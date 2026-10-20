@@ -1,5 +1,5 @@
 (ns engine.torch-stock-test
-  "jobs.access.stock/torches!: a tunnel that carries few torches stocks up first, or says it digs dark."
+  "jobs.lib.torch-stock/torches!: a tunnel that carries few torches stocks up first, or says it digs dark."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.mine-support :as mt]

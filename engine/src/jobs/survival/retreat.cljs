@@ -90,7 +90,7 @@
      Under fire (::fire-hits hits within ::hurt-window-s whose attacker is a ranged mob, or arrow damage: the mob need not be seen or known) cover comes before any fight: the order is
      plug in (walls), back off, plug in (pit or pocket), fight, though a melee mob is at the body; the fight is weighed over every hostile near, and never counts as won
      while no ranged hostile near has been seen. With none seen the last-resort fight swings only at a mob within 3 blocks, none walked to. In another cell than the
-     last time it was under fire, a plug that failed is tried again. A shot's direction (the hurt event's :dir, ::shot-window-s) stands for an unseen shooter ::shot-reach blocks out: cover, the seal's sides, the way away and back-off all use it.
+     last time it was under fire, a plug that failed is tried again. A shot's direction (the hurt event's :dir, jobs.lib.shot window-s) stands for an unseen shooter jobs.lib.shot reach blocks out: cover, the seal's sides, the way away and back-off all use it.
      An option that fails is not tried again until all have failed. Then, after a second's hold, all are tried again
      (one retreat_blocked warning per flight).
   Plugged in or up a pillar it hides (one retreat_sealed warning; a declared hold, wait why hiding) while a

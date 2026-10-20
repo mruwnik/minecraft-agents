@@ -19,7 +19,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.reach :as reach]
             [jobs.lib.access :as access]
-            [jobs.access.cleanup :as cleanup]
+            [jobs.lib.shelter.keep :as stay]
             [jobs.lib.look :as look]
             [jobs.lib.threats :as threats]
             [jobs.lib.world-files :as world]))
@@ -43,8 +43,8 @@
 (defn scaffold-left
   [p memory args kn]
   (let [dark-ok? (or (settings/get settings ::at-night) (not (look/dark-here? p)))
-        opens-dark? (cleanup/opens-dark? p)
-        plug-kept? #(and (cleanup/keep-at-night?) (opens-dark? (:cell %)))]
+        opens-dark? (stay/opens-dark? p)
+        plug-kept? #(and (stay/at-night?) (opens-dark? (:cell %)))]
     (boolean (and (not (body/recovery-pending? memory :scaffold-left))
                   (some? (world/zones kn))
                   (or (settings/get settings ::with-hostile)

@@ -98,7 +98,7 @@
          at (into (mapv #(danger-q/mob-pos p %) ranged) spots)]
      (when (seq at)
        (let [arrow-at (fn [x y z] (reach/arrow-kind-of (u/seen-block p {:x x :y y :z z})))]
-         #(walk/out-of-fire? arrow-at at %))))))
+         #(reach/out-of-fire? arrow-at at %))))))
 
 (defn swim-factor
   "The flight's price of a swim block: ::swim-factor, else jobs.lib.cost/swim-factor of the boots worn."

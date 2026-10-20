@@ -92,8 +92,8 @@
 
 (deftest leaves-cover-a-body-from-arrows
   (let [skeleton {:x 0.5 :y 64 :z 0.5}]
-    (is (walk/out-of-fire? leaf-wall-world [skeleton] {:x 5 :y 64 :z 0}) "behind the leaves")
-    (is (not (walk/out-of-fire? leaf-wall-world [skeleton] {:x 0 :y 64 :z 6})) "in the open beside them")))
+    (is (reach/out-of-fire? leaf-wall-world [skeleton] {:x 5 :y 64 :z 0}) "behind the leaves")
+    (is (not (reach/out-of-fire? leaf-wall-world [skeleton] {:x 0 :y 64 :z 6})) "in the open beside them")))
 
 (def stair-floors (vec (for [i (range 1 9)] [(- 10 i) (- 70 i) 0])))
 

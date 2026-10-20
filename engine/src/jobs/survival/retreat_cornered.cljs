@@ -18,6 +18,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.util :as u]
+            [jobs.lib.shot :as shot]
             [jobs.survival.retreat-flight :as flight]
             [jobs.survival.retreat-goal :as retreat-goal]
             [jobs.lib.rooms :as room-lib]
@@ -444,7 +445,7 @@
   [c]
   (let [n (fire-hits)]
     (and (pos? n)
-         (<= n (count (filter flight/shot? (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s))))))))))
+         (<= n (count (filter shot/shot? (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s))))))))))
 
 (defn retry-covers
   "Pure: mem of a body under fire at feet cell: in another cell than the last time (:fire-cell), the covers that failed

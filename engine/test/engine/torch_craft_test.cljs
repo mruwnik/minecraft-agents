@@ -1,5 +1,5 @@
 (ns engine.torch-craft-test
-  "mine's torch round crafts torches in a child slot of its own: the stock-up's obtain (jobs.access.stock/torches!)
+  "mine's torch round crafts torches in a child slot of its own: the stock-up's obtain (jobs.lib.torch-stock/torches!)
   leaves a :start map in its slot when it ends declined, and a craft reading it made a NaN count."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]

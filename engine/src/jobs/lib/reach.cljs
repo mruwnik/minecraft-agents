@@ -643,3 +643,9 @@
   (let [from [(:x mob-pos) (+ (:y mob-pos) game/eye-height) (:z mob-pos)]
         bx (:x body-pos) bz (:z body-pos)]
     (boolean (some #(ray-clear? arrow-at from [bx (+ (:y body-pos) %) bz]) [game/eye-height 0.9]))))
+
+(defn out-of-fire?
+  "Whether no ranged mob at mob-positions (feet) has a line of fire to a body standing in feet cell end
+  (line-of-fire? over arrow-at, an arrow-kind lookup: leaves stop arrows)."
+  [arrow-at mob-positions {:keys [x y z]}]
+  (not-any? #(line-of-fire? arrow-at % {:x (+ x 0.5) :y y :z (+ z 0.5)}) mob-positions))

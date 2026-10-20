@@ -11,6 +11,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.shelter.keep :as stay]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
@@ -75,7 +76,7 @@
   ::roof-height above it while the body is in the open). A walk leg also stops while a mob the body fled from within
   jobs.lib.threats/fled-memory-ms was last known within jobs.lib.threats/fled-radius of the cell or the body (:danger).
 
-  A shelter's block (purpose :shelter or :retreat-plug) stays while a known hostile is near (:hostile-near) and while it opens onto a dark cell (:night; setting ::keep-at-night?): a neighbour that is not solid and not lit by what the body knows (an unseen one is guessed by the sky), whatever the hour: it keeps the hostile out of the body's refuge.
+  A shelter's block (purpose :shelter or :retreat-plug) stays while a known hostile is near (:hostile-near) and while it opens onto a dark cell (:night; setting jobs.lib.shelter.keep ::at-night?): a neighbour that is not solid and not lit by what the body knows (an unseen one is guessed by the sky), whatever the hour: it keeps the hostile out of the body's refuge.
 
   Every dig asks jobs.lib.access.rules/may-dig? (zones, plan footprints, ledger cells) when chosen and again
   right before the dig. A refusal (:zone :footprint :no-zones :not-loaded) or a hazard :accept does not name
@@ -112,7 +113,6 @@
    ::max-collect-radius {:default 48 :doc "Blocks around the body in which dropped scaffold is collected, at most." :spec (a/int-in 0 nil)}
    ::roof-height {:default 4 :doc "Blocks above a scaffold block within which a solid block (not scaffold) roofs it; a roofed one is not walked to from the open (:roofed)." :spec (a/int-in 0 nil)}
    ::died-radius {:default 24 :doc "Blocks around a place the body died within which a scaffold is not walked to (:died-near)." :spec (a/num-in 0 nil)}
-   ::keep-at-night? {:default true :doc "A shelter's block (:shelter, :retreat-plug) stays while it opens onto a dark cell; false takes it back anyway." :spec boolean?}
    ::danger-radius {:default 16 :doc "Blocks around a scaffold block within which a known hostile holds it (:danger) instead of a walk." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds a cleanup may take: the digs, the walks, the collecting." :spec (a/num-in 0 nil)}
    ::max-passes {:default 200 :doc "Steps (dig, walk, collect) in one run before it stops." :spec (a/int-in 0 nil)}})
@@ -133,22 +133,6 @@
 (defn leg-s [] (settings/get settings ::leg-s))
 
 (defn give-up [] (settings/get settings ::give-up))
-
-(defn keep-at-night? [] (settings/get settings ::keep-at-night?))
-
-(defn opens-dark?
-  "A fn of a cell: whether a neighbour of it is not solid and dark: a cell the body has seen by its light, one it has not
-  by the guess (the sky's darkening, or the body underground: unseen cave cells are dark)."
-  [p]
-  (let [buried? (sh-sense/buried-at? p (sh-sense/feet p))
-        dark? (fn [n] (if (sh-sense/seen-cell? p n)
-                        (not (sh-sense/lit-here? p n))
-                        (or buried? (look/dark-guess? p))))]
-    (fn [[x y z]]
-      (boolean (some (fn [[dx dy dz]]
-                       (let [n {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
-                         (and (not (sh-sense/solid-at? p n)) (dark? n))))
-                     [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0] [0 -1 0]])))))
 
 (defn danger-radius [] (settings/get settings ::danger-radius))
 
@@ -186,7 +170,7 @@
     (merge (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))})
            {:feet (reach/standing-vec (:primitives c)) :eye (eye-of c) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :floor-at (access/seen-at (:primitives c)) :entries entries
             :can-clear? #(not (tools/needs-tool-to-clear? (:primitives c) %))
-            :hostile-near? (hostile-near? (:primitives c)) :opens-dark? (opens-dark? (:primitives c)) :keep-at-night? (keep-at-night?)
+            :hostile-near? (hostile-near? (:primitives c)) :opens-dark? (stay/opens-dark? (:primitives c)) :keep-at-night? (stay/at-night?)
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach (dig-reach)
             :spare-own-builds (access/spare-own-builds)
             :guard-walks? (and (nil? (:job (:args c))) (nil? (:near (:args c))))

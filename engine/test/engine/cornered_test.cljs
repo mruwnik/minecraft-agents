@@ -17,6 +17,7 @@
             [engine.triggers :as triggers]
             [jobs.survival.retreat :as retreat]
             [jobs.survival.retreat-cornered :as cornered]
+            [jobs.lib.shot :as shot]
             [jobs.survival.retreat-flight :as flight]
             [jobs.survival.retreat-refuge :as refuge]
             [jobs.survival.retreat-cover :as cover]
@@ -1209,11 +1210,11 @@
 (deftest an-unseen-shooters-place-is-a-point-out-along-the-way-the-arrow-came-from
   (let [entry (fn [data] {:data data})
         arrow {:damageType "arrow" :dir {:x 1 :z 0}}]
-    (is (= [{:x 12.5 :y 64 :z 0.5}] (flight/shot-spots [(entry arrow)] {:x 0.5 :y 64 :z 0.5} 12)))
+    (is (= [{:x 12.5 :y 64 :z 0.5}] (shot/shot-spots [(entry arrow)] {:x 0.5 :y 64 :z 0.5} 12)))
     (is (= [{:x 0.5 :y 64 :z -11.5}]
-           (flight/shot-spots [(entry {:attacker {:name "pillager"} :dir {:x 0 :z -1}})] {:x 0.5 :y 64 :z 0.5} 12))
+           (shot/shot-spots [(entry {:attacker {:name "pillager"} :dir {:x 0 :z -1}})] {:x 0.5 :y 64 :z 0.5} 12))
         "a ranged attacker is a shooter")
-    (is (= [] (flight/shot-spots [(entry {:attacker {:name "zombie"} :dir {:x 1 :z 0}}) (entry {:damageType "arrow"})]
+    (is (= [] (shot/shot-spots [(entry {:attacker {:name "zombie"} :dir {:x 1 :z 0}}) (entry {:damageType "arrow"})]
                                  {:x 0 :y 64 :z 0} 12))
         "a melee hit, and a shot with no way known, give no spot")))
 

@@ -20,7 +20,7 @@
             [jobs.lib.lava :as lava]
             [jobs.lib.reach :as reach]
             [jobs.lib.tools :as tools]
-            [jobs.access.stock :as stock]
+            [jobs.lib.torch-stock :as stock]
             [jobs.lib.trip :as trip]
             [jobs.lib.walk :as walk]
             [engine.game :as game]

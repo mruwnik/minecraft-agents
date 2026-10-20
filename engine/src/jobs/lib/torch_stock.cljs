@@ -1,4 +1,4 @@
-(ns jobs.access.stock
+(ns jobs.lib.torch-stock
   "What a dig stocks before it sets out, through jobs.lib.need: torches when few are carried, a spare for the last worn
   pickaxe. Both are optional: a get that fails only warns, and the dig goes on (dark, or with the worn tool)."
   (:require [clojure.string :as str]

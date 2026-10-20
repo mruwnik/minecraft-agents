@@ -26,13 +26,13 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
-            [jobs.access.stock :as stock]
+            [jobs.lib.torch-stock :as stock]
             [jobs.lib.walk :as walk]))
 
 (def doc
   "Cut a way to stand beside a buried block :target [x y z] and stop there, with the target the next cell ahead
   at feet height. A bad :target is :impossible :bad-args before any step. A level run along a heading is jobs.gather.strip-tunnel. The target itself is left. With no zone list read the job waits (:no-zones) until one is.
-  Before the first step it stocks torches when under 8 are carried (jobs.access.stock/torches!: info torch.stocked, or warn torch.no-stock and it goes on dark).
+  Before the first step it stocks torches when under 8 are carried (jobs.lib.torch-stock/torches!: info torch.stocked, or warn torch.no-stock and it goes on dark).
 
   The way is one straight line along a heading (:heading limits it to one) through the target's column:
   1. An entry stand: on the surface (the column's top cell over a solid floor, two open cells; no entry from

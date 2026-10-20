@@ -19,7 +19,7 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.torch :as torch]
             [jobs.lib.tools :as tools]
-            [jobs.access.stock :as stock]
+            [jobs.lib.torch-stock :as stock]
             [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]
             [jobs.lib.access.zones :as zones]))

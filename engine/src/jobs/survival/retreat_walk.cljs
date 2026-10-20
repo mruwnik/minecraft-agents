@@ -196,12 +196,6 @@
     (max 1 (- (apply min (map #(u/dist end %) threats)) (apply min (map #(u/dist from %) threats))))
     1))
 
-(defn out-of-fire?
-  "Whether no ranged mob at mob-positions (feet) has a line of fire to a body standing in feet cell end
-  (jobs.lib.reach/line-of-fire? over arrow-at, an arrow-kind lookup: leaves stop arrows)."
-  [arrow-at mob-positions {:keys [x y z]}]
-  (not-any? #(reach/line-of-fire? arrow-at % {:x (+ x 0.5) :y y :z (+ z 0.5)}) mob-positions))
-
 (defn roofed?
   "Whether a block that is not passable lies within roof-reach above the head of feet cell end."
   [block-at {:keys [x y z]}]
