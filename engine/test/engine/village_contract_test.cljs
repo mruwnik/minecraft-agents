@@ -1,5 +1,5 @@
 (ns engine.village-contract-test
-  "village.feed, village.trade and village.roll as contract jobs: they export the contract, quote validly, and end with a
+  "village.trade and village.roll as contract jobs: they export the contract, quote validly, and end with a
   kind and a cause (a partial run is never done)."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
