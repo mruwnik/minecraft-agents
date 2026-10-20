@@ -340,7 +340,7 @@
                    (finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason reason :detail text)))]
     (if (> need-s left-s)
       (give-up! :window-closed (str "the pile is " below " blocks down: a stair takes about " (js/Math.round need-s) " s, " (js/Math.round left-s) " s are left"))
-      (let [args {:target [(js/Math.floor (:x pos)) (js/Math.floor (:y pos)) (js/Math.floor (:z pos))] :max-length 96 :keep true :by-hand false}]
+      (let [args {:target [(js/Math.floor (:x pos)) (js/Math.floor (:y pos)) (js/Math.floor (:z pos))] :max-length 96 :keep true}]
         (loop [n 0]
           (let [danger (dg/threatened? c)
                 ;; a mob the trip was already weighed with must not stop the stair again
@@ -354,7 +354,7 @@
               (and (= :continue r) (< n (child/default-max-calls))) (do (await (pace/pace!)) (recur (inc n)))
               (= :continue r) (dg/decline! c :unreachable "the stair down to the pile is waiting on the world" {:pos pos})
               :else (give-up! :unreachable (str "no stair down to the pile: " (pr-str (contract/cause-key r))
-                                                    (when (get-in r [:cause :fetch]) " (no pickaxe could be got)"))))))))))
+                                                    (when (get-in r [:cause :because]) " (no pickaxe could be got)"))))))))))
 
 (defn ^:async trip!
   "The decision, then the walk and the collect passes of a trip inside its window."

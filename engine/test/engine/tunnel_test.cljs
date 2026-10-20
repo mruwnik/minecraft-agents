@@ -714,20 +714,21 @@
           (is (= 1 (count calls)))
           (is (= :reached (:reason @out))))))))
 
-(deftest a-pickaxe-that-cannot-be-fetched-is-done-without-one-by-hand
+(deftest a-pickaxe-that-cannot-be-fetched-ends-no-tool
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out calls]} (await (fetching-tunnel! nil true (fn [_])))]
           (is (= 1 (count calls)) "tried once, not again")
-          (is (= :reached (:reason @out))))))))
+          (is (= [:stopped :no-tool] ((juxt :status :reason) @out))))))))
 
-(deftest by-hand-false-ends-no-tool-after-a-failed-fetch
+(deftest need-drop-false-digs-by-hand-and-fetches-nothing
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out]} (await (fetching-tunnel! nil true (fn [_]) {:by-hand false}))]
-          (is (= [:stopped :no-tool] ((juxt :status :reason) @out))))))))
+        (let [{:keys [out calls]} (await (fetching-tunnel! "iron_pickaxe" true (fn [_]) {:need-drop false}))]
+          (is (empty? calls))
+          (is (= :reached (:reason @out))))))))
 
 (deftest fetch-false-opts-out-and-never-calls-get-tool
   (async done
@@ -758,17 +759,6 @@
           (is (= [5 20 5] (feet p)) "beside the target, after the shorter axis (z) first")
           (is (= "air" (block-at p [0 20 5])) "the first leg ran to the target's row")
           (is (= "iron_ore" (block-at p [6 20 5]))))))))
-
-(deftest a-heading-and-length-dig-that-many-blocks-from-the-bodys-cell
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [deep (merge (stone -12 12 0 64 -3 8) {"0,20,0" "air" "0,21,0" "air"})
-              {:keys [out p]} (await (tunnel! {:self {:pos {:x 0.5 :y 20 :z 0.5}} :blocks deep}
-                                              {:heading :east :length 5} (fn [_])))]
-          (is (= :reached (:reason @out)) (pr-str (:reason @out)))
-          (is (= [5 20 0] (feet p)) "5 blocks east at the body's height")
-          (is (= [6 20 0] (:target @out))))))))
 
 (deftest a-given-heading-limits-the-lines-to-it
   (let [a (ln/approach {:block-at (world-fn {}) :zones [] :footprints #{} :ledger #{}} [6 57 0] [0 65 0] 24 #{} :north)]
@@ -880,7 +870,7 @@
                      [4 64 4] [0 65 0] 64 #{})
     (is (< @reads 40000))))
 
-(deftest a-fetch-child-that-ends-done-while-the-no-tool-stop-persists-digs-by-hand-without-spinning
+(deftest a-fetch-child-that-ends-done-while-the-no-tool-stop-persists-ends-no-tool-without-spinning
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -901,7 +891,7 @@
                              (orig c slot job args))))
           (try
             (let [s (await (tunnel! {:blocks (assoc ground "6,57,0" "iron_ore")} {:target [6 57 0]} prep))]
-              (is (= :reached (:reason @(:out s))) "the fetch that cured nothing is not asked again: the stone is dug by hand"))
+              (is (= [:stopped :no-tool] ((juxt :status :reason) @(:out s))) "the fetch that cured nothing is not asked again"))
             (finally (set! ctx/call orig)))
           (is (<= 1 @n 2) (str "fetch child calls " @n)))))))
 
@@ -957,6 +947,7 @@
           (is (= [:condition-failed :refused]
                  (await (run {:blocks eight-down :zones [{:name "z" :min [6 57 0] :max [6 57 0]}]} target (fn [_])))))
           (is (= [:condition-failed :no-zones] (await (run {:blocks eight-down :zones nil} target (fn [_])))))
+          (is (= [:impossible :bad-args] (await (run {:blocks eight-down} {:heading :east} (fn [_])))) "a call with no target never starts")
           (is (= [:condition-failed :no-tool] (await (run {:blocks eight-down :inventory []} (assoc target :fetch false) (fn [_])))))
           (is (= [:condition-failed :hazard] (await (run {:blocks eight-down :inventory with-cobble} target lava-ahead))))
           (is (= [:condition-failed :tool-spent]

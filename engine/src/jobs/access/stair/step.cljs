@@ -119,12 +119,10 @@
         :else (assoc r :reason :water-unplugged)))))
 
 (defn by-hand?
-  "Whether block is dug bare-handed: `:need-drop false` asks for it, or the fetch of a tool for it failed (the way out must open
-  even with no pickaxe to be had)."
+  "Whether block is dug bare-handed: `:need-drop false` asks for it."
   [c block]
   (and (tools/needs-tool-to-clear? (:primitives c) block)
-       (or (false? (:need-drop (:args c)))
-           (mem/tool-failed? c block))))
+       (false? (:need-drop (:args c)))))
 
 (defn lacks-tool?
   "A tool is needed and not carried, and the block is not dug by hand (by-hand?)."
@@ -145,7 +143,7 @@
         seen? (not (unknown? p cell))
         tries (get-in (ctx/mem c) [:cell-tries cell] 0)]
     (cond
-      (>= tries (if (rules/falling? block) (sset/max-fall-digs) (sset/max-cell-digs))) (cond-> {:reason :refills :cell cell :block block}
+      (>= tries (sset/max-digs block)) (cond-> {:reason :refills :cell cell :block block}
                                    (not (rules/falling? block))
                                    (assoc :why "put back by something else, e.g. the night shelter closing an opened refuge again"))
       (rules/unbreakable block) {:reason :unbreakable :cell cell :block block}

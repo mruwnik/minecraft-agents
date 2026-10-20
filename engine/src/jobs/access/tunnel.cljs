@@ -9,12 +9,12 @@
             [jobs.access.stair :as stair]
             [jobs.access.stair.judge :as judge]
             [jobs.lib.stair-cells :as geo]
-            [jobs.lib.stair-memory :as smem]
             [jobs.access.stair.step :as sstep]
             [jobs.access.tunnel.estimate :refer [target-of steps-estimate cells-estimate bad-target? cause-keys ending-result stop-of run-index]]
             [jobs.access.tunnel.line :as ln]
             [jobs.access.tunnel.torches :as torches]
             [jobs.lib.access :as access]
+            [jobs.lib.access-tool :as atool]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.child :as child]
             [jobs.lib.choose :as choose]
@@ -30,8 +30,8 @@
             [jobs.lib.walk :as walk]))
 
 (def doc
-  "Cut a way to stand beside a buried block :target [x y z] and stop there (or, with :heading and :length and no :target, a level run of :length blocks that way from the body's cell: the target is the next cell), with the target the next cell ahead
-  at feet height. The target itself is left. With no zone list read the job waits (:no-zones) until one is.
+  "Cut a way to stand beside a buried block :target [x y z] and stop there, with the target the next cell ahead
+  at feet height. A bad :target is :impossible :bad-args before any step. A level run along a heading is jobs.gather.strip-tunnel. The target itself is left. With no zone list read the job waits (:no-zones) until one is.
   Before the first step it stocks torches when under 8 are carried (jobs.access.stock/torches!: info torch.stocked, or warn torch.no-stock and it goes on dark).
 
   The way is one straight line along a heading (:heading limits it to one) through the target's column:
@@ -115,8 +115,8 @@
   :spent-ok (default false): every carried pickaxe down to 3 uses stops the tunnel {:reason :tool-spent} before the last breaks (jobs.access.stair).
   :fetch (default true; false ends :no-tool; jobs.lib.need): a missing pickaxe (the stair's :no-tool ending, or a :no-tool stop of
   the run's own digs) is got with jobs.items.get-tool, then the body walks back to the cell it stood on and goes on;
-  a fetch for a block that fails or cures nothing digs that block bare-handed (slow, no drop; :by-hand false ends :no-tool); one for no block ends :no-tool. The stair child fetches only items (a block to seal lava with),
-  not tools.")
+  a fetch that fails or cures nothing ends :no-tool with its reason as :because. :need-drop false digs a block no carried tool clears
+  bare-handed (slow, no drop) instead. The stair child fetches only items (a block to seal lava with), not tools.")
 
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds a tunnel may take, in and (a dead end) out." :spec (a/num-in 0 nil)}})
@@ -124,15 +124,14 @@
 
 (a/defargs args
   {:target {:doc "the buried block [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
-   :heading {:doc "with no :target, dig this way from the body's cell at its height, :length blocks; with a :target, take only a line along it" :spec #{:north :east :south :west} :default nil}
-   :length {:doc "with :heading and no :target, blocks to dig (default :max-length less one)" :spec (a/int-in 1 96) :default nil}
+   :heading {:doc "take only a line along this heading" :spec #{:north :east :south :west} :default nil}
    :max-length {:doc "longest line, in blocks along the heading from the entry to the target, 1 to 96" :spec (a/int-in 1 96) :default 24}
    :accept {:doc "dig hazards taken (jobs.lib.access.rules): #{:fluid-adjacent :lava-adjacent :falling-block}" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{}}
    :ignore-zones? :shared
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop (jobs.access.stair)" :spec #{:seal :stop} :default :seal}
    :keep {:doc "a tunnel that stays: torches left and the tunnel left open; false (a dead end): torches go into the scaffold ledger for jobs.access.leave-tunnel to take back" :spec boolean? :default false}
    :fetch {:doc "get a missing pickaxe instead of ending :no-tool (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-tool" :spec need/option? :default true}
-   :by-hand {:doc "a block whose tool could not be got is dug bare-handed (slow, no drop); false ends :no-tool instead" :spec boolean? :default true}
+   :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of fetching a tool; a failed fetch ends :no-tool either way" :spec boolean? :default true}
    :spent-ok {:doc "dig on with tools down to 3 uses instead of stopping :tool-spent (see jobs.access.stair)" :spec boolean? :default false}
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}})
 
@@ -161,7 +160,9 @@
       (checks/cause-status :later (assoc fields :reason :refused) (str "refused by " (access/refusal-text fields))))
     (contract/ok :permitted "no zone, claim or plan refuses")))
 
-(def can-start? (cond/and checks/zones-read not-refused))
+(def can-start?
+  (cond/and (checks/args-fit "target must be [x y z] of integers" #(not (bad-target? (target-of %))))
+            checks/zones-read not-refused))
 
 (defn quote-of [c]
   (let [feet (reach/standing-vec (:primitives c))
@@ -311,7 +312,7 @@
   [c {:keys [heading dir] :as plan} k]
   (let [cells (ln/line-cells plan)
         e (await (ctx/call c :stair 'jobs.access.stair
-                           {:dir dir :heading heading :fetch (stair-fetch (:fetch (:args c))) :need-drop (empty? (:tool-failed (ctx/mem c))) :y ((cells (segment-end plan k)) 1) :on-lava (:on-lava (:args c) :seal)
+                           {:dir dir :heading heading :fetch (stair-fetch (:fetch (:args c))) :need-drop (:need-drop (:args c)) :y ((cells (segment-end plan k)) 1) :on-lava (:on-lava (:args c) :seal)
                             :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c))) :spent-ok (boolean (:spent-ok (:args c)))
                             :pick-up-ores (:pick-up-ores (:args c))}))]
     (if (= :continue e)
@@ -397,9 +398,8 @@
         target (target-of c)
         feet (reach/standing-vec (:primitives c))]
     (if (bad-target? target)
-      (finish! c :bad-args {:why "target must be [x y z] of integers, or a heading with a length"})
-      (let [_ (when-not (:start (ctx/mem c)) (ctx/update-mem! c assoc :start feet))
-            a (await (sense/decide! c ::approach #(ln/approach (assoc (dissoc (judge/rules-in c feet) :feet) :filler? (some? (choose/filler c :build))) target feet max-length (set accept) (:heading (:args c)))
+      (finish! c :bad-args {:why "target must be [x y z] of integers"})
+      (let [a (await (sense/decide! c ::approach #(ln/approach (assoc (dissoc (judge/rules-in c feet) :feet) :filler? (some? (choose/filler c :build))) target feet max-length (set accept) (:heading (:args c)))
                                     {:retry? #(not (:entry %))}))]
         (if-let [w (when (or (not (:entry a)) (ln/far-entry? a feet))
                      (when (or (:entry a) (#{:too-far :no-approach} (:reason a)))
@@ -419,35 +419,30 @@
     (when (and o (contains? (:what o) :tool)) o)))
 
 (defn fetch-for-stop!
-  "A :no-tool stop the fetch can cure: remember the wait so the next step fetches for it; :again. Nil when not."
+  "A :no-tool stop the fetch can cure (not one a fetch just ended without curing): remember the wait so the next step fetches for it; :again. Nil when not."
   [c stop]
-  (when (and (= :no-tool (:reason stop)) (fetch-limits c))
+  (when (and (= :no-tool (:reason stop)) (fetch-limits c) (not= (select-keys stop [:block :tool]) (:fetched (ctx/mem c))))
     (ctx/update-mem! c assoc :fetch-wait (select-keys stop [:block :tool]))
     :again))
 
 (defn ^:async fetch-tool!
-  "Get the pickaxe the stop lacked (jobs.lib.need, then the walk back to where the body stood): :continue while it
-  works, :again once it ended :done, else the stop :no-tool with the fetch's reason."
+  "Get the pickaxe the stop lacked (jobs.lib.access-tool, then the walk back to where the body stood): :continue while it
+  works, :again once it ended :done, else the stop :no-tool with the fetch's reason as :because."
   [c {:keys [block tool] :as wait}]
-  (let [e (await (need/tool! c (cond block {:block block} :else {:kind (or tool "pickaxe")})
-                             (assoc (select-keys (fetch-limits c) [:how :explore]) :return? true)))]
+  (let [r (await (atool/get! c (cond block {:block block} :else {:kind (or tool "pickaxe")}) (fetch-limits c)))]
     (cond
-      (= :continue e) :continue
-      (= :done (:kind e)) (do (ctx/update-mem! c dissoc :fetch-wait) :again)
-      (and block (:by-hand (:args c))) (do (smem/tool-failed! c block)
-                (ctx/update-mem! c dissoc :fetch-wait :need/return)
-                (ctx/emit! c :tunnel.fetch-failed :warn {:block block :text (str "tunnel could not get a tool for " block ": digging it bare-handed")})
-                :again)
+      (= :continue r) :continue
+      (= :fetched r) (do (ctx/update-mem! c #(-> % (dissoc :fetch-wait) (assoc :fetched wait))) :again)
       :else (do (ctx/update-mem! c dissoc :fetch-wait :need/return)
-                (stop! c (assoc wait :reason :no-tool :fetch (contract/cause-key e)))))))
+                (stop! c (atool/no-tool wait r))))))
 
 (defn ^:async leg!
   "The first leg of a diagonal target: a kept tunnel child to the waypoint (its stand is in the target's column), then
   the plan is chosen again from there. :again or :continue; else the job ends with the leg's stop."
   [c w]
-  (let [{:keys [fetch accept ignore-zones? on-lava max-length by-hand]} (:args c)
+  (let [{:keys [fetch accept ignore-zones? on-lava max-length need-drop]} (:args c)
         e (await (ctx/call c :leg 'jobs.access.tunnel
-                           (cond-> {:target w :keep true :max-length max-length :accept accept :by-hand by-hand
+                           (cond-> {:target w :keep true :max-length max-length :accept accept :need-drop need-drop
                                     :ignore-zones? ignore-zones? :on-lava on-lava}
                              (some? fetch) (assoc :fetch fetch))))]
     (cond
@@ -487,10 +482,9 @@
       :else (await (work-round c)))))
 
 (defn ^:async round
-  "The whole tunnel, in and (a dead end) out: step! until it ends, a pace between; :continue after (stair/round-s) seconds of
-  them or while a child waits on the world."
+  "The whole tunnel, in and (a dead end) out: step! until it ends, a pace between; :continue while a child waits on the world."
   [c]
   (or (await (stock/torches! c))
-      (await (pace/timed-steps! c (stair/round-s) #(step! c)))))
+      (await (pace/steps! c #(step! c)))))
 
 (def meta {:tags [:mine :dig :light]})

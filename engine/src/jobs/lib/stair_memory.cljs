@@ -72,13 +72,3 @@
   "Remember the steps walked (memory :stair-way, one entry a connected way: remember-way!)."
   [c origin dir heading steps]
   (remember-way! c (shape/add origin [0 -1 0]) (cells/way-floors origin dir heading steps)))
-
-(defn tool-failed?
-  "Whether a fetch of a tool for block failed in this call (job memory), so it is dug bare-handed and not asked for again."
-  [c block]
-  (contains? (:tool-failed (ctx/mem c)) block))
-
-(defn tool-failed!
-  "Remember the failed fetch of a tool for block for the rest of the call."
-  [c block]
-  (ctx/update-mem! c update :tool-failed (fnil conj #{}) block))

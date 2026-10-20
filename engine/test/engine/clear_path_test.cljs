@@ -83,7 +83,7 @@
                      (ctx/end c :done nil {:dug true :reason :dug}))
               r (await (run-door (assoc wall :inventory [{:name "wooden_pickaxe" :count 1}]) stub))]
           (is (= [:stopped :refills] [(:status r) (:reason r)]) (pr-str r))
-          (is (= 8 @digs) "a cell is dug max-cell-digs times"))))))
+          (is (= 3 @digs) "a stone cell is dug max-cell-digs times"))))))
 
 (deftest a-dig-child-that-yields-continue-counts-as-one-dig-of-the-cell
   (async done
@@ -95,7 +95,7 @@
                        (ctx/end c :done nil {:dug true :reason :dug})
                        :continue))
               r (await (run-door (assoc wall :inventory [{:name "wooden_pickaxe" :count 1}]) stub))]
-          (is (= [:refills 8] [(:reason r) (count (:dug r))]) "a cell is dug max-cell-digs times, not max-cell-digs calls"))))))
+          (is (= [:refills 3] [(:reason r) (count (:dug r))]) "a cell is dug max-cell-digs times, not max-cell-digs calls"))))))
 
 (deftest a-dig-that-fails-ends-dig-failed-without-copying-its-ending
   (async done

@@ -13,7 +13,6 @@
             [jobs.lib.need :as need]
             [jobs.lib.reach :as reach]
             [jobs.lib.tools :as tools]
-            [jobs.lib.util :as u]
             [plan.shape :as shape]))
 
 (defn access-world
@@ -36,14 +35,6 @@
   [c]
   (let [o (need/opts c 'jobs.access.stair)]
     (when (and o (contains? (:what o) :tool)) o)))
-
-(defn room-due?
-  "Whether lack (from need) is a full pack that a make-room child may cure: the make-room? setting is on and the pack has not
-  changed since make-room last stopped short."
-  [c lack]
-  (and (= :no-free-slot (:reason lack))
-       (limits/make-room?)
-       (not= (u/inventory (:primitives c)) (:room-failed (ctx/mem c)))))
 
 (defn fetchable?
   "Whether lack is a missing pickaxe that :fetch lets the call get."
@@ -74,11 +65,11 @@
       (not (sstep/drop-room? c block)) {:reason :no-free-slot :block block})))
 
 (defn unmet
-  "What the next dig lacks that this call cannot make good (no room made, no tool fetched), or nil."
+  "What the next dig lacks that this call cannot make good (no tool fetched), or nil."
   [c]
   (when-not (:backoff (ctx/mem c))
     (when-let [lack (need c)]
-      (when-not (or (room-due? c lack) (fetchable? c lack)) lack))))
+      (when-not (fetchable? c lack) lack))))
 
 (defn refusal
   "Before anything is cut: the stop of the first step when a zone, claim or plan refuses its cut, else nil."

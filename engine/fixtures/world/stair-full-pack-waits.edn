@@ -1,0 +1,16 @@
+;; A stair that digs with a full pack of diamonds (nothing to toss, so the make-room reflex finds nothing either) waits :no-free-slot
+;; and does not end. Rock x 10..30, z 12..20, y 0..10 (deepslate); the body in a 1x3 cell at [16 0 16] with a stone pickaxe.
+{:defaults
+ {:tags [:access :storage :jobs] :time :any
+  :plot {:height 14}
+  :blocks [[:fill [10 0 12] [30 10 20] "deepslate"] [:fill [12 0 16] [16 2 16] "air"]]
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "full-pack-of-diamonds-waits-no-free-slot"
+   :body {:inventory [["stone_pickaxe" 1] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64] ["diamond" 64]]}
+   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 6})]]
+   :expect [{:no-event {:source :job :kind :stopped} :for-s 100 :of-job true}
+            {:no-event {:source :job :kind :make-room.tossed} :for-s 100}]
+   :after [[:item "diamond" 2240]]
+   :limit-s 130}]}

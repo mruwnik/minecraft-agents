@@ -8,7 +8,6 @@
             [engine.memory :as mem]
             [engine.library-test :refer [setup]]
             [engine.registry :as registry]
-            [engine.settings :as settings]
             [engine.test-util :as tu :refer [run-until-empty]]
             [jobs.movement.go-to.result :as end]))
 
@@ -53,28 +52,6 @@
           (is (= {:decision :abandoned :reason :window-closed} (select-keys (recovered eng) [:decision :reason])) (pr-str (recovered eng)))
           (is (empty? digs) "nothing is dug for a stair that ends after the pile is gone"))))))
 
-(defn feet-y [p] (js/Math.floor (.-y (.-pos (.self p)))))
-
-(deftest a-dear-zombie-turning-up-mid-stair-backs-the-trip-off
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [arrived (atom false)
-              {:keys [eng p seen]} (setup {:blocks deep-ground :inventory [{:name "iron_pickaxe" :count 1} {:name "torch" :count 16}]
-                                           :entities [{:id 1 :name "item" :kind "item" :pos pile-pos :item {:name "diamond" :count 5}}]})]
-          (die! eng {:pos pile-pos :inventory pile} 5000)
-          (core/submit! eng (list (first job) {:danger-overrides {"zombie" 1000}}) {})
-          (add-watch (fake/state p) ::zombie
-                     (fn [_ _ _ _]
-                       (when (and (<= (feet-y p) 58) (not @arrived))
-                         (reset! arrived true)
-                         (let [pos (.-pos (.self p))]
-                           (fake/add-entity! p
-                                  {:id 7 :name "zombie" :kind "hostile" :pos {:x (- (js/Math.floor (.-x pos)) 0.5) :y (inc (js/Math.floor (.-y pos))) :z (+ 0.5 (js/Math.floor (.-z pos)))}})))))
-          (await (settings/scoped {:jobs.access.stair/round-s 0} #(run-until-empty eng 200)))
-          (is (some :retry (filter #(= :recover-drops.decided (:kind %)) @seen)) "the zombie is weighed and the trip backs off")
-          (is (> (feet-y p) 50) "the stair was not carried on to the pile"))))))
-
 (deftest a-skeleton-beyond-eight-blocks-with-a-line-of-fire-is-weighed-not-an-unreachable-stair
   (async done
     (tu/run-async done
@@ -84,7 +61,7 @@
                                                       {:id 9 :name "skeleton" :kind "hostile" :pos {:x 12.5 :y 64 :z 0.5}}]})]
           (die! eng {:pos pile-pos :inventory pile} 5000)
           (core/submit! eng (list (first job) {:danger-overrides {"skeleton" 1000}}) {})
-          (await (settings/scoped {:jobs.access.stair/round-s 0} #(run-until-empty eng 200)))
+          (await (run-until-empty eng 200))
           (is (not= :unreachable (:reason (recovered eng))) (pr-str (recovered eng)))
           (is (some :retry (filter #(= :recover-drops.decided (:kind %)) @seen)) "the skeleton is weighed and the trip backs off"))))))
 

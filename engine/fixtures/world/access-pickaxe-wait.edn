@@ -24,7 +24,7 @@
    :limit-s 150}
   {:name "tunnel-no-pickaxe-stops-once"
    :body {:inventory [["torch" 8] ["cobblestone" 8]]}
-   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true :by-hand false})]]
+   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 40 :until {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}}}]
    :after [[:not-block [16 9 16] "air"]]}

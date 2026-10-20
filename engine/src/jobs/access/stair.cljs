@@ -12,6 +12,7 @@
             [jobs.lib.stair-memory :as smem]
             [jobs.access.stair.step :as sstep]
             [jobs.lib.access :as access]
+            [jobs.lib.access-tool :as atool]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.child :as child]
@@ -25,7 +26,6 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.tools :as tools]
             [jobs.lib.trip :as trip]
-            [jobs.lib.util :as u]
             [jobs.lib.walk :as walk]
             [plan.shape :as shape]))
 
@@ -52,11 +52,11 @@
 
   Needs a pickaxe and room for the drops. A call starts only when the first step is not refused, the args give a length and the next
   dig lacks nothing this call cannot get (:refused, :no-tool, :no-free-slot). Quote: steps x cells of the step x the time of a cell.
-  - A pack without room is made room in (jobs.storage.make-room, once per pack content; setting make-room?), else it waits :no-free-slot until the pack changes.
+  - A pack without room waits :no-free-slot until it changes (the make-room reflex or the caller clears it).
   - A missing pickaxe is got with jobs.items.get-tool (:fetch), then the body walks back and goes on; a fetch that fails is remembered and the block dug bare-handed. :fetch off ends :no-tool.
   - Before each step the exposed ores within reach are dug (:pick-up-ores, jobs.lib.ore-pick).
 
-  One call cuts the whole stair; it yields :continue while a fetch or walk child waits on the world, or after round-s seconds. The
+  One call cuts the whole stair; it yields :continue while a fetch or walk child waits on the world. The
   body's cell is the progress: a resumed call finds its step from where the body stands on the stair line. Dug cells are left and recorded.
 
   Ends :done, or {:reason r ...detail}. :condition-failed for facts that bar the next cell (:refused :zone :claim :footprint :not-loaded :no-zones
@@ -90,10 +90,8 @@
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 3600 :doc "Seconds one call may last from its start, the waits on checks and the jobs that run between its rounds included (:limit-reached)." :spec (a/num-in 0 nil)}
-   ::round-s {:default 20 :doc "Seconds one call runs before it gives the round back with :continue, so the call's :checks are asked again (stair, tunnel, leave-tunnel)." :spec (a/int-in 0 nil)}
    ::max-returns {:default 3 :doc "Walks back onto the stair's line (after a reflex moved the body off it) one call makes before it stops :off-stair." :spec (a/int-in 0 nil)}
    ::cell-s {:default 1.2 :doc "Mean seconds one cut cell of a step takes (look, dig, walk), for the quote." :spec (a/num-in 0 nil)}})
-(defn round-s [] (settings/get settings ::round-s))
 (defn max-returns [] (settings/get settings ::max-returns))
 
 (def safe? ready/safe-at-from)
@@ -155,7 +153,7 @@
         (contract/ok :supplied "nothing lacking")))))
 
 (defn pack-has-room
-  "Later :no-free-slot while the next dig has no room for its drop and no make-room can cure it: the pack can clear (a deposit, a toss), so the stair waits."
+  "Later :no-free-slot while the next dig has no room for its drop: the pack can clear (a deposit, a toss), so the stair waits."
   [c]
   (let [lack (judge/unmet c)]
     (if (= :no-free-slot (:reason lack))
@@ -233,39 +231,21 @@
                                          (some->> (:why detail) (str ": ")))))
                    data)))))
 
-(defn ^:async make-room!
-  "Run make-room as child :room (no walk away: the stair is one tunnel wide). :continue while it waits, else :again; a
-  stop short of the room is remembered with the pack it saw, so the wait is not retried until the pack changes."
-  [c]
-  (let [e (await (ctx/call c :room 'jobs.storage.make-room {:away 0 :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-    (if (= :continue e)
-      :continue
-      (do (when (= :no-free-slot (:reason (judge/need c)))
-            (ctx/update-mem! c assoc :room-failed (u/inventory (:primitives c))))
-          :again))))
-
-(defn give-up-fetch!
-  "The fetch of a tool for block failed or changed nothing: remember it (smem/tool-failed!), so the block is dug by hand and the
-  call does not ask again. :again."
-  [c block e]
-  (smem/tool-failed! c block)
-  (ctx/update-mem! c dissoc :need/return :fetched-for)
-  (ctx/emit! c :stair.fetch-failed :warn {:block block :why (some-> e contract/cause-key)
-                                         :text (str "stair could not get a tool for " block ": digging it bare-handed")})
-  :again)
-
 (defn ^:async fetch-tool!
-  "Get the pickaxe for lack's block (jobs.lib.need, then walk back to where the body stood): :continue while it works,
-  :again once it ended. A tool asked for already for this block and still missing is a failed fetch."
-  [c {:keys [block]}]
-  (let [limits (judge/fetch-limits c)]
+  "Get the pickaxe for lack's block (jobs.lib.access-tool, then walk back to where the body stood): :continue while it
+  works, :again once it ended, else the stair ends :no-tool with the fetch's reason as :because. A tool asked for already for
+  this block and still missing is a fetch that cured nothing."
+  [c {:keys [block] :as lack}]
+  (let [fail! (fn [e]
+                (ctx/update-mem! c dissoc :need/return :fetched-for)
+                (finish! c :no-tool (dissoc (atool/no-tool lack e) :reason)))]
     (if (= block (:fetched-for (ctx/mem c)))
-      (give-up-fetch! c block nil)
-      (let [e (await (need/tool! c {:block block} (assoc (select-keys limits [:how :explore]) :return? true)))]
+      (fail! nil)
+      (let [r (await (atool/get! c {:block block} (judge/fetch-limits c)))]
         (cond
-          (= :continue e) :continue
-          (= :done (:kind e)) (do (ctx/update-mem! c assoc :fetched-for block) :again)
-          :else (give-up-fetch! c block e))))))
+          (= :continue r) :continue
+          (= :fetched r) (do (ctx/update-mem! c assoc :fetched-for block) :again)
+          :else (fail! r))))))
 
 (defn ^:async step!
   "Walk into the cut step. :again, :continue while the walk waits, or a stop map. A step on the goal cell of a go-to up the
@@ -370,7 +350,7 @@
       (finish! c (:reason stop) (assoc (dissoc stop :reason) :backed-off (boolean (and cell (= cell (reach/standing-vec (:primitives c))))))))))
 
 (defn ^:async start!
-  "The first piece: the steps to cut, torches and a spare pickaxe in hand, the body on its start cell. :again, :continue
+  "The first piece: the steps to cut and a spare pickaxe in hand, the body on its start cell. :again, :continue
   while a child waits, or the :bad-args ending."
   [c]
   (let [m (ctx/mem c)
@@ -401,7 +381,6 @@
     (cond
       (:backoff m) (await (back-off! c))
       back back
-      (and lack (judge/room-due? c lack)) (await (make-room! c))
       (and lack (judge/fetchable? c lack)) (await (fetch-tool! c lack))
       lack (finish! c (:reason lack) (dissoc lack :reason))
       (nil? (:origin m)) (await (start! c))
@@ -414,10 +393,10 @@
           :else (finish! c (:reason r) (dissoc r :reason)))))))
 
 (defn ^:async round
-  "The whole stair: next! until it ends, a pace between pieces; :continue after round-s seconds."
+  "The whole stair: next! until it ends, a pace between pieces."
   [c0]
   (let [c (with-heading c0)]
     (when-not (:heading (:args c0)) (ctx/update-mem! c assoc :heading (name (:heading (:args c)))))
-    (await (pace/timed-steps! c (round-s) #(next! c)))))
+    (await (pace/steps! c #(next! c)))))
 
 (def meta {:tags [:mine :dig] :position-bound? true})

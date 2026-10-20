@@ -1,23 +1,13 @@
 (ns jobs.access.tunnel.estimate
   "The tunnel's target, size estimates and how a child's ending reads as a stop."
   (:require [engine.contract :as contract]
-            [engine.ctx :as ctx]
-            [jobs.access.tunnel.line :as ln]
-            [jobs.lib.reach :as reach]
-            [plan.shape :as shape]))
+            [jobs.access.tunnel.line :as ln]))
 
 (defn target-of
-  "The :target arg as [x y z]; with only a :heading, the cell :length + 1 blocks along it from where the call started
-  (the body's cell, remembered in the job memory); else nil."
+  "The :target arg as [x y z], or nil."
   [c]
-  (if-let [{:keys [x y z]} (:target (:args c))]
-    [x y z]
-    (when-let [h (:heading (:args c))]
-      (let [{:keys [length max-length]} (:args c)
-            [sx sy sz] (or (:start (ctx/mem c)) (reach/standing-vec (:primitives c)))
-            [dx dz] (shape/headings h)
-            n (inc (or length (max 1 (dec max-length))))]
-        [(+ sx (* n dx)) sy (+ sz (* n dz))]))))
+  (when-let [{:keys [x y z]} (:target (:args c))]
+    [x y z]))
 
 (defn spans
   "[horizontal vertical] blocks from feet to target."
@@ -35,7 +25,7 @@
 
 (defn bad-target? [t] (not (and (vector? t) (every? int? t))))
 
-(def cause-keys [:cell :hazards :zone :zones :claim :plan :fluid :block :tool :why :headings :in :fetch])
+(def cause-keys [:cell :hazards :zone :zones :claim :plan :fluid :block :tool :why :headings :in :because])
 
 (defn ending-result
   "The old child result of ending e: its data with a :status and a :reason."

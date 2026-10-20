@@ -9,7 +9,7 @@
  :cases
  [{:name "tunnel-no-pickaxe-stops-no-tool"
    :body {:inventory [["torch" 8] ["cobblestone" 8]]}
-   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true :by-hand false})]
+   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true})]
          [:await {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}} 40]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :round_started :round [:> 6]} :for-s 20 :of-job true}

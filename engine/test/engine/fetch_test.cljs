@@ -368,10 +368,9 @@
                        [own-zone])
               id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :fetch true}) {})]
           (await (run-ticks s 40))
-          (is (empty? (mem/entries (mem/view (:store (:eng s))) :stair-tool-failed)))
           (is (nil? (:need/return (core/job-memory (:eng s) id))) (pr-str (core/job-memory (:eng s) id))))))))
 
-(deftest a-fetch-child-that-ends-done-without-solving-the-need-is-not-asked-again-the-stair-digs-by-hand
+(deftest a-fetch-child-that-ends-done-without-solving-the-need-is-not-asked-again-the-stair-ends-no-tool
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -388,8 +387,7 @@
             (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :fetch true}) {})
             (await (run-ticks s 6))
             (finally (set! ctx/call orig)))
-          (is (< @n 5) (str "tool fetches asked " @n))
-          (is (empty? (mem/entries (mem/view (:store (:eng s))) :stair-tool-failed))))))))
+          (is (< @n 5) (str "tool fetches asked " @n)))))))
 
 (deftest stair-without-fetch-waits-no-tool
   (async done

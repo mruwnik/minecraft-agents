@@ -455,21 +455,6 @@
           (is (= :done (:status @out)) "one round is the whole stair")
           (is (= [3 62 0] (:at @out))))))))
 
-(deftest a-stair-past-its-round-time-gives-the-round-back-and-resumes
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (with-redefs [stair/round-s (fn [] 0)]
-          (let [{:keys [eng clock out p] :as s} (setup {:blocks ground} east (fn [_]))]
-            (swap! clock + 500)
-            (await (core/tick! eng))
-            (is (= :not-done @out) "the round ended with :continue before the stair was cut")
-            (is (seq (:list (core/state eng))) "the job is still listed")
-            (is (< (count (digs p)) 6) "not all six pieces were dug in the first round")
-            (await (tick-out! s))
-            (is (= :done (:status @out)))
-            (is (= [3 62 0] (:at @out)) "the next rounds finish it from the body's cell")))))))
-
 (deftest down-by-target-y-north
   (async done
     (tu/run-async done
@@ -886,25 +871,13 @@
           (is (= 0 (:steps @out)))
           (is (empty? (digs p))))))))
 
-(deftest a-full-pack-of-junk-is-made-room-in-and-the-stair-goes-on
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [full (into pick (repeat 35 {:name "dirt" :count 64}))
-              {:keys [out] :as s} (await (stair! {:blocks (apply dissoc (stone -3 12 60 80) (for [x [0 -1 -2] y [65 66]] (str x "," y ",0"))) :inventory full}
-                                                 {:dir :up :heading :east :steps 6} (fn [_])))]
-          (is (= :done (:status @out)) (pr-str @out))
-          (is (= 6 (:steps @out)))
-          (is (seq (events-of s :make-room.tossed)) "dirt was tossed to make room")
-          (is (nil? (waiting s))))))))
-
 (deftest a-full-pack-with-nothing-to-toss-waits-before-a-lost-drop
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [full (into pick (repeat 35 {:name "diamond" :count 64}))
               {:keys [out p] :as s} (await (stair! {:blocks ground :inventory full} east (fn [_])))]
-          (is (= [:stopped :no-free-slot] ((juxt :status :reason) @out)) "make-room found nothing to toss: the stair ends for its caller to decide")
+          (is (= [:stopped :no-free-slot] ((juxt :status :reason) @out)) "the stair ends for its caller to decide")
           (is (empty? (digs p))))))))
 
 (deftest a-stack-with-room-is-room
@@ -1378,7 +1351,7 @@
           (is (= [:impossible :bad-args] (await (run {:blocks ground} {:dir :down} (fn [_])))))
           (is (= [:condition-failed :no-tool] (await (run {:blocks ground :inventory []} (assoc east :fetch false) (fn [_])))))
           (is (= [:condition-failed :no-free-slot]
-                 (await (run {:blocks ground :inventory (into pick (repeat 35 {:name "dirt" :count 64}))} (assoc east :settings {:jobs.access.stair.limits/make-room? false}) (fn [_])))))
+                 (await (run {:blocks ground :inventory (into pick (repeat 35 {:name "dirt" :count 64}))} east (fn [_])))))
           (is (= [:condition-failed :refused]
                  (await (run {:blocks ground :zones [{:name "garden" :min [1 50 -2] :max [6 70 2]}]} east (fn [_])))))
           (is (= [:condition-failed :moved-since-submit]
@@ -1403,14 +1376,13 @@
           (is (= [1 64 0] (:at (:data e))))
           (is (= 1 (count (:dug (:data e))))))))))
 
-(deftest a-pickaxe-fetch-failing-leaves-a-bare-handed-stair-and-no-body-memory
+(deftest a-pickaxe-fetch-failing-ends-no-tool-with-the-fetch-as-because
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (stair! {:blocks ground :inventory []} east (fn [_])))]
-          (is (= :done (:status @(:out s))))
-          (is (seq (digs (:p s))) "dug bare-handed")
-          (is (empty? (mem/entries (mem/view (:store (:eng s))) :stair-tool-failed)) "the failure lives in the call, not in body memory"))))))
+          (is (= [:stopped :no-tool] ((juxt :status :reason) @(:out s))))
+          (is (empty? (digs (:p s))) "nothing dug bare-handed"))))))
 
 (def hill
   "Stone over x 1..12, y 65..75 beside the ground of ground: a hill for a stair up east from [0 65 0]."

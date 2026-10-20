@@ -1,5 +1,6 @@
 (ns jobs.access.clear-path
   (:require [engine.settings :as settings]
+            [jobs.access.stair.limits :as limits]
             [engine.args :as a]
             [jobs.lib.ready :as ready]
             [engine.contract :as contract]
@@ -32,7 +33,7 @@
   :bad-args and :no-door are conditions, checked at the start. Ends :done, or with a cause {:reason r ...}: :impossible for :bad-args (needs :heading), :condition-failed for
   :no-door (no such wall here), :protected (a block it never digs), :footprint (a cell of a plan this body made,
   unless the spare-own-builds setting is false) and :dig-waits (the dig child's wait or decline, its ending the :because); :nothing-possible for
-  :dig-failed (its ending the :because), :refills (a cell dug max-cell-digs times, e.g. sand falling in) and :step-failed
+  :dig-failed (its ending the :because), :refills (a cell dug stair.limits/max-digs times, e.g. sand falling in) and :step-failed
   (the walk through did not arrive). Data {:dug [{:cell :block}] :at [x y z] :through [x y z]}.
   It does not put the blocks back: jobs.movement.go-to does that once through.
   :need-drop false: a block no carried tool harvests is dug bare-handed (slow, the drop is lost) instead of stopping :dig-waits
@@ -49,10 +50,8 @@
 (a/defargs settings
   {::max-thick {:default 3 :doc "The thickest wall it digs through, in blocks." :spec (a/int-in 1 nil)}
    ::job-time-s {:default 300 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
-   ::max-cell-digs {:default 8 :doc "Digs of one cell (a falling block refills it) before it stops :refills." :spec (a/int-in 0 nil)}
    ::cell-s {:default 1.5 :doc "Mean seconds one cell of the door takes (dig, pick up, pace), for the quote." :spec (a/num-in 0 nil)}})
 (defn max-thick [] (settings/get settings ::max-thick))
-(defn max-cell-digs [] (settings/get settings ::max-cell-digs))
 
 (def meta {:category :phase :part-of '[jobs.movement.go-to]})
 
@@ -166,7 +165,7 @@
       (escape/protected? block) (finish! c :protected {:cell cell :block block})
       (own-build c cell) (finish! c :footprint {:cell cell :block block :plan (:plan (own-build c cell))})
       (and (not (:started (:digging (ctx/mem c))))
-           (>= (get-in (ctx/mem c) [:cell-tries cell] 0) (max-cell-digs)))
+           (>= (get-in (ctx/mem c) [:cell-tries cell] 0) (limits/max-digs block)))
       (finish! c :refills {:cell cell :block block})
       :else
       (let [resumed? (:started (:digging (ctx/mem c)))

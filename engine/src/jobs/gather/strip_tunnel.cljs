@@ -52,7 +52,7 @@
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
-(def target [])
+(def target [:heading])
 
 (def safe? ready/safe-if-lit)
 
@@ -212,4 +212,4 @@
 
 (defn ^:async round [c] (await (pace/steps! c #(step c))))
 
-(def meta {:tags [:mine :dig]})
+(def meta {:category :phase :part-of '[jobs.gather.dig-for] :tags [:mine :dig]})

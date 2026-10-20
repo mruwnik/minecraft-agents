@@ -4,6 +4,7 @@
             [engine.args :as a]
             [jobs.lib.ready :as ready]
             [engine.settings :as settings]
+            [jobs.lib.access-tool :as atool]
             [jobs.lib.need :as need]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
@@ -245,14 +246,18 @@
 
 (defn ^:async fetch-tool!
   "Get the pickaxe the escape stair lacks (its ending e names the block or tool kind): :continue while it works, :again
-  once it is got, else :again with the stair dug bare-handed from now on (:by-hand)."
+  once it is got, else :again with the stair dug bare-handed from now on (:by-hand): a way out must open, so this is the
+  one place a failed fetch is not passed up."
   [c e]
   (let [{:keys [block tool]} (:cause e)
-        t (await (need/tool! c (if block {:block block} {:kind tool}) {:return? true}))]
+        r (await (atool/get! c (if block {:block block} {:kind tool}) nil))]
     (cond
-      (= :continue t) :continue
-      (= :done (:kind t)) :again
-      :else (do (ctx/update-mem! c assoc :by-hand true) :again))))
+      (= :continue r) :continue
+      (= :fetched r) :again
+      :else (do (ctx/update-mem! c assoc :by-hand true)
+                (ctx/emit! c :leave-tunnel.fetch-failed :warn {:block block :tool tool :because (contract/cause-key r)
+                                                              :text "leave-tunnel could not get a pickaxe: digging its way out bare-handed"})
+                :again))))
 
 (defn ^:async escape!
   "One attempt of the way out: a stair to the entry's height (opposite the tunnel's :dir) along the next heading; done, the body is out and the
@@ -405,7 +410,7 @@
     (if back back (await (work-round c)))))
 
 (defn ^:async round
-  "The whole way out: step! until it ends, a pace between; :continue after (stair/round-s) seconds or while a child
+  "The whole way out: step! until it ends, a pace between; :continue while a child
   waits on the world."
   [c]
-  (await (pace/timed-steps! c (stair/round-s) #(step! c))))
+  (await (pace/steps! c #(step! c))))
