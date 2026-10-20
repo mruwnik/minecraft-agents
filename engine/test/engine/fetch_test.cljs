@@ -22,6 +22,7 @@
             [engine.memory :as mem]
             [engine.perception :as perception]
             [engine.registry :as registry]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]))
@@ -964,6 +965,10 @@
           (is (empty? (events-of s :stopped)) (pr-str (map :why (events-of s :stopped))))
           (is (seq (listed s)) "the obtain is still running"))))))
 
+(def small-explore
+  "A search that walks a few short legs: the whole default range of a search that finds nothing is minutes of walking."
+  {:max-distance 12 :max-legs 2 :spend {:job-time 300}})
+
 (deftest obtain-oak-planks-fells-no-birch
   ;; a birch log makes no oak planks: felling birch for them gathered hundreds of logs live
   (async done
@@ -972,7 +977,7 @@
         (let [birch (into {} (for [y (range 64 68)] [(str "4," y ",9") "birch_log"]))
               s (start (update (bare []) :blocks merge birch {"4,68,9" "birch_leaves"}) [own-zone])]
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_planks" :count 4}) {})
-          (await (run-ticks s 60))
+          (await (settings/with-settings {:jobs.items.obtain.base/explore small-explore} #(run-ticks s 60)))
           (is (empty? (calls s "dig")))
           (is (nil? (get (inv s) "birch_log")))
           (is (some #(re-find #"gather what a craft lacks: oak_log" (str (:why %))) (concat (events-of s :waiting) (events-of s :stopped)))
@@ -1153,7 +1158,7 @@
       (fn ^:async t []
         (let [s (start (assoc (update (bare []) :blocks merge tree-blocks) :unreachable (vec (keys tree-blocks))) [own-zone])]
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :explore true}) {})
-          (await (run-ticks s 300))
+          (await (settings/with-settings {:jobs.items.obtain.base/explore small-explore} #(run-ticks s 300)))
           (is (seq (events-of s :obtain.exploring)) "it walked to look for another tree")
           (is (<= (count (events-of s :obtain.exploring)) 3) "bounded")
           (is (= :no-source (:reason (last (events-of s :stopped))))))))))
@@ -1210,7 +1215,7 @@
         (let [leaves {"-2,65,3" "oak_leaves" "-2,66,3" "oak_leaves"}
               s (start (assoc (update (bare []) :blocks merge leaves) :drops {"oak_leaves" "oak_sapling"}) [own-zone foreign-zone])]
           (core/submit! (:eng s) (list 'jobs.items.obtain {:item "oak_sapling"}) {})
-          (await (run-ticks s 60))
+          (await (settings/with-settings {:jobs.items.obtain.base/explore small-explore} #(run-ticks s 60)))
           (is (empty? (calls s "dig")))
           (is (nil? (get (inv s) "oak_sapling"))))))))
 
