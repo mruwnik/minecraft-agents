@@ -1,0 +1,21 @@
+;; The :ore-seen trigger (card c2e39ab0): ore a mining job passes is dug by gather.pick-ores, never the ore the job digs
+;; itself, never buried ore (mine-ore/buried-ore-off-the-line-is-never-dug stays the should-not-dig case).
+;; Stone mass x 2..30, z 8..24, y 0..6; body in a 1x2 cell at [16 0 16] facing east, stone pickaxe.
+{:defaults
+ {:tags [:mine :jobs :triggers] :time :any
+  :plot {:height 12}
+  :blocks [[:fill [2 0 8] [30 6 24] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
+  :body {:at [16.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["cobblestone" 16]] :effects [["resistance" 600 4]]}}
+ :cases
+ [{:name "mine-picks-up-coal-beside-its-tunnel-and-digs-its-own-iron"
+   :blocks [[:set [19 0 17] "coal_ore"] [:set [24 0 16] "iron_ore"]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 10 :radius 8})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 120 :of-job true}]
+   :after [[:item "raw_iron" 1] [:item "coal" 1] [:not-block [19 0 17] "coal_ore"]]
+   :limit-s 140}
+  {:name "root-stair-picks-up-coal-beside-its-cut"
+   :blocks [[:set [19 0 17] "coal_ore"]]
+   :act [[:job (jobs.access.stair {:dir :level :heading :east :steps 6 :fetch false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]
+   :after [[:item "coal" 1] [:not-block [19 0 17] "coal_ore"]]
+   :limit-s 140}]}

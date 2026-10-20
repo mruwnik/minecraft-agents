@@ -60,12 +60,12 @@
   :stay-level (jobs.gather.mine-stay, mine.side) keeps the start height and seals a cut that opens into air; seen ore out of reach is
   :unreached in the result.
 
-  Ore beside the way is picked up by jobs.lib.ore-pick (:pick-up-ores).
+  It marks itself for the :ore-seen trigger (jobs.lib.ore-pick): ore beside the way is dug, except the block it digs.
 
   Ends :done when :got meets :count (or the call's :least); else condition-failed for the facts :none :wet :refused :own-zone
   :no-shaft :flooded :no-tool :no-torches, nothing-possible for failed tries (:no-drops
   :gave-up :tunnel-length :tunnel-stopped :no-stone-found :descent-stopped :not-back). 0 of :count is never done.
-  Data {:got n :reason r} plus :descent, :tunnel, :left, :lost, :ores, :unreached, :ground (with :track-ground), :start-floor-dug (the cell under the start was dug); text says reason,
+  Data {:got n :reason r} plus :descent, :tunnel, :left, :lost, :unreached, :ground (with :track-ground), :start-floor-dug (the cell under the start was dug); text says reason,
   :got, the stair and the tunnel. Quote: about ::item-s s an item, open-ended.")
 
 (a/defargs args
@@ -75,7 +75,6 @@
    :radius :shared
    :center :shared
    :wet :shared
-   :pick-up-ores :shared
    :fetch {:doc "get what the dig runs out of on its way through its children (blocks to seal a cut, the ingredients of torches: jobs.lib.need; not for the stair of a shaft descent, which always fetches): true, a set of kinds or a map of limits; false: it makes do with what is carried. The pickaxe, a spare and the torches are the trip's (jobs.gather.mine)" :spec need/option? :default true}
    :ignore-zones? :shared
    :track-ground {:doc "dig the 5x5x2 ground under the start last and list the cells of it that were open at the end or dug in :ground of the result, for a caller that fills them again" :spec boolean? :default false}
@@ -286,7 +285,7 @@
                   :else (stop! c (if (and wet? (not wet)) :wet :none)))))))
 
 (defn ^:async dig-round!
-  "A side cut or tunnel step under way goes on first, then a hole dug in the wall is shut, then the ores within reach, then
+  "A side cut or tunnel step under way goes on first, then a hole dug in the wall is shut, then
   one piece of the digging."
   [c]
   (cond
@@ -294,8 +293,8 @@
     (:branch (ctx/mem c)) (await (branch/branch-round! c))
     (:stepping (ctx/mem c)) (await (tunnel/tunnel-round! c))
     (seq (:holes (ctx/mem c))) (await (wall/shut-holes! c))
-    (= :continue (await (ore-pick/pick! c {:leave (kinds (:args c))}))) :continue
-    :else (await (dig-round-1! c))))
+    :else (do (ore-pick/mark! c {:leave (kinds (:args c))})
+              (await (dig-round-1! c)))))
 
 (defn toward
   "The heading name for a :heading arg h at start: a name, or the dominant axis from start to a cell [x y z]; nil when none."

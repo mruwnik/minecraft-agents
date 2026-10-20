@@ -5,7 +5,6 @@
             [jobs.lib.access :as access]
             [jobs.lib.shafts :as shafts]
             [jobs.lib.util :as u]
-            [jobs.lib.ore-pick :as ore-pick]
             [jobs.lib.look :refer [cell-of]]
             [jobs.gather.mine.targets :refer [kinds left-behind owed got]]))
 
@@ -62,12 +61,6 @@
   (when-let [end (when (pos? (:steps tunnel 0)) (:end tunnel))]
     (str ", ended at " (str/join "," end))))
 
-(defn ores-text
-  "\"; also picked 2 redstone_ore, 1 gold_ore\" for the ore blocks ore-pick dug on the way (empty for none)."
-  [picked]
-  (when (seq picked)
-    (str "; also picked " (str/join ", " (map (fn [[block n]] (str n " " block)) (frequencies (map :block picked)))))))
-
 (defn record-shaft-branch!
   "Remember the branch of the shaft this run dug (once), so the next run takes another."
   [c]
@@ -110,13 +103,12 @@
               (pos? (:steps tunnel 0)) (assoc :tunnel (-> tunnel (select-keys [:origin :heading :steps :stop :end]) (update :origin access/cell)))
               (:start-floor-dug m) (assoc :start-floor-dug true)
               (seq (:legs m)) (assoc :legs (:legs m))
-              (seq (ore-pick/picked c)) (assoc :ores (ore-pick/picked c))
               (seq left) (assoc :left (mapv (fn [[pos n]] {:pos pos :count n}) (:left (ctx/mem c))))
               (seq (:lost m)) (assoc :lost (:lost m))
               (:track-ground (:args c)) (assoc :ground ground))]
     (record-shaft-branch! c)
     (end-run c (merge (let [soil (when (= :no-stone-found reason) (str "; dug down " (:steps descent 0) " blocks through soil, found no stone"))
-                            tail (str wet-text (dug-text m reason) (tunnel-tail tunnel) (ores-text (ore-pick/picked c)))]
+                            tail (str wet-text (dug-text m reason) (tunnel-tail tunnel))]
                         (cond
                           (zero? got) {:text (str "dig-for got nothing: " (name reason) soil tail)}
                           (< got (owed c)) {:text (str "dig-for got " got " of " (owed c) ": " (name reason) tail)}

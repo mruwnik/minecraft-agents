@@ -50,7 +50,6 @@
    :radius :shared
    :center :shared
    :wet :shared
-   :pick-up-ores :shared
    :fetch {:doc "get a pickaxe when none is carried (jobs.items.get-tool through jobs.lib.need), a spare for a worn one, and torches: true, a set of kinds or a map of which only :how and :explore apply; false: the dig ends with what is carried" :spec need/option? :default true}
    :ignore-zones? :shared
    :mend {:doc "fill the ground under the start again once the dig is over" :spec boolean? :default false}

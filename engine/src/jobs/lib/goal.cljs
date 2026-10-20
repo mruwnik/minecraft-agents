@@ -11,7 +11,7 @@
 (def errands
   "The comfort errands' jobs (the :comfort entries of triggers/defaults.edn): their walks are not where the body was bound. Listed here because a job library does not read the trigger defaults (engine); keep in step with them."
   #{"jobs.access.cleanup" "jobs.maintenance.shut" "jobs.storage.make-room" "jobs.survival.restore-broken"
-    "jobs.items.pick-up-loose" "jobs.movement.leave-vehicle"})
+    "jobs.items.pick-up-loose" "jobs.gather.pick-ores" "jobs.movement.leave-vehicle"})
 
 (defn open-goals
   "The :goal of every open go-to in a job memory map, its children included."

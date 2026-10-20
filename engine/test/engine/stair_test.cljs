@@ -16,6 +16,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]
             [jobs.access.stair :as stair]
+            [jobs.lib.ore-pick :as ore-pick]
             [jobs.lib.access :as access]
             [jobs.lib.bridge :as bridge]
             [jobs.lib.dig-look :as dig-look]
@@ -1203,20 +1204,28 @@
           (is (nil? (waiting s)))
           (is (seq (digs p)) "dug bare-handed"))))))
 
-(deftest a-stair-digs-an-exposed-ore-beside-the-way-unless-told-not-to-or-lava-touches-it
+(deftest only-a-root-stair-marks-itself-for-the-ore-seen-trigger
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [coal (assoc ground "1,64,1" "coal_ore")
-              run (fn ^:async run1 [blocks args] (await (stair! {:blocks blocks} (merge east args) tu/seeing-all)))
-              on (await (run coal {}))
-              off (await (run coal {:pick-up-ores false}))
-              wet (await (run (assoc coal "2,64,1" "lava") {}))]
-          (is (= "air" (block-at (:p on) [1 64 1])) "picked")
-          (is (= [{:cell [1 64 1] :block "coal_ore"}] (mapv #(select-keys % [:cell :block]) (:ores @(:out on)))))
+        (let [marks (atom 0)
+              run (fn ^:async run1 [root?]
+                    (reset! marks 0)
+                    (with-redefs [ore-pick/mark! (fn [_ _] (swap! marks inc))]
+                      (let [s (setup {:blocks ground} (atom east) (fn [_]))]
+                        (when root? (core/submit! (:eng s) (list 'jobs.access.stair east) {}))
+                        (await (tick-out! s))))
+                    @marks)]
+          (is (pos? (await (run true))) "a stair called by an agent")
+          (is (zero? (await (run false))) "a stair a parent runs"))))))
+
+(deftest a-stair-leaves-an-exposed-ore-beside-the-way-to-the-ore-seen-trigger
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [on (await (stair! {:blocks (assoc ground "1,64,1" "coal_ore")} east tu/seeing-all))]
           (is (= :done (:status @(:out on))))
-          (is (= "coal_ore" (block-at (:p off) [1 64 1])) "opted out")
-          (is (= "coal_ore" (block-at (:p wet) [1 64 1])) "lava beside it"))))))
+          (is (= "coal_ore" (block-at (:p on) [1 64 1]))))))))
 
 (defn ^:async with-sight-of-no-sky
   "(f) with the body underground whatever the fake's missing light data say (the column fallback of sh-sense/buried? sees only

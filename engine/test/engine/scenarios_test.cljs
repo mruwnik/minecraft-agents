@@ -165,7 +165,8 @@
 ;; A default trigger left out of survival.edn on purpose goes here, with the reason: a register that omits a new default
 ;; never offers it to existing bodies.
 (def survival-excluded
-  #{:loose-items}) ; would fire on the death pile the survival tests pin to recover-drops
+  #{:loose-items ; would fire on the death pile the survival tests pin to recover-drops
+    :ore-seen}) ; a survival scenario runs no mining job
 
 (deftest survival-registers-every-default-trigger
   (let [{:keys [eng]} (boot "scenarios/survival.edn" {})]

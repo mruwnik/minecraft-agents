@@ -139,7 +139,7 @@
 (defn watch-kinds
   "The blocks whose coming into view the strip tunnel stops for: the mined block and the ores the pick-up takes on the way."
   [c]
-  (into (kinds (:args c)) (ore-pick/names c)))
+  (into (kinds (:args c)) (ore-pick/names)))
 
 (defn ^:async tunnel-round!
   "One stretch of the strip tunnel: a jobs.gather.strip-tunnel child (slot :tunnel), which ends when a block that is dug for or picked

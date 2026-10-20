@@ -662,22 +662,6 @@
             (finally (set! ctx/call orig)))
           (is (<= 1 @n 2) (str "fetch child calls " @n)))))))
 
-(deftest a-tunnel-run-digs-an-exposed-ore-beside-the-way-but-never-its-target
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [trench (apply dissoc ground (for [x (range -12 -1) y [61 62 63 64] z (range -3 4)] (str x "," y "," z)))
-              world (assoc trench "-1,61,1" "coal_ore" "0,61,0" "coal_ore")
-              run (fn ^:async run1 [args] (await (tunnel! {:blocks world :self {:pos {:x -5 :y 61 :z 0}}}
-                                                          (merge {:target [0 61 0]} args) tu/seeing-all)))
-              on (await (run {}))
-              off (await (run {:pick-up-ores false}))]
-          (is (= :reached (:reason @(:out on))))
-          (is (= "air" (block-at (:p on) [-1 61 1])) "the coal beside the run")
-          (is (= [{:cell [-1 61 1] :block "coal_ore"}] (mapv #(select-keys % [:cell :block]) (:ores @(:out on)))))
-          (is (= "coal_ore" (block-at (:p on) [0 61 0])) "the target is left to its caller")
-          (is (= "coal_ore" (block-at (:p off) [-1 61 1])) "opted out"))))))
-
 (deftest a-tunnel-with-only-a-spent-pickaxe-stops-tool-spent-unless-told-otherwise
   (async done
     (tu/run-async done

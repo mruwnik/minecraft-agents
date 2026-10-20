@@ -206,8 +206,7 @@
         r (waits/waiting-out c (await (ctx/call c :stair 'jobs.access.stair
                                  {:dir :down :heading (keyword (:heading (ctx/mem c))) :steps 1 :fetch (if level? (:fetch (:args c)) true)
                                   :accept (filterv #{:falling-block} (:accept (:args c)))
-                                  :ignore-zones? (:ignore-zones? (:args c))
-                                  :pick-up-ores (:pick-up-ores (:args c))})))
+                                  :ignore-zones? (:ignore-zones? (:args c))})))
         res (result-of r)]
     (cond
       (= :continue r) :continue

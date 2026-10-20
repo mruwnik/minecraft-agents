@@ -422,17 +422,6 @@
         (let [s (await (shafted (assoc via-shaft :shaft :required) ore-east [] 400))]
           (is (= :count (:reason (done-event s)))))))))
 
-(deftest mine-digs-an-exposed-ore-within-reach-of-its-stand-and-reports-it
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [world {:blocks (merge floor sand-patch {"-1,64,1" "coal_ore"}) :inventory [{:name "wooden_pickaxe" :count 1}]}
-              on (await (scenario {:block "sand" :count 6} world 60))
-              off (await (scenario {:block "sand" :count 6 :pick-up-ores false} world 60))]
-          (is (= "air" (block-at on -1 64 1)))
-          (is (= [[-1 64 1]] (mapv :cell (:ores (done-event on)))))
-          (is (= "coal_ore" (block-at off -1 64 1)) "opted out"))))))
-
 (deftest stay-level-declines-on-the-surface-and-says-what-to-do
   (let [stay {:stay-level true}]
     (is (= :on-surface (:reason (mine/surface-cause stay 15))))
@@ -441,11 +430,6 @@
     (is (nil? (mine/surface-cause stay 0)) "sealed from the sky")
     (is (nil? (mine/surface-cause stay nil)) "no light data")
     (is (nil? (mine/surface-cause {} 15)) "only :stay-level declines")))
-
-(deftest the-end-text-names-the-other-ores-picked
-  (is (nil? (mine-end/ores-text nil)))
-  (is (= "; also picked 2 redstone_ore, 1 gold_ore"
-         (mine-end/ores-text [{:block "redstone_ore"} {:block "gold_ore"} {:block "redstone_ore"}]))))
 
 (deftest the-end-text-names-why-a-run-with-no-tunnel-blocks-stopped
   (is (= "; stair stopped: undercuts-way; tunnel stopped: way-out"

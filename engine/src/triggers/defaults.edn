@@ -28,4 +28,5 @@
   {:id :mounted :level :comfort :when triggers.movement.mounted/mounted :job (jobs.movement.leave-vehicle) :args {} :persistence :cooldown :cooldown-s 30}
   {:id :part-cut-tree :level :comfort :when triggers.forestry.part-cut-tree/part-cut-tree :job (jobs.forestry.fell-tree {:part-cut? true :ways #{:carried}}) :args triggers.forestry.part-cut-tree/defaults :persistence :cooldown :cooldown-s 60}
   {:id :replant-owed :level :comfort :when triggers.forestry.replant-owed/replant-owed :job (jobs.forestry.plant-sapling {:ways #{:carried}}) :args triggers.forestry.replant-owed/defaults :persistence :cooldown :cooldown-s 60}
+  {:id :ore-seen :level :comfort :when triggers.gather.ore-seen/ore-seen :job (jobs.gather.pick-ores) :args triggers.gather.ore-seen/defaults :persistence :cooldown :cooldown-s 5 :backoff {:after 9}}
   {:id :loose-items :level :comfort :when triggers.items.loose-items/loose-items :job (jobs.items.pick-up-loose) :args triggers.items.loose-items/defaults :persistence :cooldown :cooldown-s 30}]}

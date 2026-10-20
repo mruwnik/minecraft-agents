@@ -55,7 +55,7 @@
   dig lacks nothing this call cannot get (:refused, :no-tool, :no-free-slot). Quote: steps x cells of the step x the time of a cell.
   - A pack without room waits :no-free-slot until it changes (the make-room reflex or the caller clears it).
   - A missing pickaxe is got by the jobs.blocks.dig child (:fetch), then the body walks back onto the line and goes on; a fetch that fails ends :no-tool with its reason as :because. :fetch off ends :no-tool.
-  - Before each step the exposed ores within reach are dug, those below the feet only over a solid floor (:pick-up-ores, jobs.lib.ore-pick).
+  - A root stair marks itself for the :ore-seen trigger (jobs.lib.ore-pick): exposed ore within reach is dug.
 
   One call cuts the whole stair; it yields :continue while a fetch or walk child waits on the world. The
   body's cell is the progress: a resumed call finds its step from where the body stands on the stair line. Dug cells are left and recorded.
@@ -67,7 +67,7 @@
   refusals but :not-loaded; a cell of a plan this body made refuses :footprint unless the spare-own-builds setting is false.
   :undercuts-way: a cut cell is the floor of an earlier stair of this body (memory :stair-way, written at every end), or a step floor of air at a step of one.
   :off-stair: off the line with max-returns walks back used up. :floor-unseen: the floor still unseen once the cut is open, looked at again after a lean.
-  Data {:steps n :at [x y z] :dug [{:cell :block}] :ores [{:cell :block :got}]} plus detail (:cell :hazards :zone :why ...; the walk child's ending is the :because of :step-failed).
+  Data {:steps n :at [x y z] :dug [{:cell :block}]} plus detail (:cell :hazards :zone :why ...; the walk child's ending is the :because of :step-failed).
 
   A dig whose every carried tool is down to jobs.lib.trip's ::spent-uses (3) uses (trip/spent-tool?) stops :tool-spent before the last tool
   breaks, after a spare was tried once; a way out digs on with the call's :settings {:jobs.lib.trip/spent-uses 0}. :need-drop false digs a block no carried tool clears bare-handed (go-to's last resort).")
@@ -84,7 +84,6 @@
    :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.need), and a block to seal lava with: true, a set of kinds or a map of limits" :spec need/option? :default true}
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop" :spec #{:seal :stop} :default :seal}
    :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of waiting :no-tool" :spec boolean? :default true}
-   :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way (below the feet only over a solid floor); false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}
    :through {:doc "the id of a mineshaft plan the stair runs down: its footprint is no obstacle (jobs.lib.shafts)" :spec string? :default nil}})
 
 (a/defargs settings
@@ -168,10 +167,10 @@
             (with-heading-check not-lacking)))
 
 (defn result-of
-  "The data of a stair now: {:steps :at :dug :ores} and what it placed (jobs.lib.spent) plus detail."
+  "The data of a stair now: {:steps :at :dug} and what it placed (jobs.lib.spent) plus detail."
   [c detail]
   (let [m (ctx/mem c)]
-    (merge {:steps (or (:at-step m) 0) :at (reach/standing-vec (:primitives c)) :dug (:dug m []) :ores (vec (ore-pick/picked c))}
+    (merge {:steps (or (:at-step m) 0) :at (reach/standing-vec (:primitives c)) :dug (:dug m [])}
            (spent/summary (spent/log c)) detail)))
 
 (defn done?
@@ -274,13 +273,13 @@
         in (judge/rules-in c feet)
         i (geo/stair-index origin feet dir heading target)]
     (ctx/update-mem! c geo/record-dug (:block-at in))
+    (when (empty? (:slots c)) (ore-pick/mark! c {}))
     (cond
       (nil? i) (or (await (return! c))
                    {:reason :off-stair :cell feet :origin origin
                     :offset (mapv - feet origin)
                     :why (str "the body is " (pr-str (mapv - feet origin)) " from the stair's start " (pr-str origin)
                               ", off its line")})
-      (= :continue (await (ore-pick/pick! c))) :continue
       :else
       (do
         (ctx/update-mem! c assoc :at-step i)

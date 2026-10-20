@@ -82,13 +82,12 @@
   stand it is done, anywhere else it walks to the entry. A cell dug before a cut is air and is not dug again.
   Dug cells are left and recorded.
 
-  On the run it digs the exposed ores within reach (:pick-up-ores, jobs.lib.ore-pick), never the target; :ores lists them
-  with those of the stair child.
+  A root tunnel marks itself for the :ore-seen trigger (jobs.lib.ore-pick): ore seen beside the line is dug, never the target.
 
   Done (:already before the start) when the body stands beside :target at its height with the cell over it open. Ends :done {:reason :reached}; a stop is condition-failed for a fact (the reasons above, :no-tool, :no-way-back, the
   stair's) and nothing-possible for a failed attempt (:walk-in-failed, :step-failed, :dig-failed, :refills);
   :tool-spent is a fact (no tool left above its reserve). Data of every ending: {:reason :target :entry :heading :stand :at
-  [x y z] :dug [{:cell :block}] :ores :inside bool :line {:entry :heading :dir :steps :run :stand :target}}
+  [x y z] :dug [{:cell :block}] :inside bool :line {:entry :heading :dir :steps :run :stand :target}}
   plus detail. :inside is true when the body is off the entry, on the way in. 
 
   Every carried pickaxe down to jobs.lib.trip's ::spent-uses (3) uses stops the tunnel {:reason :tool-spent} before the last breaks (jobs.access.stair; the call's :settings {:jobs.lib.trip/spent-uses 0} digs on).
@@ -108,8 +107,7 @@
    :ignore-zones? :shared
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop (jobs.access.stair)" :spec #{:seal :stop} :default :seal}
    :fetch {:doc "get a missing pickaxe instead of ending :no-tool (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-tool" :spec need/option? :default true}
-   :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of fetching a tool; a failed fetch ends :no-tool either way" :spec boolean? :default true}
-   :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way (below the feet only over a solid floor); false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}})
+   :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of fetching a tool; a failed fetch ends :no-tool either way" :spec boolean? :default true}})
 
 (def safe? (ready/safe-at-by-night (fn [c] (a/cell (:target (:args c)))) false true))
 
@@ -159,13 +157,13 @@
       (ledger/record-tunnel! c (:end (ln/line plan)) (shape/headings (:heading plan)) run-steps))))
 
 (defn result-of
-  "The result data of the tunnel now: {:reason r :target :at :dug :ores :inside} plus the line's
+  "The result data of the tunnel now: {:reason r :target :at :dug :inside} plus the line's
   entry, heading and stand once one is chosen, then detail."
   [c reason detail]
-  (let [{:keys [plan dug ores]} (ctx/mem c)
+  (let [{:keys [plan dug]} (ctx/mem c)
         feet (reach/standing-vec (:primitives c))]
     (merge (cond-> {:reason reason :target (target-of c)
-                    :at feet :dug (or dug []) :ores (into (vec ores) (ore-pick/picked c)) :inside (boolean (and plan (not= feet (:entry plan))))}
+                    :at feet :dug (or dug []) :inside (boolean (and plan (not= feet (:entry plan))))}
              plan (assoc :line (select-keys plan [:entry :heading :dir :steps :run :stand :target])))
            (select-keys plan [:entry :heading :stand])
            detail)))
@@ -273,13 +271,12 @@
   (let [cells (ln/line-cells plan)
         e (waits/waiting-out c (await (ctx/call c :stair 'jobs.access.stair
                            {:dir dir :heading heading :fetch (:fetch (:args c)) :need-drop (:need-drop (:args c)) :y ((cells (:steps plan)) 1) :on-lava (:on-lava (:args c) :seal)
-                            :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c)))
-                            :pick-up-ores (:pick-up-ores (:args c))})))]
+                            :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
     (if (= :continue e)
       :continue
       (let [res (:data e)
             done? (= :done (:kind e))]
-        (ctx/update-mem! c #(-> % (update :dug (fnil into []) (:dug res)) (update :ores (fnil into []) (:ores res))
+        (ctx/update-mem! c #(-> % (update :dug (fnil into []) (:dug res))
                                 (assoc :stair-done (and done? (= (cells (:steps plan)) (reach/standing-vec (:primitives c)))))))
         (if done? :again (stop-of e :stair))))))
 
@@ -299,7 +296,8 @@
         j (run-index end feet heading run)
         i (when (pos? steps) (geo/stair-index entry feet dir heading steps))]
     (ctx/update-mem! c geo/record-dug (:block-at (judge/rules-in c feet)))
-    (or (when (and j (= :continue (await (ore-pick/pick! c {:except #{(target-of c)}})))) :continue)
+    (when (empty? (:slots c)) (ore-pick/mark! c {:except [(target-of c)]}))
+    (or
         (cond
           (and i (not stair-done) (or (< i steps) (not (segment-start? c))))
           (if-let [stop (when (and (pos? i) (not= i checked) (segment-start? c)) (await (drive/way-back c entry)))]
