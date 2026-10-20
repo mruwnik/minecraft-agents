@@ -147,6 +147,13 @@
     (is (= 8 (land-x (spot p 4 {:x 8 :y 64 :z 0}))))
     (is (= 10 (land-x (spot p 4 {:x 12 :y 64 :z 0}))))))
 
+(deftest afloat-the-recorded-launch-bank-is-left-out
+  (let [{:keys [p]} (lt/setup {:blocks (into {} (for [x (range 4 21) z (range -3 4)] [(str x ",63," z) "water"]))})
+        afloat (fn [bank] (settings/with-settings {::cw/min-cross 5}
+                            #(land-x (cw/far-spot p {:x 12.5 :y 63.5 :z 0.5} {:goal {:x 0 :y 64 :z 0} :bank bank}))))]
+    (is (= 3 (afloat nil)) "no record: every shore counts")
+    (is (< 3 (afloat {:x 3.5 :y 64 :z 0.5})) "the bank pushed off from is not across")))
+
 (defn ^:async run-saved
   "Run cross-water as the child of a parent that first saved a crossing to `land`: a restart after the launch."
   [world land]

@@ -69,12 +69,14 @@
           (range 1 n))))
 
 (defn far-spot
-  "The shore spot {:land :water} within ::radius of `from`, at least ::min-cross away and across water from it (not the start bank), or nil:
-  the one nearest :goal when given, else the farthest."
-  [p from {:keys [goal]}]
+  "The shore spot {:land :water} within ::radius of `from`, at least ::min-cross away and across water from it, or nil:
+  the one nearest :goal when given, else the farthest. Shores less than ::min-cross from `bank` (the launch bank, if known) are left out."
+  [p from {:keys [goal bank]}]
   (->> (shore/spots p from {:radius (radius)})
        (map #(assoc % :d (u/dist from (vehicle/centre (:land %)))))
-       (filter #(and (>= (:d %) (min-cross)) (water-between? p from %)))
+       (filter #(and (>= (:d %) (min-cross))
+                    (or (nil? bank) (>= (u/dist bank (vehicle/centre (:land %))) (min-cross)))
+                    (water-between? p from %)))
        (sort-by (if goal #(u/dist goal (vehicle/centre (:land %))) #(- (:d %))))
        first))
 
@@ -82,13 +84,13 @@
   (let [p (:primitives c)]
     (if-let [cell (given-pos c)]
       (shore/spot-at p cell)
-      (far-spot p (u/self-pos c) {:goal (goal-pos c)}))))
+      (far-spot p (u/self-pos c) {:goal (goal-pos c) :bank (:bank (ctx/mem c))}))))
 
 (defn water-in-sight? [c]
   (boolean (seq (look/seen-blocks (:primitives c) {:names ["water"] :radius (radius) :max 1 :live? true}))))
 
 (defn crossing
-  "The crossing under way, {:land cell}, from job memory; nil before the launch."
+  "The crossing under way, {:land cell}, from job memory; nil before the launch (:bank there is the launch bank)."
   [c]
   (:crossing (ctx/mem c)))
 
@@ -115,21 +117,22 @@
     (cond
       (= :continue r) :continue
       (= :done (:kind r))
-      (do (ctx/update-mem! c dissoc :crossing)
+      (do (ctx/update-mem! c dissoc :crossing :bank)
           (ctx/end c :done nil (merge {:land land :recovered false} (select-keys (:data r) [:land :boat :recovered]))))
       ;; on foot after the launch with the landing already done: done only if the body is on the far shore
       (and (crossing c) (= :not-aboard (contract/cause-key r)) (on-shore? c land))
-      (do (ctx/update-mem! c dissoc :crossing)
+      (do (ctx/update-mem! c dissoc :crossing :bank)
           (ctx/end c :done nil {:land land :recovered false}))
       (and (crossing c) (= :not-aboard (contract/cause-key r)))
-      (do (ctx/update-mem! c dissoc :crossing)
+      (do (ctx/update-mem! c dissoc :crossing :bank)
           (ctx/end c :nothing-possible :not-landed {:land land}))
       :else
-      (do (ctx/update-mem! c dissoc :crossing)
+      (do (ctx/update-mem! c dissoc :crossing :bank)
           (failure c r {})))))
 
 (defn ^:async launch! [c spot]
   (let [{:keys [item]} (:args c)
+        _ (when-not (vehicle/mounted? (:primitives c)) (ctx/update-mem! c assoc :bank (u/self-pos c)))
         r (await (ctx/call c :launch 'jobs.movement.boat-launch {:item item}))]
     (cond
       (= :continue r) :continue
