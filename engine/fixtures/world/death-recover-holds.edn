@@ -40,7 +40,7 @@
    :act [[:time-set 21500]
          [:wait-s 1]
          [:kill-body]]
-   :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 160}
-            {:no-event {:source :reflex :kind :held :data {:reason :exposed}} :for-s 160 :until {:source :job :kind :recover-drops.decided}}]
+   :expect [{:event {:source :job :kind :completed :data {:decision :collected}} :within-s 160}
+            {:no-event {:source :reflex :kind :held :data {:reason :exposed}} :for-s 160 :until {:source :job :kind :completed :data {:decision :collected}}}]
    :after [[:item "raw_iron" 24]]
    :limit-s 200}]}

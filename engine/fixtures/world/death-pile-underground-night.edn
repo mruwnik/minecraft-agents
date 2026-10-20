@@ -15,6 +15,6 @@
   :limit-s 220}
  :cases
  [{:name "underground-pile-is-fetched-at-night"
-   :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 200}
-            {:no-event {:source :job :kind :waiting :data {:reason :night}} :for-s 200 :until {:source :job :kind :recover-drops.decided}}]
+   :expect [{:event {:source :job :kind :completed :data {:decision :collected}} :within-s 200}
+            {:no-event {:source :job :kind :waiting :data {:reason :night}} :for-s 200 :until {:source :job :kind :completed :data {:decision :collected}}}]
    :after [[:item "raw_iron" 24]]}]}

@@ -42,7 +42,7 @@
         (let [{:keys [eng seen p]} (await ((run-with-chest kit-in-chest true "skeleton")))]
           (is (= 1 (get (inv p) "iron_sword")))
           (is (= "iron_helmet" (get (worn p) "head")))
-          (is (re-find #"^fetch: " (decided-text seen)))
+          (is (re-find #"^fetch: " (decided-text eng)))
           (is (not= :skip (:decision (recovered eng)))))))))
 
 (deftest no-chest-leaves-the-unarmed-skip-unchanged
@@ -116,7 +116,7 @@
         (let [{:keys [eng seen]} (await ((run-with-pile dt/death-pile-of-the-field-report (fn ^:async stub-fetch [c names n opts] (contract/ending :nothing-possible :failed nil)))))]
           (is (some #{:recover-drops.kit-dropped} (kinds-of seen)))
           (is (= :failed (get-in (first (filter #(= :recover-drops.kit-dropped (:kind %)) @seen)) [:because :cause])) "the fetch's ending is passed on")
-          (is (some #{:recover-drops.decided} (kinds-of seen))))))))
+          (is (some? (dt/recovered-trip eng))))))))
 
 (deftest the-kit-fetch-is-limited-to-the-minutes-left-in-the-despawn-window
   (async done

@@ -14,8 +14,8 @@
   :limit-s 220}
  :cases
  [{:name "night-respawn-fetches-the-pile-before-sealing-in"
-   :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 200}
-            {:no-event {:source :job :kind :shut-in.sealed} :for-s 200 :until {:source :job :kind :recover-drops.decided}}]
+   :expect [{:event {:source :job :kind :completed :data {:decision :collected}} :within-s 200}
+            {:no-event {:source :job :kind :shut-in.sealed} :for-s 200 :until {:source :job :kind :completed :data {:decision :collected}}}]
    :after [[:item "raw_iron" 24]]}
   {:name "far-pile-in-the-open-is-fetched-at-night-before-sheltering"
    ;; Q367: late at night, 136 blocks from the pile, no bed, open sky: the drops despawn 5 min after the death, so the body walks to them
@@ -24,8 +24,8 @@
    :act [[:time-set 21500] [:wait-s 1] [:kill-body]]
    :plot {:length 160 :width 32 :height 10 :floor "dirt"}
    :body {:at [140.5 0 16.5] :spawnpoint [4 0 16]}
-   :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 200}
-            {:no-event {:source :job :kind :shut-in.sealed} :for-s 200 :until {:source :job :kind :recover-drops.decided}}]
+   :expect [{:event {:source :job :kind :completed :data {:decision :collected}} :within-s 200}
+            {:no-event {:source :job :kind :shut-in.sealed} :for-s 200 :until {:source :job :kind :completed :data {:decision :collected}}}]
    :after [[:item "raw_iron" 24]]
    :limit-s 220}
   {:name "night-shelter-moves-off-another-players-zone"

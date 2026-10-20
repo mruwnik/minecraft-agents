@@ -4,20 +4,21 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
             [engine.fake :as fake]
-            [engine.death-test :as dt :refer [die! job recovered recovered-trip pile-drops fetching-events]]
+            [engine.death-test :as dt :refer [die! job recovered recovered-trip pile-drops]]
             [engine.library-test :refer [setup]]
             [jobs.lib.child :as child]
             [jobs.lib.ledger :as ledger]
             [engine.memory :as mem]
             [engine.shelter-support :as st]
             [engine.sky-perception :as sky]
+            [jobs.survival.recover-drops.config :as cfg]
             [jobs.survival.recover-drops.estimate :as estimate]
             [jobs.survival.recover-drops.fetch :as fetch]
             [engine.test-util :as tu :refer [run-until-empty]]
             [triggers.survival.died :as died]))
 
 (defn fetch-run
-  "Die with the field-report pile and cause, run the job to its decision: the :recover-drops.decided or .fetching event."
+  "Die with the field-report pile and cause, run the job to its decision."
   ([cause] (fetch-run cause {}))
   ([cause body]
   (let [pile dt/death-pile-of-the-field-report]
@@ -28,8 +29,12 @@
         (await (run-until-empty eng 20))
         {:eng eng :seen seen})))))
 
-(defn decided-text [seen]
-  (:text (first (filter #(contains? #{:recover-drops.fetching :recover-drops.decided} (:kind %)) @seen))))
+(defn decided-text
+  "The priced decision of the run: what the remembered danger says, else the decision of the :recovered entry."
+  [eng]
+  (or (:text (dt/danger-remembered eng))
+      (let [r (recovered eng)]
+        (estimate/decision-text (if (= :skip (:decision r)) :skip :fetch) r (cfg/margin)))))
 
 (deftest a-skeleton-killer-is-priced-at-the-pile
   (async done
@@ -37,15 +42,15 @@
       (fn ^:async t []
         (let [with-cause (await ((fetch-run "skeleton")))
               without (await ((fetch-run nil)))]
-          (is (re-find #"danger [1-9][0-9.]*,.*: skeleton" (decided-text (:seen with-cause))))
-          (is (re-find #"danger 0," (decided-text (:seen without)))))))))
+          (is (re-find #"danger [1-9][0-9.]*,.*: skeleton" (decided-text (:eng with-cause))))
+          (is (re-find #"danger 0," (decided-text (:eng without)))))))))
 
 (deftest a-damage-type-cause-adds-no-danger
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [r (await ((fetch-run "fall")))]
-          (is (re-find #"danger 0," (decided-text (:seen r)))))))))
+          (is (re-find #"danger 0," (decided-text (:eng r)))))))))
 
 (def iron-kit
   {:inventory [{:name "iron_sword" :count 1}]
@@ -57,14 +62,14 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (await ((fetch-run "skeleton")))]
           (is (nil? (recovered eng)) "a danger skip stays open")
-          (is (re-find #"skip: .*danger [1-9][0-9.]*,.*: skeleton" (decided-text seen))))))))
+          (is (re-find #"skip: .*danger [1-9][0-9.]*,.*: skeleton" (decided-text eng))))))))
 
 (deftest a-body-with-an-iron-sword-and-armour-goes-for-the-guarded-pile
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [seen]} (await ((fetch-run "skeleton" iron-kit)))]
-          (is (re-find #"^fetch: " (decided-text seen))))))))
+        (let [{:keys [eng]} (await ((fetch-run "skeleton" iron-kit)))]
+          (is (re-find #"^fetch: " (decided-text eng))))))))
 
 ;; ------------------------------------------------------------ cut trips
 
@@ -129,7 +134,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [r (await ((fetch-run "drowning")))]
-          (is (re-find #"danger [1-9][0-9.]*,.*: drowning" (decided-text (:seen r)))))))))
+          (is (re-find #"danger [1-9][0-9.]*,.*: drowning" (decided-text (:eng r)))))))))
 
 (deftest a-pile-under-water-is-priced-as-water-whatever-the-cause
   (async done
@@ -137,7 +142,7 @@
       (fn ^:async t []
         (let [wet (into {} (for [y [64 65]] [(str (:x dt/death-pos) "," y "," (:z dt/death-pos)) "water"]))
               r (await ((fetch-run "fall" {:blocks wet})))]
-          (is (re-find #"danger [1-9][0-9.]*,.*: water" (decided-text (:seen r)))))))))
+          (is (re-find #"danger [1-9][0-9.]*,.*: water" (decided-text (:eng r)))))))))
 
 (deftest an-agent-retry-weighs-a-remembered-danger-anew
   (async done
@@ -170,7 +175,7 @@
           (die! eng {:pos (update dt/death-pos :x - 6) :inventory [] :cause "skeleton"})
           (core/submit! eng job {})
           (await (run-until-empty eng 5))
-          (is (re-find #"skip: value [1-9].*: skeleton" (decided-text seen)) (decided-text seen))
+          (is (re-find #"skip: value [1-9].*: skeleton" (decided-text eng)) (decided-text eng))
           (is (= [] (tu/walk-calls p))))))))
 
 (deftest a-death-with-nothing-carried-starts-no-walk
@@ -210,7 +215,7 @@
           (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"} 120000)
           (core/submit! eng job {})
           (await (run-until-empty eng 20))
-          (is (re-find #"^fetch: " (decided-text seen)))
+          (is (re-find #"^fetch: " (decided-text eng)))
           (is (= :collected (:decision (recovered eng)))))))))
 
 (deftest a-second-run-after-a-skip-says-the-death-was-decided
@@ -383,8 +388,8 @@
             (await (core/tick! eng))
             (is (= :danger (:reason (core/waiting eng id))) (pr-str (core/waiting eng id)))
             (is (re-find #"zombie" (str (:text (core/waiting eng id)))) "the wait names what made it decline")
-            (is (= 1 (count (dt/emitted seen :recover-drops.decided))) "the danger is not weighed again")
-            (is (= [] (tu/walk-calls p)))
+            (is (= 1 (count (mem/entries (mem/view (:store eng)) :recover-danger))) "the danger is not weighed again")
+                        (is (= [] (tu/walk-calls p)))
             (swap! clock + 151000)
             (is (true? (died/died nil (mem/view (:store eng)) {})) "the died trigger fires again once the memory has run out")
             (swap! (fake/state p) update :entities #(filterv (fn [e] (not= "hostile" (:kind e))) %))

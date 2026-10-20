@@ -31,8 +31,8 @@
   Danger: a real danger (jobs.lib.danger/nearest-danger) is weighed once per mob; a skip for danger alone is remembered (:recover-danger, ::danger-memory-ms, the mobs priced where they stood until their place is seen empty), after which can-run? is :later :danger and the died trigger rests; :retry weighs now and ends at once.
   Kit: a pile worth it were the route safe, and no weapon or armour: fetch the best piece a known chest holds (the call's ways, jobs.lib.need) and wear it.
   Fetch: legs of ::leg-s (weighed again after each), then up to 3 collect passes (jobs.items.collect-drops), a look and a walk round the pile; own seal blocks near it are taken back (jobs.access.cleanup), a deep pile is reached by a stair (jobs.access.tunnel).
-  Ends: :collected done; :skip condition-failed :not-worth; :partial nothing-possible :unreachable or :not-visible; :abandoned by reason (:window-closed condition-failed :gone, :danger, :nothing-found condition-failed, :unreachable nothing-possible). Data :decision :text :pos :items :left. A walk that did not arrive leaves the death open.
-  Events: recover-drops.fetching, recover-drops.decided (the priced decision, read by the dashboard), recover-drops.kit-dropped (a failed kit fetch); warn respawn_away_from_bed once per death when the respawn is over ::bed-away-blocks from the respawn bed.
+  Ends: :collected done; :skip condition-failed :not-worth; :partial nothing-possible :unreachable or :not-visible; :abandoned by reason (:window-closed condition-failed :gone, :danger, :nothing-found condition-failed, :unreachable nothing-possible). Data :decision :text :pos :value :items :left. A walk that did not arrive leaves the death open.
+  Events: recover-drops.kit-dropped (a failed kit fetch); warn respawn_away_from_bed once per death when the respawn is over ::bed-away-blocks from the respawn bed.
   Memory: reads :died :respawned :bed :slept :recover-trip :recover-danger, the scaffold ledger; writes :recovered :recover-trip :recover-danger.")
 
 (a/defargs args
@@ -107,37 +107,26 @@
       :else (do (await (child/pause! c (cfg/pause-s) reason)) (await (pace/pace!)) (recur)))))
 
 (defn decide!
-  "The decision of this trip: the saved one, else the estimate, save and report it. A resumed trip estimates again once (from
+  "The decision of this trip: the saved one, else the estimate, save it. A resumed trip estimates again once (from
   where the body stands, with the hostiles it knows now), and so does a walk after each leg; its baseline stays."
   [c entry]
   (if (and (:decided (ctx/mem c)) (not (:recheck (ctx/mem c))) (or (zero? (:cuts (ctx/mem c) 0)) (:reestimated (ctx/mem c))))
     (:decided (ctx/mem c))
-    (let [margin (cfg/margin)
-          e (-> (est/estimate c (:data entry) (settings/ticks->ms (game/ticks-since entry (ctx/view c))))
+    (let [e (-> (est/estimate c (:data entry) (settings/ticks->ms (game/ticks-since entry (ctx/view c))))
                 (update :cost est/finite)
-                (assoc :at (ctx/now c)))
-          rechecked? (:recheck (ctx/mem c))
-          fetch? (> (:value e) (+ (if (= :infinite (:cost e)) js/Infinity (:cost e)) margin))]
+                (assoc :at (ctx/now c)))]
       (ctx/update-mem! c #(cond-> (assoc % :decided e :reestimated true :recheck false) (nil? (:baseline %)) (assoc :baseline (storage/carried-totals (u/inventory (:primitives c))))))
       (dth/save-trip! c)
-      (when (and fetch? (not rechecked?))
-        (ctx/emit! c :recover-drops.fetching :info
-                   (assoc (select-keys e [:value :cost :parts :top-items :top-mobs])
-                          :pos (:pos (:data entry)) :text (est/decision-text :fetch e margin))))
       e)))
 
 
 (defn retreat!
   "Remember the danger for hold-ms and report the skip (see retry-later!). With :retry asked the run ends at once; else the
   remembered danger makes can-run? :later, which stops the round between steps."
-  [c entry decided hold-ms mobs]
+  [c entry decided hold-ms]
   (ctx/update-mem! c #(-> % (dissoc :decided) (assoc :hostile-cut true)))
   (dth/save-trip! c)
-  (ctx/remember! c :recover-danger {:death-t (:t entry) :until (+ (ctx/now c) hold-ms) :text mobs :mobs (:seen-mobs decided)} cfg/danger-policy)
-  (ctx/emit! c :recover-drops.decided :info
-             (assoc (select-keys decided [:value :cost :parts :top-items :top-mobs])
-                    :decision :skip :retry true :pos (:pos (:data entry)) :hold-s (js/Math.round (/ hold-ms 1000))
-                    :text (str (est/decision-text :skip decided (cfg/margin)) "; looks again in " (js/Math.round (/ hold-ms 1000)) " s")))
+  (ctx/remember! c :recover-danger {:death-t (:t entry) :until (+ (ctx/now c) hold-ms) :text (est/decision-text :skip decided (cfg/margin)) :mobs (:seen-mobs decided)} cfg/danger-policy)
   (if (:retry (:args c))
     (ctx/end c :condition-failed :danger {:top-mobs (:top-mobs decided) :hold-s (js/Math.round (/ hold-ms 1000)) :pos (:pos (:data entry))})
     :next))
@@ -153,7 +142,7 @@
         hold-ms (min room (:hold-ms decided (cfg/danger-memory-ms)))
         mobs (str/join ", " (map :name (:top-mobs decided)))]
     (if (pos? room)
-      (retreat! c entry decided hold-ms mobs)
+      (retreat! c entry decided hold-ms)
       (end/finish! c :abandoned (assoc decided :reason :danger :detail (str mobs " guard it and no walk back would end before it despawns"))))))
 
 (defn ^:async dig-down!

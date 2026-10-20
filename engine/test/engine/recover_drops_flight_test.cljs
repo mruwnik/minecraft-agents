@@ -43,7 +43,7 @@
           (core/submit! eng job {})
           (await (run-until-empty eng 20))
           (is (= [] (danger-declines seen)))
-          (is (= ["zombie"] (map :name (:top-mobs (last (emitted seen :recover-drops.decided)))))))))))
+          (is (re-find #"zombie" (:text (dt/danger-remembered eng)))))))))
 
 (defn dear-run
   "A death ago-ms back with a zombie priced far dearer than the pile, run to its decision."
@@ -94,8 +94,7 @@
           (die! eng {:pos dt/death-pos :inventory dt/diamonds})
           (core/submit! eng dear-zombie {})
           (await (run-until-empty eng 5))
-          (is (= {:decision :skip :retry true :mobs ["zombie"]}
-                 (let [e (last (emitted seen :recover-drops.decided))] {:decision (:decision e) :retry (:retry e) :mobs (map :name (:top-mobs e))})))
+          (is (re-find #"zombie" (:text (dt/danger-remembered eng))) "the skip for danger is remembered, naming the mob")
           (is (= [] (tu/walk-calls p)) "the body did not walk toward the pile"))))))
 
 (deftest a-priced-zombie-near-during-the-settling-hold-is-weighed-not-declined
@@ -110,7 +109,7 @@
             (await (run-until-empty eng 12))
             (js/clearInterval timer))
           (is (= [] (danger-declines seen)))
-          (is (= :skip (:decision (last (emitted seen :recover-drops.decided))))))))))
+          (is (some? (dt/danger-remembered eng))))))))
 
 (deftest a-far-mob-that-closes-in-is-weighed-when-near
   (async done
@@ -122,7 +121,7 @@
           (on-first-leg! p clock #(place-entity! p 8 (update (fake/body-pos @(fake/state p)) 0 + 3)))
           (core/submit! eng (list 'jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/leg-s 1} :danger-overrides {"zombie" 1000}}) {})
           (await (run-until-empty eng 30))
-          (is (true? (:retry (last (emitted seen :recover-drops.decided)))) "the trip turned dear: it backs off")
+          (is (some? (dt/danger-remembered eng)) "the trip turned dear: it backs off")
           (is (nil? (recovered eng)) "the death stays open"))))))
 
 (deftest a-hit-on-the-way-weighs-the-trip-again
@@ -137,7 +136,7 @@
                              (mem/write! (:store eng) :hurt {:amount 18 :health 2 :attacker {:id 8 :name "zombie"}} {:cap 50 :ttl 60000})))
           (core/submit! eng (list 'jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops.config/leg-s 1}}) {})
           (await (run-until-empty eng 30))
-          (is (true? (:retry (last (emitted seen :recover-drops.decided)))) "hit and low, the trip backs off")
+          (is (some? (dt/danger-remembered eng)) "hit and low, the trip backs off")
           (is (nil? (recovered eng)) "the death stays open"))))))
 
 (deftest a-back-off-counts-the-flight-before-the-walk-back

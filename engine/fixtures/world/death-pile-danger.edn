@@ -14,7 +14,7 @@
   :limit-s 150}
  :cases
  [{:name "zombie-near-is-priced-and-the-pile-fetched"
-   :expect [{:event {:source :job :kind :recover-drops.fetching :data {:top-mobs [:has {:name "zombie"}]}} :within-s 60}
-            {:no-event {:source :job :kind :stopped :data {:reason :danger}} :for-s 130 :until {:source :job :kind :recover-drops.decided}}
-            {:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 130}]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :go}} :within-s 60}
+            {:no-event {:source :job :kind :stopped :data {:reason :danger}} :for-s 130 :until {:source :job :kind :completed :data {:decision :collected}}}
+            {:event {:source :job :kind :completed :data {:decision :collected}} :within-s 130}]
    :after [[:item "raw_iron" 24]]}]}

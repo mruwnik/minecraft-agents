@@ -13,14 +13,14 @@
  [{:name "cheap-pile-in-water-skipped-for-the-water"
    :blocks [[:fill [23 0 23] [29 2 29] "stone"] [:fill [24 0 24] [28 2 28] "water"]]
    :act [[:job (jobs.survival.recover-drops {:value-overrides {"raw_iron" 8}})]]
-   :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :skip :retry true} :message [:contains "water 30"]} :within-s 60}
-            {:no-event {:source :job :kind :recover-drops.fetching} :for-s 60 :until {:source :job :kind :recover-drops.decided}}]}
+   :expect [{:event {:source :job :kind :waiting :data {:reason :danger :text [:contains "water 30"]}} :within-s 60}
+            {:no-event {:source :job :kind :child_started :data {:slot :go}} :for-s 60 :until {:source :job :kind :waiting :data {:reason :danger}}}]}
   {:name "same-cheap-pile-on-dry-ground-is-fetched"
    :act [[:job (jobs.survival.recover-drops {:value-overrides {"raw_iron" 8}})]]
-   :expect [{:event {:source :job :kind :recover-drops.fetching} :within-s 60}
-            {:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 140}]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :go}} :within-s 60}
+            {:event {:source :job :kind :completed :data {:decision :collected}} :within-s 140}]
    :after [[:item "raw_iron" 24]]}
   {:name "rich-pile-in-water-still-goes"
    :blocks [[:fill [23 0 23] [29 2 29] "stone"] [:fill [24 0 24] [28 2 28] "water"]]
    :act [[:job (jobs.survival.recover-drops {:value-overrides {"raw_iron" 60}})]]
-   :expect [{:event {:source :job :kind :recover-drops.fetching} :within-s 60}]}]}
+   :expect [{:event {:source :job :kind :child_started :data {:slot :go}} :within-s 60}]}]}

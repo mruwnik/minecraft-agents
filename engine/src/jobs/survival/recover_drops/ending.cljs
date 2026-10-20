@@ -1,5 +1,5 @@
 (ns jobs.survival.recover-drops.ending
-  "How a recover-drops trip ends: the :recovered entry, the decided event and the ending by decision."
+  "How a recover-drops trip ends: the :recovered entry and the ending by decision."
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.survival.recover-drops.config :as cfg]
@@ -20,17 +20,14 @@
   with the reason (:unreachable, or for a partial :unreachable / :not-visible)."
   [c decision fields text pos]
   (let [[kind cause] (or (endings decision) (endings [decision (:reason fields)]) [:nothing-possible (:reason fields)])]
-    (ctx/end c kind cause (assoc (select-keys fields [:items :left :detail]) :decision decision :text text :pos pos))))
+    (ctx/end c kind cause (assoc (select-keys fields [:items :left :detail :value]) :decision decision :text text :pos pos))))
 
 (defn finish!
-  "Write the :recovered entry, report the decision and end the job with its ending."
+  "Write the :recovered entry and end the job with its ending."
   [c decision fields]
   (let [death (dth/current-death c)
         pos (:pos (:data death))
         text (cond-> (est/decision-text decision fields (cfg/margin))
                (= :abandoned decision) (str "; the pile at " (str/join " " (map #(js/Math.floor (% pos)) [:x :y :z]))))]
     (ctx/remember! c :recovered (merge {:decision decision :death-t (:t death)} (dissoc fields :at :flight-s)) cfg/recovered-policy)
-    (ctx/emit! c :recover-drops.decided (if (= :abandoned decision) :warn :info)
-               (assoc (select-keys fields [:value :cost :reason :items :left :parts :top-items :top-mobs])
-                      :decision decision :pos pos :text text))
     (ending-for c decision fields text pos)))

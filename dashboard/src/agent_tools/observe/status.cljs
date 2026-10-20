@@ -313,6 +313,11 @@
     (clean-pairs :decision (some-> (:decision d) name) :reason (some-> (:reason d) name)
                  :value (some-> (:value d) js/Math.round))))
 
+(defn recover-ending?
+  "Whether e is the end of a recover-drops run (its :data carries the :decision)."
+  [e]
+  (and (= :job (:source e)) (#{:completed :stopped} (:kind e)) (= "jobs.survival.recover-drops" (:name e)) (some? (get-in e [:data :decision]))))
+
 (defn death-details
   "For the :died event e: its :cause (the last hurt within hurt-window-ms), :lost (the biggest stacks, :lost-more
   the number of other names) and :recover (the recover-drops decision among the later events of the page); else nil."
@@ -321,7 +326,7 @@
     (let [{:keys [cause time-ms]} (:hurt tracker)
           cause (when (and time-ms (:time-ms e) (<= 0 (- (:time-ms e) time-ms) hurt-window-ms)) cause)
           lost (lost-items (get-in e [:data :inventory]))
-          decided (first (filter #(and (= :job (:source %)) (= :recover-drops.decided (:kind %))) later))]
+          decided (first (filter recover-ending? later))]
       (clean-pairs :cause (some-> (not-empty cause) (clip 80))
                    :lost (not-empty (vec (take lost-shown lost)))
                    :lost-more (nonzero (- (count lost) lost-shown))

@@ -45,7 +45,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (await ((deep-run 290000)))
               digs (filter #(= "dig" (.-name %)) (.-calls (.-world p)))
-              decided (first (filter #(= :recover-drops.decided (:kind %)) @seen))]
+              decided (dt/ending-event seen)]
           (is (= :warn (:level decided)) "an abandoned pile is said to the owner, not logged quietly")
           (is (re-find #"20 50 0" (:text decided)) (str "the text names the pile: " (:text decided)))
           (is (re-find #"window-closed" (:text decided)) (:text decided))
@@ -63,7 +63,7 @@
           (core/submit! eng (list (first job) {:danger-overrides {"skeleton" 1000}}) {})
           (await (run-until-empty eng 200))
           (is (not= :unreachable (:reason (recovered eng))) (pr-str (recovered eng)))
-          (is (some :retry (filter #(= :recover-drops.decided (:kind %)) @seen)) "the skeleton is weighed and the trip backs off"))))))
+          (is (some? (dt/danger-remembered eng)) "the skeleton is weighed and the trip backs off"))))))
 
 (def slope-pile-pos {:x 20 :y 82 :z 0})
 

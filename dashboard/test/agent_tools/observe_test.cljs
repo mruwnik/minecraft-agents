@@ -469,8 +469,8 @@
                       {:name "oak_sapling" :count 2 :slot 37} {:name "leaf_litter" :count 8 :slot 38}
                       {:name "dirt" :count 16 :slot 39} {:name "birch_planks" :count 1 :slot 40}]}})
 (def real-decision
-  {:source :job :kind :recover-drops.decided
-   :data {:decision :skip :reason :too-far :value 75.35 :cost :infinite}})
+  {:source :job :kind :stopped :name "jobs.survival.recover-drops"
+   :data {:decision :skip :reason :not-worth :value 75.35 :cost :infinite}})
 
 (deftest a-death-takes-its-cause-from-the-last-hurt
   (let [tracker (reduce observe-status/track-deaths {} [real-hurt real-died])
@@ -489,7 +489,7 @@
     (is (= 3 (:lost-more details)))))
 
 (deftest a-death-carries-the-recover-decision-when-it-arrived
-  (is (= {:decision "skip" :reason "too-far" :value 75}
+  (is (= {:decision "skip" :reason "not-worth" :value 75}
          (:recover (observe-status/death-details {} real-died [real-decision]))))
   (is (nil? (:recover (observe-status/death-details {} real-died nil)))))
 

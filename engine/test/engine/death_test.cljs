@@ -17,6 +17,8 @@
             [engine.triggers :as triggers]
             [jobs.lib.body :as body]
             [jobs.survival.recover-drops :as recover-drops]
+            [jobs.survival.recover-drops.config :as cfg]
+            [jobs.survival.recover-drops.estimate :as est]
             [triggers.survival.died :as died]))
 
 ;; The value and cost functions are jobs.lib.cost (jobs_value_test, cost_test); route danger jobs_danger_test.
@@ -146,6 +148,10 @@
 (defn recovered-trip [eng] (:data (mem/latest (mem/view (:store eng)) :recover-trip)))
 
 (defn recovered [eng] (:data (mem/latest (mem/view (:store eng)) :recovered)))
+
+(defn danger-remembered [eng] (:data (mem/latest (mem/view (:store eng)) :recover-danger)))
+
+(defn ending-event [seen] (first (filter #(#{:completed :stopped} (:kind %)) @seen)))
 
 (def job '(jobs.survival.recover-drops))
 
@@ -506,9 +512,7 @@
           (appear-after-first-leg! p clock zombie)
           (core/submit! eng (list (first job) {:settings {:jobs.survival.recover-drops.config/leg-s 1} :danger-overrides {"zombie" 1000}}) {})
           (await (run-until-empty eng 3))
-          (let [e (last (emitted seen :recover-drops.decided))]
-            (is (true? (:retry e)) "a mob that turned up on the way makes the trip dear: it backs off")
-            (is (= ["zombie"] (map :name (:top-mobs e)))))
+          (is (re-find #"zombie" (:text (danger-remembered eng))) "a mob that turned up on the way makes the trip dear: it backs off")
           (is (nil? (recovered eng)) "the death stays open")
           (is (< (.-x (.-pos (.self p))) 19) "the body did not walk on to the pile"))))))
 
@@ -574,8 +578,6 @@
 
 (def second-death-pos {:x -30 :y 64 :z 0})
 (def second-drops [(drop-item 3 -30 "diamond_pickaxe") (drop-item 4 -31 "diamond_sword")])
-
-(defn decided-events [seen] (filter #(= :recover-drops.decided (:kind %)) @seen))
 
 (defn job-memory [eng] (core/job-memory eng "j1"))
 
@@ -688,8 +690,8 @@
           (die! eng {:pos death-pos :inventory junk})
           (core/submit! eng job {})
           (await (run-until-empty eng 5))
-          (is (= [:skip] (map :decision (decided-events seen))))
-          (is (seq (:text (first (decided-events seen))))))))))
+          (is (= :skip (:decision (ending-event seen))))
+          (is (seq (:text (ending-event seen)))))))))
 
 (deftest recover-drops-reports-collected
   (async done
@@ -699,8 +701,8 @@
           (die! eng {:pos death-pos :inventory diamonds})
           (core/submit! eng job {})
           (await (run-until-empty eng 10))
-          (is (= [:collected] (map :decision (decided-events seen))))
-          (is (seq (:text (first (decided-events seen))))))))))
+          (is (= [:completed :collected] ((juxt :kind (comp :decision)) (ending-event seen))))
+          (is (seq (:text (ending-event seen)))))))))
 
 (deftest recover-drops-reports-abandoned
   (async done
@@ -710,16 +712,14 @@
           (die! eng {:pos death-pos :inventory diamonds})
           (core/submit! eng job {})
           (await (run-until-empty eng 5))
-          (is (= [:abandoned] (map :decision (decided-events seen))))
-          (is (seq (:text (first (decided-events seen))))))))))
+          (is (= :abandoned (:decision (ending-event seen))))
+          (is (seq (:text (ending-event seen)))))))))
 
 ;; ------------------------------------------- value against cost, overrides, the decision text
 
 (def zombie-by-the-way
   "A zombie 3 blocks off the walk to the death point, 15 from the body: no yield, but a danger on the way."
   {:id 7 :name "zombie" :kind "hostile" :pos {:x 15.5 :y 64 :z 3.5}})
-
-(defn fetching-events [seen] (filter #(= :recover-drops.fetching (:kind %)) @seen))
 
 (defn pile-drops [items]
   (map-indexed (fn [i {:keys [name count]}] {:id (+ 100 i) :name "item" :kind "item" :pos {:x 20 :y 64 :z 0}
@@ -735,15 +735,15 @@
           (die! eng {:pos death-pos :inventory death-pile-of-the-field-report})
           (core/submit! eng job {})
           (loop [n 0]
-            (when (and (< n 30) (empty? (fetching-events seen)))
+            (when (and (< n 30) (nil? (recovered-trip eng)))
               (await (core/tick! eng))
               (recur (inc n))))
-          (swap! (fake/state p) update :entities #(filterv (fn [e] (not= "hostile" (:kind e))) %))
-          (core/submit! eng job {})
-          (await (run-until-empty eng 20))
-          (is (= :collected (:decision (recovered eng))))
-          (is (= [death-pos] (tu/walked-to eng)))
-          (let [text (:text (first (fetching-events seen)))]
+          (let [text (est/decision-text :fetch (:decided (recovered-trip eng)) (cfg/margin))]
+            (swap! (fake/state p) update :entities #(filterv (fn [e] (not= "hostile" (:kind e))) %))
+            (core/submit! eng job {})
+            (await (run-until-empty eng 20))
+            (is (= :collected (:decision (recovered eng))))
+            (is (= [death-pos] (tu/walked-to eng)))
             (is (re-find #"raw_iron" text) "the main item is named")
             (is (re-find #"zombie" text) "the danger on the way is named")
             (is (re-find #"walk" text))))))))
@@ -770,7 +770,7 @@
           (await (run-until-empty eng 5))
           (is (= [] (tu/walk-calls p)))
           (is (nil? (recovered eng)) "a danger skip stays open")
-          (is (re-find #"zombie" (:text (first (decided-events seen))))))))))
+          (is (re-find #"zombie" (:text (danger-remembered eng)))))))))
 
 (deftest recover-drops-refuses-overrides-that-are-not-maps-at-submit
   (is (re-find #"jobs.survival.recover-drops :value-overrides must be a map of a string to a number or a map, got \"lots\""

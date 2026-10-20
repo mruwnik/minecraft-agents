@@ -15,5 +15,5 @@
   :limit-s 200}
  :cases
  [{:name "older-valuable-pile-fetched-after-a-second-death"
-   :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 160 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:decision :collected}} :within-s 160 :of-job true}]
    :after [[:item "raw_iron" 24]]}]}
