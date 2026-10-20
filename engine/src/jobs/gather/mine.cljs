@@ -43,28 +43,26 @@
   tunnel. Quote: about ::item-s s an item, open-ended.")
 
 (a/defargs args
-  {:block {:doc "name of the block to mine (required)" :spec a/name? :default nil}
-   :item {:doc "the item the block drops; nil: the drop-item table, else the block name" :spec a/item? :default nil}
-   :count {:doc "how many to carry at least (carried at the start count)" :spec (a/int-in 0 nil) :default 8}
-   :radius {:doc "seen blocks within this many blocks of the body count" :spec (a/num-in 0 nil) :default 16}
-   :center {:doc "the centre of the area the job works, a cell [x y z] or {:x :y :z}; nil: where the body stands when the job first runs (jobs.lib.area)" :spec a/position? :default nil}
-   :wet {:doc "dig blocks that touch water, and tunnel beside water" :spec boolean? :default false}
-   :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach of where it stands; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}
+  {:block :shared
+   :item :shared
+   :count :shared
+   :radius :shared
+   :center :shared
+   :wet :shared
+   :pick-up-ores :shared
    :fetch {:doc "get a pickaxe when none is carried (jobs.items.get-tool through jobs.lib.need), a spare for a worn one, and torches: true, a set of kinds or a map of which only :how and :explore apply; false: the dig ends with what is carried" :spec need/option? :default true}
    :ignore-zones? :shared
    :mend {:doc "fill the ground under the start again once the dig is over" :spec boolean? :default false}
-   :heading {:doc "the strip tunnel's heading, over :direction: north, south, east or west (n/s/e/w), or a cell [x y z] (the dominant axis from the start toward it); nil: :direction" :spec (a/pred "a heading name or a cell [x y z]" #(or (and (or (string? %) (keyword? %)) (heading-name %)) (and (sequential? %) (= 3 (count %)) (every? number? %)))) :default nil}
-   :direction {:doc "the strip tunnel's heading: north, south, east or west (n/s/e/w); nil: the way the body faces when the job starts" :spec (a/pred "north, south, east or west (n/s/e/w), a string or keyword" #(and (or (string? %) (keyword? %)) (heading-name %))) :default nil}
-   :tunnel-length {:doc "the most blocks the strip tunnel runs in this job, at the body's level; 0: no tunnel, seen blocks only" :spec (a/int-in 0 nil) :default 32}
-   :stay-level {:doc "caution for caves: dig only at the level the body starts at (the two-high tunnel, no stair down, no :level), mine only seen ore beside the body (or, by a short side cut out, ore up to the mine-stay ::ore-reach setting away), and seal a dug cell that opens into air beyond the tunnel with a carried block (tunnel ends :breach-sealed, or :breach-open when it cannot seal)" :spec boolean? :default false}
-   :variants {:doc "an ore's stone and deepslate kinds both count as the block (iron_ore and deepslate_iron_ore, either named); false: only :block" :spec boolean? :default true}
-   :level {:doc "the feet height the strip tunnel runs at (a whole number, or a cell [x y z] / {:x :y :z} whose y it takes): with no target seen the body first stairs down to it (jobs.access.stair) when higher; nil: the ore's level (setting mine.descent/ore-levels), none for other blocks; false: where the body stands"
-           :spec (a/pred "a whole number, a cell [x y z] or {:x :y :z}, nil or false" #(or (nil? %) (false? %) (integer? %) (and (sequential? %) (= 3 (count %)) (integer? (second %))) (and (map? %) (integer? (:y %))))) :default nil}
-   :shaft {:doc "a mineshaft plan id to descend by instead of digging a stair (jobs.lib.shafts); nil: the nearest usable one within reach, when a descent is due; false: none; :required: the nearest usable one, and no shaft usable ends :no-shaft before anything is dug" :spec (a/pred "a shaft plan id, nil, false or :required" #(or (nil? %) (false? %) (= :required %) (string? %))) :default nil}
-   :descend-limit {:doc "the most steps of stair down through soil to find stone, when the block is stone-type and none is in sight; 0: never descend" :spec (a/int-in 0 nil) :default 12}
-   :torches {:doc "hang torches where jobs.lib.torch-plan says a dug cell would stay dark; false: none" :spec boolean? :default true}
-   :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block); the lava and :wet rules above still hold"
-            :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}})
+   :heading :shared
+   :direction :shared
+   :tunnel-length :shared
+   :stay-level :shared
+   :variants :shared
+   :level :shared
+   :shaft :shared
+   :descend-limit :shared
+   :torches :shared
+   :accept :shared})
 
 
 (a/defargs settings
