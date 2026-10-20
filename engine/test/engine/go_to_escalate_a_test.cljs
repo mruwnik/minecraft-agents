@@ -342,12 +342,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng out p seen]} (await (run-job! {:self {:pos {:x 0 :y 34 :z 0}} :blocks deep-shaft}
+        (let [{:keys [eng out p seen]} (await (run-job! {:self {:pos {:x 0 :y 46 :z 0}} :blocks deep-shaft}
                                                     'jobs.movement.go-to (merge {:pos [30 64 0] :range 1} trespass) foreign))
               escalated (events-of seen :go-to.escalated)]
           (is (= {:arrived true} @out))
-          (is (= [:stair :stair :stair :stair] (map :step escalated)) "30 up is 4 stairs of at most 8, one after another")
-          (is (= [1 1 1 1] (map :n escalated)) "each began nearer than any before")
+          (is (= [:stair :stair :stair] (map :step escalated)) "18 up is 3 stairs of at most 8, one after another")
+          (is (= [1 1 1] (map :n escalated)) "each began nearer than any before")
           (is (restores-after-the-last-stair? seen))
           (is (= (dug-cells p) (holes eng)) "every dug cell is in the ledger"))))))
 
@@ -356,10 +356,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng out p seen]} (await (run-job! {:self {:pos {:x 0 :y 34 :z 0}} :blocks deep-shaft}
+        (let [{:keys [eng out p seen]} (await (run-job! {:self {:pos {:x 0 :y 46 :z 0}} :blocks deep-shaft}
                                                     'jobs.movement.go-to (merge {:pos [10 64 0] :range 1} trespass) foreign))]
           (is (= {:arrived true} @out))
-          (is (= [:stair :stair :stair :stair] (map :step (events-of seen :go-to.escalated))))
+          (is (= [:stair :stair :stair] (map :step (events-of seen :go-to.escalated))))
           (is (seq (events-of seen :go-to.restore-skipped)) "the put-back ran once the walk got on")
           (is (restores-after-the-last-stair? seen))
           (is (= (dug-cells p) (holes eng)) "every dug cell is in the ledger"))))))
@@ -368,13 +368,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 0 :y 34 :z 0}} :blocks deep-shaft
+        (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 0 :y 46 :z 0}} :blocks deep-shaft
                                                    :inventory [{:name "dirt" :count 64}]}
                                               {:pos [10 64 0] :range 1}))
               escalated (events-of seen :go-to.escalated)]
           (is (= {:arrived true} @out))
-          (is (= [:pillar :pillar :pillar :pillar] (map :step escalated)) "30 up is 4 pillars of at most 8")
-          (is (= [1 1 1 1] (map :n escalated))))))))
+          (is (= [:pillar :pillar :pillar] (map :step escalated)) "18 up is 3 pillars of at most 8")
+          (is (= [1 1 1] (map :n escalated))))))))
 
 (deftest escalations-count-only-while-none-gets-nearer
   (are [m d n] (= n (:fruitless (esc/count-escalation m d)))
