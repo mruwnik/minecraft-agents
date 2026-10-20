@@ -80,6 +80,16 @@
    :expect [{:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 150 :of-job true}]
    :after [[:not-block [36 0 16] "iron_ore"]]
    :limit-s 160}
+  ;; card 148a1078: the gather mine for an unseen ore cannot stock torches itself; obtain makes them from the carried coal first
+  {:name "torches-are-made-before-the-mine-goes-down-for-unseen-iron"
+   :time :any
+   :plot {:height 12 :floor "grass_block" :length 64 :width 32}
+   :blocks [[:fill [20 -1 14] [30 3 24] "stone"]]
+   :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["stone_sword" 1] ["stick" 2] ["cooked_beef" 3] ["coal" 2] ["crafting_table" 1]]}
+   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore true :food false})]]
+   :expect [{:event {:source :job :kind :torch.stocked} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :no-torches}} :for-s 60 :of-job true}]
+   :limit-s 100}
   ;; card fc0d4f6f: get-kit writes the kit reserve entries and the mine under it keeps them on its trip deposit (the raw iron stays in the bag, the junk goes in the chest)
   {:name "kit-trip-deposit-keeps-the-raw-iron"
    :plot {:height 12 :floor "grass_block" :length 64 :width 32}
