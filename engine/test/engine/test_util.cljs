@@ -130,8 +130,10 @@
   empty: the ground the walks of jobs that use jobs.lib.near/go-near! need, without touching ground a test built.
   The spec's :floor-block lays another block than stone (a test that digs stone needs a floor it does not dig)."
   [spec]
-  (let [built (into #{} (map (fn [k] (let [[x _ z] (.split (name k) ",")] (str x ",63," z)))) (keys (:blocks spec)))
-        ground (reduce dissoc (ground-of (:floor spec walk-floor) (:floor-block spec "stone")) built)]
+  (let [rect (:floor spec walk-floor)
+        y (if (= 5 (count rect)) (first rect) 63)
+        built (into #{} (map (fn [k] (let [[x _ z] (.split (name k) ",")] (str x "," y "," z)))) (keys (:blocks spec)))
+        ground (reduce dissoc (ground-of rect (:floor-block spec "stone")) built)]
     (fake (-> spec (dissoc :floor :floor-block) (assoc :blocks (merge ground (:blocks spec)))))))
 
 (defn act-clock
