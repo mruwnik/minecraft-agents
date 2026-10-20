@@ -137,13 +137,18 @@
 (defn keep-at-night? [] (settings/get settings ::keep-at-night?))
 
 (defn opens-dark?
-  "A fn of a cell: whether a neighbour of it is not solid and not lit as the body knows it (a mob could stand there)."
+  "A fn of a cell: whether a neighbour of it is not solid and dark: a cell the body has seen by its light, one it has not
+  by the guess (the sky's darkening, or the body underground: unseen cave cells are dark)."
   [p]
-  (fn [[x y z]]
-    (boolean (some (fn [[dx dy dz]]
-                     (let [n {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
-                       (and (not (sh-sense/solid-at? p n)) (not (sh-sense/lit-here? p n)))))
-                   [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0] [0 -1 0]]))))
+  (let [buried? (sh-sense/buried-at? p (sh-sense/feet p))
+        dark? (fn [n] (if (sh-sense/seen-cell? p n)
+                        (not (sh-sense/lit-here? p n))
+                        (or buried? (look/dark-guess? p))))]
+    (fn [[x y z]]
+      (boolean (some (fn [[dx dy dz]]
+                       (let [n {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
+                         (and (not (sh-sense/solid-at? p n)) (dark? n))))
+                     [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0] [0 -1 0]])))))
 
 (defn danger-radius [] (settings/get settings ::danger-radius))
 
