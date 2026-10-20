@@ -382,7 +382,6 @@
       (fn ^:async t []
         (let [p (sensing {:blocks dirt-ground :inventory []})
               _ (set! (.-look p) (fn [_] (js/Promise.resolve #js {:status "ok"})))
-              {:keys [out seen]} (await (tick-out! (setup p 'jobs.access.stair (assoc stair-east :fetch false)) 30))]
+              {:keys [out]} (await (tick-out! (setup p 'jobs.access.stair (assoc stair-east :fetch false)) 30))]
           (is (not= :no-tool (:reason @out)) (pr-str @out))
-          (is (some #(= :unseen (:reason %)) (filter #(= :waiting (:kind %)) @seen))
-              "the stair holds, waiting for cells it has not seen"))))))
+          (is (= :unseen (:reason @out)) (str "a called stair ends at once for cells it has not seen: " (pr-str @out))))))))
