@@ -89,7 +89,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 22}
+        (let [s (await (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 13}
                                  (torch-world torches8) 200 [0 0]))]
           (is (= [0 11] (torch-xs s)) "the entry, then where the next cell lies past its light (the torch at the entry reaches 12 cells on)")
           (is (= 6 (get (inv s) "torch")))
@@ -104,7 +104,7 @@
               _ (swap! (fake/state p) assoc :light-default [0 0])
               _ (.override (.-world p) "place" (fn ^:async f [tok a impl] (if (= "torch" (.-item a)) #js {:status "failed" :reason "no"} (await (impl tok a)))))
               s (start {:p p})]
-          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 22}) {})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 13}) {})
           (await (run-ticks s 200))
           (is (> (count (filter #(= :place-failed (:reason %)) (events-of s :mine.torch-left-out))) 3)
               "a failed torch is no light source: later steps are still owed torches"))))))
@@ -114,7 +114,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [run (fn [inv] (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 22}
+        (let [run (fn [inv] (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 13}
                                       (torch-world inv) 200 [0 0]))
               lit (await (run torches8))
               dark (await (run pickaxe))]
@@ -127,7 +127,7 @@
       (fn ^:async t []
         (let [world (assoc (torch-world [{:name "iron_pickaxe" :count 1} {:name "coal" :count 3} {:name "stick" :count 3}])
                            :equipment {"offHand" {:name "torch" :count 8}})
-              s (await (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 22} world 200 [0 0]))]
+              s (await (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 13} world 200 [0 0]))]
           (is (= [0 11] (torch-xs s)) "hung from the off-hand stack")
           (is (empty? (events-of s :mine.no-torches)))
           (is (= 3 (get (inv s) "coal")) "nothing crafted"))))))
@@ -175,7 +175,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 22}
+        (let [s (await (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 13}
                                  (torch-world bare-pickaxe) 200 [0 0]))]
           (is (= [] (torch-xs s)))
           (is (= [:no-torches 1] [(:reason (done-event s)) (:steps (:tunnel (done-event s)))]) "the tunnel stopped at its first torch")
@@ -185,7 +185,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 22}
+        (let [s (await (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 13}
                                  (torch-world bare-pickaxe) 200 [0 8]))]
           (is (= [] (torch-xs s)))
           (is (= :tunnel-length (:reason (done-event s)))))))))
