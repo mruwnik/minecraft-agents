@@ -10,7 +10,7 @@
   :plot {:height 12 :floor "grass_block" :isolate true}
   :blocks [[:set [16 0 18] "crafting_table"]]
   :body {:at [16.5 0 12.5] :settle-s 2 :effects [["resistance" 600 4]]}
-  :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:wait-s 2]]
+  :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:until-facing {:yaw 0 :pitch 10} 10]]
   :limit-s 90}
  :cases
  [{:name "logs-and-stone-in-view-stone-pickaxe-made"

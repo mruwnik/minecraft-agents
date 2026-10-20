@@ -7,7 +7,7 @@
  :cases
  [{:name "wall-removed-mid-job-table-used"
    :body {:inventory [["oak_planks" 3] ["stick" 2]]}
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 3]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:until-facing {:yaw 270 :pitch 0} 10]
          [:rcon "execute as $BODY at @s run tp @s ~-10 ~ ~"] [:wait-s 2]
          [:job (jobs.items.get-tool {:kind "pickaxe"})]
          [:wait-s 1]

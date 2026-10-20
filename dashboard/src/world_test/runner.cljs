@@ -1413,6 +1413,22 @@
                       (and @seen (not has))))
                   (str ":until-effect-gone " (pr-str effect)) limit-s)))
 
+(defn until-facing-step!
+  "Polls the body's own pose file until its view looks where want says. The body writes the pose only while its view/watching
+  file is fresh (a browser watching), so each poll touches that file."
+  [opts want limit-s]
+  (let [dir (path/join (body-dir opts) "view")
+        file (path/join dir "pose.json")
+        until (+ (js/Date.now) (* 1000 limit-s))]
+    (letfn [(poll []
+              (fs/mkdirSync dir #js {:recursive true})
+              (fs/writeFileSync (path/join dir "watching") (str (js/Date.now)))
+              (cond
+                (and (fs/existsSync file) (f/pose-faces? (fs/readFileSync file "utf8") want (js/Date.now))) (js/Promise.resolve nil)
+                (> (js/Date.now) until) (throw (js/Error. (str ":until-facing " (pr-str want) " not met after " limit-s " s")))
+                :else (.then (sleep 200) poll)))]
+      (poll))))
+
 (defn until-pos-step!
   "Polls the Pos reply of cmd until it lies inside bounds (plot-relative, see f/pos-in-bounds?)."
   [io cmd origin bounds limit-s]
@@ -1470,6 +1486,7 @@
                          :until-rcon (.then (until-rcon-step! {:send rcon! :sleep sleep} (f/substitute a (:body opts) origin box) b (nth step 3)) (constantly ids))
                          :until-effect-gone (.then (until-effect-gone-step! {:send rcon! :sleep sleep} (f/substitute "data get entity $BODY active_effects" (:body opts) origin box) a b) (constantly ids))
                          :until-pos (.then (until-pos-step! {:send rcon! :sleep sleep} (f/substitute "data get entity $BODY Pos" (:body opts) origin box) origin a b) (constantly ids))
+                         :until-facing (.then (until-facing-step! opts a b) (constantly ids))
                          (:cli :http) (.then (do (reset! cli-ms (js/Date.now)) (tool-step! opts step @last-job @event-job))
                                              (fn [out] (if-let [id (and (= [:http :submit] (take 2 step)) (f/submitted-id out))]
                                                          (do (reset! last-job id) (conj ids id))

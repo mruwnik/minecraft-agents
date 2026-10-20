@@ -278,7 +278,7 @@
         kept (.filter arr (fn [m] (not= tag (.-by m))))]
     (if (= (.-length kept) (.-length arr)) text (markers-text kept))))
 
-(def step-kinds #{:summon :rcon :rcon-until :job :wait-s :await :kill-body :time-set :restart-body :cli :http :until :until-seen :until-rcon :until-effect-gone :until-pos})
+(def step-kinds #{:summon :rcon :rcon-until :job :wait-s :await :kill-body :time-set :restart-body :cli :http :until :until-seen :until-rcon :until-effect-gone :until-pos :until-facing})
 (def after-kinds #{:block :not-block :any-not-block :body-near :body-far :item :entities :memory :file})
 (def http-ops #{:submit :cancel :cancel-all})
 (def cli-tools #{"jobs" "plans" "map" "world" "say" "time" "triggers" "entities" "observe" "workspace" "blueprints" "quote" "snapshot"})
@@ -304,6 +304,7 @@
     :until-rcon (not (and (= 4 (count step)) (string? a) (string? b) (number? (nth step 3))))
     :until-effect-gone (not (and (= 3 (count step)) (string? a) (number? b)))
     :until-pos (not (and (= 3 (count step)) (map? a) (number? b)))
+    :until-facing (not (and (= 3 (count step)) (map? a) (every? #(number? (get a %)) (keys a)) (every? #{:yaw :pitch} (keys a)) (seq a) (number? b)))
     :cli (not (and (cli-tools a) (vector? b) (every? #(or (string? %) (map? %) (vector? %)) b)))
     :http (not (http-ops a))
     (not (step-kinds op))))
@@ -1062,6 +1063,18 @@
            (or (nil? y-min) (>= dy y-min)) (or (nil? y-max) (<= dy y-max))
            (or (nil? z-min) (>= dz z-min)) (or (nil? z-max) (<= dz z-max))))
     false))
+
+(defn pose-faces?
+  "Whether the body's own view (the pose.json text its client writes: Mineflayer radians) looks where want says, in F3
+  degrees (yaw 0 south, 90 west, 180 north, 270 east; pitch positive down), within 2 degrees. A pose older than 3 s
+  before now-ms is a leftover of an earlier run."
+  [pose-text {:keys [yaw pitch]} now-ms]
+  (let [pose (try (js->clj (js/JSON.parse pose-text) :keywordize-keys true) (catch :default _ nil))
+        deg #(* % (/ 180 js/Math.PI))
+        gap (fn [a b] (let [d (mod (- a b) 360)] (min d (- 360 d))))]
+    (boolean (and (number? (:yaw pose)) (number? (:pitch pose)) (number? (:t pose)) (< (- now-ms (:t pose)) 3000)
+                  (or (nil? yaw) (<= (gap (- 180 (deg (:yaw pose))) yaw) 2))
+                  (or (nil? pitch) (<= (js/Math.abs (- (- (deg (:pitch pose))) pitch)) 2))))))
 
 (def leave-margin
   "Blocks beyond the plot a body may stand before the runner fails its case: the next plot's setup would build over it."

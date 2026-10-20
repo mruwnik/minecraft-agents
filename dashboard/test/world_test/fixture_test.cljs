@@ -961,3 +961,13 @@
     ["engine/tools/jobs.mjs" "B" "--world" "w" "submit" "(x)" "--request-id" "mine"] ["engine/tools/jobs.mjs" "B" "--world" "w" "submit" "(x)" "--request-id" "mine"]
     ["engine/tools/jobs.mjs" "B" "--world" "w" "list"] ["engine/tools/jobs.mjs" "B" "--world" "w" "list"]
     ["engine/tools/observe.mjs" "B" "result" "j1"] ["engine/tools/observe.mjs" "B" "result" "j1"]))
+
+(deftest pose-faces-reads-the-clients-view
+  (let [now 1000000
+        pose #(str "{\"t\":" now ",\"yaw\":" %1 ",\"pitch\":" %2 "}")]
+    (is (f/pose-faces? (pose js/Math.PI 0) {:yaw 0 :pitch 0} now))
+    (is (f/pose-faces? (pose (/ js/Math.PI -2) -0.1745) {:yaw 270 :pitch 10} now))
+    (is (not (f/pose-faces? (pose js/Math.PI 0) {:yaw 270} now)))
+    (is (not (f/pose-faces? (pose js/Math.PI 0.7) {:pitch 10} now)))
+    (is (not (f/pose-faces? (pose js/Math.PI 0) {:yaw 0} (+ now 5000))))
+    (is (not (f/pose-faces? "" {:yaw 0} now)))))

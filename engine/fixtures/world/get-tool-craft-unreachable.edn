@@ -12,21 +12,21 @@
  :cases
  [{:name "planks-new-table-placed"
    :body {:inventory [["oak_planks" 7] ["stick" 4]]}
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 3]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:until-facing {:yaw 270 :pitch 0} 10]
          [:rcon "execute as $BODY at @s run tp @s ~-10 ~ ~"] [:wait-s 2]
          [:job (jobs.items.get-tool {:kind "pickaxe"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:item "wooden_pickaxe" 1] [:block [19 0 16] "crafting_table"]]}
   {:name "carried-table-used"
    :body {:inventory [["crafting_table" 1] ["oak_planks" 3] ["stick" 2]]}
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 3]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:until-facing {:yaw 270 :pitch 0} 10]
          [:rcon "execute as $BODY at @s run tp @s ~-10 ~ ~"] [:wait-s 2]
          [:job (jobs.items.get-tool {:kind "pickaxe"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:item "wooden_pickaxe" 1] [:item "oak_planks" 0]]}
   {:name "three-planks-two-sticks-table-unreachable"
    :body {:inventory [["oak_planks" 3] ["stick" 2]]}
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 3]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:until-facing {:yaw 270 :pitch 0} 10]
          [:rcon "execute as $BODY at @s run tp @s ~-10 ~ ~"] [:wait-s 2]
          [:job (jobs.items.get-tool {:kind "pickaxe"})]]
    :expect [{:event {:source :job :data {:reason :table-unreachable}} :within-s 60 :of-job true}

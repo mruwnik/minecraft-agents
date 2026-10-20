@@ -131,7 +131,7 @@
    :act [[:summon "cow" [8.5 0 16.5] "{NoAI:1b,PersistenceRequired:1b}"] [:wait-s 2]
          [:job (jobs.explore.search {:target "cow" :settings {:jobs.explore.search/max-legs 0} :max-distance 12 :use-notes false})]
          [:await {:source :job :kind :completed} 40]
-         [:rcon "tp $BODY ~34 ~ ~-8 90 0"] [:wait-s 3]
+         [:rcon "tp $BODY ~34 ~ ~-8 90 0"] [:until-facing {:yaw 90 :pitch 0} 10]
          [:job (jobs.explore.search {:target "cow" :settings {:jobs.explore.search/max-legs 0} :max-distance 60 :use-notes true})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 70 :of-job true}]
    :limit-s 90}
@@ -141,7 +141,7 @@
    :act [[:summon "cow" [8.5 0 16.5] "{NoAI:1b,PersistenceRequired:1b}"] [:wait-s 2]
          [:job (jobs.explore.search {:target "cow" :settings {:jobs.explore.search/max-legs 0} :max-distance 12 :use-notes false})]
          [:await {:source :job :kind :completed} 40]
-         [:rcon "execute as $BODY at @s run tp @s ~34 ~ ~-8 90 0"] [:wait-s 3]
+         [:rcon "execute as $BODY at @s run tp @s ~34 ~ ~-8 90 0"] [:until-facing {:yaw 90 :pitch 0} 10]
          [:job (jobs.explore.search {:target "cow" :settings {:jobs.explore.search/max-legs 0} :max-distance 60 :use-notes true})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found :found [{:noted true}] :text [:contains "found 1 cow at"]}} :within-s 70 :of-job true}]
    :limit-s 90}

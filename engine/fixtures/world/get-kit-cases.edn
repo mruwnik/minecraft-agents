@@ -18,7 +18,7 @@
             [:fill [10 4 21] [12 5 23] "oak_leaves[persistent=true]"] [:fill [11 0 22] [11 4 22] "oak_log"]
             [:fill [20 0 22] [22 1 23] "stone"]]
    :body {:inventory [["cooked_beef" 3]]}
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:until-facing {:yaw 0 :pitch 10} 10]
          [:job (jobs.items.get-kit {:items ["stone_sword" "stone_pickaxe" "iron_pickaxe"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 290 :of-job true}]
    :after [[:item "stone_sword" 1] [:item "stone_pickaxe" 1] [:item "iron_pickaxe" 0]]
@@ -27,7 +27,7 @@
    :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]
             [:fill [20 0 22] [22 1 23] "stone"]]
    :body {:inventory [["cooked_beef" 3] ["wooden_sword" 1]]}
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:wait-s 2]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:until-facing {:yaw 0 :pitch 10} 10]
          [:job (jobs.items.get-kit {:items ["iron_pickaxe" "stone_sword"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true :until {:source :job :kind :stopped}}]
