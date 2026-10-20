@@ -11,6 +11,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.chests :as chests]
             [jobs.lib.least :as least]
+            [jobs.lib.look :as look]
             [jobs.lib.storage :as storage]))
 
 (def doc
@@ -31,11 +32,17 @@
   Storage group: with no :chest, or a :chest of the group (jobs.lib.storage/group), a chest that lacks what is short
   is followed by the next one; :chest-lacks is reported only once the last has been looked into.
   Stock: what the chest holds is booked in body memory :fetch/stock when inspected and after each take
-  (jobs.lib.stock), for jobs.items.obtain.")
+  (jobs.lib.stock), for jobs.items.obtain.
+  Entity form (:entity, the id of a container entity in reach, a chest minecart; no :items): the caller walks within reach, and
+  every stack is moved to the bag. Needs: an entity not refused for :take (as above), and no :items, else never :bad-args.
+  Ends done {:full bool :moved {item n}}: :full true when a later transfer moved nothing for lack of room, what fitted is taken.
+  Else condition-failed :bag-full (the first transfer found no room) or :missing (the entity is gone), or nothing-possible with the
+  inspect or transfer status as the cause (:unreachable, :nothing-moved, ..).")
 
 (a/defargs args
   {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :spec ::a/pos :default nil}
    :items {:doc "{item-name count}: carry at least this many of each name" :spec (a/map-of string? number?) :default {}}
+   :entity {:doc "entity id of a container in reach (a chest minecart): move every stack to the bag; takes no :chest or :items" :spec number? :default nil}
    :ignore-zones? :shared})
 
 (defn shortfall
@@ -53,19 +60,36 @@
    ::walk-speed {:default 4 :doc "Blocks a second a quote counts for the walk to the chest." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
 
-(def target [:chest])
+(def target [:chest :entity])
 
-(def safe? ready/safe-at-chest)
+(defn entity-form? [c] (some? (:entity (:args c))))
+
+(defn safe? [c] (if (entity-form? c) (ready/safe-here-by-night c) (ready/safe-at-chest c)))
 (def fit? ready/ok)
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
+(defn entity-positions [c]
+  (let [id (:entity (:args c))]
+    (->> (look/seen-entities (:primitives c) {:radius 16 :max 32})
+         (filter #(= id (:id %)))
+         (map :pos))))
+
 (defn can-start? [c]
-  (contract/all [(checks/chest-known c) ((checks/container-refused every? :take (chests/pool-positions :take)) c)]))
+  (if (entity-form? c)
+    (contract/all [((checks/args-fit "withdraw: an :entity takes no :chest or :items"
+                                     #(and (empty? (:items (:args %))) (nil? (:chest (:args %))))) c)
+                   ((checks/container-refused every? :take entity-positions) c)])
+    (contract/all [(checks/chest-known c) ((checks/container-refused every? :take (chests/pool-positions :take)) c)])))
 (def can-run? can-start?)
 
 (def carried-text "withdraw: everything wanted is carried")
 
-(defn done?
+(defn entity-done? [c]
+  (if (:emptied (ctx/mem c))
+    (contract/ok :emptied "withdraw: the container is empty or the bag full" :units :container :done 1 :left 0)
+    (contract/later :emptying "withdraw: stacks still to move" :units :container :done 0 :left 1)))
+
+(defn items-done?
   "Everything wanted is carried; :done counts the carried items toward the wanted ones."
   [c]
   (let [inv (u/inventory (:primitives c))
@@ -77,7 +101,9 @@
       (contract/later :short (str "withdraw: " left " item(s) short") :units :items :done (- want left) :left left
                       :result {:short (into {} (shortfall inv items))}))))
 
-(defn quote-of
+(defn done? [c] (if (entity-form? c) (entity-done? c) (items-done? c)))
+
+(defn items-quote
   "Time for the walk and one transfer a name short; yields up to the shortfall, none when the chest lacks it."
   [c]
   (let [short (shortfall (u/inventory (:primitives c)) (:items (:args c)))
@@ -86,6 +112,11 @@
         t (+ walk (* (count short) (settings/get settings ::take-s)))]
     {:uses {:job-time [(* (count short) (settings/get settings ::take-s)) t (max t (time-s))]}
      :yields {:items (into {} (map (fn [[name n]] [name [0 n n]])) short)}}))
+
+(defn quote-of [c]
+  (if (entity-form? c)
+    {:uses {:job-time [1 5 (time-s)]}}
+    (items-quote c)))
 
 (defn end!
   "ctx/end, but done when the items carried toward the wanted meet the call's :least."
@@ -181,8 +212,30 @@
       :else
       (await (take! c chest short)))))
 
+(defn ^:async empty-entity!
+  "Inspect the container entity and move its stacks one after another; a transfer that moves nothing ends it done :full once something moved, else :bag-full or nothing-possible; any other failure nothing-possible."
+  [c]
+  (let [id (:entity (:args c))
+        seen (await (ctx/act c :inspectContainer (clj->js {:entity id})))
+        status (.-status seen)]
+    (if (not= "ok" status)
+      (ctx/end c (if (= "missing" status) :condition-failed :nothing-possible) (keyword status))
+      (loop [stacks (vec (stock/stacks->items (.-items seen))) moved {}]
+        (if-let [[name n] (first stacks)]
+          (let [r (await (ctx/act c :transfer (clj->js {:entity id :direction "withdraw" :item name :count n})))
+                status (.-status r)]
+            (cond
+              (and (= "ok" status) (pos? (.-moved r))) (recur (rest stacks) (assoc moved name (.-moved r)))
+              (and (seq moved) (contains? #{"ok" "full"} status)) (do (ctx/update-mem! c assoc :emptied true) (ctx/end c :done nil {:full true :moved moved}))
+              (= "full" status) (ctx/end c :condition-failed :bag-full)
+              (= "ok" status) (ctx/end c :nothing-possible :nothing-moved)
+              :else (ctx/end c :nothing-possible (keyword status))))
+          (do (ctx/update-mem! c assoc :emptied true) (ctx/end c :done nil {:full false :moved moved})))))))
+
 (defn ^:async round
   "The whole take in one call, a name after another until nothing is short or it stops. :continue only while go-to
-  waits on the world."
+  waits on the world. The entity form empties the container in reach at once."
   [c]
-  (await (pace/steps! c (fn ^:async withdraw-step [] (await (step! c))))))
+  (if (entity-form? c)
+    (await (empty-entity! c))
+    (await (pace/steps! c (fn ^:async withdraw-step [] (await (step! c)))))))

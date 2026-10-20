@@ -13,7 +13,7 @@
 
 (def doc
   "Empty a chest minecart and take the cart: walk within reach (jobs.lib.near/go-near!), open it and move every stack into the bag
-  (a jobs.storage.withdraw-entity child), then break it (a jobs.combat.attack child) and pick up what falls (a
+  (a jobs.storage.withdraw :entity child), then break it (a jobs.combat.attack child) and pick up what falls (a
   jobs.items.collect-drops child, radius 4 round the cart): the cart item, and the stacks the bag had no room for.
   The cart is :id (an entity id) or the nearest chest_minecart within :radius of :near (default the body). It starts
   only when a cart is in sight (condition :gone; start only). Its safe? is ready/safe-at-by-night :near, else ready/safe-if-lit. A cart in
@@ -94,10 +94,10 @@
   {:uses {:job-time [5 20 (settings/get settings ::job-time-s)]}})
 
 (defn ^:async empty-cart!
-  "Move every stack of the cart into the bag (a jobs.storage.withdraw-entity child): \"ok\", :continue while it waits, else
+  "Move every stack of the cart into the bag (a jobs.storage.withdraw :entity child): \"ok\", :continue while it waits, else
   the status that stopped it. A bag too full for a stack is noted as :full."
   [c id]
-  (let [r (await (child/run!* c :empty 'jobs.storage.withdraw-entity {:id id}))]
+  (let [r (await (child/run!* c :empty 'jobs.storage.withdraw {:entity id}))]
     (cond
       (= :continue r) :continue
       (= :done (:kind r)) (do (ctx/update-mem! c #(cond-> (assoc % :withdrawn (:moved (:data r) {})) (:full (:data r)) (assoc :full true))) "ok")
