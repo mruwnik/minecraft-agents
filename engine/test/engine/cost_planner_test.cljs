@@ -117,6 +117,7 @@
 (deftest with-drops-sets-the-air-costs-under-the-callers-costs
   (let [o (wplan/with-drops #js {} {:air-drain 0.5 :air-grace 10})]
     (is (= 0.5 (.. o -costs -airDrain)))
+    (is (= 13.5 (.. o -costs -airLimit)) "the 3 s margin under the supply shrinks with the drain")
     (is (= 10 (.. o -costs -airGrace))))
   (let [o (wplan/with-drops #js {} {:air-drain 0.5 :costs {:swim-h 2}})]
     (is (= 0.5 (.. o -costs -airDrain)))
