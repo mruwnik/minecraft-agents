@@ -44,22 +44,22 @@
 
 
 (a/defargs settings
-  {:jobs.survival.retreat-cornered/lost-memory-ms {:default 30000 :doc "Milliseconds a mob the flight lost (its :threat entry) still counts, at the place it was last known, when choosing where to flee; a creeper counts triple." :spec (a/int-in 0 nil)}
-   :jobs.survival.retreat-cornered/fist-sweeps {:default 1 :doc "Times a body with no weapon, every cornered option failed, looks for a way to walk before it punches a hostile it would not beat; 0: it punches at once." :spec (a/int-in 0 nil)}
-   :jobs.survival.retreat-cornered/hit-reach {:default 3 :doc "Blocks within which a melee hostile counts as the one that hit the body." :spec (a/num-in 0 nil)}
-   :jobs.survival.retreat-cornered/glance-reach {:default 3 :doc "Blocks along a direction to the feet cell a glance looks at." :spec (a/int-in 0 nil)}
-   :jobs.survival.retreat-cornered/glance-memory {:default 24 :doc "Most glanced cells a flight remembers." :spec (a/int-in 0 nil)}
-   :jobs.survival.retreat-cornered/cover-gap {:default 5 :doc "Blocks within which a melee chaser keeps a low body from taking cover where it stands." :spec (a/num-in 0 nil)}
-   :jobs.survival.retreat-cornered/close-radius {:default 8 :doc "Blocks within which a hostile that attacks at close range (a creeper too, not a ranged mob or an enderman) bounds a flee step to close-leg-s, at its start and again during its search." :spec (a/num-in 0 nil)}
-   :jobs.survival.retreat-cornered/close-leg-s {:default 1 :doc "Seconds a flee step may search or walk while a close-range hostile is within close-radius, or the body was hurt: a body that stands searching there is hit for the whole leg." :spec (a/num-in 0 nil)}
-   :jobs.survival.retreat-cornered/hurt-window-s {:default 5 :doc "Seconds after the body lost health in which a flee step is bounded to close-leg-s, even with no hostile seen in reach (an unseen attacker hits as hard)." :spec (a/num-in 0 nil)}
-   :jobs.survival.retreat-cornered/fire-hits {:default 1 :doc "Hits by a ranged mob (the damage's attacker, or an arrow) within hurt-window-s that put a cornered body under fire: cover comes before any fight, and a shooter it has not seen is never weighed as beaten. 0: never." :spec (a/int-in 0 nil)}
-   :jobs.survival.retreat-cornered/shot-hits {:default 2 :doc "Hits by a ranged mob within hurt-window-s that make a walking body take cover (seal, or break the line of fire) instead of walking on under fire it cannot answer. 0: it keeps walking." :spec (a/int-in 0 nil)}
-   :jobs.survival.retreat-cornered/cover-tries {:default 2 :doc "Cornered steps under fire in which cover (seal, back off) is tried before an armed body fights a melee mob pressing it: a mob standing in the cells to wall keeps every seal failing, and each back-off step makes the covers open again." :spec (a/int-in 1 nil)}
-   :jobs.survival.retreat-cornered/beaten-hits {:default 2 :doc "Hits by a melee mob near (the damage names one within close-radius; not a creeper or an enderman) within hurt-window-s that show the flight is failing: the body fights it first, armed or not. 0: never." :spec (a/int-in 0 nil)}
-   :jobs.survival.retreat-cornered/press-gap {:default 2 :doc "Blocks within which a melee mob (not a creeper or an enderman) makes a cornered armed body fight before it builds a seal or pillar, hit or not: the mob strikes before a block is placed and stands in the cells to fill." :spec (a/num-in 0 nil)}
-   :jobs.survival.retreat-cornered/hold-cap {:default 60 :doc "Holds (one wait-ms each) a flight makes in water or under a roof against an angry enderman before it tries the next option (seal, pit, pocket, fight); 0: none." :spec (a/int-in 0 nil)}
-   :jobs.survival.retreat-cornered/refuge-gap {:default 10 :doc "Blocks within which a lone melee hostile the body cannot outfight is pillared against (else sealed against) before any flee step, when blocks are carried; 0 never." :spec (a/num-in 0 nil)}
+  {::lost-memory-ms {:default 30000 :doc "Milliseconds a mob the flight lost (its :threat entry) still counts, at the place it was last known, when choosing where to flee; a creeper counts triple." :spec (a/int-in 0 nil)}
+   ::fist-sweeps {:default 1 :doc "Times a body with no weapon, every cornered option failed, looks for a way to walk before it punches a hostile it would not beat; 0: it punches at once." :spec (a/int-in 0 nil)}
+   ::hit-reach {:default 3 :doc "Blocks within which a melee hostile counts as the one that hit the body." :spec (a/num-in 0 nil)}
+   ::glance-reach {:default 3 :doc "Blocks along a direction to the feet cell a glance looks at." :spec (a/int-in 0 nil)}
+   ::glance-memory {:default 24 :doc "Most glanced cells a flight remembers." :spec (a/int-in 0 nil)}
+   ::cover-gap {:default 5 :doc "Blocks within which a melee chaser keeps a low body from taking cover where it stands." :spec (a/num-in 0 nil)}
+   ::close-radius {:default 8 :doc "Blocks within which a hostile that attacks at close range (a creeper too, not a ranged mob or an enderman) bounds a flee step to close-leg-s, at its start and again during its search." :spec (a/num-in 0 nil)}
+   ::close-leg-s {:default 1 :doc "Seconds a flee step may search or walk while a close-range hostile is within close-radius, or the body was hurt: a body that stands searching there is hit for the whole leg." :spec (a/num-in 0 nil)}
+   ::hurt-window-s {:default 5 :doc "Seconds after the body lost health in which a flee step is bounded to close-leg-s, even with no hostile seen in reach (an unseen attacker hits as hard)." :spec (a/num-in 0 nil)}
+   ::fire-hits {:default 1 :doc "Hits by a ranged mob (the damage's attacker, or an arrow) within hurt-window-s that put a cornered body under fire: cover comes before any fight, and a shooter it has not seen is never weighed as beaten. 0: never." :spec (a/int-in 0 nil)}
+   ::shot-hits {:default 2 :doc "Hits by a ranged mob within hurt-window-s that make a walking body take cover (seal, or break the line of fire) instead of walking on under fire it cannot answer. 0: it keeps walking." :spec (a/int-in 0 nil)}
+   ::cover-tries {:default 2 :doc "Cornered steps under fire in which cover (seal, back off) is tried before an armed body fights a melee mob pressing it: a mob standing in the cells to wall keeps every seal failing, and each back-off step makes the covers open again." :spec (a/int-in 1 nil)}
+   ::beaten-hits {:default 2 :doc "Hits by a melee mob near (the damage names one within close-radius; not a creeper or an enderman) within hurt-window-s that show the flight is failing: the body fights it first, armed or not. 0: never." :spec (a/int-in 0 nil)}
+   ::press-gap {:default 2 :doc "Blocks within which a melee mob (not a creeper or an enderman) makes a cornered armed body fight before it builds a seal or pillar, hit or not: the mob strikes before a block is placed and stands in the cells to fill." :spec (a/num-in 0 nil)}
+   ::hold-cap {:default 60 :doc "Holds (one wait-ms each) a flight makes in water or under a roof against an angry enderman before it tries the next option (seal, pit, pocket, fight); 0: none." :spec (a/int-in 0 nil)}
+   ::refuge-gap {:default 10 :doc "Blocks within which a lone melee hostile the body cannot outfight is pillared against (else sealed against) before any flee step, when blocks are carried; 0 never." :spec (a/num-in 0 nil)}
    ::flight-timeout-s {:default 5 :doc "Seconds bounding one step of the flight: the mob moves, so the next step aims again." :spec (a/num-in 0 nil)}
    ::enderman-close {:default 3 :doc "Blocks within which an enderman counts as angry though it has not hurt the body yet (a calm one does not come this near)." :spec (a/num-in 0 nil)}
    ::water-reach {:default 6 :doc "Blocks within which a body hunted by an enderman looks for water to stand in." :spec (a/num-in 0 nil)}
@@ -73,8 +73,8 @@
 (defn swim-reach [] (settings/get settings ::swim-reach))
 (defn creeper-keep [] (settings/get settings ::creeper-keep))
 
-(defn fist-sweeps [] (settings/get settings :jobs.survival.retreat-cornered/fist-sweeps))
-(defn hit-reach [] (settings/get settings :jobs.survival.retreat-cornered/hit-reach))
+(defn fist-sweeps [] (settings/get settings ::fist-sweeps))
+(defn hit-reach [] (settings/get settings ::hit-reach))
 
 (defn hits-total
   "The hits an attack ending's (or prior's) :struck counts over all mobs."
@@ -164,7 +164,7 @@
                  (<= (danger-q/mob-distance (:primitives c) %) (hit-reach)))
            hostiles))
 
-(defn close-radius [] (settings/get settings :jobs.survival.retreat-cornered/close-radius))
+(defn close-radius [] (settings/get settings ::close-radius))
 
 (defn hurt-by
   "The causes of a :hurt memory entry (the raw body event: its attacker's name, else the damage's cause)."
@@ -218,19 +218,19 @@
          (sort-by #(- (u/dist % threat)))
          first)))
 
-(defn glance-reach [] (settings/get settings :jobs.survival.retreat-cornered/glance-reach))
+(defn glance-reach [] (settings/get settings ::glance-reach))
 
-(defn glance-memory [] (settings/get settings :jobs.survival.retreat-cornered/glance-memory))
+(defn glance-memory [] (settings/get settings ::glance-memory))
 
-(defn cover-gap [] (settings/get settings :jobs.survival.retreat-cornered/cover-gap))
+(defn cover-gap [] (settings/get settings ::cover-gap))
 
-(defn refuge-gap [] (settings/get settings :jobs.survival.retreat-cornered/refuge-gap))
+(defn refuge-gap [] (settings/get settings ::refuge-gap))
 
-(defn press-gap [] (settings/get settings :jobs.survival.retreat-cornered/press-gap))
+(defn press-gap [] (settings/get settings ::press-gap))
 
-(defn close-leg-s [] (settings/get settings :jobs.survival.retreat-cornered/close-leg-s))
+(defn close-leg-s [] (settings/get settings ::close-leg-s))
 
-(defn lost-memory-ms [] (settings/get settings :jobs.survival.retreat-cornered/lost-memory-ms))
+(defn lost-memory-ms [] (settings/get settings ::lost-memory-ms))
 
 (defn ^:async leg-step!
   "One flee step to target as a go-to child of legs of at most leg-s seconds (a flee never digs or pillars: :ways #{:walk :clear-seal}, and plans no route deeper or higher than y-margin (16) blocks past body and target;
@@ -269,7 +269,7 @@
   "One hold (a pause of flight/wait-ms) in a spot an enderman cannot use: :again, or nil once the flight has held
   hold-cap times (the option is then tried! and the next one of the order comes)."
   [c option why]
-  (if (>= (:holds (ctx/mem c) 0) (settings/get settings :jobs.survival.retreat-cornered/hold-cap))
+  (if (>= (:holds (ctx/mem c) 0) (settings/get settings ::hold-cap))
     (do (flight/tried! c option) nil)
     (do (ctx/update-mem! c update :holds (fnil inc 0))
         (await (child/pause! c (/ (flight/wait-ms) 1000) why))
