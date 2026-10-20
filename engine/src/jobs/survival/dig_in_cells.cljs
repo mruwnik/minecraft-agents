@@ -155,9 +155,7 @@
 (a/defargs settings
   {::mob-wait-ticks {:default 200 :doc "Game ticks a shelter's place refused for a mob in its cell is retried before the shelter gives up."
                      :spec (a/int-in 0 nil)}
-   ::pickup-reach {:default 1 :doc "How far from the body, along the ground, an item is picked up without a walk." :spec (a/int-in 0 nil)}
-   ::support-depth {:default 3 :doc "How many cells under a wall cell with nothing beside it a shelter fills to give it a block to be placed against." :spec (a/int-in 0 nil)}
-   ::rock-depth {:default 3 :doc "How far behind a seen solid face a cell the body has not sensed is taken for rock." :spec (a/int-in 0 nil)}})
+   ::support-depth {:default 3 :doc "How many cells under a wall cell with nothing beside it a shelter fills to give it a block to be placed against." :spec (a/int-in 0 nil)}})
 
 (defn support-chain
   "The cells to fill, lowest first, so a block can then be placed in cell: [] when cell is placeable? already, the cells
@@ -313,14 +311,6 @@
                   (some #(sealed? p {:x x :y (+ y %) :z z}) (range 1 (inc roof-height))))))
        (or (not= :walls mode) (empty? (open-cells p (sh-sense/feet p))))))
 
-(defn ^:async collect-drops!
-  "Pick up the placeable blocks a dig dropped."
-  [c blocks drops]
-  (loop [ds (filter #(some #{(.-name %)} blocks) (array-seq drops))]
-    (when (seq ds)
-      (await (ctx/act c :collect #js {:id (.-id (first ds))}))
-      (recur (rest ds)))))
-
 (defn supported?
   "Whether a block placed in cell has a side neighbour to be placed against: one whose collision shape fills its cell
   (full-cube?; the place step needs a collision box, so a flower or a crop is no support)."
@@ -354,8 +344,6 @@
      :plugs (if side [(col (inc depth) (inc bottom))] [])
      :roof (col (if side depth 0) (+ bottom 2))}))
 
-(declare rock-solid?)
-
 (defn known-solid?
   "Whether the body has sensed cell and it is solid: a floor it may drop onto (a guess never is)."
   [p cell]
@@ -373,7 +361,7 @@
   [p roof open]
   (boolean (some (fn [[dx dz]]
                    (let [n (assoc roof :x (+ (:x roof) dx) :z (+ (:z roof) dz))]
-                     (and (not= n open) (or (:full-cube? (u/seen-facts p n)) (and (nil? (u/seen-name p n)) (rock-solid? p n))))))
+                     (and (not= n open) (or (:full-cube? (u/seen-facts p n)) (and (nil? (u/seen-name p n)) (dig-look/rock-solid? p n))))))
                  sides)))
 
 (defn pit-shapes
@@ -391,61 +379,6 @@
                      :when (and depth (side-ok? b))]
                  (pit-steps feet side depth))]
     (remove nil? (cons straight zigzag))))
-
-(defn pickup-reach [] (settings/get settings ::pickup-reach))
-
-(defn in-reach-ids
-  "The ids of the item entities among ids that lie within pickup-reach of the body (a step or less above or below)."
-  [c ids]
-  (let [p (:primitives c)
-        at (u/self-pos c)
-        wanted (set ids)]
-    (->> (look/seen-items p {:radius 4 :max 64})
-         (filter #(wanted (.-id %)))
-         (filter (fn [e] (let [q (u/pos-of (.-pos e))]
-                           (and (<= (js/Math.hypot (- (:x q) (:x at)) (- (:z q) (:z at))) (pickup-reach))
-                                (<= (js/Math.abs (- (:y q) (:y at))) 1)))))
-         (mapv #(.-id %)))))
-
-(defn ^:async collect-pit-drops!
-  "Pick up the placeable drops of the pit's digs (memory :pit-drops) that fell into the body's column at or over its
-  feet and lie within its pickup reach: a drop that drifted further is left, so taking drops never walks the body off
-  the floor it stands on."
-  [c {:keys [x y z]}]
-  (let [here? (fn [{cell :cell}] (and (= x (:x cell)) (= z (:z cell)) (>= (:y cell) y)))
-        drops (filter here? (:pit-drops (ctx/mem c)))]
-    (loop [[id & more] (in-reach-ids c (map :id drops))]
-      (when id
-        (await (ctx/act c :collect #js {:id id}))
-        (recur more)))
-    (ctx/update-mem! c update :pit-drops #(vec (remove here? %)))))
-
-(def neighbours rules/neighbour-deltas)
-
-(defn shift [{:keys [x y z]} [dx dy dz]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
-
-(defn rock-depth [] (settings/get settings ::rock-depth))
-
-(defn rock-name
-  "The block name at cell as a player reads rock: what the body sees or remembers, else \"stone\" for a loaded cell it has
-  not sensed when a seen solid block lies behind it within rock-depth cells along some axis and no neighbour is seen
-  open (an open neighbour would have shown it; cells in except, the way in, are not counted). nil when it is not loaded
-  or no seen face is near. The shelter plans (pit, pocket, niche) read the rock they dig through this way, then dig to
-  see (jobs.lib.dig-look)."
-  ([p cell] (rock-name p cell #{}))
-  ([p cell except]
-  (or (u/seen-name p cell)
-      (when (some-> (u/sensed p cell) .-unknown)
-        (let [name-at (fn [d k] (u/seen-name p (shift cell (mapv #(* k %) d))))]
-          (when (and (every? #(or (nil? %) (solid/solid? %)) (map #(when-not (except (shift cell %)) (name-at % 1)) neighbours))
-                     (some (fn [d] (some solid/solid? (take 1 (remove nil? (map #(name-at d %) (range 1 (inc (rock-depth))))))))
-                           neighbours))
-            "stone"))))))
-
-(defn rock-solid?
-  "Whether cell is solid rock as the body reads it (rock-name)."
-  [p cell]
-  (solid/solid? (rock-name p cell)))
 
 (defn shaft-top
   "When the feet cell is the bottom of a 1x1 shaft (no side open at feet height): the first height up the open column

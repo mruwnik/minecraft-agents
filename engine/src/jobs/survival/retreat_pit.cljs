@@ -19,6 +19,7 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
+            [jobs.survival.pit-drops :as pit-drops]
             [jobs.survival.retreat-flight :as flight]))
 
 (a/defargs settings
@@ -66,15 +67,15 @@
 (defn cell-stop
   "The stop for a cell to dig that is beside fluid, wet, a hazard or open air, nil when it is solid rock to dig."
   [p cell]
-  (let [name (dig-cells/rock-name p cell)
+  (let [name (look/rock-name p cell)
         beside (dig-cells/lateral-fluid p cell)]
     (cond
       beside (stop :fluid-adjacent (str beside " beside the cell to dig; not opening the pit"))
       (or (dig-cells/wet? p cell) (dig-cells/hazards name)) (stop :hazard-below (str name " in the cell to dig; not digging"))
-      (not (dig-cells/rock-solid? p cell)) (stop :no-floor "open air where the pit would go; not digging"))))
+      (not (look/rock-solid? p cell)) (stop :no-floor "open air where the pit would go; not digging"))))
 
 (defn dug-cells-ok?
-  "Whether cells are all solid rock to dig (rock the body has not looked into reads stone, dig-cells/rock-name) with no
+  "Whether cells are all solid rock to dig (rock the body has not looked into reads stone, look/rock-name) with no
   hazard in or fluid beside them."
   [p cells]
   (every? #(nil? (cell-stop p %)) cells))
@@ -88,7 +89,7 @@
     (loop [[cell & more] cells have (boolean (lb/pick c blocks))]
       (if (nil? cell)
         (when-not have (stop :no-blocks "nothing to roof the pit with"))
-        (let [name (dig-cells/rock-name p cell)
+        (let [name (look/rock-name p cell)
               ok (tools/can-harvest? p name)]
           (if (and (not ok) (or (not have) (> (tools/clear-ms p name) (hand-clear-ms c))))
             (stop :no-tool (str "cannot harvest " name (if have " in good time" "; nothing to roof the pit with") ", so not digging") name)
@@ -119,7 +120,7 @@
                 (let [cells (concat prep (mapcat :dig steps))]
                   (and (dug-cells-ok? p cells)
                        (nil? (over-stop p roof))
-                       (dig-cells/rock-solid? p (:floor (peek steps)))
+                       (look/rock-solid? p (:floor (peek steps)))
                        (nil? (material-stop c blocks cells)))))
         shape (when-not (here-stop p feet)
                 (first (filter fits? (candidates c feet))))]
@@ -141,7 +142,7 @@
   (let [p (:primitives c)]
     (or (some (fn [{:keys [dig floor]}]
                 (or (some #(cell-stop p %) dig)
-                    (when-not (dig-cells/rock-solid? p floor)
+                    (when-not (look/rock-solid? p floor)
                       (cond-> (stop :no-floor (str (or (u/seen-name p floor) "an unseen cell") " under the hole; not stepping into it"))
                         (nil? (u/seen-name p floor)) (assoc :unseen true)))))
               steps)
@@ -216,9 +217,9 @@
                       (for [dist [1 2 3] dy [0 1] d (if (= 3 dist) (cons [0 0] perp) perp)] (at dist dy d)))
         unknown? #(some-> (u/sensed p %) .-unknown)
         entry #{feet (update feet :y inc)}
-        dug-name #(dig-cells/rock-name p % entry)
+        dug-name #(look/rock-name p % entry)
         ;; a far cell never sensed reads stone: the dig looks at it and stops if it lays open a gap
-        wall-name #(or (dig-cells/rock-name p %) (when (unknown? %) "stone"))
+        wall-name #(or (look/rock-name p %) (when (unknown? %) "stone"))
         ;; the far pair lies behind cells the body has not dug yet: unsensed, it reads stone like the walls, the dig looks and stops on a gap
         names (map-indexed (fn [i cell] (if (< i 2) (dug-name cell) (or (dug-name cell) (when (unknown? cell) "stone")))) dug)]
     (when (and (every? #(solid/solid? %) names)
@@ -295,7 +296,7 @@
         (if (nil? cell)
           (do (await (step-to! c (nth cells 2)))
               :again)
-          (let [_ (await (tools/equip-for! c (dig-cells/rock-name p cell) {:fast true}))
+          (let [_ (await (tools/equip-for! c (look/rock-name p cell) {:fast true}))
                 r (await (tidy/dig! c cell true))]
             (if-not (contains? #{"dug" "missing"} (.-status r))
               (stop! :dig-failed (str "cannot dig the pocket: " (.-status r)))
@@ -309,7 +310,7 @@
                     (loop [[d & ds] (reverse dug)]
                       (when d (await (look/see-round! c [(:x d) (:y d) (:z d)])) (recur ds)))
                     (await (look/wait-settled! c [[(:x cell) (:y cell) (:z cell)]]))
-                    (await (dig-cells/collect-drops! c (flight/blocks c) (.-drops r)))
+                    (await (pit-drops/collect-drops! c (flight/blocks c) (.-drops r)))
                     (if-let [why (await (lays-open? c dug (into (set dug) [feet (update feet :y inc)])))]
                       (stop! why (str "the pocket lays open " (if (= :fluid-adjacent why) "fluid" "a gap")))
                       (do ;; the far pair is dug from inside: the drops lie there and the reach is short
@@ -356,13 +357,13 @@
                     (retry-or-stop c :roof-failed (str "cannot roof the pit: " (.-status r) (dig-cells/mob-text r)))))))))
 
 (defn ^:async dig-pit-cell!
-  "Dig one cell of the pit (its placeable drops noted for dig-cells/collect-pit-drops!), look at what it laid open and let it
+  "Dig one cell of the pit (its placeable drops noted for pit-drops/collect-pit-drops!), look at what it laid open and let it
   settle: :again, or a stop when the dig fails, lays open fluid or a cave (lava is sealed first, lays-open?), or the cell fills again."
   [c cell keep]
   (let [p (:primitives c)
         v (lb/cell cell)
         blocks (set (flight/blocks c))
-        _ (await (tools/equip-for! c (dig-cells/rock-name p cell) {:fast true}))
+        _ (await (tools/equip-for! c (look/rock-name p cell) {:fast true}))
         r (await (tidy/dig! c cell true))]
     (if (not= "dug" (.-status r))
       (retry-or-stop c :dig-failed (str "cannot dig down: " (.-status r)))
@@ -402,7 +403,7 @@
         early-stop (delay (or (here-stop p feet) (over-stop p roof)))
         keep (into #{anchor (update anchor :y inc) roof}
                    (concat plugs prep (mapcat :dig steps) (mapcat (fn [{:keys [to]}] [to (update to :y inc)]) steps)))]
-    (when at (await (dig-cells/collect-pit-drops! c feet)))
+    (when at (await (pit-drops/collect-pit-drops! c feet)))
     (cond
       (nil? at) (stop :left-pit "the body left the pit's cells")
       (= at (count steps)) (await (plug! c refuge))

@@ -10,7 +10,9 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.survival.dig-in-cells :as dig-cells]
+            [jobs.survival.pit-drops :as pit-drops]
             [jobs.survival.retreat-pit :as pit]))
 
 (def dead-end-cells (set (for [x (range 0 9) y [64 65]] [x y 0])))
@@ -125,10 +127,10 @@
 
 (deftest rock-name-guesses-stone-behind-a-seen-face-but-never-beside-a-seen-open-cell
   (let [face {[1 0 0] "stone"}]
-    (is (= "stone" (dig-cells/rock-name (sensing-stub face) (cell 0 0 0))) "a seen solid face behind it")
-    (is (nil? (dig-cells/rock-name (sensing-stub (assoc face [0 1 0] "air")) (cell 0 0 0))) "a seen open neighbour would have shown it")
-    (is (= "stone" (dig-cells/rock-name (sensing-stub (assoc face [0 1 0] "air")) (cell 0 0 0) #{(cell 0 1 0)})) "except: the way in is open")
-    (is (nil? (dig-cells/rock-name (sensing-stub {}) (cell 0 0 0))) "nothing seen near")))
+    (is (= "stone" (dig-look/rock-name (sensing-stub face) (cell 0 0 0))) "a seen solid face behind it")
+    (is (nil? (dig-look/rock-name (sensing-stub (assoc face [0 1 0] "air")) (cell 0 0 0))) "a seen open neighbour would have shown it")
+    (is (= "stone" (dig-look/rock-name (sensing-stub (assoc face [0 1 0] "air")) (cell 0 0 0) #{(cell 0 1 0)})) "except: the way in is open")
+    (is (nil? (dig-look/rock-name (sensing-stub {}) (cell 0 0 0))) "nothing seen near")))
 
 ;; ------------------------------------------------------------------ the pit's first dig
 
@@ -317,5 +319,5 @@
 (deftest drops-are-collected-only-within-pickup-reach
   (let [item (fn [id x y z] {:id id :name "item" :kind "item" :pos {:x x :y y :z z} :item {:name "cobblestone" :count 1}})
         p (tu/seeing-all (tu/fake {:blocks {} :entities [(item 1 0.5 64 0.5) (item 2 0.8 64 0.5) (item 3 2.5 64 0.5) (item 4 0.5 70 0.5)]}))]
-    (is (= [1 2] (sort (dig-cells/in-reach-ids {:primitives p} [1 2 3 4]))) "under foot and a step off, not 2 blocks away or 6 above")
-    (is (= [2] (dig-cells/in-reach-ids {:primitives p} [2])) "only the ids asked for")))
+    (is (= [1 2] (sort (pit-drops/in-reach-ids {:primitives p} [1 2 3 4]))) "under foot and a step off, not 2 blocks away or 6 above")
+    (is (= [2] (pit-drops/in-reach-ids {:primitives p} [2])) "only the ids asked for")))

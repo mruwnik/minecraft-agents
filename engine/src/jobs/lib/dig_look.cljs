@@ -5,16 +5,19 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.access.rules :as rules]
+            [jobs.lib.solid :as solid]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
   {::flow-delay-ticks {:default 34 :spec (a/int-in 1 nil)
                        :doc "One overworld lava flow delay (30 game ticks) with a few ticks over, in game ticks."}
    ::settle-wait-ms {:default 500 :spec (a/int-in 0 nil) :doc "One wait while a flow delay runs (wait-settled!), in ms."}
-   ::settle-waits {:default 6 :spec (a/int-in 0 nil) :doc "Most waits of wait-settled!."}})
+   ::settle-waits {:default 6 :spec (a/int-in 0 nil) :doc "Most waits of wait-settled!."}
+   ::rock-depth {:default 3 :spec (a/int-in 0 nil) :doc "How far behind a seen solid face a cell the body has not sensed is taken for rock."}})
 
 (defn flow-delay-ticks [] (settings/get settings ::flow-delay-ticks))
 (defn settle-wait-ms [] (settings/get settings ::settle-wait-ms))
+(defn rock-depth [] (settings/get settings ::rock-depth))
 (defn settle-waits [] (settings/get settings ::settle-waits))
 
 (defn add [[x y z] [dx dy dz]] [(+ x dx) (+ y dy) (+ z dz)])
@@ -30,6 +33,34 @@
   [c [x y z]]
   (when (some? (.-sensedAt (:primitives c)))
     (await (ctx/act c :look (clj->js {:pos {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)}})))))
+
+(def neighbours rules/neighbour-deltas)
+
+(defn shift [{:keys [x y z]} [dx dy dz]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
+
+(defn shift [{:keys [x y z]} [dx dy dz]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
+
+
+(defn rock-name
+  "The block name at cell as a player reads rock: what the body sees or remembers, else \"stone\" for a loaded cell it has
+  not sensed when a seen solid block lies behind it within rock-depth cells along some axis and no neighbour is seen
+  open (an open neighbour would have shown it; cells in except, the way in, are not counted). nil when it is not loaded
+  or no seen face is near. The shelter plans (pit, pocket, niche) read the rock they dig through this way, then dig to
+  see (jobs.lib.dig-look)."
+  ([p cell] (rock-name p cell #{}))
+  ([p cell except]
+  (or (u/seen-name p cell)
+      (when (some-> (u/sensed p cell) .-unknown)
+        (let [name-at (fn [d k] (u/seen-name p (shift cell (mapv #(* k %) d))))]
+          (when (and (every? #(or (nil? %) (solid/solid? %)) (map #(when-not (except (shift cell %)) (name-at % 1)) neighbours))
+                     (some (fn [d] (some solid/solid? (take 1 (remove nil? (map #(name-at d %) (range 1 (inc (rock-depth))))))))
+                           neighbours))
+            "stone"))))))
+
+(defn rock-solid?
+  "Whether cell is solid rock as the body reads it (rock-name)."
+  [p cell]
+  (solid/solid? (rock-name p cell)))
 
 (def max-floor-looks "Most looks of look-unknown!." 5)
 

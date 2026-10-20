@@ -12,6 +12,7 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.waits :as waits]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.dig-pit-site :as site]
             [jobs.survival.plug-way :as way]
@@ -112,8 +113,8 @@
   dug into: dirt stays dirt below the surface), else the rock guess."
   [p cell]
   (or (u/seen-name p cell)
-      (->> (range 1 (inc (dig-cells/rock-depth))) (keep #(u/seen-name p (update cell :y + %))) (filter solid/solid?) first)
-      (dig-cells/rock-name p cell)))
+      (->> (range 1 (inc (dig-look/rock-depth))) (keep #(u/seen-name p (update cell :y + %))) (filter solid/solid?) first)
+      (dig-look/rock-name p cell)))
 
 (defn dig-seconds
   "Seconds the plan's cells take to dig with the best carried tool or the hand."

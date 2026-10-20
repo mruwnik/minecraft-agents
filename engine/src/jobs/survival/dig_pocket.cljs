@@ -10,6 +10,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.dig-pit :as pit-quote]
             [jobs.survival.plug-way :as way]
@@ -134,7 +135,7 @@
   [c cells]
   (let [p (:primitives c)
         o (need/opts c 'jobs.survival.dig-pocket)
-        block (some #(let [n (dig-cells/rock-name p %)] (when-not (tools/can-harvest? p n) n)) cells)
+        block (some #(let [n (dig-look/rock-name p %)] (when-not (tools/can-harvest? p n) n)) cells)
         e (await (need/tool! c {:block block} (select-keys o [:how :explore])))]
     (cond (= :continue e) :continue
           (= :done (:kind e)) :again
