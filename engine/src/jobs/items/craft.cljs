@@ -11,7 +11,6 @@
             [engine.settings :as settings]
             [jobs.lib.near :as near]
             [jobs.lib.crafting-table :as crafting-table]
-            [jobs.lib.look :as look]
             [jobs.lib.access :as access]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.world :as known]
@@ -26,7 +25,7 @@
 (def doc
   "Craft until at least :count of :item are carried. 2x2 recipes work anywhere; bigger ones use a crafting table
   (:table, else the nearest seen within :radius), put down from the bag or fetched when none is in reach.
-  Needs: an item name (impossible :bad-args). An ingredient that runs out is fetched (jobs.lib.need) from the ways the call allows (:ways #{:carried}: stops :short).
+  Needs: an item name (impossible :bad-args); a table known when the recipe needs one, else one look round first (:look :no-table). An ingredient that runs out is fetched (jobs.lib.need) from the ways the call allows (:ways #{:carried}: stops :short).
   Returns :done {:made n :item :text}. Stopping short it ends with :made, :item and :text: condition-failed
   :need (:short, :alternatives), :no-table, :not-a-table or :full; nothing-possible :unreachable, :cannot or :craft-failed.
   A table this call put down is dug up again however the call ends, unless :keep-table.")
@@ -64,7 +63,29 @@
   (when-not (string? (:item (:args c)))
     {:reason :bad-args :why "no item name"}))
 
-(defn can-start? [c] (checks/cause-status :never (bad-args c)))
+(defn carried-table? [c]
+  (pos? (storage/carried (u/inventory (:primitives c)) "crafting_table")))
+
+(defn needs-table?
+  "Whether every recipe of the item has a grid bigger than the 2x2 of the inventory."
+  [c]
+  (let [rs (get (recipes/recipes-for (game/version-of (:primitives c))) (:item (:args c)))]
+    (and (seq rs) (every? :table? rs))))
+
+(defn table-known?
+  "A table handed in, chosen, carried or seen within the radius."
+  [c]
+  (boolean (or (:table (:args c)) (:table (ctx/mem c)) (carried-table? c)
+               (crafting-table/nearest (:primitives c) (:radius (:args c))))))
+
+(defn can-start?
+  "Never without an item name. Look (once) when the recipe needs a table and none is known: the round fetches or puts one down after that."
+  [c]
+  (contract/all [(checks/cause-status :never (bad-args c))
+                 (if (needs-table? c)
+                   (checks/seen-or-look c (table-known? c) :no-table
+                                        {:known "a crafting table is known" :missing "no crafting table in sight" :fetches? true})
+                   (checks/holds))]))
 
 (defn pickup-spot
   "The table cell this call put down and is still to dig up, else nil: not with :keep-table, once dug, gone, in an area of the
@@ -158,9 +179,6 @@
    (if (u/count-fail! c)
      (finish! c made (assoc extra :reason reason :text (str "craft gave up: " (name reason) (when-let [d (:detail extra)] (str " " d)))))
      :again)))
-
-(defn carried-table? [c]
-  (pos? (storage/carried (u/inventory (:primitives c)) "crafting_table")))
 
 (defn table-problem
   "The crafting table to get while one is wanted and none is carried, else nil."
@@ -261,9 +279,6 @@
         skip (unreachable-tables c)
         table (or table (crafting-table/nearest p radius skip))]
     (cond
-      (and (nil? table) (not (look/surveyed? c)))
-      (do (await (look/survey! c)) :again) ; a table behind the body is not seen until it looks
-
       (nil? table)
       (await (no-table! c made))
 

@@ -300,27 +300,25 @@
 ;; ------------------------------------------------------------------ the round, with the fetches
 
 (defn ^:async acquire-furnace!
-  "With no furnace chosen: the nearest one seen is chosen (nil), else look around once, then put a carried or
+  "With no furnace chosen: the nearest one seen is chosen (nil), else put a carried or
   fetched one down. nil once a furnace is chosen; :continue while that goes on; a stop when none can be had."
   [c input]
   (if-let [pos (nearest-furnace c input)]
     (do (ctx/update-mem! c assoc :furnace pos)
         (ctx/emit! c :smelt.furnace :info {:furnace pos :text (str "smelting at the furnace seen at " (:x pos) " " (:y pos) " " (:z pos))})
         nil)
-    (or (await (look/survey! c :cell))
-        (let [f (await (sf/furnace-fetch! c))]
-          (case f
-            nil (if-let [why (and (pos? (storage/carried (carried c) "furnace")) (:furnace-refusal (ctx/mem c)))]
-                  (stop! c "furnace-not-placed" nil (str "a furnace is carried but could not be put down: " why))
-                  (stop! c "no-furnace-seen" nil (when (:furnace-tried (ctx/mem c)) "none could be made either: a furnace is 8 cobblestone mined with a pickaxe")))
-            :again nil
-            f)))))
+    (let [f (await (sf/furnace-fetch! c))]
+      (case f
+        nil (if-let [why (and (pos? (storage/carried (carried c) "furnace")) (:furnace-refusal (ctx/mem c)))]
+              (stop! c "furnace-not-placed" nil (str "a furnace is carried but could not be put down: " why))
+              (stop! c "no-furnace-seen" nil (when (:furnace-tried (ctx/mem c)) "none could be made either: a furnace is 8 cobblestone mined with a pickaxe")))
+        :again nil
+        f))))
 
 (defn ^:async item-round
   "One bounded step: yield while the cook is not due, else get a furnace (the nearest one seen, else one put down:
   a body that cannot have one stops before it spends logs on fuel), fetch the missing input and fuel, reach the
-  furnace, read it, then load (first) or collect. With none in view it looks around once from where it stands (the
-  four headings, level and down, a sight pass after each) first; none after that ends no-furnace-seen."
+  furnace, read it, then load (first) or collect. A furnace out of sight is looked for once by can-start? (a :look status); none after that ends no-furnace-seen."
   [c]
   (or (when (cooking-in? c (ctx/mem c)) :continue)
       (when-not (or (furnace-of c) (some? (:owed (ctx/mem c))))
@@ -412,12 +410,20 @@
 (def defaults {:spend {:job-time default-time :wall-time default-wall-time}})
 
 (defn can-start?
-  "Never when the :item is one no furnace cooks; later :refused while a zone or claim bars the furnace."
+  "Never when the :item is one no furnace cooks; later :refused while a zone or claim bars the furnace; look (once) when a
+  single item is to be smelted and no furnace is known: the round puts one down or fetches one after that."
   [c]
   (let [item (:item (:args c))]
-    (if (and item (not (coll? item)) (not (sp/smeltable? (sp/input-of item (carried c)))))
+    (cond
+      (and item (not (coll? item)) (not (sp/smeltable? (sp/input-of item (carried c)))))
       (contract/never :not-smeltable (str item " does not smelt") :item item)
-      (furnace-refused c))))
+
+      (and item (not (coll? item)))
+      (contract/all [(furnace-refused c)
+                     (checks/seen-or-look c (boolean (or (furnace-of c) (nearest-furnace c (sp/input-of item (carried c))))) :no-furnace
+                                          {:known "a furnace is known" :missing "no furnace in sight" :fetches? true})])
+
+      :else (furnace-refused c))))
 
 (defn done?
   "Done once the load is smelted and taken: :got reaches the count the load owes, or every item of a batch has its result

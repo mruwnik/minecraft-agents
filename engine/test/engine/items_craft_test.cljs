@@ -62,6 +62,15 @@
     {:item nil} false
     {:item 3} false))
 
+(deftest a-table-recipe-with-no-table-in-sight-looks-first
+  (let [status (fn [item world & [extra]]
+                 (first ((:can-start? (get registry/jobs job))
+                         {:primitives (tu/fake-on-floor world) :args (merge {:item item :radius 64} extra) :view (fn [] {:now 0 :data {}}) :root "j" :slots []})))]
+    (is (= :look (status "chest" {})) "a 3x3 recipe, no table known")
+    (is (= :ok (status "chest" {:inventory [{:name "crafting_table" :count 1}]})) "a carried table is put down")
+    (is (= :ok (status "chest" {} {:table {:x 1 :y 64 :z 0}})))
+    (is (= :ok (status "stick" {})) "a 2x2 recipe needs no table")))
+
 (deftest craft-2x2-needs-no-walk
   (async done
     (tu/run-async done

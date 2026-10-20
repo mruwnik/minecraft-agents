@@ -106,10 +106,8 @@
 (defn no-table
   "Look :no-table while no table is given or seen within the table radius and no look round has run (a table behind the body is not seen until it looks), later after it."
   [c]
-  (cond
-    (or (:table (:args c)) (find-table (:primitives c) (table-radius))) (contract/ok :table "an enchanting table is known")
-    (look/surveyed? c) (contract/later :no-table "no enchanting table in sight")
-    :else (contract/look :no-table "no enchanting table in sight")))
+  (checks/seen-or-look c (boolean (or (:table (:args c)) (find-table (:primitives c) (table-radius)))) :no-table
+                       {:known "an enchanting table is known" :missing "no enchanting table in sight"}))
 
 (defn can-start? [c]
   (contract/all [(checks/cause-status :never (problem c)) (checks/cause-status :later (lacking c)) (checks/cause-status :later (unaffordable c))

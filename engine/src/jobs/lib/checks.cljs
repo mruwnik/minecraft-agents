@@ -6,6 +6,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.body :as body]
             [jobs.lib.cond :as cond]
+            [jobs.lib.look :as look]
             [jobs.lib.storage :as storage]
             [jobs.lib.world :as known]))
 
@@ -19,6 +20,16 @@
   "The check that ok? (a fn of the ctx) holds of the call's args: :ok :args, else :never :bad-args with text."
   [text ok?]
   (fn [c] (if (ok? c) (contract/ok :args "args fit") (contract/never :bad-args text))))
+
+(defn seen-or-look
+  "ok when seen?, else :look before the job has looked around (a block behind the body is not seen until it looks), then
+  :later; with :fetches? (the job gets or puts down the block itself) ok. A check for can-start?."
+  [c seen? reason {:keys [known missing fetches?]}]
+  (cond
+    seen? (contract/ok reason known)
+    (not (look/surveyed? c)) (contract/look reason missing)
+    fetches? (contract/ok reason missing)
+    :else (contract/later reason missing)))
 
 (defn holds "A :ok status for a check with nothing to say." [] (contract/ok :holds "no precondition"))
 

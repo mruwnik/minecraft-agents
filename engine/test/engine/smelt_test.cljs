@@ -1041,10 +1041,12 @@
 
 (deftest an-item-no-furnace-cooks-is-an-impossible-start-condition
   (let [job (get registry/jobs 'jobs.items.smelt)
-        status (fn [item] ((:can-start? job) {:primitives (tu/fake-on-floor base-world) :args {:item item} :view (fn [] {:now 0 :data {}}) :root "j" :slots []}))]
+        status (fn [item & [extra]] ((:can-start? job) {:primitives (tu/fake-on-floor base-world) :args (merge {:item item} extra) :view (fn [] {:now 0 :data {}}) :root "j" :slots []}))
+        reason (fn [s] [(first s) (:reason (nth s 2))])]
     (is (= [:never :not-smeltable "diamond"] ((juxt first #(:reason (nth % 2)) #(:item (nth % 2))) (status "diamond"))))
-    (is (= :ok (first (status "raw_iron"))))
-    (is (= :ok (first (status "iron_ingot"))) "a product names its input")))
+    (is (= [:look :no-furnace] (reason (status "raw_iron"))) "no furnace in sight: one look round first")
+    (is (= [:look :no-furnace] (reason (status "iron_ingot"))) "a product names its input")
+    (is (= :ok (first (status "raw_iron" {:furnace {:x 1 :y 64 :z 0}}))))))
 
 (deftest a-give-up-before-any-load-is-a-failed-condition-with-the-reason-as-cause
   (async done
