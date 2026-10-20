@@ -1,5 +1,5 @@
 ;; Card d2d247b6: jobs.farm.tidy over a farm plan digs the stray blocks over its cells (a stone, a sapling, a dirt block above a crop cell) and ends
-;; done {:dug n}; a clean field is done with nothing dug; a missing plan waits :plan-trouble (one tidy.declined warn), never acts.
+;; done {:dug n}; a clean field is done with nothing dug; a missing plan waits :plan-trouble, never acts.
 ;; Plan row of 4 wheat cells [10..13 0 16] on farmland (water beside); the body at [10.5 0 14.5] holds an iron pickaxe.
 {:defaults
  {:tags [:farm :tidy :jobs]

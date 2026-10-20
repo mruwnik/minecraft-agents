@@ -37,13 +37,13 @@
   again before the dig. A zone, claim, footprint or undiggable cell is refused at once. A dig hazard that
   :accept does not name defers the cell until nothing else is left. It is then tried give-up (3) times and refused
   as :hazard. A cell that cannot be walked to or reached give-up times is refused as :unreachable.
-  Refused cells are in the result's :refused [{:pos :block :reason}] and the warn tidy.refused.
+  Refused cells are in the result's :refused [{:pos :block :reason}].
   The sweep goes top-down, nearest first. It ends by collecting the drops within the field's extent plus 4 blocks
   (jobs.items.collect-drops as a child).
   Ends :done with data {:dug n :collected n :kept [...] :wrong [...] :refused [...]}; over a tidy
   field it digs nothing and is done. When strays were found, none dug and some refused, it ends condition-failed
   :refused with the same data.
-  {:reason :plan-trouble :why text} (one tidy.declined warn naming the plan and the reason): a wait while the plan is
+  {:reason :plan-trouble :why text}: a wait while the plan is
   missing or unreadable or no zone list has been read; impossible when it has no cells (in :part), also later in the call.
   Quote: time only, the strays are not counted.")
 
@@ -134,7 +134,7 @@
 ;; ------------------------------------------------------------------ conditions
 
 (defn planned
-  "{:answer plan-answer} for the plan in the args, or {:trouble text} (warned once per reason)."
+  "{:answer plan-answer} for the plan in the args, or {:trouble text :later? bool}."
   [c]
   (let [{:keys [plan part]} (:args c)
         answer (known/plan c plan)
@@ -143,10 +143,7 @@
         trouble (or (plan-trouble answer part) no-zones)]
     (if-not trouble
       {:answer answer}
-      (do (ctx/warn-once! c [plan trouble] :tidy.declined
-                          {:plan plan :part part :reason trouble
-                           :text (str "tidy declines plan " plan (when part (str " part " part)) ": " trouble)})
-          {:trouble trouble :later? (or (known/unreadable? answer) (= no-zones trouble))}))))
+      {:trouble trouble :later? (or (known/unreadable? answer) (= no-zones trouble))})))
 
 (defn can-run?
   "Later :plan-trouble while the plan is missing or unreadable or no zone list has been read; never when it has no cells
@@ -279,10 +276,6 @@
         done-text (str "tidy of " plan " done: "
                        (if (and (zero? (:dug m 0)) (empty? refused)) "nothing to dig" (str "dug " (:dug m 0)))
                        (when (seq refused) (str ", refused " (count refused))))]
-    (when (seq refused)
-      (ctx/emit! c :tidy.refused :warn {:plan plan :refused refused
-                                        :text (str "tidy of " plan " refused " (count refused) " strays: "
-                                                   (str/join ", " (map #(str (pr-str (:pos %)) " " (:block %) " " (name (:reason %))) refused)))}))
     (when (seq (:wrong found))
       (ctx/emit! c :tidy.wrong :warn {:plan plan :cells (:wrong found)
                                       :text (str "tidy of " plan " left " (count (:wrong found)) " wrong blocks: "
@@ -306,7 +299,7 @@
 (defn ^:async step [c]
   (let [{:keys [answer trouble]} (planned c)]
     (if trouble
-      :continue
+      :continue ; the plan went bad after can-run?; the next check reports it
       (let [cells (work-cells (:cells answer) (:part (:args c)))
             found (strays cells #(tr/world-block (:primitives c) %))
             _ (settle-digging! c found)
@@ -336,7 +329,7 @@
 (def can-start? can-run?)
 
 (defn done?
-  "Ok once no stray is left in the plan's cells, none is refused or wrong (finish! warns of them), no sweep is owed
+  "Ok once no stray is left in the plan's cells, none is refused or wrong (the ending reports them), no sweep is owed
   and the cells were seen; else later with the strays dug and left."
   [c]
   (let [{:keys [answer trouble]} (planned c)

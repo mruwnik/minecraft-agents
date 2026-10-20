@@ -173,9 +173,10 @@
       (fn ^:async t []
         (let [dig (get registry/jobs 'jobs.blocks.dig)
               declining (assoc dig :can-start? (constantly (contract/later :not-allowed "claimed")))
-              {:keys [eng]} (start tidy-spec {"field" field-plan} [] (assoc registry/jobs 'jobs.blocks.dig declining))
+              {:keys [eng seen]} (start tidy-spec {"field" field-plan} [] (assoc registry/jobs 'jobs.blocks.dig declining))
               result (await (outcome eng {:plan "field" :settings {:jobs.farm.tidy/give-up 1}} 200))]
           (is (seq (:refused result)))
+          (is (empty? (of-kind seen :tidy.refused)) "the ending carries the refused cells")
           (is (nil? (:text result)) "a refused tidy carries no success text")
           (is (= #{:not-allowed} (set (map :reason (:refused result)))) (pr-str (:refused result))))))))
 
@@ -233,39 +234,30 @@
 
 ;; ---------------------------------------------------------------- declining
 
+;; The reasons ride on the waits and endings (honest-checks, tidy-prepare-contract), not on a warn.
 (defn declines
-  "Submit tidy over tidy-spec with args and plans (zones given), tick a few times: [digs, tidy.declined reasons]."
+  "Submit tidy over tidy-spec with args and plans (zones given), tick a few times: [digs, tidy.declined events]."
   ([plans args] (declines plans args []))
   ([plans args zones]
    (let [{:keys [eng p seen]} (start tidy-spec plans zones)]
      (core/submit! eng (list job args) {})
      (dotimes [_ 4] (swap! clock + 700) (core/tick! eng))
-     [(count (calls p "dig")) (mapv #(select-keys (:data %) [:plan :reason]) (of-kind seen :tidy.declined))])))
+     [(count (calls p "dig")) (count (of-kind seen :tidy.declined))])))
 
-(deftest the-check-declines-a-plan-it-cannot-work-with-one-warn
-  (are [plans args reason] (= [0 [{:plan (:plan args) :reason reason}]] (declines plans args))
-    {} {:plan "nope"} "no such plan"
-    {"field" field-plan} {:plan "field" :part "nothing"} "no cells"
-    {"field" (assoc field-plan :parts [])} {:plan "field"} "no cells"))
+(deftest a-plan-it-cannot-work-with-digs-nothing-and-warns-nothing
+  (are [plans args zones] (= [0 0] (declines plans args zones))
+    {} {:plan "nope"} []
+    {"field" field-plan} {:plan "field" :part "nothing"} []
+    {"field" (assoc field-plan :parts [])} {:plan "field"} []
+    {"field" field-plan} {:plan "field"} nil))
 
-(deftest a-decline-is-one-event-however-long-it-lasts
-  (let [{:keys [eng seen]} (start tidy-spec {})]
-    (core/submit! eng (list job {:plan "nope"}) {})
-    (dotimes [_ 12] (swap! clock + 700) (core/tick! eng))
-    (is (= 1 (count (of-kind seen :tidy.declined))))))
-
-(deftest a-broken-plan-declines-naming-the-error
+(deftest a-broken-plan-digs-nothing
   (let [{:keys [eng p seen w]} (start tidy-spec {})]
     (reset! (:state w) (assoc @(:state w) :plans {"field" {:error "unreadable EDN: eof"}}))
     (core/submit! eng (list job {:plan "field"}) {})
     (dotimes [_ 3] (swap! clock + 700) (core/tick! eng))
     (is (zero? (count (calls p "dig"))))
-    (is (= [{:plan "field" :reason "the plan cannot be read: unreadable EDN: eof"}]
-           (mapv #(select-keys (:data %) [:plan :reason]) (of-kind seen :tidy.declined))))))
-
-(deftest no-zone-list-declines-and-never-means-no-zones
-  (is (= [0 [{:plan "field" :reason "no zone list has been read"}]]
-         (declines {"field" field-plan} {:plan "field"} nil))))
+    (is (empty? (of-kind seen :tidy.declined)))))
 
 (deftest a-zone-list-that-appears-lets-it-work
   (async done
