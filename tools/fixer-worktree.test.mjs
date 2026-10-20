@@ -73,6 +73,14 @@ test('a dir left holding only test logs and probe files is cleared by --remove a
   assert.equal(fs.existsSync(wt), false)
 }))
 
+test('--remove run from inside the worktree (as land.sh does) does not count itself as a live run', withRepo(({ repo, tool, env }) => {
+  const wt = sh(repo, tool, [card], env).stdout.trim().split('\n').pop()
+  const rm = sh(wt, tool, ['--remove', card], env)
+  assert.equal(rm.status, 0, rm.stderr)
+  assert.equal(rm.stderr, '')
+  assert.equal(fs.existsSync(wt), false)
+}))
+
 test('a stub holding any other file is not deleted', withRepo(({ repo, tool, env }) => {
   const wt = path.join(env.FIXER_WT_ROOT, 'fix-' + card)
   writeLate(wt)
