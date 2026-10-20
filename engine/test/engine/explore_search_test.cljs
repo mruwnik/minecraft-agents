@@ -33,10 +33,10 @@
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         dir (tu/tmp-dir)
-        p (tu/fake (update (dissoc spec :cone? :zones :plans :seen-r) :blocks #(merge (ground (or ground-r 64)) %)))
+        p (tu/fake (update (dissoc spec :cone? :zones :plans :seen-r) :blocks #(merge (ground (or ground-r 36)) %)))
         _ (.override (.-world p) "wait" (fn [token a impl] (swap! clock + (.-ms a)) (impl token a)))
         p (if (:cone? spec)
-            (let [w (perception/wrap p (perception/create (fake-raw/create p) {:radius 16 :ray-deg 2}))]
+            (let [w (perception/wrap p (perception/create (fake-raw/create p) {:radius (if (number? (:cone? spec)) (:cone? spec) 16) :ray-deg 2}))]
               (.setOwner p "Fake")
               w)
             (let [p (tu/seeing-all p)]
@@ -91,7 +91,7 @@
   (fs/mkdirSync (path/join dir "notes") #js {:recursive true})
   (fs/writeFileSync (path/join dir "notes" (str body ".edn")) (notes/render body ns)))
 
-(def diamond {"45,64,3" "diamond_block"})
+(def diamond {"28,64,3" "diamond_block"})
 
 ;; ------------------------------------------------------------------ pure
 
@@ -133,10 +133,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (search! {:target "diamond_block" :max-distance 32} {:blocks {"24,64,0" "diamond_block"} :cone? true}))
+        (let [s (await (search! {:target "diamond_block" :max-distance 20} {:blocks {"13,64,0" "diamond_block"} :cone? 8}))
               e (found-of s)]
           (is (= nil (not-found-of s)))
-          (is (= [{:what "diamond_block" :pos [24 64 0]}] (:found e)))
+          (is (= [{:what "diamond_block" :pos [13 64 0]}] (:found e)))
           (is (seq (walks s))))))))
 
 ;; ------------------------------------------------------------------ the job
@@ -186,9 +186,9 @@
               ns (file-notes s)]
           (is (finished? s))
           (is (= :found (:reason (found-of s))))
-          (is (= [[45 64 3]] (map :pos (:found (found-of s)))))
+          (is (= [[28 64 3]] (map :pos (:found (found-of s)))))
           (is (pos? (count (walks s))))
-          (is (some #(= [:seen "diamond_block" [45 64 3] "Fake"] ((juxt :kind :what :pos :by) %)) ns))
+          (is (some #(= [:seen "diamond_block" [28 64 3] "Fake"] ((juxt :kind :what :pos :by) %)) ns))
           (is (some #(= [:searched ["diamond_block"]] ((juxt :kind :what) %)) ns))
           (is (nil? (not-found-of s))))))))
 
@@ -226,15 +226,15 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (search! {:target "diamond_block" :scan-radius 10 :max-distance 60} {:blocks diamond :seen-r 64}))]
-          (is (= [{:what "diamond_block" :pos [45 64 3]}] (:found (found-of s))))
+        (let [s (await (search! {:target "diamond_block" :scan-radius 10 :max-distance 40} {:blocks diamond :seen-r 64}))]
+          (is (= [{:what "diamond_block" :pos [28 64 3]}] (:found (found-of s))))
           (is (= [] (walks s))))))))
 
 (deftest a-target-seen-beyond-the-distance-bound-is-not-taken
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (search! {:target "diamond_block" :scan-radius 10 :max-distance 30 :settings {:jobs.explore.search/max-legs 1}} {:blocks diamond :seen-r 64}))]
+        (let [s (await (search! {:target "diamond_block" :scan-radius 10 :max-distance 20 :settings {:jobs.explore.search/max-legs 1}} {:blocks diamond :seen-r 64}))]
           (is (nil? (found-of s)))
           (is (= [] (:found (not-found-of s)))))))))
 
@@ -250,7 +250,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (search! {:target "diamond_block" :max-distance 20} {:blocks diamond}))
+        (let [s (await (search! {:target "diamond_block" :max-distance 20} {:blocks {"45,64,3" "diamond_block"}}))
               e (not-found-of s)]
           (is (finished? s))
           (is (= :stopped (:kind e)))
@@ -318,11 +318,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [seen [{:kind :seen :what "diamond_block" :pos [45 64 3] :by "Other" :t 1 :until 9e15}]
-              s (await (search! {:target "diamond_block"} {:cone? true :blocks diamond} 400 #(write-other! % "Other" seen)))
-              own (await (search! {:target "diamond_block" :use-notes false :max-distance 20} {:cone? true :blocks diamond} 400
+        (let [seen [{:kind :seen :what "diamond_block" :pos [28 64 3] :by "Other" :t 1 :until 9e15}]
+              s (await (search! {:target "diamond_block"} {:cone? 8 :blocks diamond} 400 #(write-other! % "Other" seen)))
+              own (await (search! {:target "diamond_block" :use-notes false :max-distance 20} {:cone? 8 :blocks diamond} 400
                                   #(write-other! % "Other" seen)))]
-          (is (= [{:what "diamond_block" :pos [45 64 3] :noted true :by "Other"}] (:found (found-of s))))
+          (is (= [{:what "diamond_block" :pos [28 64 3] :noted true :by "Other"}] (:found (found-of s))))
           (is (= [] (walks s)))
           (is (= :stopped (:kind (not-found-of own)))))))))
 
