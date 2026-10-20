@@ -98,14 +98,36 @@
   ;; true when the column x,z, open at the body's level y, drops to farmland at least a cell down: a body brushing it on a
   ;; diagonal can slip in and trample it (a landing from over half a block up)
   (slipScan [s x z y]
-    (loop [y2 (dec y)]
-      (when (>= y2 (- y (.-max-drop s) 1))
-        (let [id (.stateAt s x y2 z)]
-          (cond
-            (== id UNLOADED) false
-            (== (aget (.-tbl-farmland s) id) 1) (< y2 (dec y))
-            (pos? (aget (.-tbl-top s) id)) false
-            :else (recur (dec y2)))))))
+    (when ^boolean (.farmlandNear s x (- y (.-max-drop s) 1) (dec y) z x z)
+      (loop [y2 (dec y)]
+        (when (>= y2 (- y (.-max-drop s) 1))
+          (let [id (.stateAt s x y2 z)]
+            (cond
+              (== id UNLOADED) false
+              (== (aget (.-tbl-farmland s) id) 1) (< y2 (dec y))
+              (pos? (aget (.-tbl-top s) id)) false
+              :else (recur (dec y2))))))))
+
+  ;; does a section the block x0..x1, y0..y1, z0..z1 touches hold farmland or lava? (the usual case: no, answered without
+  ;; reading cells)
+  (farmlandNear [s x0 y0 y1 z0 x1 z1]
+    (let [^js snap (.-snapshot s)
+          tbl (.-tbl-farmland s)
+          min-y (.-min-y s)
+          sy1 (bit-shift-right (- y1 min-y) 4)
+          sz1 (bit-shift-right z1 4)
+          sx1 (bit-shift-right x1 4)
+          sz0 (bit-shift-right z0 4)
+          sx0 (bit-shift-right x0 4)]
+      (loop [sy (bit-shift-right (- y0 min-y) 4)
+             sz sz0
+             sx sx0]
+        (cond
+          (> sy sy1) false
+          (> sz sz1) (recur (inc sy) sz0 sx0)
+          (> sx sx1) (recur sy (inc sz) sx0)
+          (true? (.sectionHas snap tbl sx sy sz)) true
+          :else (recur sy sz (inc sx))))))
 
   ;; slipScan, cached per column in a direct-mapped table (keys +1, the opening pass its own entries): the side columns of
   ;; neighbouring diagonals repeat, and a masked search reads each one through a drop of void
@@ -208,12 +230,13 @@
 
   ;; lava beside the feet or beside the floor under them
   (lavaNear [s x y z]
-    (loop [c 0]
-      (cond
-        (== c 4) false
-        (or ^boolean (.lavaAt s (+ x (aget (.-adx s) c)) y (+ z (aget (.-adz s) c)))
-            ^boolean (.lavaAt s (+ x (aget (.-adx s) c)) (dec y) (+ z (aget (.-adz s) c)))) true
-        :else (recur (inc c)))))
+    (when ^boolean (.farmlandNear s (dec x) (dec y) y (dec z) (inc x) (inc z))
+      (loop [c 0]
+        (cond
+          (== c 4) false
+          (or ^boolean (.lavaAt s (+ x (aget (.-adx s) c)) y (+ z (aget (.-adz s) c)))
+              ^boolean (.lavaAt s (+ x (aget (.-adx s) c)) (dec y) (+ z (aget (.-adz s) c)))) true
+          :else (recur (inc c))))))
 
   ;; 1 when a fall through this column ends in lava or beyond a safe drop, else 0 (an unseen cell ends the look as unloaded land)
   (holeRisk [s x y z]

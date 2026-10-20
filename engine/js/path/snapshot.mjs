@@ -17,7 +17,7 @@ export function createSnapshot ({ minY = -64, height = 384 } = {}, parent = null
   const columnsByKey = new Map()
   const sectionCount = height >> 4
   // a fork shares its parent's section arrays and copies one on its first write (the parent must not be written after)
-  parent?.forEach((e, key) => columnsByKey.set(key, { cx: e.cx, cz: e.cz, sections: e.sections.slice(), flagTable: null, flags: null, shared: new Uint8Array(sectionCount).fill(1) }))
+  parent?.forEach((e, key) => columnsByKey.set(key, { cx: e.cx, cz: e.cz, sections: e.sections.slice(), flagSets: [], shared: new Uint8Array(sectionCount).fill(1) }))
   let lastKey = -1
   let lastEntry = null
 
@@ -33,11 +33,11 @@ export function createSnapshot ({ minY = -64, height = 384 } = {}, parent = null
 
   const setSection = (cx, sy, cz, ids) => {
     const key = keyOf(cx, cz)
-    const entry = columnsByKey.get(key) ?? { cx, cz, sections: new Array(sectionCount).fill(undefined), flagTable: null, flags: null }
+    const entry = columnsByKey.get(key) ?? { cx, cz, sections: new Array(sectionCount).fill(undefined), flagSets: [] }
     columnsByKey.set(key, entry)
     entry.sections[sy] = ids
     if (entry.shared) entry.shared[sy] = 0
-    if (entry.flags) entry.flags[sy] = 0
+    for (const fs of entry.flagSets) fs.flags[sy] = 0
   }
 
   const dropColumn = (cx, cz) => {
@@ -67,24 +67,26 @@ export function createSnapshot ({ minY = -64, height = 384 } = {}, parent = null
       entry.shared[sy] = 0
     }
     entry.sections[sy][((ry & 15) << 8) | ((z & 15) << 4) | (x & 15)] = id
-    if (entry.flags) entry.flags[ry >> 4] = 0
+    for (const fs of entry.flagSets) fs.flags[ry >> 4] = 0
   }
 
-  // does the section hold any state with flagTable[id] set? Scanned once per section and table, so a planner can skip whole
+  // does the section hold any state with flagTable[id] set? Scanned once per section and table (each table keeps its own answers), so a planner can skip whole
   // sections that cannot matter; writes into the section reset its answer.
   const sectionHas = (flagTable, cx, sy, cz) => {
     const entry = entryAt(cx, cz)
     const section = entry?.sections[sy]
     if (section === undefined) return false
-    if (entry.flagTable !== flagTable) {
-      entry.flagTable = flagTable
-      entry.flags = new Uint8Array(sectionCount)
+    let set = entry.flagSets.find((fs) => fs.table === flagTable)
+    if (set === undefined) {
+      set = { table: flagTable, flags: new Uint8Array(sectionCount) }
+      entry.flagSets.push(set)
     }
-    let known = entry.flags[sy]
+    const flags = set.flags
+    let known = flags[sy]
     if (known === 0) {
       known = 1
       for (let i = 0; i < VOLUME && known === 1; i++) if (flagTable[section[i]]) known = 2
-      entry.flags[sy] = known
+      flags[sy] = known
     }
     return known === 2
   }

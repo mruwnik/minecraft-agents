@@ -177,7 +177,7 @@
         wet (js/Uint8Array. size) ;; water in the cell: water itself or a waterlogged block (eyes in it drain air even when it has collision)
         magma (js/Uint8Array. size) ;; a magma block: a body must not end its route on it
         dripleaf (js/Uint8Array. size) ;; a big dripleaf leaf with collision: a floor that tilts under a body
-        farmland (js/Uint8Array. size) ;; farmland: a body landing on it from a jump or a fall tramples it to dirt
+        farmland (js/Uint8Array. size) ;; farmland (1): a body landing on it from a jump or a fall tramples it to dirt; lava (2) rides along so one section scan finds both
         openable (js/Uint8Array. size)
         open-state (js/Uint32Array. size)
         open-kind (js/Uint8Array. size)
@@ -229,7 +229,7 @@
         (aset bubble id (if (= name "bubble_column") (if (true? (prop props "drag")) 2 1) 0))
         (aset wet id (if (or (= (aget kind id) WATER) (true? (prop props "waterlogged"))) 1 0))
         (aset magma id (if (= name "magma_block") 1 0))
-        (aset farmland id (if (= name "farmland") 1 0))
+        (aset farmland id (cond (= name "farmland") 1 (= (aget kind id) LAVA) 2 :else 0))
         ;; (a magma bubble column is special too: the cells beside it cost risk, which a search only looks for where one is near)
         (aset special id (bit-or (aget partial id)
                                  (if (= (aget climb id) CLIMB-NONE) 0 1)

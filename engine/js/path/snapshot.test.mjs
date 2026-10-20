@@ -137,6 +137,16 @@ test('sectionHas: a write into the section is seen, as is replacing the section,
   assert.deepEqual([snap.sectionHas(table, 0, 4, 0), snap.sectionHas(flagFor([9]), 0, 4, 0)], [false, true])
 })
 
+test('sectionHas: two tables used in turn each stay right across a write', () => {
+  const snap = createSnapshot({})
+  snap.setSection(0, 4, 0, new Uint16Array(4096))
+  const a = flagFor([7])
+  const b = flagFor([9])
+  assert.deepEqual([snap.sectionHas(a, 0, 4, 0), snap.sectionHas(b, 0, 4, 0)], [false, false])
+  snap.setState(1, snap.minY + 64 + 1, 1, 9)
+  assert.deepEqual([snap.sectionHas(a, 0, 4, 0), snap.sectionHas(b, 0, 4, 0), snap.sectionHas(a, 0, 4, 0)], [false, true, false])
+})
+
 test('a fork reads as its parent, and writing it leaves the parent as it was', () => {
   const parent = createSnapshot()
   parent.setSection(0, 5, 0, new Uint16Array(4096).fill(7))
