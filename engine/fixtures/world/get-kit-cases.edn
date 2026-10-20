@@ -79,4 +79,15 @@
    :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false :food false})]]
    :expect [{:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 150 :of-job true}]
    :after [[:not-block [36 0 16] "iron_ore"]]
-   :limit-s 160}]}
+   :limit-s 160}
+  ;; card fc0d4f6f: get-kit writes the kit reserve entries and the mine under it keeps them on its trip deposit (the raw iron stays in the bag, the junk goes in the chest)
+  {:name "kit-trip-deposit-keeps-the-raw-iron"
+   :plot {:height 12 :floor "grass_block" :length 64 :width 32}
+   :blocks [[:set [20 0 12] "chest[facing=west]"] [:fill [36 -1 14] [40 3 18] "stone"] [:set [36 0 16] "iron_ore"] [:set [36 1 16] "iron_ore"]]
+   :memory [{:kind :chest :data {:pos #xyz [20 0 12]} :policy {:cap 1 :ttl :forever}}]
+   :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["stone_sword" 1] ["stick" 2] ["cooked_beef" 3] ["cobblestone" 8] ["coal" 4] ["crafting_table" 1] ["raw_iron" 1] ["dirt" 1] ["sand" 1] ["gravel" 1] ["tuff" 1] ["andesite" 1] ["diorite" 1] ["granite" 1] ["netherrack" 1] ["deepslate" 1] ["calcite" 1] ["coarse_dirt" 1] ["red_sand" 1] ["clay_ball" 1] ["flint" 1] ["feather" 1] ["bone" 1] ["string" 1] ["gunpowder" 1] ["spider_eye" 1] ["leather" 1] ["paper" 1] ["sugar" 1] ["slime_ball" 1] ["ink_sac" 1]]}
+   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false :food false})]]
+   :expect [{:event {:source :job :kind :trip.deposited :data {:result {:moved [:any]}}} :within-s 120}
+            {:event {:source :job :kind :completed} :within-s 200 :of-job true}]
+   :after [[:item "iron_pickaxe" 1] [:not-block [20 0 12] "chest{Items:[{id:\"minecraft:raw_iron\"}]}"]]
+   :limit-s 220}]}
