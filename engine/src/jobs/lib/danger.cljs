@@ -92,7 +92,6 @@
 
 (defn radius-in "The :radius of args, else the ::hostile-radius setting." [args] (or (:radius args) (hostile-radius)))
 (defn ranged-radius-in "The :ranged-radius of args, else the ::ranged-radius setting." [args] (or (:ranged-radius args) (ranged-radius)))
-(defn reserve-in "The :reserve of args, else the ::fight-reserve setting." [args] (or (:reserve args) (fight-reserve)))
 
 (defn known-hostiles
   "The hostiles the body knows of within radius (ranged ones within :ranged-radius), nearest first; a heard one by
