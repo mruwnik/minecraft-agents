@@ -12,7 +12,7 @@
             [jobs.lib.look :refer [cell-of]]
             [jobs.gather.mine.targets :refer [base-ore step-cell within-own-zone]]
             [jobs.gather.mine.end :refer [stop!]]
-            [jobs.gather.mine.torches :refer [stair-torch-due? torch-step!]]
+            [jobs.gather.mine.torches :refer [mouth-torch-due? stair-torch-due? torch-step!]]
             [jobs.gather.mine.tunnel :refer [heading-stops turn-heading! result-of]]))
 
 (a/defargs settings
@@ -240,6 +240,8 @@
       (= :continue back) :continue
       back (do (ctx/emit! c :mine.not-back :warn {:cell back :text (str "mine could not walk back to its stair down at " (str/join "," back))})
                (stop! c :not-back))
+      (and level? (mouth-torch-due? c)) (do (ctx/update-mem! c assoc-in [:descent :mouth-torch] true)
+                                            (await (torch-step! c :stair)))
       (and level? (stair-torch-due? c)) (await (torch-step! c :stair))
       (and (not level?) (>= n (:descend-limit (:args c)))) (no-stone! c)
       (stair-in-own-zone? c) (do (ctx/update-mem! c assoc-in [:descent :stop] :own-zone)

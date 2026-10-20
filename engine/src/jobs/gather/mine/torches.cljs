@@ -118,6 +118,13 @@
     (boolean (and (on? c) (pos? (:steps (:descent (ctx/mem c)) 0))
                   (due-spot c [site [x y z]] [[(+ x dx) (dec y) (+ z dz)]] site)))))
 
+(defn mouth-torch-due?
+  "Whether the stair this run cuts from its start owes the torch at its mouth: the first torch of the stair hangs after its first
+  step whatever the light now, so the opening stays lit when the light fails."
+  [c]
+  (let [d (:descent (ctx/mem c))]
+    (boolean (and (on? c) (pos? (:steps d 0)) (not (:mouth-torch d)) (not= :done (:state (:own-stair d)))))))
+
 (defn booked!
   "Book a torch hung: its cell joins the planner's sources."
   [c site]

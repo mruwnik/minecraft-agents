@@ -6,10 +6,11 @@
             [engine.settings :as settings]
             [jobs.gather.dig-for :as dig]
             [jobs.gather.mine.descent :refer [descent-wanted? shaft-top-here?]]
+            [jobs.gather.shaft-descent :refer [pick-shaft]]
             [jobs.gather.mine.end :as end :refer [end-run wanted]]
             [jobs.gather.mine.home :as home]
             [jobs.gather.mine.mend :as mend]
-            [jobs.gather.mine.targets :refer [owed carried got had zone-margin within-own-zone]]
+            [jobs.gather.mine.targets :refer [owed carried got had zone-margin within-keep-clear]]
                         [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.child :as child]
@@ -112,8 +113,13 @@
   (let [f (need/parse-arg (:fetch (:args c)))]
     (boolean (and (map? f) (not (:error f)) (or (nil? (:what f)) (contains? (:what f) kind))))))
 
+(defn stair-start?
+  "Whether the dig starts with a stair of its own (not by a mineshaft): the start keeps clear of buildings."
+  [c]
+  (and (descent-wanted? c) (or (false? (:shaft (:args c))) (boolean (:none (pick-shaft c))))))
+
 (defn ^:async leave-zone!
-  "Before the first dig: a go-to child to a cell zone-margin outside the own zone zn the body stands near (the start moves with it).
+  "Before the first dig: a go-to child to a cell zone-margin outside the own zone (or, for a stair, building) zn the body stands near (the start moves with it).
   :continue while it walks, :again once out, else the trip ends :zone-exit."
   [c zn]
   (let [m (zone-margin)
@@ -124,7 +130,7 @@
         here (cell-of (u/self-pos c))]
     (cond
       (= :continue r) :continue
-      (not (within-own-zone c (dec m) (access/cell here)))
+      (not (within-keep-clear c (dec m) (access/cell here) (stair-start? c)))
       (do (ctx/emit! c :mine.left-zone :info {:zone (:name zn) :from (access/cell from) :to (access/cell here)
                                               :text (str "mine walked out of zone " (:name zn) " to " (str/join "," (access/cell here)) " before it digs")})
           (ctx/update-mem! c assoc :start here :resume-at here)
@@ -298,7 +304,7 @@
         e (when-not (:equipped? m) (await (equip! c)))
         stop (when (:equipped? m) (stop-cause c))
         at-resume? (= (access/cell (:resume-at m)) (access/cell (cell-of (u/self-pos c))))
-        own (when-not (:zoned? m) (within-own-zone c (dec (zone-margin)) (access/cell (cell-of (u/self-pos c)))))]
+        own (when-not (:zoned? m) (within-keep-clear c (dec (zone-margin)) (access/cell (cell-of (u/self-pos c))) (stair-start? c)))]
     (cond
       (= :continue e) :continue
       (not (:equipped? m)) (do (ctx/update-mem! c #(cond-> (assoc % :equipped? true) (pos? (torch/torches-held (:primitives c))) (assoc :stocked? true))) :again)

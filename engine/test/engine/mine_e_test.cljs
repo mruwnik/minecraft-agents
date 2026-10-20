@@ -320,6 +320,48 @@
           (is (every? (fn [[_ _ z]] (> z 9)) (dug-cells s)))
           (is (some? first-dig)))))))
 
+(deftest a-stair-is-not-started-beside-a-building
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (ew/of-data {"pad" pad-plan} {} [])
+              s (await (zoned {:block "stone" :count 1 :tunnel-length 0 :direction "east" :trip true :torches false}
+                              {:blocks (soil-over-stone 63 59) :drops {"stone" "cobblestone"} :inventory pickaxe} w 60))
+              left (first (events-of s :mine.left-zone))]
+          (is (= "pad" (:zone left)))
+          (is (< (first (:to left)) -1) "it walked west, away from the pad at x 6"))))))
+
+(deftest a-stair-is-not-started-beside-another-owners-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (zoned {:block "stone" :count 1 :tunnel-length 0 :direction "east" :trip true :torches false}
+                              {:blocks (soil-over-stone 63 59) :drops {"stone" "cobblestone"} :inventory pickaxe}
+                              (ew/of-data {} {} [(assoc farm-zone :min [6 60 -2] :max [8 70 2])]) 60))]
+          (is (= "farm" (:zone (first (events-of s :mine.left-zone))))))))))
+
+(deftest after-leaving-a-building-the-descent-still-walks-down-its-own-stair
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks (stair-down-east 4) :drops {"iron_ore" "raw_iron" "stone" "cobblestone"} :inventory pickaxe
+                                :self {:pos [0.5 64 0.5]}}
+                        :shared (ew/of-data {"hut" {:id "hut" :parts [{:id "p" :box [[-5 64 0] [-5 64 0]] :want "sand"}]}} {} [])})]
+          (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors (vec (for [i (range 1 5)] [i (- 63 i) 0]))})
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level 58 :heading "east" :count 1 :tunnel-length 3 :torches false :trip true}) {})
+          (await (run-ticks s 400))
+          (is (seq (events-of s :mine.left-zone)))
+          (is (= [[4 60 0]] (map :own-stair (events-of s :mine.stair-plan)))))))))
+
+(deftest a-plain-dig-is-not-moved-from-a-building
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (ew/of-data {"pad" pad-plan} {} [])
+              s (await (zoned {:block "sand" :count 1 :tunnel-length 0 :trip true} {:blocks {"2,64,0" "sand"}} w 20))]
+          (is (empty? (events-of s :mine.left-zone)))
+          (is (= 1 (count (dug-cells s)))))))))
+
 (deftest ignoring-zones-digs-from-inside-the-own-zone
   (async done
     (tu/run-async done

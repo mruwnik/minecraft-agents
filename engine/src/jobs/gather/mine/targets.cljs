@@ -10,6 +10,7 @@
             [jobs.lib.near :as near]
             [jobs.lib.result :as result]
             [engine.ctx :as ctx]
+            [engine.memory :as mem]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.access.zones :as zones]
@@ -297,6 +298,39 @@
   [c targets]
   (let [clear (filterv #(drop-in-line? c %) targets)]
     (if (seq clear) clear targets)))
+
+(def building-window
+  "Blocks round the body in which a plan's footprint cells count as a building to keep clear of (x and z; y within 8)."
+  24)
+
+(defn footprint-boxes
+  "One {:name plan-id :min :max} box per plan with footprint cells near [x y z] (mineshaft plans left out: a stair is meant to join them)."
+  [c [x y z]]
+  (let [shafts (known/shafts c)]
+    (->> (known/footprints c)
+         (filter (fn [[[cx cy cz] id]] (and (not (shafts id)) (<= (js/Math.abs (- cx x)) building-window) (<= (js/Math.abs (- cz z)) building-window)
+                                            (<= (js/Math.abs (- cy y)) 8))))
+         (group-by val)
+         (map (fn [[id cells]]
+                (let [ks (map key cells)]
+                  {:name id :min (apply mapv min ks) :max (apply mapv max ks)}))))))
+
+(defn buildings
+  "Boxes {:name :min :max} of what a stair is not started beside: plan footprints near cell, zones of other owners and live claims the
+  body is not inside (a dig inside one is refused as it stands), and the :home place (3 blocks round it). None with :ignore-zones?."
+  [c cell]
+  (when-not (:ignore-zones? (:args c))
+    (let [self (ctx/self-name c)
+          home (mem/place (ctx/view c) :home)]
+      (concat (footprint-boxes c cell)
+              (remove #(zones/in-box? cell %) (filter #(zones/foreign-owner? (:owner %) self) (known/zones c)))
+              (for [cl (known/claims c) :when (not (or (zones/same-owner? (:owner cl) self) (zones/in-box? cell cl)))] (assoc cl :name (:id cl)))
+              (when home [{:name "home" :min [(- (:x home) 3) (- (:y home) 3) (- (:z home) 3)] :max [(+ (:x home) 3) (+ (:y home) 3) (+ (:z home) 3)]}])))))
+
+(defn within-keep-clear
+  "The own zone, or with stair? the building, whose box grown by m holds the cell [x y z], else nil."
+  [c m cell stair?]
+  (first (filter #(zones/in-box? cell (grown % m)) (concat (own-zones c) (when stair? (buildings c cell))))))
 
 (defn ^:async next-target!
   "The target to walk to next: of the targets off the ground snapshot (else those over it) that the body sees in a
