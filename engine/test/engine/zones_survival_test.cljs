@@ -212,7 +212,7 @@
                                               [(update two-carrots :blocks dissoc "3,64,0") [(zone "Miles" [2 64 0] [2 64 0])] [{:x 2 :y 64 :z 0}] [["vault"]]]
                                               [(update two-carrots :blocks dissoc "3,64,0") nil [{:x 2 :y 64 :z 0}] []]]]
           (let [{:keys [eng p seen]} (setup (assoc world :self {:food 2}) zones)]
-            (core/submit! eng '(jobs.survival.get-food) {})
+            (core/submit! eng '(jobs.survival.get-food {:carry 0}) {})
             (await (run-until-empty eng 6))
             (is (= expected (take (count expected) (dug p))) (pr-str [zones expected]))
             (is (= warns (mapv :zones (trespass seen :get-food.trespass-last-resort))) (pr-str [zones expected]))))))))
