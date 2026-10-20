@@ -218,12 +218,16 @@
                  (mapv #(select-keys (:data %) [:cell :action :was :now]) (mem/entries (mem/view (:store eng)) :tidy))))
           (is (= "cobblestone" (bd/block-at p at))))))))
 
-(deftest the-bodys-own-cell-waits-own-body
+(deftest a-body-standing-in-the-cell-steps-off-it-and-places
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= {:reason :own-body :pos {:x 0 :y 64 :z 0}}
-               (bd/wait-cause (await (bd/waiting-after (bd/setup {:self body :inventory cobble}) (list job {:pos [0 64 0] :item "cobblestone"}) 3)))))))))
+        (let [{:keys [eng p]} (bd/setup {:self body :inventory cobble})
+              result (await (tu/child-outcome eng job {:pos [0 64 0] :item "cobblestone"} 12))
+              feet (u/self-pos {:primitives p})]
+          (is (:placed result))
+          (is (= "cobblestone" (bd/block-at p {:x 0 :y 64 :z 0})))
+          (is (not= [0 0] [(js/Math.floor (:x feet)) (js/Math.floor (:z feet))])))))))
 
 (deftest a-cell-with-nothing-to-place-against-waits-no-support
   (async done

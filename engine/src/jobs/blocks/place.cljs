@@ -14,6 +14,7 @@
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.placement :as placement]
+            [jobs.lib.step-off :as step-off]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
             [engine.game :as game]))
@@ -21,14 +22,14 @@
 (def doc
   "Place one block at :pos ([x y z] or {:x :y :z}): :item, or the first carried of :use {:blocks [names]} (default: the
   carried building blocks, jobs.lib.choose :build). One call is the whole attempt: fetch a missing item (:fetch), clear
-  the cell, walk into reach (one jobs.movement.go-to call), place. It yields :continue only when a child waits on the world.
+  the cell, walk into reach (one jobs.movement.go-to call), step off the cell it stands in (jobs.lib.step-off; not for
+  seeds, carpets and the like: no collision), place. It yields :continue only when a child waits on the world.
 
   Needs: the item carried (or fetchable, :fetch). Conditions (can-start? and can-run?: a listed call waits on them, a called one ends condition-failed with the cause)
   and place nothing when:
   - {:reason :need :item name :pos} or {:reason :need :any-of [names] :pos}: not carried and :fetch is off.
   - {:reason :not-allowed :pos :by :zone|:claim|:footprint|:no-zones ...}: zones, claims or another plan's
     footprint refuse the place. :for-plan's own footprint does not. :ignore-zones? skips the rule.
-  - {:reason :own-body :pos}: the body stands in the cell (not for seeds, carpets and the like: no collision).
   - {:reason :no-support :pos}: no solid neighbour to place against (not for boats).
   - {:reason :not-loaded :pos}.
 
@@ -149,7 +150,7 @@
           (some #{block} items) nil
           (= :not-loaded (:reason v)) {:reason :not-loaded :pos pos}
           (b/not-allowed pos v) (b/not-allowed pos v)
-          (= :own-body (:reason v)) {:reason :own-body :pos pos}
+          (= :own-body (:reason v)) nil
           (= :not-replaceable (:reason v)) nil
           (not (:ok v)) {:reason (:reason v) :pos pos}
           :else (or (when-not (fetching? c) (when-let [n (needs c items)] (assoc n :reason :need :pos pos)))
@@ -299,6 +300,11 @@
       (not (b/in-reach? c pos (:see (:args c))))
       (let [w (await (b/walk-into-reach! c pos (:see (:args c))))]
         (if (:unreachable w) (unreachable c pos items (:unreachable w) (:text w)) w))
+      (= :own-body (:reason (place-verdict c pos items)))
+      (let [r (await (step-off/step-off-zoned! c pos {}))]
+        (cond (= :continue r) :continue
+              (:unreachable r) (unreachable c pos items (:unreachable r) nil)
+              :else :again))
       lacking? (finish! c :condition-failed (assoc (needs c items) :reason :need :pos pos)
                         {:placed false :pos pos :item (first items) :reason :need})
       :else
