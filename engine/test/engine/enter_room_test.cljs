@@ -3,6 +3,9 @@
   doorway; end for what it cannot do."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
+            [engine.events :as events]
+            [jobs.lib.world-files :as ew]
+            [engine.triggers :as triggers]
             [engine.hut-shelter-test :refer [hut-world door-states door-open?]]
             [engine.memory :as mem]
             [engine.registry :as registry]
@@ -40,7 +43,7 @@
           (await (tu/run-until-empty eng 30))
           (is (true? (door-open? p)) "the click did nothing")
           (is (= [{:door [5 64 2]}] (st/entries eng :night-door-failed)))
-          (is (= 1 (count (st/emitted seen :shelter.door-failed))))
+          (is (empty? (st/emitted seen :shelter.door-failed)) "the ending says it, no warn beside it")
           (is (seq (st/ended-because seen :door-open))))))))
 
 (deftest a-forgotten-home-and-no-roof-ends-no-room
@@ -128,3 +131,29 @@
           (is (= 0 (await (mean (hut-world {:x 5 :y 64 :z 0} {}) []))))
           (is (= ##Inf (await (mean doorway-hut []))))
           (is (= 6 (await (mean doorway-hut stones)))))))))
+
+(deftest a-home-in-anothers-zone-is-not-walked-into
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              [seen sink] (tu/legacy-capture-sink)
+              world (assoc (hut-world {:x 5 :y 64 :z 6} {}) :states open-door-states :time st/night)
+              p (tu/fake (merge {:offlineScale 0.0001 :floor tu/walk-floor} world))
+              _ (st/dawn-after! p st/default-dawn)
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})
+                                :world (ew/of-data {} {} [{:name "yard" :min [3 60 -2] :max [7 70 2] :owner "Miles"}])})]
+          (mem/write! (:store eng) :home {:pos {:x 5 :y 64 :z 0}} mem/place-policy)
+          (core/submit! eng '(jobs.survival.enter-room {}) {})
+          (await (tu/run-until-empty eng 30))
+          (is (seq (st/ended-because seen :no-room)))
+          (is (> (:z (st/pos-of p)) 3) "stayed outside"))))))
+
+(deftest with-no-home-the-nearest-closed-room-seen-is-entered
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (enter! (assoc (hut-world {:x 5 :y 64 :z 6} {}) :states open-door-states) {}))]
+          (is (< (:z (st/pos-of p)) 2) "inside the hut")
+          (is (false? (door-open? p)) "the door is shut"))))))

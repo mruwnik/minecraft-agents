@@ -3,6 +3,7 @@
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.settings :as settings]
+            [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
             [jobs.lib.checks :as checks]
             [jobs.lib.combat :as combat]
@@ -25,7 +26,7 @@
   "Walk into a known closed room and close it: the :place (a remembered place name; default the home, or where the body
   is when it is roofed) is walked to (a go-to child, key :roof-walk), then an
   open door or gate of the room is shut (retreat-doors/shut-home-door!; a door still open once clicked writes
-  :night-door-failed and warns shelter.door-failed, which ends the job nothing-possible :door-open), a doorway gap in its walls is
+  :night-door-failed, which ends the job nothing-possible :door-open), a doorway gap in its walls is
   filled (jobs.blocks.fill-cells: a carried wooden door, else the call's :use :blocks; the filled cells are remembered as
   :doorway-filled, which night.morning digs again by day; a doorway tried once, or left open for want of blocks, is not tried again tonight, :doorway-tried) and a hole in
   the roof over the body is filled with one block (the cell is in :placed and the scaffold ledger as :shelter). Needs the
@@ -47,6 +48,7 @@
    ::fill-s {:default 3 :doc "Seconds filling a doorway or a roof hole is guessed to take, for the quote." :spec (a/num-in 0 nil)}
    ::race-radius {:default 16 :doc "Blocks within which a hostile may reach a door of the room before the body does." :spec (a/num-in 0 nil)}
    ::max-steps {:default 40 :doc "Steps (a walk, a door, a fill) a call takes before it gives up." :spec (a/int-in 1 nil)}
+   ::max-judged {:default 3 :doc "Doors seen whose room is judged (flooded) to find the nearest closed room when no place is remembered." :spec (a/int-in 0 nil)}
    ::max-mends {:default 3 :doc "Fills of the roof hole a call tries before it gives up." :spec (a/int-in 1 nil)}})
 
 (def target [])
@@ -61,11 +63,32 @@
 
 (defn have-blocks? [c] (boolean (or (room-lib/carried-door (:primitives c)) (seq (lb/carried c (blocks c))))))
 
-(defn target-of
-  "{:name :pos} of the room to enter: the call's :place, else the home; nil when it is not remembered."
+(defn refused?
+  "Whether another's zone, claim or plan refuses a block at pos: a room there is not walked into (a fill or a dig it needs would trespass)."
+  [c pos]
+  (boolean (access/trespass-refusal (assoc (access/rules-input c) :feet nil) :place pos)))
+
+(defn nearest-seen
+  "{:pos} of the nearest closed room behind one of the first ::max-judged doors the body has seen that no zone refuses, nil
+  when none. Read-only (a quote runs this), so nothing is cached."
   [c]
-  (let [nm (or (:place (:args c)) :home)]
-    (when-let [pos (mem/place (ctx/view c) nm)] {:name nm :pos pos})))
+  (let [p (:primitives c)]
+    (->> (room-lib/starts p nil)
+         (take (settings/get settings ::max-judged))
+         (keep (fn [{:keys [pos]}] (when (some->> (reach/room p pos) (room-lib/closed-past-sight? p)) {:pos pos})))
+         (remove #(refused? c (:pos %)))
+         first)))
+
+(defn target-of
+  "{:name :pos} of the room to enter: the call's :place, else the home, else (no :place and no home remembered) the nearest
+  closed room seen ({:pos} only); nil when none, or when a zone refuses the place."
+  [c]
+  (let [nm (or (:place (:args c)) :home)
+        pos (mem/place (ctx/view c) nm)]
+    (cond
+      pos (when-not (refused? c pos) {:name nm :pos pos})
+      (:place (:args c)) nil
+      :else (nearest-seen c))))
 
 (defn at-target?
   "Whether the body is within a step and a half of the place, or in the room that holds it (read-only: a quote runs this)."
@@ -97,7 +120,7 @@
   (let [p (:primitives c)
         t (target-of c)]
     (if-not (here? c t)
-      (if t {:walk t} {:stop :no-room :text "no place to enter is remembered and the body is not under a roof"})
+      (if t {:walk t} {:stop :no-room :text "no room to enter: no place remembered or closed room seen that no zone refuses, and the body is not under a roof"})
       (let [door (sh/open-room-door p (ctx/view c))
             gap (room-lib/gap c)
             plug (when (and (not (shut? c)) (not gap))
@@ -165,14 +188,12 @@
 (defn ^:async shut-door!
   "Shut an open door of the closed room the body stands in (retreat-doors/shut-home-door!: from where it stands within a hand's
   reach, else a step to the room cell inside it first). No zone rule applies: shutting a door changes no block. A door still
-  open once clicked writes :night-door-failed for this door (shelter.door-failed warn), so the night does not call the body safe
+  open once clicked writes :night-door-failed for this door, so the night does not call the body safe
   behind it. :again."
   [c door]
   (await (retreat-doors/shut-home-door! c door))
   (when (and (some #(= (sh/door-key (:cell door)) (sh/door-key (:cell %))) (sh/open-doors (:primitives c) (ctx/view c)))
              (contains? (:doors-clicked (ctx/mem c) #{}) (retreat-doors/door-key (:cell door))))
-    (ctx/emit! c :shelter.door-failed :warn {:cell (retreat-doors/door-key (:cell door))
-                                             :text "an open door of the room would not shut; the room is not safe"})
     (ctx/remember! c :night-door-failed {:door (sh/door-key (:cell door))} {:cap 1 :ttl (sh/door-failed-ms)}))
   :again)
 
