@@ -14,14 +14,14 @@
    :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated} :within-s 60 :of-job true}
-            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}
+            {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:escalation {:why :no-dig}}} :for-s 140 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [24.5 0 16.5] 2]]}
   {:name "stone-room-with-bare-hands-is-dug-out"
    :blocks [[:fill [14 -1 14] [18 2 18] "stone" :hollow]]
    :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated} :within-s 60 :of-job true}
-            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}
+            {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:escalation {:why :no-tool}}} :for-s 140 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [24.5 0 16.5] 2]]}
   {:name "own-stair-sealed-by-dirt-is-dug-by-hand"
@@ -32,14 +32,14 @@
             [:fill [18 6 16] [18 8 16] "air"]]
    :body {:at [16.5 4 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [20 6 16] :range 1})]]
-   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}
+   :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:why :ladder-gap}} :for-s 140 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [20.5 6 16.5] 2]]}
   {:name "one-wide-dirt-tunnel-open-end-walks-out"
    :blocks [[:fill [2 0 15] [27 2 17] "dirt"] [:fill [3 0 16] [27 1 16] "air"]]
    :body {:at [5.5 0 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [30 0 16] :range 1})]]
-   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}
+   :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :go-to.escalated} :for-s 90 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [30.5 0 16.5] 2]]}
   {:name "one-wide-dirt-tunnel-plugged-digs-out"
@@ -47,7 +47,7 @@
    :body {:at [5.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.movement.go-to {:pos #at [30 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated} :within-s 60 :of-job true}
-            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}]
+            {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [30.5 0 16.5] 2]]}
   {:name "free-body-goal-walled-in-with-pickaxe-digs-in"
    :plot {:height 14 :length 64} ; a 32 cell drains as start-enclosed: the body would count as shut in
@@ -55,19 +55,19 @@
    :body {:at [4.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 0})]]
    :expect [{:event {:source :job :kind :go-to.escalated} :within-s 90 :of-job true}
-            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}]
+            {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [24.5 0 16.5] 2]]}
   {:name "bedrock-room-with-pickaxe-gives-up-and-digs-nothing"
    :blocks [[:fill [14 -1 14] [18 2 18] "bedrock" :hollow]]
    :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
-   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 90 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false}} :within-s 90 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false}}}]
    :after [[:block [18 1 16] "bedrock"] [:body-near [16.5 0 16.5] 1.5]]}
   {:name "bedrock-room-bare-handed-gives-up-and-digs-nothing"
    :blocks [[:fill [14 -1 14] [18 2 18] "bedrock" :hollow]]
    :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
-   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 90 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false}} :within-s 90 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false}}}]
    :after [[:block [18 1 16] "bedrock"] [:body-near [16.5 0 16.5] 1.5]]}
   {:name "goal-in-a-bedrock-room-gives-up-for-a-free-body"
@@ -75,13 +75,13 @@
    :body {:at [4.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 0})]]
    ;; the floor under the goal is unseen from outside and reads as rock, so one stone of the ground may be dug to look; the room stays whole
-   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 120 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false}} :within-s 120 :of-job true}]
    :after [[:block [22 1 16] "bedrock"] [:block [26 1 16] "bedrock"] [:block [24 -1 16] "bedrock"] [:block [24 2 16] "bedrock"]]}
   {:name "goal-in-a-closed-bedrock-room-bare-handed-gives-up-quickly"
    :blocks [[:fill [22 -2 14] [26 3 18] "bedrock" :hollow]]
    :plot {:height 14 :length 64}
    :body {:at [4.5 0 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 0})]]
-   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 20 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false}} :within-s 20 :of-job true}]
    :after [[:block [22 1 16] "bedrock"] [:body-near [4.5 0 16.5] 30]]
    :limit-s 30}]}

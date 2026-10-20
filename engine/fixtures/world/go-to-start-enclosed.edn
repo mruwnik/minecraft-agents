@@ -13,7 +13,7 @@
  [{:name "sealed-pen-far-unloaded-goal-is-start-enclosed"
    :blocks [[:fill [1 -1 16] [5 4 20] "stone" :hollow]]
    :act [[:job (jobs.movement.go-to {:pos #at [-1000 0 17] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :start-enclosed}} :within-s 30 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :start-enclosed}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :planned :data {:why "goal-unloaded"}} :for-s 30 :until {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :start-enclosed}}}]
    :after [[:body-near [3.5 0 17.5] 2] [:block [1 0 18] "stone"]]}
   {:name "sealed-pen-with-pickaxe-far-unloaded-goal-escalates"
@@ -28,7 +28,7 @@
    ;; many minutes; :tour-worth setting 18 (about 60 blocks) ends it at the end of the first walk that got no nearer
    :act [[:job (jobs.movement.go-to {:pos #at [-1000 0 17] :range 1 :ways #{:walk :clear-seal} :settings {:jobs.lib.cost.value/tour-worth 18}})]]
    :expect [{:event {:source :job :kind :planned :data {:why "goal-unloaded"}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :explore-spent}} :within-s 75 :of-job true}
+            {:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :reason :unreachable :why :explore-spent}} :within-s 75 :of-job true}
             {:no-event {:source :job :kind :planned :data {:why "start-enclosed"}} :for-s 60 :until {:source :job :kind #{:completed :stopped} :data {:why :explore-spent}}}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:why :start-enclosed}} :for-s 60 :until {:source :job :kind #{:completed :stopped} :data {:why :explore-spent}}}]
    :after []}]}

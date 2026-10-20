@@ -11,5 +11,5 @@
  [{:name "gravel-over-the-next-column-is-dug-through"
    :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
-            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 180 :of-job true}]
+            {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
    :after [[:body-near [20.5 4 16.5] 2]]}]}
