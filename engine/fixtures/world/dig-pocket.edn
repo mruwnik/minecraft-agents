@@ -26,7 +26,7 @@
   {:name "hidden-water-behind-the-wall-stops-the-pocket"
    :blocks [[:fill [22 0 15] [24 4 17] "stone"] [:set [23 0 16] "water"]]
    :act [[:job (jobs.survival.dig-pocket {})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :failed}} :within-s 30 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :fluid-adjacent}} :within-s 30 :of-job true}]
    :limit-s 45}
   {:name "stone-without-pickaxe-no-tool"
    :blocks [[:fill [22 0 8] [30 4 24] "stone"]]

@@ -23,6 +23,6 @@
                                                        {:id "door" :cells [#at [15 0 18]] :want [:any "oak_door"]}
                                                        {:id "bed" :cells [#at [15 0 17]] :want [:any "red_bed"]}]}]
    :act [[:job (jobs.survival.enter-room)]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :no-room}} :within-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-room}} :within-s 40 :of-job true}]
    :after [[:body-far [15.5 0 15.5] 5] [:block [15 0 18] "oak_door[half=lower,open=true]"]]
    :limit-s 60}]}
