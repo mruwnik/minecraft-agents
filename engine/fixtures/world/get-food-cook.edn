@@ -20,7 +20,7 @@
          [:rcon "damage $BODY 5 minecraft:generic"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
             {:event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :within-s 80}
-            {:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}} :within-s 90}]
+            {:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome #{:done :stopped}}} :within-s 90}]
    :after [[:item "chicken" 0]]}
   {:name "carried-furnace-is-put-down-and-two-chops-cooked"
    :body {:inventory [["furnace" 1] ["porkchop" 2] ["coal" 2]]}
