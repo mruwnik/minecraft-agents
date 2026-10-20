@@ -3,6 +3,7 @@
   (:require [engine.args :as a]
             [clojure.string :as str]
             [cljs.reader :as reader]
+            [engine.edn-fast :as fast]
             [engine.settings :as settings]
             ["crypto" :as crypto]
             ["fs" :as fs]
@@ -92,7 +93,7 @@
   (let [record (try
                  (if (> (count line) (setting "max-line-bytes"))
                    (or (stub-record line) (reader/read-string line))
-                   (reader/read-string line))
+                   (try (fast/read-string line) (catch :default _ (reader/read-string line))))
                  (catch :default e
                    (throw (ex-info (str "malformed complete event record in " file
                                         " at line " line-no ": " (.-message e))
