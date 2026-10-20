@@ -11,7 +11,7 @@
 ;; Pit mass: stone x 10..22, z 10..22, y 0..3 (top feet y 4), a 1x1 shaft at x 16, z 16 from y 0 up.
 {:defaults
  {:tags [:movement :access]
-  :plot {:height 12 :light :dark}
+  :plot {:height 12}
   :blocks [[:fill [10 0 10] [22 3 22] "stone"] [:fill [16 0 16] [16 3 16] "air"]]
   :body {:at [16.5 0 16.5]}
   :limit-s 150}
