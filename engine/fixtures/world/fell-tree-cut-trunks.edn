@@ -1,0 +1,19 @@
+;; Card 348dd724: trees whose lower logs were cut (the trunk hangs over air, leaves round the top) beside a plank hut. fell-tree walks to
+;; the ground of the trunk's column, not to the hanging log cells (goal-not-standable), and brings the logs down.
+{:defaults
+ {:tags [:forestry :fell-tree] :time :any
+  :plot {:height 24 :floor "stone"}
+  :blocks [[:fill [8 0 8] [12 3 12] "oak_planks"] [:fill [9 0 9] [11 2 11] "air"] [:set [10 0 8] "air"] [:set [10 1 8] "air"]
+           [:fill [16 3 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 8 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]
+           [:fill [22 4 16] [22 6 16] "oak_log"] [:fill [20 5 14] [24 8 18] "oak_leaves[persistent=true]"] [:fill [22 5 16] [22 6 16] "oak_log"]]
+  :body {:at [14.5 0 22.5] :yaw 180 :settle-s 2 :inventory [["iron_axe" 1] ["dirt" 20]] :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "fell-tree-at-a-trunk-hanging-over-air-brings-its-logs-down"
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 3 16]})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 180 :of-job true}]
+   :after [[:not-block [16 6 16] "oak_log"] [:not-block [16 3 16] "oak_log"] [:item "oak_log" 4]]}
+  {:name "fell-tree-by-radius-finds-a-hanging-trunk-and-keeps-its-logs"
+   :act [[:job (jobs.forestry.fell-tree {:radius 14})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 190 :of-job true}]
+   :after [[:item "oak_log" 4]]}]}
