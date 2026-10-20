@@ -78,7 +78,7 @@
    :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false}} :within-s 120 :of-job true}]
    :after [[:block [22 1 16] "bedrock"] [:block [26 1 16] "bedrock"] [:block [24 -1 16] "bedrock"] [:block [24 2 16] "bedrock"]]}
   {:name "goal-in-a-closed-bedrock-room-free-bare-handed-body-gives-up"
-   ;; a free body may fetch a pickaxe (none to craft from here), so it tries the guessed ground first, as with a pickaxe above
+   ;; a free body would fetch a pickaxe for the guessed ground; none can be had here, so it gives up before digging by hand
    :blocks [[:fill [22 -2 14] [26 3 18] "bedrock" :hollow]]
    :plot {:height 14 :length 64}
    :body {:at [4.5 0 16.5]}

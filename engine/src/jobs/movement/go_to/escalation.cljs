@@ -354,7 +354,7 @@
         (bs/passable? n) :open
         (or (escape/protected? n) (not (escape/diggable? block-at (may-dig-fn c) (own-placed-fn c) cell))) :not-diggable
         :else
-        (let [args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :fetch (fetch-tool? c) :accept #{:lava-adjacent}}
+        (let [args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :fetch (fetch-tool? c) :need-drop (fetch-tool? c) :accept #{:lava-adjacent}}
               pos (zipmap [:x :y :z] cell)
               e (await (b/dig-cell-ending! c pos args))
               boxed? (and (not= :continue e) (= :no-side-stand (:why (:cause e))))
