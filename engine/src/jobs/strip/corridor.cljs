@@ -114,14 +114,15 @@
                              :sources (:torches (ctx/mem c))})))))
 
 (defn ^:async hang-torch!
-  "Hang a torch at spot (nil: none stands there, booked at feet so the step is not asked again)."
+  "Hang a torch at spot (nil: none stands there, booked at feet so the step is not asked again; apart from :torches, since
+  no torch lights round it)."
   [c spot feet]
   (let [o (if (nil? spot)
             :no-spot
             (await (b/place-cell! c (zipmap [:x :y :z] spot) "torch" (select-keys (:args c) [:ignore-zones?]))))]
     (case o
       :continue :continue
-      :no-spot (do (ctx/update-mem! c update :torches (fnil conj []) feet) :again)
+      :no-spot (do (ctx/update-mem! c update :no-spot-at (fnil conj []) feet) :again)
       :refused (stop! c :refused {:cell spot})
       (:placed :already) (do (ctx/update-mem! c update :torches (fnil conj []) spot) :again)
       (stop! c :torch-failed {:child o :cell spot}))))
@@ -158,7 +159,7 @@
   (let [block-at (access/seen-at (:primitives c))
         {:keys [axis line from to]} seg
         along (if (= axis :x) x z)
-        hung (:torches (ctx/mem c))
+        hung (concat (:torches (ctx/mem c)) (:no-spot-at (ctx/mem c)))
         d2 (fn [[cx cy cz]] (+ (* (- cx x) (- cx x)) (* (- cy y) (- cy y)) (* (- cz z) (- cz z))))]
     (->> (range (max from (- along 4)) (inc (min to (+ along 4))))
          (map #(strip/at axis (:y seg) line %))

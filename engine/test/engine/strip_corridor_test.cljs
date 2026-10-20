@@ -153,6 +153,15 @@
           (is (pos? (count (filter #(= "torch" (.-item (.-args %))) (bd/calls p "place")))))
           (is (= 8 (bd/carried p "torch")) "the torches it hung are taken back at the end"))))))
 
+(deftest a-cell-with-no-torch-spot-is-not-booked-as-a-torch
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [mem (atom {})
+              o (await (corridor/hang-torch! {:update-mem (fn [f args] (swap! mem #(apply f % args)))} nil [5 64 0]))]
+          (is (= :again o))
+          (is (= {:no-spot-at [[5 64 0]]} @mem) "a torch source would mark 13 cells round it lit"))))))
+
 (deftest no-torch-in-the-dark-stops-no-torches
   (async done
     (tu/run-async done
