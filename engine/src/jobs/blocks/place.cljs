@@ -45,7 +45,7 @@
   call (the conditions' causes). Impossible: :bad-args (from can-start?). nothing-possible :unreachable (the walk
   failed twice or the place is out of reach, :why).
   nothing-possible: :clear-failed (the plant could not be dug) or :failed (the primitive refused twice in one call: :primitive its status,
-  :why its reason text, else one from its status). The caller decides whether to try again.
+  :why its reason text, else one from its status; :mobs the names of mobs it reports in the cell). The caller decides whether to try again.
 
   :ways (default all): a missing item is fetched with jobs.items.obtain (one of it) from the ways but :carried; #{:carried}
   waits :need.")
@@ -105,7 +105,7 @@
 (defn clear-args
   "The jobs.blocks.dig args for clearing the plant at pos."
   [c pos]
-  (merge (select-keys (:args c) [:for-plan :ignore-zones?])
+  (merge (select-keys (:args c) [:for-plan :ignore-zones? :see])
          {:pos pos :collect false :need-drop false :accept #{:fluid-adjacent :falling-block}}))
 
 (defn clears?
@@ -250,7 +250,8 @@
                                                                       :state (js->clj (.-properties (.-placed r)) :keywordize-keys true)})))
           "unreachable" :unreachable
           "failed" (if (:retried (ctx/mem c))
-                     (stop! c :nothing-possible {:placed false :pos pos :item item :reason :failed :primitive (.-status r) :why (refusal-why r)})
+                     (stop! c :nothing-possible (cond-> {:placed false :pos pos :item item :reason :failed :primitive (.-status r) :why (refusal-why r)}
+                                                  (b/refusing-mobs r) (assoc :mobs (vec (b/refusing-mobs r)))))
                      (do (ctx/update-mem! c assoc :retried true) :again))
           (stop! c :nothing-possible {:placed false :pos pos :item item :reason :failed :primitive (.-status r) :why (refusal-why r)}))))))
 

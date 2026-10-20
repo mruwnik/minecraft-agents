@@ -100,7 +100,7 @@
                           (case (await (step! c))
                             :done (ctx/end c :done nil (merge {:pos (sh-sense/feet (:primitives c)) :way way} (result c)))
                             :hit :continue
-                            :again (if (:seal-mob-since (ctx/mem c)) :continue :again)
+                            :again (if (:seal-wait (ctx/mem c)) :continue :again)
                             (let [{:keys [reason text needs]} (:stop (ctx/mem c))]
                                      (ctx/end c :nothing-possible (or reason :failed)
                                               (merge {:text (or text (:seal-refusal (ctx/mem c)) (str "the " (name way) " cannot enclose the body here")) :status (:seal-status (ctx/mem c))}

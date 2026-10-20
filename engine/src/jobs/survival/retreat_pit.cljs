@@ -20,15 +20,14 @@
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.pit-drops :as pit-drops]
-            [jobs.survival.retreat-flight :as flight]))
+            [jobs.survival.retreat-flight :as flight]
+            [jobs.survival.retreat-seal :as retreat-seal]))
 
 (a/defargs settings
   {::max-refills {:default 3 :doc "Times a dug cell may fill again (sand, gravel, a sealed lava cell) before the pit is given up." :spec (a/int-in 0 nil)}
-   ::night-hand-clear-ms {:default 10000 :doc "For :night, a block the carried tools cannot harvest is dug by hand when the hand breaks it within this many ms (stone by hand takes 7500); by day tools/quick-clear-ms." :spec (a/int-in 0 nil)}
-   ::max-occupied {:default 2 :doc "Times a plug cell may answer occupied by a block that does not seal before the pit is given up." :spec (a/int-in 0 nil)}})
+   ::night-hand-clear-ms {:default 10000 :doc "For :night, a block the carried tools cannot harvest is dug by hand when the hand breaks it within this many ms (stone by hand takes 7500); by day tools/quick-clear-ms." :spec (a/int-in 0 nil)}})
 (defn max-refills [] (settings/get settings ::max-refills))
 (defn hand-clear-ms [c] (if (= :night (:for (:args c))) (settings/get settings ::night-hand-clear-ms) (tools/quick-clear-ms)))
-(defn max-occupied [] (settings/get settings ::max-occupied))
 
 (defn hostiles
   "The cells the melee hostiles within the danger ::hostile-radius overlap; none when c has ::ignore-hostiles."
@@ -324,33 +323,23 @@
   (if (u/count-fail! c) (stop reason text) :again))
 
 (defn ^:async plug!
-  "Place a carried block at the pit's first open plug cell (the side beside the head, then the roof over it), ledgered
-  as flight/plug-purpose: :again, :hidden once all are sealed, else a stop (no block carried, a cell occupied by a block that does not
-  seal, or the place refused)."
+  "Place a carried block at the pit's first open plug cell (the side beside the head, then the roof over it) through
+  retreat-seal/fill!: :again (also while a mob in the cell is waited out), :hidden once all are sealed, else a stop (no block
+  carried, a cell holding a block that does not seal, or the place refused)."
   [c {:keys [plugs roof]}]
   (let [p (:primitives c)
-        item (lb/pick c (flight/blocks c))
-        cell (first (remove #(dig-cells/sealed? p %) (conj plugs roof)))]
+        cells (vec (remove #(dig-cells/sealed? p %) (conj plugs roof)))]
     (cond
-      (nil? cell) :hidden
-      (nil? item) (stop :no-blocks "nothing to roof the pit with")
+      (empty? cells) :hidden
+      (nil? (lb/pick c (flight/blocks c))) (stop :no-blocks "nothing to roof the pit with")
       :else
-      (let [l (ledger/intend (ledger/open-entries (ctx/view c))
-                             {:cell (lb/cell cell) :item item :before (u/seen-name p cell) :job (:id c) :purpose (flight/plug-purpose c)})
-            _ (ledger/remember! c l)
-            r (await (tidy/place! c cell item true))]
-        (ledger/remember! c (ledger/reconcile l (escape/block-at-of p)))
-        (cond
-          (= "placed" (.-status r)) (do (dig-cells/forget-wait! c :seal-mob-since) (u/progress! c) (flight/note-placed! c cell item) :again)
-          (and (= "occupied" (.-status r)) (dig-cells/sealed? p cell)) :again
-          (and (= "occupied" (.-status r)) (not= cell roof))
-          (do (ctx/update-mem! c update :plug-occupied (fnil inc 0))
-              (if (< (:plug-occupied (ctx/mem c)) (max-occupied))
-                :again
-                (stop :roof-failed (str "cannot seal the pit: the plug cell is occupied by " (or (u/seen-name p cell) "a block") " that does not seal"))))
-          (dig-cells/keep-waiting! c :seal-mob-since r) :again
-          :else (do (dig-cells/forget-wait! c :seal-mob-since)
-                    (retry-or-stop c :roof-failed (str "cannot roof the pit: " (.-status r) (dig-cells/mob-text r)))))))))
+      (case (await (retreat-seal/fill! c cells))
+        :ok (if-let [held (first (filter #(retreat-seal/occupied? c %) cells))]
+              (stop :roof-failed (str "cannot seal the pit: the plug cell is occupied by " (or (u/seen-name p held) "a block") " that does not seal"))
+              (do (u/progress! c) :again))
+        :wait :again
+        :hit :again
+        (retry-or-stop c :roof-failed (str "cannot roof the pit: " (:seal-status (ctx/mem c)) (some->> (:seal-refusal (ctx/mem c)) (str "; "))))))))
 
 (defn ^:async dig-pit-cell!
   "Dig one cell of the pit (its placeable drops noted for pit-drops/collect-pit-drops!), look at what it laid open and let it

@@ -3,21 +3,16 @@
   its ways (wall-in, dig-pit, dig-pocket, enter-room), plug-way, block-arrow-gap and the retreat jobs use them."
   (:require [engine.args :as a]
             [jobs.lib.block-sets :as bs]
-            [clojure.string :as string]
             [engine.settings :as settings]
-            [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
             [jobs.lib.click :as click]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.land :as land]
             [jobs.lib.ledger :as ledger]
-            [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.solid :as solid]
-            [jobs.lib.tools :as tools]
-            [jobs.lib.look :as look]
             [jobs.lib.util :as u]))
 
 (def sides [[1 0] [-1 0] [0 1] [0 -1]])
@@ -153,9 +148,7 @@
                  rules/neighbour-deltas)))
 
 (a/defargs settings
-  {::mob-wait-ticks {:default 200 :doc "Game ticks a shelter's place refused for a mob in its cell is retried before the shelter gives up."
-                     :spec (a/int-in 0 nil)}
-   ::support-depth {:default 3 :doc "How many cells under a wall cell with nothing beside it a shelter fills to give it a block to be placed against." :spec (a/int-in 0 nil)}})
+  {::support-depth {:default 3 :doc "How many cells under a wall cell with nothing beside it a shelter fills to give it a block to be placed against." :spec (a/int-in 0 nil)}})
 
 (defn support-chain
   "The cells to fill, lowest first, so a block can then be placed in cell: [] when cell is placeable? already, the cells
@@ -197,33 +190,6 @@
         side (or both (first feet-placed))]
     (when side [(at side 0) (at side 1)])))
 
-(defn mob-wait-ms [] (settings/ticks->ms (settings/get settings ::mob-wait-ticks)))
-
-(defn refusing-mobs
-  "The names of the entities a refused place reports near its cell (the mob in the way), nil when none."
-  [r]
-  (seq (map #(or (.-name %) (.-kind %)) (some-> r .-refusal .-entities))))
-
-(defn mob-text
-  "', <names> stays in the cell' for a refused place r that named mobs, else ''."
-  [r]
-  (if-let [mobs (refusing-mobs r)] (str ", " (string/join ", " mobs) " stays in the cell") ""))
-
-(defn keep-waiting!
-  "Whether a place refused for a mob (r) is still within mob-wait-ms of the first such refusal, kept in job memory under
-  key k (cleared by forget-wait!); false when r names no mob or the wait is over."
-  [c k r]
-  (let [now (ctx/now c)
-        since (or (k (ctx/mem c)) now)]
-    (boolean (when (and (refusing-mobs r) (<= (- now since) (mob-wait-ms)))
-               (ctx/update-mem! c assoc k since)
-               true))))
-
-(defn forget-wait! [c k] (ctx/update-mem! c dissoc k))
-
-(defn full-cube? [c cell]
-  (boolean (some-> (u/seen-block (:primitives c) cell) .-fullCube)))
-
 (defn note-placed!
   "Job memory: cell is a placed cell, and one more of item is spent (:spent {item count}, which the sealed event reports).
   The block also goes to the scaffold ledger (purpose :shelter) for go-to's goal-enclosed clearing and recover-drops."
@@ -232,28 +198,6 @@
     (ledger/remember! c (-> (ledger/intend (ledger/open-entries (ctx/view c)) {:cell at :item item :before "air" :job (:id c) :purpose :shelter})
                             (ledger/confirm at))))
   (ctx/update-mem! c #(-> % (update :placed (fnil conj #{}) cell) (assoc-in [:placed-items cell] item) (update-in [:spent item] (fnil inc 0)))))
-
-(defn bed?
-  "Whether a bed stands at cell: a shelter never digs one (the spawn bed would go with it)."
-  [p cell]
-  (string/ends-with? (or (u/seen-name p cell) "") "_bed"))
-
-(defn ^:async clear-over!
-  "A place was answered occupied at cell: dig out a block a mob walks through (a torch, a sapling) once, so the place can be
-  tried again. True when it was dug. Else cell goes in occupied-key and is not tried again: a full block, a bed, one
-  already dug once (cleared-key), one in another's area, a dig that fails. An unsensed cell is looked at first: the place
-  answering occupied there often means rock the body never saw, which then counts as sealed."
-  [c cell cleared-key occupied-key]
-  (let [p (:primitives c)
-        _ (when (dig-look/unknown? p [(:x cell) (:y cell) (:z cell)]) (await (dig-look/look-at! c [(:x cell) (:y cell) (:z cell)])))
-        leave! #(do (ctx/update-mem! c update occupied-key (fnil conj #{}) cell) false)]
-    (if (or (nil? (u/seen-block p cell)) (full-cube? c cell) (bed? p cell) (contains? (get (ctx/mem c) cleared-key) cell)
-            (access/trespass-refusal c :dig cell))
-      (leave!)
-      (let [_ (await (tools/equip-for! c (u/seen-name p cell) {:fast true}))
-            d (await (tidy/dig! c cell true))]
-        (ctx/update-mem! c update cleared-key (fnil conj #{}) cell)
-        (if (= "dug" (.-status d)) true (leave!))))))
 
 (defn sealed-in?
   "Whether the world shows the body shut in: a roof within roof-height above (a solid block, or a cell that stops a mob,

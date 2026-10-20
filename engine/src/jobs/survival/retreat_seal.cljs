@@ -3,17 +3,16 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.blocks.fill-cells :as fill]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
             [jobs.lib.click :as click]
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-look :as look]
-            [jobs.lib.escape :as escape]
-            [jobs.lib.ledger :as ledger]
             [jobs.lib.seal :as seal]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.lib.tidy :as tidy]
+            [jobs.lib.spent :as spent]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.retreat-flight :as flight]))
@@ -27,79 +26,63 @@
          (mapv #(danger-q/mob-pos p %)))))
 
 (a/defargs settings
-  {::max-places {:default 4 :doc "Seal placements a step of a flight makes (also the shut-in ways')." :spec (a/int-in 1 nil)}
-   ::hit-reach {:default 3 :doc "Blocks within which a melee mob that hurt the body during a seal step ends the step (the fight is decided anew)." :spec (a/num-in 0 nil)}
-   ::max-refusals {:default 2 :doc "Times the place primitive may refuse one cell before it is given up on." :spec (a/int-in 0 nil)}})
-(defn max-refusals [] (settings/get settings ::max-refusals))
-(defn max-places
-  "Seal placements a step."
-  []
-  (settings/get settings ::max-places))
+  {::max-refusals {:default 1 :doc "Failed steps (a place refused twice) at one cell before the seal gives up on it." :spec (a/int-in 1 nil)}
+   ::hit-reach {:default 3 :doc "Blocks within which a melee mob that hurt the body during a seal step ends the step (the fight is decided anew)." :spec (a/num-in 0 nil)}})
 
 (defn occupied?
-  "Whether the seal leaves cell alone: a block it cannot clear stands in it, or the server refused it max-refusals times."
+  "Whether the seal leaves cell alone: a block it cannot clear stands in it."
   [c cell]
-  (let [m (ctx/mem c)]
-    (or (contains? (:seal-occupied m) cell) (>= (get-in m [:seal-refused cell] 0) (max-refusals)))))
+  (contains? (:seal-occupied (ctx/mem c)) cell))
 
 (defn hit-reach [] (settings/get settings ::hit-reach))
 
-(defn hit-while-placing?
-  "Whether the body lost health since health0 with a seen melee hostile within hit-reach: more blocks beside it only cost more hits."
+(defn hit-since?
+  "Whether the body lost health since the last fill! step ended (health0) with a seen melee hostile within hit-reach: more blocks beside it only cost more hits."
   [c health0]
   (let [p (:primitives c)]
-    (boolean (and (< (.-health (.self p)) health0)
+    (boolean (and health0
+                  (< (.-health (.self p)) health0)
                   (some #(<= (u/dist (u/self-pos c) %) (hit-reach)) (melee-spots c))))))
 
-(defn ^:async place-seal!
-  "Place carried blocks at cells in order, each ledgered (flight/plug-purpose) for the cleanup. :hit once a melee mob hit the body during the step (hit-while-placing?: no more blocks beside it), :ok, :wait while a mob stands in a cell (the place is refused and tried again
-  for dig-cells/mob-wait-ms), or :failed with nothing left to place. A cell with nothing to place against yet, or one the
-  server refused, goes to the end of the order (its neighbours may be placed first); :failed once every cell left has none, a mob
-  that stays past the wait, or a refused one max-refusals times. A door, gate or trapdoor standing open is shut instead (dig-cells/shut-open!). A cell
-  the place answers occupied by a block a mob walks through (a torch, a sapling) is dug once and placed again; one that
-  stays (a full block, a bed, an iron door left open, a dig that fails) is remembered in :seal-occupied and never tried again this flight."
+(defn leftover
+  "Of cells (as given to fill!), those still open that the fill does not owe: a block it cannot clear or shut (a bed) holds them."
+  [c cells left]
+  (let [owed (set left)]
+    (->> cells
+         (remove #(or (dig-cells/sealed? (:primitives c) %) (owed %)))
+         (into #{}))))
+
+(defn ^:async fill!
+  "Place the first of cells (in the order given; sides, support, roof) that is still open through a jobs.blocks.fill-cells child
+  (in place, ledgered flight/plug-purpose, an open door shut, a torch dug out first): :ok once a cell is filled or none is owed
+  (a cell the fill cannot fill goes to :seal-occupied), :wait while a mob stands in the cell (job memory :seal-wait), :hit when a
+  melee mob hit the body since the last step, :failed with job memory :seal-refusal and :seal-status (no block carried, a refused
+  place, a zone)."
   [c cells]
-  (let [health0 (.-health (.self (:primitives c)))]
-  (loop [cells cells skipped 0]
-    (let [item (lb/pick c (flight/blocks c))
-          cell (first cells)]
-      (cond
-        (empty? cells) :ok
-        (hit-while-placing? c health0) :hit
-        (dig-cells/sealed? (:primitives c) cell) (recur (rest cells) 0)
-        (nil? item) :failed
-        :else (let [door (await (dig-cells/shut-open! c cell))
-                    l (when-not door (ledger/intend (ledger/open-entries (ctx/view c))
-                                                    {:cell [(:x cell) (:y cell) (:z cell)] :item item :before (u/seen-name (:primitives c) cell)
-                                                     :job (:id c) :purpose (flight/plug-purpose c)}))
-                    _ (some->> l (ledger/remember! c))
-                    r (when-not door (await (tidy/place! c cell item true)))
-                    _ (some->> l (#(ledger/reconcile % (escape/block-at-of (:primitives c)))) (ledger/remember! c))
-                    status (some-> r .-status)]
-                (cond
-                  (or (= :shut door) (= "placed" status))
-                  (do (dig-cells/forget-wait! c :seal-mob-since)
-                      (when (= "placed" status) (flight/note-placed! c cell item))
-                      (recur (rest cells) 0))
-                  (and (= "no-support" status) (< (inc skipped) (count cells)))
-                  (recur (concat (rest cells) [cell]) (inc skipped))
-                  (= :open door)
-                  (do (ctx/update-mem! c update :seal-occupied (fnil conj #{}) cell)
-                      (recur (rest cells) 0))
-                  (= "occupied" status)
-                  (if (await (dig-cells/clear-over! c cell :seal-cleared :seal-occupied))
-                    (recur cells 0)
-                    (recur (rest cells) 0))
-                  (dig-cells/keep-waiting! c :seal-mob-since r) :wait
-                  :else (let [support? (= "no-support" status)]
-                          (dig-cells/forget-wait! c :seal-mob-since)
-                          (ctx/update-mem! c assoc :seal-status status)
-                          (ctx/update-mem! c assoc :seal-refusal (str "a place at " (pr-str [(:x cell) (:y cell) (:z cell)]) " was refused: " status (dig-cells/mob-text r)))
-                          (when-not support? (ctx/update-mem! c update-in [:seal-refused cell] (fnil inc 0)))
-                          (cond
-                            (or support? (dig-cells/refusing-mobs r)) :failed
-                            (occupied? c cell) (recur (rest cells) 0)
-                            :else (recur (concat (rest cells) [cell]) 0))))))))))
+  (let [p (:primitives c)
+        health (.-health (.self p))]
+    (if (hit-since? c (:seal-health (ctx/mem c)))
+      (do (ctx/update-mem! c assoc :seal-health health) :hit)
+      (let [fillable (remove #(and (access/trespass-refusal c :dig %) (= :loose (fill/kind (u/seen-name p %)))) cells)
+            e (await (ctx/call c :fill 'jobs.blocks.fill-cells
+                               {:cells (mapv lb/cell fillable) :order :given :least 1 :clear-loose true :shut-open true :in-place true
+                                :purpose (flight/plug-purpose c) :ignore-zones? true :use {:blocks (vec (flight/blocks c))} :ways #{:carried}
+                                :checks {:safe? '(always) :fit? '(always)} :settings {::fill/max-refusals (settings/get settings ::max-refusals)}}))
+            _ (ctx/update-mem! c assoc :seal-health health)
+            data (:data e)]
+        (ctx/update-mem! c dissoc :seal-wait)
+        (cond
+          (= :continue e) (do (ctx/update-mem! c assoc :seal-wait true) :wait)
+          (= :done (:kind e)) (do (doseq [{:keys [cell item]} (:placed data)]
+                                    (spent/note! c item cell)
+                                    (flight/note-placed! c (u/cell-pos cell) item))
+                                  (ctx/update-mem! c update :seal-occupied (fnil into #{}) (leftover c cells (:left data)))
+                                  :ok)
+          (= :blocked (get-in e [:cause :reason]))
+          (do (ctx/update-mem! c update :seal-occupied (fnil conj #{}) (get-in e [:cause :cell]))
+              :ok)
+          :else (do (ctx/update-mem! c assoc :seal-status (:status data) :seal-refusal (:text data))
+                    :failed))))))
 
 (defn shooters
   "Where the seen ranged hostiles within the flight's :ranged-radius stand, and the unseen shooters of recent shots (flight/fire-spots)."
@@ -180,27 +163,26 @@
         open (dig-cells/open-cells p (sh-sense/feet p) threats)
         free (remove #(occupied? c %) open)
         cells (if (seq (shooters c)) (facing-first (sh-sense/feet p) (shooters c) free) (nearest-first (sh-sense/feet p) (melee-spots c) free))
-        forget! #(dig-cells/forget-wait! c :seal-mob-since)
-        unfillable (fn [] (forget!) :failed)]
+        ]
     (cond
-      (empty? open) (do (forget!) :sealed)
-      (empty? cells) (unfillable)
-      (and (not= :night (:for (:args c))) (some (seal/hostile-cells p radius) cells)) (do (forget!) :failed)
+      (empty? open) :sealed
+      (empty? cells) :failed
+      (and (not= :night (:for (:args c))) (some (seal/hostile-cells p radius) cells)) :failed
       (and (false? (:trespass? (:args c))) (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
-      (do (forget!) (ctx/update-mem! c assoc :stop {:reason :trespass :text "the walls need a cell of another's area"}) :failed)
-      (nil? (lb/pick c blocks)) (do (forget!) :failed)
+      (do (ctx/update-mem! c assoc :stop {:reason :trespass :text "the walls need a cell of another's area"}) :failed)
+      (nil? (lb/pick c blocks)) :failed
       :else
       (do (when (seal/off-centre? p) (await (seal/centre! c)))
           (access/trespass! c "shut-in" (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
-          (case (await (place-seal! c (take (max-places) (remove #(and (not (some #{%} cells)) (access/trespass-refusal c :place %))
-                                                                 (dig-cells/bottom-up p cells (sh-sense/feet p))))))
+          (case (await (fill! c (remove #(and (not (some #{%} cells)) (access/trespass-refusal c :place %))
+                                         (dig-cells/bottom-up p cells (sh-sense/feet p)))))
             :failed :failed
             :wait :again
             :hit :hit
             (let [left (dig-cells/open-cells p (sh-sense/feet p) threats)]
               (cond
-                (empty? left) (do (forget!) :sealed)
-                (every? #(occupied? c %) left) (unfillable)
+                (empty? left) :sealed
+                (every? #(occupied? c %) left) :failed
                 :else :again)))))))
 
 (defn ^:async seal!

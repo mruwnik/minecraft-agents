@@ -329,10 +329,15 @@
                             (and s (not (true? (.-unknown s))) (not (support-name? (.-name s))) (> (or (.-ageMs s) 0) stale-ms))))
                         neighbours)))))
 
+(defn refusing-mobs
+  "The names of the entities a refused place reports near its cell (the mob in the way), nil when none."
+  [r]
+  (seq (map #(or (.-name %) (.-kind %)) (some-> r .-refusal .-entities))))
+
 (defn place-outcome
   "What one round of a jobs.blocks.place child (:continue, or its ending e) means for the cell: :placed, :already (it
   holds the block), :continue, :refused (a zone, claim or plan), :need (the item is not carried), :no-support,
-  :occupied, :unreachable, or the failed place's primitive status (a keyword) or reason (:clear-failed ...)."
+  :occupied, :unreachable, :mob (the failed place names a mob in the cell), or the failed place's primitive status (a keyword) or reason (:clear-failed ...)."
   [e]
   (if (= :continue e)
     :continue
@@ -346,7 +351,7 @@
                             :unreachable)
         :impossible :unreachable
         (:cut-off :limit-reached) :failed
-        (or (some-> (:primitive data) keyword) (:reason data) (when (not= k (:kind e)) k) :failed)))))
+        (or (when (seq (:mobs data)) :mob) (some-> (:primitive data) keyword) (:reason data) (when (not= k (:kind e)) k) :failed)))))
 
 (defn ^:async place-call!
   "Place item at pos with a jobs.blocks.place child in slot :place (args merged over: no fetch): :continue or its ending
