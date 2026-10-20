@@ -323,10 +323,27 @@
 
 (defn after-walk [w from] (-> w (animals/drag-leashed from) animals/tempt-follow (chase-body from)))
 
+(def rail-memo
+  "[blocks states body-pos props-by-pos]: rail-properties, kept while the three things it reads stay as they are."
+  (volatile! [nil nil nil {}]))
+
+(defn rail-properties
+  "rail/rail-properties, worked out once per rail while the blocks, the states and the body's position stay the same (a shape walks the neighbours)."
+  [w pos]
+  (if-not (rail/rail? (rail/name-at w pos))
+    {}
+    (let [blocks (:blocks w) states (:states w) at (get-in w [:self :pos])
+          [b s a m] @rail-memo
+          m (if (and (identical? b blocks) (identical? s states) (= a at)) m {})]
+      (or (get m pos)
+          (let [v (rail/rail-properties w pos)]
+            (vreset! rail-memo [blocks states at (assoc m pos v)])
+            v)))))
+
 (defn properties-of
   "A cell's block properties: the rail's, its state and its crop age, as perception gives them (whole numbers as strings)."
   [w pos]
-  (use-on/perceived (merge (rail/rail-properties w pos) (get-in w [:states pos]) (when (contains? (:ages w) pos) {:age (get-in w [:ages pos])}))))
+  (use-on/perceived (merge (rail-properties w pos) (get-in w [:states pos]) (when (contains? (:ages w) pos) {:age (get-in w [:ages pos])}))))
 
 ;; ---- the acts: (act w args) -> [world' result], args as cljs data
 

@@ -111,7 +111,10 @@
                    (f x y z (state-at-pos new pos)))))
     #js {:stateAt (fn [x y z] (state-at @state x y z))
          :lightAt (fn [x y z] (light-at @state x y z))
-         :eye (fn [] (eye @state))
+         :eye (let [last-w (volatile! nil) last-eye (volatile! nil)]
+                (fn [] (let [w @state]
+                         (when-not (identical? w @last-w) (vreset! last-eye (eye w)) (vreset! last-w w))
+                         @last-eye)))
          :offHand (fn [] (or (get-in @state [:self :offhand]) (get-in @state [:equipment "offHand" :name])))
          :heldItem (fn [] (get-in @state [:self :held]))
          :sky (fn [] (let [w @state]
