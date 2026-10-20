@@ -14,7 +14,7 @@
             [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.farm.field :as fld]
-            [jobs.farm.find-spot :as find-spot]
+            [jobs.lib.farm :as lib-farm]
             [jobs.farm.irrigate :as irrigate]
             [jobs.farm.tend-decide :as decide]
             [jobs.farm.tend-box :refer [box-cells centre box-facts box-census]]
@@ -139,7 +139,7 @@
 (defn water-reach-cells
   "Per y layer of the ground cells, the cells irrigate must see to call a ground cell dry: the layer's bounding square grown by the water reach, at the layer and one above."
   [c]
-  (let [r (find-spot/water-reach)]
+  (let [r (lib-farm/water-reach)]
     (for [[y ps] (group-by :y (ground-cells c))
           x (range (- (apply min (map :x ps)) r) (+ (apply max (map :x ps)) r 1))
           z (range (- (apply min (map :z ps)) r) (+ (apply max (map :z ps)) r 1))
