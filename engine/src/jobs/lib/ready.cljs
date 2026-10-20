@@ -52,6 +52,11 @@
        (not (sh-sense/seen-cell? p to))
        (roof-over? p to)))
 
+(defn sense-looked?
+  "Whether a look round already looked at every one of cells: what it could not show (a dark cell beyond the body's sight) stays unseen."
+  [c cells]
+  (every? (sense/round-looked c) cells))
+
 (defn at-status
   "The status of the exposure of the walk of c's body to `to`: ok while sheltered or the chance is within ::risk-limit,
   else by what lowers it; darkness no sky light reaches (a cave: dawn never lifts it) is no exposure, only threats count; light further off than ::light-patience-s is not waited for."
@@ -70,6 +75,8 @@
       (contract/look :exposed (str "walls of the room round the body not all seen; at " where) :look-at @unseen-sides :room-sides true)
       (and (contains? lowered-by :look) (hidden-below? p to))
       (contract/ok :sealed (str "unseen below at " where ": underground, no look shows it and dawn does not light it; only threats count"))
+      (and (contains? lowered-by :look) (sense-looked? c look-at) (sh-sense/buried? p) (not (u/within? (sh-sense/feet p) to 0)))
+      (at-status c (sh-sense/feet p))
       (contains? lowered-by :look) (contract/look :exposed (str "light at " where " not seen") :look-at look-at)
       (and (contains? lowered-by :light) (<= light-in patience))
       (contract/later :exposed (str "dark at " where " until light") :lowered-by lowered-by :chance chance)
