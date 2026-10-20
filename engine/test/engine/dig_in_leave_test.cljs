@@ -141,6 +141,17 @@
             (is (standable-open? p (feet p)) (str label ": stands in an open cell"))
             (is (= 1 (count (emitted seen :dig-in.left))) label)))))))
 
+(deftest by-day-a-pit-with-no-pickaxe-is-dug-out-by-hand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen] :as s} (setup {:inventory [{:name "cobblestone" :count 20}]})]
+          (await (dig-in! s))
+          (is (< (second (feet p)) 64) "in the pit")
+          (await (leave-at-dawn! s))
+          (is (zero? (count (emitted seen :dig-in.trapped))) "not trapped")
+          (is (<= 64 (second (feet p))) "out of the pit"))))))
+
 (deftest out-of-the-pit-a-go-to-ten-blocks-away-arrives
   (async done
     (tu/run-async done

@@ -56,7 +56,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen clock]} (await (dug-in-world {:blocks st/stone-ground :inventory [{:name "dirt" :count 1}] :ways #{:room :walls :pit}}))]
+        (let [{:keys [eng seen clock p]} (await (dug-in-world {:blocks st/stone-ground :inventory [{:name "dirt" :count 1}] :ways #{:room :walls :pit}}))]
+          (doseq [x (range -3 4) z (range -3 4) y (range 62 68) :when (not= [0 0] [x z])]
+            (fake/set-block! p [x y z] "bedrock"))
           (core/load-scenario! eng (scenario/parse (str "{:register [{:trigger " shut-in-trigger "}]}")))
           (dotimes [_ 6]
             (await (st/tick-n eng 10))

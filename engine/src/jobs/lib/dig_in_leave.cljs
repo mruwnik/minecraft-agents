@@ -178,7 +178,7 @@
 (defn ^:async climb!
   "One stair attempt out of a pit (jobs.access.stair :up, a child of the caller): to the :start height, or with no
   :start one step at a time until nothing solid is within sh-sense/default-roof-height above, at most max-climb steps. A
-  stopped stair books its reason and the next heading is tried; so does one that cannot start (it lacks a tool or a slot),
+  stopped stair books its reason and the next heading is tried; so does one that cannot start (it lacks a slot),
   instead of waiting, because the caller (jobs.survival.night) must end failed, not wait, when trapped."
   [c {:keys [start]} toward]
   (let [{:keys [i order tries climbed] :or {i 0 tries [] climbed 0}} (leave-mem c)
@@ -194,7 +194,7 @@
       (let [slot (keyword (str "dig-out-" i))
             _ (update-leave! c assoc :heading (:heading attempt))
             e (waits/waiting-out c (await (ctx/call c slot 'jobs.access.stair
-                                     (merge {:dir :up :checks (ready/unforced c {:fit? '(always)}) :heading (:heading attempt) :ways #{:carried} :ignore-zones? (or (:ignore-zones? attempt) (:ignore-zones? (:args c)))}
+                                     (merge {:dir :up :checks (ready/unforced c {:fit? '(always)}) :heading (:heading attempt) :ways #{:carried} :need-drop false :ignore-zones? (or (:ignore-zones? attempt) (:ignore-zones? (:args c)))}
                                             (if start {:y (:y start)} {:steps 1})))))
             data (:data e)]
         (when (and (not= :continue e) (:ignore-zones? attempt)) (note-trespass! c (:dug data)))
@@ -219,7 +219,7 @@
   - A pit (:start) or a roofed shaft (no :start, no :door): a stair up (jobs.access.stair :up) to the start height.
     A shaft goes one step at a time until nothing solid is within 4 above (at most 32 steps, else :too-deep).
     The heading nearest :toward goes first. The stair refuses lava, water, falling blocks and a missing floor,
-    and then the next heading is tried.
+    and then the next heading is tried. With no pickaxe it digs by hand (the drop is lost), as a player would.
   - Only when a heading stopped for an access reason (:zone :claim :footprint :no-zones),
     all four are tried again with :ignore-zones?, the survival last resort.
     The cells dug in another's zone or claim are noted as :tidy entries.
