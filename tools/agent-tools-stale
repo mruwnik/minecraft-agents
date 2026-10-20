@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Exit 0 when dashboard/out/agent-tools.cjs is missing or older than a source it is built from (the list mirrors
+# bundleSources in engine/tools/agent-tools-bundle-check.mjs); exit 1 when it is current. A stat scan, no compile.
+repo=${1:-$(cd "$(dirname "$0")/.." && pwd)}
+bundle="$repo/dashboard/out/agent-tools.cjs"
+[ -e "$bundle" ] || exit 0
+roots=("$repo/dashboard/src/agent_tools" "$repo/dashboard/src/dashboard/agent_plan_tools.cljs" "$repo/dashboard/src/dashboard/plan_compare.cljs" "$repo/engine/src/plan" "$repo/engine/src/engine/bodies.cljs")
+[ -n "$(find "${roots[@]}" -name '*.clj*' -newer "$bundle" -print -quit 2>/dev/null)" ]

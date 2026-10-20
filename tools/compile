@@ -66,6 +66,11 @@ fi
 # the dashboard's own unit-test build is :dashboard-test (:test is the engine's)
 [ "$project" = dashboard ] && for i in "${!builds[@]}"; do [ "${builds[$i]}" = test ] && builds[$i]=dashboard-test; done
 
+# a world run calls the agent tools (bin/*): build their bundle in the same compile when it is missing or stale
+if [ "$project" = dashboard ] && [ "$stop" = 0 ] && [ -z "$outdir" ] && [ "${builds[*]}" = world-test ] && "$repo/tools/agent-tools-stale" "$repo"; then
+  builds+=(agent-tools)
+fi
+
 log_builds="${builds[*]}"; restarted=0; fallback=${MC_COMPILE_FALLBACK:-}; pick_wait=${MC_COMPILE_PICK_WAIT_S:-}
 available_mb() { awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo; }
 worktree=0; [ -n "${MC_COMPILE_IN_POOL:-}" ] || [ "$(cd "$repo" && git rev-parse --git-dir 2>/dev/null)" = "$(cd "$repo" && git rev-parse --git-common-dir 2>/dev/null)" ] || worktree=1
