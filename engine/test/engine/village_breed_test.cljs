@@ -110,9 +110,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out]} (await (breed {:entities pair :inventory bread} args 200 #(feeding % 0)))]
+        (let [{:keys [p out seen]} (await (breed {:entities pair :inventory bread} args 200 #(feeding % 0)))]
           (is (= :no-births (:reason @out)) "three attempts on the one pair, not the no-food of a second feeding")
-          (is (= 2 (count (tosses p))) "the food they took stays unspent"))))))
+          (is (= 2 (count (tosses p))) "the food they took stays unspent")
+          (is (= 3 (count (filter #(and (= :child_ended (:kind %)) (= :wait (:slot %)) (not= :continue (:status %))) @seen))) "three waits on the one pair"))))))
 
 (deftest fewer-than-two-adults-or-no-food-never-starts
   (async done
