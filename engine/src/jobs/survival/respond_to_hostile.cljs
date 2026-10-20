@@ -160,17 +160,22 @@
   (cond-> {:name (.-name e) :distance (danger-q/mob-distance p e) :hits (:hits struck 0)}
     (number? (:health struck)) (assoc :health (:health struck))))
 
+(defn fight-struck
+  "What the fight counted per mob: the running child's (hostile/struck), else the last declined ending's."
+  [c]
+  (let [running (hostile/struck (get-in (ctx/mem c) [:children :fight]))]
+    (if (seq running) running (get-in (ctx/mem c) [:fight-prior :struck]))))
+
 (defn struck-of
   "The :struck entry of mob id: the fight child's own, else the one an earlier round left in memory (:struck-hits)."
   [c id]
-  (or (get (hostile/struck (get-in (ctx/mem c) [:children :fight])) id)
-      (get-in (ctx/mem c) [:fight-prior :struck id])
+  (or (get (fight-struck c) id)
       (get-in (mem/latest (ctx/view c) :struck-hits) [:data id])))
 
 (defn keep-struck!
-  "Writes the fight child's :struck map to memory, so a refire after a lost round keeps the hits."
+  "Writes the last fight ending's :struck map to memory, so a refire after a lost round keeps the hits."
   [c]
-  (when-let [struck (seq (hostile/struck (get-in (ctx/mem c) [:children :fight])))]
+  (when-let [struck (seq (fight-struck c))]
     (ctx/remember! c :struck-hits (into {} struck) (struck-policy))))
 
 (defn note-hits
@@ -333,7 +338,8 @@
   {:health (.-health (.self (:primitives c)))
    :cell (let [{:keys [x y z]} (u/self-pos c)] [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)])
    :ids (set (map #(.-id %) hs))
-   :fight (select-keys (get-in (ctx/mem c) [:children :fight]) [:struck :no-damage :blocked :killed])})
+   :fight (select-keys (get-in (ctx/mem c) [:children :fight]) [:struck :no-damage :blocked :killed])
+   :prior (select-keys (:fight-prior (ctx/mem c)) [:struck :given-up :killed])})
 
 (defn fight-unsettled?
   "Whether a round that now sees no danger may be a blink: the fight child yielded :continue or the body was hurt within

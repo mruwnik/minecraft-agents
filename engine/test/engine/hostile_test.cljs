@@ -592,6 +592,26 @@
           (dotimes [_ 2] (await (core/tick! eng)))
           (is (= 2 @fights) "the second encounter fights the nearly dead zombie, no flight"))))))
 
+(deftest a-refired-reflex-remembers-the-hits-of-a-fight-that-ended-declined
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:health 20} :inventory [{:name "stone_sword" :count 1}] :entities [(zombie 7 1 0)]})
+              fights (atom 0)
+              decliner {:round (fn ^:async decline [c]
+                                 (swap! fights inc)
+                                 (swap! (fake/state p) assoc :entities [])
+                                 (ctx/end c :nothing-possible :blocked {:struck {7 {:name "zombie" :hits 3 :health 2}}}))}
+              eng (assoc-in eng [:jobs 'jobs.combat.attack] decliner)]
+          (core/submit! eng respond {})
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (is (= 1 @fights))
+          (fake/swap-self! p assoc :health 10)
+          (fake/add-entity! p (zombie 7 1 0))
+          (core/submit! eng respond {})
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (is (= 2 @fights) "the second encounter fights the nearly dead zombie, no flight"))))))
+
 (deftest a-refired-reflex-goes-on-with-the-fight-the-last-one-began-below-the-hysteresis-health
   (async done
     (tu/run-async done

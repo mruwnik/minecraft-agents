@@ -466,6 +466,22 @@
             (await (run-job! s 'fighter {}))
             (is (= [nil want] @out) (str before " -> " after))))))))
 
+(deftest a-fight-resumed-after-flee-steps-measures-its-leash-from-where-the-body-now-stands
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [seen (atom :unset)
+              fighter {:defaults {:checks {:safe? '(always) :fit? '(always)}}
+                       :round (fn ^:async f [c]
+                                (ctx/update-mem! c assoc-in [:children :cornered] {:start {:x 0 :y 64 :z 0}})
+                                (await (cornered/fight! c [] false))
+                                (ctx/end c :done nil))}
+              s (setup {:entities [(zombie 7 2 {})]})
+              s (update-in (assoc-in s [:eng :jobs 'fighter] fighter) [:eng :jobs] merge
+                           {'jobs.combat.attack {:round (fn ^:async look [c] (reset! seen (:start (ctx/mem c))) :continue)}})]
+          (await (run-job! s 'fighter {}))
+          (is (nil? @seen) "the stale start of the fight before the flee steps is dropped"))))))
+
 (defn stepper
   "A job that takes one flee step to a fixed cell and keeps the refused ends the flight remembers."
   [out]
