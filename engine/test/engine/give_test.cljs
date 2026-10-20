@@ -200,7 +200,7 @@
                                                                 (let [st (first @statuses)]
                                                                   (swap! statuses rest)
                                                                   (when (> (count (calls p "collect")) 8) (take-drops! p))
-                                                                  #js {:status st :gained #js []}))))))]
+                                                                  #js {:status st :gained (if (= "collected" st) #js [#js {:name "bread" :count 1}] #js [])}))))))]
           (is (= {:given 5 :returned 0 :text "gave 5 bread"} @out) "two fails, a collect, two fails do not end it as litter")
           (is (> (count (calls p "collect")) 4)))))))
 

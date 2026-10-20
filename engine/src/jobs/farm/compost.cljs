@@ -81,6 +81,7 @@
    ::level-7-pause-s {:default 1 :doc "Seconds paused at a level-7 composter before looking again (it turns 8 within a second)." :spec (a/num-in 0 nil)}
    ::max-waits {:default 6 :doc "Pauses at a level-7 composter that count as one failure." :spec (a/int-in 1 nil)}
    ::meal-look {:default 20 :doc "Bone meal on the ground is looked for this far from the body, in blocks." :spec (a/num-in 0 nil)}
+   ::collect-radius {:default 8 :doc "How far round the body the meal child looks for the dropped bone meal, in blocks." :spec (a/num-in 0 nil)}
    ::meal-reach {:default 3 :doc "Bone meal this close to the composter counts as its own, in blocks." :spec (a/num-in 0 nil)}})
 
 (def target [:at])
@@ -150,6 +151,15 @@
        (filter #(<= (u/dist at (u/pos-of (.-pos %))) (settings/get settings ::meal-reach)))
        first))
 
+(defn ^:async take-meal!
+  "An items.collect-drops child takes the meal: :continue while it waits, :collected or :left."
+  [c meal]
+  (let [r (await (child/run!* c :collect 'jobs.items.collect-drops {:ids [(.-id meal)] :radius (settings/get settings ::collect-radius)}))]
+    (cond
+      (= :continue r) :continue
+      (pos? (or (:collected (:data r)) 0)) :collected
+      :else :left)))
+
 (defn ^:async collect-meal!
   "Right after a take, up to ::meal-looks looks at the composter for the dropped meal, collecting it when seen: the round ends
   on done? as soon as the take is counted, and the drop shows a moment after it."
@@ -157,7 +167,7 @@
   (loop [n 0]
     (await (level-now! c pos))
     (if-let [meal (meal-near c pos)]
-      (await (ctx/act c :collect #js {:id (.-id meal)}))
+      (await (take-meal! c meal))
       (when (< n (settings/get settings ::meal-looks)) (recur (inc n))))))
 
 (defn problem
@@ -228,8 +238,10 @@
               todo (feedable (reserve/free c :compost) {:items items :keep kept})]
           (cond
             meal
-            (let [r (await (ctx/act c :collect #js {:id (.-id meal)}))]
-              (if (= "collected" (.-status r)) :again (strike! c level)))
+            (case (await (take-meal! c meal))
+              :continue :continue
+              :collected :again
+              (strike! c level))
 
             (>= taken times)
             (finish! c {:level level})
@@ -250,8 +262,7 @@
                       (= :continue res) :continue
                       (= :used (:status res))
                       (do (ctx/update-mem! c #(-> % (update :taken (fnil inc 0)) (assoc :strikes 0)))
-                          (await (collect-meal! c pos))
-                          :again)
+                          (if (= :continue (await (collect-meal! c pos))) :continue :again))
                       :else (strike! c level)))
 
                   (= 7 level)

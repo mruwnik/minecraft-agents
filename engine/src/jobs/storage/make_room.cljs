@@ -182,13 +182,16 @@
             false)))))
 
 (defn ^:async pick-up-swap!
-  "Collect the item a swap made room for (:swap in memory), then forget the swap."
+  "Collect the item a swap made room for (:swap in memory) with an items.collect-drops child, then forget the swap
+  (kept while the child waits on the world, so the next round resumes it)."
   [c]
   (let [{:keys [id item worth]} (:swap (ctx/mem c))
-        r (await (ctx/act c :collect (clj->js {:id id :timeoutS 10})))]
-    (ctx/update-mem! c dissoc :swap)
-    (ctx/emit! c :make-room.swapped :info {:item item :worth worth :status (.-status r)
-                                           :text (str "swap for " item ": " (.-status r))})))
+        r (await (child/run!* c :collect 'jobs.items.collect-drops {:ids [id] :radius (swap-radius)}))]
+    (when-not (= :continue r)
+      (let [status (if (pos? (or (:collected (:data r)) 0)) "collected" "left")]
+        (ctx/update-mem! c dissoc :swap)
+        (ctx/emit! c :make-room.swapped :info {:item item :worth worth :status status
+                                               :text (str "swap for " item ": " status)})))))
 
 (defn ^:async settle-intents!
   "Intents left by a cut or a restart, inspected before acting again: a toss went out when the item's carried total is

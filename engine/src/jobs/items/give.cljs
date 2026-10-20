@@ -198,17 +198,17 @@
   (gave! c given :not-taken {:returned back}))
 
 (defn ^:async collect!
-  "Take the nearest drop back. Each collect that gathers nothing counts through
+  "Take the nearest drop back with an items.collect-drops child. Each collect that gathers nothing counts through
   u/fail!; the third gives up as litter."
   [c lying given back]
-  (let [r (await (ctx/act c :collect (clj->js {:id (:id (first lying))})))]
+  (let [r (await (child/run!* c :collect 'jobs.items.collect-drops {:ids [(:id (first lying))] :radius (radius)}))]
     (ctx/update-mem! c assoc :collecting true)
-    (if (= "collected" (.-status r))
-      (do (u/progress! c) :again)
-      (if (u/count-fail! c)
-        (do (ctx/update-mem! c assoc :litter true)
-            (finish! c :nothing-possible :litter {:given given :returned back}))
-        :again))))
+    (cond
+      (= :continue r) :continue
+      (pos? (or (:collected (:data r)) 0)) (do (u/progress! c) :again)
+      (u/count-fail! c) (do (ctx/update-mem! c assoc :litter true)
+                            (finish! c :nothing-possible :litter {:given given :returned back}))
+      :else :again)))
 
 (defn ^:async after-toss!
   "The item was thrown: see whether it was taken, wait, or take it back. An
