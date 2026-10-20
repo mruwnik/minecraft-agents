@@ -119,7 +119,8 @@
   (let [entries #js [#js {:name "ProbeFb83c2d0"} #js {:name "Aviendha"}]]
     (is (= "ProbeFb83c2d0" (tools/case-clash entries "Probefb83c2d0")))
     (is (nil? (tools/case-clash entries "ProbeFb83c2d0")))
-    (is (nil? (tools/case-clash entries "Other")))))
+    (is (nil? (tools/case-clash entries "Other")))
+    (is (nil? (tools/case-clash #js [#js {:name "ProbeFb83c2d0"} #js {:name "Probefb83c2d0"}] "Probefb83c2d0")))))
 
 (deftest build-raw-command
   (are [argv expected] (= expected (tools/build-raw-command (clj->js argv)))

@@ -43,11 +43,11 @@
 (defn case-clash
   "The whitelist entry naming `value` in a different case, or nil. The server matches names without case on
   `whitelist add` (so it answers 'already whitelisted') but admits a login by the offline UUID, which is
-  derived from the exact-case name, so the entry does not admit `value`."
+  derived from the exact-case name, so the entry does not admit `value`. nil when an exact-case entry exists."
   [entries value]
-  (->> entries
-       (map #(.-name %))
-       (some #(when (and (not= % value) (= (str/lower-case %) (str/lower-case value))) %))))
+  (let [names (map #(.-name %) entries)]
+    (when-not (some #{value} names)
+      (some #(when (= (str/lower-case %) (str/lower-case value)) %) names))))
 
 (defn clash-message [value other]
   (str value " is not admitted: the whitelist holds " other " (other case, other login UUID). Use the name "
