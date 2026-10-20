@@ -40,12 +40,17 @@
 
 (defn own-placed-fn
   "(own? cell block): go-to itself placed block at cell (a put-back), or the body's scaffold ledger holds it there
-  placed (a pillar, a plug: its own temporary block; an :intent proves nothing), so it is not someone's build."
+  (a pillar, a plug: its own temporary block; an :intent entry counts when the cell holds the intended item, as
+  jobs.lib.ledger/decide reads it), so it is not someone's build."
   [c]
-  (let [placed (into (set (map (comp (juxt :cell :block) :data) (ctx/entries c :escalation-placed)))
-                     (comp (filter (comp #{:placed :removing} :state)) (map (juxt :cell :item)))
-                     (ledger/open-entries (ctx/view c)))]
-    (fn [cell block] (contains? placed [(vec cell) block]))))
+  (let [put-back (set (map (comp (juxt :cell :block) :data) (ctx/entries c :escalation-placed)))
+        entries (into {} (map (juxt :cell identity)) (ledger/open-entries (ctx/view c)))]
+    (fn [cell block]
+      (or (contains? put-back [(vec cell) block])
+          (when-let [e (get entries (vec cell))]
+            (case (:state e)
+              :intent (= :placed (ledger/decide e (constantly block)))
+              (and (#{:placed :removing} (:state e)) (= block (:item e)))))))))
 
 (defn forget-dug-own!
   "Drop from the scaffold ledger each entry of dug ({:cell :block}) whose block it was and whose cell is air now: a

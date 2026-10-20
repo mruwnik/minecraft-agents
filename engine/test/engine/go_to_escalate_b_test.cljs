@@ -92,7 +92,7 @@
                               (map #(let [pos (.-pos (.-args %))] [(.-x pos) (.-y pos) (.-z pos)]) (calls p "dig"))))
               "a dug block of its own leaves the ledger at once: a block built there later is not its own"))))))
 
-(deftest go-to-does-not-dig-a-wall-its-ledger-only-meant-to-place
+(deftest go-to-does-not-dig-a-wall-its-ledger-meant-another-block-for
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -100,7 +100,7 @@
               walled (apply dissoc (merge room (box -3 64 -3 3 65 3 "cobblestone")) inner)
               intent (for [x (range -3 4) z (range -3 4) y [64 65]
                            :when (or (= 3 (abs x)) (= 3 (abs z)))]
-                       {:cell [x y z] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :intent})
+                       {:cell [x y z] :item "dirt" :before "air" :job "j0" :purpose :pillar :state :intent})
               {:keys [eng p]} (setup (merge in-room {:blocks walled}))
               out (atom :not-done)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [8 64 0] :range 1})))]
@@ -108,7 +108,7 @@
           (core/submit! eng '(recording-parent) {})
           (await (tick-out! eng 1000))
           (is (false? (:arrived @out)) (pr-str @out))
-          (is (empty? (calls p "dig")) "an :intent is no proof the cobblestone there is its own"))))))
+          (is (empty? (calls p "dig")) "an :intent for another item is no proof the cobblestone there is its own"))))))
 
 (deftest go-to-never-digs-in-another-s-zone
   (async done
