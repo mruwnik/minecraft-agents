@@ -262,7 +262,9 @@
       (ledger/remember! c (if placed (ledger/confirm l cell) (ledger/drop-cell l cell)))
       placed)))
 
-(defn has-bucket? [p] (boolean (some #(= "water_bucket" (:name %)) (u/inventory p))))
+(defn carried? [p item] (boolean (some #(= item (:name %)) (u/inventory p))))
+
+(defn has-bucket? [p] (carried? p "water_bucket"))
 
 (defn drop-pour!
   "Take the pour at cell out of the ledger (the water never showed: nothing of ours to scoop)."
@@ -273,7 +275,7 @@
 (defn leave-pour!
   "Leave the pour at cell in the ledger for a later cleanup; this run scoops it no more."
   [c cell]
-  (ctx/update-mem! c #(-> % (update :left (fnil conj #{}) cell) (dissoc :pour-waits :water-waits))))
+  (ctx/update-mem! c #(-> % (update :left (fnil conj #{}) cell) (dissoc :pour-waits :water-waits :bucket-waits))))
 
 (defn scoop-failed!
   "Notes a poured cell left in place for the ending (the pass goes on)."
@@ -322,6 +324,11 @@
           (do (ctx/update-mem! c assoc :water-waits waits)
               (await (burning-wait! c (pour-wait-ms)))
               :again)))
+
+      (and (not (carried? p "bucket")) (<= (:bucket-waits (ctx/mem c) 0) (max-water-waits)))
+      (do (ctx/update-mem! c update :bucket-waits (fnil inc 0))
+          (await (burning-wait! c (pour-wait-ms)))
+          :again)
 
       :else
       (do (ctx/hold-still! c nil)

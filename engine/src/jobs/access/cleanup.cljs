@@ -252,6 +252,16 @@
       (-> m (update :fails dissoc cell) (assoc-in [:held cell] why))
       (assoc-in m [:fails cell] n))))
 
+(defn ^:async gone-water!
+  "Wait a few quarter seconds for the block update that shows the scooped cell no longer water: the bucket is full by then, so a
+  stale water read would hold the entry :no-bucket."
+  [c cell]
+  (let [[x y z] cell]
+    (loop [n 0]
+      (when (and (< n 8) (= "water" (u/block-name (:primitives c) {:x x :y y :z z})))
+        (await (ctx/act c :wait #js {:ms 250}))
+        (recur (inc n))))))
+
 (defn ^:async scoop!
   "Scoop the poured water at cell with the empty bucket (jobs.items.use; the pour was this body's own, so no zone is asked);
   the entry is marked :removing first and the next round settles the cell."
@@ -260,7 +270,7 @@
   (let [r (await (child/run!* c :scoop 'jobs.items.use {:on cell :item "bucket" :ignore-zones? true}))]
     (cond
       (= :continue r) :continue
-      (= :done (:kind r)) :again
+      (= :done (:kind r)) (do (await (gone-water! c cell)) :again)
       :else (do (ctx/update-mem! c count-fail cell {:reason :scoop-failed :scoop (or (get-in r [:data :reason]) :failed)} (give-up))
                 :again))))
 
