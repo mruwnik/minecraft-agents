@@ -532,6 +532,12 @@
   (is (= :keep (f/body-start-plan {:keep-memory true} false)))
   (is (= :restart-clean (f/body-start-plan {:keep-memory false} false))))
 
+(deftest body-stops-after-a-case-unless-the-next-one-keeps-it
+  (is (f/stops-after? nil))
+  (is (f/stops-after? {}))
+  (is (f/stops-after? {:keep-memory false}))
+  (is (not (f/stops-after? {:keep-memory true}))))
+
 (deftest reset-plot-clears-a-left-over-plot-before-the-body-starts
   (let [origin [20000 150 20000]
         cmds (f/reset-plot-commands grid origin)]

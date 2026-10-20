@@ -184,6 +184,11 @@
     first-in-group? :restart-keep
     :else :keep))
 
+(defn stops-after?
+  "Whether the body can stop once its case ends: the next case of the group (nil at the end) does not :keep it running."
+  [next-case]
+  (not (and next-case (= :keep (body-start-plan next-case false)))))
+
 (defn memory-entries
   "A case's :memory entries, and for a night case a :log-out \"unsupported\" entry (unless the case names log-out or keeps
   memory): other probe bodies sleep in the same night, and the night job would log out for them instead of doing what the case tests."

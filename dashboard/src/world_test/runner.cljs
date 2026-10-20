@@ -1951,6 +1951,7 @@
         (.then (fn [r] (write-trace! opts r (or @setup-cursor start-cursor))))
         (.then (fn [r]
                  (-> (run-cleanup! [#(exec-file ["engine/tools/jobs.mjs" (:body opts) "--world" (:world opts) "cancel-all"])
+                                    #(when (:stop-after-case? opts) (leave-and-stop! opts))
                                     #(rcon! (f/cleanup-commands grid origin (:body opts) rc))
                                     #(when (lease/weather-x? rc) (set-weather! opts :clear (str (:id c) " ended")))
                                     #(when (and (:night-barrier opts) (:night-batch opts)) (barrier-leave! nil (:night-batch opts) (.-pid js/process)))
@@ -2204,6 +2205,7 @@
                                                            [from end] (f/plot-range (f/case-grid c))
                                                            i (acquire-plot! (max from (:first-plot opts)) end)
                                                            left (atom false)
+                                                           opts (assoc opts :stop-after-case? (f/stops-after? (first (nth pairs (inc n) nil))))
                                                            memory (when (seq (f/memory-entries c))
                                                                     (f/memory-seed (f/resolve-tags (f/memory-entries c) (f/plot-origin (f/case-grid c) i)) (js/Date.now)))]
                                                        (-> (with-goal! (body-dir opts) (case-goal c run (or (:retry opts) 0)) (case-wait c)
