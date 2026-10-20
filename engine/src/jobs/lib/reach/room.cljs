@@ -166,11 +166,10 @@
 
 (defn room-flood
   "{:cells [...] :unseen? bool}: the cells a walker at cell [x y z] reaches (room-kind-at) fewer than room-cells, and
-  whether any is an unseen-edge?; nil when the flood is open."
+  whether any is an unseen-edge?; nil when the flood is open. `kind-at`: room-kind-at of a shut-kind-at."
   [p kind-at x y z]
-  (let [kind-at (room-kind-at p kind-at)]
-    (when-let [cells (flood-cells (partial forward kind-at) [x y z] room-cells)]
-      {:cells cells :unseen? (boolean (some #(unseen-edge? p kind-at %) cells))})))
+  (when-let [cells (flood-cells (partial forward kind-at) [x y z] room-cells)]
+    {:cells cells :unseen? (boolean (some #(unseen-edge? p kind-at %) cells))}))
 
 (defn room-from
   "The closed room a walker at cell [x y z] reaches (room*'s answer), nil when it is no closed room or any cell of it is
@@ -201,8 +200,8 @@
   or unloaded cell, unseen-edge?). {:cells #{[x y
   z]} feet cells, :doors [{:cell {:x :y :z} :inside {:x :y :z}}] each door or gate beside a room cell at its feet, with
   that room cell}; nil when it is no closed room. A door or gate cell is the room's boundary whether open or shut, so
-  a pos in one is judged by the first closed room beside it. `kind-at`: shut-kind-at p, or one kept for a while."
-  ([p pos] (room* p pos (shut-kind-at p)))
+  a pos in one is judged by the first closed room beside it. `kind-at`: room-kind-at of shut-kind-at p, or one kept for a while."
+  ([p pos] (room* p pos (room-kind-at p (shut-kind-at p))))
   ([p {:keys [x y z]} kind-at]
    (let [in-door? (some-> (u/seen-block p {:x x :y y :z z}) .-name openable?)]
      (if in-door?
@@ -245,7 +244,7 @@
   "Whether the cell pos {:x :y :z} holds a room that closes over what the body has seen but has a cell it has not seen
   beside it (room* nil for that reason, not because the room is open): it is unknown, look first."
   [p {:keys [x y z]}]
-  (let [kind-at (shut-kind-at p)
+  (let [kind-at (room-kind-at p (shut-kind-at p))
         in-door? (some-> (u/seen-block p {:x x :y y :z z}) .-name openable?)
         starts (if in-door? (map (fn [[dx dz]] [(+ x dx) y (+ z dz)]) [[1 0] [-1 0] [0 1] [0 -1]]) [[x y z]])]
     (boolean (some (fn [[sx sy sz]] (:unseen? (room-flood p kind-at sx sy sz))) starts))))
@@ -254,7 +253,7 @@
   "The feet cells [x y z] beside the room cells of the room around pos {:x :y :z} (as unseen-room?) that the body has not
   seen: what a look into the room has to show."
   [p {:keys [x y z]}]
-  (let [kind-at (shut-kind-at p)
+  (let [kind-at (room-kind-at p (shut-kind-at p))
         in-door? (some-> (u/seen-block p {:x x :y y :z z}) .-name openable?)
         starts (if in-door? (map (fn [[dx dz]] [(+ x dx) y (+ z dz)]) [[1 0] [-1 0] [0 1] [0 -1]]) [[x y z]])]
     (->> starts

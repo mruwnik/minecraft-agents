@@ -394,22 +394,23 @@
   (let [p (:primitives c)
         feet (sh-sense/feet p)
         at (pit-index refuge feet)
+        early-stop (delay (or (here-stop p feet) (over-stop p roof)))
         keep (into #{anchor (update anchor :y inc) roof}
                    (concat plugs prep (mapcat :dig steps) (mapcat (fn [{:keys [to]}] [to (update to :y inc)]) steps)))]
     (when at (await (dig-cells/collect-pit-drops! c feet)))
     (cond
       (nil? at) (stop :left-pit "the body left the pit's cells")
       (= at (count steps)) (await (plug! c refuge))
-      (here-stop p feet) (here-stop p feet)
-      (over-stop p roof) (over-stop p roof)
+      @early-stop @early-stop
       :else
       (let [{:keys [dig to floor]} (nth steps at)
             cell (first (remove #(dig-cells/open-cell? p %) (if (zero? at) (concat prep dig) dig)))
+            cell-stop* (delay (cell-stop p cell))
             under? (= cell (update feet :y dec))
             _ (when cell (await (look-cell! c cell)))
             material (when cell (material-stop c (flight/blocks c) (remove #(dig-cells/open-cell? p %) (concat prep (mapcat :dig steps)))))]
         (cond
-          (and cell (cell-stop p cell)) (cell-stop p cell)
+          (and cell @cell-stop*) @cell-stop*
           (and under? (not (dig-cells/known-solid? p floor))) (stop :no-floor (str (or (u/seen-name p floor) "an unseen cell") " under the hole; not digging through it"))
           (and cell material) material
           cell (await (dig-pit-cell! c cell keep))

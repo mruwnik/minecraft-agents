@@ -26,7 +26,7 @@
   show it. A side of a dark stretch is never shown (a dark cell is not recorded), so the region stays open there."
   [p feet]
   (let [see-lit (look/see-lit-fn p)
-        cells (set (map vec (:cells (reach-room/room-flood p (reach-room/shut-kind-at p) (:x feet) (:y feet) (:z feet)))))]
+        cells (set (map vec (:cells (reach-room/room-flood p (reach-room/room-kind-at p (reach-room/shut-kind-at p)) (:x feet) (:y feet) (:z feet)))))]
     (fn [[x y z]]
       (or (nil? see-lit)
           (some (fn [[dx dz]] (and (contains? cells [(+ x dx) y (+ z dz)]) (== 1 (see-lit (+ x dx) y (+ z dz)))))

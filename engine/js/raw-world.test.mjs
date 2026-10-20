@@ -1,5 +1,5 @@
 // Why JavaScript: tests raw-world.mjs, which stays JS: Mineflayer boundary over packed chunk data.
-import { test } from 'node:test'
+import { test, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import vec3 from 'vec3'
@@ -234,4 +234,14 @@ test('epoch counts block updates and chunk loads and unloads, not reads', () => 
 test('sightTable lets sight pass beds, as the entity sight check does', () => {
   const table = sightTable(registry)
   assert.deepEqual(['red_bed', 'white_bed'].map(n => table[id(n)]), [0, 0])
+})
+
+test('close clears the light ttl timer', () => {
+  const { bot } = makeBot()
+  const clear = mock.method(globalThis, 'clearInterval')
+  const raw = createRawWorld({ getBot: () => bot })
+  raw.close()
+  const calls = clear.mock.callCount()
+  clear.mock.restore()
+  assert.equal(calls, 1)
 })

@@ -57,7 +57,8 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
   let lightCalls = 0
   let lastLight = null
   // lightAt skips the clock between section changes; this bounds how long a repeat caller on one section keeps a stale copy
-  setInterval(() => { lastLightKey = -1 }, Math.max(lightTtlMs, 50)).unref()
+  const lightTimer = setInterval(() => { lastLightKey = -1 }, Math.max(lightTtlMs, 50))
+  lightTimer.unref()
   let epoch = 0 // counts block updates and chunk loads/unloads within EPOCH_RANGE of the body: "what it can see may differ"
   const near = (bot, x, y, z, range) => {
     const e = bot?.entity?.position
@@ -250,6 +251,6 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
       listeners.add(fn)
       return () => listeners.delete(fn)
     },
-    close: () => { unhook(); unhook = () => {}; hooked = null; listeners.clear(); forget() }
+    close: () => { clearInterval(lightTimer); unhook(); unhook = () => {}; hooked = null; listeners.clear(); forget() }
   }
 }
