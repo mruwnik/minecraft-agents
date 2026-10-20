@@ -42,7 +42,9 @@ mkdir -p "$T/repo/engine/src/jobs/movement"; echo '(ns jobs.movement.go-to)' > "
 echo old > "$T/repo/engine/out/body-release.cjs"
 bundle_stub() { printf '#!/bin/sh\necho "npx $*" >> "%s/npx.log"\n[ "$BUNDLE" = none ] || echo "$BUNDLE" > ../engine/out/body-release.new.cjs\n' "$T" > "$T/bin/npx"; }
 bundle_stub
+mkdir -p "$T/repo/engine/out/compile-cache/v"; touch -d '5 days ago' "$T/repo/engine/out/compile-cache/v/old"; touch "$T/repo/engine/out/compile-cache/v/new"
 BUNDLE='jobs.movement.go_to.round=1' timeout 20 "$C" engine body-release >/dev/null 2>&1; check "complete body-release bundle is renamed into place" "$(cat "$T/repo/engine/out/body-release.cjs")" 'jobs.movement.go_to.round=1'
+check "body-release prunes only stale compile-cache entries" "$(ls "$T/repo/engine/out/compile-cache/v")" new
 check "no temp bundle left" "$(ls "$T/repo/engine/out" | grep -c 'body-release.new')" 0
 BUNDLE='jobs.movement.other.x=1' timeout 20 "$C" engine body-release >/dev/null 2>&1; check "bundle missing a job fails the build" "$?" 1
 check "failed bundle leaves the old one" "$(cat "$T/repo/engine/out/body-release.cjs")" 'jobs.movement.go_to.round=1'
