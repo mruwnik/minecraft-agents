@@ -14,7 +14,6 @@
             [jobs.access.stair.step :as sstep]
             [jobs.access.tunnel.estimate :refer [target-of steps-estimate cells-estimate bad-target? cause-keys ending-result stop-of run-index]]
             [jobs.access.tunnel.line :as ln]
-            [jobs.access.tunnel.torches :as torches]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.child :as child]
@@ -27,13 +26,11 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
-            [jobs.lib.torch-stock :as stock]
             [jobs.lib.walk.drive :as drive]))
 
 (def doc
   "Cut a way to stand beside a buried block :target [x y z] and stop there, with the target the next cell ahead
   at feet height. A bad :target is :impossible :bad-args before any step. A level run along a heading is jobs.gather.strip-tunnel. The target itself is left. With no zone list read the job waits (:no-zones) until one is.
-  Before the first step it stocks torches when under 8 are carried (jobs.lib.torch-stock/torches!: info torch.stocked, or warn torch.no-stock and it goes on dark).
 
   The way is one straight line along a heading (:heading limits it to one) through the target's column:
   1. An entry stand: on the surface (the column's top cell over a solid floor, two open cells; no entry from
@@ -64,18 +61,16 @@
   and walks its steps. Each run step is judged again right before each dig (:hazard :floor-unseen :zone :no-tool
   :inventory-full :refills :dig-failed). Exposed lava is sealed or stops as the stair's :on-lava says (tunnel.sealed
   info; :lava-exposed, :lava-unsealed). Before each further run step, and at the stand, the way back to the
-  entry is planned on a fresh pathWorld and must be whole and walkable, else :no-way-back and the body stays
-  where it is (a kept tunnel; a dead end goes through leave-tunnel below, which digs its own way out).
+  entry is planned on a fresh pathWorld and must be whole and walkable, else :no-way-back.
 
-  After any other stop once the body has entered, it walks back to the entry first (:out true when it arrived).
-  A dead end (:keep false) goes through jobs.access.leave-tunnel as a child (result in :leave). A kept tunnel
-  is left by a plain walk.
+  A stop ends the job where the body stands; walking home is the caller's (go-to to :entry in the data). Torches are
+  not hung: the caller lights the way afterwards with jobs.build.light-area over the line's cells.
 
-  One call does it all, in and (a dead end) out; :continue only while a child waits on the world.
+  One call does it all; :continue only while a child waits on the world.
 
   A target off the body's row and column, with the body underground and no line entered within 24 blocks, is
   reached in two legs: a kept tunnel child along the shorter axis to a waypoint one past the target's column, then
-  the line above from the body's own cell. That first leg stays open even in a dead end (:keep false). A leg that stops is tried once on the other axis; a
+  the line above from the body's own cell. A leg that stops is tried once on the other axis; a
   floor of air is bridged with a carried building block (jobs.access.stair.step/bridge!), as the stair does. A target on the body's
   row or column farther than :max-length is cut the same way in legs of :max-length from the body's cell.
 
@@ -87,31 +82,14 @@
   stand it is done, anywhere else it walks to the entry. A cell dug before a cut is air and is not dug again.
   Dug cells are left and recorded.
 
-  Torches: the line's cells are numbered 0 (entry) to n (stand), the target is n+1. A torch site is a cell
-  index s whose torch hangs in the head cell of s on a side wall (else a floor torch in the feet cell), placed
-  from cell s+1. Sites are the fewest that leave no cell dark (jobs.lib.torch-plan: light spreads 13 cells
-  through the line), a flat run about every 25 cells, none when the entry is the stand. The stair is cut in segments up to cell s+1 of the next
-  site so the torch goes in between.
-
-  A site is placed when due (the body on s+1, nothing hanging in its cells; the world is the record, so a
-  restart does not hang it twice). A site the body already passed is :unlit :passed. With no torch carried
-  (:no-torches), the place refused (may-place?, or no wall or floor to hang on: :no-support) or failed
-  (:place-failed), the site is :unlit with its reason and the tunnel goes on dark. The first gives one warn
-  tunnel.unlit.
-
-  :keep (default false, a dead end) writes each torch to the scaffold ledger (purpose :tunnel-torch, before the
-  place) for jobs.access.leave-tunnel to take back. :keep true leaves the torches and the tunnel as they are.
-
   On the run it digs the exposed ores within reach (:pick-up-ores, jobs.lib.ore-pick), never the target; :ores lists them
   with those of the stair child.
 
   Done (:already before the start) when the body stands beside :target at its height with the cell over it open. Ends :done {:reason :reached}; a stop is condition-failed for a fact (the reasons above, :no-tool, :no-way-back, the
   stair's) and nothing-possible for a failed attempt (:walk-in-failed, :step-failed, :dig-failed, :refills);
   :tool-spent is a fact (no tool left above its reserve). Data of every ending: {:reason :target :entry :heading :stand :at
-  [x y z] :dug [{:cell :block}] :ores :inside bool :keep bool :line {:entry :heading :dir :steps :run :stand :target}
-  :torches [{:cell :site :block}] :unlit [{:cell :site :reason}]} plus detail (:out true once it walked out, :leave
-  the way-out's data). :torches are those standing now, read from the world. :inside is true when the body is off
-  the entry, on the way in. 
+  [x y z] :dug [{:cell :block}] :ores :inside bool :line {:entry :heading :dir :steps :run :stand :target}}
+  plus detail. :inside is true when the body is off the entry, on the way in. 
 
   Every carried pickaxe down to jobs.lib.trip's ::spent-uses (3) uses stops the tunnel {:reason :tool-spent} before the last breaks (jobs.access.stair; the call's :settings {:jobs.lib.trip/spent-uses 0} digs on).
   :fetch (default true; false ends :no-tool; jobs.lib.need): a missing pickaxe is got inside the jobs.blocks.dig child of the dig
@@ -119,7 +97,7 @@
   bare-handed (slow, no drop) instead.")
 
 (a/defargs settings
-  {::job-time-s {:default 1800 :doc "Seconds a tunnel may take, in and (a dead end) out." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 1800 :doc "Seconds a tunnel may take." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
 
 (a/defargs args
@@ -129,7 +107,6 @@
    :accept {:doc "dig hazards taken (jobs.lib.access.rules): #{:fluid-adjacent :lava-adjacent :falling-block}" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{}}
    :ignore-zones? :shared
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop (jobs.access.stair)" :spec #{:seal :stop} :default :seal}
-   :keep {:doc "a tunnel that stays: torches left and the tunnel left open; false (a dead end): torches go into the scaffold ledger for jobs.access.leave-tunnel to take back" :spec boolean? :default false}
    :fetch {:doc "get a missing pickaxe instead of ending :no-tool (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-tool" :spec need/option? :default true}
    :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of fetching a tool; a failed fetch ends :no-tool either way" :spec boolean? :default true}
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way (below the feet only over a solid floor); false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}})
@@ -182,16 +159,14 @@
       (ledger/record-tunnel! c (:end (ln/line plan)) (shape/headings (:heading plan)) run-steps))))
 
 (defn result-of
-  "The result data of the tunnel now: {:reason r :target :at :dug :ores :inside :keep :torches :unlit} plus the line's
+  "The result data of the tunnel now: {:reason r :target :at :dug :ores :inside} plus the line's
   entry, heading and stand once one is chosen, then detail."
   [c reason detail]
-  (let [{:keys [plan dug unlit ores]} (ctx/mem c)
+  (let [{:keys [plan dug ores]} (ctx/mem c)
         feet (reach/standing-vec (:primitives c))]
     (merge (cond-> {:reason reason :target (target-of c)
-                    :at feet :dug (or dug []) :ores (into (vec ores) (ore-pick/picked c)) :inside (boolean (and plan (not= feet (:entry plan))))
-                    :keep (boolean (:keep (:args c))) :torches [] :unlit (or unlit [])}
-             plan (assoc :line (select-keys plan [:entry :heading :dir :steps :run :stand :target])
-                         :torches (torches/standing-torches (:block-at (judge/rules-in c feet)) plan)))
+                    :at feet :dug (or dug []) :ores (into (vec ores) (ore-pick/picked c)) :inside (boolean (and plan (not= feet (:entry plan))))}
+             plan (assoc :line (select-keys plan [:entry :heading :dir :steps :run :stand :target])))
            (select-keys plan [:entry :heading :stand])
            detail)))
 
@@ -291,19 +266,13 @@
     (record-run! c))
   (ctx/end c :done nil {}))
 
-(defn segment-end
-  "The line index the stair child cuts to from k: the standing cell (s+1) of the next site s >= k, else the stair's end."
-  [{:keys [sites steps]} k]
-  (min steps (or (some #(when (>= % k) (inc %)) sites) steps)))
-
 (defn ^:async stair-part!
-  "One call of the stair child over the segment from line index k (it hands over what it dug): :again once the
-  segment is cut, :continue while the child waits on the world, or a stop map when the stair ended otherwise (its
+  "One call of the stair child over the whole stair (it hands over what it dug): :again once it is cut, :continue while the child waits on the world, or a stop map when the stair ended otherwise (its
   :no-tool reaches the fetch). :stair-done once the body stands at the stair's end."
-  [c {:keys [heading dir] :as plan} k]
+  [c {:keys [heading dir] :as plan}]
   (let [cells (ln/line-cells plan)
         e (waits/waiting-out c (await (ctx/call c :stair 'jobs.access.stair
-                           {:dir dir :heading heading :fetch (:fetch (:args c)) :need-drop (:need-drop (:args c)) :y ((cells (segment-end plan k)) 1) :on-lava (:on-lava (:args c) :seal)
+                           {:dir dir :heading heading :fetch (:fetch (:args c)) :need-drop (:need-drop (:args c)) :y ((cells (:steps plan)) 1) :on-lava (:on-lava (:args c) :seal)
                             :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c)))
                             :pick-up-ores (:pick-up-ores (:args c))})))]
     (if (= :continue e)
@@ -315,7 +284,7 @@
         (if done? :again (stop-of e :stair))))))
 
 (defn segment-start?
-  "Whether no stair child is in flight: the next call cuts a new segment."
+  "Whether no stair child is in flight."
   [c]
   (empty? (get-in (ctx/mem c) [:children :stair])))
 
@@ -327,18 +296,16 @@
         cells (ln/line-cells plan)
         {:keys [end stand]} (ln/line plan)
         feet (reach/standing-vec (:primitives c))
-        k (line-index cells feet)
         j (run-index end feet heading run)
         i (when (pos? steps) (geo/stair-index entry feet dir heading steps))]
     (ctx/update-mem! c geo/record-dug (:block-at (judge/rules-in c feet)))
-    (or (when k (await (torches/torch-step! c k)))
-        (when (and j (= :continue (await (ore-pick/pick! c {:except #{(target-of c)}})))) :continue)
+    (or (when (and j (= :continue (await (ore-pick/pick! c {:except #{(target-of c)}})))) :continue)
         (cond
           (and i (not stair-done) (or (< i steps) (not (segment-start? c))))
           (if-let [stop (when (and (pos? i) (not= i checked) (segment-start? c)) (await (drive/way-back c entry)))]
             stop
             (do (when (segment-start? c) (ctx/update-mem! c assoc :checked i))
-                (await (stair-part! c plan i))))
+                (await (stair-part! c plan))))
           j (if-let [stop (when (and (not= feet entry) (not= (+ steps j) checked)) (await (drive/way-back c entry)))]
               stop
               (do (ctx/update-mem! c assoc :checked (+ steps j))
@@ -349,37 +316,10 @@
                     (and (:arrived (:data r)) (= entry (reach/standing-vec (:primitives c)))) :again
                     :else {:reason :walk-in-failed :cell entry :walk (ending-result r) :outside true}))))))
 
-(defn way-out
-  "What jobs.access.leave-tunnel needs of the tunnel so far: {:line :dug :torches}."
-  [c]
-  (let [{:keys [plan dug]} (ctx/mem c)]
-    {:line (select-keys plan [:entry :heading :dir :steps :run :stand :target]) :dug (or dug [])
-     :torches (torches/standing-torches (:block-at (judge/rules-in c (reach/standing-vec (:primitives c)))) plan)}))
-
-(defn ^:async retreat!
-  "Leave after a stop: a dead end through jobs.access.leave-tunnel (torches back, mouth sealed), a kept tunnel by the
-  plain walk back to the entry; then finish with the stop."
-  [c]
-  (let [{:keys [stop plan way-out]} (ctx/mem c)
-        keep? (:keep (:args c))
-        e (if keep?
-            (await (child/walk-into!* c :out (:entry plan)))
-            (waits/waiting-out c (await (ctx/call c :out 'jobs.access.leave-tunnel
-                             (cond-> {:tunnel way-out :ignore-zones? (boolean (:ignore-zones? (:args c)))}
-                               (some? (:fetch (:args c))) (assoc :fetch (:fetch (:args c))))))))]
-    (if (= :continue e)
-      :continue
-      (finish! c (:reason stop)
-               (assoc (dissoc stop :reason) :out (= (:entry plan) (reach/standing-vec (:primitives c)))
-                      (if keep? :walk-out :leave) (ending-result e))))))
-
 (defn stop!
-  "After a stop: finish where the body is (outside, at the entry, or no way back in a kept tunnel), else walk out first;
-  a dead end with no way back goes through leave-tunnel, which digs its own way out."
+  "After a stop: finish where the body is; walking home is the caller's."
   [c {:keys [reason outside] :as stop}]
-  (if (or outside (and (= :no-way-back reason) (:keep (:args c))) (= (reach/standing-vec (:primitives c)) (:entry (:plan (ctx/mem c)))))
-    (finish! c reason (cond-> (dissoc stop :reason :outside) outside (assoc :inside false)))
-    (do (ctx/update-mem! c assoc :stop stop :way-out (way-out c)) :again)))
+  (finish! c reason (cond-> (dissoc stop :reason :outside) outside (assoc :inside false))))
 
 (defn ^:async choose!
   "Judge the lines and keep the best, or finish with why there is none. A refusal that read cells the body has not
@@ -397,7 +337,7 @@
                        (ln/leg-target (:block-at (judge/rules-in c feet)) feet target max-length (:leg-swap (ctx/mem c)))))]
           (do (ctx/update-mem! c assoc :leg w) :again)
           (if (:entry a)
-            (do (ctx/update-mem! c assoc :plan (assoc a :sites (ln/torch-sites a)) :dug [])
+            (do (ctx/update-mem! c assoc :plan a :dug [])
                 (ctx/emit! c :tunnel.plan :info (assoc a :text (str "tunnel from " (pr-str (:entry a)) " " (name (:heading a))
                                                                     ", " (:steps a) " steps, run " (:run a))))
                 :again)
@@ -409,7 +349,7 @@
   [c w]
   (let [{:keys [fetch accept ignore-zones? on-lava max-length need-drop]} (:args c)
         e (waits/waiting-out c (await (ctx/call c :leg 'jobs.access.tunnel
-                           (cond-> {:target w :keep true :max-length max-length :accept accept :need-drop need-drop
+                           (cond-> {:target w :max-length max-length :accept accept :need-drop need-drop
                                     :ignore-zones? ignore-zones? :on-lava on-lava}
                              (some? fetch) (assoc :fetch fetch)))))]
     (cond
@@ -428,7 +368,6 @@
     (cond
       (:leg m) (await (leg! c (:leg m)))
       (nil? (:plan m)) (await (choose! c))
-      (:stop m) (await (retreat! c))
       :else (let [r (await (work! c))]
               (cond
                 (#{:again :continue} r) r
@@ -444,9 +383,8 @@
   (await (work-round c)))
 
 (defn ^:async round
-  "The whole tunnel, in and (a dead end) out: step! until it ends, a pace between; :continue while a child waits on the world."
+  "The whole tunnel: step! until it ends, a pace between; :continue while a child waits on the world."
   [c]
-  (or (await (stock/torches! c))
-      (await (pace/steps! c #(step! c)))))
+  (await (pace/steps! c #(step! c))))
 
 (def meta {:tags [:mine :dig :light]})

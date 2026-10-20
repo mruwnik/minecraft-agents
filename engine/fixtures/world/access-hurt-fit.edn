@@ -11,14 +11,14 @@
    :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
    :body {:at [16.5 10 16.5] :inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8]] :effects [["hunger" 120 255]]}
    :act [[:rcon "damage $BODY 17 minecraft:generic"]
-         [:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true :fetch false})]]
+         [:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :fetch false})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped}} :of-job true :for-s 25 :until {:source :job :kind :waiting :data {:reason :low-health}}}]
    :after [[:block [16 9 17] "stone"]]}
   {:name "healthy-body-tunnel-cuts"
    :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
    :body {:at [16.5 10 16.5] :inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8]] :effects [["resistance" 600 4]]}
-   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true :fetch false})]]
+   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :fetch false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:block [15 6 20] "air"]]}
   {:name "hurt-body-pillar-job-waits-low-health"

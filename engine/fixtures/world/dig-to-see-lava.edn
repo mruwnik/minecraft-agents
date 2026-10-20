@@ -53,7 +53,7 @@
    :blocks [[:fill [8 6 14] [13 9 18] "air"] [:set [15 6 16] "iron_ore"] [:set [15 7 16] "lava"]]
    :body {:at [13.5 6 16.5]}
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 0"] [:until-seen {:block "stone"} 10]
-         [:job (jobs.access.tunnel {:target #at [15 6 16] :max-length 6 :keep true})]]
+         [:job (jobs.access.tunnel {:target #at [15 6 16] :max-length 6})]]
    :expect [{:event {:source :job :kind :tunnel.sealed} :within-s 90 :of-job true}
             {:event {:source :job :kind :completed} :within-s 110 :of-job true}]
    :after [[:not-block [15 7 16] "lava"] [:block [15 6 16] "iron_ore"]]}

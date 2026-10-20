@@ -1,5 +1,5 @@
 (ns engine.access-contract-test
-  "access.bridge, toggle and leave-tunnel as contract jobs: they export the contract, quote validly, and end with a
+  "access.bridge and toggle as contract jobs: they export the contract, quote validly, and end with a
   kind and a cause."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
@@ -11,8 +11,7 @@
 
 (def quote-args
   {'jobs.access.bridge {:heading :east :length 5}
-   'jobs.access.toggle {:pos [3 64 0] :state :open}
-   'jobs.access.leave-tunnel {:tunnel {:torches [{:cell [1 64 0] :site 1} {:cell [2 64 0] :site 2}] :dug [{:cell [1 64 0]}]}}})
+   'jobs.access.toggle {:pos [3 64 0] :state :open}})
 
 (deftest each-job-exports-the-contract-and-quotes-validly
   (let [p (tu/fake {})]
@@ -125,7 +124,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [spec ['(jobs.access.leave-tunnel {:tunnel {} :ignore-zones? true})]]
+        (doseq [spec ['(jobs.access.tunnel {:heading :east})]]
           (is (= {:event :stopped :kind :impossible :reason :bad-args}
                  (await (ending-of spec {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks {"0,63,0" "stone"}})))
               (pr-str spec)))))))

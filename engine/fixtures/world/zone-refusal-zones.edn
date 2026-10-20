@@ -26,7 +26,7 @@
    :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
    :body {:at [16.5 10 16.5] :inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8]]}
    :zones [{:name "z" :min [10 2 10] :max [22 11 22] :owner "SomeoneElse"}]
-   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true})]]
+   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :refused :zones [:any]}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :waiting :data {:reason :refused}}}]
    :after [[:block [16 9 16] "stone"] [:block [17 9 16] "stone"]]}
@@ -34,7 +34,7 @@
    :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
    :body {:at [16.5 10 16.5] :inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8]]}
    :zones [{:name "z" :min [8 0 8] :max [9 1 9] :owner "SomeoneElse"}]
-   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true})]]
+   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12})]]
    :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]
    :limit-s 150}
   {:name "till-refused"

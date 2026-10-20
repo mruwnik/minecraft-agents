@@ -1,10 +1,9 @@
 (ns jobs.access.tunnel.line
-  "The geometry of a tunnel line: choosing it (approach), its cells and its torch sites. Reads no settings, memory or ctx."
+  "The geometry of a tunnel line: choosing it (approach), its cells. Reads no settings, memory or ctx."
   (:require [jobs.lib.block-sets :as bs]
             [jobs.lib.stair-cells :as geo]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.pillar :as pillar]
-            [jobs.lib.torch-plan :as tp]
             [plan.shape :as shape]))
 
 (def heading-order [:north :east :south :west])
@@ -61,27 +60,6 @@
   [plan]
   (let [cells (line-cells plan)]
     (into (set cells) (map head-cell) cells)))
-
-(defn lit-cells
-  "The feet cells of the line that torches at the head cells of sites light (jobs.lib.torch-plan)."
-  [plan sites]
-  (let [cells (line-cells plan)
-        lit (into #{} (mapcat #(tp/lit-by (open-cells plan) (head-cell (cells %)))) sites)]
-    (filterv lit cells)))
-
-(defn torch-sites
-  "The site indices of the torches of plan: [] when the entry is the stand, else the fewest (jobs.lib.torch-plan) that
-  leave no cell 0..n+1 dark; a torch hangs in the head cell of site s (0 to n-1), placed from cell s+1."
-  [plan]
-  (let [cells (line-cells plan)
-        n (- (count cells) 2)
-        open (open-cells plan)
-        by-head (zipmap (map head-cell cells) (range))]
-    (if (zero? n)
-      []
-      (->> (tp/plan {:cells cells :dark? (constantly true) :open? open
-                     :spots (map head-cell (take n cells))})
-           :spots (map by-head) sort vec))))
 
 (defn step-stop
   "jobs.lib.stair-cells/stop-of for a step of the line. With a building block carried (in :filler?) air under or in the floor is no stop:

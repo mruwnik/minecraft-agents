@@ -1,5 +1,5 @@
 (ns jobs.access.stair.judge
-  "What the next stair step needs and what refuses it, judged from the feet. Shared by jobs.access.stair, jobs.access.tunnel and jobs.access.leave-tunnel."
+  "What the next stair step needs and what refuses it, judged from the feet. Shared by jobs.access.stair and jobs.access.tunnel."
   (:require [jobs.lib.block-sets :as bs]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]

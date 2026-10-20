@@ -11,7 +11,7 @@
  :cases
  [{:name "body-in-the-room-enters-the-line-where-it-stands"
    :blocks [[:fill [11 4 15] [13 5 17] "air"] [:set [12 6 16] "sea_lantern"]]
-   :act [[:job (jobs.access.tunnel {:target #at [16 1 16] :max-length 6 :keep true})]]
+   :act [[:job (jobs.access.tunnel {:target #at [16 1 16] :max-length 6})]]
    :expect [{:event {:source :job :kind :tunnel.plan :data {:entry #at [12 4 16]}} :within-s 30 :of-job true}
             {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:body-near [15.5 1 16.5] 2] [:body-far [12.5 10 16.5] 5]]}
@@ -19,14 +19,14 @@
   ;; the level run from the body (8), but the body is on the line at the target's height and digs level.
   {:name "target-at-the-bodys-height-is-dug-level-not-by-a-stair-from-the-surface"
    :blocks [[:fill [11 4 15] [13 5 17] "air"] [:set [12 6 16] "sea_lantern"]]
-   :act [[:job (jobs.access.tunnel {:target #at [20 4 16] :max-length 12 :keep true})]]
+   :act [[:job (jobs.access.tunnel {:target #at [20 4 16] :max-length 12})]]
    :expect [{:event {:source :job :kind :tunnel.plan :data {:entry #at [12 4 16] :steps 0}} :within-s 30 :of-job true}
             {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:body-near [19.5 4 16.5] 2] [:body-far [13.5 10 16.5] 5]]}
   {:name "body-off-the-line-column-is-too-far"
    :blocks [[:fill [11 4 11] [13 5 13] "air"] [:set [12 6 12] "sea_lantern"]]
    :body {:at [12.5 4 12.5]}
-   :act [[:job (jobs.access.tunnel {:target #at [16 1 16] :max-length 3 :keep true})]]
+   :act [[:job (jobs.access.tunnel {:target #at [16 1 16] :max-length 3})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :too-far}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :tunnel.step} :for-s 30 :until {:source :job :kind :stopped}}]
    :after [[:body-near [12.5 4 12.5] 2] [:not-block [15 1 16] "air"]]}]}

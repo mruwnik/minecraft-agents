@@ -50,7 +50,7 @@
   {:name "tunnel-through-snow-blocks-by-hand"
    :blocks [[:fill [8 0 8] [24 9 24] "snow_block"]]
    :body {:at [16.5 10 16.5] :inventory [["torch" 8] ["cobblestone" 8]]}
-   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true})]]
+   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12})]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-tool}} :for-s 150 :until {:source :job :kind :completed}}
             {:no-event {:source :job :kind :child_ended :data {:slot :need}} :for-s 150 :until {:source :job :kind :completed}}]

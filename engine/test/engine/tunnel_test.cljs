@@ -2,7 +2,6 @@
   "jobs.access.tunnel: the approach choice, the stops, and whole tunnels against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [clojure.string :as str]
-            [jobs.lib.ledger :as ledger]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -148,27 +147,6 @@
     (is (= [[0 65 0] [0 64 -1] [0 63 -2] [0 63 -3] [0 63 -4]] cells))
     (is (= 5 (count cells)) "n + 2 cells: 0..n and the target")))
 
-(def sites-plans
-  {:straight-down {:entry [0 65 0] :heading :north :dir :down :steps 5 :run 0 :target [0 60 -6]}
-   :eight-down {:entry [6 65 9] :heading :north :dir :down :steps 8 :run 0 :target [6 57 0]}
-   :flat-run {:entry [-12 61 0] :heading :east :dir :down :steps 0 :run 24 :target [13 61 0]}
-   :mixed {:entry [0 65 0] :heading :south :dir :down :steps 4 :run 9 :target [0 61 14]}
-   :up {:entry [0 60 0] :heading :west :dir :up :steps 7 :run 2 :target [-10 67 0]}
-   :one-run-step {:entry [0 61 0] :heading :east :dir :down :steps 0 :run 1 :target [2 61 0]}
-   :nothing {:entry [0 61 0] :heading :east :dir :down :steps 0 :run 0 :target [1 61 0]}})
-
-(deftest torch-sites-of-known-lines
-  (are [k sites] (= sites (ln/torch-sites (sites-plans k)))
-    :straight-down [0]
-    :eight-down [3]
-    :flat-run [12 13]
-    :one-run-step [0]
-    :nothing []))
-
-(deftest sites-light-every-cell-of-the-line
-  (doseq [[k plan] (dissoc sites-plans :nothing)]
-    (is (= (ln/line-cells plan) (ln/lit-cells plan (ln/torch-sites plan))) (str k " every cell lit"))))
-
 ;; ---------------------------------------------------------------- the fake world
 
 (defn stone
@@ -221,9 +199,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p] :as s} (await (tunnel! {:blocks (assoc ground "6,57,0" "iron_ore")}
+        (let [{:keys [out p] :as s} (await (tunnel! {:blocks (assoc ground "6,57,0" "iron_ore")
+                                                     :inventory [{:name "iron_pickaxe" :count 1} {:name "torch" :count 8}]}
                                                     {:target [6 57 0]} (fn [_])))]
           (is (= :done (:status @out)))
+          (is (not-any? #(= "place" (.-name %)) (.-calls (.-world p))) "no torch is hung: lighting is the caller's")
           (is (= :reached (:reason @out)))
           (is (= [5 57 0] (feet p)))
           (is (= [-3 65 0] (:entry @out)))
@@ -305,8 +285,7 @@
                                                     {:target [6 57 0]} prep))]
           (is (= :stopped (:status @out)))
           (is (= :hazard (:reason @out)))
-          (is (= [-3 65 0] (feet p)) "back at the entry")
-          (is (true? (:out @out)))
+          (is (nil? (:out @out)) "the tunnel ends where it stopped")
           (is (not-any? #(= {:x 3 :y 61 :z 0} %) (digs p)))
           (is (str/starts-with? (:text @out) "tunnel stopped: hazard")))))))
 
@@ -420,42 +399,9 @@
               {:keys [out p]} (await (tunnel! {:blocks (assoc ground "6,57,0" "iron_ore")} {:target [6 57 0]} prep))]
           (is (= :stopped (:status @out)))
           (is (= :no-way-back (:reason @out)))
-          (is (some? (:leave @out)) "a dead end goes through leave-tunnel, which digs its own way out")
-          (is (not= :walk-failed (:reason (:leave @out))) "the escape got the body out, or the walk did"))))))
+          (is (nil? (:out @out)) "the tunnel ends where it stands"))))))
 
 (declare get-tool-stub)
-
-(defn ^:async lost-pickaxe-dead-end!
-  "A dead end whose way back is blocked and whose pickaxe is gone, so leave-tunnel's escape stair needs one."
-  [args]
-  (let [calls (atom [])
-        prep (fn [p]
-               (let [world (.-world p)
-                     n (atom 0)]
-                 (.override world "steer"
-                            (fn ^:async f [token a impl]
-                              (let [r (await (impl token a))]
-                                (when (= 3 (swap! n inc))
-                                  (set-block! p "-2,65,0" "stone") (set-block! p "-2,66,0" "stone")
-                                  (swap! (.-state world) assoc :inventory []))
-                                r)))))]
-    (assoc (await (tunnel! {:blocks (assoc ground "6,57,0" "iron_ore")} (merge {:target [6 57 0]} args) prep
-                           :jobs {'jobs.items.get-tool (get-tool-stub calls nil nil)}))
-           :calls calls)))
-
-(deftest a-dead-end-without-a-pickaxe-fetches-for-its-escape-by-default
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [calls]} (await (lost-pickaxe-dead-end! {}))]
-          (is (seq @calls)))))))
-
-(deftest tunnel-fetch-false-is-passed-to-the-leave-tunnel-child
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [calls]} (await (lost-pickaxe-dead-end! {:fetch false}))]
-          (is (empty? @calls)))))))
 
 (deftest a-way-back-blocked-on-the-run-stops-at-the-stand
   (async done
@@ -475,70 +421,7 @@
           (is (= :no-way-back (:reason @out)))
           (is (= [-1 61 0] (feet p))))))))
 
-;; ---------------------------------------------------------------- torches
-
-(def torches [{:name "iron_pickaxe" :count 1} {:name "torch" :count 8}])
-(def lit-blocks #{"torch" "wall_torch"})
 (def eight-down (assoc ground "6,57,0" "iron_ore"))
-(def long-down
-  "A stair of 30-odd cells: two torch sites."
-  (assoc (stone -50 12 20 64 -3 3) "6,30,0" "iron_ore"))
-
-(defn carried [p item]
-  (reduce + (map #(.-count %) (filter #(= item (.-name %)) (array-seq (.-inventory (.self p)))))))
-
-(defn places [p] (mapv #(js->clj (.-pos (.-args %)) :keywordize-keys true)
-                       (filter #(= "place" (.-name %)) (.-calls (.-world p)))))
-
-(defn lit-from-standing
-  "The feet cells of the line of result whose light from a torch that stands is under 1."
-  [res]
-  (let [plan (:line res)
-        sites (map :site (:torches res))]
-    (remove (set (ln/lit-cells plan sites)) (ln/line-cells plan))))
-
-(deftest torches-held-in-the-off-hand-are-hung
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [out]} (await (tunnel! {:blocks eight-down :inventory pick :equipment {"offHand" {:name "torch" :count 8}}}
-                                            {:target [6 57 0]} (fn [_])))
-              res @out]
-          (is (= :reached (:reason res)))
-          (is (seq (:torches res)) "torches hung from the off-hand stack")
-          (is (empty? (:unlit res))))))))
-
-(deftest torches-are-hung-on-the-way-in-one-per-site
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [out p]} (await (tunnel! {:blocks eight-down :inventory torches} {:target [6 57 0]} (fn [_])))
-              res @out
-              sites (ln/torch-sites (:line res))]
-          (is (= :reached (:reason res)))
-          (is (= [5 57 0] (feet p)))
-          (is (= 22 (count (:dug res))) "torches never cost a dig")
-          (is (= sites (mapv :site (:torches res))))
-          (is (every? #(contains? lit-blocks (block-at p (:cell %))) (:torches res)))
-          (is (= (mapv :block (:torches res)) (mapv #(block-at p (:cell %)) (:torches res))))
-          (is (= (- 8 (count sites)) (carried p "torch")))
-          (is (empty? (:unlit res)))
-          (is (empty? (lit-from-standing res)) "every feet cell of the line is lit by a torch that stands")
-          (is (false? (:keep res))))))))
-
-(deftest a-dead-end-books-its-torches-in-the-ledger-a-kept-tunnel-does-not
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (doseq [keep? [false true]]
-          (let [{:keys [out eng]} (await (tunnel! {:blocks long-down :inventory torches}
-                                                  {:max-length 60 :target [6 30 0] :keep keep?} (fn [_])))
-                l (ledger/open-entries (mem/view (:store eng)))]
-            (is (= :reached (:reason @out)) (str keep?))
-            (is (= keep? (:keep @out)) (str keep?))
-            (is (= (if keep? 0 (count (ln/torch-sites (:line @out)))) (count l)) (str keep?))
-            (is (every? #(and (= :placed (:state %)) (= :tunnel-torch (:purpose %))) l) (str keep?))
-            (is (= (set (map :cell l)) (set ({false (map :cell (:torches @out)) true []} keep?))) (str keep?))))))))
 
 (deftest a-tunnel-through-leaves-is-dug-by-hand-with-an-empty-bag-and-no-fetch
   (async done
@@ -560,75 +443,6 @@
           (is (= [:stopped :no-tool "pickaxe"] ((juxt :status :reason :tool) @out)))
           (is (empty? (digs p))))))))
 
-(deftest no-torches-digs-on-and-books-every-site-unlit-with-one-warn
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [out] :as s} (await (tunnel! {:blocks eight-down} {:target [6 57 0]} (fn [_])))
-              res @out]
-          (is (= :reached (:reason res)))
-          (is (= 22 (count (:dug res))))
-          (is (empty? (:torches res)))
-          (is (= (ln/torch-sites (:line res)) (mapv :site (:unlit res))))
-          (is (every? #(= :no-torches (:reason %)) (:unlit res)))
-          (is (= [:no-torches] (mapv :reason (events-of s :tunnel.unlit)))))))))
-
-(deftest an-unlit-site-names-the-cell-its-torch-would-have-taken
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [lit (await (tunnel! {:blocks eight-down :inventory torches} {:target [6 57 0]} (fn [_])))
-              dark (await (tunnel! {:blocks eight-down} {:target [6 57 0]} (fn [_])))]
-          (is (= (map (juxt :site :cell) (:torches @(:out lit)))
-                 (map (juxt :site :cell) (:unlit @(:out dark))))))))))
-
-(deftest too-few-torches-light-the-first-site-and-book-the-rest
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [out p] :as s} (await (tunnel! {:blocks long-down :inventory [{:name "iron_pickaxe" :count 1} {:name "torch" :count 1}]}
-                                                    {:max-length 60 :target [6 30 0]} (fn [_])))
-              res @out
-              [first-site & others] (ln/torch-sites (:line res))]
-          (is (= :reached (:reason res)))
-          (is (= [first-site] (mapv :site (:torches res))))
-          (is (= others (mapv :site (:unlit res))))
-          (is (every? #(= :no-torches (:reason %)) (:unlit res)))
-          (is (= 0 (carried p "torch")))
-          (is (= 1 (count (events-of s :tunnel.unlit)))))))))
-
-(deftest a-zone-that-forbids-placing-leaves-that-site-unlit
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [zone {:name "no-torch" :min [-12 20 -3] :max [12 50 3] :allow #{:dig}}
-              {:keys [out p]} (await (tunnel! {:blocks long-down :inventory torches :zones [zone]}
-                                              {:max-length 60 :target [6 30 0]} (fn [_])))
-              res @out
-              [first-site & others] (ln/torch-sites (:line res))]
-          (is (= :reached (:reason res)))
-          (is (= [first-site] (mapv :site (:torches res))))
-          (is (= (map vector others (repeat :zone)) (mapv (juxt :site :reason) (:unlit res))))
-          (is (= 7 (carried p "torch")) "one torch used")
-          (is (not-any? #(< (:y %) 50) (places p))))))))
-
-(deftest a-restart-with-torches-hangs-no-site-twice
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [dir (tu/tmp-dir)
-              spec {:blocks eight-down :inventory torches}
-              {:keys [eng p]} (setup spec {:target [6 57 0]} (fn [_]) :dir dir)]
-          (await (stall-dig! eng p 10))
-          (let [again (await (tick-out! (setup spec {:target [6 57 0]} (fn [_]) :dir dir :p p)))
-                res @(:out again)
-                hung (places p)]
-            (is (= :reached (:reason res)))
-            (is (= (count hung) (count (distinct hung))) "no cell placed twice")
-            (is (= (count (ln/torch-sites (:line res))) (count (:torches res))))
-            (is (empty? (lit-from-standing res)))
-            (is (= (count (digs p)) (count (distinct (digs p)))))))))))
-
 ;; ---------------------------------------------------------------- the way out
 
 (def with-cobble [{:name "iron_pickaxe" :count 1} {:name "torch" :count 8} {:name "cobblestone" :count 10}])
@@ -648,41 +462,6 @@
                        r (await (impl token a))]
                    (swap! (.-state world) assoc-in [:self :pos] at)
                    r)))))
-
-(deftest a-stop-in-a-dead-end-takes-the-torches-back-and-seals-the-mouth
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [out p eng] :as s} (await (tunnel! {:blocks eight-down :inventory with-cobble
-                                                         :drops {"wall_torch" "torch" "stone" "cobblestone"}}
-                                                        {:target [6 57 0]} lava-ahead))
-              res @out]
-          (is (= :hazard (:reason res)))
-          (is (= :stopped (:status res)))
-          (is (= [-3 65 0] (feet p)) "back at the entry")
-          (is (true? (:out res)))
-          (is (= :sealed (:reason (:leave res))))
-          (is (= 8 (carried p "torch")) "the torches came back")
-          (is (= 1 (count (:taken (:leave res)))))
-          (is (empty? (:torches res)) "none stands now")
-          (is (every? #(= "cobblestone" (block-at p %)) [[-2 64 0] [-1 64 0] [0 64 0]]) "the mouth is closed")
-          (is (= [] (ledger/open-entries (mem/view (:store eng)))))
-          (is (str/starts-with? (:text res) "tunnel stopped: hazard")))))))
-
-(deftest a-stop-in-a-kept-tunnel-walks-out-and-leaves-the-torches
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [out p]} (await (tunnel! {:blocks eight-down :inventory with-cobble
-                                               :drops {"wall_torch" "torch" "stone" "cobblestone"}}
-                                              {:target [6 57 0] :keep true} lava-ahead))
-              res @out]
-          (is (= :hazard (:reason res)))
-          (is (some? (:walk-out res)) "the plain walk to the entry (the fake cannot step onto the floor torch at the entry)")
-          (is (nil? (:leave res)) "no leave-tunnel")
-          (is (= 7 (carried p "torch")) "the torch stays")
-          (is (= 10 (carried p "cobblestone")))
-          (is (= ["torch"] (distinct (map #(if (lit-blocks (block-at p (:cell %))) "torch" "gone") (:torches res))))))))))
 
 ;; ---------------------------------------------------------------- :fetch
 
@@ -846,23 +625,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [row (merge (stone -12 12 0 64 -3 8) {"0,20,0" "air" "0,21,0" "air" "6,20,0" "iron_ore"})
-              {:keys [eng out]} (await (tunnel! {:self {:pos {:x 0.5 :y 20 :z 0.5}} :blocks row} {:target [6 20 0] :keep true} (fn [_])))]
+              {:keys [eng out]} (await (tunnel! {:self {:pos {:x 0.5 :y 20 :z 0.5}} :blocks row} {:target [6 20 0]} (fn [_])))]
           (is (= :reached (:reason @out)))
           (is (= [{:origin [0 20 0] :delta [1 0] :steps 5}]
                  (map #(select-keys (:data %) [:origin :delta :steps]) (mem/entries (mem/view (:store eng)) :tunnel-way)))))))))
-
-(deftest one-call-is-a-dead-end-and-its-way-out
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng clock out p]} (setup {:blocks eight-down :inventory with-cobble
-                                                :drops {"wall_torch" "torch" "stone" "cobblestone"}}
-                                               {:target [6 57 0]} lava-ahead)]
-          (swap! clock + 500)
-          (await (core/tick! eng))
-          (is (= :hazard (:reason @out)) "one round: in, stopped, torches taken, mouth sealed")
-          (is (= :sealed (:reason (:leave @out))))
-          (is (= [-3 65 0] (feet p))))))))
 
 (deftest the-widest-line-reads-few-blocks-over-open-air
   (let [reads (atom 0)
@@ -960,7 +726,7 @@
       (fn ^:async t []
         (let [e @(:out (await (tunnel! {:blocks eight-down :inventory with-cobble} {:target [6 57 0]} lava-ahead :raw true)))]
           (is (= :hazard (:reason (:data e))))
-          (is (true? (:out (:data e))))
+          (is (nil? (:out (:data e))))
           (is (seq (:dug (:data e))))
           (is (= [-3 65 0] (:entry (:data e)))))))))
 

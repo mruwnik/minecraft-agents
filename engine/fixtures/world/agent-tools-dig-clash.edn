@@ -11,6 +11,6 @@
  [{:name "tunnel-submit-is-held-while-a-stair-runs"
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3 :fetch false})]
          [:await {:source :job :kind :waiting} 30]
-         [:http :submit (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true}) [] {:ok false :reason :job-clash :clashes [:has {:name "jobs.access.stair"}]}]
-         [:http :submit (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true}) [:alongside] {:ok true}]]
+         [:http :submit (jobs.access.tunnel {:target #at [16 6 20] :max-length 12}) [] {:ok false :reason :job-clash :clashes [:has {:name "jobs.access.stair"}]}]
+         [:http :submit (jobs.access.tunnel {:target #at [16 6 20] :max-length 12}) [:alongside] {:ok true}]]
    :expect [{:event {:source :job :kind :waiting} :within-s 30 :of-job true}]}]}

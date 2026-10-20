@@ -326,7 +326,7 @@
       (finish! c :abandoned (assoc decided :reason :danger :detail (str mobs " guard it and no walk back would end before it despawns"))))))
 
 (defn ^:async dig-down!
-  "A stair down to the pile (jobs.access.tunnel, kept): :next once it ended there, else the trip ends :abandoned. Not when
+  "A stair down to the pile (jobs.access.tunnel): :next once it ended there, else the trip ends :abandoned. Not when
   the window left cannot hold it (about ::stair-step-s per block): go-to has no way down and would only stand above."
   [c entry pos {:keys [below aside]}]
   (let [need-s (* (cfg/stair-step-s) (max below aside))
@@ -335,7 +335,7 @@
                    (finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason reason :detail text)))]
     (if (> need-s left-s)
       (give-up! :window-closed (str "the pile is " below " blocks down: a stair takes about " (js/Math.round need-s) " s, " (js/Math.round left-s) " s are left"))
-      (let [args {:target [(js/Math.floor (:x pos)) (js/Math.floor (:y pos)) (js/Math.floor (:z pos))] :max-length 96 :keep true}]
+      (let [args {:target [(js/Math.floor (:x pos)) (js/Math.floor (:y pos)) (js/Math.floor (:z pos))] :max-length 96}]
         (loop [n 0]
           (let [danger (dg/threatened? c)
                 ;; a mob the trip was already weighed with must not stop the stair again

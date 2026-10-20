@@ -9,7 +9,7 @@
   :limit-s 90}
  :cases
  [{:name "ore-behind-three-stone-is-named-once-the-stone-is-dug"
-   :act [[:job (jobs.access.tunnel {:target #at [22 0 16] :max-length 8 :keep true :fetch false})]
+   :act [[:job (jobs.access.tunnel {:target #at [22 0 16] :max-length 8 :fetch false})]
          [:await {:source :job :kind :completed :of-job true} 80]
          [:job (jobs.explore.look {:at #at [22 0 16] :max-blocks 0 :max-entities 0})]]
    :expect [{:event {:source :job :kind :completed :data {:at {:name "iron_ore" :seen? true}}} :within-s 40 :of-job true}]}

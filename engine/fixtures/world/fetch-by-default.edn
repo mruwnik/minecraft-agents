@@ -1,7 +1,5 @@
 ;; Card 88a7e29c: a job that starts without the item it needs fetches it from a chest the body has seen, by default, through its need child.
-;; Should-succeed: animals.maintain with no wheat carried fetches it for the breed step; leave-tunnel with no block to seal with fetches cobblestone
-;; and shuts the mouth (:sealed); apiary.maintain with no shears fetches them and harvests the ripe, smoked hive.
-;; Should-fail (control): leave-tunnel with :fetch false leaves the mouth open.
+;; Should-succeed: animals.maintain with no wheat carried fetches it for the breed step; apiary.maintain with no shears fetches them and harvests the ripe, smoked hive.
 {:defaults
  {:tags [:fetch :jobs]
   :plot {:floor "grass_block" :height 12}
@@ -17,32 +15,6 @@
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 70 :of-job true}
             {:event {:source :job :kind :completed} :within-s 140 :of-job true}]
    :after [[:item "wheat" [:< 8]]]}
-  {:name "leave-tunnel-fetches-blocks-to-seal-the-mouth"
-   :tags [:access :mining]
-   :time :any
-   :plot {:floor "stone" :height 8}
-   :blocks [[:fill [13 0 8] [24 4 24] "stone"] [:fill [13 0 20] [22 1 20] "air"]
-            [:set [12 0 21] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:16}]}"]]
-   :body {:at [20.5 0 20.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.access.leave-tunnel {:tunnel {:line {:entry #at [12 0 20] :heading :east :dir :down :steps 0 :run 9
-                                                          :stand #at [21 0 20] :target #at [22 0 20]}
-                                                   :dug [{:cell #at [13 0 20] :block "stone"} {:cell #at [14 0 20] :block "stone"} {:cell #at [15 0 20] :block "stone"} {:cell #at [13 1 20] :block "stone"} {:cell #at [14 1 20] :block "stone"} {:cell #at [15 1 20] :block "stone"}]
-                                                   :torches []}})]]
-   :expect [{:event {:source :job :kind :completed :data {:reason :sealed}} :within-s 140 :of-job true}
-            {:no-event {:source :job :kind :stopped :data {:reason :open}} :for-s 140 :until {:source :job :kind :completed} :of-job true}]}
-  {:name "leave-tunnel-fetch-false-leaves-the-mouth-open"
-   :tags [:access :mining]
-   :time :any
-   :plot {:floor "stone" :height 8}
-   :blocks [[:fill [13 0 8] [24 4 24] "stone"] [:fill [13 0 20] [22 1 20] "air"]
-            [:set [12 0 21] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:16}]}"]]
-   :body {:at [20.5 0 20.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.access.leave-tunnel {:fetch false :tunnel {:line {:entry #at [12 0 20] :heading :east :dir :down :steps 0 :run 9
-                                                          :stand #at [21 0 20] :target #at [22 0 20]}
-                                                   :dug [{:cell #at [13 0 20] :block "stone"} {:cell #at [14 0 20] :block "stone"} {:cell #at [15 0 20] :block "stone"} {:cell #at [13 1 20] :block "stone"} {:cell #at [14 1 20] :block "stone"} {:cell #at [15 1 20] :block "stone"}]
-                                                   :torches []}})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :open}} :within-s 140 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 140 :until {:source :job :kind :stopped :data {:reason :open}} :of-job true}]}
   {:name "apiary-maintain-fetches-shears-and-harvests"
    :tags [:apiary]
    :plot {:floor "stone" :height 8}

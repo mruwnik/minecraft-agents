@@ -20,8 +20,9 @@
    :after [[:not-block [17 9 16] "air"] [:not-block [17 8 16] "air"]]}
   {:name "tunnel-with-pickaxe"
    :body {:inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8]]}
-   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true})]]
+   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12})]]
    :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]
+   :after [[:item "torch" 8]]
    :limit-s 150}
   {:name "stair-stops-at-crop"
    :blocks [[:set [17 9 16] "farmland[moisture=7]"] [:set [17 10 16] "wheat[age=7]"] [:set [18 9 16] "water"]]
