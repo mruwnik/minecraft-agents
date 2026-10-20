@@ -34,9 +34,9 @@
           (a branch only after the segment it hangs on; one with an unseen end first), strip.seal at the mouth of a
           segment once it and every segment beyond it are stripped, sealed or skipped. A segment no stripped one reaches is
           :skipped :unlinked. A segment the far end shows longer than it was read is stripped again. The segment holding :at is never
-          sealed. A segment that stops stop-limit (3) times for one reason is :skipped with the reason. A stop for
+          sealed. A segment that stops ::stop-limit (3) times for one reason is :skipped with the reason. A stop for
           :bag-full :food-short :no-torches :no-tool, or low torches or free slots, is a trip: deposit into the base chests
-          (storage.deposit), obtain torches, get the tool, get food (survival.get-food, once per trip; still hungry with none: :food-short; :fetch false skips the try), then back down; at most max-trips (12).
+          (storage.deposit), obtain torches, get the tool, get food (survival.get-food, once per trip; still hungry with none: :food-short; :fetch false skips the try), then back down; at most ::max-trips (12).
   Each time at the base, before the deposit, the raw ore the base chests are known to hold (body memory stock) is withdrawn (storage.withdraw,
           up to 64 a free furnace; a failed withdraw is not a stop), then the raw ore carried (raw_iron raw_gold raw_copper) is loaded into the base
           furnaces (items.smelt, :fetch only from chests; one kind split over both furnaces, several one kind each) and
@@ -55,20 +55,11 @@
   child that ended condition-failed, limit-reached or impossible, with the same data and
   :phase, :child and :because (the child's reason) for a child. Event: strip.site.stopped (warn).")
 
-(def max-trips
-  "Trips to the base before the strip stops :trips-exhausted."
-  12)
-
-(def stop-limit
-  "Stops of one segment for one reason before it is skipped."
-  3)
-
 (a/defargs args
   {:site {:doc "the site's name, the key of its memory" :spec a/name? :default nil}
    :at {:doc "[x y z] of a rail, plank or fence of the site the body has seen; kept once given" :spec ::a/pos :default nil}
    :base {:doc "id of the field-base plan (blueprint field-base)" :spec a/name? :default nil}
    :shaft {:doc "id of a mineshaft plan down from the base; nil: the nearest usable one; false: walk" :spec (a/or-of a/name? boolean?) :default nil}
-   :radius {:doc "how far from :at a corridor belongs to the site" :spec (a/int-in 8 65) :default 64}
    :take {:doc "classes stripped" :spec (a/coll-of #{:wood :cobweb :rail :ore}) :default [:wood :cobweb :rail :ore]}
    :spawner {:doc "a spawner in a segment: :light lights its spawn box and leaves it, :break lights and digs it, :seal seals the segment's mouth at once (its subtree skipped), :skip leaves it unlit" :spec #{:light :break :seal :skip} :default :light}
    :fetch {:doc "get what a trip lacks: food (jobs.survival.get-food, tried once per trip) and, passed to strip.seal, the blocks to seal with; true, a set of kinds or a map of limits; false stops :food-short and :no-blocks" :spec need/option? :default true}
@@ -78,6 +69,9 @@
 
 (a/defargs settings
   {::job-time-s {:default 7200 :doc "Seconds a strip of one site may take: base, descent, every segment, trips and the haul." :spec (a/num-in 0 nil)}
+   ::radius {:default 64 :doc "How far from :at a corridor belongs to the site." :spec (a/int-in 8 65)}
+   ::max-trips {:default 12 :doc "Trips to the base before the strip stops :trips-exhausted." :spec (a/int-in 1 nil)}
+   ::stop-limit {:default 3 :doc "Stops of one segment for one reason before it is skipped." :spec (a/int-in 1 nil)}
    ::max-sites {:default 4 :doc "Sites kept in memory; finished ones go first once there are more." :spec (a/int-in 1 nil)}})
 
 (def kind :strip/sites)
@@ -107,13 +101,21 @@
   [e]
   (if (map? (:cause e)) (contract/cause-key e) (or (:cause e) (:kind e))))
 
+(defn wait-night
+  "e, a child's ending, but :continue (the night is waited out, as a player waits for day to set the spawn) when it ended
+  condition-failed :night."
+  [c e]
+  (if (and (= :condition-failed (:kind e)) (= :night (:reason (:cause e))))
+    (do (some-> (:child-wait c) (reset! (:cause e))) :continue)
+    e))
+
 (defn ^:async run-all!
-  "The steps [[slot job args] ..] in order: nil when all ended :done, :continue while one waits, else {:child job :ending e} of the first that did not."
+  "The steps [[slot job args] ..] in order: nil when all ended :done, :continue while one waits (also for the night), else {:child job :ending e} of the first that did not."
   [c steps]
   (loop [[[slot job args] & more] steps]
     (if-not slot
       nil
-      (let [e (await (ctx/call c slot job args))]
+      (let [e (wait-night c (await (ctx/call c slot job args)))]
         (cond (= :continue e) :continue
               (not= :done (:kind e)) {:child (str job) :ending e}
               :else (recur more))))))
@@ -236,7 +238,7 @@
 (defn in-site? [c s]
   (let [{:keys [x y z]} (u/self-pos c)
         [ax ay az] (vec3 (:at s))]
-    (and (<= (js/Math.abs (- x ax)) (:radius (:args c))) (<= (js/Math.abs (- z az)) (:radius (:args c))) (<= (js/Math.abs (- y ay)) 4))))
+    (and (<= (js/Math.abs (- x ax)) (settings/get settings ::radius)) (<= (js/Math.abs (- z az)) (settings/get settings ::radius)) (<= (js/Math.abs (- y ay)) 4))))
 
 (defn at-site?
   "Within sight of :at: a body anywhere in the radius (the base it just built) cannot read the corridors."
@@ -270,8 +272,8 @@
 (defn ^:async read-site! [c s]
   (await (look/look-around! c))
   (let [p (:primitives c)
-        blocks (look/seen-blocks p {:match #(or (strip/fence? %) (strip/planks? %) (strip/rail? %)) :radius (:radius (:args c)) :max 1024})
-        segs (filterv #(<= (strip/gap % (vec3 (:at s))) (:radius (:args c))) (strip/segments blocks {:block-at (access/seen-at p)}))]
+        blocks (look/seen-blocks p {:match #(or (strip/fence? %) (strip/planks? %) (strip/rail? %)) :radius (settings/get settings ::radius) :max 1024})
+        segs (filterv #(<= (strip/gap % (vec3 (:at s))) (settings/get settings ::radius)) (strip/segments blocks {:block-at (access/seen-at p)}))]
     (if (empty? segs)
       (stop! c :no-site {:at (:at s)})
       (do (save! c assoc :segments (strip/merge-segments {} segs)) :again))))
@@ -351,7 +353,7 @@
                 (if (= :continue f)
                   :continue
                   (do (save! c assoc-in [:trip :food-done] true) :again))))
-      (if (> (:trips s 0) max-trips)
+      (if (>= (:trips s 0) (settings/get settings ::max-trips))
         (stop! c :trips-exhausted {:trips (:trips s)})
         (do (save! c #(-> % (dissoc :trip) (update :trips (fnil inc 0)))) :again)))))
 
@@ -373,7 +375,7 @@
         why (when-not (= :done (:kind e)) (reason-of e))
         n (inc (get-in s [:stops id why] 0))
         taken #(update % :taken (partial merge-with +) (:taken res))
-        radius (:radius (:args c))]
+        radius (settings/get settings ::radius)]
     (cond
       (= :continue e) :continue
       (= :spawner why) (do (save! c #(-> % taken
@@ -384,7 +386,7 @@
                                             (update :segments strip/merge-segments (filter (fn [g] (<= (strip/gap g (vec3 (:at s))) radius)) (:new-segments res)))
                                             (update-in [:segments id] (fn [m] (assoc m :state (if (= (select-keys seg [:from :to]) (select-keys m [:from :to])) :stripped :open))))))
                                   :again)
-      (>= n stop-limit) (do (save! c #(-> % taken (assoc-in [:segments id] (assoc seg :state :skipped :why why)))) :again)
+      (>= n (settings/get settings ::stop-limit)) (do (save! c #(-> % taken (assoc-in [:segments id] (assoc seg :state :skipped :why why)))) :again)
       :else (do (save! c #(cond-> (-> % taken (assoc-in [:stops id why] n))
                             (trip-reasons why) (assoc :trip {:reason why :tool (:tool res)})))
                 :again))))

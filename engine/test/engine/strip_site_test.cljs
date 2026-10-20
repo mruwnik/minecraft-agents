@@ -209,6 +209,26 @@
           (is (= {:stripped 1 :sealed 1 :skipped 1} (:segments r)))
           (is (= 3 (count (filter #(= "x-27-20:0..20" (:id (:segment %))) (called env 'jobs.strip.corridor))))))))))
 
+(deftest a-night-set-spawn-is-waited-out-not-a-child-failure
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup :ending-jobs {'jobs.survival.set-spawn (ending-job 'jobs.survival.set-spawn :condition-failed {:reason :night})})]
+          (is (= :not-done (await (start! env args))) "the base phase yields while it is night")
+          (is (empty? (called env 'jobs.strip.corridor))))))))
+
+(deftest the-stop-limit-and-trip-limit-are-settings
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [refuse (fn [a] (if (= "x-27-20:0..20" (:id (:segment a))) {:status :stopped :reason :refused} {:status :done :taken {}}))
+              env (setup :results {'jobs.strip.corridor refuse})
+              _ (await (start! env (assoc args :settings {:jobs.strip.site/stop-limit 1})))
+              env2 (setup :results {'jobs.strip.corridor (constantly {:status :stopped :reason :bag-full :taken {}})})
+              r2 (await (start! env2 (assoc args :settings {:jobs.strip.site/max-trips 1})))]
+          (is (= 1 (count (filter #(= "x-27-20:0..20" (:id (:segment %))) (called env 'jobs.strip.corridor)))))
+          (is (= [:stopped :trips-exhausted 1] ((juxt :status :reason :trips) r2)) "at most max-trips trips"))))))
+
 (deftest a-segment-no-stripped-one-reaches-is-skipped-unlinked-not-left-open
   (async done
     (tu/run-async done
