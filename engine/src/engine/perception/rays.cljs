@@ -202,21 +202,19 @@
   2000)
 
 (defn renew-marks!
-  "Gives the next slice a new mark stamp unless it can share the last slice's: same eye cell, dimension, raw-world epoch,
-  darkness and near, at most mark-gen-ms old. Then the cells marked so far are still recorded as they are in the world,
-  and the look-around and turn passes from one spot do not read them again. No epoch counter: a new stamp every slice."
+  "Gives the next slice a new mark stamp unless it can share the last slice's: same dimension, raw-world epoch, darkness
+  and near, at most mark-gen-ms old. Then the cells marked so far are still recorded as they are in the world, and
+  look-around, turn and walking passes do not read them again wherever the eye is (a mark says what the cell is, not
+  who saw it). No epoch counter: a new stamp every slice."
   [per ^js st ^js eye now]
   (let [raw (:raw per) epoch (epoch-of raw) darken (darken-now raw) near (near-of per)
         ^js g (.-gen st)]
     (when-not (and g epoch (some? (.-markStamp st))
                    (== (.-epoch g) epoch) (== (.-darken g) darken) (== (.-near g) near)
                    (= (.-dim g) (.-dimension eye))
-                   (== (.-cx g) (js/Math.floor (.-x eye))) (== (.-cy g) (js/Math.floor (.-y eye)))
-                   (== (.-cz g) (js/Math.floor (.-z eye)))
                    (< (- now (.-at g)) mark-gen-ms))
       (set! (.-markStamp st) (inc (or (.-markStamp st) 0)))
-      (set! (.-gen st) #js {:epoch epoch :darken darken :near near :dim (.-dimension eye) :at now
-                            :cx (js/Math.floor (.-x eye)) :cy (js/Math.floor (.-y eye)) :cz (js/Math.floor (.-z eye))}))))
+      (set! (.-gen st) #js {:epoch epoch :darken darken :near near :dim (.-dimension eye) :at now}))))
 
 (def kernel-cache (atom nil)) ;; [root module]
 

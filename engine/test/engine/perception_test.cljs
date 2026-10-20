@@ -449,6 +449,34 @@
     (perception/pass! per)
     (is (= [109 43201189] (memory-digest per)))))
 
+(defn walk-memory
+  "Passes along a walk (one cell east and half a turn each step, the clock moving step-ms between them) over a seeded
+  jitter: [state reads, memory digest]."
+  [blocks light seed step-ms]
+  (let [clock (atom 0) reads (atom 0) rnd (atom seed)
+        p (tu/blind (tu/fake {:blocks blocks}))
+        raw (fake-raw/create p)
+        w (js/Object.assign #js {} raw)
+        at (.-stateAt raw)
+        _ (set! (.-stateAt w) (fn [x y z] (swap! reads inc) (at x y z)))
+        per (perception/create w {:now #(deref clock)
+                                  :rand #(let [r (mod (+ (* @rnd 1103515245) 12345) 2147483648)] (reset! rnd r) (/ r 2147483648))})]
+    (light! p light)
+    (doseq [step (range 8)]
+      (swap! (fake/state p) assoc-in [:self :pos] [(- step 3) 64 0])
+      (turn! p (* 40 step))
+      (swap! clock + step-ms)
+      (perception/pass! per))
+    [@reads (memory-digest per)]))
+
+(deftest walking-passes-share-marks-and-remember-what-passes-of-their-own-would
+  (doseq [light [{} {:light-default [0 0]}]
+          seed [1 7 42]]
+    (let [[shared-reads shared] (walk-memory pinned-world light seed 100)
+          [own-reads own] (walk-memory pinned-world light seed 3000)]
+      (is (= own shared) "the same cells remembered")
+      (is (< shared-reads own-reads) "cells recorded from the last spot are not read again"))))
+
 ;; ---- a still body in an unchanged world looks again only every :still-ms
 
 (defn passes-after
