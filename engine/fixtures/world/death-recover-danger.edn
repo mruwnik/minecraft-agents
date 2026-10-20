@@ -24,8 +24,7 @@
    :after [[:item "raw_iron" 24]]}
   {:name "empty-handed-death-is-a-skip-with-no-walk"
    :body {:inventory []}
-   :act [[:wait-s 1]
-         [:kill-body]
+   :act [[:kill-body]
          [:await {:source :body :kind :respawned} 30]]
    :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :skip}} :within-s 60}
             {:no-event {:source :job :kind :recover-drops.fetching} :for-s 30}]

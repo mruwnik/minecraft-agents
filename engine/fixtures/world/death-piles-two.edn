@@ -3,13 +3,11 @@
 {:defaults
  {:tags [:survival :death :jobs]
   :body {:at [26.5 0 26.5] :spawnpoint [4 0 4] :inventory [["raw_iron" 24] ["cobblestone" 64] ["cobblestone" 36]]}
-  :act [[:wait-s 1]
-        [:kill-body]
+  :act [[:kill-body]
         [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]
         [:until-rcon "data get entity $BODY Health" "data: 20" 20]
         [:rcon "give $BODY minecraft:dirt 3"]
         [:rcon "execute positioned $X $Y $Z run tp $BODY ~14 ~ ~14"]
-        [:wait-s 1]
         [:kill-body]
         [:until [:memory {:entries {:deaths [{:data {:pos [:any]}} {:data {:pos [:any]}}]}}] 15]
         [:until-rcon "data get entity $BODY Health" "data: 20" 20]

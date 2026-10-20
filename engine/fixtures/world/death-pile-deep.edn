@@ -10,8 +10,7 @@
   :plot {:height 24}
   :body {:at [26.5 0 26.5] :spawnpoint [2 20 26] :effects [["resistance" 600 4]]
          :inventory [["raw_iron" 24] ["cobblestone" 64] ["cobblestone" 36]]}
-  :act [[:wait-s 1]
-        [:kill-body]
+  :act [[:kill-body]
         [:await {:source :body :kind :respawned} 30]
         [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]
         [:job (jobs.survival.recover-drops)]]

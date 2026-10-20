@@ -9,8 +9,7 @@
   :body {:at [22.5 0 22.5] :spawnpoint [4 0 4] :effects [["resistance" 600 4]]
          :inventory [["raw_iron" 24] ["cobblestone" 64] ["cobblestone" 36]]}
   :mobs :keep
-  :act [[:wait-s 1]
-        [:kill-body]
+  :act [[:kill-body]
         [:await {:source :body :kind :respawned} 30]
         [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]
         [:summon "skeleton" [18.5 0 18.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}],ArmorItems:[{},{},{},{id:\"minecraft:iron_helmet\",count:1}]}"]

@@ -13,8 +13,7 @@
   :limit-s 280}
  :cases
  [{:name "chased-from-the-pile-backs-off-and-returns-before-despawn"
-   :act [[:wait-s 1]
-         [:kill-body]
+   :act [[:kill-body]
          [:await {:source :body :kind :respawned} 30]
          [:summon "zombie" [24.5 0 24.5] "{PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :job :kind :recover-drops.decided :data {:decision :skip :retry true}} 60]

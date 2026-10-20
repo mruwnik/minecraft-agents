@@ -5,8 +5,7 @@
 {:defaults
  {:tags [:survival :death :jobs]
   :body {:at [26.5 0 26.5] :spawnpoint [4 0 4] :effects [["resistance" 600 4]] :inventory [["raw_iron" 24]]}
-  :act [[:wait-s 1]
-        [:kill-body]
+  :act [[:kill-body]
         [:await {:source :body :kind :respawned} 30]
         [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]]
   :limit-s 150}

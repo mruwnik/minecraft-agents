@@ -11,7 +11,7 @@
            [:set [6 1 16] "torch"] [:set [12 1 16] "torch"] [:set [18 1 16] "torch"] [:set [24 1 16] "torch"] [:set [28 1 16] "torch"]]
   :body {:at [26.5 0 16.5] :spawnpoint [4 0 16] :effects [["resistance" 600 4]]
          :inventory [["raw_iron" 24] ["cobblestone" 64] ["cobblestone" 36]]}
-  :act [[:wait-s 1] [:kill-body]]
+  :act [[:kill-body]]
   :limit-s 220}
  :cases
  [{:name "underground-pile-is-fetched-at-night"

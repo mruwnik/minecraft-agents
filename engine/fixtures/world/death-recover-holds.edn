@@ -12,8 +12,7 @@
  [{:name "hungry-before-died-waits-for-the-recovery"
    :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {})}
               {:trigger :died :persistence :cooldown :cooldown-s 30 :args {}}]
-   :act [[:wait-s 1]
-         [:kill-body]
+   :act [[:kill-body]
          [:await {:source :body :kind :respawned} 30]
          [:rcon "effect give $BODY minecraft:hunger 5 255 true"]
          [:wait-s 40]] ; hungry is due the whole time; it may fire only once the recovery has ended
@@ -27,7 +26,6 @@
               {:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
                :job (jobs.survival.respond-to-hostile)}]
    :act [[:summon "zombie" [8.5 0 4.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:wait-s 1]
          [:kill-body]
          [:await {:source :body :kind :respawned} 30]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :died}} :within-s 40}
