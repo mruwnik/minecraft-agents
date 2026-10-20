@@ -6,12 +6,13 @@
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
+            [jobs.lib.villager :as villager]
             [jobs.lib.pace :as pace]
             [jobs.lib.cond :as cond]
             [jobs.lib.util :as u]))
 
 (def doc
-  "Grow the villagers seen within :radius to :target (adults and babies count). One call is the whole attempt. Each
+  "Grow the villagers in sight to :target (adults and babies count). One call is the whole attempt. Each
   attempt takes the two nearest adults not yet tried in this call (else the nearest two again, not fed again while the food they took is unspent), feeds each enough to be willing (jobs.village.feed
   child, fetched unless :fetch is off: 3 bread, else 12 of carrot, potato or beetroot), then stays near them for
   the ::wait-s setting (jobs.movement.linger-near child) and counts again. A rise in the baby villagers in sight is a birth
@@ -31,7 +32,6 @@
 
 (a/defargs args
   {:target {:doc "villagers wanted in sight (adults and babies)" :spec (a/int-in 2 64) :default nil}
-   :radius {:doc "how far to look for villagers" :spec (a/int-in 1 96) :default 48}
    :fetch {:doc "get food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}})
 
 (a/defargs settings
@@ -44,17 +44,8 @@
 (defn feed-s [] (settings/get settings ::feed-s))
 (def job 'jobs.village.breed)
 
-(defn villagers
-  "The villagers in sight within radius."
-  [p radius]
-  (look/seen-objs p {:radius radius :names ["villager"]}))
 
-(defn adult? [e] (not (.-baby e)))
-
-(defn held
-  "How many of item the body carries."
-  [c item]
-  (transduce (comp (filter #(= item (:name %))) (map :count)) + 0 (u/inventory (:primitives c))))
+(defn held [c item] (u/carried-count (:primitives c) item))
 
 (defn meal
   "[item count] to feed one villager: carried bread (3), else a carried 12 of carrot, potato or beetroot, else bread
@@ -66,7 +57,7 @@
 (defn sight
   "{:pop n :kids k}: the villagers in sight, and how many of them are babies."
   [vs]
-  {:pop (count vs) :kids (count (remove adult? vs))})
+  {:pop (count vs) :kids (count (remove villager/adult? vs))})
 
 (def target [:target])
 
@@ -87,9 +78,9 @@
 (defn no-pair
   "Look :no-pair (later once a look round found nothing) while the target is not met and fewer than two adult villagers are in sight."
   [c]
-  (let [vs (villagers (:primitives c) (:radius (:args c)))]
+  (let [vs (villager/seen (:primitives c))]
     (cond
-      (not (and (< (:pop (sight vs)) (:target (:args c))) (< (count (filter adult? vs)) 2))) (contract/ok :pair "two adult villagers in sight, or the target met")
+      (not (and (< (:pop (sight vs)) (:target (:args c))) (< (count (filter villager/adult? vs)) 2))) (contract/ok :pair "two adult villagers in sight, or the target met")
       (look/surveyed? c :near) (contract/later :no-pair "fewer than two adult villagers in sight")
       :else (contract/look :no-pair "fewer than two adult villagers in sight"))))
 
@@ -121,7 +112,7 @@
   births first), with the population, target and births as its result."
   [c]
   (let [target (:target (:args c))
-        seen (sight (villagers (:primitives c) (:radius (:args c))))
+        seen (sight (villager/seen (:primitives c)))
         m (ctx/mem c)
         data [:units :villagers :done (:pop seen) :left (max 0 (- (or target 0) (:pop seen))) :result (data-of c seen)]]
     (if (and (number? target) (>= (:pop seen) target) (not (:pair m)) (not (:waiting m)))
@@ -129,7 +120,7 @@
       (apply contract/later :growing (str (:pop seen) " of " target " villagers in sight") data))))
 
 (defn quote-of [c]
-  (let [left (max 0 (- (:target (:args c)) (:pop (sight (villagers (:primitives c) (:radius (:args c)))))))
+  (let [left (max 0 (- (:target (:args c)) (:pop (sight (villager/seen (:primitives c))))))
         w (wait-s)]
     {:uses {:job-time [(if (pos? left) w 0) (* left (+ w (feed-s))) ##Inf]}}))
 
@@ -160,7 +151,7 @@
         me (u/self-pos c)
         tried (set (:tried m))
         nearest (fn [es] (->> es (sort-by #(u/dist me (u/pos-of (.-pos %)))) (take 2)))
-        adults (filter adult? vs)
+        adults (filter villager/adult? vs)
         fresh (nearest (remove #(tried (.-uuid %)) adults))
         pair (if (and (< (count fresh) 2) (seq tried)) (nearest adults) fresh)]
     (cond
@@ -181,14 +172,14 @@
   [c vs seen]
   (let [m (ctx/mem c)
         next (first (remove (set (:fed m)) (:pair m)))
-        {:keys [radius fetch]} (:args c)]
+        {:keys [fetch]} (:args c)]
     (if-not next
       (let [at (some #(when (= (first (:pair m)) (.-uuid %)) (u/pos-of (.-pos %))) vs)]
         (ctx/update-mem! c assoc :waiting true :at (or at (u/self-pos c)))
         :again)
       (let [[item n] (meal c)
             r (await (ctx/call c (keyword (str "feed-" next)) 'jobs.village.feed
-                               {:villager next :item item :count n :radius radius :fetch fetch}))]
+                               {:villager next :item item :count n :fetch fetch}))]
         (cond
           (= :continue r) :continue
           (= :no-food (contract/cause-key r)) (stop! c seen :condition-failed :no-food)
@@ -212,7 +203,7 @@
   pair, or choose one. :again, :continue or an ending."
   [c]
   (let [m (ctx/mem c)
-        vs (villagers (:primitives c) (:radius (:args c)))
+        vs (villager/seen (:primitives c))
         seen (sight vs)]
     (cond
       (>= (:pop seen) (:target (:args c)))

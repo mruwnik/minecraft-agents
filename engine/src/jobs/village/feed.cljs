@@ -9,11 +9,12 @@
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
-            [jobs.lib.look :as look]))
+            [jobs.lib.look :as look]
+            [jobs.lib.villager :as villager]))
 
 (def doc
   "Toss :count food to the villager with uuid :villager and confirm that villager took it. One call is the whole
-  feeding: find the villager within :radius, walk to a cell 2.5 to 3.5 blocks from it, on the side where no other villager is near the toss, (jobs.movement.go-to legs of 5 s, it
+  feeding: find the villager in sight, walk to a cell 2.5 to 3.5 blocks from it, on the side where no other villager is near the toss, (jobs.movement.go-to legs of 5 s, it
   wanders), look level toward it and toss, so the drop flies about that far and lands within the villager's pickup reach but outside the body's own (a
   drop in both is taken back by the body when the pickup delay ends), with a pickup receipt (the toss primitive's :watchS reports who collected the drop, by uuid). Only what that
   villager collected counts as fed; the rest of the drop lying near the toss is collected back (a jobs.items.collect-drops child), never left as litter.
@@ -23,7 +24,7 @@
   Ends with the data {:fed n :item name}. :done when the villager took :count (done? holds), or the call's :least
   (default :all) when it gave up after that many. Otherwise with the cause:
   - condition-failed :no-food: none carried and none fetched (a listed call with :fetch off waits for food).
-  - condition-failed :gone: the villager is not seen within :radius (also a non-villager under the uuid).
+  - condition-failed :gone: the villager is not in sight (also a non-villager under the uuid).
   - nothing-possible :crowded: from no side of it was the toss free of other villagers (one within ::crowd-gap of the landing spot or ::line-gap of the line would take the drop) for ::crowd-s.
   - nothing-possible :unreachable: three blocked walks in a row, or eight legs without getting within reach.
   - nothing-possible :not-taken: three tosses in a row that the villager did not collect (full inventory, not
@@ -39,13 +40,13 @@
   {:villager {:doc "the villager's entity uuid" :spec string? :default nil}
    :item {:doc "food to give; nil: the first carried of bread, carrot, potato, beetroot" :spec a/item? :default nil}
    :count {:doc "how many items the villager is to take" :spec (a/int-in 1 64) :default 1}
-   :radius {:doc "how far to look for the villager" :spec (a/int-in 1 96) :default 48}
    :fetch {:doc "get food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}})
 
 (def foods ["bread" "carrot" "potato" "beetroot"])
 (def wanted (into (set foods) ["wheat" "wheat_seeds" "beetroot_seeds" "torchflower_seeds" "pitcher_pod"]))
 (a/defargs settings
-  {::min-gap {:default 2.5 :doc "Fewest blocks along x or z between body and villager at a toss: a level toss lands about 2.5 to 3 ahead; nearer, the drop is in the body's own pickup reach." :spec (a/num-in 0 nil)}
+  {::drop-radius {:default 48 :doc "Blocks within which the body collects its tossed food back." :spec (a/int-in 1 96)}
+   ::min-gap {:default 2.5 :doc "Fewest blocks along x or z between body and villager at a toss: a level toss lands about 2.5 to 3 ahead; nearer, the drop is in the body's own pickup reach." :spec (a/num-in 0 nil)}
    ::max-gap {:default 3.5 :doc "Most blocks along x and z between body and villager at a toss: farther, the drop falls short of the villager's pickup reach." :spec (a/num-in 0 nil)}
    ::crowd-gap {:default 2 :doc "Blocks around the spot a toss lands (::land-gap in front of the villager) that must hold no other villager: one nearer takes the drop, and it is not counted." :spec (a/num-in 0 nil)}
    ::land-gap {:default 1 :doc "Blocks in front of the villager, on the body's side, where the toss is taken to land." :spec (a/num-in 0 nil)}
@@ -58,6 +59,7 @@
    ::watch-s {:default 4 :doc "Seconds the body watches the animal after acting." :spec (a/int-in 0 nil)}
    ::settle-reach {:default 4 :doc "Reach once the animal has settled, in blocks." :spec (a/int-in 0 nil)}})
 (def eye-height 1.62)
+(defn drop-radius [] (settings/get settings ::drop-radius))
 (defn min-gap [] (settings/get settings ::min-gap))
 (defn max-gap [] (settings/get settings ::max-gap))
 (defn crowd-gap [] (settings/get settings ::crowd-gap))
@@ -152,13 +154,6 @@
   "End with the ending of reason (a keyword)."
   [c reason]
   (ending-of c reason))
-
-(defn find-villager
-  "The villager entity with uuid within radius, or nil."
-  [p uuid radius]
-  (->> (look/seen-objs p {:radius radius :names ["villager"]})
-       (filter #(= uuid (.-uuid %)))
-       first))
 
 (defn ^:async fetch-food!
   "No food carried: fetch it when :fetch allows, else end no-food. :again once it arrived, :continue, or the stop."
@@ -272,12 +267,9 @@
   (keep (fn [d]
           (let [more (- (:count d) (get skip (:id d) 0))]
             (when (pos? more) (assoc d :count more))))
-        (look/drops (:primitives c) item (:radius (:args c)) at)))
+        (look/drops (:primitives c) item (drop-radius) at)))
 
-(defn held
-  "How many of item the body carries."
-  [c item]
-  (transduce (comp (filter #(= item (:name %))) (map :count)) + 0 (u/inventory (:primitives c))))
+(defn held [c item] (u/carried-count (:primitives c) item))
 
 (defn took
   "What the villager took of a toss cut before its receipt: the items gone from the inventory since the intent was
@@ -298,7 +290,7 @@
   (let [drops (lying c item at skip)]
     (if (empty? drops)
       (do (ctx/update-mem! c dissoc :cleanup) :again)
-      (let [r (await (child/run!* c :collect 'jobs.items.collect-drops {:ids (mapv :id drops) :near (select-keys at [:x :y :z]) :radius (:radius (:args c))}))]
+      (let [r (await (child/run!* c :collect 'jobs.items.collect-drops {:ids (mapv :id drops) :near (select-keys at [:x :y :z]) :radius (drop-radius)}))]
         (cond
           (= :continue r) :continue
           (pos? (:collected (:data r) 0)) (do (u/progress! c) :again)
@@ -359,9 +351,9 @@
   "One piece: take back a drop, find the villager, fetch food, walk or toss. :again, :continue or an ending."
   [c]
   (let [m (ctx/mem c)
-        {:keys [villager radius]} (:args c)
+        {:keys [villager]} (:args c)
         item (food c)
-        e (when-not (or (:tossing m) (:cleanup m)) (find-villager (:primitives c) villager radius))]
+        e (when-not (or (:tossing m) (:cleanup m)) (villager/find-by-uuid (:primitives c) villager))]
     (cond
       (:tossing m) (if (u/within? (u/self-pos c) (:at (:tossing m)) (settle-reach))
                      (settle! c (:tossing m))

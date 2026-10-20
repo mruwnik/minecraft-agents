@@ -9,13 +9,14 @@
             [jobs.lib.cond :as cond]
             [jobs.lib.blocks :as b]
             [jobs.lib.look :as look]
+            [jobs.lib.villager :as villager]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.step-off :as step-off]
             [jobs.village.trade :as trade]))
 
 (def doc
-  "Re-roll the offers of an untraded villager (:villager uuid; nil: the nearest adult, not a nitwit, within :radius)
+  "Re-roll the offers of an untraded villager (:villager uuid; nil: the nearest adult, not a nitwit, in sight)
   until one gives :want, by breaking and placing again the workstation :item (nil: that of :profession) at :pos.
   Needs: a workstation item, a wanted item and a cell the body may break and place at (else impossible, :bad-args); a
   cell not yet seen is looked at, then walked to. An offer matches when it gives :want, is not sold out and costs at
@@ -36,7 +37,6 @@
    :item {:doc "the workstation block item name, e.g. lectern; nil: the one of :profession" :spec a/item? :default nil}
    :profession {:doc "villager profession whose workstation :item defaults to" :spec string? :default nil}
    :want {:doc "item name an offer is to give" :spec a/item? :default nil}
-   :radius {:doc "how far to look for a villager when :villager is nil (a named one is found wherever it is seen)" :spec (a/int-in 1 96) :default 48}
    :max-price {:doc "highest price (first cost stack); nil for no limit" :spec (a/int-in 0 nil) :default nil}})
 
 (def workstations
@@ -89,7 +89,7 @@
   [c]
   (let [{:keys [villager]} (:args c)
         p (:primitives c)
-        e (when (string? villager) (trade/find-villager p villager))
+        e (when (string? villager) (villager/find-by-uuid p villager))
         block (when e (some->> (:pos (b/parse (:args c))) (u/seen-name p)))
         item (item-of (:args c))]
     (cond
@@ -158,11 +158,11 @@
   (or (:villager (:args c)) (:chosen (ctx/mem c))))
 
 (defn pick!
-  "Without :villager, choose the nearest adult villager within :radius that is no nitwit and keep it. The uuid or nil."
+  "Without :villager, choose the nearest adult villager in sight that is no nitwit and keep it. The uuid or nil."
   [c]
   (or (chosen c)
-      (when-let [e (->> (look/seen-objs (:primitives c) {:radius (:radius (:args c)) :names ["villager"]})
-                        (remove #(or (.-baby %) (= "nitwit" (.-profession %))))
+      (when-let [e (->> (villager/adults (:primitives c))
+                        (remove #(= "nitwit" (.-profession %)))
                         first)]
         (ctx/update-mem! c assoc :chosen (.-uuid e))
         (.-uuid e))))
@@ -271,7 +271,7 @@
         item (item-of (:args c))
         p (:primitives c)
         villager (pick! c)
-        e (when villager (trade/find-villager p villager))
+        e (when villager (villager/find-by-uuid p villager))
         block (u/seen-name p pos)
         profession (when e (.-profession e))
         out-of-tries? (>= (rolls c) (max-rolls))]

@@ -7,6 +7,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.look :as look]
+            [jobs.lib.villager :as villager]
             [jobs.lib.pace :as pace]))
 
 (def doc
@@ -14,14 +15,14 @@
   it ends and never run twice in a pass (:continue only while a child waits on the world):
   - :repair (jobs.build.from-plan, :plan): the village plan is built again where it is missing or broken. The plan's
     huts and beds are the housing, so this is the house step too. Skipped :no-plan without a :plan.
-  - :breed (jobs.village.breed, :target and :radius): villagers (babies count) are below :target and 2 adults are
+  - :breed (jobs.village.breed, :target): villagers (babies count) are below :target and 2 adults are
     near. Skipped :no-target, :at-target, :too-few-adults.
-  - :roll-N (jobs.village.roll, one per entry of :roles, with its :profession, :want, :pos and :radius): no adult villager
+  - :roll-N (jobs.village.roll, one per entry of :roles, with its :profession, :want and :pos): no adult villager
     near holds the role's profession, so one is rolled to it (the lock). :pos is the workstation cell. Skipped
     :filled when a villager holds the profession, :no-villager when none is near, :no-pos without one (the pass
     ends stopped, the role cannot be rolled). A roll
     already begun goes on while a villager is near.
-  Villagers are those the body sees within :radius. Every call re-reads the villagers: a step the world no longer needs is skipped.
+  Villagers are those the body sees in sight. Every call re-reads the villagers: a step the world no longer needs is skipped.
   A step whose child declines is booked {:skipped :declined :reason why} (the child's wait reason); the pass goes on.
   A child that throws fails the pass (parked failed, like any job whose round throws).
   A village where no step would run is in order: done at once (:already). A started run always continues.
@@ -37,7 +38,6 @@
   {:plan {:doc "id of the village plan to repair (jobs.build.from-plan); nil: no repair" :spec a/name? :default nil}
    :target {:doc "villagers wanted (babies count); nil: no breeding" :spec (a/int-in 2 nil) :default nil}
    :roles {:doc "profession roles to hold: [{:profession name :pos workstation-cell :trade name?}], each rolled when nobody holds it" :spec (a/coll-of map?) :default []}
-   :radius {:doc "villagers within this many blocks of the body count" :spec (a/int-in 1 96) :default 48}
    :ignore-zones? :shared})
 
 (def jobs
@@ -64,7 +64,7 @@
 (defn facts
   "The villagers the body sees: {:villagers [{:baby :profession}]}."
   [c]
-  (let [v (look/seen-objs (:primitives c) {:radius (:radius (:args c)) :names ["villager"]})]
+  (let [v (villager/seen (:primitives c))]
     {:villagers (mapv (fn [e] {:baby (true? (.-baby e)) :profession (.-profession e)}) v)}))
 
 ;; ------------------------------------------------------------------ what is decided
@@ -78,7 +78,7 @@
 
 (defn decide
   "{:skip reason} or {:call args} for a step slot."
-  [slot {:keys [plan target radius ignore-zones?] :as args} {:keys [villagers]}]
+  [slot {:keys [plan target ignore-zones?] :as args} {:keys [villagers]}]
   (let [adults (remove :baby villagers)]
     (case slot
       :repair (if plan
@@ -88,13 +88,13 @@
                (nil? target) {:skip :no-target}
                (>= (count villagers) target) {:skip :at-target}
                (< (count adults) 2) {:skip :too-few-adults}
-               :else {:call {:target target :radius radius}})
+               :else {:call {:target target}})
       (let [{:keys [profession trade pos]} (role-of args slot)]
         (cond
           (empty? villagers) {:skip :no-villager}
           (some #(= profession (:profession %)) adults) {:skip :filled}
           (nil? pos) {:skip :no-pos}
-          :else {:call (cond-> {:profession profession :pos pos :radius radius} trade (assoc :want trade))})))))
+          :else {:call (cond-> {:profession profession :pos pos} trade (assoc :want trade))})))))
 
 (defn plan
   "Walk todo, booking the steps that decide skips in report; {:todo :report :call}, :call nil when none is left."

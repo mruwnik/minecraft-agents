@@ -46,8 +46,7 @@
 (defn carried
   "Total of the item carried over all stacks."
   [c]
-  (let [item (blocks/item-name (:args c))]
-    (transduce (comp (filter #(= item (:name %))) (map :count)) + 0 (u/inventory (:primitives c)))))
+  (u/carried-count (:primitives c) (blocks/item-name (:args c))))
 
 (defn had
   "The count carried when the run began (now, before it began)."

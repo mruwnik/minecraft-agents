@@ -171,6 +171,11 @@
                   (some? (.-durability i)) (assoc :durability (.-durability i) :max (.-maxDurability i))))
         (some-> (.self p) .-inventory array-seq)))
 
+(defn carried-count
+  "How many of item the body carries, over all stacks."
+  [p item]
+  (transduce (comp (filter #(= item (:name %))) (map :count)) + 0 (inventory p)))
+
 (defn carried-names [p] (set (map :name (inventory p))))
 
 (def inventory-slots

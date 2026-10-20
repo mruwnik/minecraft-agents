@@ -9,12 +9,13 @@
             [jobs.lib.aim :as aim]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
+            [jobs.lib.villager :as villager]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]))
 
 (def doc
   "Buy :count of :buy from the villager with uuid :villager. One call is the whole purchase: find the villager
-  within ::search-radius, walk within ::reach of it, seeing it (no seen solid block, glass too, between the eye and its cell; jobs.movement.go-to legs of ::chase-timeout-s), read its offers (prices move between visits),
+  within jobs.lib.villager/search-radius, walk within ::reach of it, seeing it (no seen solid block, glass too, between the eye and its cell; jobs.movement.go-to legs of ::chase-timeout-s), read its offers (prices move between visits),
   choose and buy. It yields (:continue) only while go-to waits on the world.
   Of the offers that give :buy and are not sold out, those whose price (the adjusted count of the first cost
   stack) is within :max-price (nil: no limit) are kept. The cheapest is taken, the lowest index on a tie.
@@ -24,7 +25,7 @@
   was bought, else with the cause, condition-failed for :gone, :not-villager, :payment-short and :no-room, else
   nothing-possible. A partial purchase stays bought and paid. A missing villager uuid or item name is impossible (:bad-args).
   done? holds once the remembered count reaches :count; the engine then ends it :done (already, before a start). The causes:
-  - :gone (not listed within ::search-radius, also a non-villager entity under the uuid), :not-villager.
+  - :gone (not listed within jobs.lib.villager/search-radius, also a non-villager entity under the uuid), :not-villager.
   - :unreachable (walk blocked, or still out of reach after three tries in the call).
   - :no-offers (unemployed, nitwit, baby, or an empty window), :window (did not open three times: busy
     villager), :no-offer (nothing gives :buy), :sold-out.
@@ -45,11 +46,9 @@
    :max-price {:doc "highest price per trade (first cost stack); nil for no limit" :spec (a/int-in 0 nil) :default nil}})
 
 (a/defargs settings
-  {::search-radius {:default 48 :doc "Blocks within which a trader is looked for." :spec (a/int-in 0 nil)}
-   ::job-time-s {:default 120 :doc "Seconds one purchase may take." :spec (a/int-in 1 nil)}
+  {::job-time-s {:default 120 :doc "Seconds one purchase may take." :spec (a/int-in 1 nil)}
    ::chase-timeout-s {:default 15 :doc "Seconds one walk toward the villager may take: it wanders, so the walk aims again at where it is now this often." :spec (a/num-in 0 nil)}
    ::reach {:default 2 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}})
-(defn search-radius [] (settings/get settings ::search-radius))
 (defn reach [] (settings/get settings ::reach))
 
 (defn chase-timeout-s [] (settings/get settings ::chase-timeout-s))
@@ -76,10 +75,7 @@
 
 (def currency "The item villagers sell for; the price is known only once the offers are read." "emerald")
 
-(defn carried
-  "How many of item are carried."
-  [c item]
-  (transduce (comp (filter #(= item (:name %))) (map :count)) + 0 (u/inventory (:primitives c))))
+(defn carried [c item] (u/carried-count (:primitives c) item))
 
 (defn no-payment
   "Later :need while no currency is carried and the call will not fetch it."
@@ -132,13 +128,6 @@
   "A step that failed but may be tried again: counted per call, the third in a row gives up."
   [reason]
   {:retry reason})
-
-(defn find-villager
-  "The entity named villager with uuid within the search radius, or nil."
-  [p uuid]
-  (->> (look/seen-objs p {:radius (search-radius) :names ["villager"]})
-       (filter #(= uuid (.-uuid %)))
-       first))
 
 (defn choose
   "Pick an offer from the read offers: {:offer o} with :price, or {:reason
@@ -271,7 +260,7 @@
   "Find the villager, walk within reach with one go-to leg (it wanders), then read the offers and buy. :again,
   :continue (go-to yields), an ending or a retry."
   [c]
-  (let [e (find-villager (:primitives c) (:villager (:args c)))]
+  (let [e (villager/find-by-uuid (:primitives c) (:villager (:args c)))]
     (cond
       (and (nil? e) (not (look/surveyed? c))) (await (look/survey! c)) ; villagers count only while in view
       (nil? e) (give-up! c :gone)

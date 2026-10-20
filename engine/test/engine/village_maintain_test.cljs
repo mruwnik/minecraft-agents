@@ -80,7 +80,7 @@
                                  (apply world pair) {'jobs.build.from-plan {:placed 3}}))]
           (is (= [['jobs.build.from-plan {:plan "village"}]] (ran s 'jobs.build.from-plan)))
           (is (= 3 (:placed (step s :repair))))
-          (is (= [['jobs.village.breed {:target 4 :radius 48}]] (ran s 'jobs.village.breed)))
+          (is (= [['jobs.village.breed {:target 4}]] (ran s 'jobs.village.breed)))
           (is (true? (finished? s)))
           (is (= ['jobs.build.from-plan 'jobs.village.breed] (mapv first (remove #(= :check (first %)) @(:calls s))))))))))
 
@@ -111,7 +111,7 @@
               s (await (scenario {:roles roles}
                                  (world (villager 1 3 {:profession "farmer"}) (villager 2 5 {:profession "none"}))
                                  {'jobs.village.roll {:rolled 1}}))]
-          (is (= [['jobs.village.roll {:profession "librarian" :want "mending" :pos [4 64 4] :radius 48}]]
+          (is (= [['jobs.village.roll {:profession "librarian" :want "mending" :pos [4 64 4]}]]
                  (ran s 'jobs.village.roll)))
           (is (= {:skipped :filled} (step s :roll-1)))
           (is (= 1 (:rolled (step s :roll-0))))

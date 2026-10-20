@@ -3,6 +3,8 @@
   kind and a cause (a partial run is never done)."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
+            [engine.settings :as settings]
+            [jobs.lib.villager :as villagers]
             [engine.ctx :as ctx]
             [jobs.lib.look :as look]
             [jobs.village.breed :as breed]
@@ -71,14 +73,20 @@
                (await (ends '(jobs.village.breed {:target 3 :fetch false})
                              {:entities [(villager [] {:uuid "v-1" :pos {:x 3 :y 64 :z 0}}) (villager [] {:id 2 :uuid "v-2" :pos {:x 5 :y 64 :z 0}})]}))))))))
 
+(deftest villagers-are-sought-within-the-one-search-radius
+  (let [p (tu/fake {:entities [(villager [] {:uuid "v-1" :pos {:x 20 :y 64 :z 0}})]})
+        found (fn [overrides] (settings/scoped overrides #(some? (villagers/find-by-uuid p "v-1"))))]
+    (is (found {}) "in sight at 20, inside the default 48")
+    (is (not (found {:jobs.lib.villager/search-radius 10})) "a call's :settings narrows every village job's search")))
+
 (deftest breed-no-pair-looks-first-until-surveyed
-  (let [c {:primitives (tu/fake {:entities [(villager [])]}) :args {:target 3 :radius 48}}
+  (let [c {:primitives (tu/fake {:entities [(villager [])]}) :args {:target 3}}
         status (fn [surveyed?] (with-redefs [look/surveyed? (fn ([_] surveyed?) ([_ _] surveyed?))] (breed/no-pair c)))]
     (is (= [:look :no-pair] ((juxt first (comp :reason last)) (status false))))
     (is (= [:later :no-pair] ((juxt first (comp :reason last)) (status true))))))
 
 (deftest breed-can-run-answers-a-lost-pair-until-one-was-tried
-  (let [c {:primitives (tu/fake {:entities [(villager [])]}) :args {:target 3 :radius 48}}
+  (let [c {:primitives (tu/fake {:entities [(villager [])]}) :args {:target 3}}
         status (fn [m] (with-redefs [look/surveyed? (fn ([_] true) ([_ _] true)) ctx/mem (constantly m)] (breed/can-run? c)))]
     (is (= [:later :no-pair] ((juxt first (comp :reason last)) (status {}))))
     (are [m] (= :ok (first (status m)))

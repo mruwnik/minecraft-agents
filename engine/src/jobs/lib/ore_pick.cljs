@@ -50,8 +50,6 @@
   (let [n (u/seen-name p {:x x :y (dec y) :z z})]
     (boolean (and n (not (bs/passable? n)) (not (bs/fluids n)) (not (bs/bad-floor n))))))
 
-(defn count-of [p item] (transduce (comp (filter #(= item (:name %))) (map :count)) + 0 (u/inventory p)))
-
 (defn candidates
   "Cells of ore blocks to pick up from here, nearest first; leave: block names left to the job, except: cells."
   [c {:keys [except leave]}]
@@ -93,7 +91,7 @@
             dug? (= :dug reason)
             item (blocks/item-name {:block block})]
         (book! c (fn [m] (-> (dissoc m :target)
-                             (cond-> dug? (update :picked (fnil conj []) {:cell target :block block :got (- (count-of p item) before)})
+                             (cond-> dug? (update :picked (fnil conj []) {:cell target :block block :got (- (u/carried-count p item) before)})
                                      (not dug?) (update :skipped (fnil conj []) target)))))
         (ctx/emit! c (if dug? :ore-pick.dug :ore-pick.skipped) :info
                    {:cell target :from home :block block :reason reason
@@ -119,7 +117,7 @@
          (if-let [{:keys [pos name]} (first (candidates c opts))]
            (let [cell (blocks/cell pos)]
              (book! c assoc :target cell :block name :home (blocks/feet-cell c)
-                    :before (count-of (:primitives c) (blocks/item-name {:block name})))
+                    :before (u/carried-count (:primitives c) (blocks/item-name {:block name})))
              (book! c update :n (fnil inc 0))
              (recur))
            (do (book! c dissoc :n) nil)))))))
