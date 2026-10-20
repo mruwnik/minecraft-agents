@@ -2,6 +2,7 @@
 ;; where the body dies with 24 raw_iron; it respawns on the surface at [2 20 26], 20 down and 24 aside (the plot has a bedrock roof, so the stair starts in the body's own cell: a line needs 21 blocks of run-up).
 ;; Should-succeed: legs that get no nearer count as blocked, a stair is dug down through the dirt with a pickaxe given after the respawn (the trip never digs by hand) and the pile collected.
 ;; Should-fail: the same chamber in bedrock: no way down, the trip ends :abandoned instead of bouncing till the pile despawns.
+;; A line of glass from the respawn cell to the chamber lets the body see the pile cell at the start (an unseen pile cell at night waits for light, by the clock, and the pile's window runs out first).
 ;; A glowstone in the chamber corner keeps natural mobs from spawning in the dark pile chamber.
 ;; Cards a4a4ddab, d54a4e3b: a stone mass and no pickaxe (nothing to fetch it with): abandoned at once; a zombie that appears at the body
 ;; once the stair is under way is weighed before the next step: the run declines (:danger) instead of digging on.
@@ -18,7 +19,8 @@
   :limit-s 330}
  :cases
  [{:name "deep-pile-stair-down-collects"
-   :blocks [[:fill [0 0 0] [31 19 31] "dirt"] [:fill [24 0 24] [28 2 28] "air"] [:fill [24 2 24] [24 2 24] "glowstone"]]
+   :blocks [[:fill [0 0 0] [31 19 31] "dirt"] [:fill [24 0 24] [28 2 28] "air"] [:fill [24 2 24] [24 2 24] "glowstone"]
+            [:fill [4 19 26] [4 19 26] "glass"] [:fill [5 18 26] [5 19 26] "glass"] [:fill [6 17 26] [6 18 26] "glass"] [:fill [7 16 26] [7 17 26] "glass"] [:fill [8 15 26] [8 16 26] "glass"] [:fill [9 15 26] [9 15 26] "glass"] [:fill [10 14 26] [10 15 26] "glass"] [:fill [11 13 26] [11 14 26] "glass"] [:fill [12 12 26] [12 13 26] "glass"] [:fill [13 11 26] [13 12 26] "glass"] [:fill [14 10 26] [14 11 26] "glass"] [:fill [15 9 26] [15 10 26] "glass"] [:fill [16 8 26] [16 9 26] "glass"] [:fill [17 7 26] [17 8 26] "glass"] [:fill [18 7 26] [18 7 26] "glass"] [:fill [19 6 26] [19 7 26] "glass"] [:fill [20 5 26] [20 6 26] "glass"] [:fill [21 4 26] [21 5 26] "glass"] [:fill [22 3 26] [22 4 26] "glass"] [:fill [23 2 26] [23 3 26] "glass"]]
    :act [[:rcon "give $BODY minecraft:iron_pickaxe 1"]]
    :expect [{:event {:source :job :kind :recover-drops.decided :data {:decision :collected}} :within-s 300 :of-job true}]
    :after [[:item "raw_iron" 24]]}
