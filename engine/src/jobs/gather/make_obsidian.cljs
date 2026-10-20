@@ -270,7 +270,7 @@
   (let [e (await (ctx/call c :mine 'jobs.gather.mine
                            {:block "obsidian" :item "obsidian" :count (+ (carried c "obsidian") (- (:count (:args c)) got)) :fetch (if (contains? (:what (need/opts c 'jobs.gather.make-obsidian)) :tool) mine-fetch false) :mend false :radius (:radius (:args c))
                             :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-    (ctx/update-mem! c assoc :mining (= :continue e))
+    (ctx/update-mem! c #(cond-> (assoc % :mining (= :continue e)) (not= :continue e) (dissoc :drained)))
     (cond
       (= :continue e) :continue
       (> (gained c) got) :again

@@ -196,3 +196,21 @@
           (fake/swap-self! p assoc :inWater true)
           (await (tu/child-outcome eng 'jobs.gather.make-obsidian {:count 1} 100))
           (is (false? @in-water-at-start) "the mine child waited for the flow to drain"))))))
+
+(deftest each-obsidian-waits-for-the-scooped-water-to-drain-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (lt/setup (world (assoc ground "4,63,0" "obsidian" "5,63,0" "obsidian") [pick]))
+              mined (atom 0)
+              stub {:round (fn ^:async mine-round [c]
+                             (swap! mined inc)
+                             (fake/add-item! p "obsidian" 1)
+                             (ctx/end c :done nil))}
+              pauses (atom 0)
+              noop {:round (fn ^:async noop-round [c] (swap! pauses inc) (ctx/end c :done nil))}
+              eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.gather.mine stub 'jobs.time.noop noop))]
+          (fake/swap-self! p assoc :inWater true)
+          (await (tu/child-outcome eng 'jobs.gather.make-obsidian {:count 2} 100))
+          (is (= 2 @mined))
+          (is (= 12 @pauses) "six half-second looks before each mine child, not only before the first"))))))
