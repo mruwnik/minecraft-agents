@@ -212,6 +212,12 @@
     (is (= :look (first s)))
     (is (= [[15 64 0]] (:look-at (nth s 2))))))
 
+(deftest an-unseen-cell-well-below-the-feet-is-underground-and-asks-no-look-or-dawn
+  (are [to expected] (= expected (with-redefs [sh-sense/seen-cell? (constantly false)] (kind (ready/safe-at (constantly to)) open-night)))
+    {:x 15 :y 40 :z 0} :ok
+    {:x 15 :y 63 :z 0} :look
+    {:x 15 :y 64 :z 0} :look))
+
 (def escapes
   '[respond-to-hostile block-arrow-gap unwedge breathe extinguish night dig-pocket retreat shut-in])
 

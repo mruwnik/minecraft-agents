@@ -24,6 +24,8 @@
                  :doc "Spawn chance per second (jobs.lib.cost/exposure) above which a place or the walk to it is exposed: a single dark cell is 0.005, a lit or sunlit one 0."}
    ::light-patience-s {:default 1200 :spec (a/num-in 0 nil)
                        :doc "Seconds readiness waits for light (jobs.lib.shelter.sense/light-in) before it calls the darkness unfixable; 1200 is a whole day, so a full night is waited for."}
+   ::hidden-below-depth {:default 2 :spec (a/num-in 0 nil)
+                         :doc "Blocks under the feet from which an unseen place counts as underground: no look asks for it and waiting for dawn does not light it."}
    ::unseen-judged-here-within {:default 6 :spec (a/num-in 0 nil)
                                 :doc "Blocks: an unseen place this near the feet is judged where the body stands (no look shows a cell behind a wall)."}})
 
@@ -34,6 +36,13 @@
   (apply dissoc forms (keys (:checks (ctx/frozen-call c)))))
 
 (defn place-text [{:keys [x y z]}] (str/join " " (remove nil? [x y z])))
+
+(defn hidden-below?
+  "Whether `to` is an unseen cell at least ::hidden-below-depth under the feet: terrain hides it (a pit or cliff foot seen from its rim is seen), so it is underground (Q279)."
+  [p to]
+  (and (:y to)
+       (>= (- (:y (sh-sense/feet p)) (:y to)) (settings/get settings ::hidden-below-depth))
+       (not (sh-sense/seen-cell? p to))))
 
 (defn at-status
   "The status of the exposure of the walk of c's body to `to`: ok while sheltered or the chance is within ::risk-limit,
@@ -48,6 +57,8 @@
       (and (sh-sense/dark-outside? p) (sh-inside/safe-from-night? p) (not (sh-inside/walk-leaves-shelter? p shelter to 1)))
       (contract/ok :sheltered (str "sheltered at " where))
       (<= chance (settings/get settings ::risk-limit)) (contract/ok :unexposed (str "no spawn risk at " where))
+      (and (contains? lowered-by :look) (hidden-below? p to))
+      (contract/ok :sealed (str "unseen below at " where ": underground, no look shows it and dawn does not light it; only threats count"))
       (contains? lowered-by :look) (contract/look :exposed (str "light at " where " not seen") :look-at look-at)
       (and (contains? lowered-by :light) (<= light-in patience))
       (contract/later :exposed (str "dark at " where " until light") :lowered-by lowered-by :chance chance)
