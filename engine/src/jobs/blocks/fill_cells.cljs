@@ -31,7 +31,8 @@
   With :clear-loose, loose things in the cells (rails, cobwebs, torches, fences, ladders ...) are dug first
   (jobs.blocks.dig, no fetch) and the drops picked up; a container in a cell is never dug (ends :blocked). With :shut-open, a door,
   gate or trapdoor standing open in a cell is shut with a click instead (one that stays open, an iron door, ends :blocked).
-  With :in-place the body works from where it stands, without aiming or picking up drops (a shelter: it never moves). With :purpose each placed block
+  With :in-place the body works from where it stands, without aiming or picking up drops (a shelter: it never moves). With :danger? the blocks may spend soft reserves (never hard ones), only at cells where breaking the block out later releases
+  no fluid and drops no sand or gravel column; a block so borrowed is marked :borrowed in its ledger entry. With :purpose each placed block
   goes to the scaffold ledger under it (jobs.access.cleanup takes the plug purposes back). A cell the place refused or that had
   nothing to place against goes behind the others, and is given up after ::max-refusals failed steps. A mob standing in the next
   cell is waited out a second at a time (::mob-waits) when seen, and for jobs.lib.seal/mob-wait-ticks when only a refused place names it, not counted a failed step. A cell a
@@ -56,6 +57,7 @@
    :clear-loose {:doc "dig loose things (rails, torches, cobwebs ...) out of the cells first and pick up the drops" :spec boolean? :default false}
    :shut-open {:doc "shut a door, gate or trapdoor standing open in a cell with a click (it counts as unfilled until shut)" :spec boolean? :default false}
    :in-place {:doc "work from where the body stands: place and dig without aiming at the cell, pick no drops up (a shelter does not move)" :spec boolean? :default false}
+   :danger? {:doc "the body places in danger: it may spend soft-reserved blocks (not hard ones) it can dig back out, at cells where taking the block out later is safe (jobs.lib.blocks/safe-to-break?)" :spec boolean? :default false}
    :purpose {:doc "scaffold ledger purpose of each placed block (jobs.access.cleanup); nil: not ledgered" :spec keyword? :default nil}
    :ignore-zones? :shared})
 
@@ -123,6 +125,11 @@
 
 (def safe? (ready/safe-at-by-night (ready/near-unseen-here (fn [c] (or (next-cell c (owed c)) (a/cell (first (:cells (:args c)))))))))
 
+(defn soft-ok?
+  "Whether soft-reserved blocks may go in cell pos: a call in danger, at a cell where the block can be taken out safely later."
+  [c pos]
+  (boolean (and (:danger? (:args c)) (or (nil? pos) (blocks/safe-to-break? (:primitives c) pos)))))
+
 (defn bump! [c k] (ctx/update-mem! c update k (fnil inc 0)))
 
 (defn refusal-text [pos status more]
@@ -130,23 +137,24 @@
 
 (defn note-placed!
   "Job memory: item was placed at pos (the result's :placed), and in the scaffold ledger under the call's :purpose."
-  [c pos item before]
+  [c pos item before borrowed?]
   (let [at (u/cell-vec pos)]
     (ctx/update-mem! c update :placed (fnil conj []) {:cell at :item item})
     (when-let [purpose (:purpose (:args c))]
-      (ledger/remember! c (-> (ledger/intend (ledger/open-entries (ctx/view c)) {:cell at :item item :before before :job (:id c) :purpose purpose})
+      (ledger/remember! c (-> (ledger/intend (ledger/open-entries (ctx/view c)) (cond-> {:cell at :item item :before before :job (:id c) :purpose purpose} borrowed? (assoc :borrowed true)))
                               (ledger/confirm at))))))
 
 (defn ^:async place!
   "One cell: resolves to :placed, :failed, :refused, :need, :mob (a mob stands in the cell: its names in job memory :mobs) or :partial (the place child waits on the world)."
   [c pos item]
   (let [before (u/seen-name (:primitives c) pos)
+        borrowed? (blocks/borrowed? c item)
         e (await (blocks/place-call! c pos item (cond-> (select-keys (:args c) [:ignore-zones?])
                                                   (:in-place (:args c)) (assoc :see false))))
         o (blocks/place-outcome e)]
     (case o
       :continue :partial
-      :placed (do (note-placed! c pos item before) :placed)
+      :placed (do (note-placed! c pos item before borrowed?) :placed)
       :already :placed
       :mob (do (ctx/update-mem! c assoc :mobs (get-in e [:data :mobs])) :mob)
       (:refused :need) o
@@ -191,7 +199,7 @@
    :carried "a block is carried"
    (fn [c]
      (let [names (wanted c)]
-       (when (and (seq (owed c)) (empty? (need/fetch-how c)) (nil? (blocks/pick c names)))
+       (when (and (seq (owed c)) (empty? (need/fetch-how c)) (nil? (blocks/pick c names (boolean (:danger? (:args c))))))
          {:reason :need :any-of names})))))
 
 (def can-start? need)
@@ -266,9 +274,9 @@
         kinds (kinds-of c)
         cells (mapv first kinds)
         container (first (filter #(= :container (second %)) kinds))
-        item (when (seq cells) (blocks/pick c names))
         given-up? (fn [cell] (>= (get-in (ctx/mem c) [:tries cell] 0) (settings/get settings ::max-refusals)))
         pos (next-cell c (remove given-up? cells))
+        item (when (seq cells) (blocks/pick c names (soft-ok? c pos)))
         kind-at (some (fn [[cell k]] (when (= cell pos) k)) kinds)
         loose? (and pos (= :loose kind-at))
         shut? (and pos (= :shut kind-at))]

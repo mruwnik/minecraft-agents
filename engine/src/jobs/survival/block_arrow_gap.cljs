@@ -141,7 +141,7 @@
   [c cell item]
   (let [e (waits/waiting-out c (await (ctx/call c :fill 'jobs.blocks.fill-cells
                                                 {:cells [cell] :use {:blocks [item]} :least 1 :clear-loose true :shut-open true
-                                                 :in-place true :purpose :shelter :ignore-zones? true})))]
+                                                 :in-place true :danger? true :purpose :shelter :ignore-zones? true})))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) (do (ctx/update-mem! c update :placed (fnil into #{}) (map (comp u/cell-pos :cell) (get-in e [:data :placed]))) :ok)

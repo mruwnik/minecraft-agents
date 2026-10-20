@@ -72,29 +72,50 @@
     (and (some #{block} (drops-of p block))
          (or (empty? need) (boolean (some (set need) (map :name (u/inventory p))))))))
 
+(def falling-names #{"sand" "red_sand" "gravel" "suspicious_sand" "suspicious_gravel" "anvil" "dragon_egg"})
+
+(defn falling? [n] (boolean (and n (or (falling-names n) (re-find #"_concrete_powder$" n)))))
+
+(defn safe-to-break?
+  "Whether taking a block out of cell later is safe, as far as the body has seen: no fluid beside or above it
+  (it would flow in) and no falling block directly above it (the column would drop). An unseen neighbour counts as safe."
+  [p {:keys [x y z]}]
+  (let [at (fn [dx dy dz] (u/seen-name p {:x (+ x dx) :y (+ y dy) :z (+ z dz)}))]
+    (not (or (some #(contains? bs/fluids %) [(at 0 1 0) (at 1 0 0) (at -1 0 0) (at 0 0 1) (at 0 0 -1)])
+             (falling? (at 0 1 0))))))
+
 (defn held-fillers
-  "{name count} the fillers chooser may not use in danger: the reserve register's hard units (strength 1, an :avoid),
-  and soft ones the body could not dig back out (recoverable?)."
-  [c]
+  "{name count} the fillers chooser may not use: the reserve register's hard units (strength 1, an :avoid), and with
+  soft? false the soft ones too; with soft? true the soft ones the body could not dig back out (recoverable?)."
+  [c soft?]
   (reduce (fn [m {:keys [name count strength]}]
-            (if (and (< strength 1) (recoverable? (:primitives c) name))
+            (if (and soft? (< strength 1) (recoverable? (:primitives c) name))
               m
               (update m name (fnil + 0) count)))
           {} (reserve/rows c :fillers)))
 
 (defn carried
   "The carried [{:name :count}] whose name is in blocks, less what the reserve register holds off limits to the
-  fillers chooser (held-fillers: a hard reserve, an :avoid; soft-reserved units that can be dug back out count as
-  free). Names with unreserved units come first, then ones spending soft reserves, each in the order of blocks."
-  [c blocks]
-  (let [have (into {} (map (juxt :name :count)) (u/inventory (:primitives c)))
-        held (held-fillers c)
-        all (reserve/held c :fillers)
-        rows (vec (for [b blocks :let [n (- (get have b 0) (get held b 0))] :when (pos? n)] {:name b :count n}))
-        free? #(> (- (get have (:name %) 0) (get all (:name %) 0)) 0)]
-    (vec (concat (filter free? rows) (remove free? rows)))))
+  fillers chooser (held-fillers). With soft? (default true: a body in danger), soft-reserved units that can be dug back
+  out count as free, and names with unreserved units come first, then ones spending soft reserves, each in the order of blocks."
+  ([c blocks] (carried c blocks true))
+  ([c blocks soft?]
+   (let [have (into {} (map (juxt :name :count)) (u/inventory (:primitives c)))
+         held (held-fillers c soft?)
+         all (reserve/held c :fillers)
+         rows (vec (for [b blocks :let [n (- (get have b 0) (get held b 0))] :when (pos? n)] {:name b :count n}))
+         free? #(> (- (get have (:name %) 0) (get all (:name %) 0)) 0)]
+     (vec (concat (filter free? rows) (remove free? rows))))))
 
-(defn pick [c blocks] (:name (first (carried c blocks))))
+(defn pick
+  ([c blocks] (pick c blocks true))
+  ([c blocks soft?] (:name (first (carried c blocks soft?)))))
+
+(defn borrowed?
+  "Whether placing item spends a soft-reserved unit: fewer unreserved units are carried than the reserve register leaves free."
+  [c item]
+  (let [have (into {} (map (juxt :name :count)) (u/inventory (:primitives c)))]
+    (<= (- (get have item 0) (get (reserve/held c :fillers) item 0)) 0)))
 
 (defn parse
   "{:pos {:x :y :z}} of args' :pos (a cell, fractions floored), or {:error text}."

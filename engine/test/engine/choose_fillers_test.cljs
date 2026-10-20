@@ -89,3 +89,22 @@
 
 (deftest a-plain-build-still-leaves-soft-reserves-alone
   (is (= [] (:list (choose/fillers-for (reserving [(stack "cobblestone" 4) (stack "stone_pickaxe" 1)] [(soft "cobblestone")]) :build 1)))))
+
+(deftest a-call-not-in-danger-skips-soft-reserves
+  (let [c (reserving [(stack "cobblestone" 4) (stack "stone_pickaxe" 1)] [(soft "cobblestone")])]
+    (is (= ["cobblestone"] (map :name (lb/carried c ["cobblestone"]))))
+    (is (= [] (lb/carried c ["cobblestone"] false)))
+    (is (nil? (lb/pick c ["cobblestone"] false)))
+    (is (lb/borrowed? c "cobblestone"))
+    (is (not (lb/borrowed? (reserving [(stack "cobblestone" 4)] []) "cobblestone")))))
+
+(deftest a-block-is-taken-out-safely-only-with-no-fluid-beside-or-above-and-no-falling-column-over-it
+  (are [blocks safe?] (= safe? (lb/safe-to-break? (tu/fake {:blocks blocks}) {:x 0 :y 64 :z 0}))
+    {} true
+    {"0,65,0" "stone"} true
+    {"1,64,0" "water"} false
+    {"0,64,-1" "lava"} false
+    {"0,65,0" "water"} false
+    {"0,65,0" "gravel"} false
+    {"0,65,0" "white_concrete_powder"} false
+    {"0,63,0" "water"} true))
