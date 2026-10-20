@@ -3,6 +3,7 @@
 ;; result says which (:wood). A species name (oak_planks) stays exact.
 ;; Should-succeed: planks wanted, birch_planks carried: built in birch, nothing fetched; oak_planks wanted with a birch log column nearer and an oak
 ;; column farther: the oak is felled, the birch column stands.
+;; 20 plank cells need 5 logs: two 4-log trees are felled (8 logs), the two farther trees stand.
 ;; Should-fail: oak_planks wanted, only birch_planks carried, :fetch false: waits :no-items needing oak_planks, nothing placed (a look at the unseen cells comes first).
 {:defaults
  {:tags [:build :fetch] :time :any
@@ -32,4 +33,14 @@
    :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 30 :of-job true}
             {:event {:source :job :kind :completed :data {:missing []}} :within-s 140 :of-job true}]
-   :after [[:block [14 0 14] "oak_planks"] [:block [15 0 14] "oak_planks"] [:block [19 0 16] "birch_log"] [:block [19 3 16] "birch_log"]]}]}
+   :after [[:block [14 0 14] "oak_planks"] [:block [15 0 14] "oak_planks"] [:block [19 0 16] "birch_log"] [:block [19 3 16] "birch_log"]]}
+  {:name "plank-floor-fells-only-the-trees-it-needs"
+   :blocks [[:fill [20 0 16] [20 3 16] "oak_log"] [:set [20 4 16] "oak_leaves[persistent=true]"]
+            [:fill [23 0 16] [23 3 16] "oak_log"] [:set [23 4 16] "oak_leaves[persistent=true]"]
+            [:fill [26 0 16] [26 3 16] "oak_log"] [:set [26 4 16] "oak_leaves[persistent=true]"]
+            [:fill [29 0 16] [29 3 16] "oak_log"] [:set [29 4 16] "oak_leaves[persistent=true]"]]
+   :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [6 0 10] #at [6 0 11] #at [6 0 12] #at [6 0 13] #at [7 0 10] #at [7 0 11] #at [7 0 12] #at [7 0 13] #at [8 0 10] #at [8 0 11] #at [8 0 12] #at [8 0 13] #at [9 0 10] #at [9 0 11] #at [9 0 12] #at [9 0 13] #at [10 0 10] #at [10 0 11] #at [10 0 12] #at [10 0 13]] :want "oak_planks"}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+   :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 200 :of-job true}]
+   :after [[:block [6 0 10] "oak_planks"] [:block [10 0 13] "oak_planks"] [:block [26 0 16] "oak_log"] [:block [29 0 16] "oak_log"]]
+   :limit-s 220}]}
