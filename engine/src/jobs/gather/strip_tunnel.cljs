@@ -4,13 +4,13 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.access.stair :as stair]
             [jobs.gather.mine-stay :as stay]
             [jobs.gather.mine.cause :as cause]
             [jobs.gather.mine.targets :as targets :refer [rules-in step-cell within-own-zone]]
             [jobs.gather.mine.torches :as torches]
             [jobs.gather.mine.tunnel :as tunnel :refer [passable open-start result-of walk-of back-on-line!]]
             [jobs.lib.access :as access]
+            [jobs.lib.access-tool :as atool]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.need :as need]
             [jobs.lib.look :as look :refer [cell-of headings glance!]]
@@ -105,7 +105,7 @@
   (let [data (assoc (data-of c stop at next walk) :text (str "strip-tunnel " (name stop) " after " (get-in (ctx/mem c) [:tunnel :steps]) " steps"))]
     (cond
       (#{:tunnel-length :watch} stop) (ctx/end c :done nil data)
-      (or (stair/facts stop) (#{:own-zone :no-torches} stop)) (ctx/end c :condition-failed {:reason stop} data)
+      (or (atool/facts stop) (#{:own-zone :no-torches} stop)) (ctx/end c :condition-failed {:reason stop} data)
       :else (ctx/end c :nothing-possible {:reason stop} data))))
 
 (defn step-accept [{:keys [accept wet]}]

@@ -17,3 +17,8 @@
   "The stop map of lack with a fetch that failed: :no-tool, the failed ending's reason as :because (nil: it cured nothing)."
   [lack e]
   (assoc lack :reason :no-tool :because (some-> e contract/cause-key)))
+
+(def facts
+  "The stops that name a fact barring the next cell (condition-failed); the others are attempts that failed."
+  #{:refused :zone :claim :footprint :no-zones :not-loaded :fluid-in-cut :crop :base-block :undercuts-way :unbreakable
+    :no-tool :tool-spent :no-free-slot :inventory-full :hazard :lava-exposed :plugged :floor-unseen :no-floor :cave-below :off-stair :no-way-back :y-not-beyond-feet})

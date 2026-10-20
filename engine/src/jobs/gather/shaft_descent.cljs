@@ -3,7 +3,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.access.stair :as stair]
+            [jobs.lib.access-tool :as atool]
             [jobs.lib.child :as child]
             [jobs.lib.look :refer [cell-of]]
             [jobs.lib.pace :as pace]
@@ -73,7 +73,7 @@
   (when (and shaft (not (no-pick reason)))
     (ctx/remember! c :mine-shaft-failed {:id shaft} failed-shaft-policy))
   (ctx/update-mem! c assoc :finished true)
-  (ctx/end c (if (or (no-pick reason) (stair/facts reason) (nil? shaft)) :condition-failed :nothing-possible)
+  (ctx/end c (if (or (no-pick reason) (atool/facts reason) (nil? shaft)) :condition-failed :nothing-possible)
            {:reason reason :shaft shaft :text (str "shaft-descent stopped" (some->> shaft (str " at ")) ": " (name reason))}
            {:shaft shaft :steps (or steps 0)}))
 

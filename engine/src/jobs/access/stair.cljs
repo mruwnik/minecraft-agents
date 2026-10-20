@@ -208,10 +208,7 @@
     {:uses {:job-time [(* 0.5 s) s (* 4 s)]} :done [0 n n]
      :moves-to (mapv + feet (map #(* n %) (geo/delta dir heading)))}))
 
-(def facts
-  "The stops that name a fact barring the next cell (condition-failed); the others are attempts that failed."
-  #{:refused :zone :claim :footprint :no-zones :not-loaded :fluid-in-cut :crop :base-block :undercuts-way :unbreakable
-    :no-tool :tool-spent :no-free-slot :inventory-full :hazard :lava-exposed :plugged :floor-unseen :no-floor :cave-below :off-stair :no-way-back :y-not-beyond-feet})
+(def facts atool/facts)
 
 (defn finish!
   "End the stair: a stop remembers its way, and ends by reason a kind (facts, the rest nothing possible) with the
