@@ -1,9 +1,9 @@
 ;; Cards 38a9927d, 4b0a28f4: harvest-wood :count ends :stopped :tree-unreachable (nothing-possible, with :got) when no tree is left to reach, instead of
-;; restarting the fell for ever, and the replant debts of the trees it felled are still reported (harvest-wood.replant-owed).
+;; restarting the fell for ever, and the replant debts of the trees it felled are still reported (the ending's :replant-owed).
 ;; The unreachable tree stands on a stone island (x 14..22, z 12..20) inside a lava moat 6 wide (x 8..28, z 4..28), no blocks carried.
 ;; Mangrove leaves drop no sapling, so a felled tree without a carried sapling leaves its replant owed.
 ;; Should-succeed: :count 2 with a reachable tree ends :completed with logs. Should-fail: only the island tree -> :tree-unreachable, no debt
-;; event; a felled tree plus the island one -> :tree-unreachable with the replant-owed warning.
+;; owed; a felled tree plus the island one -> :tree-unreachable with :replant-owed.
 {:defaults
  {:tags [:forestry :harvest-wood :count]
   :plot {:height 10 :floor "grass_block"}
@@ -23,7 +23,6 @@
    :body {:inventory [["iron_axe" 1]]}
    :act [[:job (jobs.forestry.harvest-wood {:radius 32 :count 4})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :tree-unreachable}} :within-s 100 :of-job true}
-            {:no-event {:source :job :kind :harvest-wood.replant-owed} :for-s 100 :until {:source :job :kind :stopped :data {:kind :nothing-possible :reason :tree-unreachable}}}
             {:no-event {:source :job :kind :harvest-wood.debts-owed} :for-s 100 :until {:source :job :kind :stopped :data {:kind :nothing-possible :reason :tree-unreachable}}}]
    :after [[:block [18 0 16] "oak_log"] [:body-far [18.5 0 16.5] 6]]}
   {:name "felled-tree-then-island-only-ends-tree-unreachable-with-replant-owed"
@@ -32,6 +31,5 @@
             [:fill [3 0 8] [3 3 8] "oak_log"] [:fill [1 3 6] [5 4 10] "mangrove_leaves[persistent=true]"] [:set [3 3 8] "oak_log"]]
    :body {:inventory [["iron_axe" 1]]}
    :act [[:job (jobs.forestry.harvest-wood {:radius 32 :count 8})]]
-   :expect [{:event {:source :job :kind :harvest-wood.replant-owed :data {:reason :no-sapling}} :within-s 110 :of-job true}
-            {:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :tree-unreachable :got [:>= 3]}} :within-s 110 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :tree-unreachable :got [:>= 3] :replant-owed 1}} :within-s 110 :of-job true}]
    :after [[:not-block [3 0 8] "oak_log"] [:block [18 0 16] "oak_log"] [:item "oak_log" [:>= 3]]]}]}

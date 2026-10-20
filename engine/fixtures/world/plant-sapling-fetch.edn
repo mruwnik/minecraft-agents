@@ -86,7 +86,6 @@
    :body {:inventory [["iron_axe" 1]]}
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"]
          [:job (jobs.forestry.harvest-wood {:radius 16 :fetch false})]]
-   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
-            {:event {:source :job :kind :harvest-wood.replant-owed :data {:reason :no-sapling}} :within-s 80 :of-job true}
-            {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 80 :until {:source :job :kind :harvest-wood.replant-owed}}]
+   :expect [{:event {:source :job :kind :completed :data {:replant-owed 1}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 80 :until {:source :job :kind :completed}}]
    :after [[:not-block [22 0 16] "oak_sapling"]]}]}

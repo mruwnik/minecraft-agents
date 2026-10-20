@@ -10,37 +10,25 @@
             [jobs.lib.area :as area]
             [jobs.lib.checks :as checks]
             [jobs.lib.need :as need]
-            [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]
-            [jobs.lib.trees :as trees :refer [default-radius drop-filter debts near-debt? sapling-for]]))
+            [jobs.lib.trees :as trees :refer [default-radius drop-filter debts near-debt?]]))
 
 (def doc
-  "Fell a tree, collect what dropped and replant. Runs three child jobs in turn, each called once and run to its end:
-  :fell (jobs.forestry.fell-tree), :collect (collect-drops) and :plant (plant-sapling).
-  :collect works around the felled tree's base (when fewer logs came in than were felled and no drop is in sight, it walks round the base to look: trunks and terrain hide drops), wherever a reflex has since taken the body. Only replant debts within :radius of where the body stood when :plant began are
-  planted; the others (and any when no sapling is carried or the spot is not clear) stay owed, and the job
-  warns harvest-wood.debts-owed with their :count and the :nearest one's :pos.
+  "Fell a tree, collect what dropped and replant. Three child jobs in turn, each called once and run to its end:
+  :fell (jobs.forestry.fell-tree), :collect (collect-drops, round the felled tree's base) and :plant (plant-sapling).
   :center (default: where the body stands at the first round) with :radius is the area: a call waits (:outside-area, jobs.lib.area) while the body stands farther than :radius from the centre; the caller walks there first.
+  Only replant debts within :radius of where the body stood when :plant began are planted; the others stay owed and the job warns harvest-wood.debts-owed with their :count and the :nearest one's :pos.
   Before the first tree it deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!).
-  Debts within the radius that stay unplanted (no sapling carried, spot refused) warn harvest-wood.replant-owed
-  with :count, :pos, :reason (:no-sapling or :not-planted) and :text. Ends :done (the wood is the goal), with {:replant-owed n} when
-  debts stay owed. With :count, the three phases repeat on the next tree until that many logs are carried; done? holds
-  at once when they are carried already (the job ends :done :already).
-  No tree in range before the first is felled is a condition (:no-tree, after the condition's look round): a listed job waits, a called one ends condition-failed :no-tree. Endings otherwise are the felling's, passed up with :got (the logs carried) and :replant-owed in the data: condition-failed
-  :no-tree when no tree is left after the first (with :count); a fell that ends for want of an axe or pillar blocks (:need, :tool, :free-slots)
-  or hunger, a limit, or nothing-possible :tree-unreachable / :tree-blocked (data :why, :columns); nothing-possible
-  :none-collected when a felling brings in no item at all (the inventory count of the filter's items, before the felling against
-  after the collecting). A felling at night in a shelter yields :continue. With no axe carried, fell-tree fetches one for a big tree (:fetch).
-  A missing sapling is fetched by plant-sapling (a seen chest, or breaking the seen leaves of its tree); when none can be got it stays owed.
-  Quote: the felling's, per tree.")
+  With :count, the three phases repeat on the next tree until that many logs are carried; done? holds at once when they are carried already (:done :already).
+  Needs: a tree in range (a start wait :no-tree until one shows); an axe and a sapling are fetched (:fetch).
+  Ends :done (the wood is the goal) with {:replant-owed n} when near debts stay unplanted. Any other ending is the felling's, passed up with :got (the logs carried) and :replant-owed in the data: condition-failed :no-tree when no tree is left, a need, a limit, nothing-possible :tree-unreachable / :tree-blocked (data :why, :columns). Nothing-possible :none-collected when a felling brings in no item at all.")
 
 (a/defargs args
   {:species {:doc "log species; any when nil" :spec a/name? :default nil}
    :radius {:doc "search radius in blocks" :spec (a/num-in 0 nil) :default default-radius}
    :center {:doc "the centre of the area the job works, a cell [x y z] or {:x :y :z}; nil: where the body stands when the job first runs (jobs.lib.area)" :spec a/position? :default nil}
-   :filter {:doc "items to collect; the species' log, sapling, stick and apple when nil" :spec (a/coll-of a/item?) :default nil}
    :ignore-zones? :shared
    :avoid {:doc "columns [x z] of trees to leave alone (passed to fell-tree)" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
    :count {:doc "logs to carry: another tree is felled while fewer of the species' logs (any log when no species) are carried; nil: one tree" :spec (a/int-in 1 nil) :default nil}
@@ -50,15 +38,19 @@
   {::job-time-s {:default 1800 :doc "Seconds a harvest may take: every tree's felling, collecting and planting." :spec (a/num-in 0 nil)}
    ::max-steps {:default 400 :doc "Child calls of one round before it gives the body back with :continue." :spec (a/int-in 1 nil)}})
 
+(defn fell-args [{:keys [species radius ignore-zones? fetch avoid]}]
+  (cond-> {:species species :radius radius :ignore-zones? ignore-zones?}
+    (some? fetch) (assoc :fetch fetch)
+    (seq avoid) (assoc :avoid avoid)))
+
 (defn phases
   "The children in order: [phase job args]; the phase is also the slot. tree is the felled tree's base, if any."
-  [{:keys [species radius filter ignore-zones? fetch avoid]} origin tree]
-  [[:fell 'jobs.forestry.fell-tree (cond-> {:species species :radius radius :ignore-zones? ignore-zones?}
-                                     (some? fetch) (assoc :fetch fetch)
-                                     (seq avoid) (assoc :avoid avoid))]
-   [:collect 'jobs.items.collect-drops {:radius radius :items (or filter (drop-filter species)) :least-items (if species [(str species "_log")] trees/log-names) :near tree :search radius}]
-   [:plant 'jobs.forestry.plant-sapling (cond-> {:species species :ignore-zones? ignore-zones? :near origin :within radius}
-                                         (some? fetch) (assoc :fetch fetch))]])
+  [args origin tree]
+  (let [{:keys [species radius ignore-zones? fetch]} args]
+    [[:fell 'jobs.forestry.fell-tree (fell-args args)]
+     [:collect 'jobs.items.collect-drops {:radius radius :items (drop-filter species) :least-items (if species [(str species "_log")] trees/log-names) :near tree :search radius}]
+     [:plant 'jobs.forestry.plant-sapling (cond-> {:species species :ignore-zones? ignore-zones? :near origin :within radius}
+                                            (some? fetch) (assoc :fetch fetch))]]))
 
 (defn current-phase
   "The [phase job args] the job is in, from its memory."
@@ -78,28 +70,18 @@
                       {:count (count owed)
                        :nearest (:pos (apply min-key #(u/dist here (:pos %)) owed))}))))
 
-(defn warn-replant-owed!
-  "Debts of the species within the radius still owed when the job ends: warn once; the count n, nil when none."
+(defn replant-owed
+  "How many debts of the species within the radius are still owed; nil when none."
   [c]
   (let [{:keys [species radius]} (:args c)
         here (:origin (ctx/mem c))
-        owed (filterv #(and (or (nil? species) (= species (:species %))) (near-debt? here radius %)) (debts c))]
-    (when (seq owed)
-      (let [n (count owed)
-            reason (if (some #(sapling-for (u/inventory (:primitives c)) (:species %)) owed) :not-planted :no-sapling)]
-        (ctx/warn-once! c :replant-owed :harvest-wood.replant-owed
-                        {:count n
-                         :pos (:pos (apply min-key #(u/dist here (:pos %)) owed))
-                         :reason reason
-                         :text (str "felled " n (if (= 1 n) " tree" " trees") ", could not replant: "
-                                    (if (= :no-sapling reason) "no sapling" "spot not plantable"))})
-        n))))
+        n (count (filter #(and (or (nil? species) (= species (:species %))) (near-debt? here radius %)) (debts c)))]
+    (when (pos? n) n)))
 
 (defn carried-count
   "How many of the collected items the body carries: the filter's items, any item when there is no filter."
   [c]
-  (let [{:keys [species] only :filter} (:args c)
-        names (some-> (or only (drop-filter species)) set)]
+  (let [names (some-> (drop-filter (:species (:args c))) set)]
     (->> (u/inventory (:primitives c))
          (filter #(or (nil? names) (names (:name %))))
          (map :count)
@@ -117,13 +99,7 @@
   (let [n (:count (:args c))]
     (and n (< (logs-carried c) n))))
 
-(defn fell-args [{:keys [species radius ignore-zones? fetch avoid]}]
-  (cond-> {:species species :radius radius :ignore-zones? ignore-zones?}
-    (some? fetch) (assoc :fetch fetch)
-    (seq avoid) (assoc :avoid avoid)))
-
-
-(defn owed-data [c] (when-let [n (warn-replant-owed! c)] {:replant-owed n}))
+(defn owed-data [c] (when-let [n (replant-owed c)] {:replant-owed n}))
 
 (defn end-with
   "The felling's ending e as this job's: its kind and cause, the logs carried and the replant owed in the data."
@@ -135,20 +111,14 @@
                   (owed-data c))))
 
 (defn fell-ended!
-  "What the :fell child's ending e means: a tree felled goes on to collect, none in sight before the first tree waits
-  (:continue), any other ending ends the job."
+  "What the :fell child's ending e means: a tree felled goes on to collect, any other ending ends the job."
   [c e]
-  (let [why (contract/cause-key e)]
-    (cond
-      (= :done (:kind e))
-      (do (some->> (:base (:data e)) (ctx/update-mem! c assoc :tree))
-          (ctx/update-mem! c assoc :want (max 0 (- (:logs (:data e) 1) (- (logs-carried c) (:logs-before (ctx/mem c) 0)))))
-          (ctx/update-mem! c assoc :phase :collect)
-          :again)
-      (and (= :no-tree why) (not (pos? (:felled (ctx/mem c) 0))))
-      (do (ctx/update-mem! c assoc :looked (look/cell-of (u/self-pos c)))
-          :continue)
-      :else (end-with c e))))
+  (if (not= :done (:kind e))
+    (end-with c e)
+    (do (some->> (:base (:data e)) (ctx/update-mem! c assoc :tree))
+        (ctx/update-mem! c assoc :want (max 0 (- (:logs (:data e) 1) (- (logs-carried c) (:logs-before (ctx/mem c) 0)))))
+        (ctx/update-mem! c assoc :phase :collect)
+        :again)))
 
 (defn ^:async step
   "Calls the current phase's child once; when the child is done the phase advances (:again). A child that waits on the
