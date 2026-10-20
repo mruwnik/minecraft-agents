@@ -122,7 +122,7 @@
 (def exclusive-run! schedule/exclusive-run!)
 (def holder schedule/holder)
 (def tick! schedule/tick!)
-(def waiting schedule/waiting)
+(def waiting base/waiting)
 (def held-trigger schedule/held-trigger)
 (def drop-leftover-reflex-jobs! restart/drop-leftover-reflex-jobs!)
 (def drop-leftover-slot-jobs! restart/drop-leftover-slot-jobs!)

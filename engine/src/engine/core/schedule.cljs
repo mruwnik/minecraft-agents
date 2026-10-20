@@ -2,7 +2,7 @@
   "The scheduling pass: readiness of listed jobs (checks, job.waiting, the next one to run), who holds
   the body, cuts, firing reflexes and holding them off during a section (ctx/atomic), tick! and do-now!."
   (:require [engine.args :as a]
-            [engine.core.base :refer [add-instance dead? drop-reflex-job! emit! flush-save-stats! free-owner! hold-trigger! job-fields job-of exclusive-job memory-flush-due? new-id! now paused? reflex-text running save-memory! state ttl-now wait-reason waiting-text]]
+            [engine.core.base :refer [add-instance dead? drop-reflex-job! emit! flush-save-stats! free-owner! hold-trigger! job-fields job-of exclusive-job memory-flush-due? new-id! now paused? reflex-text running save-memory! state ttl-now wait-reason waiting waiting-text]]
             [engine.core.attention :refer [request-attention!]]
             [engine.core.fruitless :refer [reset-backoff!]]
             [engine.core.register :refer [effective-register evaluate-register! expire-changes! levels preempts?]]
@@ -38,11 +38,6 @@
           (swap! (:waiting eng) #(assoc (select-keys % (:list (state eng))) id r))
           (emit! eng (merge (job-fields eng id)
                             {:source :job :kind :waiting :level :info :data r :text (waiting-text r)})))))))
-
-(defn waiting
-  "Why listed job id waits: the reason map of its last declining check, or nil while its check passes."
-  [eng id]
-  (some-> (:waiting eng) deref (get id)))
 
 (defn held-trigger
   "Why trigger id is held: the reason map of the start check of its job that declined, or nil."

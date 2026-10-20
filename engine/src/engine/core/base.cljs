@@ -74,6 +74,13 @@
 
 (defn running [eng] @(:running eng))
 
+(defn waiting
+  "Why listed job id waits: its last declining check's reason map, or nil. A wait taken from a child belongs to the
+  round that ended with it, so it is not told while the job's next round runs."
+  [eng id]
+  (let [w (get @(:waiting eng) id)]
+    (when-not (and (:child (meta w)) (= id (:id (running eng)))) w)))
+
 (defn now [eng] ((:now eng)))
 
 (def suspend-gap-ms

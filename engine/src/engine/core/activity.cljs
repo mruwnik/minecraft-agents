@@ -3,7 +3,7 @@
   job.idle, body.idle, and the away record of a body a job logged out."
   (:require [clojure.string :as str]
             [engine.args :as a]
-            [engine.core.base :refer [emit! job-fields now running state waiting-text]]
+            [engine.core.base :refer [emit! job-fields now running state waiting waiting-text]]
             [engine.core.register :refer [levels]]
             [engine.expr :as expr]
             [engine.memory :as mem]
@@ -134,7 +134,7 @@
 (defn idle-job
   "What listed or reflex job id does while the body idles: {:job :name} and :waiting, :holding, :failed or :idle-ok."
   [eng id]
-  (let [waiting (get @(:waiting eng) id)
+  (let [waiting (waiting eng id)
         hold (holding eng id)
         failed (get-in (state eng) [:failed id])]
     (cond-> {:job id :name (some-> (get-in (state eng) [:instances id :spec]) expr/label)}

@@ -119,3 +119,12 @@
               ready (await (waiting-after '(jobs.animals.lead-to {:mob "cow" :pos {:x 3 :y 64 :z 0}}) {:inventory lead-item}))]
           (is (nil? (:waiting no-lead)) "no lead carried: the job runs and fetches one")
           (is (nil? (:waiting ready)) "mob, destination and lead given: it runs"))))))
+
+(deftest a-wait-taken-from-a-child-is-not-told-while-the-job-runs-its-next-round
+  (let [wait (fn [child?] (cond-> {:reason :exposed :text "dark"} child? (with-meta {:child true})))
+        eng (fn [w running] {:waiting (atom {"j3" w}) :running (atom running)})]
+    (are [w running told?] (= told? (some? (core/waiting (eng w running) "j3")))
+      (wait true) {:id "j3"} false
+      (wait true) {:id "j9"} true
+      (wait true) nil true
+      (wait false) {:id "j3"} true)))
