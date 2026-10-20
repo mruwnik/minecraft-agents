@@ -870,7 +870,8 @@
 
 (def refusing-place
   "A jobs.blocks.place that always refuses, naming the footprint of another plan."
-  {:round (fn ^:async refuse [c] (ctx/end c :nothing-possible {:reason :footprint :text "the cell is inside another plan's footprint"}))})
+  {:ways (:ways (get registry/jobs 'jobs.blocks.place))
+   :round (fn ^:async refuse [c] (ctx/end c :nothing-possible {:reason :footprint :text "the cell is inside another plan's footprint"}))})
 
 (deftest a-carried-furnace-that-cannot-be-put-down-names-the-refusal
   (async done
