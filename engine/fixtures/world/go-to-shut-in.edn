@@ -70,4 +70,12 @@
    :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 0})]]
    ;; the floor under the goal is unseen from outside and reads as rock, so one stone of the ground may be dug to look; the room stays whole
    :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false}} :within-s 120 :of-job true}]
-   :after [[:block [22 1 16] "bedrock"] [:block [26 1 16] "bedrock"] [:block [24 -1 16] "bedrock"] [:block [24 2 16] "bedrock"]]}]}
+   :after [[:block [22 1 16] "bedrock"] [:block [26 1 16] "bedrock"] [:block [24 -1 16] "bedrock"] [:block [24 2 16] "bedrock"]]}
+  {:name "goal-in-a-closed-bedrock-room-free-bare-handed-body-gives-up"
+   ;; a free body would fetch a pickaxe for the guessed ground; none can be had here, so it gives up before digging by hand
+   :blocks [[:fill [22 -2 14] [26 3 18] "bedrock" :hollow]]
+   :plot {:height 14 :length 64}
+   :body {:at [4.5 0 16.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 0})]]
+   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false}} :within-s 120 :of-job true}]
+   :after [[:block [22 1 16] "bedrock"]]}]}
