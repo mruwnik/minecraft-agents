@@ -355,3 +355,91 @@ test('check of a mineshaft counts its steps dug, undug and unseen from what the 
     assert.deepEqual(checked.value.shaft, { steps: 2, dug: 1, undug: 1, unseen: 0, heading: keyword('east'), depth: 2 })
   } finally { fx.close() }
 })
+
+// Flat ground (stone to y 63, air 64..70) over x 0..40, z 0..10, with the given [x0 x1 top] hills and [x0 x1 floor] chasms.
+function groundCells ({ hills = [], chasms = [] } = {}) {
+  const cells = []
+  for (let x = 0; x <= 40; x++) {
+    for (let z = 0; z <= 10; z++) {
+      const hill = hills.find(([a, b]) => x >= a && x <= b)
+      const chasm = chasms.find(([a, b]) => x >= a && x <= b)
+      const top = hill ? hill[2] : chasm ? chasm[2] : 63
+      for (let y = 58; y <= 70; y++) cells.push([x, y, z, y <= top ? 'stone' : 'air'])
+    }
+  }
+  return cells
+}
+
+const ROUTE = ['route', 'line', '--body', 'Probe', '--by', 'Router', '--from=2,64,5', '--to=38,64,5']
+
+test('route writes the rail plan between two cells over the seen ground, with materials and the next step', async () => {
+  const fx = fixture()
+  try {
+    await writeSeen(fx, 'Probe', groundCells(), Date.now() - 1000)
+    const made = await invoke('plan', fx, ROUTE)
+    assert.equal(made.code, 0, made.output)
+    assert.ok(made.value.route.materials.items['powered_rail'] > 0)
+    assert.match(made.value.route.next, /rail-line/)
+    const shown = await invoke('plan', fx, ['show', 'line'])
+    assert.deepEqual(shown.value.validation.items, [])
+    const text = fs.readFileSync(path.join(fx.state, 'worlds', 'fixture', 'plans', 'line.edn'), 'utf8')
+    assert.match(text, /"rail"/)
+    assert.doesNotMatch(text, /:spans/)
+  } finally { fx.close() }
+})
+
+test('route needs --tunnel to cut through a hill and --bridge to span a chasm, and writes them as the plan\'s :spans', async () => {
+  const fx = fixture()
+  try {
+    await writeSeen(fx, 'Probe', groundCells({ hills: [[18, 26, 66]], chasms: [] }), Date.now() - 1000)
+    const closed = await invoke('plan', fx, ROUTE)
+    assert.equal(closed.code, 2)
+    assert.deepEqual(closed.value.reason, keyword('no-route'))
+    assert.match(closed.value.message, /--tunnel/)
+    const tunnelled = await invoke('plan', fx, [...ROUTE, '--tunnel', '12'])
+    assert.equal(tunnelled.code, 0, tunnelled.output)
+    assert.deepEqual(tunnelled.value.route.spans.map(s => s.kind), [keyword('tunnel')])
+    assert.match(fs.readFileSync(path.join(fx.state, 'worlds', 'fixture', 'plans', 'line.edn'), 'utf8'), /:spans \[\{:kind :tunnel/)
+  } finally { fx.close() }
+})
+
+test('route bridges a seen drop of 2 or more with --bridge', async () => {
+  const fx = fixture()
+  try {
+    await writeSeen(fx, 'Probe', groundCells({ chasms: [[18, 24, 60]] }), Date.now() - 1000)
+    assert.deepEqual((await invoke('plan', fx, ROUTE)).value.reason, keyword('no-route'))
+    const bridged = await invoke('plan', fx, [...ROUTE, '--bridge', '10'])
+    assert.equal(bridged.code, 0, bridged.output)
+    assert.deepEqual(bridged.value.route.spans.map(s => s.kind), [keyword('bridge')])
+  } finally { fx.close() }
+})
+
+test('route treats another owner\'s zone as no ground unless it allows :place; the maker\'s own zone is fine', async () => {
+  const fx = fixture()
+  try {
+    await writeSeen(fx, 'Probe', groundCells(), Date.now() - 1000)
+    const zones = path.join(fx.state, 'worlds', 'fixture', 'zones.edn')
+    const wall = owner => `[{:name "wall" :owner "${owner}" :min [10 60 0] :max [14 70 10]}]\n`
+    fs.writeFileSync(zones, wall('Other'))
+    assert.deepEqual((await invoke('plan', fx, ROUTE)).value.reason, keyword('no-route'))
+    fs.writeFileSync(zones, wall('Router'))
+    assert.equal((await invoke('plan', fx, ROUTE)).code, 0)
+  } finally { fx.close() }
+})
+
+test('route refuses bad cells, a missing body or by, and an unseen world; --dry-run writes nothing', async () => {
+  const fx = fixture()
+  try {
+    const bad = args => invoke('plan', fx, ['route', 'line', '--body', 'Probe', '--by', 'Router', ...args])
+    assert.deepEqual((await bad(['--from=1,2', '--to=5,64,5'])).value.reason, keyword('bad-from'))
+    assert.deepEqual((await bad(['--from=1,64,5', '--to=1,64,5'])).value.reason, keyword('bad-to'))
+    assert.deepEqual((await bad(['--from=1,64,5', '--to=9,64,5', '--tunnel', '99'])).value.reason, keyword('bad-span'))
+    assert.deepEqual((await invoke('plan', fx, ['route', 'line', '--by', 'Router', '--from=1,64,5', '--to=9,64,5'])).value.reason, keyword('body-required'))
+    assert.deepEqual((await invoke('plan', fx, ['route', 'line', '--body', 'Probe', '--from=1,64,5', '--to=9,64,5'])).value.reason, keyword('actor-required'))
+    assert.deepEqual((await bad(['--from=2,64,5', '--to=38,64,5'])).value.reason, keyword('no-route'))
+    await writeSeen(fx, 'Probe', groundCells(), Date.now() - 1000)
+    const dry = await invoke('plan', fx, [...ROUTE, '--dry-run'])
+    assert.equal(dry.code, 0, dry.output)
+    assert.ok(!fs.existsSync(path.join(fx.state, 'worlds', 'fixture', 'plans', 'line.edn')))
+  } finally { fx.close() }
+})

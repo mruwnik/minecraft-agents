@@ -18,6 +18,8 @@
 (deftest plans-check-gets-the-workspace-body
   (is (= ["--world" "w" "--worlds" "/x" "--repo" "/r" "--body" "Probe" "check" "p1"]
          (workspace/route ctx "plans" ["check" "p1"])))
+  (is (= ["--world" "w" "--worlds" "/x" "--repo" "/r" "--body" "Probe" "route" "p1"]
+         (workspace/route ctx "plans" ["route" "p1"])))
   (is (= ["--world" "w" "--worlds" "/x" "--repo" "/r" "list"]
          (workspace/route ctx "plans" ["list"]))))
 

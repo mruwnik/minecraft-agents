@@ -43,8 +43,8 @@
                  (= "time" command) (into ["--body" (:body ctx)])
                  true (into ["--world" (:world ctx) "--worlds" (:worlds ctx)])
                  (#{"plans" "blueprints"} command) (into ["--repo" (:repo ctx)])
-                 ;; plans check judges one body's seen memory: always the agent's own
-                 (and (= "plans" command) (= "check" (first argv))) (into ["--body" (:body ctx)])
+                 ;; plans check and route judge one body's seen memory: always the agent's own
+                 (and (= "plans" command) (#{"check" "route"} (first argv))) (into ["--body" (:body ctx)])
                  (#{"map" "world-changes"} command) (into ["--repo-root" (:repo ctx)])
                  ;; one change cursor per body: the default observer name is shared by every agent
                  (and (= "world-changes" command)
