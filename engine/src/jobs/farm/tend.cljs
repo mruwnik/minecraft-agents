@@ -24,7 +24,7 @@
   farmland and the layer above holds the crops, so max y is at least min y + 1.
   One run is one pass over seven steps in this order. Each step is a child job that runs when its conditions hold:
   - :harvest (jobs.farm.harvest, replanting): a ripe crop lies in the box.
-  - :irrigate (jobs.farm.irrigate over the ground layer): :irrigate is true (box mode only) and a ground cell is seen
+  - :irrigate (jobs.farm.irrigate over the ground layer, in plan mode over the bounding box of the plan's lowest ground layer, :for-plan): :irrigate is true and a ground cell is seen
     dry (no water seen in reach, the whole reach seen). The child fetches a water bucket when none is carried; a failed
     call is booked as its summary {:poured n} and the run goes on.
   - :till (jobs.farm.till): :till is true, a hoe is carried, dirt or grass lies uncovered in the ground layer and
@@ -59,7 +59,7 @@
   touched. A dirt lane inside the box counts as a bed unless :till is false. A ripe crop that cannot be reached
   keeps the check passing on every run (harvest gives up on it and the run still ends).
   :plan (optionally :part; with neither :part nor :parts every crop part of the plan is worked) makes the plan's crop cells the field instead of :box. Only crops harvest knows
-  (wheat, carrots, potatoes, beetroots) count. The plan's other cells are never touched. The same steps (but :irrigate) run
+  (wheat, carrots, potatoes, beetroots) count. The plan's other cells are never touched. The same steps run
   per cell, with the crop the plan names there:
   - harvest never digs a wrong crop. A ripe crop of another kind in a crop cell stays standing and is listed in
     :field :wrong {:pos :found :want} (warn farm-tend.wrong).
@@ -83,7 +83,7 @@
    :part {:doc "with :plan, only the cells of this part; omit :part (and :parts) to work every crop part of the plan" :spec a/name? :default nil}
    :parts {:doc "with :plan, the parts worked in one job, one pass each in this order (instead of :part)" :spec (a/coll-of a/name?) :default nil}
    :till {:doc "hoe untilled dirt and grass in the ground layer when seed and a hoe are carried" :spec boolean? :default true}
-   :irrigate {:doc "wet dry farmland with water (jobs.farm.irrigate, a water bucket fetched when none is carried); box mode only" :spec boolean? :default true}
+   :irrigate {:doc "wet dry farmland with water (jobs.farm.irrigate, a water bucket fetched when none is carried)" :spec boolean? :default true}
    :fertilize {:doc "use bone meal on unripe crops" :spec boolean? :default false}
    :composter {:doc "composter position {:x :y :z} for seed above the reserve; nil: do not compost" :spec ::a/pos :default nil}
    :chest {:doc "chest position {:x :y :z} for the farm goods; nil: do not store" :spec ::a/pos :default nil}

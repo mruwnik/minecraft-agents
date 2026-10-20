@@ -23,12 +23,12 @@
                     {:center mid :radius radius :replant true})}}))
 
 (defn decide-irrigate
-  [{:keys [irrigate box]} {:keys [dry]}]
+  [{:keys [irrigate plan]} {:keys [dry ground-box]}]
   (cond
     (not irrigate) {:skip :irrigate-off}
     (not (pos? (or dry 0))) {:skip :not-dry}
     :else {:call {:slot :irrigate :job (jobs :irrigate)
-                  :args {:from (:min box) :to (assoc (:max box) :y (:y (:min box)))}}}))
+                  :args (cond-> {:from (:min ground-box) :to (:max ground-box)} plan (assoc :for-plan plan))}}))
 
 (defn decide-till
   [{:keys [till plan]} {:keys [hoe untilled bare seeds till-short till-held]}]

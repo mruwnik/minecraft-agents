@@ -2,6 +2,7 @@
 ;; farmland cells at [12..20 -1 16], crops at y 0, one water bucket and seed carried.
 ;; Should-succeed: the middle cell [16 -1 16] becomes water and the other eight are sown (tend completes, irrigate poured 1).
 ;; Should-fail: with :irrigate false the row stays dry and all nine are sown, no water is placed.
+;; Plan mode: the same row as a plan's crop cells; the dry farmland under it is wetted the same way.
 {:defaults
  {:tags [:farm :irrigate :jobs]
   :time :any
@@ -17,4 +18,14 @@
   {:name "irrigate-off-leaves-the-row-dry"
    :act [[:job (jobs.farm.tend {:box {:min #xyz [12 -1 16] :max #xyz [20 0 16]} :irrigate false})]]
    :expect [{:event {:source :job :kind :completed :data {:steps {:irrigate {:skipped :irrigate-off} :plant {:planted 9}}}} :within-s 100 :of-job true}]
+   :after [[:block [16 -1 16] "farmland[moisture=0]"] [:item "water_bucket" 1]]}
+  {:name "plan-dry-row-is-wetted-then-sown"
+   :plans [{:id "field" :metadata {:by "$body"} :parts [{:id "row" :box [#at [12 0 16] #at [20 0 16]] :want {:crop "wheat"}}]}]
+   :act [[:job (jobs.farm.tend {:plan "$plan:field"})]]
+   :expect [{:event {:source :job :kind :completed :data {:steps {:irrigate {:poured 1} :plant {:planted 8}}}} :within-s 100 :of-job true}]
+   :after [[:block [16 -1 16] "water"] [:block [12 0 16] "wheat[age=0]"] [:item "water_bucket" 0]]}
+  {:name "plan-irrigate-off-leaves-the-row-dry"
+   :plans [{:id "field" :metadata {:by "$body"} :parts [{:id "row" :box [#at [12 0 16] #at [20 0 16]] :want {:crop "wheat"}}]}]
+   :act [[:job (jobs.farm.tend {:plan "$plan:field" :irrigate false})]]
+   :expect [{:event {:source :job :kind :completed :data {:steps {:irrigate {:skipped :irrigate-off}}}} :within-s 100 :of-job true}]
    :after [[:block [16 -1 16] "farmland[moisture=0]"] [:item "water_bucket" 1]]}]}

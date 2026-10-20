@@ -544,3 +544,14 @@
                             {"mix" (plan-of)} 80))]
           (is (= {:tilled 1} (step s :till)) "only the cell within 4 blocks of the water")
           (is (= ["farmland" "dirt"] (mapv #(block-at s % 63 3) [3 2]))))))))
+
+(deftest dry-planned-farmland-is-wetted-with-the-bucket-before-it-is-sown
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [under {:blocks (into {} (map (fn [[x z]] [(k x 62 z) "dirt"])) (concat wheat-cells carrot-cells))}
+              s (await (run {:plan "mix"}
+                            (world-of farmland-all under {:inventory [(item "water_bucket" 1) (item "wheat_seeds" 6) (item "carrot" 6) (item "bread" 12)]})
+                            {"mix" (plan-of)} 120))]
+          (is (= {:poured 1} (step s :irrigate)))
+          (is (= 1 (count (filter #(= "water" (block-at s (first %) 63 (second %))) (concat wheat-cells carrot-cells))))))))))

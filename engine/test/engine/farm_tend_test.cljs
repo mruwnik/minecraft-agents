@@ -108,7 +108,12 @@
 
 (deftest the-irrigate-call-covers-the-ground-layer-of-the-box
   (is (= {:from (:min box) :to {:x 4 :y 63 :z 4}}
-         (:args (:call (decide/decide :irrigate {:irrigate true :box box} {:dry 2}))))))
+         (:args (:call (decide/decide :irrigate {:irrigate true :box box} {:dry 2 :ground-box {:min (:min box) :max {:x 4 :y 63 :z 4}}}))))))
+
+(deftest the-irrigate-call-of-a-plan-names-the-plan
+  (let [gb {:min {:x 2 :y 63 :z 2} :max {:x 3 :y 63 :z 3}}]
+    (is (= {:from (:min gb) :to (:max gb) :for-plan "mix"}
+           (:args (:call (decide/decide :irrigate {:irrigate true :plan "mix"} {:dry 2 :ground-box gb})))))))
 
 (deftest a-dry-field-is-wetted-before-it-is-planted
   (async done

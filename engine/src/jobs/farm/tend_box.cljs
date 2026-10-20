@@ -81,10 +81,15 @@
   (let [in (access/rules-input c)]
     (filterv #(not (gate/refused? (access/may? in action %))) poss)))
 
+(defn ground-box
+  "The box's ground layer as the box irrigate and its need work over."
+  [{lo :min hi :max}]
+  {:min lo :max (assoc hi :y (:y lo))})
+
 (defn irrigate-need
-  "How many ground cells of the box are seen dry, 0 when no spot would wet any (irrigate would end :no-spot)."
+  "How many ground cells of the box (a ground-box) are seen dry, 0 when no spot would wet any (irrigate would end :no-spot)."
   [c {lo :min hi :max}]
-  (let [view (assoc c :args {:from lo :to (assoc hi :y (:y lo))})
+  (let [view (assoc c :args {:from lo :to hi :for-plan (:plan (:args c))})
         dry (irrigate/dry-cells view)]
     (if (irrigate/spot view dry) (count dry) 0)))
 
@@ -99,7 +104,7 @@
         me (u/self-pos c)
         tried (:till-tried (ctx/mem c) #{})
         ground (ground-layer p box)
-        dry (if (:irrigate (:args c)) (irrigate-need c box) 0)
+        dry (if (:irrigate (:args c)) (irrigate-need c (ground-box box)) 0)
         raw-untilled (->> ground (filter stock/untilled?) (map :pos) (remove tried))
         bare (count (box-permitted c :sow (farm/bare-cells p box [])))
         keep-of (stock/keeps (reserve (beds ground) inventory) inventory keep)]
@@ -107,6 +112,7 @@
      :radius R
      :ripe (count (box-permitted c :harvest (filter #(in-box? box %) (fld/ripe-crops p {:radius R :crops nil} mid []))))
      :dry dry
+     :ground-box (ground-box box)
      :hoe (some? (farm/hoe-of p))
      :untilled (->> ground
                     (filter stock/untilled?)

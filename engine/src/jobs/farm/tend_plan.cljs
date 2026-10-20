@@ -13,6 +13,7 @@
             [jobs.lib.farm :as farm]
             [jobs.farm.tidy :as tidy]
             [jobs.farm.tend-stock :as stock]
+            [jobs.farm.tend-box :as box]
             [plan.shape :as shape]
             [jobs.lib.plan-field :as pf]
             [jobs.lib.world :as known]))
@@ -107,6 +108,16 @@
          (remove (fn [[pos _]] (tried pos)))
          (filter (fn [[pos _]] (stock/untilled? (ground-cell p pos)))))))
 
+(defn plan-ground-box
+  "The lowest-y ground layer's bounding box of the plan's ground cells (as box/ground-box), nil with none."
+  [answer crops]
+  (let [ps (keys (ground-cells answer crops))
+        y (when (seq ps) (apply min (map :y ps)))
+        ps (filter #(= y (:y %)) ps)]
+    (when (seq ps)
+      {:min {:x (apply min (map :x ps)) :y y :z (apply min (map :z ps))}
+       :max {:x (apply max (map :x ps)) :y y :z (apply max (map :z ps))}})))
+
 (defn plan-facts
   "What the decisions are made from for a plan, read live."
   [c]
@@ -128,8 +139,11 @@
         unseeded (remove (comp seeded-set key) tillable)
         wet (filter (fn [[pos _]] (wet? p pos)) unseeded)
         dry (remove (set wet) unseeded)
-        tilled-cells (concat seeded wet)]
+        tilled-cells (concat seeded wet)
+        ground-box (plan-ground-box answer crops)]
     {:mid mid
+     :ground-box ground-box
+     :dry (if (and (:irrigate (:args c)) ground-box) (box/irrigate-need c ground-box) 0)
      :radius R
      :ripe (count (fld/planned-ripe p {} crops []))
      :hoe (some? (farm/hoe-of p))
