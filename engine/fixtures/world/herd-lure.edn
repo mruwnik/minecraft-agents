@@ -83,4 +83,20 @@
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 240 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-gate}} :for-s 240 :until {:source :job :kind :completed}}]
-   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]]}]}
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]]}
+  ;; no cow is listed near the start (the server loads animals only within ~48 blocks): the body searches for one, then lures it in
+  {:name "no-cow-near-searches-and-brings-one"
+   :plot {:length 120 :width 32 :height 8}
+   :act [[:summon "cow" [62.5 0 16.5]]
+         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1 :radius 80})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :brought}} :within-s 280 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
+           [:block [18 0 16] "oak_fence_gate[open=false]"]]
+   :limit-s 340}
+  ;; should fail: no cow within :radius at all, the search finds none and the run ends :none
+  {:name "no-cow-anywhere-searches-then-ends-none"
+   :plot {:length 120 :width 32 :height 8}
+   :act [[:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1 :radius 40})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :none}} :within-s 240 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 0]]
+   :limit-s 280}]}

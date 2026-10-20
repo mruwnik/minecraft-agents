@@ -24,7 +24,7 @@
   on a lead (:method :lead) or follows the food held in hand (:method :lure, the mob's breeding food: wheat,
   carrots, seeds), and is walked through the gate one cell at a time (a long drag jams in a 1-wide gate).
   :auto (the default) leads when a lead or a slime ball is carried and lures otherwise. A lure run fetches the food
-  when none is carried (no source: ends :no-food, the text naming the food), walks within 6 blocks of the nearest animal outside the pen, and
+  when none is carried (no source: ends :no-food, the text naming the food), lures the nearest animal outside the pen to the cell 4 out from the gate (jobs.animals.lure-to, food kept in hand), and
   puts the food away at the far end of the pen so nothing follows the body out. The lead steps below hold for both;
   \"on the lead\" means following the food in a lure run, \"let go\" means the food put away.
 
@@ -35,6 +35,8 @@
   more (a server loads animals only near the body), it walks back to within 12 of each remembered spot to see it again.
   A lured or led animal follows only within about 10 blocks: from where it was met the body walks to the pen in short legs,
   holding still while the animal trails more than 7 behind, and gives it up (given-up :lost unseen 3 s after a walk back to where it was last seen, :animal-stalled when it stops coming nearer for 10 s) rather than outrun it.
+
+  With no animal of the kind listed within :radius of the start and none brought, the body searches for one once (jobs.explore.search, within :radius of the start, up to 12 legs) before ending :none.
 
   The pen checks. At the start the pen as the body sees and remembers it is judged (a start condition, the setting herd-pen/precheck? false
   skips it): a refusal waits (condition-failed under a parent) with the cause {:reason :text} and the fields below. A pen
@@ -203,14 +205,14 @@
     (regather-or-lose! c)))
 
 (defn ^:async lure-approach!
-  "The walk to the pen's first cell with a led or lured animal: an animal follows the food only within follow-range (a lead is 10 long), so the body
+  "The walk to the pen's first cell with a led animal (a lured one is walked there by jobs.animals.lure-to): a lead is 10 long, so the body
   goes in short go-to legs and, by escort/follow-verdict, holds still (or walks back toward the last sighting) while the
   animal trails more than (escort/safe-gap); unseen long, or seen and not coming nearer, it is given up. The last leg is settle-at!'s."
   [c]
   (let [m (ctx/mem c)
         a (animal-now c (:animal m))
         target (u/cell-pos (nth (:axis m) 0))
-        verdict (escort/follow-verdict c a (or (lure? c) (nil? a) (animals/led-by-me? a)) (escort/safe-gap))]
+        verdict (escort/follow-verdict c a (or (nil? a) (animals/led-by-me? a)) (escort/safe-gap))]
     (if verdict
       (if (= :wait verdict)
         (do (await (escort/wait-for-animal! c :never)) :continue)

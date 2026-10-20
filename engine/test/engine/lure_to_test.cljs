@@ -78,6 +78,14 @@
           (is (= 4 (count-of s "wheat")) "no food is used")
           (is (nil? (.-held (.self (:p s)))) "the food is put away at the end"))))))
 
+(deftest keep-food-leaves-the-food-in-hand-at-the-end
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:keep-food true} {:inventory wheat :entities [(cow 1 3)]} 12))]
+          (is (= :arrived (:reason (done-event s))))
+          (is (= "wheat" (.-held (.self (:p s)))) "a parent that goes on with the animal gets the food still in hand"))))))
+
 (deftest a-full-inventory-still-ends-with-something-else-than-the-food-in-hand
   (async done
     (tu/run-async done

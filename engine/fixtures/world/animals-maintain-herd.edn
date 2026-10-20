@@ -1,0 +1,20 @@
+;; Card ae6272fc (D33): animals.maintain with fewer than 2 adults in the box asks herd for a pair before breeding.
+;; Pen: oak fence ring x 18..24, z 13..19, inside 19..23 x 14..18, gate west at [18 0 16] (as herd-lure.edn). One cow inside, one outside the gate.
+;; Should-succeed: the second cow is brought in and maintain ends done with 2 adults.
+{:defaults
+ {:tags [:animals :herd :jobs]
+  :time :any
+  :plot {:floor "grass_block"}
+  :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"]
+           [:fill [19 0 14] [23 0 18] "air"]
+           [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"]]
+  :body {:at [12.5 0 16.5] :yaw 270 :inventory [["wheat" 4]] :effects [["resistance" 900 4]]}
+  :limit-s 300}
+ :cases
+ [{:name "one-adult-in-the-pen-gets-a-second-brought"
+   :act [[:summon "cow" [21.5 0 16.5]]
+         [:summon "cow" [10.5 0 18.5]]
+         [:job (jobs.animals.maintain {:mob "cow" :target 2 :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done :adults 2}} :within-s 240 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 2]
+           [:block [18 0 16] "oak_fence_gate[open=false]"]]}]}

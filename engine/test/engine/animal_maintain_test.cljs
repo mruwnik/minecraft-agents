@@ -137,12 +137,21 @@
           (is (= :failed-steps (or (:cause (done-event s)) (get-in (done-event s) [:data :cause]))))
           (is (true? (finished? s))))))))
 
-(deftest one-adult-cannot-breed
+(deftest one-adult-cannot-breed-herd-is-asked-for-another
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:target 4} {:inventory [(wheat 4)] :entities [(cow 1 2) (calf 2 2) leather-on-the-ground]} 12))]
-          (is (= {:skipped :too-few-adults} (get-in (done-event s) [:steps :breed]))))))))
+          (is (= {:skipped :too-few-adults} (get-in (done-event s) [:steps :breed])))
+          (is (some? (get-in (done-event s) [:steps :herd :ended])) "herd ran and ended short (the test pen has no gate)"))))))
+
+(deftest herd-is-asked-for-a-pair-or-the-target-if-less
+  (are [expected target adults] (= expected (maintain/decide :herd {:mob "cow" :box box :target target} {:adults adults}))
+    {:skip :at-pair} 4 2
+    {:skip :at-pair} 0 0
+    {:skip :at-pair} 1 1
+    {:call {:slot :herd :job 'jobs.animals.herd :args {:mob "cow" :box box :target 2}}} 4 1
+    {:call {:slot :herd :job 'jobs.animals.herd :args {:mob "cow" :box box :target 1}}} 1 0))
 
 (deftest items-inside-the-box-are-collected-and-those-outside-left
   (async done
@@ -227,7 +236,6 @@
 
 (deftest the-check-declines-when-nothing-needs-doing
   (is (declines? {:box box :target 4} four-cows) "at target")
-  (is (declines? {:box box :target 4} []) "nothing around, one adult too few to breed")
   (is (declines? {:box box :target 2} [(animal 1 "pig" 2) (animal 2 "pig" 3) (animal 3 "pig" 4)]) "other kinds only")
   (is (declines? {:box box :target 4} (conj four-cows (cow 5 20) (cow 6 30) (cow 7 40))) "cows outside the box are not counted"))
 
@@ -238,9 +246,9 @@
         (let [s (await (scenario {:target 4} {:inventory h/sword :entities (mapv #(cow % (+ 1 %)) (range 1 6))} 60))
               r (done-event s)]
           (is (= {:mob "cow" :target 4 :adults 4 :babies 0} (select-keys r [:mob :target :adults :babies])))
-          (is (= [:mend :breed :cull :shear :collect :deposit] (vec (keys (:steps r)))))
-          (is (= {:mend {:skipped :no-plan} :breed {:skipped :at-target} :shear {:skipped :not-sheep} :deposit {:skipped :no-chest}}
-                 (select-keys (:steps r) [:mend :breed :shear :deposit]))))))))
+          (is (= [:mend :herd :breed :cull :shear :collect :deposit] (vec (keys (:steps r)))))
+          (is (= {:mend {:skipped :no-plan} :herd {:skipped :at-pair} :breed {:skipped :at-target} :shear {:skipped :not-sheep} :deposit {:skipped :no-chest}}
+                 (select-keys (:steps r) [:mend :herd :breed :shear :deposit]))))))))
 
 (deftest the-pure-pieces-decide-from-facts
   (are [expected inventory produce reserve] (= expected (maintain/to-store inventory produce reserve))

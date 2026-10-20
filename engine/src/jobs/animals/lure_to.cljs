@@ -51,7 +51,7 @@
     :unreachable (a walk gave up).
   Endings: :arrived is done; :no-food is condition-failed; the engine's limit (the call's :spend :job-time, default
   ::job-time-s) is limit-reached; the rest are nothing-possible with the reason as the cause. Every reason but :arrived carries a :text.
-  However it ends, its cleanup puts the food away and shuts the gates the legs left open.
+  However it ends, its cleanup puts the food away (not with :keep-food) and shuts the gates the legs left open.
 
   Zones: an animal standing in another owner's zone or claim is not lured (:ignore-zones? true skips the check).")
 
@@ -62,6 +62,7 @@
    :radius {:doc "animals within this many blocks (flat, height ignored) of where the job starts are lured" :spec (a/num-in 0 nil) :default 8}
    :fetch {:doc "get the food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}
    :uuid {:doc "lead only this animal (its uuid or the start of it, as the entities tool shows; the id when it has none); nothing else takes its place. An empty or ambiguous start (more than one animal matches) never starts; one already at the destination ends the job at once (done? :ok)" :spec string? :default nil}
+   :keep-food {:doc "leave the food in hand when the lure ends, for a parent that goes on with the animal (jobs.animals.herd); the gates the legs left open are still shut" :spec boolean? :default false}
    :ignore-zones? :shared})
 
 (a/defargs settings
@@ -407,8 +408,8 @@
   (await (pace/steps! c (fn ^:async s [] (let [r (await (step c))] (if (= :yield r) :continue r))))))
 
 (defn ^:async cleanup
-  "However the lure ended: the food is put away, then the gates the legs left open are shut (escort/close-up!). Done."
+  "However the lure ended: the food is put away unless :keep-food, then the gates the legs left open are shut (escort/close-up!). Done."
   [c _]
-  (await (bait/put-food-away! c))
+  (when-not (:keep-food (:args c)) (await (bait/put-food-away! c)))
   (let [r (await (escort/close-up! c (fn [c _] (ctx/end c :done nil))))]
     (if (= :yield r) :continue r)))

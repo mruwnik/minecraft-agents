@@ -1246,7 +1246,7 @@
             (await (run-ticks s 900))
             (is (= reason (get-in (done-event s) [:given-up "u1"])) label)))))))
 
-(deftest the-walk-back-for-a-lost-cow-leaves-no-gate-open
+(deftest the-walk-back-for-a-lost-cow-leaves-no-gate-open-at-the-end
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1268,7 +1268,7 @@
                                     r)))))
             (await (run-ticks s 900))
             (is (seq @backs) "the body walked back for the cow")
-            (is (every? #{:never} @backs) (pr-str @backs))
+            (is (not (gate-open? s)) "the lure's cleanup shuts what its legs opened")
             (finally (set! child/call-walk* orig))))))))
 
 (deftest a-penned-cow-that-vanishes-near-the-pen-is-not-counted-as-inside
@@ -1450,6 +1450,17 @@
                                (when (and @at-pen (> (looks) @at-pen)) (reset! seen-again true))
                                (if (or (nil? @at-pen) @seen-again) (.call entities p q) #js [])))
           (await (run-ticks s 900))
+          (is (= :brought (:reason (done-event s))))
+          (is (= #{1} (cows-in-pen s))))))))
+
+(deftest no-animal-near-the-start-sends-the-body-to-search-and-the-one-found-is-brought
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (submit! (setup (world {:entities [(cow 1 -45 3)] :inventory [wheat] :blocks far-ground}))
+                         {:target 1 :radius 60})]
+          (track-range! s 30)
+          (await (run-ticks s 1500))
           (is (= :brought (:reason (done-event s))))
           (is (= #{1} (cows-in-pen s))))))))
 

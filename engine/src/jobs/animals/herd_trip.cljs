@@ -13,7 +13,6 @@
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.bait :as bait]
-            [jobs.lib.escort :as escort]
             [jobs.animals.herd-run :refer [animal-now deepest end! finish! gate-open? held-by-me? in-pen-adults lure? near-pen out-1 read-pen regather-radius set-phase!]]
             [jobs.animals.herd-pen :refer [animal-pos pinned-ms settle-at! step-in-step]]))
 
@@ -53,10 +52,12 @@
 
 (defn start-trip!
   "The animal k is with the body (on its lead, or following its food): its trip to the gate starts."
-  [c k]
-  (set-phase! c :approach {:animal k :led [k]
-                           :animal-tries (update (:animal-tries (ctx/mem c)) k (fnil inc 0))
-                           :pos-index 0 :backs 0 :retried false :deepest-tried false}))
+  ([c k] (start-trip! c k nil))
+  ([c k more]
+   (set-phase! c :approach (merge {:animal k :led [k]
+                                   :animal-tries (update (:animal-tries (ctx/mem c)) k (fnil inc 0))
+                                   :pos-index 0 :backs 0 :retried false :deepest-tried false}
+                                  more))))
 
 (defn ^:async lead-next!
   "Lead one more animal and start its trip, or end when none more can be led."
@@ -92,6 +93,27 @@
                         (<= (u/dist origin (u/pos-of (.-pos %))) radius)))
          (animals/allowed c :herd.declined "herd" :take))))
 
+(defn ^:async search!
+  "Nothing brought and no animal of :mob listed within :radius of the start: walk and look for one (jobs.explore.search,
+  once per run, within :radius of the start). The count asked for is one more than the animals of the kind in view now, so
+  the ones already penned do not end the search. :continue; the next call lists again."
+  [c]
+  (let [{:keys [mob radius]} (:args c)
+        [origin _] (range-from-origin c)
+        seen (count (animals/herd (:primitives c) mob 24))
+        e (await (ctx/call c :explore 'jobs.explore.search
+                           (child/search-args {:target mob :count (inc seen) :center origin :max-distance (min 128 (max 1 (long radius)))
+                                               :max-legs 12 :takeable true})))]
+    (when-not (= :continue e) (ctx/update-mem! c assoc :searched true))
+    :continue))
+
+(defn search-due?
+  "Whether the run has brought and given up nothing, lists no animal to fetch, was not refused any and has not searched yet."
+  [c]
+  (let [m (ctx/mem c)]
+    (and (not (:searched m)) (empty? (:brought m)) (empty? (:given-up m))
+         (nil? (animals/refusal c)) (empty? (lure-candidates c)))))
+
 (defn ^:async fetch-food!
   "A lure run with no food carried: get one of the mob's breeding foods (bait/food!), else end :no-food because of the
   fetch's ending. Nil when food is carried."
@@ -110,6 +132,26 @@
   (when (= :lure (:method (ctx/mem c)))
     (await (fetch-food! c))))
 
+(defn ^:async lure-to!
+  "Lure the animal to the cell 4 out from the gate (jobs.animals.lure-to, the food kept in hand for the gate) and start its trip from there; an animal the lure gives up on is booked given-up
+  with the lure's reason (:animal-outside as :lost), a missing food or hold ends the run."
+  [c target]
+  (let [k (animals/key-of target)
+        [_ listed] (range-from-origin c)
+        _ (child/progress! c :equip)
+        e (await (ctx/call c :lure 'jobs.animals.lure-to
+                           (cond-> {:mob (:mob (:args c)) :pos (u/cell-pos (nth (:axis (ctx/mem c)) 0)) :uuid (str k)
+                                    :radius listed :fetch false :keep-food true}
+                             (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))
+        why (contract/cause-key e)]
+    (cond
+      (= :continue e) :continue
+      (= :done (:kind e)) (start-trip! c k {:walked true})
+      (= :no-food why) (finish! c :no-food {:because (select-keys e [:kind :cause])})
+      (= :no-hold why) (finish! c :no-hold)
+      :else (do (ctx/update-mem! c update :given-up assoc k (if (= :animal-outside why) :lost why))
+                :continue))))
+
 (defn ^:async lure-next!
   "Hold the mob's food (fetched when none is carried), walk within follow range of the nearest animal and start its
   trip; end :no-food when no food can be had, else as lead-next! when no animal is left."
@@ -127,11 +169,7 @@
                            (finish! c (or (animals/refusal c) :none))
                            (finish! c nil))
           (not= food (bait/held c)) (if (= :no-hold (await (bait/hold! c food))) (finish! c :no-hold) :continue)
-          :else
-          (let [k (animals/key-of target)
-                _ (child/progress! c :equip)
-                walked (await (animals/walk! c k target (escort/lure-reach) {:doors :shut :range (escort/lure-reach)}))]
-            (if (= :there walked) (start-trip! c k) :continue)))))))
+          :else (await (lure-to! c target)))))))
 
 (defn remember-start!
   "Once, before the walk to the pen: the adults of :mob listed within :radius of the body, unleashed, as {:key :pos}. The server
@@ -180,7 +218,9 @@
       (do (when-not (:method (ctx/mem c)) (ctx/update-mem! c assoc :method (resolve-method c)))
           (if-let [lost (look-back-target c)]
             (await (look-back! c lost))
-            (if (lure? c) (await (lure-next! c)) (await (lead-next! c))))))))
+            (if (search-due? c)
+              (await (search! c))
+              (if (lure? c) (await (lure-next! c)) (await (lead-next! c)))))))))
 
 (defn prune-led!
   "Drop from :led the animals no longer on this body's lead, booking each (:lead-broke seen, :lost not seen);

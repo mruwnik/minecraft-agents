@@ -18,12 +18,14 @@
             [jobs.lib.world :as known]))
 
 (def doc
-  "Keep one pen of one kind of animal in order. The pen is :box. One run is one pass over six steps in this
+  "Keep one pen of one kind of animal in order. The pen is :box. One run is one pass over seven steps in this
   order, each a child job called once (a child that yields is called again on the next call). A step under way is not re-decided.
 
   - :mend (jobs.build.pen over the whole :plan, only with :plan): a fence, gate or wall cell of the plan beside the box
     was seen as something else (blown away), so the plan's fence is built again. Only cells the body has seen count; a gap
     that stays rests the pen.
+  - :herd (jobs.animals.herd for 2 adults, or :target if less): fewer adults than that are in the box, so breeding cannot start; herd fetches
+    and searches for animals of the kind within its default radius and brings them in.
   - :breed (jobs.animals.breed, 2 animals): adults plus babies are below :target, at least 2 adults, breeding
     food carried (breed fetches it unless :fetch is off).
   - :cull (jobs.animals.cull): adults exceed :keep, the larger of 2 and :target minus the babies.
@@ -35,8 +37,8 @@
   A body outside the box that lists fewer animals of the kind in it than the target first walks to the box (go-to, once; the server
   lists animals only near the body) and counts again; the job starts for that look.
 
-  A step whose conditions do not hold is skipped and booked {:skipped reason}: :no-plan, :sound, :at-target, :too-few-adults,
-  :no-food and :no-shears (only with :fetch off), :within-target, :not-sheep, :none-shearable, :no-drops, :no-chest, :nothing-to-store,
+  A step whose conditions do not hold is skipped and booked {:skipped reason}: :no-plan, :sound, :at-target, :at-pair,
+  :too-few-adults, :no-food and :no-shears (only with :fetch off), :within-target, :not-sheep, :none-shearable, :no-drops, :no-chest, :nothing-to-store,
   or :declined when the child declined.
 
   Done (:already before the start) when the box needs no look, no step would run and the herd is at :target. It starts when some step would run. Without a :box and a :plan it can never start (impossible :no-box), nor without a :mob and a :plan (:no-mob). Otherwise it
@@ -44,7 +46,7 @@
   {:skipped {step reason}}.
 
   Ends :done after the pass, with {:mob :target :adults :babies (live census in the box) :steps {step
-  summary}}. Summaries: mend {:closed? :reason}, breed {:fed n :reason}, cull {:killed :remaining :reason}, shear {:shorn n :reason
+  summary}}. Summaries: mend {:closed? :reason}, herd {:reason :inside :brought}, breed {:fed n :reason}, cull {:killed :remaining :reason}, shear {:shorn n :reason
   :collected}, collect {:collected}, deposit {:gave-up :reason}.
 
   With :plan and :part the pen is that part of the plan: its :box, and :mob and :target from its :herd
@@ -71,10 +73,11 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def steps [:mend :breed :cull :shear :collect :deposit])
+(def steps [:mend :herd :breed :cull :shear :collect :deposit])
 
 (def jobs
   {:mend 'jobs.build.pen
+   :herd 'jobs.animals.herd
    :breed 'jobs.animals.breed
    :cull 'jobs.animals.cull
    :shear 'jobs.animals.shear
@@ -146,6 +149,12 @@
     (empty? gaps) {:skip :sound}
     :else {:call {:slot :mend :job (jobs :mend) :args (cond-> {:plan plan} (some? fetch) (assoc :fetch fetch))}}))
 
+(defn decide-herd
+  [{:keys [mob box fetch target]} {:keys [adults]}]
+  (if (<= (min 2 target) adults)
+    {:skip :at-pair}
+    {:call {:slot :herd :job (jobs :herd) :args (cond-> {:mob mob :box box :target (min 2 target)} (some? fetch) (assoc :fetch fetch))}}))
+
 (defn decide-breed
   [{:keys [mob target fetch box]} {:keys [adults babies food reach]}]
   (cond
@@ -187,6 +196,7 @@
   [step args facts]
   (case step
     :mend (decide-mend args facts)
+    :herd (decide-herd args facts)
     :breed (decide-breed args facts)
     :cull (decide-cull args facts)
     :shear (decide-shear args facts)
@@ -286,6 +296,7 @@
   [step r]
   (case step
     :mend (select-keys r [:closed? :reason])
+    :herd (select-keys r [:reason :inside :brought])
     :breed {:fed (count (:fed r)) :reason (:reason r)}
     :cull (select-keys r [:killed :remaining :reason])
     :shear {:shorn (count (:shorn r)) :reason (:reason r) :collected (:collected r)}
