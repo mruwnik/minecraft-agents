@@ -10,7 +10,9 @@
             [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::room-roof-height {:default 16 :spec (a/int-in 1 nil)
+  {::roof-height {:default 4 :spec (a/int-in 0 nil)
+                  :doc "A solid block within this many blocks above counts as a roof (the shelter ways, the night's roofed places, enter-room, bed-down and the enclosed test; a call overrides it with :settings)."}
+   ::room-roof-height {:default 16 :spec (a/int-in 1 nil)
                        :doc "How high above the feet a roof may be and still make the closed room around the body a shelter."}})
 
 (defn feet [p] (solid/cell (u/self-pos {:primitives p})))
@@ -97,6 +99,8 @@
 (defn sleeping? [p] (boolean (.-isSleeping (.self p))))
 
 (def default-roof-height 4)
+
+(defn roof-height [] (settings/get settings ::roof-height))
 
 (defn room-roof-height [] (settings/get settings ::room-roof-height))
 

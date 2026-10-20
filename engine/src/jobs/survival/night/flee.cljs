@@ -27,7 +27,7 @@
   [c radius]
   (let [p (:primitives c)]
     (->> (look/seen-blocks p {:match #(and (solid/solid? %) (rules/natural? %) (not (rules/falling? %)) (tools/can-harvest? p %))
-                              :radius (min 64 radius) :max 64})
+                              :radius (min (sites/scan-radius) radius) :max (sites/scan-radius)})
          (map #(update (:pos %) :y inc))
          (filter #(and (pit-site/pit-site? p %) (pit-site/clear-of-failed? c %)))
          (take (sites/ground-candidates))
@@ -40,8 +40,8 @@
   zone or claim refuses. The nearest sites/cave-candidates. Reads seen blocks only: its reach is the nearest sites/cave-scan solids."
   [c radius]
   (let [p (:primitives c)
-        roof-height (:roof-height (:args c))
-        solids (look/seen-blocks p {:match solid/solid? :radius (min 64 radius) :max (sites/cave-scan)})
+        roof-height (sh-sense/roof-height)
+        solids (look/seen-blocks p {:match solid/solid? :radius (min (sites/scan-radius) radius) :max (sites/cave-scan)})
         key-of (juxt :x :y :z)
         solid? (into #{} (map (comp key-of :pos)) solids)
         seen-free? (fn [cell] (and (not (solid? (key-of cell)))

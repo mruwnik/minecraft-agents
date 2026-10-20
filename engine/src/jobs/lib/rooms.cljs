@@ -312,8 +312,9 @@
   "The remembered places of names (the night's :roofed-places) within radius and roofed within roof-height, as
   [{:name :pos}] nearest first. A roof cell the body has not seen is guessed solid (u/block-name-or): from the ground the
   cell over a home hides behind the roof's near edge; a column seen open is no roof."
-  [c {:keys [roofed-places roof-height]} radius]
+  [c {:keys [roofed-places]} radius]
   (let [p (:primitives c)
+        roof-height (sh-sense/roof-height)
         here (sh-sense/feet p)
         roofed? (fn [pos] (some #(solid/solid? (u/block-name-or p (update pos :y + %) "stone")) (range 1 (inc roof-height))))]
     (->> roofed-places

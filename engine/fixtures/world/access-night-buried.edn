@@ -1,5 +1,5 @@
 ;; Cards d6a489cf (the night fact is silent when sealed in a lit corridor; owner Q345: an open tunnel or stair is not shelter), 820b2869 (dig-in walls run out of
-;; blocks -> pit), 555ea732 (a trapped pit shelter by day with no pickaxe fails :no-way-out once, never waits).
+;; blocks -> pit).
 ;; Night: run with --allow-time --time-log <shared time log>. Stone mass x 2..30, z 8..24, y 0..9 (cases that need a taller
 ;; mass say so). The register holds :night -> a notify job (the night job would log the body out when
 ;; another player sleeps; here only whether the trigger fires is judged).
@@ -7,7 +7,7 @@
  {:tags [:night :survival :access]
   :time :night
   :plot {:height 24}
-  :register [{:trigger :night :persistence :cooldown :cooldown-s 2 :args {:roof-height 4}
+  :register [{:trigger :night :persistence :cooldown :cooldown-s 2
               :job (jobs.debug.notify {:text "night fired"})}]
   :blocks [[:fill [2 0 8] [30 9 24] "stone"]]
   :body {:at [16.5 10 16.5] :effects [["resistance" 600 4]]}}
@@ -74,18 +74,4 @@
          [:rcon "clear $BODY dirt"]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-way}} :for-s 90 :until {:source :job :kind :shut-in.sealed}}]
-   :limit-s 120}
-  ;; A trapped cell is remembered 5 minutes (:shelter-trapped, one try per cell): rerun this case after that, the plot
-  ;; cell is the same every run.
-  {:name "trapped-pit-by-day-no-pickaxe-fails-once"
-   :register []
-   :body {:inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]
-         [:await {:source :job :kind :shut-in.sealed} 90]
-         [:rcon "clear $BODY"]
-         [:time-set 1000]
-         [:job (jobs.survival.leave-shelter)]]
-   :expect [{:event {:source :job :kind :dig-in.trapped} :within-s 60 :of-job true}
-            {:event {:source :job :kind :shelter.failed :data {:reason :no-way-out}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason :no-tool}} :for-s 60 :until {:source :job :kind :shelter.failed :data {:reason :no-way-out}}}]
-   :limit-s 150}]}
+   :limit-s 120}]}

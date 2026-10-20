@@ -61,8 +61,7 @@
   Muting :night does not end a running night job: cancel it too.")
 
 (a/defargs args
-  {:roof-height {:doc "a solid block within this many blocks above counts as a roof" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
-   :roofed-places {:doc "place names walked to at night, when close and the route is lit, before digging in" :spec (a/coll-of (a/or-of keyword? string?)) :default [:home]}})
+  {:roofed-places {:doc "place names walked to at night, when close and the route is lit, before digging in" :spec (a/coll-of (a/or-of keyword? string?)) :default [:home]}})
 
 (a/defargs settings
   {::job-time-s {:default 2400 :doc "Seconds the night may take: a bound against a runaway night (the night itself ends it in about 10 minutes)." :spec (a/num-in 0 nil)}
@@ -172,7 +171,7 @@
   [c bed]
   (hold/busy! c)
   (let [d (await (ctx/call c :bed-down 'jobs.survival.bed-down
-                                 (cond-> (select-keys (:args c) [:roof-height])
+                                 (cond-> {}
                                    bed (assoc :bed bed)
                                    (room-lib/closed-home? (:primitives c)) (assoc :roofed-only true))))]
     (if (= :continue d)
@@ -198,7 +197,7 @@
   no walk is wanted)."
   [c place]
   (hold/busy! c)
-  (let [w (await (ctx/call c :enter-room 'jobs.survival.enter-room (cond-> {:settings {:jobs.survival.plug-way/roof-height (:roof-height (:args c))}}
+  (let [w (await (ctx/call c :enter-room 'jobs.survival.enter-room (cond-> {}
                                                                      place (assoc :place place))))]
     (when (and place (not= :continue w))
       (ctx/update-mem! c assoc :roof-walk-failed true))
@@ -226,10 +225,6 @@
     (ctx/update-mem! c #(-> % (dissoc :no-site :no-way-text :shut-ins :pit-trapped :niche :fleeing :flee-failed)
                             (assoc :exposed {:pos (sh-sense/feet p) :at (ctx/now c) :retries retries})))))
 
-(def niche-reach
-  "Blocks within which the niche's wall is looked for."
-  16)
-
 (defn ^:async niche!
   "No pit site is left: out of the failed pit first (dig-in-leave/climb!, a stair), then jobs.survival.shut-in digs a pocket
   into a hillside or wall within niche-reach; the blocks that plug it are the :shelter entry's door (written by shut-in). Whatever it ends in, it is tried once (:niche :tried); the next pass holds exposed if it
@@ -242,7 +237,7 @@
       :again)
     (if-not (look/surveyed? c)
       (do (await (look/look-around! c)) :again)
-      (let [d (await (ctx/call c :niche 'jobs.survival.shut-in {:ways #{:pocket} :for :night :settings {:jobs.survival.dig-pocket/walk-radius niche-reach}}))]
+      (let [d (await (ctx/call c :niche 'jobs.survival.shut-in {:ways #{:pocket} :for :night :settings {:jobs.survival.dig-pocket/walk-radius (sites/niche-reach)}}))]
         (when-not (= :continue d)
           (ctx/update-mem! c assoc :niche :tried)
           (spent/absorb! c (:data d)))
@@ -262,11 +257,11 @@
   [c]
   (let [p (:primitives c)
         pos (:enclose (ctx/mem c))
-        roof-height (:roof-height (:args c))]
+        roof-height (sh-sense/roof-height)]
     (if (not= pos (sh-sense/feet p))
       (do (ctx/update-mem! c dissoc :enclose) :again)
       (let [_ (hold/busy! c)
-            d (await (ctx/call c :enclose 'jobs.survival.shut-in {:ways #{:walls} :for :night :settings {:jobs.survival.plug-way/roof-height roof-height :jobs.survival.wall-in/wall-value (sites/wall-value)}}))]
+            d (await (ctx/call c :enclose 'jobs.survival.shut-in {:ways #{:walls} :for :night :settings {:jobs.survival.wall-in/wall-value (sites/wall-value)}}))]
         (if (= :continue d)
           :again
           (do (ctx/update-mem! c dissoc :enclose)
@@ -301,7 +296,7 @@
   "The :roof-height for dig-in: the night's, but pit-roof-height at most while an open door stands in the room, so the room's
   roof does not make dig-in decline :already-sealed."
   [c]
-  (let [h (:roof-height (:args c))]
+  (let [h (sh-sense/roof-height)]
     (if (seq (sh/open-room-doors (:primitives c))) (min h pit-roof-height) h)))
 
 
@@ -340,7 +335,7 @@
             (await (sense/look-round! c [])))
         d (await (ctx/call c :shut-in 'jobs.survival.shut-in
                            (cond-> {:ways (cond-> #{:walls :pit} (or place (sh-sense/roofed? p (sh-sense/room-roof-height)) (room-plug/room-plug p (sh-sense/feet p) (dig-in-roof-height c))) (conj :room))
-                                    :for :night :settings {:jobs.survival.plug-way/roof-height (dig-in-roof-height c) :jobs.survival.wall-in/wall-value (sites/wall-value)}}
+                                    :for :night :settings {:jobs.lib.shelter.sense/roof-height (dig-in-roof-height c) :jobs.survival.wall-in/wall-value (sites/wall-value)}}
                              place (assoc :place place))))]
     (when-not (= :continue d)
       (ctx/update-mem! c #(cond-> (-> % (dissoc :digging) (update :shut-ins (fnil inc 0))) place (assoc :roof-walk-failed true)))
@@ -399,7 +394,7 @@
   [c]
   (let [p (:primitives c)
         breached (sh/breached-home? p (ctx/view c))
-        roofed (and (sh-sense/roofed? p (:roof-height (:args c))) (not breached))
+        roofed (and (sh-sense/roofed? p (sh-sense/roof-height)) (not breached))
         sheltered (:sheltered (ctx/mem c))
         bed-way (ctx/way? c :bed)
         edge (delay (look-edge/pending c))]

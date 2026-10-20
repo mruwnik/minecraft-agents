@@ -63,7 +63,7 @@
           (dotimes [_ 6]
             (await (st/tick-n eng 10))
             (swap! clock + 11000))
-          (is (= 1 (count (st/emitted seen :shelter.failed))) "one failure, not one per cooldown"))))))
+          (is (= 1 (count (st/emitted seen :stopped))) "one failure, not one per cooldown"))))))
 
 ;; ------------------------------------------------------------------ the hint
 

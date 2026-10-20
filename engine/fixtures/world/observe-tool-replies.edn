@@ -11,7 +11,7 @@
  :cases
  [{:name "now-submit-behind-the-night-reflex-names-it"
    :time :night
-   :register [{:trigger :night :persistence :cooldown :cooldown-s 2 :args {:roof-height 4}}]
+   :register [{:trigger :night :persistence :cooldown :cooldown-s 2}]
    :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]]
    :body {:inventory [["cobblestone" 16]]}
    :act [[:await {:source :reflex :kind :fired :context {:reflex-id :night}} 30]

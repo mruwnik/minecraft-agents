@@ -12,8 +12,8 @@
              :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 10}})}
             {:trigger :hungry :persistence :cooldown :cooldown-s 30 :args {:food 14}
              :job (jobs.survival.get-food {:food 14})}
-            {:trigger :night :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}
-             :job (jobs.survival.night {:roof-height 4})}
+            {:trigger :night :persistence :cooldown :cooldown-s 10
+             :job (jobs.survival.night)}
             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
              :job (jobs.storage.make-room {:free 4})}]
  :queue [(repeat (seq (jobs.farm.harvest {:area {:plan "test-probenight-field"}})

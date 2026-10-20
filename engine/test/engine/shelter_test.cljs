@@ -868,7 +868,7 @@
           (is (= {:y 61 :holder false :notified 1} mid) "in the pit, safe: the queued job ran at night")
           (is (nil? (core/holder eng)) "the shelter ended at day")
           (is (>= (:y (pos-of p)) 64) "the body stands on the surface, out of the pit")
-          (is (empty? (emitted seen :shelter.failed)) "out: done, not failed")
+          (is (empty? (emitted seen :stopped)) "out: done, not failed")
           (is (= 1 (notified seen)) "then the queued job ran"))))))
 
 (deftest the-night-ends-at-first-light-and-leave-shelter-takes-the-body-out-of-the-pit
@@ -886,20 +886,20 @@
           (is (>= (:y (pos-of p)) 64) "leave-shelter climbed out")
           (is (not ((:when (get triggers/all :dawn)) p (mem/view (:store eng)) {} nil))))))))
 
-(deftest a-pit-shelter-with-no-way-out-ends-failed-by-day-and-the-queued-job-runs
+(deftest a-pit-shelter-with-no-way-out-ends-nothing-possible-by-day-and-the-queued-job-runs
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:time night :blocks stone-ground :inventory [{:name "dirt" :count 1}]})]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night} {:trigger :dawn}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
-          (let [mid (await (night-then-day eng p 4 #(hash-map :pit (< (:y (pos-of p)) 64) :notified (notified seen)) 6))]
+          (let [wall-in! (fn [] (let [{:keys [x y z]} (pos-of p)]
+                                  (doseq [dx (range -3 4) dz (range -3 4) dy (range -1 6) :when (not= [0 0] [dx dz])]
+                                    (fake/set-block! p [(+ (js/Math.floor x) dx) (+ (js/Math.floor y) dy) (+ (js/Math.floor z) dz)] "bedrock"))))
+                mid (await (night-then-day eng p 4 #(do (wall-in!) (hash-map :pit (< (:y (pos-of p)) 64) :notified (notified seen))) 6))]
             (is (= {:pit true :notified 1} mid) "in the pit, safe: the queued job ran at night"))
-          (is (seq (emitted seen :dig-in.trapped)) "no pickaxe for the stone stair: trapped")
-          (let [[w & more] (emitted seen :shelter.failed)]
-            (is (empty? more) "one warn")
-            (is (= :no-way-out (:reason w)))
-            (is (= (let [{:keys [x y z]} (pos-of p)] [x y z]) (:at w)) "the pit position"))
+          (is (seq (emitted seen :dig-in.trapped)) "bedrock round the pit: trapped")
+          (is (= [:no-way-out] (mapv :reason (emitted seen :stopped))) "one ending, nothing possible")
           (is (nil? (core/holder eng)) "the shelter ended: the body is the agent's again")
           (is (= 1 (notified seen)) "the queued job ran"))))))
 
@@ -914,7 +914,7 @@
           (is (>= (:y (pos-of p)) 64) "out of the pit: a hostile is the hostile reflex's business, not the shelter's")
           (is (nil? (core/holder eng)) "no hold: the shelter ended")
           (is (empty? (emitted seen :dig-in.staying)))
-          (is (empty? (emitted seen :shelter.failed)))
+          (is (empty? (emitted seen :stopped)))
           (is (= 1 (notified seen)) "then the queued job ran"))))))
 
 (deftest a-sleeping-shelter-holds-until-day-then-the-queued-job-runs

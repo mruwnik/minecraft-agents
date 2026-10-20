@@ -15,12 +15,10 @@
             [jobs.survival.wall-placer :as wall-placer]))
 
 (a/defargs settings
-  {::roof-height {:default sh-sense/default-roof-height :doc "A solid block within this many blocks above counts as a roof (the ways, enter-room and the enclosed test; a call overrides it with :settings)." :spec (a/int-in 0 nil)}
-   ::place-s {:default 3 :doc "Seconds a placement is guessed to take, for a way's quote." :spec (a/num-in 0 nil)}
+  {::place-s {:default 3 :doc "Seconds a placement is guessed to take, for a way's quote." :spec (a/num-in 0 nil)}
    ::night-place-s {:default 1 :doc "Seconds a placement (aim, place, settle) takes for a night's shelter; the dig back at dawn is daylight work, so only placing is priced." :spec (a/num-in 0 nil)}
    ::trespass-s {:default 1000 :doc "Seconds a way's quote adds when a cell it digs or fills is another's (zone, claim or plan): a last resort, after every way that keeps off." :spec (a/num-in 0 nil)}})
 
-(defn roof-height [] (settings/get settings ::roof-height))
 
 (defn refused?
   "Whether the zone rules refuse a cell in {:dig :place :plug} (a plug is placed from a cell the body is not at)."
@@ -45,7 +43,7 @@
   :room way, a roof over a room that is not breached, with no open door."
   [c]
   (let [p (:primitives c)
-        roof (roof-height)]
+        roof (sh-sense/roof-height)]
     (boolean (if (= :night (:for (:args c)))
                (sh-inside/safe-from-night? p)
                (and (not (sh-sense/head-in-block? p))

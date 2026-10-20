@@ -18,7 +18,7 @@
 (def doc
   "Shut the body in where it stands, atomically: no hostile logic, little walking (only dig-pocket, to a wall, dig-pit for :night, to ground where a pit fits, and the :room way walk); whoever calls it decides when.
   Needs nothing to start. Tuning is by setting, per call with :settings (the roof height, the hostile radii, the placements per step, how long a hand dig may take, the dear-block value). One call is a whole attempt: it ends :done {:pos :way :placed} once the body is enclosed (a roof within
-  the plug-way ::roof-height setting over no open cell round the feet, or with the :room way a roof over a closed room), at once when it already is.
+  the jobs.lib.shelter.sense roof-height setting over no open cell round the feet, or with the :room way a roof over a closed room), at once when it already is.
   Ways (:ways) are child jobs: jobs.survival.wall-in (the open sides, a roof support and the roof with carried blocks),
   dig-pit (dig down under a solid side and plug the hole), dig-pocket (dig a pocket beside the body, step in, wall the way in), and :room
   (jobs.survival.enter-room: walk into the :place, else the home or the closed room the body is in, shut its doors, fill a doorway or a hole in its roof; walks, which the others do not).

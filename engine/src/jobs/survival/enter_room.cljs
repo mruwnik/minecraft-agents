@@ -22,7 +22,6 @@
             [jobs.lib.util :as u]
             [jobs.lib.waits :as waits]
             [jobs.survival.room-plug :as room-plug]
-            [jobs.survival.plug-way :as way]
             [jobs.survival.respond.doors :as respond.doors]
             [jobs.survival.respond.options :as options]))
 
@@ -113,7 +112,7 @@
     (boolean (or (and t (at-target? c t))
                  (and (not (:place (:args c)))
                       (or (sh-sense/roofed? p (sh-sense/room-roof-height)) (sh-sense/shut-in-room? p)
-                          (some? (room-plug/room-plug p (sh-sense/feet p) (way/roof-height)))))))))
+                          (some? (room-plug/room-plug p (sh-sense/feet p) (sh-sense/roof-height)))))))))
 
 (defn shut?
   "Whether the body is in a closed room (sh-sense/shut-in-room?) with no open door."
@@ -133,7 +132,7 @@
       (let [door (sh/open-room-door p (ctx/view c))
             gap (room-lib/gap c)
             plug (when (and (not (shut? c)) (not gap))
-                   (room-plug/room-plug p (sh-sense/feet p) (way/roof-height)))
+                   (room-plug/room-plug p (sh-sense/feet p) (sh-sense/roof-height)))
             blocks? (have-blocks? c)]
         (cond
           door {:door door}

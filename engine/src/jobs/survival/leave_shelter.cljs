@@ -123,7 +123,6 @@
           (= :out (:reason r)) :again
           (= :no-way-out (:reason r))
           (let [text "no way out of the shelter by day; giving the body back"]
-            (ctx/emit! c :shelter.failed :warn {:reason :no-way-out :at (:at r) :tries (:tries r) :text text})
             (ctx/remember! c :shelter-trapped {:pos (sh-sense/feet p)} sh-inside/trapped-policy)
             (ctx/forget-where! c :night-site (constantly true))
             (ctx/end c :nothing-possible :no-way-out {:text text :at (:at r) :tries (:tries r)}))

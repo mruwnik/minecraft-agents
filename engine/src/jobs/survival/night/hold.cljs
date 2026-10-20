@@ -14,11 +14,8 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.survival.eat :as eat]
+            [jobs.survival.night.sites :as sites]
             [jobs.survival.get-food.cook :as cook]))
-
-(def hold-ms
-  "How long one hold waits before the night looks again (the wait primitive does not wake a sleeping body)."
-  5000)
 
 (defn can-place-furnace?
   "A furnace carried with raw food, fuel and a tool that digs it up again: the hold may put it down in the shelter."
@@ -103,7 +100,7 @@
     (ctx/hold-still! c nil)
     (await (ctx/call c :food 'jobs.survival.get-food (if (inside/safe-from-night? (:primitives c)) {:ways in-shelter-ways :carry 0} {:carry 0})))
     (ctx/hold-still! c reason))
-  (await (child/pause! c (/ hold-ms 1000) reason))
+  (await (child/pause! c (/ (sites/hold-ms) 1000) reason))
   :again)
 
 (defn busy!

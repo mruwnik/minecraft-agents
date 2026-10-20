@@ -123,7 +123,7 @@
   (filterv #(= [:reflex :declined reflex] [(:source %) (:kind %) (:reflex %)]) @seen))
 
 (def always-shelter
-  {:name :always-shelter :job '(jobs.survival.night) :args {:roof-height 4}
+  {:name :always-shelter :job '(jobs.survival.night) :args {}
    :persistence :cooldown :cooldown-s 10 :when (constantly true)})
 
 (defn refuse-placing! [p]

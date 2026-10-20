@@ -30,7 +30,6 @@
 
 (a/defargs args
   {:bed {:doc "bed position [x y z] or {:x :y :z} to sleep in; default: the bed to use within the radius" :spec ::a/pos :default nil}
-   :roof-height {:doc "a solid block within this many blocks above counts as a roof (where a carried bed is put down)" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
    :roofed-only {:doc "put a carried bed down on roofed cells only, never in the open (a body inside a home)" :spec boolean? :default false}})
 
 (a/defargs settings
@@ -142,7 +141,7 @@
   when no row fits."
   [c roofed?]
   (let [p (:primitives c)
-        roof (:roof-height (:args c))
+        roof (sh-sense/roof-height)
         {:keys [x y z]} (sh-sense/feet p)
         in (access/rules-input c)
         air? #(bs/air (u/seen-name p %))

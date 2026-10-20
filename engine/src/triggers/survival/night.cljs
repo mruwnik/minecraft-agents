@@ -14,10 +14,9 @@
   (:require [jobs.lib.body :as body]
             [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.beds :as sh-beds]
-            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.sleepers :as sh-sleepers]))
 
-(def defaults {:roof-height sh-sense/default-roof-height})
+(def defaults {})
 
 (defn night
   [world memory args kn]
