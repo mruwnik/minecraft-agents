@@ -453,3 +453,19 @@
           (is (<= 2 @looks) "one look cannot show two sides")
           (is (ran-home? seen) "the room seen, it runs in")
           (is (in-room? (body p)) (str "inside the building: " (body p))))))))
+
+(deftest a-creeper-chase-does-not-take-the-body-to-a-doorway-to-look-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [hidden (atom #{[5 64 0]})
+              looks (atom 0)
+              creeper (assoc (zombie 5.5 20.5 0.4) :name "creeper")
+              {:keys [eng p]} (setup (assoc (hut {:x 5.5 :y 64 :z 6.5} hs/door-states [creeper]) :home false))
+              _ (seeing-all-but p (fn [cell] (contains? @hidden cell)))
+              _ (.override (.-world p) "look" (fn ^:async o [token args impl]
+                                                (swap! looks inc)
+                                                (await (impl token args))))]
+          (core/submit! eng '(jobs.survival.retreat) {})
+          (await (tu/run-until-empty eng 6))
+          (is (zero? @looks) "a creeper behind is not led to a door for a look"))))))

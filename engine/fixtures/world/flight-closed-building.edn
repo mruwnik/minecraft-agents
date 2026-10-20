@@ -33,11 +33,11 @@
    :expect [{:event {:source :job :kind :retreat.home :data {:own? true}} :within-s 25}
             {:event {:source :job :kind :retreat.door-shut} :within-s 40}]
    :after [[:body-near [16.5 0 16.5] 3.5]]}
-  ;; 1b22e0fa: a hut seen only from outside (a cell of the room unseen) is dropped :unseen; the body within a few blocks of its door steps into the doorway, looks at the unseen sides, then runs in. No scan: that look is the only way it sees the room
+  ;; 1b22e0fa: a hut seen only from outside (a cell of the room unseen) is dropped :unseen; the body within a few blocks of its door steps into the doorway, looks at the unseen sides, then the choice leans into the room (the body is already inside, so no retreat.home) and shuts the door. No scan: that look is the only way it sees the room
   {:name "hut-seen-only-from-outside-is-looked-into-from-the-door"
    :body {:at [16.5 0 21.5] :yaw 180 :effects [["resistance" 600 4]]}
-   :act [[:summon "zombie" [16.5 0 31.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :job :kind :retreat.home :data {:own? false}} :within-s 25}
+   :act [[:wait-s 2] [:summon "zombie" [16.5 0 31.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat.choice :data {:lean [:near #at [16 0 17] 3]}} :within-s 25}
             {:event {:source :job :kind :retreat.door-shut} :within-s 40}]
    :after [[:body-near [16.5 0 16.5] 3.5]]}
   ;; card 659f5e6d: a creeper chasing from afar is not led to the door (it would follow and blow the door, chest and bed): no run into the hut

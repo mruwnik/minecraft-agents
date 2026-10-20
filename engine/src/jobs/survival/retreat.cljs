@@ -39,7 +39,7 @@
      gate the body has seen (jobs.lib.rooms/rooms, bounded by its settings), that is a closed room (walls,
      doors that shut: jobs.lib.reach/room) whose door it walks to (over seen blocks, at its own speed) ahead of every
      melee chaser (jobs.lib.cost/reach-first?), the fewest steps of those, with a go-to child to the room cell inside
-     that door (retreat.home info, once a flight); a building dropped only for unseen cells, with its door side within 6 blocks, is looked into once a flight from its doorway, up to ::door-looks (4) looks at its unseen sides (room-lib/glance-in!) before the choice; a step that gets no nearer drops that room for the flight. Not while
+     that door (retreat.home info, once a flight); a building dropped only for unseen cells, with its door side within 6 blocks, is looked into once a flight from its doorway (then from one cell beyond it), up to ::door-looks (4) looks at its unseen sides (room-lib/glance-in!; never with a creeper chasing) before the choice; a step that gets no nearer drops that room for the flight. Not while
      low in a ranged chaser's line of fire (the cover step below comes first). Any cell of the room counts as home:
      there an open door of the room is shut (a step back to one out of reach first), and a chaser still with a way in
      gets the cornered options (4.), its plug the walls alone (no pit or pocket dug in the hut): it does not walk out.
@@ -199,10 +199,12 @@
                                             0
                                             (room-lib/judge-per-step))))
         survey0 (when (and threat (not hit?) (empty? blast)) (survey-now))
-        survey (if (and survey0 (await (room-lib/glance-in! c survey0))) (survey-now) survey0)
+        glanced? (boolean (and survey0 (not-any? combat/creeper? threats) (await (room-lib/glance-in! c survey0))))
+        survey (if glanced? (survey-now) survey0)
         rooms (:rooms survey)
         verdicts (when survey (room-lib/verdicts p rooms threats (not (cover/exposed-low? c covered?))))
         {:keys [room way inside?]} (room-lib/pick verdicts)
+        _ (when (and glanced? room inside?) (say-once! c room))
         home-now? (fn [] (or inside? (and (nil? survey) (room-lib/in-home? c (cover/home-pos c)))))
         judged (when threat (retreat-goal/judge c (if (seq blast) [] (remove nil? [(:start (first rooms)) (cover/home-pos c)]))))
         _ (when threat (step/say-choice! c survey verdicts judged blast))

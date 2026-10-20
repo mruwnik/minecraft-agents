@@ -151,8 +151,8 @@
 (defn ^:async glance-in!
   "Once a flight per building: when survey dropped a building only for :unseen cells and the body is within
   door-glance-radius of its door side, step into the doorway (a go-to child; a wall of a 1-wide door shows a wedge from
-  outside) and look at the nearest unseen cell beside its room, again for each still unseen, at most ::door-looks looks
-  (sight passes; the time is part of the flight). True when it looked: the caller surveys again."
+  outside) and look at the nearest unseen cell beside its room, again for each still unseen, at most ::door-looks looks at each spot; cells a door gap shows only at a graze stay unseen, so
+  the body then steps to the far side of the door and looks again (sight passes; the time is part of the flight). True when it looked: the caller surveys again."
   [c survey]
   (let [p (:primitives c)
         me (u/self-pos c)
@@ -163,19 +163,31 @@
                     {:k k :pos {:x x :y y :z z}}))]
     (when at
       (ctx/update-mem! c update :door-glanced (fnil conj #{}) (:k at))
-      (when-let [d (door-cell p (:pos at))]
-        (when-not (= (cell-key me) (cell-key d))
-          (await (ctx/call c :door-glance 'jobs.movement.go-to {:pos (mid d) :range 0.7 :ways #{:walk} :spend {:job-time 4 :tries 1}}))))
-      (loop [n 0 looked #{}]
-        (let [me (u/self-pos c)
-              target (->> (reach/unseen-sides p (:pos at))
-                          (remove looked)
-                          (sort-by #(u/dist me {:x (% 0) :y (% 1) :z (% 2)}))
-                          first)]
-          (if (and target (< n (door-looks)))
-            (do (await (sense/look-at! c target))
-                (recur (inc n) (conj looked target)))
-            (pos? n)))))))
+      (let [d (door-cell p (:pos at))
+            walk-to! (fn ^:async w [cell]
+                       (when-not (= (cell-key (u/self-pos c)) (cell-key cell))
+                         (await (ctx/call c :door-glance 'jobs.movement.go-to {:pos (mid cell) :range 0.7 :ways #{:walk} :spend {:job-time 4 :tries 1}}))))
+            look-at-sides! (fn ^:async l [n looked]
+                             (loop [n n looked looked]
+                               (let [me (u/self-pos c)
+                                     target (->> (reach/unseen-sides p (:pos at))
+                                                 (remove looked)
+                                                 (sort-by #(u/dist me {:x (% 0) :y (% 1) :z (% 2)}))
+                                                 first)]
+                                 (if (and target (< n (door-looks)))
+                                   (do (await (sense/look-at! c target))
+                                       (recur (inc n) (conj looked target)))
+                                   [n looked]))))
+            beyond (when d (let [{:keys [x y z]} (:pos at)] {:x (- (* 2 (:x d)) x) :y y :z (- (* 2 (:z d)) z)}))]
+        (when d (await (walk-to! d)))
+        (let [[n _] (await (look-at-sides! 0 #{}))
+              inner (when (and beyond (reach/unseen-room? p (:pos at)))
+                      (if (> (u/dist me beyond) (u/dist me (:pos at))) beyond (:pos at)))]
+          (if-not inner
+            (pos? n)
+            (do (await (walk-to! inner))
+                (await (look-at-sides! 0 #{}))
+                true)))))))
 
 (defn rooms
   "The closed rooms to flee to (survey), none a run to failed this flight."
