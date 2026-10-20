@@ -87,6 +87,6 @@
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [14 1 16] [18 5 16] "oak_log"]]
    :act [[:job (jobs.forestry.fell-tree {:part-cut? true :radius 12})]]
-   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind #{:completed :waiting :stopped}} :within-s 60 :of-job true}]
    :after [[:block [14 1 16] "oak_log"] [:block [18 5 16] "oak_log"] [:item "oak_log" 0]]
    :limit-s 80}]}

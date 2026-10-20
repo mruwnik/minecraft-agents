@@ -3,7 +3,7 @@
 ;; by the replant-owed trigger (plant-sapling, carried saplings only).
 {:defaults
  {:tags [:forestry :triggers :part-cut-tree :replant-owed] :time :any
-  :plot {:height 24 :floor "stone"}
+  :plot {:height 24 :floor "grass_block"}
   :body {:at [14.5 0 22.5] :yaw 180 :settle-s 2 :inventory [["iron_axe" 1] ["oak_sapling" 1]] :effects [["resistance" 600 4]]}
   :limit-s 150}
  :cases
