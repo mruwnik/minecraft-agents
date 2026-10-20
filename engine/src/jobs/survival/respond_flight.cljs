@@ -3,14 +3,14 @@
   A real danger (jobs.lib.danger: a mob with a walkable way to the body, or a ranged one with a line of fire) within
   ::hostile-radius (ranged ones ::ranged-radius) starts a chase, or is seen afresh. A mob stops chasing (vanilla) once it is
   gone (dead, despawned, untracked), beyond its follow range (jobs.lib.threats: zombie 35, most 16), out of line of
-  sight for retreat-flight/lost-s (4 s), a melee one beyond ::hostile-radius that stood at one place in sight for retreat-flight/still-s (5 s), or has no walkable way to the body (nor, ranged, a line of fire; a creeper within
-  retreat-flight/::blast-reach (6) always has one: its blast).
+  sight for respond.state/lost-s (4 s), a melee one beyond ::hostile-radius that stood at one place in sight for respond.state/still-s (5 s), or has no walkable way to the body (nor, ranged, a line of fire; a creeper within
+  respond.state/::blast-reach (6) always has one: its blast).
   Each step, in this order:
   1. A door, gate or trapdoor standing open within a hand's reach and nearer the nearest chaser than the body is shut
      with one click (retreat.door-shut info). Each door is clicked at most once a flight.
   2. Runs into a closed building first (not while a creeper chases: its blast would take the door and what is inside;
      with a creeper within blast reach no room is looked for, and the one the body stands in is no refuge: it steps away
-     or takes the cornered options): the latest :bed or :home within retreat-cover/home-range (64), or a room behind a wooden door or
+     or takes the cornered options): the latest :bed or :home within respond.cover/home-range (64), or a room behind a wooden door or
      gate the body has seen (jobs.lib.rooms/rooms, bounded by its settings), that is a closed room (walls,
      doors that shut: jobs.lib.reach.room/room) whose door it walks to (over seen blocks, at its own speed) ahead of every
      melee chaser (jobs.lib.cost/reach-first?), the fewest steps of those, with a go-to child to the room cell inside
@@ -24,20 +24,20 @@
   2b. A lone melee mob (no creeper, enderman, spider, flyer or shooter) between ::cover-gap (5) and ::refuge-gap (10) that a fight would not win, with
      pillar-height blocks carried: pillar up, else seal in, before any flee step (a walk gains little on it); when neither can be
      done the flight walks. Each flee step emits debug retreat.step-speed {:blocks :seconds :bps}.
-  3. Walks a short step (the retreat-flight ::step setting, 6 blocks) away from all chasers (nearer ones weigh more) with a go-to child (:ways #{:walk :clear-seal}),
+  3. Walks a short step (the respond.state ::step setting, 6 blocks) away from all chasers (nearer ones weigh more) with a go-to child (:ways #{:walk :clear-seal}),
      leaning toward the first closed room of 2. (else a home it is nearer to than every hostile it knows, none on the way; else the :goal, the destination of the walk the flight
-     interrupted, while it is safe: jobs.survival.retreat-goal/verdict, judged every step in three dimensions against every hostile it knows and the places of those it fled lately; else the latest :bed or :home within retreat-cover/home-range) when not through the
-     hostiles (a closed room behind them: turned retreat-walk ::flank-turn degrees toward it, to go round them, while it still gains on them so:
+     interrupted, while it is safe: jobs.survival.respond.goal/verdict, judged every step in three dimensions against every hostile it knows and the places of those it fled lately; else the latest :bed or :home within respond.cover/home-range) when not through the
+     hostiles (a closed room behind them: turned respond.walk ::flank-turn degrees toward it, to go round them, while it still gains on them so:
      jobs.lib.cost/outruns-at?), avoiding :hazard positions.
      When a wall blocks the way away it turns up to 120 degrees towards open ground (at least 2 clear cells).
-     It leaves out the ends within retreat-flight/::died-radius of a recent :died place, then dark ones
-     (retreat-flight/::prefer-lit?), each only while another end is open.
+     It leaves out the ends within respond.state/::died-radius of a recent :died place, then dark ones
+     (respond.state/::prefer-lit?), each only while another end is open.
      It prefers, in this order: a step whose end is out of every ranged chaser's line of fire (cover: leaves stop arrows),
-     the full step that takes least time (a swim block costs retreat-cover/::swim-factor), the most open.
+     the full step that takes least time (a swim block costs respond.cover/::swim-factor), the most open.
      It first looks away and to either side where it has not seen the ground (at most 3 looks); a cell still unseen
      reads as rock.
      Eats one bite a step (up to food 20) when the nearest chaser is at least eat-gap (12) blocks away and food is carried.
-  Low on health (at most retreat-flight/::hide-health, 12) in a seen ranged chaser's line of fire (over the cells it has seen) with no
+  Low on health (at most respond.state/::hide-health, 12) in a seen ranged chaser's line of fire (over the cells it has seen) with no
   covered step, it takes cover where it stands first: plug in (as below);
   not possible, it walks on. A plug begun where it stands is finished before it walks on (refuge/plugging-here?).
   Not while a creeper chases it or a melee mob is within cover-gap: it walks (or backs off, cornered) first.
@@ -45,8 +45,8 @@
   A mob that attacks at close range within ::hostile-radius and outruns the body (jobs.lib.cost/outruns?: a spider at any food;
   not a creeper or an enderman): no flee step. After the door and room steps (1., 2., the race at each chaser's own
   speed) it takes the cornered options (4.) without the back-off.
-  4. Cornered (no open direction worth a walk, or the walk is blocked, or a melee hostile within 3 hit the body since the last step, or the body is in a closed room with a melee mob within close-radius and carries no weapon or block, or melee mobs within close-radius hit it retreat-cornered/::beaten-hits (2) times, or a ranged mob ::shot-hits (2) times, within its ::hurt-window-s: it cannot be outrun, and the fight is weighed over those hostiles alone; checked afresh every step) with no hostile within
-     ::hostile-radius: holds a second (wait, why cornered) and looks again; after the retreat-flight ::no-gain-steps setting (20) of such steps or holds with no gain the flight ends :keeps-off. With one within ::hostile-radius: takes the safest option it has not yet failed.
+  4. Cornered (no open direction worth a walk, or the walk is blocked, or a melee hostile within 3 hit the body since the last step, or the body is in a closed room with a melee mob within close-radius and carries no weapon or block, or melee mobs within close-radius hit it respond.options/::beaten-hits (2) times, or a ranged mob ::shot-hits (2) times, within its ::hurt-window-s: it cannot be outrun, and the fight is weighed over those hostiles alone; checked afresh every step) with no hostile within
+     ::hostile-radius: holds a second (wait, why cornered) and looks again; after the respond.state ::no-gain-steps setting (20) of such steps or holds with no gain the flight ends :keeps-off. With one within ::hostile-radius: takes the safest option it has not yet failed.
      - an angry enderman near (one the client flags angry, that hurt the body this flight or is within 3 blocks; it teleports; a walk is no flight): at once, before any walk: water within 6 blocks (it keeps away from water; the body steps in and holds), else a seen 2-high gap under a roof within 8 blocks (a 3-tall enderman cannot enter; walks there and holds), else plug in, last of all fight.
      - a drowned near while the body is in water (and no fight wins): swims to the nearest seen dry stand within 16 blocks first (past the mob if need be), before seal, pillar or a fist fight.
      - fight (jobs.combat.attack) only when jobs.lib.cost/fight-damage leaves ::fight-reserve health. Never against a creeper.
@@ -57,8 +57,8 @@
        Not against a ranged mob or a spider (it climbs the pillar). Every block goes to the scaffold ledger (purpose :pillar) for jobs.access.cleanup.
      - back off: a step of up to 2 cells in any of 8 directions that gains at least a block on the hostile.
      - last of all, fight with the best weapon or tool (pickaxe, shovel, hoe) or the fist. A body with no weapon
-       (the call's :use :tools, else jobs.lib.combat/default-weapons) first looks for a way to walk once more (retreat-cornered ::fist-sweeps, 1).
-       A pillared body that is hit raises the pillar `retreat-pillar/::pillar-extend` (2) blocks, once, before the refuge fails.
+       (the call's :use :tools, else jobs.lib.combat/default-weapons) first looks for a way to walk once more (respond.options ::fist-sweeps, 1).
+       A pillared body that is hit raises the pillar `respond.pillar/::pillar-extend` (2) blocks, once, before the refuge fails.
      Order: fight if it wins, then plug in (walls), pillar (not against a ranged mob or a spider), back off (not from a mob that outruns the body), plug in by a pit or pocket (not at home), a pillar through another's area (the last resort), fight.
      Against a creeper back off comes first.
      Hit ::beaten-hits times in ::hurt-window-s by melee mobs within close-radius, the fight comes first if armed or with no blocks to wall with, else it walls in first.
@@ -70,8 +70,8 @@
      (one retreat_blocked warning per flight).
   Plugged in or up a pillar it hides (one retreat_sealed warning; a declared hold, wait why hiding) while a
   hostile within its follow range (jobs.lib.threats; ranged ones at least ::ranged-radius) would have a walkable way to
-  the refuge if its own blocks were gone, and for the retreat-refuge ::quiet-s setting (30 s) more after the last such danger (a silent mob is forgotten
-  after a few seconds); then the flight ends :hidden. After the ::hide-s setting (60 s) in the refuge with no real danger on the body as it
+  the refuge if its own blocks were gone, and for the hide-out ::quiet-s setting (30 s) more after the last such danger (a silent mob is forgotten
+  after a few seconds); then the flight ends :hidden. After the hide-out ::hide-s setting (60 s) in the refuge with no real danger on the body as it
   stands (jobs.lib.danger/danger-near?, the hostile-near trigger's test) it ends :hidden even while that hostile stays;
   the refuge stays, its plugs too while a hostile is near (jobs.access.cleanup). In a plug or pit with a melee hostile at its foot (::foot-reach) past ::hide-s,
   a body digs a stair up (jobs.access.stair, ::dig-out-steps steps) on the heading away from that mob, the next heading when one stops, before it hands back.
@@ -91,19 +91,19 @@
             [jobs.lib.child :as child]
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
-            [jobs.survival.retreat-doors :as retreat-doors]
+            [jobs.survival.respond.doors :as respond.doors]
             [jobs.lib.pace :as pace]
             [jobs.lib.shot :as shot]
             [jobs.lib.util :as u]
             [jobs.survival.respond-choose :as choose]
-            [jobs.survival.retreat-cornered :as cornered]
-            [jobs.survival.retreat-cornered.pick :as pick]
-            [jobs.survival.retreat-cover :as cover]
-            [jobs.survival.retreat-flight :as flight]
-            [jobs.survival.retreat-goal :as retreat-goal]
+            [jobs.survival.respond.options :as cornered]
+            [jobs.survival.respond.cornered :as pick]
+            [jobs.survival.respond.cover :as cover]
+            [jobs.survival.respond.state :as flight]
+            [jobs.survival.respond.goal :as respond.goal]
             [jobs.lib.rooms :as room-lib]
-            [jobs.survival.retreat-refuge :as refuge]
-            [jobs.survival.retreat-step :as step]))
+            [jobs.survival.respond.refuge :as refuge]
+            [jobs.survival.respond.step :as step]))
 
 
 (defn ^:async wait-far!
@@ -128,12 +128,14 @@
   (ctx/update-mem! c update :refuges-failed (fnil conj #{}) (room-lib/cell-key (:start room))))
 
 (defn ^:async run-home!
-  "A step to room (home or another closed building) to the room cell inside its door way (room-lib/way-in), said
-  once a flight (retreat.home): :again; a step that gets no nearer drops that room for the rest of the flight."
+  "A step to room (home or another closed building): one leg of jobs.survival.shut-in's :room way to the room cell inside its
+  door way (room-lib/way-in), said once a flight (retreat.home): :again; a way that ends other than done (no leg got nearer, a chaser
+  reaches the door first) drops that room for the rest of the flight."
   [c room way]
   (say-once! c room)
-  (when-not (await (cornered/step! c :home (:inside way) 0)) (failed! c room))
-  :again)
+  (let [e (await (ctx/call c :room 'jobs.survival.shut-in {:ways #{:room} :at (:inside way) :flee? true}))]
+    (when-not (or (= :continue e) (= :done (:kind e))) (failed! c room))
+    :again))
 
 
 (defn ^:async flight-step!
@@ -144,7 +146,7 @@
         threats (flight/look! c)
         threat (first threats)
         hit? (or (cornered/hit-on-the-run! c) (pick/beaten? c) (pick/shot-on-the-run? c) (pick/bare-boxed-in? c (cornered/near-hostiles c)))
-        door (when threat (retreat-doors/door-to-shut c (danger-q/mob-pos p threat)))
+        door (when threat (respond.doors/door-to-shut c (danger-q/mob-pos p threat)))
         early (when (and threat (not hit?) (not door)) (await (step/early-refuge! c)))
         covered? (cover/cover-fn p threats (flight/fire-spots c))
         blast (filterv #(flight/blaster? p %) threats)
@@ -161,7 +163,7 @@
         {:keys [room way inside?]} (room-lib/pick verdicts)
         _ (when (and glanced? room inside?) (say-once! c room))
         home-now? (fn [] (or inside? (and (nil? survey) (room-lib/in-home? c (cover/home-pos c)))))
-        judged (when threat (retreat-goal/judge c (if (seq blast) [] (remove nil? [(:start (first rooms)) (cover/home-pos c)]))))
+        judged (when threat (respond.goal/judge c (if (seq blast) [] (remove nil? [(:start (first rooms)) (cover/home-pos c)]))))
         _ (when threat (step/say-choice! c survey verdicts judged blast))
         stuck (fn ^:async stuck [why]
                 (if (seq (cornered/near-hostiles c))
@@ -175,7 +177,7 @@
         (choose/choose {:threat threat :early early :no-gain? (flight/no-gain? (ctx/mem c) (flight/no-gain-steps))
                         :angry-enderman? (and threat (cornered/angry-enderman? c near)) :hit? hit?
                         :flyer? (some combat/flyer? near) :door door :inside? inside?
-                        :home-door (when inside? (retreat-doors/home-door c room)) :way way
+                        :home-door (when inside? (respond.doors/home-door c room)) :way way
                         :outruns? (or (nil? threat) (cornered/outrun? c near))
                         :shot-open? (and (nil? threat) (shot/open? p (ctx/view c)))})]
     (case option
@@ -188,8 +190,8 @@
                  (await (stuck why)))
       :cornered (await (pick/cornered! c why (home-now?)))
       :cornered-inside (await (pick/cornered! c why inside?))
-      :shut-door (await (retreat-doors/shut-door! c door))
-      :shut-home-door (await (retreat-doors/shut-home-door! c (retreat-doors/home-door c room)))
+      :shut-door (await (respond.doors/shut-door! c door))
+      :shut-home-door (await (respond.doors/shut-home-door! c (respond.doors/home-door c room)))
       :run-home (await (run-home! c room way))
       :walk (await (step/walk-away! c threats judged rooms covered? stuck)))))
 

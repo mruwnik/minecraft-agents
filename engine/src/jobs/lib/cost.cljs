@@ -61,6 +61,7 @@
 (def default-reserve fight/default-reserve)
 (def fight-damage fight/fight-damage)
 (def decide fight/decide)
+(def leaves-reserve? fight/leaves-reserve?)
 
 (def route-danger danger/route-danger)
 (def straight-route danger/straight-route)

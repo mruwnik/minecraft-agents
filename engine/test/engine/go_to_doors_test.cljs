@@ -622,7 +622,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[label entries arrives?]
-                [["own seal in the ledger" (mapv (fn [cell] {:cell cell :item "dirt" :before "air" :job "j9" :purpose :retreat-seal :state :placed}) body-seal-cells) true]
+                [["own seal in the ledger" (mapv (fn [cell] {:cell cell :item "dirt" :before "air" :job "j9" :purpose :seal :state :placed}) body-seal-cells) true]
                  ["same blocks, not the body's" [] false]]]
           (let [world {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (merge flat (zipmap (map #(clojure.string/join "," %) body-seal-cells) (repeat "dirt")))}
                 {:keys [eng clock]} (setup world [])

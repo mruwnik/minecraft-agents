@@ -9,7 +9,7 @@
             [jobs.lib.choose :as choose]
             [jobs.lib.escape :as escape]
             [jobs.lib.reserve :as reserve]
-            [jobs.survival.retreat-flight :as flight]))
+            [jobs.survival.respond.state :as flight]))
 
 (defn body
   [items & overrides]

@@ -12,7 +12,7 @@
             [jobs.survival.extinguish :as extinguish]
             [jobs.survival.night.sites :as sites]
             [jobs.survival.recover-drops.config :as recover-drops]
-            [jobs.survival.retreat-flight :as flight]))
+            [jobs.survival.respond.state :as flight]))
 
 (deftest an-override-changes-the-value-read-at-use
   (settings/with-settings {:jobs.access.pillar/max-height 10 :jobs.survival.extinguish/walk-cost 1.5

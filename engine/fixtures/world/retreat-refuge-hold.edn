@@ -25,7 +25,7 @@
    :expect [{:event {:source :job :kind :retreat_sealed :message [:contains "pillared up"]} :within-s 40}
             {:event {:source :job :kind :retreat.hide-breached :message [:contains "creeper"]} :within-s 70}]}
   {:name "creeper-at-the-pillar-setting-off-body-stays"
-   :settings {:jobs.survival.retreat-refuge/leave-for-breakers false}
+   :settings {:jobs.survival.hide-out/leave-for-breakers false}
    :body {:inventory [["dirt" 20]]}
    :act [[:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :job :kind :retreat_sealed} 40]

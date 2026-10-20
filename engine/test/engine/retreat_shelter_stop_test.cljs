@@ -14,7 +14,7 @@
             [jobs.lib.dig-look :as dig-look]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.pit-drops :as pit-drops]
-            [jobs.survival.retreat-pit :as pit]))
+            [jobs.survival.pit-cells :as pit]))
 
 (def dead-end-cells (set (for [x (range 0 9) y [64 65]] [x y 0])))
 
@@ -91,7 +91,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [p (await (round (pocket-world "air") {:settings {:jobs.survival.retreat-cornered/fist-sweeps 0}}))]
+        (let [p (await (round (pocket-world "air") {:settings {:jobs.survival.respond.options/fist-sweeps 0}}))]
           (is (= [[-1 64 0] [-1 65 0]] (calls p "dig")) "the near pair dug, the cave behind it showed, the far pair never dug")
           (is (not-any? #{[-1 64 0] [-1 65 0]} (calls p "place")) "never sealed in"))))))
 
@@ -107,7 +107,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [p (await (round (pocket-world "lava") {:settings {:jobs.survival.retreat-refuge/on-lava :stop}}))]
+        (let [p (await (round (pocket-world "lava") {:settings {:jobs.survival.respond.refuge/on-lava :stop}}))]
           (is (not-any? #{[-2 64 0]} (calls p "place")) "nothing placed into the lava")
           (is (not-any? #{[0 64 0] [0 65 0]} (calls p "place")) "not sealed in beside it"))))))
 
@@ -224,7 +224,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[x y z] deep-cells]
-          (let [r (await (pit-round (plain-world {(key-of x y z) "lava"} false) {:settings {:jobs.survival.retreat-refuge/on-lava :stop}}))]
+          (let [r (await (pit-round (plain-world {(key-of x y z) "lava"} false) {:settings {:jobs.survival.respond.refuge/on-lava :stop}}))]
             (is (not ((:stood r) "lava")) (str "lava at " [x y z] ": the body never stands in it"))
             (is (= "lava" (block-at (:p r) x y z)) "the lava is left")
             (is (not ((:kinds r) :shelter_seal_failed)) "no seal tried")))))))

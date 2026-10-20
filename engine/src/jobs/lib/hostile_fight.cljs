@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.combat :as combat]
+            [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.util :as u]))
 
@@ -87,3 +88,30 @@
       {:killed (:killed data) :given-up (:given-up data) :names (:names data)
        :hits (pick :hits) :health (pick :health) :quiet (pick :quiet)
        :fails (pick :blocked) :fail-health (pick :blocked-health)})))
+
+(defn mob-of
+  "What fight-damage needs of hostile e: its name, distance (jobs.lib.danger/mob-distance: a heard one by its band) and
+  the hits the attack has landed on it (struck, its :struck entry, or nil)."
+  [p struck e]
+  (cond-> {:name (.-name e) :distance (danger-q/mob-distance p e) :hits (:hits struck 0)}
+    (number? (:health struck)) (assoc :health (:health struck))))
+
+(defn damage
+  "The damage fighting hostiles with the best weapon carried is expected to cost (jobs.lib.cost/fight-damage); struck-of
+  maps a mob id to what the attack counted on it (nil: none)."
+  [c hostiles struck-of]
+  (let [p (:primitives c)
+        self (.self p)]
+    (cost/fight-damage {:weapon (combat/best-weapon p (combat/weapons c))
+                        :equipment (cost/equipment-of (.-equipment self))
+                        :mobs (map #(mob-of p (struck-of (.-id %)) %) hostiles)})))
+
+(defn wins?
+  "Whether fighting hostiles leaves :reserve health (jobs.lib.danger/fight-reserve): the one weighing the response and the
+  flight's cornered options share. Never against a creeper, nor against none."
+  ([c hostiles] (wins? c hostiles (constantly nil)))
+  ([c hostiles struck-of]
+   (boolean (and (seq hostiles)
+                 (not-any? combat/creeper? hostiles)
+                 (cost/leaves-reserve? {:health (.-health (.self (:primitives c))) :reserve (danger-q/fight-reserve)
+                                        :damage (damage c hostiles struck-of)})))))

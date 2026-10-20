@@ -14,7 +14,7 @@
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.dig-pit :as pit-quote]
             [jobs.survival.plug-way :as way]
-            [jobs.survival.retreat-pit :as pit]))
+            [jobs.survival.pit-cells :as pit]))
 
 (def doc
   "A way of jobs.survival.shut-in: dig a pocket into a wall beside the body (feet and head cell, depth 1), step in and wall the way in
@@ -107,7 +107,7 @@
     (way/quote-of c seconds (settings/get settings ::job-time-s))))
 
 (defn ^:async step!
-  "A pocket dug once (retreat-pit/pocket!: it steps in), then walls on its way in: :done, :again, or nil with none that fits
+  "A pocket dug once (pit-cells/pocket!: it steps in), then walls on its way in: :done, :again, or nil with none that fits
   or one that cannot be walled."
   [c]
   (if (:dug (ctx/mem c))

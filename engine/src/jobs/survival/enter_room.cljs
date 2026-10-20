@@ -23,12 +23,13 @@
             [jobs.lib.waits :as waits]
             [jobs.survival.room-plug :as room-plug]
             [jobs.survival.plug-way :as way]
-            [jobs.survival.retreat-doors :as retreat-doors]))
+            [jobs.survival.respond.doors :as respond.doors]
+            [jobs.survival.respond.options :as options]))
 
 (def doc
   "Walk into a known closed room and close it: the :place (a remembered place name; default the home, or where the body
   is when it is roofed) is walked to (a go-to child, key :roof-walk), then an
-  open door or gate of the room is shut (retreat-doors/shut-home-door!; a door still open once clicked writes
+  open door or gate of the room is shut (respond.doors/shut-home-door!; a door still open once clicked writes
   :night-door-failed, which ends the job nothing-possible :door-open), a doorway gap in its walls is
   filled (jobs.blocks.fill-cells: a carried wooden door, else the call's :use :blocks; the filled cells go into the scaffold ledger as :doorway,
   which survival.leave-shelter takes back by day (jobs.access.cleanup); a doorway tried once, or left open for want of blocks, is not tried again tonight, :doorway-tried) and a hole in
@@ -37,12 +38,15 @@
   Done {:pos :placed :roof} when the body is in a closed room (sh-sense/shut-in-room?) with no open door and no doorway gap, at once when it is.
   Nothing-possible: :no-room (no place known and the body not roofed), :no-walk (go-to did not arrive), :door-open, :no-blocks (a gap or hole
   and none carried), :failed (a fill that did not hold), :open (the room cannot be closed).
-  Quote: go-to's route seconds (dark cells priced in; ##Inf with no route), or once in the room ::door-s for a door and ::fill-s for each fill; ##Inf when
+  Quote (a flee entry skips the room and race checks: the flight judged them this step): go-to's route seconds (dark cells priced in; ##Inf with no route), or once in the room ::door-s for a door and ::fill-s for each fill; ##Inf when
   the place is not remembered, a creeper is near, or a melee hostile reaches a door of the room first (jobs.lib.rooms/race-won?).
   Picked by jobs.survival.shut-in as its :room way, and called by the night for a door, a doorway and the walk home to a bed.")
 
 (a/defargs args
-  {:place {:doc "the room to enter: a remembered place name (default the home)" :spec (a/or-of keyword? string?) :default nil}})
+  {:at {:doc "a cell inside the room to enter, instead of a place" :spec ::a/pos :default nil}
+   :flee? {:doc "walk in as a flee step: legs of jobs.movement.run-away (:leg-s seconds, no digging or pillaring), one leg a round; for a body running from a hostile" :spec boolean? :default false}
+   :leg-s {:doc "seconds one flee leg may take; nil: the respond.options flight step setting" :spec (a/num-in 0.1 120) :default nil}
+   :place {:doc "the room to enter: a remembered place name (default the home)" :spec (a/or-of keyword? string?) :default nil}})
 
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds an entering may take." :spec (a/num-in 0 nil)}
@@ -90,6 +94,7 @@
   (let [nm (or (:place (:args c)) :home)
         pos (mem/place (ctx/view c) nm)]
     (cond
+      (:at (:args c)) (let [at (:at (:args c))] (when-not (refused? c at) {:pos at}))
       pos (when-not (refused? c pos) {:name nm :pos pos})
       (:place (:args c)) nil
       :else (nearest-seen c))))
@@ -192,7 +197,7 @@
     (cond
       (and (shut? c) (nil? (room-lib/gap c))) (priced 0)
       (not (here? c t))
-      (if (or (nil? t) (unclosable? (:primitives c) (:pos t)) (race-lost? c t))
+      (if (or (nil? t) (and (not (:flee? (:args c))) (or (unclosable? (:primitives c) (:pos t)) (race-lost? c t))))
         (priced ##Inf)
         (let [route (await (room-lib/route-cost c (walk-args t)))]
           (priced (or route ##Inf))))
@@ -202,25 +207,39 @@
                      door (settings/get settings ::door-s)
                      :else (* (count (or gap [plug])) (settings/get settings ::fill-s))))))))
 
-(defn ^:async walk!
-  "A go-to child to the target (key :roof-walk); :again once it arrived, :continue while it goes on, else the call ends :no-walk."
+(defn ^:async flee-leg!
+  "One jobs.movement.run-away leg (key :roof-walk) toward the room's middle: :again once arrived, :continue after a leg that
+  got nearer, nil otherwise."
   [c t]
-  (let [w (waits/waiting-out c (await (ctx/call c :roof-walk 'jobs.movement.go-to (walk-args t))))]
+  (let [w (await (ctx/call c :roof-walk 'jobs.movement.run-away
+                           {:pos (room-lib/mid (:pos t)) :range 0.7 :leg-s (or (:leg-s (:args c)) (options/flight-timeout-s))}))]
     (cond
       (= :continue w) :continue
+      (:arrived (:data w)) :again
+      (and (= :limit-reached (:kind w)) (:nearer (:data w))) :continue)))
+
+(defn ^:async walk!
+  "A go-to child to the target (key :roof-walk; with :flee? a run-away leg a round); :again once it arrived, :continue while it goes on, else the call ends :no-walk."
+  [c t]
+  (let [w (if (:flee? (:args c))
+            (or (await (flee-leg! c t)) :stuck)
+            (waits/waiting-out c (await (ctx/call c :roof-walk 'jobs.movement.go-to (walk-args t)))))]
+    (cond
+      (= :continue w) :continue
+      (= :again w) :again
       (:arrived (:data w)) :again
       :else (ctx/end c :nothing-possible :no-walk {:text (str "could not walk into the room" (when (:name t) (str " at " (name (:name t)))))
                                                    :cause (:cause w)}))))
 
 (defn ^:async shut-door!
-  "Shut an open door of the closed room the body stands in (retreat-doors/shut-home-door!: from where it stands within a hand's
+  "Shut an open door of the closed room the body stands in (respond.doors/shut-home-door!: from where it stands within a hand's
   reach, else a step to the room cell inside it first). No zone rule applies: shutting a door changes no block. A door still
   open once clicked writes :night-door-failed for this door, so the night does not call the body safe
   behind it. :again."
   [c door]
-  (await (retreat-doors/shut-home-door! c door))
+  (await (respond.doors/shut-home-door! c door))
   (when (and (some #(= (sh/door-key (:cell door)) (sh/door-key (:cell %))) (sh/open-doors (:primitives c) (ctx/view c)))
-             (contains? (:doors-clicked (ctx/mem c) #{}) (retreat-doors/door-key (:cell door))))
+             (contains? (:doors-clicked (ctx/mem c) #{}) (respond.doors/door-key (:cell door))))
     (ctx/remember! c :night-door-failed {:door (sh/door-key (:cell door))} {:cap 1 :ttl (sh/door-failed-ms)}))
   :again)
 

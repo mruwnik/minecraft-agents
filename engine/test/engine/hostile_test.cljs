@@ -1304,7 +1304,7 @@
 (deftest respond-weighs-a-heard-mob-by-its-rough-distance
   (let [p (tu/fake-on-floor {:floor flight-floor :entities [(assoc (heard-zombie) :visible false)]})
         e (first (combat/hostiles p 8))]
-    (is (= 4 (:distance (respond-to-hostile/mob-of p nil e))) "the near band stands for 4 blocks, not the exact 3")))
+    (is (= 4 (:distance (hostile-fight/mob-of p nil e))) "the near band stands for 4 blocks, not the exact 3")))
 
 (deftest recover-drops-logs-a-heard-danger-at-its-rough-spot
   (let [p (tu/fake-on-floor {:floor flight-floor :entities [(assoc (heard-zombie) :visible false)]})

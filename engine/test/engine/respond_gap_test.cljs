@@ -114,7 +114,7 @@
   [spec slots hides?]
   (let [s (await (respond! spec))]
     (is (not (placed? s)))
-    (is (= slots (remove #{:pause} (calls s))) "holds not counted: how many depends on real time")
+    (is (= slots (remove #{:pause :hide} (calls s))) "holds not counted: how many depends on real time")
     (is (= [:flee] (decisions s)) "a lone skeleton with no weapon: flee")
     (is (= hides? (hiding-seen? s)))
     s))

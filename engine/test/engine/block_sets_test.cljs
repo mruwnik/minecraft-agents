@@ -2,7 +2,7 @@
   "jobs.lib.block-sets: the named sets nest as their callers rely on."
   (:require [cljs.test :refer [deftest is are]]
             [jobs.lib.block-sets :as bs]
-            [jobs.survival.retreat-walk :as walk]))
+            [jobs.survival.respond.walk :as walk]))
 
 (deftest passable-names-are-the-collision-free-ones
   (are [n] (bs/passable? n)

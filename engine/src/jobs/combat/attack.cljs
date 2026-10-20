@@ -38,7 +38,7 @@
     sound (jobs.lib.vantage). :absent :wait makes the call wait (can-start? :no-target) until one is present: a standing guard.
   - :limit-reached: the engine's limit (default :spend :job-time ::job-time-s), with the same data.
   The job does not guard the body's health: the survival register above it cuts it.
-  {:targets :hostiles} is the reflex fight (respond-to-hostile, retreat-cornered): hostiles within :radius (ranged ones
+  {:targets :hostiles} is the reflex fight (respond-to-hostile, respond.options): hostiles within :radius (ranged ones
   within :ranged-radius), except the ids in :skip. Only a hostile the body has seen is fought; one only heard is turned
   toward (:nothing-possible :heard-only), never walked to. One beyond hostile-fight/::leash of where the fight began is not
   chased. With :hold a melee hostile beyond reach is waited for (:nothing-possible :hold-timeout after hostile-fight/::hold-s

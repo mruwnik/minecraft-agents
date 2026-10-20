@@ -43,6 +43,8 @@
    :trespass? {:doc "false: the walls, pit and pocket ways fail rather than use a cell of another's zone, claim or plan (the caller tries again with true as a last resort)" :spec boolean? :default true}
    :for {:doc "why the body shuts itself in: :danger (blocks are taken back by the cleanup once no hostile is near; a hostile in a cell fails it), :night (blocks stay for the night; a mob in a cell is waited out)" :spec #{:danger :night} :default :danger}
    :place {:doc "the :room way: the room to enter, a remembered place name (default the home)" :spec (a/or-of keyword? string?) :default nil}
+   :at {:doc "the :room way: a cell inside the room to enter, instead of a place (a room the body saw)" :spec ::a/pos :default nil}
+   :flee? {:doc "the :room way: walk in as a flee step (legs of run-away, no digging or pillaring, one leg a round), for a body running from a hostile" :spec boolean? :default false}
    :fetch {:doc "dig-pocket: get a missing tool (jobs.lib.need): true, a set of kinds or a map of limits" :spec need/option? :default false}
    :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pit or pocket is dropped and the lava left" :spec #{:seal :stop} :default :seal}})
 
@@ -62,7 +64,7 @@
 
 (def children
   "Each way's job and the args of this call it takes."
-  {:room ['jobs.survival.enter-room [:place]]
+  {:room ['jobs.survival.enter-room [:place :at :flee?]]
    :walls ['jobs.survival.wall-in [:for :ignore-zones? :trespass?]]
    :pit ['jobs.survival.dig-pit [:for :ignore-zones? :trespass? :on-lava]]
    :pocket ['jobs.survival.dig-pocket [:for :ignore-zones? :trespass? :fetch :on-lava]]})

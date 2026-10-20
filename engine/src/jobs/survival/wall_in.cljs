@@ -8,7 +8,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.plug-way :as way]
-            [jobs.survival.retreat-flight :as flight]))
+            [jobs.survival.respond.state :as flight]))
 
 (def doc
   "A plug way: fill the open sides at feet and head height, a roof support and the roof round the body with carried blocks, the side

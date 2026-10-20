@@ -96,7 +96,7 @@
    :limit-s 40}
   ;; card 4e2615d0: an angry enderman that never leaves (speed 0) must not hold the body in water for ever: after hold-cap holds the flight moves on to the next options (roof, seal, or none left)
   {:name "staying-enderman-ends-the-water-hold-and-the-flight-ends"
-   :settings {:jobs.survival.retreat-cornered/hold-cap 2}
+   :settings {:jobs.survival.respond.options/hold-cap 2}
    :blocks [[:fill [14 0 14] [18 0 18] "stone"] [:fill [15 0 15] [17 0 17] "water"]]
    :body {:inventory [["dirt" 20]] :effects [["resistance" 900 4]]}
    :register []

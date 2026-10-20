@@ -36,13 +36,18 @@
         ends (rest (reductions + 0 (map #(+ (approach %) (kill-s %)) mobs)))]
     (reduce + 0 (map (fn [m end] (threat/mob-hurt stats (:name m) end)) mobs ends))))
 
+(defn leaves-reserve?
+  "Whether a fight costing damage leaves at least reserve of health."
+  [{:keys [health damage reserve]}]
+  (<= damage (- health reserve)))
+
 (defn decide
   "Pure but for its settings: :flee from any creeper, else :fight when the expected damage leaves at least reserve
   health, or when a fight already begun (fighting?) is against a single mob (single?) above ::hysteresis-health, or
   against a mob the body cannot outrun (cannot-outrun?: the flight would lose as well), else :flee."
   [{:keys [health damage creeper? reserve fighting? single? cannot-outrun?]}]
   (if (and (not creeper?)
-           (or (<= damage (- health reserve))
+           (or (leaves-reserve? {:health health :damage damage :reserve reserve})
                (and fighting? single? (> health (settings/get settings ::hysteresis-health)))
                (and fighting? cannot-outrun?)))
     :fight

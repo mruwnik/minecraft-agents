@@ -18,15 +18,15 @@
             [jobs.survival.dig-pit-site :as site]
             [jobs.survival.plug-way :as way]
             [jobs.survival.shut-in-night :as night]
-            [jobs.survival.retreat-flight :as flight]
-            [jobs.survival.retreat-pit :as pit]))
+            [jobs.survival.respond.state :as flight]
+            [jobs.survival.pit-cells :as pit]))
 
 (def doc
   "A plug way: dig down 2 (3 on flat ground) under a solid side and plug the hole over the head with carried or dug blocks.
   Needs a pit that fits (every cell solid rock, no fluid or hazard in or beside it, none at the roof, solid under the bottom) and a
-  block to plug with, carried or dug (a block the tools cannot harvest is dug by hand once one is in hand and the hand breaks it within retreat-pit's ::night-hand-clear-ms for :night, else jobs.lib.tools quick-clear-ms).
+  block to plug with, carried or dug (a block the tools cannot harvest is dug by hand once one is in hand and the hand breaks it within pit-cells's ::night-hand-clear-ms for :night, else jobs.lib.tools quick-clear-ms).
   One call is a whole attempt: :done {:pos :way :pit :roof :start} once enclosed, at once when it already is; nothing-possible :failed
-  {:reason :text :needs} when a pit fails, the reason a stop of jobs.survival.retreat-pit: :no-floor, :fluid-here, :fluid-adjacent,
+  {:reason :text :needs} when a pit fails, the reason a stop of jobs.survival.pit-cells: :no-floor, :fluid-here, :fluid-adjacent,
   :fluid-above, :hazard-below, :no-tool (:needs the block), :hostile-near (a melee hostile stands in the way), :no-blocks, :dig-failed, :descent-stalled, :roof-failed, :lays-open (a dig
   laid a cave or fluid open). The pit is never dug into what the body sees as fluid, a hazard or open air, and it is planned again
   when the body has left its column. Lava a dig lays open is filled first (:on-lava :seal). Every plug goes to the scaffold ledger
@@ -87,7 +87,7 @@
 
 (defn assess
   "{:plan p} for a pit that fits (p is nil while only a floor not yet seen rules it out: the pit looks first; not so for :night,
-  which looks before it asks), else {:stop stop} (retreat-pit/stop-of, or :spared)."
+  which looks before it asks), else {:stop stop} (pit-cells/stop-of, or :spared)."
   [c]
   (let [feet (sh-sense/feet (:primitives c))
         blocks (flight/blocks c)
@@ -99,12 +99,12 @@
       :else {:plan plan})))
 
 (defn why-not
-  "The stop (retreat-pit/stop-of's {:stop reason :text}) that rules a pit out here, nil when one may fit."
+  "The stop (pit-cells/stop-of's {:stop reason :text}) that rules a pit out here, nil when one may fit."
   [c]
   (:stop (assess c)))
 
 (defn ^:async look!
-  "A look at the roof's surroundings and the side columns the body has not sensed (retreat-pit/plan-of!), so the quote reads what a pit would."
+  "A look at the roof's surroundings and the side columns the body has not sensed (pit-cells/plan-of!), so the quote reads what a pit would."
   [c]
   (await (pit/plan-of! c (flight/blocks c)))
   nil)

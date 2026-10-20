@@ -18,17 +18,17 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.survival.respond-flight :as retreat]
-            [jobs.survival.retreat-cornered :as cornered]
+            [jobs.survival.respond.options :as cornered]
             [jobs.survival.respond-choose :as choose]
-            [jobs.survival.retreat-cornered.pick :as pick]
+            [jobs.survival.respond.cornered :as pick]
             [jobs.lib.shot :as shot]
-            [jobs.survival.retreat-flight :as flight]
-            [jobs.survival.retreat-refuge :as refuge]
-            [jobs.survival.retreat-cover :as cover]
-            [jobs.survival.retreat-walk :as retreat-walk]
+            [jobs.survival.respond.state :as flight]
+            [jobs.survival.respond.refuge :as refuge]
+            [jobs.survival.respond.cover :as cover]
+            [jobs.survival.respond.walk :as respond.walk]
             [jobs.lib.seal :as seal]
-            [jobs.survival.retreat-pillar :as retreat-pillar]
-            [jobs.survival.retreat-seal :as retreat-seal]))
+            [jobs.survival.respond.pillar :as respond.pillar]
+            [jobs.survival.wall-placer :as wall-placer]))
 
 (defn setup
   "An engine over a fake; its clock moves a second with every primitive call (a whole flight ends by time). The world's
@@ -119,7 +119,7 @@
 
 (def hiding-retreat
   "A retreat that hides on for as long as the test needs (:hide-s far off)."
-  '(test.flight {:settings {:jobs.survival.retreat-refuge/hide-s 100000}}))
+  '(test.flight {:settings {:jobs.survival.hide-out/hide-s 100000}}))
 
 (deftest a-retreat-walks-back-down-the-stair-it-came-up
   (async done
@@ -205,7 +205,7 @@
         (let [{:keys [eng p seen]} (setup {:blocks dead-end :inventory [{:name "cobblestone" :count 20}] :entities [(skeleton 4 64 0)]})
               _ (add-watch (fake/state p) :mob-out
                            (fn [_ _ _ w] (when (and (seq (:entities w)) (get-in w [:blocks [1 64 0]])) (swap! (fake/state p) assoc :entities []))))
-              round (do (core/submit! eng '(test.flight {:settings {:jobs.survival.retreat-seal/max-places 1}}) {})
+              round (do (core/submit! eng '(test.flight {:settings {:jobs.survival.wall-placer/max-places 1}}) {})
                         (core/tick! eng))]
           (await round)
           (is (= [[1 64 0] [1 65 0]] (placed-cells p)) "the seal is finished though the skeleton is out of sense")
@@ -285,7 +285,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p while-hidden]}
-              (await (hidden-round '(jobs.survival.respond-to-hostile {:settings {:jobs.survival.retreat-refuge/hide-s 100000}})
+              (await (hidden-round '(jobs.survival.respond-to-hostile {:settings {:jobs.survival.hide-out/hide-s 100000}})
                                    {:blocks dead-end :inventory [{:name "cobblestone" :count 20}]
                                     :entities [(assoc (skeleton 4 64 0) :name "zombie")]}
                                    100000 (fn [{:keys [eng]}] (:list (core/state eng)))))]
@@ -319,7 +319,7 @@
 (defn hidden-holds
   "The :hold (:spent or :quiet) of each flight ending that carries one."
   [seen]
-  (vec (keep #(or (:hold %) (get-in % [:ending :data :hold])) (filter #(#{:completed :child_ended} (:kind %)) @seen))))
+  (vec (keep #(or (:hold %) (get-in % [:ending :data :hold])) (filter #(and (#{:completed :child_ended} (:kind %)) (not= :hide (:slot %))) @seen))))
 
 (defn ^:async hide-steps
   "Submit spec over world and run its round. Once it hides, each [entities jump-ms] of steps replaces the mobs and
@@ -358,7 +358,7 @@
       (fn ^:async t []
         (doseq [[spec listed-want] [['(test.flight) [[]]]
                                       ['(jobs.survival.respond-to-hostile) [[]]]
-                                      ['(jobs.survival.respond-to-hostile {:settings {:jobs.survival.retreat-refuge/hide-s 100000}}) [["j1"]]]]]
+                                      ['(jobs.survival.respond-to-hostile {:settings {:jobs.survival.hide-out/hide-s 100000}}) [["j1"]]]]]
           (let [{:keys [listed]}
                 (await (hide-steps spec {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20}]
                                          :entities [(zombie-at 4)]}
@@ -383,7 +383,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng listed]}
-              (await (hide-steps '(test.flight {:settings {:jobs.survival.retreat-refuge/quiet-s 2000 :jobs.survival.retreat-refuge/hide-s 100000}})
+              (await (hide-steps '(test.flight {:settings {:jobs.survival.hide-out/quiet-s 2000 :jobs.survival.hide-out/hide-s 100000}})
                                  {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20}]
                                   :entities [(zombie-at 4)]}
                                  [[[(zombie-at 12)] 0] [[] 10000]]))]
@@ -410,7 +410,7 @@
       (fn ^:async t []
         (doseq [[q ok?] [[0 #(< % 5)] [120 #(>= % 100)]]]
           (let [{:keys [waits]}
-                (await (hide-steps (list 'jobs.survival.respond-to-hostile {:settings {:jobs.survival.retreat-refuge/quiet-s q :jobs.survival.retreat-refuge/hide-s 100000}})
+                (await (hide-steps (list 'jobs.survival.respond-to-hostile {:settings {:jobs.survival.hide-out/quiet-s q :jobs.survival.hide-out/hide-s 100000}})
                                    {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20}]
                                     :entities [(zombie-at 4)]}
                                    [[[] 0]]))]
@@ -858,9 +858,9 @@
   (fn [{:keys [x y z]}] (if (and (= y 63) (<= x edge) (= z 0)) "stone" "air")))
 
 (deftest walk-cells-stop-at-the-edge-of-a-floor
-  (is (= [1 2 3] (mapv :x (retreat-walk/walk-cells (edge-world 3) {:x 0.5 :y 64 :z 0.5} [1 0] 6))) "the cells past the edge have no floor")
-  (is (= [1 2 3] (mapv :x (retreat-walk/walk-cells (edge-world 3) {:x 0.5 :y 64 :z 0.5} [1 0] 3))))
-  (is (= [1 2 3 4 5 6] (mapv :x (retreat-walk/walk-cells (edge-world 9) {:x 0.5 :y 64 :z 0.5} [1 0] 6)))))
+  (is (= [1 2 3] (mapv :x (respond.walk/walk-cells (edge-world 3) {:x 0.5 :y 64 :z 0.5} [1 0] 6))) "the cells past the edge have no floor")
+  (is (= [1 2 3] (mapv :x (respond.walk/walk-cells (edge-world 3) {:x 0.5 :y 64 :z 0.5} [1 0] 3))))
+  (is (= [1 2 3 4 5 6] (mapv :x (respond.walk/walk-cells (edge-world 9) {:x 0.5 :y 64 :z 0.5} [1 0] 6)))))
 
 (defn sealed-world
   "Floor at y 63 everywhere, stone at feet and head height on the four sides of cell 0,0 only: the diagonals open."
@@ -871,9 +871,9 @@
     :else "air"))
 
 (deftest walk-cells-do-not-cut-a-corner-between-two-blocks
-  (is (= [] (retreat-walk/walk-cells sealed-world {:x 0.5 :y 64 :z 0.5} (retreat-walk/unit 1 1) 2))
+  (is (= [] (respond.walk/walk-cells sealed-world {:x 0.5 :y 64 :z 0.5} (respond.walk/unit 1 1) 2))
       "a body walled in on four sides cannot squeeze out diagonally")
-  (is (= 2 (count (retreat-walk/walk-cells (fn [{:keys [y]}] (if (= y 63) "stone" "air")) {:x 0.5 :y 64 :z 0.5} (retreat-walk/unit 1 1) 2)))
+  (is (= 2 (count (respond.walk/walk-cells (fn [{:keys [y]}] (if (= y 63) "stone" "air")) {:x 0.5 :y 64 :z 0.5} (respond.walk/unit 1 1) 2)))
       "past no corner, the diagonal is open"))
 
 (defn ^:async first-act-round
@@ -1036,12 +1036,6 @@
           (is (zero? (count (calls p "attack"))))
           (is (pos? (count (calls p "place"))) "blocks between it and the enderman"))))))
 
-(deftest water-cell-is-the-nearest-seen-water-within-reach
-  (let [water #{[3 64 0] [-2 64 1] [9 64 0]}
-        at (fn [{:keys [x y z]}] (if (water [x y z]) "water" "air"))]
-    (is (= {:x -2 :y 64 :z 1} (cornered/water-cell at {:x 0.5 :y 64 :z 0.5} 6)))
-    (is (nil? (cornered/water-cell at {:x 20.5 :y 64 :z 0.5} 6)) "none within reach")))
-
 (deftest a-body-with-an-enderman-near-steps-into-water-nearby
   (async done
     (tu/run-async done
@@ -1076,23 +1070,9 @@
         (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}] :blocks {(key-of 0 64 0) "water"}
                                       :entities [(enderman 2.5 64 0.5)]})]
           (core/submit! eng retreat {})
-          (await (settings/with-settings {:jobs.survival.retreat-cornered/hold-cap 2}
+          (await (settings/with-settings {:jobs.survival.respond.options/hold-cap 2}
                    (fn ^:async tick [] (await (core/tick! eng)))))
           (is (pos? (count (calls p "place"))) "after the capped holds the body walls itself in"))))))
-
-(deftest roof-cell-is-the-nearest-seen-two-high-gap-under-a-roof
-  (let [solid #{[0 63 0] [3 63 0] [3 66 0] [-2 63 1] [-2 65 1] [9 63 0] [9 66 0]}
-        at (fn [{:keys [x y z]}] (if (solid [x y z]) "stone" "air"))]
-    (is (= {:x 3 :y 64 :z 0} (cornered/roof-cell at {:x 0.5 :y 64 :z 0.5} 8)) "a cell with a block at head height is no gap; one beyond reach is skipped")
-    (is (nil? (cornered/roof-cell at {:x 20.5 :y 64 :z 0.5} 8)) "none within reach")))
-
-(deftest roof-cell-prefers-a-cell-no-enderman-can-stand-within-two-cells-of
-  (let [roof (for [x (range 3 9) z (range -3 4)] [x 66 z])
-        floor (for [x (range 0 9) z (range -3 4)] [x 63 z])
-        solid (set (concat roof floor))
-        at (fn [{:keys [x y z]}] (if (solid [x y z]) "stone" "air"))]
-    (is (= {:x 5 :y 64 :z 0} (cornered/roof-cell at {:x 0.5 :y 64 :z 0.5} 8))
-        "the edge cell x=3 is open to a 3-high stand at x=2: it takes the first cell 2 in")))
 
 (deftest a-body-with-an-enderman-near-and-no-water-walks-under-a-nearby-roof
   (async done
@@ -1146,9 +1126,9 @@
         east {:x 1 :y 64 :z 0} west {:x -1 :y 64 :z 0}
         support {:x 1 :y 66 :z 0} roof {:x 0 :y 66 :z 0}
         cells [east west support roof]]
-    (is (= [west east support roof] (retreat-seal/nearest-first feet [{:x -3.5 :y 64 :z 0.5}] cells)) "the side towards it first; support, then roof")
-    (is (= [east west support roof] (retreat-seal/nearest-first feet [{:x 0.5 :y 66 :z 0.5}] cells)) "a zombie over the roof does not pull the roof ahead of its support")
-    (is (= cells (retreat-seal/nearest-first feet [] cells)) "no chaser: as given")))
+    (is (= [west east support roof] (wall-placer/nearest-first feet [{:x -3.5 :y 64 :z 0.5}] cells)) "the side towards it first; support, then roof")
+    (is (= [east west support roof] (wall-placer/nearest-first feet [{:x 0.5 :y 66 :z 0.5}] cells)) "a zombie over the roof does not pull the roof ahead of its support")
+    (is (= cells (wall-placer/nearest-first feet [] cells)) "no chaser: as given")))
 
 (deftest a-creeper-beside-an-enderman-keeps-the-creeper-order
   (is (= :back-off (first (choose/escape-order {:enderman? true :creeper? true})))))
@@ -1389,7 +1369,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p seen]}
-              (await (hidden-round '(jobs.survival.respond-to-hostile {:settings {:jobs.survival.retreat-refuge/hide-s 100000}})
+              (await (hidden-round '(jobs.survival.respond-to-hostile {:settings {:jobs.survival.hide-out/hide-s 100000}})
                                    {:self {:health 20 :food 20} :inventory [{:name "cobblestone" :count 20}]
                                     :entities [{:id 9 :name "spider" :kind "hostile" :pos {:x 4 :y 64 :z 0} :health 16}]}
                                    120000 (fn [_] nil)))]
@@ -1411,7 +1391,7 @@
           (core/submit! eng retreat {})
           (dotimes [_ 6] (await (core/tick! eng)))
           (is (empty? (calls p "attack")) "no fist fight")
-          (is (= :swim-out (:slot (first (filter #(= :retreat.step-speed (:kind %)) @seen)))) "the walk is the swim-out step")
+          (is (= :dry (:slot (first (filter #(= :retreat.step-speed (:kind %)) @seen)))) "the walk is the swim-out step")
           (is (= -5 (:x (first-move eng))) "the first walk is to the nearest dry land, west of the pool"))))))
 
 (deftest a-sealed-body-that-keeps-taking-hits-leaves-the-seal-and-fights
@@ -1422,7 +1402,7 @@
                                            :entities [(assoc (zombie 3 64 0) :visible true)]})
               hurt! #(swap! (fake/state p) update-in [:self :health] - 2)]
           (.override (.-world p) "wait" (fn [token a impl] (when (hiding? seen) (hurt!)) (impl token a)))
-          (core/submit! eng '(test.flight {:settings {:jobs.survival.retreat-refuge/hide-s 100000}}) {})
+          (core/submit! eng '(test.flight {:settings {:jobs.survival.hide-out/hide-s 100000}}) {})
           (await (core/tick! eng))
           (is (= 1 (count (filter #(= :retreat_sealed (:kind %)) @seen))) "sealed first")
           (is (pos? (count (calls p "attack"))) "hit while sealed: it stops hiding and hits back"))))))
@@ -1451,10 +1431,10 @@
         with (fn [cells] (fn [pos] (if (contains? cells pos) "stone" (floor pos))))
         column (fn [x h] (for [y (range 64 (+ 64 h))] [x y 0]))
         slope (set (concat (column 1 3) (column 2 2) (column 3 1)))]
-    (is (true? (retreat-pillar/pillar-ok? (with #{}) [0 64 0])) "open ground all round")
-    (is (false? (retreat-pillar/pillar-ok? (with slope) [0 64 0]))
+    (is (true? (respond.pillar/pillar-ok? (with #{}) [0 64 0])) "open ground all round")
+    (is (false? (respond.pillar/pillar-ok? (with slope) [0 64 0]))
         "a slope up to the pillar's top: a zombie walks up and reaches the body")
-    (is (true? (retreat-pillar/pillar-ok? (with (set (column 1 3))) [0 64 0]))
+    (is (true? (respond.pillar/pillar-ok? (with (set (column 1 3))) [0 64 0]))
         "a wall of the same height with no steps up to it: out of reach")))
 
 (defn ^:async pillar-then-arrives

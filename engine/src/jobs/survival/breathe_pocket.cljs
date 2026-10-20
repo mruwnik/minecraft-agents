@@ -15,7 +15,7 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
-            [jobs.survival.retreat-pit :as pit]))
+            [jobs.survival.pit-cells :as pit]))
 
 (a/defargs settings
   {::dig-share {:default 0.6 :doc "Share of the air left (oxygen, then health) the two digs of a dry pocket may take; a slower pocket is not started." :spec (a/num-in 0 1)}
@@ -40,7 +40,7 @@
     (boolean (or (breath/suffocates-here? p below) (some-> (u/seen-block p below) .-fullCube)))))
 
 (defn ^:async site!
-  "Where a dry pocket can be made from where the body stands, {:cells [feet head feet2 head2]} (jobs.survival.retreat-pit/pocket-site), after a
+  "Where a dry pocket can be made from where the body stands, {:cells [feet head feet2 head2]} (jobs.survival.pit-cells/pocket-site), after a
   look at the wall cells not seen and with the best tool held; else {:why kw}: :off (arg :pocket false), the
   outcome of the run's earlier pocket (one a run), :made-near (see ::near), :no-block (no pillar block carried to plug it), :afloat, :no-wall
   (no side with two natural wall cells under a roof that does not fall) or :too-slow (the digs do not fit ::dig-share

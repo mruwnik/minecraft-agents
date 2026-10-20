@@ -23,13 +23,14 @@
             [jobs.lib.look :as look]
             [jobs.survival.respond-flight :as retreat]
             [jobs.survival.respond-to-hostile :as respond]
-            [jobs.survival.retreat-refuge :as refuge]
-            [jobs.survival.retreat-cornered :as cornered]
-            [jobs.survival.retreat-cover :as cover]
-            [jobs.survival.retreat-flight :as retreat-flight]
+            [jobs.survival.respond.refuge :as refuge]
+            [jobs.survival.hide-out :as hide-out]
+            [jobs.survival.respond.options :as cornered]
+            [jobs.survival.respond.cover :as cover]
+            [jobs.survival.respond.state :as respond.state]
             [jobs.lib.seal :as seal]
-            [jobs.survival.retreat-goal :as retreat-goal]
-            [jobs.survival.retreat-walk :as retreat-walk]))
+            [jobs.survival.respond.goal :as respond.goal]
+            [jobs.survival.respond.walk :as respond.walk]))
 
 (def ms-per-call
   "Game time one primitive call takes in these tests: a flight ends by time (out of line, its bound), so the clock moves
@@ -87,24 +88,24 @@
 (deftest a-mob-stops-chasing-past-its-range-out-of-line-or-with-no-way
   (let [now 10000 lost-ms 4000
         chasing {:mob "zombie" :distance 10 :in-line? true :way? true}]
-    (is (nil? (retreat-flight/stopped-chasing chasing 0 now lost-ms)) "in range, in line, a way: chasing")
-    (is (= :gone (retreat-flight/stopped-chasing nil 0 now lost-ms)))
-    (is (= :far (retreat-flight/stopped-chasing (assoc chasing :distance 36) now now lost-ms)))
-    (is (= :lost (retreat-flight/stopped-chasing (assoc chasing :in-line? false) 5000 now lost-ms)))
-    (is (nil? (retreat-flight/stopped-chasing (assoc chasing :in-line? false) 7000 now lost-ms)) "out of line 3 s: still")
-    (is (= :closed (retreat-flight/stopped-chasing (assoc chasing :way? false) now now lost-ms)))
-    (is (= :far (retreat-flight/stopped-chasing {:mob "skeleton" :distance 17 :in-line? true} now now lost-ms)))
-    (is (nil? (retreat-flight/stopped-chasing (assoc chasing :still-ms 4000) now now lost-ms)) "still 4 s: may be waiting")
-    (is (= :still (retreat-flight/stopped-chasing (assoc chasing :still-ms 6000) now now lost-ms)) "a melee mob that stands still is not chasing")
-    (is (nil? (retreat-flight/stopped-chasing (assoc chasing :mob "skeleton" :ranged? true :distance 10 :still-ms 60000) now now lost-ms)) "a shooter stands still and shoots")))
+    (is (nil? (respond.state/stopped-chasing chasing 0 now lost-ms)) "in range, in line, a way: chasing")
+    (is (= :gone (respond.state/stopped-chasing nil 0 now lost-ms)))
+    (is (= :far (respond.state/stopped-chasing (assoc chasing :distance 36) now now lost-ms)))
+    (is (= :lost (respond.state/stopped-chasing (assoc chasing :in-line? false) 5000 now lost-ms)))
+    (is (nil? (respond.state/stopped-chasing (assoc chasing :in-line? false) 7000 now lost-ms)) "out of line 3 s: still")
+    (is (= :closed (respond.state/stopped-chasing (assoc chasing :way? false) now now lost-ms)))
+    (is (= :far (respond.state/stopped-chasing {:mob "skeleton" :distance 17 :in-line? true} now now lost-ms)))
+    (is (nil? (respond.state/stopped-chasing (assoc chasing :still-ms 4000) now now lost-ms)) "still 4 s: may be waiting")
+    (is (= :still (respond.state/stopped-chasing (assoc chasing :still-ms 6000) now now lost-ms)) "a melee mob that stands still is not chasing")
+    (is (nil? (respond.state/stopped-chasing (assoc chasing :mob "skeleton" :ranged? true :distance 10 :still-ms 60000) now now lost-ms)) "a shooter stands still and shoots")))
 
 (deftest a-low-body-keeps-fleeing-a-ranged-mob-that-lost-its-line-while-near
   (let [now 10000 lost-ms 4000
         witch {:mob "witch" :distance 6 :in-line? false :way? true :ranged? true}]
-    (is (= :lost (retreat-flight/stopped-chasing witch 0 now lost-ms)) "a healthy body lets it go")
-    (is (nil? (retreat-flight/stopped-chasing (assoc witch :low? true) 0 now lost-ms)) "a low one may not rest 6 blocks from it")
-    (is (= :far (retreat-flight/stopped-chasing (assoc witch :low? true :distance 17) 0 now lost-ms)))
-    (is (= :lost (retreat-flight/stopped-chasing {:mob "zombie" :distance 6 :in-line? false :way? true :low? true} 0 now lost-ms))
+    (is (= :lost (respond.state/stopped-chasing witch 0 now lost-ms)) "a healthy body lets it go")
+    (is (nil? (respond.state/stopped-chasing (assoc witch :low? true) 0 now lost-ms)) "a low one may not rest 6 blocks from it")
+    (is (= :far (respond.state/stopped-chasing (assoc witch :low? true :distance 17) 0 now lost-ms)))
+    (is (= :lost (respond.state/stopped-chasing {:mob "zombie" :distance 6 :in-line? false :way? true :low? true} 0 now lost-ms))
         "a melee mob out of line is still let go")))
 
 ;; ------------------------------------------------------------------ whole flights
@@ -238,7 +239,7 @@
           (is (< (fake/dist (body-pos p) (mob-pos p 7)) 35) "lost before the follow range"))))))
 
 (deftest the-flight-time-spend-outlasts-the-longest-hide
-  (is (> (settings/get respond/settings ::respond/job-time-s) (refuge/hide-max-s))))
+  (is (> (settings/get respond/settings ::respond/job-time-s) (hide-out/hide-max-s))))
 
 (deftest a-flight-runs-past-the-old-180-s-bound-until-the-zombie-leaves
   (async done
@@ -253,7 +254,7 @@
             (.override world name (fn ^:async f [token a impl]
                                     (when (> (elapsed-s) 180) (swap! (fake/state p) assoc :entities []))
                                     (await (impl token a)))))
-          (let [{:keys [out]} (await (run-job! s 'test.flight {:settings {:jobs.survival.retreat-flight/no-gain-steps 3}}))]
+          (let [{:keys [out]} (await (run-job! s 'test.flight {:settings {:jobs.survival.respond.state/no-gain-steps 3}}))]
             (is (> (elapsed-s) 180) "the chase went on past the old 180 s bound, until the zombie left")
             (is (not= :still-chased (:reason out)))))))))
 
@@ -362,7 +363,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [longest-ms]} (await (settings/with-settings {:jobs.survival.retreat-cornered/close-radius 4}
+        (let [{:keys [longest-ms]} (await (settings/with-settings {:jobs.survival.respond.options/close-radius 4}
                                           #(searches-in-flee-leg {:entities [(zombie 7 6 {})]} {} clear-after-6)))]
           (is (>= longest-ms 4000) "a zombie at 6 is outside a close radius of 4"))))))
 
@@ -374,26 +375,26 @@
           (is (pos? attacks) "armed with a sword, zombie adjacent, search running: it hits back"))))))
 
 (deftest a-chase-that-gains-no-distance-escalates-and-a-gain-resets-it
-  (let [step (fn [mem gap] (retreat-flight/note-gap mem gap))]
+  (let [step (fn [mem gap] (respond.state/note-gap mem gap))]
     (is (= {:best-gap 5 :since-gain 0 :sweeps 0} (step {:sweeps 1} 5)) "first gap is a gain")
     (is (= {:best-gap 5 :since-gain 2 :sweeps 1} (-> {:best-gap 5 :since-gain 1 :sweeps 1} (step 5.5))) "under a block: no gain")
     (is (= {:best-gap 7 :since-gain 0 :sweeps 0} (step {:best-gap 5 :since-gain 2 :sweeps 1} 7)) "a gain resets both")
-    (is (retreat-flight/no-gain? {:since-gain 3} 3))
-    (is (not (retreat-flight/no-gain? {:since-gain 2} 3)))))
+    (is (respond.state/no-gain? {:since-gain 3} 3))
+    (is (not (respond.state/no-gain? {:since-gain 2} 3)))))
 
 (deftest a-step-with-no-hostile-near-is-no-gap-sample
-  (is (= {:best-gap 9 :since-gain 0 :sweeps 1} (retreat-flight/note-gap {:best-gap 9 :since-gain 4 :sweeps 1} nil))
+  (is (= {:best-gap 9 :since-gain 0 :sweeps 1} (respond.state/note-gap {:best-gap 9 :since-gain 4 :sweeps 1} nil))
       "the flight is succeeding: no-gain count resets, best gap and sweeps stay")
-  (is (= {:since-gain 0} (retreat-flight/note-gap {} nil)) "no best gap is invented from nothing")
-  (is (= {:best-gap 6 :since-gain 0 :sweeps 0} (retreat-flight/note-gap (retreat-flight/note-gap {} nil) 6))))
+  (is (= {:since-gain 0} (respond.state/note-gap {} nil)) "no best gap is invented from nothing")
+  (is (= {:best-gap 6 :since-gain 0 :sweeps 0} (respond.state/note-gap (respond.state/note-gap {} nil) 6))))
 
 (deftest the-step-gap-is-the-nearest-hostile-however-they-are-ordered
   (let [p (tu/fake-on-floor {:floor big-floor :entities [(zombie 1 20 {}) (zombie 2 6 {})]})
         hostiles (vec (danger-q/known-hostiles p 30 {:ranged-radius 30}))]
     (is (= 2 (count hostiles)))
-    (is (= 6 (retreat-flight/nearest-gap p hostiles)))
-    (is (= 6 (retreat-flight/nearest-gap p (vec (reverse hostiles)))))
-    (is (nil? (retreat-flight/nearest-gap p [])))))
+    (is (= 6 (respond.state/nearest-gap p hostiles)))
+    (is (= 6 (respond.state/nearest-gap p (vec (reverse hostiles)))))
+    (is (nil? (respond.state/nearest-gap p [])))))
 
 (def sweeper
   "A contract job that runs retreat's blocked! until it ends the job."
@@ -419,7 +420,7 @@
    :round (fn ^:async backer-round [c]
             (let [threat (first (danger-q/known-hostiles (:primitives c) 30 {:ranged-radius 30}))
                   r (await (cornered/back-off! c (some->> threat (danger-q/mob-pos (:primitives c)))))]
-              (reset! out {:r r :tried (retreat-flight/tried? c :back-off)})
+              (reset! out {:r r :tried (respond.state/tried? c :back-off)})
               (ctx/end c :done nil)))})
 
 (deftest back-off-steps-away-and-fails-when-the-walk-does
@@ -496,8 +497,8 @@
             (is (= want @out) (str "go-to ends " why))))))))
 
 (deftest every-option-failing-in-two-sweeps-in-a-row-is-cannot-escape
-  (is (not (retreat-flight/cannot-escape? (retreat-flight/count-sweep {}))))
-  (is (retreat-flight/cannot-escape? (retreat-flight/count-sweep (retreat-flight/count-sweep {})))))
+  (is (not (respond.state/cannot-escape? (respond.state/count-sweep {}))))
+  (is (respond.state/cannot-escape? (respond.state/count-sweep (respond.state/count-sweep {})))))
 
 (deftest respond-to-hostile-never-continues
   (async done
@@ -595,7 +596,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup {:floor [-8 -8 8 8] :entities [(zombie 7 4 {:pos {:x 4 :y 64 :z 4}})]})
-              {:keys [calls out]} (await (run-job! s 'test.flight {:settings {:jobs.survival.retreat-flight/still-s 3600}}))]
+              {:keys [calls out]} (await (run-job! s 'test.flight {:settings {:jobs.survival.respond.state/still-s 3600}}))]
           (is (= [:done] calls) "the flight ends, it does not dance for ever")
           (is (= :keeps-off (:ended out)))
           (is (re-find #"still following" (:text out))))))))
@@ -616,7 +617,7 @@
                   (.override world name (fn ^:async f [token a impl]
                                           (swap! (fake/state p) update :entities (partial mapv #(assoc % :pos [15 64 0])))
                                           (await (impl token a)))))
-              {:keys [calls out]} (await (run-job! s 'test.flight {:settings {:jobs.survival.retreat-flight/still-s 3600}}))]
+              {:keys [calls out]} (await (run-job! s 'test.flight {:settings {:jobs.survival.respond.state/still-s 3600}}))]
           (is (= [:done] calls) "no way away, nothing within :radius: the flight ends")
           (is (= :keeps-off (:ended out))))))))
 
@@ -626,24 +627,24 @@
   (let [p (tu/fake-on-floor {:floor big-floor :entities [(zombie 7 30 {})]})
         per (perception/create (fake-raw/create p) {:now (constantly 1000000)})
         wrapped (perception/wrap p per)]
-    (is (= [7] (mapv #(.-id %) (retreat-flight/known-chasers p))) "no perception: every tracked mob")
-    (is (= [] (mapv #(.-id %) (retreat-flight/known-chasers wrapped))) "30 blocks off, unseen and unheard: not known")))
+    (is (= [7] (mapv #(.-id %) (respond.state/known-chasers p))) "no perception: every tracked mob")
+    (is (= [] (mapv #(.-id %) (respond.state/known-chasers wrapped))) "30 blocks off, unseen and unheard: not known")))
 
 (deftest the-cornered-body-weighs-only-the-hostiles-it-knows
   (let [p (tu/fake-on-floor {:floor big-floor :entities [(zombie 7 30 {})]})
         per (perception/create (fake-raw/create p) {:now (constantly 1000000)})
         wrapped (perception/wrap p per)
         ids #(mapv (fn [e] (.-id e)) %)]
-    (is (= [7] (ids (retreat-flight/near-known p #{} 40 nil))) "no perception: every tracked mob")
-    (is (= [] (ids (retreat-flight/near-known wrapped #{} 40 nil))) "unseen and unheard: not weighed")
+    (is (= [7] (ids (respond.state/near-known p #{} 40 nil))) "no perception: every tracked mob")
+    (is (= [] (ids (respond.state/near-known wrapped #{} 40 nil))) "unseen and unheard: not weighed")
     (is (= [] (vec (seal/hostile-cells wrapped 40))) "no cell is kept clear for an unknown mob")
-    (is (= [] (ids (retreat-flight/near-known p #{7} 40 nil))) "a corpse is skipped")))
+    (is (= [] (ids (respond.state/near-known p #{7} 40 nil))) "a corpse is skipped")))
 
 (deftest a-flight-resumed-after-a-gap-starts-its-clocks-afresh
   (let [mem {:flight-start 0 :last-step 1000 :chasers {7 {:id 7 :seen-t 1000}}}]
-    (is (= mem (retreat-flight/resume-flight mem 3000)) "a short gap: as it was")
+    (is (= mem (respond.state/resume-flight mem 3000)) "a short gap: as it was")
     (is (= {:flight-start 100000 :last-step 100000 :chasers {7 {:id 7 :seen-t 100000}}}
-           (retreat-flight/resume-flight mem 100000))
+           (respond.state/resume-flight mem 100000))
         "a long gap: the flight starts now and every chaser was just seen")))
 
 (defn ^:async with-flee
@@ -888,21 +889,21 @@
                            [:past-hostile {:x 20 :y 64 :z 0} {:hostiles [{:x 6 :y 64 :z 0}]}]
                            [:home-safer {:x 10 :y 64 :z 30} {:hostiles [{:x 6 :y 64 :z 0}] :home {:x -12 :y 64 :z 0}}]
                            [nil {:x -14 :y 64 :z 3} {:hostiles [{:x 6 :y 64 :z 0}] :home {:x -12 :y 64 :z 0}}]]]
-    (is (= why (retreat-goal/verdict here goal opts)) (pr-str goal opts))))
+    (is (= why (respond.goal/verdict here goal opts)) (pr-str goal opts))))
 
 (deftest a-home-is-safer-only-when-the-body-is-nearer-it-than-every-hostile-and-none-is-on-the-way
   (let [home {:x -12 :y 64 :z 0}]
-    (is (= home (retreat-goal/safe-home here [{:x 6 :y 64 :z 0}] [home])))
-    (is (nil? (retreat-goal/safe-home here [{:x -10 :y 64 :z 8}] [home])) "the hostile gets there first")
-    (is (nil? (retreat-goal/safe-home here [{:x -5 :y 64 :z 0}] [home])) "the hostile stands on the way")
-    (is (nil? (retreat-goal/safe-home here [{:x 6 :y 64 :z 0}] [])) "no home known")))
+    (is (= home (respond.goal/safe-home here [{:x 6 :y 64 :z 0}] [home])))
+    (is (nil? (respond.goal/safe-home here [{:x -10 :y 64 :z 8}] [home])) "the hostile gets there first")
+    (is (nil? (respond.goal/safe-home here [{:x -5 :y 64 :z 0}] [home])) "the hostile stands on the way")
+    (is (nil? (respond.goal/safe-home here [{:x 6 :y 64 :z 0}] [])) "no home known")))
 
 (deftest a-home-is-dropped-for-the-reason-it-is-no-safe-run
   (let [home {:x -12 :y 64 :z 0}]
-    (is (nil? (retreat-goal/home-why here [{:x 6 :y 64 :z 0}] home)))
-    (is (= :hostile-nearer (retreat-goal/home-why here [{:x -10 :y 64 :z 10}] home)))
-    (is (= :past-hostile (retreat-goal/home-why here [{:x -5 :y 64 :z 0}] home)))
-    (is (nil? (retreat-goal/home-why here [{:x 6 :y 64 :z 0}] nil)) "no home: nothing to explain")))
+    (is (nil? (respond.goal/home-why here [{:x 6 :y 64 :z 0}] home)))
+    (is (= :hostile-nearer (respond.goal/home-why here [{:x -10 :y 64 :z 10}] home)))
+    (is (= :past-hostile (respond.goal/home-why here [{:x -5 :y 64 :z 0}] home)))
+    (is (nil? (respond.goal/home-why here [{:x 6 :y 64 :z 0}] nil)) "no home: nothing to explain")))
 
 (defn choice [seen] (first (events-of seen :retreat.choice)))
 
@@ -972,8 +973,8 @@
 
 (deftest a-verdict-drops-a-goal-near-a-place-the-body-died
   (let [spot {:x -22 :y 64 :z 3}]
-    (is (= :died-there (retreat-goal/verdict here {:x -20 :y 64 :z 0} {:died [spot]})))
-    (is (nil? (retreat-goal/verdict here {:x -20 :y 64 :z 0} {:died [{:x -22 :y 64 :z 40}]})) "a death far from the goal")))
+    (is (= :died-there (respond.goal/verdict here {:x -20 :y 64 :z 0} {:died [spot]})))
+    (is (nil? (respond.goal/verdict here {:x -20 :y 64 :z 0} {:died [{:x -22 :y 64 :z 40}]})) "a death far from the goal")))
 
 (deftest a-flight-does-not-run-toward-a-place-the-body-died
   (async done
@@ -982,7 +983,7 @@
         (let [spot {:x -12 :y 64 :z 0}
               out (await (target-after {} [spot] {}))
               plain (await (target-after {} [] {}))
-              off (await (target-after {} [spot] {:jobs.survival.retreat-flight/died-radius 0}))]
+              off (await (target-after {} [spot] {:jobs.survival.respond.state/died-radius 0}))]
           (is (= {:x -6 :y 64 :z 0} plain) "no death: straight west")
           (is (> (u/dist out spot) 12) (str "the straight way ends within the radius of the death: " (pr-str out)))
           (is (= {:x -6 :y 64 :z 0} off) "radius 0 turns it off"))))))
@@ -994,7 +995,7 @@
         (let [lit (into {} (for [x (range -12 4) z (range -12 13) y [63 64 65] :when (> (js/Math.abs z) 1)] [[x y z] [0 8]]))
               world {:time 18000 :light-default [15 0] :light lit}
               out (await (target-after world [] {}))
-              off (await (target-after world [] {:jobs.survival.retreat-flight/prefer-lit? false}))
+              off (await (target-after world [] {:jobs.survival.respond.state/prefer-lit? false}))
               day (await (target-after (assoc world :time 1000) [] {}))
               day-dark (await (target-after (assoc world :time 1000 :light-default [0 0]) [] {}))]
           (is (neg? (:z out)) (str "west is dark, north-west is lit: " (pr-str out)))
@@ -1019,7 +1020,7 @@
                          (swap! (:clock s) + 10000)
                          (swap! st update :entities #(vec (take (- 8 n) %)))
                          {:arrived false :leg (and (> n 1) (not= west-goal (:pos (last @calls))))})]
-            (await (settings/with-settings {:jobs.survival.retreat-goal/retry-s retry-s}
+            (await (settings/with-settings {:jobs.survival.respond.goal/retry-s retry-s}
                      #(run-job! (scripted-go-to s calls script) 'test.flight {:goal west-goal})))
             (is (= west-goal (:pos (first @calls))) "the first leg, which fails, goes to the goal")
             (is (= legs (count (goal-legs calls))) (str "retry-s " retry-s ": " (mapv :pos @calls)))))))))
@@ -1105,7 +1106,7 @@
               s (buried-setup {:inventory [] :entities [(zombie 7 6 {})]})]
           (await (run-job! (stub-go-to s calls identity) 'test.flight {:goal {:x -9 :y 64 :z 0}}))
           (is (= {:x -9 :y 64 :z 0} (:pos (first @calls))) "the leg goes to the goal")
-          (is (= (retreat-walk/max-descent) (get-in (first @calls) [:settings :jobs.lib.walk.world/y-margin])) "and its plan may not dip under the descent floor"))))))
+          (is (= (respond.walk/max-descent) (get-in (first @calls) [:settings :jobs.lib.walk.world/y-margin])) "and its plan may not dip under the descent floor"))))))
 
 (deftest a-buried-flight-with-no-stair-digs-a-pocket-before-any-hop
   (async done
@@ -1179,9 +1180,9 @@
 
 (deftest short-flights-of-one-chain-add-up-from-the-chains-first-place
   (let [start {:x 0 :y 64 :z 0}]
-    (is (= start (retreat-flight/chain-origin {:data {:from start}} {:x 10 :y 64 :z 0}))
+    (is (= start (respond.state/chain-origin {:data {:from start}} {:x 10 :y 64 :z 0}))
         "a flight soon after another measures from where the chain began")
-    (is (= {:x 10 :y 64 :z 0} (retreat-flight/chain-origin nil {:x 10 :y 64 :z 0}))
+    (is (= {:x 10 :y 64 :z 0} (respond.state/chain-origin nil {:x 10 :y 64 :z 0}))
         "no earlier flight: from where this one began")))
 
 (deftest short-flights-in-a-row-tell-the-agent-once-their-sum-is-far
@@ -1190,13 +1191,13 @@
       (fn ^:async t []
         (let [s (setup {:entities [(zombie 7 4 {:chase {:speed 0.7 :follow 6}})]})
               fled (fn [r] (filterv #(= :hostile.fled (:kind %)) @(:seen r)))
-              r1 (await (settings/with-settings {:jobs.survival.retreat-flight/far-flight 40}
+              r1 (await (settings/with-settings {:jobs.survival.respond.state/far-flight 40}
                           #(run-job! s 'test.flight {})))
               n1 (count (fled r1))
               bp (body-pos (:p s))
               _ (swap! (fake/state (:p s)) update :entities (fn [es] (filterv #(not= 7 (:id %)) es)))
               _ (fake/add-entity! (:p s) (zombie 7 (+ (first bp) 4) {:chase {:speed 0.7 :follow 6}}))
-              r2 (await (settings/with-settings {:jobs.survival.retreat-flight/far-flight 40}
+              r2 (await (settings/with-settings {:jobs.survival.respond.state/far-flight 40}
                           #(run-job! r1 'test.flight {})))]
           (is (= 0 n1) "the first flight alone is under far-flight")
           (is (= 1 (count (fled r2))) "the second adds up past it, measured from the chain's start")
@@ -1204,14 +1205,14 @@
           (is (seq (mem/entries (mem/view (:store (:eng r2))) :displaced)) "the night job is told the body was driven off"))))))
 
 (deftest a-far-flight-tells-the-agent-where-the-body-went-and-why
-  (is (nil? (retreat-flight/fled-notice {:x 0 :y 64 :z 0} {:x -10 :y 64 :z 0} [{:mob "zombie" :id 7}] :far 16))
+  (is (nil? (respond.state/fled-notice {:x 0 :y 64 :z 0} {:x -10 :y 64 :z 0} [{:mob "zombie" :id 7}] :far 16))
       "a short flight is no news")
-  (is (nil? (retreat-flight/fled-notice nil {:x -10 :y 64 :z 0} [] :far 16)) "no start place: no news")
+  (is (nil? (respond.state/fled-notice nil {:x -10 :y 64 :z 0} [] :far 16)) "no start place: no news")
   (is (= {:from [0 64 0] :to [-40 64 3] :distance 40 :mobs ["zombie 7"] :ended :far
           :text "fled 40 blocks from zombie 7: [0 64 0] -> [-40 64 3]; it stopped chasing (far)"}
-         (retreat-flight/fled-notice {:x 0.4 :y 64 :z 0.2} {:x -39.6 :y 64 :z 3.4} [{:mob "zombie" :id 7}] :far 16)))
+         (respond.state/fled-notice {:x 0.4 :y 64 :z 0.2} {:x -39.6 :y 64 :z 3.4} [{:mob "zombie" :id 7}] :far 16)))
   (are [ended tail] (= (str "fled 40 blocks from zombie 7: [0 64 0] -> [-40 64 3]; " tail)
-                       (:text (retreat-flight/fled-notice {:x 0 :y 64 :z 0} {:x -40 :y 64 :z 3} [{:mob "zombie" :id 7}] ended 16)))
+                       (:text (respond.state/fled-notice {:x 0 :y 64 :z 0} {:x -40 :y 64 :z 3} [{:mob "zombie" :id 7}] ended 16)))
     :hidden "the body is hidden from it (hidden)"
     :keeps-off "it kept up, no ground was gained (keeps-off)"
     :cannot-escape "no way of escaping was left (cannot-escape)")

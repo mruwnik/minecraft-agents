@@ -11,7 +11,7 @@
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]
             [jobs.survival.dig-pocket :as pocket]
-            [jobs.survival.retreat-pit :as pit]))
+            [jobs.survival.pit-cells :as pit]))
 
 (defn blocks [name [x0 x1] [y0 y1] [z0 z1]]
   (into {} (for [x (range x0 (inc x1)) y (range y0 (inc y1)) z (range z0 (inc z1))] [(str x "," y "," z) name])))

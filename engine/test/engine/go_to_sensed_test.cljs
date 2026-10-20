@@ -32,8 +32,8 @@
             [jobs.movement.go-to.health :as gth]
             [jobs.movement.go-to.restore :as restore]
             [jobs.movement.go-to.torch :as torch]
-            [jobs.survival.retreat-cornered :as cornered]
-            [jobs.survival.retreat-walk :as walk]))
+            [jobs.survival.respond.options :as cornered]
+            [jobs.survival.respond.walk :as walk]))
 
 (defn sensed-only
   "Wrapped fake primitives for spec, lit, whose raw blockAt throws. rawWorld stays, as on the body: go-to's planner

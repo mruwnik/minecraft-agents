@@ -135,13 +135,6 @@
       (ctx/emit! c :hostile.decided :info (assoc (dissoc entry :from) :text (encounter-text entry prev))))
     (ctx/update-mem! c assoc :logged true)))
 
-(defn mob-of
-  "What fight-damage needs of hostile e: its name, distance (jobs.lib.danger/mob-distance: a heard one by its band) and
-  the hits the attack has landed on it (struck, its :struck entry, or nil)."
-  [p struck e]
-  (cond-> {:name (.-name e) :distance (danger-q/mob-distance p e) :hits (:hits struck 0)}
-    (number? (:health struck)) (assoc :health (:health struck))))
-
 (defn fight-struck
   "What the fight counted per mob: the running child's (hostile/struck), else the last declined ending's."
   [c]
@@ -232,9 +225,7 @@
                                :cannot-outrun? (not (cost/outruns? (or (.-food self) 20) (map cost/mob-kind (remove combat/ranged? near))))
                                :creeper? (boolean (some combat/creeper? near))
                                :reserve reserve
-                               :damage (cost/fight-damage {:weapon (combat/best-weapon p (combat/weapons c))
-                                                           :equipment (cost/equipment-of (.-equipment self))
-                                                           :mobs (map #(mob-of p (struck-of c (.-id %)) %) near)})}))
+                               :damage (hostile/damage c near #(struck-of c %))}))
         stay? (stay-under-roof? c near)
         decision (if (and (= :flee chosen) (>= (count hits) 2) (not-any? combat/creeper? near) (not-any? combat/enderman? near))
                    :fight

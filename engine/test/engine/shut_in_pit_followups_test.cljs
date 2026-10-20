@@ -5,7 +5,7 @@
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [engine.shut-in-pit-seen-test :as seen]
-            [jobs.survival.retreat-pit :as pit]))
+            [jobs.survival.pit-cells :as pit]))
 
 (def tunnel
   "Rock round an east-west tunnel: air at x 0..3, y 65..66, z 0."

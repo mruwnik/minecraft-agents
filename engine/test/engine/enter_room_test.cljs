@@ -177,3 +177,11 @@
         (let [{:keys [p]} (await (enter! (assoc (hut-world {:x 5 :y 64 :z 6} {}) :states open-door-states) {}))]
           (is (< (:z (st/pos-of p)) 2) "inside the hut")
           (is (false? (door-open? p)) "the door is shut"))))))
+
+(deftest a-flee-entry-walks-legs-into-the-room-named-by-a-cell-and-shuts-the-door
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (enter! (assoc (hut-world {:x 5 :y 64 :z 6} {}) :states open-door-states) {:at {:x 5 :y 64 :z 1} :flee? true}))]
+          (is (< (:z (st/pos-of p)) 2) "inside the hut, no home remembered")
+          (is (false? (door-open? p)) "the door is shut"))))))

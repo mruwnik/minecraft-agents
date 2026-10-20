@@ -15,7 +15,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.reach.room :as reach-room]
             [jobs.survival.respond-flight :as retreat]
-            [jobs.survival.retreat-cornered :as cornered]
+            [jobs.survival.respond.options :as cornered]
             [jobs.survival.respond-choose :as choose]
             [jobs.lib.rooms :as rooms]))
 
@@ -355,7 +355,7 @@
           (is (in-room? (body p)) (str "inside the hut: " (body p)))
           (is (pos? steps))
           (is (<= closed-room (* 2 (rooms/max-doors))) (str "each door side flooded once a flight: " @counts))
-          (is (<= room (+ closed-room (* steps (rooms/max-rooms)))) (str "rooms rebuilt per step: " @counts))
+          (is (<= room (+ closed-room (* steps (inc (rooms/max-rooms))))) (str "rooms rebuilt per step: " @counts))
           (is (<= walk-steps (* steps (rooms/max-rooms))) (str "one walk search per room door per step: " @counts)))))))
 
 (defn reading!

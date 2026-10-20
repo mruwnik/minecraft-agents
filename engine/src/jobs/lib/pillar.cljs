@@ -1,5 +1,5 @@
 (ns jobs.lib.pillar
-  "What the pillar job shares with the jobs that stand on or beside one (bridge, fell-tree, retreat-refuge): the blocks
+  "What the pillar job shares with the jobs that stand on or beside one (bridge, fell-tree, respond.refuge): the blocks
   it builds with, the cell a free cell is, the cell the body stands in, what is carried."
   (:require [jobs.lib.block-sets :as bs]
             [jobs.lib.access.rules :as rules]

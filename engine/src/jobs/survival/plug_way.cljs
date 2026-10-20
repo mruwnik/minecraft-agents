@@ -12,7 +12,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spent :as spent]
             [jobs.survival.dig-in-cells :as dig-cells]
-            [jobs.survival.retreat-seal :as seal]))
+            [jobs.survival.wall-placer :as wall-placer]))
 
 (a/defargs settings
   {::roof-height {:default sh-sense/default-roof-height :doc "A solid block within this many blocks above counts as a roof (the ways, enter-room and the enclosed test; a call overrides it with :settings)." :spec (a/int-in 0 nil)}
@@ -78,16 +78,16 @@
     {:uses {:job-time [0 mean (if (infinite? mean) mean (max (* 3 mean) job-time-s))]} :done [0 1 1]}))
 
 (defn ^:async walls-step!
-  "One step of the walls (retreat-seal/seal!): :done once enclosed, :again, :hit (a melee mob hit the body: run! yields), or nil when they cannot be placed."
+  "One step of the walls (wall-placer/seal!): :done once enclosed, :again, :hit (a melee mob hit the body: run! yields), or nil when they cannot be placed."
   [c]
-  (case (await (seal/seal! c))
+  (case (await (wall-placer/seal! c))
     :sealed :done
     :again :again
     :hit :hit
     nil))
 
 (defn stop!
-  "Job memory: why the way ends nothing-possible ({:stop reason :text :needs} of retreat-pit/stop), for run!."
+  "Job memory: why the way ends nothing-possible ({:stop reason :text :needs} of pit-cells/stop), for run!."
   [c {:keys [stop text needs]}]
   (ctx/update-mem! c assoc :stop (cond-> {:reason stop :text text} needs (assoc :needs needs)))
   nil)
