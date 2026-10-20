@@ -390,7 +390,7 @@
         (let [{:keys [p seen]} (await (run {:blocks (merge (ground [[8 0]]) (lt/tree 8 0 "oak" 4)) :unreachable ["8,64,0"]}
                                            {"forest" (forest-plan ["a" [[8 64 0]] "oak"])} {:plan "forest"} 80))]
           (is (= [] (places p)))
-          (is (= [{:pos {:x 8 :y 64 :z 0} :reason :unreachable}] (warns seen :forest.left))))))))
+          (is (= [{:pos {:x 8 :y 64 :z 0} :reason :unreachable :because {:reason :tree-unreachable}}] (warns seen :forest.left)) "the fell ending's cause is kept"))))))
 
 ;; ------------------------------------------------------------------ access
 
@@ -584,9 +584,9 @@
          (maintain/plant-args {:args {:plan "forest"}} {:x 3 :y 64 :z 0} "oak"))))
 
 (deftest maintain-fells-a-tall-tree-from-a-pillar-unless-told-not-to
-  (is (false? (maintain/too-tall? {:args {:max-logs 6 :pillar? true}} (range 9))))
-  (is (true? (maintain/too-tall? {:args {:max-logs 6 :pillar? false}} (range 9))))
-  (is (false? (maintain/too-tall? {:args {:max-logs 6 :pillar? false}} (range 6))))
+  (is (false? (maintain/too-tall? {:args {:pillar? true}} (range 9))))
+  (is (true? (maintain/too-tall? {:args {:pillar? false}} (range 9))))
+  (is (false? (maintain/too-tall? {:args {:pillar? false}} (range 6))))
   (are [on] (= on (:pillar? (maintain/fell-args {:args {:pillar? on}} {:x 3 :y 64 :z 0} "oak")))
     true false))
 

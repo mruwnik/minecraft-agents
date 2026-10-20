@@ -20,14 +20,9 @@
 
 (def doc
   "Keep the trees a forest plan wants (cells wanting {:tree species}; a large tree is four cells).
-  One call does the first step that applies, again and again until none is left (:continue only while a child
-  waits on the world):
-  1. Collect the drops of a tree just felled.
-  2. Go on felling the tree begun.
-  3. Plant the planned sapling on a planned cell standing bare (air over soil) or owing one.
-  4. Fell the nearest grown tree of the wanted species on a planned cell (jobs.forestry.fell-tree as a child). The
-     cell is noted as owing a sapling before the base log is dug, so a restart or plan edit never loses the replant.
-  5. Finish.
+  One call plants bare planned cells and fells grown trees (jobs.forestry.fell-tree, plant-sapling, collect-drops as
+  children) until none is left (:continue only while a child waits on the world). A cell is noted as owing a sapling
+  before its base log is dug, so a restart or plan edit never loses the replant.
   With a planned cell never seen, the body looks around once from where it stands (again after moving over 3 blocks)
   before the start conditions decide, and the first round looks once more before it works.
   Cells are read from the plan and the world at every step. A sapling of the wanted species is left to grow.
@@ -36,8 +31,8 @@
   A bare cell whose sapling is not carried gets it from jobs.forestry.plant-sapling (a child that fetches it: a seen
   chest, or the leaves of its tree). With :fetch off for items it is skipped, with one forest.no-sapling note.
   A tree is left standing (forest.left, once, and skipped for the rest of the call; the next call looks again) when:
-  - its column holds more than :max-logs logs and :pillar? is false (else it is felled from a pillar),
-  - fell-tree gave up on it,
+  - its column holds more than ::max-logs (6) logs and :pillar? is false (else it is felled from a pillar),
+  - fell-tree gave up on it (its cause is the :because of forest.left),
   - a log of it may not be dug (another plan's footprint or a zone; checked for the whole column before the first
     dig and again before every felling round), or
   - planting it was refused or failed three times.
@@ -52,11 +47,9 @@
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world; its tree cells are the forest" :spec a/name? :default nil}
    :part {:doc "only the cells of this part" :spec a/name? :default nil}
-   :max-logs {:doc "with :pillar? false, a tree whose column holds more logs than this is too tall to fell from the ground and is left" :spec (a/int-in 1 nil) :default 6}
-   :pillar? {:doc "fell a tree too tall for the ground from a pillar (jobs.forestry.fell-tree); false: leave one over :max-logs" :spec boolean? :default true}
+   :pillar? {:doc "fell a tree too tall for the ground from a pillar (jobs.forestry.fell-tree); false: leave one over ::max-logs" :spec boolean? :default true}
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :lava-adjacent :falling-block"
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}
-   :collect-radius {:doc "how far from where the body stands the drops of a felled tree are collected, in blocks" :spec (a/num-in 0 nil) :default 8}
    :fetch {:doc "get a missing sapling (passed to plant-sapling; see its :fetch): true, a set of kinds or a map of limits; false skips a bare cell whose sapling is not carried" :spec need/option? :default true}
    :ignore-zones? :shared})
 
@@ -109,6 +102,11 @@
       (not ((soil-for species) below)) :no-ground
       (some-> (u/seen-name p (up pos)) forestry/log-name?) :cramped
       :else :bare)))
+
+(a/defargs settings
+  {::max-logs {:default 6 :doc "With :pillar? false, a tree whose column holds more logs than this is too tall to fell from the ground and is left." :spec (a/int-in 1 nil)}
+   ::collect-radius {:default 8 :doc "How far from where the body stands the drops of a felled tree are collected, in blocks." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 1800 :doc "Seconds a maintain run may take: the fellings, collecting, plantings and walks." :spec (a/num-in 0 nil)}})
 
 ;; ------------------------------------------------------------------ left cells
 
@@ -249,7 +247,7 @@
   [c]
   (when-let [species (:collect (ctx/mem c))]
     (let [r (await (ctx/call c :collect 'jobs.items.collect-drops
-                                   {:radius (:collect-radius (:args c))
+                                   {:radius (settings/get settings ::collect-radius)
                                     :items (vec (distinct (mapcat forestry/drop-filter species)))
                                     :holes (:holes (ctx/mem c))}))]
       (when (not= :continue r) (ctx/update-mem! c dissoc :collect))
@@ -267,17 +265,18 @@
   [c logs]
   (some #(when-let [r (refusal c (:pos %))] [(:pos %) r]) logs))
 
-(defn too-tall? [c logs] (and (not (:pillar? (:args c))) (> (count logs) (:max-logs (:args c)))))
+(defn too-tall? [c logs] (and (not (:pillar? (:args c))) (> (count logs) (settings/get settings ::max-logs))))
 
 (defn finished-felling!
-  "The fell child ended: count the tree felled, or leave it when logs of it still stand; collect either way."
-  [c pos species]
+  "The fell child ended with e: count the tree felled, or leave it (e's cause the :because) when logs of it still stand;
+  collect either way."
+  [c pos species e]
   (let [logs (remaining-logs c pos species)]
     (ctx/update-mem! c (fn [m] (-> m (dissoc :cut) (update :collect (fnil conj []) species) (update :holes (fnil conj []) pos))))
     (if (seq logs)
       (if-let [bad (column-refusal c logs)]
         (leave! c pos :refused :why (second bad) :log (first bad))
-        (leave! c pos :unreachable))
+        (leave! c pos :unreachable :because (let [cause (:cause e)] (cond (map? cause) cause (keyword? cause) {:reason cause}))))
       (ctx/update-mem! c bump :felled))))
 
 (defn fell-args
@@ -303,7 +302,7 @@
                   :again)
           :else
           (let [r (await (ctx/call c (fell-slot pos) 'jobs.forestry.fell-tree (fell-args c pos species)))]
-            (when (not= :continue r) (finished-felling! c pos species))
+            (when (not= :continue r) (finished-felling! c pos species r))
             (if (= :continue r) :continue :again))))
 
       :else
@@ -416,13 +415,8 @@
                       (await (fell! c trees classes))
                       (finish! c classes)))))))))
 
-(a/defargs settings
-  {::max-steps {:default 400 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
-   ::job-time-s {:default 1800 :doc "Seconds a maintain run may take: the fellings, collecting, plantings and walks." :spec (a/num-in 0 nil)}})
-
 (defn ^:async round [c]
-  (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) (settings/get settings ::max-steps)) (step c) :continue)))))
+  (await (pace/steps! c #(step c))))
 
 ;; ------------------------------------------------------------------ the contract
 
