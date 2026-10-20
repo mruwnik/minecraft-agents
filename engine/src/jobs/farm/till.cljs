@@ -3,6 +3,7 @@
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as b]
@@ -297,19 +298,21 @@
                 (do (skip! c [target] :covered) :again)
 
                 :else
-                (let [r (await (ctx/act c :useOn #js {:pos (clj->js target) :item tool :face "up"}))
-                      status (.-status r)]
-                  (cond
-                    (and (= "used" status) (= "farmland" (some-> (.-after r) .-name)))
-                    (ctx/update-mem! c #(-> % (update :tilled (fnil conj #{}) target) (update :cell-tries dissoc target)))
+                (let [res (await (child/use-on! c target tool "up"))
+                      {:keys [status raw]} res]
+                  (if (= :continue res)
+                    :continue
+                    (do (cond
+                          (and (= :used status) (= "farmland" (some-> (.-after raw) .-name)))
+                          (ctx/update-mem! c #(-> % (update :tilled (fnil conj #{}) target) (update :cell-tries dissoc target)))
 
-                    (and (= "used" status) (loosened (some-> (.-before r) .-name)) (= "dirt" (some-> (.-after r) .-name)))
-                    nil
+                          (and (= :used status) (loosened (some-> (.-before raw) .-name)) (= "dirt" (some-> (.-after raw) .-name)))
+                          nil
 
-                    (= "missing" status) (skip! c [target] :gone)
-                    (= "no-item" status) (bump! c target :no-hoe)
-                    :else (bump! c target :refused))
-                  :again)))))))))
+                          (= :missing status) (skip! c [target] :gone)
+                          (= :no-item status) (bump! c target :no-hoe)
+                          :else (bump! c target :refused))
+                        :again)))))))))))
 
 (defn ^:async hoe!
   "Get a hoe when none may be used, cells are left and :fetch allows tools: nil when one is carried (or came), :continue while the fetch waits

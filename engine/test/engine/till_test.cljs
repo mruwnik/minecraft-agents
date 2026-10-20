@@ -75,6 +75,22 @@
           (is (= ["farmland"] (distinct (map #(block-at p %) (till/cells box)))))
           (is (= 4 (count (calls p "useOn")))))))))
 
+(deftest each-hoe-click-is-a-blocks-use-on-child
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clicks (atom 0)
+              use-on (get registry/jobs 'jobs.blocks.use-on)
+              stub (assoc use-on :round (fn [c] (swap! clicks inc) ((:round use-on) c)))
+              clock (atom 1000000)
+              [_ sink] (tu/legacy-capture-sink)
+              p (tu/fake {:inventory hoe :blocks four})
+              eng (core/create {:primitives p :jobs (assoc registry/jobs 'jobs.blocks.use-on stub) :triggers triggers/all
+                                :dir (tu/tmp-dir) :now #(deref clock) :world (ew/of-data {} {} [])
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+          (await (child-outcome eng job box 12))
+          (is (= 4 @clicks)))))))
+
 (deftest till-is-one-call-the-whole-box
   (async done
     (tu/run-async done

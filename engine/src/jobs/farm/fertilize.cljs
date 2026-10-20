@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.job-common :as common]
@@ -166,12 +167,14 @@
         :blocked (do (refuse!) :again)
         (if-not (gate/allowed? c :fertilize.declined "fertilize" :harvest target {:own-plans-ok? true})
           (do (refuse!) :again)
-          (let [r (await (ctx/act c :useOn #js {:pos (clj->js target) :item "bone_meal" :face "up"}))]
-            (if (= "used" (.-status r))
-              (do (ctx/update-mem! c update :used (fnil + 0) (max 1 (or (.-consumed r) 1)))
-                  (when (:grass (:args c)) (refuse!)))
-              (refuse!))
-            :again))))))
+          (let [res (await (child/use-on! c target "bone_meal" "up"))]
+            (if (= :continue res)
+              :continue
+              (do (if (= :used (:status res))
+                    (do (ctx/update-mem! c update :used (fnil + 0) (max 1 (or (some-> (:raw res) .-consumed) 1)))
+                        (when (:grass (:args c)) (refuse!)))
+                    (refuse!))
+                  :again))))))))
 
 (defn ^:async step
   "One step: fetch missing bone meal when none is carried (a failed fetch ends the call with its ending), then

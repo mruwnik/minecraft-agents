@@ -190,15 +190,17 @@
       :partial :continue
       :blocked (do (skip! c pos :unreachable) :again)
       (let [_ (when (hive-allowed? c pos) (ctx/update-mem! c assoc :clicking {:pos pos :tool tool}))
-            r (if (hive-allowed? c pos)
-                (await (ctx/act c :useOn (clj->js {:pos pos :item tool :face (face-toward pos (u/self-pos c))})))
-                #js {:status "refused"})
-            level (some-> r .-after .-properties .-honey_level)]
-        (ctx/update-mem! c dissoc :clicking)
-        (if (and (= "used" (.-status r)) (< (or level facts/ripe-level) facts/ripe-level))
-          (book-harvest! c pos tool)
-          (skip! c pos (keyword (if (= "used" (.-status r)) "no-effect" (.-status r)))))
-        :again))))
+            res (if (hive-allowed? c pos)
+                  (await (child/use-on! c pos tool (face-toward pos (u/self-pos c))))
+                  {:status :refused})
+            level (some-> (:raw res) .-after .-properties .-honey_level)]
+        (if (= :continue res)
+          :continue
+          (do (ctx/update-mem! c dissoc :clicking)
+              (if (and (= :used (:status res)) (< (or level facts/ripe-level) facts/ripe-level))
+                (book-harvest! c pos tool)
+                (skip! c pos (if (= :used (:status res)) :no-effect (:status res))))
+              :again))))))
 
 (def target [:box :center])
 

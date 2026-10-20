@@ -33,6 +33,20 @@
         :else (let [e (await (pause! c (/ ms 1000) why))]
                 (if (= :continue e) :continue (recur (dec n))))))))
 
+(defn ^:async use-on!
+  "Click pos with item (nil: as held) on face through a jobs.blocks.use-on child in slot :click (the body is in reach:
+  it walks only when not). Resolves to :continue while the child waits on the world, else {:status :raw}: status :used
+  or the child's reason (:missing :no-item :cannot :unchanged :unreachable ...), raw the primitive's answer (nil when
+  none came)."
+  [c pos item face]
+  (let [e (await (ctx/call c :click 'jobs.blocks.use-on
+                           (cond-> (merge (select-keys (:args c) [:ignore-zones?]) {:pos pos :face face})
+                             item (assoc :item item))))]
+    (if (= :continue e)
+      :continue
+      {:status (if (= :done (:kind e)) :used (or (:reason (:data e)) (contract/cause-key e) :failed))
+       :raw (:raw (:data e))})))
+
 (defn fruitless
   "Rounds in a row of slot's child that brought nothing (counted with fruitless!), kept in job memory."
   [c slot]

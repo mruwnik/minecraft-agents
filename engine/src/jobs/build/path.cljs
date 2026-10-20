@@ -3,6 +3,7 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.access :as access]
             [jobs.lib.job-common :as common]
             [jobs.lib.access.rules :as rules]
@@ -224,16 +225,18 @@
 (defn ^:async use-shovel!
   "Use the shovel on target and book the outcome."
   [c target tool]
-  (let [r (await (ctx/act c :useOn #js {:pos (clj->js target) :item tool :face "up"}))
-        status (.-status r)]
-    (cond
-      (and (= "used" status) (= "dirt_path" (some-> (.-after r) .-name)))
-      (ctx/update-mem! c #(-> % (update :pathed (fnil conj #{}) target) (update :cell-tries dissoc target)))
+  (let [res (await (child/use-on! c target tool "up"))
+        {:keys [status raw]} res]
+    (if (= :continue res)
+      :continue
+      (do (cond
+            (and (= :used status) (= "dirt_path" (some-> (.-after raw) .-name)))
+            (ctx/update-mem! c #(-> % (update :pathed (fnil conj #{}) target) (update :cell-tries dissoc target)))
 
-      (= "missing" status) (skip! c [target] :gone)
-      (= "no-item" status) (bump! c target :no-shovel)
-      :else (bump! c target :refused))
-    :again))
+            (= :missing status) (skip! c [target] :gone)
+            (= :no-item status) (bump! c target :no-shovel)
+            :else (bump! c target :refused))
+          :again))))
 
 (defn ^:async work!
   "Walk to target and clear the cover above it, or shovel it."

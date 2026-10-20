@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
@@ -240,12 +241,14 @@
                   (finish! c {:reason :no-composter})
 
                   (= 8 level)
-                  (let [r (await (ctx/act c :useOn #js {:pos (clj->js pos) :face "up"}))]
-                    (if (= "used" (.-status r))
+                  (let [res (await (child/use-on! c pos nil "up"))]
+                    (cond
+                      (= :continue res) :continue
+                      (= :used (:status res))
                       (do (ctx/update-mem! c #(-> % (update :taken (fnil inc 0)) (assoc :strikes 0)))
                           (await (collect-meal! c pos))
                           :again)
-                      (strike! c level)))
+                      :else (strike! c level)))
 
                   (= 7 level)
                   (let [waits (inc (:waits mem 0))]
@@ -260,12 +263,14 @@
 
                   :else
                   (let [[name _] (first todo)
-                        r (await (ctx/act c :useOn #js {:pos (clj->js pos) :item name :face "up"}))
-                        consumed (or (.-consumed r) 0)]
-                    (if (pos? consumed)
+                        res (await (child/use-on! c pos name "up"))
+                        consumed (or (some-> (:raw res) .-consumed) 0)]
+                    (cond
+                      (= :continue res) :continue
+                      (pos? consumed)
                       (do (ctx/update-mem! c #(-> % (update-in [:fed name] (fnil + 0) consumed) (assoc :strikes 0)))
                           :again)
-                      (strike! c level)))))))))))))
+                      :else (strike! c level)))))))))))))
 
 (defn ^:async round
   "The whole attempt: loop the steps until one ends; :continue only while a walk waits on the world."

@@ -20,7 +20,7 @@
   never (:bad-args); a bucket :item changes the cell, so zones, claims and plans may refuse it (a pour asks :place, a scoop :harvest; {:reason :not-allowed :pos :by ...},
   :ignore-zones? skips the rule); a plain click changes no block by itself and asks no zone. It yields :continue only when the walk waits on the world.
 
-  Ends with data {:used true|false :pos :item :face :reason}, plus :spawn-set true when a bed answered \"respawn point set\" (a bed is used by day to set the spawn; not in the Nether or End). :reason is the primitive's
+  Ends with data {:used true|false :pos :item :face :reason :raw (the primitive's answer: before, after, consumed)}, plus :spawn-set true when a bed answered \"respawn point set\" (a bed is used by day to set the spawn; not in the Nether or End). :reason is the primitive's
   status (:used, :unchanged, :no-item, :no-room, :missing, :cannot, :occupied, :unreachable, :failed); only :used is done.
   condition-failed: :no-item, :missing, :cannot, :occupied (a bucket's cell is filled). Impossible: a bad :pos or :face (:bad-args, from can-start?). nothing-possible: :unreachable (a walk
   that failed twice, :why), :unchanged, :no-room, :failed.")
@@ -100,7 +100,7 @@
       :else
       (let [[status r] (await (click! c {:pos pos :item item :face face}))]
         (finish! c (cond (= :used status) :done (condition-reasons status) :condition-failed :else :nothing-possible)
-                 (cond-> {:used (= :used status) :pos pos :item item :face face :reason status}
+                 (cond-> {:used (= :used status) :pos pos :item item :face face :reason status :raw r}
                    (.-spawnSet r) (assoc :spawn-set true)))))))
 
 (defn ^:async round [c]
