@@ -1,0 +1,228 @@
+(ns jobs.survival.retreat-cornered.pick
+  "The cornered step of a flight: the conditions that rank its options (pressed, beaten, under fire, boxed in) and cornered!, which takes the first option it can."
+  (:require [engine.settings :as settings]
+            [jobs.survival.retreat-cornered :as rc :refer [settings weapons near-hostiles hitters close-radius hurt-by press-gap hit-reach fist-sweeps tool-weapons fight! escape-order outrun? angry-enderman? fight-wins? in-water? water! roof! swim-out! back-off! blocked!]]
+            [engine.args :as a]
+            [jobs.lib.access :as access]
+            [jobs.lib.blocks :as lb]
+            [engine.contract :as contract]
+            [engine.ctx :as ctx]
+            [engine.hurt :as hurt]
+            [jobs.lib.child :as child]
+            [jobs.lib.combat :as combat]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.danger :as danger-q]
+            [jobs.lib.block-sets :as bs]
+            [jobs.lib.escape :as escape]
+            [jobs.lib.look :as look]
+            [jobs.lib.pillar :as pl]
+            [jobs.lib.reach :as reach]
+            [jobs.lib.result :as result]
+            [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.step-off :as step-off]
+            [jobs.lib.util :as u]
+            [jobs.lib.shot :as shot]
+            [jobs.survival.dig-in-cells :as dig-cells]
+            [jobs.survival.retreat-flight :as flight]
+            [jobs.survival.retreat-goal :as retreat-goal]
+            [jobs.lib.rooms :as room-lib]
+            [jobs.survival.retreat-pillar :as pillar]
+            [jobs.survival.retreat-refuge :as refuge]
+            [jobs.survival.retreat-walk :as walk]))
+
+
+(defn fist-hold?
+  "Pure: whether a cornered body walks on if it can once more before it fights: no weapon carried (armed? false), the odds
+  not won (win?) and fewer than fist-sweeps sweeps done."
+  [{:keys [armed? win? sweeps fist-sweeps]}]
+  (and (not armed?) (not win?) (< sweeps fist-sweeps)))
+
+(defn ^:async fist-look!
+  "Count a sweep and let the flight step again: it walks away if a way has opened, else the options (all failed) come back here."
+  [c]
+  (ctx/update-mem! c flight/count-sweep)
+  :again)
+
+(defn hurt-window-s [] (settings/get settings :jobs.survival.retreat-cornered/hurt-window-s))
+
+(defn recently-hurt?
+  "Whether the body lost health within hurt-window-s."
+  [c]
+  (pos? (ctx/count-in c :hurt (* 1000 (hurt-window-s)))))
+
+(defn pressed?
+  "Whether an armed body has a melee mob (hitters) on it: one within press-gap, or one within hit-reach and the body
+  was hit this step or within hurt-window-s (a hit in an earlier step counts: the step since may have gained nothing)."
+  [c hostiles]
+  (let [near (hitters c hostiles)
+        p (:primitives c)]
+    (boolean (and (seq near)
+                  (combat/best-weapon p (weapons c))
+                  (or (:hit-on-the-run (ctx/mem c))
+                      (recently-hurt? c)
+                      (some #(<= (danger-q/mob-distance p %) (press-gap)) near))))))
+
+(defn plug-continues?
+  "Whether a plug begun here goes on (refuge/plugging-here?): not while an armed body is pressed, the fight comes first."
+  [c]
+  (and (refuge/plugging-here? c) (not (pressed? c (near-hostiles c)))))
+
+(defn beaten-hits [] (settings/get settings :jobs.survival.retreat-cornered/beaten-hits))
+
+(defn beaten?
+  "Whether melee mobs within close-radius hit the body beaten-hits times within hurt-window-s: knocked back and
+  stepping away, it is out of hit-reach at each step, yet the flight is failing."
+  [c]
+  (let [n (beaten-hits)
+        p (:primitives c)
+        names (->> (near-hostiles c)
+                   (filter #(and (not (combat/ranged? %)) (not (combat/creeper? %)) (not (combat/enderman? %))
+                                 (<= (danger-q/mob-distance p %) (close-radius))))
+                   (map #(.-name %))
+                   set)]
+    (and (pos? n)
+         (seq names)
+         (<= n (->> (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s))))
+                    (filter #(some names (hurt-by %)))
+                    (map #(:hits (:data %) 1))
+                    (reduce + 0))))))
+
+(defn beaten-fights?
+  "Pure: whether a beaten body (beaten?) fights before it seals or pillars: armed, or with no blocks to wall with. An
+  unarmed body that carries blocks builds first (a spider cannot be fought with fists)."
+  [{:keys [beaten? armed? blocks?]}]
+  (boolean (and beaten? (or armed? (not blocks?)))))
+
+(defn shots-in
+  "Shots in one :hurt entry: its hits when the entry is a shot, else the shot packets among its merged damages (a skeleton's arrow and a zombie's blow in one loss)."
+  [e]
+  (if (shot/shot? e)
+    (:hits (:data e) 1)
+    (count (filter #(shot/shot? {:data %}) (:damages (:data e))))))
+
+(defn fire-hits [] (settings/get settings :jobs.survival.retreat-cornered/fire-hits))
+
+(defn under-fire?
+  "Whether a ranged mob hit the body fire-hits times within hurt-window-s, seen or not."
+  [c]
+  (let [n (fire-hits)]
+    (and (pos? n)
+         (<= n (transduce (map shots-in) + 0 (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s)))))))))
+
+(defn shot-on-the-run?
+  "Whether a ranged mob hit the body shot-hits times within hurt-window-s and it carries blocks to wall with: walking on only feeds the shooter, so the flight takes cover."
+  [c]
+  (let [n (settings/get settings :jobs.survival.retreat-cornered/shot-hits)]
+    (and (pos? n)
+         (seq (lb/carried c (flight/blocks c)))
+         (<= n (->> (ctx/since c :hurt (- (ctx/now c) (* 1000 (hurt-window-s))))
+                    (map shots-in)
+                    (reduce + 0))))))
+
+(defn press-fights?
+  "Pure: whether a melee mob pressing the body (pressed?) makes it fight before it builds: always unless it is under fire, where cover comes first for limit steps."
+  [{:keys [fire? pressed? tries limit]}]
+  (boolean (and pressed? (or (not fire?) (> tries limit)))))
+
+(defn retry-covers
+  "Pure: mem of a body under fire at feet cell: in another cell than the last time (:fire-cell), the covers that failed
+  there (plug, plug-dig) are open again."
+  [mem cell]
+  (if (= cell (:fire-cell mem))
+    mem
+    (-> mem (update :tried #(reduce disj (set %) [:plug :plug-dig])) (assoc :fire-cell cell))))
+
+(defn boxed-in?
+  "Whether the body stands in a closed room with a melee mob (hitters) within hit-reach and was hit this step or within
+  hurt-window-s: no step leads out of it, so backing off only prolongs the beating and the fight is the way."
+  [c hostiles]
+  (boolean (and (seq (hitters c hostiles))
+                (or (:hit-on-the-run (ctx/mem c)) (recently-hurt? c))
+                (sh-sense/shut-in-room? (:primitives c)))))
+
+(defn bare-boxed-in?
+  "Whether the body is in a closed hut (not a one-wide tunnel, which may lead on) with a melee mob (not a creeper or an enderman) within close-radius in that room (not outside its door) and has no
+  weapon and no block to wall with: the fist is all it has, so it fights at once rather than dodge about the room."
+  [c hostiles]
+  (let [p (:primitives c)
+        close (filter #(and (not (combat/ranged? %)) (not (combat/creeper? %)) (not (combat/enderman? %))
+                            (<= (danger-q/mob-distance p %) (close-radius)))
+                      hostiles)
+        in-room? (fn [] (let [cells (:cells (reach/room p (sh-sense/feet p)))]
+                          (some (fn [e] (let [{:keys [x y z]} (danger-q/mob-pos p e)]
+                                          (contains? cells [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)])))
+                                close)))]
+    (boolean (and (seq close)
+                  (nil? (combat/best-weapon p (weapons c)))
+                  (empty? (lb/carried c (flight/blocks c)))
+                  (sh-sense/shut-in-hut? p)
+                  (in-room?)))))
+
+(defn mob-in-corner-cell?
+  "Whether a melee mob (hitters) stands in a diagonal cell the walls still have to fill: a placed block is refused
+  there and it hits across the corner, so the walls cannot close until it is fought off. A mob beside the body is left
+  to the pillar."
+  [c hostiles]
+  (let [p (:primitives c)
+        feet (sh-sense/feet p)
+        corner? (fn [{:keys [x z]}] (and (== 1 (js/Math.abs (- x (:x feet)))) (== 1 (js/Math.abs (- z (:z feet))))))
+        open (set (filter corner? (dig-cells/open-cells p feet)))]
+    (boolean (some (fn [e] (let [{:keys [x y z]} (danger-q/mob-pos p e)
+                                 cell {:x (int (js/Math.floor x)) :y (int (js/Math.floor y)) :z (int (js/Math.floor z))}]
+                             (or (open cell) (open (update cell :y inc)))))
+                   (hitters c hostiles)))))
+
+(defn ^:async cornered!
+  "Nowhere worth walking to: the first option of escape-order that it can take and has not failed since the last
+  start over (blocked!). home?: the body is in its home room."
+  ([c why] (await (cornered! c why false)))
+  ([c why home?]
+  (let [weapons (weapons c)
+        max-fist-sweeps (fist-sweeps)
+        hostiles (near-hostiles c)
+        threat (first hostiles)
+        fire? (under-fire? c)
+        beaten (and (not fire?) (or (beaten? c) (boxed-in? c hostiles)))
+        blind? (and fire? (not-any? #(and (combat/ranged? %) (danger-q/seen-only? %)) hostiles))
+        _ (when fire? (ctx/update-mem! c retry-covers (let [{:keys [x y z]} (sh-sense/feet (:primitives c))] [x y z])))
+        _ (when fire? (ctx/update-mem! c update :fire-tries (fnil inc 0)))
+        fire-tries (:fire-tries (ctx/mem c) 0)
+        armed? (some? (combat/best-weapon (:primitives c) weapons))
+        pillar-first? (boolean (and (not fire?) (not armed?) (pillar/pillar-item c)
+                                    (pillar/pillar-ok? (escape/block-at-of (:primitives c)) (pl/feet-cell c))
+                                    (mob-in-corner-cell? c hostiles)))
+        beaten-fight? (or (beaten-fights? {:beaten? beaten :armed? armed? :blocks? (boolean (seq (lb/carried c (flight/blocks c))))})
+                          (and (not fire?) (not pillar-first?) (mob-in-corner-cell? c hostiles)))
+        win? (and (not blind?)
+                  (fight-wins? c (if (and (:hit-on-the-run (ctx/mem c)) (not fire?)) (hitters c hostiles) hostiles)))
+        order (escape-order {:win? win?
+                             :creeper? (boolean (some combat/creeper? hostiles))
+                             :enderman? (angry-enderman? c hostiles)
+                             :flyer? (boolean (some combat/flyer? hostiles))
+                             :ranged? (boolean (or fire? (and threat (combat/ranged? threat))))
+                             :climber? (boolean (some combat/climber? hostiles))
+                             :faster? (not (outrun? c hostiles))
+                             :pressed? (or beaten-fight? (press-fights? {:fire? fire? :pressed? (pressed? c hostiles) :tries fire-tries :limit (settings/get settings :jobs.survival.retreat-cornered/cover-tries)}))
+                             :swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (in-water? c))
+                             :home? home?
+                             :lean? (pillar/lean? c)
+                             :pillar-first? pillar-first?})]
+    (loop [[option & more] order]
+      (let [r (when-not (flight/tried? c option)
+                (case option
+                  :fight (if (fist-hold? {:armed? (or beaten-fight? armed?) :win? win?
+                                          :sweeps (:sweeps (ctx/mem c) 0) :fist-sweeps max-fist-sweeps})
+                           (await (fist-look! c))
+                           (await (fight! c (if (= [:fight] order) weapons (into (vec weapons) tool-weapons)) blind?)))
+                  :plug (await (refuge/plug-option! c :plug #{:walls}))
+                  :plug-dig (await (refuge/plug-option! c :plug-dig #{:pit :pocket}))
+                  :pillar (await (refuge/pillar! c))
+                  :water (await (water! c))
+                  :roof (await (roof! c))
+                  :swim-out (await (swim-out! c))
+                  :back-off (when-let [from (or (some->> threat (danger-q/mob-pos (:primitives c))) (first (flight/fire-spots c)))]
+                              (await (back-off! c from)))))]
+        (cond
+          (some? r) r
+          (seq more) (recur more)
+          :else (await (blocked! c why))))))))

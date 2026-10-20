@@ -16,6 +16,7 @@
             [jobs.lib.util :as u]
             [jobs.survival.retreat-choose :as choose]
             [jobs.survival.retreat-cornered :as cornered]
+            [jobs.survival.retreat-cornered.pick :as pick]
             [jobs.survival.retreat-cover :as cover]
             [jobs.survival.retreat-flight :as flight]
             [jobs.survival.retreat-goal :as retreat-goal]
@@ -188,7 +189,7 @@
   (let [p (:primitives c)
         threats (flight/look! c)
         threat (first threats)
-        hit? (or (cornered/hit-on-the-run! c) (cornered/beaten? c) (cornered/shot-on-the-run? c) (cornered/bare-boxed-in? c (cornered/near-hostiles c)))
+        hit? (or (cornered/hit-on-the-run! c) (pick/beaten? c) (pick/shot-on-the-run? c) (pick/bare-boxed-in? c (cornered/near-hostiles c)))
         door (when threat (retreat-doors/door-to-shut c (danger-q/mob-pos p threat)))
         early (when (and threat (not hit?) (not door)) (await (step/early-refuge! c)))
         covered? (cover/cover-fn p threats (flight/fire-spots c))
@@ -210,7 +211,7 @@
         _ (when threat (step/say-choice! c survey verdicts judged blast))
         stuck (fn ^:async stuck [why]
                 (if (seq (cornered/near-hostiles c))
-                  (await (cornered/cornered! c why (or inside? (and (seq blast) (room-lib/in-home? c (cover/home-pos c))))))
+                  (await (pick/cornered! c why (or inside? (and (seq blast) (room-lib/in-home? c (cover/home-pos c))))))
                   (do (ctx/update-mem! c update :since-gain (fnil inc 0))
                       (if (flight/no-gain? (ctx/mem c) (flight/no-gain-steps))
                         (flight/end-flight! c :keeps-off)
@@ -225,14 +226,14 @@
                         :shot-open? (and (nil? threat) (shot/open? p (ctx/view c)))})]
     (case option
       :end (or (await (flight/look-back! c))
-               (when (cornered/plug-continues? c) (await (refuge/plug-on! c)))
+               (when (pick/plug-continues? c) (await (refuge/plug-on! c)))
                (flight/end-flight! c nil))
       :early early
       :dodge (await (step/dodge-shot! c))
       :stuck (do (when (and reset-gain? (seq (cornered/near-hostiles c))) (ctx/update-mem! c assoc :since-gain 0))
                  (await (stuck why)))
-      :cornered (await (cornered/cornered! c why (home-now?)))
-      :cornered-inside (await (cornered/cornered! c why inside?))
+      :cornered (await (pick/cornered! c why (home-now?)))
+      :cornered-inside (await (pick/cornered! c why inside?))
       :shut-door (await (retreat-doors/shut-door! c door))
       :shut-home-door (await (retreat-doors/shut-home-door! c (retreat-doors/home-door c room)))
       :run-home (await (run-home! c room way))

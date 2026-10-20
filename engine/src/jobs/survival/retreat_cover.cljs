@@ -18,7 +18,8 @@
             [jobs.lib.rooms :as room-lib]
             [jobs.survival.retreat-refuge :as refuge]
             [jobs.survival.retreat-walk :as walk]
-            [jobs.survival.retreat-cornered :as cornered]))
+            [jobs.survival.retreat-cornered :as cornered]
+            [jobs.survival.retreat-cornered.pick :as pick]))
 
 (a/defargs settings
   {::home-range {:default 64 :doc "Blocks within which the latest :bed or :home entry is a home a flight runs or leans to." :spec (a/num-in 0 nil)}
@@ -161,7 +162,7 @@
   [c]
   (let [{:keys [pocket-tried]} (ctx/mem c)]
     (cond
-      (cornered/plug-continues? c) (await (refuge/plug-on! c))
+      (pick/plug-continues? c) (await (refuge/plug-on! c))
       pocket-tried nil
       :else (do (ctx/update-mem! c assoc :pocket-tried true)
                 (await (refuge/plug! c :pocket #{:pocket}))))))

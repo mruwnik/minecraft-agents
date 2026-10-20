@@ -18,6 +18,7 @@
             [engine.triggers :as triggers]
             [jobs.survival.retreat :as retreat]
             [jobs.survival.retreat-cornered :as cornered]
+            [jobs.survival.retreat-cornered.pick :as pick]
             [jobs.lib.shot :as shot]
             [jobs.survival.retreat-flight :as flight]
             [jobs.survival.retreat-refuge :as refuge]
@@ -1116,12 +1117,12 @@
   (is (= :water (first (cornered/escape-order {:pressed? true :enderman? true})))))
 
 (deftest a-beaten-body-fights-first-only-if-armed-or-out-of-blocks
-  (are [armed? blocks? fights?] (= fights? (cornered/beaten-fights? {:beaten? true :armed? armed? :blocks? blocks?}))
+  (are [armed? blocks? fights?] (= fights? (pick/beaten-fights? {:beaten? true :armed? armed? :blocks? blocks?}))
     true true true
     true false true
     false false true
     false true false)
-  (is (false? (cornered/beaten-fights? {:beaten? false :armed? true :blocks? false}))))
+  (is (false? (pick/beaten-fights? {:beaten? false :armed? true :blocks? false}))))
 
 (deftest an-unarmed-body-hit-twice-on-the-run-fights-instead-of-fleeing-on
   (async done
@@ -1282,8 +1283,8 @@
 
 (deftest under-fire-in-a-new-cell-the-covers-that-failed-elsewhere-are-tried-again
   (is (= {:tried #{:back-off} :fire-cell [1 64 0]}
-         (cornered/retry-covers {:tried #{:plug :plug-dig :back-off} :fire-cell [0 64 0]} [1 64 0])))
-  (is (= {:tried #{:plug} :fire-cell [0 64 0]} (cornered/retry-covers {:tried #{:plug} :fire-cell [0 64 0]} [0 64 0]))
+         (pick/retry-covers {:tried #{:plug :plug-dig :back-off} :fire-cell [0 64 0]} [1 64 0])))
+  (is (= {:tried #{:plug} :fire-cell [0 64 0]} (pick/retry-covers {:tried #{:plug} :fire-cell [0 64 0]} [0 64 0]))
       "the same cell: a failed plug stays failed"))
 
 (deftest an-unarmed-body-at-full-health-seals-in-against-a-spider-instead-of-running-or-punching
@@ -1394,7 +1395,7 @@
                      [{:armed? false :win? false :sweeps 0 :fist-sweeps 0} false]
                      [{:armed? true :win? false :sweeps 0 :fist-sweeps 1} false]
                      [{:armed? false :win? true :sweeps 0 :fist-sweeps 1} false]]]
-    (is (= held (cornered/fist-hold? in)) (pr-str in))))
+    (is (= held (pick/fist-hold? in)) (pr-str in))))
 
 (deftest a-pillared-body-hurt-on-its-pillar-raises-it-instead-of-fighting
   (async done
@@ -1458,7 +1459,7 @@
     (into {} (for [x (range -1 6) y (range 62 68) z (range -2 3) :when (not (open [x y z]))] [(key-of x y z) "stone"]))))
 
 (deftest a-bare-body-in-a-closed-hut-is-boxed-in-by-a-melee-mob-in-the-room-hit-or-not
-  (let [boxed? (fn [world mob] (cornered/bare-boxed-in? {:primitives (tu/fake-on-floor world) :quote-call {}} [mob]))
+  (let [boxed? (fn [world mob] (pick/bare-boxed-in? {:primitives (tu/fake-on-floor world) :quote-call {}} [mob]))
         closed {:blocks hut}]
     (is (true? (boxed? closed (mob-at "zombie" 4))) "never hurt: no hit is needed")
     (is (false? (boxed? closed (mob-at "zombie" 12))) "beyond close-radius")
@@ -1477,7 +1478,7 @@
                                      lb/carried (constantly carried)
                                      flight/blocks (constantly nil)
                                      ctx/now (constantly 100000)]
-                         (cornered/shot-on-the-run? {})))]
+                         (pick/shot-on-the-run? {})))]
     (is (not (shot-on-run? [] [:cobblestone])))
     (is (not (shot-on-run? [arrow] [:cobblestone])) "one arrow is walked off")
     (is (not (shot-on-run? [arrow melee] [:cobblestone])) "melee hits are the beaten rule's")
@@ -1488,7 +1489,7 @@
     (is (not (shot-on-run? [arrow arrow] [])) "no blocks, no cover to take")))
 
 (deftest a-pressed-body-under-fire-builds-cover-first-then-fights
-  (are [fire? pressed? tries fights?] (= fights? (cornered/press-fights? {:fire? fire? :pressed? pressed? :tries tries :limit 2}))
+  (are [fire? pressed? tries fights?] (= fights? (pick/press-fights? {:fire? fire? :pressed? pressed? :tries tries :limit 2}))
     false true 1 true
     true true 1 false
     true true 2 false

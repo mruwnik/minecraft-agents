@@ -12,6 +12,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
             [jobs.survival.retreat-cornered :as cornered]
+            [jobs.survival.retreat-cornered.pick :as pick]
             [jobs.survival.retreat-cover :as cover]
             [jobs.survival.retreat-flight :as flight]
             [jobs.survival.retreat-goal :as retreat-goal]
@@ -91,11 +92,11 @@
   (let [spots (flight/fire-spots c)
         target (await (cover/flight-target! c []))]
     (if-not target
-      (await (cornered/cornered! c "shot at by a shooter not seen, no open way out of its line" false))
+      (await (pick/cornered! c "shot at by a shooter not seen, no open way out of its line" false))
       (let [_ (ctx/emit! c :retreat.target :info {:target (mapv #(js/Math.floor %) [(:x target) (:y target) (:z target)]) :from [] :shot-spots (count spots)
                                                   :text "flee step out of the line of an unseen shooter"})
             moved (await (cornered/leg-step! c :step target 1 (cornered/close-leg-s)))]
-        (if moved :again (await (cornered/cornered! c "shot at by a shooter not seen, the step out of its line is blocked" false)))))))
+        (if moved :again (await (pick/cornered! c "shot at by a shooter not seen, the step out of its line is blocked" false)))))))
 
 (defn lone-melee?
   "Whether hostiles is one melee mob a pillar stops (not a creeper, enderman, spider, flyer or shooter) farther than cover-gap (it would stand in the cells to fill) and within refuge-gap."
@@ -137,7 +138,7 @@
         cover (cond
                 grown? (do (ctx/update-mem! c update :regrown (fnil inc 0)) :again)
                 (and low?
-                     (or (cornered/plug-continues? c) (not (and target (covered? target))) (pos? (:stalled (ctx/mem c) 0)))
+                     (or (pick/plug-continues? c) (not (and target (covered? target))) (pos? (:stalled (ctx/mem c) 0)))
                      (not (cover/close-danger? p threats)))
                 (await (cover/take-cover! c))
                 (and target (not stair) (sh-sense/buried? p) (not (cover/close-danger? p threats)))
@@ -151,7 +152,7 @@
             _ (when leg (retreat-goal/start-leg! c))
             from (u/self-pos c)
             moved (await (cornered/leg-step! c :step target 1
-                                    (cond (or (seq (close-hitters c)) (cornered/recently-hurt? c)) (cornered/close-leg-s)
+                                    (cond (or (seq (close-hitters c)) (pick/recently-hurt? c)) (cornered/close-leg-s)
                                           low? (low-leg-s)
                                           :else (cornered/flight-timeout-s))
                                     (if leg (retreat-goal/margin c) (retreat-goal/leg-margin))))]
