@@ -2,8 +2,8 @@
 ;; surface-*: glass-roofed 40 cell dives (10 s each, x 5..24 and after the middle), start in the west shaft, goal the east shaft (head in air).
 ;;   Should-succeed: a 14 cell surface stretch between them (7 s with the head out = a full breath back). Should-fail: the dives joined by one cell with air over it (about 2 s of air back, 10 s + 8 s > 12 s), :why :air.
 ;; replan-*: a 6 deep water shaft S (x 4), a 2 high sealed tunnel from S's bottom to the shaft F (x 5+T), land over all (feet y 6), a bedrock ridge at x 11 (y 6..9) across the plot, with a gap at z 59..63 (the walk round, 100+ blocks) or none.
-;;   Full air: the body starts at S's top (head in air), waits for 300 air, is teleported to S's bottom and goes at once (a load-slow setup must not spend air). Others: the body starts at S's bottom and waits under water (/data cannot set a player's air) before go-to to the land beside F; no reflex is registered.
-;;   Should-succeed: full air takes the sealed tunnel (T 24); with air half spent it surfaces (and walks round or dives again) (no :hurt). Should-fail: air half spent, T 64 sealed, only a lethal drowning way: :why :air (the goal's head is on land the body has not seen, so it is no way to air).
+;;   The full-air case starts on land over S and is teleported to S's bottom just before go-to (full air whatever the load); the others start at S's bottom and wait under water (/data cannot set a player's air) before go-to to the land beside F; no reflex is registered.
+;;   Should-succeed: full air takes the sealed tunnel (T 16); with air half spent it surfaces (and walks round or dives again) (no :hurt). Should-fail: air half spent, T 64 sealed, only a lethal drowning way: :why :air (the goal's head is on land the body has not seen, so it is no way to air).
 ;; drowning-*: a 2 high water tunnel with a stone roof and an air pocket (air at y 2 over the water, lit by a sea lantern over it: the sealed tunnel is dark and sight sees dark cells only within 4 blocks); the body waits ~10 s under water (air ~4 of 20 bubbles, vanilla 15 s) then go-to the pocket.
 ;;   Should-succeed: pocket 6 cells away in line of sight (3 s): arrives, the drowning is priced not refused (go-to looks at the pocket; a cell of it seen edge-on is enough).
 ;;   Should-fail: the same seen pocket, the body at 2 hp (hunger stops regeneration) after ~14 s under water: any drowning kills, :why :air-lethal. A pocket round a bend (30 cells, never in sight): no way to air, :why :air. Resistance keeps the body alive after.
@@ -53,9 +53,9 @@
    :blocks [[:fill [0 0 0] [43 5 63] "stone"]
             [:fill [4 0 8] [4 5 8] "water"] [:fill [5 0 8] [20 1 8] "water"] [:fill [21 0 8] [21 5 8] "water"]
             [:fill [11 6 0] [11 9 63] "bedrock"]
-            [:set [8 2 8] "sea_lantern"] [:set [16 2 8] "sea_lantern"] [:set [24 2 8] "sea_lantern"]]
-   :body {:at [4.5 5 8.5]}
-   :act [[:until-rcon "data get entity $BODY Air" "data: 300s" 60] [:rcon "execute positioned $X $Y $Z run tp $BODY ~4 ~0 ~8"] [:job (jobs.movement.go-to {:pos #at [30 6 8] :range 1 :ways #{:walk :clear-seal}})]]
+            [:set [8 2 8] "sea_lantern"] [:set [16 2 8] "sea_lantern"]]
+   :body {:at [4.5 6 8.5]}
+   :act [[:rcon "execute positioned $X $Y $Z run tp $BODY ~4 ~0 ~8"] [:job (jobs.movement.go-to {:pos #at [22 6 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [22.5 6 8.5] 3]]}
