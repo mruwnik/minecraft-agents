@@ -1,5 +1,6 @@
 (ns jobs.access.tunnel
-  (:require [engine.args :as a]
+  (:require [jobs.lib.block-sets :as bs]
+            [engine.args :as a]
             [jobs.lib.ready :as ready]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -227,10 +228,10 @@
     (or (when-let [r (await (sstep/clear-own-cell! c in feet accept))] (if (= :continue r) :again r))
         (await (sstep/lava-step! c :tunnel.sealed (:block-at in) feet cut))
         (let [stop (await (sstep/judge! c in cells accept))]
-          (if (and (= :no-floor (:reason stop)) (rules/air (:block stop)))
+          (if (and (= :no-floor (:reason stop)) (bs/air (:block stop)))
             (await (sstep/bridge! c in cells))
             stop))
-        (if-let [cell (first (remove #(rules/air ((:block-at in) %)) cut))]
+        (if-let [cell (first (remove #(bs/air ((:block-at in) %)) cut))]
           (or (await (sstep/peek! c cell)) (await (dig-cell! c in cell cut accept)))
           (or (await (look/settle! c cut))
               (let [r (await (child/walk-into!* c :walk next))]
@@ -240,7 +241,7 @@
                   (do (ctx/update-mem! c update :run-steps (fnil max 0) (run-index (:end (ln/line (:plan (ctx/mem c)))) next (:heading plan) (:run plan)))
                       (ctx/emit! c :tunnel.step :info {:at next :text (str "tunnel step to " (pr-str next))})
                       :again)
-                  (some #(not (rules/air ((:block-at (judge/rules-in c feet)) %))) cut) :again
+                  (some #(not (bs/air ((:block-at (judge/rules-in c feet)) %))) cut) :again
                   :else {:reason :step-failed :cell next :walk (ending-result r)})))))))
 
 (defn ^:async open-over-target!
@@ -253,7 +254,7 @@
     (await (sstep/look-ahead! c feet next cut))
     (or (await (sstep/lava-step! c :tunnel.sealed (:block-at in) feet [over]))
         (await (sstep/judge! c in cells accept))
-        (if (rules/air ((:block-at in) over))
+        (if (bs/air ((:block-at in) over))
           (or (await (look/settle! c [over])) :reached)
           (or (await (sstep/peek! c over)) (await (dig-cell! c in over cut accept)))))))
 
@@ -270,7 +271,7 @@
         [tx ty tz :as t] (target-of c)
         block-at (:block-at (judge/rules-in c feet))]
     (boolean (and t (not (bad-target? t)) (= 1 (apply + (map #(js/Math.abs %) (map - t feet)))) (= ty (feet 1))
-                  (rules/air (block-at [tx (inc ty) tz]))))))
+                  (bs/air (block-at [tx (inc ty) tz]))))))
 
 (defn done?
   "Ok once the body stands beside :target at its height with the cell over the target open and settled (before the

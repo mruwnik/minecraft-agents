@@ -1,7 +1,8 @@
 (ns jobs.access.stair.step
   "The pieces of a stair step that call the world: look, judge, peek, seal lava, plug water, dig a cell, bridge a missing
   floor. Shared by jobs.access.stair and jobs.access.tunnel."
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.block-sets :as bs]
+            [clojure.string :as str]
             [engine.constants :as constants]
             [engine.ctx :as ctx]
             [jobs.lib.stair-cells :as cells]
@@ -104,7 +105,7 @@
   (when-let [lava (first (cells/exposed-lava block-at feet cut))]
     (when-not (aim/body-sees? c lava)
       (let [near? (set (map #(shape/add lava %) rules/neighbour-deltas))]
-        (first (remove #(or (near? %) (rules/air (block-at %)) (rules/fluids (block-at %))) cut))))))
+        (first (remove #(or (near? %) (bs/air (block-at %)) (bs/fluids (block-at %))) cut))))))
 
 (defn ^:async water-step!
   "Water a dig laid open: a cell the stair dug that now touches seen water is filled with a building block at once
@@ -163,7 +164,7 @@
           (cond
             (not (:ok v)) (assoc (dissoc v :ok) :cell cell)
             (not-every? (comp accept access/stair-hazard-key) (:hazards v)) {:reason :hazard :cell cell :hazards (:hazards v) :why (cells/hazards-why (:hazards v))}
-            (rules/air block) :continue
+            (bs/air block) :continue
             :else
             (do
               ;; a waiting child is resumed on the same cell: only the first round of a dig counts a try
@@ -212,7 +213,7 @@
         open (assoc stop :open-to [cell])]
     (cond
       (not (and (= :down (:dir (:args c))) (#{:no-support-floor :no-floor} (:reason stop)))) stop
-      (or (nil? item) (not (rules/air ((:block-at in) cell)))) open
+      (or (nil? item) (not (bs/air ((:block-at in) cell)))) open
       (await (bridge/place-floor! c in item cell (take-back-floor? c))) open
       :else (assoc stop :sealed [cell]))))
 

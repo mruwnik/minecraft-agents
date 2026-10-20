@@ -1,7 +1,8 @@
 (ns jobs.gather.mine.side
   "The wall ore of a :stay-level jobs.gather.mine run: a side cut by a child mine run, and the holes dug in the wall
   shut again."
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.block-sets :as bs]
+            [clojure.string :as str]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.gather.mine-stay :as stay]
@@ -68,7 +69,7 @@
         (if x
           (do (await (ctx/act c :look (clj->js {:pos {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)}})))
               (look/see! c)
-              (recur more (cond-> open (rules/air (u/seen-name (:primitives c) {:x x :y y :z z})) (conj {:x x :y y :z z}))))
+              (recur more (cond-> open (bs/air (u/seen-name (:primitives c) {:x x :y y :z z})) (conj {:x x :y y :z z}))))
           (let [shut (or (empty? open) (await (stay/seal! c (rules-in c) open)))]
             (ctx/update-mem! c #(cond-> (dissoc % :holes) (not shut) (update :holes-open into (map access/cell open))))
             (when-not shut

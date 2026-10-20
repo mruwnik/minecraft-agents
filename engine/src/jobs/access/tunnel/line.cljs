@@ -1,6 +1,7 @@
 (ns jobs.access.tunnel.line
   "The geometry of a tunnel line: choosing it (approach), its cells and its torch sites. Reads no settings, memory or ctx."
-  (:require [jobs.lib.stair-cells :as geo]
+  (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.stair-cells :as geo]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.pillar :as pillar]
             [jobs.lib.torch-plan :as tp]
@@ -84,7 +85,7 @@
   [in feet cells accept]
   (let [filler? (:filler? in)
         stop (geo/stop-of (assoc in :feet feet) (assoc cells :filler? filler?) accept)]
-    (when-not (and filler? (= :no-floor (:reason stop)) (rules/air (:block stop)))
+    (when-not (and filler? (= :no-floor (:reason stop)) (bs/air (:block stop)))
       stop)))
 
 (defn line-stop

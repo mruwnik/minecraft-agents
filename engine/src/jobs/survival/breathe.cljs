@@ -1,5 +1,6 @@
 (ns jobs.survival.breathe
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.ready :as ready]
             [jobs.lib.checks :as checks]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -96,7 +97,7 @@
   (let [y (.. self -pos -y) fy (js/Math.floor y)
         below (u/feel-name p {:x (js/Math.floor (.. self -pos -x)) :y (if (> (- y fy) 0.001) fy (dec fy))
                                :z (js/Math.floor (.. self -pos -z))})]
-    (boolean (and below (not (breath/air? below)) (not (contains? land/unsafe-below below))))))
+    (boolean (and below (not (bs/air below)) (not (contains? land/unsafe-below below))))))
 
 (defn on-land?
   "Out of the water and standing on solid ground. A swim or walk that ends on a jump crest against a wall over water
@@ -250,8 +251,8 @@
     (->> (for [[dx dz] (breath/columns radius) dy [0 -1]] {:x (+ fx dx) :y (+ fy dy) :z (+ fz dz)})
          (remove #(or (= own %) (contains? (set failed) %)))
          (filter #(and (= "water" (u/seen-name p %))
-                       (breath/air? (u/seen-name p (update % :y inc)))
-                       (breath/air? (u/seen-name p (update % :y + 2)))
+                       (bs/air (u/seen-name p (update % :y inc)))
+                       (bs/air (u/seen-name p (update % :y + 2)))
                        (blocks/support? p %)))
          first)))
 

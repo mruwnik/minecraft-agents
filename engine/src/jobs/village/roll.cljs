@@ -1,5 +1,6 @@
 (ns jobs.village.roll
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.ready :as ready]
             [engine.contract :as contract]
             [engine.settings :as settings]
             [engine.args :as a]
@@ -95,7 +96,7 @@
       (nil? e) (contract/ok :villager "no villager in view to judge")
       (= "nitwit" (.-profession e)) (contract/never :nitwit "a nitwit has no job")
       (.-baby e) (contract/later :baby "the villager is a baby")
-      (and block (not (b/air block)) (not= item block)) (contract/later :occupied (str block " stands at the workstation cell") :block block)
+      (and block (not (bs/air block)) (not= item block)) (contract/later :occupied (str block " stands at the workstation cell") :block block)
       :else (contract/ok :villager "the villager can take a job"))))
 
 (defn cell-unseen
@@ -276,7 +277,7 @@
         out-of-tries? (>= (rolls c) (max-rolls))]
     (cond
       (nil? block) (await (approach! c pos))
-      (b/air block)
+      (bs/air block)
       (cond
         (not (:broken (ctx/mem c))) (do (ctx/update-mem! c assoc :broken true) :again)
         ;; the workstation is gone: wait for the villager to lose the job, then place it back
@@ -306,7 +307,7 @@
   [c _]
   (let [{:keys [pos]} (:args c)
         block (u/seen-name (:primitives c) pos)]
-    (if-not (and (:broken (ctx/mem c)) block (b/air block))
+    (if-not (and (:broken (ctx/mem c)) block (bs/air block))
       (ctx/end c :done nil)
       (let [r (if (on-cell? c pos) (await (clear-cell! c pos)) (await (place! c)))]
         (if (= :again r) (await (cleanup c nil)) r)))))

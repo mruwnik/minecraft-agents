@@ -1,5 +1,6 @@
 (ns jobs.lib.build.plan
-  (:require [engine.args :as a]
+  (:require [jobs.lib.block-sets :as bs]
+            [engine.args :as a]
             [engine.settings :as settings]
             [clojure.string :as str]
             [jobs.lib.access.rules :as rules]
@@ -288,9 +289,9 @@
   [cells]
   (mapv (fn [{:keys [answer found] :as cell}]
           (cond
-            (not (rules/replaceable found)) cell
+            (not (bs/replaceable found)) cell
             (= :wrong answer) (assoc cell :answer :missing)
-            (and (= :extra answer) (not (rules/fluids found))) (assoc cell :answer :match)
+            (and (= :extra answer) (not (bs/fluids found))) (assoc cell :answer :match)
             :else cell))
         cells))
 

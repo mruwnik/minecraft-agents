@@ -1,7 +1,8 @@
 (ns jobs.movement.go-to.holes
   "go-to's bookkeeping of the holes its escalations dig and the blocks it places: what the body may dig, what is its own,
   the cells a child planned to cut and the ledger entries that put them back."
-  (:require [engine.ctx :as ctx]
+  (:require [jobs.lib.block-sets :as bs]
+            [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.escape :as escape]
@@ -54,7 +55,7 @@
         l (ledger/open-entries (ctx/view c))
         gone (set (for [{:keys [cell block]} dug
                         :let [e (ledger/entry-at l (vec cell))]
-                        :when (and e (= block (:item e)) (b/air (u/seen-name p (zipmap [:x :y :z] cell))))]
+                        :when (and e (= block (:item e)) (bs/air (u/seen-name p (zipmap [:x :y :z] cell))))]
                     (vec cell)))]
     (when (seq gone)
       (ledger/remember! c (remove (comp gone :cell) l)))))

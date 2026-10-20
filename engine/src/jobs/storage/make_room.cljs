@@ -1,5 +1,6 @@
 (ns jobs.storage.make-room
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.ready :as ready]
             [jobs.storage.make-room.order :as ord]
             [engine.contract :as contract]
             [engine.args :as a]
@@ -221,7 +222,7 @@
   has not seen is no goal (it may be rock, or a drop)."
   [p {:keys [x y z]}]
   (let [seen (fn [dy] (u/seen-name p {:x x :y (+ y dy) :z z}))
-        open? (fn [n] (and n (rules/replaceable n) (not (rules/fluids n))))]
+        open? (fn [n] (and n (bs/replaceable n) (not (bs/fluids n))))]
     (boolean (and (open? (seen 0)) (open? (seen 1))
                   (seen -1) (rules/solid-floor? (fn [_] (seen -1)) nil)))))
 

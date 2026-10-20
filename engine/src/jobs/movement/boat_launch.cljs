@@ -1,5 +1,6 @@
 (ns jobs.movement.boat-launch
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -69,7 +70,7 @@
   "The 8 horizontal neighbours: a boat is 1.375 wide, so its box reaches into all of them."
   [[1 0] [-1 0] [0 1] [0 -1] [1 1] [1 -1] [-1 1] [-1 -1]])
 
-(defn solid-name? [n] (boolean (and n (not (b/air n)) (not (b/fluids n)) (not (b/clearable n)))))
+(defn solid-name? [n] (boolean (and n (not (bs/air n)) (not (bs/fluids n)) (not (b/clearable n)))))
 
 (defn clear-water?
   "Whether a boat fits on the water cell: air above it and no solid block (seen) round it at the water's level or the one

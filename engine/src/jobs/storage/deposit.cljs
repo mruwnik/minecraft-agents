@@ -1,5 +1,6 @@
 (ns jobs.storage.deposit
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -181,11 +182,11 @@
   [c cells]
   (let [p (:primitives c)
         tried (:chest-tried (ctx/mem c) #{})
-        solid? (fn [n] (and n (not (b/air n)) (not (b/fluids n)) (not (b/clearable n))))]
+        solid? (fn [n] (and n (not (bs/air n)) (not (bs/fluids n)) (not (b/clearable n))))]
     (vec (for [[x y z] cells
                [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
                :let [pos {:x (+ x dx) :y y :z (+ z dz)}]
-               :when (and (b/air (u/seen-name p pos))
+               :when (and (bs/air (u/seen-name p pos))
                           (solid? (u/seen-name p (update pos :y dec)))
                           (not (tried (storage/cell-of pos)))
                           (:ok (access/may? c :place pos)))]

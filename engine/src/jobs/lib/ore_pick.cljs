@@ -4,7 +4,8 @@
   that harvests it, room in the bag, the rules' dig verdict ok) with a jobs.blocks.dig child, then steps back to the
   stand it dug from. Picked blocks are listed in the job's memory (picked) for its result. The arg :pick-up-ores is true
   (the ::ores setting), false (none) or a coll of ore block names."
-  (:require [jobs.lib.access.rules :as rules]
+  (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.access.rules :as rules]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -41,7 +42,7 @@
   "Whether a seen air face touches the cell and no seen face is fluid."
   [p cell]
   (let [ns (face-names p cell)]
-    (and (some blocks/air ns) (not-any? blocks/fluids ns))))
+    (and (some bs/air ns) (not-any? bs/fluids ns))))
 
 (defn count-of [p item] (transduce (comp (filter #(= item (:name %))) (map :count)) + 0 (u/inventory p)))
 

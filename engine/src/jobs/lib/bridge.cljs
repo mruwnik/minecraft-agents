@@ -1,6 +1,7 @@
 (ns jobs.lib.bridge
   "Placing a carried block on the air floor of a step (a stair, a tunnel) against a neighbour's face."
-  (:require [engine.game :as game]
+  (:require [jobs.lib.block-sets :as bs]
+            [engine.game :as game]
             [engine.ctx :as ctx]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.escape :as escape]
@@ -17,7 +18,7 @@
   over the cell counts only from below its underside (eye-y under the cell's top): above it the face cannot be aimed at."
   [block-at cell loose? eye-y]
   (let [solid? (fn [d] (let [n (block-at (mapv + cell d))]
-                         (if (nil? n) loose? (not (or (rules/air n) (#{"water" "lava"} n))))))]
+                         (if (nil? n) loose? (not (or (bs/air n) (#{"water" "lava"} n))))))]
     (boolean (or (some solid? face-steps)
                  (and (< eye-y (inc (second cell))) (solid? [0 1 0]))))))
 
@@ -26,10 +27,10 @@
   floor's height: every cell between must be air, the support seen solid. nil when there is none."
   [block-at floor {:keys [back depth]}]
   (let [at (fn [k] (mapv + floor [(* k (first back)) 0 (* k (second back))]))
-        solid? (fn [n] (and n (not (rules/air n)) (not (#{"water" "lava"} n))))]
+        solid? (fn [n] (and n (not (bs/air n)) (not (#{"water" "lava"} n))))]
     (when back
       (some (fn [j]
-              (when (and (solid? (block-at (at j))) (every? #(rules/air (block-at (at %))) (range j)))
+              (when (and (solid? (block-at (at j))) (every? #(bs/air (block-at (at %))) (range j)))
                 (mapv at (reverse (range j)))))
             (range 1 (inc depth))))))
 
@@ -45,7 +46,7 @@
          plans (fn [loose?]
                  (for [[probe plan] [[floor [floor]] [under [under floor]]]
                        :when (face-support? block-at probe loose? eye-y)]
-                   (filterv #(rules/air (block-at %)) plan)))]
+                   (filterv #(bs/air (block-at %)) plan)))]
      (vec (distinct (concat (plans false) (some-> (chain-plan block-at floor opts) vector) (plans true)))))))
 
 (defn ^:async place-floor!
@@ -61,7 +62,7 @@
             _ (when l (ledger/remember! c l))
             r (await (ctx/act c :place #js {:pos #js {:x x :y y :z z} :item item}))]
         (when l (ledger/remember! c (ledger/reconcile l (escape/block-at-of (:primitives c)))))
-        (if (rules/air ((:block-at in) cell))
+        (if (bs/air ((:block-at in) cell))
           (if (= "no-support" (some-> r .-status))
             {:reason :no-support-floor :cell cell :item item :why (str "nothing to place " item " against at " (pr-str cell))}
             {:reason :place-failed :cell cell :item item})

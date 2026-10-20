@@ -28,7 +28,8 @@
 
   The lifecycle functions are pure over the entry vector. open-entries reads it from a memory view, write!
   and remember! store it."
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.block-sets :as bs]
+            [clojure.string :as str]
             [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.access.rules :as rules]
@@ -122,7 +123,7 @@
     (cond
       (nil? n) [:keep e]
       (same-block? item n) [:keep (assoc e :state :placed)]
-      (and (= :removing state) (rules/air n)) [:removed e]
+      (and (= :removing state) (bs/air n)) [:removed e]
       :else [:dropped (assoc e :found n)])))
 
 (defn settle

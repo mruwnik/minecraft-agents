@@ -1,7 +1,8 @@
 (ns jobs.lib.stair-cells
   "The geometry and the stop rules of a stair step, pure: where its cells are, which of them may be cut, what a dig
   laid open. Shared by jobs.access.stair and jobs.access.tunnel."
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.block-sets :as bs]
+            [clojure.string :as str]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [plan.shape :as shape]))
@@ -87,14 +88,14 @@
   in: the rules' input without :cell; its :unseen? (fn cell -> true when never sensed) makes a floor the body has not
   seen a stop :floor-unseen once the cut is open, not a guess. cells :bridged? true: the floor was placed by the stair, what is under it is not judged; :filler? true: air under a solid floor is no stop (the next floor is bridged); :up? true (a stair up or level): it never is (those dig no floor)."
   [{:keys [block-at plugs] :as in} {:keys [cut floor under bridged? up? filler? ways]} accept]
-  (let [plug-cell (first (filter #(and (contains? plugs %) (not (rules/air (block-at %)))) cut))
+  (let [plug-cell (first (filter #(and (contains? plugs %) (not (bs/air (block-at %)))) cut))
         all-ways (into (set (:ways in)) ways)
         floor-cell (known-floor block-at cut all-ways)
         over-stand (when (and (contains? (set (map (fn [[x y z]] [x (inc y) z]) all-ways)) floor) (not (rules/solid-floor? block-at floor))) floor)
-        fluid-cell (first (filter #(rules/fluids (block-at %)) cut))
+        fluid-cell (first (filter #(bs/fluids (block-at %)) cut))
         crop-cell (first (filter #(crop-names (block-at %)) cut))
         unseen-cell (when-let [unseen? (:unseen? in)]
-                      (when (and (every? #(rules/air (block-at %)) cut) (unseen? floor)) floor))]
+                      (when (and (every? #(bs/air (block-at %)) cut) (unseen? floor)) floor))]
     (cond
       (some #(nil? (block-at %)) (conj cut floor under))
       {:reason :not-loaded :cell (first (filter #(nil? (block-at %)) (conj cut floor under)))}
@@ -109,11 +110,11 @@
                   :why "the floor of the step is a step of a stair this body cut earlier; flooring it would block the way"}
       unseen-cell {:reason :floor-unseen :cell unseen-cell}
       (not (rules/solid-floor? block-at floor)) {:reason :no-floor :cell floor :block (block-at floor)}
-      (and (not bridged?) (not up?) (let [n (block-at under)] (or (and (rules/air n) (not filler?)) (rules/fluids n))))
+      (and (not bridged?) (not up?) (let [n (block-at under)] (or (and (bs/air n) (not filler?)) (bs/fluids n))))
       {:reason :cave-below :cell under :block (block-at under)}
       :else
       (some (fn [cell]
-              (when-not (rules/air (block-at cell))
+              (when-not (bs/air (block-at cell))
                 (let [v (cell-verdict (assoc in :cell cell) cut)]
                   (cond
                     (not (:ok v)) (assoc (dissoc v :ok) :cell cell)
@@ -125,7 +126,7 @@
   "The lava cells a step lays open: lava beside the feet, the head or a cut cell that is open (air or fluid) now,
   then lava in one of those; sources behind first."
   [block-at feet cut]
-  (let [open (into [feet (shape/add feet [0 1 0])] (filter #(let [n (block-at %)] (or (rules/air n) (rules/fluids n))) cut))
+  (let [open (into [feet (shape/add feet [0 1 0])] (filter #(let [n (block-at %)] (or (bs/air n) (bs/fluids n))) cut))
         open? (set open)
         lava? #(= "lava" (block-at %))
         beside (for [o open d rules/neighbour-deltas :let [n (shape/add o d)] :when (and (not (open? n)) (lava? n))] n)]
@@ -140,7 +141,7 @@
     (let [dug? (set (map :cell dug))]
       (vec (for [cell cut :when (dug? cell)
                  :let [n (block-at cell)]
-                 :when (or (rules/air n) (rules/fluids n))
+                 :when (or (bs/air n) (bs/fluids n))
                  w (cons cell (map #(shape/add cell %) rules/neighbour-deltas))
                  :when (= "water" (block-at w))]
              [cell w])))))

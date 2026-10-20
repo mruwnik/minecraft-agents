@@ -1,5 +1,6 @@
 (ns jobs.gather.make-obsidian
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -62,7 +63,7 @@
   "Whether the seen block at cell can be clicked: not air, fluid or a plant."
   [p cell]
   (let [n (u/seen-name p cell)]
-    (boolean (and n (not (b/air n)) (not (b/fluids n)) (not (b/clearable n))))))
+    (boolean (and n (not (bs/air n)) (not (bs/fluids n)) (not (b/clearable n))))))
 
 (defn supported?
   "Whether a bucket can be emptied at cell: a solid block below it or beside it to click."

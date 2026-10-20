@@ -1,6 +1,7 @@
 (ns jobs.access.cleanup.step
   "The pure step decision of jobs.access.cleanup: which ledger cell to dig, walk to, retreat from, or give up."
-  (:require [jobs.lib.access.rules :as rules]))
+  (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.access.rules :as rules]))
 
 (defn centre [[x y z]] [(+ x 0.5) (+ y 0.5) (+ z 0.5)])
 
@@ -11,7 +12,7 @@
   [{:keys [reason fluid]}]
   (if (and (= :fluid-adjacent reason) (= "lava" fluid)) :lava-adjacent reason))
 
-(defn open? [block-at pos] (let [n (block-at pos)] (boolean (and n (rules/replaceable n)))))
+(defn open? [block-at pos] (let [n (block-at pos)] (boolean (and n (bs/replaceable n)))))
 
 (defn clear?
   "Open, or leaves: a player enclosed by a canopy digs through it, so leaves are no wall."
@@ -116,7 +117,7 @@
   [{:keys [block-at ledger roof-height]} cell]
   (boolean (some (fn [dy] (let [c (rules/offset cell 0 dy 0)
                                 n (block-at c)]
-                            (and n (not (rules/replaceable n)) (not (contains? ledger c)))))
+                            (and n (not (bs/replaceable n)) (not (contains? ledger c)))))
                  (range 1 (inc roof-height)))))
 
 (defn walk-blocker

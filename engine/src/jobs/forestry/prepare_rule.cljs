@@ -1,7 +1,8 @@
 (ns jobs.forestry.prepare-rule
   "The rule of jobs.forestry.prepare, pure: what state a planned tree cell is in, from the blocks around it and what
   the body carries."
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.block-sets :as bs]
+            [clojure.string :as str]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.trees :as forestry]
             [jobs.lib.tools :as tools]
@@ -27,7 +28,7 @@
 (defn tree-free?
   "Whether a tree's growth may take the place of the block: air, leaves, saplings, plants, snow, vines, invisible light blocks."
   [n]
-  (boolean (or (rules/air n) (= "light" n) (str/ends-with? n "_leaves") (str/ends-with? n "_sapling") (tree-plants n))))
+  (boolean (or (bs/air n) (= "light" n) (str/ends-with? n "_leaves") (str/ends-with? n "_sapling") (tree-plants n))))
 
 (def natural-names
   #{"stone" "cobblestone" "deepslate" "cobbled_deepslate" "andesite" "diorite" "granite" "tuff" "calcite" "sand"
@@ -81,10 +82,10 @@
     (cond
       (nil? n) {:state :unloaded}
       ((lib/soil-for species) n) nil
-      (and (contains? holes (lib/cell-vec under)) (rules/air n)) (if dirt {:state :soil-place :item dirt} no-dirt)
+      (and (contains? holes (lib/cell-vec under)) (bs/air n)) (if dirt {:state :soil-place :item dirt} no-dirt)
       (planned (lib/cell-vec under)) {:state :no-soil :why :planned}
-      (rules/air n) {:state :no-soil :why :hollow}
-      (rules/fluids n) {:state :no-soil :why :fluid}
+      (bs/air n) {:state :no-soil :why :hollow}
+      (bs/fluids n) {:state :no-soil :why :fluid}
       (tidy/keep-why n) {:state :no-soil :why :kept}
       (not (natural-ground? n)) {:state :no-soil :why :other-block}
       dirt {:state :soil-dig :block n :item dirt}
@@ -175,7 +176,7 @@
         (when (= "water" n) (wet-state p pos species carried))
         (own-cell p pos species)
         (growth-space p pos species over)
-        (when-not (rules/air n) {:state :clear :block n})
+        (when-not (bs/air n) {:state :clear :block n})
         (soil-state p pos species world)
         (if (carried sapling) {:state :plant :item sapling} {:state :short}))))
 

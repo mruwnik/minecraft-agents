@@ -22,9 +22,6 @@
             [jobs.lib.places :as places]
             [engine.game :as game]))
 
-(def air bs/air)
-(def fluids bs/fluids)
-
 (def ores
   {"coal_ore" "coal" "iron_ore" "raw_iron" "copper_ore" "raw_copper" "gold_ore" "raw_gold"
    "diamond_ore" "diamond" "redstone_ore" "redstone" "lapis_ore" "lapis_lazuli" "emerald_ore" "emerald"})
@@ -57,7 +54,7 @@
 (def clearable
   "What jobs.blocks.place digs out of a cell before placing: the replaceable plants and snow layer
   (block-sets/replaceable, less air and fluids) and small flowers, which a placement does not overwrite."
-  (into (set/difference bs/replaceable air fluids) bs/flowers))
+  (into (set/difference bs/replaceable bs/air bs/fluids) bs/flowers))
 
 (def drops-table
   "{block name [item name ..]} of what minecraft-data lists each block drops for a version (memoised)."
@@ -279,7 +276,7 @@
 (defn support-name?
   "Whether a block name is one to place against (not air, a fluid or a plant)."
   [n]
-  (boolean (and n (not (air n)) (not (fluids n)) (not (clearable n)))))
+  (boolean (and n (not (bs/air n)) (not (bs/fluids n)) (not (clearable n)))))
 
 (defn support?
   "Whether a neighbour of pos is a block to place against; a face the body has not seen is not one."

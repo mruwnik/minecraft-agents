@@ -44,11 +44,6 @@
             [jobs.lib.access.zones :as zones]
             [jobs.lib.block-sets :as bs]))
 
-(def air bs/air)
-
-(def fluids bs/fluids)
-
-(def replaceable bs/replaceable)
 
 (def item-block
   "Items whose placed block is not the block of the same name: seeds and root crops place a crop block, and the
@@ -92,7 +87,7 @@
   button, sign, torch or flower has no collision, so the body stands on the block below it."
   [block-at pos]
   (let [n (block-at pos)]
-    (boolean (and n (or (str/ends-with? n "_carpet") (not (bs/passable? n))) (not (fluids n)) (not (not-a-floor n))))))
+    (boolean (and n (or (str/ends-with? n "_carpet") (not (bs/passable? n))) (not (bs/fluids n)) (not (not-a-floor n))))))
 
 (defn in-box? [[x y z] {[x0 y0 z0] :min [x1 y1 z1] :max}]
   (and (<= x0 x x1) (<= y0 y y1) (<= z0 z z1)))
@@ -103,7 +98,7 @@
 (defn fluid-neighbours
   "[name pos] of every water, lava or bubble column among the six neighbours of cell, in neighbour-deltas order."
   [block-at cell]
-  (keep (fn [d] (let [pos (apply offset cell d) n (block-at pos)] (when (fluids n) [n pos])))
+  (keep (fn [d] (let [pos (apply offset cell d) n (block-at pos)] (when (bs/fluids n) [n pos])))
         neighbour-deltas))
 
 (defn falls-on-body?
@@ -115,7 +110,7 @@
         n (block-at above)
         head (inc fy)]
     (when (and (falling? n) (= x fx) (= z fz) (>= y head)
-               (every? #(let [b (block-at [x % z])] (or (nil? b) (air b))) (range (inc head) y)))
+               (every? #(let [b (block-at [x % z])] (or (nil? b) (bs/air b))) (range (inc head) y)))
       [n above])))
 
 (defn verdict
@@ -189,7 +184,7 @@
      (concat
       (common-checks :place in)
       [#(when (and feet (contains? #{fy (inc fy)} cy) (contains? cols [cx cz])) (refuse :own-body))
-       #(let [n (block-at cell)] (when-not (replaceable n) (refuse :not-replaceable :block n)))
+       #(let [n (block-at cell)] (when-not (bs/replaceable n) (refuse :not-replaceable :block n)))
        (no-zones-check in)]))))
 
 (def natural-blocks

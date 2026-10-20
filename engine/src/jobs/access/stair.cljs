@@ -1,5 +1,6 @@
 (ns jobs.access.stair
-  (:require [engine.args :as a]
+  (:require [jobs.lib.block-sets :as bs]
+            [engine.args :as a]
             [jobs.lib.ready :as ready]
             [jobs.lib.spent :as spent]
             [engine.contract :as contract]
@@ -147,7 +148,7 @@
   (if-let [lack (judge/unmet c)]
     (checks/cause-status :later lack (str "lacks " (name (:reason lack))))
     (let [p (:primitives c)
-          unseen (filterv #(and (unknown? p %) (some blocks/air (ore-pick/face-names p %))) (judge/next-cut c))]
+          unseen (filterv #(and (unknown? p %) (some bs/air (ore-pick/face-names p %))) (judge/next-cut c))]
       (if (and (seq unseen) (:need-drop (:args c)) (not (judge/fetch-limits c)) (sstep/lacks-tool? c blocks/hidden-guess))
         (contract/look :unseen "the cells to cut were not seen" :look-at unseen)
         (contract/ok :supplied "nothing lacking")))))
@@ -263,7 +264,7 @@
       (do (ctx/emit! c :stair.step :info {:at next-feet :text (str "stepped to " (pr-str next-feet))})
           :again)
       (let [block-at (:block-at (judge/rules-in c (reach/standing-vec (:primitives c))))]
-        (some #(when-let [b (block-at %)] (not (rules/air b))) cut)) :again
+        (some #(when-let [b (block-at %)] (not (bs/air b))) cut)) :again
       :else {:reason :step-failed :cell next-feet})))
 
 (defn ^:async return!
@@ -322,10 +323,10 @@
                              (when-let [r (await (sstep/clear-own-cell! c in feet accept))] (case r :continue :again :yield :continue r))
                              (await (sstep/water-step! c (:block-at in) accept cut))
                              (await (sstep/judge! c in step-cells accept)))]
-                (if (and (= :no-floor (:reason stop)) (rules/air (:block stop)))
+                (if (and (= :no-floor (:reason stop)) (bs/air (:block stop)))
                   (await (sstep/bridge! c in step-cells))
                   (or stop
-                    (if-let [cell (first (remove #(rules/air ((:block-at in) %)) cut))]
+                    (if-let [cell (first (remove #(bs/air ((:block-at in) %)) cut))]
                       (or (await (sstep/peek! c cell))
                           (let [r (await (sstep/dig! c in cell cut accept))] (case r :continue :again :yield :continue r)))
                       (or (await (settle! c cut)) (if (:cut-only (:args c)) :finished (await (step! c next cut)))))))))))))))

@@ -1,5 +1,6 @@
 (ns jobs.forestry.maintain
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.ready :as ready]
             [engine.args :as a]
             [jobs.lib.access.rules :as rules]
             [engine.contract :as contract]
@@ -97,7 +98,7 @@
       (nil? here) :unloaded
       (= here (str species "_log")) :ripe
       (= here (forestry/sapling-of species)) :growing
-      (not (rules/air here)) :foreign
+      (not (bs/air here)) :foreign
       (nil? below) :unloaded
       (not ((soil-for species) below)) :no-ground
       (some-> (u/seen-name p (up pos)) forestry/log-name?) :cramped

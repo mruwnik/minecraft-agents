@@ -1,6 +1,7 @@
 (ns jobs.gather.mine-stay
   "The :stay-level option of jobs.gather.dig-for: ore only beside the body, and a cut that opens into a cave sealed again."
-  (:require [engine.args :as a]
+  (:require [jobs.lib.block-sets :as bs]
+            [engine.args :as a]
             [jobs.lib.choose :as choose]
             [engine.ctx :as ctx]
             [jobs.lib.access.rules :as rules]
@@ -59,7 +60,7 @@
   (let [open (into #{from (update from :y inc)} cut)]
     (filterv (fn [cell] (some #(let [n (mapv + [(:x cell) (:y cell) (:z cell)] %)
                                      q {:x (n 0) :y (n 1) :z (n 2)}]
-                                 (and (not (open q)) (not (own n)) (rules/air (name-at q))))
+                                 (and (not (open q)) (not (own n)) (bs/air (name-at q))))
                               around))
              cut)))
 
@@ -89,7 +90,7 @@
                     (for [cell breach d around
                           :let [n (mapv + [(:x cell) (:y cell) (:z cell)] d)
                                 q {:x (n 0) :y (n 1) :z (n 2)}]
-                          :when (and (not (open q)) (not (own n)) (let [nm (name-at q)] (or (rules/air nm) (rules/fluids nm))))]
+                          :when (and (not (open q)) (not (own n)) (let [nm (name-at q)] (or (bs/air nm) (bs/fluids nm))))]
                       n))]
     (when (seq cells)
       {:names (vec (sort (distinct (map (fn [[x y z]] (name-at {:x x :y y :z z})) cells)))) :cells (vec cells)})))

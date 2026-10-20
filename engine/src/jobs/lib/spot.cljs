@@ -1,6 +1,7 @@
 (ns jobs.lib.spot
   "A free cell beside the body to put a block in (a crafting table, a furnace): found, or dug."
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.block-sets :as bs]
+            [clojure.string :as str]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -14,7 +15,7 @@
 
 (def table-offsets [[1 0] [-1 0] [0 1] [0 -1] [1 1] [-1 1] [1 -1] [-1 -1]])
 
-(defn solid? [n] (and n (not (b/air n)) (not (b/fluids n)) (not (b/clearable n))))
+(defn solid? [n] (and n (not (bs/air n)) (not (bs/fluids n)) (not (b/clearable n))))
 
 (defn home-cell?
   "Whether a table in pos would spoil a room: on a bed, or in the cell beside a door (the way in and out)."
@@ -51,12 +52,12 @@
         {:keys [x y z]} (u/self-pos c)
         [x y z] (mapv #(js/Math.floor %) [x y z])
         sides [[1 0] [-1 0] [0 1] [0 -1]]
-        open? (fn [cx cz] (b/air (u/seen-name p {:x cx :y y :z cz})))
+        open? (fn [cx cz] (bs/air (u/seen-name p {:x cx :y y :z cz})))
         cramped? (< (count (filter (fn [[dx dz]] (open? (+ x dx) (+ z dz))) sides)) 3)
         passage? (fn [{px :x pz :z}]
                    (some (fn [[dx dz]] (and (not= [(+ px dx) (+ pz dz)] [x z]) (open? (+ px dx) (+ pz dz)))) sides))]
     (some (fn [[pos floor]]
-            (when (and (b/air (u/seen-name p pos)) (solid? (u/seen-name p floor))
+            (when (and (bs/air (u/seen-name p pos)) (solid? (u/seen-name p floor))
                        (not (and cramped? (= y (:y pos)) (= 1 (+ (js/Math.abs (- x (:x pos))) (js/Math.abs (- z (:z pos)))))
                                  (passage? pos))))
               pos))
@@ -108,7 +109,7 @@
               (if (and (= :done (:kind r)) (:dug (:data r)))
                 (do (await (ctx/act c :look (clj->js {:pos {:x (+ (:x cell) 0.5) :y (- (:y cell) 0.5) :z (+ (:z cell) 0.5)}})))
                     (look/see! c)
-                    (when (and (b/air (u/seen-name (:primitives c) cell)) (solid? (u/seen-name (:primitives c) (update cell :y dec))))
+                    (when (and (bs/air (u/seen-name (:primitives c) cell)) (solid? (u/seen-name (:primitives c) (update cell :y dec))))
                       cell))
                 (recur))))))))
 

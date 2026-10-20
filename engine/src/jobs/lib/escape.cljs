@@ -61,7 +61,7 @@
 (defn solid?
   "A loaded block that is neither passable (block-sets/passable?) nor a fluid."
   [n]
-  (boolean (and n (not (bs/passable? n)) (not (rules/fluids n)))))
+  (boolean (and n (not (bs/passable? n)) (not (bs/fluids n)))))
 
 (defn protected? [n] (boolean (and n (re-find protected n))))
 
@@ -185,7 +185,7 @@
         (every? bs/passable? names) (when (> k 1) {:cells cells :through row})
         (> k max-thick) nil
         (some protected? names) nil
-        (some rules/fluids names) nil
+        (some bs/fluids names) nil
         :else (recur (inc k) (into cells (filter #(solid? (block-at %)) pair)))))))
 
 (defn door
@@ -405,7 +405,7 @@
         cell (vec cell)
         noted (first (filter #(= cell (:cell %)) (tidy/entries c)))
         v (when-not (:escalation noted) (tidy/refusal c :dig (zipmap [:x :y :z] cell)))]
-    (when (and v (b/air (u/seen-name p (zipmap [:x :y :z] cell))))
+    (when (and v (bs/air (u/seen-name p (zipmap [:x :y :z] cell))))
       (when noted (tidy/forget-cell! c cell))
       (tidy/record! c (merge {:cell cell :action :dig :was block :any-of (vec (distinct (cons block (b/drops-of p block))))}
                              (select-keys v [:zone :claim :plan]) tag)

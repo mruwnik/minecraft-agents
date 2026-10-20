@@ -1,5 +1,6 @@
 (ns jobs.blocks.dig
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.block-sets :as bs]
+            [clojure.string :as str]
             [engine.settings :as settings]
             [engine.args :as a]
             [jobs.lib.ready :as ready]
@@ -134,7 +135,7 @@
             {:keys [accept collect]} (:args c)]
         (cond
           (:dug (b/mem-for c pos)) nil
-          (or (nil? block) (b/air block) (b/fluids block)) nil
+          (or (nil? block) (bs/air block) (bs/fluids block)) nil
           :else
           (let [v (access/may-dig? (b/rules-in c) pos)]
             (case (access/judge v accept)
@@ -151,7 +152,7 @@
   (let [{:keys [pos error]} (b/parse (:args c))]
     (when-not (or error (:dug (b/mem-for c pos)) (look/unknown? (:primitives c) (b/cell pos)))
       (let [block (b/target-name (:primitives c) pos b/hidden-guess)]
-        (when (and block (not (b/air block)) (not (b/fluids block)))
+        (when (and block (not (bs/air block)) (not (bs/fluids block)))
           (when-let [{:keys [tool listed]} (needs c block)]
             (if (false? listed)
               {:reason :no-tool :block block :hint "the :use list names no tool that harvests it"}
@@ -204,7 +205,7 @@
   [c]
   (let [{:keys [pos error]} (b/parse (:args c))
         block (when-not error (b/target-name (:primitives c) pos b/hidden-guess))
-        air? (boolean (and block (b/air block) (not (:dug (b/mem-for c pos)))))]
+        air? (boolean (and block (bs/air block) (not (:dug (b/mem-for c pos)))))]
     (checks/goal air? [:already-clear "the cell is air"] [:solid "the cell is still to dig"]
                  {:units :blocks :done (if air? 1 0) :left (if air? 0 1)
                   :result (when air? {:dug false :pos pos :block block :reason :already-clear})})))
@@ -223,7 +224,7 @@
        (when (:dug result)
          (let [now (:now result)]
            (cond (nil? now) "; the cell was not seen since"
-                 (b/air now) "; the cell is now clear"
+                 (bs/air now) "; the cell is now clear"
                  :else (str "; the cell now holds " now))))
        (when stepped-down (str "; the body stepped down to " (pr-str stepped-down) " for the drops"))
        (when stepped-aside (str " from beside (stepped aside to " (pr-str stepped-aside) ": no seen floor under it)"))
@@ -391,8 +392,8 @@
           s s
           (and (:collect (:args c)) (seq ids)) (await (collect! c pos))
           :else (finish! c {:dug true :pos pos :block block :reason :dug :collected 0 :ids ids})))
-      (b/air block) (finish! c {:dug false :pos pos :block block :reason :already-clear})
-      (b/fluids block) (finish! c {:dug false :pos pos :block block :reason :fluid})
+      (bs/air block) (finish! c {:dug false :pos pos :block block :reason :already-clear})
+      (bs/fluids block) (finish! c {:dug false :pos pos :block block :reason :fluid})
       (rules/unbreakable block) (finish! c {:dug false :pos pos :block block :reason :cannot})
       tool (let [r (await (get-tool! c tool))]
              (if (= :fetched r) :again r))

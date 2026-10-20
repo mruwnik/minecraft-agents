@@ -1,5 +1,6 @@
 (ns jobs.farm.irrigate
-  (:require [engine.args :as a]
+  (:require [jobs.lib.block-sets :as bs]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.farm.find-spot :as find-spot]
@@ -108,7 +109,7 @@
   "Whether the block at pos is seen and neither air, fluid nor clearable."
   [p pos]
   (let [n (u/seen-name p pos)]
-    (and n (not (b/air n)) (not (b/fluids n)) (not (b/clearable n)))))
+    (and n (not (bs/air n)) (not (bs/fluids n)) (not (b/clearable n)))))
 
 (defn contained?
   "Whether the cell's four sides are seen solid and its underside is not seen open (farmland hides what it rests on until

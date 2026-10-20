@@ -1,7 +1,8 @@
 (ns jobs.lib.shore
   "Where a boat can land the body, read only from what the body has seen: a stand cell (feet and head air over a solid, non-fluid,
   non-hazard block) with water at the level of that block beside it and air over the water."
-  (:require [jobs.lib.blocks :as b]
+  (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.blocks :as b]
             [jobs.lib.land :as land]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
@@ -9,7 +10,7 @@
 
 (def sides [[1 0] [-1 0] [0 1] [0 -1]])
 
-(defn seen-air? [p cell] (contains? b/air (u/seen-name p cell)))
+(defn seen-air? [p cell] (contains? bs/air (u/seen-name p cell)))
 
 (defn standable?
   "Whether the cell is a seen stand cell: feet and head air, a seen block below that is solid and no hazard."

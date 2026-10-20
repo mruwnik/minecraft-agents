@@ -1,5 +1,6 @@
 (ns jobs.access.clear-path
-  (:require [engine.settings :as settings]
+  (:require [jobs.lib.block-sets :as bs]
+            [engine.settings :as settings]
             [jobs.access.stair.limits :as limits]
             [engine.args :as a]
             [jobs.lib.ready :as ready]
@@ -111,7 +112,7 @@
   (let [m (ctx/mem c)
         p (:primitives c)
         cells (:cells m)
-        open? (fn [cell] (b/air (u/seen-name p (zipmap [:x :y :z] cell))))]
+        open? (fn [cell] (bs/air (u/seen-name p (zipmap [:x :y :z] cell))))]
     (if (and (seq cells) (:through m) (= (:through m) (reach/standing-vec p)) (every? open? cells))
       (contract/ok :done (str "cleared a way through to " (pr-str (:through m))) :units :cells :done (count cells) :left 0
                    :result (result-of c {}))
@@ -219,11 +220,11 @@
   [c cells]
   (let [p (:primitives c)
         pos #(zipmap [:x :y :z] %)]
-    (when-let [cell (first (remove #(b/air (u/seen-name p (pos %))) cells))]
+    (when-let [cell (first (remove #(bs/air (u/seen-name p (pos %))) cells))]
       (when (dig-look/unknown? p cell) (await (dig-look/look-at! c cell)))
       (let [seen (u/seen-name p (pos cell))]
         (cond
-          (b/air seen) :open
+          (bs/air seen) :open
           (and (nil? seen) (some? (.-sensedAt p)) (nil? (u/sensed p (pos cell)))) {:unloaded cell}
           :else (let [block (or seen b/hidden-guess)
                       d {:cell cell :block block :collect (room-for-drop? p block)}]

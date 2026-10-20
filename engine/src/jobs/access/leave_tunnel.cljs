@@ -1,5 +1,6 @@
 (ns jobs.access.leave-tunnel
-  (:require [engine.contract :as contract]
+  (:require [jobs.lib.block-sets :as bs]
+            [engine.contract :as contract]
             [jobs.lib.choose :as choose]
             [engine.args :as a]
             [jobs.lib.ready :as ready]
@@ -100,7 +101,7 @@
   "Whether the cell is loaded and holds air, a fluid or a plant: a block placed there takes its place."
   [block-at cell]
   (let [n (block-at cell)]
-    (boolean (and n (rules/replaceable n)))))
+    (boolean (and n (bs/replaceable n)))))
 
 (defn mouth
   "The cells of the dug blocks [{:cell :block}] that seal the tunnel off, from the entry cell: those at or above the
@@ -315,7 +316,7 @@
                                                                 :ignore-zones? true}))]
         (cond
           (= :continue outcome) :continue
-          (not (rules/air (block-at cell))) (book-left! c cell site :dig-failed)
+          (not (bs/air (block-at cell))) (book-left! c cell site :dig-failed)
           :else (do (ledger/remember! c (ledger/drop-cell l cell))
                     (ctx/update-mem! c #(-> % (update :taken (fnil conj []) cell) (assoc :collect true)))
                     :again))))))
@@ -372,7 +373,7 @@
                   n (block-at cell)]
               (cond
                 (= :continue outcome) :continue
-                (and n (not (rules/replaceable n))) (do (ctx/update-mem! c update :filled (fnil conj []) cell) :again)
+                (and n (not (bs/replaceable n))) (do (ctx/update-mem! c update :filled (fnil conj []) cell) :again)
                 :else (book-open! c cell :place-failed))))))
 
 (defn ^:async seal!

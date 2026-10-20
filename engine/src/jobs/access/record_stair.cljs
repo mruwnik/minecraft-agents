@@ -1,5 +1,6 @@
 (ns jobs.access.record-stair
-  (:require [engine.args :as a]
+  (:require [jobs.lib.block-sets :as bs]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -45,14 +46,14 @@
   "Whether cell is a stand: a solid seen floor under it, air in it and over it."
   [block-at cell]
   (and (rules/solid-floor? block-at (shape/add cell [0 -1 0]))
-       (rules/air (block-at cell))
-       (rules/air (block-at (shape/add cell [0 1 0])))))
+       (bs/air (block-at cell))
+       (bs/air (block-at (shape/add cell [0 1 0])))))
 
 (defn step?
   "Whether from -> to is a step of a stair: both stands, and the air over the head of to that a stair cuts."
   [block-at from to]
   (and (stand? block-at from) (stand? block-at to)
-       (rules/air (block-at (shape/add (if (> (to 1) (from 1)) from to) [0 2 0])))))
+       (bs/air (block-at (shape/add (if (> (to 1) (from 1)) from to) [0 2 0])))))
 
 (defn run-along
   "The stands reached from cell by steps of d, nearest first."

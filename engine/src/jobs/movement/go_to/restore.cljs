@@ -1,6 +1,7 @@
 (ns jobs.movement.go-to.restore
   "go-to's put-back: once the walk is on past an escalation, the holes it dug are filled again."
-  (:require [engine.contract :as contract]
+  (:require [jobs.lib.block-sets :as bs]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as b]
             [jobs.lib.ledger :as ledger]
@@ -27,7 +28,7 @@
   "Whether hole cell is seen filled (not air); a cell the body does not know is not."
   [p cell]
   (let [n (u/seen-name p (zipmap [:x :y :z] cell))]
-    (boolean (and n (not (b/air n))))))
+    (boolean (and n (not (bs/air n))))))
 
 (defn deep-below?
   "Whether cell lies more than 2 below the body's feet: a place walk (range 3) has to go down into the shaft for it."

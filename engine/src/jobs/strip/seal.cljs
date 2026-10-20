@@ -1,5 +1,6 @@
 (ns jobs.strip.seal
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.ready :as ready]
             [engine.contract :as contract]
             [engine.args :as a]
             [engine.ctx :as ctx]
@@ -65,7 +66,7 @@
   or :container (never touched)."
   [n]
   (cond
-    (or (nil? n) (rules/replaceable n)) :open
+    (or (nil? n) (bs/replaceable n)) :open
     (found/containers n) :container
     (re-find loose n) :loose
     :else :solid))

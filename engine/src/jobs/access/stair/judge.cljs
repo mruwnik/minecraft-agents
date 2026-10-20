@@ -1,6 +1,7 @@
 (ns jobs.access.stair.judge
   "What the next stair step needs and what refuses it, judged from the feet. Shared by jobs.access.stair, jobs.access.tunnel and jobs.access.leave-tunnel."
-  (:require [jobs.lib.access :as access]
+  (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as blocks]
             [engine.ctx :as ctx]
@@ -58,7 +59,7 @@
   [c]
   (let [p (:primitives c)
         block-at (:block-at (rules-in c (reach/standing-vec p)))
-        block (some #(let [n (when-not (unknown? p %) (block-at %))] (when (and n (not (rules/air n)) (not (rules/unbreakable n))) n)) (next-cut c))]
+        block (some #(let [n (when-not (unknown? p %) (block-at %))] (when (and n (not (bs/air n)) (not (rules/unbreakable n))) n)) (next-cut c))]
     (cond
       (nil? block) nil
       (sstep/lacks-tool? c block) {:reason :no-tool :tool (tools/needed-kind p block) :block block}

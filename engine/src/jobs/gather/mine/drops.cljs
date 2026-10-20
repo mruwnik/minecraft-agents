@@ -1,7 +1,8 @@
 (ns jobs.gather.mine.drops
   "The drops of jobs.gather.dig-for: digging one cell, then collecting what it dropped (a look down the column, a
   collect-drops child, a walk or a short cut beside the dug cell) and telling what was left or lost."
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.block-sets :as bs]
+            [clojure.string :as str]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -111,7 +112,7 @@
         [dx dy dz] (map - dug [x y z])]
     (when (and (zero? dy) (= 1 (+ (js/Math.abs dx) (js/Math.abs dz)))
                (let [under (u/seen-name (:primitives c) (zipmap [:x :y :z] (update dug 1 dec)))]
-                 (or (nil? under) (rules/air under))))
+                 (or (nil? under) (bs/air under))))
       {:x (+ x 0.5 (* 0.4 dx)) :y y :z (+ z 0.5 (* 0.4 dz))})))
 
 (defn ^:async peek-over-lip!
