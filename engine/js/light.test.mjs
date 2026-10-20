@@ -2,7 +2,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
-import { emitOf, lightTable, relightBox, boxIndex } from './light.mjs'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { emitOf, lightTable, lightTableCached, relightBox, boxIndex } from './light.mjs'
 
 const require = createRequire(import.meta.url)
 const registry = require('prismarine-registry')('26.1')
@@ -216,3 +219,15 @@ const randomBox = (size, seed) => {
   return b
 }
 
+
+test('the cached table equals the built one, on the first call and when read back', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'light-cache-'))
+  try {
+    const built = lightTableCached(registry, '26.1', dir)
+    const read = lightTableCached(registry, '26.1', dir)
+    for (const t of [built, read]) assert.deepEqual(t, table)
+    assert.equal(fs.readdirSync(dir).length, 1)
+  } finally {
+    fs.rmSync(dir, { recursive: true })
+  }
+})

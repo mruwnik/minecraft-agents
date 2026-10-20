@@ -495,3 +495,17 @@
     (world/set-data! w {"pad" pad "wall" wall} {})
     (world/memo w :c (fn [] 3))
     (is (= #{:c} (set (filter #{:a :b :c} (keys @(:derived w))))))))
+
+(deftest a-file-is-parsed-when-its-value-is-first-needed
+  (let [{:keys [plans seen w]} (reader)]
+    (write! plans "field" (pr-str wheat))
+    (write! plans "broken" "{:id \"broken\" :parts [")
+    (world/refresh! w)
+    (is (empty? (unreloaded seen)) "reading the folder parses nothing")
+    (is (= {} (world/derived w :gates (fn [as] (into {} (keep (fn [a] (when (:plan a) [(:id a) 1]))) as)) ["_fence_gate"])))
+    (is (empty? (unreloaded seen)) "a scan with needles skips files whose text lacks them")
+    (is (= #{} (world/shaft-ids w)))
+    (is (= {} (world/plan-authors w)))
+    (is (empty? (unreloaded seen)) "so do the shaft and author scans")
+    (world/plan w "broken")
+    (is (= [:world.plan-unreadable] (map :kind (unreloaded seen))) "the first read of a bad file warns")))

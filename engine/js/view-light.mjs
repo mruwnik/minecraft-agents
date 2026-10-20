@@ -1,7 +1,7 @@
 // Why JavaScript: binary/graphics; the view dump's column, light and pose encoding.
 // View dump light: masks, nibbles, the local relight overlay and its box merging.
 import prismarineRegistry from 'prismarine-registry'
-import { lightTable } from './light.mjs'
+import { lightTableCached } from './light.mjs'
 
 export const LIGHT_SECTION_BYTES = 2048
 export const RELIGHT_BUDGET_MS = 10
@@ -151,7 +151,7 @@ export const tableFor = target => {
   const cached = lightTables.get(target.version)
   if (cached) return cached
   const registry = target.registry?.blocksArray ? target.registry : prismarineRegistry(target.version)
-  const table = { ...lightTable(registry), stone: registry.blocksByName.stone.defaultState, air: registry.blocksByName.air.defaultState }
+  const table = { ...lightTableCached(registry, target.version), stone: registry.blocksByName.stone.defaultState, air: registry.blocksByName.air.defaultState }
   lightTables.set(target.version, table)
   return table
 }

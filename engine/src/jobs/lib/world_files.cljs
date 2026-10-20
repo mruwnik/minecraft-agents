@@ -22,6 +22,9 @@
 
   The state: {:plans {id entry} :blueprints {id entry} :zones entry :area-claims entry :expanded {id (delay expansion)}
   :claims {id (delay #{cell})} :footprints (delay {cell id}) :checked-at ms}.
+    A file's text is read when it changes but parsed by the first reader that needs its value (entry :lazy, see resolved), which
+    is why a bad file warns when first used, not when read. Readers that scan every plan skip those whose text lacks their
+    needle (mentions?, shaft-ids, plan-authors).
     Expansions are delays, forced by the first reader that needs them (a trigger that asks for gates forces only the plans
     that mention one), so a body that never asks pays nothing at start.
     An entry is {:stamp [mtime size] :value v :error text}: :value the last good copy, :error the current file's
@@ -51,17 +54,46 @@
   [claims]
   (into {} (for [[id cells] claims cell cells] [cell id])))
 
+;; ------------------------------------------------------------------ lazy entries
+
+(defn resolved
+  "The entry with its :value/:error, parsing the file now if nobody has needed it yet."
+  [e]
+  (if-let [d (:lazy e)] @d e))
+
+(defn value "The last good copy of the plan or blueprint of entry e (parsed now if need be)." [e] (:value (resolved e)))
+
+(defn value-if
+  "(value e), unless the file's text lacks needle (then nil without parsing it)."
+  [e needle]
+  (let [t (:text e)]
+    (when (or (nil? t) (str/includes? t needle)) (value e))))
+
+(defn lazy-entry
+  "Entry for a file whose text was read: parsed (with warn on a bad file, via warn!) by the first reader of its value."
+  [old id stamp text parse-fn k warn!]
+  {:stamp stamp
+   :text text
+   :lazy (delay
+          (let [parsed (parse-fn text id)
+                [entries warn] (fsync/absorb (if (:errors parsed) {id (resolved old)} {}) id stamp
+                                             (if (:errors parsed) parsed {:value (get parsed k)}))]
+            (when warn (warn! warn))
+            (get entries id)))})
+
 (defn expand-all
   "state with :expanded rebuilt (a delay of each plan's last good copy expanded over the blueprints' last good copies), and
   the :claims and :footprints of the active plans with it (delays too). With prior (the state before), a plan whose entry
   is unchanged keeps its expansion and claim, unless a blueprint changed."
   ([state] (expand-all state nil))
   ([state prior]
-   (let [blueprints (into {} (keep (fn [[id e]] (when (:value e) [id (:value e)]))) (:blueprints state))
+   (let [blueprints (delay (into {} (keep (fn [[id e]] (when-let [v (value e)] [id v]))) (:blueprints state)))
          reuse? (and prior (= (:blueprints prior) (:blueprints state)))
          same? (fn [id e] (and reuse? (= e (get-in prior [:plans id])) (contains? (:expanded prior) id)))
-         active (filter (fn [[_ e]] (:value e)) (:plans state))
-         expanded (into {} (map (fn [[id e]] [id (if (same? id e) (get-in prior [:expanded id]) (delay (shape/expand (:value e) blueprints)))]))
+         active (:plans state)
+         expanded (into {} (map (fn [[id e]] [id (if (same? id e)
+                                                   (get-in prior [:expanded id])
+                                                   (delay (when-let [v (value e)] (shape/expand v @blueprints))))]))
                         active)
          cs (into {} (map (fn [[id e]] [id (if (same? id e)
                                              (get-in prior [:claims id])
@@ -79,7 +111,8 @@
   {:id :plan :cells :spots :errors} (:cells [{:pos [x y z] :want :part}], :spots {\"part/spot\" [x y z]}, :errors those of the expansion), with
   :error when the current file is bad and this is the last good copy."
   [state id]
-  (let [{:keys [value error] :as entry} (get-in state [:plans id])
+  (let [entry (some-> (get-in state [:plans id]) resolved)
+        {:keys [value error]} entry
         expansion (when value (expansion state id))]
     (cond
       (nil? entry) nil
@@ -89,15 +122,6 @@
 
 ;; ------------------------------------------------------------------ files
 
-(defn read-parsed
-  "The file of id parsed with parse-fn into {:value v} or {:errors [..]}; an unreadable file is an error."
-  [dir id parse-fn k]
-  (let [text (try (.readFileSync fs (path/join dir (str id ".edn")) "utf8") (catch :default e {:error (ex-message e)}))]
-    (if (map? text)
-      {:errors [(str "unreadable file: " (:error text))]}
-      (let [parsed (parse-fn text id)]
-        (if (:errors parsed) parsed {:value (get parsed k)})))))
-
 (def kinds
   {:plans {:dir :plans-dir :parse parse/parse :k :plan :kind :world.plan-unreadable :what :plan}
    :blueprints {:dir :blueprint-dir :parse parse/parse-blueprint :k :blueprint :kind :world.blueprint-unreadable
@@ -105,11 +129,14 @@
 
 (defn sync-kind
   "[entries warns] for one kind of file, re-reading only what changed."
-  [entries dir {:keys [parse k]}]
+  [entries dir {:keys [parse k]} warn!]
   (let [now-stamps (fsync/stamps dir)]
     (reduce (fn [[entries warns] id]
-              (let [[entries warn] (fsync/absorb entries id (get now-stamps id) (read-parsed dir id parse k))]
-                [entries (cond-> warns warn (conj warn))]))
+              (let [text (try (.readFileSync fs (path/join dir (str id ".edn")) "utf8") (catch :default e {:error (ex-message e)}))]
+                (if (map? text)
+                  (let [[entries warn] (fsync/absorb entries id (get now-stamps id) {:errors [(str "unreadable file: " (:error text))]})]
+                    [entries (cond-> warns warn (conj warn))])
+                  [(assoc entries id (lazy-entry (get entries id) id (get now-stamps id) text parse k warn!)) warns])))
             [(fsync/drop-gone entries now-stamps) []]
             (fsync/stale-ids entries now-stamps))))
 
@@ -239,7 +266,7 @@
     (let [now ((:now opts))]
       (when (or force? (fsync/due? (assoc @state :every-ms (:every-ms opts)) now))
         (let [old @state
-              results (into {} (map (fn [[kind spec]] [kind (sync-kind (get old kind) (get opts (:dir spec)) spec)]))
+              results (into {} (map (fn [[kind spec]] [kind (sync-kind (get old kind) (get opts (:dir spec)) spec #((:emit opts) (warn-event spec %)))]))
                             kinds)
               plans (first (:plans results))
               blueprints (first (:blueprints results))
@@ -352,13 +379,15 @@
   "Whether plan id, or a blueprint it places, names a block containing one of needles (text): false means the plan has no cell
   wanting such a block, so it need not be expanded."
   [state id needles]
-  (let [value (get-in state [:plans id :value])
-        text (str (pr-str value)
-                  (apply str (for [part (:parts value)
-                                   :let [bp (get-in state [:blueprints (:blueprint part) :value])]
-                                   :when bp]
-                               (pr-str (:key bp)))))]
-    (boolean (some #(str/includes? text %) needles))))
+  (let [file-text (get-in state [:plans id :text])]
+    (and (not (and file-text (not (str/includes? file-text "blueprint")) (not-any? #(str/includes? file-text %) needles)))
+         (let [plan (value (get-in state [:plans id]))
+               text (str (pr-str plan)
+                         (apply str (for [part (:parts plan)
+                                          :let [bp (value (get-in state [:blueprints (:blueprint part)]))]
+                                          :when bp]
+                                      (pr-str (:key bp)))))]
+           (boolean (some #(str/includes? text %) needles))))))
 
 (defn answers
   "The answers (see answer) of every plan in state, by id; with needles only of the plans that mention one (see mentions?)."
@@ -430,7 +459,7 @@
   (if-not w
     #{}
     (do (refresh! w)
-        (memo w :shaft-ids #(into #{} (keep (fn [[id e]] (when (= :mineshaft (:kind (:value e))) id))) (:plans @(:state w)))))))
+        (memo w :shaft-ids #(into #{} (keep (fn [[id e]] (when (= :mineshaft (:kind (value-if e ":mineshaft"))) id))) (:plans @(:state w)))))))
 
 (defn plan-authors
   "{plan-id by}: the :metadata :by (the body that made the plan) of each plan that names one; {} for a nil world."
@@ -438,7 +467,7 @@
   (if-not w
     {}
     (do (refresh! w)
-        (memo w :plan-authors #(into {} (keep (fn [[id e]] (when-let [by (shape/author (:value e))] [id by]))) (:plans @(:state w)))))))
+        (memo w :plan-authors #(into {} (keep (fn [[id e]] (when-let [by (shape/author (value-if e ":by"))] [id by]))) (:plans @(:state w)))))))
 
 (defn area-claims
   "The world's area claims as read from claims.edn ([] when there is no file or no world; the last good copy when it is

@@ -3,6 +3,10 @@
 // box keeps its values and acts as fixed sources; the interior is rebuilt from
 // emitters plus the shell using vanilla flood-fill rules. No bot access.
 import { createRequire } from 'node:module'
+import { createHash } from 'node:crypto'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const require = createRequire(import.meta.url)
 const blockFactory = require('prismarine-block')
@@ -93,6 +97,28 @@ export function lightTable (registry) {
     }
   }
   return { emit, filter, faces }
+}
+
+const SOURCE_HASH = createHash('sha1').update(fs.readFileSync(fileURLToPath(import.meta.url))).digest('hex').slice(0, 12)
+export const tableCacheDir = process.env.MC_LIGHT_CACHE_DIR || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'state', 'light-tables')
+
+// Building the table walks every block state (~140 ms); the result only depends on the version and this file.
+export function lightTableCached (registry, version, dir = tableCacheDir) {
+  const file = path.join(dir, `${version}-${SOURCE_HASH}.bin`)
+  const read = fs.existsSync(file) ? fs.readFileSync(file) : null
+  if (read && read.length % 3 === 0) {
+    const n = read.length / 3
+    const part = (i) => new Uint8Array(read.buffer, read.byteOffset + i * n, n).slice()
+    return { emit: part(0), filter: part(1), faces: part(2) }
+  }
+  const table = lightTable(registry)
+  const tmp = `${file}.${process.pid}.tmp`
+  try {
+    fs.mkdirSync(dir, { recursive: true })
+    fs.writeFileSync(tmp, Buffer.concat([table.emit, table.filter, table.faces]))
+    fs.renameSync(tmp, file)
+  } catch { /* an unwritable cache only costs the build next time */ }
+  return table
 }
 
 export const boxIndex = (size, x, y, z) => (y * size[2] + z) * size[0] + x
