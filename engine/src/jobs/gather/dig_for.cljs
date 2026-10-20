@@ -37,8 +37,8 @@
   (:variants). The run's own area is :center / :radius (waits :outside-area while the body is farther; jobs.lib.area).
 
   Needs: a pickaxe carried when the block wants one (a shovel or axe block drops by hand), torches carried or craftable when a
-  tunnel or stair is lit, food carried when hungry, health (can-run? waits :low-health), and a read zone list (:no-zones unless
-  :ignore-zones?). Impossible: :no-block. :stay-level declines :on-surface in the open. Fetches nothing and walks nowhere
+  tunnel or stair is lit, food carried when hungry, health (fit? waits :low-health, at the start only), and a read zone list (:no-zones unless
+  :ignore-zones?). Impossible: :no-block. :stay-level declines :on-surface in the open. Fetches only seal blocks and torch ingredients (:fetch), never the tool or food, and walks nowhere
   home: the body stays where the dig ends. Targets come only from perception (seenBlocks, never x-ray): a seen block within
   :radius with a seen air face, not beside seen lava (or water unless :wet), that the zone rules, claims and plans let it dig
   (:refused when all are barred).
@@ -156,8 +156,6 @@
             (checks/refusing :underground "not in the open" on-surface)
             (checks/refusing :zones-read "zone list read" no-zones)
             (checks/refusing :target "a target no zone refuses" all-refused)))
-
-(def can-run? checks/low-health)
 
 (defn done?
   "Progress in items: got against :count carried. :ok at once when :count is carried before the run began, else once the run has finished

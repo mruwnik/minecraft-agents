@@ -211,28 +211,13 @@
           (await (run-ticks s 60))
           (is (>= (get (inv s) "sand") 6) "healed, it mines"))))))
 
-(deftest a-mine-hurt-between-two-digs-waits-to-heal-before-the-next
+(deftest a-caller-with-fit-always-digs-on-at-low-health
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [p (tu/fake-on-floor {:floor-block floor-block :inventory [{:name "torch" :count 10}]
-                                   :blocks (merge wide-floor (cells "sand" (range 4 10) [64 65] (range -2 3)))})
-              world (.-world p)
-              _ (.override world "dig"
-                           (fn ^:async f [token a impl]
-                             (let [r (await (impl token a))]
-                               (when (= 2 (count (filterv #(= "dig" (.-name %)) (.-calls world))))
-                                 (swap! (.. world -state) assoc-in [:self :health] 2))
-                               r)))
-              s (start {:p p})]
-          (core/submit! (:eng s) (spec {:block "sand" :count 30}) {})
-          (await (run-ticks s 20))
-          (is (= 2 (dig-count s)) "no dig after the body got hurt, though the round had steps left")
-          (is (= [:low-health] (distinct (map :reason (events-of s :waiting)))))
-          (is (not (finished? s)) "the run waits, it does not end")
-          (swap! (.. world -state) assoc-in [:self :health] 20)
-          (await (run-ticks s 20))
-          (is (< 2 (dig-count s)) "healed, it digs on"))))))
+        (let [{:keys [s]} (await (as-child {:block "sand" :count 6 :checks {:fit? '(always)}}
+                                           {:blocks (merge floor sand-patch) :self {:health 0.5}} nil 10))]
+          (is (pos? (dig-count s)) "low health is fit?'s, which the caller overrode"))))))
 
 (deftest a-body-with-its-head-in-water-digs-nothing-and-says-flooded
   (async done

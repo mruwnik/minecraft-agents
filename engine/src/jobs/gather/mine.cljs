@@ -85,8 +85,6 @@
 
 (def can-start? dig/can-start?)
 
-(def can-run? dig/can-run?)
-
 (defn done?
   "Progress in items: got against :count carried. :ok at once when :count is carried before the trip began, else once it has finished
   (:finished in memory) with the wanted items carried and the body home; else :later, the round ends the run."

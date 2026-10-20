@@ -10,7 +10,6 @@
             [jobs.gather.mine.torches :as torches]
             [jobs.gather.mine.tunnel :as tunnel :refer [passable open-start result-of walk-of back-on-line!]]
             [jobs.lib.access :as access]
-            [jobs.lib.checks :as checks]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.need :as need]
             [jobs.lib.look :as look :refer [cell-of headings glance!]]
@@ -58,8 +57,6 @@
 (def safe? ready/safe-if-lit)
 
 (def fit? ready/fit?)
-
-(def can-run? checks/low-health)
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
