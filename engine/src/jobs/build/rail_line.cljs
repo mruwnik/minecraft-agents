@@ -30,7 +30,7 @@
   1. :build, the head-first builder (jobs.build.rail). Cells go in along the line from the end nearer the
      body. Each station's bed and power go under before its rail, and the rail before the torch or lever beside
      it, so every rail takes the shape its neighbours give it. The body stands on the rail behind the cell it
-     places. A rail that settled in the wrong shape is dug and placed again up to :fix times, then given up as
+     places. A rail that settled in the wrong shape is dug and placed again (jobs.build.rail's ::fix-times), then given up as
      :shape. Placing, zones, other plans' footprints, refusals, give-ups and the build.* events are
      jobs.build.from-plan's (its arg :accept applies).
      With nothing left to build the builder is skipped and the line goes straight to the proof.
@@ -42,9 +42,9 @@
   :all-carried false); those lacking are fetched first (jobs.lib.need, :fetch; a failed fetch ends the job with its cause). Returns, as the data of its ending, {:ok? :breaks :hazards :built {:placed :missing :short
   :given-up :wrong :refused}}. :hazards lists falling beds (gravel, sand).
   Endings: done when the line is sound (a line sound already is done at once, placed 0);
-  nothing-possible :broken when it is not (one warn rail-build.broken with :breaks {:pos :why} (:gap :shape :unlit
-  :lit-brake :no-bed :blocked :wet :no-buffer :launch-trap :unloaded; at most 12) and what the build left (:refused
-  :given-up :short)).
+  nothing-possible :broken when it is not (the data's :breaks {:pos :why} (:gap :shape :unlit :lit-brake :no-bed
+  :blocked :wet :no-buffer :launch-trap :unloaded) and :built say why; the text names the first 12 and what the build
+  left (:refused :given-up :short)). A build that stopped short of finishing (its ending carries the result) goes on to the proof, which names what is missing.
   Start facts (one rail-build.declined warn (:plan :reason) each):
   - impossible: its rail cells are not one chain (:not-a-line, :why :gap|:branch|:two-chains|:loop|:no-rails); the plan has no cells to build (:no-cells).
   - condition-failed: the plan is missing or unreadable (:plan, a wait); no zone list has been read (:no-zones); a cell wanting
@@ -62,7 +62,6 @@
    :accept {:doc "as jobs.build.from-plan" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
    :all-carried {:doc "start only while every item still to place is carried (false: build what is carried)" :spec boolean? :default true}
    :fetch {:doc "get the items still to place with jobs.lib.need before the build: true, a set of kinds or a map of limits; false (or without :item) waits :short" :spec need/option? :default true}
-   :fix {:doc "times a rail whose settled shape is wrong is dug and placed again, then given up as :shape (0 or false: given up at once)" :spec (a/or-of (a/int-in 0 nil) false?) :default 1}
    :ignore-zones? :shared})
 
 ;; ------------------------------------------------------------------ the plan
@@ -237,7 +236,7 @@
 
 ;; ------------------------------------------------------------------ rounds
 
-(def builder-args [:plan :part :accept :fix :ignore-zones?])
+(def builder-args [:plan :part :accept :ignore-zones?])
 
 (defn ^:async build-step!
   "One round of the head-first builder (jobs.build.rail child); its result is kept when it ends and the phase moves on. A
@@ -254,7 +253,7 @@
         (let [e (await (ctx/call c :build 'jobs.build.rail (select-keys (:args c) builder-args)))]
           (cond
             (or (= :continue e) (= :cut-off (:kind e))) :continue
-            (= :done (:kind e)) (do (ctx/update-mem! c assoc :phase :switch :built (:data e)) :again)
+            (or (= :done (:kind e)) (contains? (:data e) :missing)) (do (ctx/update-mem! c assoc :phase :switch :built (:data e)) :again)
             :else (ctx/end c (:kind e) (:cause e)))))))
 
 (defn unlit-levers
@@ -317,7 +316,7 @@
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one rail line may take." :spec (a/int-in 1 nil)}
    ::settle-reads {:default 8 :doc "How many times, 250 ms apart, a line whose only fault is a powered rail's power state is re-read before it counts as broken (the power spreads and its updates arrive after the last block is placed)." :spec (a/int-in 0 nil)}
-   ::max-breaks {:default 12 :doc "Blocks broken for one rail line before it gives up." :spec (a/int-in 0 nil)}})
+   ::max-breaks {:default 12 :doc "Breaks of a broken line named in the ending's text (the data lists all)." :spec (a/int-in 0 nil)}})
 (defn max-breaks [] (settings/get settings ::max-breaks))
 (defn settle-reads [] (settings/get settings ::settle-reads))
 
@@ -341,16 +340,13 @@
         proof (rail/judge-line cells at)
         rails (count (filter rail/rail-cell? cells))
         left (plan/left-text built)]
-    (when-not (:ok? proof)
-      (ctx/emit! c :rail-build.broken :warn
-                 {:plan plan :breaks (vec (take (max-breaks) (:breaks proof))) :breaks-total (count (:breaks proof))
-                  :refused (:refused built) :given-up (:given-up built) :short (:short built)
-                  :text (str "rail line " plan " is broken: "
-                             (str/join ", " (map break-text (take (max-breaks) (:breaks proof))))
-                             (when (seq left) (str "; " left)))}))
     (ctx/end c (if (:ok? proof) :done :nothing-possible) (when-not (:ok? proof) :broken)
-             (cond-> (assoc proof :built built)
-               (:ok? proof) (assoc :text (str "rail line " plan " is sound, " rails " rails, placed " (:placed built)))))))
+             (assoc proof :built built
+                    :text (if (:ok? proof)
+                            (str "rail line " plan " is sound, " rails " rails, placed " (:placed built))
+                            (str "rail line " plan " is broken: "
+                                 (str/join ", " (map break-text (take (max-breaks) (:breaks proof))))
+                                 (when (seq left) (str "; " left))))))))
 
 (defn ^:async fetch-step!
   "Before the build is begun with :all-carried, fetch the first item certainly lacking (jobs.lib.need): :continue while

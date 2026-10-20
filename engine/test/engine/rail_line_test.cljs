@@ -11,6 +11,7 @@
             [jobs.build.rail :as builder]
             [jobs.build.rail-line :as rail-line]
             [engine.fake :as fake]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             [plan.rail :as rail]
             [plan.shape :as shape]))
@@ -73,8 +74,7 @@
             (is (= "powered_rail" (h/block-at p 3 64 0)) label)
             (is (true? (:powered (props p [3 64 0]))) label)
             (is (= "east_west" (:shape (props p [0 64 0]))) label)
-            (is (= 1 (count (h/events-of seen :completed))) label)
-            (is (empty? (h/events-of seen :rail-build.broken)) label)))))))
+            (is (= 1 (count (h/events-of seen :completed))) label)))))))
 
 (deftest a-lever-is-switched-on-after-the-build
   (async done
@@ -240,33 +240,30 @@
 ;; ---------------------------------------------------------------- a line broken after the build
 
 (defn ^:async broken-run
-  "Build the line, break the rail at x 7, then submit the job with args: [seen p]."
+  "Build the line, break the rail at x 7, then run the job with args: [its ending's data seen p]."
   [args]
   (let [{:keys [eng p seen]} (b/start (spec "stone" 63 (kit {})) {"line" (line-plan {})} [])]
     (await (outcome eng job {:plan "line"} 400))
     (fake/remove-block! p [7 64 0])
-    (core/submit! eng (list job (merge {:plan "line"} args)) {})
-    (await (tu/run-ticks eng h/clock 6 700))
-    [seen p]))
+    [(await (outcome eng job (merge {:plan "line"} args) 700)) seen p]))
 
 (deftest a-rail-broken-after-the-build-is-a-gap-in-the-next-proof
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[seen p] (await (broken-run {:all-carried false}))
-              [warn] (h/events-of seen :rail-build.broken)]
+        (let [[result _ p] (await (broken-run {:all-carried false}))]
           (is (= "air" (h/block-at p 7 64 0)))
-          (is (= [{:pos [7 64 0] :why :gap}] (:breaks warn)))
-          (is (= {"rail" 1} (:short warn)))
-          (is (= 1 (count (h/events-of seen :rail-build.broken)))))))))
+          (is (= [{:pos [7 64 0] :why :gap}] (:breaks result)))
+          (is (= {"rail" 1} (get-in result [:built :short])))
+          (is (re-find #"broken: gap" (:text result))))))))
 
 (deftest a-broken-line-without-the-rail-carried-declines-short-by-default
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[seen] (await (broken-run {:fetch false}))]
+        (let [[result seen] (await (broken-run {:fetch false}))]
           (is (= [{"rail" 1}] (mapv :short (h/events-of seen :rail-build.short))))
-          (is (empty? (h/events-of seen :rail-build.broken))))))))
+          (is (nil? result) "it declines, no proof is run"))))))
 
 ;; ---------------------------------------------------------------- resuming
 
@@ -360,8 +357,7 @@
             (is (true? (:ok? result)) label)
             (is (= [] (:breaks result)) label)
             (is (= {} (get-in result [:built :given-up])) label)
-            (is (= 1 (count (h/events-of seen :completed))) label)
-            (is (empty? (h/events-of seen :rail-build.broken)) label)))))))
+            (is (= 1 (count (h/events-of seen :completed))) label)))))))
 
 (deftest the-corner-and-the-slope-come-out-as-the-layout-wants-them
   (async done
@@ -420,8 +416,7 @@
               [result seen p] (await (build-route! l-route {} world {:all-carried false}))]
           (is (true? (:ok? result)))
           (is (= "east_west" (shape-of p [10 64 0])))
-          (is (= 1 (count (filter #(= {:x 10 :y 64 :z 0} (js->clj (.-pos (.-args %)) :keywordize-keys true)) (h/calls p "dig")))))
-          (is (= [] (h/events-of seen :rail-build.broken))))))))
+          (is (= 1 (count (filter #(= {:x 10 :y 64 :z 0} (js->clj (.-pos (.-args %)) :keywordize-keys true)) (h/calls p "dig"))))))))))
 
 (deftest a-stand-beside-a-rail-cell-is-put-on-the-ground-where-it-rises
   (let [ground (into {} (concat (for [x (range 5 23) z (range 5 23)] [(h/cell-key x 63 z) "stone"])
@@ -467,11 +462,11 @@
         (let [world (built-line-world l-route {} flat-top {} {"10,64,0" {:shape "north_south"}})
               [result seen p] (await (with-dig-attempt!
                                     (fn [c pos] (dig/finish! c {:dug false :pos pos :block "air" :reason :already-clear}))
-                                    #(build-route! l-route {} world {:all-carried false :fix 1})))]
+                                    #(build-route! l-route {} world {:all-carried false})))]
           (is (= {[10 64 0] :shape} (get-in result [:built :given-up])) (pr-str result))
           (is (not= :not-done result) "the build ends, it does not yield for ever")
           (is (empty? (h/calls p "dig")) "the dig was never made")
-          (is (= [{:pos [10 64 0] :why :shape}] (:breaks (first (h/events-of seen :rail-build.broken))))))))))
+          (is (= [{:pos [10 64 0] :why :shape}] (:breaks result))))))))
 
 (deftest a-dig-child-that-is-cut-parks-and-any-other-failed-ending-is-passed-up
   (async done
@@ -498,7 +493,7 @@
                                     #(build-route! l-route {} world {:all-carried false :ticks 100})))]
           (is (not (true? (:ok? result))))
           (is (= :shape (get-in result [:built :given-up [10 64 0]])) (pr-str result))
-          (is (= [{:pos [10 64 0] :why :shape}] (:breaks (first (h/events-of seen :rail-build.broken))))))))))
+          (is (= [{:pos [10 64 0] :why :shape}] (:breaks result))))))))
 
 (deftest a-rail-that-cannot-come-out-right-is-given-up-as-shape-after-the-fixes-are-spent
   (async done
@@ -506,13 +501,27 @@
       (fn ^:async t []
         (doseq [[fix digs] [[1 1] [2 2] [0 0]]]
           (let [world (built-line-world l-route {} flat-top {"0,64,1" "rail"} {})
-                [result seen p] (await (build-route! l-route {} world {:all-carried false :fix fix}))
-                [warn] (h/events-of seen :rail-build.broken)]
+                [result seen p] (await (settings/with-settings {:jobs.build.rail/fix-times fix}
+                                         #(build-route! l-route {} world {:all-carried false})))]
             (is (false? (:ok? result)) (str fix))
             (is (= {[0 64 0] :shape} (get-in result [:built :given-up])) (str fix))
-            (is (= [{:pos [0 64 0] :why :shape}] (:breaks warn)) (str fix))
-            (is (= {[0 64 0] :shape} (:given-up warn)) (str fix))
+            (is (= [{:pos [0 64 0] :why :shape}] (:breaks result)) (str fix))
             (is (= digs (count (h/calls p "dig"))) (str fix))))))))
+
+(deftest the-builder-ends-done-only-when-nothing-is-left-else-nothing-possible-incomplete
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ended (fn ^:async ended-with [extra]
+                      (let [world (built-line-world l-route {} flat-top extra {})
+                            {:keys [eng]} (b/start world {"line" (route-plan l-route {})} [])]
+                        (await (ending-of {:eng eng} 'jobs.build.rail {:plan "line"} 400))))
+              fine (await (ended {}))
+              stuck (await (settings/with-settings {:jobs.build.rail/fix-times 0}
+                             #(ended {"0,64,1" "rail"})))]
+          (is (= :done (:kind fine)))
+          (is (= {:kind :nothing-possible :cause :incomplete} (select-keys stuck [:kind :cause])))
+          (is (= {[0 64 0] :shape} (get-in stuck [:data :given-up]))))))))
 
 (deftest a-corner-rail-broken-after-the-build-is-a-gap-in-the-next-proof
   (async done
@@ -523,7 +532,7 @@
           (fake/remove-block! p [19 64 0])
           (core/submit! eng (list job {:plan "line" :all-carried false}) {})
           (await (tu/run-ticks eng h/clock 6 700))
-          (is (= [{:pos [19 64 0] :why :gap}] (:breaks (first (h/events-of seen :rail-build.broken))))))))))
+          (is (= [{:pos [19 64 0] :why :gap}] (:breaks (:data (await (ending-of {:eng eng} job {:plan "line" :all-carried false} 700)))))))))))
 
 (deftest a-corner-in-another-plans-footprint-declines-before-anything-is-placed
   (async done
@@ -673,5 +682,4 @@
               [result seen p] (await (build-route! slope-route {} world {}))]
           (is (true? (:ok? result)))
           (is (= [] (get-in result [:built :wrong])))
-          (is (= "powered_rail" (h/block-at p 21 66 0)))
-          (is (empty? (h/events-of seen :rail-build.broken))))))))
+          (is (= "powered_rail" (h/block-at p 21 66 0))))))))

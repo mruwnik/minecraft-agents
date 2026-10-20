@@ -26,24 +26,29 @@
     2. Each round places cells in that order while they are within reach. When the next is not, it walks to the rail
        behind it, else to a cell beside it as jobs.build.from-plan does.
     3. A rail has settled once every neighbour it has in the chain is a rail in the world. A settled rail of the wrong
-       shape is dug and placed again (:fix times), then given up as :shape.
+       shape is dug and placed again (::fix-times), then given up as :shape.
   Placing, access rules, refusals, give-ups and the result are jobs.build.from-plan's functions over this job's
   memory. Every dig and place asks jobs.lib.access.rules right before it acts.
-  Needs: a readable plan and the items for the cells to place carried (the caller fetches them). Ends done with the
-  data {:placed :missing :short :given-up :wrong :refused} once nothing more can be done; a plan that is missing or
-  unreadable is a wait (later :plan-trouble), a readable one with no cells never (as jobs.build.from-plan); a dig child's failure ends it with that child's kind and cause.")
+  Needs: a readable plan and the items for the cells to place carried (the caller fetches them). Ends, once nothing more can be done,
+  with the data {:placed :missing :short :given-up :wrong :refused}: done when no cell is missing or wrong, else as
+  jobs.build.from-plan (nothing-possible :incomplete or :wrong-blocks, condition-failed :no-items or :refused). A plan
+  that is missing or unreadable is a wait (later :plan-trouble), a readable one with no cells never (as
+  jobs.build.from-plan); a dig child's failure ends it with that child's kind and cause. Done? reads the world: no cell
+  owed and no settled rail in the wrong shape.")
 
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
    :part {:doc "only the cells of this part" :spec a/name? :default nil}
    :accept {:doc "as jobs.build.from-plan" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
-   :fix {:doc "times a rail whose settled shape is wrong is dug and placed again, then given up as :shape (0 or false: given up at once)" :spec (a/or-of (a/int-in 0 nil) false?) :default 1}
    :ignore-zones? :shared})
 
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one build may take." :spec (a/int-in 1 nil)}
+   ::fix-times {:default 1 :doc "Times a rail whose settled shape is wrong is dug and placed again, then given up as :shape (0: given up at once)." :spec (a/int-in 0 nil)}
    ::give-up {:default 3 :doc "Failed walks or shapes after which a rail cell is given up." :spec (a/int-in 1 nil)}})
 (defn give-up [] (settings/get settings ::give-up))
+
+(def meta {:category :phase :part-of '[jobs.build.rail-line]})
 
 (def target [:plan :part])
 
@@ -53,14 +58,21 @@
 (def safe? (ready/safe-at-by-night work-place/spot))
 (def fit? ready/fit?)
 
-(defn quote-of [_c]
-  {:uses {:job-time [30 300 (settings/get settings ::job-time-s)]}})
+(declare cells-of wrong-shapes)
+
+(defn ^:async quote-of [c]
+  (select-keys (await (ctx/quote c 'jobs.build.from-plan (select-keys (:args c) [:plan :part :accept :ignore-zones?]))) [:uses]))
 
 (defn done?
   [c]
-  (if (:built (ctx/mem c))
-    (contract/ok :built "rail: the build is finished")
-    (contract/later :building "rail: cells still to build")))
+  (let [cells (cells-of c)
+        owed (count (plan/owed cells))
+        wrong (if (seq cells) (count (wrong-shapes c (mapv :pos (rail/line cells)))) 0)]
+    (cond
+      (empty? cells) (contract/later :plan-trouble "rail: the plan cannot be read")
+      (pos? owed) (contract/later :owed (str "rail: " owed " cells still to build"))
+      (pos? wrong) (contract/later :wrong (str "rail: " wrong " rails in the wrong shape"))
+      :else (contract/ok :built "rail: every cell is built" :result (text/summary c cells (ctx/mem c) true)))))
 
 
 ;; ------------------------------------------------------------------ order
@@ -113,11 +125,7 @@
                           (not= (rail/shape-joining pos joins) (rail/state block :shape)))]
            pos))))
 
-(defn fix-budget
-  "How many times a wrong rail may be dug and placed again: the :fix argument (a number, true for 1, else 0)."
-  [c]
-  (let [f (:fix (:args c))]
-    (cond (number? f) f f 1 :else 0)))
+(defn fix-budget [] (settings/get settings ::fix-times))
 
 (defn idle?
   "Whether the builder has nothing to do: nothing placeable with what is carried, no unseen cell with its item
@@ -218,17 +226,24 @@
   [c ps from cells pos]
   (let [cell (first (filter #(= pos (:pos %)) cells))]
     (cond
-      (>= (get-in (ctx/mem c) [:fixes pos] 0) (fix-budget c)) (do (ctx/update-mem! c assoc-in [:given-up pos] :shape)
+      (>= (get-in (ctx/mem c) [:fixes pos] 0) (fix-budget)) (do (ctx/update-mem! c assoc-in [:given-up pos] :shape)
                                                                    :again)
       (empty? (build/in-reach c [cell])) (await (walk-to! c ps from cells cell))
       :else (await (dig-away! c pos)))))
 
 (defn finish!
-  "End the build with its result as the ending's data."
+  "End the build with its result as the ending's data: done when nothing is missing or wrong, else by what holds the
+  rest back (as jobs.build.from-plan)."
   [c cells]
-  (let [result (text/summary c cells (ctx/mem c) true)]
-    (ctx/update-mem! c assoc :built result)
-    (ctx/end c :done nil result)))
+  (let [{:keys [missing short given-up refused wrong] :as result} (text/summary c cells (ctx/mem c) true)
+        data (assoc result :text (text/stopped-text (:plan (:args c)) result))]
+    (cond
+      (and (empty? missing) (empty? wrong)) (ctx/end c :done nil result)
+      (and (empty? missing) (empty? given-up)) (ctx/end c :nothing-possible :wrong-blocks data)
+      (seq given-up) (ctx/end c :nothing-possible :incomplete data)
+      (seq short) (ctx/end c :condition-failed {:reason :no-items :needs short} data)
+      (seq refused) (ctx/end c :condition-failed :refused data)
+      :else (ctx/end c :nothing-possible :incomplete data))))
 
 (defn ^:async step!
   "One round of the builder over the plan's judged cells, in this order: fix a settled wrong rail, place work in reach,
