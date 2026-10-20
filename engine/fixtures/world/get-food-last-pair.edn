@@ -13,7 +13,7 @@
   :limit-s 100}
  :cases
  [{:name "the-last-pair-is-kept-by-default"
-   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food} :message [:contains "passed over 2 animals (cow: kept for breeding at ["]} :within-s 90}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food :text [:contains "passed over 2 animals (cow: kept for breeding at ["]}} :within-s 90}
             {:no-event {:source :job :kind :food.killed} :for-s 90 :until {:source :job :kind :stopped :data {:reason :no-food}}}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]]}
   {:name "the-last-pair-is-hunted-when-the-setting-lifts-it"
