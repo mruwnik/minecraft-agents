@@ -43,7 +43,9 @@
   [c need all?]
   (when (:seen need)
     (let [in (access/rules-input c)
-          blocks (look/seen-blocks (:primitives c) {:match #((:seen need) %) :radius (seen-radius) :max (if all? 1 64)})]
+          blocks (if (= "water_bucket" (:key need))
+                   (look/seen-water-sources (:primitives c) (seen-radius))
+                   (look/seen-blocks (:primitives c) {:match #((:seen need) %) :radius (seen-radius) :max (if all? 1 64)}))]
       (if all? blocks (filter #(and (:ok (access/may? in :harvest (:pos %))) (not (cut-off? c %))) blocks)))))
 
 (defn seen-of

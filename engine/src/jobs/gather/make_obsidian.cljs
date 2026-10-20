@@ -56,15 +56,7 @@
 (defn seen-of [c names]
   (look/seen-blocks (:primitives c) {:names names :radius (:radius (:args c)) :max 32 :live? true}))
 
-(defn water-source?
-  "Whether a seen water block is a source (a bucket takes only that): level 0, or no level known."
-  [{:keys [properties]}]
-  (let [l (:level properties)]
-    (or (nil? l) (zero? (js/parseInt l)))))
-
-(defn seen-water-sources [c]
-  (filterv water-source?
-           (look/seen-blocks (:primitives c) {:names ["water"] :radius (:radius (:args c)) :max 32 :live? true :properties? true})))
+(defn seen-water-sources [c] (look/seen-water-sources (:primitives c) (:radius (:args c))))
 
 (defn lava-near?
   "Whether a cell beside the stand cell (its four sides, at its level) is lava, which could flow onto it."

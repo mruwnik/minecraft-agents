@@ -213,6 +213,17 @@
            vec))
     []))
 
+(defn water-source?
+  "Whether a seen water block is a source (a bucket takes only that): level 0, or no level known."
+  [{:keys [properties]}]
+  (let [l (:level properties)]
+    (or (nil? l) (zero? (js/parseInt l)))))
+
+(defn seen-water-sources
+  "The seen live water source blocks within radius, nearest first (the nearest 256 water blocks are read: a spill on flat ground is mostly flowing cells round its source)."
+  [p radius]
+  (filterv water-source? (seen-blocks p {:names ["water"] :radius radius :max 256 :live? true :properties? true})))
+
 (defn seen-block
   "The block at cell pos as last seen: {:name :pos :age-ms (:properties)}, or {:unknown true :pos} for a cell never
   seen; nil without a perception."

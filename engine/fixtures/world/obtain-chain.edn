@@ -167,4 +167,11 @@
    :act [[:job (jobs.items.obtain {:item "oak_log" :count 3 :ways #{:chest} :explore false})]]
    :expect [{:event {:source :job :kind :obtain.chest :message [:contains "oak_log in the chest at"]} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed} :within-s 80 :of-job true}]
-   :after [[:item "oak_log" 3]]}]}
+   :after [[:item "oak_log" 3]]}
+  ;; an empty bucket is scooped at a seen water source (obtain's water_bucket plan; flowing water is no source, unit-tested)
+  {:name "empty-bucket-is-filled-at-a-seen-water-source"
+   :blocks [[:set [19 0 16] "water"]]
+   :body {:inventory [["bucket" 1]]}
+   :act [[:job (jobs.items.obtain {:item "water_bucket" :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "water_bucket" 1]]}]}

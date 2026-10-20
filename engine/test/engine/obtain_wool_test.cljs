@@ -189,4 +189,5 @@
               s (h/setup {:inventory h/sword :entities [(cow 1 3) (cow 2 6) (cow 3 8)]} 50 (ew/of-data {} {} pen))]
           (core/submit! (:eng s) '(jobs.items.obtain {:item "leather" :count 1}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 40 700))
-          (is (empty? (attacked s)) "no cow attacked"))))))
+          (is (empty? (attacked s)) "no cow attacked")
+          (is (re-find #"left alone: 3 pen" (:why (first (filter #(= :stopped (:kind %)) @(:seen s))))) "the ending says the cows were spared"))))))

@@ -7,7 +7,9 @@
             [engine.ctx :as ctx]
             [engine.farm-contract-test :refer [ending-of]]
             [engine.fetch-test :as f]
+            [engine.library-test :as lt]
             [engine.obtain-iron-test :as oi]
+            [engine.obtain-obsidian-test :as oo]
             [engine.registry :as registry]
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.table :as table]
@@ -216,3 +218,17 @@
           (is (= :done (:kind e)))
           (is (= 4 (get-in e [:data :got])))
           (is (empty? (f/events-of s :obtain.chest)) "no walk to the chest"))))))
+
+(deftest a-bucket-is-filled-only-at-a-water-source-not-at-flowing-water
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [water (fn [level] {:blocks (assoc oo/ground "4,63,0" "water") :states {"4,63,0" {:level level}}
+                                 :inventory [{:name "bucket" :count 1}] :self {:pos [0.5 64 0.5]}})
+              run (fn ^:async run-with [level]
+                    (let [{:keys [eng]} (lt/setup (water level))]
+                      (await (tu/child-outcome eng 'jobs.items.obtain {:item "water_bucket" :explore false} 100))))
+              flowing (await (run "3"))
+              source (await (run "0"))]
+          (is (= :no-source (:reason flowing)) (pr-str flowing))
+          (is (= :done (:status source)) (pr-str source)))))))
