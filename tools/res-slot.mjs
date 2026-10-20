@@ -4,7 +4,7 @@
 // Heavy runs (--heavy, RES_SLOT_HEAVY=1, or a .res-slot-heavy file in the cwd or a parent: tools/integration-worktree.sh writes it, since agents' test runs cannot set env) may also take the `reserve` slots a kind keeps back in res-slot.json.
 // tools/res-slot status                            holders per kind (pid, command, age) and free memory.
 // A run appends {start:true, pid, kind, cmd} to /tmp/mc-res/log.jsonl when it gets its slot, and {kind, needMb, waitedS, ranS, code, cmd} when it finishes.
-// A kind with maxLoadPerCore also waits while the 1-minute load average plus the cores (loadCores each) of its recent grants is at maxLoadPerCore x cores.
+// A kind with maxLoadPerCore also waits while the 1-minute load average plus the cores (loadCores each) of its recent grants is at maxLoadPerCore x cores. Heavy runs skip that gate.
 // Kinds, need, max and the memory floor: tools/res-slot.json (tools/test-shards.mjs reads the same floor and tests numbers).
 // Exit 75 "busy" after ~9 min of waiting (agents' foreground calls cap at 10 min): retry. The slot is an flock held by the command's own process, so it is freed when the command exits or dies.
 import fs from 'node:fs'
@@ -201,7 +201,7 @@ const main = async () => {
       const reserved = currentReserved()
       free = heavy ? open : capDuringSweep(freeForLight(open, heavyWaits(kind)), lightHeldCount(kind, k.max), k.sweepCap, sweeping)
       const rampLoad = rampingLoad(readGrants(), kind, Date.now(), rampMs(), pidAlive)
-      const d = decide({ freeSlots: free.length, availableMb: availableMb(), needMb, floorMb: cfg.floorMb, waitedMs: Date.now() - t0, maxWaitMs, reservedMb: reserved, loadAvg: os.loadavg()[0], maxLoad: maxLoadOf(k, os.cpus().length), rampLoad })
+      const d = decide({ freeSlots: free.length, availableMb: availableMb(), needMb, floorMb: cfg.floorMb, waitedMs: Date.now() - t0, maxWaitMs, reservedMb: reserved, loadAvg: os.loadavg()[0], maxLoad: heavy ? undefined : maxLoadOf(k, os.cpus().length), rampLoad })
       if (d.action === 'run') fs.mkdirSync(grantDir(), { recursive: true }), fs.writeFileSync(path.join(grantDir(), `${process.pid}.json`), JSON.stringify({ needMb, t: Date.now(), kind, cores: k.loadCores ?? 0 }))
       return d
     })

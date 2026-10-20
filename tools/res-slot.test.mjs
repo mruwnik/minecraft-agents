@@ -382,3 +382,14 @@ test('treeRssMb: sums the root and all descendants of a process table, ignoring 
   assert.equal(treeRssMb(table, 2), 60)
   assert.equal(treeRssMb(table, 77), 0)
 })
+
+test('integration: the load gate holds a plain run (busy) but not a heavy one', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'res-slot-test-'))
+  const cfg = path.join(dir, 'cfg.json')
+  fs.writeFileSync(cfg, JSON.stringify({ floorMb: 0, kinds: { t: { needMb: 1, max: 1, maxLoadPerCore: 0 } } }))
+  const env = { RES_SLOT_DIR: dir, RES_SLOT_CONFIG: cfg, RES_SLOT_MAX_WAIT_MS: '800', RES_SLOT_POLL_MS: '200' }
+  assert.equal(run(['t', '--', 'echo', 'ran'], env).status, 75)
+  const heavy = run(['t', '--heavy', '--', 'echo', 'ran'], env)
+  assert.equal(heavy.status, 0); assert.match(heavy.stdout, /ran/)
+  fs.rmSync(dir, { recursive: true, force: true })
+})
