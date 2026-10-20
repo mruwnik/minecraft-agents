@@ -27,7 +27,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.tools :as tools]
             [jobs.lib.trip :as trip]
-            [jobs.lib.walk :as walk]
+            [jobs.lib.walk.drive :as drive]
             [plan.shape :as shape]))
 
 (def doc
@@ -284,7 +284,7 @@
       :else
       (do
         (ctx/update-mem! c assoc :at-step i)
-        (if-let [stop (when (and (pos? i) (not= i checked) (not= i target)) (await (walk/way-back c origin)))]
+        (if-let [stop (when (and (pos? i) (not= i checked) (not= i target)) (await (drive/way-back c origin)))]
           stop
           (do
             (ctx/update-mem! c assoc :checked i)

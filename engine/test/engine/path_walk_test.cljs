@@ -8,6 +8,7 @@
             [engine.events :as events]
             [engine.path.planner-tuned :as planner]
             [jobs.lib.walk :as walk]
+            [jobs.lib.walk.drive :as drive]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.search :as wsearch]
@@ -25,7 +26,7 @@
   (into {} (for [x xs z (range 3)] [(str x "," 63 "," z) "stone"])))
 
 (defn ^:async walk-to
-  "A body at pos over blocks; a parent job calls walk/walk-to! to goal. [the driver's answer, the plan and replan
+  "A body at pos over blocks; a parent job calls drive/walk-to! to goal. [the driver's answer, the plan and replan
   kinds it announced, the body's position]."
   [blocks goal pos]
   (let [clock (atom 1000000)
@@ -34,7 +35,7 @@
         out (atom nil)
         announced (atom [])
         parent {:round (fn ^:async driving-round [c]
-                         (reset! out (await (walk/walk-to! c {:to goal :range 0 :weight 1.2 :timeout-s 60
+                         (reset! out (await (drive/walk-to! c {:to goal :range 0 :weight 1.2 :timeout-s 60
                                                               :announce! (fn [kind _] (swap! announced conj kind))})))
                          (ctx/end c :done nil))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'driving-parent parent)
@@ -434,7 +435,7 @@
               ran (atom [])
               back! (fn ^:async backing [walked]
                       (reset! ran [])
-                      (await (walk/back-off! {:primitives p} {:pw pw} walked (fn [steps _] (swap! ran conj steps)) executor/policy)))]
+                      (await (drive/back-off! {:primitives p} {:pw pw} walked (fn [steps _] (swap! ran conj steps)) executor/policy)))]
           (await (back! walked))
           (is (= 1 (count @ran)))
           (is (= [10 5] [(:x (first (first @ran))) (:x (peek (first @ran)))]) "from where the body stands back to the first cell a block clear")

@@ -13,6 +13,7 @@
             [engine.path.executor :as executor]
             [engine.path.fixture :as fx]
             [jobs.lib.walk :as walk]
+            [jobs.lib.walk.drive :as drive]
             [jobs.lib.walk.search :as wsearch]
             [jobs.lib.walk.watch :as wwatch]
             [jobs.lib.walk.world :as wworld]
@@ -147,7 +148,7 @@
 (defn set-block! [s pos name] (swap! s assoc-in [:blocks pos] name))
 
 (defn ^:async walk-to
-  "walk/walk-to! from pos to goal over blocks (range 0); prepare gets the fake primitives before the walk. [result
+  "drive/walk-to! from pos to goal over blocks (range 0); prepare gets the fake primitives before the walk. [result
   announced-replans body-cell]."
   [world goal prepare]
   (let [clock (atom 1000000)
@@ -157,7 +158,7 @@
         out (atom nil)
         announced (atom [])
         parent {:round (fn ^:async driving-round [c]
-                         (reset! out (await (walk/walk-to! c {:to goal :range 0 :weight 1.2 :timeout-s 60
+                         (reset! out (await (drive/walk-to! c {:to goal :range 0 :weight 1.2 :timeout-s 60
                                                               :announce! (fn [kind data] (swap! announced conj [kind data]))})))
                          (ctx/end c :done nil))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'driving-parent parent)
@@ -371,7 +372,7 @@
                      [{:status :replan :why why :step 1 :at [1 64 0]} 1]
                      [{:status :arrived :at [(:x (peek steps)) 64 0]} 1])))
         c {:primitives (tu/fake-on-floor {:floor [-5 -5 20 5]})}]
-    (-> (walk/follow! c plan {:plan-fn (fn [_] (js/Promise.resolve fresh)) :walk-fn walk-fn :to [9 64 0]
+    (-> (drive/follow! c plan {:plan-fn (fn [_] (js/Promise.resolve fresh)) :walk-fn walk-fn :to [9 64 0]
                               :policy executor/policy})
         (.then (fn [r] (assoc r :walks @walks :watches @watches))))))
 
@@ -429,7 +430,7 @@
                      [{:status :replan :why why :step 1 :at [1 64 0] :cells []} 1]
                      [{:status :arrived :at [(:x (peek steps)) 64 0]} 1])))
         c {:primitives (tu/fake-on-floor {:floor [-5 -5 20 5]})}]
-    (-> (walk/follow! c {:status "partial" :r #js {} :steps (line 3) :ms 5}
+    (-> (drive/follow! c {:status "partial" :r #js {} :steps (line 3) :ms 5}
                       {:plan-fn (fn [_] (js/Promise.resolve refused)) :walk-fn walk-fn :to [9 64 0] :policy executor/policy})
         (.then (fn [r] (assoc r :walks @walks))))))
 
@@ -513,7 +514,7 @@
                            [{:status :replan :why :danger :step 2 :at [2 63 0]} 1]
                            [{:status :arrived :at [3 63 0]} 1])))
               c {:primitives (tu/fake-on-floor {:floor [-5 -5 20 5]})}
-              r (await (walk/follow! c plan {:plan-fn (fn [_] (js/Promise.resolve none)) :walk-fn walk-fn :to [3 63 0]
+              r (await (drive/follow! c plan {:plan-fn (fn [_] (js/Promise.resolve none)) :walk-fn walk-fn :to [3 63 0]
                                              :policy executor/policy}))]
           (is (= 2 @walks))
           (is (= 2 (:damage r)) "the 2 hp drop walked once"))))))
@@ -535,7 +536,7 @@
       (fn ^:async t []
         (let [plan {:status "found" :r #js {} :steps drop-ahead :ms 5}
               c {:primitives (tu/fake-on-floor {:floor [-5 -5 20 5]})}
-              r (await (walk/follow! c plan {:plan-fn (fn [_] (js/Promise.resolve plan))
+              r (await (drive/follow! c plan {:plan-fn (fn [_] (js/Promise.resolve plan))
                                              :walk-fn (fn [steps _] (js/Promise.resolve [{:status :arrived :at [3 61 0]} 1]))
                                              :to [3 61 0] :policy executor/policy}))]
           (is (= 3 (:damage r))))))))
@@ -576,9 +577,9 @@
         c {:emit (fn [kind level m] (swap! emitted conj [kind level m]))}]
     (set! ctx/since (fn [_ _ _] [{:data {:amount 5 :damageType "minecraft:fall"}}]))
     (try
-      (walk/note-mismatch! c 3 0 nil)
-      (walk/note-mismatch! c 3 0 2)
-      (walk/note-mismatch! c 3 0 1)
+      (drive/note-mismatch! c 3 0 nil)
+      (drive/note-mismatch! c 3 0 2)
+      (drive/note-mismatch! c 3 0 1)
       (finally (set! ctx/since orig-since)))
     (is (= [[:damage-mismatch :info {:planned 3 :lost 5}] [:damage-mismatch :info {:planned 3 :lost 5}]] @emitted)
         "default margin 1 and margin 1: 5 is over 3 + 1; margin 2: 5 is not over 3 + 2")))

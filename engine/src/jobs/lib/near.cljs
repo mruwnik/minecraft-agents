@@ -15,6 +15,7 @@
             [jobs.lib.places :as places]
             [jobs.lib.toll-cells :as tc]
             [jobs.lib.walk :as walk]
+            [jobs.lib.walk.drive :as drive]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.search :as wsearch]))
@@ -121,7 +122,7 @@
             (recur more)))))))
 
 (defn ^:async walk-once!
-  "Plan from where the body stands and follow the plan (walk/follow!: planned again in the same round when the look-ahead
+  "Plan from where the body stands and follow the plan (drive/follow!: planned again in the same round when the look-ahead
   sees the way change, a partial plan is due a refresh, or a mob is in the way of a stuck body; each replan is a :replan
   info event {:why :ms :kept :replans :at}): the walk's result map (jobs.lib.walk), or the no-path result of a plan that
   is not walked. Every plan reads a fresh pathWorld; the caller has checked there is one. Each steer is bounded by timeout-s.
@@ -154,18 +155,18 @@
                          {:status :stair-cheaper :why why}
                        (let [began (ctx/now c)
                              {done :done last-plan :plan planned :damage}
-                             (await (walk/follow! c plan {:plan-fn (fn ^:async replan [cells]
+                             (await (drive/follow! c plan {:plan-fn (fn ^:async replan [cells]
                                                                 (let [fresh (await (plan! c to range doors (policy-of) (into walls cells) explore one-way (wsearch/replan-budget budget) progress dangers avoid dark tolls unknown))]
                                                                   (if-let [why (and stair-check (nil? (wplan/no-walk fresh 0 (policy-of))) (stair-check fresh false))]
                                                                     (assoc fresh :steps [] :refused true :stop {:status :stair-cheaper :why why})
                                                                     fresh)))
                                                           :walk-fn walk-fn :to to :policy (policy-of) :announce! announce! :dangers dangers}))
-                             _ (walk/note-mismatch! c planned began nil)]
+                             _ (drive/note-mismatch! c planned began nil)]
                          (cond
                            (= :stair-cheaper (:status done)) done
 
                            (not= :door-stuck (:status done))
-                           (cond-> (with-sight (walk/partial-end done (:status last-plan) to range (:steps last-plan) (:stop last-plan)) last-plan to)
+                           (cond-> (with-sight (drive/partial-end done (:status last-plan) to range (:steps last-plan) (:stop last-plan)) last-plan to)
                              (:frontier-taken last-plan) (assoc :frontier (:at (:frontier-taken last-plan)))
                              (:known (:frontier-taken last-plan)) (assoc :frontier-known true
                                                          :frontier-target (:target (:frontier-taken last-plan))))

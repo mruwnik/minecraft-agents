@@ -27,7 +27,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
             [jobs.lib.torch-stock :as stock]
-            [jobs.lib.walk :as walk]))
+            [jobs.lib.walk.drive :as drive]))
 
 (def doc
   "Cut a way to stand beside a buried block :target [x y z] and stop there, with the target the next cell ahead
@@ -334,11 +334,11 @@
         (when (and j (= :continue (await (ore-pick/pick! c {:except #{(target-of c)}})))) :continue)
         (cond
           (and i (not stair-done) (or (< i steps) (not (segment-start? c))))
-          (if-let [stop (when (and (pos? i) (not= i checked) (segment-start? c)) (await (walk/way-back c entry)))]
+          (if-let [stop (when (and (pos? i) (not= i checked) (segment-start? c)) (await (drive/way-back c entry)))]
             stop
             (do (when (segment-start? c) (ctx/update-mem! c assoc :checked i))
                 (await (stair-part! c plan i))))
-          j (if-let [stop (when (and (not= feet entry) (not= (+ steps j) checked)) (await (walk/way-back c entry)))]
+          j (if-let [stop (when (and (not= feet entry) (not= (+ steps j) checked)) (await (drive/way-back c entry)))]
               stop
               (do (ctx/update-mem! c assoc :checked (+ steps j))
                   (if (= feet stand) (await (open-over-target! c feet)) (await (run-step! c feet)))))
