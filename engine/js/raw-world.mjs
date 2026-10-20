@@ -111,13 +111,18 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
     if (!p) return
     if (near(getBot(), p.x, p.y, p.z)) bump()
     const bot = getBot()
-    const s = (p.y - (bot.game?.minY ?? -64)) >> 4
-    const key = keyOf(p.x >> 4, p.z >> 4, s)
-    states.delete(key)
-    lights.delete(key)
-    if (key === lastStateKey) lastStateKey = -1
-    if (key === lastLightKey) lastLightKey = -1
+    const ry = p.y - minYOf(bot)
+    const key = keyOf(p.x >> 4, p.z >> 4, ry >> 4)
     const id = newBlock?.stateId ?? 0
+    const cached = states.get(key)
+    // the cached section is patched, not dropped: rebuilding its 4096 ids dominated the cost of a busy plot's updates
+    if (cached && newBlock) cached[((ry & 15) << 8) | ((p.z & 15) << 4) | (p.x & 15)] = id
+    else {
+      states.delete(key)
+      if (key === lastStateKey) lastStateKey = -1
+    }
+    lights.delete(key)
+    if (key === lastLightKey) lastLightKey = -1
     if (oldBlock?.stateId === id) return
     for (const fn of listeners) fn(p.x, p.y, p.z, id)
   }

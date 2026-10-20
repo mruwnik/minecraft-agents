@@ -1,8 +1,9 @@
 // Why JavaScript: replaces Mineflayer's block_change handlers at the library boundary; raw packet fields.
 // Mineflayer's handler builds four full Blocks per changed block (each read forces the column's biome and light
 // sections), though it only needs the old and new type. This one writes the new state and emits blockUpdate with
-// two plain Blocks (no light or biome). It does not drop a painting when the block under it changes; the server
-// destroys the painting entity itself.
+// two small {type, stateId, position} records: every general listener (view, raw world, pathfinder) reads only those.
+// Full Blocks are built only when someone waits on that cell's own `blockUpdate:(x, y, z)` event (dig, place).
+// It does not drop a painting when the block under it changes; the server destroys the painting entity itself.
 import { createRequire } from 'node:module'
 import prismarineBlock from 'prismarine-block'
 import vec3 from 'vec3'
@@ -14,10 +15,22 @@ const posInChunk = pos => new Vec3(Math.floor(pos.x) & 15, Math.floor(pos.y), Ma
 
 // `bot` is a Mineflayer bot whose plugins are loaded; bot.world exists from the login packet on.
 export function installFastBlockUpdates (bot) {
-  const Block = prismarineBlock(bot.registry ?? require('prismarine-registry')(bot.version))
+  const registry = bot.registry ?? require('prismarine-registry')(bot.version)
+  const Block = prismarineBlock(registry)
   const client = bot._client
   const singleLong = bot.supportFeature('usesMultiblockSingleLong')
   const chunk3d = bot.supportFeature('usesMultiblock3DChunkCoords')
+
+  const stateType = stateId => registry.blocksByStateId[stateId]?.id ?? 0
+  const light = (stateId, position) => ({ type: stateType(stateId), stateId, position })
+
+  // count of `blockUpdate:(x, y, z)` listeners, kept by the bot's listener events (Mineflayer forwards them to the world) so the common update builds no key string
+  let keyed = 0
+  const isKeyed = event => typeof event === 'string' && event.startsWith('blockUpdate:')
+  bot.on('newListener', event => { if (isKeyed(event)) keyed++ })
+  bot.on('removeListener', event => { if (isKeyed(event)) keyed-- })
+
+  const withPosition = (block, position) => { block.position = position; return block }
 
   const update = (point, stateId) => {
     const world = bot.world
@@ -27,7 +40,9 @@ export function installFastBlockUpdates (bot) {
     const old = column.getBlockStateId(at)
     column.setBlockStateId(at, stateId)
     world.async.saveAt(point)
-    world._emitBlockUpdate(Block.fromStateId(old), Block.fromStateId(stateId), point)
+    const position = point // packet coordinates are whole numbers
+    world.emit('blockUpdate', light(old, position), light(stateId, position))
+    if (keyed > 0) world.emit(`blockUpdate:${position}`, withPosition(Block.fromStateId(old), position), withPosition(Block.fromStateId(stateId), position))
   }
 
   client.removeAllListeners('block_change')

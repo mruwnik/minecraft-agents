@@ -103,6 +103,14 @@ test('a block update reaches the listeners with the new state and the stale sect
   assert.deepEqual([seen, raw.stateAt(3, 70, 4)], [[[3, 70, 4, id('dirt')]], id('dirt')])
 })
 
+test('a block update patches the cached section in place', () => {
+  const { bot } = makeBot()
+  const raw = createRawWorld({ getBot: () => bot })
+  const section = raw.sectionStates(0, 8, 0)
+  bot.emit('blockUpdate', { position: new Vec3(3, 70, 4), stateId: id('stone') }, { position: new Vec3(3, 70, 4), stateId: id('dirt') })
+  assert.deepEqual([raw.sectionStates(0, 8, 0) === section, raw.stateAt(3, 70, 4)], [true, id('dirt')])
+})
+
 test('the listener follows a reconnected bot', () => {
   const first = makeBot().bot
   const second = makeBot().bot

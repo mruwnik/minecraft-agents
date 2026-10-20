@@ -21,19 +21,33 @@ function fakeBot () {
   client.on('block_change', () => assert.fail('the stock handler must be removed'))
   const world = new World(null).sync
   world.setColumn(0, 0, new Chunk())
-  const bot = { _client: client, registry, world, supportFeature: name => mineflayer.supportFeature(name, '26.1') }
+  const bot = Object.assign(new EventEmitter(), { _client: client, registry, world, supportFeature: name => mineflayer.supportFeature(name, '26.1') })
   const updates = []
-  world.on('blockUpdate', (oldBlock, newBlock) => updates.push([oldBlock.name, newBlock.name, newBlock.position.toString()]))
+  world.on('blockUpdate', (oldBlock, newBlock) => updates.push([registry.blocks[oldBlock.type].name, registry.blocks[newBlock.type].name, newBlock.position.toString()]))
   installFastBlockUpdates(bot)
-  return { client, world, updates }
+  return { client, world, updates, bot }
 }
 
-test('a block_change writes the state and emits blockUpdate with the old and new block', () => {
+test('a block_change writes the state and emits blockUpdate with the old and new type', () => {
   const { client, world, updates } = fakeBot()
   client.emit('block_change', { location: { x: 3, y: 70, z: 5 }, type: id('stone') })
   client.emit('block_change', { location: { x: 3, y: 70, z: 5 }, type: id('dirt') })
   assert.equal(world.getBlockStateId(new Vec3(3, 70, 5)), id('dirt'))
   assert.deepEqual(updates, [['air', 'stone', '(3, 70, 5)'], ['stone', 'dirt', '(3, 70, 5)']])
+})
+
+test('a listener of one cell gets full Blocks for it; other cells build none', () => {
+  const { client, bot, world } = fakeBot()
+  const keyed = []
+  const listener = (oldBlock, newBlock) => keyed.push([oldBlock.name, newBlock.name, newBlock.boundingBox])
+  bot.on('blockUpdate:(3, 70, 5)', listener)
+  world.on('blockUpdate:(3, 70, 5)', listener)
+  client.emit('block_change', { location: { x: 3, y: 70, z: 5 }, type: id('stone') })
+  client.emit('block_change', { location: { x: 4, y: 70, z: 5 }, type: id('stone') })
+  bot.off('blockUpdate:(3, 70, 5)', listener)
+  world.off('blockUpdate:(3, 70, 5)', listener)
+  client.emit('block_change', { location: { x: 3, y: 70, z: 5 }, type: id('dirt') })
+  assert.deepEqual(keyed, [['air', 'stone', 'block']])
 })
 
 test('a multi_block_change writes every record, decoded as Mineflayer does', () => {
