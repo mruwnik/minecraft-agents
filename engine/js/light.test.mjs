@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { emitOf, lightTable, lightTableCached, relightBox, boxIndex } from './light.mjs'
+import { emitOf, lightTable, lightTableCached, tableCacheName, relightBox, boxIndex } from './light.mjs'
 
 const require = createRequire(import.meta.url)
 const registry = require('prismarine-registry')('26.1')
@@ -230,4 +230,11 @@ test('the cached table equals the built one, on the first call and when read bac
   } finally {
     fs.rmSync(dir, { recursive: true })
   }
+})
+
+test('the cache file name changes with the installed block data versions', () => {
+  const a = { 'minecraft-data': '3.116.0', 'prismarine-block': '1.23.0' }
+  assert.notEqual(tableCacheName('26.1', a), tableCacheName('26.1', { ...a, 'minecraft-data': '3.117.0' }))
+  assert.notEqual(tableCacheName('26.1', a), tableCacheName('26.1', { ...a, 'prismarine-block': '1.24.0' }))
+  assert.equal(tableCacheName('26.1', a), tableCacheName('26.1', { ...a }))
 })

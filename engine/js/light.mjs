@@ -102,9 +102,17 @@ export function lightTable (registry) {
 const SOURCE_HASH = createHash('sha1').update(fs.readFileSync(fileURLToPath(import.meta.url))).digest('hex').slice(0, 12)
 export const tableCacheDir = process.env.MC_LIGHT_CACHE_DIR || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'state', 'light-tables')
 
-// Building the table walks every block state (~140 ms); the result only depends on the version and this file.
+const DATA_PACKAGES = ['minecraft-data', 'prismarine-block', 'prismarine-registry']
+const installedVersions = Object.fromEntries(DATA_PACKAGES.map((n) => [n, require(`${n}/package.json`).version]))
+
+export function tableCacheName (version, deps = installedVersions) {
+  const depHash = createHash('sha1').update(JSON.stringify(deps)).digest('hex').slice(0, 8)
+  return `${version}-${SOURCE_HASH}-${depHash}.bin`
+}
+
+// Building the table walks every block state (~140 ms); the result depends on the version, this file and the block data packages.
 export function lightTableCached (registry, version, dir = tableCacheDir) {
-  const file = path.join(dir, `${version}-${SOURCE_HASH}.bin`)
+  const file = path.join(dir, tableCacheName(version))
   const read = fs.existsSync(file) ? fs.readFileSync(file) : null
   if (read && read.length % 3 === 0) {
     const n = read.length / 3
