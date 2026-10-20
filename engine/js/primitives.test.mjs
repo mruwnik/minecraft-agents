@@ -1175,6 +1175,20 @@ test('collect: an item the body cannot get within reach of after the re-approach
   assert.equal(goals.length, 3)
 })
 
+// A drop in a one-high hole: no walk enters its cell, the walk ends 1.3 off; the body leans in by hand and the pickup follows.
+test('collect: an item just out of pickup reach after a walk that could not get closer is leaned toward, not given up on', async () => {
+  const { bot, p, goals } = dropRig([1.8, 64, 0.5], () => {})
+  bot.pathfinder.goto = goal => { goals.push(goal); return Promise.reject(Object.assign(new Error('NoPath'), { name: 'NoPath' })) }
+  const setControlState = bot.setControlState
+  bot.setControlState = (control, state) => {
+    setControlState(control, state)
+    if (control === 'forward' && state) { bot.entity.position = new Vec3(1.0, 64, 0.5); pickUp(bot) }
+  }
+  const result = await p.collect('t1', { id: 7 })
+  assert.equal(goals.length, 1)
+  assert.equal(result.status, 'collected')
+})
+
 test('collect: an item that was still settling when the walk to it failed is followed to where it lands', async () => {
   const { bot, p, goals } = dropRig([4.5, 66, 0.5], (b, goal, n) => {
     if (n === 1) b.entities[7].position = new Vec3(4.5, 64, 0.5)

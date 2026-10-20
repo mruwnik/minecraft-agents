@@ -291,6 +291,31 @@ export function createDig (env) {
     return Math.hypot(e.position.x - here().x, e.position.z - here().z) <= PICKUP_REACH && dy > -0.7 && dy < 2.2
   }
 
+  // A walk cannot enter the cell of a drop in a one-high hole (the roof stops the body), so it ends a little more than
+  // PICKUP_REACH off: lean in by hand, bounded, instead of digging the roof or giving up.
+  const NUDGE_MAX_DIST = 2
+  const NUDGE_S = 0.6
+  const nudgeToItem = async (ctx, id) => {
+    const item = liveEntity(env.bot, id)
+    if (!item) return false
+    if (inPickupReach(item)) return true
+    if (Math.hypot(item.position.x - here().x, item.position.z - here().z) > NUDGE_MAX_DIST) return false
+    ctx.onAbort(() => env.bot.setControlState('forward', false))
+    await lookNow(() => env.bot.lookAt(vec({ x: item.position.x, y: here().y + 1.62, z: item.position.z }), true))
+    env.bot.setControlState('forward', true)
+    const until = Date.now() + NUDGE_S * 1000 * timeScale
+    try {
+      while (Date.now() < until && liveEntity(env.bot, id) && !inPickupReach(liveEntity(env.bot, id))) {
+        await sleepMs(setting('prim/poll-ms') * timeScale)
+        ctx.alive()
+      }
+    } finally {
+      env.bot.setControlState('forward', false)
+    }
+    const now = liveEntity(env.bot, id)
+    return !now || inPickupReach(now)
+  }
+
   const collect = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(isNum(a.id), 'collect needs an entity id')
@@ -326,7 +351,7 @@ export function createDig (env) {
           continue
         }
         approaches++
-        if (!reached && now) return result('unreachable')
+        if (!reached && now && !(await nudgeToItem(ctx, id))) return result('unreachable')
       }
       const got = gained(before, countsNow())
       return got.length ? { status: 'collected', gained: got } : { status: 'gone', gained: [] }
