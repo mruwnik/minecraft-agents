@@ -16,6 +16,7 @@
             [jobs.lib.reach.room :as reach-room]
             [jobs.survival.respond-flight :as retreat]
             [jobs.survival.retreat-cornered :as cornered]
+            [jobs.survival.respond-choose :as choose]
             [jobs.lib.rooms :as rooms]))
 
 ;; The hut of hut-shelter-test: walls x 3..7, z -2..2, roof y 67, room x 4..6 z -1..1, a door at (5,64,2) facing south.
@@ -84,7 +85,7 @@
     20 0 true))
 
 (deftest cornered-at-home-the-body-never-digs-its-own-hut
-  (is (= [:plug :pillar :back-off :fight] (cornered/escape-order {:home? true}))))
+  (is (= [:plug :pillar :back-off :fight] (choose/escape-order {:home? true}))))
 
 (deftest a-hut-is-a-closed-room-once-its-doors-are-shut-and-open-ground-is-not
   (let [p (tu/seeing-all (tu/fake-on-floor (hut {:x 5.5 :y 64 :z 0.5} open-door [])))]
@@ -389,12 +390,12 @@
       (fn ^:async t []
         (let [homes (atom [])
               hit cornered/hit-on-the-run!
-              order cornered/escape-order]
+              order choose/escape-order]
           (set! cornered/hit-on-the-run! (fn [_] true))
-          (set! cornered/escape-order (fn [m] (swap! homes conj (:home? m)) []))
+          (set! choose/escape-order (fn [m] (swap! homes conj (:home? m)) []))
           (try (await (flee! (hut {:x 5.5 :y 64 :z 0.5} hs/door-states [(zombie 5.5 -0.5 0.4)])))
                (finally (set! cornered/hit-on-the-run! hit)
-                        (set! cornered/escape-order order)))
+                        (set! choose/escape-order order)))
           (is (= true (first @homes)) (str @homes)))))))
 
 (deftest door-sides-left-unjudged-by-a-step-are-judged-on-a-later-one
