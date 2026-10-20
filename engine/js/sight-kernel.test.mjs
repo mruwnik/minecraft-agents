@@ -1,7 +1,7 @@
 // Why JavaScript: tests sight-kernel.mjs.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { castRays, lazySections } from './sight-kernel.mjs'
+import { castRays, cellLight, lazySections } from './sight-kernel.mjs'
 
 // a world of cells given by `at(x, y, z)`: state id (1 blocks sight, 0 air, -1 unloaded) and light (sky << 4 | block)
 const rig = (at, lightOf = () => 0xF0, { near = 0 } = {}) => {
@@ -57,3 +57,40 @@ test('a dark cell within near is recorded', () => {
   cast()
   assert.deepEqual(records.map(r => r[0]), [0, 1, 2])
 })
+
+// cellLight: the light before the cell seen from the eye at (0.5, 64.5, 0.5); -1 when no point of the cell is reachable
+const lineCtx = (at, lightOf = () => 0xF0, withSections = false) => {
+  const raw = { stateAt: at, lightAt: lightOf }
+  const src = withSections
+    ? { sectionRange: () => ({ minY: 0, sections: 32 }),
+        sectionStates: (cx, s, cz) => Uint16Array.from({ length: 4096 }, (_, i) => {
+          const id = at((cx << 4) | (i & 15), (s << 4) | (i >> 8), (cz << 4) | ((i >> 4) & 15))
+          return id < 0 ? 0xFFFF : id
+        }) }
+    : null
+  return { raw, sight: Uint8Array.from([0, 1]), src, blocks: () => true }
+}
+
+for (const withSections of [false, true]) {
+  const tag = withSections ? 'section arrays' : 'stateAt'
+  test(`cellLight (${tag}): the light of the cell before the target along a clear line`, () => {
+    const ctx = lineCtx(() => 0, (x) => x === 2 ? 0x35 : 0xF0, withSections)
+    assert.equal(cellLight(ctx, 0.5, 64.5, 0.5, 3, 64, 0), 0x35)
+  })
+
+  test(`cellLight (${tag}): a blocking cell on every line to the cell gives -1`, () => {
+    const ctx = lineCtx((x) => x === 1 ? 1 : 0, undefined, withSections)
+    assert.equal(cellLight(ctx, 0.5, 64.5, 0.5, 3, 64, 0), -1)
+  })
+
+  test(`cellLight (${tag}): a face point reaches a cell whose centre line is blocked`, () => {
+    const ctx = lineCtx((x, y, z) => x === 2 && y === 64 && z === 0 ? 1 : 0, undefined, withSections)
+    ctx.blocks = (id, x, y, z, ox, oy, oz, tx, ty) => ty < 64.5
+    assert.notEqual(cellLight(ctx, 0.5, 64.5, 0.5, 4, 64, 0), -1)
+  })
+
+  test(`cellLight (${tag}): an unloaded cell on the way gives -1`, () => {
+    const ctx = lineCtx((x) => x === 2 ? -1 : 0, undefined, withSections)
+    assert.equal(cellLight(ctx, 0.5, 64.5, 0.5, 4, 64, 0), -1)
+  })
+}

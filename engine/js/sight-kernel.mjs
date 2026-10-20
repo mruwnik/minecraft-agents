@@ -161,3 +161,86 @@ export function castRays (ctx, ox, oy, oz, dirs, count) {
   }
   return total
 }
+
+const FACE_INSET = 0.15
+
+// The light of the last cell before the point's own cell on the straight line from the eye (ox oy oz) to the point
+// (tx ty tz), or -1 when a cell on the way stops the line (ctx.blocks), is unloaded, or the walk overruns its budget.
+// Reads state ids from the section arrays when the raw world has them, else cell by cell through raw.stateAt.
+function walkLine (ctx, ox, oy, oz, tx, ty, tz) {
+  const { raw, sight, src } = ctx
+  const vx = tx - ox; const vy = ty - oy; const vz = tz - oz
+  const d = Math.hypot(vx, vy, vz)
+  const x1 = Math.floor(tx); const y1 = Math.floor(ty); const z1 = Math.floor(tz)
+  const x0 = Math.floor(ox); const y0 = Math.floor(oy); const z0 = Math.floor(oz)
+  const dx = d === 0 ? 0 : vx / d; const dy = d === 0 ? 0 : vy / d; const dz = d === 0 ? 0 : vz / d
+  const sx = dx > 0 ? 1 : -1; const sy = dy > 0 ? 1 : -1; const sz = dz > 0 ? 1 : -1
+  const tdx = dx === 0 ? Infinity : Math.abs(1 / dx)
+  const tdy = dy === 0 ? Infinity : Math.abs(1 / dy)
+  const tdz = dz === 0 ? Infinity : Math.abs(1 / dz)
+  let cx = x0; let cy = y0; let cz = z0
+  let tmx = dx === 0 ? Infinity : tdx * (dx > 0 ? (x0 + 1 - ox) : (ox - x0))
+  let tmy = dy === 0 ? Infinity : tdy * (dy > 0 ? (y0 + 1 - oy) : (oy - y0))
+  let tmz = dz === 0 ? Infinity : tdz * (dz > 0 ? (z0 + 1 - oz) : (oz - z0))
+  let budget = 3 + Math.abs(x1 - x0) + Math.abs(y1 - y0) + Math.abs(z1 - z0)
+  const { minY, sections } = src ? src.sectionRange() : { minY: 0, sections: 0 }
+  const s0 = minY >> 4
+  let secKey = -1
+  let ids = null
+  for (;;) {
+    const t = Math.min(tmx, tmy, tmz)
+    if ((cx === x1 && cy === y1 && cz === z1) || t > d) return raw.lightAt(cx, cy, cz) || 0
+    if (budget <= 0) return -1
+    const px = cx; const py = cy; const pz = cz
+    if (t === tmx) { cx += sx; tmx += tdx } else if (t === tmy) { cy += sy; tmy += tdy } else { cz += sz; tmz += tdz }
+    if (cx === x1 && cy === y1 && cz === z1) return raw.lightAt(px, py, pz) || 0
+    let id
+    if (src) {
+      const s = (cy >> 4) - s0
+      if (s < 0 || s >= sections) return -1
+      const key = ((cx >> 4) * 65536 + (cz >> 4)) * 256 + s
+      if (key !== secKey) { ids = src.sectionStates(cx >> 4, s, cz >> 4); secKey = key }
+      if (ids === null) return -1
+      id = ids[((cy & 15) << 8) | ((cz & 15) << 4) | (cx & 15)]
+      if (id === UNLOADED) return -1
+    } else {
+      id = raw.stateAt(cx, cy, cz)
+      if (id < 0) return -1
+    }
+    if (sight[id] === 1 && ctx.blocks(id, cx, cy, cz, ox, oy, oz, tx, ty, tz)) return -1
+    budget--
+  }
+}
+
+// The light before the cell (x y z) as seen from the eye: along the line to its centre, else to inset points on the
+// faces towards the eye (four per face), first that is clear. -1 when none is. ctx: {raw, sight, src (the raw
+// world when it has section arrays, else null), blocks(id, x, y, z, ox, oy, oz, tx, ty, tz)}.
+export function cellLight (ctx, ox, oy, oz, x, y, z) {
+  const centre = walkLine(ctx, ox, oy, oz, x + 0.5, y + 0.5, z + 0.5)
+  if (centre >= 0) return centre
+  const lo = FACE_INSET; const hi = 1 - FACE_INSET
+  const side = (o, c) => o < c ? -1 : o > c + 1 ? 1 : 0
+  const sx = side(ox, x); const sy = side(oy, y); const sz = side(oz, z)
+  if (sx !== 0) {
+    const fx = x + (sx < 0 ? lo : hi)
+    for (const b of [lo, hi]) for (const c of [lo, hi]) {
+      const r = walkLine(ctx, ox, oy, oz, fx, y + b, z + c)
+      if (r >= 0) return r
+    }
+  }
+  if (sy !== 0) {
+    const fy = y + (sy < 0 ? lo : hi)
+    for (const a of [lo, hi]) for (const c of [lo, hi]) {
+      const r = walkLine(ctx, ox, oy, oz, x + a, fy, z + c)
+      if (r >= 0) return r
+    }
+  }
+  if (sz !== 0) {
+    const fz = z + (sz < 0 ? lo : hi)
+    for (const a of [lo, hi]) for (const b of [lo, hi]) {
+      const r = walkLine(ctx, ox, oy, oz, x + a, y + b, fz)
+      if (r >= 0) return r
+    }
+  }
+  return -1
+}

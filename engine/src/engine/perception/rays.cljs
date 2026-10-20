@@ -355,61 +355,17 @@
 
 ;; ---- block changes and touch
 
-(defn walk-cells
-  "Walk the cells from the eye (ox oy oz) towards the point (tx ty tz), up to (excluding) the point's own cell. Nil when a
-  cell on the way blocks the line (blocks-line?), is unloaded, or the walk overruns its budget;
-  else the light of the last cell before the point's cell (the eye's own cell when they are the same)."
-  [^js raw ^js table ox oy oz tx ty tz]
-  (let [vx (- tx ox) vy (- ty oy) vz (- tz oz)
-        d (js/Math.hypot vx vy vz)
-        x1 (js/Math.floor tx) y1 (js/Math.floor ty) z1 (js/Math.floor tz)
-        x0 (js/Math.floor ox) y0 (js/Math.floor oy) z0 (js/Math.floor oz)
-        dx (if (zero? d) 0 (/ vx d)) dy (if (zero? d) 0 (/ vy d)) dz (if (zero? d) 0 (/ vz d))
-        sx (if (pos? dx) 1 -1) sy (if (pos? dy) 1 -1) sz (if (pos? dz) 1 -1)
-        tdx (if (zero? dx) js/Infinity (js/Math.abs (/ 1 dx)))
-        tdy (if (zero? dy) js/Infinity (js/Math.abs (/ 1 dy)))
-        tdz (if (zero? dz) js/Infinity (js/Math.abs (/ 1 dz)))]
-    (loop [cx x0 cy y0 cz z0
-           tmx (if (zero? dx) js/Infinity (* tdx (if (pos? dx) (- (inc x0) ox) (- ox x0))))
-           tmy (if (zero? dy) js/Infinity (* tdy (if (pos? dy) (- (inc y0) oy) (- oy y0))))
-           tmz (if (zero? dz) js/Infinity (* tdz (if (pos? dz) (- (inc z0) oz) (- oz z0))))
-           prev (or (.lightAt raw x0 y0 z0) 0)
-           budget (+ 3 (js/Math.abs (- x1 x0)) (js/Math.abs (- y1 y0)) (js/Math.abs (- z1 z0)))]
-      (let [t (js/Math.min tmx tmy tmz)]
-        (cond
-          (or (and (== cx x1) (== cy y1) (== cz z1)) (> t d)) prev
-          (<= budget 0) nil
-          :else
-          (let [ax (== t tmx) ay (and (not ax) (== t tmy)) az (and (not ax) (not ay))
-                nx (if ax (+ cx sx) cx) ny (if ay (+ cy sy) cy) nz (if az (+ cz sz) cz)
-                target? (and (== nx x1) (== ny y1) (== nz z1))
-                here (.stateAt raw nx ny nz)]
-            (cond
-              (and (not target?) (or (< here 0) (blocks-line? raw table here nx ny nz ox oy oz tx ty tz))) nil
-              target? prev
-              :else (recur nx ny nz
-                           (if ax (+ tmx tdx) tmx) (if ay (+ tmy tdy) tmy) (if az (+ tmz tdz) tmz)
-                           (or (.lightAt raw nx ny nz) 0) (dec budget)))))))))
-
-(def face-inset 0.15)
-
-(defn face-points
-  "Points just inside the cell (x y z) on each face the eye (ox oy oz) is outside of: four inset corners per face, so a
-  block counts as seen when any such point is, as a player sees it by any visible face."
-  [ox oy oz x y z]
-  (let [lo face-inset hi (- 1 face-inset)
-        side (fn [o c] (cond (< o c) -1 (> o (inc c)) 1 :else 0))
-        sx (side ox x) sy (side oy y) sz (side oz z)
-        near (fn [s c] (if (neg? s) (+ c lo) (+ c hi)))]
-    (concat
-     (when-not (zero? sx) (for [b [lo hi] c [lo hi]] [(near sx x) (+ y b) (+ z c)]))
-     (when-not (zero? sy) (for [a [lo hi] c [lo hi]] [(+ x a) (near sy y) (+ z c)]))
-     (when-not (zero? sz) (for [a [lo hi] b [lo hi]] [(+ x a) (+ y b) (near sz z)])))))
+(defn line-ctx
+  "What the kernel's cellLight reads: the raw world, the sight table, the raw world as the section source when it has
+  section arrays, and the thin-block test."
+  [^js raw ^js sight]
+  #js {:raw raw :sight sight :src (when (.-sectionStates raw) raw)
+       :blocks (fn [id x y z ox oy oz tx ty tz] (blocks-line? raw sight id x y z ox oy oz tx ty tz))})
 
 (defn visible-now?
   "Whether the cell (x y z), now holding state id, is in view: its centre inside the cone and the radius, a point of it
   (the centre first, then inset points on the faces towards the eye) with nothing blocking sight on the way from the
-  eye, and lit (or within near)."
+  eye (kernel cellLight), and lit (or within near)."
   [{:keys [raw opts grid] :as per} ^js st ^js eye x y z id]
   (let [ox (.-x eye) oy (.-y eye) oz (.-z eye)
         vx (- (+ x 0.5) ox) vy (- (+ y 0.5) oy) vz (- (+ z 0.5) oz)
@@ -419,14 +375,11 @@
     (and sight
          (<= dist (:radius opts))
          (in-cone? (basis (.-yaw eye) (.-pitch eye)) (:hx grid) (:hy grid) vx vy vz)
-         (when-let [prev (or (walk-cells raw sight ox oy oz (+ x 0.5) (+ y 0.5) (+ z 0.5))
-                             (loop [ps (seq (face-points ox oy oz x y z))]
-                               (when ps
-                                 (let [[tx ty tz] (first ps)]
-                                   (or (walk-cells raw sight ox oy oz tx ty tz) (recur (next ps)))))))]
-           (let [light (.lightAt ^js raw x y z)
-                 shown (if (== 1 (aget sight id)) (max-light light prev) light)]
-             (or (== 1 (aget visible shown)) (<= dist (near-of per))))))))
+         (let [prev (.cellLight ^js (kernel) (line-ctx raw sight) ox oy oz x y z)]
+           (when (>= prev 0)
+             (let [light (.lightAt ^js raw x y z)
+                   shown (if (== 1 (aget sight id)) (max-light light prev) light)]
+               (or (== 1 (aget visible shown)) (<= dist (near-of per)))))))))
 
 (defn line-clear?
   "Whether the eye at (ox oy oz) has a clear line to the point (tx ty tz): no cell strictly between the eye's cell and

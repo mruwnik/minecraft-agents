@@ -2,7 +2,7 @@
   "Which floors the body can see from where it stands, through the real ray code (engine.perception.rays/visible-now?):
   the table the planner's options.unknown seeDepth and seeLit rest on (card c51cd6c2, design v3.2 section 0). A cliff
   course: the takeoff's feet cell is (0 64 0) on stone, the landing column x 1 is air down to the landing floor
-  (1 63-d 0); a cell counts as seen by any face point (rays/face-points), so the planner's see depths are lower bounds:
+  (1 63-d 0); a cell counts as seen by any face point (sight-kernel cellLight), so the planner's see depths are lower bounds:
   a row that reads true beyond them is fine, one that reads false inside them is a bug; the eye stands at x ex in the takeoff cell, z 0.5, 1.62 over the feet."
   (:require [cljs.test :refer [deftest is]]
             [engine.fake.raw-world :as fake-raw]
