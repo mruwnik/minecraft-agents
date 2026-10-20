@@ -132,7 +132,7 @@
               :writes 0 :stamp 0 :lastKey -1 :lastSec nil :minSec nil :minNow nil :minVal 0 :dim "overworld" :sight nil :visible nil
               :pass nil :passRays nil :lastStart nil :unsubscribe nil
               :mobs (js/Map.) :mobSource nil
-              :infoOf (fn [id] (.stateInfo ^js raw id)) :kinds nil :sensedKey nil :sensed (js/Map.) :sensedJs (js/Map.)
+              :infoOf (fn [id] (.stateInfo ^js raw id)) :kinds nil :sensedKey nil :sensed (js/Map.) :sensedJs (js/Map.) :blockBases (js/Map.)
               :passes 0 :rays 0 :cells 0 :steps 0 :stepMs 0 :stepMsMax 0}}))
 
 (defn stats [{:keys [st] :as per}]
@@ -171,15 +171,24 @@
       (off)
       (save))))
 
+(defn block-base
+  "The answer for state id without its place (name, properties, age, full-cube), kept per id: the same for every cell."
+  [{:keys [raw st]} id]
+  (let [^js cache (.-blockBases ^js st)]
+    (or (.get cache id)
+        (let [^js info (.stateInfo ^js raw id)
+              props (store/properties-of info)
+              base (cond-> {:name (.-name info) :state-id id}
+                     props (assoc :properties props)
+                     (:age props) (assoc :age (js/Number (:age props)))
+                     (.-fullCube info) (assoc :full-cube true))]
+          (.set cache id base)
+          base))))
+
 (defn block-of
   "A blockAt-like answer for state id at pos: {:name :pos :properties :age (a crop's, as a number) :full-cube :state-id}."
-  [{:keys [raw]} id pos]
-  (let [^js info (.stateInfo ^js raw id)
-        props (store/properties-of info)]
-    (cond-> {:name (.-name info) :pos pos :state-id id}
-      props (assoc :properties props)
-      (:age props) (assoc :age (js/Number (:age props)))
-      (.-fullCube info) (assoc :full-cube true))))
+  [per id pos]
+  (assoc (block-base per id) :pos pos))
 
 (defn glance!
   "The cell's blockAt-like answer with :visible true when the body sees it now (one ray, the pass's rules; memory takes
