@@ -30,10 +30,6 @@
 (defn hand-clear-ms [c] (if (= :night (:for (:args c))) (settings/get settings ::night-hand-clear-ms) (tools/quick-clear-ms)))
 (defn max-occupied [] (settings/get settings ::max-occupied))
 
-(def drop-of
-  "The block a dug block drops, where it is another (an unlisted one drops itself)."
-  {"grass_block" "dirt" "stone" "cobblestone" "deepslate" "cobbled_deepslate" "podzol" "dirt" "mycelium" "dirt"})
-
 (defn hostiles
   "The cells the melee hostiles within the danger ::hostile-radius overlap; none when c has ::ignore-hostiles."
   [c]
@@ -93,7 +89,7 @@
               ok (tools/can-harvest? p name)]
           (if (and (not ok) (or (not have) (> (tools/clear-ms p name) (hand-clear-ms c))))
             (stop :no-tool (str "cannot harvest " name (if have " in good time" "; nothing to roof the pit with") ", so not digging") name)
-            (recur more (or have (and ok (boolean (some #{(get drop-of name name)} blocks)))))))))))
+            (recur more (or have (and ok (boolean (some #{(lb/item-name {:block name})} blocks)))))))))))
 
 (defn candidates
   "The pits the shapes allow from feet (dig-cells/pit-shapes) with a side column open and free of hostiles; with none, the
@@ -228,7 +224,7 @@
                (every? #(and (rules/natural? %) (not (escape/protected? %)) (not (rules/falling? %))) names)
                (not-any? #(rules/falling? (wall-name %)) (map #(at % 2 [0 0]) [1 2]))
                (or by-hand? (every? #(tools/can-harvest? p %) names))
-               (or (lb/pick c blocks) (some (set blocks) (map #(get drop-of % %) names))))
+               (or (lb/pick c blocks) (some (set blocks) (map #(lb/item-name {:block %}) names))))
       (vec dug)))))
 
 (defn fluid-shown?

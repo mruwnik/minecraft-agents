@@ -28,7 +28,7 @@
    "diamond_ore" "diamond" "redstone_ore" "redstone" "lapis_ore" "lapis_lazuli" "emerald_ore" "emerald"})
 
 (def drop-item
-  (merge {"stone" "cobblestone" "grass_block" "dirt" "deepslate" "cobbled_deepslate"
+  (merge {"stone" "cobblestone" "grass_block" "dirt" "deepslate" "cobbled_deepslate" "podzol" "dirt" "mycelium" "dirt"
           "clay" "clay_ball" "snow_block" "snowball"}
          ores
          (into {} (map (fn [[k v]] [(str "deepslate_" k) v])) ores)))
