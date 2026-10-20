@@ -1290,7 +1290,7 @@
       (fn ^:async t []
         (doseq [status ["blocked" "arrived"]]
           (let [{:keys [eng p seen]} (setup {:time night :blocks one-side-open})]
-            (.override (.-world p) "moveTo" (fn ^:async f [_ _ _] #js {:status status}))
+            (.override (.-world p) "steer" (fn ^:async f [_ _ _] #js {:status status}))
             (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
             (is (< (await (run-until-empty eng 12)) 12))
             (is (= 1 (count (no-way-stops seen))))

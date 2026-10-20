@@ -35,9 +35,9 @@
   {"grass_block" "dirt" "stone" "cobblestone" "deepslate" "cobbled_deepslate" "podzol" "dirt" "mycelium" "dirt"})
 
 (defn hostiles
-  "The cells the melee hostiles within the danger ::hostile-radius overlap."
+  "The cells the melee hostiles within the danger ::hostile-radius overlap; none when c has ::ignore-hostiles."
   [c]
-  (seal/hostile-cells (:primitives c) (danger-q/hostile-radius)))
+  (if (::ignore-hostiles c) #{} (seal/hostile-cells (:primitives c) (danger-q/hostile-radius))))
 
 (defn side-open?
   "Whether the side column at feet height (cell and the one over it) is seen open, dry and free of hostiles: a way to
@@ -159,7 +159,7 @@
       (let [plan (dig-cells/dig-plan p feet)
             shape (or (when plan (refused-column p feet plan)) (first (candidates c feet)))]
         (cond
-          (pit-plan (assoc-in c [:args :radius] 0) feet blocks) (stop :hostile-near "a hostile stands in the way of the pit; not digging down")
+          (pit-plan (assoc c ::ignore-hostiles true) feet blocks) (stop :hostile-near "a hostile stands in the way of the pit; not digging down")
           (nil? shape) (if plan
                          (stop :no-floor "no floor the body sees solid under a pit; not digging down")
                          (stop :no-roof-support "nothing solid beside the roof cell to place against; not digging a pit"))
