@@ -1007,8 +1007,8 @@
   "The RCON command whose reply answers one :after check (positions plot-relative); :any-not-block gives a vector of commands."
   [origin body grid c [op & args]]
   (case op
-    :block (str "execute if block " (xyz-str (block-pos origin (first args))) " " (second args))
-    :not-block (str "execute if block " (xyz-str (block-pos origin (first args))) " " (second args))
+    (:block :not-block) (let [at (str "execute if block " (xyz-str (block-pos origin (first args))) " ")]
+                          (if (= "air" (second args)) [(str at "air") (str at "light")] (str at (second args))))
     :any-not-block (let [[boxes block] args]
                      (->> boxes
                           (mapcat (fn [[[ax ay az] [bx by bz]]]
@@ -1022,7 +1022,7 @@
     nil))
 
 (defn after-commands
-  "The RCON commands of one :after check, always a vector."
+  "The RCON commands of one :after check, always a vector. An \"air\" check also asks for `light`, the invisible block the runner lays in lit plots."
   [origin body grid c check]
   (let [cmd (after-command origin body grid c check)]
     (if (vector? cmd) cmd [cmd])))
@@ -1035,11 +1035,15 @@
 
 (defn join-after-replies
   "The single reply of a check from its commands' replies. An :any-not-block cell set differs when any chunk's test failed; a
-  chained `execute if` that fails before its last condition prints nothing, so a blank reply counts as failed."
-  [[op] replies]
-  (if (= op :any-not-block)
+  chained `execute if` that fails before its last condition prints nothing, so a blank reply counts as failed. An \"air\"
+  check (air, light) is met when either block is there."
+  [[op _ block] replies]
+  (cond
+    (= op :any-not-block)
     (if (some #(str/blank? %) replies) "Test failed" (or (first (filter #(str/includes? % "Test failed") replies)) (last replies)))
-    (last replies)))
+    (and (#{:block :not-block} op) (= "air" block))
+    (or (first (filter #(str/includes? % "Test passed") replies)) (last replies))
+    :else (last replies)))
 
 (defn entity-probe-command
   "The RCON command that dumps one entity matching a failed :entities check (nil for other checks)."

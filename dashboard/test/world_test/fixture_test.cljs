@@ -399,9 +399,18 @@
     (is (< (.indexOf cmds "gamemode spectator ProbeFixture") (.indexOf cmds tp)) "a spectator, so it does not fall when it logs in there")
     (is (< (.indexOf cmds tp) (.indexOf cmds "forceload remove 20000 20000 20031 20031")))))
 
+(deftest an-air-check-counts-the-runners-light-block-as-air
+  (let [judge (fn [check replies] (:pass? (f/judge-after [0 0 0] check (f/join-after-replies check replies))))]
+    (is (judge [:block [1 2 1] "air"] ["Test failed" "Test passed"]) "a lit plot's light layer reads as air")
+    (is (judge [:block [1 2 1] "air"] ["Test passed" "Test failed"]))
+    (is (not (judge [:block [1 2 1] "air"] ["Test failed" "Test failed"])))
+    (is (not (judge [:not-block [1 2 1] "air"] ["Test failed" "Test passed"])) "light is not a block a dug cell must lack")
+    (is (judge [:not-block [1 2 1] "air"] ["Test failed" "Test failed"]))))
+
 (deftest after-checks-read-rcon-replies
   (let [origin [20000 150 20000]]
-    (is (= "execute if block 20003 150 20004 air" (f/after-command origin "B" grid {} [:block [3 0 4] "air"])))
+    (is (= ["execute if block 20003 150 20004 air" "execute if block 20003 150 20004 light"]
+           (f/after-command origin "B" grid {} [:block [3 0 4] "air"])))
     (is (= "execute if entity @e[type=cow,x=20001,y=150,z=20001,dx=4,dy=1,dz=4]"
            (f/after-command origin "B" grid {} [:entities "type=cow" [[1 0 1] [5 1 5]] [:>= 1]])))
     (is (:pass? (f/judge-after origin [:block [3 0 4] "air"] "Test passed")))
@@ -491,7 +500,8 @@
            (f/resolve-entity-refs form {"cow" 12 "pig" 40})))))
 
 (deftest after-block-checks-floor-fractional-coordinates
-  (is (= "execute if block 20001 150 20002 air" (f/after-command [20000 150 20000] "B" {} {} [:block [1.5 0 2.5] "air"])))
+  (is (= ["execute if block 20001 150 20002 air" "execute if block 20001 150 20002 light"]
+         (f/after-command [20000 150 20000] "B" {} {} [:block [1.5 0 2.5] "air"])))
   (is (= "execute if block 20011 150 20011 dirt" (f/after-command [20000 150 20000] "B" {} {} [:not-block [11.5 0 11.5] "dirt"]))))
 
 (deftest any-not-block-passes-when-one-cell-is-not-the-block
