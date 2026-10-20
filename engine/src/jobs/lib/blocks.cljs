@@ -44,16 +44,6 @@
   (or (pos? (u/free-slots p))
       (some #(and (= item (:name %)) (< (:count %) facts/stack-size)) (u/inventory p))))
 
-(defn carried
-  "The carried [{:name :count}] whose name is in blocks, in the order of blocks, less what the reserve register
-  holds off limits to the fillers chooser (a reserved stack, an :avoid)."
-  [c blocks]
-  (let [have (into {} (map (juxt :name :count)) (u/inventory (:primitives c)))
-        held (reserve/held c :fillers)]
-    (vec (for [b blocks :let [n (- (get have b 0) (get held b 0))] :when (pos? n)] {:name b :count n}))))
-
-(defn pick [c blocks] (:name (first (carried c blocks))))
-
 (def clearable
   "What jobs.blocks.place digs out of a cell before placing: the replaceable plants and snow layer
   (block-sets/replaceable, less air and fluids) and small flowers, which a placement does not overwrite."
@@ -72,6 +62,38 @@
   the data does not list it."
   [p block-name]
   (get (drops-table (game/version-of p)) block-name [block-name]))
+
+(defn recoverable?
+  "Whether the placed block can be dug out again by this body for the same item: it drops itself and the carried
+  tools harvest it. Glass, ice and leaves drop nothing without silk touch; stone drops cobblestone."
+  [p block]
+  (let [need (some-> (.harvestTools p block) js->clj)]
+    (and (some #{block} (drops-of p block))
+         (or (empty? need) (boolean (some (set need) (map :name (u/inventory p))))))))
+
+(defn held-fillers
+  "{name count} the fillers chooser may not use in danger: the reserve register's hard units (strength 1, an :avoid),
+  and soft ones the body could not dig back out (recoverable?)."
+  [c]
+  (reduce (fn [m {:keys [name count strength]}]
+            (if (and (< strength 1) (recoverable? (:primitives c) name))
+              m
+              (update m name (fnil + 0) count)))
+          {} (reserve/rows c :fillers)))
+
+(defn carried
+  "The carried [{:name :count}] whose name is in blocks, less what the reserve register holds off limits to the
+  fillers chooser (held-fillers: a hard reserve, an :avoid; soft-reserved units that can be dug back out count as
+  free). Names with unreserved units come first, then ones spending soft reserves, each in the order of blocks."
+  [c blocks]
+  (let [have (into {} (map (juxt :name :count)) (u/inventory (:primitives c)))
+        held (held-fillers c)
+        all (reserve/held c :fillers)
+        rows (vec (for [b blocks :let [n (- (get have b 0) (get held b 0))] :when (pos? n)] {:name b :count n}))
+        free? #(> (- (get have (:name %) 0) (get all (:name %) 0)) 0)]
+    (vec (concat (filter free? rows) (remove free? rows)))))
+
+(defn pick [c blocks] (:name (first (carried c blocks))))
 
 (defn parse
   "{:pos {:x :y :z}} of args' :pos (a cell, fractions floored), or {:error text}."

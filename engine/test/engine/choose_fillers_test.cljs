@@ -8,6 +8,7 @@
             [jobs.lib.blocks :as lb]
             [jobs.lib.choose :as choose]
             [jobs.lib.escape :as escape]
+            [jobs.lib.reserve :as reserve]
             [jobs.survival.retreat-flight :as flight]))
 
 (defn body
@@ -64,3 +65,27 @@
 
 (deftest an-unknown-purpose-throws
   (is (thrown? js/Error (choose/fillers-for (body []) :wall 1))))
+
+(defn reserving
+  "A body carrying items with register entries (strength 0.5 unless given) on each name."
+  [items entries]
+  (let [data (reduce #(mem/add-entry %1 :reserve {:t 0 :data %2} reserve/policy) mem/empty-data entries)]
+    {:primitives (tu/fake {:inventory items}) :view (fn [] {:data data :now 1})}))
+
+(defn soft [item & {:keys [strength] :or {strength 0.5}}] {:item item :all true :strength strength})
+
+(deftest a-danger-placer-spends-soft-reserved-blocks-it-can-dig-back-out
+  (are [items entries names] (= names (map :name (lb/carried (reserving items entries) ["dirt" "cobblestone" "glass" "oak_planks"])))
+    [(stack "cobblestone" 4) (stack "stone_pickaxe" 1)] [(soft "cobblestone")] ["cobblestone"]
+    [(stack "cobblestone" 4)] [(soft "cobblestone")] []
+    [(stack "glass" 4) (stack "stone_pickaxe" 1)] [(soft "glass")] []
+    [(stack "dirt" 4)] [(soft "dirt")] ["dirt"]
+    [(stack "dirt" 4) (stack "stone_pickaxe" 1)] [(soft "dirt" :strength 1)] []))
+
+(deftest unreserved-blocks-come-before-soft-reserved-ones
+  (let [c (reserving [(stack "cobblestone" 4) (stack "dirt" 2) (stack "stone_pickaxe" 1)] [(soft "cobblestone")])]
+    (is (= ["dirt" "cobblestone"] (map :name (lb/carried c ["cobblestone" "dirt"]))))
+    (is (= ["dirt" "cobblestone"] (map :item (:list (choose/fillers-for c :cover 1)))))))
+
+(deftest a-plain-build-still-leaves-soft-reserves-alone
+  (is (= [] (:list (choose/fillers-for (reserving [(stack "cobblestone" 4) (stack "stone_pickaxe" 1)] [(soft "cobblestone")]) :build 1)))))

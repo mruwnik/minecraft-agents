@@ -1,0 +1,19 @@
+;; A body whose only wall-in blocks are soft-reserved cobblestone (strength 0.5) with a pickaxe to dig them back out:
+;; the retreat still seals the 1-wide lit tunnel against the zombie (NoAI, waits outside). Tunnel x 7..29 at z 16, zombie at x 9 (5 blocks off).
+{:defaults
+ {:tags [:hostile :survival :retreat :reserve :underground]
+  :time :any
+  :plot {:height 8}
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile)}]
+  :limit-s 100}
+ :cases
+ [{:name "soft-reserved-cobblestone-and-a-pickaxe-still-seal-the-tunnel"
+   :blocks [[:fill [6 0 12] [30 4 20] "stone"] [:fill [7 0 16] [29 1 16] "air"]
+            [:set [8 1 16] "torch"] [:set [13 1 16] "torch"] [:set [17 1 16] "torch"] [:set [23 1 16] "torch"] [:set [28 1 16] "torch"]]
+   :body {:at [14.5 0 16.5] :yaw 90 :inventory [["cobblestone" 8] ["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
+   :act [[:job (jobs.memory.reserve {:id "wt-soft" :item "cobblestone" :strength 0.5 :why "world test"})]
+         [:summon "zombie" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:await {:source :job :kind :retreat_sealed} 60]
+         [:rcon "kill @e[type=zombie,$BOX]"]]
+   :expect [{:event {:source :job :kind :retreat_sealed} :within-s 70}]}]}

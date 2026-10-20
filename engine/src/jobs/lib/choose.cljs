@@ -84,15 +84,19 @@
   (or (filler-purposes purpose)
       (throw (js/Error. (str "fillers: unknown purpose " (pr-str purpose))))))
 
+(def danger-purposes
+  "Purposes a body in danger places for: they may spend soft-reserved blocks it can dig back out (jobs.lib.blocks/carried)."
+  #{:shelter :pillar :climb :cover :seal})
+
 (defn fillers-for
   "See the ns doc."
   [c purpose amount]
   (let [held (reserved c :fillers)
-        carried (into {} (map (juxt :name :count)) (u/inventory (:primitives c)))
-        listed (vec (for [b (fillers purpose)
-                          :let [n (- (get carried b 0) (get held b 0))]
-                          :when (pos? n)]
-                      {:item b :count n}))]
+        have (into {} (map (juxt :name :count)) (u/inventory (:primitives c)))
+        carried (if (danger-purposes purpose)
+                  (blocks/carried c (fillers purpose))
+                  (for [b (fillers purpose) :let [n (- (get have b 0) (get held b 0))] :when (pos? n)] {:name b :count n}))
+        listed (mapv (fn [{:keys [name count]}] {:item name :count count}) carried)]
     {:list listed
      :short (max 0 (- amount (transduce (map :count) + 0 listed)))}))
 
