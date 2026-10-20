@@ -39,9 +39,9 @@
    - options.knownEdges: a Set of the cells (knownKey) earlier searches found at the loaded edge that no search has
      known to its end since. When it is empty, a frontier in known land is never taken: every edge was searched past,
      and the result says so as searchedOut true (the way on, if any, is not in the land this goal's searches can reach).
-   - options.dangers: known hostiles, an array of {x y z close radius rate} (at most 8): a move adds to its risk rate
+   - options.dangers: known hostiles, an array of {x y z close radius rate block} (at most 8): a move adds to its risk rate
      (hp a second) times its seconds within close blocks of a danger's point, falling linearly to 0 at radius; all the
-     dangers together add at most options.dangerCap (4) a second (see dangerRisk), each hp priced at options.damageWeight. jobs.lib.threats builds them.
+     dangers together add at most options.dangerCap (4) a second (see dangerRisk), each hp priced at options.damageWeight. A danger with block true (a seen mob) also fills its cell: no plan enters it. jobs.lib.threats builds them.
    - options.dark {at, factor}: a cell that at(x, y, z) calls dark (returns 1) costs factor times its own seconds
      more, in g and in cost.darkSeconds (see darkOf; jobs.lib.look builds at).
    - options.tolls {cells}: cells is a Map of cell-key (planner/cell-key) to a factor: entering such a cell costs factor
@@ -164,7 +164,7 @@
 
 (defn- goal-array [ctor ^js goals f] (new ctor (.map goals f)))
 
-(def ^:const DANGER-STRIDE 6)
+(def ^:const DANGER-STRIDE 7)
 (def ^:const MAX-DANGERS 8)
 
 (defn- danger-array
@@ -178,7 +178,8 @@
         (let [^js d (aget ds i)
               o (* i DANGER-STRIDE)]
           (aset a o (.-x d)) (aset a (+ o 1) (.-y d)) (aset a (+ o 2) (.-z d))
-          (aset a (+ o 3) (.-close d)) (aset a (+ o 4) (.-radius d)) (aset a (+ o 5) (* scale (.-rate d)))))
+          (aset a (+ o 3) (.-close d)) (aset a (+ o 4) (.-radius d)) (aset a (+ o 5) (* scale (.-rate d)))
+          (aset a (+ o 6) (if (true? (.-block d)) 1 0))))
       a)))
 
 (defn- danger-box

@@ -201,11 +201,11 @@
 
 (defn danger-of [body kind {:keys [name pos]} {:keys [shape] :as opts}]
   (let [k (if (= "creeper" name) :creeper kind)]
-    (merge {:x (:x pos) :y (:y pos) :z (:z pos) :rate (danger-rate body name opts) :mob name}
+    (merge {:x (:x pos) :y (:y pos) :z (:z pos) :rate (danger-rate body name opts) :mob name :block (= :sensed kind)}
            (get danger-shape k) (get shape k))))
 
 (defn danger-list
-  "The dangers ({:x :y :z :close :radius :rate :mob}) of the sensed mobs [{:key :name :pos}] (nearest first) and the
+  "The dangers ({:x :y :z :close :radius :rate :mob :block}; :block true for a sensed mob, whose cell is no way) of the sensed mobs [{:key :name :pos}] (nearest first) and the
   remembered :threat entries' data [{:key :mob :pos}] (nearest the body first; one whose :key is sensed now is left out:
   the sensed place wins), at most max-dangers. body {:health :equipment :weapon :pos}. opts: danger-opts (default none)."
   ([body sensed remembered] (danger-list body sensed remembered nil))

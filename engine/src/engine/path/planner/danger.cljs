@@ -19,7 +19,7 @@
             cz (+ z 0.5)]
         (loop [i 0 rate 0]
           (if (< i (.-n-dangers s))
-            (let [o (* i 6)
+            (let [o (* i 7)
                   dx (- cx (aget a o))
                   dy (- y (aget a (+ o 1)))
                   dz (- cz (aget a (+ o 2)))
@@ -30,4 +30,17 @@
                 (>= d2 (* radius radius)) (recur (inc i) rate)
                 (<= d2 (* close close)) (recur (inc i) (+ rate (aget a (+ o 5))))
                 :else (recur (inc i) (+ rate (/ (* (aget a (+ o 5)) (- radius (js/Math.sqrt d2))) (- radius close))))))
-            (* dsec (js/Math.min rate (.-danger-cap s)))))))))
+            (* dsec (js/Math.min rate (.-danger-cap s))))))))
+
+  ;; whether the cell x,y,z (a body standing there, 2 high) overlaps a danger flagged `block` (a seen mob: a body cannot walk through
+  ;; it, so a cell it fills is no way, the toll above only prices passing near)
+  (dangerBlocks [s x y z]
+    (let [^js a (.-dangers s)]
+      (loop [i 0]
+        (and (< i (.-n-dangers s))
+             (let [o (* i 7)]
+               (or (and (== 1 (aget a (+ o 6)))
+                        (== x (js/Math.floor (aget a o)))
+                        (== z (js/Math.floor (aget a (+ o 2))))
+                        (<= (js/Math.abs (- y (js/Math.floor (aget a (+ o 1))))) 1))
+                   (recur (inc i)))))))))

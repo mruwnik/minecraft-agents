@@ -270,6 +270,8 @@
         (do (set! (.-lethal-seen s) true) nil)
         ;; an infinite toll is a cell no plan enters, the goal cell too
         (and (some? (.-tolls s)) (== ##Inf (.tollOf s x y z))) nil
+        ;; a seen mob fills its cell: no plan walks through it
+        (and (pos? (.-n-dangers s)) ^boolean (.dangerBlocks s x y z)) nil
         :else
         (let [drisk (if (pos? (.-n-dangers s)) (+ drisk (.dangerRisk s x y z dsec)) drisk)
               extra (if ^boolean (.-avoiding s) (.avoidCost s x y z move dsec drisk) 0)

@@ -72,3 +72,14 @@
     (is (= "found" (:status r)))
     (is (not (js/isNaN (get-in r [:path :cost :seconds]))))
     (is (not (js/isNaN (get-in r [:path :cost :risk]))))))
+
+(defn blocking [] (assoc (danger 4) :block true))
+
+(deftest a-seen-mob-fills-its-cell-and-the-planner-steps-round-it
+  (let [r (pf/run open-world goal {:dangers [(blocking)]} from)]
+    (is (= "found" (:status r)))
+    (is (not-any? #{[19 64 20] [19 63 20] [19 65 20]} (pf/cells r)))))
+
+(deftest a-seen-mob-in-the-only-gap-blocks-the-way
+  (let [r (pf/run gap-world goal {:dangers [(assoc (blocking) :x 20.5)]} from)]
+    (is (not= "found" (:status r)))))
