@@ -2,7 +2,7 @@
 ;; treat go-to's :done give-up as :again and walk about nine times). NoAI villager, fixed UUID as in village-feed.edn, a farmer with
 ;; one offer (1 emerald for 6 bread). Should-succeed: a reachable villager sells. Should-fail: a villager in a glass box ends
 ;; stopped "unreachable" and no second walk follows.
-;; One-off (not here): jobs.movement.follow of a player sealed in a box ends stopped :unreachable after one go-to give-up, and a
+;; One-off (not here): jobs.movement.stay-near of a player sealed in a box ends stopped :unreachable after one go-to give-up, and a
 ;; player walking away still ends out-of-range after 3 legs; both need a player.
 {:defaults
  {:tags [:village :trade :jobs]

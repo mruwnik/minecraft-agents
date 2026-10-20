@@ -1,5 +1,5 @@
 (ns engine.movement-contract-test
-  "movement.go-to, follow, linger-near, mount, leave-vehicle and boat-drive as contract jobs: they export the contract,
+  "movement.go-to, stay-near, mount, leave-vehicle and boat-drive as contract jobs: they export the contract,
   quote validly, and end with a kind and a cause."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
@@ -12,13 +12,12 @@
             [engine.test-util :as tu]
             [jobs.lib.world-files :as world]
             [jobs.movement.boat-drive :as boat-drive]
-            [jobs.movement.follow :as follow]
             [jobs.movement.go-to :as go-to]))
 
 (defn job [sym] (get registry/jobs sym))
 
 (deftest each-job-exports-the-contract-and-quotes-validly
-  (doseq [[sym args] [['jobs.movement.follow {:player "Steve"}]
+  (doseq [[sym args] [['jobs.movement.stay-near {:player "Steve"}]
                       ['jobs.movement.mount {:id 9}]
                       ['jobs.movement.leave-vehicle {}]
                       ['jobs.movement.boat-drive {:pos [10 63 2]}]
@@ -52,8 +51,7 @@
     (is (= 60 (settings/with-settings {:jobs.movement.go-to/job-time-s 60} #(get-in (resolve) [:spend :job-time]))))))
 
 (deftest targets-and-moves-to
-  (is (= [:player] (:target (job 'jobs.movement.follow))))
-  (is (= [:pos] (:target (job 'jobs.movement.linger-near))))
+  (is (= [:pos :player] (:target (job 'jobs.movement.stay-near))))
   (is (= [:pos] (:target (job 'jobs.movement.boat-drive))))
   (is (= [:pos] (:target (job 'jobs.movement.boat-launch))))
   (is (= [:id] (:target (job 'jobs.movement.boat-recover))))
@@ -86,20 +84,20 @@
 (def steve {:id 5 :name "Steve" :kind "player" :pos {:x 1 :y 64 :z 0}})
 (def boat {:id 9 :name "oak_boat" :uuid "u-9" :kind "other" :pos {:x 1.5 :y 64 :z 0.5}})
 
-(deftest follow-is-done-at-its-time-once-the-player-was-seen-and-waits-when-absent
+(deftest stay-near-a-player-is-done-at-its-time-once-the-player-was-seen-and-waits-when-absent
   (async done
     (tu/run-async done
       (fn ^:async t []
         (is (= {:event :completed}
-               (select-keys (await (ending-of {:entities [steve]} '(jobs.movement.follow {:player "Steve" :spend {:job-time 2}}))) [:event])))
-        (is (nil? (:event (await (ending-of {} '(jobs.movement.follow {:player "Steve"}))))))))))
+               (select-keys (await (ending-of {:entities [steve]} '(jobs.movement.stay-near {:player "Steve" :spend {:job-time 2}}))) [:event])))
+        (is (nil? (:event (await (ending-of {} '(jobs.movement.stay-near {:player "Steve"}))))))))))
 
-(deftest linger-near-waits-its-time-then-is-done
+(deftest stay-near-a-cell-waits-its-time-then-is-done
   (async done
     (tu/run-async done
       (fn ^:async t []
         (is (= {:event :completed}
-               (select-keys (await (ending-of {} '(jobs.movement.linger-near {:pos {:x 0 :y 64 :z 0} :wait-s 1}))) [:event])))))))
+               (select-keys (await (ending-of {} '(jobs.movement.stay-near {:pos {:x 0 :y 64 :z 0} :for-s 1}))) [:event])))))))
 
 (deftest mount-is-done-or-a-failed-condition
   (async done

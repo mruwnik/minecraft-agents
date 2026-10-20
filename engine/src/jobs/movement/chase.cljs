@@ -12,8 +12,8 @@
   "Walk one leg toward a thing that moves: a go-to child of at most :leg-s seconds aimed at where the thing is now. The
   thing is the entity :entity (an id) or the player :player, seen within the radius setting (64); out of sight, the last
   :pos given. A caller that wants more legs calls again, so it can look at its target, fight or check danger between legs.
-  :walk is the go-to call (its args and call keys, such as :ways :doors :see :checks :settings :floor) minus :pos, :range
-  and :spend, which are this job's.
+  The :walk map is the go-to call (its args and call keys, such as :ways :doors :see :checks :settings :floor, and a
+  :spend; :tries is 1 unless it says otherwise: a leg is re-aimed by the caller, not retried); :pos, :range and :spend :job-time are this job's.
   Ends:
   - :done {:arrived true} when the body is within :range of the thing (at once when it already is).
   - limit-reached {:reason :leg :line :job-time} with {:arrived false :leg true :nearer bool} when the leg's seconds ran out
@@ -28,7 +28,7 @@
    :player {:doc "name of the player to walk to; their position now replaces :pos" :spec a/name? :default nil}
    :range {:doc "how close counts as there, in blocks" :spec (a/num-in 0 nil) :default 1}
    :leg-s {:doc "seconds one leg of the walk may take" :spec (a/num-in 0.1 120) :default nil}
-   :walk {:doc "the go-to call to walk with: its args and call keys, but not :pos, :range or :spend" :spec map? :default {}}
+   :walk {:doc "the go-to call to walk with: its args and call keys, but not :pos, :range or :spend :job-time" :spec map? :default {}}
    :ignore-zones? :shared})
 
 (a/defargs settings
@@ -90,7 +90,7 @@
   (let [{:keys [range leg-s walk]} (:args c)
         aim (aim-of c)
         before (u/dist (u/self-pos c) aim)
-        e (await (child/call-walk* c :walk (assoc walk :pos aim :range range :spend {:job-time leg-s :tries 1})))]
+        e (await (child/call-walk* c :walk (-> walk (assoc :pos aim :range range) (update :spend #(merge {:tries 1} % {:job-time leg-s})))))]
     (cond
       (= :continue e) :continue
       (:arrived (:data e)) (ctx/end c :done nil {:arrived true})

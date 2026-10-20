@@ -249,7 +249,7 @@
                           (seq walk-settings) (assoc :settings walk-settings)
                           ways (assoc :ways ways))
                    e (await (if leg-s
-                              (child/call-chase* c :walk {:pos cell :range range :leg-s leg-s :walk (dissoc walk :pos :range :spend)})
+                              (child/call-chase* c :walk {:pos cell :range range :leg-s leg-s :walk (dissoc walk :pos :range)})
                               (child/call-walk* c :walk walk)))]
                (if (= :continue e)
                  :partial

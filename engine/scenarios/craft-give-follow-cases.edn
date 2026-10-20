@@ -35,12 +35,12 @@
 ;; ;; batch-craft live: follow ProbeMove as rcon moves it across the pad, then out of sight (lost after walking to where it was last seen)
 ;; {:register []
 ;;  :queue [(seq (jobs.time.noop {:seconds 4.5 :why :idle})
-;;                     (jobs.movement.follow {:player "ProbeMove" :range 3}))]}
+;;                     (jobs.movement.stay-near {:player "ProbeMove" :range 3}))]}
 ;; -- case from live-ProbeAttack-21
 ;; ;; batch-craft live: follow ProbeMove standing on top of a pillar the body cannot climb (three blocked walks end it unreachable)
 ;; {:register []
 ;;  :queue [(seq (jobs.time.noop {:seconds 4.5 :why :idle})
-;;                     (jobs.movement.follow {:player "ProbeMove" :range 2}))]}
+;;                     (jobs.movement.stay-near {:player "ProbeMove" :range 2}))]}
 ;; -- case from live-ProbeAttack-22
 ;; ;; batch-craft live: give 5 bread to ProbeMove 10 blocks off (taken), then everything carried of a second item
 ;; {:register []

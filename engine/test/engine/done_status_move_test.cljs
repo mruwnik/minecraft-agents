@@ -12,9 +12,9 @@
     :view (fn [] {:now 0 :data {:entries {:job/j1 [{:t 0 :data mem}]}}})}))
 
 (def cases
-  [['jobs.movement.follow {:player "Steve"} :later {}]
-   ['jobs.movement.linger-near {:pos [0 64 0] :range 100 :wait-s 5} :later {:waited 4500}]
-   ['jobs.movement.linger-near {:pos [0 64 0] :range 100 :wait-s 5} :ok {:waited 5000}]
+  [['jobs.movement.stay-near {:player "Steve"} :later {}]
+   ['jobs.movement.stay-near {:pos [0 64 0] :range 100 :for-s 5} :later {:waited 4500}]
+   ['jobs.movement.stay-near {:pos [0 64 0] :range 100 :for-s 5} :ok {:waited 5000}]
    ['jobs.movement.mount {:id 9} :later {}]
    ['jobs.movement.leave-vehicle {} :ok {}]
    ['jobs.movement.boat-drive {:pos [10 63 2] :range 2} :later {}]

@@ -1,5 +1,5 @@
 (ns engine.chase-test
-  "jobs.movement.chase against the fake world: one go-to leg aimed at where the thing is now."
+  "jobs.movement.chase and run-away against the fake world: one go-to leg aimed at where the thing is now."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
             [engine.core :as core]
@@ -15,15 +15,16 @@
 (defn cow [x] {:id 7 :name "cow" :kind "mob" :pos {:x x :y 64 :z 0}})
 
 (defn ^:async run-chase
-  "Chase over a fake world with a go-to stand-in that records its args in calls and ends as (ending c) says; the chase's
+  "A job (chase unless given) over a fake world with a go-to stand-in that records its args in calls and ends as (ending c p) says; the job's
   ending."
-  [world args calls ending]
+  ([world args calls ending] (run-chase world job args calls ending))
+  ([world job args calls ending]
   (let [clock (atom 1000000)
         [_ sink] (tu/legacy-capture-sink)
         p (tu/fake-on-floor world)
         out (atom :not-done)
         stub (assoc (get registry/jobs 'jobs.movement.go-to)
-                    :round (fn ^:async stub-round [c] (swap! calls conj (assoc (:args c) :job-time (get-in (ctx/frozen-call c) [:spend :job-time]))) (ending c p)))
+                    :round (fn ^:async stub-round [c] (swap! calls conj (merge (:args c) (select-keys (ctx/frozen-call c) [:ways :floor :settings]) {:job-time (get-in (ctx/frozen-call c) [:spend :job-time])})) (ending c p)))
         eng (core/create {:primitives p :jobs (merge registry/jobs {'jobs.movement.go-to stub 'recording-parent (tu/recording-parent job args out identity)})
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -33,7 +34,7 @@
         (swap! clock + 500)
         (await (core/tick! eng))
         (recur (inc i))))
-    @out))
+    @out)))
 
 (def leg-over #(ctx/end % :limit-reached {:reason :unreachable :why :search-spent :line :job-time} {:arrived false}))
 
@@ -97,3 +98,15 @@
     {:player "Steve" :leg-s 3} [:ok :args]
     {:pos [1 64 1]} [:never :bad-args]
     {:leg-s 3} [:never :bad-args]))
+
+(deftest run-away-is-a-chase-leg-with-the-flee-presets
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom [])
+              r (await (run-chase {} 'jobs.movement.run-away {:pos {:x 12 :y 64 :z 0} :leg-s 3 :y-margin 9} calls
+                                  (fn [c _] (leg-over c))))]
+          (is (= [{:pos {:x 12 :y 64 :z 0} :ways #{:walk :clear-seal} :floor {:health 1} :job-time 3
+                   :settings {:jobs.movement.go-to.tuning/look-round false :jobs.lib.walk.world/y-margin 9}}]
+                 (map #(select-keys % [:pos :ways :floor :job-time :settings]) @calls)))
+          (is (= {:arrived false :leg true :nearer false} (:data r))))))))

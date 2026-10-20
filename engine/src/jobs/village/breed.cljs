@@ -15,7 +15,7 @@
   "Grow the villagers in sight to :target (adults and babies count). One call is the whole attempt. Each
   attempt takes the two nearest adults not yet tried in this call (else the nearest two again, not fed again while the food they took is unspent), feeds each enough to be willing (jobs.village.feed
   child, fetched unless :fetch is off: 3 bread, else 12 of carrot, potato or beetroot), then stays near them for
-  the ::wait-s setting (jobs.movement.linger-near child) and counts again. A rise in the baby villagers in sight is a birth
+  the ::wait-s setting (jobs.movement.stay-near child) and counts again. A rise in the baby villagers in sight is a birth
   (an adult walking into view is not).
   Needs adult villagers in sight and beds the villagers can claim (the body cannot see which are free): it only counts
   what it sees, so a villager out of sight is not counted. Zones are the walks' (go-to tolls), never claimed here.
@@ -190,7 +190,7 @@
   "Stay near the fed pair; when the wait ends (however it ends) count the births. :again or :continue."
   [c seen]
   (let [m (ctx/mem c)
-        r (await (ctx/call c :wait 'jobs.movement.linger-near {:pos (:at m) :range (wait-range) :wait-s (wait-s)}))]
+        r (await (ctx/call c :wait 'jobs.movement.stay-near {:pos (:at m) :range (wait-range) :for-s (wait-s)}))]
     (if (= :continue r)
       :continue
       (let [born (born c seen)]

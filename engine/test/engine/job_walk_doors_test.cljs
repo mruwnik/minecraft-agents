@@ -57,7 +57,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (leaves-through-the-door! {:entities [steve]} '(jobs.movement.follow {:player "Steve"})))))))
+        (await (leaves-through-the-door! {:entities [steve]} '(jobs.movement.stay-near {:player "Steve"})))))))
 
 (deftest go-to-from-inside-a-hut
   (async done

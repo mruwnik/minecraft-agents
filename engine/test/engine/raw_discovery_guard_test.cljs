@@ -10,7 +10,8 @@
 (def legit
   {"items/use.cljs" [1 "re-finds the one entity the call already named by id"]
    "items/give.cljs" [1 "finds the player the order names"]
-   "movement/follow.cljs" [1 "finds the player the order names"]
+   "movement/stay_near.cljs" [1 "finds the player the order names"]
+   "movement/chase.cljs" [1 "finds the entity or player the order names"]
    "movement/leave_vehicle.cljs" [1 "re-finds the body's own vehicle by id"]
    "movement/boat_drive.cljs" [1 "re-finds the body's own boat by id"]
    "lib/threats.cljs" [1 "only compares ids against hostiles perception already listed"]})

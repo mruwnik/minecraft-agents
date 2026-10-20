@@ -1,15 +1,15 @@
-;; Card e3fe6235 (bbd900c77): follow has no own clocks; a player never seen is a can-start?/can-run? wait (:later :gone) bounded by the call's :wall-time.
+;; Card e3fe6235 (bbd900c77): stay-near has no own clocks; a player never seen is a can-start?/can-run? wait (:later :gone) bounded by the call's :wall-time.
 ;; A fixture has no way to spawn or move a player (rcon tp needs a player online), so the in-sight cases (the body keeps in range of a
 ;; walking player; a player out of sight is walked to where last seen and waited for) are hand-run with a real player.
 ;; Should-succeed: following a player nobody sees leaves the body where it is, fails nothing, and the call ends limit_reached at its wall time.
 {:defaults
- {:tags [:movement :follow :jobs]
+ {:tags [:movement :stay-near :jobs]
   :plot {:height 6}
   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 60}
  :cases
  [{:name "player-nobody-sees-is-waited-for-until-the-wall-time"
-   :act [[:job (jobs.movement.follow {:player "NoSuchPlayerHere" :spend {:wall-time 8}})]]
+   :act [[:job (jobs.movement.stay-near {:player "NoSuchPlayerHere" :spend {:wall-time 8}})]]
    :expect [{:event {:source :job :kind :limit_reached} :within-s 40 :of-job true}
             {:no-event {:source :job :kind #{:failed :completed}} :for-s 30 :until {:source :job :kind :limit_reached} :of-job true}]
    :after [[:body-near [16.5 0 16.5] 2]]}]}

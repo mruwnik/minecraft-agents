@@ -213,19 +213,14 @@
 (defn lost-memory-ms [] (settings/get settings ::lost-memory-ms))
 
 (defn ^:async leg-step!
-  "One flee step to target as a go-to child of legs of at most leg-s seconds (a flee never digs or pillars: :ways #{:walk :clear-seal}, and plans no route deeper or higher than y-margin (16) blocks past body and target;
-  known dangers stay costed): true when the body arrived or got on a leg nearer, false when go-to gave up, waited or was declined (mem :leg-timed-out: it ran out of the leg's seconds unhurt)."
+  "One flee step to target as a jobs.movement.run-away child of at most leg-s seconds (y-margin (16) blocks past body and target bound its route): true when the body arrived or got on a leg nearer, false when go-to gave up, waited or was declined (mem :leg-timed-out: it ran out of the leg's seconds unhurt)."
   ([c slot target range leg-s] (await (leg-step! c slot target range leg-s (retreat-goal/leg-margin))))
   ([c slot target range leg-s y-margin]
   (let [from (u/self-pos c)
         t0 (ctx/now c)
         health0 (.-health (.self (:primitives c)))
-        r (await (ctx/call c slot 'jobs.movement.chase
-                           {:pos target :range range :leg-s leg-s
-                            :walk {:ways #{:walk :clear-seal}
-                                   :settings (cond-> {:jobs.movement.go-to.tuning/look-round false}
-                                               y-margin (assoc :jobs.lib.walk.world/y-margin y-margin))
-                                   :floor {:health 1}}}))
+        r (await (ctx/call c slot 'jobs.movement.run-away
+                           (cond-> {:pos target :range range :leg-s leg-s} y-margin (assoc :y-margin y-margin))))
         res (when (contract/ending? r) (:data r))
         _ (when (= :goal-not-standable (result/why r)) (ctx/update-mem! c update :refused (fnil conj #{}) (mapv target [:x :y :z])))
         s (/ (- (ctx/now c) t0) 1000)
