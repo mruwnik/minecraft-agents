@@ -4,8 +4,8 @@
 ;; stock withdrawn from the chest first (seq).
 ;; Should-fail (a :stopped job event with its reason, nothing smelted): no fuel, no furnace at the position, nothing
 ;; smeltable carried, an item this kind of furnace does not cook.
-;; Default time budget scales with the count (600 s plus 10 s an item): a full stack of 64 takes 640 s of furnace time and
-;; still ends done; the same stack under an explicit :spend {:job-time 5} ends limit-reached :job-time and the furnace output stays.
+;; A full stack under an explicit :spend {:job-time 5} ends limit-reached :job-time and the furnace output stays (the default
+;; budget scaling with the count is pinned by smelt-test).
 {:defaults
  {:tags [:items :smelt :jobs]
   :time :any
@@ -62,15 +62,6 @@
    :act [[:job (jobs.items.smelt {:furnace #xyz [20 0 14] :item "raw_iron" :count 3})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :not-smeltable}} :within-s 30 :of-job true}]
    :after [[:item "iron_ingot" 0] [:item "raw_iron" 3]]}
-  {:name "full-stack-default-budget-ends-done"
-   :tags [:slow]
-   :blocks [[:set [20 0 14] "furnace[facing=west]"]]
-   :body {:inventory [["raw_iron" 64] ["coal" 8]]}
-   :act [[:job (jobs.items.smelt {:furnace #xyz [20 0 14] :item "raw_iron" :count 64})]]
-   :expect [{:event {:source :job :kind :completed :data {:smelted 64}} :within-s 780 :of-job true}
-            {:no-event {:source :job :kind :limit_reached} :for-s 780 :until {:source :job :kind :completed}}]
-   :limit-s 800
-   :after [[:item "iron_ingot" 64]]}
   {:name "full-stack-under-a-short-explicit-budget-is-limit-reached"
    :blocks [[:set [20 0 14] "furnace[facing=west]"]]
    :body {:inventory [["raw_iron" 64] ["coal" 8]]}

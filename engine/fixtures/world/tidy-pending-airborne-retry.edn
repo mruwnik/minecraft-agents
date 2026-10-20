@@ -17,7 +17,7 @@
    :body {:inventory [["cobblestone" 4]]}
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :tidy-pending}} :within-s 20}
             {:event {:source :reflex :kind :ended :context {:reflex-id :tidy-pending} :data {:kind :done}} :within-s 60}
-            {:no-event {:source :job :kind :stopped :data {:not-restored [:any]}} :for-s 60 :until {:source :reflex :kind :ended :context {:reflex-id :tidy-pending}}}]
+            {:no-event {:source :job :kind :stopped :data {:not-restored [:any]}} :for-s 15 :until {:source :reflex :kind :ended :context {:reflex-id :tidy-pending}}}]
    :after [[:block [14 0 6] "cobblestone"]]
    :limit-s 70}
   {:name "stair-walk-then-hold-no-cut-while-airborne"

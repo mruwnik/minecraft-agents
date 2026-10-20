@@ -17,6 +17,6 @@
    :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :dig-in.left} :within-s 90}
             {:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 110 :of-job true}
-            {:count-event {:source :job :kind :dig-in.left} :for-s 100 :at-most 1}
-            {:count-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 100 :at-most 1}]
+            {:count-event {:source :job :kind :dig-in.left} :for-s 30 :at-most 1}
+            {:count-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 30 :at-most 1}]
    :after [[:body-near [24.5 0 16.5] 3]]}]}

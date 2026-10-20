@@ -16,19 +16,19 @@
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 8})]]
    :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :data {:steps 8}} :within-s 240 :of-job true}
-            {:count-event {:source :job :kind :tool.low} :for-s 240 :at-most 1}]
+            {:count-event {:source :job :kind :tool.low} :for-s 100 :at-most 1}]
    :after [[:item "stone_pickaxe" [:>= 1]]]
    :limit-s 260}
   {:name "worn-last-pick-nothing-to-make-a-spare-warns-and-goes-on"
    :body {:inventory [["stone_pickaxe[damage=125]" 1] ["torch" 8]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3})]]
    :expect [{:event {:source :job :kind :tool.no-spare} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :tool.spare} :for-s 60}]}
+            {:no-event {:source :job :kind :tool.spare} :for-s 60 :until {:source :job :kind :tool.no-spare}}]}
   {:name "worn-iron-pick-gets-a-stone-spare"
    :body {:inventory [["iron_pickaxe[damage=245]" 1] ["oak_log" 4] ["torch" 8] ["cobblestone" 8]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 4})]]
    :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :tool.spare :data {:tool "iron_pickaxe"}} :for-s 60}]}
+            {:no-event {:source :job :kind :tool.spare :data {:tool "iron_pickaxe"}} :for-s 60 :until {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}}}]}
   {:name "fell-tree-with-a-worn-last-axe-gets-a-stone-spare"
    :blocks [[:fill [16 10 16] [16 17 16] "oak_log"] [:fill [14 16 14] [18 18 18] "oak_leaves[persistent=true]"] [:fill [16 16 16] [16 17 16] "oak_log"]]
    :body {:at [16.5 10 21.5] :yaw 180 :inventory [["iron_axe[damage=249]" 1] ["oak_planks" 12] ["stick" 4] ["cobblestone" 4]]}

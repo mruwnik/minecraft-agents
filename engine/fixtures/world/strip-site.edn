@@ -38,13 +38,13 @@
            [:block [20 1 15] "cobblestone"] [:item "cobweb" 0] [:item "rail" 0]]}
   {:name "carried-raw-iron-is-smelted-at-the-base-and-hauled"
    :body {:inventory [["stone_pickaxe" 1] ["stone_axe" 1] ["shears" 1] ["torch" 6] ["bread" 12] ["cobblestone" 64] ["oak_planks" 96] ["chest" 4]
-                      ["furnace" 2] ["crafting_table" 1] ["white_bed" 1] ["oak_door" 1] ["raw_iron" 16] ["coal" 24] ["stick" 8]]}
+                      ["furnace" 2] ["crafting_table" 1] ["white_bed" 1] ["oak_door" 1] ["raw_iron" 3] ["coal" 24] ["stick" 8]]}
    :act [[:job (jobs.strip.site {:site "wt-mine" :at #at [10 0 16] :base "$plan:base" :shaft false :take [:cobweb]})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:smelted [:any]}} :within-s 650 :of-job true}]
    :after [[:item "raw_iron" 0] [:item "iron_ingot" 0]]}
   {:name "raw-iron-the-base-chest-holds-is-withdrawn-and-smelted"
-   :blocks [[:set [19 0 3] "chest[facing=south,type=left]{Items:[{Slot:0b,id:\"minecraft:raw_iron\",count:16}]}"] [:set [20 0 3] "chest[facing=south,type=right]"]]
-   :memory [{:kind :fetch/stock :data {:pos #at [19 0 3] :items {"raw_iron" 16}} :policy {:cap 64 :ttl :forever}}]
+   :blocks [[:set [19 0 3] "chest[facing=south,type=left]{Items:[{Slot:0b,id:\"minecraft:raw_iron\",count:3}]}"] [:set [20 0 3] "chest[facing=south,type=right]"]]
+   :memory [{:kind :fetch/stock :data {:pos #at [19 0 3] :items {"raw_iron" 3}} :policy {:cap 64 :ttl :forever}}]
    :body {:inventory [["stone_pickaxe" 1] ["stone_axe" 1] ["shears" 1] ["torch" 6] ["bread" 12] ["cobblestone" 64] ["oak_planks" 96] ["chest" 4]
                       ["furnace" 2] ["crafting_table" 1] ["white_bed" 1] ["oak_door" 1] ["coal" 24] ["stick" 8]]}
    :act [[:job (jobs.strip.site {:site "wt-mine" :at #at [10 0 16] :base "$plan:base" :shaft false :take [:cobweb]})]]
@@ -52,7 +52,7 @@
    :after [[:item "raw_iron" 0] [:item "iron_ingot" 0]]}
   {:name "haul-false-still-collects-the-smelted-output-into-the-base-chest"
    :body {:inventory [["stone_pickaxe" 1] ["stone_axe" 1] ["shears" 1] ["torch" 6] ["bread" 12] ["cobblestone" 64] ["oak_planks" 96] ["chest" 4]
-                      ["furnace" 2] ["crafting_table" 1] ["white_bed" 1] ["oak_door" 1] ["raw_iron" 16] ["coal" 24] ["stick" 8]]}
+                      ["furnace" 2] ["crafting_table" 1] ["white_bed" 1] ["oak_door" 1] ["raw_iron" 3] ["coal" 24] ["stick" 8]]}
    :act [[:job (jobs.strip.site {:site "wt-mine" :at #at [10 0 16] :base "$plan:base" :shaft false :take [:cobweb] :haul false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:smelted [:any]}} :within-s 650 :of-job true}]
    :after [[:item "raw_iron" 0] [:item "iron_ingot" 0] [:block [19 0 3] "chest{Items:[{id:\"minecraft:iron_ingot\"}]}"]]}

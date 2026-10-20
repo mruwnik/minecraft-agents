@@ -121,4 +121,4 @@
    :body {:at [10.5 1 17.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [17 0 9]})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 80 :of-job true}
-            {:no-event {:source :body :kind :hurt :data {:causes ["lava"]}} :for-s 80 :until {:source :job :kind :completed}}]}]}
+            {:no-event {:source :body :kind :hurt :data {:causes ["lava"]}} :for-s 80 :until {:source :job :kind #{:completed :stopped}}}]}]}

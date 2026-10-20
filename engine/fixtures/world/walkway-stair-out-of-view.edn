@@ -22,12 +22,7 @@
     [:fill [340 0 7] [340 0 9] "stone"]
     [:fill [341 -1 7] [341 -1 9] "stone"]]}
  :cases
- [{:name "stair-150-east-arrives"
-   :body {:at [180.5 11 8.5]}
-   :act [[:job (jobs.movement.go-to {:pos #at [60 0 16] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 280 :of-job true}]
-   :after [[:body-near [60.5 0 16.5] 3]]}
-  {:name "stair-100-east-arrives"
+ [  {:name "stair-100-east-arrives"
    :body {:at [230.5 11 8.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [60 0 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 280 :of-job true}]

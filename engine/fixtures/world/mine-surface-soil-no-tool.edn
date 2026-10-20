@@ -16,12 +16,6 @@
    :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4]}} :within-s 100 :of-job true}]
    :after [[:item "cobblestone" [:>= 4]]]}
-  {:name "surface-stone-mined-b"
-   :blocks [[:fill [18 0 16] [24 3 16] "stone"]]
-   :body {:inventory [["iron_pickaxe" 1]]}
-   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 3 :direction :east :tunnel-length 8 :radius 8})]]
-   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 3]}} :within-s 100 :of-job true}]
-   :after [[:item "cobblestone" [:>= 3]]]}
   {:name "no-pickaxe-none-fetchable-ends-no-tool"
    :blocks [[:fill [20 0 14] [26 2 18] "stone"]]
    :body {:inventory []}

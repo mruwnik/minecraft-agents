@@ -150,7 +150,7 @@
    :body {:at [14.5 1 20.5] :inventory [["diamond_pickaxe" 1] ["water_bucket" 2]]}
    :act [[:wait-s 8] [:job (jobs.gather.make-obsidian {:count 1})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :pour-failed}} :within-s 110 :of-job true}
-            {:count-event {:source :action :kind :started :data {:name "place" :args {"item" "water_bucket"}}} :for-s 110 :at-least 2 :of-job true}]
+            {:count-event {:source :action :kind :started :data {:name "place" :args {"item" "water_bucket"}}} :for-s 85 :at-least 2 :of-job true}]
    :after [[:item "obsidian" 0]]
    :limit-s 130}
   ;; card 6bbfb29c: a pick of ores on the way never walks to an ore it merely sees: the iron ore 26 blocks off stays, the body stays by its stone

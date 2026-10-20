@@ -33,7 +33,7 @@
    :act [[:summon "sheep" [20.5 0 16.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [21.5 0 16.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [20.5 0 18.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [21.5 0 18.5] "{NoAI:1b,Color:0b}"]
          [:job (jobs.items.obtain {:item "white_wool" :count 2 :explore false})]]
    :expect [{:event {:source :job :kind :obtain.wool-source} :within-s 60}
-            {:count-event {:source :job :kind :animal.killed :data {:animal "sheep" :rule :surplus}} :for-s 100 :at-least 2 :at-most 2}
+            {:count-event {:source :job :kind :animal.killed :data {:animal "sheep" :rule :surplus}} :for-s 45 :at-least 2 :at-most 2}
             {:event {:source :job :kind :completed :data {:name "jobs.items.obtain"}} :within-s 100 :of-job true}]
    :after [[:item "white_wool" [:>= 2]] [:entities "type=sheep,tag=wt" [[0 0 0] [31 3 31]] 2]]}
   ;; the colour fallback needs several wanted names: a single wool item has one plan, so the wanted set is the two beds

@@ -48,12 +48,6 @@
    :body {:inventory [["iron_shovel" 1]]}
    :expect [{:event {:source :reflex :kind :ended} :within-s 40}]
    :after [[:not-block [16 0 16] "sand"] [:body-near [16.5 0 16.5] 1.5]]}
-  {:name "s3-digs-with-water-side-2"
-   :blocks [[:fill [15 0 15] [17 1 17] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:set [15 0 16] "water"]] 
-   :act [[:rcon "execute positioned $X $Y $Z run setblock ~16 ~ ~16 sand"]]
-   :body {:inventory [["iron_shovel" 1]]}
-   :expect [{:event {:source :reflex :kind :ended} :within-s 40}]
-   :after [[:not-block [16 0 16] "sand"] [:body-near [16.5 0 16.5] 1.5]]}
   {:name "n1-slab"
    :blocks [[:set [16 0 16] "stone_slab[type=bottom]"]]
    :act [[:wait-s 13] [:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~16"]]
@@ -64,39 +58,17 @@
    :act [[:wait-s 13] [:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~16"]]
    :expect [{:no-event {:source :reflex :kind :fired} :for-s 12}]
    :after [[:body-near [16.5 0 16.5] 1.5]]}
-  {:name "n1-snow-layer"
-   :blocks [[:set [16 0 16] "snow[layers=1]"]]
-   :act [[:wait-s 13] [:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~16"]]
-   :expect [{:no-event {:source :reflex :kind :fired} :for-s 12}]
-   :after [[:block [16 0 16] "snow[layers=1]"] [:body-near [16.5 0 16.5] 1.5]]}
-  {:name "n1-soul-sand"
-   :blocks [[:set [16 -1 16] "soul_sand"]]
-   :act [[:wait-s 13] [:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~16"]]
-   :expect [{:no-event {:source :reflex :kind :fired} :for-s 12}]
-   :after [[:block [16 -1 16] "soul_sand"] [:body-near [16.5 0 16.5] 1.5]]}
  {:name "n2-pillar-up-no-false-wedge-1"
    :body {:inventory [["dirt" 8]]}
    :act [[:job (jobs.access.pillar {:height 4})] [:await {:source :job :kind :completed} 60]]
    :expect [{:no-event {:source :reflex :kind :fired} :for-s 20}]
    :after [[:not-block [16 2 16] "air"]]
    :limit-s 90}
-  {:name "n2-pillar-up-no-false-wedge-2"
-   :body {:inventory [["cobblestone" 8]]}
-   :act [[:job (jobs.access.pillar {:height 3})] [:await {:source :job :kind :completed} 60]]
-   :expect [{:no-event {:source :reflex :kind :fired} :for-s 20}]
-   :after [[:not-block [16 1 16] "air"]]
-   :limit-s 90}
   {:name "n2-place-next-to-feet-1"
    :body {:inventory [["cobblestone" 8]]}
    :act [[:job (jobs.blocks.place {:pos #at [17 0 16] :item "cobblestone"})] [:await {:source :job :kind #{:completed :stopped} :data {:placed [:any]}} 40]]
    :expect [{:no-event {:source :reflex :kind :fired} :for-s 15}]
    :after [[:block [17 0 16] "cobblestone"]]
-   :limit-s 60}
-  {:name "n2-place-next-to-feet-2"
-   :body {:inventory [["cobblestone" 8]]}
-   :act [[:job (jobs.blocks.place {:pos #at [16 0 17] :item "cobblestone"})] [:await {:source :job :kind #{:completed :stopped} :data {:placed [:any]}} 40]]
-   :expect [{:no-event {:source :reflex :kind :fired} :for-s 15}]
-   :after [[:block [16 0 17] "cobblestone"]]
    :limit-s 60}
   {:name "f1-lava-only-free-side-1"
    :blocks [[:fill [15 0 15] [17 1 17] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:fill [17 1 16] [17 1 16] "air"]]

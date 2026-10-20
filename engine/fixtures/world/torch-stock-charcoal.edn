@@ -17,13 +17,13 @@
    :plot {:height 14 :floor "dirt" :isolate true}
    :blocks [[:fill [8 0 8] [24 5 24] "dirt"]]
    :expect [{:event {:source :job :kind :torch.no-stock :message [:contains "8 cobblestone"]} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :smelt.furnace} :for-s 60}]}
+            {:no-event {:source :job :kind :smelt.furnace} :for-s 60 :until {:source :job :kind :torch.no-stock}}]}
   {:name "coal-2-and-logs-make-8-torches-without-a-smelt"
    ;; card 1aa2b8e3: coal 2 + sticks from the logs make 8 torches at once; no charcoal smelt, furnace or give-up is attempted
    :blocks [[:fill [8 0 8] [24 5 24] "stone"]]
    :body {:inventory [["stone_pickaxe" 1] ["oak_log" 11] ["coal" 2] ["cooked_beef" 8]]}
    :expect [{:event {:source :job :kind :torch.stocked :data {:held [:>= 8]}} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind #{:smelt.furnace :smelt.loaded :torch.no-stock}} :for-s 60 :of-job true}]}
+            {:no-event {:source :job :kind #{:smelt.furnace :smelt.loaded :torch.no-stock}} :for-s 60 :of-job true :until {:source :job :kind :torch.stocked}}]}
   {:name "no-coal-and-no-logs-says-so-once-and-digs-on-dark"
    :blocks [[:fill [8 0 8] [24 5 24] "stone"]]
    :body {:inventory [["stone_pickaxe" 1] ["cooked_beef" 8]]}

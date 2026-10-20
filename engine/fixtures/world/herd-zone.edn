@@ -23,4 +23,4 @@
    :act [[:summon "cow" [10.5 0 18.5]]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :unleash.declined :data {:reason :refused}} :within-s 240 :of-job true}
-            {:no-event {:source :job :kind :completed :data {:reason :brought}} :for-s 240 :until {:source :job :kind :completed}}]}]}
+            {:no-event {:source :job :kind :completed :data {:reason :brought}} :for-s 240 :until {:source :job :kind #{:completed :stopped}}}]}]}

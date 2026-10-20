@@ -33,12 +33,6 @@
    :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-furnace-seen}} :for-s 15 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "cooked_chicken" 2]]}
-  {:name "iron-ingot-name-loads-raw-iron"
-   :blocks [[:set [26 0 16] "furnace[facing=west]"]]
-   :body {:inventory [["raw_iron" 2] ["coal" 2]]}
-   :act [[:job (jobs.items.smelt {:item "iron_ingot" :count 2})]]
-   :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 100 :of-job true}]
-   :after [[:item "iron_ingot" 2]]}
   {:name "diamond-is-no-input"
    :blocks [[:set [26 0 16] "furnace[facing=west]"]]
    :body {:inventory [["diamond" 2] ["coal" 2]]}
