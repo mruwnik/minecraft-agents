@@ -31,7 +31,7 @@
   what is carried. A death only keeps the job listed when it was submitted with :survive-death?.
   Needs (condition): :items, else impossible :bad-args. Ends done with {:have [..] :made [..]}. Every other ending has
   :have, :made, the next :item, a :why and a :text:
-  - the obtain child's kind and cause (:no-source, a walk cause such as :zone-exit or :not-home, :time ..; :item is then the one it stopped at);
+  - the obtain child's kind and cause (:no-source, a walk cause such as :zone-exit, :time ..; :item is then the one it stopped at);
   - nothing-possible {:reason :wear-failed}.
   Quote: a guess per missing item. done? is ok when every item is carried or worn.")
 

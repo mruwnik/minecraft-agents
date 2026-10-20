@@ -51,7 +51,7 @@
   (ctx/update-mem! c assoc :finished true)
   (let [cause (merge {:reason reason} (select-keys data [:tool :why]))]
     (cond
-      (and (not= :not-home reason) (>= got (wanted c))) (ctx/end c :done nil data)
+      (>= got (wanted c)) (ctx/end c :done nil data)
       (facts reason) (ctx/end c :condition-failed cause data)
       :else (ctx/end c :nothing-possible cause data))))
 

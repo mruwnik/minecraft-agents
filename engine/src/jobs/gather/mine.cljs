@@ -8,9 +8,8 @@
             [jobs.gather.mine.descent :refer [descent-wanted? shaft-top-here?]]
             [jobs.gather.shaft-descent :refer [pick-shaft]]
             [jobs.gather.mine.end :as end :refer [end-run wanted]]
-            [jobs.gather.mine.home :as home]
             [jobs.gather.mine.mend :as mend]
-            [jobs.gather.mine.targets :refer [owed carried got had zone-margin within-keep-clear scan]]
+            [jobs.gather.mine.targets :refer [owed carried got had zone-margin within-keep-clear scan items main-block]]
                         [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.child :as child]
@@ -32,15 +31,15 @@
   zone it stands near, walks back to the start cell, and calls jobs.gather.dig-for with the same args until it ends. Flooded
   at the start, or a pickaxe or torches that cannot be had, end it before the dig. A dig that stops for a pickaxe or torches (:no-tool,
   :no-torches) gets them again and goes on from where it stood (at most ::max-equip-rounds rounds); any other ending is passed on.
-  Then, with :mend, it fills the ground under the start that the dig opened (mine.mend), and always walks back to the start cell (a go-to
-  child with every way but a pillar first); the walk is the cleanup for a run cut by the limit or a cancel. Not arriving ends :not-home
-  (a cut run's walk warns mine.not-home); a mend with nothing to fill with or a fill that fails or mends nothing warn mine.mend-short / mine.mend-failed.
+  Then, with :mend, it fills the ground under the start that the dig opened (mine.mend; a mend with nothing to fill with or six failed
+  fills warns mine.mend-short / mine.mend-failed, and never changes the ending). The body stays where the dig ends: walking home is the
+  caller's, or the :stuck-underground trigger's.
 
   Needs and impossible: those of jobs.gather.dig-for; its can-start? checks stand here too. The run's own area is :center / :radius.
 
-  Ends :done when :got meets :count (or the call's :least) and the body is home; else the dig's ending (condition-failed for the facts
+  Ends :done when :got meets :count (or the call's :least); else the dig's ending (condition-failed for the facts
   :none :wet :refused :own-zone :no-shaft :flooded :no-tool :no-torches, nothing-possible for
-  failed tries) or :not-home. Data {:got n :reason r :mended n} plus the dig's data; text says reason, :got, :mended, the stair and the
+  failed tries). Data {:got n :reason r :mended n} plus the dig's data; text says reason, :got, :mended, the stair and the
   tunnel. Quote: about ::item-s s an item, open-ended.")
 
 (a/defargs args
@@ -58,7 +57,6 @@
    :tunnel-length :shared
    :stay-level :shared
    :branches {:doc "with :stay-level: cut a side branch to each side of the tunnel every few blocks (mine-stay ::branch-every, ::branch-length), more rock in view per block walked" :spec boolean? :default false}
-   :variants :shared
    :level :shared
    :shaft :shared
    :descend-limit :shared
@@ -71,7 +69,7 @@
    ::item-s {:default 6 :doc "Mean seconds one item takes (walk, dig, collect), for the quote." :spec (a/num-in 0 nil)}
    ::max-equip-rounds {:default 3 :doc "Times the trip gets a pickaxe or torches again for a dig that stopped without them before it ends with the dig's ending." :spec (a/int-in 0 nil)}})
 
-(def target [:block :heading :center])
+(def target [:item :block :heading :center])
 
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
@@ -84,16 +82,16 @@
 (def can-start? dig/can-start?)
 
 (defn done?
-  "Progress in items: got against :count carried. :ok at once when :count is carried before the trip began, else once it has finished
-  (:finished in memory) with the wanted items carried and the body home; else :later, the round ends the run."
+  "Progress in items: got against :count carried (as the dig left it: a mend that spends some does not change it). :ok at once when :count is carried before the trip began, else once it has finished
+  (:finished in memory) with the wanted items carried; else :later, the round ends the run."
   [c]
   (let [n (:count (:args c))
         m (ctx/mem c)
-        got (if (:goal m) (got c) 0)
+        got (if (:goal m) (or (:dug-got m) (got c)) 0)
         extra {:units :items :done got :left (max 0 (- (owed c) got)) :result {:got got}}]
-    (if (or (and (:finished m) (not= :not-home (:reason m)) (>= got (wanted c)))
+    (if (or (and (:finished m) (>= got (wanted c)))
             (and (not (:goal m)) (>= (carried c) n)))
-      (apply contract/ok :mined (str "mine: " got " of " n ", home") (mapcat identity extra))
+      (apply contract/ok :mined (str "mine: " got " of " n) (mapcat identity extra))
       (apply contract/later :mining (str "mine: " got " of " n ", the round ends the run") (mapcat identity extra)))))
 
 (defn quote-of
@@ -102,7 +100,7 @@
   (let [{:keys [count] :as a} (:args c)
         mean (* count (settings/get settings ::item-s))]
     {:uses {:job-time [(min count mean) mean ##Inf]}
-     :yields {:items {(blocks/item-name a) [0 count count]}}
+     :yields {:items {(first (items a)) [0 count count]}}
      :done [0 count count]}))
 
 ;; ------------------------------------------------------------------ equip
@@ -157,7 +155,7 @@
   "A pickaxe is owed: jobs.items.get-tool for the block through jobs.lib.need (:fetch's :how and :explore apply), once per equip. :continue
   while it runs, else nil; a failed fetch is kept as the dig's :why (mem :tool-why)."
   [c]
-  (let [{:keys [block]} (:args c)
+  (let [block (main-block (:args c))
         o (need/opts c 'jobs.gather.mine)
         o (when (and o (contains? (:what o) :tool)) o)]
     (when (and o (not (tools/can-harvest? (:primitives c) block)) (not (:tool-why (ctx/mem c))))
@@ -179,7 +177,7 @@
   [c]
   (or (await (trip/ready! c))
       (await (fetch-pickaxe! c))
-      (await (trip/tool-ready! c (:block (:args c)) (digs-left c)))
+      (await (trip/tool-ready! c (main-block (:args c)) (digs-left c)))
       (await (when (and (:torches (:args c)) (nil? (:tunnel (ctx/mem c))) (or (pos? (:tunnel-length (:args c))) (descent-wanted? c)))
                (stock/torches! c)))))
 
@@ -193,10 +191,10 @@
 
 ;; ------------------------------------------------------------------ the end
 
-(defn to-home!
-  "The dig is over with reason (cause: fields of a stop before a dig, else nil): the mend next with :mend, else the walk home."
+(defn to-end!
+  "The dig is over with reason (cause: fields of a stop before a dig, else nil): the mend next with :mend, else the end."
   [c reason cause]
-  (ctx/update-mem! c assoc :phase (if (:mend (:args c)) :mend :home) :reason reason :end-cause cause :at-mend (carried c))
+  (ctx/update-mem! c assoc :phase (if (:mend (:args c)) :mend :end) :reason reason :end-cause cause :dug-got (got c))
   :again)
 
 (defn dig-text
@@ -204,48 +202,26 @@
   [text]
   (str "mine" (str/replace-first text #"^dig-for" "")))
 
-(defn spent-on-mend?
-  "Whether the mend ate into what the dig brought, leaving fewer than the goal carried."
-  [c]
-  (let [{:keys [at-mend]} (ctx/mem c)
-        now (carried c)]
-    (and (:mend (:args c)) at-mend (< now (:count (:args c))) (< now at-mend) (> at-mend (had c)))))
-
 (defn finish!
-  "End the trip: the dig's ending in memory, whether the body arrived home, the mend's count."
-  [c arrived?]
-  (let [{:keys [dig-end dig-ending tool-ending end-cause reason mended start tool-why]} (ctx/mem c)
+  "End the trip: the dig's ending in memory and the mend's count."
+  [c]
+  (let [{:keys [dig-end dig-ending tool-ending end-cause reason mended tool-why dug-got]} (ctx/mem c)
         dug (let [d (merge dig-end end-cause)]
               (if (seq (:left d))
                 (let [left (end/still-lying c (:left d))]
                   (if (seq left) (assoc d :left left) (dissoc d :left)))
                 d))
-        n (got c)
+        n (or dug-got (got c))
         mended (or mended 0)
-        spent? (and arrived? (spent-on-mend? c))
-        end-reason (cond (not arrived?) :not-home spent? :spent-on-mend :else reason)
-        tunnel (:tunnel dug)
-        data (cond-> (merge (dissoc dug :text) {:got n :reason end-reason :mended mended})
-               (or spent? (not arrived?)) (assoc :dig-reason reason)
-               tunnel (assoc :tunnel (assoc tunnel :walked-back? (boolean arrived?) :back-at (access/cell (cell-of (u/self-pos c)))))
+        data (cond-> (merge (dissoc dug :text) {:got n :reason reason :mended mended})
                (and tool-why (= :no-tool reason)) (assoc :why tool-why))
-        home (str/join "," (access/cell start))
-        text (str (dig-text (or (:text dug) (str "dig-for got " n " of " (owed c) ": " (name end-reason))))
-                  (when (pos? mended) (str "; mended " mended))
-                  (when tunnel (if arrived? (str ", walked back to " home) ", did not get back to its origin"))
-                  (when-not arrived? (str "; did not get back to " home)))
+        text (str (dig-text (or (:text dug) (str "dig-for got " n " of " (owed c) ": " (name reason))))
+                  (when (pos? mended) (str "; mended " mended)))
         because (if (and tool-ending (= :no-tool reason)) tool-ending dig-ending)
         e (end-run c (assoc data :text text))]
     (if (and because (not= :done (:kind e)) (not= :done (:kind because)))
       (contract/with-because e because)
       e)))
-
-(defn not-home!
-  "A walk home that did not arrive: warn mine.not-home."
-  [c]
-  (ctx/emit! c :mine.not-home :warn {:to (access/cell (:start (ctx/mem c))) :at (access/cell (cell-of (u/self-pos c)))
-                                     :goal (let [g (:home-goal (ctx/mem c))] (cond-> g (:cell g) (update :cell access/cell)))
-                                     :text (str "mine did not get back to " (str/join "," (access/cell (:start (ctx/mem c)))))}))
 
 ;; ------------------------------------------------------------------ the steps
 
@@ -265,7 +241,6 @@
         known (into #{} (map :pos) (:ground m))]
     (-> m
         (assoc :dig-end d)
-        (cond-> (:start-floor-dug d) (dissoc :start-floor))
         (update :ground (fnil into []) (remove #(known (:pos %))) (:ground d))
         (update-in [:descent :steps] #(max (or % 0) (get-in d [:descent :steps] 0)))
         (cond-> (get-in d [:tunnel :heading]) (assoc :dug-heading (get-in d [:tunnel :heading]))))))
@@ -281,7 +256,7 @@
 
 (defn ^:async dig-step!
   "One round of the dig-for child; its ending is kept. A stop for a pickaxe or torches that the trip may get again goes back to the
-  equip, to dig on from where the dig stopped; any other ending goes to the mend or the walk home."
+  equip, to dig on from where the dig stopped; any other ending goes to the mend or the end."
   [c]
   (let [e (await (ctx/call c :dig 'jobs.gather.dig-for (dig-args c)))]
     (if (= :continue e)
@@ -294,7 +269,7 @@
                                       (assoc :phase nil :resume-at (cell-of (u/self-pos c)) :wanted reason)
                                       (dissoc :equipped? :torches-tried :tool-why :tool-ending)))
               :again)
-          (to-home! c reason nil))))))
+          (to-end! c reason nil))))))
 
 (defn ^:async equip-step!
   "The phase before each dig: equip once, end on a stop the equip did not cure, walk back to where the dig goes on from, out of an own
@@ -308,54 +283,37 @@
     (cond
       (= :continue e) :continue
       (not (:equipped? m)) (do (ctx/update-mem! c #(cond-> (assoc % :equipped? true) (pos? (torch/torches-held (:primitives c))) (assoc :stocked? true))) :again)
-      stop (to-home! c (:reason stop) (select-keys stop [:tool :why :text]))
+      stop (to-end! c (:reason stop) (select-keys stop [:tool :why :text]))
       (not at-resume?) (await (back-to-resume! c))
       (and own (not (shaft-top-here? c))) (await (leave-zone! c own))
       :else (do (ctx/update-mem! c #(cond-> (assoc % :zoned? true :phase :dig) (not (:goal %)) (assoc :goal (:count (:args c)) :had (carried c))))
                 :again))))
 
 (defn ^:async mend-step!
-  "The mend of the ground the dig opened, then the walk home."
+  "The mend of the ground the dig opened, then the end."
   [c]
   (let [r (await (mend/mend-round! c))]
     (if (nil? r)
-      (do (ctx/update-mem! c assoc :phase :home) :again)
+      (finish! c)
       r)))
-
-(defn ^:async home-step!
-  "The walk back to the start cell; the trip ends when it is over."
-  [c]
-  (let [r (await (home/home-round! c))]
-    (if (= :continue r)
-      :continue
-      (finish! c r))))
 
 (defn ^:async step [c]
   (case (:phase (ctx/mem c))
     :dig (await (dig-step! c))
     :mend (await (mend-step! c))
-    :home (await (home-step! c))
+    :end (finish! c)
     (await (equip-step! c))))
 
 (defn ^:async round
   [c]
   (when-not (:start (ctx/mem c))
     (let [start (cell-of (u/self-pos c))]
-      (ctx/update-mem! c assoc :start start :resume-at start
-                       :start-floor (u/feel-name (:primitives c) {:x (:x start) :y (dec (:y start)) :z (:z start)}))))
+      (ctx/update-mem! c assoc :start start :resume-at start)))
   (await (pace/steps! c #(step c))))
 
 (defn ^:async cleanup
-  "A trip that ended by itself has walked home already. Cut by the limit, a cancel or a parent's end after the dig began: the walk back
-  to the start cell, a step per round, done when it ends (arrived or not; not-home warns)."
+  "A run cut by the limit, a cancel or a parent's end stays where it is."
   [c _]
-  (let [m (ctx/mem c)]
-    (if (or (:finished m) (not (:goal m)))
-      (ctx/end c :done nil {})
-      (let [r (await (home/home-round! c))]
-        (if (= :continue r)
-          :continue
-          (do (when-not r (not-home! c))
-              (ctx/end c :done nil {:walked-back? (boolean r)})))))))
+  (ctx/end c :done nil {}))
 
 (def meta {:tags [:mine :dig :ore :light] :position-bound? true})

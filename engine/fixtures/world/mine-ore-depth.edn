@@ -14,7 +14,6 @@
    :blocks [[:set [28 -10 17] "iron_ore"] [:set [29 -10 15] "deepslate_iron_ore"]]
    :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :count 2 :direction :east :level #at [16 -10 16] :tunnel-length 4 :radius 8 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 2 :reason :count}} :within-s 280 :of-job true}
-            {:no-event {:source :job :kind :mine.not-home} :for-s 280 :until {:source :job :kind #{:completed :stopped}}}
             {:no-event {:source :job :kind :mine.descent-stopped} :for-s 280 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "raw_iron" 2] [:not-block [28 -10 17] "iron_ore"] [:not-block [29 -10 15] "deepslate_iron_ore"]]}
   {:name "stair-stopped-far-above-the-level-ends-descent-stopped"

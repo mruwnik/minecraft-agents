@@ -1,0 +1,29 @@
+;; jobs.gather.mine's dig of the block under the feet and its start floor (cards 2ea6f686, 757f252d, bfc5416e, 73dfa0f1).
+;; A dirt block is the floor of the start cell, lava below it (sand would fall into the lava at setup). The block under the feet is dug from beside (never standing over
+;; the lava), the hole is mended with the carried cobblestone, the body stays beside it. With nothing to mend with
+;; the hole may stay open; the body never ends in it. A dirt patch under the body is mined to the count.
+;; Plot floor stone (y -1); the start cell is [16 0 16].
+{:defaults
+ {:tags [:mine :jobs] :time :any
+  :plot {:height 12}
+  :blocks [[:fill [14 -3 14] [18 -2 18] "stone"] [:set [16 -1 16] "dirt"] [:set [16 -2 16] "lava"]]
+  :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 16]] :effects [["resistance" 600 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "dirt-under-the-feet-dug-from-beside-and-mended"
+   :act [[:job (jobs.gather.mine {:torches false :block "dirt" :level false :count 1 :direction :east :tunnel-length 0 :radius 3 :mend true})]]
+   ;; the dirt drops into the hole over open lava and burns in a fraction of the cases (the job tells mine.drop-lost), so the count is not asserted
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}]
+   :after [[:item "dirt" [:>= 0]] [:not-block [16 -1 16] "air"] [:block [16 -2 16] "cobblestone"]]}
+  {:name "nothing-to-mend-with-the-body-stays-out-of-the-hole"
+   ;; sandstone gives no cobblestone, so the hole may stay open or be mended with the dug dirt; the body must not end in the hole
+   :blocks [[:fill [0 -8 0] [31 -1 31] "sandstone"] [:set [16 -1 16] "dirt"] [:set [16 -2 16] "lava"]]
+   :act [[:job (jobs.gather.mine {:torches false :block "dirt" :level false :count 1 :direction :east :tunnel-length 0 :radius 3 :mend true})]]
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}]
+   :after [[:item "dirt" [:>= 0]] [:body-far [16.5 -1.5 16.5] 0.8]]}
+  {:name "dirt-patch-under-the-body-mined-to-the-count"
+   :blocks [[:fill [15 -1 15] [17 -1 17] "dirt"] [:set [16 -2 16] "stone"]]
+   :act [[:job (jobs.gather.mine {:torches false :block "dirt" :level false :count 5 :direction :east :tunnel-length 0 :radius 3})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 5}} :within-s 100 :of-job true}]
+   :after [[:item "dirt" [:>= 5]]]}]}

@@ -1,6 +1,7 @@
 (ns jobs.gather.mine.cause
   "Why the dig of jobs.gather.dig-for, or a stretch of its strip tunnel, cannot go on."
-  (:require [jobs.lib.breath :as breath]
+  (:require [jobs.gather.mine.targets :refer [main-block]]
+            [jobs.lib.breath :as breath]
             [jobs.lib.tools :as tools]
             [jobs.lib.trip :as trip]))
 
@@ -10,7 +11,7 @@
   jobs.gather.mine gets it."
   [c]
   (let [p (:primitives c)
-        block (:block (:args c))
+        block (main-block (:args c))
         kind (tools/needed-kind p block)]
     (cond
       (breath/head-under? p) {:reason :flooded :text "dig-for stopped: the head is in water"}

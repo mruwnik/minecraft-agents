@@ -35,18 +35,33 @@
   (let [plain (some-> block (str/replace #"^deepslate_" ""))]
     (if (contains? blocks/ores plain) plain block)))
 
+(defn items
+  "The items the call mines for: :item (one or several), else what :block drops."
+  [{:keys [item block]}]
+  (cond (sequential? item) (vec item)
+        item [item]
+        block [(blocks/item-name {:block block})]
+        :else []))
+
 (defn kinds
-  "The block names that count as the mined block: an ore's stone and deepslate kinds with :variants, else :block alone."
-  [{:keys [block variants]}]
-  (let [base (base-ore block)]
-    (if (and variants (contains? blocks/ores base)) #{base (str "deepslate_" base)} #{block})))
+  "The block names that count as mined: :block (an ore with its deepslate kind) when given, else every block that drops one of the items."
+  [{:keys [block] :as args}]
+  (if block
+    (let [base (base-ore block)]
+      (if (contains? blocks/ores base) #{base (str "deepslate_" base)} #{block}))
+    (into #{} (mapcat blocks/blocks-dropping) (items args))))
+
+(defn main-block
+  "The block the call stands for where one is needed (the tool, the level, the soil rule): :block, else the first kind by name."
+  [args]
+  (or (:block args) (first (sort (kinds args)))))
 
 (def not-solid (into bs/air #{"water" "lava" "short_grass" "tall_grass"}))
 
 (defn carried
   "Total of the item carried over all stacks."
   [c]
-  (u/carried-count (:primitives c) (blocks/item-name (:args c))))
+  (transduce (map #(u/carried-count (:primitives c) %)) + 0 (items (:args c))))
 
 (defn had
   "The count carried when the run began (now, before it began)."
@@ -108,12 +123,12 @@
   "Whether a soil dig at pos would go deeper than the ground the run started on: that makes a pit the body is left in."
   [c pos]
   (let [{:keys [start]} (ctx/mem c)]
-    (boolean (and start (contains? soil-blocks (:block (:args c))) (< (:y pos) (dec (:y start)))))))
+    (boolean (and start (contains? soil-blocks (main-block (:args c))) (< (:y pos) (dec (:y start)))))))
 
 (defn floor-hole?
   "Whether digging pos would open a hole below the body's feet whose drop is lost: not for soil or ores, which are dug where they lie."
   [c pos]
-  (let [block (:block (:args c))]
+  (let [block (main-block (:args c))]
     (and (< (:y pos) (js/Math.floor (:y (u/self-pos c))))
          (not (contains? soil-blocks block))
          (not (contains? blocks/ores (base-ore block))))))
@@ -221,9 +236,9 @@
   {[x y z] count}."
   ([c] (left-behind c (drop-radius c)))
   ([c radius]
-  (let [item (blocks/item-name (:args c))]
+  (let [wanted (set (items (:args c)))]
     (into {}
-          (comp (filter #(= item (some-> (.-item %) .-name)))
+          (comp (filter #(contains? wanted (some-> (.-item %) .-name)))
                 (map (fn [e] [(access/cell (cell-of (u/pos-of (.-pos e)))) (or (some-> (.-item e) .-count) 1)])))
           (look/seen-items (:primitives c) {:radius radius :max 32})))))
 

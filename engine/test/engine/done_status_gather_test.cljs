@@ -251,9 +251,9 @@
     (swap! (fake/state (:primitives c)) fake/spawn [1 64 1] "apple" 1)
     (is (= [:later :collecting] (tu/kind-reason ((:done? (get registry/jobs 'jobs.items.collect-drops)) c))))))
 
-(deftest mine-is-done-once-finished-with-the-count-carried-and-home
+(deftest mine-is-done-once-finished-with-the-count-carried
   (are [count m reason] (= reason (tu/kind-reason (done-of 'jobs.gather.mine {:inventory [{:name "cobblestone" :count 5}]} {:block "stone" :count count} m)))
     5 {:goal 5 :had 3 :finished true} [:ok :mined]
     5 {:goal 5 :had 3} [:later :mining]
     8 {:goal 8 :had 3 :finished true} [:later :mining]
-    5 {:goal 5 :had 3 :finished true :reason :not-home} [:later :mining]))
+    5 {:goal 5 :had 3 :dug-got 1 :finished true} [:later :mining]))

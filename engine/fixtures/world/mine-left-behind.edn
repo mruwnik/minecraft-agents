@@ -1,7 +1,7 @@
 ;; jobs.gather.mine and a drop it cannot get (card 79be43a4; the left-behind case not ported in card 8aa80fca). README: drops
 ;; still lying 0.4 s after the collect are reported once (info mine.left-behind) and listed in :left; then the body
-;; walks back to the start cell (otherwise warn mine.not-home, job :stopped :not-home). It must never end stranded: the checks are
-;; mine.left-behind, the job ending, no mine.not-home, the body at the start cell. Case 1: the ore hangs over a 1-deep pit
+;; stays where the dig ends. The checks are
+;; mine.left-behind and the job ending. Case 1: the ore hangs over a 1-deep pit
 ;; (reachable drop: collected, nothing left). Case 2 (collect-drops :dig cuts to the drop, card dd4e8bf6): the ore stands across a 1-wide 5-deep trench in the line, is dug from
 ;; the cut's end (3 away) and its drop lies in plain view on the far ledge, out of reach: the ledge cell has stone above it
 ;; (no standing there, so the 1-wide gap cannot be jumped for it) and the ore is a cell back from the trench edge, so
@@ -20,17 +20,17 @@
    :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :mine.left-behind} :for-s 120 :until {:source :job :kind #{:completed :stopped} :data {:got 1}}}]
-   :after [[:item "raw_iron" 1] [:body-near [16.5 0 16.5] 1.5]]
+   :after [[:item "raw_iron" 1]]
    :limit-s 140}
-  {:name "drop-across-a-trench-is-dug-to-and-body-goes-home"
+  {:name "drop-across-a-trench-is-dug-to"
    ;; the ore stands across a 1-wide, 5-deep trench and a 1-high ledge cell in the line: seen from the start, dug from
    ;; the cut's end (3 away), its drop lies on the ledge in plain view and cannot be walked to; collect-drops :dig (card
-   ;; dd4e8bf6) cuts to it and the body ends home with it, nothing left behind, never mine.not-home.
+   ;; dd4e8bf6) cuts to it nothing left behind.
    :blocks [[:fill [20 -4 16] [20 1 16] "air"] [:set [21 0 16] "air"] [:set [22 0 16] "iron_ore"]]
    :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 150 :of-job true}
-            {:no-event {:source :job :kind #{:mine.left-behind :mine.not-home}} :for-s 150 :until {:source :job :kind #{:completed :stopped}}}]
-   :after [[:item "raw_iron" 1] [:body-near [16.5 0 16.5] 1.5]]
+            {:no-event {:source :job :kind :mine.left-behind} :for-s 150 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:item "raw_iron" 1]]
    :limit-s 170}
   {:name "drop-in-a-3-deep-pit-is-dug-to"
    ;; the ore hangs over a 3x3 pit 3 deep (wide, so its drop is seen): too deep to walk down for, so the drop is dug to
@@ -40,5 +40,5 @@
    :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 150 :of-job true}
             {:no-event {:source :job :kind :mine.left-behind} :for-s 150 :until {:source :job :kind #{:completed :stopped}}}]
-   :after [[:item "raw_iron" 1] [:body-near [16.5 0 16.5] 1.5]]
+   :after [[:item "raw_iron" 1]]
    :limit-s 170}]}

@@ -6,7 +6,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.gather.mine.targets :refer [carried book-ground! drop-radius left-behind]]
+            [jobs.gather.mine.targets :refer [carried book-ground! drop-radius items left-behind]]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.waits :as waits]
             [jobs.lib.blocks :as blocks]
@@ -172,7 +172,7 @@
 (defn ^:async collect! [c]
   (await (look-for-drop! c))
   (let [r (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops
-                           (cond-> {:radius (drop-radius c) :items [(blocks/item-name (:args c))] :dig true}
+                           (cond-> {:radius (drop-radius c) :items (items (:args c)) :dig true}
                              (:dug-at (ctx/mem c)) (assoc :holes [(:dug-at (ctx/mem c))])))))
         why (into {} (map (fn [{:keys [pos reason]}] [[(:x pos) (:y pos) (:z pos)] reason])) (when (map? r) (:left (:data r))))
         w (when (not= :continue r) (await (walk-to-drop! c)))]

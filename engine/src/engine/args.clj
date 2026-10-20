@@ -4,8 +4,8 @@
 (def shared
   "Args many jobs declare alike (mine and dig-for share the dig ones; their specs use a/ and heading-name, which both have): an entry written :shared stands for the one here."
   {:ignore-zones? {:doc "act regardless of zones and claims; the rules of the game allow it" :spec 'boolean? :default false}
-   :block {:doc "name of the block to mine (required)" :spec 'a/name? :default nil}
-   :item {:doc "the item the block drops; nil: the drop-item table, else the block name" :spec 'a/item? :default nil}
+   :block {:doc "narrow the target to this block (an ore with its deepslate kind); nil: every block that drops the item" :spec 'a/name? :default nil}
+   :item {:doc "the item to carry, or several items (any of them counts toward :count); the blocks come from the drop table. Required unless :block is given, which then names the item by what it drops" :spec '(a/or-of a/item? (a/coll-of a/item?)) :default nil}
    :count {:doc "how many to carry at least (carried at the start count)" :spec '(a/int-in 0 nil) :default 8}
    :radius {:doc "seen blocks within this many blocks of the body count" :spec '(a/num-in 0 nil) :default 16}
    :center {:doc "the centre of the area the job works, a cell [x y z] or {:x :y :z}; nil: where the body stands when the job first runs (jobs.lib.area)" :spec 'a/position? :default nil}
@@ -14,7 +14,6 @@
    :direction {:doc "the strip tunnel's heading: north, south, east or west (n/s/e/w); nil: the way the body faces when the job starts" :spec '(a/pred "north, south, east or west (n/s/e/w), a string or keyword" #(and (or (string? %) (keyword? %)) (heading-name %))) :default nil}
    :tunnel-length {:doc "the most blocks the strip tunnel runs in this job, at the body's level; 0: no tunnel, seen blocks only" :spec '(a/int-in 0 nil) :default 32}
    :stay-level {:doc "caution for caves: dig only at the level the body starts at (the two-high tunnel, no stair down, no :level), mine only seen ore beside the body (or, by a short side cut out, ore up to the mine-stay ::ore-reach setting away), and seal a dug cell that opens into air beyond the tunnel with a carried block (tunnel ends :breach-sealed, or :breach-open when it cannot seal)" :spec 'boolean? :default false}
-   :variants {:doc "an ore's stone and deepslate kinds both count as the block (iron_ore and deepslate_iron_ore, either named); false: only :block" :spec 'boolean? :default true}
    :level {:doc "the feet height the strip tunnel runs at (a whole number, or a cell [x y z] / {:x :y :z} whose y it takes): with no target seen the body first stairs down to it (jobs.access.stair) when higher; nil: the ore's level (setting mine.descent/ore-levels), none for other blocks; false: where the body stands"
            :spec '(a/pred "a whole number, a cell [x y z] or {:x :y :z}, nil or false" #(or (nil? %) (false? %) (integer? %) (and (sequential? %) (= 3 (count %)) (integer? (second %))) (and (map? %) (integer? (:y %))))) :default nil}
    :shaft {:doc "a mineshaft plan id to descend by instead of digging a stair (jobs.lib.shafts); nil: the nearest usable one within reach, when a descent is due; false: none; :required: the nearest usable one, and no shaft usable ends :no-shaft before anything is dug" :spec '(a/pred "a shaft plan id, nil, false or :required" #(or (nil? %) (false? %) (= :required %) (string? %))) :default nil}

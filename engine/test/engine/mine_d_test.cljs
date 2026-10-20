@@ -24,14 +24,13 @@
             [jobs.gather.dig-for :as mine]
             [jobs.gather.mine.descent :as mine-descent]
             [jobs.gather.mine.end :as mine-end]
-            [jobs.gather.mine.home :as mine-home]
             [jobs.gather.mine.targets :as mine-targets]
             [jobs.gather.mine.torches :as mine-torches]
             [jobs.gather.mine.tunnel :as mine-tunnel]
             [jobs.gather.mine-stay :as stay]
             [jobs.access.stair :as stair]
             [plan.shape :as shape]
-            [engine.mine-support :refer [spec as-child floor-block sight-opts seeing start run-ticks scenario scenario-lit start-lit events-of done-events done-event finished? inv job-mem calls moved dig-count dug-cells block-at cells floor wide-floor sand-patch set-pos! bare-pickaxe pickaxe cobble stone-floor stone-hill ground-cell? dug-ground farm-zone pad-plan two-in-two-out zoned their-claim rock rock-world feet tunnel-ends open-line east start-x corridor bridge-run no-floor-end? deep-rock far-cave side-cave facing-west-run stay-run side-ore-run shutdown-at-cell! run-until! below-ore-run run-until shaft-plan shafted via-shaft ore-east drop-away! hide-drop-until-beside! walled-ore watched dark-ore-dug long-rock torch-world torch-xs torches8 side-room side-torch-cells branch-torches soil-over-stone soil-all-round descent-run stair-down-east classify-in walk-options spy-go-to home-go-tos home-zone no-shaft-args deep-ore home-walk-run]]))
+            [engine.mine-support :refer [spec as-child floor-block sight-opts seeing start run-ticks scenario scenario-lit start-lit events-of done-events done-event finished? inv job-mem calls moved dig-count dug-cells block-at cells floor wide-floor sand-patch set-pos! bare-pickaxe pickaxe cobble stone-floor stone-hill ground-cell? dug-ground farm-zone pad-plan two-in-two-out zoned their-claim rock rock-world feet tunnel-ends open-line east start-x corridor bridge-run no-floor-end? deep-rock far-cave side-cave facing-west-run stay-run side-ore-run shutdown-at-cell! run-until! below-ore-run run-until shaft-plan shafted via-shaft ore-east drop-away! hide-drop-until-beside! walled-ore watched dark-ore-dug long-rock torch-world torch-xs torches8 side-room side-torch-cells branch-torches soil-over-stone soil-all-round descent-run stair-down-east classify-in walk-options spy-go-to home-zone no-shaft-args deep-ore]]))
 
 (deftest a-strip-tunnel-looks-round-between-steps
   (async done
@@ -267,8 +266,6 @@
           (await (run-ticks s 200))
           (is (<= 2 (get (inv s) "cobblestone" 0)) "the ore is kept")
           (is (= :count (:reason (done-event s))))
-          (is (= [0 64 0] (feet s)) "the body is back on its start cell")
-          (is (empty? (events-of s :mine.not-home)))
           (let [names (mapv #(.-name %) (.-calls (.-world (:p s))))
                 soil-digs (filter #(< 59 (nth % 1)) (dug-cells s))]
             (is (seq soil-digs) "it dug soil")
@@ -334,18 +331,6 @@
           (is (<= 2 (get (inv s) "cobblestone" 0)))
           (is (= :count (:reason (done-event s)))))))))
 
-;; Rowan j119: mining stone from the pit at the foot of a short stair; the body must get home (escalation may dig out).
-(deftest mining-at-the-foot-of-its-stair-still-gets-the-body-home
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (start {:world {:blocks (soil-over-stone 63 61) :drops cobble :inventory pickaxe}})]
-          (core/submit! (:eng s) (spec {:block "stone" :count 20 :direction "east" :tunnel-length 0 :trip true}) {})
-          (await (run-ticks s 400))
-          (is (finished? s))
-          (is (empty? (events-of s :mine.not-home)) "the walk home arrives")
-          (is (= [0 64 0] (feet s)) "the body is back on its start cell"))))))
-
 ;; Rowan j119: mine dug the step-up cells and floors round its pit until the body stood on a one-cell column.
 (deftest mine-leaves-the-block-that-is-the-bodys-last-way-out
   (async done
@@ -389,22 +374,6 @@
           (let [own (ew/of-data {"pad" (cond-> (shape/with-author pad-plan "Fake") kind (assoc :kind kind))} {} [])
                 s (await (zoned (merge {:block "sand" :count 1 :tunnel-length 0} extra) {:blocks {"6,64,0" "sand"}} own 20))]
             (is (= n (count (dug-cells s))) (pr-str kind extra))))))))
-
-(deftest after-a-descent-the-walk-home-is-a-go-to-and-ends-home
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [s go-to]} (await (descent-run 300))]
-          (is (finished? s))
-          (is (= :count (:reason (done-event s))))
-          (is (seq go-to) "home by a go-to child")
-          (is (= [16] (distinct (map #(get-in % [:settings :jobs.lib.walk.world/y-margin]) (filter #(= 64 (:y (:pos %))) go-to)))) "the walk home plans no deep way round")
-          (is (= [0 64 0] (feet s)) "the body is back on its start cell")
-          (is (empty? (events-of s :mine.not-home))))))))
-
-(deftest the-walk-home-bounds-its-search-only-near-under-the-start
-  (is (= {:y-margin 16} (mine-home/home-margin 6)) "a start near above: no way round through deep caves")
-  (is (nil? (mine-home/home-margin 16)) "from far below go-to's own climb rules hold, which an explicit :y-margin switches off"))
 
 (deftest the-mend-leaves-the-stair-cells-below-the-start-level
   (async done

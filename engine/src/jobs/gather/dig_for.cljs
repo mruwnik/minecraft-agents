@@ -12,7 +12,7 @@
             [jobs.gather.mine.end :refer [stop! wanted]]
             [jobs.gather.mine.branch :as branch]
             [jobs.gather.mine.side :as wall]
-            [jobs.gather.mine.targets :as targets :refer [owed reach kinds carried rules-in scan snapshot way-floor last-exit? skip! skip-failed! skip-unreachable! stalled! drop-in-line? next-target!]]
+            [jobs.gather.mine.targets :as targets :refer [owed reach kinds items main-block carried rules-in scan snapshot way-floor last-exit? skip! skip-failed! skip-unreachable! stalled! drop-in-line? next-target!]]
             [jobs.gather.mine.torches :as torches]
             [jobs.gather.mine.tunnel :as tunnel]
             [jobs.lib.access :as access]
@@ -34,13 +34,13 @@
             [jobs.lib.world :as known]))
 
 (def doc
-  "Dig for the item of one block kind (:block) until :count of it are carried, from where the body stands, with what it carries: the
-  digging half of jobs.gather.mine, which equips first, calls this and walks back. An ore's stone and deepslate kinds both count
-  (:variants). The run's own area is :center / :radius (waits :outside-area while the body is farther; jobs.lib.area).
+  "Dig for an item (:item, or what :block drops; several items count together) until :count of it are carried, from where the body stands, with what it carries: the
+  digging half of jobs.gather.mine, which equips first, calls this and walks back. The blocks that drop it come from the drop table (an ore's
+  stone and deepslate kinds both); :block narrows them. The run's own area is :center / :radius (waits :outside-area while the body is farther; jobs.lib.area).
 
   Needs: a pickaxe carried when the block wants one (a shovel or axe block drops by hand), torches carried or craftable when a
   tunnel or stair is lit, health (fit? waits :low-health, at the start only), and a read zone list (:no-zones unless
-  :ignore-zones?). Impossible: :no-block. :stay-level declines :on-surface in the open. Fetches only seal blocks and torch ingredients (:fetch), never the tool or food, and walks nowhere
+  :ignore-zones?). Impossible: :no-target. :stay-level declines :on-surface in the open. Fetches only seal blocks and torch ingredients (:fetch), never the tool or food, and walks nowhere
   home: the body stays where the dig ends. Targets come only from perception (seenBlocks, never x-ray): a seen block within
   :radius with a seen air face, not beside seen lava (or water unless :wet), that the zone rules, claims and plans let it dig
   (:refused when all are barred).
@@ -83,7 +83,6 @@
    :tunnel-length :shared
    :stay-level :shared
    :branches {:doc "with :stay-level: cut a side branch to each side of the tunnel every few blocks (mine-stay ::branch-every, ::branch-length), more rock in view per block walked" :spec boolean? :default false}
-   :variants :shared
    :level :shared
    :shaft :shared
    :descend-limit :shared
@@ -97,7 +96,7 @@
    ::stay-margin {:default 8 :doc "Blocks over the higher or under the lower of body and ore that a :stay-level walk to ore may plan through (go-to :y-margin): a body a reflex took far off does not climb a hill to get back." :spec (a/num-in 0 nil)}
    ::item-s {:default 6 :doc "Mean seconds one item takes (walk, dig, collect), for the quote." :spec (a/num-in 0 nil)}})
 
-(def target [:block :heading :center])
+(def target [:item :block :heading :center])
 
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
@@ -110,22 +109,22 @@
 (defn no-zones
   "{:reason :no-zones} while no zone list has been read (unless :ignore-zones?)."
   [c]
-  (when (and (:block (:args c)) (nil? (known/zones c)) (not (:ignore-zones? (:args c))))
+  (when (and (seq (items (:args c))) (nil? (known/zones c)) (not (:ignore-zones? (:args c))))
     {:reason :no-zones}))
 
 (defn all-refused
   "{:reason :refused ..} when every seen target is refused by zones, claims or plans."
   [c]
-  (let [{:keys [targets refused]} (when (:block (:args c)) (scan c))]
+  (let [{:keys [targets refused]} (when (seq (items (:args c))) (scan c))]
     (when (and (empty? targets) (seq refused))
       (assoc (access/refusal-fields refused) :reason :refused))))
 
-(defn block-given
-  "Never :no-block without the :block to mine."
+(defn target-given
+  "Never :no-target without an :item (or a :block) to mine for."
   [c]
-  (if (:block (:args c))
-    (contract/ok :args "a block given")
-    (contract/never :no-block "no :block to mine")))
+  (if (seq (items (:args c)))
+    (contract/ok :args "a target given")
+    (contract/never :no-target "no :item to mine for")))
 
 (defn surface-cause
   "{:reason :on-surface :text ..} for a :stay-level run whose head cell has full sky light (head-light 15, as loaded): it stands in
@@ -145,7 +144,7 @@
 
 (def can-start?
   (cond/and area/inside
-            block-given
+            target-given
             (checks/refusing :underground "not in the open" on-surface)
             (checks/refusing :zones-read "zone list read" no-zones)
             (checks/refusing :target "a target no zone refuses" all-refused)))
@@ -169,7 +168,7 @@
   (let [{:keys [count] :as a} (:args c)
         mean (* count (settings/get settings ::item-s))]
     {:uses {:job-time [(min count mean) mean ##Inf]}
-     :yields {:items {(blocks/item-name a) [0 count count]}}
+     :yields {:items {(first (items a)) [0 count count]}}
      :done [0 count count]}))
 
 (defn refused!
@@ -202,7 +201,7 @@
     (if (not= :ok verdict)
       (do (refused! c pos v verdict) :again)
       (let [_ (ctx/update-mem! c #(cond-> (assoc % :digging pos)
-                                   (= (access/cell pos) (when-let [{:keys [x y z]} (:start %)] [x (dec y) z])) (-> (dissoc :start-floor) (assoc :start-floor-dug true))))
+                                   (= (access/cell pos) (when-let [{:keys [x y z]} (:start %)] [x (dec y) z])) (assoc :start-floor-dug true)))
             outcome (await (dig-cell! c pos))]
         (when-not (= :continue outcome) (ctx/update-mem! c dissoc :digging))
         (case outcome
@@ -326,7 +325,7 @@
             start (cell-of (u/self-pos c))
             heading (or (toward start heading) (heading-name direction))]
         (ctx/update-mem! c assoc
-                         :goal (:count (:args c)) :had now :start start :start-floor (u/feel-name (:primitives c) {:x (:x start) :y (dec (:y start)) :z (:z start)})
+                         :goal (:count (:args c)) :had now :start start
                          :failures 0 :dry 0 :last-carried now
                          :heading (or heading faced)
                          :ground (if (:track-ground (:args c)) (snapshot c start) [])

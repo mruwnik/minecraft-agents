@@ -13,9 +13,9 @@
    :act [[:job (jobs.blocks.clear-cells {})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :bad-args}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :waiting} :for-s 3 :until {:source :job :kind :stopped} :of-job true}]}
-  {:name "mine-no-block-is-impossible"
+  {:name "mine-no-target-is-impossible"
    :act [[:job (jobs.gather.mine {:torches false })]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :no-block}} :within-s 20 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-target}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :waiting} :for-s 3 :until {:source :job :kind :stopped} :of-job true}]}
   {:name "leave-vehicle-not-mounted-is-done-already"
    :act [[:job (jobs.movement.leave-vehicle {})]]

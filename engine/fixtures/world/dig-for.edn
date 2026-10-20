@@ -1,6 +1,6 @@
 ;; jobs.gather.dig-for (card fb51965f): the dig of jobs.gather.mine from where the body stands, with what it carries: no fetch, no mend,
 ;; no walk home. It ends at the ore (:completed), or :stopped with a text that says what is missing: no usable pickaxe (:no-tool, absent or
-;; nearly spent), no torch to hang (:no-torches). The last case is the trip, jobs.gather.mine, getting a pickaxe first and coming home.
+;; nearly spent), no torch to hang (:no-torches). The last case is the trip, jobs.gather.mine, getting a pickaxe first.
 ;; Open floor (plot stone floor y -1); body at [16.5 0 16.5]; ore in the open 8 blocks east (cases 1-3); a stone mass with the ore at the end of the line (case 4).
 {:defaults
  {:tags [:mine :jobs] :time :any
@@ -35,11 +35,20 @@
    :act [[:job (jobs.gather.dig-for {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 12 :radius 10})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 100 :of-job true}]
    :after [[:item "raw_iron" 1] [:not-block [18 0 16] "wall_torch"]]}
-  {:name "mine-trip-crafts-a-pickaxe-digs-and-comes-home"
+  {:name "dig-for-an-item-takes-any-block-that-drops-it"
+   :blocks [[:set [24 0 16] "deepslate_iron_ore"]]
+   :act [[:job (jobs.gather.dig-for {:torches false :item "raw_iron" :level false :count 1 :tunnel-length 0 :descend-limit 0 :radius 10})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1 :reason :count}} :within-s 100 :of-job true}]
+   :after [[:item "raw_iron" 1] [:not-block [24 0 16] "deepslate_iron_ore"]]}
+  {:name "dig-for-several-items-counts-any-of-them"
+   :blocks [[:set [24 0 16] "coal_ore"]]
+   :act [[:job (jobs.gather.dig-for {:torches false :item ["raw_iron" "coal"] :level false :count 1 :tunnel-length 0 :descend-limit 0 :radius 10})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1 :reason :count}} :within-s 100 :of-job true}]
+   :after [[:item "coal" 1] [:not-block [24 0 16] "coal_ore"]]}
+  {:name "mine-trip-crafts-a-pickaxe-and-digs"
    :blocks [[:fill [20 0 14] [26 2 18] "stone"]]
    :body {:inventory [["oak_planks" 4] ["stick" 2] ["crafting_table" 1]]}
    :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 1 :tunnel-length 0 :descend-limit 0 :radius 10})]]
-   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 1] :reason :count}} :within-s 110 :of-job true}
-            {:no-event {:source :job :kind :mine.not-home} :for-s 110 :until {:source :job :kind #{:completed :stopped}}}]
-   :after [[:item "cobblestone" [:>= 1]] [:body-near [16.5 0 16.5] 2]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 1] :reason :count}} :within-s 110 :of-job true}]
+   :after [[:item "cobblestone" [:>= 1]]]
    :limit-s 130}]}

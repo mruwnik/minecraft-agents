@@ -35,7 +35,7 @@
    :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:reason :count :got [:>= 4]}} :within-s 110 :of-job true}]
-   :after [[:item "cobblestone" [:>= 4]] [:item "stone_pickaxe" [:>= 1]] [:item "stone_pickaxe[minecraft:damage=0]" 0] [:item "stone_pickaxe[minecraft:damage=1]" 0] [:item "stone_pickaxe[minecraft:damage=2]" 0] [:item "stone_pickaxe[minecraft:damage=3]" 0] [:item "stone_pickaxe[minecraft:damage=6]" 0] [:item "stone_pickaxe[minecraft:damage=7]" 0] [:item "stone_pickaxe[minecraft:damage=8]" 0] [:body-near [16.5 0 16.5] 2]]}
+   :after [[:item "cobblestone" [:>= 4]] [:item "stone_pickaxe" [:>= 1]] [:item "stone_pickaxe[minecraft:damage=0]" 0] [:item "stone_pickaxe[minecraft:damage=1]" 0] [:item "stone_pickaxe[minecraft:damage=2]" 0] [:item "stone_pickaxe[minecraft:damage=3]" 0] [:item "stone_pickaxe[minecraft:damage=6]" 0] [:item "stone_pickaxe[minecraft:damage=7]" 0] [:item "stone_pickaxe[minecraft:damage=8]" 0]]}
   {:name "soil-deeper-than-limit-ends-no-stone-found"
    :plot {:floor "dirt"}
    :blocks [[:fill [0 -12 0] [31 -1 31] "dirt"] [:fill [0 -4 0] [31 6 0] "dirt"] [:fill [0 -4 31] [31 6 31] "dirt"] [:fill [0 -4 0] [0 6 31] "dirt"] [:fill [31 -4 0] [31 6 31] "dirt"]]
@@ -44,7 +44,7 @@
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0 :reason :no-stone-found}} :within-s 110 :of-job true}
             {:event {:source :job :kind :stopped :data {:status :stopped :text [:contains "dug down"]}} :within-s 110 :of-job true}
             {:event {:source :job :kind :stopped :data {:text [:contains "found no stone"]}} :within-s 110 :of-job true}]
-   :after [[:item "cobblestone" 0] [:item "stone_pickaxe[minecraft:damage=0]" [:>= 1]] [:body-near [16.5 0 16.5] 2]]}
+   :after [[:item "cobblestone" 0] [:item "stone_pickaxe[minecraft:damage=0]" [:>= 1]]]}
   ;; Card 22a724ee: obtain cobblestone with no stone in sight (soil 4 deep over stone) hands it to the mine child, which stairs down
   ;; (the cobblestone under the soil is dug), never a surface search (no obtain.exploring).
   {:name "obtain-cobblestone-unseen-stairs-down-no-surface-search"

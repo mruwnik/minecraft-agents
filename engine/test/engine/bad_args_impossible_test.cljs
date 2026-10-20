@@ -29,5 +29,5 @@
                                ['(jobs.farm.plant {}) :bad-args]
                                ['(jobs.farm.till {}) :bad-args]
                                ['(jobs.strip.seal {}) :bad-args]
-                               ['(jobs.gather.mine {}) :no-block]]]
+                               ['(jobs.gather.mine {}) :no-target]]]
           (is (= [:impossible reason] (await (ended spec))) (pr-str spec)))))))

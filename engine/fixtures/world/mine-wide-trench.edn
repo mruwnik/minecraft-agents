@@ -15,7 +15,7 @@
  [{:name "dark-ore-3-blocks-from-the-cut-end-is-seen-and-dug"
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 1]}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :mine.left-behind} :for-s 100 :until {:source :job :kind #{:completed :stopped}} :of-job true}]
-   :after [[:not-block [22 0 16] "iron_ore"] [:item "raw_iron" [:>= 1]] [:body-near [16.5 0 16.5] 1.5]]}
+   :after [[:not-block [22 0 16] "iron_ore"] [:item "raw_iron" [:>= 1]]]}
   {:name "dark-ore-7-blocks-from-the-cut-end-not-seen-tunnel-stops-at-trench"
    :blocks [[:set [22 0 16] "stone"] [:fill [20 -4 16] [25 1 16] "air"] [:set [26 0 16] "iron_ore"]]
    ;; no building block: with cobblestone the stair bridges the trench and the tunnel goes on across it
@@ -27,4 +27,4 @@
    :blocks [[:set [18 0 16] "torch"]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 1]}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :mine.left-behind} :for-s 100 :until {:source :job :kind #{:completed :stopped}} :of-job true}]
-   :after [[:not-block [22 0 16] "iron_ore"] [:body-near [16.5 0 16.5] 1.5]]}]}
+   :after [[:not-block [22 0 16] "iron_ore"]]}]}

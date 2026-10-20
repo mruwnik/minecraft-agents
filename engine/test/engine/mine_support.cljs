@@ -491,10 +491,6 @@
         spy (assoc real :round (fn [c] (swap! go-tos conj (:args c)) ((:round real) c)))]
     [(assoc s :eng (assoc (:eng s) :jobs (assoc (:jobs (:eng s)) 'jobs.movement.go-to spy))) go-tos]))
 
-(defn home-go-tos "The go-to calls that aim at the start cell or a cell next to it: the walk home."
-  [go-tos]
-  (filterv #(let [{:keys [x y z]} (:pos %)] (and (= 64 y) (<= (+ (abs (- x 0.5)) (abs (- z 0.5))) 1))) go-tos))
-
 ;; ------------------------------------------------------------------ an own zone is left before the first dig
 (def home-zone {:name "home" :min [-3 60 -3] :max [3 70 3] :owner "Fake"})
 
@@ -502,21 +498,3 @@
 
 (def deep-ore (deep-rock {"9,58,1" "iron_ore"}))
 
-(defn ^:async home-walk-run
-  "A mine run whose body is moved off its start before the walk home; refuse? says whether a home walk (the targets with x < 2) fails; {:out :ways} the ending and the :ways of each home walk."
-  [refuse?]
-  (let [setup (atom nil)
-        ways (atom [])
-        real (get-in (start {:world {}}) [:eng :jobs 'jobs.movement.go-to])
-        spy (assoc real :round (fn ^:async go-to [c]
-                                 (if (< (:x (:pos (:args c))) 2)
-                                   (do (swap! ways conj (:ways (:args c)))
-                                       (swap! (fake/state (:p @setup)) assoc-in [:self :pos] [6.5 64 0.5])
-                                       (if (refuse? (:args c))
-                                         (ctx/end c :nothing-possible {:reason :unreachable} {})
-                                         (await ((:round real) c))))
-                                   (await ((:round real) c)))))
-        {:keys [out]} (await (as-child {:block "iron_ore" :level false :count 1 :tunnel-length 0 :trip true}
-                                       {:blocks {"3,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270} nil 300
-                                       {:jobs {'jobs.movement.go-to spy} :before #(reset! setup %)}))]
-    {:out out :ways @ways}))

@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.waits :as waits]
             [jobs.lib.block-sets :as bs]
+            [jobs.gather.mine.targets :refer [items kinds]]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.choose :as choose]
             [jobs.lib.gate :as gate]
@@ -24,11 +25,11 @@
   "The blocks to fill with, in order: dig-in's building blocks other than the mined item, then the item itself
   when it is a block (the mend must not eat the count)."
   [c]
-  (let [{:keys [block] :as a} (:args c)
-        item (blocks/item-name a)
+  (let [a (:args c)
+        mined (set (items a))
         builds (choose/filler-names c :build)
-        own (when (or (some #{item} builds) (= item block)) [item])]
-    (vec (concat (remove #{item} builds) own))))
+        own (filterv #(or (some #{%} builds) (contains? (kinds a) %)) (items a))]
+    (vec (concat (remove mined builds) own))))
 
 (defn mend-permitted
   "The owed cells ({:pos ..}) the job may place on (zones and claims)."

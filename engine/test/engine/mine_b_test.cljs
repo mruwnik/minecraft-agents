@@ -30,7 +30,7 @@
             [jobs.gather.mine-stay :as stay]
             [jobs.access.stair :as stair]
             [plan.shape :as shape]
-            [engine.mine-support :refer [spec as-child floor-block sight-opts seeing start run-ticks scenario events-of done-events done-event finished? inv job-mem calls moved dig-count dug-cells block-at cells floor wide-floor sand-patch set-pos! bare-pickaxe pickaxe cobble stone-floor stone-hill ground-cell? dug-ground farm-zone pad-plan two-in-two-out zoned their-claim rock rock-world feet tunnel-ends open-line east start-x corridor bridge-run no-floor-end? deep-rock far-cave side-cave facing-west-run stay-run side-ore-run shutdown-at-cell! run-until! below-ore-run run-until shaft-plan shafted via-shaft ore-east drop-away! hide-drop-until-beside! walled-ore watched dark-ore-dug long-rock torch-world torch-xs torches8 side-room side-torch-cells branch-torches soil-over-stone soil-all-round descent-run stair-down-east classify-in walk-options spy-go-to home-go-tos home-zone no-shaft-args deep-ore home-walk-run]]))
+            [engine.mine-support :refer [spec as-child floor-block sight-opts seeing start run-ticks scenario events-of done-events done-event finished? inv job-mem calls moved dig-count dug-cells block-at cells floor wide-floor sand-patch set-pos! bare-pickaxe pickaxe cobble stone-floor stone-hill ground-cell? dug-ground farm-zone pad-plan two-in-two-out zoned their-claim rock rock-world feet tunnel-ends open-line east start-x corridor bridge-run no-floor-end? deep-rock far-cave side-cave facing-west-run stay-run side-ore-run shutdown-at-cell! run-until! below-ore-run run-until shaft-plan shafted via-shaft ore-east drop-away! hide-drop-until-beside! walled-ore watched dark-ore-dug long-rock torch-world torch-xs torches8 side-room side-torch-cells branch-torches soil-over-stone soil-all-round descent-run stair-down-east classify-in walk-options spy-go-to home-zone no-shaft-args deep-ore]]))
 
 (deftest no-tool-never-digs
   (async done
@@ -115,7 +115,7 @@
       (fn ^:async t []
         (let [s (await (zoned {} {:blocks {"6,64,0" "sand"}} (ew/of-data {} {} nil) 3))]
           (is (empty? (events-of s :mine.declined)))
-          (is (= :no-block (:reason (first (events-of s :stopped)))))
+          (is (= :no-target (:reason (first (events-of s :stopped)))))
           (is (empty? (calls s "dig"))))))))
 
 (deftest no-zone-list-declines-and-digs-nothing
@@ -210,11 +210,8 @@
           (is (= :count (:reason (done-event s))))
           (is (= [[1 65 0] [1 64 0] [2 65 0] [2 64 0] [3 65 0] [3 64 0]] cut) "a 1x2 run east, no further")
           (is (= {:heading "east" :steps 3} (select-keys (:tunnel (done-event s)) [:heading :steps])))
-          (is (= [0 64 0] (feet s)) "back where it started")
-          (is (= [3 64 0] (:end (:tunnel (done-event s)))) "where the tunnel ended, before the walk back: the side ore pocket is picked from beside it")
-          (is (true? (:walked-back? (:tunnel (done-event s)))))
-          (is (= [0 64 0] (:back-at (:tunnel (done-event s)))))
-          (is (re-find #"walked back to \[?0,64,0" (:text (done-event s)))))))))
+          (is (= [3 64 0] (feet s)) "stays where the tunnel ended")
+          (is (= [3 64 0] (:end (:tunnel (done-event s)))) "where the tunnel ended: the side ore pocket is picked from beside it"))))))
 
 (deftest a-short-run-keeps-the-tunnel-text
   (async done
@@ -224,8 +221,7 @@
                                  (rock-world {"3,64,1" "iron_ore"}) 80))
               text (:text (first (events-of s :stopped)))]
           (is (re-find #"^mine got 1 of 2" text))
-          (is (re-find #"tunnel 3 blocks" text))
-          (is (re-find #"walked back to \[?0,64,0" text)))))))
+          (is (re-find #"tunnel 3 blocks" text)))))))
 
 (deftest the-tunnel-never-digs-a-chest-in-its-way
   (async done
@@ -373,10 +369,14 @@
   (is (= -10 (mine-descent/tunnel-level {:block "sand" :level {:x 5 :y -10 :z 7}})))
   (is (nil? (mine-descent/tunnel-level {:block "iron_ore" :level false})) "false: the tunnel runs where the body stands")
   (is (nil? (mine-descent/tunnel-level {:block "sand"})))
-  (is (= #{"iron_ore" "deepslate_iron_ore"} (mine-targets/kinds {:block "iron_ore" :variants true})))
-  (is (= #{"iron_ore" "deepslate_iron_ore"} (mine-targets/kinds {:block "deepslate_iron_ore" :variants true})))
-  (is (= #{"iron_ore"} (mine-targets/kinds {:block "iron_ore" :variants false})))
-  (is (= #{"sand"} (mine-targets/kinds {:block "sand" :variants true}))))
+  (is (= #{"iron_ore" "deepslate_iron_ore"} (mine-targets/kinds {:block "iron_ore"})))
+  (is (= #{"iron_ore" "deepslate_iron_ore"} (mine-targets/kinds {:block "deepslate_iron_ore"})))
+  (is (= #{"sand"} (mine-targets/kinds {:block "sand"})))
+  (is (= #{"iron_ore" "deepslate_iron_ore"} (mine-targets/kinds {:item "raw_iron"})) "an item: every block that drops it")
+  (is (= #{"iron_ore" "deepslate_iron_ore" "coal_ore" "deepslate_coal_ore"} (mine-targets/kinds {:item ["raw_iron" "coal"]})) "several items")
+  (is (= ["raw_iron" "coal"] (mine-targets/items {:item ["raw_iron" "coal"]})))
+  (is (= ["raw_iron"] (mine-targets/items {:block "iron_ore"})) "no item: what the block drops")
+  (is (= "iron_ore" (mine-targets/main-block {:item "raw_iron" :block "iron_ore"}))))
 
 (deftest a-seen-deepslate-twin-of-the-ore-is-dug-for-its-item
   (async done

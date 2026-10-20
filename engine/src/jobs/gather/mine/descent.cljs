@@ -12,7 +12,7 @@
             [jobs.gather.shaft-descent :refer [pick-shaft xyz]]
             [jobs.lib.util :as u]
             [jobs.lib.look :refer [cell-of]]
-            [jobs.gather.mine.targets :refer [base-ore step-cell within-own-zone]]
+            [jobs.gather.mine.targets :refer [base-ore main-block step-cell within-own-zone]]
             [jobs.gather.mine.end :refer [stop!]]
             [jobs.gather.mine.torches :refer [mouth-torch-due? stair-torch-due? torch-step!]]
             [jobs.gather.mine.tunnel :refer [heading-stops turn-heading! result-of]]))
@@ -30,12 +30,12 @@
 
 (defn tunnel-level
   "The feet height the strip tunnel should run at (args a): :level, else the ore's ::ore-levels entry; nil for none (:level false)."
-  [{:keys [block level stay-level]}]
+  [{:keys [level stay-level] :as args}]
   (cond (or stay-level (false? level)) nil
         (sequential? level) (second level)
         (map? level) (:y level)
         (some? level) level
-        :else (get (settings/get settings ::ore-levels) (base-ore block))))
+        :else (get (settings/get settings ::ore-levels) (base-ore (main-block args)))))
 
 (def stone-types #{"stone" "cobblestone" "deepslate" "andesite" "granite" "diorite" "tuff"})
 
@@ -50,7 +50,8 @@
 
 (defn descent-wanted?
   [c]
-  (let [{:keys [block descend-limit]} (:args c)]
+  (let [{:keys [descend-limit]} (:args c)
+        block (main-block (:args c))]
     (or (to-level? c)
         (and (nil? (tunnel-level (:args c))) (not (:stay-level (:args c))) (contains? stone-types block) (pos? descend-limit) (nil? (:tunnel (ctx/mem c)))))))
 

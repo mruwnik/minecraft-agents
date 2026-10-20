@@ -112,7 +112,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [cause [:zone-exit :not-home]]
+        (doseq [cause [:zone-exit :not-back]]
           (let [runs (atom 0)
                 mine (assoc (get registry/jobs 'jobs.gather.mine) :round (fn ^:async stuck [c] (swap! runs inc) (ctx/end c :nothing-possible cause {:got 0})))
                 out (atom nil)

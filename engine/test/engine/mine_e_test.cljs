@@ -25,14 +25,13 @@
             [jobs.gather.mine :as mine-job]
             [jobs.gather.mine.descent :as mine-descent]
             [jobs.gather.mine.end :as mine-end]
-            [jobs.gather.mine.home :as mine-home]
             [jobs.gather.mine.targets :as mine-targets]
             [jobs.gather.mine.torches :as mine-torches]
             [jobs.gather.mine.tunnel :as mine-tunnel]
             [jobs.gather.mine-stay :as stay]
             [jobs.access.stair :as stair]
             [plan.shape :as shape]
-            [engine.mine-support :refer [spec as-child floor-block sight-opts seeing start run-ticks scenario events-of done-events done-event finished? inv job-mem calls moved dig-count dug-cells block-at cells floor wide-floor sand-patch set-pos! bare-pickaxe pickaxe cobble stone-floor stone-hill ground-cell? dug-ground farm-zone pad-plan two-in-two-out zoned their-claim rock rock-world feet tunnel-ends open-line east start-x corridor bridge-run no-floor-end? deep-rock far-cave side-cave facing-west-run stay-run side-ore-run shutdown-at-cell! run-until! below-ore-run run-until shaft-plan shafted via-shaft ore-east drop-away! hide-drop-until-beside! walled-ore watched dark-ore-dug long-rock torch-world torch-xs torches8 side-room side-torch-cells branch-torches soil-over-stone soil-all-round descent-run stair-down-east classify-in walk-options spy-go-to home-go-tos home-zone no-shaft-args deep-ore home-walk-run]]))
+            [engine.mine-support :refer [spec as-child floor-block sight-opts seeing start run-ticks scenario events-of done-events done-event finished? inv job-mem calls moved dig-count dug-cells block-at cells floor wide-floor sand-patch set-pos! bare-pickaxe pickaxe cobble stone-floor stone-hill ground-cell? dug-ground farm-zone pad-plan two-in-two-out zoned their-claim rock rock-world feet tunnel-ends open-line east start-x corridor bridge-run no-floor-end? deep-rock far-cave side-cave facing-west-run stay-run side-ore-run shutdown-at-cell! run-until! below-ore-run run-until shaft-plan shafted via-shaft ore-east drop-away! hide-drop-until-beside! walled-ore watched dark-ore-dug long-rock torch-world torch-xs torches8 side-room side-torch-cells branch-torches soil-over-stone soil-all-round descent-run stair-down-east classify-in walk-options spy-go-to  home-zone no-shaft-args deep-ore]]))
 
 (deftest the-tunnel-cuts-beside-lava-it-has-not-seen
   (async done
@@ -106,70 +105,6 @@
           (is (empty? (dug-cells s)) "a pillar top is never dug from on top")
           (is (= [{:x 0 :y 63 :z 0}] (mapv :pos (events-of s :mine.refused))))
           (is (not= :failures (:reason (done-event s))) "no dig failure is booked"))))))
-
-(deftest the-walk-home-does-not-aim-at-a-start-cell-whose-floor-the-mend-left-open
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (start {:world {:blocks {"0,63,0" "sand" "0,62,0" "lava"}}})
-              ys (atom [])]
-          (add-watch (fake/state (:p s)) ::ys (fn [_ _ _ w] (swap! ys conj (second (get-in w [:self :pos])))))
-          (core/submit! (:eng s) (spec {:block "sand" :count 1 :tunnel-length 0 :trip true :mend true}) {})
-          (await (run-ticks s 30))
-          (is (every? #(>= % 63) @ys) "the body never goes down onto the open hole")
-          (is (not-any? #(= {:x 0.5 :y 64 :z 0.5} (select-keys (:target %) [:x :y :z])) (moved s))
-              "no raw move onto the start cell")
-          (is (empty? (events-of s :mine.not-home)) "ending beside the hole is the normal end")
-          (is (let [[x y z] (feet s)] (and (<= (abs x) 1) (<= (abs z) 1) (>= y 64))) "the body ends on a standable cell beside the start"))))))
-
-(deftest the-walk-home-from-a-patch-is-one-go-to-onto-the-start-cell
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [[s go-tos] (spy-go-to (start {:world {:blocks (merge wide-floor sand-patch)}}))]
-          (core/submit! (:eng s) (spec {:block "sand" :count 6 :trip true}) {})
-          (await (run-ticks s 120))
-          (is (seq (home-go-tos @go-tos)) "home by a go-to child, not a raw moveTo")
-          (is (= #{0} (set (map :range (home-go-tos @go-tos)))) "onto the start cell: range 0 on every round of the walk")
-          (is (= #{16} (set (map #(get-in % [:settings :jobs.lib.walk.world/y-margin]) (home-go-tos @go-tos)))) "a start near above: no way round through deep caves")
-          (is (= [0 64 0] (feet s)))
-          (is (finished? s)))))))
-
-(deftest digging-the-start-floor-drops-the-floor-felt-at-the-start
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (start {:world {:blocks {"0,63,0" "sand" "0,62,0" "lava"}}})]
-          (core/submit! (:eng s) (spec {:block "sand" :count 1 :tunnel-length 0}) {})
-          (await (run-ticks s 30))
-          (is (not (contains? (job-mem s) :start-floor)) "the felt floor is stale once the run digs it: an unseen hole is no solid floor"))))))
-
-(deftest the-go-to-args-of-the-walk-home-stay-the-same-while-the-walk-goes-on
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [[s go-tos] (spy-go-to (start {:world {:blocks {"0,63,0" "sand" "0,62,0" "lava"}}}))]
-          (core/submit! (:eng s) (spec {:block "sand" :count 1 :tunnel-length 0 :trip true :mend true}) {})
-          (await (run-ticks s 30))
-          (is (seq (home-go-tos @go-tos)))
-          (is (= 1 (count (set (home-go-tos @go-tos)))) "one set of args for the whole walk home"))))))
-
-(deftest beside-counts-only-a-standable-cell-next-to-the-start-like-go-to-range-1
-  (let [start {:x 0 :y 64 :z 0}]
-    (is (mine-home/beside? {:x 1 :y 64 :z 0} start))
-    (is (mine-home/beside? {:x 0 :y 64 :z -1} start))
-    (is (mine-home/beside? {:x 0 :y 65 :z 0} start) "above the start is standable")
-    (is (not (mine-home/beside? {:x 0 :y 63 :z 0} start)) "inside the dug hole is not home")
-    (is (not (mine-home/beside? {:x 1 :y 63 :z 0} start)))
-    (is (not (mine-home/beside? {:x 1 :y 64 :z 1} start)) "a diagonal is out of go-to's range 1")
-    (is (not (mine-home/beside? {:x 2 :y 64 :z 0} start)))))
-
-(deftest a-start-floor-felt-at-the-start-decides-when-it-is-not-seen-now
-  (is (mine-home/solid-floor? nil "dirt") "unseen now: the felt floor counts")
-  (is (not (mine-home/solid-floor? nil nil)) "never known: no place to aim at")
-  (is (not (mine-home/solid-floor? nil "air")))
-  (is (not (mine-home/solid-floor? "air" "dirt")) "seen open now wins over the felt floor")
-  (is (mine-home/solid-floor? "dirt" "air")))
 
 (deftest the-tunnel-heading-arg-names-a-way-or-a-cell-to-run-toward
   (async done
@@ -444,50 +379,12 @@
   (let [def (get registry/jobs 'jobs.gather.mine)
         c {:primitives (tu/fake-on-floor {:blocks sand-patch}) :args (second (expr/leaf registry/jobs 'jobs.gather.mine {:block "sand" :count 3}))}
         q ((:quote-of def) c)]
-    (is (= [:block :heading :center] (:target def)))
+    (is (= [:item :block :heading :center] (:target def)))
     (is (fn? (:can-start? def)))
     (is (nil? (:check def)))
     (is (nil? (contract/quote-problem q)) (pr-str q))
     (is (= [0 3 3] (get-in q [:yields :items "sand"])))
     (is (fn? (:done? def)))))
-
-(deftest a-run-that-got-its-count-but-not-home-ends-nothing-possible-not-home
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [setup (atom nil)
-              real (get-in (start {:world {}}) [:eng :jobs 'jobs.movement.go-to])
-              no-walk (assoc real :round (fn ^:async go-to [c]
-                                   (if (< (:x (:pos (:args c))) 2)
-                                     (do (swap! (fake/state (:p @setup)) assoc-in [:self :pos] [6.5 64 0.5])
-                                         (ctx/end c :nothing-possible {:reason :unreachable} {}))
-                                     (await ((:round real) c)))))
-              {:keys [out]} (await (as-child {:block "iron_ore" :level false :count 1 :tunnel-length 0 :trip true}
-                                             {:blocks {"3,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270} nil 300
-                                             {:jobs {'jobs.movement.go-to no-walk} :before #(reset! setup %)}))]
-          (is (= [:nothing-possible :not-home 1] [(:kind out) (contract/cause-key out) (:got (:data out))]) (pr-str out)))))))
-
-(deftest a-dig-of-the-start-floor-drops-the-floor-felt-at-the-start
-  (is (nil? (:start-floor (mine-job/booked {:start-floor "dirt"} {:data {:start-floor-dug true}}))))
-  (is (= "dirt" (:start-floor (mine-job/booked {:start-floor "dirt"} {:data {}})))))
-
-(deftest the-walk-home-tries-pillar-and-fill-gap-only-after-the-other-ways-fail
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [out ways]} (await (home-walk-run #(= mine-home/home-ways (:ways %))))]
-          (is (= :done (:kind out)) (pr-str out))
-          (is (= 2 (count ways)))
-          (is (= mine-home/home-ways (first ways)) "stair and clear-path first")
-          (is (nil? (second ways)) "every way is allowed once they failed"))))))
-
-(deftest the-walk-home-does-not-pillar-when-the-other-ways-arrive
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [out ways]} (await (home-walk-run (constantly false)))]
-          (is (= :done (:kind out)) (pr-str out))
-          (is (= [mine-home/home-ways] ways)))))))
 
 (deftest a-pickaxe-that-breaks-in-the-dig-phase-with-none-to-fetch-ends-no-tool
   (async done

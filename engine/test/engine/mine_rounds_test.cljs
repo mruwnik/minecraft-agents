@@ -17,7 +17,7 @@
           (is (= :count (:reason (m/done-event s))))
           (is (>= (get (m/inv s) "sand") 6)))))))
 
-(deftest mine-runs-the-strip-tunnel-and-walks-home-once-the-flow-delays-have-passed
+(deftest mine-runs-the-strip-tunnel-once-the-flow-delays-have-passed
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -25,8 +25,7 @@
         (let [s (await (m/scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4 :trip true}
                                    (m/rock-world {"3,64,1" "iron_ore"}) 14))]
           (is (m/finished? s) "ended once the flow delays passed")
-          (is (= 1 (get (m/inv s) "raw_iron")))
-          (is (= [0 64 0] (m/feet s))))))))
+          (is (= 1 (get (m/inv s) "raw_iron"))))))))
 
 (deftest mine-stairs-down-to-stone-once-the-lava-flow-delay-has-passed
   (async done

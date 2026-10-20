@@ -156,7 +156,7 @@
                                 :hung (vec (:hung m)) :torches (:torches args) :watch-kinds (vec (watch-kinds c))
                                 :radius (:radius args) :wet (boolean (:wet args)) :accept (vec (:accept args)) :stay-level (boolean (:stay-level args))
                                 :fetch (:fetch args) :ignore-zones? (:ignore-zones? args)
-                                :block (:block args)})))]
+                                :block (:block args) :item (:item args)})))]
         (if (= :continue r)
           :continue
           (let [res (:data r)

@@ -30,7 +30,7 @@
             [jobs.gather.mine-stay :as stay]
             [jobs.access.stair :as stair]
             [plan.shape :as shape]
-            [engine.mine-support :refer [spec as-child floor-block sight-opts seeing start run-ticks scenario events-of done-events done-event finished? inv job-mem calls moved dig-count dug-cells block-at cells floor wide-floor sand-patch set-pos! bare-pickaxe pickaxe cobble stone-floor stone-hill ground-cell? dug-ground farm-zone pad-plan two-in-two-out zoned their-claim rock rock-world feet tunnel-ends open-line east start-x corridor bridge-run no-floor-end? deep-rock far-cave side-cave facing-west-run stay-run side-ore-run shutdown-at-cell! run-until! below-ore-run run-until shaft-plan shafted via-shaft ore-east drop-away! hide-drop-until-beside! walled-ore watched dark-ore-dug long-rock torch-world torch-xs torches8 side-room side-torch-cells branch-torches soil-over-stone soil-all-round descent-run stair-down-east classify-in walk-options spy-go-to home-go-tos home-zone no-shaft-args deep-ore home-walk-run]]))
+            [engine.mine-support :refer [spec as-child floor-block sight-opts seeing start run-ticks scenario events-of done-events done-event finished? inv job-mem calls moved dig-count dug-cells block-at cells floor wide-floor sand-patch set-pos! bare-pickaxe pickaxe cobble stone-floor stone-hill ground-cell? dug-ground farm-zone pad-plan two-in-two-out zoned their-claim rock rock-world feet tunnel-ends open-line east start-x corridor bridge-run no-floor-end? deep-rock far-cave side-cave facing-west-run stay-run side-ore-run shutdown-at-cell! run-until! below-ore-run run-until shaft-plan shafted via-shaft ore-east drop-away! hide-drop-until-beside! walled-ore watched dark-ore-dug long-rock torch-world torch-xs torches8 side-room side-torch-cells branch-torches soil-over-stone soil-all-round descent-run stair-down-east classify-in walk-options spy-go-to home-zone no-shaft-args deep-ore]]))
 
 ;; ------------------------------------------------------------------ the job
 (deftest mines-a-patch-and-leaves-the-ground-alone
@@ -87,8 +87,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:block "dirt" :count 4 :trip true :mend true} {:blocks floor} 80))]
-          (is (= :spent-on-mend (:reason (done-event s))) "the dirt is the only filler, so the mend eats the count")
-          (is (= :count (:dig-reason (done-event s))))
+          (is (= :count (:reason (done-event s))) "the dirt is the only filler, so the mend eats the count, which does not change the ending")
           (is (pos? (:mended (done-event s))))
           (is (= 4 (:mended (done-event s))))
           (is (every? #(= "dirt" %) (for [x (range -2 3) y [62 63] z (range -2 3)] (block-at s x y z))))
@@ -328,8 +327,7 @@
           (await (run-ticks s 1))
           (is (empty? (:ground (job-mem s))) "no ground is recorded")
           (await (run-ticks s 60))
-          (is (= :count (:reason (done-event s))) "the dig reached its count; the walk home ends beside the open floor, not on it")
-          (is (empty? (events-of s :mine.not-home)))
+          (is (= :count (:reason (done-event s))) "the dig reached its count")
           (is (zero? (:mended (done-event s))))
           (is (zero? (count (calls s "place"))))
           (is (zero? (count (calls s "jumpPlace"))))
@@ -464,16 +462,15 @@
           (is (every? #{"dirt"} items) "never the cobblestone")
           (is (= 2 (get (inv s) "cobblestone"))))))))
 
-(deftest a-mend-that-spends-the-count-ends-spent-on-mend
+(deftest a-mend-that-spends-the-count-does-not-change-the-ending
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:block "stone" :count 6 :trip true :mend true}
                                  {:blocks stone-floor :drops cobble :inventory pickaxe} 120))
               done-ev (done-event s)]
-          (is (= :spent-on-mend (:reason done-ev)))
-          (is (= :count (:dig-reason done-ev)))
-          (is (= (:got done-ev) (get (inv s) "cobblestone" 0)) "got is what is left")
+          (is (= :count (:reason done-ev)))
+          (is (= :completed (:kind done-ev)) "the count was dug before the mend")
           (is (every? #{"stone" "cobblestone"} (for [x (range -2 3) y [62 63] z (range -2 3)] (block-at s x y z))) "the floor is solid")
           (is (finished? s)))))))
 

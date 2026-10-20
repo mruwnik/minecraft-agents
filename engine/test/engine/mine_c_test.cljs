@@ -31,7 +31,7 @@
             [jobs.gather.mine-stay :as stay]
             [jobs.access.stair :as stair]
             [plan.shape :as shape]
-            [engine.mine-support :refer [spec as-child floor-block sight-opts seeing start run-ticks scenario scenario-lit events-of done-events done-event finished? inv job-mem calls moved dig-count dug-cells block-at cells floor wide-floor sand-patch set-pos! bare-pickaxe pickaxe cobble stone-floor stone-hill ground-cell? dug-ground farm-zone pad-plan two-in-two-out zoned their-claim rock rock-world feet tunnel-ends open-line east start-x corridor bridge-run no-floor-end? deep-rock far-cave side-cave facing-west-run stay-run side-ore-run shutdown-at-cell! run-until! below-ore-run run-until shaft-plan shafted via-shaft ore-east drop-away! hide-drop-until-beside! walled-ore watched dark-ore-dug long-rock torch-world torch-xs torches8 side-room side-torch-cells branch-torches soil-over-stone soil-all-round descent-run stair-down-east classify-in walk-options spy-go-to home-go-tos home-zone no-shaft-args deep-ore home-walk-run]]))
+            [engine.mine-support :refer [spec as-child floor-block sight-opts seeing start run-ticks scenario scenario-lit events-of done-events done-event finished? inv job-mem calls moved dig-count dug-cells block-at cells floor wide-floor sand-patch set-pos! bare-pickaxe pickaxe cobble stone-floor stone-hill ground-cell? dug-ground farm-zone pad-plan two-in-two-out zoned their-claim rock rock-world feet tunnel-ends open-line east start-x corridor bridge-run no-floor-end? deep-rock far-cave side-cave facing-west-run stay-run side-ore-run shutdown-at-cell! run-until! below-ore-run run-until shaft-plan shafted via-shaft ore-east drop-away! hide-drop-until-beside! walled-ore watched dark-ore-dug long-rock torch-world torch-xs torches8 side-room side-torch-cells branch-torches soil-over-stone soil-all-round descent-run stair-down-east classify-in walk-options spy-go-to home-zone no-shaft-args deep-ore]]))
 
 (deftest stay-level-takes-ore-seen-two-blocks-into-the-wall-by-a-side-cut
   (async done
@@ -118,7 +118,6 @@
       (fn ^:async t []
         (let [s (await (branch-run true))]
           (is (= 1 (get (inv s) "raw_iron")) (pr-str (keep :text @(:seen s)) (dug-cells s)))
-          (is (= [3 64 0] (feet s)) "back in the tunnel at the junction, or home")
           (is (every? (set (dug-cells s)) [[3 64 -1] [3 64 -4]]) "the branch was cut to its length"))))))
 
 (defn ^:async ended-branch-run
@@ -212,7 +211,6 @@
           (is (= :count (:reason e)))
           (is (some (fn [[_ y _]] (< y 60)) (dug-cells s)) "it dug down")
           (is (= 58 (second (:origin (:tunnel e)))) "the tunnel runs at the ore level")
-          (is (= [0 64 0] (feet s)) "back on its start cell")
           (is (seq (calls s "place")) "a torch lights the stair or the tunnel"))))))
 
 ;; Sorrel #14: a night reflex walked the body home between two steps of the stair down; the next step started a new
@@ -257,8 +255,7 @@
           (is (= 1 (get (inv s) "raw_iron")))
           (is (= :count (:reason e)))
           (is (= [4 60 0] (:origin (:tunnel e))) "the first branch runs on from the shaft's bottom")
-          (is (re-find #"via shaft s \(stair 4 steps to y 60\), branch 1 east" (:text e)))
-          (is (= [0 64 0] (feet s))))))))
+          (is (re-find #"via shaft s \(stair 4 steps to y 60\), branch 1 east" (:text e))))))))
 
 (deftest stone-seen-from-the-shaft-stair-does-not-end-the-descent-before-the-shaft-is-used
   (async done
@@ -288,6 +285,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (shafted via-shaft (assoc ore-east "7,60,-4" "iron_ore") [] 400))
+              _ (set-pos! s 0.5 64 0.5)
               _ (core/submit! (:eng s) (spec (assoc via-shaft :count 2)) {})
               _ (await (run-ticks s 400))
               e (second (done-events s))]
@@ -301,6 +299,8 @@
       (fn ^:async t []
         (let [s (await (shafted via-shaft (assoc ore-east "7,60,-4" "iron_ore") [] 400))
               _ (doseq [y [60 61]] (fake/set-block! (:p s) [7 y 0] "bedrock"))
+              _ (set-pos! s 0.5 64 0.5)
+              _ (swap! (fake/state (:p s)) assoc :yaw 0)
               _ (core/submit! (:eng s) (spec (assoc via-shaft :count 2)) {})
               _ (await (run-ticks s 400))
               [no] (events-of s :mine.no-shaft)
@@ -316,6 +316,7 @@
       (fn ^:async t []
         (let [walled (into {} (for [y (range 58 68)] [(str "2," y ",0") "bedrock"]))
               s (await (shafted via-shaft (merge ore-east walled) [] 400))
+              _ (set-pos! s 0.5 64 0.5)
               _ (core/submit! (:eng s) (spec via-shaft) {})
               _ (await (run-ticks s 400))
               [first-no second-no] (events-of s :mine.no-shaft)]
@@ -355,8 +356,7 @@
           (is (= :tunnel-length (:reason e)))
           (is (zero? (:got e)))
           (is (= 60 (second (:origin (:tunnel e)))))
-          (is (re-find #"tunnel 3 blocks east at y 60" (:text e)))
-          (is (= [0 64 0] (feet s))))))))
+          (is (re-find #"tunnel 3 blocks east at y 60" (:text e))))))))
 
 (deftest the-stair-down-goes-on-under-gravel-and-stops-when-falling-blocks-are-not-accepted
   (async done
@@ -543,58 +543,6 @@
           (await (run-ticks s 20))
           (is (empty? (events-of s :mine.left-behind)))
           (is (nil? (:left (done-event s)))))))))
-
-(deftest drops-picked-up-after-the-report-are-not-listed-left-at-the-end
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (start {:world {:blocks (merge wide-floor {"8,64,0" "iron_ore"}) :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270
-                                :unreachable ["5,64,2"]}})]
-          (drop-away! (:p s) [5 64 2])
-          ;; a later steer (the walk home) picks the drop up
-          (.override (.-world (:p s)) "steer"
-                     (fn [token ^js args impl]
-                       (let [decide (.-decide args)
-                             wrapped (fn [pose]
-                                       (when (<= (.-x pose) 2)
-                                         (swap! (fake/state (:p s)) assoc :entities []))
-                                       (decide pose))]
-                         (impl token (js/Object.assign #js {} args #js {:decide wrapped})))))
-          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0 :trip true}) {})
-          (await (run-ticks s 60))
-          (is (= 1 (count (events-of s :mine.left-behind))) "reported when it was still lying")
-          (is (nil? (:left (done-event s))) "but gone by the end"))))))
-
-(deftest a-run-that-only-dug-targets-still-walks-home
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (start {:world {:blocks {"3,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270}})]
-          (drop-away! (:p s) [5 64 2])
-          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0 :trip true}) {})
-          (await (run-ticks s 30))
-          (is (= :count (:reason (done-event s))))
-          (is (= [0 64 0] (feet s))))))))
-
-(deftest a-cancelled-run-still-walks-home-in-its-cleanup
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (start {:world {:blocks {"3,64,0" "iron_ore"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270}})
-              _ (.override (.-world (:p s)) "dig" (fn [token args impl]
-                                                     (.then (impl token args) (fn [_] (set-pos! s 2.5 64 0.5) (js/Promise. (fn [_ _]))))))
-              id (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :tunnel-length 0 :trip true}) {})]
-          (core/tick! (:eng s))
-          (loop [i 0]
-            (when (and (< i 300) (zero? (dig-count s)))
-              (await (js/Promise. (fn [ok] (js/setTimeout ok 10))))
-              (recur (inc i))))
-          (is (= [2 64 0] (feet s)) "the dig never ends, with the body off its start")
-          (core/cancel! (:eng s) id)
-          (.override (.-world (:p s)) "dig" nil)
-          (await (run-ticks s 30))
-          (is (finished? s))
-          (is (= [0 64 0] (feet s))))))))
 
 (deftest a-zone-follows-its-owner-and-the-opt-out
   (async done

@@ -15,14 +15,13 @@
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :breach-sealed}} :within-s 90 :of-job true}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}]
    :after [[:block [18 0 16] "cobblestone"] [:block [18 1 16] "cobblestone"]
-           [:block [18 0 17] "air"] [:not-block [19 0 16] "air"] [:body-near [16.5 0 16.5] 2]]}
+           [:block [18 0 17] "air"] [:not-block [19 0 16] "air"]]}
   {:name "breach-records-what-was-behind"
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :breach-sealed :behind {:names [:any] :cells [:any]}}} :within-s 90 :of-job true}]
-   :after [[:block [18 0 16] "cobblestone"] [:body-near [16.5 0 16.5] 2]]}
+   :after [[:block [18 0 16] "cobblestone"]]}
   {:name "lava-beside-the-cut-is-sealed-not-a-breach"
    ;; lava is no air, so no breach: lava the body sees beside the next cut stops the tunnel before it opens (stair-test lava-two-ahead-stops-before-opening-it), lava it
    ;; does not see is sealed once the cut lays it open (:on-lava :seal); which one happens depends on what the glance at the cut shows, so only the absence of a breach is pinned
    :blocks [[:fill [18 0 17] [18 1 17] "lava"]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}
-            {:no-event {:source :job :kind #{:completed :stopped} :data {:stop :breach-sealed}} :for-s 20}]
-   :after [[:body-near [16.5 0 16.5] 3.5]]}]}
+            {:no-event {:source :job :kind #{:completed :stopped} :data {:stop :breach-sealed}} :for-s 20}]}]}

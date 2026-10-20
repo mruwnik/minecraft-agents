@@ -39,6 +39,12 @@
   [{:keys [block item]}]
   (or item (get drop-item block) block))
 
+(defn blocks-dropping
+  "The blocks that drop item: the drop table's, else a block of the item's own name (sand)."
+  [item]
+  (let [from-table (into #{} (keep (fn [[b i]] (when (= i item) b))) drop-item)]
+    (if (and (empty? from-table) (not (contains? drop-item item))) #{item} from-table)))
+
 (defn room-for?
   "A free slot, or a carried stack of item with room."
   [p item]
