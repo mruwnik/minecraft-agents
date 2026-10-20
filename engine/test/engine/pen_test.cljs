@@ -1,7 +1,9 @@
 (ns engine.pen-test
   "jobs.lib.pen: the pen check, over a block grid that is stone up to y 63 and air above."
   (:require [cljs.test :refer [deftest is are]]
-            [jobs.lib.pen :as pen]))
+            [jobs.lib.pen :as pen]
+            [jobs.lib.pen-blocks :as pen-blocks]
+            [jobs.lib.pen-world :as pw]))
 
 (defn block
   "A JS block from a cell value: a name, or [name {property value}]."
@@ -449,3 +451,60 @@
   (let [cells (assoc fence-ring [-1 64 2] ["oak_fence_gate" {:open "true"}] [5 65 3] ["oak_fence_gate" {:open "false"}])
         r (check cells)]
     (is (= [{:pos {:x -1 :y 64 :z 2} :open? true} {:pos {:x 5 :y 65 :z 3} :open? false}] (:gates r)))))
+
+;; ------------------------------------------------------------------ the fill against a plain reference
+
+(defn reference-fill
+  "The breadth-first fill written plainly (persistent queue, vectors): what pen/fill must answer."
+  [world seeds box max-cells]
+  (let [seen (volatile! (into {} (map (fn [{:keys [key s]}] [key {:s s :from nil}])) seeds))]
+    (loop [queue (into cljs.core/PersistentQueue.EMPTY (map :key) seeds) order (mapv :key seeds) exits []]
+      (cond
+        (empty? queue) {:seen @seen :order order :exits exits :truncated? false}
+        (>= (count @seen) max-cells) {:seen @seen :order order :exits exits :truncated? true :last (peek order)}
+        :else
+        (let [[x y z :as k] (peek queue)
+              [order exits queue]
+              (reduce (fn [[order exits queue] [[dx dz] {:keys [top perch?]}]]
+                        (let [nk [(+ x dx) (pw/floor-cell top) (+ z dz)]]
+                          (cond
+                            (and box (pw/outside? box (nk 0) (nk 2))) [order (conj exits {:from k :to nk :top top :perch? perch?}) queue]
+                            (contains? @seen nk) [order exits queue]
+                            :else (do (vswap! seen assoc nk {:s top :from k :perch? perch?})
+                                      [(conj order nk) exits (conj queue nk)]))))
+                      [order exits (pop queue)]
+                      (pw/moves world x z (:s (@seen k))))]
+          (recur queue order exits))))))
+
+(defn random-cells
+  "A 9x9 patch of ground-level cells of fence, gate, stone, slab, water, air or fence-top blocks, from seed."
+  [seed]
+  (let [r (atom (+ 7 (* 7919 seed)))
+        next! #(swap! r (fn [v] (mod (+ (* v 1103515245) 12345) 2147483648)))
+        pick (fn [xs] (nth xs (mod (quot (next!) 8) (count xs))))]
+    (into {} (for [x (range -2 7) z (range -2 7) y [63 64 65]
+                   :let [v (pick [nil nil nil "oak_fence" "oak_fence" ["oak_fence_gate" {:open "true"}] ["oak_fence_gate" {:open "false"}]
+                                  "stone" "air" "water" ["oak_slab" {:type "bottom"}]])]
+                   :when v]
+               [[x y z] v]))))
+
+(deftest the-fill-equals-the-plain-reference-on-random-patches
+  (is (< 20 (apply max (for [seed (range 40)
+                             :let [world (pw/make-world (block-at-from (random-cells seed)) nil (pw/store))]]
+                         (count (:order (pen/fill world (pw/seeds-at world {:x 2 :y 64 :z 2}) nil 2000)))))))
+  (doseq [seed (range 40) max-cells [12 2000] box [nil {:min {:x 0 :y 64 :z 0} :max {:x 4 :y 64 :z 4}}]]
+    (let [cells (random-cells seed)
+          world (pw/make-world (block-at-from cells) nil (pw/store))
+          seeds (if box (pw/seeds-in-box world box) (pw/seeds-at world {:x 2 :y 64 :z 2}))
+          got (pen/fill world seeds box max-cells)
+          want (reference-fill world seeds box max-cells)]
+      (is (= want got) (str "fill seed " seed))
+      (is (= (pen/gates-near world (:order want))
+             (->> (:order want)
+                  (mapcat (fn [[x y z]] (for [[dx dz] (cons [0 0] pw/orthogonal) dy [0 1 -1]] [(+ x dx) (+ y dy) (+ z dz)])))
+                  distinct
+                  (keep (fn [[x y z]] (let [b ((:block world) x y z)]
+                                        (when (pen-blocks/gate? b) {:pos {:x x :y y :z z} :open? (pen-blocks/on? b "open")}))))
+                  (sort-by (juxt (comp :x :pos) (comp :y :pos) (comp :z :pos)))
+                  vec))
+          (str "gates seed " seed)))))

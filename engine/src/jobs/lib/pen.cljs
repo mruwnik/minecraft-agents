@@ -210,12 +210,15 @@
     (if (empty? queue)
       region
       (let [[x y z] (peek queue)
-            next (for [[dx dz] orthogonal dy [0 -1 1]
-                       :let [k [(+ x dx) (+ y dy) (+ z dz)]]
-                       :when (and (contains? inside k) (not (contains? region k)))]
-                   k)
-            fresh (distinct next)]
-        (recur (into region fresh) (into (pop queue) fresh))))))
+            [region' queue']
+            (reduce (fn [[region queue] [dx dz dy]]
+                      (let [k [(+ x dx) (+ y dy) (+ z dz)]]
+                        (if (and (contains? inside k) (not (contains? region k)))
+                          [(conj region k) (conj queue k)]
+                          [region queue])))
+                    [region (pop queue)]
+                    (for [[dx dz] orthogonal dy [0 -1 1]] [dx dz dy]))]
+        (recur region' queue')))))
 
 (defn gate-drop
   "{:gate :from :to :drop} for a gate whose inside side reaches fewer than half the inside cells by steps of one block
