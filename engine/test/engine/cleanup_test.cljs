@@ -121,6 +121,13 @@
     {:block-at (lookup [1 64 0] "dirt" [2 64 0] "lava")} :hazard
     {:block-at (constantly nil)} :not-loaded))
 
+(deftest a-poured-water-source-is-scooped-with-a-bucket-and-needs-one
+  (are [bucket? expected] (= expected ((juxt :step :reason) (let [s (step :entries [(entry [1 64 0] :item "water" :purpose :pour)]
+                                                                         :block-at (lookup [1 64 0] "water") :bucket? bucket?)]
+                                                              (merge s (first (:open s))))))
+    true [:dig nil]
+    false [:finish :no-bucket]))
+
 (deftest the-footprint-of-a-plan-this-body-made-keeps-its-blocks-unless-told-otherwise
   (are [own-plans spare? result] (= result (:step (step :entries [(entry [1 64 0])] :block-at (lookup [1 64 0] "dirt")
                                                         :footprints {[1 64 0] "farm"} :own-plans own-plans :spare-own-builds spare?)))
@@ -715,6 +722,21 @@
           (await (ticks s eng 30))
           (is (= 1 (count (of-kind seen :tool.broke))))
           (is (= 1 (count (of-kind seen :tool.none)))))))))
+
+(deftest a-poured-water-source-is-scooped-by-the-bucket-not-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p out]} (setup {:self {:x 0.5 :y 64 :z 0.5} :blocks (merge (floor -2 5) {"1,64,0" "water"})
+                                          :entries [(entry [1 64 0] :item "water" :purpose :pour)]})]
+          (swap! (fake/state p) update :inventory conj {:name "bucket" :count 1})
+          (core/submit! eng '(recording-parent) {})
+          (await (ticks {:clock (atom 1000000)} eng 5))
+          (is (= [] (:list (core/state eng))))
+          (is (= [{:cell [1 64 0] :item "water"}] (:removed @out)))
+          (is (not= "water" (block p [1 64 0])))
+          (is (= [] (the-ledger eng)))
+          (is (= [] (filter #(= "dig" (.-name %)) (.-calls (.-world p)))) "scooped, not dug"))))))
 
 (deftest a-pillar-is-cleaned-up-in-one-run
   (async done

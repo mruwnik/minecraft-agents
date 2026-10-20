@@ -13,6 +13,7 @@
             [engine.hut-shelter-test :as hut]
             [engine.fake.raw-world :as fake-raw]
             [engine.memory :as mem]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.shelter.beds :as sh-beds]
             [engine.perception :as perception]
             [engine.settings :as settings]
@@ -98,23 +99,11 @@
 
 (deftest dawn-holds-for-a-bed-it-put-down-outside-its-zone
   (let [world {:time noon :blocks {"3,64,0" "red_bed"}}
-        placed (fn [eng] (write! eng :bed-placed {:pos {:x 3 :y 64 :z 0}}))]
+        placed (fn [eng] (ledger/write! (:store eng) [{:cell [3 64 0] :item "red_bed" :before "air" :job "j9" :purpose :bed :state :placed}]))]
     (is (true? (leaves? world placed)))
     (is (false? (leaves? {:time noon} placed)) "the bed is gone")
     (is (false? (leaves? world (fn [_]))) "a bed it did not put down")
     (is (false? (leaves? (assoc world :time night) placed)) "never at night")))
-
-(deftest dawn-does-not-hold-for-a-placed-bed-that-is-the-spawn-bed
-  (let [world {:time noon :blocks {"3,64,0" "red_bed"}}]
-    (is (false? (leaves? world (fn [eng]
-                                (write! eng :bed-placed {:pos {:x 3 :y 64 :z 0}})
-                                (write! eng :spawn-bed {:pos {:x 3 :y 64 :z 0}})))))))
-
-(deftest dawn-does-not-hold-for-a-placed-bed-whose-other-half-is-the-spawn-bed
-  (let [world {:time noon :blocks {"3,64,0" "red_bed"}}]
-    (is (false? (leaves? world (fn [eng]
-                                (write! eng :bed-placed {:pos {:x 3 :y 64 :z 0}})
-                                (write! eng :spawn-bed {:pos {:x 4 :y 64 :z 0}})))))))
 
 (deftest a-muted-night-never-fires
   (async done
@@ -261,6 +250,8 @@
     (is (= {:bed {:x 6 :y 64 :z 0}} (waiting {:time noon :blocks {"6,64,0" "red_bed"}} #(write! % :spawn-bed bed))))
     (is (= {:lost {:x 6 :y 64 :z 0} :why :seen-gone} (waiting {:time noon :blocks {"6,64,0" "stone"}} #(write! % :spawn-bed bed))))))
 
+(defn u-cell [{:keys [x y z]}] [x y z])
+
 (deftest the-night-puts-a-carried-bed-down-in-the-open-sleeps-and-picks-it-up-by-day
   (async done
     (tu/run-async done
@@ -268,7 +259,7 @@
         (let [{:keys [eng p seen]} (st/setup {:time night :inventory [{:name "red_bed" :count 1}] :skipNight false})
               mid (atom nil)]
           (st/on-wait! p (fn [n] (case n
-                                1 (reset! mid {:sleeps (mapv st/arg-pos (st/calls p "sleep")) :placed (st/entries eng :bed-placed)})
+                                1 (reset! mid {:sleeps (mapv st/arg-pos (st/calls p "sleep")) :placed (mapv :cell (ledger/open-entries (mem/view (:store eng))))})
                                 2 (do (fake/swap-self! p assoc :isSleeping false) (.setTime (.-world p) noon))
                                 nil)))
           (core/submit! eng '(jobs.survival.night) {})
@@ -280,10 +271,10 @@
             (is (= [foot] (:sleeps @mid)))
             (is (= [{:pos foot :own-zone false}] (mapv #(select-keys % [:pos :own-zone]) (st/emitted seen :night.bed-placed)))
                 "says where the bed went")
-            (is (= [{:pos foot}] (:placed @mid)) "outside any own zone: remembered for the morning")
+            (is (= [(u-cell foot)] (:placed @mid)) "outside any own zone: entered in the ledger for the morning")
             (is (= [foot] (mapv st/arg-pos (st/calls p "dig"))) "picked up by day by leave-shelter")
-            (is (= [] (st/entries eng :bed-placed)))
-            (is (empty? (st/calls p "moveTo")) "the drop is walked to by go-to, not a direct move")
+            (is (= [] (ledger/open-entries (mem/view (:store eng)))) "taken back")
+            (is (empty? (st/calls p "moveTo")) "the drop is picked up without a direct move")
             (is (= [] (:list (core/state eng))))))))))
 
 (deftest bed-down-puts-a-carried-bed-down-and-sleeps-in-it

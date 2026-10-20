@@ -40,6 +40,7 @@
   - an instance id: that instance's and its children's. A parent cleaning up after its own pillar passes its
     own id.
   - :all: every entry.
+  :purpose (a keyword or a set) narrows any of these to the entries of that purpose (:pillar :doorway :bed :pour ...).
   :near {:pos :radius} narrows any of these to the entries within :radius of :pos; :within n, to those within n blocks of the
   body now. With :job nil and neither given, :within is 32: far scaffold waits for the body to come near, or for :job :all, an
   instance id, :near or a larger :within.
@@ -56,6 +57,9 @@
     ::leg-s. Before each leg a known hostile within ::danger-radius of the cell, or a flight from one near it or the body,
     holds that cell :danger instead (the hostile reflex acts; the cell is offered again after the hold).
   - Else finish.
+
+  A poured water source (item water, purpose :pour) is scooped, not dug: with an empty bucket carried, jobs.items.use clicks
+  it from within bucket reach (zones are not asked: the pour was this body's own). Without a bucket it stays open (:no-bucket).
 
   A body standing on a ledger row (a bridge) never digs the last way back to firm ground: that cell is :stranding.
   With nothing else to dig it walks to the ground at the row's end (go-to, range 0, 3 tries) and digs the rest from
@@ -98,6 +102,7 @@
 (a/defargs args
   {:job {:doc "nil: entries no live job owns; \"jN\": that instance's and its children's; :all: every entry" :spec (a/or-of #{:all} a/name?) :default nil}
    :near {:doc "only the entries within :radius of :pos" :spec (a/map-with {:pos a/point? :radius (a/num-in 0 nil)}) :default nil}
+   :purpose {:doc "only the entries of these purposes (a keyword or a set), e.g. :doorway; nil: any" :spec (a/or-of keyword? (a/coll-of keyword?)) :default nil}
    :within {:doc "only the entries within this many blocks of the body, read afresh each time (32 when :job is nil); :near wins" :spec (a/num-in 0 nil) :default nil}
    :accept {:doc "dig hazards accepted: :fluid-adjacent (water beside), :lava-adjacent, :falling-block"
             :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:fluid-adjacent}}
@@ -166,6 +171,7 @@
     (merge (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))})
            {:feet (reach/standing-vec (:primitives c)) :eye (eye-of c) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :floor-at (access/seen-at (:primitives c)) :entries entries
             :can-clear? #(not (tools/needs-tool-to-clear? (:primitives c) %))
+            :bucket? (boolean (some #(= "bucket" (:name %)) (u/inventory (:primitives c))))
             :hostile-near? (hostile-near? (:primitives c)) :opens-dark? (stay/opens-dark? (:primitives c)) :keep-at-night? (stay/at-night?)
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach (dig-reach)
             :spare-own-builds (access/spare-own-builds)
@@ -178,11 +184,15 @@
 
 ;; ------------------------------------------------------------------ check
 
+(defn purposes-of [c]
+  (let [p (:purpose (:args c))]
+    (cond (nil? p) nil (keyword? p) #{p} :else (set p))))
+
 (defn unseen-entries?
   "Whether an entry this cleanup would work on lies in a cell the body has never seen (it reads as not loaded)."
   [c]
   (let [v (ctx/view c)
-        cells (->> (ledger/select (ledger/open-entries v) v (:job (:args c)) (ledger/near-of-args c (:args c)))
+        cells (->> (ledger/select (ledger/open-entries v) v (:job (:args c)) (ledger/near-of-args c (:args c)) (purposes-of c))
                    (map (fn [{[x y z] :cell}] {:x x :y y :z z})))]
     (look/unseen? (:primitives c) cells)))
 
@@ -191,7 +201,7 @@
   (checks/args-fit "bad :job" #(not (bad-job? (:job (:args %))))))
 
 (defn offered-now [c]
-  (ledger/offered (ctx/view c) (access/sensed-at (:primitives c) nil) (:job (:args c)) (ledger/near-of-args c (:args c))))
+  (ledger/offered (ctx/view c) (access/sensed-at (:primitives c) nil) (:job (:args c)) (ledger/near-of-args c (:args c)) (purposes-of c)))
 
 (defn nothing-to-do?
   "Nothing is offered, no pick-up is due, and a cell never seen has been looked at (or none is unseen): the goal holds."
@@ -212,7 +222,7 @@
 
 (defn picked-entries [c]
   (let [view (ctx/view c)]
-    (ledger/select (ledger/open-entries view) view (:job (:args c)) (ledger/near-of-args c (:args c)))))
+    (ledger/select (ledger/open-entries view) view (:job (:args c)) (ledger/near-of-args c (:args c)) (purposes-of c))))
 
 (defn result-of
   "The result of the cleanup now, with the cells left open."
@@ -242,8 +252,20 @@
       (-> m (update :fails dissoc cell) (assoc-in [:held cell] why))
       (assoc-in m [:fails cell] n))))
 
+(defn ^:async scoop!
+  "Scoop the poured water at cell with the empty bucket (jobs.items.use; the pour was this body's own, so no zone is asked);
+  the entry is marked :removing first and the next round settles the cell."
+  [c l cell]
+  (ledger/remember! c (ledger/begin-removal l cell))
+  (let [r (await (child/run!* c :scoop 'jobs.items.use {:on cell :item "bucket" :ignore-zones? true}))]
+    (cond
+      (= :continue r) :continue
+      (= :done (:kind r)) :again
+      :else (do (ctx/update-mem! c count-fail cell {:reason :scoop-failed :scoop (or (get-in r [:data :reason]) :failed)} (give-up))
+                :again))))
+
 (defn ^:async dig!
-  "Ask the rules once more, equip, mark the entry :removing and dig; the next round settles the cell."
+  "Ask the rules once more, equip, mark the entry :removing and dig (a poured water source is scooped); the next round settles the cell."
   [c {:keys [cell item]}]
   (let [p (:primitives c)
         l (ledger/open-entries (ctx/view c))
@@ -252,19 +274,21 @@
     (if-let [why (if e (blocker (inputs c l [e] (known/zones c)) e) {:reason :gone})]
       (do (ctx/update-mem! c count-fail cell why (give-up))
           :again)
-      (do
-        (await (tools/equip-tool! c item {:fast true}))
-        (ledger/remember! c (ledger/begin-removal l cell))
-        (let [[x y z] cell
-              outcome (await (blocks/dig-cell! c {:x x :y y :z z} {:accept (into #{:fluid-adjacent :falling-block :under-feet}
-                                                                         (filter #{:lava-adjacent}) (:accept (:args c)))
-                                                                   :ignore-zones? true}))]
-          (when (and under? (not= :continue outcome)) (await (walk/settle! c)))
-          (cond
-            (= :continue outcome) :continue
-            (#{:dug :missing} outcome) (ctx/update-mem! c assoc :collect true)
-            :else (ctx/update-mem! c count-fail cell {:reason :dig-failed :dig outcome} (give-up)))
-          (if (= :continue outcome) :continue :again))))))
+      (if (= "water" item)
+        (await (scoop! c l cell))
+        (do
+          (await (tools/equip-tool! c item {:fast true}))
+          (ledger/remember! c (ledger/begin-removal l cell))
+          (let [[x y z] cell
+                outcome (await (blocks/dig-cell! c {:x x :y y :z z} {:accept (into #{:fluid-adjacent :falling-block :under-feet}
+                                                                           (filter #{:lava-adjacent}) (:accept (:args c)))
+                                                                     :ignore-zones? true}))]
+            (when (and under? (not= :continue outcome)) (await (walk/settle! c)))
+            (cond
+              (= :continue outcome) :continue
+              (#{:dug :missing} outcome) (ctx/update-mem! c assoc :collect true)
+              :else (ctx/update-mem! c count-fail cell {:reason :dig-failed :dig outcome} (give-up)))
+            (if (= :continue outcome) :continue :again)))))))
 
 
 (defn ^:async no-way?
@@ -316,7 +340,7 @@
   not asked for again."
   [c removed]
   (let [r (await (ctx/call c :collect 'jobs.items.collect-drops
-                           {:radius (collect-radius c removed) :items (vec (distinct (map (comp placement/item-of :item) removed)))
+                           {:radius (collect-radius c removed) :items (vec (distinct (map (comp placement/item-of :item) (remove #(= "water" (:item %)) removed))))
                             :holes (mapv :cell removed)}))]
     (when-not (= :continue r)
       (ctx/update-mem! c #(-> % (dissoc :collect)
@@ -373,7 +397,7 @@
   [c zones]
   (let [view (ctx/view c)
         l (ledger/open-entries view)
-        picked (set (map :cell (ledger/select l view (:job (:args c)) (ledger/near-of-args c (:args c)))))
+        picked (set (map :cell (ledger/select l view (:job (:args c)) (ledger/near-of-args c (:args c)) (purposes-of c))))
         settled (settle! c l picked)
         step (next-step (inputs c settled (filterv #(picked (:cell %)) settled) zones))
         m (ctx/mem c)]

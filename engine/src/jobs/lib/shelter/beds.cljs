@@ -5,6 +5,7 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.access.zones :as zones]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.util :as u]
             [jobs.lib.world-files :as world]
             [jobs.lib.shelter.clock :as sh-clock]
@@ -166,18 +167,6 @@
   minutes."
   {:cap 1 :ttl 600000})
 
-(def bed-placed-policy
-  "Policy of the :bed-placed entries: a bed the night job put down outside the body's own zones, picked up by day."
-  {:cap 4 :ttl (* 7 sh-clock/ms-per-day)})
-
-(def doorway-filled-policy
-  "Policy of the :doorway-filled entries: a doorway cell the night filled (jobs.survival.night.doorway), opened by day."
-  {:cap 4 :ttl sh-clock/ms-per-day})
-
-(def doorway-open-failed-policy
-  "Policy of the :doorway-open-failed entries: a filled doorway cell the day failed to open, not tried again until it lapses."
-  {:cap 4 :ttl (* 2 60 1000)})
-
 (defn carried-bed
   "The name of a bed item the body carries (any colour), or nil."
   [p]
@@ -200,35 +189,27 @@
                 (empty? (mem/entries view :sleep-failed))
                 (nil? (bed-to-use p view radius permit?)))))
 
-(defn bed-to-collect
-  "By day: the latest :bed-placed position while a bed block still stands there and is not the respawn point
-  (:spawn-bed), else nil."
-  [p view]
+(defn standing-entries
+  "By day: the open ledger entries of view with purpose (a night's :bed or :doorway) whose block still stands (seen) and that no
+  cleanup held lately, oldest first."
+  [p view purpose]
   (when-not (sh-sense/night? p)
-    (let [pos (:pos (:data (mem/latest view :bed-placed)))]
-      (when (and pos (.endsWith (or (u/seen-name p pos) "") "_bed")
-                 (not (sh-spawn/spawn-bed-at? view pos)))
-        pos))))
+    (let [held (ledger/held-cells view)]
+      (filterv #(and (= purpose (:purpose %)) (not (held (:cell %)))
+                     (ledger/same-block? (:item %) (u/seen-name p (zipmap [:x :y :z] (:cell %)))))
+               (ledger/open-entries view)))))
 
-(defn still-filled?
-  "Whether a :doorway-filled entry's cell still holds one of its :blocks (the block the night put there)."
-  [p {:keys [cell blocks]}]
-  (some? (some #{(u/seen-name p cell)} blocks)))
-
-(defn fill-gone?
-  "Whether a :doorway-filled entry's cell is seen holding none of its :blocks: opened, or changed by someone else."
-  [p {:keys [cell blocks]}]
-  (let [n (u/seen-name p cell)]
-    (and (some? n) (not (some #{n} blocks)))))
+(defn bed-to-collect
+  "By day: the foot cell [x y z] of the bed the night put down outside the body's own zones (ledger purpose :bed; slept in
+  and made the respawn point, it is no longer an entry) while it still stands, else nil."
+  [p view]
+  (:cell (first (standing-entries p view :bed))))
 
 (defn doorway-to-open
-  "By day: the cells {:x :y :z} of the :doorway-filled entries that are still-filled?, none failed to open lately
-  (:doorway-open-failed), oldest first; nil when none."
+  "By day: the cells [x y z] of the doorway blocks the night filled (ledger purpose :doorway) that still stand and that no
+  cleanup held lately, oldest first; nil when none."
   [p view]
-  (when-not (sh-sense/night? p)
-    (let [failed (set (map (comp :cell :data) (mem/entries view :doorway-open-failed)))]
-      (seq (keep #(let [{:keys [cell] :as d} (:data %)] (when (and (not (failed cell)) (still-filled? p d)) cell))
-                 (mem/entries view :doorway-filled))))))
+  (seq (map :cell (standing-entries p view :doorway))))
 
 (defn bed
   "The remembered bed position when it is within radius of the body, else nil."

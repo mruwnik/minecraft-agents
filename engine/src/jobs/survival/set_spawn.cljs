@@ -78,7 +78,7 @@
     (cond
       (nil? bed) (ctx/end c :condition-failed :no-bed)
       (sh-spawn/spawn-known? (ctx/view c) bed (ctx/now c))
-      (do (ctx/remember! c :spawn-bed {:pos bed} sh-spawn/spawn-bed-policy)
+      (do (sh-spawn/remember-spawn-bed! c bed)
           (places/offer! c :home bed)
           (ctx/end c :done nil {:spawn bed :why :unchanged :text "the respawn point is already at this bed"}))
       :else
@@ -86,7 +86,7 @@
         (cond
           (= :continue e) :continue
           (or (= :done (:kind e)) (= :unchanged (get-in e [:data :reason])))
-          (do (ctx/remember! c :spawn-bed {:pos bed} sh-spawn/spawn-bed-policy)
+          (do (sh-spawn/remember-spawn-bed! c bed)
               (places/offer! c :home bed)
               (ctx/end c :done nil (cond-> {:spawn bed} (not= :done (:kind e)) (assoc :why :unchanged))))
           :else (let [why (get-in e [:data :reason] (contract/cause-key e))]

@@ -6,6 +6,7 @@
             [engine.memory :as mem]
             [engine.test-util :as tu :refer [run-async run-until-empty]]
             [engine.sense-test :as sense]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.shelter.beds :as sh-beds]
             [engine.shelter-support :as st :refer [setup know-bed! calls entries emitted noon night]]))
 
@@ -47,6 +48,16 @@
           (is (= [bed] (mapv st/arg-pos (calls p "useOn"))))
           (is (= [{:pos bed}] (entries eng :spawn-bed)))
           (is (= [nil] (mapv :why (emitted seen :completed)))))))))
+
+(deftest a-bed-the-night-put-down-that-becomes-the-spawn-bed-leaves-the-ledger
+  (async done
+    (run-async done
+      (fn ^:async t []
+        (let [night-bed (fn [cell] {:cell cell :item "red_bed" :before "air" :job "j9" :purpose :bed :state :placed})
+              {:keys [eng]} (await (run-set-spawn bed-world {} (fn [e]
+                                                                 (know-bed! e bed)
+                                                                 (ledger/write! (:store e) [(night-bed [6 64 0]) (night-bed [40 64 0])]))))]
+          (is (= [[40 64 0]] (mapv :cell (ledger/open-entries (mem/view (:store eng))))) "only the respawn bed stays"))))))
 
 (deftest set-spawn-clicks-from-within-the-servers-bed-range
   (async done

@@ -6,6 +6,7 @@
             [engine.zones-survival-test :as zs]
             [engine.fake :as fake]
             [engine.events :as events]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.util :as u]
             [engine.memory :as mem]
             [engine.registry :as registry]
@@ -61,6 +62,8 @@
 
 (defn entries [eng kind] (mapv :data (mem/entries (mem/view (:store eng)) kind)))
 
+(defn pours [eng] (filterv #(= :pour (:purpose %)) (ledger/open-entries (mem/view (:store eng)))))
+
 (defn bare-ctx
   "A ctx with empty job memory over primitives p, for calling check and round directly."
   [p args]
@@ -92,14 +95,6 @@
     (is (= expected (not= :ok (first (extinguish/done? (bare-ctx (tu/fake {:self self}) {}))))) (pr-str self))
     (is (= expected ((:when (:burning triggers/all)) (tu/fake {:self self}) nil {})) (pr-str self))))
 
-(deftest burning-trigger-holds-for-an-unscooped-pour-even-when-the-fire-is-out
-  (let [view (fn [now] {:now now :data {:entries {:extinguish-pour [{:t 0 :data {:pos {:x 0 :y 64 :z 0}}}]}
-                                        :policies {:extinguish-pour extinguish/pour-policy}}})
-        holds? #((:when (:burning triggers/all)) (tu/fake {:self {}}) % {})]
-    (is (true? (holds? (view 1000))) "a fresh pour is scooped though the body is no longer burning")
-    (is (false? (holds? (view (* 11 60 1000)))) "an expired entry does not fire")
-    (is (false? (holds? {:now 0 :data {}})) "no pour, no fire")))
-
 (deftest burning-trigger-holds-on-fire-or-in-lava
   (doseq [[self expected] [[{:onFire true} true] [{:inLava true} true] [{} false]]]
     (is (= expected ((:when (:burning triggers/all)) (tu/fake {:self self}) nil {})) (pr-str self))))
@@ -116,9 +111,6 @@
 
 (defn zombie-at [x z] {:id 7 :name "zombie" :kind "hostile" :pos {:x x :y 64 :z z}})
 
-(def pour-view {:now 1000 :data {:entries {:extinguish-pour [{:t 0 :data {:pos {:x 0 :y 64 :z 0}}}]}
-                                 :policies {:extinguish-pour extinguish/pour-policy}}})
-
 (deftest burning-trigger-leaves-plain-fire-to-the-hostile-reflex-while-a-danger-is-near
   (doseq [[world memory settings-layer expected]
           [[{:self {:onFire true} :entities [(zombie-at 3 0)]} nil {} false]
@@ -127,7 +119,7 @@
            [{:self {:onFire true} :entities []} nil {} true]
            [{:self {:inLava true} :entities [(zombie-at 3 0)]} nil {} true]
            [{:self {:onFire true} :blocks {"0,64,0" "fire"} :entities [(zombie-at 3 0)]} nil {} true]
-           [{:self {} :entities [(zombie-at 3 0)]} pour-view {} false]]]
+           [{:self {} :entities [(zombie-at 3 0)]} nil {} false]]]
     (settings/with-settings settings-layer
       (fn [] (is (= expected ((:when (:burning triggers/all)) (tu/fake-on-floor world) memory {})) (pr-str world settings-layer))))))
 
@@ -247,7 +239,7 @@
           (is (= [] (calls p "moveTo")) "no walking needed")
           (is (not (.-onFire (.self p))))
           (is (= [] (:list (core/state eng))) "poured and scooped in one run")
-          (is (= [] (entries eng :extinguish-pour)) "the pour is forgotten once scooped"))))))
+          (is (= [] (pours eng)) "the pour leaves the ledger once scooped"))))))
 
 (deftest scoops-the-poured-water-back-once-the-fire-is-out
   (async done
@@ -507,7 +499,7 @@
 
 ;; ------------------------------------------------------------------- one run, cuts
 
-(deftest a-cut-while-waiting-on-a-pour-leaves-the-pour-in-body-memory-and-the-next-run-scoops-it
+(deftest a-cut-while-waiting-on-a-pour-leaves-the-pour-in-the-ledger-and-a-cleanup-scoops-it
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -519,12 +511,13 @@
           (on-wait! p (fn [n _] ((get {1 #(core/cut! eng (core/holder eng) :test nil)} n (fn [])))))
           (core/submit! eng '(jobs.survival.extinguish) {})
           (await (core/tick! eng))
-          (is (= [{:pos {:x 0 :y 64 :z 0}}] (entries eng :extinguish-pour)) "the pour outlives the cut")
+          (is (= [[0 64 0]] (mapv :cell (pours eng))) "the pour outlives the cut")
           (swap! (fake/state p) assoc-in [:self :onFire] false)
+          (core/submit! eng '(jobs.access.cleanup) {:ignore-zones? true :checks {:fit? '(always)}})
           (await (run-until-empty eng 3))
           (is (= [] (:list (core/state eng))))
-          (is (= ["water_bucket" "bucket"] (mapv (comp :item call-args) (calls p "place"))) "scooped by the next run")
-          (is (= [] (entries eng :extinguish-pour))))))))
+          (is (= ["water_bucket" "bucket"] (mapv (comp :item call-args) (calls p "place"))) "scooped by the cleanup")
+          (is (= [] (pours eng))))))))
 
 (deftest every-ending-of-a-run-is-done-never-continue
   (async done
@@ -665,116 +658,6 @@
           (is (= [] (:list (core/state eng))))
           (is (= :still-burning (stopped-reason seen)))
           (is (= (extinguish/max-passes) @go-tos)))))))
-
-(def scoop-edge "Blocks (feet distance) a pour can lie away and still be scooped in place: eye reach 4.5 less the eye height." 4)
-
-(defn ^:async pour-then-flee
-  "A cut run poured at the origin, then the body (out of the fire) stands at x blocks away; runs to the end."
-  [x]
-  (let [{:keys [eng p seen] :as s} (setup {:self {:onFire true}
-                                           :inventory [{:name "water_bucket" :count 1}]
-                                           :blocks (floor 40)})]
-    (on-place! p "water_bucket" (fn [s _] (swap! s assoc-in [:self :onFire] true)))
-    (on-wait! p (fn [n _] ((get {1 #(core/cut! eng (core/holder eng) :test nil)} n (fn [])))))
-    (core/submit! eng '(jobs.survival.extinguish) {})
-    (await (core/tick! eng))
-    (swap! (fake/state p) assoc-in [:self :onFire] false)
-    (swap! (fake/state p) assoc-in [:self :pos] [x 64 0])
-    (await (run-until-empty eng 3))
-    s))
-
-(deftest a-pour-left-within-scoop-reach-is-scooped-in-place
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (await (pour-then-flee scoop-edge))]
-          (is (= [] (entries eng :extinguish-pour)))
-          (is (= ["water_bucket" "bucket"] (mapv (comp :item call-args) (calls p "place"))))
-          (is (= 0 (count (calls p "moveTo"))) "no walk back")
-          (is (nil? (:scoop-failed (first (of-kind seen :completed)))) "no scoop failed"))))))
-
-(deftest a-pour-4-3-blocks-away-is-in-bucket-reach-from-the-eye
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [p seen]} (await (pour-then-flee 4.3))]
-          (is (= 0 (count (calls p "moveTo"))) "no walk back")
-          (is (nil? (:scoop-failed (first (of-kind seen :completed)))) "no scoop failed"))))))
-
-(deftest a-pour-left-just-past-scoop-reach-is-walked-back-to-and-scooped
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (await (pour-then-flee (inc scoop-edge)))]
-          (is (= [] (entries eng :extinguish-pour)))
-          (is (= ["water_bucket" "bucket"] (mapv (comp :item call-args) (calls p "place"))))
-          (is (<= (u/eye-dist (u/pos-of (.-pos (.self p))) [0 64 0]) u/bucket-reach) "walked back")
-          (is (nil? (:scoop-failed (first (of-kind seen :completed)))) "no scoop failed"))))))
-
-(deftest a-pour-left-at-the-walk-back-limit-is-scooped-and-farther-is-dropped
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [near (await (pour-then-flee (extinguish/max-return-distance)))
-              far (await (pour-then-flee (inc (extinguish/max-return-distance))))]
-          (is (= ["water_bucket" "bucket"] (mapv (comp :item call-args) (calls (:p near) "place"))))
-          (is (= ["water_bucket"] (mapv (comp :item call-args) (calls (:p far) "place"))) "no scoop attempted from afar")
-          (is (= [] (entries (:eng far) :extinguish-pour)) "the entry is gone")
-          (is (= ["far"] (mapv :status (:scoop-failed (first (of-kind (:seen far) :completed))))) "the ending lists the dropped pour"))))))
-
-(deftest a-failed-walk-back-drops-the-pour-with-a-warn-and-ends
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (let [s (setup {:self {:onFire true}
-                                                   :inventory [{:name "water_bucket" :count 1}]
-                                                   :blocks (floor 40)})]
-                                     (on-place! (:p s) "water_bucket" (fn [st _] (swap! st assoc-in [:self :onFire] true)))
-                                     (on-wait! (:p s) (fn [n _] (when (= 1 n) (core/cut! (:eng s) (core/holder (:eng s)) :test nil))))
-                                     (.override (.-world (:p s)) "steer" (fn ^:async f [_ _ _] #js {:status "failed" :reason "no controls"}))
-                                     (core/submit! (:eng s) '(jobs.survival.extinguish) {})
-                                     (await (core/tick! (:eng s)))
-                                     (swap! (fake/state (:p s)) assoc-in [:self :onFire] false)
-                                     (swap! (fake/state (:p s)) assoc-in [:self :pos] [(inc scoop-edge) 64 0])
-                                     (await (run-until-empty (:eng s) 3))
-                                     s)]
-          (is (= [] (:list (core/state eng))) "the run ends")
-          (is (= ["water_bucket"] (mapv (comp :item call-args) (calls p "place"))) "no scoop from afar")
-          (is (= [] (entries eng :extinguish-pour)) "the entry is gone")
-          (is (= ["far"] (mapv :status (:scoop-failed (first (of-kind seen :completed)))))))))))
-
-(deftest a-second-pour-in-the-same-run-is-walked-back-to-as-well
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [far (inc scoop-edge)
-              {:keys [eng p seen]} (setup {:self {:onFire true}
-                                           :inventory [{:name "water_bucket" :count 2}]
-                                           :blocks (floor 40)})
-              st (fake/state p)
-              pours (atom 0)]
-          ;; each pour puts the fire out and leaves the body far from the water; the first walk back sets it alight
-          ;; again, so that pour is given up and the body pours anew
-          (.override (.-world p) "place"
-                     (fn ^:async g [tok a impl]
-                       (let [r (await (impl tok a))]
-                         (when (= "water_bucket" (.-item a))
-                           (swap! pours inc)
-                           (swap! st assoc-in [:self :onFire] false)
-                           (swap! st update-in [:self :pos 0] + far))
-                         r)))
-          (let [walks (atom 0)]
-            (.override (.-world p) "steer"
-                       (fn ^:async g [tok a impl]
-                         (let [r (await (impl tok a))]
-                           (when (= 1 (swap! walks inc)) (swap! st assoc-in [:self :onFire] true))
-                           r))))
-          (core/submit! eng '(jobs.survival.extinguish) {})
-          (await (run-until-empty eng 4))
-          (is (= 2 @pours) "poured twice")
-          (is (= ["water_bucket" "water_bucket" "bucket"] (mapv (comp :item call-args) (calls p "place"))))
-          (is (nil? (:scoop-failed (first (of-kind seen :completed)))) "no scoop failed")
-          (is (= [] (entries eng :extinguish-pour))))))))
 
 (deftest a-fire-the-body-has-not-seen-is-not-scanned
   (let [p (tu/fake {:blocks {"1,64,0" "fire"}})]

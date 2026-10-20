@@ -17,7 +17,6 @@
             [jobs.lib.rooms :as room-lib]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter :as sh]
-            [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spent :as spent]
             [jobs.lib.util :as u]
@@ -31,8 +30,8 @@
   is when it is roofed) is walked to (a go-to child, key :roof-walk), then an
   open door or gate of the room is shut (retreat-doors/shut-home-door!; a door still open once clicked writes
   :night-door-failed, which ends the job nothing-possible :door-open), a doorway gap in its walls is
-  filled (jobs.blocks.fill-cells: a carried wooden door, else the call's :use :blocks; the filled cells are remembered as
-  :doorway-filled, which survival.leave-shelter digs again by day; a doorway filled once is not tried again tonight, :doorway-tried) and a hole in
+  filled (jobs.blocks.fill-cells: a carried wooden door, else the call's :use :blocks; the filled cells go into the scaffold ledger as :doorway,
+  which survival.leave-shelter takes back by day (jobs.access.cleanup); a doorway tried once, or left open for want of blocks, is not tried again tonight, :doorway-tried) and a hole in
   the roof over the body is filled with one block (the cell is in :placed and the scaffold ledger as :shelter). Needs the
   blocks for a gap or a hole carried (none fetched; in the room already it waits :no-blocks at the start), nothing for a walk or a door.
   Done {:pos :placed :roof} when the body is in a closed room (sh-sense/shut-in-room?) with no open door and no doorway gap, at once when it is.
@@ -225,29 +224,14 @@
     (ctx/remember! c :night-door-failed {:door (sh/door-key (:cell door))} {:cap 1 :ttl (sh/door-failed-ms)}))
   :again)
 
-(defn remember-cells!
-  "Remember each of cells as :doorway-filled {:cell :blocks}, once, before it is filled with one of blocks: a fill cut
-  short is opened by day too."
-  [c cells blocks]
-  (doseq [cell cells
-          :when (not-any? #(= cell (:cell (:data %))) (ctx/entries c :doorway-filled))]
-    (ctx/remember! c :doorway-filled {:cell cell :blocks blocks} sh-beds/doorway-filled-policy)))
-
 (defn ^:async fill-gap!
-  "Fill the doorway gap (jobs.blocks.fill-cells: a carried wooden door, else the call's blocks). Once it ends, the doorway is
-  tried for tonight, filled or not, and each cell's :doorway-filled entry keeps the block it now holds, or is forgotten when it
-  holds none of them. :again."
+  "Fill the doorway gap (jobs.blocks.fill-cells: a carried wooden door, else the call's blocks), the placed blocks entered in the
+  ledger as :doorway. Once it ends, the doorway is tried for tonight, filled or not. :again."
   [c cells]
   (let [door (room-lib/carried-door (:primitives c))
         blocks (if door [door] (blocks c))
-        _ (remember-cells! c cells blocks)
-        r (waits/waiting-out c (await (ctx/call c :shut-doorway 'jobs.blocks.fill-cells (cond-> {:cells (vec cells) :danger? true :ignore-zones? true} (seq blocks) (assoc :use {:blocks blocks})))))]
+        r (waits/waiting-out c (await (ctx/call c :shut-doorway 'jobs.blocks.fill-cells (cond-> {:cells (vec cells) :danger? true :ignore-zones? true :purpose :doorway} (seq blocks) (assoc :use {:blocks blocks})))))]
     (when-not (= :continue r)
-      (ctx/forget-where! c :doorway-filled #(some #{(:cell %)} cells))
-      (doseq [cell cells
-              :let [n (u/seen-name (:primitives c) cell)]
-              :when (some #{n} blocks)]
-        (ctx/remember! c :doorway-filled {:cell cell :blocks [n]} sh-beds/doorway-filled-policy))
       (ctx/remember! c :doorway-tried (first cells) room-lib/doorway-tried-policy))
     (if (= :continue r) :continue :again)))
 

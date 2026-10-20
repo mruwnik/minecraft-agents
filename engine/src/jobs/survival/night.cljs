@@ -47,7 +47,7 @@
   - roofed or buried in a closed region with sides never seen: a look at the nearest, else a walk to it, 15 failed cells and 200 steps a night at most (an unseen side is open until seen: a lit tunnel with its walls seen is shelter, one with an unseen branch is not).
   - sheltered (slept, dug in, shut in): log out for a stint while someone else sleeps, else hold (:sheltered) while a bed to use or a sleeper keeps the trigger firing, else end so the queue runs.
   - a roofed :roofed-places place within the night.sites ::home-radius setting, a bed to use or carry and the body not roofed: jobs.survival.enter-room walks in (one try tonight); a carried bed is not put down in the open while one is close (night.bed-kept).
-  - an open door of the closed room the body stands in is shut; the room's doorway is filled before a carried bed goes down (:doorway-filled; one that cannot be filled for want of blocks, or was filled, is :doorway-tried, not tried again tonight).
+  - an open door of the closed room the body stands in is shut; the room's doorway is filled before a carried bed goes down (ledger :doorway; one that cannot be filled for want of blocks, or was filled, is :doorway-tried, not tried again tonight).
   - a bed to use or carried (sh-beds/bed-to-use): jobs.survival.bed-down, called again until it ends; one that stops hostile-near makes the night hold :monsters-near.
   - someone else asleep: jobs.survival.log-out, a 30 s stint, not retried tonight when not ok.
   - a roof over a room with a hole (shelter.room_open warn): walled in under the roof (:enclose).

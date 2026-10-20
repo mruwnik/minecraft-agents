@@ -20,6 +20,7 @@
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.targets :as targets]
             [jobs.survival.night :as night]
@@ -284,16 +285,18 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen filled]} (await (doorway-shut-early))]
+        (let [{:keys [eng p seen filled]} (await (doorway-shut-early))
+              failing? (atom true)]
+          (.override (.-world p) "dig" (fn ^:async f [tok a impl] (if @failing? #js {:status "timeout"} (await (impl tok a)))))
           (core/submit! eng '(jobs.survival.leave-shelter) {})
-          (await (with-child-log #(tu/run-until-empty eng 40)
-                   (fn [_ k _ _] (when (= :doorway-open k) {:kind :nothing-possible :data {}}))))
+          (await (tu/run-until-empty eng 40))
           (is (seq filled))
-          (is (not-any? #(= "air" (block-at p %)) filled) "the walk failed, nothing dug")
+          (is (not-any? #(= "air" (block-at p %)) filled) "the digs failed, nothing opened")
           (is (seq (st/emitted seen :night.doorway-stuck)) "the stuck doorway is warned")
           (is (not (dawn-holds-now? eng p)) "not tried again at once")
-          (mem/forget! (:store eng) :doorway-open-failed)
-          (is (dawn-holds-now? eng p) "once the wait lapses the trigger holds for it again")
+          (mem/forget! (:store eng) ledger/held-kind)
+          (is (dawn-holds-now? eng p) "once the hold lapses the trigger holds for it again")
+          (reset! failing? false)
           (core/submit! eng '(jobs.survival.leave-shelter) {})
           (await (tu/run-until-empty eng 40))
           (is (every? #(= "air" (block-at p %)) filled) "and the next try opens it"))))))
@@ -303,17 +306,17 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (await (doorway-shut-early))
-              fail-walk (fn [_ k _ _] (when (= :doorway-open k) {:kind :nothing-possible :data {}}))
               try-once! (fn ^:async once []
-                          (mem/forget! (:store eng) :doorway-open-failed)
+                          (mem/forget! (:store eng) ledger/held-kind)
                           (core/submit! eng '(jobs.survival.leave-shelter) {})
-                          (await (with-child-log #(tu/run-until-empty eng 40) fail-walk)))]
+                          (await (tu/run-until-empty eng 40)))]
+          (.override (.-world p) "dig" (fn ^:async f [_ _ _] #js {:status "timeout"}))
           (await (try-once!))
           (await (try-once!))
           (await (try-once!))
           (is (= 1 (count (st/emitted seen :night.doorway-stuck))) "three failed tries, one warning")
-          (mem/forget! (:store eng) :doorway-open-failed)
-          (is (dawn-holds-now? eng p) "still tried again once the wait lapses"))))))
+          (mem/forget! (:store eng) ledger/held-kind)
+          (is (dawn-holds-now? eng p) "still tried again once the hold lapses"))))))
 
 (deftest a-filled-doorway-cell-someone-else-changed-is-left-alone
   (async done

@@ -8,6 +8,7 @@
             [engine.triggers :as triggers]
             [engine.hut-shelter-test :refer [hut-world door-states door-open?]]
             [engine.memory :as mem]
+            [jobs.lib.ledger :as ledger]
             [engine.registry :as registry]
             [engine.shelter-support :as st]
             [engine.test-util :as tu]))
@@ -89,13 +90,13 @@
   [world inventory]
   (await (enter! (assoc world :inventory inventory) {})))
 
-(deftest a-doorway-gap-is-filled-and-remembered-for-the-morning
+(deftest a-doorway-gap-is-filled-and-entered-in-the-ledger-for-the-morning
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (await (enter-with doorway-hut stones))]
           (is (seq (filter #(= 2 (:z (st/arg-pos %))) (st/calls p "place"))) "the doorway was filled")
-          (is (seq (st/entries eng :doorway-filled)))
+          (is (seq (filter #(= :doorway (:purpose %)) (ledger/open-entries (mem/view (:store eng))))))
           (is (seq (st/entries eng :doorway-tried)))
           (is (empty? (st/ended-because seen :no-blocks))))))))
 

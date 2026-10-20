@@ -1,0 +1,38 @@
+;; D15: a water pour is a scaffold-ledger entry (purpose :pour) and the scoop is a jobs.access.cleanup call.
+;; The burning body pours water at its feet, is put out, and its own cleanup call scoops the source back up. A pour a cut run
+;; left (seeded in the ledger, the body not burning, an empty bucket carried) is walked back to and scooped by a later cleanup;
+;; one no walk reaches stays open.
+{:defaults
+ {:tags [:survival :fire :cleanup] :time :any
+  :plot {:height 6}
+  :body {:at [4.5 0 16.5] :inventory [["bucket" 1] ["iron_sword" 1]] :settle-s 1}
+  :limit-s 60}
+ :cases
+ [{:name "burning-body-pours-and-scoops-its-own-pour"
+   :blocks [[:set [10 -1 16] "netherrack"] [:set [10 0 16] "fire"]]
+   :body {:at [10.5 0 16.5] :inventory [["water_bucket" 1] ["iron_sword" 1]]}
+   :act [[:job (jobs.survival.extinguish {:water-radius 6})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.extinguish"}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :completed :data {:scoop-failed [:any]}} :for-s 5}]
+   :after [[:not-block [10 0 16] "water"] [:item "water_bucket" 1]]}
+  {:name "pour-10-away-is-walked-back-to-and-scooped"
+   :blocks [[:set [14 0 16] "water"]]
+   :memory [{:kind :scaffold :data {:entries [{:cell #at [14 0 16] :item "water" :before "air" :job "j1" :purpose :pour :state :placed}]}}]
+   :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :completed :data {:removed [[:any]]}} :within-s 40 :of-job true}]
+   :after [[:not-block [14 0 16] "water"] [:item "water_bucket" 1]]}
+  {:name "pour-4-away-in-a-pit-is-scooped-in-place"
+   :blocks [[:set [14 -1 16] "water"]]
+   :memory [{:kind :scaffold :data {:entries [{:cell #at [14 -1 16] :item "water" :before "air" :job "j1" :purpose :pour :state :placed}]}}]
+   :body {:at [10.7 0 16.5]}
+   :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :completed :data {:removed [[:any]]}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :child_started :data {:slot :walk}} :for-s 15}]
+   :after [[:not-block [14 -1 16] "water"] [:item "water_bucket" 1]]}
+  {:name "pour-walled-in-is-left-open"
+   :blocks [[:fill [17 0 11] [27 4 21] "stone"] [:set [22 0 16] "water"]]
+   :memory [{:kind :scaffold :data {:entries [{:cell #at [22 0 16] :item "water" :before "air" :job "j1" :purpose :pour :state :placed}]}}]
+   :body {:at [8.5 0 16.5]}
+   :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :stopped :data {:open [:any]}} :within-s 40 :of-job true}]
+   :after [[:block [22 0 16] "water"]]}]}

@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.settings :as settings]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -13,6 +14,16 @@
 (defn spawn-near [] (settings/get settings ::spawn-near))
 
 (def spawn-bed-policy {:cap 1 :ttl :forever})
+
+(defn remember-spawn-bed!
+  "Record bed as the respawn bed. A bed the night put down (ledger purpose :bed) that this makes the respawn point stays: its entry goes."
+  [c bed]
+  (ctx/remember! c :spawn-bed {:pos bed} spawn-bed-policy)
+  (let [l (ledger/open-entries (ctx/view c))
+        mine? (fn [{:keys [cell purpose]}]
+                (and (= :bed purpose) (<= (u/dist (zipmap [:x :y :z] cell) bed) (spawn-near))))]
+    (when (some mine? l)
+      (ledger/remember! c (vec (remove mine? l))))))
 
 (defn spawn-bed-entry
   "The latest :spawn-bed entry, live or not."

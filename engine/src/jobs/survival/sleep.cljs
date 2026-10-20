@@ -170,7 +170,7 @@
     (case (.-status r)
       "sleeping" (do (ctx/remember! c :slept {:pos bed} slept-policy)
                      (if (sh-spawn/spawn-known? (ctx/view c) bed t0)
-                       (ctx/remember! c :spawn-bed {:pos bed} sh-spawn/spawn-bed-policy)
+                       (sh-spawn/remember-spawn-bed! c bed)
                        (ctx/emit! c :spawn_not_set :warn {:pos bed :text "slept in the bed but the server did not say the respawn point was set"}))
                      (when (:bed (:args c)) (places/offer! c :bed bed))
                      (places/offer! c :home bed)

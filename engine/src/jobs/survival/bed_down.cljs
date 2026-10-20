@@ -16,6 +16,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tidy-rules :as tidy-rules]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -24,7 +25,7 @@
   The bed: the :bed argument, else sh-beds/bed-to-use (seen, or remembered within the jobs.lib.shelter.beds bed radius, the urgent radius once max-days-awake days passed without sleep; never an occupied one or one given up on; unless that long without sleep or an underground body sees another player sleep and the bed is near (courtesy), never one whose walk leaves an underground, dug-in or room shelter): jobs.survival.sleep on it.
   A bed in the open is slept in only by a body overdue for sleep or one that just put the bed down; a sleep that stops :bed-open writes :bed-open and ends condition-failed :bed-open.
   A sleep that ends otherwise without sleeping writes :sleep-failed (5 minutes) and ends nothing-possible :sleep-failed.
-  A bed item carried and no bed to use: put down beside the body (roofed cells first, else in the open unless :roofed-only; never in a doorway, on a chest, table or other kept block, or in another's zone, claim or plan footprint), recorded as :bed unless a live :bed is, and as :bed-placed outside the body's own zones (info night.bed-placed {:pos :own-zone}). A placement the server refuses is tried again (twice at most on one foot cell, three in all). No room, or a failed placement, writes :bed-place-failed (10 minutes) and ends nothing-possible :bed-place-failed.
+  A bed item carried and no bed to use: put down beside the body (roofed cells first, else in the open unless :roofed-only; never in a doorway, on a chest, table or other kept block, or in another's zone, claim or plan footprint), recorded as :bed unless a live :bed is, and as a scaffold-ledger entry (purpose :bed, for survival.leave-shelter to take back by day unless it became the respawn bed) outside the body's own zones (info night.bed-placed {:pos :own-zone}). A placement the server refuses is tried again (twice at most on one foot cell, three in all). No room, or a failed placement, writes :bed-place-failed (10 minutes) and ends nothing-possible :bed-place-failed.
   Ends done {:slept true :bed pos} when asleep, condition-failed :not-night when the day came first or :bed-open {:slept false :bed-open true}; :continue while walking or sleeping. Quote: time by the walk to the bed, done 1 sleep.")
 
 (a/defargs args
@@ -184,7 +185,7 @@
 
 (defn ^:async put-down-bed!
   "Walk to the layout's stand cell if the body is not on it, then place the carried bed on the foot cell (facing along
-  the row) and record it as :bed unless a live :bed is recorded, and as :bed-placed when outside the body's own zones.
+  the row) and record it as :bed unless a live :bed is recorded, and as a scaffold-ledger entry (purpose :bed) when outside the body's own zones.
   A placement the server refuses is counted (job memory :bed-refused) and tried again while fewer than ::bed-tries failed.
   :continue while walking or trying again; the foot cell when a bed block stands there after; else nil."
   [c]
@@ -203,7 +204,8 @@
             (let [own? (boolean (sh-beds/in-own-zone? p (:world (:engine c)) foot))]
               (places/offer! c :bed foot)
               (when-not own?
-                (ctx/remember! c :bed-placed {:pos foot} sh-beds/bed-placed-policy))
+                (ledger/remember! c (-> (ledger/intend (ledger/open-entries (ctx/view c)) {:cell (u/cell-vec foot) :item item :before "air" :job (:id c) :purpose :bed})
+                                        (ledger/confirm (u/cell-vec foot)))))
               (ctx/emit! c :night.bed-placed :info {:pos foot :own-zone own?
                                                     :text (str "put the carried bed down at " (pr-str foot) (if own? " (in its own zone: it stays)" ", picked up by day unless sleeping in it made it the respawn bed"))})
               foot)))

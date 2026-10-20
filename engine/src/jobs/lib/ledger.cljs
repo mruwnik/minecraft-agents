@@ -170,21 +170,25 @@
 
 (defn select
   "The entries of l a cleanup with :job job works on: nil, those whose owner is not live and that are not held (a dig-in's :shelter blocks stay: the dig-in's leave takes them back); :all,
-  every one; an instance id, those of that instance and its children. near narrows them to a pos and radius (near-of)."
-  ([l view job] (select l view job nil))
-  ([l view job near]
-   (near-of (cond
-              (nil? job) (let [held (held-cells view)]
-                           (filterv #(and (not= :shelter (:purpose %)) (not (owner-live? view %)) (not (held (:cell %)))) l))
-              (= :all job) (vec l)
-              :else (filterv #(of-instance? job %) l))
-            near)))
+  every one; an instance id, those of that instance and its children. near narrows them to a pos and radius (near-of); purposes (a set), to those of
+  that :purpose."
+  ([l view job] (select l view job nil nil))
+  ([l view job near] (select l view job near nil))
+  ([l view job near purposes]
+   (cond->> (near-of (cond
+                       (nil? job) (let [held (held-cells view)]
+                                    (filterv #(and (not= :shelter (:purpose %)) (not (owner-live? view %)) (not (held (:cell %)))) l))
+                       (= :all job) (vec l)
+                       :else (filterv #(of-instance? job %) l))
+                     near)
+     (seq purposes) (filterv #(contains? (set purposes) (:purpose %))))))
 
 (defn offered
-  "The entries a cleanup with :job job (and :near near) would work on now: selected and loaded."
-  ([view block-at job] (offered view block-at job nil))
-  ([view block-at job near]
-   (filterv #(some? (block-at (:cell %))) (select (open-entries view) view job near))))
+  "The entries a cleanup with :job job (and :near near, :purpose purposes) would work on now: selected and loaded."
+  ([view block-at job] (offered view block-at job nil nil))
+  ([view block-at job near] (offered view block-at job near nil))
+  ([view block-at job near purposes]
+   (filterv #(some? (block-at (:cell %))) (select (open-entries view) view job near purposes))))
 
 (defn hold!
   "Hold cells in body-memory store."

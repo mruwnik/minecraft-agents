@@ -3,8 +3,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.spent :as spent]
             [jobs.survival.dig-pit-site :as pit-site]
-            [jobs.survival.night.sites :as sites]
-            [jobs.lib.shelter.beds :as sh-beds]))
+            [jobs.survival.night.sites :as sites]))
 
 (defn fled
   "Walks to somewhere safer this night made, or nil when none."
@@ -24,11 +23,9 @@
   (cond-> (spent-fields c) how (assoc :night how) (fled c) (assoc :fled (fled c))))
 
 (defn forget-night!
-  "The night's cleanup: tonight's failed sites (sites/forget-failed!) and the filled doorway cells someone else changed
-  (sh-beds/fill-gone?) are forgotten."
+  "The night's cleanup: tonight's failed sites (sites/forget-failed!) are forgotten."
   [c]
-  (sites/forget-failed! c)
-  (ctx/forget-where! c :doorway-filled (partial sh-beds/fill-gone? (:primitives c))))
+  (sites/forget-failed! c))
 
 (defn end-exposed!
   "Nothing sheltered the body tonight: end nothing-possible :exposed {:sites}."

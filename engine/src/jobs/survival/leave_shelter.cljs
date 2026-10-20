@@ -6,13 +6,14 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.dawn :as dawn]
             [jobs.lib.dig-in-leave :as dig-leave]
+            [jobs.lib.ledger :as ledger]
+            [jobs.lib.waits :as waits]
+            [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.pace :as pace]
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.lib.tidy :as tidy]
-            [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.survival.night.hold :as hold]))
 
@@ -25,7 +26,8 @@
   over. A shelter with no way out ends nothing-possible :no-way-out (the cell is remembered as :shelter-trapped, so the
   trigger lets go). A body shut in stays while a known hostile is near and the dawn grace lasts (night.dawn-hold).
   A doorway cell it could not open is warned night.doorway-stuck once and tried again quietly.
-  Memory: job memory :pickup, :dig-out, :take-back; body memory :doorway-filled, :bed-placed, :shelter-trapped.")
+  The doorway blocks and the bed are scaffold-ledger entries (purposes :doorway, :bed); one jobs.access.cleanup call takes them back.
+  Memory: job memory :dig-out, :take-back; body memory :shelter-trapped, :doorway-stuck-warned.")
 
 (a/defargs args {})
 
@@ -45,72 +47,47 @@
 
 (def can-start? (checks/day :night))
 
-(defn ^:async walk!
-  "A go-to child in slot to pos within range, at night too: :continue while it walks, else whether it arrived."
-  [c slot pos range]
-  (let [w (await (ctx/call c slot 'jobs.movement.go-to {:pos pos :range range}))]
-    (if (= :continue w) :continue (boolean (:arrived (:data w))))))
+(def stuck-warned-policy
+  "Policy of :doorway-stuck-warned: a cell warned about once a day."
+  {:cap 4 :ttl sh-clock/ms-per-day})
 
-(defn ^:async collect-bed!
-  "By day: dig up the bed at pos the night put down outside the body's zones, then walk over its drop. One try: the
-  :bed-placed entry is dropped whatever happens, and a :bed entry at pos is retracted."
-  [c pos]
-  (let [arrived (await (walk! c :bed-collect pos 2))]
-    (if (= :continue arrived)
-      :again
-      (do (when arrived
-            (let [r (await (tidy/dig! c pos))]
-              (when (= "dug" (.-status r))
-                (when (= pos (mem/place (ctx/view c) :bed))
-                  (ctx/remember! c :bed {:gone true :was pos} mem/place-policy))
-                (ctx/update-mem! c assoc :pickup pos))))
-          (ctx/forget-where! c :bed-placed (constantly true))
-          :again))))
+(defn warn-stuck!
+  "Warn night.doorway-stuck once per cell for the doorway cells cleanup left open (it holds them for a while, so they are retried quietly)."
+  [c open]
+  (let [cells (filterv (fn [cell] (not-any? #(= {:cell cell} (:data %)) (ctx/entries c :doorway-stuck-warned)))
+                       (keep #(when (= :doorway (:purpose %)) (:cell %)) open))]
+    (when (seq cells)
+      (doseq [cell cells] (ctx/remember! c :doorway-stuck-warned {:cell cell} stuck-warned-policy))
+      (ctx/emit! c :night.doorway-stuck :warn {:cells cells :text (str "could not open the doorway it filled at " (pr-str cells) "; trying again quietly")}))))
 
-(defn ^:async open-doorway!
-  "By day: dig the cells the night filled in a doorway (sh-beds/doorway-to-open: still holding a block it put there), after a
-  walk within reach of the first, and walk over the drop. No zone check: it takes out only blocks this body put there.
-  Entries seen holding none of their blocks are forgotten (sh-beds/fill-gone?); a cell it could not open (the walk or the dig
-  failed) is marked :doorway-open-failed, so the night trigger tries it again once that lapses, and warned
-  night.doorway-stuck once per cell and cause (walk or dig; :doorway-stuck-warned, a day)."
-  [c cells]
-  (let [arrived (await (walk! c :doorway-open (first cells) 3))]
-    (if (= :continue arrived)
-      :again
-      (do (when arrived
-            (loop [[cell & more] cells dug nil]
-              (let [n (when cell (u/seen-name (:primitives c) cell))]
-                (cond
-                  (nil? cell) (when dug (ctx/update-mem! c assoc :pickup dug))
-                  (not (some #{cell} (sh-beds/doorway-to-open (:primitives c) (ctx/view c)))) (recur more dug)
-                  :else (let [_ (await (tools/equip-for! c n {:fast true}))
-                              r (await (tidy/dig! c cell))]
-                          (recur more (or dug (when (= "dug" (.-status r)) cell))))))))
-          (let [held (keep #(when (sh-beds/still-filled? (:primitives c) (:data %)) (:cell (:data %))) (ctx/entries c :doorway-filled))
-                stuck (filterv (set held) cells)]
-            (ctx/forget-where! c :doorway-filled (partial sh-beds/fill-gone? (:primitives c)))
-            (doseq [cell stuck] (ctx/remember! c :doorway-open-failed {:cell cell} sh-beds/doorway-open-failed-policy))
-            (let [cause (if arrived :dig :walk)
-                  new-stuck (filterv (fn [cell] (not-any? #(= {:cell cell :cause cause} (:data %)) (ctx/entries c :doorway-stuck-warned))) stuck)]
-              (when (seq new-stuck)
-                (doseq [cell new-stuck] (ctx/remember! c :doorway-stuck-warned {:cell cell :cause cause} sh-beds/doorway-filled-policy))
-                (ctx/emit! c :night.doorway-stuck :warn {:cells new-stuck :arrived arrived
-                                                         :text (str "could not open the doorway it filled at " (pr-str new-stuck) "; trying again quietly")}))))
-          :again))))
+(defn retract-bed!
+  "A bed cleanup took (an item ending _bed among the removed cells) is no longer the remembered :bed."
+  [c removed]
+  (when-let [{:keys [cell]} (first (filter #(.endsWith (str (:item %)) "_bed") removed))]
+    (when (= (mem/place (ctx/view c) :bed) (u/cell-pos cell))
+      (ctx/remember! c :bed {:gone true :was (u/cell-pos cell)} mem/place-policy))))
 
-(defn ^:async pick-up-drop!
-  "Walk over the dug bed's drop at pos (go-to); one try, then the walk is over."
-  [c pos]
-  (when-not (= :continue (await (walk! c :bed-pickup pos 0))) (ctx/update-mem! c dissoc :pickup))
-  :again)
+(defn ^:async take-back!
+  "Take back what the night put down outside its own zones, the doorway blocks it filled and the bed (scaffold ledger
+  purposes :doorway and :bed), with one jobs.access.cleanup call that walks to them, digs and picks up the drops. Cells it
+  leaves open are held by cleanup (10 minutes) and warned about once. :again."
+  [c]
+  (let [r (waits/waiting-out c (await (ctx/call c :take-back 'jobs.access.cleanup
+                                                {:job :all :purpose #{:doorway :bed} :ignore-zones? true
+                                                 :checks {:fit? '(always) :safe? '(not (threatened))}})))]
+    (when-not (= :continue r)
+      (retract-bed! c (:removed (:data r)))
+      (warn-stuck! c (let [held (ledger/held-cells (ctx/view c))]
+                       (filterv #(held (:cell %)) (ledger/open-entries (ctx/view c))))))
+    :again))
 
 (defn pending?
-  "Whether the morning still has work: a pickup walk, a dig-out, a shelter to leave, a doorway the night filled to open, a
+  "Whether the morning still has work: a dig-out, a shelter to leave, a doorway the night filled to open, a
   bed put down to collect."
   [c]
   (let [p (:primitives c)
         m (ctx/mem c)]
-    (boolean (or (:pickup m) (:dig-out m)
+    (boolean (or (:dig-out m)
                  (sh-inside/shut-in-by-day? p (:data (ctx/latest c :shelter)) (:data (ctx/latest c :shelter-trapped)))
                  (sh-beds/doorway-to-open p (ctx/view c))
                  (sh-beds/bed-to-collect p (ctx/view c))))))
@@ -133,13 +110,12 @@
         doorway (sh-beds/doorway-to-open p (ctx/view c))
         shelter (or doorway (dig-leave/sheltered-in c))]
     (cond
-      (:pickup (ctx/mem c)) (await (pick-up-drop! c (:pickup (ctx/mem c))))
       (and shelter (dawn/hostile-hold? p))
       (do (when-not (:dawn-noted (ctx/mem c))
             (ctx/update-mem! c assoc :dawn-noted true)
             (ctx/emit! c :night.dawn-hold :info {:text "first light, but a hostile is known near the shelter; staying in until it is gone or the grace is over"}))
           (await (hold/hold! c "first light: hostile near")))
-      doorway (await (open-doorway! c doorway))
+      doorway (await (take-back! c))
       (or (:dig-out (ctx/mem c)) shelter)
       (let [r (await (dig-leave/leave! c))]
         (cond
@@ -153,8 +129,8 @@
             (ctx/end c :nothing-possible :no-way-out {:text text :at (:at r) :tries (:tries r)}))
           :else (await (hold/hold! c :leaving))))
       :else
-      (if-let [bed (sh-beds/bed-to-collect p (ctx/view c))]
-        (await (collect-bed! c bed))
+      (if (sh-beds/bed-to-collect p (ctx/view c))
+        (await (take-back! c))
         :again))))
 
 (defn ^:async round [c] (await (pace/steps! c #(step! c))))

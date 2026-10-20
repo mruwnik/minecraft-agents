@@ -9,7 +9,7 @@
     not safe from the night (sh-inside/safe-from-night?: shut in a closed, roofed room with no dark spawnable cell beyond the 24-block spawn-free radius; a roof with open sides or a cave is not)
     an open door in the closed room the body stands in (sh/open-room-doors), also one the night could not shut
   By day it holds while the body is shut in its own latest :shelter (no :shelter-trapped entry for the cell), or a bed
-  it put down outside its own zone (:bed-placed) still stands. Safe from the night (its dug-in shelter too) with no bed and no sleeper it does not
+  it put down outside its own zone, or a doorway block it filled (scaffold ledger :bed, :doorway), still stands. Safe from the night (its dug-in shelter too) with no bed and no sleeper it does not
   hold: the queue runs. An agent that wants the night for itself mutes it."
   (:require [jobs.lib.body :as body]
             [jobs.lib.shelter :as sh]

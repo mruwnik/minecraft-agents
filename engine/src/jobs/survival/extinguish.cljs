@@ -11,6 +11,7 @@
             [jobs.lib.block-sets :as bs]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.look :as look]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.child :as child]
             [jobs.lib.pace :as pace]
@@ -21,14 +22,14 @@
 (def doc
   "Put the body out when it is on fire or in lava. One run, re-reading the world before each pass, until the body is
   neither burning nor in lava (:done). Done at once when it is not burning and no poured water is left to scoop. Each pass, in this order:
-  1. With a water bucket carried and the body not in lava, pours water at the feet and notes the cell in body memory
-     (:extinguish-pour, ten minutes; a jobs.items.use child), so a run cut before the scoop leaves it for the next run.
+  1. With a water bucket carried and the body not in lava, pours water at the feet (a jobs.items.use child) and enters the cell in the
+     scaffold ledger (purpose :pour), so a run cut before the scoop leaves it for jobs.access.cleanup (the scaffold-left trigger).
      A cell in another's zone or claim is skipped while another way exists. As a last resort it pours there anyway,
      with one extinguish.trespass-last-resort warning.
-  2. Once the fire is out, scoops the water back up with the empty bucket so no source block stays.
-     It looks at the poured cell, then waits (a declared :burning-wait hold) up to 10 quarter seconds for it to read as water, and up to
-     8 while still burning. A pour left more than 4 blocks away is walked back to (one go-to) when within 16 blocks, else dropped.
-     A scoop that fails, a pour dropped as too far, or a pour that never shows as water, is dropped and listed in the ending as :scoop-failed [{:pos :status :text}].
+  2. Once the fire is out, scoops the water back up so no source block stays: it looks at the poured cell, waits (a declared :burning-wait
+     hold) up to 10 quarter seconds for it to read as water, and up to 8 while still burning (then the pour is left to cleanup), then calls
+     jobs.access.cleanup for its own pour (the scoop, the walk back).
+     A pour that never shows as water is dropped from the ledger; a pour cleanup could not scoop stays in it. Both are listed in the ending as :scoop-failed [{:pos :status :text}].
   3. With no bucket, on fire and with water within :water-radius, walks into the nearest water.
   4. In lava, or with no water in reach, walks to the best nearby cell within the ::step setting (4) blocks.
      It must be passable, solid underfoot and not fire, lava, magma or a campfire.
@@ -70,8 +71,6 @@
    ::stand-wait-ms {:default 1000 :doc "One wait while standing still off the fire, in ms." :spec (a/int-in 0 nil)}
    ::eat-below {:default 18 :doc "Food level below which the body eats while it burns." :spec (a/int-in 0 nil)}
    ::max-covers {:default 3 :doc "Lava cells covered per run." :spec (a/int-in 0 nil)}
-   ::max-return-distance {:default 16 :doc "A pour left farther than this is dropped with a warn, not walked back to." :spec (a/int-in 0 nil)}
-   ::max-scoop-return-range {:default 3 :doc "go-to range for the walk back to a pour." :spec (a/int-in 0 nil)}
    ::max-pour-waits {:default 8 :doc "Waits for the fire to go out after a pour." :spec (a/int-in 0 nil)}
    ::max-water-waits {:default 10 :doc "Waits for poured water to show before it is scooped back." :spec (a/int-in 0 nil)}
    ::pour-wait-ms {:default 250 :doc "A wait for the server to put the fire out or show the poured water." :spec (a/int-in 0 nil)}
@@ -90,19 +89,19 @@
 (def water-like ["water" "powder_snow"])
 (defn max-covers [] (settings/get settings ::max-covers))
 
-(defn max-return-distance [] (settings/get settings ::max-return-distance))
-(defn max-scoop-return-range [] (settings/get settings ::max-scoop-return-range))
 (defn max-pour-waits [] (settings/get settings ::max-pour-waits))
 (defn max-water-waits [] (settings/get settings ::max-water-waits))
 
 (defn body-burning? [c] (body/burning? (:primitives c)))
 
-(def pour-policy "Body memory of the cell poured: it outlives a cut run so the next run scoops it." {:cap 1 :ttl (* 10 60 1000)})
-
 (defn poured
-  "The cell a run poured water at and has not scooped yet, or nil."
+  "The ledger cell [x y z] this run poured water at and has not scooped yet (one left to cleanup is not counted), or nil."
   [c]
-  (some-> (ctx/latest c :extinguish-pour) :data :pos))
+  (let [left (:left (ctx/mem c) #{})]
+    (->> (ledger/of-job (ledger/open-entries (ctx/view c)) (:id c) :pour)
+         (remove #(left (:cell %)))
+         first
+         :cell)))
 
 (def target [])
 
@@ -251,19 +250,30 @@
 (defn max-passes [] (settings/get settings ::max-passes))
 
 (defn ^:async pour-water!
-  "Pour a carried water bucket at the feet. True when the water was placed (then noted in body memory)."
+  "Pour a carried water bucket at the feet. True when the water was placed (entered in the ledger as a :pour first, so a cut leaves it to cleanup)."
   [c pos]
   ;; the zone choice is made above (trespass-refusal, last resort), and the scoop must undo the pour: the child must not refuse again
   (ctx/hold-still! c nil)
-  (let [placed (= :done (:kind (await (child/run!* c :bucket 'jobs.items.use {:on pos :item "water_bucket" :ignore-zones? true}))))]
-    (when placed (ctx/remember! c :extinguish-pour {:pos pos} pour-policy))
-    placed))
+  (let [cell (u/cell-vec pos)
+        l (ledger/open-entries (ctx/view c))]
+    (ledger/remember! c (ledger/intend l {:cell cell :item "water" :before (or (u/block-name (:primitives c) pos) "air") :job (:id c) :purpose :pour}))
+    (let [placed (= :done (:kind (await (child/run!* c :bucket 'jobs.items.use {:on pos :item "water_bucket" :ignore-zones? true}))))
+          l (ledger/open-entries (ctx/view c))]
+      (ledger/remember! c (if placed (ledger/confirm l cell) (ledger/drop-cell l cell)))
+      placed)))
 
 (defn has-bucket? [p] (boolean (some #(= "water_bucket" (:name %)) (u/inventory p))))
 
-(defn clear-pour! [c]
-  (ctx/forget-where! c :extinguish-pour (constantly true))
-  (ctx/update-mem! c dissoc :pour-waits :water-waits :returned))
+(defn drop-pour!
+  "Take the pour at cell out of the ledger (the water never showed: nothing of ours to scoop)."
+  [c cell]
+  (ledger/remember! c (ledger/drop-cell (ledger/open-entries (ctx/view c)) cell))
+  (ctx/update-mem! c dissoc :pour-waits :water-waits))
+
+(defn leave-pour!
+  "Leave the pour at cell in the ledger for a later cleanup; this run scoops it no more."
+  [c cell]
+  (ctx/update-mem! c #(-> % (update :left (fnil conj #{}) cell) (dissoc :pour-waits :water-waits))))
 
 (defn scoop-failed!
   "Notes a poured cell left in place for the ending (the pass goes on)."
@@ -275,49 +285,51 @@
   [c ms]
   (await (child/pause! c (/ ms 1000) :burning-wait)))
 
+(defn scoop-failures
+  "The :scoop-failed entries of a cleanup ending that did not scoop the pour at cell."
+  [r cell]
+  (let [open (seq (:open (:data r)))
+        at (zipmap [:x :y :z] cell)]
+    (if open
+      (mapv (fn [{[x y z] :cell why :reason}]
+              {:pos {:x x :y y :z z} :status (name why)
+               :text (str "could not scoop the poured water at " (pr-str [x y z]) ": " (name why))})
+            open)
+      [{:pos at :status (if (= :continue r) "continue" (name (or (contract/cause-key r) :failed)))
+        :text (str "could not scoop the poured water at " (pr-str cell))}])))
+
 (defn ^:async scoop-pass
-  "The water was poured at cell. Wait while burning (up to max-pour-waits), nil after that so the pass tries
-  another way; once out, wait for the water to show (up to max-water-waits), scoop it back up and end."
+  "The water was poured at cell. Wait while burning (up to max-pour-waits; then it is left to cleanup and nil comes back so the
+  pass tries another way); once out, wait for the water to show (up to max-water-waits), then scoop it with a cleanup call and end."
   [c cell]
-  (let [p (:primitives c)]
+  (let [p (:primitives c)
+        at (zipmap [:x :y :z] cell)]
     (cond
       (body-burning? c)
       (let [waits (inc (:pour-waits (ctx/mem c) 0))]
         (if (> waits (max-pour-waits))
-          (do (clear-pour! c) nil)
+          (do (leave-pour! c cell) nil)
           (do (ctx/update-mem! c assoc :pour-waits waits)
               (await (burning-wait! c (pour-wait-ms)))
               :again)))
 
-      (not= "water" (do (await (dig-look/look-unknown! c [[(:x cell) (:y cell) (:z cell)]])) (u/block-name p cell)))
+      (not= "water" (do (await (dig-look/look-unknown! c [cell])) (u/block-name p at)))
       (let [waits (inc (:water-waits (ctx/mem c) 0))]
         (if (> waits (max-water-waits))
-          (do (clear-pour! c)
-              (scoop-failed! c cell "unseen" (str "the poured water at " (pr-str cell) " never showed: not scooped"))
+          (do (drop-pour! c cell)
+              (scoop-failed! c at "unseen" (str "the poured water at " (pr-str cell) " never showed: not scooped"))
               :done)
           (do (ctx/update-mem! c assoc :water-waits waits)
               (await (burning-wait! c (pour-wait-ms)))
               :again)))
 
-      (and (> (u/eye-dist (u/self-pos c) cell) u/bucket-reach)
-           (<= (u/dist (u/self-pos c) cell) (max-return-distance))
-           (not (:returned (ctx/mem c))))
-      (do (ctx/update-mem! c assoc :returned true)
-          (await (child/call-walk* c :go {:pos cell :range (max-scoop-return-range) :ways #{:walk :clear-seal}}))
-          :again)
-
-      (> (u/eye-dist (u/self-pos c) cell) u/bucket-reach)
-      (do (clear-pour! c)
-          (scoop-failed! c cell "far" (str "left the poured water at " (pr-str cell) ": too far to scoop"))
-          :done)
-
       :else
       (do (ctx/hold-still! c nil)
-          (let [r (await (child/run!* c :bucket 'jobs.items.use {:on cell :item "bucket" :ignore-zones? true}))
-                status (if (= :continue r) "continue" (name (or (get-in r [:data :reason]) :failed)))]
-            (clear-pour! c)
+          (let [r (await (child/run!* c :scoop 'jobs.access.cleanup {:job (:id c) :ignore-zones? true :checks {:safe? '(always) :fit? '(always)}}))]
+            (leave-pour! c cell)
             (when-not (= :done (:kind r))
-              (scoop-failed! c cell status (str "could not scoop the poured water at " (pr-str cell) ": " status)))
+              (doseq [f (scoop-failures r cell)]
+                (scoop-failed! c (:pos f) (:status f) (:text f))))
             :done)))))
 
 (defn ^:async cover!
