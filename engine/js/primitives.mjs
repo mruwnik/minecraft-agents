@@ -4,6 +4,7 @@
 
 import './compile-cache.mjs'
 import './protocol-cache.mjs'
+import './frame-splitter.mjs'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { connectBot } from './connect.mjs'
