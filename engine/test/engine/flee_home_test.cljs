@@ -313,10 +313,18 @@
     (is (true? (rooms/refuge-room? (seen-hut open-door {}) home)) "a door shuts it: a refuge whatever lies outside, its own floor not seen")))
 
 (defn counting!
-  "Replace the var at (getter) via (setter f) with a wrapper counting calls in counts under k; returns the restore fn."
+  "Replace the var at (getter) via (setter f) with a wrapper counting calls in counts under k; returns the restore fn.
+  A multi-arity fn (compiled calls use its arity entries) counts only its widest arity: the shorter ones call it."
   [counts k getter setter]
-  (let [f (getter)]
-    (setter (fn [& args] (swap! counts update k (fnil inc 0)) (apply f args)))
+  (let [f (getter)
+        arity (fn [n] (aget f (str "cljs$core$IFn$_invoke$arity$" n)))
+        widest (last (filter arity [2 3 4]))
+        count! #(swap! counts update k (fnil inc 0))
+        w (fn [& args] (when-not widest (count!)) (apply f args))]
+    (doseq [n [2 3 4] :when (arity n)]
+      (aset w (str "cljs$core$IFn$_invoke$arity$" n)
+            (fn [& args] (when (= n widest) (count!)) (apply (arity n) args))))
+    (setter w)
     #(setter f)))
 
 (def lone-doors
