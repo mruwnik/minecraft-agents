@@ -46,20 +46,54 @@
             (when (and r (pos? r))
               (for [dx [(- r) r] dz [(- r) r]] [(+ x dx) head (+ z dz)])))))
 
+(defonce line-answers
+  ;; raw -> #js {:epoch :x :y :z :see Map :hit Map}: answers valid for one eye and raw-world epoch
+  (js/WeakMap.))
+
+(defn answers-of
+  "The cache of line answers for raw at eye: emptied when the raw world's epoch or the eye moved; nil when raw has no epoch
+  (nothing can be shown unchanged)."
+  [^js raw ^js eye]
+  (when-some [epoch (rays/epoch-of raw)]
+    (let [^js st (or (.get line-answers raw)
+                     (let [st #js {:see (js/Map.) :hit (js/Map.)}] (.set line-answers raw st) st))]
+      (when-not (and (identical? epoch (.-epoch st)) (== (.-x eye) (.-x st)) (== (.-y eye) (.-y st)) (== (.-z eye) (.-z st)))
+        (.clear ^js (.-see st))
+        (.clear ^js (.-hit st))
+        (set! (.-epoch st) epoch) (set! (.-x st) (.-x eye)) (set! (.-y st) (.-y eye)) (set! (.-z st) (.-z eye)))
+      st)))
+
+(defn answered
+  "(compute) for entity e, kept in the answers table k (:see or :hit) while the eye, the raw world's epoch and e's box stay the
+  same: a repeat sensing of the same mob in the same tick (the walk's checks, the mob sample, the entity list) draws no new lines."
+  [^js raw ^js eye ^js e k compute]
+  (let [^js st (answers-of raw eye)]
+    (if-not st
+      (compute)
+      (let [^js pos (.-pos e)
+            ck (str (.-x pos) "," (.-y pos) "," (.-z pos) "," (.-height e) "," (.-width e))
+            ^js m (aget st (name k))
+            hit (.get m ck)]
+        (if (undefined? hit)
+          (let [v (compute)] (.set m ck v) v)
+          hit)))))
+
 (defn can-see?
   "A clear line from the eye to any of the entity's sight-points; stops at the first clear one."
   [^js raw ^js eye ^js e]
-  (let [table (.sightTable raw) ex (.-x eye) ey (.-y eye) ez (.-z eye)]
-    (boolean (some (fn [[x y z]] (sight/line-clear ex ey ez x y z (fn [cx cy cz] (blocks-sight? raw table cx cy cz ex ey ez x y z))))
-                   (sight-points e)))))
+  (answered raw eye e :see
+            #(let [table (.sightTable raw) ex (.-x eye) ey (.-y eye) ez (.-z eye)]
+               (boolean (some (fn [[x y z]] (sight/line-clear ex ey ez x y z (fn [cx cy cz] (blocks-sight? raw table cx cy cz ex ey ez x y z))))
+                              (sight-points e))))))
 
 (defn can-hit?
   "A melee swing needs a clear line from the eye to the feet, the middle or the head of the entity, over collision boxes."
   [^js raw ^js eye ^js e]
-  (let [^js pos (.-pos e) h (or (.-height e) default-height)]
-    (boolean (some (fn [dy] (sight/ray-clear (.-x eye) (.-y eye) (.-z eye) (.-x pos) (+ (.-y pos) dy) (.-z pos)
-                                             (fn [x y z] (.shapesAt raw x y z))))
-                   [0.2 (/ h 2) (- h 0.1)]))))
+  (answered raw eye e :hit
+            #(let [^js pos (.-pos e) h (or (.-height e) default-height)]
+               (boolean (some (fn [dy] (sight/ray-clear (.-x eye) (.-y eye) (.-z eye) (.-x pos) (+ (.-y pos) dy) (.-z pos)
+                                                        (fn [x y z] (.shapesAt raw x y z))))
+                              [0.2 (/ h 2) (- h 0.1)])))))
 
 ;; ---- the wrapped primitives
 

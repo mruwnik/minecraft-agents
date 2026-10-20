@@ -40,7 +40,7 @@
   {::fall-margin {:default 1 :doc "Hp a walk's falls may cost over the plan before an info damage-mismatch (rounding of the fall)." :spec (a/num-in 0 nil)}})
 (defn fall-margin [] (settings/get settings ::fall-margin))
 
-(defn step-cells
+(defn step-cells-of
   "The cells [x y z] the body passes going from prev to step: the columns its footprint (the hitbox half-width either side) touches
   along the line between their stand points, from the floor under the lower one to two over the higher one's feet."
   [prev step]
@@ -54,20 +54,43 @@
         hi (+ 2 (max (:y prev) (:y step)))]
     (for [[x z] cols y (range lo (inc hi))] [x y z])))
 
+(defonce leg-cells (js/Map.))
+
+(defn step-cells
+  "step-cells-of, kept per leg: a walk's window asks for the same legs at every boundary."
+  [prev step]
+  (let [k (str (:px prev) "," (:pz prev) "," (:y prev) "," (:px step) "," (:pz step) "," (:y step))]
+    (or (.get leg-cells k)
+        (let [cells (doall (step-cells-of prev step))]
+          (when (> (.-size leg-cells) 4096) (.clear leg-cells))
+          (.set leg-cells k cells)
+          cells))))
+
 (defn opens-cells
   "The cells of the blocks the steps open by hand, with the cell over and under each (a door's other half): the walker
   changes them itself."
   [steps]
   (into #{} (for [s steps {:keys [x y z]} (:opens s) dy [-1 0 1]] [x (+ y dy) z])))
 
+(defn opens-of
+  "opens-cells of steps and ahead, kept in watch's :opens while the walk's steps and ahead stay the same objects."
+  [{:keys [opens]} steps ahead]
+  (let [[s a cells] (some-> opens deref)]
+    (if (and (identical? s steps) (identical? a ahead))
+      cells
+      (let [cells (opens-cells (into steps ahead))]
+        (when opens (reset! opens [steps ahead cells]))
+        cells))))
+
 (defn window-cells
-  "The distinct cells of the legs into steps i .. i+n-1 (each from the step before it), without the cells the steps open."
-  [steps i n]
-  (let [skip (opens-cells steps)]
-    (->> (range (max 1 i) (min (count steps) (+ i n)))
-         (mapcat (fn [k] (step-cells (nth steps (dec k)) (nth steps k))))
-         (remove skip)
-         distinct)))
+  "The distinct cells of the legs into steps i .. i+n-1 (each from the step before it), without the cells the steps open
+  (skip, when given: opens-cells of steps)."
+  ([steps i n] (window-cells steps i n (opens-cells steps)))
+  ([steps i n skip]
+   (->> (range (max 1 i) (min (count steps) (+ i n)))
+        (mapcat (fn [k] (step-cells (nth steps (dec k)) (nth steps k))))
+        (remove skip)
+        distinct)))
 
 (defn state-keys
   "The names of the state table's per-state arrays that the planner reads (every typed array with one entry per state, but
@@ -221,7 +244,7 @@
   way ahead (watch :sense, :known: the keys already planned for, which the stop adds its own to), else
   {:status :replan :why :health} when the damage planned ahead is more than the body may spend now (health-stop; watch
   :budget), else {:status :replan :why :refresh} for a partial plan due a refresh. Only at a boundary?. steps: the steps walked; i the
-  executor's index before the tick; state its state after; watch {:base :fresh :ahead :skip :status :interval :mobs :seen}."
+  executor's index before the tick; state its state after; watch {:base :fresh :ahead :skip :status :interval :mobs :seen :opens}."
   [{:keys [base fresh ahead skip status interval mobs sense known] :as watch} steps i {i2 :i tick :tick} pose]
   (when (boundary? steps i i2 tick pose)
     (let [all (into steps ahead)
@@ -232,7 +255,7 @@
           changed (when now
                     (let [^js bs (.-snapshot base) ^js ns (.-snapshot now) table (.-table base)]
                       (filterv (fn [[x y z]] (not (same-for-planner? table (.stateAt bs x y z) (.stateAt ns x y z))))
-                               (remove (or skip #{}) (window-cells here i2 (:window watch-policy))))))
+                               (remove (or skip #{}) (window-cells here i2 (:window watch-policy) (opens-of watch steps ahead))))))
           quiet? (and (empty? still) (empty? changed))
           dstop (when quiet? (danger-stop watch all i2 at))
           hstop (when (and quiet? (not dstop)) (health-stop watch all i2 at))]
@@ -251,7 +274,7 @@
   ([c plan known]
   (when known (swap! known into (map :key (threats/sensed-mobs (:primitives c) {}))))
   (cond-> {:base (:pw plan) :fresh #(wworld/path-world (:primitives c) (wworld/unknown-of (:pw plan))) :ahead [] :skip (opens-cells (:steps plan))
-   :mobs #(combat/sensed (:primitives c) {:radius 8 :max 64}) :seen (atom {})
+   :mobs #(combat/sensed (:primitives c) {:radius 8 :max 64}) :seen (atom {}) :opens (atom nil)
    :status (:status plan) :interval (refresh-ticks (:ms plan) (settings/physics-ms (:primitives c))) :budget #(wworld/damage-budget c)}
     known (assoc :known known :sense #(threats/sensed-mobs (:primitives c) {})))))
 

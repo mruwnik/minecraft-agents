@@ -70,6 +70,25 @@
     (is (= [[1 true nil true nil nil] [2 nil nil true nil nil] [3 true nil nil nil nil] [4 true true true nil nil]] (out {}))
         "in the open all are listed; hostile, item and player carry visible; the raw lyingDown and height are not passed on")))
 
+(deftest a-sight-answer-is-kept-until-the-epoch-or-eye-moves
+  (let [reads (atom 0) epoch (atom 0) eye (atom (at 0.5 65.62 0.5)) walls (atom {})
+        raw (doto (raw-world {})
+              (aset "eye" (fn [] @eye))
+              (aset "epoch" (fn [] @epoch))
+              (aset "stateAt" (fn [x y z] (swap! reads inc) (if (@walls [x y z]) 1 0))))
+        mob (ent 1 "zombie" "hostile" 5.5)
+        sees (fn [] (senses/can-see? raw @eye mob))
+        read-count (fn [] (let [r0 @reads] (sees) (- @reads r0)))]
+    (is (true? (sees)))
+    (is (zero? (read-count)) "asked again with nothing moved: answered from the kept one, no cell read")
+    (reset! walls {[2 64 0] true [2 65 0] true [2 66 0] true})
+    (is (true? (sees)) "the epoch has not moved: still the kept answer")
+    (swap! epoch inc)
+    (is (false? (sees)) "a world change moves the epoch: the line is drawn again")
+    (reset! walls {})
+    (reset! eye (at 0.5 65.62 1.5))
+    (is (true? (sees)) "the eye moved: drawn again")))
+
 (deftest entities-hittable-follows-shapes
   (let [hostile (ent 9 "zombie" "hostile" 5.5)
         hit (fn [blocks] (.-hittable ^js (first (.entities ^js (:w (wrapped {:entities [hostile] :blocks blocks})) #js {:kind "hostile"}))))]
