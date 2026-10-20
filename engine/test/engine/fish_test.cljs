@@ -63,7 +63,7 @@
 
 (deftest water-gone-mid-run-looks-once-then-waits-no-water
   (let [status (fn [mem] (with-redefs [ctx/mem (constantly mem)]
-                           (fish/can-run? {:primitives (tu/fake-on-floor {:blocks bank :inventory [rod]}) :args {:count 3 :radius 24}})))
+                           (fish/can-run? {:primitives (tu/fake-on-floor {:blocks bank :inventory [rod]}) :args {:count 3}})))
         kind-reason (fn [mem] ((juxt first (comp :reason last)) (status mem)))]
     (is (= [:look :no-water] (kind-reason {})) "not looked yet: the round looks")
     (is (= [:later :no-water] (kind-reason {:looked [0 64 0]})) "looked, still no water: waits")))
@@ -111,3 +111,8 @@
               res (await (tu/child-outcome eng 'jobs.food.fish {:count 1} 120))]
           (is (= :done (:status res)) (pr-str res))
           (is (= 1 (:got res))))))))
+
+(deftest a-walk-that-ends-short-of-the-bank-is-not-an-arrival
+  (is (fish/arrived? {:kind :done :data {:arrived true}}))
+  (is (not (fish/arrived? {:kind :done :data {:arrived false :leg true}})))
+  (is (not (fish/arrived? {:kind :stopped :data {:arrived true}}))))

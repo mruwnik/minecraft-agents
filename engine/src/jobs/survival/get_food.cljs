@@ -42,7 +42,7 @@
   :collect  Harvest items lying within 8 blocks (collect-drops).
   :hunt  The nearest passive food animal within ::hunt-radius (combat.hunt over the animal's kind, which collects its drops).
   :crops  Mature crops, sweet berry bushes or melons within ::hunt-radius (blocks.dig).
-  :fish  Nothing left: with a fishing rod carried, once per job it fishes two (jobs.food.fish, which looks for a bank beside water within ::fish-radius (48)) and eats or cooks them.
+  :fish  Nothing left: with a fishing rod carried, once per job it fishes two (jobs.food.fish, which looks for a bank beside water within its ::bank-radius) and eats or cooks them.
   :pen   The surplus of its own pens: an animal in a zone or plan of its own in sight, else it walks (go-to) to the
          nearest zone or plan of its own within ::source-radius it has not visited in this job and culls there (animals.cull over its box, keeping
          the pair; the kill's rule is :own-pen). Its stock is its reserve: taken after the wild food in reach, before fishing and the search.
@@ -99,7 +99,6 @@
    ::job-time-s {:default 1800 :doc "Seconds one attempt at getting fed may take: a hunt, a search, a cook." :spec (a/num-in 0 nil)}
    ::drop-radius {:default 8 :doc "Blocks around the body in which dropped food is picked up." :spec (a/int-in 0 nil)}
    ::explore {:default {:max-distance 64 :max-legs 12 :spend {:job-time 120}} :doc "jobs.explore.search options of the search for food (:explore true)." :spec map?}
-   ::fish-radius {:default 48 :doc "Blocks within which seen water two deep with a bank makes fishing a way, with a fishing rod carried." :spec (a/int-in 0 nil)}
    ::kept-lifted-below {:default -1 :doc "At this much food or less, with no food carried, the last adults of a kind (kept for breeding) are hunted too; -1 (default) never." :spec (a/int-in -1 20)}
    ::eat-bad-food {:default 6 :doc "At this much food or less the last resort eats harmful food carried (rotten flesh); above it harmful food is not food." :spec (a/num-in 0 20)}
    ::max-ways {:default 12 :doc "Ways one call tries without getting fed before it ends :still-hungry." :spec (a/int-in 0 nil)}})
@@ -368,7 +367,7 @@
               (when (= :done (:kind e)) :again))))))))
 
 (defn rod-carried?
-  "Whether a fishing rod is carried: jobs.food.fish itself looks for a bank beside seen water two deep within ::fish-radius."
+  "Whether a fishing rod is carried: jobs.food.fish itself looks for a bank beside seen water two deep within its ::bank-radius."
   [c]
   (boolean (some #(= "fishing_rod" (:name %)) (u/inventory (:primitives c)))))
 
@@ -378,7 +377,7 @@
   the child waits on the world, else nil."
   [c]
   (when (and (not (:fished (ctx/mem c))) (not (search-waits? c)) (rod-carried? c))
-    (let [e (await (child/run!* c :fish 'jobs.food.fish {:count 2 :least 1 :radius (settings/get settings ::fish-radius) :fetch false} {:max-calls 1}))]
+    (let [e (await (child/run!* c :fish 'jobs.food.fish {:count 2 :least 1 :fetch false} {:max-calls 1}))]
       (if (= :continue e)
         :continue
         (do (ctx/update-mem! c assoc :fished true)

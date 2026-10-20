@@ -17,7 +17,7 @@
 
 (def doc
   "Carry :count fish, caught with a fishing rod from a bank beside seen water.
-  The bank is a land cell with seen water (two deep) beside it at the level below, within :radius of the body (:pos names the water cell
+  The bank is a land cell with seen water (two deep) beside it at the level below, within the bank-radius setting (24) of the body (:pos names the water cell
   to cast at instead). The body walks there (go-to), holds the rod and casts: one cast waits for a bite up to the cast-s setting (45), then reels.
   A body with no rod gets one first (jobs.lib.need, unless :fetch is false).
   Ends with the data {:got n :text}, info fish.caught per fish, and the ending:
@@ -27,22 +27,25 @@
   - :nothing-possible :unreachable (the bank could not be walked to) or :no-bite (the max-misses setting, 8, casts in a row caught nothing).
   - :limit-reached: the call's :spend :job-time (default ::job-time-s) is used up with fewer than :least caught; the engine ends it, with {:got}.
   It waits (can-start?, before the first cast) on :no-rod (none carried and :fetch false) and :no-water (no seen water with a bank
-  within :radius); can-run? waits on :no-water again after a look round (the water gone mid-run).
+  within the bank-radius setting); can-run? waits on :no-water again after a look round (the water gone mid-run).
   The goal is to carry :count fish: the carried fish are counted at every round, so a body already carrying them is done,
   and fish eaten or stored mid-job are caught again.")
 
 (a/defargs args
   {:count {:doc "fish to catch" :spec (a/int-in 1 nil) :default 3}
    :pos {:doc "the water cell to cast at, [x y z] or {:x :y :z}; nil: the nearest bank in sight" :spec ::a/pos :default nil}
-   :radius {:doc "how far from the body to look for a bank" :spec (a/num-in 1 nil) :default 24}
    :fetch {:doc "get a rod when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-rod" :spec need/option? :default true}})
 
 (a/defargs settings
   {::cast-s {:default 45 :doc "Seconds one cast waits for a bite." :spec (a/num-in 1 nil)}
    ::max-misses {:default 8 :doc "Casts in a row without a catch before the job gives up :no-bite." :spec (a/int-in 1 nil)}
+   ::bank-radius {:default 24 :doc "Blocks from the body within which a bank beside seen water is looked for." :spec (a/num-in 1 nil)}
+   ::fish-s {:default 30 :doc "Seconds one fish is quoted to take." :spec (a/num-in 1 nil)}
    ::job-time-s {:default 600 :doc "Seconds from the first round before fishing gives up." :spec (a/num-in 1 nil)}})
 (defn cast-s [] (settings/get settings ::cast-s))
 (defn max-misses [] (settings/get settings ::max-misses))
+(defn bank-radius [] (settings/get settings ::bank-radius))
+(defn fish-s [] (settings/get settings ::fish-s))
 (defn time-s [] (settings/get settings ::job-time-s))
 
 (def target [:pos])
@@ -56,15 +59,15 @@
 (defn got "The fish carried: the goal is to carry :count, whatever was eaten or stored on the way." [c] (foods/fish-carried (:primitives c)))
 
 (defn spots
-  "The banks {:land :water} to cast from: the one beside :pos when given, else the seen ones within :radius, nearest first;
+  "The banks {:land :water} to cast from: the one beside :pos when given, else the seen ones within the bank radius, nearest first;
   only water with water below it (two deep)."
   [c]
   (let [p (:primitives c)
         deep? #(= "water" (u/seen-name p (update (:water %) :y dec)))
         found (if-let [pos (:pos (:args c))]
                 (let [w (near/cell-of pos)]
-                  (filter #(= w (:water %)) (shore/spots p (u/self-pos c) {:radius (:radius (:args c))})))
-                (shore/spots p (u/self-pos c) {:radius (:radius (:args c))}))]
+                  (filter #(= w (:water %)) (shore/spots p (u/self-pos c) {:radius (bank-radius)})))
+                (shore/spots p (u/self-pos c) {:radius (bank-radius)}))]
     (filter deep? found)))
 
 
@@ -79,7 +82,7 @@
 
 (defn quote-of [c]
   (let [most (time-limit c)]
-    {:uses {:job-time [0 (min most (* 30 (:count (:args c) 1))) most]}}))
+    {:uses {:job-time [0 (min most (* (fish-s) (:count (:args c) 1))) most]}}))
 
 (defn stop!
   "End the call with the fish got so far and text as the data: done when the call's :least (default 1, :all = :count)
@@ -132,11 +135,14 @@
       (= :done (:kind e)) :again
       :else (assoc-in e [:data :got] (got c)))))
 
+(defn arrived? "A go-to ending :done can still be short of the bank ({:arrived false :leg true})." [r]
+  (and (= :done (:kind r)) (boolean (:arrived (:data r)))))
+
 (defn ^:async walk! [c {:keys [land]}]
   (let [r (await (child/call-walk* c :bank {:pos (select-keys land [:x :y :z]) :range 1 :ways #{:walk :clear-seal}}))]
     (cond
       (= :continue r) :continue
-      (= :done (:kind r)) :arrived
+      (arrived? r) :arrived
       :else (stop! c :nothing-possible :unreachable (str "could not walk to the bank at " (pr-str land))))))
 
 (defn ^:async step [c]
