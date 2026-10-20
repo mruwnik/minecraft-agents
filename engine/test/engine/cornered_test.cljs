@@ -587,7 +587,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (setup {:blocks doorway :inventory [{:name "cobblestone" :count 20}] :entities [(zombie 0 64 1)]})
+        (let [s (setup {:blocks doorway :inventory [{:name "cobblestone" :count 20}] :entities [(zombie 0.5 64 1.6)]})
               {:keys [eng p seen]} s]
           (.override (.-world p) "jumpPlace"
                      (fn [_token _args _impl] (js/Promise.resolve #js {:status "failed" :placed 0 :reason "not-raised"})))
@@ -615,6 +615,24 @@
           (is (= 67 while-hidden) "the second try raised the whole pillar")
           (is (hiding? seen))
           (is (zero? (count (calls p "attack")))))))))
+
+(deftest a-zombie-in-the-cell-of-the-next-block-is-struck-out-and-the-pillar-goes-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen while-hidden]}
+              (await (hidden-round retreat {:blocks doorway :inventory [{:name "cobblestone" :count 20}]
+                                            :entities [(zombie 0.5 64 0.9)]}
+                                   1000 (fn [{:keys [p]}] (js/Math.floor (second (:pos (fake/self p)))))
+                                   [] (fn [p]
+                                        (.override (.-world p) "jumpPlace"
+                                                   (fn [token args impl]
+                                                     (if (empty? (calls p "attack"))
+                                                       (js/Promise.resolve #js {:status "failed" :placed 0 :reason "place-failed: the block is still air"})
+                                                       (impl token args)))))))]
+          (is (pos? (count (calls p "attack"))) "the zombie standing in the cell is struck")
+          (is (= 67 while-hidden) "the pillar went on to its full height")
+          (is (hiding? seen)))))))
 
 (deftest a-pillar-that-stops-at-two-high-still-hides
   (async done
@@ -1075,6 +1093,10 @@
   (is (= [:plug :back-off :plug-dig :fight] (cornered/escape-order {:climber? true}))
       "a spider climbs the pillar's side to the body on top"))
 
+(deftest a-pillar-comes-first-against-a-mob-in-a-corner-cell-when-it-fits
+  (is (= [:pillar :plug :back-off :plug-dig :fight] (cornered/escape-order {:pillar-first? true :pressed? true}))
+      "no fist fight first, and the fight stays the last resort"))
+
 (deftest a-pillar-that-leaves-too-few-blocks-comes-after-the-dig-down
   (is (= [:plug :plug-dig :pillar :back-off :fight] (cornered/escape-order {:lean? true}))
       "the pillar top cannot be roofed in without blocks; a pit regains them")
@@ -1200,7 +1222,7 @@
           (is (zero? (count (calls p "place"))) "no seal with a mob already in the cell beside it")
           (is (= 1 (count (calls p "attack")))))))))
 
-(deftest an-unarmed-body-with-a-zombie-in-a-corner-cell-fights-it-before-walling-or-pillaring
+(deftest an-unarmed-body-with-a-zombie-in-a-corner-cell-pillars-before-it-walls-or-fights
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1211,8 +1233,8 @@
           (core/submit! eng retreat {})
           (await (core/tick! eng))
           (is (zero? (count (calls p "place"))) "no wall while the zombie stands in a corner cell")
-          (is (zero? (count (calls p "jumpPlace"))) "no pillar beside it")
-          (is (pos? (count (calls p "attack")))))))))
+          (is (pos? (count (calls p "jumpPlace"))) "the pillar needs no corner cell")
+          (is (zero? (count (calls p "attack"))) "no fist fight first"))))))
 
 ;; an arrow from a skeleton the body never saw: the damage packet names it, nothing else does
 (defn shot!

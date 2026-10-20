@@ -83,7 +83,8 @@
    :after [[:not-block [6 0 16] "cobblestone"] [:not-block [6 1 16] "cobblestone"]]
    :limit-s 170}
   {:name "zombie-diagonal-to-a-stair-hole-body-survives"
-   :blocks [[:fill [0 0 0] [31 2 31] "stone"] [:fill [16 2 16] [16 2 16] "air"]]
+   :blocks [[:fill [0 0 0] [31 2 31] "stone"] [:fill [16 2 16] [16 2 16] "air"]
+            [:fill [0 3 0] [31 6 0] "stone"] [:fill [0 3 31] [31 6 31] "stone"] [:fill [0 3 0] [0 6 31] "stone"] [:fill [31 3 0] [31 6 31] "stone"]]
    :body {:at [16.5 2 16.5] :inventory [["dirt" 12]] :effects [["resistance" 900 1]]}
    :act [[:summon "zombie" [17.5 3 17.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}

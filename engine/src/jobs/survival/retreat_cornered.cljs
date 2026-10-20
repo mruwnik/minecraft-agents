@@ -14,6 +14,7 @@
             [jobs.lib.block-sets :as bs]
             [jobs.lib.escape :as escape]
             [jobs.lib.look :as look]
+            [jobs.lib.pillar :as pl]
             [jobs.lib.reach :as reach]
             [jobs.lib.result :as result]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -117,18 +118,19 @@
   for a creeper), :flyer? a phantom is near (it outflies a walker: shelter, else fight), :creeper? one is near (it comes first), :enderman? an angry enderman is near (angry-enderman?) (it teleports, so no walk or back-off, and a
   pillar is within its reach: the body enters water within water-reach, which it avoids, else walks under a 2-high roof within roof-reach, which it cannot enter, else shuts itself in), :ranged? the threat shoots, or the body is under fire (under-fire?), :climber? it is a spider (it climbs the pillar), :faster? a mob
   the body cannot outrun is near (no step back: it gains nothing), :home? the body is in its home
-  room: it digs no pit or pocket in its own floor or walls, :lean? the pillar would leave the body too few blocks to roof in on its top (retreat-pillar/lean?): the dig-down comes before it (a pit regains its blocks), :pressed? pressed? holds and the body is not under fire (a seal or pillar cannot be built beside the mob: the fight comes first, except against a creeper or an enderman), :swim? the body is in water with a drowned near: swimming out to dry land comes first unless a fight wins}."
-  [{:keys [win? creeper? enderman? flyer? ranged? climber? faster? swim? home? pressed? lean?]}]
+  room: it digs no pit or pocket in its own floor or walls, :lean? the pillar would leave the body too few blocks to roof in on its top (retreat-pillar/lean?): the dig-down comes before it (a pit regains its blocks), :pillar-first? a mob in a diagonal cell the walls must fill, no weapon, and a pillar fits: the pillar comes first (a fist fight there only trades hits), :pressed? pressed? holds and the body is not under fire (a seal or pillar cannot be built beside the mob: the fight comes first, except against a creeper or an enderman), :swim? the body is in water with a drowned near: swimming out to dry land comes first unless a fight wins}."
+  [{:keys [win? creeper? enderman? flyer? ranged? climber? faster? swim? home? pressed? lean? pillar-first?]}]
   (cond->> (cond
              creeper? [:back-off :plug :pillar :plug-dig :fight]
              enderman? [:water :roof :plug :plug-dig :fight]
              win? [:fight]
              flyer? [:plug :plug-dig :fight]
-             :else (into (if pressed? [:fight] [])
-                         (concat (if (or ranged? climber?) [:plug] [:plug :pillar])
-                                 (when-not faster? [:back-off])
-                                 [:plug-dig]
-                                 (when-not pressed? [:fight]))))
+             :else (let [pressed? (and pressed? (not pillar-first?))]
+                     (distinct (concat (cond pillar-first? [:pillar] pressed? [:fight] :else [])
+                                       (if (or ranged? climber?) [:plug] [:plug :pillar])
+                                       (when-not faster? [:back-off])
+                                       [:plug-dig]
+                                       (when-not pressed? [:fight])))))
     (and swim? (not creeper?) (not enderman?) (not win?)) (into [:swim-out])
     (and lean? (not home?)) (#(if (some #{:pillar} %)
                                 (vec (mapcat (fn [o] (case o :pillar [:plug-dig :pillar] :plug-dig [] [o])) %))
@@ -537,8 +539,11 @@
         _ (when fire? (ctx/update-mem! c update :fire-tries (fnil inc 0)))
         fire-tries (:fire-tries (ctx/mem c) 0)
         armed? (some? (combat/best-weapon (:primitives c) weapons))
+        pillar-first? (boolean (and (not fire?) (not armed?) (pillar/pillar-item c)
+                                    (pillar/pillar-ok? (escape/block-at-of (:primitives c)) (pl/feet-cell c))
+                                    (mob-in-corner-cell? c hostiles)))
         beaten-fight? (or (beaten-fights? {:beaten? beaten :armed? armed? :blocks? (boolean (seq (lb/carried c (flight/blocks c))))})
-                          (and (not fire?) (mob-in-corner-cell? c hostiles)))
+                          (and (not fire?) (not pillar-first?) (mob-in-corner-cell? c hostiles)))
         win? (and (not blind?)
                   (fight-wins? c (if (and (:hit-on-the-run (ctx/mem c)) (not fire?)) (hitters c hostiles) hostiles)))
         order (escape-order {:win? win?
@@ -551,7 +556,8 @@
                              :pressed? (or beaten-fight? (press-fights? {:fire? fire? :pressed? (pressed? c hostiles) :tries fire-tries :limit (settings/get settings :jobs.survival.retreat-cornered/cover-tries)}))
                              :swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (in-water? c))
                              :home? home?
-                             :lean? (pillar/lean? c)})]
+                             :lean? (pillar/lean? c)
+                             :pillar-first? pillar-first?})]
     (loop [[option & more] order]
       (let [r (when-not (flight/tried? c option)
                 (case option
