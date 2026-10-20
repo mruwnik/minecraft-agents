@@ -134,7 +134,7 @@
 
 (defn ^:async back-to-resume!
   "After a fetch walked the body off: a go-to child back to the cell the dig goes on from (mem :resume-at). :continue while it walks,
-  :again once there, else the trip ends :not-back."
+  :again once there (go-to's own :arrived counts: water can push the body into the next cell after it arrived), else the trip ends :not-back."
   [c]
   (let [{:keys [x y z] :as cell} (:resume-at (ctx/mem c))
         r (await (child/call-walk* c :back
@@ -143,6 +143,7 @@
     (cond
       (= :continue r) :continue
       (= (access/cell cell) (access/cell (cell-of (u/self-pos c)))) :again
+      (get-in r [:data :arrived]) (do (ctx/update-mem! c assoc :resume-at (cell-of (u/self-pos c))) :again)
       :else (end-run c {:got 0 :reason :not-back :mended 0
                         :text (str "mine could not get back to " (str/join "," (access/cell cell)) " after getting its tools")}))))
 

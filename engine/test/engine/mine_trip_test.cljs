@@ -2,6 +2,7 @@
   "jobs.gather.mine, the trip around jobs.gather.dig-for: equip, call the dig, mend, walk back. The dig's own cases are engine.mine-a..e."
   (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
+            [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.mine-support :as m :refer [as-child rock-world feet inv cells]]
             [engine.test-util :as tu]))
@@ -68,3 +69,14 @@
                                              (assoc (rock-world {}) :inventory [{:name "stone_pickaxe" :count 1 :durability 2 :max 131}]) nil 40))]
           (is (= [:condition-failed :no-tool :spent] [(:kind out) (contract/cause-key out) (get-in out [:data :why])]) (pr-str out))
           (is (re-find #"nearly spent.*jobs.gather.mine" (get-in out [:data :text]))))))))
+
+(deftest a-walk-back-that-arrived-but-was-pushed-on-goes-on-digging
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [arrived-only {:round (fn ^:async go-to [c] (ctx/end c :done nil {:arrived true :in-water true}))}
+              {:keys [out]} (await (as-child {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 8 :trip true}
+                                             (assoc (rock-world {"3,64,1" "iron_ore"}) :inventory [])
+                                             "stone_pickaxe" 200
+                                             {:move-to [0.5 64 1.5] :jobs {'jobs.movement.go-to arrived-only}}))]
+          (is (not= :not-back (:reason (:data out))) (pr-str out)))))))
