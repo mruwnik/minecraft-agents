@@ -8,7 +8,7 @@
             [engine.memory :as mem]
             [engine.test-util :as tu :refer [child-outcome]]
             [engine.triggers :as triggers]
-            [jobs.farm.find-spot :as find-spot]
+            [jobs.lib.patch :as pt]
             [jobs.farm.field :as fld]
             [jobs.farm.tend-box :as tend-box]))
 
@@ -44,7 +44,7 @@
 (deftest water-counts-for-a-spot-only-when-seen
   (let [world {:blocks (assoc (into {} (for [x (range 0 4) z (range 0 4)] [(str x ",63," z) "dirt"])) "4,63,0" "water")}
         a {:range 4 :w 2 :h 2 :depth 6 :limit 1}
-        share (fn [p] (:water-share (first (find-spot/scan p a origin))))]
+        share (fn [p] (:water-share (first (pt/scan p a origin))))]
     (is (pos? (share (tu/seeing-all (tu/fake world)))))
     (is (zero? (or (share (tu/blind (tu/fake world))) 0)) "water not seen: no water share")))
 

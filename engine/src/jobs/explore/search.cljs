@@ -12,6 +12,7 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
+            [jobs.lib.patch :as patch]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [engine.notes :as notes]))
@@ -52,7 +53,10 @@
   - :done: :count found.
   - :nothing-possible :distance (no leg left), :legs (::max-legs walked) or :stuck (three failed walks in a row).
   - :limit-reached :job-time (the call's :spend :job-time, default ::job-time-s) or :wall-time (default ::wall-time-s); the engine ends it, with the data of done? ({:found :coverage :why}) and neither event; with :least targets found (default 1) the engine ends it :done instead.
-  - A call with no :target never runs (:bad-args).
+  - A call with no :target and no :patch never runs (:bad-args).
+
+  With :patch it looks for ground, not things: each look round (the origin first, then every leg's arrival) scans for a patch
+  of the footprint (jobs.lib.patch, in slices) and ends :done at the first that has one, :found [{:what \"patch\" :pos :spots}]; notes are neither read nor written.
 
   Memory: :origin :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :blocked (the ways legs
   failed since the last arrival) :deferred (unloaded legs set aside while a sweep goes on), and :leg while
@@ -73,6 +77,7 @@
    :scan-radius {:doc "how far round the body each look reaches" :spec (a/num-in 0 nil) :default 24}
    :takeable {:doc "leave out blocks a zone, claim or plan footprint bars this body from taking" :spec boolean? :default false}
    :avoid {:doc "columns [x z] whose blocks do not count as found" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
+   :patch {:doc "look for a patch of ground instead of named things: {:w :h :range :depth :limit :max-step :plan :farmland?} as jobs.lib.patch scans (jobs.farm.find-spot builds it); the search ends at the first look round with one, and :found is then [{:what \"patch\" :pos :spots}]" :spec map? :default nil}
    :use-notes {:doc "targets noted (by any body) within :max-distance count as found" :spec boolean? :default true}})
 
 (a/defargs settings
@@ -213,9 +218,9 @@
 ;; ------------------------------------------------------------------ the body
 
 (defn no-target
-  "Never :bad-args while no target is named."
+  "Never :bad-args while no target (or :patch) is named."
   [c]
-  (if (empty? (targets c))
+  (if (and (empty? (targets c)) (not (:patch (:args c))))
     (contract/never :bad-args "no target is named" :text "no target is named")
     (contract/ok :target "a target is named")))
 
@@ -417,11 +422,56 @@
                                                                               (cond-> (not dangerous?) (update :legs (fnil inc 0)))))))
         (if (>= in-row (max-failed-in-row)) (finish! c :not-found :stuck) :again)))))
 
+(defn ^:async patch-step!
+  "Patch mode: look round and scan for a patch (the origin first, then where the body stands). :again while the scan goes on,
+  true when spots are found (booked as the finding), nil when this place has none."
+  [c]
+  (let [a (:patch (:args c))
+        _ (when-not (:patch-scan (ctx/mem c)) (await (look/survey! c :near (look/search-effort))))
+        [x y z] (if (zero? (:scans (ctx/mem c) 0)) (:origin (ctx/mem c)) (here c))
+        spots (patch/scan-step! c a {:x x :y y :z z})]
+    (when-not (= :again spots)
+      (let [[ox _ oz] (:origin (ctx/mem c))]
+        (ctx/update-mem! c (fn [m] (cond-> (-> m (update :scans (fnil inc 0)) (update :farthest (fnil max 0) (js/Math.round (xz-dist [x z] [ox oz]))))
+                                     spots (assoc :found [{:what "patch" :pos (:pos (first spots)) :spots spots}]))))))
+    (if (= :again spots) :again (boolean spots))))
+
+(defn ^:async advance!
+  "Start the next leg, or end the search for want of one."
+  [c names ns]
+  (let [m (ctx/mem c)]
+    (if (>= (:legs m 0) (settings/get settings ::max-legs))
+      (finish! c :not-found :legs)
+      (let [{:keys [leg step column tried failed skipped unloaded more held]} (choose-leg c m names ns)]
+        (ctx/update-mem! c (fn [m] (-> m
+                                       (update :tried (fnil into []) tried)
+                                       (update :failed (fnil into []) failed)
+                                       (update :skipped (fnil + 0) skipped)
+                                       (assoc :choosing (boolean (and more (not leg))))
+                                       (assoc :deferred (when (and more (not leg)) unloaded)))))
+        (cond
+          leg (do (ctx/update-mem! c (fn [m] (-> m (assoc :leg leg :leg-column column)
+                                                 (update :legs (fnil + 0) (if step 0 1)))))
+                  (await (walk! c)))
+          more :again
+          (and (empty? unloaded) (pos? held)) (do (ctx/update-mem! c dissoc :blocked) :again)
+          (empty? unloaded) (finish! c :not-found :distance)
+          :else (do (await (child/pause! c (/ (wait-ms) 1000) :chunks-loading))
+                    :continue))))))
+
+(defn ^:async patch-round!
+  "One pass of a :patch search: scan here; with none, the next leg."
+  [c]
+  (let [found (if (:choosing (ctx/mem c)) false (await (patch-step! c)))]
+    (case found
+      :again :again
+      true (finish! c :found nil)
+      (await (advance! c [] [])))))
+
 (defn ^:async step!
   "Look round; end when enough is found or the legs are used up, else start the next leg."
   [c]
   (let [{:keys [use-notes max-distance] want :count} (:args c)
-        max-legs (settings/get settings ::max-legs)
         names (targets c)
         resumed (:choosing (ctx/mem c))
         _ (when-not (or resumed (breath/in-water? (:primitives c))) (await (scan! c names)))
@@ -433,33 +483,18 @@
                         (not resumed) (add-found (takeable c (remembered (:primitives c) names (:origin m) max-distance)) want))
                 use-notes (add-found (takeable c (noted (:primitives c) ns names (:origin m) max-distance gone)) want))]
     (ctx/update-mem! c assoc :found found)
-    (cond
-      (>= (count found) want) (finish! c :found nil)
-      (>= (:legs m 0) max-legs) (finish! c :not-found :legs)
-      :else (let [{:keys [leg step column tried failed skipped unloaded more held]} (choose-leg c m names ns)]
-              (ctx/update-mem! c (fn [m] (-> m
-                                             (update :tried (fnil into []) tried)
-                                             (update :failed (fnil into []) failed)
-                                             (update :skipped (fnil + 0) skipped)
-                                             (assoc :choosing (boolean (and more (not leg))))
-                                             (assoc :deferred (when (and more (not leg)) unloaded)))))
-              (cond
-                leg (do (ctx/update-mem! c (fn [m] (-> m (assoc :leg leg :leg-column column)
-                                                       (update :legs (fnil + 0) (if step 0 1)))))
-                        (await (walk! c)))
-                more :again
-                (and (empty? unloaded) (pos? held)) (do (ctx/update-mem! c dissoc :blocked) :again)
-                (empty? unloaded) (finish! c :not-found :distance)
-                :else (do (await (child/pause! c (/ (wait-ms) 1000) :chunks-loading))
-                          :continue))))))
+    (if (>= (count found) want)
+      (finish! c :found nil)
+      (await (advance! c names ns)))))
 
 (defn ^:async search-step!
   "One pass: end, walk the leg under way, or look and start the next leg. :again goes on, else a round result."
   [c]
   (ctx/update-mem! c (fn [m] (cond-> m (nil? (:origin m)) (assoc :origin (or (some-> (area/center c) cell-of) (here c))))))
-  (if (:leg (ctx/mem c))
-    (await (walk! c))
-    (await (step! c))))
+  (cond
+    (:leg (ctx/mem c)) (await (walk! c))
+    (:patch (:args c)) (await (patch-round! c))
+    :else (await (step! c))))
 
 (defn ^:async round [c]
   (await (pace/steps! c #(search-step! c))))

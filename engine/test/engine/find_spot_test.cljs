@@ -12,6 +12,7 @@
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
             [jobs.farm.find-spot :as fs]
+            [jobs.lib.patch :as pt]
             [jobs.lib.farm :as farm]
             [jobs.lib.surface :as surface]))
 
@@ -82,7 +83,7 @@
   (is (= 63 (surface/column-top (fn [{:keys [y]}] (case y 63 "dirt" "cave_air")) 0 0 64 12))))
 
 (deftest score-patch-table
-  (are [in expected] (= expected (fs/score-patch in))
+  (are [in expected] (= expected (pt/score-patch in))
     {:tops [63 63 63 63] :water-share 0 :sky true :away 0}
     {:y 63 :level 100 :work 0 :water-share 0 :sky true :away 0 :score 115}
     {:tops [63 63 63 64] :water-share 1 :sky true :away 8}
@@ -109,7 +110,7 @@
     #{} 0 63 0 false))
 
 (deftest max-step-table
-  (are [tops h expected] (= expected (fs/max-step tops h))
+  (are [tops h expected] (= expected (pt/max-step tops h))
     [63 63 63 63] 2 0
     [63 64 63 63] 2 1
     [63 63 63 66] 2 3
@@ -121,7 +122,7 @@
   (let [in {:footprints {[5 70 5] "hut"} :zones [{:name "mine" :owner "Me" :min [0 0 0] :max [2 99 2]}
                                                   {:name "theirs" :owner "Other" :min [10 0 0] :max [12 99 2]}]
             :claims [] :self "Me" :now 0}
-        b? (fs/blocked-fn in)]
+        b? (pt/blocked-fn in)]
     (are [x y z expected] (= expected (b? x y z))
       5 63 5 true
       6 63 5 false
@@ -198,6 +199,30 @@
               r (await (child-outcome eng job (assoc small :max-step 0) 200))]
           (is (= {:spot nil :reason :none :why :distance} r)))))))
 
+(deftest exploring-stops-at-the-first-patch
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:blocks (merge bumpy (patch 47 -1 3 3 63 "dirt") (patch 47 -1 3 3 64 "dirt")
+                                                   (patch 79 -1 3 3 63 "dirt") (patch 79 -1 3 3 64 "dirt"))})
+              r (await (child-outcome eng job (assoc small :max-step 0) 200))]
+          (is (every? #(< (:x (:pos %)) 60) (:spots r)) "the farther patch is never looked at"))))))
+
+(deftest a-missing-plan-ends-none
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:blocks (patch 4 0 3 3 63 "dirt")})
+              r (await (child-outcome eng job {:plan "no-such-plan"} 4))]
+          (is (= {:spot nil :reason :none :why :no-plan} r)))))))
+
+(deftest footprint-table
+  (are [cells expected] (= expected (fs/footprint cells))
+    [] nil
+    [{:pos [3 64 5] :want "farmland"}] {:w 1 :h 1 :farmland? true}
+    [{:pos [0 64 0] :want "oak_planks"} {:pos [4 70 2] :want "oak_planks"}] {:w 5 :h 3 :farmland? false}
+    [{:pos [0 64 0] :want {:crop "wheat"}} {:pos [1 64 0] :want "water"}] {:w 2 :h 1 :farmland? true}))
+
 (deftest limit-caps-the-spots
   (async done
     (tu/run-async done
@@ -217,7 +242,7 @@
 
 (defn scan-at [world self args from]
   (let [p (tu/seeing-all (tu/fake {:blocks world :self {:pos self}}))]
-    (fs/scan p (merge {:w 3 :h 3 :range 6 :depth 12 :limit 50} args) from)))
+    (pt/scan p (merge {:w 3 :h 3 :range 6 :depth 12 :limit 50} args) from)))
 
 (deftest scan-reports-sky-for-open-ground-and-not-under-a-roof
   (let [deep (patch 2 0 3 3 2 "stone")
@@ -257,7 +282,7 @@
               ;; one patch row: (2*range+1) z cells x w columns, each reading at most the
               ;; top scan (2*depth) + 1 + the sky scan (2*depth + 8)
               row-reads (* (inc (* 2 (:range a))) (:w a) (+ (* 4 (:depth a)) 9))
-              bound (+ (fs/read-budget) row-reads)]
+              bound (+ (pt/read-budget) row-reads)]
           (core/submit! eng '(recording-parent) {})
           (await (core/tick! eng))
           (is (empty? (:list (core/state eng))) "one call scans the whole range")
@@ -307,7 +332,7 @@
         reads (atom 0)
         orig (.-blockAt p)
         _ (set! (.-blockAt p) (fn [pos] (swap! reads inc) (.call orig p pos)))
-        r (fs/scan p a {:x (first self) :y (second self) :z (nth self 2)})]
+        r (pt/scan p a {:x (first self) :y (second self) :z (nth self 2)})]
     [@reads r]))
 
 (deftest flat-ground-stops-at-the-nearest-good-patches
@@ -342,7 +367,7 @@
 
 (deftest a-stone-patch-scores-below-a-grass-patch
   (let [p (tu/seeing-all (tu/fake {:blocks (merge (patch 0 0 3 3 63 "stone") (patch 10 0 3 3 63 "grass_block"))}))
-        spots (fs/scan p {:w 3 :h 3 :range 12 :depth 4 :limit 2} {:x 1 :y 64 :z 1})]
+        spots (pt/scan p {:w 3 :h 3 :range 12 :depth 4 :limit 2} {:x 1 :y 64 :z 1})]
     (is (= [100 0] (mapv :farmable (sort-by (comp - :farmable) spots))))))
 
 (def pond-east
