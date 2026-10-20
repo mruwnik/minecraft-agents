@@ -19,12 +19,13 @@ function run (dir, extraEnv = {}) {
     const opts = { state: 'play', version: '1.21.4' }
     const ser = createSerializer(opts); const de = createDeserializer({ ...opts, isServer: true, noErrorLogging: true })
     const buf = ser.createPacketBuffer({ name: 'chat_command', params: { command: 'say hi' } })
-    console.log(JSON.stringify(de.parsePacketBuffer(buf).data))`
-  const r = spawnSync(process.execPath, ['--input-type=module', '-e', script], { cwd: here, encoding: 'utf8', env: { ...process.env, MC_COMPILE_CACHE_DIR: dir, ...extraEnv } })
+    console.log(JSON.stringify(de.parsePacketBuffer(buf).data))
+    await new Promise(resolve => setTimeout(resolve, 300))`
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', script], { cwd: here, encoding: 'utf8', env: { ...process.env, MC_COMPILE_CACHE_DIR: dir, MC_PROTOCOL_CODE_CACHE_MS: '50', ...extraEnv } })
   assert.equal(r.status, 0, r.stderr)
   const sub = path.join(dir, 'protocol')
-  const cached = fs.existsSync(sub) ? fs.readdirSync(sub).filter(f => f.endsWith('.cjs')).length : 0
-  return { data: JSON.parse(r.stdout), cached }
+  const files = fs.existsSync(sub) ? fs.readdirSync(sub) : []
+  return { data: JSON.parse(r.stdout), cached: files.filter(f => f.endsWith('.js')).length, codeCaches: files.filter(f => f.endsWith('.cache')).length }
 }
 
 test('cached protocol code gives the same packets as the stock compile, and is reused', () => {
@@ -34,6 +35,7 @@ test('cached protocol code gives the same packets as the stock compile, and is r
     assert.equal(stock.cached, 0)
     const first = run(dir)
     assert.ok(first.cached >= 2)
+    assert.equal(first.codeCaches, first.cached)
     assert.deepEqual(first.data, stock.data)
     const second = run(dir)
     assert.equal(second.cached, first.cached)

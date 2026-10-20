@@ -2,7 +2,8 @@
   "What the planner needs to know about a block state, as flat typed arrays indexed by state id (a JS object whose fields the
   search reads in its inner loop with no allocation): built once from prismarine-registry by interop. Heights are in 1/16 block
   above the cell's floor."
-  (:require ["prismarine-block" :as prismarine-block]
+  (:require ["module" :refer [createRequire]]
+            ["prismarine-block" :as prismarine-block]
             ["prismarine-registry" :as prismarine-registry]
             [engine.path.offsets :as offsets]))
 
@@ -255,6 +256,10 @@
 (defonce ^:private shared (volatile! nil))
 
 (defn default-state-table
-  "One table per process: building walks every state in the registry."
+  "One table per process: building walks every state in the registry, so the built table is kept on disk (js/table-cache.mjs)
+  until the running build file changes."
   []
-  (or @shared (vreset! shared (build-state-table (prismarine-registry MC-VERSION)))))
+  (or @shared
+      (vreset! shared
+               (let [^js cache ((createRequire (str (offsets/root) "/")) "./js/table-cache.mjs")]
+                 (.tableCached cache "state-table" js/__filename #(build-state-table (prismarine-registry MC-VERSION)))))))

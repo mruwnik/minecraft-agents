@@ -434,22 +434,6 @@
                  (.write js/process.stderr (str "event sink failed: " (.-message e) "\n")))))
         n))))
 
-(defn tail-records
-  "The last events of file, at most max-count and within max-bytes: {:records :bytes}.
-  Reads only the file's tail."
-  [file max-bytes max-count]
-  (let [fd (fs/openSync file "r")]
-    (try
-      (let [size (.-size (fs/fstatSync fd))
-            start (max 0 (- size max-bytes))
-            text (.toString (read-bytes fd start (- size start)) "utf8")
-            lines (cond->> (str/split-lines text)
-                    (pos? start) rest) ; the first line may be cut
-            lines (->> lines (remove str/blank?) (take-last max-count) vec)]
-        {:records (mapv #(seq-of-record % file (str "(tail of " size " bytes)")) lines)
-         :bytes (reduce + 0 (map #(inc (bytes-of %)) lines))})
-      (finally (fs/closeSync fd)))))
-
 (defn open-chain!
   "Prepare the chain at file: repaired, aged out when max-age-ms is given. Returns its scanned segments, oldest first."
   [file max-age-ms]
@@ -497,8 +481,6 @@
         segments (if file (enforce-chain! file scanned-segments max-bytes) [])
         debug-segments (if file (enforce-chain! dfile scanned-debug debug-max-bytes) [])
         run-id (random-id)
-        {recent :records recent-byte-count :bytes}
-        (if file (tail-records file (setting "recent-bytes") (setting "recent-count")) {:records [] :bytes 0})
         sinks (cond-> (vec sinks)
                 stdout? (conj #(.write js/process.stdout (str (pr-str %) "\n"))))]
     (atom {:file file :metadata-file (when file (metadata-file file))
@@ -507,7 +489,7 @@
            :debug-max-bytes debug-max-bytes :debug-max-age-ms debug-max-age-ms
            :debug-seq debug-seq :debug-segments debug-segments
            :oldest-seq (some :first-seq segments) :segments segments
-           :recent recent :recent-byte-count recent-byte-count :sinks sinks :now now :pos-fn pos-fn})))
+           :recent [] :recent-byte-count 0 :sinks sinks :now now :pos-fn pos-fn})))
 
 (defn cursor
   "The append cursor of the stream: {:stream-id :seq}."

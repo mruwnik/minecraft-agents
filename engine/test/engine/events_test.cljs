@@ -201,17 +201,16 @@
     (is (= (range 12 21)
            (mapv :seq (:events (events/read-after stream {:stream-id "s" :after 11 :limit 100})))))))
 
-(deftest make-seeds-the-recent-buffer-from-the-active-file-tail
+(deftest a-restart-starts-with-no-recent-buffer-and-readers-read-the-old-events-from-disk
   (let [file (path/join (tu/tmp-dir) "events.edn")
-        first-run (events/make {:file file :generation-id "g"})]
+        first-run (events/make {:file file :generation-id "g"})
+        sid (:stream-id (events/cursor first-run))]
     (emit-n! first-run 3000)
     (let [restarted (events/make {:file file :generation-id "g"})
-          recent (:recent @restarted)]
-      (is (= 3000 (:seq (last recent))))
-      (is (= (events/setting "recent-count") (count recent)))
-      (is (= (range (inc (- 3000 (events/setting "recent-count"))) 3001) (mapv :seq recent)))
-      (is (= (:seq (last (:recent @first-run))) (:seq (last recent))))
-      (is (pos? (:recent-byte-count @restarted))))))
+          page (events/read-after restarted {:stream-id sid :after 2990 :limit 100})]
+      (is (empty? (:recent @restarted)))
+      (is (false? (:gap? page)))
+      (is (= (range 2991 3001) (mapv :seq (:events page)))))))
 
 (deftest the-recent-buffer-stays-small-and-lagging-readers-read-disk
   (let [file (path/join (tu/tmp-dir) "events.edn")
@@ -223,11 +222,6 @@
     (let [page (events/read-after stream {:stream-id sid :after 100 :limit 2000})]
       (is (false? (:gap? page)))
       (is (= (range 101 1001) (mapv :seq (:events page)))))))
-
-(deftest make-seeds-a-short-file-completely
-  (let [file (path/join (tu/tmp-dir) "events.edn")]
-    (emit-n! (events/make {:file file :generation-id "g"}) 12)
-    (is (= (range 1 13) (mapv :seq (:recent @(events/make {:file file :generation-id "g"})))))))
 
 (deftest a-body-cause-stays-in-data-and-a-cause-seq-in-context
   (let [[seen sink] (tu/capture-sink)
