@@ -29,8 +29,8 @@
   Start conditions: :refused or :no-zones (the spot may not be planted; the debt stays owed), :no-sapling (none carried and
   :fetch off for items; data :species); a log on the spot (data :pos) is waited out. A spot that holds its sapling, or no debt owed, is done at once. Ends :done with data
   {:pos} once planted (and the bone meal used up, grown or gone); condition-failed with the need cause when the fetch
-  failed, :refused when the zone rule changed on the way; a failed place or use-on child ends it with that ending
-  (:occupied, :unreachable, :not-loaded ..). Quote: the walk to the spot.")
+  failed, :refused when the zone rule changed on the way; a failed place child ends it with that ending
+  (:occupied, :unreachable, :not-loaded ..); a failed bone meal use (extra) still ends :done, with {:meal-failed {:kind :cause}}. Quote: the walk to the spot.")
 
 (a/defargs args
   {:at {:doc "where to plant; the oldest :forestry/replant debt when nil" :spec ::a/pos :default nil}
@@ -157,9 +157,11 @@
     (if (or (zero? left) (not (sapling-at? p pos)) (not (has-meal? p)))
       (do (ctx/update-mem! c dissoc :meal) (ctx/end c :done nil {:pos pos}))
       (let [e (await (child! c :meal 'jobs.blocks.use-on {:pos pos :item "bone_meal" :face "up"}))]
-        (if (not= :done e)
-          e
-          (do (ctx/update-mem! c update-in [:meal :left] dec) :again))))))
+        (cond
+          (contract/ending? e) (do (ctx/update-mem! c dissoc :meal)
+                                   (ctx/end c :done nil {:pos pos :meal-failed (select-keys e [:kind :cause])}))
+          (not= :done e) e
+          :else (do (ctx/update-mem! c update-in [:meal :left] dec) :again))))))
 
 (defn ^:async fetch-sapling!
   "Get the missing sapling w names with jobs.lib.need: :continue while it works, :again once got, else the ending."

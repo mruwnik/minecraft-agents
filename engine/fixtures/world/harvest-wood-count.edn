@@ -23,6 +23,7 @@
    :body {:inventory [["iron_axe" 1]]}
    :act [[:job (jobs.forestry.harvest-wood {:radius 32 :count 4})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :tree-unreachable}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:replant-owed [:>= 1]}} :for-s 100 :until {:source :job :kind :stopped :data {:kind :nothing-possible :reason :tree-unreachable}}}
             {:no-event {:source :job :kind :harvest-wood.debts-owed} :for-s 100 :until {:source :job :kind :stopped :data {:kind :nothing-possible :reason :tree-unreachable}}}]
    :after [[:block [18 0 16] "oak_log"] [:body-far [18.5 0 16.5] 6]]}
   {:name "felled-tree-then-island-only-ends-tree-unreachable-with-replant-owed"

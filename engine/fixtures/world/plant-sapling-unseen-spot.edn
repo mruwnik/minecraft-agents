@@ -12,7 +12,7 @@
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:block [16 0 12] "oak_sapling"]]}
   {:name "spot-walled-in-stone-is-never-seen-and-not-planted"
-   :blocks [[:fill [15 0 11] [17 3 13] "stone" :hollow]]
+   :blocks [[:fill [15 -1 11] [17 3 13] "stone" :hollow]]
    :act [[:job (jobs.forestry.plant-sapling {:at #at [16 0 12] :species "oak"})]]
-   :expect [{:event {:source :job :kind :stopped} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible}} :within-s 60 :of-job true}]
    :after [[:not-block [16 0 12] "oak_sapling"] [:item "oak_sapling" 2]]}]}

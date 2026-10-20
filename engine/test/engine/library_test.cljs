@@ -21,11 +21,12 @@
 
 (defn setup
   ([world] (setup world (tu/tmp-dir)))
-  ([world dir]
+  ([world dir] (setup world dir registry/jobs))
+  ([world dir jobs]
    (let [clock (atom 1000000)
          [seen sink] (tu/legacy-capture-sink)
          p (tu/seeing-all (tu/fake-on-floor world))
-         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir dir :now #(deref clock)
+         eng (core/create {:primitives p :jobs jobs :triggers triggers/all :dir dir :now #(deref clock)
                           :world (ew/of-data {} {} (:zones world []))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
      {:eng eng :p p :seen seen :clock clock})))
@@ -471,6 +472,17 @@
           (is (= [] (:list (core/state eng))))
           (is (empty? (calls p "useOn")))
           (is (= "oak_sapling" (.-name (.blockAt p #js {:x 5 :y 64 :z 5})))))))))
+
+(deftest plant-sapling-a-failed-bone-meal-use-still-ends-done-with-the-sapling-planted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [failing {:round (fn ^:async no-meal [c] (ctx/end c :nothing-possible :unreachable {}))}
+              {:keys [eng p seen]} (setup (plant-meal-world 5) (tu/tmp-dir) (assoc registry/jobs 'jobs.blocks.use-on failing))]
+          (core/submit! eng (list 'jobs.forestry.plant-sapling {:at {:x 5 :y 64 :z 5} :bone-meal 3}) {})
+          (await (run-until-empty eng 10))
+          (is (= "oak_sapling" (.-name (.blockAt p #js {:x 5 :y 64 :z 5}))))
+          (is (not-any? #(= :stopped (:kind %)) @seen) "the job is not stopped by the extra"))))))
 
 ;; ------------------------------------------------------------------ deposit
 
