@@ -8,6 +8,11 @@
   "The minecraft-data version used when no body is connected (the connect default, engine/js/connect.mjs)."
   "26.1")
 
+(def dye-colors
+  "The 16 dye colours, which name the wool, bed, dye and other coloured blocks and items."
+  ["white" "orange" "magenta" "light_blue" "yellow" "lime" "pink" "gray"
+   "light_gray" "cyan" "purple" "blue" "brown" "green" "red" "black"])
+
 (def cooking
   "[raw cooked] of the foods a furnace or smoker cooks (the vanilla recipes are in no minecraft-data file), meats and fish first."
   [["beef" "cooked_beef"] ["porkchop" "cooked_porkchop"] ["chicken" "cooked_chicken"] ["mutton" "cooked_mutton"]

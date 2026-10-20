@@ -1,5 +1,6 @@
 (ns jobs.survival.bed-down
   (:require [jobs.lib.block-sets :as bs]
+            [engine.game :as game]
             [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -68,7 +69,7 @@
 (def job 'jobs.survival.bed-down)
 
 (def bed-names
-  (mapv #(str % "_bed") ["white" "orange" "magenta" "light_blue" "yellow" "lime" "pink" "gray" "light_gray" "cyan" "purple" "blue" "brown" "green" "red" "black"]))
+  (mapv #(str % "_bed") game/dye-colors))
 
 (defn problem
   "The need wait for a bed while there is none to use and none carried to put down, else nil."

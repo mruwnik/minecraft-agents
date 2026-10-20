@@ -1,5 +1,6 @@
 (ns jobs.animals.shear
-  (:require [jobs.lib.ready :as ready]
+  (:require [engine.game :as game]
+            [jobs.lib.ready :as ready]
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -53,9 +54,7 @@
 (defn max-in-row [] (settings/get settings ::max-in-row))
 
 (def wool-names
-  (mapv #(str % "_wool")
-        ["white" "orange" "magenta" "light_blue" "yellow" "lime" "pink" "gray"
-         "light_gray" "cyan" "purple" "blue" "brown" "green" "red" "black"]))
+  (mapv #(str % "_wool") game/dye-colors))
 
 (defn shears-carried? [c]
   (some #(= "shears" (:name %)) (u/inventory (:primitives c))))

@@ -3,6 +3,7 @@
   drop collection and the search wait. Memory keys: :target, :killed, :skipped, :skips, :collecting, :misses."
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [engine.game :as game]
             [engine.settings :as settings]
             [jobs.lib.animals :as animals]
             [jobs.lib.foods :as foods]
@@ -11,16 +12,12 @@
             [jobs.lib.waits :as waits]
             [jobs.lib.util :as u]))
 
-(def wool-colors
-  ["white" "orange" "magenta" "light_blue" "yellow" "lime" "pink" "gray"
-   "light_gray" "cyan" "purple" "blue" "brown" "green" "red" "black"])
-
 (def drops
   "What each huntable kind drops, raw and cooked meat included, by mob name."
   (let [raw {"cow" ["beef" "leather"]
              "mooshroom" ["beef" "leather"]
              "pig" ["porkchop"]
-             "sheep" (into ["mutton"] (map #(str % "_wool")) wool-colors)
+             "sheep" (into ["mutton"] (map #(str % "_wool")) game/dye-colors)
              "chicken" ["chicken" "feather"]
              "rabbit" ["rabbit" "rabbit_hide" "rabbit_foot"]}]
     (update-vals raw (fn [items] (into items (keep foods/cooked-of) items)))))
