@@ -15,8 +15,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.lib.util :as u]
-            [jobs.lib.trees :refer [default-radius]]))
+            [jobs.lib.util :as u]))
 
 (def doc
   "Collect the nearest matching dropped item, in one call, until none is left within :radius of where the job began (the work area: a walk to an item
@@ -40,11 +39,11 @@
   Needs nothing; the sweep is the whole job. Ends :done with data {:collected n}, the number of items that entered the
   inventory, with :left [{:pos :reason}] for those (also in :loose-left, so the :loose-items reflex leaves them); none in
   sight at all is :done with 0 (an open sweep). Drops tried, or a :search that found none, and none collected: :nothing-possible :none-collected, same data;
-  :nothing-possible :search-waited when the search was held up; :cut-off :cut when cut.
+  :nothing-possible :search-waited when the search was held up; 
   Quote: what is in sight within :radius (yields by name), time to walk to each, unbounded with :search or :dig (also the items it may yet find).")
 
 (a/defargs args
-  {:radius {:doc "search radius in blocks" :spec (a/num-in 0 nil) :default default-radius}
+  {:radius {:doc "search radius in blocks; the ::radius setting when nil" :spec (a/num-in 0 nil) :default nil}
    :items {:doc "item names to collect; everything when nil" :spec (a/coll-of a/item?) :default nil}
    :near {:doc "{:x :y :z} the work area is centred on, instead of where the body stands when the job begins" :spec ::a/pos :default nil}
    :search {:doc "blocks round the anchor to walk to and look from when no drop is in sight and fewer than the call's :least were collected; 0: no search" :spec (a/num-in 0 nil) :default 0}
@@ -69,12 +68,15 @@
    ::dig-margin {:default 3 :doc "How far outside the box round the body and the drop the dig route may wander, in blocks." :spec (a/int-in 0 nil)}
    ::replans {:default 4 :doc "How often a dig route is planned again after a dig of it failed, the cells before it dug." :spec (a/int-in 0 nil)}
    ::dig-max-fall {:default 3 :doc "The longest fall, in blocks, the dig route plans." :spec (a/int-in 0 nil)}
+   ::radius {:default 16 :doc "How far from the work area a drop is looked for when the call gives no :radius, in blocks." :spec (a/num-in 0 nil)}
    ::max-moves {:default 2 :doc "How often a drop that slid to another cell while the body went to it is tried again, after a walk or dig that did not reach it." :spec (a/int-in 0 nil)}
    ::search-waits {:default 5 :doc "How many calls in a row a :search walk may wait on go-to (the night, a danger) before the search is given up." :spec (a/int-in 1 nil)}})
 
 (defn search-waits [] (settings/get settings ::search-waits))
 
 (defn max-moves [] (settings/get settings ::max-moves))
+
+(defn radius-of [c] (or (:radius (:args c)) (settings/get settings ::radius)))
 
 (defn walk-args
   "go-to args for a walk of this job: underground it ignores the dark (not (threatened) only), like the digs that made the hole."
@@ -94,7 +96,8 @@
 (defn candidates
   "The wanted items within :radius of the anchor that are not skipped, nearest first."
   [c anchor]
-  (let [{:keys [radius ids]} (:args c)
+  (let [radius (radius-of c)
+        ids (:ids (:args c))
         only-ids (some-> ids set)
         wanted (some-> (:items (:args c)) set)
         skipped (set (:skipped (ctx/mem c)))]
@@ -394,13 +397,14 @@
       (= :waited r) (ctx/end c :nothing-possible :search-waited (data-of c))
       :else (swept! c))))
 
-(defn ^:async collect-item!
-  "One drop: walk, dig or collect as its place asks, then book what came in and skip it; :continue while a child waits
-  on the world, else :again."
+(defn held-count [c item-name]
+  (transduce (comp (filter #(= item-name (:name %))) (map :count)) + 0 (u/inventory (:primitives c))))
+
+(defn ^:async try-take!
+  "One try at a drop: walk, dig or collect as its place asks (a stuck collect digs and tries once more). {:wait true} while a child
+  waits on the world, else {:acts [act results] :left why-or-nil :retry? bool}."
   [c item]
   (let [item-name (some-> (.-item item) .-name)
-        held (fn [] (transduce (comp (filter #(= item-name (:name %))) (map :count)) + 0 (u/inventory (:primitives c))))
-        start-held (held)
         hole? (in-hole? c item)
         moving? (and (at-hole? c item) (nothing-under? c item) (settling? c item))
         why (when (and hole? (not moving?)) (await (hole-problem! c item)))
@@ -411,9 +415,9 @@
         walk (if (= :dug dug) (await (walk-down! c item)) walk)
         why (if (= :dug dug) nil why)
         collect! (fn ^:async collect* []
-                   (let [before (held)
+                   (let [before (held-count c item-name)
                          r (await (ctx/act c :collect (clj->js (cond-> {:id (.-id item)} hole? (assoc :maxDropDown 1)))))
-                         got (- (held) before)]
+                         got (- (held-count c item-name) before)]
                      ;; the act can answer unreachable for a drop that flew to the body meanwhile
                      (if (and (= "unreachable" (.-status r)) (pos? got))
                        (clj->js {:status "ok" :gained [{:name item-name :count got}]})
@@ -426,32 +430,45 @@
         r2 (when (and (= :dug dug2) (not= :continue walk2)) (await (collect!)))
         r2-stuck? (and r2 (= "unreachable" (.-status r2)))]
     (if (or moving? (= :continue walk) (= :continue dug) (= :continue dug2) (= :continue walk2))
+      {:wait true}
+      {:acts (remove nil? [r r2])
+       :left (cond
+               dig-why dig-why
+               why why
+               (= :unreachable walk) :unreachable
+               dig2-why dig2-why
+               (and stuck? (not= :dug dug2)) :unreachable
+               r2-stuck? :unreachable)
+       :retry? (and (not why) (< (get-in (ctx/mem c) [:moves (.-id item)] 0) (max-moves))
+                    (or dig-why (= :unreachable walk) dig2-why stuck? r2-stuck?)
+                    (not (and r2 (not r2-stuck?)))
+                    (boolean (moved-item c item)))})))
+
+(defn book!
+  "Counts what a try brought in (also what the walk down picked up before the act ran) and skips the drop, or lets it be tried again."
+  [c item start-held {:keys [acts left retry?]}]
+  (let [item-name (some-> (.-item item) .-name)
+        least-items (some-> (:least-items (:args c)) set)
+        extra (max 0 (- (held-count c item-name) start-held (reduce + 0 (map gained-count acts))))
+        wants? (or (nil? least-items) (least-items item-name))]
+    (when (and left (not retry?)) (leave! c item left))
+    (ctx/update-mem! c (fn [m] (reduce (fn [m r] (-> m (update :collected (fnil + 0) (gained-count r))
+                                                    (update :wanted (fnil + 0) (gained-count r least-items))))
+                                       (cond-> (update m :collected (fnil + 0) extra)
+                                         wants? (update :wanted (fnil + 0) extra))
+                                       acts)))
+    (if retry?
+      (ctx/update-mem! c update-in [:moves (.-id item)] (fnil inc 0))
+      (ctx/update-mem! c update :skipped (fnil conj []) (.-id item)))))
+
+(defn ^:async collect-item!
+  "One drop: try to take it, then book what came in and skip it; :continue while a child waits on the world, else :again."
+  [c item]
+  (let [start-held (held-count c (some-> (.-item item) .-name))
+        t (await (try-take! c item))]
+    (if (:wait t)
       :continue
-      (let [retry? (and (not why) (< (get-in (ctx/mem c) [:moves (.-id item)] 0) (max-moves))
-                        (or dig-why (= :unreachable walk) dig2-why stuck? r2-stuck?)
-                        (not (and r2 (not r2-stuck?)))
-                        (boolean (moved-item c item)))]
-        (cond
-          retry? nil
-          dig-why (leave! c item dig-why)
-          why (leave! c item why)
-          (= :unreachable walk) (leave! c item :unreachable)
-          dig2-why (leave! c item dig2-why)
-          (and stuck? (not= :dug dug2)) (leave! c item :unreachable)
-          r2-stuck? (leave! c item :unreachable))
-          ;; the walk down can pick the drop up before the collect act runs
-          (let [acts (reduce + 0 (map gained-count (remove nil? [r r2])))
-                extra (max 0 (- (held) start-held acts))
-                wants? (or (nil? (:least-items (:args c))) ((set (:least-items (:args c))) item-name))]
-            (ctx/update-mem! c (fn [m] (reduce (fn [m r] (-> m (update :collected (fnil + 0) (gained-count r))
-                                                            (update :wanted (fnil + 0) (gained-count r (some-> (:least-items (:args c)) set)))))
-                                               (cond-> (update m :collected (fnil + 0) extra)
-                                                 wants? (update :wanted (fnil + 0) extra))
-                                               (remove nil? [r r2])))))
-          (if retry?
-            (ctx/update-mem! c update-in [:moves (.-id item)] (fnil inc 0))
-            (ctx/update-mem! c update :skipped (fnil conj []) (.-id item)))
-          :again))))
+      (do (book! c item start-held t) :again))))
 
 (defn ^:async step!
   "One step of the sweep: the nearest drop in sight, else a search cell, else the end. :again, :continue or an ending."
@@ -476,7 +493,7 @@
   (let [anchor (or (:anchor (ctx/mem c))
                    (let [a (or (:near (:args c)) (u/self-pos c))]
                      (ctx/update-mem! c assoc :anchor a)
-                     (loose/hold! c a (:radius (:args c)))
+                     (loose/hold! c a (radius-of c))
                      a))]
     (await (pace/steps! c #(step! c anchor)))))
 
