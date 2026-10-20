@@ -1,23 +1,17 @@
 (ns jobs.farm.tidy
-  (:require [jobs.lib.crops :as crops]
-            [engine.args :as a]
+  (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.lib.waits :as waits]
-            [jobs.lib.blocks :as blocks]
             [jobs.lib.checks :as checks]
             [jobs.lib.look :as look]
-            [jobs.lib.ready :as ready]
-            [jobs.lib.work-place :as work-place]
-            [jobs.lib.util :as u]
-            [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
-            [jobs.lib.tidy-rules :as tr]
-            [jobs.lib.toll-cells :as tc]
-            [plan.shape :as shape]
             [jobs.lib.plan-field :as pf]
-            [jobs.lib.world :as known]))
+            [jobs.lib.ready :as ready]
+            [jobs.lib.strays :as strays]
+            [jobs.lib.waits :as waits]
+            [jobs.lib.tidy-rules :as tr]
+            [jobs.lib.work-place :as work-place]))
 
 (def doc
   "Dig the stray blocks over a plan's cells (:plan, optionally only its :part) and pick up the drops.
@@ -35,14 +29,11 @@
   - a block in a cell that wants another block, and a crop of another kind in a crop cell. Result :wrong
     {:pos :found :want}. Fixing these is a build, till or plant job's work.
   Cells that are not loaded hold no strays.
-  Every dig is checked against zones and the footprints of all other active plans, when the cell is chosen and
-  again before the dig. A zone, claim, footprint or undiggable cell is refused at once. A dig hazard that
-  ::accept (a setting) does not name defers the cell until nothing else is left. It is then tried give-up (3) times and refused
-  as :hazard. A cell that cannot be walked to or reached give-up times is refused as :unreachable.
-  Refused cells are in the result's :refused [{:pos :block :reason}].
-  The sweep goes top-down, nearest first. It ends by collecting the drops within the field's extent plus 4 blocks
-  (jobs.items.collect-drops as a child).
-  Ends :done with data {:dug n :collected n :kept [...] :wrong [...] :refused [...]}; over a tidy
+  The strays are listed by jobs.lib.strays and cleared by a jobs.blocks.clear-cells child (at most 400 cells a round, the
+  plan's own footprint no obstacle): it walks, digs top-down, picks up the drops, and refuses a zone, claim, other plan's
+  footprint, undiggable, unreachable or hazard cell (::accept (a setting) names the hazards taken). Refused cells are in
+  the result's :refused [{:pos :block :reason}].
+  Ends :done with data {:dug n :kept [...] :wrong [...] :refused [...]}; over a tidy
   field it digs nothing and is done. When strays were found, none dug and some refused, it ends condition-failed
   :refused with the same data.
   {:reason :plan-trouble :why text}: a wait while the plan is
@@ -55,77 +46,10 @@
    :ignore-zones? :shared})
 
 (a/defargs settings
-  {::reach {:default u/eye-reach :doc "Cells whose centre is this close to the eye are dug without walking, in blocks." :spec (a/num-in 0 nil)}
-   ::give-up {:default 3 :doc "Failed walks, failed digs or hazard-blocked tries after which a cell is refused." :spec (a/int-in 1 nil)}
-   ::accept {:default #{:fluid-adjacent} :doc "Dig hazards accepted: :fluid-adjacent (water beside; lava beside is :lava-adjacent and is not accepted by default), :falling-block."
+  {::accept {:default #{:fluid-adjacent} :doc "Dig hazards accepted: :fluid-adjacent (water beside; lava beside is :lava-adjacent and is not accepted by default), :falling-block."
              :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block})}
-   ::job-time-s {:default 600 :doc "Seconds a tidy run may take: the digs, the walks and the sweep of the drops." :spec (a/num-in 0 nil)}})
-(defn reach [] (settings/get settings ::reach))
-(defn give-up [] (settings/get settings ::give-up))
+   ::job-time-s {:default 600 :doc "Seconds a tidy run may take: the digs, the walks and the drops." :spec (a/num-in 0 nil)}})
 (defn accepted [] (settings/get settings ::accept))
-
-
-;; ------------------------------------------------------------------ access
-
-(def crop-blocks
-  (into (set (keys crops/ripe-age))
-        #{"melon_stem" "pumpkin_stem" "attached_melon_stem" "attached_pumpkin_stem"
-    "melon" "pumpkin" "sugar_cane" "bamboo" "bamboo_sapling" "sweet_berry_bush" "nether_wart" "cocoa" "torchflower_crop"
-    "pitcher_crop"}))
-
-(defn crop-want? [want] (and (map? want) (contains? want :crop)))
-(defn tree-want? [want] (and (map? want) (contains? want :tree)))
-
-(defn classify
-  "What the world's block (nil: nobody has seen it) is in a cell with this want: nil (nothing for this job), :dig,
-  :wrong (reported, never dug) or [:kept why]. A want is a plan want, or :headroom for the air above a crop cell."
-  [want block]
-  (let [n (:name block)]
-    (cond
-      (or (nil? block) (shape/air? n)) nil
-      (tree-want? want) nil
-      (and (crop-want? want) (contains? (shape/crop-names (:crop want)) n)) nil
-      (or (= :clear want) (= :headroom want) (crop-want? want))
-      (if-let [why (tr/keep-why n)]
-        [:kept why]
-        (cond
-          (= "farmland" n) :wrong
-          (and (crop-blocks n) (= :headroom want)) nil
-          (and (crop-blocks n) (crop-want? want)) :wrong
-          :else :dig))
-      :else (when (= :wrong (shape/judge want block)) :wrong))))
-
-(defn work-cells
-  "The cells the job looks at: the plan's cells (of part when given) [{:pos :want ...}] and the cell above each crop
-  cell that no cell of the plan names, as {:pos :want :headroom}."
-  [cells part]
-  (let [claimed (set (map :pos cells))
-        mine (filterv #(or (nil? part) (= part (:part %))) cells)
-        heads (->> mine (filter #(crop-want? (:want %))) (map #(update (:pos %) 1 inc)) (remove claimed) distinct)]
-    (into mine (map (fn [pos] {:pos pos :want :headroom})) heads)))
-
-(defn want-text [want] (if (= :headroom want) "air" (shape/want-text want)))
-
-(defn strays
-  "{:dig [{:pos :block}] :kept [{:pos :block :why}] :wrong [{:pos :found :want}]} of the cells, read through block-at
-  (a fn [pos] -> {:name n :state s} or nil)."
-  [cells block-at]
-  (reduce (fn [acc {:keys [pos want]}]
-            (let [block (block-at pos)
-                  verdict (classify want block)]
-              (cond
-                (nil? verdict) acc
-                (= :dig verdict) (update acc :dig conj {:pos pos :block (:name block)})
-                (= :wrong verdict) (update acc :wrong conj {:pos pos :found (:name block) :want (want-text want)})
-                :else (update acc :kept conj {:pos pos :block (:name block) :why (second verdict)}))))
-          {:dig [] :kept [] :wrong []}
-          cells))
-
-;; ------------------------------------------------------------------ reading the world
-
-(defn in-reach? [c pos] (<= (u/eye-dist (u/self-pos c) pos) (reach)))
-
-(defn pos-map [[x y z]] {:x x :y y :z z})
 
 ;; ------------------------------------------------------------------ conditions
 
@@ -136,124 +60,42 @@
 
 (defn can-run? [c] (pf/plan-can-run? (planned c)))
 
+(defn found-in
+  "{:cells the plan's work cells :found (strays/strays over them)} for the plan answer."
+  [c answer]
+  (let [cells (strays/work-cells (:cells answer) (:part (:args c)))]
+    {:cells cells :found (strays/strays cells #(tr/world-block (:primitives c) %))}))
+
 ;; ------------------------------------------------------------------ steps
 
-(defn refuse
-  "m with pos refused: {:pos :block ...why}."
-  [m {:keys [pos block]} why]
-  (-> m
-      (update :fails dissoc pos)
-      (update :refused (fnil conj []) (merge {:pos pos :block block} why))))
+(def max-per-call 400)
 
-(defn count-fail
-  "m with one more failure on the stray; refused with :reason why at the give-up-th failure."
-  [m {:keys [pos] :as stray} why]
-  (let [n (inc (get-in m [:fails pos] 0))]
-    (if (>= n (give-up))
-      (refuse m stray {:reason why})
-      (assoc-in m [:fails pos] n))))
+(defn book-clear
+  "m with the end e of a clear-cells child over the strays todo booked: its digs counted, each cell it skipped (or all of
+  them, when it declined to start) refused with the reason."
+  [m e todo]
+  (let [block-of (into {} (map (juxt :pos :block)) todo)
+        refusals (strays/skips e (map (fn [{[x y z] :pos}] {:x x :y y :z z}) todo))]
+    (-> m
+        (update :dug (fnil + 0) (get-in e [:data :dug] 0))
+        (update :refused (fnil into []) (map (fn [[{:keys [x y z]} reason]] {:pos [x y z] :block (block-of [x y z]) :reason reason})) refusals))))
 
-(defn ^:async dig-one!
-  "Dig the stray (a blocks.dig child) after asking the access rules once more; a refusal, a failure or a dig that did nothing is booked."
-  [c {:keys [pos] :as stray}]
-  (let [d (tr/decide c pos (accepted))]
-    (cond
-      (and (vector? d) (= :refuse (first d))) (ctx/update-mem! c refuse stray (second d))
-      (not= :dig d) nil
-      :else
-      (do
-        (ctx/update-mem! c assoc :digging pos :collect true)
-        (let [;; decide has judged the hazards, lava apart from water
-              dig-args {:for-plan (:plan (:args c)) :accept (into #{:fluid-adjacent :falling-block} (filter #{:lava-adjacent}) (accepted))
-                        :ignore-zones? (:ignore-zones? (:args c))}
-              outcome (await (blocks/dig-cell! c (pos-map pos) dig-args))]
-          (when-not (= :continue outcome) (ctx/update-mem! c dissoc :digging))
-          (case outcome
-            :continue :continue
-            :dug (ctx/update-mem! c #(-> % (update :dug (fnil inc 0)) (update :holes (fnil conj []) (pos-map pos))))
-            :missing nil
-            :cannot (ctx/update-mem! c refuse stray {:reason :cannot})
-            :refused (let [[kind _ data] (ctx/child-status c :dig 'jobs.blocks.dig (merge {:collect false :need-drop false :ways #{:carried}} dig-args {:pos (pos-map pos)}))
-                             why (if (= :later kind) (:reason data) :hazard)]
-                       (ctx/update-mem! c count-fail stray why))
-            :unreachable (ctx/update-mem! c count-fail stray :unreachable)
-            (ctx/update-mem! c count-fail stray :failed)))))))
-
-(defn ^:async walk-to!
-  "Walk to within 3 of the stray; a walk that is blocked, or ends out of reach, counts a failure."
-  [c {:keys [pos] :as stray}]
-  (let [w (await (near/go-near! c (pos-map pos) 3 {:tolls (tc/walk-tolls c (near/cell-of pos))}))]
-    (when (= :blocked w)
-      (ctx/update-mem! c count-fail stray :unreachable))
-    (when (and (= :there w) (not (in-reach? c pos)))
-      (ctx/update-mem! c count-fail stray :unreachable))
-    (if (= :partial w) :continue :again)))
-
-(defn split-by-decision
-  "{:ready [strays] :deferred [[stray reasons]]} of the strays; a refused one is booked on the way, a stray whose
-  chunk went away since it was read is dropped from both (the next round reads the strays again)."
+(defn ^:async clear!
+  "A round of a clear-cells child over the strays todo (at most max-per-call); booked when it ends."
   [c todo]
-  (reduce (fn [acc stray]
-            (let [d (tr/decide c (:pos stray) (accepted))]
-              (cond
-                (= :dig d) (update acc :ready conj stray)
-                (= :skip d) acc
-                (= :refuse (first d)) (do (ctx/update-mem! c refuse stray (second d)) acc)
-                :else (update acc :deferred conj [stray (second d)]))))
-          {:ready [] :deferred []}
-          todo))
-
-(defn nearest [c strays]
-  (let [body (u/self-pos c)]
-    (first (sort-by #(u/dist body (pos-map (:pos %))) strays))))
-
-(defn ^:async work!
-  "One step over the strays still to dig: dig what is in reach (top-down), else walk to the nearest ready one; with
-  only hazard-blocked ones left, count a try on those in reach, else walk to the nearest."
-  [c todo]
-  (let [{:keys [ready deferred]} (split-by-decision c todo)
-        near (->> ready
-                  (filter #(in-reach? c (:pos %)))
-                  (sort-by (juxt #(- (get (:pos %) 1)) #(u/dist (u/self-pos c) (pos-map (:pos %))))))]
-    (cond
-      (seq near) (loop [left near]
-                   (if-let [stray (first left)]
-                     (if (= :continue (await (dig-one! c stray)))
-                       :continue
-                       (recur (rest left)))
-                     :again))
-      (seq ready) (await (walk-to! c (nearest c ready)))
-      (seq deferred) (let [stray (nearest c (map first deferred))
-                           reasons (second (first (filter #(= (:pos stray) (:pos (first %))) deferred)))]
-                       (if (in-reach? c (:pos stray))
-                         (do (ctx/update-mem! c (fn [m]
-                                                  (let [n (inc (get-in m [:fails (:pos stray)] 0))]
-                                                    (if (>= n (give-up))
-                                                      (refuse m stray {:reason :hazard :hazards reasons})
-                                                      (assoc-in m [:fails (:pos stray)] n)))))
-                             :again)
-                         (await (walk-to! c stray))))
-      :else :again)))
-
-(defn field-radius
-  "How far from the body drops can lie: the cells' extent plus 4, at most 48."
-  [cells]
-  (let [ps (map :pos cells)
-        lo (apply map min ps)
-        hi (apply map max ps)]
-    (min 48 (+ 4 (js/Math.ceil (apply js/Math.hypot (map - hi lo)))))))
-
-(defn ^:async collect! [c cells]
-  (let [e (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops {:radius (field-radius cells) :holes (:holes (ctx/mem c))})))]
-    (when-not (= :continue e)
-      (ctx/update-mem! c #(-> % (dissoc :collect) (update :collected (fnil + 0) (get-in e [:data :collected] 0)))))
-    (if (= :continue e) :continue :again)))
+  (let [todo (vec (take max-per-call todo))
+        {:keys [plan ignore-zones?]} (:args c)
+        e (waits/waiting-out c (await (ctx/call c :clear 'jobs.blocks.clear-cells
+                                                {:area {:cells (mapv :pos todo)} :for-plan plan :accept (accepted) :ignore-zones? ignore-zones?})))]
+    (if (= :continue e)
+      :continue
+      (do (ctx/update-mem! c book-clear e todo) :again))))
 
 (defn finish! [c found]
   (let [m (ctx/mem c)
         plan (:plan (:args c))
         refused (vec (:refused m))
-        result {:dug (:dug m 0) :collected (:collected m 0) :kept (:kept found) :wrong (:wrong found) :refused refused}
+        result {:dug (:dug m 0) :kept (:kept found) :wrong (:wrong found) :refused refused}
         done-text (str "tidy of " plan " done: "
                        (if (and (zero? (:dug m 0)) (empty? refused)) "nothing to dig" (str "dug " (:dug m 0)))
                        (when (seq refused) (str ", refused " (count refused))))]
@@ -261,37 +103,25 @@
       (ctx/end c :condition-failed :refused result)
       (ctx/end c :done nil (assoc result :text done-text)))))
 
-(defn settle-digging!
-  "A dig the last run was in when it was cut: counted as dug once its stray is gone from the world."
-  [c found]
-  (when-let [pos (:digging (ctx/mem c))]
-    (ctx/update-mem! c (fn [m] (cond-> (dissoc m :digging)
-                                 (not-any? #(= pos (:pos %)) (:dig found)) (-> (update :dug (fnil inc 0)) (update :holes (fnil conj []) (pos-map pos))))))))
-
 (defn cells-unseen?
   "Whether a cell of the work was never seen (the body has not looked at it), so no stray is known there."
   [c cells]
-  (look/unseen? (:primitives c) (map (comp pos-map :pos) cells)))
+  (look/unseen? (:primitives c) (map (fn [{[x y z] :pos}] {:x x :y y :z z}) cells)))
 
 (defn ^:async step [c]
   (let [{:keys [answer trouble]} (planned c)]
     (if trouble
       :continue ; the plan went bad after can-run?; the next check reports it
-      (let [cells (work-cells (:cells answer) (:part (:args c)))
-            found (strays cells #(tr/world-block (:primitives c) %))
-            _ (settle-digging! c found)
-            m (ctx/mem c)
-            refused (set (map :pos (:refused m)))
+      (let [{:keys [cells found]} (found-in c answer)
+            refused (set (map :pos (:refused (ctx/mem c))))
             todo (remove #(refused (:pos %)) (:dig found))]
         (cond
-          (seq todo) (await (work! c todo))
-          (:collect m) (await (collect! c cells))
+          (seq todo) (await (clear! c todo))
           (and (not (look/surveyed? c)) (cells-unseen? c cells)) (do (await (look/survey! c)) :again)
           :else (finish! c found))))))
 
 (defn ^:async round
-  "The whole attempt: loop the steps (dig, walk, sweep the drops) until no stray is left; :continue only while a walk or
-  the sweep waits on the world."
+  "The whole attempt: loop the steps (clear the strays, look) until no stray is left; :continue only while the clear-cells child waits on the world."
   [c]
   (await (pace/steps! c (fn ^:async s [] (await (step c))))))
 
@@ -306,21 +136,20 @@
 (def can-start? can-run?)
 
 (defn done?
-  "Ok once no stray is left in the plan's cells, none is refused or wrong (the ending reports them), no sweep is owed
+  "Ok once no stray is left in the plan's cells, none is refused or wrong (the ending reports them), no child is under way
   and the cells were seen; else later with the strays dug and left."
   [c]
   (let [{:keys [answer trouble]} (planned c)
         m (ctx/mem c)
         dug (:dug m 0)
-        cells (when-not trouble (work-cells (:cells answer) (:part (:args c))))
-        found (when cells (strays cells #(tr/world-block (:primitives c) %)))
-        left (count (:dig found))
-        data [:units :strays :done dug :left left :result {:dug dug :collected (:collected m 0) :kept (:kept found) :wrong (:wrong found) :refused (vec (:refused m))}]
+        {:keys [cells found]} (when-not trouble (found-in c answer))
+        refused (set (map :pos (:refused m)))
+        left (count (remove #(refused (:pos %)) (:dig found)))
+        data [:units :strays :done dug :left left :result {:dug dug :kept (:kept found) :wrong (:wrong found) :refused (vec (:refused m))}]
         waiting (cond
                   trouble :plan-trouble
                   (pos? left) :tidying
                   (or (seq (:wrong found)) (seq (:refused m))) :reporting
-                  (:collect m) :collecting
                   (checks/child-under-way? c) :wrapping-up
                   (and (not (look/surveyed? c)) (cells-unseen? c cells)) :looking)]
     (if waiting
@@ -329,6 +158,6 @@
 
 (defn quote-of [c]
   (let [{:keys [answer trouble]} (planned c)
-        n (if trouble 0 (count (:dig (strays (work-cells (:cells answer) (:part (:args c))) #(tr/world-block (:primitives c) %)))))]
+        n (if trouble 0 (count (:dig (:found (found-in c answer)))))]
     {:uses {:job-time [1 30 (settings/get settings ::job-time-s)]}
      :done [0 n n]}))

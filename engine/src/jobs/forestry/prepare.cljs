@@ -12,6 +12,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.checks :as checks]
             [jobs.lib.look :as look]
+            [jobs.lib.strays :as strays]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
@@ -24,11 +25,11 @@
 (def doc
   "Get the ground of a forest plan's planting spots ready (planting is jobs.forestry.maintain's). A spot is a planned tree cell (want {:tree species}). One call works
   the nearest cell with a step left until none is, each cell by the first rule that fits:
-  1. Water in the cell: a source in it is filled with carried dirt (dug as a stray after); a source beside it on its
+  1. Water in the cell: a source in it is filled with carried dirt (cleared as a stray after); a source beside it on its
      level is dammed first, a flow is traced upstream (jobs.forestry.prepare-rule/max-upstream) and its source filled.
      While the traced water recedes the body pauses (jobs.time.noop) and looks again. Untraceable water, no dirt or a
      refused source: :wet.
-  2. A stray in the cell (anything but air, the species' own sapling or log) is dug. Not dug, only reported: another
+  2. A stray in the cell (anything but air, the species' own sapling or log) is dug, by a jobs.blocks.clear-cells child. Not dug, only reported: another
      species' sapling, any other log, lava, a container, bed, sign or light (:wrong); a stray or ground no carried tool
      harvests (:no-tool).
   3. A block in the growth space (the species' headroom setting, cells above the planted cell) that a tree cannot grow
@@ -180,8 +181,30 @@
                   :unreachable (do (count-cell-fail! c cell :unreachable) :again)
                   (do (count-cell-fail! c cell :failed) :again)))))))))
 
-(defn dug-stray [pos]
-  (fn [c] (ctx/update-mem! c #(-> % (bump :cleared) (assoc :collect pos)))))
+(def refusals
+  "The clear-cells skip reasons that are a refusal (the cell is left for the call); any other is given up on."
+  #{:zone :claim :footprint :plan :own-pen :cannot :hazard :refused :no-zones})
+
+(defn book-clear!
+  "Book the end e of a clear-cells child over the cell pos: the dig counted; a skip, or a refusal to start, leaves the cell
+  with the reason."
+  [c e pos]
+  (ctx/update-mem! c update :cleared (fnil + 0) (get-in e [:data :dug] 0))
+  (doseq [[_ reason] (strays/skips e [pos])]
+    (if (refusals reason)
+      (skip! c pos reason)
+      (ctx/update-mem! c assoc-in [:gave-up pos] {:pos pos :reason reason}))))
+
+(defn ^:async clear!
+  "One round of a jobs.blocks.clear-cells child over the stray cell pos. :again, :continue while it waits."
+  [c pos]
+  (let [{:keys [plan accept ignore-zones?]} (:args c)
+        e (waits/waiting-out c (await (ctx/call c :clear 'jobs.blocks.clear-cells
+                                                {:area {:cells [(lib/cell-vec pos)]} :for-plan plan :accept (set accept)
+                                                 :ignore-zones? (boolean ignore-zones?)})))]
+    (if (= :continue e)
+      :continue
+      (do (book-clear! c e pos) :again))))
 
 (defn dug-ground [pos under]
   (fn [c] (ctx/update-mem! c #(-> % (update :holes (fnil conj #{}) (lib/cell-vec under)) (assoc :collect pos)))))
@@ -246,7 +269,7 @@
   [c {:keys [state pos block] :as cell}]
   (case state
     (:fill :dam) (await (place-source! c cell))
-    :clear (await (dig! c pos pos false (dug-stray pos)))
+    :clear (await (clear! c pos))
     :soil-dig (let [under (lib/down pos)]
                 (await (dig! c pos under true (dug-ground pos under))))
     :soil-place (await (soil-place! c cell))))

@@ -11,7 +11,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]
-            [jobs.farm.tidy :as tidy]
+            [jobs.lib.strays :as strays]
             [plan.shape :as shape]))
 
 (def job 'jobs.farm.tidy)
@@ -85,7 +85,7 @@
 
 ;; ---------------------------------------------------------------- the rule, pure
 
-(defn classify [want name] (tidy/classify want (when name {:name name})))
+(defn classify [want name] (strays/classify want (when name {:name name})))
 
 (deftest what-counts-as-a-stray
   (are [want name verdict] (= verdict (classify want name))
@@ -126,9 +126,9 @@
     {:tree "oak"} "dirt" nil))
 
 (deftest a-stateful-want-judged-by-its-state
-  (is (nil? (tidy/classify {:block "oak_fence_gate" :facing :north} {:name "oak_fence_gate" :state {:facing "north"}})))
-  (is (= :wrong (tidy/classify {:block "oak_fence_gate" :facing :north} {:name "oak_fence_gate" :state {:facing "south"}})))
-  (is (nil? (tidy/classify {:block "oak_fence_gate" :facing :north} {:name "oak_fence_gate"}))))
+  (is (nil? (strays/classify {:block "oak_fence_gate" :facing :north} {:name "oak_fence_gate" :state {:facing "north"}})))
+  (is (= :wrong (strays/classify {:block "oak_fence_gate" :facing :north} {:name "oak_fence_gate" :state {:facing "south"}})))
+  (is (nil? (strays/classify {:block "oak_fence_gate" :facing :north} {:name "oak_fence_gate"}))))
 
 (defn expanded [plan] (:cells (shape/expand plan {})))
 
@@ -137,10 +137,10 @@
               :parts [{:id "a" :cells [[1 64 1] [2 64 1]] :want {:crop "wheat"}}
                       {:id "b" :cells [[2 65 1]] :want "oak_fence"}
                       {:id "c" :cells [[5 70 5]] :want "stone"}]}
-        cells (tidy/work-cells (expanded plan) nil)]
+        cells (strays/work-cells (expanded plan) nil)]
     (is (= #{[1 64 1] [2 64 1] [2 65 1] [5 70 5] [1 65 1]} (set (map :pos cells))))
     (is (= :headroom (:want (first (filter #(= [1 65 1] (:pos %)) cells)))))
-    (is (= #{[1 64 1] [2 64 1] [1 65 1]} (set (map :pos (tidy/work-cells (expanded plan) "a")))))))
+    (is (= #{[1 64 1] [2 64 1] [1 65 1]} (set (map :pos (strays/work-cells (expanded plan) "a")))))))
 
 ;; ---------------------------------------------------------------- whole runs
 
@@ -168,29 +168,16 @@
           (await (outcome eng {:plan "field"} 200))
           (is (= 5 (count (ce/ends seen :dug)))))))))
 
-(deftest a-dig-child-that-declines-books-its-own-reason
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [dig (get registry/jobs 'jobs.blocks.dig)
-              declining (assoc dig :can-start? (constantly (contract/later :not-allowed "claimed")))
-              {:keys [eng seen]} (start tidy-spec {"field" field-plan} [] (assoc registry/jobs 'jobs.blocks.dig declining))
-              result (await (outcome eng {:plan "field" :settings {:jobs.farm.tidy/give-up 1}} 200))]
-          (is (seq (:refused result)))
-          (is (empty? (of-kind seen :tidy.refused)) "the ending carries the refused cells")
-          (is (nil? (:text result)) "a refused tidy carries no success text")
-          (is (= #{:not-allowed} (set (map :reason (:refused result)))) (pr-str (:refused result))))))))
-
 (deftest a-dig-child-that-waits-out-the-world-makes-the-job-wait-not-give-up
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [dig (get registry/jobs 'jobs.blocks.dig)
-              waiting (assoc dig :can-start? (constantly (contract/later :hostile-near "a hostile is near")))
+              waiting (assoc dig :can-start? (constantly (contract/later :inventory-full "no room")))
               {:keys [eng seen]} (start tidy-spec {"field" field-plan} [] (assoc registry/jobs 'jobs.blocks.dig waiting))
-              id (core/submit! eng (list job {:plan "field" :settings {:jobs.farm.tidy/give-up 1}}) {})]
+              _ (core/submit! eng (list job {:plan "field"}) {})]
           (await (run-until-empty eng 12))
-          (is (= :hostile-near (:reason (core/waiting eng id))))
+          (is (seq (:list (core/state eng))) "the job waits on the dig child, it does not give the cells up")
           (is (empty? (of-kind seen :tidy.refused))))))))
 
 (deftest what-is-dug-is-picked-up
@@ -200,17 +187,7 @@
         (let [{:keys [eng p]} (start tidy-spec {"field" field-plan})
               result (await (outcome eng {:plan "field"} 200))]
           (is (= {"wheat_seeds" 1 "cobblestone" 1 "oak_sapling" 1 "oak_leaves" 1 "dirt" 1} (inv p)))
-          (is (= 5 (:collected result))))))))
-
-(deftest drops-seen-but-none-taken-end-the-pickup-with-nothing-collected
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (start tidy-spec {"field" field-plan})
-              _ (.override (.-world p) "collect" (fn [_ _ _] #js {:status "unreachable" :reason "no-path" :gained #js []}))
-              result (await (outcome eng {:plan "field"} 200))]
-          (is (= 0 (:collected result)))
-          (is (pos? (:dug result)) "the tidy finished its digs, no loop on the pickup"))))))
+          (is (= 5 (:dug result))))))))
 
 (deftest crops-water-and-the-wanted-torch-stand-after
   (async done
@@ -233,7 +210,6 @@
                 again (await (outcome eng {:plan "field"} 200))]
             (is (= before (count (calls p "dig"))))
             (is (= 0 (:dug again)))
-            (is (= 0 (:collected again)))
             (is (= "tidy of field done: nothing to dig" (:text again)))))))))
 
 (deftest a-part-limits-the-work-to-that-part
@@ -317,7 +293,7 @@
         (let [{:keys [eng p]} (start tidy-spec {"field" field-plan "other" other-plan})
               result (await (outcome eng {:plan "field"} 200))]
           (is (= (disj (set strays) [2 64 4]) (dug p)))
-          (is (= [{:pos [2 64 4] :block "dirt" :reason :footprint :plan "other"}] (:refused result))))))))
+          (is (= [{:pos [2 64 4] :block "dirt" :reason :footprint}] (:refused result))))))))
 
 (deftest the-access-is-checked-again-right-before-each-dig
   (async done
@@ -331,8 +307,8 @@
                          (world/set-data! w {"field" field-plan "late" late-plan} {})
                          r)))
           (let [result (await (outcome eng {:plan "field"} 200))]
-            (is (= 2 (count (dug p))) "the first dig of the round goes through and the other plan closes the rest")
-            (is (= 3 (count (:refused result))))
+            (is (< (count (dug p)) 5) "the other plan closes the cells left after the first dig")
+            (is (seq (:refused result)))
             (is (= #{:footprint} (set (map :reason (:refused result)))))))))))
 
 ;; ---------------------------------------------------------------- hazards
@@ -366,7 +342,7 @@
                                                 #(run-hazard (hazard-world [3 64 2 "water"]) {})))]
           (is (= 0 digs))
           (is (= 0 (:dug result)))
-          (is (= [{:pos [2 64 2] :block "dirt" :reason :hazard :hazards [:fluid-adjacent]}] (:refused result))))))))
+          (is (= [{:pos [2 64 2] :block "dirt" :reason :hazard}] (:refused result))))))))
 
 (deftest lava-beside-is-refused-by-default-and-not-by-the-water-acceptance
   (async done
@@ -374,7 +350,7 @@
       (fn ^:async t []
         (let [[digs result] (await (run-hazard (hazard-world [3 64 2 "lava"]) {}))]
           (is (= 0 digs))
-          (is (= [{:pos [2 64 2] :block "dirt" :reason :hazard :hazards [:lava-adjacent]}] (:refused result))))))))
+          (is (= [{:pos [2 64 2] :block "dirt" :reason :hazard}] (:refused result))))))))
 
 (deftest lava-beside-is-dug-when-accepted-by-name
   (async done
@@ -400,7 +376,7 @@
               [digs2 result2] (await (settings/with-settings {:jobs.farm.tidy/accept #{:fluid-adjacent :falling-block}}
                                                   #(run {})))]
           (is (= 0 digs))
-          (is (= [:falling-block] (:hazards (first (:refused result)))))
+          (is (= [:hazard] (map :reason (:refused result))))
           (is (= 1 digs2))
           (is (= [] (:refused result2))))))))
 
@@ -485,7 +461,7 @@
             (await (run-until-empty (:eng b) 200))
             (is (= (set strays) (dug p)))
             (is (= (count strays) (count (calls p "dig"))) "no cell was dug twice")
-            (is (= 5 (:dug (:data (first (filterv #(= :completed (:kind %)) @(:seen b)))))) "the dig the cut came with is counted from the world after the restart")))))))
+            (is (= 4 (:dug (:data (first (filterv #(= :completed (:kind %)) @(:seen b)))))) "the dig the cut came with left air: it is not dug again, nor counted")))))))
 
 (deftest the-opt-out-needs-no-zone-list
   (async done

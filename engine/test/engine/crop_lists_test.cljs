@@ -4,14 +4,14 @@
             [jobs.farm.compost :as compost]
             [jobs.farm.harvest :as harvest]
             [jobs.farm.tend-box :as tend-box]
-            [jobs.farm.tidy :as tidy]
+            [jobs.lib.strays :as strays]
             [jobs.lib.crops :as crops]
             [jobs.lib.reserve :as reserve]))
 
 (deftest every-field-crop-is-known-to-each-job
   (doseq [crop (keys crops/ripe-age)
           :when (crops/seed-of crop)]
-    (is (tidy/crop-blocks crop) (str crop " is a crop block to tidy")))
+    (is (strays/crop-blocks crop) (str crop " is a crop block to tidy")))
   (is (= (set crops/field-seeds) (set (vals crops/seed-of))))
   (is (every? (set harvest/collect-items) crops/field-seeds) "a harvest picks up every seed that sows a field crop")
   (is (= crops/field-seeds tend-box/seed-items)))

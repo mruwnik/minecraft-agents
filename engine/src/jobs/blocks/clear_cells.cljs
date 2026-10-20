@@ -46,6 +46,7 @@
    :keep {:doc "extra block names to leave alone" :spec (a/coll-of a/name?) :default []}
    :only {:doc "block name endings to clear, e.g. [\"_log\" \"_leaves\"]; other blocks are left as they are; none = every block" :spec (a/coll-of a/name?) :default []}
    :ignore-zones? :shared
+   :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
    :open-pens? {:doc "true: cells that are the wall of an own pen holding livestock may be dug (the animals walk out)" :spec boolean? :default false}
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block)"
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}})
@@ -96,7 +97,7 @@
 (defn dig-args
   "The jobs.blocks.dig args for the cell at pos: no tool needed, the drop picked up, the job's :accept and opt-out."
   [c pos]
-  (merge (select-keys (:args c) [:accept :ignore-zones?])
+  (merge (select-keys (:args c) [:accept :ignore-zones? :for-plan])
          {:pos pos :need-drop false :collect true}))
 
 (defn named
@@ -140,7 +141,7 @@
   "{:allowed [[pos name] ..] :refused [[pos verdict] ..]}: the pending cells split by the rules' permission (a zone or
   another plan's footprint); unloaded cells are allowed (walked to)."
   [c todo]
-  (split-by-rules (access/rules-input c) (:accept (:args c)) todo))
+  (split-by-rules (access/rules-input c {:except (:for-plan (:args c))}) (:accept (:args c)) todo))
 
 (defn bad-args
   "Never :bad-args for a missing corner or too big a box."

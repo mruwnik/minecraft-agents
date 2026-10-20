@@ -216,6 +216,15 @@
           (is (= [{:zones ["farm"] :plans ["pad"] :cells 6}]
                  (map #(select-keys % [:zones :plans :cells]) (kinds seen :clear-cells.refused)))))))))
 
+(deftest the-for-plan-footprint-is-no-obstacle
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks eight} (ew/of-data {"pad" pad-plan} {} []))
+              result (await (child-outcome eng job (assoc box :for-plan "pad") 40))]
+          (is (= {:dug 8 :skipped {}} (select-keys result [:dug :skipped])))
+          (is (= 8 (count (calls p "dig")))))))))
+
 (deftest a-box-wholly-refused-declines-without-a-warn-and-stays-listed
   (async done
     (tu/run-async done

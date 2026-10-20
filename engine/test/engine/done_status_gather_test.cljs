@@ -198,7 +198,6 @@
   (are [blocks m reason] (= reason (tu/kind-reason (done-in 'jobs.farm.tidy {:blocks blocks} {:plan "p"} m {"p" tidy-plan})))
     {"0,65,0" "dirt"} {:looked here} [:later :tidying]
     {} {:looked here} [:ok :tidied]
-    {} {:looked here :collect true} [:later :collecting]
     {} {:looked here :refused [{:pos {:x 0 :y 65 :z 0}}]} [:later :reporting]))
 
 (deftest farm-tend-is-done-when-every-part-is-in-order

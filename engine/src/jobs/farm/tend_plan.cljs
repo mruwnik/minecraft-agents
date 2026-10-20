@@ -13,7 +13,7 @@
             [jobs.farm.till :as till]
             [jobs.lib.farm :as farm]
             [jobs.lib.field-area :as fa]
-            [jobs.farm.tidy :as tidy]
+            [jobs.lib.strays :as strays]
             [jobs.farm.tend-ground :as gr]
             [jobs.farm.tend-box :as box]
             [plan.shape :as shape]
@@ -66,7 +66,7 @@
   [p crops]
   (vec (keep (fn [[{:keys [x y z]} crop]]
                (let [found (u/seen-name p {:x x :y y :z z})]
-                 (when (and found (tidy/crop-blocks found) (not (contains? (shape/crop-names crop) found)))
+                 (when (and found (strays/crop-blocks found) (not (contains? (shape/crop-names crop) found)))
                    {:pos [x y z] :found found :want (shape/want-text {:crop crop})})))
              crops)))
 
