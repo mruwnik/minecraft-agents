@@ -29,7 +29,7 @@
   A real danger (jobs.lib.danger: a mob with a walkable way to the body, or a ranged one with a line of fire) within
   :radius (ranged ones :ranged-radius) starts a chase, or is seen afresh. A mob stops chasing (vanilla) once it is
   gone (dead, despawned, untracked), beyond its follow range (jobs.lib.threats: zombie 35, most 16), out of line of
-  sight for retreat-flight/lost-s (4 s), or has no walkable way to the body (nor, ranged, a line of fire; a creeper within
+  sight for retreat-flight/lost-s (4 s), a melee one beyond :radius that stood at one place in sight for retreat-flight/still-s (5 s), or has no walkable way to the body (nor, ranged, a line of fire; a creeper within
   retreat-flight/::blast-reach (6) always has one: its blast).
   Each step, in this order:
   1. A door, gate or trapdoor standing open within a hand's reach and nearer the nearest chaser than the body is shut

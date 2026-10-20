@@ -29,8 +29,10 @@
    ::no-gain-steps {:default 20 :doc "Flight steps without a new best gap to the nearest chaser before the cornered options are tried." :spec (a/int-in 1 nil)}
    ::prefer-lit? {:default true :doc "By night or under ground a flee step ends on lit ground rather than dark (jobs.lib.look/dark-fn) while a lit end is open." :spec boolean?}
    ::hide-health {:default 12 :doc "At or under this health, in a ranged chaser's line of fire with no covered step, the body takes cover where it stands before walking on." :spec (a/num-in 0 20)}
-   ::lost-s {:default 4 :doc "Seconds out of line of sight after which a mob has stopped chasing." :spec (a/num-in 0 nil)}})
+   ::lost-s {:default 4 :doc "Seconds out of line of sight after which a mob has stopped chasing." :spec (a/num-in 0 nil)}
+   ::still-s {:default 5 :doc "Seconds a melee mob in sight, beyond the hostile radius, stands at one place after which it has stopped chasing (a chaser would be coming)." :spec (a/num-in 0 nil)}})
 (defn lost-s [] (settings/get settings ::lost-s))
+(defn still-s [] (settings/get settings ::still-s))
 (defn hide-health [] (settings/get settings ::hide-health))
 
 (def displaced-policy
@@ -148,11 +150,12 @@
   :way? false: no walkable way, nor a line of fire for a ranged mob), nil when no longer listed (dead, despawned, out
   of tracking); seen-t when it was last in line. Vanilla: a mob drops its target past its follow range or a while out
   of sight. A low body (:low?) is not let go by a ranged mob (:ranged?) that is merely out of line: it may come round
-  a corner and throw again."
+  a corner and throw again. :still-ms: how long a melee mob beyond the hostile radius has stood at one place in sight."
   [m seen-t now lost-ms]
   (cond
     (nil? m) :gone
     (> (:distance m) (threats/follow-range (:mob m))) :far
+    (and (not (:ranged? m)) (> (:still-ms m 0) (* 1000 (still-s)))) :still
     (and (not (:in-line? m)) (> (- now seen-t) lost-ms) (not (and (:low? m) (:ranged? m)))) :lost
     (false? (:way? m)) :closed
     :else nil))
@@ -224,11 +227,16 @@
                                                  (filter #(reached (.-id %)) live)))
         chasers (merge (:chasers (ctx/mem c)) (into {} (map (juxt #(.-id %) #(chaser-entry p % now))) joining))
         looked (set (:looked-back (ctx/mem c)))
+        stills (into {} (keep (fn [e] (when (and (sensed-now? e) (true? (.-visible e)))
+                                        (let [pos (u/pos-of (.-pos e)) old (get (:still (ctx/mem c)) (.-id e))]
+                                          [(.-id e) (if (and old (<= (u/dist (:pos old) pos) 0.3)) old {:pos pos :since now})]))))
+                     live)
         judged (for [[id ch] chasers
                      :let [e (listed id)
                            seen-t (if (and e (true? (.-visible e))) now (:seen-t ch))
                            ch (cond-> (assoc ch :seen-t seen-t) e (-> (dissoc :pos :direction :band :from) (merge (threats/place-of p e))))
-                           m (when e (seen-now p e low?))
+                           m (when e (cond-> (seen-now p e low?)
+                                       (and (stills id) (> (danger-q/mob-distance p e) radius)) (assoc :still-ms (- now (:since (stills id))))))
                            why (stopped-chasing (cond-> m (and m (contains? reached id)) (assoc :way? true)) seen-t now (* 1000 (lost-s)))]]
                  {:id id :ch ch :e e :why why
                   :look-back? (and (unsensed-loss? e why) (not (looked id)) (not (dead id)))})
@@ -237,7 +245,7 @@
         off (remove #(or (nil? (:why %)) (:look-back? %)) judged)]
     (ctx/update-mem! c #(-> %
                             (assoc :chasers (into {} (map (juxt :id :ch)) (concat on back)))
-                            (assoc :look-back (mapv :ch back))
+                            (assoc :look-back (mapv :ch back) :still stills)
                             (update :looked-back (fn [ids] (vec (remove (set (keep (fn [{:keys [id e]}] (when (sensed-now? e) id)) judged)) ids))))
                             (update :fled (fnil into []) (map (fn [{:keys [ch why]}] (assoc ch :ended why))) off)))
     (sort-by #(danger-q/mob-distance p %) (map :e on))))

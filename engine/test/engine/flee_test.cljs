@@ -91,7 +91,10 @@
     (is (= :lost (retreat-flight/stopped-chasing (assoc chasing :in-line? false) 5000 now lost-ms)))
     (is (nil? (retreat-flight/stopped-chasing (assoc chasing :in-line? false) 7000 now lost-ms)) "out of line 3 s: still")
     (is (= :closed (retreat-flight/stopped-chasing (assoc chasing :way? false) now now lost-ms)))
-    (is (= :far (retreat-flight/stopped-chasing {:mob "skeleton" :distance 17 :in-line? true} now now lost-ms)))))
+    (is (= :far (retreat-flight/stopped-chasing {:mob "skeleton" :distance 17 :in-line? true} now now lost-ms)))
+    (is (nil? (retreat-flight/stopped-chasing (assoc chasing :still-ms 4000) now now lost-ms)) "still 4 s: may be waiting")
+    (is (= :still (retreat-flight/stopped-chasing (assoc chasing :still-ms 6000) now now lost-ms)) "a melee mob that stands still is not chasing")
+    (is (nil? (retreat-flight/stopped-chasing (assoc chasing :mob "skeleton" :ranged? true :distance 10 :still-ms 60000) now now lost-ms)) "a shooter stands still and shoots")))
 
 (deftest a-low-body-keeps-fleeing-a-ranged-mob-that-lost-its-line-while-near
   (let [now 10000 lost-ms 4000
@@ -604,7 +607,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup {:floor [-8 -8 8 8] :entities [(zombie 7 4 {:pos {:x 4 :y 64 :z 4}})]})
-              {:keys [calls out]} (await (run-job! s 'jobs.survival.retreat {}))]
+              {:keys [calls out]} (await (run-job! s 'jobs.survival.retreat {:settings {:jobs.survival.retreat-flight/still-s 3600}}))]
           (is (= [:done] calls) "the flight ends, it does not dance for ever")
           (is (= :keeps-off (:ended out)))
           (is (re-find #"still following" (:text out))))))))
@@ -625,7 +628,7 @@
                   (.override world name (fn ^:async f [token a impl]
                                           (swap! (fake/state p) update :entities (partial mapv #(assoc % :pos [15 64 0])))
                                           (await (impl token a)))))
-              {:keys [calls out]} (await (run-job! s 'jobs.survival.retreat {}))]
+              {:keys [calls out]} (await (run-job! s 'jobs.survival.retreat {:settings {:jobs.survival.retreat-flight/still-s 3600}}))]
           (is (= [:done] calls) "no way away, nothing within :radius: the flight ends")
           (is (= :keeps-off (:ended out))))))))
 

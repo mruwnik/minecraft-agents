@@ -1204,7 +1204,7 @@
           (core/register-reflex! eng {:trigger :hostile-near})
           (await (core/tick! eng))
           (is (= 1 (count (reflex-fired seen))) "a zombie at 3: the reflex fires")
-          (is (> (fake/dist (fake/vec-pos (:pos (fake/self p))) [3 64 0]) 35) "fled beyond its follow range")
+          (is (> (fake/dist (fake/vec-pos (:pos (fake/self p))) [3 64 0]) 8) "fled out of the trigger's radius, and stopped once the zombie stood still")
           (is (empty? (reflex-jobs eng)) "the zombie is far outside the trigger's radius: the reflex ended")
           (is (= [:done] (mapv :outcome (reflex-ended seen)))))))))
 
