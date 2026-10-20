@@ -6,6 +6,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.solid :as solid]
             [jobs.lib.util :as u]
             [jobs.lib.world-files :as ew]
             [jobs.survival.block-arrow-gap :as gap]))
@@ -158,3 +159,9 @@
       (fn ^:async t []
         (let [{:keys [seen]} (await (one-tick! (setup [] {:inventory [] :entities [pit-skeleton] :blocks (merge ground pit shell)}) {}))]
           (is (some #(and (= :child_started (:kind %)) (= :need (:slot %))) @seen) "a block is fetched through a need child"))))))
+
+(deftest an-invisible-light-block-is-no-support
+  (let [at {"1,1,0" "light" "0,0,0" "stone"}
+        solid-at? #(solid/solid? (at (str (:x %) "," (:y %) "," (:z %))))]
+    (is (not (gap/supported? solid-at? {:x 1 :y 2 :z 0})))
+    (is (gap/supported? solid-at? {:x 0 :y 1 :z 0}))))

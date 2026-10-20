@@ -2,9 +2,9 @@
   "What counts as solid for roofs, walls, floors and arrows, by block name, and the block cell of a position.")
 
 (def non-solid
-  "Block names that are not a roof: air, fluids, and plants and fixtures a body can stand in."
+  "Block names that are not a roof: air, fluids, plants and fixtures a body can stand in, and the invisible light block."
   #{"air" "cave_air" "void_air" "water" "lava" "short_grass" "grass" "tall_grass" "fern" "large_fern"
-    "torch" "wall_torch" "snow" "vine" "dead_bush" "seagrass" "tall_seagrass" "fire"})
+    "torch" "wall_torch" "snow" "vine" "dead_bush" "seagrass" "tall_seagrass" "fire" "light"})
 
 (def walk-through
   "Blocks a mob or body walks through or over (signs, banners, rails, plates, buttons, levers, carpets, tripwire,
