@@ -82,9 +82,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [job ['jobs.survival.breathe 'jobs.survival.eat 'jobs.survival.extinguish 'jobs.survival.get-food
-                     'jobs.survival.block-arrow-gap 'jobs.survival.restore-broken 'jobs.survival.unwedge]]
-          (is (= {:listed false :event :completed} (select-keys (await (ending job {})) [:listed :event])) (str job)))))))
+        (doseq [[job args] [['jobs.survival.breathe {}] ['jobs.survival.eat {}] ['jobs.survival.extinguish {}]
+                            ['jobs.survival.get-food {:carry 0}] ['jobs.survival.block-arrow-gap {}]
+                            ['jobs.survival.restore-broken {}] ['jobs.survival.unwedge {}]]]
+          (is (= {:listed false :event :completed} (select-keys (await (ending job args)) [:listed :event])) (str job)))))))
 
 (deftest access-farm-forestry-storage-checks-say-why-they-decline
   (are [job args reason] (= reason (waiting-reason job args))

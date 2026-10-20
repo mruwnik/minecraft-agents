@@ -24,9 +24,11 @@
             {:trigger :dusk-home :persistence :cooldown :cooldown-s 60
              :job (jobs.survival.go-home)}
             {:trigger :hungry :persistence :cooldown :cooldown-s 90 :args {:food 6}
-             :job (jobs.survival.get-food {:food 6})}
+             :job (jobs.survival.get-food {:food 6 :carry 0})}
             {:trigger :stuck-underground :persistence :cooldown :cooldown-s 300
              :job (jobs.survival.go-home {:limit 1000})}
+            {:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}
+            {:trigger :replant-owed :persistence :cooldown :cooldown-s 60}
             {:trigger :needs-bed :persistence :cooldown :cooldown-s 600}
             {:trigger :needs-weapon :persistence :cooldown :cooldown-s 600}
             {:trigger :door-left :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut)}

@@ -308,4 +308,6 @@
                                    {:r (assoc always :job '(reflex))})]
           (core/register-reflex! eng {:trigger :r})
           (await (core/tick! eng))
-          (is (= 1 (count (filter #(= [:reflex :fired] [(:source %) (:kind %)]) @seen))) "a :look is not a hold: the trigger fires"))))))
+          (is (= 1 (count (filter #(= [:reflex :fired] [(:source %) (:kind %)]) @seen))) "a :look is not a hold: the trigger fires")
+          (is (= [:fired :held] (keep #(when (= :reflex (:source %)) (#{:fired :held} (:kind %))) @seen))
+              "the look fires it first; it is held only by the end the look led to"))))))
