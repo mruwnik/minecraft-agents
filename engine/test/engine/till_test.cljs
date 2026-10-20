@@ -126,7 +126,7 @@
         (let [{:keys [eng seen]} (setup {:inventory hoe :blocks (assoc four "1,63,1" "stone")})
               result (await (child-outcome eng job box 12))]
           (is (= {:tilled 3 :skipped {{:x 1 :y 63 :z 1} :not-tillable}} result))
-          (is (= 1 (count (kinds seen :till.skipped)))))))))
+          (is (= [:debug] (distinct (map :level (kinds seen :till.skipped)))) "per-cell skips are debug: the ending lists them"))))))
 
 (deftest till-skips-a-cell-covered-by-a-solid-block
   (async done
@@ -471,3 +471,8 @@
           (is (= {:tilled 4 :skipped {}} result))
           (is (= 6 (count (calls p "useOn"))))
           (is (= ["farmland"] (distinct (map #(block-at p %) (till/cells box))))))))))
+
+(deftest till-quote-counts-two-hoe-uses-for-coarse-and-rooted-dirt
+  (let [{:keys [p]} (setup {:inventory hoe :blocks (assoc four "1,63,1" "coarse_dirt" "2,63,1" "rooted_dirt")})
+        q (till/quote-of {:args box :primitives p})]
+    (is (= {"stone_hoe" [6 6 6]} (get-in q [:uses :wear])))))

@@ -17,6 +17,5 @@
   {:name "stone-cell-is-skipped-not-tillable"
    :blocks [[:set [16 -1 16] "stone"] [:set [15 -1 15] "coarse_dirt"]]
    :act [[:job (jobs.farm.till {:center #xyz [16 -1 16] :radius 1 :ignore-zones? true})]]
-   :expect [{:event {:source :job :kind :till.skipped :data {:reason :not-tillable}} :within-s 80 :of-job true}
-            {:event {:source :job :kind :completed :data {:tilled 8}} :within-s 80 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:tilled 8}} :within-s 80 :of-job true}]
    :after [[:block [16 -1 16] "stone"] [:block [15 -1 15] "farmland"] [:block [17 -1 17] "farmland"]]}]}

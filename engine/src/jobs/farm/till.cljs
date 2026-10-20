@@ -194,17 +194,19 @@
 (defn quote-of [c]
   (let [cs (try (cells (:args c)) (catch :default _ nil))
         p (:primitives c)
-        n (count (remove #(= "farmland" (u/seen-name p %)) cs))
+        names (remove #{"farmland"} (map #(u/seen-name p %) cs))
+        n (count names)
+        uses (+ n (count (filter loosened names)))
         h (hoe c)]
-    {:uses (cond-> {:job-time [(* 0.5 n) (* 2 n) (* 10 n)]} (and h (pos? n)) (assoc :wear {h [n n n]}))
+    {:uses (cond-> {:job-time [(* 0.5 n) (* 2 n) (* 10 n)]} (and h (pos? n)) (assoc :wear {h [uses uses uses]}))
      :done [0 n n]}))
 
 (defn skip!
-  "Record the cells as skipped with reason and emit one :till.skipped each."
+  "Record the cells as skipped with reason and emit one :till.skipped each (debug: the ending lists them all)."
   [c poss reason]
   (ctx/update-mem! c update :skipped #(into (or % {}) (map (fn [p] [p reason])) poss))
   (doseq [pos poss]
-    (ctx/emit! c :till.skipped :info {:pos pos :reason reason
+    (ctx/emit! c :till.skipped :debug {:pos pos :reason reason
                                       :text (str "skipped " (pr-str pos) ": " (name reason))})))
 
 (defn bump!
