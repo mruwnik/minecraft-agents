@@ -1,0 +1,23 @@
+;; Card b18db68f: what the body sees is remembered. Ore behind 3 stone is unknown until the stone is dug; what it saw is still known
+;; after the body restarts (seen.bin). Same room as explore-seen-only: ore [18 0 16] in the east wall, ore [22 0 16] behind stone x 19..21.
+{:defaults
+ {:tags [:sensing :explore] :time :any
+  :plot {:height 12}
+  :blocks [[:fill [2 0 8] [30 6 24] "stone"] [:fill [15 0 15] [17 1 17] "air"] [:set [16 2 16] "sea_lantern"]
+           [:set [18 0 16] "iron_ore"] [:set [22 0 16] "iron_ore"]]
+  :body {:at [16.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]] :settle-s 3}
+  :limit-s 90}
+ :cases
+ [{:name "ore-behind-three-stone-is-named-once-the-stone-is-dug"
+   :act [[:job (jobs.access.tunnel {:target #at [22 0 16] :max-length 8 :keep true :fetch false})]
+         [:await {:source :job :kind :completed :of-job true} 80]
+         [:job (jobs.explore.look {:at #at [22 0 16] :max-blocks 0 :max-entities 0})]]
+   :expect [{:event {:source :job :kind :completed :data {:at {:name "iron_ore" :seen? true}}} :within-s 40 :of-job true}]}
+  {:name "a-seen-ore-is-still-remembered-after-a-restart"
+   :keep-memory true
+   :act [[:job (jobs.explore.look {:block-names ["iron_ore"] :radius 16 :max-blocks 6})]
+         [:await {:source :job :kind :completed :of-job true} 30]
+         [:restart-body]
+         [:cli "observe" ["$body" "--world" "$world" "seen" "--names" "iron_ore"] {:ok true :blocks [:has {:name "iron_ore"}]}]
+         [:job (jobs.explore.look {:at #at [18 0 16] :max-blocks 0 :max-entities 0})]]
+   :expect [{:event {:source :job :kind :completed :data {:at {:name "iron_ore"}}} :within-s 40 :of-job true}]}]}
