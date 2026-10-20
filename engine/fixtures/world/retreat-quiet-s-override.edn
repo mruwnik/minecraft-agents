@@ -14,12 +14,12 @@
  :cases
  [{:name "quiet-s-0-ends-the-hide-at-once"
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16 :settings {:jobs.survival.hide-out/quiet-s 0}})}]
+               :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 8 :jobs.lib.danger/ranged-radius 16 :jobs.survival.hide-out/quiet-s 0}})}]
    :expect [{:event {:source :reflex :kind :ended :data {:outcome :done}} :within-s 40}]
    :limit-s 90}
   {:name "quiet-s-120-holds-past-a-minute"
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16 :settings {:jobs.survival.hide-out/quiet-s 120 :jobs.survival.hide-out/hide-s 200}})}]
+               :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 8 :jobs.lib.danger/ranged-radius 16 :jobs.survival.hide-out/quiet-s 120 :jobs.survival.hide-out/hide-s 200}})}]
    :expect [{:no-event {:source :reflex :kind :ended} :from-event {:source :job :kind :retreat_sealed} :for-s 70}]
    :limit-s 120}
   {:name "default-holds-about-30s"
