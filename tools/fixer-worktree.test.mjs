@@ -58,6 +58,19 @@ test('--remove refuses while a process runs inside the worktree, and succeeds on
   assert.equal(fs.existsSync(wt), false)
 }))
 
+test('--remove ignores a compile-pool idle watcher (and its sleep) whose cwd is the worktree', withRepo(({ root, repo, tool, env }) => {
+  const wt = sh(repo, tool, [card], env).stdout.trim().split('\n').pop()
+  const watcher = path.join(root, 'pool/tools/compile-idle-watch')
+  fs.mkdirSync(path.dirname(watcher), { recursive: true })
+  fs.writeFileSync(watcher, '#!/bin/bash\nsleep 30\n', { mode: 0o755 })
+  const child = spawn('bash', [watcher, 'x'], { cwd: wt, detached: true })
+  try {
+    const r = sh(repo, tool, ['--remove', card], env)
+    assert.equal(r.status, 0, r.stderr)
+    assert.equal(fs.existsSync(wt), false)
+  } finally { process.kill(-child.pid) }
+}))
+
 test('a dir left holding only test logs and probe files is cleared by --remove and by re-creating', withRepo(({ repo, tool, env }) => {
   const wt = sh(repo, tool, [card], env).stdout.trim().split('\n').pop()
   // Simulates git having removed the worktree while a run wrote its files back.

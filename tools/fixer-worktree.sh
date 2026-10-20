@@ -25,6 +25,8 @@ live_pids() {
   local dir=$1 self=" $$ " p q c
   pgrp() { sed -n 's/.*) [A-Za-z] [0-9]* //p' "/proc/$1/stat" 2>/dev/null | cut -d' ' -f1; }
   ppid() { sed -n 's/.*) [A-Za-z] //p' "/proc/$1/stat" 2>/dev/null | cut -d' ' -f1; }
+  # A compile-pool idle watcher (and its sleep) may have a worktree as cwd from before tools/compile cd'd it; it writes nothing there.
+  watcher() { { tr '\0' ' ' < "/proc/$1/cmdline" | grep -qF -- "/tools/compile-idle-watch "; } 2>/dev/null; }
   q=$BASHPID
   while [ -n "$q" ] && [ "$q" != "$$" ]; do self="$self$q "; q=$(ppid "$q"); done
   local skip=$self
@@ -34,6 +36,8 @@ live_pids() {
     p=${p#/proc/}
     case "$skip" in *" $p "*) continue ;; esac
     case "$self" in *" $(ppid "$p") "*) continue ;; esac
+    ! watcher "$p" || continue
+    ! watcher "$(ppid "$p")" || continue
     # Pipe peers of the caller (e.g. "land.sh | tail") share its process group; a test or body run has its own.
     [ "$(pgrp "$p")" != "$(pgrp $$)" ] || continue
     c=$(readlink "/proc/$p/cwd" 2>/dev/null || true)
