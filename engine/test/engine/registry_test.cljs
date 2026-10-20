@@ -13,7 +13,7 @@
   '#{jobs.survival.breathe jobs.survival.unwedge jobs.survival.extinguish
      jobs.survival.cure jobs.survival.respond-to-hostile
      jobs.food.fish jobs.survival.eat jobs.survival.get-food jobs.survival.go-home
-     jobs.survival.sleep jobs.survival.set-spawn jobs.survival.night jobs.survival.bed-down jobs.survival.shut-in jobs.survival.wall-in jobs.survival.dig-pit jobs.survival.dig-pocket jobs.survival.enter-room jobs.survival.log-out
+     jobs.survival.sleep jobs.survival.set-spawn jobs.survival.night jobs.survival.leave-shelter jobs.survival.bed-down jobs.survival.shut-in jobs.survival.wall-in jobs.survival.dig-pit jobs.survival.dig-pocket jobs.survival.enter-room jobs.survival.log-out
      jobs.combat.attack jobs.animals.breed jobs.animals.shear jobs.animals.cull jobs.animals.maintain jobs.animals.pen-check jobs.animals.leash jobs.animals.unleash jobs.animals.lead-to jobs.animals.lure-to jobs.animals.bring jobs.survival.recover-drops jobs.survival.restore-broken jobs.maintenance.shut jobs.storage.make-room
      jobs.animals.herd
      jobs.forestry.fell-tree jobs.items.collect-drops jobs.forestry.plant-sapling
@@ -55,6 +55,7 @@
     'jobs.primitive.dig :phase []
     'jobs.debug.notify :debug []
     'jobs.survival.night :reflex []
+    'jobs.survival.leave-shelter :reflex []
     'jobs.survival.bed-down :phase '[jobs.survival.night]))
 
 (deftest a-job-declares-its-tags
@@ -95,7 +96,7 @@
                (expr/problem registry/jobs '(jobs.access.stair {:dir :down :stock-torches false})))))
 
 (deftest the-trigger-registry-holds-the-default-trigger-set
-  (is (= #{:suffocating :burning :wedged :hostile-near :poisoned :hungry :stuck-underground :needs-bed :needs-weapon :night :dusk-home :died :pen-gate :door-left
+  (is (= #{:suffocating :burning :wedged :hostile-near :poisoned :hungry :stuck-underground :needs-bed :needs-weapon :night :dawn :dusk-home :died :pen-gate :door-left
            :inventory-nearly-full :scaffold-left :tidy-pending :mounted :loose-items :part-cut-tree :replant-owed :ore-seen}
          (set (keys triggers/all))))
   (doseq [[id t] triggers/all]

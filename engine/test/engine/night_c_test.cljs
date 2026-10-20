@@ -24,7 +24,7 @@
             [jobs.lib.targets :as targets]
             [jobs.survival.night :as night]
             [jobs.survival.night.sites :as sites]
-            [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home walled-pen bed-world bed-places with-room dug-into-home stone-room block-at room-with-doorway doorway-shut-early night-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night held-with-raw-beef furnace-ops held-starving cow zombie]]))
+            [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home walled-pen bed-world bed-places with-room dug-into-home stone-room block-at room-with-doorway doorway-shut-early dawn-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night held-with-raw-beef furnace-ops held-starving cow zombie]]))
 
 (deftest a-roof-over-a-breached-room-does-not-end-the-night
   (run-night-in {:blocks breached-room :inventory st/wall-stack}
@@ -267,26 +267,26 @@
       (fn ^:async t []
         (let [{:keys [eng p filled]} (await (doorway-shut-early))]
           (is (seq filled) "the doorway was shut")
-          (is (night-holds-now? eng p) "by day the night trigger holds for the shut doorway")
-          (core/submit! eng (list 'jobs.survival.night {}) {})
+          (is (dawn-holds-now? eng p) "by day the dawn trigger holds for the shut doorway")
+          (core/submit! eng '(jobs.survival.leave-shelter) {})
           (await (tu/run-until-empty eng 40))
-          (is (every? #(= "air" (block-at p %)) filled) "the night job by day opened it"))))))
+          (is (every? #(= "air" (block-at p %)) filled) "leave-shelter opened it"))))))
 
 (deftest a-doorway-that-cannot-be-opened-by-day-is-warned-and-tried-again-later
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen filled]} (await (doorway-shut-early))]
-          (core/submit! eng (list 'jobs.survival.night {}) {})
+          (core/submit! eng '(jobs.survival.leave-shelter) {})
           (await (with-child-log #(tu/run-until-empty eng 40)
                    (fn [_ k _ _] (when (= :doorway-open k) {:kind :nothing-possible :data {}}))))
           (is (seq filled))
           (is (not-any? #(= "air" (block-at p %)) filled) "the walk failed, nothing dug")
           (is (seq (st/emitted seen :night.doorway-stuck)) "the stuck doorway is warned")
-          (is (not (night-holds-now? eng p)) "not tried again at once")
+          (is (not (dawn-holds-now? eng p)) "not tried again at once")
           (mem/forget! (:store eng) :doorway-open-failed)
-          (is (night-holds-now? eng p) "once the wait lapses the trigger holds for it again")
-          (core/submit! eng (list 'jobs.survival.night {}) {})
+          (is (dawn-holds-now? eng p) "once the wait lapses the trigger holds for it again")
+          (core/submit! eng '(jobs.survival.leave-shelter) {})
           (await (tu/run-until-empty eng 40))
           (is (every? #(= "air" (block-at p %)) filled) "and the next try opens it"))))))
 
@@ -298,14 +298,14 @@
               fail-walk (fn [_ k _ _] (when (= :doorway-open k) {:kind :nothing-possible :data {}}))
               try-once! (fn ^:async once []
                           (mem/forget! (:store eng) :doorway-open-failed)
-                          (core/submit! eng (list 'jobs.survival.night {}) {})
+                          (core/submit! eng '(jobs.survival.leave-shelter) {})
                           (await (with-child-log #(tu/run-until-empty eng 40) fail-walk)))]
           (await (try-once!))
           (await (try-once!))
           (await (try-once!))
           (is (= 1 (count (st/emitted seen :night.doorway-stuck))) "three failed tries, one warning")
           (mem/forget! (:store eng) :doorway-open-failed)
-          (is (night-holds-now? eng p) "still tried again once the wait lapses"))))))
+          (is (dawn-holds-now? eng p) "still tried again once the wait lapses"))))))
 
 (deftest a-filled-doorway-cell-someone-else-changed-is-left-alone
   (async done
@@ -316,8 +316,8 @@
           (doseq [cell filled] (fake/set-block! p cell "oak_planks"))
           (fake/swap-self! p assoc :pos [7 64 0]) ; outside the room, looking at the filled cells in its west wall
           (look-round!)
-          (is (not (night-holds-now? eng p)) "no doorway of its own to open")
-          (core/submit! eng (list 'jobs.survival.night {}) {})
+          (is (not (dawn-holds-now? eng p)) "no doorway of its own to open")
+          (core/submit! eng '(jobs.survival.leave-shelter) {})
           (await (tu/run-until-empty eng 40))
           (is (every? #(= "oak_planks" (block-at p %)) filled) "the planks someone put there stay"))))))
 

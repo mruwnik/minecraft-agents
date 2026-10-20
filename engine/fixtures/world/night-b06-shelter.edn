@@ -17,10 +17,10 @@
          [:await {:source :job :kind :shut-in.sealed} 60]
          [:until [:memory {:entries {:shelter [{:data {:state :built}}]}}] 10]
          [:time-set 1000]
-         [:job (jobs.survival.night)]]
+         [:job (jobs.survival.leave-shelter)]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 60}
             {:event {:source :job :kind :dig-in.took-back} :within-s 150}
-            {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 200 :of-job true}]
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.leave-shelter"}} :within-s 200 :of-job true}]
    :after [[:item "cobblestone" [:>= 8]]]
    :limit-s 230}
   ;; no pickaxe: a dig by hand would lose the cobblestone, so the walls stay and the night still ends
@@ -32,7 +32,7 @@
          [:await {:source :job :kind :shut-in.sealed} 60]
          [:until [:memory {:entries {:shelter [{:data {:state :built}}]}}] 10]
          [:time-set 1000]
-         [:job (jobs.survival.night)]]
+         [:job (jobs.survival.leave-shelter)]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 60}
             {:event {:source :job :level :debug :kind :dig-in.take-back-skipped :data {:reason :no-tool}} :within-s 120}
             {:no-event {:source :job :kind :dig-in.took-back} :for-s 150}]
@@ -47,7 +47,7 @@
          [:await {:source :job :kind :shut-in.sealed} 60]
          [:until [:memory {:entries {:shelter [{:data {:state :built}}]}}] 10]
          [:time-set 1000]
-         [:job (jobs.survival.night)]]
+         [:job (jobs.survival.leave-shelter)]]
    :expect [{:event {:source :job :kind :shut-in.sealed :message [:contains "oak_log"]} :within-s 60}
             {:event {:source :job :kind :dig-in.took-back} :within-s 200}]
    :after [[:item "oak_log" [:>= 8]]]
@@ -97,7 +97,7 @@
   ;; 712a8df7: first light with a hostile known near the shelter: the body stays in, and leaves once the mob is gone
   {:name "dawn-with-a-known-hostile-stays-in-until-it-is-gone"
    :time :night-exclusive
-   :register [{:trigger :night}]
+   :register [{:trigger :night} {:trigger :dawn}]
    :sleep-skip true
    :body {:inventory [["cobblestone" 16]]}
    :act [[:summon "zombie" [28.5 0 16.5] "{UUID:[I;2006101,1,1,1],NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]

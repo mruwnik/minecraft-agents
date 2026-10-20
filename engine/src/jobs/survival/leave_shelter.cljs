@@ -1,19 +1,49 @@
-(ns jobs.survival.night.morning
-  "The night's morning: a doorway it filled opened, out of the shelter, a bed it put down picked up, and the night's ending."
-  (:require [engine.ctx :as ctx]
+(ns jobs.survival.leave-shelter
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
+            [engine.ctx :as ctx]
             [engine.memory :as mem]
+            [jobs.lib.checks :as checks]
             [jobs.lib.dawn :as dawn]
             [jobs.lib.dig-in-leave :as dig-leave]
+            [jobs.lib.pace :as pace]
+            [jobs.lib.ready :as ready]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.lib.spent :as spent]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
-            [jobs.survival.night.hold :as hold]
-            [jobs.survival.dig-pit-site :as pit-site]
-            [jobs.survival.night.sites :as sites]))
+            [jobs.survival.night.hold :as hold]))
+
+(def doc
+  "The morning after a night: out of the shelter, the blocks it placed taken back, a bed put down picked up. The dawn
+  trigger starts it; night itself ends when the body is sheltered or the night is over.
+  Waits :night by night. Done once nothing is left: no shelter the body is shut in (jobs.lib.dig-in-leave/leave!: walls
+  dug, a pit climbed, the shelter's valuable blocks taken back), no doorway the night filled (still holding a block it
+  put there) to dig again, no bed it put down outside its own zones (not the respawn bed) to dig up, no drop to walk
+  over. A shelter with no way out ends nothing-possible :no-way-out (the cell is remembered as :shelter-trapped, so the
+  trigger lets go). A body shut in stays while a known hostile is near and the dawn grace lasts (night.dawn-hold).
+  A doorway cell it could not open is warned night.doorway-stuck once and tried again quietly.
+  Memory: job memory :pickup, :dig-out, :take-back; body memory :doorway-filled, :bed-placed, :shelter-trapped.")
+
+(a/defargs args {})
+
+(a/defargs settings
+  {::job-time-s {:default 600 :doc "Seconds leaving the shelter may take: a bound against a runaway morning." :spec (a/num-in 0 nil)}
+   ::morning-s {:default 60 :doc "Seconds the morning (out of the shelter, a put-down bed picked up) is reckoned to take at most, in the quote." :spec (a/num-in 0 nil)}})
+
+(def target [])
+
+(def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s}})
+
+(def meta {:category :reflex :tags [:shelter]})
+
+(def safe? ready/ok)
+
+(def fit? ready/ok)
+
+(def can-start? (checks/day :night))
 
 (defn ^:async walk!
   "A go-to child in slot to pos within range, at night too: :continue while it walks, else whether it arrived."
@@ -74,23 +104,6 @@
   (when-not (= :continue (await (walk! c :bed-pickup pos 0))) (ctx/update-mem! c dissoc :pickup))
   :again)
 
-(defn fled
-  "Walks to somewhere safer this night made, or nil when none."
-  [c]
-  (let [n (:flees (ctx/mem c))]
-    (when (and n (pos? n)) n)))
-
-(defn spent-fields
-  "What the night's children placed (the niche), as the :spent, :spent-at and :text a done ending carries; {} when nothing."
-  [c]
-  (let [log (spent/log c)]
-    (if log (assoc (spent/summary log) :text (spent/text log "night shelter")) {})))
-
-(defn done-data
-  "The data of a done night: how it sheltered, what it placed, the flees."
-  [c how]
-  (cond-> (spent-fields c) how (assoc :night how) (fled c) (assoc :fled (fled c))))
-
 (defn pending?
   "Whether the morning still has work: a pickup walk, a dig-out, a shelter to leave, a doorway the night filled to open, a
   bed put down to collect."
@@ -98,63 +111,50 @@
   (let [p (:primitives c)
         m (ctx/mem c)]
     (boolean (or (:pickup m) (:dig-out m)
-                 (and (= :dug-in (:sheltered m)) (not (:left m)))
-                 (dig-leave/sheltered-in c)
+                 (sh-inside/shut-in-by-day? p (:data (ctx/latest c :shelter)) (:data (ctx/latest c :shelter-trapped)))
                  (sh-beds/doorway-to-open p (ctx/view c))
                  (sh-beds/bed-to-collect p (ctx/view c))))))
 
-(defn forget-night!
-  "The night's cleanup: tonight's failed sites (sites/forget-failed!) and the filled doorway cells someone else changed
-  (sh-beds/fill-gone?) are forgotten."
+(defn done?
+  "Nothing left to leave or take up (result: none)."
   [c]
-  (sites/forget-failed! c)
-  (ctx/forget-where! c :doorway-filled (partial sh-beds/fill-gone? (:primitives c))))
+  (checks/goal (not (pending? c)) [:out "out of the shelter, nothing left to take up"] [:shelter "the morning is not done"] {:units :mornings}))
 
-(defn end-exposed!
-  "Nothing sheltered the body tonight: end nothing-possible :exposed {:sites}."
-  [c]
-  (let [failed (pit-site/failed c)]
-    (ctx/end c :nothing-possible :exposed
-             (cond-> {:sites failed
-                      :text (str "no shelter tonight: no bed, nobody asleep, no site to dig in, nowhere safer known (" (sites/exposed-why failed (:no-way-text (ctx/mem c))) ")")}
-               (fled c) (assoc :fled (fled c))))))
+(defn quote-of [_]
+  (let [most (settings/get settings ::morning-s)]
+    {:uses {:job-time [0 (/ most 2) most]}}))
 
-(defn ^:async morning-step!
-  "By day, nothing to walk over: a filled doorway opened or out of a dig-in pit first, then a bed picked up; done? ends the job once none is left, an exposed night ends here."
-  [c]
-  (cond
-    (and (or (= :dug-in (:sheltered (ctx/mem c))) (dig-leave/sheltered-in c) (sh-beds/doorway-to-open (:primitives c) (ctx/view c)))
-         (dawn/hostile-hold? (:primitives c)))
-    (do (when-not (:dawn-noted (ctx/mem c))
-          (ctx/update-mem! c assoc :dawn-noted true)
-          (ctx/emit! c :night.dawn-hold :info {:text "first light, but a hostile is known near the shelter; staying in until it is gone or the grace is over"}))
-        (await (hold/hold! c "first light: hostile near")))
-    (sh-beds/doorway-to-open (:primitives c) (ctx/view c))
-    (await (open-doorway! c (sh-beds/doorway-to-open (:primitives c) (ctx/view c))))
-    (or (#{:dug-in :exposed} (:sheltered (ctx/mem c))) (:dig-out (ctx/mem c)) (dig-leave/sheltered-in c))
-    (let [r (await (dig-leave/leave! c))]
-      (cond
-        (= :continue r) :again
-        (= :out (:reason r)) (do (ctx/update-mem! c dissoc :dig-out)
-                                 (ctx/update-mem! c assoc :left true)
-                                 (when-not (= :exposed (:sheltered (ctx/mem c))) (hold/sheltered! c :dug-in))
-                                 (if (and (= :exposed (:sheltered (ctx/mem c))) (not (sh-beds/bed-to-collect (:primitives c) (ctx/view c)))) (end-exposed! c) :again))
-        (= :no-way-out (:reason r))
-        (let [text "no way out of the shelter by day; giving the body back"]
-          (ctx/emit! c :shelter.failed :warn {:reason :no-way-out :at (:at r) :tries (:tries r) :text text})
-          (ctx/remember! c :shelter-trapped {:pos (sh-sense/feet (:primitives c))} sh-inside/trapped-policy)
-          (ctx/forget-where! c :night-site (constantly true))
-          (ctx/end c :nothing-possible :no-way-out {:text text :at (:at r) :tries (:tries r)}))
-        :else (await (hold/hold! c :leaving))))
-    :else
-    (if-let [bed (sh-beds/bed-to-collect (:primitives c) (ctx/view c))]
-      (await (collect-bed! c bed))
-      (if (= :exposed (:sheltered (ctx/mem c))) (end-exposed! c) :again))))
-
-(defn ^:async morning!
-  "By day: a dug bed's drop is walked over first, else morning-step!."
+(defn ^:async step!
+  "One choice of the morning: hold for a known hostile at first light, a filled doorway opened, out of the shelter, a bed
+  picked up."
   [c]
   (hold/busy! c)
-  (if-let [pos (:pickup (ctx/mem c))]
-    (await (pick-up-drop! c pos))
-    (await (morning-step! c))))
+  (let [p (:primitives c)
+        doorway (sh-beds/doorway-to-open p (ctx/view c))
+        shelter (or doorway (dig-leave/sheltered-in c))]
+    (cond
+      (:pickup (ctx/mem c)) (await (pick-up-drop! c (:pickup (ctx/mem c))))
+      (and shelter (dawn/hostile-hold? p))
+      (do (when-not (:dawn-noted (ctx/mem c))
+            (ctx/update-mem! c assoc :dawn-noted true)
+            (ctx/emit! c :night.dawn-hold :info {:text "first light, but a hostile is known near the shelter; staying in until it is gone or the grace is over"}))
+          (await (hold/hold! c "first light: hostile near")))
+      doorway (await (open-doorway! c doorway))
+      (or (:dig-out (ctx/mem c)) shelter)
+      (let [r (await (dig-leave/leave! c))]
+        (cond
+          (= :continue r) :again
+          (= :out (:reason r)) :again
+          (= :no-way-out (:reason r))
+          (let [text "no way out of the shelter by day; giving the body back"]
+            (ctx/emit! c :shelter.failed :warn {:reason :no-way-out :at (:at r) :tries (:tries r) :text text})
+            (ctx/remember! c :shelter-trapped {:pos (sh-sense/feet p)} sh-inside/trapped-policy)
+            (ctx/forget-where! c :night-site (constantly true))
+            (ctx/end c :nothing-possible :no-way-out {:text text :at (:at r) :tries (:tries r)}))
+          :else (await (hold/hold! c :leaving))))
+      :else
+      (if-let [bed (sh-beds/bed-to-collect p (ctx/view c))]
+        (await (collect-bed! c bed))
+        :again))))
+
+(defn ^:async round [c] (await (pace/steps! c #(step! c))))

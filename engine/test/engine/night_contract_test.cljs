@@ -23,7 +23,7 @@
     (is (nil? (contract/quote-problem q)))
     (is (= 0 least) "a bed can end it at once")
     (is (= (sh-clock/ticks->s (- sh-clock/day-tick st/night)) mean))
-    (is (< mean most) "the morning's leaving on top")))
+    (is (<= mean most))))
 
 (deftest a-call-without-the-bed-way-does-not-sleep
   (async done

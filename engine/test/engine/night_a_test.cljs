@@ -25,7 +25,7 @@
             [jobs.lib.targets :as targets]
             [jobs.survival.night :as night]
             [jobs.survival.night.sites :as sites]
-            [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home walled-pen bed-world bed-places dug-into-home stone-room block-at room-with-doorway doorway-shut-early night-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night held-with-raw-beef furnace-ops held-starving cow zombie]]))
+            [engine.night-support :refer [night noon roof holds? leaves? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home walled-pen bed-world bed-places dug-into-home stone-room block-at room-with-doorway doorway-shut-early dawn-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night held-with-raw-beef furnace-ops held-starving cow zombie]]))
 
 ;; ------------------------------------------------------------------ trigger
 (defn bed-for
@@ -96,22 +96,23 @@
     (is (true? (holds? world (fn [_]))))
     (is (false? (holds? (update world :blocks merge {"2,64,0" "stone" "2,65,0" "stone"}) (fn [_]))) "behind a wall")))
 
-(deftest night-holds-by-day-for-a-bed-it-put-down-outside-its-zone
+(deftest dawn-holds-for-a-bed-it-put-down-outside-its-zone
   (let [world {:time noon :blocks {"3,64,0" "red_bed"}}
         placed (fn [eng] (write! eng :bed-placed {:pos {:x 3 :y 64 :z 0}}))]
-    (is (true? (holds? world placed)))
-    (is (false? (holds? {:time noon} placed)) "the bed is gone")
-    (is (false? (holds? world (fn [_]))) "a bed it did not put down")))
+    (is (true? (leaves? world placed)))
+    (is (false? (leaves? {:time noon} placed)) "the bed is gone")
+    (is (false? (leaves? world (fn [_]))) "a bed it did not put down")
+    (is (false? (leaves? (assoc world :time night) placed)) "never at night")))
 
-(deftest night-does-not-hold-for-a-placed-bed-that-is-the-spawn-bed
+(deftest dawn-does-not-hold-for-a-placed-bed-that-is-the-spawn-bed
   (let [world {:time noon :blocks {"3,64,0" "red_bed"}}]
-    (is (false? (holds? world (fn [eng]
+    (is (false? (leaves? world (fn [eng]
                                 (write! eng :bed-placed {:pos {:x 3 :y 64 :z 0}})
                                 (write! eng :spawn-bed {:pos {:x 3 :y 64 :z 0}})))))))
 
-(deftest night-does-not-hold-for-a-placed-bed-whose-other-half-is-the-spawn-bed
+(deftest dawn-does-not-hold-for-a-placed-bed-whose-other-half-is-the-spawn-bed
   (let [world {:time noon :blocks {"3,64,0" "red_bed"}}]
-    (is (false? (holds? world (fn [eng]
+    (is (false? (leaves? world (fn [eng]
                                 (write! eng :bed-placed {:pos {:x 3 :y 64 :z 0}})
                                 (write! eng :spawn-bed {:pos {:x 4 :y 64 :z 0}})))))))
 
@@ -272,13 +273,15 @@
                                 nil)))
           (core/submit! eng '(jobs.survival.night) {})
           (await (core/tick! eng))
+          (core/submit! eng '(jobs.survival.leave-shelter) {})
+          (await (tu/run-until-empty eng 10))
           (let [foot (st/arg-pos (first (st/calls p "place")))]
             (is (some? foot) "put down beside the body, no roof needed")
             (is (= [foot] (:sleeps @mid)))
             (is (= [{:pos foot :own-zone false}] (mapv #(select-keys % [:pos :own-zone]) (st/emitted seen :night.bed-placed)))
                 "says where the bed went")
             (is (= [{:pos foot}] (:placed @mid)) "outside any own zone: remembered for the morning")
-            (is (= [foot] (mapv st/arg-pos (st/calls p "dig"))) "picked up by day, in the same round")
+            (is (= [foot] (mapv st/arg-pos (st/calls p "dig"))) "picked up by day by leave-shelter")
             (is (= [] (st/entries eng :bed-placed)))
             (is (empty? (st/calls p "moveTo")) "the drop is walked to by go-to, not a direct move")
             (is (= [] (:list (core/state eng))))))))))

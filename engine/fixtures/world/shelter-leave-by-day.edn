@@ -1,11 +1,11 @@
 ;; Card 8c5974f7: by day a body at the bottom of its own dug pit shelter (memory :shelter with :start and a :door whose cells are already
-;; dug open) is climbed out of once, by the night reflex (the one night handler); it does not step out through the door and back in for ever.
+;; dug open) is climbed out of once, by the dawn reflex (jobs.survival.leave-shelter); it does not step out through the door and back in for ever.
 ;; Dirt pad y -6..-1, the shaft at x 16 z 16 (y -2 and -1 dug out), the dug door cells beside it at x 17.
 ;; Should-succeed: the shelter is left (dig-in.left once) and the go-to to a surface goal arrives. Should-fail: the night reflex fires again, or a second dig-in.left.
 {:defaults
  {:tags [:night :survival :dig-in]
   :time :day :time-why :dawn-decision
-  :register [{:trigger :night}]
+  :register [{:trigger :dawn}]
   :plot {:height 8}
   :blocks [[:fill [8 -6 8] [24 -1 24] "dirt"] [:fill [16 -2 16] [16 -1 16] "air"] [:fill [17 -2 16] [17 -1 16] "air"]]
   :memory [{:kind :shelter :data {:pos #xyz [16 -2 16] :state :built :start #xyz [16 0 16] :door [#xyz [17 -2 16] #xyz [17 -1 16]]}
@@ -18,5 +18,5 @@
    :expect [{:event {:source :job :kind :dig-in.left} :within-s 90}
             {:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 110 :of-job true}
             {:count-event {:source :job :kind :dig-in.left} :for-s 30 :at-most 1}
-            {:count-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 30 :at-most 1}]
+            {:count-event {:source :reflex :kind :fired :context {:reflex-id :dawn}} :for-s 30 :at-most 1}]
    :after [[:body-near [24.5 0 16.5] 3]]}]}

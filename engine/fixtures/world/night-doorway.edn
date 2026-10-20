@@ -32,7 +32,7 @@
          [:time-set 1000]]
    :expect [{:event {:source :job :kind :night.bed-placed} :within-s 120 :of-job true}
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 120}
-            {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 300 :of-job true}]
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.leave-shelter"}} :within-s 300}]
    :after [[:not-block [12 0 16] "cobblestone"] [:not-block [12 1 16] "cobblestone"]]
    :limit-s 320}
   ;; b67c973b: a carried wooden door shuts the doorway before the bed goes down under the roof

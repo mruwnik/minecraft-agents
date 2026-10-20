@@ -4,7 +4,6 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
-            [engine.settings :as settings]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.pace :as pace]
@@ -29,21 +28,21 @@
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.room-plug :as room-plug]
             [jobs.survival.dig-pit-site :as pit-site]
+            [jobs.survival.night.ending :as ending]
             [jobs.survival.night.flee :as flee]
             [jobs.survival.night.hold :as hold]
             [jobs.survival.night.light :as light]
-            [jobs.survival.night.morning :as morning]
             [jobs.survival.night.sites :as sites]))
 
 
 (def doc
-  "The night: one round from the trigger until the night is over and the body is out of its shelter.
+  "The night: one round from the trigger until the body is sheltered tonight or the night is over. The morning (out of the shelter, blocks taken back) is jobs.survival.leave-shelter, started by the dawn trigger.
   Ways (the call's :ways, all by default): :bed (a bed used or put down, a sleeper's log-out), :shelter (a roofed place
   entered, shut-in, niche, a breached room walled in, the exposed retry), :flee (a walk somewhere safer, a cave walled in).
-  A door is always shut and the morning always runs.
-  Condition at the start: the night trigger's (a listed night waits :not-night, :spawn with the respawn bed's state); sheltered with nothing for the night to do, it is done before its first round. Quote: the time left of the night plus ::morning-s.
+  A door is always shut.
+  Condition at the start: the night trigger's (a listed night waits :not-night, :spawn with the respawn bed's state); sheltered with nothing for the night to do, it is done before its first round. Quote: the time left of the night.
   Each pass chooses again from the world as it is, the first that applies:
-  - day: the morning (night.morning): a doorway the night filled is dug again, a dug-in or exposed night leaves the shelter (:no-way-out ends nothing-possible), a bed put down outside its own zones is picked up (not the respawn bed); a dug-in body stays while a known hostile is near and the dawn grace lasts (night.dawn-hold). Then done? ends it done {:night :slept|:dug-in|:logged-out|:roofed :fled n}, or the morning ends nothing-possible :exposed after a night with no shelter.
+  - day: a furnace the hold put down is dug up once more; then the night is over: done {:night :slept|:dug-in|:logged-out|:roofed :fled n}, or nothing-possible :exposed after a night with no shelter.
   - asleep: hold (:sleeping).
   - roofed or buried in a closed region with sides never seen: a look at the nearest, else a walk to it, 15 failed cells and 200 steps a night at most (an unseen side is open until seen: a lit tunnel with its walls seen is shelter, one with an unseen branch is not).
   - sheltered (slept, dug in, shut in): log out for a stint while someone else sleeps, else hold (:sheltered) while a bed to use or a sleeper keeps the trigger firing, else end so the queue runs.
@@ -66,9 +65,8 @@
    :roofed-places {:doc "place names walked to at night, when close and the route is lit, before digging in" :spec (a/coll-of (a/or-of keyword? string?)) :default [:home]}})
 
 (a/defargs settings
-  {::job-time-s {:default 2400 :doc "Seconds the night may take, the morning included: a bound against a runaway night (the night itself ends it in about 10 minutes)." :spec (a/num-in 0 nil)}
-   ::wall-time-s {:default 3600 :doc "Seconds the night may last from its start, its yields to other jobs included." :spec (a/num-in 0 nil)}
-   ::morning-s {:default 60 :doc "Seconds the morning (out of the shelter, a put-down bed picked up) is reckoned to take at most, in the quote." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 2400 :doc "Seconds the night may take: a bound against a runaway night (the night itself ends it in about 10 minutes)." :spec (a/num-in 0 nil)}
+   ::wall-time-s {:default 3600 :doc "Seconds the night may last from its start, its yields to other jobs included." :spec (a/num-in 0 nil)}})
 
 (def target [])
 
@@ -105,24 +103,23 @@
   (when-let [pos (:lost (sh-spawn/spawn-state (:primitives c) (ctx/view c)))]
     (not= pos (:pos (:data (ctx/latest c :spawn-lost))))))
 
-(defn morning-over?
-  "A started night is over: light outside, no shelter to leave, no doorway or bed left to take up, not an exposed night
-  (the morning ends that nothing-possible), no lost respawn bed to note."
+(defn night-over?
+  "A started night is over: light outside, not an exposed night (the pass ends that nothing-possible), no furnace left to dig up, no lost respawn bed to note."
   [c]
   (and (checks/running? c)
        (not (sh-sense/dark-outside? (:primitives c)))
        (not= :exposed (:sheltered (ctx/mem c)))
-       (not (spawn-lost-unnoted? c))
-       (not (morning/pending? c))))
+       (or (:furnace-final (ctx/mem c)) (not (:placed-furnace (ctx/mem c))))
+       (not (spawn-lost-unnoted? c))))
 
 (defn done?
-  "The whole goal: once started, the night is over and the morning done (result {:night how :fled n}); before the start,
+  "The whole goal: once started, the night is over (result {:night how :fled n}); before the start,
   already sheltered with nothing for the night to do (and no lost respawn bed to note). Asked every round."
   [c]
   (if (checks/running? c)
-    (let [over (morning-over? c)
-          result (when over (morning/done-data c (:sheltered (ctx/mem c))))]
-      (checks/goal over [:morning (or (:text result) "the night is over, the morning done")] [:night "the night is not over"]
+    (let [over (night-over? c)
+          result (when over (ending/done-data c (:sheltered (ctx/mem c))))]
+      (checks/goal over [:morning (or (:text result) "the night is over")] [:night "the night is not over"]
                    (cond-> {:units :nights} over (assoc :result result))))
     (checks/goal (and (boolean (:shelter (quiet-night c))) (not (spawn-lost-unnoted? c)))
                  [:sheltered "sheltered, nothing for the night to do"] [:night "the night is not over"] {:units :nights})))
@@ -130,14 +127,14 @@
 (defn ^:async cleanup
   "However the night ends: tonight's failed sites and filled doorway cells someone else changed are forgotten."
   [c _]
-  (morning/forget-night! c)
+  (ending/forget-night! c)
   (ctx/end c :done nil))
 
 (defn quote-of
-  "The time left of the night (jobs.time.wait-for-light's quote), a bed possibly ending it at once, and ::morning-s on top."
+  "The time left of the night (jobs.time.wait-for-light's quote), a bed possibly ending it at once."
   [c]
   (let [[_ mean most] (get-in (sh-clock/night-left-quote c) [:uses :job-time])]
-    {:uses {:job-time [0 mean (+ most (settings/get settings ::morning-s))]}}))
+    {:uses {:job-time [0 mean most]}}))
 
 (def needs-bed-policy {:cap 1 :ttl sh-clock/ms-per-day})
 
@@ -412,7 +409,13 @@
           (await (look/look-around! c))
           (ctx/remember! c :night-looked {:cell (sh-sense/feet p)} sh/night-looked-policy)
           :again)
-      (not (sh-sense/dark-outside? p)) (await (morning/morning! c))
+      (and (not (sh-sense/dark-outside? p)) (:placed-furnace (ctx/mem c)) (not (:furnace-final (ctx/mem c))))
+      (do (hold/busy! c)
+          (when-not (await (hold/pick-up-furnace! c)) (ctx/update-mem! c assoc :furnace-final true))
+          :again)
+      (not (sh-sense/dark-outside? p)) (if (= :exposed sheltered)
+                                         (ending/end-exposed! c)
+                                         (ctx/end c :done nil (ending/done-data c sheltered)))
       (sh-sense/sleeping? p) (do (when-not (= :slept sheltered) (hold/sheltered! c :slept)) (await (hold/hold! c :sleeping)))
       (and (not sheltered) (seq @edge)) (do (hold/busy! c) (await (look-edge/look! c @edge)))
       (and roofed (or (#{:slept :dug-in} sheltered) (dig-leave/sheltered-in c)))
@@ -420,7 +423,7 @@
           (cond
             (and bed-way (log-out-wanted? c)) (await (log-out-step c))
             (sh/night-holds? p (ctx/view c) (assoc (:args c) :ways (:ways (ctx/frozen-call c))) (bed-down/bed-permit c)) (await (hold/hold! c :sheltered))
-            :else (ctx/end c :done nil (morning/done-data c (:sheltered (ctx/mem c))))))
+            :else (ctx/end c :done nil (ending/done-data c (:sheltered (ctx/mem c))))))
       :else
       (let [bed (when bed-way (await (sense/decide! c ::bed #(sh-beds/bed-to-use p (ctx/view c) (bed-down/radius c) (bed-down/bed-permit c)))))
             bed-wanted (and bed-way (carried-bed-wanted? c))
@@ -441,7 +444,7 @@
           (and bed-way (log-out-wanted? c)) (await (log-out-step c))
           (and (:enclose (ctx/mem c)) (not= :dug-in sheltered)) (await (enclose! c))
           (and (sh-inside/safe-from-night? p) (empty? (sh/open-room-doors p)))
-          (do (ctx/end c :done nil (morning/done-data c (if (= :logged-out sheltered) :logged-out :roofed))))
+          (do (ctx/end c :done nil (ending/done-data c (if (= :logged-out sheltered) :logged-out :roofed))))
           (and (ctx/way? c :shelter) (await (light/wanted? c))) (await (light/light! c))
           (:fleeing (ctx/mem c)) (await (flee/flee! c (:fleeing (ctx/mem c))))
           (and (= :exposed sheltered) (ctx/way? c :shelter) (sites/retry-due? c)) (do (retry-dig-in! c) (await (shelter! c)))

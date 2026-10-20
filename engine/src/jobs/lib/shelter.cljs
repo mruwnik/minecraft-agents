@@ -115,25 +115,32 @@
   "Whether the night trigger holds (see triggers.survival.night). permit? decides whether a bed may be used (bed-permit).
   Without :bed in (:ways args) (all when absent) there are no bed terms and no bed-look.
   A buried body is not pulled out of the ground to place a bed, and logs out only from its own night shelter (a miner
-  mines on)."
+  mines on). By day never (leave-wanted?)."
   [p view args permit?]
   (let [shelter (:data (mem/latest view :shelter))
         buried (and (sh-sense/buried? p) (not (sh-sense/shut-in-hut? p)))
         bed-way (or (nil? (:ways args)) (contains? (:ways args) :bed))]
     (boolean
-     (if (sh-sense/night? p)
-       (and (not (sh-sense/sleeping? p))
-            (or (and bed-way
-                     (or (some? (sh-beds/bed-to-use p view (sh-beds/bed-radius view) permit?))
-                         (unlooked-for-bed? p view)
-                         (and (not buried) (sh-beds/bed-place-wanted? p view (sh-beds/bed-radius view) permit?))
-                         (and (or (not buried) (sh-inside/in-own-shelter p shelter)) (sh-sleepers/log-out-for-sleepers? p view))))
-                (not (sh-inside/safe-from-night? p))
-                (breached-home? p view)
-                (seq (open-doors p view))))
-       (or (sh-inside/shut-in-by-day? p shelter (:data (mem/latest view :shelter-trapped)))
-           (some? (sh-beds/bed-to-collect p view))
-           (some? (sh-beds/doorway-to-open p view)))))))
+     (and (sh-sense/night? p)
+          (not (sh-sense/sleeping? p))
+          (or (and bed-way
+                   (or (some? (sh-beds/bed-to-use p view (sh-beds/bed-radius view) permit?))
+                       (unlooked-for-bed? p view)
+                       (and (not buried) (sh-beds/bed-place-wanted? p view (sh-beds/bed-radius view) permit?))
+                       (and (or (not buried) (sh-inside/in-own-shelter p shelter)) (sh-sleepers/log-out-for-sleepers? p view))))
+              (not (sh-inside/safe-from-night? p))
+              (breached-home? p view)
+              (seq (open-doors p view)))))))
+
+(defn leave-wanted?
+  "Whether the dawn trigger holds (see triggers.survival.dawn): by day, shut in the body's own shelter (no
+  :shelter-trapped entry for its cell), a doorway the night filled to open, or a bed it put down to take up."
+  [p view]
+  (boolean
+   (and (not (sh-sense/night? p))
+        (or (sh-inside/shut-in-by-day? p (:data (mem/latest view :shelter)) (:data (mem/latest view :shelter-trapped)))
+            (some? (sh-beds/bed-to-collect p view))
+            (some? (sh-beds/doorway-to-open p view))))))
 
 (defn home-target
   "The place to go home to before night: the remembered :home, else :bed (view: an engine.memory view)."

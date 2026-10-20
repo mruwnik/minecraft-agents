@@ -81,7 +81,7 @@
                                                 :inventory [{:name "bread" :count 4} {:name "stone_sword" :count 1}]}
                                                1000)
               food #(:food (fake/self p))]
-          (is (= [:suffocating :burning :wedged :died :hostile-near :poisoned :night :dusk-home :hungry :stuck-underground :part-cut-tree :replant-owed :needs-bed :needs-weapon :door-left
+          (is (= [:suffocating :burning :wedged :died :hostile-near :poisoned :night :dawn :dusk-home :hungry :stuck-underground :part-cut-tree :replant-owed :needs-bed :needs-weapon :door-left
                   :inventory-nearly-full :scaffold-left :tidy-pending
                   :pen-gate :mounted]
                  (mapv :id (:register (core/state eng)))))

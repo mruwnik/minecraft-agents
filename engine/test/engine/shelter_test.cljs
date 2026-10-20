@@ -189,7 +189,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:time night :entities [sleeper] :blocks {"0,66,0" "stone"}})]
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night} {:trigger :dawn}]}"))
           (await (tick-n eng 3))
           (is (< 1 (count (calls p "offline"))) "the roof does not matter; out again while the sleeper sleeps")
           (is (= (min 10 (count (calls p "offline"))) (count (entries eng :log-out))) "each stint booked (cap 10)"))))))
@@ -198,20 +198,22 @@
 
 (deftest night-does-not-hold-at-night-while-shut-in-its-own-shelter
   (let [{:keys [eng]} (setup {})
-        holds? (fn [world] (boolean ((:when (get triggers/all :night)) (tu/fake world) (mem/view (:store eng)) {})))]
+        holds? (fn [world] (boolean ((:when (get triggers/all :night)) (tu/fake world) (mem/view (:store eng)) {})))
+        leaves? (fn [world] (boolean ((:when (get triggers/all :dawn)) (tu/fake world) (mem/view (:store eng)) {})))]
     (mem/write! (:store eng) :shelter own-shelter {:cap 10 :ttl day-ms})
     (is (not (holds? {:time night :blocks {"0,66,0" "stone"}})) "shut in at night is safe: the queue runs")
     (is (not (holds? {:time night :blocks {"0,66,0" "stone"} :self {:isSleeping true}})) "asleep")
-    (is (holds? {:time noon :blocks {"0,66,0" "stone"}}) "by day it lets the body out")
+    (is (leaves? {:time noon :blocks {"0,66,0" "stone"}}) "by day the dawn trigger lets the body out")
+    (is (not (leaves? {:time night :blocks {"0,66,0" "stone"}})))
     (is (not (holds? {:time night :blocks {"0,66,0" "stone" "3,66,0" "stone"} :self {:pos {:x 3 :y 64 :z 0}}}))
         "roofed elsewhere, out of its shelter")))
 
 (def walls
   (into {} (for [[x z] [[1 0] [-1 0] [0 1] [0 -1]] y [64 65]] [(str x "," y "," z) "stone"])))
 
-(deftest a-pit-with-a-way-out-does-not-hold-the-body-by-day
+(deftest a-pit-with-a-way-out-is-left-by-day
   (let [{:keys [eng]} (setup {})
-        holds? (fn [world] (boolean ((:when (get triggers/all :night)) (tu/fake world) (mem/view (:store eng)) {})))]
+        holds? (fn [world] (boolean ((:when (get triggers/all :dawn)) (tu/fake world) (mem/view (:store eng)) {})))]
     (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :start {:x 0 :y 66 :z 0} :state :built} {:cap 10 :ttl day-ms})
     (is (holds? {:time noon :floor tu/walk-floor :blocks (assoc walls "0,66,0" "stone")}) "shut in a pit by day: let out")
     (is (not (holds? {:time noon :floor tu/walk-floor :blocks (dissoc walls "1,64,0" "1,65,0")}))
@@ -843,7 +845,7 @@
     (tu/run-async done
       (walls-cheap (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:time night :inventory wall-stack :blocks floor :entities [awake]})
-              _ (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+              _ (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night} {:trigger :dawn}]}"))
               _ (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
               mid (await (night-then-day eng p 4 #(hash-map :places (count (calls p "place")) :digs (count (calls p "dig"))
                                                             :holder (some? (core/holder eng)) :notified (notified seen))
@@ -860,7 +862,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:time night :blocks ground})
-              _ (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+              _ (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night} {:trigger :dawn}]}"))
               _ (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
               mid (await (night-then-day eng p 4 #(hash-map :y (:y (pos-of p)) :holder (some? (core/holder eng)) :notified (notified seen)) 6))]
           (is (= {:y 61 :holder false :notified 1} mid) "in the pit, safe: the queued job ran at night")
@@ -869,12 +871,27 @@
           (is (empty? (emitted seen :shelter.failed)) "out: done, not failed")
           (is (= 1 (notified seen)) "then the queued job ran"))))))
 
+(deftest the-night-ends-at-first-light-and-leave-shelter-takes-the-body-out-of-the-pit
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time night :blocks ground})
+              _ (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+              _ (await (night-then-day eng p 4 (constantly nil) 6))]
+          (is (nil? (core/holder eng)) "the night is over")
+          (is (< (:y (pos-of p)) 64) "and it left the body in the pit")
+          (is (boolean ((:when (get triggers/all :dawn)) p (mem/view (:store eng)) {} nil)) "the dawn trigger holds for the shelter")
+          (core/submit! eng '(jobs.survival.leave-shelter) {})
+          (await (run-until-empty eng 20))
+          (is (>= (:y (pos-of p)) 64) "leave-shelter climbed out")
+          (is (not ((:when (get triggers/all :dawn)) p (mem/view (:store eng)) {} nil))))))))
+
 (deftest a-pit-shelter-with-no-way-out-ends-failed-by-day-and-the-queued-job-runs
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:time night :blocks stone-ground :inventory [{:name "dirt" :count 1}]})]
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night} {:trigger :dawn}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
           (let [mid (await (night-then-day eng p 4 #(hash-map :pit (< (:y (pos-of p)) 64) :notified (notified seen)) 6))]
             (is (= {:pit true :notified 1} mid) "in the pit, safe: the queued job ran at night"))
@@ -891,7 +908,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:time night :blocks ground})]
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night} {:trigger :dawn}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
           (await (night-then-day eng p 4 #(fake/add-entity! p {:id 7 :name "zombie" :kind "hostile" :pos {:x 2 :y 64 :z 0}}) 6))
           (is (>= (:y (pos-of p)) 64) "out of the pit: a hostile is the hostile reflex's business, not the shelter's")
@@ -906,7 +923,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:time night :skipNight false :blocks bed-room})]
           (know-bed! eng {:x 6 :y 64 :z 0})
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night} {:trigger :dawn}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
           (let [mid (mid-night! p 2 #(hash-map :asleep (.-isSleeping (.self p)) :notified (notified seen)))]
             (await (tick-n eng 6))
@@ -985,7 +1002,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:time night :blocks bed-room})]
           (know-bed! eng {:x 6 :y 64 :z 0})
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night} {:trigger :dawn}]}"))
           (await (tick-n eng 4))
           (is (= 1 (count (calls p "sleep")))))))))
 
@@ -1008,7 +1025,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen clock]} (setup {:time night :inventory (conj wall-stack {:name "iron_pickaxe" :count 1}) :blocks floor})]
           (refuse-placing! p)
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night} {:trigger :dawn}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
           (let [mid (mid-night! p 10 #(hash-map :holder (some? (core/holder eng)) :places (count (calls p "place"))
                                                :exposed (count (emitted seen :shelter.exposed)) :notified (notified seen)))]
@@ -1135,7 +1152,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:time night :drops {"iron_ore" "raw_iron"} :inventory [{:name "iron_pickaxe" :count 1}]
                                            :blocks ore-ground})]
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night} {:trigger :dawn}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
           (let [mid (mid-night! p 2 #(hash-map :digs (count (calls p "dig")) :holder (some? (core/holder eng))))]
             (await (tick-n eng 6))

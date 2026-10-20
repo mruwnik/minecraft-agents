@@ -39,6 +39,14 @@
     (swap! clock + later)
     (boolean ((:when (get triggers/all :night)) p (mem/view (:store eng)) {}))))
 
+(defn leaves?
+  "The :dawn condition in world after seed! wrote body memory."
+  [world seed!]
+  (let [{:keys [eng]} (st/setup {})
+        p (tu/fake world)]
+    (seed! eng)
+    (boolean ((:when (get triggers/all :dawn)) p (mem/view (:store eng)) {} nil))))
+
 (defn write! [eng kind data] (mem/write! (:store eng) kind data nil))
 
 (defn status! [sleeping needed] (fn [eng] (write! eng :sleep-status {:sleeping sleeping :needed needed})))
@@ -201,6 +209,8 @@
         log (await (with-child-log #(tu/run-until-empty eng 60)
                      (fn [_ k _ _] (when (and (= :roof-walk k) (< 2 (swap! walks inc)))
                                      {:kind :nothing-possible :data {}}))))]
+    (core/submit! eng '(jobs.survival.leave-shelter) {})
+    (await (tu/run-until-empty eng 60))
     {:p p :log log}))
 
 (def stone-room
@@ -227,7 +237,7 @@
     (.setTime (.-world p) noon)
     (assoc r :filled (set (map st/arg-pos (st/calls p "place"))))))
 
-(defn night-holds-now? [eng p] ((:when (get triggers/all :night)) p (mem/view (:store eng)) {}))
+(defn dawn-holds-now? [eng p] ((:when (get triggers/all :dawn)) p (mem/view (:store eng)) {} nil))
 
 ;; ------------------------------------------------------------------ flee somewhere safer
 (def dark-world (assoc lit-world :light-default [15 0]))

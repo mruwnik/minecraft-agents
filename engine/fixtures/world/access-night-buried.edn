@@ -84,7 +84,7 @@
          [:await {:source :job :kind :shut-in.sealed} 90]
          [:rcon "clear $BODY"]
          [:time-set 1000]
-         [:job (jobs.survival.night {})]]
+         [:job (jobs.survival.leave-shelter)]]
    :expect [{:event {:source :job :kind :dig-in.trapped} :within-s 60 :of-job true}
             {:event {:source :job :kind :shelter.failed :data {:reason :no-way-out}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :no-tool}} :for-s 60 :until {:source :job :kind :shelter.failed :data {:reason :no-way-out}}}]
