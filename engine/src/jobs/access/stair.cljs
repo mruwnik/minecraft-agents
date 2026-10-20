@@ -13,7 +13,6 @@
             [jobs.lib.stair-memory :as smem]
             [jobs.access.stair.step :as sstep]
             [jobs.lib.access :as access]
-            [jobs.lib.access-tool :as atool]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.child :as child]
@@ -54,7 +53,7 @@
   Needs a pickaxe and room for the drops. A call starts only when the first step is not refused, the args give a length and the next
   dig lacks nothing this call cannot get (:refused, :no-tool, :no-free-slot). Quote: steps x cells of the step x the time of a cell.
   - A pack without room waits :no-free-slot until it changes (the make-room reflex or the caller clears it).
-  - A missing pickaxe is got with jobs.items.get-tool (:fetch), then the body walks back and goes on; a fetch that fails is remembered and the block dug bare-handed. :fetch off ends :no-tool.
+  - A missing pickaxe is got by the jobs.blocks.dig child (:fetch), then the body walks back onto the line and goes on; a fetch that fails ends :no-tool with its reason as :because. :fetch off ends :no-tool.
   - Before each step the exposed ores within reach are dug (:pick-up-ores, jobs.lib.ore-pick).
 
   One call cuts the whole stair; it yields :continue while a fetch or walk child waits on the world. The
@@ -229,22 +228,6 @@
                                          (some->> (:why detail) (str ": ")))))
                    data)))))
 
-(defn ^:async fetch-tool!
-  "Get the pickaxe for lack's block (jobs.lib.access-tool, then walk back to where the body stood): :continue while it
-  works, :again once it ended, else the stair ends :no-tool with the fetch's reason as :because. A tool asked for already for
-  this block and still missing is a fetch that cured nothing."
-  [c {:keys [block] :as lack}]
-  (let [fail! (fn [e]
-                (ctx/update-mem! c dissoc :need/return :fetched-for)
-                (finish! c :no-tool (dissoc (atool/no-tool lack e) :reason)))]
-    (if (= block (:fetched-for (ctx/mem c)))
-      (fail! nil)
-      (let [r (await (atool/get! c {:block block} (judge/fetch-limits c)))]
-        (cond
-          (= :continue r) :continue
-          (= :fetched r) (do (ctx/update-mem! c assoc :fetched-for block) :again)
-          :else (fail! r))))))
-
 (defn ^:async step!
   "Walk into the cut step. :again, :continue while the walk waits, or a stop map. A step on the goal cell of a go-to up the
   chain is the same call as that go-to (a duplicate), so it is walked to the cell's centre: the same place. A cut cell
@@ -373,13 +356,10 @@
   [c]
   (let [m (ctx/mem c)
         back (when-not (:backoff m) (await (need/return! c)))
-        lack (when-not (or (:backoff m) back) (judge/need c))]
-    (when (and (:fetched-for m) (not lack))
-      (ctx/update-mem! c dissoc :fetched-for))
+        lack (when-not (or (:backoff m) back) (judge/unmet c))]
     (cond
       (:backoff m) (await (back-off! c))
       back back
-      (and lack (judge/fetchable? c lack)) (await (fetch-tool! c lack))
       lack (finish! c (:reason lack) (dissoc lack :reason))
       (nil? (:origin m)) (await (start! c))
       :else

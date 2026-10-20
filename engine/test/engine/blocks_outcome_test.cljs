@@ -18,7 +18,7 @@
     (e :limit-reached :budget) :failed
     (e :nothing-possible :hazard) :refused
     (e :nothing-possible :cannot) :cannot
-    (e :nothing-possible :no-tool) :unreachable
+    (e :nothing-possible :no-tool) :no-tool
     (e :nothing-possible :fluid-adjacent {:primitive "dig"}) :dig
     (e :nothing-possible nil) :failed))
 

@@ -247,25 +247,32 @@
                             (:not-allowed :hazard) :refused
                             (:cannot :fluid) :cannot
                             :fluid-adjacent :fluid-adjacent
+                            :no-tool :no-tool
                             :unreachable)
         :impossible :unreachable
         (:cut-off :limit-reached) :failed
         (case k
           (:cannot :fluid) :cannot
           (:not-allowed :hazard) :refused
-          (:unreachable :no-tool :inventory-full :not-loaded) :unreachable
+          (:unreachable :inventory-full :not-loaded) :unreachable
+          :no-tool :no-tool
           (or (some-> (:primitive data) keyword) (when (not= k (:kind e)) k) :failed))))))
 
-(defn ^:async dig-cell!
+(defn ^:async dig-cell-ending!
   "Dig the one block at pos with a jobs.blocks.dig child in slot :dig (args merged over: no drops collected, no tool
-  needed, no fetch; the caller picks drops up) and say what came of it (dig-outcome). :fetch false does not stop
+  needed, no fetch; the caller picks drops up): :continue or the child's ending. :fetch false does not stop
   the lava seal's fetch (the seal-fetch setting, default true)."
   [c pos args]
   (let [args (merge {:collect false :need-drop false :fetch false} args {:pos pos})
         e (await (ctx/call c :dig 'jobs.blocks.dig args))]
     ;; the dig child told any wear of the tool; this job's older snapshot would tell it again
     (ctx/update-mem! c dissoc :tool-wear)
-    (dig-outcome e)))
+    e))
+
+(defn ^:async dig-cell!
+  "dig-cell-ending!, said as what came of it (dig-outcome)."
+  [c pos args]
+  (dig-outcome (await (dig-cell-ending! c pos args))))
 
 (defn chosen
   "The first of items carried, or nil."

@@ -15,7 +15,6 @@
             [jobs.access.tunnel.line :as ln]
             [jobs.access.tunnel.torches :as torches]
             [jobs.lib.access :as access]
-            [jobs.lib.access-tool :as atool]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.child :as child]
             [jobs.lib.choose :as choose]
@@ -114,10 +113,9 @@
   the entry, on the way in. 
 
   :spent-ok (default false): every carried pickaxe down to 3 uses stops the tunnel {:reason :tool-spent} before the last breaks (jobs.access.stair).
-  :fetch (default true; false ends :no-tool; jobs.lib.need): a missing pickaxe (the stair's :no-tool ending, or a :no-tool stop of
-  the run's own digs) is got with jobs.items.get-tool, then the body walks back to the cell it stood on and goes on;
-  a fetch that fails or cures nothing ends :no-tool with its reason as :because. :need-drop false digs a block no carried tool clears
-  bare-handed (slow, no drop) instead. The stair child fetches only items (a block to seal lava with), not tools.")
+  :fetch (default true; false ends :no-tool; jobs.lib.need): a missing pickaxe is got inside the jobs.blocks.dig child of the dig
+  (the stair's and the run's own), then the body walks back and goes on; a fetch that fails or cures nothing ends :no-tool with its reason as :because. :need-drop false digs a block no carried tool clears
+  bare-handed (slow, no drop) instead.")
 
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds a tunnel may take, in and (a dead end) out." :spec (a/num-in 0 nil)}})
@@ -298,14 +296,6 @@
   [{:keys [sites steps]} k]
   (min steps (or (some #(when (>= % k) (inc %)) sites) steps)))
 
-(defn stair-fetch
-  "The :fetch the stair child gets from the tunnel's: its items (a seal block), not tools (the tunnel fetches those),
-  nil when that is off."
-  [fetch]
-  (let [limits (need/parse-arg fetch)]
-    (when (and limits (contains? (or (:what limits) need/kinds) :item))
-      (assoc limits :what #{:item}))))
-
 (defn ^:async stair-part!
   "One call of the stair child over the segment from line index k (it hands over what it dug): :again once the
   segment is cut, :continue while the child waits on the world, or a stop map when the stair ended otherwise (its
@@ -313,7 +303,7 @@
   [c {:keys [heading dir] :as plan} k]
   (let [cells (ln/line-cells plan)
         e (await (ctx/call c :stair 'jobs.access.stair
-                           {:dir dir :heading heading :fetch (stair-fetch (:fetch (:args c))) :need-drop (:need-drop (:args c)) :y ((cells (segment-end plan k)) 1) :on-lava (:on-lava (:args c) :seal)
+                           {:dir dir :heading heading :fetch (:fetch (:args c)) :need-drop (:need-drop (:args c)) :y ((cells (segment-end plan k)) 1) :on-lava (:on-lava (:args c) :seal)
                             :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c))) :spent-ok (boolean (:spent-ok (:args c)))
                             :pick-up-ores (:pick-up-ores (:args c))}))]
     (if (= :continue e)
@@ -413,30 +403,6 @@
                 :again)
             (finish! c (:reason a) (dissoc a :reason))))))))
 
-(defn fetch-limits
-  "The limits map of :fetch when it allows a tool, else nil."
-  [c]
-  (let [o (need/opts c 'jobs.access.tunnel)]
-    (when (and o (contains? (:what o) :tool)) o)))
-
-(defn fetch-for-stop!
-  "A :no-tool stop the fetch can cure (not one a fetch just ended without curing): remember the wait so the next step fetches for it; :again. Nil when not."
-  [c stop]
-  (when (and (= :no-tool (:reason stop)) (fetch-limits c) (not= (select-keys stop [:block :tool]) (:fetched (ctx/mem c))))
-    (ctx/update-mem! c assoc :fetch-wait (select-keys stop [:block :tool]))
-    :again))
-
-(defn ^:async fetch-tool!
-  "Get the pickaxe the stop lacked (jobs.lib.access-tool, then the walk back to where the body stood): :continue while it
-  works, :again once it ended :done, else the stop :no-tool with the fetch's reason as :because."
-  [c {:keys [block tool] :as wait}]
-  (let [r (await (atool/get! c (cond block {:block block} :else {:kind (or tool "pickaxe")}) (fetch-limits c)))]
-    (cond
-      (= :continue r) :continue
-      (= :fetched r) (do (ctx/update-mem! c #(-> % (dissoc :fetch-wait) (assoc :fetched wait))) :again)
-      :else (do (ctx/update-mem! c dissoc :fetch-wait :need/return)
-                (stop! c (atool/no-tool wait r))))))
-
 (defn ^:async leg!
   "The first leg of a diagonal target: a kept tunnel child to the waypoint (its stand is in the target's column), then
   the plan is chosen again from there. :again or :continue; else the job ends with the leg's stop."
@@ -469,18 +435,13 @@
                 (= :reached r) (if (:over-open m)
                                  (finish! c :reached {})
                                  (do (ctx/update-mem! c assoc :over-open true) :again))
-                :else (or (fetch-for-stop! c r) (stop! c r)))))))
+                :else (stop! c r))))))
 
 (defn ^:async step!
   "One piece of the tunnel: the walk back after a fetch, the fetch, else the work. :again, :continue (a child waits on
   the world) or the ending."
   [c]
-  (let [back (await (need/return! c))
-        wait (:fetch-wait (ctx/mem c))]
-    (cond
-      back back
-      wait (await (fetch-tool! c wait))
-      :else (await (work-round c)))))
+  (await (work-round c)))
 
 (defn ^:async round
   "The whole tunnel, in and (a dead end) out: step! until it ends, a pace between; :continue while a child waits on the world."

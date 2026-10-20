@@ -361,13 +361,13 @@
   "Get the tool the block needs (jobs.lib.need): :fetched, :continue while the fetch waits, or the ending when the
   fetch is off or fails (condition-failed :no-tool, :why the fetch's cause)."
   [c tool-problem]
-  (let [limits (fetch-limits c)
+  (let [limits (when-not (= (:block tool-problem) (:tool-fetched (ctx/mem c))) (fetch-limits c))
         what (if (use-tools c) {:item (:needs tool-problem)} {:block (:block tool-problem)})
         r (when (and limits (:needs tool-problem)) (await (need/tool! c what (select-keys limits [:how :explore]))))]
     (cond
       (or (nil? limits) (nil? (:needs tool-problem))) (ctx/end c :condition-failed tool-problem)
       (= :continue r) :continue
-      (= :done (:kind r)) :fetched
+      (= :done (:kind r)) (do (ctx/update-mem! c assoc :tool-fetched (:block tool-problem)) :fetched)
       :else (ctx/end c (:kind r) (assoc tool-problem :why (contract/cause-key r))))))
 
 (defn ^:async attempt!

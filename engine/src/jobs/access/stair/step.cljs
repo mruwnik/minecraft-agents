@@ -2,6 +2,7 @@
   "The pieces of a stair step that call the world: look, judge, peek, seal lava, plug water, dig a cell, bridge a missing
   floor. Shared by jobs.access.stair and jobs.access.tunnel."
   (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.need :as need]
             [clojure.string :as str]
             [engine.constants :as constants]
             [engine.ctx :as ctx]
@@ -130,6 +131,11 @@
   [c block]
   (and (not (by-hand? c block)) (tools/needs-tool-to-clear? (:primitives c) block)))
 
+(defn fetch-tool?
+  "Whether the job's :fetch lets the dig child get a missing pickaxe (it fetches inside the dig, so a missing tool is no stop)."
+  [c]
+  (need/allows? (:fetch (:args c)) :tool))
+
 (defn drop-room?
   "Room for block's drop, or no drop to keep: a :need-drop false dig with no tool that harvests it loses it."
   [c block]
@@ -148,7 +154,7 @@
                                    (not (rules/falling? block))
                                    (assoc :why "put back by something else, e.g. the night shelter closing an opened refuge again"))
       (rules/unbreakable block) {:reason :unbreakable :cell cell :block block}
-      (and seen? (lacks-tool? c block)) {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block)}
+      (and seen? (not (fetch-tool? c)) (lacks-tool? c block)) {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block)}
       (and (not (:spent-ok (:args c))) (trip/spent-tool? p block))
       (if (= :continue (await (trip/tool-ready! c block nil)))
         :yield
@@ -171,8 +177,11 @@
               (ctx/update-mem! c #(cond-> (assoc % :digging {:cell cell :block block} :counted cell)
                                     (not= cell (:counted %)) (update-in [:cell-tries cell] (fnil inc 0))))
               (let [[x y z] cell
-                    outcome (await (blocks/dig-cell! c {:x x :y y :z z} {:accept #{:fluid-adjacent :lava-adjacent :falling-block}
-                                                                         :on-lava :leave :ignore-zones? true}))]
+                    fetch? (and (fetch-tool? c) (lacks-tool? c block))
+                    e (await (blocks/dig-cell-ending! c {:x x :y y :z z}
+                                                      (cond-> {:accept #{:fluid-adjacent :lava-adjacent :falling-block} :on-lava :leave :ignore-zones? true}
+                                                        fetch? (assoc :fetch (:fetch (:args c)) :need-drop (not (false? (:need-drop (:args c))))))))
+                    outcome (blocks/dig-outcome e)]
                 (if (= :continue outcome)
                   :yield
                   (do
@@ -184,6 +193,8 @@
                       (await (see-over! c in cell cut)))
                     (case outcome
                       (:dug :missing) :continue
+                      :no-tool {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block)
+                                :because (let [cause (:cause e)] (when (map? cause) (:why cause)))}
                       {:reason :dig-failed :cell cell :block block :dig outcome})))))))))))
 
 (defn ^:async clear-own-cell!

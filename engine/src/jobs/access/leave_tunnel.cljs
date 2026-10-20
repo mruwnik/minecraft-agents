@@ -5,7 +5,6 @@
             [engine.args :as a]
             [jobs.lib.ready :as ready]
             [engine.settings :as settings]
-            [jobs.lib.access-tool :as atool]
             [jobs.lib.need :as need]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
@@ -60,8 +59,8 @@
   :fetch is off; a failed fetch digs the stair bare-handed), or nothing-possible with :walk-failed (every escape failed; data
   :escape holds the stair endings). Event: leave-tunnel.escape.
 
-  :fetch (default true; false ends :no-tool): the escape stair's missing pickaxe is got with jobs.items.get-tool (jobs.lib.need), then
-  the body walks back to the cell it stood on and goes on. With nothing to fill the mouth with, building blocks are
+  :fetch (default true; false ends :no-tool): the escape stair's missing pickaxe is got by the stair's dig child (jobs.lib.need), then
+  the body walks back onto the stair. With nothing to fill the mouth with, building blocks are
   got the same way, once (jobs.items.obtain); a failed fetch or :fetch off books the cell open :no-blocks.")
 
 (a/defargs args
@@ -245,21 +244,6 @@
   [{:keys [dir]} entry-y]
   {:dir (if (= :up dir) :down :up) :y entry-y})
 
-(defn ^:async fetch-tool!
-  "Get the pickaxe the escape stair lacks (its ending e names the block or tool kind): :continue while it works, :again
-  once it is got, else :again with the stair dug bare-handed from now on (:by-hand): a way out must open, so this is the
-  one place a failed fetch is not passed up."
-  [c e]
-  (let [{:keys [block tool]} (:cause e)
-        r (await (atool/get! c (if block {:block block} {:kind tool}) nil))]
-    (cond
-      (= :continue r) :continue
-      (= :fetched r) :again
-      :else (do (ctx/update-mem! c assoc :by-hand true)
-                (ctx/emit! c :leave-tunnel.fetch-failed :warn {:block block :tool tool :because (contract/cause-key r)
-                                                              :text "leave-tunnel could not get a pickaxe: digging its way out bare-handed"})
-                :again))))
-
 (defn ^:async escape!
   "One attempt of the way out: a stair to the entry's height (opposite the tunnel's :dir) along the next heading; done, the body is out and the
   rounds go on; stopped or refused by a zone, the next heading; none left, the walk failure stands; a stair without a pickaxe gets one
@@ -275,7 +259,7 @@
       (finish! c :stopped :walk-failed {:cell cell :walk walk :escape results})
       (let [slot (keyword (str "escape-" i))
             sargs (assoc (escape-stair (:line tunnel) entry-y)
-                         :heading (:heading attempt) :fetch false :need-drop (not (:by-hand (ctx/mem c))) :spent-ok true :ignore-zones? (:ignore-zones? attempt))
+                         :heading (:heading attempt) :fetch (:fetch (:args c)) :need-drop (not (:by-hand (ctx/mem c))) :spent-ok true :ignore-zones? (:ignore-zones? attempt))
             e (await (ctx/call c slot 'jobs.access.stair sargs))
             why (when (map? e) (contract/cause-key e))
             next-heading! #(do (ctx/update-mem! c update :escape (fn [m] (-> m (assoc :i (inc i)) (update :results conj %)))) :again)]
@@ -287,7 +271,11 @@
               (ctx/update-mem! c #(-> % (dissoc :escape) (assoc :escaped true)))
               :again)
           (= :refused why) (next-heading! {:reason :refused :heading (:heading attempt)})
-          (and (= :no-tool why) (:fetch (:args c))) (await (fetch-tool! c e))
+          (and (= :no-tool why) (:fetch (:args c)) (not (:by-hand (ctx/mem c))))
+          (do (ctx/update-mem! c assoc :by-hand true)
+              (ctx/emit! c :leave-tunnel.fetch-failed :warn {:because (:because (:cause e))
+                                                            :text "leave-tunnel could not get a pickaxe: digging its way out bare-handed"})
+              :again)
           (= :no-tool why) (finish! c :stopped (:cause e) {})
           :else (next-heading! (assoc (select-keys (:data e) [:cell]) :reason why :heading (:heading attempt))))))))
 
