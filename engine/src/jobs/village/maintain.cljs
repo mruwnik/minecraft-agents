@@ -188,13 +188,10 @@
                 :again))))))))
 
 (a/defargs settings
-  {::max-steps {:default 400 :doc "Steps of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}
-   ::job-time-s {:default 1800 :doc "Seconds a maintain pass may take: all its steps." :spec (a/num-in 0 nil)}})
-(defn max-steps [] (settings/get settings ::max-steps))
+  {::job-time-s {:default 1800 :doc "Seconds a maintain pass may take: all its steps." :spec (a/num-in 0 nil)}})
 
 (defn ^:async round [c]
-  (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (step c) :continue)))))
+  (await (pace/steps! c #(step c))))
 
 ;; ------------------------------------------------------------------ the contract
 

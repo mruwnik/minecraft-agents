@@ -41,10 +41,8 @@
    :ignore-zones? :shared})
 
 (a/defargs settings
-  {::job-time-s {:default 180 :doc "Seconds a planting may take: the walk, a fetch." :spec (a/num-in 0 nil)}
-   ::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
+  {::job-time-s {:default 180 :doc "Seconds a planting may take: the walk, a fetch." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
-(defn max-steps [] (settings/get settings ::max-steps))
 
 (def target [:at :near])
 
@@ -175,5 +173,4 @@
 
 (defn ^:async round
   [c]
-  (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (step c) :continue)))))
+  (await (pace/steps! c #(step c))))

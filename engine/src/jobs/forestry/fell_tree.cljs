@@ -25,7 +25,7 @@
 
 (def doc
   "Fell the nearest tree: a log column with leaves near its top, lowest log first, the whole of it in one call. It yields
-  (:continue) while a child waits on the world, and after ::max-steps pieces of work.
+  (:continue) while a child waits on the world.
   The base log's :forestry/replant debt (one per cell of a 2x2 trunk; none with :replant? false) is written before it is dug; a lower log of the
   column seen later becomes the base. It ends on the ground: from the canopy it walks down beside the base (warn
   a :stranded true result when it cannot). With :at it fells that one column instead (:radius and :species are then unused).
@@ -73,10 +73,8 @@
    ::at-close-range {:default 2 :doc "Blocks from the :at column it walks to when the cell stayed unseen from ::at-range (a wall hides the foot)." :spec (a/num-in 0 nil)}
    ::collect-radius {:default 8 :doc "Blocks around the base within which the drops of the logs dug are collected." :spec (a/num-in 0 nil)}
    ::collect-search {:default 4 :doc "Blocks round the base walked to look for drops that are not in sight." :spec (a/num-in 0 nil)}
-   ::job-time-s {:default 900 :doc "Seconds a felling may take: the search, a fetch, the walk, the digs and a pillar." :spec (a/num-in 0 nil)}
-   ::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
+   ::job-time-s {:default 900 :doc "Seconds a felling may take: the search, a fetch, the walk, the digs and a pillar." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
-(defn max-steps [] (settings/get settings ::max-steps))
 (defn approach-range [] (settings/get settings ::approach-range))
 
 (def job 'jobs.forestry.fell-tree)
@@ -413,8 +411,7 @@
   "Steps until a tree is chosen, then that tree as one comfort section (ctx/atomic :tree): hunger, a full bag or
   tidying waits for the tree, up to its cap. A tree given up ends its section before the next is chosen."
   [c]
-  (let [n (atom 0)
-        step! #(if (< (swap! n inc) (max-steps)) (step c) :continue)
+  (let [step! #(step c)
         chosen? #(some? (:column (ctx/mem c)))
         steps-while (fn [want] (pace/steps! c (fn ^:async part []
                                                 (let [r (await (step!))]

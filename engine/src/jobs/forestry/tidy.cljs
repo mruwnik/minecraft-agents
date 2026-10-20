@@ -32,7 +32,6 @@
 (a/defargs settings
   {::max-trees {:default 8 :doc "The most trunks one tidy run fells." :spec (a/int-in 1 nil)}
    ::job-time-s {:default 1200 :doc "Seconds a tidy run may take: the trunks, their drops and replants." :spec (a/num-in 0 nil)}
-   ::max-steps {:default 400 :doc "Child calls of one round before it gives the body back with :continue." :spec (a/int-in 1 nil)}
    ::ground-depth {:default 24 :doc "Blocks under a raised log looked down for the ground to replant on." :spec (a/int-in 1 nil)}})
 
 (a/defargs args
@@ -178,8 +177,7 @@
 
 (defn ^:async round
   [c]
-  (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) (settings/get settings ::max-steps)) (step c) :continue)))))
+  (await (pace/steps! c #(step c))))
 
 ;; ------------------------------------------------------------------ the contract
 

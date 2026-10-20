@@ -55,10 +55,8 @@
    ::settle-min {:default 5 :doc "Fewest looks at the cut logs before the top collect goes on: a drop may be seen a moment after it lands." :spec (a/int-in 0 nil)}
    ::settle-looks {:default 8 :doc "Most looks at the falling logs before the top collect goes on." :spec (a/int-in 0 nil)}
    ::max-walk-fails {:default 3 :doc "Stands or bases the walk may fail to reach before the call ends :walk." :spec (a/int-in 1 nil)}
-   ::max-lowered {:default 4 :doc "Drops lowered by digging their support, per call." :spec (a/int-in 0 nil)}
-   ::max-steps {:default 400 :doc "Pieces of work of one call before it gives the round back with :continue." :spec (a/int-in 0 nil)}})
+   ::max-lowered {:default 4 :doc "Drops lowered by digging their support, per call." :spec (a/int-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
-(defn max-steps [] (settings/get settings ::max-steps))
 
 (def target [:base])
 
@@ -405,7 +403,6 @@
 
 (defn ^:async round
   [c]
-  (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) (max-steps)) (step c) :continue)))))
+  (await (pace/steps! c #(step c))))
 
 (def meta {:category :phase :part-of '[jobs.forestry.fell-tree]})
