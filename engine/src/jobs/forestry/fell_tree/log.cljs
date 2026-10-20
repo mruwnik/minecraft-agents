@@ -110,10 +110,11 @@
   "Walk until the body's cell is within range of pos with a go-to child (slot :walk, no retry): :there, :partial (go-to
   waits on the world, or a leg got nearer: call again) or :blocked (it gave up, or pos is no cell)."
   [c pos range]
-  (let [cell (:pos (places/parse-pos pos))]
+  (let [column? (nil? (:y pos))
+        cell (if column? pos (:pos (places/parse-pos pos)))]
     (cond
       (nil? cell) :blocked
-      (u/within? (u/self-pos c) cell range) :there
+      (and (not column?) (u/within? (u/self-pos c) cell range)) :there
       :else (let [e (await (child/call-walk* c :walk {:pos cell :range range :doors :shut
                                                       :one-way :closed :see false :spend {:tries 1}
                                                       :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
@@ -126,11 +127,15 @@
 
 (defn ^:async approach!
   "Get the log at pos within reach to dig: nothing when its centre is within eye reach already, else walk to within 2
-  of the column's foot (3 when that has no path: the foot may be the trunk itself). :there, :partial or :blocked."
+  of the column's foot (3 when that has no path: the foot may be the trunk itself). When the cell under the foot is
+  unseen the trunk may go on down, so the walk aims at the column's ground (go-to's column goal), not at that height.
+  :there, :partial or :blocked."
   [c pos base-y]
   (if (<= (u/eye-dist (u/self-pos c) pos) dig-reach)
     :there
-    (let [foot (assoc pos :y base-y)
+    (let [foot (if (nil? (trees/seen-name (:primitives c) {:x (:x pos) :y (dec base-y) :z (:z pos)}))
+                 (select-keys pos [:x :z])
+                 (assoc pos :y base-y))
           w (await (walk-near! c foot 2))]
       (if (= :blocked w)
         (await (walk-near! c foot 3))

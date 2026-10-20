@@ -20,7 +20,7 @@
             [jobs.forestry.fell-tree.log :as log]
             [jobs.lib.ready :as ready]
             [jobs.lib.targets :as targets]
-            [jobs.lib.trees :refer [axe-fetch-limits]]
+            [jobs.lib.trees :as trees :refer [axe-fetch-limits]]
             [jobs.lib.ledger :as ledger]
             [engine.memory :as mem]))
 
@@ -750,6 +750,22 @@
                                        (if (= 1 (count @bases)) (js/Promise.resolve :partial) (dig! c l o)))]
             (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 12} 300)))
           (is (= [6 -9] (take 2 @bases)) "the walk to the near tree was held by a hostile: the body turned to the other tree"))))))
+
+(deftest the-walk-to-a-trunk-whose-foot-is-unseen-aims-at-the-ground-of-its-column
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (fm/start {:blocks (lt/tree 30 0 "oak" 3) :self {:pos {:x 0 :y 64 :z 0}}} {})
+              walks (atom [])
+              call! ctx/call
+              seen trees/seen-name]
+          (with-redefs [trees/seen-name (fn [p pos] (when-not (= 63 (:y pos)) (seen p pos)))
+                        ctx/call (fn [c k job & [args :as more]]
+                                   (when (= :walk k) (swap! walks conj (:pos args)))
+                                   (apply call! c k job more))]
+            (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 40} 60)))
+          (is (seq @walks))
+          (is (every? #(nil? (:y %)) (take 1 @walks)) "no height is aimed at while the cells under the lowest seen log are unseen"))))))
 
 (deftest a-pick-up-that-stopped-short-leaves-the-tree-condition-failed-with-the-logs-left
   (async done
