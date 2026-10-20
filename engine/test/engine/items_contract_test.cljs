@@ -140,8 +140,8 @@
       (fn ^:async t []
         (let [xp {:self {:experience {:level 30}}}]
           (is (true? (await (waits? (stacks "dirt") 'jobs.items.equip {:item "iron_pickaxe" :fetch false}))))
-          (is (true? (await (waits? (merge xp (stacks "lapis_lazuli")) 'jobs.items.enchant {:item "iron_sword" :fetch false}))))
-          (is (true? (await (waits? (merge xp (stacks "iron_sword")) 'jobs.items.enchant {:item "iron_sword" :fetch false}))))
+          (is (true? (await (waits? (merge xp (stacks "lapis_lazuli")) 'jobs.items.enchant {:item "iron_sword" :ways #{:carried}}))))
+          (is (true? (await (waits? (merge xp (stacks "iron_sword")) 'jobs.items.enchant {:item "iron_sword" :ways #{:carried}}))))
           (is (true? (await (waits? (stacks "iron_sword" "lapis_lazuli") 'jobs.items.enchant {:item "iron_sword"}))) "no level at all")
           (is (true? (await (waits? (merge xp (stacks "iron_sword" "lapis_lazuli")) 'jobs.items.enchant {:item "iron_sword"}))) "no table in sight, after a look round")
           (is (true? (await (waits? {} 'jobs.items.give {:player "Steve" :item "bread"})))))))))
@@ -160,8 +160,8 @@
         (let [w (assoc (stacks "iron_sword") :self {:experience {:level 30}} :blocks {"2,64,0" "enchanting_table"})]
           (is (= :need (:cause (kc (await (ending-of w 'jobs.items.enchant {:item "iron_sword"}))))) "no lapis: a fetch for it fails as :need")
           (is (= :need (:cause (kc (await (ending-of (assoc w :inventory [{:name "lapis_lazuli" :count 3}]) 'jobs.items.enchant {:item "iron_sword"}))))) "no item")
-          (is (= :no-lapis (:cause (kc (await (ending-of w 'jobs.items.enchant {:item "iron_sword" :fetch false}))))))
-          (is (= :no-item (:cause (kc (await (ending-of (assoc w :inventory [{:name "lapis_lazuli" :count 3}]) 'jobs.items.enchant {:item "iron_sword" :fetch false})))))))))))
+          (is (= :no-lapis (:cause (kc (await (ending-of w 'jobs.items.enchant {:item "iron_sword" :ways #{:carried}}))))))
+          (is (= :no-item (:cause (kc (await (ending-of (assoc w :inventory [{:name "lapis_lazuli" :count 3}]) 'jobs.items.enchant {:item "iron_sword" :ways #{:carried}})))))))))))
 
 (deftest equip-and-pick-up-loose-facts-are-conditions-so-a-root-job-waits
   (async done

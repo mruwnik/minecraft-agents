@@ -16,7 +16,7 @@
 (def doc
   "Enchant one :item at an enchanting table. Walks to the table (:table, else the nearest within the table-radius setting), reads
   the three offers with the item lying in the table, chooses one and enchants. Needs the item, lapis and levels; a missing item or
-  lapis is fetched (jobs.lib.need) unless :fetch is false. Quote: A, a walk and a visit.
+  lapis is fetched (jobs.lib.need) from the ways the call allows. Quote: A, a walk and a visit.
   An offer costs its slot number in lapis, and in levels at least its level cost and its slot number. The
   choice: :slot 1-3 takes that offer alone. Otherwise :choice \"best\" takes the dearest offer the body can pay and
   \"cheapest\" the lowest level cost it can pay (the lower slot on a tie). Offers dearer than :max-level-cost
@@ -25,7 +25,7 @@
   :level}] :xp-level :hint {:enchant :level}|nil}, measured from what is carried and the body's level after the
   window closed, and a :text.
   A give-up ends with the :text and {:enchanted false :item :levels-spent n :lapis-spent n}.
-  Impossible: :bad-args (no item name). Conditions (a listed root job waits): :no-table (none given or in sight, after one look round), :no-item and :no-lapis (not carried, :fetch false), :too-few-levels
+  Impossible: :bad-args (no item name). Conditions (a listed root job waits): :no-table (none given or in sight, after one look round), :no-item and :no-lapis (not carried, the call's :ways #{:carried}), :too-few-levels
   (no level at all). A failed fetch ends as {:reason :need} with its ending as the :because. Condition-failed in the
   round: :no-table (the table is gone at the visit), :not-a-table, :no-item, :already-enchanted (every copy carried is enchanted), :not-enchantable,
   :no-lapis, :too-few-levels (the offers cost more), :no-offer (the :slot has none), :no-offer-within-cost,
@@ -42,8 +42,7 @@
    :table {:doc "the enchanting table position {:x :y :z}; the nearest within the table-radius setting when nil" :spec ::a/pos :default nil}
    :max-level-cost {:doc "highest level cost of an offer to take; nil for no limit" :spec (a/int-in 0 nil) :default nil}
    :slot {:doc "take exactly offer 1, 2 or 3; nil to choose by :choice" :spec #{1 2 3} :default nil}
-   :choice {:doc "\"best\" (dearest affordable offer) or \"cheapest\" (lowest level cost affordable)" :spec #{"best" "cheapest"} :default "best"}
-   :fetch {:doc "get a missing item or lapis (jobs.lib.need): true, a set of kinds or a map of limits; false stops with :no-item / :no-lapis" :spec need/option? :default true}})
+   :choice {:doc "\"best\" (dearest affordable offer) or \"cheapest\" (lowest level cost affordable)" :spec #{"best" "cheapest"} :default "best"}})
 
 (a/defargs settings
   {::table-radius {:default 16 :doc "How far to look for a table, in blocks." :spec (a/num-in 0 nil)}
@@ -55,6 +54,7 @@
 (defn table-radius [] (settings/get settings ::table-radius))
 
 (def target [:item :table :slot :choice])
+(def ways need/fetch-ways)
 
 (def safe? ready/safe-here-by-night)
 (def fit? ready/ok)
@@ -85,8 +85,8 @@
 (defn lacking
   "The cause :no-item or :no-lapis for what is not carried when nothing fetches it."
   [c]
-  (let [{:keys [item fetch]} (:args c)]
-    (when-not (or (under-way? c) (need/parse-arg fetch) (not (string? item)))
+  (let [{:keys [item]} (:args c)]
+    (when-not (or (under-way? c) (seq (need/fetch-how c)) (not (string? item)))
       (cond
         (zero? (carries c item)) {:reason :no-item :item item}
         (zero? (carries c lapis)) {:reason :no-lapis}))))
@@ -270,15 +270,15 @@
           :else (await (consider! c pos)))))))
 
 (defn ^:async supply!
-  "Fetch the item, then the lapis, when one is not carried and :fetch allows: nil when both are, :continue while a
+  "Fetch the item, then the lapis, when one is not carried and the call's ways allow: nil when both are, :continue while a
   fetch waits, else the fetch's ending."
   [c]
   (let [{:keys [item]} (:args c)
-        opts (need/opts c 'jobs.items.enchant)
+        how (need/fetch-how c)
         lacks (when-not (under-way? c)
                 (cond (zero? (carries c item)) [item 1]
                       (zero? (carries c lapis)) [lapis (lapis-wanted c)]))
-        e (when (and lacks opts) (await (need/item! c (first lacks) (second lacks) opts)))]
+        e (when (and lacks (seq how)) (await (need/item! c (first lacks) (second lacks) {:how how})))]
     (when-not (or (nil? e) (= :done (:kind e))) e)))
 
 (defn ^:async round
