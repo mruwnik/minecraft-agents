@@ -326,6 +326,27 @@
                    (is (fs/existsSync other))))
           (.finally (fn [] (fs/rmSync other #js {:recursive true :force true}) (done)))))))
 
+(deftest a-passed-run-removes-a-probe-body-dir-only
+  (async done
+    (let [world (str "wt-body-" (.-pid js/process))
+          root (r/repo-path "worlds" world)
+          make! (fn [body]
+                  (let [opts {:world world :body body}]
+                    (fs/mkdirSync (r/body-dir opts) #js {:recursive true})
+                    opts))
+          finish (fn [opts results] (r/finish-run! opts results))
+          exists? (fn [opts] (fs/existsSync (r/body-dir opts)))
+          probe (make! "ProbeWtDir") named (make! "WtNamed") kept (assoc (make! "ProbeWtKeep") :keep-body true)
+          failed (make! "ProbeWtFail")]
+      (-> (js/Promise.all #js [(finish probe [{:status :pass}]) (finish named [{:status :pass}])
+                               (finish kept [{:status :pass}]) (finish failed [{:status :fail}])])
+          (.then (fn []
+                   (is (not (exists? probe)))
+                   (is (exists? named))
+                   (is (exists? kept))
+                   (is (exists? failed))))
+          (.finally (fn [] (fs/rmSync root #js {:recursive true :force true}) (done)))))))
+
 (deftest a-failed-or-broken-run-keeps-its-temp-dir-for-the-log
   (async done
     (let [body (str "WtKeep" (.-pid js/process))

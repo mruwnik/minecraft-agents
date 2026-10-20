@@ -34,6 +34,7 @@
        "--check only loads and validates the fixtures (no body, no server): one result per case, exit 1 on a parse error or problem.\n"
        "A job case (no :register, no :wait-full true, only :event expectations pending) ends :idle-grace-s (default 3) s after every job it submitted has ended, failed or parked (\"no job active: ...\", :ended-early-s and :idle-grace-s in the result).\n"
        "Runs world fixtures (default dir engine/fixtures/world) by default in sealed underground cells (y -40), with :plot :light :sky on the surface plot grid x/z 20000..20640, y 150 (large plots: lanes south of it, to z 22240).\n"
+       "--keep-body leaves the probe body's agent dir after the run (otherwise a passed run removes it; a failed one keeps it, like the temp dir).\n"
        "--view keeps the view dump on for the probe body (off by default: it costs CPU and no run reads it).\n"
        "--allow-time lets a case that needs night or day set the time (each set appended to --time-log); without it\n"
        "such a case is skipped, and a case with no :time still gets day (logged to a default file in the temp dir). While a world sweep runs, a run outside it fails every case that needs a time lock at once (only :time :any cases run). A case that depends on the time of day (with --allow-time, every case) holds a time lock shared by phase (day cases together,\n"
@@ -80,6 +81,7 @@
       (= a "--trace-attempt") (recur more (assoc opts :trace-attempt (js/Number b)))
       (= a "--stop-on-fail") (recur (rest all) (assoc opts :stop-on-fail true))
       (= a "--allow-time") (recur (rest all) (assoc opts :allow-time true))
+      (= a "--keep-body") (recur (rest all) (assoc opts :keep-body true))
       (= a "--view") (recur (rest all) (assoc opts :view true))
       (= a "--list") (recur (rest all) (assoc opts :list true))
       (= a "--check") (recur (rest all) (assoc opts :check true))
@@ -416,6 +418,14 @@
        (-> (send! (f/reset-plot-commands (let [[sx sz] dims] (cond-> (if sx (assoc f/default-grid :size-x sx :size-z sz) f/default-grid) underground? (assoc :underground? true))) origin))
            (.finally #(release-plot! held)))))))
 
+(defn probe-body? [body] (str/starts-with? (str body) "Probe"))
+
+(defn remove-body-dir!
+  "Removes a probe body's agent dir (never a named agent's) unless --keep-body."
+  [{:keys [body keep-body] :as opts}]
+  (when (and (probe-body? body) (not keep-body))
+    (fs/rmSync (body-dir opts) #js {:recursive true :force true})))
+
 (defn finish-run!
   "End of a run: clears the plot the body was left on, then removes the run's temp dir, unless results is nil (the run
   broke) or holds a failed or errored case: then the dir stays with its body.log and the log says where. When the
@@ -425,7 +435,8 @@
          (fn []
            (if (or (nil? results) (some #(#{:fail :error} (:status %)) results))
              (log! "world-test: kept " (run-dir opts) " (body.log) for the post-mortem")
-             (fs/rmSync (run-dir opts) #js {:recursive true :force true})))))
+             (do (remove-body-dir! opts)
+                 (fs/rmSync (run-dir opts) #js {:recursive true :force true}))))))
 
 (defn body-argv
   "node argv for a body: V8 flags must be on the command line (heap cap: RSS 335 -> ~255 MB). --fresh drops engine.edn
