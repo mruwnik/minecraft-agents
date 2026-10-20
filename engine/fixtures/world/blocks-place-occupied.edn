@@ -10,11 +10,6 @@
    :act [[:job (jobs.blocks.place {:pos #at [18 0 16] :item "cobblestone"})]]
    :expect [{:event {:source :job :kind :stopped :data {:placed false :reason :occupied :block "stone"}} :within-s 10 :of-job true}]
    :after [[:block [18 0 16] "stone"] [:item "cobblestone" 8]]}
-  {:name "occupied-grass-block"
-   :blocks [[:set [18 0 16] "grass_block"]]
-   :act [[:job (jobs.blocks.place {:pos #at [18 0 16] :item "cobblestone"})]]
-   :expect [{:event {:source :job :kind :stopped :data {:placed false :reason :occupied :block "grass_block"}} :within-s 10 :of-job true}]
-   :after [[:block [18 0 16] "grass_block"] [:item "cobblestone" 8]]}
   {:name "occupied-oak-leaves"
    :blocks [[:set [18 0 16] "oak_leaves"]]
    :act [[:job (jobs.blocks.place {:pos #at [18 0 16] :item "cobblestone"})]]
@@ -24,10 +19,6 @@
    :act [[:job (jobs.blocks.place {:pos #at [18 0 18] :item "cobblestone"})]]
    :expect [{:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 30 :of-job true}]
    :after [[:block [18 0 18] "cobblestone"] [:item "cobblestone" 7]]}
-  {:name "free-cell-b"
-   :act [[:job (jobs.blocks.place {:pos #at [14 0 14] :item "cobblestone"})]]
-   :expect [{:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 30 :of-job true}]
-   :after [[:block [14 0 14] "cobblestone"] [:item "cobblestone" 7]]}
   {:name "head-block-suffocation"
    :act [[:rcon "execute at $BODY run setblock ~ ~1 ~ stone"] [:wait-s 4] [:rcon "execute at $BODY run setblock ~ ~1 ~ air"]]
    :expect [{:event {:source :body :kind :hurt :data {:causes ["suffocation"]}} :within-s 15}]

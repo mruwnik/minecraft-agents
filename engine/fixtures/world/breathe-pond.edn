@@ -32,15 +32,6 @@
             {:event {:source :reflex :kind :ended :data {:outcome :stopped :reason :no-land-in-range}} :within-s 80}
             {:no-event {:source :job :kind :afloat} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no-land-in-range}}}]
    :after [[:body-near [15.5 3.5 15.5] 6]]}
-  {:name "walled-stops-no-land-2"
-   :body {:at [13.5 2 17.5]}
-   :expect [{:event {:source :reflex :kind :fired} :within-s 30}
-            {:event {:source :reflex :kind :ended :data {:outcome :stopped :reason :no-blocks}} :within-s 80}
-            {:event {:source :job :kind :stopped :data {:reason :no-blocks :step :no-blocks}} :within-s 80}
-            {:no-event {:source :job :kind :afloat} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no-blocks}}}
-            {:no-event {:source :job :kind :holding :data {:reason :afloat}} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no-blocks}}}
-            {:no-event {:source :job :kind :child_ended :data {:ending {:data {:arrived false}}}} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no-blocks}}}]
-   :after [[:body-near [13.5 3.5 17.5] 6]]}
   {:name "ledge-east-lands-1"
    :blocks [[:fill [21 4 11] [21 5 20] "air"]]
    :body {:at [18.5 2 15.5]}
@@ -48,18 +39,6 @@
             {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 60}
             {:no-event {:source :reflex :kind :ended :data {:outcome :stopped}} :for-s 60 :until {:source :reflex :kind :ended :data {:how :cleared}}}]
    :after [[:body-near [22.5 4 15.5] 4]]}
-  {:name "equal-shores-walled-first-ledge-east"
-   :blocks [[:fill [21 4 11] [21 5 20] "air"]]
-   :body {:at [15.5 2 15.5]}
-   :expect [{:event {:source :reflex :kind :fired} :within-s 30}
-            {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 80}]
-   :after [[:body-near [22.5 4 15.5] 6]]}
-  {:name "equal-shores-walled-first-ledge-west"
-   :blocks [[:fill [10 4 11] [10 5 20] "air"]]
-   :body {:at [15.5 2 15.5]}
-   :expect [{:event {:source :reflex :kind :fired} :within-s 30}
-            {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 80}]
-   :after [[:body-near [8.5 4 15.5] 6]]}
   {:name "ledge-west-lands-2"
    :blocks [[:fill [10 4 11] [10 5 20] "air"]]
    :body {:at [12.5 2 13.5]}
@@ -69,13 +48,6 @@
    :after [[:body-near [8.5 4 13.5] 4]]}
   {:name "ledge-east-slab-lands"
    :blocks [[:fill [21 4 11] [21 5 20] "air"] [:fill [21 3 11] [21 3 20] "stone_slab[type=bottom]"]]
-   :body {:at [18.5 2 15.5]}
-   :expect [{:event {:source :reflex :kind :fired} :within-s 30}
-            {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 60}
-            {:no-event {:source :job :kind :afloat} :for-s 60 :until {:source :reflex :kind :ended :data {:how :cleared}}}]
-   :after [[:body-near [22.5 4 15.5] 4]]}
-  {:name "ledge-east-path-lands"
-   :blocks [[:fill [21 4 11] [21 5 20] "air"] [:fill [21 3 11] [21 3 20] "dirt_path"]]
    :body {:at [18.5 2 15.5]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 60}

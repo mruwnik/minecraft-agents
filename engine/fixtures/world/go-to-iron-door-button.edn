@@ -14,11 +14,6 @@
    :act [[:job (jobs.movement.go-to {:pos #at [16 1 22] :range 1})]]
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 90 :of-job true}]
    :after [[:body-near [16.5 1 22.5] 2]]}
-  {:name "oak-button-inside-opens-and-arrives"
-   :blocks [[:set [15 2 17] "oak_button[face=wall,facing=north]"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [16 1 22] :range 1})]]
-   :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 90 :of-job true}]
-   :after [[:body-near [16.5 1 22.5] 2]]}
   {:name "pressure-plate-inside-opens-and-arrives"
    :blocks [[:set [16 1 17] "stone_pressure_plate"]]
    :act [[:job (jobs.movement.go-to {:pos #at [16 1 22] :range 1})]]

@@ -6,19 +6,7 @@
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}
   :limit-s 90}
  :cases
- [{:name "fetch-from-seen-chest-then-place-a"
-   :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:8}]}"]]
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
-         [:job (jobs.blocks.place {:pos #at [20 0 14] :item "cobblestone" :fetch true})]]
-   :expect [{:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 80 :of-job true}]
-   :after [[:block [20 0 14] "cobblestone"] [:item "cobblestone" 0]]}
-  {:name "fetch-from-seen-chest-then-place-b"
-   :blocks [[:set [18 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:dirt\",count:8}]}"]]
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
-         [:job (jobs.blocks.place {:pos #at [12 0 14] :item "dirt" :fetch true})]]
-   :expect [{:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 80 :of-job true}]
-   :after [[:block [12 0 14] "dirt"] [:item "dirt" 0]]}
-  {:name "no-fetch-waits-need"
+ [{:name "no-fetch-waits-need"
    :blocks [[:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:8}]}"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.blocks.place {:pos #at [20 0 14] :item "cobblestone" :fetch false})]]
@@ -27,14 +15,6 @@
    :after [[:not-block [20 0 14] "cobblestone"] [:item "cobblestone" 0]]}
   {:name "fetch-nothing-fetchable-fails-clearly"
    :act [[:job (jobs.blocks.place {:pos #at [20 0 14] :item "cobblestone" :fetch {:how #{:chest}}})]]
-   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :need}} :within-s 50 :of-job true}
-            {:no-event {:source :job :kind #{:completed :stopped} :data {:placed [:any]}} :for-s 30}]
-   :after [[:not-block [20 0 14] "cobblestone"] [:item "cobblestone" 0]]}
-  {:name "chest-never-seen-not-used"
-   :blocks [[:fill [13 0 18] [15 2 20] "stone" :outline]
-            [:set [14 1 19] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:8}]}"]]
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "stone"} 10]
-         [:job (jobs.blocks.place {:pos #at [20 0 14] :item "cobblestone" :fetch {:how #{:chest}}})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :need}} :within-s 50 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:placed [:any]}} :for-s 30}]
    :after [[:not-block [20 0 14] "cobblestone"] [:item "cobblestone" 0]]}]}

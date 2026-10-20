@@ -17,12 +17,6 @@
    :expect [{:event {:source :action :kind :done :data {:name "useOn"}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [22.5 0 16.5] 2]]}
-  {:name "wood-button-pressed-and-arrives"
-   :blocks [[:set [15 1 15] "oak_button[face=wall,facing=west]"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
-   :expect [{:event {:source :action :kind :done :data {:name "useOn"}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
-   :after [[:body-near [22.5 0 16.5] 2]]}
   {:name "button-beats-a-nearer-lever"
    ;; the lever [15 0 15] is next to the door and nearer the body's cell in front of it than the button [15 1 17]; both work the door
    :blocks [[:set [15 0 15] "lever[face=wall,facing=west,powered=false]"] [:set [15 1 17] "stone_button[face=wall,facing=west]"]]

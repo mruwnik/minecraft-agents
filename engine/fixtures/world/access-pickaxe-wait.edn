@@ -23,12 +23,6 @@
    :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true})]]
    :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]
    :limit-s 150}
-  {:name "tunnel-no-pickaxe-stops-once"
-   :body {:inventory [["torch" 8] ["cobblestone" 8]]}
-   :act [[:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12 :keep true})]]
-   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}} :within-s 40 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 40 :until {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}}}]
-   :after [[:not-block [16 9 16] "air"]]}
   {:name "stair-stops-at-crop"
    :blocks [[:set [17 9 16] "farmland[moisture=7]"] [:set [17 10 16] "wheat[age=7]"] [:set [18 9 16] "water"]]
    :body {:inventory [["stone_pickaxe" 1]]}

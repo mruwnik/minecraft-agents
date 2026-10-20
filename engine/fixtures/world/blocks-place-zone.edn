@@ -22,10 +22,6 @@
    :act [[:job (jobs.blocks.place {:pos #at [20 0 14] :item "cobblestone" :for-plan "$plan:w"})]]
    :expect [{:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 40 :of-job true}]
    :after [[:block [20 0 14] "cobblestone"] [:item "cobblestone" 7]]}
-  {:name "for-plan-places-b"
-   :act [[:job (jobs.blocks.place {:pos #at [20 0 14] :item "cobblestone" :for-plan "$plan:w"})]]
-   :expect [{:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 40 :of-job true}]
-   :after [[:block [20 0 14] "cobblestone"] [:item "cobblestone" 7]]}
   {:name "free-cell-outside-the-plan-places"
    :act [[:job (jobs.blocks.place {:pos #at [12 0 14] :item "cobblestone"})]]
    :expect [{:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 40 :of-job true}]

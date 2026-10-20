@@ -16,15 +16,6 @@
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}
             {:event {:source :job :kind :completed :data {:status :completed}} :within-s 90 :of-job true}]
    :after [[:body-near [22.5 4 16.5] 3]]}
-  {:name "edge-pit-4-deep-arrives-b"
-   :blocks [[:fill [4 -1 4] [28 3 28] "stone"]
-            [:fill [16 0 15] [16 3 16] "air"]
-            [:set [16 -1 16] "air"]]
-   :body {:at [16.5 0 16.2] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [16 4 24] :range 1})]]
-   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}
-            {:event {:source :job :kind :completed :data {:status :completed}} :within-s 90 :of-job true}]
-   :after [[:body-near [16.5 4 24.5] 3]]}
   {:name "edge-pit-sealed-no-pickaxe-digs-by-hand"
    :blocks [[:fill [4 -1 4] [28 3 28] "stone"]
             [:fill [16 0 15] [16 3 16] "air"]

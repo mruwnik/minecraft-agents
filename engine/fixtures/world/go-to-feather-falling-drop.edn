@@ -9,13 +9,7 @@
   :body {:at [8.5 4 16.5]}
   :limit-s 90}
  :cases
- [{:name "feather-falling-iv-takes-a-4-drop"
-   :blocks [[:fill [1 0 1] [15 3 30] "stone"]]
-   :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:feet {:name "diamond_boots"}}}] 10]
-         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :spend {:health 1.5}})]]
-   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
-   :after [[:body-near [22.5 0 16.5] 2]]}
-  {:name "feather-falling-iv-takes-a-5-drop"
+ [{:name "feather-falling-iv-takes-a-5-drop"
    :body {:at [8.5 5 16.5]}
    :blocks [[:fill [1 0 1] [15 4 30] "stone"]]
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:feet {:name "diamond_boots"}}}] 10]

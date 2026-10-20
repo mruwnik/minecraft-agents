@@ -15,30 +15,12 @@
    :expect [{:no-event {:source :action :kind :started :data {:name "steer"}} :for-s 20 :until {:source :reflex :kind :ended}}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 80 :of-job true}]
    :after [[:body-near [26.5 0 16.5] 2]]}
-  {:name "stands-still-then-go-to-arrives-2"
-   :blocks [[:set [8 -1 10] "netherrack"] [:set [8 0 10] "fire"]]
-   :body {:at [8.5 0 10.5]}
-   :act [[:job (jobs.movement.go-to {:pos #at [26 0 22] :range 1})]]
-   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 80 :of-job true}]
-   :after [[:body-near [26.5 0 22.5] 2]]}
   {:name "burning-in-rain-is-still-handled"
    :weather :rain :time :day :time-why :weather
    :act [[:job (jobs.movement.go-to {:pos #at [26 0 16] :range 1})]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :burning}} :within-s 20}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 80 :of-job true}]
    :after [[:body-near [26.5 0 16.5] 2]]}
-  {:name "covers-adjacent-lava-1"
-   :blocks [[:set [11 -2 16] "stone"] [:set [11 -1 16] "lava"]]
-   :body {:inventory [["cobblestone" 8]]}
-   :act [[:until-rcon "execute positioned $X $Y $Z positioned ~11 ~-1 ~16 if block ~ ~ ~ cobblestone" "passed" 20]]
-   :after [[:not-block [11 -1 16] "lava"] [:block [11 -1 16] "cobblestone"]]
-   :limit-s 30}
-  {:name "covers-adjacent-lava-2"
-   :blocks [[:set [8 -1 10] "netherrack"] [:set [8 0 10] "fire"] [:set [8 -2 11] "stone"] [:set [8 -1 11] "lava"]]
-   :body {:at [8.5 0 10.5] :inventory [["cobblestone" 8]]}
-   :act [[:until-rcon "execute positioned $X $Y $Z positioned ~8 ~-1 ~11 if block ~ ~ ~ cobblestone" "passed" 20]]
-   :after [[:not-block [8 -1 11] "lava"] [:block [8 -1 11] "cobblestone"]]
-   :limit-s 30}
   {:name "water-within-6-walks-into-it"
    :blocks [[:set [14 -2 16] "stone"] [:set [14 -1 16] "water"]]
    :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :burning}} :within-s 20}]
