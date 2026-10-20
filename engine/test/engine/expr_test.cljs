@@ -2,6 +2,7 @@
   (:require [cljs.test :refer [deftest is are]]
             [cljs.reader :as reader]
             [engine.args :as a]
+            [engine.ctx :as ctx]
             [engine.expr :as expr]
             [engine.registry :as registry]))
 
@@ -70,6 +71,11 @@
   (is (nil? (problem '(jobs.a {:n 1 :m 2}))))
   (is (nil? (problem '(jobs.b {}))))
   (is (nil? (problem '(jobs.free {:anything 1}))) "an entry without :args is not checked"))
+
+(deftest a-child-call-by-symbol-refuses-an-unknown-arg-key
+  (let [c {:engine {:jobs reg}}]
+    (is (thrown-with-msg? js/Error #"jobs.a has no arg :fetch; its args are :m, :n" (ctx/child-job c 'jobs.a {:fetch 1})))
+    (is (= 2 (count (ctx/child-job c 'jobs.a {:n 3 :use {}}))) "call keys pass")))
 
 (deftest labels-print-the-spec
   (is (= "jobs.a" (expr/label (expr/parse reg '(jobs.a {:n 4})))))

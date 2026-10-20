@@ -1165,7 +1165,7 @@
 
 (deftest obtain-sapling-leaf-breaking-is-bounded
   (let [need (table/gather-need {"oak_sapling" 1})]
-    (is (= (base/sapling-leaf-limit) (:dry-digs (:args need))) "digs per child run")
+    (is (= (base/sapling-leaf-limit) (:jobs.gather.get-seeds/dry-digs (:settings (:args need)))) "digs per child run")
     (is (= 1 (:max-runs need)) "one fruitless run ends the source")
     (is (nil? (:max-runs (table/gather-need {"cobblestone" 1}))) "other sources use the default bound")))
 

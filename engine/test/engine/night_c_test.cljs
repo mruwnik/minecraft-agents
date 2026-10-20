@@ -156,7 +156,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (await (night-at-home (update lit-world :blocks merge walled-pen) {:x 10 :y 64 :z 0}))
               log (await (with-child-log #(tu/run-until-empty eng 60)
-                           (fn [c k sym a] (when (:place a) (ctx/call c k sym (-> a (dissoc :place) (assoc :pos {:x 10 :y 64 :z 4})))))))]
+                           (fn [c k sym a] (when (:place a) (ctx/call c k sym (dissoc a :place))))))]
           (is (= 1 (count (filter #(and (= :roof-walk (first %)) (:place (nth % 2))) log))) "one walk attempted, never repeated")
           (is (seq (st/calls p "place")) "the night dug in after the walk failed"))))))
 
@@ -165,9 +165,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (await (night-at-home lit-world {:x 10 :y 64 :z 0}))
-              beside {:x 10 :y 64 :z 1}
               log (await (with-child-log #(tu/run-until-empty eng 60)
-                           (fn [c k sym a] (when (:place a) (ctx/call c k sym (-> a (dissoc :place) (assoc :pos beside)))))))]
+                           (fn [c k sym a] (when (:place a) (ctx/call c k sym (dissoc a :place))))))]
           (is (= 1 (count (filter #(and (= :roof-walk (first %)) (:place (nth % 2))) log))) "walked once, arrived unroofed, then dug in")
           (is (seq (st/calls p "place")) "the night dug in"))))))
 

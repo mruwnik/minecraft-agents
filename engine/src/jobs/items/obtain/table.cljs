@@ -104,7 +104,7 @@
     (vec (concat
           (for [[sapling n] gather :when (leaves-of sapling)]
             {:key sapling :count n :job 'jobs.gather.get-seeds :seen #{(leaves-of sapling)} :max-runs 1
-             :args {:item sapling :count n :sources [(leaves-of sapling)] :dry-digs (sapling-leaf-limit)}})
+             :args {:item sapling :count n :sources [(leaves-of sapling)] :settings {:jobs.gather.get-seeds/dry-digs (sapling-leaf-limit)}}})
           (for [[seed n] gather :when (grass-seeds seed)]
             {:key seed :count n :job 'jobs.gather.get-seeds :seen (grass-seeds seed) :max-runs 1
              :args {:item seed :count n}})

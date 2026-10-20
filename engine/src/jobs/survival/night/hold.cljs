@@ -57,7 +57,7 @@
     (cond
       (= :continue placed) true
       (and (or cooker (:cooking (ctx/mem c))) (not (cook/rushed? c)))
-      (let [going (= :continue (await (cook/cook! c cooker {:fetch false})))]
+      (let [going (= :continue (await (cook/cook! c cooker {:ways #{:carried}})))]
         (if (or going (not (:placed-furnace (ctx/mem c))))
           going
           (await (pick-up-furnace! c))))

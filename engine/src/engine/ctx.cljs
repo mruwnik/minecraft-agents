@@ -111,10 +111,14 @@
 
 (defn child-job
   "[def args] for a child: job is a definition map, or a job namespace
-  symbol looked up in the registry with args merged over its defaults."
+  symbol looked up in the registry with args merged over its defaults; throws when args holds a key the job does not
+  declare, so a renamed arg fails at the caller."
   [ctx job args]
   (if (symbol? job)
-    (update (expr/leaf (:jobs (:engine ctx)) job args) 0 assoc :sym job)
+    (let [registry (:jobs (:engine ctx))]
+      (when-let [problem (expr/unknown-keys-message job (get registry job) args)]
+        (throw (ex-info problem {:job job})))
+      (update (expr/leaf registry job args) 0 assoc :sym job))
     [job args]))
 
 (defn call

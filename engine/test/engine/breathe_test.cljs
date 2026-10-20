@@ -694,7 +694,7 @@
 (defn stub-child-ctx
   "A ctx whose go-to child call resolves to the ending e, with a go-to registry entry."
   [e]
-  {:engine {:jobs {'jobs.movement.go-to {:ways [:walk :clear-seal] :round (fn [_] nil) :args nil}}}
+  {:engine {:jobs {'jobs.movement.go-to {:ways [:walk :clear-seal] :round (fn [_] nil)}}}
    :call (fn [_slot _def _args] (js/Promise.resolve e))})
 
 (deftest a-go-to-child-that-continues-or-does-not-end-done-is-a-failed-try
