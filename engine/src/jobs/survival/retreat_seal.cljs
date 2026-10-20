@@ -154,7 +154,7 @@
                  :let [n (assoc feet :x (+ (:x feet) dx) :z (+ (:z feet) dz))]
                  :when (and (free? n) (free? (update n :y inc))
                             (:full-cube? (u/seen-facts p (update n :y dec)))
-                            (not-any? #(stuck-door? p %) (dig-cells/fill-cells (constantly false) n)))]
+                            (not-any? #(stuck-door? p %) (dig-cells/fill-cells (constantly false) n nil (constantly false))))]
              n))))
 
 (defn ^:async step-from-door!
@@ -163,7 +163,7 @@
   [c]
   (let [p (:primitives c)
         feet (sh-sense/feet p)]
-    (when (and (not (:door-stepped (ctx/mem c))) (some #(stuck-door? p %) (dig-cells/fill-cells (constantly false) feet)))
+    (when (and (not (:door-stepped (ctx/mem c))) (some #(stuck-door? p %) (dig-cells/fill-cells (constantly false) feet nil (constantly false))))
       (when-let [spot (door-free-spot p feet)]
         (let [r (await (ctx/call c :door-step 'jobs.movement.go-to {:pos {:x (+ (:x spot) 0.5) :y (:y spot) :z (+ (:z spot) 0.5)} :range 0}))]
           (when-not (= :continue r) (ctx/update-mem! c assoc :door-stepped true))

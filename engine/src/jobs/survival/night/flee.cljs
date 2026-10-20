@@ -48,7 +48,8 @@
                                    (not (:unknown (look/seen-block p cell)))))
         have (reduce + (map :count (lb/carried c (choose/cheap-blocks (choose/fillers :shelter) (sites/wall-value)))))
         up (fn [{:keys [x y z]} dy] {:x x :y (+ y dy) :z z})
-        sealed? (fn [cell] (and (solid? (key-of cell)) (dig-cells/sealed? p cell)))]
+        sealed? (fn [cell] (and (solid? (key-of cell)) (dig-cells/sealed? p cell)))
+        stand-on? #(dig-cells/stand-on? p %)]
     (->> solids
          (map #(up (:pos %) 1))
          (filter (fn [f]
@@ -57,7 +58,7 @@
                         (not (dig-cells/wet? p f)) (not (dig-cells/wet? p (up f 1)))
                         (pit-site/clear-of-failed? c f))))
          (keep (fn [f]
-                 (let [cells (dig-cells/fill-cells sealed? f)]
+                 (let [cells (dig-cells/fill-cells sealed? f nil stand-on?)]
                    (when (and (<= (count cells) have)
                               (not-any? #(access/trespass-refusal c :place %) cells))
                      {:kind :cave :pos f :needed (count cells)}))))

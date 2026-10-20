@@ -120,11 +120,9 @@
   the support exists; none when one of the four is placed already or the roof cell is sealed; else the one farthest from
   threats ({:x :y :z}), the +x one with none), then the roof cell above the head; only those the
   predicate sealed? (cell -> bool) does not hold for. A corner cell (diagonal, feet or head height) is among them only
-  when a mob could stand in it: an open one on a floor it stands on (stand-on?, default sealed?), or above a corner
+  when a mob could stand in it: an open one on a floor it stands on (stand-on?, cell -> bool), or above a corner
   that is one; the corners follow the sides."
-  ([sealed? feet] (fill-cells sealed? feet nil))
-  ([sealed? feet threats] (fill-cells sealed? feet threats sealed?))
-  ([sealed? {:keys [x y z]} threats stand-on?]
+  [sealed? {:keys [x y z]} threats stand-on?]
    (let [roof {:x x :y (+ y 2) :z z}
          supports (for [[dx dz] sides] {:x (+ x dx) :y (+ y 2) :z (+ z dz)})
          gap (fn [{cx :x cy :y cz :z}]
@@ -141,7 +139,7 @@
               (concat (for [dy [0 1] d sides] (at dy d))
                       (mapcat corner-cells corners)
                       (when-not (or (sealed? roof) (some sealed? supports)) [support])
-                      [roof])))))
+                      [roof]))))
 
 (defn open-cells
   "The fill-cells around the feet cell that are not sealed? in the world; the roof support away from threats."

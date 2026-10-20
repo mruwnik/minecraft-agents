@@ -1392,14 +1392,14 @@
   (let [feet {:x 0 :y 64 :z 0}
         none (constantly false)
         roofed #(= 66 (:y %))]
-    (is (= 10 (count (dig-cells/fill-cells none feet))) "sides, support, roof")
-    (is (= 8 (count (dig-cells/fill-cells roofed feet))) "a sealed roof cell needs no support")))
+    (is (= 10 (count (dig-cells/fill-cells none feet nil none))) "sides, support, roof")
+    (is (= 8 (count (dig-cells/fill-cells roofed feet nil roofed))) "a sealed roof cell needs no support")))
 
 (deftest fill-cells-include-the-corners-a-mob-could-stand-in
   (let [feet {:x 0 :y 64 :z 0}
         floor? #(= 63 (:y %))
         corner? (fn [c] (and (not= 0 (:x c)) (not= 0 (:z c)) (<= 64 (:y c) 65)))
-        corners (fn [sealed?] (set (filter corner? (dig-cells/fill-cells sealed? feet))))]
+        corners (fn [sealed?] (set (filter corner? (dig-cells/fill-cells sealed? feet nil sealed?))))]
     (is (= 8 (count (corners floor?))) "on flat ground a mob stands in every corner, feet and head height")
     (is (= #{{:x 1 :y 65 :z 1}} (corners #(or (floor? %) (= {:x 1 :y 64 :z 1} %) (and (corner? %) (not= {:x 1 :y 65 :z 1} %)))))
         "a rock corner at feet height leaves its head cell as a stand")
@@ -1422,7 +1422,7 @@
   (let [feet {:x 0 :y 64 :z 0}
         none (constantly false)
         beside? (fn [cell] (= 1 (+ (Math/abs (:x cell)) (Math/abs (:z cell)))))
-        supports (fn [sealed? threats] (filterv #(and (= 66 (:y %)) (beside? %)) (dig-cells/fill-cells sealed? feet threats)))]
+        supports (fn [sealed? threats] (filterv #(and (= 66 (:y %)) (beside? %)) (dig-cells/fill-cells sealed? feet threats sealed?)))]
     (is (= [{:x 1 :y 66 :z 0}] (supports none [])) "no threat: the +x side")
     (is (= [{:x -1 :y 66 :z 0}] (supports none [{:x 4.5 :y 66 :z 0.5}])) "a zombie on the +x side: the -x one")
     (is (= [] (supports #(= {:x 0 :y 66 :z 1} %) [{:x 4.5 :y 66 :z 0.5}])) "one placed already: no other")))
