@@ -28,7 +28,7 @@
 (def doc
   "Mine like a player: a trip that gets what the dig needs, calls jobs.gather.dig-for, and comes back. It remembers the cell it
   starts on, deposits when the bag is nearly full (jobs.lib.trip), gets a pickaxe when none is carried that harvests the block, a spare
-  for a worn last one, and torches before a descent or tunnel (all through jobs.lib.need; :fetch false skips them), walks out of an own
+  for a worn last one, and torches before a descent or tunnel (all through jobs.lib.need; ways #{:carried} skips them), walks out of an own
   zone it stands near, walks back to the start cell, and calls jobs.gather.dig-for with the same args until it ends. Flooded
   at the start, or a pickaxe or torches that cannot be had, end it before the dig. A dig that stops for a pickaxe or torches (:no-tool,
   :no-torches) gets them again and goes on from where it stood (at most ::max-equip-rounds rounds); any other ending is passed on.
@@ -50,7 +50,6 @@
    :radius :shared
    :center :shared
    :wet :shared
-   :fetch {:doc "get a pickaxe when none is carried (jobs.items.get-tool through jobs.lib.need), a spare for a worn one, and torches: true, a set of kinds or a map of which only :how and :explore apply; false: the dig ends with what is carried" :spec need/option? :default true}
    :ignore-zones? :shared
    :mend {:doc "fill the ground under the start again once the dig is over" :spec boolean? :default false}
    :heading :shared
@@ -109,12 +108,6 @@
 
 ;; ------------------------------------------------------------------ equip
 
-(defn allows?
-  "Whether :fetch allows getting things of kind (:tool or :item)."
-  [c kind]
-  (let [f (need/parse-arg (:fetch (:args c)))]
-    (boolean (and (map? f) (not (:error f)) (or (nil? (:what f)) (contains? (:what f) kind))))))
-
 (defn stair-start?
   "Whether the dig starts with a stair of its own (not by a mineshaft, and no wanted block in sight to walk to instead): the start keeps clear of buildings."
   [c]
@@ -156,14 +149,13 @@
                         :text (str "mine could not get back to " (str/join "," (access/cell cell)) " after getting its tools")}))))
 
 (defn ^:async fetch-pickaxe!
-  "A pickaxe is owed: jobs.items.get-tool for the block through jobs.lib.need (:fetch's :how and :explore apply), once per equip. :continue
+  "A pickaxe is owed: jobs.items.get-tool for the block through jobs.lib.need (the ways' sources apply), once per equip. :continue
   while it runs, else nil; a failed fetch is kept as the dig's :why (mem :tool-why)."
   [c]
   (let [block (main-block (:args c))
-        o (need/opts c 'jobs.gather.mine)
-        o (when (and o (contains? (:what o) :tool)) o)]
+        o (need/fetch-opts c)]
     (when (and o (not (tools/can-harvest? (:primitives c) block)) (not (:tool-why (ctx/mem c))))
-      (let [e (await (need/tool! c {:block block} (select-keys o [:how :explore])))]
+      (let [e (await (need/tool! c {:block block} o))]
         (cond
           (= :continue e) :continue
           (tools/can-harvest? (:primitives c) block) nil
@@ -254,8 +246,8 @@
   [c reason]
   (and (< (:rounds (ctx/mem c) 0) (settings/get settings ::max-equip-rounds))
        (case reason
-         :no-tool (allows? c :tool)
-         :no-torches (and (:stocked? (ctx/mem c)) (allows? c :item))
+         :no-tool (some? (need/fetch-opts c))
+         :no-torches (and (:stocked? (ctx/mem c)) (stock/fetch-allows? c :item))
          false)))
 
 (defn ^:async dig-step!

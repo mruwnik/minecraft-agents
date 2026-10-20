@@ -343,7 +343,7 @@
 (deftest eat-declines-without-edible-food
   (let [{:keys [eng p]} (setup {:self {:food 4} :inventory [{:name "rotten_flesh" :count 2} {:name "spider_eye" :count 1}
                                                             {:name "cobblestone" :count 9}]})]
-    (core/submit! eng '(jobs.survival.eat {:fetch false}) {})
+    (core/submit! eng '(jobs.survival.eat {:get-food? false}) {})
     (is (nil? (core/tick! eng)) "the check declines")
     (is (= [] (calls p "eat")))))
 
@@ -421,7 +421,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:food 4 :health 20} :inventory [{:name "golden_apple" :count 1}]})]
-          (core/submit! eng '(jobs.survival.eat {:fetch false}) {})
+          (core/submit! eng '(jobs.survival.eat {:get-food? false}) {})
           (is (nil? (core/tick! eng)) "healthy and unnamed: not eaten")
           (is (= [] (calls p "eat"))))
         (let [{:keys [eng p]} (setup {:self {:food 4 :health 20} :inventory [{:name "golden_apple" :count 1}]})]

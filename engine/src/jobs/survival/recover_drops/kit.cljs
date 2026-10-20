@@ -58,11 +58,13 @@
   [c]
   (await (child/run!* c :wear 'jobs.items.equip {})))
 
+(def kit-fetch-minutes "How long the kit fetch may take." 3)
+
 (defn kit-minutes
-  "The kit fetch's limit: the fetch option's :minutes, at most the minutes the pile's despawn window has left."
-  [c entry limits]
+  "The kit fetch's limit: kit-fetch-minutes, at most the minutes the pile's despawn window has left."
+  [c entry]
   (let [left (/ (settings/ticks->ms (game/despawn-left-ticks entry (ctx/view c))) 60000)]
-    (max 0.1 (min left (or (:minutes limits) left)))))
+    (max 0.1 (min left kit-fetch-minutes))))
 
 (defn ^:async kit!
   "Once per run: fetch and wear a weapon and armour when the pile is worth the trip, the danger calls for them and a known
@@ -70,12 +72,12 @@
   :fetching-kit) until it ends, a danger or the despawn window. nil when done, dropped (a fetch that failed: warn with its ending) or
   nothing to do, else :continue for a cut."
   [c entry]
-  (let [limits (need/opts c 'jobs.survival.recover-drops)]
+  (let [limits (need/fetch-opts c)]
     (if (or (:kit-done (ctx/mem c)) (not limits) (nil? (kit-problem c)) (not (kit-called-for? c entry)))
       (do (ctx/update-mem! c assoc :kit-done true) nil)
       (loop []
         (let [wanted (kit-problem c)
-              r (if wanted (await (need/blocks! c (:any-of wanted) 1 (assoc (select-keys limits [:how :explore]) :minutes (kit-minutes c entry limits)))) :done)]
+              r (if wanted (await (need/blocks! c (:any-of wanted) 1 (assoc limits :minutes (kit-minutes c entry)))) :done)]
           (cond
             (nil? wanted)
             (do (await (wear-kit! c))

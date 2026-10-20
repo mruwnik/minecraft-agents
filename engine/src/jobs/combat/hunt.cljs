@@ -30,8 +30,8 @@
   Never takes the last :keep adults of the kind (nil: 2 for animals, 0 for hostile mobs); babies are never targets. Animals the body
   spares (jobs.lib.animal-spare: kinds in ::off-limits, animals in a zone or plan of its own or a closed enclosure unless ::spare-pens
   is false) are never targets either. Weapons: the call's :use :tools (default the best carried); a hostile kind with none gets a sword
-  first (jobs.lib.need, :fetch; a failed fetch ends the job with its cause).
-  Needs: fit? (waits :low-health); at its start it waits :unarmed (hostile, no weapon, :fetch off), :no-color or
+  first (jobs.lib.need; a failed fetch ends the job with its cause).
+  Needs: fit? (waits :low-health); at its start it waits :unarmed (hostile, no weapon, ways #{:carried}), :no-color or
   :too-few (:in-range, :radius, :keep, :nearest) unless the kind is heard and not in sight, when it first steps up to four times
   toward the sound (jobs.lib.vantage).
   done? holds once :count of the item are carried.
@@ -44,12 +44,13 @@
    :count {:doc "items to carry in all" :spec (a/int-in 1 nil) :default 1}
    :radius {:doc "animals within this many blocks of the body count" :spec (a/num-in 0 nil) :default 24}
    :center {:doc "the centre of the area the job works, a cell [x y z] or {:x :y :z}; nil: where the body stands when the job first runs (jobs.lib.area)" :spec a/position? :default nil}
-   :keep {:doc "never kill the last this many adults of the kind within :radius (babies do not count); nil: 2 for animals, 0 for hostile mobs; 0 turns the rule off" :spec (a/int-in 0 nil) :default nil}
-   :fetch {:doc "get a sword when a hostile kind is hunted unarmed, with jobs.lib.need: true, a set of kinds or a map of limits; false (or without :tool) ends :unarmed" :spec need/option? :default true}})
+   :keep {:doc "never kill the last this many adults of the kind within :radius (babies do not count); nil: 2 for animals, 0 for hostile mobs; 0 turns the rule off" :spec (a/int-in 0 nil) :default nil}})
 
 (a/defargs settings
   {::job-time-s {:default 600 :doc "Seconds a hunt may take." :spec (a/num-in 0 nil)}
    ::sight-radius {:default 64 :doc "How far the :too-few wait looks for the nearest adult of the kind, in blocks." :spec (a/num-in 0 nil)}})
+
+(def ways need/fetch-ways)
 
 (def target [:item :center])
 
@@ -146,10 +147,9 @@
        (when nearest (str "; the nearest is " nearest " away"))))
 
 (defn fetch-opts
-  "The limits {:how :explore :minutes} for fetching a weapon, nil when :fetch does not allow tools."
+  "The limits {:how} for fetching a weapon, nil when the ways leave only :carried."
   [c]
-  (when-let [o (need/opts c 'jobs.combat.hunt)]
-    (when (contains? (:what o) :tool) (select-keys o [:how :explore :minutes]))))
+  (need/fetch-opts c))
 
 (defn ^:async fetch-weapon!
   "Get a sword with jobs.lib.need: :yield while it works, :again once got (the memory :fetching marks the fetch under way across
@@ -192,7 +192,7 @@
     {:reason :unarmed :killed 0 :mob (mob-name c) :text (str "hunt stopped: no weapon carried for a hostile " (mob-name c))}))
 
 (def start-fact
-  "Later with the cause that bars a hunt's first step: no weapon for a hostile kind (:fetch off), nothing of the :color in range, or :keep or fewer adults.
+  "Later with the cause that bars a hunt's first step: no weapon for a hostile kind (ways #{:carried}), nothing of the :color in range, or :keep or fewer adults.
   Ok while the kind is heard and not in sight: the first steps look for it."
   (checks/refusing
    :quarry "there is something to hunt"

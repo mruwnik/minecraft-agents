@@ -32,7 +32,7 @@
   stop ends the call with data {:stop reason :at :next :walk} (the stair's stops, :own-zone, :walk-failed, :breach-sealed,
   :breach-open): condition-failed for facts, else nothing-possible. No torch to hang and none to craft ends condition-failed
   :no-torches. The data always carries :origin :heading :steps :hung :dug [{:cell :block}] :behind. Needs a pickaxe as the
-  stair does (:fetch passed on).")
+  stair does (ways passed on).")
 
 (a/defargs args
   {:heading {:doc "north, east, south or west" :spec #{"north" "east" "south" "west"}}
@@ -46,13 +46,14 @@
    :wet {:doc "water beside a watched block does not hide it; water beside the cut is taken" :spec boolean? :default false}
    :accept {:doc "dig hazards taken (jobs.access.stair)" :spec (a/coll-of #{:falling-block :fluid-adjacent :lava-adjacent}) :default []}
    :stay-level {:doc "only cut; seal a cut that opens into air beyond the tunnel" :spec boolean? :default false}
-   :fetch {:doc "get missing torch ingredients and seal blocks (jobs.lib.need)" :spec need/option? :default true}
    :block {:doc "the block the dig is for (the tool, hunger and water checks of each step)" :spec string? :default "stone"}
    :ignore-zones? :shared})
 
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::max-redigs {:default 32 :doc "The most times one step is cut again because a falling block landed in it (a column of gravel above the tunnel)." :spec (a/int-in 0 nil)}})
+
+(def ways need/fetch-ways)
 
 (def target [:heading])
 
@@ -138,7 +139,7 @@
         _ (await (watch/watch! c {:risky? true :before-dig (first (remove #(passable (name-at %)) cut))}))
         _ (ctx/update-mem! c assoc :stepping true)
         r (waits/waiting-out c (await (ctx/call c :step 'jobs.access.stair
-                                 {:dir :level :heading (keyword heading) :steps 1 :accept (step-accept args) :ways (need/ways-of-fetch (:fetch args))
+                                 {:dir :level :heading (keyword heading) :steps 1 :accept (step-accept args) :ways (need/pass-ways c)
                                   :ignore-zones? (:ignore-zones? args)
                                   :cut-only (boolean (:stay-level args))})))
         res (result-of r)]

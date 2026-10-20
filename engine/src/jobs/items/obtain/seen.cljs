@@ -65,7 +65,7 @@
 
     (and (= "obsidian" (:key need))
          (empty? (look/seen-blocks (:primitives c) {:names ["obsidian"] :radius (seen-radius) :max 1})))
-    (assoc need :job 'jobs.gather.cast-obsidian :args {:count (:count need) :radius (seen-radius) :fetch #{:tool}})
+    (assoc need :job 'jobs.gather.cast-obsidian :args {:count (:count need) :radius (seen-radius) :ways #{:carried}})
 
     (= "water_bucket" (:key need))
     (cond-> need (seen-of c need) (assoc-in [:args :on] (:pos (seen-of c need))))

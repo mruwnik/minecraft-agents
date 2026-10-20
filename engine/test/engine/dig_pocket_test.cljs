@@ -216,7 +216,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p seen] :as s} (setup [] {:inventory [{:name "cobblestone" :count 4}]})]
-          (await (run-job! s {:fetch true}))
+          (await (run-job! s {:ways #{:carried :chest :craft :gather}}))
           (is (some #(and (= :child_started (:kind %)) (= :need (:slot %))) @seen) "a tool is asked for")
           (is (nil? (failed seen)))
           (is (= ["cobblestone" "cobblestone"] (mapv #(block-at p %) [[4 64 0] [4 65 0]]))))))))
@@ -246,7 +246,7 @@
         (let [{:keys [eng seen] :as s} (setup [] {:inventory []})
               orig ctx/call
               n (atom 0)]
-          (core/submit! eng (list 'jobs.survival.dig-pocket {:fetch true}) {})
+          (core/submit! eng (list 'jobs.survival.dig-pocket {:ways #{:carried :chest :craft :gather}}) {})
           (set! ctx/call (fn [c slot job args]
                            (if (= :need slot)
                              (do (swap! n inc) (js/Promise.resolve :continue))

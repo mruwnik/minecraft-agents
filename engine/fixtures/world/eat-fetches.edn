@@ -16,6 +16,6 @@
    :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]]}
   {:name "eat-fetch-false-ends-no-food"
-   :act [[:job (jobs.survival.eat {:fetch false})]]
+   :act [[:job (jobs.survival.eat {:get-food? false})]]
    :expect [{:no-event {:source :job :kind :food.killed} :for-s 25}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 3]]}]}

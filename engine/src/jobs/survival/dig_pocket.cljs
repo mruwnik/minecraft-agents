@@ -26,7 +26,7 @@
   walk that fails. A pocket that lays open fluid or a cave is dropped (lava is filled first, :on-lava :seal).
   Where no side fits at the feet it first walks (go-to) to the nearest standing cell it has seen within the ::walk-radius setting (6, dy -3
   to 3) from where one does, not to a cell a hostile stands on, a wall that is no other's first, never one of the body's own plans.
-  A wall no carried tool harvests: with :fetch (jobs.lib.need) it gets a tool first, and cuts bare-handed when none comes (slow, the drops
+  A wall no carried tool harvests: with ways beyond :carried (jobs.lib.need) it gets a tool first, and cuts bare-handed when none comes (slow, the drops
   lost); without, that wall is no site. The walls go to the scaffold ledger with :for (default :danger, ledger :retreat-plug, taken
   back by jobs.access.cleanup once no hostile is near; :night: ledger :shelter, left alone). Quote: time by the walk (##Inf when no side
   fits). Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.")
@@ -35,7 +35,6 @@
   {:ignore-zones? :shared
    :for {:doc "why the body shuts itself in: :danger (blocks are taken back by the cleanup once no hostile is near; a hostile in a cell fails it), :night (blocks stay for the night; a mob in a cell is waited out)" :spec #{:danger :night} :default :danger}
    :trespass? {:doc "false: a pocket whose walls are another's zone, claim or plan is no site (the caller tries again with true as a last resort)" :spec boolean? :default true}
-   :fetch {:doc "get a missing tool (jobs.lib.need): true, a set of kinds or a map of limits; false leaves a wall no carried tool harvests without a site" :spec need/option? :default false}
    :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pocket is dropped and the lava left" :spec #{:seal :stop} :default :seal}})
 
 (a/defargs settings
@@ -46,7 +45,9 @@
 
 (def target [])
 
-(def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s}})
+(def ways need/fetch-ways)
+
+(def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s} :ways #{:carried}})
 
 (defn done? [c] (way/done? c :pocket))
 
@@ -74,9 +75,9 @@
          (reduce (fn [fallback cell] (if (refused? cell) (or fallback cell) (reduced cell))) nil))))
 
 (defn fetch-tool?
-  "Whether :fetch lets the job get a tool."
+  "Whether the call's ways let the job get a tool."
   [c]
-  (some-> (need/opts c 'jobs.survival.dig-pocket) :what (contains? :tool)))
+  (some? (need/fetch-opts c)))
 
 (defn site
   "Where the pocket is dug from: {:stand cell :fetch? true when no carried tool harvests its wall and one may be fetched}; with
@@ -117,7 +118,7 @@
       :again)))
 
 (defn can-start?
-  "A wall to pocket into that a carried tool harvests, or :fetch lets it get one."
+  "A wall to pocket into that a carried tool harvests, or the ways let it get one."
   [c]
   (if (:no-tool? (site c))
     (contract/later :no-tool "no tool for the wall to pocket into")
@@ -134,9 +135,9 @@
   hand from now on."
   [c cells]
   (let [p (:primitives c)
-        o (need/opts c 'jobs.survival.dig-pocket)
+        o (need/fetch-opts c)
         block (some #(let [n (dig-look/rock-name p %)] (when-not (tools/can-harvest? p n) n)) cells)
-        e (await (need/tool! c {:block block} (select-keys o [:how :explore])))]
+        e (await (need/tool! c {:block block} o))]
     (cond (= :continue e) :continue
           (= :done (:kind e)) :again
           :else (do (ctx/update-mem! c assoc :by-hand true) :again))))

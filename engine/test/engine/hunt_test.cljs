@@ -302,8 +302,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[args kind reason] [[{:item "rotten_flesh"} :condition-failed :tool]
-                                    [{:item "rotten_flesh" :fetch false} :condition-failed :unarmed]
-                                    [{:item "rotten_flesh" :fetch #{:item}} :condition-failed :unarmed]]]
+                                    [{:item "rotten_flesh" :ways #{:carried}} :condition-failed :unarmed]]]
           (let [s (h/setup {:inventory [] :entities [(zombie 1 3)]} 20)
                 e (await (ending-of s 'jobs.combat.hunt args 60))]
             (is (= [kind reason] [(:kind e) (get-in e [:cause :reason] (:cause e))]) (pr-str args))

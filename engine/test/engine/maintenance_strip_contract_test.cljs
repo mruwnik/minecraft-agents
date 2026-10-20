@@ -30,7 +30,7 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:kind :nothing-possible :cause :no-blocks}
-               (select-keys (await (seal-ending (ss/world :inventory (into [{:name "cobblestone" :count 4}] ss/tools)) (assoc ss/args :fetch false))) [:kind :cause])))
+               (select-keys (await (seal-ending (ss/world :inventory (into [{:name "cobblestone" :count 4}] ss/tools)) (assoc ss/args :ways #{:carried}))) [:kind :cause])))
         (is (= {:kind :condition-failed :cause :blocked}
                (select-keys (await (seal-ending (ss/world :extra {"0,64,1" "chest"}) ss/args)) [:kind :cause])))
         (is (= {:kind :condition-failed :cause :refused}

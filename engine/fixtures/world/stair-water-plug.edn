@@ -25,7 +25,7 @@
   {:name "mine-with-its-head-in-water-ends-flooded"
    :blocks [[:fill [16 0 16] [16 2 16] "water"] [:set [17 0 16] "coal_ore"] [:set [17 1 16] "coal_ore"]]
    :body {:at [16.5 0 16.5] :yaw 270 :inventory [["iron_pickaxe" 1]]}
-   :act [[:job (jobs.gather.mine {:block "coal_ore" :count 1 :fetch false})]]
+   :act [[:job (jobs.gather.mine {:block "coal_ore" :count 1 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :flooded}} :within-s 90 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 60 :until {:source :job :kind :stopped}}]
    :after [[:block [17 0 16] "coal_ore"] [:block [17 1 16] "coal_ore"]]}

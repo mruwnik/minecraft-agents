@@ -100,7 +100,7 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:event :waiting :reason :no-blocks}
-               (await (gap-end {:inventory []} {:fetch false}))))))))
+               (await (gap-end {:inventory []} {:ways #{:carried}}))))))))
 
 (deftest no-open-cell-to-stop-the-arrows-is-nothing-possible
   (async done

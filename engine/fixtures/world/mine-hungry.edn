@@ -27,6 +27,6 @@
    :blocks [[:set [21 0 16] "iron_ore"] [:set [22 0 16] "iron_ore"]]
    :body {:inventory [["cobblestone" 16] ["torch" 8] ["bread" 4]]}
    :act [[:rcon "item replace entity $BODY hotbar.0 with minecraft:stone_pickaxe[minecraft:damage=130]"]
-         [:job (jobs.gather.mine {:block "iron_ore" :level false :count 3 :direction :east :tunnel-length 8 :radius 16 :mend false :fetch false})]]
+         [:job (jobs.gather.mine {:block "iron_ore" :level false :count 3 :direction :east :tunnel-length 8 :radius 16 :mend false :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:kind :limit-reached}} :for-s 30 :of-job true}]}]}

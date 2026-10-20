@@ -53,7 +53,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (lt/setup (world lava-lake [pick {:name "water_bucket" :count 1}]))
               calls (atom 0)
-              stub {:round (fn ^:async mine-round [c]
+              stub {:ways [:carried :chest :craft :gather] :round (fn ^:async mine-round [c]
                              (if (= 1 (swap! calls inc))
                                (do (await (ctx/act c :dig (clj->js {:pos {:x 4 :y 63 :z 0}}))) :continue)
                                (ctx/end c :done nil)))}
@@ -197,7 +197,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (lt/setup (world lava-lake [pick {:name "water_bucket" :count 1}]))
               in-water-at-start (atom nil)
-              stub {:round (fn ^:async mine-round [c]
+              stub {:ways [:carried :chest :craft :gather] :round (fn ^:async mine-round [c]
                              (reset! in-water-at-start (.-inWater (.self p)))
                              (ctx/end c :done nil))}
               pauses (atom 0)
@@ -215,7 +215,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (lt/setup (world (assoc lava-lake "7,63,0" "lava") [pick {:name "water_bucket" :count 1}]))
               mined (atom 0)
-              stub {:round (fn ^:async mine-round [c]
+              stub {:ways [:carried :chest :craft :gather] :round (fn ^:async mine-round [c]
                              (swap! mined inc)
                              (fake/add-item! p "obsidian" 1)
                              (ctx/end c :done nil))}

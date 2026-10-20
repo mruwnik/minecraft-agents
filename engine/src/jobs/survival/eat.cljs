@@ -19,7 +19,7 @@
   An unnamed meal leaves one of each seed a noted dug crop needs for the tidy-up (jobs.lib.tidy) until food is nearly starving.
   Golden apples are eaten only when named or at low health. Chorus fruit and suspicious stew only when named.
   Done? means fed (food at :until): a fed body ends done without eating. Hungry with no edible food carried, it fetches
-  through get-food (a child, :eat false :carry the missing food points; :fetch false: not), else condition-failed :no-food (a listed job waits);
+  through get-food (a child, :eat false :carry the missing food points; :get-food? false: not), else condition-failed :no-food (a listed job waits);
   a fetch that brought none ends condition-failed :no-food with the get-food ending as its because. A named item that is not food, or is harmful without :allow-bad, is
   impossible :not-food or :bad-food (the cause's :text says why).
   Ends :done with {:ate bites} when food reached :until or :max-bites were eaten; nothing-possible :out-of-food when the
@@ -36,7 +36,7 @@
    :until {:doc "keep eating while food is below this (of 20)" :spec (a/num-in 0 nil) :default 18}
    :max-bites {:doc "eat at most this many bites; unlimited when nil" :spec (a/int-in 1 nil) :default nil}
    :allow-bad {:doc "also eat the harmful foods when nothing else is carried" :spec boolean? :default false}
-   :fetch {:doc "with no edible food carried and the body hungry, get some with jobs.survival.get-food first; false: end :no-food at once (reflexes that only eat what is carried)" :spec boolean? :default true}})
+   :get-food? {:doc "with no edible food carried and the body hungry, get some with jobs.survival.get-food first; false: end :no-food at once (reflexes that only eat what is carried)" :spec boolean? :default true}})
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
@@ -120,7 +120,7 @@
 
 (defn no-food [c]
   (cond (carried-best c) (contract/ok :food "food carried")
-        (:fetch (:args c)) (contract/ok :food "no food carried: get-food fetches it")
+        (:get-food? (:args c)) (contract/ok :food "no food carried: get-food fetches it")
         :else (contract/later :no-food "no edible food carried")))
 
 (def can-start? (cond/and bad-item no-food))
@@ -149,7 +149,7 @@
           (or (>= (food-of c) until) (and max-bites (>= bites max-bites))) (ctx/end c :done nil {:ate bites})
           (nil? best) (cond
                         (pos? bites) (ctx/end c :nothing-possible :out-of-food {:ate bites})
-                        (:fetch (:args c)) (let [e (await (child/run!* c :fetch 'jobs.survival.get-food
+                        (:get-food? (:args c)) (let [e (await (child/run!* c :fetch 'jobs.survival.get-food
                                                          {:eat false :carry (max 1 (- until (food-of c)))}))]
                                              (cond
                                                (= :continue e) :continue

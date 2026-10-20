@@ -262,7 +262,7 @@
   [c hs tried?]
   (boolean (and (not tried?)
                 (every? combat/ranged? hs)
-                (= :ok (first (gap/can-start? (assoc c :args {:fetch false}))))
+                (= :ok (first (gap/can-start? (assoc c :args {:ways #{:carried}}))))
                 (tools/can-harvest? (:primitives c) "stone"))))
 
 (defn gap-wanted?
@@ -280,7 +280,7 @@
   "One call of block-arrow-gap (never fetching): :continue or its ending's kind; nothing placed lets the round decide as usual.
   Tried once it has ended; a :continue (its look around) calls it again."
   [c]
-  (let [e (await (ctx/call c :gap 'jobs.survival.block-arrow-gap {:fetch false}))]
+  (let [e (await (ctx/call c :gap 'jobs.survival.block-arrow-gap {:ways #{:carried}}))]
     (when-not (= :continue e) (ctx/update-mem! c assoc :gap-tried true))
     (if (= :continue e) :continue (:kind e))))
 

@@ -31,7 +31,7 @@
   Ready: fit? ok; safe? is ok: it never waits for light or dawn, the drops despawn 5 min after the death (game/despawn-ticks). The children walk under :checks {:safe? (always)}: the trip prices its own danger; a pile it cannot reach before the despawn ends :too-far or :window-closed.
   Decision (settings ::margin, ::leg-s; args :value-overrides, :danger-overrides): skip when the value of what was carried (jobs.lib.cost/item-value, plus 5 per level of experience) is at most the fetch cost plus ::margin. Cost: a trip of 10, 0.3 per block, and 10 per point of route danger (jobs.lib.cost/route-danger) past the hostiles the body knows of, the killer assumed at the pile for ::killer-guard-ms; infinite for lava, fire, the void, or a walk that ends after the despawn. A pile in water adds ::wet-danger.
   A real danger (jobs.lib.danger/nearest-danger) the hostile-near trigger sees (its radii), or a hit, has the trip weighed again once per mob. A skip for danger alone is not final: the run ends condition-failed :danger, the danger is remembered (:recover-danger) for ::danger-memory-ms and the pile weighed anew, the mobs seen still priced where they stood until the body is within ::see-range of the place and none is known there; the decline counts toward ::max-hostile-cuts; no time left to come back: :abandoned :danger. :retry weighs it now. A skip for value is final.
-  Kit: a body without weapon or armour whose pile is worth it were the route safe fetches the best piece a chest of known stock holds (:fetch, jobs.lib.need) and wears it; a failed fetch is dropped (warn recover-drops.kit-dropped with the ending).
+  Kit: a body without weapon or armour whose pile is worth it were the route safe fetches the best piece a chest of known stock holds (the call's ways, jobs.lib.need) and wears it; a failed fetch is dropped (warn recover-drops.kit-dropped with the ending).
   Fetch: walks to the death point in legs of ::leg-s seconds (weighed again after each), then collects up to 3 passes the visible items within ::collect-radius (jobs.items.collect-drops). Drops out of sight get one look where they were last seen, and one walk round the pile. A pile out of reach behind blocks this body placed within ::seal-radius: they are taken back once (jobs.access.cleanup). A pile far below is reached by a stair (jobs.access.tunnel).
   Events: recover-drops.fetching (a decision to go) and recover-drops.decided (the priced decision, read by the dashboard).
   Endings: :collected is done (also a pile already carried); :skip condition-failed :not-worth; :partial nothing-possible :unreachable or :not-visible; :abandoned by its reason: :window-closed (the pile despawned) condition-failed :gone, :danger and :nothing-found condition-failed, :unreachable nothing-possible. Data :decision :text :pos :items :left. A danger or a walk that did not arrive leaves the death open. A walk go-to refused outright (a verdict on the cell, no nearer) is not counted toward giving up as :unreachable: the window closes it.
@@ -41,13 +41,14 @@
 (a/defargs args
   {:value-overrides {:doc "jobs.lib.cost/item-value overrides, a map: item name or group (ore tool armor food block unknown) -> worth of one item, or {:times n}; e.g. {\"raw_iron\" 500}" :spec (a/map-of string? (a/or-of number? map?)) :default {}}
    :danger-overrides {:doc "jobs.lib.cost/route-danger overrides, a map: mob name -> threat in points of damage before armour, or {:times n}; e.g. {\"creeper\" 100 \"zombie\" 0}" :spec (a/map-of string? (a/or-of number? map?)) :default {}}
-   :fetch {:doc "get a weapon and armour from a chest whose stock the body knows before walking to a pile its killer guards (jobs.lib.need limits); false: no kit fetch" :spec need/option? :default {:what #{:item} :how #{:chest} :minutes 3}}
    :retry {:doc "try a pile again that an earlier run ended :abandoned or declined for a danger still remembered, while its despawn window is open (a reflex run keeps the decision; an agent asks for another try)" :spec boolean? :default false}})
 
 (a/defargs settings
   {::collect-radius {:default 10 :doc "Blocks from the death point within which the pile's drops are collected (a pile on open ground rolls 6-8 out)." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 300 :doc "Seconds of the call's time limit: the despawn window, which the job keeps itself in game ticks." :spec (a/num-in 0 nil)}
    ::collect-s {:default 10 :doc "Seconds a collect pass at the pile is reckoned to take, in the job's quote." :spec (a/num-in 0 nil)}})
+
+(def ways need/fetch-ways)
 
 (def target [])
 
@@ -61,7 +62,7 @@
 
 (def fit? ready/ok)
 
-(def defaults {:spend {:job-time ::job-time-s}})
+(def defaults {:spend {:job-time ::job-time-s} :ways #{:carried :chest}})
 
 (defn can-run?
   "A death open to serve, else :later with the danger remembered for one, else the decision already taken."

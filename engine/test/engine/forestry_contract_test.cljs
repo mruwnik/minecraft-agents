@@ -89,7 +89,7 @@
           (is (= :done (:kind end)))
           (is (= {:got 1 :text "made 1 obsidian"} (:data end)))
           (is (= 1 (ot/carried p "obsidian"))))
-        (let [{:keys [end]} (await (obsidian-end (ot/world ot/lava-lake [ot/pick]) {:count 1 :fetch false}))]
+        (let [{:keys [end]} (await (obsidian-end (ot/world ot/lava-lake [ot/pick]) {:count 1 :ways #{:carried}}))]
           (is (= {:kind :condition-failed :cause :no-bucket} (kc end))))
         (let [{:keys [end]} (await (obsidian-end (ot/world ot/lava-lake [ot/pick]) {:count 1}))]
           (is (= {:kind :condition-failed :cause :need} (kc end)) "a bucket is fetched first; none to be had passes up"))

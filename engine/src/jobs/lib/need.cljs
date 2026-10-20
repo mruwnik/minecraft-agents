@@ -169,7 +169,7 @@
                      (seq any-of) {:kind :item :job 'jobs.items.obtain :args (with-explore {:any-of (vec any-of) :count (or (:count w) 1)})
                                    :key [:item (vec any-of)]})
              nil)]
-    (when (and pl (contains? (:what o) (:kind pl)))
+    (when (and pl (or (nil? (:what o)) (contains? (:what o) (:kind pl))))
       pl)))
 
 (def full-reasons "Fetch endings that mean the bag has no room." #{:inventory-full :bag-full})

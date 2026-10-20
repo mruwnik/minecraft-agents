@@ -31,7 +31,7 @@
   Done at once when no ranged mob within the danger ranged radius (jobs.lib.danger/::ranged-radius) has a line of fire. With no cell to fill it looks around once (yielding
   :continue) before it ends :no-gap, for cells it has not seen yet.
   The blocks are the call's :use :blocks (default the carried shelter fillers, jobs.lib.choose/fillers).
-  Needs: one of them carried, or :fetch (default true; jobs.lib.need, jobs.items.obtain) to get one; else it does not
+  Needs: one of them carried, or a fetch by the call's ways (jobs.lib.need, jobs.items.obtain) to get one; else it does not
   start (:no-blocks); a failed fetch ends :condition-failed :no-blocks with its ending as :because.
   Ends :done with the data {:placed [cells]} once none has a line of fire (also when the mob moved away meanwhile), else
   :condition-failed :no-blocks (none carried, nothing fetched) or :refused (every cell that would help is another's zone,
@@ -43,12 +43,13 @@
   gets out as from its own shelter (go-to escalation digs a door, dig-in leave).")
 
 (a/defargs args
-  {:ignore-zones? :shared
-   :fetch {:doc "get a missing block (jobs.lib.need): true, a set of kinds or a map of limits; false stops :no-blocks" :spec need/option? :default true}})
+  {:ignore-zones? :shared})
 
 (a/defargs settings
   {::reach {:default 3 :doc "Open cells within this many blocks of the body's feet may be filled." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 120 :doc "Seconds stopping the arrows may take, a block fetch included." :spec (a/num-in 0 nil)}})
+
+(def ways need/fetch-ways)
 
 (def target [])
 
@@ -125,11 +126,11 @@
   (ctx/end c (get failure-kinds reason :nothing-possible) reason {:placed (vec (:placed (ctx/mem c))) :text text}))
 
 (defn ^:async fetch-blocks!
-  "None of blocks carried: get one through jobs.lib.need when :fetch allows (:again once got, :continue while it
+  "None of blocks carried: get one through jobs.lib.need when the ways allow (:again once got, :continue while it
   waits), else end :no-blocks, a failed fetch's ending as :because."
   [c blocks]
-  (let [o (need/opts c 'jobs.survival.block-arrow-gap)
-        e (when (contains? (:what o) :item) (await (need/blocks! c blocks 1 (select-keys o [:how :explore]))))]
+  (let [o (need/fetch-opts c)
+        e (when o (await (need/blocks! c blocks 1 o)))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) :again
@@ -181,9 +182,9 @@
 
 
 (defn can-start?
-  "A block to place carried, or :fetch lets it get one."
+  "A block to place carried, or the ways let it get one."
   [c]
-  (if (or (lb/pick c (blocks c)) (need/opts c 'jobs.survival.block-arrow-gap))
+  (if (or (lb/pick c (blocks c)) (need/fetch-opts c))
     (contract/ok :blocks "a block to place, or one to fetch")
     (contract/later :no-blocks "no block to stop the arrows with and no fetch")))
 

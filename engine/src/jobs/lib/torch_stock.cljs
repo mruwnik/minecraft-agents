@@ -8,9 +8,12 @@
             [jobs.lib.trip :as trip]))
 
 (defn fetch-allows?
-  "Whether the call lets it get a thing of kind (:item or :tool)."
+  "Whether the call lets it get a thing of kind (:item or :tool). Torches need coal, so an item is fetched only when the ways
+  include :gather (a mine run by obtain never starts a gather of its own)."
   [c kind]
-  (need/fetch-allowed? c kind))
+  (if (= :item kind)
+    (contains? (need/fetch-how c) :gather)
+    (need/fetch-allowed? c kind)))
 
 (defn no-stock-text [held e]
   (let [tried (get-in e [:data :tried])]

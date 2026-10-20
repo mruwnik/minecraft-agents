@@ -73,7 +73,7 @@
         hungry (and (not (sh-sense/sleeping? p)) (foods/wants-meal? self (reserve/spared (ctx/view c) self) {}))
         cooking (when hungry (await (cooking-in-shelter? c)))]
     (when (and hungry (not cooking) (eat/carried-best (assoc c :args {:allow-bad false})))
-      (let [e (await (ctx/call c :eat 'jobs.survival.eat {:until 20 :max-bites 1 :fetch false}))]
+      (let [e (await (ctx/call c :eat 'jobs.survival.eat {:until 20 :max-bites 1 :get-food? false}))]
         (when (pos? (:ate (:data e) 0))
           (ctx/emit! c :shelter.ate :info {:food (.-food (.self p)) :text "ate while holding the night"}))))))
 

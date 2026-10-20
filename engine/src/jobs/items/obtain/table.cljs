@@ -86,8 +86,8 @@
     (not-empty (set (for [[blk d] b/drop-item :when (and (= d item) (re-find #"_ore$" blk))] blk)))))
 
 (def mine-fetch
-  "The :fetch of a gather mine: its pickaxe from a chest or a craft only, so a mine never starts another gather."
-  {:what #{:tool} :how #{:chest :craft}})
+  "The :ways of a gather mine: its pickaxe from a chest or a craft only, so a mine never starts another gather."
+  #{:carried :chest :craft})
 
 (def log-ways
   "The :ways of a gather of logs: an axe from a chest only, and the pillar for a tall tree."
@@ -128,21 +128,21 @@
           (for [[k n] gather :when (material-blocks version k)]
             (let [blocks (material-blocks version k)]
               {:key k :count n :job 'jobs.gather.mine :seen blocks :tunnel? true
-               :args {:block (first (sort blocks)) :item k :count n :fetch mine-fetch :radius (seen-radius)}}))
+               :args {:block (first (sort blocks)) :item k :count n :ways mine-fetch :radius (seen-radius)}}))
           (when-let [n (get gather "bone_meal")]
             [{:key "bone_meal" :count n :job 'jobs.farm.compost :seen #{"composter"} :max-runs 1 :args {:times n}}])
           (for [[k n] gather :when (fish-items k)]
             {:key k :count n :job 'jobs.food.fish :seen #{"water"} :args {:count n}})
           (when-let [n (get gather "obsidian")]
             [{:key "obsidian" :count n :job 'jobs.gather.mine :seen #{"obsidian" "lava"}
-              :args {:block "obsidian" :item "obsidian" :count n :mend false :fetch mine-fetch :radius (seen-radius)}}])
+              :args {:block "obsidian" :item "obsidian" :count n :mend false :ways mine-fetch :radius (seen-radius)}}])
           (for [[k n] gather :let [blocks (hand-dug k)] :when blocks]
             {:key k :count n :job 'jobs.gather.mine :seen blocks
-             :args {:block (if (= "dirt" k) "dirt" (first (sort blocks))) :item k :count n :fetch mine-fetch :radius (seen-radius)}})
+             :args {:block (if (= "dirt" k) "dirt" (first (sort blocks))) :item k :count n :ways mine-fetch :radius (seen-radius)}})
           (for [[k n] gather :when (ore-blocks k)]
             (let [blocks (ore-blocks k)]
               {:key k :count n :job 'jobs.gather.mine :seen blocks :ore? true :tunnel? (not= "coal" k)
-               :args {:block (first (sort-by count blocks)) :item k :count n :fetch mine-fetch :radius (seen-radius)}})))))))
+               :args {:block (first (sort-by count blocks)) :item k :count n :ways mine-fetch :radius (seen-radius)}})))))))
 
 (defn gather-need
   "The first of gather-needs."

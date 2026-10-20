@@ -37,7 +37,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [s out fetch]} (await (as-child {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 8 :trip true :fetch false}
+        (let [{:keys [s out fetch]} (await (as-child {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 8 :trip true :ways #{:carried}}
                                                      ore-world "stone_pickaxe" 200 {:before breaks-on-third-dig!}))]
           (is (empty? fetch))
           (is (= [:condition-failed :no-tool] [(:kind out) (contract/cause-key out)]) (pr-str out)))))))

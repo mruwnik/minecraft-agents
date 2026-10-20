@@ -197,7 +197,7 @@
     (if own?
       ['jobs.animals.cull (cond-> (assoc common :radius 8 :center (select-keys pos [:x :z]))
                             box (-> (dissoc :radius :center) (assoc :box {:min (zipmap [:x :y :z] (first box)) :max (zipmap [:x :y :z] (second box))})))]
-      ['jobs.combat.hunt (-> common (dissoc :mob) (assoc :item (meat-of (.-name animal)) :radius (hunt-radius c) :fetch false))])))
+      ['jobs.combat.hunt (-> common (dissoc :mob) (assoc :item (meat-of (.-name animal)) :radius (hunt-radius c) :ways #{:carried}))])))
 
 (defn ^:async hunt!
   "Kill the nearest food animal with the real job (combat.hunt; own?: animals.cull over its own pen): :again, or nil when
@@ -396,7 +396,7 @@
              (<= (food-level c) (eat-bad-food))
              (some #(contains? foods/harmful (:name %)) (u/inventory (:primitives c))))
     (let [before (food-level c)
-          e (await (child/run!* c :eat-bad 'jobs.survival.eat {:until foods/top-up-food :allow-bad true :fetch false}))]
+          e (await (child/run!* c :eat-bad 'jobs.survival.eat {:until foods/top-up-food :allow-bad true :get-food? false}))]
       (if (= :continue e) :continue (when (> (food-level c) before) :again)))))
 
 (defn ^:async eat-carried!
@@ -405,7 +405,7 @@
   [c]
   (when (eats? c)
     (let [low? (< (.-health (.self (:primitives c))) (:health (:args c)))
-          e (await (child/run!* c :eat 'jobs.survival.eat {:until (if low? 20 foods/top-up-food) :fetch false}))]
+          e (await (child/run!* c :eat 'jobs.survival.eat {:until (if low? 20 foods/top-up-food) :get-food? false}))]
       (when (= :continue e) :continue))))
 
 

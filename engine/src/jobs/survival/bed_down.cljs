@@ -31,8 +31,7 @@
 (a/defargs args
   {:bed {:doc "bed position [x y z] or {:x :y :z} to sleep in; default: the bed to use within the radius" :spec ::a/pos :default nil}
    :roof-height {:doc "a solid block within this many blocks above counts as a roof (where a carried bed is put down)" :spec (a/int-in 0 nil) :default sh-sense/default-roof-height}
-   :roofed-only {:doc "put a carried bed down on roofed cells only, never in the open (a body inside a home)" :spec boolean? :default false}
-   :fetch {:doc "get a bed when none is to use or carried (jobs.lib.need): true, a set of kinds or a map of limits; false makes :no-bed a start condition" :spec need/option? :default true}})
+   :roofed-only {:doc "put a carried bed down on roofed cells only, never in the open (a body inside a home)" :spec boolean? :default false}})
 
 (a/defargs settings
   {::job-time-s {:default 900 :doc "Seconds a bed-down may take: the walk, the bed put down or fetched (an obtain may take its own 600 without a change), the sleep." :spec (a/num-in 0 nil)}
@@ -65,6 +64,8 @@
 
 (def fit? ready/ok)
 
+(def ways need/fetch-ways)
+
 (def target [])
 
 (def job 'jobs.survival.bed-down)
@@ -82,7 +83,7 @@
 (defn bed-status
   "A bed to use, a bed item to put down or a bed to fetch, else :no-bed (:look until the body looked round)."
   [c]
-  (if (when-let [w (problem c)] (not (some->> (need/opts c job) (need/plan-for w))))
+  (if (when-let [w (problem c)] (not (some->> (need/fetch-opts c) (need/plan-for w))))
     (contract/status :look :no-bed "no bed to use and none carried to put down" {})
     (contract/ok :bed "a bed to use, put down or fetch")))
 
@@ -231,8 +232,8 @@
     (cond
       bed (await (sleep! c bed (overdue? c)))
       (sh-beds/bed-place-wanted? p (ctx/view c) (radius c) (bed-permit c)) (await (place-bed-and-sleep! c))
-      :else (let [o (need/opts c job)
-                  e (when (and (contains? (:what o) :item) (problem c)) (await (need/blocks! c bed-names 1 (select-keys o [:how :explore]))))]
+      :else (let [o (need/fetch-opts c)
+                  e (when (and o (problem c)) (await (need/blocks! c bed-names 1 o)))]
               (cond
                 (or (= :continue e) (nil? (problem c))) :continue
                 (and e (not= :done (:kind e))) (contract/with-because (ctx/end c (:kind e) {:reason :need} {:slept false}) e)

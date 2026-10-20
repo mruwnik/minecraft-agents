@@ -1,5 +1,6 @@
 (ns jobs.gather.dig-for
   (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.need :as need]
             [jobs.lib.ready :as ready]
             [clojure.string :as str]
             [engine.args :as a]
@@ -41,7 +42,7 @@
 
   Needs: a pickaxe carried when the block wants one (a shovel or axe block drops by hand), torches carried or craftable when a
   tunnel or stair is lit, health (fit? waits :low-health, at the start only), and a read zone list (:no-zones unless
-  :ignore-zones?). Impossible: :no-target. :ways without a descent decline :on-surface in the open. Fetches only seal blocks and torch ingredients (:fetch), never the tool or food, and walks nowhere
+  :ignore-zones?). Impossible: :no-target. :ways without a descent decline :on-surface in the open. Fetches only seal blocks and torch ingredients (the call's ways), never the tool or food, and walks nowhere
   home: the body stays where the dig ends. Targets come only from perception (seenBlocks, never x-ray): a seen block within
   :radius with a seen air face, not beside seen lava (or water unless :wet), that the zone rules, claims and plans let it dig
   (:refused when all are barred).
@@ -76,7 +77,6 @@
    :radius :shared
    :center :shared
    :wet :shared
-   :fetch {:doc "get what the dig runs out of on its way through its children (blocks to seal a cut, the ingredients of torches: jobs.lib.need; not for the stair of a shaft descent, which always fetches): true, a set of kinds or a map of limits; false: it makes do with what is carried. The pickaxe, a spare and the torches are the trip's (jobs.gather.mine)" :spec need/option? :default true}
    :ignore-zones? :shared
    :track-ground {:doc "dig the 5x5x2 ground under the start last and list the cells of it that were open at the end or dug in :ground of the result, for a caller that fills them again" :spec boolean? :default false}
    :heading :shared

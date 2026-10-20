@@ -1189,7 +1189,7 @@
   (is (= #{"stone"} (:seen (table/gather-need {"cobblestone" 1}))))
   (let [n (table/gather-need {"cobbled_deepslate" 2})]
     (is (= #{"deepslate"} (:seen n)))
-    (is (= {:block "deepslate" :item "cobbled_deepslate" :count 2 :fetch table/mine-fetch :radius (base/seen-radius)} (:args n)))))
+    (is (= {:block "deepslate" :item "cobbled_deepslate" :count 2 :ways table/mine-fetch :radius (base/seen-radius)} (:args n)))))
 
 (deftest the-stone-materials-are-those-of-the-bodys-version
   (is (= #{"deepslate"} (table/material-blocks "26.1" "cobbled_deepslate")))

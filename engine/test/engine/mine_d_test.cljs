@@ -165,7 +165,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 12 :fetch false}
+        (let [s (await (scenario-lit {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 12 :ways #{:carried}}
                                  (torch-world [{:name "iron_pickaxe" :count 1} {:name "coal" :count 1} {:name "oak_log" :count 1}]) 300 [0 0]))]
           (is (= [] (torch-xs s)))
           (is (= :no-torches (:reason (done-event s)))))))))
@@ -224,10 +224,6 @@
         (let [{:keys [out]} (await (as-child {:block "stone" :count 1 :trip true} {:blocks {"3,64,0" "stone"} :drops cobble} nil 20))]
           (is (= :no-tool (contract/cause-key out)))
           (is (= :no-source (contract/cause-key (:because out))) (pr-str out)))))))
-
-(deftest a-bad-fetch-arg-is-refused-at-submit-not-treated-as-true
-  (is (re-find #"jobs.gather.mine :fetch must be true, false"
-               (expr/problem registry/jobs '(jobs.gather.mine {:block "stone" :count 1 :fetch "please"})))))
 
 (deftest a-bad-direction-is-refused-at-submit
   (is (re-find #"jobs.gather.mine :direction must be"

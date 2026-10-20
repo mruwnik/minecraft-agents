@@ -28,7 +28,7 @@
 
 (defn ^:async run-case [{:keys [job args world ways?]} fetch]
   (let [{:keys [eng p]} (lt/setup (merge {:self {:pos [0.5 64 0.5]}} world))
-        call (cond (not ways?) (assoc args :fetch fetch) fetch args :else (assoc args :ways #{:carried}))
+        call (if fetch args (assoc args :ways #{:carried}))
         res (await (tu/child-outcome eng job call 200))]
     {:res res :p p}))
 

@@ -90,7 +90,7 @@
   "The need options of the torch fetch: nil unless :torches is :fetch."
   [c]
   (when (= :fetch (:torches (:args c)))
-    (-> (need/opts (assoc-in c [:args :fetch] true) 'jobs.movement.go-to) (select-keys [:how :explore]) (assoc :slot :need-torch))))
+    {:how need/sources :slot :need-torch}))
 
 (defn torch-fetching? [c] (boolean (:torch-fetching (ctx/mem c))))
 

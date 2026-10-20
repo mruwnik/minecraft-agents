@@ -43,7 +43,7 @@
   [c threat]
   (when (and (not (:ate (ctx/mem c)))
              (>= (danger-q/mob-distance (:primitives c) threat) (eat-gap)))
-    (let [r (await (ctx/call c :eat 'jobs.survival.eat {:until 20 :max-bites 1 :fetch false}))]
+    (let [r (await (ctx/call c :eat 'jobs.survival.eat {:until 20 :max-bites 1 :get-food? false}))]
       (when (and (contract/ending? r) (not= :done (:kind r)))
         (ctx/update-mem! c assoc :ate true)))))
 

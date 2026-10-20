@@ -45,7 +45,7 @@
    :place {:doc "the :room way: the room to enter, a remembered place name (default the home)" :spec (a/or-of keyword? string?) :default nil}
    :at {:doc "the :room way: a cell inside the room to enter, instead of a place (a room the body saw)" :spec ::a/pos :default nil}
    :flee? {:doc "the :room way: walk in as a flee step (legs of run-away, no digging or pillaring, one leg a round), for a body running from a hostile" :spec boolean? :default false}
-   :fetch {:doc "dig-pocket: get a missing tool (jobs.lib.need): true, a set of kinds or a map of limits" :spec need/option? :default false}
+   :fetch-tool? {:doc "dig-pocket: may get a missing tool (its ways are then all the fetch ways)" :spec boolean? :default false}
    :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pit or pocket is dropped and the lava left" :spec #{:seal :stop} :default :seal}})
 
 (a/defargs settings
@@ -67,7 +67,7 @@
   {:room ['jobs.survival.enter-room [:place :at :flee?]]
    :walls ['jobs.survival.wall-in [:for :ignore-zones? :trespass?]]
    :pit ['jobs.survival.dig-pit [:for :ignore-zones? :trespass? :on-lava]]
-   :pocket ['jobs.survival.dig-pocket [:for :ignore-zones? :trespass? :fetch :on-lava]]})
+   :pocket ['jobs.survival.dig-pocket [:for :ignore-zones? :trespass? :on-lava]]})
 
 (defn done? [c] (way/done? c (:way (ctx/mem c)) (merge (spent/summary (spent/log c)) (select-keys (ctx/mem c) [:placed :roof :start]))))
 
@@ -77,6 +77,7 @@
 
 (defn child-args [c way]
   (merge (select-keys (:args c) (second (children way)))
+         (when (and (= :pocket way) (:fetch-tool? (:args c))) {:ways (set need/fetch-ways)})
          (when-let [blocks (night/blocks c)] {:use {:blocks blocks}})))
 
 (defn ^:async cost-of

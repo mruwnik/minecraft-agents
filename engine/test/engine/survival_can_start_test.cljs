@@ -52,6 +52,6 @@
 
 (deftest block-arrow-gap-needs-a-block-or-a-fetch
   (are [world args expected] (= expected (start-of 'jobs.survival.block-arrow-gap world args))
-    {:inventory [{:name "cobblestone" :count 4}]} {:fetch false} [:ok :blocks]
-    {:inventory []} {:fetch true} [:ok :blocks]
-    {:inventory []} {:fetch false} [:later :no-blocks]))
+    {:inventory [{:name "cobblestone" :count 4}]} {:ways #{:carried}} [:ok :blocks]
+    {:inventory []} {} [:ok :blocks]
+    {:inventory []} {:ways #{:carried}} [:later :no-blocks]))

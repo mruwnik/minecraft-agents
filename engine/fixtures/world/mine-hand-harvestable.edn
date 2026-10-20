@@ -21,11 +21,11 @@
    :after [[:item "dandelion" 1]]}
   {:name "stone-with-no-pickaxe-and-nothing-to-fetch-ends-no-tool-pickaxe"
    :blocks [[:fill [20 0 15] [22 1 17] "stone"]]
-   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 1 :direction :east :tunnel-length 4 :radius 8 :fetch false :mend false})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 1 :direction :east :tunnel-length 4 :radius 8 :ways #{:carried} :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0 :reason :no-tool :tool "pickaxe"}} :within-s 40 :of-job true}]
    :after [[:block [20 0 16] "stone"]]}
   {:name "cobweb-with-no-sword-ends-no-tool-sword"
    :blocks [[:set [20 0 16] "cobweb"]]
-   :act [[:job (jobs.gather.mine {:torches false :block "cobweb" :count 1 :direction :east :tunnel-length 4 :radius 8 :fetch false :mend false})]]
+   :act [[:job (jobs.gather.mine {:torches false :block "cobweb" :count 1 :direction :east :tunnel-length 4 :radius 8 :ways #{:carried} :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0 :reason :no-tool :tool "sword"}} :within-s 40 :of-job true}]
    :after [[:block [20 0 16] "cobweb"]]}]}

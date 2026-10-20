@@ -16,7 +16,7 @@
    :limit-s 140}
   {:name "root-stair-picks-up-coal-beside-its-cut"
    :blocks [[:set [19 0 17] "coal_ore"]]
-   :act [[:job (jobs.access.stair {:dir :level :heading :east :steps 6 :fetch false})]]
+   :act [[:job (jobs.access.stair {:dir :level :heading :east :steps 6 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]
    :after [[:item "coal" 1] [:not-block [19 0 17] "coal_ore"]]
    :limit-s 140}

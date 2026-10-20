@@ -117,7 +117,7 @@
                (await (hunting {:item "beef" :count 1 :keep 0} {:inventory h/sword :entities [(assoc (cow 1 3) :invulnerable true)]})))
             "an animal that cannot be hurt: 0 killed is not done")
         (is (= {:event :waiting :reason :unarmed}
-               (await (hunting {:item "rotten_flesh" :count 1 :fetch false} {:entities [{:id 1 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]})))
+               (await (hunting {:item "rotten_flesh" :count 1 :ways #{:carried}} {:entities [{:id 1 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]})))
             "an unarmed body does not fist-fight a hostile: it waits at the start")))))
 
 (deftest a-hunt-takes-its-weapon-from-the-call

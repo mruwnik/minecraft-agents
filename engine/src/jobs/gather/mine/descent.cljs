@@ -207,7 +207,7 @@
   (let [_ (when-not (get-in (ctx/mem c) [:descent :top])
             (ctx/update-mem! c update :descent assoc :top (access/cell (cell-of (u/self-pos c))) :top-heading (keyword (:heading (ctx/mem c)))))
         r (waits/waiting-out c (await (ctx/call c :stair 'jobs.access.stair
-                                 {:dir :down :heading (keyword (:heading (ctx/mem c))) :steps 1 :ways (if level? (need/ways-of-fetch (:fetch (:args c))) (set need/fetch-ways))
+                                 {:dir :down :heading (keyword (:heading (ctx/mem c))) :steps 1 :ways (if level? (need/pass-ways c) (set need/fetch-ways))
                                   :accept (filterv #{:falling-block} (:accept (:args c)))
                                   :ignore-zones? (:ignore-zones? (:args c))})))
         res (result-of r)]
@@ -230,8 +230,8 @@
 (defn ^:async descend-round!
   "One step of the stair down (jobs.access.stair child, :steps 1) along the tunnel heading; the next round looks round and scans.
   The body first walks back onto the stair (back-on-stair!); one that cannot ends the dig phase :not-back.
-  To the tunnel level: a torch first when one is due (stair-torch-due?), :fetch passed on; the stair stopping ends the descent there.
-  For stone: :fetch true; at :descend-limit steps, or when the stair stops, ends :no-stone-found. Either way a heading-stop
+  To the tunnel level: a torch first when one is due (stair-torch-due?), ways passed on; the stair stopping ends the descent there.
+  For stone: all fetch ways; at :descend-limit steps, or when the stair stops, ends :no-stone-found. Either way a heading-stop
   turns the stair first (step-down!)."
   [c]
   (let [n (:steps (:descent (ctx/mem c)) 0)

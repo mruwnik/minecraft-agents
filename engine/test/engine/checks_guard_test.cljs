@@ -10,7 +10,7 @@
 (def allowed
   {['jobs.survival.night 'jobs.survival.sleep] "sleep is only called once night has chosen the bed, and asks (not (threatened))"
    ['jobs.survival.get-food 'jobs.combat.hunt] "get-food passes its own :checks (job-safe-or-starving) at the hunt call, so a starving body still hunts"
-   ['jobs.survival.extinguish 'jobs.survival.get-food] "extinguish only reaches get-food by quoting eat's helper source; its eat call passes :fetch false"
+   ['jobs.survival.extinguish 'jobs.survival.get-food] "extinguish only reaches get-food by quoting eat's helper source; its eat call passes :get-food? false"
    ['jobs.survival.respond-to-hostile 'jobs.combat.attack] "the :hostiles fight call passes :checks (always) itself: a reflex fight is not refused for the danger it answers"
    ['jobs.survival.night 'jobs.survival.bed-down] "bed-down is only called once night has chosen the bed, and asks (not (threatened))"
    ['jobs.survival.night 'jobs.survival.get-food] "the night hold calls it only when starving with no danger near, so its starving form is the intent"})
