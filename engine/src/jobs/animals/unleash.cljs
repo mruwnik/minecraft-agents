@@ -4,6 +4,7 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.waits :as waits]
             [jobs.lib.animals :as animals]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
@@ -202,7 +203,7 @@
     (if (= :continue waited)
       :continue
       (do (ctx/update-mem! c assoc :dropped true)
-          (let [e (await (ctx/call c :collect 'jobs.items.collect-drops {:radius (:radius (:args c)) :items ["lead"]}))]
+          (let [e (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops {:radius (:radius (:args c)) :items ["lead"]})))]
             (if (= :continue e)
               :continue
               (finish! c (:reason (ctx/mem c)))))))))

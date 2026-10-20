@@ -1,6 +1,7 @@
 (ns jobs.access.leave-tunnel
   (:require [jobs.lib.block-sets :as bs]
             [engine.contract :as contract]
+            [jobs.lib.waits :as waits]
             [jobs.lib.choose :as choose]
             [engine.args :as a]
             [jobs.lib.ready :as ready]
@@ -263,7 +264,7 @@
       (let [slot (keyword (str "escape-" i))
             sargs (assoc (escape-stair (:line tunnel) entry-y)
                          :heading (:heading attempt) :fetch (:fetch (:args c)) :need-drop (not (:by-hand (ctx/mem c))) :settings {:jobs.lib.trip/spent-uses 0} :ignore-zones? (:ignore-zones? attempt))
-            e (await (ctx/call c slot 'jobs.access.stair sargs))
+            e (waits/waiting-out c (await (ctx/call c slot 'jobs.access.stair sargs)))
             why (when (map? e) (contract/cause-key e))
             next-heading! #(do (ctx/update-mem! c update :escape (fn [m] (-> m (assoc :i (inc i)) (update :results conj %)))) :again)]
         (cond
@@ -315,7 +316,7 @@
 (defn ^:async collect!
   "Pick the dropped torches up near the body; the flag clears when the pick-up ends (done, or it cannot run)."
   [c]
-  (let [r (await (ctx/call c :collect 'jobs.items.collect-drops {:radius 3 :items ["torch"]}))]
+  (let [r (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops {:radius 3 :items ["torch"]})))]
     (if (= :continue r)
       :continue
       (do (ctx/update-mem! c dissoc :collect) :again))))
@@ -360,8 +361,8 @@
         (when-not (= :continue r) (ctx/update-mem! c assoc :blocks-fetched true))
         (or r (book-open! c cell :no-blocks)))
       (nil? item) (book-open! c cell :no-blocks)
-      :else (let [outcome (await (ctx/call c :fill 'jobs.blocks.fill-cells
-                                           {:cells [(cell-pos cell)] :use {:blocks [item]} :least 1 :ignore-zones? true}))
+      :else (let [outcome (waits/waiting-out c (await (ctx/call c :fill 'jobs.blocks.fill-cells
+                                           {:cells [(cell-pos cell)] :use {:blocks [item]} :least 1 :ignore-zones? true})))
                   n (block-at cell)]
               (cond
                 (= :continue outcome) :continue

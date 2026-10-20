@@ -1,5 +1,6 @@
 (ns jobs.forestry.maintain
   (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.waits :as waits]
             [jobs.lib.ready :as ready]
             [engine.args :as a]
             [jobs.lib.access.rules :as rules]
@@ -234,10 +235,10 @@
   "Step 1: one collect-drops call while a sweep is owed. :again, :continue while it waits."
   [c]
   (when-let [species (:collect (ctx/mem c))]
-    (let [r (await (ctx/call c :collect 'jobs.items.collect-drops
+    (let [r (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops
                                    {:radius (settings/get settings ::collect-radius)
                                     :items (vec (distinct (mapcat forestry/drop-filter species)))
-                                    :holes (:holes (ctx/mem c))}))]
+                                    :holes (:holes (ctx/mem c))})))]
       (when (not= :continue r) (ctx/update-mem! c dissoc :collect))
       (if (= :continue r) :continue :again))))
 

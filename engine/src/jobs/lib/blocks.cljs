@@ -12,6 +12,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.waits :as waits]
             [jobs.lib.need :as need]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.access :as access]
@@ -285,11 +286,11 @@
 
 (defn ^:async dig-cell-ending!
   "Dig the one block at pos with a jobs.blocks.dig child in slot :dig (args merged over: no drops collected, no tool
-  needed, no fetch; the caller picks drops up): :continue or the child's ending. :fetch false does not stop
+  needed, no fetch; the caller picks drops up): :continue (also when the child waits out the world) or the child's ending. :fetch false does not stop
   the lava seal's fetch (the seal-fetch setting, default true)."
   [c pos args]
   (let [args (merge {:collect false :need-drop false :fetch false} args {:pos pos})
-        e (await (ctx/call c :dig 'jobs.blocks.dig args))]
+        e (waits/waiting-out c (await (ctx/call c :dig 'jobs.blocks.dig args)))]
     ;; the dig child told any wear of the tool; this job's older snapshot would tell it again
     (ctx/update-mem! c dissoc :tool-wear)
     e))
@@ -351,7 +352,7 @@
   "Place item at pos with a jobs.blocks.place child in slot :place (args merged over: no fetch): :continue or its ending
   (its :data has the placed :block)."
   [c pos item args]
-  (await (ctx/call c :place 'jobs.blocks.place (merge {:ways #{:carried}} args {:pos pos :item item}))))
+  (waits/waiting-out c (await (ctx/call c :place 'jobs.blocks.place (merge {:ways #{:carried}} args {:pos pos :item item})))))
 
 (defn ^:async place-cell!
   "place-call!, said as what came of it (place-outcome)."

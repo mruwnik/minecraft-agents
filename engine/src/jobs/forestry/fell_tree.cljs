@@ -7,6 +7,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.forestry.fell-tree.log :as log]
+            [jobs.lib.waits :as waits]
             [jobs.lib.access :as access]
             [jobs.lib.checks :as checks]
             [jobs.lib.choose :as choose]
@@ -328,8 +329,8 @@
   [c]
   (let [{:keys [base drop-ids collected]} (ctx/mem c)]
     (when (and (seq drop-ids) (not collected))
-      (let [e (await (ctx/call c :collect 'jobs.items.collect-drops
-                               (log/collect-args c {:radius (settings/get settings ::collect-radius) :ids drop-ids :near base :search (settings/get settings ::collect-search) :least (count drop-ids)})))]
+      (let [e (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops
+                               (log/collect-args c {:radius (settings/get settings ::collect-radius) :ids drop-ids :near base :search (settings/get settings ::collect-search) :least (count drop-ids)}))))]
         (cond
           (= :continue e) :continue
           (or (= :done (:kind e)) (and (= :nothing-possible (:kind e)) (= :none-collected (contract/cause-key e))))

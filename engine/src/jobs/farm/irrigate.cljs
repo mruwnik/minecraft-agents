@@ -3,6 +3,7 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.waits :as waits]
             [jobs.lib.farm :as farm]
             [jobs.farm.till :as till]
             [jobs.lib.blocks :as b]
@@ -216,7 +217,7 @@
 (defn ^:async restore!
   "Put dirt back in the dug cell; a cell that stays open is booked in :holes. :continue while the child waits."
   [c hole]
-  (let [e (await (ctx/call c :restore 'jobs.blocks.place (merge (select-keys (:args c) [:ignore-zones?]) {:pos hole :item "dirt" :clear false})))]
+  (let [e (waits/waiting-out c (await (ctx/call c :restore 'jobs.blocks.place (merge (select-keys (:args c) [:ignore-zones?]) {:pos hole :item "dirt" :clear false}))))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) (do (ctx/update-mem! c #(-> (dissoc % :restore) (update :restored (fnil conj #{}) hole))) :again)
@@ -225,7 +226,7 @@
 (defn ^:async pour!
   "Pour the bucket in the dug hole. :again, or :continue while the child waits."
   [c hole]
-  (let [e (await (ctx/call c :pour 'jobs.blocks.use-on (merge (select-keys (:args c) [:ignore-zones?]) {:pos hole :item "water_bucket"})))]
+  (let [e (waits/waiting-out c (await (ctx/call c :pour 'jobs.blocks.use-on (merge (select-keys (:args c) [:ignore-zones?]) {:pos hole :item "water_bucket"}))))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) (do (ctx/update-mem! c #(-> (dissoc % :hole) (update :poured (fnil conj #{}) hole))) :again)
@@ -234,7 +235,7 @@
 (defn ^:async dig!
   "Dig the field cell at hole; the pour waits in memory (:hole) so a restart finishes it."
   [c hole]
-  (let [e (await (ctx/call c :dig 'jobs.blocks.dig (till/cover-args c hole)))]
+  (let [e (waits/waiting-out c (await (ctx/call c :dig 'jobs.blocks.dig (till/cover-args c hole))))]
     (cond
       (= :continue e) :continue
       (and (= :done (:kind e)) (#{:dug :already-clear} (:reason (:data e)))) (do (ctx/update-mem! c assoc :hole hole) :again)

@@ -1,5 +1,6 @@
 (ns jobs.survival.block-arrow-gap
   (:require [jobs.lib.access.rules :as rules]
+            [jobs.lib.waits :as waits]
             [jobs.lib.ready :as ready]
             [jobs.lib.checks :as checks]
             [jobs.lib.choose :as choose]
@@ -142,8 +143,8 @@
   (let [door (await (dig-cells/shut-open! c cell))]
     (if door
       (do (when (= :open door) (ctx/update-mem! c update :occupied (fnil conj #{}) cell)) :ok)
-      (let [e (await (ctx/call c :fill 'jobs.blocks.fill-cells
-                               {:cells [cell] :use {:blocks [item]} :least 1 :clear-loose true :ignore-zones? true}))]
+      (let [e (waits/waiting-out c (await (ctx/call c :fill 'jobs.blocks.fill-cells
+                               {:cells [cell] :use {:blocks [item]} :least 1 :clear-loose true :ignore-zones? true})))]
         (cond
           (= :continue e) :continue
           (= :done (:kind e)) (do (dig-cells/note-placed! c cell item) :ok)

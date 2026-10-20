@@ -4,6 +4,7 @@
             [clojure.string :as str]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.waits :as waits]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.job-common :as common]
@@ -410,8 +411,8 @@
   "Step 3: one collect-drops round while a sweep is owed."
   [c]
   (when (:collect (ctx/mem c))
-    (let [r (await (ctx/call c :collect 'jobs.items.collect-drops
-                             {:radius (+ (:radius (:args c)) (settings/get settings ::collect-margin)) :items collect-items}))]
+    (let [r (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops
+                             {:radius (+ (:radius (:args c)) (settings/get settings ::collect-margin)) :items collect-items})))]
       (when-not (= :continue r) (ctx/update-mem! c dissoc :collect))
       (if (= :continue r) :continue :again))))
 

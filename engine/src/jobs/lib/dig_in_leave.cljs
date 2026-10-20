@@ -1,6 +1,7 @@
 (ns jobs.lib.dig-in-leave
   "Leaving the shelter jobs.survival.shut-in built for the night (leave!): jobs.survival.night calls it by day."
   (:require [jobs.lib.access :as access]
+            [jobs.lib.waits :as waits]
             [jobs.lib.tidy :as tidy]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -150,8 +151,8 @@
       (:done tb) nil
       (not target)
       (if (and (pos? (:dug tb 0)) (not (:collected tb)))
-        (let [r (await (ctx/call c :take-back-collect 'jobs.items.collect-drops
-                                       {:radius take-back-radius :near (:pos (:data (ctx/latest c :shelter))) :items (vec (distinct (map :item (:take-back (:data (ctx/latest c :shelter))))))}))]
+        (let [r (waits/waiting-out c (await (ctx/call c :take-back-collect 'jobs.items.collect-drops
+                                       {:radius take-back-radius :near (:pos (:data (ctx/latest c :shelter))) :items (vec (distinct (map :item (:take-back (:data (ctx/latest c :shelter))))))})))]
           (if (= :continue r)
             :continue
             (do (update-take-back! c assoc :collected true :done true)

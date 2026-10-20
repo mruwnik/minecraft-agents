@@ -4,6 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.waits :as waits]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.checks :as checks]
             [jobs.lib.look :as look]
@@ -243,7 +244,7 @@
     (min 48 (+ 4 (js/Math.ceil (apply js/Math.hypot (map - hi lo)))))))
 
 (defn ^:async collect! [c cells]
-  (let [e (await (ctx/call c :collect 'jobs.items.collect-drops {:radius (field-radius cells) :holes (:holes (ctx/mem c))}))]
+  (let [e (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops {:radius (field-radius cells) :holes (:holes (ctx/mem c))})))]
     (when-not (= :continue e)
       (ctx/update-mem! c #(-> % (dissoc :collect) (update :collected (fnil + 0) (get-in e [:data :collected] 0)))))
     (if (= :continue e) :continue :again)))

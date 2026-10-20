@@ -3,6 +3,7 @@
             [jobs.lib.work-place :as work-place]
             [engine.contract :as contract]
             [engine.settings :as settings]
+            [jobs.lib.waits :as waits]
             [jobs.lib.game-facts :as facts]
             [engine.args :as a]
             [jobs.lib.pen-read :as pen-read]
@@ -145,7 +146,7 @@
   [c]
   (if (= :pausing (:comb-wait (ctx/mem c)))
     (await (wait-for-comb! c))
-    (let [e (await (ctx/call c :collect 'jobs.items.collect-drops {:radius (settings/get settings ::collect-radius) :items ["honeycomb"]}))
+    (let [e (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops {:radius (settings/get settings ::collect-radius) :items ["honeycomb"]})))
           done? (= :done (:kind e))
           got (if done? (get-in e [:data :collected] 0) 0)]
       (when done?

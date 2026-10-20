@@ -10,7 +10,6 @@
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
-            [jobs.lib.waits :as waits]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
@@ -170,7 +169,7 @@
 
 (defn ^:async dig! [c {:keys [pos class]}]
   (let [cell [(:x pos) (:y pos) (:z pos)]
-        o (b/dig-outcome (waits/waiting-out c (await (b/dig-cell-ending! c pos (merge {:collect true :need-drop (not= :spawner class)} (select-keys (:args c) [:ignore-zones?]))))))]
+        o (await (b/dig-cell! c pos (merge {:collect true :need-drop (not= :spawner class)} (select-keys (:args c) [:ignore-zones?]))))]
     (case o
       :continue :continue
       (:dug :missing) (do (ctx/update-mem! c #(-> % (update :dug (fnil conj []) cell) (update-in [:taken class] (fnil inc 0)))) :again)

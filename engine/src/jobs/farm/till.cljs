@@ -3,6 +3,7 @@
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.waits :as waits]
             [jobs.lib.child :as child]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
@@ -283,7 +284,7 @@
                 (do (skip! c [target] :not-permitted) :again)
 
                 (ground-cover above)
-                (let [e (await (ctx/call c :cover 'jobs.blocks.dig (cover-args c above-pos)))]
+                (let [e (waits/waiting-out c (await (ctx/call c :cover 'jobs.blocks.dig (cover-args c above-pos))))]
                   (cond
                     (= :continue e) :continue
                     (not (and (= :done (:kind e)) (#{:dug :already-clear} (:reason (:data e)))))

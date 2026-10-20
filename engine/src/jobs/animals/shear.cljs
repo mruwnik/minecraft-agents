@@ -1,5 +1,6 @@
 (ns jobs.animals.shear
   (:require [engine.game :as game]
+            [jobs.lib.waits :as waits]
             [jobs.lib.ready :as ready]
             [engine.settings :as settings]
             [engine.args :as a]
@@ -182,7 +183,7 @@
   "One round of the pick-up phase; finish with the stored reason when it is done."
   [c]
   (let [{:keys [radius]} (:args c)
-        e (await (ctx/call c :collect 'jobs.items.collect-drops {:radius radius :items wool-names}))]
+        e (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops {:radius radius :items wool-names})))]
     (if (= :continue e)
       :continue
       (do (ctx/update-mem! c assoc :collected (get-in e [:data :collected] 0))

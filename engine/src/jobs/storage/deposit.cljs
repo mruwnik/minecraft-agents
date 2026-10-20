@@ -1,5 +1,6 @@
 (ns jobs.storage.deposit
   (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.waits :as waits]
             [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -191,7 +192,7 @@
         :else
         (let [pargs (merge (select-keys (:args c) [:ignore-zones?]) {:pos spot :item "chest" :ways (need/call-ways c)})
               _ (ctx/update-mem! c assoc :chest-spot spot)
-              e (await (ctx/call c :place 'jobs.blocks.place pargs))]
+              e (waits/waiting-out c (await (ctx/call c :place 'jobs.blocks.place pargs)))]
           (cond
             (= :continue e) :continue
             (and (= :done (:kind e)) (:placed (:data e)))

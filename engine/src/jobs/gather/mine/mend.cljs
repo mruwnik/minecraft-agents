@@ -2,6 +2,7 @@
   "The mend of jobs.gather.mine: the ground cells under the start that the dig left open, filled by a blocks.fill-cells child."
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.lib.waits :as waits]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.choose :as choose]
@@ -44,7 +45,7 @@
   (let [cells (mend-permitted c (owed c))]
     (if (empty? cells)
       nil
-      (let [e (await (ctx/call c :fill 'jobs.blocks.fill-cells {:cells (mapv :pos cells) :use {:blocks (fillers c)} :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
+      (let [e (waits/waiting-out c (await (ctx/call c :fill 'jobs.blocks.fill-cells {:cells (mapv :pos cells) :use {:blocks (fillers c)} :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
             {:keys [mended left]} (when (map? e) (:data e))
             left (or left (map :pos cells))]
         (when (map? e)

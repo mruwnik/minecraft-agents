@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.blocks.fill-cells :as fill]
+            [jobs.lib.waits :as waits]
             [jobs.lib.blocks :as b]
             [jobs.lib.choose :as choose]
             [jobs.lib.checks :as checks]
@@ -150,10 +151,10 @@
 (defn ^:async fill! [c todo]
   (let [{:keys [at axis width height ignore-zones?]} (:args c)
         names (or (seq (blocks c)) (choose/filler-names c :seal))
-        e (await (ctx/call c :fill 'jobs.blocks.fill-cells
+        e (waits/waiting-out c (await (ctx/call c :fill 'jobs.blocks.fill-cells
                            (cond-> {:cells (section (at-of at) axis width height) :order :given :least 1 :clear-loose true
                                     :use {:blocks (vec names)} :ways #{:carried}}
-                             ignore-zones? (assoc :ignore-zones? true))))
+                             ignore-zones? (assoc :ignore-zones? true)))))
         short (count todo)
         cell (some-> (get-in e [:cause :cell]) (->> ((juxt :x :y :z))) vec)]
     (cond

@@ -1,6 +1,7 @@
 (ns jobs.blocks.place
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [jobs.lib.waits :as waits]
             [jobs.lib.ready :as ready]
             [engine.ctx :as ctx]
             [engine.contract :as contract]
@@ -199,7 +200,7 @@
   "One jobs.blocks.dig call on the plant at pos. Resolves to :cleared, :continue (the dig waits on the world) or the
   ending (nothing-possible :clear-failed)."
   [c pos items]
-  (let [e (await (ctx/call c :clear 'jobs.blocks.dig (clear-args c pos)))]
+  (let [e (waits/waiting-out c (await (ctx/call c :clear 'jobs.blocks.dig (clear-args c pos))))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) :cleared

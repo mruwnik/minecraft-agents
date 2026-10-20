@@ -1,6 +1,7 @@
 (ns jobs.items.craft
   (:require [jobs.lib.ready :as ready]
             [clojure.string :as str]
+            [jobs.lib.waits :as waits]
             [jobs.lib.least :as least]
             [engine.args :as a]
             [jobs.items.shortfall :as craft]
@@ -420,7 +421,7 @@
   (let [spot (pickup-spot c)]
     (if-not spot
       (ctx/end c :done nil {})
-      (let [r (await (ctx/call c :pickup 'jobs.blocks.dig {:pos spot :collect true :need-drop false :fetch false :on-fluid :fail :for-plan (:for-plan (:args c))}))]
+      (let [r (waits/waiting-out c (await (ctx/call c :pickup 'jobs.blocks.dig {:pos spot :collect true :need-drop false :fetch false :on-fluid :fail :for-plan (:for-plan (:args c))})))]
         (if (= :continue r)
           :continue
           (do (ctx/update-mem! c assoc :picked-up true)

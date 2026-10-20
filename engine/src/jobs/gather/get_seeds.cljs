@@ -5,6 +5,7 @@
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.waits :as waits]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.checks :as checks]
@@ -334,7 +335,7 @@
 
 (defn ^:async collect! [c]
   (let [{:keys [item]} (:args c)
-        r (await (ctx/call c :collect 'jobs.items.collect-drops {:radius (collect-radius) :items [item]}))]
+        r (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops {:radius (collect-radius) :items [item]})))]
     (when (not= :continue r)
       (let [now (carried c)]
         (ctx/update-mem! c (fn [m]

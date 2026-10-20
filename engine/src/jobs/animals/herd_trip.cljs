@@ -3,6 +3,7 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.settings :as settings]
+            [jobs.lib.waits :as waits]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.animals :as animals]
             [jobs.lib.child :as child]
@@ -220,7 +221,7 @@
 (defn ^:async regather! [c]
   (if (lure? c)
     (set-phase! c :leash)
-    (let [e (await (ctx/call c :collect 'jobs.items.collect-drops {:radius (regather-radius) :items ["lead"]}))]
+    (let [e (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops {:radius (regather-radius) :items ["lead"]})))]
       (if (= :continue e) :continue (set-phase! c :leash)))))
 
 

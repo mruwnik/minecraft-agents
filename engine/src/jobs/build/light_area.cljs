@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.waits :as waits]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.look :as look]
@@ -120,9 +121,9 @@
       (and (empty? spots) (empty? uncovered)) (ctx/end c :done nil {:torches (:torches (ctx/mem c) []) :uncovered []})
       (nil? spot) (ctx/end c :nothing-possible {:reason :uncovered} {:torches (:torches (ctx/mem c) []) :uncovered uncovered})
       :else
-      (let [o (b/place-outcome (await (ctx/call c :place 'jobs.blocks.place
+      (let [o (b/place-outcome (waits/waiting-out c (await (ctx/call c :place 'jobs.blocks.place
                                                 (merge (select-keys (:args c) [:ignore-zones?])
-                                                       {:pos spot :item "torch"}))))]
+                                                       {:pos spot :item "torch"})))))]
         (case o
           :continue :continue
           (:placed :already) (do (ctx/update-mem! c update :torches (fnil conj []) spot) :again)

@@ -2,6 +2,7 @@
   (:require [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.contract :as contract]
+            [jobs.lib.waits :as waits]
             [jobs.lib.cond :as cond]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -255,9 +256,9 @@
 (defn ^:async collect!
   "One collect-drops round while the drops of the digs are owed. :again, :continue while it waits."
   [c]
-  (let [e (await (ctx/call c :collect 'jobs.items.collect-drops
+  (let [e (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops
                            {:radius (settings/get settings ::collect-radius)
-                            :holes (vec (remove nil? (cons (:collect (ctx/mem c)) (:holes (ctx/mem c)))))}))]
+                            :holes (vec (remove nil? (cons (:collect (ctx/mem c)) (:holes (ctx/mem c)))))})))]
     (when-not (= :continue e) (ctx/update-mem! c dissoc :collect))
     (if (= :continue e) :continue :again)))
 

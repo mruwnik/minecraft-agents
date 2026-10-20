@@ -5,6 +5,7 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.waits :as waits]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as b]
@@ -103,7 +104,7 @@
   (loop []
     (when-let [cell (or (:spot-digging (ctx/mem c)) (first (dig-spot-cells c)))]
       (ctx/update-mem! c assoc :spot-digging cell)
-      (let [r (await (ctx/call c :spot-dig 'jobs.blocks.dig {:pos cell :collect false :need-drop false :fetch false :on-fluid :fail :for-plan (:for-plan (:args c))}))]
+      (let [r (waits/waiting-out c (await (ctx/call c :spot-dig 'jobs.blocks.dig {:pos cell :collect false :need-drop false :fetch false :on-fluid :fail :for-plan (:for-plan (:args c))})))]
         (if (= :continue r)
           :continue
           (do (ctx/update-mem! c #(-> % (dissoc :spot-digging) (update :spot-dug (fnil conj #{}) cell)))

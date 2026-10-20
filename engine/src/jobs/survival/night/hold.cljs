@@ -2,6 +2,7 @@
   "The night's holds: hold still on purpose, eating or cooking first, and the bookkeeping of what the night did."
   (:require [engine.ctx :as ctx]
             [engine.memory :as mem]
+            [jobs.lib.waits :as waits]
             [jobs.lib.child :as child]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.foods :as foods]
@@ -33,7 +34,7 @@
   only once dug up; a failed dig keeps it, so the next hold retries. True while the dig goes on."
   [c]
   (let [pos (:placed-furnace (ctx/mem c))
-        e (await (ctx/call c :unplace 'jobs.blocks.dig {:pos pos :fetch false}))]
+        e (waits/waiting-out c (await (ctx/call c :unplace 'jobs.blocks.dig {:pos pos :fetch false})))]
     (when (= :done (:kind e))
       (ctx/update-mem! c dissoc :placed-furnace :furnace)
       (when (= pos (mem/place (ctx/view c) :furnace))

@@ -5,6 +5,7 @@
             [jobs.lib.access.rules :as rules]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [jobs.lib.waits :as waits]
             [jobs.lib.pace :as pace]
             [jobs.lib.world :as known]
             [jobs.lib.ready :as ready]
@@ -203,7 +204,7 @@
     (if-not (:ok v)
       (do (ctx/update-mem! c plan/refuse pos (select-keys v [:reason :zone :plan :claim]))
           :again)
-      (let [r (await (ctx/call c :dig 'jobs.blocks.dig args))]
+      (let [r (waits/waiting-out c (await (ctx/call c :dig 'jobs.blocks.dig args)))]
         (cond
           (= :continue r) :continue
           (= :cut-off (:kind r)) :continue

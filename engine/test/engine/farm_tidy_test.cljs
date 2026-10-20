@@ -181,6 +181,18 @@
           (is (nil? (:text result)) "a refused tidy carries no success text")
           (is (= #{:not-allowed} (set (map :reason (:refused result)))) (pr-str (:refused result))))))))
 
+(deftest a-dig-child-that-waits-out-the-world-makes-the-job-wait-not-give-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [dig (get registry/jobs 'jobs.blocks.dig)
+              waiting (assoc dig :can-start? (constantly (contract/later :hostile-near "a hostile is near")))
+              {:keys [eng seen]} (start tidy-spec {"field" field-plan} [] (assoc registry/jobs 'jobs.blocks.dig waiting))
+              id (core/submit! eng (list job {:plan "field" :settings {:jobs.farm.tidy/give-up 1}}) {})]
+          (await (run-until-empty eng 12))
+          (is (= :hostile-near (:reason (core/waiting eng id))))
+          (is (empty? (of-kind seen :tidy.refused))))))))
+
 (deftest what-is-dug-is-picked-up
   (async done
     (tu/run-async done

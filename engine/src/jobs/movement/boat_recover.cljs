@@ -4,6 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.waits :as waits]
             [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
             [jobs.lib.util :as u]
@@ -99,8 +100,8 @@
                       (ctx/update-mem! c assoc :target {:id (:id boat) :item item :before (carried c item)}))
                   r (await (ctx/act c :attack #js {:id (:id boat)}))]
               (if (= "killed" (.-status r))
-                (let [k (await (ctx/call c :collect 'jobs.items.collect-drops
-                                         {:near (:pos boat) :radius 4 :items [item]}))
+                (let [k (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops
+                                         {:near (:pos boat) :radius 4 :items [item]})))
                       n (:collected (:data k) 0)]
                   (cond
                     (= :continue k) :continue

@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.forestry.fell-tree.log :as log]
+            [jobs.lib.waits :as waits]
             [jobs.lib.access :as access]
             [jobs.lib.access.approach :as approach]
             [jobs.lib.blocks :as b]
@@ -336,7 +337,7 @@
         (or (= :continue settle) (= :continue e)) :continue
         (not cell) (do (ctx/update-mem! c assoc-in [:pillar :topped] true) nil)
         :else
-        (let [d (await (ctx/call c (keyword (str "lower" n)) 'jobs.blocks.dig (log/log-dig-args c (u/cell-pos cell))))]
+        (let [d (waits/waiting-out c (await (ctx/call c (keyword (str "lower" n)) 'jobs.blocks.dig (log/log-dig-args c (u/cell-pos cell)))))]
           (if (= :continue d)
             :continue
             (do (ctx/update-mem! c update-in [:pillar :lowered] (fnil inc 0)) :again)))))))

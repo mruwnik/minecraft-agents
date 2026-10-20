@@ -1,5 +1,6 @@
 (ns jobs.blocks.fill-cells
   (:require [engine.args :as a]
+            [jobs.lib.waits :as waits]
             [jobs.lib.block-sets :as bs]
             [engine.settings :as settings]
             [jobs.lib.ready :as ready]
@@ -135,7 +136,7 @@
 
 (defn ^:async collect!
   [c]
-  (let [r (await (ctx/call c :collect 'jobs.items.collect-drops {:radius 3}))]
+  (let [r (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops {:radius 3})))]
     (if (= :continue r)
       :continue
       (do (ctx/update-mem! c dissoc :collect) :again))))

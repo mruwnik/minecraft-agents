@@ -1,5 +1,6 @@
 (ns jobs.movement.boat-launch
   (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.waits :as waits]
             [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -205,7 +206,7 @@
           :else (await (board! c boat cell))))
       (vehicle/mounted? p) (ctx/end c :condition-failed {:reason :aboard :hint "get off the vehicle first"})
       :else
-      (let [e (await (ctx/call c :place 'jobs.blocks.place {:pos cell :item item}))]
+      (let [e (waits/waiting-out c (await (ctx/call c :place 'jobs.blocks.place {:pos cell :item item})))]
         (cond
           (= :continue e) :continue
           (not= :done (:kind e)) (ctx/end c (if (= :condition-failed (:kind e)) :condition-failed :nothing-possible) :place-failed {:pos cell})
