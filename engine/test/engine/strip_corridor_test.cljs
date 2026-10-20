@@ -122,7 +122,7 @@
               p (:p env)
               _ (.override (.-world p) "inspectContainer" (fn [_ _ _] #js {:status "ok" :items #js [#js {:name "iron_ingot" :count 3}]}))
               _ (.override (.-world p) "transfer" (fn [_ _ _] #js {:status "full" :moved 0}))
-              r (await (run! env (assoc args :want-free 0)))]
+              r (await (run! env (assoc args :settings {:jobs.lib.trip/want-free 0})))]
           (is (= [:stopped :bag-full] ((juxt :status :reason) r))))))))
 
 (deftest without-shears-the-web-stops-no-tool-naming-the-tool

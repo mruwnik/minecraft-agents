@@ -32,12 +32,12 @@
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 140 :of-job true}]
    :after [[:item "iron_ingot" 3] [:item "chest_minecart" [:>= 1]]]}
   ;; a bag with no free slot and no room in any stack: the cart cannot be emptied, which is a bag-full stop (a trip to the base
-  ;; chests), not :cart-failed. 34 stacks of cobblestone, bread and torches fill all 36 slots; :want-free 0 lets the corridor reach the cart.
+  ;; chests), not :cart-failed. 34 stacks of cobblestone, bread and torches fill all 36 slots; want-free 0 lets the corridor reach the cart.
   {:name "full-bag-at-a-chest-minecart-stops-bag-full"
    :body {:inventory [["cobblestone" 2176] ["torch" 8] ["bread" 8]]}
    :act [[:summon "chest_minecart" [12.5 0 16.5] "{Items:[{Slot:0b,id:\"minecraft:iron_ingot\",count:3}]}"]
          [:wait-s 2]
-         [:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:rail] :want-free 0})]]
+         [:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:rail] :settings {:jobs.lib.trip/want-free 0}})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :bag-full}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :cart-failed}} :for-s 100 :until {:source :job :kind :stopped}}]
    :after [[:item "iron_ingot" 0] [:entities "type=chest_minecart,tag=wt" [[2 -1 10] [30 4 22]] 1]]}

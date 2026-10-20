@@ -27,10 +27,12 @@
   {::job-time-s {:default 1800 :doc "Seconds one corridor trip may take: the digs, torches and walks." :spec (a/num-in 0 nil)}
    ::lit {:default 8 :doc "Light from which a cell in a spawner's box counts lit." :spec (a/int-in 0 16)}
    ::torch-gap {:default 3 :doc "Cells within which a torch already hung counts as lighting a cell in a spawner's box." :spec (a/int-in 0 16)}
+   ::cart-radius {:default 32 :doc "Blocks within which a chest minecart is looked for." :spec (a/int-in 1 129)}
    ::hop {:default 8 :doc "Cells walked between two steps on the way to the far end: a dark corridor is seen about this far." :spec (a/int-in 1 33)}})
 
 (defn lit [] (settings/get settings ::lit))
 (defn torch-gap [] (settings/get settings ::torch-gap))
+(defn cart-radius [] (settings/get settings ::cart-radius))
 (defn hop [] (settings/get settings ::hop))
 
 (def doc
@@ -43,7 +45,7 @@
   walks to the far end (8 cells a step, so a spawner on the way is seen and lit) and looks round there, so crossings and new corridors come into view, then looks into each side opening of the wall once, then takes back the torches
   standing in the segment (the caller seals behind it).
   It does not start (a skipped job) while the body is short of food (:food-short). Its can-run? is later, with what was taken in
-  the cause, when the next step cannot go on: :food-short, :bag-full (under :want-free slots free with
+  the cause, when the next step cannot go on: :food-short, :bag-full (under jobs.lib.trip/want-free slots free with
   work left), :no-torches (one is due, none carried), :no-tool (:tool, :cell); a called child ends condition-failed with it. Its safe? is ready/safe-at-by-night the end of the segment nearest :entry. A :segment that
   is neither a map nor a readable id is never possible (:bad-args).
   A spawner seen at any step stays in the result (the far end may be out of sight of it). A spawner follows :spawner: :light (default) hangs torches on the dark standable centre-line cells of the segment inside its
@@ -55,14 +57,13 @@
   seen from the far end, this segment's longer reading included (the caller folds them into its memory with merge-segments); or
   condition-failed :bag-full :food-short :no-torches :no-tool (cause keys :taken, as can-run?) or :bag-full (a cart it cannot empty) :refused, or
   nothing-possible with :spawner :unreachable :dig-failed :cart-failed :torch-failed (data :cell, :child), the data carrying :taken.
-  Settings: ::lit (8), ::torch-gap (3), ::hop (8).")
+  Settings: ::lit (8), ::torch-gap (3), ::hop (8), ::cart-radius (32).")
 
 (a/defargs args
   {:segment {:doc "the segment map {:y :axis :line :from :to :open-ends} of jobs.lib.strip, or its id string" :spec (a/pred "a segment map or its id string" #(or (map? %) (string? %))) :default nil}
    :entry {:doc "[x y z] of the base side: targets are taken outward from the end nearest it" :spec ::a/pos :default nil}
    :take {:doc "classes taken: :wood :cobweb :rail :ore" :spec (a/coll-of #{:wood :cobweb :rail :ore}) :default [:wood :cobweb :rail :ore]}
    :spawner {:doc "a spawner in the segment: :light lights its spawn box and leaves it, :break lights it and digs it, :seal stops the trip :spawner, :skip leaves it unlit" :spec #{:light :break :seal :skip} :default :light}
-   :want-free {:doc "free slots under which the trip turns back; nil: jobs.lib.trip/want-free" :spec (a/int-in 0 36) :default nil}
    :ignore-zones? :shared})
 
 (defn seg-of
@@ -138,7 +139,7 @@
 (defn carts
   "The ids of chest minecarts in sight within 2 cells of the segment."
   [c seg]
-  (->> (look/seen-entities (:primitives c) {:names ["chest_minecart"] :radius 32 :max 16})
+  (->> (look/seen-entities (:primitives c) {:names ["chest_minecart"] :radius (cart-radius) :max 16})
        (filter #(<= (strip/gap seg (u/cell-vec (:pos %))) 2))
        (mapv :id)))
 
@@ -146,11 +147,6 @@
   "The spawners seen in the segment: [{:pos :name :class :spawner}], nearest the entry first."
   [c seg]
   (:targets (strip/targets [] seg {:entry (some-> (:entry (:args c)) a/cell ((juxt :x :y :z))) :take #{:spawner} :block-at (access/seen-at (:primitives c))})))
-
-(defn in-spawn-box?
-  "Whether cell is inside the spawner's spawn box: 4 either side along x and z, 1 up or down."
-  [{:keys [x y z]} [cx cy cz]]
-  (and (<= (js/Math.abs (- cx x)) 4) (<= (js/Math.abs (- cy y)) 1) (<= (js/Math.abs (- cz z)) 4)))
 
 (defn dark-near
   "A standable cell of the corridor's centre line inside the spawn box of pos whose light is under 8 and which no torch of
@@ -160,10 +156,11 @@
         {:keys [axis line from to]} seg
         along (if (= axis :x) x z)
         hung (concat (:torches (ctx/mem c)) (:no-spot-at (ctx/mem c)))
+        reach (:horizontal strip/spawn-box-reach)
         d2 (fn [[cx cy cz]] (+ (* (- cx x) (- cx x)) (* (- cy y) (- cy y)) (* (- cz z) (- cz z))))]
-    (->> (range (max from (- along 4)) (inc (min to (+ along 4))))
+    (->> (range (max from (- along reach)) (inc (min to (+ along reach))))
          (map #(strip/at axis (:y seg) line %))
-         (filter #(and (in-spawn-box? {:x x :y y :z z} %) (let [n (block-at %)] (or (bs/air n) (strip/rail? n)))
+         (filter #(and (strip/in-spawn-box? {:x x :y y :z z} %) (let [n (block-at %)] (or (bs/air n) (strip/rail? n)))
                        (some-> (sh-sense/light-at (:primitives c) (zipmap [:x :y :z] %)) (< (lit)))
                        (not-any? (fn [h] (<= (u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] h)) (torch-gap))) hung)))
          (sort-by d2)
@@ -194,7 +191,7 @@
                cell)
         hung (filter #(let [n (block-at %)] (or (nil? n) (torch? n))) (:torches (ctx/mem c)))]
     (->> (distinct (concat seen hung))
-         (remove (fn [cell] (some #(in-spawn-box? (:pos %) cell) keep-lit)))
+         (remove (fn [cell] (some #(strip/in-spawn-box? (:pos %) cell) keep-lit)))
          (map (fn [[x yy z :as cell]] {:pos {:x x :y yy :z z} :name (or (block-at cell) "torch") :class :torch}))
          (sort-by #(u/dist here (:pos %))))))
 
@@ -300,7 +297,7 @@
   branches, or nil: food short, a full bag with work left, no torch for the one to hang, no tool for the next dig."
   [c seg]
   (let [p (:primitives c)
-        {:keys [want-free spawner]} (:args c)
+        {:keys [spawner]} (:args c)
         {:keys [target cart dark]} (owed c seg)
         feet (assoc (b/feet-cell c) 1 (:y seg))
         work? (or target cart)
@@ -308,7 +305,7 @@
         kind (some-> target :name kind/tool-kind)
         cause (cond
                 (trip/food-short? c) {:reason :food-short}
-                (and work? (< (u/free-slots p) (or want-free (trip/want-free)))) {:reason :bag-full}
+                (and work? (< (u/free-slots p) (trip/want-free))) {:reason :bag-full}
                 (and work? no-torch? (due-spot c seg feet)) {:reason :no-torches}
                 cart nil
                 (and dark no-torch?) {:reason :no-torches}
