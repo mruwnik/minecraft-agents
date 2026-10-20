@@ -19,4 +19,10 @@
    :act [[:job (jobs.access.stair {:dir :level :heading :east :steps 6 :fetch false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]
    :after [[:item "coal" 1] [:not-block [19 0 17] "coal_ore"]]
-   :limit-s 140}]}
+   :limit-s 140}
+  {:name "buried-ore-off-the-line-is-never-picked-up"
+   :blocks [[:set [18 0 14] "coal_ore"] [:set [19 3 16] "coal_ore"] [:set [20 0 18] "coal_ore"]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 5 :radius 8})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0 :reason :tunnel-length}} :within-s 100 :of-job true}]
+   :after [[:block [18 0 14] "coal_ore"] [:block [19 3 16] "coal_ore"] [:block [20 0 18] "coal_ore"]]
+   :limit-s 120}]}
