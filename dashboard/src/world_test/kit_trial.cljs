@@ -223,7 +223,8 @@
                                       #js ["body" "--" js/process.execPath "--max-old-space-size=192" "out/body-release.cjs" "--agent" body "--world" world
                                            "--scenario" (path/join build "engine/scenarios/survival.edn")
                                            "--worlds" (path/join (repo) "worlds") "--blueprints" (path/join (repo) "blueprints") "--fresh"]
-                                      #js {:cwd (path/join build "engine") :detached true :stdio "ignore"})]
+                                      #js {:cwd (path/join build "engine") :detached true :stdio "ignore"
+                                           :env (js/Object.assign #js {} js/process.env #js {:NODE_COMPILE_CACHE (path/join (repo) "engine/out/compile-cache")})})]
                   (.unref child))
     :rcon (run-node! "tools/rcon-raw.mjs" (str/split (first a) #" "))
     :record (let [[f m] a, p (path/join (repo) f)]

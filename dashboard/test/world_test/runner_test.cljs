@@ -1708,6 +1708,9 @@
     {:body "B"} "0"
     {:body "B" :view true} (aget js/process.env "BODY_VIEW")))
 
+(deftest a-probe-body-loads-its-bundle-through-the-node-compile-cache
+  (is (.endsWith (aget (r/body-env {:body "B"}) "NODE_COMPILE_CACHE") "engine/out/compile-cache")))
+
 (deftest setup-plot-builds-while-a-body-starts-but-parks-first-for-a-body-that-is-up
   (let [c {:plot {:height 4 :floor "stone"} :blocks []}
         run (fn [starting]

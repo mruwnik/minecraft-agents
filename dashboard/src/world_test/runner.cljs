@@ -483,9 +483,11 @@
   {:source :system :kind #{:started :restored}})
 
 (defn body-env
-  "The environment of a probe body: no view dump (it costs CPU every physics tick and no run reads it) unless --view."
+  "The environment of a probe body: no view dump (it costs CPU every physics tick and no run reads it) unless --view; Node's
+  compile cache for the 10 MB bundle (a rebuild changes the file, so Node recompiles it)."
   [opts]
   (js/Object.assign #js {} js/process.env
+                    #js {:NODE_COMPILE_CACHE (repo-path "engine" "out" "compile-cache")}
                     (when-not (:view opts) #js {:BODY_VIEW "0"})
                     (when (:trace-dir opts) #js {:MC_STEP_TRACE (steps-file opts)})))
 
