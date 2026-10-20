@@ -11,7 +11,6 @@
             [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.lib.storage :as storage]
-            [jobs.lib.near :as near]
             [jobs.build.from-plan :as build]
             [jobs.lib.build.plan :as plan]
             [jobs.lib.build.text :as text]
@@ -170,20 +169,11 @@
         planned (set (map :pos cells))
         bad (set (:bad-stands (ctx/mem c)))
         beside (beside-stand c body (:pos cell) planned bad)
-        stand (or (stand-behind c ps from cell) beside)
-        limit (give-up)]
+        stand (or (stand-behind c ps from cell) beside)]
     (if-not stand
-      (do (ctx/update-mem! c plan/count-fail (:pos cell) :unreachable limit)
+      (do (ctx/update-mem! c build/walk-fail (:pos cell) :unreachable (give-up) (u/self-pos c))
           :again)
-      (let [w (await (near/go-near! c (zipmap [:x :y :z] stand) 0 {:ways #{:walk :clear-seal}}))]
-        (when (= :blocked w)
-          (ctx/update-mem! c #(-> (plan/count-fail % (:pos cell) :unreachable limit)
-                                  (update :bad-stands (fnil conj []) stand))))
-        (when (and (= :there w) (nil? (:found cell)))
-          (ctx/update-mem! c plan/count-fail (:pos cell) :unloaded limit))
-        (when (and (= :there w) (:found cell) (empty? (build/in-reach c [cell])))
-          (ctx/update-mem! c plan/count-fail (:pos cell) :unreachable limit))
-        (if (= :partial w) :continue :again)))))
+      (if (= :partial (await (build/walk-stand! c cell stand {:ways #{:walk :clear-seal}}))) :continue :again))))
 
 (defn ^:async place-run!
   "Place the cells in order while each is within reach. Returns {:placed n} and, when one was out of reach, :next cell."

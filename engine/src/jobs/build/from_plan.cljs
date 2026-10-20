@@ -437,6 +437,25 @@
   [c stands pos]
   (filter (fn [[x y z]] (<= (u/eye-dist {:x (+ x 0.5) :y y :z (+ z 0.5)} pos) (- (plan/reach) 0.71))) stands))
 
+(defn ^:async walk-stand!
+  "Walk to stand beside cell with go-near options opts; a walk that is blocked (the stand is then bad), or an arrival
+  with the cell unseen (:unloaded, :buried) or out of reach, counts a failure. Resolves to go-near's answer."
+  [c cell stand opts]
+  (let [limit (give-up)
+        w (await (near/go-near! c (zipmap [:x :y :z] stand) 0 opts))]
+    (when (= :blocked w)
+      (ctx/update-mem! c #(-> (walk-fail % (:pos cell) :unreachable limit (u/self-pos c))
+                              (update :bad-stands (fnil conj []) stand))))
+    (when (and (= :there w) (nil? (:found cell)))
+      (let [pos (:pos cell)]
+        ;; a cell outside the view cone is seen only by turning to it
+        (when (dig-look/unknown? (:primitives c) pos) (await (dig-look/look-at! c pos)))
+        (when (nil? (u/seen-block (:primitives c) (zipmap [:x :y :z] pos)))
+          (ctx/update-mem! c walk-fail pos (if (buried? (:primitives c) pos) :buried :unloaded) limit (u/self-pos c)))))
+    (when (and (= :there w) (:found cell) (empty? (if (:dig? cell) (in-dig-reach c [cell]) (in-reach c [cell]))))
+      (ctx/update-mem! c walk-fail (:pos cell) :unreachable limit (u/self-pos c)))
+    w))
+
 (defn ^:async walk-to!
   "Walk to a stand cell beside cell (:continue while the walk waits, else :again); a cell that cannot be walked to, or is still out of reach (or unseen, as
   :unloaded) on arrival, counts a failure."
@@ -447,23 +466,11 @@
         facing (when-not (or (:click cell) (:dig? cell)) (facing-of (:want cell)))
         all (stands-for (:primitives c) (:pos cell) (js/Math.floor (:y body)) facing planned bad)
         stands (or (seq (reaching c all (:pos cell))) all)
-        stand (first (sort-by #(u/dist body (zipmap [:x :y :z] %)) stands))
-        limit (give-up)]
+        stand (first (sort-by #(u/dist body (zipmap [:x :y :z] %)) stands))]
     (if-not stand
-      (do (ctx/update-mem! c walk-fail (:pos cell) :unreachable limit (u/self-pos c))
+      (do (ctx/update-mem! c walk-fail (:pos cell) :unreachable (give-up) (u/self-pos c))
           :again)
-      (let [w (await (near/go-near! c (zipmap [:x :y :z] stand) 0 (cond-> {} (not (in-hole? c)) (assoc :ways #{:walk :clear-seal}))))]
-        (when (= :blocked w)
-          (ctx/update-mem! c #(-> (walk-fail % (:pos cell) :unreachable limit (u/self-pos c))
-                                  (update :bad-stands (fnil conj []) stand))))
-        (when (and (= :there w) (nil? (:found cell)))
-          (let [pos (:pos cell)]
-            ;; a cell outside the view cone is seen only by turning to it
-            (when (dig-look/unknown? (:primitives c) pos) (await (dig-look/look-at! c pos)))
-            (when (nil? (u/seen-block (:primitives c) (zipmap [:x :y :z] pos)))
-              (ctx/update-mem! c walk-fail pos (if (buried? (:primitives c) pos) :buried :unloaded) limit (u/self-pos c)))))
-        (when (and (= :there w) (:found cell) (empty? (if (:dig? cell) (in-dig-reach c [cell]) (in-reach c [cell]))))
-          (ctx/update-mem! c walk-fail (:pos cell) :unreachable limit (u/self-pos c)))
+      (let [w (await (walk-stand! c cell stand (cond-> {} (not (in-hole? c)) (assoc :ways #{:walk :clear-seal}))))]
         (if (and (= :blocked w) (in-hole? c))
           (hole-blocked! c)
           (do (ctx/update-mem! c dissoc :hole-blocked)
