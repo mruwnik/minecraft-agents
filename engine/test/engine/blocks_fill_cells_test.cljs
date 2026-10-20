@@ -167,3 +167,38 @@
           (let [e (await (settings/with-settings three-failures #(ending-of env {:cells [(first cells)] :use {:blocks ["dirt"]}})))]
             (is (= :done (:kind e)))
             (is (= 1 (count (bd/calls p "place"))) "no place was tried while the cow stood there")))))))
+
+(defn refuse-at
+  "A place override refusing the cells whose x is in xs."
+  [xs]
+  (fn ^:async f [token a impl]
+    (if (contains? xs (.-x (.-pos a)))
+      #js {:status "no-support"}
+      (await (impl token a)))))
+
+(deftest a-cell-is-given-up-after-max-refusals-and-the-call-fails-once-only-such-cells-are-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [n [1 2 3]]
+          (let [[{:keys [p]} e] (await (settings/with-settings {:jobs.blocks.fill-cells/max-refusals n}
+                                          #(outcome [{:name "dirt" :count 9}] {:cells cells :use {:blocks ["dirt"]}} (refuse-at #{3}))))]
+            (is (= :nothing-possible (:kind e)) (str "max-refusals " n))
+            (is (= {:mended 1 :left [(second cells)]} (select-keys (:data e) [:mended :left])))
+            (is (= (+ 1 n) (count (bd/calls p "place"))) "the placeable cell once, the refused one n times")))))))
+
+(deftest shut-open-shuts-an-open-gate-with-a-click-and-an-iron-door-ends-blocked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (fn [block] {:self body :inventory [{:name "dirt" :count 5}] :blocks {"2,64,0" block} :states {"2,64,0" {:open true}}})
+              gate (bd/setup (world "oak_fence_gate"))
+              iron (bd/setup (world "iron_door"))
+              args {:cells [(first cells)] :use {:blocks ["dirt"]} :shut-open true}
+              g (await (ending-of gate args))
+              i (await (ending-of iron args))]
+          (is (= [:done 1] [(:kind g) (:mended (:data g))]))
+          (is (empty? (bd/calls (:p gate) "place")) "shut, not placed into")
+          (is (false? (get-in @(fake/state (:p gate)) [:states [2 64 0] :open])))
+          (is (= :condition-failed (:kind i)))
+          (is (= {:reason :blocked :cell (first cells)} (select-keys (:cause i) [:reason :cell]))))))))

@@ -1015,7 +1015,7 @@
             (await (tick-nights eng clock 2))
             (is (= {:holder true :exposed 1 :notified 0} (dissoc @mid :places))
                 "held at night; one warn that the body is unsheltered; the queued job waits")
-            (is (<= (* 5 (sites/max-sites)) (:places @mid) (* 6 (sites/max-sites))) "max-sites sites tried"))
+            (is (= (+ 5 (* 4 (sites/max-sites))) (:places @mid)) "4 places per shut-in call (one per wall), max-sites calls, after the first walls try of 4 walls and a roof"))
           (is (= [] (declined-events seen :night)) "never declined, so never dropped and fired again")
           (is (= 1 (count (filter #(= :fired (:kind %)) (emitted-by seen :reflex :night)))) "fired once")
           (is (nil? (core/holder eng)) "the shelter ended at day")
