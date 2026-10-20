@@ -290,7 +290,7 @@
     (await (sense/look-at-unknown! c (sort-by #(u/eye-dist (u/self-pos c) %) unseen) look-ahead-steps))
     (let [hidden (filter #(and (sense/unknown? p %) (occluded? c %)) cells)
           solid (filter #(true? (some-> (u/sensed p (zipmap [:x :y :z] %)) .-fullCube)) cells)]
-      (doseq [[x y z] hidden] (.add ^js (.-blocked ^js (:unknown c)) (str x "," y "," z)))
+      (doseq [[x y z] (concat hidden solid)] (.add ^js (.-blocked ^js (:unknown c)) (str x "," y "," z)))
       (if-let [cell (first (concat solid hidden))]
         (let [{:keys [x y z]} (u/self-pos c)]
           {:end {:status :replan :why :changed :cells [cell] :at [x y z] :step 1}})

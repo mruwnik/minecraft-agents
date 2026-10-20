@@ -13,6 +13,7 @@
             [engine.memory :as mem]
             [jobs.lib.walk.search :as wsearch]
             [engine.registry :as registry]
+            [engine.sky-perception :as sky]
             [engine.test-util :as tu :refer [box]]
             [engine.triggers :as triggers]))
 
@@ -359,3 +360,14 @@
         (let [{:keys [out]} (await (go! {:blocks ravine :self {:pos {:x 10.5 :y 64 :z 3.5}} :viewChunks 1}
                                         {:pos [10 64 -3] :range 1 :ways #{:walk :clear-seal} :settings {:jobs.lib.cost.value/tour-floor-blocks 0}}))]
           (is (= :explore-spent (:why @out)) (str "result " @out)))))))
+
+(deftest a-solid-cell-the-body-feels-but-has-not-seen-does-not-loop-the-replan
+  ;; the walk's look-ahead finds the unseen cell on the way solid and ends the leg for a replan; a replan that plans
+  ;; the same way again (the cell still read as air) used to repeat for ever, never yielding
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:floor [-2 -3 10 6] :self {:pos {:x 1.5 :y 64 :z 2.5}} :blocks {"2,64,2" "stone" "2,65,2" "stone"}}
+              {:keys [out ticks]} (await (go-on! world (sky/with-sky (tu/fake-on-floor world)) {:pos [4 63 3] :range 0}))]
+          (is (map? @out) (pr-str @out))
+          (is (< ticks 200) "ends"))))))

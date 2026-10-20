@@ -122,7 +122,7 @@
               (or (proved-none? fresh) (searching? fresh) (:refused fresh)) (finish (wplan/no-walk fresh 0 policy) fresh walked')
               :else (recur (assoc plan :ms plan-ms) (subvec steps (max 0 (dec k))) (inc n) ms walked' kept-damage)))
 
-          (= :replan (:status done))
+          (and (= :replan (:status done)) (< n wwatch/max-watch-replans))
           (let [_ (wsight/note-missed! (:pw plan) done)
                 t (js/performance.now)
                 fresh (await (plan-fn []))
