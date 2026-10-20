@@ -1,6 +1,6 @@
 ;; items.obtain's ways beyond the chest and the craft chain (design D29): :loose (items lying in sight), :hunt (raw meat, cooked after),
 ;; :crops (own ripe field crops), and a :bill {item n}. Open plot, body at [16.5 0 12.5] looking south; the table stands at [16 0 18].
-;; Should-succeed: 3 iron ingots lying 5 blocks off (the :loose-items reflex is set off) are picked up; a cooked beef is made
+;; Should-succeed: 3 iron ingots lying 14 blocks off, clear of the table (the :loose-items reflex is set off) are picked up; a cooked beef is made
 ;; from a hunted cow and a carried coal at the furnace; ripe wheat is cut; a bill of helmet and boots is crafted from 9 ingots.
 ;; Should-fail: the same ingots with :ways #{:chest :craft} stay lying; the same cows with :ways #{:chest :craft :smelt} are not hunted;
 ;; a bill of helmet and boots from 5 ingots makes the helmet and stops at the boots (no ingot source).
@@ -14,13 +14,13 @@
  :cases
  [{:name "loose-items-in-sight-are-picked-up"
    :settings {:jobs.lib.loose/radius 0}
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:until-facing {:yaw 0 :pitch 10} 10] [:summon "item" [16.5 0 17.5] "{Item:{id:\"minecraft:iron_ingot\",count:3}}"] [:wait-s 4]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:until-facing {:yaw 0 :pitch 10} 10] [:summon "item" [19.5 0 26.5] "{Item:{id:\"minecraft:iron_ingot\",count:3}}"] [:wait-s 4]
          [:job (jobs.items.obtain {:item "iron_ingot" :count 3 :explore false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
    :after [[:item "iron_ingot" 3]]}
   {:name "loose-way-off-leaves-the-items-and-stops-no-source"
    :settings {:jobs.lib.loose/radius 0}
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:until-facing {:yaw 0 :pitch 10} 10] [:summon "item" [16.5 0 17.5] "{Item:{id:\"minecraft:iron_ingot\",count:3}}"] [:wait-s 4]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:until-facing {:yaw 0 :pitch 10} 10] [:summon "item" [19.5 0 26.5] "{Item:{id:\"minecraft:iron_ingot\",count:3}}"] [:wait-s 4]
          [:job (jobs.items.obtain {:item "iron_ingot" :count 3 :ways #{:chest :craft} :explore false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 40 :of-job true}]
    :after [[:item "iron_ingot" 0]]
