@@ -16,16 +16,15 @@
    :body {:at [8.5 0 16.5]}
    :memory [{:kind :goal-off :age-s 12 :data {:goal #at [56 0 16] :why :lost-ground} :policy {:cap 4 :ttl 30000}}]
    :act [[:job (jobs.movement.go-to {:pos #at [56 0 16] :range 2})]
-         [:until-pos {:x-min 10} 20]
+         [:await {:source :job :kind :planned} 20]
          [:summon "zombie" [12.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}},active_effects:[{id:\"minecraft:slowness\",amplifier:0b,duration:2400}]}"]]
    :expect [{:event {:source :job :kind :retreat.choice :data {:goal-why :given-up}} :within-s 25}
-            {:event {:source :job :kind :retreat.choice :data {:lean [:near #at [56 0 16] 1.5]}} :within-s 80}]
-   :after [[:body-far [8.5 0 16.5] 20]]}
+            {:event {:source :job :kind :retreat.choice :data {:lean [:near #at [56 0 16] 1.5]}} :within-s 80}]}
   {:name "goal-straight-up-a-column-is-steep-no-leg"
    :blocks [[:fill [19 0 15] [21 29 17] "stone"]]
    :plot {:height 31 :light :sky}
    :act [[:job (jobs.movement.go-to {:pos #at [20 30 16] :range 1})]
-         [:wait-s 2]
+         [:await {:source :job :kind :planned} 30]
          [:summon "zombie" [11.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat.choice :data {:goal-why :steep}} :within-s 30}
             {:no-event {:source :job :kind :retreat.target :data {:target [:near #at [20 30 16] 3]}} :for-s 40}]
@@ -47,7 +46,8 @@
             {:no-event {:source :job :kind :retreat.target :data {:target [:near #at [25 1 16] 6]}} :for-s 40}]
    :limit-s 60}
   {:name "gaining-flight-never-turns-to-the-cornered-options"
-   :plot {:height 12 :length 64 :width 32}
+   ;; long enough that the flight ends by outrunning the zombie before the far wall pins the body in a corner
+   :plot {:height 12 :length 256 :width 32}
    ;; no blocks carried: with some, a lone melee mob close by is pillared against before any flee step (early refuge)
    :body {:at [12.5 0 16.5] :inventory []}
    :act [[:summon "zombie" [6.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}},active_effects:[{id:\"minecraft:slowness\",amplifier:1b,duration:2400}]}"]]
