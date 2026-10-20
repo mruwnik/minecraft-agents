@@ -6,6 +6,7 @@
             [jobs.lib.block-sets :as bs]
                         [jobs.lib.child :as child]
             [jobs.lib.look :refer [cell-of]]
+            [jobs.lib.need :as need]
             [jobs.lib.util :as u]
             [jobs.lib.world :as known]
             [plan.rail :as rail]
@@ -48,7 +49,7 @@
   "[job args] cutting or bridging span from where the body stands at its stand cell."
   [c {:keys [kind heading cells]}]
   (let [n (count cells)
-        zones (select-keys (:args c) [:ignore-zones?])]
+        zones {:ignore-zones? (boolean (:ignore-zones? (:args c))) :ways (need/pass-ways c)}]
     (if (= :bridge kind)
       ['jobs.access.bridge (merge zones {:heading (keyword (heading-names heading)) :length n})]
       ['jobs.gather.strip-tunnel (merge zones {:heading (heading-names heading) :limit n :through (:plan (:args c))})])))
