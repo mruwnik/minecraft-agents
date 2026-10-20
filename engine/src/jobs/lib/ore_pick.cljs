@@ -44,6 +44,12 @@
   (let [ns (face-names p cell)]
     (and (some bs/air ns) (not-any? bs/fluids ns))))
 
+(defn solid-under?
+  "Whether the cell under this one is seen and a floor: digging an ore there leaves a dent the body climbs out of, not a drop."
+  [p [x y z]]
+  (let [n (u/seen-name p {:x x :y (dec y) :z z})]
+    (boolean (and n (not (bs/passable? n)) (not (bs/fluids n)) (not (bs/bad-floor n))))))
+
 (defn count-of [p item] (transduce (comp (filter #(= item (:name %))) (map :count)) + 0 (u/inventory p)))
 
 (defn candidates
@@ -60,7 +66,7 @@
            (filter (fn [{:keys [pos name]}]
                      (let [cell (blocks/cell pos)]
                        (and (not (skipped cell)) (not (contains? except cell))
-                            (>= (second cell) floor-y)
+                            (or (>= (second cell) floor-y) (solid-under? p cell))
                             (blocks/in-reach? c pos true)
                             (exposed? p cell)
                             (tools/can-harvest? p name)
@@ -96,8 +102,8 @@
 
 (defn ^:async pick!
   "Dig the exposed ores within reach one after another (at most ::per-call), each followed by the walk back to the stand.
-  :continue while a child waits on the world, else nil. Ores below the feet are left: digging one beside the stand makes
-  a hole the body can fall into and not climb out of. opts :except (cells never dug: the job's own target) and :leave
+  :continue while a child waits on the world, else nil. An ore below the feet is left unless the cell under it is seen solid: digging one over a cave or void
+  makes a hole the body can fall into and not climb out of. opts :except (cells never dug: the job's own target) and :leave
   (block names the job digs for itself)."
   ([c] (pick! c {}))
   ([c opts]

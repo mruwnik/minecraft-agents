@@ -55,7 +55,7 @@
   dig lacks nothing this call cannot get (:refused, :no-tool, :no-free-slot). Quote: steps x cells of the step x the time of a cell.
   - A pack without room waits :no-free-slot until it changes (the make-room reflex or the caller clears it).
   - A missing pickaxe is got by the jobs.blocks.dig child (:fetch), then the body walks back onto the line and goes on; a fetch that fails ends :no-tool with its reason as :because. :fetch off ends :no-tool.
-  - Before each step the exposed ores within reach at or above the feet are dug (:pick-up-ores, jobs.lib.ore-pick).
+  - Before each step the exposed ores within reach are dug, those below the feet only over a solid floor (:pick-up-ores, jobs.lib.ore-pick).
 
   One call cuts the whole stair; it yields :continue while a fetch or walk child waits on the world. The
   body's cell is the progress: a resumed call finds its step from where the body stands on the stair line. Dug cells are left and recorded.
@@ -84,7 +84,7 @@
    :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.need), and a block to seal lava with: true, a set of kinds or a map of limits" :spec need/option? :default true}
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop" :spec #{:seal :stop} :default :seal}
    :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of waiting :no-tool" :spec boolean? :default true}
-   :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}
+   :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way (below the feet only over a solid floor); false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}
    :through {:doc "the id of a mineshaft plan the stair runs down: its footprint is no obstacle (jobs.lib.shafts)" :spec string? :default nil}})
 
 (a/defargs settings

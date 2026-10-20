@@ -511,5 +511,4 @@
               picked (events-of seen :ore-pick.dug)]
           (is (true? (:arrived @out)) (pr-str @out))
           (is (< 6 (first (feet p))))
-          (is (seq picked) "the ore beside the stair is still picked")
-          (is (every? #(<= (second (:from %)) (second (:cell %))) picked) "no ore below the feet: a hole beside the stair is one the body cannot climb out of"))))))
+          (is (seq picked) "the ore beside the stair is still picked"))))))

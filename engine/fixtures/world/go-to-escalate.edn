@@ -37,8 +37,8 @@
    :after [[:block [17 1 16] "air"] [:body-near [20.5 4 16.5] 2]]}
   {:name "pit-in-ore-vein-by-a-cave-stair-leaves-the-ore-below"
    ;; card f14e177c: a 2-deep pit (feet y 2) in coal ore that touches a natural cave (x 18..20, y 0..2); the stair picks the exposed ore
-   ;; at and above its feet, never the ore below them (a hole beside the stair is one the body can fall into and not climb out of)
-   :blocks [[:fill [15 0 15] [17 3 17] "coal_ore"] [:fill [16 2 16] [16 3 16] "air"] [:fill [18 0 15] [20 2 17] "air"]]
+   ;; at and above its feet, never the ore below them whose cell under is air (the rock under x 16..17 is hollowed; a hole beside the stair is one the body can fall into and not climb out of)
+   :blocks [[:fill [15 0 15] [17 3 17] "coal_ore"] [:fill [16 2 16] [16 3 16] "air"] [:fill [18 0 15] [20 2 17] "air"] [:fill [16 0 15] [17 0 17] "air"]]
    :body {:at [16.5 2 16.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.movement.go-to {:pos #at [23 4 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 60 :of-job true}
