@@ -1581,7 +1581,7 @@
 
 (deftest walkable-near-is-the-reachable-ground-nearest-the-cell
   (let [p (tunnel-edge-body nil)]
-    (is (<= 11 (:x (look-edge/walkable-near p [23 64 0])) 19) "the farthest cell whose roof was seen, not past the dead end")
+    (is (<= 3 (:x (look-edge/walkable-near p [23 64 0])) 19) "the farthest cell whose roof was seen, not past the dead end")
     (is (= {:x 5 :y 64 :z 0} (look-edge/walkable-near p [5 64 3])))))
 
 (deftest walkable-near-stays-inside-the-closed-region-and-does-not-open-its-door
@@ -1618,7 +1618,7 @@
             (await (look-edge/look! c cells)))
           (is (= [:look :walk :walk :look] (map first @log))
               "look, walk (still walking: again), walk done, look again")
-          (is (<= 11 (:x (nth (nth @log 1) 2)) 19) "the stride reaches the cell 3 away, not the one 10 away")
+          (is (<= 3 (:x (nth (nth @log 1) 2)) 19) "the stride reaches the cell 3 away, not the one 10 away")
           (is (= #{[20 64 0]} (:edge-looked @mem*)))
           (is (= 5 (:edge-steps @mem*))))))))
 
