@@ -180,7 +180,7 @@
     (let [p (:primitives c)
           feet (end/feet-cell c)
           goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
-          opts {:own? (own-placed-fn c) :skip (skips c) :pillar-item (escape/pillar-item c)}
+          opts {:own? (own-placed-fn c) :skip (skips c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c)}
           may-dig? (may-dig-fn c)]
       (or (dig-way p feet goal may-dig? opts)
           (when (> (second goal) (second feet))
@@ -217,7 +217,7 @@
         cave (when (:dive-stair c) (:cave-floor c))
         back (:own-floor c)
         cheaper? (and (not (:stair-tried m)) (>= (- (second goal) (second feet)) stair-first-rise))
-        stair (delay (let [e (escape/choose (:primitives c) feet goal (may-dig-fn c) {:own? (own-placed-fn c) :skip (skips c) :pillar-item (escape/pillar-item c)})]
+        stair (delay (let [e (escape/choose (:primitives c) feet goal (may-dig-fn c) {:own? (own-placed-fn c) :skip (skips c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c)})]
                        (when (= :stair (:step e)) e)))]
     (when (and (ways/way? c :stair) (not (sh-inside/sheltered-in c)) (or cave cheaper? back))
       (fn [{:keys [status steps ^js r]} first?]

@@ -406,3 +406,18 @@
   (doseq [n ["oak_planks" "bricks" "stone_bricks" "glass" "white_wool" "cobblestone" "oak_door" "iron_door" "oak_log" "glowstone" "cobbled_deepslate" "dirt_path"
              "oak_fence" "spruce_fence_gate" "white_glazed_terracotta" "smooth_stone" "polished_andesite" nil]]
     (is (not (rules/natural? n)) (pr-str n))))
+
+(deftest escape-choose-walks-to-an-unseen-part-of-a-build-wall-once-then-finds-no-dig
+  ;; unseen wall cells are guessed as rock, so each looks like a door: the body walks to look, and a cell it walked to
+  ;; (:approached) is not chosen again; the chain ends in :no-dig
+  (let [planks (into {} (map (fn [[k v]] [k (if (= v "dirt") "oak_planks" v)])) room)
+        p (tu/fake {:self {:pos {:x 2 :y 64 :z 0}} :blocks planks})
+        hide? (fn [[x _ z]] (and (= 3 x) (not= 0 z)))]
+    (aset p "sensedAt" (fn [pos] (if (hide? [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} (.blockAt p pos))))
+    (let [steps (loop [seen #{} out []]
+                  (let [e (escape/choose p [2 64 0] [8 64 0] (constantly true) {:approached seen})]
+                    (if (or (not= :approach (:step e)) (> (count out) 8))
+                      (conj out e)
+                      (recur (conj seen (:pos e)) (conj out e)))))]
+      (is (= {:step :none :why :no-dig} (last steps)))
+      (is (apply distinct? (map :pos (butlast steps)))))))

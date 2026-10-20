@@ -136,7 +136,7 @@
         n (:fruitless counted)
         _ (when (<= n (tuning/max-escalations)) (await (look-round! c feet)))
         goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
-        opts {:own? (own-placed-fn c) :skip (skips c) :pillar-item (escape/pillar-item c)}
+        opts {:own? (own-placed-fn c) :skip (skips c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c)}
         into? (goal-walled? c result)
         ;; a shut-in body (a pit, a plateau it cannot walk off) whose goal is walled in digs straight into it when it can
         dig-in? (and (not into?) (= :goal-enclosed (some-> (:reason result) keyword)))
@@ -215,10 +215,14 @@
   "The child made a way (or part of one, done false): walk again from a fresh count, or escalate again at once after an
   approach, after a whole stair that left the body shut in under the goal (climb-on?), or after any stair that left it
   under ground on its climb away from a dive (dive-climb-on?). Its holes are put back once a walk round gets on past
-  it (restore-next!)."
+  it (restore-next!). An approach does not count toward max-escalations (its look may show a wall to dig or not), but
+  its cell is not walked to twice (memory :approached), so a chain of them ends."
   [c pos {:keys [step]} done?]
-  (let [again? (or (= :approach step) (and (= :stair step) (or (and done? (climb-on? c pos)) (dive-climb-on? c pos))))]
+  (let [again? (or (= :approach step) (and (= :stair step) (or (and done? (climb-on? c pos)) (dive-climb-on? c pos))))
+        target (some-> (:escalation (ctx/mem c)) :pos vec)]
     (ctx/update-mem! c #(cond-> (-> % (dissoc :escalation :escalation-from :planned :holes-before :best)
+                                    (cond-> (= :approach step) (-> (update :approached (fnil conj #{}) target)
+                                                                   (update :fruitless (fn [n] (max 0 (dec (or n 0)))))))
                                     (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
                           again? (assoc :escalate-now true)
                           (not (#{:approach :fill-gap} step)) (assoc :restore-pending true))))
@@ -285,7 +289,7 @@
              block-at (escape/block-at-of p)
              may-dig? (may-dig-fn c)]
          (not= :none (:step (escape/choose p (end/feet-cell c) goal #(and (may-dig? %) (not= block (block-at %)))
-                                           {:own? (own-placed-fn c) :skip (conj (skips c) (skip-key e)) :pillar-item (escape/pillar-item c)}))))))
+                                           {:own? (own-placed-fn c) :skip (conj (skips c) (skip-key e)) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c)}))))))
 
 (defn ^:async escalation-failed!
   "The child stopped or would wait: when it changed something, walk again (escalation-stopped!); when it had no tool

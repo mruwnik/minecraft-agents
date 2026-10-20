@@ -221,8 +221,10 @@
 
 (defn wall-spot
   "The nearest cell (breadth-first through standable cells, at most wall-search-radius away along x and z) that has
-  a solid side: one whose side along dir is solid when there is one, else the first with any. nil when none."
-  [p feet dir]
+  a solid side: one whose side along dir is solid when there is one, else the first with any. nil when none. Cells in
+  visited (already walked to) do not count."
+  ([p feet dir] (wall-spot p feet dir #{}))
+  ([p feet dir visited]
   (let [block-at (block-at-of p)
         [hx _ hz] feet
         near? (fn [[x _ z]] (and (<= (js/Math.abs (- x hx)) wall-search-radius)
@@ -233,12 +235,12 @@
     (loop [queue #queue [feet] seen #{feet} fallback nil]
       (if-let [cell (peek queue)]
         (let [here? (= cell feet)]
-          (if (and dir (not here?) (solid? (block-at (ahead cell dir 1))))
+          (if (and dir (not here?) (not (visited cell)) (solid? (block-at (ahead cell dir 1))))
             cell
-            (let [fallback (or fallback (when (and (not here?) (walled-side? block-at cell)) cell))
+            (let [fallback (or fallback (when (and (not here?) (not (visited cell)) (walled-side? block-at cell)) cell))
                   nbrs (->> dirs (map #(ahead cell % 1)) (filter #(and (not (seen %)) (near? %) (standable? %))))]
               (recur (into (pop queue) nbrs) (into seen nbrs) fallback))))
-        fallback))))
+        fallback)))))
 
 (defn pillar-item
   "{:item :count}: the carried climb block (choose/fillers-for, so reserves and an :avoid apply) with the largest count, or nil."
@@ -269,8 +271,8 @@
 (defn door-spot
   "The nearest cell (breadth-first through standable cells, within wall-search-radius) other than feet from which a
   wall straight along dir is a door (door) whose every cell is diggable?: where to walk when the wall at feet cannot be
-  dug (an iron door or another's build in line). nil when none."
-  [p feet dir diggable]
+  dug (an iron door or another's build in line). nil when none. Cells in visited (already walked to) do not count."
+  [p feet dir diggable visited]
   (let [block-at (block-at-of p)
         [hx _ hz] feet
         near? (fn [[x _ z]] (and (<= (js/Math.abs (- x hx)) wall-search-radius)
@@ -281,23 +283,24 @@
         ok? (fn [cell] (when-let [gap (door block-at unseen? cell dir (max-door))] (every? diggable (:cells gap))))]
     (loop [queue #queue [feet] seen #{feet}]
       (when-let [cell (peek queue)]
-        (if (and (not= cell feet) (ok? cell))
+        (if (and (not= cell feet) (not (visited cell)) (ok? cell))
           cell
           (let [nbrs (->> cardinals (map #(ahead cell % 1)) (filter #(and (not (seen %)) (near? %) (standable? %))))]
             (recur (into (pop queue) nbrs) (into seen nbrs))))))))
 
 (defn door-back
   "For a body in the free part of a shut door's cell feet: the cell on the free side, to step back to and look round
-  from, unless it is seen and not standable (an unseen cell is walked to and looked at)."
-  [p [x y z]]
+  from, unless it is seen and not standable (an unseen cell is walked to and looked at) or already walked to (visited)."
+  ([p cell] (door-back p cell #{}))
+  ([p [x y z] visited]
   (let [kind-at (reach/lookup p)]
     (when-let [[dx dz] (reach/panel-step p kind-at {:x x :y y :z z})]
       (let [back [(- x dx) y (- z dz)]]
         (when (let [unseen? (unseen-of p)
                     ok? (fn [cell good?] (or (unseen? cell) (good? kind-at (cell 0) (cell 1) (cell 2))))]
-                (and (ok? back reach/passable?) (ok? (up back 1) reach/passable?)
+                (and (not (visited back)) (ok? back reach/passable?) (ok? (up back 1) reach/passable?)
                      (ok? (up back -1) #(keyword-identical? :solid (%1 %2 %3 %4)))))
-          back)))))
+          back))))))
 
 (def heading-dirs (into {} (map (fn [[k v]] [v k])) heading-names))
 
@@ -305,7 +308,7 @@
   "How a body at feet (a cell) that cannot walk to goal (a cell) can make a way, cheapest first. It only ever digs
   natural terrain (natural?) and blocks it placed itself (opts :own?, (own? cell block)) in cells (may-dig? cell)
   allows (go-to: no other owner's zone or claim); opts :pillar-item ({:item :count} or nil, escape/pillar-item) replaces the climb block read from the inventory. opts :skip is a set of steps that already failed (a stair heading
-  that failed: [:stair :east]): the next one is chosen.
+  that failed: [:stair :east]): the next one is chosen; opts :approached, the cells an approach already walked to.
   - {:step :pillar :height n :item}: in a pit d deep with room above the head and at least n pillar blocks carried: n
     the rim-pillar (d - 1, then a step onto the rim), d when no side has a rim to step onto.
   - {:step :stair :heading kw :steps n}: a block in front to stair up on, n how far the goal is above or the pit's
@@ -326,8 +329,9 @@
     the block over the head; :no-dig: nothing natural and allowed to dig; :no-wall: no wall to walk to."
   ([p feet goal] (choose p feet goal (constantly true)))
   ([p feet goal may-dig?] (choose p feet goal may-dig? nil))
-  ([p feet goal may-dig? {:keys [own? skip] :or {own? (constantly false) skip #{}} :as opts}]
-   (let [block-at (block-at-of p)
+  ([p feet goal may-dig? {:keys [own? skip approached] :or {own? (constantly false) skip #{} approached #{}} :as opts}]
+   (let [approached (or approached #{})
+         block-at (block-at-of p)
          dir (heading feet goal)
          depth (pit-depth block-at (unseen-of p) feet)
          {:keys [item count]} (if (contains? opts :pillar-item) (:pillar-item opts) (carried-pillar-item p))
@@ -348,8 +352,8 @@
                         (stair-heading block-at feet stair-dirs rise may-dig? own? true)))
          gap (when (and dir (not (skip :clear-path))) (door block-at (unseen-of p) feet dir (max-door)))
          spot (delay (when (and dir (not (skip :approach)) (not (skip :clear-path)) (walled-side? block-at feet))
-                       (door-spot p feet dir #(diggable? block-at may-dig? own? %))))
-         back (delay (when-not (or (skip :approach) (skip :clear-path)) (door-back p feet)))
+                       (door-spot p feet dir #(diggable? block-at may-dig? own? %) approached)))
+         back (delay (when-not (or (skip :approach) (skip :clear-path)) (door-back p feet approached)))
          door? (and gap (every? #(diggable? block-at may-dig? own? %) (:cells gap)))
          rim (when (and rim-n (>= count rim-n)) rim-n)]
      (cond
@@ -371,8 +375,8 @@
        @back
        {:step :approach :pos @back}
 
-       (and (not (skip :approach)) (not (and (skip :clear-path) (skip :stair))) (not (walled-side? block-at feet)) (wall-spot p feet dir))
-       {:step :approach :pos (wall-spot p feet dir)}
+       (and (not (skip :approach)) (not (and (skip :clear-path) (skip :stair))) (not (walled-side? block-at feet)) (wall-spot p feet dir approached))
+       {:step :approach :pos (wall-spot p feet dir approached)}
 
        @ledge
        {:step :stair :heading @ledge :steps rise}
