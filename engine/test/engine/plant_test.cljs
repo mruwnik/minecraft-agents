@@ -25,7 +25,7 @@
   "An engine over primitives made from world, over the shared world (no zones by default)."
   [world & [shared]]
   (let [[seen sink] (tu/legacy-capture-sink)
-        p (sky/with-sky (tu/fake world))
+        p (sky/with-sky (tu/seeing-all (tu/fake world)))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :world (or shared (ew/of-data {} {} []))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
