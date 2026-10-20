@@ -748,6 +748,7 @@
               e (done-event s)]
           (is (= :no-food (:reason e)))
           (is (re-find #"wheat" (:text e)))
+          (is (some? (:because e)) "the failed fetch's ending is carried")
           (is (= -40 (js/Math.round (self-x s))))
           (is (nil? (failed-error s)))
           (is (finished? s)))))))

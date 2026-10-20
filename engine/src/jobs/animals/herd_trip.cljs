@@ -104,7 +104,7 @@
 
 (defn ^:async fetch-food!
   "A lure run with no food carried: get one of the mob's breeding foods (jobs.lib.need, :fetch allowing), else end
-  :no-food. Nil when food is carried."
+  :no-food, the fetch's ending as its :because. Nil when food is carried."
   [c]
   (let [p (:primitives c)
         mob (:mob (:args c))
@@ -114,7 +114,7 @@
         (cond
           (= :continue e) :continue
           (animals/food-carried p mob) :continue
-          :else (finish! c :no-food))))))
+          :else (finish! c :no-food (when (map? e) {:because (select-keys e [:kind :cause])})))))))
 
 (defn ^:async food-first!
   "Before the walk to the pen: settle the method and, for a lure run, get the food. Nil when there is nothing to do."
