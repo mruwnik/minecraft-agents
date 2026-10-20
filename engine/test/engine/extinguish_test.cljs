@@ -612,7 +612,7 @@
           (is (= (extinguish/max-covers) @places-at-go-to) "covers first, then the go-to")
           (is (= (repeat (extinguish/max-covers) "cobblestone") (mapv (comp :item call-args) (calls p "place"))))
           (is (= 1 @go-tos))
-          (is (some #(and (= :child_started (:kind %)) (= :cover (:slot %))) @seen) "a cover is a jobs.blocks.place child")
+          (is (some #(and (= :child_started (:kind %)) (= :cover (:slot %))) @seen) "a cover is a jobs.blocks.fill-cells child")
           (is (= 1 (count (calls p "moveTo"))) "one blocked step")
           (is (= 1 (count (of-kind seen :completed)))))))))
 

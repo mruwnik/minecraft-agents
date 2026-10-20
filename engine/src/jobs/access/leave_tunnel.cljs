@@ -40,7 +40,7 @@
   asks may-place? right before. A refusal (:zone :footprint :own-body) books the cell open with its reason and
   is never forced. The cell must be within :reach of the eye (:out-of-reach). It is filled with the dug block's
   drop if carried (unless a :spare item), else the first carried building block (jobs.survival.shut-in) that is
-  not :spare, else a :spare item that can be placed. Nothing to place: :no-blocks. A place that leaves the cell
+  not :spare, else a :spare item that can be placed, by a jobs.blocks.fill-cells child. Nothing to place: :no-blocks. A place that leaves the cell
   open: :place-failed.
 
   A walk that does not arrive (stair broken by an explosion or cave-in, a hole in its floor) is not the end. The
@@ -357,7 +357,8 @@
         (when-not (= :continue r) (ctx/update-mem! c assoc :blocks-fetched true))
         (or r (book-open! c cell :no-blocks)))
       (nil? item) (book-open! c cell :no-blocks)
-      :else (let [outcome (await (blocks/place-cell! c (cell-pos cell) item {:ignore-zones? true}))
+      :else (let [outcome (await (ctx/call c :fill 'jobs.blocks.fill-cells
+                                           {:cells [(cell-pos cell)] :use {:blocks [item]} :least 1 :ignore-zones? true}))
                   n (block-at cell)]
               (cond
                 (= :continue outcome) :continue

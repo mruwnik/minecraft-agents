@@ -34,7 +34,7 @@
      It must be passable, solid underfoot and not fire, lava, magma or a campfire.
      Scoring favours distance from those hazards (up to 4 blocks) and height, and charges a small cost per block walked.
   Water also counts powder snow. Not in lava (or in lava once a walk was blocked), with a cover block carried (cobblestone, stone, dirt, ...) it first
-  places one (a jobs.blocks.place child) on a lava cell next to the feet (side or below) with open air above it, so the body does not step past it. Never sand, gravel or
+  places one (a jobs.blocks.fill-cells child) on a lava cell next to the feet (side or below) with open air above it, so the body does not step past it. Never sand, gravel or
   other falling blocks, never in another's zone or claim, and at most 3 covers per run.
   Before each decision from a new cell it looks round (level and down) so the fire at the feet and the lava beside them are seen.
   5. On fire, not in lava, with no water in reach and no hazard within 1.5 blocks, there is nothing useful to do.
@@ -321,10 +321,10 @@
             :done)))))
 
 (defn ^:async cover!
-  "Place a cover block on the lava cell (a jobs.blocks.place child, slot :cover): true when placed, else false (a reflex
+  "Place a cover block on the lava cell (a jobs.blocks.fill-cells child, slot :cover): true when placed, else false (a reflex
   never yields: a child that waits is no cover this pass)."
   [c lava]
-  (let [r (await (child/run!* c :cover 'jobs.blocks.place {:pos lava :item (cover-item c) :ways #{:carried} :clear false}))]
+  (let [r (await (child/run!* c :cover 'jobs.blocks.fill-cells {:cells [lava] :use {:blocks [(cover-item c)]} :least 1 :ignore-zones? true}))]
     (and (not= :continue r) (= :done (:kind r)))))
 
 (defn ^:async pour-last-resort!

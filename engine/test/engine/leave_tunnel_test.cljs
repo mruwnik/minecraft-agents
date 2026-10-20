@@ -188,12 +188,13 @@
           (is (pos? (count (calls-of p "dig"))) "at least one torch is dug")
           (is (= (count (calls-of p "dig")) (count (ce/ends s :dug)))))))))
 
-(deftest each-mouth-cell-is-filled-through-the-place-job
+(deftest each-mouth-cell-is-filled-through-a-fill-cells-child
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (run-out! (setup {:blocks eight-down :inventory (inventory)} {:target [6 57 0]} {})))]
-          (is (= (count mouth) (count (ce/ends s :placed)))))))))
+          (is (= (count mouth) (count (ce/ends s :placed))))
+          (is (= (count mouth) (count (filter #(and (= :child_started (:kind %)) (= :fill (:slot %))) @(:seen s))))))))))
 
 (deftest nothing-to-fill-with-leaves-the-mouth-open-but-the-torches-taken
   (async done

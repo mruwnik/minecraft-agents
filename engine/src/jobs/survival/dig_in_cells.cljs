@@ -255,52 +255,6 @@
         (ctx/update-mem! c update cleared-key (fnil conj #{}) cell)
         (if (= "dug" (.-status d)) true (leave!))))))
 
-(defn ^:async place-all!
-  "Place blocks at cells in order. Resolves to :ok, :wait (a mob stands in the cell: the place was refused and is retried
-  for mob-wait-ms, the caller yields in between), or the first status that is not placed or occupied.
-  A cell occupied by a block that fills it is sealed already and goes in :occupied.
-  A cell occupied by a block a mob walks through is dug once and placed again, never a bed (it goes in :occupied).
-  If that second try is occupied too, or the dig fails, the cell goes in :occupied and is not tried again.
-  A cell that is sealed by now (the other half of a door just shut) is skipped.
-  An open door, gate or trapdoor is shut (shut-open!), never placed into or dug. One that stays open goes in :occupied."
-  [c blocks cells]
-  (loop [cells cells]
-    (let [item (lb/pick c blocks)
-          cell (first cells)]
-      (cond
-        (empty? cells) :ok
-        (sealed? (:primitives c) cell) (recur (rest cells))
-        (nil? item) "no-item"
-        :else (let [door (await (shut-open! c cell))
-                    r (when-not door (await (tidy/place! c cell item true)))
-                    status (some-> r .-status)
-                    _ (when-not (refusing-mobs r) (forget-wait! c :mob-since))]
-                (cond
-                  (= :shut door) (recur (rest cells))
-
-                  (= :open door)
-                  (do (ctx/update-mem! c update :occupied (fnil conj #{}) cell)
-                      (recur (rest cells)))
-
-                  (= "placed" status)
-                  (do (note-placed! c cell item)
-                      (forget-wait! c :mob-since)
-                      (recur (rest cells)))
-
-                  (and (not= "occupied" status) (keep-waiting! c :mob-since r))
-                  :wait
-
-                  (not= "occupied" status)
-                  (do (when (not= "no-item" status)
-                        (ctx/update-mem! c update-in [:refused cell] (fnil inc 0)))
-                      (ctx/update-mem! c assoc :mob-text (mob-text r))
-                      status)
-
-                  :else
-                  (if (await (clear-over! c cell :cleared :occupied))
-                    (recur cells)
-                    (recur (rest cells)))))))))
-
 (defn sealed-in?
   "Whether the world shows the body shut in: a roof within roof-height above (a solid block, or a cell that stops a mob,
   sealed?: leaves, glass) and, for walls mode, no open cell around the feet (checked from the blocks, not from what was placed)."
