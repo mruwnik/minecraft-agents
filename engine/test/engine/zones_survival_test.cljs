@@ -189,7 +189,7 @@
               (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
               (await (run-until-empty eng 10))
               (is (= digs? (boolean (seq (dug p)))) label)
-              (is (= (not digs?) (boolean (seq (filterv #(= :shut-in.failed (:kind %)) @seen)))) label))))))))
+              (is (= (not digs?) (boolean (seq (filterv #(and (= :stopped (:kind %)) (= :no-way (:reason %))) @seen)))) label))))))))
 
 ;; ------------------------------------------------------------------ get-food
 

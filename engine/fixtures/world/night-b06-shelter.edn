@@ -59,7 +59,7 @@
    :body {:inventory [["oak_log" 12]]}
    :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :shut-in.failed} :for-s 90 :until {:source :job :kind :shut-in.sealed}}]
+            {:no-event {:source :job :kind :stopped :data {:reason :no-way}} :for-s 90 :until {:source :job :kind :shut-in.sealed}}]
    :after [[:item "oak_log" [:>= 11]]]
    :limit-s 100}
   ;; 5a9e8c64: wall cells beside a one-block pillar have nothing to place against until a block goes under them
@@ -70,7 +70,7 @@
    :plot {:height 12 :light :dark}
    :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :shut-in.failed} :for-s 90 :until {:source :job :kind :shut-in.sealed}}]
+            {:no-event {:source :job :kind :stopped :data {:reason :no-way}} :for-s 90 :until {:source :job :kind :shut-in.sealed}}]
    :limit-s 100}
   ;; 29349f1b: a hut with an open door: the night job shuts it instead of bunkering inside with it open
   {:name "open-door-of-the-hut-is-shut"

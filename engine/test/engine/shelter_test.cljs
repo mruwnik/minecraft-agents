@@ -18,7 +18,7 @@
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
             [engine.test-util :as tu :refer [run-until-empty]]
-            [engine.shelter-support :refer [day-ms night noon on-wait! dawn-after! mid-night! default-dawn setup tick-n night-then-day calls arg-pos entries know-bed! looked-round! pos-of teleport! emitted emitted-by floor bed-room dirt-stack sleeper awake declined-events always-shelter refuse-placing! after-first! fires? ground stone-ground hard-ground ms-of-offline notified refuse-cell!]]
+            [engine.shelter-support :refer [day-ms night noon on-wait! dawn-after! mid-night! default-dawn setup tick-n night-then-day calls arg-pos entries know-bed! looked-round! pos-of teleport! emitted no-way-stops emitted-by floor bed-room dirt-stack sleeper awake declined-events always-shelter refuse-placing! after-first! fires? ground stone-ground hard-ground ms-of-offline notified refuse-cell!]]
             [engine.triggers :as triggers]))
 
 (deftest without-a-sky-nothing-is-dark-with-one-the-night-is
@@ -518,7 +518,7 @@
           (await (run-until-empty eng 8))
           (is (= [] (calls p "dig")) "no cell dug: none of the cells drops a block")
           (is (= [] (calls p "place")))
-          (is (re-find #"nothing to roof the pit with" (:text (first (emitted seen :shut-in.failed)))))
+          (is (re-find #"nothing to roof the pit with" (:text (first (no-way-stops seen)))))
           (is (= [:no-way] (mapv :reason (emitted seen :stopped))))
           (is (= [] (:list (core/state eng))) "ended"))))))
 
@@ -531,7 +531,7 @@
                                            :blocks (merge pit-floor {"0,63,0" "iron_ore" "0,62,0" "iron_ore" "0,61,0" "iron_ore" "0,60,0" "stone"})})]
           (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
           (await (run-until-empty eng 8))
-          (is (= [] (emitted seen :shut-in.failed)))
+          (is (= [] (no-way-stops seen)))
           (is (= ["oak_log"] (map #(.-item (.-args %)) (calls p "place"))) "the log roofs the pit"))))))
 
 (deftest a-submitted-dig-in-in-a-shut-room-is-done-and-places-nothing
@@ -574,7 +574,7 @@
           (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
           (await (run-until-empty eng 8))
           (is (= [] (calls p "dig")) "a hand dig of stone drops nothing: no roofless pit")
-          (is (re-find #"cannot harvest stone" (:text (first (emitted seen :shut-in.failed)))))
+          (is (re-find #"cannot harvest stone" (:text (first (no-way-stops seen)))))
           (is (= [] (entries eng :shut-in-failed)) "a lack of tool is no failed site: the quote says so")
           (is (= [] (:list (core/state eng))) "ended"))))))
 
@@ -599,7 +599,7 @@
           (after-first! p "place" #(do (swap! (fake/state p) assoc :inventory []) (teleport! p 5 64 0)))
           (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
           (await (run-until-empty eng 12))
-          (is (empty? (emitted seen :shut-in.failed)) "no failure: it switched to a pit")
+          (is (empty? (no-way-stops seen)) "no failure: it switched to a pit")
           (is (seq (calls p "dig")) "it dug down")
           (is (< (:y (pos-of p)) 64) "the body is in the pit")
           (is (= "dirt" (.-name (.blockAt p (tu/pos 5 64 0)))) "the pit is roofed with a dug block"))))))
@@ -624,7 +624,7 @@
           (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status "no-support"}))
           (core/submit! eng '(jobs.survival.shut-in {:ways #{:walls} :for :night}) {})
           (is (<= (await (run-until-empty eng 10)) 5) "bounded")
-          (is (= 1 (count (emitted seen :shut-in.failed))))
+          (is (= 1 (count (no-way-stops seen))))
           (is (= [{:pos {:x 0 :y 64 :z 0} :state :built :sealed false}] (entries eng :shelter)) "records that it stopped, unroofed"))))))
 
 (deftest dig-in-walls-place-a-support-before-the-roof
@@ -644,7 +644,7 @@
           (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
           (await (run-until-empty eng 8))
           (is (= [{:x 1 :y 66 :z 0} {:x 0 :y 66 :z 0}] (mapv arg-pos (take-last 2 (calls p "place")))) "support, then roof")
-          (is (= [] (emitted seen :shut-in.failed)))
+          (is (= [] (no-way-stops seen)))
           (is (= [{:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built
                    :door [{:x 1 :y 64 :z 0} {:x 1 :y 65 :z 0}]}]
                  (entries eng :shelter))))))))
@@ -668,7 +668,7 @@
           (require-support! p)
           (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
           (await (run-until-empty eng 12))
-          (is (= [] (emitted seen :shut-in.failed)))
+          (is (= [] (no-way-stops seen)))
           (is (= {:x 0 :y 61 :z 0} (pos-of p)) "three down")
           (is (= "dirt" (.-name (.blockAt p (tu/pos 0 63 0)))) "roof flush with the ground, beside solid ground")
           (is (= {:x 0 :y 63 :z 0} (:roof (last (entries eng :shelter))))))))))
@@ -682,7 +682,7 @@
           (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
           (await (run-until-empty eng 12))
           (is (= [] (calls p "dig")) "floor intact")
-          (is (= 1 (count (emitted seen :shut-in.failed))))
+          (is (= 1 (count (no-way-stops seen))))
           (is (= :hazard-below (:reason (first (entries eng :shut-in-failed))))))))))
 
 (def one-side-open
@@ -709,8 +709,8 @@
           (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
           (await (run-until-empty eng 8))
           (is (= [] (calls p "dig")))
-          (is (= 1 (count (emitted seen :shut-in.failed))))
-          (is (re-find #"water" (:text (first (emitted seen :shut-in.failed))))))))))
+          (is (= 1 (count (no-way-stops seen))))
+          (is (re-find #"water" (:text (first (no-way-stops seen))))))))))
 
 (deftest dig-in-will-not-dig-over-an-air-gap
   (async done
@@ -720,7 +720,7 @@
           (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
           (await (run-until-empty eng 8))
           (is (= [] (calls p "dig")))
-          (is (= 1 (count (emitted seen :shut-in.failed)))))))))
+          (is (= 1 (count (no-way-stops seen)))))))))
 
 (deftest dig-in-does-not-claim-sealed-when-the-roof-is-refused
   (async done
@@ -1011,7 +1011,7 @@
             (core/submit! eng '(jobs.survival.night) {})
             (await (tick-n eng 3))
             (is (= [] (calls p "dig")) (pr-str blocks))
-            (is (= 5 (count (emitted seen :shut-in.failed))) (str (pr-str blocks) ": one try at the site, then max-sites sites in all, then the niche"))
+            (is (= 5 (count (no-way-stops seen))) (str (pr-str blocks) ": one try at the site, then max-sites sites in all, then the niche"))
             (is (= {:jobs 1 :futile reason} @mid) (str (pr-str blocks) ": held exposed at night, dig-in's futile entry written"))
             (is (= [] (entries eng :shut-in-failed)) "forgotten when the night ends")))))))
 
@@ -1233,7 +1233,7 @@
           (await (run-until-empty eng 12))
           (is (= [{:x 0 :y 63 :z 0} {:x 0 :y 62 :z 0} {:x 0 :y 61 :z 0}] (mapv arg-pos (calls p "dig"))))
           (is (= [{:x 0 :y 63 :z 0}] (mapv arg-pos (calls p "place"))) "roofed in the ground layer")
-          (is (= [] (emitted seen :shut-in.failed))))))))
+          (is (= [] (no-way-stops seen))))))))
 
 (deftest dig-in-bounds-digging-without-progress
   (async done
@@ -1244,7 +1244,7 @@
           (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
           (is (< (await (run-until-empty eng 10)) 10))
           (is (= 3 (count (calls p "dig"))) "three failed digs in a row, then it gives up")
-          (is (= 1 (count (emitted seen :shut-in.failed))))
+          (is (= 1 (count (no-way-stops seen))))
           (is (= :dig-failed (:reason (first (entries eng :shut-in-failed)))))
           (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
           (await (run-until-empty eng 10))
@@ -1259,7 +1259,7 @@
             (.override (.-world p) "moveTo" (fn ^:async f [_ _ _] #js {:status status}))
             (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
             (is (< (await (run-until-empty eng 12)) 12))
-            (is (= 1 (count (emitted seen :shut-in.failed))))
+            (is (= 1 (count (no-way-stops seen))))
             (is (= :descent-stalled (:reason (first (entries eng :shut-in-failed)))) status)))))))
 
 (deftest unsupported-walls-are-not-retried-on-every-reflex-firing

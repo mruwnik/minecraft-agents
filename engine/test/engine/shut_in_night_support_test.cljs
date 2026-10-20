@@ -40,7 +40,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [seen]} (await (run-walls! {:inventory [{:name "dirt" :count 40}] :blocks pillar :floor [0 0 0 0]}))]
-          (is (empty? (st/emitted seen :shut-in.failed)) (pr-str (map :text (st/emitted seen :shut-in.failed))))
+          (is (empty? (filter #(= :no-way (:reason %)) (st/emitted seen :stopped))) (pr-str (map :text (filter #(= :no-way (:reason %)) (st/emitted seen :stopped)))))
           (is (= 1 (count (st/emitted seen :shut-in.sealed)))))))))
 
 (deftest a-support-block-in-another-zone-is-not-placed

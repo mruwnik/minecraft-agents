@@ -82,6 +82,12 @@
 (defn teleport! [p x y z] (fake/swap-self! p assoc :pos [x y z]))
 
 (defn emitted [seen kind] (filterv #(= kind (:kind %)) @seen))
+(defn no-way-stops
+  "The :no-way endings of shut-in seen so far, each with its :text: a root call's :stopped event, a night's child_ended."
+  [seen]
+  (vec (concat (for [e (emitted seen :stopped) :when (= :no-way (:reason e))] (assoc e :text (or (:text e) (:message e))))
+               (for [e (emitted seen :child_ended) :when (= :no-way (get-in e [:ending :cause]))]
+                 (assoc e :text (get-in e [:ending :data :text]))))))
 
 (defn ended-because
   "The ending events (a job's own, or a child's child_ended) whose cause is cause."

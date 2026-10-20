@@ -18,7 +18,7 @@
    :keep-memory false
    :body {:at [25.5 6 25.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
-   :expect [{:event {:source :job :kind :shut-in.failed} :within-s 30 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-way}} :within-s 30 :of-job true}]
    :after [[:block [25 5 25] "stone"]]
    :limit-s 40}
   {:name "c2-reasoned-entry-drops-the-pit-after-restart"

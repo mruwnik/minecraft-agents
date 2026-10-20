@@ -37,7 +37,7 @@
       (await (core/tick! eng))
       (recur (inc i)))))
 
-(defn failed [seen] (some #(when (= :shut-in.failed (:kind %)) %) @seen))
+(defn failed [seen] (some #(when (and (= :stopped (:kind %)) (= :no-way (:reason %))) %) @seen))
 
 (deftest dig-in-walls-wait-out-a-mob-in-a-wall-cell
   (async done

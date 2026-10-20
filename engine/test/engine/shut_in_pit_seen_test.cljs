@@ -9,6 +9,7 @@
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
+            [engine.shelter-support :refer [no-way-stops]]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as world]))
@@ -68,7 +69,7 @@
                            (filter #(= kind (.-name %)) (.-calls (.-world p)))))
 (defn digs [p] (mapv (juxt :x :y :z) (map :pos (calls p "dig"))))
 (defn feet-y [p] (js/Math.floor (.-y (.-pos (.self p)))))
-(defn failed [{:keys [seen]}] (filter #(= :shut-in.failed (:kind %)) @seen))
+(defn failed [{:keys [seen]}] (no-way-stops seen))
 
 (deftest a-pit-over-clean-rock-is-dug-and-roofed-on-what-the-body-saw-of-the-surface
   (async done
@@ -77,7 +78,7 @@
         (let [{:keys [p seen]} (await (run-pit! {:blocks ground}))]
           (is (= [[1 64 0] [0 64 0] [0 63 0] [1 63 0] [1 62 0]] (digs p)) "zigzag: no dig under the feet")
           (is (= 62 (feet-y p)))
-          (is (empty? (filter #(= :shut-in.failed (:kind %)) @seen))))))))
+          (is (empty? (no-way-stops seen))))))))
 
 (defn hover-over-digs!
   "A dig leaves the body where it stands for the moment (the fall into the hole takes ticks on a server): the job decides

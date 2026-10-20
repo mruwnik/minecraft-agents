@@ -1,5 +1,5 @@
 ;; Cards d3a6426a, 05fc51cf: shut-in (night) site checks. Water-ish blocks beside the descent cell, or water at the body, refuse the pit
-;; (shut-in.failed, ground intact); a plant beside the start is no roof support, so the pit goes 3 deep and is roofed in the
+;; (:no-way ending, ground intact); a plant beside the start is no roof support, so the pit goes 3 deep and is roofed in the
 ;; ground layer. Dirt pad y -6..-1 under the body (the plot floor is over void).
 {:defaults
  {:tags [:survival :shut-in]
@@ -12,22 +12,22 @@
  [{:name "water-beside-descent-cell-refuses"
    :blocks [[:set [17 -2 16] "stone"] [:set [17 -1 16] "water"]]
    :act [[:job (jobs.survival.shut-in {:ways #{:pit} :for :night})]]
-   :expect [{:event {:source :job :kind :shut-in.failed :message [:contains "; not "]} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :shut-in.sealed} :for-s 30 :until {:source :job :kind :shut-in.failed :message [:contains "; not "]}}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-way} :message [:contains "; not "]} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :shut-in.sealed} :for-s 30 :until {:source :job :kind :stopped :data {:reason :no-way} :message [:contains "; not "]}}]
    :after [[:block [16 -1 16] "dirt"]]
    :limit-s 40}
   {:name "waterlogged-slab-beside-descent-cell-refuses"
    :blocks [[:set [17 -1 16] "oak_slab[waterlogged=true]"]]
    :act [[:job (jobs.survival.shut-in {:ways #{:pit} :for :night})]]
-   :expect [{:event {:source :job :kind :shut-in.failed :message [:contains "; not "]} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :shut-in.sealed} :for-s 30 :until {:source :job :kind :shut-in.failed :message [:contains "; not "]}}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-way} :message [:contains "; not "]} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :shut-in.sealed} :for-s 30 :until {:source :job :kind :stopped :data {:reason :no-way} :message [:contains "; not "]}}]
    :after [[:block [16 -1 16] "dirt"]]
    :limit-s 40}
   {:name "seagrass-beside-descent-cell-refuses"
    :blocks [[:set [17 -1 16] "seagrass"]]
    :act [[:job (jobs.survival.shut-in {:ways #{:pit} :for :night})]]
-   :expect [{:event {:source :job :kind :shut-in.failed :message [:contains "; not "]} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :shut-in.sealed} :for-s 30 :until {:source :job :kind :shut-in.failed :message [:contains "; not "]}}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-way} :message [:contains "; not "]} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :shut-in.sealed} :for-s 30 :until {:source :job :kind :stopped :data {:reason :no-way} :message [:contains "; not "]}}]
    :after [[:block [16 -1 16] "dirt"]]
    :limit-s 40}
   {:name "water-in-feet-cell-refuses"
@@ -40,15 +40,15 @@
   {:name "water-above-roof-cell-refuses"
    :blocks [[:set [17 0 16] "stone"] [:set [16 1 16] "water"]]
    :act [[:job (jobs.survival.shut-in {:ways #{:pit} :for :night})]]
-   :expect [{:event {:source :job :kind :shut-in.failed :message [:contains "not digging"]} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :shut-in.sealed} :for-s 30 :until {:source :job :kind :shut-in.failed :message [:contains "not digging"]}}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-way} :message [:contains "not digging"]} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :shut-in.sealed} :for-s 30 :until {:source :job :kind :stopped :data {:reason :no-way} :message [:contains "not digging"]}}]
    :after [[:block [16 -1 16] "dirt"]]
    :limit-s 40}
   {:name "poppy-beside-start-digs-3-deep-and-seals"
    :blocks [[:set [17 0 16] "poppy"]]
    :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :shut-in.failed} :for-s 60 :until {:source :job :kind :shut-in.sealed}}]
+            {:no-event {:source :job :kind :stopped :data {:reason :no-way}} :for-s 60 :until {:source :job :kind :shut-in.sealed}}]
    :after [[:body-near [16.5 -3 16.5] 2]]
    :limit-s 80}
   ;; 05fc51cf: lava hidden in the dirt beside the first dug cell flows into the hole: sealed with a carried block and the pit goes on, or (:on-lava :stop) left and the job stops
@@ -66,11 +66,11 @@
    :blocks [[:set [17 -2 16] "lava"]]
    :body {:at [16.5 0 16.5] :effects [["resistance" 600 4] ["fire_resistance" 600 0]] :inventory [["cobblestone" 8]]}
    :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night :on-lava :stop})]]
-   :expect [{:event {:source :job :kind :shut-in.failed :message [:contains "lava"]} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :shut-in.sealed} :for-s 60 :until {:source :job :kind :shut-in.failed}}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-way} :message [:contains "lava"]} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :shut-in.sealed} :for-s 60 :until {:source :job :kind :stopped :data {:reason :no-way}}}]
    :limit-s 70}
   {:name "flat-dirt-no-plant-seals"
    :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :shut-in.failed} :for-s 60 :until {:source :job :kind :shut-in.sealed}}]
+            {:no-event {:source :job :kind :stopped :data {:reason :no-way}} :for-s 60 :until {:source :job :kind :shut-in.sealed}}]
    :limit-s 80}]}

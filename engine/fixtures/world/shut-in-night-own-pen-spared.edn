@@ -1,5 +1,5 @@
 ;; Card 193c7aa0 (138d763b, a289a411): night shut-in with the body inside a pen it made (plan by "$body") does not cut the pen's floor or
-;; fence: the cell is spared (shut-in.failed warn naming it), the floor under the body and the ring stand. Dirt mass x 8..24, z 8..24, y 0..9;
+;; fence: the cell is spared (the :no-way ending names it), the floor under the body and the ring stand. Dirt mass x 8..24, z 8..24, y 0..9;
 ;; fence ring x 13..19, z 13..19 on the surface (y 10), floor y 9 inside; body inside at [16.5 10 16.5].
 ;; A door a plan wants beside the body spares the pit too (a hole at the doorstep leaves a closed building without a way in).
 ;; Should-fail (dug): the same body on the same dirt with no plan digs its pit (shut-in.sealed).
@@ -19,16 +19,16 @@
                     {:id "e" :box [#at [19 10 14] #at [19 10 18]] :want "oak_fence"}
                     {:id "floor" :box [#at [14 9 14] #at [18 9 18]] :want [:any "dirt"]}]}]
    :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
-   :expect [{:event {:source :job :kind :shut-in.failed :level :warn} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :shut-in.sealed} :for-s 60 :until {:source :job :kind :shut-in.failed}}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-way}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :shut-in.sealed} :for-s 60 :until {:source :job :kind :stopped :data {:reason :no-way}}}]
    :after [[:block [16 9 16] "dirt"] [:block [13 10 16] "oak_fence"] [:block [19 10 16] "oak_fence"]]
    :limit-s 90}
   {:name "shut-in-on-a-planned-doorstep-is-spared"
    :plans [{:id "hut" :metadata {:by "Miles"}
             :parts [{:id "door" :box [#at [17 10 16] #at [17 10 16]] :want "oak_door"}]}]
    :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
-   :expect [{:event {:source :job :kind :shut-in.failed :level :warn} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :shut-in.sealed} :for-s 60 :until {:source :job :kind :shut-in.failed}}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-way}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :shut-in.sealed} :for-s 60 :until {:source :job :kind :stopped :data {:reason :no-way}}}]
    :after [[:block [16 9 16] "dirt"]]
    :limit-s 90}
   {:name "shut-in-without-a-plan-digs-the-pit"

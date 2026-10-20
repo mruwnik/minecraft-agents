@@ -33,7 +33,7 @@
   at the bottom of), :take-back (placed blocks worth more than :take-back-value, and any near a gate a plan wants, which leave! digs
   again by day), :room true; a shelter sealed again where the latest entry stood keeps its :start and :door); the event
   shut-in.sealed (when it placed blocks and the world shows the body shut in, with :spent; a warning when :resealed) or shut-in.unsealed (warning, naming the open
-  cells); shut-in.failed (warning) when no way is left; and for a way that failed on the site a :shut-in-failed {:pos :way :reason} entry (cap 5, ten
+  cells); and for a way that failed on the site a :shut-in-failed {:pos :way :reason} entry (cap 5, ten
   minutes; none for a lack of blocks or of a tool), after which that way is dropped within ::futile-radius of it (jobs.survival.shut-in-night), except the pit, which walks to another site (jobs.survival.dig-pit-site).
   Quote: time.")
 
@@ -171,13 +171,11 @@
     (ctx/update-mem! c #(-> % (assoc-in [:why way] text) (assoc-in [:stops way] {:reason stop})))))
 
 (defn no-way!
-  "Nothing left to try: the :no-way ending (for :night with a shut-in.failed warning)."
+  "Nothing left to try: the :no-way ending."
   [c]
   (note-dropped! c)
   (let [m (ctx/mem c)
         text (str "cannot enclose the body: " (if-let [why (seq (vals (:why m)))] (str/join "; " why) "no way left that can be done here"))]
-    (when (and (night/night? c) (not-every? (set (:barred m)) (concat (:failed-ways m) (:dropped m))))
-      (ctx/emit! c :shut-in.failed :warn {:text text :open (dig-cells/open-cells (:primitives c) (sh-sense/feet (:primitives c)))}))
     (end! c :nothing-possible :no-way {:text text :tried (vec (:failed-ways m)) :dropped (:dropped m) :why (:why m) :statuses (:statuses m) :stops (:stops m)})))
 
 (defn ^:async round
