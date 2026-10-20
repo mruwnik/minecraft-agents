@@ -46,7 +46,6 @@
             {:no-event {:source :job :kind :go-to.escalated} :for-s 300 :of-job true :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [60.5 30 16.5] 3]]}
   {:name "zombie-on-the-walk-refuses-the-lane-below-and-cuts-a-stair"
-   :mobs :keep
    :act [[:job (jobs.movement.go-to {:pos #at [60 30 16] :range 1})]
          [:until-pos {:x-min 40} 60]
          [:summon "zombie" [54.5 12 16.5] "{NoAI:1b}"]]

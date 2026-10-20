@@ -5,6 +5,7 @@
             [engine.path.executor :as executor]
             [engine.path.planner-tuned :as planner]
             [jobs.lib.cost :as cost]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.walk.sight :as wsight]
             [jobs.lib.walk.world :as wworld]))
 
@@ -208,6 +209,36 @@
    (let [k (last (keep-indexed (fn [i s] (when-not (or (:swim s) (wet? s)) i)) steps))]
      (if k (subvec steps 0 (inc k)) []))))
 
+(defn- near-blocker-fn
+  "(fn [step]): whether the step is within margin blocks more than the hostile-near radius of a danger with block true (a seen
+  mob in dangers, the planner's options.dangers); nil when there is no such danger."
+  [^js dangers margin]
+  (let [r (+ margin (danger-q/hostile-radius))
+        r2 (* r r)
+        blockers (filterv #(true? (.-block ^js %)) (some-> dangers vec))]
+    (when (seq blockers)
+      (fn [{:keys [x y z]}]
+        (some (fn [^js d] (< (+ (js/Math.pow (- (+ x 0.5) (.-x d)) 2) (js/Math.pow (- y (.-y d)) 2) (js/Math.pow (- (+ z 0.5) (.-z d)) 2)) r2))
+              blockers)))))
+
+(defn stop-short
+  "A partial plan's steps without its tail within the hostile-near radius of a seen mob that blocks the way: a body stops out of
+  reach of what it cannot pass, and escalates from there."
+  [steps dangers]
+  (if-let [near? (near-blocker-fn dangers 0)]
+    (loop [k (count steps)]
+      (if (and (pos? k) (near? (nth steps (dec k)))) (recur (dec k)) (subvec steps 0 k)))
+    steps))
+
+(defn retreat-cell
+  "[x y z] of the last of steps (the way walked so far) a block clear of the hostile-near radius of every blocking seen mob
+  of dangers, nil when the body is already clear of them or none is."
+  [steps dangers]
+  (when-let [near? (near-blocker-fn dangers 0)]
+    (when (near? (peek steps))
+      (when-let [s (first (remove (near-blocker-fn dangers 1) (rseq steps)))]
+        [(:x s) (:y s) (:z s)]))))
+
 (defn near-goal
   "How far, in blocks to 1 decimal, the step is from the goal cell to."
   [{:keys [x y z]} [gx gy gz]]
@@ -257,13 +288,15 @@
         past (when (and (not edge) (not out) (= :open one-way)) (open-path r))
         steps (cond edge (path-steps walled (:path edge)) past (path-steps walled past) :else steps)
         status (if (or edge past) "partial" (.-status r))
-        walked (if (= "partial" status) (dry-end steps (head-wet-fn walled)) steps)
+        dry (if (= "partial" status) (dry-end steps (head-wet-fn walled)) steps)
+        walked (if (= "partial" status) (stop-short dry (.-dangers walled)) dry)
         step (one-way-of r)]
     {:r r :steps walked :beyond beyond :status status :pw pw
      :ms (or (some-> r .-ms) 0)
      :one-way-taken (when past step)
      :frontier-taken (when (and edge (> (count walked) 1)) (cond-> {:at (:at edge)} (:known edge) (assoc :known true) (:target edge) (assoc :target (:target edge))))
      :searched-out out
+     :stopped-short (< (count walked) (count dry))
      :stop (when (and step (not past) (not edge)) (stopped-one-way r (or (peek walked) (first steps) (wworld/body-cell c)) to step))}))
 
 (defn no-walk
@@ -272,7 +305,7 @@
   executor/policy) refuses. replans goes in the result; :damage-refused true when the search found no way for want of
   damage budget (the planner's damageRefused)."
   ([plan replans] (no-walk plan replans executor/policy))
-  ([{:keys [r steps beyond status stop searched-out fresh]} replans policy]
+  ([{:keys [r steps beyond status stop searched-out fresh stopped-short]} replans policy]
    (let [partial? (= "partial" status)]
      (cond
        (= "searching" status)
@@ -293,6 +326,7 @@
 
        (or (= "none" status) (and partial? (< (count steps) 2)))
        (cond-> {:status :no-path :reason (some-> (.-reason r) keyword) :replans replans}
+         stopped-short (assoc :stopped-short true)
          (true? (some-> r .-damageRefused)) (assoc :damage-refused true))
 
        :else

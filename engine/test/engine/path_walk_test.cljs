@@ -211,6 +211,15 @@
       [(s 0 true) (s 1 true)] []
       [(s 0 false) (s 1 false)] [0 1])))
 
+(deftest stop-short-ends-a-partial-plan-out-of-reach-of-a-blocking-mob
+  (let [steps (mapv (fn [x] {:x x :y 12 :z 16}) (range 0 12))
+        d (fn [x block] #js {:x x :y 12 :z 16.5 :block block})
+        ends (fn [dangers] (:x (peek (wplan/stop-short steps dangers))))]
+    (is (= 11 (ends #js [(d 60.5 true)])) "far mob: the plan is whole")
+    (is (= 11 (ends #js [(d 12.5 false)])) "a mob that only costs a toll: whole")
+    (is (= 4 (ends #js [(d 12.5 true)])) "stops hostile-near's radius (8) short of the blocker")
+    (is (= 11 (ends nil)))))
+
 (deftest with-walls-reads-the-named-cells-as-one-stone-state-and-leaves-the-rest
   (let [pw (.pathWorld (tu/fake {:blocks (merge (box 0 64 0 2 64 0 "oak_fence_gate") (box 0 65 0 0 65 0 "air"))}))
         walled (wworld/with-walls pw [{:x 1 :y 64 :z 0}])

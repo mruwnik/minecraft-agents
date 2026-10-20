@@ -361,6 +361,15 @@
             (let [t (js/performance.now) plan (await (plan-fn []))] [plan (- (js/performance.now) t)]))
           (recur (inc n)))))))
 
+(defn ^:async back-off!
+  "Walk the body back along the way it came to a cell clear of the hostile-near radius of the seen mob that blocks the way
+  (fresh's pw dangers), so what follows (a stair, another way) does not start in reach of it. No-op when none is blocking or clear."
+  [c fresh walked walk-fn policy]
+  (when-let [cell (wplan/retreat-cell walked (.-dangers ^js (:pw fresh)))]
+    (let [{:keys [steps]} (await (wplan/plan-within! c (:pw fresh) cell 0 (default-weight) policy))]
+      (when (> (count steps) 1)
+        (await (walk-fn steps nil))))))
+
 (defn ^:async follow!
   "Walk plan (a plan-walk! result) and plan again from the body's cell, in the same call, whenever the walk stops for it:
   the look-ahead saw the way change (:changed: the new plan is walked), a partial plan is due a refresh (:refresh: the new
@@ -381,7 +390,8 @@
   [c plan {:keys [plan-fn walk-fn to policy announce! dangers] :or {policy (wworld/body-policy c) announce! (fn [_ _])}}]
   (let [known (when dangers (atom #{}))
         walkable? (fn [pl] (nil? (wplan/no-walk pl 0 policy)))
-        proved-none? (fn [pl] (contains? #{:goal-cut-off :goal-enclosed} (:reason (wplan/no-walk pl 0 policy))))
+        proved-none? (fn [pl] (let [nw (wplan/no-walk pl 0 policy)]
+                                (or (contains? #{:goal-cut-off :goal-enclosed} (:reason nw)) (:stopped-short nw))))
         searching? (fn [pl] (= :searching (:status (wplan/no-walk pl 0 policy))))
         cut-length (fn [steps k] (path-length (subvec steps 0 (min (count steps) (max 1 k)))))]
     (loop [plan plan steps (:steps plan) n 0 ms 0 walked 0 damage 0]
@@ -423,6 +433,8 @@
                 fresh (await (plan-fn []))
                 plan-ms (- (js/performance.now) t)]
             (tell! :danger plan-ms (not (or (walkable? fresh) (searching? fresh) (:refused fresh))))
+            (when (:stopped-short (wplan/no-walk fresh 0 policy))
+              (await (back-off! c fresh (subvec steps 0 (min (count steps) (inc k))) walk-fn policy)))
             (cond
               (walkable? fresh) (recur (assoc fresh :ms plan-ms) (:steps fresh) (inc n) ms walked' damage')
               ;; an unfinished search: the old plan runs past the danger, so the caller searches on from here
