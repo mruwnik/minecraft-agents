@@ -69,12 +69,14 @@
    ::enderman-close {:default 3 :doc "Blocks within which an enderman counts as angry though it has not hurt the body yet (a calm one does not come this near)." :spec (a/num-in 0 nil)}
    ::water-reach {:default 6 :doc "Blocks within which a body hunted by an enderman looks for water to stand in." :spec (a/num-in 0 nil)}
    ::roof-reach {:default 8 :doc "Blocks within which a body hunted by an enderman looks for a 2-high gap under a roof." :spec (a/num-in 0 nil)}
+   ::creeper-keep {:default 5 :doc "Blocks within which a creeper stops the fight walking toward a mob on its side: the fight swings from where the body stands, never a step nearer the creeper." :spec (a/num-in 0 nil)}
    ::swim-reach {:default 16 :doc "Blocks within which a body in water looks for dry land to swim out to." :spec (a/num-in 0 nil)}})
 (defn flight-timeout-s [] (settings/get settings ::flight-timeout-s))
 (defn enderman-close [] (settings/get settings ::enderman-close))
 (defn water-reach [] (settings/get settings ::water-reach))
 (defn roof-reach [] (settings/get settings ::roof-reach))
 (defn swim-reach [] (settings/get settings ::swim-reach))
+(defn creeper-keep [] (settings/get settings ::creeper-keep))
 
 (defn fist-sweeps [] (settings/get settings :jobs.survival.retreat-cornered/fist-sweeps))
 (defn hit-reach [] (settings/get settings :jobs.survival.retreat-cornered/hit-reach))

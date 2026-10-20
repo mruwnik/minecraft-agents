@@ -778,14 +778,25 @@
         creeper #js {:name "creeper" :d 6}
         near-creeper #js {:name "creeper" :d 2}
         far-zombie #js {:name "zombie" :d 6}
-        dist #(.-d %)]
-    (are [blind? hostiles expected] (= expected (pick/reach-only? blind? hostiles dist))
+        dist #(.-d %)
+        offset #(.-o %)]
+    (are [blind? hostiles expected] (= expected (pick/reach-only? blind? hostiles dist offset 5))
       false [zombie creeper] false
       false [creeper zombie] false
       false [near-creeper far-zombie] true
       false [creeper] true
       true [zombie] true
       false [] false)))
+
+(deftest a-step-toward-a-zombie-never-brings-the-body-nearer-a-creeper-in-keep-range
+  (let [at (fn [name d o] #js {:name name :d d :o o})
+        dist #(.-d %)
+        offset #(.-o %)
+        ro? (fn [hostiles] (pick/reach-only? false hostiles dist offset 5))]
+    (is (true? (ro? [(at "zombie" 2 #js [2 0]) (at "creeper" 4 #js [4 0])])) "creeper on the zombie's side")
+    (is (false? (ro? [(at "zombie" 2 #js [2 0]) (at "creeper" 4 #js [-4 0])])) "creeper behind: the step away from it is fine")
+    (is (false? (ro? [(at "zombie" 2 #js [2 0]) (at "creeper" 4 #js [0 4])])) "creeper at right angles: the step keeps its distance (first order)")
+    (is (false? (ro? [(at "zombie" 2 #js [2 0]) (at "creeper" 9 #js [9 0])])) "creeper beyond keep range")))
 
 (deftest an-unarmed-body-at-a-dead-end-never-walks-to-a-creeper-to-punch-it
   (async done

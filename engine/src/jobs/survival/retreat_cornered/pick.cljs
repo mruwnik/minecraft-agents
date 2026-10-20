@@ -38,10 +38,24 @@
   (and (not armed?) (not win?) (< sweeps fist-sweeps)))
 
 (defn reach-only?
-  "Pure: whether the fight swings only at what is within reach and walks to nothing: blind? (a body that cannot see), or
-  the nearest of hostiles by dist is a creeper. A zombie nearer than a creeper is fought as any mob would be."
-  [blind? hostiles dist]
-  (boolean (or blind? (some-> (seq hostiles) (->> (apply min-key dist)) combat/creeper?))))
+  "Pure: whether the fight swings only at what is within reach and walks to nothing: blind? (a body that cannot see), the
+  nearest of hostiles by dist is a creeper, or a creeper within creeper-keep lies on the same side as a hostile (offset: [dx dz] from the body):
+  a step toward that hostile would bring the body nearer the creeper."
+  [blind? hostiles dist offset creeper-keep]
+  (let [creepers (filter combat/creeper? hostiles)
+        dot (fn [[ax az] [bx bz]] (+ (* ax bx) (* az bz)))]
+    (boolean (or blind?
+                 (some-> (seq hostiles) (->> (apply min-key dist)) combat/creeper?)
+                 (some (fn [c] (and (<= (dist c) creeper-keep)
+                                    (some #(and (not (combat/creeper? %)) (pos? (dot (offset %) (offset c)))) hostiles)))
+                       creepers)))))
+
+(defn mob-offset
+  "[dx dz] from the body to hostile e."
+  [c e]
+  (let [from (u/pos-of (.-pos (.self (:primitives c))))
+        to (danger-q/mob-pos (:primitives c) e)]
+    [(- (:x to) (:x from)) (- (:z to) (:z from))]))
 
 (defn ^:async fight-or-wait!
   "fight!, except that a reach-only fight with no hostile within hit-reach fails the option at once: attack would sit waiting for one to come."
@@ -236,7 +250,7 @@
                   :fight (if (fist-hold? {:armed? (or beaten-fight? armed?) :win? win?
                                           :sweeps (:sweeps (ctx/mem c) 0) :fist-sweeps max-fist-sweeps})
                            (await (fist-look! c))
-                           (await (fight-or-wait! c (if (= [:fight] order) weapons (into (vec weapons) tool-weapons)) (reach-only? blind? hostiles #(danger-q/mob-distance (:primitives c) %)) hostiles)))
+                           (await (fight-or-wait! c (if (= [:fight] order) weapons (into (vec weapons) tool-weapons)) (reach-only? blind? hostiles #(danger-q/mob-distance (:primitives c) %) #(mob-offset c %) (rc/creeper-keep)) hostiles)))
                   :plug (await (refuge/plug-option! c :plug #{:walls}))
                   :plug-zone (when (:zone-walls (ctx/mem c)) (await (refuge/plug-option! c :plug-zone #{:walls})))
                   :plug-dig (await (refuge/plug-option! c :plug-dig #{:pit :pocket}))
