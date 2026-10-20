@@ -26,7 +26,7 @@
   "Before a dig down or a tunnel sets out: with fewer than trip/torch-low torches carried, get them up to trip/torch-stock
   with a jobs.items.obtain child (slot :torches; chest, craft from coal or charcoal, charcoal by smelt, gather), and with
   coal or charcoal carried only what that fuel makes (4 each). Resolves nil to go on, :continue while the get waits.
-  Once per call (:torches-tried): info torch.stocked, or warn torch.no-stock with the get's cause. The body walks back to
+  Once per call (:torches-tried): info torch.stocked, or warn torch.no-stock with the get's cause (nothing when a caller is already getting torches: :duplicate-call). The body walks back to
   where it began (need :return?). Skipped without :gather in the call's ways."
   [c]
   (let [p (:primitives c)
@@ -42,7 +42,10 @@
           (let [now (torch/torches-held p)]
             (ctx/update-mem! c assoc :torches-tried true)
             (when (and (pos? fuel) (<= now held)) (ctx/update-mem! c assoc :craft-failed true))
-            (if (> now held)
+            (cond
+              (> now held)
               (ctx/emit! c :torch.stocked :info {:held now :text (str "carrying " now " torches for the dig")})
+              (= :duplicate-call (need/cause-why e)) nil
+              :else
               (ctx/emit! c :torch.no-stock :warn {:held now :reason (need/cause-why e) :tried (get-in e [:data :tried]) :text (no-stock-text now e)}))
             nil))))))

@@ -40,7 +40,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (mine-with-cooking!))]
-          (is (empty? (own :torch.no-stock s)) "the smelt is waited for")
+          (is (empty? (mt/events-of s :torch.no-stock)) "the smelt is waited for, and the furnace's cobblestone child does not warn for the get it is part of")
           (is (seq (own :torch.stocked s))))))))
 
 (deftest the-torch-stocking-trip-to-a-far-chest-does-not-move-the-tunnel
