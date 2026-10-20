@@ -58,7 +58,7 @@
       (fn ^:async t []
         (doseq [[args world expected] [[{:count 2} {:blocks (patch "short_grass" (range 2 6) (range 0 4)) :drops seed-drops} {:kind :completed :reason :count}]
                                        [{} {:blocks {"2,64,0" "dirt"}} {:kind :stopped :reason :none}]
-                                       [{:dry-digs 6} {:blocks (patch "short_grass" (range 2 12) [0]) :drops {"short_grass" nil}} {:kind :stopped :reason :dry}]
+                                       [{:settings {:jobs.gather.get-seeds/dry-digs 6}} {:blocks (patch "short_grass" (range 2 12) [0]) :drops {"short_grass" nil}} {:kind :stopped :reason :dry}]
                                        [{:count 64} {:blocks (patch "short_grass" [2 3 4] [0]) :drops seed-drops} {:kind :stopped :reason :none}]
                                        [{:count 2 :chest {:x 10 :y 64 :z 0}} {:containers {"10,64,0" []}} {:kind :stopped :reason :short}]
                                        [{:count 2 :chest {:x 10 :y 64 :z 0}} {:containers {"10,64,0" [{:name "wheat_seeds" :count 10}]}} {:kind :completed :reason :count}]]]
@@ -168,7 +168,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:dry-digs 6} {:blocks (patch "short_grass" (range 2 12) [0]) :drops {"short_grass" nil}} 60))]
+        (let [s (await (scenario {:settings {:jobs.gather.get-seeds/dry-digs 6}} {:blocks (patch "short_grass" (range 2 12) [0]) :drops {"short_grass" nil}} 60))]
           (is (= :dry (:reason (done-event s))))
           (is (<= 6 (dig-count s) 10))
           (is (= 0 (:got (done-event s))))
@@ -311,7 +311,7 @@
 (defn dug-cells [{:keys [p]}] (mapv #(let [q (.-pos (.-args %))] [(.-x q) (.-y q) (.-z q)]) (h/calls p "dig")))
 (defn block-at [{:keys [p]} x y z] (.-name (.blockAt p (tu/pos x y z))))
 (defn gave-up-fields [s] (map #(select-keys % [:reason :zones :plans]) (events-of s :stopped)))
-(defn declined-reasons [s] (mapv :reason (events-of s :get-seeds.declined)))
+(defn declined-reasons [s] (vec (distinct (map :reason (events-of s :waiting)))))
 
 (defn stand
   "{\"x,y,z\" block} for a stand of height h of block on x z, base at y 64."
@@ -392,6 +392,15 @@
             (is (= :condition-failed (get-in out [:ending :kind])))
             (is (= 0 (:got out)))
             (is (finished? s))))))))
+
+(deftest a-source-gone-after-the-start-is-a-failed-condition
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup-seeing {:blocks {"2,64,0" "dirt"}})
+              out (await (tu/child-outcome (:eng s) 'jobs.gather.get-seeds {:count 1} 40))]
+          (is (= :none (:reason out)))
+          (is (= :condition-failed (get-in out [:ending :kind]))))))))
 
 (deftest a-cut-in-a-claim-gives-up-naming-the-claim
   (async done

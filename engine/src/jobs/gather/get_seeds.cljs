@@ -8,11 +8,11 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.checks :as checks]
-            [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.look :as look]
+            [jobs.lib.near :as near]
             [jobs.lib.storage :as storage]
             [jobs.lib.world :as known]))
 
@@ -28,12 +28,11 @@
     with neither declines.
 
   The goal (:count carried, so a body that carries it is done at once) is fixed in the first step. One call runs these steps until the job ends (it yields with :continue only while a child or
-  a walk waits on the world, and after 400 steps):
+  a walk waits on the world):
   1. Carrying the goal ends :count.
-  2. Chest way: the withdraw child takes the item. It ends :count when the goal is carried, else :short (warn
-     get-seeds.gave-up with withdraw's reason when it gave up).
+  2. Chest way: the withdraw child takes the item. It ends :count when the goal is carried, else :short.
   3. After a dig batch the collect-drops child picks up the item (only it) within the collect-radius setting (8).
-  4. :dry-digs digs in a row that brought no new item end :dry (the ending says so).
+  4. The dry-digs setting (40) digs in a row that brought no new item end :dry (the ending says so).
   5. Otherwise a batch: the nearest source blocks within :radius not skipped (for a stand: its cut cells) are
      judged by jobs.lib.access.rules. At most the per-round setting (4) of the permitted ones are walked to (within 3) and
      dug, each judged again right before its dig.
@@ -47,11 +46,11 @@
   (the ending says so). A batch of only skipped blocks is not barren.
 
   done? is :ok when the goal is carried and no child is under way: ends :done (data {:got n :reason :count}). Any
-  other end is condition-failed with the cause :refused or :withdraw-declined, else nothing-possible with the cause
-  :none, :dry, :barren or :short (the chest gave less), and data {:got n :reason r :text}; :got is how many more are
+  other end is condition-failed with the cause :refused, :withdraw-declined or :none, else nothing-possible with the cause
+  :dry, :barren or :short (the chest gave less), and data {:got n :reason r :text}; :got is how many more are
   carried than at the start, at least 0.
 
-  Conditions (one warn get-seeds.declined {:reason r} per reason): :no-source (a material with no known way),
+  Conditions (the check waits with the reason): :no-source (a material with no known way),
   :no-chest (chest way with no :chest and no known chest place), :plan-missing, :plan-broken, :no-chest-cell (the
   :plan has no chest cell), :no-zones (break way with no zone list read), :too-short (cane or bamboo in range but no
   stand of two or more: the job stays queued, a stand may grow) and :nothing-in-range (after one look around).
@@ -64,17 +63,18 @@
    :sources {:doc "block names to break for the item; nil: the material's own (grass for wheat_seeds)" :spec (a/coll-of a/name?) :default nil}
    :chest {:doc "chest position: take the item from it instead of breaking blocks" :spec ::a/pos :default nil}
    :plan {:doc "id of a plan: take the item from the chest cell (want \"chest\") of the plan" :spec a/name? :default nil}
-   :dry-digs {:doc "digs in a row that brought no new item before giving up" :spec (a/int-in 1 nil) :default 40}
    :ignore-zones? :shared
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent water, :lava-adjacent seen lava, :falling-block)"
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:falling-block}}})
 
 (a/defargs settings
-  {::per-round {:default 4 :doc "Blocks dug per step at most." :spec (a/int-in 1 nil)}
+  {::dry-digs {:default 40 :doc "Digs in a row that brought no new item before giving up (:dry)." :spec (a/int-in 1 nil)}
+   ::per-round {:default 4 :doc "Blocks dug per step at most." :spec (a/int-in 1 nil)}
    ::collect-radius {:default 8 :doc "How far around to collect drops after a batch, in blocks." :spec (a/num-in 0 nil)}
    ::reach {:default 3 :doc "How near the body stands to act on its target, in blocks." :spec (a/int-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds a gathering may take: the walks, digs, drops and the chest." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
+(defn dry-digs [] (settings/get settings ::dry-digs))
 (defn per-round [] (settings/get settings ::per-round))
 (defn collect-radius [] (settings/get settings ::collect-radius))
 (defn time-s [] (settings/get settings ::job-time-s))
@@ -159,10 +159,8 @@
     (boolean (seq (look/seen-blocks (:primitives c) {:names [(:block (materials item))] :radius radius :max 8 :live? true})))))
 
 (defn decline!
-  "One warn per reason, then the reason as the check's cause."
+  "The reason as the check's cause."
   [c reason]
-  (ctx/warn-once! c [:declined reason] :get-seeds.declined
-                  {:reason reason :text (str "get-seeds declined: " (name reason))})
   reason)
 
 (defn no-source [c]
@@ -235,11 +233,10 @@
            (str "no " (str/join "/" names) " within " radius))
          (when far (str ", the nearest seen is " (Math/round (u/dist (u/self-pos c) (:pos far))) " away")))))
 
-(def condition-reasons #{:refused :withdraw-declined})
+(def condition-reasons #{:refused :withdraw-declined :none})
 
 (defn finish!
-  "End the job: :done for :count, condition-failed for :refused and :withdraw-declined (a zone, claim
-  or chest can change), else nothing-possible with the reason."
+  "End the job: :done for :count, condition-failed for :refused, :withdraw-declined and :none (a zone, claim, chest or source can change), else nothing-possible with the reason."
   ([c reason] (finish! c reason {}))
   ([c reason fields]
   (let [got (got c)
@@ -286,23 +283,10 @@
                   ok)))
             [] poss)))
 
-(defn ^:async walk!
-  "Walk to within (reach) of pos with a go-to child: :there, :partial (it waits on the world, or a leg that got nearer)
-  or :blocked."
-  [c pos]
-  (let [e (await (child/call-walk* c :walk {:pos pos :range (reach) :one-way :closed :spend {:tries 1}
-                                            :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-    (cond
-      (= :continue e) :partial
-      (not= :done (:kind e)) :blocked
-      (:arrived (:data e)) :there
-      (:leg (:data e)) :partial
-      :else :blocked)))
-
 (defn ^:async dig-one!
   "Walk to pos and dig it: :dug, :missing, :walking (the walk waits on the world: yield) or :skipped (a blocked walk, a cell the rules no longer permit, or a dig that is neither dug nor missing)."
   [c pos]
-  (let [walked (await (walk! c pos))]
+  (let [walked (await (near/go-near! c pos (reach)))]
     (cond
       (= :partial walked) :walking
       (= :blocked walked) (do (skip! c pos) :skipped)
@@ -375,14 +359,13 @@
     (let [now (carried c)]
       (ctx/update-mem! c assoc :goal (:count (:args c)) :had now :last-carried now :dry 0 :barren 0)))
   (let [{:keys [goal collecting dry]} (ctx/mem c)
-        {:keys [dry-digs]} (:args c)
         chest? (= :chest (mode (:args c)))
         targets (when-not (or chest? collecting) (vec (take (per-round) (vet! c (source-blocks c)))))]
     (cond
       (>= (carried c) goal) (finish! c :count)
       chest? (await (take! c))
       collecting (await (collect! c))
-      (>= dry dry-digs) (give-up! c :dry)
+      (>= dry (dry-digs)) (give-up! c :dry)
       (and (empty? targets) (seq (:refused (ctx/mem c)))) (refuse-up! c)
       (and (empty? targets) (not (look/surveyed? c))) (do (await (look/survey! c)) :again)
       (empty? targets) (finish! c :none)
