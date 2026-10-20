@@ -1,6 +1,7 @@
 ;; Card 754c1072: jobs.build.light-area lights a dark room or corridor with the fewest torches (jobs.lib.torch-plan): a 9x9 room takes
 ;; 1, an L corridor of 36 cells takes 2, and no cell is left at block light 0 (observe light per cell). Sealed dark plot: no clock.
-;; Should-succeed: both cases. Should-fail: a lit room hangs nothing.
+;; The 1 s wait lets the client receive the torch's light before it is read.
+;; Should-succeed: the first three cases (the third: the corridor's lit part shows no dark cell, the room round the corner is unseen and dark, so it must be looked at and lit, never done with none hung). Should-fail: a lit room hangs nothing.
 {:defaults
  {:tags [:build :light :torches] :time :any
   :plot {:height 8 :light :dark :length 64}
@@ -13,6 +14,7 @@
    :body {:at [7.5 0 16.5]}
    :act [[:job (jobs.build.light-area {:boxes [[#at [3 0 12] #at [11 0 20]]]})]
          [:await {:source :job :kind :completed} 150]
+         [:wait-s 1]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [3 0 12]] {:ok true :light {:lit? true}}]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [11 0 12]] {:ok true :light {:lit? true}}]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [3 0 20]] {:ok true :light {:lit? true}}]
@@ -26,6 +28,7 @@
    :body {:at [3.5 0 16.5]}
    :act [[:job (jobs.build.light-area {:boxes [[#at [3 0 16] #at [30 0 16]] [#at [30 0 17] #at [30 0 24]]]})]
          [:await {:source :job :kind :completed} 150]
+         [:wait-s 1]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [3 0 16]] {:ok true :light {:lit? true}}]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [6 0 16]] {:ok true :light {:lit? true}}]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [9 0 16]] {:ok true :light {:lit? true}}]
@@ -40,6 +43,15 @@
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [30 0 20]] {:ok true :light {:lit? true}}]
          [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [30 0 24]] {:ok true :light {:lit? true}}]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :torches [:any :any]}} :within-s 150 :of-job true}]}
+  {:name "lit-corridor-into-unseen-dark-room-gets-a-torch"
+   :blocks [[:fill [3 0 16] [14 1 16] "air"] [:fill [14 0 17] [14 1 24] "air"] [:set [2 0 16] "glowstone"]]
+   :body {:at [3.5 0 16.5]}
+   :act [[:job (jobs.build.light-area {:boxes [[#at [3 0 16] #at [14 0 16]] [#at [14 0 17] #at [14 0 24]]]})]
+         [:await {:source :job :kind :completed} 150]
+         [:wait-s 1]
+         [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [14 0 20]] {:ok true :light {:lit? true}}]
+         [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [14 0 24]] {:ok true :light {:lit? true}}]]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done :torches [:any]}} :within-s 150 :of-job true}]}
   {:name "lit-room-hangs-nothing"
    :blocks [[:fill [3 0 12] [11 1 20] "air"] [:set [7 0 16] "glowstone"] [:set [7 1 16] "glowstone"]]
    :body {:at [5.5 0 14.5]}

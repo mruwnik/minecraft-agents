@@ -4,7 +4,7 @@
 ;; (the :from side). The section is x 16: a rail at [16 0 16] and a cobweb at [16 1 15] are in it.
 ;; Haul: two source chests (iron ingots, coal) and an empty main chest (:to), no storage group needed.
 ;; Should-succeed: the 9 cells are cobblestone, rail and cobweb gone; both source chests are emptied into the bag-free main chest.
-;; Should-fail: no blocks carried stops with a :short count and leaves the rail; a chest in the section stops :blocked, chest kept.
+;; Should-fail: no blocks carried and none fetchable (empty bag, bare hands, no tree or chest in the plot) ends :no-blocks with the failed fetch as its cause; no blocks carried stops with a :short count and leaves the rail; a chest in the section stops :blocked, chest kept.
 {:defaults
  {:tags [:strip :seal :haul :storage] :time :any
   :plot {:height 8 :floor "stone"}
@@ -22,6 +22,13 @@
    :act [[:job (jobs.strip.seal {:at #at [16 0 16] :axis :x :side :from :fetch false})]]
    :expect [{:event {:source :job :kind :stopped :data {:short [:>= 1]}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]}
+  {:name "failed-block-fetch-stops-no-blocks"
+   :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [6 0 15] [26 2 17] "air"]]
+   :body {:inventory []}
+   :act [[:job (jobs.strip.seal {:at #at [16 0 16] :axis :x :side :from :fetch {:what #{:item} :minutes 1 :fail-minutes 1}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:short [:>= 1]}} :within-s 150 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 10 :of-job true}]
+   :limit-s 200}
   {:name "container-in-the-section-is-never-dug"
    :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [6 0 15] [26 2 17] "air"] [:set [16 1 17] "chest"]]
    :act [[:job (jobs.strip.seal {:at #at [16 0 16] :axis :x :side :from})]]
