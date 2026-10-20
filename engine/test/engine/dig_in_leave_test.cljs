@@ -63,7 +63,7 @@
                            :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                            :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
                      (:zones spec) (assoc :world (world/of-data (:plans spec {}) {} (:zones spec)))))]
-     {:eng eng :p p :seen seen :clock clock :out out :runs runs})))
+     {:eng eng :p p :seen seen :clock clock :out out :runs runs :ways (:ways spec)})))
 
 (defn ^:async run-until-empty [{:keys [eng clock]} n]
   (loop [i 0]
@@ -85,8 +85,8 @@
   [p [x y z]]
   (and (air? p [x y z]) (air? p [x (inc y) z]) (not (air? p [x (dec y) z]))))
 
-(defn ^:async dig-in! [{:keys [eng] :as s}]
-  (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
+(defn ^:async dig-in! [{:keys [eng ways] :as s}]
+  (core/submit! eng (list 'jobs.survival.shut-in {:ways (or ways #{:room :walls :pit}) :for :night}) {})
   (await (run-until-empty s 20)))
 
 (defn ^:async leave-at-dawn!
@@ -129,7 +129,7 @@
                 [["a 3-deep pit on flat ground" {} [0 61 0] 64]
                  ["a 2-deep pit beside a block" {:blocks (assoc (ground) "1,64,0" "stone")} [0 62 0] 64]
                  ["a pit in a slope" {:blocks (slope)} [0 62 0] 64]
-                 ["a walled cell" {:inventory dirt-kit} [0 64 0] 64]
+                 ["a walled cell" {:inventory dirt-kit :ways #{:walls}} [0 64 0] 64]
                  ["a roofed 1x1 shaft" {:blocks (shaft) :self {:pos {:x 0.5 :y 60 :z 0.5}} :inventory dirt-kit} [0 60 0] 64]]]
           (let [{:keys [p out seen] :as s} (setup spec)]
             (await (dig-in! s))
@@ -206,7 +206,7 @@
           (await (dig-in! s))
           (is (= [[false nil]] (mapv (juxt :resealed :attention) (emitted seen :shut-in.sealed))) "the first seal is reported")
           (fake/remove-block! p [0 63 0])
-          (await (dig-in! s))
+          (await (dig-in! (assoc s :ways #{:walls})))
           (is (not (air? p [0 63 0])) "the roof is back")
           (is (= [[false nil] [true :notice]] (mapv (juxt :resealed :attention) (emitted seen :shut-in.sealed))))
           (is (re-find #"again" (:text (last (emitted seen :shut-in.sealed)))))
