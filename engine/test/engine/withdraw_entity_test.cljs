@@ -14,7 +14,8 @@
         (let [{:keys [eng p]} (lc/setup {:entities [(lc/cart 50 [2 64 0])]})
               r (await (child-outcome eng job {:id 50} 12))]
           (is (= {"iron_ingot" 3 "rail" 16 "bread" 2} (lc/inv p)))
-          (is (= [:done false] [(:status r) (:full r)])))))))
+          (is (= [:done false] [(:status r) (:full r)]))
+          (is (= {"iron_ingot" 3 "rail" 16 "bread" 2} (:moved r))))))))
 
 (deftest a-missing-entity-is-condition-failed
   (async done

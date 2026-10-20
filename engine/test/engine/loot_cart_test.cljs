@@ -41,7 +41,7 @@
               result (await (child-outcome eng job {:id 50} 12))]
           (is (= {"iron_ingot" 3 "rail" 16 "bread" 2 "chest_minecart" 1} (inv p)))
           (is (empty? (cart-ids p)))
-          (is (= {:status :done :collected 22 :items {"iron_ingot" 3 "rail" 16 "bread" 2 "chest_minecart" 1}} (select-keys result [:status :collected :items]))))))))
+          (is (= {:status :done :collected 22 :items {"iron_ingot" 3 "rail" 16 "bread" 2}} (select-keys result [:status :collected :items]))))))))
 
 (deftest a-cart-by-near-takes-the-nearest-only
   (async done
@@ -96,11 +96,19 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:inventory [{:name "iron_sword" :count 1}] :entities [(cart 50 [2 64 0] :invulnerable true)]})
+        (let [{:keys [eng p]} (setup {:inventory [{:name "iron_sword" :count 1}] :entities [(cart 50 [2 64 0] :invulnerable true)]})
               result (await (child-outcome eng job {:id 50} 15))]
-          (is (= [:cannot-break] (mapv :reason (filter #(= :loot-cart.stopped (:kind %)) @seen))))
           (is (= {:kind :nothing-possible :cause :cannot-break} (select-keys (:ending result) [:kind :cause])))
           (is (= #{50} (cart-ids p))))))))
+
+(deftest the-count-ignores-what-other-jobs-put-in-or-take-out-of-the-bag
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:entities [(cart 50 [2 64 0])] :inventory [{:name "iron_ingot" :count 10}]})
+              result (await (child-outcome eng job {:id 50} 12))]
+          (is (= {"iron_ingot" 13} (select-keys (inv p) ["iron_ingot"])))
+          (is (= {"iron_ingot" 3 "rail" 16 "bread" 2} (:items result)) "the 10 ingots held at the start are not counted"))))))
 
 (deftest a-cart-in-another-plans-footprint-is-refused
   (async done

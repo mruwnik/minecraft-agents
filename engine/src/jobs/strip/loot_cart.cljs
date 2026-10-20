@@ -5,7 +5,6 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.child :as child]
-            [jobs.lib.stock :as stock]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.checks :as checks]
@@ -20,7 +19,7 @@
   only when a cart is in sight (condition :gone; start only). Its safe? is ready/safe-at-by-night :near, else ready/safe-if-lit. A cart in
   another owner's zone, claim or plan footprint is refused (:ignore-zones? true skips that). Broken-and-gone carts are not looked for again:
   a restart re-reads the world and goes on from there.
-  Ends :done {:collected n :items {name n}} (what came into the bag, counted from the inventory at the start), with :full true
+  Ends :done {:collected n :items {name n}} (the stacks the withdraw child moved, and the drops the collect child picked up as a count), with :full true
   when the bag had no room for a stack. Else condition-failed :gone (the cart vanished), :refused (zones) or :bag-full (no
   room for anything: nothing gained; with no free slot the cart is left standing), nothing-possible
   :unreachable (go-near! cannot arrive, or the cart is out of reach) or :cannot-break (the attack gave up, the cart is still
@@ -54,10 +53,9 @@
          (sort-by #(u/dist anchor (:pos %))))))
 
 (defn gained
-  "{name n} the bag holds more of than at the start of the job."
+  "{name n} the withdraw child moved out of the cart; the drops collected afterwards are only counted (:dropped)."
   [c]
-  (let [now (stock/stacks->items (u/inventory (:primitives c)))]
-    (into {} (keep (fn [[k n]] (let [d (- n (get (:before (ctx/mem c)) k 0))] (when (pos? d) [k d])))) now)))
+  (:withdrawn (ctx/mem c) {}))
 
 (def kinds "The kind of ending each stop reason is." {:bag-full :condition-failed :gone :condition-failed :refused :condition-failed :unreachable :nothing-possible :cannot-break :nothing-possible})
 
@@ -65,19 +63,18 @@
   "The gained items as the job's data; extra is merged in."
   [c extra]
   (let [items (gained c)]
-    (merge {:collected (reduce + 0 (vals items)) :items items} (when (:full (ctx/mem c)) {:full true}) extra)))
+    (merge {:collected (+ (reduce + 0 (vals items)) (:dropped (ctx/mem c) 0)) :items items} (when (:full (ctx/mem c)) {:full true}) extra)))
 
 (defn stop!
   "End with the kind of reason and a :why in words."
   [c reason why & [extra]]
-  (ctx/emit! c :loot-cart.stopped :warn {:reason reason :text (str "loot-cart stopped: " why)})
   (ctx/end c (kinds reason) reason (items-data c (merge {:why why} extra))))
 
 (defn looted!
   "The cart is broken and its drops collected: done? holds, so the engine ends the call; a full bag that gained nothing
   ends :bag-full."
   [c]
-  (if (and (:full (ctx/mem c)) (empty? (gained c)))
+  (if (and (:full (ctx/mem c)) (empty? (gained c)) (zero? (:dropped (ctx/mem c) 0)))
     (stop! c :bag-full "the bag had no room for anything in the cart")
     (do (ctx/update-mem! c assoc :looted true)
         (or (ctx/done c) :continue))))
@@ -85,9 +82,9 @@
 (def can-start? (checks/refusing :cart "a cart in sight" (fn [c] (when (empty? (carts c)) :gone))))
 
 (defn done?
-  "The cart is broken and its drops collected; the items counted are the gain since the first round."
+  "The cart is broken and its drops collected."
   [c]
-  (let [{:keys [collected] :as result} (if (:before (ctx/mem c)) (items-data c nil) {:collected 0 :items {}})]
+  (let [{:keys [collected] :as result} (items-data c nil)]
     (if (:looted (ctx/mem c))
       (contract/ok :looted (str "loot-cart: " collected " items") :units :items :done collected :result result)
       (contract/later :looting (str "loot-cart: " collected " items, cart still to loot") :units :items :done collected
@@ -103,7 +100,7 @@
   (let [r (await (child/run!* c :empty 'jobs.storage.withdraw-entity {:id id}))]
     (cond
       (= :continue r) :continue
-      (= :done (:kind r)) (do (when (:full (:data r)) (ctx/update-mem! c assoc :full true)) "ok")
+      (= :done (:kind r)) (do (ctx/update-mem! c #(cond-> (assoc % :withdrawn (:moved (:data r) {})) (:full (:data r)) (assoc :full true))) "ok")
       (= :bag-full (contract/cause-key r)) (do (ctx/update-mem! c assoc :full true) "ok")
       :else (name (contract/cause-key r)))))
 
@@ -120,14 +117,13 @@
   "Pick up the drops round the cart's place: :done, or :continue while the child waits."
   [c pos]
   (let [r (await (child/run!* c :collect 'jobs.items.collect-drops {:radius (:radius (:args c)) :near pos}))]
+    (when-not (= :continue r) (ctx/update-mem! c assoc :dropped (:collected (:data r) 0)))
     (if (= :continue r) :continue :done)))
 
 (defn ^:async round
   "One call is the whole job: find the cart, walk to it, empty it, break it, collect. The phase is in job memory; the cart is
   looked for again on a restart, and one already broken goes straight to the collect."
   [c]
-  (when-not (:before (ctx/mem c))
-    (ctx/update-mem! c assoc :before (stock/stacks->items (u/inventory (:primitives c)))))
   (let [mem (ctx/mem c)
         cart (first (carts c))
         pos (or (:pos mem) (:pos cart))]
@@ -150,7 +146,7 @@
                 (cond
                   (= :continue e) :continue
                   (= "missing" e) (stop! c :gone "the cart is gone")
-                  (not= "ok" e) (stop! c :unreachable (str "cannot open the cart: " e))
+                  (not= "ok" e) (stop! c (if (kinds (keyword e)) (keyword e) :unreachable) (str "cannot open the cart: " e))
                   :else
                   (do (ctx/update-mem! c assoc :emptied true)
                       (if (and (:full (ctx/mem c)) (empty? (gained c)) (zero? (u/free-slots (:primitives c))))
