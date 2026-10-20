@@ -174,7 +174,14 @@
     "lava" false
     "bubble_column" false
     "air" false
-    "magma_block" false))
+    "magma_block" false
+    "white_carpet" true
+    "rail" false
+    "powered_rail" false
+    "stone_pressure_plate" false
+    "stone_button" false
+    "oak_sign" false
+    "torch" false))
 
 (deftest accepts-checks-ok-and-every-hazard
   (are [v accepted expected] (= expected (rules/accepts? v accepted))

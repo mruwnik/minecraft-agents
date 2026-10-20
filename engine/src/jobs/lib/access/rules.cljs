@@ -88,10 +88,11 @@
 (def neighbour-deltas [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
 
 (defn solid-floor?
-  "True when the cell holds a known block that is solid and safe to stand on."
+  "True when the cell holds a known block that is solid and safe to stand on. A carpet is a floor; a rail, plate,
+  button, sign, torch or flower has no collision, so the body stands on the block below it."
   [block-at pos]
   (let [n (block-at pos)]
-    (boolean (and n (not (bs/passable? n)) (not (fluids n)) (not (not-a-floor n))))))
+    (boolean (and n (or (str/ends-with? n "_carpet") (not (bs/passable? n))) (not (fluids n)) (not (not-a-floor n))))))
 
 (defn in-box? [[x y z] {[x0 y0 z0] :min [x1 y1 z1] :max}]
   (and (<= x0 x x1) (<= y0 y y1) (<= z0 z z1)))
