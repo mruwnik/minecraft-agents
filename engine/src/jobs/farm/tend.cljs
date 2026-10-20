@@ -16,7 +16,8 @@
             [jobs.farm.field :as fld]
             [jobs.farm.tend-decide :as decide]
             [jobs.farm.tend-box :refer [box-cells centre box-facts box-census]]
-            [jobs.farm.tend-plan :as tend-plan]))
+            [jobs.farm.tend-plan :as tend-plan]
+            [jobs.lib.plan-field :as pf]))
 
 (def doc
   "Keep one field of crops in order. The field is the :box (inclusive). Its lowest layer (y = min) is the
@@ -196,15 +197,7 @@
           (some nil? statuses) (contract/ok :work "a part has work")
           :else (or (first (filter #(= :look (first %)) statuses)) (last statuses)))))))
 
-(defn can-run?
-  "Later :plan-trouble while the plan is missing or unreadable or no zone list has been read; never when it has no crop
-  cells."
-  [c]
-  (let [{:keys [trouble later?]} (when (:plan (:args c)) (tend-plan/planned c))]
-    (cond
-      (nil? trouble) (contract/ok :plan "no plan trouble")
-      later? (contract/later :plan-trouble trouble :why trouble)
-      :else (contract/never :plan-trouble trouble :why trouble))))
+(defn can-run? [c] (pf/plan-can-run? (when (:plan (:args c)) (tend-plan/planned c))))
 
 (defn can-start?
   "usable-args, then can-run?, then problem (it reads the box)."

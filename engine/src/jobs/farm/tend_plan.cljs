@@ -14,6 +14,7 @@
             [jobs.farm.tidy :as tidy]
             [jobs.farm.tend-stock :as stock]
             [plan.shape :as shape]
+            [jobs.lib.plan-field :as pf]
             [jobs.lib.world :as known]))
 
 (defn farmland-want?
@@ -40,18 +41,10 @@
   "With :plan, {:answer :crops {pos crop}} when the plan can be worked, else {:trouble text} (warned once per reason);
   nil without :plan."
   [c]
-  (when-let [id (:plan (:args c))]
-    (let [part (:part (:args c))
-          answer (known/plan c id)
-          crops (fld/crop-cells answer part)
-          no-zones (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) "no zone list has been read")
-          trouble (or (fld/plan-trouble answer crops) no-zones)]
-      (if-not trouble
-        {:answer answer :crops crops}
-        (do (ctx/warn-once! c [id trouble] :farm-tend.declined
-                            {:plan id :part part :reason trouble
-                             :text (str "tend declines plan " id (when part (str " part " part)) ": " trouble)})
-            {:trouble trouble :later? (or (known/unreadable? answer) (= no-zones trouble))})))))
+  (when (:plan (:args c))
+    (let [{:keys [cells] :as r} (pf/read-plan c {:cells fld/crop-cells :what "crop cells" :zones? true
+                                                  :event :farm-tend.declined :label "tend"})]
+      (cond-> r cells (assoc :crops cells)))))
 
 (defn ground-cell
   "{:pos :name :above} of a ground cell."

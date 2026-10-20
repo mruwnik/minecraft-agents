@@ -15,6 +15,7 @@
             [jobs.lib.tidy-rules :as tr]
             [jobs.lib.toll-cells :as tc]
             [plan.shape :as shape]
+            [jobs.lib.plan-field :as pf]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -117,14 +118,6 @@
           {:dig [] :kept [] :wrong []}
           cells))
 
-(defn plan-trouble
-  "Why a plan answer cannot be worked (the cells in part), or nil."
-  [answer part]
-  (cond
-    (nil? answer) "no such plan"
-    (:broken answer) (str "the plan cannot be read: " (:broken answer))
-    (not-any? #(or (nil? part) (= part (:part %))) (:cells answer)) "no cells"))
-
 ;; ------------------------------------------------------------------ reading the world
 
 (defn in-reach? [c pos] (<= (u/eye-dist (u/self-pos c) pos) (reach)))
@@ -136,24 +129,9 @@
 (defn planned
   "{:answer plan-answer} for the plan in the args, or {:trouble text :later? bool}."
   [c]
-  (let [{:keys [plan part]} (:args c)
-        answer (known/plan c plan)
-        no-zones (let [{:keys [zones ignore-zones?]} (tr/access-world c)]
-                   (when (and (nil? zones) (not ignore-zones?)) "no zone list has been read"))
-        trouble (or (plan-trouble answer part) no-zones)]
-    (if-not trouble
-      {:answer answer}
-      {:trouble trouble :later? (or (known/unreadable? answer) (= no-zones trouble))})))
+  (pf/read-plan c {:cells pf/part-cells :what "cells" :zones? true}))
 
-(defn can-run?
-  "Later :plan-trouble while the plan is missing or unreadable or no zone list has been read; never when it has no cells
-  (in :part)."
-  [c]
-  (let [{:keys [trouble later?]} (planned c)]
-    (cond
-      (nil? trouble) (contract/ok :plan "the plan is readable")
-      later? (contract/later :plan-trouble trouble :why trouble)
-      :else (contract/never :plan-trouble trouble :why trouble))))
+(defn can-run? [c] (pf/plan-can-run? (planned c)))
 
 ;; ------------------------------------------------------------------ steps
 

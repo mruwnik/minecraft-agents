@@ -463,7 +463,7 @@
       (fn ^:async t []
         (let [{:keys [p seen]} (await (with-zones nil #(run (world {"3,64,0" "short_grass"} (item "oak_sapling" 1)) {"forest" one-cell} {:plan "forest"} 10)))]
           (is (= 0 (calls-made p)))
-          (is (= ["no zone list"] (mapv :reason (h/events-of seen :prepare.declined)))))))))
+          (is (= ["no zone list has been read"] (mapv :reason (h/events-of seen :prepare.declined)))))))))
 
 (deftest a-field-nothing-can-improve-is-left-alone-and-the-wait-names-the-worst-cells
   (async done

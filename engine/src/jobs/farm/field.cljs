@@ -16,14 +16,6 @@
                      [(u/cell-pos pos) (:crop want)])))
         (:cells answer)))
 
-(defn plan-trouble
-  "Why a plan answer with these crop cells cannot be worked, or nil."
-  [answer cells]
-  (cond
-    (nil? answer) "no such plan"
-    (:broken answer) (str "the plan cannot be read: " (:broken answer))
-    (empty? cells) "no crop cells"))
-
 (defn ripe-at?
   "Whether p shows crop ripe at pos (nil, an unloaded cell, is not)."
   [p pos crop]

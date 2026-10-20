@@ -21,6 +21,7 @@
             [jobs.farm.field :as fld]
             [jobs.farm.till :as till]
             [jobs.lib.farm :refer [bare-cells pick-seed sowable]]
+            [jobs.lib.plan-field :as pf]
             [jobs.lib.world :as known]))
 
 (def doc
@@ -192,15 +193,7 @@
                          cause)
     (contract/ok :work "a field to sow")))
 
-(defn can-run?
-  "Later :plan-trouble while the plan is missing or unreadable (it may be saved or fixed later); never when it has no crop
-  cells."
-  [c]
-  (let [{:keys [trouble later?]} (planned c)]
-    (cond
-      (nil? trouble) (contract/ok :plan "no plan trouble")
-      later? (contract/later :plan-trouble trouble :why trouble)
-      :else (contract/never :plan-trouble trouble :why trouble))))
+(defn can-run? [c] (pf/plan-can-run? (planned c)))
 
 (def can-start? (cond/and bad-args can-run? work))
 
@@ -237,17 +230,8 @@
   "Without :plan nil; else {:cells {pos crop}}, or {:trouble text} (warned once per reason) when the plan cannot be
   worked."
   [c]
-  (when-let [id (:plan (:args c))]
-    (let [part (:part (:args c))
-          answer (known/plan c id)
-          cells (fld/crop-cells answer part)
-          trouble (fld/plan-trouble answer cells)]
-      (if-not trouble
-        {:cells cells}
-        (do (ctx/warn-once! c [id trouble] :plant.declined
-                            {:plan id :part part :reason trouble
-                             :text (str "plant declines plan " id (when part (str " part " part)) ": " trouble)})
-            {:trouble trouble :later? (known/unreadable? answer)})))))
+  (when (:plan (:args c))
+    (pf/read-plan c {:cells fld/crop-cells :what "crop cells" :event :plant.declined :label "plant"})))
 
 (defn sowing
   "How the planned bare cells divide: {:ready [{:pos :seed}] (seed carried, not skipped, permitted) :short #{seed}

@@ -1,10 +1,9 @@
 (ns jobs.lib.forestry
   "Helpers the forestry jobs share: reading the tree cells of a forest plan, the soil a species takes and the plan's status."
-  (:require [engine.contract :as contract]
-            [engine.ctx :as ctx]
+  (:require [engine.ctx :as ctx]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
-            [jobs.lib.world :as known]))
+            [jobs.lib.plan-field :as pf]))
 
 (defn cell-vec [{:keys [x y z]}] [x y z])
 
@@ -20,14 +19,6 @@
                      [(u/cell-pos pos) (:tree want)])))
         (:cells answer)))
 
-(defn plan-trouble
-  "Why a plan answer with these tree cells cannot be worked, or nil."
-  [answer cells]
-  (cond
-    (nil? answer) "no such plan"
-    (:broken answer) (str "the plan cannot be read: " (:broken answer))
-    (empty? cells) "no tree cells"))
-
 (def soil #{"dirt" "grass_block" "coarse_dirt" "podzol" "rooted_dirt" "moss_block"})
 
 (defn soil-for [species]
@@ -35,14 +26,7 @@
 
 (defn down [pos] (update pos :y dec))
 
-(defn trouble-status
-  "The status of a planned field: later :plan-trouble while the plan is missing or unreadable or no zone list is loaded
-  (it may be saved or fixed later); never when it has no tree cells."
-  [{:keys [trouble later?]}]
-  (cond
-    (nil? trouble) (contract/ok :plan "no plan trouble")
-    later? (contract/later :plan-trouble trouble :why trouble)
-    :else (contract/never :plan-trouble trouble :why trouble)))
+(def trouble-status pf/plan-can-run?)
 
 (defn field-cells
   "The planned tree cells of field and the ground under them, as {:x :y :z}."
@@ -59,14 +43,8 @@
   "{:trees {pos species} :planned #{[x y z]}} for the plan of c's args, or {:trouble text :later?} (warned once per
   reason as <label>.declined)."
   [c label]
-  (let [{:keys [plan part]} (:args c)
-        answer (known/plan c plan)
-        trees (tree-cells answer part)
-        no-zones (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) "no zone list")
-        trouble (or (plan-trouble answer trees) no-zones)]
-    (if-not trouble
-      {:trees trees :planned (set (map (comp vec :pos) (:cells answer)))}
-      (do (ctx/warn-once! c [plan trouble] (keyword (str label ".declined"))
-                          {:plan plan :part part :reason trouble
-                           :text (str label " declines plan " plan (when part (str " part " part)) ": " trouble)})
-          {:trouble trouble :later? (or (known/unreadable? answer) (= no-zones trouble))}))))
+  (let [{:keys [answer cells] :as r} (pf/read-plan c {:cells tree-cells :what "tree cells" :zones? true
+                                                        :event (keyword (str label ".declined")) :label label})]
+    (if cells
+      {:trees cells :planned (set (map (comp vec :pos) (:cells answer)))}
+      r)))

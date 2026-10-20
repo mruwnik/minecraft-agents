@@ -440,7 +440,7 @@
       (fn ^:async t []
         (let [{:keys [p seen]} (await (with-zones nil #(run oak-world {"forest" oak-cell} {:plan "forest"} 10)))]
           (is (= [] (vec (.-calls (.-world p)))))
-          (is (= ["no zone list"] (mapv :reason (h/events-of seen :forest.declined)))))))))
+          (is (= ["no zone list has been read"] (mapv :reason (h/events-of seen :forest.declined)))))))))
 
 (deftest a-hazard-the-job-accepts-does-not-stop-the-felling-and-one-it-does-not-accept-does
   (async done
