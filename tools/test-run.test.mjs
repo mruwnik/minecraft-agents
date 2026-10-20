@@ -5,7 +5,7 @@ import { EventEmitter } from 'node:events'
 import { spawn } from 'node:child_process'
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parseNss, nsOf, expectedMs, stallLimitS, slowestPriorMs, watchStall, stallMessage, needMb, lastFinished, isolate, narrowBundle, missingNss, sweepStale, cleanupOnExit, killTree } from './test-run.mjs'
+import { UNKNOWN_NS_MS, parseNss, nsOf, expectedMs, stallLimitS, slowestPriorMs, watchStall, stallMessage, needMb, lastFinished, isolate, narrowBundle, missingNss, sweepStale, cleanupOnExit, killTree } from './test-run.mjs'
 
 test('parseNss: space- and comma-separated namespaces, blanks dropped', () => {
   assert.deepEqual(parseNss(['engine.a-test,engine.b-test', 'engine.c-test', '']), ['engine.a-test', 'engine.b-test', 'engine.c-test'])
@@ -26,7 +26,8 @@ test('stallLimitS: the floor, or 10x the slowest prior test', () => {
 test('slowestPriorMs: slowest var of the requested namespaces only', () => {
   const lines = ['{"var":"#\'a-test/x","ms":40}', '{"var":"#\'a-test/y","ms":900}', '{"var":"#\'b-test/z","ms":5000}', 'junk', '']
   assert.equal(slowestPriorMs(['a-test'], lines), 900)
-  assert.equal(slowestPriorMs(['c-test'], lines), 0)
+  assert.equal(slowestPriorMs(['c-test'], lines), UNKNOWN_NS_MS, 'no timing: assume a slow one')
+  assert.equal(slowestPriorMs(['a-test', 'c-test'], lines), UNKNOWN_NS_MS)
 })
 
 test('watchStall: fires once when the file stops growing, not before the run has started', async (t) => {

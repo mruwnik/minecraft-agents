@@ -45,11 +45,13 @@ export const needMb = (nsCount, tests) => Math.min(tests.needMb, tests.baseMb + 
 export const STALL_FLOOR_S = 90, STALL_K = 10
 // Until the first test finishes the run is still loading (bundle, setup, a long first test under machine load), so it gets this longer limit.
 export const FIRST_RESULT_S = 300
+// A namespace with no prior timing (fresh worktree) counts as this slow, so one long test (a fuzz run) is not killed by the floor.
+export const UNKNOWN_NS_MS = 30000
 export const slowestPriorMs = (nss, lines) => {
-  const want = new Set(nss)
-  return lines.filter(Boolean).map((l) => { try { return JSON.parse(l) } catch { return {} } })
-    .filter((r) => r.var && want.has(r.var.replace(/^#'/, '').split('/')[0]))
-    .reduce((m, r) => Math.max(m, r.ms), 0)
+  const rows = lines.filter(Boolean).map((l) => { try { return JSON.parse(l) } catch { return {} } })
+    .filter((r) => r.var).map((r) => ({ ns: r.var.replace(/^#'/, '').split('/')[0], ms: r.ms }))
+  const slowest = (ns) => rows.filter((r) => r.ns === ns).reduce((m, r) => Math.max(m, r.ms), -1)
+  return nss.reduce((m, ns) => Math.max(m, slowest(ns) < 0 ? UNKNOWN_NS_MS : slowest(ns)), 0)
 }
 export const stallLimitS = (slowestMs, floor = STALL_FLOOR_S, k = STALL_K) => Math.max(floor, Math.round(k * slowestMs / 1000))
 

@@ -52,6 +52,18 @@ test('the worktree links worlds/test to the main one and nothing else under worl
   } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })
 
+test('the worktree gets the main checkout test timings for the stall watchdog', () => {
+  const { root, repo } = fakeRepo()
+  try {
+    fs.mkdirSync(path.join(repo, 'engine/out'), { recursive: true })
+    fs.writeFileSync(path.join(repo, 'engine/out/test-timings.jsonl'), '{"var":"#\'a-test/x","ms":5}\n')
+    const wt = path.join(root, 'wt')
+    const r = sh(repo, path.join(repo, 'tools/integration-worktree.sh'), ['HEAD', wt])
+    assert.equal(r.status, 0, r.stderr)
+    assert.equal(fs.readFileSync(path.join(wt, 'engine/out/test-timings.jsonl'), 'utf8'), '{"var":"#\'a-test/x","ms":5}\n')
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
+
 test('the worktree gets the :test build cache only, no server, port, pid or lock files', () => {
   const { root, repo } = fakeRepo()
   try {
