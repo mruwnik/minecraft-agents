@@ -35,6 +35,7 @@
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.cost.tolls :as tolls]
             [jobs.lib.cost.weapon :as weapon]
+            [jobs.lib.cost.table :as table]
             [jobs.lib.cost.value :as value]
             [jobs.lib.look :as look]
             [jobs.lib.shelter.inside :as sh-inside]
@@ -110,7 +111,7 @@
 (def reserve-cost value/reserve-cost)
 (def walk-cost value/walk-cost)
 (defn walk-blocks-per-s [] (value/walk-blocks-per-s))
-(def dig-cost value/dig-cost)
+(def dig-cost table/dig-cost)
 (def detour-cost value/detour-cost)
 (def tour-cost value/tour-cost)
 (def tour-worth value/tour-worth)

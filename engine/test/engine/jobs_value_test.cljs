@@ -1,6 +1,7 @@
 (ns engine.jobs-value-test
   "jobs.lib.cost.value: item-value (built from minecraft-data) and fetch-cost, the two sides of a fetch-or-skip decision."
   (:require [cljs.test :refer [deftest is are]]
+            [jobs.lib.cost.table :as table]
             [jobs.lib.cost.value :as v]))
 
 (defn value [items & opts] (:value (apply v/item-value items opts)))
@@ -61,7 +62,7 @@
   (is (= (each "dirt") (value [{:name "dirt" :count nil}]))))
 
 (deftest unknown-items-get-a-small-default
-  (is (= (:unknown-each v/default-basis) (each "mystery_thing")))
+  (is (= (:unknown-each table/default-basis) (each "mystery_thing")))
   (is (= 7 (value [{:name "mystery_thing"}] :basis {:unknown-each 7})) "the unknown worth is in the basis")
   (is (pos? (each "mystery_thing")))
   (is (< (each "mystery_thing") (each "raw_iron"))))
@@ -146,7 +147,7 @@
 
 (deftest placed-forms-are-no-free-source-and-no-source-items-keep-the-stack-rule
   (is (> (each "redstone") 1))
-  (is (= (* (:no-source-each v/default-basis) 64) (each "totem_of_undying")) "no source: 4 x 64 / stack of 1")
+  (is (= (* (:no-source-each table/default-basis) 64) (each "totem_of_undying")) "no source: 4 x 64 / stack of 1")
   (is (= 640 (value [{:name "totem_of_undying"}] :basis {:no-source-each 10})) "the no-source worth is in the basis"))
 
 (deftest durability-and-enchantment-constants-are-in-the-basis

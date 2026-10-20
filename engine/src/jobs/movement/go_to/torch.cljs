@@ -101,7 +101,7 @@
 
 (defn light-ok
   "The planner's lightOk: (fn [x y z]) true where a torch may go at a takeoff (x y z its feet): the feet or the head cell
-  in no other owner's zone or claim (none under :ignore-zones?); jobs.lib.walk/light! places it in the one allowed."
+  in no other owner's zone or claim (none under :ignore-zones?); jobs.lib.walk.light/light! places it in the one allowed."
   [c]
   (let [in (access/zone-input c)
         ok? (fn [cell] (true? (:ok (zones/verdict (assoc in :action :place :cell cell)))))]
