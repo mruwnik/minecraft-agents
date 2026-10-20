@@ -22,7 +22,7 @@
   The far shore is :pos (a land cell: it must be a seen shore), else a seen shore within ::radius of the body, at least ::min-cross blocks away, with water between it and the body
   (not the start bank): the one nearest :goal when given, else the farthest.
   A given :pos is looked at first; one the body still cannot make out is crossed toward all the same (boat-land drives nearer to it).
-  Impossible: :bad-args (:pos names no cell, :item is no boat). Conditions, asked before every round (a listed call waits on them; the engine looks round once first): :no-far-shore (:pos is no shore,
+  Impossible: :bad-args (:pos or :goal names no cell, :item is no boat). Conditions, asked before every round (a listed call waits on them; the engine looks round once first): :no-far-shore (:pos is no shore,
   or none far enough is in sight), :not-water (no water in sight to launch on, unless already aboard). A crossing under way skips them.
   Ends done (data {:land {:x :y :z} :boat id :recovered bool}), or the failed child's kind with its ending as the :because:
   condition-failed :no-boat (none carried and none could be fetched), :boat-not-seen (the placed boat is not in sight), the launch's other causes (:refused, :no-support,
@@ -153,10 +153,11 @@
                {:land (given-pos c)}))))
 
 (def bad-args
-  "Never :bad-args when :pos names no cell or :item is no boat."
-  (checks/args-fit "needs a cell :pos and a boat :item"
-                   (fn [c] (let [{:keys [pos item]} (:args c)]
+  "Never :bad-args when :pos or :goal names no cell or :item is no boat."
+  (checks/args-fit "needs a cell :pos or :goal and a boat :item"
+                   (fn [c] (let [{:keys [pos goal item]} (:args c)]
                              (not (or (and pos (nil? (given-pos c)))
+                                      (and goal (nil? (goal-pos c)))
                                       (and item (not (launch/boat-name? item)))))))))
 
 (defn start-fact

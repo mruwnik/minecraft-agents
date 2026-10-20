@@ -252,6 +252,15 @@
     (is (= {:spots 2 :drive :blocked} (:data (cw/failure {} r {}))))
     (is (= :no-boat (contract/cause-key (cw/failure {} {:kind :condition-failed :cause :need} {:need :no-boat}))))))
 
+(deftest a-launch-whose-boat-is-not-in-sight-ends-boat-not-seen
+  (let [r (cw/failure {} {:kind :nothing-possible :cause :no-boat} cw/launch-stops)]
+    (is (= :boat-not-seen (contract/cause-key r)))))
+
+(deftest a-goal-naming-no-cell-is-bad-args
+  (let [{:keys [p]} (lt/setup world)
+        c {:primitives p :args {:goal "nowhere"}}]
+    (is (= :never (first (cw/bad-args c))) (pr-str (cw/bad-args c)))))
+
 (deftest only-a-body-standing-dry-at-the-landing-is-ashore
   (doseq [[label pos ashore] [["on the landing" [7.5 64 0.5] true]
                               ["a swimmer within reach of it" [6.5 63 0.5] false]]]
