@@ -331,6 +331,21 @@
           (is (= {"diamond_pickaxe" 1 "diamond_sword" 1} (inv p)) "a short walk round the pile brought it into sight")
           (is (= :collected (:decision (recovered eng)))))))))
 
+(deftest recover-drops-turns-to-look-for-a-drop-beside-the-body-outside-its-view
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities [(drop-item 1 20 "diamond_pickaxe") (assoc (drop-item 2 22 "diamond_sword") :visible false)]})]
+          (.override (.-world p) "look"
+                     (fn [token a impl]
+                       (swap! (fake/state p) update :entities (fn [es] (mapv #(cond-> % (= 2 (:id %)) (assoc :visible true)) es)))
+                       (impl token a)))
+          (die! eng {:pos death-pos :inventory diamonds})
+          (core/submit! eng (list 'jobs.survival.recover-drops {:settings {:jobs.survival.recover-drops/collect-radius 8}}) {})
+          (is (< (await (run-until-empty eng 40)) 40))
+          (is (= {"diamond_pickaxe" 1 "diamond_sword" 1} (inv p)) "a turn of the head, not a walk round the pile, brought it into sight")
+          (is (= :collected (:decision (recovered eng)))))))))
+
 (defn die-twice!
   "A death 310 s ago (its pile gone) and one 5 s ago with a pile of diamonds; the newer declined for a danger that is remembered."
   [eng]

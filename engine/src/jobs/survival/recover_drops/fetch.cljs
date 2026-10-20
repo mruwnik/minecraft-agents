@@ -3,6 +3,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.look :as look]
             [jobs.lib.result :as result]
             [jobs.lib.util :as u]
             [jobs.survival.recover-drops.config :as cfg]
@@ -86,6 +87,15 @@
       (zero? items) (end/finish! c :abandoned (assoc decided :items 0 :reason :nothing-found))
       :else (end/finish! c :partial (assoc decided :items items :left left :reason (if (seq ids) :unreachable :not-visible))))))
 
+(defn ^:async find-ids!
+  "Ids of the pile's items in sight; when none, turn to each heading and check after every look (an item is seen only inside the view cone, and a walk ends facing wherever)."
+  [c pos names radius]
+  (or (seq (pl/pile-ids c pos names radius))
+      (loop [dirs (vals look/headings)]
+        (when-let [d (first dirs)]
+          (await (look/glance! c [d]))
+          (or (seq (pl/pile-ids c pos names radius)) (recur (rest dirs)))))))
+
 (defn ^:async look-round!
   "Drops of the pile went out of sight (down a shaft): once, walk to the cell the first was last seen in (go-to, range 1)
   and look again. :next with a pass counted when drops are in sight now, else the end of the trip (what is left, with its
@@ -93,7 +103,7 @@
   [c [x y z] pos names radius pile]
   (ctx/update-mem! c assoc :looked true)
   (await (child/run!* c :look 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 1 :ways #{:walk :clear-seal} :checks cfg/own-checks}))
-  (let [again (pl/pile-ids c pos names radius)]
+  (let [again (vec (await (find-ids! c pos names radius)))]
     (if (seq again)
       (do (ctx/update-mem! c update :passes (fnil inc 0)) (dth/save-trip! c) :next)
       (finish-collect! c pile again))))
@@ -107,7 +117,7 @@
                  (map-indexed (fn [i [dx dz]] [i {:x (+ x dx) :y y :z (+ z dz)}]) [[r 0] [0 r] [(- r) 0] [0 (- r)]]))]
     (when-let [[i cell] (first cells)]
       (await (child/run!* c (keyword (str "search" i)) 'jobs.movement.go-to {:pos cell :range 1 :ways #{:walk :clear-seal} :checks cfg/own-checks}))
-      (or (seq (pl/pile-ids c pos names radius)) (recur (rest cells))))))
+      (or (seq (await (find-ids! c pos names radius))) (recur (rest cells))))))
 
 (defn ^:async collect!
   "One collect pass over the pile's visible items: :next after a pass that left some in sight (walk back, at most
@@ -117,7 +127,7 @@
         total (reduce + 0 (map :count pile))]
     (if (>= (pl/recovered-items c pile) total)
       (finish-collect! c pile [])
-      (let [ids (pl/pile-ids c pos names radius)]
+      (let [ids (vec (await (find-ids! c pos names radius)))]
         (if (empty? ids)
           (or (await (clear-seal! c pos))
               (when-not (:searched (ctx/mem c))
@@ -129,7 +139,7 @@
                 cell (pl/look-cell (:data swept))]
             (if (empty? (pl/left-over c pile))
               (finish-collect! c pile [])
-              (let [again (pl/pile-ids c pos names radius)
+              (let [again (vec (await (find-ids! c pos names radius)))
                     passes (:passes (ctx/mem c) 0)]
                 (cond
                   (and (seq again) (< passes (cfg/max-collect-passes)))
