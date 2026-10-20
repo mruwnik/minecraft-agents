@@ -116,7 +116,7 @@
   (let [failed (pit-site/failed c)]
     (ctx/end c :nothing-possible :exposed
              (cond-> {:sites failed
-                      :text (str "no shelter tonight: no bed, nobody asleep, no site to dig in, nowhere safer known (" (sites/exposed-why failed) ")")}
+                      :text (str "no shelter tonight: no bed, nobody asleep, no site to dig in, nowhere safer known (" (sites/exposed-why failed (:no-way-text (ctx/mem c))) ")")}
                (fled c) (assoc :fled (fled c))))))
 
 (defn ^:async morning-step!

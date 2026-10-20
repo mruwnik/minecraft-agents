@@ -35,12 +35,13 @@
 
 (defn exposed-why
   "A short why for a night with no shelter, from the failed sites' reasons: counts per reason, and a hint to move when
-  the server refused the walls and every other way failed for want of blocks that stay (spawn protection)."
-  [sites]
+  the server refused the walls and every other way failed for want of blocks that stay (spawn protection). With no site tried,
+  why is shut-in's own text of what each way lacked (no blocks, no tool), when it gave one."
+  [sites & [why]]
   (let [reasons (map :reason sites)
         counts (frequencies reasons)]
     (cond
-      (empty? sites) "no site tried"
+      (empty? sites) (or why "no site tried")
       :else (str (str/join ", " (map (fn [[r n]] (str n " " (name r))) (sort-by (comp name key) counts)))
                  (when (and (some #{:walls-server-refused} reasons) (every? #{:walls-server-refused :roof-failed :lays-open} reasons))
                    "; the server refused every block placed (spawn protection?): move well away from here and try again")))))

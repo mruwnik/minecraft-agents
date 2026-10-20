@@ -211,15 +211,15 @@
     (ctx/update-mem! c update :exposed #(or % {:pos (sh-sense/feet (:primitives c)) :at (ctx/now c)}))
     (ctx/emit! c :shelter.exposed :warn {:pos (sh-sense/feet (:primitives c)) :sites (pit-site/failed c)
                                          :text (str "cannot shelter here (no bed, nobody asleep, no site to dig in, nowhere safer known: "
-                                                    (sites/exposed-why (pit-site/failed c)) "); holding until day")}))
-  (await (hold/hold! c (str "exposed: " (sites/exposed-why (pit-site/failed c))))))
+                                                    (sites/exposed-why (pit-site/failed c) (:no-way-text (ctx/mem c))) "); holding until day")}))
+  (await (hold/hold! c (str "exposed: " (sites/exposed-why (pit-site/failed c) (:no-way-text (ctx/mem c)))))))
 
 (defn retry-dig-in!
   "Start over from the exposed hold: give-ups forgotten, one retry counted."
   [c]
   (let [p (:primitives c)
         retries (inc (or (:retries (:exposed (ctx/mem c))) 0))]
-    (ctx/update-mem! c #(-> % (dissoc :no-site :shut-ins :pit-trapped :niche :fleeing :flee-failed)
+    (ctx/update-mem! c #(-> % (dissoc :no-site :no-way-text :shut-ins :pit-trapped :niche :fleeing :flee-failed)
                             (assoc :exposed {:pos (sh-sense/feet p) :at (ctx/now c) :retries retries})))))
 
 (def niche-reach
@@ -334,7 +334,8 @@
     (when-not (= :continue d)
       (ctx/update-mem! c #(-> % (dissoc :digging) (update :shut-ins (fnil inc 0))))
       (cond
-        (not (and (= :done (:kind d)) (sh-sense/roofed? p (dig-in-roof-height c)))) (when-not (more-sites? c) (ctx/update-mem! c assoc :no-site true))
+        (not (and (= :done (:kind d)) (sh-sense/roofed? p (dig-in-roof-height c)))) (do (ctx/update-mem! c assoc :no-way-text (:text (:data d)))
+                                                                                        (when-not (more-sites? c) (ctx/update-mem! c assoc :no-site true)))
         (not (and (= :room (:way (:data d))) (empty? (:placed (:data d))))) (hold/sheltered! c :dug-in)))
     :again))
 
@@ -430,7 +431,7 @@
           (do (ctx/end c :done nil (morning/done-data c (if (= :logged-out sheltered) :logged-out :roofed))))
           (:fleeing (ctx/mem c)) (await (flee/flee! c (:fleeing (ctx/mem c))))
           (and (= :exposed sheltered) (ctx/way? c :shelter) (sites/retry-due? c)) (do (retry-dig-in! c) (await (shelter! c)))
-          (= :exposed sheltered) (await (hold/hold! c (str "exposed: " (sites/exposed-why (pit-site/failed c)))))
+          (= :exposed sheltered) (await (hold/hold! c (str "exposed: " (sites/exposed-why (pit-site/failed c) (:no-way-text (ctx/mem c))))))
           (not (ctx/way? c :shelter)) (await (flee-or-hold! c))
           (:no-site (ctx/mem c)) (await (no-site! c))
           :else (await (shelter! c)))))))

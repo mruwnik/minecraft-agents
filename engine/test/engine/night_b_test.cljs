@@ -207,7 +207,8 @@
   (is (not (re-find #"spawn protection" (sites/exposed-why [{:reason :walls-failed} {:reason :walls-failed}]))))
   (is (not (re-find #"spawn protection" (sites/exposed-why [{:reason :walls-server-refused} {:reason :unreachable}]))))
   (is (re-find #"spawn protection.*move" (sites/exposed-why [{:reason :walls-server-refused} {:reason :walls-server-refused}])))
-  (is (= "no site tried" (sites/exposed-why []))))
+  (is (= "no site tried" (sites/exposed-why [])))
+  (is (= "no block to wall" (sites/exposed-why [] "no block to wall"))))
 
 (deftest a-body-held-exposed-says-why-when-the-server-refuses-every-place
   (async done

@@ -147,7 +147,7 @@
    :limit-s 90}
 
   ;; Night: the body is shut in a closed stone room at night; a search for a target outside waits for day in the room
-  ;; (job.waiting :exposed) and its job time does not run out meanwhile; once the time is set to day it leaves and finds the target.
+  ;; (job.waiting :dark, "dark sky above ground") and its job time does not run out meanwhile; once the time is set to day it leaves and finds the target.
   ;; Run with --allow-time and a shared --time-log.
   {:name "search-waits-the-night-in-a-room-without-timing-out"
    :time :night-exclusive
@@ -159,7 +159,7 @@
                                      :use-notes false :max-distance 60 :settings {:jobs.explore.search/max-legs 16} :spend {:job-time 45}})]
          [:wait-s 70]
          [:time-set 1000]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 60 :of-job true}
+   :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 70 :of-job true}
             {:no-event {:source :job :kind :limit-reached} :for-s 70}
             {:event {:source :job :kind :completed :data {:reason :found}} :within-s 200 :of-job true}]
