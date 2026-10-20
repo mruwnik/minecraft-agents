@@ -3,6 +3,7 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.child :as child]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
@@ -21,7 +22,7 @@
   Ends done (data {:id :vehicle name}, plus :already true when aboard it already and the root job did not yet hold it; cause :already when it did), or
   condition-failed: :gone (the server found no such entity), :not-mountable, :occupied, :hand-full
   (a mob, with an item in hand that cannot be put away), or
-  nothing-possible: :timeout (the server never seated the body), :unreachable (the walk failed twice),
+  nothing-possible: :timeout (the server never seated the body), :unreachable (the walk failed ::max-walks (2) times),
   :failed (any other status, data :mount the primitive's).")
 
 (a/defargs args
@@ -31,14 +32,19 @@
 (def target [:id :name])
 
 (def reach 2.5)
-(def max-walks 2)
+(a/defargs settings
+  {::job-time-s {:default 60 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
+   ::max-walks {:default 2 :doc "Failed walks to the vehicle before the call stops :unreachable." :spec (a/int-in 1 nil)}
+   ::sight-radius {:default 64 :doc "How far a vehicle is looked for among the entities in sight." :spec (a/num-in 1 nil)}})
+
+(defn max-walks [] (settings/get settings ::max-walks))
 (def walk-speed "Blocks a second a walk covers, for the quote." 4)
 (def seat-s "Seconds the server takes to seat the body, for the quote." 1)
 
 (defn sensed
   "The entities in sight with a position (heard mobs have none)."
   [p]
-  (filter #(some? (.-pos %)) (look/seen-objs p {:radius 64 :max 64})))
+  (filter #(some? (.-pos %)) (look/seen-objs p {:radius (settings/get settings ::sight-radius) :max 64})))
 
 (defn entity-of [p id]
   (first (filter #(= id (.-id %)) (sensed p))))
@@ -92,9 +98,6 @@
       (contract/later :aboard-other (str "aboard another vehicle, " (:name v)) :vehicle (:name v))
       (contract/ok :vehicle "not aboard another vehicle"))))
 
-(a/defargs settings
-  {::job-time-s {:default 60 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
-
 (def safe? ready/safe-here-by-night)
 (def fit? ready/fit?)
 
@@ -141,7 +144,7 @@
             (let [r (await (child/call-walk* c :walk {:pos (u/pos-of (.-pos e)) :range 2 :ways #{:walk :clear-seal}}))]
               (cond
                 (= :continue r) :continue
-                (>= (inc fails) max-walks) (stop! c id :nothing-possible :unreachable {:why (contract/cause-key r)})
+                (>= (inc fails) (max-walks)) (stop! c id :nothing-possible :unreachable {:why (contract/cause-key r)})
                 :else (recur (inc fails))))
             :else
             (do (vehicle/hold! c)
@@ -155,5 +158,5 @@
                     "occupied" (stop! c id :condition-failed :occupied)
                     "hand-full" (stop! c id :condition-failed :hand-full)
                     "timeout" (stop! c id :nothing-possible :timeout {:seen (js->clj (.-vehicle r) :keywordize-keys true)})
-                    "out-of-reach" (if (>= (inc fails) max-walks) (stop! c id :nothing-possible :unreachable) (recur (inc fails)))
+                    "out-of-reach" (if (>= (inc fails) (max-walks)) (stop! c id :nothing-possible :unreachable) (recur (inc fails)))
                     (stop! c id :nothing-possible :failed {:mount status}))))))))))

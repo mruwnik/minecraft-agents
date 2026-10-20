@@ -158,6 +158,11 @@
   (is (nil? (condition-with {:entities [boat]} {:name "oak_boat"})))
   (is (= :bad-args (condition-with {:entities [boat]} {}))))
 
+(deftest the-sight-radius-is-a-setting
+  (let [far {:entities [(assoc boat :pos {:x 1.5 :y 64 :z 30.5})]}]
+    (is (= :no-vehicle (settings/with-settings {::mount/sight-radius 20} #(condition-with far {:id 9}))))
+    (is (nil? (settings/with-settings {::mount/sight-radius 40} #(condition-with far {:id 9}))))))
+
 (deftest a-walk-that-arrives-but-stays-out-of-reach-is-unreachable
   (async done
     (tu/run-async done
