@@ -172,6 +172,17 @@ test('SSE sends the pose and hud on connect, then a pose event on change', async
   writeAt(path.join(viewDir, 'pose.json'), JSON.stringify(pose), 1000)
 })
 
+test('a streamed body gets a fresh watch marker, which stops being touched once the stream closes', async () => {
+  const marker = path.join(viewDir, 'watching')
+  fs.rmSync(marker, { force: true })
+  const response = await get('/pose/w1/Bob?radius=2')
+  await collect(response, { ms: 300 })
+  assert.ok(Date.now() - fs.statSync(marker).mtimeMs < 1000)
+  const closedAt = fs.statSync(marker).mtimeMs
+  await sleep(2600)
+  assert.equal(fs.statSync(marker).mtimeMs, closedAt)
+})
+
 test('SSE pose events carry lamp: the light of a torch held in either hand, 0 otherwise', async () => {
   const response = await get('/pose/w1/Bob?radius=2')
   setTimeout(() => writeAt(path.join(viewDir, 'pose.json'), JSON.stringify({ ...pose, t: 7, offHand: 'torch' }), 2500), 100)

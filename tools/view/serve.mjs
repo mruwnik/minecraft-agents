@@ -10,6 +10,7 @@ import { biomeTable } from './biome-colors.mjs'
 import { createBlockScanner, classifyReal, findClientJar } from './block-scan.mjs'
 import { heldLamp } from './renderer.mjs'
 import { bodyDir, listBodies, worldsDir } from '../../engine/js/bodies.mjs'
+import { watchFile } from '../../engine/js/view.mjs'
 
 const NAME = /^[A-Za-z0-9_-]+$/
 const VERSION = /^[0-9.]+$/
@@ -17,6 +18,11 @@ const COLUMN_FILE = /^(-?\d+)\.(-?\d+)\.bin$/
 const WEB_FILE = /^(?!\.)[A-Za-z0-9_.-]+$/
 const TYPES = { '.html': 'text/html; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8' }
 const PING_MS = 15000
+// a body in on-demand mode (engine/js/view.mjs) dumps while its watch marker is younger than WATCH_FRESH_MS; touched this often while streamed
+const WATCH_TOUCH_MS = 2000
+// how long a stream waits for a body that has not dumped its first pose yet (the dump starts within about a second of the marker)
+const FIRST_POSE_WAIT_MS = 5000
+const FIRST_POSE_POLL_MS = 250
 const MAX_STREAM_AGENTS = 32
 // a body is addressed as <world>/<name>: a name is unique only within a world
 const bodyOfKey = key => {
@@ -62,6 +68,46 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
   const jarPath = blockJar === undefined ? findClientJar() : blockJar
   const scanner = createBlockScanner({ stateDir, textureDir, jar: jarPath, sweepMs: blockSweepMs, writeMs: blockWriteMs })
   const agentFile = ({ world, name }, file) => path.join(bodyDir(stateDir, world, name), 'view', file)
+  // Marks a body as watched until the returned release() is called: its watch marker is touched every WATCH_TOUCH_MS, so the body
+  // dumps only while a browser streams it. Bodies with no folder get no marker.
+  const watched = new Map() // path -> {count, timer}
+  const watchBody = body => {
+    const marker = watchFile(stateDir, body.world, body.name)
+    const touch = async () => {
+      if (!(await statOrNull(bodyDir(stateDir, body.world, body.name)))?.isDirectory()) return
+      await fs.promises.mkdir(path.dirname(marker), { recursive: true })
+      await fs.promises.writeFile(marker, String(Date.now()))
+    }
+    const held = watched.get(marker) ?? { count: 0, timer: null }
+    watched.set(marker, held)
+    held.count++
+    if (!held.timer) {
+      held.timer = setInterval(() => touch().catch(() => {}), WATCH_TOUCH_MS)
+      held.timer.unref()
+    }
+    touch().catch(() => {})
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      if (--held.count > 0) return
+      clearInterval(held.timer)
+      watched.delete(marker)
+    }
+  }
+
+  // the body's first pose; a body whose folder exists but that has not started dumping yet is waited for (the watch marker starts it)
+  const firstPose = async body => {
+    const read = () => readJson(agentFile(body, 'pose.json'))
+    const dir = () => statOrNull(bodyDir(stateDir, body.world, body.name))
+    let pose = await read()
+    for (let waited = 0; !pose && waited < FIRST_POSE_WAIT_MS && (await dir())?.isDirectory(); waited += FIRST_POSE_POLL_MS) {
+      await new Promise(resolve => setTimeout(resolve, FIRST_POSE_POLL_MS))
+      pose = await read()
+    }
+    return pose
+  }
+
   // one build per version (in a worker thread, see view-assets.mjs) serves both the table and the texture bytes
   const buildFor = createAssetCache(version => buildAssetsInWorker(version, textureDir, jarPath))
 
@@ -266,31 +312,44 @@ export function createViewServer ({ stateDir, textureDir, webDir, pollMs = 50, c
   const sseWrite = (res, event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
 
   const streamAgent = async (req, res, body, radius) => {
-    const first = await readJson(agentFile(body, 'pose.json'))
-    if (!first) return notFound(res)
-    trackStreamed(first.world)
-    sseHead(res)
-    const stop = watchAgent(body, first, radius, (event, data) => sseWrite(res, event, data))
-    const ping = setInterval(() => res.write(': ping\n\n'), PING_MS)
+    const release = watchBody(body)
+    let stop = () => {}
+    let ping = null
     req.on('close', () => {
       clearInterval(ping)
       stop()
+      release()
     })
+    const first = await firstPose(body)
+    if (req.destroyed) return
+    if (!first) {
+      release()
+      return notFound(res)
+    }
+    trackStreamed(first.world)
+    sseHead(res)
+    stop = watchAgent(body, first, radius, (event, data) => sseWrite(res, event, data))
+    ping = setInterval(() => res.write(': ping\n\n'), PING_MS)
   }
 
   // one stream for several bodies (keys <world>/<name>); every event's data carries `agent`, the key. Bodies without a pose file are left out.
   const streamAgents = async (req, res, keys, radius) => {
-    const firsts = await Promise.all(keys.map(async key => [key, await readJson(agentFile(bodyOfKey(key), 'pose.json'))]))
-    sseHead(res)
-    const stops = firsts.filter(([, first]) => first).map(([key, first]) => {
-      trackStreamed(first.world)
-      return watchAgent(bodyOfKey(key), first, radius, (event, data) => sseWrite(res, event, { agent: key, ...data }))
-    })
-    const ping = setInterval(() => res.write(': ping\n\n'), PING_MS)
+    const releases = keys.map(key => watchBody(bodyOfKey(key)))
+    let ping = null
+    let stops = []
     req.on('close', () => {
       clearInterval(ping)
       stops.forEach(stop => stop())
+      releases.forEach(release => release())
     })
+    const firsts = await Promise.all(keys.map(async key => [key, await firstPose(bodyOfKey(key))]))
+    if (req.destroyed) return
+    sseHead(res)
+    stops = firsts.filter(([, first]) => first).map(([key, first]) => {
+      trackStreamed(first.world)
+      return watchAgent(bodyOfKey(key), first, radius, (event, data) => sseWrite(res, event, { agent: key, ...data }))
+    })
+    ping = setInterval(() => res.write(': ping\n\n'), PING_MS)
   }
 
   const route = async (req, res) => {

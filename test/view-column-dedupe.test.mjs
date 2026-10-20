@@ -26,7 +26,7 @@ const setup = () => {
     removeListener: () => {}
   }
   let clock = 1000
-  const view = createView({ stateDir, agent: 'Bob', world: 'w', enabled: true, now: () => (clock += 1000), poseHz: 0 })
+  const view = createView({ stateDir, agent: 'Bob', world: 'w', mode: 'on', now: () => (clock += 1000), poseHz: 0 })
   view.attach(bot)
   const file = columnFile(stateDir, 'w', 0, 0)
   const flush = async () => { await view.flushColumns(); await view.idle() }

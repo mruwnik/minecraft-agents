@@ -35,7 +35,7 @@
        "A job case (no :register, no :wait-full true, only :event expectations pending) ends :idle-grace-s (default 3) s after every job it submitted has ended, failed or parked (\"no job active: ...\", :ended-early-s and :idle-grace-s in the result).\n"
        "Runs world fixtures (default dir engine/fixtures/world) by default in sealed underground cells (y -40), with :plot :light :sky on the surface plot grid x/z 20000..20640, y 150 (large plots: lanes south of it, to z 22240).\n"
        "--keep-body leaves the probe body's agent dir after the run (otherwise a passed run removes it; a failed one keeps it, like the temp dir).\n"
-       "--view keeps the view dump on for the probe body (off by default: it costs CPU and no run reads it).\n"
+       "--view keeps the view dump always on for the probe body (default: only while a browser watches it).\n"
        "--allow-time lets a case that needs night or day set the time (each set appended to --time-log); without it\n"
        "such a case is skipped, and a case with no :time still gets day (logged to a default file in the temp dir). While a world sweep runs, a run outside it fails every case that needs a time lock at once (only :time :any cases run). A case that depends on the time of day (with --allow-time, every case) holds a time lock shared by phase (day cases together,\n"
        "night cases together; the other phase waits; the first holder sets the time) for its whole run; a manual `time set` takes it too: node tools/time-set.mjs <ticks|day|noon|night|midnight>. A failed case whose day time jumped meanwhile (a foreign `time set`) is INCONCLUSIVE. "
@@ -483,12 +483,12 @@
   {:source :system :kind #{:started :restored}})
 
 (defn body-env
-  "The environment of a probe body: no view dump (it costs CPU every physics tick and no run reads it) unless --view; Node's
+  "The environment of a probe body: the view dump on demand (only while a browser watches the body; no cost otherwise), always on with --view; Node's
   compile cache for the 10 MB bundle (a rebuild changes the file, so Node recompiles it)."
   [opts]
   (js/Object.assign #js {} js/process.env
                     #js {:NODE_COMPILE_CACHE (repo-path "engine" "out" "compile-cache")}
-                    (when-not (:view opts) #js {:BODY_VIEW "0"})
+                    #js {:BODY_VIEW (if (:view opts) "1" "demand")}
                     (when (:trace-dir opts) #js {:MC_STEP_TRACE (steps-file opts)})))
 
 (defn start-body!

@@ -1703,10 +1703,10 @@
                    (is (some #{"--request-id"} (first @argvs)))
                    (done)))))))
 
-(deftest a-probe-body-runs-without-the-view-dump-unless-asked
+(deftest a-probe-body-dumps-its-view-on-demand-unless-asked-for-always
   (are [opts view] (= view (aget (r/body-env opts) "BODY_VIEW"))
-    {:body "B"} "0"
-    {:body "B" :view true} (aget js/process.env "BODY_VIEW")))
+    {:body "B"} "demand"
+    {:body "B" :view true} "1"))
 
 (deftest a-probe-body-loads-its-bundle-through-the-node-compile-cache
   (is (.endsWith (aget (r/body-env {:body "B"}) "NODE_COMPILE_CACHE") "engine/out/compile-cache")))

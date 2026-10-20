@@ -49,6 +49,16 @@ export const columnFile = (stateDir, world, cx, cz, dimension) => {
 export const biomesFile = (stateDir, world) => path.join(worldsDir(stateDir), world, 'biomes.json')
 export const poseFile = (stateDir, world, agent) => path.join(bodyDir(stateDir, world, agent), 'view', 'pose.json')
 export const hudFile = (stateDir, world, agent) => path.join(bodyDir(stateDir, world, agent), 'view', 'hud.json')
+// the view server touches this while a browser watches the body; the dump runs only while it is fresh (on-demand mode)
+export const watchFile = (stateDir, world, agent) => path.join(bodyDir(stateDir, world, agent), 'view', 'watching')
+export const WATCH_FRESH_MS = 6000
+export const WATCH_CHECK_MS = 1000
+
+// BODY_VIEW: 0 = no dump, 1 = always dump, anything else (the default) = dump only while a browser watches this body
+export function viewModeFromEnv (env = process.env) {
+  if (env.BODY_VIEW === '0') return 'off'
+  return env.BODY_VIEW === '1' ? 'on' : 'demand'
+}
 
 // One write in flight per file. A write asked for meanwhile replaces any waiting one, so the last data always lands
 // and the intermediate ones are dropped. Resolves when data (or something newer) has been written; never rejects
@@ -113,10 +123,12 @@ export function nearestK (points, at, k) {
   return heap.sort((a, b) => a[0] - b[0]).map(([, p]) => p)
 }
 
-export function createView ({ stateDir, agent, world, onEvent = () => {}, now = Date.now, enabled = process.env.BODY_VIEW !== '0', poseHz = poseHzFromEnv(), relightBudgetMs = RELIGHT_BUDGET_MS, relightMaxPoints = RELIGHT_MAX_POINTS, relightRange, relightBacklogMax, dirtyColumnsMax, dirtyPointsMax }) {
+export function createView ({ stateDir, agent, world, onEvent = () => {}, now = Date.now, mode = viewModeFromEnv(), poseHz = poseHzFromEnv(), relightBudgetMs = RELIGHT_BUDGET_MS, relightMaxPoints = RELIGHT_MAX_POINTS, relightRange, relightBacklogMax, dirtyColumnsMax, dirtyPointsMax }) {
   let bot = null
   let unhook = () => {}
   let timers = []
+  // dumping now: always when on, in demand mode only while the watch marker is fresh
+  let live = mode === 'on'
   let stats = zeroStats()
   let lastPoseKey = null
   let lastPoseAt = 0
@@ -421,7 +433,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     const target = bot
     const writes = []
     const blocked = relight(target)
-    if (!enabled) {
+    if (!live) {
       pending.clear() // the server sends no light update after a block change, so perception needs the relit overlay even with no dump
       return Promise.resolve()
     }
@@ -452,7 +464,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
 
   // main-thread time here (snapshot, change key, stringify) is counted as poseMs, apart from the column ms
   const tickPose = () => {
-    if (!bot || !enabled) return Promise.resolve()
+    if (!bot || !live) return Promise.resolve()
     const start = performance.now()
     const json = (() => {
       try {
@@ -481,7 +493,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   }
 
   const tickHud = () => {
-    if (!bot || !enabled) return Promise.resolve()
+    if (!bot || !live) return Promise.resolve()
     const hud = (() => {
       try { return timed(() => hudSnapshot(bot, now())) } catch (err) { reportError(err); return null }
     })()
@@ -541,6 +553,19 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     onEvent({ source: 'body', kind: 'view.stats', level: 'info', ...takeStats() })
   }
 
+  // demand mode: turn the dump on while a browser watches. On turn-on every loaded column is dumped once so the view is complete.
+  const checkWatch = async () => {
+    if (!bot || mode !== 'demand') return
+    const stat = await fs.promises.stat(watchFile(stateDir, world, agent)).catch(() => null)
+    const fresh = Boolean(stat) && now() - stat.mtimeMs < WATCH_FRESH_MS
+    if (fresh === live || !bot) return
+    live = fresh
+    if (!live) return
+    lastPoseKey = lastBodyKey = lastHudKey = null
+    for (const { chunkX, chunkZ } of bot.world?.getColumns?.() ?? []) markColumn(Number(chunkX), Number(chunkZ))
+    track(writeBiomes(bot)).catch(reportError)
+  }
+
   const startTimers = () => {
     if (timers.length) return
     const every = (ms, fn) => {
@@ -553,7 +578,8 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
       // tick mode: physicsTick stops while the column under the body is unloaded or physics is off, so the refresh needs its own timer
       every(poseHz > 0 ? 1000 / poseHz : POSE_REFRESH_MS, tickPose),
       every(HUD_MS, tickHud),
-      every(STATS_MS, emitStats)
+      every(STATS_MS, emitStats),
+      ...(mode === 'demand' ? [every(WATCH_CHECK_MS, checkWatch)] : [])
     ]
   }
 
@@ -586,11 +612,12 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     // columns that arrived before attach (the spawn column) never fire chunkColumnLoad for us
     const loaded = target.world?.getColumns?.() ?? []
     loaded.forEach(({ chunkX, chunkZ }) => markColumn(Number(chunkX), Number(chunkZ)))
-    if (enabled) track(writeBiomes(target)).catch(reportError)
+    if (live) track(writeBiomes(target)).catch(reportError)
     const tableStart = performance.now()
     try { tableFor(target) } catch (err) { reportError(err) }
     stats.relightTableMs += performance.now() - tableStart
     startTimers()
+    checkWatch().catch(reportError)
   }
 
   const detach = () => {
@@ -598,7 +625,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     unhook()
     unhook = () => {}
     bot = null
-    if (!enabled) return Promise.resolve()
+    if (!live) return Promise.resolve()
     return track(writePose(JSON.stringify(offlinePose({ world, now: now(), mcVersion, last: lastPose }))))
   }
 
@@ -616,5 +643,5 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
 
   // the relit light of world section s of column (cx, cz), {sky, block} one byte per cell, or undefined (engine.perception reads light through it)
   const lightOverlay = (cx, cz, s) => overlays.get(`${cx},${cz}`)?.get(s)
-  return { attach, detach, stop, markCell, flushColumns, tickPose, tickHud, idle, pendingCount: () => pending.size, stats: takeStats, lightOverlay }
+  return { attach, detach, stop, markCell, checkWatch, isLive: () => live, flushColumns, tickPose, tickHud, idle, pendingCount: () => pending.size, stats: takeStats, lightOverlay }
 }

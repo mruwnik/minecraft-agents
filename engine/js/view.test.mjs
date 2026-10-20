@@ -11,7 +11,7 @@ import prismarineChunk from 'prismarine-chunk'
 import prismarineRegistry from 'prismarine-registry'
 import {
   encodeColumn, decodeColumnFile, restoreColumn, columnFile,
-  poseSnapshot, poseKey, hudSnapshot, createView, poseHzFromEnv, coalescedWriter, STATS_MS, POSE_REFRESH_MS, POSE_BODY_MS,
+  poseSnapshot, poseKey, hudSnapshot, createView, watchFile, poseFile, WATCH_FRESH_MS, viewModeFromEnv, poseHzFromEnv, coalescedWriter, STATS_MS, POSE_REFRESH_MS, POSE_BODY_MS,
   packNibbles, decodeColumnLight, mergeOverlapping, columnLightSection, columnStateSection
 } from './view.mjs'
 import { poseEntities } from './view-pose.mjs'
@@ -69,7 +69,7 @@ const fakeBot = ({ columns = {}, entities = {}, listing = false } = {}) => {
 const makeView = (bot, overrides = {}) => {
   const dir = tmp()
   const events = []
-  const view = createView({ stateDir: dir, agent: 'Bob', world: 'w', onEvent: e => events.push(e), enabled: true, ...overrides })
+  const view = createView({ stateDir: dir, agent: 'Bob', world: 'w', onEvent: e => events.push(e), mode: 'on', ...overrides })
   view.attach(bot)
   return { view, dir, events }
 }
@@ -514,7 +514,7 @@ test('disabled view writes nothing but still relights a block change', async () 
   const bot = fakeBot({ columns })
   bot.registry = undefined
   bot.entity.position = new Vec3(8.5, 65, 10.5)
-  const view = createView({ stateDir: dir, agent: 'Bob', world: 'w', onEvent: () => {}, enabled: false })
+  const view = createView({ stateDir: dir, agent: 'Bob', world: 'w', onEvent: () => {}, mode: 'off' })
   view.attach(bot)
   bot.emit('chunkColumnLoad', new Vec3(0, 0, 0))
   columns['0,0'].setBlockStateId({ x: 8, y: 64, z: 8 }, stateOf('stone'))
@@ -527,6 +527,35 @@ test('disabled view writes nothing but still relights a block change', async () 
   view.stop()
   assert.equal(view.lightOverlay(0, 0, (65 + 64) >> 4)?.block[((65 + 64) & 15) << 8 | 8 << 4 | 8], 14)
   assert.deepEqual(fs.readdirSync(dir), [])
+})
+
+test('demand mode dumps only while the watch marker is fresh, and dumps the loaded columns once when it turns on', async () => {
+  const columns = { '0,0': makeColumn(), '-1,2': makeColumn() }
+  const dir = tmp()
+  const view = createView({ stateDir: dir, agent: 'Bob', world: 'w', onEvent: () => {}, mode: 'demand' })
+  view.attach(fakeBot({ columns, listing: true }))
+  const marker = watchFile(dir, 'w', 'Bob')
+  await view.checkWatch()
+  await view.flushColumns()
+  await view.tickPose()
+  assert.equal(view.isLive(), false)
+  assert.deepEqual(fs.readdirSync(dir), [])
+
+  fs.mkdirSync(path.dirname(marker), { recursive: true })
+  fs.writeFileSync(marker, '')
+  await view.checkWatch()
+  await view.flushColumns()
+  await view.tickPose()
+  await view.idle()
+  assert.equal(view.isLive(), true)
+  assert.equal(fs.readdirSync(worldChunks(dir)).length, 2)
+  assert.ok(fs.existsSync(poseFile(dir, 'w', 'Bob')))
+
+  const old = (Date.now() - WATCH_FRESH_MS - 1000) / 1000
+  fs.utimesSync(marker, old, old)
+  await view.checkWatch()
+  assert.equal(view.isLive(), false)
+  view.stop()
 })
 
 const posesIn = async (poseHz, seconds, drive) => {
@@ -659,7 +688,7 @@ const statsEventsAcross = async phases => {
   try {
     const dir = tmp()
     const events = []
-    const view = createView({ stateDir: dir, agent: 'Bob', world: 'w', onEvent: e => events.push(e), enabled: true })
+    const view = createView({ stateDir: dir, agent: 'Bob', world: 'w', onEvent: e => events.push(e), mode: 'on' })
     const counts = []
     for (const phase of phases) {
       const before = events.filter(e => e.kind === 'view.stats').length
@@ -1428,7 +1457,7 @@ test('a broken biomes.json is replaced', async () => {
   const dir = tmp()
   fs.mkdirSync(path.dirname(biomesPath(dir)), { recursive: true })
   fs.writeFileSync(biomesPath(dir), '{nope')
-  const view = createView({ stateDir: dir, agent: 'Bob', world: 'w', enabled: true })
+  const view = createView({ stateDir: dir, agent: 'Bob', world: 'w', mode: 'on' })
   view.attach(withBiomes(fakeBot(), entries))
   await view.idle()
   assert.equal(readJson(biomesPath(dir)).biomes.length, 3)
