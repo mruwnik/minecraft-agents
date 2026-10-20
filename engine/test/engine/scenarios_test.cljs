@@ -55,7 +55,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen clock]} (boot "scenarios/woodcutter.edn"
-                                               {:blocks (merge (tree 4 0 4) {"8,64,8" "chest"})
+                                               {:blocks (merge (tree 4 0 4) {"4,63,0" "dirt" "8,64,8" "chest"})
                                                 :inventory [{:name "oak_sapling" :count 1}]
                                                 :containers {"8,64,8" []}})]
           ;; The chest becomes known only after the harvest: deposit puts away
