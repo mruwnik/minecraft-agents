@@ -33,7 +33,7 @@
    :range {:doc "how many cells from :pos the walk may stop (go-to :range); a click the server checks by distance, a bed's 3 blocks, wants less" :spec (a/num-in 0 nil) :default 3}
    :face {:doc "the face clicked: up down north south east west" :spec #{"up" "down" "north" "south" "east" "west"} :default "up"}})
 
-(def safe? (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))
+(def safe? (ready/safe-at-by-night (ready/near-unseen-here (fn [c] (a/cell (:pos (:args c)))))))
 
 (def fit? ready/ok)
 

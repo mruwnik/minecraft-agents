@@ -364,3 +364,9 @@
   (doseq [job (concat work-jobs (jobs-under "jobs.animals." "jobs.apiary." "jobs.village." "jobs.strip." "jobs.food.")
                       '[jobs.farm.find-spot])]
     (is (contains? (meta (safe-of job)) ::ready/exposure) (str job))))
+
+(deftest near-unseen-here-judges-a-hidden-cell-within-reach-where-the-body-stands
+  (are [goal expected] (= expected (with-redefs [sh-sense/seen-cell? (constantly false)]
+                                     (kind (ready/safe-at-by-night (ready/near-unseen-here (constantly goal))) tunnel)))
+    {:x 4 :y 68 :z 0} :ok
+    {:x 40 :y 70 :z 0} :later))

@@ -68,7 +68,7 @@
          (sort-by (juxt :y #(u/dist here %)))
          first)))
 
-(def safe? (ready/safe-at-by-night (fn [c] (or (next-cell c (owed c)) (a/cell (first (:cells (:args c))))))))
+(def safe? (ready/safe-at-by-night (ready/near-unseen-here (fn [c] (or (next-cell c (owed c)) (a/cell (first (:cells (:args c)))))))))
 
 (defn bump! [c k] (ctx/update-mem! c update k (fnil inc 0)))
 

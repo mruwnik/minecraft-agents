@@ -16,7 +16,8 @@
             [jobs.lib.danger :as danger]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.lib.storage :as storage]))
+            [jobs.lib.storage :as storage]
+            [jobs.lib.util :as u]))
 
 (a/defargs settings
   {::risk-limit {:default 0.001 :spec (a/num-in 0 nil)
@@ -77,6 +78,17 @@
   [f]
   (with-meta (fn [c] (contract/all [(threatened c) (exposed c (f c))]))
     {::exposure (fn [c] (exposed c (f c))) ::plain true}))
+
+(defn near-unseen-here
+  "f, but an unseen place within 6 blocks of the feet is judged where the body stands: a look cannot show a cell
+  behind a wall (the job walks round to it), so asking for one would wait for ever."
+  [f]
+  (fn [c]
+    (let [p (:primitives c)
+          at (f c)]
+      (when-not (and at (:y at) (not (sh-sense/seen-cell? p (update-vals at js/Math.floor)))
+                     (<= (u/dist (sh-sense/feet p) at) 6))
+        at))))
 
 (defn safe-at-by-night
   "The checker of a job that goes to the place (f c): while the place is dark safe-at it, by day or when body and place are both

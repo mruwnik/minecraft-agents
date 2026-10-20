@@ -59,7 +59,7 @@
    :see {:doc "true: place only from where the eye sees the cell (jobs.lib.aim: nothing seen solid in the way, as a player aims at the face it places against), walking to such a stand first (go-to :see; none: :unreachable :out-of-sight); false: within reach is enough" :spec boolean? :default true}
    :fetch {:doc "get the missing block item instead of waiting :need (jobs.lib.need): true, a set of kinds or a map of limits" :spec need/option? :default true}})
 
-(def safe? (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))
+(def safe? (ready/safe-at-by-night (ready/near-unseen-here (fn [c] (a/cell (:pos (:args c)))))))
 
 (def fit? ready/ok)
 
