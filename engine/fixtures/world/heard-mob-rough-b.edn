@@ -5,7 +5,7 @@
 {:defaults
  {:tags [:hostile :combat :sensing]
   :time :any
-  :plot {:height 8}
+  :plot {:height 8 :light :dark}
   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
               :job (jobs.survival.respond-to-hostile)}]
   :blocks [[:fill [4 -1 4] [28 6 28] "stone" :hollow]]
