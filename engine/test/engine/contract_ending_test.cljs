@@ -347,6 +347,18 @@
           (is (= 2 (fired)) "backs off after :after runs that ended :already")
           (is (seq (core/backoff-entries eng))))))))
 
+(deftest a-reflex-that-ends-condition-failed-holds-its-trigger-instead-of-firing-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [late {:round (fn [c] (ctx/end c :condition-failed {:reason :dark :text "dark at the pile"}))}
+              {:keys [eng seen]} (setup {'late late}
+                                        {:late {:name :late :job '(late) :persistence :retry :when (fn [_ _ _] true)}})]
+          (core/register-reflex! eng {:trigger :late})
+          (dotimes [_ 4] (await (core/tick! eng)))
+          (is (= 1 (count (ev seen :reflex :fired))) "held, not fired on every tick")
+          (is (= [:dark] (mapv #(:reason (:data %)) (ev seen :reflex :held)))))))))
+
 (deftest a-condition-that-needs-a-look-looks-once-then-the-job-waits-unstarted
   (async done
     (tu/run-async done

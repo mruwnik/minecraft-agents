@@ -2,7 +2,7 @@
   "The scheduling pass: readiness of listed jobs (checks, job.waiting, the next one to run), who holds
   the body, cuts, firing reflexes and holding them off during a section (ctx/atomic), tick! and do-now!."
   (:require [engine.args :as a]
-            [engine.core.base :refer [add-instance dead? drop-reflex-job! emit! flush-save-stats! free-owner! job-fields job-of exclusive-job memory-flush-due? new-id! now paused? reflex-text running save-memory! state ttl-now wait-reason waiting-text]]
+            [engine.core.base :refer [add-instance dead? drop-reflex-job! emit! flush-save-stats! free-owner! hold-trigger! job-fields job-of exclusive-job memory-flush-due? new-id! now paused? reflex-text running save-memory! state ttl-now wait-reason waiting-text]]
             [engine.core.attention :refer [request-attention!]]
             [engine.core.fruitless :refer [reset-backoff!]]
             [engine.core.register :refer [effective-register evaluate-register! expire-changes! levels preempts?]]
@@ -146,10 +146,7 @@
             r (when-not ok? (contract/status-cause s))]
         (if ok?
           (swap! (:held-triggers eng) dissoc id)
-          (do (swap! (:held-triggers eng) assoc id (with-meta r {:t t}))
-              (when (not= before r)
-                (emit! eng {:source :reflex :kind :held :level (if (= :check-threw (:reason r)) :warn :info) :reflex id :data r
-                            :text (str "trigger " (name id) " held: " (:text r))}))))
+          (hold-trigger! eng id r))
         ok?))))
 
 (defn fire! [eng entry h]

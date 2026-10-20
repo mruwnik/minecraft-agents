@@ -1,7 +1,7 @@
 (ns engine.core.settle
   "Settling a round: booking a listed job's or a reflex job's outcome, judging reflex ends against the
   entry's persistence, and starting a round."
-  (:require [engine.core.base :refer [delete-root! drop-instance! drop-reflex-job! emit! free-owner! job-fields exclusive-job now paused? reflex-text remove-listed running save-memory! set-owner! state stopped-result? wait-reason waiting-text]]
+  (:require [engine.core.base :refer [delete-root! drop-instance! drop-reflex-job! emit! free-owner! hold-trigger! job-fields exclusive-job now paused? reflex-text remove-listed running save-memory! set-owner! state stopped-result? wait-reason waiting-text]]
             [engine.core.attention :refer [request-attention! resolve-job-attention!]]
             [engine.core.ending :refer [refused?]]
             [engine.core.fruitless :refer [book-round! note-fruitless!]]
@@ -150,7 +150,7 @@
   "Classify a reflex end now and apply the entry's persistence when its trigger
   still holds, the cooldown counted from the end's :ended-at; an :impossible ending stops the entry as :stop does,
   whatever its persistence, until the trigger lets go. Emit its one reflex.ended with extra fields."
-  [eng {:keys [reflex job outcome kind reason ended-at text report result]} extra]
+  [eng {:keys [reflex job outcome kind reason cause ended-at text report result]} extra]
   (let [entry (some #(when (= reflex (:id %)) %) (:register (state eng)))
         still? (and entry (trigger-holds? eng entry (:primitives eng) (mem/view (:store eng))))]
     (when still?
@@ -159,6 +159,8 @@
                          (+ ended-at (* 1000 (:cooldown-s entry 0))))
         :stop (swap! (:state eng) assoc-in [:reflex-state reflex :stopped?] true)
         nil))
+    (when (and still? (= :condition-failed kind))
+      (hold-trigger! eng reflex (if (map? cause) cause {:reason reason :text (str cause)})))
     (emit! eng (merge {:source :reflex :kind :ended :level :info :reflex reflex :job job
                        :outcome outcome :text (str text ": " (name outcome))
                        :how (if still? :completed_not_cleared :cleared)}
@@ -177,7 +179,7 @@
                      :text (reflex-text reflex (get-in (state eng) [:instances id :spec]))
                      :report (tally/end-root! eng id (#{:done :stopped} outcome) e)}
               reason (assoc :reason reason)
-              e (assoc :kind (:kind e) :result (:data e)))]
+              e (assoc :kind (:kind e) :cause (:cause e) :result (:data e)))]
     (drop-instance! eng id :ended)
     (if (paused? eng)
       (swap! (:state eng) update :deferred-ends conj end)

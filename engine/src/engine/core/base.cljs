@@ -159,6 +159,15 @@
     (record-result! eng event))
   (events/emit! (:events eng) event))
 
+(defn hold-trigger!
+  "Keep reflex entry id held with reason map r (told once per reason as reflex.held; a warn when the check threw)."
+  [eng id r]
+  (let [before (get @(:held-triggers eng) id)]
+    (swap! (:held-triggers eng) assoc id (with-meta r {:t (now eng)}))
+    (when (not= before r)
+      (emit! eng {:source :reflex :kind :held :level (if (= :check-threw (:reason r)) :warn :info) :reflex id :data r
+                  :text (str "trigger " (name id) " held: " (:text r))}))))
+
 (defn job-fields [eng id]
   (let [inst (get-in (state eng) [:instances id])]
     {:job id :chain [id] :round (:round inst) :reflex (:reflex inst)
