@@ -34,7 +34,7 @@
    :blocks [[:fill [10 -1 20] [12 -1 20] "farmland[moisture=7]"] [:fill [10 -2 21] [12 -2 21] "stone"] [:fill [10 -1 21] [12 -1 21] "water"]
             [:fill [10 0 20] [12 0 20] "wheat[age=7]"]]
    :body {:inventory [["wheat_seeds" 10]]}
-   :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 20] :max #xyz [12 0 20]}})]]
+   :act [[:job (jobs.farm.tend {:area {:min #xyz [10 -1 20] :max #xyz [12 0 20]}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:harvest {:cut 3 :replanted 3}}}} :within-s 80 :of-job true}]
    :after [[:block [10 0 20] "wheat[age=0]"] [:block [12 0 20] "wheat[age=0]"]]}
   {:name "find-spot-picks-the-spot-by-the-pond-behind-it"

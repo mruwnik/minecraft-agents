@@ -88,10 +88,10 @@
 
 (deftest access-farm-forestry-storage-checks-say-why-they-decline
   (are [job args reason] (= reason (waiting-reason job args))
-    'jobs.farm.harvest {:plan "nope"} :plan-trouble
-    'jobs.farm.plant {:plan "nope"} :plan-trouble
-    'jobs.farm.tend {:plan "nope"} :plan-trouble
-    'jobs.farm.tend {:box box} :nothing-to-do
+    'jobs.farm.harvest {:area {:plan "nope"}} :plan-trouble
+    'jobs.farm.plant {:area {:plan "nope"}} :plan-trouble
+    'jobs.farm.tend {:area {:plan "nope"}} :plan-trouble
+    'jobs.farm.tend {:area box} :nothing-to-do
     'jobs.farm.tidy {:plan "nope"} :plan-trouble
     'jobs.forestry.maintain {:plan "nope"} :plan-trouble
     'jobs.forestry.prepare {:plan "nope"} :plan-trouble))

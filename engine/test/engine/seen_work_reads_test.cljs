@@ -89,7 +89,7 @@
   {:primitives w :args args :root "j1" :slots [] :view (fn [] {:now 0 :data {}})})
 
 (deftest till-pending-needs-sight
-  (let [pending (fn [w] (till/pending (job-ctx w {:from cell :to cell})))]
+  (let [pending (fn [w] (till/pending (job-ctx w {:area {:min cell :max cell}})))]
     (is (= [[cell nil]] (pending (wrapped far true))) "behind stone: unknown")
     (is (= [] (pending (wrapped far false))) "in view: farmland, nothing to till")))
 
@@ -138,13 +138,13 @@
 (deftest fertilize-targets-need-sight
   (let [grass {"0,64,4" "grass_block" "0,65,4" "air"}
         wheat {"0,64,4" "wheat"}
-        raw (fn [w args] (fertilize/raw-targets (job-ctx w (assoc args :radius 8))))]
-    (is (= [] (raw (wrapped grass true) {:at cell :grass true})) "behind stone: grass unknown")
-    (is (= [cell] (raw (wrapped grass false) {:at cell :grass true})))
+        raw (fn [w args] (fertilize/raw-targets (job-ctx w args)))]
+    (is (= [] (raw (wrapped grass true) {:area {:cells [cell]} :grass true})) "behind stone: grass unknown")
+    (is (= [cell] (raw (wrapped grass false) {:area {:cells [cell]} :grass true})))
     (is (= [] (raw (wrapped grass true) {:grass true})) "open-grass scan skips what is unseen")
     (is (= [cell] (raw (wrapped grass false) {:grass true})))
-    (is (= [] (raw (wrapped wheat true {:ages {cell 1}}) {:at cell})) "behind stone: crop unknown")
-    (is (= [cell] (raw (wrapped wheat false {:ages {cell 1}}) {:at cell})))
+    (is (= [] (raw (wrapped wheat true {:ages {cell 1}}) {:area {:cells [cell]}})) "behind stone: crop unknown")
+    (is (= [cell] (raw (wrapped wheat false {:ages {cell 1}}) {:area {:cells [cell]}})))
     (is (= [] (raw (wrapped wheat true {:ages {cell 1}}) {})) "crop scan skips what is unseen")
     (is (= [cell] (raw (wrapped wheat false {:ages {cell 1}}) {})))))
 

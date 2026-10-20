@@ -2,6 +2,7 @@
   "Reading a farm field: the crop cells of a plan, which are ripe or bare, where to walk."
   (:require [jobs.lib.crops :as crops]
             [jobs.lib.farm :as farm]
+            [jobs.lib.field-area :as fa]
             [jobs.lib.util :as u]))
 
 (def ripe-age crops/ripe-age)
@@ -73,7 +74,7 @@
     [center (+ 2 (js/Math.ceil (reduce max 0 (map #(u/dist center %) ps))))]))
 
 (defn ripe-crops
-  "Ripe crop cells of a wanted crop within :radius of center, not in skipped, nearest to the body first."
+  "Ripe crop cells of a wanted crop in the box or circle :area of args, else within :radius of center, not in skipped, nearest to the body first."
   [p args center skipped]
   (let [crops (or (:crops args) (keys ripe-age))
         skipped (set skipped)
@@ -82,7 +83,7 @@
     (->> (crops/seen-crops p crops radius 4096)
          (filter #(some-> (:age %) (>= (ripe-age (:name %)))))
          (map :pos)
-         (filter #(<= (u/dist % center) (:radius args)))
+         (filter #(if-let [area (:area args)] (fa/contains-pos? area %) (<= (u/dist % center) (:radius args))))
          (remove skipped))))
 
 (defn nearest [p cells]

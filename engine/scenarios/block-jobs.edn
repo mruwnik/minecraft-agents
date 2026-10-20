@@ -2,8 +2,8 @@
 ;; the wheat around the body (setup: dirt under the sapling spot, three age-0 wheat on farmland at z 5004)
 {:register []
  :queue [(seq (jobs.forestry.plant-sapling {:at {:x 4996 :y 100 :z 4996}})
-              (jobs.farm.fertilize {:at {:x 4996 :y 100 :z 4996} :max 5})
-              (jobs.farm.fertilize {:radius 8}))]}
+              (jobs.farm.fertilize {:area {:cells [{:x 4996 :y 100 :z 4996}]} :max 5})
+              (jobs.farm.fertilize {}))]}
 ;; ---- other cases of this feature: swap the commented form in for the active one above ----
 ;; -- case from live-ProbeDummy-apiary-unreachable
 ;; ;; apiary.harvest live: the only ripe smoked hive is sealed inside a stone block 15 blocks away, the walk cannot get within reach

@@ -40,14 +40,14 @@
   {:name "till-refused"
    :body {:at [10.5 0 10.5] :inventory [["iron_hoe" 1]]}
    :zones [{:name "z" :min [13 -1 13] :max [17 0 17] :owner "SomeoneElse"}]
-   :act [[:job (jobs.farm.till {:from #at [14 -1 14] :to #at [15 -1 15] :ways #{:carried}})]]
+   :act [[:job (jobs.farm.till {:area {:min #at [14 -1 14] :max #at [15 -1 15]} :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :refused}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :waiting :data {:reason :refused}}}]
    :after [[:block [14 -1 14] "grass_block"] [:block [15 -1 15] "grass_block"]]}
   {:name "till-free-outside-the-plan"
    :body {:at [10.5 0 10.5] :inventory [["iron_hoe" 1]]}
    :zones [{:name "z" :min [26 -1 26] :max [28 0 28] :owner "SomeoneElse"}]
-   :act [[:job (jobs.farm.till {:from #at [14 -1 14] :to #at [15 -1 15] :ways #{:carried}})]]
+   :act [[:job (jobs.farm.till {:area {:min #at [14 -1 14] :max #at [15 -1 15]} :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed :data {:tilled [:>= 1]}} :within-s 60 :of-job true}]
    :after [[:block [14 -1 14] "farmland"]]}
   {:name "clear-cells-refused"

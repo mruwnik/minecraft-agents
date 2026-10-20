@@ -4,7 +4,6 @@
             [jobs.farm.compost :as compost]
             [jobs.farm.harvest :as harvest]
             [jobs.farm.tend-box :as tend-box]
-            [jobs.farm.tend-stock :as stock]
             [jobs.farm.tidy :as tidy]
             [jobs.lib.crops :as crops]
             [jobs.lib.reserve :as reserve]))
@@ -22,7 +21,7 @@
     (is (compost/compostable seed) seed)
     (is (compost/held-back seed) seed)
     (is ((:seeds reserve/tags) seed) seed))
-  (is (every? (set stock/farm-goods) (concat stock/waste-seeds crops/produce-items))))
+  (is (every? (set crops/farm-goods) (concat crops/waste-seeds crops/produce-items))))
 
 (deftest only-seeds-are-seeds
   (are [item expected] (= expected ((:seeds reserve/tags) item))

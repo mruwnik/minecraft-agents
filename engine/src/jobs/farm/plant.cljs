@@ -7,7 +7,7 @@
             [jobs.farm.permit :as permit]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as blocks]
-            [jobs.lib.pen-read :as pen-read]
+            [jobs.lib.field-area :as fa]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.cost :as cost]
@@ -27,14 +27,14 @@
             [jobs.lib.world :as known]))
 
 (def doc
-  "Sow the bare farmland of a :box (a cell is bare when (x, min.y, z) is farmland and the block above is air).
+  "Sow the bare farmland of the :area, a box or circle (its square) (a cell is bare when (x, min.y, z) is farmland and the block above is air).
   The seed is :seed, else the carried seed with the largest stack, kept while carried (one run sows one crop). Carrots
   and potatoes are sown only above what the reserve register holds (jobs.lib.reserve: the food reserve, agent entries); harvest replants whatever the reserve.
   A missing seed is fetched before the run starts (jobs.lib.need, from the call's :ways; a failed fetch ends the call with its ending as
   the :because), unless :ways is #{:carried}.
   One call plants the bare cells within the reach setting (eye reach), walking to the nearest (a go-to child) when none is. A cell whose place is
   refused or unreachable, or whose walk is blocked, three times is skipped.
-  :plan (optionally :part) makes the plan's crop cells the field instead (:box and :seed are then unused); each bare
+  :area {:plan id} (optionally :part) makes the plan's crop cells the field instead (:seed is then unused); each bare
   planned cell is sown with the seed of the crop the plan wants there, when carried. Zones and other active plans'
   footprints are asked before choosing a cell and again before the place; a cell they refuse is left bare
   (:reason :refused), :ignore-zones? true skips the check.
@@ -48,10 +48,8 @@
   nothing-possible :gave-up for skipped cells; none planted and nothing left, :nothing-to-do. done? counts the cells sown and the bare cells left.")
 
 (a/defargs args
-  {:box {:doc "the field: {:min :max}, corners {:x :y :z} or [x y z], inclusive; the ground layer is y = (:y :min); required without :plan" :spec pen-read/box-arg :default nil}
-   :seed {:doc "item name to plant; the carried seed with the largest count when nil" :spec a/item? :default nil}
-   :plan {:doc "id of a plan of the body's world whose crop cells are the field (then :box and :seed are not used)" :spec a/name? :default nil}
-   :part {:doc "with :plan, only the cells of this part" :spec a/name? :default nil}
+  {:area {:doc "the field: a box {:min :max} (corners inclusive, [x y z] or {:x :y :z}; the ground layer is the lowest y), a circle {:pos :radius} (its square at pos's y) or {:plan id :part name} (the plan's crop cells, each sown with its own crop's seed; :part limits it to one part)" :spec fa/spec :default nil}
+   :seed {:doc "item name to plant; the carried seed with the largest count when nil (not used with a plan)" :spec a/item? :default nil}
    :ignore-zones? :shared})
 
 (def ways need/fetch-ways)
@@ -90,7 +88,7 @@
 (declare planned sowing)
 
 (def job-sym 'jobs.farm.plant)
-(def target [:box :plan :part])
+(def target [:area])
 (def defaults {:least 1 :spend {:job-time ::job-time-s}})
 (def safe? (ready/safe-at-by-night work-place/spot))
 (def fit? ready/fit?)
@@ -123,8 +121,8 @@
 (defn unsown
   "The bare cells of the field now (a box's, or the plan's planned ones), skipped cells included."
   [c]
-  (let [{:keys [plan]} (:args c)
-        box (pen-read/arg-box c)
+  (let [plan (fa/plan c)
+        box (fa/arg-box c)
         p (:primitives c)]
     (cond
       plan (when-let [cells (:cells (planned c))] (vec (fld/planned-bare p cells)))
@@ -137,8 +135,9 @@
   (when-not (:started (ctx/mem c))
     (let [p (:primitives c)
           inventory (u/inventory p)
-          {:keys [seed plan]} (:args c)
-          box (pen-read/arg-box c)]
+          {:keys [seed]} (:args c)
+          plan (fa/plan c)
+          box (fa/arg-box c)]
       (if plan
         (when-let [cells (:cells (planned c))]
           (let [{:keys [ready short]} (sowing c cells)]
@@ -167,7 +166,7 @@
 
 (defn box-problem [c]
   (let [{:keys [seed]} (:args c)
-        box (pen-read/arg-box c)
+        box (fa/arg-box c)
         p (:primitives c)
         inventory (u/inventory p)
         bare (bare-cells p box [])
@@ -180,16 +179,16 @@
 
 (defn problem
   "Why the call cannot run now (before its first round), a cause map, or nil: no zone list read (unless :ignore-zones?),
-  a plan that cannot be worked, and a field with no cell to sow or no seed to sow it with. Nil without :box and :plan
+  a plan that cannot be worked, and a field with no cell to sow or no seed to sow it with. Nil without a box, circle or plan area
   (bad-args says so)."
   [c]
-  (let [{:keys [plan]} (:args c)
-        box (pen-read/arg-box c)]
+  (let [plan (fa/plan c)
+        box (fa/arg-box c)]
     (when (and (or box plan) (not (:started (ctx/mem c))))
       (or (common/no-zones c)
           (if plan (plan-problem c) (box-problem c))))))
 
-(def bad-args (checks/args-fit "plant needs :box or :plan" #(let [{:keys [box plan]} (:args %)] (or box plan))))
+(def bad-args (checks/args-fit "plant needs :area, a box, circle or plan" #(boolean (#{:box :circle :plan} (fa/kind (fa/of %))))))
 
 (defn work
   "Ok with something to sow, else the problem's status; a field with no bare cell is a :look until the body has looked
@@ -210,8 +209,8 @@
   "Ok once no cell of the field is bare (skipped and refused ones included), no cell needs tilling, a look round has
   been made and the cells sown meet :least; else later with the cells sown and the bare cells left."
   [c]
-  (let [{:keys [plan]} (:args c)
-        box (pen-read/arg-box c)
+  (let [plan (fa/plan c)
+        box (fa/arg-box c)
         m (ctx/mem c)
         field (when plan (planned c))
         bare (count (unsown c))
@@ -238,14 +237,14 @@
   "Without :plan nil; else {:cells {pos crop}}, or {:trouble text} when the plan cannot be
   worked."
   [c]
-  (when (:plan (:args c))
+  (when (fa/plan c)
     (pf/read-plan c {:cells fld/crop-cells :what "crop cells"})))
 
 (defn sowing
   "How the planned bare cells divide: {:ready [{:pos :seed}] (seed carried, not skipped, permitted) :short #{seed}
   (carried none) :refused [{:pos :reason}]}. "
   [c cells]
-  (let [plan (:plan (:args c))
+  (let [plan (fa/plan c)
         have (set (map key (filter (comp pos? val) (sowable c))))
         skipped (set (:skipped (ctx/mem c)))
         {:keys [short seeded]} (reduce (fn [acc {:keys [pos seed] :as debt}]
@@ -269,7 +268,7 @@
   "Place the seed of debt at its cell after asking the gate once more (the reader sowing uses); a refusal or a failure
   is counted against the cell."
   [c {:keys [pos seed]}]
-  (if-not (gate/allowed? c :plant.declined "plant" :sow pos {:except (:plan (:args c)) :own-plans-ok? true})
+  (if-not (gate/allowed? c :plant.declined "plant" :sow pos {:except (fa/plan c) :own-plans-ok? true})
     (ctx/update-mem! c count-fail :fails pos)
     (let [outcome (await (blocks/place-cell! c pos seed {:ignore-zones? true}))]
       (case outcome
@@ -282,7 +281,7 @@
   box mode the dirt cells that need tilling."
   [c extra]
   (let [m (ctx/mem c)
-        untilled (when (pen-read/arg-box c) (untilled-cells (:primitives c) (pen-read/arg-box c)))]
+        untilled (when (fa/arg-box c) (untilled-cells (:primitives c) (fa/arg-box c)))]
     (cond-> (merge {:planted (:planted m 0) :skipped (vec (:skipped m))} extra)
       (seq untilled) (assoc :untilled untilled))))
 
@@ -349,8 +348,8 @@
     (ctx/update-mem! c assoc :started true))
   (let [p (:primitives c)
         m (ctx/mem c)
-        bare (bare-cells p (pen-read/arg-box c) [])
-        cells (sowable-cells c (bare-cells p (pen-read/arg-box c) (:skipped m)))
+        bare (bare-cells p (fa/arg-box c) [])
+        cells (sowable-cells c (bare-cells p (fa/arg-box c) (:skipped m)))
         inventory (u/inventory p)
         kept (:sowing m)                ; the seed picked first is kept while carried: one run, one crop
         seed (if (and (nil? (:seed (:args c))) kept (pick-seed kept c))

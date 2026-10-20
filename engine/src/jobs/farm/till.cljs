@@ -16,14 +16,15 @@
             [jobs.lib.need :as need]
             [jobs.lib.ready :as ready]
             [jobs.lib.work-place :as work-place]
+            [jobs.lib.field-area :as fa]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.places :as places]
             [jobs.lib.toll-cells :as tc]))
 
 (def doc
-  "Hoe dirt, grass_block, dirt_path, coarse_dirt or rooted_dirt (two uses: dirt first) into farmland over a set of ground cells, given as the box :from/:to or
-  the square :center/:radius (at most 256 cells). Water nearby is not its concern.
+  "Hoe dirt, grass_block, dirt_path, coarse_dirt or rooted_dirt (two uses: dirt first) into farmland over a set of ground cells, given as the :area: a box {:min :max} or the
+  square of a circle {:pos :radius} at its y (at most 256 cells). Water nearby is not its concern.
   Needs a hoe: the call's :use {:tools [..]} names the ones it may use (default every carried hoe); with none carried it
   fetches one (jobs.lib.need, from the call's :ways; a failed fetch ends the call with its ending as the :because, tilled and skipped
   in the data), with :ways #{:carried} the call is refused {:reason :no-tool :kind \"hoe\"}. Ground cover over a cell (grass,
@@ -43,10 +44,7 @@
   tilled this call and the cells left.")
 
 (a/defargs args
-  {:from {:doc "box corner (inclusive); with :to, any order" :spec ::a/pos :default nil}
-   :to {:doc "opposite box corner (inclusive)" :spec ::a/pos :default nil}
-   :center {:doc "centre of a square of cells at its y; with :radius" :spec ::a/pos :default nil}
-   :radius {:doc "the square covers |dx|,|dz| <= radius, 0 to 7" :spec (a/int-in 0 7) :default nil}
+  {:area {:doc "the ground cells: a box {:min :max} (corners inclusive, any order, each [x y z] or {:x :y :z}) or a circle {:pos :radius}, the square |dx|,|dz| <= radius at pos's y; at most 256 cells" :spec fa/spec :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
    :ignore-zones? :shared})
 
@@ -71,24 +69,17 @@
   [a b]
   (range (min a b) (inc (max a b))))
 
-(defn span-size [a b] (inc (js/Math.abs (- a b))))
-
 (defn cells
-  "The ground cells [{:x :y :z} ...] of args: the box :from/:to, or the square
-  :center/:radius at center's y. Throws ex-info for neither form or over
-  max-cells cells."
-  [{:keys [from to center radius]}]
-  (let [[xa xb ya yb za zb] (cond
-                              (and from to) [(:x from) (:x to) (:y from) (:y to) (:z from) (:z to)]
-                              (and center radius) [(- (:x center) radius) (+ (:x center) radius) (:y center) (:y center)
-                                                   (- (:z center) radius) (+ (:z center) radius)]
-                              :else (throw (ex-info "till needs :from and :to, or :center and :radius" {})))
-        n (* (span-size xa xb) (span-size ya yb) (span-size za zb))]
-    (when (> n (max-cells))
-      (throw (ex-info (str "till covers " n " cells, at most " (max-cells)) {:cells n})))
-    (vec (for [x (span xa xb) y (span ya yb) z (span za zb)] {:x x :y y :z z}))))
+  "The ground cells [{:x :y :z} ...] of the :area. Throws ex-info for no box or circle, or over max-cells cells."
+  [{:keys [area]}]
+  (let [{lo :min hi :max :as b} (fa/box area)]
+    (when-not b (throw (ex-info "till needs :area, a box or a circle" {})))
+    (let [n (fa/cell-count b)]
+      (when (> n (max-cells))
+        (throw (ex-info (str "till covers " n " cells, at most " (max-cells)) {:cells n})))
+      (vec (for [x (span (:x lo) (:x hi)) y (span (:y lo) (:y hi)) z (span (:z lo) (:z hi))] {:x x :y y :z z})))))
 
-(def target [:from :to :center :radius])
+(def target [:area])
 (def defaults {:use {:tools :till} :spend {:job-time ::job-time-s}})
 (def safe? (ready/safe-at-by-night work-place/spot))
 (def fit? ready/fit?)
@@ -152,7 +143,7 @@
 (def no-hoe {:reason :no-tool :kind "hoe"})
 
 (defn bad-args
-  "Never :bad-args unless the cells can be read from the args (a box within the limit, or a centre and radius)."
+  "Never :bad-args unless the cells can be read from the args (a box or circle within the limit)."
   [c]
   (let [cs (try (cells (:args c))
                 (catch :default e (ex-message e)))]

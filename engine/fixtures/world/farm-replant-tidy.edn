@@ -16,7 +16,7 @@
    :plans [{:id "field" :metadata {:by "Other"}
             :parts [{:id "row" :box [#at [10 0 16] #at [11 0 16]] :want {:crop "carrots"}}]}]
    :body {:inventory [["carrot" 5] ["stone_pickaxe" 1]]}
-   :act [[:job (jobs.farm.harvest {:plan "$plan:field" :ignore-zones? true})]
+   :act [[:job (jobs.farm.harvest {:area {:plan "$plan:field"} :ignore-zones? true})]
          [:await {:source :job :kind #{:completed :stopped} :data {:cut 2 :replanted 2}} 80]
          [:job (jobs.survival.restore-broken {})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:cut 2 :replanted 2}} :within-s 80}

@@ -8,16 +8,16 @@
   :limit-s 90}
  :cases
  [{:name "grass-patch-takes-the-bone-meal"
-   :act [[:job (jobs.farm.fertilize {:grass true :radius 6 :max 3})]]
+   :act [[:job (jobs.farm.fertilize {:grass true :area {:pos #xyz [16 0 16] :radius 6} :max 3})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:used [:>= 1]}} :within-s 70 :of-job true}]
    :after [[:item "bone_meal" [:<= 2]]]}
   {:name "bare-dirt-no-grass-keeps-the-bone-meal"
    :plot {:floor "dirt"}
-   :act [[:job (jobs.farm.fertilize {:grass true :radius 6 :max 3})]]
+   :act [[:job (jobs.farm.fertilize {:grass true :area {:pos #xyz [16 0 16] :radius 6} :max 3})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:used 0}} :within-s 40 :of-job true}]
    :after [[:item "bone_meal" 3]]}
   {:name "no-bone-meal-fetch-false-waits-need"
    :body {:inventory []}
-   :act [[:job (jobs.farm.fertilize {:grass true :radius 6 :max 3 :ways #{:carried}})]]
+   :act [[:job (jobs.farm.fertilize {:grass true :area {:pos #xyz [16 0 16] :radius 6} :max 3 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :need :item "bone_meal"}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 15}]}]}

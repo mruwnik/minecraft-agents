@@ -12,6 +12,7 @@
             [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.lib.crops :as crops]
+            [jobs.lib.field-area :as fa]
             [jobs.lib.farm :as farm]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
@@ -20,7 +21,7 @@
             [jobs.lib.trees :as trees]))
 
 (def doc
-  "Use bone meal on unripe crops: the crop or sapling at :at, or the unripe crops within :radius, nearest first.
+  "Use bone meal on unripe crops: the unripe crops of the :area (a box, a circle, or {:cells [pos ...]} of crops or saplings; nil: a circle of radius 8 round the body), nearest first.
   With :grass true it uses bone meal once on each open grass block (nothing on top) it has seen, instead of on crops.
   Needs bone meal in the inventory; it is fetched (jobs.lib.need, from the call's :ways) when none is carried and none was used yet; a
   failed fetch ends the call with its ending as the :because. A crop that refuses bone meal or cannot be reached is skipped.
@@ -33,9 +34,7 @@
   took bone meal (zones, unreachable, the crop refused), :need when the bone meal ran out under :least. done? counts the uses and the targets left.")
 
 (a/defargs args
-  {:at {:doc "one crop or sapling position to fertilize; the crops around the body when nil" :spec ::a/pos :default nil}
-   :radius {:doc "crops within this many blocks of the body count, when :at is nil" :spec (a/num-in 0 nil) :default 8}
-   :center {:doc "centre of the radius search; the body's position when nil" :spec ::a/pos :default nil}
+  {:area {:doc "the crops: a box {:min :max}, a circle {:pos :radius} or {:cells [pos ...]} (one or more crops or saplings); nil: a circle of radius 8 round the body" :spec fa/spec :default nil}
    :grass {:doc "fertilize open grass blocks instead of crops" :spec boolean? :default false}
    :max {:doc "bone meal uses, at most" :spec (a/int-in 1 nil) :default 16}
    :ignore-zones? :shared})
@@ -54,12 +53,13 @@
         age (when b (age-of b))]
     (boolean (and ripe age (< age ripe)))))
 
+(def default-radius 8)
+
 (defn open-grass
-  "The seen grass blocks within radius of mid with air above, as positions."
-  [p mid radius reach]
+  "The seen grass blocks within reach of the body with air above, as positions."
+  [p reach]
   (->> (look/seen-blocks p {:names ["grass_block"] :radius reach :max 4096 :live? true})
        (map :pos)
-       (filter #(<= (u/dist mid %) radius))
        (filter #(= "air" (u/seen-name p (update % :y inc))))))
 
 (def ways need/fetch-ways)
@@ -67,7 +67,7 @@
 (a/defargs settings
   {::job-time-s {:default 300 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}})
 
-(def target [:at :center :grass])
+(def target [:area :grass])
 
 (def defaults {:spend {:job-time ::job-time-s}})
 (def safe? (ready/safe-at-by-night work-place/spot))
@@ -77,21 +77,22 @@
   "The positions to fertilize (unripe crops, or open grass with :grass), before the zone rules and the refused ones."
   [c]
   (let [p (:primitives c)
-        {:keys [at radius center grass]} (:args c)
         me (u/self-pos c)
-        mid (or center me)
-        reach (+ radius (u/dist me mid))]
-    (cond
-      grass (if at
-              (if (and (= "grass_block" (u/seen-name p at)) (= "air" (u/seen-name p (update at :y inc)))) [at] [])
-              (open-grass p mid radius reach))
-      at (let [b (u/seen-block p at)]
-           (if (or (unripe? b) (trees/sapling-name? (some-> b .-name))) [at] []))
-      :else
-      (->> (crops/seen-crops p (keys ripe-age) reach 4096)
-           (filter #(some-> (:age %) (< (ripe-age (:name %)))))
-           (map :pos)
-           (filter #(<= (u/dist mid %) radius))))))
+        area (or (fa/of c) {:pos me :radius default-radius})
+        grass? (:grass (:args c))]
+    (if (= :cells (fa/kind area))
+      (filter (if grass?
+                #(and (= "grass_block" (u/seen-name p %)) (= "air" (u/seen-name p (update % :y inc))))
+                #(let [b (u/seen-block p %)] (or (unripe? b) (trees/sapling-name? (some-> b .-name)))))
+              (map a/cell (:cells area)))
+      (let [[mid radius] (fa/sphere area)
+            reach (+ radius (u/dist me mid))]
+        (->> (if grass?
+               (open-grass p reach)
+               (->> (crops/seen-crops p (keys ripe-age) reach 4096)
+                    (filter #(some-> (:age %) (< (ripe-age (:name %)))))
+                    (map :pos)))
+             (filter #(fa/contains-pos? area %)))))))
 
 (defn targets
   "The positions to fertilize, nearest first, minus the refused ones and what the zone rules keep from the body."
@@ -119,7 +120,9 @@
   [c]
   (when (and (lacks-meal? c) (nil? (fetch-opts c))) {:reason :need :item "bone_meal"}))
 
-(def can-start? (cond/and checks/zones-read
+(def bad-args (checks/args-fit "fertilize :area must be a box, circle or cells" #(contains? #{nil :box :circle :cells} (fa/kind (fa/of %)))))
+
+(def can-start? (cond/and bad-args checks/zones-read
                           (checks/refusing :meal "bone meal carried or fetchable" no-meal-source)))
 
 (defn done?

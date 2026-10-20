@@ -16,7 +16,7 @@
             [:fill [10 0 16] [12 0 16] "wheat[age=7]"]
             [:fill [17 0 15] [19 2 17] "stone"] [:set [17 -2 16] "stone"] [:set [17 -1 16] "water"] [:set [18 -1 16] "farmland[moisture=7]"]
             [:set [18 0 16] "wheat[age=7]"]]
-   :act [[:job (jobs.farm.harvest {:center #xyz [14 0 16] :radius 8 :replant false})]]
+   :act [[:job (jobs.farm.harvest {:area {:pos #xyz [14 0 16] :radius 8} :replant false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:cut 3}} :within-s 70 :of-job true}]
    :after [[:block [10 0 16] "air"] [:block [12 0 16] "air"] [:block [18 0 16] "wheat[age=7]"]]}
   {:name "fertilize-grows-open-crops-and-leaves-the-walled-one"
@@ -25,7 +25,7 @@
             [:fill [17 0 15] [19 2 17] "stone"] [:set [17 -2 16] "stone"] [:set [17 -1 16] "water"] [:set [18 -1 16] "farmland[moisture=7]"]
             [:set [18 0 16] "wheat[age=2]"]]
    :body {:inventory [["bone_meal" 16]]}
-   :act [[:job (jobs.farm.fertilize {:center #xyz [14 0 16] :radius 8 :ways #{:carried}})]]
+   :act [[:job (jobs.farm.fertilize {:area {:pos #xyz [14 0 16] :radius 8} :ways #{:carried}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:used [:>= 3]}} :within-s 70 :of-job true}]
    :after [[:block [10 0 16] "wheat[age=7]"] [:block [12 0 16] "wheat[age=7]"] [:block [18 0 16] "wheat[age=2]"]]}
   {:name "tend-harvests-open-crops-and-leaves-the-walled-one"
@@ -34,20 +34,20 @@
             [:fill [17 0 15] [19 2 17] "stone"] [:set [17 -2 16] "stone"] [:set [17 -1 16] "water"] [:set [18 -1 16] "farmland[moisture=7]"]
             [:set [18 0 16] "wheat[age=7]"]]
    :body {:inventory [["wheat_seeds" 10]]}
-   :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [18 0 16]}})]]
+   :act [[:job (jobs.farm.tend {:area {:min #xyz [10 -1 16] :max #xyz [18 0 16]}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:harvest {:cut 3 :replanted 3}}}} :within-s 80 :of-job true}]
    :after [[:block [10 0 16] "wheat[age=0]"] [:block [12 0 16] "wheat[age=0]"] [:block [18 0 16] "wheat[age=7]"]]}
   {:name "harvest-far-from-the-centre-finishes-in-time"
    :blocks [[:fill [19 -1 20] [21 -1 20] "farmland[moisture=7]"] [:fill [19 -2 21] [21 -2 21] "stone"] [:fill [19 -1 21] [21 -1 21] "water"]
             [:fill [19 0 20] [21 0 20] "wheat[age=7]"]]
    :body {:at [2.5 0 2.5]}
-   :act [[:job (jobs.farm.harvest {:center #xyz [20 0 20] :radius 6 :replant false})]]
+   :act [[:job (jobs.farm.harvest {:area {:pos #xyz [20 0 20] :radius 6} :replant false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:cut 3}} :within-s 60 :of-job true}]
    :limit-s 70
    :after [[:block [19 0 20] "air"] [:block [21 0 20] "air"]]}
   ;; card 859abff2: a stopped ending names its cause; the success text ("harvest done: cut ...") is only for a done ending
   {:name "harvest-with-no-crop-seen-names-the-cause-not-done"
-   :act [[:job (jobs.farm.harvest {:center #xyz [14 0 16] :radius 6 :replant false})]]
+   :act [[:job (jobs.farm.harvest {:area {:pos #xyz [14 0 16] :radius 6} :replant false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-crop-seen}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :stopped :message [:contains "harvest done"]} :for-s 40 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true :until {:source :job :kind :stopped}}]

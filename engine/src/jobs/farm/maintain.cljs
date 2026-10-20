@@ -1,0 +1,172 @@
+(ns jobs.farm.maintain
+  (:require [engine.args :as a]
+            [engine.contract :as contract]
+            [engine.ctx :as ctx]
+            [engine.settings :as settings]
+            [jobs.farm.maintain-stock :as stock]
+            [jobs.farm.tend :as tend]
+            [jobs.farm.tend-box :as box]
+            [jobs.farm.tend-plan :as tend-plan]
+            [jobs.lib.crops :as crops]
+            [jobs.lib.field-area :as fa]
+            [jobs.lib.pace :as pace]
+            [jobs.lib.ready :as ready]
+            [jobs.lib.reserve :as rsv]
+            [jobs.lib.steps :as steps]
+            [jobs.lib.util :as u]
+            [jobs.lib.work-place :as work-place]))
+
+(def doc
+  "Keep a farm: its field in order, its stock in its place. One run is one pass over three steps in this order, each a
+  child job called once (a child that yields is called again on the next call; a step under way is not re-decided):
+  - :tend (jobs.farm.tend over the :area, with :till :irrigate :fertilize): harvest, irrigate, till, plant and fertilize as
+    its conditions hold. It always runs; a field with nothing to do books it declined.
+  - :compost (jobs.farm.compost): a :composter is given and seed above the keep is carried.
+  - :deposit (jobs.storage.deposit with :items :farm-goods): a :chest is given and farm goods (seeds, crops, melon,
+    pumpkin, hay, cocoa) are carried above the keep. Tools, bread and other non-crop food are never stored.
+  The keep, per name, is the largest of: the sowing reserve (twice the number of beds, farmland or untilled ground cells of
+  a box, or twice the planned cells of each crop of a plan), a backup stack (64) of each seed type, the units the reserve
+  register holds (jobs.lib.reserve: the 3-day food reserve, best food first; agent entries) and the :keep entry. Harvested
+  crops above it are stored; seed above it is composted.
+  Skipped steps are booked {:skipped reason}: :no-composter, :no-surplus-seed, :no-chest, :nothing-to-store, or
+  :declined when the child declined.
+  It starts when tend would run or a stock step has something to do. Done (:already before the start) when tend has nothing
+  to do and nothing is left to compost or store. Ends :done with {:steps {step summary}} when a step ran to its end,
+  nothing-possible :failed-steps when one stopped early and none ran, else condition-failed :nothing-to-do. Summaries: tend
+  {:field :parts}, compost {:fed :bone-meal :reason}, deposit {:gave-up :reason}.")
+
+(a/defargs args
+  {:area {:doc "the field, as for jobs.farm.tend: a box {:min :max} with a crop layer, or {:plan id} with :part or :parts; required" :spec fa/spec :default nil}
+   :till {:doc "hoe untilled dirt and grass in the ground layer when seed and a hoe are carried" :spec boolean? :default true}
+   :irrigate {:doc "wet dry farmland with water" :spec boolean? :default true}
+   :fertilize {:doc "use bone meal on unripe crops" :spec boolean? :default false}
+   :composter {:doc "composter position {:x :y :z} for seed above the keep; nil: do not compost" :spec ::a/pos :default nil}
+   :chest {:doc "chest position {:x :y :z} for the farm goods; nil: do not store" :spec ::a/pos :default nil}
+   :keep {:doc "{item-name count}: how many of an item compost and deposit leave carried, at least the seed reserve" :spec (a/map-of string? number?) :default {}}
+   :ignore-zones? :shared})
+
+(a/defargs settings
+  {::job-time-s {:default 1800 :doc "Seconds a maintain pass may take: its three steps." :spec (a/num-in 0 nil)}})
+
+(def target [:area])
+(def defaults {:spend {:job-time ::job-time-s}})
+(def safe? (ready/safe-at-by-night work-place/spot))
+(def fit? ready/fit?)
+
+(def steps [:tend :compost :deposit])
+
+(def jobs {:tend 'jobs.farm.tend :compost 'jobs.farm.compost :deposit 'jobs.storage.deposit})
+
+(defn sow-reserve
+  "{seed count} the field's sowing keeps carried."
+  [c]
+  (if (fa/plan c)
+    (stock/plan-reserve (or (:crops (tend-plan/planned c)) {}))
+    (stock/box-reserve (stock/beds (box/ground-layer (:primitives c) (fa/arg-box c)))
+                       (u/inventory (:primitives c)))))
+
+(defn facts
+  "{:keep :waste :stored}: what is kept carried, the seed above it and the farm goods above it."
+  [c]
+  (let [inventory (u/inventory (:primitives c))
+        keep (stock/keeps (sow-reserve c) (rsv/held c :maintain) (:keep (:args c)))]
+    {:keep keep
+     :waste (stock/surplus inventory keep crops/waste-seeds)
+     :stored (stock/surplus inventory keep crops/farm-goods)}))
+
+(defn decide
+  "{:skip reason} or {:call {:slot :args}} for a step."
+  [step {:keys [area till irrigate fertilize composter chest ignore-zones?]} {:keys [keep waste stored]}]
+  (case step
+    :tend {:call {:slot :tend :args (cond-> {:area area :till till :irrigate irrigate :fertilize fertilize}
+                                      ignore-zones? (assoc :ignore-zones? true))}}
+    :compost (cond
+               (nil? composter) {:skip :no-composter}
+               (empty? waste) {:skip :no-surplus-seed}
+               :else {:call {:slot :compost :args (cond-> {:at composter :items waste :keep keep}
+                                                    ignore-zones? (assoc :ignore-zones? true))}})
+    :deposit (cond
+               (nil? chest) {:skip :no-chest}
+               (empty? stored) {:skip :nothing-to-store}
+               :else {:call {:slot :deposit :args {:chest chest :items :farm-goods :keep keep}}})))
+
+(defn stock-work?
+  "Whether a stock step would call its child over the facts."
+  [c]
+  (let [f (facts c)]
+    (boolean (some #(:call (decide % (:args c) f)) [:compost :deposit]))))
+
+(defn tend-work? [c] (= :ok (first (tend/problem c))))
+
+(defn can-start?
+  "Tend's start check, or ok while a stock step has work."
+  [c]
+  (let [t (tend/can-start? c)]
+    (cond
+      (#{:ok :never} (first t)) t
+      (stock-work? c) (contract/ok :work "stock to store or compost")
+      :else t)))
+
+(defn done?
+  "Ok when tend has nothing to do and nothing is left to compost or store; else later with the steps run and left."
+  [c]
+  (let [m (ctx/mem c)
+        ran (count (remove (some-fn :skipped :stopped) (vals (:report m))))
+        left (count (:todo m))]
+    (if (or (tend-work? c) (stock-work? c))
+      (contract/later :steps (str ran " steps run") :units :steps :done ran :left left)
+      (contract/ok :in-order "the farm is in order" :units :steps :done ran :left 0 :result {:steps (:report m)}))))
+
+(defn quote-of [_c]
+  {:uses {:job-time [1 60 (settings/get settings ::job-time-s)]}})
+
+(defn summary
+  "What the report keeps of a child's result."
+  [step r]
+  (case step
+    :tend (select-keys r [:field :parts])
+    :compost (select-keys r [:fed :bone-meal :reason])
+    :deposit {:gave-up (boolean (:gave-up r)) :reason (:reason r)}))
+
+(defn entry-of
+  "The report entry of a child's ending e: its summary; a child whose condition failed before its first round is
+  {:skipped :declined :reason cause}, any other ending carries :stopped kind."
+  [step e]
+  (cond
+    (= :done (:kind e)) (summary step (:data e))
+    (and (#{:condition-failed :impossible} (:kind e)) (empty? (:data e))) {:skipped :declined :reason (contract/cause-key e)}
+    :else (assoc (summary step (merge {:reason (contract/cause-key e)} (:data e))) :stopped (:kind e))))
+
+(defn booked
+  "Memory after the step's child ended: the step leaves todo, its summary goes in the report."
+  [m step entry]
+  (-> m (update :todo rest) (dissoc :call-args) (assoc-in [:report step] entry)))
+
+(defn finish!
+  "End the pass: done when some step ran to its end, else nothing-possible :failed-steps or condition-failed :nothing-to-do."
+  [c report]
+  (let [out {:steps report}
+        entries (vals report)]
+    (cond
+      (some (complement (some-fn :skipped :stopped)) entries) (ctx/end c :done nil (assoc out :text (str "farm maintain done: " (count (filter :skipped entries)) " steps skipped")))
+      (some :stopped entries) (ctx/end c :nothing-possible :failed-steps out)
+      :else (ctx/end c :condition-failed {:reason :nothing-to-do} out))))
+
+(defn ^:async step
+  "One piece of the pass: :again after a step ended, :continue while its child waits on the world, or the ending."
+  [c]
+  (when-not (:todo (ctx/mem c))
+    (ctx/update-mem! c assoc :todo steps :report {}))
+  (let [{:keys [call] :as p} (steps/next-plan decide jobs c facts)]
+    (ctx/update-mem! c assoc :todo (:todo p) :report (:report p))
+    (if-not call
+      (finish! c (:report p))
+      (let [slot (:slot call)
+            _ (ctx/update-mem! c assoc :call-args (:args call))
+            e (await (ctx/call c slot (jobs slot) (:args call)))]
+        (if (= :continue e)
+          :continue
+          (do (ctx/update-mem! c booked slot (entry-of slot e)) :again))))))
+
+(defn ^:async round [c]
+  (await (pace/steps! c #(step c))))

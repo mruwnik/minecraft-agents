@@ -6,6 +6,7 @@
             [jobs.lib.waits :as waits]
             [jobs.lib.farm :as farm]
             [jobs.farm.till :as till]
+            [jobs.lib.field-area :as fa]
             [jobs.lib.blocks :as b]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
@@ -19,7 +20,7 @@
             [jobs.lib.work-place :as work-place]))
 
 (def doc
-  "Give the farm cells of a box (:from/:to) or square (:center/:radius, the cells of jobs.farm.till) water: a cell of
+  "Give the farm cells of the :area, a box or a circle's square (the cells of jobs.farm.till), water: a cell of
   the field the body has seen, farmland or ground a hoe would till, is dry when every block within 4 in x and z of it, at its height
   and one above, is seen and none is water; a cell with an unseen block in reach and no water is unknown, never dry. For the spot
   that wets the most dry cells (one of the field's own cells under open air whose four sides are seen solid and underside not seen open, nearest
@@ -37,10 +38,7 @@
   done? is ok when a field cell is seen, none is dry or unknown after a look and no child is under way; it counts the dry cells left.")
 
 (a/defargs args
-  {:from {:doc "box corner (inclusive); with :to, any order" :spec ::a/pos :default nil}
-   :to {:doc "opposite box corner (inclusive)" :spec ::a/pos :default nil}
-   :center {:doc "centre of a square of cells at its y; with :radius" :spec ::a/pos :default nil}
-   :radius {:doc "the square covers |dx|,|dz| <= radius, 0 to 7" :spec (a/int-in 0 7) :default nil}
+  {:area {:doc "the field cells: a box {:min :max} (corners inclusive, any order) or a circle {:pos :radius}, the square |dx|,|dz| <= radius at pos's y (the cells of jobs.farm.till)" :spec fa/spec :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
    :ignore-zones? :shared})
 
@@ -49,7 +47,7 @@
 (a/defargs settings
   {::job-time-s {:default 180 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}})
 
-(def target [:from :to :center :radius])
+(def target [:area])
 (def defaults {:spend {:job-time ::job-time-s}})
 (def fit? ready/fit?)
 

@@ -28,11 +28,21 @@
 
 (defn corner-vec [p] (let [{:keys [x y z]} (a/cell p)] [x y z]))
 
+(defn area-spot
+  "The cell at the middle of a field :area (a box, circle, cells or plan), nil for none."
+  [area c]
+  (cond
+    (:plan area) (plan-spot area c)
+    (:cells area) (middle (map corner-vec (:cells area)))
+    (:pos area) (a/cell (:pos area))
+    (:min area) (middle (map corner-vec [(:min area) (:max area)]))))
+
 (defn spot
-  "The place of c's args: :at or :pos, else the middle of :plan, of :box, of :from to :to, else :center."
+  "The place of c's args: :at or :pos, else the middle of :area, :plan, of :box, of :from to :to, else :center."
   [c]
-  (let [{:keys [at pos box from to center] :as args} (:args c)]
+  (let [{:keys [at pos box from to center area] :as args} (:args c)]
     (or (a/cell (or at pos))
+        (area-spot area c)
         (plan-spot args c)
         (when box (middle (map corner-vec [(:min box) (:max box)])))
         (when (and from to) (middle (map corner-vec [from to])))

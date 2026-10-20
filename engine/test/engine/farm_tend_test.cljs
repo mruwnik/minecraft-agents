@@ -13,7 +13,7 @@
             [jobs.farm.tend :as tend]
             [jobs.farm.tend-box :as tend-box]
             [jobs.farm.tend-decide :as decide]
-            [jobs.farm.tend-stock :as stock]
+            [jobs.lib.field-area :as fa]
             [jobs.lib.look :as look]
             [jobs.lib.steps :as steps]
             [jobs.lib.world-files :as world]))
@@ -61,7 +61,7 @@
   "Submit the job with args in a world; run n ticks 700 ms apart; the setup map."
   [args spec n]
   (let [s (setup spec)]
-    (core/submit! (:eng s) (list 'jobs.farm.tend (merge {:box box} args)) {})
+    (core/submit! (:eng s) (list 'jobs.farm.tend (merge {:area box} args)) {})
     (await (tu/run-ticks (:eng s) (:clock s) n 700))
     s))
 
@@ -109,20 +109,20 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:box {:min [2 63 2] :max [4 64 4]}} (world (farm "wheat" 7 all-cells [[2 2] [3 2]]) (crops "wheat" 3 [[4 2]]) wheat-drops) 80))]
+        (let [s (await (scenario {:area {:min [2 63 2] :max [4 64 4]}} (world (farm "wheat" 7 all-cells [[2 2] [3 2]]) (crops "wheat" 3 [[4 2]]) wheat-drops) 80))]
           (is (= #{[2 2] [3 2]} (dug s)))
           (is (true? (finished? s))))))))
 
 (def under {:blocks (into {} (map (fn [[x z]] [(k x 62 z) "dirt"])) all-cells)})
 
 (deftest the-irrigate-call-covers-the-ground-layer-of-the-box
-  (is (= {:from (:min box) :to {:x 4 :y 63 :z 4}}
-         (:args (:call (decide/decide :irrigate {:irrigate true :box box} {:dry 2 :ground-box {:min (:min box) :max {:x 4 :y 63 :z 4}}}))))))
+  (is (= {:area {:min (:min box) :max {:x 4 :y 63 :z 4}}}
+         (:args (:call (decide/decide :irrigate {:irrigate true :area box} {:dry 2 :ground-box {:min (:min box) :max {:x 4 :y 63 :z 4}}}))))))
 
 (deftest the-irrigate-call-of-a-plan-names-the-plan
   (let [gb {:min {:x 2 :y 63 :z 2} :max {:x 3 :y 63 :z 3}}]
-    (is (= {:from (:min gb) :to (:max gb) :for-plan "mix"}
-           (:args (:call (decide/decide :irrigate {:irrigate true :plan "mix"} {:dry 2 :ground-box gb})))))))
+    (is (= {:area {:min (:min gb) :max (:max gb)} :for-plan "mix"}
+           (:args (:call (decide/decide :irrigate {:irrigate true :area {:plan "mix"}} {:dry 2 :ground-box gb})))))))
 
 (deftest a-dry-field-is-wetted-before-it-is-planted
   (async done
@@ -252,77 +252,9 @@
 
 (deftest nothing-to-do-declines-and-asks-the-body-nothing
   (let [mature (world (farm "wheat" 3 all-cells all-cells) {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 4) (item "bone_meal" 3)]})]
-    (is (declines? {:box box} mature) "unripe crops, fertilize off by default")
-    (is (declines? {:box box :fertilize true :till false} (world (farm "wheat" 3 all-cells all-cells))) "bone meal wanted but none carried")
-    (is (declines? {:box box :till false} (world (ground "dirt" [[2 2]]) {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 4)]})) "till off")))
-
-(deftest without-a-chest-the-goods-stay-carried
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (scenario {} (world (farm "wheat" 7 [[2 2]] [[2 2]]) wheat-drops {:inventory [(item "wheat" 5)]}) 40))]
-          (is (= {:skipped :no-chest} (step s :deposit)))
-          (is (= 6 (get (inv s) "wheat"))))))))
-
-(def goods-world
-  (world (farm "wheat" 3 [[2 2] [3 2]] [[2 2] [3 2]])
-         {:inventory [(item "wheat" 5) (item "wheat_seeds" 10) (item "iron_hoe" 1) (item "bread" 2)]
-          :containers {"10,64,0" []}}))
-
-(deftest goods-above-the-seed-reserve-go-to-the-chest-and-tools-and-food-stay
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (scenario {:chest chest} goods-world 40))]
-          (is (= {"wheat" 5} (chest-items s)) "a stack of backup seed and the 3-day food stay carried")
-          (is (= {"wheat_seeds" 10 "iron_hoe" 1 "bread" 2} (inv s)))
-          (is (= {:gave-up false} (select-keys (step s :deposit) [:gave-up])))
-          (is (true? (finished? s))))))))
-
-(deftest goods-an-agent-reserve-entry-holds-are-not-stored
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (setup goods-world)
-              _ (mem/write! (:store (:eng s)) :reserve {:id "wheat" :item "wheat" :count :all} {:cap 100 :ttl :forever})
-              _ (core/submit! (:eng s) (list 'jobs.farm.tend {:box box :chest chest}) {})
-              _ (await (tu/run-ticks (:eng s) (:clock s) 40 700))]
-          (is (= {} (chest-items s)))
-          (is (= 5 (get (inv s) "wheat"))))))))
-
-(deftest keep-is-honoured-above-the-reserve
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (scenario {:chest chest :keep {"wheat" 2 "wheat_seeds" 1}} goods-world 40))]
-          (is (= {"wheat" 3} (chest-items s)))
-          (is (= 2 (get (inv s) "wheat")))
-          (is (= 10 (get (inv s) "wheat_seeds"))))))))
-
-(deftest only-seed-above-the-backup-stack-is-composted
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (scenario {:composter {:x 6 :y 64 :z 2}}
-                                 (world goods-world {:blocks {"6,64,2" "composter"}}
-                                        {:inventory [(item "wheat" 5) (item "wheat_seeds" 70) (item "bread" 2)]}) 60))]
-          (is (= {"wheat_seeds" 6} (:fed (step s :compost))))
-          (is (= 64 (get (inv s) "wheat_seeds")))
-          (is (= 2 (get (inv s) "bread")))
-          (is (= 5 (get (inv s) "wheat")) "crops are not fed")
-          (is (= {:skipped :no-chest} (step s :deposit))))))))
-
-(deftest without-a-composter-or-surplus-seed-the-step-is-skipped
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (scenario {:chest chest} goods-world 40))]
-          (is (= {:skipped :no-composter} (step s :compost))))
-        (let [s (await (scenario {:composter {:x 6 :y 64 :z 2} :chest chest}
-                                 (world (farm "wheat" 3 [[2 2] [3 2]] [[2 2] [3 2]]) {:blocks {"6,64,2" "composter"}}
-                                        {:inventory [(item "wheat_seeds" 4) (item "wheat" 2)] :containers {"10,64,0" []}}) 40))]
-          (is (= {:skipped :no-surplus-seed} (step s :compost)))
-          (is (= {"wheat" 2} (chest-items s))))))))
+    (is (declines? {:area box} mature) "unripe crops, fertilize off by default")
+    (is (declines? {:area box :fertilize true :till false} (world (farm "wheat" 3 all-cells all-cells))) "bone meal wanted but none carried")
+    (is (declines? {:area box :till false} (world (ground "dirt" [[2 2]]) {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 4)]})) "till off")))
 
 (deftest bone-meal-is-used-on-unripe-crops-when-asked
   (async done
@@ -364,7 +296,7 @@
       (fn ^:async t []
         (let [s (setup (world (ground "dirt" [[2 2]]) {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 3)]}))]
           (.override (.-world (:p s)) "useOn" (fn [_ _ _] (js/Promise.resolve #js {:status "unchanged"})))
-          (core/submit! (:eng s) (list 'jobs.farm.tend {:box box}) {})
+          (core/submit! (:eng s) (list 'jobs.farm.tend {:area box}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 60 700))
           (is (true? (finished? s)))
           (is (<= (count (calls s "useOn")) 2) "one till child per cell, which tries twice")
@@ -379,98 +311,50 @@
           (is (= ["air" "air" "air"] [(block-at s 5 64 2) (block-at s 6 64 3) (block-at s 7 64 4)])))))))
 
 (deftest crops-just-outside-the-box-do-not-start-a-run
-  (is (declines? {:box box} (world (farm "wheat" 7 [[5 2]] [[5 2]]) wheat-drops)) "ripe outside")
-  (is (declines? {:box box :fertilize true} (world (farm "wheat" 3 [[5 2]] [[5 2]]) {:inventory [(item "bone_meal" 3)]})) "unripe outside"))
+  (is (declines? {:area box} (world (farm "wheat" 7 [[5 2]] [[5 2]]) wheat-drops)) "ripe outside")
+  (is (declines? {:area box :fertilize true} (world (farm "wheat" 3 [[5 2]] [[5 2]]) {:inventory [(item "bone_meal" 3)]})) "unripe outside"))
 
 ;; ------------------------------------------------------------------ pure pieces
 
-(deftest reserve-sows-the-field-twice-over-one-seed-at-a-time
-  (are [expected beds inventory] (= expected (tend-box/reserve beds inventory))
-    {} 0 [(item "wheat_seeds" 9)]
-    {"wheat_seeds" 4} 2 [(item "wheat_seeds" 9)]
-    {"wheat_seeds" 3} 2 [(item "wheat_seeds" 3)]
-    {"wheat_seeds" 2 "carrot" 2} 2 [(item "wheat_seeds" 9) (item "carrot" 9)]
-    {"wheat_seeds" 2 "carrot" 1 "potato" 1} 2 [(item "wheat_seeds" 9) (item "carrot" 1) (item "potato" 5)]
-    {"wheat_seeds" 5 "carrot" 1} 3 [(item "wheat_seeds" 5) (item "carrot" 1)]
-    {"wheat_seeds" 3} 5 [(item "wheat_seeds" 1) (item "wheat_seeds" 2)]
-    {} 4 [(item "bread" 5) (item "melon_seeds" 3)]))
-
-(deftest the-keep-holds-sowing-seed-a-backup-stack-per-seed-and-the-held-units
-  (are [expected sow held keep] (= expected (stock/keeps sow held keep))
-    {"wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64} {} {} {}
-    {"wheat_seeds" 100 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64} {"wheat_seeds" 100} {} {}
-    {"wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64 "bread" 4 "carrot" 9}
-    {"carrot" 2} {"bread" 4 "carrot" 9} {}
-    {"wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 70} {} {} {"pumpkin_seeds" 70}))
-
-(deftest crops-are-stored-down-to-the-food-reserve
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (scenario {:chest chest}
-                                 (world (farm "wheat" 3 [[2 2]] [[2 2]])
-                                        {:inventory [(item "carrot" 20) (item "bread" 3)] :containers {"10,64,0" []}}) 40))]
-          (is (= {"carrot" 5} (chest-items s)) "bread 3 is 15 of the 60 points, so 15 carrots (45 points) stay")
-          (is (= {"carrot" 15 "bread" 3} (inv s))))))))
-
-(deftest surplus-lists-names-above-their-keep
-  (are [expected inventory keep names] (= expected (stock/surplus inventory keep names))
-    ["wheat"] [(item "wheat" 2) (item "bread" 4)] {} ["wheat" "carrot"]
-    [] [(item "wheat" 2)] {"wheat" 2} ["wheat"]
-    ["wheat"] [(item "wheat" 2) (item "wheat" 1)] {"wheat" 2} ["wheat"]
-    ["carrot" "wheat"] [(item "wheat" 2) (item "carrot" 1)] {} ["carrot" "wheat"]))
-
 (deftest the-box-geometry
   (are [expected actual] (= expected actual)
-    {:x 3 :y 64 :z 3} (tend-box/centre box)
-    3 (tend-box/radius box (tend-box/centre box))
-    9 (tend-box/box-cells {:min {:x 0 :y 0 :z 0} :max {:x 2 :y 0 :z 2}})
-    true (tend-box/in-box? box {:x 4 :y 64 :z 2})
-    false (tend-box/in-box? box {:x 5 :y 64 :z 2})
-    false (tend-box/in-box? box {:x 3 :y 65 :z 2})
+    {:x 3 :y 64 :z 3} (fa/centre box)
+    3 (fa/cover-radius box (fa/centre box))
+    9 (fa/cell-count {:min {:x 0 :y 0 :z 0} :max {:x 2 :y 0 :z 2}})
+    true (fa/contains-pos? box {:x 4 :y 64 :z 2})
+    false (fa/contains-pos? box {:x 5 :y 64 :z 2})
+    false (fa/contains-pos? box {:x 3 :y 65 :z 2})
     true (tend/usable-box? box)
     false (tend/usable-box? nil)
     false (tend/usable-box? {:min {:x 0 :y 63 :z 0} :max {:x 4 :y 63 :z 4}})
     false (tend/usable-box? {:min {:x 0 :y 63 :z 0} :max {:x 60 :y 64 :z 20}})))
 
-(deftest beds-are-farmland-or-uncovered-dirt
-  (are [expected ground] (= expected (tend-box/beds ground))
-    2 [{:name "farmland" :above "wheat"} {:name "dirt" :above "air"}]
-    1 [{:name "grass_block" :above "short_grass"} {:name "grass_block" :above "stone"}]
-    0 [{:name "stone" :above "air"} {:name "dirt" :above nil}]))
-
 (deftest each-step-decides-from-its-facts
   (are [expected step args facts] (= expected (:skip (decide/decide step args facts)))
     :no-ripe :harvest {} {:ripe 0}
-    nil :harvest {} {:ripe 1 :mid {:x 0 :y 0 :z 0} :radius 2}
+    nil :harvest {} {:ripe 1}
     :till-off :till {:till false} {:hoe true :untilled [{}] :bare 0 :seeds 3}
     :no-hoe :till {:till true} {:hoe false :untilled [{}] :bare 0 :seeds 3}
     :nothing-to-till :till {:till true} {:hoe true :untilled [] :bare 0 :seeds 3}
     :no-seed :till {:till true} {:hoe true :untilled [{}] :bare 2 :seeds 2}
     nil :till {:till true} {:hoe true :untilled [{:x 1 :y 63 :z 1}] :bare 2 :seeds 3}
-    :irrigate-off :irrigate {:irrigate false :box box} {:dry 3}
-    :not-dry :irrigate {:irrigate true :box box} {:dry 0}
+    :irrigate-off :irrigate {:irrigate false :area box} {:dry 3}
+    :not-dry :irrigate {:irrigate true :area box} {:dry 0}
     :not-dry :irrigate {:irrigate true} {}
-    nil :irrigate {:irrigate true :box box} {:dry 3}
+    nil :irrigate {:irrigate true :area box} {:dry 3}
     :no-bare :plant {} {:bare 0 :seed true}
     :no-seed :plant {} {:bare 1 :seed false}
-    nil :plant {:box box} {:bare 1 :seed true}
+    nil :plant {:area box} {:bare 1 :seed true}
     :fertilize-off :fertilize {:fertilize false} {:meal true :unripe 2}
     :no-bone-meal :fertilize {:fertilize true} {:meal false :unripe 2}
-    nil :fertilize {:fertilize true} {:meal false :bones true :unripe 2 :mid {} :radius 2}
+    nil :fertilize {:fertilize true} {:meal false :bones true :unripe 2}
     :none-unripe :fertilize {:fertilize true} {:meal true :unripe 0}
-    nil :fertilize {:fertilize true} {:meal true :unripe 1 :mid {} :radius 2}
-    :no-composter :compost {} {:waste ["wheat_seeds"]}
-    :no-surplus-seed :compost {:composter {:x 1 :y 1 :z 1}} {:waste []}
-    nil :compost {:composter {:x 1 :y 1 :z 1}} {:waste ["wheat_seeds"] :keep {}}
-    :no-chest :deposit {} {:stored ["wheat"]}
-    :nothing-to-store :deposit {:chest {:x 1 :y 1 :z 1}} {:stored []}
-    nil :deposit {:chest {:x 1 :y 1 :z 1}} {:stored ["wheat"] :keep {}}))
+    nil :fertilize {:fertilize true} {:meal true :unripe 1}))
 
 (deftest the-till-call-names-the-nearest-cell-and-the-plan-keeps-a-tilled-report
   (let [cell {:x 3 :y 63 :z 2}
         facts {:hoe true :untilled [cell {:x 4 :y 63 :z 2}] :bare 0 :seeds 3}]
-    (is (= {:from cell :to cell} (:args (:call (decide/decide :till {:till true} facts)))))
+    (is (= {:area {:min cell :max cell}} (:args (:call (decide/decide :till {:till true} facts)))))
     (is (= {:till {:tilled 2} :plant {:skipped :no-bare}}
            (:report (steps/plan decide/decide [:till :plant] {:till true} {:hoe true :untilled [] :bare 0 :seeds 3} {:till {:tilled 2}}))))
     (is (= {:till {:skipped :nothing-to-till}}
@@ -479,11 +363,11 @@
 (deftest a-contract-child-refused-before-it-started-counts-as-declined
   (are [e refused] (= refused (tend/refused? e))
     {:kind :condition-failed :cause {:reason :no-zones}} true
-    {:kind :condition-failed :cause :no-composter :data {:fed {}}} false
+    {:kind :condition-failed :cause :no-hoe :data {:tilled 0}} false
     {:kind :nothing-possible :cause :unreachable} false
     {:kind :done :data {:tilled 2}} false)
   (is (= {:till {:skipped :declined}}
-         (:report (tend/after-child {:report {}} :till {:from {:x 1 :y 63 :z 1}} {:kind :condition-failed :cause {:reason :no-zones}})))))
+         (:report (tend/after-child {:report {}} :till {:area {:min {:x 1 :y 63 :z 1}}} {:kind :condition-failed :cause {:reason :no-zones}})))))
 
 (deftest a-child-that-hit-its-own-limit-is-booked-and-the-run-goes-on
   (let [m (tend/after-child {:todo [:harvest :till] :report {}} :harvest {} {:kind :limit-reached :cause {:limit :job-time} :data {:cut 1}})]
@@ -500,12 +384,7 @@
     :till {:tilled 0} false
     :plant {:planted 2} true
     :plant {:skipped :no-bare} false
-    :fertilize {:used 0} false
-    :compost {:fed {"wheat_seeds" 6}} true
-    :compost {:fed {}} false
-    :deposit {:gave-up false} true
-    :deposit {:gave-up true} false
-    :deposit {:skipped :no-chest} false))
+    :fertilize {:used 0} false))
 
 ;; ------------------------------------------------------------------ zones
 
@@ -513,7 +392,7 @@
   "Whether tend starts a round on the first tick, in a world whose zone list is zones."
   [args spec zones]
   (let [s (setup spec zones)]
-    (core/submit! (:eng s) (list 'jobs.farm.tend (merge {:box box} args)) {})
+    (core/submit! (:eng s) (list 'jobs.farm.tend (merge {:area box} args)) {})
     (await (core/tick! (:eng s)))
     (boolean (seq (events-of s :round_started)))))
 
@@ -538,7 +417,7 @@
       (fn ^:async t []
         (let [s (setup (world (farm "wheat" 7 all-cells [[2 2] [3 2]]) wheat-drops))
               _ (tu/seeing-after-look (:p s))]
-          (core/submit! (:eng s) (list 'jobs.farm.tend {:box box}) {})
+          (core/submit! (:eng s) (list 'jobs.farm.tend {:area box}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 80 700))
           (is (seq (calls s "look")))
           (is (= #{[2 2] [3 2]} (dug s)))
@@ -550,7 +429,7 @@
       (fn ^:async t []
         (let [s (setup (world (farm "wheat" 3 all-cells all-cells)))
               _ (tu/seeing-after-look (:p s))]
-          (core/submit! (:eng s) (list 'jobs.farm.tend {:box box}) {})
+          (core/submit! (:eng s) (list 'jobs.farm.tend {:area box}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 6 700))
           (is (seq (calls s "look")))
           (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting)))))
@@ -564,7 +443,7 @@
                              {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 4)]})
               s (setup terrain)
               _ (tu/seeing-after-look (:p s))]
-          (core/submit! (:eng s) (list 'jobs.farm.tend {:box box :till true}) {})
+          (core/submit! (:eng s) (list 'jobs.farm.tend {:area box :till true}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 6 700))
           (let [w (last (events-of s :waiting))]
             (is (= :nothing-to-do (:reason w)))
@@ -581,7 +460,7 @@
   [listed?]
   (let [s (setup (assoc far-ripe :time 15000))]
     (when listed? (core/submit! (:eng s) '(jobs.time.wait-for-light) {}))
-    (core/submit! (:eng s) (list 'jobs.farm.tend {:box far-box}) {})
+    (core/submit! (:eng s) (list 'jobs.farm.tend {:area far-box}) {})
     (await (tu/run-ticks (:eng s) (:clock s) 3 700))
     s))
 
@@ -606,7 +485,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup far-ripe)]
-          (core/submit! (:eng s) (list 'jobs.farm.tend {:box high-box}) {})
+          (core/submit! (:eng s) (list 'jobs.farm.tend {:area high-box}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 3 700))
           (is (empty? (events-of s :round_started)))
           (is (some #(= :away (:reason %)) (events-of s :waiting))))))))
@@ -630,14 +509,14 @@
     (is (fn? (:can-start? job)))
     (is (vector? (:target job)))
     (is (fn? (:done? job)))
-    (is (nil? (contract/quote-problem ((:quote-of job) {:primitives (tu/fake {}) :args {:box box}}))))))
+    (is (nil? (contract/quote-problem ((:quote-of job) {:primitives (tu/fake {}) :args {:area box}}))))))
 
 (deftest a-run-that-worked-is-done-with-its-steps-and-field
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup (world (farm "wheat" 7 all-cells [[2 2] [3 2]]) wheat-drops))
-              e (await (ending-of s {:box box} 80))]
+              e (await (ending-of s {:area box} 80))]
           (is (= :done (:kind e)))
           (is (= 2 (get-in e [:data :steps :harvest :cut])))
           (is (= {:crops 2 :bare 7 :untilled 0} (get-in e [:data :field]))))))))
@@ -647,27 +526,23 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup (world (farm "wheat" 3 all-cells all-cells)))]
-          (is (= {:kind :condition-failed :cause {:reason :nothing-to-do}} (update (select-keys (await (ending-of s {:box box} 20)) [:kind :cause]) :cause dissoc :text))))
+          (is (= {:kind :condition-failed :cause {:reason :nothing-to-do}} (update (select-keys (await (ending-of s {:area box} 20)) [:kind :cause]) :cause dissoc :text))))
         (let [s (setup (world (farm "wheat" 7 all-cells all-cells)))]
           (is (= {:kind :impossible :cause {:reason :no-box}} (update (select-keys (await (ending-of s {} 20)) [:kind :cause]) :cause dissoc :text)))
-          (is (= :impossible (:kind (await (ending-of s {:box {:min {:x 2 :y 63 :z 2} :max {:x 4 :y 63 :z 4}}} 20)))) "no crop layer")
-          (is (= :impossible (:kind (await (ending-of s {:box {:min {:x 0 :y 63 :z 0} :max {:x 60 :y 64 :z 20}}} 20)))) "over the cell cap"))))))
+          (is (= :impossible (:kind (await (ending-of s {:area {:min {:x 2 :y 63 :z 2} :max {:x 4 :y 63 :z 4}}} 20)))) "no crop layer")
+          (is (= :impossible (:kind (await (ending-of s {:area {:min {:x 0 :y 63 :z 0} :max {:x 60 :y 64 :z 20}}} 20)))) "over the cell cap"))))))
 
 (deftest a-run-that-gave-up-on-everything-is-not-done
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup (world (farm "wheat" 7 [[4 4]] [[4 4]]) {:unreachable [(k 4 64 4)]}))
-              e (await (ending-of s {:box box} 80))]
+              e (await (ending-of s {:area box} 80))]
           (is (= {:kind :nothing-possible :cause :gave-up} (select-keys e [:kind :cause])))
           (is (some? (get-in e [:data :steps :harvest]))))))))
 
-(deftest tend-hands-its-chest-argument-to-deposit
-  (let [given [-545 64 324]]
-    (is (= given (get-in (decide/decide :deposit {:chest given} {:stored ["wheat"] :keep {}}) [:call :args :chest])))))
-
 (deftest a-part-with-no-step-is-a-look-until-the-body-has-looked-round
-  (let [c {:primitives (tu/fake {}) :args {:box box}}
+  (let [c {:primitives (tu/fake {}) :args {:area box}}
         status (fn [surveyed?] (with-redefs [ctx/mem (constantly {}) tend/check-facts (constantly {}) tend/would-run? (constantly false)
                                              tend/needs-look? (constantly true) look/surveyed? (fn ([_] surveyed?) ([_ _] surveyed?))]
                                  (tend/part-status c)))]

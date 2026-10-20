@@ -31,7 +31,7 @@
      jobs.combat.hunt jobs.gather.get-seeds jobs.gather.make-obsidian jobs.gather.mine jobs.gather.dig-for jobs.gather.shaft-descent jobs.gather.strip-tunnel
      jobs.movement.go-to jobs.movement.chase jobs.movement.look-around jobs.movement.follow jobs.movement.leave-vehicle jobs.movement.mount jobs.movement.boat-launch jobs.movement.boat-recover jobs.movement.boat-drive jobs.movement.boat-land jobs.movement.cross-water jobs.movement.linger-near jobs.survival.block-arrow-gap
      jobs.time.wait-for-light jobs.time.noop jobs.debug.notify jobs.debug.ready-probe
-     jobs.access.stair jobs.access.record-stair jobs.access.tunnel jobs.access.toggle jobs.farm.tidy
+     jobs.access.stair jobs.access.record-stair jobs.access.tunnel jobs.access.toggle jobs.farm.tidy jobs.farm.maintain
      jobs.access.cleanup jobs.access.clear-path jobs.strip.seal jobs.strip.corridor jobs.strip.site jobs.strip.all jobs.strip.base jobs.strip.smelt jobs.strip.haul
      jobs.blocks.dig jobs.blocks.fill-cells jobs.blocks.place jobs.items.use
      jobs.memory.set-place jobs.memory.forget-place jobs.memory.remember jobs.memory.reserve jobs.memory.unreserve})
@@ -120,20 +120,18 @@
                 '(jobs.farm.find-spot {:range 1000})
                 '(jobs.movement.chase {:pos [1 64 1] :leg-s 0})
                 '(jobs.movement.chase {:pos [1 64 1] :leg-s 500})
-                '(jobs.farm.till {:center [0 64 0] :radius 1000000})
                 '(jobs.farm.find-spot {:w 17})
                 '(jobs.farm.find-spot {:range 49})
                 '(jobs.movement.chase {:pos [1 64 1] :leg-s 0.05})
                 '(jobs.movement.chase {:pos [1 64 1] :leg-s 120.1})
-                '(jobs.farm.till {:center [0 64 0] :radius 8})
-                '(jobs.farm.till {:center [0 64 0] :radius -1})]]
+                '(jobs.farm.till {:area {:pos [0 64 0] :radius -1}})]]
     (is (string? (expr/problem registry/jobs form)) (pr-str form)))
   (doseq [form ['(jobs.farm.find-spot {:w 16 :h 16 :range 48})
                 '(jobs.movement.chase {:pos [1 64 1] :leg-s 5})
-                '(jobs.farm.till {:center [0 64 0] :radius 7})
+                '(jobs.farm.till {:area {:pos [0 64 0] :radius 7}})
                 '(jobs.movement.chase {:pos [1 64 1] :leg-s 0.1})
                 '(jobs.movement.chase {:pos [1 64 1] :leg-s 120})
-                '(jobs.farm.till {:center [0 64 0] :radius 0})]]
+                '(jobs.farm.till {:area {:pos [0 64 0] :radius 0}})]]
     (is (nil? (expr/problem registry/jobs form)) (pr-str form))))
 
 (deftest every-default-use-names-a-chooser-that-exists

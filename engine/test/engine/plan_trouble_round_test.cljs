@@ -107,7 +107,8 @@
       'jobs.build.rail [(fn [] [(:eng (bfp/start (rl/spec "stone" 63 (rl/kit {})) plans []))]) {:plan "line"}]
       'jobs.animals.pen-check [(fn [] [(:eng (bfp/start (pb/spec [] pb/built-pen) plans []))]) {:plan "pen"}]
       'jobs.animals.maintain [maintain-world {:plan "pen" :part "nowhere"}]}
-     (into {} (map (fn [sym] [sym [(fn [] [(:eng (bfp/start {} plans))]) {:plan "pen"}]]))
+     (into {} (map (fn [sym] [sym [(fn [] [(:eng (bfp/start {} plans))])
+                                    (if (#{'jobs.farm.harvest 'jobs.farm.plant 'jobs.farm.tend} sym) {:area {:plan "pen"}} {:plan "pen"})]]))
            '[jobs.farm.harvest jobs.farm.plant jobs.farm.tend jobs.farm.tidy jobs.forestry.prepare jobs.forestry.maintain]))))
 
 (deftest a-missing-plan-waits-in-every-plan-job

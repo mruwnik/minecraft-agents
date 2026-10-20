@@ -16,7 +16,7 @@
              :job (jobs.survival.night {:roof-height 4})}
             {:trigger :inventory-nearly-full :persistence :cooldown :cooldown-s 120 :args {:free 2}
              :job (jobs.storage.make-room {:free 4})}]
- :queue [(repeat (seq (jobs.farm.harvest {:plan "test-probenight-field" :center {:x 9100 :y 121 :z 9100} :radius 8})
+ :queue [(repeat (seq (jobs.farm.harvest {:area {:plan "test-probenight-field"}})
                       (jobs.storage.deposit {:chest {:x 9104 :y 121 :z 9100}
                                              :items ["wheat" "wheat_seeds"]
                                              :keep {"wheat_seeds" 24}})))]}

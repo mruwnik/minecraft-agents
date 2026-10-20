@@ -80,6 +80,12 @@
 
 (defn plain-args [p] (merge {:radius 12 :crops nil :replant true} p))
 
+(deftest ripe-crops-of-a-box-area-are-those-inside-the-box-not-the-sphere-round-it
+  (let [p (tu/seeing-all (tu/fake {:blocks {"1,64,0" "wheat" "2,64,0" "wheat" "5,64,0" "wheat"} :ages {"1,64,0" 7 "2,64,0" 7 "5,64,0" 7}}))
+        area {:min {:x 0 :y 64 :z 0} :max {:x 2 :y 64 :z 0}}]
+    (is (= [1 2] (mapv :x (fld/ripe-crops p (assoc (plain-args {}) :radius 4 :area area) {:x 1 :y 64 :z 0} []))))
+    (is (= [1 2 5] (mapv :x (fld/ripe-crops p (plain-args {:radius 4}) {:x 3 :y 64 :z 0} []))) "no area: the sphere")))
+
 (deftest ripe-crops-picks-ripe-wanted-cells-near-the-centre
   (let [p (tu/seeing-all (tu/fake {:blocks {"1,64,0" "wheat" "2,64,0" "wheat" "3,64,0" "carrots" "4,64,0" "carrots"
                              "5,64,0" "beetroots" "6,64,0" "beetroots" "7,64,0" "potatoes" "30,64,0" "wheat"}
@@ -251,7 +257,7 @@
               {:keys [eng p seen]} (start {:world {:blocks (zipmap cells (repeat "wheat"))
                                                    :ages (zipmap cells (repeat 7))
                                                    :unreachable cells}})
-              result (await (child-outcome eng job {:radius 14} 400))
+              result (await (child-outcome eng job {:area {:pos origin :radius 14}} 400))
               warn (first (events-of seen :harvest.gave-up))]
           (is (zero? (count (calls p "dig"))))
           (is (= 1 (count (events-of seen :harvest.gave-up))))
@@ -374,7 +380,7 @@
         (let [cells (far-cells (range 8 13))
               {:keys [eng p]} (start {:world {:blocks (zipmap cells (repeat "wheat")) :ages (zipmap cells (repeat 7))
                                               :noPath cells}})
-              result (await (child-outcome eng job {:radius 14} 100))]
+              result (await (child-outcome eng job {:area {:pos origin :radius 14}} 100))]
           (is (zero? (count (calls p "dig"))))
           (is (= {:cut 0 :replanted 0 :bare [] :lost [] :gave-up true} (dissoc result :status :reason :text))))))))
 
@@ -455,7 +461,7 @@
               _ (aset p "sensedAt" (fn [pos] (if (near?) (.blockAt p pos) #js {:unknown true})))
               {:keys [eng]} (start {:p p})]
           (fake/swap-self! p assoc :pos [75 64 0])
-          (let [result (await (child-outcome eng job {:center {:x 3 :y 64 :z 0}} 600))]
+          (let [result (await (child-outcome eng job {:area {:pos {:x 3 :y 64 :z 0} :radius 12}} 600))]
             (is (= 1 (:cut result)))))))))
 
 (deftest a-centre-that-cannot-be-reached-ends-the-job-with-the-cells-bare
@@ -483,7 +489,7 @@
               {:keys [eng]} (start {:p p})]
           (fake/swap-self! p assoc :pos [75 64 0])
           (tu/short-walks! p 1)
-          (let [result (await (child-outcome eng job {:center {:x 3 :y 64 :z 0}} 200))]
+          (let [result (await (child-outcome eng job {:area {:pos {:x 3 :y 64 :z 0} :radius 12}} 200))]
             (is (= [:stopped :unreachable] ((juxt :status :reason) result)))
             (is (= {:x 3 :y 64 :z 0} (:center result)))))))))
 
@@ -503,7 +509,7 @@
       (fn ^:async t []
         (doseq [[owner extra cut] [["Fake" {} 1] ["FAKE" {} 1] ["Miles" {} 0] ["Miles" {:ignore-zones? true} 1]]]
           (let [{:keys [eng p seen]} (start {:world zoned-world :shared (ew/of-data {} {} [(zone-over-crop owner)])})]
-            (core/submit! eng (list job (merge {:radius 6} extra)) {})
+            (core/submit! eng (list job (merge {:area {:pos origin :radius 6}} extra)) {})
             (await (run-until-empty eng 60))
             (is (= cut (count (calls p "dig"))) (pr-str [owner extra]))
             (is (empty? (events-of seen :harvest.declined)) "a condition does not warn")))))))
@@ -514,7 +520,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (start {:world (assoc zoned-world :blocks (field "wheat" 7 [2 3] [2]) :ages (ages 7 [2 3] [2]))
                                            :shared (ew/of-data {} {} [(zone-over-crop "Miles")])})]
-          (core/submit! eng (list job {:radius 6}) {})
+          (core/submit! eng (list job {:area {:pos origin :radius 6}}) {})
           (await (run-until-empty eng 60))
           (is (= 1 (count (calls p "dig"))) "the free crop is cut")
           (is (= 1 (count (events-of seen :harvest.declined))) "the refused one is named once"))))))
@@ -524,7 +530,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (start {:world zoned-world :shared (ew/of-data {} {} nil)})]
-          (core/submit! eng (list job {:radius 6}) {})
+          (core/submit! eng (list job {:area {:pos origin :radius 6}}) {})
           (await (run-until-empty eng 60))
           (is (zero? (count (calls p "dig"))))
           (is (empty? (events-of seen :harvest.declined))))))))

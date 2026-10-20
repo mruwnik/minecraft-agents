@@ -2,73 +2,57 @@
   "The steps of jobs.farm.tend, the child job of each, and the decision per step over the facts: skip it with a
   reason, or call its child.")
 
-(def steps [:harvest :irrigate :till :plant :fertilize :compost :deposit])
+(def steps [:harvest :irrigate :till :plant :fertilize])
 
 (def jobs
   {:harvest 'jobs.farm.harvest
    :irrigate 'jobs.farm.irrigate
    :till 'jobs.farm.till
    :plant 'jobs.farm.plant
-   :fertilize 'jobs.farm.fertilize
-   :compost 'jobs.farm.compost
-   :deposit 'jobs.storage.deposit})
+   :fertilize 'jobs.farm.fertilize})
 
 (defn decide-harvest
-  [{:keys [plan part]} {:keys [ripe mid radius]}]
+  [{:keys [area]} {:keys [ripe]}]
   (if (zero? ripe)
     {:skip :no-ripe}
     {:call {:slot :harvest :job (jobs :harvest)
-            :args (if plan
-                    {:plan plan :part part :replant true :replant-bare false}
-                    {:center mid :radius radius :replant true})}}))
+            :args (if (:plan area)
+                    {:area (select-keys area [:plan :part]) :replant true :replant-bare false}
+                    {:area area :replant true})}}))
 
 (defn decide-irrigate
-  [{:keys [irrigate plan]} {:keys [dry ground-box]}]
+  [{:keys [irrigate area]} {:keys [dry ground-box]}]
   (cond
     (not irrigate) {:skip :irrigate-off}
     (not (pos? (or dry 0))) {:skip :not-dry}
     :else {:call {:slot :irrigate :job (jobs :irrigate)
-                  :args (cond-> {:from (:min ground-box) :to (:max ground-box)} plan (assoc :for-plan plan))}}))
+                  :args (cond-> {:area {:min (:min ground-box) :max (:max ground-box)}} (:plan area) (assoc :for-plan (:plan area)))}}))
 
 (defn decide-till
-  [{:keys [till plan]} {:keys [hoe untilled bare seeds till-short till-held]}]
+  [{:keys [till area]} {:keys [hoe untilled bare seeds till-short till-held]}]
   (cond
     (not till) {:skip :till-off}
     (not hoe) {:skip :no-hoe}
     (and (empty? untilled) till-held) {:skip :food-reserve :detail till-held}
     (empty? untilled) {:skip (if (pos? (or till-short 0)) :no-seed :nothing-to-till)}
-    (and (not plan) (<= seeds bare)) {:skip :no-seed}
+    (and (not (:plan area)) (<= seeds bare)) {:skip :no-seed}
     :else {:call {:slot :till :job (jobs :till)
-                  :args (cond-> {:from (first untilled) :to (first untilled)} plan (assoc :for-plan plan))}}))
+                  :args (cond-> {:area {:min (first untilled) :max (first untilled)}} (:plan area) (assoc :for-plan (:plan area)))}}))
 
 (defn decide-plant
-  [{:keys [box plan part]} {:keys [bare seed]}]
+  [{:keys [area]} {:keys [bare seed]}]
   (cond
     (zero? bare) {:skip :no-bare}
     (not seed) {:skip :no-seed}
-    :else {:call {:slot :plant :job (jobs :plant) :args (if plan {:plan plan :part part :ways #{:carried}} {:box box :ways #{:carried}})}}))
+    :else {:call {:slot :plant :job (jobs :plant) :args {:area (if (:plan area) (select-keys area [:plan :part]) area) :ways #{:carried}}}}))
 
 (defn decide-fertilize
-  [{:keys [fertilize]} {:keys [meal bones unripe mid radius]}]
+  [{:keys [fertilize]} {:keys [meal bones unripe field]}]
   (cond
     (not fertilize) {:skip :fertilize-off}
     (not (or meal bones)) {:skip :no-bone-meal}
     (zero? unripe) {:skip :none-unripe}
-    :else {:call {:slot :fertilize :job (jobs :fertilize) :args {:center mid :radius radius}}}))
-
-(defn decide-compost
-  [{:keys [composter]} {:keys [waste keep]}]
-  (cond
-    (nil? composter) {:skip :no-composter}
-    (empty? waste) {:skip :no-surplus-seed}
-    :else {:call {:slot :compost :job (jobs :compost) :args {:at composter :items waste :keep keep}}}))
-
-(defn decide-deposit
-  [{:keys [chest]} {:keys [stored keep]}]
-  (cond
-    (nil? chest) {:skip :no-chest}
-    (empty? stored) {:skip :nothing-to-store}
-    :else {:call {:slot :deposit :job (jobs :deposit) :args {:chest chest :items stored :keep keep}}}))
+    :else {:call {:slot :fertilize :job (jobs :fertilize) :args {:area field}}}))
 
 (defn decide
   "{:skip reason} or {:call {:slot :job :args}} for a step."
@@ -79,6 +63,4 @@
     :till (decide-till args facts)
     :plant (decide-plant args facts)
     :fertilize (decide-fertilize args facts)
-    :compost (decide-compost args facts)
-    :deposit (decide-deposit args facts)
     {:skip :todo}))

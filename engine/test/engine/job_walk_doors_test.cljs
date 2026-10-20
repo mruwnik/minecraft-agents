@@ -73,7 +73,7 @@
                                             (update :blocks merge (h/field "wheat" 7 [5] [8]))
                                             (assoc :ages (h/ages 7 [5] [8]) :drops h/wheat-drops)))
               _ (tu/seeing-all p)]
-          (core/submit! eng '(jobs.farm.harvest {:center {:x 5 :y 64 :z 8} :radius 3}) {})
+          (core/submit! eng '(jobs.farm.harvest {:area {:pos {:x 5 :y 64 :z 8} :radius 3}}) {})
           (await (st/tick-n eng 40))
           (is (= [] (ut/calls p "moveTo")) "no raw pathfinder walk")
           (is (seq (ut/calls p "dig")) "the crop outside was cut")

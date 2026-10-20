@@ -31,7 +31,7 @@
                             [(str x ",62,0") "dirt"] [(str x ",63,0") (if (< -1 x n) "farmland" "stone")]]))
         (range -2 (+ n 2))))
 
-(defn args [n] {:from {:x 0 :y 63 :z 0} :to {:x (dec n) :y 63 :z 0}})
+(defn args [n] {:area {:min {:x 0 :y 63 :z 0} :max {:x (dec n) :y 63 :z 0}}})
 
 (deftest a-dry-field-gets-one-water-spot-that-wets-all-of-it
   (async done

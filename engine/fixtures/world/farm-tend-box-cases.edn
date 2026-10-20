@@ -14,14 +14,14 @@
  [{:name "grass-box-with-hoe-and-seeds-is-tilled-and-sown"
    :blocks [[:fill [10 -1 19] [12 -1 19] "water"] [:fill [10 -2 19] [12 -2 19] "stone"]]
    :body {:inventory [["stone_hoe" 1] ["wheat_seeds" 9]]}
-   :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [12 0 18]} :till true})]]
+   :act [[:job (jobs.farm.tend {:area {:min #xyz [10 -1 16] :max #xyz [12 0 18]} :till true})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:till {:tilled [:>= 1]}}}} :within-s 90 :of-job true}]
    :after [[:block [10 -1 16] "farmland"] [:block [10 0 16] "wheat"]]}
   ;; the grass under the stone shows no face to the body: unseen cells are not counted as covered tillable ground
   {:name "stone-over-the-grass-waits-nothing-to-do-without-covered"
    :blocks [[:fill [10 0 16] [12 0 18] "stone"]]
    :body {:inventory [["stone_hoe" 1] ["wheat_seeds" 9]]}
-   :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [12 0 18]} :till true})]]
+   :act [[:job (jobs.farm.tend {:area {:min #xyz [10 -1 16] :max #xyz [12 0 18]} :till true})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:covered [:any]}} :for-s 30}
             {:no-event {:source :job :kind #{:completed :stopped}} :for-s 30}]
@@ -30,13 +30,13 @@
    :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]
             [:fill [10 0 16] [13 0 16] "wheat[age=1]"]]
    :body {:inventory [["bone" 2]]}
-   :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [13 0 16]} :fertilize true :till false})]]
+   :act [[:job (jobs.farm.tend {:area {:min #xyz [10 -1 16] :max #xyz [13 0 16]} :fertilize true :till false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:fertilize {:used [:>= 1]}}}} :within-s 80 :of-job true}]
    :after [[:item "bone" [:<= 1]]]}
   {:name "no-bones-no-meal-fetch-false-does-not-fertilize"
    :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]
             [:fill [10 0 16] [13 0 16] "wheat[age=1]"]]
-   :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [13 0 16]} :fertilize true :till false})]]
+   :act [[:job (jobs.farm.tend {:area {:min #xyz [10 -1 16] :max #xyz [13 0 16]} :fertilize true :till false})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped}} :for-s 30}]
    :after [[:block [10 0 16] "wheat[age=1]"]]}
@@ -46,27 +46,34 @@
             [:fill [10 -1 15] [12 -1 17] "farmland[moisture=7]"] [:fill [10 -2 18] [12 -2 18] "stone"] [:fill [10 -1 18] [12 -1 18] "water"]
             [:fill [10 0 15] [12 0 17] "wheat[age=7]"]]
    :body {:at [6.5 -2 15.5]}
-   :act [[:job (jobs.farm.harvest {:center #xyz [11 0 16] :radius 8 :replant false})]]
+   :act [[:job (jobs.farm.harvest {:area {:pos #xyz [11 0 16] :radius 8} :replant false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:cut 9}} :within-s 80 :of-job true}]
    :after [[:block [10 0 15] "air"] [:block [12 0 17] "air"] [:item "wheat" [:>= 9]]]}
+  ;; D32: harvest on a box area cuts only the crops inside it; ripe wheat just outside (inside the sphere round the box) stands
+  {:name "harvest-box-area-leaves-the-ripe-crops-just-outside-it"
+   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]
+            [:fill [10 0 16] [13 0 16] "wheat[age=7]"]]
+   :act [[:job (jobs.farm.harvest {:area {:min #xyz [10 0 16] :max #xyz [11 0 16]} :replant false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:cut 2}} :within-s 80 :of-job true}]
+   :after [[:block [10 0 16] "air"] [:block [11 0 16] "air"] [:block [12 0 16] "wheat[age=7]"] [:block [13 0 16] "wheat[age=7]"]]}
   {:name "plant-box-sows-farmland-behind-the-body"
    :blocks [[:fill [10 -1 18] [13 -1 18] "farmland[moisture=7]"] [:fill [10 -2 19] [13 -2 19] "stone"] [:fill [10 -1 19] [13 -1 19] "water"]]
    :body {:at [11.5 0 14.5] :yaw 180 :inventory [["wheat_seeds" 10]]}
-   :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 18] :max #xyz [13 -1 18]}})]]
+   :act [[:job (jobs.farm.plant {:area {:min #xyz [10 -1 18] :max #xyz [13 -1 18]}})]]
    :expect [{:event {:source :job :kind :completed :data {:planted 4}} :within-s 80 :of-job true}]
    :after [[:block [10 0 18] "wheat"] [:block [13 0 18] "wheat"]]}
   ;; Card 17761d3f: plant on dried-back dirt names the untilled cells instead of "planted 0, reason none".
   {:name "plant-on-dried-back-dirt-names-the-untilled-cells"
    :blocks [[:fill [10 -1 16] [13 -1 16] "dirt"]]
    :body {:inventory [["wheat_seeds" 8]]}
-   :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :ways #{:carried}})]]
+   :act [[:job (jobs.farm.plant {:area {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do :untilled 4}} :within-s 40 :of-job true}]
    :after [[:block [10 0 16] "air"] [:item "wheat_seeds" 8]]}
   ;; Cards 37907cbf, d62866ae: till cuts the flower and the grass tuft off the ground first and tills; a berry bush is no ground cover.
   {:name "till-cuts-flower-and-tuft-then-tills-and-skips-the-berry-bush"
    :blocks [[:set [10 0 16] "poppy"] [:set [11 0 16] "short_grass"] [:set [12 0 16] "sweet_berry_bush[age=0]"]]
    :body {:inventory [["stone_hoe" 1]]}
-   :act [[:job (jobs.farm.till {:from #xyz [10 -1 16] :to #xyz [13 -1 16] :ways #{:carried}})]]
+   :act [[:job (jobs.farm.till {:area {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed :data {:tilled 3}} :within-s 70 :of-job true}]
    :after [[:block [10 -1 16] "farmland"] [:block [11 -1 16] "farmland"] [:block [13 -1 16] "farmland"] [:block [12 -1 16] "grass_block"]]}
   ;; Card f793bc9a: a plan added just before the job (the plan file is new to the body's cache) is read at once, not "no crop cells".
@@ -75,7 +82,7 @@
             [:fill [10 0 16] [13 0 16] "carrots[age=7]"]]
    :body {:inventory [["carrot" 12]]}
    :act [[:cli "plans" ["--world" "$world" "add" "late-$tag" "--edn" {:id "late-$tag" :parts [{:id "row" :box [#at [10 0 16] #at [13 0 16]] :want {:crop "carrots"}}]} "--by" "$body"]]
-         [:job (jobs.farm.tend {:plan "late-$tag"})]]
+         [:job (jobs.farm.tend {:area {:plan "late-$tag"}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:harvest {:cut 4}}}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :nothing-to-do}} :for-s 20 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:block [10 0 16] "carrots[age=0]"]]}
@@ -83,6 +90,6 @@
   {:name "till-over-a-meadow-tills-grass-under-flowers-and-skips-the-stone-patch"
    :blocks [[:fill [10 0 16] [14 0 16] "poppy"] [:fill [10 -1 18] [14 -1 18] "stone"]]
    :body {:inventory [["stone_hoe" 1]]}
-   :act [[:job (jobs.farm.till {:from #xyz [10 -1 16] :to #xyz [14 -1 18] :ways #{:carried}})]]
+   :act [[:job (jobs.farm.till {:area {:min #xyz [10 -1 16] :max #xyz [14 -1 18]} :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed :data {:tilled 10}} :within-s 90 :of-job true}]
    :after [[:block [10 -1 16] "farmland"] [:block [14 -1 17] "farmland"] [:block [12 -1 18] "stone"]]}]}

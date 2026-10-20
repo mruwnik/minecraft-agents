@@ -21,8 +21,8 @@
 
 (deftest every-farm-job-exports-the-contract-and-quotes-validly
   (let [p (tu/fake {:inventory tt/hoe})
-        args {'jobs.farm.till tt/box 'jobs.farm.fertilize {:max 16 :radius 8} 'jobs.farm.compost {:times 1} 'jobs.farm.find-spot {:w 3 :h 3 :range 6}
-              'jobs.farm.plant {:box pt/field-box} 'jobs.farm.harvest {:radius 6}}]
+        args {'jobs.farm.till tt/box 'jobs.farm.fertilize {:max 16} 'jobs.farm.compost {:times 1} 'jobs.farm.find-spot {:w 3 :h 3 :range 6}
+              'jobs.farm.plant {:area pt/field-box} 'jobs.farm.harvest {:area {:pos {:x 0 :y 64 :z 0} :radius 6}}}]
     (doseq [sym jobs
             :let [job (get registry/jobs sym)]]
       (is (vector? (:target job)) (str sym " has a target"))
@@ -59,10 +59,10 @@
         (let [e (await (ending-of (tt/setup {:inventory tt/hoe :blocks (assoc tt/four "1,64,1" "cobblestone")}) till tt/box 30))]
           (is (= :done (:kind e)))
           (is (= {:tilled 3 :skipped {{:x 1 :y 63 :z 1} :covered}} (dissoc (:data e) :text)) "a partial run carries its counts"))
-        (doseq [[world args kind reason] [[{:inventory tt/hoe :blocks {"1,63,1" "stone"}} {:from {:x 1 :y 63 :z 1} :to {:x 1 :y 63 :z 1}}
+        (doseq [[world args kind reason] [[{:inventory tt/hoe :blocks {"1,63,1" "stone"}} {:area {:min {:x 1 :y 63 :z 1} :max {:x 1 :y 63 :z 1}}}
                                            :condition-failed :not-tillable]
                                           [{:inventory tt/hoe :blocks {"5,63,0" "dirt"} :unreachable ["5,63,0"]}
-                                           {:from {:x 5 :y 63 :z 0} :to {:x 5 :y 63 :z 0}} :nothing-possible :unreachable]]]
+                                           {:area {:min {:x 5 :y 63 :z 0} :max {:x 5 :y 63 :z 0}}} :nothing-possible :unreachable]]]
           (let [e (await (ending-of (tt/setup world) till args 30))]
             (is (= {:kind kind :cause reason} (kc e)))
             (is (= 0 (get-in e [:data :tilled])))))))))
@@ -75,7 +75,7 @@
                (kcm (await (ending-of (tt/setup {:inventory tt/hoe :blocks tt/four} (ew/of-data {} {} nil)) till tt/box 5)))))
         (is (= {:kind :condition-failed :cause {:reason :no-tool :kind "hoe"}}
                (kcm (await (ending-of (tt/setup {:blocks tt/four}) till (assoc tt/box :ways #{:carried}) 5)))))
-        (is (= :bad-args (get-in (await (ending-of (tt/setup {:inventory tt/hoe}) till {:from {:x 0 :y 63 :z 0}} 5)) [:cause :reason])))))))
+        (is (= :bad-args (get-in (await (ending-of (tt/setup {:inventory tt/hoe}) till {:area {:min {:x 0 :y 63 :z 0} :max {:x 100 :y 63 :z 100}}} 5)) [:cause :reason])))))))
 
 (deftest till-with-no-hoe-and-nothing-to-fetch-ends-with-the-failed-fetch
   (async done
@@ -196,29 +196,29 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [e (await (ending-of (pt/start (pt/field-world (pt/inv "wheat_seeds" 9))) plant {:box pt/field-box} 100))]
+        (let [e (await (ending-of (pt/start (pt/field-world (pt/inv "wheat_seeds" 9))) plant {:area pt/field-box} 100))]
           (is (= {:kind :done :cause nil} (kc e)))
           (is (= {:planted 9 :skipped []} (dissoc (:data e) :text))))
         (is (= {:kind :condition-failed :cause {:reason :nothing-to-do}}
-               (kcm (await (ending-of (pt/start (pt/field-world (pt/inv "wheat_seeds" 9))) plant {:box (pt/box 8 8 9 9)} 20)))))
+               (kcm (await (ending-of (pt/start (pt/field-world (pt/inv "wheat_seeds" 9))) plant {:area (pt/box 8 8 9 9)} 20)))))
         (is (= {:kind :condition-failed :cause {:reason :need :any-of ["beetroot_seeds" "carrot" "potato" "wheat_seeds"] :count 9}}
-               (kcm (await (ending-of (pt/start (pt/field-world [])) plant {:box pt/field-box :ways #{:carried}} 20)))))
+               (kcm (await (ending-of (pt/start (pt/field-world [])) plant {:area pt/field-box :ways #{:carried}} 20)))))
         (is (= {:kind :condition-failed :cause {:reason :no-zones}}
-               (kcm (await (ending-of (pt/start (pt/field-world (pt/inv "wheat_seeds" 9)) (ew/of-data {} {} nil)) plant {:box pt/field-box} 20)))))))))
+               (kcm (await (ending-of (pt/start (pt/field-world (pt/inv "wheat_seeds" 9)) (ew/of-data {} {} nil)) plant {:area pt/field-box} 20)))))))))
 
 (deftest plant-without-a-box-or-plan-is-never-bad-args
   (let [c {:primitives (tu/fake {}) :args {}}]
     (is (= [:never :bad-args] (tu/kind-reason ((:can-start? (get registry/jobs plant)) c))))))
 
 (deftest a-field-with-no-bare-cell-is-a-look-until-the-body-has-looked-round
-  (let [c {:primitives (tu/fake {:blocks {}}) :args {:box pt/field-box :ignore-zones? true}}
+  (let [c {:primitives (tu/fake {:blocks {}}) :args {:area pt/field-box :ignore-zones? true}}
         status (fn [surveyed?] (with-redefs [ctx/mem (constantly {}) look/surveyed? (fn ([_] surveyed?) ([_ _] surveyed?))]
                                  ((:can-start? (get registry/jobs plant)) c)))]
     (is (= [:look :nothing-to-do] (tu/kind-reason (status false))))
     (is (= [:later :nothing-to-do] (tu/kind-reason (status true))))))
 
 (deftest plant-done-is-a-status-with-the-counts
-  (let [c {:primitives (tu/fake {}) :args {:box pt/field-box}}
+  (let [c {:primitives (tu/fake {}) :args {:area pt/field-box}}
         [kind _ data] (with-redefs [ctx/mem (constantly {:planted 2})] ((:done? (get registry/jobs plant)) c))]
     (is (= [:later :cells 2] [kind (:units data) (:done data)]))))
 
@@ -229,12 +229,12 @@
         (let [p (tu/fake (pt/field-world (pt/inv "wheat_seeds" 9) {:blocks {}}))
               _ (pt/look-then-see p)
               env (pt/start-on p)
-              e (await (ending-of env plant {:box pt/field-box} 20))]
+              e (await (ending-of env plant {:area pt/field-box} 20))]
           (is (seq (pt/calls p "look")))
           (is (= {:kind :condition-failed :cause {:reason :nothing-to-do}} (kcm e))))
         (let [e (await (ending-of (pt/start (pt/field-world (pt/inv "wheat_seeds" 9)
                                                            {:blocks (into {} (for [x (range 2 5) z (range 2 5)] [(str x ",63," z) "dirt"]))}))
-                                  plant {:box pt/field-box} 20))]
+                                  plant {:area pt/field-box} 20))]
           (is (= {:kind :condition-failed :cause {:reason :nothing-to-do :untilled 9}} (kcm e))))))))
 
 (deftest plant-a-carried-seed-the-food-reserve-keeps-is-a-failed-condition-and-nothing-is-fetched
@@ -242,7 +242,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p seen] :as env} (pt/start (pt/field-world (pt/inv "carrot" 6)))
-              e (await (ending-of env plant {:box pt/field-box :seed "carrot"} 20))]
+              e (await (ending-of env plant {:area pt/field-box :seed "carrot"} 20))]
           (is (= {:kind :condition-failed :cause {:reason :food-reserve :seed "carrot" :held 6 :kept 6 :reserve-points 60}} (kcm e)))
           (is (empty? (filter #(= :need (:slot %)) (pt/events-of seen :child_started))))
           (is (= {"carrot" 6} (pt/inv-of p))))))))
@@ -253,16 +253,16 @@
       (fn ^:async t []
         (let [env (pt/start (pt/field-world (pt/inv "wheat_seeds" 9)))]
           (.override (.-world (:p env)) "place" (fn ^:async f [_ _ _] #js {:status "failed" :reason "refused"}))
-          (let [e (await (ending-of env plant {:box pt/field-box} 100))]
+          (let [e (await (ending-of env plant {:area pt/field-box} 100))]
             (is (= {:kind :nothing-possible :cause :gave-up} (kc e)))
             (is (= 0 (get-in e [:data :planted])))
             (is (= 9 (count (get-in e [:data :skipped]))))))
         (doseq [[least kind cause] [[5 :done :done] [6 :condition-failed :need] [:all :condition-failed :need]]]
-          (let [e (await (ending-of (pt/start (pt/field-world (pt/inv "carrot" 5 "bread" 12))) plant {:box pt/field-box :least least :ways #{:carried}} 100))]
+          (let [e (await (ending-of (pt/start (pt/field-world (pt/inv "carrot" 5 "bread" 12))) plant {:area pt/field-box :least least :ways #{:carried}} 100))]
             (is (= [kind cause] [(:kind e) (contract/cause-key e)]) (str ":least " least))
             (is (= 5 (get-in e [:data :planted])))))
         (doseq [[least kind cause] [[9 :done nil] [:all :done nil]]]
-          (let [e (await (ending-of (pt/start (pt/field-world (pt/inv "wheat_seeds" 9))) plant {:box pt/field-box :least least} 100))]
+          (let [e (await (ending-of (pt/start (pt/field-world (pt/inv "wheat_seeds" 9))) plant {:area pt/field-box :least least} 100))]
             (is (= {:kind kind :cause cause} (kc e)) (str "nothing left, :least " least))
             (is (= 9 (get-in e [:data :planted])))))))))
 
@@ -279,7 +279,7 @@
           (is (= {:cut 9 :replanted 9 :bare [] :lost [] :gave-up false} (dissoc (:data e) :text :spent :spent-at))))
         (let [cells (for [x (range 8 13)] (ht/cell-key x 64 0))
               e (await (ending-of (ht/start {:world {:blocks (zipmap cells (repeat "wheat")) :ages (zipmap cells (repeat 7)) :unreachable cells}})
-                                  harvest {:radius 14} 400))]
+                                  harvest {:area {:pos {:x 0 :y 64 :z 0} :radius 14}} 400))]
           (is (= {:kind :nothing-possible :cause :gave-up} (kc e)))
           (is (= 0 (get-in e [:data :cut]))))
         (let [p (tu/fake-on-floor {:blocks {}})
@@ -287,9 +287,9 @@
               e (await (ending-of (ht/start {:p p}) harvest {} 50))]
           (is (= {:kind :condition-failed :cause :no-crop-seen} (kc e))))
         (is (= {:kind :condition-failed :cause {:reason :no-zones}}
-               (kcm (await (ending-of (ht/start {:world ht/zoned-world :shared (ew/of-data {} {} nil)}) harvest {:radius 6} 20)))))
+               (kcm (await (ending-of (ht/start {:world ht/zoned-world :shared (ew/of-data {} {} nil)}) harvest {:area {:pos {:x 0 :y 64 :z 0} :radius 6}} 20)))))
         (is (= {:kind :condition-failed :cause {:reason :refused}}
-               (kcm (await (ending-of (ht/start {:world ht/zoned-world :shared (ew/of-data {} {} [(ht/zone-over-crop "Miles")])}) harvest {:radius 6} 20)))))
+               (kcm (await (ending-of (ht/start {:world ht/zoned-world :shared (ew/of-data {} {} [(ht/zone-over-crop "Miles")])}) harvest {:area {:pos {:x 0 :y 64 :z 0} :radius 6}} 20)))))
         (is (= {:kind :done :cause :already}
                (kc (await (ending-of (ht/start {:world {:blocks (ht/field "wheat" 3 [2 3] [2]) :ages (ht/ages 3 [2 3] [2])}}) harvest {} 20)))))))))
 

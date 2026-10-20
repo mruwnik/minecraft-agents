@@ -89,7 +89,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run {:plan "mix"} (world-of farmland-all all-seed) {"mix" (plan-of)} 60))]
+        (let [s (await (run {:area {:plan "mix"}} (world-of farmland-all all-seed) {"mix" (plan-of)} 60))]
           (is (= {[2 64 2] "wheat_seeds" [3 64 2] "wheat_seeds" [2 64 3] "carrot" [3 64 3] "carrot"} (placed s)))
           (is (= ["wheat" "wheat" "carrots" "carrots"] (mapv (fn [[x z]] (block-at s x 64 z)) (concat wheat-cells carrot-cells))))
           (is (= {:crops 4 :bare 0 :untilled 0 :wrong []} (:field (done-event s))))
@@ -99,7 +99,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run {:plan "mix" :parts ["wheat" "carrots"]} (world-of farmland-all all-seed) {"mix" (plan-of)} 80))
+        (let [s (await (run {:area {:plan "mix" :parts ["wheat" "carrots"]}} (world-of farmland-all all-seed) {"mix" (plan-of)} 80))
               ev (done-event s)]
           (is (= {[2 64 2] "wheat_seeds" [3 64 2] "wheat_seeds" [2 64 3] "carrot" [3 64 3] "carrot"} (placed s)))
           (is (= ["wheat" "carrots"] (keys (:parts ev))) "one report per part, in order")
@@ -110,7 +110,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run {:plan "mix" :parts ["carrots"]} (world-of farmland-all all-seed) {"mix" (plan-of)} 60))]
+        (let [s (await (run {:area {:plan "mix" :parts ["carrots"]}} (world-of farmland-all all-seed) {"mix" (plan-of)} 60))]
           (is (= #{[2 64 3] [3 64 3]} (set (keys (placed s))))))))))
 
 (defn pass-ends
@@ -135,7 +135,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run-standing {:plan "mix" :part "wheat"} stuck-wheat {"mix" (plan-of)} 80))]
+        (let [s (await (run-standing {:area {:plan "mix" :part "wheat"}} stuck-wheat {"mix" (plan-of)} 80))]
           (is (<= 2 (count (pass-ends s))) "no rest: the next run tries the part again")
           (is (empty? (filter :backed-off (events-of s :waiting))) "no wait names a back-off"))))))
 
@@ -143,7 +143,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run {:plan "mix"} (world-of farmland-all {:inventory [(item "wheat_seeds" 6)]}) {"mix" (plan-of)} 60))]
+        (let [s (await (run {:area {:plan "mix"}} (world-of farmland-all {:inventory [(item "wheat_seeds" 6)]}) {"mix" (plan-of)} 60))]
           (is (= #{[2 64 2] [3 64 2]} (set (keys (placed s)))))
           (is (= ["air" "air"] (mapv #(block-at s % 64 3) [2 3])))
           (let [notes (events-of s :farm-tend.short-seed)]
@@ -155,7 +155,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run {:plan "mix"} (world-of (ground "farmland" carrot-cells) {:inventory [(item "wheat_seeds" 6)]})
+        (let [s (await (run {:area {:plan "mix"}} (world-of (ground "farmland" carrot-cells) {:inventory [(item "wheat_seeds" 6)]})
                             {"mix" (plan-of)} 6))]
           (is (empty? (.-calls (.-world (:p s)))))
           (is (= [] (events-of s :farm-tend.short-seed)) "the check writes no warn")
@@ -168,7 +168,7 @@
         (let [n (atom 0)
               real tend-plan/plan-facts]
           (with-redefs [tend-plan/plan-facts (fn [c] (swap! n inc) (real c))]
-            (await (run {:plan "mix"} (world-of (ground "farmland" carrot-cells) {:inventory [(item "wheat_seeds" 6)]})
+            (await (run {:area {:plan "mix"}} (world-of (ground "farmland" carrot-cells) {:inventory [(item "wheat_seeds" 6)]})
                         {"mix" (plan-of)} 8)))
           (is (< 0 @n 8) "eight ticks, fewer than eight readings"))))))
 
@@ -176,7 +176,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run {:plan "mix"}
+        (let [s (await (run {:area {:plan "mix"}}
                             (world-of (ground "farmland" [[3 2]]) (ground "dirt" [[2 2] [2 3]]) (ground "farmland" [[3 3]])
                                       {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 6) (item "carrot" 6) (item "bread" 12)]})
                             {"mix" (plan-of)} 100))]
@@ -191,7 +191,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [plan (update (plan-of) :parts conj {:id "path" :cells [[2 63 2]] :want "dirt"})
-              s (await (run {:plan "mix"} (world-of (ground "dirt" [[2 2]]) (ground "farmland" [[3 2]])
+              s (await (run {:area {:plan "mix"}} (world-of (ground "dirt" [[2 2]]) (ground "farmland" [[3 2]])
                                                     {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 6)]})
                             {"mix" plan} 60))]
           (is (empty? (calls s "useOn")))
@@ -202,7 +202,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run {:plan "mix"}
+        (let [s (await (run {:area {:plan "mix"}}
                             (world-of farmland-all (crops "wheat" 7 [[2 2]]) (crops "carrots" 7 [[2 3]])
                                       {:inventory [(item "wheat_seeds" 6) (item "carrot" 6)] :drops {"wheat" ["wheat" "wheat_seeds"] "carrots" ["carrot"]}})
                             {"mix" (plan-of)} 100))]
@@ -216,7 +216,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run {:plan "mix"}
+        (let [s (await (run {:area {:plan "mix"}}
                             (world-of (ground "farmland" [[3 2] [2 3] [3 3]]) (crops "carrots" 7 [[2 2]])
                                       {:inventory [(item "wheat_seeds" 6) (item "carrot" 6) (item "bread" 12)] :drops {"carrots" ["carrot"]}})
                             {"mix" (plan-of)} 60))]
@@ -232,7 +232,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [outside (world-of (ground "dirt" [[8 2]]) (ground "farmland" [[8 3] [9 3]]) (crops "wheat" 7 [[9 3]]))
-              s (await (run {:plan "mix"}
+              s (await (run {:area {:plan "mix"}}
                             (world-of (ground "farmland" [[2 2]]) outside
                                       {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 9)] :drops {"wheat" ["wheat"]}})
                             {"mix" (plan-of)} 60))
@@ -247,7 +247,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run {:plan "mix" :part "carrots"} (world-of farmland-all all-seed) {"mix" (plan-of)} 60))]
+        (let [s (await (run {:area {:plan "mix" :part "carrots"}} (world-of farmland-all all-seed) {"mix" (plan-of)} 60))]
           (is (= #{[2 64 3] [3 64 3]} (set (keys (placed s)))))
           (is (= ["air" "air"] (mapv #(block-at s % 64 2) [2 3]))))))))
 
@@ -260,7 +260,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run {:plan "mix"} (world-of farmland-all all-seed)
+        (let [s (await (run {:area {:plan "mix"}} (world-of farmland-all all-seed)
                             {"mix" (plan-of) "other" (foreign-plan [[3 64 2] [3 64 3]])} 60))]
           (is (= #{[2 64 2] [2 64 3]} (set (keys (placed s)))))
           (is (= ["air" "air"] (mapv #(block-at s 3 64 %) [2 3])))
@@ -271,7 +271,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [zone {:name "keep-out" :min [3 60 2] :max [3 70 3] :owner "x" :allow #{}}
-              s (await (run {:plan "mix"} (world-of farmland-all all-seed) {"mix" (plan-of)} [zone] 60))]
+              s (await (run {:area {:plan "mix"}} (world-of farmland-all all-seed) {"mix" (plan-of)} [zone] 60))]
           (is (= #{[2 64 2] [3 64 2] [2 64 3] [3 64 3]} (set (keys (placed s))))))))))
 
 (deftest a-zone-allowing-place-and-dig-lets-the-field-be-worked
@@ -279,7 +279,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [zone {:name "farm" :min [0 60 0] :max [9 70 9] :owner "x" :allow #{:place :dig}}
-              s (await (run {:plan "mix"} (world-of farmland-all all-seed) {"mix" (plan-of)} [zone] 60))]
+              s (await (run {:area {:plan "mix"}} (world-of farmland-all all-seed) {"mix" (plan-of)} [zone] 60))]
           (is (= 4 (count (placed s)))))))))
 
 (deftest another-active-plans-footprint-is-not-sown-over-but-its-own-is
@@ -287,7 +287,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [other {:id "other" :parts [{:id "hut" :cells [[3 64 2]] :want "oak_planks"}]}
-              s (await (run {:plan "mix"} (world-of farmland-all all-seed) {"mix" (plan-of) "other" other} 60))]
+              s (await (run {:area {:plan "mix"}} (world-of farmland-all all-seed) {"mix" (plan-of) "other" other} 60))]
           (is (= #{[2 64 2] [2 64 3] [3 64 3]} (set (keys (placed s)))))
           (is (= "air" (block-at s 3 64 2))))))))
 
@@ -296,7 +296,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [zone {:name "keep-out" :min [2 60 2] :max [2 70 2] :owner "x" :allow #{}}
-              s (await (run {:plan "mix"} (world-of (ground "dirt" [[2 2]]) (ground "farmland" [[3 2]])
+              s (await (run {:area {:plan "mix"}} (world-of (ground "dirt" [[2 2]]) (ground "farmland" [[3 2]])
                                                     {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 6)]})
                             {"mix" (plan-of)} [zone] 60))]
           (is (empty? (calls s "useOn")))
@@ -308,7 +308,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [zone {:name "keep-out" :min [2 60 2] :max [2 70 2] :owner "x" :allow #{}}
-              s (await (run {:plan "mix"} (world-of (ground "dirt" [[2 2]])
+              s (await (run {:area {:plan "mix"}} (world-of (ground "dirt" [[2 2]])
                                                     {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 6)]})
                             {"mix" (plan-of)} [zone] 6))
               waits (events-of s :waiting)]
@@ -322,7 +322,7 @@
       (fn ^:async t []
         (doseq [[extra hoed] [[{} "dirt"] [{:ignore-zones? true} "farmland"]]]
           (let [zone {:name "keep-out" :min [2 60 2] :max [2 70 2] :owner "x" :allow #{}}
-                s (await (run (merge {:plan "mix"} extra)
+                s (await (run (merge {:area {:plan "mix"}} extra)
                               (world-of (ground "dirt" [[2 2]]) (ground "farmland" [[3 2]])
                                         {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 6)]})
                               {"mix" (plan-of)} [zone] 60))]
@@ -340,7 +340,7 @@
                          (reset! deleted true)
                          (world/set-data! (:w s) {} {}))
                        (await (impl token args))))
-          (core/submit! (:eng s) (list job {:plan "mix"}) {})
+          (core/submit! (:eng s) (list job {:area {:plan "mix"}}) {})
           (swap! (:clock s) + 700)
           (await (core/tick! (:eng s)))
           (let [before (count (calls s "place"))]
@@ -353,34 +353,34 @@
 
 (deftest the-job-declines-and-touches-nothing-when-the-plan-cannot-be-worked
   (let [spec (world-of farmland-all all-seed)]
-    (is (untouched? {:plan "mix"} spec {}) "no such plan")
-    (is (untouched? {:plan "mix" :part "nope"} spec {"mix" (plan-of)}) "no cells in the part")
-    (is (untouched? {:plan "mix"} spec {"mix" {:id "mix" :parts [{:id "hut" :cells [[2 64 2]] :want "oak_planks"}]}})
+    (is (untouched? {:area {:plan "mix"}} spec {}) "no such plan")
+    (is (untouched? {:area {:plan "mix" :part "nope"}} spec {"mix" (plan-of)}) "no cells in the part")
+    (is (untouched? {:area {:plan "mix"}} spec {"mix" {:id "mix" :parts [{:id "hut" :cells [[2 64 2]] :want "oak_planks"}]}})
         "no crop cells")
-    (is (untouched? {:plan "mix"} spec {"mix" (plan-of)} nil) "no zone list has been read")))
+    (is (untouched? {:area {:plan "mix"}} spec {"mix" (plan-of)} nil) "no zone list has been read")))
 
 (deftest ignore-zones-works-a-plan-with-no-zone-list-read
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run {:plan "mix" :ignore-zones? true} (world-of farmland-all all-seed) {"mix" (plan-of)} nil 60))]
+        (let [s (await (run {:area {:plan "mix"} :ignore-zones? true} (world-of farmland-all all-seed) {"mix" (plan-of)} nil 60))]
           (is (= 4 (count (placed s)))))))))
 
 (deftest a-plan-trouble-is-a-wait-reason-not-a-warn
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run {:plan "mix"} (world-of farmland-all all-seed) {} 5))
+        (let [s (await (run {:area {:plan "mix"}} (world-of farmland-all all-seed) {} 5))
               warns (events-of s :farm-tend.declined)]
           (is (empty? warns)))
-        (let [s (await (run {:plan "mix"} (world-of farmland-all all-seed) {"mix" (plan-of)} nil 5))
+        (let [s (await (run {:area {:plan "mix"}} (world-of farmland-all all-seed) {"mix" (plan-of)} nil 5))
               warns (events-of s :farm-tend.declined)]
           (is (empty? warns)))))))
 
 (deftest nothing-to-do-over-a-plan-declines
-  (is (untouched? {:plan "mix"} (world-of (ground "farmland" wheat-cells) (crops "wheat" 3 wheat-cells) {:inventory [(item "wheat_seeds" 6)]})
+  (is (untouched? {:area {:plan "mix"}} (world-of (ground "farmland" wheat-cells) (crops "wheat" 3 wheat-cells) {:inventory [(item "wheat_seeds" 6)]})
                   {"mix" (plan-of)}) "young crops only")
-  (is (untouched? {:plan "mix"} (world-of (ground "dirt" wheat-cells) {:inventory [(item "wheat_seeds" 6)]}) {"mix" (plan-of)})
+  (is (untouched? {:area {:plan "mix"}} (world-of (ground "dirt" wheat-cells) {:inventory [(item "wheat_seeds" 6)]}) {"mix" (plan-of)})
       "dirt without a hoe"))
 
 ;; ---------------------------------------------------------------- the children over a plan
@@ -400,7 +400,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[r s] (await (child-result 'jobs.farm.plant {:plan "mix"} (world-of farmland-all {:inventory [(item "wheat_seeds" 6)]})
+        (let [[r s] (await (child-result 'jobs.farm.plant {:area {:plan "mix"}} (world-of farmland-all {:inventory [(item "wheat_seeds" 6)]})
                                          {"mix" (plan-of) "other" (foreign-plan [[3 64 2]])} [] 20))]
           (is (= {:planted 1 :skipped [] :refused [{:pos {:x 3 :y 64 :z 2} :reason :footprint}] :short ["carrot"] :status :done} r))
           (is (= #{[2 64 2]} (set (keys (placed s))))))))))
@@ -413,7 +413,7 @@
               s (setup (world-of (ground "farmland" [[8 0]]) {:inventory [(item "wheat_seeds" 3)]}) {"mix" plan} [])
               late (foreign-plan [[8 64 0]])]
           (.override (.-world (:p s)) "steer" (fn [token args impl] (world/set-data! (:w s) {"mix" plan "other" late} {}) (impl token args)))
-          (core/submit! (:eng s) (list 'jobs.farm.plant {:plan "mix"}) {})
+          (core/submit! (:eng s) (list 'jobs.farm.plant {:area {:plan "mix"}}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 6 700))
           (is (seq (tu/walk-calls (:p s))))
           (is (empty? (calls s "place")))
@@ -424,7 +424,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [zone {:name "keep-out" :min [3 60 2] :max [3 70 2] :owner "x" :allow #{}}
-              [r s] (await (child-result 'jobs.farm.till {:from {:x 2 :y 63 :z 2} :to {:x 3 :y 63 :z 2} :for-plan "mix"}
+              [r s] (await (child-result 'jobs.farm.till {:area {:min {:x 2 :y 63 :z 2} :max {:x 3 :y 63 :z 2}} :for-plan "mix"}
                                          (world-of (ground "dirt" wheat-cells) {:inventory [(item "stone_hoe" 1)]})
                                          {"mix" (plan-of)} [zone] 20))]
           (is (= {:tilled 1 :skipped {{:x 3 :y 63 :z 2} :not-permitted}} (dissoc r :status :text)))
@@ -433,7 +433,7 @@
               s (setup (world-of (ground "dirt" [[8 0]]) {:inventory [(item "stone_hoe" 1)]}) {"mix" plan} [])
               zone {:name "late" :min [8 60 0] :max [8 70 0] :owner "x" :allow #{}}]
           (.override (.-world (:p s)) "steer" (fn [token args impl] (world/set-zones! (:w s) [zone]) (impl token args)))
-          (core/submit! (:eng s) (list 'jobs.farm.till {:from {:x 8 :y 63 :z 0} :to {:x 8 :y 63 :z 0} :for-plan "mix"}) {})
+          (core/submit! (:eng s) (list 'jobs.farm.till {:area {:min {:x 8 :y 63 :z 0} :max {:x 8 :y 63 :z 0}} :for-plan "mix"}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 6 700))
           (is (seq (tu/walk-calls (:p s))))
           (is (empty? (calls s "useOn")))
@@ -441,7 +441,7 @@
 
 (deftest till-for-a-plan-declines-without-a-zone-list
   (let [{:keys [eng p seen]} (setup (world-of (ground "dirt" [[2 2]]) {:inventory [(item "stone_hoe" 1)]}) {"mix" (plan-of)} nil)]
-    (core/submit! eng (list 'jobs.farm.till {:from {:x 2 :y 63 :z 2} :to {:x 2 :y 63 :z 2} :for-plan "mix"}) {})
+    (core/submit! eng (list 'jobs.farm.till {:area {:min {:x 2 :y 63 :z 2} :max {:x 2 :y 63 :z 2}} :for-plan "mix"}) {})
     (core/tick! eng)
     (is (empty? (.-calls (.-world p))))
     (is (empty? (filter #(= :till.skipped (:kind %)) @seen)) "the round never ran")))
@@ -458,7 +458,7 @@
           (.override (.-world (:p s)) "steer" (fn [token args impl] (world/set-data! (:w s) {"mix" plan "other" late} {})
                                                        (world/set-zones! (:w s) [ground-zone])
                                                        (impl token args)))
-          (core/submit! (:eng s) (list job {:plan "mix"}) {})
+          (core/submit! (:eng s) (list job {:area {:plan "mix"}}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 30 700))
           (is (seq (tu/walk-calls (:p s))))
           (is (empty? (calls s "useOn")))
@@ -470,7 +470,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [zone {:name "keep-out" :min [2 60 2] :max [2 70 2] :owner "x" :allow #{}}
-              s (await (run {:plan "mix"} (world-of (ground "dirt" [[2 2]]) (ground "farmland" [[3 2]])
+              s (await (run {:area {:plan "mix"}} (world-of (ground "dirt" [[2 2]]) (ground "farmland" [[3 2]])
                                                     {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 6)]})
                             {"mix" (plan-of)} [zone] 60))]
           (is (empty? (events-of s :till.skipped)) "the till child never saw the cell"))))))
@@ -480,7 +480,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [zone {:name "no-sowing" :min [3 60 2] :max [3 70 2] :owner "x" :allow #{:dig}}
-              s (await (run {:plan "mix" :part "wheat"}
+              s (await (run {:area {:plan "mix" :part "wheat"}}
                             (world-of farmland-all (crops "wheat" 7 [[3 2]])
                                       {:inventory [(item "wheat_seeds" 6)] :drops {"wheat" ["wheat" "wheat_seeds"]}})
                             {"mix" (plan-of)} [zone] 60))]
@@ -492,7 +492,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run {:plan "mix"} (world-of (ground "dirt" wheat-cells) {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 1)]})
+        (let [s (await (run {:area {:plan "mix"}} (world-of (ground "dirt" wheat-cells) {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 1)]})
                             {"mix" (plan-of)} 80))]
           (is (= {:tilled 1} (step s :till)))
           (is (= 1 (count (calls s "useOn"))))
@@ -503,7 +503,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run {:plan "mix" :part "carrots"}
+        (let [s (await (run {:area {:plan "mix" :part "carrots"}}
                             (world-of farmland-all (crops "wheat" 7 [[2 2]]) (crops "carrots" 7 [[2 3]])
                                       {:inventory [(item "carrot" 6) (item "bread" 12)] :drops {"wheat" ["wheat"] "carrots" ["carrot"]}})
                             {"mix" (plan-of)} 60))]
@@ -514,7 +514,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[r s] (await (child-result 'jobs.farm.plant {:plan "mix" :part "carrots"} (world-of farmland-all {:inventory [(item "carrot" 21)]})
+        (let [[r s] (await (child-result 'jobs.farm.plant {:area {:plan "mix" :part "carrots"}} (world-of farmland-all {:inventory [(item "carrot" 21)]})
                                          {"mix" (plan-of)} [] 20))]
           (is (= 1 (:planted r)))
           (is (= 1 (count (placed s)))))))))
@@ -525,7 +525,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run {:plan "mix" :part "carrots"} (world-of (ground "dirt" [[2 3]]) (ground "farmland" [[3 3]]) (crops "carrots" 7 [[3 3]])
+        (let [s (await (run {:area {:plan "mix" :part "carrots"}} (world-of (ground "dirt" [[2 3]]) (ground "farmland" [[3 3]]) (crops "carrots" 7 [[3 3]])
                                       {:inventory (:inventory reserve-only) :drops {"carrots" ["carrot"]}})
                             {"mix" (plan-of)} 60))]
           (is (empty? (calls s "useOn")))
@@ -536,7 +536,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (run {:plan "mix" :part "carrots"}
+        (let [s (await (run {:area {:plan "mix" :part "carrots"}}
                             (world-of (ground "dirt" carrot-cells) {:blocks {(k 7 64 3) "water"}} reserve-only)
                             {"mix" (plan-of)} 80))]
           (is (= {:tilled 1} (step s :till)) "only the cell within 4 blocks of the water")
@@ -547,7 +547,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [under {:blocks (into {} (map (fn [[x z]] [(k x 62 z) "dirt"])) (concat wheat-cells carrot-cells))}
-              s (await (run {:plan "mix"}
+              s (await (run {:area {:plan "mix"}}
                             (world-of farmland-all under {:inventory [(item "water_bucket" 1) (item "wheat_seeds" 6) (item "carrot" 6) (item "bread" 12)]})
                             {"mix" (plan-of)} 120))]
           (is (= {:poured 1} (step s :irrigate)))

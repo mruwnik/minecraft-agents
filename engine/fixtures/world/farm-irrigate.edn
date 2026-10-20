@@ -11,32 +11,32 @@
   :limit-s 90}
  :cases
  [{:name "dry-row-gets-one-water-cell-in-the-middle"
-   :act [[:job (jobs.farm.irrigate {:from #xyz [12 -1 16] :to #xyz [20 -1 16]})]]
+   :act [[:job (jobs.farm.irrigate {:area {:min #xyz [12 -1 16] :max #xyz [20 -1 16]}})]]
    :expect [{:event {:source :job :kind :completed :data {:dry []}} :within-s 70 :of-job true}]
    :after [[:block [16 -1 16] "water"] [:item "water_bucket" 0]]}
   {:name "row-with-water-beside-it-is-left-alone"
    :blocks [[:set [16 -1 17] "water"]]
-   :act [[:job (jobs.farm.irrigate {:from #xyz [12 -1 16] :to #xyz [20 -1 16]})]]
+   :act [[:job (jobs.farm.irrigate {:area {:min #xyz [12 -1 16] :max #xyz [20 -1 16]}})]]
    :expect [{:event {:source :job :kind :completed :data {:poured []}} :within-s 40 :of-job true}]
    :after [[:not-block [16 -1 16] "water"] [:item "water_bucket" 1]]}
   {:name "no-bucket-fetch-false-stops-need"
    :body {:inventory []}
-   :act [[:job (jobs.farm.irrigate {:from #xyz [12 -1 16] :to #xyz [20 -1 16] :ways #{:carried}})]]
+   :act [[:job (jobs.farm.irrigate {:area {:min #xyz [12 -1 16] :max #xyz [20 -1 16]} :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :need}} :within-s 30 :of-job true}]
    :after [[:not-block [16 -1 16] "water"]]}
   {:name "ignore-zones-pours-in-a-foreign-footprint"
    :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [11 -2 15] #at [21 -1 17]] :want "dirt"}]}]
-   :act [[:job (jobs.farm.irrigate {:from #xyz [12 -1 16] :to #xyz [20 -1 16] :ignore-zones? true})]]
+   :act [[:job (jobs.farm.irrigate {:area {:min #xyz [12 -1 16] :max #xyz [20 -1 16]} :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed :data {:dry []}} :within-s 70 :of-job true}]
    :after [[:block [16 -1 16] "water"] [:item "water_bucket" 0]]}
   {:name "foreign-footprint-keeps-the-field-dry"
    :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [11 -2 15] #at [21 -1 17]] :want "dirt"}]}]
-   :act [[:job (jobs.farm.irrigate {:from #xyz [12 -1 16] :to #xyz [20 -1 16]})]]
+   :act [[:job (jobs.farm.irrigate {:area {:min #xyz [12 -1 16] :max #xyz [20 -1 16]}})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 10 :until {:source :job :kind :stopped}}]
    :after [[:not-block [16 -1 16] "water"] [:item "water_bucket" 1]]}
   {:name "box-over-air-sees-no-field-and-stops"
-   :act [[:job (jobs.farm.irrigate {:from #xyz [12 4 16] :to #xyz [20 4 16]})]]
+   :act [[:job (jobs.farm.irrigate {:area {:min #xyz [12 4 16] :max #xyz [20 4 16]}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :nothing-seen}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 10 :until {:source :job :kind :stopped}}]
    :after [[:item "water_bucket" 1]]}]}

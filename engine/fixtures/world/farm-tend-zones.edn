@@ -15,7 +15,7 @@
    :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]
             [:set [10 0 16] "wheat[age=7]"]]
    :plans [{:id "other" :parts [{:id "f" :cells [#at [10 0 16]] :want [:any "wheat"]}]}]
-   :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [13 0 16]}})]]
+   :act [[:job (jobs.farm.tend {:area {:min #xyz [10 -1 16] :max #xyz [13 0 16]}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped}} :for-s 30}]
    :after [[:block [10 0 16] "wheat[age=7]"]]}
@@ -23,12 +23,12 @@
    :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]
             [:set [10 0 16] "wheat[age=7]"] [:set [13 0 16] "wheat[age=7]"]]
    :plans [{:id "other" :parts [{:id "f" :cells [#at [10 0 16]] :want [:any "wheat"]}]}]
-   :act [[:job (jobs.farm.tend {:box {:min #xyz [10 -1 16] :max #xyz [13 0 16]}})]]
+   :act [[:job (jobs.farm.tend {:area {:min #xyz [10 -1 16] :max #xyz [13 0 16]}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:harvest {:cut 1}}}} :within-s 80 :of-job true}]
    :after [[:block [10 0 16] "wheat[age=7]"] [:not-block [13 0 16] "wheat[age=7]"]]}
   {:name "till-hoe-breaks-mid-run-rest-skipped-no-hoe"
    :blocks [[:fill [10 -1 16] [13 -1 16] "dirt"]]
    :body {:at [9.5 0 14.5] :inventory [["wooden_hoe[damage=58]" 1]]}
-   :act [[:job (jobs.farm.till {:from #xyz [10 -1 16] :to #xyz [13 -1 16] :ways #{:carried}})]]
+   :act [[:job (jobs.farm.till {:area {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :ways #{:carried}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 80 :of-job true}]
    :after [[:item "wooden_hoe" 0] [:block [10 -1 16] "farmland"] [:not-block [13 -1 16] "farmland"]]}]}

@@ -20,12 +20,13 @@
 (def no-zones "no zone list has been read")
 
 (defn read-plan
-  "The plan of c's args: {:answer plan-answer :cells cells} when it can be worked, else {:trouble text :later? bool}
+  "The plan of c's args (of its :area, a farm job's field, when it has one): {:answer plan-answer :cells cells} when it can be worked, else {:trouble text :later? bool}
   (later when the plan is missing or unreadable or the zone list is unread: it may come; never when it has no cells).
   opts: :cells (fn [answer part] -> cells), :what (name of the cells in the trouble text), :zones? true to want a zone
   list unless the job's :ignore-zones? is set. A pure read: the trouble is the caller's status to report."
   [c {:keys [cells what zones?]}]
-  (let [{:keys [plan part ignore-zones?]} (:args c)
+  (let [{:keys [ignore-zones?] :as args} (:args c)
+        {:keys [plan part]} (or (:area args) args)
         answer (known/plan c plan)
         found (cells answer part)
         unzoned (when (and zones? (nil? (known/zones c)) (not ignore-zones?)) no-zones)

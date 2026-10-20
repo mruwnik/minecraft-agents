@@ -11,6 +11,6 @@
  [{:name "harvest-centre-sealed-in-bedrock-ends-unreachable"
    :blocks [[:fill [78 -3 14] [84 3 18] "bedrock"] [:fill [79 -1 15] [83 2 17] "air"]
             [:fill [79 -1 15] [83 -1 17] "farmland[moisture=7]"] [:fill [80 0 16] [82 0 16] "wheat[age=7]"]]
-   :act [[:job (jobs.farm.harvest {:center #xyz [81 0 16] :radius 6 :replant false})]]
+   :act [[:job (jobs.farm.harvest {:area {:pos #xyz [81 0 16] :radius 6} :replant false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :unreachable}} :within-s 160 :of-job true}]
    :after [[:item "wheat" 0]]}]}

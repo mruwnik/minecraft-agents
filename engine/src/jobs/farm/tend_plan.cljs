@@ -12,9 +12,9 @@
             [jobs.farm.plant :as plant]
             [jobs.farm.till :as till]
             [jobs.lib.farm :as farm]
-            [jobs.lib.reserve :as reserve]
+            [jobs.lib.field-area :as fa]
             [jobs.farm.tidy :as tidy]
-            [jobs.farm.tend-stock :as stock]
+            [jobs.farm.tend-ground :as gr]
             [jobs.farm.tend-box :as box]
             [plan.shape :as shape]
             [jobs.lib.plan-field :as pf]
@@ -44,7 +44,7 @@
   "With :plan, {:answer :crops {pos crop}} when the plan can be worked, else {:trouble text};
   nil without :plan."
   [c]
-  (when (:plan (:args c))
+  (when (fa/plan c)
     (let [{:keys [cells] :as r} (pf/read-plan c {:cells fld/crop-cells :what "crop cells" :zones? true})]
       (cond-> r cells (assoc :crops cells)))))
 
@@ -69,11 +69,6 @@
                  (when (and found (tidy/crop-blocks found) (not (contains? (shape/crop-names crop) found)))
                    {:pos [x y z] :found found :want (shape/want-text {:crop crop})})))
              crops)))
-
-(defn seed-reserve
-  "{seed count}: twice the planned cells of each crop."
-  [cells]
-  (into {} (for [[crop n] (frequencies (vals cells))] [(crops/seed-of crop) (* 2 n)])))
 
 (defn refusers
   "What refuses the hoe on untilled ground cells of the plan for a social reason: {:refused n :zones :claims :plans
@@ -101,7 +96,7 @@
         tried (:till-tried (ctx/mem c) #{})]
     (->> (ground-cells answer crops)
          (remove (fn [[pos _]] (tried pos)))
-         (filter (fn [[pos _]] (stock/untilled? (ground-cell p pos)))))))
+         (filter (fn [[pos _]] (gr/untilled? (ground-cell p pos)))))))
 
 (defn plan-ground-boxes
   "The boxes (as box/ground-box) irrigate works over for the plan's ground cells: per y layer, tiles of at most
@@ -124,16 +119,14 @@
   "What the decisions are made from for a plan, read live."
   [c]
   (let [p (:primitives c)
-        {:keys [plan fertilize keep]} (:args c)
+        plan (fa/plan c)
+        fertilize (:fertilize (:args c))
         {:keys [answer crops]} (planned c)
-        inventory (u/inventory p)
         have (farm/sowable c)
         me (u/self-pos c)
         bare (fld/planned-bare p crops)
         bare-of (frequencies (map :seed bare))
         sowing (plant/sowing c crops)
-        [mid R] (fld/plan-field crops)
-        keep (stock/keeps (seed-reserve crops) (reserve/held c :tend) keep)
         untilled (untilled-cells c)
         tillable (filter (fn [[pos _]] (permit/ok? c plan :dig pos)) untilled)
         seeded (filter (fn [[_ crop]] (let [seed (crops/seed-of crop)] (> (get have seed 0) (get bare-of seed 0)))) tillable)
@@ -143,10 +136,9 @@
         dry (remove (set wet) unseeded)
         tilled-cells (concat seeded wet)
         [ground-box dry-n] (when (:irrigate (:args c)) (dry-box c answer crops))]
-    {:mid mid
+    {:field {:cells (vec (keys crops))}
      :ground-box ground-box
      :dry (or dry-n 0)
-     :radius R
      :ripe (count (fld/planned-ripe p {} crops []))
      :hoe (some? (farm/hoe-of p))
      :untilled (->> tilled-cells (map key) (sort-by #(u/dist me %)) vec)
@@ -157,18 +149,15 @@
      :seed (boolean (seq (:ready sowing)))
      :short (:short sowing)
      :meal (boolean (farm/has-meal? c))
-     :unripe (if fertilize (count (unripe-planned p crops)) 0)
-     :keep keep
-     :waste (stock/surplus inventory keep stock/waste-seeds)
-     :stored (stock/surplus inventory keep stock/farm-goods)}))
+     :unripe (if fertilize (count (unripe-planned p crops)) 0)}))
 
 (defn note-short!
   "One farm-tend.short-seed warn per seed the plan wants sown that is not carried (once per job and seed)."
   [c seeds]
   (doseq [seed (sort seeds)]
-    (ctx/warn-once! c [(:plan (:args c)) :short seed] :farm-tend.short-seed
-                    {:plan (:plan (:args c)) :seed seed
-                     :text (str "tend of " (:plan (:args c)) ": no " seed " carried for the bare cells that want it")})))
+    (ctx/warn-once! c [(fa/plan c) :short seed] :farm-tend.short-seed
+                    {:plan (fa/plan c) :seed seed
+                     :text (str "tend of " (fa/plan c) ": no " seed " carried for the bare cells that want it")})))
 
 (defn plan-census
   "The live {:crops :bare :untilled :wrong} of the plan's field, and the seeds short for its bare cells as :short."
@@ -179,6 +168,6 @@
         have (set (map :name (u/inventory p)))]
     {:crops (count (filter (fn [[pos crop]] (contains? (shape/crop-names crop) (u/seen-name p pos))) crops))
      :bare (count (fld/planned-bare p crops))
-     :untilled (count (filter #(stock/untilled? (ground-cell p %)) (keys (ground-cells answer crops))))
+     :untilled (count (filter #(gr/untilled? (ground-cell p %)) (keys (ground-cells answer crops))))
      :wrong (wrong-crops p crops)
      :short (into #{} (comp (map :seed) (remove have)) (fld/planned-bare p crops))}))

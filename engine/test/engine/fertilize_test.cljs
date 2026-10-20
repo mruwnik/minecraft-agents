@@ -108,7 +108,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup two-wheat)
-              r (await (child-outcome eng job {:at {:x 2 :y 64 :z 0}} 20))]
+              r (await (child-outcome eng job {:area {:cells [{:x 2 :y 64 :z 0}]}} 20))]
           (is (= 7 (age p "2,64,0")))
           (is (= 4 (age p "3,64,1")))
           (is (= 2 (:used r))))))))
@@ -128,7 +128,7 @@
         (let [{:keys [eng p]} (setup {:inventory meal
                                       :blocks {"30,64,0" "wheat" "2,64,0" "wheat"}
                                       :ages {"30,64,0" 5 "2,64,0" 5}})]
-          (await (child-outcome eng job {:center {:x 30 :y 64 :z 2} :radius 4} 20))
+          (await (child-outcome eng job {:area {:pos {:x 30 :y 64 :z 2} :radius 4}} 20))
           (is (= 7 (age p "30,64,0")) "near the centre, far from the body")
           (is (= 5 (age p "2,64,0")) "near the body, outside the centre's radius"))))))
 
@@ -169,7 +169,7 @@
               {:keys [eng p]} (setup {:inventory meal
                                       :blocks (assoc (zipmap cells (repeat "wheat")) "7,64,0" "wheat")
                                       :ages (assoc (zipmap cells (repeat 7)) "7,64,0" 3)})]
-          (await (child-outcome eng job {:radius 10} 20))
+          (await (child-outcome eng job {:area {:pos {:x 0 :y 64 :z 0} :radius 10}} 20))
           (is (= 7 (age p "7,64,0"))))))))
 
 ;; ------------------------------------------------------------------ grass
@@ -235,7 +235,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup sapling-world)
-              r (await (child-outcome eng job {:at [2 64 0] :max 3} 20))]
+              r (await (child-outcome eng job {:area {:cells [[2 64 0]]} :max 3} 20))]
           (is (= 3 (count (calls p "useOn"))))
           (is (= 3 (:used r))))))))
 
@@ -249,6 +249,6 @@
                        (let [r (await (impl token a))]
                          (fake/set-block! p [2 64 0] "oak_log")
                          r)))
-          (let [r (await (child-outcome eng job {:at [2 64 0] :max 3} 20))]
+          (let [r (await (child-outcome eng job {:area {:cells [[2 64 0]]} :max 3} 20))]
             (is (= 1 (count (calls p "useOn"))))
             (is (= 1 (:used r)))))))))

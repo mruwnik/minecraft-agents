@@ -6,7 +6,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.checks :as checks]
-            [jobs.lib.pen-read :as pen-read]
+            [jobs.lib.field-area :as fa]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.standing :as standing]
@@ -18,37 +18,29 @@
             [jobs.lib.farm :as lib-farm]
             [jobs.farm.irrigate :as irrigate]
             [jobs.farm.tend-decide :as decide]
-            [jobs.farm.tend-box :refer [box-cells centre box-facts box-census]]
+            [jobs.farm.tend-box :refer [box-facts box-census]]
             [jobs.farm.tend-plan :as tend-plan]
             [jobs.lib.plan-field :as pf]))
 
 (def doc
-  "Keep one field of crops in order. The field is the :box (inclusive). Its lowest layer (y = min) is the
-  farmland and the layer above holds the crops, so max y is at least min y + 1.
-  One run is one pass over seven steps in this order. Each step is a child job that runs when its conditions hold:
-  - :harvest (jobs.farm.harvest, replanting): a ripe crop lies in the box.
+  "Keep one field of crops in order. The field is the :area: a box (inclusive; its lowest layer, y = min, is the
+  farmland and the layer above holds the crops, so max y is at least min y + 1) or a plan's crop cells ({:plan id}).
+  Seed, produce and compost are not its business (jobs.farm.maintain stores and composts them).
+  One run is one pass over five steps in this order. Each step is a child job that runs when its conditions hold:
+  - :harvest (jobs.farm.harvest, replanting): a ripe crop lies in the field; only the field's crops are cut.
   - :irrigate (jobs.farm.irrigate over the ground layer, in plan mode over the plan's ground cells, per layer in pieces of at most till's max-cells, one piece per pass, :for-plan): :irrigate is true and a ground cell is seen
     dry (no water seen in reach, the whole reach seen: with :irrigate on, a run looks round and walks within 3 blocks of up to 3 ground cells whose reach is partly unseen first). The child fetches a water bucket when none is carried; a failed
     call is booked as its summary {:poured n} and the run goes on.
   - :till (jobs.farm.till): :till is true, a hoe is carried, dirt or grass lies uncovered in the ground layer and
     more seed is carried than there is bare farmland. It tills one cell at a time, nearest first.
-  - :plant (jobs.farm.plant): bare farmland lies in the box and a seed is carried.
-  - :fertilize (jobs.farm.fertilize): :fertilize is true, bone meal (or bones, which the fertilize child crafts) is carried and an unripe crop lies in the box.
-  - :compost (jobs.farm.compost): a :composter is given and seed above the keep is carried.
-  - :deposit (jobs.storage.deposit): a :chest is given and farm goods are carried above the keep. Farm goods are
-    seeds, crops (carrots, potatoes and beetroot too), melon, pumpkin, hay and cocoa. Tools, bread and other
-    non-crop food are never stored.
-  The keep for compost and deposit, per name, is the largest of: the sowing reserve (twice the number of beds, farmland or
-  untilled ground cells, spread over the carried seeds), a backup stack (64) of each seed type, the units the reserve register holds
-  (jobs.lib.reserve: the 3-day food reserve, 60 hunger points, best food first; carrots and potatoes count toward it
-  first; agent entries) and the :keep entry. Harvested crops above it are stored; seed above it is composted.
+  - :plant (jobs.farm.plant): bare farmland lies in the field and a seed is carried.
+  - :fertilize (jobs.farm.fertilize, over the field's cells): :fertilize is true, bone meal (or bones, which the fertilize child crafts) is carried and an unripe crop lies in the field.
   Skipped steps are booked as {:skipped reason}: :no-ripe, :till-off, :no-hoe, :nothing-to-till, :no-seed,
   :food-reserve (a plan's dry cells wait because the reserve keeps their seed; adds :seed :held :kept :reserve-points; cells
-  within 4 blocks of water, level or one up, are tilled anyway), :no-bare, :fertilize-off, :no-bone-meal, :none-unripe, :no-composter, :no-surplus-seed, :no-chest,
-  :nothing-to-store or :declined (the child declined).
+  within 4 blocks of water, level or one up, are tilled anyway), :no-bare, :fertilize-off, :no-bone-meal, :none-unripe or :declined (the child declined).
   A step that ran keeps its summary even if it is skipped later in the same run.
-  Start facts, failed conditions: impossible {:reason :no-box} unless the box has a crop layer and at most 2048 cells (or
-  :plan is given); {:reason :away :site :limit} far from the field while another job is listed, or deep below it;
+  Start facts, failed conditions: impossible {:reason :no-box} unless the area is a box with a crop layer and at most 2048 cells, or a plan;
+  {:reason :away :site :limit} far from the field while another job is listed, or deep below it;
   {:reason :nothing-to-do} (with :covered, :refused, :food-reserve) or {:reason :short-seed :seeds} when no
   step would run, after one look round from here when a cell was never seen. A started run always continues. A step under
   way is not re-decided.
@@ -57,11 +49,10 @@
   condition-failed :nothing-to-do when no step ran. A child that ends in any failure, a limit of its own too, is booked
   with what it did and the run goes on; tend's own time spend is the only limit it ends on.
   :field is counted live at the end. Summaries: harvest {:cut :replanted :bare :gave-up}, till {:tilled n}, plant {:planted
-  :skipped :refused :short}, fertilize {:used}, compost {:fed :bone-meal}, deposit {:gave-up}.
-  Limits: harvest and fertilize work in a sphere around the box centre, so crops just outside the box may be
-  touched. A dirt lane inside the box counts as a bed unless :till is false. A ripe crop that cannot be reached
+  :skipped :refused :short}, fertilize {:used}.
+  Limits: a dirt lane inside the box counts as a bed unless :till is false. A ripe crop that cannot be reached
   keeps the check passing on every run (harvest gives up on it and the run still ends).
-  :plan (optionally :part; with neither :part nor :parts every crop part of the plan is worked) makes the plan's crop cells the field instead of :box. Only crops harvest knows
+  {:plan id} (optionally :part; with neither :part nor :parts every crop part of the plan is worked) makes the plan's crop cells the field. Only crops harvest knows
   (wheat, carrots, potatoes, beetroots) count. The plan's other cells are never touched. The same steps run
   per cell, with the crop the plan names there:
   - harvest never digs a wrong crop. A ripe crop of another kind in a crop cell stays standing and is listed in
@@ -71,7 +62,6 @@
     Farmland the plan wants without a crop over it is not tilled, since it would revert.
   - plant sows every bare crop cell with its own crop's seed. A cell whose seed is not carried stays bare, with one
     farm-tend.short-seed warn per missing seed.
-  - fertilize, compost and deposit work as in box mode. The seed reserve is twice the planned cells of each crop.
   Tilling and sowing are checked against zones and the footprints of the other active plans, when a cell is chosen
   and again before the act. Untilled ground the rules refuse is left alone.
   When only refused ground remains, the check stays false: the job waits with :refused n and the :zones, :claims, :plans and :owners that refuse.
@@ -81,19 +71,13 @@
   list has been read; impossible when it has no crop cells, also in a started run if the plan stops being workable.")
 
 (a/defargs args
-  {:box {:doc "the field: {:min :max}, corners {:x :y :z} or [x y z], inclusive; y min is the farmland layer, max y at least min y + 1; at most 2048 cells; required unless :plan is given (without either the check declines)" :spec pen-read/box-arg :default nil}
-   :plan {:doc "id of a plan of the body's world whose crop cells are the field, each cell worked with the crop the plan wants there (then :box is not used)" :spec a/name? :default nil}
-   :part {:doc "with :plan, only the cells of this part; omit :part (and :parts) to work every crop part of the plan" :spec a/name? :default nil}
-   :parts {:doc "with :plan, the parts worked in one job, one pass each in this order (instead of :part)" :spec (a/coll-of a/name?) :default nil}
+  {:area {:doc "the field: a box {:min :max} (corners {:x :y :z} or [x y z], inclusive; y min is the farmland layer, max y at least min y + 1; at most 2048 cells) or {:plan id} whose crop cells are the field, each worked with the crop the plan wants there; :part limits the plan to one part, :parts works a list of parts one pass each; required" :spec fa/spec :default nil}
    :till {:doc "hoe untilled dirt and grass in the ground layer when seed and a hoe are carried" :spec boolean? :default true}
    :irrigate {:doc "wet dry farmland with water (jobs.farm.irrigate, a water bucket fetched when none is carried)" :spec boolean? :default true}
    :fertilize {:doc "use bone meal on unripe crops" :spec boolean? :default false}
-   :composter {:doc "composter position {:x :y :z} for seed above the reserve; nil: do not compost" :spec ::a/pos :default nil}
-   :chest {:doc "chest position {:x :y :z} for the farm goods; nil: do not store" :spec ::a/pos :default nil}
-   :keep {:doc "{item-name count}: how many of an item compost and deposit leave carried, at least the seed reserve" :spec (a/map-of string? number?) :default {}}
    :ignore-zones? :shared})
 
-(def target [:box :plan :part :parts])
+(def target [:area])
 (def defaults {:least 1 :spend {:job-time ::job-time-s}})
 (def safe? (ready/safe-at-by-night work-place/spot))
 (def fit? ready/fit?)
@@ -108,11 +92,11 @@
   [box]
   (boolean (and box
                 (>= (:y (:max box)) (inc (:y (:min box))))
-                (<= (box-cells box) (max-cells)))))
+                (<= (fa/cell-count box) (max-cells)))))
 
-(defn facts [c] (if (:plan (:args c)) (tend-plan/plan-facts c) (box-facts c)))
+(defn facts [c] (if (fa/plan c) (tend-plan/plan-facts c) (box-facts c)))
 
-(defn census [c] (if (:plan (:args c)) (tend-plan/plan-census c) (box-census c)))
+(defn census [c] (if (fa/plan c) (tend-plan/plan-census c) (box-census c)))
 
 (defn would-run?
   "Whether a run is under way, or some step would call a child over the facts f."
@@ -123,18 +107,18 @@
 (defn field-cells
   "The cells the run decides from: the box's ground and crop layers, or the plan's crop cells and the ground under them."
   [c]
-  (if (:plan (:args c))
+  (if (fa/plan c)
     (mapcat (fn [pos] [pos (update pos :y dec)]) (keys (:crops (tend-plan/planned c))))
-    (let [{lo :min hi :max} (pen-read/arg-box c)]
+    (let [{lo :min hi :max} (fa/arg-box c)]
       (for [x (range (:x lo) (inc (:x hi))) z (range (:z lo) (inc (:z hi))) y [(:y lo) (inc (:y lo))]]
         {:x x :y y :z z}))))
 
 (defn ground-cells
   "The ground cells irrigate works over: the plan's under its crop cells, or the box's lowest layer."
   [c]
-  (if (:plan (:args c))
+  (if (fa/plan c)
     (map #(update % :y dec) (keys (:crops (tend-plan/planned c))))
-    (let [{lo :min hi :max} (pen-read/arg-box c)]
+    (let [{lo :min hi :max} (fa/arg-box c)]
       (for [x (range (:x lo) (inc (:x hi))) z (range (:z lo) (inc (:z hi)))] {:x x :y (:y lo) :z z}))))
 
 (defn water-reach-cells
@@ -152,14 +136,14 @@
   [c]
   (boolean (or (look/unseen? (:primitives c) (field-cells c))
                (and (:irrigate (:args c)) (look/unseen? (:primitives c) (water-reach-cells c)))
-               (and (:plan (:args c)) (fld/unwatched? (:primitives c) (:crops (tend-plan/planned c)))))))
+               (and (fa/plan c) (fld/unwatched? (:primitives c) (:crops (tend-plan/planned c)))))))
 
 (defn check-facts
   "The facts the check decides from: read once per check-cache window, and fresh while a cell was never seen."
   [c]
   (if (needs-look? c)
     (facts c)
-    (check-cache/cached c [:facts (:part (:args c))] #(facts c))))
+    (check-cache/cached c [:facts (fa/part c)] #(facts c))))
 
 (defn nothing-to-do-reason
   "The wait reason when no step would run: :covered counts tillable cells with a block over them (the box sits too low),
@@ -173,7 +157,7 @@
   :short-seed names the seeds the plan's bare cells want and the body lacks. A :look while a cell was never seen and
   the body has not looked round near here."
   [c]
-  (let [trouble (when (:plan (:args c)) (:trouble (tend-plan/planned c)))]
+  (let [trouble (when (fa/plan c) (:trouble (tend-plan/planned c)))]
     (if trouble
       (checks/cause-status :later {:reason :plan-trouble :why trouble})
       (let [f (check-facts c)]
@@ -187,26 +171,24 @@
 (defn parts-of
   "The parts a job works: :parts, else the one :part (nil: the whole field)."
   [c]
-  (let [{:keys [parts part]} (:args c)]
-    (if (seq parts) (vec parts) [part])))
+  (if (seq (fa/parts c)) (vec (fa/parts c)) [(fa/part c)]))
 
-(defn for-part [c part] (assoc-in c [:args :part] part))
+(defn for-part [c part] (fa/with-part c part))
 
 (defn site
   "A position of the field: the box's centre, else the plan's first crop cell; nil when there is neither."
   [c]
-  (if-let [{lo :min hi :max} (pen-read/arg-box c)]
+  (if-let [{lo :min hi :max} (fa/arg-box c)]
     (when lo {:x (/ (+ (:x lo) (:x hi)) 2) :y (:y lo) :z (/ (+ (:z lo) (:z hi)) 2)})
-    (when (:plan (:args c)) (first (keys (:crops (tend-plan/planned c)))))))
+    (when (fa/plan c) (first (keys (:crops (tend-plan/planned c)))))))
 
 (defn usable-args
   "Never :no-box without a usable box (or plan)."
   [c]
-  (let [{:keys [plan]} (:args c)
-        box (pen-read/arg-box c)]
-    (if (or plan (usable-box? box))
+  (let [box (fa/arg-box c)]
+    (if (or (fa/plan c) (and (= :box (fa/kind (fa/of c))) (usable-box? box)))
       (contract/ok :args "a box or plan given")
-      (contract/never :no-box "no usable box or plan"))))
+      (contract/never :no-box "no usable box or plan area"))))
 
 (defn problem
   "Why no run can start (a started run decides through its steps), a status: away while the field is far and another
@@ -220,7 +202,7 @@
           (some nil? statuses) (contract/ok :work "a part has work")
           :else (or (first (filter #(= :look (first %)) statuses)) (last statuses)))))))
 
-(defn can-run? [c] (pf/plan-can-run? (when (:plan (:args c)) (tend-plan/planned c))))
+(defn can-run? [c] (pf/plan-can-run? (when (fa/plan c) (tend-plan/planned c))))
 
 (defn can-start?
   "usable-args, then can-run?, then problem (it reads the box)."
@@ -239,9 +221,7 @@
      :irrigate (pos? (:poured s 0))
      :till (pos? (:tilled s 0))
      :plant (pos? (:planted s 0))
-     :fertilize (pos? (:used s 0))
-     :compost (seq (:fed s))
-     :deposit (and (not (:skipped s)) (not (:gave-up s))))))
+     :fertilize (pos? (:used s 0)))))
 
 (defn step-summaries
   "[[step summary]] of the pass under way and the finished parts."
@@ -285,28 +265,26 @@
     :irrigate {:poured (count (:poured r))}
     :till {:tilled (:tilled r 0)}
     :plant (select-keys r [:planted :skipped :refused :short])
-    :fertilize (select-keys r [:used])
-    :compost (select-keys r [:fed :bone-meal :reason])
-    :deposit {:gave-up (boolean (:gave-up r))}))
+    :fertilize (select-keys r [:used])))
 
 (defn part-report
   "{:steps :field} of the pass just made over the field c works (and the plan's notes about it)."
   [c report]
   (let [{:keys [short] :as seen} (census c)
         field (dissoc seen :short)]
-    (when (:plan (:args c))
+    (when (fa/plan c)
       (tend-plan/note-short! c short)
       (when (seq (:wrong field))
         (ctx/emit! c :farm-tend.wrong :warn
-                   {:plan (:plan (:args c)) :cells (:wrong field)
-                    :text (str "tend of " (:plan (:args c)) " left " (count (:wrong field)) " wrong crops standing: "
+                   {:plan (fa/plan c) :cells (:wrong field)
+                    :text (str "tend of " (fa/plan c) " left " (count (:wrong field)) " wrong crops standing: "
                                (str/join ", " (map #(str (pr-str (:pos %)) " " (:found %)) (:wrong field))))})))
     {:steps report :field field}))
 
 (defn finish-part!
   "The pass over the field c works is made: book its report and clear the pass. :again."
   [c report]
-  (let [part (:part (:args c))
+  (let [part (fa/part c)
         out (part-report c report)]
     (ctx/update-mem! c #(-> % (dissoc :todo :report :call-args :cur :till-tried :tilled :irrigate-tried :irrigated :reach-tried)
                             (assoc-in [:results (key-of part)] out)))
@@ -316,8 +294,8 @@
   "The ending's data from the parts' results so far: the one part's, or {:parts {part result}}."
   [c]
   (let [results (:results (ctx/mem c))]
-    (if (seq (:parts (:args c)))
-      {:parts (into (array-map) (map (fn [part] [part (get results (key-of part))])) (filter #(contains? results (key-of %)) (:parts (:args c))))}
+    (if (seq (fa/parts c))
+      {:parts (into (array-map) (map (fn [part] [part (get results (key-of part))])) (filter #(contains? results (key-of %)) (fa/parts c)))}
       (some-> results first val))))
 
 (defn finish-all!
@@ -325,7 +303,7 @@
   [c]
   (let [m (ctx/mem c)
         results (:results m)
-        multi? (seq (:parts (:args c)))
+        multi? (seq (fa/parts c))
         out (out-of c)
         summaries (step-summaries m)
         fields (if multi? (map :field (vals (:parts out))) [(:field out)])
@@ -342,7 +320,7 @@
   (let [tilled (+ (:tilled m 0) r-tilled)]
     (-> m
         (dissoc :call-args)
-        (update :till-tried (fnil conj #{}) (:from call-args))
+        (update :till-tried (fnil conj #{}) (:min (:area call-args)))
         (assoc :tilled tilled)
         (update-in [:report :till] #(cond
                                       (pos? tilled) {:tilled tilled}
@@ -356,7 +334,7 @@
   (let [poured (+ (:irrigated m 0) r-poured)]
     (-> m
         (dissoc :call-args)
-        (update :irrigate-tried (fnil conj #{}) (:from call-args))
+        (update :irrigate-tried (fnil conj #{}) (:min (:area call-args)))
         (assoc :irrigated poured)
         (update-in [:report :irrigate] #(cond
                                           (pos? poured) {:poured poured}
@@ -385,9 +363,9 @@
           (assoc-in [:report step] (if declined? {:skipped :declined} (summary step r)))))))
 
 (defn with-zone-opt-out
-  "The args of the child of step, with :ignore-zones? true when the tend job has it (the children that change blocks)."
-  [c step child-args]
-  (if (and (:ignore-zones? (:args c)) (not= :deposit step))
+  "The args of a child, with :ignore-zones? true when the tend job has it."
+  [c child-args]
+  (if (:ignore-zones? (:args c))
     (assoc child-args :ignore-zones? true)
     child-args))
 
@@ -402,7 +380,7 @@
       (finish-part! c (:report p))
       (let [step (:slot call)
             _ (ctx/update-mem! c assoc :call-args (:args call))
-            e (await (ctx/call c step (:job call) (with-zone-opt-out c step (:args call))))]
+            e (await (ctx/call c step (:job call) (with-zone-opt-out c (:args call))))]
         (if (= :continue e)
           :continue
           (do (ctx/update-mem! c after-child step (:args call) e)
@@ -435,7 +413,7 @@
   "A run over a field partly never seen looks around first and yields (the check decides on what is seen then)."
   [c]
   (cond
-    (and (:plan (:args c)) (:trouble (tend-plan/planned c)))
+    (and (fa/plan c) (:trouble (tend-plan/planned c)))
     :continue
     (and (not (:todo (ctx/mem c))) (not (look/surveyed? c)) (needs-look? c))
     (await (look/survey! c :run (look/search-effort)))

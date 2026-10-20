@@ -16,13 +16,13 @@
  :cases
  [{:name "body-far-below-the-field-waits-away"
    :body {:at [3.5 0 16.5]}
-   :act [[:http :submit (repeat (jobs.farm.tend {:box {:min #xyz [10 11 16] :max #xyz [13 12 16]}})) [] {:ok true}]]
+   :act [[:http :submit (repeat (jobs.farm.tend {:area {:min #xyz [10 11 16] :max #xyz [13 12 16]}})) [] {:ok true}]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :away}} :within-s 40}]
    :after [[:block [10 12 16] "wheat[age=7]"] [:block [13 12 16] "wheat[age=7]"] [:body-near [3.5 0 16.5] 2]]
    :limit-s 60}
   {:name "body-on-the-field-cuts-the-wheat"
    :body {:at [11.5 12 15.5]}
-   :act [[:http :submit (repeat (jobs.farm.tend {:box {:min #xyz [10 11 16] :max #xyz [13 12 16]}})) [] {:ok true}]]
+   :act [[:http :submit (repeat (jobs.farm.tend {:area {:min #xyz [10 11 16] :max #xyz [13 12 16]}})) [] {:ok true}]]
    :expect [{:no-event {:source :job :kind :waiting :data {:reason :away}} :for-s 30}]
    :after [[:not-block [10 12 16] "wheat[age=7]"]]
    :limit-s 90}]}

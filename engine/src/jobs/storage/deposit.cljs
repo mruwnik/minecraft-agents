@@ -1,5 +1,6 @@
 (ns jobs.storage.deposit
   (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.crops :as crops]
             [jobs.lib.waits :as waits]
             [jobs.lib.ready :as ready]
             [engine.args :as a]
@@ -25,7 +26,7 @@
 (def doc
   "Walk to the chest (one go-to) and deposit every stack in one call: the named :items in the order named, or everything but tools
   and armour (saplings included) and the units the reserve register holds (jobs.lib.reserve/held: the 3-day food reserve, bait, entries) in inventory order.
-  :keep leaves at least that many of a name carried. :free ends the call, clean, once that many slots are free. With explicit :items the reserve is ignored.
+  :keep leaves at least that many of a name carried. :free ends the call, clean, once that many slots are free. With explicit item names the reserve is ignored; :items :farm-goods puts away the farm goods (seeds, crops, melon, pumpkin, hay, cocoa) above the reserve and :keep.
   Needs (can-start? and can-run?): a chest, the :chest argument or the known :chest place, else waits :no-chest (a chest place lost mid-job waits, a reflex ends
   condition-failed); a chest of the pool that zones or claims of another do not refuse :put, else waits :refused {:zones :claims}. :ignore-zones? skips it.
   Ends done when nothing is left to put away (also at once when nothing is), or at any other ending when at least the
@@ -49,7 +50,7 @@
 
 (a/defargs args
   {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :spec ::a/pos :default nil}
-   :items {:doc "item names to put away, in this order (the first name with something to spare goes first); everything but tools and armour when nil" :spec (a/coll-of (a/or-of string? keyword?)) :default nil}
+   :items {:doc "item names to put away, in this order (the first name with something to spare goes first), or :farm-goods (seeds, crops, melon, pumpkin, hay, cocoa; the reserve register applies); everything but tools and armour when nil" :spec (a/or-of (a/coll-of (a/or-of string? keyword?)) (a/pred ":farm-goods" #(= :farm-goods %))) :default nil}
    :keep {:doc "{item-name count}: leave at least this many of the name carried" :spec (a/map-of string? number?) :default {}}
    :free {:doc "stop once this many inventory slots are free; all of it when nil" :spec (a/int-in 0 nil) :default nil}
    :make-chests? {:doc "when every storage chest is full, put a new one beside them (carried, else fetched or crafted by the call's :ways; #{:carried} places only a carried one, no-chest-item otherwise); false stops with reason all-chests-full" :spec boolean? :default true}
@@ -85,6 +86,11 @@
 (def fit? ready/ok)
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
+(defn wanted-names
+  "The :items names: the farm goods for :farm-goods, nil for none given. The reserve register applies to a chooser, not to named items."
+  [items]
+  (if (= :farm-goods items) crops/farm-goods items))
+
 (defn spare-items
   "{name n} the call would put away now: the carried names the pick rules allow, each by its spare over the keep."
   [c]
@@ -92,9 +98,9 @@
         carried (u/inventory (:primitives c))
         goods (found/goods (ctx/view c))
         inventory (remove #(contains? goods (:name %)) carried)
-        keeps (if items keep (merge-with max (reserve/held c :deposit) keep))]
+        keeps (if (and items (not= :farm-goods items)) keep (merge-with max (reserve/held c :deposit) keep))]
     (loop [left inventory, acc {}]
-      (if-let [pick (to-deposit left items keeps)]
+      (if-let [pick (to-deposit left (wanted-names items) keeps)]
         (let [n (:name (:stack pick))]
           (recur (remove #(= n (:name %)) left) (assoc acc n (- (storage/carried left n) (get keeps n 0)))))
         acc))))
@@ -233,7 +239,7 @@
         keeps (found-here! c carried)
         inventory (remove #(contains? keeps (:name %)) carried)
         pick (when-not (and free (>= (u/free-slots (:primitives c)) free))
-               (to-deposit inventory items (if items keep (merge-with max (reserve/held c :deposit) keep))))]
+               (to-deposit inventory (wanted-names items) (if (and items (not= :farm-goods items)) keep (merge-with max (reserve/held c :deposit) keep))))]
     (cond
       (nil? pick) (do (when (offer-owed? c)
                         (places/offer! c :chest (:chest (:args c)))

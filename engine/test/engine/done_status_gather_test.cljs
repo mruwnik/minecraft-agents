@@ -27,13 +27,13 @@
   {'jobs.gather.get-seeds {:count 2}
    'jobs.gather.make-obsidian {}
    'jobs.gather.mine {:block "stone" :count 2}
-   'jobs.farm.till {:center [0 63 0] :radius 0}
+   'jobs.farm.till {:area {:pos [0 63 0] :radius 0}}
    'jobs.farm.tidy {:plan "p"}
    'jobs.farm.harvest {}
    'jobs.farm.fertilize {}
    'jobs.farm.compost {}
    'jobs.farm.find-spot {}
-   'jobs.farm.tend {:plan "p"}
+   'jobs.farm.tend {:area {:plan "p"}}
    'jobs.items.collect-drops {}
    'jobs.forestry.fell-tree {}
    'jobs.forestry.fell-from-pillar {:base {:x 0 :y 64 :z 0}}
@@ -62,12 +62,12 @@
 (def farmland {:blocks {"0,63,0" "farmland"}})
 
 (deftest till-is-done-when-every-cell-is-farmland-and-no-child-is-under-way
-  (are [world m reason] (= reason (tu/kind-reason (done-of 'jobs.farm.till world {:center [0 63 0] :radius 0} m)))
+  (are [world m reason] (= reason (tu/kind-reason (done-of 'jobs.farm.till world {:area {:pos [0 63 0] :radius 0}} m)))
     farmland {} [:ok :tilled]
     farmland {:children {:cover {}}} [:later :wrapping-up]
     {:blocks {"0,63,0" "dirt"}} {} [:later :to-till])
   (is (= {:tilled 1 :skipped {}}
-         (:result (nth (done-of 'jobs.farm.till farmland {:center [0 63 0] :radius 0} {:tilled #{{:x 0 :y 63 :z 0}}}) 2)))))
+         (:result (nth (done-of 'jobs.farm.till farmland {:area {:pos [0 63 0] :radius 0}} {:tilled #{{:x 0 :y 63 :z 0}}}) 2)))))
 
 (def seeds {:inventory [{:name "wheat_seeds" :count 5}]})
 
@@ -167,7 +167,7 @@
 (def here {:x 0 :y 64 :z 0})
 
 (deftest harvest-is-done-when-nothing-ripe-is-left-and-nothing-is-owed
-  (are [world m reason] (= reason (tu/kind-reason (done-of 'jobs.farm.harvest world {:radius 6} m)))
+  (are [world m reason] (= reason (tu/kind-reason (done-of 'jobs.farm.harvest world {:area {:pos [0 64 0] :radius 6}} m)))
     (field-of 7 [2 3]) {} [:later :ripe]
     (field-of 3 [2 3]) {} [:ok :harvested]
     (field-of 3 [2 3]) {:cut 2 :replanted 2} [:ok :harvested]
@@ -180,7 +180,7 @@
 (def plant-box {:min {:x 0 :y 63 :z 0} :max {:x 1 :y 63 :z 0}})
 
 (deftest plant-is-done-when-no-cell-is-bare-and-the-field-was-seen
-  (are [blocks m reason] (= reason (tu/kind-reason (done-of 'jobs.farm.plant {:blocks blocks} {:box plant-box} m)))
+  (are [blocks m reason] (= reason (tu/kind-reason (done-of 'jobs.farm.plant {:blocks blocks} {:area plant-box} m)))
     {"0,63,0" "farmland" "1,63,0" "farmland"} {} [:later :planting]
     {"0,63,0" "farmland" "1,63,0" "farmland" "0,64,0" "wheat" "1,64,0" "wheat"} {:looked here} [:ok :planted]
     {"0,63,0" "farmland" "1,63,0" "farmland" "0,64,0" "wheat" "1,64,0" "wheat"} {:started true :planted 2} [:ok :planted]
@@ -211,7 +211,7 @@
 
 (deftest farm-tend-is-done-when-every-part-is-in-order
   (let [box {:min {:x 0 :y 63 :z 0} :max {:x 1 :y 64 :z 0}}]
-    (are [world m reason] (= reason (tu/kind-reason (done-in 'jobs.farm.tend world {:box box} m {})))
+    (are [world m reason] (= reason (tu/kind-reason (done-in 'jobs.farm.tend world {:area box} m {})))
       (field-of 3 [0 1]) {:results {"*" {:steps {:harvest {:cut 1}}}}} [:ok :in-order]
       (field-of 3 [0 1]) {} [:later :tending]
       (field-of 7 [0 1]) {} [:later :tending]

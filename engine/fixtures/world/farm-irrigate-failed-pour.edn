@@ -11,6 +11,6 @@
   :limit-s 120}
  :cases
  [{:name "pour-over-air-is-refilled-and-another-spot-wets-the-row"
-   :act [[:job (jobs.farm.irrigate {:from #xyz [13 -1 16] :to #xyz [19 -1 16]})]]
+   :act [[:job (jobs.farm.irrigate {:area {:min #xyz [13 -1 16] :max #xyz [19 -1 16]}})]]
    :expect [{:event {:source :job :kind :completed :data {:dry []}} :within-s 90 :of-job true}]
    :after [[:block [16 -1 16] "dirt"] [:item "water_bucket" 0]]}]}

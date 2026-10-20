@@ -39,31 +39,31 @@
 
 (def job 'jobs.farm.till)
 (def hoe [{:name "stone_hoe" :count 1}])
-(def box {:from {:x 1 :y 63 :z 1} :to {:x 2 :y 63 :z 2}})
+(def box {:area {:min {:x 1 :y 63 :z 1} :max {:x 2 :y 63 :z 2}}})
 (def four {"1,63,1" "dirt" "2,63,1" "grass_block" "1,63,2" "dirt" "2,63,2" "grass_block"})
 
 (deftest cells-of-a-box-any-corner-order
   (are [args expected] (= expected (set (till/cells args)))
-    {:from {:x 0 :y 5 :z 0} :to {:x 1 :y 5 :z 1}} #{{:x 0 :y 5 :z 0} {:x 1 :y 5 :z 0} {:x 0 :y 5 :z 1} {:x 1 :y 5 :z 1}}
-    {:from {:x 1 :y 5 :z 1} :to {:x 0 :y 5 :z 0}} #{{:x 0 :y 5 :z 0} {:x 1 :y 5 :z 0} {:x 0 :y 5 :z 1} {:x 1 :y 5 :z 1}}
-    {:center {:x 3 :y 7 :z 3} :radius 0} #{{:x 3 :y 7 :z 3}}))
+    {:area {:min {:x 0 :y 5 :z 0} :max {:x 1 :y 5 :z 1}}} #{{:x 0 :y 5 :z 0} {:x 1 :y 5 :z 0} {:x 0 :y 5 :z 1} {:x 1 :y 5 :z 1}}
+    {:area {:min {:x 1 :y 5 :z 1} :max {:x 0 :y 5 :z 0}}} #{{:x 0 :y 5 :z 0} {:x 1 :y 5 :z 0} {:x 0 :y 5 :z 1} {:x 1 :y 5 :z 1}}
+    {:area {:pos {:x 3 :y 7 :z 3} :radius 0}} #{{:x 3 :y 7 :z 3}}))
 
 (deftest cells-of-a-radius-is-the-square-at-center-y
-  (let [cs (till/cells {:center {:x 10 :y 63 :z -4} :radius 2})]
+  (let [cs (till/cells {:area {:pos {:x 10 :y 63 :z -4} :radius 2}})]
     (is (= 25 (count cs)))
     (is (= #{63} (set (map :y cs))))
     (is (= #{8 9 10 11 12} (set (map :x cs))))
     (is (= #{-6 -5 -4 -3 -2} (set (map :z cs))))))
 
 (deftest cells-allows-256-and-rejects-more-or-nothing
-  (is (= 225 (count (till/cells {:center {:x 0 :y 63 :z 0} :radius 7}))) "15x15")
-  (is (= 256 (count (till/cells {:from {:x 0 :y 63 :z 0} :to {:x 15 :y 63 :z 15}}))))
+  (is (= 225 (count (till/cells {:area {:pos {:x 0 :y 63 :z 0} :radius 7}}))) "15x15")
+  (is (= 256 (count (till/cells {:area {:min {:x 0 :y 63 :z 0} :max {:x 15 :y 63 :z 15}}}))))
   (are [args] (thrown? js/Error (till/cells args))
-    {:from {:x 0 :y 63 :z 0} :to {:x 16 :y 63 :z 15}}
-    {:center {:x 0 :y 63 :z 0} :radius 8}
+    {:area {:min {:x 0 :y 63 :z 0} :max {:x 16 :y 63 :z 15}}}
+    {:area {:pos {:x 0 :y 63 :z 0} :radius 8}}
     {}
-    {:from {:x 0 :y 63 :z 0}}
-    {:center {:x 0 :y 63 :z 0}}))
+    {:area {:min {:x 0 :y 63 :z 0}}}
+    {:area {:pos {:x 0 :y 63 :z 0}}}))
 
 (deftest till-tills-a-two-by-two-box
   (async done
@@ -104,9 +104,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [cs (till/cells {:center {:x 0 :y 63 :z 0} :radius 1})
+        (let [cs (till/cells {:area {:pos {:x 0 :y 63 :z 0} :radius 1}})
               {:keys [eng p]} (setup {:inventory hoe :blocks (into {} (map (fn [{:keys [x y z]}] [(str x "," y "," z) "dirt"])) cs)})
-              result (await (child-outcome eng job {:center {:x 0 :y 63 :z 0} :radius 1} 20))]
+              result (await (child-outcome eng job {:area {:pos {:x 0 :y 63 :z 0} :radius 1}} 20))]
           (is (= 9 (:tilled result)))
           (is (= ["farmland"] (distinct (map #(block-at p %) cs)))))))))
 
@@ -169,7 +169,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory hoe :blocks {"5,63,0" "dirt"} :unreachable ["5,63,0"]})
-              args {:from {:x 5 :y 63 :z 0} :to {:x 5 :y 63 :z 0}}
+              args {:area {:min {:x 5 :y 63 :z 0} :max {:x 5 :y 63 :z 0}}}
               result (await (child-outcome eng job args 8))]
           (is (= {:status :stopped :reason :unreachable :tilled 0 :skipped {{:x 5 :y 63 :z 0} :unreachable}} (dissoc result :text)))
           (is (re-find #"1 unreachable" (:text result)))
@@ -181,7 +181,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (merge pit-world/in-pit {:blocks (assoc pit-world/pit "8,63,0" "dirt")
                                                               :inventory (into hoe [{:name "dirt" :count 5}])}))
-              args {:from {:x 8 :y 63 :z 0} :to {:x 8 :y 63 :z 0}}
+              args {:area {:min {:x 8 :y 63 :z 0} :max {:x 8 :y 63 :z 0}}}
               result (await (child-outcome eng job args 300))]
           (is (= {:tilled 1 :skipped {}} result))
           (is (= "farmland" (block-at p {:x 8 :y 63 :z 0}))))))))
@@ -191,7 +191,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory hoe :blocks {"1,63,1" "dirt"}})
-              args {:from {:x 1 :y 63 :z 1} :to {:x 1 :y 63 :z 1}}]
+              args {:area {:min {:x 1 :y 63 :z 1} :max {:x 1 :y 63 :z 1}}}]
           (.override (.-world p) "useOn" (fn ^:async f [_ _ _] #js {:status "unchanged" :before #js {:name "dirt"} :after #js {:name "dirt"} :consumed 0}))
           (is (= {:status :stopped :reason :refused :tilled 0 :skipped {{:x 1 :y 63 :z 1} :refused}} (dissoc (await (child-outcome eng job args 8)) :text)))
           (is (= 2 (count (calls p "useOn")))))))))
@@ -201,7 +201,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory hoe :blocks {"1,63,1" "dirt"}})
-              args {:from {:x 1 :y 63 :z 1} :to {:x 1 :y 63 :z 1}}]
+              args {:area {:min {:x 1 :y 63 :z 1} :max {:x 1 :y 63 :z 1}}}]
           (.override (.-world p) "useOn" (fn ^:async f [_ _ _] #js {:status "unchanged" :before #js {:name "dirt"} :after #js {:name "dirt"} :consumed 0}))
           (is (= :condition-failed (get-in (await (tu/child-outcome eng job args 8)) [:ending :kind]))))))))
 
@@ -231,7 +231,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory hoe :blocks {"1,63,1" "dirt"}})
-              args {:from {:x 1 :y 63 :z 1} :to {:x 1 :y 63 :z 1}}
+              args {:area {:min {:x 1 :y 63 :z 1} :max {:x 1 :y 63 :z 1}}}
               first? (atom true)]
           (.override (.-world p) "useOn"
                      (fn ^:async f [token a impl]
@@ -248,7 +248,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory hoe :blocks {"1,63,1" "dirt" "1,64,1" "short_grass"}})
-              args {:from {:x 1 :y 63 :z 1} :to {:x 1 :y 63 :z 1}}]
+              args {:area {:min {:x 1 :y 63 :z 1} :max {:x 1 :y 63 :z 1}}}]
           (.override (.-world p) "dig" (fn ^:async f [_ _ _] #js {:status "unreachable"}))
           (is (= {:status :stopped :reason :cover-stuck :tilled 0 :skipped {{:x 1 :y 63 :z 1} :cover-stuck}} (dissoc (await (child-outcome eng job args 10)) :text)))
           (is (= 2 (count (calls p "dig"))) "each of the two tries digs again"))))))
@@ -261,7 +261,7 @@
     (set! (.-blockAt p) (fn [pos] (swap! reads update (js/JSON.stringify pos) (fnil inc 0)) (orig pos)))
     {:primitives p :args args :view (constantly {}) :root "till-check" :slots [] :engine {:world (ew/of-data {} {} [])}}))
 
-(def sixteen {:from {:x 0 :y 63 :z 0} :to {:x 15 :y 63 :z 15}})
+(def sixteen {:area {:min {:x 0 :y 63 :z 0} :max {:x 15 :y 63 :z 15}}})
 (def sixteen-cells (till/cells sixteen))
 
 (deftest check-stops-at-the-first-cell-that-needs-work
@@ -328,9 +328,8 @@
           (is (= [[1 64 1]] (mapv #(:cell (:data %)) (mem/entries (mem/view (:store eng)) :tidy)))))))))
 
 (deftest till-spec-takes-vector-corners-and-refuses-malformed-ones
-  (is (= {:from {:x 1 :y 64 :z 2} :to {:x 3 :y 64 :z 4}}
-         (select-keys (:args (expr/parse registry/jobs '(jobs.farm.till {:from [1 64 2] :to [3 64 4]}))) [:from :to])))
-  (is (re-find #":from must be \[x y z\]" (expr/problem registry/jobs '(jobs.farm.till {:from [1 64] :to [3 64 4]})))))
+  (is (= 9 (count (till/cells (:args (expr/parse registry/jobs '(jobs.farm.till {:area {:min [1 64 2] :max [3 64 4]}})))))))
+  (is (re-find #":area must be" (expr/problem registry/jobs '(jobs.farm.till {:area {:min [1 64] :max [3 64 4]}})))))
 
 (deftest a-hoe-that-vanishes-at-the-use-counts-a-try-and-the-cell-is-skipped-as-no-hoe
   (async done
@@ -367,7 +366,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory hoe :blocks {"1,63,1" "stone" "2,63,1" "stone"}})
-              args {:from {:x 1 :y 63 :z 1} :to {:x 2 :y 63 :z 1}}
+              args {:area {:min {:x 1 :y 63 :z 1} :max {:x 2 :y 63 :z 1}}}
               result (await (child-outcome eng job args 8))]
           (is (= :stopped (:status result)))
           (is (= :not-tillable (:reason result)))
@@ -379,7 +378,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:inventory hoe :blocks {"1,63,1" "stone" "5,63,1" "dirt"} :unreachable ["5,63,1"]})
-              args {:from {:x 1 :y 63 :z 1} :to {:x 5 :y 63 :z 1}}
+              args {:area {:min {:x 1 :y 63 :z 1} :max {:x 5 :y 63 :z 1}}}
               result (await (child-outcome eng job args 8))]
           (is (= :stopped (:status result)))
           (is (= :nothing-tilled (:reason result)))
@@ -436,9 +435,9 @@
   (are [args] (let [[kind _ data] (till/bad-args (counting-ctx {:inventory hoe} args (atom {})))]
                 (and (= :never kind) (= :bad-args (:reason data)) (string? (:why data))))
     {}
-    {:from {:x 0 :y 63 :z 0}}
-    {:center {:x 0 :y 63 :z 0}}
-    {:from {:x 0 :y 63 :z 0} :to {:x 1000000000 :y 63 :z 1000000000}}))
+    {:area {:min {:x 0 :y 63 :z 0}}}
+    {:area {:pos {:x 0 :y 63 :z 0}}}
+    {:area {:min {:x 0 :y 63 :z 0} :max {:x 1000000000 :y 63 :z 1000000000}}}))
 
 (deftest till-leaves-cells-in-the-footprint-of-its-own-plan-alone-too
   (async done

@@ -20,12 +20,13 @@
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.plan-field :as pf]
+            [jobs.lib.field-area :as fa]
             [jobs.lib.world :as known]))
 
 (def doc
-  "Cut the ripe crops within :radius of a centre and replant them, then collect the drops.
-  The centre is :center, or the body's position when the job first runs (kept in memory). With :plan (optionally :part) the
-  plan's crop cells are the field instead (:radius and :center unused), read again every step: a cell is cut only when ripe and
+  "Cut the ripe crops of the :area and replant them, then collect the drops. The area is a box (only crops inside it are cut), a circle {:pos :radius}
+  (a sphere) or nil: a circle of radius 12 round the body's position when the job first runs (kept in memory). With {:plan id}
+  (optionally :part) the plan's crop cells are the field instead, read again every step: a cell is cut only when ripe and
   holding the crop the plan wants, a planned bare cell is sown unless :replant-bare is false (food seeds only above the food
   reserve), crops outside the plan stand.
   Needs: a zone list (unless :ignore-zones?), seeds carried to replant. Another owner's zone, claim or plan footprint is left
@@ -33,7 +34,7 @@
   One call is the whole run, doing the first step that applies until it finishes:
   1. Replant the bare farmland of cells it cut (what it cuts is written to memory with its seed before the dig).
   2. Cut the ripe crops, walking (a go-to child) to the nearest when out of the reach setting; a shut-in body walks out first.
-     A body farther than :radius from the centre with nothing cut walks there first. After the give-up setting such crops
+     A body farther than the area's radius (a box's covering sphere) from the centre with nothing cut walks there first. After the give-up setting such crops
      stop it cutting (warn harvest.gave-up); replanting and collecting go on.
   3. Collect the drops (a jobs.items.collect-drops child).
   With no crop seen (or, with :plan, none known ripe while planned crops are out of view) it looks around once first.
@@ -46,13 +47,10 @@
   sweep or given-up cell is left (and :least is met): a field with nothing ripe at the start ends :done :already.")
 
 (a/defargs args
-  {:radius {:doc "how far around the centre to harvest, in blocks" :spec (a/num-in 0 nil) :default 12}
-   :center {:doc "centre of the field; the body's position when the job first runs when nil" :spec ::a/pos :default nil}
+  {:area {:doc "the field: a box {:min :max} (corners inclusive; only crops inside it are cut), a circle {:pos :radius} (a sphere) or {:plan id :part name} (the plan's crop cells); nil: a circle of radius 12 round the body's position when the job first runs" :spec fa/spec :default nil}
    :replant {:doc "replant what was cut" :spec boolean? :default true}
    :replant-bare {:doc "with :plan, also sow the planned cells that stood bare before; false: only the cells this run cut" :spec boolean? :default true}
    :crops {:doc "crop block names to cut; all known crops when nil" :spec (a/coll-of a/name?) :default nil}
-   :plan {:doc "id of a plan of the body's world whose crop cells are the field (then :radius and :center are not used)" :spec a/name? :default nil}
-   :part {:doc "with :plan, only the cells of this part" :spec a/name? :default nil}
    :ignore-zones? :shared})
 
 (def ripe-age crops/ripe-age)
@@ -68,11 +66,20 @@
   [p targets]
   (filterv #(some->> (u/seen-name p %) (fld/ripe-at? p %)) targets))
 
+(def default-radius 12)
+
+(defn field-sphere
+  "[center radius] of the field: the plan's cells' sphere (set by with-field), else the area's; nil for neither."
+  [c]
+  (or (:sphere c) (fa/sphere (fa/of c))))
+
 (defn center-of
-  "The centre: the :center arg, else the remembered one (a bare ctx of a quote test has no job memory), else the
+  "The centre of the field, else the remembered one (a bare ctx of a quote test has no job memory), else the
   body's position."
   [c]
-  (or (:center (:args c)) (when (:view c) (:center (ctx/mem c))) (u/self-pos c)))
+  (or (first (field-sphere c)) (when (:view c) (:center (ctx/mem c))) (u/self-pos c)))
+
+(defn radius-of [c] (or (second (field-sphere c)) default-radius))
 
 (a/defargs settings
   {::give-up {:default 4 :doc "Unreachable crops after which cutting stops." :spec (a/int-in 1 nil)}
@@ -126,20 +133,20 @@
   "The poss the job may act on with action: zones, claims and the footprints of plans but its own (see jobs.lib.gate).
   A plan this body made never refuses its own work."
   [c action poss]
-  (:allowed (gate/look c action poss {:except (:plan (:args c)) :own-plans-ok? true})))
+  (:allowed (gate/look c action poss {:except (fa/plan c) :own-plans-ok? true})))
 
 (defn cut-action
   "The zone action asked for cutting a crop: :harvest in box mode; with :plan :dig, the action the plan jobs (farm.tend)
   ask for a cut."
   [c]
-  (if (:plan (:args c)) :dig :harvest))
+  (if (fa/plan c) :dig :harvest))
 
 (defn ripe-raw
   "The ripe crops to cut before the zone rules: the planned ones with :plan, else those within :radius of the centre."
   [c skipped]
   (if-let [cells (:plan-cells c)]
     (fld/planned-ripe (:primitives c) (:args c) cells skipped)
-    (fld/ripe-crops (:primitives c) (:args c) (center-of c) skipped)))
+    (fld/ripe-crops (:primitives c) (assoc (:args c) :radius (radius-of c) :area (let [a (fa/of c)] (when (#{:box :circle} (fa/kind a)) a))) (center-of c) skipped)))
 
 (defn ripe-of
   "The ripe crops to cut: none that zones, claims or other plans' footprints refuse."
@@ -149,23 +156,23 @@
 (defn ripe-warned
   "As ripe-of, with the gate's decline warn when it refuses a ripe crop: for the round, which acts on the rest."
   [c skipped]
-  (gate/allowed c :harvest.declined "harvest" (cut-action c) (ripe-raw c skipped) {:except (:plan (:args c)) :own-plans-ok? true}))
+  (gate/allowed c :harvest.declined "harvest" (cut-action c) (ripe-raw c skipped) {:except (fa/plan c) :own-plans-ok? true}))
 
 (defn planned
   "Without :plan nil; else {:cells {pos crop}}, or {:trouble text} when the plan
   cannot be worked."
   [c]
-  (when (:plan (:args c))
+  (when (fa/plan c)
     (pf/read-plan c {:cells fld/crop-cells :what "crop cells"})))
 
 (defn with-field
-  "c over the field of planned (nil: unchanged): :plan-cells set, :center and :radius of the args around them."
+  "c over the field of planned (nil: unchanged): :plan-cells set and :sphere the sphere round them."
   [c field]
   (if-let [cells (:cells field)]
     (let [[center radius] (fld/plan-field cells)]
       (-> c
           (assoc :plan-cells cells)
-          (update :args assoc :center center :radius radius)))
+          (assoc :sphere [center radius])))
     c))
 
 (defn permitted-debts
@@ -194,8 +201,8 @@
 (defn crop-seen?
   "Whether any crop of a wanted name within :radius of the centre has been seen, ripe or not (box mode)."
   [c]
-  (let [{:keys [crops radius]} (:args c)]
-    (boolean (seq (crops/seen-crops (:primitives c) (or crops (keys ripe-age)) (+ radius (u/dist (u/self-pos c) (center-of c))) 1)))))
+  (let [{:keys [crops]} (:args c)]
+    (boolean (seq (crops/seen-crops (:primitives c) (or crops (keys ripe-age)) (+ (radius-of c) (u/dist (u/self-pos c) (center-of c))) 1)))))
 
 (defn blind?
   "No crop seen yet (box mode), or planned crops remembered but not in view and none known ripe, and no look from this
@@ -206,7 +213,7 @@
          (and (fld/unwatched? (:primitives c) cells) (empty? (ripe-raw c nil)))
          (not (crop-seen? c)))))
 
-(def target [:center :radius :plan :part])
+(def target [:area])
 (def defaults {:least 1 :spend {:job-time ::job-time-s}})
 (def safe? (ready/safe-at-by-night work-place/spot))
 (def fit? ready/fit?)
@@ -232,7 +239,9 @@
 
 (defn can-run? [c] (pf/plan-can-run? (planned c)))
 
-(def can-start? (cond/and can-run? (checks/refusing :work "something to harvest" problem)))
+(def bad-args (checks/args-fit "harvest :area must be a box, circle or plan" #(contains? #{nil :box :circle :plan} (fa/kind (fa/of %)))))
+
+(def can-start? (cond/and bad-args can-run? (checks/refusing :work "something to harvest" problem)))
 
 (declare lost-cells)
 
@@ -396,7 +405,7 @@
   [c]
   (let [m (ctx/mem c)
         center (center-of c)
-        radius (:radius (:args c))
+        radius (radius-of c)
         shut-in? (and (not (:left-pit m)) (zero? (:cut m 0)) (reach-room/enclosed? (:primitives c)))]
     (when (and (or (seq (:replant m)) (:collect m) (zero? (:cut m 0)))
                (or shut-in? (> (u/dist (u/self-pos c) center) radius)))
@@ -412,7 +421,7 @@
   [c]
   (when (:collect (ctx/mem c))
     (let [r (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops
-                             {:radius (+ (:radius (:args c)) (settings/get settings ::collect-margin)) :items collect-items})))]
+                             {:radius (+ (radius-of c) (settings/get settings ::collect-margin)) :items collect-items})))]
       (when-not (= :continue r) (ctx/update-mem! c dissoc :collect))
       (if (= :continue r) :continue :again))))
 

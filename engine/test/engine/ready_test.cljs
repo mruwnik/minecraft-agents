@@ -431,7 +431,7 @@
 
 (deftest irrigate-binds-its-field-once-a-field-cell-is-seen
   (let [seen (fn [x] (assoc-in night-hut [:blocks (str x ",64,0")] "dirt"))
-        at (fn [x] {:center {:x x :y 64 :z 0} :radius 0})]
+        at (fn [x] {:area {:pos {:x x :y 64 :z 0} :radius 0}})]
     (are [world args expected] (= expected (lit 0 15 #(bound (safe-of 'jobs.farm.irrigate) world args)))
       (seen 15) (at 15) :later
       (seen 6) (at 6) :ok
