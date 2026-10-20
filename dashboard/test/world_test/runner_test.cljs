@@ -171,6 +171,33 @@
             "the segment active at the cursor was rotated out: every kept segment oldest first, then the active file")))
     (fs/rmSync dir #js {:recursive true :force true})))
 
+(deftest an-incremental-event-reader-returns-what-a-full-read-would-across-appends-a-half-line-and-rotation
+  (let [dir (fs/mkdtempSync (path/join (os/tmpdir) "wt-inc-"))
+        file (path/join dir "events.edn")
+        ev (fn [& ks] (apply str (map #(str "{:seq " % "}\n") ks)))
+        ks (fn [evs] (mapv :seq evs))]
+    (fs/writeFileSync file (ev 1 2))
+    (let [cur (r/log-cursor file)
+          poll (r/event-reader file cur)
+          same (fn [msg expected]
+                 (is (= expected (ks (poll))) msg)
+                 (is (= expected (ks (r/read-events-from file cur))) (str msg ", as a full read")))]
+      (same "nothing new" [])
+      (fs/appendFileSync file (ev 3))
+      (same "appended" [3])
+      (fs/appendFileSync file "{:seq 4")
+      (same "a half-written line waits" [3])
+      (fs/appendFileSync file "}\n")
+      (same "the line once complete" [3 4])
+      (fs/appendFileSync file (ev 5))
+      (same "appended again, not doubled" [3 4 5])
+      (fs/renameSync file (str file ".1"))
+      (fs/writeFileSync file (ev 6 7))
+      (same "rotated" [3 4 5 6 7])
+      (fs/appendFileSync file (ev 8))
+      (same "appended after the rotation" [3 4 5 6 7 8]))
+    (fs/rmSync dir #js {:recursive true :force true})))
+
 (deftest the-event-reader-merges-the-debug-chain
   (let [dir (fs/mkdtempSync (path/join (os/tmpdir) "wt-dbg-"))
         file (path/join dir "events.edn")

@@ -71,6 +71,7 @@ const tryRun = (kind, i, cmd, onStart = () => {}, heavy = false) => new Promise(
   const announce = () => {
     if (announced || !fs.existsSync(marker)) return
     announced = true
+    clearInterval(poll)
     onStart()
     logRun({ start: true, pid: p.pid, kind, cmd: cmd.join(' ') })
   }

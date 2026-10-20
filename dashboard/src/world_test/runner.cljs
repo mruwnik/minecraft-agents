@@ -273,6 +273,14 @@
   [file]
   (assoc (chain-cursor file) :debug (chain-cursor (str file ".debug"))))
 
+(defn parse-events
+  "The parsed events of text, one per line; unreadable lines skipped."
+  [text]
+  (->> (str/split-lines text)
+       (keep #(try (reader/read-string {:default (fn [_ v] v)} %) (catch :default _ nil)))
+       (filter map?)
+       vec))
+
 (defn read-from
   "The parsed events of file from byte start on; unreadable lines skipped."
   [file start]
@@ -283,27 +291,29 @@
             buf (js/Buffer.alloc (- size start))]
         (fs/readSync fd buf 0 (- size start) start)
         (fs/closeSync fd)
-        (->> (str/split-lines (.toString buf "utf8"))
-             (keep #(try (reader/read-string {:default (fn [_ v] v)} %) (catch :default _ nil)))
-             (filter map?)
-             vec)))))
+        (parse-events (.toString buf "utf8"))))))
+
+(defn rotated-events
+  "The events of the segments (file.N) logged after cursor, when the engine rotated the active file since: the tail of the segment
+  that was active at cursor, then the newer segments. When that segment is gone, every kept segment (all newer)."
+  [file {:keys [ino pos]}]
+  (let [live (filterv fs/existsSync (mapv #(str file "." %) (range 3 0 -1)))
+        from (first (keep-indexed #(when (= ino (.-ino (fs/statSync %2))) %1) live))]
+    (if from
+      (vec (concat (read-from (nth live from) pos) (mapcat #(read-from % 0) (subvec live (inc from)))))
+      (vec (mapcat #(read-from % 0) live)))))
+
+(defn rotated?
+  "True when the active file is not the one cursor was taken on."
+  [file {:keys [ino]}]
+  (and (some? ino) (not= ino (when (fs/existsSync file) (.-ino (fs/statSync file))))))
 
 (defn read-chain-from
-  "The events of one chain (file and its segments) logged after cursor. When the engine rotated the log since (events.edn.N), the tail of the
-  segment that was the active file at cursor, the newer segments, then the active file. When that segment is gone, every
-  kept segment (all newer) then the active file."
-  [file {:keys [ino pos]}]
-  (let [segments (mapv #(str file "." %) (range 3 0 -1))
-        cur-ino (when (fs/existsSync file) (.-ino (fs/statSync file)))]
-    (if (or (nil? ino) (= ino cur-ino))
-      (read-from file pos)
-      (let [live (filterv fs/existsSync segments)
-            from (first (keep-indexed #(when (= ino (.-ino (fs/statSync %2))) %1) live))]
-        (if from
-          (vec (concat (read-from (nth live from) pos)
-                       (mapcat #(read-from % 0) (subvec live (inc from)))
-                       (read-from file 0)))
-          (vec (concat (mapcat #(read-from % 0) live) (read-from file 0))))))))
+  "The events of one chain (file and its segments) logged after cursor."
+  [file cursor]
+  (if (rotated? file cursor)
+    (vec (concat (rotated-events file cursor) (read-from file 0)))
+    (read-from file (:pos cursor))))
 
 (defn read-events-from
   "The events logged after cursor in both chains (main and :debug), oldest first by :seq."
@@ -312,6 +322,48 @@
                (read-chain-from (str file ".debug") (or (:debug cursor) {:ino nil :pos 0})))
        (sort-by #(:seq % 0))
        vec))
+
+(defn read-complete-from
+  "{:events :end} of the whole lines of file from byte start on; end is where the next read starts (a half-written last line waits)."
+  [file start]
+  (let [size (file-size file)]
+    (if (<= size start)
+      {:events [] :end start}
+      (let [fd (fs/openSync file "r")
+            buf (js/Buffer.alloc (- size start))]
+        (fs/readSync fd buf 0 (- size start) start)
+        (fs/closeSync fd)
+        (let [nl (.lastIndexOf buf 10)
+              used (inc nl)]
+          {:events (if (zero? used) [] (parse-events (.toString buf "utf8" 0 used)))
+           :end (+ start used)})))))
+
+(defn chain-reader
+  "A fn returning what (read-chain-from file cursor) returns, parsing only the bytes appended since its last call.
+  A new active file (rotation) or a shrunk one restarts the active part."
+  [file cursor]
+  (let [st (atom nil)]
+    (fn []
+      (let [ino (when (fs/existsSync file) (.-ino (fs/statSync file)))
+            {:keys [seen pos]} @st
+            restart (cond
+                      (or (nil? @st) (not= seen ino))
+                      (if (rotated? file cursor)
+                        {:rotated (rotated-events file cursor) :pos 0}
+                        {:rotated [] :pos (:pos cursor 0)})
+                      (< (file-size file) pos) (assoc @st :pos 0))
+            base (assoc (or restart @st) :seen ino :events (if restart [] (:events @st)))
+            {:keys [events end]} (read-complete-from file (:pos base))
+            m (assoc base :events (into (:events base) events) :pos end)]
+        (reset! st m)
+        (into (:rotated m) (:events m))))))
+
+(defn event-reader
+  "A fn returning what (read-events-from file cursor) returns, parsing only what was appended since its last call."
+  [file cursor]
+  (let [main (chain-reader file cursor)
+        dbg (chain-reader (str file ".debug") (or (:debug cursor) {:ino nil :pos 0}))]
+    (fn [] (->> (concat (main) (dbg)) (sort-by #(:seq % 0)) vec))))
 
 (defn await-since
   "The time an :await counts events from: t0, but a :world.reloaded await after a :cli/:http step (cli-ms, when that step
@@ -330,10 +382,11 @@
   [opts offset pattern since-ms limit-ms job-ids]
   (let [until (+ (js/Date.now) limit-ms)
         own? (:of-job pattern)
-        pattern (dissoc pattern :of-job :after-previous)]
+        pattern (dissoc pattern :of-job :after-previous)
+        events (event-reader (events-file opts) offset)]
     (letfn [(poll []
               (let [hit (some #(when (and (>= (:time-ms % 0) since-ms) (x/matches? pattern %) (or (not own?) (x/of-jobs? job-ids %))) %)
-                              (read-events-from (events-file opts) offset))]
+                              (events))]
                 (cond
                   hit (js/Promise.resolve hit)
                   (> (js/Date.now) until) (js/Promise.resolve nil)
@@ -1569,11 +1622,12 @@
   "watch-with! on the body's event log. window: see watch-window; events before t0 count when the window starts earlier.
   The body's position is read to fail a case whose body left its plot (origin; raw-case c: its #at tags are unresolved)."
   [opts c raw origin {offset :offset from :from-ms} t0 ids clock]
-  (watch-with! {:now js/Date.now :sleep sleep
-                :left-plot #(.then (rcon! [(f/start-check-command (:body opts))])
-                                   (fn [[reply]] (f/left-plot-why origin raw (or reply ""))))
-                :events #(filterv (fn [e] (>= (:time-ms e 0) from)) (read-events-from (events-file opts) offset))}
-               c t0 ids clock))
+  (let [events (event-reader (events-file opts) offset)]
+    (watch-with! {:now js/Date.now :sleep sleep
+                  :left-plot #(.then (rcon! [(f/start-check-command (:body opts))])
+                                     (fn [[reply]] (f/left-plot-why origin raw (or reply ""))))
+                  :events #(filterv (fn [e] (>= (:time-ms e 0) from)) (events))}
+                 c t0 ids clock)))
 
 (defn judge-file-check
   "Result of a :memory / :file check: reads the file under the body's directory."
