@@ -10,7 +10,7 @@
 {:defaults
  {:tags [:movement :go-to :torch]
   :time :any
-  :plot {:height 12}
+  :plot {:height 12 :light :dark}
   :blocks [[:fill [10 -3 14] [26 8 18] "stone"]
            [:fill [11 3 16] [13 4 16] "air"]
            [:fill [14 -2 16] [24 4 16] "air"]]
@@ -32,13 +32,14 @@
             {:no-event {:kind :walk.torch-placed} :for-s 110 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "torch" 4]]}
   {:name "torch-left-by-a-cancelled-call-is-returned-at-the-next-call"
-   ;; the first call is cancelled once the torch is in the off hand (if the call ended first, the torch is back anyway)
+   ;; the first call is cancelled while it runs, once the torch is in the off hand: the await and the cancel fail the case if the call ended first
    :act [[:job (jobs.movement.go-to {:pos #at [24 -2 16] :range 1 :ways #{:walk :clear-seal} :unknown true :ignore-zones? true})]
          [:await {:source :job :kind :go-to.off-hand-torch} 100]
          [:http :cancel "$event-job" {:ok true}]
          [:await {:source :job :kind :cancelled} 10]
          [:job (jobs.movement.go-to {:pos #at [12 3 16] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :cancelled} :within-s 120}
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:item "torch" 4]]}
   {:name "zone-over-the-takeoff-refuses-the-torch"
    ;; the feet and head cells of the corridor's end belong to another owner: no torch goes there
