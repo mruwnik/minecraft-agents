@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [engine.core :as core]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.farm-contract-test :refer [ending-of]]
             [engine.library-test :as lt]
             [engine.memory :as mem]
@@ -177,3 +178,21 @@
           (is @waited "the scoop child waited once")
           (is (= :done (:status res)) (pr-str res))
           (is (= 1 (carried p "water_bucket")) "the water was scooped back after the wait"))))))
+
+(deftest the-mine-child-starts-only-after-the-body-is-out-of-the-scooped-water
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (lt/setup (world (assoc ground "4,63,0" "obsidian") [pick]))
+              in-water-at-start (atom nil)
+              stub {:round (fn ^:async mine-round [c]
+                             (reset! in-water-at-start (.-inWater (.self p)))
+                             (ctx/end c :done nil))}
+              pauses (atom 0)
+              noop {:round (fn ^:async noop-round [c]
+                             (when (= 2 (swap! pauses inc)) (fake/swap-self! p assoc :inWater false))
+                             (ctx/end c :done nil))}
+              eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.gather.mine stub 'jobs.time.noop noop))]
+          (fake/swap-self! p assoc :inWater true)
+          (await (tu/child-outcome eng 'jobs.gather.make-obsidian {:count 1} 100))
+          (is (false? @in-water-at-start) "the mine child waited for the flow to drain"))))))

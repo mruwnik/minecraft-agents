@@ -264,7 +264,7 @@
                                       (ctx/end c :done nil {}))
               :else (left!))))))))
 
-(defn ^:async mine-seen!
+(defn ^:async mine-seen-now!
   "The seen obsidian mined with a mine child, which is kept under way (memory :mining) until it ends: the dug block is no longer seen while the child picks it up. :again, :continue while it works, or its ending when it got none."
   [c got]
   (let [e (await (ctx/call c :mine 'jobs.gather.mine
@@ -278,6 +278,14 @@
                   why (or (some-> e :cause :reason) (:cause e) :unknown)]
               (ctx/end c (if done? :nothing-possible (:kind e)) (if done? :mine-failed (:cause e))
                        {:got got :text (str "the obsidian could not be mined: " (name why))})))))
+
+(defn ^:async mine-seen!
+  "mine-seen-now!, after the scooped water's flow has drained from the body (a few half-second looks): a head in water ends the mine child :flooded."
+  [c got]
+  (if (and (not (:mining (ctx/mem c))) (.-inWater (.self (:primitives c))) (< (:drained (ctx/mem c) 0) (settings/get settings ::settle-looks)))
+    (let [e (await (child/pause! c 0.5 :waiting-for-water-to-drain))]
+      (if (= :continue e) :continue (do (ctx/update-mem! c update :drained (fnil inc 0)) :again)))
+    (await (mine-seen-now! c got))))
 
 (defn ^:async step [c]
   (let [{:keys [count]} (:args c)
