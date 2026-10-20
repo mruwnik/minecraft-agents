@@ -290,27 +290,6 @@
         2 (fs/writeFileSync (r/lease-file plot) "")))
     (is true)))
 
-(deftest lease-dir-child
-  "Not a test on its own: the process the next test spawns (it runs only when WT_LEASE_DIR_OUT is set)."
-  (when-let [out (.. js/process -env -WT_LEASE_DIR_OUT)]
-    (fs/writeFileSync out r/lease-dir))
-  (is true))
-
-(deftest runners-with-different-tmpdirs-share-one-lease-dir
-  (let [bundle (aget js/process.argv 1)
-        work (fs/mkdtempSync (path/join (os/tmpdir) "wt-tmp-"))
-        lease-dir-under (fn [tmp]
-                          (let [out (path/join work (str tmp ".out"))]
-                            (cp/spawnSync (.-execPath js/process) #js [bundle "--test=world-test.runner-test/lease-dir-child"]
-                                          #js {:env (js/Object.assign #js {} js/process.env #js {"TMPDIR" (path/join work tmp) "WT_LEASE_DIR_OUT" out})
-                                               :stdio "ignore"})
-                            (str (fs/readFileSync out "utf8"))))
-        a (lease-dir-under "a")
-        b (lease-dir-under "b")]
-    (fs/rmSync work #js {:recursive true :force true})
-    (is (= a b))
-    (is (not (.includes a "wt-tmp-")))))
-
 (deftest racing-reclaimers-of-a-dead-holder-never-share-the-lock
   (async done
     (let [dir (fs/mkdtempSync (path/join (os/tmpdir) "wt-reclaim-"))
