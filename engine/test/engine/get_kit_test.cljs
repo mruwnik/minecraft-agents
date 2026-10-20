@@ -157,31 +157,6 @@
           (is (= {"feet" "iron_boots"} (worn s)))
           (is (= {:status :done :have ["iron_pickaxe" "iron_boots"]} (select-keys @(:out s) [:status :have]))))))))
 
-(def sword-recipes
-  {"stone_sword" {:count 1 :needs {"cobblestone" 2 "stick" 1} :table true}
-   "wooden_sword" {:count 1 :needs {"oak_planks" 2 "stick" 1} :table true}})
-
-(defn armed-world [inv]
-  (update (world inv {}) :recipes merge sword-recipes))
-
-(deftest an-unarmed-body-makes-a-cheap-sword-before-the-mining-starts
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (start (armed-world [{:name "cobblestone" :count 3} {:name "stick" :count 2} {:name "bread" :count 20}])
-                       {:items ["iron_pickaxe"] :explore false})]
-          (await (f/run-ticks s 60))
-          (is (= {"stone_sword" 1} (select-keys (f/inv s) ["stone_sword" "wooden_sword"]))))))))
-
-(deftest an-armed-body-makes-no-sword-for-the-mining
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (start (armed-world [{:name "cobblestone" :count 3} {:name "stick" :count 2} {:name "bread" :count 20} {:name "wooden_axe" :count 1}])
-                       {:items ["iron_pickaxe"] :explore false})]
-          (await (f/run-ticks s 60))
-          (is (= {} (select-keys (f/inv s) ["stone_sword" "wooden_sword"]))))))))
-
 (defn hungry-world [inv food]
   (assoc-in (world inv {}) [:self :food] food))
 

@@ -1,7 +1,6 @@
 ;; jobs.items.get-kit: cards f0118847 (items are made in order; iron is sourced only when the next missing item needs it),
 ;; 9d844aa3 (carried raw iron is smelted when the mine finds no ore), 71a675d6 (carried ingots are never crafted into nuggets),
 ;; 89e23248 (the home chest is not emptied, the hut's furnace and bed are not dug up), a094008f (the list in order, armour worn).
-;; A weapon is carried unless the case makes one (get-kit makes a stone sword first when no sword or axe is carried and smelting or mining is ahead).
 ;; The body carries 3 cooked beef where mining or smelting is ahead (:food false stops :needs-food under 20 food points).
 ;; Open plot, body at [16.5 0 12.5] looking south (yaw 0); the table stands at [16 0 18].
 ;; Should-succeed: stone sword and pickaxe made with no iron seen, then the job stops no-source for the iron; a pickaxe smelted from
@@ -63,21 +62,6 @@
             {:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:item "iron_helmet" 0]]
    :limit-s 120}
-  {:name "unarmed-body-makes-a-stone-sword-before-the-smelting"
-   ;; card 147ceaa0: smelting ahead and no sword or axe carried: a stone sword is made first
-   :blocks [[:set [20 0 14] "furnace[facing=west]"]]
-   :body {:inventory [["raw_iron" 3] ["coal" 3] ["stick" 3] ["cobblestone" 3] ["cooked_beef" 3]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false :food false})]]
-   :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
-   :after [[:item "stone_sword" 1] [:item "iron_pickaxe" 1]]
-   :limit-s 170}
-  {:name "armed-body-makes-no-sword-for-the-smelting"
-   :blocks [[:set [20 0 14] "furnace[facing=west]"]]
-   :body {:inventory [["raw_iron" 3] ["coal" 3] ["stick" 3] ["cobblestone" 3] ["wooden_axe" 1] ["cooked_beef" 3]]}
-   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false :food false})]]
-   :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
-   :after [[:item "stone_sword" 0] [:item "iron_pickaxe" 1]]
-   :limit-s 170}
   ;; card a1a67cc5 (fix 75f53a09 of 9d844aa3): raw iron smelting on thin fuel (planks only): the kit waits out the cook and finishes, never "stopped: cooking"
   {:name "raw-iron-on-plank-fuel-waits-for-the-cook"
    :blocks [[:set [20 0 14] "furnace[facing=west]"]]

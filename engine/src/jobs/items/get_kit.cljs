@@ -10,7 +10,6 @@
             [jobs.items.smelt.plan :as smelt-plan]
             [jobs.lib.armour :as armour]
             [jobs.lib.checks :as checks]
-            [jobs.lib.combat :as combat]
             [jobs.lib.foods :as foods]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
@@ -22,7 +21,6 @@
   :wear, wear each armour piece once it is carried. One call is the whole goal; it yields (:continue) only while a
   child waits on the world.
   Each round starts from the world: an item carried or worn (or a better armour piece worn in its slot) is skipped.
-  When furnace material is ahead and no sword or axe is carried, a stone (else wooden) sword is obtained first (a failure warns kit.no-weapon and goes on).
   When the next missing item needs furnace material, one jobs.items.obtain child gets what all missing pieces need together (iron_ingot: 32 for the
   whole kit, less what is carried), so the ore is mined and smelted in one go; if it cannot, the job stops at once
   naming the material, unless some of it (raw input, or the material itself) is carried: then raw input is smelted, the pieces it covers are made in
@@ -94,7 +92,7 @@
 (defn restarted
   "The job memory after a death: the children and what was made went with the body; the job starts from now."
   [m now]
-  (-> m (dissoc :children :materials :made :fed :partial :no-food :weapon-tried) (assoc :since now)))
+  (-> m (dissoc :children :materials :made :fed :partial :no-food) (assoc :since now)))
 
 (defn why-of
   "The text a child ending e gives for its stop: its data's :why, else its cause map's."
@@ -174,15 +172,6 @@
            :count total :explore (:explore a)
            :spend {:job-time (* 60 (settings/get settings ::minutes))})))
 
-(defn armed?
-  "Whether a weapon (jobs.lib.combat/default-weapons: a sword or an axe) is carried."
-  [carried]
-  (boolean (some #(combat/weapon? combat/default-weapons %) (keys carried))))
-
-(def starter-weapons
-  "The cheap weapons made before the mining starts, best first."
-  ["stone_sword" "wooden_sword"])
-
 (defn ^:async run-obtain!
   "One obtain child round in slot: :continue, or the stop (stop-of) of the child's ending when it ended without the item
   (nil when it got it)."
@@ -259,14 +248,6 @@
                   :else :again))
 
           (empty? todo) (finish! c items have nil)
-
-          (and need (not (armed? (:carried st))) (not (:weapon-tried (ctx/mem c))))
-          (let [r (await (run-obtain! c :weapon starter-weapons 1))]
-            (cond (= :continue r) :continue
-                  :else (do (ctx/update-mem! c assoc :weapon-tried true)
-                            (when r (ctx/emit! c :kit.no-weapon :warn {:reason (:reason r) :why (:why r)
-                                                                       :text "no sword or axe to fight with, going on unarmed"}))
-                            :again)))
 
           (and short (< fp min-food) (not (:fed (ctx/mem c)))
                (not (and (:no-food (ctx/mem c)) (not (foods/starving? (.self (:primitives c)) {})))))
