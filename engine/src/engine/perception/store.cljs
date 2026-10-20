@@ -32,6 +32,7 @@
     (when oldest
       (.delete ^js (:map oldest) (aget (:entry oldest) 0))
       (set! (.-count st) (dec (.-count st)))
+      (set! (.-writes st) (inc (.-writes st)))
       (set! (.-lastKey st) -1))))
 
 (defn section-for!
@@ -110,6 +111,7 @@
         key (section-key cx sy cz)
         ^js sec (if (== key (.-lastKey st)) (.-lastSec st) (section-for! st store key cx sy cz now))]
     (let [i (cell-index x y z)]
+      (when-not (== (aget (.-ids sec) i) (inc id)) (set! (.-writes st) (inc (.-writes st))))
       (aset (.-ids sec) i (inc id))
       (aset (.-times sec) i (minute-of! sec now))
       (if (mutable-id? st id)

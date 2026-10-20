@@ -7,6 +7,7 @@
             [engine.perception :as perception]
             [engine.perception.mobs :as mobs]
             [jobs.lib.cost.danger :as danger]
+            [jobs.lib.reach.room :as reach-room]
             [engine.test-util :as tu]))
 
 ;; The body stands at [0 64 0], eye at (0.5, 65.62, 0.5), facing south (+z) unless a test turns it.
@@ -617,3 +618,19 @@
     (is (true? again))
     (is (> r3 r1) "a block change in range casts again")
     (is (> (rays) r3) "after the generation, casts again")))
+
+(deftest a-room-answer-is-kept-until-memory-or-the-world-changes
+  (let [{:keys [p per clock]} (clocked-rig {"0,65,4" "gold_block"})
+        w (perception/wrap p per)
+        kept #(reach-room/kept w "k" (fn [_] #js {}))]
+    (perception/pass! per)
+    (let [a (kept)]
+      (reset! clock 3000)
+      (turn! p 30)
+      (is (identical? a (kept)) "seconds later with the eye turned and nothing new seen: no new flood")
+      (turn! p 180)
+      (perception/pass! per)
+      (let [b (kept)]
+        (is (not (identical? a b)) "a turn that shows new cells: judged again")
+        (fake/set-block! p [0 65 -3] "stone")
+        (is (not (identical? b (kept))) "a block changed: judged again")))))

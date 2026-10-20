@@ -302,21 +302,17 @@
   (let [{:keys [cell closed?]} (unroofed-cell p pos)]
     (when-not closed? cell)))
 
-(def room-memo-ms
-  "How long a room answer is reused while the body and the world stand still: the night trigger asks every 250 ms and a flood reads up to room-cells cells."
-  2000)
-
 (defn steady-key
-  "What a room answer depends on: the raw world's epoch, the eye and the clock in room-memo-ms steps; nil offline."
-  [{:keys [raw opts]}]
+  "What a room answer depends on: the raw world's epoch, how often memory changed a cell (a newly seen cell or a changed
+  block), and the clock in half :mutable-max-ms steps (a remembered door ages out to unknown); nil offline."
+  [{:keys [raw opts st]}]
   (when-let [^js eye (.eye ^js raw)]
-    (str (js/Math.floor (/ ((:now opts)) room-memo-ms)) "|" (rays/epoch-of raw) "|" (.-dimension eye) "|"
-         (.-x eye) "|" (.-y eye) "|" (.-z eye) "|" (.-yaw eye) "|" (.-pitch eye))))
+    (str (js/Math.floor (/ ((:now opts)) (quot (:mutable-max-ms opts) 2))) "|" (rays/epoch-of raw) "|" (.-dimension eye) "|"
+         (.-writes ^js st))))
 
 (defn kept-with
-  "(f kind-at put!) for the key `ck`, kept in the body's perception store for room-memo-ms while its eye and the world stay
-  the same (the same shared kind-at serves every cell); put! (key value) keeps a further answer for another key of the same
-  window (a no-op unkept). Not kept without a perception."
+  "(f kind-at put!) for the key `ck`, kept in the body's perception store while the world and its memory stay the same (the same shared kind-at serves every cell); put! (key value) keeps a further answer for another key of the
+  same steady key (a no-op unkept). Not kept without a perception."
   [p ck f]
   (let [per (aget p "perception") k (some-> per steady-key)]
     (if-not k
@@ -337,7 +333,7 @@
   (kept-with p ck (fn [kind-at _] (f kind-at))))
 
 (defn room
-  "room* kept per body (kept) for room-memo-ms; not kept without a perception."
+  "room* kept per body (kept); not kept without a perception."
   [p {:keys [x y z] :as pos}]
   (kept p (str x "|" y "|" z) (partial room* p pos)))
 
@@ -371,7 +367,7 @@
 (defn walled-region
   "{:room :checks} for the walkers' flood from cell pos {:x :y :z} (doors shut, within budget, at most wall-cells): :room as room*'s answer
   (nil when the flood is open or reaches an unseen edge, which ends it), :checks a delay of whether no walker outside can step in
-  (enterable?) and no spider squeezes through (spider-gap?). Kept per body for room-memo-ms, and for every cell of the flood
+  (enterable?) and no spider squeezes through (spider-gap?). Kept per body (kept), and for every cell of the flood
   that walks back to pos (walker-sources: it reaches the same cells), so a cave is flooded once, not once per cell."
   [p {:keys [x y z] :as pos} budget]
   (kept-with
