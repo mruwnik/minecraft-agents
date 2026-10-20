@@ -331,6 +331,13 @@
     {:x 40 :y 70 :z 0} true :later
     {:x 40 :y 64 :z 0} false :later))
 
+(deftest safe-at-by-night-dug-takes-an-unseen-goal-no-higher-than-a-buried-body-as-underground-with-no-seen-roof
+  (are [goal expected] (= expected (with-redefs [sh-sense/seen-cell? (constantly false)
+                                                ready/roof-over? (constantly false)]
+                                     (kind (ready/safe-at-by-night (constantly goal) false true) tunnel)))
+    {:x 40 :y 64 :z 0} :ok
+    {:x 40 :y 70 :z 0} :later))
+
 (deftest explore-search-underground-at-night-is-ok
   (is (= :ok (bound search/safe? tunnel {}))))
 

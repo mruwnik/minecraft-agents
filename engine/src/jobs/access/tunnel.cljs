@@ -133,7 +133,7 @@
    :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of fetching a tool; a failed fetch ends :no-tool either way" :spec boolean? :default true}
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way (below the feet only over a solid floor); false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}})
 
-(def safe? (ready/safe-at-by-night (fn [c] (a/cell (:target (:args c))))))
+(def safe? (ready/safe-at-by-night (fn [c] (a/cell (:target (:args c)))) false true))
 
 (def fit? ready/fit?)
 

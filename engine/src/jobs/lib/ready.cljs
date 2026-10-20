@@ -148,9 +148,10 @@
   "The checker of a job that goes to the place (f c): while the place is dark safe-at it, by day or when body and place are both
   underground only not threatened (an unseen place's light is no reason to wait, and darkness underground does not end
   at dawn; a walk from a tunnel to open ground is exposed). A buried body's unseen place no higher than its feet with a seen solid block over it is
-  underground (Q279: caves count only reachable hostiles); one above them, or with open sky over it (outside a hut), may be open ground."
+  underground (Q279: caves count only reachable hostiles); one above them, or with open sky over it (outside a hut), may be open ground. dug?: the job digs to the place, so no seen roof is needed (rock is what a player digs through)."
   ([f] (safe-at-by-night f false))
-  ([f walk?]
+  ([f walk?] (safe-at-by-night f walk? false))
+  ([f walk? dug?]
   (let [at (safe-at f walk?)
         by-night? (fn [c]
                     (let [p (:primitives c)
@@ -161,7 +162,7 @@
                       (and (not (sh-sense/lit-here? p (if (and to (sh-sense/solid-at? p to)) (update to :y inc) (or to feet))))
                            (not (and to (sh-sense/buried? p)
                                      (or (sh-sense/buried-at? p to)
-                                         (and (not (sh-sense/seen-cell? p to)) (<= (:y to) (:y feet)) (roof-over? p to))))))))]
+                                         (and (not (sh-sense/seen-cell? p to)) (<= (:y to) (:y feet)) (or dug? (roof-over? p to)))))))))]
     (with-meta (fn [c] (if (by-night? c) (at c) (if walk? (threatened-walking c (f c)) (threatened c))))
       {::exposure (fn [c] (if (by-night? c) ((::exposure (meta at)) c) (contract/ok :day "an unseen place's light is no reason to wait")))}))))
 
