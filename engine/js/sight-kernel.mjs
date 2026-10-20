@@ -8,8 +8,9 @@ const UNSET = 0xFFFE // a cell of a lazy section not read yet
 const UNLOADED = 0xFFFF
 const LIGHT_UNSET = 255 // block-light nibbles are 0..15
 // A marks array is a Uint8Array of MARKS_LENGTH for the current mark stamp (marksOf hands out zeroed ones for a new
-// stamp): the mark kind of each cell of the section, 0 while not recorded, else markKind.
+// stamp): the mark kind of each cell of the section, 0 while not recorded, else markKind (or DARK).
 export const MARKS_LENGTH = 4096
+const DARK = 4 // a clear cell too dark to make out: recorded only within near of the eye, so it is read again only there
 
 // Sections filled cell by cell from raw.stateAt / raw.lightAt as the rays reach them, for raw worlds that have no
 // section arrays (the test fakes). Valid while the world does not change; the perception drops it with its marks.
@@ -122,7 +123,7 @@ export function castRays (ctx, ox, oy, oz, dirs, count) {
         lightSec = lightC[slot]
       }
       const kind = marks[i]
-      if (kind === 1) { n++; prev = -1; continue }
+      if (kind === 1 || (kind === DARK && t > near)) { n++; prev = -1; continue }
       if (kind === 2) { n++; break }
       const id = stateIn(raw, ids, x, y, z, i)
       if (id < 0) break
@@ -151,7 +152,7 @@ export function castRays (ctx, ox, oy, oz, dirs, count) {
       if (visible[shown] === 1 || t <= near) {
         record(x, y, z, id)
         marks[i] = k
-      }
+      } else if (k === 1) marks[i] = DARK
       if (blocks) break
       prev = light
     }
@@ -180,6 +181,38 @@ function stateIn (raw, ids, x, y, z, i) {
     if (v === UNLOADED) return -1
   }
   return v
+}
+
+// The unit directions of rays [from, to) of a pass into out (3 per ray; NaN x: a ray outside the cone or past the grid).
+// A pass casts its ground rows first, then its grid in tiles of tileRays taken in golden-stride order (see rays.cljs).
+// p: {b (the view basis: 9 numbers), hx, hy, cols, rows, jx, jy, ground (flat [d l ...]), tiles, stride, tileRays, fx, fz,
+// rx, rz, eyeHeight}.
+export function sliceDirs (out, from, to, p) {
+  const { b, hx, hy, cols, rows, jx, jy, ground, tiles, stride, tileRays, fx, fz, rx, rz, eyeHeight } = p
+  const nGrid = cols * rows
+  const nGround = ground.length / 2
+  const du = (2 * hx) / cols; const dv = (2 * hy) / rows
+  for (let q = from; q < to; q++) {
+    const j = q - from
+    let dx; let dy; let dz
+    if (q >= nGround) {
+      const g = q - nGround
+      const k = tileRays * ((Math.floor(g / tileRays) * stride) % tiles) + (g % tileRays)
+      if (k >= nGrid) { out[3 * j] = NaN; continue }
+      const a = -hx + du * ((k % cols) + jx)
+      const v = -hy + dv * (Math.floor(k / cols) + jy)
+      dx = b[0] + a * b[3] + v * b[6]
+      dy = b[1] + v * b[7]
+      dz = b[2] + a * b[5] + v * b[8]
+    } else {
+      const d = ground[2 * q]; const l = ground[2 * q + 1]
+      dx = d * fx + l * rx; dy = -eyeHeight; dz = d * fz + l * rz
+      const f = dx * b[0] + dy * b[1] + dz * b[2]
+      if (!(f > 0 && Math.abs(dx * b[3] + dz * b[5]) <= hx * f && Math.abs(dx * b[6] + dy * b[7] + dz * b[8]) <= hy * f)) { out[3 * j] = NaN; continue }
+    }
+    const len = Math.hypot(dx, dy, dz)
+    out[3 * j] = dx / len; out[3 * j + 1] = dy / len; out[3 * j + 2] = dz / len
+  }
 }
 
 const FACE_INSET = 0.15

@@ -54,18 +54,25 @@
     sec))
 
 (defn minute-of!
-  "The cell time (minutes after the section's base) for a write at now; the base moves on when it would pass 255."
-  [^js sec now]
-  (let [m (js/Math.max 0 (js/Math.floor (/ (- now (.-base sec)) minute-ms)))]
-    (if (<= m 255)
-      m
-      (let [shift (- m 255) ^js times (.-times sec)]
-        (dotimes [i 4096] (aset times i (js/Math.max 0 (- (aget times i) shift))))
-        (when-let [^js fine (.-fine sec)]
-          (let [ms (* shift minute-ms)]
-            (dotimes [i 4096] (aset fine i (let [t (- (aget fine i) ms)] (if (neg? t) js/NaN t))))))
-        (set! (.-base sec) (+ (.-base sec) (* shift minute-ms)))
-        255))))
+  "The cell time (minutes after the section's base) for a write at now; the base moves on when it would pass 255. The
+  last answer is kept for the same section and now: a pass writes thousands of cells at one now."
+  [^js st ^js sec now]
+  (if (and (identical? sec (.-minSec st)) (== now (.-minNow st)))
+    (.-minVal st)
+    (let [m (js/Math.max 0 (js/Math.floor (/ (- now (.-base sec)) minute-ms)))
+          m (if (<= m 255)
+              m
+              (let [shift (- m 255) ^js times (.-times sec)]
+                (dotimes [i 4096] (aset times i (js/Math.max 0 (- (aget times i) shift))))
+                (when-let [^js fine (.-fine sec)]
+                  (let [ms (* shift minute-ms)]
+                    (dotimes [i 4096] (aset fine i (let [t (- (aget fine i) ms)] (if (neg? t) js/NaN t))))))
+                (set! (.-base sec) (+ (.-base sec) (* shift minute-ms)))
+                255))]
+      (set! (.-minSec st) sec)
+      (set! (.-minNow st) now)
+      (set! (.-minVal st) m)
+      m)))
 
 (defn cell-seen
   "When the cell was last seen, in ms: to the ms for a mutable state, else to the minute (never later than the truth)."
@@ -109,14 +116,17 @@
 (defn record! [^js st store x y z id now]
   (let [cx (bit-shift-right x 4) sy (bit-shift-right y 4) cz (bit-shift-right z 4)
         key (section-key cx sy cz)
-        ^js sec (if (== key (.-lastKey st)) (.-lastSec st) (section-for! st store key cx sy cz now))]
-    (let [i (cell-index x y z)]
-      (when-not (== (aget (.-ids sec) i) (inc id)) (set! (.-writes st) (inc (.-writes st))))
-      (aset (.-ids sec) i (inc id))
-      (aset (.-times sec) i (minute-of! sec now))
-      (if (mutable-id? st id)
-        (aset (fine-times sec) i (- now (.-base sec)))
-        (when-let [^js fine (.-fine sec)] (aset fine i js/NaN))))))
+        ^js sec (if (== key (.-lastKey st)) (.-lastSec st) (section-for! st store key cx sy cz now))
+        i (bit-or (bit-shift-left (bit-and y 15) 8) (bit-shift-left (bit-and z 15) 4) (bit-and x 15))
+        ^js ids (.-ids sec)
+        v (inc id)]
+    (when-not (== (aget ids i) v) (set! (.-writes st) (inc (.-writes st))))
+    (aset ids i v)
+    (aset (.-times sec) i (if (and (identical? sec (.-minSec st)) (== now (.-minNow st))) (.-minVal st) (minute-of! st sec now)))
+    (if (let [k (if-let [^js ks (.-kinds st)] (if (< id (.-length ks)) (aget ks id) 0) 0)]
+          (if (zero? k) (mutable-id? st id) (== k 1)))
+      (aset (fine-times sec) i (- now (.-base sec)))
+      (when-let [^js fine (.-fine sec)] (aset fine i js/NaN)))))
 
 (defn new-stamp!
   "A new write round: sections written from now on are moved to the newest end again."

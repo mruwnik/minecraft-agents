@@ -265,35 +265,13 @@
 (defn slice-dirs
   "The unit directions of rays [from, to) of the pass as a Float64Array of triples (NaN x: a ground ray outside the cone now)."
   [{:keys [grid]} ^js pass ^js eye from to]
-  (let [{:keys [hx hy]} grid
-        cols (.-cols pass) n-grid (* cols (.-rows pass))
-        ^js ground (.-ground pass) n-ground (/ (.-length ground) 2)
-        yaw (.-yaw eye)
-        b (basis yaw (.-pitch eye))
-        fx (- (js/Math.sin yaw)) fz (- (js/Math.cos yaw)) rx (js/Math.cos yaw) rz (- (js/Math.sin yaw))
-        du (/ (* 2 hx) cols) dv (/ (* 2 hy) (.-rows pass))
-        out (js/Float64Array. (* 3 (- to from)))
-        put! (fn [j dx dy dz]
-               (let [len (js/Math.hypot dx dy dz)]
-                 (aset out (* 3 j) (/ dx len)) (aset out (+ (* 3 j) 1) (/ dy len)) (aset out (+ (* 3 j) 2) (/ dz len))))]
-    (loop [q from]
-      (when (< q to)
-        (let [j (- q from)
-              g (- q n-ground)
-              k (+ (* tile-rays (mod (* (quot g tile-rays) (.-stride pass)) (.-tiles pass))) (mod g tile-rays))]
-          (cond
-            (and (>= g 0) (>= k n-grid)) (aset out (* 3 j) js/NaN)
-            (>= g 0)
-            (let [a (+ (- hx) (* du (+ (mod k cols) (.-jx pass))))
-                  v (+ (- hy) (* dv (+ (js/Math.floor (/ k cols)) (.-jy pass))))]
-              (put! j (+ (aget b 0) (* a (aget b 3)) (* v (aget b 6)))
-                    (+ (aget b 1) (* v (aget b 7)))
-                    (+ (aget b 2) (* a (aget b 5)) (* v (aget b 8)))))
-            :else
-            (let [i (* 2 q) d (aget ground i) l (aget ground (inc i))
-                  dx (+ (* d fx) (* l rx)) dy (- game/eye-height) dz (+ (* d fz) (* l rz))]
-              (if (in-cone? b hx hy dx dy dz) (put! j dx dy dz) (aset out (* 3 j) js/NaN)))))
-        (recur (inc q))))
+  (let [yaw (.-yaw eye)
+        out (js/Float64Array. (* 3 (- to from)))]
+    (.sliceDirs ^js (kernel) out from to
+                #js {:b (basis yaw (.-pitch eye)) :hx (:hx grid) :hy (:hy grid) :cols (.-cols pass) :rows (.-rows pass)
+                     :jx (.-jx pass) :jy (.-jy pass) :ground (.-ground pass) :tiles (.-tiles pass) :stride (.-stride pass)
+                     :tileRays tile-rays :fx (- (js/Math.sin yaw)) :fz (- (js/Math.cos yaw))
+                     :rx (js/Math.cos yaw) :rz (- (js/Math.sin yaw)) :eyeHeight game/eye-height})
     out))
 
 (defn cast-slice!

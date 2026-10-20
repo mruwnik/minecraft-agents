@@ -129,7 +129,7 @@
      :opts o
      :grid g
      :st #js {:stores (js/Map.) :count 0 :cap (max 1 (js/Math.floor (/ (:cap-bytes o) store/section-bytes)))
-              :writes 0 :stamp 0 :lastKey -1 :lastSec nil :dim "overworld" :sight nil :visible nil
+              :writes 0 :stamp 0 :lastKey -1 :lastSec nil :minSec nil :minNow nil :minVal 0 :dim "overworld" :sight nil :visible nil
               :pass nil :passRays nil :lastStart nil :unsubscribe nil
               :mobs (js/Map.) :mobSource nil
               :infoOf (fn [id] (.stateInfo ^js raw id)) :kinds nil :sensedKey nil :sensed (js/Map.) :sensedJs (js/Map.)
