@@ -117,12 +117,11 @@
 
 (defn can-cook?
   "Mid-cook, or raw food carried and no failed cook in this job, with a furnace known or cooking worth a furnace of its
-  own (worth-cooking?); never while the night handler holds or when rushed? (a cook under way is dropped then). Darkness
-  is no reason to refuse: the smelt child's own safe? (exposure, threats) decides, so a sealed dark room cooks."
+  own (worth-cooking?); never when rushed? (a cook under way is dropped then). The clock is no reason to refuse (Q334): the smelt
+  child's own safe? (exposure, threats) decides, so a sealed dark room cooks."
   [c]
   (boolean
-   (and (not (night-holds? c))
-        (not (rushed? c))
+   (and (not (rushed? c))
         (or (:cooking (ctx/mem c))
             (and (seq (raw-carried c))
                  (not (:no-cook (ctx/mem c)))

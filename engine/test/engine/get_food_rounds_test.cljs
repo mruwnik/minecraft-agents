@@ -709,6 +709,15 @@
           (is (not-any? #{"chicken"} (map #(.-name %) (.-inventory (.self p)))) "no raw chicken left")
           (is (> (food p) 2) "and eaten"))))))
 
+(deftest raw-chicken-is-cooked-in-the-dark-sky-at-a-furnace-the-body-can-reach
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (assoc furnace-world :self {:food 2} :time 15000) :step-ms 2000)]
+          (core/submit! eng (list 'jobs.survival.get-food {:explore false}) {})
+          (await (run-until-idle! eng p 40))
+          (is (some #{"take"} (call-args p "furnace" "op")) "the clock alone is no reason to skip the cook"))))))
+
 (deftest raw-chicken-in-a-roofed-hut-at-night-is-not-carried-to-a-furnace
   (async done
     (tu/run-async done

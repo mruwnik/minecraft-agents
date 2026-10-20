@@ -324,10 +324,10 @@
           (core/submit! eng '(jobs.survival.night) {})
           (await (core/tick! eng))
           (reset! mid {:at (st/pos-of p) :holder (some? (core/holder eng))})
-          (is (= {:at {:x 4.5 :y 64 :z -0.5} :holder false} @mid) "shut in the pocket (the stair out of the failed pit went north), safe: not held")
-          (is (= #{{:x 3 :y 64 :z -1} {:x 3 :y 65 :z -1} {:x 3 :y 64 :z 0}}
-                 (set (filterv #(= 3 (:x %)) (mapv st/arg-pos (st/calls p "place")))))
-              "the opening, feet and head, plugged, and the corner beside it")
+          (is (= {:at {:x 5.5 :y 64 :z -0.5} :holder false} @mid) "shut in the far pair of the 2-deep pocket (the stair out of the failed pit went north), safe: not held")
+          (is (= #{{:x 4 :y 64 :z -1} {:x 4 :y 65 :z -1}}
+                 (set (filterv #(= 4 (:x %)) (mapv st/arg-pos (st/calls p "place")))))
+              "the near pair, feet and head, plugged: rock all round")
           (is (empty? (st/emitted seen :shelter.exposed)))
           (is (empty? (st/emitted seen :stopped)) "the night ended done"))))))
 
@@ -339,5 +339,5 @@
           (st/refuse-cell! p [0 63 0])
           (let [r (await (tu/child-outcome eng 'jobs.survival.night {} 40))]
             (is (= :dug-in (:night r)) (pr-str r))
-            (is (= 3 (reduce + (vals (:spent r)))) (pr-str r))
-            (is (re-find #"used 2 stone, 1 dirt \(night shelter" (:text r)) (pr-str r))))))))
+            (is (= 2 (reduce + (vals (:spent r)))) (pr-str r))
+            (is (re-find #"used 1 dirt, 1 stone \(night shelter" (:text r)) (pr-str r))))))))
