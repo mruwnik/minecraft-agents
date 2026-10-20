@@ -90,7 +90,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world [{:name "iron_ingot" :count 8} {:name "stick" :count 2}] {})
-                       {:items ["iron_pickaxe" "iron_helmet"] :explore false :min-food 0})]
+                       {:items ["iron_pickaxe" "iron_helmet"] :explore false :settings {:jobs.items.get-kit/min-food 0}})]
           (await (f/run-ticks s 120))
           (is (= 1 (get (f/inv s) "iron_pickaxe")))
           (is (= {"head" "iron_helmet"} (worn s)))
@@ -103,7 +103,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world [{:name "stick" :count 2}] {})
-                       {:items ["iron_pickaxe" "iron_helmet" "iron_boots"] :explore false :min-food 0})]
+                       {:items ["iron_pickaxe" "iron_helmet" "iron_boots"] :explore false :settings {:jobs.items.get-kit/min-food 0}})]
           (await (f/run-ticks s 120))
           (is (not-any? #{"iron_pickaxe" "iron_helmet" "iron_boots"} (crafted s)))
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
@@ -116,7 +116,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world [{:name "iron_ingot" :count 3} {:name "stick" :count 2}] {})
-                       {:items ["iron_pickaxe" "iron_helmet"] :explore false :min-food 0})]
+                       {:items ["iron_pickaxe" "iron_helmet"] :explore false :settings {:jobs.items.get-kit/min-food 0}})]
           (await (f/run-ticks s 120))
           (is (= 1 (get (f/inv s) "iron_pickaxe")))
           (is (nil? (get (f/inv s) "iron_helmet")))
@@ -129,7 +129,7 @@
       (fn ^:async t []
         (let [w (-> (world [{:name "cobblestone" :count 2} {:name "stick" :count 3}] {})
                     (update :recipes assoc "stone_sword" {:count 1 :needs {"cobblestone" 2 "stick" 1} :table true}))
-              s (start w {:items ["stone_sword" "iron_pickaxe"] :explore false :min-food 0})]
+              s (start w {:items ["stone_sword" "iron_pickaxe"] :explore false :settings {:jobs.items.get-kit/min-food 0}})]
           (await (f/run-ticks s 120))
           (is (= #{"stone_sword"} (set (crafted s))))
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
@@ -140,7 +140,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world [] {:head {:name "iron_helmet" :count 1}})
-                       {:items ["iron_helmet" "iron_boots"] :explore false :min-food 0})]
+                       {:items ["iron_helmet" "iron_boots"] :explore false :settings {:jobs.items.get-kit/min-food 0}})]
           (await (f/run-ticks s 40))
           (is (empty? (crafted s)))
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source :have ["iron_helmet"]}
@@ -151,7 +151,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world [{:name "iron_pickaxe" :count 1} {:name "iron_boots" :count 1}] {})
-                       {:items ["iron_pickaxe" "iron_boots"] :min-food 0})]
+                       {:items ["iron_pickaxe" "iron_boots"] :settings {:jobs.items.get-kit/min-food 0}})]
           (await (f/run-ticks s 20))
           (is (empty? (crafted s)))
           (is (= {"feet" "iron_boots"} (worn s)))
@@ -191,7 +191,7 @@
       (fn ^:async t []
         ;; armed: an unarmed body would first explore the empty world for a sword's wood
         (let [s (start (world [{:name "bread" :count 1} {:name "wooden_axe" :count 1}] {})
-                       {:items ["iron_pickaxe"] :min-food 20 :food false})]
+                       {:items ["iron_pickaxe"] :settings {:jobs.items.get-kit/min-food 20} :food false})]
           (await (f/run-ticks s 20))
           (is (empty? (crafted s)))
           (is (= {:status :stopped :item "iron_pickaxe" :reason :needs-food :food 5 :min-food 20}
@@ -202,7 +202,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world [{:name "iron_ingot" :count 3} {:name "stick" :count 2}] {})
-                       {:items ["iron_pickaxe"] :min-food 20 :food false})]
+                       {:items ["iron_pickaxe"] :settings {:jobs.items.get-kit/min-food 20} :food false})]
           (await (f/run-ticks s 60))
           (is (= 1 (get (f/inv s) "iron_pickaxe")))
           (is (= :done (:status @(:out s)))))))))
@@ -211,7 +211,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (hungry-world [] 0) {:items ["iron_pickaxe"] :min-food 20 :explore false})]
+        (let [s (start (hungry-world [] 0) {:items ["iron_pickaxe"] :settings {:jobs.items.get-kit/min-food 20} :explore false})]
           (await (f/run-ticks s 60))
           (is (= {:status :stopped :item "iron_pickaxe" :reason :needs-food :cause :no-food}
                  (select-keys @(:out s) [:status :item :reason :cause]))))))))
@@ -220,7 +220,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (hungry-world [] 14) {:items ["iron_pickaxe"] :min-food 20 :explore false})]
+        (let [s (start (hungry-world [] 14) {:items ["iron_pickaxe"] :settings {:jobs.items.get-kit/min-food 20} :explore false})]
           (await (f/run-ticks s 80))
           (is (= 1 (count (f/events-of s :kit.no-food))) "asked once, not again")
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
@@ -231,7 +231,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world [{:name "iron_ingot" :count 3} {:name "stick" :count 2} {:name "bread" :count 4}] {})
-                       {:items ["iron_pickaxe"] :min-food 20})]
+                       {:items ["iron_pickaxe"] :settings {:jobs.items.get-kit/min-food 20}})]
           (await (f/run-ticks s 60))
           (is (= 1 (get (f/inv s) "iron_pickaxe")))
           (is (= :done (:status @(:out s)))))))))
@@ -240,7 +240,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (world [{:name "iron_boots" :count 1}] {}) {:items ["iron_boots"] :wear false :min-food 0})]
+        (let [s (start (world [{:name "iron_boots" :count 1}] {}) {:items ["iron_boots"] :wear false :settings {:jobs.items.get-kit/min-food 0}})]
           (await (f/run-ticks s 20))
           (is (empty? (worn s)))
           (is (= {:status :done :have ["iron_boots"]} (select-keys @(:out s) [:status :have]))))))))
@@ -249,7 +249,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (world [] {:head {:name "diamond_helmet" :count 1}}) {:items ["iron_helmet"] :min-food 0})]
+        (let [s (start (world [] {:head {:name "diamond_helmet" :count 1}}) {:items ["iron_helmet"] :settings {:jobs.items.get-kit/min-food 0}})]
           (await (f/run-ticks s 20))
           (is (empty? (crafted s)))
           (is (= {:status :done :have ["iron_helmet"]} (select-keys @(:out s) [:status :have]))))))))
@@ -276,7 +276,7 @@
         (let [s (start (assoc (hungry-world [] 20) :entities (for [[id x] [[7 5] [8 6] [9 7]]]
                                                                  {:id id :name "cow" :kind "passive" :pos {:x x :y 64 :z 0} :health 20
                                                                   :drops [{:name "beef" :count 1}]}))
-                       {:items ["iron_pickaxe"] :min-food 3 :explore false})]
+                       {:items ["iron_pickaxe"] :settings {:jobs.items.get-kit/min-food 3} :explore false})]
           (let [timer (js/setInterval #(swap! (:clock s) + 500) 5)]
             (await (f/run-ticks s 80))
             (js/clearInterval timer))
@@ -288,7 +288,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (hungry-world [] 20) {:items ["iron_pickaxe"] :min-food 20 :explore false})]
+        (let [s (start (hungry-world [] 20) {:items ["iron_pickaxe"] :settings {:jobs.items.get-kit/min-food 20} :explore false})]
           (await (f/run-ticks s 80))
           (is (= [:no-stock] (mapv :cause (f/events-of s :kit.no-food))))
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
@@ -312,7 +312,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (raw-world) {:items ["iron_pickaxe"] :food false :min-food 0 :wear false} (assoc f/sight-opts :radius 48))]
+        (let [s (start (raw-world) {:items ["iron_pickaxe"] :food false :settings {:jobs.items.get-kit/min-food 0} :wear false} (assoc f/sight-opts :radius 48))]
           (loop [i 0]
             (await (f/run-ticks s 1))
             (.advance (.-world (:p s)) 40)

@@ -22,14 +22,15 @@
   :wear, wear each armour piece once it is carried. One call is the whole goal; it yields (:continue) only while a
   child waits on the world.
   Each round starts from the world: an item carried or worn (or a better armour piece worn in its slot) is skipped.
+  When furnace material is ahead and no sword or axe is carried, a stone (else wooden) sword is obtained first (a failure warns kit.no-weapon and goes on).
   When the next missing item needs furnace material, one jobs.items.obtain child gets what all missing pieces need together (iron_ingot: 32 for the
   whole kit, less what is carried), so the ore is mined and smelted in one go; if it cannot, the job stops at once
   naming the material, unless some of it (raw input, or the material itself) is carried: then raw input is smelted, the pieces it covers are made in
   order and the job stops at the first one it cannot make. Then one obtain child per missing piece, in order, with :explore and a :spend :job-time of the ::minutes setting
   (longer than the fetch limit). Each piece got is an info kit.progress.
   While furnace material is still short (mining or smelting ahead; pure crafting needs no food) and fewer than
-  :min-food food points are carried (nil: ::min-food; harmful food does not count), a jobs.survival.get-food child
-  (with :explore, and :stock :min-food to fill the pack) runs before the work and again after each piece (:food false: no child, stops :needs-food instead). A child that
+  ::min-food food points are carried (harmful food does not count), a jobs.survival.get-food child
+  (with :explore, and :stock ::min-food to fill the pack) runs before the work and again after each piece (:food false: no child, stops :needs-food instead). A child that
   stops (:no-food, or :no-stock when fed with nothing to stock) ends the job :needs-food with its reason as :cause only
   when the body is starving (jobs.lib.foods/starving?); else a warn kit.no-food names the cause and the work goes on, with
   no new food search unless the body starves. Get a base first.
@@ -49,8 +50,7 @@
   {:items {:doc "the items to get, in order" :spec (a/coll-of a/item?) :default iron-kit}
    :wear {:doc "wear each armour piece once it is carried" :spec boolean? :default true}
    :explore {:doc "passed to the obtain children: walk and look for raw needs not seen" :spec (a/or-of boolean? map?) :default true}
-   :food {:doc "run a get-food child when mining or smelting is ahead and fewer than :min-food points are carried; false: stop :needs-food" :spec boolean? :default true}
-   :min-food {:doc "food points to carry before mining or smelting starts and between pieces; nil: ::min-food" :spec (a/int-in 0 nil) :default nil}})
+   :food {:doc "run a get-food child when mining or smelting is ahead and fewer than ::min-food points are carried; false: stop :needs-food" :spec boolean? :default true}})
 
 (a/defargs settings
   {::minutes {:default 45 :doc "Time budget of each obtain child of the kit." :spec (a/num-in 0 nil)}
@@ -205,10 +205,10 @@
                       {:text (str "kit stopped at " (:item out) ": " (name (:reason out)) (when (:why out) (str " (" (:why out) ")")))})))))
 
 (defn food-args
-  "The get-food child's args: feed the body, then stock the pack up to :min-food points."
+  "The get-food child's args: feed the body, then stock the pack up to ::min-food points."
   [c]
   {:explore (:explore (:args c))
-   :stock (or (:min-food (:args c)) (settings/get settings ::min-food))})
+   :stock (settings/get settings ::min-food)})
 
 (defn ^:async run-food!
   "One get-food child round: :continue, nil when the body is fed or not hungry, or {:cause :why} when it could not be fed."
@@ -223,7 +223,7 @@
 (defn ^:async round [c]
   (let [a (:args c)
         items (vec (:items a))
-        min-food (or (:min-food a) (settings/get settings ::min-food))
+        min-food (settings/get settings ::min-food)
         version (game/version-of (:primitives c))
         m (ctx/mem c)]
     (cond
