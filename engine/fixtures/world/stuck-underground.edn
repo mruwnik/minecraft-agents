@@ -1,6 +1,6 @@
 ;; Card 2e405a35 (D9): the :stuck-underground trigger walks an idle body that sits 6 or more blocks under its home out of its hole. A stone mass x 0..31
 ;; z 8..24, y 0..11 with an air room around the body at [16 0 16] and a ramp of open cells up to the surface (y 12) at x 30; the home is a torch on the surface.
-;; Should-succeed: no job, buried, home 12 above: the trigger fires go-home once and the body ends within 5 of the home.
+;; Should-succeed: no job for :idle-s 20, buried, home 12 above: the trigger fires go-home once and the body ends within 5 of the home.
 ;; Should-fail: a home only 4 above never fires it.
 {:defaults
  {:tags [:survival :stuck-underground] :time :any
@@ -19,7 +19,7 @@
             [:fill [29 10 16] [29 12 16] "air"]
             [:fill [30 11 16] [30 13 16] "air"]]
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}
-  :register [{:trigger :stuck-underground :persistence :cooldown :cooldown-s 300}]
+  :register [{:trigger :stuck-underground :persistence :cooldown :cooldown-s 300 :args {:idle-s 20}}]
   :limit-s 150}
  :cases
  [{:name "idle-body-twelve-under-its-home-walks-out"
