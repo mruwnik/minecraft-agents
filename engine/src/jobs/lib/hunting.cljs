@@ -64,7 +64,8 @@
                              (assoc :collecting true))))))
 
 (defn ^:async attack!
-  "Call the attack child on the target (a whole fight) with the call's weapons; books its end. :again, :yield while the
+  "Call the attack child on the target (a whole fight) with the call's weapons and :checks (the child's own default :checks would
+  otherwise hide the caller's); books its end. :again, :yield while the
   child waits on the world, or the ending after too many skips in a row (opts :give-up, a fn of c).
   opts: :radius (search radius of the child), :job and :rule-fn (see note-target!).
   Shared by combat.hunt and animals.cull."
@@ -72,9 +73,11 @@
   (let [target (:target (ctx/mem c))
         _ (note-target! c target opts)
         tools (ctx/use c :tools)
+        checks (:checks (ctx/frozen-call c))
         e (waits/waiting-out c (await (ctx/call c :attack 'jobs.combat.attack
                                                 (cond-> {:targets [target] :radius radius :absent :done}
-                                                  tools (assoc :use {:tools tools})))))]
+                                                  tools (assoc :use {:tools tools})
+                                                  checks (assoc :checks checks)))))]
     (if (= :continue e)
       :yield
       (do (book-outcome! c target e)

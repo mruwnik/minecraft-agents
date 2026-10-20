@@ -514,6 +514,14 @@
           (is (empty? (attacked s)) "nothing attacked at night")
           (is (= [:dark] (distinct (map :reason (events-of s :waiting))))))))))
 
+(deftest the-calls-checks-reach-the-attack-child
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:count 1 :keep 0 :checks {:safe? '(always)}} {:inventory h/sword :time st/night :entities [(cow 1 3)]} 10))]
+          (is (seq (attacked s)) "the caller's :checks replace attack's own dark-sky check below the hunt")
+          (is (empty? (filter #(= :dark (:reason %)) (events-of s :waiting)))))))))
+
 (deftest a-hunt-under-way-waits-when-hurt-and-is-not-ended-by-it
   (async done
     (tu/run-async done
