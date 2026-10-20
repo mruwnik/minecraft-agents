@@ -211,8 +211,8 @@
   join or are seen afresh; one that stopped chasing (stopped-chasing) moves to :fled with :ended why. The chasers
   still on, as JS entities, nearest first. A mob that hurt the body in its refuge (:reached) has a way whatever the map says."
   [c]
-  (let [radius (danger-q/radius-in (:args c))
-        ranged-radius (danger-q/ranged-radius-in (:args c))
+  (let [radius (danger-q/hostile-radius)
+        ranged-radius (danger-q/ranged-radius)
         p (:primitives c)
         low? (<= (.-health (.self p)) (hide-health))
         now (ctx/now c)

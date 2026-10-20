@@ -353,7 +353,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [longest-ms]} (await (searches-in-flee-leg {:entities [(zombie 7 11 {})]} {:radius 14} clear-after-6))]
+        (let [{:keys [longest-ms]} (await (searches-in-flee-leg {:entities [(zombie 7 11 {})]} {:settings {:jobs.lib.danger/hostile-radius 14}} clear-after-6))]
           (is (>= longest-ms 4000) "a mob 11 blocks off is not close: the leg searches on"))))))
 
 (deftest the-close-radius-is-a-setting
@@ -368,21 +368,21 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [longest-ms]} (await (searches-in-flee-leg {:entities [(zombie 7 11 {})]} {:radius 14} (first-search-then-clear close-in)))]
+        (let [{:keys [longest-ms]} (await (searches-in-flee-leg {:entities [(zombie 7 11 {})]} {:settings {:jobs.lib.danger/hostile-radius 14}} (first-search-then-clear close-in)))]
           (is (<= longest-ms 2000) "searching from 11 blocks off, the zombie reaches the body: within a second"))))))
 
 (deftest a-leg-started-with-the-hostile-far-ends-once-the-body-is-hit
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [longest-ms]} (await (searches-in-flee-leg {:entities [(zombie 7 11 {})]} {:radius 14} (first-search-then-clear hurt)))]
+        (let [{:keys [longest-ms]} (await (searches-in-flee-leg {:entities [(zombie 7 11 {})]} {:settings {:jobs.lib.danger/hostile-radius 14}} (first-search-then-clear hurt)))]
           (is (<= longest-ms 2000) "a hit taken in the search bounds the leg"))))))
 
 (deftest an-armed-body-whose-search-runs-while-the-zombie-closes-in-fights
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [attacks]} (await (searches-in-flee-leg {:inventory [{:name "stone_sword" :count 1}] :entities [(zombie 7 11 {})]} {:radius 14} (first-search-then-clear (fn [st n] (hurt st n) (close-in st n)))))]
+        (let [{:keys [attacks]} (await (searches-in-flee-leg {:inventory [{:name "stone_sword" :count 1}] :entities [(zombie 7 11 {})]} {:settings {:jobs.lib.danger/hostile-radius 14}} (first-search-then-clear (fn [st n] (hurt st n) (close-in st n)))))]
           (is (pos? attacks) "armed with a sword, zombie adjacent, search running: it hits back"))))))
 
 (deftest a-chase-that-gains-no-distance-escalates-and-a-gain-resets-it

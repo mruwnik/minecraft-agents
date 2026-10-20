@@ -22,7 +22,7 @@
   "Where the seen melee hostiles within the flight's :radius stand."
   [c]
   (let [p (:primitives c)]
-    (->> (danger-q/known-hostiles p (danger-q/radius-in (:args c)) {})
+    (->> (danger-q/known-hostiles p (danger-q/hostile-radius) {})
          (filter #(and (not (combat/ranged? %)) (danger-q/seen-only? %)))
          (mapv #(danger-q/mob-pos p %)))))
 
@@ -104,8 +104,8 @@
 (defn shooters
   "Where the seen ranged hostiles within the flight's :ranged-radius stand, and the unseen shooters of recent shots (flight/fire-spots)."
   [c]
-  (let [radius (danger-q/radius-in (:args c))
-        ranged-radius (danger-q/ranged-radius-in (:args c))
+  (let [radius (danger-q/hostile-radius)
+        ranged-radius (danger-q/ranged-radius)
         p (:primitives c)]
     (into (->> (danger-q/known-hostiles p radius {:ranged-radius ranged-radius})
                (filter #(and (combat/ranged? %) (danger-q/seen-only? %)))
@@ -175,7 +175,7 @@
   (let [threats (into (shooters c) (melee-spots c))
         p (:primitives c)
         _ (await (look/look-unknown! c (map lb/cell (dig-cells/open-cells p (sh-sense/feet p) threats))))
-        radius (danger-q/radius-in (:args c))
+        radius (danger-q/hostile-radius)
         blocks (flight/blocks c)
         open (dig-cells/open-cells p (sh-sense/feet p) threats)
         free (remove #(occupied? c %) open)

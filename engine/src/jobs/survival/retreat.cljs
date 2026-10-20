@@ -27,9 +27,9 @@
 (def doc
   "Flee from the hostiles in range, one whole flight per round: run until no mob chases the body any more.
   A real danger (jobs.lib.danger: a mob with a walkable way to the body, or a ranged one with a line of fire) within
-  :radius (ranged ones :ranged-radius) starts a chase, or is seen afresh. A mob stops chasing (vanilla) once it is
+  ::hostile-radius (ranged ones ::ranged-radius) starts a chase, or is seen afresh. A mob stops chasing (vanilla) once it is
   gone (dead, despawned, untracked), beyond its follow range (jobs.lib.threats: zombie 35, most 16), out of line of
-  sight for retreat-flight/lost-s (4 s), a melee one beyond :radius that stood at one place in sight for retreat-flight/still-s (5 s), or has no walkable way to the body (nor, ranged, a line of fire; a creeper within
+  sight for retreat-flight/lost-s (4 s), a melee one beyond ::hostile-radius that stood at one place in sight for retreat-flight/still-s (5 s), or has no walkable way to the body (nor, ranged, a line of fire; a creeper within
   retreat-flight/::blast-reach (6) always has one: its blast).
   Each step, in this order:
   1. A door, gate or trapdoor standing open within a hand's reach and nearer the nearest chaser than the body is shut
@@ -56,7 +56,7 @@
      hostiles (a closed room behind them: turned retreat-walk ::flank-turn degrees toward it, to go round them, while it still gains on them so:
      jobs.lib.cost/outruns-at?), avoiding :hazard positions.
      When a wall blocks the way away it turns up to 120 degrees towards open ground (at least 2 clear cells).
-     It leaves out the ends within retreat-flight/::died-radius of a recent :died place, then dark ones at night or under ground
+     It leaves out the ends within retreat-flight/::died-radius of a recent :died place, then dark ones
      (retreat-flight/::prefer-lit?), each only while another end is open.
      It prefers, in this order: a step whose end is out of every ranged chaser's line of fire (cover: leaves stop arrows),
      the full step that takes least time (a swim block costs retreat-cover/::swim-factor), the most open.
@@ -68,14 +68,14 @@
   not possible, it walks on. A plug begun where it stands is finished before it walks on (refuge/plugging-here?).
   Not while a creeper chases it or a melee mob is within cover-gap: it walks (or backs off, cornered) first.
   A step of at most 1.5 s there that left the body where it stood (a search) is followed by that cover at once.
-  A mob that attacks at close range within :radius and outruns the body (jobs.lib.cost/outruns?: a spider at any food;
+  A mob that attacks at close range within ::hostile-radius and outruns the body (jobs.lib.cost/outruns?: a spider at any food;
   not a creeper or an enderman): no flee step. After the door and room steps (1., 2., the race at each chaser's own
   speed) it takes the cornered options (4.) without the back-off.
   4. Cornered (no open direction worth a walk, or the walk is blocked, or a melee hostile within 3 hit the body since the last step, or the body is in a closed room with a melee mob within close-radius and carries no weapon or block, or melee mobs within close-radius hit it retreat-cornered/::beaten-hits (2) times, or a ranged mob ::shot-hits (2) times, within its ::hurt-window-s: it cannot be outrun, and the fight is weighed over those hostiles alone; checked afresh every step) with no hostile within
-     :radius: holds a second (wait, why cornered) and looks again; after the retreat-flight ::no-gain-steps setting (20) of such steps or holds with no gain the flight ends :keeps-off. With one within :radius: takes the safest option it has not yet failed.
+     ::hostile-radius: holds a second (wait, why cornered) and looks again; after the retreat-flight ::no-gain-steps setting (20) of such steps or holds with no gain the flight ends :keeps-off. With one within ::hostile-radius: takes the safest option it has not yet failed.
      - an angry enderman near (one the client flags angry, that hurt the body this flight or is within 3 blocks; it teleports; a walk is no flight): at once, before any walk: water within 6 blocks (it keeps away from water; the body steps in and holds), else a seen 2-high gap under a roof within 8 blocks (a 3-tall enderman cannot enter; walks there and holds), else plug in, last of all fight.
      - a drowned near while the body is in water (and no fight wins): swims to the nearest seen dry stand within 16 blocks first (past the mob if need be), before seal, pillar or a fist fight.
-     - fight (jobs.combat.attack) only when jobs.lib.cost/fight-damage leaves :reserve health. Never against a creeper.
+     - fight (jobs.combat.attack) only when jobs.lib.cost/fight-damage leaves ::fight-reserve health. Never against a creeper.
      - plug in (jobs.survival.shut-in, a child: the walls, and later a pit or side pocket, never at home; the early refuge the walls alone): shuts the body
        in with carried blocks (or, with none to wall with, ones it digs), the sides towards a seen ranged hostile first. Every
        plug block goes to the scaffold ledger (purpose :retreat-plug), taken back by jobs.access.cleanup once no hostile is near.
@@ -95,7 +95,7 @@
      An option that fails is not tried again until all have failed. Then, after a second's hold, all are tried again
      (one retreat_blocked warning per flight).
   Plugged in or up a pillar it hides (one retreat_sealed warning; a declared hold, wait why hiding) while a
-  hostile within its follow range (jobs.lib.threats; ranged ones at least :ranged-radius) would have a walkable way to
+  hostile within its follow range (jobs.lib.threats; ranged ones at least ::ranged-radius) would have a walkable way to
   the refuge if its own blocks were gone, and for the retreat-refuge ::quiet-s setting (30 s) more after the last such danger (a silent mob is forgotten
   after a few seconds); then the flight ends :hidden. After the ::hide-s setting (60 s) in the refuge with no real danger on the body as it
   stands (jobs.lib.danger/danger-near?, the hostile-near trigger's test) it ends :hidden even while that hostile stays;
@@ -114,10 +114,7 @@
   A cell in another's zone is used only as a last resort (shut-in.trespass-last-resort warning).")
 
 (a/defargs args
-  {:radius {:doc "hostiles within this many blocks start a flight; nil: the jobs.lib.danger ::hostile-radius setting" :spec (a/num-in 0 nil) :default nil}
-   :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks start a flight; nil: the ::ranged-radius setting" :spec (a/num-in 0 nil) :default nil}
-   :goal {:doc "a position {:x :y :z} the flight walks to with go-to legs (planner danger costs keep it round the hostiles) while the body outruns them (done within 3 blocks of it; given up for jobs.survival.retreat-goal/retry-s after a leg that lost ground or left the goal's height), else leans toward, like a refuge; nil: away only" :spec goal/pos-spec :default nil}
-   :reserve {:doc "health a cornered fight must be expected to leave; nil: the ::fight-reserve setting" :spec (a/num-in 0 nil) :default nil}
+  {:goal {:doc "a position {:x :y :z} the flight walks to with go-to legs (planner danger costs keep it round the hostiles) while the body outruns them (done within 3 blocks of it; given up for jobs.survival.retreat-goal/retry-s after a leg that lost ground or left the goal's height), else leans toward, like a refuge; nil: away only" :spec goal/pos-spec :default nil}
    :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pocket or pit is dropped and the lava left" :spec #{:seal :stop} :default :seal}})
 
 (a/defargs settings
@@ -139,8 +136,8 @@
   "Done once no real danger is within range and the flight holds no chaser, fled mob or refuge: those are written by the
   flight's end (flight/end-flight!), which the call still has to make."
   [c]
-  (let [radius (danger-q/radius-in (:args c))
-        ranged-radius (danger-q/ranged-radius-in (:args c))
+  (let [radius (danger-q/hostile-radius)
+        ranged-radius (danger-q/ranged-radius)
         {:keys [fled chasers refuge]} (ctx/mem c)
         data [:units :hostiles :done (count fled) :left (count chasers)]]
     (if (or (seq fled) (seq chasers) refuge (shot/open? (:primitives c) (ctx/view c)) (seq (danger-q/dangers (:primitives c) radius {:ranged-radius ranged-radius} {:sight? false})))
@@ -154,7 +151,7 @@
 
 
 (defn ^:async wait-far!
-  "Cornered with every chaser beyond :radius: pause a moment (why cornered) and look again."
+  "Cornered with every chaser beyond ::hostile-radius: pause a moment (why cornered) and look again."
   [c]
   (await (child/pause! c (/ (flight/wait-ms) 1000) "cornered"))
   :again)
@@ -245,9 +242,6 @@
   [c]
   (ctx/update-mem! c flight/resume-flight (ctx/now c))
   (when-not (:flight-start (ctx/mem c)) (ctx/update-mem! c assoc :flight-start (ctx/now c) :flight-from (u/self-pos c) :flight-health (.-health (.self (:primitives c)))))
-  (loop []
-    (ctx/update-mem! c assoc :last-step (ctx/now c))
-    (let [r (await (if (:refuge (ctx/mem c)) (refuge/refuge-round! c) (flight-step! c)))]
-      (if (= :again r)
-        (do (await (pace/pace!)) (recur))
-        r))))
+  (await (pace/steps! c (fn ^:async step []
+                          (ctx/update-mem! c assoc :last-step (ctx/now c))
+                          (await (if (:refuge (ctx/mem c)) (refuge/refuge-round! c) (flight-step! c)))))))

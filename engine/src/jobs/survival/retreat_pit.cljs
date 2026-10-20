@@ -10,6 +10,7 @@
             [jobs.lib.dig-look :as look]
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.result :as result]
             [jobs.lib.seal :as seal]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -33,9 +34,9 @@
   {"grass_block" "dirt" "stone" "cobblestone" "deepslate" "cobbled_deepslate" "podzol" "dirt" "mycelium" "dirt"})
 
 (defn hostiles
-  "The cells the melee hostiles within the call's :radius overlap."
+  "The cells the melee hostiles within the danger ::hostile-radius overlap."
   [c]
-  (seal/hostile-cells (:primitives c) (danger-q/radius-in (:args c))))
+  (seal/hostile-cells (:primitives c) (danger-q/hostile-radius)))
 
 (defn side-open?
   "Whether the side column at feet height (cell and the one over it) is seen open, dry and free of hostiles: a way to
@@ -273,6 +274,11 @@
     (or (first (remove (fn [cells] (some #(access/trespass-refusal in :dig %) cells)) free))
         (when-not (false? (:trespass? (:args c))) (first free))))))
 
+(defn ^:async step-to!
+  "A go-to child (walk only) to a cell of the body's own dug pit or pocket: its ending, or :continue."
+  [c cell]
+  (await (ctx/call c :step 'jobs.movement.go-to {:pos cell :range 0 :ways #{:walk}})))
+
 (defn ^:async pocket!
   "Dig a side pocket (two cells deep, feet and head, closed on every other side), collecting the blocks, and step
   into its far end: :again, so the next step seals the way in with them. nil when no side fits or a dig fails or lays open fluid or a
@@ -287,8 +293,7 @@
         (access/trespass! c "shut-in" (some #(access/trespass-refusal in :dig %) cells)))
       (loop [[cell & more] cells]
         (if (nil? cell)
-          (do ;; raw moveTo kept: a step into the body's own pocket, as the pit's drop; the planner has no standable goal there.
-              (await (ctx/act c :moveTo (clj->js {:pos (nth cells 2) :range 0.5})))
+          (do (await (step-to! c (nth cells 2)))
               :again)
           (let [_ (await (tools/equip-for! c (dig-cells/rock-name p cell) {:fast true}))
                 r (await (tidy/dig! c cell true))]
@@ -308,7 +313,7 @@
                     (if-let [why (await (lays-open? c dug (into (set dug) [feet (update feet :y inc)])))]
                       (stop! why (str "the pocket lays open " (if (= :fluid-adjacent why) "fluid" "a gap")))
                       (do ;; the far pair is dug from inside: the drops lie there and the reach is short
-                        (when (= 2 (count dug)) (await (ctx/act c :moveTo (clj->js {:pos (first cells) :range 0.5}))))
+                        (when (= 2 (count dug)) (await (step-to! c (first cells))))
                         (recur more)))))))))))))
 
 (defn pit-index
@@ -418,8 +423,7 @@
           (do (when (look/unknown? p (lb/cell floor)) (await (look/look-at! c (lb/cell floor))))
               (if-not (dig-cells/known-solid? p floor)
                 (stop :no-floor (str (or (u/seen-name p floor) "an unseen cell") " under the hole; not stepping into it"))
-                ;; raw moveTo kept: a drop into the body's own pit; the planner has no standable goal there.
-                (let [r (await (ctx/act c :moveTo (clj->js {:pos to :range 0.5})))]
+                (let [r (await (step-to! c to))]
                   (if (= to (sh-sense/feet p))
                     (do (u/progress! c) (ctx/update-mem! c dissoc :refills) :again)
-                    (retry-or-stop c :descent-stalled (str "cannot descend into the pit: " (.-status r))))))))))))
+                    (retry-or-stop c :descent-stalled (str "cannot descend into the pit: " (or (result/why r) (:kind r) r))))))))))))

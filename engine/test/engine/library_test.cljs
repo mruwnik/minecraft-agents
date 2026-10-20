@@ -543,7 +543,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (flight-setup {:floor [-40 -10 10 10]
                                              :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 5 :y 64 :z 0}}]})]
-          (core/submit! eng (list 'jobs.survival.retreat {:radius 8 :settings {:jobs.survival.retreat-flight/still-s 3600}}) {})
+          (core/submit! eng (list 'jobs.survival.retreat {:settings {:jobs.lib.danger/hostile-radius 8 :jobs.survival.retreat-flight/still-s 3600}}) {})
           (await (core/tick! eng))
           (is (< (.-x (.-pos (.self p))) -30) "moved away from the zombie, along x, beyond its follow range")
           (is (= [] (:list (core/state eng))) "one round"))))))
@@ -564,7 +564,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (flight-setup {:entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 1 :y 64 :z 0}}]})]
           (.override (.-world p) "steer" (fn [_ _ _] (js/Promise.resolve #js {:status "timeout" :pose #js {}})))
-          (core/submit! eng (list 'jobs.survival.retreat {:radius 8}) {})
+          (core/submit! eng (list 'jobs.survival.retreat {:settings {:jobs.lib.danger/hostile-radius 8}}) {})
           (await (core/tick! eng))
           (is (= 4 (count (calls p "attack"))) "unarmed and nothing to seal with: the fist until the zombie dies")
           (is (empty? (filter #(= :retreat_blocked (:kind %)) @seen))))))))

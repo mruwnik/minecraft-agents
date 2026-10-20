@@ -6,7 +6,6 @@
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.combat :as combat]
-            [jobs.lib.pace :as pace]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.ready :as ready]
@@ -76,7 +75,7 @@
         true))))
 
 (defn ^:async refuge-round!
-  "A step in a refuge: building the pillar (a hostile in the cell of the next block is struck out of it; one more try after a refusal, which a hit or knockback can cause), or hidden in it (to the end of the flight)."
+  "A step in a refuge: building the pillar (a hostile in the cell of the next block is struck out of it; one more try after a refusal, which a hit or knockback can cause), or hidden in it (one hold step, :again, until it ends the flight)."
   [c]
   (let [{:keys [kind hidden] :as refuge} (:refuge (ctx/mem c))]
     (if hidden
@@ -109,10 +108,8 @@
   in, nil when no way shuts it. :plugging marks the option, ways and cell a plug is under way at (plugging-here?)."
   [c option ways]
   (let [{:keys [on-lava]} (:args c)
-        radius (danger-q/radius-in (:args c))
-        ranged-radius (danger-q/ranged-radius-in (:args c))
         e (await (ctx/call c option 'jobs.survival.shut-in
-                           (cond-> {:ways ways :on-lava on-lava :trespass? (contains? #{:plug-zone :plug-dig-zone} option) :settings {:jobs.lib.danger/hostile-radius radius :jobs.lib.danger/ranged-radius ranged-radius}}
+                           (cond-> {:ways ways :on-lava on-lava :trespass? (contains? #{:plug-zone :plug-dig-zone} option)}
                              (ctx/use c :blocks) (assoc :use {:blocks (ctx/use c :blocks)}))))
         feet (sh-sense/feet (:primitives c))]
     (cond
@@ -159,7 +156,7 @@
   [c {:keys [anchor cells]}]
   (let [p (:primitives c)
         open (set cells)
-        ranged-radius (danger-q/ranged-radius-in (:args c))
+        ranged-radius (danger-q/ranged-radius)
         reach-of (fn [e] (cond-> (threats/follow-range (.-name e)) (combat/ranged? e) (max ranged-radius)))
         known (flight/near-known p (set (flight/dead-ids c)) threats/max-follow-range ranged-radius)]
     (boolean (some #(and (<= (danger-q/mob-distance p %) (reach-of %))
@@ -212,7 +209,7 @@
            first))))
 
 (defn ^:async hide-hold!
-  "Plugged in or up the pillar: hold (a :wait, why hiding) while the refuge keeps a danger off
+  "Plugged in or up the pillar: one hold step (a :wait, why hiding; :again) while the refuge keeps a danger off
   (refuge-danger?) and the ::quiet-s setting after the last one, then end the flight :hidden. Past the ::hide-s setting (while a melee hostile waits at the foot, ::hide-max-s) in the refuge with no real
   danger on the body as it stands (danger-q/danger-near?, the hostile-near trigger's test) it ends :hidden at once,
   the trigger fires again should one reach it. Sealed in a plug or pit with a melee hostile at the foot past ::hide-s it first digs a stair up
@@ -223,55 +220,53 @@
   (let [now (ctx/now c)]
     (when-not (:quiet-from (ctx/mem c)) (ctx/update-mem! c assoc :quiet-from now))
     (when-not (:hidden-since (ctx/mem c)) (ctx/update-mem! c assoc :hidden-since now)))
-  (loop []
-    (when (refuge-danger? c (:refuge (ctx/mem c))) (ctx/update-mem! c assoc :quiet-from (ctx/now c)))
-    (let [radius (danger-q/radius-in (:args c))
-          ranged-radius (danger-q/ranged-radius-in (:args c))
-          {:keys [quiet-from hidden-since refuge hold-health]} (ctx/mem c)
-          health (.-health (.self (:primitives c)))
-          hurt? (< health (or hold-health health))
-          breaker (breaker-of c refuge)
-          _ (ctx/update-mem! c assoc :hold-health health)
-          quiet? (>= (- (ctx/now c) quiet-from) (* 1000 (quiet-s)))
-          held-ms (- (ctx/now c) hidden-since)
-          spent? (and (>= held-ms (* 1000 (hide-s)))
-                      (or (>= held-ms (* 1000 (hide-max-s))) (not (waiting-at-foot? c)))
-                      (not (danger-q/danger-near? (:primitives c) radius ranged-radius)))
-          dig-out? (or (:dig-out (ctx/mem c))
-                       (and (#{:plug :pit} (:kind refuge))
-                            (>= held-ms (* 1000 (hide-s)))
-                            (seq (waiting-melee c))
-                            (not (danger-q/danger-near? (:primitives c) radius ranged-radius))))]
-      (cond
-        hurt? (let [ids (map (fn [e] (.-id e)) (flight/near-known (:primitives c) #{} (reach-radius) (reach-radius)))]
-                (ctx/update-mem! c #(-> % (dissoc :quiet-from :hidden-since :hold-health :dig-out) (update :reached (fnil into #{}) ids)))
-                (ctx/emit! c :retreat.hide-hurt :warn {:text "hurt while hidden: the refuge does not keep the hostile off" :pos (sh-sense/feet (:primitives c))
-                                                       :hostiles (hostiles-known c)})
-                (if (= :again (await (pillar/raise! c))) :again (await (abandon-refuge! c))))
-        breaker (let [name (.-name breaker)]
-                  (ctx/update-mem! c #(-> % (dissoc :quiet-from :hidden-since :hold-health :dig-out) (update :reached (fnil conj #{}) (.-id breaker))))
-                  (ctx/emit! c :retreat.hide-breached :warn {:text (str "a " name " is near: the refuge does not keep it off, leaving before it strikes")
-                                                              :mob name :pos (sh-sense/feet (:primitives c))})
-                  (await (abandon-refuge! c)))
-        dig-out? (let [r (await (dig-out! c))]
-                   (if (= :again r)
-                     :again
-                     (do (ctx/update-mem! c dissoc :quiet-from :hidden-since :dig-out)
-                         (flight/end-flight! c :hidden {:hold :spent :dug-out (= :out r)}))))
-        quiet? (do (ctx/update-mem! c dissoc :quiet-from :hidden-since)
-                   (flight/end-flight! c :hidden {:hold :quiet}))
-        spent? (do (ctx/update-mem! c dissoc :quiet-from :hidden-since)
-                   (flight/end-flight! c :hidden {:hold :spent}))
-        :else (do (await (child/pause! c (/ (flight/wait-ms) 1000) "hiding"))
-                  (await (pace/pace!))
-                  (recur))))))
+  (when (refuge-danger? c (:refuge (ctx/mem c))) (ctx/update-mem! c assoc :quiet-from (ctx/now c)))
+  (let [radius (danger-q/hostile-radius)
+        ranged-radius (danger-q/ranged-radius)
+        {:keys [quiet-from hidden-since refuge hold-health]} (ctx/mem c)
+        health (.-health (.self (:primitives c)))
+        hurt? (< health (or hold-health health))
+        breaker (breaker-of c refuge)
+        _ (ctx/update-mem! c assoc :hold-health health)
+        quiet? (>= (- (ctx/now c) quiet-from) (* 1000 (quiet-s)))
+        held-ms (- (ctx/now c) hidden-since)
+        spent? (and (>= held-ms (* 1000 (hide-s)))
+                    (or (>= held-ms (* 1000 (hide-max-s))) (not (waiting-at-foot? c)))
+                    (not (danger-q/danger-near? (:primitives c) radius ranged-radius)))
+        dig-out? (or (:dig-out (ctx/mem c))
+                     (and (#{:plug :pit} (:kind refuge))
+                          (>= held-ms (* 1000 (hide-s)))
+                          (seq (waiting-melee c))
+                          (not (danger-q/danger-near? (:primitives c) radius ranged-radius))))]
+    (cond
+      hurt? (let [ids (map (fn [e] (.-id e)) (flight/near-known (:primitives c) #{} (reach-radius) (reach-radius)))]
+              (ctx/update-mem! c #(-> % (dissoc :quiet-from :hidden-since :hold-health :dig-out) (update :reached (fnil into #{}) ids)))
+              (ctx/emit! c :retreat.hide-hurt :warn {:text "hurt while hidden: the refuge does not keep the hostile off" :pos (sh-sense/feet (:primitives c))
+                                                     :hostiles (hostiles-known c)})
+              (if (= :again (await (pillar/raise! c))) :again (await (abandon-refuge! c))))
+      breaker (let [name (.-name breaker)]
+                (ctx/update-mem! c #(-> % (dissoc :quiet-from :hidden-since :hold-health :dig-out) (update :reached (fnil conj #{}) (.-id breaker))))
+                (ctx/emit! c :retreat.hide-breached :warn {:text (str "a " name " is near: the refuge does not keep it off, leaving before it strikes")
+                                                            :mob name :pos (sh-sense/feet (:primitives c))})
+                (await (abandon-refuge! c)))
+      dig-out? (let [r (await (dig-out! c))]
+                 (if (= :again r)
+                   :again
+                   (do (ctx/update-mem! c dissoc :quiet-from :hidden-since :dig-out)
+                       (flight/end-flight! c :hidden {:hold :spent :dug-out (= :out r)}))))
+      quiet? (do (ctx/update-mem! c dissoc :quiet-from :hidden-since)
+                 (flight/end-flight! c :hidden {:hold :quiet}))
+      spent? (do (ctx/update-mem! c dissoc :quiet-from :hidden-since)
+                 (flight/end-flight! c :hidden {:hold :spent}))
+      :else (do (await (child/pause! c (/ (flight/wait-ms) 1000) "hiding"))
+                :again))))
 
 (defn hostiles-known
   "The hostiles the body knows within follow range, as [{:name :pos [x y z]}]; empty when it only heard one."
   [c]
   (let [p (:primitives c)]
     (mapv (fn [e] {:name (.-name e) :pos (mapv #(js/Math.floor (% (danger-q/mob-pos p e))) [:x :y :z])})
-          (flight/near-known p (set (flight/dead-ids c)) threats/max-follow-range (danger-q/ranged-radius-in (:args c))))))
+          (flight/near-known p (set (flight/dead-ids c)) threats/max-follow-range (danger-q/ranged-radius)))))
 
 (defn hide-now! [c refuge text]
   (ctx/update-mem! c assoc :refuge (assoc refuge :hidden true))

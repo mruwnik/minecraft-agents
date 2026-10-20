@@ -45,8 +45,8 @@
                 '(jobs.storage.deposit {:ignore-zones? 3})
                 '(jobs.survival.shut-in {:ways #{:bogus}})
                 '(jobs.survival.shut-in {:place 3})
-                '(jobs.survival.retreat {:radius "text"})
-                '(jobs.survival.retreat {:reserve -7})]]
+                '(jobs.survival.retreat {:goal "text"})
+                '(jobs.survival.retreat {:on-lava :lava})]]
     (is (string? (expr/problem registry/jobs form)) (pr-str form)))
   (doseq [form ['(jobs.blocks.dig {:pos [1 64 1] :on-fluid :fail})
                 '(jobs.combat.attack {:radius 16 :absent :wait})
@@ -55,7 +55,7 @@
                 '(jobs.items.obtain {:item "stick" :count 100})
                 '(jobs.storage.deposit {:free 2})
                 '(jobs.survival.shut-in {:for :night :ways #{:walls}})
-                '(jobs.survival.retreat {:radius 8 :reserve 6})]]
+                '(jobs.survival.retreat {:on-lava :stop})]]
     (is (nil? (expr/problem registry/jobs form)) (pr-str form))))
 
 (deftest shape-errors-once-caught-in-a-round-are-refused-at-submit
