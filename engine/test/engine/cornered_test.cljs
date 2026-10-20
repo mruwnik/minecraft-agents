@@ -761,6 +761,20 @@
           (is (= 1 (count (tu/walked-to eng))) "one step back, into the last cell of the room (then the creeper leaves)")
           (is (= -1 (:x (first-move eng)))))))))
 
+(deftest an-unarmed-body-at-a-dead-end-never-walks-to-a-creeper-to-punch-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:pos [0.5 64 0.5]} :blocks dead-end
+                                      :entities [(assoc (creeper 6.5 64 0.5) :visible true)]})
+              n (atom 0)]
+          (.override (.-world p) "blockAt"
+                     (fn [token a impl] (when (= 300 (swap! n inc)) (swap! (fake/state p) assoc :entities [])) (impl token a)))
+          (core/submit! eng retreat {})
+          (await (core/tick! eng))
+          (is (zero? (count (calls p "attack"))) "no melee with a creeper out of reach")
+          (is (every? #(< (:x %) 3) (tu/walked-to eng)) "no step towards the creeper"))))))
+
 (defn stuck-walks!
   "Make every walk of the engine walker get no nearer: :blocked."
   [p]

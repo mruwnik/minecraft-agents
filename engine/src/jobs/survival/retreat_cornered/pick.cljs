@@ -37,6 +37,13 @@
   [{:keys [armed? win? sweeps fist-sweeps]}]
   (and (not armed?) (not win?) (< sweeps fist-sweeps)))
 
+(defn ^:async fight-or-wait!
+  "fight!, except that a reach-only fight with no hostile within hit-reach fails the option at once: attack would sit waiting for one to come."
+  [c weapons reach-only? hostiles]
+  (if (and reach-only? (not-any? #(<= (danger-q/mob-distance (:primitives c) %) (hit-reach)) hostiles))
+    (do (flight/tried! c :fight) nil)
+    (await (fight! c weapons reach-only?))))
+
 (defn ^:async fist-look!
   "Count a sweep and let the flight step again: it walks away if a way has opened, else the options (all failed) come back here."
   [c]
@@ -223,7 +230,7 @@
                   :fight (if (fist-hold? {:armed? (or beaten-fight? armed?) :win? win?
                                           :sweeps (:sweeps (ctx/mem c) 0) :fist-sweeps max-fist-sweeps})
                            (await (fist-look! c))
-                           (await (fight! c (if (= [:fight] order) weapons (into (vec weapons) tool-weapons)) blind?)))
+                           (await (fight-or-wait! c (if (= [:fight] order) weapons (into (vec weapons) tool-weapons)) (or blind? (some? (some combat/creeper? hostiles))) hostiles)))
                   :plug (await (refuge/plug-option! c :plug #{:walls}))
                   :plug-zone (when (:zone-walls (ctx/mem c)) (await (refuge/plug-option! c :plug-zone #{:walls})))
                   :plug-dig (await (refuge/plug-option! c :plug-dig #{:pit :pocket}))
