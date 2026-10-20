@@ -292,25 +292,28 @@ for (const [label, onSwing, expected] of hurtCases) {
   })
 }
 
-test('attack reports killed when the death status follows the hurt one a moment later', async () => {
+test('attack reports killed when the death status follows the hurt one a moment later', async t => {
+  mockClock(t)
   const { bot, p } = rig(ownWorld())
   bot.attack = async () => {
     bot.emit('entityHurt', bot.entities[8])
     setTimeout(() => bot.emit('entityDead', bot.entities[8]), 20 * SCALE)
   }
-  assert.equal((await p.attack('t1', { id: 8 })).status, 'killed')
+  assert.equal((await driveClock(t, p.attack('t1', { id: 8 }))).status, 'killed')
 })
 
-test('attack reports killed when the death status follows the hurt one 300 ms later (a loaded machine)', async () => {
+test('attack reports killed when the death status follows the hurt one 300 ms later (mock clock)', async t => {
+  mockClock(t)
   const { bot, p } = rig(ownWorld())
   bot.attack = async () => {
     bot.emit('entityHurt', bot.entities[8])
     setTimeout(() => bot.emit('entityDead', bot.entities[8]), 300 * SCALE)
   }
-  assert.equal((await p.attack('t1', { id: 8 })).status, 'killed')
+  assert.equal((await driveClock(t, p.attack('t1', { id: 8 }))).status, 'killed')
 })
 
-test('attack reports hit at once when the hurt target shows lowered health above 0', async () => {
+test('attack reports hit at once when the hurt target shows lowered health above 0', async t => {
+  mockClock(t)
   const { bot, p } = rig(ownWorld())
   bot.entities[8] = { ...bot.entities[8], health: 20 }
   bot.attack = async () => {
@@ -318,14 +321,15 @@ test('attack reports hit at once when the hurt target shows lowered health above
     bot.emit('entityHurt', bot.entities[8])
   }
   const t0 = Date.now()
-  assert.equal((await p.attack('t1', { id: 8 })).status, 'hit')
+  assert.equal((await driveClock(t, p.attack('t1', { id: 8 }))).status, 'hit')
   assert.ok(Date.now() - t0 < 300 * SCALE)
 })
 
-test('attack resolves early when entityHurt arrives after a delay', async () => {
+test('attack resolves early when entityHurt arrives after a delay', async t => {
+  mockClock(t)
   const { bot, p } = rig(ownWorld())
   bot.attack = async () => { setTimeout(() => bot.emit('entityHurt', bot.entities[8]), 20 * SCALE) }
-  assert.deepEqual(await p.attack('t1', { id: 8 }), { status: 'hit', health: 20, hurt: true })
+  assert.deepEqual(await driveClock(t, p.attack('t1', { id: 8 })), { status: 'hit', health: 20, hurt: true })
   assert.equal(bot.listenerCount('entityHurt'), 0)
 })
 
