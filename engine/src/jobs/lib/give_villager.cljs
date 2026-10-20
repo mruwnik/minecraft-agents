@@ -18,8 +18,8 @@
   {::drop-radius {:default 48 :doc "Blocks within which the body collects its tossed food back." :spec (a/int-in 1 96)}
    ::min-gap {:default 2.5 :doc "Fewest blocks along x or z between body and villager at a toss: a level toss lands about 2.5 to 3 ahead; nearer, the drop is in the body's own pickup reach." :spec (a/num-in 0 nil)}
    ::max-gap {:default 3.5 :doc "Most blocks along x and z between body and villager at a toss: farther, the drop falls short of the villager's pickup reach." :spec (a/num-in 0 nil)}
-   ::crowd-gap {:default 2 :doc "Blocks around the spot a toss lands (::land-gap in front of the villager) that must hold no other villager: one nearer takes the drop, and it is not counted." :spec (a/num-in 0 nil)}
-   ::land-gap {:default 1 :doc "Blocks in front of the villager, on the body's side, where the toss is taken to land." :spec (a/num-in 0 nil)}
+   ::crowd-gap {:default 2 :doc "Blocks around the spot a toss lands (::toss-reach ahead of the body) that must hold no other villager: one nearer takes the drop, and it is not counted." :spec (a/num-in 0 nil)}
+   ::toss-reach {:default 2.6 :doc "Blocks ahead of the body, along the toss, where a level toss comes to rest: it flies on past a villager nearer than this." :spec (a/num-in 0 nil)}
    ::line-gap {:default 1.5 :doc "Blocks a villager must keep from the line of the toss: nearer, it picks up the flying drop." :spec (a/num-in 0 nil)}
    ::crowd-s {:default 30 :doc "Seconds to wait for other villagers to move off before the call stops :crowded." :spec (a/int-in 0 nil)}
    ::leg-s {:default 5 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
@@ -32,7 +32,7 @@
 (defn min-gap [] (settings/get settings ::min-gap))
 (defn max-gap [] (settings/get settings ::max-gap))
 (defn crowd-gap [] (settings/get settings ::crowd-gap))
-(defn land-gap [] (settings/get settings ::land-gap))
+(defn toss-reach [] (settings/get settings ::toss-reach))
 (defn line-gap [] (settings/get settings ::line-gap))
 (defn crowd-s [] (settings/get settings ::crowd-s))
 (defn leg-s [] (settings/get settings ::leg-s))
@@ -167,11 +167,11 @@
     (js/Math.hypot (- (:x o) (+ (:x a) (* t abx))) (- (:z o) (+ (:z a) (* t abz))))))
 
 (defn clear-side?
-  "Whether a toss from side [sx sz] of the villager at v, thrown from `from`, meets none of the other villagers: the drop
-  lands land-gap in front of the villager (nobody within crowd-gap of that spot) and flies over a line that passes
-  no other villager within pickup reach."
-  [others v [sx sz] from]
-  (let [land {:x (+ (:x v) (* sx (land-gap))) :z (+ (:z v) (* sz (land-gap)))}]
+  "Whether a toss thrown from `from` at the villager on side [sx sz] meets none of the other villagers: the drop comes to
+  rest toss-reach ahead of the body (nobody within crowd-gap of that spot) and flies over a line that passes no other
+  villager within pickup reach."
+  [others [sx sz] from]
+  (let [land {:x (- (:x from) (* sx (toss-reach))) :z (- (:z from) (* sz (toss-reach)))}]
     (every? #(and (> (gap land %) (crowd-gap)) (> (seg-dist from land %) (line-gap))) others)))
 
 (defn others
@@ -181,14 +181,14 @@
        (remove #(= (.-uuid e) (.-uuid %)))
        (map #(u/pos-of (.-pos %)))))
 
-(defn from-stand [v side] (merge v (select-keys (stand v side) [:x :z])))
+(defn from-stand [v side] (let [{:keys [x z]} (stand v side)] (assoc v :x (+ x 0.5) :z (+ z 0.5))))
 
 (defn clear-stand
   "The first side of v, turned round by blocked, that is clear of the other villagers, or nil."
   [others v me blocked]
   (let [ss (sides me v)
         turned (take 4 (drop (mod blocked 4) (cycle ss)))]
-    (first (filter #(clear-side? others v % (from-stand v %)) turned))))
+    (first (filter #(clear-side? others % (from-stand v %)) turned))))
 
 (defn ^:async wait-room!
   "Hold 0.5 s for the crowd round the villager to move off; the held time is booked, and the call stops :crowded after
@@ -324,7 +324,7 @@
             side (clear-stand os v me (:blocked m 0))]
         (cond
           (nil? side) (await (wait-room! c))
-          (and (tossing-gap? me v) (clear-side? os v (side-of me v) me)) (await (toss! c e item))
+          (and (tossing-gap? me v) (clear-side? os (side-of me v) me)) (await (toss! c e item))
           :else (await (walk! c (stand v side) 0)))))))
 
 (defn ^:async run-rounds

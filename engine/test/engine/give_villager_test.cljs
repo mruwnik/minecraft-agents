@@ -163,6 +163,16 @@
           (is (= {:given 1 :status :done} (select-keys @out [:given :status])))
           (is (<= 6 (first @xs)) "not tossed from the neighbour's side"))))))
 
+(deftest a-neighbour-just-behind-the-villager-takes-a-toss-that-flies-past
+  ;; Live, a level toss rested 2.6 ahead of the body, past the villager, and the fed neighbour behind it took every drop.
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out]} (await (feed {:entities [(villager 6) (villager 7.5 {:id 2 :uuid "v-2"})] :inventory bread}
+                                           {:to "v-1"} 200 #(taking % (all-taken "v-1"))))]
+          (is (= :crowded (:reason @out)))
+          (is (empty? (tosses p))))))))
+
 (deftest a-blocked-walk-is-unreachable
   (async done
     (tu/run-async done
