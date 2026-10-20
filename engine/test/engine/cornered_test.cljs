@@ -958,6 +958,24 @@
           (is (= {:x 3 :y 64 :z 0} (first (tu/walked-to eng))) "walks under the roof, digs and places nothing")
           (is (zero? (count (calls p "place")))))))))
 
+(deftest a-body-with-an-enderman-near-looks-round-for-a-roof-it-has-not-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}]
+                                      :blocks {(key-of 3 66 0) "stone" (key-of 3 63 0) "stone"}
+                                      :entities [(enderman 2.5 64 0.5)]})
+              sensed (.-sensedAt p)
+              looked-east? #(some (fn [l] (> (.. l -args -pos -x) 3.5)) (calls p "look"))]
+          (aset p "sensedAt" (fn [pos] (if (and (== 66 (.-y pos)) (not (looked-east?))) #js {:unknown true} (sensed pos))))
+          (.override (.-world p) "steer"
+                     (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
+          (core/submit! eng retreat {})
+          (await (core/tick! eng))
+          (is (looked-east?) "an unseen cell reads as rock, so the body looks round before it gives up on the roof")
+          (is (= {:x 3 :y 64 :z 0} (first (tu/walked-to eng))) "walks under the roof")
+          (is (zero? (count (calls p "place")))))))))
+
 (deftest a-body-with-an-enderman-near-looks-up-before-it-takes-the-sky-for-a-roof
   (async done
     (tu/run-async done

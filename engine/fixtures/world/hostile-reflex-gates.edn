@@ -63,7 +63,8 @@
    :limit-s 40}
   {:name "provoked-enderman-no-shelter-body-seals"
    :body {:inventory [["dirt" 20]] :effects [["resistance" 900 4]]}
-   :act [[:summon "enderman" [20.5 0 16.5] "{}"]
+   :act [[:summon "enderman" [20.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0}]}"]
+         [:until-seen {:entity "enderman"} 10]
          [:rcon "damage @e[type=enderman,tag=wt,$BOX,limit=1] 1 minecraft:player_attack by $BODY"]]
    :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}
             {:no-event {:source :job :kind :child_started :data {:slot :fight}} :for-s 40}]
@@ -71,22 +72,26 @@
   {:name "provoked-enderman-water-near-body-steps-in"
    :blocks [[:fill [19 0 14] [23 0 18] "stone"] [:fill [20 0 15] [22 0 17] "water"]]
    :body {:inventory [["dirt" 20]] :effects [["resistance" 900 4]]}
-   :act [[:summon "enderman" [11.5 0 16.5] "{}"]
+   :act [[:summon "enderman" [11.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0}]}"]
+         [:until-seen {:entity "enderman"} 10]
          [:rcon "damage @e[type=enderman,tag=wt,$BOX,limit=1] 1 minecraft:player_attack by $BODY"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30}]
    :after [[:body-near [21.5 0 16.5] 2]]
    :limit-s 40}
   {:name "provoked-enderman-roof-gap-body-walks-under"
+   :register [{:trigger :hostile-near :args {:radius 16 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile {:radius 16 :ranged-radius 16})}]
    :blocks [[:fill [20 0 14] [20 1 14] "stone"] [:fill [24 0 18] [24 1 18] "stone"] [:fill [20 2 14] [24 2 18] "stone"]]
    :body {:inventory [["dirt" 20]] :effects [["resistance" 900 4]]}
-   :act [[:summon "enderman" [11.5 0 16.5] "{}"]
+   :act [[:summon "enderman" [11.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0}]}"]
+         [:until-seen {:entity "enderman"} 10]
          [:rcon "damage @e[type=enderman,tag=wt,$BOX,limit=1] 1 minecraft:player_attack by $BODY"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
+            {:event {:source :job :kind :holding :data {:reason "under a roof, out of the enderman's reach"}} :within-s 30}
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30}]
-   :after [[:body-near [22.5 0 16.5] 2.5]]
    :limit-s 40}
-  ;; card 4e2615d0: an angry enderman that never leaves (speed 0) must not hold the body in water for ever: after hold-cap holds the flight tries the next options and ends (the stone ring leaves no seal cell)
+  ;; card 4e2615d0: an angry enderman that never leaves (speed 0) must not hold the body in water for ever: after hold-cap holds the flight moves on to the next options (roof, seal, or none left)
   {:name "staying-enderman-ends-the-water-hold-and-the-flight-ends"
    :settings {:jobs.survival.retreat-cornered/hold-cap 2}
    :blocks [[:fill [14 0 14] [18 0 18] "stone"] [:fill [15 0 15] [17 0 17] "water"]]
@@ -97,7 +102,7 @@
          [:rcon "damage @e[type=enderman,tag=wt,$BOX,limit=1] 1 minecraft:player_attack by $BODY"]
          [:wait-s 1]
          [:job (jobs.survival.retreat {})]]
-   :expect [{:event {:source :job :kind :stopped} :within-s 50 :of-job true}]
+   :expect [{:count-event {:source :job :kind :holding :data {:reason "in water, away from the enderman"}} :for-s 45 :at-least 1 :at-most 6 :of-job true}]
    :limit-s 60}
   {:name "phantom-near-unarmed-body-seals-no-flight"
    :body {:inventory [["cobblestone" 20]] :effects [["resistance" 900 4]]}

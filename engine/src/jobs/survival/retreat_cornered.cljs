@@ -275,6 +275,14 @@
          (sort-by #(u/dist from {:x (+ 0.5 (:x %)) :y (:y %) :z (+ 0.5 (:z %))}))
          first)))
 
+(defn ^:async seen-once!
+  "find (a cell or nil), else once a flight after a look round (a cell not seen reads as rock) the first find that follows a look."
+  [c option find]
+  (or (find)
+      (when-not (contains? (:glanced (ctx/mem c)) option)
+        (ctx/update-mem! c update :glanced (fnil conj #{}) option)
+        (await (look/look-around-until! c find)))))
+
 (defn ^:async water!
   "Stand in water (an enderman keeps away from it): a step to the nearest water within water-reach, a short hold once
   in it. :again, nil when there is none or the walk is blocked."
@@ -283,7 +291,7 @@
         self (u/self-pos c)]
     (if (= "water" (block-at {:x (js/Math.floor (:x self)) :y (js/Math.floor (:y self)) :z (js/Math.floor (:z self))}))
       (await (hold! c :water "in water, away from the enderman"))
-      (when-let [cell (water-cell block-at self (water-reach))]
+      (when-let [cell (await (seen-once! c :water #(water-cell block-at (u/self-pos c) (water-reach))))]
         (if (await (step! c :water {:x (+ 0.5 (:x cell)) :y (:y cell) :z (+ 0.5 (:z cell))} 0))
           :again
           (do (flight/tried! c :water) nil))))))
@@ -321,7 +329,7 @@
       (look/see! c))
     (if (and (escape/passable? (block-at (update here :y inc))) (escape/solid? (block-at (update here :y + 2))))
       (await (hold! c :roof "under a roof, out of the enderman's reach"))
-      (when-let [cell (roof-cell block-at self (roof-reach))]
+      (when-let [cell (await (seen-once! c :roof #(roof-cell block-at (u/self-pos c) (roof-reach))))]
         (if (await (step! c :roof {:x (+ 0.5 (:x cell)) :y (:y cell) :z (+ 0.5 (:z cell))} 0))
           :again
           (do (flight/tried! c :roof) nil))))))
