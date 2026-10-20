@@ -126,14 +126,23 @@
       (set! (.-markArr st) arr)
       arr)))
 
+(defn mark-kind
+  "How a recorded cell of state id stops sight, stored with its slice mark: 1 never, 2 for every line (a full cube),
+  3 depends on the line (a thin block)."
+  [^js raw ^js sight id]
+  (cond (not (== 1 (aget sight id))) 1
+        (thin-boxes raw sight id) 3
+        :else 2))
+
 (defn cast!
   "One ray from (ox oy oz) along the unit vector (dx dy dz). Returns the number of cells entered.
-  A cell an earlier ray of this slice recorded (st.markStamp) is not read or recorded again: recording it again would
-  write the same state id and time. Cells not recorded are never marked, so another ray may still record them. The
-  light of the previous cell is read only when a blocking cell needs it."
+  A cell an earlier ray of this slice recorded is not read or recorded again: recording it again would write the same
+  state id and time. Its mark (st.markStamp * 4 + mark-kind) also says whether it stops every line, so the ray goes on
+  or ends without reading the cell; only a thin block is read again. Cells not recorded are never marked, so another ray
+  may still record them. The light of the previous cell is read only when a blocking cell needs it."
   [{:keys [raw opts]} ^js st store ox oy oz dx dy dz now]
   (let [radius (:radius opts) near (.-near st)
-        stamp (.-markStamp st)
+        base (* 4 (.-markStamp st))
         ^js sight (.-sight st) ^js visible (.-visible st)
         sx (if (pos? dx) 1 -1) sy (if (pos? dy) 1 -1) sz (if (pos? dz) 1 -1)
         tdx (if (zero? dx) js/Infinity (js/Math.abs (/ 1 dx)))
@@ -143,13 +152,14 @@
         ex (+ ox (* dx radius)) ey (+ oy (* dy radius)) ez (+ oz (* dz radius))
         stops? (fn [id x y z] (blocks-line? raw sight id x y z ox oy oz ex ey ez))
         first-id (.stateAt ^js raw x0 y0 z0)
-        first-light (.lightAt ^js raw x0 y0 z0)]
+        first-light (.lightAt ^js raw x0 y0 z0)
+        cx0 (bit-shift-right x0 4) cy0 (bit-shift-right y0 4) cz0 (bit-shift-right z0 4)
+        ^js marks0 (marks-of st (section-key cx0 cy0 cz0))]
     (when (>= first-id 0)
-      (let [^js marks (marks-of st (section-key (bit-shift-right x0 4) (bit-shift-right y0 4) (bit-shift-right z0 4)))
-            i (cell-index x0 y0 z0)]
-        (when-not (== stamp (aget marks i))
+      (let [i (cell-index x0 y0 z0)]
+        (when-not (< 0 (- (aget marks0 i) base) 4)
           (record! st store x0 y0 z0 first-id now)
-          (aset marks i stamp))))
+          (aset marks0 i (+ base (mark-kind raw sight first-id))))))
     (if (or (< first-id 0) (stops? first-id x0 y0 z0))
       1
       (loop [x x0 y y0 z z0
@@ -157,38 +167,41 @@
              tmy (if (zero? dy) js/Infinity (* tdy (if (pos? dy) (- (inc y0) oy) (- oy y0))))
              tmz (if (zero? dz) js/Infinity (* tdz (if (pos? dz) (- (inc z0) oz) (- oz z0))))
              prev first-light
-             n 1]
+             n 1
+             marks marks0 mcx cx0 mcy cy0 mcz cz0]
         (let [t (js/Math.min tmx tmy tmz)]
           (if (> t radius)
             n
             (let [ax (== t tmx) ay (and (not ax) (== t tmy)) az (and (not ax) (not ay))
                   px x py y pz z
                   x (if ax (+ x sx) x) y (if ay (+ y sy) y) z (if az (+ z sz) z)
-                  id (.stateAt ^js raw x y z)]
-              (if (< id 0)
-                n
-                (let [^js marks (marks-of st (section-key (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4)))
-                      i (cell-index x y z)
-                      marked? (== stamp (aget marks i))
-                      blocks? (stops? id x y z)]
-                  (if marked?
-                    (if blocks?
-                      (inc n)
-                      (recur x y z
-                             (if ax (+ tmx tdx) tmx) (if ay (+ tmy tdy) tmy) (if az (+ tmz tdz) tmz)
-                             -1 (inc n)))
-                    (let [light (.lightAt ^js raw x y z)
-                          shown (if blocks?
-                                  (max-light light (if (neg? prev) (.lightAt ^js raw px py pz) prev))
-                                  light)]
-                      (when (or (== 1 (aget visible shown)) (<= t near))
-                        (record! st store x y z id now)
-                        (aset marks i stamp))
-                      (if blocks?
-                        (inc n)
-                        (recur x y z
-                               (if ax (+ tmx tdx) tmx) (if ay (+ tmy tdy) tmy) (if az (+ tmz tdz) tmz)
-                               light (inc n))))))))))))))
+                  cx (bit-shift-right x 4) cy (bit-shift-right y 4) cz (bit-shift-right z 4)
+                  ^js marks (if (and (== cx mcx) (== cy mcy) (== cz mcz)) marks (marks-of st (section-key cx cy cz)))
+                  i (cell-index x y z)
+                  kind (- (aget marks i) base)
+                  ntmx (if ax (+ tmx tdx) tmx) ntmy (if ay (+ tmy tdy) tmy) ntmz (if az (+ tmz tdz) tmz)]
+              (cond
+                (== kind 1) (recur x y z ntmx ntmy ntmz -1 (inc n) marks cx cy cz)
+                (== kind 2) (inc n)
+                :else
+                (let [id (.stateAt ^js raw x y z)]
+                  (if (< id 0)
+                    n
+                    (let [blocks? (stops? id x y z)]
+                      (if (== kind 3)
+                        (if blocks?
+                          (inc n)
+                          (recur x y z ntmx ntmy ntmz -1 (inc n) marks cx cy cz))
+                        (let [light (.lightAt ^js raw x y z)
+                              shown (if blocks?
+                                      (max-light light (if (neg? prev) (.lightAt ^js raw px py pz) prev))
+                                      light)]
+                          (when (or (== 1 (aget visible shown)) (<= t near))
+                            (record! st store x y z id now)
+                            (aset marks i (+ base (mark-kind raw sight id))))
+                          (if blocks?
+                            (inc n)
+                            (recur x y z ntmx ntmy ntmz light (inc n) marks cx cy cz)))))))))))))))
 
 (defn moved-why
   "Why a pass is due for the eye's change since the last pass started: :moved, :turned, or nil."
