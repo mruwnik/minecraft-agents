@@ -14,7 +14,7 @@
 #
 #   --priority  jump the queue: ahead of every waiting normal compile (it still waits for the compile now running).
 #               For the owner's UI rebuilds (dashboard ui/server) and nothing else.
-#   --release   `shadow-cljs release` instead of `compile` (the :viewer build); the engine :body-release build always does.
+#   --release   `shadow-cljs release` instead of `compile` (the :viewer build); the engine :body-release and the dashboard :agent-tools builds always do.
 #   A build-time .clj on the build source paths newer than the running server restarts it before the compile (shadow-cljs does not reload macros).
 #   --stop      stop the checkout's server (waits for the checkout's compile; for restarts; no build argument).
 #
@@ -52,7 +52,7 @@ while [ $# -gt 0 ]; do
     --release) verb=release ;;
     --stop) stop=1 ;;
     -*) usage ;;
-    body-release) builds+=("$a"); verb=release ;;   # the body's release build
+    body-release|agent-tools) builds+=("$a"); verb=release ;;   # release builds: one file, no per-run vm.Script of the dev runtime files
     *) builds+=("$a") ;;
   esac
 done
@@ -68,7 +68,7 @@ fi
 
 # a world run calls the agent tools (bin/*): build their bundle in the same compile when it is missing or stale
 if [ "$project" = dashboard ] && [ "$stop" = 0 ] && [ -z "$outdir" ] && [ "${builds[*]}" = world-test ] && "$repo/tools/agent-tools-stale" "$repo"; then
-  builds+=(agent-tools)
+  "$repo/tools/compile" dashboard agent-tools || exit $?   # its own compile: agent-tools is a release build, world-test is not
 fi
 
 log_builds="${builds[*]}"; restarted=0; fallback=${MC_COMPILE_FALLBACK:-}; pick_wait=${MC_COMPILE_PICK_WAIT_S:-}

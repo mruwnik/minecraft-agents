@@ -1,4 +1,4 @@
-// Why JavaScript: node --test file for tools/agent-tools-stale (the check tools/compile uses to add the agent-tools build to a world-test compile).
+// Why JavaScript: node --test file for tools/agent-tools-stale (the check tools/compile uses to build the agent-tools bundle before a world-test compile).
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
