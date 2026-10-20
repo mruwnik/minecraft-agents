@@ -151,10 +151,10 @@
     :else {:call {:slot :mend :job (jobs :mend) :args (cond-> {:plan plan} (not (need/fetching? ways)) (assoc :ways #{:carried}))}}))
 
 (defn decide-herd
-  [{:keys [mob box fetch target]} {:keys [adults]}]
+  [{:keys [mob box ways target]} {:keys [adults]}]
   (if (<= (min 2 target) adults)
     {:skip :at-pair}
-    {:call {:slot :herd :job (jobs :herd) :args (cond-> {:mob mob :box box :target (min 2 target)} (some? fetch) (assoc :fetch fetch))}}))
+    {:call {:slot :herd :job (jobs :herd) :args (cond-> {:mob mob :box box :target (min 2 target)} (some? ways) (assoc :ways ways))}}))
 
 (defn decide-breed
   [{:keys [mob target ways box]} {:keys [adults babies food reach]}]

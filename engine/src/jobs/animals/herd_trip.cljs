@@ -141,7 +141,7 @@
         _ (child/progress! c :equip)
         e (await (ctx/call c :lure 'jobs.animals.lure-to
                            (cond-> {:mob (:mob (:args c)) :pos (u/cell-pos (nth (:axis (ctx/mem c)) 0)) :uuid (str k)
-                                    :radius listed :fetch false :keep-food true}
+                                    :radius listed :ways #{:carried} :keep-food true}
                              (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))
         why (contract/cause-key e)]
     (cond
