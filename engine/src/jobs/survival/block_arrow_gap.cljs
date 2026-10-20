@@ -16,7 +16,6 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
-            [jobs.lib.seal :as seal]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.solid :as solid]
             [jobs.lib.util :as u]
@@ -37,7 +36,7 @@
   Ends :done with the data {:placed [cells]} once none has a line of fire (also when the mob moved away meanwhile), else
   :condition-failed :no-blocks (none carried, nothing fetched) or :refused (every cell that would help is another's zone,
   claim or plan; :ignore-zones? lifts it), or :nothing-possible :no-gap (a line of fire stays and no open cell within
-  the ::reach setting (3) would end it), :place-failed or :no-progress (over max-steps rounds).
+  the ::reach setting (3) would end it), or :place-failed.
   Does not fight, flee or walk: respond-to-hostile and retreat own that.
   What it placed is what place-all! reports placed (the body trusts its own place, not a view that may lag).
   Filling a doorway can shut the body in: the blocks are the building blocks dig-in shelters with, and a shut-in body
@@ -49,9 +48,7 @@
 
 (a/defargs settings
   {::reach {:default 3 :doc "Open cells within this many blocks of the body's feet may be filled." :spec (a/num-in 0 nil)}
-   ::job-time-s {:default 120 :doc "Seconds stopping the arrows may take, a block fetch included." :spec (a/num-in 0 nil)}
-   ::max-steps {:default 12 :doc "Steps (one cell each) one round takes at most." :spec (a/int-in 0 nil)}})
-(defn max-steps [] (settings/get settings ::max-steps))
+   ::job-time-s {:default 120 :doc "Seconds stopping the arrows may take, a block fetch included." :spec (a/num-in 0 nil)}})
 
 (def target [])
 
@@ -139,14 +136,14 @@
       :else (contract/with-because (fail! c :no-blocks "no block to stop the arrows with") e))))
 
 (defn ^:async step
-  "One cell: :done, :again, or :continue while it fetches a block."
+  "One cell: :again, or :continue while it fetches a block. With no line of fire left it gives :again, and the goal check ends the job."
   [c]
   (let [p (:primitives c)
         within (settings/get settings ::reach)
         blocks (blocks c)
         dangers (ranged-dangers c)]
     (if (empty? dangers)
-      (ctx/end c :done nil {:placed (vec (:placed (ctx/mem c)))})
+      :again
       (let [kind-at (seen-kind p)
             in (access/rules-input c)
             skip (:skip (ctx/mem c) #{})
@@ -181,15 +178,11 @@
   "No ranged mob has a line of fire to the body; the cells placed so far."
   [c]
   (checks/goal (empty? (ranged-dangers c)) [:covered "no ranged mob has a line of fire"] [:in-fire "a ranged mob has a line of fire"]
-               {:units :cells :done (count (:placed (ctx/mem c)))}))
+               {:units :cells :done (count (:placed (ctx/mem c))) :result {:placed (vec (:placed (ctx/mem c)))}}))
 
 (defn quote-of [_c] {:uses {:job-time [0 3 (settings/get settings ::job-time-s)]}})
 
 (defn ^:async round
   "Fill the gap (see doc), one cell a step with a timer between."
   [c]
-  (loop [i 0]
-    (let [res (if (< i (max-steps)) (await (step c)) (fail! c :no-progress "the gap took too many steps"))]
-      (if (= :again res)
-        (do (await (pace/pace!)) (recur (inc i)))
-        res))))
+  (await (pace/steps! c #(step c))))
