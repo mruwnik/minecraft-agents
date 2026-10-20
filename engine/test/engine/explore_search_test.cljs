@@ -275,6 +275,13 @@
           (is (= [:legs 2] ((juxt :why #(get-in % [:coverage :legs])) (not-found-of legs))))
           (is (= :job-time (:reason (event-of timed :stopped))) "the engine's time limit ends it"))))))
 
+(deftest the-spiral-legs-nearest-the-body-come-first
+  (let [c {:args {:pattern :spiral :spacing 16 :max-distance 64} :primitives #js {:self (fn [] #js {:pos #js {:x 42.5 :y 0 :z 0.5}})}}
+        m {:origin [0 0 0]}
+        order (search/candidates c m)]
+    (is (= [48 0] (first order)) "straight on from the body, not the origin's ring 1 first")
+    (is (= (count (search/spiral-points [0 0] 16 64)) (count order)))))
+
 (deftest ground-another-body-searched-for-these-targets-is-skipped
   (async done
     (tu/run-async done
@@ -448,7 +455,7 @@
         (let [s (await (search! {:target "diamond_block" :max-distance 23} {:unreachable (mapv (fn [[x z]] (str x ",64," z)) (search/spiral-points [0 0] 16 23))}))
               e (not-found-of s)]
           (is (= :stuck (:why e)))
-          (is (= [[-16 64 -16] [16 64 -16] [16 64 16]] (mapv :pos (get-in e [:coverage :failed])))
+          (is (= [[0 64 -16] [16 64 0] [0 64 16]] (mapv :pos (get-in e [:coverage :failed])))
               "each next leg lies another way: one within 60 degrees of a failed leg's way is held back"))))))
 
 ;; live (Juniper, card e51d1fe9): three legs east all failed at the same rim and the search ended stuck; a leg that lies
