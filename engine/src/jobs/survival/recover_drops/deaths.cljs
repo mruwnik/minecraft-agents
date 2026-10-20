@@ -42,7 +42,7 @@
   "The wait reason while the only open deaths are ones declined for a remembered danger, else nil."
   [view]
   (when-let [{:keys [until text]} (some #(body/danger-hold view %) (body/open-deaths view))]
-    {:reason :danger-remembered :until until
+    {:reason :danger :until until
      :text (str "the pile was declined for danger (" text "); weighed again in " (js/Math.ceil (/ (- until (:now view)) 1000))
                 " s, or now with (jobs.survival.recover-drops {:retry true})")}))
 

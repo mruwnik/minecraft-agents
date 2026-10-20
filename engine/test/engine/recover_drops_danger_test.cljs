@@ -12,7 +12,7 @@
             [engine.shelter-support :as st]
             [engine.sky-perception :as sky]
             [jobs.survival.recover-drops.estimate :as estimate]
-            [jobs.survival.recover-drops :as recover-drops]
+            [jobs.survival.recover-drops.fetch :as fetch]
             [engine.test-util :as tu :refer [run-until-empty]]
             [triggers.survival.died :as died]))
 
@@ -280,20 +280,20 @@
 (deftest a-seal-block-four-cells-west-of-a-pile-is-near-it
   (let [{:keys [eng]} (setup {:floor tu/walk-floor})]
     (ledger/write! (:store eng) [{:cell [22 64 26] :item "dirt" :before "air" :job "j9" :purpose :retreat :state :placed}])
-    (is (= 1 (count (recover-drops/own-seal-near {:view #(mem/view (:store eng))} {:x 26.5 :y 64 :z 26.5}))))))
+    (is (= 1 (count (fetch/own-seal-near {:view #(mem/view (:store eng))} {:x 26.5 :y 64 :z 26.5}))))))
 
 (deftest an-unseen-seal-is-walked-up-to-before-it-is-taken-back
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (sealed-run [] {:self {:pos {:x -25 :y 64 :z 0}}})
-              walk-leg! recover-drops/walk-leg!]
+              walk-leg! fetch/walk-leg!]
           (tu/seeing-within p 6)
-          (set! recover-drops/walk-leg! (fn [_ _]
-                                          (set! recover-drops/walk-leg! walk-leg!)
+          (set! fetch/walk-leg! (fn [_ _]
+                                          (set! fetch/walk-leg! walk-leg!)
                                           [{:kind :done :data {:arrived false :why :exhausted}}]))
           (await (run-until-empty eng 60))
-          (set! recover-drops/walk-leg! walk-leg!)
+          (set! fetch/walk-leg! walk-leg!)
           (is (empty? (ledger/open-entries (mem/view (:store eng))))
               "the first cleanup saw the plug and took it back")
           (is (= :collected (:decision (recovered eng))) (pr-str (recovered eng))))))))
@@ -303,20 +303,21 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (sealed-run [] {:self {:pos {:x -25 :y 64 :z 0}}})
-              walk-leg! recover-drops/walk-leg!
-              run!* child/run!*]
-          (set! recover-drops/walk-leg! (fn [_ _] [{:kind :done :data {:arrived false :why :goal-enclosed}}]))
+              walk-leg! fetch/walk-leg!
+              run!* child/run!*
+              seals (atom 0)]
+          (set! fetch/walk-leg! (fn [_ _] [{:kind :done :data {:arrived false :why :goal-enclosed}}]))
           (let [stub (fn ^:async stub [c slot & more]
                       (if (= :seal slot)
-                        {:kind :done :data {:removed []}}
+                        (do (swap! seals inc) {:kind :done :data {:removed []}})
                         (await (apply run!* c slot more))))]
             (set! (.-cljs$core$IFn$_invoke$arity$4 stub) stub)
             (set! (.-cljs$core$IFn$_invoke$arity$5 stub) stub)
             (set! child/run!* stub))
           (await (run-until-empty eng 60))
-          (set! recover-drops/walk-leg! walk-leg!)
+          (set! fetch/walk-leg! walk-leg!)
           (set! child/run!* run!*)
-          (is (= 2 (count (filter #(= :recover-drops.seal (:kind %)) @seen))) "the seal is tried again, up to twice a trip"))))))
+          (is (= 2 @seals) "the seal is tried again, up to twice a trip"))))))
 
 ;; ------------------------------------------------------------ night: safe? judges the pile
 
@@ -380,7 +381,7 @@
           (is (false? (died/died nil (mem/view (:store eng)) {})) "the died trigger rests while the danger is remembered")
           (let [id (core/submit! eng dear {})]
             (await (core/tick! eng))
-            (is (= :danger-remembered (:reason (core/waiting eng id))) (pr-str (core/waiting eng id)))
+            (is (= :danger (:reason (core/waiting eng id))) (pr-str (core/waiting eng id)))
             (is (re-find #"zombie" (str (:text (core/waiting eng id)))) "the wait names what made it decline")
             (is (= 1 (count (dt/emitted seen :recover-drops.decided))) "the danger is not weighed again")
             (is (= [] (tu/walk-calls p)))

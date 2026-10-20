@@ -48,17 +48,34 @@
           (is (= {:kind :done} (end-of seen)))
           (is (= :collected (:decision (recovered eng)))))))))
 
-(deftest a-danger-that-makes-the-pile-dear-ends-condition-failed-danger
+(defn dear-zombie-run
+  "Die beside a zombie priced at 1000, submit recover-drops with the extra args, run it out: [eng seen id]."
+  [extra]
+  (let [zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}
+        {:keys [eng seen clock]} (setup {:floor tu/walk-floor :inventory dt/sword :entities (conj dt/drops zombie)})]
+    (die! eng {:pos dt/death-pos :inventory dt/diamonds} 3000)
+    {:eng eng :seen seen :clock clock
+     :id (core/submit! eng (list 'jobs.survival.recover-drops (merge {:danger-overrides {"zombie" 1000}} extra)) {})}))
+
+(deftest a-danger-that-makes-the-pile-dear-waits-the-listed-job
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}
-              {:keys [eng seen clock]} (setup {:floor tu/walk-floor :inventory dt/sword :entities (conj dt/drops zombie)})]
-          (die! eng {:pos dt/death-pos :inventory dt/diamonds} 3000)
-          (core/submit! eng '(jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}}) {})
-          (let [timer (js/setInterval #(swap! clock + 500) 5)]
-            (await (run-until-empty eng 12))
-            (js/clearInterval timer))
+        (let [{:keys [eng clock id]} (dear-zombie-run {})
+              timer (js/setInterval #(swap! clock + 500) 5)]
+          (await (run-until-empty eng 12))
+          (js/clearInterval timer)
+          (is (= :danger (:reason (core/waiting eng id))))
+          (is (nil? (recovered eng)) "the death stays open"))))))
+
+(deftest a-danger-that-makes-the-pile-dear-ends-a-retry-condition-failed-danger
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (dear-zombie-run {:retry true})
+              timer (js/setInterval #(swap! clock + 500) 5)]
+          (await (run-until-empty eng 12))
+          (js/clearInterval timer)
           (is (= {:kind :condition-failed :reason :danger} (end-of seen)))
           (is (nil? (recovered eng)) "the death stays open"))))))
 

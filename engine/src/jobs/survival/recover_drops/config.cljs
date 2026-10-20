@@ -18,7 +18,7 @@
    ::stair-step-s {:default 3 :doc "Seconds one block of a stair down and its run is reckoned to take, against the despawn window left." :spec (a/num-in 0 nil)}
    ::killer-guard-ms {:default 60000 :doc "How long after a death its killer is assumed to still stand at the pile; later only the hostiles the body knows of count." :spec (a/num-in 0 nil)}
    ::pause-s {:default 1 :doc "Seconds one wait for the respawn, the settling or a kit fetch pauses (jobs.time.noop) before it looks again." :spec (a/num-in 0 nil)}
-   ::danger-memory-ms {:default 150000 :doc "How long a skip for danger is remembered: the died trigger rests and the job waits (:danger-remembered) for that death, then the danger is weighed anew. A skip for the assumed killer alone lasts only while the killer guard does." :spec (a/num-in 0 nil)}
+   ::danger-memory-ms {:default 150000 :doc "How long a skip for danger is remembered: the died trigger rests and the job waits (:danger) for that death, then the danger is weighed anew. A skip for the assumed killer alone lasts only while the killer guard does." :spec (a/num-in 0 nil)}
    ::margin {:default 0 :doc "Added to the fetch cost before comparing it to the value." :spec (a/num-in nil nil)}
    ::leg-s {:default 6 :doc "The walk to the pile goes in legs of this many seconds; after each the danger and the cost are weighed again." :spec (a/num-in 0.1 120)}
    ::see-range {:default 16 :doc "A hostile a declined trip saw stays priced where it stood until the body is this near the place and no such mob is known there." :spec (a/num-in 0 nil)}
@@ -78,3 +78,7 @@
 (defn see-range [] (settings/get settings ::see-range))
 
 (defn mob-spot-radius [] (settings/get settings ::mob-spot-radius))
+
+(def own-checks
+  "The :checks of the job's children: the trip prices its own danger."
+  {:safe? '(always)})
