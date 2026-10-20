@@ -9,6 +9,7 @@
             [jobs.lib.blocks :as lb]
             [jobs.lib.click :as click]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.land :as land]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.tidy :as tidy]
             [engine.ctx :as ctx]
@@ -92,6 +93,15 @@
                   (not (open-openable p cell))
                   (or (.-fullCube b) (re-find mob-proof-shapes (.-name b)))))))
 
+(defn stand-on?
+  "Whether a mob can stand on the top of the block at cell: a full cube or any other floor (slab, stair, farmland, path,
+  soul sand, chest, carpet; jobs.lib.land/floor?), not a fence, wall, pane or bars (too tall to stand on) or a cell not loaded."
+  [p cell]
+  (let [b (u/seen-block p cell)]
+    (boolean (and b
+                  (not (re-find mob-proof-shapes (.-name b)))
+                  (or (.-fullCube b) (land/floor? (.-name b)))))))
+
 (defn ^:async shut-open!
   "Shut the door, gate or trapdoor standing open at cell with one click of the hand (jobs.lib.click): :shut when
   it is shut now, :open when it stays open (an iron one, or a click that did nothing), nil when the cell holds none.
@@ -110,10 +120,11 @@
   the support exists; none when one of the four is placed already or the roof cell is sealed; else the one farthest from
   threats ({:x :y :z}), the +x one with none), then the roof cell above the head; only those the
   predicate sealed? (cell -> bool) does not hold for. A corner cell (diagonal, feet or head height) is among them only
-  when a mob could stand in it: an open one on a sealed floor, or above a corner that is sealed or filled; the corners
-  follow the sides."
+  when a mob could stand in it: an open one on a floor it stands on (stand-on?, default sealed?), or above a corner
+  that is one; the corners follow the sides."
   ([sealed? feet] (fill-cells sealed? feet nil))
-  ([sealed? {:keys [x y z]} threats]
+  ([sealed? feet threats] (fill-cells sealed? feet threats sealed?))
+  ([sealed? {:keys [x y z]} threats stand-on?]
    (let [roof {:x x :y (+ y 2) :z z}
          supports (for [[dx dz] sides] {:x (+ x dx) :y (+ y 2) :z (+ z dz)})
          gap (fn [{cx :x cy :y cz :z}]
@@ -122,10 +133,10 @@
          at (fn [dy [dx dz]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
          corner-cells (fn [corner]
                         (let [feet-c (at 0 corner)
-                              feet-stand? (and (not (sealed? feet-c)) (sealed? (at -1 corner)))]
+                              feet-stand? (and (not (sealed? feet-c)) (stand-on? (at -1 corner)))]
                           (cond-> []
                             feet-stand? (conj feet-c)
-                            (or feet-stand? (sealed? feet-c)) (conj (at 1 corner)))))]
+                            (or feet-stand? (stand-on? feet-c)) (conj (at 1 corner)))))]
      (filterv #(not (sealed? %))
               (concat (for [dy [0 1] d sides] (at dy d))
                       (mapcat corner-cells corners)
@@ -135,7 +146,7 @@
 (defn open-cells
   "The fill-cells around the feet cell that are not sealed? in the world; the roof support away from threats."
   ([p feet] (open-cells p feet nil))
-  ([p feet threats] (fill-cells #(sealed? p %) feet threats)))
+  ([p feet threats] (fill-cells #(sealed? p %) feet threats #(stand-on? p %))))
 
 (defn placeable?
   "Whether a block placed in cell has a neighbour (any of the six) whose collision shape fills its cell to be placed against."

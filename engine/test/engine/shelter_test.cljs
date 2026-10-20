@@ -1405,6 +1405,19 @@
         "a rock corner at feet height leaves its head cell as a stand")
     (is (empty? (corners (constantly false))) "no floor under a corner: nobody stands there")))
 
+(deftest fill-cells-corners-follow-what-a-mob-can-stand-on
+  (let [feet {:x 0 :y 64 :z 0}
+        floor? #(= 63 (:y %))
+        slab {:x 1 :y 63 :z 1}
+        corners (fn [stand-on?]
+                  (set (filter #(and (not= 0 (:x %)) (not= 0 (:z %)) (<= 64 (:y %) 65))
+                               (dig-cells/fill-cells floor? feet nil stand-on?))))]
+    (is (= #{{:x 1 :y 64 :z 1} {:x 1 :y 65 :z 1}}
+           (set (filter #(= [1 1] [(:x %) (:z %)]) (corners #(or (floor? %) (= slab %))))))
+        "a corner floor that is no full cube but is stood on (a slab top) is walled out")
+    (is (empty? (filter #(= [1 1] [(:x %) (:z %)]) (corners #(and (floor? %) (not= slab %)))))
+        "a corner floor nobody stands on needs no walls")))
+
 (deftest fill-cells-put-the-roof-support-away-from-the-threats
   (let [feet {:x 0 :y 64 :z 0}
         none (constantly false)
