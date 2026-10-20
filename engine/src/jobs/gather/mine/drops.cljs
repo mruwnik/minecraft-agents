@@ -113,7 +113,7 @@
     (when (and (zero? dy) (= 1 (+ (js/Math.abs dx) (js/Math.abs dz)))
                (let [under (u/seen-name (:primitives c) (zipmap [:x :y :z] (update dug 1 dec)))]
                  (or (nil? under) (bs/air under))))
-      {:x (+ x 0.5 (* 0.4 dx)) :y y :z (+ z 0.5 (* 0.4 dz))})))
+      {:x (+ x 0.5 (* 0.6 dx)) :y y :z (+ z 0.5 (* 0.6 dz))})))
 
 (defn ^:async peek-over-lip!
   "A dug cell the body stands beside whose drop is still not in sight: once per dug cell, a step to the edge of its own cell

@@ -67,6 +67,7 @@
    ::walk-s-per-block {:default 0.4 :doc "Seconds a quote counts to walk one block to a drop." :spec (a/num-in 0 nil)}
    ::dig-max-cells {:default 16 :doc "The most cells :dig digs to reach one drop; a dearer route leaves it." :spec (a/int-in 0 nil)}
    ::dig-margin {:default 3 :doc "How far outside the box round the body and the drop the dig route may wander, in blocks." :spec (a/int-in 0 nil)}
+   ::replans {:default 4 :doc "How often a dig route is planned again after a dig of it failed, the cells before it dug." :spec (a/int-in 0 nil)}
    ::dig-max-fall {:default 3 :doc "The longest fall, in blocks, the dig route plans." :spec (a/int-in 0 nil)}
    ::max-moves {:default 2 :doc "How often a drop that slid to another cell while the body went to it is tried again, after a walk or dig that did not reach it." :spec (a/int-in 0 nil)}
    ::search-waits {:default 5 :doc "How many calls in a row a :search walk may wait on go-to (the night, a danger) before the search is given up." :spec (a/int-in 1 nil)}})
@@ -116,15 +117,20 @@
 
 (defn below-feet? [c item] (boolean (and (.-pos item) (< (second (item-cell item)) (feet-y c)))))
 
-(defn in-hole?
-  "Whether item lies lower than the feet at or under a cell of :holes, in its column or one of the eight beside (a drop
-  that fell through the hole lands a column over)."
+(defn at-hole?
+  "Whether item lies at or under a cell of :holes, in its column or one of the eight beside (a drop that fell through the
+  hole lands a column over), at any height: a drop still falling out of the dug cell is not yet lower than the feet."
   [c item]
   (let [[x y z] (when (.-pos item) (item-cell item))]
-    (boolean (and (below-feet? c item)
+    (boolean (and x
                   (some #(let [{hx :x hy :y hz :z} (a/cell %)]
                            (and (<= (abs (- x (js/Math.floor hx))) 1) (<= (abs (- z (js/Math.floor hz))) 1) (<= y (js/Math.floor hy))))
                         (:holes (:args c)))))))
+
+(defn in-hole?
+  "Whether item is at a hole (at-hole?) and lower than the feet."
+  [c item]
+  (and (below-feet? c item) (at-hole? c item)))
 
 (defn deep? [c item] (boolean (and (.-pos item) (> (- (feet-y c) (second (item-cell item))) 1))))
 
@@ -194,23 +200,47 @@
                    {:max-digs (settings/get settings ::dig-max-cells) :margin (settings/get settings ::dig-margin)
                     :max-fall (settings/get settings ::dig-max-fall)}))
 
+(defn ^:async look-pit!
+  "A route over cells never seen takes them for stone, so a drop in a pit is dug to round the pit: first a look at the unsensed
+  cells of the box between the feet and the drop, nearest to the drop first (jobs.lib.dig-look), as a player would lean over
+  the edge."
+  [c from [gx gy gz :as goal]]
+  (let [[fx fy fz] from
+        rng (fn [a b] (range (min a b) (inc (max a b))))
+        cells (for [x (rng fx gx) z (rng fz gz) y (range (dec gy) (inc fy))] [x y z])]
+    (await (dig-look/look-unknown! c (sort-by #(u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] goal)) cells)))))
+
+(defn replans [] (settings/get settings ::replans))
+
+(defn ^:async dig-cells!
+  "One dig child per cell of cells, in order: :dug when all are open, else {:out outcome :cell cell :n cells dug before it}."
+  [c cells]
+  (loop [cells cells n 0]
+    (if-let [cell (first cells)]
+      (let [o (await (blocks/dig-cell! c cell {:need-drop true}))]
+        (if (#{:dug :missing} o)
+          (recur (rest cells) (inc n))
+          {:out o :cell cell :n n}))
+      :dug)))
+
 (defn ^:async dig-to!
-  "Dig the route to item (jobs.lib.dig-route): one jobs.blocks.dig child per cell, in walking order. :dug when every
-  cell is open now, :continue while a dig waits on the world, else why not: :no-route or the failed dig's outcome
-  (:refused, :cannot, :unreachable ...)."
+  "Dig the route to item (jobs.lib.dig-route). A dig that fails after others of its route were dug (a cell beyond the light was
+  never seen) is planned again from where the body now stands, at most ::replans times. :dug when every cell is open now,
+  :continue while a dig waits on the world, else why not: :no-route or the failed dig's outcome (:refused, :cannot, :unreachable ...)."
   [c item]
-  (let [p (:primitives c)
-        r (drop-route (fn [[x y z]] (u/seen-name p {:x x :y y :z z})) (u/cell-vec (u/self-pos c)) (item-cell item))]
-    (if (:problem r)
-      :no-route
-      (loop [cells (:dig r)]
-        (if-let [cell (first cells)]
-          (let [o (await (blocks/dig-cell! c cell {:need-drop true}))]
+  (let [p (:primitives c)]
+    (loop [pass 0]
+      (let [from (u/cell-vec (u/self-pos c))
+            _ (await (look-pit! c from (item-cell item)))
+            r (drop-route (fn [[x y z]] (u/seen-name p {:x x :y y :z z})) from (item-cell item))]
+        (if (:problem r)
+          :no-route
+          (let [d (await (dig-cells! c (:dig r)))]
             (cond
-              (= :continue o) :continue
-              (#{:dug :missing} o) (recur (rest cells))
-              :else o))
-          :dug)))))
+              (= :dug d) :dug
+              (and (pos? (:n d)) (< pass (replans)) (not= :continue (:out d)))
+              (do (await (dig-look/look-at! c (:cell d))) (recur (inc pass)))
+              :else (:out d))))))))
 
 (defn moved-item
   "item as seen now when it lies in another cell than the one it was judged in (a drop slides while the body digs to it), else nil."
@@ -365,7 +395,7 @@
         held (fn [] (transduce (comp (filter #(= item-name (:name %))) (map :count)) + 0 (u/inventory (:primitives c))))
         start-held (held)
         hole? (in-hole? c item)
-        moving? (and hole? (settling? c item))
+        moving? (and (at-hole? c item) (settling? c item))
         why (when (and hole? (not moving?)) (await (hole-problem! c item)))
         walk (when (and (not hole?) (deep? c item)) (await (walk-down! c item)))
         dig? (and (:dig (:args c)) (or (= :unreachable walk) (= :too-deep why)))

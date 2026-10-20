@@ -34,8 +34,9 @@
    :limit-s 170}
   {:name "drop-in-a-3-deep-pit-is-dug-to"
    ;; the ore hangs over a 3x3 pit 3 deep (wide, so its drop is seen): too deep to walk down for, so the drop is dug to
-   ;; with a stair and collected (card dd4e8bf6); nothing is left behind
-   :blocks [[:fill [20 -3 15] [22 -1 17] "air"] [:set [20 0 16] "iron_ore"]]
+   ;; with a stair and collected (card dd4e8bf6); nothing is left behind. A light block lights the pit: in the dark the
+   ;; body makes out nothing beyond 4 blocks, so the pit floor it must route over is never seen
+   :blocks [[:fill [20 -3 15] [22 -1 17] "air"] [:set [22 -1 17] "light"] [:set [20 0 16] "iron_ore"]]
    :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 8})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 150 :of-job true}
             {:no-event {:source :job :kind :mine.left-behind} :for-s 150 :until {:source :job :kind #{:completed :stopped}}}]

@@ -108,6 +108,22 @@
             (is (= [:unreachable] (mapv :reason (:left result))))
             (is (= [:unreachable] (mapv :reason (bd/left-drops seen))))))))))
 
+(deftest a-drop-dug-to-is-routed-after-a-look-at-the-unseen-cells-between-it-and-the-feet
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pocket (into {} (for [x [4 5 6] y [56 57 58 59] z [-1 0 1]
+                                    :when (not= [5 58 0] [x y z])]
+                                [(str x "," y "," z) "stone"]))
+              {:keys [eng p]} (bd/setup {:self body :blocks pocket})]
+          (aset p "sensedAt" (fn [pos] (if (= [2 63 0] [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} (.blockAt p pos))))
+          (drop! p [5 58 0] "dirt")
+          (seen-from-above! p)
+          (await (tu/child-outcome eng job {:radius 8 :dig true} 30))
+          (is (some #(= [2.5 63.5 0.5] [(.-x (.-pos (.-args %))) (.-y (.-pos (.-args %))) (.-z (.-pos (.-args %)))])
+                     (bd/calls p "look"))
+              "the unseen floor cell was looked at before the route was planned"))))))
+
 (deftest no-drop-in-sight-is-done-with-nothing-collected
   (async done
     (tu/run-async done
@@ -140,6 +156,17 @@
             (is (= 0 (:collected result)))
             (is (= [:too-deep] (mapv :reason (bd/left-drops seen))))
             (is (empty? (bd/calls p "collect")))))))))
+
+(deftest a-drop-still-falling-out-of-the-dug-cell-is-waited-for-before-it-is-judged
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (bd/setup {:self body :blocks {"1,63,0" "air" "1,62,0" "stone"}})]
+          (drop! p [1 63 0] "dirt")
+          (falling-first! p)
+          (let [result (await (tu/child-outcome eng job {:radius 6 :holes [[1 64 0]]} 20))]
+            (is (= 1 (:collected result)))
+            (is (empty? (bd/left-drops seen)))))))))
 
 (def wall
   "A stone wall at x 2, z -2..2, two high: a drop at (4,64,0) behind it is out of the body's sight."
