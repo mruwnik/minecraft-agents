@@ -1,7 +1,7 @@
 (ns jobs.survival.retreat-cornered.pick
   "The cornered step of a flight: the conditions that rank its options (pressed, beaten, under fire, boxed in) and cornered!, which takes the first option it can."
   (:require [engine.settings :as settings]
-            [jobs.survival.retreat-cornered :as rc :refer [settings weapons near-hostiles hitters close-radius hurt-by press-gap hit-reach fist-sweeps tool-weapons fight! escape-order outrun? angry-enderman? fight-wins? in-water? water! roof! swim-out! back-off! blocked!]]
+            [jobs.survival.retreat-cornered :as rc :refer [settings near-hostiles hitters close-radius hurt-by press-gap hit-reach fist-sweeps tool-weapons fight! escape-order outrun? angry-enderman? fight-wins? in-water? water! roof! swim-out! back-off! blocked!]]
             [engine.args :as a]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
@@ -84,7 +84,7 @@
   (let [near (hitters c hostiles)
         p (:primitives c)]
     (boolean (and (seq near)
-                  (combat/best-weapon p (weapons c))
+                  (combat/best-weapon p (combat/weapons c))
                   (or (:hit-on-the-run (ctx/mem c))
                       (recently-hurt? c)
                       (some #(<= (danger-q/mob-distance p %) (press-gap)) near))))))
@@ -180,7 +180,7 @@
                                           (contains? cells [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)])))
                                 close)))]
     (boolean (and (seq close)
-                  (nil? (combat/best-weapon p (weapons c)))
+                  (nil? (combat/best-weapon p (combat/weapons c)))
                   (empty? (lb/carried c (flight/blocks c)))
                   (sh-sense/shut-in-hut? p)
                   (in-room?)))))
@@ -214,7 +214,7 @@
   start over (blocked!). home?: the body is in its home room."
   ([c why] (await (cornered! c why false)))
   ([c why home?]
-  (let [weapons (weapons c)
+  (let [weapons (combat/weapons c)
         max-fist-sweeps (fist-sweeps)
         hostiles (near-hostiles c)
         threat (first hostiles)

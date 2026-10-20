@@ -56,6 +56,11 @@
 (defn creeper? [e]
   (or (true? (.-creeper e)) (= "creeper" (.-name e))))
 
+(defn weapons
+  "The weapons of the call: its :use :tools, else the default substrings."
+  [c]
+  (or (ctx/use c :tools) default-weapons))
+
 (defn weapon? [weapons item-name]
   (boolean (some #(str/includes? item-name %) weapons)))
 

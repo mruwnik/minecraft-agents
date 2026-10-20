@@ -59,11 +59,6 @@
 
 (def fit? ready/ok)
 
-(defn weapons
-  "The weapons of the call: its :use :tools, else the default substrings."
-  [c]
-  (or (ctx/use c :tools) combat/default-weapons))
-
 (def hostile-policy {:cap 50 :ttl (* 60 60 1000)})
 
 (defn near
@@ -105,9 +100,9 @@
   [c decision hold]
   (let [child-args (case decision
                      :fight {:targets :hostiles :radius (danger-q/hostile-radius) :ranged-radius (danger-q/ranged-radius)
-                             :use {:tools (weapons c)} :hold (or hold (hold? c)) :prior (:fight-prior (ctx/mem c))
+                             :use {:tools (combat/weapons c)} :hold (or hold (hold? c)) :prior (:fight-prior (ctx/mem c))
                              :checks {:safe? '(always) :fit? '(always)}}
-                     :flee {:use {:tools (weapons c)} :goal (:goal (ctx/mem c))})
+                     :flee {:use {:tools (combat/weapons c)} :goal (:goal (ctx/mem c))})
         _ (when (and (= :fight decision) (not= :fight (:last-run (ctx/mem c))))
             (ctx/update-mem! c #(cond-> % (:fight (:children %)) (update-in [:children :fight] dissoc :start))))
         _ (ctx/update-mem! c assoc :last-run decision)
@@ -239,7 +234,7 @@
                                :cannot-outrun? (not (cost/outruns? (or (.-food self) 20) (map cost/mob-kind (remove combat/ranged? near))))
                                :creeper? (boolean (some combat/creeper? near))
                                :reserve reserve
-                               :damage (cost/fight-damage {:weapon (combat/best-weapon p (weapons c))
+                               :damage (cost/fight-damage {:weapon (combat/best-weapon p (combat/weapons c))
                                                            :equipment (cost/equipment-of (.-equipment self))
                                                            :mobs (map #(mob-of p (struck-of c (.-id %)) %) near)})}))
         stay? (stay-under-roof? c near)

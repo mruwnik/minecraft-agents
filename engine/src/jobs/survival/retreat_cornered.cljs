@@ -43,11 +43,6 @@
     (fn [{:keys [x y z]}] (at [x y z]))))
 
 
-(defn weapons
-  "The weapons of the flight's call: its :use :tools, else the default substrings."
-  [c]
-  (or (ctx/use c :tools) combat/default-weapons))
-
 (a/defargs settings
   {:jobs.survival.retreat-cornered/lost-memory-ms {:default 30000 :doc "Milliseconds a mob the flight lost (its :threat entry) still counts, at the place it was last known, when choosing where to flee; a creeper counts triple." :spec (a/int-in 0 nil)}
    :jobs.survival.retreat-cornered/fist-sweeps {:default 1 :doc "Times a body with no weapon, every cornered option failed, looks for a way to walk before it punches a hostile it would not beat; 0: it punches at once." :spec (a/int-in 0 nil)}
@@ -206,7 +201,7 @@
     (boolean
      (and (seq hostiles)
           (not-any? combat/creeper? hostiles)
-          (<= (cost/fight-damage {:weapon (combat/best-weapon p (weapons c))
+          (<= (cost/fight-damage {:weapon (combat/best-weapon p (combat/weapons c))
                                   :equipment (cost/equipment-of (.-equipment self))
                                   :mobs (map (fn [e] {:name (.-name e) :distance (danger-q/mob-distance p e) :hits 0}) hostiles)})
               (- (.-health self) reserve))))))
