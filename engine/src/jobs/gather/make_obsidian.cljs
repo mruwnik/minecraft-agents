@@ -230,12 +230,14 @@
         {:keys [lava pour looks]} (:poured (ctx/mem c))
         made? (= "obsidian" (u/seen-name p lava))]
     (if (or made? (>= looks (settings/get settings ::settle-looks)))
-      (do (when (= "water" (u/seen-name p pour))
-            (await (child/run!* c :scoop 'jobs.blocks.use-on {:pos pour :item "bucket" :ignore-zones? true})))
-          (ctx/update-mem! c #(-> (dissoc % :poured)
-                                  (cond-> made? (assoc :failed 0)
-                                          (not made?) (-> (update :tried (fnil conj []) lava) (update :failed (fnil inc 0))))))
-          :again)
+      (let [e (when (= "water" (u/seen-name p pour))
+                (await (use-bucket! c :scoop pour "bucket")))]
+        (if (= :continue e)
+          :continue
+          (do (ctx/update-mem! c #(-> (dissoc % :poured)
+                                      (cond-> made? (assoc :failed 0)
+                                              (not made?) (-> (update :tried (fnil conj []) lava) (update :failed (fnil inc 0))))))
+              :again)))
       (let [e (await (child/pause! c 0.5 :waiting-for-conversion))]
         (if (= :continue e)
           :continue
@@ -255,10 +257,12 @@
         (case w
           :continue :continue
           :blocked (left!)
-          (if (= :done (:kind (await (child/run!* c :scoop 'jobs.blocks.use-on {:pos pour :item "bucket" :ignore-zones? true}))))
-            (do (ctx/update-mem! c dissoc :poured)
-                (ctx/end c :done nil {}))
-            (left!)))))))
+          (let [e (await (use-bucket! c :scoop pour "bucket"))]
+            (cond
+              (= :continue e) :continue
+              (= :done (:kind e)) (do (ctx/update-mem! c dissoc :poured)
+                                      (ctx/end c :done nil {}))
+              :else (left!))))))))
 
 (defn ^:async mine-seen!
   "The seen obsidian mined with a mine child, which is kept under way (memory :mining) until it ends: the dug block is no longer seen while the child picks it up. :again, :continue while it works, or its ending when it got none."
