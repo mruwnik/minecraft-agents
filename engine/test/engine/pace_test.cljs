@@ -16,4 +16,6 @@
         (is (= [:done] (await (run-steps {:reflex :needs-weapon} [:continue :continue [:done]]))) "a reflex's :continue is another step")
         (is (= (contract/ending :condition-failed {:reason :dark} nil)
                (await (run-steps {:reflex :needs-weapon :child-wait (atom {:reason :dark})} [:continue [:done]])))
-            "a waiting child ends the reflex with its reason")))))
+            "a waiting child ends the reflex with its reason")
+        (is (= :continue (await (run-steps {:reflex :hostile-near :slots [:cornered]} [:continue [:done]])))
+            "a child a reflex calls yields to its caller")))))
