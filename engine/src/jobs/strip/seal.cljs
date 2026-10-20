@@ -1,15 +1,14 @@
 (ns jobs.strip.seal
-  (:require [jobs.lib.block-sets :as bs]
-            [jobs.lib.ready :as ready]
+  (:require [jobs.lib.ready :as ready]
             [engine.contract :as contract]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.blocks.fill-cells :as fill]
             [jobs.lib.blocks :as b]
             [jobs.lib.choose :as choose]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
-            [jobs.lib.found :as found]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
@@ -24,13 +23,13 @@
   body must end on (:from the lower coordinate, :to the higher). The body works from the stand cell, one step back from
   :at on that side. A body on the far side first walks to it (go-to child); no way there ends :wrong-side.
 
-  Every cell of the section that is not a solid block is closed with a carried block of the call's :use {:blocks} (default the :seal fillers; a
-  jobs.blocks.place child).
-  Loose things in it (rails, cobwebs, torches, fences, ladders ...) are dug first (jobs.blocks.dig child, no fetch) and
-  the drops picked up (torches come back).
+  The section is filled by a jobs.blocks.fill-cells child (:order :given, :clear-loose, :least 1: one cell a call, so the body stands on its side again before each): every cell that is not a solid block is
+  closed with a carried block of the call's :use {:blocks} (default the :seal fillers). Loose things in it (rails, cobwebs,
+  torches, fences, ladders ...) are dug first and the drops picked up (torches come back). The rows go up from the bottom, the centre
+  bottom cell last, so the body keeps its view. A container in the section is never dug (:blocked). Zones, claims and plans are the
+  place rules'.
   With none of the blocks carried they are fetched first (jobs.lib.need, :fetch; a failed fetch ends the call with its
-  ending as the :because), before the walk to the stand; with :fetch off for items it stops :no-blocks at once. The rows go up from the bottom, the centre bottom cell last, so the body
-  keeps its view. A container in the section is never dug (:blocked). Zones, claims and plans are the place rules'.
+  ending as the :because), before the walk to the stand; with :fetch off for items it stops :no-blocks at once.
 
   done? is :ok when the section is shut, its drops picked up and no child under way: ends :done {:placed n} (0 =
   already shut). Else it ends with data {:placed n
@@ -59,17 +58,11 @@
    :fetch {:doc "get the blocks to close with (jobs.lib.need): true, a set of kinds or a map of limits; false (or without :item) stops :no-blocks" :spec need/option? :default true}
    :ignore-zones? :shared})
 
-(def loose #"(^|_)(rail|torch|fence|fence_gate|ladder|lantern|button|lever|carpet|sign|banner|pressure_plate)$|^cobweb$")
-
 (defn kind
   "What a block name means for the seal: :solid (done), :open (replaceable or not read yet), :loose (dig it first)
   or :container (never touched)."
   [n]
-  (cond
-    (or (nil? n) (bs/replaceable n)) :open
-    (found/containers n) :container
-    (re-find loose n) :loose
-    :else :solid))
+  (if (nil? n) :open (fill/kind n)))
 
 (defn at-of [at] (some-> at b/cell))
 
@@ -128,20 +121,6 @@
       (on-side? c at axis side) (stop! c :unreachable {:cell stand-cell})
       :else (stop! c :wrong-side {:cell stand-cell}))))
 
-(defn ^:async collect! [c]
-  (let [r (await (ctx/call c :collect 'jobs.items.collect-drops {:radius 3}))]
-    (if (= :continue r)
-      :continue
-      (do (ctx/update-mem! c dissoc :collect) :again))))
-
-(defn ^:async dig! [c cell]
-  (let [o (await (b/dig-cell! c {:x (cell 0) :y (cell 1) :z (cell 2)} (select-keys (:args c) [:ignore-zones?])))]
-    (case o
-      :continue :continue
-      (:dug :missing) (do (ctx/update-mem! c assoc :collect true) :again)
-      :refused (stop! c :refused {:cell cell})
-      (stop! c :unreachable {:cell cell :why o}))))
-
 (defn blocks
   "The block names the call closes with: its :use {:blocks} (the engine fills the :seal fillers carried when the caller gives none)."
   [c]
@@ -165,19 +144,29 @@
               :else (contract/with-because (stop! c :no-blocks {:short open}) e)))
       (stop! c :no-blocks {:short open}))))
 
-(defn ^:async place! [c cell open]
-  (let [{:keys [ignore-zones?]} (:args c)
-        item (b/chosen c (blocks c))]
-    (if-not item
-      (stop! c :no-blocks {:short open})
-      (let [o (await (b/place-cell! c {:x (cell 0) :y (cell 1) :z (cell 2)} item {:ignore-zones? ignore-zones?}))]
-        (case o
-          :continue :continue
-          :placed (do (ctx/update-mem! c update :placed (fnil inc 0)) :again)
-          :already :again
-          :refused (stop! c :refused {:cell cell})
-          :need (stop! c :no-blocks {:short open})
-          (stop! c :unreachable {:cell cell :why o}))))))
+(defn cell-map [cell] {:x (cell 0) :y (cell 1) :z (cell 2)})
+
+(defn ^:async fill! [c todo]
+  (let [{:keys [at axis width height ignore-zones?]} (:args c)
+        names (or (seq (blocks c)) (choose/filler-names c :seal))
+        e (await (ctx/call c :fill 'jobs.blocks.fill-cells
+                           (cond-> {:cells (section (at-of at) axis width height) :order :given :least 1 :clear-loose true
+                                    :use {:blocks (vec names)} :ways #{:carried}}
+                             ignore-zones? (assoc :ignore-zones? true))))
+        short (count todo)
+        cell (some-> (get-in e [:cause :cell]) (->> ((juxt :x :y :z))) vec)]
+    (cond
+      (= :continue e) :continue
+      (= :done (:kind e)) (if (or (empty? todo) (pos? (:mended (:data e) 0)))
+                            (do (ctx/update-mem! c update :placed (fnil + 0) (:mended (:data e))) :again)
+                            (stop! c :unreachable {:cell (ffirst todo)}))
+      :else
+      (do (ctx/update-mem! c update :placed (fnil + 0) (:mended (:data e) 0))
+          (case (get-in e [:cause :reason])
+            :need (contract/with-because (stop! c :no-blocks {:short short}) e)
+            :refused (stop! c :refused {:cell cell})
+            :blocked (stop! c :blocked {:cell cell})
+            (stop! c :unreachable {:cell (some-> (first (:left (:data e))) ((juxt :x :y :z)) vec)}))))))
 
 (defn open-cells
   "The cells of the section that are not solid, [cell kind] each."
@@ -191,16 +180,14 @@
 (defn ^:async step! [c]
   (let [{:keys [at axis side]} (:args c)
         at (at-of at)
-        todo (open-cells c)
-        [cell k] (first todo)]
+        todo (open-cells c)]
     (cond
-      (:collect (ctx/mem c)) (await (collect! c))
+      (checks/child-under-way? c) (await (fill! c todo))
       (empty? todo) (finish! c :done nil {})
       (some #(= :container (second %)) todo) (stop! c :blocked {:cell (first (first (filter #(= :container (second %)) todo)))})
       (not (b/chosen c (blocks c))) (await (fetch-blocks! c (count todo)))
       (not= (stand at axis side) (reach/standing-vec (:primitives c))) (await (go-stand! c at axis side))
-      (= :loose k) (await (dig! c cell))
-      :else (await (place! c cell (count todo))))))
+      :else (await (fill! c todo)))))
 
 (defn done?
   "Every cell of the section is solid, the drops are picked up and no child is under way; the cells shut and open."
@@ -211,7 +198,7 @@
         data [:units :cells :done (- (* width height) n) :left n :result {:placed placed}]]
     (cond
       (pos? n) (apply contract/later :open (str "seal: " n " cells open") data)
-      (or (:collect (ctx/mem c)) (checks/child-under-way? c)) (apply contract/later :wrapping-up "seal: the section is shut, wrapping up" data)
+      (checks/child-under-way? c) (apply contract/later :wrapping-up "seal: the section is shut, wrapping up" data)
       :else (apply contract/ok :sealed (str "seal sealed: placed " placed) data))))
 
 (defn quote-of [c]

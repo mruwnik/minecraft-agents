@@ -88,7 +88,7 @@
   (let [args {:at [-1 64 1] :axis :x :side :from}]
     (are [blocks m reason] (= reason (tu/kind-reason (done-of 'jobs.strip.seal {:blocks blocks} args m)))
       section {:placed 2} [:ok :sealed]
-      section {:collect true} [:later :wrapping-up]
+      section {:children {:fill {}}} [:later :wrapping-up]
       (assoc section "-1,64,1" "air") {} [:later :open])
     (is (= {:placed 2} (:result (nth (done-of 'jobs.strip.seal {:blocks section} args {:placed 2}) 2))))))
 
