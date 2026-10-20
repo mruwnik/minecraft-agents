@@ -294,7 +294,7 @@
       :else
       (do (ctx/update-mem! c dissoc :target)
           (case (if (= :done (:kind e)) (:reason (:data e)) (contract/cause-key e))
-            :dug (ctx/update-mem! c #(-> % (update :cell-tries dissoc t) (update :dug (fnil inc 0))))
+            (:dug :lava-unsealed) (ctx/update-mem! c #(-> % (update :cell-tries dissoc t) (update :dug (fnil inc 0))))
             :already-clear (ctx/update-mem! c update :cell-tries dissoc t)
             (:cannot :fluid) (skip! c t :cannot)
             :unreachable (skip! c t :unreachable)
