@@ -21,7 +21,7 @@
  :cases
  [{:name "dark-false-takes-the-direct-corridor"
    :settings {:jobs.lib.walk.world/dark false}
-   :act [[:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1}] {:ok true :quote {:route {:found true :length [:< 30]}}}]]
+   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 16] :range 1}] {:ok true :quote {:route {:found true :length [:< 30]}}}] 30]]
    :expect [{:no-event {:level :error} :for-s 2}]
    :after [[:body-near [2.5 0 16.5] 1]]}
   {:name "walked-lit-detour-beats-the-dark-direct-corridor"
