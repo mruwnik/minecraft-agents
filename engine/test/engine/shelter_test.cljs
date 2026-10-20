@@ -9,6 +9,7 @@
             [engine.memory :as mem]
             [engine.scenario :as scenario]
             [engine.fake :as fake]
+            [engine.blocks-dig-test :as bd]
             [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
             [jobs.lib.dig-look :as dig-look]
@@ -1639,3 +1640,24 @@
                   raw-p))]
     (is (false? (sh-inside/safe-from-night? (world false))) "a mob on the rim steps down into the pit")
     (is (true? (sh-inside/safe-from-night? (world true))))))
+
+(deftest only-a-sealed-room-with-a-far-dark-cell-wants-light
+  (are [w d open-sides? light wanted?] (= wanted? (sh-inside/dark-room-at? (seen-box (box w d open-sides?) light) {:x 0 :y 64 :z 0}))
+    1 40 false [0 0] true
+    1 40 false [0 14] false
+    5 5 false [0 0] false
+    1 40 true [0 0] false))
+
+(deftest a-sealed-dark-hall-is-lit-with-the-torches-carried-before-any-wall-is-placed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [raw-p (tu/fake {:time night :blocks (box 1 40 false) :inventory [{:name "torch" :count 16}] :drops {"torch" "torch"}})
+              _ (swap! (fake/state raw-p) assoc :light-default [0 0])
+              p (tu/seeing-all (perception/wrap raw-p (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})))
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now (constantly 1000000)
+                                :events (events/make {:body "Fake" :sinks [] :now (constantly 1000000)})})]
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (run-until-empty eng 30))
+          (is (seq (for [z (range 40) y [64 65] :when (re-find #"torch" (or (bd/block-at raw-p {:x 0 :y y :z z}) ""))] z)) "torches hung in the hall")
+          (is (empty? (for [z (range 40) :when (= "dirt" (bd/block-at raw-p {:x 0 :y 64 :z z}))] z)) "no wall or pit"))))))

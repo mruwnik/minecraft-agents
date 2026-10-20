@@ -49,21 +49,26 @@
     (boolean (some #(and (far? %) (not (sh-sense/lit-here? p %)))
                    (sh-sense/spawnable-cells p (map (fn [[x y z]] {:x x :y y :z z}) (:cells room)))))))
 
-(defn walled-off-at?
-  "Whether a body at `at` ({:x :y :z}) has no dark spawnable cell a mob could walk from to it (owner Q345 for work exposure:
-  nothing spawns within spawn-free-radius, so only dark cells beyond it that a mob reaches on foot count): `at` lies in a
-  closed, fully seen region (reach-room/room) with no open door, no way in for a walking mob or a spider
-  (reach-room/enterable?, reach-room/spider-gap?), and no dark spawnable cell in it farther than spawn-free-radius from
-  `at`. A region too big to flood (an unroofed one over reach-room/yard-cells) or with an unseen edge is not: unseen is never safe."
+(defn sealed-region
+  "The closed, fully seen region (reach-room/room) round `at` ({:x :y :z}) with no open door and no way in for a walking mob
+  or a spider (reach-room/enterable?, reach-room/spider-gap?), else nil: safe but for the dark. A region too big to flood
+  (an unroofed one over reach-room/yard-cells) or with an unseen edge is none: unseen is never safe."
   [p at]
-  (boolean
-   (let [room (and (or (sh-sense/shut-in-room? p at) (reach-room/small-region? p at))
-                   (reach-room/room p at))]
-     (and room
-          (not-any? #(open-door? p %) (:doors room))
-          (not (reach-room/enterable? p room))
-          (not (reach-room/spider-gap? p room))
-          (not (dark-spawn-beyond? p room at))))))
+  (let [room (and (or (sh-sense/shut-in-room? p at) (reach-room/small-region? p at))
+                  (reach-room/room p at))]
+    (when (and room
+               (not-any? #(open-door? p %) (:doors room))
+               (not (reach-room/enterable? p room))
+               (not (reach-room/spider-gap? p room)))
+      room)))
+
+(defn walled-off-at?
+  "Whether a body at `at` has no dark spawnable cell a mob could walk from to it (owner Q345 for work exposure: nothing
+  spawns within spawn-free-radius, so only dark cells beyond it that a mob reaches on foot count): a sealed-region with no
+  dark spawnable cell in it farther than spawn-free-radius from `at`."
+  [p at]
+  (boolean (when-let [room (sealed-region p at)]
+             (not (dark-spawn-beyond? p room at)))))
 
 (defn safe-room-at?
   "Whether a body at `at` would be safe from the night (owner Q345): walled-off-at? in a room under a roof
@@ -71,6 +76,13 @@
   sides or a pit a walker on its rim steps down into."
   [p at]
   (boolean (and (sh-sense/shut-in-room? p at) (walled-off-at? p at))))
+
+(defn dark-room-at?
+  "Whether `at` is in a room under a roof that a sealed-region closes and only its dark keeps from being safe-room-at?:
+  torches fix it."
+  [p at]
+  (boolean (when-let [room (and (sh-sense/shut-in-room? p at) (sealed-region p at))]
+             (dark-spawn-beyond? p room at))))
 
 (defn safe-from-night?
   "Whether the body is safe from the night where it stands: safe-room-at? its feet, its head not inside a block. The one

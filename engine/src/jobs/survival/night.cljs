@@ -31,6 +31,7 @@
             [jobs.survival.dig-pit-site :as pit-site]
             [jobs.survival.night.flee :as flee]
             [jobs.survival.night.hold :as hold]
+            [jobs.survival.night.light :as light]
             [jobs.survival.night.morning :as morning]
             [jobs.survival.night.sites :as sites]))
 
@@ -52,6 +53,7 @@
   - someone else asleep: jobs.survival.log-out, a 30 s stint, not retried tonight when not ok.
   - a roof over a room with a hole (shelter.room_open warn): walled in under the roof (:enclose).
   - roofed, buried or shut in a closed room: done {:night :roofed}.
+  - in a sealed room only dark cells beyond the spawn-free radius spoil, with torches or coal held, once a night: jobs.build.light-area over the room's cells (night.light), then the pass chooses again.
   - else jobs.survival.shut-in {:for :night} (walls, pit, room by quote; its pit walks to other ground after a failed site, jobs.survival.dig-pit-site; called again while another site may be left, at most max-sites), then a niche (pocket way, once), then a flee, then hold exposed (one shelter.exposed warn), still taking a bed or log-out that turns up, and digging in again after moving or retry-after-ms (max-retries).
   Fleeing (the night.sites ::flee-radius setting, 0 never; at most max-flees walks): to the not-yet-tried candidate go-to reaches soonest (jobs.lib.targets/nearest!): a known bed, a :roofed-places place, a seen cave or overhang cell (walled in on arrival), or seen natural ground the carried tools dig. shelter.fled on arrival, shelter.flee_failed otherwise.
   Every hold is declared (ctx/hold-still!), waits hold-ms, and (night.hold) cooks, eats or runs get-food first.
@@ -440,6 +442,7 @@
           (and (:enclose (ctx/mem c)) (not= :dug-in sheltered)) (await (enclose! c))
           (and (sh-inside/safe-from-night? p) (empty? (sh/open-room-doors p)))
           (do (ctx/end c :done nil (morning/done-data c (if (= :logged-out sheltered) :logged-out :roofed))))
+          (and (ctx/way? c :shelter) (light/wanted? c)) (await (light/light! c))
           (:fleeing (ctx/mem c)) (await (flee/flee! c (:fleeing (ctx/mem c))))
           (and (= :exposed sheltered) (ctx/way? c :shelter) (sites/retry-due? c)) (do (retry-dig-in! c) (await (shelter! c)))
           (= :exposed sheltered) (await (hold/hold! c (str "exposed: " (sites/exposed-why (pit-site/failed c) (:no-way-text (ctx/mem c))))))

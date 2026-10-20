@@ -35,6 +35,22 @@
    :blocks [[:fill [8 0 8] [16 3 16] "air"] [:fill [8 0 8] [50 3 10] "stone" :hollow] [:fill [9 0 9] [49 2 9] "air"]]
    :body {:at [9.5 0 9.5]}
    :expect [{:event {:source :action :kind :started :data {:name "place"}} :within-s 60}]}
+  {:name "dark-known-hall-is-lit-with-the-torches-carried"
+   ;; the 31-long closed hall seen by torch light along its length and left at its west end, the torches taken away: a sealed room known whole, dark beyond 24 blocks. The body carries torches and no blocks: it lights the hall (jobs.build.light-area) and the night ends in it, no wall or pit
+   :plot {:length 64 :width 32}
+   :blocks [[:fill [8 0 8] [16 3 16] "air"] [:fill [8 0 8] [40 3 10] "stone" :hollow] [:fill [9 0 9] [39 2 9] "air"]
+            [:set [9 1 9] "torch"] [:set [15 1 9] "torch"] [:set [21 1 9] "torch"] [:set [27 1 9] "torch"] [:set [33 1 9] "torch"] [:set [39 1 9] "torch"]]
+   :body {:at [9.5 0 9.5] :inventory [["torch" 16]]}
+   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+         [:job (jobs.movement.go-to {:pos #at [38 0 9] :range 0})] [:await {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} 60]
+         [:job (jobs.movement.look-around)] [:wait-s 6]
+         [:job (jobs.movement.go-to {:pos #at [9 0 9] :range 0})] [:wait-s 14]
+         [:rcon "execute positioned $X $Y $Z run fill ~8 ~-1 ~8 ~40 ~3 ~10 air replace torch"]
+         [:wait-s 2]
+         [:job (jobs.survival.night {})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 150}
+            {:event {:source :action :kind :started :data {:name "place"}} :within-s 150}]
+   :limit-s 200}
   {:name "lit-tunnel-is-shelter"
    ;; a 1-wide dead-end tunnel, 40 long, torch every 6: no room, but lit all along and closed. The night walks along it to see its far walls (an unseen cell is open until seen), so the body ends anywhere in the tunnel
    :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30] [:job (jobs.survival.night {})]]
