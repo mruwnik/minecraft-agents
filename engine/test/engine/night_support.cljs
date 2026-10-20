@@ -99,9 +99,10 @@
 
 ;; ------------------------------------------------------------------ a niche in a hillside
 (def hillside
-  "Dirt ground over x -2..8, z -2..2 with a stone hill (x 4..8, y 64..66) on it: no pit site 9+ from a failed one, a niche in the hill."
+  "Dirt ground over x -2..8, z -2..2 with a stone hill (x 4..8, y 64..66) on it, and a 1-wide obsidian road (no pit site: the iron pickaxe cannot dig it) west of it so the ground is no closed room: no pit site 9+ from a failed one, a niche in the hill."
   (merge (into {} (for [x (range -2 9) z (range -2 3) y (range 60 64)] [(str x "," y "," z) "dirt"]))
-         (into {} (for [x (range 4 9) z (range -2 3) y (range 64 67)] [(str x "," y "," z) "stone"]))))
+         (into {} (for [x (range 4 9) z (range -2 3) y (range 64 67)] [(str x "," y "," z) "stone"]))
+         (into {} (for [x (range -1100 -2)] [(str x ",63,0") "obsidian"]))))
 
 (def breached-room (merge st/floor (dissoc st/bed-room "-2,64,0" "-2,65,0")))
 

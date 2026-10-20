@@ -263,7 +263,7 @@
                                      (kind (ready/safe-at-by-night (constantly goal)) tunnel)))
     {:x 40 :y 64 :z 0} :ok
     {:x 40 :y 50 :z 0} :ok
-    {:x 40 :y 70 :z 0} :look))
+    {:x 40 :y 70 :z 0} :later))
 
 (deftest explore-search-underground-at-night-is-ok
   (is (= :ok (bound search/safe? tunnel {}))))

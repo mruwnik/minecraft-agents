@@ -135,12 +135,19 @@
   (let [in? (set cells)]
     (boolean (some (fn [[x y z]] (and (in? [(inc x) y z]) (in? [x y (inc z)]) (in? [(inc x) y (inc z)]))) in?))))
 
+(defn leaf-roofed?
+  "Whether a leaf block lies within height blocks straight above the feet cell: no mob comes through it, and the cells
+  under it are judged by their light."
+  [p height]
+  (let [{:keys [x y z]} (feet p)]
+    (boolean (some #(some-> (u/seen-name p {:x x :y (+ y %) :z z}) (.endsWith "_leaves")) (range 1 (inc height))))))
+
 (defn shut-in-room?
-  "Whether the body stands in a closed room (reach/closed-room?) with a roof over it within room-roof-height blocks:
-  safe from the night though the roof is above :roof-height. Sealed from the sky (buried?) counts as roofed: the roof
-  over the feet cannot be looked at from inside."
+  "Whether the body stands in a closed room (reach/closed-room?) with a roof (solid or leaves) over it within
+  room-roof-height blocks: safe from the night though the roof is above :roof-height. Sealed from the sky (buried?)
+  counts as roofed: the roof over the feet cannot be looked at from inside."
   [p]
-  (and (or (roofed? p (room-roof-height)) (buried? p)) (reach/closed-room? p (feet p))))
+  (and (or (roofed? p (room-roof-height)) (leaf-roofed? p (room-roof-height)) (buried? p)) (reach/closed-room? p (feet p))))
 
 (defn shut-in-hut?
   "shut-in-room? and wide: a hut, not a one-wide tunnel the body dug."

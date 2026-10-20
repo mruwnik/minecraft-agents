@@ -6,7 +6,7 @@
     a look round first (sh/unlooked-for-bed?): a bed known or carried and cells beside the feet never seen, or a closed hut
       not looked round from tonight while it could still sleep
     someone else on the server asleep (sh-sleepers/log-out-for-sleepers?)
-    not safe from the night (sh-inside/safe-from-night?: shut in a closed, roofed room that is tiny or has no dark spawnable cell; a roof with open sides, a dark cave or a big dark room is not)
+    not safe from the night (sh-inside/safe-from-night?: shut in a closed, roofed room with no dark spawnable cell beyond the 24-block spawn-free radius; a roof with open sides or a cave is not)
     an open door in the closed room the body stands in (sh/open-room-doors), also one the night could not shut
   By day it holds while the body is shut in its own latest :shelter (no :shelter-trapped entry for the cell), or a bed
   it put down outside its own zone (:bed-placed) still stands. Safe from the night (its dug-in shelter too) with no bed and no sleeper it does not

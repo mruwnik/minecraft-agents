@@ -37,7 +37,7 @@
   (not-any? #(< (:x (st/arg-pos %)) 5) (st/calls p "place")))
 
 (deftest a-closed-room-with-a-stale-bed-open-entry-ends-the-night-roofed
-  (run-night-in {:blocks st/bed-room :light {} :light-default [15 14]}
+  (run-night-in {:blocks st/bed-room}
                 (fn [{:keys [p]}]
                   (is (empty? (st/calls p "place")) "shut in: nothing to do")
                   (is (empty? (tu/walk-calls p))))))

@@ -1,6 +1,7 @@
-;; Owner Q345: a closed room is shelter from the night only when no cell where a mob could spawn is dark, or when it is
-;; tiny; a roof with open sides is none. Stone hut x 8..16, z 8..16, y 0..3, room 9..15, body inside, at night. The night
-;; job judges the room after its look round: in a shelter it ends :completed placing nothing; otherwise it walls the body in.
+;; Owner Q345: a closed room is shelter from the night when no dark cell where a mob could spawn lies beyond 24 blocks of
+;; the body (no mob spawns nearer to a player); a roof with open sides is none. Stone hut x 8..16, z 8..16, y 0..3, room 9..15,
+;; body inside, at night. The night job judges the room after its look round: in a shelter it ends :completed placing
+;; nothing; otherwise it walls the body in.
 ;; Needs night: run with --allow-time --time-log <the shared time log>.
 {:defaults
  {:tags [:night :survival :shelter]
@@ -17,7 +18,14 @@
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 60}
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}]
    :after [[:body-near [13.5 0 13.5] 1.5]]}
-  {:name "dark-closed-room-is-no-shelter"
+  {:name "dark-5x5-room-is-shelter"
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 60}
+            {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}]
+   :after [[:body-near [13.5 0 13.5] 1.5]]}
+  {:name "dark-big-hall-is-no-shelter"
+   :plot {:length 64 :width 32}
+   :blocks [[:fill [8 0 8] [16 3 16] "air"] [:fill [8 0 8] [50 3 10] "stone" :hollow] [:fill [9 0 9] [49 2 9] "air"]]
+   :body {:at [9.5 0 9.5]}
    :expect [{:event {:source :action :kind :started :data {:name "place"}} :within-s 60}]}
   {:name "tiny-dark-cell-is-shelter"
    :blocks [[:fill [8 0 8] [16 3 16] "air"] [:fill [10 0 10] [12 3 13] "stone" :hollow] [:fill [11 0 11] [11 2 12] "air"]]

@@ -35,28 +35,32 @@
   (let [b (u/seen-block p cell)]
     (and b (#{:openable :iron} (click/kind-of (.-name b))) (click/reached? :open (click/props-of b)))))
 
-(def tiny-room-cells
-  "A closed room of at most this many cells is small enough to need no light: no mob spawns in it beside the body."
-  2)
+(def spawn-free-radius
+  "Blocks round a player in which no mob spawns (the vanilla rule, spherical): a dark cell nearer than this to the body is no danger."
+  24)
 
-(defn dark-spawn-inside?
+(defn dark-spawn-beyond?
   "Whether some cell of the closed room round the feet where a mob could spawn (sh-sense/spawnable?) is dark, as the body
-  knows it (sh-sense/lit-here?)."
+  knows it (sh-sense/lit-here?), and farther than spawn-free-radius from the feet."
   [p room]
-  (boolean (some #(not (sh-sense/lit-here? p %))
-                 (sh-sense/spawnable-cells p (map (fn [[x y z]] {:x x :y y :z z}) (:cells room))))))
+  (let [feet (sh-sense/feet p)
+        far? (fn [{:keys [x y z]}]
+               (> (+ (js/Math.pow (- x (:x feet)) 2) (js/Math.pow (- y (:y feet)) 2) (js/Math.pow (- z (:z feet)) 2))
+                  (* spawn-free-radius spawn-free-radius)))]
+    (boolean (some #(and (far? %) (not (sh-sense/lit-here? p %)))
+                   (sh-sense/spawnable-cells p (map (fn [[x y z]] {:x x :y y :z z}) (:cells room)))))))
 
 (defn safe-from-night?
   "Whether the body is safe from the night where it stands (owner Q345): shut in a closed room under a roof
-  (sh-sense/shut-in-room?) with no open door, so no way in for a walking mob, that is tiny (at most tiny-room-cells cells) or has no dark
-  spawnable cell. A roof with open sides, a buried tunnel, a dark cave or a big dark room is not. The one test the night
-  trigger, night-sheltered, walk-leaves-shelter?, the night job's end and the hold share."
+  (sh-sense/shut-in-room?) with no open door, so no way in for a walking mob, and no dark spawnable cell in it farther
+  than spawn-free-radius from the body (a dark 5x5 room is safe, a dark hall reaching 30 blocks is not). A roof with open
+  sides is not. The one test the night trigger, night-sheltered, walk-leaves-shelter?, the night job's end and the hold share."
   [p]
   (boolean
    (and (not (sh-sense/head-in-block? p)) (sh-sense/shut-in-room? p)
         (let [room (reach/room p (sh-sense/feet p))]
           (and (not-any? #(open-door? p %) (:doors room))
-               (or (<= (count (:cells room)) tiny-room-cells) (not (dark-spawn-inside? p room))))))))
+               (not (dark-spawn-beyond? p room)))))))
 
 (defn night-sheltered
   "At night, awake and safe from it (safe-from-night?), the kind of shelter the body is in (:dug-in the one shelter says

@@ -81,14 +81,19 @@
         per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})]
     (tu/seeing-all (perception/wrap raw-p per))))
 
-(deftest a-closed-room-is-shelter-when-lit-or-tiny-never-dark-and-big
+(deftest a-closed-room-is-shelter-unless-a-dark-spawnable-cell-lies-beyond-the-spawn-free-radius
   (are [w d open-sides? light safe?] (= safe? (sh-inside/safe-from-night? (seen-box (box w d open-sides?) light)))
     5 5 false [0 14] true
-    5 5 false [0 0] false
-    1 2 false [0 0] true
+    5 5 false [0 0] true
     1 1 false [0 0] true
-    1 3 false [0 0] false
+    1 25 false [0 0] true
+    1 26 false [0 0] false
+    1 40 false [0 14] true
     5 5 true [0 14] false))
+
+(deftest a-leaf-roof-keeps-mobs-out-like-stone
+  (let [leaf-roof (into {} (map (fn [[k v]] [k (if (= k "0,66,0") "oak_leaves" v)])) (box 3 3 false))]
+    (is (true? (sh-inside/safe-from-night? (seen-box leaf-roof [0 0]))))))
 
 (deftest light-in-s-is-the-wait-until-the-sky-light-is-enough
   (is (nil? (sh-sense/light-in-s 0 18000 0 0)) "no sky light reaches it")

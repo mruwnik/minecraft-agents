@@ -1,4 +1,4 @@
-;; Cards d6a489cf (the night fact is silent when sealed in a lit corridor; owner Q345: an open tunnel or stair is not shelter), 820b2869 (dig-in walls run out of
+;; Cards d6a489cf (the night fact is silent when sealed in a corridor, dark or lit; owner Q345: an open tunnel or stair is not shelter), 820b2869 (dig-in walls run out of
 ;; blocks -> pit), 555ea732 (a trapped pit shelter by day with no pickaxe fails :no-way-out once, never waits).
 ;; Night: run with --allow-time --time-log <shared time log>. Stone mass x 2..30, z 8..24, y 0..9 (cases that need a taller
 ;; mass say so). The register holds :night -> a notify job (the night job would log the body out when
@@ -13,9 +13,9 @@
   :body {:at [16.5 10 16.5] :effects [["resistance" 600 4]]}}
  :cases
  [{:name "buried-corridor-silent"
-   ;; a sealed 1x2 corridor in the rock east along z 16 from x 26 to 28 (short enough to be read whole), torch-lit:
-   ;; no way in for a mob, no dark cell.
-   :blocks [[:fill [26 4 16] [28 5 16] "air"] [:set [27 4 16] "torch"]]
+   ;; a sealed 1x2 corridor in the rock east along z 16 from x 26 to 28 (short enough to be read whole), dark:
+   ;; no way in for a mob, and no dark cell beyond 24 blocks of the body.
+   :blocks [[:fill [26 4 16] [28 5 16] "air"]]
    :body {:at [28.5 4 16.5] :inventory [["cobblestone" 16]]}
    :register []
    :act [[:job (jobs.survival.night {})]]
@@ -25,7 +25,7 @@
    :after [[:body-near [28.5 4 16.5] 1.5]]}
   {:name "deep-diagonal-stair-open-to-the-surface-shelters"
    ;; a 1-wide stair of 12 steps down from the top of a 29-high mass (the shape jobs.access.stair cuts): the body at its
-   ;; bottom has sky light 0 but a mob can walk down the stair and the stair is dark, so it is no shelter
+   ;; bottom has sky light 0 but a mob can walk down the stair, so it is no shelter
    :plot {:height 31}
    :blocks [[:fill [2 0 8] [30 28 24] "stone"] [:fill [5 28 16] [5 30 16] "air"] [:fill [6 27 16] [6 29 16] "air"] [:fill [7 26 16] [7 28 16] "air"] [:fill [8 25 16] [8 27 16] "air"] [:fill [9 24 16] [9 26 16] "air"] [:fill [10 23 16] [10 25 16] "air"] [:fill [11 22 16] [11 24 16] "air"] [:fill [12 21 16] [12 23 16] "air"] [:fill [13 20 16] [13 22 16] "air"] [:fill [14 19 16] [14 21 16] "air"] [:fill [15 18 16] [15 20 16] "air"] [:fill [16 17 16] [16 19 16] "air"]]
    :body {:at [16.5 17 16.5] :inventory [["cobblestone" 16]]}

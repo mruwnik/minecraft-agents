@@ -57,14 +57,9 @@
     (is (false? (bed-for (assoc-in world [:blocks "20,64,0"] "air") (seed {:x 20 :y 64 :z 0})))
         "seen not to be a bed")))
 
-(def lit-hut
-  "Torch and sky light in every cell of closed-hut's room."
-  (into {} (for [x (range -1 2) z (range -1 2) y (range 64 70)] [[x y z] [15 14]])))
-
 (deftest a-body-already-safe-at-night-does-not-hold
-  (is (false? (holds? {:time night :blocks closed-hut :light lit-hut} (fn [_]))) "shut in a high lit closed room")
-  (is (true? (holds? {:time night :blocks closed-hut} (fn [_]))) "the same room dark: a mob may spawn in it")
-  (is (true? (holds? {:time night :blocks (dissoc closed-hut "0,70,0") :light lit-hut} (fn [_]))) "a hole in the roof: not shut in")
+  (is (false? (holds? {:time night :blocks closed-hut} (fn [_]))) "shut in a high closed room, dark or not")
+  (is (true? (holds? {:time night :blocks (dissoc closed-hut "0,70,0")} (fn [_]))) "a hole in the roof: not shut in")
   (is (true? (holds? {:time night :blocks {}} (fn [_]))) "outside"))
 
 (deftest night-holds-for-a-sleeper-the-action-bar-counts-tonight

@@ -57,11 +57,11 @@
           (is (= #{:retreat-plug} (purposes eng)))
           (is (= [{:cell [1 64 0] :item "cobblestone"} {:cell [1 65 0] :item "cobblestone"}] (:placed (:data out))) "every placed block, for a caller to take back"))))))
 
-(deftest the-callers-for-labels-the-ledger-entries
+(deftest the-callers-for-labels-the-ledger-entries ; the tunnel loses its roof: a closed dead end would be shelter already
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (await (plug! {:blocks ct/dead-end :inventory cobble :time 18000} {:for :night} tu/seeing-all))]
+        (let [{:keys [eng]} (await (plug! {:blocks (apply dissoc ct/dead-end (for [x (range 0 9) y [66 67]] (str x "," y ",0"))) :inventory cobble :time 18000} {:for :night} tu/seeing-all))]
           (is (= #{:shelter} (purposes eng))))))))
 
 (deftest walls-beside-an-open-iron-door-step-away-from-it-and-wall-the-cell-between

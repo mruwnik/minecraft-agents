@@ -101,10 +101,6 @@
 (deftest a-buried-body-not-yet-overdue-stays-in-the-tunnel
   (is (nil? (bed-to-use-after-days (tunnel-world buried-light) 2))))
 
-(deftest a-roofed-body-the-sky-reaches-still-walks-to-its-bed
-  (is (= far-bed (bed-to-use (tunnel-world {}))) "a roof alone is no shelter to keep")
-  (is (true? (holds? (tunnel-world {})))))
-
 (deftest a-body-out-in-the-open-still-walks-to-its-bed
   (let [world {:floor tu/walk-floor :self {:pos {:x 5 :y 64 :z 0}} :time st/night :blocks {"40,64,0" "red_bed"}}]
     (is (= far-bed (bed-to-use world)))
