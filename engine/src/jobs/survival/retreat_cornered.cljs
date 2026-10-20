@@ -13,7 +13,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.escape :as escape]
-                        [jobs.lib.look :as look]
+            [jobs.lib.look :as look]
             [jobs.lib.result :as result]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.step-off :as step-off]
@@ -73,7 +73,9 @@
 (defn fist-sweeps [] (settings/get settings :jobs.survival.retreat-cornered/fist-sweeps))
 (defn hit-reach [] (settings/get settings :jobs.survival.retreat-cornered/hit-reach))
 
-(defn hits-total [hits] (reduce + 0 (vals hits)))
+(defn hits-total
+  "The hits an attack ending's (or prior's) :struck counts over all mobs."
+  [struck] (reduce + 0 (map :hits (vals struck))))
 
 (defn ^:async fight!
   "Fight back with the best of weapons (the fist when none is carried) whatever
@@ -86,7 +88,7 @@
         radius (if reach-only? (min radius (hit-reach)) radius)
         ranged-radius (if reach-only? radius ranged-radius)]
     (ctx/update-mem! c assoc :cornered true)
-    (let [hits-before (hits-total (get-in (ctx/mem c) [:children :cornered :hits]))
+    (let [hits-before (hits-total (:struck (:fight-prior (ctx/mem c))))
           r (await (ctx/call c :cornered 'jobs.combat.attack
                              {:targets :hostiles :radius radius :ranged-radius ranged-radius :use {:tools (mapv name weapons)}
                               :skip (flight/dead-ids c) :prior (:fight-prior (ctx/mem c)) :checks {:safe? '(always) :fit? '(always)}}))
@@ -96,7 +98,7 @@
       (if (and ended (not= :done (:kind ended)))
         (do (when (:struck (:data ended)) (ctx/update-mem! c assoc :fight-prior (select-keys (:data ended) [:killed :given-up :names :struck])))
             (flight/tried! c :fight)
-            (when (> (hits-total (:hits (:memory (:data ended)))) hits-before)
+            (when (> (hits-total (:struck (:data ended))) hits-before)
               (ctx/update-mem! c assoc :sweeps 0))
             nil)
         :again))))

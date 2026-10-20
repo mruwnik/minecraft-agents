@@ -427,11 +427,11 @@
             (is (= want @out) (str "go-to " label))))))))
 
 (defn fighter
-  "A job that runs a fight whose attack child declines, after a sweep already counted and with the child's earlier hits in memory; keeps the memory's sweeps."
+  "A job that runs a fight whose attack child declines, after a sweep already counted and with the earlier call's per-mob hits as the prior; keeps the memory's sweeps."
   [out before]
   {:defaults {:checks {:safe? '(always) :fit? '(always)}}
    :round (fn ^:async fighter-round [c]
-            (ctx/update-mem! c assoc :sweeps 1 :children {:cornered {:hits before}})
+            (ctx/update-mem! c assoc :sweeps 1 :fight-prior {:struck (into {} (for [[id n] before] [id {:name "zombie" :hits n}]))})
             (reset! out [(await (cornered/fight! c [] false)) (:sweeps (ctx/mem c))])
             (ctx/end c :done nil))})
 
@@ -443,7 +443,7 @@
           (let [out (atom nil)
                 s (setup {:entities [(zombie 7 2 {})]})
                 s (update-in (assoc-in s [:eng :jobs 'fighter] (fighter out before)) [:eng :jobs] merge
-                             {'jobs.combat.attack {:round (fn ^:async declined [c] (ctx/end c :nothing-possible :unreachable {:memory {:hits after} :struck (into {} (for [[id n] after] [id {:name "zombie" :hits n}]))}))}})]
+                             {'jobs.combat.attack {:round (fn ^:async declined [c] (ctx/end c :nothing-possible :unreachable {:struck (into {} (for [[id n] after] [id {:name "zombie" :hits n}]))}))}})]
             (await (run-job! s 'fighter {}))
             (is (= [nil want] @out) (str before " -> " after))))))))
 
