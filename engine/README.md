@@ -102,7 +102,7 @@ nobody may act. `isOwner(token)` reports whether a token is current.
 |---|---|
 | `self()` | `{username, pos, health, food, foodSaturation, oxygen, onFire, inWater, inLava, onGround, chunkLoaded, settling, isSleeping, vehicle, effects, experience, dimension, timeOfDay, isDay, raining, thundering, players, held, equipment, inventory}` |
 | `worldAge()` | the world age in game ticks (`null` offline); a cheap read of what `self()` carries, used for memory `:age` |
-| `entities({radius=16, kind?, names?, ids?, max=32})` | `[{id, name, kind, pos, distance, visible?, ...}]` by distance; `kind` is `hostile`, `passive`, `player`, `item` or `other`; passive mobs and villagers are listed only with a clear line of sight; hostiles, items and players are listed regardless and carry `visible` (a player counts as `sleeping` only in sight) |
+| `entities({radius=16, kind?, names?, ids?, max=32})` | `[{id, name, kind, pos, distance, visible?, ...}]` by distance; `kind` is `hostile`, `passive`, `player`, `item` or `other`; passive mobs and villagers are listed only inside the view cone with a clear line of sight (`senses/in-view?`; a cow behind the body is not listed); hostiles, items and players are listed regardless and carry `visible` (an item's also needs the cone) (a player counts as `sleeping` only in sight) |
 | `blockAt(pos)` | with perception, `sensedAt(pos)`: the cell as the body senses it (an unknown cell has no `name`), `null` when the chunk is not loaded; jobs and triggers read through `jobs.lib.util`, never `.blockAt` (lint) |
 
 Notes:

@@ -4,7 +4,10 @@
   gives cells (stateAt, sightTable, shapesAt, eye); wrap derives isDay, raining, thundering, visible, hittable and
   sleeping from them, lists only what a player would see, and passes the sleep preconditions down."
   (:require [engine.constants :as constants]
+            [engine.perception :as perception]
+            [engine.perception.mobs :as mobs]
             [engine.perception.rays :as rays]
+            [engine.settings :as settings]
             [engine.sight :as sight]))
 
 (def rain-level 0.2)   ;; vanilla client: raining above this rain level, thundering above thunder-level while raining
@@ -86,6 +89,14 @@
                (boolean (some (fn [[x y z]] (sight/line-clear ex ey ez x y z (fn [cx cy cz] (blocks-sight? raw table cx cy cz ex ey ez x y z))))
                               (sight-points e))))))
 
+(defn in-view?
+  "Whether the eye meets entity e as a player's eyes do: inside the view cone (the perception setting's fov and aspect)
+  and a clear line. A body cannot see what is behind it."
+  [^js raw ^js eye ^js e]
+  (let [[hx hy] (rays/half-extents (settings/get perception/settings :engine.perception/fov)
+                                   (settings/get perception/settings :engine.perception/aspect))]
+    (and (mobs/in-view-cone? hx hy eye (.-pos e)) (can-see? raw eye e))))
+
 (defn can-hit?
   "A melee swing needs a clear line from the eye to the feet, the middle or the head of the entity, over collision boxes."
   [^js raw ^js eye ^js e]
@@ -112,13 +123,13 @@
       out)))
 
 (defn- sense-entities
-  "The raw entity list as a player's senses give it: a passive mob or a villager behind a wall is dropped; hostiles, items
-  and players stay with `visible`; hittable within hit-range (not for items); a player's sleeping needs sight."
+  "The raw entity list as a player's senses give it: a passive mob or a villager out of view (behind a wall or the body) is
+  dropped; hostiles, items and players stay with `visible` (an item's also needs the view cone); hittable within hit-range (not for items); a player's sleeping needs sight."
   [raw ^js eye entities max]
   (->> (array-seq entities)
        (map (fn [^js e] (js/Object.assign #js {} e)))
        (map (fn [^js e] (let [k (.-kind e)
-                              see? (can-see? raw eye e)]
+                              see? (if (#{"hostile" "player"} k) (can-see? raw eye e) (in-view? raw eye e))]
                           [e k see?])))
        (filter (fn [[_ k see?]] (or (#{"hostile" "item" "player"} k) see?)))
        (take max)
@@ -136,7 +147,7 @@
   engine.entity-observations/wrap-heard, which turns them into what a sound tells."
   [raw ^js eye entities max]
   (->> (array-seq entities)
-       (remove (fn [^js e] (or (#{"hostile" "item" "player"} (.-kind e)) (can-see? raw eye e))))
+       (remove (fn [^js e] (or (#{"hostile" "item" "player"} (.-kind e)) (in-view? raw eye e))))
        (take max)))
 
 (defn- monsters-near?

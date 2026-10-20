@@ -25,6 +25,13 @@
         lit? (fn [yy] (== 1 (aget visible (.lightAt ^js raw x yy z))))]
     (or (lit? y) (lit? (inc y)))))
 
+(defn in-view-cone?
+  "Whether a thing at pos (feet) is inside the view cone of eye (yaw, pitch; no look is yaw 0, pitch 0) with tangent
+  half-extents hx and hy. The one cone rule for mobs, items and what engine.senses lists."
+  [hx hy ^js eye ^js pos]
+  (in-cone? (basis (or (.-yaw eye) 0) (or (.-pitch eye) 0)) hx hy
+            (- (.-x pos) (.-x eye)) (- (+ (.-y pos) mob-middle) (.-y eye)) (- (.-z pos) (.-z eye))))
+
 (defn sense-thing
   "How the body senses a thing at pos (feet) from eye, given whether a line from the eye to it is clear (`visible?`)
   and whether it makes no sound (`silent?`): :seen, :heard or nil. One rule for mobs (mob-sense) and for what
@@ -36,7 +43,7 @@
         seen? (and visible?
                    (<= d (:radius opts))
                    (or (<= d (near-of per)) (mob-lit? per pos))
-                   (or heard? (in-cone? (basis (.-yaw eye) (.-pitch eye)) (:hx grid) (:hy grid) vx vy vz)))]
+                   (or heard? (in-view-cone? (:hx grid) (:hy grid) eye pos)))]
     (cond seen? :seen heard? :heard :else nil)))
 
 (defn mob-sense

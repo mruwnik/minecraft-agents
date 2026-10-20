@@ -10,13 +10,17 @@
 
 ;; ---- the view cone
 
+(defn half-extents
+  "The tangent half-extents [hx hy] of the view plane for a vertical field of view in degrees and a width over height."
+  [fov aspect]
+  (let [hy (js/Math.tan (/ (* fov js/Math.PI) 360))] [(* hy aspect) hy]))
+
 (defn grid
   "{:cols :rows :hx :hy}: the ray grid over the view plane, tangent half-extents hx (horizontal) and hy. At effort e
   (0-1, default 1) the grid keeps the share effort-min + (1 - effort-min) e of the rays of a ray-deg grid."
   ([opts] (grid opts 1))
   ([{:keys [fov aspect ray-deg effort-min]} effort]
-   (let [hy (js/Math.tan (/ (* fov js/Math.PI) 360))
-         hx (* hy aspect)
+   (let [[hx hy] (half-extents fov aspect)
          share (+ effort-min (* (- 1 effort-min) (max 0 (min 1 effort))))
          spacing (js/Math.tan (/ (* (/ ray-deg (js/Math.sqrt share)) js/Math.PI) 180))]
      {:hx hx :hy hy :cols (js/Math.ceil (/ (* 2 hx) spacing)) :rows (js/Math.ceil (/ (* 2 hy) spacing))})))

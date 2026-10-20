@@ -12,7 +12,7 @@
   "A raw world over {[x y z] :block|:fence|:pane}: state 1 blocks sight, 2 does not, -1 is not loaded (cells in unloaded)."
   [blocks & [unloaded]]
   (let [id (fn [x y z] (cond (contains? (set unloaded) [x y z]) -1 (= :block (get blocks [x y z])) 1 (contains? blocks [x y z]) 2 :else 0))]
-    #js {:eye (fn [] (at 0.5 65.62 0.5))
+    #js {:eye (fn [] (js/Object.assign (at 0.5 65.62 0.5) #js {:yaw (- (/ js/Math.PI 2)) :pitch 0}))
          :stateAt id
          :sightTable (fn [] (js/Uint8Array. #js [0 1 0]))
          :shapesAt (fn [x y z]
@@ -104,6 +104,14 @@
     (let [w (:w (wrapped {:entities es}))]
       (is (= [1 10] (mapv #(.-id ^js %) (.entities ^js w #js {:max 2})))))))
 
+(deftest a-body-senses-nothing-passive-behind-it
+  (let [es [(ent 1 "cow" "passive" 3.5) (ent 2 "cow" "passive" -2.5) (ent 3 "villager" "villager" -2.5)
+            (ent 4 "item" "item" 3.5) (ent 5 "item" "item" -2.5) (ent 6 "zombie" "hostile" -2.5)]
+        listed (vec (.entities ^js (:w (wrapped {:entities es})) #js {}))]
+    (is (= [1 4 5 6] (mapv #(.-id ^js %) listed)) "the cow and villager behind are dropped, items and hostiles stay")
+    (is (= [true false true] (mapv #(.-visible ^js %) (rest listed))) "an item behind is listed but not visible; a hostile keeps its line-only flag")
+    (is (= [2 3] (mapv #(.-id ^js %) (.unseenPassives ^js (:w (wrapped {:entities es})) #js {}))) "what is behind is the unseen input of hearing")))
+
 (deftest sleep-preconditions-come-from-the-senses
   (let [flags (fn [self entities]
                 (let [{:keys [p seen] :as s} (stub {:self self :entities entities})
@@ -162,7 +170,7 @@
            @got))))
 
 (deftest the-real-sight-table-decides-what-blocks-the-eye
-  (let [world (fn [blocks] {:blocks blocks :self {:pos [0 64 0]}})
+  (let [world (fn [blocks] {:blocks blocks :yaw 270 :self {:pos [0 64 0]}})
         raw (fn [blocks] (let [w (world blocks)]
                            #js {:eye (fn [] (fake-raw/eye w))
                                 :stateAt (fn [x y z] (fake-raw/state-at-slow w x y z))
