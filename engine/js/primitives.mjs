@@ -3,6 +3,7 @@
 // engine/README.md (Primitives). Nothing here imports from src/.
 
 import './compile-cache.mjs'
+import './protocol-cache.mjs'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { connectBot } from './connect.mjs'
