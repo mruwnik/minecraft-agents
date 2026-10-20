@@ -144,7 +144,7 @@
 (defn own-seal-near
   "The open scaffold ledger entries (jobs.lib.ledger) within seal-radius of pos: blocks this body placed round the pile."
   [c pos]
-  (filterv #(<= (u/dist pos (zipmap [:x :y :z] (:cell %))) (cfg/seal-radius)) (ledger/open-entries (ctx/view c))))
+  (ledger/near-of (ledger/open-entries (ctx/view c)) {:pos pos :radius (cfg/seal-radius)}))
 
 (defn ^:async clear-seal!
   "When the body's own placed blocks stand near the pile (its flee seal): take back those within seal-radius of it
@@ -179,7 +179,7 @@
 (defn ^:async go!
   "Walk one leg (:leg-s) toward the death point: :next once there (the collect phase) or after a leg (a go-to cut by the leg's own job-time limit is a leg too; the danger and the
   cost are weighed again; one that got no nearer counts as a walk that did not arrive), else :declined (go-to waits on the
-  world, or it did not arrive: the next run walks again while the pile is worth it, and the window closes it). A walk
+  world, or it did not arrive (the body's own seal near the pile is taken back first): the next run walks again while the pile is worth it, and the window closes it). A walk
   go-to refused for the body's own shelter (:inside-own-shelter) is no failed try: the window closes the trip."
   [c pos]
   (let [before (u/dist (u/self-pos c) pos)
@@ -191,7 +191,7 @@
       (dg/decline! c :unreachable (str "the walk to " (pr-str pos) " is waiting on the world") {:pos pos})
       (:inside-own-shelter walked)
       (dg/decline! c :unreachable (str "the walk to " (pr-str pos) " is refused: the body is sealed in its own shelter, which opens by day") {:pos pos})
-      (and (= :goal-enclosed (:why walked)) (await (clear-seal! c pos))) :next
+      (and (not (:arrived walked)) (not (:leg walked)) (await (clear-seal! c pos))) :next
       (:leg walked)
       (let [nearer? (< (u/dist (u/self-pos c) pos) (- before 1))]
         (ctx/update-mem! c #(cond-> (assoc % :recheck true)

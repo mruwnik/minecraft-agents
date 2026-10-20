@@ -161,12 +161,12 @@
 (defn held-cells [view] (set (:cells (:data (mem/latest view held-kind)))))
 
 (defn near-of
-  "The entries of l whose cell lies within the :radius of the :pos of near ({:pos {:x :y :z} :radius n}); all of l when near is nil."
+  "The entries of l whose cell (its centre in x and z, at its feet height) lies within the :radius of the :pos of near ({:pos {:x :y :z} :radius n}); all of l when near is nil."
   [l near]
   (if-not near
     l
     (let [{:keys [x y z]} (:pos near)]
-      (filterv (fn [{[cx cy cz] :cell}] (<= (js/Math.hypot (- cx x) (- cy y) (- cz z)) (:radius near))) l))))
+      (filterv (fn [{[cx cy cz] :cell}] (<= (js/Math.hypot (- (+ cx 0.5) x) (- cy y) (- (+ cz 0.5) z)) (:radius near))) l))))
 
 (defn select
   "The entries of l a cleanup with :job job works on: nil, those whose owner is not live and that are not held (a dig-in's :shelter blocks stay: the dig-in's leave takes them back); :all,

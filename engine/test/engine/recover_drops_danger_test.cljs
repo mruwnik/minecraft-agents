@@ -277,6 +277,11 @@
           (is (= :collected (:decision (recovered eng))) (pr-str (recovered eng)))
           (is (= [far] (mapv :cell (ledger/open-entries (mem/view (:store eng))))) "the far scaffold block is still there"))))))
 
+(deftest a-seal-block-four-cells-west-of-a-pile-is-near-it
+  (let [{:keys [eng]} (setup {:floor tu/walk-floor})]
+    (ledger/write! (:store eng) [{:cell [22 64 26] :item "dirt" :before "air" :job "j9" :purpose :retreat :state :placed}])
+    (is (= 1 (count (recover-drops/own-seal-near {:view #(mem/view (:store eng))} {:x 26.5 :y 64 :z 26.5}))))))
+
 (deftest an-unseen-seal-is-walked-up-to-before-it-is-taken-back
   (async done
     (tu/run-async done
@@ -286,7 +291,7 @@
           (tu/seeing-within p 6)
           (set! recover-drops/walk-leg! (fn [_ _]
                                           (set! recover-drops/walk-leg! walk-leg!)
-                                          [{:kind :done :data {:arrived false :why :goal-enclosed}}]))
+                                          [{:kind :done :data {:arrived false :why :exhausted}}]))
           (await (run-until-empty eng 60))
           (set! recover-drops/walk-leg! walk-leg!)
           (is (empty? (ledger/open-entries (mem/view (:store eng))))
