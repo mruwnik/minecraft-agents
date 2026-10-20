@@ -14,6 +14,7 @@
             [jobs.lib.block-sets :as bs]
             [jobs.lib.escape :as escape]
             [jobs.lib.look :as look]
+            [jobs.lib.reach :as reach]
             [jobs.lib.result :as result]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.step-off :as step-off]
@@ -489,15 +490,22 @@
                 (sh-sense/shut-in-room? (:primitives c)))))
 
 (defn bare-boxed-in?
-  "Whether the body is in a closed hut (not a one-wide tunnel, which may lead on) with a melee mob (not a creeper or an enderman) within close-radius and has no
+  "Whether the body is in a closed hut (not a one-wide tunnel, which may lead on) with a melee mob (not a creeper or an enderman) within close-radius in that room (not outside its door) and has no
   weapon and no block to wall with: the fist is all it has, so it fights at once rather than dodge about the room."
   [c hostiles]
-  (boolean (and (some #(and (not (combat/ranged? %)) (not (combat/creeper? %)) (not (combat/enderman? %))
-                            (<= (danger-q/mob-distance (:primitives c) %) (close-radius)))
+  (let [p (:primitives c)
+        close (filter #(and (not (combat/ranged? %)) (not (combat/creeper? %)) (not (combat/enderman? %))
+                            (<= (danger-q/mob-distance p %) (close-radius)))
                       hostiles)
-                (sh-sense/shut-in-hut? (:primitives c))
-                (nil? (combat/best-weapon (:primitives c) (weapons c)))
-                (empty? (lb/carried c (flight/blocks c))))))
+        in-room? (fn [] (let [cells (:cells (reach/room p (sh-sense/feet p)))]
+                          (some (fn [e] (let [{:keys [x y z]} (danger-q/mob-pos p e)]
+                                          (contains? cells [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)])))
+                                close)))]
+    (boolean (and (seq close)
+                  (nil? (combat/best-weapon p (weapons c)))
+                  (empty? (lb/carried c (flight/blocks c)))
+                  (sh-sense/shut-in-hut? p)
+                  (in-room?)))))
 
 (defn mob-in-corner-cell?
   "Whether a melee mob (hitters) stands in a diagonal cell the walls still have to fill: a placed block is refused
