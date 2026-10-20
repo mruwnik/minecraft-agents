@@ -68,7 +68,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (st/setup {:time night :inventory st/dirt-stack :blocks stone-and-dirt-patch})]
+        (let [{:keys [eng p seen]} (st/setup {:time night :inventory st/wall-stack :blocks stone-and-dirt-patch})]
           (tu/seeing-all p)
           (.override (.-world p) "place"
                      (fn ^:async f [token a impl]
@@ -112,7 +112,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (cave-night [{:name "dirt" :count 8}])
+        (let [{:keys [eng p seen]} (cave-night [{:name "dirt" :count 12}])
               log (await (with-child-log #(tu/run-until-empty eng 160)))
               enclose (first (filter #(and (= 'jobs.survival.shut-in (second %)) (= #{:walls} (:ways (nth % 2)))) log))]
           (is (= [:cave] (mapv :target (st/emitted seen :shelter.fled))))

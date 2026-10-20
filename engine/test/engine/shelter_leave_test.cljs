@@ -22,8 +22,8 @@
 (defn ^:async dug-in-world
   "A body dug in at night by dig-in submitted directly (no shelter job), then the time set to day; the setup map."
   [world]
-  (let [s (st/setup (merge {:time st/night :inventory st/dirt-stack :blocks st/floor} world))]
-    (core/submit! (:eng s) '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
+  (let [s (st/setup (merge {:time st/night :inventory st/wall-stack :blocks st/floor} (dissoc world :ways)))]
+    (core/submit! (:eng s) (list 'jobs.survival.shut-in {:ways (:ways world #{:room :walls}) :for :night}) {})
     (await (st/tick-n (:eng s) 25))
     (is (= [:built] (mapv :state (st/entries (:eng s) :shelter))) "dug in")
     (.setTime (.-world (:p s)) st/noon)
@@ -56,7 +56,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen clock]} (await (dug-in-world {:blocks st/stone-ground :inventory [{:name "dirt" :count 1}]}))]
+        (let [{:keys [eng seen clock]} (await (dug-in-world {:blocks st/stone-ground :inventory [{:name "dirt" :count 1}] :ways #{:room :walls :pit}}))]
           (core/load-scenario! eng (scenario/parse (str "{:register [{:trigger " shut-in-trigger "}]}")))
           (dotimes [_ 6]
             (await (st/tick-n eng 10))

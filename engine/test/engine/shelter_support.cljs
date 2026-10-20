@@ -1,6 +1,7 @@
 (ns engine.shelter-support
   "Shared helpers of the night and shelter test namespaces."
   (:require [engine.core :as core]
+            [engine.settings :as settings]
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
@@ -37,6 +38,11 @@
 (def default-dawn
   "Holds after which setup's night turns to day, so a test that does not care when the night ends still ends."
   12)
+
+(defn walls-cheap
+  "Run f (a test body) with the night walls priced low enough that the quote picks them over a pit: these tests are about the walls."
+  [f]
+  (settings/with-settings {:jobs.survival.wall-in/night-place-s 0.1} f))
 
 (defn setup [world]
   (let [clock (atom 1000000)
@@ -109,6 +115,7 @@
   (assoc (apply dissoc (tu/box -2 64 -2 8 66 2 "stone") (keys (tu/box -1 64 -1 7 65 1 "stone"))) "6,64,0" "red_bed"))
 
 (def dirt-stack [{:name "dirt" :count 12}])
+(def wall-stack "Blocks enough to wall the body in on flat ground (18 cells)." [{:name "dirt" :count 20}])
 (def sleeper {:id 5 :name "Alex" :kind "player" :sleeping true :pos {:x 10 :y 64 :z 0}})
 (def awake {:id 6 :name "Sam" :kind "player" :pos {:x 10 :y 64 :z 0}})
 

@@ -130,7 +130,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (plug! {:blocks mid-room :inventory pick :entities [(ct/zombie -3 64 0)]} {:ways #{:pocket}}))
+        (let [{:keys [out p]} (await (plug! {:blocks mid-room :inventory (into pick cobble) :entities [(ct/zombie -3 64 0)]} {:ways #{:pocket}}))
               [x _ z] (mapv js/Math.floor (:pos (fake/self p)))]
           (is (= [:done :pocket] [(:kind out) (:way (:data out))]))
           (is (<= 3 (max (js/Math.abs x) (js/Math.abs z))) "a pocket in a wall 3 blocks from the room's centre")

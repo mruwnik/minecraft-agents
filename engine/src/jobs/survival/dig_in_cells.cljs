@@ -21,6 +21,8 @@
 
 (def sides [[1 0] [-1 0] [0 1] [0 -1]])
 
+(def corners "The diagonal neighbours: a mob standing there still reaches the body." [[1 1] [1 -1] [-1 1] [-1 -1]])
+
 (def hazards
   "Blocks that are or hold a fluid: a cell opened beside or under one fills."
   (into bs/fluids #{"kelp" "kelp_plant" "seagrass" "tall_seagrass"}))
@@ -107,16 +109,26 @@
   solid face neighbour to be placed against, and the roof cell has none until
   the support exists; none when one of the four is placed already or the roof cell is sealed; else the one farthest from
   threats ({:x :y :z}), the +x one with none), then the roof cell above the head; only those the
-  predicate sealed? (cell -> bool) does not hold for."
+  predicate sealed? (cell -> bool) does not hold for. A corner cell (diagonal, feet or head height) is among them only
+  when a mob could stand in it: an open one on a sealed floor, or above a corner that is sealed or filled; the corners
+  follow the sides."
   ([sealed? feet] (fill-cells sealed? feet nil))
   ([sealed? {:keys [x y z]} threats]
    (let [roof {:x x :y (+ y 2) :z z}
          supports (for [[dx dz] sides] {:x (+ x dx) :y (+ y 2) :z (+ z dz)})
          gap (fn [{cx :x cy :y cz :z}]
                (apply min (map #(u/dist {:x (+ cx 0.5) :y (+ cy 0.5) :z (+ cz 0.5)} %) threats)))
-         support (if (empty? threats) (first supports) (apply max-key gap supports))]
+         support (if (empty? threats) (first supports) (apply max-key gap supports))
+         at (fn [dy [dx dz]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
+         corner-cells (fn [corner]
+                        (let [feet-c (at 0 corner)
+                              feet-stand? (and (not (sealed? feet-c)) (sealed? (at -1 corner)))]
+                          (cond-> []
+                            feet-stand? (conj feet-c)
+                            (or feet-stand? (sealed? feet-c)) (conj (at 1 corner)))))]
      (filterv #(not (sealed? %))
-              (concat (for [dy [0 1] [dx dz] sides] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
+              (concat (for [dy [0 1] d sides] (at dy d))
+                      (mapcat corner-cells corners)
                       (when-not (or (sealed? roof) (some sealed? supports)) [support])
                       [roof])))))
 

@@ -65,7 +65,7 @@
 ;; ------------------------------------------------------------------ dig-in in a room with a hole in the roof
 
 (defn ^:async dig-in! [world]
-  (let [{:keys [eng p seen] :as s} (st/setup (merge world {:time st/night :inventory st/dirt-stack}))]
+  (let [{:keys [eng p seen] :as s} (st/setup (merge world {:time st/night :inventory st/wall-stack}))]
     (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
     (await (tu/run-until-empty eng 8))
     (assoc s :eng eng :p p :seen seen)))
@@ -99,7 +99,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} {"5,67,0" "air"})
-                                               {:time st/night :inventory st/dirt-stack}))]
+                                               {:time st/night :inventory st/wall-stack}))]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (is (nil? (await (st/night-then-day eng p 8 #(core/holder eng) 6)))
               "mended, the room is safe: the night job ends and the queue may run")

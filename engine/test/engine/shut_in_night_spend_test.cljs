@@ -8,7 +8,7 @@
             [engine.test-util :as tu :refer [run-until-empty]]))
 
 (def pick {:name "iron_pickaxe" :count 1})
-(def logs {:name "oak_log" :count 12})
+(def logs {:name "oak_log" :count 20})
 (def dirt-floor (tu/box -8 55 -8 8 63 8 "dirt"))
 (def roofed (assoc st/floor "0,66,0" "stone"))
 
@@ -38,12 +38,12 @@
 (deftest dirt-walls-say-what-they-spent
   (async done
     (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [p seen]} (await (run-dig! {:inventory [{:name "dirt" :count 12} logs] :blocks st/floor}))
+      (st/walls-cheap (fn ^:async t []
+        (let [{:keys [p seen]} (await (run-dig! {:inventory [{:name "dirt" :count 20} logs] :blocks st/floor}))
               ev (first (st/emitted seen :shut-in.sealed))]
           (is (nil? (get (placed p) "oak_log")))
-          (is (= {"dirt" 10} (:spent ev)))
-          (is (re-find #"10 dirt" (:text ev))))))))
+          (is (= {"dirt" 18} (:spent ev)))
+          (is (re-find #"18 dirt" (:text ev)))))))))
 
 (deftest logs-wall-the-body-in-when-no-pit-is-wanted
   (async done
@@ -58,20 +58,20 @@
 (deftest a-body-with-only-logs-and-no-tool-walls-in-at-once-when-the-pit-takes-longer-by-hand
   (async done
     (tu/run-async done
-      (fn ^:async t []
+      (st/walls-cheap (fn ^:async t []
         (let [{:keys [p]} (await (run-dig! {:inventory [logs] :blocks st/floor}))]
           (is (empty? (st/calls p "dig")))
-          (is (pos? (get (placed p) "oak_log" 0)) (pr-str (placed p))))))))
+          (is (pos? (get (placed p) "oak_log" 0)) (pr-str (placed p)))))))))
 
 (deftest the-night-handler-walls-in-with-logs-it-takes-back-when-no-tool-digs-slower
   (async done
     (tu/run-async done
-      (fn ^:async t []
+      (st/walls-cheap (fn ^:async t []
         (let [{:keys [eng p]} (st/setup {:time st/night :inventory [logs] :blocks st/floor})]
           (core/submit! eng '(jobs.survival.night) {})
           (await (run-until-empty eng 40))
           (is (empty? (st/calls p "dig")))
-          (is (pos? (get (placed p) "oak_log" 0)) (pr-str (placed p))))))))
+          (is (pos? (get (placed p) "oak_log" 0)) (pr-str (placed p)))))))))
 
 (deftest a-body-with-only-logs-and-no-tool-on-dirt-digs-a-pit-and-keeps-the-logs
   (async done

@@ -44,10 +44,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [p (tu/seeing-all (tu/fake {:offlineScale 0.0001 :time 14000 :blocks (merge pocket/ground pocket/hill)
-                                         :drops {"stone" "cobblestone"} :inventory [{:name "iron_pickaxe" :count 1}]}))
+                                         :drops {"stone" "cobblestone"} :inventory [{:name "iron_pickaxe" :count 1} {:name "cobblestone" :count 4}]}))
               e (await (call! p 'jobs.survival.dig-pocket {} (constantly nil)))]
           (is (= :done (:kind e)))
-          (is (= 2 (count (:placed (:data e))))))))))
+          (is (= 6 (count (:placed (:data e))))))))))
 
 (deftest flat-ground-has-no-pocket-site
   (async done

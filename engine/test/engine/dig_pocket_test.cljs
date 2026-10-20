@@ -77,7 +77,7 @@
          [seen sink] (tu/legacy-capture-sink)
          p ((:seeing spec tu/seeing-all) (tu/fake (merge {:offlineScale 0.0001 :time 14000 :blocks (merge ground hill)
                                            :drops {"stone" "cobblestone"}
-                                           :inventory [{:name "iron_pickaxe" :count 1}]}
+                                           :inventory [{:name "iron_pickaxe" :count 1} {:name "cobblestone" :count 4}]}
                                           (dissoc spec :plans :seeing))))
          eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
                            :world (ew/of-data (:plans spec {}) {} zones)
@@ -104,7 +104,7 @@
         (let [{:keys [p seen] :as s} (setup [])]
           (await (run-job! s {}))
           (is (nil? (failed seen)))
-          (is (= {"cobblestone" 2} (:spent (completed seen))))
+          (is (= {"cobblestone" 6} (:spent (completed seen))) "the way in and the four corners beside it")
           (is (= ["air" "air"] (mapv #(block-at p %) [[4 64 0] [4 65 0]])) "pocket cells dug")
           (is (= ["cobblestone" "cobblestone"] (mapv #(block-at p %) [[3 64 0] [3 65 0]])) "way in walled with the dropped blocks"))))))
 

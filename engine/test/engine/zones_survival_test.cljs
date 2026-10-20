@@ -112,7 +112,7 @@
 
 ;; ------------------------------------------------------------------ dig-in
 
-(def night-world {:floor tu/walk-floor :time st/night :inventory st/dirt-stack :blocks st/floor})
+(def night-world {:floor tu/walk-floor :time st/night :inventory st/wall-stack :blocks st/floor})
 
 (def pit-world "night-world over flat ground, where a pit can be dug." (update night-world :blocks #(merge st/ground %)))
 
@@ -130,30 +130,30 @@
 (deftest dig-in-trespasses-only-when-every-way-is-foreign
   (async done
     (tu/run-async done
-      (fn ^:async t []
-        (doseq [[zones places warns] [[[(whole-zone "Miles")] 10 [["vault"]]]
-                                      [[(whole-zone "Fake")] 10 []]
-                                      [nil 10 []]]]
+      (st/walls-cheap (fn ^:async t []
+        (doseq [[zones places warns] [[[(whole-zone "Miles")] 18 [["vault"]]]
+                                      [[(whole-zone "Fake")] 18 []]
+                                      [nil 18 []]]]
           (let [{:keys [eng p seen]} (setup night-world zones)]
             (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
             (await (run-until-empty eng 10))
             (is (= places (count (calls p "place"))) (pr-str zones))
-            (is (= warns (mapv :zones (trespass seen :shut-in.trespass-last-resort))) (pr-str zones))))))))
+            (is (= warns (mapv :zones (trespass seen :shut-in.trespass-last-resort))) (pr-str zones)))))))))
 
 (deftest shelter-through-dig-in-follows-the-same-rule
   (async done
     (tu/run-async done
-      (fn ^:async t []
+      (st/walls-cheap (fn ^:async t []
         (let [{:keys [eng p seen]} (setup night-world [(whole-zone "Miles")])]
           (st/dawn-after! p 2)
           (core/submit! eng '(jobs.survival.night) {})
           (await (run-until-empty eng 12))
-          (is (= 10 (count (calls p "place"))))
+          (is (= 18 (count (calls p "place"))))
           (is (= 1 (count (trespass seen :shut-in.trespass-last-resort)))))))))
 
 (def wide-ground
   "Dirt (no tool needed) from y 60 to 63 over x and z -12..12."
-  (into {} (for [x (range -12 13) z (range -12 13) y (range 60 64)] [(str x "," y "," z) "dirt"])))
+  (into {} (for [x (range -12 13) z (range -12 13) y (range 60 64)] [(str x "," y "," z) "dirt"]))))
 
 (deftest the-night-moves-out-of-a-foreign-zone-to-free-ground-before-it-digs-in
   (async done
@@ -213,7 +213,7 @@
 (deftest ignore-zones-lifts-the-preference-and-the-warning-of-the-survival-jobs
   (async done
     (tu/run-async done
-      (fn ^:async t []
+      (st/walls-cheap (fn ^:async t []
         (let [breathe (setup {:blocks {"0,65,0" "stone" "0,66,0" "stone"}} [(whole-zone "Miles")])
               pour (setup (assoc burning-with-bucket :blocks (merge st/floor pool)) [feet-zone])
               dig (setup pit-world [(zone "Miles" [1 64 -1] [1 66 1])])
@@ -234,4 +234,4 @@
           (core/submit! (:eng unwedge) '(jobs.survival.unwedge {:ignore-zones? true}) {})
           (await (run-until-empty (:eng unwedge) 6))
           (is (= 1 (count (calls (:p unwedge) "dig"))) "unwedge digs the feet block")
-          (is (= [] (trespass (:seen unwedge) :unwedge.trespass-last-resort))))))))
+          (is (= [] (trespass (:seen unwedge) :unwedge.trespass-last-resort)))))))))

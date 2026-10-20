@@ -92,16 +92,16 @@
 (deftest the-night-ends-once-the-body-is-dug-in-and-the-queue-runs
   (async done
     (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (st/setup {:time night :inventory st/dirt-stack :blocks st/floor})]
+      (st/walls-cheap (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup {:time night :inventory st/wall-stack :blocks st/floor})]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
           (await (st/tick-n eng 4))
-          (is (= {:holder false :notified 1 :places 10}
+          (is (= {:holder false :notified 1 :places 18}
                  {:holder (some? (core/holder eng)) :notified (st/notified seen) :places (count (st/calls p "place"))})
               "walled in and safe: no hold, the queued job ran at night")
           (is (= {:x 0.5 :y 64 :z 0.5} (st/pos-of p)) "still in the shelter")
-          (is (= 1 (fired seen)) "not fired again while safe"))))))
+          (is (= 1 (fired seen)) "not fired again while safe")))))))
 
 (deftest at-night-a-respawned-body-recovers-its-drops-before-it-shelters
   (async done
@@ -228,10 +228,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (st/setup {:time night :inventory st/dirt-stack :blocks st/floor})]
-          (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
+        (let [{:keys [eng p]} (st/setup {:time night :inventory [{:name "dirt" :count 20}] :blocks st/floor})]
+          (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls} :for :night}) {})
           (await (core/tick! eng))
-          (is (= 10 (count (st/calls p "place"))) "walled and roofed in one call")
+          (is (= 18 (count (st/calls p "place"))) "walled and roofed in one call")
           (is (= [] (:list (core/state eng)))))
         (let [{:keys [eng p seen]} (st/setup {:time night :blocks (merge st/ground st/floor)})]
           (st/refuse-placing! p)
@@ -325,9 +325,9 @@
           (await (core/tick! eng))
           (reset! mid {:at (st/pos-of p) :holder (some? (core/holder eng))})
           (is (= {:at {:x 4.5 :y 64 :z -0.5} :holder false} @mid) "shut in the pocket (the stair out of the failed pit went north), safe: not held")
-          (is (= #{{:x 3 :y 64 :z -1} {:x 3 :y 65 :z -1}}
+          (is (= #{{:x 3 :y 64 :z -1} {:x 3 :y 65 :z -1} {:x 3 :y 64 :z 0}}
                  (set (filterv #(= 3 (:x %)) (mapv st/arg-pos (st/calls p "place")))))
-              "the opening, feet and head, plugged")
+              "the opening, feet and head, plugged, and the corner beside it")
           (is (empty? (st/emitted seen :shelter.exposed)))
           (is (empty? (st/emitted seen :stopped)) "the night ended done"))))))
 
@@ -339,5 +339,5 @@
           (st/refuse-cell! p [0 63 0])
           (let [r (await (tu/child-outcome eng 'jobs.survival.night {} 40))]
             (is (= :dug-in (:night r)) (pr-str r))
-            (is (= 2 (reduce + (vals (:spent r)))) (pr-str r))
-            (is (re-find #"used 1 dirt, 1 stone \(night shelter" (:text r)) (pr-str r))))))))
+            (is (= 3 (reduce + (vals (:spent r)))) (pr-str r))
+            (is (re-find #"used 2 stone, 1 dirt \(night shelter" (:text r)) (pr-str r))))))))

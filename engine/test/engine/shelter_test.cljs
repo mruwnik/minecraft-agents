@@ -18,7 +18,7 @@
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
             [engine.test-util :as tu :refer [run-until-empty]]
-            [engine.shelter-support :refer [day-ms night noon on-wait! dawn-after! mid-night! default-dawn setup tick-n night-then-day calls arg-pos entries know-bed! looked-round! pos-of teleport! emitted no-way-stops emitted-by floor bed-room dirt-stack sleeper awake declined-events always-shelter refuse-placing! after-first! fires? ground stone-ground hard-ground ms-of-offline notified refuse-cell!]]
+            [engine.shelter-support :refer [walls-cheap day-ms night noon on-wait! dawn-after! mid-night! default-dawn setup tick-n night-then-day calls arg-pos entries know-bed! looked-round! pos-of teleport! emitted no-way-stops emitted-by floor bed-room dirt-stack wall-stack sleeper awake declined-events always-shelter refuse-placing! after-first! fires? ground stone-ground hard-ground ms-of-offline notified refuse-cell!]]
             [engine.triggers :as triggers]))
 
 (deftest without-a-sky-nothing-is-dark-with-one-the-night-is
@@ -428,11 +428,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack :blocks floor})]
-          (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
+        (let [{:keys [eng p]} (setup {:time night :inventory wall-stack :blocks floor})]
+          (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls} :for :night}) {})
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))) "one call: done in one round")
-          (is (= 10 (count (calls p "place"))) "four sides at feet and head height, a roof support, the roof")
+          (is (= 18 (count (calls p "place"))) "sides and corners at feet and head height, a roof support, the roof")
           (is (= [] (calls p "dig")))
           (is (= "dirt" (.-name (.blockAt p (tu/pos 0 66 0)))) "the roof")
           (is (= "dirt" (.-name (.blockAt p (tu/pos 1 65 0)))) "a wall at head height")
@@ -445,10 +445,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack :blocks (assoc floor "1,64,0" "stone" "0,64,1" "stone")})]
-          (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
+        (let [{:keys [eng p]} (setup {:time night :inventory wall-stack :blocks (assoc floor "1,64,0" "stone" "0,64,1" "stone")})]
+          (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls} :for :night}) {})
           (await (run-until-empty eng 6))
-          (is (= 8 (count (calls p "place")))))))))
+          (is (= 16 (count (calls p "place")))))))))
 
 (deftest dig-in-digs-down-three-on-flat-ground-and-roofs-with-a-dug-block
   (async done
@@ -584,7 +584,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:time night :inventory [{:name "dirt" :count 30}] :blocks floor})]
           (after-first! p "place" #(teleport! p 5 64 0))
-          (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
+          (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls} :for :night}) {})
           (await (run-until-empty eng 8))
           (is (= "dirt" (.-name (.blockAt p (tu/pos 5 66 0)))) "roof over where the body now is")
           (is (= {:x 5 :y 64 :z 0} (:pos (last (entries eng :shelter)))))
@@ -620,7 +620,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :inventory dirt-stack :blocks floor})]
+        (let [{:keys [eng p seen]} (setup {:time night :inventory wall-stack :blocks floor})]
           (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status "no-support"}))
           (core/submit! eng '(jobs.survival.shut-in {:ways #{:walls} :for :night}) {})
           (is (<= (await (run-until-empty eng 10)) 5) "bounded")
@@ -631,7 +631,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :inventory dirt-stack
+        (let [{:keys [eng p seen]} (setup {:time night :inventory wall-stack
                                            :blocks (merge floor {"1,63,0" "stone" "-1,63,0" "stone" "0,63,1" "stone" "0,63,-1" "stone"})})
               supported? (fn [pos] (some #(let [n (.-name (.blockAt p (tu/pos (+ (.-x pos) (first %)) (+ (.-y pos) (second %)) (+ (.-z pos) (nth % 2)))))]
                                             (not (#{"air" "cave_air"} n)))
@@ -641,7 +641,7 @@
                        (if (supported? (.-pos args))
                          (await (impl _ args))
                          #js {:status "no-support"})))
-          (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
+          (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls} :for :night}) {})
           (await (run-until-empty eng 8))
           (is (= [{:x 1 :y 66 :z 0} {:x 0 :y 66 :z 0}] (mapv arg-pos (take-last 2 (calls p "place")))) "support, then roof")
           (is (= [] (no-way-stops seen)))
@@ -726,7 +726,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :inventory dirt-stack :blocks floor})]
+        (let [{:keys [eng p seen]} (setup {:time night :inventory wall-stack :blocks floor})]
           (tu/seeing-all p)
           (refuse-cell! p [0 66 0])
           (core/submit! eng '(jobs.survival.shut-in {:ways #{:walls} :for :night}) {})
@@ -739,9 +739,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack :blocks floor})]
+        (let [{:keys [eng p]} (setup {:time night :inventory wall-stack :blocks floor})]
           (refuse-cell! p [-1 64 0])
-          (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
+          (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls} :for :night}) {})
           (await (run-until-empty eng 12))
           (is (every? #(= "dirt" (.-name (.blockAt p (tu/pos (first %) (second %) (nth % 2)))))
                       [[1 64 0] [0 64 1] [0 64 -1] [1 65 0] [-1 65 0] [0 66 0]])
@@ -774,24 +774,24 @@
 (deftest another-player-online-and-awake-is-no-reason-to-log-out
   (async done
     (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :players ["Alex"] :entities [awake] :inventory dirt-stack :blocks floor})]
+      (walls-cheap (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time night :players ["Alex"] :entities [awake] :inventory wall-stack :blocks floor})]
           (core/submit! eng '(jobs.survival.night) {})
           (await (tick-n eng 8))
           (is (= [] (calls p "offline")))
-          (is (= 10 (count (calls p "place"))) "dug in"))))))
+          (is (= 18 (count (calls p "place"))) "dug in")))))))
 
 (deftest shelter-digs-in-when-the-log-out-fails
   (async done
     (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :entities [sleeper] :inventory dirt-stack :blocks floor})]
+      (walls-cheap (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:time night :entities [sleeper] :inventory wall-stack :blocks floor})]
           (.override (.-world p) "offline" (fn [_ _ _] #js {:status "unsupported"}))
           (core/submit! eng '(jobs.survival.night) {})
           (await (tick-n eng 8))
           (is (= 1 (count (calls p "offline"))) "tried once; unsupported is not tried again")
           (is (= ["unsupported"] (mapv :status (entries eng :log-out))))
-          (is (= 10 (count (calls p "place"))) "fell through to dig-in"))))))
+          (is (= 18 (count (calls p "place"))) "fell through to dig-in")))))))
 
 (deftest shelter-falls-through-a-missing-bed-to-the-next-choice
   (async done
@@ -807,19 +807,19 @@
 (deftest a-dug-in-shelter-holds-the-body-until-day-then-the-queued-job-runs
   (async done
     (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :inventory dirt-stack :blocks floor :entities [awake]})
+      (walls-cheap (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :inventory wall-stack :blocks floor :entities [awake]})
               _ (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
               _ (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
               mid (await (night-then-day eng p 4 #(hash-map :places (count (calls p "place")) :digs (count (calls p "dig"))
                                                             :holder (some? (core/holder eng)) :notified (notified seen))
                                          6))]
-          (is (= {:places 10 :digs 0 :holder false :notified 1} mid)
+          (is (= {:places 18 :digs 0 :holder false :notified 1} mid)
               "dug in and safe: the night does not hold the body, the queued job ran at night")
           (is (= [:built] (mapv :state (entries eng :shelter))))
           (is (nil? (core/holder eng)) "the shelter ended at day")
           (is (not= {:x 0 :y 64 :z 0} (pos-of p)) "the body stepped out of its walls")
-          (is (= 1 (notified seen)) "then the queued job ran"))))))
+          (is (= 1 (notified seen)) "then the queued job ran")))))))
 
 (deftest a-pit-shelter-holds-until-day-then-ends-with-the-body-out-of-the-pit
   (async done
@@ -907,8 +907,8 @@
 (deftest shelter-does-not-retry-a-sleep-that-already-failed
   (async done
     (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :inventory dirt-stack :blocks (merge floor {"6,64,0" "red_bed"}) :entities [awake]
+      (walls-cheap (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time night :inventory wall-stack :blocks (merge floor {"6,64,0" "red_bed"}) :entities [awake]
                                            :unreachable ["6,64,0"]})]
           (know-bed! eng {:x 6 :y 64 :z 0})
           (core/submit! eng '(jobs.survival.night) {})
@@ -920,7 +920,7 @@
           (let [walks (walks-to-bed eng)]
             (await (tick-n eng 12))
             (is (= walks (walks-to-bed eng)) "no more walking at the unreachable bed")
-            (is (= 10 (count (calls p "place"))) "dig-in finished the walls")))))))
+            (is (= 18 (count (calls p "place"))) "dig-in finished the walls"))))))))
 
 (deftest shelter-treats-a-long-awake-body-as-needing-a-bed
   (async done
@@ -972,7 +972,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen clock]} (setup {:time night :inventory (conj dirt-stack {:name "iron_pickaxe" :count 1}) :blocks floor})]
+        (let [{:keys [eng p seen clock]} (setup {:time night :inventory (conj wall-stack {:name "iron_pickaxe" :count 1}) :blocks floor})]
           (refuse-placing! p)
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
@@ -991,7 +991,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :inventory dirt-stack :blocks (tu/box -30 58 -30 30 63 30 "stone")})
+        (let [{:keys [eng p seen]} (setup {:time night :inventory wall-stack :blocks (tu/box -30 58 -30 30 63 30 "stone")})
               _ (core/submit! eng '(jobs.survival.night) {})
               mid (await (night-then-day eng p 8 #(hash-map :holder (some? (core/holder eng)) :pos (pos-of p)) 2))]
           (is (= {:holder false :pos {:x 0.5 :y 64 :z 0.5}} mid) "in place at night (stepped to its cell's middle to place the walls), on the surface, not held")
@@ -1030,7 +1030,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack :blocks floor})]
+        (let [{:keys [eng p]} (setup {:time night :inventory wall-stack :blocks floor})]
           (refuse-placing! p)
           (let [before (mid-night! p 3 #(do (.emit (.-world p) #js {:kind "sleep-status" :sleeping 1 :needed 2})
                                             (count (calls p "offline"))))]
@@ -1045,7 +1045,7 @@
       (fn ^:async t []
         (doseq [[how change] [[:carried #(swap! (fake/state %) assoc :inventory [{:name "red_bed" :count 1}])]
                               [:seen #(swap! (fake/state %) update :blocks assoc "3,64,0" "red_bed")]]]
-          (let [{:keys [eng p seen clock]} (setup {:time night :inventory dirt-stack :blocks floor})]
+          (let [{:keys [eng p seen clock]} (setup {:time night :inventory wall-stack :blocks floor})]
             (refuse-placing! p)
             (core/submit! eng '(jobs.survival.night) {})
             (await (tick-nights eng clock 3))
@@ -1058,7 +1058,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p clock]} (setup {:time night :inventory dirt-stack :blocks floor})]
+        (let [{:keys [eng p clock]} (setup {:time night :inventory wall-stack :blocks floor})]
           (refuse-placing! p)
           (let [at3 (atom nil)
                 at9 (atom nil)]
@@ -1265,8 +1265,8 @@
 (deftest unsupported-walls-are-not-retried-on-every-reflex-firing
   (async done
     (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p clock]} (setup {:time night :blocks floor :inventory dirt-stack :floor [-4 -4 4 4]})
+      (walls-cheap (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup {:time night :blocks floor :inventory wall-stack :floor [-4 -4 4 4]})
               eng (update eng :triggers assoc :always-shelter always-shelter)]
           (refuse-placing! p)
           (core/register-reflex! eng {:trigger :always-shelter})
@@ -1277,13 +1277,13 @@
             (swap! clock + 11000)
             (await (tick-n eng 8))
             (is (= 4 (count (calls p "place"))) "each of the four cells of one step tried once")
-            (is (= digs (count (calls p "dig"))) "the failed ways are not tried again")))))))
+            (is (= digs (count (calls p "dig"))) "the failed ways are not tried again"))))))))
 
 (deftest needs-bed-is-warned-once-across-firings
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen clock]} (setup {:time night :inventory dirt-stack :blocks floor})
+        (let [{:keys [eng p seen clock]} (setup {:time night :inventory wall-stack :blocks floor})
               eng (update eng :triggers assoc :always-shelter always-shelter)]
           (refuse-placing! p)
           (mem/write! (:store eng) :slept {:pos {:x 0 :y 64 :z 0}} {:cap 10 :ttl (* 7 day-ms)})
@@ -1299,7 +1299,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack
+        (let [{:keys [eng p]} (setup {:time night :inventory wall-stack
                                       :blocks (assoc floor "1,66,0" "oak_leaves" "0,66,0" "oak_leaves")})]
           (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
           (is (<= (await (run-until-empty eng 8)) 5) "the job ends instead of looping")
@@ -1314,9 +1314,9 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [passable ["torch" "oak_sapling"]]
-          (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack
+          (let [{:keys [eng p]} (setup {:time night :inventory wall-stack
                                         :blocks (assoc floor "1,64,0" passable "1,65,0" passable)})]
-            (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
+            (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls} :for :night}) {})
             (is (<= (await (run-until-empty eng 10)) 8) (str passable ": the job ends"))
             (is (= [] (:list (core/state eng))))
             (is (= "dirt" (.-name (.blockAt p (tu/pos 1 64 0)))) (str passable " at feet height is walled, not left a hole"))
@@ -1326,7 +1326,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack :blocks (assoc floor "1,64,0" "torch")})]
+        (let [{:keys [eng p]} (setup {:time night :inventory wall-stack :blocks (assoc floor "1,64,0" "torch")})]
           (.override (.-world p) "dig" (fn ^:async f [_ _ _] #js {:status "unreachable"}))
           (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
           (is (<= (await (run-until-empty eng 12)) 10) "the job still ends")
@@ -1337,9 +1337,9 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [passable ["oak_sign" "oak_wall_sign" "rail" "stone_pressure_plate" "stone_button" "lever" "white_carpet"]]
-          (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack
+          (let [{:keys [eng p]} (setup {:time night :inventory wall-stack
                                         :blocks (assoc floor "1,64,0" passable "0,65,1" passable "0,66,0" passable)})]
-            (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
+            (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls} :for :night}) {})
             (is (<= (await (run-until-empty eng 12)) 10) (str passable ": the job ends"))
             (is (= [] (:list (core/state eng))))
             (is (= "dirt" (.-name (.blockAt p (tu/pos 1 64 0)))) (str passable " in a feet wall cell is walled"))
@@ -1350,9 +1350,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :inventory dirt-stack
+        (let [{:keys [eng p]} (setup {:time night :inventory wall-stack
                                       :blocks (assoc floor "1,64,0" "oak_fence" "0,64,1" "glass" "-1,64,0" "iron_bars")})]
-          (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
+          (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls} :for :night}) {})
           (await (run-until-empty eng 8))
           (is (= [] (calls p "dig")))
           (is (= ["oak_fence" "glass" "iron_bars"]
@@ -1367,12 +1367,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :inventory [{:name "dirt" :count 8}] :blocks overhang})]
+        (let [{:keys [eng p seen]} (setup {:time night :inventory [{:name "dirt" :count 20}] :blocks overhang})]
           (tu/seeing-all p)
           (core/submit! eng '(jobs.survival.shut-in {:ways #{:walls} :for :night}) {})
           (await (run-until-empty eng 8))
           (let [placed (mapv arg-pos (calls p "place"))]
-            (is (<= 4 (count placed) 6) "only the open sides of the 8, less the 2 wall cells already solid, as many as it takes to close the room")
+            (is (<= 4 (count placed) 14) "only the open side and corner cells of the 16, less the ones already solid, as many as it takes to close the room")
             (is (every? #(<= (:y %) 65) placed) "roof and support already solid: none placed up there"))
           (is (= 1 (count (emitted seen :shut-in.sealed))))
           (is (some? (:door (last (entries eng :shelter))))))))))
@@ -1394,6 +1394,16 @@
         roofed #(= 66 (:y %))]
     (is (= 10 (count (dig-cells/fill-cells none feet))) "sides, support, roof")
     (is (= 8 (count (dig-cells/fill-cells roofed feet))) "a sealed roof cell needs no support")))
+
+(deftest fill-cells-include-the-corners-a-mob-could-stand-in
+  (let [feet {:x 0 :y 64 :z 0}
+        floor? #(= 63 (:y %))
+        corner? (fn [c] (and (not= 0 (:x c)) (not= 0 (:z c)) (<= 64 (:y c) 65)))
+        corners (fn [sealed?] (set (filter corner? (dig-cells/fill-cells sealed? feet))))]
+    (is (= 8 (count (corners floor?))) "on flat ground a mob stands in every corner, feet and head height")
+    (is (= #{{:x 1 :y 65 :z 1}} (corners #(or (floor? %) (= {:x 1 :y 64 :z 1} %) (and (corner? %) (not= {:x 1 :y 65 :z 1} %)))))
+        "a rock corner at feet height leaves its head cell as a stand")
+    (is (empty? (corners (constantly false))) "no floor under a corner: nobody stands there")))
 
 (deftest fill-cells-put-the-roof-support-away-from-the-threats
   (let [feet {:x 0 :y 64 :z 0}
