@@ -108,7 +108,7 @@
 
 (defn present
   "The entities matching :targets within :radius, nearest first; ones already
-  killed (their id stays after a respawn) are left out, and so is a hostile only heard or not seen for ::seen-memory-s (it
+  killed (their id stays after a respawn) are left out, and so is a hostile of a type or name target only heard or not seen for ::seen-memory-s (it
   is turned toward, never walked to). Name and id targets filter before the 64 cap of the sense."
   [c]
   (let [p (:primitives c)
@@ -121,7 +121,7 @@
         ids (when (and (seq wanted) (every? number? wanted)) {:ids (vec wanted)})]
     (->> (combat/sensed p (merge {:radius radius :max 64} names ids))
          (remove #(contains? dead-ids (.-id %)))
-         (remove lost?)
+         (remove #(and (not ids) (lost? %)))
          (filterv #(matches? wanted self-name (set killed-players) %)))))
 
 (defn candidates
