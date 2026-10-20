@@ -182,7 +182,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:blocks wet-world})
-              r (await (child-outcome eng job (assoc small :limit 1) 4))]
+              r (await (child-outcome eng job (assoc small :settings {:jobs.farm.find-spot/limit 1}) 4))]
           (is (= 1 (count (:spots r)))))))))
 
 (deftest find-spot-does-not-move
@@ -336,7 +336,7 @@
                 p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (constantly 1000000) :rand (constantly j)}))
                 {:keys [eng]} (setup {:blocks pond-east})
                 eng (assoc eng :primitives p)
-                r (await (child-outcome eng job {:w 5 :h 5 :range 24 :depth 7} 12))]
+                r (await (child-outcome eng job {:w 5 :h 5 :range 24} 12))]
             (is (pos? (:water-share (first (:spots r)))) (str "jitter " j ": " (pr-str (first (:spots r)))))))))))
 
 (def hillside
@@ -350,7 +350,7 @@
               p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (constantly 1000000) :rand (constantly 0.5)}))
               {:keys [eng]} (setup {:blocks hillside})
               eng (assoc eng :primitives p)
-              r (await (child-outcome eng job {:w 5 :h 5 :range 24 :depth 12} 20))]
+              r (await (child-outcome eng job {:w 5 :h 5 :range 24} 20))]
           (is (seq (:spots r)) (pr-str r)))))))
 
 (deftest existing-farmland-ranks-with-farmable-ground

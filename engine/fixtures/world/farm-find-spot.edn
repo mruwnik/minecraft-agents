@@ -9,16 +9,16 @@
   :limit-s 90}
  :cases
  [{:name "wide-range-open-grass-finishes-with-spots"
-   :act [[:job (jobs.farm.find-spot {:range 48 :depth 7})]]
+   :act [[:job (jobs.farm.find-spot {:range 48 :settings {:jobs.farm.find-spot/depth 7}})]]
    :expect [{:event {:source :job :kind :completed :data {:spots [:has {:pos [:any]}]}} :within-s 60 :of-job true}
             {:no-event {:source :system :kind :error} :for-s 30}]}
   {:name "water-all-round-finds-no-spot"
    :plot {:floor "water"}
    :blocks [[:fill [0 -2 0] [127 -2 63] "stone"] [:fill [63 -1 31] [65 -1 33] "stone"]]
-   :act [[:job (jobs.farm.find-spot {:range 12 :depth 7})]]
+   :act [[:job (jobs.farm.find-spot {:range 12 :settings {:jobs.farm.find-spot/depth 7}})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :none}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :stopped}}]}
   ;; Card e3e88fbd: the ending lists every spot with its score and level, not only the best.
   {:name "ending-lists-every-spot-with-score-and-level"
-   :act [[:job (jobs.farm.find-spot {:range 20 :depth 7 :limit 3})]]
+   :act [[:job (jobs.farm.find-spot {:range 20 :settings {:jobs.farm.find-spot/depth 7 :jobs.farm.find-spot/limit 3}})]]
    :expect [{:event {:source :job :kind :completed :data {:spots [:has {:level [:>= 0] :score [:any]}]}} :within-s 60 :of-job true}]}]}

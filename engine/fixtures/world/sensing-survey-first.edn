@@ -41,7 +41,7 @@
    :plot {:height 8 :floor "grass_block" :length 64 :width 64 :light :sky}
    :blocks [[:fill [28 -2 44] [36 -2 48] "stone"] [:fill [28 -1 44] [36 -1 48] "water"]]
    :body {:at [32.5 0 32.5]}
-   :act [[:job (jobs.farm.find-spot {:w 5 :h 5 :range 24 :depth 7})]]
+   :act [[:job (jobs.farm.find-spot {:w 5 :h 5 :range 24 :settings {:jobs.farm.find-spot/depth 7}})]]
    :expect [{:event {:source :job :kind :completed :data {:spot [:near #at [32 -1 42] 8]}} :within-s 40 :of-job true}
             {:no-event {:source :system :kind :error} :for-s 20}]
    :limit-s 60}

@@ -14,11 +14,11 @@
 
 (def doc
   "Pick where a :w x :h farm would go. Ranks patches by flatness first, then water within 4,
-  open sky and nearness to :center. It tries patches nearest-first and stops once :limit flat open-sky ones are found (with water within 4, when water is in range).
+  open sky and nearness to :center. It tries patches nearest-first and stops once ::limit flat open-sky ones are found (with water within 4, when water is in range).
   A patch of 8 or more is tried at every fourth corner. Reads blocks only: it never digs or marks anything.
   A scan reads at most ::max-reads blocks, then settles for the best spots so far. It never walks: a parent walks to the spot.
   Ends with data {:spot pos :spots [...]}: done with the spots, or nothing-possible :none (no patch found).
-  :spots best first up to :limit, each {:pos :score :level :work :step :water-share :sky :away :y :farmable}; :step is
+  :spots best first up to ::limit, each {:pos :score :level :work :step :water-share :sky :away :y :farmable}; :step is
   the largest height difference between two neighbouring cells of the patch. A pos is the north-west corner at ground level.
   Score = level (% of the patch's cells at its commonest ground height y, 0-100) + ::water-weight x water-share + ::sky-weight for open sky,
   less :work (sum of blocks the other cells are off y, at most ::work-cap), :away / 4 (blocks from :center, at most ::away-cap)
@@ -33,12 +33,12 @@
    :h {:doc "patch height (z), 1 to 16" :spec (a/int-in 1 16) :default 5}
    :range {:doc "patches lie within this many blocks of :center in x and z, 1 to 48" :spec (a/int-in 1 48) :default 24}
    :center {:doc "where to search from {:x :y :z}; nil is the body's cell" :spec ::a/pos :default nil}
-   :depth {:doc "how far above and below the centre's y to look for ground, 1 to 16" :spec (a/int-in 1 16) :default 12}
-   :limit {:doc "how many spots to keep, 1 to 8" :spec (a/int-in 1 8) :default 3}
    :max-step {:doc "drop patches whose largest step between neighbouring cells is over this; nil: keep all" :spec (a/int-in 0 16) :default nil}})
 
 (a/defargs settings
-  {::job-time-s {:default 30 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+  {::depth {:default 12 :doc "How far above and below the centre's y to look for ground." :spec (a/int-in 1 16)}
+   ::limit {:default 3 :doc "How many spots to keep; the scan stops once that many good ones are found." :spec (a/int-in 1 8)}
+   ::job-time-s {:default 30 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
    ::water-reach {:default 4 :doc "Blocks from water within which farmland is hydrated." :spec (a/int-in 0 nil)}
    ::sky-extra {:default 8 :doc "Extra blocks of sky checked above a spot." :spec (a/int-in 0 nil)}
    ::read-budget {:default 4096 :doc "blockAt reads after which a round stops scanning (at the end of the row it is in)." :spec (a/int-in 1 nil)}
@@ -260,7 +260,8 @@
 (defn ^:async step
   "Look around when no water is in sight, then scan (a bounded slice per step, remembering the spots)."
   [c]
-  (let [a (merge (settings/job-defaults (quote jobs.farm.find-spot) args) (:args c))
+  (let [a (assoc (merge (settings/job-defaults (quote jobs.farm.find-spot) args) (:args c))
+                 :depth (settings/get settings ::depth) :limit (settings/get settings ::limit))
         found (if (water-unseen? c a)
                 (do (await (look/survey! c :run (look/search-effort))) :again)
                 (or (:spots (ctx/mem c)) (scan-step! c a)))]
