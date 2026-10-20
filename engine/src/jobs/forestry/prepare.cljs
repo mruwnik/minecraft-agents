@@ -40,8 +40,7 @@
   footprints, when the cell is chosen and before the act. A refusal or a dig hazard not in :accept skips the cell
   for the call (:refused); the third failed try (walk, dig, place, plant) gives it up (:gave-up).
   Does not start while the plan is missing or unreadable or no zone list is loaded (a wait), or has no tree cells
-  (impossible), unless a step can be taken; cells never seen are looked at first. One note per cell left (warns
-  prepare.wrong ...) and per species short.
+  (impossible), unless a step can be taken; cells never seen are looked at first. What is left is in the ending.
   Ends :done with {:cleared :soiled :planted :dammed :short {species n} :wrong :no-soil :no-tool :cramped :wet
   :refused :gave-up :text} when it worked and no cell is left, or (done?) when every cell is ready, none refused or
   given up, the drops collected and no child under way. Cells left after part of the work: condition-failed :refused,
@@ -59,36 +58,6 @@
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :falling-block; lava beside is :lava-adjacent and never taken by default"
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent}}
    :ignore-zones? :shared})
-
-;; ------------------------------------------------------------------ notes
-
-(defn note-cells!
-  "Say, once each, what is wrong with a cell, and (when settled) which species are short of saplings."
-  [c states settled?]
-  (doseq [{:keys [pos species state found why at block source]} (sort-by (comp lib/cell-vec :pos) (vals states))]
-    (case state
-      :wrong (ctx/warn-once! c [:wrong pos found] :prepare.wrong
-                             {:pos pos :found found :species species
-                              :text (str "prepare leaves " found " at " (pr-str (lib/cell-vec pos)) " (the plan wants a " species " tree)")})
-      :no-soil (ctx/warn-once! c [:no-soil pos why] :prepare.no-soil
-                               {:pos pos :why why
-                                :text (str "prepare cannot give " (pr-str (lib/cell-vec pos)) " soil: " (name why))})
-      :wet (ctx/warn-once! c [:wet pos why] :prepare.wet
-                           {:pos pos :why why :water-source (some-> source vec)
-                            :text (str "prepare leaves " (pr-str (lib/cell-vec pos)) " wet: " (name why)
-                                       (when source (str ", water source " (pr-str source))))})
-      :no-tool (ctx/warn-once! c [:no-tool pos block] :prepare.no-tool
-                               {:pos pos :block block
-                                :text (str "prepare leaves " block " at " (pr-str (lib/cell-vec pos)) ": no carried tool harvests it")})
-      :cramped (ctx/warn-once! c [:cramped pos at] :prepare.cramped
-                               {:pos pos :at at :block block
-                                :text (str "prepare leaves " (pr-str (lib/cell-vec pos)) ": " block " at " (pr-str at) " blocks the growth space")})
-      nil))
-  (when settled?
-    (doseq [[species cells] (group-by :species (filter #(= :short (:state %)) (vals states)))]
-      (ctx/warn-once! c [:short species (count cells)] :prepare.short
-                      {:species species :missing (count cells)
-                       :text (str "prepare has no " (forestry/sapling-of species) " for " (count cells) " cells")}))))
 
 ;; ------------------------------------------------------------------ check
 
@@ -133,7 +102,7 @@
 
 (defn not-ready
   "Whether the job may start: ok while a step can be taken on a planned cell or a look is asked for cells never seen. The field
-  is assessed once per check-cache window; the round says (warns) what is wrong with each cell."
+  is assessed once per check-cache window; the ending says what is wrong with each cell."
   [c]
   (let [field (field/planned c)]
     (if (:trouble field)
@@ -148,12 +117,9 @@
 ;; ------------------------------------------------------------------ steps
 
 (defn skip!
-  "Leave the cell for the rest of this call and say why, once."
+  "Leave the cell for the rest of this call."
   [c pos reason]
-  (ctx/update-mem! c assoc-in [:skipped pos] {:pos pos :reason reason})
-  (ctx/warn-once! c [:refused pos reason] :prepare.refused
-                  {:pos pos :reason reason
-                   :text (str "prepare leaves " (pr-str (lib/cell-vec pos)) " alone: " (name reason))}))
+  (ctx/update-mem! c assoc-in [:skipped pos] {:pos pos :reason reason}))
 
 (defn count-cell-fail!
   "Count a failed try on the cell; given up at the third. :again."
@@ -161,10 +127,7 @@
   (let [n (inc (get-in (ctx/mem c) [:fails pos] 0))]
     (ctx/update-mem! c assoc-in [:fails pos] n)
     (when (>= n (u/max-failures))
-      (ctx/update-mem! c assoc-in [:gave-up pos] {:pos pos :reason reason})
-      (ctx/warn-once! c [:gave-up pos reason] :prepare.gave-up
-                      {:pos pos :reason reason
-                       :text (str "prepare gives up on " (pr-str (lib/cell-vec pos)) " after " n " tries: " (name reason))}))
+      (ctx/update-mem! c assoc-in [:gave-up pos] {:pos pos :reason reason}))
     :again))
 
 (defn blocked!
@@ -379,7 +342,6 @@
                   work (field/todo c states)
                   target (first work)
                   owed (:collect (ctx/mem c))]
-              (note-cells! c states (empty? work))
               (cond
                 (and owed (or (nil? target) (not= owed (:pos target)))) (await (collect! c))
                 target (await (act! c target))
