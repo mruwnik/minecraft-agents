@@ -140,7 +140,7 @@
   (.override (.-world p) "place"
              (fn ^:async f [tok a impl] (if (= item (.-item a)) #js {:status "failed" :reason "no"} (await (impl tok a))))))
 
-(def dirt [{:name "water_bucket" :count 1} {:name "dirt" :count 4}])
+(def dirt [{:name "water_bucket" :count 1} {:name "dirt" :count 12}])
 
 (defn hide-floor!
   "Make every block under the field row (y 62) unseen, as a dug cell's floor can stay."
@@ -159,21 +159,27 @@
         (let [{:keys [eng p]} (setup {:inventory dirt :blocks (strip 9)})
               _ (hide-floor! p)
               r (await (tu/child-outcome eng job (args 9) 60))]
-          (is (= 1 (count (:restored r))))
+          (is (pos? (count (:restored r))) "every spot tried is refilled")
           (is (= [] (:poured r)))
           (is (not-any? #(#{"air" "water"} (block-at p {:x % :y 63 :z 0})) (range 9))))))))
 
-(deftest a-failed-pour-after-the-dig-has-the-cell-refilled
+(deftest a-failed-pour-has-the-cell-refilled-and-another-spot-is-tried
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:inventory dirt :blocks (strip 9)})
-              _ (fail-places! p "water_bucket")
-              r (await (tu/child-outcome eng job (args 9) 60))]
+        (let [{:keys [eng p]} (setup {:inventory dirt :blocks (strip 7)})
+              failed (atom false)
+              _ (.override (.-world p) "place"
+                           (fn ^:async f [tok a impl]
+                             (if (and (= "water_bucket" (.-item a)) (not @failed))
+                               (do (reset! failed true) #js {:status "failed" :reason "no"})
+                               (await (impl tok a)))))
+              r (await (tu/child-outcome eng job (args 7) 80))]
           (is (= 1 (count (:restored r))))
           (is (= [] (:holes r)))
-          (is (= [] (:poured r)))
-          (is (not-any? #(#{"air" "water"} (block-at p {:x % :y 63 :z 0})) (range 9))))))))
+          (is (= 1 (count (:poured r))))
+          (is (= [] (:dry r)))
+          (is (= :done (:status r))))))))
 
 (deftest a-cell-that-cannot-be-refilled-is-named-as-a-hole
   (async done
@@ -197,7 +203,7 @@
                                (swap! (.-state (.-world p)) fake/take-one "water_bucket")
                                r)))
               r (await (tu/child-outcome eng job (args 9) 60))]
-          (is (= 1 (count (:restored r))))
+          (is (pos? (count (:restored r))) "every spot tried is refilled")
           (is (= [] (:holes r)))
           (is (= [] (:poured r)))
           (is (not-any? #(#{"air" "water"} (block-at p {:x % :y 63 :z 0})) (range 9))))))))

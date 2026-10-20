@@ -22,7 +22,7 @@
   and one above, is seen and none is water; a cell with an unseen block in reach and no water is unknown, never dry. For the spot
   that wets the most dry cells (one of the field's own cells under open air whose four sides are seen solid and underside not seen open, nearest
   first) it digs the cell (a jobs.blocks.dig child) and pours a water bucket in it (a jobs.blocks.use-on child), then
-  looks again (a pour that fails, or a bucket gone before it, has the cell refilled with dirt (a jobs.blocks.place child); a cell that stays open is named in :holes and ends the call); one bucket wets one spot, so it ends when no cell is dry, no water bucket is left or no spot helps. A pour
+  looks again (a pour that fails, or a bucket gone before it, has the cell refilled with dirt (a jobs.blocks.place child); a cell that stays open is named in :holes and ends the call, a refilled one only drops that spot); one bucket wets one spot, so it ends when no cell is dry, no water bucket is left or no spot helps. A pour
   counts only once the cell is seen as water. A water bucket is fetched (jobs.lib.need, :fetch) when dry cells are left and none is carried; a
   failed fetch ends the call with its ending as the :because. Zones: a spot in another owner's zone or claim, or in a
   plan's footprint (unless :for-plan), is not used, with an irrigate.declined warn once.
@@ -243,7 +243,7 @@
       restore (await (restore! c restore))
       hole (if (and (has-bucket? p) (solid-at? p (update hole :y dec))) (await (pour! c hole)) (do (unpour! c hole) :again))
       (empty? dry) (conclude! c nil)
-      (or (seq (:holes (ctx/mem c))) (seq (:restored (ctx/mem c)))) (conclude! c :no-spot)
+      (seq (:holes (ctx/mem c))) (conclude! c :no-spot)
       (not (has-bucket? p))
       (let [e (await (need/item! c "water_bucket" 1 (fetch-opts c)))]
         (cond
