@@ -4,6 +4,7 @@
             [engine.args :as a]
             [jobs.lib.cond :as cond]
             [engine.contract :as contract]
+            [engine.game :as game]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.need :as need]
@@ -53,12 +54,11 @@
    ::line-gap {:default 1.5 :doc "Blocks a villager must keep from the line of the toss: nearer, it picks up the flying drop." :spec (a/num-in 0 nil)}
    ::crowd-s {:default 30 :doc "Seconds to wait for other villagers to move off before the call stops :crowded." :spec (a/int-in 0 nil)}
    ::leg-s {:default 5 :doc "Seconds one walk leg may take." :spec (a/int-in 0 nil)}
-   ::max-refused {:default 3 :doc "Refusals before the job gives up on the animal." :spec (a/int-in 0 nil)}
+   ::max-refused {:default 3 :doc "Tosses in a row that are refused or not collected before the call stops :not-taken." :spec (a/int-in 0 nil)}
    ::max-walks {:default 8 :doc "Failed walks of one call before it stops :unreachable." :spec (a/int-in 0 nil)}
    ::job-time-s {:default 120 :doc "Seconds one feeding may take." :spec (a/int-in 1 nil)}
-   ::watch-s {:default 4 :doc "Seconds the body watches the animal after acting." :spec (a/int-in 0 nil)}
-   ::settle-reach {:default 4 :doc "Reach once the animal has settled, in blocks." :spec (a/int-in 0 nil)}})
-(def eye-height 1.62)
+   ::watch-s {:default 4 :doc "Seconds the toss primitive watches for who collects the drop (the pickup receipt)." :spec (a/int-in 0 nil)}
+   ::settle-reach {:default 4 :doc "Blocks from the toss spot within which a restart settles a toss cut before its receipt; farther, it walks back there first." :spec (a/int-in 0 nil)}})
 (defn drop-radius [] (settings/get settings ::drop-radius))
 (defn min-gap [] (settings/get settings ::min-gap))
 (defn max-gap [] (settings/get settings ::max-gap))
@@ -323,7 +323,7 @@
     (ctx/update-mem! c assoc :tossing {:item item :at (u/self-pos c) :before (held c item)
                                        :t (ctx/now c)
                                        :skip (into {} (map (juxt :id :count)) (lying c item (u/self-pos c) {}))})
-    (await (ctx/act c :look (clj->js {:pos (assoc pos :y (+ (:y (u/self-pos c)) eye-height))})))
+    (await (ctx/act c :look (clj->js {:pos (assoc pos :y (+ (:y (u/self-pos c)) game/eye-height))})))
     (let [r (await (ctx/act c :toss (clj->js {:item item :count n :watchS (watch-s)})))
           status (.-status r)]
       (if (= "tossed" status)
