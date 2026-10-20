@@ -4,9 +4,11 @@
 // Heavy runs (--heavy, RES_SLOT_HEAVY=1, or a .res-slot-heavy file in the cwd or a parent: tools/integration-worktree.sh writes it, since agents' test runs cannot set env) may also take the `reserve` slots a kind keeps back in res-slot.json.
 // tools/res-slot status                            holders per kind (pid, command, age) and free memory.
 // A run appends {start:true, pid, kind, cmd} to /tmp/mc-res/log.jsonl when it gets its slot, and {kind, needMb, waitedS, ranS, code, cmd} when it finishes.
+// A kind with maxLoadPerCore also waits while the 1-minute load average plus the cores (loadCores each) of its recent grants is at maxLoadPerCore x cores.
 // Kinds, need, max and the memory floor: tools/res-slot.json (tools/test-shards.mjs reads the same floor and tests numbers).
 // Exit 75 "busy" after ~9 min of waiting (agents' foreground calls cap at 10 min): retry. The slot is an flock held by the command's own process, so it is freed when the command exits or dies.
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -17,9 +19,12 @@ export const availableMb = () => Number(fs.readFileSync(process.env.RES_SLOT_MEM
 
 // Pure: run when a slot is free and memory leaves the floor intact; else wait, or busy once waited past the limit.
 // reservedMb: need of recent grants whose processes have not ramped up yet (see reservedMb below); it counts as already used.
-export const decide = ({ freeSlots, availableMb, needMb, floorMb, waitedMs, maxWaitMs, reservedMb = 0 }) => {
+// loadAvg/maxLoad/rampLoad: the 1-minute load average, the kind's ceiling (maxLoad undefined: no gate) and the cores of recent grants whose processes have not shown in the load average yet.
+export const decide = ({ freeSlots, availableMb, needMb, floorMb, waitedMs, maxWaitMs, reservedMb = 0, loadAvg = 0, maxLoad, rampLoad = 0 }) => {
   const free = availableMb - reservedMb
-  const why = [freeSlots <= 0 && 'no free slot', free - needMb < floorMb && `memory ${Math.round(availableMb)} MB free${reservedMb ? `, ${Math.round(reservedMb)} reserved for starting runs` : ''}, need ${needMb} + floor ${floorMb}`].filter(Boolean).join(', ')
+  const load = loadAvg + rampLoad
+  const why = [freeSlots <= 0 && 'no free slot', free - needMb < floorMb && `memory ${Math.round(availableMb)} MB free${reservedMb ? `, ${Math.round(reservedMb)} reserved for starting runs` : ''}, need ${needMb} + floor ${floorMb}`,
+    maxLoad !== undefined && load >= maxLoad && `load ${loadAvg.toFixed(1)}${rampLoad ? ` + ${rampLoad.toFixed(1)} for starting runs` : ''} at the ceiling ${maxLoad}`].filter(Boolean).join(', ')
   if (!why) return { action: 'run' }
   return { action: waitedMs >= maxWaitMs ? 'busy' : 'wait', why }
 }
@@ -86,6 +91,11 @@ export const logRun = (entry) => fs.appendFileSync(path.join(dir(), 'log.jsonl')
 // Pure: need of grants still ramping, minus what their process trees already hold (MemAvailable has dropped by that much, so it must not count twice).
 export const reservedMb = (grants, now, rampMs, alive = () => true, rss = () => 0) =>
   grants.filter((g) => now - g.t < rampMs && alive(g.pid)).reduce((a, g) => a + Math.max(0, g.needMb - rss(g.pid)), 0)
+// Pure: cores the grants of one kind still ramping will use (their load is not in the load average yet).
+export const rampingLoad = (grants, kind, now, rampMs, alive = () => true) =>
+  grants.filter((g) => g.kind === kind && now - g.t < rampMs && alive(g.pid)).reduce((a, g) => a + (g.cores ?? 0), 0)
+// Pure: the load ceiling of a kind from its `maxLoadPerCore` and the machine's core count, or undefined for no gate.
+export const maxLoadOf = (k, cores) => k.maxLoadPerCore === undefined ? undefined : k.maxLoadPerCore * cores
 // Heavy waiters: <dir>/heavy-wait/<kind>.<pid>[.<n>], holding the JSON list of slots the waiter tries (empty: any slot). While one is alive, light runs of the kind leave those slots alone, so a freed slot reaches the heavy run.
 export const isHeavy = (cwd = process.cwd()) => !!process.env.RES_SLOT_HEAVY || hasHeavyMarker(cwd)
 // Pure: the free slots a light run may take. waits: one entry per live heavy waiter, the slots it tries, or null (any slot).
@@ -154,7 +164,7 @@ const holders = (kind, max) => heldSlots(kind, max).map((i) => {
 }).join('; ')
 
 const status = (cfg) => {
-  console.log(`MemAvailable ${Math.round(availableMb())} MB, floor ${cfg.floorMb} MB`)
+  console.log(`MemAvailable ${Math.round(availableMb())} MB, floor ${cfg.floorMb} MB, load ${os.loadavg()[0].toFixed(1)} on ${os.cpus().length} cores`)
   for (const [kind, k] of Object.entries(cfg.kinds)) {
     const h = heldSlots(kind, k.max)
     console.log(`${kind}: ${h.length}/${k.max} in use (default need ${k.needMb} MB each)`)
@@ -190,8 +200,9 @@ const main = async () => {
     const gated = await withGate(() => {
       const reserved = currentReserved()
       free = heavy ? open : capDuringSweep(freeForLight(open, heavyWaits(kind)), lightHeldCount(kind, k.max), k.sweepCap, sweeping)
-      const d = decide({ freeSlots: free.length, availableMb: availableMb(), needMb, floorMb: cfg.floorMb, waitedMs: Date.now() - t0, maxWaitMs, reservedMb: reserved })
-      if (d.action === 'run') fs.mkdirSync(grantDir(), { recursive: true }), fs.writeFileSync(path.join(grantDir(), `${process.pid}.json`), JSON.stringify({ needMb, t: Date.now() }))
+      const rampLoad = rampingLoad(readGrants(), kind, Date.now(), rampMs(), pidAlive)
+      const d = decide({ freeSlots: free.length, availableMb: availableMb(), needMb, floorMb: cfg.floorMb, waitedMs: Date.now() - t0, maxWaitMs, reservedMb: reserved, loadAvg: os.loadavg()[0], maxLoad: maxLoadOf(k, os.cpus().length), rampLoad })
+      if (d.action === 'run') fs.mkdirSync(grantDir(), { recursive: true }), fs.writeFileSync(path.join(grantDir(), `${process.pid}.json`), JSON.stringify({ needMb, t: Date.now(), kind, cores: k.loadCores ?? 0 }))
       return d
     })
     const d = gated

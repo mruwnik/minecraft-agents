@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { spawnSync, spawn } from 'node:child_process'
-import { candidateSlots, capDuringSweep, decide, freeForLight, hasHeavyMarker, loadConfig, reservedMb, treeRssMb, usableSlots } from './res-slot.mjs'
+import { candidateSlots, capDuringSweep, decide, freeForLight, hasHeavyMarker, loadConfig, maxLoadOf, rampingLoad, reservedMb, treeRssMb, usableSlots } from './res-slot.mjs'
 
 const base = { freeSlots: 1, availableMb: 10000, needMb: 700, floorMb: 6144, waitedMs: 0, maxWaitMs: 540000 }
 
@@ -19,6 +19,24 @@ test('decide: no free slot waits, and says so', () => {
 test('decide: memory short of floor+need waits', () => {
   const d = decide({ ...base, availableMb: 6800 })
   assert.equal(d.action, 'wait'); assert.match(d.why, /memory/)
+})
+test('decide: load at the ceiling waits, below it runs, no ceiling never waits', () => {
+  assert.equal(decide({ ...base, loadAvg: 19.9, maxLoad: 20 }).action, 'run')
+  const d = decide({ ...base, loadAvg: 20, maxLoad: 20 })
+  assert.equal(d.action, 'wait')
+  assert.match(d.why, /load 20\.0/)
+  assert.equal(decide({ ...base, loadAvg: 99 }).action, 'run')
+})
+test('decide: cores of starting runs count toward the load ceiling', () => {
+  assert.equal(decide({ ...base, loadAvg: 17, rampLoad: 3, maxLoad: 20 }).action, 'wait')
+})
+test('rampingLoad: only grants of the kind still ramping whose owner lives', () => {
+  const grants = [{ pid: 1, kind: 'body', t: 1000, cores: 1 }, { pid: 2, kind: 'body', t: 100, cores: 1 }, { pid: 3, kind: 'tests', t: 1000, cores: 2 }, { pid: 4, kind: 'body', t: 1000, cores: 1 }]
+  assert.equal(rampingLoad(grants, 'body', 1500, 600, (pid) => pid !== 4), 1)
+})
+test('maxLoadOf: scales with cores; none without maxLoadPerCore', () => {
+  assert.equal(maxLoadOf({ maxLoadPerCore: 1.25 }, 16), 20)
+  assert.equal(maxLoadOf({}, 16), undefined)
 })
 test('decide: exactly floor+need runs', () => {
   assert.equal(decide({ ...base, availableMb: 6844 }).action, 'run')
