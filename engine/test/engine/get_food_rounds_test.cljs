@@ -720,7 +720,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup (assoc furnace-world :self {:food 2} :time 15000) :step-ms 2000)]
+        (let [{:keys [eng p]} (setup (assoc furnace-world :self {:food 0} :time 15000) :step-ms 2000)]
           (core/submit! eng (list 'jobs.survival.get-food {:carry 0 :explore false}) {})
           (await (run-until-idle! eng p 40))
           (is (some #{"take"} (call-args p "furnace" "op")) "the clock alone is no reason to skip the cook"))))))
