@@ -157,6 +157,19 @@
     (is (= (:rays-per-pass all) (:rays all)))
     (is (< (:rays one) (/ (:rays-per-pass all) 10)))))
 
+(deftest a-body-turned-every-half-second-sees-each-view-it-faces
+  (let [clock (atom 0)
+        walls (merge (tu/box -5 58 5 5 72 5 "stone") (tu/box -5 58 -5 5 72 -5 "stone")
+                     (tu/box 5 58 -5 5 72 5 "stone") (tu/box -5 58 -5 -5 72 5 "stone"))
+        {:keys [p per]} (rig walls {:now #(deref clock) :pass-ms 1500 :step-ms 50})
+        ahead (for [[x z] [[0 5] [0 -5] [5 0] [-5 0]] y [64 65 66] d [-1 0 1]]
+                (if (zero? x) [d y z] [x y d]))]
+    (doseq [t (range 80)]
+      (when (zero? (mod t 10)) (turn! p (* 90 (mod (quot t 10) 4))))
+      (swap! clock + 50)
+      (perception/step! per))
+    (is (every? #(= "stone" (seen-name per %)) ahead))))
+
 (deftest a-forced-look-drops-the-pass-in-flight
   (let [{:keys [p per]} (rig {} {:pass-ms 1000 :step-ms 50})]
     (perception/step! per)

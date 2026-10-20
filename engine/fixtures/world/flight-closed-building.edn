@@ -25,6 +25,14 @@
    :expect [{:event {:source :job :kind :retreat.home :data {:own? false}} :within-s 25}
             {:event {:source :job :kind :retreat.door-shut} :within-s 40}]
    :after [[:body-near [16.5 0 16.5] 3.5]]}
+  ;; c14d29fa: eight quick turns (a few seconds apart, each shorter than the 1.5 s pass) still show the whole room: partial passes count.
+  {:name "runs-into-a-foreign-closed-building-seen-by-quick-rcon-turns"
+   :body {:at [16.5 0 17.5] :effects [["resistance" 600 4]]}
+   :act [[:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~16"] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 0"] [:until-facing {:yaw 0 :pitch 0} 10] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"] [:until-facing {:yaw 90 :pitch 0} 10] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 0"] [:until-facing {:yaw 180 :pitch 0} 10] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:until-facing {:yaw 270 :pitch 0} 10] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 40"] [:until-facing {:yaw 0 :pitch 40} 10] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 40"] [:until-facing {:yaw 90 :pitch 40} 10] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 40"] [:until-facing {:yaw 180 :pitch 40} 10] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 40"] [:until-facing {:yaw 270 :pitch 40} 10] [:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~25"] [:until-pos {:x-min 15 :x-max 18 :z-min 24 :z-max 27} 10]
+         [:summon "zombie" [16.5 0 31.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat.home :data {:own? false}} :within-s 25}
+            {:event {:source :job :kind :retreat.door-shut} :within-s 40}]
+   :after [[:body-near [16.5 0 16.5] 3.5]]}
   {:name "own-home-ahead-of-a-chaser-beside-the-door"
    :body {:at [16.5 0 17.5] :effects [["resistance" 600 4]]}
    :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30] [:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~25"] [:until-pos {:x-min 15 :x-max 18 :z-min 24 :z-max 27} 10]

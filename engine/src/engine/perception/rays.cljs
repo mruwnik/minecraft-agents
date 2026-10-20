@@ -181,6 +181,14 @@
         ^js c (or (aget m (name why)) (aset m (name why) #js {:passes 0 :rays 0}))]
     (aset c (name k) (+ (aget c (name k)) n))))
 
+(defn stride-of
+  "A step near the golden share of n that is coprime to n: casting ray k*stride mod n puts any prefix of a pass spread
+  over the whole view, so a pass cut short by a turn still sampled all of its view."
+  [n]
+  (let [gcd (fn gcd [a b] (if (zero? b) a (recur b (mod a b))))]
+    (loop [s (max 1 (js/Math.round (* 0.618034 n)))]
+      (if (== 1 (gcd s n)) s (recur (inc s))))))
+
 (defn start-pass!
   "Starts a pass at effort (0-1: the share of grid rays, see grid; the opts' :effort when nil), unless the sight table
   is not ready yet (the next step tries again)."
@@ -194,6 +202,7 @@
           ground (ground-rays opts hx hy (.-yaw eye) (.-pitch eye) jx jy)]
       (set! (.-pass st) #js {:next 0 :jx jx :jy jy :cols cols :rows rows :ground ground
                              :total (+ (* cols rows) (/ (.-length ground) 2)) :why why})
+      (set! (.-stride (.-pass st)) (stride-of (.-total (.-pass st))))
       (count-why! st why :passes 1)
       (set! (.-passRays st) (.-total (.-pass st))))))
 
@@ -255,9 +264,10 @@
         put! (fn [j dx dy dz]
                (let [len (js/Math.hypot dx dy dz)]
                  (aset out (* 3 j) (/ dx len)) (aset out (+ (* 3 j) 1) (/ dy len)) (aset out (+ (* 3 j) 2) (/ dz len))))]
-    (loop [k from]
-      (when (< k to)
-        (let [j (- k from)]
+    (loop [q from]
+      (when (< q to)
+        (let [j (- q from)
+              k (mod (* q (.-stride pass)) (.-total pass))]
           (if (< k n-grid)
             (let [a (+ (- hx) (* du (+ (mod k cols) (.-jx pass))))
                   v (+ (- hy) (* dv (+ (js/Math.floor (/ k cols)) (.-jy pass))))]
@@ -267,7 +277,7 @@
             (let [i (* 2 (- k n-grid)) d (aget ground i) l (aget ground (inc i))
                   dx (+ (* d fx) (* l rx)) dy (- game/eye-height) dz (+ (* d fz) (* l rz))]
               (if (in-cone? b hx hy dx dy dz) (put! j dx dy dz) (aset out (* 3 j) js/NaN)))))
-        (recur (inc k))))
+        (recur (inc q))))
     out))
 
 (defn cast-slice!
