@@ -193,7 +193,7 @@
         texts (fixture-dir-texts paths)
         by-stem (group-by stem-path (keys texts))
         ran (set (mapcat by-stem (map :file results)))
-        clean (chg/recordable {:passed (set (mapcat by-stem passed)) :fixtures texts :src (source-texts) :start start :end (run-state)})
+        clean (chg/recordable {:passed (set (mapcat by-stem passed)) :fixtures texts :src (delay (source-texts)) :start start :end (run-state)})
         record (read-pass-record)
         next (chg/next-record record (:rev start) {:clean clean :ran ran})]
     (when (not= record next)

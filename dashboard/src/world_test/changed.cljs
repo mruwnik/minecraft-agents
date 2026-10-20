@@ -9,31 +9,41 @@
 (defn ns-file [ns-name]
   (str "engine/src/" (str/replace (str/replace ns-name "-" "_") "." "/") ".cljs"))
 
-(defn trigger-file
-  "The file of trigger keyword name among the known source paths, or nil."
-  [name known]
-  (let [tail (str "/" (str/replace name "-" "_") ".cljs")]
-    (first (filter #(and (str/starts-with? % "engine/src/triggers/") (str/ends-with? % tail)) known))))
+(defn trigger-index
+  "{trigger keyword name file} for the trigger sources among the known paths."
+  [known]
+  (into {} (for [p known
+                 :when (and (str/starts-with? p "engine/src/triggers/") (str/ends-with? p ".cljs"))]
+             [(str/replace (last (str/split p #"/")) #"\.cljs$" "") p])))
 
-(defn mentioned
-  "Source files the text names: namespaces by symbol (jobs.*, triggers.*, any dotted name that is a known file), triggers by keyword."
-  [text known]
-  (let [known? (set known)]
-    (into (set (filter known? (map ns-file (re-seq ns-token text))))
-          (keep #(trigger-file (second %) known))
-          (re-seq trigger-token text))))
+(defn mentions
+  "A memoised fn text-key -> source files the text names: namespaces by symbol (any dotted name that is a known file),
+  triggers by keyword. Built once per source set, so a run indexes the sources once."
+  [known]
+  (let [known? (set known)
+        idx (trigger-index known)
+        scan (fn [text]
+               (into (set (filter known? (map ns-file (re-seq ns-token text))))
+                     (keep #(idx (str/replace (second %) "-" "_")))
+                     (re-seq trigger-token text)))]
+    scan))
+
+(defn scanner
+  "{:scan text -> files, :of path -> files its source names (memoised)} over src {path text}."
+  [src]
+  (let [scan (mentions (keys src))]
+    {:scan scan :of (memoize (fn [p] (scan (src p))))}))
 
 (defn closure
   "The source files fixture text uses, transitively through the names in their own source. src: {path text} of every
-  job and trigger source."
-  [fixture-text src]
-  (let [known (keys src)]
-    (loop [seen #{} todo (mentioned fixture-text known)]
-      (if (empty? todo)
-        seen
-        (let [p (first todo)]
-          (recur (conj seen p)
-                 (into (disj todo p) (remove seen) (mentioned (src p) known))))))))
+  job and trigger source; sc: (scanner src), shared across fixtures."
+  ([fixture-text src] (closure fixture-text src (scanner src)))
+  ([fixture-text _src {:keys [scan of]}]
+   (loop [seen #{} todo (scan fixture-text)]
+     (if (empty? todo)
+       seen
+       (let [p (first todo)]
+         (recur (conj seen p) (into (disj todo p) (remove seen) (of p))))))))
 
 (defn leaf-source? [p]
   (and (str/ends-with? p ".cljs")
@@ -59,19 +69,20 @@
   fixtures {repo-relative path text}, record {path rev}, src {path text} of every job and trigger source,
   changed-since (rev -> changed repo paths or nil)."
   [{:keys [fixtures record src changed-since]}]
-  (set (for [[path text] fixtures
+  (set (for [sc [(scanner src)]
+             [path text] fixtures
              :let [rev (get record path)
                    changed (when rev (changed-since rev))]
-             :when (or (nil? changed) (stale? (closure text src) path changed))]
+             :when (or (nil? changed) (stale? (closure text src sc) path changed))]
          path)))
 
 (defn recordable
   "The passed fixture paths whose pass may be recorded: HEAD and the changed set held from the run's start (the body
   build) to its end, and none of their code differs from HEAD. start/end: {:rev :changed}."
   [{:keys [passed fixtures src start end]}]
-  (if (or (nil? (:rev start)) (nil? (:changed end)) (not= (:rev start) (:rev end)) (not= (set (:changed start)) (set (:changed end))))
+  (if (or (empty? passed) (nil? (:rev start)) (nil? (:changed end)) (not= (:rev start) (:rev end)) (not= (set (:changed start)) (set (:changed end))))
     #{}
-    (set (remove (stale-stems {:fixtures (select-keys fixtures passed) :record (zipmap passed (repeat (:rev end))) :src src
+    (set (remove (stale-stems {:fixtures (select-keys fixtures passed) :record (zipmap passed (repeat (:rev end))) :src (force src)
                                :changed-since (constantly (:changed end))})
                  passed))))
 
