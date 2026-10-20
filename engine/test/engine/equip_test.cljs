@@ -128,7 +128,7 @@
           (core/submit! (:eng s) (list job {:item "wooden_pickaxe" :fetch false}) {})
           (await (ft/run-ticks s 10))
           (is (nil? (held (:p s))))
-          (is (empty? (ft/events-of s :fetch.started)))
+          (is (empty? (filter #(= :need (:slot %)) (ft/events-of s :child_started))))
           (is (empty? (ft/inspects s)))
           (is (seq (ft/chest-items s [-2 64 3])))
           (is (empty? (ft/events-of s :completed)))

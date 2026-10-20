@@ -174,7 +174,7 @@
     (tu/run-async done
       (fn ^:async t []
         (await (call! (spawn-world {}) 'jobs.survival.bed-down {:fetch false} (constantly nil)))
-        (is (empty? (filterv #(= :fetch.started (:kind %)) @@seen-events)))))))
+        (is (empty? (filterv #(and (= :child_started (:kind %)) (= :need (:slot %))) @@seen-events)))))))
 
 (deftest bed-down-with-no-bed-fetches-one-through-a-need-child
   (async done

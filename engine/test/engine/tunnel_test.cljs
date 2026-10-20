@@ -548,7 +548,7 @@
                                                     {:target [6 57 0] :fetch false} (fn [_])))]
           (is (= :reached (:reason @out)))
           (is (seq (digs p)) "dug by hand")
-          (is (empty? (events-of s :fetch.started)))
+          (is (empty? (filter #(= :need (:slot %)) (events-of s :child_started))))
           (is (empty? (filter #(= :no-tool (:reason %)) (events-of s :waiting)))))))))
 
 (deftest no-pickaxe-ends-with-the-stairs-reason-and-digs-nothing

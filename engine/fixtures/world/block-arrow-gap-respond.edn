@@ -20,7 +20,7 @@
  [{:name "respond-closes-the-doorway-no-walk"
    :expect [{:event {:source :job :kind :child_ended :data {:slot :gap :ending {:kind :done}}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :child_ended :data {:slot :gap :ending {:kind :nothing-possible}}} :for-s 40 :until {:source :job :kind :child_ended :data {:slot :gap :ending {:kind :done}}} :of-job true}
-            {:no-event {:source :job :kind :fetch.started} :for-s 40 :until {:source :job :kind :child_ended :data {:slot :gap :ending {:kind :done}}} :of-job true}]
+            {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 40 :until {:source :job :kind :child_ended :data {:slot :gap :ending {:kind :done}}} :of-job true}]
    :after [[:body-near [17.5 0 16.5] 1.5] [:item "cobblestone" [:< 10]]]
    :limit-s 50}
   {:name "no-pickaxe-no-gap"
@@ -32,7 +32,7 @@
    :body {:inventory [["stone_pickaxe" 1]]}
    :expect [{:event {:source :job :kind :round_started} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :child_ended :data {:slot :gap :ending {:kind #{:done :nothing-possible}}}} :for-s 30 :of-job true}
-            {:no-event {:source :job :kind :fetch.started} :for-s 30 :of-job true}]
+            {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 30 :of-job true}]
    :limit-s 40}
   {:name "zombie-too-no-gap"
    :act [[:summon "zombie" [24.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]

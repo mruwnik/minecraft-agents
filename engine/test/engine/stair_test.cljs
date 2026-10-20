@@ -347,7 +347,6 @@
               (is (= :done (:status @(:out s))))
               (is (= 3 (:steps @(:out s))))
               (is (seq (digs (:p s))) "dug by hand")
-              (is (empty? (events-of s :fetch.started)))
               (is (empty? (filter #(= :need (:slot %)) (events-of s :child_started))) "no tool is fetched for a hand-breakable block")
               (is (nil? (waiting s))))))))))
 

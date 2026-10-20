@@ -350,7 +350,7 @@
       (fn ^:async t []
         (let [s (await (run! {:blocks snow-mass :inventory []} 'jobs.access.stair stair-east))]
           (is (= :done (:status @(:out s))))
-          (is (empty? (events-of s :fetch.started)))
+          (is (empty? (filter #(= :need (:slot %)) (events-of s :child_started))))
           (is (seq (digs (:p s)))))))))
 
 (def dirt-ground (into {} (for [[k v] ground] [k "dirt"])))

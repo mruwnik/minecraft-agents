@@ -1,6 +1,6 @@
 ;; Card fe73a5ef: jobs.forestry.plant-sapling with no sapling carried. A seen chest holding one is fetched and planted;
 ;; seen oak leaves are broken for the drop (obtain :gather via gather.get-seeds; the drop is chance and the dig bound is 20 leaves,
-;; so that case checks the bounded outcome: fetch.done (a sapling came) or fetch.failed (20 dry digs)); with no source the job waits :no-sapling; harvest-wood :fetch false passes down and leaves the debt owed.
+;; so that case checks the bounded outcome: the :need child ends (a sapling came) or fails (20 dry digs)); with no source the job waits :no-sapling; harvest-wood :fetch false passes down and leaves the debt owed.
 {:defaults
  {:tags [:forestry :plant-sapling :fetch]
   :plot {:height 10 :floor "grass_block" :length 64 :width 32}

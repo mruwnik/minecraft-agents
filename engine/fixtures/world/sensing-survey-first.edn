@@ -14,7 +14,7 @@
    :body {:inventory [["oak_planks" 3] ["stick" 2]]}
    :act [[:job (jobs.items.craft {:item "wooden_pickaxe"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :fetch.started} :for-s 30 :of-job true :until {:source :job :kind :completed}}
+            {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 30 :of-job true :until {:source :job :kind :completed}}
             {:no-event {:source :job :kind :stopped} :for-s 30 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "wooden_pickaxe" 1] [:block [16 0 20] "crafting_table"]]}
   {:name "compost-feeds-the-composter-behind-it"

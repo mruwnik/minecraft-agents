@@ -497,10 +497,13 @@
 
 (defn unknown-kinds
   "The event kinds the case names in a pattern with :source :job, :reflex or :trigger (an :event, :no-event, :count-event,
-  :from-event, :until or :await pattern) that no source emits: not in known (kind names), not a computed kind."
+  :from-event, :until or :await pattern; an :expect pattern without :source counts too) that no source emits: not in known (kind names), not a computed kind."
   [c known]
   (->> (tree-seq coll? seq (dissoc c :id :file))
-       (filter #(and (map? %) (#{:job :reflex :trigger} (:source %))))
+       (mapcat #(if (map? %) (concat (when (#{:job :reflex :trigger} (:source %)) [%])
+                                     (filter (fn [p] (and (map? p) (not (:source p)) (:kind p)))
+                                             (map % [:event :no-event :count-event :from-event :until])))
+                    []))
        (mapcat #(let [k (:kind %)] (if (set? k) k [k])))
        (filter keyword?)
        (remove #(let [n (subs (str %) 1)] (or (known n) (re-find computed-kinds n))))

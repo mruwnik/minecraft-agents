@@ -1,7 +1,7 @@
 ;; Cards b72b070d, e87d918f: jobs.forestry.fell-tree felling a 10-log trunk (x 16, z 16, the top logs out of reach from the ground)
 ;; from a pillar. b72b070d: the pillar is taken back (the ledger ends empty) and the job completes, with no round repeating;
 ;; a pillar refused by a plan's footprint ends :tree-unreachable and the top log stays. e87d918f: too few blocks carried
-;; fetches the height in dirt or cobblestone from a seen chest (fetch.started, fetch.done) and felling goes on; :fetch false, or
+;; fetches the height in dirt or cobblestone from a seen chest (a :need child) and felling goes on; :fetch false, or
 ;; no chest, stops :need.
 ;; The need cases use a tree whose only ground log is the base (logs y 8..13 float above it, no lower canopy): the pillar is built of dirt, cobblestone and
 ;; the logs cut (2b670ae6), so with one log carried it is short and the shortfall is what is fetched or waited for. A trunk reaching the ground

@@ -20,7 +20,8 @@
  [{:name "tall-tree-felled-on-its-own-logs-with-no-blocks-carried"
    :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}
-            {:no-event {:source :job :kind #{:stopped :fell-tree.declined :fetch.started}} :for-s 150 :until {:source :job :kind :completed}}]
+            {:no-event {:source :job :kind #{:stopped :fell-tree.declined}} :for-s 150 :until {:source :job :kind :completed}}
+            {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 150 :until {:source :job :kind :completed}}]
    :after [[:not-block [16 9 16] "oak_log"] [:not-block [16 0 16] "oak_log"] [:item "oak_log" [:>= 9]] [:body-far [16.5 9 16.5] 5]]}
   {:name "branch-logs-are-felled-with-the-trunk-and-carried"
    :blocks [[:fill [17 4 16] [18 4 16] "oak_log"]]

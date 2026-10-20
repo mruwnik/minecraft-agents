@@ -246,7 +246,7 @@
         (let [{:keys [p seen] :as env} (pt/start (pt/field-world (pt/inv "carrot" 6)))
               e (await (ending-of env plant {:box pt/field-box :seed "carrot"} 20))]
           (is (= {:kind :condition-failed :cause {:reason :food-reserve :seed "carrot" :held 6 :kept 6 :reserve-points 60}} (kcm e)))
-          (is (empty? (pt/events-of seen :fetch.started)))
+          (is (empty? (filter #(= :need (:slot %)) (pt/events-of seen :child_started))))
           (is (= {"carrot" 6} (pt/inv-of p))))))))
 
 (deftest plant-every-cell-skipped-is-nothing-possible-and-fewer-seeds-than-least-is-not-done

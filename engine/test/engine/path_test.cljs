@@ -80,7 +80,7 @@
           (core/submit! eng (list job (assoc box :fetch false)) {})
           (is (nil? (core/tick! eng)) "check false: nothing runs")
           (is (= [:no-tool] (map :reason (kinds seen :waiting))))
-          (is (empty? (kinds seen :fetch.started)) "fetch false: no fetch child")
+          (is (empty? (filter #(= :need (:slot %)) (kinds seen :child_started))) "fetch false: no fetch child")
           (is (empty? (calls p "useOn"))))))))
 
 (deftest path-bad-args-end-impossible-instead-of-throwing

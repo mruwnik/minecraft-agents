@@ -929,10 +929,12 @@
   (let [c {:expect [{:event {:source :job :kind :real.one :data {:kind :nested}} :within-s 1}
                     {:no-event {:source :reflex :kind #{:real.one :gone.two}} :for-s 1 :from-event {:source :job :kind :gone.three}}
                     {:event {:source :body :kind :gone.four} :within-s 1}
-                    {:event {:source :job :kind :trip.deposited} :within-s 1}]
+                    {:event {:source :job :kind :trip.deposited} :within-s 1}
+                    {:no-event {:kind :gone.six :data {:kind :nested}} :for-s 1}
+                    {:no-event {:level :error} :for-s 1}]
            :act [[:await {:source :job :kind :gone.five} 5]
                  [:until [:cli "jobs" []] 5]]}]
-    (is (= [:gone.five :gone.three :gone.two] (sort (f/unknown-kinds c #{"real.one"}))))))
+    (is (= [:gone.five :gone.six :gone.three :gone.two] (sort (f/unknown-kinds c #{"real.one"}))))))
 
 (deftest a-fill-over-the-server-limit-is-split-and-a-hollow-one-is-refused
   (let [origin [20000 150 20000]
