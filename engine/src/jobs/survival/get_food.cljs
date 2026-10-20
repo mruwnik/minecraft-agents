@@ -81,8 +81,8 @@
    :ignore-zones? :shared})
 
 (def harvest-items
-  "What the drops of a harvest or a kill may be called."
-  (into (set (filter foods/edible? (keys (foods/table)))) #{"wheat" "wheat_seeds" "beetroot_seeds" "poisonous_potato"}))
+  "What the drops of a harvest or a kill may be called (a delay: the food table is read on first use, not at load)."
+  (delay (into (set (filter foods/edible? (keys (foods/table)))) #{"wheat" "wheat_seeds" "beetroot_seeds" "poisonous_potato"})))
 
 (def hungry-policy {:cap 10 :ttl (* 60 60 1000)})
 
@@ -160,7 +160,7 @@
 (defn ^:async collect-drops!
   "Pick up the harvest items within radius (collect-drops): :again when some came in, else nil."
   [c radius]
-  (let [e (await (child/run!* c :collect 'jobs.items.collect-drops {:radius radius :items (vec harvest-items)}))]
+  (let [e (await (child/run!* c :collect 'jobs.items.collect-drops {:radius radius :items (vec @harvest-items)}))]
     (cond
       (= :continue e) :continue
       (pos? (:collected (:data e) 0)) :again)))

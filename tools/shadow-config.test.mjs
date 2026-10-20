@@ -44,6 +44,10 @@ test('the body-release build writes its bundle with no character above U+00FF', 
   assert.match(build('body-release'), /engine\.build-hooks\/ascii-output/)
 })
 
+test('the body-release build requires lazy-requires before the bundle code, so protodef skips its validator', () => {
+  assert.match(build('body-release'), /preload-lazy-requires\) \(engine\.build-hooks\/ascii-output/)
+})
+
 test('engine sources come before engine tests on the source path', () => {
   const paths = edn.match(/:source-paths \[([^\]]*)\]/)[1]
   assert.ok(paths.indexOf('"../engine/src"') >= 0)

@@ -45,3 +45,14 @@
         out (str/replace s #"[^\x00-\xFF]" (fn [c] (apply str (map #(format "\\u%04x" (int %)) c))))]
     (when-not (= s out) (spit f out))
     state))
+
+(defn preload-lazy-requires
+  "Make the release bundle require js/lazy-requires.mjs before anything else: its own requires (prismarine-block, then protodef) run at the bundle's top, before primitives.mjs could load it, and protodef would build its ajv validator (~60 ms per body) first. Runs at :flush, before ascii-output."
+  {:shadow.build/stage :flush}
+  [state]
+  (let [f (io/file (get-in state [:shadow.build/config :output-to]))
+        s (slurp f)
+        line "require(require(\"path\").join(__dirname,\"..\",\"js\",\"lazy-requires.mjs\"));"
+        out (str/replace-first s #"^(#![^\n]*\n)?" (fn [[m]] (str m line "\n")))]
+    (spit f out)
+    state))
