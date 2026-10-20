@@ -1,0 +1,16 @@
+;; Card ec7d219e: farm.harvest with a :center it cannot walk to ends nothing-possible :unreachable (data :center), not :nothing-to-do / :no-crop-seen:
+;; a caller must not read it as an empty field. The ripe wheat [80..82 0 16] stands in a closed bedrock box (nothing a player could dig through), the body 76 blocks west.
+;; Should-fail (ends :unreachable, nothing in the bag (the far chunk is not loaded for a block check)). Control: the same field without the box is cut (harvest-far-centre.edn).
+{:defaults
+ {:tags [:farm :harvest :jobs]
+  :time :any
+  :plot {:floor "grass_block" :length 100 :width 32 :height 8}
+  :body {:at [4.5 0 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "harvest-centre-sealed-in-bedrock-ends-unreachable"
+   :blocks [[:fill [78 -3 14] [84 3 18] "bedrock"] [:fill [79 -1 15] [83 2 17] "air"]
+            [:fill [79 -1 15] [83 -1 17] "farmland[moisture=7]"] [:fill [80 0 16] [82 0 16] "wheat[age=7]"]]
+   :act [[:job (jobs.farm.harvest {:center #xyz [81 0 16] :radius 6 :replant false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :unreachable}} :within-s 160 :of-job true}]
+   :after [[:item "wheat" 0]]}]}

@@ -1,0 +1,16 @@
+;; Card 34f4ca6c: jobs.farm.irrigate whose best spot's pour fails (the dug cell shows air under it, so no water stays) has that cell refilled
+;; with dirt and tries another spot; it used to end :no-spot with the field dry. Seven farmland cells at [13..19 -1 16], air under the middle one [16 -2 16], one bucket.
+;; Should-succeed: the call completes with nothing dry, the bucket poured at a neighbour, the middle cell back to dirt.
+{:defaults
+ {:tags [:farm :irrigate :jobs]
+  :time :any
+  :plot {:height 8 :floor "grass_block"}
+  :body {:at [16.5 0 14.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["water_bucket" 1] ["dirt" 12]]}
+  :blocks [[:fill [13 -1 17] [19 -1 17] "grass_block"] [:fill [13 -2 16] [19 -2 16] "dirt"] [:set [16 -2 16] "air"]
+           [:fill [13 -1 16] [19 -1 16] "farmland[moisture=0]"]]
+  :limit-s 120}
+ :cases
+ [{:name "pour-over-air-is-refilled-and-another-spot-wets-the-row"
+   :act [[:job (jobs.farm.irrigate {:from #xyz [13 -1 16] :to #xyz [19 -1 16]})]]
+   :expect [{:event {:source :job :kind :completed :data {:dry []}} :within-s 90 :of-job true}]
+   :after [[:block [16 -1 16] "dirt"] [:item "water_bucket" 0]]}]}
