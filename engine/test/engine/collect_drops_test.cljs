@@ -206,6 +206,18 @@
             (is (= 1 (:collected result)))
             (is (= 1 (bd/carried p "oak_log")))))))))
 
+(deftest a-search-does-not-walk-to-cells-inside-rock-beside-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [rock (into {} (for [x (range -2 8) z (range -6 7) y [64 65] :when (not= z 0)] [(str x "," y "," z) "stone"]))
+              {:keys [eng p]} (bd/setup {:self body :blocks rock})]
+          (aset p "sensedAt" (fn [pos] (if (> (js/Math.abs (.-z pos)) 1) #js {:unknown true} (.blockAt p pos))))
+          (let [result (await (tu/child-outcome eng job {:radius 6 :items ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 80))
+                [_ _ z] (get-in @(fake/state p) [:self :pos])]
+            (is (= [:stopped :none-collected] ((juxt :status :reason) result)))
+            (is (<= (js/Math.abs z) 1) "the body stayed in its tunnel")))))))
+
 (deftest a-drop-behind-a-wall-stays-unseen-without-a-search
   (async done
     (tu/run-async done

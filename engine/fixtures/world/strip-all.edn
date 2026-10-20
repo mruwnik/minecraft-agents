@@ -51,8 +51,8 @@
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:smelted [:any]}} :within-s 650 :of-job true}]
    :after [[:item "raw_iron" 0] [:item "iron_ingot" 0]]}
   {:name "site-ending-short-still-smelts-and-hauls-the-carried-ore"
-   :time :any
    ;; One trip allowed and a thin torch stock: the site may give up (:trips-exhausted, or :unreachable on a bad walk; the unit test pins that) or finish; either way the iron carried is smelted and hauled.
+   ;; The base stands on open ground, so the case keeps the day clock: with :time :any a night run waits the night out and eats the limit.
    :body {:inventory [["stone_pickaxe" 1] ["stone_axe" 1] ["shears" 1] ["torch" 6] ["bread" 12] ["cobblestone" 64] ["oak_planks" 96] ["chest" 4]
                       ["furnace" 2] ["crafting_table" 1] ["white_bed" 1] ["oak_door" 1] ["raw_iron" 3] ["coal" 24] ["stick" 8]]}
    :act [[:job (jobs.strip.all {:site "wt-mine" :at #at [10 0 16] :base "$plan:base" :shaft false :settings {:jobs.strip.site/max-trips 1}})]]

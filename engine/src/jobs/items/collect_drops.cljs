@@ -1,5 +1,6 @@
 (ns jobs.items.collect-drops
-  (:require [jobs.lib.block-sets :as bs]
+  (:require [clojure.string :as str]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -29,7 +30,7 @@
   hazardous beside it), the walk dropping one block at most; else it is left, with a debug collect-drops.left
   {:pos :reason :unseen-floor|:unseen-cell|:unsafe-floor|:too-deep}. A drop still falling is judged at rest.
   With :search, when fewer than the call's :least (default 1) items (those named in :least-items, else any) were collected and no item is in sight (trunks or terrain hide drops), the body walks (a go-to child)
-  to standable cells round the anchor, nearest first (a cell whose floor is unseen counts when nothing seen forbids it: walking there is how it gets looked at), and looks again at each, until an item is seen or the cells within :search
+  to standable cells round the anchor, nearest first (a cell whose floor is unseen counts when nothing seen forbids it: walking there is how it gets looked at; not behind a seen solid block on the way from the anchor, which is rock), and looks again at each, until an item is seen or the cells within :search
   blocks are tried. Underground a walk goes on at night; a search that go-to made wait :search-waits calls in a row ends with :reason :search-waited.
   While it runs it holds its work area (jobs.lib.loose :collecting), so the :loose-items reflex leaves those drops to it.
   With :ids, ids not in sight when none is left to try are booked as one :left {:reason :unseen :ids [...] :last {id [x y z]}}, the cell each was last seen in.
@@ -290,6 +291,15 @@
          (or (nil? floor) (identical? :solid (reach/kind-of floor)))
          (free? feet) (free? head))))
 
+(defn walled-off?
+  "Whether a seen opaque solid block (not leaves, which can be looked through) stands on the line from the anchor to the cell at d steps
+  (dx, dz) away, at feet or head height: what lies behind it is rock, not somewhere to walk to and look."
+  [p [ax ay az] d dx dz]
+  (some (fn [[k dy]]
+          (let [b (u/seen-block p {:x (+ ax (* k dx)) :y (+ ay dy) :z (+ az (* k dz))})]
+            (and b (= :solid (reach/kind-of b)) (not (str/ends-with? (.-name b) "_leaves")))))
+        (for [k (range 1 d) dy [0 1]] [k dy])))
+
 (defn search-cells
   "Cells round the anchor at 2 blocks and at :search blocks in the eight directions, nearest to the body first: per column the
   standable one at the anchor's height or one above or below, else (nothing seen there, a wall in the way) the anchor's height
@@ -307,7 +317,7 @@
         seen-columns (set (map (juxt :x :z) cells))
         unseen (for [d dists dx [-1 0 1] dz [-1 0 1] :when (not (and (zero? dx) (zero? dz)))
                      :let [cell {:x (+ ax (* d dx)) :y ay :z (+ az (* d dz))}]
-                     :when (and (not (seen-columns [(:x cell) (:z cell)])) (unseen-open? p cell))]
+                     :when (and (not (seen-columns [(:x cell) (:z cell)])) (not (walled-off? p [ax ay az] d dx dz)) (unseen-open? p cell))]
                  cell)
         by-column (vals (group-by (juxt :x :z) (concat cells unseen)))]
     (->> by-column (map first) (sort-by #(u/dist (u/self-pos c) %)))))
