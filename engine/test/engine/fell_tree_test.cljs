@@ -409,6 +409,11 @@
           (is (= 8 (:logs (:out s))))
           (is (= 1 (chest-axes s))))))))
 
+(deftest a-stranded-canopy-walk-is-told-in-the-result
+  (with-redefs [ctx/mem (constantly {:base [0 70 0] :dug 3 :stranded true})
+                fell-tree/axe-status (constantly :carried)]
+    (is (= {:base [0 70 0] :logs 3 :axe :carried :stranded true} (fell-tree/tree-result nil)))))
+
 (deftest a-carried-axe-is-not-fetched-for
   (async done
     (tu/run-async done
@@ -431,7 +436,7 @@
       (fn ^:async t []
         (let [s (await (fell (axe-world [] []) {:radius 10} 400))]
           (is (= 8 (:logs (:out s))) "felled without an axe")
-          (is (= 2 (count (kinds s :fetch.failed))) "the fetch, and the craft-only ask again after two logs"))))))
+          (is (= :none-found (:axe (:out s))) "the result says no axe was had"))))))
 
 (deftest the-crown-over-a-tree-seen-short-makes-an-axe-worth-fetching
   (async done

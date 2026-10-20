@@ -35,8 +35,7 @@
   or whose pillar digs no log counts as unreachable. Once a tree is chosen the rest of it is a comfort section
   (ctx/atomic): reflexes at or below that level wait for it, up to their caps.
   Before the third log of a tree big enough for an axe to pay (jobs.lib.trees/axe-worth-fetching?) with none carried it
-  gets one (jobs.lib.need) unless :fetch is false or lacks :tool; a failed fetch is warned (fetch.failed) and the tree
-  chopped by hand, asking once more (craft only) after two logs. Before the first log, a carried axe that is the last of
+  gets one (jobs.lib.need) unless :fetch is false or lacks :tool; a failed fetch ends the tree chopped by hand (:axe :none-found), asking once more (craft only) after two logs. Before the first log, a carried axe that is the last of
   its kind and worn gets a spare (jobs.lib.trip/tool-ready!).
   Each log is dug by a jobs.blocks.dig child that leaves the drop on the ground; a leaf hiding a log from the eye is dug
   first. When the tree is down a jobs.items.collect-drops child picks up the drops of the logs dug from the ground (by
@@ -254,8 +253,8 @@
         retry? (assoc :how #{:craft})))))
 
 (defn ^:async axe!
-  "Get an axe before a log of a tree it pays for (axe-wanted?): nil to go on (one came, or none could be had: the failure is
-  warned and the tree chopped by hand), :continue while the fetch waits on the world."
+  "Get an axe before a log of a tree it pays for (axe-wanted?): nil to go on (one came, or none could be had: the tree is
+  chopped by hand), :continue while the fetch waits on the world."
   [c logs]
   (when (axe-wanted? c logs)
     (when-let [opts (axe-fetch-opts c (:axe-failed (ctx/mem c)))]
@@ -264,7 +263,6 @@
           (= :continue e) :continue
           (= :done (:kind e)) nil
           :else (do (ctx/update-mem! c #(cond-> (assoc % :axe-failed true) (:axe-failed %) (assoc :axe-retried true)))
-                    (ctx/emit! c :fetch.failed :warn {:reason (contract/cause-key e) :text "no axe could be had; chopping by hand"})
                     nil))))))
 
 (defn axe-status
