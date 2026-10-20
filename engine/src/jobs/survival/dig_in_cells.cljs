@@ -8,7 +8,6 @@
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.seal :as seal]
             [jobs.lib.land :as land]
-            [jobs.lib.ledger :as ledger]
             [engine.ctx :as ctx]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -155,15 +154,6 @@
         both (first (filter #(contains? placed (at % 1)) feet-placed))
         side (or both (first feet-placed))]
     (when side [(at side 0) (at side 1)])))
-
-(defn note-placed!
-  "Job memory: cell is a placed cell, and one more of item is spent (:spent {item count}, which the sealed event reports).
-  The block also goes to the scaffold ledger (purpose :shelter) for go-to's goal-enclosed clearing and recover-drops."
-  [c cell item]
-  (let [at (if (map? cell) [(:x cell) (:y cell) (:z cell)] (vec cell))]
-    (ledger/remember! c (-> (ledger/intend (ledger/open-entries (ctx/view c)) {:cell at :item item :before "air" :job (:id c) :purpose :shelter})
-                            (ledger/confirm at))))
-  (ctx/update-mem! c #(-> % (update :placed (fnil conj #{}) cell) (assoc-in [:placed-items cell] item) (update-in [:spent item] (fnil inc 0)))))
 
 (defn sealed-in?
   "Whether the world shows the body shut in: a roof within roof-height above (a solid block, or a cell that stops a mob,

@@ -19,9 +19,7 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.solid :as solid]
-            [jobs.lib.util :as u]
-            [jobs.lib.seal :as seal]
-            [jobs.survival.dig-in-cells :as dig-cells]))
+            [jobs.lib.util :as u]))
 
 (def doc
   "Stop a ranged mob's arrows at a gap in the body's cover: a doorway, window or hole a skeleton (or the like) has a
@@ -29,7 +27,7 @@
   arrows' line (jobs.lib.reach/line-of-fire?: from the mob's eye to the body's eye and its middle), the cell nearest
   the body first, one that ends the line alone before one that blocks half of it. A mob that was only heard is
   taken at the rough spot its direction and band give (jobs.lib.danger/mob-pos). A door, gate or trapdoor standing
-  open in the way is shut, not walled over (jobs.lib.seal/shut-open!).
+  open in the way is shut, not walled over (jobs.blocks.fill-cells :shut-open).
   Done at once when no ranged mob within the danger ranged radius (jobs.lib.danger/::ranged-radius) has a line of fire. With no cell to fill it looks around once (yielding
   :continue) before it ends :no-gap, for cells it has not seen yet.
   The blocks are the call's :use :blocks (default the carried shelter fillers, jobs.lib.choose/fillers).
@@ -138,18 +136,16 @@
       :else (contract/with-because (fail! c :no-blocks "no block to stop the arrows with") e))))
 
 (defn ^:async fill-gap!
-  "Close one gap cell: an open door, gate or trapdoor is shut, anything else filled with item by a jobs.blocks.fill-cells
-  child (loose things in it dug first). :ok, or why not (:continue while the child waits)."
+  "Close one gap cell with item through a jobs.blocks.fill-cells child, in place: an open door, gate or trapdoor is shut,
+  loose things in it dug first, a block placed is ledgered as :shelter. :ok, or why not (:continue while the child waits)."
   [c cell item]
-  (let [door (await (seal/shut-open! c cell))]
-    (if door
-      (do (when (= :open door) (ctx/update-mem! c update :occupied (fnil conj #{}) cell)) :ok)
-      (let [e (waits/waiting-out c (await (ctx/call c :fill 'jobs.blocks.fill-cells
-                               {:cells [cell] :use {:blocks [item]} :least 1 :clear-loose true :ignore-zones? true})))]
-        (cond
-          (= :continue e) :continue
-          (= :done (:kind e)) (do (dig-cells/note-placed! c cell item) :ok)
-          :else (or (get-in e [:cause :reason]) :failed))))))
+  (let [e (waits/waiting-out c (await (ctx/call c :fill 'jobs.blocks.fill-cells
+                                                {:cells [cell] :use {:blocks [item]} :least 1 :clear-loose true :shut-open true
+                                                 :in-place true :purpose :shelter :ignore-zones? true})))]
+    (cond
+      (= :continue e) :continue
+      (= :done (:kind e)) (do (ctx/update-mem! c update :placed (fnil into #{}) (map (comp u/cell-pos :cell) (get-in e [:data :placed]))) :ok)
+      :else (or (get-in e [:cause :reason]) :failed))))
 
 (defn ^:async step
   "One cell: :again, or :continue while it fetches a block. With no line of fire left it gives :again, and the goal check ends the job."
