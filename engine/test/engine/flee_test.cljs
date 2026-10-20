@@ -427,25 +427,25 @@
             (is (= want @out) (str "go-to " label))))))))
 
 (defn fighter
-  "A job that runs a fight whose attack child declines with struck, after a sweep already counted; keeps the memory's sweeps."
-  [out]
+  "A job that runs a fight whose attack child declines, after a sweep already counted and with the child's earlier hits in memory; keeps the memory's sweeps."
+  [out before]
   {:defaults {:checks {:safe? '(always) :fit? '(always)}}
    :round (fn ^:async fighter-round [c]
-            (ctx/update-mem! c assoc :sweeps 1)
+            (ctx/update-mem! c assoc :sweeps 1 :children {:cornered {:hits before}})
             (reset! out [(await (cornered/fight! c [] false)) (:sweeps (ctx/mem c))])
             (ctx/end c :done nil))})
 
-(deftest a-fight-that-landed-hits-before-it-gave-up-resets-the-sweeps
+(deftest a-fight-that-landed-new-hits-resets-the-sweeps
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[struck want] [[{1 {:name "zombie" :hits 2}} 0] [{1 {:name "zombie" :hits 0}} 1]]]
+        (doseq [[before after want] [[{} {1 2} 0] [{1 2} {1 2} 1] [{1 2} {1 3} 0]]]
           (let [out (atom nil)
                 s (setup {:entities [(zombie 7 2 {})]})
-                s (update-in (assoc-in s [:eng :jobs 'fighter] (fighter out)) [:eng :jobs] merge
-                             {'jobs.combat.attack {:round (fn ^:async declined [c] (ctx/end c :nothing-possible :unreachable {:struck struck}))}})]
+                s (update-in (assoc-in s [:eng :jobs 'fighter] (fighter out before)) [:eng :jobs] merge
+                             {'jobs.combat.attack {:round (fn ^:async declined [c] (ctx/end c :nothing-possible :unreachable {:memory {:hits after} :struck (into {} (for [[id n] after] [id {:name "zombie" :hits n}]))}))}})]
             (await (run-job! s 'fighter {}))
-            (is (= [nil want] @out) (str "struck " struck))))))))
+            (is (= [nil want] @out) (str before " -> " after))))))))
 
 (defn stepper
   "A job that takes one flee step to a fixed cell and keeps the refused ends the flight remembers."
