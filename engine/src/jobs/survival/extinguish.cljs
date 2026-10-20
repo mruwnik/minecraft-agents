@@ -346,7 +346,7 @@
         waits (inc (:stand-waits (ctx/mem c) 0))]
     (ctx/update-mem! c assoc :stand-waits waits)
     (when (and (eat/carried-best c) (< (.-food (.self p)) (eat-below)))
-      (await (child/run!* c :eat 'jobs.survival.eat {:until (eat-below) :max-bites 1})))
+      (await (child/run!* c :eat 'jobs.survival.eat {:until (eat-below) :max-bites 1 :fetch false})))
     (await (burning-wait! c (stand-wait-ms)))
     (cond
       (clear? c) :done

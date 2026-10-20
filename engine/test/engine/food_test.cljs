@@ -343,9 +343,18 @@
 (deftest eat-declines-without-edible-food
   (let [{:keys [eng p]} (setup {:self {:food 4} :inventory [{:name "rotten_flesh" :count 2} {:name "spider_eye" :count 1}
                                                             {:name "cobblestone" :count 9}]})]
-    (core/submit! eng '(jobs.survival.eat) {})
+    (core/submit! eng '(jobs.survival.eat {:fetch false}) {})
     (is (nil? (core/tick! eng)) "the check declines")
     (is (= [] (calls p "eat")))))
+
+(deftest eat-with-nothing-carried-fetches-through-get-food
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:food 4} :inventory []})]
+          (core/submit! eng '(jobs.survival.eat) {})
+          (await (core/tick! eng))
+          (is (some #(and (= :child_started (:kind %)) (= :fetch (:slot %))) @seen) "get-food runs as the fetch child"))))))
 
 (deftest eat-when-fed-is-done-without-eating
   (async done
@@ -412,7 +421,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:self {:food 4 :health 20} :inventory [{:name "golden_apple" :count 1}]})]
-          (core/submit! eng '(jobs.survival.eat) {})
+          (core/submit! eng '(jobs.survival.eat {:fetch false}) {})
           (is (nil? (core/tick! eng)) "healthy and unnamed: not eaten")
           (is (= [] (calls p "eat"))))
         (let [{:keys [eng p]} (setup {:self {:food 4 :health 20} :inventory [{:name "golden_apple" :count 1}]})]

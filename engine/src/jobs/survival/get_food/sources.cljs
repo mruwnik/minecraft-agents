@@ -111,6 +111,12 @@
          (filter #(<= (u/dist here (box-middle %)) (settings/get settings ::source-radius)))
          (sort-by #(u/dist here (box-middle %))))))
 
+(defn box-around
+  "The [min max] cells of the own zone or plan footprint that holds pos, else nil."
+  [c pos]
+  (let [cell (mapv #(js/Math.floor %) [(:x pos) (:y pos) (:z pos)])]
+    (first (filter (fn [[lo hi]] (every? true? (map (fn [v a b] (<= a v b)) cell lo hi))) (own-boxes c ::none)))))
+
 (defn own-areas
   "The middles {:x :y :z} of own-boxes."
   [c]

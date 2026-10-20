@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
+            [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
             [jobs.lib.foods :as foods]
             [jobs.lib.reserve :as reserve]
@@ -17,8 +18,9 @@
   Harmful foods (rotten flesh, spider eyes, pufferfish, poisonous potatoes, raw chicken) need :allow-bad.
   An unnamed meal leaves one of each seed a noted dug crop needs for the tidy-up (jobs.lib.tidy) until food is nearly starving.
   Golden apples are eaten only when named or at low health. Chorus fruit and suspicious stew only when named.
-  Done? means fed (food at :until): a fed body ends done without eating. Hungry, it needs an edible food carried, else
-  condition-failed :no-food (a listed job waits). A named item that is not food, or is harmful without :allow-bad, is
+  Done? means fed (food at :until): a fed body ends done without eating. Hungry with no edible food carried, it fetches
+  through get-food (a child, :food :until; :fetch false: not), else condition-failed :no-food (a listed job waits);
+  a fetch that brought none ends condition-failed :no-food with the get-food ending as its because. A named item that is not food, or is harmful without :allow-bad, is
   impossible :not-food or :bad-food (the cause's :text says why).
   Ends :done with {:ate bites} when food reached :until or :max-bites were eaten; nothing-possible :out-of-food when the
   food ran out after a bite short of :until; a failed bite ends nothing-possible :eat-failed with {:ate bites}.
@@ -33,7 +35,8 @@
   {:item {:doc "the food to eat; the best carried when nil" :spec a/item? :default nil}
    :until {:doc "keep eating while food is below this (of 20)" :spec (a/num-in 0 nil) :default 18}
    :max-bites {:doc "eat at most this many bites; unlimited when nil" :spec (a/int-in 1 nil) :default nil}
-   :allow-bad {:doc "also eat the harmful foods when nothing else is carried" :spec boolean? :default false}})
+   :allow-bad {:doc "also eat the harmful foods when nothing else is carried" :spec boolean? :default false}
+   :fetch {:doc "with no edible food carried and the body hungry, get some with jobs.survival.get-food first; false: end :no-food at once (reflexes that only eat what is carried)" :spec boolean? :default true}})
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
@@ -115,7 +118,10 @@
     (checks/goal (and (nil? (refusal c)) (zero? left)) [:fed "ate up to the wanted food"] [:hungry (str left " food points to eat")]
                  {:units :food :left left})))
 
-(defn no-food [c] (if (carried-best c) (contract/ok :food "food carried") (contract/later :no-food "no edible food carried")))
+(defn no-food [c]
+  (cond (carried-best c) (contract/ok :food "food carried")
+        (:fetch (:args c)) (contract/ok :food "no food carried: get-food fetches it")
+        :else (contract/later :no-food "no edible food carried")))
 
 (def can-start? (cond/and bad-item no-food))
 
@@ -141,7 +147,14 @@
         (cond
           (not (ctx/alive? c)) :continue
           (or (>= (food-of c) until) (and max-bites (>= bites max-bites))) (ctx/end c :done nil {:ate bites})
-          (nil? best) (if (pos? bites) (ctx/end c :nothing-possible :out-of-food {:ate bites}) (ctx/end c :condition-failed :no-food {:ate 0}))
+          (nil? best) (cond
+                        (pos? bites) (ctx/end c :nothing-possible :out-of-food {:ate bites})
+                        (:fetch (:args c)) (let [e (await (child/run!* c :fetch 'jobs.survival.get-food {:food until}))]
+                                             (cond
+                                               (= :continue e) :continue
+                                               (carried-best c) (recur bites)
+                                               :else (contract/with-because (ctx/end c :condition-failed :no-food {:ate 0}) e)))
+                        :else (ctx/end c :condition-failed :no-food {:ate 0}))
           :else
           (let [_ (await (ctx/act c :equip #js {:item best}))
                 r (await (ctx/act c :eat #js {:item best}))]

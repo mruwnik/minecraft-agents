@@ -1,0 +1,22 @@
+;; survival.eat with no food carried fetches through get-food: it hunts and eats, where it used to end :no-food.
+;; Hunger is drained by RCON (food 9-10), hp 15; only a sword is carried.
+;; Should-succeed: 3 cows in the open: one is killed as surplus and eaten (eat completes).
+;; Should-fail: :fetch false: eat ends :no-food, all 3 cows stay.
+{:defaults
+ {:tags [:survival :eat :get-food]
+  :plot {:height 6}
+  :body {:at [4.5 0 16.5] :inventory [["iron_sword" 1]] :settle-s 2}
+  :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+        [:rcon "damage $BODY 5 minecraft:generic"]
+        [:summon "cow" [24.5 0 24.5] "{NoAI:1b}"] [:summon "cow" [25.5 0 24.5] "{NoAI:1b}"] [:summon "cow" [24.5 0 25.5] "{NoAI:1b}"]]
+  :limit-s 120}
+ :cases
+ [{:name "eat-with-no-food-hunts-through-get-food"
+   :act [[:job (jobs.survival.eat {})]]
+   :expect [{:event {:source :job :kind :food.killed :data {:rule :surplus}} :within-s 100}
+            {:event {:source :job :kind :completed} :within-s 110 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]]}
+  {:name "eat-fetch-false-ends-no-food"
+   :act [[:job (jobs.survival.eat {:fetch false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 30}]
+   :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 3]]}]}

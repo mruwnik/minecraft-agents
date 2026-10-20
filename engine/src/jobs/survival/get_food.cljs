@@ -13,6 +13,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
             [jobs.lib.foods :as foods]
+            [jobs.lib.animal-spare :as spare]
             [jobs.lib.reserve :as reserve]
             [jobs.survival.eat :as eat]
             [jobs.survival.get-food.animals :as animals]
@@ -39,12 +40,12 @@
          :animals: hunt there (:hunt).
          A chest found empty or a source go-to cannot reach is forgotten; a farm with nothing ripe is passed over.
   :collect  Harvest items lying within 8 blocks (collect-drops).
-  :hunt  The nearest passive food animal within ::hunt-radius (combat.attack, then collect-drops).
+  :hunt  The nearest passive food animal within ::hunt-radius (combat.hunt over the animal's kind, which collects its drops).
   :crops  Mature crops, sweet berry bushes or melons within ::hunt-radius (blocks.dig).
   :fish  Nothing left: with a fishing rod carried, once per job it fishes two (jobs.food.fish, which looks for a bank beside water within ::fish-radius (48)) and eats or cooks them.
   :pen   The surplus of its own pens: an animal in a zone or plan of its own in sight, else it walks (go-to) to the
-         nearest zone or plan of its own within ::source-radius it has not visited in this job and hunts there (the
-         same keep rules; the kill's rule is :own-pen). Its stock is its reserve: taken after the wild food in reach, before fishing and the search.
+         nearest zone or plan of its own within ::source-radius it has not visited in this job and culls there (animals.cull over its box, keeping
+         the pair; the kill's rule is :own-pen). Its stock is its reserve: taken after the wild food in reach, before fishing and the search.
   :field Last: it walks to the nearest zone or plan of its own it has not visited in this job and cuts and replants the ripe wheat there
          (jobs.farm.harvest); the wheat is baked next (:bake).
   Then, once per job (:explore, default on; a starving body again after foods/::starving-rest-ms) it searches for food animals and crops (jobs.explore.search, the
@@ -62,7 +63,7 @@
   danger (jobs.lib.cost/route-danger) is its health or more; with nothing else to try it writes a :food-too-dangerous entry (no :hungry) and ends condition-failed
   :too-dangerous; the hungry trigger then rests (its :rest-s) while the body stays fragile
   (jobs.survival.get-food.risk). Not shut in a shelter, it first looks around from where it stands (once per place) so hostiles outside its view count.
-  Wheat is cut only by :field, in a zone or plan of its own. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own (but for the :pen way) or inside a closed enclosure (::spare-pens), kinds in ::off-limits, and the last ::keep-adults (2) adults of a kind in sight (for breeding; never hunted, even when starving, unless ::kept-lifted-below lifts it) are never hunted (:ignore-zones? lifts the others' zone only). Each animal attacked is a food.killed info with its name, cell, adults counted, :keep, food and the rule that allowed it; the data carries :killed. A chest in another's zone or claim is skipped and never taken from, even when starving
+  Wheat is cut only by :field, in a zone or plan of its own. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own (but for the :pen way) or inside a closed enclosure (::spare-pens), kinds in ::off-limits, and the last ::keep-adults (2) adults of a kind in sight (for breeding; never hunted, even when starving, unless ::kept-lifted-below lifts it) are never hunted (:ignore-zones? lifts the others' zone only). Each animal chosen is a food.killed info with its name, cell, adults counted, :keep, food and the rule that allowed it; the data carries :killed. A chest in another's zone or claim is skipped and never taken from, even when starving
   (one get-food.skipped warning). A crop in another's zone or claim is dug only when no other is (one
   get-food.trespass-last-resort warning). :ignore-zones? lifts both.
   A cut call starts again from the world: carried food first, then the ways.
@@ -167,10 +168,32 @@
   [c own?]
   (some? (animals/nearest c (animal-opts c own?))))
 
+(defn starved?
+  "Food at the ::kept-lifted-below line or less with no food carried: the last adults of a kind may go too."
+  [c]
+  (let [self (.self (:primitives c))]
+    (and (<= (.-food self) (settings/get settings ::kept-lifted-below)) (not (foods/carries-food? self)))))
+
+(defn keep-for
+  "Adults of the kind the kill leaves alive: the spare rule's keep, none when starved."
+  [c]
+  (if (starved? c) 0 (spare/keep-adults)))
+
+(defn kill-job
+  "The real job and args that kill the food animal of target: animals.cull over the own pen it stands in (own?), else combat.hunt."
+  [c own? {animal :entity}]
+  (let [common {:mob (.-name animal) :count 1 :keep (keep-for c) :spend {:job-time 60}
+                :checks {:safe? '(job-safe-or-starving) :fit? '(always)}}
+        pos (u/pos-of (.-pos animal))
+        box (when own? (sources/box-around c pos))]
+    (if own?
+      ['jobs.animals.cull (cond-> (assoc common :radius 8 :center (select-keys pos [:x :z]))
+                            box (-> (dissoc :radius :center) (assoc :box {:min (zipmap [:x :y :z] (first box)) :max (zipmap [:x :y :z] (second box))})))]
+      ['jobs.combat.hunt (assoc common :radius (hunt-radius c) :fetch false)])))
+
 (defn ^:async hunt!
-  "Kill the nearest food animal (combat.attack; own?: its own pens' too, see animals/in-sight) and pick up its drops:
-  :again, or nil when there is none (after a look around) or the walk to it is refused (risk). An animal is attacked
-  once per job, killed or not."
+  "Kill the nearest food animal with the real job (combat.hunt; own?: animals.cull over its own pen): :again, or nil when
+  there is none (after a look around) or the walk to it is refused (risk). An animal is chosen once per job, killed or not."
   [c own?]
   (let [target (await (animals/nearest-or-look c (animal-opts c own?)))
         animal (:entity target)]
@@ -179,15 +202,13 @@
       (nil? target) nil
       (risk/refused? c (u/pos-of (.-pos animal))) nil
       :else
-      (let [e (await (child/run!* c :attack 'jobs.combat.attack
-                                  {:targets [(.-id animal)] :radius (hunt-radius c)
-                                   :spend {:job-time 60}
-                                   :checks {:safe? '(job-safe-or-starving)}}))]
+      (let [[job args] (kill-job c own? target)
+            e (await (child/run!* c :kill job args))]
         (if (= :continue e)
           :continue
           (do (ctx/update-mem! c update :skipped-animals (fnil conj []) (.-id animal))
               (animals/note-kill! c target)
-              (or (await (collect-drops! c (drop-radius))) :again)))))))
+              :again))))))
 
 ;; ------------------------------------------------------------------ bread
 
@@ -369,7 +390,7 @@
   (when (and (<= (food-level c) (eat-bad-food))
              (some #(contains? foods/harmful (:name %)) (u/inventory (:primitives c))))
     (let [before (food-level c)
-          e (await (child/run!* c :eat-bad 'jobs.survival.eat {:until foods/top-up-food :allow-bad true}))]
+          e (await (child/run!* c :eat-bad 'jobs.survival.eat {:until foods/top-up-food :allow-bad true :fetch false}))]
       (if (= :continue e) :continue (when (> (food-level c) before) :again)))))
 
 (defn ^:async eat-carried!
@@ -377,7 +398,7 @@
   going after the call cap, else nil."
   [c]
   (let [low? (< (.-health (.self (:primitives c))) (:health (:args c)))
-        e (await (child/run!* c :eat 'jobs.survival.eat {:until (if low? 20 foods/top-up-food)}))]
+        e (await (child/run!* c :eat 'jobs.survival.eat {:until (if low? 20 foods/top-up-food) :fetch false}))]
     (when (= :continue e) :continue)))
 
 
