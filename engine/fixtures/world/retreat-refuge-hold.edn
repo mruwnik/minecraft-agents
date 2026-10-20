@@ -90,9 +90,9 @@
             {:count-event {:source :body :kind :hurt :data {:causes [:has "zombie"]}} :for-s 60 :at-most 6}]
    :limit-s 70}
   {:name "zombie-coming-at-a-body-in-a-pit-with-4-dirt-seals-it"
-   :blocks [[:fill [0 0 0] [31 2 31] "stone"] [:fill [16 1 16] [16 2 16] "air"]]
+   :blocks [[:fill [0 0 0] [31 2 31] "stone"] [:fill [16 1 16] [16 2 16] "air"] [:set [15 3 16] "stone"]]
    :body {:at [16.5 1 16.5] :inventory [["dirt" 4]] :effects [["resistance" 900 1]]}
-   :act [[:summon "zombie" [20.5 3 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:summon "zombie" [19.5 3 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :retreat_sealed} :within-s 60}
             {:no-event {:source :body :kind :died} :for-s 60}]
    :after [[:block [16 3 16] "dirt"]]

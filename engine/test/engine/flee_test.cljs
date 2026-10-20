@@ -426,6 +426,27 @@
             (await (run-job! s 'backer {}))
             (is (= want @out) (str "go-to " label))))))))
 
+(defn fighter
+  "A job that runs a fight whose attack child declines with struck, after a sweep already counted; keeps the memory's sweeps."
+  [out]
+  {:defaults {:checks {:safe? '(always) :fit? '(always)}}
+   :round (fn ^:async fighter-round [c]
+            (ctx/update-mem! c assoc :sweeps 1)
+            (reset! out [(await (cornered/fight! c [] false)) (:sweeps (ctx/mem c))])
+            (ctx/end c :done nil))})
+
+(deftest a-fight-that-landed-hits-before-it-gave-up-resets-the-sweeps
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[struck want] [[{1 {:name "zombie" :hits 2}} 0] [{1 {:name "zombie" :hits 0}} 1]]]
+          (let [out (atom nil)
+                s (setup {:entities [(zombie 7 2 {})]})
+                s (update-in (assoc-in s [:eng :jobs 'fighter] (fighter out)) [:eng :jobs] merge
+                             {'jobs.combat.attack {:round (fn ^:async declined [c] (ctx/end c :nothing-possible :unreachable {:struck struck}))}})]
+            (await (run-job! s 'fighter {}))
+            (is (= [nil want] @out) (str "struck " struck))))))))
+
 (defn stepper
   "A job that takes one flee step to a fixed cell and keeps the refused ends the flight remembers."
   [out]

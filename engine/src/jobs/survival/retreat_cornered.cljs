@@ -75,7 +75,7 @@
 (defn ^:async fight!
   "Fight back with the best of weapons (the fist when none is carried) whatever
   the health, kept while the hostile stays close: :again, nil when the fight
-  cannot reach any hostile (the option failed this flight). reach-only?: only a hostile within hit-reach is
+  cannot reach any hostile (the option failed this flight; hits it landed first reset the sweep count). reach-only?: only a hostile within hit-reach is
   swung at, none walked to. A fight that ends other than done keeps its memory (its given-up counts) for the next."
   [c weapons reach-only?]
   (let [radius (danger-q/radius-in (:args c))
@@ -92,6 +92,8 @@
       (if (and ended (not= :done (:kind ended)))
         (do (when-let [m (:memory (:data ended))] (ctx/update-mem! c assoc-in [:children :cornered] (dissoc m :start)))
             (flight/tried! c :fight)
+            (when (some pos? (map :hits (vals (:struck (:data ended)))))
+              (ctx/update-mem! c assoc :sweeps 0))
             nil)
         :again))))
 
