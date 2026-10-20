@@ -8,6 +8,7 @@ import { SafeMovements } from './movements.mjs'
 import { fixDigMaterials } from './dig-materials.mjs'
 import { MC_VERSION } from './path/snapshot.mjs'
 import { tickRatePhysics } from './tick-rate-physics.mjs'
+import { installLazyChunks } from './lazy-chunk.mjs'
 
 const { pathfinder } = pf
 
@@ -31,6 +32,7 @@ export function botOptions ({ host, port, username, auth = DEFAULTS.auth, versio
 // `create` replaces mineflayer.createBot (tests).
 export function connectBot (params, { timeoutMs = SPAWN_TIMEOUT_MS, create = mineflayer.createBot } = {}) {
   return new Promise((resolve, reject) => {
+    installLazyChunks()
     const bot = create(botOptions(params))
     params.gameClock?.attach(bot._client)
     bot.loadPlugin(pathfinder)
