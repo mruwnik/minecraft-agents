@@ -225,8 +225,8 @@
     :continue))
 
 (defn ^:async toggle-gate!
-  [c state next reach then]
-  (let [e (await (ctx/call c :gate 'jobs.access.toggle {:pos (:gate (ctx/mem c)) :state state :reach reach}))]
+  [c state next then]
+  (let [e (await (ctx/call c :gate 'jobs.access.toggle {:pos (:gate (ctx/mem c)) :state state}))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e))
@@ -236,14 +236,14 @@
       :else (shut-failed! c))))
 
 (defn ^:async set-gate!
-  "Put the gate into state (:open or :closed) with jobs.access.toggle (within :reach), then go to phase next, merging
+  "Put the gate into state (:open or :closed) with jobs.access.toggle, then go to phase next, merging
   :then into the memory; :gate-stuck when it did not open, shut-failed! when it did not shut. The :gate-held entry is
   written before an open and dropped after a shut. A shut with the body in the gate cell first walks out of it."
-  [c state next & [{:keys [reach then] :or {reach 3}}]]
+  [c state next & [{:keys [then]}]]
   (when (= :open state) (hold-gate! c))
   (if (and (= :closed state) (click/standing-in? (u/self-pos c) (u/cell-pos (gate-cell c)) nil))
     (await (step-out-of-gate! c))
-    (await (toggle-gate! c state next reach then))))
+    (await (toggle-gate! c state next then))))
 
 (defn outside-gate?
   "True when pos {:x :z} stands past the gate cell g on the side away from the pen cell in beside it (along the axis)."
@@ -384,10 +384,10 @@
     :else (await (look-wait! c))))
 
 (defn ^:async shut-when-clear!
-  "Shut the gate (:closed within reach, then to phase next with then) while no adult of :mob overlaps its cell, never
+  "Shut the gate (:closed, then to phase next with then) while no adult of :mob overlaps its cell, never
   while one does: looks every 500 ms, then (on-crowded) after limit-ms."
-  [c reach limit-ms next then on-crowded]
+  [c limit-ms next then on-crowded]
   (cond
-    (not (on-gate? c)) (await (set-gate! c :closed next {:reach reach :then then}))
+    (not (on-gate? c)) (await (set-gate! c :closed next {:then then}))
     (>= (waited-ms c) limit-ms) (await (on-crowded))
     :else (await (look-wait! c))))

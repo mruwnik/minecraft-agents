@@ -468,19 +468,6 @@
       (fn ^:async t []
         (await (brought-and-shut-up "two cows" {:target 2} {:entities [(lazy-cow 1 3 5) (lazy-cow 2 4 1)]} 900))))))
 
-(defn far-shut-clicks!
-  "Make the fake answer a shut click from 4 or more cells along the axis out of reach, as the live game does for a
-  body that stops short of the middle of in-4 (eye to gate centre 4.5 and more). Returns the atom of those refusals."
-  [{:keys [p] :as s}]
-  (let [refused (atom 0)]
-    (.override (.-world p) "useOn"
-               (fn [token args impl]
-                 (if (and (gate-open? s) (>= (- (self-x s) 10) 4))
-                   (do (swap! refused inc)
-                       (js/Promise.resolve #js {:status "unreachable" :reason "too-far" :distance 4.53}))
-                   (impl token args))))
-    refused))
-
 (defn refuse-shuts-from!
   "Every gate click is refused out of reach while the gate is open and the body stands at x or beyond."
   [s x]
@@ -489,20 +476,6 @@
                (if (and (gate-open? s) (>= (self-x s) x))
                  (js/Promise.resolve #js {:status "unreachable" :reason "too-far" :distance 4.6})
                  (impl token args)))))
-
-(deftest a-shut-click-out-of-reach-from-in-4-walks-closer-and-shuts
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (submit! (setup (world {:entities [(cow 1 4 3)]})) {:target 1})
-              refused (far-shut-clicks! s)]
-          (await (run-ticks s 400))
-          (let [e (done-event s)]
-            (is (pos? @refused) "the click from in-4 was refused")
-            (is (= :brought (:reason e)))
-            (is (in-pen? (cow-of s 1)))
-            (is (< (self-x s) 10) "the body ends outside")
-            (is (not (gate-open? s)))))))))
 
 (deftest a-gate-that-will-not-shut-from-inside-is-shut-from-outside-the-body-never-ends-in-the-pen
   (async done

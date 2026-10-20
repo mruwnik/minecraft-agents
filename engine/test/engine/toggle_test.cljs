@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.settings :as settings]
             [engine.expr :as expr]
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
@@ -293,7 +294,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (world "oak_fence_gate" {:open true} 3 4))
               clicks (too-far-first! p 1)
-              result (await (child-outcome eng job {:pos at :state :closed :reach 4} 60))]
+              result (await (settings/with-settings {::toggle/reach 4} #(child-outcome eng job {:pos at :state :closed} 60)))]
           (is (= {:status :done :reason :changed} (head result [:status :reason])))
           (is (false? (:open (props p at))))
           (is (= 2 @clicks) "one click out of reach, one after the walk closer")
@@ -306,7 +307,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (world "oak_fence_gate" {:open true} 3 4))
               clicks (too-far-first! p 1)
-              result (await (child-outcome eng job {:pos at :state :closed :reach 4} 1))]
+              result (await (settings/with-settings {::toggle/reach 4} #(child-outcome eng job {:pos at :state :closed} 1)))]
           (is (= {:status :done :reason :changed} (head result [:status :reason])))
           (is (= 2 @clicks)))))))
 
@@ -316,14 +317,14 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup (world "oak_fence_gate" {:open true} 3 4))
               clicks (too-far-first! p 99)
-              result (await (child-outcome eng job {:pos at :state :closed :reach 4} 80))]
+              result (await (settings/with-settings {::toggle/reach 4} #(child-outcome eng job {:pos at :state :closed} 80)))]
           (is (= {:status :stopped :reason :unreachable} (head result [:status :reason])))
           (is (= 3 @clicks) "the first click and one after each of two walks closer"))))))
 
 (deftest the-job-is-registered-with-doc-and-args
   (let [j (get registry/jobs job)]
     (is (string? (:doc j)))
-    (is (= 3 (get-in j [:args :reach :default])))
+    (is (= 3 (settings/get toggle/settings ::toggle/reach)))
     (is (some? toggle/doc))))
 
 ;; ------------------------------------------------------------------ a dark block read back after the click
@@ -340,7 +341,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup (world "lever" {:powered false} 3 4))
               _ (make-dark p at)
-              result (await (child-outcome eng job {:pos at :state :on :reach 5} 40))]
+              result (await (settings/with-settings {::toggle/reach 5} #(child-outcome eng job {:pos at :state :on} 40)))]
           (is (= {:status :done :reason :changed} (head result [:status :reason])) (pr-str result))
           (is (true? (:powered (props p at)))))))))
 

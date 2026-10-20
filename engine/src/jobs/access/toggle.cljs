@@ -3,7 +3,6 @@
             [engine.args :as a]
             [jobs.lib.ready :as ready]
             [jobs.lib.click :as click]
-            [jobs.lib.solid :as solid]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [engine.contract :as contract]
@@ -12,6 +11,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.step-off :as step-off]
             [jobs.lib.places :as places]))
 
 (def doc
@@ -27,7 +27,7 @@
   Iron doors and iron trapdoors ignore a hand (:needs-redstone). Any other block is :not-toggleable. A state the
   block cannot have is :bad-state with :valid. Zones and footprints do not apply, since no block type changes.
 
-  The body walks within :reach of the block (jobs.movement.go-to child with :doors :never, so the approach
+  The body walks within the ::reach setting (3) of the block (jobs.movement.go-to child with :doors :never, so the approach
   opens nothing). A walk that gives up is :unreachable. It then clicks once with the hand as it is (useOn with no
   item: what is held stays in hand) and reads the block again.
   A click the game answers out of reach (it measures from the eye to the block's middle) walks one cell closer
@@ -49,11 +49,11 @@
 
 (a/defargs args
   {:pos {:doc "the block, [x y z] or {:x :y :z}; either half of a door" :spec ::a/pos :default nil}
-   :state {:doc ":open or :closed (gate, door, trapdoor), :on or :off (lever), :press (button)" :spec (a/or-of #{:open :closed :on :off :press} #{"open" "closed" "on" "off" "press"}) :default nil}
-   :reach {:doc "walk until within this many cells of the block (the click reaches 4.5 from the eye)" :spec (a/num-in 0 nil) :default 3}})
+   :state {:doc ":open or :closed (gate, door, trapdoor), :on or :off (lever), :press (button)" :spec (a/or-of #{:open :closed :on :off :press} #{"open" "closed" "on" "off" "press"}) :default nil}})
 
 (a/defargs settings
-  {::job-time-s {:default 120 :doc "Seconds a toggle may take: the walk, the click and the walks closer." :spec (a/num-in 0 nil)}
+  {::reach {:default 3 :doc "Walk until within this many cells of the block (the click reaches 4.5 from the eye)." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 120 :doc "Seconds a toggle may take: the walk, the click and the walks closer." :spec (a/num-in 0 nil)}
    ::max-closer {:default 2 :doc "How often a click the game answers out of reach is followed by a walk one cell closer." :spec (a/int-in 0 nil)}})
 (defn max-closer [] (settings/get settings ::max-closer))
 (defn time-s [] (settings/get settings ::job-time-s))
@@ -163,7 +163,7 @@
 (defn reach
   "The reach the walk aims for now: :reach, less one for each walk closer after a click out of reach (at least 1)."
   [c]
-  (max 1 (- (:reach (:args c)) (:closer (ctx/mem c) 0))))
+  (max 1 (- (settings/get settings ::reach) (:closer (ctx/mem c) 0))))
 
 (defn closer!
   "The click was out of reach (the game measures from the eye to the block's middle, so a body that stopped at the
@@ -195,36 +195,15 @@
       (:arrived (:data r)) (do (ctx/update-mem! c assoc :arrived true) :again)
       :else (give-up! c :unreachable pos state (str "cannot walk within reach of " block " at " (pr-str pos)) {:block block}))))
 
-(defn free-sides
-  "The cells beside the body's own whose feet and head are open air and whose floor is a seen solid block."
-  [c]
-  (let [{:keys [x y z]} (u/self-pos c)
-        [bx by bz] (map #(js/Math.floor %) [x y z])
-        open? (fn [cx cy cz] (some-> (u/block-at (:primitives c) {:x cx :y cy :z cz}) .-name click/air?))]
-    (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
-          :when (and (open? (+ bx dx) by (+ bz dz)) (open? (+ bx dx) (inc by) (+ bz dz))
-                     (solid/solid? (some-> (u/block-at (:primitives c) {:x (+ bx dx) :y (dec by) :z (+ bz dz)}) .-name)))]
-      {:x (+ bx dx) :y by :z (+ bz dz)})))
-
-(defn ^:async look-sides!
-  "Turns the head to each side cell's floor that is not made out yet: the cone does not reach the floor beside a body
-  standing in the gate."
-  [c]
-  (let [{:keys [x y z]} (u/self-pos c)
-        [bx by bz] (map #(js/Math.floor %) [x y z])]
-    (doseq [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
-            :let [cell [(+ bx dx) (dec by) (+ bz dz)]]
-            :when (dig-look/unknown? (:primitives c) cell)]
-      (await (dig-look/look-at! c cell)))))
-
-(defn ^:async step-out! [c pos state block]
-  (let [_ (await (look-sides! c))
-        cell (first (free-sides c))
-        r (when cell (await (child/call-walk* c :walk {:pos cell :range 0 :doors :never :ways #{:walk :clear-seal}})))]
+(defn ^:async step-out!
+  "Step off the column the body stands in (jobs.lib.step-off, a cell beside it)."
+  [c pos state block]
+  (let [[x y z] (map #(js/Math.floor %) (let [{:keys [x y z]} (u/self-pos c)] [x y z]))
+        r (await (step-off/step-off-zoned! c {:x x :y y :z z} {:reach 1}))]
     (cond
       (= :continue r) :continue
-      (:arrived (:data r)) :again
-      :else (give-up! c :unreachable pos state (str "cannot step out of " block " at " (pr-str pos)) {:block block}))))
+      (= :arrived r) :again
+      :else (give-up! c :unreachable pos state (str "cannot step out of " block " at " (pr-str pos)) {:block block :why (:unreachable r)}))))
 
 (defn ^:async next!
   "One piece of the run: the step out of the closed door's column, the walk or the click. :again, :continue (a walk waits) or the ending."

@@ -247,7 +247,7 @@
       ;; the retry walks out and lines up again with the gate shut: out-1, the shut (an animal on the gate cell is
       ;; waited for, then the gate stays open), out-4
       :retry-back (await (go-then! c (axis-cell out-1) :retry-shut))
-      :retry-shut (await (shut-when-clear! c 3 (shut-look-ms) :retry-out nil #(set-phase! c :retry-out)))
+      :retry-shut (await (shut-when-clear! c (shut-look-ms) :retry-out nil #(set-phase! c :retry-out)))
       :retry-out (await (settle-at! c 0 (settle-out-ms) #(set-phase! c :line-up {:pos-index 1})))
       ;; the animal is clear of the gate cell: step back one cell and shut; one that stays on it is waited for, then
       ;; looked at once more from the deepest cell, else it is as good as pinned
@@ -258,7 +258,7 @@
                      :else (set-phase! c :shut-deepest {:deepest-tried true}))
       :shut-deepest (await (go-then! c (axis-cell deepest) :shut-behind))
       :shut-back (await (go-then! c (axis-cell (dec deepest)) :shut-click))
-      :shut-click (await (shut-when-clear! c 4 (shut-look-ms) :deep nil #(set-phase! c :shut-behind)))
+      :shut-click (await (shut-when-clear! c (shut-look-ms) :deep nil #(set-phase! c :shut-behind)))
       :deep (await (go-then! c (let-go-cell (:inside (read-pen c)) (gate-cell c) (cell (:inside-cell m))) :deep-release))
       :deep-release (await (release-step! c #(released! c :deep-unequip)))
       :deep-unequip (do (await (ctx/act c :unequip #js {})) (await (bait/put-food-away! c)) (set-phase! c :exit))
@@ -268,7 +268,7 @@
       :exit-dash (await (exit-dash! c))
       :exit-open (await (set-gate! c :open :exit-out))
       :exit-out (await (go-then! c (axis-cell out-1) :shut-out))
-      :shut-out (await (shut-when-clear! c 3 (exit-shut-ms) :shut-side nil
+      :shut-out (await (shut-when-clear! c (exit-shut-ms) :shut-side nil
                                          #(if (:stepped-back m)
                                             (shut-failed! c)
                                             (set-phase! c :shut-back-in {:stepped-back true}))))
@@ -284,7 +284,7 @@
                    (not (gate-open? c)) (after-shut! c)
                    (and (body-in-pen? c) (< (:leaves m 0) (max-leaves)))
                    (set-phase! c :exit {:leaves (inc (:leaves m 0)) :stepped-back false})
-                   :else (await (shut-when-clear! c 3 (shut-look-ms) :shut-gate nil #(shut-failed! c)))))))
+                   :else (await (shut-when-clear! c (shut-look-ms) :shut-gate nil #(shut-failed! c)))))))
 
 (defn ^:async step-once!
   "One step of the run: the lead looked at, the :gate-held entry kept fresh, then the phase's step."

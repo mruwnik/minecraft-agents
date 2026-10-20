@@ -1,6 +1,6 @@
 ;; Card 8b88794f: a click trusts its own result before the sight read-back, so a lever the body cannot make out (a dark room, 4 blocks off,
 ;; beyond the 2-block light rule) is still pulled: job.completed, not "no longer loaded". Sealed stone room x 8..24, z 8..24, roof y 4, no light.
-;; The lever sits on the east wall [23 0 16], the body 4 blocks west of it; :reach 5 keeps the body from walking closer.
+;; The lever sits on the east wall [23 0 16], the body 4 blocks west of it; the body walks within the reach setting (3) first.
 ;; Control: with a torch beside the lever it is seen and pulled the same way.
 {:defaults
  {:tags [:access :toggle :light] :time :any
@@ -11,11 +11,11 @@
  :cases
  [{:name "dark-lever-four-blocks-off-is-pulled"
    :blocks [[:set [22 0 16] "lever[face=wall,facing=west,powered=false]"]]
-   :act [[:job (jobs.access.toggle {:pos #at [22 0 16] :state :on :reach 5})]]
+   :act [[:job (jobs.access.toggle {:pos #at [22 0 16] :state :on})]]
    :expect [{:event {:source :job :kind :completed :data {:wanted :on}} :within-s 40 :of-job true}]
    :after [[:block [22 0 16] "lever[powered=true]"]]}
   {:name "lit-lever-is-pulled"
    :blocks [[:set [22 0 16] "lever[face=wall,facing=west,powered=false]"] [:set [22 0 14] "torch"] [:set [21 0 18] "torch"]]
-   :act [[:job (jobs.access.toggle {:pos #at [22 0 16] :state :on :reach 5})]]
+   :act [[:job (jobs.access.toggle {:pos #at [22 0 16] :state :on})]]
    :expect [{:event {:source :job :kind :completed :data {:wanted :on}} :within-s 40 :of-job true}]
    :after [[:block [22 0 16] "lever[powered=true]"]]}]}
