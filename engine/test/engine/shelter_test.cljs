@@ -1661,3 +1661,17 @@
           (await (run-until-empty eng 30))
           (is (seq (for [z (range 40) y [64 65] :when (re-find #"torch" (or (bd/block-at raw-p {:x 0 :y y :z z}) ""))] z)) "torches hung in the hall")
           (is (empty? (for [z (range 40) :when (= "dirt" (bd/block-at raw-p {:x 0 :y 64 :z z}))] z)) "no wall or pit"))))))
+
+
+(deftest a-sealed-dark-hall-is-not-lit-when-the-torches-carried-cannot-light-it-and-no-coal-makes-more
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [raw-p (tu/fake {:time night :blocks (box 1 40 false) :inventory [{:name "torch" :count 1} {:name "dirt" :count 64}] :drops {"torch" "torch"}})
+              _ (swap! (fake/state raw-p) assoc :light-default [0 0])
+              p (tu/seeing-all (perception/wrap raw-p (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})))
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now (constantly 1000000)
+                                :events (events/make {:body "Fake" :sinks [] :now (constantly 1000000)})})]
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (run-until-empty eng 30))
+          (is (empty? (for [z (range 40) y [64 65] :when (re-find #"torch" (or (bd/block-at raw-p {:x 0 :y y :z z}) ""))] z)) "one torch cannot light the hall: a wall or pit is quoted instead"))))))
