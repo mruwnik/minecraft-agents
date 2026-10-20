@@ -104,13 +104,14 @@
     (let [w (:w (wrapped {:entities es}))]
       (is (= [1 10] (mapv #(.-id ^js %) (.entities ^js w #js {:max 2})))))))
 
-(deftest a-body-senses-nothing-passive-behind-it
-  (let [es [(ent 1 "cow" "passive" 3.5) (ent 2 "cow" "passive" -2.5) (ent 3 "villager" "villager" -2.5)
-            (ent 4 "item" "item" 3.5) (ent 5 "item" "item" -2.5) (ent 6 "zombie" "hostile" -2.5)]
-        listed (vec (.entities ^js (:w (wrapped {:entities es})) #js {}))]
-    (is (= [1 4 5 6] (mapv #(.-id ^js %) listed)) "the cow and villager behind are dropped, items and hostiles stay")
-    (is (= [true false true] (mapv #(.-visible ^js %) (rest listed))) "an item behind is listed but not visible; a hostile keeps its line-only flag")
-    (is (= [2 3] (mapv #(.-id ^js %) (.unseenPassives ^js (:w (wrapped {:entities es})) #js {}))) "what is behind is the unseen input of hearing")))
+(deftest a-body-senses-nothing-passive-behind-it-out-of-earshot
+  (let [es [(ent 1 "cow" "passive" 3.5) (ent 2 "cow" "passive" -19.5) (ent 3 "villager" "villager" -19.5)
+            (ent 4 "item" "item" 3.5) (ent 5 "item" "item" -2.5) (ent 6 "cow" "passive" -2.5)]
+        w (:w (wrapped {:entities es}))
+        listed (vec (.entities ^js w #js {}))]
+    (is (= [1 4 5 6] (mapv #(.-id ^js %) listed)) "far behind: dropped; a cow behind within earshot is heard, so listed")
+    (is (= [true false] (mapv #(.-visible ^js %) (filter #(= "item" (.-kind ^js %)) listed))) "an item makes no sound: behind, listed but not visible")
+    (is (= [2 3] (mapv #(.-id ^js %) (.unseenPassives ^js w #js {}))) "what is behind and out of earshot is the unseen input of hearing")))
 
 (deftest sleep-preconditions-come-from-the-senses
   (let [flags (fn [self entities]

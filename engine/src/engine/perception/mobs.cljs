@@ -27,10 +27,22 @@
 
 (defn in-view-cone?
   "Whether a thing at pos (feet) is inside the view cone of eye (yaw, pitch; no look is yaw 0, pitch 0) with tangent
-  half-extents hx and hy. The one cone rule for mobs, items and what engine.senses lists."
+  half-extents hx and hy."
   [hx hy ^js eye ^js pos]
   (in-cone? (basis (or (.-yaw eye) 0) (or (.-pitch eye) 0)) hx hy
             (- (.-x pos) (.-x eye)) (- (+ (.-y pos) mob-middle) (.-y eye)) (- (.-z pos) (.-z eye))))
+
+(defn heard-at?
+  "Whether a thing at pos (feet) within hearing blocks of eye makes itself heard (not silent)."
+  [hearing ^js eye ^js pos silent?]
+  (and (not silent?)
+       (<= (js/Math.hypot (- (.-x pos) (.-x eye)) (- (+ (.-y pos) mob-middle) (.-y eye)) (- (.-z pos) (.-z eye))) hearing)))
+
+(defn faces-or-hears?
+  "The cone-or-sound rule of sensing one thing, shared by sense-thing and engine.senses: a thing in the view cone, or one
+  that sounds within hearing, is noticed whichever way the eye faces."
+  [hx hy hearing ^js eye ^js pos silent?]
+  (or (heard-at? hearing eye pos silent?) (in-view-cone? hx hy eye pos)))
 
 (defn sense-thing
   "How the body senses a thing at pos (feet) from eye, given whether a line from the eye to it is clear (`visible?`)
@@ -39,11 +51,11 @@
   [{:keys [opts grid] :as per} ^js eye ^js pos visible? silent?]
   (let [vx (- (.-x pos) (.-x eye)) vy (- (+ (.-y pos) mob-middle) (.-y eye)) vz (- (.-z pos) (.-z eye))
         d (js/Math.hypot vx vy vz)
-        heard? (and (<= d (:hearing opts)) (not silent?))
+        heard? (heard-at? (:hearing opts) eye pos silent?)
         seen? (and visible?
                    (<= d (:radius opts))
                    (or (<= d (near-of per)) (mob-lit? per pos))
-                   (or heard? (in-view-cone? (:hx grid) (:hy grid) eye pos)))]
+                   (faces-or-hears? (:hx grid) (:hy grid) (:hearing opts) eye pos silent?))]
     (cond seen? :seen heard? :heard :else nil)))
 
 (defn mob-sense

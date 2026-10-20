@@ -90,12 +90,14 @@
                               (sight-points e))))))
 
 (defn in-view?
-  "Whether the eye meets entity e as a player's eyes do: inside the view cone (the perception setting's fov and aspect)
-  and a clear line. A body cannot see what is behind it."
+  "Whether the eye meets entity e as a player's senses do: a clear line, and e in the view cone or sounding within hearing
+  (perception's fov, aspect and hearing settings, the rule of mobs/sense-thing). A passive mob behind the body and out of
+  earshot is not met."
   [^js raw ^js eye ^js e]
   (let [[hx hy] (rays/half-extents (settings/get perception/settings :engine.perception/fov)
-                                   (settings/get perception/settings :engine.perception/aspect))]
-    (and (mobs/in-view-cone? hx hy eye (.-pos e)) (can-see? raw eye e))))
+                                   (settings/get perception/settings :engine.perception/aspect))
+        hearing (settings/get perception/settings :engine.perception/hearing)]
+    (and (mobs/faces-or-hears? hx hy hearing eye (.-pos e) (= "item" (.-kind e))) (can-see? raw eye e))))
 
 (defn can-hit?
   "A melee swing needs a clear line from the eye to the feet, the middle or the head of the entity, over collision boxes."
