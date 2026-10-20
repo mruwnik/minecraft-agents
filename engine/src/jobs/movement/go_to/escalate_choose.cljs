@@ -113,11 +113,12 @@
   "[{:cell :block :guess}]: the cheapest cells to dig for a walk from feet cell from down or across into goal
   (jobs.lib.dig-route priced by jobs.lib.cost: a block's walk and dig-cost; at most the dig-route settings' digs and fall),
   in walking order, every one escape/diggable?, :guess on a cell not seen (read as rock); [] when nothing is left to
-  dig, nil when no such route or when its digging takes the body longer than max-route-s, with what it carries or
-  bare-handed (a player does not punch a tunnel through rock). A floor never seen under a cell seen open may be a void: dig-route reads it as no floor,
+  dig, nil when no such route or when its digging takes the body longer than max-route-s, with what it carries, or with
+  a wooden pickaxe when fetch? (the dig fetches one, fetch-tool?), else bare-handed (a player does not punch a tunnel through rock). A floor never seen under a cell seen open may be a void: dig-route reads it as no floor,
   unless floors-unseen-ok? (a pocket's floor shows only from inside it)."
-  ([p from goal may-dig? own?] (route-cells p from goal may-dig? own? false))
-  ([p from goal may-dig? own? floors-unseen-ok?]
+  ([p from goal may-dig? own?] (route-cells p from goal may-dig? own? false false))
+  ([p from goal may-dig? own? floors-unseen-ok?] (route-cells p from goal may-dig? own? floors-unseen-ok? false))
+  ([p from goal may-dig? own? floors-unseen-ok? fetch?]
   (let [block-at (escape/block-at-of p)
         seen-floor (fn [[x y z :as cell]]
                      (when-not (and (not floors-unseen-ok?) (dig-look/unknown? p cell) (dig-route/open? (block-at [x (inc y) z]))
@@ -126,14 +127,18 @@
         cells (:dig (dig-route/route seen-floor from goal {:dig-s cost/dig-cost
                                                          :step-s (:cost (cost/walk-cost {:distance 1}))}))]
     (when (and cells (every? #(escape/diggable? block-at may-dig? own? %) cells)
-               (<= (transduce (map #(/ (tools/clear-ms p (block-at %)) 1000)) + 0 cells) (max-route-s)))
+               (<= (transduce (map #(/ (cond-> (tools/clear-ms p (block-at %))
+                                                 fetch? (min (js/Number (.clearTime p (block-at %) "wooden_pickaxe"))))
+                                               1000))
+                              + 0 cells)
+                   (max-route-s)))
       (mapv (fn [cell] {:cell cell :block (block-at cell) :guess (dig-look/unknown? p cell)}) cells)))))
 
 (defn dig-way
   "{:step :dig-route :cells (route-cells)} when there are cells to dig, else nil."
-  [p from goal may-dig? {:keys [own? skip]}]
+  [p from goal may-dig? {:keys [own? skip fetch?]}]
   (when-not (skip :dig-route)
-    (when-let [cells (seq (route-cells p from goal may-dig? own?))]
+    (when-let [cells (seq (route-cells p from goal may-dig? own? false fetch?))]
       {:step :dig-route :cells (vec cells)})))
 
 (defn nearest-stand
@@ -184,7 +189,7 @@
     (let [p (:primitives c)
           feet (end/feet-cell c)
           goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
-          opts {:own? (own-placed-fn c) :skip (skips c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c)}
+          opts {:own? (own-placed-fn c) :skip (skips c) :fetch? (fetch-tool? c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c)}
           may-dig? (may-dig-fn c)]
       (or (dig-way p feet goal may-dig? opts)
           (when (> (second goal) (second feet))
