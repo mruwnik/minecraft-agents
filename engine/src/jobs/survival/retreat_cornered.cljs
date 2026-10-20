@@ -19,6 +19,7 @@
             [jobs.lib.step-off :as step-off]
             [jobs.lib.util :as u]
             [jobs.lib.shot :as shot]
+            [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.retreat-flight :as flight]
             [jobs.survival.retreat-goal :as retreat-goal]
             [jobs.lib.rooms :as room-lib]
@@ -474,6 +475,20 @@
                 (nil? (combat/best-weapon (:primitives c) (weapons c)))
                 (empty? (lb/carried c (flight/blocks c))))))
 
+(defn mob-in-corner-cell?
+  "Whether a melee mob (hitters) stands in a diagonal cell the walls still have to fill: a placed block is refused
+  there and it hits across the corner, so the walls cannot close until it is fought off. A mob beside the body is left
+  to the pillar."
+  [c hostiles]
+  (let [p (:primitives c)
+        feet (sh-sense/feet p)
+        corner? (fn [{:keys [x z]}] (and (== 1 (js/Math.abs (- x (:x feet)))) (== 1 (js/Math.abs (- z (:z feet))))))
+        open (set (filter corner? (dig-cells/open-cells p feet)))]
+    (boolean (some (fn [e] (let [{:keys [x y z]} (danger-q/mob-pos p e)
+                                 cell {:x (int (js/Math.floor x)) :y (int (js/Math.floor y)) :z (int (js/Math.floor z))}]
+                             (or (open cell) (open (update cell :y inc)))))
+                   (hitters c hostiles)))))
+
 (defn ^:async cornered!
   "Nowhere worth walking to: the first option of escape-order that it can take and has not failed since the last
   start over (blocked!). home?: the body is in its home room."
@@ -488,7 +503,8 @@
         blind? (and fire? (not-any? #(and (combat/ranged? %) (danger-q/seen-only? %)) hostiles))
         _ (when fire? (ctx/update-mem! c retry-covers (let [{:keys [x y z]} (sh-sense/feet (:primitives c))] [x y z])))
         armed? (some? (combat/best-weapon (:primitives c) weapons))
-        beaten-fight? (beaten-fights? {:beaten? beaten :armed? armed? :blocks? (boolean (seq (lb/carried c (flight/blocks c))))})
+        beaten-fight? (or (beaten-fights? {:beaten? beaten :armed? armed? :blocks? (boolean (seq (lb/carried c (flight/blocks c))))})
+                          (and (not fire?) (mob-in-corner-cell? c hostiles)))
         win? (and (not blind?)
                   (fight-wins? c (if (and (:hit-on-the-run (ctx/mem c)) (not fire?)) (hitters c hostiles) hostiles)))
         order (escape-order {:win? win?

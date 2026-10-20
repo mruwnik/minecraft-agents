@@ -1182,6 +1182,20 @@
           (is (zero? (count (calls p "place"))) "no seal with a mob already in the cell beside it")
           (is (= 1 (count (calls p "attack")))))))))
 
+(deftest an-unarmed-body-with-a-zombie-in-a-corner-cell-fights-it-before-walling-or-pillaring
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}] :entities [(zombie 1.5 64 1.5)]})
+              leave! (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r))))]
+          (.override (.-world p) "steer" (fn [_ _ _] (js/Promise.resolve #js {:status "timeout" :pose #js {}})))
+          (.override (.-world p) "attack" leave!)
+          (core/submit! eng retreat {})
+          (await (core/tick! eng))
+          (is (zero? (count (calls p "place"))) "no wall while the zombie stands in a corner cell")
+          (is (zero? (count (calls p "jumpPlace"))) "no pillar beside it")
+          (is (pos? (count (calls p "attack")))))))))
+
 ;; an arrow from a skeleton the body never saw: the damage packet names it, nothing else does
 (defn shot!
   [{:keys [eng]}]
