@@ -55,7 +55,7 @@
   dig lacks nothing this call cannot get (:refused, :no-tool, :no-free-slot). Quote: steps x cells of the step x the time of a cell.
   - A pack without room waits :no-free-slot until it changes (the make-room reflex or the caller clears it).
   - A missing pickaxe is got by the jobs.blocks.dig child (:fetch), then the body walks back onto the line and goes on; a fetch that fails ends :no-tool with its reason as :because. :fetch off ends :no-tool.
-  - Before each step the exposed ores within reach are dug (:pick-up-ores, jobs.lib.ore-pick).
+  - Before each step the exposed ores within reach at or above the feet are dug (:pick-up-ores, jobs.lib.ore-pick).
 
   One call cuts the whole stair; it yields :continue while a fetch or walk child waits on the world. The
   body's cell is the progress: a resumed call finds its step from where the body stands on the stair line. Dug cells are left and recorded.

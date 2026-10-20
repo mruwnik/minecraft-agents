@@ -53,12 +53,14 @@
         wanted (apply disj (names c) leave)
         skipped (set (:skipped (:ore-pick (ctx/mem c))))
         here (u/self-pos c)
+        floor-y (second (blocks/feet-cell c))
         in (blocks/rules-in c)]
     (when (seq wanted)
       (->> (look/seen-blocks p {:names (vec wanted) :radius (settings/get settings ::radius) :max 32 :live? true})
            (filter (fn [{:keys [pos name]}]
                      (let [cell (blocks/cell pos)]
                        (and (not (skipped cell)) (not (contains? except cell))
+                            (>= (second cell) floor-y)
                             (blocks/in-reach? c pos true)
                             (exposed? p cell)
                             (tools/can-harvest? p name)
@@ -77,7 +79,7 @@
 
 (defn ^:async dig!
   "The dig child over the booked :target: :continue while it waits, else nil with the pick booked or the cell skipped."
-  [c {:keys [target block before]}]
+  [c {:keys [target block before home]}]
   (let [p (:primitives c)
         e (await (ctx/call c :ore 'jobs.blocks.dig {:pos target :fetch false :walk false :on-lava :leave :ignore-zones? (boolean (:ignore-zones? (:args c))) :for-plan (:for-plan (:args c))}))]
     (when-not (= :continue e)
@@ -88,27 +90,30 @@
                              (cond-> dug? (update :picked (fnil conj []) {:cell target :block block :got (- (count-of p item) before)})
                                      (not dug?) (update :skipped (fnil conj []) target)))))
         (ctx/emit! c (if dug? :ore-pick.dug :ore-pick.skipped) :info
-                   {:cell target :block block :reason reason
+                   {:cell target :from home :block block :reason reason
                     :text (str (if dug? "picked up " "left ") block " at " (pr-str target) " on the way")})))
     (when (= :continue e) :continue)))
 
 (defn ^:async pick!
   "Dig the exposed ores within reach one after another (at most ::per-call), each followed by the walk back to the stand.
-  :continue while a child waits on the world, else nil. opts :except (cells never dug: the job's own target) and :leave
+  :continue while a child waits on the world, else nil. Ores below the feet are left: digging one beside the stand makes
+  a hole the body can fall into and not climb out of. opts :except (cells never dug: the job's own target) and :leave
   (block names the job digs for itself)."
   ([c] (pick! c {}))
   ([c opts]
-   (loop [n 0]
-     (let [{:keys [target home] :as m} (:ore-pick (ctx/mem c))]
+   (loop []
+     (let [{:keys [target home n] :as m} (:ore-pick (ctx/mem c))]
        (cond
          target (or (await (dig! c m))
                     (await (go-home! c home))
-                    (do (book! c dissoc :home) (recur n)))
-         home (or (await (go-home! c home)) (do (book! c dissoc :home) (recur n)))
-         (>= n (settings/get settings ::per-call)) nil
+                    (do (book! c dissoc :home) (recur)))
+         home (or (await (go-home! c home)) (do (book! c dissoc :home) (recur)))
+         (>= (or n 0) (settings/get settings ::per-call)) (do (book! c dissoc :n) nil)
          :else
-         (when-let [{:keys [pos name]} (first (candidates c opts))]
+         (if-let [{:keys [pos name]} (first (candidates c opts))]
            (let [cell (blocks/cell pos)]
              (book! c assoc :target cell :block name :home (blocks/feet-cell c)
                     :before (count-of (:primitives c) (blocks/item-name {:block name})))
-             (recur (inc n)))))))))
+             (book! c update :n (fnil inc 0))
+             (recur))
+           (do (book! c dissoc :n) nil)))))))

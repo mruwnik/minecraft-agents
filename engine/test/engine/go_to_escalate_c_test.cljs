@@ -491,3 +491,25 @@
 (deftest every-escalation-child-runs-hurt
   (doseq [e [{:step :pillar :height 2} {:step :stair :heading :east :steps 2} {:step :clear-path :heading :east} {:step :approach :pos [1 64 0]}]]
     (is (= '(always) (get-in (second (esc/escalation-job e nil false false false)) [:checks :fit?])) (str (:step e)))))
+
+;; ------------------------------------------------------------------ ore walls (card f14e177c)
+(def ore-pit
+  "A 2-deep 1x1 pit (feet at y 62) whose walls and floor are coal ore, in stone x -3..3, y 58..63, z -3..3, beside a natural cave (x 2..5, y 60..62) its ore touches; stone ground east of it (x 4..14) topped at the rim (feet y 64)."
+  (let [pit-air #{"0,62,0" "0,63,0"}
+        cave (for [x (range 2 6) y [60 61 62] z (range -2 3)] (str x "," y "," z))]
+    (apply dissoc
+           (merge (tu/box 4 58 -3 14 63 3 "stone") (tu/box -3 58 -3 3 63 3 "stone") (tu/box -1 59 -1 2 63 1 "coal_ore"))
+           (concat pit-air cave))))
+
+(deftest go-to-climbs-out-of-a-two-deep-pit-in-an-ore-vein
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p seen]} (await (run-job! {:self {:pos {:x 0.5 :y 62 :z 0.5}} :blocks ore-pit :seeing-all true
+                                                      :inventory [{:name "iron_pickaxe" :count 1}]}
+                                                    {:pos [8 64 0] :range 1}))
+              picked (events-of seen :ore-pick.dug)]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (< 6 (first (feet p))))
+          (is (seq picked) "the ore beside the stair is still picked")
+          (is (every? #(<= (second (:from %)) (second (:cell %))) picked) "no ore below the feet: a hole beside the stair is one the body cannot climb out of"))))))

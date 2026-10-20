@@ -24,7 +24,7 @@
   ([world zones]
    (let [clock (atom 1000000)
          [seen sink] (tu/legacy-capture-sink)
-         p (cond-> (tu/fake (dissoc world :plans :sight)) (:sight world) (tu/seeing-within (:sight world)))
+         p (cond-> (tu/fake (dissoc world :plans :sight :seeing-all)) (:sight world) (tu/seeing-within (:sight world)) (:seeing-all world) tu/seeing-all)
          eng (core/create (cond-> {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
                                    :backoff false
                                    :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
