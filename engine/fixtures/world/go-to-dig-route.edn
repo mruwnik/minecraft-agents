@@ -51,9 +51,9 @@
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]}} :within-s 120 :of-job true}]
    :after [[:block [19 0 16] "lava"] [:body-far [19.5 2 16.5] 0.9]]
    :limit-s 150}
-  ;; should fail: walk-only, the pocket is walled in: it walks to the plateau cell nearest it (within budget) and gives up there, digging nothing
+  ;; should fail: walk-only, the pocket is walled in (:unknown false: unseen, the pocket would be re-aimed to its column top and arrived at): it walks to the plateau cell nearest it (within budget) and gives up there, digging nothing
   {:name "walk-only-walks-over-the-pocket-and-gives-up"
-   :act [[:job (jobs.movement.go-to {:pos #at [19 2 16] :range 0 :ways #{:walk}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [19 2 16] :range 0 :unknown false :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :go-to.wall-walk} :within-s 30 :of-job true}
             {:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false}} :within-s 60 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 60 :until {:source :job :kind :stopped :data {:arrived false}}}]
