@@ -3,11 +3,16 @@
   branch to each side, one jobs.gather.dig-for child per branch, and walks back to the junction between them."
   (:require [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [engine.contract :as contract]
             [jobs.gather.mine-stay :as stay]
+            [jobs.gather.mine.end :refer [stop!]]
+            [jobs.lib.waits :as waits]
             [jobs.gather.mine.targets :refer [step-cell]]
             [jobs.lib.child :as child]
             [jobs.lib.look :refer [cell-of]]
             [jobs.lib.util :as u]))
+
+(def halting "Branch endings that end the whole mine as they would in the main tunnel." #{:no-tool :no-torches :flooded})
 
 (def sides {"north" ["west" "east"] "south" ["east" "west"] "east" ["north" "south"] "west" ["south" "north"]})
 
@@ -41,16 +46,21 @@
                  (dissoc :direction :submitted-at :mend)
                  (assoc :heading side :tunnel-length (settings/get stay/settings ::stay/branch-length) :branches false :shaft false :stay-level true :track-ground false))
         r (or (:branch-end (ctx/mem c))
-              (let [r (await (ctx/call c :branch 'jobs.gather.dig-for args))]
+              (let [r (waits/waiting-out c (await (ctx/call c :branch 'jobs.gather.dig-for args)))]
                 (when-not (= :continue r) (ctx/update-mem! c assoc :branch-end true))
                 r))
-        back (when-not (= :continue r)
+        why (when (map? r) (contract/cause-key r))
+        back (when-not (or (= :continue r) (halting why))
                (await (child/call-walk* c :branch-back {:pos {:x (+ (:x junction) 0.5) :y (:y junction) :z (+ (:z junction) 0.5)} :range 0
                                                         :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
-    (when-not (or (= :continue r) (= :continue back))
-      (ctx/update-mem! c #(let [m (-> % (dissoc :branch-end) (update-in [:branch :todo] rest))]
-                            (if (seq (get-in m [:branch :todo]))
-                              m
-                              (-> m (dissoc :branch) (update :branched (fnil conj []) at)))))
-      (ctx/emit! c :mine.branch :info {:at (u/cell-vec junction) :heading side :text (str "mine cut a branch " side " from the tunnel at " at " blocks")}))
-    (if (or (= :continue r) (= :continue back)) :continue :again)))
+    (cond
+      (= :continue r) :continue
+      (halting why) (stop! c why (select-keys (merge (:data r) (:cause r)) [:tool :why :text]))
+      (= :continue back) :continue
+      :else (do
+              (ctx/update-mem! c #(let [m (-> % (dissoc :branch-end) (update-in [:branch :todo] rest))]
+                                    (if (seq (get-in m [:branch :todo]))
+                                      m
+                                      (-> m (dissoc :branch) (update :branched (fnil conj []) at)))))
+              (ctx/emit! c :mine.branch :info {:at (u/cell-vec junction) :heading side :text (str "mine cut a branch " side " from the tunnel at " at " blocks")})
+              :again))))

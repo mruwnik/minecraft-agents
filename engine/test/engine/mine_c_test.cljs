@@ -121,6 +121,36 @@
           (is (= [3 64 0] (feet s)) "back in the tunnel at the junction, or home")
           (is (every? (set (dug-cells s)) [[3 64 -1] [3 64 -4]]) "the branch was cut to its length"))))))
 
+(defn ^:async ended-branch-run
+  "branch-run where every branch child ends condition-failed with reason (the main run is the real dig-for); the setup and the number of branch children started."
+  [reason]
+  (let [dig (get registry/jobs 'jobs.gather.dig-for)
+        started (atom 0)
+        stub (assoc dig :round (fn ^:async f [c]
+                                 (if (false? (:branches (:args c)))
+                                   (do (swap! started inc) (ctx/end c :condition-failed {:reason reason} {:reason reason}))
+                                   (await ((:round dig) c)))))
+        s (start {:world (update (rock-world {}) :inventory into [{:name "cobblestone" :count 5}]) :jobs (assoc registry/jobs 'jobs.gather.dig-for stub)})
+        id (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 7 :stay-level true :branches true
+                                         :settings {:jobs.gather.mine-stay/branch-every 3 :jobs.gather.mine-stay/branch-length 4}}) {})]
+    (await (run-ticks s 300))
+    (assoc s :id id :started started)))
+
+(deftest a-branch-that-ends-without-a-tool-ends-the-mine-without-cutting-the-other-side
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (ended-branch-run :no-tool))]
+          (is (= :no-tool (:reason (done-event s))))
+          (is (= 1 @(:started s))))))))
+
+(deftest a-branch-that-ends-on-a-hostile-makes-the-mine-wait
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (ended-branch-run :hostile-near))]
+          (is (= :hostile-near (:reason (core/waiting (:eng s) (:id s))))))))))
+
 (deftest without-branches-the-tunnel-cuts-no-side-branch
   (async done
     (tu/run-async done
