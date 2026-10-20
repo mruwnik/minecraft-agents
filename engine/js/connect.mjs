@@ -21,7 +21,7 @@ export const SPAWN_TIMEOUT_MS = 60000
 // physics that follows /tick rate, see tick-rate-physics.mjs.
 export function botOptions ({ host, port, username, auth = DEFAULTS.auth, version = DEFAULTS.version, viewDistance = DEFAULTS.viewDistance, followTickRate = true }) {
   if (version !== MC_VERSION) throw new Error(`minecraft version ${version} is not supported: the planner block table is built for ${MC_VERSION}`)
-  const options = { host, port, username, auth, version, viewDistance }
+  const options = { host, port, username, auth, version, viewDistance, validateChannelProtocol: false }
   return followTickRate ? { ...options, plugins: { physics: tickRatePhysics() } } : options
 }
 

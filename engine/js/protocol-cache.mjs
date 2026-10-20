@@ -7,8 +7,10 @@ import { createRequire } from 'node:module'
 import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { cacheDir } from './compile-cache.mjs'
+import './lazy-requires.mjs'
 
 const require = createRequire(import.meta.url)
+
 const { ProtoDefCompiler } = require('protodef').Compiler
 const versions = ['protodef', 'minecraft-protocol', 'prismarine-nbt', 'minecraft-data'].map(p => require(`${p}/package.json`).version).join()
 const dir = path.join(cacheDir, 'protocol')
