@@ -6,7 +6,9 @@
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.choose :as choose]
-            [jobs.lib.look :refer [cell-of]]
+            [jobs.lib.child :as child]
+            [jobs.lib.look :as sight :refer [cell-of]]
+            [jobs.lib.pillar :as pl]
             [jobs.lib.pace :as pace]
             [jobs.lib.checks :as checks]
             [jobs.lib.found :as found]
@@ -24,6 +26,8 @@
   With :clear-loose, loose things in the cells (rails, cobwebs, torches, fences, ladders ...) are dug first
   (jobs.blocks.dig, no fetch) and the drops picked up; a container in a cell is never dug (ends :blocked). It yields :continue
   only when a child waits on the world.
+
+  A seen mob standing in the next cell is waited out a second at a time (::mob-waits), not counted a failed step.
 
   Needs the blocks carried. With none carried, the call's :ways minus :carried (default #{:carried}: none; jobs.lib.need) fetch them
   before the next cell; a failed fetch is the ending's :because. Condition, at the start only: {:reason :need :any-of [names]}
@@ -44,6 +48,7 @@
 
 (a/defargs settings
   {::max-failures {:default 6 :doc "Failed steps in a row before the job ends nothing-possible." :spec (a/int-in 1 nil)}
+   ::mob-waits {:default 10 :doc "Seconds a mob standing in the next cell is waited out before the cell counts as a failed step." :spec (a/int-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
 (def fit? ready/ok)
@@ -191,6 +196,18 @@
           (= :done (:kind e)) :again
           :else (contract/with-because (finish! c :condition-failed {:reason :need :any-of names}) e))))
 
+(defn mob-in
+  "A seen mob whose box overlaps cell (the server refuses a block there), or nil."
+  [c cell]
+  (pl/mob-in (sight/seen-entities (:primitives c) {:radius 4}) [(:x cell) (:y cell) (:z cell)]))
+
+(defn ^:async wait-mob!
+  "A mob stands in the cell: wait a second for it to move on (:continue when the pause is cut, else :again)."
+  [c]
+  (ctx/update-mem! c update :mob-waits (fnil inc 0))
+  (let [r (await (child/pause! c 1 :mob-in-cell))]
+    (if (= :continue r) :continue :again)))
+
 (defn ^:async step!
   "One cell: :again after it, :continue when a child waits, or the ending."
   [c]
@@ -211,6 +228,7 @@
       (>= (or failures 0) (settings/get settings ::max-failures)) (finish! c :nothing-possible {:reason :failed})
       (and (nil? item) (seq (need/fetch-how c))) (await (fetch! c names (count cells)))
       (nil? item) (finish! c :condition-failed {:reason :need :any-of names})
+      (and pos (not loose?) (< (:mob-waits (ctx/mem c) 0) (settings/get settings ::mob-waits)) (mob-in c pos)) (await (wait-mob! c))
       :else
       (let [r (cond loose? (await (dig! c pos))
                     pos (await (place! c pos item))
@@ -220,7 +238,7 @@
           :refused (finish! c :condition-failed {:reason :refused :cell pos})
           :need (finish! c :condition-failed {:reason :need :any-of names})
           :dug :again
-          :placed (do (ctx/update-mem! c #(cond-> (update % :mended (fnil inc 0)) pos (assoc :failures 0))) :again)
+          :placed (do (ctx/update-mem! c #(cond-> (update % :mended (fnil inc 0)) pos (assoc :failures 0 :mob-waits 0))) :again)
           (do (bump! c :failures) :again))))))
 
 (defn ^:async round [c]

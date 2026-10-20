@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.blocks-dig-test :as bd]
             [engine.core :as core]
+            [engine.fake :as fake]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [engine.test-util :as tu]))
@@ -145,3 +146,24 @@
           (is (some #(= :need (:slot %)) started))
           (is (= :need (get-in e [:cause :reason])))
           (is (some? (:because e))))))))
+
+(deftest a-mob-standing-in-the-cell-is-waited-out-not-counted-as-a-failed-place
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cow {:id 7 :name "cow" :kind "passive" :width 0.9 :height 1.4 :pos {:x 2.5 :y 64 :z 0.5}}
+              env (bd/setup {:self body :inventory [{:name "dirt" :count 5}] :entities [cow]})
+              p (:p env)
+              waits (atom 0)]
+          (.override (.-world p) "place"
+                     (fn [token args impl]
+                       (if (seq (fake/entities p))
+                         (js/Promise.resolve #js {:status "refused"})
+                         (impl token args))))
+          (.override (.-world p) "wait"
+                     (fn [token args impl]
+                       (when (= 3 (swap! waits inc)) (swap! (fake/state p) assoc :entities []))
+                       (impl token args)))
+          (let [e (await (settings/with-settings three-failures #(ending-of env {:cells [(first cells)] :use {:blocks ["dirt"]}})))]
+            (is (= :done (:kind e)))
+            (is (= 1 (count (bd/calls p "place"))) "no place was tried while the cow stood there")))))))
