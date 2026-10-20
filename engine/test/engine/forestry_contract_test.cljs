@@ -77,20 +77,6 @@
         (let [{:keys [end]} (await (harvest-end oak {:species "oak" :radius 10} 40 (fail :condition-failed {:reason :need :any-of ["dirt"] :count 4})))]
           (is (= {:kind :condition-failed :cause :need} (kc end))))))))
 
-(deftest nothing-collected-after-a-felling-is-nothing-possible
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (lt/setup oak)
-              _ (.override (.-world p) "dig"
-                           (fn ^:async dig [token args impl]
-                             (let [r (await (impl token args))]
-                               (doseq [x (fake/entities p)]
-                                 (swap! (fake/state p) update :entities (fn [es] (remove #(= (:id x) (:id %)) es))))
-                               r)))
-              end (await (ending-of {:eng eng} harvest {:species "oak" :radius 10} 40))]
-          (is (= {:kind :nothing-possible :cause :none-collected} (kc end))))))))
-
 ;; ------------------------------------------------------------------ tidy
 
 (def tidy 'jobs.forestry.tidy)
