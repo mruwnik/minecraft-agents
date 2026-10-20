@@ -530,6 +530,23 @@
           (is (= [] (:list (core/state eng))) "done once the zombie has gone")
           (is (empty? (blocked-events seen))))))))
 
+(deftest a-pillar-through-anothers-zone-is-built-only-after-every-other-way-failed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen]}
+              (await (hidden-round retreat {:blocks doorway :inventory [{:name "cobblestone" :count 20}]
+                                            :entities [(zombie 0 64 1)]
+                                            :zones [{:name "vault" :min [0 64 0] :max [0 67 0] :owner "Miles"}]}
+                                   1000 (constantly nil)))]
+          (is (= 3 (count (calls p "jumpPlace"))) "nothing else was left, so the pillar went up")
+          (is (= 1 (count (filterv #(= :retreat.trespass-last-resort (:kind %)) @seen))) "and said it trespassed"))))))
+
+(deftest a-pillar-through-anothers-area-comes-after-every-other-way-and-before-a-last-fight
+  (is (= [:plug :pillar :back-off :plug-dig :pillar-zone :fight] (pick/with-zone-pillar (cornered/escape-order {}))))
+  (is (= [:fight :plug :pillar :plug-dig :pillar-zone] (pick/with-zone-pillar (cornered/escape-order {:pressed? true :faster? true}))))
+  (is (= [:fight] (pick/with-zone-pillar [:fight])) "no pillar in the order, none added"))
+
 (deftest a-lone-melee-mob-within-ten-with-blocks-carried-is-pillared-against-before-any-flee-step
   (async done
     (tu/run-async done

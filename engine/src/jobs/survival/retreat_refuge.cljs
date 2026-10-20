@@ -140,9 +140,9 @@
     (await (plug! c option ways))))
 
 (defn ^:async pillar!
-  "Start a pillar (retreat-pillar/plan!) when it fits: a step's result, else nil."
-  [c]
-  (when-let [refuge (await (pillar/plan! c))]
+  "Start a pillar (retreat-pillar/plan!, through another's area only with trespass?) when it fits: a step's result, else nil."
+  [c trespass?]
+  (when-let [refuge (await (pillar/plan! c trespass?))]
     (await (start-refuge! c refuge))))
 
 (defn refuge-danger?

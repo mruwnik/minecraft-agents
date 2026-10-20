@@ -114,7 +114,7 @@
   (let [hostiles (cornered/near-hostiles c)]
     (when (and (not (:early-refuge-failed (ctx/mem c))) (lone-melee? (:primitives c) hostiles)
                (pillar/pillar-item c) (not (pillar/lean? c)) (not (cornered/fight-wins? c hostiles)))
-      (let [r (or (when-not (flight/tried? c :pillar) (await (refuge/pillar! c)))
+      (let [r (or (when-not (flight/tried? c :pillar) (await (refuge/pillar! c false)))
                   (await (refuge/plug-option! c :plug #{:walls})))]
         (when (nil? r) (ctx/update-mem! c assoc :early-refuge-failed true))
         r))))

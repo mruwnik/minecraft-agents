@@ -85,8 +85,9 @@
 (defn ^:async plan!
   "The pillar refuge ({:kind :pillar :item :anchor :cells}) when a pillar-height pillar fits here, else nil. The cells it
   rises into that the body has not sensed are looked at first, so open sky is not taken for rock; so are the unsensed cells
-  round it when the pillar does not fit, so unseen ground behind the body is not taken for a ledge a mob climbs."
-  [c]
+  round it when the pillar does not fit, so unseen ground behind the body is not taken for a ledge a mob climbs.
+  A pillar through another's zone, claim or plan is planned only with trespass? (the last resort, after every way that keeps off)."
+  [c trespass?]
   (let [p (:primitives c)
         feet (pl/feet-cell c)
         item (pillar-item c)]
@@ -97,9 +98,11 @@
       (when-let [zone (not-empty (unseen-zone p feet))]
         (await (look/look-unknown! c zone))))
     (when (and item (pillar-ok? (escape/block-at-of p) feet))
-      (access/trespass! c "retreat" (some #(access/trespass-refusal (access/rules-input c) :place (cell-map (escape/up feet %)))
-                                          (range (pillar-height))))
-      {:kind :pillar :item item :anchor (cell-map feet) :cells (mapv #(escape/up feet %) (range (pillar-height)))})))
+      (let [cells (mapv #(escape/up feet %) (range (pillar-height)))
+            refusal (some #(access/trespass-refusal (access/rules-input c) :place (cell-map %)) cells)]
+        (when (or trespass? (nil? refusal))
+          (access/trespass! c "retreat" refusal)
+          {:kind :pillar :item item :anchor (cell-map feet) :cells cells})))))
 
 (defn ^:async build!
   "A jobs.access.pillar child of height with item, from where the body stands: :continue, or the blocks it built."

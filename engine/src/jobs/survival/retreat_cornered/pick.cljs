@@ -172,6 +172,17 @@
                              (or (open cell) (open (update cell :y inc)))))
                    (hitters c hostiles)))))
 
+(defn with-zone-pillar
+  "order with :pillar-zone (a pillar through another's area) after every way that keeps off, before a last :fight."
+  [order]
+  (if-not (some #{:pillar} order)
+    order
+    (let [order (vec order)
+          fight-last? (= :fight (peek order))]
+      (-> (if fight-last? (pop order) order)
+          (conj :pillar-zone)
+          (cond-> fight-last? (conj :fight))))))
+
 (defn ^:async cornered!
   "Nowhere worth walking to: the first option of escape-order that it can take and has not failed since the last
   start over (blocked!). home?: the body is in its home room."
@@ -207,7 +218,7 @@
                              :home? home?
                              :lean? (pillar/lean? c)
                              :pillar-first? pillar-first?})]
-    (loop [[option & more] order]
+    (loop [[option & more] (with-zone-pillar order)]
       (let [r (when-not (flight/tried? c option)
                 (case option
                   :fight (if (fist-hold? {:armed? (or beaten-fight? armed?) :win? win?
@@ -216,7 +227,8 @@
                            (await (fight! c (if (= [:fight] order) weapons (into (vec weapons) tool-weapons)) blind?)))
                   :plug (await (refuge/plug-option! c :plug #{:walls}))
                   :plug-dig (await (refuge/plug-option! c :plug-dig #{:pit :pocket}))
-                  :pillar (await (refuge/pillar! c))
+                  :pillar (await (refuge/pillar! c false))
+                  :pillar-zone (when-not (flight/tried? c :pillar) (await (refuge/pillar! c true)))
                   :water (await (water! c))
                   :roof (await (roof! c))
                   :swim-out (await (swim-out! c))
