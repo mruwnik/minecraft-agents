@@ -69,8 +69,8 @@
   :off-stair: off the line with max-returns walks back used up. :floor-unseen: the floor still unseen once the cut is open, looked at again after a lean.
   Data {:steps n :at [x y z] :dug [{:cell :block}] :ores [{:cell :block :got}]} plus detail (:cell :hazards :zone :why ...; the walk child's ending is the :because of :step-failed).
 
-  :spent-ok (default false): a dig whose every carried tool is down to 3 uses (jobs.lib.trip/spent-tool?) stops :tool-spent before the last tool
-  breaks, after a spare was tried once; true digs on. :need-drop false digs a block no carried tool clears bare-handed (go-to's last resort).")
+  A dig whose every carried tool is down to jobs.lib.trip's ::spent-uses (3) uses (trip/spent-tool?) stops :tool-spent before the last tool
+  breaks, after a spare was tried once; a way out digs on with the call's :settings {:jobs.lib.trip/spent-uses 0}. :need-drop false digs a block no carried tool clears bare-handed (go-to's last resort).")
 
 (a/defargs args
   {:dir {:doc ":down, :up or :level (a flat run, :steps only)" :spec #{:down :up :level} :default :down}
@@ -84,7 +84,6 @@
    :fetch {:doc "get a missing pickaxe instead of waiting :no-tool (jobs.lib.need), and a block to seal lava with: true, a set of kinds or a map of limits" :spec need/option? :default true}
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop" :spec #{:seal :stop} :default :seal}
    :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of waiting :no-tool" :spec boolean? :default true}
-   :spent-ok {:doc "dig on with tools down to jobs.lib.trip's ::spent-uses (3) uses instead of stopping :tool-spent before the last breaks; true for a way out" :spec boolean? :default false}
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}
    :through {:doc "the id of a mineshaft plan the stair runs down: its footprint is no obstacle (jobs.lib.shafts)" :spec string? :default nil}})
 

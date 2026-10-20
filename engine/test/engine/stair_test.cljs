@@ -1264,7 +1264,7 @@
       (fn ^:async t []
         (doseq [[uses args dug? status reason] [[3 east false :stopped :tool-spent]
                                                 [4 east true :done nil]
-                                                [3 (assoc east :spent-ok true) true :done nil]]]
+                                                [3 (assoc east :settings {:jobs.lib.trip/spent-uses 0}) true :done nil]]]
           (let [{:keys [out p]} (await (stair! {:blocks ground :inventory [{:name "stone_pickaxe" :count 1 :durability uses}]} args (fn [_])))]
             (is (= dug? (boolean (seq (digs p)))) (pr-str uses args))
             (is (= [status reason] [(:status @out) (:reason @out)]) (pr-str uses args))))))))

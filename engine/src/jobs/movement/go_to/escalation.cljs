@@ -46,7 +46,7 @@
   [{:keys [step] :as e} tag ignore-zones? by-hand? fetch?]
   (case step
     :pillar ['jobs.access.pillar (cond-> {:height (:height e) :fetch false :ignore-zones? ignore-zones? :checks {:safe? '(not (exposed)) :fit? '(always)}} (:item e) (assoc :use {:blocks [(:item e)]}))]
-    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :checks {:fit? '(always)} :accept #{:falling-block} :fetch fetch? :spent-ok true :ignore-zones? ignore-zones? :need-drop (not by-hand?)}]
+    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :checks {:fit? '(always)} :accept #{:falling-block} :fetch fetch? :settings {:jobs.lib.trip/spent-uses 0} :ignore-zones? ignore-zones? :need-drop (not by-hand?)}]
     :clear-path ['jobs.access.clear-path {:checks {:fit? '(always)} :heading (:heading e) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :fetch false}]
     :approach ['jobs.movement.go-to {:checks {:fit? '(always)} :pos (zipmap [:x :y :z] (:pos e)) :range 0 :ways #{:walk :clear-seal}}]
     :fill-gap ['jobs.blocks.place {:pos (zipmap [:x :y :z] (:cell e)) :use {:blocks [(:item e)]} :fetch false :ignore-zones? ignore-zones?}]))

@@ -112,7 +112,7 @@
   the way-out's data). :torches are those standing now, read from the world. :inside is true when the body is off
   the entry, on the way in. 
 
-  :spent-ok (default false): every carried pickaxe down to 3 uses stops the tunnel {:reason :tool-spent} before the last breaks (jobs.access.stair).
+  Every carried pickaxe down to jobs.lib.trip's ::spent-uses (3) uses stops the tunnel {:reason :tool-spent} before the last breaks (jobs.access.stair; the call's :settings {:jobs.lib.trip/spent-uses 0} digs on).
   :fetch (default true; false ends :no-tool; jobs.lib.need): a missing pickaxe is got inside the jobs.blocks.dig child of the dig
   (the stair's and the run's own), then the body walks back and goes on; a fetch that fails or cures nothing ends :no-tool with its reason as :because. :need-drop false digs a block no carried tool clears
   bare-handed (slow, no drop) instead.")
@@ -131,7 +131,6 @@
    :keep {:doc "a tunnel that stays: torches left and the tunnel left open; false (a dead end): torches go into the scaffold ledger for jobs.access.leave-tunnel to take back" :spec boolean? :default false}
    :fetch {:doc "get a missing pickaxe instead of ending :no-tool (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-tool" :spec need/option? :default true}
    :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of fetching a tool; a failed fetch ends :no-tool either way" :spec boolean? :default true}
-   :spent-ok {:doc "dig on with tools down to 3 uses instead of stopping :tool-spent (see jobs.access.stair)" :spec boolean? :default false}
    :pick-up-ores {:doc "true: dig the ores of jobs.lib.ore-pick's ::ores setting that are exposed within reach on the way; false: none; or the ore block names to dig" :spec (a/or-of boolean? (a/coll-of a/name?)) :default true}})
 
 (def safe? (ready/safe-at-by-night (fn [c] (a/cell (:target (:args c))))))
@@ -304,7 +303,7 @@
   (let [cells (ln/line-cells plan)
         e (await (ctx/call c :stair 'jobs.access.stair
                            {:dir dir :heading heading :fetch (:fetch (:args c)) :need-drop (:need-drop (:args c)) :y ((cells (segment-end plan k)) 1) :on-lava (:on-lava (:args c) :seal)
-                            :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c))) :spent-ok (boolean (:spent-ok (:args c)))
+                            :accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c)))
                             :pick-up-ores (:pick-up-ores (:args c))}))]
     (if (= :continue e)
       :continue

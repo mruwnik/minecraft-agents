@@ -917,7 +917,7 @@
       (fn ^:async t []
         (doseq [[uses args dug? reason] [[3 {:target [6 57 0]} false :tool-spent]
                                          [4 {:target [6 57 0]} true :reached]
-                                         [3 {:target [6 57 0] :spent-ok true} true :reached]]]
+                                         [3 {:target [6 57 0] :settings {:jobs.lib.trip/spent-uses 0}} true :reached]]]
           (let [{:keys [out p]} (await (tunnel! {:blocks eight-down :inventory [{:name "iron_pickaxe" :count 1 :durability uses}]} args (fn [_])))]
             (is (= dug? (boolean (seq (digs p)))) (pr-str uses args))
             (is (= reason (:reason @out)) (pr-str uses args))))))))
