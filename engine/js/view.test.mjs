@@ -14,6 +14,7 @@ import {
   poseSnapshot, poseKey, hudSnapshot, createView, poseHzFromEnv, coalescedWriter, STATS_MS, POSE_REFRESH_MS, POSE_BODY_MS,
   packNibbles, decodeColumnLight, mergeOverlapping, columnLightSection, columnStateSection
 } from './view.mjs'
+import { poseEntities } from './view-pose.mjs'
 import { writeAtomic } from './write-atomic.mjs'
 import { lightTable, relightBox } from './light.mjs'
 import { decodeLight } from '../../tools/view/web/decode.mjs'
@@ -388,6 +389,15 @@ test('a tick the write gates drop does not scan the entities', async () => {
   await view.tickPose()
   assert.ok(after > 0)
   assert.equal(scans, after)
+})
+
+test('one pose scan reads each block cell once however many sight lines cross it', async () => {
+  const bot = fakeBot({ entities: { 2: entity(2, 20, -3), 3: entity(3, 20, -3), 4: entity(4, 20, -3) } })
+  const seen = []
+  bot.blockAt = p => { seen.push(`${p.x},${p.y},${p.z}`); return { name: 'air', boundingBox: 'empty' } }
+  poseEntities(bot)
+  assert.ok(seen.length > 0)
+  assert.equal(new Set(seen).size, seen.length)
 })
 
 test('10 s of walking (a step every 50 ms tick) writes about 10 poses a second', async () => {

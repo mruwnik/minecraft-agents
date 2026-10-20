@@ -49,12 +49,27 @@ const entityView = (bot, e, seen, item = droppedName(bot, e), baby = mobFields(b
 const { Vec3 } = vec3
 
 // whether the body's eye has a clear line to the entity (feet, middle or head): a player does not see through walls. A bot that
-// cannot read blocks sees everything.
-const inSight = (bot, eye, e) => {
-  if (typeof bot.blockAt !== 'function') return true
+// cannot read blocks sees everything. `blockAt` answers whole cells and is memoised by the caller for one scan: the lines all start at the eye.
+const inSight = (blockAt, eye, e) => {
+  if (!blockAt) return true
   const h = e.height ?? 1
-  const blockAt = c => bot.blockAt(new Vec3(c.x, c.y, c.z))
   return [0.1, h / 2, h * 0.9].some(up => clearLine(blockAt, eye, { x: e.position.x, y: e.position.y + up, z: e.position.z }))
+}
+
+// one scan's block reads: a cell is read once however many lines cross it, and one Vec3 serves every read. Keys are offsets from the
+// eye's cell (entities are within ENTITY_RANGE, so each offset fits in 8 bits).
+const scanBlockAt = (bot, eye) => {
+  if (typeof bot.blockAt !== 'function') return null
+  const [ox, oy, oz] = [Math.floor(eye.x) - 128, Math.floor(eye.y) - 128, Math.floor(eye.z) - 128]
+  const cells = new Map()
+  const at = new Vec3(0, 0, 0)
+  return c => {
+    const key = ((c.x - ox) * 256 + (c.y - oy)) * 256 + (c.z - oz)
+    if (cells.has(key)) return cells.get(key)
+    const block = bot.blockAt(at.set(c.x, c.y, c.z))
+    cells.set(key, block)
+    return block
+  }
 }
 
 const near = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) <= ENTITY_RANGE
@@ -63,7 +78,8 @@ export const poseEntities = bot => {
   const self = bot.entity
   const p = self.position
   const eye = { x: p.x, y: p.y + eyeHeight(self), z: p.z }
-  return liveEntities(bot).filter(e => e !== self && e.position && near(e.position, p)).map(e => entityView(bot, e, inSight(bot, eye, e)))
+  const blockAt = scanBlockAt(bot, eye)
+  return liveEntities(bot).filter(e => e !== self && e.position && near(e.position, p)).map(e => entityView(bot, e, inSight(blockAt, eye, e)))
 }
 
 // withEntities false leaves the list empty: the caller's write gates need only the body part, and the entity scan is the costly bit
