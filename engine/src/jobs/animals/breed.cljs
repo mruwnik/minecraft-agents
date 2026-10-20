@@ -27,7 +27,7 @@
 
   Per animal:
   - Fed: it went into love mode.
-  - Refused: nothing happened (on its breeding cooldown, or already in love). It is not tried again.
+  - Refused: nothing happened twice (on its breeding cooldown, or already in love; a lost click is tried once more). It is not tried again.
   - Given up: :unreachable (walk blocked, or two feedings out of reach), :gone, :cannot, :failed, or :baby
     (the food was eaten without love; a baby the sensing missed, warn breed.baby).
 
@@ -250,8 +250,10 @@
                   (zero? (or (:consumed raw) 0)) (do (ctx/update-mem! c update :refused (fnil conj []) k)
                                                      (animals/bump-row! c))
                   :else (animals/reset-row! c))
-          :no-effect (do (ctx/update-mem! c update :refused (fnil conj []) k)
-                         (animals/bump-row! c))
+          :no-effect (if (contains? (:retried (ctx/mem c)) k)
+                       (do (ctx/update-mem! c update :refused (fnil conj []) k)
+                           (animals/bump-row! c))
+                       (ctx/update-mem! c update :retried (fnil conj #{}) k))
           :no-item nil
           (animals/book-failed! c k status))
         (if (= :no-item status) :no-food :again)))))

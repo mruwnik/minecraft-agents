@@ -497,6 +497,22 @@
           (is (finished? s))
           (is (= ["u1" "u2"] (sort (:refused (done-event s))))))))))
 
+(deftest a-lost-click-is-tried-once-more
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (h/setup {:inventory (wheat 4) :entities [(cow 1 2) (cow 2 3)]})
+              calls (atom 0)]
+          (.override (.-world p) "interact"
+                     (fn [token args impl]
+                       (if (= 1 (swap! calls inc))
+                         (js/Promise.resolve #js {:status "no-effect" :consumed 0 :love false :worn 0 :leash nil :changed #js {}})
+                         (impl token args))))
+          (core/submit! eng '(jobs.animals.breed {:mob "cow"}) {})
+          (await (run-ticks s 8 700))
+          (is (= :fed (:reason (done-event s))))
+          (is (empty? (:refused (done-event s)))))))))
+
 (deftest breed-follows-zones-and-claims
   (async done
     (tu/run-async done
