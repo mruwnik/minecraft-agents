@@ -404,15 +404,17 @@
                                        " bytes, above the " cap " byte log cap\n"))
         {:error :event-too-large :bytes line-bytes :max-bytes cap})
       (do
-        ;; Reserve the sequence before appending: a crash leaves a gap, never a reused number.
-        (when file
-          (write-meta! file {:stream-id stream-id :last-seq n :debug-seq (if debug? n debug-seq)}))
         ;; The in-memory counter moves on even if the append fails.
         (swap! stream assoc :last-seq n :debug-seq (if debug? n debug-seq))
         (when file
-          (if debug?
-            (append-chain! stream (debug-file file) :debug-segments cap debug-max-age-ms n line line-bytes)
-            (append-chain! stream file :segments cap nil n line line-bytes)))
+          (let [layout (fn [] (mapv #(mapv :first-seq (% @stream)) [:segments :debug-segments]))
+                before (layout)]
+            (if debug?
+              (append-chain! stream (debug-file file) :debug-segments cap debug-max-age-ms n line line-bytes)
+              (append-chain! stream file :segments cap nil n line line-bytes))
+            ;; Records a rotation or prune dropped may have held the high-water mark, so only then is the metadata rewritten.
+            (when (not= before (layout))
+              (write-meta! file {:stream-id stream-id :last-seq n :debug-seq (if debug? n debug-seq)}))))
         (let [r (assoc @stream :recent (conj (:recent @stream) full)
                                :recent-byte-count (+ (:recent-byte-count @stream) line-bytes))]
           (let [r (loop [s r]
@@ -474,7 +476,7 @@
   "Create a canonical EDN event stream. Options: :file, :generation-id,
   :max-bytes (aggregate active+rotated cap), :debug-max-bytes and :debug-max-age-ms (the separate :debug chain in
   <file>.debug), :stdout?, :sinks, :pos-fn, :now, and :stream-id for tests. File-backed streams use events.edn plus
-  atomically replaced events.edn.meta.edn metadata."
+  atomically replaced events.edn.meta.edn metadata. The metadata is the high-water mark: written at start and whenever an append rotates or drops records, not per event (a restart takes the larger of it and the numbers on disk)."
   [{:keys [file generation-id max-bytes debug-max-bytes debug-max-age-ms stdout? sinks pos-fn now stream-id]
     :or {max-bytes (setting "max-bytes") debug-max-bytes (setting "debug-max-bytes")
          debug-max-age-ms (setting "debug-max-age-ms") now js/Date.now pos-fn (constantly nil)
@@ -483,10 +485,12 @@
   (ensure-valid-max-bytes! debug-max-bytes)
   (let [dfile (when file (debug-file file))
         scanned-segments (if file (open-chain! file nil) [])
+        ;; Scanned before the age-out drops old debug records, so their numbers still count towards the high-water mark.
+        debug-before-age (if file (open-chain! dfile nil) [])
         scanned-debug (if file (open-chain! dfile debug-max-age-ms) [])
         meta (if file (initial-meta file) {:stream-id (or stream-id (random-id)) :last-seq 0})
-        debug-seq (max (or (:debug-seq meta) 0) (reduce max 0 (keep :last-seq scanned-debug)))
-        scanned-seq (reduce max 0 (keep :last-seq (concat scanned-segments scanned-debug)))
+        debug-seq (max (or (:debug-seq meta) 0) (reduce max 0 (keep :last-seq debug-before-age)))
+        scanned-seq (reduce max 0 (keep :last-seq (concat scanned-segments debug-before-age)))
         last-seq (max (:last-seq meta) scanned-seq)
         sid (or stream-id (:stream-id meta) (random-id))
         _reserved (when file (write-meta! file {:stream-id sid :last-seq last-seq :debug-seq debug-seq}))

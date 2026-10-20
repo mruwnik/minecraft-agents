@@ -536,3 +536,13 @@
     (events/emit! stream {:source :job :kind :done :level :info})
     (disk-only stream)
     (is (= [false [:glance :done]] (kinds-after stream 0)))))
+
+(deftest the-metadata-is-not-rewritten-per-event-but-keeps-the-high-water-mark
+  (let [file (path/join (tu/tmp-dir) "events.edn")
+        stream (events/make {:file file :generation-id "g"})
+        meta-seq #(:last-seq (events/read-edn-file (events/metadata-file file)))]
+    (emit-n! stream 5)
+    (is (<= (meta-seq) 1) "no rewrite per event")
+    (emit-n! stream 3000)
+    (is (< (meta-seq) 3005) "only rotations rewrite it")
+    (is (= 3005 (:seq (events/cursor (events/make {:file file :generation-id "g2"})))))))
