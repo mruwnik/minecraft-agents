@@ -1,3 +1,4 @@
+;; Open sky over the plot: a hole under a roof within 16 blocks is already a closed roofed room (owner Q345), so the pit would need no roof.
 ;; Card 820b2869: night shut-in with NO building blocks carried. A fresh dirt cell must choose pit mode (dig, roof from the
 ;; dug dirt), not walls (which would fail :no-item). Should-fail: stone under the body and no tool -> the :no-way ending
 ;; says why (cannot harvest). A failed or sealed cell is remembered 5 minutes (:shut-in-failed): one run per plot
@@ -5,7 +6,7 @@
 {:defaults
  {:tags [:survival :access]
   :time :any
-  :plot {:height 20}
+  :plot {:height 20 :light :sky}
   :register []
   :body {:at [16.5 10 16.5] :effects [["resistance" 600 4]]}}
  :cases
