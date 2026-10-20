@@ -46,7 +46,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3) :inventory [{:name "oak_sapling" :count 1}]})]
+        (let [{:keys [eng p]} (lt/setup {:blocks (merge (lt/tree 3 0 "oak" 3) {"3,63,0" "grass_block"}) :inventory [{:name "oak_sapling" :count 1}]})]
           (core/submit! eng harvest {})
           (is (< (await (tu/run-until-empty eng 30)) 30))
           (is (= "oak_sapling" (.-name (.blockAt p #js {:x 3 :y 64 :z 0}))))
@@ -114,7 +114,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3) :inventory [{:name "oak_sapling" :count 2}]
+        (let [{:keys [eng p seen]} (lt/setup {:blocks (merge (lt/tree 3 0 "oak" 3) {"3,63,0" "grass_block"}) :inventory [{:name "oak_sapling" :count 2}]
                                               :unloaded ["1500,66,1500"]})]
           (owe-far! eng)
           (core/submit! eng '(jobs.forestry.harvest-wood {:radius 32}) {})
@@ -201,7 +201,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3) :inventory [{:name "oak_sapling" :count 1}]})]
+        (let [{:keys [eng p seen]} (lt/setup {:blocks (merge (lt/tree 3 0 "oak" 3) {"3,63,0" "grass_block"}) :inventory [{:name "oak_sapling" :count 1}]})]
           (after-last-dig! p #(do (clear-drops! p) (fake/add-item! p "oak_log" 3)))
           (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10}) {})
           (await (tu/run-until-empty eng 30))
@@ -218,8 +218,7 @@
           (core/submit! eng '(jobs.forestry.plant-sapling) {})
           (await (tu/run-until-empty eng 12))
           (is (= 1 (count (lt/debts eng))) "the replant stays owed")
-          (is (= ["cannot plant: occupied"]
-                 (mapv :text (filterv #(= :plant_blocked (:kind %)) @seen)))))))))
+          (is (= [:occupied] (mapv :reason (filterv #(= :stopped (:kind %)) @seen)))))))))
 
 (deftest the-same-sapling-already-on-the-planting-spot-counts-as-planted
   (async done

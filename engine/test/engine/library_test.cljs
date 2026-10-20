@@ -391,7 +391,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:blocks (tree 3 0 "oak" 2) :inventory [{:name "oak_sapling" :count 1}]})]
+        (let [{:keys [eng p]} (setup {:blocks (merge (tree 3 0 "oak" 2) {"3,63,0" "grass_block"}) :inventory [{:name "oak_sapling" :count 1}]})]
           (core/submit! eng (list 'jobs.forestry.fell-tree {:species "oak" :radius 10}) {})
           (await (run-until-empty eng 6))
           (core/submit! eng (list 'jobs.forestry.plant-sapling {:species "oak"}) {})
@@ -564,7 +564,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:blocks (tree 3 0 "oak" 3) :inventory [{:name "oak_sapling" :count 1}]})]
+        (let [{:keys [eng p]} (setup {:blocks (merge (tree 3 0 "oak" 3) {"3,63,0" "grass_block"}) :inventory [{:name "oak_sapling" :count 1}]})]
           (core/submit! eng (list 'jobs.forestry.harvest-wood {:species "oak" :radius 10}) {})
           (is (= 1 (await (run-until-empty eng 20))) "fells, collects and plants in the one round")
           (is (= [] (:list (core/state eng))))

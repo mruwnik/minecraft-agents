@@ -39,13 +39,6 @@
         (let [p (await (plant-unseen looked-at-spot?))]
           (is (= "oak_sapling" (.-name (.blockAt p spot))) "planted after the look"))))))
 
-(deftest a-spot-that-stays-unseen-is-not-planted
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [p (await (plant-unseen (constantly false)))]
-          (is (= "air" (.-name (.blockAt p spot)))))))))
-
 (deftest a-sapling-is-planted-in-the-footprint-of-its-own-plan-but-not-another-bodys
   (async done
     (tu/run-async done

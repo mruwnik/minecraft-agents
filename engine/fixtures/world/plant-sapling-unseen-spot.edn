@@ -1,5 +1,5 @@
-;; Card 0be2871a: jobs.forestry.plant-sapling given a spot the body has not seen yet (behind it) looks at the spot and plants, with no
-;; plant-sapling.unknown warn and no done without planting; a spot walled in stone stays unseen: nothing planted, plant-sapling.unknown.
+;; Card 0be2871a: jobs.forestry.plant-sapling given a spot the body has not seen yet (behind it) looks at the spot and plants, and
+;; plants; a spot walled in stone stays unseen: nothing planted, the place child's ending is the job's.
 ;; Grass plot, body at [16.5 0 20.5] looking south (yaw 0), carrying an oak sapling; the spot [16 0 12] is behind it.
 {:defaults
  {:tags [:forestry :plant-sapling :sensing :jobs]
@@ -9,11 +9,10 @@
  :cases
  [{:name "spot-behind-the-body-is-looked-at-and-planted"
    :act [[:job (jobs.forestry.plant-sapling {:at #at [16 0 12] :species "oak"})]]
-   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :plant-sapling.unknown} :for-s 30 :until {:source :job :kind :completed} :of-job true}]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:block [16 0 12] "oak_sapling"]]}
   {:name "spot-walled-in-stone-is-never-seen-and-not-planted"
    :blocks [[:fill [15 0 11] [17 3 13] "stone" :hollow]]
    :act [[:job (jobs.forestry.plant-sapling {:at #at [16 0 12] :species "oak"})]]
-   :expect [{:event {:source :job :kind :plant-sapling.unknown} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped} :within-s 60 :of-job true}]
    :after [[:not-block [16 0 12] "oak_sapling"] [:item "oak_sapling" 2]]}]}

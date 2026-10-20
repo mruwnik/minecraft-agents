@@ -24,21 +24,27 @@
             {:event {:source :job :kind :child_ended :data {:slot :need}} :within-s 160 :of-job true}
             {:no-event {:source :job :kind :failed} :for-s 20}]}
   {:name "already-planted-spot-clears-debt"
-   ;; card f3248d31: the same sapling already on the spot counts as planted (place says occupied) and the debt is forgotten
+   ;; card f3248d31: the same sapling already on the spot counts as planted (place says :already) and the debt is forgotten
    :blocks [[:set [20 0 14] "oak_sapling"]]
    :memory [{:kind :forestry/replant :data {:pos #xyz [20 0 14] :species "oak"}}]
    :body {:inventory [["oak_sapling" 1]]}
    :act [[:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak"})]]
-   :expect [{:event {:source :job :kind :completed} :within-s 50 :of-job true}
-            {:no-event {:source :job :kind :plant_blocked} :for-s 50 :until {:source :job :kind :completed}}]
+   :expect [{:event {:source :job :kind :completed} :within-s 50 :of-job true}]
    :after [[:block [20 0 14] "oak_sapling"]]}
-  {:name "stone-on-spot-fails-plant-blocked"
+  {:name "bone-meal-is-used-through-a-use-on-child"
+   :memory [{:kind :forestry/replant :data {:pos #xyz [20 0 14] :species "oak"}}]
+   :body {:inventory [["oak_sapling" 1] ["bone_meal" 2]]}
+   :act [[:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak" :bone-meal 1})]]
+   :expect [{:event {:source :job :kind :child_ended :data {:slot :place :status :done}} :within-s 40 :of-job true}
+            {:event {:source :job :kind :child_ended :data {:slot :meal :status :done}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 60 :of-job true}]}
+  {:name "stone-on-spot-fails-occupied"
    ;; card f3248d31 should-fail: a foreign block on the spot still fails (debt kept)
    :blocks [[:set [20 0 14] "stone"]]
    :memory [{:kind :forestry/replant :data {:pos #xyz [20 0 14] :species "oak"}}]
    :body {:inventory [["oak_sapling" 1]]}
    :act [[:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak"})]]
-   :expect [{:event {:source :job :kind :plant_blocked :level :warn} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :occupied}} :within-s 60 :of-job true}]
    :after [[:block [20 0 14] "stone"]]}
   {:name "mangrove-propagule-fetched-and-planted"
    ;; card f3248d31: the sapling kind is the species' own (mangrove_propagule), fetched from a seen chest
