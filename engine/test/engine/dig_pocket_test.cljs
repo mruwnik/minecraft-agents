@@ -186,6 +186,31 @@
           (is (= :no-tool (some #(when (= :waiting (:kind %)) (:reason %)) @seen)) "can-start? holds the call")
           (is (= "stone" (block-at p [4 64 0]))))))))
 
+(defn ^:async run-wall! [s args]
+  (core/submit! (:eng s) (list 'jobs.survival.wall-in args) {})
+  (loop [i 0]
+    (when (and (< i 30) (seq (:list (core/state (:eng s)))))
+      (await (core/tick! (:eng s)))
+      (recur (inc i)))))
+
+(deftest wall-in-holds-for-want-of-a-block-of-the-calls-use-even-with-others-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen] :as s} (setup [] {:inventory [{:name "cobblestone" :count 8}]})]
+          (await (run-wall! s {:use {:blocks ["glass"]}}))
+          (is (= :no-blocks (some #(when (= :waiting (:kind %)) (:reason %)) @seen)) "can-start? reads the call's :use")
+          (is (= "air" (block-at p [1 64 0]))))))))
+
+(deftest wall-in-starts-with-a-block-only-the-calls-use-names
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen] :as s} (setup [] {:inventory [{:name "oak_log" :count 12}]})]
+          (await (run-wall! s {:use {:blocks ["oak_log"]}}))
+          (is (nil? (some #(when (= :waiting (:kind %)) %) @seen)))
+          (is (= "oak_log" (block-at p [1 64 0]))))))))
+
 (deftest stone-without-a-pickaxe-tries-a-fetch-then-cuts-the-pocket-by-hand
   (async done
     (tu/run-async done

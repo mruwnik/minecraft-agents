@@ -44,7 +44,7 @@
   (let [x (get def k)]
     (if (seq? x) (compiled x (str (name k) " of " (:sym def))) x)))
 
-(declare inherited-checks)
+(declare inherited-checks call-of)
 
 (defn checks-of
   "The :checks (form per key) c's frame runs under: its frozen call's once started, else what it would freeze with."
@@ -80,10 +80,12 @@
 
 (defn statuses
   "[start run] for c: start def's can-start? status until it has started (:ok after); run its can-run?'s
-  (contract/verdict). asked: {:start s :run s} a check just computed for this round, used as it is."
+  (contract/verdict). asked: {:start s :run s} a check just computed for this round, used as it is. Before the call starts,
+  can-start? reads the call it would start with (ctx/use, ctx/way?) as done? does."
   ([def c] (statuses def c nil))
   ([def c asked]
-   [(or (:start asked) (moved-or (contract/verdict c (cond-> (dissoc def :can-run?) (started? c) (dissoc :can-start?))) c))
+   [(or (:start asked) (moved-or (contract/verdict (if (started? c) c (assoc c :quote-call (first (call-of c def))))
+                                                   (cond-> (dissoc def :can-run?) (started? c) (dissoc :can-start?))) c))
     (or (:run asked) (run-status def c))]))
 
 (defn asked-key "c's frame, as ctx/child-status makes a child ctx without a new :id." [c] (mem/path->id (:root c) (:slots c)))

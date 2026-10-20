@@ -1,5 +1,6 @@
 (ns jobs.survival.wall-in
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.settings :as settings]
             [jobs.lib.blocks :as lb]
             [jobs.lib.choose :as choose]
@@ -54,6 +55,13 @@
     (cond
       (nil? (lb/pick c (flight/blocks c))) {:stop :no-blocks :text "no block to wall the body in with"}
       (and (= :night (:for (:args c))) (< have open)) {:stop :no-blocks :text (str "fewer blocks carried than the " open " open cells")})))
+
+(defn can-start?
+  "A block of the call's :use (else every :build filler) is carried, or the body is already enclosed (done? first)."
+  [c]
+  (if (nil? (lb/pick c (flight/blocks c)))
+    (contract/later :no-blocks "no block to wall the body in with")
+    (contract/ok :blocks "a block to wall with")))
 
 (defn quote-of [c]
   (let [cells (dig-cells/open-cells (:primitives c) (sh-sense/feet (:primitives c)))
