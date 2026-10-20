@@ -277,7 +277,7 @@
     62 40))
 
 (def escapes
-  '[respond-to-hostile block-arrow-gap unwedge breathe extinguish night dig-pocket retreat shut-in])
+  '[respond-to-hostile block-arrow-gap unwedge breathe extinguish night dig-pocket shut-in])
 
 (def healers '[bed-down sleep go-home])
 
