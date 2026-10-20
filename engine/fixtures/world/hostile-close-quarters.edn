@@ -4,6 +4,7 @@
 ;; hits), 05029ce5 (an armed body hit at a dead end fights before it seals), 222faba7 (a witch is not fought in iron at
 ;; health 11), d2f4d76e (a full-iron body with a sword does not flee skeletons it only hears).
 ;; Food 6: the runner feeds the body to food 20 and saturation 20; hunger amplifier 226 for 6 s burns 136 exhaustion, 34 points (20 saturation, 14 food).
+;; The witch case drains to food ~12 (hunger 5 s) so health 11 is not regenerated away (food >= 18 heals 2 hp/s) before the decision.
 {:defaults
  {:tags [:hostile :survival :combat]
   :time :any
@@ -53,7 +54,10 @@
          [:rcon "item replace entity $BODY armor.chest with minecraft:iron_chestplate"]
          [:rcon "item replace entity $BODY armor.legs with minecraft:iron_leggings"]
          [:rcon "item replace entity $BODY armor.feet with minecraft:iron_boots"]
+         [:rcon "effect give $BODY minecraft:hunger 5 226 true"]
+         [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 9 minecraft:generic"]
+         [:until [:cli "observe" ["$body" "--world" "$world" "status"] {:health 11}] 10]
          [:summon "witch" [22.5 0 16.5] "{NoAI:1b}"]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "witch" :decision :flee}} :within-s 20}
             {:no-event {:source :job :kind :child_started :data {:slot :fight}} :for-s 30}]
