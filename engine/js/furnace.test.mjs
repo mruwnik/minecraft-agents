@@ -19,7 +19,7 @@ const filler = n => Array.from({ length: n }, (_, i) => [`item_${i}`, 1])
 // a furnace window the way mineflayer's openFurnace hands it out: slots 0 input, 1 fuel, 2 output, fractions for the
 // two bars, and put/take methods that move stacks between the window and the pockets; the server drops what a slot
 // does not take silently, and a take moves what fits (shift-click)
-const setup = ({ block = 'furnace', carried = [], slots = {}, bars = {}, lit, accepts = ACCEPTS, far = false, aliveAfter = Infinity, eatsFuel = false } = {}) => {
+const setup = ({ block = 'furnace', carried = [], slots = {}, bars = {}, lit, accepts = ACCEPTS, far = false, aliveAfter = Infinity, eatsFuel = false, refill = null } = {}) => {
   const bot = stubBot({ blocks: { '3,64,0': block }, props: lit === undefined ? {} : { '3,64,0': { lit } } })
   const pockets = carried.map(stack)
   // the pockets are what the window's inventory part (slots 3..38) shows, as on the server
@@ -60,7 +60,7 @@ const setup = ({ block = 'furnace', carried = [], slots = {}, bars = {}, lit, ac
     const held = win.slots[SLOT[part]]
     const moved = give(held.name, held.count)
     held.count -= moved
-    if (held.count === 0) win.slots[SLOT[part]] = null
+    if (held.count === 0) win.slots[SLOT[part]] = refill ? stack(refill) : null
     sync()
   }
   Object.assign(win, {
@@ -281,6 +281,12 @@ test('take: no room at all is refused before any click', async () => {
   const r = await visit({ op: 'take' })
   assert.deepEqual([r.status, r.taken, win.slots[2]], ['full', [], { name: 'iron_ingot', count: 3 }])
   assert.deepEqual(calls.filter(c => c.startsWith('take')), [])
+})
+
+test('take: an output the cook refilled while the pockets have room is ok, not full', async () => {
+  const { visit, win } = setup({ carried: [['coal', 1]], slots: { output: ['iron_ingot', 2] }, refill: ['iron_ingot', 1] })
+  const r = await visit({ op: 'take' })
+  assert.deepEqual([r.status, r.taken, win.slots[2]], ['ok', [{ part: 'output', name: 'iron_ingot', count: 2 }], { name: 'iron_ingot', count: 1 }])
 })
 
 test('take: room for part of the stack takes that part and says full', async () => {

@@ -267,7 +267,7 @@
     :take (let [r (await (take! c))]
             (cond
               (= "full" (:status r)) (stop! c "inventory-full")
-              (:input r) (wait-until! c (recheck-ms))
+              (or (:input r) (:output r)) (wait-until! c (recheck-ms))
               :else (finish! c {})))
     :wait (wait-until! c (wait-ms (:kind state) state))
     :out-of-fuel (await (feed! c state))

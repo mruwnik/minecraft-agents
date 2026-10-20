@@ -84,6 +84,7 @@ async function load (bot, ctx, win, block, a, { settle, barsOf }) {
 async function take (bot, ctx, win, block, a, { settle, barsOf }) {
   const parts = ['output', 'input', 'fuel'].filter(slot => slot === 'output' ? a.output !== false : a[slot])
   const before = Object.fromEntries(parts.map(slot => [slot, stackOf(win.slots[SLOTS[slot]])]).filter(([, s]) => s))
+  const carriedBefore = Object.fromEntries(Object.values(before).map(h => [h.name, carriedCount(win, h.name)]))
   for (const [slot, held] of Object.entries(before)) {
     if (roomFor(bot, win, held.name) <= 0) continue
     await takers(win)[slot].call(win)
@@ -91,9 +92,10 @@ async function take (bot, ctx, win, block, a, { settle, barsOf }) {
   }
   await settle(win) // also when nothing was clicked: the bars arrive a moment after the open
   const taken = Object.entries(before)
-    .map(([slot, held]) => ({ part: slot, name: held.name, count: held.count - (win.slots[SLOTS[slot]]?.count ?? 0) }))
+    .map(([slot, held]) => ({ part: slot, name: held.name, count: carriedCount(win, held.name) - carriedBefore[held.name] }))
     .filter(t => t.count > 0)
-  const stuck = Object.entries(before).some(([slot]) => win.slots[SLOTS[slot]])
+  // a slot the cook refilled while the pockets still have room is not a full pocket
+  const stuck = Object.entries(before).some(([slot, held]) => win.slots[SLOTS[slot]] && roomFor(bot, win, held.name) <= 0)
   return { status: stuck ? 'full' : 'ok', taken, ...stateOf(win, block, barsOf(win)) }
 }
 
