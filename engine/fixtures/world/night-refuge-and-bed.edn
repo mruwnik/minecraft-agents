@@ -12,8 +12,9 @@
  :cases
  [{:name "dig-in-walls-sealed"
    :time :any
-   :body {:inventory [["cobblestone" 16]]}
-   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
+   :plot {:light :sky :height 8 :floor "grass_block" :length 48 :width 48} ; open ground: a sealed cell is already a shelter
+   :body {:inventory [["cobblestone" 24]]} ; the 8 cells round the feet 2 high take 16, the roof more
+   :act [[:job (jobs.survival.shut-in {:ways #{:walls} :for :night})]]
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :shut-in.unsealed} :for-s 60 :until {:source :job :kind :shut-in.sealed}}]
    :after [[:not-block [17 0 16] "air"] [:not-block [15 0 16] "air"] [:not-block [16 0 17] "air"] [:not-block [16 0 15] "air"]
