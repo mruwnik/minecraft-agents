@@ -13,7 +13,11 @@
    ['jobs.survival.extinguish 'jobs.survival.get-food] "extinguish only reaches get-food by quoting eat's helper source; its eat call passes :get-food? false"
    ['jobs.survival.respond-to-hostile 'jobs.combat.attack] "the :hostiles fight call passes :checks (always) itself: a reflex fight is not refused for the danger it answers"
    ['jobs.survival.night 'jobs.survival.bed-down] "bed-down is only called once night has chosen the bed, and asks (not (threatened))"
-   ['jobs.survival.night 'jobs.survival.get-food] "the night hold calls it only when starving with no danger near, so its starving form is the intent"})
+   ['jobs.survival.night 'jobs.survival.get-food] "the night hold calls it only when starving with no danger near, so its starving form is the intent"
+   ['jobs.survival.leave-shelter 'jobs.access.cleanup] "the take-back call passes :checks itself: it asks (not (threatened)) and needs no fitness"
+   ['jobs.survival.leave-shelter 'jobs.survival.get-food] "the dawn hold shares night's hold, which calls get-food only when starving with no danger near"
+   ['jobs.survival.extinguish 'jobs.access.cleanup] "the scoop call passes :checks (always) itself: putting the fire out is not refused for the danger it answers"
+   ['jobs.survival.stand-in 'jobs.combat.attack] "the cornered fight call (respond options) passes :checks (always) itself: a reflex fight is not refused for the danger it answers"})
 
 (defn source-of [ns-sym]
   (.readFileSync fs (str "src/" (-> (str ns-sym) (str/replace "-" "_") (str/replace "." "/")) ".cljs") "utf8"))
