@@ -134,6 +134,14 @@
    :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}]
    :after [[:item "obsidian" [:>= 1]]]
    :limit-s 130}
+  ;; card 59018ef2: a second obsidian waits again for the scooped water to drain before its mine child starts
+  {:name "two-lava-sources-make-two-obsidian"
+   :blocks [[:fill [22 0 14] [26 0 18] "stone"] [:set [23 0 15] "lava"] [:set [25 0 18] "lava"]]
+   :body {:inventory [["diamond_pickaxe" 1] ["water_bucket" 1]]}
+   :act [[:job (jobs.gather.make-obsidian {:count 2})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 170 :of-job true}]
+   :after [[:item "obsidian" [:>= 2]]]
+   :limit-s 190}
   ;; card ff7ec4e1: flowing lava only (the source under a glass wall, so no site): water on it makes cobblestone; the wall at
   ;; x 10 (glass: stone would hide the west flow from the east side) keeps each pour's water to its own side, so a failed east pour leaves the west flow for a second failed pour
   {:name "water-on-flowing-lava-twice-ends-pour-failed"

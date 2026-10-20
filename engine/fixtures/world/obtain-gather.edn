@@ -21,6 +21,12 @@
    :limit-s 280
    :expect [{:event {:source :job :kind :completed} :within-s 270 :of-job true}]
    :after [[:item "stone_pickaxe" 1]]}
+  ;; card 7331d47c: fell-tree's quote lists the logs it picks up, so harvest-wood (and obtain) see a log source that yields
+  {:name "oak-logs-in-view-are-obtained-by-felling"
+   :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]]
+   :act [[:job (jobs.items.obtain {:item "oak_log" :count 4 :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 85 :of-job true}]
+   :after [[:item "oak_log" [:>= 4]]]}
   {:name "logs-only-waits-naming-the-unseen-stone"
    :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]]
    :act [[:job (jobs.items.get-tool {:item "stone_pickaxe" :explore false})]]
