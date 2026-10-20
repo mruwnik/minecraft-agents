@@ -173,7 +173,7 @@
             :dug (ctx/update-mem! c #(-> % (update :dug (fnil inc 0)) (update :holes (fnil conj []) (pos-map pos))))
             :missing nil
             :cannot (ctx/update-mem! c refuse stray {:reason :cannot})
-            :refused (let [[kind _ data] (ctx/child-status c :dig 'jobs.blocks.dig (merge {:collect false :need-drop false :fetch false} dig-args {:pos (pos-map pos)}))
+            :refused (let [[kind _ data] (ctx/child-status c :dig 'jobs.blocks.dig (merge {:collect false :need-drop false :ways #{:carried}} dig-args {:pos (pos-map pos)}))
                              why (if (= :later kind) (:reason data) :hazard)]
                        (ctx/update-mem! c count-fail stray why))
             :unreachable (ctx/update-mem! c count-fail stray :unreachable)

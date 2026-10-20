@@ -7,7 +7,6 @@
             [engine.ctx :as ctx]
             [jobs.items.obtain.craft :as obtain-craft]
             [engine.events :as events]
-            [engine.expr :as expr]
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
             [jobs.lib.crafting-table :as crafting-table]
@@ -127,7 +126,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world pickaxe-stock) [own-zone])]
-          (core/submit! (:eng s) (dig-spec {:fetch true}) {})
+          (core/submit! (:eng s) (dig-spec {}) {})
           (await (run-ticks s 40))
           (is (empty? (listed s)) "the dig ended")
           (is (= "air" (block-at s 2 64 3)))
@@ -178,7 +177,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world pickaxe-stock) [own-zone])]
-          (core/submit! (:eng s) (dig-spec {:fetch true}) {})
+          (core/submit! (:eng s) (dig-spec {}) {})
           (swap! (:clock s) + 700)
           (await (core/tick! (:eng s)))
           (is (empty? (listed s)))
@@ -195,7 +194,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world pickaxe-stock) [own-zone])]
-          (core/submit! (:eng s) (dig-spec {:fetch false}) {})
+          (core/submit! (:eng s) (dig-spec {:ways #{:carried}}) {})
           (await (run-ticks s 10))
           (is (= [:no-tool] (distinct (mapv :reason (events-of s :waiting)))))
           (is (empty? (stopped-reasons s)))
@@ -208,7 +207,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world pickaxe-stock) [foreign-zone])]
-          (core/submit! (:eng s) (dig-spec {:fetch true}) {})
+          (core/submit! (:eng s) (dig-spec {}) {})
           (await (run-ticks s 15))
           (is (= [:no-tool] (stopped-reasons s)))
           (is (empty? (inspects s)))
@@ -219,7 +218,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world pickaxe-stock) [(assoc foreign-zone :allow #{:take})])]
-          (core/submit! (:eng s) (dig-spec {:fetch true}) {})
+          (core/submit! (:eng s) (dig-spec {}) {})
           (await (run-ticks s 40))
           (is (= "air" (block-at s 2 64 3)))
           (is (= 1 (count (transfers s)))))))))
@@ -229,7 +228,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world pickaxe-stock) [])]
-          (core/submit! (:eng s) (dig-spec {:fetch true}) {})
+          (core/submit! (:eng s) (dig-spec {}) {})
           (await (run-ticks s 40))
           (is (= "air" (block-at s 2 64 3)))
           (is (= 1 (get (inv s) "wooden_pickaxe"))))))))
@@ -243,26 +242,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (update (world pickaxe-stock) :blocks merge walled-chest) [own-zone])]
-          (core/submit! (:eng s) (dig-spec {:fetch true}) {})
+          (core/submit! (:eng s) (dig-spec {}) {})
           (await (run-ticks s 15))
           (is (empty? (inspects s)))
           (is (empty? (transfers s)))
           (is (= [:no-tool] (stopped-reasons s))))))))
-
-(deftest fetch-what-item-does-not-fetch-a-tool
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (start (world pickaxe-stock) [own-zone])]
-          (core/submit! (:eng s) (dig-spec {:fetch #{:item}}) {})
-          (await (run-ticks s 10))
-          (is (= [:no-tool] (distinct (mapv :reason (events-of s :waiting)))))
-          (is (empty? (stopped-reasons s)))
-          (is (empty? (inspects s))))))))
-
-(deftest a-bad-fetch-arg-is-refused-at-submit
-  (is (re-find #"jobs.blocks.dig :fetch must be true, false, a set of kinds"
-               (expr/problem registry/jobs (dig-spec {:fetch "please"})))))
 
 ;; ------------------------------------------------------------------ place with :fetch
 
@@ -648,7 +632,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (-> (world {}) (update :blocks dissoc chest-at) (assoc :inventory [{:name "oak_log" :count 12}])) [own-zone])]
-          (core/submit! (:eng s) (dig-spec {:fetch true}) {})
+          (core/submit! (:eng s) (dig-spec {}) {})
           (await (run-ticks s 80))
           (is (empty? (listed s)) "the dig ended")
           (is (= "air" (block-at s 2 64 3)))

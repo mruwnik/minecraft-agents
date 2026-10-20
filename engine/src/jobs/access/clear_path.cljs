@@ -159,7 +159,7 @@
   call goes on with it). :again, :continue while the child waits on the world, or the ending."
   [c {:keys [cell block collect]}]
   (let [hand? (and (false? (:need-drop (:args c))) (not (tools/can-harvest? (:primitives c) block)))
-        args {:pos cell :collect (and collect (not hand?)) :need-drop (not hand?) :fetch (:fetch (:args c))
+        args {:pos cell :collect (and collect (not hand?)) :need-drop (not hand?) :ways (need/ways-of-fetch (:fetch (:args c)))
               :ignore-zones? (:ignore-zones? (:args c))}
         done! (fn [] (ctx/update-mem! c dissoc :digging))]
     (cond

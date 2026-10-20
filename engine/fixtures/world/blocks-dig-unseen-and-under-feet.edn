@@ -1,5 +1,5 @@
 ;; Cards ec7aaf35 (an unseen target is not the stone guess), bdf979bd / 3b38404c / f6578081 (the block under the feet is dug from beside).
-;; unseen-dirt-needs-no-tool: the body faces north, a dirt cell lies behind it; blocks.dig :fetch false and no tool digs it (an unseen cell
+;; unseen-dirt-needs-no-tool: the body faces north, a dirt cell lies behind it; blocks.dig :ways #{:carried} and no tool digs it (an unseen cell
 ;; is not read as stone, which would wait :no-tool). A stone cell in the same place waits :no-tool (blocks-dig-place.edn).
 ;; Slab x 12..20, z 12..20, y 0..2, the body on top (feet y 3). dig-under-feet-steps-aside: blocks.dig of the cell under the feet steps off its
 ;; column to a side cell first (result :stepped-aside) and digs; the body stays up. from-plan-clear-cell-under-feet: a plan cell wanted
@@ -13,7 +13,7 @@
  [{:name "unseen-dirt-needs-no-tool"
    :blocks [[:set [16 0 19] "dirt"]]
    :body {:yaw 180}
-   :act [[:job (jobs.blocks.dig {:pos #at [16 0 19] :fetch false})]]
+   :act [[:job (jobs.blocks.dig {:pos #at [16 0 19] :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed :data {:dug true :reason :dug}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :no-tool}} :for-s 60 :until {:source :job :kind #{:completed :stopped} :data {:dug [:any]}}}]
    :after [[:block [16 0 19] "air"] [:item "dirt" [:>= 1]]]}

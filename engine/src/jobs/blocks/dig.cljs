@@ -23,7 +23,7 @@
 
 (def doc
   "Dig the one block at :pos ([x y z] or {:x :y :z}) and pick up what it dropped, as a player would. One call is the
-  whole attempt: get a missing tool (:fetch, jobs.lib.need), walk into reach (one jobs.movement.go-to call), dig, pick up
+  whole attempt: get a missing tool (jobs.lib.need, from the call's :ways), walk into reach (one jobs.movement.go-to call), dig, pick up
   the drops (jobs.items.collect-drops: a drop in the dug hole only from a seen solid safe floor). It yields :continue
   only when a child waits on the world. Needs a tool that harvests the block (with :need-drop), room for the drop (with :collect) and
   a cell zones, claims and hazards allow. Quote: the walk and dig time, 1 s at least.
@@ -35,8 +35,8 @@
   - {:reason :hazard :pos :hazards [kw ..]}: a dig hazard not in :accept (:fluid-adjacent water, :lava-adjacent seen
     lava, :falling-block). With :on-fluid :fail a fluid hazard ends the job :fluid-adjacent instead.
   - {:reason :inventory-full :pos}: with :collect, no free slot and no carried stack of the block's drop to grow.
-  - {:reason :no-tool :needs item :block name :hint}: no carried tool harvests the block (with :need-drop) and :fetch
-    does not allow a tool (otherwise the round gets one; a fetch that fails ends the same way, with :why).
+  - {:reason :no-tool :needs item :block name :hint}: no carried tool harvests the block (with :need-drop) and the call's :ways
+    allow no fetch (otherwise the round gets one; a fetch that fails ends the same way, with :why).
 
   Out of reach, it walks within 3 cells (go-to child, which opens and shuts doors); a failed walk is tried once more,
   then it ends nothing-possible {:reason :unreachable :pos :why} (:no-walk, :out-of-reach, go-to's why).
@@ -69,8 +69,9 @@
    :on-lava {:doc ":seal: seen lava beside the dug cell is filled with a building block (jobs.lib.lava); :leave: the caller deals with it (stair, tunnel)" :spec #{:seal :leave} :default :seal}
    :on-fluid {:doc ":wait: a block beside a fluid that :accept does not take waits :hazard; :fail: the job ends at once, reason :fluid-adjacent, with a :hint" :spec #{:wait :fail} :default :wait}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
-   :ignore-zones? :shared
-   :fetch {:doc "get a missing tool instead of ending :no-tool (jobs.lib.need): true, a set of kinds or a map of limits" :spec need/option? :default true}})
+   :ignore-zones? :shared})
+
+(def ways need/fetch-ways)
 
 (a/defargs settings
   {::collect-radius {:default 8 :doc "Blocks within which dropped items are collected after a dig." :spec (a/int-in 0 nil)}
@@ -159,10 +160,10 @@
               {:reason :no-tool :needs tool :block block :hint no-tool-hint})))))))
 
 (defn fetch-limits
-  "The limits map of :fetch when it allows a tool, else nil."
+  "The limits {:how} of the tool fetch the call's ways allow, else nil."
   [c]
-  (let [f (need/parse-arg (:fetch (:args c)))]
-    (when (and f (contains? (or (:what f) need/kinds) :tool)) f)))
+  (when-let [how (seq (need/fetch-how c))]
+    {:how (set how)}))
 
 (defn fluid-hazard
   "With :on-fluid :fail, the problem r when it is a hazard of a block beside a fluid, else nil."
@@ -307,7 +308,7 @@
           (not lavas) nil
           :else
         (let [r (await (lava/seal! c :blocks.dig.sealed #(u/seen-name (:primitives c) (zipmap [:x :y :z] %)) (first lavas)
-                                   {:fetch (settings/get b/settings ::b/seal-fetch) :ignore-zones? (:ignore-zones? (:args c))}))]
+                                   {:ways (if (settings/get b/settings ::b/seal-fetch) (set need/fetch-ways) #{:carried}) :ignore-zones? (:ignore-zones? (:args c))}))]
           (if (map? r)
             (do (ctx/update-mem! c assoc-in [:dug :unsealed] (assoc r :lavas (vec lavas))) :again)
             r)))))))
@@ -369,7 +370,7 @@
   [c tool-problem]
   (let [limits (when-not (= (:block tool-problem) (:tool-fetched (ctx/mem c))) (fetch-limits c))
         what (if (use-tools c) {:item (:needs tool-problem)} {:block (:block tool-problem)})
-        r (when (and limits (:needs tool-problem)) (await (need/tool! c what (select-keys limits [:how :explore]))))]
+        r (when (and limits (:needs tool-problem)) (await (need/tool! c what limits)))]
     (cond
       (or (nil? limits) (nil? (:needs tool-problem))) (ctx/end c :condition-failed tool-problem)
       (= :continue r) :continue

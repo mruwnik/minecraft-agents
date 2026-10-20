@@ -337,7 +337,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p]} (await (run! {:self {:pos {:x 0 :y 64 :z 0}} :blocks dirt-room :inventory []}
-                                           'jobs.blocks.dig {:pos [3 64 0] :fetch false}))]
+                                           'jobs.blocks.dig {:pos [3 64 0] :ways #{:carried}}))]
           (is (= :dug (:reason @out)))
           (is (= "dirt" (:block @out)))
           (is (some #{{:x 3 :y 64 :z 0}} (digs p))))))))

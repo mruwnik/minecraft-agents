@@ -34,7 +34,7 @@
   only once dug up; a failed dig keeps it, so the next hold retries. True while the dig goes on."
   [c]
   (let [pos (:placed-furnace (ctx/mem c))
-        e (waits/waiting-out c (await (ctx/call c :unplace 'jobs.blocks.dig {:pos pos :fetch false})))]
+        e (waits/waiting-out c (await (ctx/call c :unplace 'jobs.blocks.dig {:pos pos :ways #{:carried}})))]
     (when (= :done (:kind e))
       (ctx/update-mem! c dissoc :placed-furnace :furnace)
       (when (= pos (mem/place (ctx/view c) :furnace))

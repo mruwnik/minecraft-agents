@@ -85,11 +85,11 @@
 (def max-seals "Places per lava cell (a seal and one reseal) before the seal counts as failed." 2)
 
 (defn ^:async seal!
-  "Fill lava cell with a building block (a jobs.blocks.place child in slot :place, fetching one as opts :fetch (the old switch) allows,
+  "Fill lava cell with a building block (a jobs.blocks.place child in slot :place, fetching one as opts :ways allow,
   zones as opts :ignore-zones?). Memory :seals counts places per cell, :sealing the cell in hand. :again once placed
   (event kind, info), :continue while the child waits on the world, else the stop {:reason :lava-unsealed :cell}
   with the place outcome (:place; :need when no block is carried) or :tries."
-  [c kind block-at cell {:keys [fetch ignore-zones?]}]
+  [c kind block-at cell {:keys [ways ignore-zones?]}]
   (let [tries (get-in (ctx/mem c) [:seals cell] 0)
         [x y z] cell]
     (if (>= tries max-seals)
@@ -99,7 +99,7 @@
         (ctx/update-mem! c #(cond-> (assoc % :sealing cell)
                               (not= cell (:sealing %)) (update-in [:seals cell] (fnil inc 0))))
         (let [outcome (await (blocks/place-cell! c {:x x :y y :z z} nil
-                                                 {:use {:blocks (choose/filler-names c :build)} :ways (need/ways-of-fetch fetch)
+                                                 {:use {:blocks (choose/filler-names c :build)} :ways ways
                                                   :ignore-zones? (boolean ignore-zones?)}))]
           (if (= :continue outcome)
             :continue

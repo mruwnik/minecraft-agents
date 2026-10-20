@@ -31,7 +31,7 @@
   {:name "dig-fetch-from-logs"
    :blocks [[:set [18 0 19] "stone"]]
    :body {:inventory [["oak_log" 12]]}
-   :act [[:job (jobs.blocks.dig {:pos #at [18 0 19] :fetch true})]]
+   :act [[:job (jobs.blocks.dig {:pos #at [18 0 19]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:block [18 0 19] "air"] [:item "wooden_pickaxe" 1] [:item "cobblestone" 1]]}
   {:name "only-dirt-waits-no-source"

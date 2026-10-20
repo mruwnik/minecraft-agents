@@ -421,7 +421,7 @@
   (let [spot (pickup-spot c)]
     (if-not spot
       (ctx/end c :done nil {})
-      (let [r (waits/waiting-out c (await (ctx/call c :pickup 'jobs.blocks.dig {:pos spot :collect true :need-drop false :fetch false :on-fluid :fail :for-plan (:for-plan (:args c))})))]
+      (let [r (waits/waiting-out c (await (ctx/call c :pickup 'jobs.blocks.dig {:pos spot :collect true :need-drop false :ways #{:carried} :on-fluid :fail :for-plan (:for-plan (:args c))})))]
         (if (= :continue r)
           :continue
           (do (ctx/update-mem! c assoc :picked-up true)

@@ -156,7 +156,7 @@
       (fn ^:async t []
         (let [env (setup {:self body :blocks {"2,64,0" "stone"}})]
           (is (= {:reason :no-tool :needs "wooden_pickaxe" :block "stone"}
-                 (dissoc (wait-cause (await (waiting-after env (list job {:pos at :fetch false}) 3))) :hint)))
+                 (dissoc (wait-cause (await (waiting-after env (list job {:pos at :ways #{:carried}}) 3))) :hint)))
           (is (empty? (calls (:p env) "dig"))))))))
 
 (defn ^:async unseen-from-waits-no-tool
@@ -166,7 +166,7 @@
         shown (atom false)]
     (aset p "sensedAt" (fn [pos] (if (and (>= (.-x pos) unseen-from) (not @shown)) #js {:unknown true} (.blockAt p pos))))
     (.override (.-world p) "look" (fn [token a impl] (reset! shown true) (impl token a)))
-    (is (= :no-tool (:reason (wait-cause (await (waiting-after env (list job {:pos at :fetch false}) 6))))))
+    (is (= :no-tool (:reason (wait-cause (await (waiting-after env (list job {:pos at :ways #{:carried}}) 6))))))
     (is (empty? (calls p "dig")))))
 
 (deftest an-unseen-block-or-face-is-looked-at-before-the-call-starts-so-a-listed-call-waits-no-tool
@@ -181,7 +181,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [env (setup {:self body :blocks {"2,64,0" "stone"}})]
-          (is (re-find #":need-drop false" (:hint (wait-cause (await (waiting-after env (list job {:pos at :fetch false}) 3)))))))))))
+          (is (re-find #":need-drop false" (:hint (wait-cause (await (waiting-after env (list job {:pos at :ways #{:carried}}) 3)))))))))))
 
 (deftest need-drop-false-digs-without-the-tool
   (async done
@@ -800,7 +800,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup-seeing {:self body :blocks {"2,64,0" "dirt" "2,64,1" "lava" "2,63,1" "stone" "-2,64,3" "chest"}
                                              :containers {"-2,64,3" [{:name "cobblestone" :count 5}]}})
-              result (await (tu/child-outcome eng job {:pos [2 64 0] :accept #{:lava-adjacent} :fetch false} 60))]
+              result (await (tu/child-outcome eng job {:pos [2 64 0] :accept #{:lava-adjacent} :ways #{:carried}} 60))]
           (is (= {:dug true :reason :dug} (select-keys result [:dug :reason])))
           (is (= "cobblestone" (block-at p {:x 2 :y 64 :z 1})) "the lava is sealed with a fetched block"))))))
 

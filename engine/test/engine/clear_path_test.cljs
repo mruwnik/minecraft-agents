@@ -52,18 +52,18 @@
           (is (= [:stopped :dig-waits] [(:status r) (:reason r)]) (pr-str r))
           (is (= [1 65 0] (:cell r)) "the top layer first"))))))
 
-(deftest the-dig-child-gets-the-fetch-arg-default-true
+(deftest the-dig-child-gets-the-ways-of-the-fetch-arg
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [seen (atom [])
               stub (fn ^:async spy-dig [c]
-                     (swap! seen conj (:fetch (:args c)))
+                     (swap! seen conj (:ways (:args c)))
                      (ctx/end c :nothing-possible :failed {:dug false}))
               w (assoc wall :inventory [{:name "wooden_pickaxe" :count 1}])
               _ (await (run-door w stub))
-              _ (await (run-door w stub {:heading :east :fetch #{:item}}))]
-          (is (= [true #{:item}] @seen)))))))
+              _ (await (run-door w stub {:heading :east :fetch false}))]
+          (is (= [#{:carried :chest :craft :gather} #{:carried}] @seen)))))))
 
 (deftest by-hand-digs-the-door-with-no-pickaxe
   (async done

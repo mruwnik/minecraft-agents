@@ -115,7 +115,7 @@
       (when-let [cell (first (cells/exposed-lava block-at feet cut))]
         (if (= :stop (:on-lava (:args c)))
           {:reason :lava-exposed :cell cell :fluid "lava"}
-          (let [r (await (lava/seal! c kind block-at cell {:fetch (:fetch (:args c)) :ignore-zones? (:ignore-zones? (:args c))}))]
+          (let [r (await (lava/seal! c kind block-at cell {:ways (need/ways-of-fetch (:fetch (:args c))) :ignore-zones? (:ignore-zones? (:args c))}))]
             (when (= :again r) (ctx/update-mem! c assoc :sealed-at (ctx/now c)))
             r))))))
 
@@ -145,7 +145,7 @@
   place child waits; the stop {:reason :hazard :cell :plugged :hazards} once plugged, else {:reason :water-unplugged}."
   [c block-at accept cut]
   (when-let [[cell w] (first (cells/exposed-water block-at (:dug (ctx/mem c)) accept cut))]
-    (let [r (await (lava/seal! c :stair.plugged block-at cell {:fetch (:fetch (:args c)) :ignore-zones? (:ignore-zones? (:args c))}))]
+    (let [r (await (lava/seal! c :stair.plugged block-at cell {:ways (need/ways-of-fetch (:fetch (:args c))) :ignore-zones? (:ignore-zones? (:args c))}))]
       (cond
         (= :continue r) :continue
         (= :again r) (do (mem/plug! c cell) {:reason :hazard :cell cell :plugged cell :hazards [{:reason :fluid-adjacent :fluid "water" :at w}]})
@@ -211,7 +211,7 @@
                     fetch? (and (fetch-tool? c) (lacks-tool? c block))
                     e (await (blocks/dig-cell-ending! c {:x x :y y :z z}
                                                       (cond-> {:accept #{:fluid-adjacent :lava-adjacent :falling-block} :on-lava :leave :ignore-zones? true}
-                                                        fetch? (assoc :fetch (:fetch (:args c)) :need-drop (not (false? (:need-drop (:args c))))))))
+                                                        fetch? (assoc :ways (need/ways-of-fetch (:fetch (:args c))) :need-drop (not (false? (:need-drop (:args c))))))))
                     outcome (blocks/dig-outcome e)]
                 (if (= :continue outcome)
                   :yield
