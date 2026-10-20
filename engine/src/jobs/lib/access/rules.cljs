@@ -43,7 +43,7 @@
             [clojure.string :as str]
             [jobs.lib.access.zones :as zones]))
 
-(def air #{"air" "cave_air" "void_air"})
+(def air "Open cells; the invisible light block counts: a body walks through it." #{"air" "cave_air" "void_air" "light"})
 
 (def fluids #{"water" "lava" "bubble_column"})
 

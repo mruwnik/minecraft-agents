@@ -139,14 +139,15 @@
           (is (empty? (calls (:p env) "dig")))
           (is (< (.-x (.-pos (.self (:p env)))) 1) "the body stood still"))))))
 
-(deftest air-is-already-clear-and-nothing-is-done
+(deftest air-and-an-invisible-light-block-are-already-clear-and-nothing-is-done
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:self body})
-              result (await (tu/child-outcome eng job {:pos at} 5))]
-          (is (= {:status :done :already? true} (select-keys result [:status :already?])) "the engine ends it before a round")
-          (is (empty? (calls p "dig"))))))))
+        (doseq [block ["air" "light"]]
+          (let [{:keys [eng p]} (setup {:self body :blocks {"2,64,0" block}})
+                result (await (tu/child-outcome eng job {:pos at} 5))]
+            (is (= {:status :done :already? true} (select-keys result [:status :already?])) (str block ": the engine ends it before a round"))
+            (is (empty? (calls p "dig")))))))))
 
 (deftest without-a-harvesting-tool-it-waits-no-tool-naming-the-cheapest
   (async done

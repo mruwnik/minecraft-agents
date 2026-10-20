@@ -11,7 +11,7 @@
    ::margin {:default 3 :doc "How far (blocks) round the two ends a route may stray." :spec (a/int-in 0 nil)}
    ::max-fall {:default 3 :doc "The longest fall (blocks) a route's step may drop." :spec (a/int-in 0 nil)}})
 
-(def air #{"air" "cave_air" "void_air"})
+(def air "Open cells; the invisible light block counts: a body walks through it." #{"air" "cave_air" "void_air" "light"})
 (def fluids #{"water" "lava" "bubble_column"})
 (def falling #{"sand" "red_sand" "gravel"})
 
