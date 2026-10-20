@@ -17,6 +17,8 @@
    :jobs.items.obtain.base/craft-step-s {:default 5 :doc "Guess of the seconds one craft step takes, walks included (the quote)." :spec (a/num-in 0 nil)}
    :jobs.items.obtain.base/smelt-item-s {:default 15 :doc "Guess of the seconds one smelt step takes per item, the furnace's 10 s and its fetches (the quote)." :spec (a/num-in 0 nil)}
    :jobs.items.obtain.base/gather-need-s {:default 60 :doc "Guess of the seconds one raw need takes to gather: a walk, a fell or a dig (the quote)." :spec (a/num-in 0 nil)}
+   :jobs.items.obtain.base/loose-radius {:default 16 :doc "Blocks within which a loose item of the wanted kind is picked up (the :loose way)." :spec (a/num-in 0 32)}
+   :jobs.items.obtain.base/bill-item-s {:default 2700 :doc "Seconds each item of a bill may take (its obtain child's :spend :job-time)." :spec (a/num-in 0 nil)}
    :jobs.items.obtain.base/explore {:default {:max-distance 64 :max-legs 12 :spend {:job-time 300}} :doc "jobs.explore.search options of a search for a raw need (:explore true)." :spec map?}})
 (defn max-inspections [] (settings/get settings :jobs.items.obtain.base/max-inspections))
 (defn animal-radius [] (settings/get settings :jobs.items.obtain.base/animal-radius))
@@ -28,6 +30,8 @@
 (defn gather-need-s [] (settings/get settings :jobs.items.obtain.base/gather-need-s))
 (defn seen-radius [] (settings/get settings :jobs.items.obtain.base/seen-radius))
 (defn craft-radius [] (settings/get settings :jobs.items.obtain.base/craft-radius))
+(defn loose-radius [] (settings/get settings :jobs.items.obtain.base/loose-radius))
+(defn bill-item-s [] (settings/get settings :jobs.items.obtain.base/bill-item-s))
 (defn explore-setting [] (settings/get settings :jobs.items.obtain.base/explore))
 
 (defn names-of [{:keys [item any-of]}]
@@ -38,9 +42,17 @@
   [a]
   (into {} (remove (comp nil? val)) (select-keys a [:item :any-of])))
 
+(defn bill-of
+  "The bill's entries [item n], in order."
+  [a]
+  (vec (:bill a)))
+
 (defn args-error [a]
   (let [names (names-of a)]
     (cond
+      (:bill a) (cond (or (:item a) (:any-of a)) "a :bill replaces :item and :any-of: give one or the other"
+                      (empty? (:bill a)) ":bill is {item count} with at least one item"
+                      (not (every? (fn [[k n]] (and (string? k) (int? n) (pos? n))) (:bill a))) (str ":bill is {item count}, counts positive whole numbers, got " (pr-str (:bill a))))
       (not (and (seq names) (every? string? names))) (str "needs :item, or :any-of [names], got :item " (pr-str (:item a)) " :any-of " (pr-str (:any-of a)))
       (not (and (int? (:count a)) (pos? (:count a)))) (str ":count is a positive whole number, got " (pr-str (:count a))))))
 
@@ -52,14 +64,22 @@
   [c names]
   (max 0 (- (:count (:args c)) (carried-of (u/inventory (:primitives c)) names))))
 
-(def all-ways #{:chest :craft :smelt :gather})
+(def all-ways #{:chest :craft :smelt :loose :gather :hunt :crops :search})
+
+(def field-ways "What a caller's :gather (the fetch ways of jobs.lib.need) stands for: every way that works the field." #{:loose :hunt :crops :search})
 
 (defn ways-of
-  "The ways the call allows: the frozen call's; before it starts, the args' :ways, else all."
+  "The ways the call allows: the frozen call's; before it starts, the args' :ways, else all. A :gather brings the field ways."
   [c]
-  (set (or (:ways (ctx/frozen-call c)) (:ways (:args c)) all-ways)))
+  (let [ws (set (or (:ways (ctx/frozen-call c)) (:ways (:args c)) all-ways))]
+    (cond-> ws (contains? ws :gather) (into field-ways))))
 
 (defn way? [c k] (contains? (ways-of c) k))
+
+(defn gathers?
+  "Whether a way that fetches a raw item from the world is allowed."
+  [c]
+  (boolean (some #(way? c %) [:gather :hunt :crops])))
 
 (defn makes?
   "Whether a chain may be made: a craft or a smelt step is allowed."
@@ -74,7 +94,7 @@
   (every? #(way? c (step-way %)) (:steps plan)))
 
 (defn child-ways
-  "The ways of this call a fetching child job takes: :carried and the :chest :craft :gather it allows."
+  "The ways of this call a fetching child job takes: :carried and the :chest :craft :gather it allows (the ways of jobs.lib.need)."
   [c]
   (into #{:carried} (filter #{:chest :craft :gather} (ways-of c))))
 

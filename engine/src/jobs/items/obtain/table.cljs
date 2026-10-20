@@ -16,13 +16,18 @@
 
 (def mob-drops
   "The items a mob drops, and the mob: gathered by hunting it (a kept pair and penned animals are spared; a hostile kind is hunted armed)."
-  {"leather" "cow" "feather" "chicken" "string" "spider" "bone" "skeleton"})
+  {"leather" "cow" "feather" "chicken" "string" "spider" "bone" "skeleton"
+   "beef" "cow" "porkchop" "pig" "mutton" "sheep" "chicken" "chicken" "rabbit" "rabbit"})
+
+(def crop-blocks
+  "The field crops: item they give, the crop block cut for it (jobs.farm.harvest cuts the ripe ones)."
+  {"wheat" "wheat" "carrot" "carrots" "potato" "potatoes" "beetroot" "beetroots"})
 
 (defn source-opts
   "The recipes/plan options of the gather and smelt sources: ore drops count as gathered, and every furnace product
   (jobs.items.smelt.plan/made-from; charcoal from any overworld log) is also made by a smelt step."
   []
-  {:raw (conj (into ore-drops (concat fish-items (keys mob-drops))) "obsidian")
+  {:raw (conj (into ore-drops (concat fish-items (keys mob-drops) (keys crop-blocks))) "obsidian")
    :smelts (assoc (into {} (map (fn [[out in]] [out [in]])) smelt-plan/made-from) "charcoal" trees/log-names)})
 
 (defn leaves-of
@@ -59,6 +64,16 @@
   "Whether a gather need is hunted (wool from sheep, leather from cows ..), not mined or felled."
   [need]
   (boolean (or (:sheep need) (:mob need))))
+
+(defn searchable?
+  "Whether a need is looked for by walking: a block, not an animal or a crop of the field (own ripe crops only)."
+  [need]
+  (not (or (animal? need) (:crop need))))
+
+(defn need-way
+  "The way a gather need belongs to: :hunt for animals, :crops for a field crop, else :gather."
+  [need]
+  (cond (animal? need) :hunt (:crop need) :crops :else :gather))
 
 (defn wool? [name] (clojure.string/ends-with? name "_wool"))
 
@@ -101,6 +116,9 @@
           (for [[k n] gather :when (mob-drops k)]
             {:key k :count n :job 'jobs.combat.hunt :mob (mob-drops k) :max-runs 1
              :args {:mob (mob-drops k) :count n :radius (animal-radius) :drops [k]}})
+          (for [[k n] gather :when (crop-blocks k)]
+            {:key k :count n :job 'jobs.farm.harvest :crop (crop-blocks k) :seen #{(crop-blocks k)} :max-runs 1
+             :args {:crops [(crop-blocks k)] :radius (seen-radius)}})
           (for [[k n] gather :when (wool? k)]
             {:key k :count n :job 'jobs.combat.hunt :sheep (wool-color k) :max-runs 1
              :args {:mob "sheep" :color (wool-color k) :count n :radius (animal-radius)}})

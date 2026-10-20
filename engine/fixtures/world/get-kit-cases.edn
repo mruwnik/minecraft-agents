@@ -1,7 +1,7 @@
 ;; jobs.items.get-kit: cards f0118847 (items are made in order; iron is sourced only when the next missing item needs it),
 ;; 9d844aa3 (carried raw iron is smelted when the mine finds no ore), 71a675d6 (carried ingots are never crafted into nuggets),
 ;; 89e23248 (the home chest is not emptied, the hut's furnace and bed are not dug up), a094008f (the list in order, armour worn).
-;; The body carries 3 cooked beef where mining or smelting is ahead (:food false stops :needs-food under 20 food points).
+;; The body carries 3 cooked beef where mining or smelting is ahead (:food false: no food child runs).
 ;; Open plot, body at [16.5 0 12.5] looking south (yaw 0); the table stands at [16 0 18].
 ;; Should-succeed: stone sword and pickaxe made with no iron seen, then the job stops no-source for the iron; a pickaxe smelted from
 ;; carried raw iron; sword and shovel from 3 ingots without nuggets; the home chest and hut blocks untouched; helmet crafted and worn.

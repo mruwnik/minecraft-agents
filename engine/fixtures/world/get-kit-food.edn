@@ -2,7 +2,7 @@
 ;; with no iron near: mining/smelting is ahead, so a get-food child with :carry stocks the pack first.
 ;; Should-succeed: 3 cows near, a sword: a cow is hunted before any mining (food.killed); fed with no animals anywhere: kit.no-food
 ;; warns and the kit goes on (no :needs-food stop).
-;; Should-fail: a starving body (food 0) with no food anywhere ends the kit condition-failed :needs-food; :food false does too.
+;; Should-fail: a starving body (food 0) with no food anywhere warns kit.no-food and goes on, never stopping :needs-food; :food false runs no food child.
 {:defaults
  {:tags [:items :get-kit :food]
   :plot {:height 6}
@@ -17,10 +17,12 @@
    :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
    :expect [{:event {:source :job :kind :kit.no-food :level :warn} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :needs-food}} :for-s 40 :until {:source :job :kind :kit.no-food}}]}
-  {:name "starving-with-no-food-stops-needs-food"
+  {:name "starving-with-no-food-warns-and-goes-on"
    :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
          [:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
-   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :needs-food}} :within-s 100 :of-job true}]}
-  {:name "food-false-stops-needs-food"
+   :expect [{:event {:source :job :kind :kit.no-food :level :warn} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :needs-food}} :for-s 40 :until {:source :job :kind :kit.no-food}}]}
+  {:name "food-false-runs-no-food-child"
    :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false :food false})]]
-   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :needs-food}} :within-s 60 :of-job true}]}]}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :kit.no-food} :for-s 30 :until {:source :job :kind :stopped}}]}]}

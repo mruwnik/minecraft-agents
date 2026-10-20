@@ -12,10 +12,10 @@
             [engine.memory :as mem]
             [engine.perception :as perception]
             [engine.registry :as registry]
-            [engine.settings :as settings]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.items.get-kit :as kit]
+            [jobs.items.obtain.bill :as bill]
             [jobs.lib.world-files :as ew]))
 
 (def job 'jobs.items.get-kit)
@@ -66,19 +66,13 @@
 (defn crafted [s] (mapv #(.-item (.-args %)) (f/calls s "craft")))
 
 (deftest the-iron-kit-needs-32-ingots-from-the-furnace
-  (is (= {"iron_ingot" 32} (kit/furnace-short game/default-version kit/iron-kit {}))))
-
-(deftest the-kit-reserves-the-ingots-and-raw-iron-its-missing-pieces-need
-  (is (= [{:id "k-kit-iron_ingot" :item "iron_ingot" :count 3 :strength 0.9 :by "k" :why "material for the kit" :not #{:craft :smelt}}
-          {:id "k-kit-raw_iron" :item "raw_iron" :count 3 :strength 0.9 :by "k" :why "material for the kit" :not #{:craft :smelt}}]
-         (kit/kit-entries "k" game/default-version ["iron_pickaxe"])))
-  (is (= [] (kit/kit-entries "k" game/default-version []))))
+  (is (= {"iron_ingot" 32} (bill/furnace-short game/default-version kit/iron-kit {}))))
 
 (deftest carried-ingots-count-against-the-furnace-need
-  (is (= {"iron_ingot" 1} (kit/furnace-short game/default-version ["iron_pickaxe" "iron_helmet" "iron_boots"] {"iron_ingot" 11}))))
+  (is (= {"iron_ingot" 1} (bill/furnace-short game/default-version ["iron_pickaxe" "iron_helmet" "iron_boots"] {"iron_ingot" 11}))))
 
 (deftest nothing-is-short-when-the-ingots-are-carried
-  (is (= {} (kit/furnace-short game/default-version ["iron_pickaxe"] {"iron_ingot" 3}))))
+  (is (= {} (bill/furnace-short game/default-version ["iron_pickaxe"] {"iron_ingot" 3}))))
 
 (deftest a-death-after-the-start-makes-the-memory-stale
   (is (kit/stale? {:since 100} {:t 200}))
@@ -95,7 +89,6 @@
           (is (= 1 (get (f/inv s) "iron_pickaxe")))
           (is (= {"head" "iron_helmet"} (worn s)))
           (is (= {:status :done :made ["iron_pickaxe" "iron_helmet"]} (select-keys @(:out s) [:status :made])))
-          (is (= ["iron_pickaxe" "iron_helmet"] (mapv :item (f/events-of s :kit.progress))))
           (is (= [["iron_pickaxe" "iron_helmet"]] (mapv :items (f/events-of s :kit.plan))) "the plan is stated once at the start"))))))
 
 (deftest ingots-that-cannot-be-got-stop-the-job-at-once-naming-the-ingots
@@ -160,17 +153,15 @@
 (defn hungry-world [inv food]
   (assoc-in (world inv {}) [:self :food] food))
 
-(deftest with-work-ahead-and-food-off-it-stops-needing-food
+(deftest with-food-false-no-food-child-runs
   (async done
     (tu/run-async done
       (fn ^:async t []
-        ;; armed: an unarmed body would first explore the empty world for a sword's wood
-        (let [s (start (world [{:name "bread" :count 1} {:name "wooden_axe" :count 1}] {})
-                       {:items ["iron_pickaxe"] :food false})]
-          (await (f/run-ticks s 20))
-          (is (empty? (crafted s)))
-          (is (= {:status :stopped :item "iron_pickaxe" :reason :needs-food :food 5 :carry 60}
-                 (select-keys @(:out s) [:status :item :reason :food :carry]))))))))
+        (let [s (start (hungry-world [] 5) {:items ["iron_pickaxe"] :food false :explore false})]
+          (await (f/run-ticks s 60))
+          (is (empty? (f/events-of s :kit.no-food)))
+          (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
+                 (select-keys @(:out s) [:status :item :reason]))))))))
 
 (deftest pure-crafting-from-carried-ingots-needs-no-food
   (async done
@@ -182,20 +173,11 @@
           (is (= 1 (get (f/inv s) "iron_pickaxe")))
           (is (= :done (:status @(:out s)))))))))
 
-(deftest a-starving-body-with-no-food-to-be-found-stops-needing-food-with-the-childs-reason
+(deftest a-body-with-no-food-to-be-found-goes-on-with-the-work
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (hungry-world [] 0) {:items ["iron_pickaxe"] :explore false})]
-          (await (f/run-ticks s 60))
-          (is (= {:status :stopped :item "iron_pickaxe" :reason :needs-food :cause :no-food}
-                 (select-keys @(:out s) [:status :item :reason :cause]))))))))
-
-(deftest a-hungry-but-not-starving-body-with-no-food-to-be-found-goes-on-with-the-work
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (start (hungry-world [] 14) {:items ["iron_pickaxe"] :explore false})]
           (await (f/run-ticks s 80))
           (is (= 1 (count (f/events-of s :kit.no-food))) "asked once, not again")
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
@@ -229,9 +211,9 @@
           (is (empty? (crafted s)))
           (is (= {:status :done :have ["iron_helmet"]} (select-keys @(:out s) [:status :have]))))))))
 
-(deftest a-death-restart-forgets-the-children-and-what-was-made
+(deftest a-death-restart-forgets-the-children-and-the-bill
   (is (= {:since 500 :other 1}
-         (kit/restarted {:since 100 :children {:a 1} :materials #{"x"} :made ["iron_pickaxe"] :fed true :other 1} 500))))
+         (kit/restarted {:since 100 :children {:a 1} :bill {"iron_pickaxe" 1} :bill-done true :fed true :other 1} 500))))
 
 (deftest a-wear-child-that-yields-yields-and-one-that-wore-nothing-stops
   (is (= :continue (kit/wear-outcome :continue)))
@@ -296,11 +278,3 @@
           (is (= {:status :done :made ["iron_pickaxe"]} (select-keys @(:out s) [:status :made]))
               (pr-str (select-keys @(:out s) [:status :item :reason :why])))
           (is (= 1 (get (f/inv s) "iron_pickaxe"))))))))
-
-(deftest each-obtain-child-gets-the-minutes-setting-as-its-job-time
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (await (settings/with-settings {:jobs.items.get-kit/minutes 2}
-                 (fn ^:async two-minutes []
-                   (is (= {:job-time 120} (:spend (kit/obtain-args {:primitives (tu/fake {}) :args {:items ["iron_pickaxe"]}} "iron_pickaxe" 1)))))))))))

@@ -1,0 +1,60 @@
+;; items.obtain's ways beyond the chest and the craft chain (design D29): :loose (items lying in sight), :hunt (raw meat, cooked after),
+;; :crops (own ripe field crops), and a :bill {item n}. Open plot, body at [16.5 0 12.5] looking south; the table stands at [16 0 18].
+;; Should-succeed: 3 iron ingots lying 5 blocks off (the :loose-items reflex is set off) are picked up; a cooked beef is made
+;; from a hunted cow and a carried coal at the furnace; ripe wheat is cut; a bill of helmet and boots is crafted from 9 ingots.
+;; Should-fail: the same ingots with :ways #{:chest :craft} stay lying; the same cows with :ways #{:chest :craft :smelt} are not hunted;
+;; a bill of helmet and boots from 5 ingots makes the helmet and stops at the boots (no ingot source).
+{:defaults
+ {:tags [:items :obtain :jobs]
+  :time :any
+  :plot {:height 12 :floor "grass_block"}
+  :blocks [[:set [16 0 18] "crafting_table"]]
+  :body {:at [16.5 0 12.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "loose-items-in-sight-are-picked-up"
+   :settings {:jobs.lib.loose/radius 0}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:until-facing {:yaw 0 :pitch 10} 10] [:summon "item" [16.5 0 17.5] "{Item:{id:\"minecraft:iron_ingot\",count:3}}"] [:wait-s 4]
+         [:job (jobs.items.obtain {:item "iron_ingot" :count 3 :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
+   :after [[:item "iron_ingot" 3]]}
+  {:name "loose-way-off-leaves-the-items-and-stops-no-source"
+   :settings {:jobs.lib.loose/radius 0}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:until-facing {:yaw 0 :pitch 10} 10] [:summon "item" [16.5 0 17.5] "{Item:{id:\"minecraft:iron_ingot\",count:3}}"] [:wait-s 4]
+         [:job (jobs.items.obtain {:item "iron_ingot" :count 3 :ways #{:chest :craft} :explore false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 40 :of-job true}]
+   :after [[:item "iron_ingot" 0]]
+   :limit-s 60}
+  {:name "cooked-beef-is-hunted-and-smelted"
+   :blocks [[:set [20 0 14] "furnace[facing=west]"]]
+   :body {:inventory [["iron_sword" 1] ["coal" 2]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:until-facing {:yaw 0 :pitch 10} 10] [:summon "cow" [20.5 0 20.5] "{NoAI:1b}"] [:summon "cow" [21.5 0 20.5] "{NoAI:1b}"] [:summon "cow" [20.5 0 22.5] "{NoAI:1b}"]
+         [:job (jobs.items.obtain {:item "cooked_beef" :count 1 :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 170 :of-job true}]
+   :after [[:item "cooked_beef" 1]]
+   :limit-s 190}
+  {:name "hunt-way-off-leaves-the-cows"
+   :blocks [[:set [20 0 14] "furnace[facing=west]"]]
+   :body {:inventory [["iron_sword" 1] ["coal" 2]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:until-facing {:yaw 0 :pitch 10} 10] [:summon "cow" [20.5 0 20.5] "{NoAI:1b}"] [:summon "cow" [21.5 0 20.5] "{NoAI:1b}"] [:summon "cow" [20.5 0 22.5] "{NoAI:1b}"]
+         [:job (jobs.items.obtain {:item "cooked_beef" :count 1 :ways #{:chest :craft :smelt} :explore false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 40 :of-job true}]
+   :after [[:item "beef" 0] [:item "cooked_beef" 0]]
+   :limit-s 60}
+  {:name "ripe-wheat-is-cut-by-the-crops-way"
+   :blocks [[:fill [14 -1 22] [16 -1 22] "farmland[moisture=7]"] [:fill [14 -2 23] [16 -2 23] "stone"] [:fill [14 -1 23] [16 -1 23] "water"]
+            [:fill [14 0 22] [16 0 22] "wheat[age=7]"]]
+   :body {:inventory [["wheat_seeds" 3]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:until-facing {:yaw 0 :pitch 10} 10] [:job (jobs.items.obtain {:item "wheat" :count 3 :ways #{:crops} :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:item "wheat" [:>= 3]]]}
+  {:name "bill-of-two-pieces-is-crafted-from-carried-ingots"
+   :body {:inventory [["iron_ingot" 9]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:until-facing {:yaw 0 :pitch 10} 10] [:job (jobs.items.obtain {:bill {"iron_helmet" 1 "iron_boots" 1} :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:item "iron_helmet" 1] [:item "iron_boots" 1]]}
+  {:name "bill-stops-at-the-piece-the-ingots-do-not-cover"
+   :body {:inventory [["iron_ingot" 5]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:until-facing {:yaw 0 :pitch 10} 10] [:job (jobs.items.obtain {:bill {"iron_helmet" 1 "iron_boots" 1} :explore false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 100 :of-job true}]
+   :after [[:item "iron_helmet" 1] [:item "iron_boots" 0]]}]}

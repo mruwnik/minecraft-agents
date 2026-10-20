@@ -4,11 +4,11 @@
             [engine.ctx :as ctx]
             [engine.game :as game]
             [jobs.items.get-tool :as get-tool]
-            [jobs.items.obtain.base :refer [explore-setting makes? way?]]
+            [jobs.items.obtain.base :refer [explore-setting gathers? makes? way?]]
             [jobs.items.obtain.chest :refer [candidates]]
             [jobs.items.obtain.plan :refer [craft-plan gather-plan]]
             [jobs.items.obtain.seen :refer [gather-slot seen-of with-block]]
-            [jobs.items.obtain.table :refer [animal? gather-needs]]
+            [jobs.items.obtain.table :refer [gather-needs searchable?]]
             [jobs.lib.tools :as tools]
             [jobs.lib.trees :as trees]))
 
@@ -21,7 +21,7 @@
   (let [tools (tools-wanted c names need)]
     (boolean (or (and (way? c :chest) (seq (candidates c tools)))
                  (and (makes? c) (craft-plan c tools 1))
-                 (and (way? c :gather) (or (gather-viable? c tools 1) (explorable? c tools 1)))))))
+                 (and (gathers? c) (or (gather-viable? c tools 1) (explorable? c tools 1)))))))
 
 (defn gather-viable?
   "Whether a chain is craftable once raw items are gathered, and a block for every raw need has been seen and
@@ -35,10 +35,10 @@
                       (= :ok (first (ctx/child-status c (gather-slot need) (:job need) (:args need))))))))))
 
 (defn explore-opts
-  "The search options of :explore, or nil when it is off."
+  "The search options, or nil when the :search way is off (or :explore false)."
   [c]
-  (let [e (:explore (:args c))]
-    (when e (explore-setting))))
+  (when (and (:explore (:args c)) (way? c :search))
+    (explore-setting)))
 
 (defn search-names
   "The block names a search for a need looks for."
@@ -60,7 +60,7 @@
   had (tool-viable?)."
   [c names n]
   (boolean (and (explore-opts c)
-                (some #(and (not (animal? %)) (or (not (seen-of c %)) (trees-unreachable? c (with-block c %)))
+                (some #(and (searchable? %) (or (not (seen-of c %)) (trees-unreachable? c (with-block c %)))
                             (or (not (tools-wanted c names %)) (tool-viable? c names %)))
                       (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))))))))
 

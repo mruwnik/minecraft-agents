@@ -1,7 +1,7 @@
 (ns jobs.items.obtain.why
   "The texts of a source that has nothing: why no source, what a failed try adds."
   (:require [engine.game :as game]
-            [jobs.items.obtain.base :refer [makes? animal-radius seen-radius way?]]
+            [jobs.items.obtain.base :refer [animal-radius gathers? makes? seen-radius way?]]
             [jobs.items.obtain.need :refer [explore-opts]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [seen-blocks-of seen-of]]
@@ -60,8 +60,8 @@
      "; "
      (concat (when (way? c :chest) [(str "no seen chest that may hold " (clojure.string/join "/" names))])
              (when (makes? c) [(recipes/lacking version have (first names) n)])
-             (when (way? c :gather) [(unseen-why c names n)])
-             (when-let [w (and (way? c :gather) (pickaxe-why version have names))] [w])))))
+             (when (gathers? c) [(unseen-why c names n)])
+             (when-let [w (and (gathers? c) (pickaxe-why version have names))] [w])))))
 
 (defn tried-text
   "What a gather that was tried and failed adds to the no-source text (\"; gathering was tried and ended ..\", with the

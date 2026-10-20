@@ -34,7 +34,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[sym ways] [['jobs.items.obtain [:chest :craft :smelt :gather]] ['jobs.items.get-tool [:chest :craft :gather]]]
+        (doseq [[sym ways] [[(quote jobs.items.obtain) [:chest :craft :smelt :loose :gather :hunt :crops :search]] ['jobs.items.get-tool [:chest :craft :gather]]]
                 :let [job (get registry/jobs sym)]]
           (is (fn? (:can-start? job)) (str sym " has can-start?"))
           (is (nil? (:check job)) (str sym " has no old check"))

@@ -1,0 +1,83 @@
+(ns engine.obtain-ways-test
+  "items.obtain's ways beyond the chest and the craft chain (:loose, :hunt, :crops, :search) and its :bill."
+  (:require [cljs.test :refer [deftest is async are]]
+            [engine.blocks-dig-test :as bd]
+            [engine.core :as core]
+            [engine.fake :as fake]
+            [engine.game :as game]
+            [engine.hostile-test :as h]
+            [engine.test-util :as tu]
+            [jobs.items.obtain :as obtain]
+            [jobs.items.obtain.base :as base]
+            [jobs.items.obtain.table :as table]
+            [jobs.items.recipes :as recipes]))
+
+(defn cow [id x] {:id id :name "cow" :kind "passive" :pos {:x x :y 64 :z 0} :drops [{:name "beef" :count 1}]})
+
+(defn ^:async scenario [args world n]
+  (let [s (h/setup world 50)]
+    (core/submit! (:eng s) (list 'jobs.items.obtain args) {})
+    (await (tu/run-ticks (:eng s) (:clock s) n 700))
+    s))
+
+(defn attacked [{:keys [p]}] (mapv #(.-id (.-args %)) (h/calls p "attack")))
+
+(def herd {:inventory h/sword :entities [(cow 1 3) (cow 2 6) (cow 3 8) (cow 4 10)]})
+
+(deftest raw-meat-is-a-hunt-need-and-cooked-meat-gathers-it
+  (is (= {"beef" 2} (:gather (recipes/plan game/default-version {} "cooked_beef" 2 (merge (table/source-opts) {:gather? true :table? true})))))
+  (is (= [:hunt :hunt] (map (comp table/need-way first table/gather-needs) [{"beef" 1} {"porkchop" 1}]))))
+
+(deftest a-field-crop-is-a-crops-need-and-a-block-is-a-gather-need
+  (are [item way] (= way (table/need-way (first (table/gather-needs {item 1}))))
+    "wheat" :crops "potato" :crops "cobblestone" :gather "leather" :hunt))
+
+(deftest a-gather-in-the-ways-brings-the-field-ways
+  (are [ways wanted] (= wanted (base/way? {:quote-call {:ways ways}} :hunt))
+    #{:gather} true #{:hunt} true #{:chest :craft} false))
+
+(deftest hunt-way-hunts-raw-meat
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:item "beef" :count 1 :ways #{:hunt}} herd 40))]
+          (is (seq (attacked s)) "a cow was attacked")
+          (is (= 'jobs.combat.hunt (:via (first (filter #(= :obtain.gathering (:kind %)) @(:seen s)))))))))))
+
+(deftest without-the-hunt-way-no-animal-is-hunted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:item "beef" :count 1 :ways #{:chest :craft :loose}} herd 40))]
+          (is (empty? (attacked s))))))))
+
+(deftest the-loose-way-picks-up-what-lies-in-sight
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self {:pos {:x 0 :y 64 :z 0}}})]
+          (swap! (fake/state p) fake/spawn [4 64 0] "beef" 1)
+          (let [res (await (tu/child-outcome eng 'jobs.items.obtain {:item "beef" :count 1 :ways #{:loose}} 30))]
+            (is (= :done (:status res)) (pr-str res))
+            (is (= 1 (bd/carried p "beef")))))))))
+
+(deftest a-bill-gets-each-item-and-names-the-one-it-stops-at
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self {:pos {:x 0 :y 64 :z 0}}})]
+          (swap! (fake/state p) fake/spawn [4 64 0] "beef" 1)
+          (let [res (await (tu/child-outcome eng 'jobs.items.obtain {:bill {"beef" 1 "diamond" 1} :ways #{:loose}} 60))]
+            (is (= :stopped (:status res)))
+            (is (= "diamond" (:item res)))
+            (is (= 1 (bd/carried p "beef")) "the first item was got")))))))
+
+(deftest a-bill-and-an-item-together-are-bad-args
+  (are [args] (some? (base/args-error args))
+    {:bill {"beef" 1} :item "beef" :count 1}
+    {:bill {} :count 1}
+    {:bill {"beef" 0} :count 1}))
+
+(deftest a-carried-bill-is-done
+  (let [c {:primitives (tu/fake {:inventory [{:name "beef" :count 2}]}) :args {:bill {"beef" 2}} :view (fn [] {:data {} :now 0})}]
+    (is (= :ok (first (obtain/done? c))))))

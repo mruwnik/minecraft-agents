@@ -3,9 +3,9 @@
   (:require [engine.ctx :as ctx]
             [engine.game :as game]
             [jobs.lib.crafting-table :as crafting-table]
-            [jobs.items.obtain.base :refer [craft-radius plan-allowed? seen-radius]]
+            [jobs.items.obtain.base :refer [craft-radius plan-allowed? seen-radius way?]]
             [jobs.items.obtain.seen :refer [seen-of sheep-in-range shears-source wool-keep]]
-            [jobs.items.obtain.table :refer [gather-needs grass-seeds hand-dug leaves-of material-blocks source-opts stalks wool-color wool?]]
+            [jobs.items.obtain.table :refer [gather-needs grass-seeds hand-dug leaves-of material-blocks need-way source-opts stalks wool-color wool?]]
             [jobs.items.recipes :as recipes]
             [jobs.lib.look :as look]
             [jobs.lib.storage :as storage]
@@ -80,6 +80,7 @@
         seen? #(seq (look/seen-blocks p {:names (vec (material-blocks version %)) :radius (seen-radius) :max 1}))
         seen (set (filter seen? (recipes/stone-materials version)))
         materials (if (seq seen) seen (recipes/stone-materials version))
+        allowed (fn [pl] (when (and pl (every? #(way? c (need-way %)) (some-> pl :gather (gather-needs version)))) pl))
         plan-of (fn [name]
                   (if-let [seen-of-name (cond (hand-dug name) (hand-dug name)
                                               (leaves-of name) #{(leaves-of name)}
@@ -101,6 +102,6 @@
                               (update :gather any-log version have name n opts)
                               (assoc :item name)))))))]
     (if (= 1 (count names))
-      (plan-of (first names))
-      (let [plans (keep plan-of names)]
+      (allowed (plan-of (first names)))
+      (let [plans (keep (comp allowed plan-of) names)]
         (pick-plan c (or (not-empty (filter #(raw-seen? c %) plans)) plans))))))
