@@ -8,6 +8,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.look :as look]
             [jobs.lib.dig-look :as dig-look]
@@ -51,11 +52,8 @@
   {:water-radius {:doc "on fire, water within this many blocks is walked into" :spec (a/num-in 0 nil) :default 6}
    :ignore-zones? :shared})
 
-(def hazards #{"lava" "fire" "soul_fire" "magma_block" "campfire" "soul_campfire"})
-(def passable #{"air" "cave_air" "water" "short_grass" "tall_grass" "grass" "snow"})
-(def unsafe-floor
-  #{"air" "cave_air" "void_air" "water" "lava" "fire" "soul_fire" "magma_block" "campfire" "soul_campfire"
-    "cactus" "sweet_berry_bush" "powder_snow"})
+(def hazards bs/harms-in-cell)
+(def unsafe-floor (into (into bs/air bs/fluids) bs/bad-floor))
 
 (def extinguish-policy {:cap 20 :ttl (* 60 60 1000)})
 (def hazard-policy {:cap 50 :ttl (* 6 60 60 1000)})
@@ -150,8 +148,8 @@
   (let [feet (u/seen-name p pos)
         head (u/seen-name p (offset pos 0 1 0))
         below (u/seen-name p (offset pos 0 -1 0))]
-    (and (contains? passable feet)
-         (contains? passable head)
+    (and (bs/passable-or-water? feet)
+         (bs/passable-or-water? head)
          (or (= "water" feet)
              (and (some? below) (not (contains? unsafe-floor below)))))))
 
@@ -218,7 +216,7 @@
             (and (= "lava" name)
                  (< (:y pos) (:y feet))
                  (let [above (u/block-name p (offset pos 0 1 0))]
-                   (not (or (nil? above) (contains? passable above) (= "lava" above))))))
+                   (not (or (nil? above) (bs/passable-or-water? above) (= "lava" above))))))
           scanned))
 
 (defn cover-item

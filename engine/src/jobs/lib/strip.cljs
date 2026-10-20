@@ -8,7 +8,8 @@
   A segment is {:id :y :axis :x|:z :line n :from a :to b :open-ends #{:from :to}}: y is the rail level, the axis the
   direction it runs, line the other horizontal coordinate. The id comes from the geometry (\"x-27-290:-180..-160\").
   Memory is a map id -> segment, with :state kept by the caller."
-  (:require [jobs.lib.access.rules :as rules]))
+  (:require [jobs.lib.access.rules :as rules]
+            [jobs.lib.block-sets :as bs]))
 
 (def run-gap "Evidence further apart than this on one line belongs to different runs." 9)
 (def join "Reach at which two perpendicular runs count as crossing." 7)
@@ -23,7 +24,7 @@
 (defn fence? [n] (boolean (and n (re-find #"_fence$" n) (not= n "nether_brick_fence"))))
 (defn planks? [n] (boolean (and n (re-find #"_planks$" n))))
 (defn rail? [n] (boolean (and n (re-find #"(^|_)rail$" n))))
-(defn passable? [n] (boolean (and n (or (#{"air" "cave_air" "void_air" "cobweb"} n) (rail? n) (re-find #"torch$" n)))))
+(defn passable? [n] (boolean (and n (or (bs/air n) (= "cobweb" n) (rail? n) (re-find #"torch$" n)))))
 
 (defn at
   "The cell at coordinate a along axis, on line, at y."
@@ -186,7 +187,6 @@
              :leaves (vec (remove children order))
              :unreached (vec (remove (set order) (map :id segs)))}))))))
 
-(defn air? [n] (contains? #{"air" "cave_air" "void_air"} n))
 (defn falling? [n] (boolean (and n (or (#{"gravel" "sand" "red_sand"} n) (re-find #"_concrete_powder$" n)))))
 (defn wood? [n] (boolean (and n (or (planks? n) (fence? n) (re-find #"_(log|wood)$" n)))))
 
@@ -208,7 +208,7 @@
         beside (fn [[dx dy dz]] (block-at [(+ x dx) (+ y dy) (+ z dz)]))
         below (beside [0 -1 0])]
     (cond (some #(= "lava" (beside %)) faces) :lava
-          (and floor? (or (nil? below) (air? below) (contains? #{"water" "lava"} below))) :bridge
+          (and floor? (or (nil? below) (bs/air below) (contains? #{"water" "lava"} below))) :bridge
           (falling? (beside [0 1 0])) :falling)))
 
 (defn targets
@@ -228,7 +228,7 @@
                     :when k
                     :let [inside? (and (<= (js/Math.abs w) 1) (<= h 2))]
                     :when (case k :wood inside? true)
-                    :when (or (not= k :ore) (some (fn [[dx dy dz]] (air? (block-at (mapv + cell [dx dy dz])))) faces))]
+                    :when (or (not= k :ore) (some (fn [[dx dy dz]] (bs/air (block-at (mapv + cell [dx dy dz])))) faces))]
                 {:a a :w w :h h :cell cell :name n :class k})
         kept (for [c cells :when (= :wood (:class c))
                    :let [why (why-kept block-at (:cell c) (= -1 (:h c)))]

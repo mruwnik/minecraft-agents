@@ -6,6 +6,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.job-common :as common]
             [jobs.lib.access.rules :as rules]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.gate :as gate]
             [jobs.lib.need :as need]
             [jobs.lib.ready :as ready]
@@ -54,7 +55,6 @@
 (defn max-cells [] (settings/get settings ::max-cells))
 (def pathable #{"grass_block" "dirt" "coarse_dirt" "podzol" "mycelium" "rooted_dirt"})
 (def ground-cover #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "snow"})
-(def air #{"air" "cave_air" "void_air"})
 (defn max-tries [] (settings/get settings ::max-tries))
 (def no-shovel {:reason :no-tool :kind "shovel"})
 (def target [:from :to :center :radius])
@@ -260,7 +260,7 @@
               :else :again))
 
           (nil? above) (do (bump! c target :unloaded) :again)
-          (not (air above)) (do (skip! c [target] :covered) :again)
+          (not (bs/air above)) (do (skip! c [target] :covered) :again)
           :else (await (use-shovel! c target tool)))))))
 
 (defn ^:async path-step!

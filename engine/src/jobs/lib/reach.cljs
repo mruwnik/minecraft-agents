@@ -9,6 +9,7 @@
             [clojure.string :as str]
             [engine.entity-observations :as obs]
             [engine.sight :as sight]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.combat :as combat]
             [jobs.lib.solid :as solid]
             [jobs.lib.util :as u]))
@@ -25,10 +26,6 @@
 (defn open-prop? [b]
   (let [v (some-> b .-properties .-open)]
     (or (true? v) (= "true" v))))
-
-(def hazard-blocks
-  "Blocks a walker treats as walls and never stands on."
-  #{"lava" "fire" "soul_fire" "magma_block" "cactus" "sweet_berry_bush" "campfire" "soul_campfire"})
 
 (def tall-block
   "Blocks with a 1.5-block collision box: nothing walking jumps onto them (fences, walls, shut fence gates)."
@@ -47,7 +44,7 @@
     (cond
       (nil? name) :open
       (= "water" name) :water
-      (hazard-blocks name) :solid
+      (bs/harms-in-cell name) :solid
       (openable? name) (if (open-prop? b) :open (if (re-find tall-block name) :tall :solid))
       (re-find tall-block name) :tall
       (str/ends-with? name "_leaves") :solid
@@ -124,7 +121,7 @@
      (and (passable? kind-at x y z) (passable? kind-at x (inc y) z)
           (keyword-identical? :solid (kind-at x (dec y) z))
           (or (nil? (.-sensedAt p))
-              (boolean (and below (not (hazard-blocks (.-name below))))))))))
+              (boolean (and below (not (bs/harms-in-cell (.-name below))))))))))
 
 
 (defn seen-standable?

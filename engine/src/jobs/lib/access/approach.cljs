@@ -31,6 +31,7 @@
             [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.access.rules :as rules]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -52,10 +53,9 @@
   2)
 
 (defn passable?
-  "A known cell the body stands in: air or a plant/snow it overwrites, never a fluid."
+  "A known cell the body stands in: air, a plant or flower, never a fluid."
   [block-at pos]
-  (let [n (block-at pos)]
-    (boolean (and n (rules/replaceable n) (not (rules/fluids n))))))
+  (bs/passable? (block-at pos)))
 
 (defn standing-cell?
   "Feet and head cells passable over a solid floor. The floor is read from floor-at (cells as seen, no guess).

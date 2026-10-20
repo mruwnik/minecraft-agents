@@ -15,6 +15,7 @@
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.blocks :as b]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.reach :as reach]
@@ -58,11 +59,9 @@
 (defn ahead [cell [dx dz] k] (add cell [(* k dx) 0 (* k dz)]))
 
 (defn solid?
-  "A loaded block that is neither air, a fluid nor a plant a body walks through."
+  "A loaded block that is neither passable (block-sets/passable?) nor a fluid."
   [n]
-  (boolean (and n (not (rules/replaceable n)) (not (rules/fluids n)))))
-
-(defn passable? [n] (boolean (and n (rules/replaceable n) (not (rules/fluids n)))))
+  (boolean (and n (not (bs/passable? n)) (not (rules/fluids n)))))
 
 (defn protected? [n] (boolean (and n (re-find protected n))))
 
@@ -106,7 +105,7 @@
   (let [side (ahead feet d 1)
         h (count (take-while #(let [cell (up side %)] (and (not (unseen? cell)) (solid? (block-at cell))))
                              (range (inc (max-depth)))))
-        room? #(let [cell (up side %)] (or (unseen? cell) (passable? (block-at cell))))]
+        room? #(let [cell (up side %)] (or (unseen? cell) (bs/passable? (block-at cell))))]
     (when (and (<= 2 h (max-depth)) (rules/solid-floor? block-at (up side (dec h))) (room? h) (room? (inc h)))
       h)))
 
@@ -116,7 +115,7 @@
   one, else the lowest; nil when none."
   [block-at unseen? feet dir]
   (let [n-of (fn [d] (when-let [h (rim-height block-at unseen? feet d)]
-                       (when (every? #(passable? (block-at (up feet %))) (range 2 (+ h 2)))
+                       (when (every? #(bs/passable? (block-at (up feet %))) (range 2 (+ h 2)))
                          (dec h))))]
     (or (some-> dir n-of) (some->> cardinals (keep n-of) seq (apply min)))))
 
@@ -181,9 +180,9 @@
       (cond
         (not (rules/solid-floor? block-at (up row -1))) nil
         (some nil? names) nil
-        (and (> k 1) (some unseen? pair) (every? #(or (unseen? %) (passable? (block-at %))) pair))
+        (and (> k 1) (some unseen? pair) (every? #(or (unseen? %) (bs/passable? (block-at %))) pair))
         {:cells cells :through row :unseen true}
-        (every? passable? names) (when (> k 1) {:cells cells :through row})
+        (every? bs/passable? names) (when (> k 1) {:cells cells :through row})
         (> k max-thick) nil
         (some protected? names) nil
         (some rules/fluids names) nil
@@ -203,7 +202,7 @@
   ([block-at may-dig? cell] (diggable? block-at may-dig? (constantly false) cell))
   ([block-at may-dig? own? cell]
    (let [n (block-at cell)]
-     (or (passable? n) (and (or (rules/natural? n) (boolean (and n (own? cell n)))) (boolean (may-dig? cell)))))))
+     (or (bs/passable? n) (and (or (rules/natural? n) (boolean (and n (own? cell n)))) (boolean (may-dig? cell)))))))
 
 (defn stair-heading
   "The first heading of dirs (each [dx dz]) with a solid block in front at feet height to stand on (bridge?: or none,
@@ -354,7 +353,7 @@
          door? (and gap (every? #(diggable? block-at may-dig? own? %) (:cells gap)))
          rim (when (and rim-n (>= count rim-n)) rim-n)]
      (cond
-       (and pillar-blocks? (passable? (block-at (up feet 2))))
+       (and pillar-blocks? (bs/passable? (block-at (up feet 2))))
        {:step :pillar :height height :item item}
 
        (and door? (<= (second goal) (second feet)))

@@ -6,6 +6,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.blocks :as b]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.job-common :as common]
@@ -60,7 +61,6 @@
 (def ground-cover
   "What lies on a cell and is dug first: the plants, small flowers and snow layer a placement clears (b/clearable) and the tall flowers."
   (into b/clearable #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "snow" "sunflower" "lilac" "rose_bush" "peony"}))
-(def air #{"air" "cave_air" "void_air"})
 (defn max-tries [] (settings/get settings ::max-tries))
 
 (defn span
@@ -293,7 +293,7 @@
                     (do (bump! c target :cover-stuck) :again)
                     :else :again))
 
-                (not (or (nil? above) (air above)))
+                (not (or (nil? above) (bs/air above)))
                 (do (skip! c [target] :covered) :again)
 
                 :else

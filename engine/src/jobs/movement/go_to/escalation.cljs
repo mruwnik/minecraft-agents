@@ -21,6 +21,7 @@
             [jobs.lib.blocks :as b]
             [jobs.lib.ready :as ready]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.shelter.inside :as sh-inside]
@@ -345,7 +346,7 @@
           n (block-at cell)]
       (cond
         (and guess (not (dig-look/unknown? p cell)) (not= n block)) :replan
-        (escape/passable? n) :open
+        (bs/passable? n) :open
         (or (escape/protected? n) (not (escape/diggable? block-at (may-dig-fn c) (own-placed-fn c) cell))) :not-diggable
         :else
         (let [o (await (b/dig-cell! c (zipmap [:x :y :z] cell) {:ignore-zones? (boolean (:ignore-zones? (:args c))) :fetch (fetch-tool? c)}))

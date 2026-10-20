@@ -1,5 +1,6 @@
 (ns jobs.survival.bed-down
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -141,7 +142,7 @@
         roof (:roof-height (:args c))
         {:keys [x y z]} (sh-sense/feet p)
         in (access/rules-input c)
-        air? #(#{"air" "cave_air"} (u/seen-name p %))
+        air? #(bs/air (u/seen-name p %))
         free? (fn [pos] (and (air? pos) (sh-sense/solid-at? p (update pos :y dec))
                              (nil? (tidy-rules/keep-why (u/seen-name p (update pos :y dec))))))
         covered? (fn [pos] (or (not roofed?) (some #(sh-sense/solid-at? p (update pos :y + %)) (range 1 (inc roof)))))

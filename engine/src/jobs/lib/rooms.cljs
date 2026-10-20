@@ -2,7 +2,8 @@
   "Closed rooms, for a flight and for shutting in: the body's home or any closed room it has seen (jobs.lib.reach/room: walls, a
   roof or none needed, doors that shut) that it gets into before every melee chaser reaches a door of it
   (jobs.lib.cost/reach-first?). Shared by jobs.survival.retreat and jobs.survival.enter-room."
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.block-sets :as bs]
+            [clojure.string :as str]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
@@ -284,7 +285,7 @@
         feet (sh-sense/feet p)
         seen (delay (look/seen-entities p {:radius 8}))
         free? (fn [{:keys [x y z] :as cell}]
-                (and (#{"air" "cave_air"} (u/seen-name p cell)) (not (pillar/mob-in @seen [x y z]))))]
+                (and (bs/air (u/seen-name p cell)) (not (pillar/mob-in @seen [x y z]))))]
     (when-let [e (:cell (reach/unroofed-cell p feet))]
       (when-let [d (shut-by p feet e free?)]
         (when-not (or (some #(= d (:data %)) (ctx/entries c :doorway-tried))

@@ -1,5 +1,6 @@
 (ns jobs.items.collect-drops
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -155,7 +156,7 @@
           (some #{(at 0 -1 0)} unseen) :unseen-floor
           (seq unseen) :unseen-cell
           (or (not (reach/standable-cell? p (at 0 0 0)))
-              (some #(reach/hazard-blocks (u/seen-name p %)) [(at 0 0 0) (at 0 1 0)])
+              (some #(bs/harms-in-cell (u/seen-name p %)) [(at 0 0 0) (at 0 1 0)])
               (some #(fluids (u/seen-name p %)) (concat [(at 0 0 0) (at 0 -1 0)] sides)))
           :unsafe-floor)))))
 

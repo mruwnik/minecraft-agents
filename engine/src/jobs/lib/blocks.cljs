@@ -7,7 +7,7 @@
             [clojure.string :as str]
             [engine.args :as a]
             [engine.settings :as settings]
-            [jobs.lib.access.rules :as rules]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.aim :as aim]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -22,8 +22,8 @@
             [jobs.lib.places :as places]
             [engine.game :as game]))
 
-(def air "Open cells; the invisible light block counts: a body walks through it." #{"air" "cave_air" "void_air" "light"})
-(def fluids #{"water" "lava" "bubble_column"})
+(def air bs/air)
+(def fluids bs/fluids)
 
 (def ores
   {"coal_ore" "coal" "iron_ore" "raw_iron" "copper_ore" "raw_copper" "gold_ore" "raw_gold"
@@ -54,15 +54,10 @@
 
 (defn pick [c blocks] (:name (first (carried c blocks))))
 
-(def flowers
-  #{"dandelion" "poppy" "blue_orchid" "allium" "azure_bluet" "red_tulip" "orange_tulip" "white_tulip" "pink_tulip"
-    "oxeye_daisy" "cornflower" "lily_of_the_valley" "torchflower" "pink_petals" "wildflowers" "short_dry_grass"
-    "tall_dry_grass" "bush" "firefly_bush"})
-
 (def clearable
   "What jobs.blocks.place digs out of a cell before placing: the replaceable plants and snow layer
-  (jobs.lib.access.rules/replaceable, less air and fluids) and small flowers, which a placement does not overwrite."
-  (into (set/difference rules/replaceable air fluids) flowers))
+  (block-sets/replaceable, less air and fluids) and small flowers, which a placement does not overwrite."
+  (into (set/difference bs/replaceable air fluids) bs/flowers))
 
 (def drops-table
   "{block name [item name ..]} of what minecraft-data lists each block drops for a version (memoised)."

@@ -1,7 +1,8 @@
 (ns jobs.lib.step-off
   "Leaving a cell the body stands in so something can be put or dug there: one go-to to the nearest cell within two
   blocks that can be stood on and is no hazard, never the column of the cell itself."
-  (:require [engine.args :as a]
+  (:require [jobs.lib.block-sets :as bs]
+            [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.child :as child]
             [jobs.lib.access :as access]
@@ -17,7 +18,7 @@
 (defn hazard-at?
   "Whether the feet or head cell holds fire, lava or another block a body must not stand in."
   [p {:keys [x y z]}]
-  (some #(contains? reach/hazard-blocks (u/seen-name p {:x x :y % :z z})) [y (inc y)]))
+  (some #(contains? bs/harms-in-cell (u/seen-name p {:x x :y % :z z})) [y (inc y)]))
 
 (defn zone-ok
   "An :ok? fn for candidates: no cell another owner's zone, claim or plan footprint refuses, over a rules input

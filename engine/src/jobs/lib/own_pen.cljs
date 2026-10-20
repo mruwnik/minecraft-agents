@@ -1,7 +1,8 @@
 (ns jobs.lib.own-pen
   "The wall of the pen the body stands shut in: a closed enclosure (jobs.lib.pen/check from its feet) in the body's own
   area (zone or plan) with livestock inside. A dig out of it frees the animals, so go-to's escalation and clear-box spare its wall."
-  (:require [engine.args :as a]
+  (:require [jobs.lib.block-sets :as bs]
+            [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.animals :as animals]
@@ -53,7 +54,7 @@
 (defn standing-cell
   "The first feet cell [x y z] going down column x z from top to bottom (air over a seen non-air block), else nil."
   [name-at x z top bottom]
-  (let [air? #(contains? #{"air" "cave_air"} %)]
+  (let [air? bs/air]
     (first (for [y (range top (dec bottom) -1)
                  :let [here (name-at [x y z]) below (name-at [x (dec y) z])]
                  :when (and (air? here) below (not (air? below)))]

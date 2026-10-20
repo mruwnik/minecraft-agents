@@ -1,11 +1,11 @@
 (ns jobs.lib.surface
   (:require [jobs.lib.blocks :as b]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.trees :as trees]))
 
-(def air #{"air" "cave_air" "void_air"})
-(defn open? "Air, or a plant a hoe's user digs first (grass, flowers): no ground." [n] (or (air n) (contains? b/clearable n)))
+(defn open? "Air, or a plant a hoe's user digs first (grass, flowers): no ground." [n] (or (bs/air n) (contains? b/clearable n)))
 (defn canopy? "A log or leaf block: a tree stands on the ground, it is not it." [n] (or (trees/log-name? n) (trees/leaves-name? n)))
-(def no-floor #{"water" "lava" "bubble_column" "ice" "frosted_ice" "magma_block" "powder_snow"})
+(def no-floor (into (into bs/fluids bs/bad-floor) #{"ice" "frosted_ice"}))
 
 (defn column-top
   "The y of the surface of column x z: the highest non-air block scanning from

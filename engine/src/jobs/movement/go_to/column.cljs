@@ -15,7 +15,8 @@
   column whose ground is not made out is looked at after a fruitless walk (at most 3 a call); with no stand in reach of its guess it walks to seen stands toward it (column/waypoint, off the line past a cliff), until ::max-waypoint-misses bring it no nearer. A cell over a short floor (farmland, a path, a bottom slab) stands for that
   block's own cell, where the body's feet are. :place (a name such as :home, set by jobs.memory.set-place) walks to
   that place's recorded position instead of :pos; a name not in memory falls back to the shared marker of that name (jobs.lib.world/marker)."
-  (:require [engine.args :as a]
+  (:require [jobs.lib.block-sets :as bs]
+            [engine.args :as a]
             [jobs.lib.places :as places]
             [jobs.lib.reach :as reach]
             [jobs.lib.surface :as surface]
@@ -51,7 +52,7 @@
   "A block as a stand test reads it: :unknown (nil: unseen or unloaded), :hazard, else reach/kind-of."
   [b]
   (cond (nil? b) :unknown
-        (reach/hazard-blocks (.-name b)) :hazard
+        (bs/harms-in-cell (.-name b)) :hazard
         :else (reach/kind-of b)))
 
 (defn surface-kind-at

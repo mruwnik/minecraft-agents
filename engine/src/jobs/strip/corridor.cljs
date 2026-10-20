@@ -1,5 +1,6 @@
 (ns jobs.strip.corridor
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.ready :as ready]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [engine.args :as a]
@@ -95,7 +96,7 @@
   (let [cells (for [d [0 1 -1] side [1 -1]] (if (= axis :x) [(+ x d) y (+ z side)] [(+ x side) y (+ z d)]))]
     (filter (fn [[cx cy cz]]
               (let [below (block-at [cx (dec cy) cz])]
-                (and (strip/air? (block-at [cx cy cz])) (not (strip/passable? below)))))
+                (and (bs/air (block-at [cx cy cz])) (not (strip/passable? below)))))
             cells)))
 
 (defn due-spot
@@ -161,7 +162,7 @@
         d2 (fn [[cx cy cz]] (+ (* (- cx x) (- cx x)) (* (- cy y) (- cy y)) (* (- cz z) (- cz z))))]
     (->> (range (max from (- along 4)) (inc (min to (+ along 4))))
          (map #(strip/at axis (:y seg) line %))
-         (filter #(and (in-spawn-box? {:x x :y y :z z} %) (let [n (block-at %)] (or (strip/air? n) (strip/rail? n)))
+         (filter #(and (in-spawn-box? {:x x :y y :z z} %) (let [n (block-at %)] (or (bs/air n) (strip/rail? n)))
                        (some-> (sh-sense/light-at (:primitives c) (zipmap [:x :y :z] %)) (< (lit)))
                        (not-any? (fn [h] (<= (u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] h)) (torch-gap))) hung)))
          (sort-by d2)

@@ -2,7 +2,7 @@
   "The mend of jobs.gather.mine: the ground cells under the start that the dig left open, filled by a blocks.fill-cells child."
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
-            [jobs.gather.mine.targets :refer [air]]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.choose :as choose]
             [jobs.lib.gate :as gate]
@@ -15,7 +15,7 @@
   (let [{:keys [descent start]} (ctx/mem c)
         way-y (when (pos? (:steps descent 0)) (js/Math.floor (:y start)))]
     (filterv #(let [name (u/seen-name (:primitives c) (:pos %))]
-                (and name (or (air name) (= "water" name))
+                (and name (or (bs/air name) (= "water" name))
                      (or (nil? way-y) (>= (:y (:pos %)) way-y))))
              (:ground (ctx/mem c)))))
 

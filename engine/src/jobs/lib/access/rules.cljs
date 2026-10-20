@@ -41,16 +41,14 @@
   A cell holding air, water, lava or a bubble column can be placed into."
   (:require ["minecraft-data" :as minecraft-data]
             [clojure.string :as str]
-            [jobs.lib.access.zones :as zones]))
+            [jobs.lib.access.zones :as zones]
+            [jobs.lib.block-sets :as bs]))
 
-(def air "Open cells; the invisible light block counts: a body walks through it." #{"air" "cave_air" "void_air" "light"})
+(def air bs/air)
 
-(def fluids #{"water" "lava" "bubble_column"})
+(def fluids bs/fluids)
 
-(def replaceable
-  "Names a placed block takes the place of: air, fluids (plugging a source, bridging water, sealing a leak) and the
-  plants, snow and invisible light blocks a placement overwrites."
-  (into (into air fluids) #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "snow" "vine" "glow_lichen" "leaf_litter" "hanging_roots" "light"}))
+(def replaceable bs/replaceable)
 
 (def item-block
   "Items whose placed block is not the block of the same name: seeds and root crops place a crop block, and the
@@ -68,9 +66,7 @@
         shape (some-> block (->> (aget (.-blocksByName (minecraft-data version)))) .-boundingBox)]
     (boolean (and block (or (= "empty" shape) (and shape (str/ends-with? block "_carpet")))))))
 
-(def not-a-floor
-  "Non-fluid, non-replaceable names that are no floor to stand on after the block above is gone."
-  #{"magma_block" "powder_snow" "cobweb" "fire" "soul_fire" "cactus" "sweet_berry_bush"})
+(def not-a-floor bs/bad-floor)
 
 (def base-blocks
   "Blocks of a base: storage, beds, workstations, doors and signs."
@@ -95,7 +91,7 @@
   "True when the cell holds a known block that is solid and safe to stand on."
   [block-at pos]
   (let [n (block-at pos)]
-    (boolean (and n (not (replaceable n)) (not (fluids n)) (not (not-a-floor n))))))
+    (boolean (and n (not (bs/passable? n)) (not (fluids n)) (not (not-a-floor n))))))
 
 (defn in-box? [[x y z] {[x0 y0 z0] :min [x1 y1 z1] :max}]
   (and (<= x0 x x1) (<= y0 y y1) (<= z0 z z1)))

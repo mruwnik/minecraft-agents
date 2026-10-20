@@ -9,6 +9,7 @@
             [jobs.lib.dig-look :as look]
             [jobs.lib.escape :as escape]
             [jobs.lib.access.rules :as rules]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
@@ -209,7 +210,7 @@
   (let [b (u/seen-block p cell)
         floor (u/sensed p (update cell :y dec))]
     (boolean (and b (not (breath/suffocates? p (update cell :y inc))) (= "water" (.-name b)) (zero? (js/Number (or (some-> (.-properties b) .-level) 0)))
-                  (not (true? (.-unknown floor))) (.-fullCube floor) (not (contains? breath/harmful-in-cell (.-name floor)))))))
+                  (not (true? (.-unknown floor))) (.-fullCube floor) (not (contains? bs/harms-in-cell (.-name floor)))))))
 
 (defn recovery-spot
   "The nearest recovery-spot? cell joined to from by seen water within steps cells; nil when from is one itself or none is."

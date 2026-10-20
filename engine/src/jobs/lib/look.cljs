@@ -3,7 +3,8 @@
   then down at the floor ahead, then up) with a sight pass after each look, so what lies beside or behind it enters
   perception's memory. Nothing is sensed through walls: jobs read blocks and entities through the seen-* helpers here
   (memory of what the body saw, players, hostiles it saw or heard), never through blocks/entities as a scan."
-  (:require [engine.args :as a]
+  (:require [jobs.lib.block-sets :as bs]
+            [engine.args :as a]
             [engine.game :as game]
             [engine.settings :as settings]
             [clojure.string :as str]
@@ -80,7 +81,7 @@
     (when-let [cell (first cells)]
       (let [b (u/sensed p cell)]
         (cond (true? (some-> b .-unknown)) true
-              (not (contains? #{"air" "cave_air" "void_air"} (some-> b .-name))) false
+              (not (contains? bs/air (some-> b .-name))) false
               :else (recur (rest cells)))))))
 
 (defn up-glance

@@ -192,3 +192,12 @@
         end (walk/choose-target flat-world from [threat] nil [] 6 {:avoid [no-ahead (constantly true) no-left]})]
     (is (< (:x end) 3) "the first avoid holds")
     (is (not (pos? (:z end))) "the all-avoiding one is skipped, the last holds")))
+
+(deftest a-meadow-flight-walks-through-flowers-and-rails
+  (let [meadow (fn [{:keys [x y z]}]
+                 (cond (<= y 63) "stone"
+                       (not= y 64) "air"
+                       (even? (+ x z)) "cornflower"
+                       :else "rail"))]
+    (is (< 3 (:x (walk/choose-target meadow from [threat] nil [] 6)))
+        "flowers and rails are no walls: the flight runs straight away from the threat")))

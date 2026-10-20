@@ -1,5 +1,6 @@
 (ns jobs.forestry.tidy
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -7,7 +8,6 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.need :as need]
             [jobs.lib.gate :as gate]
-            [jobs.lib.dig-route :as dig-route]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.trees :as trees :refer [default-radius trees-near seen-name drop-filter replant-kind]]))
@@ -44,7 +44,7 @@
 (defn raised?
   "Whether the block under pos is seen as air."
   [p pos]
-  (contains? dig-route/air (seen-name p (update pos :y dec))))
+  (contains? bs/air (seen-name p (update pos :y dec))))
 
 (defn ground-cell
   "The cell over the first seen block below the raised log at pos that is not air, or nil when none is seen
@@ -56,7 +56,7 @@
             n (seen-name p below)]
         (cond
           (nil? n) nil
-          (contains? dig-route/air n) (recur (inc dy))
+          (contains? bs/air n) (recur (inc dy))
           :else (assoc below :y (inc (:y below))))))))
 
 (defn neighbours [{:keys [x y z]}]
@@ -67,7 +67,7 @@
   "Whether the log at pos stands on a seen block that is neither air nor a log."
   [p pos]
   (let [n (seen-name p (update pos :y dec))]
-    (and n (not (contains? dig-route/air n)) (not (trees/log-name? n)))))
+    (and n (not (contains? bs/air n)) (not (trees/log-name? n)))))
 
 (defn living?
   "Whether the log at pos is joined to a log standing on the ground: a flood fill over the seen logs (the set of

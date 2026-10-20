@@ -1,5 +1,6 @@
 (ns jobs.gather.dig-for
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.ready :as ready]
             [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -10,7 +11,7 @@
             [jobs.gather.mine.drops :refer [collect! dig-cell!]]
             [jobs.gather.mine.end :refer [stop! wanted]]
             [jobs.gather.mine.side :as wall]
-            [jobs.gather.mine.targets :as targets :refer [owed reach air kinds carried rules-in scan snapshot way-floor last-exit? skip! skip-failed! skip-unreachable! stalled! drop-in-line? next-target!]]
+            [jobs.gather.mine.targets :as targets :refer [owed reach kinds carried rules-in scan snapshot way-floor last-exit? skip! skip-failed! skip-unreachable! stalled! drop-in-line? next-target!]]
             [jobs.gather.mine.torches :as torches]
             [jobs.gather.mine.tunnel :as tunnel]
             [jobs.lib.access :as access]
@@ -199,7 +200,7 @@
   [c]
   (when-let [pos (:digging (ctx/mem c))]
     (ctx/update-mem! c dissoc :digging)
-    (when (air (u/seen-name (:primitives c) pos))
+    (when (bs/air (u/seen-name (:primitives c) pos))
       (dug-booked! c pos))))
 
 (defn ^:async dig! [c pos]

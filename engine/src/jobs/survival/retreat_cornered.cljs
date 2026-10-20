@@ -11,6 +11,7 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.escape :as escape]
             [jobs.lib.look :as look]
             [jobs.lib.result :as result]
@@ -308,10 +309,10 @@
   [block-at from reach]
   (let [[fx fy fz] (mapv #(js/Math.floor %) [(:x from) (:y from) (:z from)])
         at (fn [cell dy] (block-at (update cell :y + dy)))
-        gap? (fn [cell] (and (escape/solid? (at cell -1)) (escape/passable? (at cell 0))
-                             (escape/passable? (at cell 1)) (escape/solid? (at cell 2))))
-        tall? (fn [cell] (and (escape/solid? (at cell -1)) (escape/passable? (at cell 0))
-                              (escape/passable? (at cell 1)) (escape/passable? (at cell 2))))
+        gap? (fn [cell] (and (escape/solid? (at cell -1)) (bs/passable? (at cell 0))
+                             (bs/passable? (at cell 1)) (escape/solid? (at cell 2))))
+        tall? (fn [cell] (and (escape/solid? (at cell -1)) (bs/passable? (at cell 0))
+                              (bs/passable? (at cell 1)) (bs/passable? (at cell 2))))
         deep? (fn [cell] (not-any? tall? (for [dx (range -2 3) dz (range -2 3)]
                                            (-> cell (update :x + dx) (update :z + dz)))))]
     (->> (for [dx (range (- reach) (inc reach)) dy (range -1 2) dz (range (- reach) (inc reach))
@@ -332,7 +333,7 @@
     (when (true? (some-> (u/sensed (:primitives c) (update here :y + 2)) .-unknown))
       (await (ctx/act c :look (clj->js {:pos {:x (+ 0.6 (:x here)) :y (+ 2.5 (:y here)) :z (+ 0.5 (:z here))}})))
       (look/see! c))
-    (if (and (escape/passable? (block-at (update here :y inc))) (escape/solid? (block-at (update here :y + 2))))
+    (if (and (bs/passable? (block-at (update here :y inc))) (escape/solid? (block-at (update here :y + 2))))
       (await (hold! c :roof "under a roof, out of the enderman's reach"))
       (when-let [cell (await (seen-once! c :roof #(roof-cell block-at (u/self-pos c) (roof-reach))))]
         (if (await (step! c :roof {:x (+ 0.5 (:x cell)) :y (:y cell) :z (+ 0.5 (:z cell))} 0))

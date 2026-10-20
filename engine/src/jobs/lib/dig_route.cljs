@@ -4,6 +4,7 @@
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.access.rules :as rules]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.reach :as reach]))
 
 (a/defargs settings
@@ -11,11 +12,10 @@
    ::margin {:default 3 :doc "How far (blocks) round the two ends a route may stray." :spec (a/int-in 0 nil)}
    ::max-fall {:default 3 :doc "The longest fall (blocks) a route's step may drop." :spec (a/int-in 0 nil)}})
 
-(def air "Open cells; the invisible light block counts: a body walks through it." #{"air" "cave_air" "void_air" "light"})
 (def fluids #{"water" "lava" "bubble_column"})
 (def falling #{"sand" "red_sand" "gravel"})
 
-(defn open? [n] (boolean (and n (or (air n) (re-find reach/arrow-passes n)))))
+(defn open? [n] (boolean (and n (or (bs/air n) (re-find reach/arrow-passes n)))))
 
 (defn cell-cost
   "Digs it takes to open a cell: 0 when open, 1 for a block (an unseen cell is dug to see), nil when it cannot be
@@ -24,10 +24,10 @@
   (cond
     (open? n) 0
     (nil? n) 1
-    (or (fluids n) (reach/hazard-blocks n) (rules/unbreakable n) (falling n)) nil
+    (or (fluids n) (bs/harms-in-cell n) (rules/unbreakable n) (falling n)) nil
     :else 1))
 
-(defn floor-ok? [n] (boolean (and n (not (open? n)) (not (fluids n)) (not (reach/hazard-blocks n)))))
+(defn floor-ok? [n] (boolean (and n (not (open? n)) (not (fluids n)) (not (bs/harms-in-cell n)))))
 
 (defn neighbours [[x y z] max-fall]
   (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] dy (cons 1 (map - (range max-fall -1 -1)))] [(+ x dx) (+ y dy) (+ z dz)]))

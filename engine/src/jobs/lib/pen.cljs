@@ -22,6 +22,7 @@
   (an open gate, a gap or a ridge climbed over). A leaky pen is refilled with
   those cells walled off, so :inside and :gates are the pen's own."
   (:require [engine.args :as a]
+            [jobs.lib.block-sets :as bs]
             [engine.settings :as settings]))
 
 (a/defargs settings
@@ -56,7 +57,7 @@
 
 (def hazards
   "Blocks animals refuse to enter (vanilla gives them a negative path cost)."
-  #{"lava" "fire" "soul_fire" "cactus" "sweet_berry_bush" "magma_block" "wither_rose" "powder_snow"})
+  (conj bs/harms-in-cell "powder_snow"))
 
 (def heights
   "Top of the collision box for blocks lower than a full block."

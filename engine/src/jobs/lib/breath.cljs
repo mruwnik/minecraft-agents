@@ -14,6 +14,7 @@
   Wedged: the feet cell holds such a full block, e.g. sand that fell on the body. Farmland, slabs, snow layers, soul
   sand, paths, plants and fluids never do. The eye cell is the suffocating trigger's business."
   (:require [jobs.lib.access.rules :as rules]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.cost.planner :as planner]
             [engine.args :as a]
             [engine.game :as game]
@@ -24,8 +25,7 @@
 
 (declare settings)
 
-(defn air? [block-name] (contains? #{"air" "cave_air" "void_air"} block-name))
-
+(def air? bs/air)
 
 (defn eye-cell
   "The cell holding the eyes of a body whose feet are at self's pos. The feet
@@ -347,8 +347,6 @@
               (await (look-column! c (+ fx dx) (+ fz dz) fy reach true)))
             (nearest-air p pos radius reach)))))
 
-(def harmful-in-cell #{"lava" "fire" "soul_fire" "cactus" "sweet_berry_bush" "campfire" "soul_campfire" "magma_block"})
-
 (defn side-cell
   "A horizontal neighbour of the feet cell where the body fits (feet and head
   cells passable and not harmful: lava, fire, cactus...) and can stand (the cell below is neither air, water, a water
@@ -363,7 +361,7 @@
                       below (seen-water-name p (update cell :y dec))]
                   (and feet head below
                        (not (suffocates? p cell)) (not (suffocates? p (update cell :y inc)))
-                       (not (contains? harmful-in-cell feet)) (not (contains? harmful-in-cell head))
+                       (not (contains? bs/harms-in-cell feet)) (not (contains? bs/harms-in-cell head))
                        (not (air? below)) (not (contains? swimmable below)) (not (contains? #{"lava" "magma_block"} below))
                        (not-any? #{"bubble_column_down"} [feet head below]))))]
     (->> [[1 0] [-1 0] [0 1] [0 -1]]

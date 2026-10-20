@@ -7,6 +7,7 @@
             [jobs.lib.job-common :as common]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.build.kept :refer [kept?]]
             [jobs.lib.choose :as choose]
             [jobs.lib.own-pen :as own-pen]
@@ -55,12 +56,10 @@
    ::cell-s {:default 1.5 :doc "Mean seconds one cell takes (walk, dig, pick up, pace), for the quote." :spec (a/num-in 0 nil)}})
 (defn max-cells [] (settings/get settings ::max-cells))
 (defn max-tries [] (settings/get settings ::max-tries))
-(def air #{"air" "cave_air" "void_air"})
-(def fluids #{"water" "lava" "bubble_column"})
 (defn left-alone?
   "Whether block n stays: air, fluid, kept, or (with :only) not one of the endings."
   [{:keys [keep only]} n]
-  (or (air n) (fluids n) (kept? keep n)
+  (or (bs/air n) (bs/fluids n) (kept? keep n)
       (and (seq only) (not-any? #(str/ends-with? n %) only))))
 (defn span [a b] (range (min a b) (inc (max a b))))
 
@@ -176,7 +175,7 @@
 
 (defn quote-of [c]
   (let [p (:primitives c)
-        blocks (if (box-error (:args c)) [] (remove air (map #(u/seen-name p %) (cells (:args c)))))
+        blocks (if (box-error (:args c)) [] (remove bs/air (map #(u/seen-name p %) (cells (:args c)))))
         n (count blocks)
         s (* n (settings/get settings ::cell-s))]
     {:uses (cond-> {:job-time [(* 0.5 s) s (* 4 s)]}
@@ -256,8 +255,8 @@
   (let [everything (named c)
         keep (:keep (:args c) [])]
     {:dug (:dug (ctx/mem c) 0) :skipped (:skipped (ctx/mem c) {})
-     :kept (count (filter (fn [[_ n]] (and (not (fluids n)) (not (air n)) (kept? keep n))) everything))
-     :fluids (frequencies (filter fluids (map second everything)))}))
+     :kept (count (filter (fn [[_ n]] (and (not (bs/fluids n)) (not (bs/air n)) (kept? keep n))) everything))
+     :fluids (frequencies (filter bs/fluids (map second everything)))}))
 
 (defn finish!
   "The ending of a run with no cell left to work (job-common/conclude!)."

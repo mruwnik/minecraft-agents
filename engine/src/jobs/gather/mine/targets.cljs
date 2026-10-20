@@ -4,6 +4,7 @@
             [engine.args :as a]
             [engine.game :as game]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.block-sets :as bs]
             [clojure.string :as str]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.near :as near]
@@ -27,8 +28,6 @@
 
 (defn reach [] (settings/get settings ::reach))
 
-(def air #{"air" "cave_air"})
-
 (defn base-ore
   "The stone kind of an ore block (deepslate_iron_ore: iron_ore); any other block as it is."
   [block]
@@ -41,7 +40,7 @@
   (let [base (base-ore block)]
     (if (and variants (contains? blocks/ores base)) #{base (str "deepslate_" base)} #{block})))
 
-(def not-solid #{"air" "cave_air" "water" "lava" "short_grass" "tall_grass"})
+(def not-solid (into bs/air #{"water" "lava" "short_grass" "tall_grass"}))
 
 (defn carried
   "Total of the item carried over all stacks."
@@ -92,7 +91,7 @@
   ([c wet pos open]
    (let [names (face-names c pos open)]
      (cond
-       (not-any? air names) :buried
+       (not-any? bs/air names) :buried
        (some #{"lava"} names) :no
        (and (some #{"water"} names) (not wet)) :wet
        :else :ok))))

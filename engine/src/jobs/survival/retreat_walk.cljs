@@ -3,6 +3,7 @@
   over a block-at fn)."
   (:require [engine.args :as a]
             [engine.settings :as settings]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.breath :as breath]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]))
@@ -27,15 +28,10 @@
   "Angles to try, in degrees from the preferred direction, best first."
   [0 30 -30 60 -60 90 -90 120 -120])
 
-(def passable-names
-  #{"air" "cave_air" "void_air" "short_grass" "tall_grass" "grass" "fern" "large_fern" "dead_bush" "snow"
-    "water" "dandelion" "poppy" "torch" "sweet_berry_bush" "vine"})
-
 (defn passable?
-  "Whether a block name lets the body walk through; an unloaded cell (nil) counts as open."
+  "Whether a block name lets the body walk through (water is swum); an unloaded cell (nil) counts as open."
   [block-name]
-  (or (nil? block-name) (contains? passable-names block-name)
-      (some #(.endsWith block-name %) ["_sapling" "_flower" "_carpet" "_tulip" "_orchid" "_button" "_pressure_plate"])))
+  (or (nil? block-name) (bs/passable-or-water? block-name)))
 
 (defn floorless?
   "Whether a block name under a walker's feet is no floor: a loaded passable
