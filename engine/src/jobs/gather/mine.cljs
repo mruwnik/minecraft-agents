@@ -19,6 +19,7 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.torch :as torch]
             [jobs.lib.tools :as tools]
+            [jobs.access.stock :as stock]
             [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]
             [jobs.lib.access.zones :as zones]))
@@ -175,7 +176,7 @@
       (await (fetch-pickaxe! c))
       (await (trip/tool-ready! c (:block (:args c)) (digs-left c)))
       (await (when (and (:torches (:args c)) (nil? (:tunnel (ctx/mem c))) (or (pos? (:tunnel-length (:args c))) (descent-wanted? c)))
-               (trip/torches-ready! c)))))
+               (stock/torches! c)))))
 
 (defn stop-cause
   "Why the dig cannot begin or go on after the equip, as {:reason :text ..} (jobs.gather.dig-for/stop-cause), or for a dig that stopped

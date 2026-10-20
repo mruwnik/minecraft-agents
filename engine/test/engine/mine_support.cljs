@@ -144,7 +144,7 @@
 (def bare-pickaxe [{:name "iron_pickaxe" :count 1}])
 
 (def pickaxe
-  "The pickaxe and enough torches that the job does not stock up first (jobs.lib.trip/torches-ready!)."
+  "The pickaxe and enough torches that the job does not stock up first (jobs.access.stock/torches!)."
   (conj bare-pickaxe {:name "torch" :count 10}))
 
 (def cobble {"stone" "cobblestone"})

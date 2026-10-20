@@ -1,7 +1,6 @@
 (ns jobs.lib.trip
   "Trips start with room: a gathering job that leaves home calls ready! first. See ready!."
   (:require [engine.args :as a]
-            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.settings :as settings]
@@ -13,11 +12,8 @@
             [jobs.lib.look :as look]
             [jobs.lib.foods :as foods]
             [jobs.lib.reserve :as reserve]
-            [jobs.lib.near :as near]
-            [jobs.lib.near :as near]
             [jobs.lib.tool-kind :as kind]
             [jobs.lib.tools :as tools]
-            [jobs.lib.torch :as torch]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -133,15 +129,6 @@
   [c]
   (boolean (some #(str/ends-with? % "/spare") (:chain c))))
 
-(defn ^:async back-from-stocking!
-  "After the torch trip, walk back to the cell it began on (:torches-from): :continue while the walk waits on the world, else nil."
-  [c]
-  (let [{:keys [torches-from torches-tried]} (ctx/mem c)]
-    (when (and torches-from torches-tried)
-      (if (= :partial (await (near/go-near! c torches-from 2)))
-        :continue
-        (do (ctx/update-mem! c dissoc :torches-from) nil)))))
-
 (def heading-steps {:north [0 -1] :east [1 0] :south [0 1] :west [-1 0]})
 
 (defn line-ahead
@@ -183,40 +170,3 @@
                                                   :text (str "the last " tool-name " is worn (" (:uses-left worn) " left) and no spare could be had"
                                                              (when why (str ": " (name why))))}))
              nil)))))))
-
-(defn ^:async torches-ready!
-  "Before a job that digs down or tunnels sets out: when fewer than ::torch-low torches are carried, run jobs.items.obtain
-  for torches up to ::torch-stock (child :torches; chest, craft from coal or charcoal, charcoal from logs by smelt, gather).
-  With coal or charcoal carried the count is what that fuel makes (4 torches each), so the obtain plans no charcoal smelt
-  and no table for the rest. Resolves nil to go on, :continue while the child waits on the world. Once per job (:torches-tried in its memory): info
-  torch.stocked when it came back with some, warn torch.no-stock with the child's reason when not (the job goes on, dark
-  when none are carried;), then walks back to the cell the trip began on (:torches-from), so a chest elsewhere does not move the dig. The job's :fetch off, a set of kinds without :item, or a body short of food (food-short?) skips it."
-  [c]
-  (or (await (back-from-stocking! c))
-      (let [held (torch/torches-held (:primitives c))
-          limits (need/parse-arg (:fetch (:args c)))
-          fetch? (and (map? limits) (not (:error limits)) (or (nil? (:what limits)) (contains? (:what limits) :item)))
-          fuel (torch/fuel-held (:primitives c))
-          want (- (torch-stock) held)
-          args {:item "torch" :count (need/carry-count c :torches ["torch"] (if (pos? fuel) (min want (* 4 fuel)) want)) :avoid (line-ahead c) :explore false}]
-      (when (and fetch? (< held (torch-low)) (not (:torches-tried (ctx/mem c))) (not (food-short? c)))
-        (when-not (:torches-from (ctx/mem c)) (ctx/update-mem! c assoc :torches-from (u/self-pos c)))
-        (let [e (await (ctx/call c :torches 'jobs.items.obtain args))]
-          (if (= :continue e)
-            :continue
-            (let [reason (contract/cause-key e)
-                  tried (:tried (:data e))
-                  why (:why (:data e))
-                  now (torch/torches-held (:primitives c))]
-              (ctx/update-mem! c assoc :torches-tried true)
-              (when (and (pos? fuel) (<= now held)) (ctx/update-mem! c assoc :craft-failed true))
-              (if (> now held)
-                (ctx/emit! c :torch.stocked :info {:held now :text (str "carrying " now " torches for the dig")})
-                (ctx/emit! c :torch.no-stock :warn {:held now :reason reason :tried tried
-                                                    :text (str "carries " (if (zero? now) "no torches" (str "only " now " torches"))
-                                                               (if (zero? now)
-                                                                 (str ", none made" (when (seq tried) (str " (" (str/join ", " (map (fn [[k v]] (str (name k) " " (if (keyword? v) (name v) v))) tried)) ")")))
-                                                                 " and could not get more")
-                                                               ": the dig goes on " (if (zero? now) "dark" "with them")
-                                                               (when why (str " (" why ")")))}))
-              (await (back-from-stocking! c)))))))))
