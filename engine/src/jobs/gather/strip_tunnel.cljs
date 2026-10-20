@@ -46,7 +46,7 @@
    :accept {:doc "dig hazards taken (jobs.access.stair)" :spec (a/coll-of #{:falling-block :fluid-adjacent :lava-adjacent}) :default []}
    :stay-level {:doc "only cut; seal a cut that opens into air beyond the tunnel" :spec boolean? :default false}
    :fetch {:doc "get missing torch ingredients and seal blocks (jobs.lib.need)" :spec need/option? :default true}
-   :block {:doc "the block the dig is for (the tool, hunger and water checks of each step)" :spec string?}
+   :block {:doc "the block the dig is for (the tool, hunger and water checks of each step)" :spec string? :default "stone"}
    :ignore-zones? :shared})
 
 (a/defargs settings

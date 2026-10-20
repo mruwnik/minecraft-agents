@@ -180,3 +180,6 @@
                 bad (when (seq data)
                       (args/first-problem sym data (args/defaults data)))]]
     (is (nil? bad) (str sym " default " (pr-str bad)))))
+
+(deftest strip-tunnel-called-without-a-block-checks-its-tools-for-stone
+  (is (= "stone" (:block (args/defaults (:args (get registry/jobs 'jobs.gather.strip-tunnel)))))))
