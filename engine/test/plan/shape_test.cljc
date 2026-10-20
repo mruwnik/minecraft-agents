@@ -22,7 +22,8 @@
     (with-part {:id "hut" :blueprint "hut" :at [10 64 20] :turn 90})
     (with-part {:id "hut" :blueprint "hut" :at [10 64 20]})
     (assoc wheat-plan :assign [{:spot "wheat" :body "Jizo" :use :field}])
-    (assoc wheat-plan :surface true :sturdy-ground false)))
+    (assoc wheat-plan :surface true :sturdy-ground false)
+    (assoc wheat-plan :spans [{:kind :tunnel :from [0 64 0] :to [4 64 0]} {:kind :bridge :from [5 64 0] :to [5 64 3]}])))
 
 (deftest plan-level-errors-name-no-part
   (are [plan fragment] (some #(and (nil? (:part %)) (str/includes? (:error %) fragment)) (errors-of plan))
@@ -35,6 +36,8 @@
     (assoc wheat-plan :assign {}) ":assign"
     (assoc wheat-plan :surface "yes") ":surface must be true or false"
     (assoc wheat-plan :sturdy-ground 1) ":sturdy-ground must be true or false"
+    (assoc wheat-plan :spans [{:kind :tunnel :from [0 64 0] :to [4 65 3]}]) ":spans must be"
+    (assoc wheat-plan :spans [{:kind :cave :from [0 64 0] :to [4 64 0]}]) ":spans must be"
     (assoc wheat-plan :parts [{:id "a" :cells [[0 0 0]] :want "stone"} {:id "a" :cells [[1 0 0]] :want "stone"}]) "unique"))
 
 (deftest a-village-marker-has-an-anchor-and-intent-without-geometric-claims

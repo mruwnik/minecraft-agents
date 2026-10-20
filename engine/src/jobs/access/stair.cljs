@@ -82,7 +82,7 @@
    :note {:doc "a map (go-to's escalation): each cell dug in another's zone, claim or plan is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!), each floor placed to the scaffold ledger (take-back-floor?)" :spec map? :default nil}
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop" :spec #{:seal :stop} :default :seal}
    :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of waiting :no-tool" :spec boolean? :default true}
-   :through {:doc "the id of a mineshaft plan the stair runs down: its footprint is no obstacle (jobs.lib.shafts)" :spec string? :default nil}})
+   :through {:doc "the id of a plan the stair works for (a mineshaft it runs down, a rail line it tunnels): its footprint is no obstacle" :spec string? :default nil}})
 
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}

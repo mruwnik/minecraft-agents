@@ -12,6 +12,7 @@
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.build.rail :as builder]
+            [jobs.build.rail-spans :as spans]
             [jobs.lib.placement :as placement]
             [jobs.lib.build.plan :as plan]
             [plan.rail :as rail]
@@ -26,7 +27,12 @@
   "Build the rail line a plan wants (:plan, optionally only its :part) and prove a ridden cart can run it.
   The plan's rail cells (wants naming a *rail block) must form one chain (plan.rail/line). plan.rail/layout writes
   such plans, with corners and slopes.
-  Three phases:
+  Four phases:
+  0. :spans (first, before anything is built): each stretch of at least 3 straight level rail cells that the plan's :spans
+     (a vector of {:kind :tunnel|:bridge :from :to}, as plan.rail-route/connect gives them) names and the world still shows
+     solid or unseen (tunnel) or floorless (bridge) is cut by jobs.gather.strip-tunnel (torches hung as it does) or built by
+     jobs.access.bridge, each from the rail cell before it, nearest first, up to jobs.build.rail-spans/::max-tries walks
+     and children for each; a span that stays is left to the builder.
   1. :build, the head-first builder (jobs.build.rail). Cells go in along the line from the end nearer the
      body. Each station's bed and power go under before its rail, and the rail before the torch or lever beside
      it, so every rail takes the shape its neighbours give it. The body stands on the rail behind the cell it
@@ -360,7 +366,8 @@
       (= :check phase) (or (await (look-step! c cells)) (await (settle-step! c cells)) (finish! c cells))
       (= :switch phase) (await (switch-step! c cells))
       :else (do (when-not phase (ctx/update-mem! c assoc :phase :build))
-                (or (await (fetch-step! c cells))
+                (or (when-not (:building (ctx/mem c)) (await (spans/step! c cells)))
+                    (await (fetch-step! c cells))
                     (await (build-step! c cells)))))))
 
 (defn ^:async round

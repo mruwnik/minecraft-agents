@@ -47,6 +47,7 @@
    :accept {:doc "dig hazards taken (jobs.access.stair)" :spec (a/coll-of #{:falling-block :fluid-adjacent :lava-adjacent}) :default []}
    :stay-level {:doc "keep the level; fill air a cut opens into beyond the tunnel" :spec boolean? :default false}
    :block {:doc "the block the dig is for (the tool, hunger and water checks of each step)" :spec string? :default "stone"}
+   :through {:doc "the id of a plan the tunnel is cut for (a rail line): its footprint is no obstacle" :spec string? :default nil}
    :ignore-zones? :shared})
 
 (a/defargs settings
@@ -140,7 +141,7 @@
         _ (ctx/update-mem! c assoc :stepping true)
         r (waits/waiting-out c (await (ctx/call c :step 'jobs.access.stair
                                  {:dir :level :heading (keyword heading) :steps 1 :accept (step-accept args) :ways (need/pass-ways c)
-                                  :ignore-zones? (:ignore-zones? args)})))
+                                  :ignore-zones? (:ignore-zones? args) :through (:through args)})))
         res (result-of r)]
     (when-not (= :continue r) (ctx/update-mem! c dissoc :stepping))
     (when-not (= :continue r) (ctx/update-mem! c update :dug into (:dug res)))

@@ -19,7 +19,7 @@
 (def sides [:north :east :south :west])
 (def max-cells 200000)
 
-(def plan-keys #{:id :parts :assign :note :kind :at :metadata :dim :surface :sturdy-ground})
+(def plan-keys #{:id :parts :assign :note :kind :at :metadata :dim :surface :sturdy-ground :spans})
 (def overworld "minecraft:overworld")
 
 (defn author
@@ -67,6 +67,16 @@
 
 (defn anchor? [v]
   (and (vector? v) (= 3 (count v)) (every? finite-number? v)))
+
+(defn span-cells
+  "The cells of a span {:from :to} in order, from to inclusive; nil unless they differ along one of x or z only."
+  [{[x1 y1 z1 :as from] :from [x2 y2 z2 :as to] :to}]
+  (when (and (anchor? from) (anchor? to) (= y1 y2) (or (= x1 x2) (= z1 z2)))
+    (let [dx (compare x2 x1) dz (compare z2 z1) n (+ (abs (- x2 x1)) (abs (- z2 z1)))]
+      (mapv (fn [k] [(+ x1 (* k dx)) y1 (+ z1 (* k dz))]) (range (inc n))))))
+
+(defn spans? [spans]
+  (and (vector? spans) (every? #(and (map? %) (#{:tunnel :bridge} (:kind %)) (span-cells %)) spans)))
 
 (defn block-want? [want]
   (and (map? want) (string? (:block want)) (every? keyword? (keys want))))
@@ -191,6 +201,8 @@
                      (when (and (contains? plan :metadata) (not (map? (:metadata plan)))) ":metadata must be a map")
                      (when (and (contains? plan :surface) (not (boolean? (:surface plan)))) ":surface must be true or false")
                      (when (and (contains? plan :sturdy-ground) (not (boolean? (:sturdy-ground plan)))) ":sturdy-ground must be true or false")
+                     (when (and (contains? plan :spans) (not (spans? (:spans plan))))
+                       ":spans must be a vector of {:kind :tunnel|:bridge :from [x y z] :to [x y z]}, each a straight run")
                      (when (and (contains? plan :dim) (not (and (string? (:dim plan)) (not (str/blank? (:dim plan))))))
                        ":dim must be a dimension name such as \"minecraft:the_nether\"")
                      (when-not (or (nil? (:assign plan)) (and (vector? (:assign plan)) (every? #(string? (:spot %)) (:assign plan))))

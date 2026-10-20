@@ -677,3 +677,32 @@
           (is (true? (:ok? result)))
           (is (= [] (get-in result [:built :wrong])))
           (is (= "powered_rail" (h/block-at p 21 66 0))))))))
+
+;; ---------------------------------------------------------------- spans
+
+(defn spanned-plan [kind]
+  (assoc (line-plan {}) :spans [{:kind kind :from [10 64 0] :to [19 64 0]}]))
+
+(deftest a-gap-in-the-ground-is-bridged-by-the-bridge-job-before-the-line-is-laid
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (update (spec "stone" 63 (kit {})) :blocks #(into % (for [x (range 10 20) z (range -4 5)] [(h/cell-key x 63 z) "air"])))
+              [result seen p] (await (build! world {"line" (spanned-plan :bridge)} {}))]
+          (is (true? (:ok? result)))
+          (is (= "cobblestone" (h/block-at p 15 63 0)) "the floor under the gap is the bridge's")
+          (is (= "rail" (h/block-at p 15 64 0)))
+          (is (some #(and (= :child_started (:kind %)) (re-find #"/span$" (:job %))) @seen) "the span phase ran a child")
+          (is (= 1 (count (h/events-of seen :completed)))))))))
+
+(deftest a-hill-over-the-line-is-tunnelled-by-the-tunnel-job-before-the-line-is-laid
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [hill (for [x (range 10 20) z (range -4 5) y (range 64 68)] [(h/cell-key x y z) "stone"])
+              world (update (spec "stone" 63 (kit {} {"iron_pickaxe" 1 "torch" 8})) :blocks #(into % hill))
+              [result seen p] (await (build! world {"line" (spanned-plan :tunnel)} {}))]
+          (is (true? (:ok? result)))
+          (is (= "rail" (h/block-at p 15 64 0)))
+          (is (= "stone" (h/block-at p 15 67 0)) "the hill above the tunnel stands")
+          (is (some #(and (= :child_started (:kind %)) (re-find #"/span$" (:job %))) @seen) "the span phase ran a child"))))))
