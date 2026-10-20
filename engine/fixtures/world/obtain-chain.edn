@@ -126,6 +126,14 @@
    :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}]
    :after [[:item "obsidian" [:>= 1]]]
    :limit-s 130}
+  ;; card 7e64b298: an empty bucket is scooped at seen water (a use-on child), then poured on the lava
+  {:name "empty-bucket-is-filled-at-seen-water-then-makes-obsidian"
+   :blocks [[:fill [22 0 14] [26 0 18] "stone"] [:set [24 0 16] "lava"] [:set [19 0 16] "water"]]
+   :body {:inventory [["diamond_pickaxe" 1] ["bucket" 1]]}
+   :act [[:job (jobs.gather.make-obsidian {:count 1})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}]
+   :after [[:item "obsidian" [:>= 1]]]
+   :limit-s 130}
   ;; card ff7ec4e1: flowing lava only (the source under a glass wall, so no site): water on it makes cobblestone; the wall at
   ;; x 10 (glass: stone would hide the west flow from the east side) keeps each pour's water to its own side, so a failed east pour leaves the west flow for a second failed pour
   {:name "water-on-flowing-lava-twice-ends-pour-failed"

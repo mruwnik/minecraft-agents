@@ -24,9 +24,9 @@
   Takes seen obsidian first (jobs.gather.mine). Else it needs a water bucket carried (an empty bucket is filled at seen water; no bucket at all is fetched, :fetch) and a seen
   lava cell with seen air above it (with none seen, it walks to the cells a sealed mine breach showed lava at, body memory :breach-behind, digs the seal the mine placed there from at least 2 blocks off, looks again and forgets the entry), a clickable air cell to pour at (that one, or one level with it and beside it, the water then runs over) and a stand cell beside the pour cell (a standable cell with no lava beside it, never over lava):
   it walks to the stand (go-to, which keeps off lava), pours the water there, waits for the lava to turn to obsidian,
-  scoops the water back up (also in the cleanup of a cut run), and mines the obsidian (a mine child, which fetches its pickaxe from a chest or a craft).
+  scoops the water back up (the fill, pour and scoop are jobs.blocks.use-on children; also in the cleanup of a cut run), and mines the obsidian (a mine child, which fetches its pickaxe from a chest or a craft).
   Ends :done {:got n} at :count obsidian gained. Else it ends with :got n in its data: condition-failed :no-bucket (no water bucket and no bucket
-  with water seen, or :fetch off); a failed bucket fetch ends with its need cause or :no-lava (no seen lava with open air above and a safe stand); nothing-possible :pour-failed (failed sites in a row where
+  with water seen, or :fetch off); a failed bucket fetch ends with its need cause or :no-lava (no seen lava with open air above and a safe stand); nothing-possible :scoop-failed (the bucket could not be filled at the seen water), :pour-failed (failed sites in a row where
   the pour or the conversion failed: moving lava gives cobblestone) or :unreachable (the stand could not be walked to); the mine child's
   ending (:no-tool ..) passes up; a limit of the call ends limit-reached.
   Quote: time by the walk to the stand and the pour; yields the obsidian.")
@@ -55,6 +55,16 @@
 
 (defn seen-of [c names]
   (look/seen-blocks (:primitives c) {:names names :radius (:radius (:args c)) :max 32 :live? true}))
+
+(defn water-source?
+  "Whether a seen water block is a source (a bucket takes only that): level 0, or no level known."
+  [{:keys [properties]}]
+  (let [l (:level properties)]
+    (or (nil? l) (zero? (js/parseInt l)))))
+
+(defn seen-water-sources [c]
+  (filterv water-source?
+           (look/seen-blocks (:primitives c) {:names ["water"] :radius (:radius (:args c)) :max 32 :live? true :properties? true})))
 
 (defn lava-near?
   "Whether a cell beside the stand cell (its four sides, at its level) is lava, which could flow onto it."
@@ -179,26 +189,37 @@
           (ctx/forget-where! c :breach-behind #(= entry %))
           :again))))
 
+(defn ^:async use-bucket!
+  "One bucket use at pos (a jobs.blocks.use-on child in slot): :continue while it waits, else its ending."
+  [c slot pos item]
+  (await (child/run!* c slot 'jobs.blocks.use-on
+                      {:pos pos :item item :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
+
 (defn ^:async fill-bucket!
-  "An empty bucket carried and water seen: walk to the water and scoop it. :again when filled, :blocked when not."
+  "An empty bucket carried and water seen: scoop the water (use-on walks to it). :again when filled, :continue while it waits, else the
+  ending of the end: condition-failed :no-bucket with no water seen, nothing-possible :scoop-failed (data :why the use-on reason)."
   [c]
-  (let [water (first (seen-of c ["water"]))]
+  (let [water (first (seen-water-sources c))]
     (if-not water
-      :blocked
-      (let [w (await (walk! c (:pos water) 3))]
-        (case w
-          :there (if (= "placed" (.-status (await (ctx/act c :place (clj->js {:pos (:pos water) :item "bucket"}))))) :again :blocked)
-          :continue :continue
-          :blocked)))))
+      (end c :condition-failed :no-bucket "no water bucket is carried and no seen water to fill the bucket at")
+      (let [e (await (use-bucket! c :fill (:pos water) "bucket"))]
+        (cond
+          (= :continue e) :continue
+          (= :done (:kind e)) :again
+          :else (let [why (or (get-in e [:data :reason]) (:cause e) :failed)]
+                  (ctx/end c :nothing-possible :scoop-failed
+                           {:got (gained c) :why why :text (str "could not fill the bucket at the water at " (pr-str (:pos water)) ": " (name why))})))))))
 
 (defn ^:async pour!
   "Note the pour cell of site in memory (:poured), then pour there (the note first: a cut right after the
-  pour still finds its water); settle! waits and scoops. :again, or :failed."
+  pour still finds its water); settle! waits and scoops. :again, :continue while the pour waits, or :failed."
   [c {:keys [pour] :as site}]
   (ctx/update-mem! c assoc :poured (assoc site :looks 0))
-  (if (= "placed" (.-status (await (ctx/act c :place (clj->js {:pos pour :item "water_bucket"})))))
-    :again
-    (do (ctx/update-mem! c dissoc :poured) :failed)))
+  (let [e (await (use-bucket! c :pour pour "water_bucket"))]
+    (cond
+      (= :done (:kind e)) :again
+      :else (do (ctx/update-mem! c dissoc :poured)
+                (if (= :continue e) :continue :failed)))))
 
 (defn ^:async settle!
   "One look at the poured water: the lava turned (or the looks are spent) scoops the water back and books the success
@@ -210,7 +231,7 @@
         made? (= "obsidian" (u/seen-name p lava))]
     (if (or made? (>= looks (settings/get settings ::settle-looks)))
       (do (when (= "water" (u/seen-name p pour))
-            (await (ctx/act c :place (clj->js {:pos pour :item "bucket"}))))
+            (await (child/run!* c :scoop 'jobs.blocks.use-on {:pos pour :item "bucket" :ignore-zones? true})))
           (ctx/update-mem! c #(-> (dissoc % :poured)
                                   (cond-> made? (assoc :failed 0)
                                           (not made?) (-> (update :tried (fnil conj []) lava) (update :failed (fnil inc 0))))))
@@ -234,7 +255,7 @@
         (case w
           :continue :continue
           :blocked (left!)
-          (if (= "placed" (.-status (await (ctx/act c :place (clj->js {:pos pour :item "bucket"})))))
+          (if (= :done (:kind (await (child/run!* c :scoop 'jobs.blocks.use-on {:pos pour :item "bucket" :ignore-zones? true}))))
             (do (ctx/update-mem! c dissoc :poured)
                 (ctx/end c :done nil {}))
             (left!)))))))
@@ -249,8 +270,10 @@
     (cond
       (= :continue e) :continue
       (> (gained c) got) :again
-      :else (ctx/end c (if (= :done (:kind e)) :nothing-possible (:kind e)) (if (= :done (:kind e)) :mine-failed (:cause e))
-                     {:got got :text (str "the obsidian could not be mined: " (name (or (some-> e :cause :reason) (:cause e) :unknown)))}))))
+      :else (let [done? (= :done (:kind e))
+                  why (or (some-> e :cause :reason) (:cause e) :unknown)]
+              (ctx/end c (if done? :nothing-possible (:kind e)) (if done? :mine-failed (:cause e))
+                       {:got got :text (str "the obsidian could not be mined: " (name why))})))))
 
 (defn ^:async step [c]
   (let [{:keys [count]} (:args c)
@@ -263,10 +286,7 @@
       (zero? (carried c "water_bucket"))
       (if (pos? (carried c "bucket"))
         (let [r (await (fill-bucket! c))]
-          (case r
-            :continue :continue
-            :again :again
-            (end c :condition-failed :no-bucket "no water bucket is carried and no seen water to fill the bucket at")))
+          r)
         (if (fetch-opts c)
           (let [e (await (need/item! c "bucket" 1 (fetch-opts c)))]
             (cond (= :continue e) :continue
@@ -278,8 +298,9 @@
         (let [w (await (walk! c (:stand site) 1))]
           (case w
             :continue :continue
-            :there (if (= :again (await (pour! c site)))
-                     :again
+            :there (case (await (pour! c site))
+                     :again :again
+                     :continue :continue
                      (do (ctx/update-mem! c #(-> % (update :tried (fnil conj []) (:lava site)) (update :failed (fnil inc 0))))
                          :again))
             (end c :nothing-possible :unreachable (str "could not walk to the stand at " (pr-str (:stand site))))))
@@ -293,7 +314,7 @@
 
 ;; ------------------------------------------------------------------ the contract
 
-(def target [])
+(def target [:count])
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
@@ -306,7 +327,7 @@
   [c]
   (when (and (zero? (carried c "water_bucket"))
              (empty? (seen-of c ["obsidian"]))
-             (not (and (pos? (carried c "bucket")) (seq (seen-of c ["water"]))))
+             (not (and (pos? (carried c "bucket")) (seq (seen-water-sources c))))
              (not (and (zero? (carried c "bucket")) (fetch-opts c))))
     {:reason :no-bucket}))
 

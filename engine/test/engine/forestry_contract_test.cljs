@@ -142,6 +142,16 @@
         (let [{:keys [end]} (await (obsidian-end (ot/world ot/ground [ot/pick {:name "water_bucket" :count 1}]) {:count 1}))]
           (is (= {:kind :condition-failed :cause :no-lava} (kc end))))))))
 
+(deftest a-scoop-that-fails-at-seen-water-is-scoop-failed-not-no-bucket
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (ot/world (assoc ot/lava-lake "1,63,1" "water") [ot/pick {:name "bucket" :count 1}])
+              s (lt/setup w)]
+          (.override (.-world (:p s)) "place" (fn [_ _ _] #js {:status "failed"}))
+          (let [end (await (ending-of s obsidian {:count 1} 200))]
+            (is (= {:kind :nothing-possible :cause :scoop-failed} (kc end)))))))))
+
 (defn ^:async obsidian-with-slow-lava
   "make-obsidian on a lava lake where the poured water never turns it, the engine's clock moving 20 seconds with every
   primitive call; the 'wait' calls it made, and the end state."
