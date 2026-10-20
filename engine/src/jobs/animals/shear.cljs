@@ -17,7 +17,7 @@
 
   One call is the whole run. It takes the nearest adult sheep not yet shorn or given up on (babies and sheared sheep are
   skipped). The body walks to within 3 blocks (doors :shut) and uses the
-  shears it carries (fetching them first when none are carried and sheep wait, jobs.lib.need, unless :fetch is false). Sheep are tracked by uuid, by id when it has none.
+  shears it carries (fetching them first when none are carried and sheep wait, jobs.lib.need, unless the ways are only #{:carried}). Sheep are tracked by uuid, by id when it has none.
 
   A sheep is given up on when its walk is blocked or two shearings were out of reach (:unreachable), nothing
   happened (:no-effect: already sheared), it vanished (:gone), the server said it cannot (:cannot) or the use
@@ -32,7 +32,7 @@
   - :done :already (data reason :all-sheared) when adult sheep stand in radius and all are sheared at the start. :done :shorn: the count was reached. Any stop after at least :least sheep were shorn (default 1; :all =
     :count, every sheep in radius when nil) is done, with the stop as the data reason.
   - :nothing-possible :shears-broke (the shears were gone after some, fewer than :least, were shorn).
-  - :condition-failed :no-shears (none carried and the shears went missing mid-run; a listed call with :fetch false waits for them), a failed fetch ends with the fetch's own ending,
+  - :condition-failed :no-shears (none carried and the shears went missing mid-run; a listed call with :ways #{:carried} waits for them), a failed fetch ends with the fetch's own ending,
     reason :need (its cause names the shears), or with nothing shorn :refused / :no-zones
     when the zone rules refused every candidate.
   - :nothing-possible with nothing shorn: :unreachable if one was given up as unreachable, else :all-sheared (adults present
@@ -46,7 +46,6 @@
    :radius {:doc "sheep within this many blocks count" :spec (a/num-in 0 nil) :default 16}
    :color {:doc "shear only sheep of this wool colour (e.g. \"white\"); nil: any" :spec a/name? :default nil}
    :collect {:doc "pick up the wool afterwards" :spec boolean? :default true}
-   :fetch {:doc "get shears when none are carried (jobs.lib.need): true, a set of kinds or a map of limits; false waits :no-shears; a failed fetch ends :need" :spec need/option? :default true}
    :ignore-zones? :shared})
 
 (a/defargs settings
@@ -60,6 +59,8 @@
 (defn shears-carried? [c]
   (some #(= "shears" (:name %)) (u/inventory (:primitives c))))
 
+(def ways need/fetch-ways)
+
 (def target [:color])
 
 (def safe? ready/safe-if-lit)
@@ -69,11 +70,11 @@
 (def defaults {:spend {:job-time ::job-time-s}})
 
 (defn can-start?
-  "Later :no-shears: no shears carried and :fetch off."
+  "Later :no-shears: no shears carried and ways #{:carried}."
   [c]
-  (if (or (need/parse-arg (:fetch (:args c))) (shears-carried? c))
+  (if (or (need/fetch-opts c) (shears-carried? c))
     (contract/ok :shears "shears carried or fetched")
-    (contract/later :no-shears "no shears carried and :fetch is off")))
+    (contract/later :no-shears "no shears carried and the ways are only #{:carried}")))
 
 (defn quote-of [c]
   {:uses {:job-time [0 (* 10 (or (:count (:args c)) 1)) ##Inf]}})
@@ -190,18 +191,18 @@
           (finish! c (:reason (ctx/mem c)))))))
 
 (defn fetchable?
-  "Whether shears are to be fetched now: none carried, an unsheared sheep waits and :fetch allows it."
+  "Whether shears are to be fetched now: none carried, an unsheared sheep waits and the call's ways allow it."
   [c]
-  (and (need/parse-arg (:fetch (:args c))) (not (shears-carried? c)) (not= :collect (:phase (ctx/mem c))) (seq (candidates c))))
+  (and (need/fetch-opts c) (not (shears-carried? c)) (not= :collect (:phase (ctx/mem c))) (seq (candidates c))))
 
 (defn ^:async no-shears!
-  "No shears carried: fetch them when :fetch allows and a sheep waits, else end (collecting what was shorn). Resolves
+  "No shears carried: fetch them when the call's ways allow and a sheep waits, else end (collecting what was shorn). Resolves
   to :again once they arrived, else the round's result."
   [c]
   (let [end! #(if (seq (:shorn (ctx/mem c))) (go-collect! c :shears-broke) (finish! c :no-shears))]
     (if-not (fetchable? c)
       (end!)
-      (let [limits (select-keys (need/parse-arg (:fetch (:args c))) [:how :explore])
+      (let [limits (select-keys (need/fetch-opts c) [:how :explore])
             e (await (need/item! c "shears" 1 limits))]
         (cond
           (= :continue e) :continue

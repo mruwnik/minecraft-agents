@@ -36,12 +36,13 @@
    :method {:doc "the way: :lead, :lure or :auto (see the job doc)" :spec #{:auto :lead :lure} :default :auto}
    :radius {:doc "animals within this many blocks of where the job starts are taken" :spec (a/num-in 0 nil) :default 8}
    :gather-radius {:doc "lead without :fence: the animal is let go once it is within this many blocks of :pos" :spec (a/num-in 0 nil) :default 3}
-   :fetch {:doc "get the lead or the food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false waits or ends without" :spec need/option? :default true}
    :keep-food {:doc "lure only (ignored by :lead): leave the food in hand when it ends (see jobs.animals.lure-to)" :spec boolean? :default false}
    :ignore-zones? :shared})
 
 (a/defargs settings
   {::job-time-s {:default 240 :doc "Seconds of the job's own working time before the bring gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
+
+(def ways need/fetch-ways)
 
 (def target [:mob :pos :fence])
 
@@ -90,7 +91,8 @@
   "The args the way's job takes, from this call's."
   [c method]
   (let [args (:args c)
-        common (select-keys args [:mob :pos :radius :fetch :ignore-zones?])]
+        common (cond-> (select-keys args [:mob :pos :radius :ignore-zones?])
+                 (some? (:ways args)) (assoc :ways (:ways args)))]
     (case method
       :lead (merge common (select-keys args [:fence :gather-radius]))
       :lure (merge common (select-keys args [:box :uuid :keep-food])))))

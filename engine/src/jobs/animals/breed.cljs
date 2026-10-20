@@ -21,7 +21,7 @@
   (like go-to it opens a shut gate or door on the way and shuts it behind, so a gated pen is entered and its gate
   left shut; a pen with no way in is :unreachable). It then feeds the first breeding
   food of the mob that it carries, fetching one first when none is carried and animals wait (jobs.lib.need, one
-  per animal still to feed, unless :fetch is false) (jobs.lib.animals/breeding-food: wheat for cows, sheep, goats and
+  per animal still to feed, unless the ways are only #{:carried}) (jobs.lib.animals/breeding-food: wheat for cows, sheep, goats and
   mooshrooms; carrot, potato or beetroot for pigs; seeds for chickens; carrot, golden carrot or dandelion for
   rabbits; flowers for bees). Babies are never fed.
 
@@ -37,7 +37,7 @@
     done, with the stop as the data reason; :least :all is :count.
   - :impossible :unknown-mob (no breeding food is known for :mob, checked at the start); bees at night or in rain
     wait :bees-indoors before every round.
-  - :condition-failed :no-food (none carried and none fetched, nothing fed yet; a listed call with :fetch false waits for food; a failed fetch ends with the fetch's own ending, reason :no-food, its cause naming the food), :too-few (fewer than two adults stand near before the first feeding, or no candidate is left),
+  - :condition-failed :no-food (none carried and none fetched, nothing fed yet; a listed call with :ways #{:carried} waits for food; a failed fetch ends with the fetch's own ending, reason :no-food, its cause naming the food), :too-few (fewer than two adults stand near before the first feeding, or no candidate is left),
     :refused (some refused, none ate) or :no-zones (the zone rules refused the adults).
   - :nothing-possible :food-out (the food ran out below :least fed), :unreachable (one was given up as unreachable)
     or :unpaired (an odd number fed), when no candidate is left. The same after three fruitless animals in a row.
@@ -64,7 +64,6 @@
   {:mob {:doc "the mob type to breed, such as \"cow\"" :spec a/name? :default nil}
    :count {:doc "animals to feed" :spec (a/int-in 1 nil) :default 2}
    :radius {:doc "animals within this many blocks count" :spec (a/num-in 0 nil) :default 16}
-   :fetch {:doc "get breeding food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food; a failed fetch ends :no-food because of the fetch's ending" :spec need/option? :default true}
    :box {:doc "a known pen {:min :max} to walk to when the animals are not in view, and to leave at the end" :spec pen-read/box-arg :default nil}
    :plan {:doc "id of a plan of the body's world; with :part, the known pen is that part's :box" :spec a/name? :default nil}
    :part {:doc "with :plan, the id of the pen part" :spec a/name? :default nil}
@@ -77,6 +76,8 @@
 (defn max-in-row [] (settings/get settings ::max-in-row))
 (defn calf-wait-ms [] (* 1000 (settings/get settings ::calf-wait-s)))
 
+(def ways need/fetch-ways)
+
 (def target [:mob])
 
 (def safe? ready/safe-if-lit)
@@ -87,14 +88,14 @@
 
 (defn can-start?
   "Never :unknown-mob: no breeding food is known for :mob. Later :no-food: a known mob, no breeding food carried and
-  :fetch off."
+  ways #{:carried}."
   [c]
-  (let [{:keys [mob fetch]} (:args c)]
+  (let [{:keys [mob]} (:args c)]
     (cond
       (not (contains? animals/breeding-food mob)) (contract/never :unknown-mob (str "no breeding food is known for " (pr-str mob)))
-      (and (not (need/parse-arg fetch))
+      (and (not (need/fetch-opts c))
            (nil? (animals/food-carried (:primitives c) mob)))
-      (contract/later :no-food (str "no breeding food for " mob " carried and :fetch is off"))
+      (contract/later :no-food (str "no breeding food for " mob " carried and the ways are only #{:carried}"))
       :else (contract/ok :food "food carried or fetched"))))
 
 (defn quote-of [c]
@@ -282,14 +283,14 @@
          (or (not (true? (.-isDay s))) (true? (.-raining s))))))
 
 (defn fetchable?
-  "Whether breeding food is to be fetched now: none carried, animals are there to feed, :count is not reached and :fetch
-  allows it."
+  "Whether breeding food is to be fetched now: none carried, animals are there to feed, :count is not reached and the call's ways
+  allow it."
   [c]
   (let [{:keys [mob radius] n :count} (:args c)
         fed (count (:fed (ctx/mem c)))
         p (:primitives c)]
     (boolean
-     (and (need/parse-arg (:fetch (:args c)))
+     (and (need/fetch-opts c)
           (< fed n)
           (nil? (animals/food-carried p mob))
           (or (pos? fed) (>= (count (animals/adults p mob radius)) 2))
@@ -303,7 +304,7 @@
     (contract/ok :outdoors "the animals are out")))
 
 (defn ^:async fetch-food!
-  "No food carried: fetch it when :fetch allows and animals wait, else end :no-food. Resolves to :again once food
+  "No food carried: fetch it when the call's ways allow and animals wait, else end :no-food. Resolves to :again once food
   arrived, else the round's result."
   [c]
   (if-not (fetchable? c)

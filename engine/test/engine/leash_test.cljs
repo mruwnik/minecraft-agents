@@ -217,7 +217,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (seeing-scenario {:fetch false} (chest-world [{:name "lead" :count 2}]) 12))]
+        (let [s (await (seeing-scenario {:ways #{:carried}} (chest-world [{:name "lead" :count 2}]) 12))]
           (is (not (finished? s)))
           (is (nil? (done-event s)))
           (is (= 2 (leads-in-chest s))))))))

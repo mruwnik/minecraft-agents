@@ -491,6 +491,6 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [event]} (await (run-patching {:at [2 64 2] :fetch false :settings {:jobs.animals.pen-check/max-cells 100}} (assoc (world {"2,64,-1" "air"}) :inventory [])))]
+        (let [{:keys [event]} (await (run-patching {:at [2 64 2] :ways #{:check :patch} :settings {:jobs.animals.pen-check/max-cells 100}} (assoc (world {"2,64,-1" "air"}) :inventory [])))]
           (is (= {:kind :stopped :reason :leak} (select-keys event [:kind :reason])) (pr-str event))
           (is (= :gap (:why (first (:leaks event))))))))))

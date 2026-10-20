@@ -283,7 +283,7 @@
   "One fence of the patch queue by a blocks.place child (its ending, placed or not, passes it on); then back to the check."
   [c cells]
   (if-let [[x y z] (first (:patch-queue (ctx/mem c)))]
-    (let [r (await (pen-patch/place-fence! c [x y z] (patch-item cells) {:for-plan (:plan (:args c))}))]
+    (let [r (await (pen-patch/place-fence! c [x y z] (patch-item cells) {:for-plan (:plan (:args c)) :ways (need/ways-of-fetch (:fetch (:args c)))}))]
       (if (= :continue r)
         :continue
         (do (ctx/update-mem! c update :patch-queue rest) :again)))

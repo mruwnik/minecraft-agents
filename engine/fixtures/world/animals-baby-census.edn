@@ -14,7 +14,7 @@
    :act [[:summon "cow" [15.5 0 15.5] "{NoAI:1b}"]
          [:summon "cow" [15.5 0 17.5] "{NoAI:1b,Age:-24000}"]
          [:until [:cli "entities" ["$body" "--world" "$world" "--type" "cow"] {:total 2 :items [:has {:baby true}]}] 20]
-         [:job (jobs.animals.breed {:mob "cow" :count 2 :radius 20 :fetch false})]]
+         [:job (jobs.animals.breed {:mob "cow" :count 2 :radius 20 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :too-few :text [:contains "adults 1, babies 1"]}} :within-s 40 :of-job true}]
    :after [[:item "wheat" 4]]}
   {:name "lure-to-a-lone-calf-says-babies-are-not-lured"
@@ -27,7 +27,7 @@
    :body {:inventory [["wheat" 1]]}
    :act [[:summon "cow" [15.5 0 14.5] "{NoAI:1b}"] [:summon "cow" [15.5 0 16.5] "{NoAI:1b}"]
          [:summon "cow" [15.5 0 18.5] "{NoAI:1b}"] [:summon "cow" [17.5 0 16.5] "{NoAI:1b}"]
-         [:job (jobs.animals.breed {:mob "cow" :count 4 :radius 20 :fetch false})]]
+         [:job (jobs.animals.breed {:mob "cow" :count 4 :radius 20 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :food-out :fed [:any]}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20}]
    :after [[:item "wheat" 0]]}
@@ -38,7 +38,7 @@
             [:fill [14 0 15] [14 0 18] "oak_fence"] [:fill [19 0 15] [19 0 18] "oak_fence"]]
    :act [[:summon "cow" [16.5 0 16.5] "{PersistenceRequired:1b}"]
          [:summon "cow" [17.5 0 17.5] "{PersistenceRequired:1b}"]
-         [:job (jobs.animals.breed {:mob "cow" :count 2 :radius 12 :fetch false})]]
+         [:job (jobs.animals.breed {:mob "cow" :count 2 :radius 12 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :babies 1}} :within-s 60 :of-job true}]}
   ;; Should-succeed (card 7671afe8): a pen 20 blocks off, two AI cows in it, none in view (:radius 12): breed with the known :box walks
   ;; in through the gate first, feeds both, and walks back out (go-to shuts the gate), so the call is done with 2 fed.
@@ -49,5 +49,5 @@
             [:set [28 0 16] "oak_fence_gate[facing=east,open=false]"]]
    :act [[:summon "cow" [30.5 0 15.5] "{PersistenceRequired:1b}"]
          [:summon "cow" [31.5 0 17.5] "{PersistenceRequired:1b}"]
-         [:job (jobs.animals.breed {:mob "cow" :count 2 :radius 12 :fetch false :box {:min #xyz [29 0 14] :max #xyz [32 0 18]}})]]
+         [:job (jobs.animals.breed {:mob "cow" :count 2 :radius 12 :ways #{:carried} :box {:min #xyz [29 0 14] :max #xyz [32 0 18]}})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 120 :of-job true}]}]}

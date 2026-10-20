@@ -75,7 +75,7 @@
   "Later :need when none is carried and the call will not fetch it."
   [c]
   (let [w (problem c)]
-    (if (and w (not (need/opts c job)))
+    (if (and w (not (need/fetch-opts c)))
       (apply contract/later :need "no food carried and no fetch for it" :why "no food carried and no fetch for it" (mapcat identity (dissoc w :reason)))
       (contract/ok :food "food carried or fetched, or none left to give"))))
 
@@ -113,9 +113,9 @@
   (ending-of c reason))
 
 (defn ^:async fetch-food!
-  "No food carried: fetch it when :fetch allows, else end no-food. :again once it arrived, :continue, or the stop."
+  "No food carried: fetch it when the ways allow, else end no-food. :again once it arrived, :continue, or the stop."
   [c]
-  (let [opts (need/opts c job)
+  (let [opts (need/fetch-opts c)
         {:keys [item count any-of] :as w} (problem c)]
     (if-not (and opts w)
       (stop! c :no-food)

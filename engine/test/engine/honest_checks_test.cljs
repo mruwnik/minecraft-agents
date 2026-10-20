@@ -31,8 +31,8 @@
 
 (deftest animal-checks-say-why-they-decline
   (are [job args reason] (= reason (waiting-reason job args))
-    'jobs.animals.leash {:mob "cow" :fetch false} :no-lead
-    'jobs.animals.breed {:mob "cow" :fetch false} :no-food
+    'jobs.animals.leash {:mob "cow" :ways #{:carried}} :no-lead
+    'jobs.animals.breed {:mob "cow" :ways #{:carried}} :no-food
     'jobs.combat.attack {:targets ["zombie"] :absent :wait} :no-target))
 
 (deftest build-checks-say-why-they-decline

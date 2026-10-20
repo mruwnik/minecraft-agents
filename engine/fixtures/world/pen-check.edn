@@ -213,10 +213,10 @@
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
    :expect [{:event {:source :job :kind :completed :data {:closed? true :patched {:placed 2 :shut 1}}} :within-s 90 :of-job true}]
    :limit-s 120}
-  ;; should fail: no fence carried and none fetchable (:fetch false), the gap stays and is reported
+  ;; should fail: no fence carried and none fetchable (:ways #{:carried}), the gap stays and is reported
   {:name "gap-without-a-fence-is-reported-not-patched"
    :blocks [[:set [8 0 5] "air"]]
-   :act [[:job (jobs.animals.pen-check {:at #at [5 0 5] :fetch false})]]
+   :act [[:job (jobs.animals.pen-check {:at #at [5 0 5] :ways #{:check :patch}})]]
    :expect [{:event {:source :job :kind :stopped :data {:closed? false :reason :leak :leaks [{:why :gap}]}} :within-s 40 :of-job true}]}
   {:name "secure-pen-ends-done-and-places-nothing"
    :body {:at [5.5 0 5.5] :yaw 0 :inventory [["oak_fence" 4]]}

@@ -1,5 +1,5 @@
 ;; animals.leash and animals.unleash on a lit plot with NoAI-free cows: leash a cow in plain view 1 and 3 blocks off,
-;; the honest endings (no lead and :fetch false waits :no-lead; no cow around), and unleash (frees, picks the lead up; nobody led).
+;; the honest endings (no lead and :ways #{:carried} waits :no-lead; no cow around), and unleash (frees, picks the lead up; nobody led).
 {:defaults
  {:tags [:animals :jobs]
   :time :any
@@ -20,7 +20,7 @@
   {:name "leash-without-a-lead-waits-no-lead"
    :body {:inventory []}
    :act [[:summon "cow" [17.5 0 16.5] "{NoAI:1b}"] [:until-seen {:entity "cow"} 10]
-         [:job (jobs.animals.leash {:mob "cow" :fetch false})]]
+         [:job (jobs.animals.leash {:mob "cow" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-lead}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed :data {:reason :leashed}} :for-s 20 :until {:source :job :kind :waiting}}]}
   {:name "leash-with-no-cow-around-is-none"

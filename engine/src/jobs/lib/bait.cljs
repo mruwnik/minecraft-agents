@@ -59,12 +59,12 @@
     (first (filter have (get breeding-food mob)))))
 
 (defn ^:async food!
-  "No breeding food of :mob carried: get n of it with jobs.lib.need, the :fetch arg's limits allowing. Resolves to
+  "No breeding food of :mob carried: get n of it with jobs.lib.need, the call's ways allowing. Resolves to
   :continue while the fetch goes on, :ok once food is carried, else the ending to report as the :because of :no-food
-  (nil when :fetch is off)."
+  (nil when the ways leave only :carried)."
   [c n]
   (let [mob (:mob (:args c))
-        limits (need/opts c nil)]
+        limits (need/fetch-opts c)]
     (if-not limits
       nil
       (let [e (await (need/blocks! c (get breeding-food mob) n (select-keys limits [:how :explore :minutes])))]

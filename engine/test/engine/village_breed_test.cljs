@@ -129,7 +129,7 @@
           (let [{:keys [p out]} (await (breed {:entities es :inventory inv} a 30 identity))]
             (is (= [:stopped :no-pair] ((juxt :status :reason) @out)) "after one look the child ends condition-failed :no-pair; the job never starts")
             (is (empty? (tosses p)))))
-        (let [{:keys [p out]} (await (breed {:entities pair} (assoc args :fetch false) 30 identity))]
+        (let [{:keys [p out]} (await (breed {:entities pair} (assoc args :ways #{:carried}) 30 identity))]
           (is (= [:condition-failed :no-food] ((juxt (comp :kind :ending) :reason) @out)) "no food is a condition: the job never starts")
           (is (empty? (tosses p))))))))
 
@@ -137,7 +137,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out]} (await (breed {:entities pair :inventory bread :no-beds true} (assoc args :fetch false) 30 identity))]
+        (let [{:keys [p out]} (await (breed {:entities pair :inventory bread :no-beds true} (assoc args :ways #{:carried}) 30 identity))]
           (is (= [:condition-failed :no-bed] ((juxt (comp :kind :ending) :reason) @out)) "no bed, no fetch: the job never starts")
           (is (empty? (tosses p))))
         (let [{:keys [p out]} (await (breed {:entities pair :inventory (conj bread {:name "red_bed" :count 3}) :no-beds true} args 80 #(feeding % 2)))]

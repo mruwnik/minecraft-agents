@@ -1,6 +1,6 @@
 ;; Card 09c21552: lead-to fetches a lead (jobs.items.obtain child) when none is carried. No lead carried, a chest with
 ;; one 26 blocks east in view, the cow 4 away: the body fetches it, then leads the cow and lets it go. Without a chest
-;; anywhere the job ends :no-lead; with :fetch false it waits instead. A cow already tied at the :fence post ends done :tied.
+;; anywhere the job ends :no-lead; with :ways #{:carried} it waits instead. A cow already tied at the :fence post ends done :tied.
 {:defaults
  {:tags [:animals :jobs :fetch :large]
   :time :any
@@ -22,7 +22,7 @@
   {:name "fetch-false-without-a-lead-waits"
    :blocks [[:set [30 0 16] "chest[facing=west]{Items:[{Slot:0b,id:\"minecraft:lead\",count:1}]}"]]
    :act [[:summon "cow" [8.5 0 18.5]]
-         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [14 0 16] :fetch false})]]
+         [:job (jobs.animals.lead-to {:mob "cow" :pos #xyz [14 0 16] :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-lead}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :child_ended :data {:slot :need}} :for-s 20 :until {:source :job :kind :waiting}}
             {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :waiting}}]

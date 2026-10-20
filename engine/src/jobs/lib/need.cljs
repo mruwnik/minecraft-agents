@@ -73,12 +73,23 @@
 (defn call-ways
   "The ways the call of the job running in c allows: the frozen call's, before it starts the args', else all."
   [c]
-  (set (or (:ways (ctx/frozen-call c)) (:ways (:args c)) fetch-ways)))
+  (set (or (:ways (when (:view c) (ctx/frozen-call c))) (:ways (:args c)) fetch-ways)))
 
 (defn fetch-how
   "The sources a fetch of the job running in c may use: its call's ways but :carried."
   [c]
   (set/intersection (call-ways c) sources))
+
+(defn fetch-opts
+  "The limits {:how} of a fetch the call's ways allow, nil when they leave only :carried."
+  [c]
+  (when-let [how (seq (fetch-how c))]
+    {:how (set how)}))
+
+(defn fetching?
+  "Whether a call's :ways (nil: all) allow a fetch."
+  [ways]
+  (or (nil? ways) (boolean (seq (disj (set ways) :carried)))))
 
 (defn ways-of-fetch
   "The call ways for a job still on the old :fetch arg v: :carried alone when it is off, else its :how sources too."

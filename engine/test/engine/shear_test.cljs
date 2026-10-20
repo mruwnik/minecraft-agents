@@ -229,7 +229,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (seeing-scenario {:fetch false} (chest-world [{:name "shears" :count 1}]) 12))]
+        (let [s (await (seeing-scenario {:ways #{:carried}} (chest-world [{:name "shears" :count 1}]) 12))]
           (is (not (finished? s)))
           (is (= 1 (shears-in-chest s))))))))
 

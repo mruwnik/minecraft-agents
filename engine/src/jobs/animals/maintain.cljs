@@ -27,9 +27,9 @@
   - :herd (jobs.animals.herd for 2 adults, or :target if less): fewer adults than that are in the box, so breeding cannot start; herd fetches
     and searches for animals of the kind within its default radius and brings them in.
   - :breed (jobs.animals.breed, 2 animals): adults plus babies are below :target, at least 2 adults, breeding
-    food carried (breed fetches it unless :fetch is off).
+    food carried (breed fetches it unless the ways are only #{:carried}).
   - :cull (jobs.animals.cull): adults exceed :keep, the larger of 2 and :target minus the babies.
-  - :shear (jobs.animals.shear): sheep, shears carried (shear fetches them unless :fetch is off), an adult not sheared.
+  - :shear (jobs.animals.shear): sheep, shears carried (shear fetches them unless the ways are only #{:carried}), an adult not sheared.
   - :collect (jobs.items.collect-drops): items lie in the box, only those item names.
   - :deposit (jobs.storage.deposit): a :chest is given and produce of the kind is carried above its :carry
     entry. Produce is the hunt drops table plus eggs for chickens, never tools or breeding food.
@@ -38,7 +38,7 @@
   lists animals only near the body) and counts again; the job starts for that look.
 
   A step whose conditions do not hold is skipped and booked {:skipped reason}: :no-plan, :sound, :at-target, :at-pair,
-  :too-few-adults, :no-food and :no-shears (only with :fetch off), :within-target, :not-sheep, :none-shearable, :no-drops, :no-chest, :nothing-to-store,
+  :too-few-adults, :no-food and :no-shears (only with ways #{:carried}), :within-target, :not-sheep, :none-shearable, :no-drops, :no-chest, :nothing-to-store,
   or :declined when the child declined.
 
   Done (:already before the start) when the box needs no look, no step would run and the herd is at :target. It starts when some step would run. Without a :box and a :plan it can never start (impossible :no-box), nor without a :mob and a :plan (:no-mob). Otherwise it
@@ -63,8 +63,9 @@
    :box {:doc "the pen: {:min {:x :y :z} :max {:x :y :z}}, inclusive; required without :plan" :spec pen-read/box-arg :default nil}
    :target {:doc "adult herd size wanted; babies count toward it, they grow" :spec (a/int-in 0 nil) :default 4}
    :chest {:doc "chest position {:x :y :z} for the produce; nil: do not store" :spec ::a/pos :default nil}
-   :carry {:doc "{item-name count}: how many of a produce item deposit leaves carried" :spec (a/map-of string? number?) :default {}}
-   :fetch {:doc "get breeding food and shears that are not carried (passed to breed and shear; see their :fetch): true, a set of kinds or a map of limits; false skips the step" :spec need/option? :default true}})
+   :carry {:doc "{item-name count}: how many of a produce item deposit leaves carried" :spec (a/map-of string? number?) :default {}}})
+
+(def ways need/fetch-ways)
 
 (def target [:plan :part :box])
 
@@ -143,11 +144,11 @@
      :reach (hunting/reach c)}))
 
 (defn decide-mend
-  [{:keys [plan fetch]} {:keys [gaps]}]
+  [{:keys [plan ways]} {:keys [gaps]}]
   (cond
     (nil? plan) {:skip :no-plan}
     (empty? gaps) {:skip :sound}
-    :else {:call {:slot :mend :job (jobs :mend) :args (cond-> {:plan plan} (some? fetch) (assoc :fetch fetch))}}))
+    :else {:call {:slot :mend :job (jobs :mend) :args (cond-> {:plan plan} (not (need/fetching? ways)) (assoc :fetch false))}}))
 
 (defn decide-herd
   [{:keys [mob box fetch target]} {:keys [adults]}]
@@ -156,12 +157,12 @@
     {:call {:slot :herd :job (jobs :herd) :args (cond-> {:mob mob :box box :target (min 2 target)} (some? fetch) (assoc :fetch fetch))}}))
 
 (defn decide-breed
-  [{:keys [mob target fetch box]} {:keys [adults babies food reach]}]
+  [{:keys [mob target ways box]} {:keys [adults babies food reach]}]
   (cond
     (>= (+ adults babies) target) {:skip :at-target}
     (< adults 2) {:skip :too-few-adults}
-    (and (nil? food) (not (need/allows? fetch :item))) {:skip :no-food}
-    :else {:call {:slot :breed :job (jobs :breed) :args (cond-> {:mob mob :count 2 :radius reach :box box} (some? fetch) (assoc :fetch fetch))}}))
+    (and (nil? food) (not (need/fetching? ways))) {:skip :no-food}
+    :else {:call {:slot :breed :job (jobs :breed) :args (cond-> {:mob mob :count 2 :radius reach :box box} (some? ways) (assoc :ways ways))}}))
 
 (defn decide-cull
   [{:keys [mob box target]} {:keys [adults babies]}]
@@ -171,12 +172,12 @@
       {:call {:slot :cull :job (jobs :cull) :args {:mob mob :box box :keep keep}}})))
 
 (defn decide-shear
-  [{:keys [mob fetch]} {:keys [shears shearable reach]}]
+  [{:keys [mob ways]} {:keys [shears shearable reach]}]
   (cond
     (not= "sheep" mob) {:skip :not-sheep}
-    (and (not shears) (not (need/allows? fetch :tool))) {:skip :no-shears}
+    (and (not shears) (not (need/fetching? ways))) {:skip :no-shears}
     (zero? shearable) {:skip :none-shearable}
-    :else {:call {:slot :shear :job (jobs :shear) :args (cond-> {:radius reach} (some? fetch) (assoc :fetch fetch))}}))
+    :else {:call {:slot :shear :job (jobs :shear) :args (cond-> {:radius reach} (some? ways) (assoc :ways ways))}}))
 
 (defn decide-deposit
   [{:keys [chest carry]} {:keys [stored]}]

@@ -35,8 +35,8 @@
   One call is the whole give; it waits for the player to appear or to take the drop in jobs.time.noop pauses (:giving) and yields :continue.
   done? is ok once the drop is seen taken.
   Villager: :item is food they pick up (bread, carrot, potato, beetroot, wheat or seeds; nil: the first carried of bread,
-  carrot, potato, beetroot), fetched when none is carried unless :fetch is false (condition-failed :no-food; a listed call
-  with :fetch off waits). Finds the villager in sight, walks to a cell 2.5 to 3.5 blocks from it on a side where no
+  carrot, potato, beetroot), fetched when none is carried unless the ways leave only :carried (condition-failed :no-food; a listed call
+  with ways #{:carried} waits). Finds the villager in sight, walks to a cell 2.5 to 3.5 blocks from it on a side where no
   other villager would take the drop, looks level and tosses with a pickup receipt (the toss primitive's :watchS reports
   who collected the drop, by uuid). Only what that villager collected counts as given; the rest lying near the toss is
   collected back (jobs.items.collect-drops), never left as litter, and a toss cut before its receipt is settled on
@@ -48,8 +48,7 @@
 (a/defargs args
   {:to {:doc "a player's name, or a villager's entity uuid" :spec string? :default nil}
    :item {:spec a/item? :default nil}
-   :count {:doc "how many; nil gives everything carried (a villager: 1)" :spec (a/int-in 1 nil) :default nil}
-   :fetch {:doc "villager only: get food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}})
+   :count {:doc "how many; nil gives everything carried (a villager: 1)" :spec (a/int-in 1 nil) :default nil}})
 
 (a/defargs settings
   {::radius {:default 32 :doc "How far the player and the drop are looked for, in blocks." :spec (a/num-in 0 nil)}
@@ -69,6 +68,8 @@
 (defn walk-leg-s [] (settings/get settings ::walk-leg-s))
 (defn max-blocked [] (settings/get settings ::max-blocked))
 (defn head-height [] (settings/get settings ::head-height))
+
+(def ways need/fetch-ways)
 
 (def target [:to :item :count])
 

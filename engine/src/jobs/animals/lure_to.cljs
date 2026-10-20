@@ -26,7 +26,7 @@
   carrots for pigs, seeds for chickens; jobs.lib.animals/breeding-food), then put the food away. No lead is needed.
   A one-shot order that starts and ends itself. Each step it keeps a :gate-held entry fresh for every planned gate seen open within 10 blocks of :pos, so the pen-gate trigger does not shut the gate it leads the animal through. Without :mob or :pos it can never start (impossible :no-mob, :no-destination).
 
-  A body that holds none of the food first gets it (a jobs.items.obtain child, unless :fetch is false); when none can
+  A body that holds none of the food first gets it (a jobs.items.obtain child, unless the ways are only #{:carried}); when none can
   be got the job ends :no-food with the fetch's ending as its :because. It picks the nearest adult within :radius that is on nobody's lead and not already in :box (the zone rules let
   it), holds the food, walks within 6 blocks of it and then to :pos in short go-to legs, the same legs as
   jobs.animals.lead-to (doors left open for the animal and shut afterwards); the go-to child of a leg plans its walk again after the leg was planned here). After each leg the animal is looked at:
@@ -60,7 +60,6 @@
    :pos {:doc "where to lure it {:x :y :z}" :spec ::a/pos :default nil}
    :box {:doc "the destination pen {:min :max} (feet cells, inclusive): animals in it are not lured, and the job arrives only when the led animal stands in it; none: the animal within 6 blocks of :pos" :spec pen-read/box-arg :default nil}
    :radius {:doc "animals within this many blocks (flat, height ignored) of where the job starts are lured" :spec (a/num-in 0 nil) :default 8}
-   :fetch {:doc "get the food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}
    :uuid {:doc "lead only this animal (its uuid or the start of it, as the entities tool shows; the id when it has none); nothing else takes its place. An empty or ambiguous start (more than one animal matches) never starts; one already at the destination ends the job at once (done? :ok)" :spec string? :default nil}
    :keep-food {:doc "leave the food in hand when the lure ends, for a parent that goes on with the animal (jobs.animals.herd); the gates the legs left open are still shut" :spec boolean? :default false}
    :ignore-zones? :shared})
@@ -79,6 +78,8 @@
 (defn arrive-range [] (settings/get settings ::arrive-range))
 (defn gate-hold-range [] (settings/get settings ::gate-hold-range))
 (defn ground-search [] (settings/get settings ::ground-search))
+
+(def ways need/fetch-ways)
 
 (def target [:mob :pos])
 
@@ -278,7 +279,7 @@
          first)))
 
 (defn ^:async get-food!
-  "No food carried: fetch it when :fetch allows, else (or when none came) end :no-food. :again once it is carried."
+  "No food carried: fetch it when the call's ways allow, else (or when none came) end :no-food. :again once it is carried."
   [c]
   (let [e (await (bait/food! c 1))]
     (cond

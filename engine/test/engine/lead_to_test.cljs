@@ -237,7 +237,7 @@
 (deftest a-lead-is-not-fetched-when-fetch-is-off
   (are [args expected] (= expected (tu/kind-reason (lead-to/can-start? (ctx-of {:inventory []} args {}))))
     {} [:ok :order]
-    {:fetch false} [:later :no-lead]))
+    {:ways #{:carried}} [:later :no-lead]))
 
 (deftest a-cow-10-out-is-not-pulled-so-far-that-the-lead-breaks
   (async done

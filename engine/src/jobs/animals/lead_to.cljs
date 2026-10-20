@@ -20,7 +20,7 @@
   or let it go. A one-shot order that starts and ends itself. Without :mob or a destination (:pos or :fence) it can never start
   (impossible :no-mob, :no-destination); with a :fence cell seen and not a fence it waits :no-fence. A body that carries no
   lead first gets one (phase :get-lead, a jobs.items.obtain child: withdrawn from a chest it has seen or crafted, limits
-  from :fetch); when none can be got the job ends :no-lead at once, it never waits for one; with :fetch false a call
+  from the call's ways); when none can be got the job ends :no-lead at once, it never waits for one; with :ways #{:carried} a call
   without a lead waits (can-start? later :no-lead).
 
   Phases, each by a child job:
@@ -84,7 +84,6 @@
    :range {:doc "how close to :pos counts as there" :spec (a/num-in 0 nil) :default 2}
    :radius {:doc "animals within this many blocks of where the job starts are leashed" :spec (a/num-in 0 nil) :default 8}
    :gather-radius {:doc "without :fence the animal is let go once it is within this many blocks of :pos" :spec (a/num-in 0 nil) :default 3}
-   :fetch {:doc "get a lead when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false waits for one (later :no-lead); a failed fetch ends :no-lead" :spec need/option? :default true}
    :ignore-zones? :shared})
 
 (a/defargs settings
@@ -181,6 +180,8 @@
   [c]
   (false? (fence-block? c)))
 
+(def ways need/fetch-ways)
+
 (def target [:mob :pos :fence])
 
 (def safe? ready/safe-if-lit)
@@ -191,14 +192,14 @@
 
 (defn can-start?
   "Never without :mob or a destination; later :no-fence while the :fence cell is seen and no fence, :no-lead with
-  no lead carried and :fetch off. A missing lead is otherwise fetched."
+  no lead carried and ways #{:carried}. A missing lead is otherwise fetched."
   [c]
   (let [{:keys [mob pos fence]} (:args c)]
     (cond
       (nil? mob) (contract/never :no-mob "lead-to needs a :mob")
       (not (or pos fence)) (contract/never :no-destination "lead-to needs a :pos or a :fence")
       (and fence (not-fence? c)) (contract/later :no-fence "lead-to waits: the named cell is not a fence")
-      (not (or (need/parse-arg (:fetch (:args c))) (animals/lead-carried? c))) (contract/later :no-lead "lead-to waits: no lead carried and :fetch is off")
+      (not (or (need/fetch-opts c) (animals/lead-carried? c))) (contract/later :no-lead "lead-to waits: no lead carried and the ways are only #{:carried}")
       :else (contract/ok :order "the order is complete"))))
 
 (defn quote-of [c]
@@ -241,7 +242,7 @@
 (defn ^:async get-lead!
   "Without a lead: a jobs.items.obtain child gets one (chest or craft). Any child failure ends :no-lead."
   [c]
-  (let [limits (select-keys (need/parse-arg (:fetch (:args c))) [:how :explore :minutes])
+  (let [limits (select-keys (need/fetch-opts c) [:how :explore :minutes])
         e (await (need/item! c "lead" 1 (merge {:slot :obtain :explore false} limits)))]
     (cond
       (= :continue e) :yield

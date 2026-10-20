@@ -57,7 +57,7 @@
         (is (= {:event :stopped :kind :condition-failed :reason :gone}
                (await (ends '(jobs.items.give {:to "v-1"}) {:inventory bread}))))
         (is (= {:event :waiting :reason :need}
-               (await (ends '(jobs.items.give {:to "v-1" :fetch false}) {:entities [(villager [])]}))))
+               (await (ends '(jobs.items.give {:to "v-1" :ways #{:carried}}) {:entities [(villager [])]}))))
         (is (= {:event :stopped :kind :impossible :reason :bad-args}
                (await (ends '(jobs.items.give {:to "v-1" :item "diamond"}) {:inventory bread}))))))))
 
@@ -70,7 +70,7 @@
         (is (= {:event :waiting :reason :no-pair}
                (await (ends '(jobs.village.breed {:target 3}) {:entities [(villager [])] :inventory bread}))))
         (is (= {:event :waiting :reason :no-food}
-               (await (ends '(jobs.village.breed {:target 3 :fetch false})
+               (await (ends '(jobs.village.breed {:target 3 :ways #{:carried}})
                              {:entities [(villager [] {:uuid "v-1" :pos {:x 3 :y 64 :z 0}}) (villager [] {:id 2 :uuid "v-2" :pos {:x 5 :y 64 :z 0}})]}))))))))
 
 (deftest villagers-are-sought-within-the-one-search-radius

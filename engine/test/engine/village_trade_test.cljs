@@ -127,7 +127,7 @@
       (fn ^:async t []
         (let [offer (bread {:cost [{:item "diamond" :count 1}]})
               world {:entities [(villager [offer])] :inventory [{:name "emerald" :count 4} {:name "diamond" :count 2}]}
-              [refused] (await (trade world {:fetch false}))
+              [refused] (await (trade world {:ways #{:carried}}))
               [paid p] (await (trade world {:use {:payment ["diamond"]}}))]
           (is (= :no-offer (:reason refused)))
           (is (= {:bought 1 :paid {"diamond" 1} :item "bread"} paid))
@@ -371,11 +371,11 @@
           (is (= {"emerald" 9 "bread" 1} (inv p))))))))
 
 (deftest trade-waits-for-payment-only-when-it-will-not-fetch
-  (are [inv fetch ok] (= ok (= :ok (first (trade/no-payment {:args {:villager "v-1" :buy "bread" :count 1 :fetch fetch}
+  (are [inv ways ok] (= ok (= :ok (first (trade/no-payment {:args {:villager "v-1" :buy "bread" :count 1 :ways ways}
                                                               :primitives (tu/fake-on-floor {:inventory inv})}))))
-    [] false false
-    [] true true
-    [{:name "emerald" :count 1}] false true))
+    [] #{:carried} false
+    [] #{:carried :chest} true
+    [{:name "emerald" :count 1}] #{:carried} true))
 
 (deftest payment-not-carried-and-not-fetched-ends-payment-short-before-any-buy
   (async done
@@ -383,7 +383,7 @@
       (fn ^:async t []
         (let [ops (atom [])
               [result] (await (trade {:entities [(villager [(bread {:cost [{:item "emerald" :count 3}]})])] :inventory [{:name "emerald" :count 2}]}
-                                     {:fetch false}
+                                     {:ways #{:carried}}
                                      #(.override (.-world %) "trade" (trade-ops ops false))))]
           (is (= {:bought 0 :paid {} :item "bread" :status :stopped :reason :payment-short} result))
           (is (= ["offers"] @ops) "the price was read, nothing was bought"))))))
@@ -395,7 +395,7 @@
         (let [ops (atom [])
               [result p] (await (trade {:entities [(villager [(bread {})])]
                                         :inventory (into [{:name "emerald" :count 5}] (fillers 35))}
-                                       {:fetch false}
+                                       {:ways #{:carried}}
                                        #(.override (.-world %) "trade" (trade-ops ops false))))]
           (is (= {:bought 1 :paid {"emerald" 1} :item "bread"} result))
           (is (= 4 (get (inv p) "emerald")))

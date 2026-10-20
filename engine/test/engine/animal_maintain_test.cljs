@@ -117,7 +117,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:target 4 :fetch false} {:entities [(cow 1 2) (cow 2 3) leather-on-the-ground]} 12))]
+        (let [s (await (scenario {:target 4 :ways #{:carried}} {:entities [(cow 1 2) (cow 2 3) leather-on-the-ground]} 12))]
           (is (empty? (interacts s)))
           (is (= {:skipped :no-food} (get-in (done-event s) [:steps :breed])))
           (is (true? (finished? s))))))))
@@ -177,7 +177,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:mob "sheep" :target 2 :fetch false} {:entities [(sheep 1 2) (sheep 2 3) leather-on-the-ground]} 20))]
+        (let [s (await (scenario {:mob "sheep" :target 2 :ways #{:carried}} {:entities [(sheep 1 2) (sheep 2 3) leather-on-the-ground]} 20))]
           (is (= {:skipped :no-shears} (get-in (done-event s) [:steps :shear]))))))))
 
 (deftest cows-are-not-sheared
@@ -256,21 +256,21 @@
     [] [{:name "beef" :count 1}] ["beef"] {"beef" 1}
     ["beef"] [{:name "beef" :count 64} {:name "beef" :count 3}] ["beef"] {"beef" 66}
     [] [{:name "iron_sword" :count 1}] ["beef"] {})
-  (are [expected facts] (= expected (:skip (maintain/decide :breed {:mob "cow" :target 4} facts)))
+  (are [expected facts] (= expected (:skip (maintain/decide :breed {:mob "cow" :target 4 :ways #{:carried}} facts)))
     :at-target {:adults 3 :babies 1}
     :too-few-adults {:adults 1 :babies 0}
     :no-food {:adults 2 :babies 0 :food nil}
     nil {:adults 2 :babies 0 :food "wheat" :reach 5})
-  (is (= {:call {:slot :breed :job 'jobs.animals.breed :args {:mob "cow" :count 2 :radius 5 :box box :fetch true}}}
-         (maintain/decide :breed {:mob "cow" :target 4 :box box :fetch true} {:adults 2 :babies 0 :food nil :reach 5}))
-      "no food but :fetch on: breed is called with the pen and fetches")
-  (is (= {:call {:slot :shear :job 'jobs.animals.shear :args {:radius 5 :fetch true}}}
-         (maintain/decide :shear {:mob "sheep" :fetch true} {:shears false :shearable 2 :reach 5}))
-      "no shears but :fetch on: shear is called and fetches")
-  (is (= :no-food (:skip (maintain/decide :breed {:mob "cow" :target 4 :fetch #{:tool}} {:adults 2 :babies 0 :food nil :reach 5})))
-      ":fetch limited to tools is no leave to fetch food")
-  (is (= :no-shears (:skip (maintain/decide :shear {:mob "sheep" :fetch #{:item}} {:shears false :shearable 2 :reach 5})))
-      ":fetch limited to items is no leave to fetch shears")
+  (is (= {:call {:slot :breed :job 'jobs.animals.breed :args {:mob "cow" :count 2 :radius 5 :box box :ways #{:carried :chest}}}}
+         (maintain/decide :breed {:mob "cow" :target 4 :box box :ways #{:carried :chest}} {:adults 2 :babies 0 :food nil :reach 5}))
+      "no food but ways allow a fetch: breed is called with the pen and fetches")
+  (is (= {:call {:slot :shear :job 'jobs.animals.shear :args {:radius 5 :ways #{:carried :chest}}}}
+         (maintain/decide :shear {:mob "sheep" :ways #{:carried :chest}} {:shears false :shearable 2 :reach 5}))
+      "no shears but ways allow a fetch: shear is called and fetches")
+  (is (= :no-food (:skip (maintain/decide :breed {:mob "cow" :target 4 :ways #{:carried}} {:adults 2 :babies 0 :food nil :reach 5})))
+      "ways #{:carried} is no leave to fetch food")
+  (is (= :no-shears (:skip (maintain/decide :shear {:mob "sheep" :ways #{:carried}} {:shears false :shearable 2 :reach 5})))
+      "ways #{:carried} is no leave to fetch shears")
   (are [expected facts] (= expected (:skip (maintain/decide :cull {:mob "cow" :target 4} facts)))
     :within-target {:adults 4 :babies 0}
     :within-target {:adults 2 :babies 3}
@@ -282,7 +282,7 @@
     {:skip :no-plan} {} {:gaps [[1 64 1]]}
     {:skip :sound} {:plan "pen"} {:gaps []}
     {:call {:slot :mend :job 'jobs.build.pen :args {:plan "pen"}}} {:plan "pen"} {:gaps [[1 64 1]]}
-    {:call {:slot :mend :job 'jobs.build.pen :args {:plan "pen" :fetch false}}} {:plan "pen" :fetch false} {:gaps [[1 64 1]]}))
+    {:call {:slot :mend :job 'jobs.build.pen :args {:plan "pen" :fetch false}}} {:plan "pen" :ways #{:carried}} {:gaps [[1 64 1]]}))
 
 (def ring-pen-plan
   (update (pb/ring-plan) :parts conj {:id "cows" :box [[3 64 3] [3 64 3]] :want "air" :herd {:mob "cow" :target 0}}))

@@ -569,7 +569,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (seeing-scenario {:mob "cow" :fetch false} (chest-world [{:name "wheat" :count 10}]) 12))]
+        (let [s (await (seeing-scenario {:mob "cow" :ways #{:carried}} (chest-world [{:name "wheat" :count 10}]) 12))]
           (is (not (finished? s)))
           (is (nil? (done-event s)))
           (is (= 10 (wheat-in-chest s))))))))

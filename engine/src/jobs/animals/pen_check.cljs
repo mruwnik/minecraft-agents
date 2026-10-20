@@ -27,7 +27,7 @@
   The fill stops after ::max-cells cells (a setting): a bigger pen is not closed, reason :unbounded. A fill without a box
   that finds no wall either side of a gap says that too.
 
-  Patching (way :patch, on by default; :ways #{:check} only reads): a leak that is a :gap gets one fence (a jobs.blocks.place child; the kind is :item, else the fence or wall seen
+  Patching (way :patch, on by default; :ways #{:check} only reads; the fence comes from the carried items, and from :chest :craft :gather when the call's ways list them: :ways #{:check :patch} patches with what is carried): a leak that is a :gap gets one fence (a jobs.blocks.place child; the kind is :item, else the fence or wall seen
   beside the gap) and one on top of each :climb fence; an :open-gate is shut (a jobs.items.use child). Then the pen is read again, in at most ::max-passes passes
   (a pass that put nothing right is the last). Nothing else is placed or dug. The result gains :patched {:placed :shut :failed}.
 
@@ -50,10 +50,9 @@
    :plan {:doc "id of a plan of the body's world: the pen is the box round its fence, gate and wall cells (instead of :box)" :spec a/name? :default nil}
    :part {:doc "with :plan, only the cells of this part" :spec a/name? :default nil}
    :item {:doc "the fence or wall item that patches a gap; nil: the kind seen beside the gap" :spec a/item? :default nil}
-   :fetch {:doc "as jobs.blocks.place: get the fence the patch lacks; false patches with what is carried" :spec need/option? :default true}
    :ignore-zones? :shared})
 
-(def ways [:check :patch])
+(def ways [:check :patch :chest :craft :gather])
 
 (defn pen-box
   "{:box} for the args (:box, else the box of :plan), {:trouble text}, or {} with only :at."
@@ -206,7 +205,7 @@
         shared (select-keys (:args c) [:ignore-zones?])
         r (await (if (= :shut op)
                    (ctx/call c :patch 'jobs.items.use (assoc shared :on pos :item "none"))
-                   (pen-patch/place-fence! c pos item nil)))]
+                   (pen-patch/place-fence! c pos item {:ways (into #{:carried} (filter #(ctx/way? c %)) [:chest :craft :gather])})))]
     (if (= :continue r)
       :continue
       (let [ok? (= :done (:kind r))

@@ -41,5 +41,5 @@
    :body {:inventory [["bread" 8]]}
    :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,UUID:[I;20264,7,5,1]}"]
          [:summon "villager" [16.5 0 18.5] "{NoAI:1b,UUID:[I;20264,7,5,2]}"]
-         [:job (jobs.village.breed {:target 3 :fetch false})]]
+         [:job (jobs.village.breed {:target 3 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-bed}} :within-s 30 :of-job true}]}]}

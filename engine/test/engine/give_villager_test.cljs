@@ -197,7 +197,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out]} (await (feed {:entities [(villager 2)]} {:to "v-1" :fetch false} 20 identity))]
+        (let [{:keys [p out]} (await (feed {:entities [(villager 2)]} {:to "v-1" :ways #{:carried}} 20 identity))]
           (is (= [:condition-failed :need] ((juxt (comp :kind :ending) :reason) @out)) "a failed condition, no round")
           (is (empty? (tosses p))))))))
 

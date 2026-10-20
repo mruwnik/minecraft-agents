@@ -120,7 +120,6 @@
    :gate {:doc "the fence gate {:x :y :z} to bring them through; the pen's usable gate nearest the body when nil" :spec ::a/pos :default nil}
    :radius {:doc "animals within this many blocks of where the body started the run are fetched" :spec (a/num-in 0 nil) :default 24}
    :method {:doc "how animals are brought: :lead (each on a lead), :lure (following the food in hand), :auto (a lead when one is carried or can be crafted from a carried slime ball, else the food)" :spec #{:auto :lead :lure} :default :auto}
-   :fetch {:doc "get the food when none is carried and the run lures (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food" :spec need/option? :default true}
    :ignore-zones? :shared})
 
 (def leading
@@ -137,6 +136,8 @@
    ::wall-time-s {:default 1800 :doc "Seconds a herd run may last from its start, its pauses included." :spec (a/num-in 0 nil)}})
 
 (defn pace-ms [] (settings/get settings ::pace-ms))
+
+(def ways need/fetch-ways)
 
 (def target [:mob :box])
 

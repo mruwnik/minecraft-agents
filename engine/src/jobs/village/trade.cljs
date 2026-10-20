@@ -33,17 +33,15 @@
   - :price (every open offer is dearer than the payment spend left; :price is the cheapest seen).
   - :payment-short, :no-room, :incomplete (a buy stopped short for no reason, three times), or the
     primitive's failure reason.
-  Before a buy the body must carry the price of one trade: missing it is fetched (jobs.lib.need, :fetch true, a set of
-  kinds or a map of limits; :payment-short when :fetch is off or the fetch ended), and with a full bag one
-  jobs.storage.make-room child (keeping the payment) runs per call. Without :fetch, can-start? waits (later :need)
+  Before a buy the body must carry the price of one trade: missing it is fetched (jobs.lib.need; :payment-short when the ways leave only :carried or the fetch ended), and with a full bag one
+  jobs.storage.make-room child (keeping the payment) runs per call. With ways #{:carried}, can-start? waits (later :need)
   while no emerald is carried.
   What was bought and paid is kept across a cut and restart, so a purchase is neither lost nor repeated.")
 
 (a/defargs args
   {:villager {:doc "the villager's entity uuid; nil: the nearest adult villager with a job in sight" :spec string? :default nil}
    :buy {:doc "item name to buy" :spec a/item? :default nil}
-   :count {:doc "items wanted" :spec (a/int-in 1 nil) :default 1}
-   :fetch {:doc "get the payment when one trade's price is not carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :payment-short" :spec need/option? :default true}})
+   :count {:doc "items wanted" :spec (a/int-in 1 nil) :default 1}})
 
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds one purchase may take." :spec (a/int-in 1 nil)}
@@ -52,6 +50,8 @@
 (defn reach [] (settings/get settings ::reach))
 
 (defn chase-timeout-s [] (settings/get settings ::chase-timeout-s))
+
+(def ways need/fetch-ways)
 
 (def target [:buy])
 
@@ -79,7 +79,7 @@
 (defn no-payment
   "Later :need while no currency is carried and the call will not fetch it."
   [c]
-  (if (or (need/opts c job) (pos? (carried c currency)))
+  (if (or (need/fetch-opts c) (pos? (carried c currency)))
     (contract/ok :payment "payment carried or fetched")
     (contract/later :need "no payment carried and no fetch for it" :why "no payment carried and no fetch for it" :item currency :count 1)))
 
@@ -204,7 +204,7 @@
   when it ran, else the :payment-short ending."
   [c offer]
   (when-let [{:keys [item count]} (short-payment c offer)]
-    (let [opts (need/opts c job)
+    (let [opts (need/fetch-opts c)
           e (when opts (await (need/item! c item count opts)))]
       (cond
         (= :continue e) :continue
