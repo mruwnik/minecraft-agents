@@ -78,6 +78,7 @@
         (let [s (await (scenario {:item "wooden_pickaxe" :count 1}
                                  {:inventory (carried "oak_planks" 3 "stick" 2 "crafting_table" 1)} 20))]
           (is (= 1 (get (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self (:p s)))) "wooden_pickaxe")) "crafted")
+          (is (nil? (get (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self (:p s)))) "crafting_table")) "the table is left standing")
           (is (= [[:craft :urgent]] (->> @(:seen s) (filter #(and (= :section (:kind %)) (:open %))) (map (juxt :section :holds)) distinct vec))))))))
 
 (deftest wool-with-no-sheep-seen-waits-no-source-without-throwing

@@ -77,7 +77,8 @@
 
       :else
       (do (ctx/update-mem! c assoc-in [:craft :step] step)
-          (let [e (await (ctx/call c :craft 'jobs.items.craft {:item (:item step) :count (need/carry-count c :craft [(:item step)] (:count step)) :fetch false :avoid (:avoid (:args c)) :for-plan (:for-plan (:args c))}))]
+          (let [e (await (ctx/call c :craft 'jobs.items.craft {:item (:item step) :count (need/carry-count c :craft [(:item step)] (:count step)) :fetch false :avoid (:avoid (:args c)) :for-plan (:for-plan (:args c))
+                                                                    :keep-table (nil? (:for-plan (:args c)))}))]
             (if (= :continue e)
               :continue
               (do
