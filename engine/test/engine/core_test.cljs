@@ -61,6 +61,14 @@
   (ctx/update-mem! c assoc :x 1)
   (throw (js/Error. "nope")))
 
+(defn ^:async spin-round
+  "Never yields the event loop: a microtask loop that only asks alive?."
+  [c]
+  (loop []
+    (ctx/alive? c)
+    (await (js/Promise.resolve))
+    (recur)))
+
 (defn ^:async bad-result-round [_]
   :not-ready)
 
@@ -107,6 +115,7 @@
    'attention-done (tu/job attention-done-round)
    'write-fail (tu/job write-fail-round)
    'bad-result (tu/job bad-result-round)
+   'spin (tu/job spin-round)
    'child child-job
    'recurse (tu/job recurse-round)
    'parent (tu/job parent-round)
@@ -287,6 +296,18 @@
               "failure is represented by a required attention event")
           (dotimes [_ 3] (await (core/tick! eng)))
           (is (= ["j1" "j2" "j2" "j2"] (ran seen)) "the scheduler skips j1"))))))
+
+(deftest a-job-that-never-yields-the-event-loop-is-failed-as-spinning
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup)]
+          (core/submit! eng '(spin) {})
+          (core/submit! eng '(count) {})
+          (await (core/tick! eng))
+          (is (re-find #"^Error: spinning: job j1 " (:error (get (:failed (core/state eng)) "j1"))))
+          (await (core/tick! eng))
+          (is (= {:n 1} (job-mem eng "j2")) "the next job still runs"))))))
 
 (deftest a-round-returning-junk-marks-the-job-failed-too
   (async done

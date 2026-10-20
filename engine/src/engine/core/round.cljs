@@ -12,16 +12,36 @@
             [engine.core.notices :as notices]
             [engine.core.quote :as quote]
             [engine.core.tally :as tally]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.chat :as chat]
+            [engine.settings :as settings]
             [engine.memory :as mem]
             ["crypto" :as crypto]))
 
 (declare call quote-ctx)
 
+(a/defargs settings
+  {:engine.core.round/spin-calls
+   {:default 100000 :spec (a/int-in 1000 nil)
+    :doc "Engine calls (checks, writes, acts, alive? tests) one job may make inside a single event-loop turn before it is failed as spinning: a loop that never awaits starves every other body and trigger."}})
+
+(def ^:private spin-count (volatile! 0))
+
+(defn spin-guard!
+  "Count one engine call of a job. The count restarts every event-loop turn (one setImmediate per turn, no allocation
+  per call), so only code that never yields reaches the setting; it throws a plain error naming the job, which ends it failed."
+  [root slots]
+  (let [n (vswap! spin-count inc)]
+    (when (== 1 n) (js/setImmediate #(vreset! spin-count 0)))
+    (when (and (> n 1000) (> n (settings/get settings :engine.core.round/spin-calls)))
+      (vreset! spin-count 0)
+      (throw (js/Error. (str "spinning: job " (mem/path->id root slots) " made " n " engine calls without yielding the event loop"))))))
+
 (defn own!
   "Throw unless the token of base is current: a cut; a quote ctx (no token) gets a plain error."
-  [eng {:keys [token quote-deadline]}]
+  [eng {:keys [token quote-deadline root slots]}]
+  (spin-guard! root slots)
   (when quote-deadline (throw (js/Error. "a quote cannot act, call or write")))
   (when-not (owner? eng token) (throw (cut-error))))
 
@@ -151,7 +171,7 @@
      :resolve-attention (fn [request-id reason]
                           (check!)
                           (resolve-attention! eng request-id reason))
-     :alive? #(or (nil? token) (owner? eng token))
+     :alive? #(do (spin-guard! root slots) (or (nil? token) (owner? eng token)))
      :hold-still (fn [reason] (check!) (hold-still! eng token root reason))
      :open-section (fn [section level]
                      (check!)

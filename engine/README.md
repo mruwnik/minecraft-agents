@@ -512,6 +512,7 @@ the token so the in-flight round is never booked; the job stays listed.
 - `body.idle` (info, once per stretch; wakes `observe --wait`; memory `:body-idle`): no act but `:wait` from a job not
   `idle-ok` (stay-near, wait-for-light/-dusk) for `:engine.core.activity/body-idle-s` (10); lists each job with
   its `:waiting`/`:holding` reason. A useful act or a list change re-arms it.
+- Spin guard: a job that makes more than `:engine.core.round/spin-calls` (100000) engine calls (checks, writes, acts, `alive?`) inside one event-loop turn is failed with `spinning: job <id> ...` (it never awaited a timer, so nothing else ran).
 - `job.fruitless`: a required attention request when every act of a listed job failed in 3 rounds in a row (a round that
   ends the job does not count; a round with no act neither counts nor resets); resolved by a round with progress. It only flags.
 - `job.round_started` and `job.yielded` are debug; a job refused for bad args (can-start? :never :bad-args) starts no round.
