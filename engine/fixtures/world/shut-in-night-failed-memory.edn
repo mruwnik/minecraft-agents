@@ -38,5 +38,7 @@
                :job (jobs.survival.respond-to-hostile)}]
    :body {:at [5.5 0 5.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
-   :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 60 :of-job true}]
+   ;; the pit under the stone mass is roofed by the mass itself: nothing is placed, so no shut-in.sealed
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.shut-in"}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :no-way}} :for-s 20 :until {:source :job :kind :completed :data {:name "jobs.survival.shut-in"}}}]
    :limit-s 70}]}
