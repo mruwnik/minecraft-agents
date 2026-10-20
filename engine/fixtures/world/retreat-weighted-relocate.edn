@@ -5,6 +5,7 @@
 ;; Every flight and relocation must stay on the plot grid: a plot can sit at the grid's edge, past which there is no floor.
 ;; east-west: the zombies stand 2 north of the body, so the flight goes south (into the grid), never north off it.
 ;; hollow-floor: the hollow starts at x 10, so the first relocation (9 west, x 7) is solid ground inside the plot.
+;; no-blocks-relocation: from x 18.5 with no blocks a relocated pit can lay open (the edge site: air past the plot edge, nothing to wall it): the night holds exposed, never ends roofed.
 ;; hollow-floor-2: from x 20 the relocations go x 11 (hollow, fails) then x 2: solid and one block in from the plot edge (the cell past the edge is air, which a pit with no blocks cannot wall).
 {:defaults
  {:tags [:night :survival :retreat] :time :night
@@ -54,6 +55,14 @@
    :expect [{:event {:source :job :kind :shut-in.relocated} :within-s 60 :of-job true}
             {:event {:source :job :kind :shut-in.sealed} :within-s 120 :of-job true}]
    :limit-s 150}
+  {:name "no-blocks-relocation-holds-exposed-not-roofed"
+   :time :night :time-why :night-light
+   :blocks [[:fill [0 -8 0] [31 -1 31] "stone"] [:fill [8 -3 4] [28 -2 28] "air"]]
+   :body {:at [18.5 0 14.5] :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
+   :act [[:job (jobs.survival.night {})]]
+   :expect [{:event {:source :job :kind :shelter.exposed} :within-s 150 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 30}]
+   :limit-s 200}
   {:name "no-pit-site-holds-exposed"
    :blocks [[:fill [0 -8 0] [31 -2 31] "air"]]
    :body {:inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
