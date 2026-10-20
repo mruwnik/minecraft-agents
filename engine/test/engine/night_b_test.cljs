@@ -153,7 +153,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (st/setup {:time night :blocks wide-ground :inventory st/dirt-stack
-                                            :entities [(assoc zombie :pos {:x 3.5 :y 64 :z 0.5})]})]
+                                            :entities [(assoc zombie :pos {:x -4.5 :y 64 :z 0.5})]})]
           (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
           (core/submit! eng '(jobs.survival.dig-pit {:for :night}) {})
           (await (tu/run-until-empty eng 5))
