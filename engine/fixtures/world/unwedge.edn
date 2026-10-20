@@ -99,7 +99,7 @@
    :after [[:block [16 0 17] "cobblestone"]]
    :limit-s 60}
   {:name "f1-lava-only-free-side-1"
-   :blocks [[:fill [15 0 15] [17 1 17] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
+   :blocks [[:fill [15 0 15] [17 1 17] "stone"] [:fill [16 0 16] [16 1 16] "air"] [:fill [17 1 16] [17 1 16] "air"]]
    :act [[:rcon "execute positioned $X $Y $Z run setblock ~16 ~ ~16 sand"] [:rcon "execute positioned $X $Y $Z run setblock ~17 ~ ~16 lava"] [:await {:source :job :kind :stopped :data {:reason :blocked}} 40] [:wait-s 15] [:rcon "tp $BODY $X $Y $Z"]]
    :body {:inventory [["iron_shovel" 1]] :effects [["fire_resistance" 600 0]]}
    :expect [{:event {:source :job :kind :stopped :data {:reason :blocked}} :within-s 45}
