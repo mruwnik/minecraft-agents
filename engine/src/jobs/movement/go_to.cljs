@@ -45,7 +45,7 @@
     block), :clear-path (a door dug through a wall), :stair (a stair up, its own stair cut again) and :dig-out (out of
     its own shelter).
   - Its safe? is: at night jobs.lib.ready/safe-at the goal (a hostile near, or the goal or the walk to it exposed: later,
-    waiting for dawn; a goal whose light is unseen is walked to), by day not threatened; always ok with the head under water (it swims up for air first). A caller's :checks (an escape job's
+    waiting for dawn; a goal whose light is unseen is walked to), by day not threatened (a walk leading away from every hostile near is not held); always ok with the head under water (it swims up for air first). A caller's :checks (an escape job's
     defaults, an agent's own) replace it.
   - A body already within :range of a goal with a y (not in water or hanging; under :see seeing it) ends :done, cause :already, before any round: no plan, no arrival look (done?).
   - One call is one whole attempt: it plans and walks (jobs.lib.walk: slices of about 100 ms of search, walks of at
@@ -171,7 +171,7 @@
 (def safe?
   "Safe at the goal (ready/safe-at-by-night; its light unseen is no reason to wait). Always ok with the head under water:
   breathing comes before any wait, and go-to swims up for air before it walks."
-  (let [at (ready/safe-at-by-night goal-of)]
+  (let [at (ready/safe-at-by-night goal-of true)]
     (with-meta (fn [c]
                  (cond
                    (breath/head-under? (:primitives c)) (contract/ok :submerged "head under water: air first")

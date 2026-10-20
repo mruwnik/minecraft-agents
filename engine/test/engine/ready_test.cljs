@@ -186,6 +186,16 @@
       (ready/threatened c))
     (is (= 1 @asked))))
 
+(deftest a-walk-held-by-a-near-hostile-goes-on-only-when-it-leads-away
+  (let [walk (ready/safe-at (fn [_] nil) true)]
+    (are [goal expected] (= expected (first (ready/threatened-walking (ctx-of (merge at-origin {:entities [zombie]})) goal)))
+      {:x -8 :y 64 :z 0} :ok
+      {:x 8 :y 64 :z 0} :later
+      {:x 4 :y 64 :z 2} :later
+      {:x 0 :y 64 :z 6} :ok
+      nil :later)
+    (is (= :later (first (walk (ctx-of (merge at-origin {:time st/noon :entities [zombie]}))))) "no goal: the plain threat")))
+
 (deftest safe-at-adds-the-threat-to-the-exposure
   (is (= :later (kind (ready/safe-at (constantly {:x 1 :y 64 :z 0}))
                       {:time st/noon :self {:pos {:x 0 :y 64 :z 0}} :entities [zombie]}))))

@@ -86,12 +86,35 @@
     (contract/later :hostile-near "a hostile is near")
     (contract/ok :no-hostile-near "no hostile near")))
 
+(defn leads-away?
+  "Whether the straight walk from the body to `goal` ({:x :y :z}) never takes it nearer to any hostile it knows within the
+  hostile-near radii, and there is one: a player walks away from a danger."
+  [c goal]
+  (let [p (:primitives c)
+        args (trigger-args c)
+        body (u/pos-of (.-pos (.self p)))
+        goal (update goal :y #(or % (:y body)))
+        near (danger/known-hostiles p (danger/radius-in args) {:ranged-radius (danger/ranged-radius-in args)})]
+    (and (seq near)
+         (every? (fn [e] (>= (danger/way-distance body goal (danger/mob-pos p e)) (- (danger/mob-distance p e) 0.5)))
+                 near))))
+
+(defn threatened-walking
+  "threatened, but ok while the walk to `goal` (nil: no walk) leads away from every hostile near (leads-away?)."
+  [c goal]
+  (let [t (threatened c)]
+    (if (and goal (= :later (first t)) (leads-away? c goal))
+      (contract/ok :walking-away "a hostile is near, the walk leads away from it")
+      t)))
+
 (defn safe-at
   "The checker of a job that goes to the place (f c) ({:x :y :z}, nil: here): not threatened and not exposed there.
+  With walk? a hostile near is no threat to a walk that leads away from it (leads-away?).
   Its meta ::exposure is the exposed half alone, which (exposed) of a :checks form asks."
-  [f]
-  (with-meta (fn [c] (contract/all [(threatened c) (exposed c (f c))]))
-    {::exposure (fn [c] (exposed c (f c))) ::plain true}))
+  ([f] (safe-at f false))
+  ([f walk?]
+   (with-meta (fn [c] (contract/all [(if walk? (threatened-walking c (f c)) (threatened c)) (exposed c (f c))]))
+     {::exposure (fn [c] (exposed c (f c))) ::plain true})))
 
 (defn near-unseen-here
   "f, but an unseen place within ::unseen-judged-here-within blocks of the feet is judged where the body stands: a look cannot show a cell
@@ -109,8 +132,9 @@
   underground only not threatened (an unseen place's light is no reason to wait, and darkness underground does not end
   at dawn; a walk from a tunnel to open ground is exposed). A buried body's unseen place no higher than its feet is
   underground (Q279: caves count only reachable hostiles); one above them may be open ground."
-  [f]
-  (let [at (safe-at f)
+  ([f] (safe-at-by-night f false))
+  ([f walk?]
+  (let [at (safe-at f walk?)
         by-night? (fn [c]
                     (let [p (:primitives c)
                           feet (sh-sense/feet p)
@@ -121,8 +145,8 @@
                            (not (and to (sh-sense/buried? p)
                                      (or (sh-sense/buried-at? p to)
                                          (and (not (sh-sense/seen-cell? p to)) (<= (:y to) (:y feet)))))))))]
-    (with-meta (fn [c] (if (by-night? c) (at c) (threatened c)))
-      {::exposure (fn [c] (if (by-night? c) ((::exposure (meta at)) c) (contract/ok :day "an unseen place's light is no reason to wait")))})))
+    (with-meta (fn [c] (if (by-night? c) (at c) (if walk? (threatened-walking c (f c)) (threatened c))))
+      {::exposure (fn [c] (if (by-night? c) ((::exposure (meta at)) c) (contract/ok :day "an unseen place's light is no reason to wait")))}))))
 
 (def safe-at-chest
   "The checker of a job that goes to its chest (the :chest arg or the known :chest place)."
