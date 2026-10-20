@@ -1,5 +1,5 @@
 (ns jobs.survival.retreat-seal
-  "A cornered body's seal (jobs.survival.retreat): the open cells round it filled with carried blocks."
+  "A cornered body's seal (jobs.survival.respond-flight): the open cells round it filled with carried blocks."
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]

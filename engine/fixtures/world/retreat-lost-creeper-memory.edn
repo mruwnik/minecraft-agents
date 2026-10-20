@@ -15,7 +15,7 @@
    :memory [{:kind :home :data {:pos #xyz [21000 150 20016]}}
             {:kind :threat :data {:mob "creeper" :id 9 :uuid "u9" :key "u9" :pos {:x 24.5 :y 0 :z 16.5} :ended :lost} :policy {:cap 20 :ttl 300000} :age-s 5}]
    :act [[:summon "zombie" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:job (jobs.survival.retreat {})]
+         [:job (jobs.survival.respond-to-hostile {})]
          [:wait-s 12]] ; hold: the flight takes this long to show its distance
    :expect [{:event {:source :job :kind :retreat.target} :within-s 20}]
    :after [[:body-far [10.5 0 16.5] 18]]
@@ -23,7 +23,7 @@
   {:name "flee-without-the-lost-creeper-may-run-east"
    :memory [{:kind :home :data {:pos #xyz [21000 150 20016]}}]
    :act [[:summon "zombie" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:job (jobs.survival.retreat {})]
+         [:job (jobs.survival.respond-to-hostile {})]
          [:wait-s 12]] ; hold: the flight takes this long to show its distance
    :expect [{:event {:source :job :kind :retreat.target} :within-s 20}]
    :after [[:body-far [10.5 0 16.5] 8]]
@@ -32,13 +32,13 @@
    :body {:at [16.5 0 16.5] :yaw 270 :settle-s 3}
    :act [[:summon "creeper" [24.5 0 16.5] "{NoAI:1b,Silent:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-seen {:entity "creeper"} 15]
-         [:job (jobs.survival.retreat {})]
+         [:job (jobs.survival.respond-to-hostile {})]
          [:await {:source :job :kind :completed :of-job true} 40]
          [:rcon "execute positioned $X $Y $Z run tp $BODY ~16 ~ ~16"]
          [:rcon "execute positioned $X $Y $Z run fill ~23 ~-1 ~15 ~25 ~3 ~17 stone hollow"]
          [:wait-s 2] ; hold: the box reaches the body's world view
          [:summon "zombie" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:job (jobs.survival.retreat {})]
+         [:job (jobs.survival.respond-to-hostile {})]
          [:wait-s 12]] ; hold: the flight takes this long to show its distance
    :expect [{:event {:source :job :kind :retreat.target} :within-s 20}]
    :after [[:body-near [10.5 0 16.5] 18]]
@@ -49,7 +49,7 @@
          [:summon "creeper" [24.5 0 16.5] "{NoAI:1b,Silent:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:wait-s 2] ; hold: the box and the creeper reach the body's world view
          [:summon "zombie" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:job (jobs.survival.retreat {})]
+         [:job (jobs.survival.respond-to-hostile {})]
          [:wait-s 12]] ; hold: the flight takes this long to show its distance
    :expect [{:event {:source :job :kind :retreat.target} :within-s 20}]
    :after [[:body-far [10.5 0 16.5] 18]]

@@ -1,5 +1,5 @@
 (ns jobs.survival.retreat-pit
-  "A cornered body's pit and side pocket (jobs.survival.retreat): where one fits, digging it and plugging it."
+  "A cornered body's pit and side pocket (jobs.survival.respond-flight): where one fits, digging it and plugging it."
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]

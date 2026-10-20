@@ -19,8 +19,8 @@
                 '(jobs.storage.withdraw {:items true})
                 '(jobs.storage.withdraw {:items ["a"]})
                 '(jobs.survival.shut-in {:use {:blocks false}})
-                '(jobs.survival.retreat {:use {:tools true}})
-                '(jobs.survival.retreat {:use {:blocks {:x "a"}}})]]
+                '(jobs.survival.respond-to-hostile {:use {:tools true}})
+                '(jobs.survival.respond-to-hostile {:use {:blocks {:x "a"}}})]]
     (is (string? (expr/problem registry/jobs form)) (pr-str form))))
 
 (deftest well-formed-list-args-pass
@@ -44,9 +44,7 @@
                 '(jobs.storage.deposit {:free "text"})
                 '(jobs.storage.deposit {:ignore-zones? 3})
                 '(jobs.survival.shut-in {:ways #{:bogus}})
-                '(jobs.survival.shut-in {:place 3})
-                '(jobs.survival.retreat {:goal "text"})
-                '(jobs.survival.retreat {:on-lava :lava})]]
+                '(jobs.survival.shut-in {:place 3})]]
     (is (string? (expr/problem registry/jobs form)) (pr-str form)))
   (doseq [form ['(jobs.blocks.dig {:pos [1 64 1] :on-fluid :fail})
                 '(jobs.combat.attack {:radius 16 :absent :wait})
@@ -54,8 +52,7 @@
                 '(jobs.items.obtain {:item "stick" :count 64})
                 '(jobs.items.obtain {:item "stick" :count 100})
                 '(jobs.storage.deposit {:free 2})
-                '(jobs.survival.shut-in {:for :night :ways #{:walls}})
-                '(jobs.survival.retreat {:on-lava :stop})]]
+                '(jobs.survival.shut-in {:for :night :ways #{:walls}})]]
     (is (nil? (expr/problem registry/jobs form)) (pr-str form))))
 
 (deftest shape-errors-once-caught-in-a-round-are-refused-at-submit

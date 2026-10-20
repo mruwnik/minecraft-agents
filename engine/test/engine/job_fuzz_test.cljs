@@ -198,7 +198,7 @@
 (def long-running
   "{job reason}: jobs whose rounds legitimately outlast the fuzzer's caps (the fake world's time is frozen), so a cut-off is no defect."
   {'jobs.survival.night "a night round waits for dawn, which the fake world's frozen clock never brings"
-   'jobs.survival.retreat "flight keeps moving while the danger lasts, and the fake danger never goes"})
+   'jobs.survival.respond-to-hostile "flight keeps moving while the danger lasts, and the fake danger never goes"})
 
 (def progress-window "Rounds over which a change in the fake world counts as progress, not a spin." 3)
 

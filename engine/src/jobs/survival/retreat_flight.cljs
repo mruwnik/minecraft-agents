@@ -1,5 +1,5 @@
 (ns jobs.survival.retreat-flight
-  "The state of one flight (jobs.survival.retreat): the tried options and sweeps, who still chases, and the flight's end."
+  "The state of one flight (jobs.survival.respond-flight): the tried options and sweeps, who still chases, and the flight's end."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [engine.ctx :as ctx]

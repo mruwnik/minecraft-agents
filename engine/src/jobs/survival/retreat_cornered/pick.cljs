@@ -1,7 +1,8 @@
 (ns jobs.survival.retreat-cornered.pick
   "The cornered step of a flight: the conditions that rank its options (pressed, beaten, under fire, boxed in) and cornered!, which takes the first option it can."
   (:require [engine.settings :as settings]
-            [jobs.survival.retreat-cornered :as rc :refer [settings near-hostiles hitters close-radius hurt-by press-gap hit-reach fist-sweeps tool-weapons fight! escape-order outrun? angry-enderman? fight-wins? in-water? water! roof! swim-out! back-off! blocked!]]
+            [jobs.survival.respond-choose :refer [escape-order with-zone-pillar]]
+            [jobs.survival.retreat-cornered :as rc :refer [settings near-hostiles hitters close-radius hurt-by press-gap hit-reach fist-sweeps tool-weapons fight! outrun? angry-enderman? fight-wins? in-water? water! roof! swim-out! back-off! blocked!]]
             [engine.args :as a]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
@@ -198,16 +199,6 @@
                                  cell {:x (int (js/Math.floor x)) :y (int (js/Math.floor y)) :z (int (js/Math.floor z))}]
                              (or (open cell) (open (update cell :y inc)))))
                    (hitters c hostiles)))))
-
-(defn with-zone-pillar
-  "order with :plug-zone, :plug-dig-zone and :pillar-zone (walls, a pit or pocket, a pillar through another's area) after every way that keeps off, before a last :fight."
-  [order]
-  (let [order (vec order)
-        fight-last? (= :fight (peek order))
-        extra (cond-> [] (some #{:plug} order) (conj :plug-zone) (some #{:plug-dig} order) (conj :plug-dig-zone) (some #{:pillar} order) (conj :pillar-zone))]
-    (-> (if fight-last? (pop order) order)
-        (into extra)
-        (cond-> fight-last? (conj :fight)))))
 
 (defn ^:async cornered!
   "Nowhere worth walking to: the first option of escape-order that it can take and has not failed since the last

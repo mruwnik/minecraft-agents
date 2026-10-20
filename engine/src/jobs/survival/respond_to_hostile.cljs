@@ -1,7 +1,7 @@
 (ns jobs.survival.respond-to-hostile
   (:require [jobs.lib.ready :as ready]
             [jobs.survival.block-arrow-gap :as gap]
-            [jobs.survival.retreat-refuge :as refuge]
+            [jobs.survival.respond-flight :as flight]
             [engine.args :as a]
             [jobs.lib.checks :as checks]
             [jobs.lib.body :as body]
@@ -24,18 +24,19 @@
             [jobs.lib.util :as u]))
 
 (def doc
-  "A hostile is near: fight it (jobs.combat.attack) when the odds are fair, else retreat (jobs.survival.retreat); one whole attempt
-  per round, deciding afresh before each call of the child (the choice is jobs.lib.cost, see the README row).
+  "A hostile is near: fight it (jobs.combat.attack) when the odds are fair, else flee; one whole attempt per round, deciding
+  afresh before each call of the child. The flight (jobs.survival.respond-flight) is this job's own step loop: it makes every
+  choice (room, door, walk, cover, shut-in, pillar, back-off, fist) and each way is its own call (the fight choice is jobs.lib.cost, see the README row).
   Needs: a real danger (as the hostile-near trigger, jobs.lib.danger, in sight) within the danger ::hostile-radius setting (::ranged-radius for ranged mobs);
   none near is done at once. The call's :use :tools are the weapons, handed to both children.
-  Returns: :done when no danger is near and the retreat holds no refuge, or when every danger is only heard and the fight declined
-  (they are muted, the ending names the mob); :nothing-possible :retreat-failed (the retreat's ending is the :because) when the
-  retreat ends so; :nothing-possible :no-response after ::max-unchanged calls in a row that change nothing; :limit-reached on its
+  Returns: :done when no danger is near and the body holds no refuge, or when every danger is only heard and the fight declined
+  (they are muted, the ending names the mob); :nothing-possible :retreat-failed (the flight's ending is the :because) when the
+  flight ends so; :nothing-possible :no-response after ::max-unchanged calls in a row that change nothing; :limit-reached on its
   time budget. Never :continue. Writes one :hostile memory entry per encounter. A danger reflex: never backed off.")
 
 (a/defargs settings
   {::stay-inside {:default true :doc "A body shut in a closed room or its own shelter fights from there and never steps out toward a mob; under any roof it does not flee for mobs it only hears (false: it may)." :spec boolean?}
-   ::job-time-s {:default 480 :doc "Seconds a response to a hostile may take: above retreat's (a hide runs long)." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 480 :doc "Seconds a response to a hostile may take (a hide runs long)." :spec (a/num-in 0 nil)}
    ::hold-radius {:default 16 :doc "Hostiles known within this many blocks count for holding position in the dark." :spec (a/num-in 0 nil)}
    ::hit-window-s {:default 5 :doc "A flight hit twice within this long is failing: the body fights. Also how recent a hurt keeps a fight from leaving heard mobs, and makes a round look once more." :spec (a/num-in 0 nil)}
    ::max-unchanged {:default 3 :doc "Calls of a child in a row that leave the body and the dangers as they were before the reflex stops :no-response." :spec (a/int-in 1 nil)}
@@ -72,8 +73,6 @@
 
 (def other {:fight :flee :flee :fight})
 
-(def child-jobs {:fight 'jobs.combat.attack :flee 'jobs.survival.retreat})
-
 (defn hold?
   "Whether the fight stays where it is: in the dark, with more than one hostile known (the ones in view are not all there are),
   or with any when the body is shut in a closed room or its own shelter and ::stay-inside is on."
@@ -85,7 +84,7 @@
 
 (defn stay-under-roof?
   "Whether the body keeps its roof: ::stay-inside on, a roof over the feet, and every danger near either only heard
-  or a flyer (a phantom cannot get under a roof), none a creeper or an enderman. The fight then holds and the retreat does not run."
+  or a flyer (a phantom cannot get under a roof), none a creeper or an enderman. The fight then holds and the flight does not run."
   [c hs]
   (let [p (:primitives c)]
     (boolean (and (stay-inside?)
@@ -95,24 +94,23 @@
                   (not-any? #(or (combat/creeper? %) (combat/enderman? %)) hs)))))
 
 (defn ^:async run-child
-  "One call of the child for decision: :continue, :done, :declined (a fight that ended otherwise, its memory put back,
-  or a retreat that ended :condition-failed: the other child may run), or the ending of a retreat that ended otherwise."
+  "One call of the child for decision: :continue, :done, :declined (a fight that ended otherwise, its memory put back: the
+  flight may run), or the ending of a flight that ended otherwise. The flight is this job's own steps (respond-flight/flee!)."
   [c decision hold]
-  (let [child-args (case decision
-                     :fight {:targets :hostiles :radius (danger-q/hostile-radius) :ranged-radius (danger-q/ranged-radius)
-                             :use {:tools (combat/weapons c)} :hold (or hold (hold? c)) :prior (:fight-prior (ctx/mem c))
-                             :checks {:safe? '(always) :fit? '(always)}}
-                     :flee {:use {:tools (combat/weapons c)} :goal (:goal (ctx/mem c))})
-        _ (when (and (= :fight decision) (not= :fight (:last-run (ctx/mem c))))
+  (let [_ (when (and (= :fight decision) (not= :fight (:last-run (ctx/mem c))))
             (ctx/update-mem! c #(cond-> % (:fight (:children %)) (update-in [:children :fight] dissoc :start))))
         _ (ctx/update-mem! c assoc :last-run decision)
-        e (await (ctx/call c decision (child-jobs decision) child-args))]
+        e (if (= :fight decision)
+            (await (ctx/call c :fight 'jobs.combat.attack
+                             {:targets :hostiles :radius (danger-q/hostile-radius) :ranged-radius (danger-q/ranged-radius)
+                              :use {:tools (combat/weapons c)} :hold (or hold (hold? c)) :prior (:fight-prior (ctx/mem c))
+                              :checks {:safe? '(always) :fit? '(always)}}))
+            (await (flight/flee! c)))]
     (cond
       (= :continue e) :continue
-      (= :done (:kind e)) :done
+      (= :done (:kind e)) (do (when (= :flee decision) (ctx/update-mem! c assoc :flight-end (:data e))) :done)
       (= :fight decision) (do (when (:struck (:data e)) (ctx/update-mem! c assoc :fight-prior (select-keys (:data e) [:killed :given-up :names :struck])))
                               :declined)
-      (= :condition-failed (:kind e)) :declined
       :else e)))
 
 (defn changed-text
@@ -296,18 +294,21 @@
     (if (= :continue e) :continue (:kind e))))
 
 (defn hiding?
-  "Whether the retreat child holds a refuge (sealed in, a pillar or a pit): a hostile it hides from is out of sight
+  "Whether the body holds a refuge (sealed in, a pillar or a pit): a hostile it hides from is out of sight
   and has no way to the body, yet is still there."
   [c]
-  (refuge/held? (get-in (ctx/mem c) [:children :flee])))
+  (some? (:refuge (ctx/mem c))))
 
 
 (defn done?
-  "No real danger near and the retreat not hiding."
+  "No real danger near, no refuge held and no flight on (a chaser or a fled mob its end still has to write)."
   [c]
   (let [n (count (near c))
-        clear? (and (zero? n) (not (hiding? c)) (not (shot/open? (:primitives c) (ctx/view c))))]
-    (checks/goal clear? [:clear "no danger near"] [:danger (str n " dangers near")] {:units :hostiles :done 0 :left n})))
+        {:keys [fled chasers]} (ctx/mem c)
+        flying? (or (seq fled) (seq chasers) (hiding? c))
+        clear? (and (zero? n) (not flying?) (not (shot/open? (:primitives c) (ctx/view c))))]
+    (checks/goal clear? [:clear "no danger near"] [(if flying? :fleeing :danger) (if flying? "a flight is on" (str n " dangers near"))]
+                 {:units :hostiles :done (count fled) :left (+ n (count chasers))})))
 
 (defn quote-of
   "Find-out: an encounter lasts as long as the danger stays."
@@ -351,10 +352,10 @@
       (if (contract/ending? outcome)
         (do (mute-heard! c hs)
             (ctx/end c (:kind outcome) (if (= :nothing-possible (:kind outcome)) :retreat-failed (:cause outcome))
-                     (some->> (:text (:data outcome)) (hash-map :text))))
+                     (cond-> {:flight-ended (:cause outcome)} (:text (:data outcome)) (assoc :text (:text (:data outcome))))))
         (cond
           (:left-heard outcome) (ctx/end c :done nil (:left-heard outcome))
-          (and (empty? after) (not (hiding? c)) (not (and (not looked?) (fight-unsettled? c outcome)))) (ctx/end c :done nil)
+          (and (empty? after) (not (hiding? c)) (not (and (not looked?) (fight-unsettled? c outcome)))) (ctx/end c :done nil (:flight-end (ctx/mem c)))
           (and (empty? after) (not (hiding? c))) (do (await (pace/pace!)) (recur unchanged true))
           :else
           (let [n (if (= before (signature c after)) (inc unchanged) 0)]

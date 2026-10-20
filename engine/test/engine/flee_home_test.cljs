@@ -9,11 +9,12 @@
             [engine.hut-shelter-test :as hs]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [engine.flight-job :as fj]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.cost :as cost]
             [jobs.lib.reach.room :as reach-room]
-            [jobs.survival.retreat :as retreat]
+            [jobs.survival.respond-flight :as retreat]
             [jobs.survival.retreat-cornered :as cornered]
             [jobs.lib.rooms :as rooms]))
 
@@ -29,14 +30,14 @@
         [seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake-on-floor (dissoc world :home)))
         now (tu/act-clock clock p 1000)
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
+        eng (core/create {:primitives p :jobs fj/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     (when-not (false? (:home world)) (mem/write! (:store eng) :home {:pos (:home world home)} {:cap 1 :ttl :forever}))
     {:eng eng :p p :seen seen}))
 
 (defn ^:async flee! [world]
   (let [{:keys [eng] :as s} (setup world)]
-    (core/submit! eng '(jobs.survival.retreat) {})
+    (core/submit! eng '(test.flight) {})
     (await (tu/run-until-empty eng 6))
     s))
 
@@ -145,7 +146,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup (hut {:x 5.5 :y 64 :z 9.5} hs/door-states [(zombie 5.5 3.5 nil)]))]
-          (core/submit! eng '(jobs.survival.retreat) {})
+          (core/submit! eng '(test.flight) {})
           (await (core/tick! eng))
           (is (= [:race-lost] (room-whys seen)) "the flight says why the hut was no refuge")
           (is (> (:z (first (walk-targets eng))) 9) (str "the first step is not toward the zombie: " (walk-targets eng)))
@@ -190,7 +191,7 @@
 
 (defn ^:async first-step [world]
   (let [{:keys [eng] :as s} (setup world)]
-    (core/submit! eng '(jobs.survival.retreat) {})
+    (core/submit! eng '(test.flight) {})
     (await (core/tick! eng))
     s))
 
@@ -219,7 +220,7 @@
   the mobs so the round ends."
   [world]
   (let [{:keys [eng p seen] :as s} (setup world)]
-    (core/submit! eng '(jobs.survival.retreat) {})
+    (core/submit! eng '(test.flight) {})
     (let [round (core/tick! eng)
           ended (atom false)]
       (.then round #(reset! ended true))
@@ -299,7 +300,7 @@
         (let [world (assoc (hut {:x 5.5 :y 64 :z 6.5} hs/door-states [(zombie 5.5 13.5 0.4)]) :home false)
               {:keys [eng p seen]} (setup world)
               _ (seeing-all-but p (fn [[x _ z]] (and (<= 3 x 7) (<= -2 z 2))))]
-          (core/submit! eng '(jobs.survival.retreat) {})
+          (core/submit! eng '(test.flight) {})
           (await (tu/run-until-empty eng 6))
           (is (not (ran-home? seen)) "no run to a building it never saw")
           (is (not (in-room? (body p)))))))))
@@ -375,7 +376,7 @@
               _ (reading! p reads)
               _ (set! retreat/flight-step! (fn [c] (let [before @reads]
                                                      (.then (step c) (fn [r] (swap! per-step conj (- @reads before)) r)))))]
-          (core/submit! eng '(jobs.survival.retreat) {})
+          (core/submit! eng '(test.flight) {})
           (try (await (tu/run-until-empty eng 2))
                (finally (set! retreat/flight-step! step)))
           (let [flood (let [before @reads] (reach-room/closed-room? p {:x -6 :y 64 :z 5}) (- @reads before))]
@@ -455,7 +456,7 @@
                                                 (swap! looks inc)
                                                 (reset! hidden (disj @hidden (let [q (.-pos args)] [(js/Math.floor (.-x q)) 64 (js/Math.floor (.-z q))])))
                                                 (await (impl token args))))]
-          (core/submit! eng '(jobs.survival.retreat) {})
+          (core/submit! eng '(test.flight) {})
           (await (tu/run-until-empty eng 6))
           (is (empty? @hidden) "every unseen side was looked at")
           (is (<= 2 @looks) "one look cannot show two sides")
@@ -474,6 +475,6 @@
               _ (.override (.-world p) "look" (fn ^:async o [token args impl]
                                                 (swap! looks inc)
                                                 (await (impl token args))))]
-          (core/submit! eng '(jobs.survival.retreat) {})
+          (core/submit! eng '(test.flight) {})
           (await (tu/run-until-empty eng 6))
           (is (zero? @looks) "a creeper behind is not led to a door for a look"))))))

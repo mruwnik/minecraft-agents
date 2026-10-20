@@ -1,5 +1,5 @@
 (ns jobs.survival.retreat-refuge
-  "A cornered body's refuges (jobs.survival.retreat): a pillar (retreat-pillar) or a plug (jobs.survival.shut-in), and the hiding in them."
+  "A cornered body's refuges (jobs.survival.respond-flight): a pillar (retreat-pillar) or a plug (jobs.survival.shut-in), and the hiding in them."
   (:require [clojure.string :as str]
             [engine.args :as a]
             [engine.settings :as settings]
@@ -21,7 +21,8 @@
             [jobs.survival.retreat-pillar :as pillar]))
 
 (a/defargs settings
-  {::leave-for-breakers {:default true :doc "Whether a hidden body leaves its refuge, before it is hit, for a creeper (its blast breaks any refuge) or, on a pillar, a spider (it climbs) within :breaker-reach." :spec boolean?}
+  {::on-lava {:default :seal :doc ":seal: lava a plug's dig lays open is filled with a carried block; :stop: the pocket or pit is dropped and the lava left." :spec #{:seal :stop}}
+   ::leave-for-breakers {:default true :doc "Whether a hidden body leaves its refuge, before it is hit, for a creeper (its blast breaks any refuge) or, on a pillar, a spider (it climbs) within :breaker-reach." :spec boolean?}
    ::foot-reach {:default 4 :doc "Blocks within which a melee hostile kept off a hidden body counts as waiting at its foot: the hide then outlasts ::hide-s, up to ::hide-max-s, since the first step off the refuge would pass it." :spec (a/num-in 0 nil)}
    ::dig-out-steps {:default 6 :doc "Steps of the stair a body sealed in a plug or pit digs up and away from a melee hostile kept off it at its foot, once ::hide-s has passed." :spec (a/int-in 1 nil)}
    ::quiet-s {:default 30 :doc "Seconds a hidden body keeps its refuge after the last danger." :spec (a/num-in 0 nil)}
@@ -107,9 +108,8 @@
   "Shut the body in with jobs.survival.shut-in by ways and hide there (a :plug refuge): :again while it works or once shut
   in, nil when no way shuts it. :plugging marks the option, ways and cell a plug is under way at (plugging-here?)."
   [c option ways]
-  (let [{:keys [on-lava]} (:args c)
-        e (await (ctx/call c option 'jobs.survival.shut-in
-                           (cond-> {:ways ways :on-lava on-lava :trespass? (contains? #{:plug-zone :plug-dig-zone} option)}
+  (let [e (await (ctx/call c option 'jobs.survival.shut-in
+                           (cond-> {:ways ways :on-lava (settings/get settings ::on-lava) :trespass? (contains? #{:plug-zone :plug-dig-zone} option)}
                              (ctx/use c :blocks) (assoc :use {:blocks (ctx/use c :blocks)}))))
         feet (sh-sense/feet (:primitives c))]
     (cond

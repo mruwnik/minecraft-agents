@@ -3,6 +3,7 @@
   against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
+            [engine.flight-job :as fj]
             [engine.settings :as settings]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -45,7 +46,7 @@
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake-on-floor (merge {:floor flight-floor} world))
         now (tu/act-clock clock p ms)
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now :world store
+        eng (core/create {:primitives p :jobs fj/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now :world store
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     {:eng eng :p p :seen seen :clock clock})))
 
@@ -73,7 +74,7 @@
         now (tu/act-clock clock raw ms)
         p (perception/wrap raw (perception/create (fake-raw/create raw) (cond-> {:radius (:radius world 16) :ray-deg (:ray-deg world 2) :now now}
                                                                           (:rand world) (assoc :rand (:rand world)))))
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
+        eng (core/create {:primitives p :jobs fj/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     {:eng eng :p p :seen seen :clock clock})))
 
@@ -664,7 +665,7 @@
 
 ;; ----------------------------------------------------------------- retreat
 
-(def retreat '(jobs.survival.retreat))
+(def retreat '(test.flight))
 
 (defn last-move
   "The x and z of the latest walk's target."

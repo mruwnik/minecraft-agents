@@ -1,28 +1,4 @@
-(ns jobs.survival.retreat
-  (:require [jobs.lib.ready :as ready]
-            [engine.args :as a]
-            [engine.contract :as contract]
-            [engine.ctx :as ctx]
-            [jobs.lib.child :as child]
-            [engine.settings :as settings]
-            [jobs.lib.combat :as combat]
-            [jobs.lib.danger :as danger-q]
-            [jobs.survival.retreat-doors :as retreat-doors]
-            [jobs.lib.goal :as goal]
-            [jobs.lib.pace :as pace]
-            [jobs.lib.shot :as shot]
-            [jobs.lib.util :as u]
-            [jobs.survival.retreat-choose :as choose]
-            [jobs.survival.retreat-cornered :as cornered]
-            [jobs.survival.retreat-cornered.pick :as pick]
-            [jobs.survival.retreat-cover :as cover]
-            [jobs.survival.retreat-flight :as flight]
-            [jobs.survival.retreat-goal :as retreat-goal]
-            [jobs.lib.rooms :as room-lib]
-            [jobs.survival.retreat-refuge :as refuge]
-            [jobs.survival.retreat-step :as step]))
-
-(def doc
+(ns jobs.survival.respond-flight
   "Flee from the hostiles in range, one whole flight per round: run until no mob chases the body any more.
   A real danger (jobs.lib.danger: a mob with a walkable way to the body, or a ranged one with a line of fire) within
   ::hostile-radius (ranged ones ::ranged-radius) starts a chase, or is seen afresh. A mob stops chasing (vanilla) once it is
@@ -99,53 +75,35 @@
   stands (jobs.lib.danger/danger-near?, the hostile-near trigger's test) it ends :hidden even while that hostile stays;
   the refuge stays, its plugs too while a hostile is near (jobs.access.cleanup). In a plug or pit with a melee hostile at its foot (::foot-reach) past ::hide-s,
   a body digs a stair up (jobs.access.stair, ::dig-out-steps steps) on the heading away from that mob, the next heading when one stops, before it hands back.
-  A chase is bounded by the call's time spend (default ::job-time-s): past it the flight ends limit-reached :job-time where it
+  A chase is bounded by the response's time spend: past it the response ends limit-reached :job-time where it
   stands (refuge included) and the hostile trigger fires again while the danger stays. With no new best gap to the
   nearest chaser in ::no-gain-steps (20) steps it takes the cornered options instead of walking on; it ends nothing-possible
   :cannot-escape only once every option failed in two sweeps in a row with no gain between.
   Each change of what it chose among is said in one retreat.choice info: the hostiles and where, every closed room and why
   it is not run to, the cells that are no closed room, the home and why it is no run (:home-why), the goal and why it is dropped, where it leans.
   Blocks placed are the call's :use :blocks, else every :build filler, carried or dug.
-  Needs nothing to start (no conditions); with no real danger near, no shot at it from an unseen shooter whose line of fire reaches it (jobs.lib.shot; it then steps out of that line) and no flight under way it is done at once. Ends done {:fled [ids] :ended :gone|:far|:lost|:closed|:hidden|:keeps-off|:none},
-  nothing-possible :cannot-escape {:fled [ids]}, or limit-reached. Quote: time (0, ::mean-s, ##Inf).
+  The flight ends done {:fled [ids] :ended :gone|:far|:lost|:closed|:hidden|:keeps-off|:none} or nothing-possible
+  :cannot-escape {:fled [ids]}; it is a step loop of jobs.survival.respond-to-hostile, which makes every choice above.
   Memory: one :threat entry per mob fled (jobs.lib.threats); the third from one mob within 5 min warns hostile.chased.
-  A cell in another's zone is used only as a last resort (shut-in.trespass-last-resort warning).")
-
-(a/defargs args
-  {:goal {:doc "a position {:x :y :z} the flight walks to with go-to legs (planner danger costs keep it round the hostiles) while the body outruns them (done within 3 blocks of it; given up for jobs.survival.retreat-goal/retry-s after a leg that lost ground or left the goal's height), else leans toward, like a refuge; nil: away only" :spec goal/pos-spec :default nil}
-   :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pocket or pit is dropped and the lava left" :spec #{:seal :stop} :default :seal}})
-
-(a/defargs settings
-  {::job-time-s {:default 420 :doc "Seconds of a flight's time spend (its pauses included): past it the flight ends limit-reached and the hostile trigger fires again while the danger stays." :spec (a/num-in 0 nil)}
-   ::mean-s {:default 20 :doc "Seconds a flight is guessed to take, the mean of its quote." :spec (a/num-in 0 nil)}})
-
-(def target [])
-
-(def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s}})
-
-(def meta {:category :phase :part-of '[jobs.survival.respond-to-hostile]})
-
-(def safe? ready/ok)
-
-(def fit? ready/ok)
-
-
-(defn done?
-  "Done once no real danger is within range and the flight holds no chaser, fled mob or refuge: those are written by the
-  flight's end (flight/end-flight!), which the call still has to make."
-  [c]
-  (let [radius (danger-q/hostile-radius)
-        ranged-radius (danger-q/ranged-radius)
-        {:keys [fled chasers refuge]} (ctx/mem c)
-        data [:units :hostiles :done (count fled) :left (count chasers)]]
-    (if (or (seq fled) (seq chasers) refuge (shot/open? (:primitives c) (ctx/view c)) (seq (danger-q/dangers (:primitives c) radius {:ranged-radius ranged-radius} {:sight? false})))
-      (apply contract/later :fleeing "a flight is on" data)
-      (apply contract/ok :clear "no hostile is near" (conj data :result {:fled [] :ended :none})))))
-
-(defn quote-of
-  "A flight has to find out how long the mobs chase: time (0, ::mean-s, ##Inf)."
-  [_c]
-  {:uses {:job-time [0 (settings/get settings ::mean-s) ##Inf]}})
+  A cell in another's zone is used only as a last resort (shut-in.trespass-last-resort warning)."
+  (:require [engine.contract :as contract]
+            [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
+            [jobs.lib.combat :as combat]
+            [jobs.lib.danger :as danger-q]
+            [jobs.survival.retreat-doors :as retreat-doors]
+            [jobs.lib.pace :as pace]
+            [jobs.lib.shot :as shot]
+            [jobs.lib.util :as u]
+            [jobs.survival.respond-choose :as choose]
+            [jobs.survival.retreat-cornered :as cornered]
+            [jobs.survival.retreat-cornered.pick :as pick]
+            [jobs.survival.retreat-cover :as cover]
+            [jobs.survival.retreat-flight :as flight]
+            [jobs.survival.retreat-goal :as retreat-goal]
+            [jobs.lib.rooms :as room-lib]
+            [jobs.survival.retreat-refuge :as refuge]
+            [jobs.survival.retreat-step :as step]))
 
 
 (defn ^:async wait-far!
@@ -179,7 +137,7 @@
 
 
 (defn ^:async flight-step!
-  "One step of the flight (flight/look!, then retreat-choose picks: shut a door, run home, walk a step away or the
+  "One step of the flight (flight/look!, then respond-choose picks: shut a door, run home, walk a step away or the
   cornered options), :again; the flight's end (flight/end-flight!) once no chaser is left."
   [c]
   (let [p (:primitives c)
@@ -235,11 +193,39 @@
       :run-home (await (run-home! c room way))
       :walk (await (step/walk-away! c threats judged rooms covered? stuck)))))
 
-(defn ^:async round
-  "One whole flight: steps (flight-step!, or the refuge's) until it ends."
+(defn clear?
+  "Whether no real danger is within range, nor a shot from an unseen shooter, and the flight holds no chaser, fled mob or
+  refuge (those are written by the flight's end, flight/end-flight!, which the loop still has to make)."
   [c]
+  (let [{:keys [fled chasers refuge]} (ctx/mem c)]
+    (not (or (seq fled) (seq chasers) refuge (shot/open? (:primitives c) (ctx/view c))
+             (seq (danger-q/dangers (:primitives c) (danger-q/hostile-radius) {:ranged-radius (danger-q/ranged-radius)} {:sight? false}))))))
+
+(def kept-keys
+  "Memory the response owns beyond a flight: the child calls, the fight's counts and the last flight's ending."
+  [:children :fight-prior :flight-end])
+
+(defn forget-flight!
+  "Drop what the flight wrote to job memory (everything not there when it began): a later flight starts afresh."
+  [c]
+  (ctx/update-mem! c #(select-keys % (concat (:pre-flight %) kept-keys))))
+
+(defn ^:async flee!
+  "One whole flight: steps (flight-step!, or the refuge's) until it ends: its ending, or :continue when the round is cut or
+  the response may not run on. An ending clears the flight's memory (forget-flight!)."
+  [c]
+  (when-not (:flight-start (ctx/mem c)) (ctx/update-mem! c #(assoc % :pre-flight (set (keys %)))))
   (ctx/update-mem! c flight/resume-flight (ctx/now c))
   (when-not (:flight-start (ctx/mem c)) (ctx/update-mem! c assoc :flight-start (ctx/now c) :flight-from (u/self-pos c) :flight-health (.-health (.self (:primitives c)))))
-  (await (pace/steps! c (fn ^:async step []
-                          (ctx/update-mem! c assoc :last-step (ctx/now c))
-                          (await (if (:refuge (ctx/mem c)) (refuge/refuge-round! c) (flight-step! c)))))))
+  (let [r (loop []
+            (ctx/update-mem! c assoc :last-step (ctx/now c))
+            (let [r (await (if (:refuge (ctx/mem c)) (refuge/refuge-round! c) (flight-step! c)))
+                  clear? (and (= :again r) (ctx/alive? c) (clear? c))]
+              (cond
+                (not= :again r) r
+                (not (ctx/alive? c)) :continue
+                clear? (ctx/end c :done nil {:fled [] :ended :none})
+                (not= :ok (first (ctx/can-run c))) :continue
+                :else (do (await (pace/pace!)) (recur)))))]
+    (when (contract/ending? r) (forget-flight! c))
+    r))

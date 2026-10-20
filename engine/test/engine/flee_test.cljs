@@ -4,6 +4,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.ctx :as ctx]
             [engine.registry :as registry]
+            [engine.flight-job :as fj]
             [engine.settings :as settings]
             [engine.core :as core]
             [engine.events :as events]
@@ -20,7 +21,8 @@
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
-            [jobs.survival.retreat :as retreat]
+            [jobs.survival.respond-flight :as retreat]
+            [jobs.survival.respond-to-hostile :as respond]
             [jobs.survival.retreat-refuge :as refuge]
             [jobs.survival.retreat-cornered :as cornered]
             [jobs.survival.retreat-cover :as cover]
@@ -43,7 +45,7 @@
         [seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake-on-floor (merge {:floor big-floor} (dissoc world :ms-per-call))))
         now (tu/act-clock clock p (:ms-per-call world ms-per-call))
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
+        eng (core/create {:primitives p :jobs fj/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     {:eng eng :p p :seen seen :clock clock}))
 
@@ -113,7 +115,7 @@
       (fn ^:async t []
         (let [s (setup {})
               _ (mem/write! (:store (:eng s)) :hurt {:amount 3 :health 17 :damageType "arrow" :dir {:x 1 :z 0}} {:cap 50 :ttl 60000})
-              {:keys [p out]} (await (run-job! s 'jobs.survival.retreat {}))]
+              {:keys [p out]} (await (run-job! s 'test.flight {}))]
           (is (= :done (:status out)))
           (is (< (first (body-pos p)) -2) "no mob is known, yet the body went west, away from the shooter in the east"))))))
 
@@ -131,7 +133,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p eng calls out]} (await (run-job! (setup {:entities [(zombie 7 5 {:chase {:speed 0.7}})]})
-                                                         'jobs.survival.retreat {}))]
+                                                         'test.flight {}))]
           (is (= [:done] calls) "one call: the whole flight in one round")
           (is (= :done (:status out)))
           (is (= :far (:ended out)))
@@ -149,7 +151,7 @@
               args (atom [])
               wrapped (assoc real :round (fn ^:async spy [c] (swap! args conj (:args c)) (await ((:round real) c))))
               s (assoc-in s [:eng :jobs 'jobs.movement.go-to] wrapped)
-              {:keys [p out]} (await (run-job! s 'jobs.survival.retreat {}))]
+              {:keys [p out]} (await (run-job! s 'test.flight {}))]
           (is (= :far (:ended out)))
           (is (pos? (count @args)) "every flight step is a go-to call")
           (is (every? #(not-any? #{:pillar :stair :clear-path :dig-out} (:ways %)) @args) "a flee never digs or pillars")
@@ -170,7 +172,7 @@
       (fn ^:async t []
         (let [s (setup {:blocks pen-blocks :states {"0,64,3" {:open true}} :self {:pos {:x 0.5 :y 64 :z 1.5}}
                         :entities [(zombie 7 0 {:pos {:x 0.5 :y 64 :z 6.5} :chase {:speed 0.7}})]})
-              {:keys [p seen]} (await (run-job! s 'jobs.survival.retreat {}))]
+              {:keys [p seen]} (await (run-job! s 'test.flight {}))]
           (is (= 1 (count (filterv #(= :retreat.door-shut (:kind %)) @seen))) "the flight shut the gate")
           (is (false? (get-in @(fake/state p) [:states [0 64 3] :open])) "and nothing opened it again"))))))
 
@@ -178,7 +180,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [seen]} (await (run-job! (setup {:entities [(zombie 7 5 {:chase {:speed 0.7}})]}) 'jobs.survival.retreat {}))
+        (let [{:keys [seen]} (await (run-job! (setup {:entities [(zombie 7 5 {:chase {:speed 0.7}})]}) 'test.flight {}))
               e (first (filterv #(= :retreat.target (:kind %)) @seen))]
           (is (some? e) "every flee step logs its target")
           (is (vector? (:target e)))
@@ -193,7 +195,7 @@
               _ (mem/write! (:store (:eng s)) :threat {:mob "creeper" :id 9 :uuid "u9" :key "u9" :pos {:x 8 :y 64 :z 0} :ended :lost}
                             threats/threat-policy)
               _ (swap! (:clock s) + 10000)
-              {:keys [seen]} (await (run-job! s 'jobs.survival.retreat {}))
+              {:keys [seen]} (await (run-job! s 'test.flight {}))
               target (:target (first (filterv #(= :retreat.target (:kind %)) @seen)))]
           (is (some? target))
           (is (> (js/Math.abs (- (nth target 2) 0)) 3) "sideways: not east towards the creeper")
@@ -207,7 +209,7 @@
               _ (mem/write! (:store (:eng s)) :threat {:mob "creeper" :id 9 :uuid "u9" :key "u9" :pos {:x 8 :y 64 :z 0} :ended :lost}
                             threats/threat-policy)
               _ (swap! (:clock s) + 10000)
-              {:keys [seen]} (await (run-job! s 'jobs.survival.retreat {}))
+              {:keys [seen]} (await (run-job! s 'test.flight {}))
               target (:target (first (filterv #(= :retreat.target (:kind %)) @seen)))]
           (is (some? target))
           (is (>= (first target) 4) "straight away from the zombie: the blown-up creeper's spot does not lean the way"))))))
@@ -218,7 +220,7 @@
       (fn ^:async t []
         (let [{:keys [p]} (await (run-job! (setup {:self {:food 2} :inventory [{:name "bread" :count 6}]
                                                    :entities [(zombie 7 5 {:chase {:speed 0.7}})]})
-                                           'jobs.survival.retreat {}))
+                                           'test.flight {}))
               names (mapv #(.-name %) (.-calls (.-world p)))
               eats (keep-indexed (fn [i n] (when (= "eat" n) i)) names)]
           (is (>= (count eats) 2) "it eats while fleeing")
@@ -230,13 +232,13 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p calls out]} (await (run-job! (setup {:entities [(zombie 7 5 {:visible false :chase {:speed 0.7}})]})
-                                                     'jobs.survival.retreat {}))]
+                                                     'test.flight {}))]
           (is (= [:done] calls))
           (is (= :lost (:ended out)))
           (is (< (fake/dist (body-pos p) (mob-pos p 7)) 35) "lost before the follow range"))))))
 
 (deftest the-flight-time-spend-outlasts-the-longest-hide
-  (is (> (settings/get retreat/settings ::retreat/job-time-s) (refuge/hide-max-s))))
+  (is (> (settings/get respond/settings ::respond/job-time-s) (refuge/hide-max-s))))
 
 (deftest a-flight-runs-past-the-old-180-s-bound-until-the-zombie-leaves
   (async done
@@ -251,7 +253,7 @@
             (.override world name (fn ^:async f [token a impl]
                                     (when (> (elapsed-s) 180) (swap! (fake/state p) assoc :entities []))
                                     (await (impl token a)))))
-          (let [{:keys [out]} (await (run-job! s 'jobs.survival.retreat {:settings {:jobs.survival.retreat-flight/no-gain-steps 3}}))]
+          (let [{:keys [out]} (await (run-job! s 'test.flight {:settings {:jobs.survival.retreat-flight/no-gain-steps 3}}))]
             (is (> (elapsed-s) 180) "the chase went on past the old 180 s bound, until the zombie left")
             (is (not= :still-chased (:reason out)))))))))
 
@@ -266,7 +268,7 @@
                                      (swap! (fake/state p) update-in [:self :health] - 2)
                                      (when (> (.-length (.-calls world)) 60) (swap! (fake/state p) assoc :entities []))
                                      (await (impl token a))))
-          (await (run-job! s 'jobs.survival.retreat {}))
+          (await (run-job! s 'test.flight {}))
           (is (pos? (count (filter #(= "attack" (.-name %)) (.-calls world)))) "outrun by a zombie that hits it, it hits back"))))))
 
 (deftest a-flee-leg-whose-search-runs-out-with-a-hostile-adjacent-fights-at-once
@@ -290,7 +292,7 @@
                                            (swap! (fake/state p) update-in [:self :health] - 2)
                                            (js/Promise.resolve {:result {:status :searching :fresh false} :status "searching"
                                                                 :from (:pos c) :to (:pos c)}))]
-            (await (run-job! s 'jobs.survival.retreat {})))
+            (await (run-job! s 'test.flight {})))
           (is (some? @first-attack) "the body hit back")
           (is (<= @searches-at-attack 1) "a hostile in reach bounds the leg to one search round, so the body does not stand taking hits")
           (is (<= (- @first-attack t0) (* 1000 (+ 4 (cornered/close-leg-s)))) "after one short leg (and the calls to equip and look), not after standing searching"))))))
@@ -309,7 +311,7 @@
                                            (swap! (:clock s) + 1000)
                                            (js/Promise.resolve {:result {:status :searching :fresh false} :status "searching"
                                                                 :from (:pos c) :to (:pos c)}))]
-            (await (run-job! s 'jobs.survival.retreat {})))
+            (await (run-job! s 'test.flight {})))
           (is (<= @searches 2) "a body hurt a moment ago, with nothing seen in reach, does not stand searching a whole leg"))))))
 
 (defn ^:async searches-in-flee-leg
@@ -328,7 +330,7 @@
                                      (act (fake/state p) @searches)
                                      (js/Promise.resolve {:result {:status :searching :fresh false} :status "searching"
                                                           :from (:pos c) :to (:pos c)}))]
-      (await (run-job! s 'jobs.survival.retreat args)))
+      (await (run-job! s 'test.flight args)))
     {:searches @searches :longest-ms @longest :attacks (count (filter #(= "attack" (.-name %)) (.-calls world)))}))
 
 (defn clear-after-6 [st n] (when (>= n 6) (swap! st assoc :entities [])))
@@ -512,7 +514,7 @@
   (let [[x _ _] (body-pos (:p s))]
     (swap! (fake/state (:p s)) assoc :entities [])
     (fake/add-entity! (:p s) (zombie 7 (+ x 5) {:uuid uuid :visible false}))
-    (await (run-job! s 'jobs.survival.retreat {}))))
+    (await (run-job! s 'test.flight {}))))
 
 (deftest one-mob-chasing-three-times-tells-the-agent-once
   (async done
@@ -552,7 +554,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng] :as s} (setup {:entities [(zombie 7 5 {:visible true :chase {:speed 0.7}})]})
-              out (await (run-job! s 'jobs.survival.retreat {}))]
+              out (await (run-job! s 'test.flight {}))]
           (is (number? (:x (:pos (first (threat-entries (:eng out)))))) "seen: the :pos is kept"))))))
 
 (deftest rough-pos-is-the-band-away-toward-the-direction
@@ -582,7 +584,7 @@
                                              :inventory [{:name "cobblestone" :count 20}]
                                              :entities [(zombie 7 4 {})]})
               _ (js/setTimeout #(swap! (fake/state p) assoc :entities []) 400)
-              {:keys [calls out eng]} (await (run-job! s 'jobs.survival.retreat {}))]
+              {:keys [calls out eng]} (await (run-job! s 'test.flight {}))]
           (is (= [:done] calls) "sealed, hid and ended in one round")
           (is (seq (holds seen "hiding")) "a declared hold (a pause child) while hidden")
           (is (= :hidden (:ended out)))
@@ -593,7 +595,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup {:floor [-8 -8 8 8] :entities [(zombie 7 4 {:pos {:x 4 :y 64 :z 4}})]})
-              {:keys [calls out]} (await (run-job! s 'jobs.survival.retreat {:settings {:jobs.survival.retreat-flight/still-s 3600}}))]
+              {:keys [calls out]} (await (run-job! s 'test.flight {:settings {:jobs.survival.retreat-flight/still-s 3600}}))]
           (is (= [:done] calls) "the flight ends, it does not dance for ever")
           (is (= :keeps-off (:ended out)))
           (is (re-find #"still following" (:text out))))))))
@@ -614,7 +616,7 @@
                   (.override world name (fn ^:async f [token a impl]
                                           (swap! (fake/state p) update :entities (partial mapv #(assoc % :pos [15 64 0])))
                                           (await (impl token a)))))
-              {:keys [calls out]} (await (run-job! s 'jobs.survival.retreat {:settings {:jobs.survival.retreat-flight/still-s 3600}}))]
+              {:keys [calls out]} (await (run-job! s 'test.flight {:settings {:jobs.survival.retreat-flight/still-s 3600}}))]
           (is (= [:done] calls) "no way away, nothing within :radius: the flight ends")
           (is (= :keeps-off (:ended out))))))))
 
@@ -644,40 +646,45 @@
            (retreat-flight/resume-flight mem 100000))
         "a long gap: the flight starts now and every chaser was just seen")))
 
+(defn ^:async with-flee
+  "Run (f) with the flight (respond-flight/flee!) replaced by stub, a fn of the ctx giving an ending or :continue."
+  [stub f]
+  (let [flee retreat/flee!]
+    (set! retreat/flee! (fn [c] (js/Promise.resolve (stub c))))
+    (try (await (f))
+         (finally (set! retreat/flee! flee)))))
+
 (deftest respond-to-hostile-stops-after-three-calls-that-change-nothing
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup {:entities [(zombie 7 5 {:chase false})]})
               clock (:clock s)
-              declining {:round (fn ^:async idle-flight [c] (swap! clock + 1000) (ctx/end c :done nil))}
-              s (assoc-in s [:eng :jobs 'jobs.survival.retreat] declining)
-              {:keys [calls out]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
+              {:keys [calls out]} (await (with-flee (fn idle-flight [c] (swap! clock + 1000) (ctx/end c :done nil))
+                                                    #(run-job! s 'jobs.survival.respond-to-hostile {})))]
           (is (= [:done] calls))
           (is (= {:status :stopped :reason :no-response} (select-keys out [:status :reason])))
           (is (= :nothing-possible (get-in out [:ending :kind]))))))))
 
-(deftest respond-to-hostile-stops-retreat-failed-with-the-retreats-ending-as-because
+(deftest respond-to-hostile-stops-retreat-failed-with-the-flights-ending-as-because
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (setup {:entities [(zombie 7 5 {:chase false})]})
-              cornered {:round (fn ^:async no-escape [c] (ctx/end c :nothing-possible :cannot-escape))}
-              s (assoc-in s [:eng :jobs 'jobs.survival.retreat] cornered)
-              {:keys [out]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
+              {:keys [out]} (await (with-flee (fn no-escape [c] (ctx/end c :nothing-possible :cannot-escape))
+                                              #(run-job! s 'jobs.survival.respond-to-hostile {})))]
           (is (= {:status :stopped :reason :retreat-failed} (select-keys out [:status :reason])))
           (is (= :nothing-possible (get-in out [:ending :kind])))
-          (is (= :cannot-escape (get-in out [:ending :because :cause])) "the retreat's ending is the because"))))))
+          (is (= :cannot-escape (get-in out [:ending :data :flight-ended])) "the flight's ending is the because"))))))
 
-(deftest respond-to-hostile-passes-the-kind-of-a-retreat-that-ends-impossible-or-limit-reached
+(deftest respond-to-hostile-passes-the-kind-of-a-flight-that-ends-impossible-or-limit-reached
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [kind [:impossible :limit-reached]]
           (let [s (setup {:entities [(zombie 7 5 {:chase false})]})
-                ending {:round (fn ^:async ends [c] (ctx/end c kind :stub))}
-                s (assoc-in s [:eng :jobs 'jobs.survival.retreat] ending)
-                {:keys [out]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
+                {:keys [out]} (await (with-flee (fn ends [c] (ctx/end c kind :stub))
+                                                #(run-job! s 'jobs.survival.respond-to-hostile {})))]
             (is (= kind (get-in out [:ending :kind])))))))))
 
 (deftest respond-to-hostile-is-done-when-the-danger-is-gone-after-a-long-hide
@@ -687,12 +694,11 @@
         (let [s (setup {:entities [(zombie 7 5 {:chase false})]})
               clock (:clock s)
               p (:p s)
-              hiding {:round (fn ^:async long-hide [c]
-                               (swap! clock + 400000)
-                               (swap! (fake/state p) assoc :entities [])
-                               (ctx/end c :done nil {:fled [7] :ended :hidden}))}
-              s (assoc-in s [:eng :jobs 'jobs.survival.retreat] hiding)
-              {:keys [calls out]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
+              {:keys [calls out]} (await (with-flee (fn long-hide [c]
+                                                      (swap! clock + 400000)
+                                                      (swap! (fake/state p) assoc :entities [])
+                                                      (ctx/end c :done nil {:fled [7] :ended :hidden}))
+                                                    #(run-job! s 'jobs.survival.respond-to-hostile {})))]
           (is (= [:done] calls))
           (is (not= :stopped (:status out))))))))
 
@@ -714,7 +720,7 @@
         raw (tu/fake-on-floor (merge {:floor big-floor :yaw 270 :pitch 0} world))
         p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (fn [] @clock)}))
         now (tu/act-clock clock p ms-per-call)
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
+        eng (core/create {:primitives p :jobs fj/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     {:eng eng :p p :raw raw :seen seen :clock clock}))
 
@@ -722,6 +728,7 @@
   "A job that picks one flight target (cover/flight-target!) away from the hostiles it knows, kept in out."
   [out]
   {:round (fn ^:async targeter-round [c]
+            (when-let [g (:goal (:args c))] (ctx/update-mem! c assoc :goal g))
             (let [threats (danger-q/known-hostiles (:primitives c) 30 {:ranged-radius 30})]
               (reset! out (await (cover/flight-target! c threats)))
               (ctx/end c :done nil)))})
@@ -731,7 +738,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [raw seen out]} (await (run-job! (setup-sensed {:entities [(zombie 7 5 {:chase {:speed 0.7}})]})
-                                                      'jobs.survival.retreat {}))
+                                                      'test.flight {}))
               names (set (map #(.-name %) (.-calls (.-world raw))))]
           (is (contains? #{:far :lost} (:ended out)) (str "out of its range, or out of sight and hearing: " (pr-str out)))
           (is (> (fake/dist (body-pos raw) (mob-pos raw 7)) 16) "beyond hearing")
@@ -771,7 +778,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [seen]} (await (run-job! (setup {:entities [(zombie 7 6 {:chase {:speed 0.7}})]})
-                                              'jobs.survival.retreat {:goal {:x 20 :y 64 :z 0}}))
+                                              'test.flight {:goal {:x 20 :y 64 :z 0}}))
               [x] (first-target seen)]
           (is (< x 0) (str "the goal lies past the zombie: away from it instead " (pr-str (first-target seen)))))))))
 
@@ -780,7 +787,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [seen]} (await (run-job! (setup {:entities [(zombie 7 6 {:chase {:speed 0.7}})]})
-                                              'jobs.survival.retreat {:goal {:x -20 :y 64 :z 0}}))]
+                                              'test.flight {:goal {:x -20 :y 64 :z 0}}))]
           (is (= [-20 64 0] (first-target seen))))))))
 
 (deftest a-flight-that-reaches-its-goal-flees-on-from-there-and-ends
@@ -788,7 +795,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out seen]} (await (run-job! (setup {:entities [(zombie 7 5 {:chase {:speed 0.7}})]})
-                                                  'jobs.survival.retreat {:goal {:x 20 :y 64 :z 12}}))]
+                                                  'test.flight {:goal {:x 20 :y 64 :z 12}}))]
           (is (= :done (:status out)) (pr-str out))
           (is (< (count (filterv #(= :retreat.target (:kind %)) @seen)) 200) "no walking back and forth between the goal and the way away"))))))
 
@@ -832,7 +839,7 @@
               s (setup-sensed {:entities [(zombie 7 5 {})]})
               _ (swap! (fake/state (:raw s)) assoc :light-default [0 0])
               _ (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors [[-4 64 0] [-5 65 0]]})
-              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'jobs.survival.retreat {:goal {:x -40 :y 114 :z 0}}))]
+              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'test.flight {:goal {:x -40 :y 114 :z 0}}))]
           (is (= [-5 66 0] (first-target seen)) "the stair it cut, not a leg to a goal 50 blocks above through the caves"))))))
 
 (deftest a-goal-leg-that-takes-the-body-away-from-the-goals-height-ends-the-goal-walk
@@ -842,7 +849,7 @@
         (let [calls (atom [])
               s (setup {:entities [(zombie 7 6 {})]})
               dive (fn [st] (swap! st update-in [:self :pos] (fn [[x y z]] [(- x 4) (- y 5) z])))
-              {:keys [seen]} (await (run-job! (stub-go-to s calls dive) 'jobs.survival.retreat {:goal {:x -20 :y 64 :z 0}}))]
+              {:keys [seen]} (await (run-job! (stub-go-to s calls dive) 'test.flight {:goal {:x -20 :y 64 :z 0}}))]
           (is (= [-20 64 0] (first-target seen)) "the first leg aims at the goal")
           (is (= 1 (count (events-of seen :retreat.goal-off)))
               "a leg that ends nearer in x/z but 5 blocks under the goal's height is no way to it"))))))
@@ -853,7 +860,7 @@
       (fn ^:async t []
         (let [calls (atom [])
               s (setup {:blocks {(key-of -20 63 0) "stone"} :entities [(zombie 7 6 {})]})
-              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'jobs.survival.retreat {:goal {:x -20 :y 54 :z 0}}))]
+              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'test.flight {:goal {:x -20 :y 54 :z 0}}))]
           (is (some? (first-target seen)))
           (is (not= [-20 54 0] (first-target seen)) "a goal 10 down a roofed shaft is not walked to"))))))
 
@@ -863,7 +870,7 @@
       (fn ^:async t []
         (let [calls (atom [])
               s (setup {:entities [(zombie 7 5 {}) (zombie 8 0 {:pos {:x -6 :y 64 :z 3}})]})
-              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'jobs.survival.retreat {:goal {:x -6 :y 64 :z 0}}))]
+              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'test.flight {:goal {:x -6 :y 64 :z 0}}))]
           (is (not= [-6 64 0] (first-target seen)) "a second hostile stands 3 blocks from the goal"))))))
 
 ;; ------------------------------------------------------------------ a goal must be safe to lean to
@@ -906,7 +913,7 @@
         (let [calls (atom [])
               s (setup {:entities [(zombie 7 6 {})]})
               _ (mem/write! (:store (:eng s)) :home {:pos {:x 12 :y 64 :z 0}} {:cap 1 :ttl :forever})
-              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'jobs.survival.retreat {}))
+              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'test.flight {}))
               e (choice seen)]
           (is (= [[12 64 0] :past-hostile] [(:home e) (:home-why e)]) (pr-str e)))))))
 
@@ -916,7 +923,7 @@
       (fn ^:async t []
         (let [calls (atom [])
               s (setup {:entities [(zombie 7 4 {})]})
-              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'jobs.survival.retreat {:goal {:x 3 :y 90 :z 0}}))]
+              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'test.flight {:goal {:x 3 :y 90 :z 0}}))]
           (is (some? (first-target seen)))
           (is (not= [3 90 0] (first-target seen)) "26 up and 3 across is no way out")
           (is (= :steep (:goal-why (choice seen))) (pr-str (choice seen))))))))
@@ -928,7 +935,7 @@
         (let [calls (atom [])
               s (setup {:entities [(zombie 7 6 {})]})
               _ (mem/write! (:store (:eng s)) :home {:pos {:x -12 :y 64 :z 0}} {:cap 1 :ttl :forever})
-              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'jobs.survival.retreat {:goal {:x 10 :y 64 :z 30}}))
+              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'test.flight {:goal {:x 10 :y 64 :z 30}}))
               [x] (first-target seen)
               e (choice seen)]
           (is (neg? x) (str "west, to the home side, not to the errand's goal: " (pr-str (first-target seen))))
@@ -942,7 +949,7 @@
         (let [calls (atom [])
               s (setup {:entities [(zombie 7 6 {}) {:id 99 :uuid "u99" :name "skeleton" :kind "hostile" :visible false :pos {:x -22 :y 64 :z 5}}]})
               _ (mem/write! (:store (:eng s)) :threat {:id 99 :mob "skeleton" :pos {:x -22 :y 64 :z 5} :ended :lost} threats/threat-policy)
-              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'jobs.survival.retreat {:goal {:x -20 :y 64 :z 0}}))]
+              {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'test.flight {:goal {:x -20 :y 64 :z 0}}))]
           (is (not= [-20 64 0] (first-target seen)))
           (is (= :hostile-there (:goal-why (choice seen))) (pr-str (choice seen))))))))
 
@@ -1013,7 +1020,7 @@
                          (swap! st update :entities #(vec (take (- 8 n) %)))
                          {:arrived false :leg (and (> n 1) (not= west-goal (:pos (last @calls))))})]
             (await (settings/with-settings {:jobs.survival.retreat-goal/retry-s retry-s}
-                     #(run-job! (scripted-go-to s calls script) 'jobs.survival.retreat {:goal west-goal})))
+                     #(run-job! (scripted-go-to s calls script) 'test.flight {:goal west-goal})))
             (is (= west-goal (:pos (first @calls))) "the first leg, which fails, goes to the goal")
             (is (= legs (count (goal-legs calls))) (str "retry-s " retry-s ": " (mapv :pos @calls)))))))))
 
@@ -1026,9 +1033,9 @@
               st (fake/state (:p s))
               mobs (:entities @st)
               s (scripted-go-to s calls (fn [st _] (swap! st assoc :entities []) {:arrived false :leg false}))
-              s (await (run-job! s 'jobs.survival.retreat {:goal west-goal}))
+              s (await (run-job! s 'test.flight {:goal west-goal}))
               _ (swap! st assoc :entities mobs)
-              {:keys [seen]} (await (run-job! s 'jobs.survival.retreat {:goal west-goal}))]
+              {:keys [seen]} (await (run-job! s 'test.flight {:goal west-goal}))]
           (is (= 2 (count @calls)) "one step a flight")
           (is (= 1 (count (goal-legs calls))) "the second flight does not spend a leg on the goal the first gave up")
           (is (= :given-up (:goal-why (last (events-of seen :retreat.choice))))))))))
@@ -1096,7 +1103,7 @@
       (fn ^:async t []
         (let [calls (atom [])
               s (buried-setup {:inventory [] :entities [(zombie 7 6 {})]})]
-          (await (run-job! (stub-go-to s calls identity) 'jobs.survival.retreat {:goal {:x -9 :y 64 :z 0}}))
+          (await (run-job! (stub-go-to s calls identity) 'test.flight {:goal {:x -9 :y 64 :z 0}}))
           (is (= {:x -9 :y 64 :z 0} (:pos (first @calls))) "the leg goes to the goal")
           (is (= (retreat-walk/max-descent) (get-in (first @calls) [:settings :jobs.lib.walk.world/y-margin])) "and its plan may not dip under the descent floor"))))))
 
@@ -1104,7 +1111,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (run-job! (buried-setup {:entities [(zombie 7 6 {})]}) 'jobs.survival.retreat {}))
+        (let [{:keys [p]} (await (run-job! (buried-setup {:entities [(zombie 7 6 {})]}) 'test.flight {}))
               names (mapv #(.-name %) (.-calls (.-world p)))]
           (is (= "dig" (first (filter #{"dig" "steer"} names))) "a pocket, not a hop down the tunnel"))))))
 
@@ -1152,7 +1159,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [raw seen out]} (await (run-job! (setup-sensed {:light-default [0 0] :entities [(zombie 7 5 {:chase {:speed 0.7}})]})
-                                                      'jobs.survival.retreat {}))
+                                                      'test.flight {}))
               names (set (map #(.-name %) (.-calls (.-world raw))))]
           (is (< (first (body-pos raw)) -30) (str "fled far west: " (pr-str out)))
           (is (not (contains? names "attack")) "never fights")
@@ -1164,7 +1171,7 @@
       (fn ^:async t []
         (let [creeper {:id 9 :uuid "u9" :name "creeper" :kind "hostile" :pos {:x 5 :y 64 :z 0}
                        :chase {:speed 0.7 :follow 16}}
-              {:keys [raw out]} (await (run-job! (setup-sensed {:entities [creeper]}) 'jobs.survival.retreat {}))]
+              {:keys [raw out]} (await (run-job! (setup-sensed {:entities [creeper]}) 'test.flight {}))]
           (is (= :done (:status out)) (pr-str out))
           (is (> (fake/dist (body-pos raw) (mob-pos raw 9)) 16)
               (str "the flight ends only once the creeper really stopped chasing, not while it follows unseen: "
@@ -1183,17 +1190,17 @@
       (fn ^:async t []
         (let [s (setup {:entities [(zombie 7 4 {:chase {:speed 0.7 :follow 6}})]})
               fled (fn [r] (filterv #(= :hostile.fled (:kind %)) @(:seen r)))
-              r1 (await (settings/with-settings {:jobs.survival.retreat-flight/far-flight 50}
-                          #(run-job! s 'jobs.survival.retreat {})))
+              r1 (await (settings/with-settings {:jobs.survival.retreat-flight/far-flight 40}
+                          #(run-job! s 'test.flight {})))
               n1 (count (fled r1))
               bp (body-pos (:p s))
               _ (swap! (fake/state (:p s)) update :entities (fn [es] (filterv #(not= 7 (:id %)) es)))
               _ (fake/add-entity! (:p s) (zombie 7 (+ (first bp) 4) {:chase {:speed 0.7 :follow 6}}))
-              r2 (await (settings/with-settings {:jobs.survival.retreat-flight/far-flight 50}
-                          #(run-job! r1 'jobs.survival.retreat {})))]
+              r2 (await (settings/with-settings {:jobs.survival.retreat-flight/far-flight 40}
+                          #(run-job! r1 'test.flight {})))]
           (is (= 0 n1) "the first flight alone is under far-flight")
           (is (= 1 (count (fled r2))) "the second adds up past it, measured from the chain's start")
-          (is (> (:distance (first (fled r2))) 50))
+          (is (> (:distance (first (fled r2))) 40))
           (is (seq (mem/entries (mem/view (:store (:eng r2))) :displaced)) "the night job is told the body was driven off"))))))
 
 (deftest a-far-flight-tells-the-agent-where-the-body-went-and-why
@@ -1212,7 +1219,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [seen]} (await (run-job! (setup {:entities [(zombie 7 5 {:chase {:speed 0.7}})]})
-                                              'jobs.survival.retreat {}))
+                                              'test.flight {}))
               fled (filterv #(= :hostile.fled (:kind %)) @seen)]
           (is (= 1 (count fled)) "one notice for the whole flight")
           (is (= :warn (:level (first fled))))
@@ -1233,7 +1240,7 @@
                   (.override world name (fn ^:async f [token a impl]
                                           (swap! xs conj (:x (body-pos p)))
                                           (await (impl token a)))))
-              _ (await (run-job! s 'jobs.survival.retreat {}))
+              _ (await (run-job! s 'test.flight {}))
               _ (swap! xs conj (:x (body-pos p)))]
           (is (<= (apply max @xs) 3.6) (str "never east, towards the creeper: " (pr-str @xs)))
           (is (< (:x (body-pos p)) 3) "backed off west as far as the dead end allows"))))))
@@ -1250,7 +1257,7 @@
                   (.override world name (fn ^:async f [token a impl]
                                           (swap! xs conj (:x (body-pos p)))
                                           (await (impl token a)))))
-              _ (await (run-job! s 'jobs.survival.retreat {}))
+              _ (await (run-job! s 'test.flight {}))
               _ (swap! xs conj (:x (body-pos p)))]
           (is (<= (apply max @xs) 0.6) (str "never east, towards the creeper: " (pr-str @xs)))
           (is (<= (:x (body-pos p)) 0.6) "stays at the end"))))))

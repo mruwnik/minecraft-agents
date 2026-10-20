@@ -20,9 +20,9 @@
 (defn done-of [sym world args m] (done-in sym world args m {}))
 
 (deftest retreat-is-done-when-no-danger-is-on-and-the-flight-has-nothing-to-write
-  (are [world m want] (= want (tu/kind-reason (done-of 'jobs.survival.retreat world {} m)))
+  (are [world m want] (= want (tu/kind-reason (done-of 'jobs.survival.respond-to-hostile world {} m)))
     {} {} [:ok :clear]
-    {:floor ft/big-floor :entities [(ft/zombie 7 5 {})]} {} [:later :fleeing]
+    {:floor ft/big-floor :entities [(ft/zombie 7 5 {})]} {} [:later :danger]
     {} {:chasers {7 {:id 7}}} [:later :fleeing]
     {} {:fled [{:id 7 :ended :far}]} [:later :fleeing]
     {} {:refuge {:kind :seal}} [:later :fleeing]))

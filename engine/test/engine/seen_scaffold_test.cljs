@@ -55,7 +55,7 @@
                     :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 0 :y 64 :z 1} :health 20}]}
               p (d/sensing spec)]
           (is (true? (look/unknown? p [0 67 0])) "the sky over the doorway is unsensed at the start")
-          (let [{:keys [eng clock]} (d/setup p 'jobs.survival.retreat {})]
+          (let [{:keys [eng clock]} (d/setup p 'jobs.survival.respond-to-hostile {})]
             (let [round (core/tick! eng)]
               (loop [i 0]
                 (when (and (< i 100) (empty? (d/calls p "jumpPlace")))

@@ -12,11 +12,11 @@
  [{:name "low-body-in-a-witchs-line-seals-in-at-once"
    :plot {:light :sky}
    :act [[:rcon "damage $BODY 60 minecraft:generic"]
-         [:job (jobs.survival.retreat {})]]
+         [:job (jobs.survival.respond-to-hostile {})]]
    :expect [{:event {:source :job :kind :retreat_sealed} :within-s 12}]
    :after [[:body-near [16.5 0 16.5] 3]]}
   {:name "healthy-body-in-a-witchs-line-walks-away-unsealed"
-   :act [[:job (jobs.survival.retreat {})]]
+   :act [[:job (jobs.survival.respond-to-hostile {})]]
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :retreat_sealed} :for-s 40 :until {:source :job :kind :completed}}]
    :after [[:body-far [16.5 0 16.5] 3]]}]}

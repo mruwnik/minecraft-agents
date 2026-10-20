@@ -1,5 +1,5 @@
 (ns jobs.survival.retreat-cover
-  "Where a flight goes and how it covers itself (jobs.survival.retreat): the home, the glance round, the target away from the hostiles, a seal or side pocket where the body stands."
+  "Where a flight goes and how it covers itself (jobs.survival.respond-flight): the home, the glance round, the target away from the hostiles, a seal or side pocket where the body stands."
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]

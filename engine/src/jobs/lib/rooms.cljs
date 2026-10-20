@@ -1,7 +1,7 @@
 (ns jobs.lib.rooms
   "Closed rooms, for a flight and for shutting in: the body's home or any closed room it has seen (jobs.lib.reach.room/room: walls, a
   roof or none needed, doors that shut) that it gets into before every melee chaser reaches a door of it
-  (jobs.lib.cost/reach-first?). Shared by jobs.survival.retreat and jobs.survival.enter-room."
+  (jobs.lib.cost/reach-first?). Shared by jobs.survival.respond-flight and jobs.survival.enter-room."
   (:require [jobs.lib.block-sets :as bs]
             [clojure.string :as str]
             [engine.args :as a]

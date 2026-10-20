@@ -10,14 +10,16 @@
             [engine.memory :as mem]
             [engine.ctx :as ctx]
             [engine.registry :as registry]
+            [engine.flight-job :as fj]
             [engine.settings :as settings]
             [engine.core :as core]
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.survival.retreat :as retreat]
+            [jobs.survival.respond-flight :as retreat]
             [jobs.survival.retreat-cornered :as cornered]
+            [jobs.survival.respond-choose :as choose]
             [jobs.survival.retreat-cornered.pick :as pick]
             [jobs.lib.shot :as shot]
             [jobs.survival.retreat-flight :as flight]
@@ -37,7 +39,7 @@
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake-on-floor (dissoc world :zones :stair-way))
         now (tu/act-clock clock p 1000)
-        eng (core/create (cond-> {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
+        eng (core/create (cond-> {:primitives p :jobs fj/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                                   :events (events/make {:body "Fake" :sinks [sink] :now now})}
                            zones (assoc :world (ew/of-data {} {} zones))))]
     (some->> (:stair-way world) (assoc {:dim "overworld"} :floors) (mem/write! (:store eng) :stair-way))
@@ -113,11 +115,11 @@
 
 (def stair-floors "The floors of stair-cells, as the stairs the body cut." (vec (for [x (range -9 6)] [x (+ 63 x) 0])))
 
-(def retreat '(jobs.survival.retreat))
+(def retreat '(test.flight))
 
 (def hiding-retreat
   "A retreat that hides on for as long as the test needs (:hide-s far off)."
-  '(jobs.survival.retreat {:settings {:jobs.survival.retreat-refuge/hide-s 100000}}))
+  '(test.flight {:settings {:jobs.survival.retreat-refuge/hide-s 100000}}))
 
 (deftest a-retreat-walks-back-down-the-stair-it-came-up
   (async done
@@ -203,7 +205,7 @@
         (let [{:keys [eng p seen]} (setup {:blocks dead-end :inventory [{:name "cobblestone" :count 20}] :entities [(skeleton 4 64 0)]})
               _ (add-watch (fake/state p) :mob-out
                            (fn [_ _ _ w] (when (and (seq (:entities w)) (get-in w [:blocks [1 64 0]])) (swap! (fake/state p) assoc :entities []))))
-              round (do (core/submit! eng '(jobs.survival.retreat {:settings {:jobs.survival.retreat-seal/max-places 1}}) {})
+              round (do (core/submit! eng '(test.flight {:settings {:jobs.survival.retreat-seal/max-places 1}}) {})
                         (core/tick! eng))]
           (await round)
           (is (= [[1 64 0] [1 65 0]] (placed-cells p)) "the seal is finished though the skeleton is out of sense")
@@ -354,7 +356,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[spec listed-want] [['(jobs.survival.retreat) [[]]]
+        (doseq [[spec listed-want] [['(test.flight) [[]]]
                                       ['(jobs.survival.respond-to-hostile) [[]]]
                                       ['(jobs.survival.respond-to-hostile {:settings {:jobs.survival.retreat-refuge/hide-s 100000}}) [["j1"]]]]]
           (let [{:keys [listed]}
@@ -369,7 +371,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p seen]}
-              (await (hide-steps '(jobs.survival.retreat) {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20} {:name "stone_pickaxe" :count 1}]
+              (await (hide-steps '(test.flight) {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20} {:name "stone_pickaxe" :count 1}]
                                                            :entities [(zombie-at 4)]}
                                  [[[(zombie-at 3)] 61000] [[(zombie-at 3)] 1000]]))]
           (is (seq (calls p "dig")) "a stair is cut (the old code held on, up to :hide-max-s)")
@@ -381,7 +383,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng listed]}
-              (await (hide-steps '(jobs.survival.retreat {:settings {:jobs.survival.retreat-refuge/quiet-s 2000 :jobs.survival.retreat-refuge/hide-s 100000}})
+              (await (hide-steps '(test.flight {:settings {:jobs.survival.retreat-refuge/quiet-s 2000 :jobs.survival.retreat-refuge/hide-s 100000}})
                                  {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20}]
                                   :entities [(zombie-at 4)]}
                                  [[[(zombie-at 12)] 0] [[] 10000]]))]
@@ -568,9 +570,9 @@
           (is (empty? (filterv #(= :shut-in.trespass-last-resort (:kind %)) @seen))))))))
 
 (deftest a-pillar-through-anothers-area-comes-after-every-other-way-and-before-a-last-fight
-  (is (= [:plug :pillar :back-off :plug-dig :plug-zone :plug-dig-zone :pillar-zone :fight] (pick/with-zone-pillar (cornered/escape-order {}))))
-  (is (= [:fight :plug :pillar :plug-dig :plug-zone :plug-dig-zone :pillar-zone] (pick/with-zone-pillar (cornered/escape-order {:pressed? true :faster? true}))))
-  (is (= [:fight] (pick/with-zone-pillar [:fight])) "no plug or pillar in the order, none added"))
+  (is (= [:plug :pillar :back-off :plug-dig :plug-zone :plug-dig-zone :pillar-zone :fight] (choose/with-zone-pillar (choose/escape-order {}))))
+  (is (= [:fight :plug :pillar :plug-dig :plug-zone :plug-dig-zone :pillar-zone] (choose/with-zone-pillar (choose/escape-order {:pressed? true :faster? true}))))
+  (is (= [:fight] (choose/with-zone-pillar [:fight])) "no plug or pillar in the order, none added"))
 
 (deftest a-lone-melee-mob-within-ten-with-blocks-carried-is-pillared-against-before-any-flee-step
   (async done
@@ -601,7 +603,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (first-round '(jobs.survival.retreat {:use {:blocks ["dirt"]}})
+        (let [{:keys [p]} (await (first-round '(test.flight {:use {:blocks ["dirt"]}})
                                               {:self {:health 10} :inventory [{:name "cobblestone" :count 39}]
                                                :entities [(zombie 8 64 0)]}))]
           (is (empty? (calls p "jumpPlace")) "no pillar of cobblestone the call did not list")
@@ -749,7 +751,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p]}
-              (await (hidden-round '(jobs.survival.retreat) {:blocks deep-dead-end :inventory [{:name "stone_pickaxe" :count 1}]
+              (await (hidden-round '(test.flight) {:blocks deep-dead-end :inventory [{:name "stone_pickaxe" :count 1}]
                                             :entities [(zombie 1 64 0)]}
                                    1000 (fn [_] nil)))]
           (is (zero? (count (calls p "attack"))) "a pickaxe and a pit beat a pickaxe fight")
@@ -1018,7 +1020,7 @@
 (def enderman (fn [x y z] {:id 10 :name "enderman" :kind "hostile" :pos {:x x :y y :z z} :health 40}))
 
 (deftest an-angry-enderman-is-not-fled-on-foot-nor-fought-the-body-shelters
-  (is (= [:water :roof :plug :plug-dig :fight] (cornered/escape-order {:enderman? true :win? true}))
+  (is (= [:water :roof :plug :plug-dig :fight] (choose/escape-order {:enderman? true :win? true}))
       "no walk away, no pillar (it is 3 tall), no back-off; a fight only last, whatever the odds"))
 
 (deftest a-body-with-an-enderman-near-walls-itself-in-instead-of-walking
@@ -1135,7 +1137,7 @@
     (is (= cells (retreat-seal/nearest-first feet [] cells)) "no chaser: as given")))
 
 (deftest a-creeper-beside-an-enderman-keeps-the-creeper-order
-  (is (= :back-off (first (cornered/escape-order {:enderman? true :creeper? true})))))
+  (is (= :back-off (first (choose/escape-order {:enderman? true :creeper? true})))))
 
 (deftest a-calm-enderman-is-walked-away-from-not-sealed-against
   (async done
@@ -1167,35 +1169,35 @@
           (is (not-any? #(re-find #"cannot-escape" (pr-str %)) @seen) "never gives up on the mob that is hurting it"))))))
 
 (deftest a-body-in-water-hunted-by-a-drowned-tries-to-swim-out-before-anything-else
-  (is (= [:swim-out :plug :pillar :back-off :plug-dig :fight] (cornered/escape-order {:swim? true})))
-  (is (= [:fight] (cornered/escape-order {:swim? true :win? true})) "an armed body that wins still fights")
-  (is (= :back-off (first (cornered/escape-order {:swim? true :creeper? true})))))
+  (is (= [:swim-out :plug :pillar :back-off :plug-dig :fight] (choose/escape-order {:swim? true})))
+  (is (= [:fight] (choose/escape-order {:swim? true :win? true})) "an armed body that wins still fights")
+  (is (= :back-off (first (choose/escape-order {:swim? true :creeper? true})))))
 
 (deftest no-pillar-against-a-climber
-  (is (= [:plug :back-off :plug-dig :fight] (cornered/escape-order {:climber? true}))
+  (is (= [:plug :back-off :plug-dig :fight] (choose/escape-order {:climber? true}))
       "a spider climbs the pillar's side to the body on top"))
 
 (deftest a-pillar-comes-first-against-a-mob-in-a-corner-cell-when-it-fits
-  (is (= [:pillar :plug :back-off :plug-dig :fight] (cornered/escape-order {:pillar-first? true :pressed? true}))
+  (is (= [:pillar :plug :back-off :plug-dig :fight] (choose/escape-order {:pillar-first? true :pressed? true}))
       "no fist fight first, and the fight stays the last resort"))
 
 (deftest a-pillar-that-leaves-too-few-blocks-comes-after-the-dig-down
-  (is (= [:plug :plug-dig :pillar :back-off :fight] (cornered/escape-order {:lean? true}))
+  (is (= [:plug :plug-dig :pillar :back-off :fight] (choose/escape-order {:lean? true}))
       "the pillar top cannot be roofed in without blocks; a pit regains them")
-  (is (= [:plug :pillar :back-off :fight] (cornered/escape-order {:lean? true :home? true})) "no dig-down at home")
-  (is (= [:plug :plug-dig :fight] (cornered/escape-order {:lean? true :climber? true :faster? true}))))
+  (is (= [:plug :pillar :back-off :fight] (choose/escape-order {:lean? true :home? true})) "no dig-down at home")
+  (is (= [:plug :plug-dig :fight] (choose/escape-order {:lean? true :climber? true :faster? true}))))
 
 (deftest no-step-back-from-a-mob-that-outruns-the-body
-  (is (= [:plug :plug-dig :fight] (cornered/escape-order {:climber? true :faster? true})))
-  (is (= [:plug :pillar :plug-dig :fight] (cornered/escape-order {:faster? true})) "one that cannot climb is pillared against")
-  (is (= [:fight] (cornered/escape-order {:faster? true :win? true}))))
+  (is (= [:plug :plug-dig :fight] (choose/escape-order {:climber? true :faster? true})))
+  (is (= [:plug :pillar :plug-dig :fight] (choose/escape-order {:faster? true})) "one that cannot climb is pillared against")
+  (is (= [:fight] (choose/escape-order {:faster? true :win? true}))))
 
 (deftest an-armed-body-with-a-hitter-at-it-fights-before-it-builds
-  (is (= [:fight :plug :pillar :back-off :plug-dig] (cornered/escape-order {:pressed? true}))
+  (is (= [:fight :plug :pillar :back-off :plug-dig] (choose/escape-order {:pressed? true}))
       "four dirt placed beside a zombie that keeps hitting cost three hits")
-  (is (= [:fight :plug :pillar :plug-dig] (cornered/escape-order {:pressed? true :faster? true})))
-  (is (= :back-off (first (cornered/escape-order {:pressed? true :creeper? true}))) "a creeper is never fought first")
-  (is (= :water (first (cornered/escape-order {:pressed? true :enderman? true})))))
+  (is (= [:fight :plug :pillar :plug-dig] (choose/escape-order {:pressed? true :faster? true})))
+  (is (= :back-off (first (choose/escape-order {:pressed? true :creeper? true}))) "a creeper is never fought first")
+  (is (= :water (first (choose/escape-order {:pressed? true :enderman? true})))))
 
 (deftest a-beaten-body-fights-first-only-if-armed-or-out-of-blocks
   (are [armed? blocks? fights?] (= fights? (pick/beaten-fights? {:beaten? true :armed? armed? :blocks? blocks?}))
@@ -1406,7 +1408,7 @@
                                            :entities [(assoc (zombie 3 64 0) :visible true)]})
               hurt! #(swap! (fake/state p) update-in [:self :health] - 2)]
           (.override (.-world p) "wait" (fn [token a impl] (when (hiding? seen) (hurt!)) (impl token a)))
-          (core/submit! eng '(jobs.survival.retreat {:settings {:jobs.survival.retreat-refuge/hide-s 100000}}) {})
+          (core/submit! eng '(test.flight {:settings {:jobs.survival.retreat-refuge/hide-s 100000}}) {})
           (await (core/tick! eng))
           (is (= 1 (count (filter #(= :retreat_sealed (:kind %)) @seen))) "sealed first")
           (is (pos? (count (calls p "attack"))) "hit while sealed: it stops hiding and hits back"))))))
@@ -1424,7 +1426,7 @@
                          (swap! (fake/state p) update-in [:self :health] - 2)
                          (mem/write! (:store eng) :hurt {:amount 2 :health 18 :hits 1 :attacker {:name "zombie"}} {:cap 50 :ttl 60000}))
                        (impl token args)))
-          (core/submit! eng '(jobs.survival.retreat {}) {})
+          (core/submit! eng '(test.flight {}) {})
           (await (core/tick! eng))
           (is (= [[1 64 0]] (take 1 (placed-cells p))))
           (is (= 1 (count (take-while #(not= "attack" (.-name %)) (filter #(#{"place" "attack"} (.-name %)) (.-calls (.-world p))))))

@@ -8,6 +8,7 @@
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
             [engine.registry :as registry]
+            [engine.flight-job :as fj]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.lib.dig-look :as dig-look]
@@ -66,10 +67,10 @@
         raw (tu/fake-on-floor (assoc world :entities [{:id 9 :name "skeleton" :kind "hostile" :pos {:x 4 :y 64 :z 0} :health 20}]))
         p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (fn [] @clock)}))
         now (tu/act-clock clock p 1000)
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
+        eng (core/create {:primitives p :jobs fj/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     (await (see-tunnel! raw p))
-    (core/submit! eng (list 'jobs.survival.retreat args) {})
+    (core/submit! eng (list 'test.flight args) {})
     (leave-at-first-hold! raw clock)
     (await (core/tick! eng))
     p))
@@ -106,7 +107,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [p (await (round (pocket-world "lava") {:on-lava :stop}))]
+        (let [p (await (round (pocket-world "lava") {:settings {:jobs.survival.retreat-refuge/on-lava :stop}}))]
           (is (not-any? #{[-2 64 0]} (calls p "place")) "nothing placed into the lava")
           (is (not-any? #{[0 64 0] [0 65 0]} (calls p "place")) "not sealed in beside it"))))))
 
@@ -165,10 +166,10 @@
                      (fn [_ _ _ w] (swap! stood conj (fake/block-name w (mapv js/Math.floor (fake/body-pos w))))))
         p (perception/wrap raw (perception/create (fake-raw/create raw) {:now (fn [] @clock)}))
         now (tu/act-clock clock p 1000)
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
+        eng (core/create {:primitives p :jobs fj/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     (await (see-plain! raw p))
-    (core/submit! eng (list 'jobs.survival.retreat args) {})
+    (core/submit! eng (list 'test.flight args) {})
     (leave-at-first-hold! raw clock)
     (await (core/tick! eng))
     {:p p :kinds (set (map :kind @seen)) :stood @stood :feet-y (js/Math.floor (second (:pos (fake/self raw))))}))
@@ -223,7 +224,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[x y z] deep-cells]
-          (let [r (await (pit-round (plain-world {(key-of x y z) "lava"} false) {:on-lava :stop}))]
+          (let [r (await (pit-round (plain-world {(key-of x y z) "lava"} false) {:settings {:jobs.survival.retreat-refuge/on-lava :stop}}))]
             (is (not ((:stood r) "lava")) (str "lava at " [x y z] ": the body never stands in it"))
             (is (= "lava" (block-at (:p r) x y z)) "the lava is left")
             (is (not ((:kinds r) :shelter_seal_failed)) "no seal tried")))))))

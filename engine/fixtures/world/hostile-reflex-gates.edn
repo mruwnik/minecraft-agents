@@ -104,7 +104,7 @@
          [:until-seen {:entity "enderman"} 10]
          [:rcon "damage @e[type=enderman,tag=wt,$BOX,limit=1] 1 minecraft:player_attack by $BODY"]
          [:wait-s 1]
-         [:job (jobs.survival.retreat {})]]
+         [:job (jobs.survival.respond-to-hostile {})]]
    :expect [{:count-event {:source :job :kind :holding :data {:reason "in water, away from the enderman"}} :for-s 45 :at-least 1 :at-most 6 :of-job true}]
    :limit-s 60}
   {:name "phantom-near-unarmed-body-seals-no-flight"

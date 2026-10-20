@@ -1,5 +1,5 @@
 (ns jobs.survival.retreat-goal
-  "The :goal of a flight (jobs.survival.retreat): the destination of the walk it interrupted, when the flight walks to
+  "The :goal of a flight (jobs.survival.respond-flight): the destination of the walk it interrupted, when the flight walks to
   it and when it gives it up."
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
@@ -41,7 +41,7 @@
 (defn active
   "The :goal as a position, nil when none or the flight has been there (:goal-reached)."
   [c]
-  (when-not (:goal-reached (ctx/mem c)) (goal-pos (:goal (:args c)))))
+  (when-not (:goal-reached (ctx/mem c)) (goal-pos (:goal (ctx/mem c)))))
 
 (defn cell [pos] (mapv #(js/Math.floor (% pos)) [:x :y :z]))
 

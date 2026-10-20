@@ -6,6 +6,7 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.registry :as registry]
+            [engine.flight-job :as fj]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
 
@@ -15,7 +16,7 @@
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake (merge {:offlineScale 0.0001 :time 14000 :floor tu/walk-floor} world))
-        eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
+        eng (core/create {:primitives p :jobs fj/jobs :triggers {} :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen :clock clock}))
 
@@ -99,7 +100,7 @@
                                             :inventory [{:name "cobblestone" :count 20}]
                                             :entities [{:id 7 :uuid "u7" :name "zombie" :kind "hostile" :pos {:x 4 :y 64 :z 0}}]}))
         now (tu/act-clock clock p 1000)
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
+        eng (core/create {:primitives p :jobs fj/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     {:eng eng :p p :seen seen :clock clock}))
 
@@ -121,7 +122,7 @@
         (let [{:keys [eng p seen]} (retreat-setup)]
           (refuse-with-mob! p 4)
           (js/setTimeout #(swap! (fake/state p) assoc :entities []) 500)
-          (core/submit! eng '(jobs.survival.retreat {}) {})
+          (core/submit! eng '(test.flight {}) {})
           (loop [i 0] (when (and (< i 8) (seq (:list (core/state eng)))) (await (core/tick! eng)) (recur (inc i))))
           (is (= "cobblestone" (.-name (.blockAt p (tu/pos 1 64 0)))) "sealed in despite the sheep")
           (is (not-any? #(= :retreat_blocked (:kind %)) @seen)))))))
@@ -132,7 +133,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (retreat-setup)]
           (refuse-with-mob! p 1000000)
-          (core/submit! eng '(jobs.survival.retreat {}) {})
+          (core/submit! eng '(test.flight {}) {})
           (loop [i 0] (when (and (< i 8) (seq (:list (core/state eng)))) (await (core/tick! eng)) (recur (inc i))))
           (is (not= "cobblestone" (.-name (.blockAt p (tu/pos 1 64 0)))) "never sealed")
           (is (< 4 (placed p) 60) "waited several tries, then gave up the seal"))))))

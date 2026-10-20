@@ -1,5 +1,5 @@
 (ns jobs.survival.retreat-step
-  "What a flight step does once retreat-choose has picked an option: the early refuge, the walk away, and what the step says."
+  "What a flight step does once respond-choose has picked an option: the early refuge, the walk away, and what the step says."
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [clojure.set :as set]

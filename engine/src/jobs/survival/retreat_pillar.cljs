@@ -1,5 +1,5 @@
 (ns jobs.survival.retreat-pillar
-  "A cornered body's pillar (jobs.survival.retreat): where one fits, and building and raising it with jobs.access.pillar."
+  "A cornered body's pillar (jobs.survival.respond-flight): where one fits, and building and raising it with jobs.access.pillar."
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]

@@ -1,5 +1,5 @@
 (ns engine.retreat-contract-test
-  "jobs.survival.retreat as a contract job: its exports, how a flight ends, and its time spend."
+  "jobs.survival.respond-to-hostile as a contract job: its exports, how a flight ends, and its time spend; the flight step choice."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
             [engine.core :as core]
@@ -7,11 +7,12 @@
             [engine.events :as events]
             [engine.flee-test :as ft]
             [engine.registry :as registry]
+            [engine.flight-job :as fj]
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
-            [jobs.survival.retreat :as retreat]
-            [jobs.survival.retreat-choose :as choose]))
+            [jobs.survival.respond-flight :as flight]
+            [jobs.survival.respond-choose :as choose]))
 
 (defn setup
   "flee-test/setup with the canonical event sink and a contract parent 'caller that calls retreat once with ctx/call
@@ -22,9 +23,9 @@
         p (tu/seeing-all (tu/fake-on-floor (merge {:floor ft/big-floor} world)))
         now (tu/act-clock clock p ft/ms-per-call)
         caller {:round (fn ^:async caller-round [c]
-                         (let [r (await (ctx/call c :flee 'jobs.survival.retreat {}))]
+                         (let [r (await (ctx/call c :flee 'test.flight {}))]
                            (if (= :continue r) :continue (do (reset! out r) (ctx/end c :done nil)))))}
-        eng (core/create {:primitives p :jobs (assoc registry/jobs 'caller caller) :triggers triggers/all :dir (tu/tmp-dir)
+        eng (core/create {:primitives p :jobs (assoc fj/jobs 'caller caller) :triggers triggers/all :dir (tu/tmp-dir)
                           :now now :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     {:eng eng :p p :seen seen}))
 
@@ -36,15 +37,16 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [def (get registry/jobs 'jobs.survival.retreat)
+        (let [def (get registry/jobs 'jobs.survival.respond-to-hostile)
               c {:primitives (tu/fake {}) :view (constantly {:data {} :now 0}) :root 1 :slots [] :args {}}]
           (is (nil? (:check def)))
-          (is (= {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time :jobs.survival.retreat/job-time-s}} (:defaults def)))
+          (is (= {:checks {:safe? '(always) :fit? '(always)} 
+                  :spend {:job-time :jobs.survival.respond-to-hostile/job-time-s} :use {:tools :attack}} (:defaults def)))
           (is (= [:ok :clear] (tu/kind-reason ((:done? def) c))))
           (is (= {:units :hostiles :done 0 :left 0} (select-keys (nth ((:done? def) c) 2) [:units :done :left])))
           (is (nil? (contract/quote-problem (await ((:quote-of def) c))))))))))
 
-(deftest a-whole-flight-ends-done-with-who-it-fled
+(deftest a-whole-flight-ends-the-response-done-with-who-it-fled
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -59,10 +61,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (await (settings/with-settings {:jobs.survival.retreat/job-time-s 3}
+        (await (settings/with-settings {:jobs.survival.respond-to-hostile/job-time-s 3}
                  (fn ^:async spend []
                    (let [{:keys [eng seen]} (setup {:entities chaser} (atom nil))]
-                     (core/submit! eng '(jobs.survival.retreat {}) {})
+                     (core/submit! eng '(jobs.survival.respond-to-hostile {}) {})
                      (await (tu/run-until-empty eng 5))
                      (let [{:keys [kind cause]} (:data (first (job-ev seen :stopped)))]
                        (is (= [:limit-reached {:line :job-time :spend 3}] [kind (select-keys cause [:line :spend])])))))))))))
@@ -72,10 +74,10 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [time-s [1.3 2.2 2.6 3.4 4.9]]
-          (await (settings/with-settings {:jobs.survival.retreat/job-time-s time-s}
+          (await (settings/with-settings {:jobs.survival.respond-to-hostile/job-time-s time-s}
                    (fn ^:async near-budget []
                      (let [{:keys [eng seen]} (setup {:entities chaser} (atom nil))]
-                       (core/submit! eng '(jobs.survival.retreat {}) {})
+                       (core/submit! eng '(jobs.survival.respond-to-hostile {}) {})
                        (await (tu/run-until-empty eng 10))
                        (is (empty? (:list (core/state eng))) (str time-s " s: the flight left the list"))
                        (is (= [[:limit-reached :job-time]]
@@ -90,7 +92,7 @@
         (let [calls (atom [])
               c {:engine {:jobs registry/jobs}
                  :call (fn [slot def args] (swap! calls conj [slot (:sym def) (:why args)]) (js/Promise.resolve (contract/ending :done nil nil)))}]
-          (is (= :again (await (retreat/wait-far! c))))
+          (is (= :again (await (flight/wait-far! c))))
           (is (= [[:pause 'jobs.time.noop "cornered"]] @calls)))))))
 
 (deftest the-choice-follows-the-documented-order

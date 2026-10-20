@@ -114,7 +114,7 @@
   [spec slots hides?]
   (let [s (await (respond! spec))]
     (is (not (placed? s)))
-    (is (= slots (calls s)))
+    (is (= slots (remove #{:pause} (calls s))) "holds not counted: how many depends on real time")
     (is (= [:flee] (decisions s)) "a lone skeleton with no weapon: flee")
     (is (= hides? (hiding-seen? s)))
     s))
@@ -122,22 +122,22 @@
 (deftest no-pickaxe-no-gap-placed-and-the-body-flees-and-hides
   (async done
     (tu/run-async done
-      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8]} [:flee] true))))))
+      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8]} [:plug] true))))))
 
 (deftest no-blocks-no-gap-placed-and-the-body-flees-and-hides
   (async done
     (tu/run-async done
-      (fn ^:async t [] (await (no-gap-run {:inventory [pickaxe]} [:flee] true))))))
+      (fn ^:async t [] (await (no-gap-run {:inventory [pickaxe]} [:plug :plug-dig] true))))))
 
 (deftest a-melee-mob-as-well-no-gap-placed-and-the-body-flees-and-hides
   (async done
     (tu/run-async done
-      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8 pickaxe] :entities [g/pit-skeleton zombie]} [:flee] true))))))
+      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8 pickaxe] :entities [g/pit-skeleton zombie]} [:plug] true))))))
 
 (deftest open-ground-no-gap-placed-and-the-body-flees-out-of-line
   (async done
     (tu/run-async done
-      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8 pickaxe] :blocks (merge wide-ground g/pit canopy)} [:flee] false))))))
+      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8 pickaxe] :blocks (merge wide-ground g/pit canopy)} [:pocket :step :eat :step] false))))))
 
 (deftest a-gap-that-fails-refused-falls-back-to-the-usual-response
   (async done
@@ -145,5 +145,5 @@
       (fn ^:async t []
         (let [{:keys [seen]} (await (no-gap-run {:inventory [cobble8 pickaxe]
                                                  :zones [{:name "keep" :owner "Miles" :min [-4 60 -4] :max [4 70 4]}]}
-                                                [:gap :gap :flee] true))]
+                                                [:gap :gap :plug :plug-dig :plug-zone] true))]
           (is (some #(and (= :child_ended (:kind %)) (= :gap (:slot %)) (= :refused (:reason %))) @seen) "the gap job ran and placed nothing"))))))
