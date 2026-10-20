@@ -6,7 +6,6 @@
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.animals :as animals]
-            [jobs.lib.apiary :as apiary]
             [jobs.lib.pen :as pen]
             [jobs.lib.util :as u]))
 
@@ -23,7 +22,7 @@
   A pen not fully seen (dark, out of view: only unseen cells left open) counts too, with the livestock standing in the own area as its animals: what cannot be seen is not taken for open."
   [c starts]
   (let [p (:primitives c)
-        block-at (apiary/seen-block-at-fn p)
+        block-at (u/seen-block-at-fn p)
         pens (reduce (fn [pens [x y z :as feet]]
                        (let [at (zipmap [:x :y :z] feet)]
                          (if (or (some #(contains? (:inside %) feet) pens) (not (access/in-own-area? c at)))

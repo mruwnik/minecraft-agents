@@ -5,7 +5,6 @@
             [engine.contract :as contract]
             [engine.settings :as settings]
             [jobs.lib.animals :as animals]
-            [jobs.lib.apiary :as apiary]
             [jobs.lib.bait :as bait]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
@@ -118,36 +117,20 @@
 
 (defn gate-cell [c] (cell (:gate (ctx/mem c))))
 
-(defn gate-state
-  "The gate at cell as the body knows it: :open, :shut, or :unknown (never seen, or remembered past its 10 s)."
-  [p cell]
-  (let [b (apiary/seen-block-at-fn p)
-        pos (u/cell-pos cell)]
-    (cond
-      (nil? (b pos)) :unknown
-      (seq (pg/open-cells b [cell])) :open
-      :else :shut)))
-
 (defn gate-open?
   "True unless the gate is seen shut or the last toggle of this run found it closed (:gate-closed, dropped when the run
   opens it): a gate out of sight is remembered as it was last seen, and an unknown one is never taken for shut."
   [c]
   (and (not (:gate-closed (ctx/mem c)))
-       (not= :shut (gate-state (:primitives c) (gate-cell c)))))
-
-(defn same-cell? [g entry-cell] (= g (some-> entry-cell vec)))
+       (not= :shut (pg/gate-state (:primitives c) (gate-cell c)))))
 
 (defn hold-gate!
-  "Tell the pen-gate trigger the open gate is open on purpose: a fresh :gate-held entry, the old one replaced."
+  "Tell the pen-gate trigger the open gate is open on purpose (pg/hold!)."
   [c]
-  (let [g (gate-cell c)]
-    (ctx/update-mem! c dissoc :gate-closed)
-    (ctx/forget-where! c :gate-held #(same-cell? g (:cell %)))
-    (ctx/remember! c :gate-held {:cell g :by (:id c)} pg/held-policy)))
+  (ctx/update-mem! c dissoc :gate-closed)
+  (pg/hold! c (gate-cell c)))
 
-(defn drop-gate! [c]
-  (let [g (gate-cell c)]
-    (ctx/forget-where! c :gate-held #(same-cell? g (:cell %)))))
+(defn drop-gate! [c] (pg/release! c (gate-cell c)))
 
 ;; ------------------------------------------------------------------ the end
 

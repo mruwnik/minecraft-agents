@@ -1,4 +1,4 @@
-(ns jobs.animals.escort
+(ns jobs.lib.escort
   "Walking a led or lured animal along: the legs of the walk, the looks at the animal after each, the wait for it, and shutting the gates left open. Each leg is planned here (leg-plan) to choose where it ends and to keep the animal within the lead; the go-to child of the leg plans its walk again, as it must for doors and danger. State lives in the caller's job memory."
   (:require [engine.args :as a]
             [engine.contract :as contract]

@@ -11,7 +11,7 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [engine.test-util :as tu]
-            [jobs.animals.escort :as escort]
+            [jobs.lib.escort :as escort]
             [jobs.animals.lure-to :as lure-to]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.search :as wsearch]

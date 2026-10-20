@@ -12,7 +12,7 @@
             [engine.fake :as fake]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.plan :as wplan]
-            [jobs.animals.escort :as escort]
+            [jobs.lib.escort :as escort]
             [jobs.animals.lead-to :as lead-to]
             [engine.fetch-test :as fetch-test]
             [engine.hostile-test :as h]

@@ -6,7 +6,6 @@
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.animals.herd-run :as hr]
-            [jobs.lib.apiary :as apiary]
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
@@ -81,7 +80,7 @@
   "The open gates among cells, minus the cells in left ({:cell [x y z]})."
   [c cells left]
   (let [done (set (map :cell left))]
-    (pg/open-cells (apiary/seen-block-at-fn (:primitives c)) (remove done cells))))
+    (pg/open-cells (u/seen-block-at-fn (:primitives c)) (remove done cells))))
 
 (defn unread-now
   "With :plan, the gates among cells (minus the cells in skip and left) the body has not seen lately: it goes and looks."
@@ -89,7 +88,7 @@
   (if-not (:plan (:args c))
     []
     (let [done (into (set skip) (map :cell left))]
-      (filterv #(= :unknown (hr/gate-state (:primitives c) %)) (remove done cells)))))
+      (filterv #(= :unknown (pg/gate-state (:primitives c) %)) (remove done cells)))))
 
 (defn shut-text
   "\"2 gate(s) shut\", or \"no gate open\" when this call shut none."
@@ -165,10 +164,10 @@
 (defn ^:async read-gate!
   "The gate's state from beside it: a look at it first when it is not known."
   [c cell]
-  (when (= :unknown (hr/gate-state (:primitives c) cell))
+  (when (= :unknown (pg/gate-state (:primitives c) cell))
     (await (ctx/act c :look (clj->js {:pos {:x (+ (first cell) 0.5) :y (+ (second cell) 0.5) :z (+ (nth cell 2) 0.5)}})))
     (look/see! c))
-  (hr/gate-state (:primitives c) cell))
+  (pg/gate-state (:primitives c) cell))
 
 (defn ^:async shut-once!
   "Shut the gate: nil when shut, :was-shut when it read shut on arrival, else the reason it stays open."

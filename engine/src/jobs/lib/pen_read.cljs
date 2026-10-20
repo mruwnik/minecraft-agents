@@ -117,3 +117,27 @@
       (:broken answer) {:trouble (str "the plan cannot be read: " (:broken answer)) :later? true}
       (nil? box) {:trouble "the plan has no fence, wall or gate cells"}
       :else {:box box})))
+
+(defn look-pos
+  "The middle column of the box, as the [x z] go-to takes (the ground of that column)."
+  [{:keys [min max]}]
+  [(js/Math.floor (/ (+ (:x min) (:x max)) 2)) (js/Math.floor (/ (+ (:z min) (:z max)) 2))])
+
+(defn corner-box
+  "A plan part's :box [[x y z] [x y z]] as {:min :max}."
+  [[[x1 y1 z1] [x2 y2 z2]]]
+  {:min {:x (min x1 x2) :y (min y1 y2) :z (min z1 z2)} :max {:x (max x1 x2) :y (max y1 y2) :z (max z1 z2)}})
+
+(defn pen-of
+  "With :plan, {:args {:box :mob :target}} of the pen part, else {:trouble text}; nil without :plan. The :box is {:min :max} over the part's own :box; plan-box reads the barrier cells instead."
+  [c]
+  (when-let [id (:plan (:args c))]
+    (let [{:keys [part]} (:args c)
+          answer (known/plan c id)
+          found (some #(when (= part (:id %)) %) (:parts (:plan answer)))]
+      (cond
+        (nil? answer) {:trouble "no such plan" :later? true}
+        (:broken answer) {:trouble (str "the plan cannot be read: " (:broken answer)) :later? true}
+        (not found) {:trouble (str "no part " (pr-str part))}
+        (not (and (:box found) (:herd found))) {:trouble (str "part " part " has no :box and :herd")}
+        :else {:args (assoc (:herd found) :box (corner-box (:box found)))}))))

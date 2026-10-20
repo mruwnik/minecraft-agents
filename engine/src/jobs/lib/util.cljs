@@ -92,6 +92,11 @@
   (let [b (sensed p pos)]
     (when-not (or (nil? b) (true? (.-unknown b))) b)))
 
+(defn seen-block-at-fn
+  "A block-at over what the body sees or remembers: nil for a cell it has not seen (look at it or skip it)."
+  [p]
+  (fn [pos] (seen-block p pos)))
+
 (defn low-floor?
   "Whether block b is lower than a full block to stand on: a bed or a bottom slab (top and double slabs are full-height floors)."
   [b]

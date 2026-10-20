@@ -1,7 +1,9 @@
 (ns jobs.lib.animals
   "Helpers for the animal jobs: what each mob breeds on, and the herd near the body."
-  (:require [engine.contract :as contract]
+  (:require [engine.args :as args]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.bait :as bait]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
@@ -184,3 +186,17 @@
 
 (defn lead-carried? [c]
   (some #(= "lead" (:name %)) (u/inventory (:primitives c))))
+
+(args/defargs settings
+  {::knot-margin {:default 12 :doc "Blocks around the knot searched for the animal." :spec (args/int-in 0 nil)}})
+
+(def knot-name "leash_knot")
+
+(defn knot-of
+  "The leash_knot entity the animal is tied to, or nil when it is not seen."
+  [c a]
+  (let [holder (.-leashHolder a)]
+    (when (number? holder)
+      (->> (look/seen-objs (:primitives c) {:radius (+ (settings/get settings ::knot-margin) (:radius (:args c))) :max 64})
+           (filter #(and (= holder (.-id %)) (= knot-name (.-name %))))
+           first))))

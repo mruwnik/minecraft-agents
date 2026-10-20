@@ -52,8 +52,8 @@
 
 (deftest apiary-block-reader-is-nil-for-an-unseen-cell
   (let [blocks {"0,64,4" "beehive"}]
-    (is (nil? ((apiary/seen-block-at-fn (wrapped blocks true)) {:x 0 :y 64 :z 4})))
-    (is (= "beehive" (.-name ((apiary/seen-block-at-fn (wrapped blocks false)) {:x 0 :y 64 :z 4}))))))
+    (is (nil? ((u/seen-block-at-fn (wrapped blocks true)) {:x 0 :y 64 :z 4})))
+    (is (= "beehive" (.-name ((u/seen-block-at-fn (wrapped blocks false)) {:x 0 :y 64 :z 4}))))))
 
 (deftest animal-fence-reading-needs-sight
   (let [blocks {"0,64,4" "oak_fence"}
@@ -158,7 +158,7 @@
 (deftest apiary-maintain-unsafe-fires-need-sight
   (let [blocks {"0,65,4" "beehive" "0,63,4" "campfire"}
         fire {:x 0 :y 63 :z 4}
-        unsafe (fn [w] (apiary-maintain/unsafe-fires (apiary/seen-block-at-fn w) [{:x 0 :y 65 :z 4}]))
+        unsafe (fn [w] (apiary-maintain/unsafe-fires (u/seen-block-at-fn w) [{:x 0 :y 65 :z 4}]))
         extra {:states {fire {:lit true}}}]
     (is (= [] (unsafe (wrapped blocks true extra))) "unseen fire: nothing smoking the hive")
     (is (= [fire] (unsafe (wrapped blocks false extra))) "seen open fire")))

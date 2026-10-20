@@ -6,7 +6,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.bait :as bait]
-            [jobs.animals.escort :as escort]
+            [jobs.lib.escort :as escort]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.animals :as animals]
             [jobs.lib.child :as child]
@@ -32,7 +32,7 @@
   unseen or more than 7 blocks behind, the body holds still (:waiting-for-animal) for it and the first look of the wait emits info
   escort.waiting (both positions, the distance); unseen for 3 s the body walks back toward where it was last seen (up to
   12 blocks) and then ends :lost (an allowed adult within 10 blocks takes its place at once); seen more than 7 behind and not
-  coming nearer for 10 s (jobs.animals.escort/::stall-s), :animal-stalled. An animal that keeps closing in is waited for
+  coming nearer for 10 s (jobs.lib.escort/::stall-s), :animal-stalled. An animal that keeps closing in is waited for
   however far it fell behind. The plan of each leg is searched before the body walks: a search still running never sends
   the body the whole way in one go. With no animal in sight at the start it walks to where the chosen one was last seen
   (up to ::sighting-age-s old), looks round once and steps toward a heard animal of the kind (jobs.lib.vantage) before
@@ -379,8 +379,7 @@
         near (filter (fn [[gx _ gz]] (<= (js/Math.hypot (- gx x) (- gz z)) (gate-hold-range)))
                      (keys (pg/gate-index (:world (:engine c)))))]
     (doseq [cell (pg/seen-open-cells (:primitives c) near)]
-      (ctx/forget-where! c :gate-held #(= cell (some-> (:cell %) vec)))
-      (ctx/remember! c :gate-held {:cell cell :by (:id c)} pg/held-policy))))
+      (pg/hold! c cell))))
 
 (defn ^:async step [c]
   (hold-gates! c)

@@ -10,7 +10,8 @@
             [engine.perception :as perception]
             [engine.test-util :as tu]
             [jobs.animals.herd-survey :as hs]
-            [jobs.animals.herd-run :as hr]))
+            [jobs.animals.herd-run :as hr]
+            [jobs.lib.pen-gate :as pg]))
 
 (defn coarse-world
   "ht/world with sight rays 4 degrees apart: the fence stays in view and a pass costs a quarter. The ray jitter is
@@ -54,17 +55,17 @@
               _ (await (ht/run-ticks s 12))]
           (is (= :brought (:reason (ht/done-event s)))))))))
 
-(defn gate-state [s] (hr/gate-state (:p s) (hr/cell ht/gate)))
+(defn gate-state [s] (pg/gate-state (:p s) (hr/cell ht/gate)))
 
 (defn sensing [answer] #js {:sensedAt (fn [_] (clj->js answer))})
 
 (deftest a-gate-not-seen-lately-is-unknown-never-shut
   (let [cell (hr/cell ht/gate)]
-    (is (= :shut (hr/gate-state (sensing {:name "oak_fence_gate" :properties {:open false}}) cell)) "shut gate seen")
-    (is (= :open (hr/gate-state (sensing {:name "oak_fence_gate" :properties {:open true}}) cell)) "open gate seen")
-    (is (= :unknown (hr/gate-state (sensing {:unknown true}) cell)) "never seen or aged out")
-    (is (= :unknown (hr/gate-state (:p (seeing {} true)) cell)) "a real aged gate")
-    (is (= :shut (hr/gate-state (:p (seeing {} false)) cell)) "a real gate in view")))
+    (is (= :shut (pg/gate-state (sensing {:name "oak_fence_gate" :properties {:open false}}) cell)) "shut gate seen")
+    (is (= :open (pg/gate-state (sensing {:name "oak_fence_gate" :properties {:open true}}) cell)) "open gate seen")
+    (is (= :unknown (pg/gate-state (sensing {:unknown true}) cell)) "never seen or aged out")
+    (is (= :unknown (pg/gate-state (:p (seeing {} true)) cell)) "a real aged gate")
+    (is (= :shut (pg/gate-state (:p (seeing {} false)) cell)) "a real gate in view")))
 
 (defn dark-run
   "A herd run in a pitch-dark pen: a cell is made out only within 4 blocks (perception's near)."

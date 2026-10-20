@@ -10,7 +10,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.cond :as cond]
-            [jobs.animals.escort :as escort]
+            [jobs.lib.escort :as escort]
             [jobs.lib.watch :as watch]
             [jobs.lib.bait :as bait]
             [jobs.animals.herd-run :refer [adults after-shut! pen-box pen-count-text cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? animal-now out-1 pause! read-pen release-step! set-phase! settle-out-ms shut-failed! shut-look-ms transient-keys]]

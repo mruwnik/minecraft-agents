@@ -4,7 +4,7 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [jobs.animals.maintain :as maintain]
+            [jobs.lib.pen-read :as pen-read]
             [jobs.lib.animals :as animals]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
@@ -316,7 +316,7 @@
 (defn pen-box
   "The known pen's box ({:min :max}): :box, else the box of the plan part; nil when neither is known."
   [c]
-  (or (:box (:args c)) (:box (:args (maintain/pen-of c)))))
+  (or (:box (:args c)) (:box (:args (pen-read/pen-of c)))))
 
 (defn pen-cell
   "The [x z] cell of pos, as go-to takes it."
@@ -329,7 +329,7 @@
   [c box]
   (when-not (:from (ctx/mem c))
     (ctx/update-mem! c assoc :from (pen-cell (u/self-pos c))))
-  (let [r (await (child/call-walk* c :pen {:pos (maintain/look-pos box) :range 3}))]
+  (let [r (await (child/call-walk* c :pen {:pos (pen-read/look-pos box) :range 3}))]
     (if (= :continue r)
       :continue
       (do (ctx/update-mem! c assoc :pen-walked true) :again))))

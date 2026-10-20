@@ -4,7 +4,6 @@
   animal in sight, or a pen an open gate leaks from; its gates are all of the pen's."
   (:require [engine.args :as a]
             [engine.settings :as settings]
-            [jobs.lib.apiary :as apiary]
             [jobs.lib.combat :as combat]
             [jobs.lib.pen :as pen]
             [jobs.lib.pen-blocks :as pb]
@@ -39,7 +38,7 @@
   is unseen (the pen is out of view) notes that floor, so it gets looked at."
   [c]
   (let [p (:primitives c)
-        block-at (apiary/seen-block-at-fn p)
+        block-at (u/seen-block-at-fn p)
         animals (->> (combat/sensed p {:radius (settings/get settings ::radius) :max 64})
                      (filter #(= "passive" (.-kind %)))
                      (take (settings/get settings ::max-animals)))]
@@ -76,7 +75,7 @@
   "The seen open fence gates {:x :y :z} within ::open-radius of here along x and z (lazily): the cheap test before any
   pen is searched."
   [c here]
-  (let [block-at (apiary/seen-block-at-fn (:primitives c))
+  (let [block-at (u/seen-block-at-fn (:primitives c))
         r (settings/get settings ::open-radius)
         [x y z] (map #(js/Math.floor (% here)) [:x :y :z])]
     (for [dx (range (- r) (inc r)) dz (range (- r) (inc r)) dy [0 1 -1 2]

@@ -1,10 +1,12 @@
 (ns jobs.lib.pen-gate
   "What the pen-gate trigger and the shut-gate job share: the index of planned gates, reading them open, and the memory
   entries that hide a gate from the trigger (see triggers.animals.pen-gate)."
-  (:require [jobs.lib.pen-blocks :as pen]
+  (:require [engine.ctx :as ctx]
+            [jobs.lib.pen-blocks :as pen]
             [jobs.lib.click :as click]
             [jobs.lib.look :as look]
             [engine.memory :as mem]
+            [jobs.lib.util :as u]
             [jobs.lib.world-files :as world]
             [clojure.string :as str]))
 
@@ -78,6 +80,15 @@
                (and name (str/ends-with? name "_fence_gate") (click/reached? :open properties))))
            cells))
 
+(defn gate-state
+  "The gate at cell as the body knows it: :open, :shut, or :unknown (never seen, or remembered past its 10 s)."
+  [p cell]
+  (let [b (u/seen-block-at-fn p)]
+    (cond
+      (nil? (b (u/cell-pos cell))) :unknown
+      (seq (open-cells b [cell])) :open
+      :else :shut)))
+
 (defn distance
   "Blocks from the body at self ({:x :y :z}, feet) to the middle of the cell."
   [self [x y z]]
@@ -104,6 +115,17 @@
 ;; ------------------------------------------------------------------ memory hiding a gate
 
 (def held-policy "Memory policy of the :gate-held entries." {:cap 4 :ttl 60000})
+
+(defn release!
+  "Drop the :gate-held entries of cell ([x y z])."
+  [c cell]
+  (ctx/forget-where! c :gate-held #(= (vec cell) (some-> (:cell %) vec))))
+
+(defn hold!
+  "Tell the pen-gate trigger the gate at cell ([x y z]) is open on purpose: a fresh :gate-held entry, the old one replaced."
+  [c cell]
+  (release! c cell)
+  (ctx/remember! c :gate-held {:cell (vec cell) :by (:id c)} held-policy))
 
 (defn held-cells
   "The gates a job holds open on purpose, by a :gate-held entry younger than held-ms: a set of [x y z]."

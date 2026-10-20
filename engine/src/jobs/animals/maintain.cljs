@@ -203,37 +203,13 @@
     (boolean (and (not (:looked (ctx/mem c)))
                   (< (+ (count adults) (count babies)) (:target (:args c)))))))
 
-(defn look-pos
-  "The middle column of the box, as the [x z] go-to takes (the ground of that column)."
-  [{:keys [min max]}]
-  [(js/Math.floor (/ (+ (:x min) (:x max)) 2)) (js/Math.floor (/ (+ (:z min) (:z max)) 2))])
-
-(defn corner-box
-  "A plan part's :box [[x y z] [x y z]] as {:min :max}."
-  [[[x1 y1 z1] [x2 y2 z2]]]
-  {:min {:x (min x1 x2) :y (min y1 y2) :z (min z1 z2)} :max {:x (max x1 x2) :y (max y1 y2) :z (max z1 z2)}})
-
-(defn pen-of
-  "With :plan, {:args {:box :mob :target}} of the pen part, else {:trouble text}; nil without :plan."
-  [c]
-  (when-let [id (:plan (:args c))]
-    (let [{:keys [part]} (:args c)
-          answer (known/plan c id)
-          found (some #(when (= part (:id %)) %) (:parts (:plan answer)))]
-      (cond
-        (nil? answer) {:trouble "no such plan" :later? true}
-        (:broken answer) {:trouble (str "the plan cannot be read: " (:broken answer)) :later? true}
-        (not found) {:trouble (str "no part " (pr-str part))}
-        (not (and (:box found) (:herd found))) {:trouble (str "part " part " has no :box and :herd")}
-        :else {:args (assoc (:herd found) :box (corner-box (:box found)))}))))
-
 (defn with-pen [c pen] (update c :args merge (:args pen)))
 
 (defn pen-spot
-  "work-place/spot of c with the :box of its plan part (pen-of) in place of the plan."
+  "work-place/spot of c with the :box of its plan part (pen-read/pen-of) in place of the plan."
   [c]
   (work-place/spot
-   (if-let [box (:box (:args (pen-of c)))]
+   (if-let [box (:box (:args (pen-read/pen-of c)))]
      (update c :args #(-> % (dissoc :plan) (assoc :box box)))
      c)))
 
@@ -261,7 +237,7 @@
   "Later :plan-trouble while the plan is missing or unreadable (it may be saved or fixed later); never when it has no such
   part or the part has no box and herd."
   [c]
-  (let [{:keys [trouble later?]} (pen-of c)]
+  (let [{:keys [trouble later?]} (pen-read/pen-of c)]
     (cond
       (nil? trouble) (contract/ok :pen "the pen can be read")
       later? (contract/later :plan-trouble trouble :why trouble)
@@ -271,7 +247,7 @@
   "Never :no-box without a box or a plan, :no-mob without :mob or a plan; later for :plan-trouble, :away (far from the pen while another job is listed) or nothing to do."
   [c]
   (let [{:keys [plan box mob]} (:args c)
-        {:keys [trouble] :as pen} (pen-of c)
+        {:keys [trouble] :as pen} (pen-read/pen-of c)
         c (if pen (with-pen c pen) c)
         {:keys [min max]} (:box (:args c))
         away (when min (standing/away-cause c {:x (/ (+ (:x min) (:x max)) 2) :y (:y min) :z (/ (+ (:z min) (:z max)) 2)}))]
@@ -353,14 +329,14 @@
     (not (look-due? c)) (await (step-steps c))
     (hunting/in-bound? c (u/self-pos c)) (do (await (look/survey! c)) :again)
     :else
-    (let [r (await (child/call-walk* c :look {:pos (look-pos (:box (:args c))) :range 3}))]
+    (let [r (await (child/call-walk* c :look {:pos (pen-read/look-pos (:box (:args c))) :range 3}))]
       (when-not (= :continue r) (ctx/update-mem! c assoc :looked true))
       (if (= :continue r) :yield :again))))
 
 (defn ^:async round
   "The whole pass: each step's child once, until the run ends; yields only while a child waits on the world. A plan that goes bad after can-run? is left to the next check (plan-trouble-round-test)."
   [c0]
-  (let [{:keys [trouble] :as pen} (pen-of c0)
+  (let [{:keys [trouble] :as pen} (pen-read/pen-of c0)
         c (if pen (with-pen c0 pen) c0)]
     (if trouble
       :continue

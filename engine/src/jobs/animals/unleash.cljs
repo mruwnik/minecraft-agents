@@ -52,13 +52,10 @@
 (a/defargs settings
   {::job-time-s {:default 60 :doc "Seconds from the start of the call before unleashing gives up; a walk to the animal and the collect of the lead (10 s at most) fit." :spec (a/num-in 0 nil)}
    ::max-in-row {:default 3 :doc "Fruitless animals in a row that end the run." :spec (a/int-in 0 nil)}
-   ::knot-margin {:default 12 :doc "Blocks around the knot searched for the animal." :spec (a/int-in 0 nil)}
    ::settle-ms {:default 250 :doc "How long the body waits for an animal to settle, in ms." :spec (a/int-in 0 nil)}
    ::settle-tries {:default 6 :doc "Looks at the animal before it counts as settled." :spec (a/int-in 0 nil)}
    ::drop-wait-ms {:default 800 :doc "How long the body waits for a dropped item, in ms." :spec (a/int-in 0 nil)}})
 (defn max-in-row [] (settings/get settings ::max-in-row))
-(def knot-name "leash_knot")
-(defn knot-margin [] (settings/get settings ::knot-margin))
 (defn settle-ms [] (settings/get settings ::settle-ms))
 (defn settle-tries [] (settings/get settings ::settle-tries))
 (defn drop-wait-ms [] (settings/get settings ::drop-wait-ms))
@@ -141,15 +138,6 @@
       (contract/later :unleashing (str (count freed) " animals freed") :units :animals
                       :done (count freed) :left (count (candidates c))))))
 
-(defn knot-of
-  "The leash_knot entity the animal is tied to, or nil when it is not seen."
-  [c a]
-  (let [holder (.-leashHolder a)]
-    (when (number? holder)
-      (->> (look/seen-objs (:primitives c) {:radius (+ (knot-margin) (:radius (:args c))) :max 64})
-           (filter #(and (= holder (.-id %)) (= knot-name (.-name %))))
-           first))))
-
 (defn none-reason [c]
   (let [given-up (vals (:given-up (ctx/mem c)))]
     (cond
@@ -198,7 +186,7 @@
   "Click what holds the animal's lead; end when fruitless :max-in-row times in a row."
   [c a]
   (let [k (animals/key-of a)
-        target (if (animals/led-by-me? a) a (knot-of c a))
+        target (if (animals/led-by-me? a) a (animals/knot-of c a))
         r (if target
             (await (click! c a target))
             (do (animals/give-up! c k :no-knot) (animals/bump-row! c)))]

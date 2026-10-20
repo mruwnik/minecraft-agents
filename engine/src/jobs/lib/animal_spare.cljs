@@ -4,7 +4,6 @@
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
-            [jobs.lib.apiary :as apiary]
             [jobs.lib.pen :as pen]
             [jobs.lib.util :as u]))
 
@@ -46,7 +45,7 @@
   (let [{:keys [x y z]} (u/pos-of (.-pos e))
         cell [(js/Math.floor x) (js/Math.floor (+ y 0.01)) (js/Math.floor z)]]
     (or (boolean (some #(contains? % cell) @pens))
-        (let [answer (pen/check {:block-at (apiary/seen-block-at-fn (:primitives c)) :at {:x (cell 0) :y (cell 1) :z (cell 2)}
+        (let [answer (pen/check {:block-at (u/seen-block-at-fn (:primitives c)) :at {:x (cell 0) :y (cell 1) :z (cell 2)}
                                  :max-cells (settings/get settings ::pen-max-cells)})]
           (when (:closed? answer) (swap! pens conj (:inside answer)))
           (boolean (:closed? answer))))))

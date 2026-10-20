@@ -57,11 +57,6 @@
 (defn block-at-fn [p]
   (fn [pos] (u/block-at p pos)))
 
-(defn seen-block-at-fn
-  "block-at-fn over what the body sees or remembers: nil for a cell it has not seen (look at it or skip it)."
-  [p]
-  (fn [pos] (u/seen-block p pos)))
-
 ;; ------------------------------------------------------------------ guarding
 
 (defn solid?
@@ -237,7 +232,7 @@
 (defn classify
   "The hives as {:todo [pos] :declined {key reason} :ripe n :hives n}: ripe hives not skipped, sorted by the verdict."
   [c hs]
-  (let [block-at (seen-block-at-fn (:primitives c))
+  (let [block-at (u/seen-block-at-fn (:primitives c))
         skipped (:skipped (ctx/mem c) {})
         ripe (->> hs (filter :ripe) (remove #(contains? skipped (pos-key (:pos %)))))
         verdicts (map (fn [h] [(:pos h) (hive-verdict block-at (:pos h))]) ripe)]

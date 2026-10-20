@@ -12,7 +12,7 @@
             [jobs.lib.watch :as watch]
             [jobs.lib.near :as near]
             [jobs.lib.walk.world :as wworld]
-            [jobs.animals.escort :as escort]
+            [jobs.lib.escort :as escort]
             [jobs.animals.unleash :as unleash]))
 
 (def doc
@@ -40,7 +40,7 @@
   Before each walking round the animal is looked up (within the escort watch-radius setting, 64). Seen off this body's lead: ends
   :lead-broke. Not seen: ends :lost after the unseen time (see :walk), in every phase.
 
-  The legs and the pull-reach check are planned here (jobs.animals.escort/leg-plan) to choose where each leg ends and to
+  The legs and the pull-reach check are planned here (jobs.lib.escort/leg-plan) to choose where each leg ends and to
   keep the animal within the lead; the go-to child of a leg plans its own walk again, as it must for doors and danger.
 
   Done when the animal is tied to the :fence post (also one already tied there before the start) or let go, off this
@@ -208,7 +208,7 @@
   (let [{:keys [mob fence]} (:args c)
         at-post? (fn [k] (and (= (:x fence) (js/Math.floor (.-x (.-pos k)))) (= (:z fence) (js/Math.floor (.-z (.-pos k))))))]
     (when fence
-      (some #(when-let [k (unleash/knot-of c %)] (when (at-post? k) %))
+      (some #(when-let [k (animals/knot-of c %)] (when (at-post? k) %))
             (animals/herd (:primitives c) mob (escort/watch-radius))))))
 
 (defn gates-shut?

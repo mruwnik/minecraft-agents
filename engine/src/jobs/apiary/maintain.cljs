@@ -93,7 +93,7 @@
         center (apiary/center-of c)
         inventory (u/inventory p)
         self (.self p)
-        block-at (apiary/seen-block-at-fn p)
+        block-at (u/seen-block-at-fn p)
         fires (apiary/survey c center)
         hives (apiary/hives c center)
         seen (apiary/classify c hives)
