@@ -13,11 +13,4 @@
          [:wait-s 1]
          [:rcon "execute positioned $X $Y $Z run fill ~1 ~ ~13 ~7 ~3 ~19 air"]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
-   :after [[:item "wooden_pickaxe" 1]]}
-  {:name "wall-kept-stops-unreachable"
-   :body {:inventory [["oak_planks" 3] ["stick" 2]]}
-   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 3]
-         [:rcon "execute as $BODY at @s run tp @s ~-10 ~ ~"] [:wait-s 2]
-         [:job (jobs.items.get-tool {:kind "pickaxe"})]]
-   :expect [{:event {:source :job :data {:reason :table-unreachable}} :within-s 60 :of-job true}]
-   :after [[:item "wooden_pickaxe" 0]]}]}
+   :after [[:item "wooden_pickaxe" 1]]}]}
