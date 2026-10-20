@@ -1,5 +1,6 @@
 (ns jobs.survival.dig-pit
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
@@ -30,7 +31,7 @@
   laid a cave or fluid open). The pit is never dug into what the body sees as fluid, a hazard or open air, and it is planned again
   when the body has left its column. Lava a dig lays open is filled first (:on-lava :seal). Every plug goes to the scaffold ledger
   with :for (default :danger, ledger :retreat-plug, taken back by jobs.access.cleanup once no hostile is near; :night: ledger :shelter, left alone). Quote:
-  time, with :for :night plus the walk (##Inf when no pit fits, or with :for :night when the pit would cut into a plan the body made or stand on a plan's doorstep, :spared; a cell another's zone refuses adds plug-way's ::trespass-s). Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.
+  time, with :for :night plus the walk (##Inf when no pit fits, or with :for :night when the pit would cut into a plan the body made or stand on a plan's doorstep, :spared; a cell another's zone refuses adds plug-way's ::trespass-s). With :for :night, can-start? is :later (:no-site, or :spared at the feet) before any round. Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.
   With :for :night, when a pit failed at the feet tonight (shut-in's :shut-in-failed) or another's zone refuses them and a free site is near, it first walks (go-to) to the nearest seen ground within jobs.survival.dig-pit-site's ::reach (16) that looks like a pit fits (clear of every failed site, no known mob it would flee near), climbing out of its own failed pit first; with no such ground it ends :failed :no-site.")
 
 (a/defargs args
@@ -153,6 +154,17 @@
             (if (:stop r)
               (way/stop! c r)
               (case r :hidden :done :again :again nil)))))))
+
+(defn can-start?
+  "With :for :night: ground where a pit fits is in sight, and the pit does not cut into a plan the body made. Floors not yet seen are no fact here: the round looks first."
+  [c]
+  (let [s (when (night/night? c) (site/site c))
+        stop (when (= :here (:at s)) (why-not c))]
+    (cond
+      (not (night/night? c)) (contract/ok :pit "a pit is tried when it starts")
+      (nil? s) (contract/later :no-site "no ground in sight where a pit fits")
+      (= :spared (:stop stop)) (contract/later :spared (:text stop))
+      :else (contract/ok :site "ground for a night pit"))))
 
 (def safe? ready/ok)
 (def fit? ready/ok)

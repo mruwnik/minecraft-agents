@@ -160,6 +160,19 @@
           (is (= [:hostile-near] (distinct (map :reason (filter #(= :waiting (:kind %)) @seen)))))
           (is (empty? (filter #(= :stopped (:kind %)) @seen)) "it waits, it does not end walk-failed"))))))
 
+(deftest a-night-dig-pit-with-no-ground-for-a-pit-in-sight-waits-no-site-instead-of-ending
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup {:time night :blocks (into {} (for [x (range -1 2) z (range -1 2)] [(str x ",63," z) "dirt"]))
+                                              :inventory st/dirt-stack})]
+          (mem/write! (:store eng) :shut-in-failed {:pos {:x 0 :y 64 :z 0} :way :pit :reason :no-floor} {:cap 5 :ttl 600000})
+          (core/submit! eng '(jobs.survival.dig-pit {:for :night}) {})
+          (await (tu/run-until-empty eng 5))
+          (is (= [:no-site] (distinct (map :reason (filter #(= :waiting (:kind %)) @seen)))))
+          (is (empty? (filter #(= :stopped (:kind %)) @seen)) "it waits at the start, it does not run a round to fail")
+          (is (empty? (st/calls p "place"))))))))
+
 (deftest a-failed-site-is-not-dug-again-after-a-cut-however-long-the-night
   (async done
     (tu/run-async done
