@@ -1,14 +1,14 @@
 ;; Card 1d206297: a need above 64 (a plan short of 100 cobblestone) is fetched: the build asks for the cells it has seen so far (a fetch of 40, then
 ;; 60 once the walk showed the rest), obtain takes 64 a trip at most (one fetch above 64: fetch-test a-need-above-64-is-fetched-whole); the 128 in the chest all go in: job.completed :done on 100 cells is the total over 64; it is no longer refused at submit (:count had :max 64). The body stands at [4.5 0 16.5] facing the chest at
-;; [4 0 12] (turned by RCON so its first sight sees it); the plan is a 10x10 cobblestone floor x 18..27, z 12..21 (100 cells).
+;; [4 0 12] (turned by RCON so its first sight sees it); the plan is a 4x25 cobblestone floor x 18..21, z 4..28 (100 cells; narrow so every cell is within reach of a stand beside it: the body does not climb its own floor).
 ;; Should-fail: no chest and no stone to gather (dirt floor over bedrock, an obsidian ring on the plot edge, else obtain hands the cobblestone to mine, which stairs down to stone;
-;; the body carries a pickaxe, else the pickaxe's search for logs walks it off the plot): the build ends short, waiting :no-items.
+;; the body carries a pickaxe, else the pickaxe's search for logs walks it off the plot): the build ends short, stopped :no-items (condition-failed).
 {:defaults
  {:tags [:fetch :build]
   :time :any
   :plot {:height 12 :floor "stone"}
   :plans [{:id "floor" :metadata {:by "$body"}
-           :parts [{:id "floor" :box [#at [18 0 12] #at [27 0 21]] :want "cobblestone"}]}]
+           :parts [{:id "floor" :box [#at [18 0 4] #at [21 0 28]] :want "cobblestone"}]}]
   :body {:at [4.5 0 16.5] :effects [["resistance" 600 4]]}
   :limit-s 240}
  :cases
@@ -18,7 +18,7 @@
          [:job (jobs.build.from-plan {:plan "$plan:floor"})]]
    :expect [{:event {:source :job :kind :fetch.started :data {:args {:item "cobblestone"}}} :within-s 40 :of-job true}
             {:event {:source :job :kind :completed :data {:kind :done}} :within-s 220 :of-job true}]
-   :after [[:block [18 0 12] "cobblestone"] [:block [27 0 21] "cobblestone"] [:block [22 0 17] "cobblestone"]]}
+   :after [[:block [18 0 4] "cobblestone"] [:block [21 0 28] "cobblestone"] [:block [20 0 16] "cobblestone"]]}
   {:name "no-chest-no-stone-fetch-fails"
    :plot {:floor "dirt"}
    :body {:inventory [["wooden_pickaxe" 1]]}
@@ -27,6 +27,6 @@
             [:fill [0 -1 0] [0 11 31] "obsidian"] [:fill [31 -1 0] [31 11 31] "obsidian"]
             [:fill [1 -1 0] [30 11 0] "obsidian"] [:fill [1 -1 31] [30 11 31] "obsidian"]]
    :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :no-items}} :within-s 150 :of-job true}]
-   :after [[:not-block [22 0 17] "cobblestone"]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-items}} :within-s 150 :of-job true}]
+   :after [[:not-block [20 0 16] "cobblestone"]]
    :limit-s 160}]}
