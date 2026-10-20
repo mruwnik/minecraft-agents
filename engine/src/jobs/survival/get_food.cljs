@@ -32,18 +32,18 @@
          to pay for making one (jobs.lib.cost/cook-worth?): cook it (the smelt job, which fetches a furnace and fuel, waiting out the cook in
          the round), then eat it. Done before eating unless a danger is sensed or food is 0 and health would not outlast the cook plus cook's ::cook-margin-hp. Not at night nor while the night
          handler holds. A failed cook is not retried in this job (jobs.survival.get-food.cook).
-  :source  The newest :food-source entry {:pos :kind} within :source-radius, or a chest it booked food in (memory :fetch/stock) within sources' ::stock-radius (256), reached by go-to:
+  :source  The newest :food-source entry {:pos :kind} within ::source-radius, or a chest it booked food in (memory :fetch/stock) within sources' ::stock-radius (256), reached by go-to:
          :farm: dig its mature crops (blocks.dig, which collects the drops). It does not replant.
          :chest: withdraw its best food (storage.withdraw); with no food but 3 or more wheat, wheat in multiples of 3,
          enough for the hunger, for :bake.
          :animals: hunt there (:hunt).
          A chest found empty or a source go-to cannot reach is forgotten; a farm with nothing ripe is passed over.
   :collect  Harvest items lying within 8 blocks (collect-drops).
-  :hunt  The nearest passive food animal within :hunt-radius (combat.attack, then collect-drops).
-  :crops  Mature crops, sweet berry bushes or melons within :hunt-radius (blocks.dig).
+  :hunt  The nearest passive food animal within ::hunt-radius (combat.attack, then collect-drops).
+  :crops  Mature crops, sweet berry bushes or melons within ::hunt-radius (blocks.dig).
   :fish  Nothing left: with a fishing rod carried, once per job it fishes two (jobs.food.fish, which looks for a bank beside water within ::fish-radius (48)) and eats or cooks them.
   :pen   The surplus of its own pens: an animal in a zone or plan of its own in sight, else it walks (go-to) to the
-         nearest zone or plan of its own within :source-radius it has not visited in this job and hunts there (the
+         nearest zone or plan of its own within ::source-radius it has not visited in this job and hunts there (the
          same keep rules; the kill's rule is :own-pen). Its stock is its reserve: taken after the wild food in reach, before fishing and the search.
   :field Last: it walks to the nearest zone or plan of its own it has not visited in this job and cuts and replants the ripe wheat there
          (jobs.farm.harvest); the wheat is baked next (:bake).
@@ -62,7 +62,7 @@
   danger (jobs.lib.cost/route-danger) is its health or more; with nothing else to try it writes a :food-too-dangerous entry (no :hungry) and ends condition-failed
   :too-dangerous; the hungry trigger then rests (its :rest-s) while the body stays fragile
   (jobs.survival.get-food.risk). Not shut in a shelter, it first looks around from where it stands (once per place) so hostiles outside its view count.
-  Wheat is cut only by :field, in a zone or plan of its own. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own (but for the :pen way) or inside a closed enclosure (:spare-pens, default true), kinds in :off-limits (default the jobs.lib.animal-spare setting), and the last :keep-adults (2) adults of a kind in sight (for breeding; never hunted, even when starving, unless ::kept-lifted-below lifts it) are never hunted (:ignore-zones? lifts the others' zone only). Each animal attacked is a food.killed info with its name, cell, adults counted, :keep-adults, food and the rule that allowed it; the data carries :killed. A chest in another's zone or claim is skipped and never taken from, even when starving
+  Wheat is cut only by :field, in a zone or plan of its own. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own (but for the :pen way) or inside a closed enclosure (::spare-pens), kinds in ::off-limits, and the last ::keep-adults (2) adults of a kind in sight (for breeding; never hunted, even when starving, unless ::kept-lifted-below lifts it) are never hunted (:ignore-zones? lifts the others' zone only). Each animal attacked is a food.killed info with its name, cell, adults counted, :keep, food and the rule that allowed it; the data carries :killed. A chest in another's zone or claim is skipped and never taken from, even when starving
   (one get-food.skipped warning). A crop in another's zone or claim is dug only when no other is (one
   get-food.trespass-last-resort warning). :ignore-zones? lifts both.
   A cut call starts again from the world: carried food first, then the ways.
@@ -72,14 +72,8 @@
 (a/defargs args
   {:food {:doc "hungry below this much food (of 20)" :spec (a/num-in 0 20) :default foods/default-food}
    :health {:doc "below this health eat up to a full bar" :spec (a/num-in 0 20) :default foods/default-health}
-   :source-radius {:doc "how far away a remembered food source still counts, in blocks" :spec (a/num-in 0 nil) :default 64}
-   :hunt-radius {:doc "how far to look for animals and wild crops, in blocks" :spec (a/num-in 0 nil) :default 24}
-   :take {:doc "most items to withdraw from a chest in one go" :spec (a/int-in 1 nil) :default 16}
    :explore {:doc "with nothing known or seen, walk and look for food animals and crops once per job (a starving body again after foods/::starving-rest-ms; not underground unless starving): false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default true}
    :stock {:doc "also carry food worth this many hunger points: a fed body takes the ways below until the pack holds it (0: only feed)" :spec (a/num-in 0 nil) :default 0}
-   :spare-pens {:doc "never hunt animals in a closed enclosure, nor those in a zone or plan of the body's own but by the :pen way (false: a job asked to get food may take them all)" :spec boolean? :default true}
-   :keep-adults {:doc "adults of a kind in sight that are never hunted, so they can breed (hunted only when ::kept-lifted-below lifts it)" :spec (a/int-in 0 nil) :default 2}
-   :off-limits {:doc "animal kinds never hunted; nil: the jobs.lib.animal-spare/off-limits setting" :spec (a/or-of (a/pred "nil" nil?) (a/coll-of a/item?)) :default nil}
    :ignore-zones? :shared})
 
 (def harvest-items
@@ -97,19 +91,20 @@
   [c]
   (min widen-max (inc (ctx/count-in c :hungry (:ttl hungry-policy)))))
 
-(defn hunt-radius
-  "How far the hunt and the crop way look: the widened :hunt-radius, or as far as the search saw what it found (:found-reach), so a find at the edge is not out of reach."
-  [c]
-  (max (* (widen c) (:hunt-radius (:args c))) (:found-reach (ctx/mem c) 0)))
-
 (a/defargs settings
-  {::job-time-s {:default 1800 :doc "Seconds one attempt at getting fed may take: a hunt, a search, a cook." :spec (a/num-in 0 nil)}
+  {::hunt-radius {:default 24 :doc "How far to look for animals and wild crops, in blocks (widened by recent give-ups)." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 1800 :doc "Seconds one attempt at getting fed may take: a hunt, a search, a cook." :spec (a/num-in 0 nil)}
    ::drop-radius {:default 8 :doc "Blocks around the body in which dropped food is picked up." :spec (a/int-in 0 nil)}
    ::explore {:default {:max-distance 64 :max-legs 12 :spend {:job-time 120}} :doc "jobs.explore.search options of the search for food (:explore true)." :spec map?}
    ::fish-radius {:default 48 :doc "Blocks within which seen water two deep with a bank makes fishing a way, with a fishing rod carried." :spec (a/int-in 0 nil)}
    ::kept-lifted-below {:default -1 :doc "At this much food or less, with no food carried, the last adults of a kind (kept for breeding) are hunted too; -1 (default) never." :spec (a/int-in -1 20)}
    ::eat-bad-food {:default 6 :doc "At this much food or less the last resort eats harmful food carried (rotten flesh); above it harmful food is not food." :spec (a/num-in 0 20)}
    ::max-ways {:default 12 :doc "Ways one call tries without getting fed before it ends :still-hungry." :spec (a/int-in 0 nil)}})
+
+(defn hunt-radius
+  "How far the hunt and the crop way look: the widened ::hunt-radius, or as far as the search saw what it found (:found-reach), so a find at the edge is not out of reach."
+  [c]
+  (max (* (widen c) (settings/get settings ::hunt-radius)) (:found-reach (ctx/mem c) 0)))
 
 (defn drop-radius [] (settings/get settings ::drop-radius))
 

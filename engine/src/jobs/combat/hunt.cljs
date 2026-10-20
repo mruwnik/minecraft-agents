@@ -87,9 +87,8 @@
   "The present animals of the :color the body leaves alone, as {id rule} (jobs.lib.animal-spare/why: :off-limits or :pen);
   the pair rule is :keep's."
   [c]
-  (let [pens (atom [])
-        args {:spare-pens (spare/spare-pens?) :keep-adults -1}]
-    (into {} (keep #(some->> (spare/why args (.-name %) 0 (spare/penned? c pens %) false) (vector (.-id %)))) (present c))))
+  (let [pens (atom [])]
+    (into {} (keep #(some->> (spare/why -1 (.-name %) 0 (spare/penned? c pens %) false) (vector (.-id %)))) (present c))))
 
 (defn candidates
   "The present animals of the :color not skipped and not spared, nearest first."
@@ -257,7 +256,7 @@
   "Which animal-spare rule let the hunt take the adult e: :pen-taken, :surplus or :starved."
   [c e]
   (let [adults (count (adults-within c (:radius (:args c))))]
-    (spare/allowed-by {:keep-adults (keep-of c) :spare-pens (spare/spare-pens?)} adults (spare/penned? c (atom []) e))))
+    (spare/allowed-by (keep-of c) adults (spare/penned? c (atom []) e))))
 
 (defn attack-opts
   "Options for hunting.attack!: a wide search around the ask; ends the job after too many skips."

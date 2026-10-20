@@ -19,7 +19,7 @@
 (defn in-sight
   "The food animals the entity scan lists within radius, nearest first, as {:entity e :why r :adults n :rule k}: r is nil for one
   to hunt, else :tried (attacked this job), :baby, :refused (another's zone, claim or plan), or what jobs.lib.animal-spare/why
-  says (:off-limits, :pen: a zone or plan of its own or a closed enclosure, :kept: the last :keep-adults of a kind are lifted only at
+  says (:off-limits, :pen: a zone or plan of its own or a closed enclosure, :kept: the last ::keep-adults of a kind are lifted only at
   lift food or less with no food carried); n counts the adults of its kind in sight and k is the spare rule that allowed the hunt.
   own? (the :pen way): an animal in a zone or plan of its own is no pen, and its rule is :own-pen."
   [c {:keys [radius lift own?]}]
@@ -38,9 +38,9 @@
                        why (cond (skipped (.-id e)) :tried
                                  (true? (.-baby e)) :baby
                                  (access/trespass-refusal c :take (u/pos-of (.-pos e))) :refused
-                                 :else (spare/why (:args c) (.-name e) n penned? starved?))]
+                                 :else (spare/why (spare/keep-adults) (.-name e) n penned? starved?))]
                    {:entity e :why why :adults n
-                    :rule (when-not why (if mine? :own-pen (spare/allowed-by (:args c) n penned?)))}))))))
+                    :rule (when-not why (if mine? :own-pen (spare/allowed-by (spare/keep-adults) n penned?)))}))))))
 
 (defn nearest
   "The nearest adult food animal in-sight with opts finds to hunt, as an in-sight entry."
@@ -77,7 +77,7 @@
   (let [p (u/pos-of (.-pos animal))
         cell (mapv #(js/Math.floor %) [(:x p) (:y p) (:z p)])
         food (.-food (.self (:primitives c)))
-        why {:adults adults :keep (:keep-adults (:args c)) :food food :rule rule}]
+        why {:adults adults :keep (spare/keep-adults) :food food :rule rule}]
     (ctx/update-mem! c update :killed (fnil conj []) (merge {:name (.-name animal) :pos cell} why))
     (ctx/emit! c :food.killed :info (merge {:name (.-name animal) :pos cell
                                             :text (str "hunted a " (.-name animal) " at " (pr-str cell)

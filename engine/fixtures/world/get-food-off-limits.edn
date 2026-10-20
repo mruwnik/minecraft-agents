@@ -1,4 +1,4 @@
-;; Card cf39523d: survival.get-food never hunts a kind on :off-limits (the job arg, else the ::off-limits setting), wherever it
+;; Card cf39523d: survival.get-food never hunts a kind in the ::off-limits setting, wherever it
 ;; stands and however many there are. Three cows in the open are a surplus by the keep-2 rule alone. Hunger is drained by RCON
 ;; (food 9-10), hp 15; no food carried, only a sword.
 ;; Should-succeed: with only sheep off limits one of the three cows is killed (food.killed :rule :surplus), two stay.
@@ -13,11 +13,11 @@
   :limit-s 100}
  :cases
  [{:name "other-kind-off-limits-leaves-the-cow-surplus-huntable"
-   :act [[:job (jobs.survival.get-food {:off-limits ["sheep"]})]]
+   :act [[:job (jobs.survival.get-food {:settings {:jobs.lib.animal-spare/off-limits #{"sheep"}}})]]
    :expect [{:event {:source :job :kind :food.killed :data {:rule :surplus}} :within-s 90}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]]}
   {:name "cows-off-limits-are-never-hunted"
-   :act [[:job (jobs.survival.get-food {:off-limits ["cow"]})]]
+   :act [[:job (jobs.survival.get-food {:settings {:jobs.lib.animal-spare/off-limits #{"cow"}}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 90}
             {:no-event {:source :job :kind :food.killed} :for-s 90 :until {:source :job :kind :stopped :data {:reason :no-food}}}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 3]]}]}

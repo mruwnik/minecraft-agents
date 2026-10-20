@@ -90,7 +90,7 @@
    :memory [{:kind :fetch/stock :data {:pos #at [110 0 16] :items {"bread" 16}} :policy {:cap 64 :ttl :forever}}]
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
-         [:job (jobs.survival.get-food {:explore false :source-radius 8})]]
+         [:job (jobs.survival.get-food {:explore false :settings {:jobs.survival.get-food.sources/source-radius 8}})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.get-food"}} :within-s 110}]
    :after [[:body-near [109.5 0 16.5] 5] [:item "bread" [:>= 1]]]
    :limit-s 140}
@@ -100,7 +100,7 @@
    :memory [{:kind :fetch/stock :data {:pos #at [110 0 16] :items {"cobblestone" 16}} :policy {:cap 64 :ttl :forever}}]
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
-         [:job (jobs.survival.get-food {:explore false :source-radius 8})]]
+         [:job (jobs.survival.get-food {:explore false :settings {:jobs.survival.get-food.sources/source-radius 8}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 40}]
    :after [[:body-far [109.5 0 16.5] 60]]}
   ;; 1bda3325: one hungry line for get-food and get-kit: food 8 at full health is not hungry, so get-food ends already

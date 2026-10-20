@@ -17,6 +17,8 @@
 
 (a/defargs settings
   {::reach {:default 3 :doc "How near a food source the body stands to use it, in blocks." :spec (a/int-in 0 nil)}
+   ::source-radius {:default 64 :doc "How far away a remembered food source still counts, in blocks." :spec (a/num-in 0 nil)}
+   ::take {:default 16 :doc "Most items to withdraw from a chest in one go." :spec (a/int-in 1 nil)}
    ::stock-radius {:default 256 :doc "Blocks within which a chest the body booked food in (memory :fetch/stock, what it saw when it opened it) counts as a food source." :spec (a/int-in 0 nil)}})
 
 (defn reach [] (settings/get settings ::reach))
@@ -57,11 +59,11 @@
          (map (fn [{:keys [t data]}] {:t t :data {:pos (zipmap [:x :y :z] (:pos data)) :kind :chest}})))))
 
 (defn usable-entries
-  "The :food-source entries within :source-radius and the chests booked with food within ::stock-radius, newest first,
+  "The :food-source entries within ::source-radius and the chests booked with food within ::stock-radius, newest first,
   not tried in this job and not another's chest."
   [c]
   (let [tried (set (:tried-sources (ctx/mem c)))
-        noted (filter (fn [{:keys [data]}] (<= (u/dist (u/self-pos c) (:pos data)) (:source-radius (:args c)))) (ctx/entries c :food-source))
+        noted (filter (fn [{:keys [data]}] (<= (u/dist (u/self-pos c) (:pos data)) (settings/get settings ::source-radius))) (ctx/entries c :food-source))
         known (set (map (comp :pos :data) noted))]
     (->> (concat noted (remove #(known (:pos (:data %))) (stock-entries c)))
          (sort-by :t >)
@@ -87,7 +89,7 @@
   (zipmap [:x :y :z] (map #(js/Math.floor (/ (+ %1 %2) 2)) lo hi)))
 
 (defn own-boxes
-  "The [min max] cells of the zones this body owns and of the plans it made (their footprints), within :source-radius
+  "The [min max] cells of the zones this body owns and of the plans it made (their footprints), within ::source-radius
   of their middle, not in this job's memory list tried-key, nearest first: its own pens and farms, which it knows without
   seeing them."
   [c tried-key]
@@ -106,7 +108,7 @@
     (->> (concat zoned planned)
          distinct
          (remove (comp tried box-middle))
-         (filter #(<= (u/dist here (box-middle %)) (:source-radius (:args c))))
+         (filter #(<= (u/dist here (box-middle %)) (settings/get settings ::source-radius)))
          (sort-by #(u/dist here (box-middle %))))))
 
 (defn own-areas
@@ -187,10 +189,10 @@
 
 (defn wheat-to-take
   "How much wheat to withdraw: the loaves wanted worth, no more than the chest
-  holds or :take allows, all in multiples of 3; 0 when under 3."
+  holds or ::take allows, all in multiples of 3; 0 when under 3."
   [c wheat]
   (let [down3 #(* 3 (quot % 3))]
-    (min (* 3 (loaves-wanted c)) (down3 wheat) (down3 (:take (:args c))))))
+    (min (* 3 (loaves-wanted c)) (down3 wheat) (down3 (settings/get settings ::take)))))
 
 (defn chest-wheat [items]
   (transduce (comp (filter #(= "wheat" (.-name %))) (map #(.-count %))) + 0 items))
@@ -219,6 +221,6 @@
           wheat (wheat-to-take c (chest-wheat items))]
       (cond
         (not (#{"ok" "missing"} status)) (do (pass-over! c pos) :again)
-        best (await (withdraw! c pos (.-name best) (min (.-count best) (:take (:args c)))))
+        best (await (withdraw! c pos (.-name best) (min (.-count best) (settings/get settings ::take))))
         (pos? wheat) (await (withdraw! c pos "wheat" wheat))
         :else (bury-source! c pos)))))

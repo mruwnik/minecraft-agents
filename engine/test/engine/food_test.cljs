@@ -634,14 +634,14 @@
 
 (defn hunt-world-with [spec entities zones]
   (let [{:keys [eng p seen] :as w} (setup {:self {:food 4} :entities entities} zones)]
-    (core/submit! eng (list 'jobs.survival.get-food (merge {:settings {:jobs.lib.combat/attack-gap-ms 0}} spec)) {})
+    (core/submit! eng (list 'jobs.survival.get-food (update spec :settings merge {:jobs.lib.combat/attack-gap-ms 0})) {})
     w))
 
 (deftest get-food-spares-listed-kinds
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (hunt-world-with {:off-limits ["cow"]} three-cows nil)]
+        (let [{:keys [eng p seen]} (hunt-world-with {:settings {:jobs.lib.animal-spare/off-limits #{"cow"}}} three-cows nil)]
           (await (run-until-empty eng 40))
           (is (= [] (calls p "attack")))
           (is (some #(and (= :no-food (:reason %)) (re-find #"cow: off-limits" (str (:text %)))) @seen)))))))
@@ -650,15 +650,15 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (hunt-world-with {:spare-pens false} three-cows own-farm)]
+        (let [{:keys [eng p]} (hunt-world-with {:settings {:jobs.lib.animal-spare/spare-pens false}} three-cows own-farm)]
           (await (run-until-empty eng 40))
           (is (seq (calls p "attack"))))))))
 
-(deftest get-food-keep-count-is-an-arg
+(deftest get-food-keep-count-is-a-setting
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (hunt-world-with {:keep-adults 0} (take 2 three-cows) nil)]
+        (let [{:keys [eng p]} (hunt-world-with {:settings {:jobs.lib.animal-spare/keep-adults 0}} (take 2 three-cows) nil)]
           (await (run-until-empty eng 40))
           (is (seq (calls p "attack"))))))))
 
