@@ -36,12 +36,12 @@
   :room way, a roof over a room that is not breached, with no open door."
   [c]
   (let [p (:primitives c)
-        roof-height (roof-height)]
+        roof (roof-height)]
     (boolean (if (= :night (:for (:args c)))
                (sh-inside/safe-from-night? p)
                (and (not (sh-sense/head-in-block? p))
-                    (or (dig-cells/sealed-in? p :walls roof-height)
-                        (and (ctx/way? c :room) (sh-sense/roofed? p roof-height) (not (sh/breached-home? p (ctx/view c))) (empty? (sh/open-room-doors p)))))))))
+                    (or (dig-cells/sealed-in? p :walls roof)
+                        (and (ctx/way? c :room) (sh-sense/roofed? p roof) (not (sh/breached-home? p (ctx/view c))) (empty? (sh/open-room-doors p)))))))))
 
 (defn placed
   "The spent summary and the blocks placed so far ({:cell [x y z] :item name}), for an ending's data."
