@@ -77,6 +77,10 @@
   (is (= [[4 68 0]] (:stand (plan :targets #{[0 70 0]} :feet [4 68 0] :zones [inner-zone]
                                   :block-at (world {[4 0] 67}))))))
 
+(deftest ground-that-is-all-a-built-floor-is-no-stand-not-a-zone
+  (is (= {:reason :no-stand}
+         (plan :footprints (set (for [x (range -40 41) z (range -40 41)] [x 63 z]))))))
+
 (deftest a-claim-refuses-like-a-zone
   (let [claim {:id "c" :owner "other" :status :active :until 100 :min [-20 0 -20] :max [20 100 20]}]
     (is (= {:reason :zone} (plan :claims [claim] :now 0)))))

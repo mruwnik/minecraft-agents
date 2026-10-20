@@ -23,7 +23,7 @@
     {:reason :no-stand}   ground and permission exist but no column gives a stand (headroom, too tall)
 
   A :stand cell is not zone-checked: walking there is go-to's business. A stand or base on a built floor cell the rules
-  refuse to dig (a spared wall) is never planned; a base so refused counts as a zone refusal.
+  refuse to dig (a spared wall) is never planned; a base so refused gives :no-stand when no zone refuses another.
 
   Ranking: walking a block costs 1, placing a block pillar-cost. A stand needs no placement, so any stand wins over a
   pillar."
@@ -125,7 +125,7 @@
   [{:keys [block-at floor-at targets reach feet max-height avoid] :as in} cols ys]
   (for [[x z] cols y ys :let [base [x y z]]
         :when (and (not (contains? targets base)) (not (contains? avoid base)) (standing-cell? block-at (or floor-at block-at) base))
-        :let [floor-refusal (when (floor-refused? in base) (rules/refuse :zone))
+        :let [floor-refusal (when (floor-refused? in base) (rules/refuse :floor))
               tries (for [n (range 1 (inc max-height))
                           :let [stand [x (+ y n) z]]
                           :when (in-reach? reach targets stand)]

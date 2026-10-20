@@ -938,3 +938,11 @@
             (when (< i 60) (recur (inc i))))
           (is (empty? (filter #(= :declined (:kind %)) @seen)) "a reflex job is not told to continue")
           (is (= [] (the-ledger eng)) "the scaffold is taken back"))))))
+
+(deftest a-body-enclosed-by-leaves-digs-its-pillar-from-under
+  (let [cells [[0 68 0] [0 69 0] [0 70 0]]
+        world (shaft-world cells)
+        leaves #{[1 70 0] [1 71 0]}
+        s (step :feet [0 71 0] :entries (mapv entry cells)
+                :block-at #(if (leaves %) "oak_leaves" (world %)))]
+    (is (= [:dig [0 70 0]] ((juxt :step :cell) s)) "leaves are dug through, not a wall")))

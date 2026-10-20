@@ -1,0 +1,17 @@
+;; Card 32eb059c: a plan cell 9 up over the middle of a built 13x13 floor of the plan's own cells. Every base within the scaffold's radius is a floor
+;; cell the build must leave standing, so no pillar can be raised: the cell is unreachable, not refused by a zone.
+;; Should-fail: the build ends nothing-possible :incomplete with the cell given up :unreachable, and no :refused :zone is listed.
+{:defaults
+ {:tags [:build :scaffold] :time :any
+  :plot {:height 16 :floor "stone"}
+  :blocks [[:fill [10 0 10] [22 0 22] "cobblestone"]]
+  :plans [{:id "tower" :metadata {:by "$body"}
+           :parts [{:id "floor" :box [#at [10 0 10] #at [22 0 22]] :want "cobblestone"}
+                   {:id "top" :cells [#at [16 9 16]] :want "cobblestone"}]}]
+  :body {:at [4.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["cobblestone" 40]]}
+  :limit-s 200}
+ :cases
+ [{:name "cell-over-a-plan-floor-is-unreachable-not-refused-zone"
+   :act [[:job (jobs.build.from-plan {:plan "$plan:tower"})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :incomplete}} :within-s 180 :of-job true}]
+   :after [[:not-block [16 9 16] "cobblestone"]]}]}

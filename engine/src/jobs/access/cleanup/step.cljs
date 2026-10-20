@@ -13,16 +13,21 @@
 
 (defn open? [block-at pos] (let [n (block-at pos)] (boolean (and n (rules/replaceable n)))))
 
+(defn clear?
+  "Open, or leaves: a player enclosed by a canopy digs through it, so leaves are no wall."
+  [block-at pos]
+  (or (open? block-at pos) (boolean (some->> (block-at pos) (re-find #"_leaves$")))))
+
 (defn exit-after-dig?
   "True when a body standing on cell, dropping onto the block below it, has a way on: a side cell at its new feet
-  level that is open with open head room (walked off), or solid with two open cells above it (a step up)."
+  level that is clear with clear head room (walked off), or solid with two clear cells above it (a step up)."
   [block-at cell]
   (boolean
    (some (fn [[dx dz]]
            (let [side (rules/offset cell dx 0 dz)]
-             (or (and (open? block-at side) (open? block-at (rules/offset side 0 1 0)))
-                 (and (not (open? block-at side)) (block-at side)
-                      (open? block-at (rules/offset side 0 1 0)) (open? block-at (rules/offset side 0 2 0))))))
+             (or (and (clear? block-at side) (clear? block-at (rules/offset side 0 1 0)))
+                 (and (not (clear? block-at side)) (block-at side)
+                      (clear? block-at (rules/offset side 0 1 0)) (clear? block-at (rules/offset side 0 2 0))))))
          [[1 0] [-1 0] [0 1] [0 -1]])))
 
 (defn row-way

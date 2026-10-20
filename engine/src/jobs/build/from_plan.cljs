@@ -48,8 +48,8 @@
   setting ::reach (jobs.lib.build.plan) of the eye, lowest layer first (buildable: its block is carried, the cell below is
   not still owed, it is not the body's feet or head cell; jobs.lib.placement picks the click), dig wrong blocks in reach,
   walk to a stand beside the nearest buildable or diggable cell, raise a temporary pillar and bridge row for a cell no
-  ground stand reaches (jobs.lib.build.scaffold; jobs.access.cleanup takes it back however the call ends; a zone or
-  footprint that refuses every base refuses the cell :zone; too few pillar blocks are fetched, else condition-failed
+  ground stand reaches (jobs.lib.build.scaffold; jobs.access.cleanup takes it back however the call ends; a
+  zone or footprint that refuses every base refuses the cell :zone (bases that are only floors left standing: the cell is unreachable); too few pillar blocks are fetched, else condition-failed
   {:reason :needs :needs :scaffold-item}), walk toward the nearest unloaded cell (unseen cells are never taken as
   built), else finish.
   A cell whose state no neighbour gives, or with no block to click beside it yet, waits for one. If still missing at
