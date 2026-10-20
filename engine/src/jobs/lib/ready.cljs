@@ -23,7 +23,9 @@
   {::risk-limit {:default 0.001 :spec (a/num-in 0 nil)
                  :doc "Spawn chance per second (jobs.lib.cost/exposure) above which a place or the walk to it is exposed: a single dark cell is 0.005, a lit or sunlit one 0."}
    ::light-patience-s {:default 1200 :spec (a/num-in 0 nil)
-                       :doc "Seconds readiness waits for light (jobs.lib.shelter.sense/light-in) before it calls the darkness unfixable; 1200 is a whole day, so a full night is waited for."}})
+                       :doc "Seconds readiness waits for light (jobs.lib.shelter.sense/light-in) before it calls the darkness unfixable; 1200 is a whole day, so a full night is waited for."}
+   ::unseen-judged-here-within {:default 6 :spec (a/num-in 0 nil)
+                                :doc "Blocks: an unseen place this near the feet is judged where the body stands (no look shows a cell behind a wall)."}})
 
 (defn unforced
   "The :checks forms a child would be forced with, minus the keys c's own frame runs under a form for: a call key beats
@@ -80,14 +82,14 @@
     {::exposure (fn [c] (exposed c (f c))) ::plain true}))
 
 (defn near-unseen-here
-  "f, but an unseen place within 6 blocks of the feet is judged where the body stands: a look cannot show a cell
+  "f, but an unseen place within ::unseen-judged-here-within blocks of the feet is judged where the body stands: a look cannot show a cell
   behind a wall (the job walks round to it), so asking for one would wait for ever."
   [f]
   (fn [c]
     (let [p (:primitives c)
           at (f c)]
       (when-not (and at (:y at) (not (sh-sense/seen-cell? p (update-vals at js/Math.floor)))
-                     (<= (u/dist (sh-sense/feet p) at) 6))
+                     (<= (u/dist (sh-sense/feet p) at) (settings/get settings ::unseen-judged-here-within)))
         at))))
 
 (defn safe-at-by-night

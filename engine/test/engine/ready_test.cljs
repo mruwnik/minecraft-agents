@@ -370,3 +370,8 @@
                                      (kind (ready/safe-at-by-night (ready/near-unseen-here (constantly goal))) tunnel)))
     {:x 4 :y 68 :z 0} :ok
     {:x 40 :y 70 :z 0} :later))
+
+(deftest the-near-unseen-reach-is-a-setting
+  (is (= :later (with-redefs [sh-sense/seen-cell? (constantly false)]
+                  (settings/with-settings {:jobs.lib.ready/unseen-judged-here-within 2}
+                    #(kind (ready/safe-at-by-night (ready/near-unseen-here (constantly {:x 4 :y 68 :z 0}))) tunnel))))))
