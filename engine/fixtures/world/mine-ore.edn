@@ -78,4 +78,13 @@
    :expect [{:event {:source :job :kind :mine.side :level :info :data {:shut true}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :mine.side :level :warn} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "diamond" [:>= 1]] [:not-block [24 1 14] "diamond_ore"]]
-   :limit-s 150}]}
+   :limit-s 150}
+  ;; Card 7f6f8ab7: :branches cuts a side branch to each side at every third block of the stay-level tunnel; ore buried at the end of the north branch of the first junction is found by it (no ore is seen from the tunnel)
+  {:name "branches-find-ore-buried-beside-the-tunnel"
+   :blocks [[:set [19 0 11] "diamond_ore"]]
+   :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 16]]}
+   :act [[:job (jobs.gather.mine {:torches false :block "diamond_ore" :count 1 :direction :east :stay-level true :branches true :tunnel-length 8 :mend false :settings {:jobs.gather.mine-stay/branch-length 5}})]]
+   :expect [{:event {:source :job :kind :mine.branch :level :info} :within-s 150 :of-job true}
+            {:event {:source :job :kind #{:completed :stopped}} :within-s 200 :of-job true}]
+   :after [[:item "diamond" [:>= 1]] [:not-block [19 0 11] "diamond_ore"] [:not-block [19 0 15] "stone"]]
+   :limit-s 210}]}

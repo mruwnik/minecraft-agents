@@ -10,7 +10,9 @@
             [jobs.lib.ledger :as ledger]))
 
 (a/defargs settings
-  {::ore-reach {:default 10 :doc "With :stay-level: seen ore (also remembered from earlier) up to this many blocks into the wall beside the tunnel is taken by a side cut (a child dig run), shut behind with a carried block; 0 or 1: only ore beside the body." :spec (a/int-in 0 nil)}})
+  {::ore-reach {:default 10 :doc "With :stay-level: seen ore (also remembered from earlier) up to this many blocks into the wall beside the tunnel is taken by a side cut (a child dig run), shut behind with a carried block; 0 or 1: only ore beside the body." :spec (a/int-in 0 nil)}
+   ::branch-every {:default 3 :doc "With :branches: blocks of the main tunnel between two junctions (a branch to each side at each)." :spec (a/int-in 1 nil)}
+   ::branch-length {:default 16 :doc "With :branches: blocks each branch is cut." :spec (a/int-in 1 nil)}})
 
 (defn record-tunnel!
   "jobs.lib.ledger/record-tunnel! for the tunnel map of a strip run."

@@ -10,6 +10,7 @@
             [jobs.gather.mine.descent :refer [descend-due? descend-round! shaft-due? shaft-under-way? shaft-round!]]
             [jobs.gather.mine.drops :refer [collect! dig-cell!]]
             [jobs.gather.mine.end :refer [stop! wanted]]
+            [jobs.gather.mine.branch :as branch]
             [jobs.gather.mine.side :as wall]
             [jobs.gather.mine.targets :as targets :refer [owed reach kinds carried rules-in scan snapshot way-floor last-exit? skip! skip-failed! skip-unreachable! stalled! drop-in-line? next-target!]]
             [jobs.gather.mine.torches :as torches]
@@ -82,6 +83,7 @@
    :direction :shared
    :tunnel-length :shared
    :stay-level :shared
+   :branches {:doc "with :stay-level: cut a side branch to each side of the tunnel every few blocks (mine-stay ::branch-every, ::branch-length), more rock in view per block walked" :spec boolean? :default false}
    :variants :shared
    :level :shared
    :shaft :shared
@@ -289,6 +291,7 @@
   [c]
   (cond
     (:side-cut (ctx/mem c)) (await (wall/side-round! c (:side-cut (ctx/mem c))))
+    (:branch (ctx/mem c)) (await (branch/branch-round! c))
     (:stepping (ctx/mem c)) (await (tunnel/tunnel-round! c))
     (seq (:holes (ctx/mem c))) (await (wall/shut-holes! c))
     (= :continue (await (ore-pick/pick! c {:leave (kinds (:args c))}))) :continue

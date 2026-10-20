@@ -9,6 +9,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.gather.mine-stay :as stay]
+            [jobs.gather.mine.branch :as branch]
             [jobs.gather.mine.end :refer [stop!]]
             [jobs.gather.mine.targets :as targets :refer [kinds book-ground! step-cell]]
             [jobs.gather.mine.torches :as torches]
@@ -151,7 +152,7 @@
       (stop! c (tunnel-reason stop))
       (let [_ (ctx/update-mem! c assoc :stepping true)
             r (waits/waiting-out c (await (ctx/call c :tunnel 'jobs.gather.strip-tunnel
-                               {:heading (:heading m) :origin (:origin t) :steps (or steps 0) :limit (- (:tunnel-length args) (:spent m 0))
+                               {:heading (:heading m) :origin (:origin t) :steps (or steps 0) :limit (branch/segment-limit c (or steps 0) (- (:tunnel-length args) (:spent m 0)))
                                 :hung (vec (:hung m)) :torches (:torches args) :watch-kinds (vec (watch-kinds c))
                                 :radius (:radius args) :wet (boolean (:wet args)) :accept (vec (:accept args)) :stay-level (boolean (:stay-level args))
                                 :fetch (:fetch args) :ignore-zones? (:ignore-zones? args)
@@ -170,5 +171,6 @@
             (cond
               (:cause res) (stop! c (:reason (:cause res)) (select-keys (:cause res) [:tool :why :text]))
               (= :watch stop) :again
+              (and (= :tunnel-length stop) (branch/due? c now)) (do (branch/begin! c (:tunnel (ctx/mem c))) :again)
               (= :no-torches stop) (stop! c :no-torches {:text (torches/no-torches-text false)})
               :else (tunnel-end! c stop (cell at) (cell next) walk))))))))

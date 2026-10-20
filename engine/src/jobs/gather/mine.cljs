@@ -58,6 +58,7 @@
    :direction :shared
    :tunnel-length :shared
    :stay-level :shared
+   :branches {:doc "with :stay-level: cut a side branch to each side of the tunnel every few blocks (mine-stay ::branch-every, ::branch-length), more rock in view per block walked" :spec boolean? :default false}
    :variants :shared
    :level :shared
    :shaft :shared

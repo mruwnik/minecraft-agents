@@ -103,6 +103,32 @@
           (is (= 1 @landed))
           (is (= [{:reason :tunnel-length :length 4}] (map #(select-keys % [:reason :length]) (tunnel-ends s))) (pr-str (map :text (tunnel-ends s)))))))))
 
+(defn ^:async branch-run
+  "A stay-level 7-block tunnel east in rock, ore at the 4th cell of the branch north of the third junction; branches as given."
+  [branches]
+  (let [s (start {:world (update (rock-world {"3,64,-4" "iron_ore"}) :inventory into [{:name "cobblestone" :count 5}])})]
+    (core/submit! (:eng s) (spec {:block "iron_ore" :count 1 :direction "east" :tunnel-length 7 :stay-level true :branches branches
+                                  :settings {:jobs.gather.mine-stay/branch-every 3 :jobs.gather.mine-stay/branch-length 4}}) {})
+    (await (run-ticks s 900))
+    s))
+
+(deftest branches-cut-a-side-branch-at-each-junction-and-take-the-ore-in-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (branch-run true))]
+          (is (= 1 (get (inv s) "raw_iron")) (pr-str (keep :text @(:seen s)) (dug-cells s)))
+          (is (= [3 64 0] (feet s)) "back in the tunnel at the junction, or home")
+          (is (every? (set (dug-cells s)) [[3 64 -1] [3 64 -4]]) "the branch was cut to its length"))))))
+
+(deftest without-branches-the-tunnel-cuts-no-side-branch
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (branch-run false))]
+          (is (nil? (get (inv s) "raw_iron")))
+          (is (not-any? #(neg? (% 2)) (dug-cells s))))))))
+
 (deftest stay-level-leaves-ore-beyond-its-ore-reach
   (async done
     (tu/run-async done
