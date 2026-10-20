@@ -22,39 +22,23 @@
             [jobs.lib.util :as u]))
 
 (def doc
-  "A hostile is near: fight it (jobs.combat.attack, best weapon equipped) when the odds are fair, else retreat (jobs.survival.retreat).
-  Needs: a real danger (as the hostile-near trigger, jobs.lib.danger, in sight) within :radius (:ranged-radius for ranged mobs); none near is done at once.
-  One whole attempt per round: decides afresh before each call of the child, while a danger is near. The weapons are the call's :use :tools
-  (default the weapons carried), handed to both children.
-  Fights when the damage the fight is expected to cost leaves at least :reserve health (jobs.lib.cost/fight-damage: weapon, armour worn,
-  each mob's kind and what is left of it after the hits landed, nearest killed first; bare hands land a hit every `jobs.lib.cost.fight/fist-gap-ms`,
-  so a body with no weapon retreats from a whole spider or zombie). Never fights a creeper or an enderman (a hit would anger it).
-  A fight begun goes on against a single mob above `jobs.lib.cost.fight/hysteresis-health`, and at any health against a mob the body
-  cannot outrun (jobs.lib.cost/outruns?). A flight hit twice within ::hit-window-s turns to a fight.
-  Under a roof at night, with every danger only heard or a flyer, it stays in and fights only what comes within reach (hostile.sealed-hold).
-  Only ranged mobs with a line of fire near, the body under a roof, carrying building blocks and a tool that digs stone: it stops the
-  arrows first (jobs.survival.block-arrow-gap, no fetch), once per call; when that places nothing it decides as above.
-  If the fight ends other than :done (its memory put back) or the retreat ends :condition-failed, the other one runs. A fight that
-  declines because every danger near is only heard (none in sight to hit), with the body not hurt in the last ::hit-window-s, runs no
-  retreat: heard mobs are muted (jobs.lib.body/heard-muted?), the ending names the mob (:mob, :text) and is :done, so the job it cut
-  goes on. A mob that comes into sight fires the reflex through the mute.
-  Done once no real danger is near and the retreat is not hiding (sealed in, up a pillar or down a pit).
-  Ends :done when the danger is gone or left heard-only; :nothing-possible :retreat-failed (the retreat's ending is the :because) when the
-  retreat ends so, :impossible or :limit-reached with the retreat's own cause; :nothing-possible :no-response after ::max-unchanged (3) calls
-  in a row that change neither the body's cell, its health, the dangers near nor the fight's hits. Never :continue. Its time budget
-  (::job-time-s) may end it :limit-reached; the hostile trigger fires again at once while the danger stands.
-  Memory: writes one :hostile entry {:mob :decision} plus :pos (seen) or :direction :band :from (heard only) per encounter.
-  A danger reflex: never backed off.")
+  "A hostile is near: fight it (jobs.combat.attack) when the odds are fair, else retreat (jobs.survival.retreat); one whole attempt
+  per round, deciding afresh before each call of the child (the choice is jobs.lib.cost, see the README row).
+  Needs: a real danger (as the hostile-near trigger, jobs.lib.danger, in sight) within :radius (:ranged-radius for ranged mobs);
+  none near is done at once. The call's :use :tools are the weapons, handed to both children, and its :settings reach them.
+  Returns: :done when no danger is near and the retreat holds no refuge, or when every danger is only heard and the fight declined
+  (they are muted, the ending names the mob); :nothing-possible :retreat-failed (the retreat's ending is the :because) when the
+  retreat ends so; :nothing-possible :no-response after ::max-unchanged calls in a row that change nothing; :limit-reached on its
+  time budget. Never :continue. Writes one :hostile memory entry per encounter. A danger reflex: never backed off.")
 
 (a/defargs args
   {:radius {:doc "hostiles within this many blocks count; nil: the jobs.lib.danger ::hostile-radius setting" :spec (a/num-in 0 nil) :default nil}
    :ranged-radius {:doc "ranged hostiles (skeletons and the like) within this many blocks count; nil: the ::ranged-radius setting" :spec (a/num-in 0 nil) :default nil}
-   :reserve {:doc "health a fight must be expected to leave; nil: the ::fight-reserve setting" :spec (a/num-in 0 20) :default nil}
-   :goal {:doc "passed to the retreat: where the flight leans; nil: the destination of the walk this reflex interrupted (jobs.lib.goal), read once" :spec goal/pos-spec :default nil}
-   :stay-inside {:doc "at night a body shut in a closed room or its own shelter fights from there and never steps out toward a mob; under any roof it does not flee for mobs it only hears (false: it may)" :spec boolean? :default true}})
+   :goal {:doc "passed to the retreat: where the flight leans; nil: the destination of the walk this reflex interrupted (jobs.lib.goal), read once" :spec goal/pos-spec :default nil}})
 
 (a/defargs settings
-  {::job-time-s {:default 480 :doc "Seconds a response to a hostile may take: above retreat's (a hide runs long)." :spec (a/num-in 0 nil)}
+  {::stay-inside {:default true :doc "At night a body shut in a closed room or its own shelter fights from there and never steps out toward a mob; under any roof it does not flee for mobs it only hears (false: it may)." :spec boolean?}
+   ::job-time-s {:default 480 :doc "Seconds a response to a hostile may take: above retreat's (a hide runs long)." :spec (a/num-in 0 nil)}
    ::hold-radius {:default 16 :doc "Hostiles known within this many blocks count for holding position at night." :spec (a/num-in 0 nil)}
    ::hit-window-s {:default 5 :doc "A flight hit twice within this long is failing: the body fights. Also how recent a hurt keeps a fight from leaving heard mobs, and makes a round look once more." :spec (a/num-in 0 nil)}
    ::max-unchanged {:default 3 :doc "Calls of a child in a row that leave the body and the dangers as they were before the reflex stops :no-response." :spec (a/int-in 1 nil)}
@@ -62,6 +46,7 @@
    ::struck-cap {:default 8 :doc "How many :struck-hits entries memory keeps." :spec (a/int-in 1 nil)}
    ::quote-mean-s {:default 20 :doc "Seconds an encounter is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
 
+(defn stay-inside? [] (settings/get settings ::stay-inside))
 (defn hold-radius [] (settings/get settings ::hold-radius))
 (defn hit-window-ms [] (* 1000 (settings/get settings ::hit-window-s)))
 (defn max-unchanged [] (settings/get settings ::max-unchanged))
@@ -101,37 +86,41 @@
 
 (defn hold?
   "Whether the fight stays where it is: in the dark, with more than one hostile known (the ones in view are not all there are),
-  or with any when the body is shut in a closed room or its own shelter and :stay-inside is on."
+  or with any when the body is shut in a closed room or its own shelter and ::stay-inside is on."
   [c]
   (let [p (:primitives c)]
     (boolean (and (look/dark-here? p)
                   (or (> (count (danger-q/known-hostiles p (hold-radius) {})) 1)
-                      (and (:stay-inside (:args c)) (or (sh-sense/shut-in-room? p) (sh-inside/sheltered-in c))))))))
+                      (and (stay-inside?) (or (sh-sense/shut-in-room? p) (sh-inside/sheltered-in c))))))))
 
 (defn stay-under-roof?
-  "Whether the body keeps its roof: :stay-inside on, night, a roof over the feet, and every danger near either only heard
+  "Whether the body keeps its roof: ::stay-inside on, night, a roof over the feet, and every danger near either only heard
   or a flyer (a phantom cannot get under a roof), none a creeper or an enderman. The fight then holds and the retreat does not run."
   [c hs]
   (let [p (:primitives c)]
-    (boolean (and (:stay-inside (:args c))
+    (boolean (and (stay-inside?)
                   (seq hs)
                   (sh-sense/night? p)
                   (sh-sense/roofed? p sh-sense/default-roof-height)
                   (every? #(or (combat/flyer? %) (not (danger-q/seen-only? %))) hs)
                   (not-any? #(or (combat/creeper? %) (combat/enderman? %)) hs)))))
 
+(defn scoped-settings
+  "The :settings of a child call for the radii this call was given as args, so the child reads them like the setting."
+  [args]
+  (cond-> {}
+    (:radius args) (assoc ::danger-q/hostile-radius (:radius args))
+    (:ranged-radius args) (assoc ::danger-q/ranged-radius (:ranged-radius args))))
+
 (defn ^:async run-child
   "One call of the child for decision: :continue, :done, :declined (a fight that ended otherwise, its memory put back,
   or a retreat that ended :condition-failed: the other child may run), or the ending of a retreat that ended otherwise."
   [c decision args hold]
-  (let [radius (danger-q/radius-in args)
-        ranged-radius (danger-q/ranged-radius-in args)
-        reserve (danger-q/reserve-in args)
-        child-args (case decision
-                     :fight {:targets :hostiles :radius radius :ranged-radius ranged-radius :use {:tools (weapons c)}
-                             :hold (or hold (hold? c)) :checks {:safe? '(always) :fit? '(always)}}
-                     :flee {:radius radius :ranged-radius ranged-radius :use {:tools (weapons c)} :reserve reserve
-                            :goal (:goal (ctx/mem c))})
+  (let [child-args (case decision
+                     :fight {:targets :hostiles :radius (danger-q/radius-in args) :ranged-radius (danger-q/ranged-radius-in args)
+                             :use {:tools (weapons c)} :hold (or hold (hold? c))
+                             :checks {:safe? '(always) :fit? '(always)} :settings (scoped-settings args)}
+                     :flee {:use {:tools (weapons c)} :goal (:goal (ctx/mem c)) :settings (scoped-settings args)})
         e (await (ctx/call c decision (child-jobs decision) child-args))]
     (cond
       (= :continue e) :continue
@@ -241,7 +230,7 @@
 
 (defn ^:async respond [c near]
   (let [a (:args c)
-        reserve (danger-q/reserve-in a)
+        reserve (danger-q/fight-reserve)
         p (:primitives c)
         self (.self p)
         m (ctx/mem c)
@@ -312,8 +301,7 @@
   "One call of block-arrow-gap (never fetching): :continue or its ending's kind; nothing placed lets the round decide as usual.
   Tried once it has ended; a :continue (its look around) calls it again."
   [c]
-  (let [e (await (ctx/call c :gap 'jobs.survival.block-arrow-gap (cond-> {:fetch false}
-                                                                         (:ranged-radius (:args c)) (assoc :settings {::danger-q/ranged-radius (:ranged-radius (:args c))}))))]
+  (let [e (await (ctx/call c :gap 'jobs.survival.block-arrow-gap {:fetch false :settings (scoped-settings (:args c))}))]
     (when-not (= :continue e) (ctx/update-mem! c assoc :gap-tried true))
     (if (= :continue e) :continue (:kind e))))
 
