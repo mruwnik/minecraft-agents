@@ -469,7 +469,7 @@
                       {:name "oak_sapling" :count 2 :slot 37} {:name "leaf_litter" :count 8 :slot 38}
                       {:name "dirt" :count 16 :slot 39} {:name "birch_planks" :count 1 :slot 40}]}})
 (def real-decision
-  {:source :job :kind :stopped :name "jobs.survival.recover-drops"
+  {:source :job :kind :stopped
    :data {:decision :skip :reason :not-worth :value 75.35 :cost :infinite}})
 
 (deftest a-death-takes-its-cause-from-the-last-hurt

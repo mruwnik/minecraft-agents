@@ -20,7 +20,7 @@
    :expect [{:event {:source :job :kind :stopped :data {:reason :danger}} :within-s 60}
             {:no-event {:source :job :kind :child_started :data {:slot :go}} :for-s 40 :until {:source :job :kind :stopped :data {:reason :danger}}}
             {:count-event {:source :reflex :kind :fired :context {:reflex-id :died}} :for-s 50 :at-least 1 :at-most 1}
-            {:event {:source :job :kind :completed :data {:decision :collected}} :within-s 180}]
+            {:event {:source :reflex :kind :ended :data {:decision :collected}} :within-s 180}]
    :after [[:item "raw_iron" 24]]}
   {:name "empty-handed-death-is-a-skip-with-no-walk"
    :body {:inventory []}

@@ -313,10 +313,12 @@
     (clean-pairs :decision (some-> (:decision d) name) :reason (some-> (:reason d) name)
                  :value (some-> (:value d) js/Math.round))))
 
+(def recover-decisions #{:collected :skip :partial :abandoned})
+
 (defn recover-ending?
-  "Whether e is the end of a recover-drops run (its :data carries the :decision)."
+  "Whether e ends a recover-drops run: a job or reflex ending whose :data carries its :decision."
   [e]
-  (and (= :job (:source e)) (#{:completed :stopped} (:kind e)) (= "jobs.survival.recover-drops" (:name e)) (some? (get-in e [:data :decision]))))
+  (and (#{:job :reflex} (:source e)) (#{:completed :stopped :ended} (:kind e)) (contains? recover-decisions (get-in e [:data :decision]))))
 
 (defn death-details
   "For the :died event e: its :cause (the last hurt within hurt-window-ms), :lost (the biggest stacks, :lost-more

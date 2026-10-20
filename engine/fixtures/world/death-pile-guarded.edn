@@ -19,6 +19,7 @@
  [{:name "unarmed-skips-guarded-pile-then-retries-when-killer-gone"
    :act [[:job (jobs.survival.recover-drops)]
          [:await {:source :job :kind :waiting :data {:reason :danger}} 60]
+         [:http :cancel "$event-job" {:ok true}]
          [:rcon "kill @e[type=skeleton,tag=wt,$BOX]"]
          [:wait-s 2]
          [:job (jobs.survival.recover-drops {:retry true})]]
