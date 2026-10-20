@@ -197,7 +197,13 @@
       (let [e (await (use-bucket! c :fill (:pos water) "bucket"))]
         (cond
           (= :continue e) :continue
-          (= :done (:kind e)) :again
+          (and (= :done (:kind e)) (pos? (carried c "water_bucket"))) :again
+          (= :done (:kind e)) (let [_ (ctx/update-mem! c update :fill-fails (fnil inc 0))
+                                    fails (:fill-fails (ctx/mem c))]
+                                (if (< fails (settings/get settings ::max-failed-sites))
+                                  :again
+                                  (ctx/end c :nothing-possible :scoop-failed
+                                           {:got (gained c) :why :no-water-taken :text (str "the bucket click at " (pr-str (:pos water)) " took no water")})))
           :else (let [why (or (get-in e [:data :reason]) (:cause e) :failed)]
                   (ctx/end c :nothing-possible :scoop-failed
                            {:got (gained c) :why why :text (str "could not fill the bucket at the water at " (pr-str (:pos water)) ": " (name why))})))))))

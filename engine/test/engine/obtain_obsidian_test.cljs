@@ -162,6 +162,18 @@
           (is (= :no-lava (:reason res)) (pr-str res))
           (is (= 1 (carried p "water_bucket")) "no water was poured"))))))
 
+(deftest a-bucket-click-that-takes-no-water-ends-scoop-failed-not-for-ever
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (lt/setup (world (assoc lava-lake "2,63,1" "water") [pick {:name "bucket" :count 1}]))
+              real (get registry/jobs 'jobs.items.use)
+              idle (assoc real :round (fn ^:async r [c] (ctx/end c :done nil {:used true})))
+              eng (assoc eng :jobs (assoc (:jobs eng) 'jobs.items.use idle))
+              res (await (tu/child-outcome eng 'jobs.gather.make-obsidian {:count 1} 300))]
+          (is (= :stopped (:status res)) (pr-str res))
+          (is (= :scoop-failed (:reason res)) (pr-str res)))))))
+
 (deftest a-scoop-that-waits-is-resumed-not-dropped
   (async done
     (tu/run-async done
