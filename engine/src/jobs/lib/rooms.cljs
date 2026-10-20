@@ -47,14 +47,14 @@
 (defn starts
   "Cells a closed room may hold: home ({:x :y :z}, its feet cell, or nil) first, then the sides (door-sides) of the
   wooden doors and gates the body has seen within door-radius, nearest first, at most max-doors of them. Each
-  {:pos :home?}."
+  {:pos :home? :door} (:door the door's cell)."
   [p home]
   (let [doors (->> (look/seen-blocks p {:match #(and (or (str/ends-with? % "_door") (str/ends-with? % "_fence_gate"))
                                                      (not (str/starts-with? % "iron_")))
                                         :radius (door-radius) :max (* 2 (max-doors)) :properties? true})
                    (remove #(= "upper" (:half (:properties %))))
                    (take (max-doors)))]
-    (cond->> (for [d doors s (door-sides d)] {:pos s :home? false})
+    (cond->> (for [d doors s (door-sides d)] {:pos s :home? false :door (:pos d)})
       home (cons {:pos home :home? true}))))
 
 (def open-policy

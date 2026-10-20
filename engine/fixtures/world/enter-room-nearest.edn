@@ -1,0 +1,28 @@
+;; jobs.survival.enter-room with no :place and no remembered home (cards 06559aeb, 7a442197): it walks to the nearest closed room behind a door it has seen
+;; and shuts the door. Hut: planks x 12..18, z 12..18, y 0..3 (hollow), room 13..17, open oak door at [15 0..1 18]; body 2 south of it looking north.
+;; Should-succeed: the open door is walked to, the body ends inside and the door is shut.
+;; Should-fail: the same hut with a cell of another's plan inside it (a bed spot beside the door) is not walked into (a fill there would trespass): no-room, the body stays outside.
+{:defaults
+ {:tags [:night :survival]
+  :time :any
+  :plot {:floor "grass_block"}
+  :blocks [[:fill [12 0 12] [18 3 18] "oak_planks" :hollow]
+           [:fill [13 0 13] [17 2 17] "air"]
+           [:fill [15 0 18] [15 1 18] "air"]
+           [:set [15 0 18] "oak_door[facing=south,half=lower,hinge=left,open=true]"]
+           [:set [15 1 18] "oak_door[facing=south,half=upper,hinge=left,open=true]"]]
+  :body {:at [15.5 0 20.5] :yaw 180 :effects [["resistance" 600 4]] :settle-s 3}
+  :limit-s 90}
+ :cases
+ [{:name "nearest-seen-closed-room-is-entered-and-its-door-shut"
+   :act [[:job (jobs.survival.enter-room)]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.enter-room"}} :within-s 70 :of-job true}]
+   :after [[:block [15 0 18] "oak_door[half=lower,open=false]"] [:body-near [15.5 0 15.5] 2.5]]}
+  {:name "a-room-in-anothers-plan-is-not-entered"
+   :plans [{:id "hut" :metadata {:by "Miles"} :parts [{:id "wall" :cells [#at [12 0 12] #at [13 0 12] #at [14 0 12]] :want [:any "oak_planks"]}
+                                                       {:id "door" :cells [#at [15 0 18]] :want [:any "oak_door"]}
+                                                       {:id "bed" :cells [#at [15 0 17]] :want [:any "red_bed"]}]}]
+   :act [[:job (jobs.survival.enter-room)]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-room}} :within-s 40 :of-job true}]
+   :after [[:body-far [15.5 0 15.5] 5] [:block [15 0 18] "oak_door[half=lower,open=true]"]]
+   :limit-s 60}]}

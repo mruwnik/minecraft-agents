@@ -10,6 +10,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.pace :as pace]
             [jobs.lib.ready :as ready]
+            [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
             [jobs.lib.rooms :as room-lib]
             [jobs.lib.sense :as sense]
@@ -69,14 +70,16 @@
   (boolean (access/trespass-refusal (assoc (access/rules-input c) :feet nil) :place pos)))
 
 (defn nearest-seen
-  "{:pos} of the nearest closed room behind one of the first ::max-judged doors the body has seen that no zone refuses, nil
-  when none. Read-only (a quote runs this), so nothing is cached."
+  "{:pos} of the nearest closed room behind one of the first ::max-judged doors the body has seen, nil when none. A door
+  either side of which a zone refuses is skipped; a room whose inside is not seen yet counts (the walk shows it).
+  Read-only (a quote runs this), so nothing is cached."
   [c]
-  (let [p (:primitives c)]
-    (->> (room-lib/starts p nil)
-         (take (settings/get settings ::max-judged))
-         (keep (fn [{:keys [pos]}] (when (some->> (reach/room p pos) (room-lib/closed-past-sight? p)) {:pos pos})))
-         (remove #(refused? c (:pos %)))
+  (let [p (:primitives c)
+        starts (take (settings/get settings ::max-judged) (room-lib/starts p nil))
+        refused-door? (fn [door] (some #(refused? c (:pos %)) (filter #(= door (:door %)) starts)))]
+    (->> starts
+         (remove #(refused-door? (:door %)))
+         (keep (fn [{:keys [pos]}] (when (or (room-lib/refuge-room? p pos) (reach/unseen-room? p pos)) {:pos pos})))
          first)))
 
 (defn target-of
@@ -244,14 +247,9 @@
                                             (ledger/confirm at)))
                     :again))))))
 
-(defn ^:async step!
-  "One step of the entering (judge): the walk, a door, the doorway or the roof, the end."
+(defn ^:async step-judged!
+  "The step after the looks: judge, then act on it."
   [c]
-  (when (here? c (target-of c))
-    (when-let [roof (sh/unseen-roof-cell (:primitives c))]
-      (when-not (= roof (:roof-looked (ctx/mem c)))
-        (ctx/update-mem! c assoc :roof-looked roof)
-        (await (sense/look-at! c roof)))))
   (let [j (judge c)
         n (:steps (ctx/mem c) 0)]
     (ctx/update-mem! c assoc :steps (inc n))
@@ -266,5 +264,17 @@
       :else (do (when-let [g (and (= :no-blocks (:stop j)) (room-lib/gap c))]
                   (ctx/remember! c :doorway-tried (first g) room-lib/doorway-tried-policy))
                 (ctx/end c :nothing-possible (:stop j) (merge {:text (:text j) :placed (:placed (ctx/mem c) [])} (spent/summary (spent/log c))))))))
+
+(defn ^:async step!
+  "One step of the entering (judge): the walk, a door, the doorway or the roof, the end."
+  [c]
+  (when (here? c (target-of c))
+    (when-let [roof (sh/unseen-roof-cell (:primitives c))]
+      (when-not (= roof (:roof-looked (ctx/mem c)))
+        (ctx/update-mem! c assoc :roof-looked roof)
+        (await (sense/look-at! c roof)))))
+  (if (and (here? c (target-of c)) (not (look/surveyed? c :cell)) (reach/unseen-room? (:primitives c) (sh-sense/feet (:primitives c))))
+    (await (look/look-around! c))
+    (await (step-judged! c))))
 
 (defn ^:async round [c] (await (pace/steps! c (fn ^:async enter-step [] (await (step! c))))))
