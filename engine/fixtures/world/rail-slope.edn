@@ -2,7 +2,7 @@
 ;; up a 1:1 hillside (plan.rail/layout [[2 0 16] [16 0 16] [24 8 16] [38 8 16]], written out below) from a plateau 8 high:
 ;; the hill is stone columns x 17..24 (column x rises to y x-17, z 14..18) and a plateau x 25..40 up to y 7.
 ;; Should-succeed: the body at the foot builds the whole line, walking the stands on the slope (:completed, no gave-up or declined).
-;; Should-fail: without the redstone torches and with :fetch off the line waits for them (rail-build.short), no rail is laid.
+;; Should-fail: without the redstone torches and with :fetch off the line waits for them (waiting :short), no rail is laid.
 ;; Line plan is plan.rail/layout output; items: rail 25, powered_rail 12, redstone_torch 6, fill 47 (cobblestone).
 {:defaults
  {:tags [:build :rail :jobs] :time :any
@@ -16,14 +16,14 @@
    :body {:inventory [["rail" 25] ["powered_rail" 12] ["redstone_torch" 6] ["cobblestone" 70]]}
    :act [[:job (jobs.build.rail-line {:plan "$plan:line"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 400 :of-job true}
-            {:no-event {:source :job :kind #{:rail-build.declined :stopped}} :for-s 400 :until {:source :job :kind :completed}}]
+            {:no-event {:source :job :kind #{:waiting :stopped}} :for-s 400 :until {:source :job :kind :completed}}]
    :after [[:block [10 0 16] "rail[shape=east_west]"] [:block [30 8 16] "rail[shape=east_west]"]
            [:block [17 1 16] "rail[shape=ascending_east]"] [:block [21 5 16] "rail[shape=ascending_east]"]
            [:block [22 6 16] "powered_rail[shape=ascending_east]"]]}
   {:name "no-torches-waits-short"
    :body {:inventory [["rail" 25] ["powered_rail" 12] ["cobblestone" 70]]}
    :act [[:job (jobs.build.rail-line {:plan "$plan:line" :fetch false})]]
-   :expect [{:event {:source :job :kind :rail-build.short} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :rail-build.short}}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :short}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :waiting :data {:reason :short}}}]
    :after [[:not-block [10 0 16] "rail"] [:not-block [3 0 16] "rail"]]
    :limit-s 60}]}

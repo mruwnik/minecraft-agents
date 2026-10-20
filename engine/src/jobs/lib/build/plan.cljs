@@ -330,7 +330,7 @@
 (def no-zones "no zone list has been read")
 
 (defn planned
-  "{:cells judged} for the plan in the args, or {:trouble text} (warned once per reason)."
+  "{:cells judged} for the plan in the args, or {:trouble text}."
   [c]
   (let [{:keys [plan part]} (:args c)
         answer (surfaced c (known/plan c plan))
@@ -346,10 +346,7 @@
                     (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) no-zones))]
     (if-not trouble
       {:cells cells :wood wood}
-      (do (ctx/warn-once! c [plan trouble] :build.declined
-                          {:plan plan :part part :reason trouble
-                           :text (str "build declines plan " plan (when part (str " part " part)) ": " trouble)})
-          {:trouble trouble :later? (and (not= no-zones trouble) (known/unreadable? answer))}))))
+      {:trouble trouble :later? (and (not= no-zones trouble) (known/unreadable? answer))})))
 
 (def neighbour-steps [[0 -1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0]])
 

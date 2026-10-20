@@ -67,7 +67,7 @@
   :refused when the rules refuse the rest, nothing-possible :shut-in. For a block placed in the wrong state, :found names the state it came out in.
   Events: build.gap (a fence or wall placed over air; warns) and build.way-in (cells the body stood in, above the plan's floor, filled with no door there; warns). Event texts name
   the count and the first few cells. The whole list is in :cells of the event and in the result.
-  Start facts (one build.declined warn naming the plan and the reason): no zone list read (unless :ignore-zones?) is a
+  Start facts: no zone list read (unless :ignore-zones?) is a
   failed condition {:reason :no-zones}; a plan that is missing, unreadable or has no cells to
   build (in :part) is impossible {:reason :plan-trouble :why text} (a plan missing or unreadable waits), at the start and later in the call; at the start, with nothing to place, dig, fetch or
   look at, a failed condition {:reason :no-items :needs {item n}}.

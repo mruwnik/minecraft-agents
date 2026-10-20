@@ -46,7 +46,7 @@
   pen. An ending of the builder's can-start? (no data: :no-items, :no-zones) is this job's; a builder that ended
   short or refused after its work (data) goes on to the check, which reports the shortage as leaks with :built. A
   shut-gate child that did not end done is named in the data as :shut.
-  Start facts, all waits or refusals of can-start? (one pen-build.declined warn naming the cells or the reason):
+  Start facts, all waits or refusals of can-start?:
   - {:reason :plan-trouble :why text}: a wait while the plan is missing or unreadable; never when it has no cells (in :part) or no fence cells.
   - {:reason :uneven :why text}: its ring steps more than 1 between neighbouring fences, or a gate is more than 1 above
     the ground of an inside neighbour (animals will not step down 2), unless :uneven? true.
@@ -105,7 +105,7 @@
                            (take 4 (sort-by #(- (or (:step %) (:drop %))) problems))))))
 
 (defn planned
-  "{:cells judged} for the plan in the args, or {:trouble text} (warned once per reason)."
+  "{:cells judged} for the plan in the args, or {:trouble text}."
   [c]
   (let [{:keys [plan part]} (:args c)
         p (:primitives c)
@@ -117,10 +117,7 @@
                     (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) plan/no-zones))]
     (if-not trouble
       {:cells cells}
-      (do (ctx/warn-once! c [plan trouble] :pen-build.declined
-                          {:plan plan :part part :reason trouble
-                           :text (str "pen build declines plan " plan (when part (str " part " part)) ": " trouble)})
-          {:trouble trouble :later? (and (not= plan/no-zones trouble) (known/unreadable? answer))}))))
+      {:trouble trouble :later? (and (not= plan/no-zones trouble) (known/unreadable? answer))})))
 
 (defn pen-opts [c cells]
   {:box (pen-read/barrier-box cells) :max-cells (max-cells)})
@@ -162,11 +159,7 @@
      (let [{:keys [cells trouble]} (judged-plan c)]
        (when-not (or trouble (:uneven? (:args c)))
          (when-let [bad (seq (uneven cells (plan/top-fn c)))]
-           (let [why (uneven-text bad)]
-             (ctx/warn-once! c [(:plan (:args c)) why] :pen-build.declined
-                             {:plan (:plan (:args c)) :part (:part (:args c)) :reason why
-                              :text (str "pen build declines plan " (:plan (:args c)) ": " why)})
-             {:reason :uneven :why why})))))))
+           {:reason :uneven :why (uneven-text bad)}))))))
 
 (def ways [:build :patch])
 (def defaults {:spend {:job-time ::job-time-s}})

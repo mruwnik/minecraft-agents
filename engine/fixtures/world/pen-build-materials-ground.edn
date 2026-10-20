@@ -28,7 +28,7 @@
    :blocks [[:fill [14 0 0] [31 0 31] "dirt"]]
    :act [[:job (jobs.build.pen {:plan "$plan:ring" :fetch false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 140 :of-job true}
-            {:no-event {:source :job :kind :pen-build.declined} :for-s 140 :until {:source :job :kind :completed}}]
+            {:no-event {:source :job :kind #{:waiting :stopped}} :for-s 140 :until {:source :job :kind :completed}}]
    :after [[:block [10 0 10] "oak_fence"] [:block [17 1 14] "oak_fence"] [:not-block [17 0 14] "oak_fence"]]
    :limit-s 170}
   {:name "leaf-canopy-above-the-ring-is-not-ground"

@@ -45,13 +45,13 @@
   nothing-possible :broken when it is not (the data's :breaks {:pos :why} (:gap :shape :unlit :lit-brake :no-bed
   :blocked :wet :no-buffer :launch-trap :unloaded) and :built say why; the text names the first 12 and what the build
   left (:refused :given-up :short)). A build that stopped short of finishing (its ending carries the result) goes on to the proof, which names what is missing.
-  Start facts (one rail-build.declined warn (:plan :reason) each):
+  Start facts:
   - impossible: its rail cells are not one chain (:not-a-line, :why :gap|:branch|:two-chains|:loop|:no-rails); the plan has no cells to build (:no-cells).
   - condition-failed: the plan is missing or unreadable (:plan, a wait); no zone list has been read (:no-zones); a cell wanting
     a redstone block holds another block (:source-blocked, :cells; the builder never digs, so on natural ground put a
     torch or lever in the plan, or use a raised bed); a cell still to build is refused by the access rules
     (:refused, with the list [{:pos :reason :zone|:claim|:footprint|:hazard}]); with :all-carried (the default) and :fetch off for items, items for
-    the cells still to build are not all carried (:short, one rail-build.short warn {item n}; an :any want counts every
+    the cells still to build are not all carried (:short {item n}, :up-to; an :any want counts every
     choice carried; only cells seen empty are owed, the warn's :up-to {item n} counts the unseen cells too). With
     :all-carried false it builds what is carried.
   A restart resumes in the phase it was in: the world is the memory.")
@@ -66,16 +66,8 @@
 
 ;; ------------------------------------------------------------------ the plan
 
-(defn decline!
-  "Warn rail-build.declined once per plan and trouble; trouble {:reason kw :text t ...}."
-  [c trouble]
-  (let [{:keys [plan part]} (:args c)]
-    (ctx/warn-once! c [plan (dissoc trouble :text)] :rail-build.declined
-                    (merge {:plan plan :part part}
-                           (update trouble :text #(str "rail build declines plan " plan (when part (str " part " part)) ": " %))))))
-
 (defn planned
-  "{:cells judged} for the plan in the args, or {:trouble {:reason ...}} (warned once per reason)."
+  "{:cells judged} for the plan in the args, or {:trouble {:reason ...}}."
   [c]
   (let [{:keys [plan part]} (:args c)
         p (:primitives c)
@@ -93,8 +85,7 @@
                   (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) {:reason :no-zones :text "no zone list has been read"})]
     (if-not trouble
       {:cells cells}
-      (do (decline! c trouble)
-          {:trouble trouble}))))
+      {:trouble trouble})))
 
 (defn block-at [c] (partial plan/world-block (:primitives c)))
 
@@ -161,7 +152,7 @@
   "Why a line that is not sound may not be begun, as a wait reason {:reason kw :why text}, or nil when it may: no
   redstone block cell taken by ground, nothing refused, and with :all-carried everything certainly needed carried."
   [c cells]
-  (let [{:keys [plan part all-carried]} (:args c)
+  (let [{:keys [all-carried]} (:args c)
         blocked (blocked-sources cells)
         no (refused c cells)
         owed (plan/owed cells)
@@ -171,17 +162,12 @@
       (seq blocked) (let [text (str "a redstone block cannot go at " (str/join ", " (map pr-str blocked))
                                     ": the cell holds ground and this job never digs; put a torch or lever in the plan, "
                                     "or lay the line on a raised bed")]
-                      (decline! c {:reason :source-blocked :cells blocked :text text})
                       {:reason :source-blocked :cells blocked :why text})
       (seq no) (let [text (str "cells refused: " (str/join ", " (map #(str (pr-str (:pos %)) " " (name (:reason %))) no)))]
-                 (decline! c {:reason :refused :refused no :text text})
                  {:reason :refused :refused no :why text})
       (and all-carried (not (fetch-opts c)) (seq short))
       (let [text (str "short of " (plan/shortage-text short))]
-        (ctx/warn-once! c [plan :short] :rail-build.short
-                        {:plan plan :part part :short short :up-to (up-to-of owed carried)
-                         :text (str "rail build of " plan " waits: " text)})
-        {:reason :short :short short :why text}))))
+        {:reason :short :short short :up-to (up-to-of owed carried) :why text}))))
 
 ;; ------------------------------------------------------------------ conditions
 

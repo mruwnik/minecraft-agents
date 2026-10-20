@@ -266,20 +266,17 @@
   "Submit the job with args over the world spec and plans, tick a few times: [places, build.declined warns]."
   ([spec plans args] (declines spec plans args []))
   ([spec plans args zones]
-  (let [{:keys [eng p seen]} (start spec plans zones)]
-    (core/submit! eng (list job args) {})
-    (dotimes [_ 4] (swap! h/clock + 700) (core/tick! eng))
-    [(count (h/calls p "place")) (mapv #(select-keys % [:plan :reason]) (h/events-of seen :build.declined))])))
+   (let [{:keys [eng p seen]} (start spec plans zones)]
+     (core/submit! eng (list job args) {})
+     (dotimes [_ 4] (swap! h/clock + 700) (core/tick! eng))
+     [(count (h/calls p "place")) (count (h/events-of seen :build.declined))])))
 
-(deftest the-check-declines-a-plan-it-cannot-build-with-one-warn
+(deftest the-check-declines-a-plan-it-cannot-build-without-a-warn
   (let [kit-spec {:inventory kit}]
-    (is (= [0 [{:plan "nope" :reason "no such plan"}]] (declines kit-spec {} {:plan "nope"})))
-    (is (= [0 [{:plan "pen" :reason "no cells to build"}]] (declines kit-spec {"pen" (pen-plan)} {:plan "pen" :part "nope"})))
-    (is (= [0 [{:plan "huts" :reason "the plan cannot be built: no blueprint called \"hut\""}]]
-           (declines kit-spec {"huts" missing-blueprint-plan} {:plan "huts"}))
-        "a plan whose blueprint is not found says so, not that it has no cells")
-    (is (= [0 []] (declines {:inventory []} {"pen" (pen-plan)} {:plan "pen" :fetch false}))
-        "a check with nothing to build with writes no warn")))
+    (is (= [0 0] (declines kit-spec {} {:plan "nope"})))
+    (is (= [0 0] (declines kit-spec {"pen" (pen-plan)} {:plan "pen" :part "nope"})))
+    (is (= [0 0] (declines kit-spec {"huts" missing-blueprint-plan} {:plan "huts"})))
+    (is (= [0 0] (declines {:inventory []} {"pen" (pen-plan)} {:plan "pen" :fetch false})))))
 
 (deftest a-plan-in-terminal-trouble-ends-the-job-stopped-with-the-reason
   (async done
@@ -308,14 +305,13 @@
       (dotimes [_ 8] (swap! h/clock + 700) (core/tick! eng)))
     (is (< 0 @n 8) "eight ticks, fewer than eight judgements")))
 
-(deftest a-broken-plan-declines-naming-the-error
+(deftest a-broken-plan-declines-without-a-warn
   (let [{:keys [eng p seen w]} (start {:inventory kit} {})]
     (reset! (:state w) (assoc @(:state w) :plans {"pen" {:error "unreadable EDN: eof"}}))
     (core/submit! eng (list job {:plan "pen"}) {})
     (dotimes [_ 3] (swap! h/clock + 700) (core/tick! eng))
     (is (empty? (h/calls p "place")))
-    (is (= [{:plan "pen" :reason "the plan cannot be read: unreadable EDN: eof"}]
-           (mapv #(select-keys % [:plan :reason]) (h/events-of seen :build.declined))))))
+    (is (empty? (h/events-of seen :build.declined)))))
 
 (deftest item-for-picks-the-block-to-place
   (are [want carried item] (= item (plan/item-for want carried))
@@ -378,8 +374,8 @@
           (is (= "air" (block p [4 64 3])))
           (is (= 8 (:placed result))))))))
 
-(deftest no-zone-list-declines-and-never-means-no-zones
-  (is (= [0 [{:plan "pen" :reason "no zone list has been read"}]]
+(deftest no-zone-list-declines-without-a-warn
+  (is (= [0 0]
          (declines {:inventory kit} {"pen" (pen-plan)} {:plan "pen"} nil))))
 
 (def late-plan {:id "other" :parts [{:id "o" :cells (conj ring [3 64 2] [2 65 2]) :want "stone"}]})

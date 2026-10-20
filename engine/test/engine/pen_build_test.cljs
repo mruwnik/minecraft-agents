@@ -220,21 +220,21 @@
           (is (= :nothing-possible (:kind e)))
           (is (= [{:pos {:x 3 :y 64 :z 4} :why :gap}] (get-in e [:data :leaks]))))))))
 
-(deftest a-plan-it-cannot-work-declines-with-one-warn
+(deftest a-plan-it-cannot-work-declines-without-a-warn
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [stone-plan {:id "pen" :parts [{:id "s" :cells [[2 64 2]] :want "stone"}]}]
-          (doseq [[plans args zones reason]
-                  [[{} {:plan "pen"} [] "no such plan"]
-                   [{"pen" (ring-plan)} {:plan "pen" :part "nope"} [] "no cells to build"]
-                   [{"pen" stone-plan} {:plan "pen"} [] "the plan has no fence, wall or gate cells"]
-                   [{"pen" (ring-plan)} {:plan "pen"} :none "no zone list has been read"]]]
+          (doseq [[plans args zones]
+                  [[{} {:plan "pen"} []]
+                   [{"pen" (ring-plan)} {:plan "pen" :part "nope"} []]
+                   [{"pen" stone-plan} {:plan "pen"} []]
+                   [{"pen" (ring-plan)} {:plan "pen"} :none]]]
             (let [r (await (declines (spec kit) plans args zones))]
-              (is (= [{:plan "pen" :reason reason}] (:declined r)))
+              (is (empty? (:declined r)))
               (is (= 0 (:places r))))))))))
 
-(deftest a-broken-plan-declines-naming-the-error
+(deftest a-broken-plan-declines-without-a-warn
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -242,8 +242,7 @@
           (reset! (:state w) (assoc @(:state w) :plans {"pen" {:error "unreadable EDN: eof"}}))
           (core/submit! eng (list job {:plan "pen"}) {})
           (await (tu/run-ticks eng h/clock 3 700))
-          (is (= [{:plan "pen" :reason "the plan cannot be read: unreadable EDN: eof"}]
-                 (mapv #(select-keys % [:plan :reason]) (kinds-of seen :pen-build.declined)))))))))
+          (is (empty? (kinds-of seen :pen-build.declined))))))))
 
 (deftest nothing-carried-and-no-fetch-ends-condition-failed-without-a-warn
   (async done
@@ -337,15 +336,16 @@
     (conj (mapv (fn [pos] {:pos pos :want "oak_fence"}) fenced-ring) {:pos [3 64 2] :want {:block "oak_fence_gate"}})
     (fn [_ _ _] 63) []))
 
-(deftest a-pen-with-an-uneven-ring-declines-naming-the-steps-unless-allowed
+(deftest a-pen-with-an-uneven-ring-waits-naming-the-steps-unless-allowed
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [plan {:id "pen" :parts [{:id "fence" :cells [[2 64 2] [3 64 2] [4 66 2]] :want "oak_fence"}]}
               r (await (declines (spec kit) {"pen" plan} {:plan "pen"}))
               ok (await (declines (spec kit) {"pen" plan} {:plan "pen" :uneven? true}))]
-          (is (= [{:plan "pen" :reason "the pen is uneven (steps over 1): [3 64 2] to [4 66 2] steps 2"}] (:declined r)))
+          (is (empty? (:declined r)) "the check does not warn")
           (is (= [:uneven] (distinct (map :reason (:waits r)))) "the job waits listed")
+          (is (= ["the pen is uneven (steps over 1): [3 64 2] to [4 66 2] steps 2"] (distinct (map :why (:waits r)))))
           (is (= 0 (:places r)))
           (is (= [] (:declined ok))))))))
 

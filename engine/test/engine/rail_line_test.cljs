@@ -102,10 +102,7 @@
     (core/submit! eng (list job args) {})
     (await (tu/run-ticks eng h/clock 4 700))
     {:places (count (h/calls p "place"))
-     :declined (mapv #(select-keys % [:plan :reason :why :refused :cells]) (h/events-of seen :rail-build.declined))
-     :texts (mapv :text (h/events-of seen :rail-build.declined))
-     :short (mapv :short (h/events-of seen :rail-build.short))
-     :waits (mapv #(select-keys % [:reason :why :text]) (h/events-of seen :waiting))
+     :waits (mapv #(select-keys % [:reason :why :text :short]) (h/events-of seen :waiting))
      :warns (count (filter #(re-find #"^(rail-)?build\." (name (:kind %))) @seen))}))
 
 (def holed-plan
@@ -113,28 +110,26 @@
    :parts [{:id "bed" :box [[-1 63 0] [5 63 0]] :want [:any "stone"]}
            {:id "rails" :cells [[0 64 0] [1 64 0] [3 64 0] [4 64 0]] :want {:block "rail" :shape :east_west}}]})
 
-(deftest a-plan-it-cannot-build-declines-with-one-warn-and-places-nothing
+(deftest a-plan-it-cannot-build-declines-without-a-warn-and-places-nothing
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[plans args zones declined]
-                [[{} {:plan "line"} [] [{:plan "line" :reason :plan :why "no such plan"}]]
-                 [{"line" holed-plan} {:plan "line"} [] [{:plan "line" :reason :not-a-line :why :gap}]]
-                 [{"line" (line-plan {})} {:plan "line"} :none [{:plan "line" :reason :no-zones}]]
-                 [{"line" (line-plan {}) "other" {:id "other" :parts [{:id "o" :cells [[7 64 0]] :want "stone"}]}} {:plan "line"} []
-                  [{:plan "line" :reason :refused :refused [{:pos [7 64 0] :reason :footprint :plan "other"}]}]]]]
+        (doseq [[plans args zones]
+                [[{} {:plan "line"} []]
+                 [{"line" holed-plan} {:plan "line"} []]
+                 [{"line" (line-plan {})} {:plan "line"} :none]
+                 [{"line" (line-plan {}) "other" {:id "other" :parts [{:id "o" :cells [[7 64 0]] :want "stone"}]}} {:plan "line"} []]]]
           (let [r (await (declines (spec "stone" 63 (kit {})) plans args zones))]
-            (is (= declined (:declined r)) (pr-str declined))
-            (is (= 1 (:warns r)) (pr-str declined))
-            (is (= 0 (:places r)) (pr-str declined))))))))
+            (is (= 0 (:warns r)) (pr-str plans))
+            (is (= 0 (:places r)) (pr-str plans))))))))
 
 (deftest short-of-powered-rails-declines-naming-the-shortage
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [r (await (declines (spec "stone" 63 (kit {} {"powered_rail" -2})) {"line" (line-plan {})} {:plan "line" :fetch false}))]
-          (is (= [{"powered_rail" 2}] (:short r)))
-          (is (= 1 (:warns r)))
+          (is (= [{"powered_rail" 2}] (distinct (keep :short (:waits r)))))
+          (is (= 0 (:warns r)))
           (is (= 0 (:places r))))))))
 
 (deftest short-of-powered-rails-is-fetched-and-a-failed-fetch-ends-need-before-any-place
@@ -166,22 +161,21 @@
                 _ (core/submit! eng (list job {:plan "line"}) {})]
             (await (tu/run-ticks eng h/clock 6 700))
             (is (= 1 (count (h/events-of seen :completed))) (str "ended by done? before any round " (pr-str pos)))
-            (is (= 0 (count (h/events-of seen :rail-build.declined))) (pr-str pos))
             (is (= 0 (count (h/calls p "place"))) (pr-str pos))
             (is (empty? (:list (core/state eng))) (pr-str pos))))))))
 
 ;; ---------------------------------------------------------------- redstone blocks on ground that is there
 
-(deftest a-redstone-block-bed-on-natural-ground-declines-once-naming-the-cells-and-what-would-work
+(deftest a-redstone-block-bed-on-natural-ground-waits-naming-the-cells-and-what-would-work
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [opts {:power :block}
               r (await (declines (spec "stone" 63 (kit opts)) {"line" (line-plan opts)} {:plan "line"}))]
-          (is (= [{:plan "line" :reason :source-blocked :cells [[3 63 0] [25 63 0]]}] (:declined r)))
-          (is (= 1 (:warns r)))
+          (is (= [:source-blocked] (distinct (map :reason (:waits r)))))
+          (is (= 0 (:warns r)))
           (is (= 0 (:places r)))
-          (is (every? #(re-find % (first (:texts r))) [#"\[3 63 0\]" #"\[25 63 0\]" #"torch or lever" #"raised"])))))))
+          (is (every? #(re-find % (:why (first (:waits r)))) [#"\[3 63 0\]" #"\[25 63 0\]" #"torch or lever" #"raised"])))))))
 
 (deftest a-redstone-block-bed-on-a-raised-line-is-not-declined
   (async done
@@ -189,7 +183,7 @@
       (fn ^:async t []
         (let [opts {:power :block}
               r (await (declines (spec "stone" 62 (kit opts)) {"line" (line-plan opts)} {:plan "line"}))]
-          (is (= [] (:declined r)))
+          (is (= 0 (:warns r)))
           (is (pos? (:places r))))))))
 
 ;; ---------------------------------------------------------------- wrong blocks
@@ -234,7 +228,7 @@
               world {:inventory (kit {} {"cobblestone" (- 2 (:fill (:materials (rail/layout from to {}))))}) :blocks (ground "stone" 63) :unloaded far
                      :self {:pos {:x 0 :y 64 :z 3}}}
               r (await (declines world {"line" (line-plan {})} {:plan "line"}))]
-          (is (= [] (:short r)))
+          (is (empty? (keep :short (:waits r))))
           (is (pos? (:places r))))))))
 
 ;; ---------------------------------------------------------------- a line broken after the build
@@ -257,12 +251,12 @@
           (is (= {"rail" 1} (get-in result [:built :short])))
           (is (re-find #"broken: gap" (:text result))))))))
 
-(deftest a-broken-line-without-the-rail-carried-declines-short-by-default
+(deftest a-broken-line-without-the-rail-carried-waits-short-by-default
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [[result seen] (await (broken-run {:fetch false}))]
-          (is (= [{"rail" 1}] (mapv :short (h/events-of seen :rail-build.short))))
+          (is (empty? (h/events-of seen :rail-build.short)))
           (is (nil? result) "it declines, no proof is run"))))))
 
 ;; ---------------------------------------------------------------- resuming
@@ -541,7 +535,7 @@
         (let [r (await (declines (route-world l-route {} flat-top)
                                  {"line" (route-plan l-route {}) "other" {:id "other" :parts [{:id "o" :cells [[19 64 0]] :want "stone"}]}}
                                  {:plan "line"} []))]
-          (is (= [{:plan "line" :reason :refused :refused [{:pos [19 64 0] :reason :footprint :plan "other"}]}] (:declined r)))
+          (is (= [:refused] (distinct (map :reason (:waits r)))))
           (is (= 0 (:places r))))))))
 
 (deftest a-cut-mid-build-of-a-corner-line-resumes-and-finishes-once
