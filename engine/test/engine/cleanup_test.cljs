@@ -23,6 +23,7 @@
             [engine.dig-to-see-test :as d]
             [jobs.lib.dig-look :as look]
             [jobs.access.cleanup :as cleanup]
+            [jobs.lib.shelter.keep :as keep]
             [jobs.access.cleanup.step :as cleanup-step]
             [jobs.lib.result :as result]
             [jobs.movement.go-to.result :as go-to-result]))
@@ -232,6 +233,20 @@
         night #(tu/with-light-data (tu/fake {:blocks (merge rock %) :time 14000}))]
     (is (true? (fires? (night {}) plug [])) "the plug opens onto the body's own dark cells and solid rock: taken back")
     (is (false? (fires? (night {"2,64,0" "air"}) plug [])) "a dark open cell beyond the plug keeps it")))
+
+(deftest an-unseen-neighbour-is-guessed-dark-only-while-the-bodys-own-cell-is-not-lit
+  (let [night #(tu/with-light-data (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks {} :time 14000}))
+        lit (fn [light] (let [p (night)] (swap! (fake/state p) merge {:light-default [0 0]} (when light {:light light})) p))
+        opens-dark? #(keep/opens-dark? %)]
+    (is (true? ((opens-dark? (lit nil)) [3 64 0])) "own cell dark: the unseen side is guessed dark")
+    (is (false? ((opens-dark? (lit {[0 64 0] [0 14]})) [3 64 0])) "own cell lit by the opened side: the unseen side is not guessed dark")))
+
+(deftest a-run-that-removed-a-block-holds-no-night-only-leftovers
+  (let [night [{:cell [1 64 0] :reason :night}]
+        hostile [{:cell [1 64 0] :reason :hostile-near}]]
+    (is (= [] (cleanup/cells-to-hold {:removed [{:cell [2 64 0]}]} night)))
+    (is (= hostile (cleanup/cells-to-hold {:removed [{:cell [2 64 0]}]} hostile)))
+    (is (= night (cleanup/cells-to-hold {:removed []} night)))))
 
 (deftest the-trigger-waits-out-the-first-light
   (let [dirt (trigger-store [(entry [0 64 0])] [])
