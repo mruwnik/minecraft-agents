@@ -241,6 +241,12 @@
       (is (= {:chance open-night-chance :lowered-by #{:light}} (dissoc e :light-in)))
       (is (pos? (:light-in e)) "and the seconds till light"))))
 
+(deftest exposure-of-a-walk-out-of-shelter-to-a-lit-cell-is-no-chance
+  (let [p (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks pit}))]
+    (with-redefs [sh-sense/seen-cell? (constantly false) sh-sense/block-light-at (constantly 14)]
+      (is (= {:chance 0.0 :lowered-by #{}} (cost/exposure p {:x 3 :y 64 :z 0})) "an unseen cell near the feet is judged by its loaded light")
+      (is (pos? (:chance (cost/exposure p {:x 15 :y 64 :z 0}))) "a far unseen cell is guessed dark"))))
+
 (deftest exposure-of-a-walk-in-the-open-is-the-spawn-chance-at-its-end
   (let [night (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}}}))
         day (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/noon :self {:pos {:x 0 :y 64 :z 0}}}))

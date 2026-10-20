@@ -120,6 +120,10 @@
 (def per-danger value/per-danger)
 (def spawn-chance value/spawn-chance)
 
+(def judged-here-within
+  "Blocks: a cell this near the feet whose light is loaded is judged by it, seen or not (a lit pit around the body is made out; same reach as jobs.lib.ready ::unseen-judged-here-within)."
+  6)
+
 (defn exposure
   "{:chance :lowered-by} of the walk of p to `to` ({:x :y :z}, a column {:x :z} at the feet's height; floored): the mob spawn chance per second it meets and
   what lowers it (with :light-in, the seconds until light, when :light does), data the readiness checks read (empty: nothing foreseeable does, so never). A walk that leaves shelter
@@ -133,10 +137,14 @@
    (let [to (update-vals (assoc to :y (or (:y to) (:y (sh-sense/feet p)))) js/Math.floor)
          cell [(:x to) (if (sh-sense/solid-at? p to) (inc (:y to)) (:y to)) (:z to)]
          dark (look/dark-light)
-         raw-light (fn [c] (let [[x y z] c
-                                 at {:x x :y y :z z}]
-                             (when-let [block (and (sh-sense/seen-cell? p at) (sh-sense/block-light-at p at))] {:block block :sky (or (sh-sense/sky-light-at p at) 0)})))
-         open-sky (fn [_] {:block 0 :sky 15})
+         feet (sh-sense/feet p)
+         made-out? (fn [at] (or (sh-sense/seen-cell? p at)
+                                (<= (js/Math.hypot (- (:x at) (:x feet)) (- (:y at) (:y feet)) (- (:z at) (:z feet))) judged-here-within)))
+         block-of (fn [c] (let [[x y z] c
+                                at {:x x :y y :z z}]
+                            (when (made-out? at) (sh-sense/block-light-at p at))))
+         raw-light (fn [c] (when-let [block (block-of c)] {:block block :sky (or (sh-sense/sky-light-at p (let [[x y z] c] {:x x :y y :z z})) 0)}))
+         open-sky (fn [c] {:block (or (block-of c) 0) :sky 15})
          lit-by (fn [raw darkening] (fn [c] (when-let [{:keys [block sky]} (raw c)] {:block block :sky (if (< (- sky darkening) dark) 0 15)})))
          leaves? (sh-inside/walk-leaves-shelter? p shelter to 1)
          raw (if leaves? open-sky raw-light)
