@@ -5,6 +5,8 @@
             [engine.forest-maintain-test :as fm]
             [engine.harvest-test :as h]
             [engine.library-test :as lt]
+            [engine.memory :as mem]
+            [engine.settings :as settings]
             [engine.test-util :as tu]))
 
 (def job 'jobs.forestry.tidy)
@@ -103,9 +105,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out]} (await (outcome {:blocks (merge (fm/ground [[6 0] [10 0]]) (part-cut 6) (part-cut 10))
+        (let [{:keys [p out]} (await (settings/with-settings {:jobs.forestry.tidy/max-trees 1} #(outcome {:blocks (merge (fm/ground [[6 0] [10 0]]) (part-cut 6) (part-cut 10))
                                                :inventory [sapling]}
-                                              {:radius 12 :max-trees 1}))]
+                                              {:radius 12})))]
           (is (= {:status :done :tidied 1} out))
           (is (= 1 (count (filter seq [(dug-ys p 6) (dug-ys p 10)])))))))))
 
@@ -124,3 +126,23 @@
         (let [{:keys [p out]} (await (outcome {:blocks (part-cut 6) :inventory [sapling]} {:radius 12}))]
           (is (= [] (fm/places p)))
           (is (= {:status :done :tidied 1 :replant-owed 1} out)))))))
+
+(deftest a-hungry-body-with-no-food-ends-food-short-and-skips-no-trunk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (lt/setup {:blocks (merge (fm/ground [[6 0]]) (part-cut 6)) :self {:food 2}})
+              _ (mem/write! (:store eng) :hungry {:food 2} {:cap 10 :ttl 3600000})
+              out (await (tu/child-outcome eng job {:radius 12} 150))]
+          (is (= [:stopped :food-short :condition-failed] [(:status out) (:reason out) (:kind (:ending out))]))
+          (is (= [] (fm/digs p))))))))
+
+(deftest a-light-block-under-a-raised-log-is-not-ground
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out]} (await (outcome {:blocks (merge (fm/ground [[6 0]]) (part-cut 6) {"6,64,0" "light"})
+                                               :inventory [sapling]}
+                                              {:radius 12}))]
+          (is (= #{65 66 67} (dug-ys p 6)))
+          (is (= :done (:status out))))))))

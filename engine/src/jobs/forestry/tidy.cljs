@@ -7,6 +7,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.need :as need]
             [jobs.lib.gate :as gate]
+            [jobs.lib.dig-route :as dig-route]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.trees :as trees :refer [default-radius trees-near seen-name drop-filter replant-kind]]))
@@ -22,11 +23,11 @@
   trunk whose lowest log a zone, claim or plan footprint refuses (warn tidy.declined once) are left alone; so is a trunk
   fell-tree digs no log of.
   Ends :done {:tidied n} (plus :replant-owed k when k felled trunks were not replanted: no seen ground, or plant-sapling
-  would not run; their replant debts stay owed) after :max-trees trunks or when none is left in sight. With nothing to tidy
+  would not run; their replant debts stay owed) after the max-trees setting's trunks or when none is left in sight. With nothing to tidy
   (done? true once the first round has looked round) it ends done {:tidied 0}. A fell child that ends for want of a tool, blocks or food (a need, a limit,
-  :hungry) ends the job with that ending (:tidied n in its data), done when trunks were tidied first;
+  :food-short) ends the job with that ending (:tidied n in its data), done when trunks were tidied first;
   a trunk it cannot reach is left. A missing axe, a pillar's blocks or a sapling are fetched by the children (:fetch).
-  Quote: time by the trunks to fell, at most :max-trees.")
+  Quote: time by the trunks to fell, at most the max-trees setting.")
 
 (a/defargs settings
   {::max-trees {:default 8 :doc "The most trunks one tidy run fells." :spec (a/int-in 1 nil)}
@@ -37,16 +38,13 @@
 (a/defargs args
   {:species {:doc "log species; any when nil" :spec a/name? :default nil}
    :radius {:doc "search radius in blocks" :spec (a/num-in 0 nil) :default default-radius}
-   :max-trees {:doc "trunks to fell at most; the settings' tidy max-trees when nil" :spec (a/int-in 1 nil) :default nil}
    :ignore-zones? :shared
    :fetch {:doc "get a missing axe, pillar blocks or sapling (passed to fell-tree and plant-sapling; see their :fetch)" :spec need/option? :default true}})
-
-(def air #{"air" "cave_air" "void_air"})
 
 (defn raised?
   "Whether the block under pos is seen as air."
   [p pos]
-  (contains? air (seen-name p (update pos :y dec))))
+  (contains? dig-route/air (seen-name p (update pos :y dec))))
 
 (defn ground-cell
   "The cell over the first seen block below the raised log at pos that is not air, or nil when none is seen
@@ -58,7 +56,7 @@
             n (seen-name p below)]
         (cond
           (nil? n) nil
-          (contains? air n) (recur (inc dy))
+          (contains? dig-route/air n) (recur (inc dy))
           :else (assoc below :y (inc (:y below))))))))
 
 (defn neighbours [{:keys [x y z]}]
@@ -69,7 +67,7 @@
   "Whether the log at pos stands on a seen block that is neither air nor a log."
   [p pos]
   (let [n (seen-name p (update pos :y dec))]
-    (and n (not (contains? air n)) (not (trees/log-name? n)))))
+    (and n (not (contains? dig-route/air n)) (not (trees/log-name? n)))))
 
 (defn living?
   "Whether the log at pos is joined to a log standing on the ground: a flood fill over the seen logs (the set of
@@ -108,7 +106,7 @@
    [:plant 'jobs.forestry.plant-sapling (cond-> {:at ground :species species :ignore-zones? ignore-zones?}
                                           (some? fetch) (assoc :fetch fetch))]])
 
-(defn limit [c] (or (:max-trees (:args c)) (settings/get settings ::max-trees)))
+(defn limit [_c] (settings/get settings ::max-trees))
 
 (defn result-of
   "The trunks tidied, and the replants still owed."
@@ -147,7 +145,7 @@
 
 (def fell-stops
   "Causes of a fell child's ending that are the body's or the world's, not the trunk's: they end the job."
-  #{:need :tool :free-slots :hungry})
+  #{:need :tool :free-slots :food-short})
 
 (defn fell-ended!
   "What the fell child's ending e means for the trunk: done with logs goes on to collect, done with none leaves the
@@ -207,6 +205,6 @@
       :else (apply contract/ok :tidied (str "tidied " (:tidied m 0) " trunks, none left in sight") data))))
 
 (defn quote-of [c]
-  (let [k (or (:max-trees (:args c)) (settings/get settings ::max-trees))]
+  (let [k (settings/get settings ::max-trees)]
     {:uses {:job-time [2 (* 15 (min k 2)) (max (settings/get settings ::job-time-s) (* 30 k))]}
      :done [0 1 k]}))
