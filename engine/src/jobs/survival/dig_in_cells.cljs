@@ -1,6 +1,6 @@
 (ns jobs.survival.dig-in-cells
-  "The cells a shelter fills and the placing of blocks into them (read from the world, placed, shut): jobs.survival.dig-in
-  and jobs.survival.retreat use them."
+  "The cells a shelter fills and the placing of blocks into them (read from the world, placed, shut): jobs.survival.shut-in,
+  its ways (wall-in, dig-pit, dig-pocket, enter-room), plug-way, block-arrow-gap and the retreat jobs use them."
   (:require [engine.args :as a]
             [jobs.lib.block-sets :as bs]
             [clojure.string :as string]
