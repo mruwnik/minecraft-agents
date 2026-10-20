@@ -12,7 +12,7 @@
   {:name "cobblestone-walls-are-taken-back-at-dawn"
    :time :night-exclusive
    :sleep-skip true
-   :body {:inventory [["cobblestone" 16] ["wooden_pickaxe" 1]]}
+   :body {:inventory [["cobblestone" 24] ["wooden_pickaxe" 1]]}
    :act [[:job (jobs.survival.night)]
          [:await {:source :job :kind :shut-in.sealed} 60]
          [:until [:memory {:entries {:shelter [{:data {:state :built}}]}}] 10]
@@ -27,7 +27,7 @@
   {:name "cobblestone-walls-stay-without-a-pickaxe"
    :time :night-exclusive
    :sleep-skip true
-   :body {:inventory [["cobblestone" 16]]}
+   :body {:inventory [["cobblestone" 24]]}
    :act [[:job (jobs.survival.night)]
          [:await {:source :job :kind :shut-in.sealed} 60]
          [:until [:memory {:entries {:shelter [{:data {:state :built}}]}}] 10]
@@ -99,7 +99,7 @@
    :time :night-exclusive
    :register [{:trigger :night} {:trigger :dawn}]
    :sleep-skip true
-   :body {:inventory [["cobblestone" 16]]}
+   :body {:inventory [["cobblestone" 24]]}
    :act [[:summon "zombie" [28.5 0 16.5] "{UUID:[I;2006101,1,1,1],NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :job :kind :shut-in.sealed} 60]
          [:until [:memory {:entries {:shelter [{:data {:state :built}}]}}] 10]

@@ -333,7 +333,8 @@
         _ (when-not resume
             (ctx/emit! c :night.dig-in-why :info (dig-in-inputs p))
             (ctx/update-mem! c assoc :digging (sh-sense/feet p)))
-        place (:name (first (await (sense/decide! c ::roofed-place #(seq (room-lib/roofed-places-in c (:args c) (sites/walk-radius))) {:verify-guesses true}))))
+        place (when-not (:roof-walk-failed (ctx/mem c))
+                (:name (first (await (sense/decide! c ::roofed-place #(seq (room-lib/roofed-places-in c (:args c) (sites/walk-radius))) {:verify-guesses true})))))
         _ (when (and place (not= (sh-sense/feet p) (:route-looked (ctx/mem c))))
             (ctx/update-mem! c assoc :route-looked (sh-sense/feet p))
             (await (sense/look-round! c [])))
@@ -342,7 +343,7 @@
                                     :for :night :settings {:jobs.survival.plug-way/roof-height (dig-in-roof-height c) :jobs.survival.wall-in/wall-value (sites/wall-value)}}
                              place (assoc :place place))))]
     (when-not (= :continue d)
-      (ctx/update-mem! c #(-> % (dissoc :digging) (update :shut-ins (fnil inc 0))))
+      (ctx/update-mem! c #(cond-> (-> % (dissoc :digging) (update :shut-ins (fnil inc 0))) place (assoc :roof-walk-failed true)))
       (cond
         (not (and (= :done (:kind d)) (sh-sense/roofed? p (dig-in-roof-height c)))) (do (ctx/update-mem! c assoc :no-way-text (:text (:data d)))
                                                                                         (when-not (more-sites? c) (ctx/update-mem! c assoc :no-site true)))
