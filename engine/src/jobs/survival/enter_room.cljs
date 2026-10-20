@@ -233,7 +233,7 @@
   (let [door (room-lib/carried-door (:primitives c))
         blocks (if door [door] (blocks c))
         _ (remember-cells! c cells blocks)
-        r (await (ctx/call c :shut-doorway 'jobs.blocks.fill-cells (cond-> {:cells (vec cells)} (seq blocks) (assoc :use {:blocks blocks}))))]
+        r (await (ctx/call c :shut-doorway 'jobs.blocks.fill-cells (cond-> {:cells (vec cells) :ignore-zones? true} (seq blocks) (assoc :use {:blocks blocks}))))]
     (when-not (= :continue r)
       (ctx/forget-where! c :doorway-filled #(some #{(:cell %)} cells))
       (doseq [cell cells
@@ -251,7 +251,7 @@
     (ctx/update-mem! c update :mends (fnil inc 0))
     (if (>= mends (settings/get settings ::max-mends))
       (ctx/end c :nothing-possible :failed {:text "cannot mend the roof: the block does not stay"})
-      (let [r (await (ctx/call c :mend 'jobs.blocks.fill-cells {:cells [plug] :use {:blocks [item]}}))
+      (let [r (await (ctx/call c :mend 'jobs.blocks.fill-cells {:cells [plug] :ignore-zones? true :use {:blocks [item]}}))
             at (u/cell-vec plug)]
         (cond
           (= :continue r) :continue

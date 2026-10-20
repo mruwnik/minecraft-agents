@@ -44,7 +44,7 @@
   (let [cells (mend-permitted c (owed c))]
     (if (empty? cells)
       nil
-      (let [e (await (ctx/call c :fill 'jobs.blocks.fill-cells {:cells (mapv :pos cells) :use {:blocks (fillers c)}}))
+      (let [e (await (ctx/call c :fill 'jobs.blocks.fill-cells {:cells (mapv :pos cells) :use {:blocks (fillers c)} :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
             {:keys [mended left]} (when (map? e) (:data e))
             left (or left (map :pos cells))]
         (when (map? e)

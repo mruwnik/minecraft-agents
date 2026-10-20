@@ -18,7 +18,7 @@
   (let [out (atom nil)
         parent {:round (fn ^:async recording-round [c]
                          (let [e (await (ctx/call c :kid job args))]
-                           (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause :data])) (ctx/end c :done nil)))))}
+                           (if (= :continue e) :continue (do (reset! out (select-keys e [:kind :cause :data :because])) (ctx/end c :done nil)))))}
         eng (assoc-in (:eng env) [:jobs 'recording-parent] parent)]
     (core/submit! eng '(recording-parent) {})
     (await (tu/run-until-empty eng 20))
@@ -89,3 +89,59 @@
               e (await (settings/with-settings three-failures #(ending-of env {:cells [(:pos body)] :use {:blocks ["dirt"]}})))]
           (is (= :nothing-possible (:kind e)))
           (is (= 4 (count (bd/calls (:p env) "jumpPlace")))))))))
+
+(deftest order-given-fills-in-the-callers-order-and-lowest-goes-nearest-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far-first [{:x 3 :y 64 :z 0} {:x 2 :y 64 :z 0}]
+              [{:keys [p]} _] (await (outcome [{:name "dirt" :count 5}] {:cells far-first :order :given :use {:blocks ["dirt"]}}))
+              [{p2 :p} _] (await (outcome [{:name "dirt" :count 5}] {:cells far-first :use {:blocks ["dirt"]}}))
+              ys #(mapv (fn [call] (.-x (.-pos (.-args call)))) (bd/calls % "place"))]
+          (is (= [3 2] (ys p)))
+          (is (= [2 3] (ys p2))))))))
+
+(deftest clear-loose-digs-a-rail-first-and-never-a-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/setup {:self body :inventory [{:name "dirt" :count 5}] :blocks {"2,64,0" "rail" "3,64,0" "chest"} :drops {"rail" "rail"}})
+              e (await (ending-of env {:cells cells :use {:blocks ["dirt"]} :clear-loose true}))
+              plain (await (ending-of (bd/setup {:self body :inventory [{:name "dirt" :count 5}] :blocks {"2,64,0" "rail"}})
+                                      {:cells [(first cells)] :use {:blocks ["dirt"]}}))]
+          (is (= :condition-failed (:kind e)))
+          (is (= {:reason :blocked :cell {:x 3 :y 64 :z 0}} (select-keys (:cause e) [:reason :cell])))
+          (is (= :done (:kind plain)) "without :clear-loose a rail is no owed cell")
+          (is (= 0 (:mended (:data plain)))))))))
+
+(deftest clear-loose-replaces-the-rail-with-a-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/setup {:self body :inventory [{:name "dirt" :count 5}] :blocks {"2,64,0" "rail" "2,63,0" "stone"} :drops {"rail" "rail"}})
+              e (await (ending-of env {:cells [(first cells)] :use {:blocks ["dirt"]} :clear-loose true}))]
+          (is (= :done (:kind e)))
+          (is (= "dirt" (bd/block-at (:p env) (first cells)))))))))
+
+(deftest a-cell-in-anothers-zone-ends-refused-unless-zones-are-ignored
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zone [{:name "farm" :min [2 60 0] :max [2 70 0] :owner "Miles"}]
+              mk #(bd/setup {:self body :inventory [{:name "dirt" :count 5}] :zones zone})
+              e (await (ending-of (mk) {:cells [(first cells)] :use {:blocks ["dirt"]}}))
+              ok (await (ending-of (mk) {:cells [(first cells)] :use {:blocks ["dirt"]} :ignore-zones? true}))]
+          (is (= :condition-failed (:kind e)))
+          (is (= :refused (get-in e [:cause :reason])))
+          (is (= :done (:kind ok))))))))
+
+(deftest with-fetching-ways-and-no-block-a-need-child-is-started
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/setup {:self body :inventory []})
+              e (await (ending-of env {:cells cells :use {:blocks ["dirt"]} :ways #{:carried :chest}}))
+              started (filter #(= :child_started (:kind %)) @(:seen env))]
+          (is (some #(= :need (:slot %)) started))
+          (is (= :need (get-in e [:cause :reason])))
+          (is (some? (:because e))))))))
