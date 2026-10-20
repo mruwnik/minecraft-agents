@@ -462,6 +462,23 @@
     (while (.-pass ^js (:st per)) (perception/step! per))
     (is (= 3 (:passes (perception/stats per))))))
 
+(deftest stats-count-passes-and-rays-by-the-reason-they-started
+  (let [{:keys [p clock per]} (clocked-rig {"0,65,4" "gold_block"})
+        run! #(do (perception/step! per) (while (.-pass ^js (:st per)) (perception/step! per)))
+        why #(:why (perception/stats per))]
+    (run!)
+    (reset! clock 100)
+    (turn! p 90)
+    (run!)
+    (reset! clock 3300)
+    (fake/set-block! p [0 65 -40] "stone")
+    (run!)
+    (reset! clock 40000)
+    (run!)
+    (perception/pass! per)
+    (is (= {:first 1 :turned 1 :changed 1 :still 1 :forced 1} (update-vals (why) :passes)))
+    (is (= (:rays (perception/stats per)) (reduce + (map :rays (vals (why))))))))
+
 (deftest a-pass-jitters-its-rays-by-the-rand-opt
   (let [calls (atom 0)
         {:keys [per]} (rig {} {:rand #(do (swap! calls inc) 0.5)})]

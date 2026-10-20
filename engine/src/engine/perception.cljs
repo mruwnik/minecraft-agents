@@ -138,7 +138,8 @@
     {:passes (.-passes st) :rays (.-rays st) :cells (.-cells st) :steps (.-steps st)
      :step-ms-mean (if (pos? (.-steps st)) (/ (.-stepMs st) (.-steps st)) 0) :step-ms-max (.-stepMsMax st)
      :sections (.-count st) :bytes (* store/section-bytes (.-count st))
-     :steps-per-pass (rays/steps-per-pass per) :rays-per-pass (rays/rays-per-pass per)}))
+     :steps-per-pass (rays/steps-per-pass per) :rays-per-pass (rays/rays-per-pass per)
+     :why (into {} (map (fn [k] [(keyword k) (js->clj (aget (.-why st) k) :keywordize-keys true)])) (js/Object.keys (or (.-why st) #js {})))}))
 
 ;; ---- running in the body
 

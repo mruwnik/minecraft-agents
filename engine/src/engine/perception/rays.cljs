@@ -190,34 +190,55 @@
                                (if ax (+ tmx tdx) tmx) (if ay (+ tmy tdy) tmy) (if az (+ tmz tdz) tmz)
                                light (inc n))))))))))))))
 
-(defn moved? [{:keys [opts]} ^js last ^js eye]
-  (or (nil? last)
-      (not= (.-dimension last) (.-dimension eye))
-      (>= (js/Math.hypot (- (.-x eye) (.-x last)) (- (.-y eye) (.-y last)) (- (.-z eye) (.-z last))) (:move-blocks opts))
-      (>= (* (/ 180 js/Math.PI) (max (js/Math.abs (- (.-yaw eye) (.-yaw last))) (js/Math.abs (- (.-pitch eye) (.-pitch last)))))
-          (:turn-deg opts))))
+(defn moved-why
+  "Why a pass is due for the eye's change since the last pass started: :moved, :turned, or nil."
+  [{:keys [opts]} ^js last ^js eye]
+  (cond
+    (or (not= (.-dimension last) (.-dimension eye))
+        (>= (js/Math.hypot (- (.-x eye) (.-x last)) (- (.-y eye) (.-y last)) (- (.-z eye) (.-z last))) (:move-blocks opts)))
+    :moved
+    (>= (* (/ 180 js/Math.PI) (max (js/Math.abs (- (.-yaw eye) (.-yaw last))) (js/Math.abs (- (.-pitch eye) (.-pitch last)))))
+        (:turn-deg opts))
+    :turned))
 
 (defn epoch-of
   "The raw world's change counter, or nil when it has none."
   [raw]
   (when-let [f (aget ^js raw "epoch")] (f)))
 
-(defn idle-due?
-  "A still body (not moved or turned) looks again after :idle-ms if the world around it changed since the last pass
-  started, else after :still-ms. Without a raw-world change counter every :idle-ms."
+(defn idle-why
+  "Why a still body (not moved or turned) looks again: :changed (after :idle-ms, the world around it changed since the
+  last pass started), :still (after :still-ms), :idle (no raw-world change counter, every :idle-ms), or nil."
   [{:keys [raw opts] :as per} ^js last now]
   (let [waited (- now (.-at last))]
-    (and (>= waited (:idle-ms opts))
-         (or (>= waited (:still-ms opts))
-             (nil? (.-epoch last))
-             (not= (.-epoch last) (epoch-of raw))
-             (not= (.-darken last) (darken-now raw))
-             (not= (.-near last) (near-of per))))))
+    (when (>= waited (:idle-ms opts))
+      (cond
+        (>= waited (:still-ms opts)) :still
+        (nil? (.-epoch last)) :idle
+        (or (not= (.-epoch last) (epoch-of raw))
+            (not= (.-darken last) (darken-now raw))
+            (not= (.-near last) (near-of per))) :changed))))
+
+(defn start-why
+  "The reason a pass starts now, or nil when none is due."
+  [per ^js last ^js eye now force?]
+  (cond
+    force? :forced
+    (nil? last) :first
+    :else (or (moved-why per (.-eye last) eye) (idle-why per last now))))
+
+(defn count-why!
+  "Adds n to the per-reason counter (:passes or :rays) of why, kept apart from the totals so a probe can see which
+  reason dominates."
+  [^js st why k n]
+  (let [^js m (or (.-why st) (set! (.-why st) #js {}))
+        ^js c (or (aget m (name why)) (aset m (name why) #js {:passes 0 :rays 0}))]
+    (aset c (name k) (+ (aget c (name k)) n))))
 
 (defn start-pass!
   "Starts a pass at effort (0-1: the share of grid rays, see grid; the opts' :effort when nil), unless the sight table
   is not ready yet (the next step tries again)."
-  [{:keys [raw opts] :as per} ^js st ^js eye now effort]
+  [{:keys [raw opts] :as per} ^js st ^js eye now effort why]
   (when (sight-of per st)
     (set! (.-visible st) (table-now raw (:seeing-min opts)))
     (set! (.-lastStart st) #js {:at now :eye eye :epoch (epoch-of raw) :darken (darken-now raw) :near (near-of per)})
@@ -225,7 +246,8 @@
           jx ((:rand opts)) jy ((:rand opts))
           ground (ground-rays opts hx hy (.-yaw eye) (.-pitch eye) jx jy)]
       (set! (.-pass st) #js {:next 0 :jx jx :jy jy :cols cols :rows rows :ground ground
-                             :total (+ (* cols rows) (/ (.-length ground) 2))})
+                             :total (+ (* cols rows) (/ (.-length ground) 2)) :why why})
+      (count-why! st why :passes 1)
       (set! (.-passRays st) (.-total (.-pass st))))))
 
 (defn cast-slice!
@@ -272,12 +294,8 @@
      (when eye
        (set! (.-dim st) (.-dimension eye))
        (new-stamp! st)
-       (when (and (nil? (.-pass st))
-                  (or force?
-                      (nil? (.-lastStart st))
-                      (idle-due? per (.-lastStart st) now)
-                      (moved? per (.-eye (.-lastStart st)) eye)))
-         (start-pass! per st eye now effort))
+       (when-let [why (and (nil? (.-pass st)) (start-why per (.-lastStart st) eye now force?))]
+         (start-pass! per st eye now effort why))
        (when-let [^js pass (.-pass st)]
          (let [total (.-total pass)
                from (.-next pass)
@@ -285,6 +303,7 @@
                cells (cast-slice! per st pass eye from to now)]
            (set! (.-next pass) to)
            (set! (.-rays st) (+ (.-rays st) (- to from)))
+           (count-why! st (.-why pass) :rays (- to from))
            (set! (.-cells st) (+ (.-cells st) cells))
            (when (>= to total)
              (set! (.-pass st) nil)
