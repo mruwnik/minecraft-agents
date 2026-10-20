@@ -35,6 +35,14 @@
             {:event {:source :job :kind :blocks.dig.sealed} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:not-block [20 4 16] "lava"] [:body-near [19.5 2 16.5] 1.5]]}
+  ;; should fail: the pocket's floor is lava, so its goal cell is no place to stand: go-to refuses at once (goal-not-standable), digs nothing and never steps in
+  {:name "pocket-over-lava-is-refused"
+   :blocks [[:set [19 1 16] "lava"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [19 2 16] :range 0})]]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 60 :until {:source :job :kind :stopped :data {:arrived false}}}]
+   :after [[:block [19 1 16] "lava"] [:block [19 5 16] "stone"] [:body-far [19.5 3 16.5] 0.9]]
+   :limit-s 90}
   ;; should fail: walk-only, the pocket is walled in: it walks to the plateau cell nearest it (within budget) and gives up there, digging nothing
   {:name "walk-only-walks-over-the-pocket-and-gives-up"
    :act [[:job (jobs.movement.go-to {:pos #at [19 2 16] :range 0 :ways #{:walk}})]]

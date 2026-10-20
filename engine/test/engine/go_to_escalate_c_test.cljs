@@ -10,6 +10,7 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
+            [engine.settings :as settings]
             [jobs.lib.escape :as escape]
             [jobs.lib.near :as near]
             [jobs.lib.ledger :as ledger]
@@ -443,6 +444,28 @@
         cells #(choose/route-cells p [0 64 0] [3 64 0] (constantly true) (constantly false) %)]
     (is (some #(= 1 (nth (:cell %) 2)) (cells false)))
     (is (not-any? #(= 1 (nth (:cell %) 2)) (cells true)) "it goes straight over the unseen floor")))
+
+(deftest a-dig-route-walks-on-into-a-pocket-whose-floor-is-seen-only-from-inside
+  ;; the pocket [3 60 0] [3 61 0] reads as rock until [3 62 0] is dug, then shows open; its floor [3 59 0] never shows: the
+  ;; replan finds no strict route, so it plans with floors unseen ok and walks on, counted as a replan
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [sense (fn [p]
+                      (let [sensed (.-sensedAt p)]
+                        (aset p "sensedAt" (fn [q] (let [cell [(.-x q) (.-y q) (.-z q)]]
+                                                     (if (or (= [3 59 0] cell) (and (#{[3 60 0] [3 61 0]} cell) (not= "air" (block p [3 62 0]))))
+                                                       #js {:unknown true}
+                                                       (sensed q)))))))
+              pick [{:name "stone_pickaxe" :count 1}]
+              run #(dig-route-run! below-pocket pick sense)
+              walked (await (run))
+              capped (await (settings/with-settings {:jobs.movement.go-to.tuning/max-route-replans 0} run))]
+          (is (true? (:arrived @(:out walked))) (pr-str @(:out walked)))
+          (is (= [3 60 0] (feet (:p walked))))
+          (is (empty? (events-of (:seen walked) :go-to.escalation-stopped)))
+          (is (some #(= [:dig-route :no-route] ((juxt :step :reason) %)) (events-of (:seen capped) :go-to.escalation-stopped))
+              "the walk on is a replan, so no replan left ends it"))))))
 
 (deftest every-escalation-child-runs-hurt
   (doseq [e [{:step :pillar :height 2} {:step :stair :heading :east :steps 2} {:step :clear-path :heading :east} {:step :approach :pos [1 64 0]}]]
