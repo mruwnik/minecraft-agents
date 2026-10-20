@@ -35,8 +35,8 @@
   refused or unreachable, or whose walk is blocked, three times is skipped.
   :plan (optionally :part) makes the plan's crop cells the field instead (:box and :seed are then unused); each bare
   planned cell is sown with the seed of the crop the plan wants there, when carried. Zones and other active plans'
-  footprints are asked before choosing a cell and again before the place; a cell they refuse is left bare (one
-  plant.declined warn, :reason :refused), :ignore-zones? true skips the check.
+  footprints are asked before choosing a cell and again before the place; a cell they refuse is left bare
+  (:reason :refused), :ignore-zones? true skips the check.
   Refused before it starts: impossible {:reason :bad-args :why}; failed conditions {:reason :no-zones}, {:reason
   :plan-trouble :why} (the plan is missing or unreadable: a wait; it has no crop cells: impossible, also later),
   :refused (every bare cell is refused), :food-reserve (a food-crop seed is carried but the reserve keeps it; nothing is
@@ -113,9 +113,9 @@
     {:reason :need :any-of (vec (sort (distinct (vals crops/seed-of)))) :count n}))
 
 (defn sowable-cells
-  "The ground cells of cells whose sowing (the cell above) the job may do; one warn when some are refused."
+  "The ground cells of cells whose sowing (the cell above) the job may do."
   [c cells]
-  (let [ok (set (gate/allowed c :plant.declined "plant" :sow (map #(update % :y inc) cells) {:own-plans-ok? true}))]
+  (let [ok (set (gate/allowed-quiet c :sow (map #(update % :y inc) cells) {:own-plans-ok? true}))]
     (filterv #(ok (update % :y inc)) cells)))
 
 (defn unsown
@@ -180,7 +180,7 @@
   [c]
   (let [{:keys [box plan]} (:args c)]
     (when (and (or box plan) (not (:started (ctx/mem c))))
-      (or (common/no-zones c :plant.declined "plant")
+      (or (common/no-zones c)
           (if plan (plan-problem c) (box-problem c))))))
 
 (def bad-args (checks/args-fit "plant needs :box or :plan" #(let [{:keys [box plan]} (:args %)] (or box plan))))
@@ -228,15 +228,15 @@
 ;; ------------------------------------------------------------------ plan mode
 
 (defn planned
-  "Without :plan nil; else {:cells {pos crop}}, or {:trouble text} (warned once per reason) when the plan cannot be
+  "Without :plan nil; else {:cells {pos crop}}, or {:trouble text} when the plan cannot be
   worked."
   [c]
   (when (:plan (:args c))
-    (pf/read-plan c {:cells fld/crop-cells :what "crop cells" :event :plant.declined :label "plant"})))
+    (pf/read-plan c {:cells fld/crop-cells :what "crop cells"})))
 
 (defn sowing
   "How the planned bare cells divide: {:ready [{:pos :seed}] (seed carried, not skipped, permitted) :short #{seed}
-  (carried none) :refused [{:pos :reason}]}. One plant.declined warn names what refuses the refused cells."
+  (carried none) :refused [{:pos :reason}]}. "
   [c cells]
   (let [plan (:plan (:args c))
         have (set (map key (filter (comp pos? val) (sowable c))))
@@ -248,7 +248,7 @@
                                            :else (update acc :seeded conj debt)))
                                        {:short #{} :seeded []}
                                        (fld/planned-bare (:primitives c) cells))
-        ok (set (gate/allowed c :plant.declined "plant" :sow (map :pos seeded) {:except plan :own-plans-ok? true}))]
+        ok (set (gate/allowed-quiet c :sow (map :pos seeded) {:except plan :own-plans-ok? true}))]
     (reduce (fn [acc {:keys [pos] :as debt}]
               (if (ok pos)
                 (update acc :ready conj debt)

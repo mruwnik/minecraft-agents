@@ -28,7 +28,7 @@
   holding the crop the plan wants, a planned bare cell is sown unless :replant-bare is false (food seeds only above the food
   reserve), crops outside the plan stand.
   Needs: a zone list (unless :ignore-zones?), seeds carried to replant. Another owner's zone, claim or plan footprint is left
-  alone (harvest.declined warn); :ignore-zones? skips the check.
+  alone; :ignore-zones? skips the check.
   One call is the whole run, doing the first step that applies until it finishes:
   1. Replant the bare farmland of cells it cut (what it cuts is written to memory with its seed before the dig).
   2. Cut the ripe crops, walking (a go-to child) to the nearest when out of the reach setting; a shut-in body walks out first.
@@ -125,7 +125,7 @@
   "The poss the job may act on with action: zones, claims and the footprints of plans but its own (see jobs.lib.gate).
   A plan this body made never refuses its own work."
   [c action poss]
-  (gate/allowed c :harvest.declined "harvest" action poss {:except (:plan (:args c)) :own-plans-ok? true}))
+  (gate/allowed-quiet c action poss {:except (:plan (:args c)) :own-plans-ok? true}))
 
 (defn cut-action
   "The zone action asked for cutting a crop: :harvest in box mode; with :plan :dig, the action the plan jobs (farm.tend)
@@ -146,11 +146,11 @@
   (permitted c (cut-action c) (ripe-raw c skipped)))
 
 (defn planned
-  "Without :plan nil; else {:cells {pos crop}}, or {:trouble text} (warned once per reason) when the plan
+  "Without :plan nil; else {:cells {pos crop}}, or {:trouble text} when the plan
   cannot be worked."
   [c]
   (when (:plan (:args c))
-    (pf/read-plan c {:cells fld/crop-cells :what "crop cells" :event :harvest.declined :label "harvest"})))
+    (pf/read-plan c {:cells fld/crop-cells :what "crop cells"})))
 
 (defn with-field
   "c over the field of planned (nil: unchanged): :plan-cells set, :center and :radius of the args around them."
@@ -210,7 +210,7 @@
   worked, and a field with nothing owed: no debt, no sweep, no ripe crop it may cut (:refused when zones keep it from
   every one) and no need to look around first."
   [c]
-  (or (common/no-zones c :harvest.declined "harvest")
+  (or (common/no-zones c)
       (let [field (planned c)
             c (with-field c field)
             m (ctx/mem c)]

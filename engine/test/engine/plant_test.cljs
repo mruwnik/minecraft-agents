@@ -256,13 +256,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[owner extra planted declined cell] [["Fake" {} 9 [] "wheat"] ["FAKE" {} 9 [] "wheat"]
-                                                ["Miles" {} 8 [{:reason :refused :zones ["farm"]}] "air"]
-                                                ["Miles" {:ignore-zones? true} 9 [] "wheat"]]]
+        (doseq [[owner extra planted cell] [["Fake" {} 9 "wheat"] ["FAKE" {} 9 "wheat"]
+                                                ["Miles" {} 8 "air"]
+                                                ["Miles" {:ignore-zones? true} 9 "wheat"]]]
           (let [{:keys [eng p seen]} (start (field-world (inv "wheat_seeds" 9)) (ew/of-data {} {} [(assoc zone-over-cell :owner owner)]))
                 result (await (child-outcome eng job (merge {:box field-box} extra) 100))]
             (is (= planted (:planted result)) (pr-str [owner extra]))
-            (is (= declined (mapv #(select-keys % [:reason :zones]) (events-of seen :plant.declined))) (pr-str [owner extra]))
+            (is (empty? (events-of seen :plant.declined)) "a condition does not warn")
             (is (= cell (block-at p 2 64 2)) (pr-str [owner extra]))))))))
 
 (deftest no-zone-list-declines-the-sowing
@@ -273,7 +273,7 @@
           (core/submit! eng (list job {:box field-box}) {})
           (await (run-until-empty eng 20))
           (is (empty? (calls p "place")))
-          (is (= [:no-zones] (mapv :reason (events-of seen :plant.declined)))))))))
+          (is (empty? (events-of seen :plant.declined))))))))
 
 (defn shared-plans
   "Plan mix wants wheat at (2,64,2) and (3,64,2); plan other claims the cells of other-cells."
@@ -288,7 +288,7 @@
     (await (run-until-empty eng 40))
     {:p p :seen seen}))
 
-(deftest cells-shared-with-another-plan-are-left-bare-and-named-in-one-warn
+(deftest cells-shared-with-another-plan-are-left-bare
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -296,7 +296,7 @@
               declined (events-of seen :plant.declined)]
           (is (= "wheat" (block-at p 2 64 2)))
           (is (= "air" (block-at p 3 64 2)))
-          (is (= [[:refused ["other"]]] (mapv (juxt :reason :plans) declined))))))))
+          (is (empty? declined)))))))
 
 (deftest cells-shared-with-its-own-other-plan-are-sown
   (async done
@@ -329,14 +329,14 @@
           (is (< (await (run-until-empty eng 60)) 60) "the job ended")
           (is (true? @moved?) "the body walked"))))))
 
-(deftest every-cell-refused-by-another-plan-warns-once-though-the-job-never-starts
+(deftest every-cell-refused-by-another-plan-never-starts-the-job
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p seen]} (await (run-plan [[2 64 2] [3 64 2]]))
               declined (events-of seen :plant.declined)]
           (is (= "air" (block-at p 2 64 2)))
-          (is (= [[:refused ["other"]]] (mapv (juxt :reason :plans) declined))))))))
+          (is (empty? declined)))))))
 
 (defn ^:async waiting-reasons
   "The :reason of every job.waiting event after submitting args over a field of 2 cells, with other-cells claimed by another plan."

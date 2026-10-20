@@ -32,7 +32,7 @@
   digs).
   With :for-plan (the id of the plan the cells belong to) that plan's own footprint does not refuse a cell. Zones
   and the footprints of other plans are checked when a cell is chosen and again before the hoe or cover dig.
-  Refused before it starts: impossible {:reason :bad-args :why}; failed conditions (with a till.declined warn for the zone ones)
+  Refused before it starts: impossible {:reason :bad-args :why}; failed conditions
   {:reason :no-zones} (no zone list read, unless :ignore-zones?), {:reason :refused :zones ..} (every tillable cell is
   refused) and the hoe above.
   Ends with data {:tilled n :skipped {pos reason}}: done when it tilled some (the least accepted is :least, cells) or had
@@ -149,13 +149,6 @@
 
 (def no-hoe {:reason :no-tool :kind "hoe"})
 
-(defn decline
-  "Fields (a cause) of a pre-start refusal of every tillable cell by zones, claims or plans, with one till.declined warn."
-  [c fields]
-  (ctx/warn-once! c [:access :refused] :till.declined
-                  (assoc fields :text (str "till declined: every target is refused by " (access/refusal-text fields))))
-  fields)
-
 (defn bad-args
   "Never :bad-args unless the cells can be read from the args (a box within the limit, or a centre and radius)."
   [c]
@@ -175,10 +168,10 @@
           refuse (when-not (:ignore-zones? in)
                    (fn [pos] (let [v (rules/social-verdict :dig (assoc in :cell (access/cell pos)))]
                                (when (gate/refused? v) v))))]
-      (or (common/no-zones c :till.declined "till")
+      (or (common/no-zones c)
           (let [{:keys [todo? work? verdicts]} (survey c cs refuse)]
             (cond
-              (and (seq verdicts) (not work?)) (decline c (assoc (access/refusal-fields verdicts) :reason :refused))
+              (and (seq verdicts) (not work?)) (assoc (access/refusal-fields verdicts) :reason :refused)
               (and todo? (nil? (hoe c)) (nil? (fetch-opts c))) no-hoe))))))
 
 (def can-start? (cond/and bad-args (checks/refusing :tillable "a cell to till, a hoe and zones allow" problem)))

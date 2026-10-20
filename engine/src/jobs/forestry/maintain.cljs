@@ -39,7 +39,7 @@
   Does not start (condition-failed, a skipped job) unless a grown tree stands on a planned cell that is not left, or a
   bare planned cell has its sapling carried: the cause is the worst blocked state ({:reason :cells-foreign
   :cells-unplantable :no-sapling :cells [..]}) or :nothing-to-do. {:reason :plan-trouble :why text}
-  (one forest.declined warn): a wait while the plan is missing or unreadable or no zone list is loaded; impossible when it
+  a wait while the plan is missing or unreadable or no zone list is loaded; impossible when it
   has no tree cells, also later in the call.
   Ends :done with data {:felled :planted :left :bare} when it felled or planted a tree. With none of
   those it ends nothing-possible :left when it left trees standing, else condition-failed :nothing-to-do.")
@@ -128,7 +128,7 @@
 
 ;; ------------------------------------------------------------------ the plan
 
-(defn planned [c] (lib/planned c "forest"))
+(defn planned [c] (lib/planned c))
 
 (defn note-cells!
   "Say, once each, which planned cells hold something foreign, cannot take a sapling, or want a sapling not carried."

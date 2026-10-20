@@ -38,6 +38,11 @@
   ([c kind job-name action poss] (allowed c kind job-name action poss {}))
   ([c kind job-name action poss opts] (:allowed (judge c kind job-name action poss opts))))
 
+(defn allowed-quiet
+  "As allowed, without the decline warn: for a condition, which never acts."
+  ([c action poss] (allowed-quiet c action poss {}))
+  ([c action poss opts] (:allowed (look c action poss opts))))
+
 (defn allowed?
   "Whether the job may act on pos; see allowed."
   ([c kind job-name action pos] (allowed? c kind job-name action pos {}))

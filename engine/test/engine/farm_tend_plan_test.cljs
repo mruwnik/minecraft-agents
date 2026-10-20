@@ -366,19 +366,16 @@
         (let [s (await (run {:plan "mix" :ignore-zones? true} (world-of farmland-all all-seed) {"mix" (plan-of)} nil 60))]
           (is (= 4 (count (placed s)))))))))
 
-(deftest a-decline-is-warned-once-with-its-reason
+(deftest a-plan-trouble-is-a-wait-reason-not-a-warn
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (run {:plan "mix"} (world-of farmland-all all-seed) {} 5))
               warns (events-of s :farm-tend.declined)]
-          (is (= 1 (count warns)))
-          (is (= "mix" (:plan (first warns))))
-          (is (= "no such plan" (:reason (first warns)))))
+          (is (empty? warns)))
         (let [s (await (run {:plan "mix"} (world-of farmland-all all-seed) {"mix" (plan-of)} nil 5))
               warns (events-of s :farm-tend.declined)]
-          (is (= 1 (count warns)))
-          (is (re-find #"zone" (:reason (first warns)))))))))
+          (is (empty? warns)))))))
 
 (deftest nothing-to-do-over-a-plan-declines
   (is (untouched? {:plan "mix"} (world-of (ground "farmland" wheat-cells) (crops "wheat" 3 wheat-cells) {:inventory [(item "wheat_seeds" 6)]})

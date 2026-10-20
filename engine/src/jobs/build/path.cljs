@@ -145,7 +145,7 @@
 (def no-zones
   "Later :no-zones when no zone list could be read (unless :ignore-zones?)."
   (checks/refusing :zones-read "a zone list is read"
-                      #(when (valid-cells %) (common/no-zones % :path.declined "path"))))
+                      #(when (valid-cells %) (common/no-zones %))))
 
 (def all-refused
   "Later :refused when every pathable cell is refused by a zone, claim or plan (unless :ignore-zones?)."

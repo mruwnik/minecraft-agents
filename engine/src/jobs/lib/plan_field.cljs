@@ -23,9 +23,8 @@
   "The plan of c's args: {:answer plan-answer :cells cells} when it can be worked, else {:trouble text :later? bool}
   (later when the plan is missing or unreadable or the zone list is unread: it may come; never when it has no cells).
   opts: :cells (fn [answer part] -> cells), :what (name of the cells in the trouble text), :zones? true to want a zone
-  list unless the job's :ignore-zones? is set, :event and :label to warn once per reason as <event> (\"<label> declines
-  plan ...\"); no :event is a pure read."
-  [c {:keys [cells what zones? event label]}]
+  list unless the job's :ignore-zones? is set. A pure read: the trouble is the caller's status to report."
+  [c {:keys [cells what zones?]}]
   (let [{:keys [plan part ignore-zones?]} (:args c)
         answer (known/plan c plan)
         found (cells answer part)
@@ -33,11 +32,7 @@
         why (or (trouble answer found what) unzoned)]
     (if-not why
       {:answer answer :cells found}
-      (do (when event
-            (ctx/warn-once! c [plan why] event
-                            {:plan plan :part part :reason why
-                             :text (str label " declines plan " plan (when part (str " part " part)) ": " why)}))
-          {:trouble why :later? (or (known/unreadable? answer) (= unzoned why))}))))
+      {:trouble why :later? (or (known/unreadable? answer) (= unzoned why))})))
 
 (defn plan-can-run?
   "Later :plan-trouble while the plan is missing or unreadable (or the zone list unread), never when it has no cells."

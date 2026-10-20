@@ -25,7 +25,7 @@
   Needs bone meal in the inventory; it is fetched (jobs.lib.need, :fetch) when none is carried and none was used yet; a
   failed fetch ends the call with its ending as the :because. A crop that refuses bone meal or cannot be reached is skipped.
   Zones: a crop in another owner's zone or claim, or inside a plan's footprint, is skipped (it counts as a
-  :harvest), with a fertilize.declined warn once (:reason :refused). :ignore-zones? true skips the check.
+  :harvest). :ignore-zones? true skips the check.
   Refused before it starts, as failed conditions: {:reason :no-zones} (no zone list read, unless :ignore-zones?) and
   {:reason :need :item \"bone_meal\"} (none carried, targets left, :fetch false).
   Ends when :max uses are spent, the bone meal runs out or no unripe crop is left, with data {:used n}: done when it used
@@ -97,7 +97,7 @@
   [c]
   (let [refused (:refused (ctx/mem c) #{})
         me (u/self-pos c)]
-    (->> (gate/allowed c :fertilize.declined "fertilize" :harvest (remove refused (raw-targets c)) {:own-plans-ok? true})
+    (->> (gate/allowed-quiet c :harvest (remove refused (raw-targets c)) {:own-plans-ok? true})
          (sort-by #(u/dist me %)))))
 
 (defn lacks-meal?
@@ -118,7 +118,7 @@
   [c]
   (when (and (lacks-meal? c) (nil? (fetch-opts c))) {:reason :need :item "bone_meal"}))
 
-(def can-start? (cond/and (checks/zones-read :fertilize.declined "fertilize")
+(def can-start? (cond/and checks/zones-read
                           (checks/refusing :meal "bone meal carried or fetchable" no-meal-source)))
 
 (defn done?

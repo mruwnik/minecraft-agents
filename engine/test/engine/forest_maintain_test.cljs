@@ -314,17 +314,17 @@
           (is (= [[3 64 0 "oak_sapling"]] (places (:p s))) "the cut cell is replanted though the plan dropped it")
           (is (= 4 (count (digs (:p s)))) "the felling is one call: the tree begun is felled whole"))))))
 
-(deftest the-check-declines-a-plan-it-cannot-work-with-one-warn
+(deftest the-check-waits-on-a-plan-it-cannot-work
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [crops {:id "crops" :parts [{:id "c" :cells [[3 64 0]] :want {:crop "wheat"}}]}]
           (doseq [[plans args reason] [[{} {:plan "nope"} "no such plan"]
-                                       [{"crops" crops} {:plan "crops"} "no tree cells"]
-                                       [{"forest" oak-cell} {:plan "forest" :part "zz"} "no tree cells"]]]
+                                       [{"crops" crops} {:plan "crops"} nil]
+                                       [{"forest" oak-cell} {:plan "forest" :part "zz"} nil]]]
             (let [{:keys [p seen]} (await (run oak-world plans args 5))]
-              (is (= [[] [] [[(:plan args) reason]]]
-                     [(digs p) (places p) (mapv (juxt :plan :reason) (h/events-of seen :forest.declined))])
+              (is (= [[] [] reason]
+                     [(digs p) (places p) (some :why (reverse (deref seen)))])
                   reason))))))))
 
 (deftest a-broken-plan-declines-naming-the-error
@@ -336,7 +336,7 @@
           (core/submit! eng (list job {:plan "forest"}) {})
           (await (ticks eng 4))
           (is (= [] (digs p)))
-          (is (= ["the plan cannot be read: unreadable EDN: eof"] (mapv :reason (h/events-of seen :forest.declined)))))))))
+          (is (= "the plan cannot be read: unreadable EDN: eof" (some :why (reverse (deref seen))))))))))
 
 ;; ------------------------------------------------------------------ not spinning
 
@@ -434,13 +434,13 @@
           (is (= [[3 64 0 "oak_sapling"]] (places p)))
           (is (= [] (warns seen :forest.left))))))))
 
-(deftest without-a-zone-list-the-job-declines-with-one-warn
+(deftest without-a-zone-list-the-job-waits
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p seen]} (await (with-zones nil #(run oak-world {"forest" oak-cell} {:plan "forest"} 10)))]
           (is (= [] (vec (.-calls (.-world p)))))
-          (is (= ["no zone list has been read"] (mapv :reason (h/events-of seen :forest.declined)))))))))
+          (is (= "no zone list has been read" (some :why (reverse (deref seen))))))))))
 
 (deftest a-hazard-the-job-accepts-does-not-stop-the-felling-and-one-it-does-not-accept-does
   (async done

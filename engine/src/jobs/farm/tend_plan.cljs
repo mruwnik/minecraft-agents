@@ -41,12 +41,11 @@
           crops)))
 
 (defn planned
-  "With :plan, {:answer :crops {pos crop}} when the plan can be worked, else {:trouble text} (warned once per reason);
+  "With :plan, {:answer :crops {pos crop}} when the plan can be worked, else {:trouble text};
   nil without :plan."
   [c]
   (when (:plan (:args c))
-    (let [{:keys [cells] :as r} (pf/read-plan c {:cells fld/crop-cells :what "crop cells" :zones? true
-                                                  :event :farm-tend.declined :label "tend"})]
+    (let [{:keys [cells] :as r} (pf/read-plan c {:cells fld/crop-cells :what "crop cells" :zones? true})]
       (cond-> r cells (assoc :crops cells)))))
 
 (defn ground-cell

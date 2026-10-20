@@ -32,13 +32,9 @@
         (ctx/end c (if (condition-skips cause) :condition-failed :nothing-possible) cause (assoc result :text text))))))
 
 (defn no-zones
-  "The cause {:reason :no-zones} while no zone list has been read (unless the call's :ignore-zones?), with one kind warn
-  (a job.declined event of job-name); else nil."
-  [c kind job-name]
+  "The cause {:reason :no-zones} while no zone list has been read (unless the call's :ignore-zones?); else nil."
+  [c]
   (when-not (or (:ignore-zones? (:args c)) (some? (known/zones c)))
-    (ctx/warn-once! c [:access :no-zones] kind
-                    {:reason :no-zones
-                     :text (str job-name " declined: no zone list has been read (zones.edn missing or never valid)")})
     {:reason :no-zones}))
 
 (defn ^:async walk!

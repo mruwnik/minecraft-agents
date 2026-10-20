@@ -26,7 +26,7 @@
   looks again (a pour that fails, or a bucket gone before it, has the cell refilled with dirt (a jobs.blocks.place child); a cell that stays open is named in :holes and ends the call, a refilled one only drops that spot); one bucket wets one spot, so it ends when no cell is dry, no water bucket is left or no spot helps. A pour
   counts only once the cell is seen as water. A water bucket is fetched (jobs.lib.need, :fetch) when dry cells are left and none is carried; a
   failed fetch ends the call with its ending as the :because. Zones: a spot in another owner's zone or claim, or in a
-  plan's footprint (unless :for-plan), is not used, with an irrigate.declined warn once. With no field cell seen yet it looks round even in the dark (the exposure check starts once a field cell is seen).
+  plan's footprint (unless :for-plan), is not used. With no field cell seen yet it looks round even in the dark (the exposure check starts once a field cell is seen).
   Refused before it starts: impossible {:reason :bad-args :why}; failed conditions {:reason :no-zones} (unless :ignore-zones?)
   and {:reason :need :item \"water_bucket\"} (dry cells, none carried, :fetch false).
   Ends with data {:poured [cells] :dry [cells still dry] :unknown [cells with unseen reach] :failed [spots given up] :restored
@@ -111,7 +111,7 @@
     (count (filter (fn [{:keys [x y z]}] (farm/hydrated? ws x y z)) dry))))
 
 (defn permitted? [c pos]
-  (gate/allowed? c :irrigate.declined "irrigate" :dig pos {:except (:for-plan (:args c))}))
+  (boolean (seq (gate/allowed-quiet c :dig [pos] {:except (:for-plan (:args c))}))))
 
 (defn solid-at?
   "Whether the block at pos is seen and neither air, fluid nor clearable."
@@ -165,7 +165,7 @@
   (when (and (needs-bucket? c) (nil? (fetch-opts c))) {:reason :need :item "water_bucket"}))
 
 (def can-start? (cond/and till/bad-args
-                          (checks/zones-read :irrigate.declined "irrigate")
+                          checks/zones-read
                           (checks/refusing :bucket "water bucket carried or fetchable" no-bucket-source)))
 
 (defn result-of [c]

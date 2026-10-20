@@ -22,7 +22,7 @@
   "Feed a composter what a farm cannot use and collect the bone meal it makes.
   Walks to the composter (a go-to child), feeds it, empties it when full and picks up the bone meal.
   Zones: a composter in another owner's zone or claim, or inside a plan's footprint, is not used (it counts as a
-  :harvest), with a compost.declined warn once (:reason :refused). :ignore-zones? true skips the check.
+  :harvest). :ignore-zones? true skips the check.
   Waits before it starts (a listed call waits with the reason): {:reason :no-zones} (no zone list read, unless
   :ignore-zones?), :nothing-to-feed (nothing carried to feed), :no-composter (none seen and allowed; a :look first).
   A composter at level 7 is waited out with short pauses (a jobs.time.noop child).
@@ -119,15 +119,15 @@
     (level-of (u/seen-block (:primitives c) pos))))
 
 (defn composter-allowed?
-  "Whether the job may use the composter at pos (zones, claims, footprints; one warn when refused)."
+  "Whether the job may use the composter at pos (zones, claims, footprints)."
   [c pos]
-  (gate/allowed? c :compost.declined "compost" :harvest pos {:own-plans-ok? true}))
+  (boolean (seq (gate/allowed-quiet c :harvest [pos] {:own-plans-ok? true}))))
 
 (defn nearest-composter
   "The nearest composter within :radius that the zone rules let the job use."
   [c]
   (let [me (u/self-pos c)]
-    (->> (gate/allowed c :compost.declined "compost" :harvest
+    (->> (gate/allowed-quiet c :harvest
                        (map :pos (look/seen-blocks (:primitives c) {:names ["composter"] :radius (settings/get settings ::radius) :live? true}))
                        {:own-plans-ok? true})
          (sort-by #(u/dist me %))
@@ -173,7 +173,7 @@
 
 (def can-start?
   "Zones read, a composter seen (:look until the body has looked around) and something to feed it."
-  (cond/and (checks/zones-read :compost.declined "compost")
+  (cond/and checks/zones-read
             (checks/refusing #(if (or (look/surveyed? %) (composter-at %)) :later :look) :ready
                              "a composter and something to feed" problem)))
 

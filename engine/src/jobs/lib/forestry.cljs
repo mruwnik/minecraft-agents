@@ -40,11 +40,9 @@
     (await (look/survey! c))))
 
 (defn planned
-  "{:trees {pos species} :planned #{[x y z]}} for the plan of c's args, or {:trouble text :later?} (warned once per
-  reason as <label>.declined)."
-  [c label]
-  (let [{:keys [answer cells] :as r} (pf/read-plan c {:cells tree-cells :what "tree cells" :zones? true
-                                                        :event (keyword (str label ".declined")) :label label})]
+  "{:trees {pos species} :planned #{[x y z]}} for the plan of c's args, or {:trouble text :later?}."
+  [c]
+  (let [{:keys [answer cells] :as r} (pf/read-plan c {:cells tree-cells :what "tree cells" :zones? true})]
     (if cells
       {:trees cells :planned (set (map (comp vec :pos) (:cells answer)))}
       r)))

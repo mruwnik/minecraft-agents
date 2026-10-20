@@ -4,7 +4,6 @@
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
-            [jobs.lib.job-common :as common]
             [jobs.lib.body :as body]
             [jobs.lib.cond :as cond]
             [jobs.lib.storage :as storage]
@@ -76,14 +75,11 @@
              (contract/ok ok-reason ok-text)))))
 
 (defn zones-read
-  "Later :no-zones while no zone list has been read, unless the call's :ignore-zones?. With (kind job-name) the check
-  of it that also warns once (jobs.lib.job-common/no-zones)."
-  ([c]
-   (if (or (:ignore-zones? (:args c)) (some? (known/zones c)))
-     (contract/ok :zones-read "zones read")
-     (contract/later :no-zones "no zone list has been read")))
-  ([kind job-name]
-   (refusing :zones-read "zone list read" #(common/no-zones % kind job-name))))
+  "Later :no-zones while no zone list has been read, unless the call's :ignore-zones?."
+  [c]
+  (if (or (:ignore-zones? (:args c)) (some? (known/zones c)))
+    (contract/ok :zones-read "zones read")
+    (contract/later :no-zones "no zone list has been read")))
 
 (defn night "Night, else :later with reason." [reason] (cond/because reason "not night" (cond/not (cond/daytime))))
 

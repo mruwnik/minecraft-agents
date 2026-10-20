@@ -76,18 +76,19 @@
           (is (= 2 (:cut result))))))))
 
 (defn declines
-  "Submit harvest with args over the mixed field and plans, tick a few times: [digs, places, harvest.declined warns]."
+  "Submit harvest with args over the mixed field and plans, tick a few times: [digs, places, the why of the last wait]."
   [plans args]
   (let [{:keys [eng p seen]} (start mixed-field plans)]
     (core/submit! eng (list h/job args) {})
     (dotimes [_ 4] (swap! h/clock + 700) (core/tick! eng))
-    [(count (h/calls p "dig")) (count (h/calls p "place")) (mapv #(select-keys % [:plan :reason]) (h/events-of seen :harvest.declined))]))
+    [(count (h/calls p "dig")) (count (h/calls p "place")) (some :why (reverse (deref seen)))]))
 
-(deftest the-check-declines-a-plan-it-cannot-work-with-one-warn
+
+(deftest the-check-waits-on-a-plan-it-cannot-work-without-a-warn
   (let [cane {:id "cane" :parts [{:id "c" :cells [[2 64 2]] :want {:crop "sugar_cane"}}]}]
-    (is (= [0 0 [{:plan "nope" :reason "no such plan"}]] (declines {} {:plan "nope"})))
-    (is (= [0 0 [{:plan "cane" :reason "no crop cells"}]] (declines {"cane" cane} {:plan "cane"})))
-    (is (= [0 0 [{:plan "field" :reason "no crop cells"}]] (declines {"field" (field-plan [2])} {:plan "field" :part "row-9"})))))
+    (is (= [0 0 "no such plan"] (declines {} {:plan "nope"})))
+    (is (= [0 0 nil] (declines {"cane" cane} {:plan "cane"})))
+    (is (= [0 0 nil] (declines {"field" (field-plan [2])} {:plan "field" :part "row-9"})))))
 
 (deftest a-broken-plan-declines-naming-the-error
   (let [{:keys [eng p seen w]} (start mixed-field {})]
@@ -95,8 +96,7 @@
     (core/submit! eng (list h/job {:plan "field"}) {})
     (dotimes [_ 3] (swap! h/clock + 700) (core/tick! eng))
     (is (zero? (count (h/calls p "dig"))))
-    (is (= [{:plan "field" :reason "the plan cannot be read: unreadable EDN: eof"}]
-           (mapv #(select-keys % [:plan :reason]) (h/events-of seen :harvest.declined))))))
+    (is (= "the plan cannot be read: unreadable EDN: eof" (some :why (reverse (deref seen)))))))
 
 (deftest a-row-dropped-from-the-plan-is-left-alone-from-the-next-round
   (async done

@@ -142,13 +142,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[owner extra used declined] [["Fake" {} 4 []] ["FAKE" {} 4 []] ["Miles" {} 2 [{:reason :refused :zones ["farm"]}]]
-                                         ["Miles" {:ignore-zones? true} 4 []]]]
+        (doseq [[owner extra used] [["Fake" {} 4] ["FAKE" {} 4] ["Miles" {} 2]
+                                         ["Miles" {:ignore-zones? true} 4]]]
           (let [{:keys [eng seen]} (setup two-wheat (ew/of-data {} {} [(assoc zone-over-one :owner owner)]))
                 r (await (child-outcome eng job extra 30))]
             (is (= used (:used r)) (pr-str [owner extra]))
-            (is (= declined
-                   (mapv #(select-keys % [:reason :zones]) (kinds seen :fertilize.declined))) (pr-str [owner extra]))))))))
+            (is (empty? (kinds seen :fertilize.declined)) "a condition does not warn")))))))
 
 (deftest no-zone-list-declines-the-fertilizing
   (async done
@@ -159,7 +158,7 @@
           (await (tu/run-until-empty eng 10))
           (is (empty? (calls p "useOn")))
           (is (= 1 (count (:list (core/state eng)))) "waits, does not end")
-          (is (= [:no-zones] (mapv :reason (kinds seen :fertilize.declined)))))))))
+          (is (empty? (kinds seen :fertilize.declined))))))))
 
 (deftest fertilize-finds-an-unripe-crop-past-many-nearer-ripe-ones
   (async done

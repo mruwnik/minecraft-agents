@@ -431,19 +431,19 @@
 
 ;; ------------------------------------------------------------------ declining, not spinning
 
-(deftest the-check-declines-a-plan-it-cannot-work-with-one-warn
+(deftest the-check-waits-on-a-plan-it-cannot-work
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [crops {:id "crops" :parts [{:id "c" :cells [[3 64 0]] :want {:crop "wheat"}}]}]
           (doseq [[plans args reason] [[{} {:plan "nope"} "no such plan"]
-                                       [{"crops" crops} {:plan "crops"} "no tree cells"]
-                                       [{"forest" one-cell} {:plan "forest" :part "zz"} "no tree cells"]]]
+                                       [{"crops" crops} {:plan "crops"} nil]
+                                       [{"forest" one-cell} {:plan "forest" :part "zz"} nil]]]
             (let [s (start (world {"3,64,0" "short_grass"} (item "oak_sapling" 1)) plans)]
               (core/submit! (:eng s) (list job args) {})
               (await (ticks (:eng s) 5))
-              (is (= [0 [[(:plan args) reason]]]
-                     [(calls-made (:p s)) (mapv (juxt :plan :reason) (h/events-of (:seen s) :prepare.declined))])
+              (is (= [0 reason]
+                     [(calls-made (:p s)) (some :why (reverse (deref (:seen s))))])
                   reason))))))))
 
 (deftest a-broken-plan-declines-naming-the-error
@@ -455,15 +455,15 @@
           (core/submit! eng (list job {:plan "forest"}) {})
           (await (ticks eng 4))
           (is (= 0 (calls-made p)))
-          (is (= ["the plan cannot be read: unreadable EDN: eof"] (mapv :reason (h/events-of seen :prepare.declined)))))))))
+          (is (= "the plan cannot be read: unreadable EDN: eof" (some :why (reverse (deref seen))))))))))
 
-(deftest without-a-zone-list-the-job-declines-with-one-warn
+(deftest without-a-zone-list-the-job-waits
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p seen]} (await (with-zones nil #(run (world {"3,64,0" "short_grass"} (item "oak_sapling" 1)) {"forest" one-cell} {:plan "forest"} 10)))]
           (is (= 0 (calls-made p)))
-          (is (= ["no zone list has been read"] (mapv :reason (h/events-of seen :prepare.declined)))))))))
+          (is (= "no zone list has been read" (some :why (reverse (deref seen))))))))))
 
 (deftest a-field-nothing-can-improve-is-left-alone-and-the-wait-names-the-worst-cells
   (async done
@@ -514,7 +514,7 @@
           (await (ticks (:eng s) 40))
           (is (= [[3 64 0]] (digs (:p s))) "the dig under way ends, nothing after it")
           (is (= [] (places (:p s))))
-          (is (= ["no such plan"] (mapv :reason (h/events-of (:seen s) :prepare.declined)))))))))
+          (is (empty? (h/events-of (:seen s) :prepare.declined))))))))
 
 (deftest the-saplings-a-dug-leaf-drops-are-collected-and-planted
   (async done

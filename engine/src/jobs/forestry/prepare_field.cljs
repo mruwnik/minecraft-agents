@@ -20,7 +20,7 @@
   [c]
   (:gave-up (ctx/mem c) {}))
 
-(defn planned [c] (lib/planned c "prepare"))
+(defn planned [c] (lib/planned c))
 
 (declare place-verdict)
 

@@ -166,18 +166,17 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[owner at-arg extra meal reason declined seeds]
-                [["Fake" {:at at} {} 1 nil [] 3] ["FAKE" {} {} 1 nil [] 3]
-                 ["Miles" {:at at} {} nil :no-composter [{:reason :refused :zones ["farm"]}] 10]
-                 ["Miles" {} {} nil :no-composter [{:reason :refused :zones ["farm"]}] 10]
-                 ["Miles" {:at at} {:ignore-zones? true} 1 nil [] 3]]]
+        (doseq [[owner at-arg extra meal reason seeds]
+                [["Fake" {:at at} {} 1 nil 3] ["FAKE" {} {} 1 nil 3]
+                 ["Miles" {:at at} {} nil   :no-composter 10]
+                 ["Miles" {} {} nil :no-composter 10]
+                 ["Miles" {:at at} {:ignore-zones? true} 1 nil 3]]]
           (let [{:keys [eng p seen]} (setup {:inventory (inv "wheat_seeds" 10) :blocks comp-block}
                                             (ew/of-data {} {} [(assoc zone-over-composter :owner owner)]))
                 result (await (child-outcome eng job (merge {:items ["wheat_seeds"]} at-arg extra) 40))]
             (is (= meal (:bone-meal result)) (pr-str [owner at-arg extra]))
             (is (= reason (:reason result)) (pr-str [owner at-arg extra]))
-            (is (= declined
-                   (mapv #(select-keys % [:reason :zones]) (kinds seen :compost.declined))) (pr-str [owner at-arg extra]))
+            (is (empty? (kinds seen :compost.declined)) "a condition does not warn")
             (is (= seeds (carried p "wheat_seeds")) (pr-str [owner at-arg extra]))))))))
 
 (deftest no-zone-list-declines-the-composting
@@ -189,7 +188,7 @@
           (await (tu/run-until-empty eng 10))
           (is (empty? (calls p "useOn")))
           (is (= 1 (count (:list (core/state eng)))) "waits, does not end")
-          (is (= [:no-zones] (mapv :reason (kinds seen :compost.declined)))))))))
+          (is (empty? (kinds seen :compost.declined))))))))
 
 (deftest compost-looks-around-before-it-says-there-is-no-composter
   (async done
