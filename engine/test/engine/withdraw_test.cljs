@@ -139,6 +139,17 @@
           (is (= {:kind :condition-failed :cause :missing :data {:gave-up true :short {"bread" 3}}}
                  (await (ending-of eng job {:chest chest :items {"bread" 3}} 8)))))))))
 
+(deftest withdraw-forgets-a-group-chest-that-answers-missing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:containers {"10,64,0" []}})
+              group-cells #(set (map (comp :pos :data) (mem/entries (mem/view (:store eng)) :storage/chests)))]
+          (know-place! eng :chest chest)
+          (mem/write! (:store eng) :storage/chests {:pos {:x 11 :y 64 :z 0}} {:cap 16 :ttl :forever})
+          (await (ending-of eng job {:chest {:x 11 :y 64 :z 0} :items {"bread" 3}} 8))
+          (is (= #{} (group-cells)) "the chest that is not there left the group"))))))
+
 (deftest withdraw-gives-up-when-the-known-chest-is-gone
   (async done
     (tu/run-async done

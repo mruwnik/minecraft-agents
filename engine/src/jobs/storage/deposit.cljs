@@ -145,9 +145,10 @@
   (if (u/count-fail! c) (status-stop! c (name cause)) :again))
 
 (defn retracted?
-  "retract-if-missing!, and true when status is \"missing\" at the recorded chest place (so the job ends at once)."
+  "retract-if-missing!, forget a missing chest as storage, and true when status is \"missing\" at the recorded chest place (so the job ends at once)."
   [c chest status]
   (let [recorded (mem/place (ctx/view c) :chest)]
+    (when (= "missing" status) (storage/drop-from-group! c chest))
     (places/retract-if-missing! c :chest chest status)
     (and (= "missing" status) (some? recorded) (= chest recorded))))
 
