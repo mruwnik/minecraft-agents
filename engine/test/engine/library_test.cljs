@@ -543,7 +543,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (flight-setup {:floor [-40 -10 10 10]
                                              :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 5 :y 64 :z 0}}]})]
-          (core/submit! eng (list 'jobs.survival.retreat {:radius 8}) {})
+          (core/submit! eng (list 'jobs.survival.retreat {:radius 8 :settings {:jobs.survival.retreat-flight/still-s 3600}}) {})
           (await (core/tick! eng))
           (is (< (.-x (.-pos (.self p))) -30) "moved away from the zombie, along x, beyond its follow range")
           (is (= [] (:list (core/state eng))) "one round"))))))
