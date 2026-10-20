@@ -4,7 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
-            [jobs.items.obtain.base :refer [sheep-radius tried! ways-of]]
+            [jobs.items.obtain.base :refer [animal-radius search-scan-radius tried! ways-of]]
             [jobs.items.obtain.need :refer [explore-opts gather-viable? pickaxe-first? search-names tools-wanted trees-unreachable?]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
@@ -100,7 +100,7 @@
                       :for targets :max-distance (:max-distance o) :max-legs (:max-legs o)
                       :from (mapv #(js/Math.floor %) [(.-x here) (.-y here) (.-z here)])})
         e (waits/waiting-out c (await (ctx/call c :explore 'jobs.explore.search
-                           (child/search-args (merge (explore-opts c) {:target targets :count 1 :scan-radius 16 :use-notes false :takeable true :avoid (vec (:cut-off (ctx/mem c)))})))))]
+                           (child/search-args (merge (explore-opts c) {:target targets :count 1 :scan-radius (search-scan-radius) :use-notes false :takeable true :avoid (vec (:cut-off (ctx/mem c)))})))))]
     (if (= :continue e)
       :continue
       (let [res (:data e)
@@ -155,7 +155,7 @@
                             :how (or how :kill)})))
             (when-let [{:keys [wanted taking]} (:wool-fallback pl)]
               (ctx/emit! c :obtain.wool-colour :info
-                         {:message (str "no " wanted " sheep within " (sheep-radius) " blocks; taking " taking " wool instead")
+                         {:message (str "no " wanted " sheep within " (animal-radius) " blocks; taking " taking " wool instead")
                           :wanted wanted :taking taking})))
           (let [e (waits/waiting-out c (await (ctx/call c (gather-slot need) (:job need) (:args need))))]
             (if (= :continue e)

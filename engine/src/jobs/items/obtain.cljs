@@ -6,7 +6,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.items.obtain.base :refer [args-error carried-of holds makes? max-inspections names-of shortfall tried! wanted-fields way?]]
+            [jobs.items.obtain.base :refer [args-error carried-of craft-step-s gather-need-s holds makes? max-inspections names-of near-chest smelt-item-s shortfall tried! wanted-fields way?]]
             [jobs.items.obtain.chest :refer [blocked-text candidates inspect! withdraw!]]
             [jobs.items.obtain.craft :refer [craft-step! plan-table pick-plan-table!]]
             [jobs.items.obtain.gather :refer [finish-tree! gather-step!]]
@@ -19,51 +19,17 @@
             [clojure.string]))
 
 (def doc
-  "Carry at least :count of :item (or of any of :any-of, in that order of preference; carried names are added up).
-  A body that carries them is done at once. The count carried at the first round is booked, so :got and a cut or restart stay right. One call is the whole attempt: it yields (:continue) only while a child waits on the world.
+  "Carry at least :count of :item (or of any of :any-of, in that order of preference; carried names are added up). A body that carries them is done at once. One call is the whole attempt: it yields (:continue) only while a child waits on the world.
 
-  Ways, in order (:ways, default all; the target met is done):
-  - :chest: the containers the body has seen (perception's seenBlocks, never x-ray) within 32 blocks,
-    still there, whose zone or claim allows :take (an open, unzoned chest does; jobs.lib.access). A chest known
-    to hold a wanted name (body memory :fetch/stock) is withdrawn from (jobs.storage.withdraw child :take); one of
-    unknown stock is walked to and looked into, nearest first, at most 4 per obtain (one that will not open under a
-    seen solid block gets it dug, a jobs.blocks.dig child, and is looked into once more); one known not to hold any is
-    skipped. Each chest is withdrawn from once. With none usable seen at the first round, one look around first.
-  - :craft and :smelt: a chain of crafts planned from the recipes (jobs.items.recipes) over what is carried: logs to
-    planks to sticks to the tool, and a crafting table when the chain needs one and none is seen (crafted, then put
-    down on a free cell beside the body with a jobs.blocks.place child). Each step is a jobs.items.craft child; a
-    furnace product (iron_ingot from raw_iron, charcoal from a log, cooked food; jobs.items.smelt.plan/made-from) is a step
-    run by a jobs.items.smelt child, which fetches its own fuel and furnace; a chain with a smelt step needs :smelt, any
-    other step :craft. The names are tried in
-    order; the first with a plan is made, but one with no smelt step before one with. Three fruitless steps stop it (:tried :craft); a craft child that ran and made nothing stops it at once.
-  - :gather: leather and feathers come from a cow or chicken within the sheep radius (a jobs.combat.hunt child, once; penned and kept animals are spared, and the end says which rule spared them); coal comes from a plain or deepslate ore seen; dirt is dug from seen dirt or grass; every raw item a chain lacks must be seen before it starts. A sapling (no recipe) comes from the leaves of its tree the body has seen, broken by
-    jobs.gather.get-seeds (at most 60 leaves, one run; the drop is picked up). What a craft chain lacks that has no recipe (logs, coal, stone-tool material; recipes/gatherable?, stone-materials) is
-    felled or mined as one child per round, only what the body has seen: logs by jobs.forestry.harvest-wood (of any species, but one only its species makes, oak_log for oak_planks, from that species' trees),
-    raw fish (cod, salmon: also the input of a cooked fish's smelt step) by jobs.food.fish from water seen (its rod from a chest or a craft),
-    sugar_cane and bamboo by jobs.gather.get-seeds from a seen stand of two or more,
-    a water_bucket by jobs.blocks.use-on: a carried empty bucket scooped at the nearest seen water (no bucket carried: no plan),
-    obsidian by gather.mine where seen (a diamond pickaxe), else jobs.gather.make-obsidian (water poured on a seen lava source from a stand beside it, mined, the bucket scooped back; no water bucket ends :no-source),
-    cobblestone and ore drops (coal, raw_iron, raw_gold, diamond ..: from the plain or deepslate ore seen) by jobs.gather.mine (its pickaxe only from a chest or a craft, never gathered: no mine inside a mine's fetch, so no loop back into obtain). The crafts follow once the chain is whole (a chain that is craftable now
-    is crafted first). A child that brings in nothing three times stops it (:tried :gather). A mined need (seen, or
-    with :explore) whose block no carried tool harvests gets the cheapest tool that does first (an obtain child, slot
-    :pickaxe: wooden_pickaxe for stone and coal, stone_pickaxe for iron); a mine that ends :no-tool (its pickaxe broke) does not count as a nothing run, that tool is got again the same way.
-    With :explore, an unseen stone material or ore other than coal is left to the mine child (it tunnels for ore); any other unseen raw need is searched for (jobs.explore.search child, slot :explore, at most 3 per need;
-    a notice :obtain.exploring says so); none found stops it (:tried {:gather {:searched ..}}).
-  - Nothing else: nothing-possible :no-source; a gather whose last fruitless run could not walk to or from its source
-    (walk-causes: :zone-exit, :not-home, :unreachable ..) ends nothing-possible with that cause instead.
+  Ways (:ways, default all), tried in order, each only on what the body has seen (never x-ray); the README row has the detail:
+  - :chest: seen containers that allow :take, known stock withdrawn, unknown stock looked into (nearest first, a few per call).
+  - :craft and :smelt: a chain planned from the recipes over what is carried (a table is put down when needed); each step a craft or smelt child.
+  - :gather: what a chain lacks, or a raw item itself, is felled, mined, fished, cut, scooped, sheared or hunted by one child per round; with :explore an unseen need is searched for (jobs.explore.search).
+  A child that brings in nothing three times ends that way (:tried).
 
-  Bad args are impossible :bad-args {:why}.
-  Conditions (before it starts): no source {:reason :no-source :why text :item|:any-of} (:why: what
-  each way lacks; an unseen oak_log names other species of log seen) when no usable chest that might hold it is seen
-  (with chests allowed, checked once the round has looked around), no craft chain makes it from what is carried, and
-  nothing seen to gather what a chain lacks (with :explore, a chain whose raw needs are unseen passes: the search child
-  solves it, and waits while the body is too hurt); when every raw need is seen and the gather child's
-  own check declines (night in a shelter), that cause stands instead.
-  Ends :done {:got n :item name} only with the count carried. Nothing-possible {:reason :no-source :why} or
-  :table-unreachable when every allowed way was tried, data {:got n :tried {way why} :why}. Limit-reached {:line :job-time
-  :reason :timeout} after :spend :job-time seconds (default ::job-time-s); the engine end takes the data of done? ({:got :tried}). A nested call
-  for the same item is the engine's :duplicate-call.
-  Quote: the plan's figures; yields the count, time a guess per step, no most for a gather.")
+  Needs: valid :item or :any-of and :count (else impossible :bad-args); a source (else condition-failed :no-source with :why naming what each way lacks).
+  Returns :done {:got n :item name} only with the count carried; nothing-possible :no-source, :table-unreachable or the gather's walk cause (:zone-exit, :not-home ..) when every allowed way was tried, data {:got :tried :why}; limit-reached :timeout after :spend :job-time (default ::job-time-s).
+  Quote: the count as yield, time a guess per step, no most for a gather.")
 
 (a/defargs args
   {:item {:doc "the item to get" :spec a/item? :default nil}
@@ -71,7 +37,7 @@
    :count {:doc "how many to carry at least (carried at the start count)" :spec (a/int-in 1 nil) :default 1}
    :for-plan {:doc "id of the plan whose work this is: a crafting table may stand in its own cells; passed to the craft steps" :spec a/name? :default nil}
    :avoid {:doc "cells [x y z] a crafting table is never put in or dug for (a caller's dig line); passed to the craft steps" :spec (a/coll-of a/position?) :default nil}
-   :explore {:doc "walk and look for a raw need not seen: false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default true}})
+   :explore {:doc "walk and look for a raw need not seen (the base ::explore setting's search); false fails :no-source instead" :spec boolean? :default true}})
 
 (a/defargs settings
   {::job-time-s {:default 600 :doc "Seconds an obtain may run (its default :spend :job-time)." :spec (a/num-in 0 nil)}})
@@ -151,10 +117,6 @@
 
       :else (apply contract/ok :carried (str "obtained " got " " (held-name inv names)) (conj data :result {:got got :item (held-name inv names)})))))
 
-(def step-s "A guess of the seconds one craft step takes, walks included." 5)
-(def smelt-s "A guess of the seconds one smelt step takes per item, the furnace's 10 s and its fetches." 15)
-(def gather-s "A guess of the seconds one raw need takes to gather: a walk, a fell or a dig." 60)
-
 (defn quote-of
   "The plan's figures: the count as yield; time guessed per craft and smelt step, a gather's most open."
   [c]
@@ -165,7 +127,8 @@
         steps (:steps pl)
         smelts (reduce + 0 (map :count (filter #(= :smelt (:op %)) steps)))
         gathers (count (:gather pl))
-        mean (+ (* step-s (count (remove #(= :smelt (:op %)) steps))) (* smelt-s smelts) (* gather-s gathers))
+        step-s (craft-step-s)
+        mean (+ (* step-s (count (remove #(= :smelt (:op %)) steps))) (* (smelt-item-s) smelts) (* (gather-need-s) gathers))
         item (or (:item pl) (first names))]
     {:uses {:job-time [0 (max step-s mean) (if (or (nil? pl) (pos? gathers)) ##Inf (* 3 (max step-s mean)))]}
      :yields {:items {item [0 n n]}}}))
@@ -179,15 +142,13 @@
        (way? c :chest)
        (empty? (candidates c names))))
 
-(def near-chest "Blocks within which a chest not yet looked in is worth the walk even when a craft would do." 10)
-
 (defn chests-to-try
   "The candidates, minus the unlooked-in far ones when a chain from what is carried makes the need: crafting now is
   cheaper than a long walk to a chest that may not hold it."
   [c m names n]
   (let [cs (candidates c names)]
     (if (and (makes? c) (not (get-in m [:tried :craft])) (craft-plan c names n))
-      (filter #(or (:stock %) (u/within? (u/self-pos c) (:pos %) near-chest)) cs)
+      (filter #(or (:stock %) (u/within? (u/self-pos c) (:pos %) (near-chest))) cs)
       cs)))
 
 (defn ^:async step! [c]

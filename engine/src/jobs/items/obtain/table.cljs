@@ -1,7 +1,7 @@
 (ns jobs.items.obtain.table
   "Which job gathers which raw item (gather-needs), the item families it knows, and the recipe options of the sources."
   (:require [engine.game :as game]
-            [jobs.items.obtain.base :refer [seen-radius sheep-radius]]
+            [jobs.items.obtain.base :refer [animal-radius sapling-leaf-limit seen-radius]]
             [jobs.items.recipes :as recipes]
             [jobs.items.smelt.plan :as smelt-plan]
             [jobs.lib.blocks :as b]
@@ -64,10 +64,6 @@
 
 (defn wool-color [name] (subs name 0 (- (count name) (count "_wool"))))
 
-(def sapling-leaf-limit
-  "Leaves broken for one sapling at most (a drop is about 1 in 20); one run, no retries."
-  60)
-
 (defn ore-blocks
   "The ore blocks that drop item (iron_ore and deepslate_iron_ore for raw_iron), or nil."
   [item]
@@ -93,7 +89,7 @@
     (vec (concat
           (for [[sapling n] gather :when (leaves-of sapling)]
             {:key sapling :count n :job 'jobs.gather.get-seeds :seen #{(leaves-of sapling)} :max-runs 1
-             :args {:item sapling :count n :sources [(leaves-of sapling)] :dry-digs sapling-leaf-limit}})
+             :args {:item sapling :count n :sources [(leaves-of sapling)] :dry-digs (sapling-leaf-limit)}})
           (for [[seed n] gather :when (grass-seeds seed)]
             {:key seed :count n :job 'jobs.gather.get-seeds :seen (grass-seeds seed) :max-runs 1
              :args {:item seed :count n}})
@@ -104,10 +100,10 @@
             [{:key "water_bucket" :count n :job 'jobs.blocks.use-on :seen #{"water"} :args {:item "bucket"}}])
           (for [[k n] gather :when (mob-drops k)]
             {:key k :count n :job 'jobs.combat.hunt :mob (mob-drops k) :max-runs 1
-             :args {:mob (mob-drops k) :count n :radius (sheep-radius) :drops [k]}})
+             :args {:mob (mob-drops k) :count n :radius (animal-radius) :drops [k]}})
           (for [[k n] gather :when (wool? k)]
             {:key k :count n :job 'jobs.combat.hunt :sheep (wool-color k) :max-runs 1
-             :args {:mob "sheep" :color (wool-color k) :count n :radius (sheep-radius)}})
+             :args {:mob "sheep" :color (wool-color k) :count n :radius (animal-radius)}})
           (when (pos? logs) [{:key "log" :count logs :job 'jobs.forestry.harvest-wood :seen trees/log-name? :args {:fetch log-fetch}}])
           (for [[k n] gather :when (trees/log-name? k)]
             {:key k :count n :job 'jobs.forestry.harvest-wood :seen #{k} :args {:species (trees/species-of k) :fetch log-fetch}})

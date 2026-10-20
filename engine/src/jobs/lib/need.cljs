@@ -52,7 +52,7 @@
       (and (some? how) (not (and (set? how) (every? sources how)))) (str ":how is a set of " (pr-str sources))
       (and (some? minutes) (not (pos-num? minutes))) ":minutes is a positive number"
       (and (some? fail-minutes) (not (pos-num? fail-minutes))) ":fail-minutes is a positive number"
-      (and (some? explore) (not (or (boolean? explore) (map? explore)))) ":explore is true, false or jobs.explore.search options")))
+      (and (some? explore) (not (boolean? explore))) ":explore is true or false")))
 
 (defn parse-arg
   "The :fetch arg as a limits map ({} for true), nil when off, or {:error text}."

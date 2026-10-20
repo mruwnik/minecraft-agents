@@ -33,7 +33,7 @@
    :item {:doc "a tool item name" :spec a/item? :default nil}
    :kind {:doc "a tool kind, e.g. \"pickaxe\" or \"shears\"" :spec a/name? :default nil}
    :for-plan {:doc "id of the plan whose work this is: passed to the obtain, so a table may stand in its own cells" :spec a/name? :default nil}
-   :explore {:doc "passed to the obtain: walk and look for raw material not seen (false: fail instead; a map: jobs.explore.search options)" :spec (a/or-of boolean? map?) :default true}})
+   :explore {:doc "passed to the obtain: walk and look for raw material not seen (false: fail instead)" :spec boolean? :default true}})
 
 (def tiered #{"pickaxe" "axe" "shovel" "hoe" "sword"})
 

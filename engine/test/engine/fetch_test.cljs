@@ -1178,7 +1178,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (assoc (update (bare []) :blocks merge tree-blocks) :unreachable (vec (keys tree-blocks))) [own-zone])]
-          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :explore {:max-legs 2}}) {})
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wooden_pickaxe" :explore true}) {})
           (await (run-ticks s 300))
           (is (seq (events-of s :obtain.exploring)) "it walked to look for another tree")
           (is (<= (count (events-of s :obtain.exploring)) 3) "bounded")
@@ -1186,7 +1186,7 @@
 
 (deftest obtain-sapling-leaf-breaking-is-bounded
   (let [need (table/gather-need {"oak_sapling" 1})]
-    (is (= table/sapling-leaf-limit (:dry-digs (:args need))) "digs per child run")
+    (is (= (base/sapling-leaf-limit) (:dry-digs (:args need))) "digs per child run")
     (is (= 1 (:max-runs need)) "one fruitless run ends the source")
     (is (nil? (:max-runs (table/gather-need {"cobblestone" 1}))) "other sources use the default bound")))
 
@@ -1386,7 +1386,8 @@
     (is (false? (:explore (need/merge-limits {:explore true} {:explore false}))) "the call wins")
     (is (= {:item "oak_log" :count 2 :explore true} (:args (need/plan-for {:reason :need :item "oak_log" :count 2} o))))
     (is (= {:block "stone" :explore true} (:args (need/plan-for {:reason :no-tool :block "stone"} o))))
-    (is (nil? (need/limit-error {:explore {:max-distance 10}})))
+    (is (nil? (need/limit-error {:explore false})))
+    (is (some? (need/limit-error {:explore {:max-distance 10}})))
     (is (some? (need/limit-error {:explore "yes"})))))
 
 (deftest obtain-craft-keeps-the-short-detail-of-a-need-stop

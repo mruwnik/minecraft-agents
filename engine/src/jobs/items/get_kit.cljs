@@ -49,7 +49,7 @@
 (a/defargs args
   {:items {:doc "the items to get, in order" :spec (a/coll-of a/item?) :default iron-kit}
    :wear {:doc "wear each armour piece once it is carried" :spec boolean? :default true}
-   :explore {:doc "passed to the obtain children: walk and look for raw needs not seen" :spec (a/or-of boolean? map?) :default true}
+   :explore {:doc "passed to the obtain children: walk and look for raw needs not seen" :spec boolean? :default true}
    :food {:doc "run a get-food child when mining or smelting is ahead and fewer than ::min-food points are carried; false: stop :needs-food" :spec boolean? :default true}})
 
 (a/defargs settings

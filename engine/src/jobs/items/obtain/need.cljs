@@ -38,8 +38,7 @@
   "The search options of :explore, or nil when it is off."
   [c]
   (let [e (:explore (:args c))]
-    (cond (map? e) (merge (explore-setting) e)
-          e (explore-setting))))
+    (when e (explore-setting))))
 
 (defn search-names
   "The block names a search for a need looks for."

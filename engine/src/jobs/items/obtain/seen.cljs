@@ -1,7 +1,7 @@
 (ns jobs.items.obtain.seen
   "A gather need against the body: the blocks and sheep seen for it, and the need made ready to run."
   (:require [engine.ctx :as ctx]
-            [jobs.items.obtain.base :refer [sheep-radius seen-radius]]
+            [jobs.items.obtain.base :refer [animal-radius seen-radius]]
             [jobs.lib.access :as access]
             [jobs.lib.animals :as animals]
             [jobs.lib.foods :as foods]
@@ -14,7 +14,7 @@
 (defn sheep-in-range
   "The adult unsheared sheep within the sheep radius, as JS entities."
   [c]
-  (remove #(or (true? (.-baby %)) (true? (.-sheared %))) (animals/herd (:primitives c) "sheep" (sheep-radius))))
+  (remove #(or (true? (.-baby %)) (true? (.-sheared %))) (animals/herd (:primitives c) "sheep" (animal-radius))))
 
 (def wool-keep "Sheep of a colour combat.hunt spares (its :keep default for animals); a colour with no more is no source." 2)
 
@@ -51,7 +51,7 @@
   [c need]
   (cond
     (:sheep need) (first (filter #(= (:sheep need) (.-color %)) (sheep-in-range c)))
-    (:mob need) (first (remove #(true? (.-baby %)) (animals/herd (:primitives c) (:mob need) (sheep-radius))))
+    (:mob need) (first (remove #(true? (.-baby %)) (animals/herd (:primitives c) (:mob need) (animal-radius))))
     :else (first (seen-blocks-of c need false))))
 
 (defn with-block
@@ -59,7 +59,7 @@
   [c need]
   (cond
     (and (:sheep need) (shears-source c))
-    (assoc need :job 'jobs.animals.shear :args {:color (:sheep need) :radius (sheep-radius)})
+    (assoc need :job 'jobs.animals.shear :args {:color (:sheep need) :radius (animal-radius)})
 
     (and (= "obsidian" (:key need))
          (empty? (look/seen-blocks (:primitives c) {:names ["obsidian"] :radius (seen-radius) :max 1})))

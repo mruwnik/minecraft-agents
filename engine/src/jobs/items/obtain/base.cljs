@@ -10,10 +10,22 @@
   {:jobs.items.obtain.base/max-inspections {:default 4 :doc "Looks at a place before the search for it gives up." :spec (a/int-in 0 nil)}
    :jobs.items.obtain.base/craft-radius {:default 32 :doc "Blocks within which a crafting table is looked for." :spec (a/int-in 0 nil)}
    :jobs.items.obtain.base/seen-radius {:default 48 :doc "Blocks within which a seen raw block (ore, dirt, leaves) counts as a source; the gather gets the same radius." :spec (a/int-in 0 64)}
-   :jobs.items.obtain.base/sheep-radius {:default 24 :doc "Blocks within which sheep are looked for when wool is gathered." :spec (a/num-in 0 nil)}
+   :jobs.items.obtain.base/animal-radius {:default 24 :doc "Blocks within which animals (sheep for wool, cow, chicken, spider, skeleton for their drops) are looked for." :spec (a/num-in 0 nil)}
+   :jobs.items.obtain.base/near-chest {:default 10 :doc "Blocks within which a chest not yet looked in is worth the walk even when a craft would do." :spec (a/num-in 0 nil)}
+   :jobs.items.obtain.base/sapling-leaf-limit {:default 60 :doc "Leaves broken for one sapling at most (a drop is about 1 in 20); one run, no retries." :spec (a/int-in 1 nil)}
+   :jobs.items.obtain.base/search-scan-radius {:default 16 :doc "How far round the body each look of a search for a raw need reaches." :spec (a/num-in 0 nil)}
+   :jobs.items.obtain.base/craft-step-s {:default 5 :doc "Guess of the seconds one craft step takes, walks included (the quote)." :spec (a/num-in 0 nil)}
+   :jobs.items.obtain.base/smelt-item-s {:default 15 :doc "Guess of the seconds one smelt step takes per item, the furnace's 10 s and its fetches (the quote)." :spec (a/num-in 0 nil)}
+   :jobs.items.obtain.base/gather-need-s {:default 60 :doc "Guess of the seconds one raw need takes to gather: a walk, a fell or a dig (the quote)." :spec (a/num-in 0 nil)}
    :jobs.items.obtain.base/explore {:default {:max-distance 64 :max-legs 12 :spend {:job-time 300}} :doc "jobs.explore.search options of a search for a raw need (:explore true)." :spec map?}})
 (defn max-inspections [] (settings/get settings :jobs.items.obtain.base/max-inspections))
-(defn sheep-radius [] (settings/get settings :jobs.items.obtain.base/sheep-radius))
+(defn animal-radius [] (settings/get settings :jobs.items.obtain.base/animal-radius))
+(defn near-chest [] (settings/get settings :jobs.items.obtain.base/near-chest))
+(defn sapling-leaf-limit [] (settings/get settings :jobs.items.obtain.base/sapling-leaf-limit))
+(defn search-scan-radius [] (settings/get settings :jobs.items.obtain.base/search-scan-radius))
+(defn craft-step-s [] (settings/get settings :jobs.items.obtain.base/craft-step-s))
+(defn smelt-item-s [] (settings/get settings :jobs.items.obtain.base/smelt-item-s))
+(defn gather-need-s [] (settings/get settings :jobs.items.obtain.base/gather-need-s))
 (defn seen-radius [] (settings/get settings :jobs.items.obtain.base/seen-radius))
 (defn craft-radius [] (settings/get settings :jobs.items.obtain.base/craft-radius))
 (defn explore-setting [] (settings/get settings :jobs.items.obtain.base/explore))

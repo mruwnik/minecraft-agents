@@ -1,7 +1,7 @@
 (ns jobs.items.obtain.why
   "The texts of a source that has nothing: why no source, what a failed try adds."
   (:require [engine.game :as game]
-            [jobs.items.obtain.base :refer [makes? sheep-radius seen-radius way?]]
+            [jobs.items.obtain.base :refer [makes? animal-radius seen-radius way?]]
             [jobs.items.obtain.need :refer [explore-opts]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [seen-blocks-of seen-of]]
@@ -29,8 +29,8 @@
         unseen (remove #(or (seen-of c %) (seq (seen-blocks-of c % true))) needs)
         label (fn [{:keys [key seen sheep mob] :as need}]
                 (cond
-                  sheep (str key " (from " sheep " sheep within " (sheep-radius) " blocks)")
-                  mob (str key " (from a " mob " within " (sheep-radius) " blocks)")
+                  sheep (str key " (from " sheep " sheep within " (animal-radius) " blocks)")
+                  mob (str key " (from a " mob " within " (animal-radius) " blocks)")
                   (and (set? seen) (not= #{key} seen)) (str key " (from " (clojure.string/join "/" (sort seen)) ")")
                   :else (str key (when-let [o (other-logs-seen c need)]
                                    (str " (only " (clojure.string/join "/" o) " seen: another species)")))))]
