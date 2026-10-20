@@ -24,4 +24,15 @@
    :act [[:job (jobs.farm.find-spot {:w 5 :h 5 :range 24 :settings {:jobs.farm.find-spot/depth 12}})]]
    :expect [{:event {:source :job :kind :completed :data {:spots [:has {:pos [:any]}]}} :within-s 40 :of-job true}
             {:no-event {:source :system :kind :error} :for-s 40 :until {:source :job :kind :completed}}]
-   :limit-s 60}]}
+   :limit-s 60}
+
+  ;; Card c153d70a: with no patch in range the job walks to the next leg of its spiral and scans there. Ground within 12 of the body is
+  ;; ridged (raised stripes every other column, no flat 5x5 patch with :max-step 0); flat grass starts at x 79.
+  ;; Should-succeed: ends done with a spot east of the ridges. Should-fail: none here (the :none endings are in farm-find-spot.edn and the unit tests).
+  {:name "explores-past-the-ridged-ground-to-a-flat-patch"
+   :plot {:light :lit}
+   :blocks [[:fill [53 0 0] [53 0 63] "grass_block"] [:fill [55 0 0] [55 0 63] "grass_block"] [:fill [57 0 0] [57 0 63] "grass_block"] [:fill [59 0 0] [59 0 63] "grass_block"] [:fill [61 0 0] [61 0 63] "grass_block"] [:fill [63 0 0] [63 0 63] "grass_block"] [:fill [65 0 0] [65 0 63] "grass_block"] [:fill [67 0 0] [67 0 63] "grass_block"] [:fill [69 0 0] [69 0 63] "grass_block"] [:fill [71 0 0] [71 0 63] "grass_block"] [:fill [73 0 0] [73 0 63] "grass_block"] [:fill [75 0 0] [75 0 63] "grass_block"] [:fill [77 0 0] [77 0 63] "grass_block"]]
+   :act [[:job (jobs.farm.find-spot {:w 5 :h 5 :range 12 :max-step 0 :settings {:jobs.farm.find-spot/depth 7}})]]
+   :expect [{:event {:source :job :kind :completed :data {:spot [:near #at [90 -1 32] 14]}} :within-s 120 :of-job true}
+            {:no-event {:source :system :kind :error} :for-s 30}]
+   :limit-s 150}]}

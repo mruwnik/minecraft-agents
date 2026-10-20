@@ -440,7 +440,7 @@
   (are [job args] (= :later (lit 0 15 #(bound (safe-of job) night-hut args)))
     'jobs.food.fish {}))
 
-(deftest a-find-spot-survey-that-walks-nowhere-needs-no-light
+(deftest a-find-spot-scan-needs-no-light
   (is (= :ok (lit 0 15 #(bound (safe-of 'jobs.farm.find-spot) night-hut {})))))
 
 (deftest jobs-that-go-to-a-place-keep-its-exposure-for-exposed-checks

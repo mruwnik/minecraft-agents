@@ -168,7 +168,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:blocks (merge (patch 2 0 3 3 63 "water") (patch -4 0 3 3 63 "lava"))})
               r (await (child-outcome eng job small 4))]
-          (is (= {:spot nil :reason :none} r)))))))
+          (is (= {:spot nil :reason :none :why :distance} r)))))))
 
 (deftest no-ground-is-none
   (async done
@@ -176,7 +176,27 @@
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:blocks {}})
               r (await (child-outcome eng job small 4))]
-          (is (= {:spot nil :reason :none} r)))))))
+          (is (= {:spot nil :reason :none :why :distance} r)))))))
+
+(def bumpy
+  "Ground x -12 to 60, z -3 to 3, in a checker of heights 63 and 64: no patch of it is flat."
+  (into {} (for [x (range -12 61) z (range -3 4)] [(str x "," (if (even? (+ x z)) 63 64) "," z) "dirt"])))
+
+(deftest explores-to-a-patch-beyond-the-range
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:blocks (merge bumpy (patch 47 -1 3 3 63 "dirt") (patch 47 -1 3 3 64 "dirt"))})
+              r (await (child-outcome eng job (assoc small :max-step 0) 200))]
+          (is (= [{:x 47 :y 64 :z -1}] (mapv :pos (take 1 (:spots r))))))))))
+
+(deftest exploring-ends-none-when-no-leg-has-ground
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:blocks bumpy})
+              r (await (child-outcome eng job (assoc small :max-step 0) 200))]
+          (is (= {:spot nil :reason :none :why :distance} r)))))))
 
 (deftest limit-caps-the-spots
   (async done

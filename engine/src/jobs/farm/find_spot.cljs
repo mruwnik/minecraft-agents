@@ -6,6 +6,8 @@
             [jobs.lib.surface :as surface :refer [open?]]
             [jobs.farm.till :as till]
             [jobs.lib.look :as look]
+            [jobs.lib.child :as child]
+            [jobs.explore.search :as search]
             [jobs.lib.ready :as ready]
             [jobs.lib.world :as known]
             [jobs.lib.access.zones :as zones]
@@ -17,8 +19,12 @@
   "Pick where a :w x :h farm would go. Ranks patches by flatness first, then water within 4,
   open sky and nearness to :center. It tries patches nearest-first and stops once ::limit flat open-sky ones are found (with water within 4, when water is in range).
   A patch of 8 or more is tried at every fourth corner. Reads blocks only: it never digs or marks anything.
-  A scan reads at most ::max-reads blocks, then settles for the best spots so far. It never walks: a parent walks to the spot.
-  Ends with data {:spot pos :spots [...]}: done with the spots, or nothing-possible :none (no patch found).
+  A scan reads at most ::max-reads blocks, then settles for the best spots so far. It never walks to the spot: a parent does.
+  When the scan finds no patch it explores: it walks (jobs.movement.go-to) to the nearest untried leg of explore.search's spiral round
+  the start (legs ::leg-spacing apart, within ::max-distance, at most ::max-legs, each on standable seen ground), looks, and scans again
+  centred there, until a patch is found or the call's :job-time is spent.
+  Ends with data {:spot pos :spots [...]}: done with the spots, or nothing-possible :none with :why :distance (no leg left), :legs
+  (::max-legs walked) or :stuck (three walks in a row failed).
   :spots best first up to ::limit, each {:pos :score :level :work :step :water-share :sky :away :y :farmable}; :step is
   the largest height difference between two neighbouring cells of the patch. A pos is the north-west corner at ground level.
   Score = level (% of the patch's cells at its commonest ground height y, 0-100) + ::water-weight x water-share + ::sky-weight for open sky,
@@ -39,7 +45,12 @@
 (a/defargs settings
   {::depth {:default 12 :doc "How far above and below the centre's y to look for ground." :spec (a/int-in 1 16)}
    ::limit {:default 3 :doc "How many spots to keep; the scan stops once that many good ones are found." :spec (a/int-in 1 8)}
-   ::job-time-s {:default 30 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 300 :doc "Seconds the call may take, exploring included (a guess until measured)." :spec (a/num-in 0 nil)}
+   ::max-legs {:default 8 :doc "Legs walked while exploring before it gives up." :spec (a/int-in 0 nil)}
+   ::leg-spacing {:default 24 :doc "Blocks between exploring legs." :spec (a/int-in 4 64)}
+   ::max-distance {:default 96 :doc "How far (XZ) from the start an exploring leg may go." :spec (a/int-in 1 128)}
+   ::max-steps {:default 6 :doc "Steps toward one column not yet seen before it is given up." :spec (a/int-in 1 nil)}
+   ::max-failed-in-row {:default 3 :doc "Exploring walks in a row that fail before it gives up." :spec (a/int-in 1 nil)}
    ::sky-extra {:default 8 :doc "Extra blocks of sky checked above a spot." :spec (a/int-in 0 nil)}
    ::read-budget {:default 4096 :doc "blockAt reads after which a round stops scanning (at the end of the row it is in)." :spec (a/int-in 1 nil)}
    ::max-reads {:default 45000 :doc "blockAt reads one attempt may spend on scanning (a cut and restart keeps the count); then it settles for the best spots found." :spec (a/int-in 1 nil)}
@@ -198,9 +209,9 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 (def safe?
-  "A survey that stays put only needs no danger near."
+  "Scanning needs only no danger near; the exploring walks are go-to children, which check their own light."
   (with-meta ready/threatened
-    {::ready/exposure (fn [_] (contract/ok :survey "a survey that walks nowhere is no exposure"))}))
+    {::ready/exposure (fn [_] (contract/ok :survey "the scan walks nowhere; a leg's go-to child judges its own exposure"))}))
 (def fit? ready/fit?)
 
 (defn done?
@@ -229,7 +240,7 @@
   else the finished spots (or nil for none)."
   [c a]
   (let [saved (:scan (ctx/mem c))
-        from (or (:center a) (:from saved) (into {} (map (fn [[k v]] [k (js/Math.floor v)])) (u/self-pos c)))
+        from (or (:at (ctx/mem c)) (:center a) (:from saved) (into {} (map (fn [[k v]] [k (js/Math.floor v)])) (u/self-pos c)))
         state (or saved {:next-ring 0 :found []})
         a (assoc a :blocked? (blocked-fn {:footprints (known/footprints c) :zones (known/zones c) :claims (known/claims c)
                                           :self (ctx/self-name c) :now (ctx/now c)}))
@@ -246,18 +257,70 @@
   (and (not (:spots (ctx/mem c))) (not (:scan (ctx/mem c))) (not (look/surveyed? c))
        (empty? (look/seen-blocks (:primitives c) {:names ["water"] :radius (+ (:range a) (:w a) (:h a) 4) :max 1}))))
 
+(defn next-leg
+  "The nearest untried exploring leg round m's origin: {:leg [x y z] :step column?} (a step toward a column not yet seen is walked
+  and looked at again, no leg) and :dead, the columns with no ground to stand on, which are not tried again."
+  [p m [bx bz] y]
+  (let [tried (set (:tried m))
+        legs (->> (search/spiral-points (:origin m) (settings/get settings ::leg-spacing) (settings/get settings ::max-distance))
+                  (remove tried)
+                  (sort-by #(search/xz-dist % [bx bz])))
+        at (search/seen-at p)]
+    (loop [[pt & more] legs dead []]
+      (if (nil? pt)
+        {:dead dead}
+        (let [{sy :y fail :fail} (search/stand-cell at (pt 0) (pt 1) y)
+              step (when (and (= :unseen fail) (< (get (:steps m) pt 0) (settings/get settings ::max-steps))) (search/step-toward at [bx y bz] (pt 0) (pt 1)))]
+          (cond
+            sy {:dead dead :leg [(pt 0) sy (pt 1)]}
+            step {:dead dead :leg step :step pt}
+            :else (recur more (conj dead pt))))))))
+
+(defn ^:async walk-leg!
+  "One go-to toward the leg in memory: :continue while it goes on; on its end book the arrival (re-centre, forget the scan) or the failure."
+  [c]
+  (let [[x y z] (:leg (ctx/mem c))
+        r (await (child/call-walk* c :leg {:pos {:x x :y y :z z} :range 2 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}))]
+    (if (= :continue r)
+      :continue
+      (let [arrived (and (:arrived (:data r)) (not (:in-water (:data r))))
+            in-row (if arrived 0 (inc (:failed-in-row (ctx/mem c) 0)))]
+        (ctx/update-mem! c (fn [m] (cond-> (-> m (dissoc :leg :leg-step :scan) (assoc :failed-in-row in-row))
+                                     (not (:leg-step m)) (-> (update :tried (fnil conj []) [x z]) (update :legs (fnil inc 0)))
+                                     (and arrived (not (:leg-step m))) (assoc :at {:x x :y y :z z}))))
+        (when arrived (await (look/survey! c :run (look/search-effort))))
+        (if (>= in-row (settings/get settings ::max-failed-in-row))
+          (ctx/end c :nothing-possible :none {:spot nil :why :stuck})
+          :again)))))
+
+(defn explore!
+  "No patch in the area scanned: choose the next leg and start walking, or end for want of one. :again when a leg was set."
+  [c]
+  (let [m (ctx/mem c)
+        origin (or (:origin m) (let [{:keys [x z]} (or (:center (:args c)) (into {} (map (fn [[k v]] [k (js/Math.floor v)])) (u/self-pos c)))] [x z]))
+        m (assoc m :origin origin)
+        self (u/self-pos c)
+        {:keys [leg dead] stepping :step} (next-leg (:primitives c) m [(:x self) (:z self)] (:y self))
+        _ (ctx/update-mem! c #(-> % (assoc :origin origin) (update :tried into dead)))]
+    (cond
+      (>= (:legs m 0) (settings/get settings ::max-legs)) (ctx/end c :nothing-possible :none {:spot nil :why :legs})
+      (nil? leg) (ctx/end c :nothing-possible :none {:spot nil :why :distance})
+      :else (do (ctx/update-mem! c #(cond-> (assoc % :leg leg :leg-step (boolean stepping)) stepping (update-in [:steps stepping] (fnil inc 0)))) :again))))
+
 (defn ^:async step
-  "Look around when no water is in sight, then scan (a bounded slice per step, remembering the spots)."
+  "Look around when no water is in sight, then scan (a bounded slice per step, remembering the spots); with no patch, explore."
   [c]
   (let [a (assoc (merge (settings/job-defaults (quote jobs.farm.find-spot) args) (:args c))
-                 :depth (settings/get settings ::depth) :limit (settings/get settings ::limit))
-        found (if (water-unseen? c a)
-                (do (await (look/survey! c :run (look/search-effort))) :again)
-                (or (:spots (ctx/mem c)) (scan-step! c a)))]
-    (cond
-      (= :again found) :again
-      (nil? found) (ctx/end c :nothing-possible :none {:spot nil})
-      :else (ctx/end c :done nil {:spot (:pos (first found)) :spots found}))))
+                 :depth (settings/get settings ::depth) :limit (settings/get settings ::limit))]
+    (if (:leg (ctx/mem c))
+      (await (walk-leg! c))
+      (let [found (if (water-unseen? c a)
+                    (do (await (look/survey! c :run (look/search-effort))) :again)
+                    (or (:spots (ctx/mem c)) (scan-step! c a)))]
+        (cond
+          (= :again found) :again
+          (nil? found) (explore! c)
+          :else (ctx/end c :done nil {:spot (:pos (first found)) :spots found}))))))
 
 (defn ^:async round
   "The whole attempt: scan slice after slice."
