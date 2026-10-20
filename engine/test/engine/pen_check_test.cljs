@@ -52,7 +52,7 @@
   "Submit the job with args in a world and run two ticks; the ending event, or nil."
   [args w]
   (let [s (h/setup w)]
-    (core/submit! (:eng s) (list job args) {})
+    (core/submit! (:eng s) (list job (merge {:ways #{:check}} args)) {})
     (await (tu/run-ticks (:eng s) (:clock s) 2 700))
     {:event (ending-event @(:seen s))
      :listed (:list (core/state (:eng s)))}))
@@ -127,7 +127,7 @@
   "run-job with the body seeing through perception (sight jitter pinned to rand, default 0.5) and no look taken yet; facing yaw (Minecraft degrees), ticks rounds (default 6)."
   [args w yaw & [ticks rand]]
   (let [s (h/setup-seeing (assoc w :yaw yaw :rand (or rand (constantly 0.5))) nil)]
-    (core/submit! (:eng s) (list job args) {})
+    (core/submit! (:eng s) (list job (merge {:ways #{:check}} args)) {})
     (dotimes [_ (or ticks 6)]
       (swap! (:clock s) + 700)
       (await (core/tick! (:eng s))))
@@ -182,7 +182,7 @@
   [args]
   (let [s (h/setup-seeing (assoc (world {}) :yaw 0) nil)
         run (fn ^:async run [] 
-              (core/submit! (:eng s) (list job args) {})
+              (core/submit! (:eng s) (list job (merge {:ways #{:check}} args)) {})
               (await (tu/run-ticks (:eng s) (:clock s) 6 700))
               (ending-event @(:seen s) last))
         _ (await (run))
@@ -313,7 +313,7 @@
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                                 :events (events/make {:body "Fake" :sinks [sink] :now now})
                                 :world (world-files/of-data {"pen" plan} {} [])})]
-          (core/submit! eng (list job {:plan "pen"}) {})
+          (core/submit! eng (list job {:plan "pen" :ways #{:check}}) {})
           (dotimes [_ 10]
             (swap! clock + 700)
             (await (core/tick! eng)))
@@ -334,7 +334,7 @@
     (set! (.-sensedAt p) (fn [pos]
                            (when (= floor [(.-x pos) (.-y pos) (.-z pos)]) (swap! fills inc))
                            (orig pos)))
-    (core/submit! (:eng s) (list job args) {})
+    (core/submit! (:eng s) (list job (merge {:ways #{:check}} args)) {})
     (dotimes [_ 12]
       (swap! (:clock s) + 700)
       (await (core/tick! (:eng s))))
@@ -459,3 +459,38 @@
         (doseq [seed [0 35]]
           (let [event (await (run-seeing {:at [2 64 2]} (assoc (world {}) :self {:pos {:x 6 :y 64 :z 2}}) 270 6 (lcg seed)))]
             (is (= {:closed? true :cells 25} (select-keys event [:closed? :reason :cells])) (str "ray jitter seed " seed))))))))
+
+;; Card 3742f975: pen-check makes the pen secure.
+(defn ^:async run-patching
+  "Run pen-check (patching allowed) in a world carrying 3 oak fences; {:event :p}."
+  [args w]
+  (let [s (h/setup (merge {:inventory [{:name "oak_fence" :count 3}]} w))]
+    (core/submit! (:eng s) (list job args) {})
+    (await (tu/run-ticks (:eng s) (:clock s) 10 700))
+    {:event (or (ending-event @(:seen s)) {:all (mapv #(select-keys % [:source :kind :text]) @(:seen s))}) :p (:p s)}))
+
+(deftest a-gap-in-the-fence-is-patched-with-the-fence-beside-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [event p]} (await (run-patching {:at [2 64 2] :settings {:jobs.animals.pen-check/max-cells 100}} (world {"2,64,-1" "air"})))]
+          (is (= "oak_fence" (tu/true-block-name p 2 64 -1)))
+          (is (= :completed (:kind event)) (pr-str event))
+          (is (true? (:closed? event)))
+          (is (= 1 (get-in event [:patched :placed]))))))))
+
+(deftest an-open-gate-is-shut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [event]} (await (run-patching {:at [2 64 2] :settings {:jobs.animals.pen-check/max-cells 100}} (world {"2,64,-1" "oak_fence_gate"} {"2,64,-1" {:open true :facing "north"}})))]
+          (is (true? (:closed? event)) (pr-str event))
+          (is (= 1 (get-in event [:patched :shut]))))))))
+
+(deftest a-leak-that-cannot-be-patched-is-reported-nothing-possible
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [event]} (await (run-patching {:at [2 64 2] :fetch false :settings {:jobs.animals.pen-check/max-cells 100}} (assoc (world {"2,64,-1" "air"}) :inventory [])))]
+          (is (= {:kind :stopped :reason :leak} (select-keys event [:kind :reason])) (pr-str event))
+          (is (= :gap (:why (first (:leaks event))))))))))

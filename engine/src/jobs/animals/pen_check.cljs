@@ -6,26 +6,32 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.need :as need]
             [jobs.lib.animals :as animals]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.near :as near]
             [jobs.lib.pen :as pen]
             [jobs.lib.pen-read :as pen-read]
+            [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]))
 
 (def doc
-  "Read-only: say whether an animal can walk out of a pen. Flood-fills what a cow can walk (rules in
+  "Make a pen secure: say whether an animal can walk out of a pen, and patch what it can. Flood-fills what a cow can walk (rules in
   jobs.lib.pen: fences, walls and closed gates are 1.5 high, an open gate is a way out, a drop of more than 3
   is not taken) from the feet cell :at [x y z], or from every surface inside :box (or the columns a :plan's fence, wall and gate cells close in), where a step out of the box
   is a leak. Reads what the body has seen; a pen it has not seen closed is checked again after it looks at the
   cells it has not seen (jobs.lib.sense/decide!); a cell that stays unseen (hidden behind a block) is walked to, at
-  most 3 times, until the eye sees it, unless the fill already leaves through a seen gap: that is answered at once (an open gate may divide the pen, so it waits for the look). Never digs or places. Ends impossible :no-pen without :at, :box and :plan; waits (:plan-trouble) while :plan is missing or unreadable and ends impossible :plan-trouble when it has no fence, wall or gate cells.
+  most 3 times, until the eye sees it, unless the fill already leaves through a seen gap: that is answered at once (an open gate may divide the pen, so it waits for the look). Ends impossible :no-pen without :at, :box and :plan; waits (:plan-trouble) while :plan is missing or unreadable and ends impossible :plan-trouble when it has no fence, wall or gate cells.
 
   The fill stops after ::max-cells cells (a setting): a bigger pen is not closed, reason :unbounded. A fill without a box
   that finds no wall either side of a gap says that too.
 
-  Ends with the data {:closed? :reason :cells :leaks :gates}: :done when closed or when a leak was found (a leak is
-  the answer, not a failure), else condition-failed (:no-start) or nothing-possible (:unbounded, :unloaded: the check gave up) with the :reason as the cause:
+  Patching (way :patch, on by default; :ways #{:check} only reads): a leak that is a :gap gets one fence (a jobs.blocks.place child; the kind is :item, else the fence or wall seen
+  beside the gap) and one on top of each :climb fence; an :open-gate is shut (a jobs.blocks.use-on child). Then the pen is read again, in at most ::max-passes passes
+  (a pass that put nothing right is the last). Nothing else is placed or dug. The result gains :patched {:placed :shut :failed}.
+
+  Ends with the data {:closed? :reason :cells :leaks :gates}: :done when closed, or when a leak was found and :patch is not allowed (a leak is
+  then the answer, not a failure); with :patch allowed a leak left after the patches is nothing-possible :leak (the leaks name what remains). Else condition-failed (:no-start) or nothing-possible (:unbounded, :unloaded: the check gave up) with the :reason as the cause:
   - :reason is nil when closed, else :leak, :unbounded, :unloaded (a cell, or the start's floor, was never seen) or :no-start (:at is no floor to stand on).
   - :leaks lists {:pos {:x :y :z} :why}, why one of :open-gate :gap :climb :perch-in :open :unloaded (only when :reason is not :leak; :perch-in: open ground within a block of a fence top outside the pen; :climb with a box names the fence, wall or gate top first stood on, reached from a block or raised floor beside it). At most 12 are
     listed, :leaks-total gives the count when more.
@@ -41,7 +47,12 @@
   {:at {:doc "feet cell [x y z] or {:x :y :z} of a spot inside the pen (the floor's top, where the animal's feet are)" :spec ::a/pos :default nil}
    :box {:doc "the pen: {:min :max}, each corner {:x :y :z} or [x y z], inclusive; a step out of it is a leak" :spec pen-read/box-arg :default nil}
    :plan {:doc "id of a plan of the body's world: the pen is the box round its fence, gate and wall cells (instead of :box)" :spec a/name? :default nil}
-   :part {:doc "with :plan, only the cells of this part" :spec a/name? :default nil}})
+   :part {:doc "with :plan, only the cells of this part" :spec a/name? :default nil}
+   :item {:doc "the fence or wall item that patches a gap; nil: the kind seen beside the gap" :spec a/item? :default nil}
+   :fetch {:doc "as jobs.blocks.place: get the fence the patch lacks; false patches with what is carried" :spec need/option? :default true}
+   :ignore-zones? :shared})
+
+(def ways [:check :patch])
 
 (defn pen-box
   "{:box} for the args (:box, else the box of :plan), {:trouble text}, or {} with only :at."
@@ -65,6 +76,8 @@
    ::cell-s {:default 0.03 :doc "Seconds of the default time spend per cell the fill may visit (::max-cells, or the footprint of a given :box when smaller)." :spec (a/num-in 0 nil)}
    ::max-cells {:default pen/default-max-cells :doc "Most cells the fill visits before it gives up with :unbounded." :spec (a/int-in 1 nil)}
    ::max-walks {:default 3 :doc "Walks to the same unseen cell (no progress) before the answer is given." :spec (a/int-in 0 nil)}
+   ::max-passes {:default 3 :doc "Patch passes (patch, then read again) before the leaks that remain are reported." :spec (a/int-in 1 nil)}
+   ::patch-s {:default 120 :doc "Seconds of the default time spend for patching." :spec (a/num-in 0 nil)}
    ::animal-radius {:default 48 :doc "Blocks round the body within which animals on the pen's cells are listed." :spec (a/num-in 1 nil)}})
 
 (defn default-time
@@ -73,7 +86,7 @@
   (let [max-cells (settings/get settings ::max-cells)
         {:keys [min max]} (when box (pen-read/norm-box box))
         area (when box (* (inc (- (:x max) (:x min))) (inc (- (:z max) (:z min)))))]
-    (+ (settings/get settings ::job-time-s)
+    (+ (settings/get settings ::job-time-s) (settings/get settings ::patch-s)
        (* (settings/get settings ::cell-s) (if area (clojure.core/min max-cells area) max-cells)))))
 
 (def defaults {:spend {:job-time default-time}})
@@ -159,6 +172,50 @@
   [c]
   (u/cell-vec (or (work-place/spot c) (u/self-pos c))))
 
+(defn barrier-name? [n]
+  (boolean (and n (or (str/ends-with? n "_fence") (str/ends-with? n "_wall")))))
+
+(defn fence-near
+  "The name of the nearest fence or wall seen within 3 cells of [x y z], else the first one carried, else nil."
+  [p [x y z]]
+  (let [near (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz)))
+                      (for [dx (range -3 4) dz (range -3 4)] [dx dz]))]
+    (or (->> near
+             (map (fn [[dx dz]] (some-> (u/sensed p [(+ x dx) y (+ z dz)]) .-name)))
+             (filter barrier-name?)
+             first)
+        (first (filter barrier-name? (keys (storage/carried-totals (u/inventory p))))))))
+
+(defn patch-plan
+  "[{:op :place|:shut :pos [x y z] :item}] for the patchable leaks of result: a fence in each :gap cell and on top of each :climb fence, each open gate shut."
+  [c result]
+  (let [p (:primitives c)
+        item (:item (:args c))]
+    (vec (keep (fn [{:keys [pos why]}]
+                 (let [cell [(:x pos) (:y pos) (:z pos)]
+                       up [(:x pos) (inc (:y pos)) (:z pos)]]
+                   (case why
+                     :gap (when-let [i (or item (fence-near p cell))] {:op :place :pos cell :item i})
+                     :climb (when-let [i (or item (fence-near p cell))] {:op :place :pos up :item i})
+                     :open-gate {:op :shut :pos cell}
+                     nil)))
+               (:leaks result)))))
+
+(defn ^:async patch-step!
+  "One patch of the queue by a child (a pending child yields the round); the outcome is counted in the memory."
+  [c]
+  (let [{:keys [op pos item]} (first (:patch-queue (ctx/mem c)))
+        shared (select-keys (:args c) [:ignore-zones?])
+        r (await (if (= :shut op)
+                   (ctx/call c :patch 'jobs.blocks.use-on (assoc shared :pos pos :item "none"))
+                   (ctx/call c :patch 'jobs.blocks.place (assoc (merge shared (select-keys (:args c) [:fetch])) :pos pos :item item))))]
+    (if (= :continue r)
+      :continue
+      (let [ok? (= :done (:kind r))
+            k (cond (not ok?) :failed (= :shut op) :shut :else :placed)]
+        (ctx/update-mem! c #(-> % (update :patch-queue rest) (update-in [:patched k] (fnil inc 0)) (update :pass-ok (fnil + 0) (if ok? 1 0))))
+        :continue))))
+
 (defn ^:async read-pen! [c]
   (let [{:keys [at]} (:args c)
         max-cells (settings/get settings ::max-cells)
@@ -187,11 +244,20 @@
                                          (str "pen closed, " (:cells result) " cells" (gate-drop-text result))
                                          (str "pen not closed: " (name (:reason result)) (leak-text result) (gate-drop-text result))))]
         (ctx/update-mem! c assoc :cells (:cells result))
-        (if (contains? #{nil :leak} (:reason result))
-          (ctx/end c :done nil result)
-          (ctx/end c (if (= :no-start (:reason result)) :condition-failed :nothing-possible) (:reason result) result))))))
+        (let [{:keys [patched pass pass-ok] :or {pass 0}} (ctx/mem c)
+              queue (when (and (= :leak (:reason result)) (ctx/way? c :patch)
+                               (< pass (settings/get settings ::max-passes))
+                               (or (zero? pass) (pos? (or pass-ok 0))))
+                      (patch-plan c result))
+              result (cond-> result patched (assoc :patched (merge {:placed 0 :shut 0 :failed 0} patched)))]
+          (cond
+            (seq queue) (do (ctx/update-mem! c assoc :patch-queue queue :pass (inc pass) :pass-ok 0) :continue)
+            (or (nil? (:reason result)) (and (= :leak (:reason result)) (not (ctx/way? c :patch)))) (ctx/end c :done nil result)
+            (= :no-start (:reason result)) (ctx/end c :condition-failed :no-start result)
+            :else (ctx/end c :nothing-possible (:reason result) result)))))))
 
 (defn ^:async round [c]
-  (if (:trouble (pen-box c))
-    :continue
-    (await (read-pen! c))))
+  (cond
+    (:trouble (pen-box c)) :continue
+    (seq (:patch-queue (ctx/mem c))) (await (patch-step! c))
+    :else (await (read-pen! c))))

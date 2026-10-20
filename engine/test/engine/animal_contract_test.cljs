@@ -201,7 +201,7 @@
         (fn ^:async t []
           (is (= {:event :completed} (select-keys (await (ending '(jobs.animals.pen-check {:at [2 64 2]}) (w {}))) [:event])))
           (is (= {:event :completed :kind :done}
-                 (select-keys (await (ending '(jobs.animals.pen-check {:at [2 64 2] :settings {:jobs.animals.pen-check/max-cells 100}}) (w {"2,64,-1" "air"}))) [:event :kind])))
+                 (select-keys (await (ending '(jobs.animals.pen-check {:at [2 64 2] :ways #{:check} :settings {:jobs.animals.pen-check/max-cells 100}}) (w {"2,64,-1" "air"}))) [:event :kind])))
           (is (= {:event :stopped :kind :nothing-possible :reason :unbounded}
                  (await (ending '(jobs.animals.pen-check {:at [2 64 2] :settings {:jobs.animals.pen-check/max-cells 3}}) (w {}))))))))))
 
