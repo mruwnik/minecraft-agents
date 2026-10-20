@@ -75,17 +75,19 @@
   fence_gates, wooden_trapdoors ...) is built in one species chosen for the plan (carried most, else the nearest log seen,
   else oak), booked, fetched by that species, and named in the result (:wood \"birch\"); a species name (oak_planks) stays exact.
   When cells are missing but none of their blocks is carried and none can be fetched, the call ends condition-failed :no-items with :needs.
-  Material: while cells wait for an item not carried (and not given up or refused), each round fetches it, once no cell can be placed from what is carried (:fetch,
+  Material: while cells wait for an item not carried (and not given up or refused), each round fetches it, once no cell can be placed from what is carried (when the ways allow it,
   jobs.lib.need with :explore on: a jobs.items.obtain child for the missing count, walking off to look for what is unseen; an item whose fetch failed is not asked again in the call); a pickaxe block to dig without a pickaxe fetches the tool the same way
-  (jobs.items.get-tool). With :fetch false, or once a fetch failed, the build goes on with what is carried and ends
+  (jobs.items.get-tool). With ways #{:carried}, or once a fetch failed, the build goes on with what is carried and ends
   short (the text and :fetch-failed name each failed fetch and why), a pickaxe block given up :no-tool.")
 
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
    :part {:doc "only the cells of this part" :spec a/name? :default nil}
    :accept {:doc "fluid hazards of a cell taken: :fluid-adjacent (water beside; placing beside or into water seals and bridges), :lava-adjacent (lava beside; not taken by default: the body stands beside the cell), :falling-block (a dig under sand or gravel that falls in)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
-   :fetch {:doc "get the blocks and tools the plan lacks (jobs.lib.need): true, a set of kinds or a map of limits; false builds with what is carried" :spec need/option? :default {:explore true}}
+   :explore {:doc "walk off to look for blocks and tools that are not in sight when the plan lacks them" :spec boolean? :default true}
    :ignore-zones? :shared})
+
+(def ways need/fetch-ways)
 
 (def target [:plan :part])
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
@@ -353,7 +355,7 @@
   once it ended (a failed one, a limit too, is booked), nil when nothing is due."
   [c]
   (when-let [w (plan/problem c)]
-    (let [o (assoc (select-keys (need/opts c plan/fetch-job) [:how :explore]) :for-plan (:plan (:args c)))
+    (let [o (assoc (need/fetch-opts c) :explore (:explore (:args c)) :for-plan (:plan (:args c)))
           e (await (if (= :need (:reason w))
                      (need/item! c (:item w) (:count w) o)
                      (need/tool! c {:block (:block w)} o)))]

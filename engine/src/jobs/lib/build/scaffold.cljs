@@ -55,10 +55,10 @@
   (- length (get (pl/carried (:primitives c)) (bridge-block c) 0)))
 
 (defn fetch-opts
-  "The limits {:how :explore} for getting the pillar's blocks, nil when :fetch does not allow items."
+  "The limits {:how :explore} for getting the pillar's blocks, nil when the call's ways allow no fetch."
   [c]
-  (when-let [o (need/opts c plan/fetch-job)]
-    (when (contains? (:what o) :item) (select-keys o [:how :explore]))))
+  (when-let [o (need/fetch-opts c)]
+    (assoc o :explore (boolean (:explore (:args c))))))
 
 (defn ^:async fetch-blocks!
   "Get the n blocks the pillar lacks: :continue while the fetch waits, :again once had, else the ending of the call

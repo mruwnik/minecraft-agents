@@ -424,18 +424,16 @@
 
 ;; ------------------------------------------------------------------ check
 
-(def fetch-job 'jobs.build.from-plan)
-
 (defn fetch-key
   "What a failed fetch is booked under: the item, or [:tool block]."
   [w]
   (if (= :no-tool (:reason w)) [:tool (:block w)] (:item w)))
 
 (defn due
-  "w (a :need or :no-tool wait) when the :fetch arg allows its kind and no fetch for it failed in this call, else nil."
+  "w (a :need or :no-tool wait) when the call's ways allow a fetch and none for it failed in this call, else nil."
   [c w]
-  (let [o (need/opts c fetch-job)]
-    (when (and w o (contains? (:what o) (if (= :no-tool (:reason w)) :tool :item))
+  (let [o (need/fetch-opts c)]
+    (when (and w o
                (not (contains? (:fetch-failed (ctx/mem c)) (fetch-key w))))
       w)))
 

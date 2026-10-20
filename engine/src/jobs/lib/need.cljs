@@ -91,6 +91,11 @@
   [ways]
   (or (nil? ways) (boolean (seq (disj (set ways) :carried)))))
 
+(defn pass-ways
+  "The fetch ways of the call running in c as a :ways set for a child: :carried plus the sources the call allows."
+  [c]
+  (into #{:carried} (filter #(ctx/way? c %)) sources))
+
 (defn ways-of-fetch
   "The call ways for a job still on the old :fetch arg v: :carried alone when it is off, else its :how sources too."
   [v]

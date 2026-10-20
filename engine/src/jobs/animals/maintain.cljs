@@ -148,7 +148,7 @@
   (cond
     (nil? plan) {:skip :no-plan}
     (empty? gaps) {:skip :sound}
-    :else {:call {:slot :mend :job (jobs :mend) :args (cond-> {:plan plan} (not (need/fetching? ways)) (assoc :fetch false))}}))
+    :else {:call {:slot :mend :job (jobs :mend) :args (cond-> {:plan plan} (not (need/fetching? ways)) (assoc :ways #{:carried}))}}))
 
 (defn decide-herd
   [{:keys [mob box fetch target]} {:keys [adults]}]

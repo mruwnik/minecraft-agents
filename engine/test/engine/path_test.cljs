@@ -77,7 +77,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:blocks four})]
-          (core/submit! eng (list job (assoc box :fetch false)) {})
+          (core/submit! eng (list job (assoc box :ways #{:carried})) {})
           (is (nil? (core/tick! eng)) "check false: nothing runs")
           (is (= [:no-tool] (map :reason (kinds seen :waiting))))
           (is (empty? (filter #(= :need (:slot %)) (kinds seen :child_started))) "fetch false: no fetch child")
@@ -88,7 +88,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:inventory [{:name "stone_shovel" :count 1 :durability 0 :max-durability 131}] :blocks four})]
-          (core/submit! eng (list job (assoc box :fetch false)) {})
+          (core/submit! eng (list job (assoc box :ways #{:carried})) {})
           (is (nil? (core/tick! eng)) "check false: nothing runs")
           (is (= [:no-tool] (map :reason (kinds seen :waiting))))
           (is (empty? (calls p "useOn"))))))))

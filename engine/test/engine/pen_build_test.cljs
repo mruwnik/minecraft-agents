@@ -249,7 +249,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p seen] :as w} (b/start (spec []) {"pen" (ring-plan)} [])
-              e (await (ending-of w job {:plan "pen" :fetch false} 40))]
+              e (await (ending-of w job {:plan "pen" :ways #{:carried :patch}} 40))]
           (is (empty? (h/calls p "place")))
           (is (= [:condition-failed :no-items] [(:kind e) (get-in e [:cause :reason])]))
           (is (empty? (kinds-of seen :build.declined))))))))
@@ -260,7 +260,7 @@
       (fn ^:async t []
         (let [{:keys [p] :as w} (b/start (spec []) {"pen" (ring-plan)} [])
               _ (tu/seeing-after-look p)
-              e (await (ending-of w job {:plan "pen" :fetch false} 100))]
+              e (await (ending-of w job {:plan "pen" :ways #{:carried :patch}} 100))]
           (is (empty? (h/calls p "place")))
           (is (= [:condition-failed :no-items {"oak_fence" 7 "oak_fence_gate" 1}] [(:kind e) (get-in e [:cause :reason]) (get-in e [:cause :needs])])))))))
 
@@ -286,7 +286,7 @@
       (fn ^:async t []
         (let [plan {:id "pen" :parts [{:id "gate" :cells [[3 64 2]] :want [:any "oak_fence_gate" "birch_fence_gate"]}]}
               {:keys [eng p seen]} (b/start {:inventory [{:name "birch_fence" :count 5}] :blocks ground :unloaded ["3,64,2"]} {"pen" plan} [])]
-          (core/submit! eng (list job {:plan "pen" :fetch false}) {})
+          (core/submit! eng (list job {:plan "pen" :ways #{:carried :patch}}) {})
           (await (tu/run-ticks eng h/clock 4 700))
           (is (seq (tu/walk-calls p)))
           (is (empty? (filter #(= :no-items (:reason %)) (kinds-of seen :waiting)))))))))

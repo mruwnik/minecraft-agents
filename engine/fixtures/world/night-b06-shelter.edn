@@ -176,7 +176,7 @@
    :plot {:height 14}
    :body {:at [14.5 0 16.5] :inventory [["cobblestone" 4]]}
    :plans [{:id "roof" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [20 9 16]] :want "cobblestone"}]}]
-   :act [[:job (jobs.build.from-plan {:plan "$plan:roof" :fetch false})]]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:roof" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped}} :for-s 30 :until {:source :job :kind :waiting :data {:reason :exposed}} :of-job true}]
    :after [[:body-near [14.5 0 16.5] 1.5]]

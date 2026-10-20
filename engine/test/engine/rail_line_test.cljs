@@ -127,7 +127,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [r (await (declines (spec "stone" 63 (kit {} {"powered_rail" -2})) {"line" (line-plan {})} {:plan "line" :fetch false}))]
+        (let [r (await (declines (spec "stone" 63 (kit {} {"powered_rail" -2})) {"line" (line-plan {})} {:plan "line" :ways #{:carried}}))]
           (is (= [{"powered_rail" 2}] (distinct (keep :short (:waits r)))))
           (is (= 0 (:warns r)))
           (is (= 0 (:places r))))))))
@@ -255,7 +255,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result seen] (await (broken-run {:fetch false}))]
+        (let [[result seen] (await (broken-run {:ways #{:carried}}))]
           (is (empty? (h/events-of seen :rail-build.short)))
           (is (nil? result) "it declines, no proof is run"))))))
 
@@ -563,7 +563,7 @@
       (fn ^:async t []
         (doseq [[world plans zones reason text extra]
                 [[(spec "stone" 63 (kit {})) {"line" (line-plan {}) "other" {:id "other" :parts [{:id "o" :cells [[7 64 0]] :want "stone"}]}} [] :refused #"footprint"]
-                 [(spec "stone" 63 (kit {} {"powered_rail" -2})) {"line" (line-plan {})} [] :short #"powered_rail" {:fetch false}]
+                 [(spec "stone" 63 (kit {} {"powered_rail" -2})) {"line" (line-plan {})} [] :short #"powered_rail" {:ways #{:carried}}]
                  [(spec "stone" 63 (kit {})) {"line" (line-plan {})} :none :no-zones #"zone list"]
                  [(spec "stone" 63 (kit {:power :block})) {"line" (line-plan {:power :block})} [] :source-blocked #"redstone block"]
                  [(spec "stone" 63 (kit {})) {} [] :plan #"plan"]]]

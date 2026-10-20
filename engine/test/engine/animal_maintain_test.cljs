@@ -282,7 +282,7 @@
     {:skip :no-plan} {} {:gaps [[1 64 1]]}
     {:skip :sound} {:plan "pen"} {:gaps []}
     {:call {:slot :mend :job 'jobs.build.pen :args {:plan "pen"}}} {:plan "pen"} {:gaps [[1 64 1]]}
-    {:call {:slot :mend :job 'jobs.build.pen :args {:plan "pen" :fetch false}}} {:plan "pen" :ways #{:carried}} {:gaps [[1 64 1]]}))
+    {:call {:slot :mend :job 'jobs.build.pen :args {:plan "pen" :ways #{:carried}}}} {:plan "pen" :ways #{:carried}} {:gaps [[1 64 1]]}))
 
 (def ring-pen-plan
   (update (pb/ring-plan) :parts conj {:id "cows" :box [[3 64 3] [3 64 3]] :want "air" :herd {:mob "cow" :target 0}}))

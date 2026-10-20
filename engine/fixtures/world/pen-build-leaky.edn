@@ -15,7 +15,7 @@
                     {:id "e1" :box [#at [14 0 11] #at [14 0 11]] :want "oak_fence"}
                     {:id "g" :box [#at [14 0 12] #at [14 0 12]] :want "oak_fence_gate"}
                     {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}]}]
-   :act [[:job (jobs.build.pen {:plan "$plan:ring" :fetch false})]]
+   :act [[:job (jobs.build.pen {:plan "$plan:ring" :ways #{:carried :patch}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:kind :nothing-possible}} :for-s 80 :until {:source :job :kind :completed}}]
    :after [[:block [10 0 12] "oak_fence"]]}
@@ -28,7 +28,7 @@
                     {:id "e1" :box [#at [14 0 11] #at [14 0 11]] :want "oak_fence"}
                     {:id "g" :box [#at [14 0 12] #at [14 0 12]] :want "oak_fence_gate"}
                     {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}]}]
-   :act [[:job (jobs.build.pen {:plan "$plan:ring" :fetch false :ways #{:build}})]]
+   :act [[:job (jobs.build.pen {:plan "$plan:ring" :ways #{:build}})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :leak}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 80 :until {:source :job :kind :stopped}}]
    :after [[:not-block [10 0 12] "oak_fence"] [:item "oak_fence" 2]]}
@@ -42,7 +42,7 @@
                     {:id "e1" :box [#at [14 0 11] #at [14 0 11]] :want "oak_fence"}
                     {:id "g" :box [#at [14 0 12] #at [14 0 12]] :want "oak_fence_gate"}
                     {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}]}]
-   :act [[:job (jobs.build.pen {:plan "$plan:ring" :fetch false})]]
+   :act [[:job (jobs.build.pen {:plan "$plan:ring" :ways #{:carried :patch}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
    :after [[:block [10 0 12] "oak_fence"]]}
   ;; Card 3f51b63a (f449d14b): a tree inside the ring (leaves reach the fence tops) is cleared first; the pen closes and the ground stays.
@@ -55,7 +55,7 @@
                     {:id "e1" :box [#at [14 0 11] #at [14 0 11]] :want "oak_fence"}
                     {:id "g" :box [#at [14 0 12] #at [14 0 12]] :want "oak_fence_gate"}
                     {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}]}]
-   :act [[:job (jobs.build.pen {:plan "$plan:ring" :fetch false})]]
+   :act [[:job (jobs.build.pen {:plan "$plan:ring" :ways #{:carried :patch}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:not-block [11 0 13] "oak_log"] [:not-block [11 1 12] "oak_leaves"] [:block [10 0 12] "oak_fence"]]}
   ;; Card f84912c5: with the fences carried (8, the ring needs 7 and a gate) the pen is placed from the bag at once; nothing is fetched

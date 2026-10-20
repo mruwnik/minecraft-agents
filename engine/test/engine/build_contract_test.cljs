@@ -90,7 +90,7 @@
         (is (= [:impossible :bad-args]
                (bad-args (await (ending-of (pt/setup {:inventory pt/shovel}) path {:from {:x 0 :y 63 :z 0}} 5)))))
         (is (= [:condition-failed :no-tool]
-               (bad-args (await (ending-of (pt/setup {:blocks pt/four}) path (assoc pt/box :fetch false) 5)))))
+               (bad-args (await (ending-of (pt/setup {:blocks pt/four}) path (assoc pt/box :ways #{:carried}) 5)))))
         (is (= [:condition-failed :no-zones]
                (bad-args (await (ending-of (pt/setup {:inventory pt/shovel :blocks pt/four} (ew/of-data {} {} nil)) path pt/box 5)))))
         (is (= :refused (get-in (await (ending-of (pt/setup {:inventory pt/shovel :blocks pt/four}
@@ -133,13 +133,13 @@
         (let [e (await (plan-ending {:inventory bfp/kit} {"pen" (bfp/pen-plan)} {:plan "pen" :least 1}))]
           (is (= :done (:kind e))))
         (let [e (await (plan-ending {:inventory [{:name "oak_fence" :count 4} {:name "oak_fence_gate" :count 1} {:name "torch" :count 1}]}
-                                    {"pen" (bfp/pen-plan)} {:plan "pen" :fetch false}))]
+                                    {"pen" (bfp/pen-plan)} {:plan "pen" :ways #{:carried}}))]
           (is (= :condition-failed (:kind e)) "all wanted, some placed, material short: not done")
           (is (= {"oak_fence" 3} (get-in e [:cause :needs])))
           (is (= 3 (count (get-in e [:data :missing]))))
           (is (= 6 (get-in e [:data :placed]))))
         (let [e (await (plan-ending {:inventory [{:name "oak_fence" :count 4} {:name "oak_fence_gate" :count 1} {:name "torch" :count 1}]}
-                                    {"pen" (bfp/pen-plan)} {:plan "pen" :fetch false :least 2}))]
+                                    {"pen" (bfp/pen-plan)} {:plan "pen" :ways #{:carried} :least 2}))]
           (is (= :done (:kind e)) "a partial run meets its :least"))))))
 
 (deftest from-plan-with-nothing-placed-is-never-done
@@ -178,7 +178,7 @@
         (is (= [:impossible :plan-trouble] (bad-args (await (plan-ending {:inventory bfp/kit} {"pen" (bfp/pen-plan)} {:plan "pen" :part "nope"})))))
         (is (= [:condition-failed :no-zones]
                (bad-args (await (plan-ending {:inventory bfp/kit} {"pen" (bfp/pen-plan)} {:plan "pen"} nil)))))
-        (let [e (await (plan-ending {:inventory []} {"pen" (bfp/pen-plan)} {:plan "pen" :fetch false}))]
+        (let [e (await (plan-ending {:inventory []} {"pen" (bfp/pen-plan)} {:plan "pen" :ways #{:carried}}))]
           (is (= :condition-failed (:kind e)))
           (is (= {:reason :no-items :needs {"oak_fence" 7 "oak_fence_gate" 1 "torch" 1}}
                  (select-keys (:cause e) [:reason :needs]))))))))

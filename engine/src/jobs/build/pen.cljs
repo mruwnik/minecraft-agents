@@ -38,7 +38,7 @@
   patched once unless the call's :ways (:build, :patch) leaves :patch out: a jobs.blocks.place child puts one fence of the plan's kind in each
   :gap cell and on top of each :climb cell, then the pen is checked again. Nothing else is placed that the plan does not ask for.
   Needs: the plan, a zone list (unless :ignore-zones?), and the blocks of the fence (fetched by the builder unless
-  :fetch false). Returns, as the data of its ending, {:closed? :reason :cells :leaks :gates :built {:placed :missing
+  the call's ways leave out :chest :craft :gather). Returns, as the data of its ending, {:closed? :reason :cells :leaks :gates :built {:placed :missing
   :short :given-up :wrong :refused}}. :reason is nil when closed, else :leak, :unbounded, :unloaded or :no-start.
   The pen ends with the body outside and the gate shut.
   Endings: done when the pen holds; nothing-possible with the :reason as cause when it does not (the data's :leaks name {:pos :why} (:gap :open-gate :climb :perch-in :open :unloaded; at most 12), and :built what the
@@ -59,7 +59,7 @@
   {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
    :part {:doc "only the cells of this part" :spec a/name? :default nil}
    :accept {:doc "as jobs.build.from-plan" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
-   :fetch {:doc "as jobs.build.from-plan: get the blocks the plan lacks; false builds with what is carried" :spec need/option? :default {:explore true}}
+   :explore {:doc "as jobs.build.from-plan: walk off to look for blocks that are not in sight" :spec boolean? :default true}
    :uneven? {:doc "build although the ring steps more than 1 between neighbouring fences or the inside drops more than 1 at the gate" :spec boolean? :default false}
    :ignore-zones? :shared})
 
@@ -128,7 +128,7 @@
   (pen-read/read (:primitives c) (pen-opts c cells)))
 
 (defn build-args [c]
-  (select-keys (:args c) [:plan :part :accept :fetch :ignore-zones?]))
+  (assoc (select-keys (:args c) [:plan :part :accept :explore :ignore-zones?]) :ways (need/pass-ways c)))
 
 ;; ------------------------------------------------------------------ conditions
 
@@ -161,7 +161,7 @@
          (when-let [bad (seq (uneven cells (plan/top-fn c)))]
            {:reason :uneven :why (uneven-text bad)}))))))
 
-(def ways [:build :patch])
+(def ways (into [:build :patch] need/fetch-ways))
 (def defaults {:spend {:job-time ::job-time-s}})
 (def safe? (ready/safe-at-by-night work-place/spot))
 (def fit? ready/fit?)
@@ -263,7 +263,7 @@
       (do (ctx/update-mem! c assoc :phase :build) :again)
       (if-let [[x y z :as base] (first (trunk-bases c trees felled))]
         (let [r (await (ctx/call c (keyword (str "fell-" x "-" y "-" z)) 'jobs.forestry.fell-tree
-                                 (merge (select-keys (:args c) [:fetch :ignore-zones?])
+                                 (merge (assoc (select-keys (:args c) [:ignore-zones?]) :ways (need/pass-ways c))
                                         {:at {:x x :y y :z z} :for-plan (:plan (:args c)) :replant? false})))]
           (if (= :continue r)
             :continue
@@ -283,7 +283,7 @@
   "One fence of the patch queue by a blocks.place child (its ending, placed or not, passes it on); then back to the check."
   [c cells]
   (if-let [[x y z] (first (:patch-queue (ctx/mem c)))]
-    (let [r (await (pen-patch/place-fence! c [x y z] (patch-item cells) {:for-plan (:plan (:args c)) :ways (need/ways-of-fetch (:fetch (:args c)))}))]
+    (let [r (await (pen-patch/place-fence! c [x y z] (patch-item cells) {:for-plan (:plan (:args c)) :ways (need/pass-ways c)}))]
       (if (= :continue r)
         :continue
         (do (ctx/update-mem! c update :patch-queue rest) :again)))

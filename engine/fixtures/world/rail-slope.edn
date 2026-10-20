@@ -22,7 +22,7 @@
            [:block [22 6 16] "powered_rail[shape=ascending_east]"]]}
   {:name "no-torches-waits-short"
    :body {:inventory [["rail" 25] ["powered_rail" 12] ["cobblestone" 70]]}
-   :act [[:job (jobs.build.rail-line {:plan "$plan:line" :fetch false})]]
+   :act [[:job (jobs.build.rail-line {:plan "$plan:line" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :short}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :waiting :data {:reason :short}}}]
    :after [[:not-block [10 0 16] "rail"] [:not-block [3 0 16] "rail"]]

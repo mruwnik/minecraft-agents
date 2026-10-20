@@ -55,8 +55,8 @@
 
 (deftest world-checks-say-why-they-decline
   (are [job args spec plans reason] (= [reason] (mapv :reason (waits-in-world job args spec plans)))
-    'jobs.build.from-plan {:plan "pen" :fetch false} {:inventory []} {"pen" (b/pen-plan)} :no-items
-    'jobs.build.pen {:plan "pen" :fetch false} {:inventory []} {"pen" (pen/ring-plan)} :no-items))
+    'jobs.build.from-plan {:plan "pen" :ways #{:carried}} {:inventory []} {"pen" (b/pen-plan)} :no-items
+    'jobs.build.pen {:plan "pen" :ways #{:carried}} {:inventory []} {"pen" (pen/ring-plan)} :no-items))
 
 (defn ^:async ending
   "Submit job with args in an empty world, tick once: whether it is still listed, and its root ending event's kind and

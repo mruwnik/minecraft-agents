@@ -1,7 +1,7 @@
 ;; Card 5de16da7 (part 2): jobs.build.from-plan fetches a tool for a cell it must dig. A plan wants dirt where stone stands
 ;; ([20 0 16]); the body carries dirt but no pickaxe, a seen chest at [14 0 19] holds one (yaw turned by RCON so the first sight
 ;; sees it). Should-succeed: the need child starts and ends, the stone is dug and dirt put there (job.completed :done).
-;; Should-fail: :fetch false gives the cell up :no-tool (the ending is :incomplete), the stone stays and the chest is untouched.
+;; Should-fail: :ways #{:carried} gives the cell up :no-tool (the ending is :incomplete), the stone stays and the chest is untouched.
 {:defaults
  {:tags [:build :fetch] :time :any
   :plot {:height 8}
@@ -21,7 +21,7 @@
    :after [[:block [20 0 16] "dirt"] [:item "stone_pickaxe" 1]]}
   {:name "fetch-false-gives-the-cell-up-no-tool"
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 45 20"] [:until-seen {:block "chest"} 10]
-         [:job (jobs.build.from-plan {:plan "$plan:wall" :fetch false})]]
+         [:job (jobs.build.from-plan {:plan "$plan:wall" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :incomplete}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 40 :until {:source :job :kind :stopped}}]
    :after [[:block [20 0 16] "stone"] [:item "stone_pickaxe" 0]]}]}

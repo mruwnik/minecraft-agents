@@ -19,7 +19,7 @@
    :blocks [[:set [11 0 11] "cobweb"] [:set [12 0 11] "stone"]]
    :plans [{:id "row" :metadata {:by "$body"}
             :parts [{:id "clear" :cells [#at [11 0 11] #at [12 0 11]] :want :clear}]}]
-   :act [[:job (jobs.build.from-plan {:plan "$plan:row" :fetch false})]]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:row" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :incomplete}} :within-s 100 :of-job true}]
    :after [[:block [11 0 11] "cobweb"] [:block [12 0 11] "stone"]]}
   {:name "from-plan-gives-up-iron-ore-under-a-wooden-pickaxe"
@@ -27,7 +27,7 @@
    :body {:inventory [["wooden_pickaxe" 1]]}
    :plans [{:id "row" :metadata {:by "$body"}
             :parts [{:id "clear" :cells [#at [11 0 11]] :want :clear}]}]
-   :act [[:job (jobs.build.from-plan {:plan "$plan:row" :fetch false})]]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:row" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :incomplete}} :within-s 100 :of-job true}]
    :after [[:block [11 0 11] "iron_ore"]]}
   {:name "from-plan-gives-up-obsidian-under-an-iron-pickaxe"
@@ -35,7 +35,7 @@
    :body {:inventory [["iron_pickaxe" 1]]}
    :plans [{:id "obs" :metadata {:by "$body"}
             :parts [{:id "clear" :cells [#at [12 0 11]] :want :clear}]}]
-   :act [[:job (jobs.build.from-plan {:plan "$plan:obs" :fetch false})]]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:obs" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :incomplete}} :within-s 100 :of-job true}]
    :after [[:block [12 0 11] "obsidian"]]}
   {:name "stair-through-snow-blocks-by-hand"

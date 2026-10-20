@@ -3,8 +3,8 @@
 ;; tool-fetched-while-a-short-item-has-no-source: the plan wants dirt where stone stands ([20 0 16]; dirt carried, no pickaxe, a seen chest
 ;; holds one) and a gold_block nobody has; the gold fetch fails (:explore false) and the pickaxe is still fetched, the stone replaced.
 ;; default-fetch-gathers-logs-and-crafts-planks: oak_planks wanted, none carried, a log column in sight; the default :fetch obtains them.
-;; fetch-false-names-the-short-item: the same plan with :fetch false names the item: the job waits :no-items. grass-under-the-floor-says-short:
-;; a cobblestone cell holds grass, no cobblestone carried, :fetch false: the job waits :no-items needing cobblestone, the grass stays.
+;; fetch-false-names-the-short-item: the same plan with :ways #{:carried} names the item: the job waits :no-items. grass-under-the-floor-says-short:
+;; a cobblestone cell holds grass, no cobblestone carried, :ways #{:carried}: the job waits :no-items needing cobblestone, the grass stays.
 ;; Both turn the body to face the cells first and wait: a cell not yet in view is looked at, and the job then ends stopped short instead
 ;; (unit: an-unseen-floor-with-nothing-carried-is-looked-at-then-ends-short-never-waits);
 ;; with a seen chest of cobblestone the default fetch brings it, the grass is dug and cobblestone placed.
@@ -25,7 +25,7 @@
             :parts [{:id "gold" :cells [#at [22 0 16]] :want "gold_block"}
                     {:id "cell" :cells [#at [20 0 16]] :want "dirt"}]}]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
-         [:job (jobs.build.from-plan {:plan "$plan:mixed" :fetch {:explore false}})]]
+         [:job (jobs.build.from-plan {:plan "$plan:mixed" :explore false})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :ending {:kind :done}}} :within-s 100 :of-job true}
             {:event {:source :job :kind :stopped} :within-s 130 :of-job true}]
    :after [[:block [20 0 16] "dirt"] [:item "stone_pickaxe" 1] [:not-block [22 0 16] "gold_block"]]}
@@ -40,7 +40,7 @@
    :blocks [[:fill [24 0 14] [24 3 14] "oak_log"] [:set [24 4 14] "oak_leaves[persistent=true]"]]
    :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [14 0 14] #at [15 0 14]] :want "oak_planks"}]}]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 135 40"] [:until-facing {:yaw 135 :pitch 40} 10]
-         [:job (jobs.build.from-plan {:plan "$plan:floor" :fetch false})]]
+         [:job (jobs.build.from-plan {:plan "$plan:floor" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-items :needs {"oak_planks" 2}}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 30}]
    :after [[:not-block [14 0 14] "oak_planks"]]
@@ -50,7 +50,7 @@
    :body {:inventory [["iron_pickaxe" 1]]}
    :plans [{:id "ring" :metadata {:by "$body"} :parts [{:id "cell" :cells [#at [18 -1 16]] :want "cobblestone"}]}]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ -90 60"] [:until-facing {:yaw -90 :pitch 60} 10]
-         [:job (jobs.build.from-plan {:plan "$plan:ring" :fetch false})]]
+         [:job (jobs.build.from-plan {:plan "$plan:ring" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-items :needs #{{"cobblestone" 1} {:cobblestone 1}}}} :within-s 40 :of-job true}]
    :after [[:block [18 -1 16] "grass_block"]]
    :limit-s 60}
@@ -103,7 +103,7 @@
   ;; card a8b2455b: a from-plan check that cannot pass waits with its reason, a few events at most, not a warning each tick (farm.tend: farm-tend-zones.edn keeps tend waiting :nothing-to-do)
   {:name "unmet-need-waits-without-warning-each-tick"
    :plans [{:id "gold" :metadata {:by "$body"} :parts [{:id "g" :cells [#at [22 0 16]] :want "gold_block"}]}]
-   :act [[:job (jobs.build.from-plan {:plan "$plan:gold" :fetch false})]]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:gold" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind #{:waiting :stopped}} :within-s 30 :of-job true}
             {:count-event {:source :job :level :warn} :for-s 25 :at-most 3}]
    :limit-s 40}]}

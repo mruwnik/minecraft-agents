@@ -4,7 +4,7 @@
 ;; Should-succeed: planks wanted, birch_planks carried: built in birch, nothing fetched; oak_planks wanted with a birch log column nearer and an oak
 ;; column farther: the oak is felled, the birch column stands.
 ;; 20 plank cells need 5 logs: two 4-log trees are felled (8 logs), the two farther trees stand.
-;; Should-fail: oak_planks wanted, only birch_planks carried, :fetch false: waits :no-items needing oak_planks, nothing placed (a look at the unseen cells comes first).
+;; Should-fail: oak_planks wanted, only birch_planks carried, :ways #{:carried}: waits :no-items needing oak_planks, nothing placed (a look at the unseen cells comes first).
 {:defaults
  {:tags [:build :fetch] :time :any
   :plot {:height 8}
@@ -21,7 +21,7 @@
   {:name "species-name-stays-exact-and-stops-short"
    :body {:inventory [["birch_planks" 4]]}
    :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [14 0 14] #at [15 0 14]] :want "oak_planks"}]}]
-   :act [[:job (jobs.build.from-plan {:plan "$plan:floor" :fetch false})]]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:floor" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-items :needs #{{"oak_planks" 2} {:oak_planks 2}}}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 30}]
    :after [[:not-block [14 0 14] "birch_planks"] [:not-block [14 0 14] "oak_planks"] [:item "birch_planks" 4]]

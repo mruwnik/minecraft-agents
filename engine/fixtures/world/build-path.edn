@@ -1,5 +1,5 @@
 ;; Card 7b34faee: jobs.build.path on a 3x3 grass box (floor y -1). A carried shovel paths it; a shovel in a seen chest is
-;; fetched first; :fetch false without one refuses the call :no-tool; a stone cell is skipped :not-pathable; another body's plan
+;; fetched first; :ways #{:carried} without one refuses the call :no-tool; a stone cell is skipped :not-pathable; another body's plan
 ;; footprint over the whole box declines :refused and changes nothing.
 {:defaults
  {:tags [:blocks :build]
@@ -19,7 +19,7 @@
    :expect [{:event {:source :job :kind :completed :data {:pathed 9}} :within-s 80 :of-job true}]
    :after [[:block [19 -1 19] "dirt_path"]]}
   {:name "no-shovel-and-no-fetch-waits"
-   :act [[:job (jobs.build.path {:from #at [18 -1 18] :to #at [20 -1 20] :fetch false})]]
+   :act [[:job (jobs.build.path {:from #at [18 -1 18] :to #at [20 -1 20] :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-tool :kind "shovel"}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20}]
    :after [[:not-block [19 -1 19] "dirt_path"]]}

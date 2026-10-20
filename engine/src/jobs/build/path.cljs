@@ -26,8 +26,8 @@
   "Shovel grass_block, dirt, coarse_dirt, podzol, mycelium or rooted_dirt into dirt_path over a set of ground cells,
   given as the box :from/:to or the square :center/:radius (at most 256 cells).
   Needs a shovel: the call's :use {:tools [..]} names the ones it may use (default every carried shovel); with none
-  carried it fetches one (jobs.lib.need, :fetch); a failed fetch ends condition-failed {:reason :no-tool :kind \"shovel\"}
-  with the fetch's ending as the :because, and with :fetch false the call is refused the same.
+  carried it fetches one (jobs.lib.need); a failed fetch ends condition-failed {:reason :no-tool :kind \"shovel\"}
+  with the fetch's ending as the :because, and with ways #{:carried} the call is refused the same.
   Ground cover over a cell (grass, ferns, snow layer) is dug first with a jobs.blocks.dig child. If that child
   declines or gives up, it counts a try.
   Cells are skipped with a reason: :not-pathable, :covered (something else above), :not-permitted (zone rules),
@@ -48,8 +48,9 @@
    :to {:doc "opposite box corner (inclusive)" :spec ::a/pos :default nil}
    :center {:doc "centre of a square of cells at its y; with :radius" :spec ::a/pos :default nil}
    :radius {:doc "the square covers |dx|,|dz| <= radius, 0 to 7" :spec (a/int-in 0 7) :default nil}
-   :fetch {:doc "get a shovel when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false refuses the call :no-tool" :spec need/option? :default true}
    :ignore-zones? :shared})
+
+(def ways need/fetch-ways)
 
 (a/defargs settings
   {::max-cells {:default 256 :doc "Most cells the box may hold; a bigger box is impossible (:bad-args)." :spec (a/int-in 0 nil)}
@@ -95,10 +96,9 @@
     (some #(when (or (nil? only) (only (:item %))) (:item %)) (:list (choose/tools-for c [:shovel] 1)))))
 
 (defn fetch-opts
-  "The limits {:how :explore} for fetching a shovel, nil when :fetch does not allow tools."
+  "The limits {:how :explore} for fetching a shovel, nil when the ways leave only :carried."
   [c]
-  (when-let [o (need/opts c 'jobs.build.path)]
-    (when (contains? (:what o) :tool) (select-keys o [:how :explore]))))
+  (need/fetch-opts c))
 
 (defn shovel-wanted
   "What the fetch gets: a listed shovel by name, else any shovel."
@@ -158,7 +158,7 @@
        (assoc (access/refusal-fields vs) :reason :refused)))))
 
 (def shovel-lacking
-  "Later :no-tool when cells are left to path, no shovel is carried and :fetch will not get one."
+  "Later :no-tool when cells are left to path, no shovel is carried and the ways will not get one."
   (checks/refusing
    :shovel "a shovel is carried or fetched"
    (fn [c]
