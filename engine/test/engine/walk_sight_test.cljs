@@ -84,7 +84,7 @@
         pose {:x 2.5 :y 64 :z 0.5}]
     (is (= {:k 3 :gstate {}} (ws/sense (env nil) marked {} 1 pose)) "unknown: pending")
     (is (= {:k nil :gstate {:resolved #{3}}} (ws/sense (env "stone") marked {} 1 pose)))
-    (is (= {:status :replan :why :changed :cells [[4 61 0]] :step 3}
+    (is (= {:status :replan :why :changed :learned true :cells [[4 61 0]] :step 3}
            (dissoc (:done (ws/sense (env "lava") marked {} 1 pose)) :at)))))
 
 (deftest a-body-on-a-pending-floor-is-a-breach

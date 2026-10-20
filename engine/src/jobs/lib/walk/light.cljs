@@ -42,7 +42,7 @@
         feet [(:x tk) (:y tk) (:z tk)]
         floor (first cells)
         block-at (fn [[x y z]] (u/seen-name p {:x x :y y :z z}))
-        no-light (fn [why] {:status :replan :why :no-light :cells [feet] :at at :step step :detail why})
+        no-light (fn [why] {:status :replan :why :no-light :learned true :cells [feet] :at at :step step :detail why})
         verdicts (into {} (map (fn [cell] [cell (may-light? c cell)])) [feet (update feet 1 inc)])
         refusal (when-not (some :ok (vals verdicts)) (:reason (get verdicts feet)))]
     (cond
@@ -65,4 +65,4 @@
                 (ctx/remember! c :torch-placed {:cell cell :by (:id c)} torch-placed-policy)
                 (ctx/emit! c :walk.torch-placed :info {:cell cell :floor floor :text (str "placed a torch at " (pr-str cell) " to see the floor at " (pr-str floor))}))
               (when-not (await (see-lit! c see wait-ms floor))
-                {:status :replan :why :unseen :cells [floor] :no-light [feet] :at at :step step})))))))
+                {:status :replan :why :unseen :learned true :cells [floor] :no-light [feet] :at at :step step})))))))

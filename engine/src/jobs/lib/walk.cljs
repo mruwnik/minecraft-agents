@@ -293,7 +293,7 @@
       (doseq [[x y z] (concat hidden solid)] (.add ^js (.-blocked ^js (:unknown c)) (str x "," y "," z)))
       (if-let [cell (first (concat solid hidden))]
         (let [{:keys [x y z]} (u/self-pos c)]
-          {:end {:status :replan :why :changed :cells [cell] :at [x y z] :step 1}})
+          {:end {:status :replan :why :changed :learned true :cells [cell] :at [x y z] :step 1}})
         {:looked unseen}))))
 
 (defn ^:async walk-lit!

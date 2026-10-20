@@ -57,7 +57,7 @@
   plan is walked only when take-refresh? says it is clearly better, else the rest of the old one), or the body is stuck with
   a mob in its way (:mob: wait, plan round it). A replan that proves the goal cut off or enclosed ends the call with that
   no-walk; so does one the caller refused (plan-fn's {:refused true}, with its :stop) for any why but :refresh, whose old
-  plan nothing speaks against. At most max-watch-replans; past that the plan is walked unwatched (a kept plan counts as a replan, and is watched).
+  plan nothing speaks against. At most max-watch-replans; past that the plan is walked unwatched (a kept plan counts as a replan, and is watched). A replan with :learned (a gate or the look-ahead gave an unseen cell up or found it solid, and the mask remembers it) is not counted against it: the unseen cells are finite.
   opts: :plan-fn (fn [walls]) -> a plan-walk! result (or a promise of one: plan-walk!) from where the body stands now, the
   cells {:x :y :z} read as walls;
   :walk-fn (fn [steps watch]) -> [done ms] (walk! or jobs.lib.pass/walk!); :to the goal cell; :policy for no-walk;
@@ -70,13 +70,15 @@
   the plan in force at the end; ms the time in walks; walked the blocks of plan walked; damage the hp the steps walked planned."
   [c plan {:keys [plan-fn walk-fn to policy announce! dangers] :or {policy (wworld/body-policy c) announce! (fn [_ _])}}]
   (let [known (when dangers (atom #{}))
+        learned (atom 0)
         walkable? (fn [pl] (nil? (wplan/no-walk pl 0 policy)))
         proved-none? (fn [pl] (let [nw (wplan/no-walk pl 0 policy)]
                                 (or (contains? #{:goal-cut-off :goal-enclosed} (:reason nw)) (:stopped-short nw))))
         searching? (fn [pl] (= :searching (:status (wplan/no-walk pl 0 policy))))
         cut-length (fn [steps k] (walk/path-length (subvec steps 0 (min (count steps) (max 1 k)))))]
     (loop [plan plan steps (:steps plan) n 0 ms 0 walked 0 damage 0]
-      (let [watch (when (< n wwatch/max-watch-replans) (wwatch/watch-of c plan known))
+      (let [spent (- n @learned)
+            watch (when (< spent wwatch/max-watch-replans) (wwatch/watch-of c plan known))
             [done wms] (await (walk-fn steps watch))
             ms (+ ms wms)
             k (or (:step done) (count steps))
@@ -122,8 +124,9 @@
               (or (proved-none? fresh) (searching? fresh) (:refused fresh)) (finish (wplan/no-walk fresh 0 policy) fresh walked')
               :else (recur (assoc plan :ms plan-ms) (subvec steps (max 0 (dec k))) (inc n) ms walked' kept-damage)))
 
-          (and (= :replan (:status done)) (< n wwatch/max-watch-replans))
+          (and (= :replan (:status done)) (< spent wwatch/max-watch-replans))
           (let [_ (wsight/note-missed! (:pw plan) done)
+                _ (when (:learned done) (swap! learned inc))
                 t (js/performance.now)
                 fresh (await (plan-fn []))
                 plan-ms (- (js/performance.now) t)
@@ -141,7 +144,7 @@
                     (recur fresh (:steps fresh) (inc n) ms walked' damage')
                     (finish (wplan/no-walk fresh 0 policy) fresh walked')))))
 
-          (and (= :stuck (:status done)) (< n wwatch/max-watch-replans) (seq (wwatch/mob-cells c steps k)))
+          (and (= :stuck (:status done)) (< spent wwatch/max-watch-replans) (seq (wwatch/mob-cells c steps k)))
           (let [[fresh plan-ms] (await (replan-round-mob! c plan-fn walkable? steps k))]
             (tell! :mob plan-ms false)
             (if (walkable? fresh)

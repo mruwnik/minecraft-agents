@@ -29,7 +29,7 @@
   (get-in danger/danger-shape [:sensed :radius]))
 
 (def max-watch-replans
-  "Replans a look-ahead may start in one follow! (changes, refreshes, mobs); past it the plan is walked unwatched."
+  "Replans a look-ahead may start in one follow! (changes, refreshes, mobs; not those that learned an unseen cell, :learned); past it the plan is walked unwatched."
   12)
 
 (def no-stop-moves

@@ -323,7 +323,7 @@
         (if (or (>= s (:still-ticks opts)) (>= n (:max-ticks opts)))
           {:done (if (:light g)
                    {:status :light :cells [cell] :at at :step k :ticks n}
-                   {:status :replan :why :unseen :cells [cell] :at at :step k :ticks n})
+                   {:status :replan :why :unseen :learned true :cells [cell] :at at :step k :ticks n})
            :gstate gstate'}
           {:out {:controls controls :yaw lyaw :pitch lpitch} :gstate gstate'})))))
 
@@ -344,7 +344,7 @@
             (nil? id) {:k k :gstate gstate}
             (plain? id) (recur (-> gstate (update :resolved (fnil conj #{}) k) (dissoc :held :still)))
             :else {:k k :gstate gstate
-                   :done {:status :replan :why :changed :cells [cell] :at [(:x pose) (:y pose) (:z pose)] :step k}}))))))
+                   :done {:status :replan :why :changed :learned true :cells [cell] :at [(:x pose) (:y pose) (:z pose)] :step k}}))))))
 
 (defn breach
   "The pending floor (k's) the body at pose stands on, or nil: the gate's invariant broken."
