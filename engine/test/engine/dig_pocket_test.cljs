@@ -168,13 +168,13 @@
           (is (some? (failed seen)))
           (is (nil? (completed seen))))))))
 
-(deftest stone-without-a-pickaxe-and-no-fetch-fails-no-tool
+(deftest stone-without-a-pickaxe-and-no-fetch-waits-no-tool
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p seen] :as s} (setup [] {:inventory [{:name "cobblestone" :count 4}]})]
           (await (run-job! s {}))
-          (is (= :no-tool (get-in (failed seen) [:reason])))
+          (is (= :no-tool (some #(when (= :waiting (:kind %)) (:reason %)) @seen)) "can-start? holds the call")
           (is (= "stone" (block-at p [4 64 0]))))))))
 
 (deftest stone-without-a-pickaxe-tries-a-fetch-then-cuts-the-pocket-by-hand

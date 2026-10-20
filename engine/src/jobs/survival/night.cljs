@@ -26,6 +26,7 @@
             [jobs.lib.util :as u]
             [jobs.survival.bed-down :as bed-down]
             [jobs.survival.dig-in-cells :as dig-cells]
+            [jobs.survival.room-plug :as room-plug]
             [jobs.survival.dig-pit-site :as pit-site]
             [jobs.survival.night.flee :as flee]
             [jobs.survival.night.hold :as hold]
@@ -328,7 +329,7 @@
             (ctx/update-mem! c assoc :route-looked (sh-sense/feet p))
             (await (sense/look-round! c [])))
         d (await (ctx/call c :shut-in 'jobs.survival.shut-in
-                           (cond-> {:ways (cond-> #{:walls :pit} (or place (sh-sense/roofed? p (sh-sense/room-roof-height)) (dig-cells/room-plug p (sh-sense/feet p) (dig-in-roof-height c))) (conj :room))
+                           (cond-> {:ways (cond-> #{:walls :pit} (or place (sh-sense/roofed? p (sh-sense/room-roof-height)) (room-plug/room-plug p (sh-sense/feet p) (dig-in-roof-height c))) (conj :room))
                                     :for :night :settings {:jobs.survival.plug-way/roof-height (dig-in-roof-height c) :jobs.survival.wall-in/wall-value (sites/wall-value)}}
                              place (assoc :place place))))]
     (when-not (= :continue d)

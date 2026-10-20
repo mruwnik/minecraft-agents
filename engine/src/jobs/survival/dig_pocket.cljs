@@ -1,5 +1,6 @@
 (ns jobs.survival.dig-pocket
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
@@ -105,6 +106,13 @@
     (when (await (pit/pocket! c))
       (ctx/update-mem! c assoc :dug true)
       :again)))
+
+(defn can-start?
+  "A wall to pocket into that a carried tool harvests, or :fetch lets it get one."
+  [c]
+  (if (:no-tool? (site c))
+    (contract/later :no-tool "no tool for the wall to pocket into")
+    (contract/ok :tool "a tool for the wall, or none needed")))
 
 (def safe? ready/ok)
 (def fit? ready/ok)

@@ -1,5 +1,6 @@
 (ns jobs.survival.enter-room
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.settings :as settings]
@@ -20,7 +21,7 @@
             [jobs.lib.spent :as spent]
             [jobs.lib.util :as u]
             [jobs.lib.waits :as waits]
-            [jobs.survival.dig-in-cells :as dig-cells]
+            [jobs.survival.room-plug :as room-plug]
             [jobs.survival.plug-way :as way]
             [jobs.survival.retreat-doors :as retreat-doors]))
 
@@ -107,7 +108,7 @@
     (boolean (or (and t (at-target? c t))
                  (and (not (:place (:args c)))
                       (or (sh-sense/roofed? p (sh-sense/room-roof-height)) (sh-sense/shut-in-room? p)
-                          (some? (dig-cells/room-plug p (sh-sense/feet p) (way/roof-height)))))))))
+                          (some? (room-plug/room-plug p (sh-sense/feet p) (way/roof-height)))))))))
 
 (defn shut?
   "Whether the body is in a closed room (sh-sense/shut-in-room?) with no open door."
@@ -127,7 +128,7 @@
       (let [door (sh/open-room-door p (ctx/view c))
             gap (room-lib/gap c)
             plug (when (and (not (shut? c)) (not gap))
-                   (dig-cells/room-plug p (sh-sense/feet p) (way/roof-height)))
+                   (room-plug/room-plug p (sh-sense/feet p) (way/roof-height)))
             blocks? (have-blocks? c)]
         (cond
           door {:door door}
@@ -167,6 +168,13 @@
   (let [cell (:cell (reach/unroofed-cell p pos))]
     (boolean (and (not (room-lib/refuge-room? p pos)) (not (reach/unseen-room? p pos))
                   cell (nil? (room-lib/shut-by p pos cell any?))))))
+
+(defn can-start?
+  "A room to enter: a place, the home or a closed room seen, or the body already in one."
+  [c]
+  (if (or (target-of c) (here? c nil))
+    (contract/ok :room "a room to enter")
+    (contract/later :no-room "no room to enter: no place remembered or closed room seen that no zone refuses, and the body is not under a roof")))
 
 (defn ^:async quote-of [c]
   (let [p (:primitives c)

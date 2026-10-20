@@ -422,21 +422,6 @@
         (recur more)))
     (ctx/update-mem! c update :pit-drops #(vec (remove here? %)))))
 
-(def room-limit
-  "Most cells a closed room may have (the flood from the feet stops there and the room counts as open)."
-  256)
-
-(def room-reach
-  "Farthest a closed room's cell may be from the feet along any axis."
-  8)
-
-(defn room-wall?
-  "Whether a cell bounds a room against mobs: sealed?, and not an openable door, gate or trapdoor standing open."
-  [p cell]
-  (let [b (u/seen-block p cell)]
-    (and (sealed? p cell)
-         (not (and (= :openable (click/kind-of (.-name b))) (click/reached? :open (click/props-of b)))))))
-
 (def neighbours rules/neighbour-deltas)
 
 (defn shift [{:keys [x y z]} [dx dy dz]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
@@ -463,42 +448,6 @@
   "Whether cell is solid rock as the body reads it (rock-name)."
   [p cell]
   (solid/solid? (rock-name p cell)))
-
-(defn room-cells
-  "The cells reachable from the feet cell through cells that are not room-wall? (six neighbours, the cell plug counted
-  as a wall) when they form a closed room: at most room-limit of them, none farther than room-reach from the feet on
-  any axis, none unloaded. nil when they do not."
-  [p {fx :x fy :y fz :z :as feet} plug]
-  (loop [todo [feet] seen #{feet}]
-    (if-let [{:keys [x y z] :as cell} (peek todo)]
-      (cond
-        (> (count seen) room-limit) nil
-        (< room-reach (max (js/Math.abs (- x fx)) (js/Math.abs (- y fy)) (js/Math.abs (- z fz)))) nil
-        (nil? (u/seen-block p cell)) nil
-        :else (let [next (for [d neighbours
-                               :let [n (shift cell d)]
-                               :when (and (not (seen n)) (not= n plug) (not (room-wall? p n)))]
-                           n)]
-                (recur (into (pop todo) next) (into seen next))))
-      seen)))
-
-(defn door-of?
-  "Whether a cell next to one of the room's cells holds a door, gate or trapdoor a hand opens: the room's way out."
-  [p cells]
-  (boolean (some (fn [cell] (some #(= :openable (click/kind-of (u/seen-name p (shift cell %)))) neighbours)) cells)))
-
-(defn room-plug
-  "In a closed room with a door whose roof has a hole over the body: the cell to mend, the lowest of y+2 ..
-  y+roof-height straight above the feet that is not solid and has a solid side neighbour to be placed against, when
-  once filled it leaves the feet in a closed room (room-cells) with a door, gate or trapdoor in its walls (door-of?).
-  nil when there is none (open ground, a room with an open door or doorway, a shaft or pit with no door): walls or a
-  pit then."
-  [p {:keys [x y z] :as feet} roof-height]
-  (let [column (map (fn [dy] {:x x :y (+ y dy) :z z}) (range 2 (inc roof-height)))
-        plug (first (filter #(and (not (sh-sense/solid-at? p %)) (supported? p %)) column))
-        cells (when plug (room-cells p feet plug))]
-    (when (and cells (door-of? p cells))
-      plug)))
 
 (defn shaft-top
   "When the feet cell is the bottom of a 1x1 shaft (no side open at feet height): the first height up the open column
