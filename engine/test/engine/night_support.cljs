@@ -181,6 +181,11 @@
 
 (def bed-world (update lit-world :inventory conj {:name "red_bed" :count 1}))
 
+(defn with-room
+  "bed-world with room built in place of the home-roof cell: its walls would close a doorway or fill a room that room opens."
+  [room]
+  (-> bed-world (update :blocks #(apply dissoc % (keys (dissoc home-roof "10,66,0")))) (update :blocks merge room)))
+
 (defn bed-places [p]
   (filterv #(= "red_bed" (.-item (.-args %))) (st/calls p "place")))
 
@@ -188,7 +193,7 @@
   "The night with a carried bed and a natural-stone home (go-to digs into it) at x 10; a looping night is cut off at the
   third walk in (a walk that fails ends it), so a red run ends. {:p :log}."
   [home & carried]
-  (let [{:keys [eng p]} (await (night-at-home (-> bed-world (update :blocks merge home) (update :inventory into carried)) {:x 10 :y 64 :z 0}))
+  (let [{:keys [eng p]} (await (night-at-home (-> (with-room home) (update :inventory into carried)) {:x 10 :y 64 :z 0}))
         walks (atom 0)
         log (await (with-child-log #(tu/run-until-empty eng 60)
                      (fn [_ k _ _] (when (and (= :roof-walk k) (< 2 (swap! walks inc)))
@@ -210,7 +215,7 @@
 (defn ^:async doorway-shut-early
   "The night shuts stone-room's dug doorway, then ends before dawn (no room for the bed) and it turns noon. {:eng :p :seen :filled}."
   []
-  (let [{:keys [eng p] :as r} (await (night-at-home (update bed-world :blocks merge stone-room) {:x 10 :y 64 :z 0}))]
+  (let [{:keys [eng p] :as r} (await (night-at-home (with-room stone-room) {:x 10 :y 64 :z 0}))]
     (await (with-child-log #(tu/run-until-empty eng 60)
              (fn [c k _ _] (when (= :bed-down k)
                              (ctx/remember! c :bed-place-failed {:pos (sh-sense/feet p)} sh-beds/bed-place-failed-policy)

@@ -24,7 +24,7 @@
             [jobs.lib.targets :as targets]
             [jobs.survival.night :as night]
             [jobs.survival.night.sites :as sites]
-            [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home walled-pen bed-world bed-places dug-into-home stone-room block-at room-with-doorway doorway-shut-early night-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night held-with-raw-beef furnace-ops held-starving cow zombie]]))
+            [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home walled-pen bed-world bed-places with-room dug-into-home stone-room block-at room-with-doorway doorway-shut-early night-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night held-with-raw-beef furnace-ops held-starving cow zombie]]))
 
 (deftest a-roof-over-a-breached-room-does-not-end-the-night
   (run-night-in {:blocks breached-room :inventory st/wall-stack}
@@ -154,7 +154,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await (night-at-home bed-world {:x 10 :y 64 :z 0}))]
+        (let [{:keys [eng p]} (await (night-at-home (with-room room-with-doorway) {:x 10 :y 64 :z 0}))]
           (await (tu/run-until-empty eng 40))
           (is (<= 9 (:x (st/pos-of p))) "walked into the home first")
           (is (= [] (filterv #(< (:x (st/arg-pos %)) 9) (bed-places p))) "no bed was set down on the open ground")
@@ -234,7 +234,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [world (-> bed-world (update :blocks merge room-with-doorway)
+        (let [world (-> (with-room room-with-doorway)
                         (assoc :entities [{:id 8 :name "sheep" :kind "passive" :pos {:x 11.5 :y 64 :z -0.5}}]))
               {:keys [eng p]} (await (night-at-home world {:x 10 :y 64 :z 0}))]
           (await (tu/run-until-empty eng 60))
