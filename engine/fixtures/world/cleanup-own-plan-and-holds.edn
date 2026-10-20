@@ -38,7 +38,7 @@
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "dirt" :before "air" :purpose :pillar :state :placed}]}}
             {:kind :died :data {:pos #xyz [8 0 8]}}]
    :act [[:job (jobs.access.cleanup {:job nil :ignore-zones? true})]]
-   :expect [{:event {:source :job :kind :completed :data {:open [:has {:reason :died-near}]}} :within-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:open [:has {:reason :died-near}]}} :within-s 40 :of-job true}]
    :after [[:block [6 0 8] "dirt"] [:body-far [6.5 0 8.5] 8]]}
   {:name "shelter-block-stays-while-it-opens-onto-dark"
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "dirt" :before "air" :purpose :retreat-plug :state :placed}]}}]
@@ -46,7 +46,7 @@
    :blocks [[:fill [0 0 4] [30 3 12] "stone"] [:fill [1 0 8] [14 1 8] "air"] [:set [6 0 8] "dirt"] [:set [7 0 8] "torch"]]
    :body {:at [10.5 0 8.5]}
    :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true :checks {:safe? (not (threatened))}})]]
-   :expect [{:event {:source :job :kind :completed :data {:open [:any]}} :within-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:open [:any]}} :within-s 40 :of-job true}]
    :after [[:block [6 0 8] "dirt"]]}
   {:name "plug-opening-onto-lit-cells-is-taken-back"
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "dirt" :before "air" :purpose :retreat-plug :state :placed}]}}]

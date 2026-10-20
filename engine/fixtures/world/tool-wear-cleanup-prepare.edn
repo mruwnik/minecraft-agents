@@ -31,8 +31,8 @@
          [:await {:source :job :kind :completed} 60]
          [:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
    ;; no pick: the cobblestone pillar stays (entries open :no-tool), nothing dug, no tool event
-   :expect [{:event {:source :job :kind :completed :data {:open [:has {:reason :no-tool}]}} :within-s 30}
-            {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 30 :until {:source :job :kind :completed}}]
+   :expect [{:event {:source :job :kind :stopped :data {:open [:has {:reason :no-tool}]}} :within-s 30}
+            {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 30 :until {:source :job :kind :stopped}}]
    :after [[:block [16 0 16] "cobblestone"] [:block [16 1 16] "cobblestone"]]}
   {:name "prepare-last-durability-pick-breaks"
    :blocks [[:set [16 0 16] "cobblestone"]]
