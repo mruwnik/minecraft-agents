@@ -85,6 +85,24 @@
               (is (= [{:reason :tunnel-length :length 4}] (map #(select-keys % [:reason :length]) (tunnel-ends again))) (pr-str stay))
               (is (= (set (for [x [1 2 3 4] y [64 65]] [x y 0])) (set (dug-cells again))) (pr-str stay)))))))))
 
+(deftest gravel-that-lands-in-a-cut-of-a-stay-level-tunnel-is-dug-before-the-body-walks-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world (rock-world {})})
+              landed (atom 0)]
+          (doseq [walk ["moveTo" "steer"]]
+            (.override (.-world (:p s)) walk
+                       (fn ^:async f [token a impl]
+                         (when (and (zero? @landed) (= "air" (block-at s 2 64 0)) (= "air" (block-at s 1 64 0)))
+                           (swap! landed inc)
+                           (swap! (fake/state (:p s)) assoc-in [:blocks [2 64 0]] "gravel"))
+                         (await (impl token a)))))
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4 :stay-level true}) {})
+          (await (run-ticks s 200))
+          (is (= 1 @landed))
+          (is (= [{:reason :tunnel-length :length 4}] (map #(select-keys % [:reason :length]) (tunnel-ends s))) (pr-str (map :text (tunnel-ends s)))))))))
+
 (deftest stay-level-leaves-ore-beyond-its-ore-reach
   (async done
     (tu/run-async done
