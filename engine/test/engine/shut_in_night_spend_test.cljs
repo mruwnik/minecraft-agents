@@ -24,7 +24,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (run-dig! {:inventory [pick logs] :blocks st/floor}))]
+        (let [{:keys [p]} (await (run-dig! {:inventory [pick logs] :blocks dirt-floor}))]
           (is (nil? (get (placed p) "oak_log")) (pr-str (placed p)))
           (is (seq (st/calls p "dig"))))))))
 

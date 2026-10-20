@@ -6,7 +6,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
-            [jobs.survival.dig-in-cells :as dig-cells]
+            [jobs.lib.seal :as seal]
             [jobs.survival.retreat-cornered :as cornered]
             [jobs.lib.rooms :as room-lib]))
 
@@ -35,7 +35,7 @@
     (->> (for [x (range (- fx r) (+ fx r 1)) y (range (dec fy) (+ fy 3)) z (range (- fz r) (+ fz r 1))]
            {:x x :y y :z z})
          (keep (fn [cell]
-                 (when-let [b (dig-cells/open-openable p cell)]
+                 (when-let [b (seal/open-openable p cell)]
                    (when (= :openable (click/kind-of (.-name b)))
                      (let [low (lower-half b cell)]
                        {:cell low :name (.-name b) :half (:half (click/props-of b))})))))
@@ -52,7 +52,7 @@
   shut does not hold the flight. :again: the next step sees whether the danger is still there."
   [c {:keys [cell name]}]
   (ctx/update-mem! c update :doors-clicked (fnil conj #{}) (door-key cell))
-  (let [r (await (dig-cells/shut-open! c cell))]
+  (let [r (await (seal/shut-open! c cell))]
     (when (= :shut r)
       (ctx/emit! c :retreat.door-shut :info {:cell (door-key cell) :text (str "shut the " name " at " (door-key cell)
                                                                              " on the hostile")})))
@@ -64,7 +64,7 @@
   [c room]
   (let [clicked (:doors-clicked (ctx/mem c) #{})]
     (->> (:doors room)
-         (filter #(dig-cells/open-openable (:primitives c) (:cell %)))
+         (filter #(seal/open-openable (:primitives c) (:cell %)))
          (remove #(clicked (door-key (:cell %))))
          (sort-by #(u/dist (u/self-pos c) (room-lib/mid (:cell %))))
          first)))
@@ -74,7 +74,7 @@
   cell inside it first, as also when it stands in the door's own cell (a step that gets no nearer gives the door up for
   the flight). :again."
   [c {:keys [cell inside]}]
-  (let [b (dig-cells/open-openable (:primitives c) cell)
+  (let [b (seal/open-openable (:primitives c) cell)
         in-door? (click/standing-in? (u/self-pos c) cell (:half (click/props-of b)))]
     (if (and (not in-door?) (<= (u/dist (u/self-pos c) (room-lib/mid cell)) (door-reach)))
       (await (shut-door! c {:cell cell :name (.-name b)}))

@@ -227,7 +227,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (st/setup {:time night :blocks st/floor :inventory st/dirt-stack :floor [-4 -4 4 4]})
+        (let [{:keys [eng p seen]} (st/setup {:time night :blocks (merge st/floor (tu/box -4 60 -4 4 62 4 "stone")) :inventory st/dirt-stack :floor [-4 -4 4 4]})
               mid (atom nil)]
           (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status "failed" :reason "Server refused the placement"}))
           (st/dawn-after! p 4 (fn [n] (when (= n 2) (reset! mid (:reason (core/holding eng "j1"))))))

@@ -3,7 +3,6 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.blocks.fill-cells :as fill]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
             [jobs.lib.click :as click]
@@ -26,7 +25,8 @@
          (mapv #(danger-q/mob-pos p %)))))
 
 (a/defargs settings
-  {::max-refusals {:default 1 :doc "Failed steps (a place refused twice) at one cell before the seal gives up on it." :spec (a/int-in 1 nil)}
+  {::max-places {:default 4 :doc "Seal placements a step of a flight makes (also the shut-in ways')." :spec (a/int-in 1 nil)}
+   ::max-refusals {:default 1 :doc "Failed steps (a place refused twice) at one cell before the seal gives up on it." :spec (a/int-in 1 nil)}
    ::hit-reach {:default 3 :doc "Blocks within which a melee mob that hurt the body during a seal step ends the step (the fight is decided anew)." :spec (a/num-in 0 nil)}})
 
 (defn occupied?
@@ -49,10 +49,10 @@
   [c cells left]
   (let [owed (set left)]
     (->> cells
-         (remove #(or (dig-cells/sealed? (:primitives c) %) (owed %)))
+         (remove #(or (seal/sealed? (:primitives c) %) (owed %)))
          (into #{}))))
 
-(defn ^:async fill!
+(defn ^:async fill-one!
   "Place the first of cells (in the order given; sides, support, roof) that is still open through a jobs.blocks.fill-cells child
   (in place, ledgered flight/plug-purpose, an open door shut, a torch dug out first): :ok once a cell is filled or none is owed
   (a cell the fill cannot fill goes to :seal-occupied), :wait while a mob stands in the cell (job memory :seal-wait), :hit when a
@@ -63,11 +63,11 @@
         health (.-health (.self p))]
     (if (hit-since? c (:seal-health (ctx/mem c)))
       (do (ctx/update-mem! c assoc :seal-health health) :hit)
-      (let [fillable (remove #(and (access/trespass-refusal c :dig %) (= :loose (fill/kind (u/seen-name p %)))) cells)
+      (let [fillable (remove #(and (access/trespass-refusal c :dig %) (= :loose (seal/kind (u/seen-name p %)))) cells)
             e (await (ctx/call c :fill 'jobs.blocks.fill-cells
                                {:cells (mapv lb/cell fillable) :order :given :least 1 :clear-loose true :shut-open true :in-place true
                                 :purpose (flight/plug-purpose c) :ignore-zones? true :use {:blocks (vec (flight/blocks c))} :ways #{:carried}
-                                :checks {:safe? '(always) :fit? '(always)} :settings {::fill/max-refusals (settings/get settings ::max-refusals)}}))
+                                :checks {:safe? '(always) :fit? '(always)} :settings {:jobs.blocks.fill-cells/max-refusals (settings/get settings ::max-refusals)}}))
             _ (ctx/update-mem! c assoc :seal-health health)
             data (:data e)]
         (ctx/update-mem! c dissoc :seal-wait)
@@ -77,12 +77,26 @@
                                     (spent/note! c item cell)
                                     (flight/note-placed! c (u/cell-pos cell) item))
                                   (ctx/update-mem! c update :seal-occupied (fnil into #{}) (leftover c cells (:left data)))
-                                  :ok)
+                                  (if (seq (:placed data)) :placed :ok))
           (= :blocked (get-in e [:cause :reason]))
           (do (ctx/update-mem! c update :seal-occupied (fnil conj #{}) (get-in e [:cause :cell]))
               :ok)
           :else (do (ctx/update-mem! c assoc :seal-status (:status data) :seal-refusal (:text data))
                     :failed))))))
+
+(defn max-places "Seal placements a step." [] (settings/get settings ::max-places))
+
+(defn ^:async fill!
+  "fill-one! up to max-places times in a step while it places a block and a cell is left open: the walls go up together, as
+  enclosed? is judged between steps; a body that was moved meanwhile ends the step (the cells are judged anew). :ok, :wait, :hit or :failed as fill-one!."
+  [c cells]
+  (loop [n 1]
+    (let [p (:primitives c)
+          feet (sh-sense/feet p)
+          r (await (fill-one! c cells))]
+      (if (and (= :placed r) (< n (max-places)) (= feet (sh-sense/feet p)) (not-every? #(seal/sealed? p %) cells))
+        (recur (inc n))
+        (if (= :placed r) :ok r)))))
 
 (defn shooters
   "Where the seen ranged hostiles within the flight's :ranged-radius stand, and the unseen shooters of recent shots (flight/fire-spots)."
@@ -125,14 +139,14 @@
 (defn stuck-door?
   "Whether cell holds a door a hand cannot shut (iron) standing open: no wall, and nothing can be placed into it."
   [p cell]
-  (let [b (dig-cells/open-openable p cell)]
+  (let [b (seal/open-openable p cell)]
     (and b (= :iron (click/kind-of (.-name b))))))
 
 (defn door-free-spot
   "A side neighbour of feet to stand in that the walls can enclose, because no stuck-door? is among its fill cells, or nil: its feet and
   head cells are seen free, its floor is solid and it is no door cell."
   [p feet]
-  (let [free? #(let [f (u/seen-facts p %)] (and f (not (:full-cube? f)) (not (dig-cells/open-openable p %))))]
+  (let [free? #(let [f (u/seen-facts p %)] (and f (not (:full-cube? f)) (not (seal/open-openable p %))))]
     (first (for [[dx dz] dig-cells/sides
                  :let [n (assoc feet :x (+ (:x feet) dx) :z (+ (:z feet) dz))]
                  :when (and (free? n) (free? (update n :y inc))
@@ -192,7 +206,7 @@
   more are owed, :hit when a melee mob hit the body during the step (the caller decides anew), :failed when a hostile stands in one (not with :for :night: the place is tried and a mob in its cell waited out), none is carried, a
   placement is refused, or only cells it cannot fill are left open (place-seal!'s :seal-occupied: a torch, chest or bed
   in a side cell, which the seal leaves alone).
-  A door standing open in a side cell is no wall (dig-cells/sealed?): it is shut. Cells it has not sensed (a ceiling
+  A door standing open in a side cell is no wall (seal/sealed?): it is shut. Cells it has not sensed (a ceiling
   out of view) are looked at first: an unseen cell is not taken for an open one. A support block under a wall cell is never placed in another's
   area (the wall cell then fails no-support); the wall cells themselves are a last resort.
   An open iron door in a side cell can be neither shut nor filled: the body first steps to a spot not beside it (step-from-door!)."

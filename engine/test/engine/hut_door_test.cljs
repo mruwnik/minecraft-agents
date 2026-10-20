@@ -10,6 +10,7 @@
             [engine.fake :as fake]
             [engine.hut-shelter-test :as hs]
             [engine.test-util :as tu]
+            [jobs.lib.seal :as seal]
             [jobs.survival.dig-in-cells :as dig-cells]))
 
 (def open-door-states
@@ -84,7 +85,7 @@
 (deftest sealed-means-shut-for-doors-gates-and-trapdoors
   (let [p (tu/fake {:blocks {"1,64,0" "oak_door" "2,64,0" "oak_fence_gate" "3,64,0" "oak_fence" "4,64,0" "stone"}
                     :states {"1,64,0" {:open true :half "lower"} "2,64,0" {:open false}}})]
-    (are [cell sealed] (= sealed (dig-cells/sealed? p cell))
+    (are [cell sealed] (= sealed (seal/sealed? p cell))
       {:x 1 :y 64 :z 0} false
       {:x 2 :y 64 :z 0} true
       {:x 3 :y 64 :z 0} true

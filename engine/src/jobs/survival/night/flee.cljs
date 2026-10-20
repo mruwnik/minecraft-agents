@@ -48,7 +48,7 @@
                                    (not (:unknown (look/seen-block p cell)))))
         have (reduce + (map :count (lb/carried c (choose/cheap-blocks (choose/filler-names c :shelter) (sites/wall-value)))))
         up (fn [{:keys [x y z]} dy] {:x x :y (+ y dy) :z z})
-        sealed? (fn [cell] (and (solid? (key-of cell)) (dig-cells/sealed? p cell)))
+        sealed? (fn [cell] (and (solid? (key-of cell)) (seal/sealed? p cell)))
         stand-on? #(dig-cells/stand-on? p %)]
     (->> solids
          (map #(up (:pos %) 1))

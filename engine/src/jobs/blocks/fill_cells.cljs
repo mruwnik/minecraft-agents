@@ -18,8 +18,8 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.need :as need]
             [engine.contract :as contract]
-            [jobs.lib.util :as u]
-            [jobs.survival.dig-in-cells :as dig-cells]))
+            [jobs.lib.seal :as seal]
+            [jobs.lib.util :as u]))
 
 (def doc
   "The one job that makes cells solid. Fill cells that are air, cave_air, water or replaceable with the first carried block
@@ -34,7 +34,7 @@
   With :in-place the body works from where it stands, without aiming or picking up drops (a shelter: it never moves). With :purpose each placed block
   goes to the scaffold ledger under it (jobs.access.cleanup takes the plug purposes back). A cell the place refused or that had
   nothing to place against goes behind the others, and is given up after ::max-refusals failed steps. A mob standing in the next
-  cell (seen, or named by a refused place) is waited out a second at a time (::mob-waits), not counted a failed step. A cell a
+  cell is waited out a second at a time (::mob-waits) when seen, and for jobs.lib.seal/mob-wait-ticks when only a refused place names it, not counted a failed step. A cell a
   place answers occupied for (a block that stays) is left alone, not owed. It yields :continue only when a child waits
   on the world.
 
@@ -62,7 +62,7 @@
 (a/defargs settings
   {::max-refusals {:default 2 :doc "Failed steps at one cell before it is given up; the call fails once only such cells are left." :spec (a/int-in 1 nil)}
    ::max-failures {:default 6 :doc "Failed steps in a row before the job ends nothing-possible." :spec (a/int-in 1 nil)}
-   ::mob-waits {:default 10 :doc "Seconds a mob standing in the next cell (seen, or named by a refused place) is waited out before the cell counts as a failed step." :spec (a/int-in 0 nil)}
+   ::mob-waits {:default 10 :doc "Seconds a mob standing in the next cell is waited out before the cell counts as a failed step." :spec (a/int-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
 (def fit? ready/ok)
@@ -72,18 +72,6 @@
 (def ways need/fetch-ways)
 
 (def defaults {:use {:blocks :build} :least :all :ways #{:carried} :spend {:job-time ::job-time-s}})
-
-(def loose #"(^|_)(rail|torch|fence|fence_gate|ladder|lantern|button|lever|carpet|sign|banner|pressure_plate)$|^cobweb$")
-
-(defn kind
-  "What a block name means for a fill: :open (air, water or replaceable), :container (never touched), :loose (dug first with
-  :clear-loose) or :solid (done)."
-  [n]
-  (cond
-    (or (bs/air n) (= "water" n) (bs/replaceable n)) :open
-    (found/containers n) :container
-    (and n (re-find loose n)) :loose
-    :else :solid))
 
 (defn wanted
   "The block names the call fills with: its :use {:blocks}, else (before the call starts) the carried building blocks."
@@ -96,18 +84,21 @@
   (mapv #(cell-of (a/cell %)) (:cells (:args c))))
 
 (defn kinds-of
-  "[cell kind] for the cells that are not solid, in :cells order (an unloaded cell is not owed, nor one a place answered
+  "[cell kind] for the cells that are not solid, in :cells order (an unloaded cell is not owed (with :in-place it is, as open), nor one a place answered
   occupied for). Loose things and containers count only with :clear-loose."
   [c]
   (let [clear? (:clear-loose (:args c))
         shut? (:shut-open (:args c))
+        in-place? (:in-place (:args c))
         p (:primitives c)]
     (into []
           (comp (keep (fn [cell]
-                        (if (and shut? (dig-cells/open-openable p cell))
-                          [cell :shut]
-                          (when-let [n (u/seen-name p cell)]
-                            [cell (kind n)]))))
+                        (cond
+                          (and shut? (seal/open-openable p cell)) [cell :shut]
+                          (and in-place? (seal/sealed? p cell)) nil
+                          :else (if-let [n (u/seen-name p cell)]
+                                  [cell (seal/kind n)]
+                                  (when in-place? [cell :open])))))
                 (filter (fn [[_ k]] (or (#{:open :shut} k) (and clear? (#{:loose :container} k)))))
                 (remove (comp (:occupied (ctx/mem c) #{}) first)))
           (cells-of c))))
@@ -178,7 +169,7 @@
 (defn ^:async shut!
   "One open door, gate or trapdoor: :shut, :partial never, or :stuck (an iron one, or a click that did nothing)."
   [c pos]
-  (if (= :shut (await (dig-cells/shut-open! c pos))) :shut :stuck))
+  (if (= :shut (await (seal/shut-open! c pos))) :shut :stuck))
 
 (defn ^:async collect!
   [c]
@@ -255,13 +246,16 @@
   (let [r (await (child/pause! c 1 :mob-in-cell))]
     (if (= :continue r) :continue :again)))
 
-(defn ^:async waiting!
-  "A place was refused for a mob the body does not see in the cell: waited out like a seen one (wait-mob!), then the call fails."
+(defn waiting!
+  "A place was refused for a mob the body does not see in the cell: :continue while the wait (jobs.lib.seal/mob-wait-ms) from the
+  first such refusal lasts, then the call fails."
   [c pos]
-  (if (< (:mob-waits (ctx/mem c) 0) (settings/get settings ::mob-waits))
-    (await (wait-mob! c))
-    (do (ctx/update-mem! c assoc :refusal {:status "failed" :text (refusal-text pos "failed" (str ", " (string/join ", " (:mobs (ctx/mem c))) " stays in the cell"))})
-        (finish! c :nothing-possible {:reason :failed}))))
+  (let [now (ctx/now c)
+        since (or (:mob-since (ctx/mem c)) now)]
+    (if (<= (- now since) (seal/mob-wait-ms))
+      (do (ctx/update-mem! c assoc :mob-since since) :continue)
+      (do (ctx/update-mem! c assoc :refusal {:status "failed" :text (refusal-text pos "failed" (str ", " (string/join ", " (:mobs (ctx/mem c))) " stays in the cell"))})
+          (finish! c :nothing-possible {:reason :failed})))))
 
 (defn ^:async step!
   "One cell: :again after it, :continue when a child waits, or the ending."
@@ -300,8 +294,9 @@
           :mob (waiting! c pos)
           :dug :again
           :again :again
-          (:placed :shut) (do (ctx/update-mem! c #(-> % (update :mended (fnil inc 0)) (dissoc :tries :refusal) (cond-> pos (assoc :failures 0 :mob-waits 0)))) :again)
+          (:placed :shut) (do (ctx/update-mem! c #(-> % (update :mended (fnil inc 0)) (dissoc :tries :refusal :mob-since) (cond-> pos (assoc :failures 0 :mob-waits 0)))) :again)
           (do (bump! c :failures)
+              (ctx/update-mem! c dissoc :mob-since)
               (when pos (ctx/update-mem! c update-in [:tries pos] (fnil inc 0)))
               :again))))))
 

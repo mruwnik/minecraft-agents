@@ -328,7 +328,7 @@
   carried, a cell holding a block that does not seal, or the place refused)."
   [c {:keys [plugs roof]}]
   (let [p (:primitives c)
-        cells (vec (remove #(dig-cells/sealed? p %) (conj plugs roof)))]
+        cells (vec (remove #(seal/sealed? p %) (conj plugs roof)))]
     (cond
       (empty? cells) :hidden
       (nil? (lb/pick c (flight/blocks c))) (stop :no-blocks "nothing to roof the pit with")
