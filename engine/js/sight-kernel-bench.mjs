@@ -1,12 +1,12 @@
-// Why JavaScript: times one full sight pass of kernels alone over the bench worlds, interleaved, min of many passes (node engine/js/sight-kernel-bench.mjs [kernel paths...]).
+// Why JavaScript: times one full sight pass of kernels alone over the bench worlds, interleaved, min of many passes (node engine/js/sight-kernel-bench.mjs [kernel paths...]; give two paths, e.g. a saved copy of an older kernel, for an A/B).
 import { gridDirs, makeRig, makeRaw, groundAt } from './sight-kernel-rig.mjs'
 
-const paths = process.argv.length > 2 ? process.argv.slice(2) : ['./sight-kernel-ref.mjs', './sight-kernel.mjs']
+const paths = process.argv.length > 2 ? process.argv.slice(2) : ['./sight-kernel.mjs']
 const kernels = await Promise.all(paths.map(async p => (await import(p)).castRays))
 const reps = Number(process.env.REPS ?? 40)
 for (const kind of ['hills', 'cave', 'pen']) {
   const { raw, bot } = makeRaw(kind)
-  const rigs = paths.map(p => makeRig(raw, { legacy: p.includes('-ref') }))
+  const rigs = paths.map(p => makeRig(raw))
   const pos = bot.entity.position
   const views = Array.from({ length: 8 }, (_, i) => {
     const ox = pos.x + i; const oz = pos.z

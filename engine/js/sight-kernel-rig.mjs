@@ -1,4 +1,4 @@
-// Why JavaScript: drives sight-kernel.mjs over a real raw world (sight-bench-world.mjs) without the cljs perception; shared by the kernel bench and the kernel guard test.
+// Why JavaScript: drives sight-kernel.mjs over a real raw world (sight-bench-world.mjs) without the cljs perception; used by the kernel bench.
 import { MARKS_LENGTH } from './sight-kernel.mjs'
 import { makeRaw, groundAt } from './sight-bench-world.mjs'
 
@@ -31,20 +31,18 @@ export function gridDirs (yaw, pitch, { rayDeg = 1, fov = 70, aspect = 16 / 9, j
 }
 
 // A kernel context over a raw world: marks per section for one stamp, records into an array of packed [x y z id].
-// legacy: the marks of the reference kernel (Uint32 stamps, ctx.base) instead of per-stamp zeroed bytes.
-export function makeRig (raw, { radius = 48, near = 4, legacy = false } = {}) {
+export function makeRig (raw, { radius = 48, near = 4 } = {}) {
   const sight = raw.sightTable()
   const visible = new Uint8Array(256)
   for (let l = 0; l < 256; l++) visible[l] = Math.max(l >> 4, l & 15) >= 3 ? 1 : 0
   const marks = new Map()
-  let stamp = 0
   const records = []
   const ctx = {
-    raw, sections: raw, sight, visible, base: 0, radius, near,
+    raw, sections: raw, sight, visible, radius, near,
     marksOf: (cx, cy, cz) => {
       const k = (cx * 65536 + cz) * 256 + cy
       let m = marks.get(k)
-      if (!m) marks.set(k, m = legacy ? new Uint32Array(4096) : new Uint8Array(MARKS_LENGTH))
+      if (!m) marks.set(k, m = new Uint8Array(MARKS_LENGTH))
       return m
     },
     record: (x, y, z, id) => records.push(x, y, z, id),
@@ -53,7 +51,7 @@ export function makeRig (raw, { radius = 48, near = 4, legacy = false } = {}) {
   }
   return {
     ctx, records,
-    fresh () { stamp++; ctx.base = 4 * stamp; if (!legacy) marks.clear(); records.length = 0 }
+    fresh () { marks.clear(); records.length = 0 }
   }
 }
 
