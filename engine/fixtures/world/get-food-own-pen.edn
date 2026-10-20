@@ -14,12 +14,12 @@
  :cases
  [{:name "own-plan-pen-surplus-is-hunted-keeping-two"
    :plans [{:id "pen" :metadata {:by "$body"}
-            :parts [{:id "pen" :cells [#at [22 0 22] #at [27 0 27]] :want [:any "dirt"]}]}]
+            :parts [{:id "pen" :box [#at [22 0 22] #at [27 0 27]] :want [:any "dirt"]}]}]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 90 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]]}
   {:name "other-plan-pen-is-spared"
    :plans [{:id "pen" :metadata {:by "SomeoneElse"}
-            :parts [{:id "pen" :cells [#at [22 0 22] #at [27 0 27]] :want [:any "dirt"]}]}]
+            :parts [{:id "pen" :box [#at [22 0 22] #at [27 0 27]] :want [:any "dirt"]}]}]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 90}]
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 3]]}
   ;; Card 1557a519: a hand-built fenced pen (a ring: :hollow on a one-layer box fills every cell) with no zone or plan still spares its cows (the :no-food ending names it); wild cows in the open
