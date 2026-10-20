@@ -38,7 +38,7 @@
    :after [[:block [11 0 21] "air"]]}
   {:name "hunt-queued-at-night-in-the-open-waits-dark-then-hunts-at-day"
    :act [[:summon "cow" [13.5 0 12.5] "{NoAI:1b}"]
-         [:job (jobs.combat.hunt {:mob "cow" :count 1 :keep 0})]
+         [:job (jobs.combat.hunt {:item "beef" :count 1 :keep 0})]
          [:await {:source :job :kind :waiting :data {:reason :dark}} 30]
          [:wait-s 10]
          [:time-set 1000]]

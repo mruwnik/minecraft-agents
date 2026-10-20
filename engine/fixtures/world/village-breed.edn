@@ -29,9 +29,17 @@
          [:job (jobs.village.breed {:target 3})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-pair}} :within-s 30 :of-job true}]
    :after [[:item "bread" 8]]}
-  ;; should fail: NoAI villagers never breed, so the attempt ends without a birth
+  ;; should fail: NoAI villagers never breed, so the attempt ends without a birth; no bed is in sight, so the three carried beds are put down first
   {:name "noai-pair-no-births"
+   :body {:inventory [["bread" 8] ["red_bed" 3]]}
    :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,UUID:[I;20264,7,4,1]}"]
          [:summon "villager" [16.5 0 18.5] "{NoAI:1b,UUID:[I;20264,7,4,2]}"]
          [:job (jobs.village.breed {:target 3 :settings {:jobs.village.breed/wait-s 20}})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :no-births}} :within-s 200 :of-job true}]}]}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-births}} :within-s 200 :of-job true}]}
+  ;; should fail: two villagers and no free bed in sight, none carried, no fetch: a start condition, the call waits on :no-bed
+  {:name "no-free-bed-waits"
+   :body {:inventory [["bread" 8]]}
+   :act [[:summon "villager" [16.5 0 16.5] "{NoAI:1b,UUID:[I;20264,7,5,1]}"]
+         [:summon "villager" [16.5 0 18.5] "{NoAI:1b,UUID:[I;20264,7,5,2]}"]
+         [:job (jobs.village.breed {:target 3 :fetch false})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-bed}} :within-s 30 :of-job true}]}]}

@@ -22,7 +22,7 @@
      jobs.apiary.guard
      jobs.apiary.maintain
      jobs.village.trade
-     jobs.village.feed jobs.village.breed jobs.village.maintain jobs.village.roll
+     jobs.village.breed jobs.village.roll
      jobs.items.smelt
      jobs.items.enchant jobs.items.obtain jobs.items.get-tool jobs.items.get-kit
      jobs.build.from-plan jobs.build.light-area jobs.build.pen jobs.build.rail jobs.build.rail-line

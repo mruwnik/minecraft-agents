@@ -45,15 +45,15 @@
 ;; ;; batch-craft live: give 5 bread to ProbeMove 10 blocks off (taken), then everything carried of a second item
 ;; {:register []
 ;;  :queue [(seq (jobs.time.noop {:seconds 4.5 :why :idle})
-;;                     (jobs.items.give {:player "ProbeMove" :item "bread" :count 5})
-;;                     (jobs.items.give {:player "ProbeMove" :item "apple"}))]}
+;;                     (jobs.items.give {:to "ProbeMove" :item "bread" :count 5})
+;;                     (jobs.items.give {:to "ProbeMove" :item "apple"}))]}
 ;; -- case from live-ProbeAttack-23
 ;; ;; batch-craft live: give to ProbeMove with a full inventory (drop not taken, collected back), then with nothing carried, then to a player out of sight
 ;; {:register []
 ;;  :queue [(seq (jobs.time.noop {:seconds 4.5 :why :idle})
-;;                     (jobs.items.give {:player "ProbeMove" :item "bread" :count 5})
-;;                     (jobs.items.give {:player "ProbeMove" :item "golden_apple"})
-;;                     (jobs.items.give {:player "NoSuchPlayerZz" :item "bread"}))]}
+;;                     (jobs.items.give {:to "ProbeMove" :item "bread" :count 5})
+;;                     (jobs.items.give {:to "ProbeMove" :item "golden_apple"})
+;;                     (jobs.items.give {:to "NoSuchPlayerZz" :item "bread"}))]}
 ;; -- case from live-ProbeAttack-24
 ;; ;; batch-craft live: notify with :chat? sends one public line; a text that is a command is refused and the job still ends done
 ;; {:register []
@@ -73,7 +73,7 @@
 ;; ;; batch-craft live: give 5 bread while a look-around reflex cuts every 3 s; ProbeMove's inventory is full at the toss and emptied 12 s later, so the drop lies through several cuts before it is taken
 ;; {:register [{:id :look-timer :when (or (not (known? (since :looked))) (>= (since :looked) 3)) :job (jobs.movement.look-around)}]
 ;;  :queue [(seq (jobs.time.noop {:seconds 2 :why :idle})
-;;                     (jobs.items.give {:player "ProbeMove" :item "bread" :count 5 :settings {:jobs.items.give/wait-s 30}}))]}
+;;                     (jobs.items.give {:to "ProbeMove" :item "bread" :count 5 :settings {:jobs.items.give/wait-s 30}}))]}
 ;; -- case from live-ProbeAttack-29
 ;; ;; batch-craft live: kit craft branch - chest with cobblestone and sticks makes a stone hoe
 ;; {:register []

@@ -19,7 +19,7 @@
   {:name "hunt-cow-behind-glass-is-hunted"
    :blocks [[:fill [12 0 0] [12 4 29] "glass"]]
    :act [[:summon "cow" [20.5 0 16.5] "{NoAI:1b}"]
-         [:job (jobs.combat.hunt {:mob "cow" :keep 0 :radius 24})]]
+         [:job (jobs.combat.hunt {:item "beef" :keep 0 :radius 24})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.combat.hunt"}} :within-s 55 :of-job true}]
    :after [[:item "beef" [:>= 1]]]}
   {:name "cull-cow-behind-glass-is-culled"

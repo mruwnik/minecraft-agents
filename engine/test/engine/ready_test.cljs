@@ -411,9 +411,6 @@
       'jobs.apiary.guard {:box (corners-at 15)} night-hut :later
       'jobs.apiary.maintain {:box (corners-at 5)} night-hut :ok
       'jobs.apiary.harvest {:center [15 64 0]} night-hut :later
-      'jobs.village.maintain {:plan "far"} night-hut :later
-      'jobs.village.maintain {:plan "near"} night-hut :ok
-      'jobs.village.maintain {:plan "gone"} night-hut :ok
       'jobs.strip.site {:site "t" :base "b"} night-hut :later
       'jobs.strip.all {:site "t" :base "b"} night-hut :later
       'jobs.strip.base {:base "far"} night-hut :later

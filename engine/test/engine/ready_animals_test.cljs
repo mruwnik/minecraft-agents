@@ -20,8 +20,7 @@
             [jobs.apiary.maintain :as apiary-maintain]
             [jobs.lib.world-files :as world]
             [jobs.village.breed :as village-breed]
-            [jobs.village.feed :as feed]
-            [jobs.village.maintain :as village-maintain]
+            [jobs.items.give :as give]
             [jobs.village.roll :as roll]
             [jobs.village.trade :as trade]))
 
@@ -31,8 +30,6 @@
 (def plans
   {"hut-gate" (pg/pen-plan "hut-gate" [5 64 0])
    "far-gate" (pg/pen-plan "far-gate" [20 64 0])
-   "hut-part" {:id "hut-part" :parts [{:id "a" :cells [[5 64 0]] :want "oak_planks"}]}
-   "far-part" {:id "far-part" :parts [{:id "a" :cells [[15 64 0]] :want "oak_planks"}]}
    "pens" {:id "pens" :parts [{:id "hut" :box [[5 64 0] [5 64 0]] :herd {:mob "cow" :target 2}}
                               {:id "far" :box [[15 64 0] [15 64 0]] :herd {:mob "cow" :target 2}}]}})
 
@@ -53,9 +50,12 @@
     lure-to/safe? rt/open-night :later
     shear/safe? rt/open-night :later
     village-breed/safe? rt/open-night :later
-    feed/safe? rt/open-night :later
-    breed/safe? (assoc rt/open-night :time st/noon) :ok
-    feed/safe? (assoc rt/open-night :time st/noon) :ok))
+    breed/safe? (assoc rt/open-night :time st/noon) :ok))
+
+(deftest giving-to-a-villager-roams-so-it-waits-for-dawn-above-ground
+  (are [world expected] (= expected (status give/safe? {:to "v-1"} world))
+    rt/open-night :later
+    (assoc rt/open-night :time st/noon) :ok))
 
 (deftest staying-jobs-judge-where-the-body-stands
   (are [check world expected] (= expected (status check {} world))
@@ -83,9 +83,7 @@
     apiary-maintain/safe? {:center hut-cell} :ok
     apiary-maintain/safe? {:center far-cell} :later
     roll/safe? {:pos [5 64 0]} :ok
-    roll/safe? {:pos [15 64 0]} :later
-    village-maintain/safe? {:plan "hut-part"} :ok
-    village-maintain/safe? {:plan "far-part"} :later))
+    roll/safe? {:pos [15 64 0]} :later))
 
 (deftest by-day-a-place-whose-light-is-unseen-is-no-reason-to-wait
   (let [c (-> (rt/ctx-of (assoc rt/open-night :time st/noon))
@@ -112,7 +110,6 @@
     herd/fit? :later
     guard/fit? :later
     roll/fit? :later
-    village-maintain/fit? :later
     pen-check/fit? :ok
     shut-gate/fit? :ok
     unleash/fit? :ok

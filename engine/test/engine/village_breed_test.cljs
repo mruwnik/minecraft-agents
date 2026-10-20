@@ -35,13 +35,17 @@
                      (when after (after @n)))
                    r)))))
 
+(def beds
+  "Twelve beds in sight, so any villagers of these tests have a free one for a child."
+  (into {} (map (fn [x] [(str x ",64,20") "red_bed"])) (range 24)))
+
 (defn start
   "An engine over a fake world (or the given p) on dir, holding a parent that runs the job as a child and keeps its
   result in :out."
   [{:keys [world p dir clock]} args]
   (let [clock (or clock (atom 1000000))
         [seen sink] (tu/legacy-capture-sink)
-        p (or p (tu/fake-on-floor (merge {:floor h/flight-floor} world)))
+        p (or p (tu/seeing-all (tu/fake-on-floor (merge {:floor h/flight-floor} {:blocks beds} world))))
         now (tu/act-clock clock p 0)
         out (atom :not-done)
         parent (tu/recording-parent job args out)
@@ -62,9 +66,9 @@
                  (recur (inc i))))))))
 
 (defn ^:async breed
-  "Run the job until it ends (at most n ticks); its result is in :out."
+  "Run the job until it ends (at most n ticks); its result is in :out. The world has beds unless it says :no-beds."
   [world args n prepare]
-  (let [p (tu/fake-on-floor (merge {:floor h/flight-floor} world))
+  (let [p (tu/seeing-all (tu/fake-on-floor (merge {:floor h/flight-floor} (when-not (:no-beds world) {:blocks beds}) (dissoc world :no-beds))))
         _ (prepare p)
         s (start {:p p} args)]
     (core/submit! (:eng s) '(recording-parent) {})
@@ -129,6 +133,18 @@
           (is (= [:condition-failed :no-food] ((juxt (comp :kind :ending) :reason) @out)) "no food is a condition: the job never starts")
           (is (empty? (tosses p))))))))
 
+(deftest no-free-bed-is-a-condition-unless-a-bed-is-carried-or-fetched
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out]} (await (breed {:entities pair :inventory bread :no-beds true} (assoc args :fetch false) 30 identity))]
+          (is (= [:condition-failed :no-bed] ((juxt (comp :kind :ending) :reason) @out)) "no bed, no fetch: the job never starts")
+          (is (empty? (tosses p))))
+        (let [{:keys [p out]} (await (breed {:entities pair :inventory (conj bread {:name "red_bed" :count 3}) :no-beds true} args 80 #(feeding % 2)))]
+          (is (= :done (:status @out)) "a carried bed is put down, then the pair is fed")
+          (is (= 3 (count (h/calls p "place"))) "pop 2 and target 3 want three beds; the fake lays one cell a bed")
+          (is (= 2 (count (tosses p)))))))))
+
 (deftest an-adult-walking-into-view-is-not-a-birth
   (async done
     (tu/run-async done
@@ -169,7 +185,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [dir (tu/tmp-dir)
-              p (tu/fake-on-floor (merge {:floor h/flight-floor} {:entities pair :inventory bread}))
+              p (tu/seeing-all (tu/fake-on-floor (merge {:floor h/flight-floor} {:entities pair :inventory bread :blocks beds})))
               eng (atom nil)
               cut (atom false)
               _ (feeding p 0 :after #(when (= 2 %) (reset! cut true) (core/shutdown! @eng) (throw (core/cut-error))))

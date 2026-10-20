@@ -115,13 +115,13 @@
             [{:key "water_bucket" :count n :job 'jobs.items.use :seen #{"water"} :args {:item "bucket"}}])
           (for [[k n] gather :when (mob-drops k)]
             {:key k :count n :job 'jobs.combat.hunt :mob (mob-drops k) :max-runs 1
-             :args {:mob (mob-drops k) :count n :radius (animal-radius) :drops [k]}})
+             :args {:item k :count n :radius (animal-radius)}})
           (for [[k n] gather :when (crop-blocks k)]
             {:key k :count n :job 'jobs.farm.harvest :crop (crop-blocks k) :seen #{(crop-blocks k)} :max-runs 1
              :args {:crops [(crop-blocks k)] :radius (seen-radius)}})
           (for [[k n] gather :when (wool? k)]
             {:key k :count n :job 'jobs.combat.hunt :sheep (wool-color k) :max-runs 1
-             :args {:mob "sheep" :color (wool-color k) :count n :radius (animal-radius)}})
+             :args {:item k :count n :radius (animal-radius)}})
           (when (pos? logs) [{:key "log" :count logs :job 'jobs.forestry.harvest-wood :seen trees/log-name? :args {:ways log-ways}}])
           (for [[k n] gather :when (trees/log-name? k)]
             {:key k :count n :job 'jobs.forestry.harvest-wood :seen #{k} :args {:species (trees/species-of k) :ways log-ways}})

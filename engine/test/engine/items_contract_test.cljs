@@ -14,7 +14,7 @@
 (deftest every-item-job-exports-the-contract-and-quotes-validly
   (let [p (tu/fake {})
         args {'jobs.items.equip {:item "stone_pickaxe" :hand "main"} 'jobs.items.use {:on 7}
-              'jobs.items.give {:player "Steve" :item "bread"} 'jobs.items.enchant {:item "iron_sword"}}]
+              'jobs.items.give {:to "Steve" :item "bread"} 'jobs.items.enchant {:item "iron_sword"}}]
     (doseq [sym jobs
             :let [job (get registry/jobs sym)]]
       (is (fn? (:can-start? job)) (str sym " has can-start?"))
@@ -115,7 +115,7 @@
       (fn ^:async t []
         (is (= {:kind :condition-failed :cause :no-item}
                (kc (await (ending-of {:entities [{:id 5 :name "Steve" :kind "player" :pos {:x 3 :y 64 :z 0}}]}
-                                     'jobs.items.give {:player "Steve" :item "bread"})))))
+                                     'jobs.items.give {:to "Steve" :item "bread"})))))
         (is (= {:kind :impossible :cause :bad-args}
                (kc (await (ending-of {} 'jobs.items.give {:item "bread"})))))))))
 
@@ -144,7 +144,7 @@
           (is (true? (await (waits? (merge xp (stacks "iron_sword")) 'jobs.items.enchant {:item "iron_sword" :ways #{:carried}}))))
           (is (true? (await (waits? (stacks "iron_sword" "lapis_lazuli") 'jobs.items.enchant {:item "iron_sword"}))) "no level at all")
           (is (true? (await (waits? (merge xp (stacks "iron_sword" "lapis_lazuli")) 'jobs.items.enchant {:item "iron_sword"}))) "no table in sight, after a look round")
-          (is (true? (await (waits? {} 'jobs.items.give {:player "Steve" :item "bread"})))))))))
+          (is (true? (await (waits? {} 'jobs.items.give {:to "Steve" :item "bread"})))))))))
 
 (deftest equip-fetches-a-named-piece-by-default
   (async done

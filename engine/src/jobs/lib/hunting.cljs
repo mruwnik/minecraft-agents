@@ -12,15 +12,43 @@
             [jobs.lib.waits :as waits]
             [jobs.lib.util :as u]))
 
+(def raw-drops
+  "What each huntable kind drops, by mob name."
+  {"cow" ["beef" "leather"]
+   "mooshroom" ["beef" "leather"]
+   "pig" ["porkchop"]
+   "sheep" (into ["mutton"] (map #(str % "_wool")) game/dye-colors)
+   "chicken" ["chicken" "feather"]
+   "rabbit" ["rabbit" "rabbit_hide" "rabbit_foot"]
+   "zombie" ["rotten_flesh"]
+   "skeleton" ["bone" "arrow"]
+   "spider" ["string" "spider_eye"]
+   "creeper" ["gunpowder"]
+   "enderman" ["ender_pearl"]})
+
 (def drops
-  "What each huntable kind drops, raw and cooked meat included, by mob name."
-  (let [raw {"cow" ["beef" "leather"]
-             "mooshroom" ["beef" "leather"]
-             "pig" ["porkchop"]
-             "sheep" (into ["mutton"] (map #(str % "_wool")) game/dye-colors)
-             "chicken" ["chicken" "feather"]
-             "rabbit" ["rabbit" "rabbit_hide" "rabbit_foot"]}]
-    (update-vals raw (fn [items] (into items (keep foods/cooked-of) items)))))
+  "raw-drops with the cooked meat of each raw meat added."
+  (update-vals raw-drops (fn [items] (into items (keep foods/cooked-of) items))))
+
+(def sources
+  "The mob names that drop an item, by item name (raw drops only)."
+  (reduce-kv (fn [m mob items] (reduce #(update %1 %2 (fnil conj []) mob) m items)) {} raw-drops))
+
+(defn wool-color
+  "The dye colour of a wool item name (\"white\" for white_wool), else nil."
+  [item]
+  (some->> item (re-matches #"(.+)_wool") second))
+
+(defn mobs
+  "The mob names a call hunts or culls: those that drop its :item, else its :mob."
+  [c]
+  (let [{:keys [mob item]} (:args c)]
+    (if item (get sources item []) [mob])))
+
+(defn drops-wanted
+  "The item names collected after a kill: the call's :drops, else the drops of its mobs (nil: every item)."
+  [c]
+  (or (:drops (:args c)) (not-empty (vec (distinct (mapcat drops (mobs c)))))))
 
 (a/defargs settings
   {::max-skips {:default 3 :doc "Animals skipped in a row before the hunt or cull gives up." :spec (a/int-in 0 nil)}
@@ -30,7 +58,7 @@
   "Remember the passive target as last seen (:animal, :entity id, :uuid, :cell, :by job and the rule that allowed the kill, from (rule-fn c entity)),
   for the kill event: the entity is gone once it is dead."
   [c target {:keys [radius job rule-fn]}]
-  (when-let [e (->> (look/seen-objs (:primitives c) {:radius radius :names [(:mob (:args c))] :max 64})
+  (when-let [e (->> (look/seen-objs (:primitives c) {:radius radius :names (mobs c) :max 64})
                     (filter #(and (= target (.-id %)) (= "passive" (.-kind %))))
                     first)]
     (let [p (u/pos-of (.-pos e))]
@@ -90,9 +118,8 @@
   "Call the collect-drops child; done collecting when it ends, else waiting (what to return while it waits on the world
   or its call is held by a floor)."
   [c waiting]
-  (let [{:keys [mob] :as a} (:args c)
-        e (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops
-                                                {:radius (settings/get settings ::collect-radius) :items (or (:drops a) (get drops mob))})))]
+  (let [e (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops
+                                                {:radius (settings/get settings ::collect-radius) :items (drops-wanted c)})))]
     (if (collect-ended? e)
       (do (ctx/update-mem! c dissoc :collecting) :again)
       waiting)))
@@ -136,9 +163,9 @@
       :else (<= (u/dist (u/self-pos c) pos) radius))))
 
 (defn herd
-  "The entities named :mob in the bound, never players or items."
+  "The entities of the call's mobs in the bound, never players or items."
   [c]
-  (->> (look/seen-objs (:primitives c) {:radius (reach c) :names [(:mob (:args c))] :max 64})
+  (->> (look/seen-objs (:primitives c) {:radius (reach c) :names (mobs c) :max 64})
        (remove #(contains? #{"player" "item"} (.-kind %)))
        (filter #(in-bound? c (u/pos-of (.-pos %))))
        vec))

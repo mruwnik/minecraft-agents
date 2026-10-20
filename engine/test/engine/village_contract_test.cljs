@@ -8,7 +8,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.look :as look]
             [jobs.village.breed :as breed]
-            [jobs.village.feed :as feed]
+            [jobs.items.give :as give]
             [jobs.village.roll :as roll]
             [jobs.village.trade :as trade]
             [engine.registry :as registry]
@@ -19,9 +19,9 @@
 
 (deftest each-job-exports-the-contract-and-quotes-validly
   (doseq [[sym args] [['jobs.village.breed {:target 3}]
-                      ['jobs.village.feed {:villager "v-1" :count 2}]
+                      ['jobs.items.give {:to "v-1" :count 2}]
                       ['jobs.village.trade {:villager "v-1" :buy "bread" :count 2}]
-                      ['jobs.village.roll {:villager "v-1" :pos [2 64 0] :item "lectern" :want "enchanted_book"}]]]
+                      ['jobs.village.roll {:villager "v-1" :pos [2 64 0] :profession "librarian" :want "enchanted_book"}]]]
     (is (some? (:can-start? (job sym))) (str sym " has can-start?"))
     (is (nil? (:check (job sym))) (str sym " has no old check"))
     (is (vector? (:target (job sym))) (str sym " has a target"))
@@ -33,11 +33,11 @@
   (are [done? args mem expected] (= expected (with-redefs [ctx/mem (constantly mem)] (tu/kind-reason (done? {:args args}))))
     trade/done? {:buy "bread" :count 3} {:bought 3} [:ok :bought]
     trade/done? {:buy "bread" :count 3} {:bought 1} [:later :buying]
-    feed/done? {:count 2} {:fed 2} [:ok :fed]
-    feed/done? {:count 2} {:fed 2 :cleanup {:item "bread"}} [:later :feeding]
-    feed/done? {:count 2} {:fed 1} [:later :feeding]
-    roll/done? {:item "lectern" :want "enchanted_book"} {:offer {:index 0}} [:ok :found]
-    roll/done? {:item "lectern" :want "enchanted_book"} {:rolls 1} [:later :rolling]))
+    give/done? {:to "v-1" :count 2} {:fed 2} [:ok :given]
+    give/done? {:to "v-1" :count 2} {:fed 2 :cleanup {:item "bread"}} [:later :feeding]
+    give/done? {:to "v-1" :count 2} {:fed 1} [:later :feeding]
+    roll/done? {:profession "librarian" :want "enchanted_book"} {:offer {:index 0}} [:ok :found]
+    roll/done? {:profession "librarian" :want "enchanted_book"} {:rolls 1} [:later :rolling]))
 
 (def bread [{:name "bread" :count 5}])
 
@@ -55,11 +55,11 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:event :stopped :kind :condition-failed :reason :gone}
-               (await (ends '(jobs.village.feed {:villager "v-1"}) {:inventory bread}))))
+               (await (ends '(jobs.items.give {:to "v-1"}) {:inventory bread}))))
         (is (= {:event :waiting :reason :need}
-               (await (ends '(jobs.village.feed {:villager "v-1" :fetch false}) {:entities [(villager [])]}))))
+               (await (ends '(jobs.items.give {:to "v-1" :fetch false}) {:entities [(villager [])]}))))
         (is (= {:event :stopped :kind :impossible :reason :bad-args}
-               (await (ends '(jobs.village.feed {:villager "v-1" :item "diamond"}) {:inventory bread}))))))))
+               (await (ends '(jobs.items.give {:to "v-1" :item "diamond"}) {:inventory bread}))))))))
 
 (deftest breed-start-facts-are-conditions
   (async done
@@ -116,7 +116,7 @@
         (is (= {:event :stopped :kind :impossible :reason :bad-args}
                (await (ends '(jobs.village.trade {:villager "v-1"}) {}))))))))
 
-(def roll-args {:villager "v-1" :pos [2 64 0] :item "lectern" :want "enchanted_book"})
+(def roll-args {:villager "v-1" :pos [2 64 0] :profession "librarian" :want "enchanted_book"})
 (def librarian {:profession "librarian"})
 (def lectern-world {:blocks {"2,64,0" "lectern" "2,63,0" "stone"}})
 

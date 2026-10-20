@@ -1,4 +1,4 @@
-;; Wool from sheep: combat.hunt with a :color takes only unsheared sheep of that colour and keeps the last 2; obtain of wool
+;; Wool from sheep: combat.hunt of a wool item takes only unsheared sheep of that colour and keeps the last 2; obtain of wool
 ;; shears or hunts per the same rule (cards 2b9dbe3f, 12c7d689, fc812a12, 07995c6a). Sheep are NoAI; Color 0 = white, 12 = brown.
 ;; Should-succeed: hunt brown among 4 brown + 2 white kills a brown and no white; hunt white among 3 unsheared + 1 sheared kills an
 ;; unsheared one and spares the sheared; obtain 2 white wool from 4 white sheep kills 2 and keeps 2; with only brown sheep it
@@ -14,19 +14,19 @@
  [{:name "hunt-brown-leaves-the-white-sheep"
    :act [[:summon "sheep" [20.5 0 16.5] "{NoAI:1b,Color:12b}"] [:summon "sheep" [21.5 0 16.5] "{NoAI:1b,Color:12b}"] [:summon "sheep" [20.5 0 18.5] "{NoAI:1b,Color:12b}"] [:summon "sheep" [21.5 0 18.5] "{NoAI:1b,Color:12b}"]
          [:summon "sheep" [24.5 0 16.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [25.5 0 16.5] "{NoAI:1b,Color:0b}"]
-         [:job (jobs.combat.hunt {:mob "sheep" :color "brown" :count 1})]]
+         [:job (jobs.combat.hunt {:item "brown_wool" :count 1})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.combat.hunt"}} :within-s 80}]
    :after [[:entities "type=sheep,tag=wt,nbt={Color:12b}" [[0 0 0] [31 3 31]] 3]
            [:entities "type=sheep,tag=wt,nbt={Color:0b}" [[0 0 0] [31 3 31]] 2]]}
   {:name "hunt-white-skips-the-sheared-sheep"
    :act [[:summon "sheep" [20.5 0 16.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [21.5 0 16.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [20.5 0 18.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [21.5 0 18.5] "{NoAI:1b,Color:0b,Sheared:1b}"]
-         [:job (jobs.combat.hunt {:mob "sheep" :color "white" :count 1})]]
+         [:job (jobs.combat.hunt {:item "white_wool" :count 1})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.combat.hunt"}} :within-s 80}]
    :after [[:entities "type=sheep,tag=wt,nbt={Sheared:1b}" [[0 0 0] [31 3 31]] 1]
            [:entities "type=sheep,tag=wt" [[0 0 0] [31 3 31]] 3]]}
   {:name "hunt-white-all-sheared-stops-no-color"
    :act [[:summon "sheep" [20.5 0 16.5] "{NoAI:1b,Color:0b,Sheared:1b}"] [:summon "sheep" [21.5 0 16.5] "{NoAI:1b,Color:0b,Sheared:1b}"] [:summon "sheep" [20.5 0 18.5] "{NoAI:1b,Color:0b,Sheared:1b}"]
-         [:job (jobs.combat.hunt {:mob "sheep" :color "white" :count 1})]]
+         [:job (jobs.combat.hunt {:item "white_wool" :count 1})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-color}} :within-s 40 :of-job true}]
    :after [[:entities "type=sheep,tag=wt" [[0 0 0] [31 3 31]] 3]]}
   {:name "obtain-white-wool-from-four-white-sheep-takes-two"
@@ -65,12 +65,12 @@
            [:entities "type=sheep,tag=wt,nbt={Color:0b}" [[0 0 0] [31 3 31]] 2]]}
   {:name "hunt-pig-8-blocks-off-with-keep-0"
    :act [[:summon "pig" [12.5 0 16.5] "{NoAI:1b}"]
-         [:job (jobs.combat.hunt {:mob "pig" :keep 0 :radius 24})]]
+         [:job (jobs.combat.hunt {:item "porkchop" :keep 0 :radius 24})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.combat.hunt"}} :within-s 60}]
    :after [[:item "porkchop" [:>= 1]]]}
   {:name "hunt-pig-30-blocks-off-waits-too-few-with-the-distance"
    :plot {:height 6 :length 64 :width 32}
    :act [[:summon "pig" [34.5 0 16.5] "{NoAI:1b}"]
-         [:job (jobs.combat.hunt {:mob "pig" :keep 0 :radius 24}) [:now]]]
+         [:job (jobs.combat.hunt {:item "porkchop" :keep 0 :radius 24}) [:now]]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :too-few :in-range 0 :nearest [:>= 25]}} :within-s 40 :of-job true}]
    :after [[:entities "type=pig,tag=wt" [[0 0 0] [63 3 31]] 1]]}]}

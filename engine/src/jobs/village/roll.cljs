@@ -17,10 +17,11 @@
 
 (def doc
   "Re-roll the offers of an untraded villager (:villager uuid; nil: the nearest adult, not a nitwit, in sight)
-  until one gives :want, by breaking and placing again the workstation :item (nil: that of :profession) at :pos.
-  Needs: a workstation item, a wanted item and a cell the body may break and place at (else impossible, :bad-args); a
+  until one gives :want (with :enchant, an enchanted book of that enchantment, e.g. \"mending\"), by breaking and placing
+  again the workstation of :profession at :pos.
+  Needs: a profession, a wanted item (or enchantment) and a cell the body may break and place at (else impossible, :bad-args); a
   cell not yet seen is looked at, then walked to. An offer matches when it gives :want, is not sold out and costs at
-  most :max-price (nil: no limit); offers do not name a book's enchantment. Waits (:continue) for the villager to lose
+  most :max-price (nil: no limit). Waits (:continue) for the villager to lose
   and take its job until the call's :wall-time. Re-reads the world every step, so a restart finds a missing
   workstation and places it first; the cleanup places one the call broke however it ends.
   Returns {:found true|false :rolls n :item workstation :offer {:index :cost :gives ..}}: done when an offer
@@ -34,9 +35,9 @@
 (a/defargs args
   {:villager {:doc "the villager's entity uuid" :spec string? :default nil}
    :pos {:doc "the workstation block, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
-   :item {:doc "the workstation block item name, e.g. lectern; nil: the one of :profession" :spec a/item? :default nil}
-   :profession {:doc "villager profession whose workstation :item defaults to" :spec string? :default nil}
-   :want {:doc "item name an offer is to give" :spec a/item? :default nil}
+   :profession {:doc "villager profession whose workstation block is broken and placed again, e.g. librarian" :spec string? :default nil}
+   :want {:doc "item name an offer is to give; nil with :enchant: enchanted_book" :spec a/item? :default nil}
+   :enchant {:doc "enchantment name an offer's item is to carry, e.g. mending" :spec string? :default nil}
    :max-price {:doc "highest price (first cost stack); nil for no limit" :spec (a/int-in 0 nil) :default nil}})
 
 (def workstations
@@ -57,11 +58,11 @@
 (defn leg-s [] (settings/get settings ::leg-s))
 
 (defn item-of
-  "The workstation item: :item, else the one of :profession."
+  "The workstation item of :profession."
   [args]
-  (or (:item args) (workstations (:profession args))))
+  (workstations (:profession args)))
 
-(defn want-of [args] (:want args))
+(defn want-of [args] (or (:want args) (when (:enchant args) "enchanted_book")))
 
 (def target [:villager :pos])
 
@@ -72,16 +73,16 @@
 (def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 
 (defn bad-args
-  "Never :bad-args when a cell, a workstation item (or profession) and a wanted item (or trade) are not given."
+  "Never :bad-args when a cell, a profession with a workstation and a wanted item (or enchantment) are not given."
   [c]
   (let [{:keys [villager]} (:args c)
         {:keys [error]} (b/parse (:args c))]
     (cond
       (not (and (or (nil? villager) (string? villager)) (string? (item-of (:args c))) (string? (want-of (:args c)))))
-      (contract/never :bad-args "needs a workstation item (or profession) and a wanted item"
-                      :why "needs a workstation item (or profession) and a wanted item")
+      (contract/never :bad-args "needs a known profession and a wanted item (or enchantment)"
+                      :why "needs a known profession and a wanted item (or enchantment)")
       error (contract/never :bad-args error :why error)
-      :else (contract/ok :args "a cell, a workstation item and a wanted item"))))
+      :else (contract/ok :args "a cell, a profession and a wanted item"))))
 
 (defn start-facts
   "With a named villager in view: never :nitwit (never a job), later :baby for a baby and :occupied when another block
@@ -152,20 +153,10 @@
   (await (child/pause! c (poll-s) why))
   :continue)
 
-(defn chosen
-  "The uuid of the villager rolled: :villager, else the one picked first (kept in memory), else nil."
-  [c]
-  (or (:villager (:args c)) (:chosen (ctx/mem c))))
-
 (defn pick!
-  "Without :villager, choose the nearest adult villager in sight that is no nitwit and keep it. The uuid or nil."
+  "The villager rolled: :villager, else the nearest adult that is no nitwit."
   [c]
-  (or (chosen c)
-      (when-let [e (->> (villager/adults (:primitives c))
-                        (remove #(= "nitwit" (.-profession %)))
-                        first)]
-        (ctx/update-mem! c assoc :chosen (.-uuid e))
-        (.-uuid e))))
+  (villager/pick! c #(not= "nitwit" (.-profession %))))
 
 (defn ^:async walk!
   "One go-to leg toward the villager at pos. :again, :continue or the stop."
@@ -192,14 +183,14 @@
 (defn ^:async read-offers!
   "In reach of the villager: read its offers and decide. :found, :locked, :miss (no match), or :again/:continue/stop."
   [c]
-  (let [{:keys [max-price]} (:args c)
-        villager (chosen c)
+  (let [{:keys [max-price enchant]} (:args c)
+        villager (villager/chosen c)
         want (want-of (:args c))
         r (await (ctx/act c :trade (clj->js {:villager villager :op "offers"})))
         status (.-status r)]
     (case status
       "ok" (let [offers (js->clj (.-offers r) :keywordize-keys true)
-                 {:keys [offer]} (trade/choose offers want max-price)]
+                 {:keys [offer]} (trade/choose offers {:buy want :max-price max-price :enchant enchant})]
              (u/progress! c)
              (cond
                (some #(pos? (:uses % 0)) offers) :locked

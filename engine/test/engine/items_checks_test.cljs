@@ -80,7 +80,7 @@
 (def done-args
   {'jobs.items.craft {:item "oak_planks" :count 4} 'jobs.items.enchant {:item "iron_sword"}
    'jobs.items.equip {:item "stone_pickaxe"} 'jobs.items.get-kit {:items ["iron_pickaxe"]}
-   'jobs.items.get-tool {:kind "pickaxe"} 'jobs.items.use {:on 7} 'jobs.items.give {:player "Steve" :item "bread"}
+   'jobs.items.get-tool {:kind "pickaxe"} 'jobs.items.use {:on 7} 'jobs.items.give {:to "Steve" :item "bread"}
    'jobs.items.kitchen {:chest {:x 10 :y 64 :z 0}} 'jobs.items.obtain {:item "oak_log"} 'jobs.items.pick-up-loose {}
    'jobs.items.smelt {:item "beef"} 'jobs.storage.deposit {} 'jobs.storage.haul {:from [[1 64 0]]}
    'jobs.storage.make-room {} 'jobs.storage.withdraw {:items {"bread" 1}}
@@ -174,7 +174,7 @@
     'jobs.storage.haul {} {:from [cell]} {:empty [cell] :children {:deposit {}}} [:later :wrapping-up]))
 
 (deftest give-is-ok-once-the-toss-is-confirmed-taken
-  (are [m reason] (= reason (tu/kind-reason (done-of 'jobs.items.give {} {:player "Steve" :item "bread" :count 2} m)))
+  (are [m reason] (= reason (tu/kind-reason (done-of 'jobs.items.give {} {:to "Steve" :item "bread" :count 2} m)))
     {:tossed 2 :had 2 :confirmed true} [:ok :given]
     {:tossed 2 :had 2} [:later :giving]
     {:tossed 2 :had 2 :confirmed true :collecting true} [:later :giving]

@@ -14,22 +14,23 @@
             [jobs.lib.pace :as pace]))
 
 (def doc
-  "Buy :count of :buy from the villager with uuid :villager. One call is the whole purchase: find the villager
+  "Buy :count of :buy from the villager with uuid :villager (nil: the nearest adult with a job in sight). One call is the whole purchase: find the villager
   within jobs.lib.villager/search-radius, walk within ::reach of it, seeing it (no seen solid block, glass too, between the eye and its cell; jobs.movement.go-to legs of ::chase-timeout-s), read its offers (prices move between visits),
   choose and buy. It yields (:continue) only while go-to waits on the world.
-  Of the offers that give :buy and are not sold out, those whose price (the adjusted count of the first cost
-  stack) is within :max-price (nil: no limit) are kept. The cheapest is taken, the lowest index on a tie.
+  Of the offers that give :buy and are not sold out, those paid with an item of the call's :use {:payment [..]}
+  (default emerald) and whose price (the adjusted count of the first cost stack) is within what the call's :spend
+  {:items {payment n}} has left (none set: no limit) are kept. The cheapest is taken, the lowest index on a tie.
   :count is items wanted. An offer gives several per trade, so it buys ceil(remaining / items per trade) trades
   and may overshoot a little.
   Ends with the data {:bought n :paid {item n} :item :buy} (n counts the items actually gained): :done when :count (or the call's :least, default :all)
   was bought, else with the cause, condition-failed for :gone, :not-villager, :payment-short and :no-room, else
-  nothing-possible. A partial purchase stays bought and paid. A missing villager uuid or item name is impossible (:bad-args).
+  nothing-possible. A partial purchase stays bought and paid. A missing item name is impossible (:bad-args).
   done? holds once the remembered count reaches :count; the engine then ends it :done (already, before a start). The causes:
   - :gone (not listed within jobs.lib.villager/search-radius, also a non-villager entity under the uuid), :not-villager.
   - :unreachable (walk blocked, or still out of reach after three tries in the call).
   - :no-offers (unemployed, nitwit, baby, or an empty window), :window (did not open three times: busy
     villager), :no-offer (nothing gives :buy), :sold-out.
-  - :price (every open offer is dearer than :max-price; :price is the cheapest seen).
+  - :price (every open offer is dearer than the payment spend left; :price is the cheapest seen).
   - :payment-short, :no-room, :incomplete (a buy stopped short for no reason, three times), or the
     primitive's failure reason.
   Before a buy the body must carry the price of one trade: missing it is fetched (jobs.lib.need, :fetch true, a set of
@@ -39,11 +40,10 @@
   What was bought and paid is kept across a cut and restart, so a purchase is neither lost nor repeated.")
 
 (a/defargs args
-  {:villager {:doc "the villager's entity uuid" :spec string? :default nil}
+  {:villager {:doc "the villager's entity uuid; nil: the nearest adult villager with a job in sight" :spec string? :default nil}
    :buy {:doc "item name to buy" :spec a/item? :default nil}
    :count {:doc "items wanted" :spec (a/int-in 1 nil) :default 1}
-   :fetch {:doc "get the payment when one trade's price is not carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :payment-short" :spec need/option? :default true}
-   :max-price {:doc "highest price per trade (first cost stack); nil for no limit" :spec (a/int-in 0 nil) :default nil}})
+   :fetch {:doc "get the payment when one trade's price is not carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :payment-short" :spec need/option? :default true}})
 
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds one purchase may take." :spec (a/int-in 1 nil)}
@@ -53,7 +53,7 @@
 
 (defn chase-timeout-s [] (settings/get settings ::chase-timeout-s))
 
-(def target [:villager :buy])
+(def target [:buy])
 
 (def safe? ready/safe-here-by-night)
 (def fit? ready/ok)
@@ -62,12 +62,11 @@
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
 (defn bad-args
-  "Never :bad-args when no villager uuid or no item name is given."
+  "Never :bad-args when no item name is given."
   [c]
-  (let [{:keys [villager buy]} (:args c)]
-    (if (and (string? villager) (string? buy))
-      (contract/ok :args "a villager uuid and an item name")
-      (contract/never :bad-args "needs a villager uuid and an item name" :why "needs a villager uuid and an item name"))))
+  (if (string? (:buy (:args c)))
+    (contract/ok :args "an item name")
+    (contract/never :bad-args "needs an item name" :why "needs an item name")))
 
 (def job 'jobs.village.trade)
 
@@ -132,8 +131,11 @@
 (defn choose
   "Pick an offer from the read offers: {:offer o} with :price, or {:reason
   r} (and :price, the cheapest open one, for \"price\")."
-  [offers buy max-price]
-  (let [mine (filter #(= buy (get-in % [:gives :item])) offers)
+  [offers {:keys [buy max-price payment enchant]}]
+  (let [mine (filter #(and (= buy (get-in % [:gives :item]))
+                           (or (nil? payment) (contains? payment (get-in % [:cost 0 :item])))
+                           (or (nil? enchant) (some (fn [e] (= enchant (:name e))) (get-in % [:gives :enchants]))))
+                     offers)
         open (map #(assoc % :price (get-in % [:cost 0 :count])) (remove :disabled mine))
         fit (filter #(or (nil? max-price) (<= (:price %) max-price)) open)]
     (cond
@@ -170,7 +172,8 @@
 (defn ^:async buy!
   "Buy the trades still wanted of the chosen offer and handle the outcome."
   [c offer]
-  (let [{:keys [villager buy count]} (:args c)
+  (let [{:keys [buy count]} (:args c)
+        villager (villager/chosen c)
         per (get-in offer [:gives :count])
         times (js/Math.ceil (/ (- count (:bought (ctx/mem c) 0)) per))
         r (await (ctx/act c :trade (clj->js {:villager villager :op "buy" :offer (:index offer) :times times})))
@@ -228,11 +231,14 @@
 (defn ^:async trade!
   "Read the offers and buy from the chosen one: :again, an ending or a retry."
   [c]
-  (let [{:keys [villager buy max-price]} (:args c)
+  (let [{:keys [buy]} (:args c)
+        villager (villager/chosen c)
+        payment (set (or (ctx/use c :payment) [currency]))
+        max-price (apply max (map #(get-in (ctx/left c) [:spend :items %] ##Inf) payment))
         r (await (ctx/act c :trade (clj->js {:villager villager :op "offers"})))
         status (.-status r)]
     (case status
-      "ok" (let [{:keys [offer reason price]} (choose (js->clj (.-offers r) :keywordize-keys true) buy max-price)]
+      "ok" (let [{:keys [offer reason price]} (choose (js->clj (.-offers r) :keywordize-keys true) {:buy buy :payment payment :max-price (when-not (= ##Inf max-price) max-price)})]
              (if offer
                (or (await (pay! c offer))
                    (await (room! c offer))
@@ -260,8 +266,11 @@
   "Find the villager, walk within reach with one go-to leg (it wanders), then read the offers and buy. :again,
   :continue (go-to yields), an ending or a retry."
   [c]
-  (let [e (villager/find-by-uuid (:primitives c) (:villager (:args c)))]
+  (let [uuid (villager/pick! c #(not (#{"unemployed" "nitwit"} (.-profession %))))
+        e (when uuid (villager/find-by-uuid (:primitives c) uuid))]
     (cond
+      (and (nil? uuid) (not (look/surveyed? c))) (await (look/survey! c))
+      (nil? uuid) (give-up! c :gone)
       (and (nil? e) (not (look/surveyed? c))) (await (look/survey! c)) ; villagers count only while in view
       (nil? e) (give-up! c :gone)
       (in-reach? c e) (await (trade! c))

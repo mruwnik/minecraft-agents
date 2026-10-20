@@ -76,13 +76,14 @@
       need)))
 
 (defn with-count
-  "The need with the items to carry in all (the :count of harvest-wood, fish, get-seeds and mine) in its args: those carried and those it lacks."
+  "The need with the items to carry in all (the :count of harvest-wood, fish, get-seeds, hunt and mine) in its args: those carried and those it lacks."
   [p need]
   (case (:job need)
     jobs.gather.get-seeds (assoc-in need [:args :count] (+ (gather-carried p need) (:count need)))
     jobs.gather.mine (assoc-in need [:args :count] (+ (gather-carried p need) (:count need)))
     jobs.forestry.harvest-wood (assoc-in need [:args :count] (+ (gather-carried p need) (:count need)))
     jobs.food.fish (assoc-in need [:args :count] (+ (foods/fish-carried p) (:count need)))
+    jobs.combat.hunt (assoc-in need [:args :count] (+ (gather-carried p need) (:count need)))
     need))
 
 (defn with-avoid

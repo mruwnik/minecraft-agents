@@ -183,6 +183,10 @@
   [c]
   (if (starved? c) 0 (spare/keep-adults)))
 
+(def meat-of
+  "The raw meat each food animal drops: what a hunt of it is for."
+  {"cow" "beef" "mooshroom" "beef" "pig" "porkchop" "sheep" "mutton" "chicken" "chicken" "rabbit" "rabbit"})
+
 (defn kill-job
   "The real job and args that kill the food animal of target: animals.cull over the own pen it stands in (own?), else combat.hunt."
   [c own? {animal :entity}]
@@ -193,7 +197,7 @@
     (if own?
       ['jobs.animals.cull (cond-> (assoc common :radius 8 :center (select-keys pos [:x :z]))
                             box (-> (dissoc :radius :center) (assoc :box {:min (zipmap [:x :y :z] (first box)) :max (zipmap [:x :y :z] (second box))})))]
-      ['jobs.combat.hunt (assoc common :radius (hunt-radius c) :fetch false)])))
+      ['jobs.combat.hunt (-> common (dissoc :mob) (assoc :item (meat-of (.-name animal)) :radius (hunt-radius c) :fetch false))])))
 
 (defn ^:async hunt!
   "Kill the nearest food animal with the real job (combat.hunt; own?: animals.cull over its own pen): :again, or nil when

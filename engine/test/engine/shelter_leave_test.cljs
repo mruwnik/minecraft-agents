@@ -139,7 +139,7 @@
               {:keys [eng seen clock]} (st/setup (sealed-world {:inventory h/sword :unreachable ["10,64,0" "11,64,0" "12,64,0"]
                                                           :entities [(cow 1 10) (cow 2 11) (cow 3 12)]}))
               _ (mem/write! (:store eng) :shelter (shelter-entry :built) {:cap 10 :ttl st/day-ms})
-              _ (core/submit! eng '(jobs.combat.hunt {:count 3 :keep 0}) {})
+              _ (core/submit! eng '(jobs.combat.hunt {:item "beef" :count 3 :keep 0}) {})
               _ (await (tu/run-ticks eng clock 300 700))
               g (first (st/emitted seen :stopped))]
           (is (= {:x 0 :y 64 :z 0} (:inside-own-shelter g))))))))

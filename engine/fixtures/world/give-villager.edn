@@ -1,0 +1,46 @@
+;; jobs.items.give to a villager (card 7f843e67): toss food to one villager (a fixed UUID, kept still by movement_speed 0; NoAI would stop it collecting drops; CanPickUpLoot:1b because a summoned villager picks up nothing without it, cards d86c8544, d5664740) and confirm it took it by the
+;; toss receipt. Live-only fact: whether the toss lands within the villager's pickup reach from 2 blocks.
+{:defaults
+ {:tags [:village :jobs]
+  :plot {:floor "grass_block"}
+  :body {:at [10.5 0 16.5] :yaw 270 :inventory [["bread" 8]]}
+  :limit-s 120}
+ :cases
+ [{:name "feeds-three-bread"
+   :act [[:summon "villager" [16.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0.0d}],CanPickUpLoot:1b,UUID:[I;20262,7,1,843]}"]
+         [:job (jobs.items.give {:to "00004f26-0000-0007-0000-00010000034b" :count 3})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
+   :after [[:item "bread" 5]]}
+  ;; cards 7f843e67, 127a31a1: a real villager takes the toss within the 4 s watch (feed.done), and a bread lying near beforehand is not collected
+  {:name "feeds-two-bread-taken-within-4s"
+   :act [[:summon "villager" [16.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0.0d}],CanPickUpLoot:1b,UUID:[I;20262,7,2,843]}"]
+         [:job (jobs.items.give {:to "00004f26-0000-0007-0000-00020000034b" :count 2})]]
+   :expect [{:event {:source :job :kind :completed :data {:given 2}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 40 :until {:source :job :kind :completed}}]
+   :after [[:item "bread" 6] [:entities "type=item" [[0 -1 0] [31 4 31]] 0]]}
+  ;; should stay: a stray bread of someone else lying near before the toss is never collected back
+  {:name "stray-bread-stays"
+   :act [[:summon "item" [14.5 0 20.5] "{Item:{id:\"minecraft:bread\",count:1}}"]
+         [:summon "villager" [16.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0.0d}],CanPickUpLoot:1b,UUID:[I;20262,7,3,843]}"]
+         [:job (jobs.items.give {:to "00004f26-0000-0007-0000-00030000034b" :count 2})]]
+   :expect [{:event {:source :job :kind :completed :data {:given 2}} :within-s 40 :of-job true}]
+   :after [[:item "bread" 6] [:entities "type=item,tag=wt" [[0 -1 0] [31 4 31]] 1]]}
+  ;; card dff72bd6: two villagers stand near the target, one west of it (the body's side) and one south; the body walks round to a side whose landing spot and line are free of them (north or east) and the target takes the toss
+  {:name "crowded-target-is-fed-from-a-free-side"
+   :act [[:summon "villager" [13.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0.0d}],CanPickUpLoot:1b,UUID:[I;20262,7,7,843]}"]
+         [:summon "villager" [16.5 0 19.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0.0d}],CanPickUpLoot:1b,UUID:[I;20262,7,8,843]}"]
+         [:summon "villager" [16.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0.0d}],CanPickUpLoot:1b,UUID:[I;20262,7,6,843]}"]
+         [:job (jobs.items.give {:to "00004f26-0000-0007-0000-00060000034b" :count 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:given 1}} :within-s 60 :of-job true}]
+   :after [[:item "bread" 7]]}
+  ;; should fail: the villager is not there
+  {:name "absent-villager-is-gone"
+   :act [[:job (jobs.items.give {:to "00004f26-0000-0007-0000-00040000034b" :count 1})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :gone}} :within-s 30 :of-job true}]
+   :after [[:item "bread" 8]]}
+  ;; should fail: a full inventory takes nothing; every drop is collected back
+  {:name "full-villager-takes-nothing"
+   :act [[:summon "villager" [16.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0.0d}],CanPickUpLoot:1b,UUID:[I;20262,7,5,843],Inventory:[{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64},{id:\"minecraft:bread\",count:64}]}"]
+         [:job (jobs.items.give {:to "00004f26-0000-0007-0000-00050000034b" :count 2})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :not-taken}} :within-s 90 :of-job true}]
+   :after [[:item "bread" 8]]}]}

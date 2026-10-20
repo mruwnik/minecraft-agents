@@ -10,7 +10,7 @@
  :cases
  [{:name "hunt-steps-to-the-lip-and-kills-a-heard-cow"
    :act [[:summon "cow" [16.5 -5 20.5] "{NoAI:1b}"] [:summon "cow" [17.5 -5 21.5] "{NoAI:1b}"] [:summon "cow" [18.5 -5 20.5] "{NoAI:1b}"]
-         [:job (jobs.combat.hunt {:mob "cow" :count 1 :keep 0})]]
+         [:job (jobs.combat.hunt {:item "beef" :count 1 :keep 0})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.combat.hunt"}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :too-few}} :for-s 60 :until {:source :job :kind :completed} :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[8 -8 8] [24 0 26]] 2]]}
@@ -20,5 +20,5 @@
    :expect [{:event {:source :action :kind :done :data {:name "attack" :status "hit"}} :within-s 100}]}
   {:name "no-cows-at-all-hunt-waits-too-few"
    :limit-s 40
-   :act [[:job (jobs.combat.hunt {:mob "cow" :count 1 :keep 0})]]
+   :act [[:job (jobs.combat.hunt {:item "beef" :count 1 :keep 0})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :too-few}} :within-s 30 :of-job true}]}]}

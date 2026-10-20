@@ -94,19 +94,19 @@
 
 (deftest give-needs-a-player-and-an-item-name
   (are [args kind] (= kind (first (give/named {:args args})))
-    {:player "Steve" :item "bread"} :ok
-    {:player "Steve" :item nil} :never
-    {:player nil :item "bread"} :never
-    {:player 5 :item "bread"} :never))
+    {:to "Steve" :item "bread"} :ok
+    {:to "Steve" :item nil} :never
+    {:to nil :item "bread"} :never
+    {:to 5 :item "bread"} :never))
 
 (deftest gives-the-count-to-a-player-ten-away
   (async done
     (tu/run-async done
       (fn ^:async t []
         (await (tu/each-async
-                [[{:player "Steve" :item "bread" :count 5} 5 {}]
-                 [{:player "Steve" :item "bread" :count 2} 2 {"bread" 3}]
-                 [{:player "Steve" :item "bread"} 5 {}]]
+                [[{:to "Steve" :item "bread" :count 5} 5 {}]
+                 [{:to "Steve" :item "bread" :count 2} 2 {"bread" 3}]
+                 [{:to "Steve" :item "bread"} 5 {}]]
                 (fn ^:async one [[args given left]]
                   (let [{:keys [p out] :as s} (await (give (assoc bread :entities [(steve 10)]) args 12 true))]
                     (is (= {:given given :text (str "gave " given)} @out))
@@ -118,13 +118,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out] :as s} (await (give {:entities [(steve 10)]} {:player "Steve" :item "bread"} 5 true))]
+        (let [{:keys [p out] :as s} (await (give {:entities [(steve 10)]} {:to "Steve" :item "bread"} 5 true))]
           (is (= {:reason :no-item} @out) "fails its :no-item condition")
           (is (empty? (calls p "toss"))))))))
 
 (deftest can-run-asks-the-item-and-the-player-until-the-toss
   (let [c (fn [world mem] (with-redefs [ctx/mem (constantly mem)]
-                            (give/can-run? {:primitives (tu/fake-on-floor world) :args {:player "Steve" :item "bread"}})))
+                            (give/can-run? {:primitives (tu/fake-on-floor world) :args {:to "Steve" :item "bread"}})))
         reason (comp :reason last)]
     (is (= [:ok nil] [(first (c (assoc bread :entities [(steve 10)]) {})) nil]))
     (is (= [:later :gone] [(first (c bread {})) (reason (c bread {}))]))
@@ -137,7 +137,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p out] :as s} (await (give (assoc bread :entities [(steve 10)] :unreachable ["10,64,0"])
-                                                 {:player "Steve" :item "bread"} 12 true))]
+                                                 {:to "Steve" :item "bread"} 12 true))]
           (is (= {:given 0 :reason :unreachable :text "cannot reach Steve"} @out))
           (is (= 3 (count (tu/walked-to (:eng s)))))
           (is (empty? (calls p "toss"))))))))
@@ -147,7 +147,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p out clock] :as s} (await (give (assoc bread :entities [(steve 10)])
-                                                      {:player "Steve" :item "bread" :count 5} 40 false))]
+                                                      {:to "Steve" :item "bread" :count 5} 40 false))]
           (is (= {:given 0 :reason :not-taken :returned 5 :text "gave 0 bread (not-taken)"} @out))
           (is (= {"bread" 5} (inv p)))
           (is (= 1 (count (calls p "collect"))))
@@ -165,7 +165,7 @@
                        (take-drops! p)
                        (fake/add-item! p "bread" 2)))
               {:keys [out]} (await (give (assoc bread :entities [(steve 10)])
-                                         {:player "Steve" :item "bread" :count 5} 40 false nil hook))]
+                                         {:to "Steve" :item "bread" :count 5} 40 false nil hook))]
           (is (= {:given 3 :returned 2 :text "gave 3 bread"} @out)))))))
 
 (deftest a-toss-that-keeps-failing-gives-up
@@ -173,7 +173,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p out] :as s} (await (give (assoc bread :entities [(steve 10)])
-                                                {:player "Steve" :item "bread"} 20 true
+                                                {:to "Steve" :item "bread"} 20 true
                                                 (fn [p] (.override (.-world p) "toss" (fn ^:async f [_ _ _] #js {:status "no-item" :count 0})))))]
           (is (= {:given 0 :reason :no-item :text "gave 0 bread (no-item)"} @out))
           (is (= 3 (count (calls p "toss")))))))))
@@ -183,7 +183,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p out] :as s} (await (give (assoc bread :entities [(steve 10)])
-                                                {:player "Steve" :item "bread" :count 5} 60 false
+                                                {:to "Steve" :item "bread" :count 5} 60 false
                                                 (fn [p] (.override (.-world p) "collect" (fn ^:async f [_ _ _] #js {:status "unreachable" :gained #js []})))))]
           (is (= {:given 5 :reason :litter :returned 0 :text "gave 5 bread (litter)"} @out))
           (is (= 3 (count (calls p "collect")))))))))
@@ -194,7 +194,7 @@
       (fn ^:async t []
         (let [statuses (atom (cycle ["unreachable" "unreachable" "collected"]))
               {:keys [p out]} (await (give (assoc bread :entities [(steve 10)])
-                                           {:player "Steve" :item "bread" :count 5} 14 false
+                                           {:to "Steve" :item "bread" :count 5} 14 false
                                            (fn [p] (.override (.-world p) "collect"
                                                               (fn ^:async f [_ _ _]
                                                                 (let [st (first @statuses)]
@@ -210,7 +210,7 @@
       (fn ^:async t []
         (let [held (atom nil)
               {:keys [p out] :as s} (await (give (assoc bread :entities [(steve 10)])
-                                                {:player "Steve" :item "bread" :count 5} 60 false
+                                                {:to "Steve" :item "bread" :count 5} 60 false
                                                 #(late-drop % held) (appear-two-ticks-after-toss held)))]
           (is (= {:given 0 :reason :not-taken :returned 5 :text "gave 0 bread (not-taken)"} @out) "waited for the drop, then took it back")
           (is (= 1 (count (calls p "collect")))))))))
@@ -221,7 +221,7 @@
       (fn ^:async t []
         (let [held (atom nil)
               {:keys [out clock] :as s} (await (give (assoc bread :entities [(steve 10)])
-                                                    {:player "Steve" :item "bread" :count 5} 30 false
+                                                    {:to "Steve" :item "bread" :count 5} 30 false
                                                     #(late-drop % held)))]
           (is (= {:given 0 :tossed 5 :reason :unconfirmed :text "never saw the drop of bread"} @out))
           (is (<= 6000 (- @clock 1000000))))))))
@@ -246,7 +246,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p out] :as s} (await (give (assoc bread :entities [(steve 10)])
-                                                {:player "Steve" :item "bread" :count 5} 20 false
+                                                {:to "Steve" :item "bread" :count 5} 20 false
                                                 nil (stray-bread-and-player-takes-the-drop)))]
           (is (= {:given 5 :text "gave 5"} @out) "the player took the toss; the stray bread is not it")
           (is (empty? (calls p "collect")) "the body does not walk to the stray"))))))
@@ -255,7 +255,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup (assoc bread :entities [(steve 10)]) {:player "Steve" :item "bread" :count 5})]
+        (let [{:keys [eng p]} (setup (assoc bread :entities [(steve 10)]) {:to "Steve" :item "bread" :count 5})]
           (await (core/tick! eng))
           (is (= 1 (count (calls p "toss")))))))))
 
@@ -263,7 +263,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p] :as s} (setup (assoc bread :entities [(steve 10)]) {:player "Steve" :item "bread" :count 5})
+        (let [{:keys [eng p] :as s} (setup (assoc bread :entities [(steve 10)]) {:to "Steve" :item "bread" :count 5})
               cut (atom false)]
           (await (run-ticks s 40 500 false
                             (fn [p _]
@@ -278,7 +278,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p] :as s} (setup (assoc bread :entities [(steve 10)]) {:player "Steve" :item "bread" :count 5})
+        (let [{:keys [eng p] :as s} (setup (assoc bread :entities [(steve 10)]) {:to "Steve" :item "bread" :count 5})
               cut (atom false)]
           (await (run-ticks s 40 500 false
                             (fn [p _]

@@ -70,50 +70,11 @@
 (defn world-ids [{:keys [p]}] (set (map :id (fake/entities p))))
 (defn job-mem [{:keys [eng]}] (core/job-memory eng "j1"))
 
-;; ------------------------------------------------------------------ several kinds in one call
-
-(defn pig [id x] (animal id "pig" x {:drops [{:name "porkchop" :count 1}]}))
-
-(deftest a-mob-list-hunts-each-kind-with-count-and-keep-per-kind
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (scenario {:mob ["cow" "pig"] :count 1 :keep 1}
-                                 {:inventory h/sword :entities [(cow 1 3) (cow 2 5) (pig 3 4) (pig 4 6)]} 60))
-              e (done-event s)]
-          (is (= #{2 4} (world-ids s)) "the nearest cow and the nearest pig died")
-          (is (= 1 (get (inv s) "beef")))
-          (is (= 1 (get (inv s) "porkchop")))
-          (is (= 2 (:killed e)))
-          (is (finished? s)))))))
-
-(deftest food-animals-means-cows-pigs-sheep-and-chickens
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (scenario {:mob :food-animals :count 1 :keep 0}
-                                 {:inventory h/sword :entities [(cow 1 3) (pig 2 4) (animal 3 "horse" 5)]} 60))]
-          (is (= #{3} (world-ids s)) "the cow and the pig died, the horse is no food animal")
-          (is (finished? s)))))))
-
-(deftest a-mob-list-with-no-animal-of-any-kind-ends-stopped
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (scenario {:mob ["cow" "pig"] :keep 0} {:inventory h/sword :entities []} 20))
-              e (done-event s)]
-          (is (= 0 (:killed e)))
-          (is (= :partial (:reason e)))
-          (is (seq (events-of s :stopped)) "0 killed ends stopped, not completed")
-          (is (finished? s)))))))
-
-;; ------------------------------------------------------------------ the job
-
 (deftest kills-one-cow-and-collects-its-drops
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:count 1 :keep 0} {:inventory h/sword :entities [(cow 1 3) (cow 2 5) (cow 3 7)]} 30))]
+        (let [s (await (scenario {:item "beef" :count 1 :keep 0} {:inventory h/sword :entities [(cow 1 3) (cow 2 5) (cow 3 7)]} 30))]
           (is (= #{2 3} (world-ids s)) "the nearest cow died, two remain")
           (is (= 1 (get (inv s) "beef")))
           (is (= 1 (get (inv s) "leather")))
@@ -127,7 +88,7 @@
       (fn ^:async t []
         (let [{:keys [p] :as s} (h/setup {:inventory h/sword :entities [(cow 1 3)]} 20)]
           (.override (.-world p) "collect" (fn [_ _ _] #js {:status "unreachable" :reason "no-path" :gained #js []}))
-          (core/submit! (:eng s) (spec {:count 1 :keep 0}) {})
+          (core/submit! (:eng s) (spec {:item "beef" :count 1 :keep 0}) {})
           (await (run-ticks s 30 700))
           (is (= 1 (:killed (done-event s))))
           (is (finished? s) "no loop on the pickup"))))))
@@ -145,7 +106,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [pigs (mapv #(animal % "pig" (+ 2 %) {:drops [{:name "porkchop" :count 1}]}) [1 2 3 4])
-              s (await (scenario {:mob "pig" :count 3 :keep 2} {:inventory h/sword :entities pigs} 40))]
+              s (await (scenario {:item "porkchop" :count 3 :keep 2} {:inventory h/sword :entities pigs} 40))]
           (is (= 2 (count (world-ids s))) "two pigs are left")
           (is (= 2 (:killed (done-event s))))
           (is (= :keep (:reason (done-event s))))
@@ -174,7 +135,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:count 2 :keep 0} {:inventory h/sword :entities [(animal 9 "sheep" 1) (cow 1 4) (cow 2 5)]} 40))]
+        (let [s (await (scenario {:item "beef" :count 2 :keep 0} {:inventory h/sword :entities [(animal 9 "sheep" 1) (cow 1 4) (cow 2 5)]} 40))]
           (is (not-any? #{9} (attacked s)))
           (is (= #{9} (world-ids s)))
           (is (= :count (:reason (done-event s)))))))))
@@ -186,27 +147,18 @@
         (let [s (h/setup {:inventory h/sword :entities [(cow 1 3)]} 20)]
           (fake/add-entity! (:p s) {:id 50 :kind "item" :name "item" :item {:name "dirt" :count 1}
                                     :pos [3 64 0]})
-          (core/submit! (:eng s) (spec {:keep 0}) {})
+          (core/submit! (:eng s) (spec {:item "beef" :keep 0}) {})
           (await (run-ticks s 1 700))
           (is (= 1 (get (inv s) "beef")))
           (is (nil? (get (inv s) "dirt")) "dirt stays on the ground")
           (is (contains? (world-ids s) 50))
           (is (finished? s)))))))
 
-(deftest an-unlisted-kind-collects-every-item-nearby
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [s (await (scenario {:mob "llama" :keep 0} {:inventory h/sword
-                                                         :entities [(animal 1 "llama" 3 {:drops [{:name "dirt" :count 1}]})]} 30))]
-          (is (= 1 (get (inv s) "dirt")))
-          (is (= :count (:reason (done-event s)))))))))
-
 (deftest an-invulnerable-cow-is-skipped-and-the-hunt-ends-none
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:keep 0} {:inventory h/sword :entities [(animal 1 "cow" 3 {:invulnerable true})]} 30))]
+        (let [s (await (scenario {:item "beef" :keep 0} {:inventory h/sword :entities [(animal 1 "cow" 3 {:invulnerable true})]} 30))]
           (is (<= (count (attacked s)) 20) "bounded: attack gives up after sixteen no-damage hits")
           (is (= :none (:reason (done-event s))))
           (is (= 0 (:killed (done-event s))))
@@ -216,7 +168,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:count 3 :keep 0}
+        (let [s (await (scenario {:item "beef" :count 3 :keep 0}
                                  {:inventory h/sword :entities [(cow 1 10) (cow 2 11) (cow 3 12)]
                                   :unreachable ["10,64,0" "11,64,0" "12,64,0"]} 200))]
           (is (= :gave-up (:reason (done-event s))))
@@ -235,7 +187,7 @@
                                                    (reset! added true)
                                                    (fake/add-entity! (:p s) {:id 2 :kind "passive" :name "cow" :health 20 :pos [1 64 0]}))
                                                  (impl t a)))
-          (core/submit! (:eng s) (spec {:keep 0 :count 1}) {})
+          (core/submit! (:eng s) (spec {:item "beef" :keep 0 :count 1}) {})
           (await (run-ticks s 1 700))
           (is (= #{1} (set (attacked s))) "only the original cow is hit")
           (is (not (contains? (world-ids s) 1)))
@@ -247,11 +199,11 @@
       (fn ^:async t []
         (let [{:keys [eng clock]} (h/setup {:inventory h/sword :entities [(cow 1 3) (cow 2 5)]} 20)
               out (atom nil)
-              parent (tu/recording-parent 'jobs.combat.hunt {:count 2 :keep 0} out)
+              parent (tu/recording-parent 'jobs.combat.hunt {:item "beef" :count 2 :keep 0} out)
               eng (assoc eng :jobs (assoc (:jobs eng) 'hunting-parent parent))]
           (core/submit! eng '(hunting-parent) {})
           (await (tu/run-ticks eng clock 60 700))
-          (is (= {:killed 2 :reason :count :spared 0 :remaining 0 :status :done} (dissoc @out :text))))))))
+          (is (= {:killed 2 :gained 2 :reason :count :spared 0 :remaining 0 :status :done} (dissoc @out :text))))))))
 
 (defn baby-cow [id x] (animal id "cow" x {:drops cow-drops :baby true}))
 
@@ -259,7 +211,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:count 1 :keep 0} {:inventory h/sword :entities [(baby-cow 1 2) (cow 2 5)]} 30))]
+        (let [s (await (scenario {:item "beef" :count 1 :keep 0} {:inventory h/sword :entities [(baby-cow 1 2) (cow 2 5)]} 30))]
           (is (= [2] (distinct (attacked s))) "only the adult is attacked")
           (is (contains? (world-ids s) 1) "the baby lives")
           (is (not (contains? (world-ids s) 2))))))))
@@ -270,7 +222,7 @@
       (fn ^:async t []
         (let [{:keys [eng p] :as s} (h/setup {:inventory h/sword
                                               :entities [(cow 1 3) (cow 2 4) (baby-cow 3 2) (baby-cow 4 2) (baby-cow 5 2)]})]
-          (core/submit! eng (spec {:keep 2}) {})
+          (core/submit! eng (spec {:item "beef" :keep 2}) {})
           (await (core/tick! eng))
           (is (= [:too-few] (distinct (map :reason (events-of s :waiting)))) "two adults and three babies: nothing to take")
           (is (zero? (count (h/calls p "attack")))))))))
@@ -279,7 +231,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:count 5 :keep 2}
+        (let [s (await (scenario {:item "beef" :count 5 :keep 2}
                                  {:inventory h/sword
                                   :entities [(cow 1 3) (cow 2 4) (cow 3 5) (baby-cow 4 2) (baby-cow 5 2)]} 40))]
           (is (= :keep (:reason (done-event s))))
@@ -292,7 +244,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:count 10} {:inventory h/sword :entities (mapv #(cow % (+ 2 %)) [1 2 3 4 5])} 60))
+        (let [s (await (scenario {:item "beef" :count 10} {:inventory h/sword :entities (mapv #(cow % (+ 2 %)) [1 2 3 4 5])} 60))
               d (done-event s)]
           (is (= 2 (count (world-ids s))) "two cows are left")
           (is (= 3 (:killed d)))
@@ -307,7 +259,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (h/setup {:inventory h/sword
                                         :entities [(cow 1 3) (cow 2 4) (baby-cow 3 2) (baby-cow 4 2) (baby-cow 5 2)]})]
-          (core/submit! eng (spec {}) {})
+          (core/submit! eng (spec {:item "beef"}) {})
           (await (core/tick! eng))
           (is (zero? (count (h/calls p "attack"))))
           (is (= 5 (count (fake/entities p)))))))))
@@ -316,7 +268,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:count 1} {:inventory h/sword
+        (let [s (await (scenario {:item "beef" :count 1} {:inventory h/sword
                                              :entities [(cow 1 3) (cow 2 4) (cow 3 5) (cow 4 6) (baby-cow 5 2) (baby-cow 6 2)]} 40))]
           (is (= 1 (:killed (done-event s))))
           (is (= :count (:reason (done-event s))))
@@ -327,7 +279,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:count 10 :keep 0} {:inventory h/sword :entities (mapv #(cow % (+ 2 %)) [1 2 3 4 5])} 80))
+        (let [s (await (scenario {:item "beef" :count 10 :keep 0} {:inventory h/sword :entities (mapv #(cow % (+ 2 %)) [1 2 3 4 5])} 80))
               d (done-event s)]
           (is (empty? (world-ids s)))
           (is (= 5 (:killed d)))
@@ -340,7 +292,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:mob "zombie" :count 3} {:inventory h/sword :entities (mapv #(zombie % (+ 2 %)) [1 2 3])} 80))]
+        (let [s (await (scenario {:item "rotten_flesh" :count 3} {:inventory h/sword :entities (mapv #(zombie % (+ 2 %)) [1 2 3])} 80))]
           (is (empty? (world-ids s)) "all three zombies died")
           (is (= 3 (:killed (done-event s))))
           (is (= :count (:reason (done-event s)))))))))
@@ -349,9 +301,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[args kind reason] [[{:mob "zombie"} :condition-failed :tool]
-                                    [{:mob "zombie" :fetch false} :condition-failed :unarmed]
-                                    [{:mob "zombie" :fetch #{:item}} :condition-failed :unarmed]]]
+        (doseq [[args kind reason] [[{:item "rotten_flesh"} :condition-failed :tool]
+                                    [{:item "rotten_flesh" :fetch false} :condition-failed :unarmed]
+                                    [{:item "rotten_flesh" :fetch #{:item}} :condition-failed :unarmed]]]
           (let [s (h/setup {:inventory [] :entities [(zombie 1 3)]} 20)
                 e (await (ending-of s 'jobs.combat.hunt args 60))]
             (is (= [kind reason] [(:kind e) (get-in e [:cause :reason] (:cause e))]) (pr-str args))
@@ -362,7 +314,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (h/setup {:inventory h/sword :entities [(zombie 1 3)]} 20)]
-          (core/submit! eng (spec {:mob "zombie"}) {})
+          (core/submit! eng (spec {:item "rotten_flesh"}) {})
           (await (core/tick! eng))
           (is (pos? (count (h/calls p "attack")))))))))
 
@@ -371,7 +323,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [chicken (animal 1 "chicken" 3 {:drops [{:name "feather" :count 1} {:name "chicken" :count 1}]})
-              s (await (scenario {:mob "chicken" :count 1 :keep 0} {:inventory h/sword :entities [chicken]} 30))]
+              s (await (scenario {:item "chicken" :count 1 :keep 0} {:inventory h/sword :entities [chicken]} 30))]
           (is (= 1 (get (inv s) "chicken")))
           (is (= 1 (get (inv s) "feather")))
           (is (finished? s)))))))
@@ -382,7 +334,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (h/first-round-ms (spec {:count 2 :keep 0}) {:inventory h/sword :entities [(cow 1 3) (cow 2 5) (cow 3 7)]} 20))]
+        (let [s (await (h/first-round-ms (spec {:item "beef" :count 2 :keep 0}) {:inventory h/sword :entities [(cow 1 3) (cow 2 5) (cow 3 7)]} 20))]
           (is (= #{3} (world-ids s)))
           (is (= 2 (get (inv s) "beef")))
           (is (= 2 (get (inv s) "leather")))
@@ -394,17 +346,17 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[args entities want note]
-                [[{:mob "pig" :keep 0 :radius 24} [(animal 1 "pig" 36)]
+                [[{:item "porkchop" :keep 0 :radius 24} [(animal 1 "pig" 36)]
                   {:keep 0 :in-range 0 :radius 24 :nearest 36} "a pig seen past the radius"]
-                 [{:mob "pig" :keep 1 :radius 24} [(animal 1 "pig" 5) (animal 2 "pig" 40)]
+                 [{:item "porkchop" :keep 1 :radius 24} [(animal 1 "pig" 5) (animal 2 "pig" 40)]
                   {:keep 1 :in-range 1 :radius 24 :nearest 5} "one in range, keep 1"]
-                 [{:mob "pig" :keep 0 :radius 24} []
+                 [{:item "porkchop" :keep 0 :radius 24} []
                   {:keep 0 :in-range 0 :radius 24} "none seen at all"]
-                 [{:mob "skeleton" :radius 24} [(animal 1 "skeleton" 32 {:kind "hostile"})]
+                 [{:item "bone" :radius 24} [(animal 1 "skeleton" 32 {:kind "hostile"})]
                   {:keep 0 :in-range 0 :radius 24 :nearest 32} "a hostile kind keeps none, with none in range to say it is hostile"]]]
           (let [{:keys [eng]} (h/setup {:inventory h/sword :entities entities})
                 cause (:cause (:ending (await (tu/child-outcome eng 'jobs.combat.hunt args 20))))]
-            (is (= (assoc want :reason :too-few :mob (:mob args) :killed 0)
+            (is (= (assoc want :reason :too-few :mob (first (hunting/mobs {:args args})) :killed 0)
                    (select-keys cause [:reason :mob :killed :keep :in-range :radius :nearest])) note)
             (is (= (pos? (:keep want)) (str/includes? (:text cause) "keeping")) note)))))))
 
@@ -418,7 +370,7 @@
       (fn ^:async t []
         (let [s (h/setup {:inventory h/sword :entities [(north-cow 1 -8) (north-cow 2 -9)]} 20)
               _ (hear-passives-until! (:p s) #(<= (:z %) -2))
-              _ (core/submit! (:eng s) (spec {:count 1 :keep 0 :radius 24}) {})
+              _ (core/submit! (:eng s) (spec {:item "beef" :count 1 :keep 0 :radius 24}) {})
               _ (await (run-ticks s 60 700))]
           (is (= :count (:reason (done-event s))) "walked north toward the sound, saw the cows, killed one")
           (is (= 1 (:killed (done-event s)))))))))
@@ -429,7 +381,7 @@
       (fn ^:async t []
         (let [s (h/setup {:inventory h/sword :entities [(north-cow 1 -8)]} 20)
               _ (hear-passives-until! (:p s) (constantly false))
-              _ (core/submit! (:eng s) (spec {:count 1 :keep 0 :radius 24}) {})
+              _ (core/submit! (:eng s) (spec {:item "beef" :count 1 :keep 0 :radius 24}) {})
               _ (await (run-ticks s 80 700))]
           (is (finished? s))
           (is (<= 1 (count (h/calls (:p s) "steer")) 4) "a few steps toward the sound, no more")
@@ -441,7 +393,7 @@
       (fn ^:async t []
         (let [s (h/setup {:inventory h/sword :entities []} 20)
               _ (hear-passives-until! (:p s) (constantly false))
-              _ (core/submit! (:eng s) (spec {:count 1 :keep 0 :radius 24}) {})
+              _ (core/submit! (:eng s) (spec {:item "beef" :count 1 :keep 0 :radius 24}) {})
               _ (await (run-ticks s 20 700))]
           (is (zero? (count (h/calls (:p s) "steer"))) "no sound, no steps")
           (is (= [:too-few] (distinct (map :reason (events-of s :waiting))))))))))
@@ -454,7 +406,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:mob "sheep" :color "white" :count 1 :keep 0} {:inventory h/sword :entities [(sheep 1 3 "brown") (sheep 2 6 "white")]} 30))]
+        (let [s (await (scenario {:item "white_wool" :count 1 :keep 0} {:inventory h/sword :entities [(sheep 1 3 "brown") (sheep 2 6 "white")]} 30))]
           (is (= #{2} (set (attacked s))) "the nearer brown sheep is left alone")
           (is (= #{1} (world-ids s)))
           (is (= 1 (get (inv s) "white_wool")))
@@ -464,7 +416,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:mob "sheep" :color "white" :count 1 :keep 0} {:inventory h/sword :entities [(sheep 1 3 "brown") (sheep 2 6 "gray")]} 5))
+        (let [s (await (scenario {:item "white_wool" :count 1 :keep 0} {:inventory h/sword :entities [(sheep 1 3 "brown") (sheep 2 6 "gray")]} 5))
               e (last (events-of s :waiting))
               cause (or (:cause e) e)]
           (is (empty? (attacked s)))
@@ -478,8 +430,8 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[args entities reason note]
-                [[{:mob "sheep" :color "white" :count 1 :keep 1} [(sheep 1 3 "white") (sheep 2 5 "brown") (sheep 3 6 "brown")] :too-few "one white, keep 1: too few, however many of other colours"]
-                 [{:mob "sheep" :color "white" :count 1 :keep 2} [(sheep 1 3 "brown")] :no-color "none of the colour wins over too-few"]]]
+                [[{:item "white_wool" :count 1 :keep 1} [(sheep 1 3 "white") (sheep 2 5 "brown") (sheep 3 6 "brown")] :too-few "one white, keep 1: too few, however many of other colours"]
+                 [{:item "white_wool" :count 1 :keep 2} [(sheep 1 3 "brown")] :no-color "none of the colour wins over too-few"]]]
           (let [{:keys [eng]} (h/setup {:inventory h/sword :entities entities})
                 r (await (tu/child-outcome eng 'jobs.combat.hunt args 20))]
             (is (= reason (:reason r)) note)))))))
@@ -489,8 +441,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [shorn #(assoc (sheep %1 %2 "white") :sheared true)
-              s (await (scenario {:mob "sheep" :color "white" :count 1 :keep 0} {:inventory h/sword :entities [(shorn 1 3) (sheep 2 6 "white")]} 30))
-              s2 (await (scenario {:mob "sheep" :color "white" :count 1 :keep 0} {:inventory h/sword :entities [(shorn 1 3) (shorn 2 6)]} 5))
+              s (await (scenario {:item "white_wool" :count 1 :keep 0} {:inventory h/sword :entities [(shorn 1 3) (sheep 2 6 "white")]} 30))
+              s2 (await (scenario {:item "white_wool" :count 1 :keep 0} {:inventory h/sword :entities [(shorn 1 3) (shorn 2 6)]} 5))
               e (last (events-of s2 :waiting))
               cause (or (:cause e) e)]
           (is (= #{2} (set (attacked s))) "the nearer sheared sheep is left alone")
@@ -502,7 +454,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:count 1 :keep 0} {:inventory h/sword :self {:health 0.5} :entities [(cow 1 3)]} 10))]
+        (let [s (await (scenario {:item "beef" :count 1 :keep 0} {:inventory h/sword :self {:health 0.5} :entities [(cow 1 3)]} 10))]
           (is (empty? (attacked s)) "nothing attacked at 0.5 hp")
           (is (= [:low-health] (distinct (map :reason (events-of s :waiting))))))))))
 
@@ -510,7 +462,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:count 1 :keep 0} {:inventory h/sword :time st/night :entities [(cow 1 3)]} 10))]
+        (let [s (await (scenario {:item "beef" :count 1 :keep 0} {:inventory h/sword :time st/night :entities [(cow 1 3)]} 10))]
           (is (empty? (attacked s)) "nothing attacked at night")
           (is (= [:dark] (distinct (map :reason (events-of s :waiting))))))))))
 
@@ -518,7 +470,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:count 1 :keep 0 :checks {:safe? '(always)}} {:inventory h/sword :time st/night :entities [(cow 1 3)]} 10))]
+        (let [s (await (scenario {:item "beef" :count 1 :keep 0 :checks {:safe? '(always)}} {:inventory h/sword :time st/night :entities [(cow 1 3)]} 10))]
           (is (seq (attacked s)) "the caller's :checks replace attack's own dark-sky check below the hunt")
           (is (empty? (filter #(= :dark (:reason %)) (events-of s :waiting)))))))))
 
@@ -528,7 +480,7 @@
       (fn ^:async t []
         (let [{:keys [p eng] :as s} (h/setup {:inventory h/sword :entities [(cow 1 3) (cow 2 5)]} 20)]
           (.override (.-world p) "attack" (fn [token a impl] (-> (impl token a) (.then (fn [r] (fake/swap-self! p assoc :health 0.5) r)))))
-          (core/submit! eng (spec {:count 2 :keep 0}) {})
+          (core/submit! eng (spec {:item "beef" :count 2 :keep 0}) {})
           (await (run-ticks s 15 700))
           (is (= #{1} (set (attacked s))) "the first cow was attacked, the second waits for the body to heal")
           (is (not (finished? s)) "low health does not end the hunt")
@@ -546,7 +498,7 @@
 
 (defn ^:async spared-hunt [args world zones]
   (let [s (h/setup world 20 (ew/of-data {} {} zones))]
-    (core/submit! (:eng s) (spec (merge {:mob "sheep" :count 2 :keep 0} args)) {})
+    (core/submit! (:eng s) (spec (merge {:item "white_wool" :count 2 :keep 0} args)) {})
     (await (run-ticks s 30 700))
     s))
 
@@ -592,7 +544,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [pigs (mapv #(animal % "pig" (+ 2 %) {:drops [{:name "porkchop" :count 1}]}) [1 2 3 4])
-              s (await (scenario {:mob "pig" :count 2 :keep 2} {:inventory h/sword :entities pigs} 40))
+              s (await (scenario {:item "porkchop" :count 2 :keep 2} {:inventory h/sword :entities pigs} 40))
               es (events-of s :animal.killed)]
           (is (= [["pig" "jobs.combat.hunt" :surplus] ["pig" "jobs.combat.hunt" :surplus]]
                  (mapv (juxt :animal :by :rule) es)))
@@ -603,5 +555,5 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:mob "zombie" :count 1} {:inventory h/sword :entities [(animal 1 "zombie" 3 {:kind "hostile"})]} 20))]
+        (let [s (await (scenario {:item "rotten_flesh" :count 1} {:inventory h/sword :entities [(animal 1 "zombie" 3 {:kind "hostile"})]} 20))]
           (is (empty? (events-of s :animal.killed))))))))

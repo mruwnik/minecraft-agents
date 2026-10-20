@@ -245,7 +245,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[result _ p] (await (broken-run {:all-carried false}))]
+        (let [[result _ p] (await (broken-run {:least 1}))]
           (is (= "air" (h/block-at p 7 64 0)))
           (is (= [{:pos [7 64 0] :why :gap}] (:breaks result)))
           (is (= {"rail" 1} (get-in result [:built :short])))
@@ -407,7 +407,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world (built-line-world l-route {} flat-top {} {"10,64,0" {:shape "north_south"}})
-              [result seen p] (await (build-route! l-route {} world {:all-carried false}))]
+              [result seen p] (await (build-route! l-route {} world {:least 1}))]
           (is (true? (:ok? result)))
           (is (= "east_west" (shape-of p [10 64 0])))
           (is (= 1 (count (filter #(= {:x 10 :y 64 :z 0} (js->clj (.-pos (.-args %)) :keywordize-keys true)) (h/calls p "dig"))))))))))
@@ -424,7 +424,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world (built-line-world l-route {} flat-top {"10,64,1" "lava"} {"10,64,0" {:shape "north_south"}})
-              [result _ p] (await (build-route! l-route {} world {:all-carried false}))]
+              [result _ p] (await (build-route! l-route {} world {:least 1}))]
           (is (false? (:ok? result)))
           (is (= 0 (count (h/calls p "dig"))))
           (is (= {[10 64 0] :shape} (get-in result [:built :given-up]))))))))
@@ -434,7 +434,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world (built-line-world l-route {} flat-top {"10,64,1" "water"} {"10,64,0" {:shape "north_south"}})
-              [result _ p eng] (await (build-route! l-route {} world {:all-carried false :accept [:fluid-adjacent]}))]
+              [result _ p eng] (await (build-route! l-route {} world {:least 1 :accept [:fluid-adjacent]}))]
           (is (true? (:ok? result)))
           (is (= "east_west" (shape-of p [10 64 0])))
           (is (= 1 (count (h/calls p "dig"))))
@@ -456,7 +456,7 @@
         (let [world (built-line-world l-route {} flat-top {} {"10,64,0" {:shape "north_south"}})
               [result seen p] (await (with-dig-attempt!
                                     (fn [c pos] (dig/finish! c {:dug false :pos pos :block "air" :reason :already-clear}))
-                                    #(build-route! l-route {} world {:all-carried false})))]
+                                    #(build-route! l-route {} world {:least 1})))]
           (is (= {[10 64 0] :shape} (get-in result [:built :given-up])) (pr-str result))
           (is (not= :not-done result) "the build ends, it does not yield for ever")
           (is (empty? (h/calls p "dig")) "the dig was never made")
@@ -471,7 +471,7 @@
                       (with-dig-attempt! attempt
                         (fn ^:async f []
                           (let [{:keys [eng]} (b/start world {"line" (route-plan l-route {})} [])]
-                            (await (ending-of {:eng eng} job {:plan "line" :all-carried false} 100))))))
+                            (await (ending-of {:eng eng} job {:plan "line" :least 1} 100))))))
               no-tool (await (ended (fn [c _] (ctx/end c :condition-failed {:reason :no-tool}))))
               cut (await (ended (fn [c _] (ctx/end c :cut-off nil))))]
           (is (= {:kind :condition-failed :cause {:reason :no-tool}} (kc no-tool)))
@@ -484,7 +484,7 @@
         (let [world (built-line-world l-route {} flat-top {} {"10,64,0" {:shape "north_south"}})
               [result seen p] (await (with-dig-attempt!
                                     (fn [c _] (dig/unreachable! c :test))
-                                    #(build-route! l-route {} world {:all-carried false :ticks 100})))]
+                                    #(build-route! l-route {} world {:least 1 :ticks 100})))]
           (is (not (true? (:ok? result))))
           (is (= :shape (get-in result [:built :given-up [10 64 0]])) (pr-str result))
           (is (= [{:pos [10 64 0] :why :shape}] (:breaks result))))))))
@@ -496,7 +496,7 @@
         (doseq [[fix digs] [[1 1] [2 2] [0 0]]]
           (let [world (built-line-world l-route {} flat-top {"0,64,1" "rail"} {})
                 [result seen p] (await (settings/with-settings {:jobs.build.rail/fix-times fix}
-                                         #(build-route! l-route {} world {:all-carried false})))]
+                                         #(build-route! l-route {} world {:least 1})))]
             (is (false? (:ok? result)) (str fix))
             (is (= {[0 64 0] :shape} (get-in result [:built :given-up])) (str fix))
             (is (= [{:pos [0 64 0] :why :shape}] (:breaks result)) (str fix))
@@ -524,9 +524,9 @@
         (let [{:keys [eng p seen]} (b/start (route-world l-route {} flat-top) {"line" (route-plan l-route {})} [])]
           (await (outcome eng job {:plan "line"} 900))
           (fake/remove-block! p [19 64 0])
-          (core/submit! eng (list job {:plan "line" :all-carried false}) {})
+          (core/submit! eng (list job {:plan "line" :least 1}) {})
           (await (tu/run-ticks eng h/clock 6 700))
-          (is (= [{:pos [19 64 0] :why :gap}] (:breaks (:data (await (ending-of {:eng eng} job {:plan "line" :all-carried false} 700)))))))))))
+          (is (= [{:pos [19 64 0] :why :gap}] (:breaks (:data (await (ending-of {:eng eng} job {:plan "line" :least 1} 700)))))))))))
 
 (deftest a-corner-in-another-plans-footprint-declines-before-anything-is-placed
   (async done
@@ -585,7 +585,7 @@
           (is (= {:kind :done :cause nil} (kc built)))
           (is (true? (get-in built [:data :ok?])))
           (fake/remove-block! p [7 64 0])
-          (let [broken (await (ending-of w job {:plan "line" :all-carried false} 400))]
+          (let [broken (await (ending-of w job {:plan "line" :least 1} 400))]
             (is (= {:kind :nothing-possible :cause :broken} (kc broken)))
             (is (= [{:pos [7 64 0] :why :gap}] (get-in broken [:data :breaks])))))))))
 

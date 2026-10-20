@@ -39,7 +39,7 @@
      first walked to once, to read its power as it is now; a line broken only by power states is re-read for a short while before it counts as broken. A sturdy block where the plan wants bed or buffer fill is
      no fault.
   Needs: the plan, a zone list (unless :ignore-zones?), and the items for every cell still to build carried (unless
-  :all-carried false); those lacking are fetched first (jobs.lib.need, :fetch; a failed fetch ends the job with its cause). Returns, as the data of its ending, {:ok? :breaks :hazards :built {:placed :missing :short
+  the call's :least is below :all); those lacking are fetched first (jobs.lib.need, :fetch; a failed fetch ends the job with its cause). Returns, as the data of its ending, {:ok? :breaks :hazards :built {:placed :missing :short
   :given-up :wrong :refused}}. :hazards lists falling beds (gravel, sand).
   Endings: done when the line is sound (a line sound already is done at once, placed 0);
   nothing-possible :broken when it is not (the data's :breaks {:pos :why} (:gap :shape :unlit :lit-brake :no-bed
@@ -50,17 +50,16 @@
   - condition-failed: the plan is missing or unreadable (:plan, a wait); no zone list has been read (:no-zones); a cell wanting
     a redstone block holds another block (:source-blocked, :cells; the builder never digs, so on natural ground put a
     torch or lever in the plan, or use a raised bed); a cell still to build is refused by the access rules
-    (:refused, with the list [{:pos :reason :zone|:claim|:footprint|:hazard}]); with :all-carried (the default) and :fetch off for items, items for
+    (:refused, with the list [{:pos :reason :zone|:claim|:footprint|:hazard}]); with :least :all (the default) and :fetch off for items, items for
     the cells still to build are not all carried (:short {item n}, :up-to; an :any want counts every
     choice carried; only cells seen empty are owed, the warn's :up-to {item n} counts the unseen cells too). With
-    :all-carried false it builds what is carried.
+    :least 1 it builds what is carried.
   A restart resumes in the phase it was in: the world is the memory.")
 
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
    :part {:doc "only the cells of this part" :spec a/name? :default nil}
    :accept {:doc "as jobs.build.from-plan" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
-   :all-carried {:doc "start only while every item still to place is carried (false: build what is carried)" :spec boolean? :default true}
    :fetch {:doc "get the items still to place with jobs.lib.need before the build: true, a set of kinds or a map of limits; false (or without :item) waits :short" :spec need/option? :default true}
    :ignore-zones? :shared})
 
@@ -148,11 +147,16 @@
   (when-let [o (need/opts c 'jobs.build.rail-line)]
     (when (contains? (:what o) :item) (select-keys o [:how :explore :minutes]))))
 
+(defn whole?
+  "Whether the call wants the whole line: its :least is :all (the default; before the call is frozen, the arg)."
+  [c]
+  (= :all (or (:least (ctx/frozen-call c)) (:least (:args c)) :all)))
+
 (defn not-ready
   "Why a line that is not sound may not be begun, as a wait reason {:reason kw :why text}, or nil when it may: no
-  redstone block cell taken by ground, nothing refused, and with :all-carried everything certainly needed carried."
+  redstone block cell taken by ground, nothing refused, and with :least :all everything certainly needed carried."
   [c cells]
-  (let [{:keys [all-carried]} (:args c)
+  (let [all-carried (whole? c)
         blocked (blocked-sources cells)
         no (refused c cells)
         owed (plan/owed cells)
@@ -197,7 +201,8 @@
        (when-not (or trouble (sound? c cells))
          (check-cache/cached c :ready #(not-ready c cells)))))))
 
-(def defaults {:spend {:job-time ::job-time-s}})
+(def defaults {:least :all :spend {:job-time ::job-time-s}})
+
 (def safe? (ready/safe-at-by-night work-place/spot))
 (def fit? ready/fit?)
 
@@ -335,10 +340,10 @@
                                  (when (seq left) (str "; " left))))))))
 
 (defn ^:async fetch-step!
-  "Before the build is begun with :all-carried, fetch the first item certainly lacking (jobs.lib.need): :continue while
+  "Before the build is begun with :least :all, fetch the first item certainly lacking (jobs.lib.need): :continue while
   the child waits, :again once got, the failed ending, nil when nothing is due."
   [c cells]
-  (when-let [[_ n names] (and (:all-carried (:args c)) (not (:building (ctx/mem c))) (fetch-opts c)
+  (when-let [[_ n names] (and (whole? c) (not (:building (ctx/mem c))) (fetch-opts c)
                               (first (shortages (filter #(= :missing (:answer %)) (plan/owed cells))
                                                 (storage/carried-totals (u/inventory (:primitives c))))))]
     (let [o (fetch-opts c)

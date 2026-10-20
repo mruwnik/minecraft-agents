@@ -1,5 +1,6 @@
 (ns jobs.village.breed
-  (:require [jobs.lib.ready :as ready]
+  (:require [clojure.string :as str]
+            [jobs.lib.ready :as ready]
             [engine.settings :as settings]
             [engine.args :as a] [jobs.lib.need :as need]
             [engine.contract :as contract]
@@ -9,22 +10,27 @@
             [jobs.lib.villager :as villager]
             [jobs.lib.pace :as pace]
             [jobs.lib.cond :as cond]
+            [jobs.lib.shelter.beds :as sh-beds]
+            [jobs.survival.bed-down :as bed-down]
             [jobs.lib.util :as u]))
 
 (def doc
   "Grow the villagers in sight to :target (adults and babies count). One call is the whole attempt. Each
-  attempt takes the two nearest adults not yet tried in this call (else the nearest two again, not fed again while the food they took is unspent), feeds each enough to be willing (jobs.village.feed
+  attempt takes the two nearest adults not yet tried in this call (else the nearest two again, not fed again while the food they took is unspent), feeds each enough to be willing (jobs.items.give
   child, fetched unless :fetch is off: 3 bread, else 12 of carrot, potato or beetroot), then stays near them for
   the ::wait-s setting (jobs.movement.stay-near child) and counts again. A rise in the baby villagers in sight is a birth
   (an adult walking into view is not).
-  Needs adult villagers in sight and beds the villagers can claim (the body cannot see which are free): it only counts
-  what it sees, so a villager out of sight is not counted. Zones are the walks' (go-to tolls), never claimed here.
+  Needs adult villagers in sight and a free bed for the child: seen beds (two cells each) less the villagers in sight; it
+  only counts what it sees, so a villager or bed out of sight is not counted. With no free bed it puts one down beside the body
+  (a carried bed, else one fetched when :fetch allows; the cell is a bed-down layout) and ends condition-failed :no-bed
+  when it cannot (no room, a refused or failed place, or no bed and no fetch). Zones are the walks' (go-to tolls), never claimed here.
   Conditions at the start (a listed call waits on them): :no-pair (below :target, fewer than two adult villagers in
-  sight; the engine looks round once first), :no-food (the food is not carried and a fetch is off or failed lately). A :target under 2 is impossible
+  sight; the engine looks round once first), :no-food (the food is not carried and a fetch is off or failed lately), :no-bed
+  (below :target, no free bed seen, no bed carried and a fetch is off). A :target under 2 is impossible
   (:bad-args). Quote: time from the wait and the births still missing.
   Ends with the data {:population n :target t :births b}: done when the target is met (done? holds; an already
   met target is done with 0 births), else with the cause:
-  - condition-failed :no-food: a feed child ended without food.
+  - condition-failed :no-food: a feed child ended without food. :no-bed: no free bed and none could be put down.
   - nothing-possible :no-births: 3 attempts in a row without a birth (untried pairs first; with none left the nearest pair is tried again, as a birth is chance).
   A pair a feed could not complete (villager gone, unreachable, would not take food) counts as an attempt without a
   birth. What was tried, the birth baseline and the wait are kept in job memory, so a cut and restart re-checks the
@@ -38,10 +44,12 @@
   {::wait-s {:default 45 :doc "Seconds to stay near a fed pair for a birth, before the attempt counts as fruitless." :spec (a/int-in 1 600)}
    ::wait-range {:default 6 :doc "Blocks within which the body waits for a pair to breed." :spec (a/int-in 0 nil)}
    ::job-time-s {:default 3600 :doc "Seconds one breeding may take." :spec (a/int-in 1 nil)}
+   ::max-beds {:default 3 :doc "Beds one call puts down for the villagers before it ends :no-bed." :spec (a/int-in 1 nil)}
    ::feed-s {:default 30 :doc "Seconds one pair's feeding takes, for the quote." :spec (a/num-in 0 nil)}})
 (defn wait-s [] (settings/get settings ::wait-s))
 (defn wait-range [] (settings/get settings ::wait-range))
 (defn feed-s [] (settings/get settings ::feed-s))
+(defn max-beds [] (settings/get settings ::max-beds))
 (def job 'jobs.village.breed)
 
 
@@ -58,6 +66,17 @@
   "{:pop n :kids k}: the villagers in sight, and how many of them are babies."
   [vs]
   {:pop (count vs) :kids (count (remove villager/adult? vs))})
+
+(defn free-beds
+  "Beds the body has seen within the villager search radius (a bed is two cells) less the villagers in sight."
+  [c vs]
+  (let [cells (look/seen-blocks (:primitives c) {:match #(str/ends-with? % "_bed") :radius (villager/search-radius) :max 128 :live? true})]
+    (- (quot (inc (count cells)) 2) (count vs))))
+
+(defn bed-short?
+  "Whether the target is not met and no free bed is seen."
+  [c vs]
+  (and (< (:pop (sight vs)) (:target (:args c))) (< (free-beds c vs) 1)))
 
 (def target [:target])
 
@@ -93,6 +112,15 @@
       (contract/later :no-food "no food carried and no fetch for it" :need need)
       (contract/ok :food "the meal is carried or fetched"))))
 
+(defn no-bed
+  "Later :no-bed while no free bed is seen, none is carried and a fetch is off."
+  [c]
+  (let [p (:primitives c)
+        vs (villager/seen p)]
+    (if (and (bed-short? c vs) (nil? (sh-beds/carried-bed p)) (not (need/opts c job)))
+      (contract/later :no-bed "no free bed seen, none carried and no fetch for one" :need {:reason :need :any-of bed-down/bed-names :count 1})
+      (contract/ok :bed "a free bed is seen, carried or fetched"))))
+
 (defn pair-lost
   "Later :no-pair mid-run while no pair was ever chosen (or is being fed or waited for) and fewer than two adults are in
   sight: they may come back; once a pair was tried the round ends :no-births instead."
@@ -103,7 +131,7 @@
       (no-pair c))))
 
 (def can-run? pair-lost)
-(def can-start? (cond/and bad-args no-pair no-food))
+(def can-start? (cond/and bad-args no-pair no-food no-bed))
 
 (declare data-of)
 
@@ -160,6 +188,35 @@
                                            :tried (into (vec (:tried %)) (map (fn [e] (.-uuid e))) pair)))
                 :again))))
 
+(defn facing-of
+  "The compass name of the step from cell a to cell b along x or z."
+  [a b]
+  (cond (> (:x b) (:x a)) "east" (< (:x b) (:x a)) "west" (> (:z b) (:z a)) "south" :else "north"))
+
+(defn ^:async bed!
+  "No free bed: put a bed down beside the body (fetched when none is carried and :fetch allows), at most ::max-beds times a call.
+  :again, :continue or the :no-bed ending."
+  [c seen]
+  (let [p (:primitives c)
+        item (sh-beds/carried-bed p)
+        opts (need/opts c job)
+        stop #(stop! c seen :condition-failed :no-bed)]
+    (cond
+      (>= (:beds-placed (ctx/mem c) 0) (max-beds)) (stop)
+      (and (nil? item) (nil? opts)) (stop)
+      (nil? item)
+      (let [e (await (need/blocks! c bed-down/bed-names 1 opts))]
+        (cond (= :continue e) :continue
+              (and (= :done (:kind e)) (sh-beds/carried-bed p)) :again
+              :else (stop)))
+      :else
+      (if-let [{:keys [foot head]} (bed-down/bed-layout c false)]
+        (let [r (await (ctx/call c (keyword (str "bed-" (:beds-placed (ctx/mem c) 0))) 'jobs.blocks.place {:pos foot :item item :facing (facing-of foot head)}))]
+          (cond (= :continue r) :continue
+                (= :done (:kind r)) (do (ctx/update-mem! c update :beds-placed (fnil inc 0)) :again)
+                :else (stop)))
+        (stop)))))
+
 (defn failed-pair!
   "The pair could not be fed (feed ending e): an attempt without a birth."
   [c e]
@@ -178,8 +235,8 @@
         (ctx/update-mem! c assoc :waiting true :at (or at (u/self-pos c)))
         :again)
       (let [[item n] (meal c)
-            r (await (ctx/call c (keyword (str "feed-" next)) 'jobs.village.feed
-                               {:villager next :item item :count n :fetch fetch}))]
+            r (await (ctx/call c (keyword (str "feed-" next)) 'jobs.items.give
+                               {:to next :item item :count n :fetch fetch}))]
         (cond
           (= :continue r) :continue
           (= :no-food (contract/cause-key r)) (stop! c seen :condition-failed :no-food)
@@ -210,6 +267,7 @@
       (do (ctx/update-mem! c #(-> % (dissoc :waiting :pair :fed :at) (update :births (fnil + 0) (born c seen)))) :again)
       (:waiting m) (await (wait! c seen))
       (child/exhausted? c :pair) (child/give-up c :pair :no-births (data-of c seen))
+      (and (not (:pair m)) (bed-short? c vs)) (await (bed! c seen))
       (:pair m) (await (feed-pair! c vs seen))
       :else (choose! c vs seen))))
 

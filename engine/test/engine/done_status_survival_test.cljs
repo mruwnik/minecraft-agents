@@ -37,15 +37,14 @@
     {} {:seen #{7 8} :killed [7] :given-up {8 :unreachable}} [:later :fighting]
     {:entities [(zombie 9 4)]} {:seen #{7} :killed [7]} [:later :fighting]))
 
-(deftest hunt-is-done-when-the-count-is-killed-and-the-drops-are-collected
-  (are [args m want] (= want (tu/kind-reason (done-of 'jobs.combat.hunt {} args m)))
-    {:mob "cow" :count 2} {} [:later :hunting]
-    {:mob "cow" :count 2} {:killed 1} [:later :hunting]
-    {:mob "cow" :count 2} {:killed 2} [:ok :hunted]
-    {:mob "cow" :count 2} {:killed 2 :target 5} [:later :hunting]
-    {:mob "cow" :count 2} {:killed 2 :collecting true} [:later :hunting]
-    {:mob ["cow" "pig"] :count 1} {:kinds {"cow" {:killed 1 :reason :count}}} [:later :hunting]
-    {:mob ["cow" "pig"] :count 1} {:kinds {"cow" {:killed 1 :reason :count} "pig" {:killed 1 :reason :count}}} [:ok :hunted]))
+(deftest hunt-is-done-when-the-count-is-carried-and-the-drops-are-collected
+  (are [carried m want] (= want (tu/kind-reason (done-of 'jobs.combat.hunt {:inventory [{:name "beef" :count carried}]} {:item "beef" :count 2} m)))
+    0 {} [:later :hunting]
+    1 {} [:later :hunting]
+    2 {} [:ok :hunted]
+    3 {} [:ok :hunted]
+    2 {:target 5} [:later :hunting]
+    2 {:collecting true} [:later :hunting]))
 
 (def bed {:x 3 :y 64 :z 0})
 (def bed-world {:blocks {"3,64,0" "red_bed"} :floor [-3 -3 3 3]})
@@ -67,21 +66,6 @@
     {:queued-t 100} {:log-out [{:t 500 :data {:ms 3000 :status "unsupported"}}]} [:later :online]
     {:queued-t 100} {:log-out [{:t 500 :data {:ms 3000 :status "cut"}}]} [:ok :logged-out]))
 
-(def librarian {:profession "librarian" :trade "mending" :pos [4 64 4]})
-(defn villager [id extra] (merge {:id id :uuid (str "v-" id) :name "villager" :kind "passive" :pos {:x 3 :y 64 :z 2}} extra))
-
-(deftest village-maintain-is-done-when-no-step-is-left-to-run
-  (are [args world m want] (= want (tu/kind-reason (done-of 'jobs.village.maintain world args m)))
-    {} {} {} [:ok :in-order]
-    {:plan "p"} {} {} [:later :steps]
-    {:plan "p"} {} {:todo [:breed] :report {:repair {:placed 3}}} [:ok :in-order]
-    {:plan "p"} {} {:todo [:breed] :report {:repair {:stopped :nothing-possible}}} [:later :steps]
-    {:plan "p"} {} {:todo [:breed] :report {:repair {:placed 3}} :call-args {:plan "p"}} [:later :steps]
-    {:roles [librarian]} {} {} [:later :steps]
-    {:roles [librarian]} {} {:looked {:x 0 :y 64 :z 0}} [:ok :in-order]
-    {:roles [librarian]} {:entities [(villager 1 {:profession "none"})]} {} [:later :steps]
-    {:roles [librarian]} {:entities [(villager 1 {:profession "librarian"})]} {} [:ok :in-order]
-    {:roles [(dissoc librarian :pos)]} {:entities [(villager 1 {:profession "none"})]} {} [:later :steps]))
 
 (deftest hostile-attack-is-done-when-no-hostile-is-in-range
   (are [world m want] (= want (tu/kind-reason (done-of 'jobs.combat.attack world {:targets :hostiles :radius 4 :ranged-radius 16} m)))

@@ -51,7 +51,7 @@
     (tu/run-async done
       (fn ^:async t []
         (await (leaves-through-the-door! {:inventory [{:name "bread" :count 5}] :entities [steve]}
-                                         '(jobs.items.give {:player "Steve" :item "bread"})))))))
+                                         '(jobs.items.give {:to "Steve" :item "bread"})))))))
 
 (deftest follow-from-inside-a-hut
   (async done

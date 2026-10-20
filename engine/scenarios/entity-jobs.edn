@@ -11,7 +11,7 @@
 ;; -- case from live-ProbeFight-cull
 ;; ;; batch-entity live case: cull cows down to 2 adults (culling is this hunt expression)
 ;; {:register []
-;;  :queue [(jobs.combat.hunt {:mob "cow" :keep 2 :count 8})
+;;  :queue [(jobs.combat.hunt {:item "beef" :keep 2 :count 8})
 ;;          (repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeFight-shear
 ;; ;; batch-entity live case: shear the sheep in radius and pick the wool up

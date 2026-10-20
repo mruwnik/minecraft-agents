@@ -1,6 +1,6 @@
-;; trade primitive live case 141: adjusted price above :max-price 20 (NBT 10 would pass, real 33 must not): expect reason price
+;; trade primitive live case 141: adjusted price above :spend {:items {"emerald" 20}} (NBT 10 would pass, real 33 must not): expect reason price
 {:register []
- :queue [(seq (jobs.movement.go-to {:pos {:x 9500 :y 100 :z 9000}}) (jobs.village.trade {:villager "00002329-0000-000e-0000-000000000001" :buy "bread" :count 1 :max-price 20}))]}
+ :queue [(seq (jobs.movement.go-to {:pos {:x 9500 :y 100 :z 9000}}) (jobs.village.trade {:villager "00002329-0000-000e-0000-000000000001" :buy "bread" :count 1 :spend {:items {"emerald" 20}}}))]}
 ;; ---- other cases of this feature: swap the commented form in for the active one above ----
 ;; -- case from live-ProbeDummy-trade-1
 ;; ;; trade primitive live case 1: buy 3 bread for 1 emerald each (pace first so entities are loaded)
@@ -19,9 +19,9 @@
 ;; {:register []
 ;;  :queue [(seq (jobs.movement.go-to {:pos {:x 9500 :y 100 :z 9000}}) (jobs.village.trade {:villager "00002329-0000-0004-0000-000000000001" :buy "bread" :count 5}))]}
 ;; -- case from live-ProbeDummy-trade-5
-;; ;; trade primitive live case 5: price over max-price: offer costs 5 emeralds, :max-price 3, expect reason price
+;; ;; trade primitive live case 5: price over max-price: offer costs 5 emeralds, :spend {:items {"emerald" 3}}, expect reason price
 ;; {:register []
-;;  :queue [(seq (jobs.movement.go-to {:pos {:x 9500 :y 100 :z 9000}}) (jobs.village.trade {:villager "00002329-0000-0005-0000-000000000001" :buy "bread" :count 1 :max-price 3}))]}
+;;  :queue [(seq (jobs.movement.go-to {:pos {:x 9500 :y 100 :z 9000}}) (jobs.village.trade {:villager "00002329-0000-0005-0000-000000000001" :buy "bread" :count 1 :spend {:items {"emerald" 3}}}))]}
 ;; -- case from live-ProbeDummy-trade-6
 ;; ;; trade primitive live case 6: inventory full: 35 junk stacks + emeralds, villager gives bread; expect reason no-room
 ;; {:register []
@@ -55,9 +55,9 @@
 ;; {:register []
 ;;  :queue [(seq (jobs.movement.go-to {:pos {:x 9500 :y 100 :z 9000}}) (jobs.village.trade {:villager "00002329-0000-0010-0000-000000000001" :buy "bread" :count 1}))]}
 ;; -- case from live-ProbeDummy-trade-55
-;; ;; trade primitive live case 55: price at the limit: offer costs 5 emeralds, :max-price 5, expect it buys
+;; ;; trade primitive live case 55: price at the limit: offer costs 5 emeralds, :spend {:items {"emerald" 5}}, expect it buys
 ;; {:register []
-;;  :queue [(seq (jobs.movement.go-to {:pos {:x 9500 :y 100 :z 9000}}) (jobs.village.trade {:villager "00002329-0000-0005-0000-000000000001" :buy "bread" :count 1 :max-price 5}))]}
+;;  :queue [(seq (jobs.movement.go-to {:pos {:x 9500 :y 100 :z 9000}}) (jobs.village.trade {:villager "00002329-0000-0005-0000-000000000001" :buy "bread" :count 1 :spend {:items {"emerald" 5}}}))]}
 ;; -- case from live-ProbeDummy-trade-91
 ;; ;; trade primitive live case 91: baby villager with a profession and offers: expect no-offers
 ;; {:register []

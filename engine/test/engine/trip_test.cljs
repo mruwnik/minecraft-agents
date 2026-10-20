@@ -15,7 +15,7 @@
   [chest args]
   (let [s (h/setup {:inventory (into h/sword junk) :containers {"10,64,0" []} :entities [(cow 1 3) (cow 2 5) (cow 3 7)]} 20)]
     (when chest (mem/write! (:store (:eng s)) :chest {:pos chest} mem/place-policy))
-    (core/submit! (:eng s) (list 'jobs.combat.hunt (merge {:count 1 :keep 0} args)) {})
+    (core/submit! (:eng s) (list 'jobs.combat.hunt (merge {:item "beef" :count 1 :keep 0} args)) {})
     (await (tu/run-ticks (:eng s) (:clock s) 40 700))
     [s (count (h/calls (:p s) "transfer")) (count (h/calls (:p s) "attack")) (set (map :kind @(:seen s)))]))
 
@@ -72,7 +72,7 @@
                           :containers {"10,64,0" []} :entities [(cow 1 3)]} 20)]
           (mem/write! (:store (:eng s)) :chest {:pos {:x 10 :y 64 :z 0}} mem/place-policy)
           (mem/write! (:store (:eng s)) :reserve {:id "kit-raw" :item "raw_iron" :count 5 :strength 0.9} {:cap 100 :ttl :forever})
-          (core/submit! (:eng s) '(jobs.combat.hunt {:count 1 :keep 0}) {})
+          (core/submit! (:eng s) '(jobs.combat.hunt {:item "beef" :count 1 :keep 0}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 40 700))
           (let [carried (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self (:p s))))]
             (is (contains? (set (map :kind @(:seen s))) :trip.deposited))

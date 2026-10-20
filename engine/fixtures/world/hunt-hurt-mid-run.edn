@@ -9,7 +9,7 @@
  :cases
  [{:name "hurt-below-the-floor-mid-walk-is-not-ended-condition-failed"
    :act [[:summon "cow" [26.5 0 16.5] "{NoAI:1b}"]
-         [:job (jobs.combat.hunt {:mob "cow" :count 1 :keep 0})]
+         [:job (jobs.combat.hunt {:item "beef" :count 1 :keep 0})]
          [:await {:source :job :kind :round_started} 20]
          [:rcon "damage $BODY 16 minecraft:generic"]]
    :expect [{:event {:source :body :kind :hurt} :within-s 10}

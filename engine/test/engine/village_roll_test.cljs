@@ -70,7 +70,7 @@
               wrap wrap)
         {:keys [p seen]} env
         _ (when-not keeps-job? (rolls-offers! p scripts))
-        result (await (child-outcome env (merge {:villager "v-1" :pos ws-pos :item "lectern" :want "enchanted_book"
+        result (await (child-outcome env (merge {:villager "v-1" :pos ws-pos :profession "librarian" :want "enchanted_book"
                                                  :spend {:wall-time 600}} args) 300))]
     [result p seen]))
 
@@ -79,16 +79,17 @@
 
 (deftest roll-bad-args-need-villager-pos-item-and-want
   (are [args ok] (= ok (= :ok (first (roll/bad-args {:args args}))))
-    {:villager "v-1" :pos [2 64 0] :item "lectern" :want "enchanted_book"} true
-    {:villager nil :pos [2 64 0] :item "lectern" :want "enchanted_book"} true
+    {:villager "v-1" :pos [2 64 0] :profession "librarian" :want "enchanted_book"} true
+    {:villager nil :pos [2 64 0] :profession "librarian" :want "enchanted_book"} true
     {:pos [2 64 0] :profession "librarian" :want "enchanted_book"} true
     {:pos [2 64 0] :profession "nitwit" :want "enchanted_book"} false
-    {:villager "v-1" :pos nil :item "lectern" :want "enchanted_book"} false
-    {:villager "v-1" :pos [2 64 0] :item nil :want "enchanted_book"} false
-    {:villager "v-1" :pos [2 64 0] :item "lectern" :want nil} false))
+    {:villager "v-1" :pos nil :profession "librarian" :want "enchanted_book"} false
+    {:villager "v-1" :pos [2 64 0] :profession nil :want "enchanted_book"} false
+    {:villager "v-1" :pos [2 64 0] :profession "librarian" :want nil} false
+    {:villager "v-1" :pos [2 64 0] :profession "librarian" :want nil :enchant "mending"} true))
 
 (deftest an-unseen-workstation-cell-asks-for-a-look-then-the-round-walks-there
-  (let [args {:villager "v-1" :pos ws-pos :item "lectern" :want "enchanted_book"}
+  (let [args {:villager "v-1" :pos ws-pos :profession "librarian" :want "enchanted_book"}
         world {:blocks {ws-key "lectern"}}
         cause (fn [p surveyed?]
                 (with-redefs [look/surveyed? (fn ([_] surveyed?) ([_ _] surveyed?))]
@@ -111,6 +112,17 @@
           (is (= "lectern" (workstation p)) "the workstation is back")
           (is (contains? (vt/kinds seen) :completed)))))))
 
+(deftest an-enchant-skips-books-of-other-enchantments
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [book (fn [enchant] (assoc-in (offer "enchanted_book") [:gives :enchants] [{:name enchant :level 1}]))
+              [result] (await (roll {:entities [(librarian [(book "sharpness")])]
+                                     :scripts [[(book "protection")] [(book "mending")]]}
+                                    {:want nil :enchant "mending"}))]
+          (is (= {:found true :rolls 2} (select-keys result [:found :rolls])))
+          (is (= [{:name "mending" :level 1}] (get-in result [:offer :gives :enchants]))))))))
+
 (deftest the-nearest-adult-is-rolled-when-no-villager-is-named
   (async done
     (tu/run-async done
@@ -118,7 +130,7 @@
         (let [baby (vt/villager [(offer "paper")] {:id 2 :uuid "v-0" :baby true :profession "unemployed" :pos {:x 1 :y 64 :z 1}})
               [result p] (await (roll {:entities [baby (librarian [(offer "paper")])]
                                        :scripts [[(offer "enchanted_book")]]}
-                                      {:villager nil :item nil :profession "librarian" :want "enchanted_book"}))]
+                                      {:villager nil :profession "librarian" :want "enchanted_book"}))]
           (is (= {:found true :rolls 1 :item "lectern"} (select-keys result [:found :rolls :item])))
           (is (= "lectern" (workstation p))))))))
 
@@ -323,7 +335,7 @@
       (fn ^:async t []
         (let [env (bd/setup {:entities [(librarian [(offer "paper")])] :blocks {ws-key "lectern" "2,63,0" "stone"}})
               _ (unemploys-after! env 8000 [(offer "enchanted_book")])
-              result (await (child-outcome env {:villager "v-1" :pos ws-pos :item "lectern" :want "enchanted_book" :spend {:wall-time 600}} 300))]
+              result (await (child-outcome env {:villager "v-1" :pos ws-pos :profession "librarian" :want "enchanted_book" :spend {:wall-time 600}} 300))]
           (is (= {:found true :rolls 1} (select-keys result [:found :rolls])))
           (is (= "lectern" (workstation (:p env)))))))))
 
@@ -333,7 +345,7 @@
       (fn ^:async t []
         (let [env (bd/setup {:entities [(librarian [(offer "paper")])] :blocks {ws-key "lectern" "2,63,0" "stone"}})
               _ (unemploys-after! env 30000 [(offer "enchanted_book")])
-              result (await (child-outcome env {:villager "v-1" :pos ws-pos :item "lectern" :want "enchanted_book" :spend {:wall-time 600}} 300))]
+              result (await (child-outcome env {:villager "v-1" :pos ws-pos :profession "librarian" :want "enchanted_book" :spend {:wall-time 600}} 300))]
           (is (= {:found true :rolls 1} (select-keys result [:found :rolls])))
           (is (= "lectern" (workstation (:p env)))))))))
 
@@ -351,7 +363,7 @@
                        (when (and (not @cut) (not= "lectern" (get-in w [:blocks ws-pos])))
                          (reset! cut true)
                          (core/cancel! eng (first (:list (core/state eng)))))))
-          (core/submit! eng (list job {:villager "v-1" :pos ws-pos :item "lectern" :want "enchanted_book" :spend {:wall-time 600}}) {})
+          (core/submit! eng (list job {:villager "v-1" :pos ws-pos :profession "librarian" :want "enchanted_book" :spend {:wall-time 600}}) {})
           (loop [i 0]
             (when (and (< i 300) (seq (:list (core/state eng))))
               (swap! clock + 700)

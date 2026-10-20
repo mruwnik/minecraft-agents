@@ -95,11 +95,11 @@
             (is (not (contains? (kinds seen) :trade.gave-up)) label)))
         cases)))
 
-(deftest trade-bad-args-need-a-villager-and-an-item
+(deftest trade-bad-args-need-an-item
   (are [args ok] (= ok (= :ok (first (trade/bad-args {:args args}))))
     {:villager "v-1" :buy "bread"} true
     {:villager "v-1" :buy nil} false
-    {:villager nil :buy "bread"} false))
+    {:villager nil :buy "bread"} true))
 
 (deftest buys-the-wanted-count
   (async done
@@ -110,6 +110,28 @@
           (is (= {:bought 3 :paid {"emerald" 3} :item "bread"} result))
           (is (= {"emerald" 7 "bread" 3} (inv p)))
           (is (contains? (kinds seen) :completed)))))))
+
+(deftest the-nearest-villager-with-a-job-is-used-when-none-is-named
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [idle (villager nil {:id 2 :uuid "v-0" :profession "unemployed" :pos {:x 0.5 :y 64 :z 0}})
+              [result p] (await (trade {:entities [idle (villager [(bread {})])] :inventory [{:name "emerald" :count 4}]}
+                                       {:villager nil}))]
+          (is (= {:bought 1 :paid {"emerald" 1} :item "bread"} result))
+          (is (= {"emerald" 3 "bread" 1} (inv p))))))))
+
+(deftest only-offers-paid-with-the-call-s-payment-items-are-taken
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [offer (bread {:cost [{:item "diamond" :count 1}]})
+              world {:entities [(villager [offer])] :inventory [{:name "emerald" :count 4} {:name "diamond" :count 2}]}
+              [refused] (await (trade world {:fetch false}))
+              [paid p] (await (trade world {:use {:payment ["diamond"]}}))]
+          (is (= :no-offer (:reason refused)))
+          (is (= {:bought 1 :paid {"diamond" 1} :item "bread"} paid))
+          (is (= {"emerald" 4 "diamond" 1 "bread" 1} (inv p))))))))
 
 (deftest an-offer-with-two-cost-stacks-pays-both
   (async done
@@ -171,12 +193,12 @@
                 [{:label "over the limit"
                   :world {:entities [(villager [(bread {:cost [{:item "emerald" :count 4}]}) (bread {:cost [{:item "emerald" :count 3}]})])]
                           :inventory [{:name "emerald" :count 10}]}
-                  :args {:max-price 2} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason :price :price 3}
+                  :args {:spend {:items {"emerald" 2}}} :want {:bought 0 :paid {} :item "bread" :status :stopped :reason :price :price 3}
                   :have {"emerald" 10} :kind :child_ended}
                  {:label "at the limit"
                   :world {:entities [(villager [(bread {:cost [{:item "emerald" :count 3}]})])]
                           :inventory [{:name "emerald" :count 10}]}
-                  :args {:max-price 3} :want {:bought 1 :paid {"emerald" 3} :item "bread"}
+                  :args {:spend {:items {"emerald" 3}}} :want {:bought 1 :paid {"emerald" 3} :item "bread"}
                   :have {"emerald" 7 "bread" 1} :kind :completed}]))))))
 
 (deftest gives-up-when-the-villager-offers-nothing-to-buy
