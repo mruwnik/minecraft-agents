@@ -89,7 +89,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [p (await (round (pocket-world "air") {:settings {:jobs.survival.retreat-cornered/fist-sweeps 0}}))]
-          (is (= [[-1 64 0] [-1 65 0] [-2 64 0]] (calls p "dig")) "dug until the cave behind showed")
+          (is (= [[-1 64 0] [-1 65 0]] (calls p "dig")) "the near pair dug, the cave behind it showed, the far pair never dug")
           (is (not-any? #{[-1 64 0] [-1 65 0]} (calls p "place")) "never sealed in"))))))
 
 (deftest a-pocket-that-lays-open-lava-seals-it-with-a-dug-block-by-default

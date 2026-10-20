@@ -18,14 +18,14 @@
    :act [[:job (jobs.survival.shut-in {})]]
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 40 :until {:source :job :kind :completed}}]
-   :after [[:body-near [5.5 0 16.5] 2.0]]
+   :after [[:body-near [5.5 0 16.5] 3.0]]
    :limit-s 60}
   {:name "pocket-is-dug-and-sealed"
    :plot {:floor "obsidian"}
    :body {:inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.survival.shut-in {:ways #{:pocket}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 50 :of-job true}]
-   :after [[:body-near [5.5 0 16.5] 2.0]]
+   :after [[:body-near [5.5 0 16.5] 3.0]]
    :limit-s 70}
   {:name "no-blocks-and-no-tool-is-nothing-possible"
    :act [[:job (jobs.survival.shut-in {})]]

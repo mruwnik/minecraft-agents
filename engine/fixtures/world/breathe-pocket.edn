@@ -15,4 +15,4 @@
    :body {:at [14.5 0 15.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 8]]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 50}]
-   :after [[:block [14 0 15] "cobblestone"] [:block [14 1 15] "cobblestone"] [:block [13 0 15] "air"] [:body-near [13.5 0 15.5] 1.5]]}]}
+   :after [[:block [13 0 15] "cobblestone"] [:block [13 1 15] "cobblestone"] [:block [12 0 15] "air"] [:body-near [12.5 0 15.5] 1.5]]}]}

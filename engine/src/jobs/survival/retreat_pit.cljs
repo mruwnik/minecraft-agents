@@ -218,7 +218,8 @@
         dug-name #(dig-cells/rock-name p % entry)
         ;; a far cell never sensed reads stone: the dig looks at it and stops if it lays open a gap
         wall-name #(or (dig-cells/rock-name p %) (when (unknown? %) "stone"))
-        names (map dug-name dug)]
+        ;; the far pair lies behind cells the body has not dug yet: unsensed, it reads stone like the walls, the dig looks and stops on a gap
+        names (map-indexed (fn [i cell] (if (< i 2) (dug-name cell) (or (dug-name cell) (when (unknown? cell) "stone")))) dug)]
     (when (and (every? #(solid/solid? %) names)
                (every? #(solid/solid? (wall-name %)) walls)
                (not-any? dig-cells/hazards names)
@@ -304,7 +305,7 @@
                       (when d (await (look/see-round! c [(:x d) (:y d) (:z d)])) (recur ds)))
                     (await (look/wait-settled! c [[(:x cell) (:y cell) (:z cell)]]))
                     (await (dig-cells/collect-drops! c (flight/blocks c) (.-drops r)))
-                    (if-let [why (await (lays-open? c dug (into (set cells) [feet (update feet :y inc)])))]
+                    (if-let [why (await (lays-open? c dug (into (set dug) [feet (update feet :y inc)])))]
                       (stop! why (str "the pocket lays open " (if (= :fluid-adjacent why) "fluid" "a gap")))
                       (do ;; the far pair is dug from inside: the drops lie there and the reach is short
                         (when (= 2 (count dug)) (await (ctx/act c :moveTo (clj->js {:pos (first cells) :range 0.5}))))
