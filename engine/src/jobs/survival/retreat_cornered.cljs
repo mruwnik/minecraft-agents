@@ -127,11 +127,16 @@
 
 (defn angry-enderman?
   "Whether one of hostiles is an enderman that is angry (the client's flag), hurt the body this flight (its health is under the flight's start) or
-  stands within enderman-close: a calm one is walked away from like any mob, never sealed against."
+  stands within enderman-close: a calm one is walked away from like any mob, never sealed against. Once found angry it stays so for the flight
+  (the client's flag does not hold: the body must not leave the water it stepped into)."
   [c hostiles]
   (let [p (:primitives c)
-        hurt? (< (.-health (.self p)) (:flight-health (ctx/mem c) 0))]
-    (boolean (some #(and (combat/enderman? %) (or hurt? (true? (.-angry %)) (<= (danger-q/mob-distance p %) (enderman-close)))) hostiles))))
+        hurt? (< (.-health (.self p)) (:flight-health (ctx/mem c) 0))
+        ender? (some combat/enderman? hostiles)
+        angry? (boolean (or (and ender? (:angry-enderman (ctx/mem c)))
+                            (some #(and (combat/enderman? %) (or hurt? (true? (.-angry %)) (<= (danger-q/mob-distance p %) (enderman-close)))) hostiles)))]
+    (when angry? (ctx/update-mem! c assoc :angry-enderman true))
+    angry?))
 
 (defn hitters
   "Of hostiles, the melee ones (not a creeper or an enderman) within hit-reach."

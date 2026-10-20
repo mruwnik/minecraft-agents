@@ -1055,6 +1055,20 @@
           (is (= {:x 3 :y 64 :z 1} (first (tu/walked-to eng))) "walks to the water, not away")
           (is (zero? (count (calls p "place")))))))))
 
+(deftest a-body-in-water-stays-there-when-the-enderman-stops-showing-anger
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}] :blocks {(key-of 3 64 1) "water"}
+                                      :entities [(assoc (enderman -2.5 64 0.5) :angry true)]})]
+          (.override (.-world p) "steer"
+                     (fn [token a impl] (-> (impl token a) (.then (fn [r] (fake/swap-self! p assoc :pos [3.5 64 1.5])
+                                                                        (swap! (fake/state p) assoc :entities [(enderman -2.5 64 0.5)]) r)))))
+          (core/submit! eng retreat {})
+          (await (core/tick! eng))
+          (is (= 1 (count (calls p "steer"))) "the one step into the water, no flee step out of it once the enderman looks calm")
+          (is (zero? (count (calls p "place")))))))))
+
 (deftest an-enderman-that-stays-ends-the-hold-in-water-and-the-next-option-comes
   (async done
     (tu/run-async done
