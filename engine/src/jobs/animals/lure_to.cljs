@@ -49,7 +49,7 @@
   - :no-animal (no animal to lure within :radius), :no-food, :no-hold (the food would not stay in hand), :lost, :animal-stalled (result :stalled {:animal :body :distance}),
     :unreachable (a walk gave up).
   Endings: :arrived is done; :no-food is condition-failed; the engine's limit (the call's :spend :job-time, default
-  ::timeout-s) is limit-reached; the rest are nothing-possible with the reason as the cause. Every reason but :arrived carries a :text.
+  ::job-time-s) is limit-reached; the rest are nothing-possible with the reason as the cause. Every reason but :arrived carries a :text.
   However it ends, its cleanup puts the food away and shuts the gates the legs left open.
 
   Zones: an animal standing in another owner's zone or claim is not lured (:ignore-zones? true skips the check).")
@@ -64,7 +64,7 @@
    :ignore-zones? :shared})
 
 (a/defargs settings
-  {::timeout-s {:default 180 :doc "The call's :spend :job-time when it gives none: seconds before the lure gives up." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 180 :doc "The call's :spend :job-time when it gives none: seconds of the job's own working time before the lure gives up." :spec (a/num-in 0 nil)}
    ::sighting-age-s {:default 30 :doc "Seconds a chosen animal's last sighting stays worth walking back to while the animal is out of sight." :spec (a/num-in 0 nil)}
    ::arrive-range {:default 2 :doc "How close to :pos counts as there." :spec (a/num-in 0 nil)}
    ::near-spot {:default 6 :doc "An animal this close (flat) to :pos counts as :near." :spec (a/num-in 0 nil)}
@@ -84,7 +84,7 @@
 (def fit? ready/fit?)
 
 
-(def defaults {:spend {:job-time ::timeout-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn can-start?
   "Never without :mob or a destination, or with an empty :uuid start (it would match every animal)."

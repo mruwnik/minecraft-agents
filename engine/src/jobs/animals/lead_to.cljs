@@ -31,7 +31,7 @@
     sight or catch up; unseen past the escort unseen-lost time (a ledge or tree can hide it) the body walks back toward where it was last seen, then :lost;
     still beyond the gap and not closing in for the escort stall time, :animal-stalled.
   - :gather (no :fence only): see below.
-  - :arrive: with :fence, walk within 2 of the post and click it with an empty hand (useOn), tried twice.
+  - :arrive: with :fence, walk within 2 of the post and click it with an empty hand (a jobs.blocks.use-on child), tried twice.
     Without :fence, jobs.animals.unleash lets the animal go and picks the lead up.
 
   With :fence the block there must be a fence (name ends _fence), else :no-fence before anything is leashed; a post not yet seen (far off) is checked again on arrival.
@@ -71,7 +71,7 @@
   - The reason of jobs.animals.leash (:no-lead, :none, :unreachable, :failed, :all-leashed) when no animal got on the lead, or
     of jobs.animals.unleash (:unreachable, :failed, :none) when the lead would not come off; :refused and :no-zones are
     condition-failed.
-  - the engine's limit (default :spend :job-time ::timeout-s): :limit-reached with {:animal :still-led} (done?'s :data).
+  - the engine's limit (default :spend :job-time ::job-time-s): :limit-reached with {:animal :still-led} (done?'s :data).
   All but done and condition-failed end nothing-possible with the reason as the cause.
 
   Zones: the leash child refuses an animal standing in another owner's zone or claim (see jobs.animals.leash);
@@ -89,11 +89,11 @@
 
 (a/defargs settings
   {::gather-tries {:default 3 :doc "Without :fence how many times the body walks on to pull a trailing animal nearer." :spec (a/int-in 0 nil)}
-   ::timeout-s {:default 180 :doc "Seconds from the first round before the leading gives up." :spec (a/num-in 0 nil)}
+   ::job-time-s {:default 180 :doc "Seconds of the job's own working time before the leading gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::max-ties {:default 2 :doc "Ties tried before the job gives up." :spec (a/int-in 0 nil)}
    ::moved-eps {:default 0.25 :doc "An animal that moved less than this many blocks between two looks has settled." :spec (a/num-in 0 nil)}
    ::max-settles {:default 20 :doc "Looks spent waiting for the animal to settle before a pull." :spec (a/int-in 0 nil)}
-   ::max-reach {:default 10 :doc "The farthest a pull's target lies from the animal. The lead breaks past 12 blocks, so 10 leaves a block to spare." :spec (a/num-in 0 nil)}
+   ::max-reach {:default 10 :doc "The farthest a pull's target lies from the animal. The lead breaks past animals/leash-break blocks, so 10 leaves a margin." :spec (a/num-in 0 nil)}
    ::path-reach {:default 11 :doc "How far from the animal any point of a pull's walk may lie; a path that strays farther (a detour round a wall) would break the lead." :spec (a/num-in 0 nil)}
    ::pull-range {:default 1 :doc "How close to the pull target the walk must get." :spec (a/num-in 0 nil)}
    ::pull-slack {:default 1 :doc "Blocks a pull aims farther than the lead's length strictly needs: the animal comes to a little over it." :spec (a/num-in 0 nil)}
@@ -185,7 +185,7 @@
 (def fit? ready/fit?)
 
 
-(def defaults {:spend {:job-time ::timeout-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (defn can-start?
   "Never without :mob or a destination; later :no-fence while the :fence cell is seen and no fence, :no-lead with
@@ -257,10 +257,6 @@
       :else (do (ctx/update-mem! c assoc :animal (get-in e [:data :animal]) :still-led true :phase :walk)
                 :again))))
 
-(def lead-length
-  "How far behind a walking body a led animal trails."
-  6)
-
 (defn pull-point
   "Where the body walks to pull the animal to within radius of pos: past pos, on the line from the
   animal through pos, by the lead length less radius plus the walk's range and a block of slack (flat, pos's y: a body that
@@ -268,7 +264,7 @@
   than max-reach from the animal, or nil when the animal is at pos or too far out for any pull."
   [animal-pos pos radius]
   (let [d (u/flat-dist animal-pos pos)
-        extra (min (+ (- lead-length radius) (pull-range) (pull-slack)) (- (max-reach) d))
+        extra (min (+ (- animals/lead-trail radius) (pull-range) (pull-slack)) (- (max-reach) d))
         k (/ extra d)]
     (when (and (pos? d) (pos? extra))
       (assoc pos
@@ -374,16 +370,18 @@
         near (await (near/go-near! c fence 2 {:doors :never :ways #{:walk :clear-seal}}))]
     (if-not (= :there near)
       (if (= :partial near) :again (finish! c :unreachable))
-      (let [r (await (ctx/act c :useOn (clj->js {:pos fence})))
-            tries (inc (:ties (ctx/mem c) 0))]
-        (ctx/update-mem! c assoc :ties tries)
-        (let [tied (await (await-tied! c (tie-settle-tries)))]
-          (cond
-            (= :continue tied) :continue
-            tied (do (ctx/update-mem! c assoc :still-led false :gathered true) (finish! c :tied))
-            (>= tries (max-ties)) (finish! c :tie-failed)
-            :else (do (ctx/emit! c :lead-to.tie-retry :info {:status (.-status r) :text "the post did not take the animal, trying once more"})
-                      :again)))))))
+      (let [r (await (child/use-on! c fence "none" "up"))]
+        (if (= :continue r)
+          :continue
+          (let [tries (inc (:ties (ctx/mem c) 0))]
+            (ctx/update-mem! c assoc :ties tries)
+            (let [tied (await (await-tied! c (tie-settle-tries)))]
+              (cond
+                (= :continue tied) :continue
+                tied (do (ctx/update-mem! c assoc :still-led false :gathered true) (finish! c :tied))
+                (>= tries (max-ties)) (finish! c :tie-failed)
+                :else (do (ctx/emit! c :lead-to.tie-retry :info {:status (:status r) :text "the post did not take the animal, trying once more"})
+                          :again)))))))))
 
 (defn ^:async arrive! [c]
   (let [{:keys [gathered gather-dist]} (ctx/mem c)
