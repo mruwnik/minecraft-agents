@@ -79,7 +79,7 @@
          [:rcon "give $BODY iron_pickaxe 1"]]
    :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}
             {:event {:source :reflex :kind :fired :context {:reflex-id :scaffold-left}} :within-s 150}
-            {:event {:source :reflex :kind :ended :data {:removed [[:any] [:any]]}} :within-s 150}]
+            {:event {:source :reflex :kind :ended :data {:removed [:has [:any]]}} :within-s 150}]
    :after [[:not-block [6 0 16] "cobblestone"] [:not-block [6 1 16] "cobblestone"]]
    :limit-s 170}
   {:name "zombie-diagonal-to-a-stair-hole-body-survives"

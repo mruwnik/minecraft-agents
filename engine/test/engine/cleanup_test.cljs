@@ -226,6 +226,13 @@
         (is (true? (fires? (night) dirt [])))
         (is (true? (fires? (hostile) dirt [])))))))
 
+(deftest a-plug-sealing-the-body-into-a-dark-pocket-does-not-count-the-pocket-as-what-it-opens-onto
+  (let [rock {"1,64,0" "dirt" "2,64,0" "stone" "1,63,0" "stone" "1,65,0" "stone" "1,64,1" "stone" "1,64,-1" "stone"}
+        plug (trigger-store [(entry [1 64 0] :purpose :retreat-plug)] [])
+        night #(tu/with-light-data (tu/fake {:blocks (merge rock %) :time 14000}))]
+    (is (true? (fires? (night {}) plug [])) "the plug opens onto the body's own dark cells and solid rock: taken back")
+    (is (false? (fires? (night {"2,64,0" "air"}) plug [])) "a dark open cell beyond the plug keeps it")))
+
 (deftest the-trigger-waits-out-the-first-light
   (let [dirt (trigger-store [(entry [0 64 0])] [])
         at (fn [t] (tu/fake {:blocks {"0,64,0" "dirt"} :time t}))]
