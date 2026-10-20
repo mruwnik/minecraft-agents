@@ -26,6 +26,10 @@
    ::hide-max-s {:default 300 :doc "Seconds after which a hidden body hands back though a melee hostile still waits at its foot." :spec (a/num-in 0 nil)}
    ::breaker-reach {:default 6 :doc "Blocks within which a creeper or a climber counts as breaching a hidden body's refuge." :spec (a/num-in 0 nil)}
    ::reach-radius {:default 3 :doc "Blocks within which a hostile counts as the one that hurt a hidden body." :spec (a/num-in 0 nil)}})
+(defn held?
+  "Whether a retreat child (its memory, as the parent sees it) holds a refuge: sealed in, on a pillar or in a pit."
+  [child-mem]
+  (some? (:refuge child-mem)))
 (defn reach-radius [] (settings/get settings ::reach-radius))
 (defn leave-for-breakers? [] (settings/get settings ::leave-for-breakers))
 (defn breaker-reach [] (settings/get settings ::breaker-reach))

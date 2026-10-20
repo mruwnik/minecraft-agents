@@ -1,6 +1,7 @@
 (ns jobs.survival.respond-to-hostile
   (:require [jobs.lib.ready :as ready]
             [jobs.survival.block-arrow-gap :as gap]
+            [jobs.survival.retreat-refuge :as refuge]
             [engine.args :as a]
             [jobs.lib.checks :as checks]
             [jobs.lib.body :as body]
@@ -303,7 +304,7 @@
   "Whether the retreat child holds a refuge (sealed in, a pillar or a pit): a hostile it hides from is out of sight
   and has no way to the body, yet is still there."
   [c]
-  (some? (get-in (ctx/mem c) [:children :flee :refuge])))
+  (refuge/held? (get-in (ctx/mem c) [:children :flee])))
 
 
 (defn done?

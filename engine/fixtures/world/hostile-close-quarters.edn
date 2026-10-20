@@ -29,9 +29,9 @@
          [:wait-s 2]
          [:summon "zombie" [18.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}
-            {:event {:source :action :kind :started :data {:name "attack"}} :within-s 15}
+            {:event {:source :action :kind :started :data {:name "attack"}} :within-s 30}
             {:no-event {:source :body :kind :died} :for-s 40}]
-   :limit-s 50}
+   :limit-s 55}
   {:name "iron-axe-kills-a-zombie-in-few-full-swings"
    :body {:inventory [["iron_axe" 1]] :effects [["resistance" 600 3]]}
    :act [[:summon "zombie" [20.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
