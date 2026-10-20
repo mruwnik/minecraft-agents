@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.checks :as checks]
+            [jobs.lib.pen-read :as pen-read]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.standing :as standing]
@@ -80,7 +81,7 @@
   list has been read; impossible when it has no crop cells, also in a started run if the plan stops being workable.")
 
 (a/defargs args
-  {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; y min is the farmland layer, max y at least min y + 1; at most 2048 cells; required unless :plan is given (without either the check declines)" :spec a/box? :default nil}
+  {:box {:doc "the field: {:min :max}, corners {:x :y :z} or [x y z], inclusive; y min is the farmland layer, max y at least min y + 1; at most 2048 cells; required unless :plan is given (without either the check declines)" :spec pen-read/box-arg :default nil}
    :plan {:doc "id of a plan of the body's world whose crop cells are the field, each cell worked with the crop the plan wants there (then :box is not used)" :spec a/name? :default nil}
    :part {:doc "with :plan, only the cells of this part; omit :part (and :parts) to work every crop part of the plan" :spec a/name? :default nil}
    :parts {:doc "with :plan, the parts worked in one job, one pass each in this order (instead of :part)" :spec (a/coll-of a/name?) :default nil}
@@ -124,7 +125,7 @@
   [c]
   (if (:plan (:args c))
     (mapcat (fn [pos] [pos (update pos :y dec)]) (keys (:crops (tend-plan/planned c))))
-    (let [{lo :min hi :max} (:box (:args c))]
+    (let [{lo :min hi :max} (pen-read/arg-box c)]
       (for [x (range (:x lo) (inc (:x hi))) z (range (:z lo) (inc (:z hi))) y [(:y lo) (inc (:y lo))]]
         {:x x :y y :z z}))))
 
@@ -133,7 +134,7 @@
   [c]
   (if (:plan (:args c))
     (map #(update % :y dec) (keys (:crops (tend-plan/planned c))))
-    (let [{lo :min hi :max} (:box (:args c))]
+    (let [{lo :min hi :max} (pen-read/arg-box c)]
       (for [x (range (:x lo) (inc (:x hi))) z (range (:z lo) (inc (:z hi)))] {:x x :y (:y lo) :z z}))))
 
 (defn water-reach-cells
@@ -194,14 +195,15 @@
 (defn site
   "A position of the field: the box's centre, else the plan's first crop cell; nil when there is neither."
   [c]
-  (if-let [{lo :min hi :max} (:box (:args c))]
+  (if-let [{lo :min hi :max} (pen-read/arg-box c)]
     (when lo {:x (/ (+ (:x lo) (:x hi)) 2) :y (:y lo) :z (/ (+ (:z lo) (:z hi)) 2)})
     (when (:plan (:args c)) (first (keys (:crops (tend-plan/planned c)))))))
 
 (defn usable-args
   "Never :no-box without a usable box (or plan)."
   [c]
-  (let [{:keys [plan box]} (:args c)]
+  (let [{:keys [plan]} (:args c)
+        box (pen-read/arg-box c)]
     (if (or plan (usable-box? box))
       (contract/ok :args "a box or plan given")
       (contract/never :no-box "no usable box or plan"))))

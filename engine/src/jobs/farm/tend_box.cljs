@@ -2,6 +2,7 @@
   "Box mode of jobs.farm.tend: the box's geometry, the sowing reserve, and the facts and census read from the box."
   (:require [jobs.lib.access :as access]
             [jobs.lib.gate :as gate]
+            [jobs.lib.pen-read :as pen-read]
             [jobs.lib.util :as u]
             [jobs.lib.storage :as storage]
             [jobs.lib.crops :as crops]
@@ -98,7 +99,8 @@
   "What the decisions are made from for a box, read live."
   [c]
   (let [p (:primitives c)
-        {:keys [box fertilize keep]} (:args c)
+        {:keys [fertilize keep]} (:args c)
+        box (pen-read/arg-box c)
         mid (centre box)
         R (radius box mid)
         inventory (u/inventory p)
@@ -138,7 +140,7 @@
   "The live {:crops :bare :untilled} of the box."
   [c]
   (let [p (:primitives c)
-        {lo :min hi :max :as box} (:box (:args c))
+        {lo :min hi :max :as box} (pen-read/arg-box c)
         above (inc (:y lo))]
     {:crops (count (for [x (range (:x lo) (inc (:x hi))) z (range (:z lo) (inc (:z hi)))
                          :when (crop-names (u/seen-name p {:x x :y above :z z}))]

@@ -105,6 +105,14 @@
           (is (= {:skipped :no-hoe} (step s :till)))
           (is (true? (finished? s))))))))
 
+(deftest a-box-with-vector-corners-works-the-same-field
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:box {:min [2 63 2] :max [4 64 4]}} (world (farm "wheat" 7 all-cells [[2 2] [3 2]]) (crops "wheat" 3 [[4 2]]) wheat-drops) 80))]
+          (is (= #{[2 2] [3 2]} (dug s)))
+          (is (true? (finished? s))))))))
+
 (def under {:blocks (into {} (map (fn [[x z]] [(k x 62 z) "dirt"])) all-cells)})
 
 (deftest the-irrigate-call-covers-the-ground-layer-of-the-box

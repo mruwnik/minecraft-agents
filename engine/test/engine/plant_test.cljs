@@ -158,6 +158,15 @@
           (is (sown p (range 2 5) (range 2 5) "wheat"))
           (is (= {} (inv-of p))))))))
 
+(deftest a-box-with-vector-corners-is-sown-like-a-map-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start (field-world (inv "wheat_seeds" 9)))
+              result (await (child-outcome eng job {:box {:min [2 63 2] :max [4 63 4]}} 100))]
+          (is (= {:planted 9 :skipped []} (dissoc result :text)))
+          (is (sown p (range 2 5) (range 2 5) "wheat")))))))
+
 (deftest fewer-seeds-than-cells-plant-what-there-is
   (async done
     (tu/run-async done

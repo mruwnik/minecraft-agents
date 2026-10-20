@@ -7,6 +7,7 @@
             [jobs.farm.permit :as permit]
             [engine.ctx :as ctx]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.pen-read :as pen-read]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.cost :as cost]
@@ -47,7 +48,7 @@
   nothing-possible :gave-up for skipped cells; none planted and nothing left, :nothing-to-do. done? counts the cells sown and the bare cells left.")
 
 (a/defargs args
-  {:box {:doc "the field: {:min {:x :y :z} :max {:x :y :z}}, inclusive; the ground layer is y = (:y :min); required without :plan" :spec a/box? :default nil}
+  {:box {:doc "the field: {:min :max}, corners {:x :y :z} or [x y z], inclusive; the ground layer is y = (:y :min); required without :plan" :spec pen-read/box-arg :default nil}
    :seed {:doc "item name to plant; the carried seed with the largest count when nil" :spec a/item? :default nil}
    :plan {:doc "id of a plan of the body's world whose crop cells are the field (then :box and :seed are not used)" :spec a/name? :default nil}
    :part {:doc "with :plan, only the cells of this part" :spec a/name? :default nil}
@@ -121,7 +122,8 @@
 (defn unsown
   "The bare cells of the field now (a box's, or the plan's planned ones), skipped cells included."
   [c]
-  (let [{:keys [box plan]} (:args c)
+  (let [{:keys [plan]} (:args c)
+        box (pen-read/arg-box c)
         p (:primitives c)]
     (cond
       plan (when-let [cells (:cells (planned c))] (vec (fld/planned-bare p cells)))
@@ -134,7 +136,8 @@
   (when-not (:started (ctx/mem c))
     (let [p (:primitives c)
           inventory (u/inventory p)
-          {:keys [seed plan box]} (:args c)]
+          {:keys [seed plan]} (:args c)
+          box (pen-read/arg-box c)]
       (if plan
         (when-let [cells (:cells (planned c))]
           (let [{:keys [ready short]} (sowing c cells)]
@@ -162,7 +165,8 @@
           :else {:reason :nothing-to-do})))))
 
 (defn box-problem [c]
-  (let [{:keys [box seed]} (:args c)
+  (let [{:keys [seed]} (:args c)
+        box (pen-read/arg-box c)
         p (:primitives c)
         inventory (u/inventory p)
         bare (bare-cells p box [])
@@ -178,7 +182,8 @@
   a plan that cannot be worked, and a field with no cell to sow or no seed to sow it with. Nil without :box and :plan
   (bad-args says so)."
   [c]
-  (let [{:keys [box plan]} (:args c)]
+  (let [{:keys [plan]} (:args c)
+        box (pen-read/arg-box c)]
     (when (and (or box plan) (not (:started (ctx/mem c))))
       (or (common/no-zones c)
           (if plan (plan-problem c) (box-problem c))))))
@@ -204,7 +209,8 @@
   "Ok once no cell of the field is bare (skipped and refused ones included), no cell needs tilling, a look round has
   been made and the cells sown meet :least; else later with the cells sown and the bare cells left."
   [c]
-  (let [{:keys [box plan]} (:args c)
+  (let [{:keys [plan]} (:args c)
+        box (pen-read/arg-box c)
         m (ctx/mem c)
         field (when plan (planned c))
         bare (count (unsown c))
@@ -275,7 +281,7 @@
   box mode the dirt cells that need tilling."
   [c extra]
   (let [m (ctx/mem c)
-        untilled (when (:box (:args c)) (untilled-cells (:primitives c) (:box (:args c))))]
+        untilled (when (pen-read/arg-box c) (untilled-cells (:primitives c) (pen-read/arg-box c)))]
     (cond-> (merge {:planted (:planted m 0) :skipped (vec (:skipped m))} extra)
       (seq untilled) (assoc :untilled untilled))))
 
@@ -342,8 +348,8 @@
     (ctx/update-mem! c assoc :started true))
   (let [p (:primitives c)
         m (ctx/mem c)
-        bare (bare-cells p (:box (:args c)) [])
-        cells (sowable-cells c (bare-cells p (:box (:args c)) (:skipped m)))
+        bare (bare-cells p (pen-read/arg-box c) [])
+        cells (sowable-cells c (bare-cells p (pen-read/arg-box c) (:skipped m)))
         inventory (u/inventory p)
         kept (:sowing m)                ; the seed picked first is kept while carried: one run, one crop
         seed (if (and (nil? (:seed (:args c))) kept (pick-seed kept c))
