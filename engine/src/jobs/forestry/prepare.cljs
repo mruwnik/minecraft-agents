@@ -8,6 +8,7 @@
             [jobs.lib.trees :as forestry]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.check-cache :as check-cache]
+            [jobs.lib.child :as child]
             [jobs.lib.checks :as checks]
             [jobs.lib.look :as look]
             [jobs.lib.sense :as sense]
@@ -20,65 +21,43 @@
             [jobs.forestry.prepare-rule :as rule]))
 
 (def doc
-  "Get the planting spots of a forest plan ready. A spot is a planned tree cell (want {:tree species}); the cell
-  is where the sapling goes. The goal per cell: a sapling of the planned species can be planted and can grow there.
-  One call takes steps on the nearest cell that can still be improved, until none is left:
-  1. Dig the stray in the cell (grass, flowers, snow, leaves, stone: anything but air, the species' own sapling or
-     log, or a thing never dug).
-  2. Replace natural ground under the cell (stone, sand, gravel, cobblestone, deepslate ...) with carried dirt. It
-     digs, then places. A hole this job dug is filled first, also after a restart.
-  3. Plant the sapling when it is carried (jobs.forestry.plant-sapling as a child).
-  Drops are collected (jobs.items.collect-drops) when the next step is on another cell or none is left.
-  Bringing saplings and dirt is another job, e.g. (seq (jobs.storage.withdraw ...) (jobs.forestry.prepare ...)).
-  Water in the cell is repaired. A source in the cell is filled with carried dirt (the dirt is then dug as a
-  stray). A source beside it on its level is dammed first, since it would flood the dug cell back. A flow is
-  traced upstream (at most 16 cells) and its source filled. The cell then waits while its water is traced to nothing (the call yields
-  :continue, then the check waits :receding). Water that cannot be traced, no dirt carried, or a refused source leaves the
-  cell as :wet {:pos :why :source} (warn prepare.wet).
-  Never dug, only reported:
-  - a stray or natural ground that no carried tool harvests (stone with no pickaxe: slow, nothing drops): result
-    :no-tool {:pos :block}, warn prepare.no-tool. The cell is taken up when a tool is carried.
-  - in the cell: another species' sapling, any log but the species' own, lava, a container, bed, sign or
-    light (result :wrong).
-  - under the cell: anything but natural ground (planks, logs, wool, a chest, air, fluid, a cell the plan names)
-    gives :no-soil with :why :other-block, :kept, :hollow, :fluid or :planned. Natural ground with no dirt
-    carried gives :no-soil :no-dirt.
-  - above the cell: nothing is dug. A block in the growth space that a tree cannot grow through (anything but
-    air, leaves, saplings, plants, snow, vines, light blocks) leaves the cell untouched and reported as :cramped
-    {:pos :at :block}.
-  The growth space is HEADROOM cells from the planned cell up, the cell included: oak 7, birch 8, spruce 9,
-  jungle 13, acacia 10, dark_oak 10, pale_oak 10, cherry 9. These are approximate (about 70% sure of each).
-  Light level and the neighbours of a 2x2 tree are not checked. :headroom {species n} overrides. A species not in
-  the table is refused as :unsupported-species. The species' own sapling is left growing, its own log is
-  maintain's business.
-  Every dig and place is checked against zones and the footprints of all other active plans, when the cell is
-  chosen and again before the act. A refusal, a dig hazard not in :accept, or three failed tries (walk, dig,
-  place, plant) skips the cell for the rest of the call. It is reported as :refused
-  {:pos :reason} (warn prepare.refused).
-  Condition-failed (it does not start) unless a step can be taken. A field where every cell is done, wrong, cramped, without soil or
-  short of saplings is left alone, with one note per cell (prepare.wrong, prepare.no-soil, prepare.cramped,
-  prepare.wet) and one per species short (prepare.short {:species :missing}). The job wakes when what it lacked
-  is carried. A started job runs on to finish.
-  {:reason :plan-trouble :why text} (one prepare.declined warn): a wait while the plan is missing or unreadable or no zone
-  list is loaded; impossible when it has no tree cells (in :part), also later in the call. A cell held back by cells never seen
-  (the cell, the ground under it, its growth space) starts the job: it looks around once, then at each unseen cell.
-  Ends :done with data {:cleared :soiled :planted :dammed :short {species missing} :wrong :no-soil :no-tool :cramped
-  :wet :refused :text} when it cleared, soiled, planted or dammed a cell and no cell is left, or (done?) when every cell
-  is ready, none refused, the drops collected and no child under way. Else it ends condition-failed (same data) :refused
-  when cells were skipped, else with the worst blocked state, also after part of the work.
+  "Get the planting spots of a forest plan ready. A spot is a planned tree cell (want {:tree species}). One call works
+  the nearest cell with a step left until none is, each cell by the first rule that fits:
+  1. Water in the cell: a source in it is filled with carried dirt (dug as a stray after); a source beside it on its
+     level is dammed first, a flow is traced upstream (jobs.forestry.prepare-rule/max-upstream) and its source filled.
+     While the traced water recedes the body pauses (jobs.time.noop) and looks again. Untraceable water, no dirt or a
+     refused source: :wet.
+  2. A stray in the cell (anything but air, the species' own sapling or log) is dug. Not dug, only reported: another
+     species' sapling, any other log, lava, a container, bed, sign or light (:wrong); a stray or ground no carried tool
+     harvests (:no-tool).
+  3. A block in the growth space (the species' headroom setting, cells above the planted cell) that a tree cannot grow
+     through leaves the cell untouched (:cramped). A species not in the setting is :unsupported-species.
+  4. Natural ground under the cell is replaced with carried dirt (a hole this job dug is filled first); other ground
+     is :no-soil with :why (:other-block :kept :hollow :fluid :planned :no-dirt).
+  5. The sapling is planted (jobs.forestry.plant-sapling child); none carried: :short.
+  Drops are collected (jobs.items.collect-drops) when the next step is on another cell or none is left. Saplings
+  and dirt are brought by another job. Every dig and place is checked against zones and the other active plans'
+  footprints, when the cell is chosen and before the act. A refusal or a dig hazard not in :accept skips the cell
+  for the call (:refused); the third failed try (walk, dig, place, plant) gives it up (:gave-up).
+  Does not start while the plan is missing or unreadable or no zone list is loaded (a wait), or has no tree cells
+  (impossible), unless a step can be taken; cells never seen are looked at first. One note per cell left (warns
+  prepare.wrong ...) and per species short.
+  Ends :done with {:cleared :soiled :planted :dammed :short {species n} :wrong :no-soil :no-tool :cramped :wet
+  :refused :gave-up :text} when it worked and no cell is left, or (done?) when every cell is ready, none refused or
+  given up, the drops collected and no child under way. Cells left after part of the work: condition-failed :refused,
+  nothing-possible :gave-up, else condition-failed with the worst blocked state (:cells-wrong ...).
   Quote: time only.")
 
 (a/defargs settings
   {::collect-radius {:default 8 :doc "How far from where the body stands the drops are collected, in blocks." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 1200 :doc "Seconds a prepare run may take: the digs, soil, plants and walks." :spec (a/num-in 0 nil)}
-   ::max-steps {:default 400 :doc "Steps of one round before it gives the body back with :continue." :spec (a/int-in 1 nil)}})
+   ::recede-wait-s {:default 2 :doc "Seconds the body pauses while a dammed flow recedes, before it looks again." :spec (a/num-in 0 nil)}})
 
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world; its tree cells are the planting spots" :spec a/name? :default nil}
    :part {:doc "only the cells of this part" :spec a/name? :default nil}
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :falling-block; lava beside is :lava-adjacent and never taken by default"
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent}}
-   :headroom {:doc "{species cells} overriding the table of growth space above a planted cell (the cell included)" :spec (a/map-of a/name? (a/int-in 1 nil)) :default {}}
    :ignore-zones? :shared})
 
 ;; ------------------------------------------------------------------ notes
@@ -133,13 +112,12 @@
   "The cells of the :unloaded cells' ground and growth space that the body never saw (a look shows them; an unloaded
   chunk's stay unseen), as maps for the :look-at of a :look status."
   [c states]
-  (let [p (:primitives c)
-        over (:headroom (:args c))]
+  (let [p (:primitives c)]
     (vec (distinct
           (for [{:keys [state pos species]} (vals states)
                 :when (= :unloaded state)
                 cell (cons (lib/down pos)
-                           (map #(update pos :y + %) (range (or (rule/headroom-of species over) 1))))
+                           (map #(update pos :y + %) (range (or (rule/headroom-of species) 1))))
                 :when (look/unseen? p [cell])]
             ((juxt :x :y :z) cell))))))
 
@@ -178,12 +156,15 @@
                    :text (str "prepare leaves " (pr-str (lib/cell-vec pos)) " alone: " (name reason))}))
 
 (defn count-cell-fail!
-  "Count a failed try on the cell; skipped at the third. :again."
+  "Count a failed try on the cell; given up at the third. :again."
   [c pos reason]
   (let [n (inc (get-in (ctx/mem c) [:fails pos] 0))]
     (ctx/update-mem! c assoc-in [:fails pos] n)
     (when (>= n (u/max-failures))
-      (skip! c pos reason))
+      (ctx/update-mem! c assoc-in [:gave-up pos] {:pos pos :reason reason})
+      (ctx/warn-once! c [:gave-up pos reason] :prepare.gave-up
+                      {:pos pos :reason reason
+                       :text (str "prepare gives up on " (pr-str (lib/cell-vec pos)) " after " n " tries: " (name reason))}))
     :again))
 
 (defn blocked!
@@ -265,7 +246,7 @@
 
 (defn ^:async place-source!
   "Place the carried soil into the water of a wet cell: the source in the cell (:fill), or the source elsewhere
-  (:dam, after which the cell is receding for recede-ms). :again."
+  (:dam, after which the cell is receding until its water is gone). :again."
   [c {:keys [pos target item state]}]
   (let [at (lib/cell-vec target)
         fill? (= :fill state)
@@ -337,8 +318,14 @@
   [states state f]
   (by-pos (map f (filter #(= state (:state %)) (vals states)))))
 
+(defn gave-up-list
+  "The cells given up on after their failed tries, of this plan's cells."
+  [c states]
+  (by-pos (keep (fn [[pos data]] (when (contains? states pos) {:pos (lib/cell-vec pos) :reason (:reason data)}))
+                (field/gave-up c))))
+
 (defn refused-list
-  "The refusals: cells skipped in body memory (of this plan's cells) and cells of an unsupported species."
+  "The refusals: cells skipped in job memory (of this plan's cells) and cells of an unsupported species."
   [c states]
   (by-pos (concat (keep (fn [[pos data]]
                           (when (contains? states pos) {:pos (lib/cell-vec pos) :reason (:reason data)}))
@@ -358,11 +345,12 @@
                 :cramped (state-list states :cramped (fn [{:keys [pos at block]}] {:pos (lib/cell-vec pos) :at at :block block}))
                 :wet (state-list states :wet (fn [{:keys [pos why source]}]
                                                (cond-> {:pos (lib/cell-vec pos) :why why} source (assoc :source source))))
-                :refused (refused-list c states)}]
+                :refused (refused-list c states)
+                :gave-up (gave-up-list c states)}]
     (assoc result :text (str "prepare done: cleared " (:cleared result) ", soiled " (:soiled result)
                              ", planted " (:planted result) ", short " (reduce + (vals missing))
                              ", left " (+ (count (:wrong result)) (count (:no-soil result)) (count (:no-tool result)) (count (:cramped result))
-                                         (count (:wet result)) (count (:refused result)))))))
+                                         (count (:wet result)) (count (:refused result)) (count (:gave-up result)))))))
 
 (defn finish!
   "Be done, saying what was done. Work done with cells left (refused, wrong, short ...) ends condition-failed with the
@@ -370,11 +358,12 @@
   [c states]
   (let [result (result-of c states)
         worked? (pos? (+ (:cleared result) (:soiled result) (:planted result) (:dammed result)))
-        left (when (seq (:refused result)) :refused)
+        left (cond (seq (:refused result)) :refused (seq (:gave-up result)) :gave-up)
         blocked (blocked-reason states)]
     (cond
       (and worked? (not left) (not blocked)) (ctx/end c :done nil result)
-      left (ctx/end c :condition-failed :refused result)
+      (= :refused left) (ctx/end c :condition-failed :refused result)
+      left (ctx/end c :nothing-possible :gave-up result)
       :else (ctx/end c :condition-failed (or blocked {:reason :nothing-to-do}) result))))
 
 (defn ^:async step [c]
@@ -394,12 +383,12 @@
               (cond
                 (and owed (or (nil? target) (not= owed (:pos target)))) (await (collect! c))
                 target (await (act! c target))
-                (receding? states) :continue
+                (receding? states) (let [e (await (child/pause! c (settings/get settings ::recede-wait-s) :receding))]
+                                     (if (= :continue e) :continue :again))
                 :else (finish! c states))))))))
 
 (defn ^:async round [c]
-  (let [n (atom 0)]
-    (await (pace/steps! c #(if (< (swap! n inc) (settings/get settings ::max-steps)) (step c) :continue)))))
+  (await (pace/steps! c #(step c))))
 
 ;; ------------------------------------------------------------------ the contract
 
@@ -432,7 +421,7 @@
             {:keys [refused text] :as result} (result-of c states)
             data [:units :cells :done worked :left (count todo) :result (dissoc result :text)]]
         (cond
-          (or (seq todo) (receding? states) (blocked-reason states) (seq refused) (look/unseen? (:primitives c) cells))
+          (or (seq todo) (receding? states) (blocked-reason states) (seq refused) (seq (:gave-up result)) (look/unseen? (:primitives c) cells))
           (apply contract/later :preparing (str "prepare: " (count todo) " cells to work") data)
           (or (:collect m) (checks/child-under-way? c)) (apply contract/later :wrapping-up "prepare: every cell is ready, wrapping up" data)
           :else (apply contract/ok :prepared text data))))))

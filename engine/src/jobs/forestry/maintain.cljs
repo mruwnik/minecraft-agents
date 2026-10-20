@@ -11,13 +11,12 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.access :as access]
             [jobs.lib.trees :as forestry]
-            [jobs.lib.forestry :refer [cell-vec down feet-cell field-cells plan-trouble soil-for survey-field! tree-cells trouble-status]]
+            [jobs.lib.forestry :as lib :refer [cell-vec down feet-cell field-cells soil-for survey-field! trouble-status]]
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
-            [jobs.lib.step-off :as step-off]
-            [jobs.lib.world :as known]))
+            [jobs.lib.step-off :as step-off]))
 
 (def doc
   "Keep the trees a forest plan wants (cells wanting {:tree species}; a large tree is four cells).
@@ -129,20 +128,7 @@
 
 ;; ------------------------------------------------------------------ the plan
 
-(defn planned
-  "{:trees {pos species}} of the plan, or {:trouble text} (warned once per reason) when it cannot be worked."
-  [c]
-  (let [{:keys [plan part]} (:args c)
-        answer (known/plan c plan)
-        trees (tree-cells answer part)
-        no-zones (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) "no zone list")
-        trouble (or (plan-trouble answer trees) no-zones)]
-    (if-not trouble
-      {:trees trees}
-      (do (ctx/warn-once! c [plan trouble] :forest.declined
-                          {:plan plan :part part :reason trouble
-                           :text (str "forest declines plan " plan (when part (str " part " part)) ": " trouble)})
-          {:trouble trouble :later? (or (known/unreadable? answer) (= no-zones trouble))}))))
+(defn planned [c] (lib/planned c "forest"))
 
 (defn note-cells!
   "Say, once each, which planned cells hold something foreign, cannot take a sapling, or want a sapling not carried."

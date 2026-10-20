@@ -1,7 +1,9 @@
 (ns jobs.forestry.prepare-rule
   "The rule of jobs.forestry.prepare, pure: what state a planned tree cell is in, from the blocks around it and what
   the body carries."
-  (:require [jobs.lib.block-sets :as bs]
+  (:require [engine.args :as a]
+            [engine.settings :as settings]
+            [jobs.lib.block-sets :as bs]
             [clojure.string :as str]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.trees :as forestry]
@@ -10,14 +12,15 @@
             [jobs.lib.tidy-rules :as tidy]
             [jobs.lib.forestry :as lib]))
 
-(def headroom-table
-  {"oak" 7 "birch" 8 "spruce" 9 "jungle" 13 "acacia" 10 "dark_oak" 10 "pale_oak" 10 "cherry" 9})
+(a/defargs settings
+  {::headroom {:default {"oak" 7 "birch" 8 "spruce" 9 "jungle" 13 "acacia" 10 "dark_oak" 10 "pale_oak" 10 "cherry" 9}
+               :doc "{species cells} of growth space a planted cell needs above it, the cell included (about 70% sure of each); a species missing is refused as unsupported."
+               :spec (a/map-of a/name? (a/int-in 1 nil))}})
 
 (defn headroom-of
-  "Cells of growth space for species (the planted cell included): the override, else the table, nil for a species
-  not supported."
-  [species over]
-  (or (get over species) (get headroom-table species)))
+  "Cells of growth space for species (the planted cell included), nil for a species not supported."
+  [species]
+  (get (settings/get settings ::headroom) species))
 
 (def tree-plants
   #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "snow" "vine" "glow_lichen" "dandelion" "poppy"
@@ -62,14 +65,14 @@
 (defn growth-space
   "{:state :cramped :at :block} for the lowest block above the planted cell a tree cannot grow through, {:state
   :unloaded} when a cell of it is not loaded, else nil."
-  [p pos species over]
+  [p pos species]
   (some (fn [dy]
           (let [at (update pos :y + dy)
                 n (u/seen-name p at)]
             (cond
               (nil? n) {:state :unloaded}
               (not (tree-free? n)) {:state :cramped :at (lib/cell-vec at) :block n})))
-        (range 1 (headroom-of species over))))
+        (range 1 (headroom-of species))))
 
 (defn soil-state
   "{:state ...} for the ground under the planted cell: nil when it is soil the species takes, else :soil-dig (natural
@@ -91,7 +94,7 @@
       dirt {:state :soil-dig :block n :item dirt}
       :else no-dirt)))
 
-(def max-upstream "How many cells upstream the walk to a source goes." 16)
+(def max-upstream 16)
 
 (defn upstream-cells
   "The water cells the cell at level l is fed from, the best first: the cell above for falling water, else the
@@ -169,13 +172,13 @@
 
 (defn assess-open
   "assess before the tool rule."
-  [p pos species {:keys [carried over] :as world}]
+  [p pos species {:keys [carried] :as world}]
   (let [n (u/seen-name p pos)
         sapling (forestry/sapling-of species)]
-    (or (when-not (headroom-of species over) {:state :unsupported})
+    (or (when-not (headroom-of species) {:state :unsupported})
         (when (= "water" n) (wet-state p pos species carried))
         (own-cell p pos species)
-        (growth-space p pos species over)
+        (growth-space p pos species)
         (when-not (bs/air n) {:state :clear :block n})
         (soil-state p pos species world)
         (if (carried sapling) {:state :plant :item sapling} {:state :short}))))

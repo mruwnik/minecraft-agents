@@ -6,8 +6,7 @@
             [jobs.forestry.prepare-rule :as rule]
             [jobs.lib.util :as u]
             [jobs.lib.tidy-rules :as tidy]
-            [jobs.lib.forestry :as lib]
-            [jobs.lib.world :as known]))
+            [jobs.lib.forestry :as lib]))
 
 ;; ------------------------------------------------------------------ reading the field
 
@@ -16,20 +15,12 @@
   [c]
   (:skipped (ctx/mem c) {}))
 
-(defn planned
-  "{:trees {pos species} :planned #{[x y z]}} for the plan, or {:trouble text} (warned once per reason)."
+(defn gave-up
+  "{pos {:pos :reason}} of the cells the call tried and failed at the give-up count."
   [c]
-  (let [{:keys [plan part]} (:args c)
-        answer (known/plan c plan)
-        trees (lib/tree-cells answer part)
-        no-zones (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) "no zone list")
-        trouble (or (lib/plan-trouble answer trees) no-zones)]
-    (if-not trouble
-      {:trees trees :planned (set (map (comp vec :pos) (:cells answer)))}
-      (do (ctx/warn-once! c [plan trouble] :prepare.declined
-                          {:plan plan :part part :reason trouble
-                           :text (str "prepare declines plan " plan (when part (str " part " part)) ": " trouble)})
-          {:trouble trouble :later? (or (known/unreadable? answer) (= no-zones trouble))}))))
+  (:gave-up (ctx/mem c) {}))
+
+(defn planned [c] (lib/planned c "prepare"))
 
 (declare place-verdict)
 
@@ -50,8 +41,7 @@
   (let [m (ctx/mem c)
         world {:planned planned
                :holes (set (:holes m))
-               :carried (u/carried-names (:primitives c))
-               :over (:headroom (:args c))}]
+               :carried (u/carried-names (:primitives c))}]
     (into {} (map (fn [[pos species]]
                     [pos (settle-wet c (assoc (rule/assess (:primitives c) pos species world) :pos pos :species species))]))
           trees)))
@@ -59,7 +49,7 @@
 (defn todo
   "The cells with a step to take, not skipped, nearest to the body first."
   [c states]
-  (let [skip (skipped c)
+  (let [skip (merge (skipped c) (gave-up c))
         here (u/self-pos c)]
     (->> (vals states)
          (filter #(and (rule/steps (:state %)) (not (contains? skip (:pos %)))))

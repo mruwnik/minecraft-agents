@@ -121,7 +121,7 @@
     (is (= :bare (maintain/classify (wrapped blocks false) cell "oak")))
     (is (= {:state :unloaded} (prepare-rule/own-cell (wrapped {"0,64,4" "oak_log"} true) cell "oak")))
     (is (= {:state :grown} (prepare-rule/own-cell (wrapped {"0,64,4" "oak_log"} false) cell "oak")))
-    (is (= {:state :unloaded} (prepare-rule/growth-space (wrapped {"0,65,4" "stone"} true) cell "oak" nil)))
+    (is (= {:state :unloaded} (prepare-rule/growth-space (wrapped {"0,65,4" "stone"} true) cell "oak")))
     (is (= {:state :unloaded} (prepare-rule/soil-state (wrapped blocks true) {:x 0 :y 64 :z 4} "oak" {:carried #{}})))
     (is (nil? (prepare-rule/soil-state (wrapped blocks false) {:x 0 :y 64 :z 4} "oak" {:carried #{}})))))
 

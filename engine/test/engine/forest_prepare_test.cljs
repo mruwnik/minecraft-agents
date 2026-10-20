@@ -5,9 +5,11 @@
             [clojure.string :as str]
             [engine.core :as core]
             [engine.fake :as fake]
+            [engine.settings :as settings]
             [engine.forest-maintain-test :refer [waiting-reasons set-block! ground forest-plan item start ticks digs places warns listed? give! with-zones]]
             [engine.harvest-test :as h]
             [engine.test-util :as tu]
+            [jobs.lib.child :as child]
             [jobs.lib.world-files :as world]
             [jobs.forestry.prepare :as prepare]
             [jobs.forestry.prepare-field :as field]
@@ -15,7 +17,7 @@
 
 (def job 'jobs.forestry.prepare)
 
-(def zero {:cleared 0 :soiled 0 :planted 0 :dammed 0 :short {} :wrong [] :no-soil [] :no-tool [] :cramped [] :wet [] :refused []})
+(def zero {:cleared 0 :soiled 0 :planted 0 :dammed 0 :short {} :wrong [] :no-soil [] :no-tool [] :cramped [] :wet [] :refused [] :gave-up []})
 
 (defn expect [m] (merge zero m))
 
@@ -29,14 +31,15 @@
   ([spec plans] (outcome spec plans {:plan "forest"}))
   ([spec plans args]
    (let [s (start spec plans)]
-     (assoc s :result (let [r (await (tu/child-outcome (:eng s) job args 300))] (cond-> r (map? r) (dissoc :status :text :reason :ending)))))))
+     (assoc s :result (let [r (with-redefs [child/pause! (fn ^:async pause [_ _ _] :continue)] (await (tu/child-outcome (:eng s) job args 300)))] (cond-> r (map? r) (dissoc :status :text :reason :ending)))))))
 
 (defn ^:async run
   "Submit the job with args in a world over plans and tick it n times: the start map."
   [spec plans args n]
   (let [s (start spec plans)]
     (core/submit! (:eng s) (list job args) {})
-    (await (ticks (:eng s) n))
+    (with-redefs [child/pause! (fn ^:async pause [_ _ _] :continue)]
+      (await (ticks (:eng s) n)))
     s))
 
 (defn world [blocks & inventory]
@@ -66,13 +69,13 @@
     "air" true "cave_air" true "oak_leaves" true "short_grass" true "tall_grass" true "poppy" true "snow" true
     "vine" true "birch_sapling" true "light" true "stone" false "dirt" false "oak_log" false "oak_planks" false "water" false))
 
-(deftest headroom-is-the-species-table-and-the-argument-overrides-it
-  (are [species over expected] (= expected (rule/headroom-of species over))
-    "oak" nil 7
-    "birch" nil 8
-    "oak" {"oak" 3} 3
-    "oak" {"birch" 3} 7
-    "mangrove" nil nil))
+(deftest headroom-is-the-species-table-and-the-setting-overrides-it
+  (are [species over expected] (= expected (settings/scoped over #(rule/headroom-of species)))
+    "oak" {} 7
+    "birch" {} 8
+    "oak" {::rule/headroom {"oak" 3}} 3
+    "oak" {::rule/headroom {"birch" 3}} nil
+    "mangrove" {} nil))
 
 (deftest only-natural-ground-is-replaced
   (are [name natural] (= natural (rule/natural-ground? name))
@@ -284,7 +287,7 @@
       (fn ^:async t []
         (doseq [[blocks args reported] [[{"3,70,0" "stone"} {:plan "forest"} {:pos [3 64 0] :at [3 70 0] :block "stone"}]
                                         [{"3,67,0" "oak_log"} {:plan "forest"} {:pos [3 64 0] :at [3 67 0] :block "oak_log"}]
-                                        [{"3,67,0" "stone"} {:plan "forest" :headroom {"oak" 4}} {:pos [3 64 0] :at [3 67 0] :block "stone"}]]]
+                                        [{"3,67,0" "stone"} {:plan "forest" :settings {::rule/headroom {"oak" 4}}} {:pos [3 64 0] :at [3 67 0] :block "stone"}]]]
           (let [{:keys [p result seen]} (await (outcome (world (merge {"3,64,0" "short_grass" "4,64,0" "short_grass"} blocks) (item "oak_sapling" 2))
                                                         {"forest" two-cells} args))]
             (is (= [[4 64 0]] (digs p)) (pr-str blocks))
@@ -414,7 +417,7 @@
           (is (= [[9 63 0 "dirt"] [9 64 0 "oak_sapling"]] (places p)))
           (is (= (expect {:soiled 1 :planted 1}) result)))))))
 
-(deftest a-cell-that-cannot-be-reached-is-refused-after-three-tries
+(deftest a-cell-that-cannot-be-reached-is-given-up-after-three-tries
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -423,8 +426,8 @@
                                                           {"forest" plan}))]
           (is (= 3 (count (filter #(= 9 (:x %)) (tu/walked-to eng)))) "three walks toward the cell at x 9")
           (is (= [[3 64 0]] (digs p)))
-          (is (= (expect {:cleared 1 :planted 1 :refused [{:pos [9 64 0] :reason :unreachable}]}) result))
-          (is (= 1 (count (warns seen :prepare.refused)))))))))
+          (is (= (expect {:cleared 1 :planted 1 :gave-up [{:pos [9 64 0] :reason :unreachable}]}) result))
+          (is (= 1 (count (warns seen :prepare.gave-up)))))))))
 
 (deftest a-species-without-a-table-entry-is-refused
   (async done
@@ -586,6 +589,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
+       (with-redefs [child/pause! (fn ^:async pause [_ _ _] :continue)]
         (let [{:keys [p eng seen]} (await (run (apply wet-world {"3,64,0" 1 "2,64,0" 0} sapling-and-dirt) {"forest" one-cell} {:plan "forest"} 6))
               before (calls-made p)]
           (is (= [[2 64 0 "dirt"]] (places p)))
@@ -597,7 +601,7 @@
           (drain! p "3,64,0")
           (await (ticks eng 30))
           (is (= [[2 64 0 "dirt"] [3 64 0 "oak_sapling"]] (places p)))
-          (is (= [{:dammed 1 :planted 1}] (mapv #(select-keys % [:dammed :planted]) (h/events-of seen :completed)))))))))
+          (is (= [{:dammed 1 :planted 1}] (mapv #(select-keys % [:dammed :planted]) (h/events-of seen :completed))))))))))
 
 (deftest a-stream-is-followed-to-its-source-and-only-that-is-dammed
   (async done
@@ -666,7 +670,7 @@
           (is (= "lava" (h/block-at p 3 64 0)))
           (is (= (expect {:cleared 1 :planted 1 :wrong [{:pos [3 64 0] :found "lava" :species "oak"}]}) result)))))))
 
-(deftest a-place-that-finds-no-item-or-an-occupied-cell-is-tried-three-times-then-the-cell-is-skipped
+(deftest a-place-that-finds-no-item-or-an-occupied-cell-is-tried-three-times-then-the-cell-is-given-up
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -678,26 +682,31 @@
             (core/submit! (:eng s) (list job {:plan "forest"}) {})
             (await (ticks (:eng s) 8))
             (is (= 3 (count (places (:p s)))) (str label " " status))
-            (is (= [{:pos {:x 3 :y 64 :z 0} :reason (keyword status)}] (warns (:seen s) :prepare.refused)) (str label " " status))))))))
+            (is (= [{:pos {:x 3 :y 64 :z 0} :reason (keyword status)}] (warns (:seen s) :prepare.gave-up)) (str label " " status))))))))
 
-(deftest a-skipped-cell-is-tried-again-by-the-next-call
+(deftest a-given-up-cell-is-tried-again-by-the-next-call
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world {} (item "oak_sapling" 1)) {"forest" one-cell})
               refuse? (atom true)]
           (.override (.-world (:p s)) "place" (fn ^:async f [tok a impl] (if @refuse? #js {:status "occupied"} (await (impl tok a)))))
-          (is (= :refused (:reason (await (tu/child-outcome (:eng s) job {:plan "forest"} 300)))))
+          (is (= :gave-up (:reason (await (tu/child-outcome (:eng s) job {:plan "forest"} 300)))))
           (reset! refuse? false)
           (is (= (expect {:planted 1}) (dissoc (await (tu/child-outcome (:eng s) job {:plan "forest"} 300)) :text :status))))))))
 
-(deftest a-cell-receding-from-a-dam-yields-until-its-water-is-gone
+(deftest a-cell-receding-from-a-dam-pauses-until-its-water-is-gone
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await (run (apply wet-world {"3,64,0" 1 "2,64,0" 0} sapling-and-dirt) {"forest" one-cell} {:plan "forest"} 6))]
-          (is (listed? eng) "yields while the flow recedes")
-          (is (= [[2 64 0 "dirt"]] (places p)) "the dam is placed once"))))))
+        (let [pauses (atom [])
+              s (start (apply wet-world {"3,64,0" 1 "2,64,0" 0} sapling-and-dirt) {"forest" one-cell})]
+          (with-redefs [child/pause! (fn ^:async pause [_ seconds why] (swap! pauses conj [seconds why]) :continue)]
+            (core/submit! (:eng s) (list job {:plan "forest"}) {})
+            (await (ticks (:eng s) 6)))
+          (is (seq @pauses) "pauses while the flow recedes")
+          (is (every? #{[2 :receding]} @pauses))
+          (is (= [[2 64 0 "dirt"]] (places (:p s))) "the dam is placed once"))))))
 
 (deftest a-planned-cell-never-seen-is-looked-at-before-nothing-to-do
   (async done

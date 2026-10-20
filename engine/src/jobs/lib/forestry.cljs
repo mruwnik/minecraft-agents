@@ -3,7 +3,8 @@
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.look :as look]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.world :as known]))
 
 (defn cell-vec [{:keys [x y z]}] [x y z])
 
@@ -53,3 +54,19 @@
   [c field]
   (when (and (not (:begun (ctx/mem c))) (look/unseen? (:primitives c) (field-cells field)))
     (await (look/survey! c))))
+
+(defn planned
+  "{:trees {pos species} :planned #{[x y z]}} for the plan of c's args, or {:trouble text :later?} (warned once per
+  reason as <label>.declined)."
+  [c label]
+  (let [{:keys [plan part]} (:args c)
+        answer (known/plan c plan)
+        trees (tree-cells answer part)
+        no-zones (when (and (nil? (known/zones c)) (not (:ignore-zones? (:args c)))) "no zone list")
+        trouble (or (plan-trouble answer trees) no-zones)]
+    (if-not trouble
+      {:trees trees :planned (set (map (comp vec :pos) (:cells answer)))}
+      (do (ctx/warn-once! c [plan trouble] (keyword (str label ".declined"))
+                          {:plan plan :part part :reason trouble
+                           :text (str label " declines plan " plan (when part (str " part " part)) ": " trouble)})
+          {:trouble trouble :later? (or (known/unreadable? answer) (= no-zones trouble))}))))
