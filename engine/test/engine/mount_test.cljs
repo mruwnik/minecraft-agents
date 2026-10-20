@@ -112,7 +112,8 @@
     {:entities [(assoc boat :name "oak_chest_boat" :passengers [77])]} {:id 9} [:later :occupied]
     {:entities [(assoc boat :passengers [77 78])]} {:id 9} [:later :occupied]
     {:entities [(assoc boat :passengers [77 78])]} {:name "oak_boat"} [:later :occupied]
-    {:entities [(assoc boat :passengers [77])]} {:id 9} [:ok :vehicle]))
+    {:entities [(assoc boat :passengers [77])]} {:id 9} [:ok :vehicle]
+    {:self {:vehicle 5} :entities [(assoc boat :id 5 :name "minecart" :passengers [77])]} {:id 5} [:ok :vehicle]))
 
 (deftest a-mount-the-server-refuses-after-can-run-looked-continues
   (async done

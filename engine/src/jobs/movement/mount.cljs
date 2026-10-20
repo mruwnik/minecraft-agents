@@ -109,10 +109,12 @@
   "Never :not-mountable when the wanted vehicle is nothing the body can ride; later :occupied when all its seats are taken."
   [c]
   (let [e (wanted-entity c)
-        seats (some-> e .-name vehicle/seats-of)]
+        seats (some-> e .-name vehicle/seats-of)
+        aboard (some-> (vehicle/vehicle-of (.self (:primitives c))) :id)]
     (cond
       (nil? e) (contract/ok :vehicle "no vehicle to refuse")
       (zero? seats) (contract/never :not-mountable (str (.-name e) " cannot be ridden"))
+      (= aboard (.-id e)) (contract/ok :vehicle "already aboard")
       (>= (count (.-passengers e)) seats) (contract/later :occupied "every seat of the vehicle is taken")
       :else (contract/ok :vehicle "a seat is free"))))
 

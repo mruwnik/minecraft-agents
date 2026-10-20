@@ -1,6 +1,6 @@
 ;; Card 116b9335: jobs.movement.mount (world.mjs submit mount <id>): walk to a vehicle or mount and get on, then jobs.movement.leave-vehicle.
 ;; Should-succeed: boat on land 6 away (walks, mounts); mount a boat in a pool then dismount onto the water (completed, landed :in-water);
-;; saddled pig; mounting twice is :already.
+;; saddled pig; mounting twice is :already (a boat, and a one-seat minecart).
 ;; Should-fail: cow (not-mountable), occupied minecart (waits :occupied), no such entity (waits :no-vehicle), full inventory with an item in hand and a saddled pig (hand-full).
 ;; Should-succeed too: the same full inventory still boards a boat (no hand needed).
 ;; Not a fixture: logout while mounted, the server never seating the body (timeout; unit and fake only).
@@ -30,6 +30,11 @@
    :act [[:summon "oak_boat" [11.5 0 16.5] "{}"]
          [:job (jobs.movement.mount {:name "oak_boat"})]
          [:http :submit (jobs.movement.mount {:name "oak_boat"}) [:alongside] {:ok true}]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.mount" :already true}} :within-s 40 :of-job true}]}
+  {:name "mount-twice-in-a-one-seat-minecart-is-already"
+   :act [[:summon "minecart" [11.5 0 16.5] "{}"]
+         [:job (jobs.movement.mount {:name "minecart"})]
+         [:http :submit (jobs.movement.mount {:name "minecart"}) [:alongside] {:ok true}]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.mount" :already true}} :within-s 40 :of-job true}]}
   {:name "cow-is-not-mountable"
    :act [[:summon "cow" [12.5 0 16.5]]
