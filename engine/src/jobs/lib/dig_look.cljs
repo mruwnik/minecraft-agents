@@ -38,8 +38,6 @@
 
 (defn shift [{:keys [x y z]} [dx dy dz]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
 
-(defn shift [{:keys [x y z]} [dx dy dz]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
-
 
 (defn rock-name
   "The block name at cell as a player reads rock: what the body sees or remembers, else \"stone\" for a loaded cell it has
