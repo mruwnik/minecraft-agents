@@ -25,7 +25,7 @@
             [:fill [17 0 15] [19 2 17] "stone"] [:set [17 -2 16] "stone"] [:set [17 -1 16] "water"] [:set [18 -1 16] "farmland[moisture=7]"]
             [:set [18 0 16] "wheat[age=2]"]]
    :body {:inventory [["bone_meal" 16]]}
-   :act [[:job (jobs.farm.fertilize {:center #xyz [14 0 16] :radius 8 :fetch false})]]
+   :act [[:job (jobs.farm.fertilize {:center #xyz [14 0 16] :radius 8 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:used [:>= 3]}} :within-s 70 :of-job true}]
    :after [[:block [10 0 16] "wheat[age=7]"] [:block [12 0 16] "wheat[age=7]"] [:block [18 0 16] "wheat[age=2]"]]}
   {:name "tend-harvests-open-crops-and-leaves-the-walled-one"

@@ -22,12 +22,12 @@
 (def doc
   "Use bone meal on unripe crops: the crop or sapling at :at, or the unripe crops within :radius, nearest first.
   With :grass true it uses bone meal once on each open grass block (nothing on top) it has seen, instead of on crops.
-  Needs bone meal in the inventory; it is fetched (jobs.lib.need, :fetch) when none is carried and none was used yet; a
+  Needs bone meal in the inventory; it is fetched (jobs.lib.need, from the call's :ways) when none is carried and none was used yet; a
   failed fetch ends the call with its ending as the :because. A crop that refuses bone meal or cannot be reached is skipped.
   Zones: a crop in another owner's zone or claim, or inside a plan's footprint, is skipped (it counts as a
   :harvest). :ignore-zones? true skips the check.
   Refused before it starts, as failed conditions: {:reason :no-zones} (no zone list read, unless :ignore-zones?) and
-  {:reason :need :item \"bone_meal\"} (none carried, targets left, :fetch false).
+  {:reason :need :item \"bone_meal\"} (none carried, targets left, :ways #{:carried}).
   Ends when :max uses are spent, the bone meal runs out or no unripe crop is left, with data {:used n}: done when it used
   some (at least :least, uses) or when no unripe crop was there; condition-failed :refused when crops were there and under :least
   took bone meal (zones, unreachable, the crop refused), :need when the bone meal ran out under :least. done? counts the uses and the targets left.")
@@ -38,7 +38,6 @@
    :center {:doc "centre of the radius search; the body's position when nil" :spec ::a/pos :default nil}
    :grass {:doc "fertilize open grass blocks instead of crops" :spec boolean? :default false}
    :max {:doc "bone meal uses, at most" :spec (a/int-in 1 nil) :default 16}
-   :fetch {:doc "get missing bone meal (jobs.lib.need): true, a set of kinds or a map of limits; false refuses the call :need" :spec need/option? :default true}
    :ignore-zones? :shared})
 
 (def ripe-age crops/ripe-age)
@@ -62,6 +61,8 @@
        (map :pos)
        (filter #(<= (u/dist mid %) radius))
        (filter #(= "air" (u/seen-name p (update % :y inc))))))
+
+(def ways need/fetch-ways)
 
 (a/defargs settings
   {::job-time-s {:default 300 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}})
@@ -108,13 +109,13 @@
        (seq (targets c))))
 
 (defn fetch-opts
-  "The limits {:how :explore} for fetching bone meal, nil when :fetch does not allow items."
+  "The limits {:how} for fetching bone meal, nil when the call's ways leave only :carried."
   [c]
-  (when-let [o (need/opts c 'jobs.farm.fertilize)]
-    (when (contains? (:what o) :item) (select-keys o [:how :explore]))))
+  (when-let [how (seq (need/fetch-how c))]
+    {:how (set how)}))
 
 (defn no-meal-source
-  "The cause :need bone_meal while bone meal is to be got and :fetch off forbids it."
+  "The cause :need bone_meal while bone meal is to be got and the ways forbid it."
   [c]
   (when (and (lacks-meal? c) (nil? (fetch-opts c))) {:reason :need :item "bone_meal"}))
 

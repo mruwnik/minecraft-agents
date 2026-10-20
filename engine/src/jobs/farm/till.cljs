@@ -24,8 +24,8 @@
   "Hoe dirt, grass_block, dirt_path, coarse_dirt or rooted_dirt (two uses: dirt first) into farmland over a set of ground cells, given as the box :from/:to or
   the square :center/:radius (at most 256 cells). Water nearby is not its concern.
   Needs a hoe: the call's :use {:tools [..]} names the ones it may use (default every carried hoe); with none carried it
-  fetches one (jobs.lib.need, :fetch; a failed fetch ends the call with its ending as the :because, tilled and skipped
-  in the data), with :fetch false the call is refused {:reason :no-tool :kind \"hoe\"}. Ground cover over a cell (grass,
+  fetches one (jobs.lib.need, from the call's :ways; a failed fetch ends the call with its ending as the :because, tilled and skipped
+  in the data), with :ways #{:carried} the call is refused {:reason :no-tool :kind \"hoe\"}. Ground cover over a cell (grass,
   ferns, flowers, snow layer) is dug first with a jobs.blocks.dig child; a cover dig that does not clear it counts a try.
   Cells are skipped with a reason: :not-tillable, :covered (something else above), :not-permitted (zone rules),
   :unreachable, :gone, :refused (the hoe failed twice), :no-hoe (the hoe is gone) or :cover-stuck (two failed cover
@@ -47,8 +47,9 @@
    :center {:doc "centre of a square of cells at its y; with :radius" :spec ::a/pos :default nil}
    :radius {:doc "the square covers |dx|,|dz| <= radius, 0 to 7" :spec (a/int-in 0 7) :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
-   :fetch {:doc "get a hoe when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false refuses the call :no-tool" :spec need/option? :default true}
    :ignore-zones? :shared})
+
+(def ways need/fetch-ways)
 
 (a/defargs settings
   {::job-time-s {:default 600 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
@@ -104,10 +105,10 @@
     (some #(when (and (.endsWith (:name %) "_hoe") (or (nil? only) (only (:name %)))) (:name %)) (u/inventory (:primitives c)))))
 
 (defn fetch-opts
-  "The limits {:how :explore} for fetching a hoe, nil when :fetch does not allow tools."
+  "The limits {:how} for fetching a hoe, nil when the call's ways leave only :carried."
   [c]
-  (when-let [o (need/opts c 'jobs.farm.till)]
-    (when (contains? (:what o) :tool) (select-keys o [:how :explore]))))
+  (when-let [how (seq (need/fetch-how c))]
+    {:how (set how)}))
 
 (defn hoe-wanted
   "What the fetch gets: a listed hoe by name, else any hoe."
@@ -310,7 +311,7 @@
                         :again)))))))))))
 
 (defn ^:async hoe!
-  "Get a hoe when none may be used, cells are left and :fetch allows tools: nil when one is carried (or came), :continue while the fetch waits
+  "Get a hoe when none may be used, cells are left and the ways allow a fetch: nil when one is carried (or came), :continue while the fetch waits
   on the world, else the ending of the call: done when enough is tilled already, else the fetch's kind and cause."
   [c]
   (when (and (nil? (hoe c)) (seq (pending c)) (fetch-opts c))

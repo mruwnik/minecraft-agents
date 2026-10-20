@@ -74,7 +74,7 @@
         (is (= {:kind :condition-failed :cause {:reason :no-zones}}
                (kcm (await (ending-of (tt/setup {:inventory tt/hoe :blocks tt/four} (ew/of-data {} {} nil)) till tt/box 5)))))
         (is (= {:kind :condition-failed :cause {:reason :no-tool :kind "hoe"}}
-               (kcm (await (ending-of (tt/setup {:blocks tt/four}) till (assoc tt/box :fetch false) 5)))))
+               (kcm (await (ending-of (tt/setup {:blocks tt/four}) till (assoc tt/box :ways #{:carried}) 5)))))
         (is (= :bad-args (get-in (await (ending-of (tt/setup {:inventory tt/hoe}) till {:from {:x 0 :y 63 :z 0}} 5)) [:cause :reason])))))))
 
 (deftest till-with-no-hoe-and-nothing-to-fetch-ends-with-the-failed-fetch
@@ -133,7 +133,7 @@
           (.override (.-world (:p env)) "useOn" (fn ^:async f [_ _ _] #js {:status "unchanged" :consumed 0}))
           (is (= :condition-failed (:kind (await (ending-of env fertilize {} 10)))) "an unripe crop, none fertilized"))
         (is (= {:kind :condition-failed :cause {:reason :need :item "bone_meal"}}
-               (kcm (await (ending-of (ft/setup {:blocks {"2,64,0" "wheat"} :ages {"2,64,0" 3}}) fertilize {:fetch false} 5)))))
+               (kcm (await (ending-of (ft/setup {:blocks {"2,64,0" "wheat"} :ages {"2,64,0" 3}}) fertilize {:ways #{:carried}} 5)))))
         (is (= {:kind :condition-failed :cause {:reason :no-zones}}
                (kcm (await (ending-of (ft/setup ft/two-wheat (ew/of-data {} {} nil)) fertilize {} 5)))))))))
 
@@ -143,7 +143,7 @@
       (fn ^:async t []
         (let [world (assoc ft/two-wheat :inventory [{:name "bone_meal" :count 1}])]
           (doseq [[least kind cause] [[1 :done nil] [2 :condition-failed {:reason :need :item "bone_meal" :count 1}] [:all :condition-failed {:reason :need :item "bone_meal" :count 1}]]]
-            (let [e (await (ending-of (ft/setup world) fertilize {:least least :fetch false} 30))]
+            (let [e (await (ending-of (ft/setup world) fertilize {:least least :ways #{:carried}} 30))]
               (is (= {:kind kind :cause cause} (kc e)) (str ":least " least))
               (is (= 1 (get-in e [:data :used]))))))))))
 
@@ -202,7 +202,7 @@
         (is (= {:kind :condition-failed :cause {:reason :nothing-to-do}}
                (kcm (await (ending-of (pt/start (pt/field-world (pt/inv "wheat_seeds" 9))) plant {:box (pt/box 8 8 9 9)} 20)))))
         (is (= {:kind :condition-failed :cause {:reason :need :any-of ["beetroot_seeds" "carrot" "potato" "wheat_seeds"] :count 9}}
-               (kcm (await (ending-of (pt/start (pt/field-world [])) plant {:box pt/field-box :fetch false} 20)))))
+               (kcm (await (ending-of (pt/start (pt/field-world [])) plant {:box pt/field-box :ways #{:carried}} 20)))))
         (is (= {:kind :condition-failed :cause {:reason :no-zones}}
                (kcm (await (ending-of (pt/start (pt/field-world (pt/inv "wheat_seeds" 9)) (ew/of-data {} {} nil)) plant {:box pt/field-box} 20)))))))))
 
@@ -258,7 +258,7 @@
             (is (= 0 (get-in e [:data :planted])))
             (is (= 9 (count (get-in e [:data :skipped]))))))
         (doseq [[least kind cause] [[5 :done :done] [6 :condition-failed :need] [:all :condition-failed :need]]]
-          (let [e (await (ending-of (pt/start (pt/field-world (pt/inv "carrot" 5 "bread" 12))) plant {:box pt/field-box :least least :fetch false} 100))]
+          (let [e (await (ending-of (pt/start (pt/field-world (pt/inv "carrot" 5 "bread" 12))) plant {:box pt/field-box :least least :ways #{:carried}} 100))]
             (is (= [kind cause] [(:kind e) (contract/cause-key e)]) (str ":least " least))
             (is (= 5 (get-in e [:data :planted])))))
         (doseq [[least kind cause] [[9 :done nil] [:all :done nil]]]

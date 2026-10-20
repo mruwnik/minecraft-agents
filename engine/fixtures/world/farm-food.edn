@@ -56,13 +56,13 @@
   {:name "plant-with-only-the-reserve-in-carrots-waits-food-reserve"
    :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]]
    :body {:inventory [["carrot" 15]]}
-   :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :fetch false})]]
+   :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :food-reserve}} :within-s 20 :of-job true}]
    :after [[:block [10 0 16] "air"] [:block [13 0 16] "air"] [:item "carrot" 15]]}
   {:name "plant-sows-wheat-seeds-and-keeps-the-carrot-reserve"
    :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]]
    :body {:inventory [["carrot" 15] ["wheat_seeds" 4]]}
-   :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :fetch false})]]
+   :act [[:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed :data {:planted 4}} :within-s 60 :of-job true}]
    :after [[:block [10 0 16] "wheat"] [:block [13 0 16] "wheat"] [:item "carrot" 15]]}
   {:name "stock-takes-cooked-beef-up-to-60-points-and-deposit-stocks-a-chest"

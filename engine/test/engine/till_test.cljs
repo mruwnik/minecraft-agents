@@ -160,7 +160,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks four})]
-          (core/submit! eng (list job (assoc box :fetch false)) {})
+          (core/submit! eng (list job (assoc box :ways #{:carried})) {})
           (is (nil? (core/tick! eng)) "check false: nothing runs")
           (is (empty? (calls p "useOn"))))))))
 
@@ -357,7 +357,7 @@
                                                (reset! first? false)
                                                (swap! (fake/state p) assoc :inventory []))
                                              r)))
-          (let [result (await (child-outcome eng job (assoc box :fetch false) 40))]
+          (let [result (await (child-outcome eng job (assoc box :ways #{:carried}) 40))]
             (is (= 1 (:tilled result)))
             (is (= [:no-hoe :no-hoe :no-hoe] (vec (vals (:skipped result)))))
             (is (empty? (filterv #(= :need (:slot %)) (kinds seen :child_started))))))))))
@@ -427,7 +427,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p eng]} (await (seeing-till {:fetch false} 12))]
+        (let [{:keys [p eng]} (await (seeing-till {:ways #{:carried}} 12))]
           (is (empty? (calls p "useOn")))
           (is (= 1 (count (:list (core/state eng)))) "still waiting")
           (is (= "chest" (block-at p {:x -2 :y 64 :z 3}))))))))

@@ -29,6 +29,6 @@
   {:name "till-hoe-breaks-mid-run-rest-skipped-no-hoe"
    :blocks [[:fill [10 -1 16] [13 -1 16] "dirt"]]
    :body {:at [9.5 0 14.5] :inventory [["wooden_hoe[damage=58]" 1]]}
-   :act [[:job (jobs.farm.till {:from #xyz [10 -1 16] :to #xyz [13 -1 16] :fetch false})]]
+   :act [[:job (jobs.farm.till {:from #xyz [10 -1 16] :to #xyz [13 -1 16] :ways #{:carried}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 80 :of-job true}]
    :after [[:item "wooden_hoe" 0] [:block [10 -1 16] "farmland"] [:not-block [13 -1 16] "farmland"]]}]}

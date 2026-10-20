@@ -14,7 +14,7 @@
    :body {:inventory [["wheat_seeds" 8] ["beetroot_seeds" 4]]}
    :act [[:job (jobs.memory.reserve {:id "wt-seed" :item "wheat_seeds" :count :all :why "world test"})]
          [:await {:source :job :kind :completed} 20]
-         [:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :fetch false})]]
+         [:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed :data {:planted 4 :status :completed}} :within-s 60 :of-job true}]
    :after [[:block [10 0 16] "beetroots"] [:block [13 0 16] "beetroots"] [:item "wheat_seeds" 8] [:item "beetroot_seeds" 0]]}
   {:name "plant-sows-nothing-when-all-its-seed-is-reserved"
@@ -22,7 +22,7 @@
    :body {:inventory [["wheat_seeds" 8]]}
    :act [[:job (jobs.memory.reserve {:id "wt-seed" :item "wheat_seeds" :count :all :why "world test"})]
          [:await {:source :job :kind :completed} 20]
-         [:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :fetch false})]]
+         [:job (jobs.farm.plant {:box {:min #xyz [10 -1 16] :max #xyz [13 -1 16]} :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :food-reserve}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed :data {:planted [:>= 1]}} :for-s 15}]
    :after [[:block [10 0 16] "air"] [:item "wheat_seeds" 8]]}
@@ -40,7 +40,7 @@
    :body {:inventory [["bone_meal" 5]]}
    :act [[:job (jobs.memory.reserve {:id "wt-meal" :item "bone_meal" :count 3 :why "world test"})]
          [:await {:source :job :kind :completed} 20]
-         [:job (jobs.farm.fertilize {:center #xyz [11 0 16] :radius 6 :fetch false})]]
+         [:job (jobs.farm.fertilize {:center #xyz [11 0 16] :radius 6 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped :waiting} :data {:name "jobs.farm.fertilize"}} :within-s 40 :of-job true}]
    :after [[:item "bone_meal" 3]]}
   {:name "tend-stores-and-composts-nothing-the-agent-reserves"

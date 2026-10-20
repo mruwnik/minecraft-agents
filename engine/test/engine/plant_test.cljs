@@ -379,8 +379,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= [:need] (await (waiting-reasons {:box (box 2 2 3 2) :fetch false} [] []))))
-        (is (= [:need] (await (waiting-reasons {:plan "mix" :fetch false} [] []))))))))
+        (is (= [:need] (await (waiting-reasons {:box (box 2 2 3 2) :ways #{:carried}} [] []))))
+        (is (= [:need] (await (waiting-reasons {:plan "mix" :ways #{:carried}} [] []))))))))
 
 (def seed-chest "-2,64,3")
 
@@ -406,7 +406,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (seeing-plant {:box (box 2 2 3 2) :fetch false} 12))]
+        (let [{:keys [p]} (await (seeing-plant {:box (box 2 2 3 2) :ways #{:carried}} 12))]
           (is (empty? (calls p "place")))
           (is (= "chest" (block-at p -2 64 3))))))))
 

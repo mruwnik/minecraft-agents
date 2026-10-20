@@ -1,6 +1,6 @@
 ;; Card 8e09b650: jobs.farm.fertilize :grass true uses bone meal once on each seen open grass block. Grass plot, 3 bone meal carried,
 ;; :max 3, radius 6 round the middle. Should-succeed: bone meal is spent (the job ends with used >= 1, count down). Should-fail: a plot of
-;; plain dirt has no open grass: ends used 0 and keeps its bone meal; without bone meal and :fetch false the job waits :need (a failing start condition parks it).
+;; plain dirt has no open grass: ends used 0 and keeps its bone meal; without bone meal and :ways #{:carried} the job waits :need (a failing start condition parks it).
 {:defaults
  {:tags [:farm :fertilize :jobs] :time :any
   :plot {:height 8 :floor "grass_block"}
@@ -18,6 +18,6 @@
    :after [[:item "bone_meal" 3]]}
   {:name "no-bone-meal-fetch-false-waits-need"
    :body {:inventory []}
-   :act [[:job (jobs.farm.fertilize {:grass true :radius 6 :max 3 :fetch false})]]
+   :act [[:job (jobs.farm.fertilize {:grass true :radius 6 :max 3 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :need :item "bone_meal"}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 15}]}]}

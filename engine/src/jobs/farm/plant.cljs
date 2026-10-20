@@ -30,8 +30,8 @@
   "Sow the bare farmland of a :box (a cell is bare when (x, min.y, z) is farmland and the block above is air).
   The seed is :seed, else the carried seed with the largest stack, kept while carried (one run sows one crop). Carrots
   and potatoes are sown only above what the reserve register holds (jobs.lib.reserve: the food reserve, agent entries); harvest replants whatever the reserve.
-  A missing seed is fetched before the run starts (jobs.lib.need, :fetch; a failed fetch ends the call with its ending as
-  the :because), unless :fetch is false.
+  A missing seed is fetched before the run starts (jobs.lib.need, from the call's :ways; a failed fetch ends the call with its ending as
+  the :because), unless :ways is #{:carried}.
   One call plants the bare cells within the reach setting (eye reach), walking to the nearest (a go-to child) when none is. A cell whose place is
   refused or unreachable, or whose walk is blocked, three times is skipped.
   :plan (optionally :part) makes the plan's crop cells the field instead (:box and :seed are then unused); each bare
@@ -41,7 +41,7 @@
   Refused before it starts: impossible {:reason :bad-args :why}; failed conditions {:reason :no-zones}, {:reason
   :plan-trouble :why} (the plan is missing or unreadable: a wait; it has no crop cells: impossible, also later),
   :refused (every bare cell is refused), :food-reserve (a food-crop seed is carried but the reserve keeps it; nothing is
-  fetched), {:reason :need ..} (no seed, :fetch false) and :nothing-to-do (no bare cell; dried-back dirt names :untilled n).
+  fetched), {:reason :need ..} (no seed, :ways #{:carried}) and :nothing-to-do (no bare cell; dried-back dirt names :untilled n).
   Ends with data {:planted n :skipped [cells] :untilled [cells]} (plan mode: :refused [{:pos :reason}] and :short [seeds
   not carried] instead of :untilled). Done when every bare cell was sown, or some were and the number meets :least (cells,
   default 1); else condition-failed :need, :refused or :food-reserve for cells left without a seed or permission,
@@ -52,8 +52,9 @@
    :seed {:doc "item name to plant; the carried seed with the largest count when nil" :spec a/item? :default nil}
    :plan {:doc "id of a plan of the body's world whose crop cells are the field (then :box and :seed are not used)" :spec a/name? :default nil}
    :part {:doc "with :plan, only the cells of this part" :spec a/name? :default nil}
-   :fetch {:doc "get a missing seed (jobs.lib.need): true, a set of kinds or a map of limits; false refuses the call :need" :spec need/option? :default true}
    :ignore-zones? :shared})
+
+(def ways need/fetch-ways)
 
 (a/defargs settings
   {::reach {:default u/eye-reach :doc "Cells whose centre is this close to the eye (place accepts 4.5) are planted without walking, in blocks." :spec (a/num-in 0 nil)}
@@ -148,10 +149,10 @@
             (seed-need seed (count bare))))))))
 
 (defn fetch-opts
-  "The limits {:how :explore} for fetching seeds, nil when :fetch does not allow items."
+  "The limits {:how} for fetching seeds, nil when the call's ways leave only :carried."
   [c]
-  (when-let [o (need/opts c job-sym)]
-    (when (contains? (:what o) :item) (select-keys o [:how :explore]))))
+  (when-let [how (seq (need/fetch-how c))]
+    {:how (set how)}))
 
 (defn plan-problem [c]
   (let [{:keys [trouble cells]} (planned c)]
