@@ -71,14 +71,21 @@
     (doseq [[kind data] entries] (mem/write! s kind data {:cap 8 :ttl :forever}))
     (mem/view s)))
 
-(defn holds [t blocks & [entries inventory]]
+(defn holds [t blocks & [entries inventory zones]]
   (let [p (:p (lt/setup {:blocks blocks :inventory inventory}))]
-    (t p (view entries) {} (ew/of-data {} {} []) nil)))
+    (t p (view entries) {} (ew/of-data {} {} (or zones [])) nil)))
 
 (deftest the-part-cut-tree-trigger-holds-for-a-hanging-trunk-only
   (is (true? (holds pct/part-cut-tree (merge (fm/ground [[6 0]]) (part-cut 6)))))
   (is (false? (holds pct/part-cut-tree (merge (fm/ground [[6 0]]) (lt/tree 6 0 "oak" 4)))))
   (is (false? (holds pct/part-cut-tree wall))))
+
+(deftest the-part-cut-tree-trigger-ignores-a-trunk-in-another-player-s-zone
+  (let [blocks (merge (fm/ground [[6 0]]) (part-cut 6))
+        zone (fn [owner] [{:name "apiary" :owner owner :min [5 60 -1] :max [7 80 1] :allow #{}}])
+        self (.-username (.self (:p (lt/setup {:blocks blocks}))))]
+    (is (false? (holds pct/part-cut-tree blocks [] nil (zone "Someone"))) "refused up front, so no walk and no refire")
+    (is (true? (holds pct/part-cut-tree blocks [] nil (zone self))) "own zone")))
 
 (deftest the-replant-owed-trigger-holds-while-a-debt-s-sapling-is-carried
   (let [debt [[:forestry/replant {:pos {:x 6 :y 64 :z 0} :species "oak"}]]]

@@ -21,6 +21,14 @@
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :for-s 30}]
    :after [[:block [16 0 16] "oak_log"]]
    :limit-s 40}
+  {:name "part-cut-tree-trigger-leaves-a-trunk-in-another-players-zone"
+   :register [{:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}]
+   :zones [{:name "apiary" :min [15 0 15] :max [17 12 17] :owner "Other" :allow #{}}]
+   :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
+            [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :for-s 30}]
+   :after [[:block [16 6 16] "oak_log"]]
+   :limit-s 40}
   {:name "replant-owed-trigger-plants-the-carried-sapling"
    :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 60}]
    :memory [{:kind :forestry/replant :data {:pos #at [16 0 16] :species "oak"}}]
