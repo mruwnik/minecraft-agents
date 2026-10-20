@@ -27,7 +27,9 @@
             [:fill [12 0 16] [12 1 16] "air"]]
    :body {:at [13.5 0 13.5] :inventory [["red_bed" 1] ["cobblestone" 8] ["stone_pickaxe" 1]]}
    :act [[:job (jobs.survival.night)]
-         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 120]]
+         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 120]
+         ;; the server skips the night only when enough players sleep; with other bodies on it the clock is set to the morning
+         [:time-set 1000]]
    :expect [{:event {:source :job :kind :night.bed-placed} :within-s 120 :of-job true}
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 120}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 300 :of-job true}]
