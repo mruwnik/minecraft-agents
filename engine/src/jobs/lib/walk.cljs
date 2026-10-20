@@ -433,7 +433,7 @@
                 fresh (await (plan-fn []))
                 plan-ms (- (js/performance.now) t)]
             (tell! :danger plan-ms (not (or (walkable? fresh) (searching? fresh) (:refused fresh))))
-            (when (:stopped-short (wplan/no-walk fresh 0 policy))
+            (when (or (:stopped-short (wplan/no-walk fresh 0 policy)) (and (searching? fresh) (:stopped-short fresh)))
               (await (back-off! c fresh (subvec steps 0 (min (count steps) (inc k))) walk-fn policy)))
             (cond
               (walkable? fresh) (recur (assoc fresh :ms plan-ms) (:steps fresh) (inc n) ms walked' damage')

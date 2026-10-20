@@ -233,10 +233,12 @@
          ^js ow (when pr (.-oneWay pr))
          past (when (and (= :open one-way) ow (true? (.-open ow)) (nearer? (.-distance ow))) (.-path ow))
          path (or past (when (and pr (.-path pr) (nearer? (.-distance pr))) (.-path pr)))
-         steps (when path (wplan/stop-short (wplan/dry-end (wplan/path-steps walled path) (wplan/head-wet-fn walled)) (.-dangers ^js walled)))
+         dry (when path (wplan/dry-end (wplan/path-steps walled path) (wplan/head-wet-fn walled)))
+         steps (when path (wplan/stop-short dry (.-dangers ^js walled)))
          walk? (>= (count steps) 2)
          r #js {:status (if walk? "partial" "searching") :reason "searching" :path (when walk? path) :ms ms}]
      (cond-> {:r r :status (.-status r) :pw walled :ms ms :steps (when walk? steps)}
+       (and (not walk?) (< (count steps) (count dry))) (assoc :stopped-short true)
        (and walk? past) (assoc :one-way-taken {:kind (nth executor/move-names (.-move ow)) :at [(.-x ow) (.-y ow) (.-z ow)]})))))
 
 (defn ^:async plan-walk-budgeted!

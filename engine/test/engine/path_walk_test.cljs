@@ -2,6 +2,7 @@
   "jobs.lib.walk (the shared walk driver) against the fake world: one call plans, walks and re-plans to a goal."
   (:require [cljs.test :refer [deftest is are async]]
             [engine.registry :as registry]
+            [engine.path.executor :as executor]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
@@ -387,3 +388,55 @@
         (let [plan (await (one-budgeted-call ledge-over-pit {:x 1.5 :y 64 :z 32.5} [120 61 32] 32 {:one-way :open}))]
           (is (= {:status :searching :replans 0 :fresh true} (wplan/no-walk plan 0)))
           (is (nil? (:one-way-taken plan))))))))
+
+(defn mob-at [x] #js {:x x :y 64 :z 1.5 :block true})
+
+(defn ^:async progress-plan
+  "unfinished-plan of a search whose progress is the path from x 8.5 toward x 20 (found over a free floor), planned over a
+  world whose blocking mob stands at mob-x."
+  [mob-x]
+  (let [p (tu/fake {:blocks (floor (range 130)) :self {:pos {:x 8.5 :y 64 :z 1.5}}})
+        _ (reset! wsearch/searches {})
+        free (await (tu/with-expansion-budget 16 #(walk/plan-walk! {:primitives p} (.pathWorld p) [20 64 1] 0 (walk/default-weight) {:budget 32})))
+        walled (wworld/with-dangers (.pathWorld p) #js [(mob-at mob-x)])
+        search {:walled walled :limited #js {:progress (fn [] #js {:path (.-path (:r free)) :startDistance 100 :distance 80})}}]
+    (reset! wsearch/searches {})
+    (wsearch/unfinished-plan search 1)))
+
+(deftest an-unfinished-search-whose-progress-lies-in-reach-of-a-blocking-mob-walks-nowhere-and-says-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [near (await (progress-plan 14.5))
+              far (await (progress-plan 60.5))]
+          (is (= {:status :searching :replans 0} (wplan/no-walk near 0)))
+          (is (true? (:stopped-short near)) "follow! backs off on it")
+          (is (= "partial" (:status far)))
+          (is (nil? (:stopped-short far))))))))
+
+(deftest retreat-cell-is-the-last-walked-step-a-block-clear-of-a-blocking-mob
+  (let [steps (mapv (fn [x] {:x x :y 64 :z 1}) (range 0 12))
+        cell (fn [steps dangers] (wplan/retreat-cell steps dangers))]
+    (is (= [3 64 1] (cell steps #js [(mob-at 12.5)])) "reach 8: step 3 is 9 from the mob, a block more than step 4")
+    (is (nil? (cell (subvec steps 0 4) #js [(mob-at 12.5)])) "already clear")
+    (is (nil? (cell steps #js [(mob-at 30.5)])) "far mob")
+    (is (nil? (cell steps #js [#js {:x 12.5 :y 64 :z 1.5 :block false}])) "a mob that only costs a toll")
+    (is (nil? (cell steps nil)))
+    (is (nil? (cell (subvec steps 6) #js [(mob-at 12.5)])) "no step of the way clear")))
+
+(deftest back-off-walks-back-along-the-way-to-the-clear-cell-and-does-nothing-when-clear
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake {:blocks (floor (range 40)) :self {:pos {:x 10.5 :y 64 :z 1.5}}})
+              pw (wworld/with-dangers (.pathWorld p) #js [(mob-at 14.5)])
+              walked (mapv (fn [x] {:x x :y 64 :z 1}) (range 0 11))
+              ran (atom [])
+              back! (fn ^:async backing [walked]
+                      (reset! ran [])
+                      (await (walk/back-off! {:primitives p} {:pw pw} walked (fn [steps _] (swap! ran conj steps)) executor/policy)))]
+          (await (back! walked))
+          (is (= 1 (count @ran)))
+          (is (= [10 5] [(:x (first (first @ran))) (:x (peek (first @ran)))]) "from where the body stands back to the first cell a block clear")
+          (await (back! (subvec walked 0 5)))
+          (is (empty? @ran) "clear already: no walk"))))))
