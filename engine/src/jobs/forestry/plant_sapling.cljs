@@ -31,7 +31,7 @@
 
   Start conditions: :refused or :no-zones (the spot may not be planted; the debt stays owed), the spot's soil, light and room (checked
   before any sapling is fetched: :no-soil with :found, :cramped with :at and :block, the species' growth space of
-  jobs.forestry.prepare-rule/headroom, :too-dark when the cell's best light, sky or block, is under ::min-light (9); an unseen cell or light is no refusal;
+  jobs.forestry.prepare-rule/headroom, :too-dark when the cell's best light, sky or block, is under ::min-light (9); an unseen cell or light is no refusal, nor is light in a cell holding a solid block (:occupied is the place child's);
   jobs.forestry.prepare readies the ground), :no-sapling (none carried and
   :ways #{:carried}; data :species); a log on the spot (data :pos) is waited out. A spot that holds its sapling, or no debt owed, is done at once. Ends :done with data
   {:pos} once planted; condition-failed with the need cause when the fetch
@@ -111,7 +111,8 @@
   (let [p (:primitives c)
         under (u/seen-name p (lib/down pos))
         space (when (rule/headroom-of species) (rule/growth-space p pos species))
-        light (light-at p pos)]
+        here (u/seen-name p pos)
+        light (when (and here (rule/tree-free? here)) (light-at p pos))]
     (cond
       (and under (not ((lib/soil-for species) under))) {:reason :no-soil :pos pos :found under}
       (= :cramped (:state space)) (assoc (select-keys space [:at :block]) :reason :cramped :pos pos)
