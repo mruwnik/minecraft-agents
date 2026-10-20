@@ -214,7 +214,7 @@
       :partial :partial
       (cond
         (not (log-allowed? c pos)) :refused
-        (and (:pillar? (:args c)) (not climbing?) (> (u/eye-dist (u/self-pos c) pos) dig-reach)) :high
+        (and (ctx/way? c :pillar) (not climbing?) (> (u/eye-dist (u/self-pos c) pos) dig-reach)) :high
         :else
         (let [wrote? (and (:replant? (:args c)) (trunk-cell? base pos) (record-debt! c pos species))
               e (await (ctx/call c :dig 'jobs.blocks.dig (log-dig-args c pos)))]

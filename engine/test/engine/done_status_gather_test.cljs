@@ -222,11 +222,10 @@
 
 (def logs-2 {:inventory [{:name "oak_log" :count 2}]})
 
-(deftest harvest-wood-is-done-when-the-planting-is-over-or-the-count-is-carried
+(deftest harvest-wood-is-done-when-the-felling-is-over-or-the-count-is-carried
   (are [world args m reason] (= reason (tu/kind-reason (done-of 'jobs.forestry.harvest-wood world args m)))
     logs-2 {:count 2} {} [:ok :harvested]
     logs-2 {:count 3} {} [:later :harvesting]
-    logs-2 {:count 2} {:phase :collect :tree {:x 1 :y 64 :z 1}} [:later :harvesting]
     logs-2 {:count 2} {:children {:fell {}}} [:later :harvesting]
     logs-2 {} {} [:later :harvesting]
     logs-2 {} {:phase :done} [:ok :harvested]))
@@ -234,7 +233,7 @@
 (deftest forestry-maintain-is-done-when-the-forest-is-in-order
   (are [blocks inv m reason] (= reason (tu/kind-reason (done-in 'jobs.forestry.maintain {:blocks blocks :inventory inv} {:plan "forest"} m {"forest" oak-plan})))
     {"3,63,0" "dirt" "3,64,0" "oak_sapling"} [] {:begun true} [:ok :in-order]
-    {"3,63,0" "dirt" "3,64,0" "oak_sapling"} [] {:begun true :collect ["oak"]} [:later :working]
+    {"3,63,0" "dirt" "3,64,0" "oak_sapling"} [] {:begun true :cut {:pos {:x 3 :y 64 :z 0} :species "oak"}} [:later :working]
     {"3,63,0" "dirt"} [] {:begun true} [:later :planting]
     {"3,63,0" "dirt"} [{:name "oak_sapling" :count 1}] {:begun true} [:later :planting]))
 

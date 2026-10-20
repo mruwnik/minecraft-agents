@@ -1,7 +1,7 @@
 ;; Card 2f9da188: a felled mangrove tree is replanted with a mangrove_propagule (trees/sapling-of: mangrove's sapling is the propagule,
 ;; crimson and warped trees use their fungus), where it was left owed before. The propagule is carried; the grass floor takes it.
-;; Should-succeed: harvest-wood on a mangrove log column replants the propagule. Should-fail: no propagule carried leaves the
-;; replant owed (the ending carries :replant-owed, :ways #{:carried}: leaves may drop a propagule) and plants nothing.
+;; Should-succeed: harvest-wood on a mangrove log column, the :replant-owed trigger registered, replants the propagule.
+;; Should-fail: no propagule carried plants nothing.
 {:defaults
  {:tags [:forestry :harvest-wood :mangrove]
   :plot {:height 10 :floor "grass_block"}
@@ -12,17 +12,20 @@
   :limit-s 120}
  :cases
  [{:name "propagule-replanted"
+   :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 10}]
    :body {:inventory [["iron_axe" 1] ["mangrove_propagule" 1]]}
    :act [[:job (jobs.forestry.harvest-wood {:radius 32})]]
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :failed} :for-s 100 :until {:source :job :kind :completed}}]
    :after [[:block [16 0 16] "mangrove_propagule"] [:not-block [16 1 16] "mangrove_log"]]}
-  {:name "no-propagule-leaves-the-replant-owed"
+  {:name "no-propagule-plants-nothing"
+   :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 10}]
    :body {:inventory [["iron_axe" 1]]}
    :act [[:job (jobs.forestry.harvest-wood {:radius 32 :ways #{:carried}})]]
-   :expect [{:event {:source :job :kind :completed :data {:replant-owed 1}} :within-s 100 :of-job true}]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:not-block [16 0 16] "mangrove_propagule"]]}
   {:name "stray-item-in-radius-not-taken"
+   :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 10}]
    :body {:inventory [["iron_axe" 1] ["mangrove_propagule" 1]]}
    :act [[:summon "item" [3.5 0 16.5] "{Item:{id:\"minecraft:red_bed\",count:1}}"]
          [:job (jobs.forestry.harvest-wood {:radius 32})]]

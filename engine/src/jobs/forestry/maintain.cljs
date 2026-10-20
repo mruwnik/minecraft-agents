@@ -21,9 +21,9 @@
 
 (def doc
   "Keep the trees a forest plan wants (cells wanting {:tree species}; a large tree is four cells).
-  One call plants bare planned cells and fells grown trees (jobs.forestry.fell-tree, plant-sapling, collect-drops as
+  One call plants bare planned cells and fells grown trees (jobs.forestry.fell-tree, which picks up its own logs, and plant-sapling as
   children) until none is left (:continue only while a child waits on the world). A cell is noted as owing a sapling
-  before its base log is dug, so a restart or plan edit never loses the replant.
+  before its base log is dug (fell-tree's debt, which the :replant-owed trigger also plants).
   With a planned cell never seen, the body looks around once from where it stands (again after moving over 3 blocks)
   before the start conditions decide, and the first round looks once more before it works.
   Cells are read from the plan and the world at every step. A sapling of the wanted species is left to grow.
@@ -32,7 +32,7 @@
   A bare cell whose sapling is not carried gets it from jobs.forestry.plant-sapling (a child that fetches it: a seen
   chest, or the leaves of its tree). With :ways #{:carried} it is skipped, with one forest.no-sapling note.
   A tree is left standing (forest.left, once, and skipped for the rest of the call; the next call looks again) when:
-  - its column holds more than ::max-logs (6) logs and :pillar? is false (else it is felled from a pillar),
+  - its column holds more than ::max-logs (6) logs and the call's :ways leave out :pillar (else it is felled from a pillar),
   - fell-tree gave up on it (its cause is the :because of forest.left),
   - a log of it may not be dug (another plan's footprint or a zone; checked for the whole column before the first
     dig and again before every felling round), or
@@ -48,7 +48,6 @@
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world; its tree cells are the forest" :spec a/name? :default nil}
    :part {:doc "only the cells of this part" :spec a/name? :default nil}
-   :pillar? {:doc "fell a tree too tall for the ground from a pillar (jobs.forestry.fell-tree); false: leave one over ::max-logs" :spec boolean? :default true}
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :lava-adjacent :falling-block"
             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}
    :ignore-zones? :shared})
@@ -103,12 +102,11 @@
       (some-> (u/seen-name p (up pos)) forestry/log-name?) :cramped
       :else :bare)))
 
-(def ways need/fetch-ways)
+(def ways (conj need/fetch-ways :pillar))
 
 (a/defargs settings
-  {::max-logs {:default 6 :doc "With :pillar? false, a tree whose column holds more logs than this is too tall to fell from the ground and is left." :spec (a/int-in 1 nil)}
-   ::collect-radius {:default 8 :doc "How far from where the body stands the drops of a felled tree are collected, in blocks." :spec (a/num-in 0 nil)}
-   ::job-time-s {:default 1800 :doc "Seconds a maintain run may take: the fellings, collecting, plantings and walks." :spec (a/num-in 0 nil)}})
+  {::max-logs {:default 6 :doc "Without the :pillar way, a tree whose column holds more logs than this is too tall to fell from the ground and is left." :spec (a/int-in 1 nil)}
+   ::job-time-s {:default 1800 :doc "Seconds a maintain run may take: the fellings, plantings and walks." :spec (a/num-in 0 nil)}})
 
 ;; ------------------------------------------------------------------ left cells
 
@@ -171,18 +169,12 @@
          (sort-by #(u/dist here %)))))
 
 (defn owed-cells
-  "[{:pos :species}] cells to plant: the planned cells standing bare and those this job cut (its :replant debts)
-  that are bare now, not left, nearest to the body first."
+  "[{:pos :species}] planned cells standing bare, not left, nearest to the body first."
   [c classes]
-  (let [p (:primitives c)
-        left (left-cells c)
-        here (u/self-pos c)
-        planned (keep (fn [[pos [kind species]]] (when (= :bare kind) {:pos pos :species species})) classes)
-        cut (keep (fn [{:keys [pos species]}]
-                    (when (and (not (contains? classes pos)) (= :bare (classify p pos species)))
-                      {:pos pos :species species}))
-                  (:replant (ctx/mem c)))]
-    (->> (concat planned cut)
+  (let [left (left-cells c)
+        here (u/self-pos c)]
+    (->> classes
+         (keep (fn [[pos [kind species]]] (when (= :bare kind) {:pos pos :species species})))
          (remove #(left (:pos %)))
          (sort-by #(u/dist here (:pos %))))))
 
@@ -231,17 +223,6 @@
 
 (defn bump [m k] (update m k (fnil inc 0)))
 
-(defn ^:async collect!
-  "Step 1: one collect-drops call while a sweep is owed. :again, :continue while it waits."
-  [c]
-  (when-let [species (:collect (ctx/mem c))]
-    (let [r (waits/waiting-out c (await (ctx/call c :collect 'jobs.items.collect-drops
-                                   {:radius (settings/get settings ::collect-radius)
-                                    :items (vec (distinct (mapcat forestry/drop-filter species)))
-                                    :holes (:holes (ctx/mem c))})))]
-      (when (not= :continue r) (ctx/update-mem! c dissoc :collect))
-      (if (= :continue r) :continue :again))))
-
 (defn fell-slot [pos] (keyword (str "fell-" (:x pos) "-" (:y pos) "-" (:z pos))))
 
 (defn remaining-logs
@@ -254,14 +235,13 @@
   [c logs]
   (some #(when-let [r (refusal c (:pos %))] [(:pos %) r]) logs))
 
-(defn too-tall? [c logs] (and (not (:pillar? (:args c))) (> (count logs) (settings/get settings ::max-logs))))
+(defn too-tall? [c logs] (and (not (ctx/way? c :pillar)) (> (count logs) (settings/get settings ::max-logs))))
 
 (defn finished-felling!
-  "The fell child ended with e: count the tree felled, or leave it (e's cause the :because) when logs of it still stand;
-  collect either way."
+  "The fell child ended with e: count the tree felled, or leave it (e's cause the :because) when logs of it still stand."
   [c pos species e]
   (let [logs (remaining-logs c pos species)]
-    (ctx/update-mem! c (fn [m] (-> m (dissoc :cut) (update :collect (fnil conj []) species) (update :holes (fnil conj []) pos))))
+    (ctx/update-mem! c dissoc :cut)
     (if (seq logs)
       (if-let [bad (column-refusal c logs)]
         (leave! c pos :refused :why (second bad) :log (first bad))
@@ -271,8 +251,9 @@
 (defn fell-args
   "The args of the fell-tree child for the tree of species at pos."
   [c pos species]
-  {:at pos :species species :radius 16 :for-plan (:plan (:args c))
-   :accept (:accept (:args c)) :pillar? (:pillar? (:args c)) :ignore-zones? (:ignore-zones? (:args c))})
+  (cond-> {:at pos :species species :radius 16 :for-plan (:plan (:args c))
+           :accept (:accept (:args c)) :ignore-zones? (:ignore-zones? (:args c))}
+    (some? (:ways (:args c))) (assoc :ways (:ways (:args c)))))
 
 (defn ^:async fell!
   "Steps 2 and 4: go on with the tree begun, else begin the nearest ripe one. :again, :continue while the fell child
@@ -303,8 +284,7 @@
             (too-tall? c logs) (leave! c pos :too-tall :logs (count logs))
             bad (leave! c pos :refused :why (second bad) :log (first bad))
             :else (ctx/update-mem! c (fn [m] (-> m
-                                                (assoc :cut {:pos pos :species species})
-                                                (update :replant (fnil conj []) {:pos pos :species species}))))))
+                                                (assoc :cut {:pos pos :species species}))))))
         :again))))
 
 (defn fail-plant!
@@ -314,16 +294,6 @@
     (ctx/update-mem! c assoc-in [:fails pos] n)
     (when (>= n (u/max-failures))
       (apply leave! c pos why (mapcat identity more)))))
-
-(defn settle-debts!
-  "Drop the replant debts whose cell no longer wants a sapling: one now holding a sapling or something foreign, or
-  with no soil. A cell still holding the tree's log (being felled, or left) keeps its debt."
-  [c]
-  (let [p (:primitives c)
-        debts (:replant (ctx/mem c))
-        open (filterv #(not (#{:growing :foreign :no-ground} (classify p (:pos %) (:species %)))) debts)]
-    (when (not= (count debts) (count open))
-      (ctx/update-mem! c assoc :replant open))))
 
 (defn body-cells
   "The cells the body occupies: feet and head."
@@ -395,11 +365,9 @@
         (or (await (survey-field! c field))
             (do (when-not (:begun (ctx/mem c))
                   (ctx/update-mem! c assoc :begun true))
-                (settle-debts! c)
                 (let [classes (classes-of c trees)]
                   (note-cells! c classes)
-                  (or (await (collect! c))
-                      (when (:cut (ctx/mem c)) (await (fell! c trees classes)))
+                  (or (when (:cut (ctx/mem c)) (await (fell! c trees classes)))
                       (await (plant! c classes))
                       (await (fell! c trees classes))
                       (finish! c classes)))))))))
@@ -424,7 +392,7 @@
 (def can-start? (cond/and can-run? not-ready))
 
 (defn done?
-  "Ok once the forest is in order: no tree to collect, fell or replant, no cell blocked or left, the field seen and no
+  "Ok once the forest is in order: no tree to fell or plant, no cell blocked or left, the field seen and no
   child under way; else later with the trees felled and planted this call."
   [c]
   (let [m (ctx/mem c)
@@ -438,7 +406,7 @@
         waiting (cond
                   (:trouble field) :plan-trouble
                   (and (not (:begun m)) (look/unseen? (:primitives c) (field-cells field))) :looking
-                  (or (:collect m) (:cut m)) :working
+                  (:cut m) :working
                   (seq (ripe-cells c classes)) :ripe
                   (seq (plantable c (owed-cells c classes))) :planting
                   (blocked-reason c classes) :blocked

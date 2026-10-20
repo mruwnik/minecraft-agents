@@ -78,7 +78,7 @@
 (defn fetch-how
   "The sources a fetch of the job running in c may use: its call's ways but :carried."
   [c]
-  (disj (call-ways c) :carried))
+  (set/intersection (call-ways c) sources))
 
 (defn ways-of-fetch
   "The call ways for a job still on the old :fetch arg v: :carried alone when it is off, else its :how sources too."

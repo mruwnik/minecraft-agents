@@ -58,16 +58,13 @@
                                                {:blocks (merge (tree 4 0 4) {"4,63,0" "dirt" "8,64,8" "chest"})
                                                 :inventory [{:name "oak_sapling" :count 1}]
                                                 :containers {"8,64,8" []}})]
-          ;; The chest becomes known only after the harvest: deposit puts away
-          ;; every non-tool stack, saplings included, so with a chest known
-          ;; from the start it would take the sapling the replant needs.
+          ;; The chest becomes known only after the harvest: a chest known from the start would be deposited into first.
           (await (run-ticks eng clock 20 1000))
           (is (= ["j2"] (:list (core/state eng))) "harvest finished; deposit declines without a chest")
           (mem/write! (:store eng) :chest {:pos {:x 8 :y 64 :z 8}} mem/place-policy)
           (await (run-ticks eng clock 20 1000))
           (is (= [] (:list (core/state eng))) "deposit finishes")
           (is (= #{"jobs.forestry.harvest-wood" "jobs.storage.deposit"} (names-started seen)))
-          (is (= "oak_sapling" (.-name (.blockAt p #js {:x 4 :y 64 :z 0}))) "replanted")
           (is (not-any? #(or (= :required (:attention %)) (#{:failed :error} (:kind %))) @seen)))))))
 
 (defn fired [seen]

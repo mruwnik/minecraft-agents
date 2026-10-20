@@ -513,17 +513,16 @@
 
 ;; ------------------------------------------------------------- harvest-wood
 
-(deftest harvest-wood-composes-the-three-children
+(deftest harvest-wood-fells-and-collects-in-one-round
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks (merge (tree 3 0 "oak" 3) {"3,63,0" "grass_block"}) :inventory [{:name "oak_sapling" :count 1}]})]
           (core/submit! eng (list 'jobs.forestry.harvest-wood {:species "oak" :radius 10}) {})
-          (is (= 1 (await (run-until-empty eng 20))) "fells, collects and plants in the one round")
+          (is (= 1 (await (run-until-empty eng 20))) "fells and collects in the one round")
           (is (= [] (:list (core/state eng))))
           (is (= 3 (get (inv p) "oak_log")) "logs collected")
-          (is (= "oak_sapling" (.-name (.blockAt p #js {:x 3 :y 64 :z 0}))) "replanted at the base")
-          (is (= [] (debts eng))))))))
+          (is (= 1 (count (debts eng))) "the replant stays owed"))))))
 
 ;; --------------------------------------------------------- retreat / sleep
 

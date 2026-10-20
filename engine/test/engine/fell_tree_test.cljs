@@ -87,7 +87,7 @@
         (let [s (fm/start {:blocks (assoc (lt/tree 6 0 "oak" 3) "7,64,0" "oak_log")} {})
               _ (ledger/write! (:store (:eng s)) [{:cell [7 64 0] :item "oak_log" :state :placed :job "other" :purpose :pillar}])
               _ (eye-reach! (:p s))
-              out (await (child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10 :ways #{:carried}} 100))]
+              out (await (child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10 :ways #{:carried :pillar}} 100))]
           (is (= 3 (:logs out)) "the trunk only")
           (is (= [[6 64 0] [6 65 0] [6 66 0]] (mapv #(subvec % 0 3) (fm/digs (:p s))))))))))
 
@@ -112,7 +112,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p out]} (await (fell tall-9 {:radius 10 :ways #{:carried}} 300))]
+        (let [{:keys [eng p out]} (await (fell tall-9 {:radius 10 :ways #{:carried :pillar}} 300))]
           (is (= {:base {:x 6 :y 64 :z 0} :logs 9 :axe :skipped-fetch-off} (dissoc out :text)))
           (is (= (set (range 64 73)) (set (dug-ys p))) "every log dug")
           (is (pos? (count (h/calls p "jumpPlace"))) "a pillar was built")
@@ -123,7 +123,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p out]} (await (fell (assoc tall :inventory [] :lose-logs? true) {:radius 10 :ways #{:carried}} 60))]
+        (let [{:keys [p out]} (await (fell (assoc tall :inventory [] :lose-logs? true) {:radius 10 :ways #{:carried :pillar}} 60))]
           (is (= [:stopped :need] ((juxt :status :reason) out)))
           (is (= [] (h/calls p "jumpPlace")))
           (is (= [] (pillar-cells p))))))))
@@ -408,7 +408,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (fell (axe-world [] [{:name "iron_axe" :count 1}]) {:radius 10 :ways #{:carried}} 400))]
+        (let [s (await (fell (axe-world [] [{:name "iron_axe" :count 1}]) {:radius 10 :ways #{:carried :pillar}} 400))]
           (is (= 8 (:logs (:out s))))
           (is (= 1 (chest-axes s))))))))
 
@@ -476,7 +476,7 @@
 (deftest a-gathered-log-need-fetches-no-axe
   (let [need (first (table/gather-needs {"oak_log" 3}))]
     (is (= 'jobs.forestry.harvest-wood (:job need)))
-    (is (= #{:carried :chest} (:ways (:args need))) "nothing fetched inside a gather is gathered or crafted: a sapling from leaves may drop out of reach")))
+    (is (= #{:carried :chest :pillar} (:ways (:args need))) "nothing fetched inside a gather is gathered or crafted; a tall tree may be pillared")))
 
 (deftest the-axe-wait-plans-a-chest-or-craft-get-tool-and-no-gather
   (let [lim (need/tighten (merge need/built-in {}) (axe-fetch-limits))
@@ -490,7 +490,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [off (await (fell (axe-world [] [{:name "iron_axe" :count 1}]) {:radius 10 :ways #{:carried}} 400))
+        (let [off (await (fell (axe-world [] [{:name "iron_axe" :count 1}]) {:radius 10 :ways #{:carried :pillar}} 400))
               none (await (fell (axe-world [] []) {:radius 10} 400))
               small (await (fell (assoc (axe-world [] []) :blocks (lt/tree 6 0 "oak" 2)) {:radius 10} 300))]
           (is (= :skipped-fetch-off (:axe (:out off))))
@@ -576,7 +576,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (fell (axe-world [worn-axe] [{:name "stone_axe" :count 1}]) {:radius 10 :ways #{:carried}} 400))]
+        (let [s (await (fell (axe-world [worn-axe] [{:name "stone_axe" :count 1}]) {:radius 10 :ways #{:carried :pillar}} 400))]
           (is (= 8 (:logs (:out s))))
           (is (empty? (kinds s :tool.spare)))
           (is (empty? (kinds s :tool.no-spare))))))))
@@ -613,7 +613,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world {:blocks (merge (lt/tree 6 0 "oak" 4) {"7,65,0" "oak_log" "7,66,0" "oak_log"}) :inventory []}
-              {:keys [p out]} (await (fell world {:radius 10 :ways #{:carried}} 100))]
+              {:keys [p out]} (await (fell world {:radius 10 :ways #{:carried :pillar}} 100))]
           (is (= 6 (:logs out)) "trunk and branch")
           (is (= 6 (count (fm/digs p))))
           (is (= 6 (get (lt/inv p) "oak_log")) "the logs are in the bag"))))))
@@ -624,7 +624,7 @@
       (fn ^:async t []
         (let [world {:blocks (merge (lt/tree 6 0 "oak" 4) {"7,65,0" "oak_log" "7,66,0" "oak_log"}) :inventory []}
               zones [{:name "vault" :min [7 65 0] :max [7 66 0] :allow #{:place}}]
-              {:keys [p out]} (await (fm/with-zones zones #(fell world {:radius 10 :ways #{:carried}} 100)))]
+              {:keys [p out]} (await (fm/with-zones zones #(fell world {:radius 10 :ways #{:carried :pillar}} 100)))]
           (is (= 4 (:logs out)) "the trunk only")
           (is (= [64 65 66 67] (dug-ys p))))))))
 
@@ -634,7 +634,7 @@
       (fn ^:async t []
         (let [chain (into {} (for [x (range 7 15)] [(str x ",65,0") "oak_log"]))
               world {:blocks (merge (lt/tree 6 0 "oak" 4) chain) :inventory []}
-              {:keys [p out]} (await (fell world {:radius 10 :ways #{:carried}} 200))]
+              {:keys [p out]} (await (fell world {:radius 10 :ways #{:carried :pillar}} 200))]
           (is (= (+ 4 (log/max-spread)) (:logs out)) "the trunk and the chain up to the spread from its column")
           (is (not-any? #(< (+ 6 (log/max-spread)) (first %)) (fm/digs p))))))))
 
@@ -664,7 +664,7 @@
           (eye-reach! p)
           (aset p "sensedAt" (fn [pos] (if (hidden? pos) #js {:unknown true} (.call sensed p pos))))
           (aset p "seenBlockAt" (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (.call block-at p pos))))
-          (let [out (await (child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10 :ways #{:carried}} 200))]
+          (let [out (await (child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10 :ways #{:carried :pillar}} 200))]
             (is (= 4 (count (dug-ys p))) "the two logs that went out of sight were found and dug")
             (is (= 4 (:logs out)))))))))
 
@@ -684,7 +684,7 @@
           (eye-reach! p)
           (aset p "sensedAt" (fn [pos] (if (hidden? pos) #js {:unknown true} (.call sensed p pos))))
           (aset p "seenBlockAt" (fn [pos] (if (hidden? pos) #js {:unknown true :pos pos} (.call block-at p pos))))
-          (let [out (await (child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10 :ways #{:carried}} 200))]
+          (let [out (await (child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10 :ways #{:carried :pillar}} 200))]
             (is (= 4 (count (dug-ys p))) "the logs above the two first seen were looked for and dug")
             (is (= 4 (:logs out)))))))))
 

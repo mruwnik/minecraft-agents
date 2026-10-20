@@ -181,7 +181,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (fm/start {:blocks (merge (ground [[3 0]]) (lt/tree 3 0 "oak" 8)) :inventory [(fm/item "oak_sapling" 1)]} {"forest" fm/oak-cell})
-              e (await (ending-of eng maintain {:plan "forest" :pillar? false} 300))]
+              e (await (ending-of eng maintain {:plan "forest" :ways #{:carried :chest :craft :gather}} 300))]
           (is (= {:kind :nothing-possible :cause :left} (kc e)))
           (is (= [{:x 3 :y 64 :z 0}] (get-in e [:data :left]))))))))
 

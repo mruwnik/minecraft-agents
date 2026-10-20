@@ -297,23 +297,6 @@
           (is (= #{3} (set (map first (digs (:p s))))) "the tree whose cell left the plan is not felled")
           (is (= (repeat 4 "oak_log") (mapv #(h/block-at (:p s) 9 % 0) (range 64 68)))))))))
 
-(deftest a-tree-cut-just-before-its-cell-left-the-plan-still-gets-its-replant
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [plan (forest-plan ["a" [[3 64 0]] "oak"] ["b" [[9 64 0]] "birch"])
-              s (start (update oak-world :blocks assoc "9,64,0" "birch_sapling") {"forest" plan})
-              dug (atom 0)]
-          (.override (.-world (:p s)) "dig"
-                     (fn ^:async f [token args impl]
-                       (let [r (await (impl token args))]
-                         (when (= 2 (swap! dug inc))
-                           (world/set-data! (:w s) {"forest" (forest-plan ["b" [[9 64 0]] "birch"])} {}))
-                         r)))
-          (await (tu/child-outcome (:eng s) job {:plan "forest"} 200))
-          (is (= [[3 64 0 "oak_sapling"]] (places (:p s))) "the cut cell is replanted though the plan dropped it")
-          (is (= 4 (count (digs (:p s)))) "the felling is one call: the tree begun is felled whole"))))))
-
 (deftest the-check-waits-on-a-plan-it-cannot-work
   (async done
     (tu/run-async done
@@ -373,11 +356,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p eng seen]} (await (run {:blocks (merge (ground [[3 0]]) (lt/tree 3 0 "oak" 8)) :inventory [(item "oak_sapling" 1)]}
-                                               {"forest" oak-cell} {:plan "forest" :pillar? false} 60))]
+                                               {"forest" oak-cell} {:plan "forest" :ways #{:carried :chest :craft :gather}} 60))]
           (is (= [] (vec (.-calls (.-world p)))))
           (is (= [{:pos {:x 3 :y 64 :z 0} :reason :too-tall}] (warns seen :forest.left)))
           (is (not (listed? eng)) "the run ends")
-          (core/submit! eng (list job {:plan "forest" :pillar? false}) {})
+          (core/submit! eng (list job {:plan "forest" :ways #{:carried :chest :craft :gather}}) {})
           (await (ticks eng 40))
           (is (= [] (vec (.-calls (.-world p)))) "a second run leaves the tree again")
           (is (= 2 (count (warns seen :forest.left))) "no clock carries the first call's verdict over")
@@ -583,12 +566,12 @@
   (is (= {:at {:x 3 :y 64 :z 0} :species "oak" :for-plan "forest" :ignore-zones? false}
          (maintain/plant-args {:args {:plan "forest"}} {:x 3 :y 64 :z 0} "oak"))))
 
-(deftest maintain-fells-a-tall-tree-from-a-pillar-unless-told-not-to
-  (is (false? (maintain/too-tall? {:args {:pillar? true}} (range 9))))
-  (is (true? (maintain/too-tall? {:args {:pillar? false}} (range 9))))
-  (is (false? (maintain/too-tall? {:args {:pillar? false}} (range 6))))
-  (are [on] (= on (:pillar? (maintain/fell-args {:args {:pillar? on}} {:x 3 :y 64 :z 0} "oak")))
-    true false))
+(deftest maintain-fells-a-tall-tree-from-a-pillar-unless-the-way-is-left-out
+  (let [call (fn [ways] {:quote-call {:ways ways}})]
+    (is (false? (maintain/too-tall? (call #{:carried :pillar}) (range 9))))
+    (is (true? (maintain/too-tall? (call #{:carried}) (range 9))))
+    (is (false? (maintain/too-tall? (call #{:carried}) (range 6))))
+    (is (= #{:carried} (:ways (maintain/fell-args {:args {:ways #{:carried}}} {:x 3 :y 64 :z 0} "oak"))))))
 
 (deftest a-dig-hazard-is-refused-not-unreachable
   (are [e out] (= out (fell-log/outcome e))

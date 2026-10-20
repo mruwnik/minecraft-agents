@@ -112,10 +112,18 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [end p]} (await (fell-ending (assoc ft/tall :inventory [] :lose-logs? true) 'jobs.forestry.fell-tree {:radius 10 :ways #{:carried}} 100))]
+        (let [{:keys [end p]} (await (fell-ending (assoc ft/tall :inventory [] :lose-logs? true) 'jobs.forestry.fell-tree {:radius 10 :ways #{:carried :pillar}} 100))]
           (is (= {:kind :condition-failed :cause :need} (kc end)))
           (is (= ["dirt"] (get-in end [:cause :any-of])))
           (is (pos? (get-in end [:cause :count])))
+          (is (= [] (filter #(= "jumpPlace" (.-name %)) (.-calls (.-world p))))))))))
+
+(deftest a-call-without-the-pillar-way-leaves-the-tall-tree
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [end p]} (await (fell-ending ft/tall 'jobs.forestry.fell-tree {:radius 10 :ways #{:carried :chest :craft :gather}} 200))]
+          (is (= {:kind :nothing-possible :cause :tree-unreachable} (kc end)))
           (is (= [] (filter #(= "jumpPlace" (.-name %)) (.-calls (.-world p))))))))))
 
 (deftest a-refused-pillar-leaves-the-tree-and-the-call-ends-tree-unreachable

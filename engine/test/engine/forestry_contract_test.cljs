@@ -44,14 +44,11 @@
          eng (cond-> eng wrap-fell (assoc-in [:jobs 'jobs.forestry.fell-tree :round] (wrap-fell (get-in eng [:jobs 'jobs.forestry.fell-tree :round]))))]
      (assoc s :end (await (ending-of {:eng eng} harvest args n))))))
 
-(deftest a-felled-tree-is-done-and-the-replant-owed-is-data
+(deftest a-felled-tree-is-done-with-no-data
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [end]} (await (harvest-end oak {:species "oak" :radius 10} 40))]
-          (is (= :done (:kind end)))
-          (is (= {:replant-owed 1} (:data end))))
-        (let [{:keys [end]} (await (harvest-end (assoc oak :inventory [{:name "oak_sapling" :count 1}]) {:species "oak" :radius 10} 40))]
           (is (= :done (:kind end)))
           (is (nil? (:data end))))))))
 
@@ -61,8 +58,7 @@
       (fn ^:async t []
         (let [{:keys [end]} (await (harvest-end oak {:species "oak" :radius 10 :count 6} 80))]
           (is (= {:kind :condition-failed :cause :no-tree} (kc end)))
-          (is (= 3 (get-in end [:data :got])))
-          (is (= 1 (get-in end [:data :replant-owed]))))))))
+          (is (= 3 (get-in end [:data :got]))))))))
 
 (defn fail [kind cause] (fn [_real] (fn ^:async f [c] (ctx/end c kind cause {:columns [[3 0]] :why :walk}))))
 

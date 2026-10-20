@@ -90,8 +90,8 @@
   {:what #{:tool} :how #{:chest :craft}})
 
 (def log-ways
-  "The :ways of a gather of logs: a replant sapling (or axe) from a chest only; breaking leaves for one is another gather, of a drop the felling may leave out of reach."
-  #{:carried :chest})
+  "The :ways of a gather of logs: an axe from a chest only, and the pillar for a tall tree."
+  #{:carried :chest :pillar})
 
 (defn gather-needs
   "The raw needs of a plan's :gather map, logs first: [{:key k :count n :job sym :args {..} :seen fn of a block name: what must have been seen}]. A new gather source

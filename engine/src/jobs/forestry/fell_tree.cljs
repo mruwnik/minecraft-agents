@@ -34,7 +34,7 @@
   a :stranded true result when it cannot). With :at it fells that one column instead (:radius and :species are then unused).
   The tree is the one the body walks to soonest among at most 32 candidates, nearest in a line first (jobs.lib.targets);
   one whose walk is blocked, or partial three times in a row, is marked unreachable. A log out of reach from the foot
-  is felled from a pillar (jobs.forestry.fell-tree.pillar: built of dirt, cobblestone and the logs cut, taken back; unless :pillar? is false); a tree that pillar cannot reach
+  is felled from a pillar (jobs.forestry.fell-tree.pillar: built of dirt, cobblestone and the logs cut, taken back; unless the call's :ways leave out :pillar); a tree that pillar cannot reach
   or whose pillar digs no log counts as unreachable. Once a tree is chosen the rest of it is a comfort section
   (ctx/atomic): reflexes at or below that level wait for it, up to their caps.
   Before the third log of a tree big enough for an axe to pay (jobs.lib.trees/axe-worth-fetching?) with none carried it
@@ -64,13 +64,12 @@
    :at {:doc "{:x :y :z} of a base log: fell that one column, wherever the body is (the radius and species are not used), instead of the nearest tree" :spec ::a/pos :default nil}
    :for-plan {:doc "id of the plan whose work this is: its own footprint does not refuse; nil: every plan's footprint does" :spec a/name? :default nil}
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :lava-adjacent :falling-block" :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}
-   :pillar? {:doc "fell a log out of reach of the ground from a pillar (blocks placed, then taken back); false: such a tree is left" :spec boolean? :default true}
    :avoid {:doc "columns [x z] of trees to leave alone (ones an earlier run found cut off)" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
    :replant? {:doc "write a :forestry/replant debt per trunk cell felled; false when the tree is only in the way (clearing a site: a player would not plant there)" :spec boolean? :default true}
    :part-cut? {:doc "fell only part-cut trunks (jobs.lib.part-cut: the lowest log raised over air, not joined to a standing tree)" :spec boolean? :default false}
    :ignore-zones? :shared})
 
-(def ways need/fetch-ways)
+(def ways (conj need/fetch-ways :pillar))
 
 (a/defargs settings
   {::approach-range {:default 3 :doc "Blocks from a tree's base the search for the tree to fell counts as reaching it." :spec (a/num-in 0 nil)}
