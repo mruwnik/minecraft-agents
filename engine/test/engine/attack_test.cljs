@@ -146,6 +146,18 @@
           (is (= (set [7 8]) (set (attacked s))))
           (is (= [9] (mapv :id (fake/entities p))) "the cow lives"))))))
 
+(deftest a-mob-type-heard-behind-rock-is-neither-walked-to-nor-given-up-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p] :as s} (await (scenario {:targets ["zombie"]}
+                                                 {:inventory h/sword :entities [(zed 7 3) (ent 8 "zombie" "hostile" 6 {:visible false})]} 9))
+              d (done-event s)]
+          (is (= #{7} (set (attacked s))))
+          (is (= :cleared (:reason d)))
+          (is (= {} (:given-up d)))
+          (is (some #(= 8 (:id %)) (fake/entities p)) "the unseen zombie is left"))))))
+
 (deftest a-mixed-list-takes-nearest-first-and-moves-on-when-one-dies
   (async done
     (tu/run-async done

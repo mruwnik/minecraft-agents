@@ -3,7 +3,7 @@
 ;; Should-succeed: a type kills every mob of it and leaves the others; a list of types; a cow that walks away (AI on);
 ;; :absent :wait starts when a husk turns up 8 s later.
 ;; Should-fail: nothing of the type (:absent), an entity id that does not exist (:absent), the body's own name
-;; (:absent, no swing), a zombie in a glass box (given up :unreachable), an invulnerable zombie (given up :no-damage).
+;; (:absent, no swing). Should-succeed too: a zombie only heard in a sealed rock pocket is left alone (done :cleared). Should-fail: a zombie in a glass box (given up :unreachable), an invulnerable zombie (given up :no-damage).
 {:defaults
  {:tags [:combat :attack :jobs]
   :plot {:floor "stone"}
@@ -52,6 +52,15 @@
   {:name "own-name-never-attacked"
    :act [[:job (jobs.combat.attack {:targets ["$body"]})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :absent :killed []}} :within-s 20 :of-job true}]}
+  {:name "type-zombie-ignores-one-heard-in-a-sealed-pocket"
+   :blocks [[:fill [26 -1 12] [30 3 20] "stone"] [:fill [28 0 16] [28 1 16] "air"]]
+   :act [[:summon "zombie" [12.5 0 12.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "zombie" [28.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:until-seen {:entity "zombie"} 10]
+         [:job (jobs.combat.attack {:targets "zombie"})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :cleared :given-up {}}} :within-s 90 :of-job true}]
+   :after [[:entities "type=zombie,tag=wt" [[26 0 12] [30 3 20]] 1]
+           [:entities "type=zombie,tag=wt" [[0 0 0] [25 3 31]] 0]]}
   {:name "zombie-in-glass-box-given-up-unreachable"
    :blocks [[:fill [20 -1 20] [24 3 24] "glass" :hollow]]
    :act [[:summon "zombie" [22.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
