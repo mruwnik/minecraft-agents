@@ -12,4 +12,4 @@
  [{:name "stair-down-eighteen-gets-a-mouth-torch-and-a-second-one"
    :act [[:job (jobs.gather.mine {:block "iron_ore" :level #at [16 2 16] :count 1 :heading :east :tunnel-length 3 :radius 8 :mend false})]]
    :expect [{:count-event {:source :action :kind :done :data {:name "place" :status "placed"}} :for-s 280 :at-least 2}
-            {:event {:source :job :kind :mine.tunnel-end :data {:reason :tunnel-length}} :within-s 290 :of-job true}]}]}
+            {:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 290 :of-job true}]}]}

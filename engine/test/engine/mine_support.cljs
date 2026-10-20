@@ -188,7 +188,11 @@
 
 (defn feet [{:keys [p]}] (let [pos (.-pos (.self p))] (mapv js/Math.floor [(.-x pos) (.-y pos) (.-z pos)])))
 
-(defn tunnel-ends [s] (events-of s :mine.tunnel-end))
+(defn tunnel-ends
+  "The tunnel's end as a vector of 0 or 1: the mine ending's data, :reason being the tunnel's :stop."
+  [s]
+  (let [e (done-event s)]
+    (if (:stop e) [(assoc e :reason (:stop e))] [])))
 
 ;; ------------------------------------------------------------------ open-start: where the strip tunnel starts over open cells
 (defn open-line

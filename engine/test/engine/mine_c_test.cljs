@@ -562,14 +562,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[owner extra mended-some declined] [["Fake" {:ignore-zones? true} true []] ["FAKE" {:ignore-zones? true} true []]
-                                                   ["Fake" {} false []]
-                                                   ["Miles" {} false [{:reason :refused :zones ["farm"]}]]
-                                                   ["Miles" {:ignore-zones? true} true []]]]
+        (doseq [[owner extra mended-some] [["Fake" {:ignore-zones? true} true] ["FAKE" {:ignore-zones? true} true]
+                                           ["Fake" {} false]
+                                           ["Miles" {} false]
+                                           ["Miles" {:ignore-zones? true} true]]]
           (let [zone {:name "farm" :min [-2 60 -2] :max [2 70 2] :owner owner :allow #{:dig}}
                 s (await (zoned (merge {:block "dirt" :count 4 :trip true :mend true} extra) {:blocks floor} (ew/of-data {} {} [zone]) 80))]
-            (is (= mended-some (pos? (count (calls s "place")))) (pr-str [owner extra]))
-            (is (= declined (mapv #(select-keys % [:reason :zones]) (events-of s :mine.declined))) (pr-str [owner extra]))))))))
+            (is (= mended-some (pos? (count (calls s "place")))) (pr-str [owner extra]))))))))
 
 (deftest drops-beyond-the-radius-of-the-body-but-near-the-dug-block-are-collected
   (async done

@@ -96,7 +96,7 @@
           (is (= 4 (count (dug-cells s))))
           (is (= :count (:reason (done-event s)))))))))
 
-(deftest only-refused-targets-decline-once-naming-the-zone-or-plan-and-stay-listed
+(deftest only-refused-targets-decline-naming-the-zone-or-plan-and-stay-listed
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -106,8 +106,8 @@
           (let [s (await (zoned {:block "sand" :tunnel-length 0} {:blocks blocks :yaw 270} w 5))]
             (is (zero? (count (.-calls (.-world (:p s))))))
             (is (not (finished? s)))
-            (is (= [(assoc expected :reason :refused)]
-                   (map #(select-keys % [:reason :zones :plans]) (events-of s :mine.declined))))))))))
+            (is (= (assoc expected :reason :refused)
+                   (select-keys (core/waiting (:eng s) "j1") [:reason :zones :plans])))))))))
 
 (deftest a-call-with-no-block-and-no-zone-list-ends-no-block-with-no-warn
   (async done
@@ -118,14 +118,14 @@
           (is (= :no-block (:reason (first (events-of s :stopped)))))
           (is (empty? (calls s "dig"))))))))
 
-(deftest no-zone-list-declines-with-one-warn-and-digs-nothing
+(deftest no-zone-list-declines-and-digs-nothing
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (zoned {:block "sand"} {:blocks {"6,64,0" "sand"}} (ew/of-data {} {} nil) 5))]
           (is (empty? (calls s "dig")))
           (is (not (finished? s)))
-          (is (= [:no-zones] (map :reason (events-of s :mine.declined)))))))))
+          (is (= :no-zones (:reason (core/waiting (:eng s) "j1")))))))))
 
 (deftest a-zone-added-between-the-choice-and-the-dig-stops-the-dig
   (async done
@@ -330,8 +330,7 @@
                 found (lk/seen-blocks (:p s) {:names [fluid] :radius 8 :live? true})
                 end (first (tunnel-ends s))]
             (is (some #(= pos (mapv (:pos %) [:x :y :z])) found) (str fluid " in seen memory: " (pr-str found)))
-            (is (= {:reason hazard :at pos} (select-keys end [:reason :at])) (pr-str end))
-            (is (re-find (re-pattern (str (name hazard) " at " (apply str (interpose "," pos)))) (:text end)) (:text end))))))))
+            (is (= {:reason hazard :at pos} (select-keys end [:reason :at])) (pr-str end))))))))
 
 (deftest a-fluid-in-the-cut-is-in-seen-memory-and-named
   (async done
@@ -342,8 +341,7 @@
               found (lk/seen-blocks (:p s) {:names ["water"] :radius 8 :live? true})
               end (first (tunnel-ends s))]
           (is (some #(= [1 64 0] (mapv (:pos %) [:x :y :z])) found) (pr-str found))
-          (is (= {:reason :fluid-in-cut :fluid :water :at [1 64 0]} (select-keys end [:reason :fluid :at])) (pr-str end))
-          (is (re-find #"\(water\) at 1,64,0" (:text end)) (:text end)))))))
+          (is (= {:reason :fluid-in-cut :fluid :water :at [1 64 0]} (select-keys end [:reason :fluid :at])) (pr-str end)))))))
 
 (deftest the-tunnel-seals-lava-a-cut-lays-open-and-goes-on
   (async done

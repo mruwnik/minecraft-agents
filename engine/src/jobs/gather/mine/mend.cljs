@@ -30,9 +30,9 @@
     (vec (concat (remove #{item} builds) own))))
 
 (defn mend-permitted
-  "The owed cells ({:pos ..}) the job may place on (zones and claims; one mine.declined warn per job when refused)."
+  "The owed cells ({:pos ..}) the job may place on (zones and claims)."
   [c cells]
-  (let [ok (set (gate/allowed c :mine.declined "mine" :place (map :pos cells)))]
+  (let [ok (set (:allowed (gate/look c :place (map :pos cells) {})))]
     (filterv #(ok (:pos %)) cells)))
 
 (defn cells-text [poss] (str/join " " (map #(str (:x %) "," (:y %) "," (:z %)) poss)))

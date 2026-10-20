@@ -20,7 +20,7 @@
    :blocks [[:set [22 0 16] "stone"] [:fill [20 -4 16] [25 1 16] "air"] [:set [26 0 16] "iron_ore"]]
    ;; no building block: with cobblestone the stair bridges the trench and the tunnel goes on across it
    :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
-   :expect [{:event {:source :job :kind :mine.tunnel-end :data {:reason :no-floor}} :within-s 60 :of-job true}
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :no-floor}} :within-s 60 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:got 0}} :within-s 90 :of-job true}]
    :after [[:block [26 0 16] "iron_ore"]]}
   {:name "lit-ore-is-seen-and-dug-from-the-cut-end"

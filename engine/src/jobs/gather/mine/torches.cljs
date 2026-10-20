@@ -157,7 +157,7 @@
         booked (vec-of (or site here))
         reason (cond (nil? site) :no-site
                      (:refused choice) (:refused choice)
-                     (not (gate/allowed? c :mine.declined "mine" :place (zipmap [:x :y :z] cell))) :refused)]
+                     (empty? (:allowed (gate/look c :place [(zipmap [:x :y :z] cell)] {}))) :refused)]
     (if reason
       (left-out! c booked cell reason)
       (let [held? (await (torch/place! c choice block-at))]

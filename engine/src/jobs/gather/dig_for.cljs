@@ -55,7 +55,7 @@
   4. No target: look round once per cell, then by a mineshaft (:shaft, mine.descent) or a stair down (:descend-limit, to the ore's :level) to
      find stone or the tunnel level; a stair that finds no stone ends :no-stone-found.
   5. Else the strip tunnel (mine.tunnel): 1-wide 2-high at the start level along :heading / :direction, :tunnel-length blocks, torches where the planner says (jobs.lib.torch-plan;
-     :torches); any stop ends the dig :tunnel-stopped with one warn mine.tunnel-end {:reason :at :next :walk}.
+     :torches); any stop ends the dig :tunnel-stopped with :stop :length :at :next :walk :fluid :behind.
   :stay-level (jobs.gather.mine-stay, mine.side) keeps the start height and seals a cut that opens into air; seen ore out of reach is
   :unreached in the result.
 
@@ -107,22 +107,17 @@
 ;; ------------------------------------------------------------------ the contract
 
 (defn no-zones
-  "{:reason :no-zones} while no zone list has been read (unless :ignore-zones?), with one warn mine.declined."
+  "{:reason :no-zones} while no zone list has been read (unless :ignore-zones?)."
   [c]
   (when (and (:block (:args c)) (nil? (known/zones c)) (not (:ignore-zones? (:args c))))
-    (ctx/warn-once! c [:access :no-zones] :mine.declined
-                    {:reason :no-zones :text "mine declined: no zone list has been read (zones.edn missing or never valid)"})
     {:reason :no-zones}))
 
 (defn all-refused
-  "{:reason :refused ..} when every seen target is refused by zones, claims or plans, with one warn mine.declined."
+  "{:reason :refused ..} when every seen target is refused by zones, claims or plans."
   [c]
   (let [{:keys [targets refused]} (when (:block (:args c)) (scan c))]
     (when (and (empty? targets) (seq refused))
-      (let [fields (assoc (access/refusal-fields refused) :reason :refused)]
-        (ctx/warn-once! c [:access :refused] :mine.declined
-                        (assoc fields :text (str "mine declined: every target is refused by " (access/refusal-text fields))))
-        fields))))
+      (assoc (access/refusal-fields refused) :reason :refused))))
 
 (defn block-given
   "Never :no-block without the :block to mine."

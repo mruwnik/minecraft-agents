@@ -193,8 +193,7 @@
           (is (= :step-failed (:reason e)))
           (is (= [1 64 0] (:at e)))
           (is (= {:status :stopped :reason :unreachable} (select-keys (:walk e) [:status :reason])))
-          (is (= {:cell "air" :floor "stone"} (select-keys (:walk e) [:cell :floor])))
-          (is (re-find #"walk stopped unreachable, cell air, floor stone" (:text e))))))))
+          (is (= {:cell "air" :floor "stone"} (select-keys (:walk e) [:cell :floor]))))))))
 
 ;; ------------------------------------------------------------------ low health
 (deftest a-badly-hurt-body-waits-to-heal-before-it-mines
@@ -379,7 +378,7 @@
               s (await (zoned {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 20}
                               (rock-world {}) w 120))]
           (is (every? #(< (first %) 8) (dug-cells s)) "no cell of the zone is cut")
-          (is (= [:own-zone] (map :reason (events-of s :mine.tunnel-end)))))))))
+          (is (= [:own-zone] (map :reason (tunnel-ends s)))))))))
 
 (deftest a-fresh-stair-with-no-shaft-suggests-declaring-it
   (async done

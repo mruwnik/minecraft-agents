@@ -16,8 +16,8 @@
    :act [[:job (jobs.access.record-stair {})]
          [:job (jobs.gather.mine {:torches false :block "iron_ore" :count 1 :direction :west :stay-level true :tunnel-length 5 :mend false}) [:alongside]]]
    :expect [{:event {:source :job :kind :completed :data {:steps [:>= 2]}} :within-s 30 :of-job true}
-            {:event {:source :job :kind :mine.tunnel-end} :within-s 180 :of-job true}
-            {:no-event {:source :job :kind :mine.tunnel-end :data {:reason #{:breach-sealed :breach-open}}} :for-s 120}]
+            {:event {:source :job :kind #{:completed :stopped} :data {:stop [:any]}} :within-s 180 :of-job true}
+            {:no-event {:source :job :kind #{:completed :stopped} :data {:stop #{:breach-sealed :breach-open}}} :for-s 120}]
    :after [[:block [19 3 16] "air"] [:block [18 2 16] "air"]]}
   {:name "flat-ground-is-no-stair"
    :body {:at [26.5 10 10.5]}

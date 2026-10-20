@@ -21,4 +21,4 @@
   {:name "water-pocket-beside-the-line-is-not-known-so-the-cut-is-plugged-not-refused"
    :blocks [[:set [22 0 17] "water"]]
    :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :radius 16 :mend false})]]
-   :expect [{:event {:source :job :kind :mine.tunnel-end :data {:reason :fluid-adjacent}} :within-s 100 :of-job true}]}]}
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :fluid-adjacent}} :within-s 100 :of-job true}]}]}

@@ -11,10 +11,10 @@
   :limit-s 110}
  :cases
  [{:name "cave-two-under-the-tunnel-floor-is-no-stop"
-   :expect [{:event {:source :job :kind :mine.tunnel-end :data {:reason :tunnel-length}} :within-s 90 :of-job true}
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :mine.turned} :for-s 90 :of-job true
              :until {:source :job :kind #{:completed :stopped}}}
-            {:no-event {:source :job :kind :mine.tunnel-end :data {:reason :cave-below}} :for-s 90 :of-job true
+            {:no-event {:source :job :kind #{:completed :stopped} :data {:stop :cave-below}} :for-s 90 :of-job true
              :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:block [18 -2 16] "air"] [:not-block [20 0 16] "stone"]]}
   ;; card 3e9ab9fc: the strip tunnel meets a floor gap (the floor cells under [18 0 16] and [19 0 16] are air over the cave): with a
@@ -22,11 +22,11 @@
   {:name "floor-gap-is-bridged-with-a-carried-block"
    :blocks [[:fill [18 -1 16] [19 -1 16] "air"]]
    :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 8]]}
-   :expect [{:event {:source :job :kind :mine.tunnel-end :data {:reason :tunnel-length}} :within-s 100 :of-job true}
-            {:no-event {:source :job :kind :mine.tunnel-end :data {:reason :no-floor}} :for-s 100 :until {:source :job :kind :mine.tunnel-end}}]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind #{:completed :stopped} :data {:stop :no-floor}} :for-s 100 :until {:source :job :kind #{:completed :stopped} :data {:stop [:any]}}}]
    :after [[:block [18 -1 16] "cobblestone"] [:not-block [20 0 16] "stone"]]}
   ;; the tunnel's own cells are glass (drops nothing): mined stone would drop cobblestone, which the tunnel bridges with
   {:name "floor-gap-with-no-block-ends-no-floor"
    :blocks [[:fill [17 0 16] [21 1 16] "glass"] [:fill [18 -1 16] [19 -1 16] "air"]]
-   :expect [{:event {:source :job :kind :mine.tunnel-end :data {:reason :no-floor}} :within-s 100 :of-job true}]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :no-floor}} :within-s 100 :of-job true}]
    :after [[:block [18 -1 16] "air"]]}]}

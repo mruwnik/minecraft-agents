@@ -30,6 +30,6 @@
    :body {:at [12.5 0 16.5]}
    :zones [{:name "home" :min [24 -1 14] :max [28 3 18] :owner "$body"}]
    :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 20 :radius 8})]]
-   :expect [{:event {:source :job :kind :mine.tunnel-end :data {:reason :own-zone}} :within-s 120 :of-job true}]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :own-zone}} :within-s 120 :of-job true}]
    :after [[:block [24 0 16] "stone"] [:item "raw_iron" 0]]
    :limit-s 140}]}

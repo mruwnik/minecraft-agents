@@ -79,39 +79,28 @@
 
 (defn tunnel-reason [stop] (case stop :tunnel-length :tunnel-length :no-tool :no-tool :tunnel-stopped))
 
-(defn walk-text [{:keys [status reason cell floor]}]
-  (str " (walk " (str/join " " (map #(if (keyword? %) (name %) %) (remove nil? [status reason])))
-       (when cell (str ", cell " cell ", floor " floor)) ")"))
-
 (defn tunnel-end!
-  "The tunnel is done (stop: :tunnel-length or why it stopped at cell at): one warn mine.tunnel-end, then the mend.
+  "The tunnel is done (stop: :tunnel-length or why it stopped at cell at): then the mend; the ending carries :stop :length :at :next :walk :fluid :behind.
   walk: for :walk-failed, what stopped the walk (step-to!)."
   [c stop at & [next walk]]
   (let [{:keys [tunnel]} (ctx/mem c)
         {:keys [heading steps]} tunnel
-        fluid (when (and at (= :fluid-in-cut stop)) (u/seen-name (:primitives c) at))
-        got (targets/got c)]
+        fluid (when (and at (= :fluid-in-cut stop)) (u/seen-name (:primitives c) at))]
     (if (and (if (:stay-level (:args c)) (leg-stops stop) (and (zero? steps) (heading-stops stop)))
              (< (+ steps (:spent (ctx/mem c) 0)) (:tunnel-length (:args c)))
              (turn-heading! c stop))
       :again
       (do
     (ctx/update-mem! c update :legs (fnil conj []) (cond-> {:heading heading :length steps :stop stop} (:behind (ctx/mem c)) (assoc :behind (:behind (ctx/mem c)))))
-    (ctx/emit! c :mine.tunnel-end :warn
-               (cond-> {:reason stop :heading heading :length steps :y (:y (:origin tunnel)) :got got
-                        :text (str "mine's tunnel ended after " steps " blocks " heading " at y " (:y (:origin tunnel)) ": "
-                                   (if (= :tunnel-length stop) "its length is used up" (str "stopped, " (name stop) (when fluid (str " (" fluid ")"))))
-                                   (when at (str " at " (str/join "," (access/cell at))))
-                                   (when walk (walk-text walk))
-                                   "; got " got " of " (targets/owed c))}
-                 at (assoc :at (access/cell at))
-                 fluid (assoc :fluid (keyword fluid))
-                 next (assoc :next (access/cell next))
-                 (:behind (ctx/mem c)) (assoc :behind (:behind (ctx/mem c)))
-                 walk (assoc :walk walk)))
     (ctx/update-mem! c assoc-in [:tunnel :stop] stop)
     (stay/record-tunnel! c tunnel (headings heading))
-    (stop! c (tunnel-reason stop))))))
+    (stop! c (tunnel-reason stop)
+           (cond-> {:stop stop :length steps}
+             at (assoc :at (access/cell at))
+             fluid (assoc :fluid (keyword fluid))
+             next (assoc :next (access/cell next))
+             (:behind (ctx/mem c)) (assoc :behind (:behind (ctx/mem c)))
+             walk (assoc :walk walk)))))))
 
 (defn result-of
   "A child's ending e as the result map the tunnel reads: its data with :status and the cause's :reason, nil while it

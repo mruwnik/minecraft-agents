@@ -23,7 +23,7 @@
    :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :count 1 :direction :east :level #at [16 -14 16] :tunnel-length 6 :radius 8 :mend false})]]
    :expect [{:event {:source :job :kind :mine.descent-stopped :level :warn} :within-s 200 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:got 0 :reason :descent-stopped}} :within-s 280 :of-job true}
-            {:no-event {:source :job :kind :mine.tunnel-end} :for-s 280 :of-job true :until {:source :job :kind #{:completed :stopped}}}]
+            {:no-event {:source :job :kind #{:completed :stopped} :data {:stop [:any]}} :for-s 280 :of-job true :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "raw_iron" 0]]}
   {:name "no-ore-gives-up-naming-tunnel-and-depth"
    :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :count 1 :direction :east :level #at [16 -10 16] :tunnel-length 4 :radius 8 :mend false})]]
@@ -34,5 +34,5 @@
    :blocks [[:fill [19 2 16] [19 3 16] "gravel"] [:set [19 4 16] "stone"]]
    :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :count 1 :direction :east :level false :tunnel-length 6 :radius 8 :mend false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0 :reason :tunnel-length}} :within-s 200 :of-job true}
-            {:no-event {:source :job :kind :mine.tunnel-end :data {:reason :walk-failed}} :for-s 200 :until {:source :job :kind #{:completed :stopped}}}]
+            {:no-event {:source :job :kind #{:completed :stopped} :data {:stop :walk-failed}} :for-s 200 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:not-block [19 1 16] "gravel"] [:not-block [19 2 16] "gravel"] [:not-block [19 3 16] "gravel"]]}]}
