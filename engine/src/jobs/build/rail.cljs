@@ -12,6 +12,8 @@
             [jobs.lib.util :as u]
             [jobs.lib.storage :as storage]
             [jobs.build.from-plan :as build]
+            [jobs.build.from-plan.book :as fp-book]
+            [jobs.build.from-plan.cells :as fp-cells]
             [jobs.lib.build.plan :as plan]
             [jobs.lib.build.text :as text]
             [plan.rail :as rail]))
@@ -171,7 +173,7 @@
         beside (beside-stand c body (:pos cell) planned bad)
         stand (or (stand-behind c ps from cell) beside)]
     (if-not stand
-      (do (ctx/update-mem! c build/walk-fail (:pos cell) :unreachable (give-up) (u/self-pos c))
+      (do (ctx/update-mem! c fp-book/walk-fail (:pos cell) :unreachable (give-up) (u/self-pos c))
           :again)
       (if (= :partial (await (build/walk-stand! c cell stand {:ways #{:walk :clear-seal}}))) :continue :again))))
 
@@ -180,8 +182,8 @@
   [c ordered]
   (loop [left ordered n 0]
     (if-let [cell (first left)]
-      (if (seq (build/in-reach c [cell]))
-        (do (await (build/place-one! c cell))
+      (if (seq (fp-cells/in-reach c [cell]))
+        (do (await (fp-book/place-one! c cell (build/give-up)))
             (recur (rest left) (inc n)))
         {:placed n :next cell})
       {:placed n})))
@@ -218,7 +220,7 @@
     (cond
       (>= (get-in (ctx/mem c) [:fixes pos] 0) (fix-budget)) (do (ctx/update-mem! c assoc-in [:given-up pos] :shape)
                                                                    :again)
-      (empty? (build/in-reach c [cell])) (await (walk-to! c ps from cells cell))
+      (empty? (fp-cells/in-reach c [cell])) (await (walk-to! c ps from cells cell))
       :else (await (dig-away! c pos)))))
 
 (defn finish!
@@ -241,7 +243,7 @@
   [c cells]
   (let [p (:primitives c)
         ps (mapv :pos (rail/line cells))
-        _ (build/settle-placing! c cells)
+        _ (fp-book/settle-placing! c cells)
         _ (when-not (:from (ctx/mem c)) (ctx/update-mem! c assoc :from (nearer-end c ps)))
         from (:from (ctx/mem c))
         closed (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))

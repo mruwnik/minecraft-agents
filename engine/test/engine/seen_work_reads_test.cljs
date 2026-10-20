@@ -11,7 +11,7 @@
             [jobs.farm.fertilize :as fertilize]
             [jobs.farm.field :as fld]
             [jobs.lib.farm :as farm]
-            [jobs.farm.tend :as tend]
+            [jobs.farm.tend-box :as tend-box]
             [jobs.farm.tend-plan :as tend-plan]
             [jobs.farm.till :as till]
             [jobs.apiary.maintain :as apiary-maintain]
@@ -105,10 +105,10 @@
 (deftest tend-ground-and-unripe-need-sight
   (let [box {:min cell :max cell}
         blocks {"0,64,4" "farmland" "0,65,4" "wheat"}]
-    (is (= [{:pos cell :name nil :above nil}] (tend/ground-layer (wrapped blocks true) box)))
-    (is (= [{:pos cell :name "farmland" :above "wheat"}] (tend/ground-layer (wrapped blocks false) box)))
-    (is (= [] (tend/unripe-in-box (wrapped {"0,64,4" "wheat"} true {:ages {cell 1}}) box cell 8)))
-    (is (= [cell] (tend/unripe-in-box (wrapped {"0,64,4" "wheat"} false {:ages {cell 1}}) box cell 8)))))
+    (is (= [{:pos cell :name nil :above nil}] (tend-box/ground-layer (wrapped blocks true) box)))
+    (is (= [{:pos cell :name "farmland" :above "wheat"}] (tend-box/ground-layer (wrapped blocks false) box)))
+    (is (= [] (tend-box/unripe-in-box (wrapped {"0,64,4" "wheat"} true {:ages {cell 1}}) box cell 8)))
+    (is (= [cell] (tend-box/unripe-in-box (wrapped {"0,64,4" "wheat"} false {:ages {cell 1}}) box cell 8)))))
 
 (deftest tidy-world-block-needs-sight
   (let [blocks {"0,64,4" "stone"}]

@@ -10,7 +10,7 @@
             [engine.triggers :as triggers]
             [jobs.farm.find-spot :as find-spot]
             [jobs.farm.field :as fld]
-            [jobs.farm.tend :as tend]))
+            [jobs.farm.tend-box :as tend-box]))
 
 (def field {:blocks {"1,64,0" "wheat" "2,64,0" "wheat"} :ages {"1,64,0" 7 "2,64,0" 3}})
 (def origin {:x 0 :y 64 :z 0})
@@ -38,8 +38,8 @@
 
 (deftest tend-counts-only-the-unripe-crops-seen
   (let [box {:min {:x 0 :y 64 :z 0} :max {:x 4 :y 64 :z 2}}]
-    (is (= 1 (count (tend/unripe-in-box (tu/seeing-all (tu/fake field)) box origin 6))))
-    (is (empty? (tend/unripe-in-box (tu/blind (tu/fake field)) box origin 6)))))
+    (is (= 1 (count (tend-box/unripe-in-box (tu/seeing-all (tu/fake field)) box origin 6))))
+    (is (empty? (tend-box/unripe-in-box (tu/blind (tu/fake field)) box origin 6)))))
 
 (deftest water-counts-for-a-spot-only-when-seen
   (let [world {:blocks (assoc (into {} (for [x (range 0 4) z (range 0 4)] [(str x ",63," z) "dirt"])) "4,63,0" "water")}

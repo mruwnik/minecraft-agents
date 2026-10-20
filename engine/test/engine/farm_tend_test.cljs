@@ -10,6 +10,7 @@
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
             [jobs.farm.tend :as tend]
+            [jobs.farm.tend-box :as tend-box]
             [jobs.farm.tend-decide :as decide]
             [jobs.farm.tend-stock :as stock]
             [jobs.lib.look :as look]
@@ -359,7 +360,7 @@
 ;; ------------------------------------------------------------------ pure pieces
 
 (deftest reserve-sows-the-field-twice-over-one-seed-at-a-time
-  (are [expected beds inventory] (= expected (tend/reserve beds inventory))
+  (are [expected beds inventory] (= expected (tend-box/reserve beds inventory))
     {} 0 [(item "wheat_seeds" 9)]
     {"wheat_seeds" 4} 2 [(item "wheat_seeds" 9)]
     {"wheat_seeds" 3} 2 [(item "wheat_seeds" 3)]
@@ -396,19 +397,19 @@
 
 (deftest the-box-geometry
   (are [expected actual] (= expected actual)
-    {:x 3 :y 64 :z 3} (tend/centre box)
-    3 (tend/radius box (tend/centre box))
-    9 (tend/box-cells {:min {:x 0 :y 0 :z 0} :max {:x 2 :y 0 :z 2}})
-    true (tend/in-box? box {:x 4 :y 64 :z 2})
-    false (tend/in-box? box {:x 5 :y 64 :z 2})
-    false (tend/in-box? box {:x 3 :y 65 :z 2})
+    {:x 3 :y 64 :z 3} (tend-box/centre box)
+    3 (tend-box/radius box (tend-box/centre box))
+    9 (tend-box/box-cells {:min {:x 0 :y 0 :z 0} :max {:x 2 :y 0 :z 2}})
+    true (tend-box/in-box? box {:x 4 :y 64 :z 2})
+    false (tend-box/in-box? box {:x 5 :y 64 :z 2})
+    false (tend-box/in-box? box {:x 3 :y 65 :z 2})
     true (tend/usable-box? box)
     false (tend/usable-box? nil)
     false (tend/usable-box? {:min {:x 0 :y 63 :z 0} :max {:x 4 :y 63 :z 4}})
     false (tend/usable-box? {:min {:x 0 :y 63 :z 0} :max {:x 60 :y 64 :z 20}})))
 
 (deftest beds-are-farmland-or-uncovered-dirt
-  (are [expected ground] (= expected (tend/beds ground))
+  (are [expected ground] (= expected (tend-box/beds ground))
     2 [{:name "farmland" :above "wheat"} {:name "dirt" :above "air"}]
     1 [{:name "grass_block" :above "short_grass"} {:name "grass_block" :above "stone"}]
     0 [{:name "stone" :above "air"} {:name "dirt" :above nil}]))

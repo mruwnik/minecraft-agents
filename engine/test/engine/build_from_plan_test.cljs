@@ -16,6 +16,8 @@
             [jobs.lib.reach :as reach]
             [jobs.lib.world-files :as world]
             [jobs.build.from-plan :as build]
+            [jobs.build.from-plan.book :as fp-book]
+            [jobs.build.from-plan.cells :as fp-cells]
             [jobs.lib.build.plan :as plan]
             [plan.surface :as surface]))
 
@@ -818,8 +820,8 @@
                              [(h/cell-key x y z) "stone"]))
               {:keys [p]} (start {:blocks pit :self {:pos {:x 4.5 :y 64 :z 4.5}}} {} [])]
           (is (reach/enclosed? p))
-          (is (not (build/seals? {:primitives p} [4 65 4])))
-          (is (not (build/seals? {:primitives p} [4 64 3]))))))))
+          (is (not (fp-cells/seals? {:primitives p} [4 65 4])))
+          (is (not (fp-cells/seals? {:primitives p} [4 64 3]))))))))
 
 (deftest a-box-on-a-slope-is-built-complete-with-the-body-starting-inside
   (async done
@@ -878,9 +880,9 @@
   (let [block (fn [x y z] [(h/cell-key x y z) "stone"])
         around (into {} (map (fn [[x y z]] (block x y z))) [[3 65 3] [3 63 3] [4 64 3] [2 64 3] [3 64 4] [3 64 2]])
         p (tu/seeing-all (tu/fake-on-floor {:blocks around}))]
-    (is (true? (build/buried? p [3 64 3])))
-    (is (false? (build/buried? p [8 64 3])) "open air round it")
-    (is (false? (build/buried? (tu/seeing-all (tu/fake-on-floor {:blocks (dissoc around (h/cell-key 3 65 3))})) [3 64 3]))
+    (is (true? (fp-cells/buried? p [3 64 3])))
+    (is (false? (fp-cells/buried? p [8 64 3])) "open air round it")
+    (is (false? (fp-cells/buried? (tu/seeing-all (tu/fake-on-floor {:blocks (dissoc around (h/cell-key 3 65 3))})) [3 64 3]))
         "air above it")))
 
 (deftest surface-follow-moves-each-column-onto-its-seen-ground
@@ -1230,18 +1232,18 @@
   (let [m {:given-up {[1 64 1] :unreachable [2 64 2] :refused [3 64 3] :unreachable}
            :walk-given {[1 64 1] {:x 0 :y 64 :z 0} [3 64 3] {:x 0 :y 64 :z 0}}
            :retries {[3 64 3] 2}}]
-    (is (= m (build/retry-walks m {:x 2 :y 64 :z 0} false)) "not moved: nothing")
+    (is (= m (fp-book/retry-walks m {:x 2 :y 64 :z 0} false)) "not moved: nothing")
     (is (= {[2 64 2] :refused [3 64 3] :unreachable}
-           (:given-up (build/retry-walks m {:x 20 :y 64 :z 0} false))) "moved: the walk one is open, the refused stays, the twice-retried stays")
-    (is (= 1 (get-in (build/retry-walks m {:x 20 :y 64 :z 0} false) [:retries [1 64 1]])))
-    (is (not (contains? (:walk-given (build/retry-walks m {:x 20 :y 64 :z 0} false)) [1 64 1])))
+           (:given-up (fp-book/retry-walks m {:x 20 :y 64 :z 0} false))) "moved: the walk one is open, the refused stays, the twice-retried stays")
+    (is (= 1 (get-in (fp-book/retry-walks m {:x 20 :y 64 :z 0} false) [:retries [1 64 1]])))
+    (is (not (contains? (:walk-given (fp-book/retry-walks m {:x 20 :y 64 :z 0} false)) [1 64 1])))
     (is (= {[2 64 2] :refused [3 64 3] :unreachable}
-           (:given-up (build/retry-walks m {:x 0 :y 64 :z 0} true))) "finishing: retried in place")))
+           (:given-up (fp-book/retry-walks m {:x 0 :y 64 :z 0} true))) "finishing: retried in place")))
 
 (deftest a-cell-whose-walk-keeps-failing-is-reopened-max-retries-times-then-stays-given-up
   (let [pos [1 64 1]
-        fail-round (fn [m at] (reduce (fn [m _] (build/walk-fail m pos :unreachable 2 at)) m (range 2)))
-        step (fn [m] (build/retry-walks (fail-round m {:x 0 :y 64 :z 0}) {:x 0 :y 64 :z 0} true))
+        fail-round (fn [m at] (reduce (fn [m _] (fp-book/walk-fail m pos :unreachable 2 at)) m (range 2)))
+        step (fn [m] (fp-book/retry-walks (fail-round m {:x 0 :y 64 :z 0}) {:x 0 :y 64 :z 0} true))
         runs (iterate step {})]
     (is (= {pos :unreachable} (:given-up (fail-round {} {:x 0 :y 64 :z 0}))))
     (is (= {:x 5 :y 64 :z 5} (get-in (fail-round {} {:x 5 :y 64 :z 5}) [:walk-given pos])) "noted where the body stood at the first give-up")
@@ -1252,9 +1254,9 @@
 
 (deftest walk-fail-notes-only-newly-given-up-cells
   (let [at1 {:x 0 :y 64 :z 0}
-        m (build/walk-fail {:given-up {[1 64 1] :unreachable}} [1 64 1] :unreachable 1 at1)]
+        m (fp-book/walk-fail {:given-up {[1 64 1] :unreachable}} [1 64 1] :unreachable 1 at1)]
     (is (not (contains? (:walk-given m) [1 64 1])) "already given up: no note")
-    (is (= at1 (get-in (build/walk-fail {} [2 64 2] :unreachable 1 at1) [:walk-given [2 64 2]])))))
+    (is (= at1 (get-in (fp-book/walk-fail {} [2 64 2] :unreachable 1 at1) [:walk-given [2 64 2]])))))
 
 ;; ---------------------------------------------------------------- wood species
 
