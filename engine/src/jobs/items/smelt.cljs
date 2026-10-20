@@ -411,7 +411,7 @@
 
 (defn can-start?
   "Never when the :item is one no furnace cooks; later :refused while a zone or claim bars the furnace; look (once) when a
-  single item is to be smelted and no furnace is known: the round puts one down or fetches one after that."
+  single item is to be smelted and no furnace is known or carried: the round puts one down or fetches one after that."
   [c]
   (let [item (:item (:args c))]
     (cond
@@ -420,7 +420,7 @@
 
       (and item (not (coll? item)))
       (contract/all [(furnace-refused c)
-                     (checks/seen-or-look c (boolean (or (furnace-of c) (nearest-furnace c (sp/input-of item (carried c))))) :no-furnace
+                     (checks/seen-or-look c (boolean (or (furnace-of c) (pos? (storage/carried (carried c) "furnace")) (nearest-furnace c (sp/input-of item (carried c))))) :no-furnace
                                           {:known "a furnace is known" :missing "no furnace in sight" :fetches? true})])
 
       :else (furnace-refused c))))

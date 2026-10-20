@@ -1046,7 +1046,9 @@
     (is (= [:never :not-smeltable "diamond"] ((juxt first #(:reason (nth % 2)) #(:item (nth % 2))) (status "diamond"))))
     (is (= [:look :no-furnace] (reason (status "raw_iron"))) "no furnace in sight: one look round first")
     (is (= [:look :no-furnace] (reason (status "iron_ingot"))) "a product names its input")
-    (is (= :ok (first (status "raw_iron" {:furnace {:x 1 :y 64 :z 0}}))))))
+    (is (= :ok (first (status "raw_iron" {:furnace {:x 1 :y 64 :z 0}}))))
+    (is (= :ok (first ((:can-start? job) {:primitives (tu/fake-on-floor (assoc base-world :inventory [{:name "furnace" :count 1}])) :args {:item "raw_iron"} :view (fn [] {:now 0 :data {}}) :root "j" :slots []})))
+        "a carried furnace is put down without a look round")))
 
 (deftest a-give-up-before-any-load-is-a-failed-condition-with-the-reason-as-cause
   (async done
