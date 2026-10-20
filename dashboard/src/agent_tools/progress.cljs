@@ -225,14 +225,14 @@
 ;; Wakes
 
 (defn routine-idle?
-  "Whether every job of a body.idle waits for something that clears by itself or holds on purpose. Idle-ok jobs (a
-  noop) do not count: a body with only those has no work."
+  "Whether a body.idle is the engine working normally: some job holds on purpose or waits for a routine reason, and
+  no job failed or waits for another. Jobs with neither (queued behind the running one) do not count; idle-ok jobs
+  (a noop) neither."
   [jobs]
-  (let [real (remove :idle-ok jobs)]
-    (and (seq real)
-         (every? #(and (not (:failed %))
-                       (or (:holding %) (and (:waiting %) (routine-wait? (:waiting %)))))
-                 real))))
+  (let [real (remove :idle-ok jobs)
+        routine? #(or (:holding %) (and (:waiting %) (routine-wait? (:waiting %))))]
+    (boolean (and (some routine? real)
+                  (every? #(and (not (:failed %)) (or (routine? %) (not (:waiting %)))) real)))))
 
 (defn idle-text [jobs]
   (if (every? :idle-ok jobs)
