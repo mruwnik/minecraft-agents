@@ -121,15 +121,15 @@
 (defn composter-allowed?
   "Whether the job may use the composter at pos (zones, claims, footprints)."
   [c pos]
-  (boolean (seq (gate/allowed-quiet c :harvest [pos] {:own-plans-ok? true}))))
+  (boolean (seq (:allowed (gate/look c :harvest [pos] {:own-plans-ok? true})))))
 
 (defn nearest-composter
   "The nearest composter within :radius that the zone rules let the job use."
   [c]
   (let [me (u/self-pos c)]
-    (->> (gate/allowed-quiet c :harvest
-                       (map :pos (look/seen-blocks (:primitives c) {:names ["composter"] :radius (settings/get settings ::radius) :live? true}))
-                       {:own-plans-ok? true})
+    (->> (:allowed (gate/look c :harvest
+                                 (map :pos (look/seen-blocks (:primitives c) {:names ["composter"] :radius (settings/get settings ::radius) :live? true}))
+                                 {:own-plans-ok? true}))
          (sort-by #(u/dist me %))
          first)))
 

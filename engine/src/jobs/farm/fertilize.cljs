@@ -97,7 +97,7 @@
   [c]
   (let [refused (:refused (ctx/mem c) #{})
         me (u/self-pos c)]
-    (->> (gate/allowed-quiet c :harvest (remove refused (raw-targets c)) {:own-plans-ok? true})
+    (->> (:allowed (gate/look c :harvest (remove refused (raw-targets c)) {:own-plans-ok? true}))
          (sort-by #(u/dist me %)))))
 
 (defn lacks-meal?

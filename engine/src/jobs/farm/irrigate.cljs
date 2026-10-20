@@ -111,7 +111,7 @@
     (count (filter (fn [{:keys [x y z]}] (farm/hydrated? ws x y z)) dry))))
 
 (defn permitted? [c pos]
-  (boolean (seq (gate/allowed-quiet c :dig [pos] {:except (:for-plan (:args c))}))))
+  (boolean (seq (:allowed (gate/look c :dig [pos] {:except (:for-plan (:args c))})))))
 
 (defn solid-at?
   "Whether the block at pos is seen and neither air, fluid nor clearable."

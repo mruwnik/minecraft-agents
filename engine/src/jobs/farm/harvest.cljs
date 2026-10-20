@@ -125,7 +125,7 @@
   "The poss the job may act on with action: zones, claims and the footprints of plans but its own (see jobs.lib.gate).
   A plan this body made never refuses its own work."
   [c action poss]
-  (gate/allowed-quiet c action poss {:except (:plan (:args c)) :own-plans-ok? true}))
+  (:allowed (gate/look c action poss {:except (:plan (:args c)) :own-plans-ok? true})))
 
 (defn cut-action
   "The zone action asked for cutting a crop: :harvest in box mode; with :plan :dig, the action the plan jobs (farm.tend)

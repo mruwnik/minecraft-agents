@@ -116,7 +116,7 @@
 (defn sowable-cells
   "The ground cells of cells whose sowing (the cell above) the job may do."
   [c cells]
-  (let [ok (set (gate/allowed-quiet c :sow (map #(update % :y inc) cells) {:own-plans-ok? true}))]
+  (let [ok (set (:allowed (gate/look c :sow (map #(update % :y inc) cells) {:own-plans-ok? true})))]
     (filterv #(ok (update % :y inc)) cells)))
 
 (defn unsown
@@ -254,7 +254,7 @@
                                            :else (update acc :seeded conj debt)))
                                        {:short #{} :seeded []}
                                        (fld/planned-bare (:primitives c) cells))
-        ok (set (gate/allowed-quiet c :sow (map :pos seeded) {:except plan :own-plans-ok? true}))]
+        ok (set (:allowed (gate/look c :sow (map :pos seeded) {:except plan :own-plans-ok? true})))]
     (reduce (fn [acc {:keys [pos] :as debt}]
               (if (ok pos)
                 (update acc :ready conj debt)
