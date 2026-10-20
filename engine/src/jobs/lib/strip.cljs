@@ -255,14 +255,3 @@
                              [(js/Math.abs (- a start)) (if (and (= k :cobweb) (zero? w) (<= 0 h 1)) 0 1) cell]))
                    (mapv (fn [{:keys [cell name] k :class}] {:pos (pos cell) :name name :class k})))
      :kept (mapv (fn [[c why]] {:pos (pos (:cell c)) :why why}) kept)}))
-
-(def spawn-box-reach
-  "A spawner's spawn box: cells within :horizontal either side along x and z, and :vertical up or down."
-  {:horizontal 4 :vertical 1})
-
-(defn in-spawn-box?
-  "Whether cell [x y z] lies in the spawn box of the spawner at pos {:x :y :z}."
-  [{:keys [x y z]} [cx cy cz]]
-  (and (<= (js/Math.abs (- cx x)) (:horizontal spawn-box-reach))
-       (<= (js/Math.abs (- cy y)) (:vertical spawn-box-reach))
-       (<= (js/Math.abs (- cz z)) (:horizontal spawn-box-reach))))

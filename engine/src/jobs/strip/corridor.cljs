@@ -6,6 +6,7 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.game :as game]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
@@ -156,11 +157,11 @@
         {:keys [axis line from to]} seg
         along (if (= axis :x) x z)
         hung (concat (:torches (ctx/mem c)) (:no-spot-at (ctx/mem c)))
-        reach (:horizontal strip/spawn-box-reach)
+        reach (:horizontal game/spawn-box-reach)
         d2 (fn [[cx cy cz]] (+ (* (- cx x) (- cx x)) (* (- cy y) (- cy y)) (* (- cz z) (- cz z))))]
     (->> (range (max from (- along reach)) (inc (min to (+ along reach))))
          (map #(strip/at axis (:y seg) line %))
-         (filter #(and (strip/in-spawn-box? {:x x :y y :z z} %) (let [n (block-at %)] (or (bs/air n) (strip/rail? n)))
+         (filter #(and (game/in-spawn-box? {:x x :y y :z z} %) (let [n (block-at %)] (or (bs/air n) (strip/rail? n)))
                        (some-> (sh-sense/light-at (:primitives c) (zipmap [:x :y :z] %)) (< (lit)))
                        (not-any? (fn [h] (<= (u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] h)) (torch-gap))) hung)))
          (sort-by d2)
@@ -191,7 +192,7 @@
                cell)
         hung (filter #(let [n (block-at %)] (or (nil? n) (torch? n))) (:torches (ctx/mem c)))]
     (->> (distinct (concat seen hung))
-         (remove (fn [cell] (some #(strip/in-spawn-box? (:pos %) cell) keep-lit)))
+         (remove (fn [cell] (some #(game/in-spawn-box? (:pos %) cell) keep-lit)))
          (map (fn [[x yy z :as cell]] {:pos {:x x :y yy :z z} :name (or (block-at cell) "torch") :class :torch}))
          (sort-by #(u/dist here (:pos %))))))
 

@@ -62,3 +62,14 @@
   "The status :died extra for a memory view."
   [view]
   (death-summary (mem/latest view :died) view (mem/latest view :recovered)))
+
+(def spawn-box-reach
+  "A spawner's spawn box: cells within :horizontal either side along x and z, and :vertical up or down."
+  {:horizontal 4 :vertical 1})
+
+(defn in-spawn-box?
+  "Whether cell [x y z] lies in the spawn box of the spawner at pos {:x :y :z}."
+  [{:keys [x y z]} [cx cy cz]]
+  (and (<= (js/Math.abs (- cx x)) (:horizontal spawn-box-reach))
+       (<= (js/Math.abs (- cy y)) (:vertical spawn-box-reach))
+       (<= (js/Math.abs (- cz z)) (:horizontal spawn-box-reach))))
