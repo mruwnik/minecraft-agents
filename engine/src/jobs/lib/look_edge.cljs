@@ -65,11 +65,14 @@
             vec)))))
 
 (defn walkable-near
-  "The cell {:x :y :z} of the closed region the body stands in (doors shut, as pending reads it) nearest cell [x y z], or nil:
-  a player judging a room does not walk out through its doorway to look at the outside."
+  "The cell, roofed or with an unseen roof, {:x :y :z} of the closed region the body stands in (doors shut, as pending reads it) nearest cell [x y z],
+  or nil: a player judging a room does not walk out through its doorway to look at the outside; the flood runs a few
+  seen cells past an open doorway, which no roof covers."
   [p [x y z]]
   (let [feet (sh-sense/feet p)
-        cells (:cells (reach-room/room-flood p (reach-room/room-kind-at p (reach-room/shut-kind-at p)) (:x feet) (:y feet) (:z feet)))
+        roofed? (fn [c] (let [cell {:x (aget c 0) :y (aget c 1) :z (aget c 2)}]
+                          (or (sh-sense/roofed? p (sh-sense/room-roof-height) cell) (unseen-roof? p cell))))
+        cells (filter roofed? (:cells (reach-room/room-flood p (reach-room/room-kind-at p (reach-room/shut-kind-at p)) (:x feet) (:y feet) (:z feet))))
         best (first (sort-by (fn [c] (+ (js/Math.abs (- (aget c 0) x)) (js/Math.abs (- (aget c 1) y)) (js/Math.abs (- (aget c 2) z)))) cells))]
     (when best {:x (aget best 0) :y (aget best 1) :z (aget best 2)})))
 
