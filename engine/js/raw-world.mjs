@@ -86,6 +86,13 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
     lastLightKey = -1
   }
 
+  // light-only changes reach a marked cell's darkness without any block update
+  const onLight = packet => {
+    if (near(getBot(), packet.chunkX * 16 + 8, hereY(getBot()), packet.chunkZ * 16 + 8, setting('raw-world/epoch-range') + 8)) epoch++
+    for (let s = 0; s < 64; s++) lights.delete(keyOf(packet.chunkX, packet.chunkZ, s))
+    lastLightKey = -1
+  }
+
   const onUpdate = (oldBlock, newBlock) => {
     const p = (newBlock ?? oldBlock)?.position
     if (!p) return
@@ -113,7 +120,9 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
     bot.on('blockUpdate', onUpdate)
     bot.on('chunkColumnLoad', forgetColumn)
     bot.on('chunkColumnUnload', forgetColumn)
+    bot._client?.on?.('update_light', onLight)
     unhook = () => {
+      bot._client?.removeListener?.('update_light', onLight)
       bot.removeListener('blockUpdate', onUpdate)
       bot.removeListener('chunkColumnLoad', forgetColumn)
       bot.removeListener('chunkColumnUnload', forgetColumn)
@@ -239,7 +248,7 @@ export function createRawWorld ({ getBot, isOffline = () => false, lightOverlay 
       const bot = follow()
       return { timeOfDay: bot?.time?.timeOfDay ?? 6000, rain: bot?.rainState ?? 0, thunder: bot?.thunderState ?? 0 }
     },
-    // changes whenever a block, chunk column or the hooked bot changes (light-only changes are not counted)
+    // changes whenever a block, chunk column, chunk light or the hooked bot changes near the body
     epoch: () => { follow(); return epoch },
     version: () => follow()?.version ?? null,
     // null while the bot has no registry yet (the perception waits and asks again)

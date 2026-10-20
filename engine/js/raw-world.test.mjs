@@ -144,6 +144,19 @@ test('sightTable blocks sight for full blocks, not for leaves, glass, water, gra
     [1, 1, 0, 0, 0, 0, 0, 0])
 })
 
+test('epoch also counts a block update a little past the sight radius and chunk light, so shared marks end', () => {
+  const { bot } = makeBot()
+  bot._client = new EventEmitter()
+  const raw = createRawWorld({ getBot: () => bot })
+  const e0 = raw.epoch()
+  bot.emit('blockUpdate', { position: new Vec3(60, 70, 4), stateId: id('stone') }, { position: new Vec3(60, 70, 4), stateId: id('dirt') })
+  assert.equal(raw.epoch(), e0 + 1)
+  bot._client.emit('update_light', { chunkX: 0, chunkZ: 0 })
+  assert.equal(raw.epoch(), e0 + 2)
+  bot._client.emit('update_light', { chunkX: 20, chunkZ: 0 })
+  assert.equal(raw.epoch(), e0 + 2)
+})
+
 test('sightTable lets sight pass fences, fence gates and iron bars', () => {
   const table = sightTable(registry)
   assert.deepEqual(['oak_fence', 'oak_fence_gate', 'nether_brick_fence', 'iron_bars', 'cobblestone_wall'].map(n => table[id(n)]), [0, 0, 0, 0, 1])

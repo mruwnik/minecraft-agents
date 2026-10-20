@@ -79,7 +79,7 @@ export const SPECS = {
   'steer/default-timeout-s': { default: 60, spec: ['int-in', 0, null], doc: "Steer's time limit when not told, in seconds." },
   'steer/max-timeout-s': { default: 120, spec: ['int-in', 0, null], doc: "Longest steer time limit a caller may ask for, in seconds." },
   'raw-world/cache-max': { default: 2048, spec: ['int-in', 1, null], doc: "Section copies kept before the caches are dropped." },
-  'raw-world/epoch-range': { default: 50, spec: ['int-in', 0, null], doc: "A block update or chunk change this near the body (a little over the sight radius) moves epoch, in blocks." },
+  'raw-world/epoch-range': { default: 64, spec: ['int-in', 0, null], doc: "A block, chunk or light update this near the body moves epoch, in blocks: the sight radius plus what the body walks while shared sight marks live (2 s)." },
   'view/relight-range': { default: 64, spec: ['int-in', 0, null], doc: "A block change farther than this from the body is not relit for the view overlay (a little over the sight radius), in blocks." },
   'view/relight-backlog-max': { default: 4096, spec: ['int-in', 1, null], doc: "Most block changes waiting to be relit; beyond it only the ones nearest the body are kept." },
   'view/dirty-columns-max': { default: 256, spec: ['int-in', 1, null], doc: "Most columns remembered with block changes still to relit when the body comes near; the farthest column loses its view overlay instead." },
