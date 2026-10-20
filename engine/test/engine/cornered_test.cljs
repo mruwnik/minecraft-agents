@@ -744,17 +744,17 @@
   "dead-end over solid rock down to y 58: a tunnel with a roof at y 66, a pickaxe digs down into it."
   (rock [-3 9] [58 67] dead-end-cells))
 
-(deftest an-unarmed-body-with-a-zombie-at-its-heels-digs-a-pocket-and-plugs-behind-it
+(deftest an-unarmed-body-with-a-zombie-at-its-heels-digs-down-and-roofs-the-pit-over-it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p while-hidden]}
+        (let [{:keys [p]}
               (await (hidden-round '(jobs.survival.retreat) {:blocks deep-dead-end :inventory [{:name "stone_pickaxe" :count 1}]
                                             :entities [(zombie 1 64 0)]}
-                                   1000 (fn [{:keys [p]}] (.-name (.blockAt p #js {:x -1 :y 64 :z 0})))))]
-          (is (zero? (count (calls p "attack"))) "a pickaxe and a pocket beat a pickaxe fight")
-          (is (= [[-1 64 0] [-1 65 0] [-2 64 0] [-2 65 0]] (mapv #(let [pos (.. % -args -pos)] [(.-x pos) (.-y pos) (.-z pos)]) (calls p "dig"))))
-          (is (#{"stone" "cobblestone"} while-hidden) "plugged behind it"))))))
+                                   1000 (fn [_] nil)))]
+          (is (zero? (count (calls p "attack"))) "a pickaxe and a pit beat a pickaxe fight")
+          (is (= [[0 63 0] [0 62 0]] (mapv #(let [pos (.. % -args -pos)] [(.-x pos) (.-y pos) (.-z pos)]) (calls p "dig"))) "two cells down: quicker than a pocket's four")
+          (is (some #{[0 64 0]} (placed-cells p)) "the roof goes in above the head, shut against the zombie"))))))
 
 (def room
   "A room three wide (z -1..1) closed at x -2 behind the body, open far towards +x."
