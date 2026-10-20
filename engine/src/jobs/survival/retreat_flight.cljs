@@ -3,6 +3,7 @@
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [engine.ctx :as ctx]
+            [engine.memory :as mem]
             [jobs.lib.choose :as choose]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
@@ -53,12 +54,14 @@
        (keep (comp :dir :data))
        (mapv (fn [{dx :x dz :z}] {:x (+ x (* reach dx)) :y y :z (+ z (* reach dz))}))))
 
-(defn fire-spots
-  "Where unseen shooters stand, as {:x :y :z}: shot-spots of the shots within ::shot-window-s, ::shot-reach blocks out
-  along the way each hit came from (as a player feels it), at the body's height."
-  [c]
-  (shot-spots (ctx/since c :hurt (- (ctx/now c) (* 1000 (settings/get settings ::shot-window-s))))
-              (u/self-pos c) (settings/get settings ::shot-reach)))
+(defn view-spots
+  "Where unseen shooters stand, as {:x :y :z}: shot-spots of the shots within ::shot-window-s of the view's now, ::shot-reach
+  blocks out along the way each hit came from (as a player feels it), at the body's height. p: primitives."
+  [p view]
+  (shot-spots (mem/since view :hurt (- (:now view) (* 1000 (settings/get settings ::shot-window-s))))
+              (u/pos-of (.-pos (.self p))) (settings/get settings ::shot-reach)))
+
+(defn fire-spots [c] (view-spots (:primitives c) (ctx/view c)))
 
 (defn wait-ms [] (settings/get settings ::wait-ms))
 (defn walk-step [] (settings/get settings ::step))

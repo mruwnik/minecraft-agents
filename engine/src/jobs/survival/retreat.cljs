@@ -12,6 +12,7 @@
             [jobs.lib.goal :as goal]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.pace :as pace]
+            [jobs.lib.shot :as shot]
             [jobs.lib.util :as u]
             [jobs.survival.retreat-choose :as choose]
             [jobs.survival.retreat-cornered :as cornered]
@@ -105,7 +106,7 @@
   Each change of what it chose among is said in one retreat.choice info: the hostiles and where, every closed room and why
   it is not run to, the cells that are no closed room, the home and why it is no run (:home-why), the goal and why it is dropped, where it leans.
   Blocks placed are the call's :use :blocks, else every :build filler, carried or dug.
-  Needs nothing to start (no conditions); with no real danger near and no flight under way it is done at once. Ends done {:fled [ids] :ended :gone|:far|:lost|:closed|:hidden|:keeps-off|:none},
+  Needs nothing to start (no conditions); with no real danger near, no shot at it from an unseen shooter whose line of fire reaches it (jobs.lib.shot; it then steps out of that line) and no flight under way it is done at once. Ends done {:fled [ids] :ended :gone|:far|:lost|:closed|:hidden|:keeps-off|:none},
   nothing-possible :cannot-escape {:fled [ids]}, or limit-reached. Quote: time (0, ::mean-s, ##Inf).
   Memory: one :threat entry per mob fled (jobs.lib.threats); the third from one mob within 5 min warns hostile.chased.
   A cell in another's zone is used only as a last resort (shut-in.trespass-last-resort warning).")
@@ -140,7 +141,7 @@
         ranged-radius (danger-q/ranged-radius-in (:args c))
         {:keys [fled chasers refuge]} (ctx/mem c)
         data [:units :hostiles :done (count fled) :left (count chasers)]]
-    (if (or (seq fled) (seq chasers) refuge (seq (danger-q/dangers (:primitives c) radius {:ranged-radius ranged-radius} {:sight? false})))
+    (if (or (seq fled) (seq chasers) refuge (shot/open? (:primitives c) (ctx/view c)) (seq (danger-q/dangers (:primitives c) radius {:ranged-radius ranged-radius} {:sight? false})))
       (apply contract/later :fleeing "a flight is on" data)
       (apply contract/ok :clear "no hostile is near" (conj data :result {:fled [] :ended :none})))))
 
@@ -218,12 +219,14 @@
                         :angry-enderman? (and threat (cornered/angry-enderman? c near)) :hit? hit?
                         :flyer? (some combat/flyer? near) :door door :inside? inside?
                         :home-door (when inside? (retreat-doors/home-door c room)) :way way
-                        :outruns? (or (nil? threat) (cornered/outrun? c near))})]
+                        :outruns? (or (nil? threat) (cornered/outrun? c near))
+                        :shot-open? (and (nil? threat) (shot/open? p (ctx/view c)))})]
     (case option
       :end (or (await (flight/look-back! c))
                (when (cornered/plug-continues? c) (await (refuge/plug-on! c)))
                (flight/end-flight! c nil))
       :early early
+      :dodge (await (step/dodge-shot! c))
       :stuck (do (when (and reset-gain? (seq (cornered/near-hostiles c))) (ctx/update-mem! c assoc :since-gain 0))
                  (await (stuck why)))
       :cornered (await (cornered/cornered! c why (home-now?)))

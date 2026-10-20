@@ -96,6 +96,7 @@
 (deftest the-choice-follows-the-documented-order
   (are [facts option] (= option (:option (choose/choose (merge {:threat :mob :outruns? true} facts))))
     {:threat nil :hit? true} :end
+    {:threat nil :shot-open? true} :dodge
     {:early :r :hit? true} :early
     {:no-gain? true :hit? true} :stuck
     {:angry-enderman? true :hit? true :door :d} :cornered

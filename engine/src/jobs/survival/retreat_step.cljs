@@ -84,6 +84,19 @@
                                    (when (seq (:dropped survey))
                                      (str "; no room " (str/join ", " (map #(str (:at %) " " (name (:why %))) (:dropped survey)))))))))))
 
+(defn ^:async dodge-shot!
+  "A shot from a shooter not seen (jobs.lib.shot/open?): one flee step to a cell out of its line of fire
+  (cover/flight-target! over the shot spots) :again; the cornered options (cover first) when no open way leads out."
+  [c]
+  (let [spots (flight/fire-spots c)
+        target (await (cover/flight-target! c []))]
+    (if-not target
+      (await (cornered/cornered! c "shot at by a shooter not seen, no open way out of its line" false))
+      (let [_ (ctx/emit! c :retreat.target :info {:target (mapv #(js/Math.floor %) [(:x target) (:y target) (:z target)]) :from [] :shot-spots (count spots)
+                                                  :text "flee step out of the line of an unseen shooter"})
+            moved (await (cornered/leg-step! c :step target 1 (cornered/close-leg-s)))]
+        (if moved :again (await (cornered/cornered! c "shot at by a shooter not seen, the step out of its line is blocked" false)))))))
+
 (defn lone-melee?
   "Whether hostiles is one melee mob a pillar stops (not a creeper, enderman, spider, flyer or shooter) farther than cover-gap (it would stand in the cells to fill) and within refuge-gap."
   [p hostiles]

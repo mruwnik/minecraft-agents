@@ -719,6 +719,21 @@
   (is (not (holds? {:entities [{:id 1 :name "Steve" :kind "player" :pos {:x 2 :y 64 :z 0}}]} {:radius 8})) "a player")
   (is (not (holds? {:entities [{:id 2 :name "cow" :kind "passive" :pos {:x 2 :y 64 :z 0}}]} {:radius 8})) "a passive"))
 
+(defn holds-after-hurt?
+  "Whether the trigger holds at now 2000 with one :hurt entry (written at t, data) and no mob."
+  [world t data]
+  (boolean (when-hostile-near (tu/fake-on-floor world)
+                              {:data (mem/add-entry mem/empty-data :hurt {:t t :data data} {:cap 50 :ttl 60000}) :now 2000} {})))
+
+(deftest hostile-near-holds-for-a-shot-from-an-unseen-shooter-with-a-line-of-fire
+  (let [arrow {:damageType "arrow" :dir {:x 1 :z 0}}
+        wall (tu/box 3 64 -2 3 66 2 "stone")]
+    (is (holds-after-hurt? {} 1500 arrow) "shot from the east in the open")
+    (is (not (holds-after-hurt? {:blocks wall} 1500 arrow)) "a wall between the body and the shooter's spot stops the arrows")
+    (is (not (holds-after-hurt? {} 1500 {:damageType "arrow"})) "no way known: no spot")
+    (is (not (holds-after-hurt? {} 1500 {:attacker {:name "zombie"} :dir {:x 1 :z 0}})) "a melee hit")
+    (is (not (holds-after-hurt? {} -4000 arrow)) "the shot is older than the shot window")))
+
 (def thin-stone-box
   "A hollow stone box one block thick, x 5..9 and z -2..2 (feet and head inside): a zombie heard in it has its rough spot
   (4 blocks toward the sound) on open floor outside it."

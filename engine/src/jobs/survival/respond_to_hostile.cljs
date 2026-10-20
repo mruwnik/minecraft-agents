@@ -12,6 +12,7 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.pace :as pace]
+            [jobs.lib.shot :as shot]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.goal :as goal]
             [jobs.lib.shelter.inside :as sh-inside]
@@ -317,7 +318,7 @@
   "No real danger near and the retreat not hiding."
   [c]
   (let [n (count (near c))
-        clear? (and (zero? n) (not (hiding? c)))]
+        clear? (and (zero? n) (not (hiding? c)) (not (shot/open? (:primitives c) (ctx/view c))))]
     (checks/goal clear? [:clear "no danger near"] [:danger (str n " dangers near")] {:units :hostiles :done 0 :left n})))
 
 (defn quote-of
@@ -353,7 +354,7 @@
           before (signature c hs)
           outcome (cond
                     (hiding? c) (await (run-child c :flee (:args c) false))
-                    (empty? hs) nil
+                    (empty? hs) (when (shot/open? (:primitives c) (ctx/view c)) (await (run-child c :flee (:args c) false)))
                     (gap-wanted? c hs (:gap-tried (ctx/mem c))) (await (gap! c))
                     (cover-unseen? c hs (:gap-tried (ctx/mem c))) (await (look/look-around! c))
                     :else (await (respond c hs)))

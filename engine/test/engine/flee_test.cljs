@@ -104,6 +104,25 @@
 
 ;; ------------------------------------------------------------------ whole flights
 
+(deftest a-body-shot-by-an-unseen-shooter-walks-away-from-the-side-the-arrow-came-from
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {})
+              _ (mem/write! (:store (:eng s)) :hurt {:amount 3 :health 17 :damageType "arrow" :dir {:x 1 :z 0}} {:cap 50 :ttl 60000})
+              {:keys [p out]} (await (run-job! s 'jobs.survival.retreat {}))]
+          (is (= :done (:status out)))
+          (is (< (first (body-pos p)) -2) "no mob is known, yet the body went west, away from the shooter in the east"))))))
+
+(deftest respond-to-hostile-flees-a-shot-from-an-unseen-shooter
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {})
+              _ (mem/write! (:store (:eng s)) :hurt {:amount 3 :health 17 :damageType "arrow" :dir {:x 1 :z 0}} {:cap 50 :ttl 60000})
+              {:keys [p]} (await (run-job! s 'jobs.survival.respond-to-hostile {}))]
+          (is (< (first (body-pos p)) -2) "with no mob known the reflex still leaves the line of fire"))))))
+
 (deftest retreat-flees-until-the-zombie-gives-up
   (async done
     (tu/run-async done

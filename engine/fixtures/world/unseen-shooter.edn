@@ -1,0 +1,14 @@
+;; An arrow from nowhere (no mob exists) hits the body: nothing known to flee, so only the hit's direction (the hurt event's :dir)
+;; says where it came from; the retreat steps out of that line (retreat.target with no mob in :from, :shot-spots the spots it
+;; leaned away from). The body faces east at x 14.5; the arrow comes from the east, 10 blocks out, flying west.
+{:defaults
+ {:tags [:hostile :triggers :survival]
+  :time :any
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+  :body {:at [14.5 0 16.5] :yaw -90}}
+ :cases
+ [{:name "shot-by-an-unseen-shooter-steps-out-of-its-line"
+   :act [[:rcon "execute positioned $X $Y $Z run summon arrow ~24 ~1.4 ~16 {Motion:[-3.0d,0.0d,0.0d],pickup:0b}"]]
+   :expect [{:event {:source :job :kind :retreat.target :data {:from [] :shot-spots [:>= 1]}} :within-s 30}]
+   :limit-s 40}]}
