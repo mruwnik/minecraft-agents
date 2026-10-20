@@ -14,6 +14,8 @@
             [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.farm.field :as fld]
+            [jobs.farm.find-spot :as find-spot]
+            [jobs.farm.irrigate :as irrigate]
             [jobs.farm.tend-decide :as decide]
             [jobs.farm.tend-box :refer [box-cells centre box-facts box-census]]
             [jobs.farm.tend-plan :as tend-plan]
@@ -25,7 +27,7 @@
   One run is one pass over seven steps in this order. Each step is a child job that runs when its conditions hold:
   - :harvest (jobs.farm.harvest, replanting): a ripe crop lies in the box.
   - :irrigate (jobs.farm.irrigate over the ground layer, in plan mode over the plan's ground cells, per layer in pieces of at most till's max-cells, one piece per pass, :for-plan): :irrigate is true and a ground cell is seen
-    dry (no water seen in reach, the whole reach seen). The child fetches a water bucket when none is carried; a failed
+    dry (no water seen in reach, the whole reach seen: with :irrigate on, a run looks round and walks within 3 blocks of up to 3 ground cells whose reach is partly unseen first). The child fetches a water bucket when none is carried; a failed
     call is booked as its summary {:poured n} and the run goes on.
   - :till (jobs.farm.till): :till is true, a hoe is carried, dirt or grass lies uncovered in the ground layer and
     more seed is carried than there is bare farmland. It tills one cell at a time, nearest first.
@@ -126,10 +128,29 @@
       (for [x (range (:x lo) (inc (:x hi))) z (range (:z lo) (inc (:z hi))) y [(:y lo) (inc (:y lo))]]
         {:x x :y y :z z}))))
 
+(defn ground-cells
+  "The ground cells irrigate works over: the plan's under its crop cells, or the box's lowest layer."
+  [c]
+  (if (:plan (:args c))
+    (map #(update % :y dec) (keys (:crops (tend-plan/planned c))))
+    (let [{lo :min hi :max} (:box (:args c))]
+      (for [x (range (:x lo) (inc (:x hi))) z (range (:z lo) (inc (:z hi)))] {:x x :y (:y lo) :z z}))))
+
+(defn water-reach-cells
+  "Per y layer of the ground cells, the cells irrigate must see to call a ground cell dry: the layer's bounding square grown by the water reach, at the layer and one above."
+  [c]
+  (let [r (find-spot/water-reach)]
+    (for [[y ps] (group-by :y (ground-cells c))
+          x (range (- (apply min (map :x ps)) r) (+ (apply max (map :x ps)) r 1))
+          z (range (- (apply min (map :z ps)) r) (+ (apply max (map :z ps)) r 1))
+          dy [0 1]]
+      {:x x :y (+ y dy) :z z})))
+
 (defn needs-look?
-  "Whether a field cell was never seen, or (plan) a crop cell is remembered unripe and out of view."
+  "Whether a field cell (or, with :irrigate, a block of the water reach round the ground) was never seen, or (plan) a crop cell is remembered unripe and out of view."
   [c]
   (boolean (or (look/unseen? (:primitives c) (field-cells c))
+               (and (:irrigate (:args c)) (look/unseen? (:primitives c) (water-reach-cells c)))
                (and (:plan (:args c)) (fld/unwatched? (:primitives c) (:crops (tend-plan/planned c)))))))
 
 (defn check-facts
@@ -285,7 +306,7 @@
   [c report]
   (let [part (:part (:args c))
         out (part-report c report)]
-    (ctx/update-mem! c #(-> % (dissoc :todo :report :call-args :cur :till-tried :tilled :irrigate-tried :irrigated)
+    (ctx/update-mem! c #(-> % (dissoc :todo :report :call-args :cur :till-tried :tilled :irrigate-tried :irrigated :reach-tried)
                             (assoc-in [:results (key-of part)] out)))
     :again))
 
@@ -385,6 +406,29 @@
           (do (ctx/update-mem! c after-child step (:args call) e)
               :again))))))
 
+(def max-reach-walks 3)
+
+(defn unseen-reach-target
+  "The nearest ground cell not yet walked to whose water reach is partly unseen after the body looked round, when irrigate is on."
+  [c]
+  (let [tried (:reach-tried (ctx/mem c) #{})]
+    (when (and (:irrigate (:args c)) (< (count tried) max-reach-walks))
+      (->> (ground-cells c)
+           (remove tried)
+           (remove #(irrigate/reach-seen? (:primitives c) %))
+           (sort-by #(u/dist (u/self-pos c) %))
+           first))))
+
+(defn ^:async look-from-unseen-reach!
+  "Walk (a go-to child) within 3 blocks of the ground cell whose reach is unseen and look round there, as a player steps closer to see a far row; each cell once."
+  [c]
+  (let [cell (unseen-reach-target c)
+        e (await (ctx/call c :walk 'jobs.movement.go-to {:pos (update cell :y inc) :range 3}))]
+    (if (= :continue e)
+      :continue
+      (do (ctx/update-mem! c update :reach-tried (fnil conj #{}) cell)
+          (await (look/look-around! c (look/search-effort)))))))
+
 (defn ^:async step
   "A run over a field partly never seen looks around first and yields (the check decides on what is seen then)."
   [c]
@@ -392,7 +436,9 @@
     (and (:plan (:args c)) (:trouble (tend-plan/planned c)))
     :continue
     (and (not (:todo (ctx/mem c))) (not (look/surveyed? c)) (needs-look? c))
-    (await (look/survey! c))
+    (await (look/survey! c :run (look/search-effort)))
+    (and (not (:todo (ctx/mem c))) (some? (unseen-reach-target c)))
+    (await (look-from-unseen-reach! c))
     :else (await (work c))))
 
 (defn next-part
