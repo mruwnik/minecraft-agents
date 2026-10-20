@@ -16,7 +16,7 @@
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.reserve :as reserve]
             [jobs.survival.eat :as eat]
-            [jobs.survival.get-food.animals :as animals]
+            [jobs.lib.food-animals :as animals]
             [jobs.survival.get-food.cook :as cook]
             [jobs.survival.get-food.report :as report]
             [jobs.survival.get-food.risk :as risk]

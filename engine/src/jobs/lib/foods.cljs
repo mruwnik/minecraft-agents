@@ -138,6 +138,13 @@
   ([self args reserved]
    (boolean (and (< (.-health self) (:health args default-health)) (< (.-food self) 20) (carries-food? self reserved)))))
 
+(defn wants-meal?
+  "The hungry trigger's hunger test, shared with the night hold: hungry?, top-up? or eat-now? (reserved: names an unnamed meal spares)."
+  [self reserved args]
+  (boolean (or (hungry? (.-food self) (.-health self) args)
+               (top-up? (.-food self) (.-health self) (carried-names self reserved))
+               (eat-now? self args reserved))))
+
 (def fish-items #{"cod" "salmon" "tropical_fish" "pufferfish"})
 
 (defn fish-carried [p]

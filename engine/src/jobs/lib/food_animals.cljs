@@ -1,4 +1,4 @@
-(ns jobs.survival.get-food.animals
+(ns jobs.lib.food-animals
   "The food animals get-food may hunt: which are in sight and why one is spared, and what a kill says."
   (:require [engine.args :as a]
             [engine.ctx :as ctx]

@@ -69,7 +69,7 @@
   [c]
   (let [p (:primitives c)
         self (.self p)
-        hungry (and (not (sh-sense/sleeping? p)) (or (foods/hungry? (.-food self) (.-health self) {}) (foods/eat-now? self {})))
+        hungry (and (not (sh-sense/sleeping? p)) (foods/wants-meal? self (reserve/spared (ctx/view c) self) {}))
         cooking (when hungry (await (cooking-in-shelter? c)))]
     (when (and hungry (not cooking) (eat/carried-best (assoc c :args {:allow-bad false})))
       (let [e (await (ctx/call c :eat 'jobs.survival.eat {:until 20 :max-bites 1 :fetch false}))]
@@ -88,15 +88,19 @@
          (zero? (ctx/count-in c :hungry (foods/starving-rest-ms)))
          (not (danger-q/danger-near? p (danger-q/hostile-radius) (danger-q/ranged-radius))))))
 
+(def in-shelter-ways
+  "The get-food ways a sheltered hold allows: they need no walk out of the shelter."
+  #{:bake :cook})
+
 (defn ^:async hold!
   "Hold the body still on purpose (reason) for hold-ms, eating first when hungry; a starving body with no food looks
-  for some first (food-wanted?, a get-food child): :again."
+  for some first (food-wanted?, a get-food child, limited to in-shelter-ways while the body is safe from the night): :again."
   [c reason]
   (ctx/hold-still! c reason)
   (await (eat-if-hungry! c))
   (when (food-wanted? c)
     (ctx/hold-still! c nil)
-    (await (ctx/call c :food 'jobs.survival.get-food {}))
+    (await (ctx/call c :food 'jobs.survival.get-food (if (inside/safe-from-night? (:primitives c)) {:ways in-shelter-ways} {})))
     (ctx/hold-still! c reason))
   (await (child/pause! c (/ hold-ms 1000) reason))
   :again)

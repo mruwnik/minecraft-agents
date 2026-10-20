@@ -69,9 +69,7 @@
         reserved (reserve/spared memory self)
         urgent? (or (foods/eat-now? self args reserved) (<= (.-food self) (settings/get settings ::urgent-food)))]
     (and (not (body/recovery-pending? memory :hungry))
-         (or (foods/hungry? (.-food self) (.-health self) args)
-             (foods/top-up? (.-food self) (.-health self) (foods/carried-names self reserved))
-             (foods/eat-now? self args reserved))
+         (foods/wants-meal? self reserved args)
          (not (resting? self memory args))
          (or (foods/carries-food? self reserved)
              (and (not (look/dark-here? world)) (or (not (foods/fragile? self)) (dawn/calm? world))))

@@ -338,6 +338,19 @@
           (await (core/tick! eng))
           (is (empty? (filterv #(= "attack" (.-name %)) (.-calls (.-world p)))) "no hunt with a danger near"))))))
 
+(deftest a-sheltered-starving-hold-does-not-walk-out-to-hunt
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup {:time night :blocks closed-hut :self {:food 0 :health 15} :entities [cow]})
+              waits (atom 0)]
+          (.override (.-world p) "wait" (fn ^:async w [token a impl]
+                                          (when (>= (swap! waits inc) 12) (.setTime (.-world p) st/noon))
+                                          (await (impl token a))))
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tu/run-until-empty eng 40))
+          (is (empty? (filterv #(= "attack" (.-name %)) (.-calls (.-world p)))) "shut in against the night: no hunt outside"))))))
+
 (deftest the-dig-in-at-an-open-bed-never-digs-a-bed-half
   (async done
     (tu/run-async done
