@@ -9,6 +9,7 @@
             [jobs.lib.apiary :as apiary]
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
+            [jobs.lib.pace :as pace]
             [jobs.lib.pass :as pass]
             [jobs.lib.pen-gate :as pg]
             [jobs.lib.world :as known]))
@@ -228,7 +229,7 @@
         open (if trouble [] (into (open-now c cells []) (unread-now c cells [] #{})))
         shut (:shut (ctx/mem c) 0)
         data [:units :gates :done shut :left (count open) :result {:shut shut :left []}]]
-    (if (and (not trouble) (empty? open))
+    (if (and (not trouble) (empty? open) (empty? (:left (ctx/mem c))))
       (apply contract/ok :shut (shut-text shut) data)
       (apply contract/later :gates-open (str (count open) " gate(s) open") data))))
 
@@ -251,23 +252,32 @@
         (ctx/remember! c :gate-graced {:cell cell} {:cap 50 :ttl graced-ttl-ms}))
       fresh)))
 
-(defn ^:async round [c]
+(defn ^:async step
+  "One gate: the nearest open one is walked to and shut or given up (the counts and the gates left are kept in job
+  memory); :again while a gate is left to try, else the ending."
+  [c]
+  (let [[cells] (watched-cells c)
+        {:keys [shut left skip] :or {shut 0 left [] skip []}} (ctx/mem c)
+        here (u/self-pos c)
+        open (into (open-now c cells left) (unread-now c cells left skip))
+        under (filter #(pg/standing-in? here %) open)
+        todo (remove (set under) open)
+        left (into left (map (fn [cell] {:cell cell :reason :standing-in})) under)
+        keep! (fn [shut left skip] (ctx/update-mem! c assoc :shut shut :left left :skip skip) :again)]
+    (if-let [cell (nearest c todo)]
+      (let [reason (await (shut-once! c cell))]
+        (cond
+          (nil? reason) (keep! (inc shut) left skip)
+          (= :was-shut reason) (keep! shut left (conj skip cell))
+          (#{:animal-in-the-way :walk-interrupted} reason) (keep! shut (conj left (leave! c cell reason)) skip)
+          :else (keep! shut (conj left (give-up! c cell reason)) skip)))
+      (finish! c shut left))))
+
+(defn ^:async round
+  "The gates one by one (pace/steps!: done? and can-run? are asked between them); a gate just seen open without :plan
+  waits out its grace first."
+  [c]
   (let [[cells trouble] (watched-cells c)]
-    (if trouble
+    (if (or trouble (grace! c cells))
       :continue
-      (if (grace! c cells)
-        :continue
-        (loop [shut (:shut (ctx/mem c) 0) left (:left (ctx/mem c) []) skip #{}]
-          (let [here (u/self-pos c)
-                open (into (open-now c cells left) (unread-now c cells left skip))
-                under (filter #(pg/standing-in? here %) open)
-                todo (remove (set under) open)
-                left (into left (map (fn [cell] {:cell cell :reason :standing-in})) under)]
-            (if-let [cell (nearest c todo)]
-              (let [reason (await (shut-once! c cell))]
-                (cond
-                  (nil? reason) (recur (inc shut) left skip)
-                  (= :was-shut reason) (recur shut left (conj skip cell))
-                  (#{:animal-in-the-way :walk-interrupted} reason) (recur shut (conj left (leave! c cell reason)) skip)
-                  :else (recur shut (conj left (give-up! c cell reason)) skip)))
-              (finish! c shut left))))))))
+      (await (pace/steps! c #(step c))))))

@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.need :as need]
+            [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]
             [jobs.lib.near :as near]
@@ -420,12 +421,7 @@
 (defn ^:async round
   "The whole attempt: steps until the job ends; yields only while a child waits on the world."
   [c]
-  (loop []
-    (let [r (await (step c))]
-      (case r
-        :again (recur)
-        :yield :continue
-        r))))
+  (await (pace/steps! c (fn ^:async s [] (let [r (await (step c))] (if (= :yield r) :continue r))))))
 
 (defn ^:async cleanup
   "However the leading ended: an animal still on this body's lead is let go (jobs.animals.unleash), then the doors and

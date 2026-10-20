@@ -7,6 +7,7 @@
             [jobs.lib.animals :as animals]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
+            [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -229,15 +230,13 @@
         cands (candidates c)]
     (cond
       (= :collect (:phase m)) (await (collect! c))
-      (and (empty? cands) (not (look/surveyed? c))) (do (await (look/survey! c)) :again) ; animals count only while in view
+      (and (empty? cands) (not (look/surveyed? c))) (do (await (look/survey! c)) (await (step c))) ; animals count only while in view; no done? between the look and its verdict, which keeps the :already cause
       (empty? cands) (cond (seq (:freed m)) (go-collect! c :unleashed)
                            (and (empty? (:given-up m)) (empty? (on-a-lead c))) (finish! c :unleashed :already)
                            :else (finish! c (none-reason c)))
       :else (await (engage! c (first cands))))))
 
 (defn ^:async round
-  "The whole attempt: loop the steps until one ends or yields."
+  "The whole attempt: steps (a pace between; done? and can-run? are asked between them) until one ends or yields."
   [c]
-  (loop []
-    (let [r (await (step c))]
-      (if (= :again r) (recur) r))))
+  (await (pace/steps! c #(step c))))

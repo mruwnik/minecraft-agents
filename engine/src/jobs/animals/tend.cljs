@@ -8,6 +8,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
+            [jobs.lib.pace :as pace]
             [jobs.lib.need :as need]
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.standing :as standing]
@@ -281,6 +282,14 @@
       away (checks/cause-status :later away)
       :else (pen-fact c))))
 
+(defn report-with-skips
+  "The report so far, plus the skip reason of each step not yet reached (a goal that holds mid-pass ends the run before them)."
+  [c args f]
+  (let [report (:report (ctx/mem c))]
+    (into (or report {})
+          (keep (fn [s] (when-let [why (and (not (contains? report s)) (:skip (decide s args f)))] [s {:skipped why}])))
+          steps)))
+
 (defn done?
   "Ok when the pen holds the goal: the box is not waiting for a look, no step would run and the herd is at :target
   (before the start: already), with the census as data; else later with the steps that would still run."
@@ -291,7 +300,7 @@
     (if (or (look-due? c) (pos? left) (< (+ (:adults f) (:babies f)) target))
       (contract/later :steps (str left " steps left") :units :steps :done (- (count steps) left) :left left)
       (contract/ok :tended "the pen is as wanted" :units :steps :done (count steps) :left 0
-                   :result {:mob (:mob args) :target target :adults (:adults f) :babies (:babies f) :steps (:report (ctx/mem c))}))))
+                   :result {:mob (:mob args) :target target :adults (:adults f) :babies (:babies f) :steps (report-with-skips c args f)}))))
 
 (defn quote-of [_c]
   {:uses {:job-time [0 90 600]}})
@@ -355,9 +364,4 @@
         c (if pen (with-pen c0 pen) c0)]
     (if trouble
       :continue
-      (loop []
-        (let [r (await (step c))]
-          (case r
-            :again (recur)
-            :yield :continue
-            r))))))
+      (await (pace/steps! c (fn ^:async s [] (let [r (await (step c))] (if (= :yield r) :continue r))))))))

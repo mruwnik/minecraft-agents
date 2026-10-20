@@ -6,6 +6,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
             [jobs.lib.look :as look]
+            [jobs.lib.pace :as pace]
             [jobs.lib.need :as need]
             [jobs.lib.util :as u]))
 
@@ -229,8 +230,6 @@
       :else (await (engage! c (first cands))))))
 
 (defn ^:async round
-  "The whole attempt: loop the steps until one ends or yields."
+  "The whole attempt: steps (a pace between; done? and can-run? are asked between them) until one ends or yields."
   [c]
-  (loop []
-    (let [r (await (step c))]
-      (if (= :again r) (recur) r))))
+  (await (pace/steps! c #(step c))))
