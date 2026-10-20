@@ -22,8 +22,8 @@
   "Shovel grass_block, dirt, coarse_dirt, podzol, mycelium or rooted_dirt into dirt_path over a set of ground cells,
   given as the box :from/:to or the square :center/:radius (at most 256 cells).
   Needs a shovel: the call's :use {:tools [..]} names the ones it may use (default every carried shovel); with none
-  carried it fetches one (jobs.lib.need, :fetch; a failed fetch ends the call with its ending as the :because, pathed
-  and skipped in the data), with :fetch false the call is refused {:reason :no-tool :kind \"shovel\"}.
+  carried it fetches one (jobs.lib.need, :fetch); a failed fetch ends condition-failed {:reason :no-tool :kind \"shovel\"}
+  with the fetch's ending as the :because, and with :fetch false the call is refused the same.
   Ground cover over a cell (grass, ferns, snow layer) is dug first with a jobs.blocks.dig child. If that child
   declines or gives up, it counts a try.
   Cells are skipped with a reason: :not-pathable, :covered (something else above), :not-permitted (zone rules),
@@ -152,10 +152,7 @@
    :not-refused "a cell is not refused"
    (fn [c]
      (when-let [vs (and (valid-cells c) (not (:ignore-zones? (:args c))) (refused-all c))]
-       (let [fields (assoc (access/refusal-fields vs) :reason :refused)]
-         (ctx/warn-once! c [:access :refused] :path.declined
-                         (assoc fields :text (str "path declined: every target is refused by " (access/refusal-text fields))))
-         fields)))))
+       (assoc (access/refusal-fields vs) :reason :refused)))))
 
 (def shovel-lacking
   "Later :no-tool when cells are left to path, no shovel is carried and :fetch will not get one."
@@ -285,7 +282,8 @@
 
 (defn ^:async fetch-shovel!
   "Get a shovel when none may be used and cells are left: nil when one is carried (or came), :continue while the fetch
-  waits on the world, else the ending of the call: done when enough is pathed already, else the fetch's kind and cause."
+  waits on the world, else the ending of the call: done when enough is pathed already, else condition-failed :no-tool
+  (the fetch's ending as its :because)."
   [c]
   (when (and (nil? (shovel c)) (seq (pending c)))
     (let [e (if-let [o (fetch-opts c)]
@@ -295,7 +293,7 @@
         (= :continue e) :continue
         (= :done (:kind e)) nil
         (common/enough? c (count (:pathed (ctx/mem c))) (count (cells (:args c)))) (conclude! c)
-        :else (ctx/end c (:kind e) (:cause e) (result-of c))))))
+        :else (contract/with-because (ctx/end c :condition-failed no-shovel (result-of c)) e)))))
 
 (defn ^:async round
   "The whole attempt: fetch a shovel when none is carried, then loop the steps until the cells are done; :continue only

@@ -103,7 +103,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [e (await (ending-of (pt/setup {:blocks pt/four}) path pt/box 80))]
-          (is (not= :done (:kind e)))
+          (is (= :condition-failed (:kind e)))
+          (is (= {:reason :no-tool :kind "shovel"} (:cause e)))
           (is (= 0 (get-in e [:data :pathed]))))))))
 
 (deftest path-uses-only-the-shovel-the-call-lists

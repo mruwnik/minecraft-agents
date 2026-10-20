@@ -152,7 +152,6 @@
           (core/submit! eng (list job box) {})
           (is (nil? (core/tick! eng)))
           (is (= [:refused] (map :reason (kinds seen :waiting))))
-          (is (= [:refused] (map :reason (kinds seen :path.declined))))
           (is (empty? (calls p "useOn"))))))))
 
 (deftest path-declines-without-a-zone-list-and-ignore-zones-goes-on
