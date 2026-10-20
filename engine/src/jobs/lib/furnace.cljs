@@ -18,25 +18,15 @@
       (- count base))))
 
 (defn ^:async place-furnace!
-  "Put the carried furnace down beside the body (jobs.blocks.place child; free-spot/spot! finds the cell) and make it the
-  furnace of this job. :again once it stands, :continue while a child waits, nil when it could not be put down (memory
-  :furnace-refusal says why)."
+  "Put the carried furnace down beside the body (free-spot/place-beside!) and make it the furnace of this job. :again once
+  it stands, :continue while a child waits, nil when it could not be put down (memory :furnace-refusal says why)."
   [c]
-  (let [spot (or (:furnace-spot (ctx/mem c)) (await (free-spot/spot! c)))]
+  (let [r (await (free-spot/place-beside! c "furnace" [:furnace-spot] {}))]
     (cond
-      (= :continue spot) :continue
-      (nil? spot) (do (ctx/update-mem! c assoc :furnace-refusal "no free cell beside the body to put it on")
-                      nil)
-      :else
-      (do (ctx/update-mem! c assoc :furnace-spot spot)
-          (let [e (await (ctx/call c :place 'jobs.blocks.place {:item "furnace" :pos spot :fetch false}))]
-            (if (= :continue e)
-              :continue
-              (do (ctx/update-mem! c dissoc :furnace-spot)
-                  (if (and (= :done (:kind e)) (get-in e [:data :placed]))
-                    (do (ctx/update-mem! c assoc :furnace spot)
-                        (places/offer! c :furnace spot)
-                        (ctx/emit! c :smelt.furnace :info {:furnace spot :text (str "put a furnace down at " (:x spot) " " (:y spot) " " (:z spot))})
-                        :again)
-                    (do (ctx/update-mem! c assoc :furnace-refusal (str (or (get-in e [:data :why]) (some-> (contract/cause-key e) name) "it was not placed")))
-                        nil)))))))))
+      (= :continue r) :continue
+      (:placed r) (let [spot (:placed r)]
+                    (ctx/update-mem! c assoc :furnace spot)
+                    (places/offer! c :furnace spot)
+                    (ctx/emit! c :smelt.furnace :info {:furnace spot :text (str "put a furnace down at " (:x spot) " " (:y spot) " " (:z spot))})
+                    :again)
+      :else (do (ctx/update-mem! c assoc :furnace-refusal (:why r)) nil))))

@@ -3,6 +3,7 @@
   (:require [jobs.lib.block-sets :as bs]
             [clojure.string :as str]
             [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
@@ -118,3 +119,24 @@
   waits, nil when there is none."
   [c]
   (or (await (find-spot! c)) (await (dig-spot! c))))
+
+(defn ^:async place-beside!
+  "Put the carried block item down in a cell beside the body (spot!) with a jobs.blocks.place child (never fetching). The
+  cell is kept at spot-path in the job's memory until the child ends. :continue while a child waits, {:placed cell}, or
+  {:why text}. opts: :args more place args; :wrap (fn [call] promise) runs the child call inside something else."
+  [c item spot-path {:keys [args wrap]}]
+  (let [spot (or (get-in (ctx/mem c) spot-path) (await (spot! c)))]
+    (if-not spot
+      {:cause :no-spot :why "no free cell beside the body"}
+      (if (= :continue spot)
+        :continue
+        (do (ctx/update-mem! c assoc-in spot-path spot)
+            (let [call #(ctx/call c :place 'jobs.blocks.place (merge {:item item :pos spot :fetch false} args))
+                  e (await (if wrap (wrap call) (call)))]
+              (if (= :continue e)
+                :continue
+                (do (ctx/update-mem! c (fn [m] (if (next spot-path) (update-in m (pop spot-path) dissoc (peek spot-path)) (dissoc m (first spot-path)))))
+                    (if (and (= :done (:kind e)) (get-in e [:data :placed]))
+                      {:placed spot}
+                      {:cause (contract/cause-key e)
+                       :why (str (or (get-in e [:data :why]) (some-> (contract/cause-key e) name) "it was not placed"))})))))))))

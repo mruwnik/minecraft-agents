@@ -184,28 +184,17 @@
 (defn table-why! [c why] (ctx/update-mem! c assoc :table-why why) nil)
 
 (defn ^:async place-table!
-  "Put the carried table down in a free cell beside the body (a jobs.blocks.place child; the floor is looked at first
-  when no spot is seen, and with none a cell beside is dug: spot!). :again once it stands (it is the table to craft
-  at), :continue while a child waits, nil when it could not be put down."
+  "Put the carried table down in a free cell beside the body (free-spot/place-beside!). :again once it stands (it is the
+  table to craft at), :continue while a child waits, nil when it could not be put down."
   [c]
-  (let [spot (or (:table-spot (ctx/mem c)) (await (free-spot/spot! c)))]
+  (let [r (await (free-spot/place-beside! c "crafting_table" [:table-spot] {:args {:for-plan (:for-plan (:args c))}}))]
     (cond
-      (= :continue spot) :continue
-      (not spot) (table-why! c "the carried crafting_table could not be put down: no free cell beside the body")
-      :else
-      (do
-        (ctx/update-mem! c assoc :table-spot spot)
-        (let [r (await (ctx/call c :place 'jobs.blocks.place {:item "crafting_table" :pos spot :fetch false :for-plan (:for-plan (:args c))}))]
-          (if (= :continue r)
-            :continue
-            (do
-              (ctx/update-mem! c dissoc :table-spot)
-              (if (and (= :done (:kind r)) (:placed (:data r)))
-                (do (ctx/update-mem! c #(-> % (assoc :table spot :table-placed spot) (dissoc :want-table)))
+      (= :continue r) :continue
+      (:placed r) (let [spot (:placed r)]
+                    (ctx/update-mem! c #(-> % (assoc :table spot :table-placed spot) (dissoc :want-table)))
                     (spent/note! c "crafting_table" spot)
                     :again)
-                (table-why! c (str "the carried crafting_table could not be put down: "
-                                   (if (= :done (:kind r)) "placing it failed" (name (contract/cause-key r)))))))))))))
+      :else (table-why! c (str "the carried crafting_table could not be put down: " (:why r))))))
 
 (declare craft-act! settle! short-of-ingredients!)
 

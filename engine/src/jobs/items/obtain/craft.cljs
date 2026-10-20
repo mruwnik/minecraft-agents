@@ -92,25 +92,19 @@
       (tried! c :craft :no-plan)
 
       (= :place (:op step))
-      (let [spot (or (:spot mem) (await (free-spot/spot! c)))]
-        (cond
-          (= :continue spot) :continue
-          (not spot) (fruitless! c :no-table-spot)
-          :else
-          (do (ctx/update-mem! c assoc-in [:craft :step] step)
-              (ctx/update-mem! c assoc-in [:craft :spot] spot)
-              (let [place #(ctx/call c :place 'jobs.blocks.place {:item (:item step) :pos spot :fetch false})
-                    e (await (if (= "crafting_table" (:item step))
-                               (ctx/atomic c :urgent :place-table (fn ^:async place-table [] (await (place))))
-                               (place)))]
-                (if (= :continue e)
-                  :continue
-                  (do (ctx/update-mem! c update :craft dissoc :step :spot)
-                      (if (and (= :done (:kind e)) (get-in e [:data :placed]))
-                        (do (ctx/update-mem! c assoc :table spot :plan-table spot)
-                            (ctx/update-mem! c update :craft dissoc :table-unreachable)
-                            :again)
-                        (fruitless! c (contract/cause-key e)))))))))
+      (do (ctx/update-mem! c assoc-in [:craft :step] step)
+          (let [r (await (free-spot/place-beside! c (:item step) [:craft :spot]
+                                                  {:wrap (when (= "crafting_table" (:item step))
+                                                           (fn ^:async place-wrapped [call]
+                                                             (await (ctx/atomic c :urgent :place-table (fn ^:async place-table [] (await (call)))))))}))]
+            (cond
+              (= :continue r) :continue
+              (:placed r) (do (ctx/update-mem! c update :craft dissoc :step)
+                              (ctx/update-mem! c assoc :table (:placed r) :plan-table (:placed r))
+                              (ctx/update-mem! c update :craft dissoc :table-unreachable)
+                              :again)
+              :else (do (ctx/update-mem! c update :craft dissoc :step)
+                        (fruitless! c (if (= :no-spot (:cause r)) :no-table-spot (:cause r)))))))
 
       (= :smelt (:op step))
       (await (smelt-step! c step))
