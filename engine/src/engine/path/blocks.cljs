@@ -97,13 +97,29 @@
 
 (defn- leaves-gaps?
   "true when the boxes' xz projections leave part of the 1x1 footprint uncovered (cell centres sampled at 1/16)"
-  [shapes]
-  (boolean
-   (some (fn [k]
-           (let [x (/ (+ (quot k FOOTPRINT) 0.5) FOOTPRINT)
-                 z (/ (+ (rem k FOOTPRINT) 0.5) FOOTPRINT)]
-             (not-any? (fn [b] (and (> x (aget b 0)) (< x (aget b 3)) (> z (aget b 2)) (< z (aget b 5)))) shapes)))
-         (range (* FOOTPRINT FOOTPRINT)))))
+  [^js shapes]
+  (let [n (.-length shapes)]
+    (loop [k 0]
+      (cond
+        (= k (* FOOTPRINT FOOTPRINT)) false
+        :else
+        (let [x (/ (+ (quot k FOOTPRINT) 0.5) FOOTPRINT)
+              z (/ (+ (rem k FOOTPRINT) 0.5) FOOTPRINT)
+              covered? (loop [i 0]
+                         (and (< i n)
+                              (let [^js b (aget shapes i)]
+                                (or (and (> x (aget b 0)) (< x (aget b 3)) (> z (aget b 2)) (< z (aget b 5)))
+                                    (recur (inc i))))))]
+          (if covered? (recur (inc k)) true))))))
+
+(defn- leaves-gaps-cached?
+  "leaves-gaps? memoised in gaps by shape contents: ~30000 states share ~330 distinct shape lists"
+  [^js gaps ^js shapes]
+  (let [k (.join shapes ";")
+        hit (.get gaps k)]
+    (if (some? hit)
+      hit
+      (let [v (leaves-gaps? shapes)] (.set gaps k v) v))))
 
 (defn- sixteenths [v] (js/Math.round (* v 16)))
 
@@ -169,6 +185,7 @@
         activator (js/Uint8Array. size)
         attach (js/Uint8Array. size) ;; where a button's or lever's supporting block lies from it: 1 +x, 2 -x, 3 +z, 4 -z, 5 +y, 6 -y
         name-ids (js/Map.)
+        gaps (js/Map.)
         floats #js []]
     (doseq [^js block blocks]
       (.set name-ids (.-name block) #js [(.-minStateId block) (.-maxStateId block)]))
@@ -192,7 +209,7 @@
         (aset box-count id n-shapes)
         (run! (fn [s] (dotimes [k 6] (.push floats (aget s k)))) shapes)
         (aset offset-maxes id (or (aget offset-max name) 0))
-        (aset partial id (if (and (pos? n-shapes) (leaves-gaps? shapes)) 1 0))
+        (aset partial id (if (and (pos? n-shapes) (leaves-gaps-cached? gaps shapes)) 1 0))
         (aset climb id (climb-of name props))
         (aset climb-name id (climb-name-of name))
         (aset facing id (if (or (= (aget climb-name id) LADDER) (test? TRAPDOOR name) (test? DOOR name) (test? GATE name))
