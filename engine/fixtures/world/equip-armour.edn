@@ -1,6 +1,6 @@
 ;; jobs.items.equip puts armour on; a named piece not carried is fetched (jobs.lib.need) unless the call is :ways #{:carried}, which waits :no-item.
 ;; Should-succeed: a carried helmet is worn; a helmet in the chest beside the body is fetched and worn.
-;; Should-fail: :fetch false with the piece not carried waits :no-item and wears nothing.
+;; Should-fail: :ways #{:carried} with the piece not carried waits :no-item and wears nothing.
 {:defaults
  {:tags [:items :equip]
   :plot {:height 8}
