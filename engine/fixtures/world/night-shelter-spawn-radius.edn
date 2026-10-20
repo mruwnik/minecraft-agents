@@ -9,31 +9,41 @@
   :time-why :night-light
   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]]
   :body {:at [13.5 0 13.5] :effects [["resistance" 600 4]] :inventory [["cobblestone" 24]] :settle-s 2}
-  :act [[:job (jobs.survival.night {})]]
   :limit-s 90}
  :cases
  [{:name "lit-closed-room-is-shelter"
+   :act [[:job (jobs.survival.night {})]]
    :blocks [[:set [9 1 9] "torch"] [:set [15 1 9] "torch"] [:set [9 1 15] "torch"] [:set [15 1 15] "torch"]
             [:set [12 1 9] "torch"] [:set [12 1 15] "torch"]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 60}
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}]
    :after [[:body-near [13.5 0 13.5] 1.5]]}
   {:name "dark-5x5-room-is-shelter"
+   ;; a body sees no block in the dark: the torches show it the whole room (a look round), then go out and the room is dark but known
+   :blocks [[:set [9 1 9] "torch"] [:set [15 1 9] "torch"] [:set [9 1 15] "torch"] [:set [15 1 15] "torch"]
+            [:set [12 1 9] "torch"] [:set [12 1 15] "torch"]]
+   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+         [:rcon "execute positioned $X $Y $Z run fill ~9 ~-1 ~9 ~15 ~3 ~15 air replace torch"]
+         [:wait-s 2]
+         [:job (jobs.survival.night {})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 60}
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}]
    :after [[:body-near [13.5 0 13.5] 1.5]]}
   {:name "dark-big-hall-is-no-shelter"
+   :act [[:job (jobs.survival.night {})]]
    :plot {:length 64 :width 32}
    :blocks [[:fill [8 0 8] [16 3 16] "air"] [:fill [8 0 8] [50 3 10] "stone" :hollow] [:fill [9 0 9] [49 2 9] "air"]]
    :body {:at [9.5 0 9.5]}
    :expect [{:event {:source :action :kind :started :data {:name "place"}} :within-s 60}]}
   {:name "tiny-dark-cell-is-shelter"
+   :act [[:job (jobs.survival.night {})]]
    :blocks [[:fill [8 0 8] [16 3 16] "air"] [:fill [10 0 10] [12 3 13] "stone" :hollow] [:fill [11 0 11] [11 2 12] "air"]]
    :body {:at [11.5 0 11.5]}
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 60}
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}]
    :after [[:body-near [11.5 0 11.5] 1.5]]}
   {:name "lit-roof-with-open-sides-is-no-shelter"
+   :act [[:job (jobs.survival.night {})]]
    :blocks [[:fill [8 0 8] [16 3 16] "air"] [:fill [10 3 10] [16 3 16] "stone"]
             [:fill [10 0 10] [10 2 10] "stone"] [:fill [16 0 10] [16 2 10] "stone"] [:fill [10 0 16] [10 2 16] "stone"] [:fill [16 0 16] [16 2 16] "stone"]
             [:set [12 1 12] "torch"] [:set [14 1 14] "torch"] [:set [12 1 14] "torch"] [:set [14 1 12] "torch"]]
