@@ -12,7 +12,7 @@
             [jobs.gather.mine-stay :as stay]
             [jobs.gather.mine.branch :as branch]
             [jobs.gather.mine.end :refer [stop!]]
-            [jobs.gather.mine.targets :as targets :refer [kinds book-ground! step-cell]]
+            [jobs.gather.mine.targets :as targets :refer [kinds book-ground! step-cell main-block]]
             [jobs.gather.mine.torches :as torches]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
@@ -157,7 +157,7 @@
                                 :hung (vec (:hung m)) :torches (:torches args) :watch-kinds (vec (watch-kinds c))
                                 :radius (:radius args) :wet (boolean (:wet args)) :accept (vec (:accept args)) :stay-level (ways/stay-level? args)
                                 :fetch (:fetch args) :ignore-zones? (:ignore-zones? args)
-                                :block (:block args) :item (:item args)})))]
+                                :block (main-block args)})))]
         (if (= :continue r)
           :continue
           (let [res (:data r)
