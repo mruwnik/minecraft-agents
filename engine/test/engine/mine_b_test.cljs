@@ -408,17 +408,17 @@
           (is (empty? (calls s "dig")))
           (is (= :none (:reason (done-event s)))))))))
 
-(deftest stay-level-seals-a-cut-that-opens-into-a-cave
+(deftest stay-level-fills-the-cave-a-cut-opens-into
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:block "iron_ore" :direction "east" :tunnel-length 6 :ways #{:seen :strip-tunnel}}
                                  (update (rock-world side-cave) :inventory into [{:name "cobblestone" :count 5}]) 120))]
           (is (= :breach-sealed (:reason (first (tunnel-ends s)))) (pr-str (map :text (tunnel-ends s))))
-          (is (= "cobblestone" (block-at s 2 64 0)))
-          (is (= "cobblestone" (block-at s 2 65 0)))
-          (is (not-any? #(> (first %) 2) (dug-cells s)))
-          (is (not-any? #(= 2 (if (map? %) (:x %) (first %))) (tu/walked-to (:eng s))) "sealed from the line before stepping in"))))))
+          (is (= "cobblestone" (block-at s 2 64 1)))
+          (is (= "cobblestone" (block-at s 2 65 1)))
+          (is (= "air" (block-at s 2 64 0)) "the tunnel cell stays open")
+          (is (not-any? #(> (first %) 2) (dug-cells s))))))))
 
 (deftest stay-level-turns-from-water-at-its-first-cell-and-lists-the-legs
   (async done
@@ -454,7 +454,7 @@
           (is (< 1 (count legs)) (pr-str legs))
           (is (not= "west" (:heading (second legs))))
           (is (>= 9 (reduce + (map :length legs))) "the length budget is shared by the legs")
-          (is (= "cobblestone" (block-at s -6 64 0)) "the breach stays sealed"))))))
+          (is (= "cobblestone" (block-at s -6 64 1)) "the breach stays sealed"))))))
 
 (deftest stay-level-records-what-the-sealed-breach-showed
   (async done

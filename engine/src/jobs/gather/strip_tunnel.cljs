@@ -24,8 +24,8 @@
   "Cut a straight level tunnel along :heading from where the body stands (its start moves on over open cells the body cut itself,
   tunnel/open-start), one jobs.access.stair {:dir :level :steps 1} child per step, torches hung where jobs.lib.torch-plan says (see :torches): the
   tunnel way of jobs.gather.dig-for. A call is one stretch of a tunnel: :origin and :steps name the stretch already cut (nil and 0
-  at the start), :limit the most steps the tunnel may have in all. With :stay-level the stair only cuts, a cut that opened into air
-  beyond the tunnel is sealed with a carried block, else the body walks in.
+  at the start), :limit the most steps the tunnel may have in all. With :stay-level the air a cut opened into beyond the tunnel
+  is filled with a carried block from the new cell (ending :breach-sealed, else :breach-open).
 
   Ends when the stretch is done: :done with data {:stop :tunnel-length} at :limit, or {:stop :watch} when a block of :watch-kinds with
   a seen air face is in view that was not when the call began, or a step dug one (the caller digs it, then calls again). Any other
@@ -45,7 +45,7 @@
    :radius {:doc "blocks round the body within which :watch-kinds are looked for" :spec (a/num-in 0 nil) :default 16}
    :wet {:doc "water beside a watched block does not hide it; water beside the cut is taken" :spec boolean? :default false}
    :accept {:doc "dig hazards taken (jobs.access.stair)" :spec (a/coll-of #{:falling-block :fluid-adjacent :lava-adjacent}) :default []}
-   :stay-level {:doc "only cut; seal a cut that opens into air beyond the tunnel" :spec boolean? :default false}
+   :stay-level {:doc "keep the level; fill air a cut opens into beyond the tunnel" :spec boolean? :default false}
    :block {:doc "the block the dig is for (the tool, hunger and water checks of each step)" :spec string? :default "stone"}
    :ignore-zones? :shared})
 
@@ -130,8 +130,8 @@
 
 (defn ^:async stair-step!
   "The next cells by a jobs.access.stair child, one :level step (it judges, digs, seals exposed lava, plugs laid-open
-  water, bridges a missing floor and steps in). With :stay-level the stair only cuts: a cut that opened into air beyond
-  the tunnel is sealed from the line cell, else the body walks in (a go-to child)."
+  water, bridges a missing floor and steps in). With :stay-level a cut that opened into air beyond the tunnel has that air
+  filled from the new cell."
   [c from next cut]
   (let [{:keys [heading]} (:tunnel (ctx/mem c))
         args (:args c)
@@ -140,8 +140,7 @@
         _ (ctx/update-mem! c assoc :stepping true)
         r (waits/waiting-out c (await (ctx/call c :step 'jobs.access.stair
                                  {:dir :level :heading (keyword heading) :steps 1 :accept (step-accept args) :ways (need/pass-ways c)
-                                  :ignore-zones? (:ignore-zones? args)
-                                  :cut-only (boolean (:stay-level args))})))
+                                  :ignore-zones? (:ignore-zones? args)})))
         res (result-of r)]
     (when-not (= :continue r) (ctx/update-mem! c dissoc :stepping))
     (when-not (= :continue r) (ctx/update-mem! c update :dug into (:dug res)))
@@ -153,10 +152,12 @@
       (let [own (ledger/own-cells c)
             open (when (:stay-level args) (seq (stay/breaches name-at from cut own)))]
         (if open
-          (let [b (stay/behind name-at from cut own open)]
-            (stay/remember-behind! c (access/cell (first open)) b name-at open)
+          (let [b (stay/behind name-at from cut own open)
+                air (stay/air-beside name-at from cut own)]
+            (stay/remember-behind! c (access/cell (first open)) b name-at air)
             (ctx/update-mem! c assoc :behind b)
-            (finish! c (if (await (stay/seal! c (rules-in c) open)) :breach-sealed :breach-open) (first open) next))
+            (ctx/update-mem! c update-in [:tunnel :steps] inc)
+            (finish! c (if (await (stay/seal! c (rules-in c) air)) :breach-sealed :breach-open) (first open) next))
           (do (ctx/update-mem! c update-in [:tunnel :steps] inc)
               (let [w (await (back-on-line! c next))]
                 (cond

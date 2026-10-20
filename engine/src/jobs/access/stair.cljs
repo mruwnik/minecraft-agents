@@ -76,7 +76,6 @@
   {:dir {:doc ":down, :up or :level (a flat run, :steps only)" :spec #{:down :up :level} :default :down}
    :heading {:doc ":north :east :south or :west; nil: the way the body faces" :spec #{:north :east :south :west} :default nil}
    :steps {:doc "steps to cut; or give :y" :spec (a/int-in 1 nil) :default nil}
-   :cut-only {:doc "true: end :done (:steps 0) once the first step is cut and settled, without stepping in" :spec boolean? :default false}
    :y {:doc "feet height to end at, instead of :steps" :spec (a/num-in nil nil) :default nil}
    :accept {:doc "dig hazards taken (jobs.lib.access.rules): #{:fluid-adjacent :lava-adjacent :falling-block}" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{}}
    :ignore-zones? :shared
@@ -243,8 +242,9 @@
       (and (:arrived (:data r)) (= next-feet (reach/standing-vec (:primitives c))))
       (do (ctx/emit! c :stair.step :info {:at next-feet :text (str "stepped to " (pr-str next-feet))})
           :again)
-      (let [block-at (:block-at (judge/rules-in c (reach/standing-vec (:primitives c))))]
-        (some #(when-let [b (block-at %)] (not (bs/air b))) cut)) :again
+      (do (await (look/glance! c [(look/headings (name (:heading (:args c))))]))
+          (let [block-at (:block-at (judge/rules-in c (reach/standing-vec (:primitives c))))]
+            (some #(when-let [b (block-at %)] (not (bs/air b))) cut))) :again
       :else {:reason :step-failed :cell next-feet})))
 
 (defn ^:async return!
@@ -310,7 +310,7 @@
                     (if-let [cell (first (remove #(bs/air ((:block-at in) %)) cut))]
                       (or (await (sstep/peek! c cell))
                           (let [r (await (sstep/dig! c in cell cut accept))] (case r :continue :again :yield :continue r)))
-                      (or (await (settle! c cut)) (if (:cut-only (:args c)) :finished (await (step! c next cut)))))))))))))))
+                      (or (await (settle! c cut)) (await (step! c next cut))))))))))))))
 
 (defn back-cell
   "The stair's cell one step back toward its origin from where the body stands, or nil at the origin or off the line."

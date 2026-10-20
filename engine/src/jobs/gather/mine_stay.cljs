@@ -66,6 +66,17 @@
                               around))
              cut)))
 
+(defn air-beside
+  "The seen air cells (maps) beside the cells of cut other than the cells of the cut, from, the cell over from and the own cells ([x y z] set): what a breach opens onto."
+  [name-at from cut own]
+  (let [open (into #{from (update from :y inc)} cut)]
+    (vec (distinct
+          (for [cell cut d around
+                :let [n (mapv + [(:x cell) (:y cell) (:z cell)] d)
+                      q {:x (n 0) :y (n 1) :z (n 2)}]
+                :when (and (not (open q)) (not (own n)) (bs/air (name-at q)))]
+            q)))))
+
 (defn ^:async seal!
   "Place a carried building block in each of cells: true when they all stand, false with none carried or a failed place. in: the rules input."
   [c in cells]
