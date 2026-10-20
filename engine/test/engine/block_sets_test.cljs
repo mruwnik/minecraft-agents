@@ -9,7 +9,7 @@
     "air" "light" "short_grass" "cornflower" "azure_bluet" "lilac" "rail" "powered_rail" "redstone_wire"
     "oak_sign" "white_carpet" "torch" "wall_torch" "oak_sapling" "snow" "sweet_berry_bush")
   (are [n] (not (bs/passable? n))
-    nil "stone" "water" "lava" "cactus" "oak_fence" "oak_leaves"))
+    nil "cobweb" "tripwire" "stone" "water" "lava" "cactus" "oak_fence" "oak_leaves"))
 
 (deftest a-walker-swims-water-and-treats-an-unloaded-cell-as-open
   (is (bs/passable-or-water? "water"))

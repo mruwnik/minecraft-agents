@@ -31,12 +31,16 @@
   "Blocks without a collision box besides the named sets: torches, saplings, tulips, orchids and the solid.cljs walk-through list."
   #"(torch|_sapling|_tulip|_orchid|_flower)$")
 
+(def slows-or-triggers
+  "Walk-through blocks a body avoids: cobweb slows it to a crawl, tripwire sets off traps."
+  #{"cobweb" "tripwire"})
+
 (defn passable?
-  "Whether a block name is one a body walks through (no collision, not a fluid): open cells, replaceable plants,
+  "Whether a block name is one a body walks through (no collision, not a fluid, not cobweb or tripwire): open cells, replaceable plants,
   flowers, rails, signs, carpets, torches, saplings, berry bushes. nil (an unloaded cell) is not passable."
   [name]
   (boolean
-   (and name (not (fluids name))
+   (and name (not (fluids name)) (not (slows-or-triggers name))
         (or (replaceable name) (flowers name) (= "grass" name) (= "sweet_berry_bush" name)
             (re-find passable-pattern name) (re-find solid/walk-through name)))))
 
