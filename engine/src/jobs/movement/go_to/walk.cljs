@@ -336,7 +336,7 @@
             fetched (when (= :no-torch (:status walked)) (await (fetch-torches! c)))
             aided? (when (and (not fetched) (not= "arrived" status) (torch/torch-aid? c walked)) (await (torch/hold-torch! c)))
             looked? (when (and (not aided?) (= :air (:reason walked))) (await (look-at-goal-air! c pos)))
-            surfaced? (when (and (not aided?) (not looked?) (= :air (:reason walked))) (await (air/surface! c (dissoc opts :progress) pos)))
+            surfaced? (when (and (not aided?) (not looked?) (or (= :air (:reason walked)) (air/short-under-water? c status walked pos))) (await (air/surface! c (dissoc opts :progress) pos)))
             way-looked? (when (and (not fetched) (= :goal-not-standable (:reason walked))) (await (look-along! c pos)))
             way (when (and (not fetched) (not way-looked?) (= :goal-not-standable (:reason walked))) (guess-waypoint c pos))
             col-looked? (when (and (not aided?) (not looked?) (not surfaced?) (not fetched) (not way) (not way-looked?) (not (#{"arrived" "searching"} status)))

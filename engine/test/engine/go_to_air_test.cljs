@@ -100,7 +100,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [oxygen [6 5]]
+        (doseq [oxygen [16 6 5]]
           (let [{:keys [out p]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen oxygen :pitch 0} :blocks shaft :light [0 0]}
                                                {:pos [8 70 8] :range 1 :ways #{:walk :clear-seal}}))]
             (is (true? (:arrived @out)) (str "at oxygen " oxygen ": result " @out " at " (gt/at p)))))))))

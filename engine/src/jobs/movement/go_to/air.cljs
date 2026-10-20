@@ -9,7 +9,9 @@
     walk) it swims to air first (go-to.surfacing) when under ::surface-air seconds of air are left (always), or when the
     search began afresh more than ::wet-restarts times (at most 3 such swims in a row that leave the head under).
   - Under water with no way to the goal in the air left (:air), it first walks to the nearest air it sees or finds by
-    looking (jobs.movement.go-to.air, info go-to.surfacing, at most 3 a call), waits there for its air to come back (the plan counts the air used), and plans again."
+    looking (jobs.movement.go-to.air, info go-to.surfacing, at most 3 a call), waits there for its air to come back (the plan counts the air used), and plans again.
+    A walk that ends at the end of its plan short of a goal above the body, head under water (the plan stops below cells it
+    has not seen), does the same."
   (:require [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.perception :as perception]
@@ -148,6 +150,15 @@
           (when (zero? n) (ctx/emit! c :go-to.breathing :info {:oxygen oxygen :text "head out: waiting for its air to come back"}))
           (await (ctx/act c :wait #js {:ms breath-wait-ms :why "getting its breath back"}))
           (recur (inc n)))))))
+
+(defn short-under-water?
+  "A walk that reached the end of its plan short of a goal above the body, the head under water (a dark shaft: the plan
+  stops below what it cannot see): swimming up shows what is there."
+  [c status walked goal]
+  (and (contains? #{"partial" "blocked"} status)
+       (= :arrived (:status walked))
+       (breath/head-under? (:primitives c))
+       (> (js/Math.floor (:y goal)) (js/Math.ceil (:y (u/self-pos c))))))
 
 (defn ^:async surface!
   "A round refused :air with the head under water: the planner refuses a swim past the air limit unless the goal is a
