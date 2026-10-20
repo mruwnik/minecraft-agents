@@ -12,6 +12,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [jobs.lib.util :as u]
+            [jobs.lib.storage :as storage]
             [jobs.storage.haul :as haul]))
 
 (defn start
@@ -75,7 +76,7 @@
           (is (= :done (:status result)))
           (is (= {"a0" 5 "a1" 5 "a2" 5} (:moved result)))
           (is (= 15 (reduce + (map :count main))))
-          (is (= {"oak_sapling" 4 "a0" 2} (select-keys (haul/totals (u/inventory p)) ["oak_sapling" "a0"]))))))))
+          (is (= {"oak_sapling" 4 "a0" 2} (select-keys (storage/carried-totals (u/inventory p)) ["oak_sapling" "a0"]))))))))
 
 (deftest haul-leaves-the-kept-names-in-the-source
   (async done
@@ -136,6 +137,16 @@
           (dt/full-at p [20 64 0])
           (let [result (await (wt/ending-of eng 'jobs.storage.haul {:from [[10 64 0]] :make-chests? false} 30))]
             (is (= {:kind :nothing-possible :cause :to-full :data {:gave-up true}} (update result :data select-keys [:gave-up])))))))))
+
+(deftest haul-with-a-source-that-will-not-open-is-not-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:containers two-sources})]
+          (.override (.-world p) "inspectContainer" (fn ^:async f [_ _ _] #js {:status "timeout" :items #js []}))
+          (let [result (await (wt/ending-of eng 'jobs.storage.haul {:from [[10 64 0]]} 30))]
+            (is (= {:kind :nothing-possible :cause :timeout} (select-keys result [:kind :cause])))
+            (is (seq (get (containers p) [10 64 0])))))))))
 
 (deftest haul-stops-unreachable-when-the-source-cannot-be-reached
   (async done

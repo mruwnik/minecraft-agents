@@ -63,15 +63,10 @@
 
 (defn progress-data [c] (select-keys (ctx/mem c) [:trips :moved]))
 
-(defn totals
-  "{name n} carried over all stacks."
-  [inv]
-  (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} inv))
-
 (defn hauled-keep
   "{name n} for deposit's :keep: what is carried beyond the hauled count stays with the body."
   [inv hauled]
-  (let [carried (totals inv)]
+  (let [carried (storage/carried-totals inv)]
     (into {} (map (fn [[n k]] [n (max 0 (- (get carried n 0) k))])) hauled)))
 
 (defn spare-hauled
@@ -136,14 +131,14 @@
 (defn ^:async dump!
   "Deposit the hauled goods (only what the takes brought); counts the trip and what moved. With nothing moved it is the end, or :bag-full."
   [c pending]
-  (let [before (totals (u/inventory (:primitives c)))
+  (let [before (storage/carried-totals (u/inventory (:primitives c)))
         hauled (:hauled (ctx/mem c))
         {:keys [to make-chests? ignore-zones?]} (:args c)
         e (await (ctx/call c :deposit 'jobs.storage.deposit
                            (cond-> {:make-chests? make-chests? :ignore-zones? ignore-zones?
                                     :items (vec (keys hauled)) :keep (hauled-keep (u/inventory (:primitives c)) hauled)}
                              to (assoc :chest to))))
-        after (totals (u/inventory (:primitives c)))
+        after (storage/carried-totals (u/inventory (:primitives c)))
         gone (into {} (keep (fn [[n k]] (let [d (- k (get after n 0))] (when (pos? d) [n d])))) before)]
     (cond
       (= :continue e) :continue
@@ -164,11 +159,14 @@
       w w
       :else
       (let [seen (await (ctx/act c :inspectContainer (clj->js {:pos chest})))
+            status (.-status seen)
             stacks (map (fn [s] {:name (.-name s) :count (.-count s)}) (array-seq (.-items seen)))
-            targets (when (= "ok" (.-status seen)) (load-plan stacks (:keep (:args c)) (dec free) inv))]
-        (if (empty? targets)
-          (do (ctx/update-mem! c update :empty (fnil conj []) cell) :again)
-          (do (ctx/update-mem! c assoc :intent {:chest cell :targets targets :taken (apply merge-with + (map (fn [{:keys [name count]}] {name count}) (load-stacks stacks (:keep (:args c)) (dec free))))}) :again))))))
+            targets (load-plan stacks (:keep (:args c)) (dec free) inv)]
+        (cond
+          (= "missing" status) (stop! c :condition-failed :missing)
+          (not= "ok" status) (if (u/count-fail! c) (stop! c :nothing-possible (keyword status)) :again)
+          (empty? targets) (do (ctx/update-mem! c update :empty (fnil conj []) cell) :again)
+          :else (do (ctx/update-mem! c assoc :intent {:chest cell :targets targets :taken (apply merge-with + (map (fn [{:keys [name count]}] {name count}) (load-stacks stacks (:keep (:args c)) (dec free))))}) :again))))))
 
 (defn ^:async take!
   "Take the saved load; the intent goes once the take is done. A chest that lacks part of it (:chest-lacks) is not a stop:
