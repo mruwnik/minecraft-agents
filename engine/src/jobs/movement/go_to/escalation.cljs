@@ -337,11 +337,20 @@
       (succeeded? e r) (escalated! c pos e true)
       :else (escalation-failed! c pos (merge {:step step} (stop-detail r))))))
 
+(defn ^:async boxed-in?
+  "Whether the body has no cell to step aside to within one block of its column (after a glance at the floors there):
+  only then is a floor unseen below the cell under its feet dug onto; with room beside, a player steps aside and looks down first."
+  [c]
+  (let [[x y z] (b/feet-cell c)
+        p (:primitives c)]
+    (await (dig-look/look-unknown! c (step-off/floors {:x x :y y :z z} 1)))
+    (empty? (step-off/candidates p {:x x :y y :z z} {:reach 1 :ok? (step-off/zone-ok (b/rules-in c))}))))
+
 (defn ^:async route-cell!
   "Dig one cell of a :dig-route escalation: look first at a cell the body has not sensed, then check it again as it
   is now (escape/protected?, escape/diggable? over may-dig-fn and own-placed-fn: a block built there since the route
   was planned is someone's) and dig it (b/dig-cell!: no tool needed, the drops left; a cell whose floor is unseen is dug
-  on top, as the route planned it over rock: the floor below a shaft's last cell shows only once it is dug), noting it as a hole once dug.
+  on top only when boxed-in?, else the dig steps aside and looks), noting it as a hole once dug.
   The dig's outcome, :open for a cell open already, :replan for a guessed cell the look shows otherwise (the route
   was planned over rock that is not there), or :not-diggable."
   [c {:keys [cell guess block] :as planned}]
@@ -354,7 +363,8 @@
         (bs/passable? n) :open
         (or (escape/protected? n) (not (escape/diggable? block-at (may-dig-fn c) (own-placed-fn c) cell))) :not-diggable
         :else
-        (let [o (await (b/dig-cell! c (zipmap [:x :y :z] cell) {:ignore-zones? (boolean (:ignore-zones? (:args c))) :fetch (fetch-tool? c) :accept (cond-> #{:lava-adjacent} (dig-look/unknown? p (update cell 1 dec)) (conj :under-feet))}))
+        (let [on-top? (and (dig-look/unknown? p (update cell 1 dec)) (await (boxed-in? c)))
+              o (await (b/dig-cell! c (zipmap [:x :y :z] cell) {:ignore-zones? (boolean (:ignore-zones? (:args c))) :fetch (fetch-tool? c) :accept (cond-> #{:lava-adjacent} on-top? (conj :under-feet))}))
               dug (assoc planned :block n)]
           (when (= :dug o)
             (forget-dug-own! c [dug])
