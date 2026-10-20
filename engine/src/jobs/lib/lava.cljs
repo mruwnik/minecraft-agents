@@ -50,15 +50,17 @@
 (defn peek-stance
   "The cell to stand on to see the neighbours of the dug cell still unseen, or nil when the body sees as many from where
   it stands: of the cells within step-off reach of the column over the dug cell, the first with the most clear lines
-  from its eye to the faces on the dug cell."
+  from its eye to the faces on the dug cell. Only seen standable cells count: an unseen cell inside the rock is no stance."
   [p feet ok? cell unknown-ds]
   (let [kind-at (aim/seen-kind-at p)
         targets (map (fn [d] (face-aim (add cell d) d)) unknown-ds)
         clear-count (fn [[ex ey ez]] (count (filter #(reach/ray-clear? kind-at [ex ey ez] %) targets)))
         here (clear-count [(:x feet) (+ (:y feet) 1.62) (:z feet)])
-        stands (distinct (mapcat #(step-off/candidates p {:x (first cell) :y (+ (second cell) %) :z (nth cell 2)}
-                                                       {:avoid #{cell} :ok? ok?})
-                                 (range 0 (inc peek-height))))
+        stands (->> (range 0 (inc peek-height))
+                    (mapcat #(step-off/candidates p {:x (first cell) :y (+ (second cell) %) :z (nth cell 2)}
+                                                  {:avoid #{cell} :ok? ok?}))
+                    distinct
+                    (filter #(reach/seen-standable? p %)))
         scored (map (fn [{:keys [x y z] :as st}] [(clear-count [(+ x 0.5) (+ y 1.62) (+ z 0.5)]) st]) stands)
         best (when (seq scored) (apply max (map first scored)))]
     (when (and best (> best here))

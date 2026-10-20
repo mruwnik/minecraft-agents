@@ -215,7 +215,7 @@
 (a/defargs settings
   {::enter-pens {:default false :doc "true: the walk of blocks.dig, place and use-on may go through the gate of a pen holding animals; false: it keeps out of those gates and, with no other way, declines (a :blocks.pen-kept-out warn names the pen)." :spec boolean?}
    ::max-walks {:default 2 :doc "Failed walks into reach of one blocks.dig, place or use-on call before it ends :unreachable." :spec (a/int-in 0 nil)}
-   ::seal-fetch {:default true :doc "How blocks.dig gets a building block to seal lava with when none is carried, whatever its :ways say; false seals only with a carried block." :spec boolean?}})
+   ::seal-fetch {:default true :doc "How blocks.dig gets a building block to seal lava with when none is carried, whatever its :ways say: from a chest or by crafting, never by gathering in the field (the walk would enter the hole beside the lava); false seals only with a carried block." :spec boolean?}})
 
 (def low-floor-radius 4)
 

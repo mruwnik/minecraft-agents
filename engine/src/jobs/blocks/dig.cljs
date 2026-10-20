@@ -308,7 +308,7 @@
           (not lavas) nil
           :else
         (let [r (await (lava/seal! c :blocks.dig.sealed #(u/seen-name (:primitives c) (zipmap [:x :y :z] %)) (first lavas)
-                                   {:ways (if (settings/get b/settings ::b/seal-fetch) (set need/fetch-ways) #{:carried}) :ignore-zones? (:ignore-zones? (:args c))}))]
+                                   {:ways (if (settings/get b/settings ::b/seal-fetch) (disj (set need/fetch-ways) :gather) #{:carried}) :ignore-zones? (:ignore-zones? (:args c))}))]
           (if (map? r)
             (do (ctx/update-mem! c assoc-in [:dug :unsealed] (assoc r :lavas (vec lavas))) :again)
             r)))))))

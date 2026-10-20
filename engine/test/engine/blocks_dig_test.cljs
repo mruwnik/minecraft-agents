@@ -1057,3 +1057,17 @@
         stance (lava/peek-stance p far (constantly true) [0 59 0] [[0 0 1]])]
     (is (and (zero? (:x stance)) (neg? (:z stance))) "over the column on the side away from the wall, where the line runs down the shaft")
     (is (nil? (lava/peek-stance p {:x 0.5 :y 62 :z -0.5} (constantly true) [0 59 0] [[0 0 1]])) "none better than where the body already sees")))
+
+(deftest a-peek-stance-is-never-a-cell-the-body-has-not-seen
+  (let [mass (into {} (for [x (range -3 4) y (range 55 62) z (range -3 4)
+                            :when (not (and (zero? x) (zero? z) (>= y 59)))]
+                        [(str x "," y "," z) "stone"]))
+        p (tu/fake {:self {:pos {:x 3.5 :y 62 :z 1.5}} :blocks mass})
+        sensed (.-sensedAt p)
+        stance #(lava/peek-stance p {:x 3.5 :y 62 :z 1.5} (constantly true) [0 59 0] [[0 0 1]])
+        before (stance)]
+    (aset p "sensedAt" (fn [pos] (if (and (= (.-x pos) (:x before)) (= (.-z pos) (:z before)) (>= (.-y pos) (:y before)))
+                                   #js {:unknown true}
+                                   (sensed pos))))
+    (is (some? before))
+    (is (not= (select-keys before [:x :z]) (select-keys (stance) [:x :z])) "the stance whose feet and head were never seen is passed over")))
