@@ -70,7 +70,7 @@
 ;;             {:trigger :burning :persistence :cooldown :cooldown-s 2
 ;;              :job (jobs.survival.extinguish {:water-radius 6})}
 ;;             {:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}
-;;              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}
+;;              :job (jobs.survival.respond-to-hostile)}
 ;;             {:trigger :hungry :persistence :cooldown :cooldown-s 90 :args {:food 6}
 ;;              :job (jobs.survival.get-food {:food 6})}
 ;;             {:trigger :night :persistence :cooldown :cooldown-s 10 :args {:roof-height 4}

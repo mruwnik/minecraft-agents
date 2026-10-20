@@ -37,7 +37,7 @@
 ;; -- case from live-ProbeFight-3
 ;; ;; ProbeFight re-test: hostiles above health as in survival.edn, nothing else.
 ;; {:register [{:trigger :hostile-near :persistence :cooldown :cooldown-s 5 :args {:radius 8 :ranged-radius 16}
-;;              :job (jobs.survival.respond-to-hostile {:radius 8 :ranged-radius 16})}]
+;;              :job (jobs.survival.respond-to-hostile)}]
 ;;  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
 ;; -- case from live-ProbeFight-4
 ;; ;; Backoff live proof, before: a go-to into a sealed box target under repeat with backoff off, plus look-around.

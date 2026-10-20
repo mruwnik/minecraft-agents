@@ -125,11 +125,16 @@
 
 (def corridor-seg {:y 64 :axis :x :line 0 :from 0 :to 4 :open-ends #{}})
 
+(def corridor-walls
+  (into {} (for [x (range 5) z [-2 2] y [64 65]] [(str x "," y "," z) "stone"])))
+
 (deftest corridor-is-done-when-nothing-is-left-to-take-and-the-far-end-was-looked-at
-  (are [world m reason] (= reason (tu/kind-reason (done-of 'jobs.strip.corridor {:blocks world} {:segment corridor-seg} m)))
+  (are [world m reason] (= reason (tu/kind-reason (done-of 'jobs.strip.corridor {:blocks (merge corridor-walls world)} {:segment corridor-seg} m)))
     {} {:looked true} [:ok :stripped]
     {} {} [:later :digging]
-    {"2,64,0" "rail"} {:looked true} [:later :digging]))
+    {"2,64,0" "rail"} {:looked true} [:later :digging])
+  (is (= [:later :digging] (tu/kind-reason (done-of 'jobs.strip.corridor {:blocks {}} {:segment corridor-seg} {:looked true})))
+      "side walls never seen: a side corridor may hang there"))
 
 (deftest loot-cart-is-done-once-the-cart-is-broken-and-its-drops-collected
   (are [m reason] (= reason (tu/kind-reason (done-of 'jobs.strip.loot-cart {} {} m)))
