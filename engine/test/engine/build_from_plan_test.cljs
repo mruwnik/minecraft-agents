@@ -1209,6 +1209,15 @@
     (is (seq stands))
     (is (every? #(= 64 (second %)) stands) (pr-str stands))))
 
+(deftest a-floor-cell-out-of-reach-of-the-ground-is-aimed-at-from-the-floor-already-placed
+  (let [floor (for [x (range 36 45) z (range -4 5)] [x 64 z])
+        planned (set floor)
+        placed (into {} (for [[x y z] floor :when (not= [40 0] [x z])] [(str x "," y "," z) "cobblestone"]))
+        stands (fn [blocks] (plan/stands-for (tu/seeing-all (tu/fake-on-floor {:blocks blocks})) [40 64 0] 64 nil planned #{}))]
+    (is (seq (stands placed)))
+    (is (every? #(= 65 (second %)) (stands placed)) (pr-str (stands placed)))
+    (is (not-any? #(= 65 (second %)) (stands {})) "no placed floor: no stand on it")))
+
 (deftest a-pit-cell-is-aimed-at-from-the-rim-at-the-bodys-level
   (let [rim (into {} (for [x (range 37 44) z (range -3 4) y (range 63 67)
                            :when (not= [40 0] [x z])] [(str x "," y "," z) "stone"]))

@@ -110,12 +110,21 @@
   (let [found (grounded p cands)]
     (if (seq found) found cands)))
 
+(defn on-plan
+  "The stand cells one above cell-pos's height standing on a plan cell already placed, as a player builds a floor
+  from its edge inwards: a candidate that falls into a plan cell still empty is no stand."
+  [p cell-pos facing planned bad]
+  (->> (remove bad (stand-cells cell-pos (inc (second cell-pos)) facing planned))
+       (grounded p)
+       (remove #(or (planned %) (planned (update % 1 inc))))))
+
 (defn grounded-stands
-  "The stand cells to place or dig cell-pos from that can be stood on, at the first of stand-levels that has any; nil
-  when none (a cell above the ground's reach, or unloaded land)."
+  "The stand cells to place or dig cell-pos from that can be stood on, at the first of stand-levels that has any, else
+  on plan cells already placed; nil when none (a cell above the ground's reach, or unloaded land)."
   [p cell-pos body-y facing planned bad]
   (let [at (fn [y] (remove bad (stand-cells cell-pos y facing planned)))]
-    (some #(seq (remove bad (grounded p (at %)))) (stand-levels body-y (second cell-pos)))))
+    (or (some #(seq (remove bad (grounded p (at %)))) (stand-levels body-y (second cell-pos)))
+        (seq (on-plan p cell-pos facing planned bad)))))
 
 (defn stands-for
   "The stand cells to place or dig cell-pos from: those standable (grounded-stands), else the cell-height candidates as
