@@ -747,6 +747,7 @@
         (let [s (await (scenario {:target 1} {:self {:pos {:x -40 :y 64 :z 3}} :blocks far-floor :inventory [] :entities [(cow 1 -58 3)]} 20))
               e (done-event s)]
           (is (= :no-food (:reason e)))
+          (is (some? (:because e)) "the fetch's ending comes up, not just :no-food")
           (is (re-find #"wheat" (:text e)))
           (is (some? (:because e)) "the failed fetch's ending is carried")
           (is (= -40 (js/Math.round (self-x s))))

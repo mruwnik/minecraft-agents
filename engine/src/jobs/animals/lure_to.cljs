@@ -276,15 +276,12 @@
 (defn ^:async get-food!
   "No food carried: fetch it when :fetch allows, else (or when none came) end :no-food. :again once it is carried."
   [c]
-  (if-not (need/opts c 'jobs.animals.lure-to)
-    (finish! c :no-food)
-    (let [limits (select-keys (need/parse-arg (:fetch (:args c))) [:how :explore :minutes])
-          e (await (need/blocks! c (get animals/breeding-food (:mob (:args c))) 1 limits))]
-      (cond
-        (= :continue e) :yield
-        (animals/food-carried (:primitives c) (:mob (:args c))) :again
-        :else (do (ctx/update-mem! c assoc :food-ending e)
-                  (finish! c :no-food))))))
+  (let [e (await (bait/food! c 1))]
+    (cond
+      (= :continue e) :yield
+      (= :ok e) :again
+      :else (do (ctx/update-mem! c assoc :food-ending e)
+                (finish! c :no-food)))))
 
 (defn ^:async look-for!
   "No animal to lure in sight: walk to where the chosen one was seen when that is fresh (::sighting-age-s), else look round
@@ -321,11 +318,7 @@
     (cond
       (nil? food) (await (get-food! c))
       (empty? cands) (or (await (look-for! c)) (finish! c :no-animal))
-      (not= food (.-held (.self p))) (if (child/exhausted? c :equip)
-                                       (finish! c :no-hold)
-                                       (do (child/fruitless! c :equip)
-                                           (await (ctx/act c :equip (clj->js {:item food})))
-                                           :again))
+      (not= food (bait/held c)) (if (= :no-hold (await (bait/hold! c food))) (finish! c :no-hold) :again)
       :else (let [k (animals/key-of target)
                   walked (await (animals/walk! c k target (escort/lure-reach) {:doors :shut}))]
               (if (= :there walked)
@@ -340,10 +333,7 @@
         food (animals/food-carried p (:mob (:args c)))]
     (cond
       (nil? food) (finish! c :no-food)
-      (child/exhausted? c :equip) (finish! c :no-hold)
-      :else (do (child/fruitless! c :equip)
-                (await (ctx/act c :equip (clj->js {:item food})))
-                :again))))
+      :else (if (= :no-hold (await (bait/hold! c food))) (finish! c :no-hold) :again))))
 
 (defn ^:async arrive!
   "The body stands at :pos: the job ends :arrived once the led animal is at the destination; until then the body holds

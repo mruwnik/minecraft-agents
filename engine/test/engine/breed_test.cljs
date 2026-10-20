@@ -161,7 +161,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[label args world reason babies]
-                [["no wheat" {:mob "cow"} {:entities [(cow 1 2) (cow 2 3)]} :need 0]
+                [["no wheat" {:mob "cow"} {:entities [(cow 1 2) (cow 2 3)]} :no-food 0]
                  ["one adult" {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2)]} :too-few 0]
                  ["only babies" {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2 {:baby true}) (cow 2 3 {:baby true})]} :too-few 2]
                  ["both on cooldown" {:mob "cow"} {:inventory (wheat 2) :entities [(cow 1 2 {:cooldown true}) (cow 2 3 {:cooldown true})]} :refused 0]]]
@@ -322,7 +322,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:mob "cow"} {:self {:held "iron_axe"} :inventory axe :entities [(cow 1 2) (cow 2 3)]} 4))]
-          (is (= :need (:reason (done-event s))))
+          (is (= :no-food (:reason (done-event s))))
           (is (empty? (h/calls (:p s) "equip")))
           (is (empty? (h/calls (:p s) "unequip")))
           (is (not (contains? (done-event s) :hand)))
@@ -572,7 +572,8 @@
       (fn ^:async t []
         (let [s (await (seeing-scenario {:mob "cow"} (chest-world []) 120))]
           (is (finished? s))
-          (is (= :need (:reason (done-event s)))))))))
+          (is (= :no-food (:reason (done-event s))))
+          (is (some? (:because (done-event s))) "the fetch's ending comes up"))))))
 
 (deftest each-feeding-is-an-items-interact-child
   (async done

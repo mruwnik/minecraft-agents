@@ -9,6 +9,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
+            [jobs.lib.bait :as bait]
             [jobs.lib.need :as need]
             [jobs.lib.util :as u]))
 
@@ -63,7 +64,7 @@
   {:mob {:doc "the mob type to breed, such as \"cow\"" :spec a/name? :default nil}
    :count {:doc "animals to feed" :spec (a/int-in 1 nil) :default 2}
    :radius {:doc "animals within this many blocks count" :spec (a/num-in 0 nil) :default 16}
-   :fetch {:doc "get breeding food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food; a failed fetch ends :need" :spec need/option? :default true}
+   :fetch {:doc "get breeding food when none is carried (jobs.lib.need): true, a set of kinds or a map of limits; false ends :no-food; a failed fetch ends :no-food because of the fetch's ending" :spec need/option? :default true}
    :box {:doc "a known pen {:min :max} to walk to when the animals are not in view, and to leave at the end" :spec a/box? :default nil}
    :plan {:doc "id of a plan of the body's world; with :part, the known pen is that part's :box" :spec a/name? :default nil}
    :part {:doc "with :plan, the id of the pen part" :spec a/name? :default nil}
@@ -185,16 +186,14 @@
                 :babies (count (animals/babies p mob radius))}
         result (assoc result :text (str "breed done: " (name reason) ", fed " (count (:fed m)) ", adults " (:adults result) ", babies " (:babies result)))]
     (mark-bred! c)
-    (if ending
-      (assoc ending :data result)
-      (let [[kind cause] (if (>= (count (:fed m)) (least-fed c))
-                           [:done nil]
-                           (get ending-of reason [:nothing-possible reason]))]
-        (ctx/end c kind cause result)))))
+    (let [[kind cause] (if (>= (count (:fed m)) (least-fed c))
+                         [:done nil]
+                         (get ending-of reason [:nothing-possible reason]))]
+      (contract/with-because (ctx/end c kind cause result) ending))))
 
 (defn ^:async finish!
-  "Emit the outcome and end the call: the ending of reason (ending-of, else nothing-possible), or ending when given
-  (a failed fetch's). The hand is put back by cleanup. Resolves to :continue while a calf is awaited (a pause child)."
+  "Emit the outcome and end the call: the ending of reason (ending-of, else nothing-possible), with ending (a failed
+  fetch's) as its :because. The hand is put back by cleanup. Resolves to :continue while a calf is awaited (a pause child)."
   [c reason & [ending]]
   (if-not (calf-pending? c)
     (finish-now! c reason ending)
@@ -307,12 +306,11 @@
   [c]
   (if-not (fetchable? c)
     (await (no-food! c))
-    (let [{:keys [mob] n :count} (:args c)
-          limits (select-keys (need/parse-arg (:fetch (:args c))) [:how :explore])
-          e (await (need/blocks! c (get animals/breeding-food mob) (- n (count (:fed (ctx/mem c)))) limits))]
+    (let [{n :count} (:args c)
+          e (await (bait/food! c (- n (count (:fed (ctx/mem c))))))]
       (cond
         (= :continue e) :continue
-        (= :done (:kind e)) :again
+        (= :ok e) :again
         :else (await (no-food! c e))))))
 
 (defn pen-box

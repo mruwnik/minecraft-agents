@@ -7,7 +7,6 @@
             [jobs.lib.animals :as animals]
             [jobs.lib.child :as child]
             [engine.ctx :as ctx]
-            [jobs.lib.need :as need]
             [jobs.lib.pen :as pen]
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
@@ -103,18 +102,15 @@
          (animals/allowed c :herd.declined "herd" :take))))
 
 (defn ^:async fetch-food!
-  "A lure run with no food carried: get one of the mob's breeding foods (jobs.lib.need, :fetch allowing), else end
-  :no-food, the fetch's ending as its :because. Nil when food is carried."
+  "A lure run with no food carried: get one of the mob's breeding foods (bait/food!), else end :no-food because of the
+  fetch's ending. Nil when food is carried."
   [c]
-  (let [p (:primitives c)
-        mob (:mob (:args c))
-        limits (need/parse-arg (:fetch (:args c)))]
-    (when-not (animals/food-carried p mob)
-      (let [e (when limits (await (need/blocks! c (get animals/breeding-food mob) 1 (select-keys limits [:how :explore]))))]
-        (cond
-          (= :continue e) :continue
-          (animals/food-carried p mob) :continue
-          :else (finish! c :no-food (when (map? e) {:because (select-keys e [:kind :cause])})))))))
+  (when-not (animals/food-carried (:primitives c) (:mob (:args c)))
+    (let [e (await (bait/food! c 1))]
+      (cond
+        (= :continue e) :continue
+        (= :ok e) :continue
+        :else (finish! c :no-food (when e {:because (select-keys e [:kind :cause])}))))))
 
 (defn ^:async food-first!
   "Before the walk to the pen: settle the method and, for a lure run, get the food. Nil when there is nothing to do."
@@ -139,10 +135,7 @@
           (empty? cands) (if (and (empty? (:brought m)) (empty? (:given-up m)))
                            (finish! c (or (animals/refusal c) :none))
                            (finish! c nil))
-          (and (not= food (.-held (.self p))) (child/exhausted? c :equip)) (finish! c :no-hold)
-          (not= food (.-held (.self p))) (do (child/fruitless! c :equip)
-                                             (await (ctx/act c :equip (clj->js {:item food})))
-                                             :continue)
+          (not= food (bait/held c)) (if (= :no-hold (await (bait/hold! c food))) (finish! c :no-hold) :continue)
           :else
           (let [k (animals/key-of target)
                 _ (child/progress! c :equip)

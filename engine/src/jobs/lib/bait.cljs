@@ -2,7 +2,9 @@
   "The food animals follow, and putting it out of the hand: a body that walks out through a gate with it in hand takes
   the penned animals along."
   (:require [engine.ctx :as ctx]
+            [jobs.lib.child :as child]
             [jobs.lib.look :as look]
+            [jobs.lib.need :as need]
             [jobs.lib.util :as u]))
 
 (def breeding-food
@@ -49,3 +51,35 @@
   "Empty the hand of the breeding food of :mob (put-away!)."
   [c]
   (await (put-away! c (get breeding-food (:mob (:args c))))))
+
+(defn food-carried
+  "The first food of mob's list the body carries, else nil."
+  [p mob]
+  (let [have (into #{} (map :name) (u/inventory p))]
+    (first (filter have (get breeding-food mob)))))
+
+(defn ^:async food!
+  "No breeding food of :mob carried: get n of it with jobs.lib.need, the :fetch arg's limits allowing. Resolves to
+  :continue while the fetch goes on, :ok once food is carried, else the ending to report as the :because of :no-food
+  (nil when :fetch is off)."
+  [c n]
+  (let [mob (:mob (:args c))
+        limits (need/opts c nil)]
+    (if-not limits
+      nil
+      (let [e (await (need/blocks! c (get breeding-food mob) n (select-keys limits [:how :explore :minutes])))]
+        (cond
+          (= :continue e) :continue
+          (food-carried (:primitives c) mob) :ok
+          :else e)))))
+
+(defn ^:async hold!
+  "Take food, a carried breeding food, into the hand. Nil when it is held; :no-hold after the shared fruitless tries in
+  a row; else :retry after one more equip (the caller checks the hand next round)."
+  [c food]
+  (cond
+    (= food (held c)) nil
+    (child/exhausted? c :equip) :no-hold
+    :else (do (child/fruitless! c :equip)
+              (await (ctx/act c :equip (clj->js {:item food})))
+              :retry)))

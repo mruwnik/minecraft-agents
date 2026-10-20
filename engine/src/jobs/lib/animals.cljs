@@ -20,11 +20,7 @@
 
 (def bait-ms (* 5 60 1000))
 
-(defn food-carried
-  "The first food of mob's list the body carries, else nil."
-  [p mob]
-  (let [have (into #{} (map :name) (u/inventory p))]
-    (first (filter have (get breeding-food mob)))))
+(def food-carried bait/food-carried)
 
 (defn reserve-bait!
   "Reserve the foods of mob as bait in the register (strength 0.8, 5 minutes, ended with this job): an unnamed meal leaves them alone until near starving. Call it each round."
