@@ -1,7 +1,7 @@
 ;; Cards 99aab6b1, c82d8238: jobs.access.cleanup never digs a ledger block on the footprint of a plan the body made (cleanup.plan-cell, entry
 ;; dropped; :settings {:jobs.lib.access/spare-own-builds false} digs it), keeps a shelter's block (:retreat-plug) that opens onto a dark cell (a lit side lets it go; the dark cases are a torch-lit corridor with the dark beyond the plug) unless the keep-at-night? setting is false, and walks to an
 ;; unowned scaffold entry (no :job) 14 blocks off only when armed and healthy (an unarmed body waits, :unarmed: the fit? default) and the
-;; entry is not 5+ below the feet or within 24 of a death (a per-cell hold, kept for :job nil only).
+;; entry is not 5+ below the feet or within 24 of a death (the scaffold-left trigger does not offer one near a death; cleanup itself walks to any entry).
 ;; The dark cases pass :checks {:safe? (not (threatened))}: the job's dark-sky gate would wait for dawn before its own night rule runs.
 ;; The ledger entry (a pillar block; the night cases a retreat plug) is seeded at [6 0 8] with its block; the body stands at [20.5 0 8.5].
 {:defaults
@@ -14,38 +14,39 @@
  [{:name "own-plan-cell-is-spared"
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "dirt" :before "air" :purpose :pillar :state :placed}]}}]
    :plans [{:id "hut" :metadata {:by "$body"} :parts [{:id "wall" :cells [#at [6 0 8]] :want "dirt"}]}]
-   :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
+   :act [[:job (jobs.access.cleanup {:of :all :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :cleanup.plan-cell} :within-s 40 :of-job true}]
    :after [[:block [6 0 8] "dirt"]]}
   {:name "spare-own-builds-false-digs-it"
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "dirt" :before "air" :purpose :pillar :state :placed}]}}]
    :plans [{:id "hut" :metadata {:by "$body"} :parts [{:id "wall" :cells [#at [6 0 8]] :want "dirt"}]}]
-   :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true :settings {:jobs.lib.access/spare-own-builds false}})]]
+   :act [[:job (jobs.access.cleanup {:of :all :ignore-zones? true :settings {:jobs.lib.access/spare-own-builds false}})]]
    :expect [{:event {:source :job :kind :completed :data {:removed [[:any]]}} :within-s 60 :of-job true}]
    :after [[:not-block [6 0 8] "dirt"]]}
   {:name "armed-by-day-takes-the-scaffold-back"
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "dirt" :before "air" :purpose :pillar :state :placed}]}}]
-   :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
+   :act [[:job (jobs.access.cleanup {:of :all :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed :data {:removed [[:any]]}} :within-s 60 :of-job true}]
    :after [[:not-block [6 0 8] "dirt"]]}
   {:name "unarmed-body-does-not-walk-to-it"
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "dirt" :before "air" :purpose :pillar :state :placed}]}}]
    :body {:inventory [["iron_pickaxe" 1]]}
-   :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
+   :act [[:job (jobs.access.cleanup {:of :all :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :unarmed}} :within-s 40 :of-job true}]
    :after [[:block [6 0 8] "dirt"] [:body-far [6.5 0 8.5] 8]]}
-  {:name "entry-near-a-death-is-held"
+  {:name "entry-near-a-death-is-not-offered-by-the-trigger"
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "dirt" :before "air" :purpose :pillar :state :placed}]}}
             {:kind :died :data {:pos #xyz [8 0 8]}}]
-   :act [[:job (jobs.access.cleanup {:job nil :ignore-zones? true})]]
-   :expect [{:event {:source :job :kind :stopped :data {:open [:has {:reason :died-near}]}} :within-s 40 :of-job true}]
+   :register [{:trigger :scaffold-left :args {} :job (jobs.access.cleanup {})}]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :scaffold-left}} :for-s 40}]
+   :limit-s 50
    :after [[:block [6 0 8] "dirt"] [:body-far [6.5 0 8.5] 8]]}
   {:name "shelter-block-stays-while-it-opens-onto-dark"
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "dirt" :before "air" :purpose :retreat-plug :state :placed}]}}]
    :plot {:height 12 :light :dark}
    :blocks [[:fill [0 0 4] [30 3 12] "stone"] [:fill [1 0 8] [14 1 8] "air"] [:set [6 0 8] "dirt"] [:set [7 0 8] "torch"]]
    :body {:at [10.5 0 8.5]}
-   :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true :checks {:safe? (not (threatened))}})]]
+   :act [[:job (jobs.access.cleanup {:of :all :ignore-zones? true :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :stopped :data {:open [:any]}} :within-s 40 :of-job true}]
    :after [[:block [6 0 8] "dirt"]]}
   {:name "plug-opening-onto-lit-cells-is-taken-back"
@@ -54,7 +55,7 @@
    :time :day
    :time-why :night-light
    :blocks [[:set [6 0 8] "dirt"]]
-   :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true :checks {:safe? (not (threatened))}})]]
+   :act [[:job (jobs.access.cleanup {:of :all :ignore-zones? true :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :completed :data {:removed [[:any]]}} :within-s 60 :of-job true}]
    :after [[:not-block [6 0 8] "dirt"]]}
   {:name "keep-at-night-false-takes-it-back"
@@ -62,6 +63,6 @@
    :plot {:height 12 :light :dark}
    :blocks [[:fill [0 0 4] [30 3 12] "stone"] [:fill [1 0 8] [14 1 8] "air"] [:set [6 0 8] "dirt"] [:set [7 0 8] "torch"]]
    :body {:at [10.5 0 8.5]}
-   :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true :settings {:jobs.lib.shelter.keep/at-night? false} :checks {:safe? (not (threatened))}})]]
+   :act [[:job (jobs.access.cleanup {:of :all :ignore-zones? true :settings {:jobs.lib.shelter.keep/at-night? false} :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :completed :data {:removed [[:any]]}} :within-s 60 :of-job true}]
    :after [[:not-block [6 0 8] "dirt"]]}]}

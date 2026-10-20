@@ -38,9 +38,19 @@
             [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::max-below {:default 4 :doc "Blocks below the body a scaffold may lie to be walked to; a deeper one (a cave, a pit) is held :far-below by cleanup, and the scaffold-left trigger ignores it." :spec (a/int-in 0 nil)}})
+  {::max-below {:default 4 :doc "Blocks below the body a scaffold may lie to be walked to; the scaffold-left trigger ignores a deeper one (a cave, a pit)." :spec (a/int-in 0 nil)}
+   ::roof-height {:default 4 :doc "Blocks above a scaffold block within which a solid block (not scaffold) roofs it; the scaffold-left trigger does not offer a roofed one from the open." :spec (a/int-in 0 nil)}
+   ::died-radius {:default 24 :doc "Blocks around a place the body died within which the scaffold-left trigger does not offer a scaffold." :spec (a/num-in 0 nil)}})
 
 (defn max-below [] (settings/get settings ::max-below))
+(defn roof-height [] (settings/get settings ::roof-height))
+(defn died-radius [] (settings/get settings ::died-radius))
+
+(defn died-near-of
+  "A fn of a cell: whether a :died entry of view lies within died-radius of it."
+  [view]
+  (let [spots (keep (comp :pos :data) (mem/entries view :died))]
+    (fn [[x y z]] (boolean (some #(<= (u/dist % {:x x :y y :z z}) (died-radius)) spots)))))
 
 (def kind :scaffold)
 
@@ -169,26 +179,26 @@
       (filterv (fn [{[cx cy cz] :cell}] (<= (js/Math.hypot (- (+ cx 0.5) x) (- cy y) (- (+ cz 0.5) z)) (:radius near))) l))))
 
 (defn select
-  "The entries of l a cleanup with :job job works on: nil, those whose owner is not live and that are not held (a dig-in's :shelter blocks stay: the dig-in's leave takes them back); :all,
+  "The entries of l a cleanup with :of of works on: :orphans, those whose owner is not live and that are not held (a dig-in's :shelter blocks stay: the dig-in's leave takes them back); :all,
   every one; an instance id, those of that instance and its children. near narrows them to a pos and radius (near-of); purposes (a set), to those of
   that :purpose."
-  ([l view job] (select l view job nil nil))
-  ([l view job near] (select l view job near nil))
-  ([l view job near purposes]
+  ([l view of] (select l view of nil nil))
+  ([l view of near] (select l view of near nil))
+  ([l view of near purposes]
    (cond->> (near-of (cond
-                       (nil? job) (let [held (held-cells view)]
+                       (or (nil? of) (= :orphans of)) (let [held (held-cells view)]
                                     (filterv #(and (not= :shelter (:purpose %)) (not (owner-live? view %)) (not (held (:cell %)))) l))
-                       (= :all job) (vec l)
-                       :else (filterv #(of-instance? job %) l))
+                       (= :all of) (vec l)
+                       :else (filterv #(of-instance? of %) l))
                      near)
      (seq purposes) (filterv #(contains? (set purposes) (:purpose %))))))
 
 (defn offered
-  "The entries a cleanup with :job job (and :near near, :purpose purposes) would work on now: selected and loaded."
-  ([view block-at job] (offered view block-at job nil nil))
-  ([view block-at job near] (offered view block-at job near nil))
-  ([view block-at job near purposes]
-   (filterv #(some? (block-at (:cell %))) (select (open-entries view) view job near purposes))))
+  "The entries a cleanup with :of of (and :near near, :purpose purposes) would work on now: selected and loaded."
+  ([view block-at of] (offered view block-at of nil nil))
+  ([view block-at of near] (offered view block-at of near nil))
+  ([view block-at of near purposes]
+   (filterv #(some? (block-at (:cell %))) (select (open-entries view) view of near purposes))))
 
 (defn hold!
   "Hold cells in body-memory store."
@@ -245,8 +255,9 @@
     (set (concat stairs tunnels))))
 
 (defn near-of-args
-  "The :near the entries are narrowed to: the arg, else the body's position and :within, else (unowned entries, :job
-  nil) the body's position and 32, so a saved trigger register whose job spec has no :within stays bounded, else nil."
-  [c {:keys [near within job]}]
-  (or near
-      (when-let [r (or within (when (nil? job) 32))] {:pos (u/self-pos c) :radius r})))
+  "The :near the entries are narrowed to, {:pos :radius}: the arg (its :pos the body's position when left out), else for :orphans the body's position and
+  32, so a saved trigger register whose job spec has no :near stays bounded, else nil."
+  [c {:keys [near of]}]
+  (cond
+    near {:pos (or (:pos near) (u/self-pos c)) :radius (:radius near)}
+    (or (nil? of) (= :orphans of)) {:pos (u/self-pos c) :radius 32}))

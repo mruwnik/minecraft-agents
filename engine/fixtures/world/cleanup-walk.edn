@@ -18,7 +18,7 @@
    :act [[:job (jobs.access.pillar {:height 2 :use {:blocks ["cobblestone"]} :ignore-zones? true})]
          [:await {:source :job :kind :completed} 60]
          [:rcon "execute positioned $X $Y $Z as $BODY run tp @s ~28 ~ ~16"]
-         [:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
+         [:job (jobs.access.cleanup {:of :all :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed :data {:removed [[:any] [:any]] :open []}} :within-s 140 :of-job true}]
    :after [[:not-block [8 0 16] "cobblestone"] [:not-block [8 1 16] "cobblestone"] [:block [18 0 24] "stone"]]}
   {:name "sealed-pillar-held-open-and-wall-never-dug"
@@ -26,7 +26,7 @@
    :act [[:job (jobs.access.pillar {:height 2 :use {:blocks ["cobblestone"]} :ignore-zones? true})]
          [:await {:source :job :kind :completed} 60]
          [:rcon "execute positioned $X $Y $Z as $BODY run tp @s ~28 ~ ~16"]
-         [:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
+         [:job (jobs.access.cleanup {:of :all :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :stopped :data {:open [:any]}} :within-s 100 :of-job true}]
    :after [[:block [8 0 16] "cobblestone"] [:block [8 1 16] "cobblestone"]
            [:block [18 0 16] "stone"] [:block [18 1 16] "stone"] [:body-far [8.5 0 16.5] 10]]}]}

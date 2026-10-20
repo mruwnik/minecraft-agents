@@ -13,7 +13,7 @@
  [{:name "bridges-five-then-cleanup-removes-it"
    :act [[:job (jobs.access.bridge {:heading :east :length 5 :ignore-zones? true})]
          [:await {:source :job :kind :completed} 60]
-         [:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
+         [:job (jobs.access.cleanup {:of :all :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed :data {:built 5}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:removed [[:any] [:any] [:any] [:any] [:any]]}} :within-s 100}]
    :after [[:not-block [9 -1 16] "dirt"] [:not-block [11 -1 16] "dirt"] [:not-block [13 -1 16] "dirt"]

@@ -161,7 +161,7 @@
   (let [v (view-with-jobs "j4")
         l [(entry a :job "j4/kid") (entry b :job "j5") (entry [0 66 0] :job "j41")]]
     (are [job cells] (= cells (mapv :cell (ledger/select l v job)))
-      nil [b [0 66 0]]
+      :orphans [b [0 66 0]]
       :all [a b [0 66 0]]
       "j4" [a]
       "j41" [[0 66 0]])))
@@ -170,9 +170,9 @@
   (let [s (store (tu/tmp-dir))
         l [(entry a :job "j9") (entry b :job "j9") (entry [0 66 0] :job "j9")]]
     (ledger/write! s l)
-    (is (= [a b] (mapv :cell (ledger/offered (mem/view s) (world a "dirt" b "air") nil))) "an unloaded cell is not offered")
+    (is (= [a b] (mapv :cell (ledger/offered (mem/view s) (world a "dirt" b "air") :orphans))) "an unloaded cell is not offered")
     (ledger/hold! s [b])
-    (is (= [a] (mapv :cell (ledger/offered (mem/view s) (world a "dirt" b "air") nil))) "a held cell is not offered")
+    (is (= [a] (mapv :cell (ledger/offered (mem/view s) (world a "dirt" b "air") :orphans))) "a held cell is not offered")
     (is (= [] (ledger/offered (mem/view s) (world a "dirt" b "air") "j8")))))
 
 (deftest held-cells-are-forgotten-after-a-while

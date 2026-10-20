@@ -288,7 +288,7 @@
   ledger is closed, :continue while the child waits, else a failed round (log/blocked!) when it stays open."
   [c]
   (when (log/open-scaffold? c)
-    (let [e (await (ctx/atomic c :urgent :pillar #(ctx/call c :cleanup 'jobs.access.cleanup {:job (:id c) :checks {:fit? '(always) :safe? '(not (threatened))}})))]
+    (let [e (await (ctx/atomic c :urgent :pillar #(ctx/call c :cleanup 'jobs.access.cleanup {:of (:id c) :checks {:fit? '(always) :safe? '(not (threatened))}})))]
       (cond
         (= :continue e) :continue
         (log/open-scaffold? c) (log/blocked! c "cannot take the pillar back")))))
@@ -354,7 +354,7 @@
   "However the call ends: take the pillar back. Done when the ledger is closed, else nothing-possible :cleanup-open."
   [c _]
   (when (log/open-scaffold? c)
-    (await (ctx/atomic c :urgent :pillar #(ctx/call c :cleanup 'jobs.access.cleanup {:job (:id c) :checks {:fit? '(always) :safe? '(not (threatened))}}))))
+    (await (ctx/atomic c :urgent :pillar #(ctx/call c :cleanup 'jobs.access.cleanup {:of (:id c) :checks {:fit? '(always) :safe? '(not (threatened))}}))))
   (if (log/open-scaffold? c)
     (ctx/end c :nothing-possible :cleanup-open (result c))
     (ctx/end c :done nil)))

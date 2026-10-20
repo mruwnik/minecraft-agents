@@ -429,5 +429,5 @@
             (is (= #{:shelter} (set (map :purpose l))))
             (is (= n (count l)) "one entry per placed block")
             (is (not-any? #(air? p (:cell %)) l))
-            (is (empty? (ledger/select l view nil)) "the default cleanup does not dig a shelter")
+            (is (empty? (ledger/select l view :orphans)) "the default cleanup does not dig a shelter")
             (is (= (count l) (count (ledger/select l view :all))))))))))

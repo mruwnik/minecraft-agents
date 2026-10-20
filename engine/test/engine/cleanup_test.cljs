@@ -48,7 +48,7 @@
         feet (:feet in [3 64 0])]
     (cleanup-step/next-step (merge {:feet feet :eye (eye feet) :block-at (lookup) :entries entries
                                :ledger (set (map :cell entries)) :zones [] :footprints {} :accept #{:fluid-adjacent}
-                               :reach 4.5 :held {} :guard-walks? true :max-below 4 :roof-height 4}
+                               :reach 4.5 :held {}}
                               (dissoc in :feet)))))
 
 (defn column-world [cells] (apply lookup (mapcat (fn [c] [c "dirt"]) cells)))
@@ -206,17 +206,20 @@
 (deftest the-trigger-leaves-scaffold-beyond-its-radius-for-an-explicit-cleanup
   (let [p (tu/fake {:blocks {"0,64,0" "dirt" "50,64,0" "dirt"}})
         args scaffold-left/defaults]
-    (is (= {:within 32} args))
+    (is (= {:near {:radius 32}} args))
     (is (true? (fires? p (trigger-store [(entry [20 64 0])] []) [] args)) "near")
     (is (false? (fires? p (trigger-store [(entry [50 64 0])] []) [] args)) "far: nothing for the reflex")
     (is (false? (fires? p (trigger-store [(entry [50 64 0])] []) [])) "no radius given: the default radius, as a saved register's old spec has")
     (is (= args (:args (:scaffold-left triggers/all))))
-    (is (= [args] (rest (:job (:scaffold-left triggers/all)))) "the job the reflex starts gets the radius too")))
+    (is (= '(jobs.access.cleanup) (:job (:scaffold-left triggers/all))) "the job's own :orphans default is bounded by the same radius")))
 
-(deftest the-trigger-ignores-scaffold-cleanup-would-hold-far-below
-  (let [p (tu/fake {:blocks {"0,54,0" "dirt" "0,62,0" "dirt"}})]
-    (is (false? (fires? p (trigger-store [(entry [0 54 0])] []) [])) "ten below: cleanup holds it :far-below each time the hold runs out")
-    (is (true? (fires? p (trigger-store [(entry [0 54 0]) (entry [0 62 0])] []) [])) "another, in reach, still fires")))
+(deftest the-trigger-ignores-scaffold-not-worth-a-walk
+  (let [p (tu/fake {:blocks {"0,54,0" "dirt" "0,62,0" "dirt" "10,64,0" "dirt" "10,67,0" "stone" "12,64,0" "dirt"}})
+        died (fn [& es] (doto (trigger-store (vec es) []) (mem/write! :died {:pos {:x 14 :y 64 :z 0}} {:cap 1 :ttl :forever})))]
+    (is (false? (fires? p (trigger-store [(entry [0 54 0])] []) [])) "ten below")
+    (is (true? (fires? p (trigger-store [(entry [0 54 0]) (entry [0 62 0])] []) [])) "another, in reach, still fires")
+    (is (false? (fires? p (died (entry [12 64 0])) [])) "within the died radius of a death")
+    (is (false? (fires? p (trigger-store [(entry [10 64 0])] []) [])) "under a roof while the body is in the open")))
 
 (deftest the-trigger-waits-for-light-and-for-no-hostile-near
   (let [dirt (trigger-store [(entry [0 64 0])] [])
@@ -272,39 +275,31 @@
     (is (true? (settings/with-settings {::threats/fled-memory-ms 0} #(fires? p fled []))))
     (is (true? (fires? (tu/fake {:blocks {"0,64,0" "dirt"}}) fled [])) "the skeleton was killed: its flight holds nothing off")))
 
-(deftest cleanup-within-narrows-to-the-body-and-near-wins
+(deftest cleanup-near-defaults-to-the-body-and-orphans-to-32
   (let [c {:primitives (tu/fake {:blocks {"0,64,0" "dirt"}})}]
-    (is (= [32 #{:x :y :z}] ((juxt :radius (comp set keys :pos)) (ledger/near-of-args c {:within 32}))))
-    (is (= {:pos {:x 9 :y 9 :z 9} :radius 5} (ledger/near-of-args c {:within 32 :near {:pos {:x 9 :y 9 :z 9} :radius 5}})))
-    (is (= 32 (:radius (ledger/near-of-args c {}))) "unowned entries: 32 by default")
-    (is (= 32 (:radius (ledger/near-of-args c {:job nil}))))
-    (is (nil? (ledger/near-of-args c {:job :all})))
-    (is (nil? (ledger/near-of-args c {:job "j3"})))))
+    (is (= [5 #{:x :y :z}] ((juxt :radius (comp set keys :pos)) (ledger/near-of-args c {:near {:radius 5}}))) "no :pos: the body")
+    (is (= {:pos {:x 9 :y 9 :z 9} :radius 5} (ledger/near-of-args c {:near {:pos {:x 9 :y 9 :z 9} :radius 5}})))
+    (is (= 32 (:radius (ledger/near-of-args c {}))) "orphans: 32 by default")
+    (is (= 32 (:radius (ledger/near-of-args c {:of :orphans}))))
+    (is (nil? (ledger/near-of-args c {:of :all})))
+    (is (nil? (ledger/near-of-args c {:of "j3"})))))
 
 (deftest the-trigger-is-a-builtin
   (is (= scaffold-left/scaffold-left (:when (:scaffold-left triggers/all))))
-  (is (= '(jobs.access.cleanup {:within 32}) (:job (:scaffold-left triggers/all)))))
+  (is (= '(jobs.access.cleanup) (:job (:scaffold-left triggers/all)))))
 
-(deftest a-scaffold-far-below-the-body-is-not-walked-to
-  (let [e (entry [10 60 0])
-        world (fn [[_ y _ :as pos]] (cond (= pos [10 60 0]) "dirt" (< y 60) "stone" :else "air"))
-        go #(apply step :entries [e] :block-at world %&)]
-    (is (= [:finish [{:cell [10 60 0] :item "dirt" :reason :far-below}]] ((juxt :step :open) (go :feet [3 70 0]))))
-    (is (= :walk (:step (go :feet [3 62 0]))) "two below is a walk")
-    (is (= :walk (:step (go :feet [3 66 0] :max-below 8))))
-    (is (= :walk (:step (go :feet [3 70 0] :guard-walks? false))) "an owner's or a caller's cleanup goes anyway")))
+(defn blocker [& {:as in}]
+  (cleanup-step/walk-blocker (merge {:feet [3 64 0] :block-at (constantly "air") :ledger #{} :max-below 4 :roof-height 4} in) (entry (:cell in [10 64 0]))))
 
-(deftest a-scaffold-where-the-body-died-is-not-walked-to
-  (let [s (step :feet [3 64 0] :entries [(entry [10 64 0])] :block-at (lookup [10 64 0] "dirt") :died-near? #(= [10 64 0] %))]
-    (is (= :died-near (:reason (first (:open s)))))))
-
-(deftest a-scaffold-under-a-roof-is-not-walked-to-from-the-open
-  (let [roofed (lookup [10 64 0] "dirt" [10 67 0] "stone")
-        under (lookup [10 64 0] "dirt" [10 67 0] "stone" [3 67 0] "stone")
-        go #(step :feet [3 64 0] :entries [(entry [10 64 0])] :block-at %)]
-    (is (= :roofed (:reason (first (:open (go roofed))))))
-    (is (= :walk (:step (go under))) "a body under a roof itself has nothing to fear in a roof")
-    (is (= :walk (:step (go (lookup [10 64 0] "dirt" [10 70 0] "stone")))) "a roof out of range is open sky")))
+(deftest walk-blocker-says-why-a-scaffold-is-not-worth-a-walk
+  (is (= {:reason :far-below} (blocker :feet [3 70 0] :cell [10 60 0])))
+  (is (nil? (blocker :feet [3 62 0] :cell [10 60 0])) "two below is a walk")
+  (is (nil? (blocker :feet [3 66 0] :cell [10 60 0] :max-below 8)))
+  (is (= {:reason :died-near} (blocker :died-near? #(= [10 64 0] %))))
+  (let [roofed (lookup [10 64 0] "dirt" [10 67 0] "stone")]
+    (is (= {:reason :roofed} (blocker :block-at roofed)))
+    (is (nil? (blocker :block-at (lookup [10 64 0] "dirt" [10 67 0] "stone" [3 67 0] "stone"))) "a body under a roof itself has nothing to fear in a roof")
+    (is (nil? (blocker :block-at (lookup [10 64 0] "dirt" [10 70 0] "stone"))) "a roof out of range is open sky")))
 
 ;; ------------------------------------------------------------------ against the fake world
 
@@ -581,7 +576,7 @@
         (let [cells [[0 64 0] [1 64 0]]
               {:keys [eng p out] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (pillar-blocks cells)
                                                 :entries [(entry [0 64 0] :job "j1/pillar") (entry [1 64 0] :job "j77")]
-                                                :args {:job "j1"}})]
+                                                :args {:of "j1"}})]
           (core/submit! eng '(recording-parent) {})
           (await (ticks s eng 30))
           (is (nil? (block p [0 64 0])))
@@ -606,14 +601,14 @@
 
 (deftest cleanup-is-a-contract-job
   (let [j (get registry/jobs job)]
-    (is (= [:job :near] (:target j)))
+    (is (= [:of :near] (:target j)))
     (is (some? (:defaults j)))
     (is (fn? (:quote-of j)))))
 
-(deftest a-bad-job-argument-is-impossible
-  (are [job cause] (= cause (tu/kind-reason (cleanup/bad-args {:args {:job job}})))
+(deftest a-bad-of-argument-is-impossible
+  (are [of cause] (= cause (tu/kind-reason (cleanup/bad-args {:args {:of of}})))
     5 [:never :bad-args]
-    nil [:ok :args]
+    :orphans [:ok :args]
     :all [:ok :args]
     "j3" [:ok :args]))
 

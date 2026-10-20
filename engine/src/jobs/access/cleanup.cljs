@@ -35,15 +35,15 @@
   "Take back this body's temporary blocks: the open entries of the scaffold ledger (jobs.lib.ledger, body
   memory).
 
-  Which entries (:job):
-  - nil: entries whose placing job is no longer live and that no cleanup held in the last 10 minutes.
+  Which entries (:of):
+  - :orphans (default): entries whose placing job is no longer live and that no cleanup held in the last 10 minutes.
   - an instance id: that instance's and its children's. A parent cleaning up after its own pillar passes its
     own id.
   - :all: every entry.
   :purpose (a keyword or a set) narrows any of these to the entries of that purpose (:pillar :doorway :bed :pour ...).
-  :near {:pos :radius} narrows any of these to the entries within :radius of :pos; :within n, to those within n blocks of the
-  body now. With :job nil and neither given, :within is 32: far scaffold waits for the body to come near, or for :job :all, an
-  instance id, :near or a larger :within.
+  :near {:radius n :pos p} narrows any of these to the entries within n of p (the body's position now when :pos is left out). With
+  :of :orphans and no :near it is {:radius 32}: far scaffold waits for the body to come near, or for :of :all, an instance id or
+  a larger :near.
 
   One run: every pass first settles the entries it works on from their cells. The recorded item still there: ours. A
   cell marked :removing that is now air: removed. Anything else (swapped by someone, or gone): the entry is
@@ -75,9 +75,7 @@
 
   Ready: safe? is jobs.lib.ready/safe-if-lit (:hostile-near, :dark); fit? is jobs.lib.ready/fit-armed (:low-health, :poisoned,
   :unarmed: no weapon carried). Both are the :checks defaults, so a caller or trigger overrides them (:checks {:fit? '(always)}).
-  An unowned entry (:job nil, no :near) out of reach is walked to only when it is not held: :far-below (more than jobs.lib.ledger/max-below under the feet),
-  :died-near (within ::died-radius of a :died entry in body memory), :roofed (a solid non-scaffold block within
-  ::roof-height above it while the body is in the open). A walk leg also stops while a mob the body fled from within
+  Which scaffold is worth a walk (far below, near a death, roofed) is the scaffold-left trigger's call, not this job's. A walk leg also stops while a mob the body fled from within
   jobs.lib.threats/fled-memory-ms was last known within jobs.lib.threats/fled-radius of the cell or the body (:danger).
 
   A shelter's block (purpose :shelter or :retreat-plug) stays while a known hostile is near (:hostile-near) and while it opens onto a dark cell (:night; setting jobs.lib.shelter.keep ::at-night?): a neighbour that is not solid and not lit by what the body knows (an unseen one is guessed by the sky, unless the body's own cell is lit), whatever the hour: it keeps the hostile out of the body's refuge. A run that removed a block and leaves only :night cells holds none of them (the light of the opened side may not have reached the body yet).
@@ -96,14 +94,13 @@
   are held (:scaffold-held, 10 minutes) so the conditions and the scaffold-left trigger do not offer them again at
   once. Ends :done when nothing is left open, else nothing-possible :left-open (what could be taken back, was).
 
-  Impossible: :bad-args (:job is not nil, :all or an instance id). Condition: :no-zones (no zone list has been read, unless :ignore-zones?). Done at once when nothing is offered (after a look around when a cell was
+  Impossible: :bad-args (:of is not :orphans, :all or an instance id). Condition: :no-zones (no zone list has been read, unless :ignore-zones?). Done at once when nothing is offered (after a look around when a cell was
   never seen). Quote: from the entries it would work on.")
 
 (a/defargs args
-  {:job {:doc "nil: entries no live job owns; \"jN\": that instance's and its children's; :all: every entry" :spec (a/or-of #{:all} a/name?) :default nil}
-   :near {:doc "only the entries within :radius of :pos" :spec (a/map-with {:pos a/point? :radius (a/num-in 0 nil)}) :default nil}
+  {:of {:doc ":orphans: entries no live job owns; \"jN\": that instance's and its children's; :all: every entry" :spec (a/or-of #{:orphans :all} a/name?) :default :orphans}
+   :near {:doc "only the entries within :radius of :pos (default the body's position now); {:radius 32} for :orphans when absent" :spec (a/map-with {:pos a/point? :radius (a/num-in 0 nil)}) :default nil}
    :purpose {:doc "only the entries of these purposes (a keyword or a set), e.g. :doorway; nil: any" :spec (a/or-of keyword? (a/coll-of keyword?)) :default nil}
-   :within {:doc "only the entries within this many blocks of the body, read afresh each time (32 when :job is nil); :near wins" :spec (a/num-in 0 nil) :default nil}
    :accept {:doc "dig hazards accepted: :fluid-adjacent (water beside), :lava-adjacent, :falling-block"
             :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{:fluid-adjacent}}
    :ignore-zones? :shared})
@@ -115,15 +112,9 @@
    ::give-up {:default 2 :doc "Walks ending out of reach, or failed digs, after which a cell is held." :spec (a/int-in 1 nil)}
    ::walk-range {:default 3 :doc "How near a scaffold block the body walks before it digs it." :spec (a/int-in 0 nil)}
    ::max-collect-radius {:default 48 :doc "Blocks around the body in which dropped scaffold is collected, at most." :spec (a/int-in 0 nil)}
-   ::roof-height {:default 4 :doc "Blocks above a scaffold block within which a solid block (not scaffold) roofs it; a roofed one is not walked to from the open (:roofed)." :spec (a/int-in 0 nil)}
-   ::died-radius {:default 24 :doc "Blocks around a place the body died within which a scaffold is not walked to (:died-near)." :spec (a/num-in 0 nil)}
    ::danger-radius {:default 16 :doc "Blocks around a scaffold block within which a known hostile holds it (:danger) instead of a walk." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds a cleanup may take: the digs, the walks, the collecting." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
-
-(defn roof-height [] (settings/get settings ::roof-height))
-
-(defn died-radius [] (settings/get settings ::died-radius))
 
 (defn walk-range [] (settings/get settings ::walk-range))
 
@@ -158,12 +149,6 @@
                  (some #(<= (u/dist (danger-q/mob-pos p %) {:x x :y y :z z}) r)
                        (danger-q/known-hostiles p (+ r (danger-q/known-scan)) {}))))))
 
-(defn died-near-of
-  "A fn of a cell: whether a :died entry of view lies within died-radius of it."
-  [view]
-  (let [spots (keep (comp :pos :data) (mem/entries view :died))]
-    (fn [[x y z]] (boolean (some #(<= (u/dist % {:x x :y y :z z}) (died-radius)) spots)))))
-
 (defn inputs
   "next-step's input now: entries to work on, the whole ledger l for the rules."
   [c l entries zones]
@@ -175,12 +160,9 @@
             :hostile-near? (hostile-near? (:primitives c)) :opens-dark? (stay/opens-dark? (:primitives c)) :keep-at-night? (stay/at-night?)
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach (dig-reach)
             :spare-own-builds (access/spare-own-builds)
-            :guard-walks? (and (nil? (:job (:args c))) (nil? (:near (:args c))))
-            :max-below (ledger/max-below) :roof-height (roof-height)
-            :died-near? (died-near-of (ctx/view c))
             :held (:held (ctx/mem c) {}) :retreats (:retreats (ctx/mem c) 0)})))
 
-(defn bad-job? [job] (not (or (nil? job) (= :all job) (string? job))))
+(defn bad-of? [of] (not (or (= :orphans of) (= :all of) (string? of))))
 
 ;; ------------------------------------------------------------------ check
 
@@ -192,16 +174,16 @@
   "Whether an entry this cleanup would work on lies in a cell the body has never seen (it reads as not loaded)."
   [c]
   (let [v (ctx/view c)
-        cells (->> (ledger/select (ledger/open-entries v) v (:job (:args c)) (ledger/near-of-args c (:args c)) (purposes-of c))
+        cells (->> (ledger/select (ledger/open-entries v) v (:of (:args c)) (ledger/near-of-args c (:args c)) (purposes-of c))
                    (map (fn [{[x y z] :cell}] {:x x :y y :z z})))]
     (look/unseen? (:primitives c) cells)))
 
 (def bad-args
-  "Never :bad-args unless :job is nil, :all or an instance id."
-  (checks/args-fit "bad :job" #(not (bad-job? (:job (:args %))))))
+  "Never :bad-args unless :of is :orphans, :all or an instance id."
+  (checks/args-fit "bad :of" #(not (bad-of? (:of (:args %))))))
 
 (defn offered-now [c]
-  (ledger/offered (ctx/view c) (access/sensed-at (:primitives c) nil) (:job (:args c)) (ledger/near-of-args c (:args c)) (purposes-of c)))
+  (ledger/offered (ctx/view c) (access/sensed-at (:primitives c) nil) (:of (:args c)) (ledger/near-of-args c (:args c)) (purposes-of c)))
 
 (defn nothing-to-do?
   "Nothing is offered, no pick-up is due, and a cell never seen has been looked at (or none is unseen): the goal holds."
@@ -216,13 +198,13 @@
 
 (def fit? ready/fit-armed)
 
-(def target [:job :near])
+(def target [:of :near])
 
 (def defaults {:checks {:safe? '(and (not (threatened)) (not (exposed))) :fit? '(and (healthy) (armed))} :spend {:job-time ::job-time-s}})
 
 (defn picked-entries [c]
   (let [view (ctx/view c)]
-    (ledger/select (ledger/open-entries view) view (:job (:args c)) (ledger/near-of-args c (:args c)) (purposes-of c))))
+    (ledger/select (ledger/open-entries view) view (:of (:args c)) (ledger/near-of-args c (:args c)) (purposes-of c))))
 
 (defn result-of
   "The result of the cleanup now, with the cells left open."
@@ -407,7 +389,7 @@
   [c zones]
   (let [view (ctx/view c)
         l (ledger/open-entries view)
-        picked (set (map :cell (ledger/select l view (:job (:args c)) (ledger/near-of-args c (:args c)) (purposes-of c))))
+        picked (set (map :cell (ledger/select l view (:of (:args c)) (ledger/near-of-args c (:args c)) (purposes-of c))))
         settled (settle! c l picked)
         step (next-step (inputs c settled (filterv #(picked (:cell %)) settled) zones))
         m (ctx/mem c)]

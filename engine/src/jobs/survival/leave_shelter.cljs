@@ -73,7 +73,7 @@
   leaves open are held by cleanup (10 minutes) and warned about once. :again."
   [c]
   (let [r (waits/waiting-out c (await (ctx/call c :take-back 'jobs.access.cleanup
-                                                {:job :all :purpose #{:doorway :bed} :ignore-zones? true
+                                                {:of :all :purpose #{:doorway :bed} :ignore-zones? true
                                                  :checks {:fit? '(always) :safe? '(not (threatened))}})))]
     (when-not (= :continue r)
       (retract-bed! c (:removed (:data r)))

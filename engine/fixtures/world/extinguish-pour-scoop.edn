@@ -18,21 +18,21 @@
   {:name "pour-10-away-is-walked-back-to-and-scooped"
    :blocks [[:set [14 0 16] "water"]]
    :memory [{:kind :scaffold :data {:entries [{:cell #at [14 0 16] :item "water" :before "air" :job "j1" :purpose :pour :state :placed}]}}]
-   :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
+   :act [[:job (jobs.access.cleanup {:of :all :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed :data {:removed [[:any]]}} :within-s 40 :of-job true}]
    :after [[:block [14 0 16] "air"] [:item "water_bucket" 1]]}
   {:name "pour-4-away-in-a-pit-is-scooped-in-place"
    :blocks [[:set [14 -1 16] "water"]]
    :memory [{:kind :scaffold :data {:entries [{:cell #at [14 -1 16] :item "water" :before "air" :job "j1" :purpose :pour :state :placed}]}}]
    :body {:at [10.7 0 16.5]}
-   :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
+   :act [[:job (jobs.access.cleanup {:of :all :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed :data {:removed [[:any]]}} :within-s 30 :of-job true}]
    :after [[:block [14 -1 16] "air"] [:item "water_bucket" 1]]}
   {:name "pour-walled-in-is-never-seen-and-stays"
    :blocks [[:fill [17 0 11] [27 4 21] "stone"] [:set [22 0 16] "water"]]
    :memory [{:kind :scaffold :data {:entries [{:cell #at [22 0 16] :item "water" :before "air" :job "j1" :purpose :pour :state :placed}]}}]
    :body {:at [8.5 0 16.5]}
-   :act [[:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
+   :act [[:job (jobs.access.cleanup {:of :all :ignore-zones? true})]]
    ;; the water inside the stone is never seen, so cleanup offers nothing and ends done; the source stays
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.access.cleanup"}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed :data {:removed [[:any]]}} :for-s 3}]

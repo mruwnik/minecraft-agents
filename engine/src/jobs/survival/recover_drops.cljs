@@ -147,7 +147,7 @@
     (ctx/emit! c :recover-drops.seal :info {:pos pos :text "the pile is out of reach behind blocks this body placed: taking them back"})
     (let [[x y z] (:cell (apply min-key #(u/dist (u/self-pos c) (zipmap [:x :y :z] (:cell %))) seal))]
       (await (child/run!* c :seal-walk 'jobs.movement.go-to {:pos {:x x :y y :z z} :range (cfg/seal-sight) :see true :ways #{:walk} :checks own-checks})))
-    (let [r (await (child/run!* c :seal 'jobs.access.cleanup {:job :all :near {:pos pos :radius (cfg/seal-radius)} :checks (assoc own-checks :fit? '(always))}))]
+    (let [r (await (child/run!* c :seal 'jobs.access.cleanup {:of :all :near {:pos pos :radius (cfg/seal-radius)} :checks (assoc own-checks :fit? '(always))}))]
       (when (and (= :done (:kind r)) (seq (:removed (:data r))))
         (ctx/update-mem! c assoc :seal-cleared true)))
     :next))

@@ -332,7 +332,7 @@
 
       :else
       (do (ctx/hold-still! c nil)
-          (let [r (await (child/run!* c :scoop 'jobs.access.cleanup {:job (:id c) :ignore-zones? true :checks {:safe? '(always) :fit? '(always)}}))]
+          (let [r (await (child/run!* c :scoop 'jobs.access.cleanup {:of (:id c) :ignore-zones? true :checks {:safe? '(always) :fit? '(always)}}))]
             (leave-pour! c cell)
             (when-not (= :done (:kind r))
               (doseq [f (scoop-failures r cell)]

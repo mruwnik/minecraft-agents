@@ -136,9 +136,9 @@
   :ledger #{cells} :zones :footprints :accept :reach :held {cell {:reason ...}}}: {:step :dig :cell :item},
   {:step :walk :cell}, {:step :retreat :to stand} (only :stranding cells are left, and :retreats is under 3) or
   {:step :finish :open [{:cell :item :reason ...}]}. Held cells are given up for this run."
-  [{:keys [entries eye reach held retreats guard-walks?] :as in}]
+  [{:keys [entries eye reach held retreats] :as in}]
   (let [d #(distance eye (centre (:cell %)))
-        judged (map (fn [e] [e (or (held (:cell e)) (blocker in e) (when-not (or (<= (d e) reach) (not guard-walks?)) (walk-blocker in e)))]) entries)
+        judged (map (fn [e] [e (or (held (:cell e)) (blocker in e))]) entries)
         ready (map first (remove second judged))
         near (filter #(<= (d %) reach) ready)
         far (remove #(<= (d %) reach) ready)]

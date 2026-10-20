@@ -236,7 +236,7 @@
           near (first (filter #(seq (ledger/near-of entries %)) [(at [(:x pos) (:y pos) (:z pos)]) (at (end/feet-cell c))]))]
       (when near
         (ctx/update-mem! c assoc :seal-cleared true)
-        (await (ctx/call c :seal-cleanup 'jobs.access.cleanup {:job :all :near near :checks {:fit? '(always)}}))
+        (await (ctx/call c :seal-cleanup 'jobs.access.cleanup {:of :all :near near :checks {:fit? '(always)}}))
         true))))
 
 (defn budget-s

@@ -13,7 +13,7 @@
    :body {:inventory [["iron_pickaxe[damage=249]" 1] ["cobblestone" 4] ["iron_sword" 1]]}
    :act [[:job (jobs.access.pillar {:height 2 :use {:blocks ["cobblestone"]} :ignore-zones? true})]
          [:await {:source :job :kind :completed} 60]
-         [:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
+         [:job (jobs.access.cleanup {:of :all :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :tool.broke} :within-s 60}
             {:event {:source :job :kind :tool.none} :within-s 60}]
    :after [[:item "iron_pickaxe" 0]]}
@@ -21,7 +21,7 @@
    :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 4] ["iron_sword" 1]]}
    :act [[:job (jobs.access.pillar {:height 2 :use {:blocks ["cobblestone"]} :ignore-zones? true})]
          [:await {:source :job :kind :completed} 60]
-         [:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
+         [:job (jobs.access.cleanup {:of :all :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :completed :data {:open [:any]}} :within-s 60}
             {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 60 :until {:source :job :kind :completed :data {:open [:any]}}}]
    :after [[:item "iron_pickaxe" 1]]}
@@ -29,7 +29,7 @@
    :body {:inventory [["cobblestone" 4] ["iron_sword" 1]]}
    :act [[:job (jobs.access.pillar {:height 2 :use {:blocks ["cobblestone"]} :ignore-zones? true})]
          [:await {:source :job :kind :completed} 60]
-         [:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
+         [:job (jobs.access.cleanup {:of :all :ignore-zones? true})]]
    ;; no pick: the cobblestone pillar stays (entries open :no-tool), nothing dug, no tool event
    :expect [{:event {:source :job :kind :stopped :data {:open [:has {:reason :no-tool}]}} :within-s 30}
             {:no-event {:source :job :kind #{:tool.broke :tool.none :tool.low}} :for-s 30 :until {:source :job :kind :stopped}}]
