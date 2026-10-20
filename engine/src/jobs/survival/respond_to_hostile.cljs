@@ -25,7 +25,7 @@
   "A hostile is near: fight it (jobs.combat.attack) when the odds are fair, else retreat (jobs.survival.retreat); one whole attempt
   per round, deciding afresh before each call of the child (the choice is jobs.lib.cost, see the README row).
   Needs: a real danger (as the hostile-near trigger, jobs.lib.danger, in sight) within :radius (:ranged-radius for ranged mobs);
-  none near is done at once. The call's :use :tools are the weapons, handed to both children, and its :settings reach them.
+  none near is done at once. The call's :use :tools are the weapons, handed to both children; its radii reach the retreat as settings.
   Returns: :done when no danger is near and the retreat holds no refuge, or when every danger is only heard and the fight declined
   (they are muted, the ending names the mob); :nothing-possible :retreat-failed (the retreat's ending is the :because) when the
   retreat ends so; :nothing-possible :no-response after ::max-unchanged calls in a row that change nothing; :limit-reached on its
@@ -119,7 +119,7 @@
   (let [child-args (case decision
                      :fight {:targets :hostiles :radius (danger-q/radius-in args) :ranged-radius (danger-q/ranged-radius-in args)
                              :use {:tools (weapons c)} :hold (or hold (hold? c)) :prior (:fight-prior (ctx/mem c))
-                             :checks {:safe? '(always) :fit? '(always)} :settings (scoped-settings args)}
+                             :checks {:safe? '(always) :fit? '(always)}}
                      :flee {:use {:tools (weapons c)} :goal (:goal (ctx/mem c)) :settings (scoped-settings args)})
         e (await (ctx/call c decision (child-jobs decision) child-args))]
     (cond
