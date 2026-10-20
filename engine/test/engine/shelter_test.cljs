@@ -94,6 +94,8 @@
     1 25 false [0 0] true
     1 26 false [0 0] false
     1 40 false [0 14] true
+    40 40 false [0 14] true
+    40 40 false [0 0] false
     5 5 true [0 14] false))
 
 (defn without-blocks [blocks cells] (apply dissoc blocks (map (fn [[x y z]] (str x "," y "," z)) cells)))
@@ -118,6 +120,7 @@
                                    [(str x "," y "," z) "stone"])))
         chance (fn [blocks at] (:chance (cost/exposure (seen-box blocks [0 0]) at)))]
     (is (zero? (chance (unroofed 5 5) {:x 2 :y 64 :z 2})) "walled yard open to the sky: no dark cell beyond 24 blocks")
+    (is (zero? (chance (unroofed 20 20) {:x 10 :y 64 :z 10})) "a yard of 400 cells, past the old 100-cell cap")
     (is (pos? (chance (unroofed 1 40) {:x 0 :y 64 :z 39})) "the walled yard reaches a far dark cell")
     (is (pos? (chance (box 5 5 true) {:x 2 :y 64 :z 2})) "open sides: a flood too big to close is never safe")))
 

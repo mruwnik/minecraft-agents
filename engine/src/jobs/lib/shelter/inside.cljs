@@ -39,27 +39,40 @@
   "Blocks round a player in which no mob spawns (the vanilla rule, spherical): a dark cell nearer than this to the body is no danger."
   24)
 
+(def dark-cells-of
+  "room -> its dark spawnable cells, read once per room object (a region's room is shared by all its cells)."
+  (js/WeakMap.))
+
+(defn dark-spawnable-cells
+  "The cells [x y z] of the room where a mob could spawn (sh-sense/spawnable?) and that are dark as the body knows them
+  (sh-sense/lit-here?)."
+  [p room]
+  (or (.get dark-cells-of room)
+      (let [cells (filterv (fn [[x y z]] (let [cell {:x x :y y :z z}] (and (sh-sense/spawnable? p cell) (not (sh-sense/lit-here? p cell)))))
+                           (:cells room))]
+        (.set dark-cells-of room cells)
+        cells)))
+
+(def yard-cells
+  "Cells the flood may hold for a place with no roof over it (a walled yard); a roofed one may hold reach-room/wall-cells,
+  since open sky ground floods without end and the cost is the flood."
+  500)
+
 (defn dark-spawn-beyond?
-  "Whether some cell of the closed room where a mob could spawn (sh-sense/spawnable?) is dark, as the body knows it
-  (sh-sense/lit-here?), and farther than spawn-free-radius from `at` ({:x :y :z}, where the body is or will be)."
+  "Whether some cell of the room where a mob could spawn is dark (dark-spawnable-cells) and farther than spawn-free-radius
+  from `at` ({:x :y :z}, where the body is or will be)."
   [p room at]
-  (let [far? (fn [{:keys [x y z]}]
-               (> (+ (js/Math.pow (- x (:x at)) 2) (js/Math.pow (- y (:y at)) 2) (js/Math.pow (- z (:z at)) 2))
-                  (* spawn-free-radius spawn-free-radius)))]
-    (boolean (some #(and (far? %) (not (sh-sense/lit-here? p %)))
-                   (sh-sense/spawnable-cells p (map (fn [[x y z]] {:x x :y y :z z}) (:cells room)))))))
+  (let [r2 (* spawn-free-radius spawn-free-radius)]
+    (boolean (some (fn [[x y z]] (> (+ (js/Math.pow (- x (:x at)) 2) (js/Math.pow (- y (:y at)) 2) (js/Math.pow (- z (:z at)) 2)) r2))
+                   (dark-spawnable-cells p room)))))
 
 (defn sealed-region
-  "The closed, fully seen region (reach-room/room) round `at` ({:x :y :z}) with no open door and no way in for a walking mob
-  or a spider (reach-room/enterable?, reach-room/spider-gap?), else nil: safe but for the dark. A region too big to flood
-  (an unroofed one over reach-room/yard-cells) or with an unseen edge is none: unseen is never safe."
+  "The closed, fully seen region round `at` ({:x :y :z}) with no open door and no way in for a walking mob or a spider
+  (reach-room/walled-region: up to reach-room/wall-cells cells under a roof, yard-cells in the open, judged once for all
+  its cells), else nil: safe but for the dark. A region too big to flood or with an unseen edge is none: unseen is never safe."
   [p at]
-  (let [room (and (or (sh-sense/shut-in-room? p at) (reach-room/small-region? p at))
-                  (reach-room/room p at))]
-    (when (and room
-               (not-any? #(open-door? p %) (:doors room))
-               (not (reach-room/enterable? p room))
-               (not (reach-room/spider-gap? p room)))
+  (let [{:keys [room checks]} (reach-room/walled-region p at (if (sh-sense/room-roofed? p at) reach-room/wall-cells yard-cells))]
+    (when (and room (not-any? #(open-door? p %) (:doors room)) @checks)
       room)))
 
 (defn walled-off-at?
@@ -71,17 +84,17 @@
              (not (dark-spawn-beyond? p room at)))))
 
 (defn safe-room-at?
-  "Whether a body at `at` would be safe from the night (owner Q345): walled-off-at? in a room under a roof
-  (sh-sense/shut-in-room?). A dark 5x5 room is safe, a dark hall reaching 30 blocks is not, nor is a roof with open
-  sides or a pit a walker on its rim steps down into."
+  "Whether a body at `at` would be safe from the night (owner Q345): walled-off-at? under a roof (sh-sense/room-roofed?).
+  A dark 5x5 room is safe, a dark hall reaching 30 blocks is not, nor is a roof with open sides or a pit a walker on its
+  rim steps down into."
   [p at]
-  (boolean (and (sh-sense/shut-in-room? p at) (walled-off-at? p at))))
+  (boolean (and (sh-sense/room-roofed? p at) (walled-off-at? p at))))
 
 (defn dark-room-at?
   "Whether `at` is in a room under a roof that a sealed-region closes and only its dark keeps from being safe-room-at?:
   torches fix it."
   [p at]
-  (boolean (when-let [room (and (sh-sense/shut-in-room? p at) (sealed-region p at))]
+  (boolean (when-let [room (and (sh-sense/room-roofed? p at) (sealed-region p at))]
              (dark-spawn-beyond? p room at))))
 
 (defn safe-from-night?

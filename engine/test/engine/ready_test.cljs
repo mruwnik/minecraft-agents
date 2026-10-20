@@ -257,7 +257,7 @@
 (deftest an-unseen-cell-well-below-the-feet-under-a-seen-roof-is-underground-and-asks-no-look-or-dawn
   (are [to expected] (= expected (with-redefs [sh-sense/seen-cell? (constantly false)
                                                sh-sense/solid-at? (fn [_ c] (= 66 (:y c)))]
-                                   (kind (ready/safe-at (constantly to)) open-night)))
+                                   (kind (ready/safe-at (constantly to)) (assoc open-night :floor [-70 -70 70 70]))))
     {:x 15 :y 40 :z 0} :ok
     {:x 15 :y 62 :z 0} :ok
     {:x 15 :y 63 :z 0} :look

@@ -142,13 +142,18 @@
   ([p height {:keys [x y z]}]
    (boolean (some #(some-> (u/seen-name p {:x x :y (+ y %) :z z}) (.endsWith "_leaves")) (range 1 (inc height))))))
 
-(defn shut-in-room?
-  "Whether the body stands in a closed room (reach-room/closed-room?) with a roof (solid or leaves) over it within
-  room-roof-height blocks: safe from the night though the roof is above :roof-height. Sealed from the sky (buried?)
+(defn room-roofed?
+  "Whether the cell has a roof (solid or leaves) over it within room-roof-height blocks. Sealed from the sky (buried?)
   counts as roofed: the roof over the feet cannot be looked at from inside."
+  [p cell]
+  (boolean (or (roofed? p (room-roof-height) cell) (leaf-roofed? p (room-roof-height) cell) (buried-at? p cell))))
+
+(defn shut-in-room?
+  "Whether the body stands in a closed room (reach-room/closed-room?) with a roof (room-roofed?): safe from the night
+  though the roof is above :roof-height."
   ([p] (shut-in-room? p (feet p)))
   ([p cell]
-   (and (or (roofed? p (room-roof-height) cell) (leaf-roofed? p (room-roof-height) cell) (buried-at? p cell)) (reach-room/closed-room? p cell))))
+   (and (room-roofed? p cell) (reach-room/closed-room? p cell))))
 
 (defn shut-in-hut?
   "shut-in-room? and wide: a hut, not a one-wide tunnel the body dug."

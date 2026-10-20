@@ -23,8 +23,10 @@
 
 (defn flood-visit
   "Breadth-first over (next-cells x y z) from start [x y z], expanding at most budget cells: {:cells #js [[x y z]..] in
-  visiting order, :closed? whether every reachable cell was expanded within budget}."
-  [next-cells [sx sy sz] budget]
+  visiting order, :closed? whether every reachable cell was expanded within budget}. An abort? (cell #js [x y z]) that is
+  true for a cell about to be expanded ends the flood there, not closed."
+  ([next-cells start budget] (flood-visit next-cells start budget nil))
+  ([next-cells [sx sy sz] budget abort?]
   (let [key (keyer sx sz)
         seen (js/Set.)
         queue #js [#js [sx sy sz]]]
@@ -33,6 +35,7 @@
       (cond
         (== head (.-length queue)) {:cells queue :closed? true}
         (>= (.-size seen) budget) {:cells queue :closed? false}
+        (and abort? (abort? (aget queue head))) {:cells queue :closed? false}
         :else (let [c (aget queue head)
                     nexts (next-cells (aget c 0) (aget c 1) (aget c 2))]
                 (dotimes [i (.-length nexts)]
@@ -41,7 +44,7 @@
                     (when-not (.has seen k)
                       (.add seen k)
                       (.push queue n))))
-                (recur (inc head)))))))
+                (recur (inc head))))))))
 
 (defn flood-cells
   "flood-visit's cells when every reachable cell was expanded within budget, else nil."
@@ -165,26 +168,33 @@
           [[1 0] [-1 0] [0 1] [0 -1]])))
 
 (defn room-flood
-  "{:cells [...] :unseen? bool}: the cells a walker at cell [x y z] reaches (room-kind-at) fewer than room-cells, and
-  whether any is an unseen-edge?; nil when the flood is open. `kind-at`: room-kind-at of a shut-kind-at."
-  [p kind-at x y z]
-  (when-let [cells (flood-cells (partial forward kind-at) [x y z] room-cells)]
-    {:cells cells :unseen? (boolean (some #(unseen-edge? p kind-at %) cells))}))
+  "{:cells [...] :unseen? bool}: the cells a walker at cell [x y z] reaches (room-kind-at) fewer than budget (default
+  room-cells), and whether any is an unseen-edge?; nil when the flood is open. `kind-at`: room-kind-at of a shut-kind-at."
+  ([p kind-at x y z] (room-flood p kind-at x y z room-cells))
+  ([p kind-at x y z budget]
+   (when-let [cells (flood-cells (partial forward kind-at) [x y z] budget)]
+     {:cells cells :unseen? (boolean (some #(unseen-edge? p kind-at %) cells))})))
+
+(defn room-of
+  "{:cells #{[x y z]} :doors [...]} (room*'s answer) for the cells #js [[x y z]..] of a closed flood."
+  [p cells]
+  (let [cells (set (map vec cells))
+        doors (for [[cx cy cz] cells
+                    [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+                    :let [cell {:x (+ cx dx) :y cy :z (+ cz dz)}
+                          name (some-> (u/seen-block p cell) .-name)]
+                    :when (and name (openable? name) (not (str/ends-with? name "_trapdoor")))]
+                {:cell cell :inside {:x cx :y cy :z cz}})]
+    {:cells cells :doors (vec (vals (into {} (map (juxt :cell identity)) doors)))}))
 
 (defn room-from
   "The closed room a walker at cell [x y z] reaches (room*'s answer), nil when it is no closed room or any cell of it is
   an unseen-edge?."
-  [p kind-at x y z]
-  (let [{:keys [cells unseen?]} (room-flood p kind-at x y z)]
-    (when (and cells (not unseen?))
-      (let [cells (set (map vec cells))
-            doors (for [[cx cy cz] cells
-                        [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
-                        :let [cell {:x (+ cx dx) :y cy :z (+ cz dz)}
-                              name (some-> (u/seen-block p cell) .-name)]
-                        :when (and name (openable? name) (not (str/ends-with? name "_trapdoor")))]
-                    {:cell cell :inside {:x cx :y cy :z cz}})]
-        {:cells cells :doors (vec (vals (into {} (map (juxt :cell identity)) doors)))}))))
+  ([p kind-at x y z] (room-from p kind-at x y z room-cells))
+  ([p kind-at x y z budget]
+   (let [{:keys [cells unseen?]} (room-flood p kind-at x y z budget)]
+     (when (and cells (not unseen?))
+       (room-of p cells)))))
 
 (defn shut-kind-at
   "kind-of over the blocks the body has seen, every door, gate and trapdoor shut."
@@ -202,17 +212,18 @@
   that room cell}; nil when it is no closed room. A door or gate cell is the room's boundary whether open or shut, so
   a pos in one is judged by the first closed room beside it. `kind-at`: room-kind-at of shut-kind-at p, or one kept for a while."
   ([p pos] (room* p pos (room-kind-at p (shut-kind-at p))))
-  ([p {:keys [x y z]} kind-at]
+  ([p pos kind-at] (room* p pos kind-at room-cells))
+  ([p {:keys [x y z]} kind-at budget]
    (let [in-door? (some-> (u/seen-block p {:x x :y y :z z}) .-name openable?)]
      (if in-door?
-       (some (fn [[dx dz]] (room-from p kind-at (+ x dx) y (+ z dz))) [[1 0] [-1 0] [0 1] [0 -1]])
-       (room-from p kind-at x y z)))))
+       (some (fn [[dx dz]] (room-from p kind-at (+ x dx) y (+ z dz) budget)) [[1 0] [-1 0] [0 1] [0 -1]])
+       (room-from p kind-at x y z budget)))))
 
 (defn enterable?
   "Whether a walker on seen ground outside the room (room*'s answer) steps into one of its cells: a pit under a roof is open
   to a mob on its rim though the body in it cannot climb out."
-  [p {:keys [cells]}]
-  (let [kind-at (room-kind-at p (shut-kind-at p))]
+  ([p room] (enterable? p room (room-kind-at p (shut-kind-at p))))
+  ([p {:keys [cells]} kind-at]
     (boolean (some (fn [[x y z]]
                      (some #(and (not (cells (vec %))) (seen-standable? p {:x (aget % 0) :y (aget % 1) :z (aget % 2)}))
                            (backward kind-at x y z)))
@@ -302,13 +313,14 @@
     (str (js/Math.floor (/ ((:now opts)) room-memo-ms)) "|" (rays/epoch-of raw) "|" (.-dimension eye) "|"
          (.-x eye) "|" (.-y eye) "|" (.-z eye) "|" (.-yaw eye) "|" (.-pitch eye))))
 
-(defn kept
-  "(f kind-at) for the key `ck`, kept in the body's perception store for room-memo-ms while its eye and the world stay the same
-  (the same shared kind-at serves every cell); not kept without a perception."
+(defn kept-with
+  "(f kind-at put!) for the key `ck`, kept in the body's perception store for room-memo-ms while its eye and the world stay
+  the same (the same shared kind-at serves every cell); put! (key value) keeps a further answer for another key of the same
+  window (a no-op unkept). Not kept without a perception."
   [p ck f]
   (let [per (aget p "perception") k (some-> per steady-key)]
     (if-not k
-      (f (room-kind-at p (shut-kind-at p)))
+      (f (room-kind-at p (shut-kind-at p)) (fn [_ _]))
       (let [^js st (:st per)]
         (when-not (= k (.-roomKey st))
           (set! (.-roomKey st) k)
@@ -317,22 +329,67 @@
         (let [^js m (.-roomMemo st)]
           (if (.has m ck)
             (.get m ck)
-            (let [v (f (.-roomKind st))] (.set m ck v) v)))))))
+            (let [v (f (.-roomKind st) (fn [k v] (.set m k v)))] (.set m ck v) v)))))))
+
+(defn kept
+  "(f kind-at) for the key `ck`, kept as kept-with does."
+  [p ck f]
+  (kept-with p ck (fn [kind-at _] (f kind-at))))
 
 (defn room
   "room* kept per body (kept) for room-memo-ms; not kept without a perception."
   [p {:keys [x y z] :as pos}]
   (kept p (str x "|" y "|" z) (partial room* p pos)))
 
-(def yard-cells
-  "Cells an unroofed region may hold to be judged for walls (a yard); a bigger one is open without flooding to room-cells."
-  100)
+(def wall-cells
+  "Cells the flood of walled-region may hold: a closed cave bigger than room-cells is still judged."
+  2048)
 
-(defn small-region?
-  "Whether the walkers' flood from cell {:x :y :z} (doors shut) closes within yard-cells: the cheap test before room's full flood."
-  [p {:keys [x y z]}]
-  (kept p (str "yard|" x "|" y "|" z)
-        (fn [kind-at] (boolean (:closed? (flood-visit (partial forward kind-at) [x y z] yard-cells))))))
+(defn walker-sources
+  "The cells of the flood `cells` (#js [[x y z]..] from start [x y z]) a walker steps from to the start and so on, within the
+  flood: each reaches everything the start does."
+  [kind-at cells [sx sy sz]]
+  (let [key (keyer sx sz)
+        in-flood (js/Set.)
+        _ (.forEach cells (fn [c] (.add in-flood (key (aget c 0) (aget c 1) (aget c 2)))))
+        seen (js/Set.)
+        queue #js [#js [sx sy sz]]]
+    (.add seen (key sx sy sz))
+    (loop [head 0]
+      (when (< head (.-length queue))
+        (let [c (aget queue head)
+              ns (backward kind-at (aget c 0) (aget c 1) (aget c 2))]
+          (dotimes [i (.-length ns)]
+            (let [n (aget ns i)
+                  k (key (aget n 0) (aget n 1) (aget n 2))]
+              (when (and (.has in-flood k) (not (.has seen k)))
+                (.add seen k)
+                (.push queue n))))
+          (recur (inc head)))))
+    queue))
+
+(defn walled-region
+  "{:room :checks} for the walkers' flood from cell pos {:x :y :z} (doors shut, within budget, at most wall-cells): :room as room*'s answer
+  (nil when the flood is open or reaches an unseen edge, which ends it), :checks a delay of whether no walker outside can step in
+  (enterable?) and no spider squeezes through (spider-gap?). Kept per body for room-memo-ms, and for every cell of the flood
+  that walks back to pos (walker-sources: it reaches the same cells), so a cave is flooded once, not once per cell."
+  [p {:keys [x y z] :as pos} budget]
+  (kept-with
+   p (str "wall|" budget "|" x "|" y "|" z)
+   (fn [kind-at put!]
+     (let [door? (some-> (u/seen-block p pos) .-name openable?)
+           unseen (volatile! false)
+           {:keys [cells closed?]} (flood-visit (partial forward kind-at) [x y z] budget
+                                                (fn [c] (when (unseen-edge? p kind-at c) (vreset! unseen true) true)))
+           room (if door?
+                  (room* p pos kind-at budget)
+                  (when (and closed? (not @unseen)) (room-of p cells)))
+           region {:room room
+                   :checks (delay (and room (not (enterable? p room kind-at)) (not (spider-gap? p room))))}]
+       (when-not door?
+         (.forEach (walker-sources kind-at cells [x y z])
+                   (fn [c] (put! (str "wall|" budget "|" (aget c 0) "|" (aget c 1) "|" (aget c 2)) region))))
+       region))))
 
 (defn walk-steps
   "The steps of a walk (search-steps) from cell from to a cell next to cell to ({:x :y :z} each) over the blocks the
