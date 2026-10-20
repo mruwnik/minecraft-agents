@@ -81,6 +81,17 @@ test('section arrays answer what stateAt and lightAt do, null where no column is
     [id('stone'), 5, null, null, { minY: -64, sections: 24 }])
 })
 
+test('a caller reading one section now and then sees a light change within the light ttl', async () => {
+  const { bot } = makeBot()
+  let level = 15
+  const overlay = () => ({ sky: new Uint8Array(4096), block: new Uint8Array(4096).fill(level) })
+  const raw = createRawWorld({ getBot: () => bot, lightOverlay: overlay, lightTtlMs: 50 })
+  assert.equal(raw.lightAt(3, 71, 4), 15)
+  level = 0
+  await new Promise(resolve => setTimeout(resolve, 200))
+  assert.equal(raw.lightAt(3, 71, 4), 0)
+})
+
 test('a block update reaches the listeners with the new state and the stale section copy is dropped', () => {
   const { bot, column } = makeBot()
   const raw = createRawWorld({ getBot: () => bot })
