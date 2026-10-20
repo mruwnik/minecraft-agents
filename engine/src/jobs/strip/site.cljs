@@ -47,6 +47,7 @@
           storage.haul from the base chests to the main storage (not with :haul false).
   The cleanup export puts :home and the respawn bed back to :was however the call ends (a cut included). The torches the
   corridor took back are carried.
+  A child that waits on the night or the light (set-spawn :night, haul :exposed) is waited out with :continue, not a child failure.
   Needs :site and :base (a new site also :at), else impossible :bad-args. Its safe? is ready/safe-at-by-night :at.
   Ends :done with data {:segments {state n} :taken {class n} :hauled {item n} :smelted {raw-item n} :smelt-failed [{:furnace :reason}]},
   or condition-failed (:bad-plan :no-site :no-shears :no-torches :food-short :base-full, or :child-failed), nothing-possible
@@ -102,12 +103,12 @@
   (if (map? (:cause e)) (contract/cause-key e) (or (:cause e) (:kind e))))
 
 (defn wait-night
-  "e, a child's ending, but :continue (the night is waited out, as a player waits for day to set the spawn) when it ended
-  condition-failed :night."
+  "e, a child's ending, but :continue (the world is waited out, as a player waits for day to set the spawn or for light to
+  walk to a chest) when it ended condition-failed :night or for a reason of waits/wait-reasons."
   [c e]
   (if (and (= :condition-failed (:kind e)) (= :night (:reason (:cause e))))
     (do (some-> (:child-wait c) (reset! (:cause e))) :continue)
-    e))
+    (waits/waiting-out c e)))
 
 (defn ^:async run-all!
   "The steps [[slot job args] ..] in order: nil when all ended :done, :continue while one waits (also for the night), else {:child job :ending e} of the first that did not."
@@ -415,7 +416,7 @@
       :else (do (save! c #(cond-> (assoc % :phase :haul) (some pos? (vals (:taken %))) (assoc :bank true))) :again))))
 
 (defn ^:async haul-chests! [c s]
-  (let [e (await (ctx/call c :haul 'jobs.storage.haul (merge {:from (chests c s)} (select-keys (:args c) [:ignore-zones?]))))]
+  (let [e (wait-night c (await (ctx/call c :haul 'jobs.storage.haul (merge {:from (chests c s)} (select-keys (:args c) [:ignore-zones?])))))]
     (cond (= :continue e) :continue
           (not= :done (:kind e)) (child-stop! c {:child "jobs.storage.haul" :ending e})
           :else (do (save! c assoc :phase :done :hauled (:moved (:data e) {})) :again))))

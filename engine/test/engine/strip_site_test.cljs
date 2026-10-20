@@ -217,6 +217,14 @@
           (is (= :not-done (await (start! env args))) "the base phase yields while it is night")
           (is (empty? (called env 'jobs.strip.corridor))))))))
 
+(deftest a-haul-that-waits-for-light-is-waited-out-not-a-child-failure
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup :ending-jobs {'jobs.storage.haul (ending-job 'jobs.storage.haul :condition-failed {:reason :exposed})})
+              r (await (start! env args))]
+          (is (= :not-done r) "the haul phase yields while the chest is in the dark"))))))
+
 (deftest the-stop-limit-and-trip-limit-are-settings
   (async done
     (tu/run-async done
