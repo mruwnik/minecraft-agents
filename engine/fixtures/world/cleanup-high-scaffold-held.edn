@@ -1,7 +1,7 @@
 ;; Card 9fee7db8 (and 22e49506): scaffold-left cleanup does not walk the body after scaffold it cannot reach on foot.
 ;; Three left-over cobblestone (off the body's line to the low one, which hidden cells would read as roof) sit on top of a bare 6 high stone pole (no way up on foot), as scaffold left on a tree trunk.
 ;; The planner proves no walk gets within reach, so cleanup holds them :no-way and the body stays where it stands.
-;; Should-succeed: the low entry is walked to and taken back, the high ones stay open (cleanup.left) and the body ends by the low one, not the pole.
+;; Should-succeed: the low entry is walked to and taken back, the high ones stay open (left-open) and the body ends by the low one, not the pole.
 ;; Should-fail (high only): no entry is removed, none dug, body never leaves.
 {:defaults
  {:tags [:cleanup :scaffold-left :access :survival]

@@ -2,7 +2,7 @@
 ;; digging a way) and holds a cell :unreachable only on a permanent verdict. The body pillars 2 cobblestone at x 8, is moved
 ;; to x 28 behind a stone wall at x 18 (the wall ring keeps it on the plot), and cleans up. "Walks round" has a gap at the
 ;; wall's south end: the body walks round and takes the pillar back. "sealed" has no gap: go-to says unreachable (a permanent
-;; :why), the pillar's cells stay open (cleanup.left) and the wall, which the body could dig with its pickaxe, is never touched.
+;; :why), the pillar's cells stay open (left-open) and the wall, which the body could dig with its pickaxe, is never touched.
 ;; Transient go-to reasons (door-stuck, budget, moved while searching) count a failure instead and are unit-tested only.
 {:defaults
  {:tags [:cleanup :access :go-to :jobs]
@@ -27,6 +27,6 @@
          [:await {:source :job :kind :completed} 60]
          [:rcon "execute positioned $X $Y $Z as $BODY run tp @s ~28 ~ ~16"]
          [:job (jobs.access.cleanup {:job :all :ignore-zones? true})]]
-   :expect [{:event {:source :job :kind :cleanup.left :data {:removed 0}} :within-s 100 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:removed [] :open [:any]}} :within-s 100 :of-job true}]
    :after [[:block [8 0 16] "cobblestone"] [:block [8 1 16] "cobblestone"]
            [:block [18 0 16] "stone"] [:block [18 1 16] "stone"] [:body-far [8.5 0 16.5] 10]]}]}

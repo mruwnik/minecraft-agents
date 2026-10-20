@@ -88,10 +88,9 @@
 
   Ends by collecting the removed items' drops (jobs.items.collect-drops, filtered to the items they drop;
   a wall torch gives the torch). Data {:removed [{:cell :item}] :dropped [{:cell :item :found}] :open [{:cell
-  :item :reason}] :collected n} (the ending carries it, a reflex run's too), and warn cleanup.left (with the counts) while :open is not empty. Open cells
+  :item :reason}] :collected n} (the ending carries it, a reflex run's too; a :left-open ending's :text lists the open cells). Open cells
   are held (:scaffold-held, 10 minutes) so the conditions and the scaffold-left trigger do not offer them again at
-  once. Ends :done when nothing is left open, else nothing-possible :left-open (what could be taken back, was);
-  :too-many-passes (nothing-possible) after ::max-passes steps.
+  once. Ends :done when nothing is left open, else nothing-possible :left-open (what could be taken back, was).
 
   Impossible: :bad-args (:job is not nil, :all or an instance id). Condition: :no-zones (no zone list has been read, unless :ignore-zones?). Done at once when nothing is offered (after a look around when a cell was
   never seen). Quote: from the entries it would work on.")
@@ -114,8 +113,7 @@
    ::roof-height {:default 4 :doc "Blocks above a scaffold block within which a solid block (not scaffold) roofs it; a roofed one is not walked to from the open (:roofed)." :spec (a/int-in 0 nil)}
    ::died-radius {:default 24 :doc "Blocks around a place the body died within which a scaffold is not walked to (:died-near)." :spec (a/num-in 0 nil)}
    ::danger-radius {:default 16 :doc "Blocks around a scaffold block within which a known hostile holds it (:danger) instead of a walk." :spec (a/num-in 0 nil)}
-   ::job-time-s {:default 600 :doc "Seconds a cleanup may take: the digs, the walks, the collecting." :spec (a/num-in 0 nil)}
-   ::max-passes {:default 200 :doc "Steps (dig, walk, collect) in one run before it stops." :spec (a/int-in 0 nil)}})
+   ::job-time-s {:default 600 :doc "Seconds a cleanup may take: the digs, the walks, the collecting." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
 
 (defn roof-height [] (settings/get settings ::roof-height))
@@ -125,8 +123,6 @@
 (defn walk-range [] (settings/get settings ::walk-range))
 
 (defn max-collect-radius [] (settings/get settings ::max-collect-radius))
-
-(defn max-passes [] (settings/get settings ::max-passes))
 
 (defn dig-reach [] (settings/get settings ::reach))
 
@@ -348,12 +344,9 @@
 (defn finish! [c open]
   (let [result (result-of c open)]
     (hold-open! c (cells-to-hold result open))
-    (when (seq open)
-      (ctx/emit! c :cleanup.left :warn {:open open :removed (count (:removed result)) :dropped (count (:dropped result)) :collected (:collected result)
-                                        :text (str "cleanup left " (count open) " blocks: "
-                                                   (apply str (interpose ", " (map cell-text open))))}))
     (if (seq open)
-      (ctx/end c :nothing-possible :left-open result)
+      (ctx/end c :nothing-possible :left-open
+               (assoc result :text (str "cleanup left " (count open) " blocks: " (apply str (interpose ", " (map cell-text open))))))
       (ctx/end c :done nil result))))
 
 (defn settle!
@@ -394,13 +387,10 @@
         (finish! c (:open step))))))
 
 (defn ^:async round [c]
-  (let [zones (known/zones c)
-        n (atom 0)]
+  (let [zones (known/zones c)]
     ;; a block behind the body is not seen until it looks; a reflex may not yield, so it goes on in the same round
     (if (and (not (:started (ctx/mem c))) (empty? (offered-now c))
              (not (and (await (look/survey! c)) (seq (offered-now c)))))
       (ctx/end c :done nil nil)
       (do (ctx/update-mem! c assoc :started true)
-          (await (pace/steps! c #(if (<= (max-passes) (swap! n inc))
-                                   (ctx/end c :nothing-possible :too-many-passes {:text "cleanup did not settle"})
-                                   (work! c zones))))))))
+          (await (pace/steps! c #(work! c zones)))))))

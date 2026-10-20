@@ -564,7 +564,7 @@
           (is (= "dirt" (block p [0 65 0])))
           (is (= [[0 65 0]] (mapv :cell (the-ledger eng))))
           (is (= [{:cell [0 65 0] :item "dirt" :reason :zone :zone "keep"}] (:open @out)))
-          (is (= 1 (count (of-kind seen :cleanup.left))))
+          (is (re-find #"left 1 blocks: \[0 65 0\] zone" (:text @out)))
           (is (= #{[0 65 0]} (ledger/held-cells (mem/view (:store eng))))))))))
 
 (deftest only-the-named-instance-and-its-children

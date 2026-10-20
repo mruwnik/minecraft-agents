@@ -1,5 +1,5 @@
 ;; Card 09414bbe: jobs.access.cleanup does not walk toward scaffold while a real danger is near (:danger-radius 16 of the body, or a known
-;; hostile that near the cell): the cell is held :danger, cleanup.left says so, the scaffold stays and the body keeps away.
+;; hostile that near the cell): the cell is held :danger, the ending lists it, the scaffold stays and the body keeps away.
 ;; Scaffold seeded in the ledger at [6 0 8]; the body 14 blocks off; a NoAI skeleton in the open 3 blocks from the cell has a line of fire.
 ;; The call's :checks {:safe? (always)} lifts the job's own not-threatened gate (it would wait before any hold), so the hold is what is seen.
 ;; Control: without the skeleton the same cleanup walks over and takes the block back (cleanup-walk.edn has the walk itself).
@@ -14,8 +14,8 @@
  [{:name "skeleton-near-the-cell-holds-the-walk"
    :act [[:summon "skeleton" [9.5 0 8.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.access.cleanup {:job :all :ignore-zones? true :checks {:safe? (always)}})]]
-   :expect [{:event {:source :job :kind :cleanup.left} :within-s 50 :of-job true}
-            {:no-event {:source :job :kind :completed :data {:removed [[:any]]}} :for-s 50 :until {:source :job :kind :cleanup.left}}]
+   :expect [{:event {:source :job :kind :completed :data {:open [:any]}} :within-s 50 :of-job true}
+            {:no-event {:source :job :kind :completed :data {:removed [[:any]]}} :for-s 50 :until {:source :job :kind :completed :data {:open [:any]}}}]
    :after [[:block [6 0 8] "cobblestone"] [:body-far [9.5 0 8.5] 8]]
    :limit-s 60}
   {:name "no-hostile-the-walk-is-made"
