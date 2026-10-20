@@ -187,6 +187,18 @@
              :leaves (vec (remove children order))
              :unreached (vec (remove (set order) (map :id segs)))}))))))
 
+(def mouth-reach "Cells either side of a visited stop whose walls count as looked at." 3)
+
+(defn mouth
+  "The coordinate along seg of the first opening in a side wall (air, or never seen) that no stop in visited
+  (coordinates) is within mouth-reach of, nil when none: a side corridor hangs there."
+  [block-at {:keys [axis y line from to]} visited]
+  (first (for [a (range from (inc to))
+               :when (not-any? #(<= (js/Math.abs (- a %)) mouth-reach) visited)
+               :when (some (fn [[side h]] (let [n (block-at (at axis (+ y h) (+ line side) a))] (or (nil? n) (passable? n))))
+                           (for [side [-2 2] h [0 1]] [side h]))]
+           a)))
+
 (defn falling? [n] (boolean (and n (or (#{"gravel" "sand" "red_sand"} n) (re-find #"_concrete_powder$" n)))))
 (defn wood? [n] (boolean (and n (or (planks? n) (fence? n) (re-find #"_(log|wood)$" n)))))
 

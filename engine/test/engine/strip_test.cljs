@@ -127,3 +127,13 @@
         mem (strip/merge-segments {} [(seg 0 12) (seg 12 18)])
         merged (strip/merge-segments mem [(seg 0 18)])]
     (is (= mem merged))))
+
+(deftest mouth-finds-a-side-opening-not-yet-looked-into
+  (let [seg {:axis :x :y y :line 16 :from 0 :to 30}
+        side (corridor :z 20 12 15)
+        blocks (shell (into (corridor :x 16 0 30) side))
+        at (fn [a h w] [a (+ y h) (+ 16 w)])
+        wall (fn [cell] (get blocks cell "stone"))]
+    (is (= 19 (strip/mouth wall seg [])) "the first wall cell that is air")
+    (is (= 28 (strip/mouth (fn [c] (if (= c (at 28 1 2)) nil (wall c))) seg [10 19])) "a never-seen wall cell counts too")
+    (is (nil? (strip/mouth wall seg [20])) "a stop within reach of it has looked")))

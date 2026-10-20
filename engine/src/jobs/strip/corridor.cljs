@@ -40,7 +40,7 @@
   jobs.blocks.place child; torches are the caller's to stock); a chest minecart in the segment is looted (jobs.strip.loot-cart
   child); else the next target is dug (jobs.blocks.dig child, no fetch, drops collected): cobwebs on the walk line first, then
   the rest outward from the :entry end, each with a carried tool of its kind (shears, axe, pickaxe). With no target left it
-  walks to the far end (8 cells a step, so a spawner on the way is seen and lit) and looks round there, so crossings and new corridors come into view, then takes back the torches
+  walks to the far end (8 cells a step, so a spawner on the way is seen and lit) and looks round there, so crossings and new corridors come into view, then looks into each side opening of the wall once, then takes back the torches
   standing in the segment (the caller seals behind it).
   It does not start (a skipped job) while the body is short of food (:food-short). Its can-run? is later, with what was taken in
   the cause, when the next step cannot go on: :food-short, :bag-full (under :want-free slots free with
@@ -247,6 +247,24 @@
         (do (await (look/glance! c (side-dirs (:axis seg))))
             :again)))))
 
+(defn mouth-of
+  "The coordinate of a side opening of seg not yet looked into (nil when none), once the far end was looked at."
+  [c seg]
+  (when (:looked (ctx/mem c))
+    (strip/mouth (access/seen-at (:primitives c)) seg (:mouthed (ctx/mem c)))))
+
+(defn ^:async look-mouth!
+  "Stand in the corridor beside the opening at coordinate a and look into both sides: a branch seen from the hop stops
+  only in part (too few rails, no support in view) is not read as a segment."
+  [c seg a]
+  (let [{:keys [axis y line]} seg
+        w (await (near/go-near! c (strip/at axis y line a) 1))]
+    (ctx/update-mem! c update :mouthed (fnil conj []) a)
+    (if (= :partial w)
+      :continue
+      (do (await (look/glance! c (side-dirs axis)))
+          :again))))
+
 (defn result-of
   "What the segment leaves behind: what was taken, the cells kept (bridge planks, spawners), the segments seen beyond."
   [c seg]
@@ -260,7 +278,7 @@
      :new-segments (vec news)}))
 
 (defn owed
-  "What the segment still asks for: {:target :cart :torch :dark :sealed-spawner}, each nil when nothing is."
+  "What the segment still asks for: {:target :cart :torch :dark :mouth :sealed-spawner}, each nil when nothing is."
   [c seg]
   (let [p (:primitives c)
         {:keys [entry take spawner]} (:args c)
@@ -272,6 +290,7 @@
      :sealed-spawner (when (= :seal spawner) (first (spawners c seg)))
      :cart (first (carts c seg))
      :torch (fresh (torch-cells c seg))
+     :mouth (mouth-of c seg)
      :dark (if (= :light spawner)
              (some #(dark-near c seg (:pos %)) (spawners c seg))
              (when (= :spawner (:class target)) (dark-near c seg (:pos target))))}))
@@ -299,7 +318,7 @@
 
 (defn ^:async step! [c seg]
   (let [p (:primitives c)
-        {:keys [target cart torch dark sealed-spawner]} (owed c seg)
+        {:keys [target cart torch dark sealed-spawner mouth]} (owed c seg)
         feet (assoc (b/feet-cell c) 1 (:y seg))
         work? (or target cart)]
     (when-let [seen (seq (spawners c seg))]
@@ -312,6 +331,7 @@
       dark (await (hang-torch! c (first (torch-spots (access/seen-at p) (:axis seg) dark)) dark))
       target (await (dig! c target))
       (not (:looked (ctx/mem c))) (await (look-end! c seg))
+      mouth (await (look-mouth! c seg mouth))
       torch (await (dig! c torch))
       :else (or (ctx/done c) :continue))))
 
@@ -353,7 +373,7 @@
   (let [seg (seg-of (:segment (:args c)))
         dug (count (:dug (ctx/mem c)))
         left (when seg (owed c seg))
-        stripped? (and seg (:looked (ctx/mem c)) (not-any? left [:target :cart :torch :dark :sealed-spawner]))]
+        stripped? (and seg (:looked (ctx/mem c)) (not-any? left [:target :cart :torch :dark :sealed-spawner :mouth]))]
     (if stripped?
       (contract/ok :stripped (str "corridor done: took " (pr-str (:taken (ctx/mem c) {}))) :units :cells :done dug :result (result-of c seg))
       (contract/later :digging (str "corridor: " dug " cells dug") :units :cells :done dug
