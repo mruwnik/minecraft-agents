@@ -1,6 +1,7 @@
 (ns engine.farm-tidy-test
   "jobs.farm.tidy: which blocks over a plan are strays (pure), and whole runs against the fake world."
   (:require [engine.contract :as contract]
+            [engine.settings :as settings]
             [engine.child-ends :as ce]
             [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
@@ -157,7 +158,7 @@
           (is (= #{{:pos [5 64 2] :found "carrots" :want "crop wheat"} {:pos [3 63 3] :found "dirt" :want "farmland"}}
                  (set (:wrong result))))
           (is (= [] (:refused result)))
-          (is (= 1 (count (of-kind seen :tidy.wrong)))))))))
+          (is (empty? (of-kind seen :tidy.wrong)) "the wrong cells ride the ending, no separate warn"))))))
 
 (deftest every-dig-goes-through-the-dig-job
   (async done
@@ -349,7 +350,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [[digs result] (await (run-hazard (hazard-world [3 64 2 "water"]) {:accept #{}}))]
+        (let [[digs result] (await (settings/with-settings {:jobs.farm.tidy/accept #{}}
+                                                #(run-hazard (hazard-world [3 64 2 "water"]) {})))]
           (is (= 0 digs))
           (is (= 0 (:dug result)))
           (is (= [{:pos [2 64 2] :block "dirt" :reason :hazard :hazards [:fluid-adjacent]}] (:refused result))))))))
@@ -368,7 +370,8 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (start (assoc (hazard-world [3 64 2 "lava"] [3 63 2 "stone"]) :inventory [{:name "cobblestone" :count 1}])
                                      {"h" hazard-plan})
-              result (await (outcome eng {:plan "h" :accept #{:lava-adjacent}} 200))]
+              result (await (settings/with-settings {:jobs.farm.tidy/accept #{:lava-adjacent}}
+                                                #(outcome eng {:plan "h"} 200)))]
           (is (= 1 (count (calls p "dig"))))
           (is (= 1 (:dug result)))
           (is (= "cobblestone" (block-at p 3 64 2)) "the lava beside is sealed with the carried block"))))))
@@ -382,7 +385,8 @@
                           result (await (outcome eng (assoc args :plan "h") 200))]
                       [(count (calls p "dig")) result]))
               [digs result] (await (run {}))
-              [digs2 result2] (await (run {:accept #{:fluid-adjacent :falling-block}}))]
+              [digs2 result2] (await (settings/with-settings {:jobs.farm.tidy/accept #{:fluid-adjacent :falling-block}}
+                                                  #(run {})))]
           (is (= 0 digs))
           (is (= [:falling-block] (:hazards (first (:refused result)))))
           (is (= 1 digs2))

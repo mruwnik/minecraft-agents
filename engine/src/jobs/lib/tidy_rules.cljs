@@ -69,4 +69,6 @@
     (rules/may-dig? (merge {:block-at (fn [cell] (:name (world-block p cell))) :cell pos :feet (feet-of c) :ledger #{}}
                            (access-world c)))))
 
-(defn decide [c pos] (judge-verdict (permit c pos) (:accept (:args c))))
+(defn decide
+  ([c pos] (decide c pos (:accept (:args c))))
+  ([c pos accept] (judge-verdict (permit c pos) accept)))

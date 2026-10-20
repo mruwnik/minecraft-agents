@@ -5,6 +5,7 @@
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [engine.farm-tidy-test :as ft]
             [engine.forest-maintain-test :as fm :refer [ground]]
             [engine.forest-prepare-test :as fp]
@@ -81,7 +82,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (ft/start (ft/hazard-world [3 64 2 "water"]) {"h" ft/hazard-plan})
-              e (await (ending-of eng tidy {:plan "h" :accept #{}} 200 ft/run-until-empty))]
+              e (await (settings/with-settings {:jobs.farm.tidy/accept #{}}
+                                    #(ending-of eng tidy {:plan "h"} 200 ft/run-until-empty)))]
           (is (= {:kind :condition-failed :cause :refused} (kc e)))
           (is (= 0 (get-in e [:data :dug])))
           (is (= 1 (count (get-in e [:data :refused])))))))))

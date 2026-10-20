@@ -1,6 +1,5 @@
 (ns jobs.farm.tidy
   (:require [engine.args :as a]
-            [clojure.string :as str]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -32,11 +31,11 @@
   - a container or workstation, a bed, sign, banner, head or light where the plan wants something else.
     Result :kept {:pos :block :why :container|:owned|:light|:fluid}.
   - a block in a cell that wants another block, and a crop of another kind in a crop cell. Result :wrong
-    {:pos :found :want} and warn tidy.wrong. Fixing these is a build, till or plant job's work.
+    {:pos :found :want}. Fixing these is a build, till or plant job's work.
   Cells that are not loaded hold no strays.
   Every dig is checked against zones and the footprints of all other active plans, when the cell is chosen and
   again before the dig. A zone, claim, footprint or undiggable cell is refused at once. A dig hazard that
-  :accept does not name defers the cell until nothing else is left. It is then tried give-up (3) times and refused
+  ::accept (a setting) does not name defers the cell until nothing else is left. It is then tried give-up (3) times and refused
   as :hazard. A cell that cannot be walked to or reached give-up times is refused as :unreachable.
   Refused cells are in the result's :refused [{:pos :block :reason}].
   The sweep goes top-down, nearest first. It ends by collecting the drops within the field's extent plus 4 blocks
@@ -46,21 +45,22 @@
   :refused with the same data.
   {:reason :plan-trouble :why text}: a wait while the plan is
   missing or unreadable or no zone list has been read; impossible when it has no cells (in :part), also later in the call.
-  Quote: time only, the strays are not counted.")
+  Quote: time, and the strays found now.")
 
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
    :part {:doc "only the cells of this part (and the air above its crop cells)" :spec a/name? :default nil}
-   :accept {:doc "dig hazards accepted: :fluid-adjacent (water beside; lava beside is :lava-adjacent and is not accepted by default), :falling-block"
-            :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent}}
    :ignore-zones? :shared})
 
 (a/defargs settings
   {::reach {:default u/eye-reach :doc "Cells whose centre is this close to the eye are dug without walking, in blocks." :spec (a/num-in 0 nil)}
    ::give-up {:default 3 :doc "Failed walks, failed digs or hazard-blocked tries after which a cell is refused." :spec (a/int-in 1 nil)}
+   ::accept {:default #{:fluid-adjacent} :doc "Dig hazards accepted: :fluid-adjacent (water beside; lava beside is :lava-adjacent and is not accepted by default), :falling-block."
+             :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block})}
    ::job-time-s {:default 600 :doc "Seconds a tidy run may take: the digs, the walks and the sweep of the drops." :spec (a/num-in 0 nil)}})
 (defn reach [] (settings/get settings ::reach))
 (defn give-up [] (settings/get settings ::give-up))
+(defn accepted [] (settings/get settings ::accept))
 
 
 ;; ------------------------------------------------------------------ access
@@ -153,7 +153,7 @@
 (defn ^:async dig-one!
   "Dig the stray (a blocks.dig child) after asking the access rules once more; a refusal, a failure or a dig that did nothing is booked."
   [c {:keys [pos] :as stray}]
-  (let [d (tr/decide c pos)]
+  (let [d (tr/decide c pos (accepted))]
     (cond
       (and (vector? d) (= :refuse (first d))) (ctx/update-mem! c refuse stray (second d))
       (not= :dig d) nil
@@ -161,7 +161,7 @@
       (do
         (ctx/update-mem! c assoc :digging pos :collect true)
         (let [;; decide has judged the hazards, lava apart from water
-              dig-args {:for-plan (:plan (:args c)) :accept (into #{:fluid-adjacent :falling-block} (filter #{:lava-adjacent}) (:accept (:args c)))
+              dig-args {:for-plan (:plan (:args c)) :accept (into #{:fluid-adjacent :falling-block} (filter #{:lava-adjacent}) (accepted))
                         :ignore-zones? (:ignore-zones? (:args c))}
               outcome (await (blocks/dig-cell! c (pos-map pos) dig-args))]
           (when-not (= :continue outcome) (ctx/update-mem! c dissoc :digging))
@@ -191,7 +191,7 @@
   chunk went away since it was read is dropped from both (the next round reads the strays again)."
   [c todo]
   (reduce (fn [acc stray]
-            (let [d (tr/decide c (:pos stray))]
+            (let [d (tr/decide c (:pos stray) (accepted))]
               (cond
                 (= :dig d) (update acc :ready conj stray)
                 (= :skip d) acc
@@ -254,10 +254,6 @@
         done-text (str "tidy of " plan " done: "
                        (if (and (zero? (:dug m 0)) (empty? refused)) "nothing to dig" (str "dug " (:dug m 0)))
                        (when (seq refused) (str ", refused " (count refused))))]
-    (when (seq (:wrong found))
-      (ctx/emit! c :tidy.wrong :warn {:plan plan :cells (:wrong found)
-                                      :text (str "tidy of " plan " left " (count (:wrong found)) " wrong blocks: "
-                                                 (str/join ", " (map #(str (pr-str (:pos %)) " " (:found %)) (:wrong found))))}))
     (if (and (zero? (:dug result)) (seq refused))
       (ctx/end c :condition-failed :refused result)
       (ctx/end c :done nil (assoc result :text done-text)))))
@@ -328,6 +324,8 @@
       (apply contract/later waiting (str "tidy: " dug " strays dug, " left " left") data)
       (apply contract/ok :tidied (str "tidy: no stray left, " dug " dug") data))))
 
-(defn quote-of [_c]
-  {:uses {:job-time [1 30 (settings/get settings ::job-time-s)]}
-   :done [0 1 1]})
+(defn quote-of [c]
+  (let [{:keys [answer trouble]} (planned c)
+        n (if trouble 0 (count (:dig (strays (work-cells (:cells answer) (:part (:args c))) #(tr/world-block (:primitives c) %)))))]
+    {:uses {:job-time [1 30 (settings/get settings ::job-time-s)]}
+     :done [0 n n]}))
