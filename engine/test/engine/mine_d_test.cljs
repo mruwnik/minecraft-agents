@@ -282,6 +282,18 @@
             (is (seq soil-digs) "it dug soil")
             (is (< -1 (.indexOf names "unequip") (.indexOf names "equip")) "the hand was emptied before the pickaxe came out")))))))
 
+(deftest stone-far-off-while-standing-on-soil-is-dug-down-to-not-walked-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks (merge (soil-over-stone 63 59) {"11,64,0" "stone"}) :drops cobble :inventory [{:name "stone_pickaxe" :count 1}]}})]
+          (fake/swap-self! (:p s) assoc :held "stone_pickaxe")
+          (core/submit! (:eng s) (spec {:block "stone" :count 2 :direction "east" :tunnel-length 4 :trip true}) {})
+          (await (run-ticks s 200))
+          (is (<= 2 (get (inv s) "cobblestone" 0)))
+          (is (> 4 (first (first (dug-cells s)))) "it dug down where it stood before any walk to the far block")
+          (is (< (nth (first (dug-cells s)) 1) 64)))))))
+
 ;; Sorrel j23: the crafting table the kit just placed stood in the first stair step of the faced heading.
 (deftest a-table-in-the-first-step-of-the-faced-heading-turns-the-stair-to-another
   (async done

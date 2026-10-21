@@ -8,10 +8,12 @@
             [engine.hostile-test :as h]
             [engine.expr :as expr]
             [engine.farm-grow-test :as grow]
+            [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.base :as base]
+            [jobs.items.obtain.bill :as bill]
             [jobs.items.obtain.table :as table]
             [jobs.items.recipes :as recipes]))
 
@@ -99,6 +101,22 @@
             (is (= :stopped (:status res)))
             (is (= "diamond" (:item res)))
             (is (= 1 (bd/carried p "beef")) "the first item was got")))))))
+
+(deftest a-bill-sets-its-reserve-once-not-every-round
+  (let [store (atom [])
+        writes (atom 0)
+        c {:id "j1" :primitives (tu/fake {}) :args {:bill {"iron_pickaxe" 1}}
+           :view (fn [] {:data {:entries {:reserve @store (mem/job-kind "j1") [{:data {}}]}} :now 0})
+           :remember (fn [_ data _] (swap! writes inc) (swap! store conj {:data data}))
+           :forget (fn [_ pred] (swap! store #(vec (remove (comp pred :data) %))))}]
+    (bill/reserve! c ["iron_pickaxe"])
+    (let [first-writes @writes]
+      (is (pos? first-writes))
+      (bill/reserve! c ["iron_pickaxe"])
+      (bill/reserve! c ["iron_pickaxe"])
+      (is (= first-writes @writes) "same entries: nothing written again")
+      (bill/reserve! c [])
+      (is (empty? @store)))))
 
 (deftest a-bill-and-an-item-together-are-bad-args
   (are [args] (some? (base/args-error args))

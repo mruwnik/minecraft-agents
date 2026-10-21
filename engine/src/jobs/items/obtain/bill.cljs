@@ -37,12 +37,11 @@
   "Replace this job's reserve entries (strength 0.9) with the furnace material the missing items need together and the
   raw input it is smelted from: a deposit leaves those carried units alone; the craft and smelt children spend them."
   [c items]
-  (ctx/forget-where! c reserve/kind #(= (:id c) (:by %)))
-  (doseq [[mat n] (furnace-short (game/version-of (:primitives c)) items {})
-          item [mat (get smelt-plan/made-from mat)]]
-    (ctx/remember! c reserve/kind {:id (str (:id c) "-bill-" item) :item item :count n :strength 0.9 :by (:id c)
-                                   :why "material for the bill" :not #{:craft :smelt}}
-                   reserve/policy)))
+  (reserve/set-job-entries!
+   c (vec (for [[mat n] (furnace-short (game/version-of (:primitives c)) items {})
+                item [mat (get smelt-plan/made-from mat)]]
+            {:id (str (:id c) "-bill-" item) :item item :count n :strength 0.9 :by (:id c)
+             :why "material for the bill" :not #{:craft :smelt}}))))
 
 (defn child-args
   "The obtain child's args for item, carrying total in all."

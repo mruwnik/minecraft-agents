@@ -74,6 +74,14 @@
   (when-not (some #(= id (:id %)) (entries (ctx/view c)))
     (ctx/remember! c kind (merge {:id id :count 1 :strength 1 :by (:id c)} attrs) policy)))
 
+(defn set-job-entries!
+  "Make the entries held by job c exactly `wanted` (maps with :id and :by c's id): nothing is written when they already are, so a call every round makes no reserve events."
+  [c wanted]
+  (let [mine (filterv #(= (:id c) (:by %)) (entries (ctx/view c)))]
+    (when-not (= (set mine) (set wanted))
+      (ctx/forget-where! c kind #(= (:id c) (:by %)))
+      (doseq [e wanted] (ctx/remember! c kind e policy)))))
+
 (defn rows
   "See the ns doc."
   [c chooser]

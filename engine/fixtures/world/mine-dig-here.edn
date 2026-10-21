@@ -1,0 +1,14 @@
+;; jobs.gather.mine for stone on soil (card 02f9c3f0): a seen stone block 14 blocks off is not walked to first; the body cuts its stair down where it stands
+;; and mines the stone under the soil. Soil x 2..30, y 8..9 over stone y 0..7 (surface feet y 10); one stone block stands on the surface at [30 10 16].
+{:defaults
+ {:tags [:mine :items :obtain] :time :any
+  :plot {:height 24 :light :lit}
+  :blocks [[:fill [2 0 4] [30 7 28] "stone"] [:fill [2 8 4] [30 9 28] "dirt"] [:set [30 10 16] "stone"]]
+  :body {:at [16.5 10 16.5] :yaw 270 :inventory [["stone_pickaxe" 1]] :effects [["resistance" 900 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "far-stone-on-soil-is-dug-down-to-where-the-body-stands"
+   :act [[:job (jobs.items.obtain {:item "cobblestone" :count 3 :explore false})]]
+   :expect [{:event {:source :job :kind :mine.stair-plan} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 140 :of-job true}]
+   :after [[:item "cobblestone" [:>= 3]]]}]}

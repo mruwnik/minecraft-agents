@@ -24,6 +24,7 @@
                  :spec (a/map-of string? (a/int-in nil nil))}
    ::level-slack {:default 12 :doc "Blocks above the tunnel level a stopped stair may leave the body and the strip tunnel still run there; higher, the run ends :descent-stopped (ore is not found that far above its level)." :spec (a/int-in 0 nil)}
    ::own-stair-reach {:default 32 :doc "Blocks from the body the top of a stair it cut earlier may lie for the descent to walk down that stair instead of cutting a new one." :spec (a/int-in 0 nil)}
+   ::dig-here-reach {:default 8 :doc "Stone gathered on soil or sand: a seen stone block farther than this from the body is not walked to; the stair down is cut where the body stands, as a player digs down to stone." :spec (a/num-in 0 nil)}
    ::max-restairs {:default 3 :doc "Times the descent starts a new stair where the body stands after the stair found it off its line (a reflex, a fall or a drop pick-up moved it) before the stop stands." :spec (a/int-in 0 nil)}})
 
 (defn max-restairs [] (settings/get settings ::max-restairs))
@@ -63,6 +64,16 @@
   seen block skipped for water) and the strip tunnel not begun. Not while a shaft is used or being used."
   [c]
   (and (contains? #{nil :none} (shaft-state c)) (descent-wanted? c)))
+
+(defn dig-here-due?
+  "Whether the stair down should start where the body stands instead of a walk to the seen stone block at pos: the descent is due for a stone
+  block, the body stands on ground that is not stone, and pos is farther than ::dig-here-reach."
+  [c pos]
+  (let [feet (cell-of (u/self-pos c))
+        under (u/seen-name (:primitives c) (update feet :y dec))]
+    (boolean (and (descend-due? c) (contains? stone-types (main-block (:args c)))
+                  under (not (contains? stone-types under))
+                  (> (u/dist (u/self-pos c) pos) (settings/get settings ::dig-here-reach))))))
 
 (defn shaft-under-way?
   "Whether the shaft child has been called and has not ended."

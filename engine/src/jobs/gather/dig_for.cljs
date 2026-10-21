@@ -8,7 +8,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.gather.mine.cause :as cause]
-            [jobs.gather.mine.descent :refer [descend-due? descend-round! shaft-due? shaft-under-way? shaft-round!]]
+            [jobs.gather.mine.descent :refer [descend-due? descend-round! dig-here-due? shaft-due? shaft-under-way? shaft-round!]]
             [jobs.gather.mine.drops :refer [collect! dig-cell! cut-to-drop! cut-after? target-cut-max]]
             [jobs.gather.mine.end :refer [stop! wanted]]
             [jobs.gather.mine.branch :as branch]
@@ -265,6 +265,7 @@
       (nil? looked) (do (await (look-around! c)) :again)
       (= :searching pos) :again
       (shaft-under-way? c) (await (shaft-round! c))
+      (and (some? pos) (empty? refused) (dig-here-due? c pos)) (await (descend-round! c))
       (and (some? pos) (way-floor c [pos])) (do (skip! c pos) :again)
       (and (some? pos) (last-exit? c pos)) (do (ctx/emit! c :mine.spared-exit :info {:pos (access/cell pos) :text (str "mine leaves " (str/join "," (access/cell pos)) ": it is the body's last way out")})
                                                (skip! c pos) :again)
