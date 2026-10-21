@@ -2,7 +2,7 @@
   "items.obtain's long looks: logs in a foreign zone or cut off from the body, ore seen from far. Split from engine.obtain-iron-test, whose ray casts over a wide sight made one namespace outlast the test runner's limit."
   (:require [cljs.test :refer [deftest is async]]
             [engine.fetch-test :as f]
-            [engine.obtain-iron-test :refer [ore-world obtain! mine-events]]
+            [engine.obtain-iron-test :refer [ore-world obtain!]]
             [engine.test-util :as tu]
             [engine.fake :as fake]))
 
@@ -49,11 +49,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (f/start (ore-world (into {} (for [x [0 1 2] y [63 64 65]] [(str x "," y ",38") "iron_ore"])) [{:name "stone_pickaxe" :count 1}]) [] (assoc f/sight-opts :radius 48 :ray-deg 4))]
+        (let [s (f/start (ore-world (into (into {} (for [x (range -2 5) z (range 0 38)] [(str x ",63," z) "stone"])) (for [x [0 1 2] y [63 64 65]] [(str x "," y ",38") "iron_ore"])) [{:name "stone_pickaxe" :count 1}]) [] (assoc f/sight-opts :radius 48 :ray-deg 4))]
           (await (obtain! s {:item "raw_iron" :ways #{:craft :smelt :gather}} 200))
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))))
           (is (empty? (f/events-of s :obtain.exploring)))
-          (is (seq (mine-events s)) "the mine went for the ore"))))))
+          (is (<= 1 (get (f/inv s) "raw_iron" 0)) "the mine went for the ore and got it"))))))
 
 (deftest logs-only-on-a-bedrock-pillar-are-explored-for-before-obtain-stops
   (async done
