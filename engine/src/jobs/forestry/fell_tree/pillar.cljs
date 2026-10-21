@@ -136,7 +136,9 @@
   "Plan a stand or a pillar for the highest logs and remember it. A refusal that read unseen floor cells is decided again
   after a look at them (jobs.lib.sense/decide!); one that stays ends the call."
   [c]
-  (let [r (await (sense/decide! c ::pillar #(pillar-plan c (tree-logs c) (:stand-avoid (ctx/mem c))) {:retry? :reason}))]
+  (let [t0 (js/Date.now)
+        r (await (sense/decide! c ::pillar #(pillar-plan c (tree-logs c) (:stand-avoid (ctx/mem c))) {:retry? :reason}))]
+    (ctx/emit! c :fell-tree.pillar-plan :debug {:ms (- (js/Date.now) t0) :logs (count (tree-logs c)) :found (cond (:stand r) :stand (:pillar r) :pillar :else (:reason r))})
     (cond
       (:stand r) (do (set-pillar! c {:phase :collect :plan {:stand (first (:stand r))}}) :again)
       (:pillar r) (do (set-pillar! c {:phase :collect :plan (:pillar r)}) :again)
