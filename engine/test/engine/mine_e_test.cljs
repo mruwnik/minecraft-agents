@@ -435,3 +435,14 @@
   (is (nil? (:y-margin (mine/dig-walk-opts {} false nil))))
   (is (= #{:walk :dig} (:ways (mine/dig-walk-opts {:ways #{:seen :strip-tunnel}} true nil))))
   (is (= {:safe? '(not (threatened))} (:checks (mine/dig-walk-opts {} false {:safe? '(not (threatened))})))))
+
+(deftest a-walk-that-gives-up-for-a-passing-reason-is-told-and-counted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [stub {:round (fn [c] (ctx/end c :nothing-possible {:reason :unreachable :why :no-progress} {:arrived false}))}
+              s (start {:world {:blocks (cells "sand" [15] [64] [-1 0 1 2])} :jobs (assoc registry/jobs 'jobs.movement.go-to stub)})]
+          (core/submit! (:eng s) (spec {:block "sand" :count 4 :ways #{:seen}}) {})
+          (await (run-ticks s 60))
+          (is (= [:no-progress :no-progress :no-progress] (mapv :why (events-of s :mine.walk-failed))))
+          (is (= :gave-up (:reason (done-event s)))))))))
