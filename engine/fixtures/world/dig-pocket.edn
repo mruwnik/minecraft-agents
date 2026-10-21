@@ -44,17 +44,21 @@
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-site}} :within-s 30 :of-job true}]
    :after [[:block [22 0 16] "stone"] [:block [23 0 16] "stone"]]
    :limit-s 45}
+  ;; on the surface: the sky is what keeps a hole in the sand from counting as a roofed room
   {:name "night-sand-over-sandstone-sinks-and-pockets"
-   :blocks [[:fill [0 0 0] [31 5 31] "sandstone"] [:fill [0 6 0] [31 9 31] "sand"]]
-   :body {:at [16.5 10 16.5] :inventory []}
-   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit :pocket} :for :night})]]
+   :blocks [[:fill [0 -10 0] [47 -5 47] "sandstone"] [:fill [0 -4 0] [47 -1 47] "sand"]]
+   :plot {:light :sky :length 48 :width 48}
+   :body {:at [24.5 0 24.5] :inventory []}
+   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit :pocket} :for :night})]
+         [:until-pos {:y-max -6} 150]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 150 :until {:source :job :kind :completed}}]
-   :after [[:block [16 9 16] "air"]]
+   :after [[:block [24 -2 24] "air"]]
    :limit-s 170}
   {:name "night-sand-over-deep-rock-says-no-site"
-   :blocks [[:fill [0 0 0] [31 9 31] "sand"]]
-   :body {:at [16.5 10 16.5] :inventory []}
+   :blocks [[:fill [0 -12 0] [47 -1 47] "sand"]]
+   :plot {:light :sky :length 48 :width 48}
+   :body {:at [24.5 0 24.5] :inventory []}
    :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit :pocket} :for :night})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-way}} :within-s 150 :of-job true}]
    :limit-s 170}]}
