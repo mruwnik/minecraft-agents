@@ -298,10 +298,44 @@
                                     {:eye (mapv #(round1 (get-in pose [:eye %])) [:x :y :z])
                                      :columns (unchecked-get out "columns") :render-ms (js/Math.round (unchecked-get out "ms"))}))))))))))))
 
+(def pose-wait-ms 4000)
+(def poll-ms 200)
+(def column-settle-ms 1500)
+
+(defn touch-watch!
+  "Marks the body watched: it dumps its view only while this file is fresh."
+  [ctx body now]
+  (let [file (.join path (:world-dir ctx) "agents" body "view" "watching")]
+    (.mkdirSync fs (.dirname path file) #js {:recursive true})
+    (.writeFileSync fs file (str now))))
+
+(defn pose-mtime [ctx body]
+  (try (.-mtimeMs (.statSync fs (.join path (:world-dir ctx) "agents" body "view" "pose.json")))
+       (catch :default _ nil)))
+
+(defn ^:async wait-for-dump!
+  "Resolves true once the body rewrote its pose after `since` and its columns had time to follow; false on timeout."
+  [ctx body since sleep! now]
+  (loop [deadline (+ (now) pose-wait-ms)]
+    (cond
+      (>= (or (pose-mtime ctx body) 0) since) (do (await (sleep! column-settle-ms)) true)
+      (>= (now) deadline) false
+      :else (do (await (sleep! poll-ms)) (recur deadline)))))
+
+(defn ^:async wake-dump!
+  "Asks an online body to dump its view (it writes pose.json only while watched) and waits for a fresh pose."
+  [ctx body]
+  (when (= "online" (:status (read-pose ctx body)))
+    (let [t (js/Date.now)]
+      (touch-watch! ctx body t)
+      (await (wait-for-dump! ctx body t #(js/Promise. (fn [ok] (js/setTimeout ok %))) #(js/Date.now))))))
+
 (defn main!
   "Exit code 0 drawn, 1 refused (body offline, no pose), 2 bad arguments or a failure."
   [argv render]
   (-> (js/Promise.resolve nil)
-      (.then (fn [_] (execute! (options (vec argv)) render (js/Date.now))))
+      (.then (fn [_] (let [opts (options (vec argv))]
+                       (-> (wake-dump! (:ctx opts) (:body opts))
+                           (.then (fn [_] (execute! opts render (js/Date.now))))))))
       (.then (fn [result] (.write (.-stdout js/process) (str (data/write-edn result) "\n")) (if (:ok result) 0 1)))
       (.catch (fn [error] (.write (.-stdout js/process) (str (data/write-edn (map-tool/error-result error)) "\n")) 2))))

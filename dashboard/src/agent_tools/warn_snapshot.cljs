@@ -11,9 +11,6 @@
 
 (def wakes #{:needs-you :gave-up :stall})
 (def window-ms (* 5 60 1000))
-(def pose-wait-ms 4000)
-(def poll-ms 200)
-(def column-settle-ms 1500)
 
 (defn reason-key
   "The file-name key of a wake: gave-up names the job, so two jobs giving up each get a picture."
@@ -34,26 +31,6 @@
                            (< (- now (or (stamp-ms %) 0)) window-ms))
                      (array-seq (.readdirSync fs dir)))))))
 
-(defn watch-file [ctx body] (.join path (:world-dir ctx) "agents" body "view" "watching"))
-
-(defn touch-watch! [ctx body now]
-  (let [file (watch-file ctx body)]
-    (.mkdirSync fs (.dirname path file) #js {:recursive true})
-    (.writeFileSync fs file (str now))))
-
-(defn pose-mtime [ctx body]
-  (try (.-mtimeMs (.statSync fs (.join path (:world-dir ctx) "agents" body "view" "pose.json")))
-       (catch :default _ nil)))
-
-(defn ^:async wait-for-dump!
-  "Resolves true once the body rewrote its pose after `since` and its columns had time to follow; false on timeout."
-  [ctx body since sleep! now]
-  (loop [deadline (+ (now) pose-wait-ms)]
-    (cond
-      (>= (or (pose-mtime ctx body) 0) since) (do (await (sleep! column-settle-ms)) true)
-      (>= (now) deadline) false
-      :else (do (await (sleep! poll-ms)) (recur deadline)))))
-
 (defn ^:async capture!
   "A promise of the picture's workspace-relative path for `wake`, or nil (not a trouble wake, one taken lately, body
   not dumping, any failure). Never rejects: the wake line must come out."
@@ -65,8 +42,8 @@
             key (reason-key wake)
             t (now)]
         (when-not (recent? dir key t)
-          (touch-watch! ctx agent t)
-          (when (await (wait-for-dump! ctx agent t sleep! now))
+          (snap/touch-watch! ctx agent t)
+          (when (await (snap/wait-for-dump! ctx agent t sleep! now))
             (let [out (await (snap/execute! {:ctx ctx :body agent :workspace workspace :width 640 :height 360 :max-dist 64
                                              :prefix (str "warn-" key)}
                                             render (now)))]

@@ -394,3 +394,27 @@
                    (is (= 2 code))
                    (is (.isDirectory (.statSync fs (.join path dir (snap/file-name 1000)))) "the folder is left alone")))
           (.finally done)))))
+
+(deftest wake-dump-marks-an-online-body-watched-and-waits-for-its-pose
+  (async done
+    (let [fx (world-fixture)
+          ctx {:world-dir (.join path (:worlds fx) "w")}
+          watching (.join path (:view fx) "watching")]
+      (write-pose! fx (pose {}))
+      (js/setTimeout #(write-pose! fx (pose {:t 2})) 300)
+      (-> (snap/wake-dump! ctx "B")
+          (.then (fn [dumped]
+                   (is (true? dumped))
+                   (is (.existsSync fs watching) "the body only dumps while this marker is fresh")))
+          (.finally done)))))
+
+(deftest wake-dump-leaves-an-offline-body-alone
+  (async done
+    (let [fx (world-fixture)
+          ctx {:world-dir (.join path (:worlds fx) "w")}]
+      (write-pose! fx (pose {:status "offline"}))
+      (-> (snap/wake-dump! ctx "B")
+          (.then (fn [dumped]
+                   (is (nil? dumped))
+                   (is (not (.existsSync fs (.join path (:view fx) "watching"))))))
+          (.finally done)))))
