@@ -815,7 +815,7 @@
           (is (= {:x 0 :y 64 :z 0} (core/self-pos p)) "still under water")
           (is (not-any? #{[:stopped :no-air]} (ended seen)) "a cut is not a failed try")
           (await (core/tick! eng))
-          (is (= 2 @swims) "the refire swims up")
+          (is (= 3 @swims) "the refire swims up, then treads before it stops")
           (is (= {:x 0 :y 67 :z 0} (core/self-pos p))))))))
 
 (deftest a-run-cut-mid-swim-by-a-higher-reflex-is-ended-cut-and-the-refire-surfaces-from-the-world
