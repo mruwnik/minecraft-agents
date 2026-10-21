@@ -32,4 +32,11 @@
    :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :cause :no-way}} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :round_started :round [:> 20]} :for-s 30 :until {:source :job :kind :stopped} :of-job true}]
    :after [[:not-block [6 0 16] "cobblestone"]]
-   :limit-s 40}]}
+   :limit-s 40}
+  {:name "walls-hold-the-item-held-before"
+   :body {:inventory [["cobblestone" 20] ["wheat" 3]]}
+   :act [[:job (jobs.items.equip {:item "wheat"})] [:await {:source :job :kind :completed} 20]
+         [:job (jobs.survival.shut-in {:ways #{:walls}})] [:await {:source :job :kind :completed :data {:way :walls}} 40]
+         [:until-rcon "data get entity $BODY SelectedItem" "minecraft:wheat" 10]]
+   :after [[:block [6 0 16] "cobblestone"]]
+   :limit-s 90}]}
