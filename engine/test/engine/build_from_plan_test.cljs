@@ -196,6 +196,26 @@
           (is (= {[40 64 0] :unreachable} (:given-up result)))
           (is (= 0 (:placed result))))))))
 
+(deftest a-dig-it-cannot-walk-to-is-given-up-unreachable-at-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "far" :parts [{:id "floor" :cells [[40 64 0]] :want "stone"}]}
+              {:keys [eng]} (start {:inventory [{:name "stone" :count 2}] :blocks {"40,64,0" "dirt"}
+                                    :unreachable (map #(apply h/cell-key %) (plan/stand-cells [40 64 0] 64 nil #{}))} {"far" plan})
+              result (await (child-outcome eng job {:plan "far"} 200))]
+          (is (= {[40 64 0] :unreachable} (:given-up result)) "not :refused after three tries"))))))
+
+(deftest a-wall-waits-for-the-dirt-floor-under-it-though-the-floor-item-is-not-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "hut" :parts [{:id "floor" :cells [[3 64 2]] :want "stone"}
+                                      {:id "wall" :cells [[3 65 2]] :want "cobblestone"}]}
+              {:keys [eng p]} (start {:inventory [{:name "cobblestone" :count 4}] :blocks {"3,64,2" "dirt"}} {"hut" plan})
+              _ (await (child-outcome eng job {:plan "hut"} 200))]
+          (is (empty? (places p)) "the wall cell is not placed over the dirt that is still to dig"))))))
+
 (deftest a-floor-cell-under-a-built-wall-is-placed-from-beside-it
   (async done
     (tu/run-async done

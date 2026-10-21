@@ -116,8 +116,9 @@
                                            (assoc-in m [:given-up pos] :refilled)
                                            m)))
               :missing (ctx/update-mem! c count-fail pos :missing limit)
-              (ctx/update-mem! c #(cond-> (count-fail % pos :refused limit)
-                                    (and (= :unreachable outcome) (= :budget (:why (:data e)))) (update :budget-streak (fnil inc 0))))))
+              :unreachable (ctx/update-mem! c #(cond-> (assoc-in % [:given-up pos] :unreachable)
+                                                 (= :budget (:why (:data e))) (update :budget-streak (fnil inc 0))))
+              (ctx/update-mem! c count-fail pos :refused limit)))
       :refused (ctx/update-mem! c refuse pos (select-keys v [:reason :zone :plan :claim]))
       :hazard (ctx/update-mem! c refuse pos {:reason :hazard
                                              :hazards (vec (distinct (remove accept (map access/hazard-key (:hazards v)))))})

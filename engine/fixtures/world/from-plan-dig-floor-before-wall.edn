@@ -1,0 +1,20 @@
+;; Card bccfad13: jobs.build.from-plan digs and replaces a wrong floor block before it places the wall cell right above it,
+;; even while the floor item is not yet carried (logs are crafted to planks first), so the floor is never dug from under a wall.
+;; Sealed dark plot (no clock). Should-succeed: dirt-floor-under-wall-is-dug-then-planked-and-walled.
+{:defaults
+ {:tags [:build] :time :any
+  :plot {:height 8 :light :dark :length 64}
+  :blocks [[:fill [0 0 8] [60 3 24] "stone"] [:fill [3 0 12] [11 1 20] "air"]
+           [:fill [5 0 14] [8 0 14] "dirt"]]
+  :body {:at [7.5 0 17.5] :effects [["resistance" 600 4]]}
+  :limit-s 240}
+ :cases
+ [{:name "dirt-floor-under-wall-is-dug-then-planked-and-walled"
+   :body {:inventory [["cobblestone" 8] ["oak_log" 2]]}
+   :plans [{:id "hut" :metadata {:by "$body"}
+            :parts [{:id "floor" :cells [#at [5 0 14] #at [6 0 14] #at [7 0 14] #at [8 0 14]] :want "oak_planks"}
+                    {:id "wall" :cells [#at [5 1 14] #at [6 1 14] #at [7 1 14] #at [8 1 14]] :want "cobblestone"}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:hut"})]
+         [:await {:source :job :kind :completed} 220]]
+   :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 220 :of-job true}]
+   :after [[:block [5 0 14] "oak_planks"] [:block [8 0 14] "oak_planks"] [:block [5 1 14] "cobblestone"] [:block [8 1 14] "cobblestone"]]}]}

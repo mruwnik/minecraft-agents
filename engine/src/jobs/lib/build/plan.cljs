@@ -425,9 +425,10 @@
   (-> (missing cells) (into (digging cells)) (into (short-wrong cells)) (into (unseen cells {}))))
 
 (defn buildable
-  "The missing cells this body can work on: item carried, not given up, the cell below not itself owed."
+  "The missing cells this body can work on: item carried, not given up, the cell below not itself owed (a wrong block
+  not yet dug for want of the item counts: its cell is dug before the cell above is placed)."
   [cells carried given-up]
-  (let [owed (set (map :pos (into (missing cells) (digging cells))))]
+  (let [owed (set (map :pos (-> (missing cells) (into (digging cells)) (into (short-wrong cells)))))]
     (filterv #(and (pos? (get carried (:item %) 0))
                    (not (contains? given-up (:pos %)))
                    (not (owed (update (:pos %) 1 dec))))
