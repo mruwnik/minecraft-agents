@@ -419,6 +419,22 @@
           (is (= 1 (:walks r)) "no second walk of the old plan")
           (is (= :searching (:status (:done r))) "the caller searches on from where the body stands"))))))
 
+(deftest learned-replans-stop-being-free-after-a-few-so-a-void-edge-ends-the-walk
+  ;; a void edge teaches one column per replan, each a fresh search: the walk ends instead of replanning for ever
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walks (atom 0)
+              walk-fn (fn [_ _]
+                        (let [n (swap! walks inc)]
+                          (js/Promise.resolve [{:status :replan :why :unseen :learned true :cells [[n 62 11]] :step 1 :at [1 64 0]} 1])))
+              c {:primitives (tu/fake-on-floor {:floor [-5 -5 20 5]})}
+              r (await (drive/follow! c {:status "found" :r #js {} :steps (line 10) :ms 5}
+                                      {:plan-fn (fn [_] (js/Promise.resolve {:status "found" :r #js {} :steps (line 10) :ms 5}))
+                                       :walk-fn walk-fn :to [9 64 0] :policy executor/policy}))]
+          (is (<= @walks 30) "the replans stop")
+          (is (= :replan (:status (:done r)))))))))
+
 ;; a re-plan the caller refused (near/walk-once!'s stair-check): {:refused true} with its :stop
 (def refused {:status "found" :r #js {} :steps [] :stop {:status :stair-cheaper :why :dives} :refused true :ms 5})
 
