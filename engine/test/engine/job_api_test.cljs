@@ -237,6 +237,7 @@
           (await (core/tick! eng))
           (is (= {:ok true :id "j1" :status :cleaning-up} (select-keys (command eng "c" :cancel {:id "j1"}) [:ok :id :status])))
           (is (= ["j1"] (:list (core/state eng))))
+          (is (= :cleaning-up (get-in (api/list-jobs eng 0 8) [:items 0 :status])) "the list says so too")
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
           (core/shutdown! eng))))))

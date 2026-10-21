@@ -5,6 +5,7 @@
   (the last 128). Scheduling stays in core."
   (:require [engine.core :as core]
             [engine.condition :as condition]
+            [engine.core.cleanup :as cleanup]
             [engine.expr :as expr]
             [engine.hooks :as hooks]
             [clojure.walk :as walk]
@@ -16,6 +17,7 @@
   (let [s (core/state eng)]
     (cond (contains? (:failed s) id) :failed
           (= id (:id (core/holder eng))) :running
+          (cleanup/closing? eng id []) :cleaning-up
           (= id (:resume s)) :resuming
           (some #{id} (:list s)) :queued
           :else :absent)))
@@ -131,7 +133,7 @@
                          :cancel (do (core/cancel! eng id by)
                                    (if (get-in (core/state eng) [:instances id])
                                      {:ok true :id id :status :cleaning-up
-                                      :hint "the job's cleanup runs first (up to about a minute); it ends cancelled once the cleanup is done, and a second cancel does not cut it"}
+                                      :hint "the job's cleanup runs first (up to about a minute, and it waits while a reflex holds the body); it ends cancelled once the cleanup is done, and a second cancel does not cut it"}
                                      {:ok true :id id :status :cancelled}))
                          :cancel-all (let [ids (:list (core/state eng))]
                                        (run! #(core/cancel! eng % by) ids)
