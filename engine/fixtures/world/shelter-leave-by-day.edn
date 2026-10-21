@@ -27,4 +27,11 @@
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :dawn}} :within-s 30}
             {:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 110 :of-job true}
             {:count-event {:source :reflex :kind :fired :context {:reflex-id :dawn}} :for-s 40 :at-most 2}]
-   :after [[:body-near [16.5 -2 21.5] 3]]}]}
+   :after [[:body-near [16.5 -2 21.5] 3]]},
+  {:name "dawn-hold-names-the-husk-over-the-shaft"
+   :mobs :keep
+   :act [[:summon "husk" [16.5 0 17.5] "{NoAI:1b}"] [:until-seen {:entity "husk"} 10]
+         [:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :night.dawn-hold :data {:text [:contains "husk seen"]}} :within-s 60}
+            {:no-event {:source :job :kind :dig-in.left} :for-s 20}]
+   :after [[:body-near [16.5 -2 16.5] 2]]}]}

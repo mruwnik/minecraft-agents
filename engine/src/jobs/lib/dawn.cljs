@@ -15,11 +15,36 @@
 
 (defn ticks-since-dawn [time-of-day] (mod (- time-of-day sh-clock/morning-tick) 24000))
 
-(defn hostile-known?
-  "Whether a hostile is known within ::hostile-radius (remembered and heard ones included), unless ::with-hostile is set."
+(defn known-dangers
+  "The hostiles within ::hostile-radius the body has sensed, seen, heard or remembered (jobs.lib.danger/dangers; a melee
+  one needs no way to the body, which waits behind walls: it stands where the body's walk out will land; a ranged one a
+  line of fire), nearest first; none while ::with-hostile is set."
   [p]
-  (boolean (and (not (settings/get settings ::with-hostile))
-                (seq (danger/known-hostiles p (settings/get settings ::hostile-radius) {:ranged-radius (danger/ranged-radius)})))))
+  (if (settings/get settings ::with-hostile)
+    []
+    (danger/dangers p (settings/get settings ::hostile-radius) {:ranged-radius (danger/ranged-radius)} {:way? false})))
+
+(defn hostile-known?
+  "Whether a real danger is known within ::hostile-radius (known-dangers), unless ::with-hostile is set."
+  [p]
+  (boolean (seq (known-dangers p))))
+
+(defn describe
+  "{:kind :pos :distance :how} of hostile e: how is :seen, :heard or :remembered (with :age-s since it was last sensed)."
+  [p e]
+  (let [how (cond (.-remembered e) :remembered (.-heard e) :heard :else :seen)
+        at (danger/mob-pos p e)]
+    (cond-> {:kind (.-name e) :pos (some-> at (select-keys [:x :y :z])) :distance (js/Math.round (danger/mob-distance p e)) :how how}
+      (.-ageMs e) (assoc :age-s (js/Math.round (/ (.-ageMs e) 1000))))))
+
+(defn hostile-text
+  "Short text of the nearest of known-dangers ds: kind, how it is known, distance and place."
+  [ds]
+  (let [{:keys [kind how distance pos age-s]} (first ds)
+        n (count ds)]
+    (str kind " " (name how) (when (= how :remembered) (str " " age-s " s ago")) ", " distance " blocks off"
+         (when pos (str " near [" (:x pos) " " (:y pos) " " (:z pos) "]"))
+         (when (> n 1) (str " (+" (dec n) " more)")))))
 
 (defn calm?
   "Whether the dawn grace has passed and no hostile is known near (hostile-known?)."
@@ -27,12 +52,11 @@
   (boolean (and (>= (ticks-since-dawn (.-timeOfDay (.self p))) (settings/get settings ::grace-ticks))
                 (not (hostile-known? p)))))
 
-(defn hostile-hold?
-  "Whether a body in shelter stays in at first light: within ::grace-ticks of the night's end (::unarmed-grace-ticks when
-  it carries no weapon), with a known hostile within ::hostile-radius, unless ::with-hostile is set."
+(defn hostile-hold
+  "The known-dangers a body in shelter stays in for at first light: within ::grace-ticks of the night's end
+  (::unarmed-grace-ticks when it carries no weapon); [] when it does not hold."
   [p armed?]
-  (boolean
-   (and (< (ticks-since-dawn (.-timeOfDay (.self p)))
-           (max (settings/get settings ::grace-ticks) (if armed? 0 (settings/get settings ::unarmed-grace-ticks))))
-        (not (settings/get settings ::with-hostile))
-        (seq (danger/known-hostiles p (settings/get settings ::hostile-radius) {:ranged-radius (danger/ranged-radius)})))))
+  (if (< (ticks-since-dawn (.-timeOfDay (.self p)))
+         (max (settings/get settings ::grace-ticks) (if armed? 0 (settings/get settings ::unarmed-grace-ticks))))
+    (known-dangers p)
+    []))

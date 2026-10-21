@@ -151,7 +151,7 @@
 
 (def first-light 200)
 (def grace-passed 7000)
-(def far-zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 12 :y 64 :z 2}})
+(def far-zombie {:id 7 :name "zombie" :kind "hostile" :visible true :pos {:x 8 :y 64 :z 2}})
 
 (defn ^:async held-in-then-out
   "A dug-in body at first light with the given mobs near, the dawn trigger registered, the dawn grace over at the

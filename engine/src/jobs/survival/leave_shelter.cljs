@@ -112,13 +112,16 @@
   (hold/busy! c)
   (let [p (:primitives c)
         doorway (sh-beds/doorway-to-open p (ctx/view c))
-        shelter (or doorway (dig-leave/sheltered-in c))]
+        shelter (or doorway (dig-leave/sheltered-in c))
+        ds (when shelter (mapv #(dawn/describe p %) (dawn/hostile-hold p (boolean (combat/best-weapon p (combat/weapons c))))))]
     (cond
-      (and shelter (dawn/hostile-hold? p (boolean (combat/best-weapon p (combat/weapons c)))))
-      (do (when-not (:dawn-noted (ctx/mem c))
-            (ctx/update-mem! c assoc :dawn-noted true)
-            (ctx/emit! c :night.dawn-hold :info {:text "first light, but a hostile is known near the shelter; staying in until it is gone or the grace is over"}))
-          (await (hold/hold! c "first light: hostile near")))
+      (seq ds)
+      (let [what (dawn/hostile-text ds)]
+        (when-not (:dawn-noted (ctx/mem c))
+          (ctx/update-mem! c assoc :dawn-noted true)
+          (ctx/emit! c :night.dawn-hold :info {:text (str "first light, but a hostile is known near the shelter (" what "); staying in until it is gone or the grace is over")
+                                               :hostiles ds}))
+        (await (hold/hold! c (str "first light: " what))))
       doorway (await (take-back! c))
       (or (:dig-out (ctx/mem c)) shelter)
       (let [r (await (dig-leave/leave! c))]

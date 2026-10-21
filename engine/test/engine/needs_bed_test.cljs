@@ -6,7 +6,7 @@
             [jobs.lib.shelter.clock :as sh-clock]
             [triggers.survival.needs-bed :as nb]))
 
-(def zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 12 :y 64 :z 0}})
+(def zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 8 :y 64 :z 0}})
 
 (defn run
   "f over a fake world (night? and inv given) and a view of the memory entries [[kind data age-days] ..] written age-days ago."

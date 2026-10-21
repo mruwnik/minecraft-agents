@@ -22,7 +22,7 @@
     {:inv [{:name "iron_axe" :count 1}]} false
     {:night true} true))
 
-(def zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 12 :y 64 :z 0}})
+(def zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 8 :y 64 :z 0}})
 
 (deftest first-light-and-a-known-hostile-keep-an-unarmed-body-in
   (are [world expected] (= expected (holds? world))
