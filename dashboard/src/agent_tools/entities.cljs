@@ -7,7 +7,7 @@
             ["node:fs" :as fs]
             ["node:path" :as path]))
 
-(def usage "entities.mjs BODY --world WORLD [--type TYPE] [--player NAME] [--dimension DIM] [--center X,Y,Z] [--radius N] [--limit N] [--offset N] [--raw] [--worlds DIR --state LEGACY_PARENT]\nLists entities the body has seen lately, nearest first. :id is the numeric entity id (the one attack targets), :pos is [x y z] blocks, :age-ms how long ago it was seen; a villager row has :profession (unemployed, nitwit, farmer, ...); a :heard row has :direction and :band instead of :pos; :total counts all matches, --limit/--offset page.")
+(def usage "entities.mjs BODY --world WORLD [--type TYPE] [--player NAME] [--dimension DIM] [--center X,Y,Z] [--radius N] [--limit N] [--offset N] [--raw] [--worlds DIR --state LEGACY_PARENT]\nLists entities the body has seen lately, hostile mobs first, then nearest first. :id is the numeric entity id (the one attack targets), :pos is [x y z] blocks, :age-ms how long ago it was seen; a villager row has :profession (unemployed, nitwit, farmer, ...); a :heard row has :direction and :band instead of :pos; :total counts all matches, --limit/--offset page.")
 (def default-radius 64)
 (def default-limit 10)
 (def max-radius 512)
@@ -161,7 +161,8 @@
                                        (or (nil? (:pos %)) (<= (distance-squared center (:pos %)) radius-squared))
                                        (or (nil? (:type request)) (= (:type request) (:type %)))
                                        (or (nil? (:player request)) (= (:player request) (:username %)))))
-                         (sort-by (fn [entity] [(if (:pos entity) (distance-squared center (:pos entity)) js/Infinity)
+                         (sort-by (fn [entity] [(if (:hostile? entity) 0 1)
+                                               (if (:pos entity) (distance-squared center (:pos entity)) js/Infinity)
                                                (or (:uuid entity) (:key entity) "")]))
                          vec)
             selected (vec (take limit (drop offset matches)))

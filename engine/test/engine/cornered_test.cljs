@@ -470,6 +470,21 @@
           (is (= ["stone_pickaxe"] (mapv #(.. % -args -item) (calls p "equip"))) "with the pickaxe in hand")
           (is (empty? (blocked-events seen))))))))
 
+(def sealed-cell
+  "A closed cell one wide and two high: the body's shelter, shut."
+  (rock [-3 3] [62 67] #{[0 64 0] [0 65 0]}))
+
+(deftest a-sealed-body-with-blocks-fights-a-skeleton-in-its-own-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen]} (await (first-round retreat {:blocks sealed-cell
+                                                            :inventory [{:name "cobblestone" :count 20}]
+                                                            :entities [(skeleton 0 64 0)]}))]
+          (is (zero? (count (calls p "place"))) "a wall shuts nothing out of the body's own cell")
+          (is (= 4 (count (calls p "attack"))) "it hits the skeleton with its fist until it dies")
+          (is (not-any? #(= :retreat_sealed (:kind %)) @seen)))))))
+
 (deftest a-cornered-body-with-nothing-fights-with-its-fist
   (async done
     (tu/run-async done

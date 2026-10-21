@@ -14,6 +14,7 @@
   {::hold-s {:default 15 :doc "Seconds a held fight waits without a swing for a mob to come within reach before it declines." :spec (a/num-in 0 nil)}
    ::ranged-chase {:default 6 :doc "Farthest a ranged mob may be for the body to cross open ground to it while another hostile is in range; beyond it the fight declines." :spec (a/num-in 0 nil)}
    ::chase-timeout-s {:default 10 :doc "Seconds one walk toward a hostile may take: it moves, so the walk aims again at where it is now this often." :spec (a/num-in 0 nil)}
+   ::point-blank {:default 1.5 :doc "Blocks within which a hostile (a shooter too, not a creeper or an enderman) is in the body's own cell or beside it: a cornered body fights a shooter this close instead of hiding from it." :spec (a/num-in 0 nil)}
    ::leash {:default 20 :doc "Blocks from where a hostile fight started beyond which a hostile is not chased." :spec (a/num-in 0 nil)}})
 
 (defn hostiles? [c] (= :hostiles (:targets (:args c))))
@@ -45,6 +46,12 @@
                  (remove #(contains? dead (.-id %)))
                  (remove #(and (combat/ranged? %) (not (danger-q/danger? (:primitives c) %)))))]
     (into (filterv #(.-visible %) all) (remove #(.-visible %)) all)))
+
+(defn point-blank?
+  "Whether hostile e is within ::point-blank of the body and is no creeper or enderman."
+  [c e]
+  (and (not (combat/creeper? e)) (not (combat/enderman? e))
+       (<= (danger-q/mob-distance (:primitives c) e) (settings/get settings ::point-blank))))
 
 (defn targets
   "The hostiles in range the body has seen, within the leash and not given up on, nearest first."

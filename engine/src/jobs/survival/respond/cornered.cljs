@@ -15,6 +15,7 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.escape :as escape]
+            [jobs.lib.hostile-fight :as hostile]
             [jobs.lib.look :as look]
             [jobs.lib.pillar :as pl]
             [jobs.lib.reach.room :as reach-room]
@@ -220,7 +221,8 @@
                                     (pillar/pillar-ok? (escape/block-at-of (:primitives c)) (pl/feet-cell c))
                                     (mob-in-corner-cell? c hostiles)))
         beaten-fight? (or (beaten-fights? {:beaten? beaten :armed? armed? :blocks? (boolean (seq (lb/carried c (flight/blocks c))))})
-                          (and (not fire?) (not pillar-first?) (mob-in-corner-cell? c hostiles)))
+                          (and (not fire?) (not pillar-first?) (mob-in-corner-cell? c hostiles))
+                          (boolean (some #(and (combat/ranged? %) (hostile/point-blank? c %)) hostiles)))
         win? (and (not blind?)
                   (fight-wins? c (if (and (:hit-on-the-run (ctx/mem c)) (not fire?)) (hitters c hostiles) hostiles)))
         order (escape-order {:win? win?
