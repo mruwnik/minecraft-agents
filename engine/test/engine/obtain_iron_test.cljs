@@ -128,6 +128,16 @@
           (is (empty? (f/events-of s :waiting)) "no silent wait")
           (is (seq (mine-events s)) "the mine child ran"))))))
 
+(deftest raw-iron-unseen-at-night-with-torches-waits-or-digs-not-none-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (assoc (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}])
+                                :floor [-30 -30 40 30] :time st/night) [f/own-zone])]
+          (await (obtain! s {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true} 6))
+          (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "no source is not claimed")
+          (is (empty? (filter #(= :stopped (:kind %)) @(:seen s)))))))))
+
 (deftest an-unseen-ore-gets-torches-before-the-mine-goes-down
   (async done
     (tu/run-async done
