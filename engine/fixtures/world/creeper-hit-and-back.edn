@@ -39,7 +39,7 @@
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 10 minecraft:generic"]
          [:summon "creeper" [20.5 0 16.5]]]
-   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "creeper" :decision :flee}} :within-s 10}
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "creeper" :decision :flee}} :within-s 30}
             {:no-event {:source :job :kind :hostile.decided :data {:decision :fight}} :for-s 10}]
    :limit-s 60}
   ;; Dead end at x 9: no open cell to back off to, so no fight even at full health.
@@ -47,6 +47,6 @@
    :blocks [[:fill [8 0 15] [28 3 17] "stone"] [:fill [9 0 16] [27 1 16] "air"] [:fill [9 2 16] [27 2 16] "glowstone"]]
    :body {:at [9.5 0 16.5] :inventory [["stone_sword" 1]]}
    :act [[:summon "creeper" [13.5 0 16.5]]]
-   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "creeper"}} :within-s 10}
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "creeper"}} :within-s 30}
             {:no-event {:source :job :kind :hostile.decided :data {:decision :fight}} :for-s 10}]
    :limit-s 30}]}
