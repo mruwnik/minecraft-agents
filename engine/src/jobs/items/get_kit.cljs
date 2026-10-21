@@ -27,7 +27,7 @@
   one piece after the other), with a :spend :job-time of ::job-time-s; the pieces are worn when it is done.
   While furnace material is still short (mining or smelting ahead; pure crafting needs no food) and fewer than
   the 3-day food reserve (60 points) are carried (harmful food does not count), one jobs.survival.get-food child (with :explore;
-  it fills the pack to its :carry default, the reserve) runs before the bill (:food false: none). A child that stops warns kit.no-food; with no food carried at all the kit stops {:reason :no-food} (no mining on an empty stomach).
+  it fills the pack to its :carry default, the reserve) runs before the bill (:food false: none). A child that stops warns kit.no-food; with no food carried and a food bar below ::min-food-to-dig the kit stops {:reason :no-food} (no mining on an empty stomach); a fuller bar goes on.
   With furnace material short and no weapon carried, one jobs.items.obtain child first makes a sword (iron, stone or wooden); if it cannot, kit.unarmed warns and the work goes on.
   Get a base first.
   A death since the job began (body memory :died) clears the children and the bill; the next round re-plans from
@@ -198,6 +198,10 @@
       (or (= :done (:kind e)) (= :not-hungry cause)) nil
       :else {:cause cause :why (why-of e)})))
 
+(def min-food-to-dig
+  "With nothing carried, a bar below this would starve the body during the dig."
+  12)
+
 (defn ^:async run-arm!
   "One obtain child round for a sword (the best it can make): :continue, nil when armed, or {:cause :why} when it could not."
   [c]
@@ -269,7 +273,7 @@
                   (when r
                     (ctx/emit! c :kit.no-food :warn {:cause (:cause r) :why (:why r) :food fp
                                                      :text (str "no food found (" (name (:cause r)) ")")}))
-                  (if (and r (zero? (foods/stock-points (:inv (state c)))))
+                  (if (and r (zero? (foods/stock-points (:inv (state c)))) (< (.-food (.self (:primitives c))) min-food-to-dig))
                     (finish! c items have (assoc (stop-of :nothing-possible {:reason :no-food} (str "no food carried and none found (" (name (:cause r)) "); mining ahead needs some"))
                                                  :item (first todo)))
                     :again))))

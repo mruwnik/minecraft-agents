@@ -275,11 +275,21 @@
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
                  (select-keys @(:out s) [:status :item :reason]))))))))
 
-(deftest a-fed-body-with-no-food-source-stops-naming-no-carry
+(deftest a-near-full-bar-with-no-food-source-warns-and-goes-on
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (hungry-world [] 20) {:items ["iron_pickaxe"] :explore false})]
+        (let [s (start (hungry-world [] 16) {:items ["iron_pickaxe"] :explore false})]
+          (await (f/run-ticks s 80))
+          (is (= [:no-carry] (mapv :cause (f/events-of s :kit.no-food))))
+          (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
+                 (select-keys @(:out s) [:status :item :reason]))))))))
+
+(deftest a-low-bar-with-no-food-source-stops-naming-no-carry
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (hungry-world [] 8) {:items ["iron_pickaxe"] :explore false})]
           (await (f/run-ticks s 80))
           (is (= [:no-carry] (mapv :cause (f/events-of s :kit.no-food))))
           (is (= {:status :stopped :item "iron_pickaxe" :reason :no-food}
