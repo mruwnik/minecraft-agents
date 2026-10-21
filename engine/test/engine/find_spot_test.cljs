@@ -294,6 +294,15 @@
     (is (= [3 3] ((juxt :w :h) (first spots))) "a spot says its size, so :pos reads as the corner of a w x h box")
     (is (= 1 (:away (first spots))) "the distance is from the patch centre (-13,1) to :center (-12,1), not from the corner")))
 
+(deftest a-far-center-is-not-answered-with-ground-by-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:blocks (merge (patch 2 0 3 3 63 "dirt")
+                                     (into {} (for [x (range 380 421) z (range -3 4)] [(str x "," (if (even? (+ x z)) 63 64) "," z) "dirt"])))})
+              r (await (child-outcome eng job (assoc small :center {:x 400 :y 64 :z 0} :max-step 0) 60))]
+          (is (nil? (:spot r)) "ground beside the body is 400 blocks from :center, beyond what the search may cover"))))))
+
 (deftest scan-is-one-call-in-slices-of-a-read-budget
   (async done
     (tu/run-async done

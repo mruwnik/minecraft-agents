@@ -444,7 +444,8 @@
   (let [a (:patch (:args c))
         _ (when-not (:patch-scan (ctx/mem c)) (await (look/survey! c :near (look/search-effort))))
         [x y z] (if (zero? (:scans (ctx/mem c) 0)) (:origin (ctx/mem c)) (here c))
-        spots (patch/scan-step! c a {:x x :y y :z z})]
+        far? (> (xz-dist [x z] (let [[ox _ oz] (:origin (ctx/mem c))] [ox oz])) (distance-limit))
+        spots (if far? nil (patch/scan-step! c a {:x x :y y :z z}))]
     (when-not (= :again spots)
       (let [[ox _ oz] (:origin (ctx/mem c))]
         (ctx/update-mem! c (fn [m] (cond-> (-> m (update :scans (fnil inc 0)) (update :farthest (fnil max 0) (js/Math.round (xz-dist [x z] [ox oz]))))
