@@ -103,7 +103,8 @@
   {:name "oak-door-with-doors-never-digs"
    ;; stone room, an oak door in the east wall and :doors :never (a wall for the walk): the room is dug out, no :no-dig;
    ;; the arrival is the top-level job's (chain of one): the :approach child's walk to the wall also says :arrived true
-   :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
+   :time :any
+   :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"] [:fill [10 8 10] [26 8 26] "light"]
             [:fill [12 0 12] [20 3 20] "stone" :hollow]
             [:set [20 1 16] "oak_door[facing=east,half=lower]"] [:set [20 2 16] "oak_door[facing=east,half=upper]"]]
    :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1]]}
@@ -147,7 +148,8 @@
             {:no-event {:source :job :kind #{:completed :stopped} :data {:escalation {:why :no-dig}}} :for-s 160 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [23.5 2 18.5] 2] [:block [20 1 16] "oak_fence_gate"] [:block [20 1 15] "oak_fence"]]}
   {:name "oak-log-wall-room-is-never-dug"
-   :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
+   :time :any
+   :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"] [:fill [10 8 10] [26 8 26] "light"]
             [:fill [12 0 12] [20 3 20] "oak_log" :hollow]]
    :body {:at [16.5 1 16.5] :inventory [["stone_pickaxe" 1] ["iron_axe" 1] ["dirt" 8]]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1})]]

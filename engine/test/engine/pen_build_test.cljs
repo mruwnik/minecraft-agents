@@ -351,6 +351,13 @@
     (conj (mapv (fn [pos] {:pos pos :want "oak_fence"}) fenced-ring) {:pos [3 64 2] :want {:block "oak_fence_gate"}})
     (fn [_ _ _] 63) []))
 
+(deftest a-gate-onto-a-trunk-is-uneven
+  (let [cells (conj (mapv (fn [pos] {:pos pos :want "oak_fence"}) fenced-ring) {:pos [3 64 2] :want {:block "oak_fence_gate"}})
+        problems (fn [blocks] (pen/uneven cells (fn [_ _ _] 63) (fn [x y z] (blocks [x y z]))))]
+    (is (= [{:why :gate-blocked :gate [3 64 2] :outside [3 1]}] (problems {[3 64 1] "air" [3 65 1] "oak_log"})) "a log over the cell outside")
+    (is (= [] (problems {})) "open ground")
+    (is (= [] (problems {[3 64 1] "dirt" [3 65 1] "air" [3 66 1] "air"})) "ground one higher is a step up")))
+
 (deftest a-pen-with-an-uneven-ring-waits-naming-the-steps-unless-allowed
   (async done
     (tu/run-async done

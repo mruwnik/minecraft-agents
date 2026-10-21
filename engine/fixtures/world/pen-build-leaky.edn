@@ -59,6 +59,21 @@
    :act [[:job (jobs.build.pen {:plan "$plan:ring" :uneven? true})]]
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
    :after [[:block [10 0 11] "oak_fence"] [:block [10 0 12] "oak_fence"] [:block [10 0 13] "oak_fence"]]}
+  ;; Card f24fa9d6: a gate with a trunk on the cell outside it is refused before anything is placed (no pen the body cannot leave).
+  {:name "a-gate-onto-a-trunk-waits-uneven"
+   :blocks [[:fill [15 0 12] [15 3 12] "oak_log"] [:fill [15 4 12] [15 4 12] "oak_leaves"]]
+   :plans [{:id "ring" :metadata {:by "$body"}
+            :parts [{:id "n" :box [#at [10 0 10] #at [14 0 10]] :want "oak_fence"}
+                    {:id "s" :box [#at [10 0 14] #at [14 0 14]] :want "oak_fence"}
+                    {:id "w" :box [#at [10 0 11] #at [10 0 13]] :want "oak_fence"}
+                    {:id "e1" :box [#at [14 0 11] #at [14 0 11]] :want "oak_fence"}
+                    {:id "g" :box [#at [14 0 12] #at [14 0 12]] :want "oak_fence_gate"}
+                    {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}]}]
+   :body {:yaw 270}
+   :act [[:job (jobs.build.pen {:plan "$plan:ring"})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :uneven}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 40 :until {:source :job :kind :waiting}}]
+   :after [[:not-block [10 0 12] "oak_fence"]]}
   ;; Card 3f51b63a (f449d14b): a tree inside the ring (leaves reach the fence tops) is cleared first; the pen closes and the ground stays.
   {:name "a-tree-inside-the-ring-is-cleared"
    :blocks [[:fill [11 0 13] [11 1 13] "oak_log"] [:fill [11 1 12] [11 1 12] "oak_leaves"] [:fill [10 1 13] [10 1 13] "oak_leaves"] [:fill [11 2 13] [11 2 13] "oak_leaves"]]

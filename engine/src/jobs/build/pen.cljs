@@ -19,6 +19,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.ready :as ready]
             [jobs.lib.work-place :as work-place]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.util :as u]
             [jobs.lib.storage :as storage]
             [jobs.lib.world :as known]))
@@ -78,8 +79,11 @@
 (defn uneven
   "Where the pen is too uneven for animals: [{:why :step :at :to :step}] for neighbouring barrier columns whose
   lowest cells differ by more than max-step, [{:why :gate-drop :gate :inside [x z] :drop}] for a gate more than
-  max-step above the seen ground (top-of x z y, nil when unknown) of an inside neighbour column."
-  [cells top-of]
+  max-step above the seen ground (top-of x z y, nil when unknown) of an inside neighbour column, [{:why :gate-blocked
+  :gate :outside [x z]}] for a gate whose outside neighbour has no room for an animal or the body (name-at x y z, the
+  seen block name or nil: a trunk or wall there)."
+  ([cells top-of] (uneven cells top-of (constantly nil)))
+  ([cells top-of name-at]
   (let [low (reduce (fn [m {[x y z] :pos :keys [want]}]
                       (if (pen-read/barrier? want) (update m [x z] #(min y (or % y))) m))
                     {} cells)
@@ -94,16 +98,24 @@
                     :when (and (not (low n)) (inside? n))
                     :let [top (top-of nx nz y)]
                     :when (and top (> (- y (inc top)) max-step))]
-                {:why :gate-drop :gate [x y z] :inside n :drop (- y (inc top))})]
-    (vec (concat steps drops))))
+                {:why :gate-drop :gate [x y z] :inside n :drop (- y (inc top))})
+        open? (fn [x y z] (let [n (name-at x y z)] (or (nil? n) (bs/passable? n))))
+        free? (fn [x y z] (and (open? x y z) (open? x (inc y) z)))
+        blocked (for [{[x y z] :pos :keys [want]} cells
+                      :when (gate? want)
+                      [nx nz :as n] [[(inc x) z] [(dec x) z] [x (inc z)] [x (dec z)]]
+                      :when (and (not (low n)) (not (inside? n)) (not (free? nx y nz)) (not (free? nx (inc y) nz)))]
+                  {:why :gate-blocked :gate [x y z] :outside n})]
+    (vec (concat steps drops blocked)))))
 
 (defn uneven-text [problems]
   (str "the pen is uneven (steps over " max-step "): "
-       (str/join ", " (map (fn [{:keys [why at to step gate inside drop]}]
-                             (if (= :step why)
-                               (str (pr-str at) " to " (pr-str to) " steps " step)
-                               (str "gate " (pr-str gate) " drops " drop " to " (pr-str inside))))
-                           (take 4 (sort-by #(- (or (:step %) (:drop %))) problems))))))
+       (str/join ", " (map (fn [{:keys [why at to step gate inside outside drop]}]
+                             (case why
+                               :step (str (pr-str at) " to " (pr-str to) " steps " step)
+                               :gate-drop (str "gate " (pr-str gate) " drops " drop " to " (pr-str inside))
+                               :gate-blocked (str "gate " (pr-str gate) " opens onto the blocked cell " (pr-str outside))))
+                           (take 4 (sort-by #(- (or (:step %) (:drop %) 9)) problems))))))
 
 (defn planned
   "{:cells judged} for the plan in the args, or {:trouble text}."
@@ -159,7 +171,7 @@
    (fn [c]
      (let [{:keys [cells trouble]} (judged-plan c)]
        (when-not (or trouble (:uneven? (:args c)))
-         (when-let [bad (seq (uneven cells (plan/top-fn c)))]
+         (when-let [bad (seq (uneven cells (plan/top-fn c) (fn [x y z] (u/seen-name (:primitives c) {:x x :y y :z z}))))]
            {:reason :uneven :why (uneven-text bad)}))))))
 
 (def ways (into [:build :patch] need/fetch-ways))
