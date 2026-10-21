@@ -36,7 +36,7 @@
   over that box with jobs.lib.pen (see jobs.animals.pen-check): a step out of the box is a leak.
   A leak left after the build (a hole in the plan, or a cell the build refused, gave up on or lacked material for) is
   patched once unless the call's :ways (:build, :patch) leaves :patch out: a jobs.blocks.place child puts one fence of the plan's kind in each
-  :gap cell and on top of each :climb cell, then the pen is checked again. Nothing else is placed that the plan does not ask for.
+  :gap cell and on top of each :climb or :perch-in cell, then the pen is checked again. Nothing else is placed that the plan does not ask for.
   Needs: the plan, a zone list (unless :ignore-zones?), and the blocks of the fence (fetched by the builder unless
   the call's ways leave out :chest :craft :gather). Returns, as the data of its ending, {:closed? :reason :cells :leaks :gates :built {:placed :missing
   :short :given-up :wrong :refused}}. :reason is nil when closed, else :leak, :unbounded, :unloaded or :no-start.

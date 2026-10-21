@@ -213,8 +213,8 @@
       (fn ^:async t []
         (let [{:keys [event]} (await (run-job {:box {:min [0 64 0] :max [4 64 4]}} (world {"6,64,2" "stone"})))]
           (is (= :leak (:reason event)))
-          (is (= [{:pos {:x 5 :y 64 :z 2} :why :perch-in}] (:leaks event)))
-          (is (= "pen not closed: leak: perch-in at [5 64 2]" (:text event))))))))
+          (is (= [{:pos {:x 5 :y 64 :z 2} :why :perch-in :stand {:x 6 :y 64 :z 2}}] (:leaks event)))
+          (is (= "pen not closed: leak: perch-in at [5 64 2] (an animal steps onto the top from the ground at [6 64 2])" (:text event))))))))
 
 (deftest a-plan-names-the-pen-by-its-fence-cells
   (async done
@@ -477,6 +477,15 @@
           (is (= "oak_fence" (tu/true-block-name p 2 64 -1)))
           (is (= :completed (:kind event)) (pr-str event))
           (is (true? (:closed? event)))
+          (is (= 1 (get-in event [:patched :placed]))))))))
+
+(deftest a-perch-in-fence-gets-a-second-fence-on-top
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [event p]} (await (run-patching {:at [2 64 2] :settings {:jobs.animals.pen-check/max-cells 100}} (world {"6,64,2" "stone"})))]
+          (is (= "oak_fence" (tu/true-block-name p 5 65 2)))
+          (is (true? (:closed? event)) (pr-str event))
           (is (= 1 (get-in event [:patched :placed]))))))))
 
 (deftest an-open-gate-is-shut

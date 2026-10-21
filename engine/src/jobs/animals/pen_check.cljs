@@ -28,13 +28,13 @@
   that finds no wall either side of a gap says that too.
 
   Patching (way :patch, on by default; :ways #{:check} only reads; the fence comes from the carried items, and from :chest :craft :gather when the call's ways list them: :ways #{:check :patch} patches with what is carried): a leak that is a :gap gets one fence (a jobs.blocks.place child; the kind is :item, else the fence or wall seen
-  beside the gap) and one on top of each :climb fence; an :open-gate is shut (a jobs.items.use child). Then the pen is read again, in at most ::max-passes passes
+  beside the gap) and one on top of each :climb or :perch-in fence; an :open-gate is shut (a jobs.items.use child). Then the pen is read again, in at most ::max-passes passes
   (a pass that put nothing right is the last). Nothing else is placed or dug. The result gains :patched {:placed :shut :failed}.
 
   Ends with the data {:closed? :reason :cells :leaks :gates}: :done when closed, or when a leak was found and :patch is not allowed (a leak is
   then the answer, not a failure); with :patch allowed a leak left after the patches is nothing-possible :leak (the leaks name what remains). Else condition-failed (:no-start) or nothing-possible (:unbounded, :unloaded: the check gave up) with the :reason as the cause:
   - :reason is nil when closed, else :leak, :unbounded, :unloaded (a cell, or the start's floor, was never seen) or :no-start (:at is no floor to stand on).
-  - :leaks lists {:pos {:x :y :z} :why}, why one of :open-gate :gap :climb :perch-in :open :unloaded (only when :reason is not :leak; :perch-in: open ground within a block of a fence top outside the pen; :climb with a box names the fence, wall or gate top first stood on, reached from a block or raised floor beside it). At most 12 are
+  - :leaks lists {:pos {:x :y :z} :why}, why one of :open-gate :gap :climb :perch-in :open :unloaded (only when :reason is not :leak; :perch-in: open ground within a block of a fence top outside the pen, :stand names the ground cell; :climb with a box names the fence, wall or gate top first stood on, reached from a block or raised floor beside it). At most 12 are
     listed, :leaks-total gives the count when more.
   - :cells counts the inside cells. For a leaky pen without a box it counts the cells the pen would enclose with
     its leaks shut, and 0 when shutting up to 4 rounds of them does not close it (a low wall all round).
@@ -153,7 +153,10 @@
   (let [shown (take 3 leaks)
         more (- (or leaks-total (count leaks)) (count shown))]
     (when (seq shown)
-      (str ": " (str/join ", " (map (fn [{:keys [pos why]}] (str (name why) " at [" (:x pos) " " (:y pos) " " (:z pos) "]")) shown))
+      (str ": " (str/join ", " (map (fn [{:keys [pos why stand]}]
+                                           (str (name why) " at [" (:x pos) " " (:y pos) " " (:z pos) "]"
+                                                (when stand (str " (an animal steps onto the top from the ground at [" (:x stand) " " (:y stand) " " (:z stand) "])"))))
+                                         shown))
            (when (pos? more) (str " and " more " more"))))))
 
 (defn gate-drop-text
@@ -187,7 +190,7 @@
         (first (filter barrier-name? (keys (storage/carried-totals (u/inventory p))))))))
 
 (defn patch-plan
-  "[{:op :place|:shut :pos [x y z] :item}] for the patchable leaks of result: a fence in each :gap cell and on top of each :climb fence, each open gate shut."
+  "[{:op :place|:shut :pos [x y z] :item}] for the patchable leaks of result: a fence in each :gap cell and on top of each :climb or :perch-in fence, each open gate shut."
   [c result]
   (let [p (:primitives c)
         item (:item (:args c))]

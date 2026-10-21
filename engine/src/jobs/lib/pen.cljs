@@ -144,10 +144,18 @@
   (let [walled (assoc world :cell (fn [x y z] (let [c (cell x y z)] (if (and c (> (:hi c) 1)) (assoc c :hi 3) c))))]
     (boolean (:truncated? (fill* walled [seed] nil limit)))))
 
+(defn column-top
+  "The height of the top of the stack of fences and walls from cell [x y z] up."
+  [cell x y z]
+  (let [c (cell x y z) n (cell x (inc y) z)]
+    (if (and n (>= (:hi c) 1) (zero? (:lo n)) (not (:hazard? n)) (not (:unloaded? n)))
+      (recur cell x (inc y) z)
+      (+ y (:hi c)))))
+
 (defn perch-ins
-  "Leaks {:pos :why :perch-in} of the pen's fences, walls and gates (a cell higher than a block beside an inside
+  "Leaks {:pos :why :perch-in :stand} of the pen's fences, walls and gates (a cell higher than a block beside an inside
   cell) that open ground outside lies within a block of the top of: an animal steps onto the top there and drops in.
-  world is a fresh one: cells read here are no unloaded leaks."
+  :stand is the {:x :y :z} ground block it steps from. world is a fresh one: cells read here are no unloaded leaks."
   [{:keys [cell max-drop] :as world} seen]
   (let [inside-cols (into #{} (map (fn [[x _ z]] [x z])) (keys seen))
         limit (+ 50 (* 2 (count seen)))
@@ -158,11 +166,13 @@
                          :let [fx (+ x dx) fz (+ z dz) c (cell fx y fz)]
                          :when (and c (> (:hi c) 1) (not (:hazard? c)) (not (:unloaded? c))
                                     (not (contains? inside-cols [fx fz])))
-                         :let [t (+ y (:hi c)) ox (+ fx dx) oz (+ fz dz)]
-                         :when (and (not (contains? inside-cols [ox oz]))
-                                    (some #(and (not (:perch? %)) (<= (- t 1 eps) (:s %) (+ t max-drop eps)) (open %))
-                                          (surfaces-in world ox oz (floor-cell (- t 1)) (floor-cell (+ t max-drop)))))]
-                     {:pos {:x fx :y y :z fz} :why :perch-in})))
+                         :let [t (column-top cell fx y fz) ox (+ fx dx) oz (+ fz dz)]
+                         :when (not (contains? inside-cols [ox oz]))
+                         :let [from (first (filter #(and (not (:perch? %)) (<= (- t 1 eps) (:s %) (+ t max-drop eps)) (open %))
+                                                   (surfaces-in world ox oz (floor-cell (- t 1)) (floor-cell (+ t max-drop)))))]
+                         :when from]
+                     (let [[sx sy sz] (:key from)]
+                       {:pos {:x fx :y y :z fz} :why :perch-in :stand {:x sx :y (dec sy) :z sz}}))))
          (sort-by (juxt (comp :x :pos) (comp :y :pos) (comp :z :pos)))
          vec)))
 

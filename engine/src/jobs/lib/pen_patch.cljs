@@ -1,16 +1,16 @@
 (ns jobs.lib.pen-patch
   "Patching a pen's leaks, shared by jobs.animals.pen-check and jobs.build.pen: a :gap is filled with a fence, a :climb
-  fence gets one on top, each by a jobs.blocks.place child. Only the choice of the fence item differs between the jobs."
+  or :perch-in fence gets one on top, each by a jobs.blocks.place child. Only the choice of the fence item differs between the jobs."
   (:require [engine.ctx :as ctx]
             [jobs.lib.need :as need]))
 
-(def patchable #{:gap :climb})
+(def patchable #{:gap :climb :perch-in})
 
 (defn patch-cell
-  "The cell [x y z] a patch fills for a leak ({:pos :why}), else nil: the :gap cell, the cell above a :climb fence."
+  "The cell [x y z] a patch fills for a leak ({:pos :why}), else nil: the :gap cell, the cell above a :climb or :perch-in fence."
   [{:keys [pos why]}]
   (when (patchable why)
-    [(:x pos) (if (= :climb why) (inc (:y pos)) (:y pos)) (:z pos)]))
+    [(:x pos) (if (#{:climb :perch-in} why) (inc (:y pos)) (:y pos)) (:z pos)]))
 
 (defn patch-cells
   "The distinct cells the patchable leaks need filled."
