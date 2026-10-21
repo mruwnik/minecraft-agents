@@ -149,6 +149,15 @@
         p (tu/seeing-all (tu/fake {:self {:inWater true :oxygen 4} :blocks lake}))]
     (is (< (dec breath/flood-cells) (count (breath/joined-cells p 0 62 0 24 10)) (* 41 41 5)) "the flood stops a layer after the cap, short of the whole lake")))
 
+(deftest the-recovery-search-of-a-lake-stops-at-the-cell-cap
+  (let [lake (into {} (for [x (range -30 31) y (range 60 65) z (range -30 31)] [(str x "," y "," z) "water"]))
+        p (tu/seeing-all (tu/fake {:self {:inWater true :oxygen 4} :blocks lake}))
+        looked (atom 0)
+        seen-name breath/seen-water-name]
+    (with-redefs [breath/seen-water-name (fn [q cell] (swap! looked inc) (seen-name q cell))]
+      (is (nil? (air/recovery-spot p {:x 0 :y 62 :z 0} 60)) "no floor is seen: no spot"))
+    (is (< @looked (* 2 breath/flood-cells)) "far fewer cells looked at than the 18605 of the lake")))
+
 (deftest the-swim-price-is-the-planners-dive-price
   (is (= planner/swim-sub-ms (breath/swim-ms))))
 

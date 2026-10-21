@@ -187,11 +187,12 @@
   [p from steps]
   (when-not (recovery-spot? p from)
     (loop [frontier [from] seen #{from} k 0]
-      (when (and (seq frontier) (< k steps))
-        (let [next (->> (for [c frontier [dx dy dz] breath/neighbours] (-> c (update :x + dx) (update :y + dy) (update :z + dz)))
-                        (remove seen)
-                        distinct
-                        (filter #(contains? breath/swimmable (breath/seen-water-name p %))))]
+      (when (and (seq frontier) (< k steps) (< (count seen) breath/flood-cells))
+        (let [next (into [] (comp (mapcat (fn [c] (map (fn [[dx dy dz]] (-> c (update :x + dx) (update :y + dy) (update :z + dz))) breath/neighbours)))
+                                                 (remove seen)
+                                                 (distinct)
+                                                 (filter #(contains? breath/swimmable (breath/seen-water-name p %))))
+                                           frontier)]
           (or (first (filter #(recovery-spot? p %) next))
               (recur next (into seen next) (inc k))))))))
 

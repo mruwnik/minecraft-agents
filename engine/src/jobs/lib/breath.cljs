@@ -198,11 +198,11 @@
         in-range? (fn [{:keys [x y z]}] (and (<= (js/Math.abs (- x fx)) radius) (<= (js/Math.abs (- z fz)) radius) (<= (dec fy) y (+ fy reach))))
         {tx :x ty :y tz :z} (or toward {:x fx :y fy :z fz})
         dist (fn [{:keys [x y z]}] (+ (js/Math.abs (- x tx)) (js/Math.abs (- y ty)) (js/Math.abs (- z tz))))]
-    (->> (for [c joined [dx dy dz] neighbours] (-> c (update :x + dx) (update :y + dy) (update :z + dz)))
-         distinct
-         (remove joined)
-         (filter in-range?)
-         (filter #(nil? (seen-water-name p %)))
+    (->> (into #{} (comp (mapcat (fn [c] (map (fn [[dx dy dz]] (-> c (update :x + dx) (update :y + dy) (update :z + dz))) neighbours)))
+                         (remove joined)
+                         (filter in-range?)
+                         (filter #(nil? (seen-water-name p %))))
+               joined)
          (sort-by dist)
          (take limit))))
 
