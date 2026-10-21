@@ -204,7 +204,7 @@
   ([c] (wait-for-animal! c :leave-open))
   ([c doors]
   (if-let [to (:back-to (ctx/mem c))]
-    (if (= :continue (await (child/call-walk* c :back {:pos to :range 2 :doors doors :ways #{:walk :clear-seal}
+    (if (= :continue (await (child/call-walk* c :back {:pos to :range 2 :doors doors :ways #{:walk :dig} :may-dig #{:own}
                                                        :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
       :yield
       :again)
@@ -224,7 +224,7 @@
   "A tempted animal stops a couple of blocks behind the food, so a body that stopped at the box edge leaves it outside:
   walk to the far side of the box once (slot :deeper). :yield while the walk goes on, else :again."
   [c box animal-pos]
-  (if (= :continue (await (child/call-walk* c :deeper {:pos (deep-cell box animal-pos) :range 1 :doors :leave-open :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
+  (if (= :continue (await (child/call-walk* c :deeper {:pos (deep-cell box animal-pos) :range 1 :doors :leave-open :ways #{:walk :dig} :may-dig #{:own} :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
     :yield
     (do (ctx/update-mem! c assoc :led-deeper true) :again)))
 
@@ -248,7 +248,7 @@
           (let [{:keys [leg searching]} (await (leg-plan c target))
                 r (when-not searching
                     (await (child/call-walk* c slot
-                                             {:pos (or leg target) :range (if leg 1 range) :doors :leave-open :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
+                                             {:pos (or leg target) :range (if leg 1 range) :doors :leave-open :ways #{:walk :dig} :may-dig #{:own} :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
             (when-not searching (ctx/update-mem! c dissoc :search-rounds))
             (cond
               searching (let [n (inc (:search-rounds (ctx/mem c) 0))]

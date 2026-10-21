@@ -235,7 +235,7 @@
   [c pos see? & [range]]
   (let [pens (when-not (settings/get settings ::enter-pens) (await (pen-entry/pens! c)))
         keep-out (mapv #(assoc % :factor ##Inf) (into (vec (mapcat :gates pens)) (when (:for-plan (:args c)) (low-floor-cells c pos))))]
-    [pens (cond-> {:pos pos :range (or range 3) :see (boolean see?) :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))}
+    [pens (cond-> {:pos pos :range (or range 3) :see (boolean see?) :ways #{:walk :dig} :may-dig #{:own} :ignore-zones? (boolean (:ignore-zones? (:args c)))}
             (seq keep-out) (assoc :tolls keep-out))]))
 
 (defn warn-kept-out! [c pens]

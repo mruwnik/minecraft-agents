@@ -98,7 +98,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out seen p]} (await (gs/run-go-to shielded {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true
+        (let [{:keys [out seen p]} (await (gs/run-go-to shielded {:pos below :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true
                                                                   :torches :fetch :ignore-zones? true}
                                                         dark-with-torch-light))]
           (is (= {:arrived true} (select-keys out [:arrived])) (pr-str out))
@@ -113,7 +113,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (gs/run-go-to shielded {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true :ignore-zones? true}
+        (let [{:keys [out p]} (await (gs/run-go-to shielded {:pos below :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true :ignore-zones? true}
                                                    dark-with-torch-light))]
           (is (= :unseen-floor-dark (:why out)) (pr-str out))
           (is (empty? (torch-cells p)))
@@ -124,7 +124,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out seen p]} (await (gs/run-go-to (assoc shielded :inventory [])
-                                                        {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true
+                                                        {:pos below :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true
                                                          :torches :carried :ignore-zones? true}
                                                         dark-with-torch-light))]
           (is (= :unseen-floor-dark (:why out)) (pr-str out))
@@ -136,7 +136,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out seen]} (await (gs/run-go-to (assoc shielded :inventory [])
-                                                      {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true
+                                                      {:pos below :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true
                                                        :torches :fetch :ignore-zones? true}
                                                       dark-with-torch-light))]
           (is (= :unseen-floor-dark (:why out)) (str "nothing to fetch torches from " (pr-str out)))
@@ -154,7 +154,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out seen p]} (await (gs/run-go-to bare {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true
+        (let [{:keys [out seen p]} (await (gs/run-go-to bare {:pos below :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true
                                                               :torches :fetch :ignore-zones? true}
                                                         dark-with-torch-light))]
           (is (= {:arrived true} (select-keys out [:arrived])) (pr-str out))
@@ -166,7 +166,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out seen p]} (await (gs/run-go-to (assoc shielded :inventory [] :equipment {"offHand" {:name "torch" :count 4}})
-                                                        {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true
+                                                        {:pos below :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true
                                                          :torches :carried :ignore-zones? true}
                                                         dark-with-torch-light))]
           (is (= {:arrived true} (select-keys out [:arrived])) (pr-str out))
@@ -180,7 +180,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p]} (await (gs/run-go-to (assoc shielded :zones [{:name "theirs" :min [0 65 0] :max [0 65 0] :owner "Other"}])
-                                                   {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true :torches :fetch}
+                                                   {:pos below :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true :torches :fetch}
                                                    dark-with-torch-light))]
           (is (= {:arrived true} (select-keys out [:arrived])) (pr-str out))
           (is (= [[0 64 0]] (torch-cells p)) "a floor torch at the feet, not a wall torch in the zone"))))))
@@ -190,7 +190,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p]} (await (gs/run-go-to (assoc shielded :zones [{:name "theirs" :min [0 64 0] :max [0 65 0] :owner "Other"}])
-                                                   {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true :torches :fetch}
+                                                   {:pos below :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true :torches :fetch}
                                                    dark-with-torch-light))]
           (is (= :unseen-floor-dark (:why out)) (pr-str out))
           (is (empty? (torch-cells p))))))))
@@ -203,7 +203,7 @@
               refuse! (fn [{:keys [w] :as world}]
                         (dark-with-torch-light world)
                         (aset w "place" (fn [& _] (swap! places inc) (js/Promise.resolve #js {:status "failed" :reason "refused"}))))
-              {:keys [out seen p]} (await (gs/run-go-to shielded {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true
+              {:keys [out seen p]} (await (gs/run-go-to shielded {:pos below :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true
                                                                   :torches :fetch :ignore-zones? true}
                                                         refuse!))]
           (is (= :unseen-floor-dark (:why out)) (pr-str out))
@@ -220,7 +220,7 @@
                           (aset w "place" (fn [& _]
                                             (swap! (fake/state p) assoc-in [:blocks "0,65,0"] "wall_torch")
                                             (js/Promise.resolve #js {:status "occupied" :block "wall_torch"}))))
-              {:keys [seen]} (await (gs/run-go-to shielded {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true
+              {:keys [seen]} (await (gs/run-go-to shielded {:pos below :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true
                                                             :torches :fetch :ignore-zones? true}
                                                   occupied!))]
           (is (empty? (filter #(= :walk.torch-placed (:kind %)) seen)) "not its torch"))))))
@@ -229,7 +229,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out seen p]} (await (gs/run-go-to shielded {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true
+        (let [{:keys [out seen p]} (await (gs/run-go-to shielded {:pos below :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true
                                                                   :torches :fetch :ignore-zones? true}
                                                         gs/dark-and-looked))]
           (is (= :unseen-floor-dark (:why out)) (pr-str out))
@@ -303,7 +303,7 @@
         (let [{:keys [out seen p]} (await (gs/run-go-to (assoc shielded :inventory []
                                                                 :blocks (assoc ledge "-2,64,0" "chest")
                                                                 :containers {"-2,64,0" [{:name "torch" :count 8}]})
-                                                        {:pos below :range 1 :ways #{:walk :clear-seal} :unknown true
+                                                        {:pos below :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true
                                                          :torches :fetch :ignore-zones? true}
                                                         dark-with-torch-light))]
           (is (= {:arrived true} (select-keys out [:arrived])) (pr-str out))

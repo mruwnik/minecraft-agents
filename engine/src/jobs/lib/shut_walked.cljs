@@ -69,7 +69,7 @@
   [c {:keys [cell column dist]}]
   (if (pass/in-column? column (doors/feet-cell (u/self-pos c)))
     :standing-in
-    (if-let [why (when (> dist (pass/leftover-reach)) (await (walk/walk! c cell #{:walk :clear-seal})))]
+    (if-let [why (when (> dist (pass/leftover-reach)) (await (walk/walk! c cell #{:walk :dig})))]
       why
       (loop [n 1]
         (await (pass/shut-column! c column))

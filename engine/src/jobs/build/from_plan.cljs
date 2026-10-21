@@ -203,7 +203,7 @@
   or not: the next step judges where the body stands). :continue while the walk waits, else :again."
   [c]
   (let [[x y z] (:leave (ctx/mem c))
-        r (await (child/call-walk* c :leave {:pos {:x x :y y :z z} :range (:leave-range (ctx/mem c) 1) :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+        r (await (child/call-walk* c :leave {:pos {:x x :y y :z z} :range (:leave-range (ctx/mem c) 1) :ways #{:walk :dig} :may-dig #{:own} :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (when-not (= :continue r)
       (ctx/update-mem! c dissoc :leave :leave-range))
     (if (= :continue r) :continue :again)))
@@ -257,7 +257,7 @@
     (if-not stand
       (do (ctx/update-mem! c walk-fail (:pos cell) :unreachable (give-up) (u/self-pos c))
           :again)
-      (let [w (await (walk-stand! c cell stand (cond-> {} (not (in-hole? c)) (assoc :ways #{:walk :clear-seal}))))]
+      (let [w (await (walk-stand! c cell stand (cond-> {} (not (in-hole? c)) (assoc :ways #{:walk :dig} :may-dig #{:own}))))]
         (if (and (= :blocked w) (in-hole? c))
           (hole-blocked! c)
           (do (ctx/update-mem! c dissoc :hole-blocked)

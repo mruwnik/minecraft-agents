@@ -11,6 +11,7 @@
             [jobs.lib.tidy :as tidy]
             [jobs.lib.util :as u]
             [jobs.lib.world :as known]
+            [plan.shape :as shape]
             [jobs.movement.go-to.result :as end]))
 
 (defn own-plan-fn
@@ -71,13 +72,15 @@
 
 
 (defn planned-cells
-  "The solid cells escalation e from feet would cut, [{:cell :block}]: the stair's cuts or clear-path's door, those
+  "The solid cells escalation e from feet would cut, [{:cell :block}]: the stair's cuts (up or down) or clear-path's door, those
   the body has sensed (the child notes what it digs of the rest)."
-  [p {:keys [step heading steps]} feet]
+  [p {:keys [step heading steps dir]} feet]
   (let [block-at (escape/block-at-of p)
         unseen? (escape/unseen-of p)
         cells (case step
-                :stair (escape/stair-cuts feet (escape/heading-dirs heading) steps)
+                :stair (if (= :down dir)
+                         (shape/stair-cells {:from feet :heading heading :to-y (- (second feet) steps)})
+                         (escape/stair-cuts feet (escape/heading-dirs heading) steps))
                 :clear-path (:cells (escape/door block-at unseen? feet (escape/heading-dirs heading) (escape/max-door)))
                 nil)]
     (vec (for [cell cells :let [n (block-at cell)] :when (and (escape/solid? n) (not (unseen? cell)))] {:cell cell :block n}))))

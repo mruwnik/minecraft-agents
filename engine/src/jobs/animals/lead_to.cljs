@@ -370,7 +370,7 @@
 
 (defn ^:async tie! [c]
   (let [fence (:fence (:args c))
-        near (await (near/go-near! c fence 2 {:doors :never :ways #{:walk :clear-seal}}))]
+        near (await (near/go-near! c fence 2 {:doors :never :ways #{:walk :dig} :may-dig #{:own}}))]
     (if-not (= :there near)
       (if (= :partial near) :again (finish! c :unreachable))
       (let [r (await (child/use-on! c fence "none" "up"))]

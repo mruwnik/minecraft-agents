@@ -236,7 +236,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng] :as s} (setup-with-jobs {:blocks {"6,64,0" "short_grass"} :drops seed-drops}
-                                                    {'jobs.movement.go-to {:ways [:walk :clear-seal] :round (fn [_] :continue)}})]
+                                                    {'jobs.movement.go-to {:ways [:walk :dig] :round (fn [_] :continue)}})]
           (core/submit! eng (spec {:count 1}) {})
           (await (run-ticks s 6 700))
           (is (zero? (dig-count s)))

@@ -406,7 +406,7 @@
   [c]
   (let [[x y z] (:leg (ctx/mem c))
         r (await (child/call-walk* c :leg (cond-> {:pos {:x x :y y :z z} :range 2 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}
-                                                           (< (:failed-in-row (ctx/mem c) 0) (dec (max-failed-in-row))) (assoc :ways #{:walk :clear-seal}))))]
+                                                           (< (:failed-in-row (ctx/mem c) 0) (dec (max-failed-in-row))) (assoc :ways #{:walk :dig} :may-dig #{:own}))))]
     (if (= :continue r)
       :continue
       (let [{:keys [in-water why] :as data} (:data r)

@@ -181,7 +181,7 @@
     (if-not stand
       (do (ctx/update-mem! c fp-book/walk-fail (:pos cell) :unreachable (give-up) (u/self-pos c))
           :again)
-      (if (= :partial (await (build/walk-stand! c cell stand {:ways #{:walk :clear-seal}}))) :continue :again))))
+      (if (= :partial (await (build/walk-stand! c cell stand {:ways #{:walk :dig} :may-dig #{:own}}))) :continue :again))))
 
 (defn ^:async place-run!
   "Place the cells in order while each is within reach. Returns {:placed n} and, when one was out of reach, :next cell."

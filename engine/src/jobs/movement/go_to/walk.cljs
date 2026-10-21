@@ -230,7 +230,7 @@
   mouth) or of its feet (a retreat's seal that shuts the body in, once the hostile is gone): one jobs.access.cleanup
   child takes them back. True when it ran, so the walk is planned again."
   [c pos result]
-  (when (and (ways/way? c :clear-seal) (#{:goal-enclosed :goal-cut-off :exhausted :out-of-sight :ladder-gap :start-enclosed} (some-> (:reason result) keyword)) (not (:seal-cleared (ctx/mem c))))
+  (when (and (ways/way? c :dig) (#{:goal-enclosed :goal-cut-off :exhausted :out-of-sight :ladder-gap :start-enclosed} (some-> (:reason result) keyword)) (not (:seal-cleared (ctx/mem c))))
     (let [at (fn [[x y z]] {:pos {:x (js/Math.floor x) :y (js/Math.floor y) :z (js/Math.floor z)} :radius seal-clear-radius})
           entries (ledger/open-entries (ctx/view c))
           near (first (filter #(seq (ledger/near-of entries %)) [(at [(:x pos) (:y pos) (:z pos)]) (at (end/feet-cell c))]))]
@@ -261,7 +261,7 @@
         to (fn [a b] (u/dist (zipmap [:x :y :z] a) (zipmap [:x :y :z] b)))]
     (when (and (#{:goal-enclosed :goal-cut-off} (:reason result))
                (not (:wall-walked (ctx/mem c)))
-               (not (choose/escalate? c tries result))
+               (not (choose/escalate? c tries result pos))
                (<= (to @nearest goal) (dec (to feet goal)))
                (< (to @near goal) (to feet goal))
                (<= (:cost (cost/walk-cost {:distance (to feet @near)})) (budget-s c)))
@@ -426,7 +426,7 @@
                   :again)
               (let [unloaded? (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))
                     result (dive-end c pos (dark-end c result))
-                    ended (cond-> (if (choose/escalate? c tries result) result (sight-end c pos (unloaded-end result unloaded?)))
+                    ended (cond-> (if (choose/escalate? c tries result pos) result (sight-end c pos (unloaded-end result unloaded?)))
                             (:waypoint-why (ctx/mem c)) (assoc :waypoint-why (:waypoint-why (ctx/mem c))))]
                 (cond
                   (await (clear-goal-seal! c pos ended)) :again

@@ -8,6 +8,7 @@
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
+            [jobs.lib.escape.span :as span]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
@@ -155,29 +156,83 @@
          best (reduce (fn [a b] (if (< (to-goal b) (to-goal a)) b a)) cells)]
      (first (filter #(and (<= (to-goal %) (+ (to-goal best) slack)) (<= (across %) (+ (across best) slack))) cells)))))
 
-(defn goal-way
-  "A free body's way into a walled-in goal: escape/choose from where it stands, or, while the cell it can walk to
-  nearest the goal (nearest-stand) is more than a block nearer, from there, as
-  {:step :approach :pos cell} first. Only a door, or a stair or pillar up to a higher goal, leads in (a walk along
-  the wall too, from where it stands, to a goal not below it), else the fewest cells dug (dig-way); else {:step :none :why :no-dig}."
+(defn way-opts
+  "The opts of escape/choose and the spans for this call's escalations."
+  [c]
+  {:own? (own-placed-fn c) :skip (skips c) :fetch? (fetch-tool? c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c)})
+
+(defn walled-step
+  "escape/choose from cell from for a goal that is walled in: only a door, or a stair or pillar up to a higher goal (a
+  walk along the wall too, from where it stands, to a goal not below it) leads in, else the fewest cells dug (dig-way);
+  else {:step :none :why :no-dig}."
+  [c from goal here? may-dig? opts]
+  (let [p (:primitives c)
+        e (escape/choose p from goal may-dig? opts)
+        in? (case (:step e)
+              :clear-path true
+              (:stair :pillar) (> (second goal) (second from))
+              :approach (and here? (>= (second goal) (second from)))
+              false)]
+    (cond in? e
+          :else (or (dig-way p from goal may-dig? opts)
+                    (if (= :none (:step e)) e {:step :none :why :no-dig})))))
+
+(defn price
+  "Seconds the escalation e from feet is reckoned to take (jobs.lib.cost): a stair, a pillar or a bridge by its blocks, a
+  dug door or route by what its cells take to dig with the tool carried, plus a step a cell; 0 for a walk to the wall."
+  [c feet {:keys [step] :as e}]
+  (let [p (:primitives c)
+        block-at (escape/block-at-of p)
+        dig-s (fn [cells] (transduce (map #(+ (/ (tools/clear-ms p (block-at %)) 1000) (:cost (cost/walk-cost {:distance 1})))) + 0 cells))]
+    (case step
+      :stair (+ (cost/stair-cost (:steps e)) (* (:aside e 0) (or (cost/dig-cost "stone") 1)))
+      :pillar (cost/pillar-cost (:height e))
+      :bridge (cost/bridge-cost (:length e) (:short e 0))
+      :dig-route (dig-s (map :cell (:cells e)))
+      :clear-path (dig-s (:cells (escape/door block-at (escape/unseen-of p) feet (escape/heading-dirs (:heading e)) (escape/max-door))))
+      0)))
+
+(defn spans
+  "The stair down and the bridge toward goal from cell from (jobs.lib.escape.span) that opts allow, as a vector."
+  [c from goal may-dig? opts]
+  (let [p (:primitives c)
+        block-at (escape/block-at-of p)]
+    (into [] (remove nil?)
+          [(span/down-stair block-at from goal may-dig? (:own? opts) (:skip opts))
+           (span/bridge-span block-at (escape/unseen-of p) from goal opts)])))
+
+(defn with-spans
+  "e (a way from escape/choose, walled-step or none, planned from cell from) or, when e is none or a walk to the wall
+  (spans fill what it lacks) or priced? and price (jobs.lib.cost) says a span from the feet is cheaper than the real
+  way e: the cheapest span."
+  [c feet from goal may-dig? opts e priced?]
+  (let [extra (spans c feet goal may-dig? opts)
+        real? (not (#{:none :approach} (:step e)))]
+    (if (and (seq extra) (or (not real?) priced?))
+      (apply min-key #(price c (if (= e %) from feet) %) (cond-> extra (and real? priced?) (conj e)))
+      e)))
+
+(defn goal-way-plan
+  "{:best way :near cell :here? bool}: goal-way's choice before the walk to the nearest cell is added."
   [c feet goal may-dig? opts]
   (let [p (:primitives c)
         to-goal #(u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] goal))
         near (nearest-stand p goal)
         here? (or ((:skip opts) :approach) (>= (to-goal near) (dec (to-goal feet))))
         from (if here? feet near)
-        e (escape/choose p from goal may-dig? opts)
-        in? (case (:step e)
-              :clear-path true
-              (:stair :pillar) (> (second goal) (second from))
-              :approach (and here? (>= (second goal) (second from)))
-              false)
-        e (cond in? e
-                :else (or (dig-way p from goal may-dig? opts)
-                          (if (= :none (:step e)) e {:step :none :why :no-dig})))]
+        e (walled-step c from goal here? may-dig? opts)]
+    {:best (with-spans c feet from goal may-dig? opts e true) :e e :near near :here? here?}))
+
+(defn goal-way
+  "A free body's way to a goal it cannot walk to (walled in, or cut off by a drop), the cheapest by price over: what
+  walled-step finds, a stair down to a goal below and a bridge over a gap toward it (with-spans; spans start where the
+  body stands). While the cell it can walk to nearest the goal (nearest-stand) is more than a block nearer, the way
+  of walled-step is chosen from there, as {:step :approach :pos cell} first. {:step :none :why ...} when there is none."
+  [c feet goal may-dig? opts]
+  (let [{:keys [best e near here?]} (goal-way-plan c feet goal may-dig? opts)]
     (cond
-      (= :none (:step e)) e
-      here? e
+      (= :none (:step best)) best
+      (or here? (not= e best)) best
       :else {:step :approach :pos near})))
 
 (defn detour-way
@@ -196,10 +251,6 @@
             (let [e (escape/choose p feet goal may-dig? opts)]
               (when (= :stair (:step e)) e)))))))
 
-(def stair-step-s
-  "Seconds one step of a stair up is reckoned to take (two cuts and a step), against a found plan's seconds."
-  3)
-
 (def stair-first-rise
   "How far above the feet a goal is for a found plan to be weighed against a stair up."
   8)
@@ -208,7 +259,7 @@
   "stair-step-s, dearer by the dark factor where the body stands dark: the plan's seconds carry its dark surcharge, and the
   stair is cut in that dark too."
   [c]
-  (cond-> stair-step-s
+  (cond-> (cost/stair-cost 1)
     (and (wworld/dark?) (look/dark-here? (:primitives c))) (* (+ 1 (cost/dark-factor (wworld/kit-of c))))))
 
 (defn stair-check
@@ -236,12 +287,22 @@
             (and back (climb/returns? steps back (ledger/stair-stands c)) @stair) :dives
             (and first? cheaper? (= "found" status) (number? seconds) @stair (> seconds (* 3 (stair-step-s-here c) (:steps @stair)))) :cheaper))))))
 
+(defn cut-off-way?
+  "Whether a give-up with result is a free body's whose goal pos the planner proved cut off by a drop and goal-way finds
+  a way that changes the world and starts at once (no walk to a wall): a stair, pillar or bridge."
+  [c pos result]
+  (boolean
+   (and pos (= :goal-cut-off (some-> (:reason result) keyword))
+        (not (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword)))
+        (not (#{:none :approach} (:step (:best (goal-way-plan c (end/feet-cell c) (mapv #(js/Math.floor (% pos)) [:x :y :z]) (may-dig-fn c) (way-opts c)))))))))
+
 (defn escalate?
   "Whether a give-up after tries fruitless walks with result may escalate instead: a carried block fills the 1-cell gap it was refused (gap-fill), its only way dives (dive?), the goal is walled in (goal-walled?), or the walker failed max-blocked walks running (walker-fault?; one stuck walk of a :tries 1 caller is no proof) or the body is shut in (reach-room/enclosed?), and no door or
   gate borders where it can walk (escape/door-beside?: that is its way out; an iron door, or any door under :doors :never,
   is a wall). Never out of
   the body's own shelter: it is shut in on purpose."
-  [c tries result]
+  ([c tries result] (escalate? c tries result nil))
+  ([c tries result pos]
   (and (ways/escalating? c)
        (or (shelter-exit? c result) (not (sh-inside/sheltered-in c)))
        (or (shelter-exit? c result)
@@ -249,10 +310,11 @@
            (sprint-only? result)
            (dive? c result)
            (goal-walled? c result)
+           (cut-off-way? c pos result)
            (let [doors (some-> (:doors (:args c)) keyword)]
              (and (or (and (walker-fault? result) (>= tries (max-blocked)))
                       (and (escalate-reason? result doors) (escape/enclosed? (:primitives c) doors)))
-                  (not (escape/door-beside? (:primitives c) (end/feet-cell c) doors)))))))
+                  (not (escape/door-beside? (:primitives c) (end/feet-cell c) doors))))))))
 
 (defn climb-on?
   "Whether a stair that is done leaves the body still shut in (escape/enclosed?) under the goal pos: a walk could only

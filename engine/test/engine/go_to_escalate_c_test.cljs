@@ -114,7 +114,7 @@
       (fn ^:async t []
         (let [world (merge {:self {:pos {:x 5 :y 64 :z 0}}} {:blocks room-and-deck})
               {:keys [out seen]} (await (run-job! world {:pos [8 71 0] :range 0}))
-              {off :out} (await (run-job! world {:pos [8 71 0] :range 0 :ways #{:walk :clear-seal} :spend {:health 0}}))]
+              {off :out} (await (run-job! world {:pos [8 71 0] :range 0 :ways #{:walk :dig} :may-dig #{:own} :spend {:health 0}}))]
           (is (= :goal-cut-off (:why @off)) "without escalation the planner's verdict is cut-off")
           (is (seq (events-of seen :go-to.escalated)) "shut in: it escalates")
           (is (= :unreachable (:reason @out))))))))
@@ -253,7 +253,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (run-job! {:self {:pos {:x 5 :y 64 :z 0}} :blocks room-and-deck}
-                                             {:pos [8 71 0] :range 0 :ways #{:walk :clear-seal}}))]
+                                             {:pos [8 71 0] :range 0 :ways #{:walk :dig} :may-dig #{:own}}))]
           (is (= {:why :goal-cut-off :reason :unreachable :arrived false} (select-keys @out [:why :reason :arrived]))
               "the default budget lets drops of 10 in, and still no way leads up onto the deck"))))))
 
@@ -302,7 +302,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world {:self {:pos {:x 0 :y 50 :z 0}} :blocks long-loop :inventory [{:name "iron_pickaxe" :count 1}]}
-              off (await (run-job! world {:pos [10 60 2] :range 1 :tolls loop-tolls :ways #{:walk :clear-seal}}))
+              off (await (run-job! world {:pos [10 60 2] :range 1 :tolls loop-tolls :ways #{:walk :dig} :may-dig #{:own}}))
               near (await (run-job! world {:pos [24 52 0] :range 1 :tolls loop-tolls}))]
           (is (true? (:arrived @(:out off))))
           (is (empty? (events-of (:seen off) :go-to.escalated)))
@@ -325,13 +325,13 @@
       (fn ^:async t []
         (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 3.5 :y 64 :z 0.5}} :blocks cave
                                                    :inventory [{:name "iron_pickaxe" :count 1}]}
-                                                  {:pos [30 64 0] :range 1 :ways #{:walk :clear-seal}}))]
+                                                  {:pos [30 64 0] :range 1 :ways #{:walk :dig} :may-dig #{:own}}))]
           (is (= [false :exhausted] ((juxt :arrived :why) @out)) (pr-str @out))
           (is (= [[:exhausted 1] [:exhausted 2]] (mapv (juxt :reason :try) (events-of seen :go-to.retrying)))
               (pr-str (events-of seen :go-to.retrying))))))))
 
 (deftest an-approach-walk-may-take-back-its-own-seal
-  (is (= #{:walk :clear-seal} (:ways (second (esc/escalation-job {:step :approach :pos [1 64 0]} nil false false false))))))
+  (is (= #{:walk :dig} (:ways (second (esc/escalation-job {:step :approach :pos [1 64 0]} nil false false false))))))
 
 
 (deftest walker-faults-past-the-retries-feed-the-escalation-ladder

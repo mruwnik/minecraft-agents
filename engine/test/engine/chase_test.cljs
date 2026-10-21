@@ -106,9 +106,9 @@
         (let [calls (atom [])
               r (await (run-chase {} 'jobs.movement.run-away {:pos {:x 12 :y 64 :z 0} :leg-s 3 :y-margin 9} calls
                                   (fn [c _] (leg-over c))))]
-          (is (= [{:pos {:x 12 :y 64 :z 0} :ways #{:walk :clear-seal} :floor {:health 1} :job-time 3
+          (is (= [{:pos {:x 12 :y 64 :z 0} :ways #{:walk :dig} :may-dig #{:own} :floor {:health 1} :job-time 3
                    :settings {:jobs.movement.go-to.tuning/look-round false :jobs.lib.walk.world/y-margin 9}}]
-                 (map #(select-keys % [:pos :ways :floor :job-time :settings]) @calls)))
+                 (map #(select-keys % [:pos :ways :may-dig :floor :job-time :settings]) @calls)))
           (is (= {:arrived false :leg true :nearer false} (:data r))))))))
 
 (deftest under-see-a-thing-in-range-behind-a-wall-is-not-arrived

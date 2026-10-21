@@ -31,7 +31,7 @@
   ([yaw jitter args]
    (let [{:keys [out]} (await (gt/go! {:self {:pos [5.5 64 8.5] :inWater true :oxygen 4 :yaw yaw} :blocks (:blocks args tunnel) :light [15 15]
                                        :seen tunnel-seen :jitter jitter}
-                                      (merge {:pos [12 65 8] :range 1 :ways #{:walk :clear-seal}} (dissoc args :blocks))))]
+                                      (merge {:pos [12 65 8] :range 1 :ways #{:walk :dig} :may-dig #{:own}} (dissoc args :blocks))))]
      @out)))
 
 (deftest a-drowning-body-swims-to-a-pocket-it-has-seen-a-cell-of
@@ -55,7 +55,7 @@
       (fn ^:async t []
         (let [{:keys [out]} (await (gt/go! {:self {:pos [5.5 64 8.5] :inWater true :oxygen 2 :yaw (/ js/Math.PI -2)} :blocks bent-tunnel :light [15 15]
                                             :jitter 0}
-                                           {:pos bent-goal :range 1 :ways #{:walk :clear-seal}}))
+                                           {:pos bent-goal :range 1 :ways #{:walk :dig} :may-dig #{:own}}))
               out @out]
           (is (= :air (:why out)) (str "result " out)))))))
 
@@ -79,7 +79,7 @@
       (fn ^:async t []
         (doseq [goal [[8 70 8] [18 70 8]] oxygen [6 5]]
           (let [{:keys [out p]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen oxygen :pitch 0} :blocks shaft :light [15 15]}
-                                               {:pos goal :range 1 :ways #{:walk :clear-seal}}))]
+                                               {:pos goal :range 1 :ways #{:walk :dig} :may-dig #{:own}}))]
             (is (true? (:arrived @out)) (str "to " goal " at oxygen " oxygen ": result " @out " at " (gt/at p)))))))))
 
 ;; should fail: the only way on is a 64 cell sealed tunnel (16 s of sprint-swimming) to a shaft at x 69, the land cut by a bedrock ridge (x 11):
@@ -93,7 +93,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen 6 :pitch 0} :blocks long-tunnel :light [15 15]}
-                                             {:pos [70 70 8] :range 1 :unknown false :ways #{:walk :clear-seal}}))]
+                                             {:pos [70 70 8] :range 1 :unknown false :ways #{:walk :dig} :may-dig #{:own}}))]
           (is (= :air (:why @out)) (str "result " @out))
           (is (<= 69 (second (gt/at p))) (str "it swam up for air: at " (gt/at p))))))))
 
@@ -104,7 +104,7 @@
       (fn ^:async t []
         (doseq [oxygen [16 6 5]]
           (let [{:keys [out p]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen oxygen :pitch 0} :blocks shaft :light [0 0]}
-                                               {:pos [8 70 8] :range 1 :ways #{:walk :clear-seal}}))]
+                                               {:pos [8 70 8] :range 1 :ways #{:walk :dig} :may-dig #{:own}}))]
             (is (true? (:arrived @out)) (str "at oxygen " oxygen ": result " @out " at " (gt/at p)))))))))
 
 ;; go-to-air-budget surface-stretch-arrives: two 20 cell dives (10 s each) joined by 14 cells with air over them. The body
@@ -119,7 +119,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen 10 :pitch 0} :blocks surface-stretch :light [15 15]}
-                                             {:pos [59 65 8] :range 1 :unknown false :ways #{:walk :clear-seal}}))]
+                                             {:pos [59 65 8] :range 1 :unknown false :ways #{:walk :dig} :may-dig #{:own}}))]
           (is (true? (:arrived @out)) (str "result " @out " at " (gt/at p))))))))
 
 ;; open water 4 deep, a land floor at feet 64 round it, the body on its bottom at night in the dark: its safe? would
@@ -141,6 +141,6 @@
       (fn ^:async t []
         (let [{:keys [out ticks]} (await (gt/go! {:self {:pos [4.5 64 8.5] :inWater true :oxygen 20}
                                                   :blocks (merge (box -4 60 -4 30 70 20 "stone") (box 4 64 8 4 65 8 "water")) :light [0 0]}
-                                                 {:pos [12 64 8] :range 1 :ways #{:walk :clear-seal}}))]
+                                                 {:pos [12 64 8] :range 1 :ways #{:walk :dig} :may-dig #{:own}}))]
           (is (false? (:arrived @out)) (pr-str @out))
           (is (< ticks 30) "ends"))))))

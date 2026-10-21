@@ -13,7 +13,7 @@
    :blocks [[:fill [0 0 0] [47 4 31] "stone"]
             [:fill [4 0 4] [24 4 28] "water"]]
    :body {:at [6.5 0 16.5] :settle-s 1}
-   :act [[:job (jobs.movement.go-to {:pos #at [36 5 16] :range 2 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [36 5 16] :range 2 :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 90 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [36.5 5 16.5] 3]]}
@@ -22,7 +22,7 @@
    :blocks [[:fill [0 0 0] [47 4 31] "stone"]
             [:fill [4 0 4] [24 4 28] "water"]]
    :body {:at [30.5 5 16.5] :yaw 90 :settle-s 1}
-   :act [[:job (jobs.movement.go-to {:pos #at [23 4 16] :range 3 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [23 4 16] :range 3 :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [26.5 5 16.5] 2.6]]}
@@ -31,7 +31,7 @@
    :blocks [[:fill [0 0 0] [47 14 31] "stone"]
             [:fill [4 0 4] [24 14 28] "water"]]
    :body {:at [30.5 15 16.5] :yaw 270 :settle-s 1}
-   :act [[:job (jobs.movement.go-to {:pos #at [14 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [14 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [14.5 15 16.5] 3]]}
@@ -42,7 +42,7 @@
             [:fill [16 10 16] [16 12 16] "air"]]
    :body {:at [16.5 1 16.5] :settle-s 1 :effects [["resistance" 600 4]]}
    :act [[:until-rcon "data get entity $BODY Air" "data: ([0-9]{1,2}|1[0-9]{2}|2[0-4][0-9])s" 15]
-         [:job (jobs.movement.go-to {:pos #at [16 11 16] :range 1 :ways #{:walk :clear-seal}})]]
+         [:job (jobs.movement.go-to {:pos #at [16 11 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:why :air}} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [16.5 11 16.5] 4]]}
@@ -51,14 +51,14 @@
   {:name "shallow-pool-pressed-on-the-east-bank-face-climbs-out"
    :blocks [[:fill [16 0 8] [30 0 24] "stone"] [:fill [6 0 8] [15 0 24] "water"]]
    :body {:at [15.69 0 16.5] :settle-s 2}
-   :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :walker-fault} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [24.5 1 16.5] 3]]}
   {:name "shallow-pool-pressed-on-the-north-bank-face-climbs-out"
    :blocks [[:fill [8 0 0] [24 0 15] "stone"] [:fill [8 0 16] [24 0 24] "water"]]
    :body {:at [16.5 0 16.31] :settle-s 2}
-   :act [[:job (jobs.movement.go-to {:pos #at [16 1 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [16 1 8] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :walker-fault} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [16.5 1 8.5] 3]]}
@@ -70,7 +70,7 @@
             [:fill [4 0 8] [4 5 8] "water"] [:fill [5 0 8] [22 1 8] "water"] [:fill [23 0 8] [23 5 8] "water"]
             [:fill [11 6 0] [11 9 63] "bedrock"]]
    :body {:at [4.5 0 8.5]}
-   :act [[:job (jobs.movement.go-to {:pos #at [24 6 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 6 8] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 11 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 11 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [24.5 6 8.5] 3]]}]}

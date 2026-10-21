@@ -53,7 +53,7 @@
   [c cell {:keys [reach] :or {reach (reach-blocks)}  :as opts}]
   (await (dig-look/look-unknown! c (floors cell reach)))
   (if-let [to (first (candidates (:primitives c) cell opts))]
-    (let [e (await (child/call-walk* c :step-off {:pos to :range 0 :ways #{:walk :clear-seal}}))
+    (let [e (await (child/call-walk* c :step-off {:pos to :range 0 :ways #{:walk :dig} :may-dig #{:own}}))
           res (:data e)]
       (cond
         (= :continue e) :continue

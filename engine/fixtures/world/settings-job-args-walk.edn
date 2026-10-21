@@ -14,29 +14,29 @@
  :cases
  [{:name "job-args-overlay-range-is-the-default-of-a-call-without-it"
    :settings {:engine.settings/job-args {jobs.movement.go-to {:range 20}}}
-   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [8.5 10 16.5] 3]]}
   {:name "explicit-arg-beats-the-job-args-overlay"
    :settings {:engine.settings/job-args {jobs.movement.go-to {:range 20}}}
-   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [22.5 0 16.5] 2]]}
   {:name "walk-world-min-health-setting-sets-the-floor"
    :settings {:jobs.lib.walk.world/min-health 14}
-   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-far [22.5 0 16.5] 4]]}
   {:name "settings-set-reloads-the-floor-for-the-next-go-to-and-unset-restores-it"
    :act [[:cli "observe" ["$body" "--world" "$world" "settings" "set" ":jobs.lib.walk.world/min-health" "14"] {:ok true}]
-         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal}})]]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes [:not ["suffocation"]]}} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-far [22.5 0 16.5] 4]]}
   {:name "settings-unset-restores-the-default-floor-for-the-next-go-to"
    :settings {:jobs.lib.walk.world/min-health 14}
    :act [[:cli "observe" ["$body" "--world" "$world" "settings" "unset" ":jobs.lib.walk.world/min-health"] {:ok true}]
-         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal}})]]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [22.5 0 16.5] 2]]}]}

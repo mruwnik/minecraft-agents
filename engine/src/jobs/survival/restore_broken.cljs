@@ -190,7 +190,7 @@
 (defn ^:async walk-to!
   "Walk to within reach of cell: true when it arrived, :continue when the walk yielded, false when it gave up."
   [c cell]
-  (case (await (near/go-near! c (zipmap [:x :y :z] cell) (tidy/reach-blocks) {:ways #{:walk :clear-seal} :one-way :open}))
+  (case (await (near/go-near! c (zipmap [:x :y :z] cell) (tidy/reach-blocks) {:ways #{:walk :dig} :may-dig #{:own} :one-way :open}))
     :there true
     :partial :continue
     false))
@@ -266,7 +266,7 @@
         target (when-not (:stepped (ctx/mem c)) (clear-cell c e waiting))]
     (if-not target
       (skip! c e :occupied)
-      (do (await (child/call-walk* c :go {:pos target :range 0 :ways #{:walk :clear-seal}}))
+      (do (await (child/call-walk* c :go {:pos target :range 0 :ways #{:walk :dig} :may-dig #{:own}}))
           (ctx/update-mem! c assoc :stepped true)))))
 
 (defn farthest-first

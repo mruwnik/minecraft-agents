@@ -139,7 +139,7 @@
   (let [tpos (u/pos-of (.-pos target))]
     (if (<= (u/dist (u/self-pos c) tpos) reach)
       :there
-      (let [r (await (near/go-near! c tpos range (cond-> {:ways #{:walk :clear-seal} :look-round false}
+      (let [r (await (near/go-near! c tpos range (cond-> {:ways #{:walk :dig} :may-dig #{:own} :look-round false}
                                                doors (assoc :doors doors))))]
         (case r
           :there :there

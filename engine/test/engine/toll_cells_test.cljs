@@ -129,7 +129,7 @@
 (defn ^:async go-to-trail
   "job-trail of a go-to to [40 64 0] with args."
   [args]
-  (await (job-trail (list 'jobs.movement.go-to (merge {:pos [40 64 0] :range 1 :ways #{:walk :clear-seal}} args)) {})))
+  (await (job-trail (list 'jobs.movement.go-to (merge {:pos [40 64 0] :range 1 :ways #{:walk :dig} :may-dig #{:own}} args)) {})))
 
 (defn ^:async kit-trail
   "job-trail of a withdraw run on a chest at 40 64 0 with args."

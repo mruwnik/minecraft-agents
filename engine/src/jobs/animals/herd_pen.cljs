@@ -271,7 +271,7 @@
   failure counted in :dash-tries."
   [c]
   (hold-gate! c)
-  (let [r (await (near/go-near! c (u/cell-pos (nth (:axis (ctx/mem c)) out-1)) 0 {:ways #{:walk :clear-seal}}))
+  (let [r (await (near/go-near! c (u/cell-pos (nth (:axis (ctx/mem c)) out-1)) 0 {:ways #{:walk :dig} :may-dig #{:own}}))
         outside? (body-outside? c)
         open? (gate-open? c)]
     (cond
@@ -300,7 +300,7 @@
 (defn ^:async go!
   "One round of a go-to (range 0, :doors :never) to the cell: :arrived, :failed or nil while it goes on."
   [c cell]
-  (let [r (await (child/call-walk* c :walk {:pos (u/cell-pos cell) :range 0 :doors :never :ways #{:walk :clear-seal}}))]
+  (let [r (await (child/call-walk* c :walk {:pos (u/cell-pos cell) :range 0 :doors :never :ways #{:walk :dig} :may-dig #{:own}}))]
     (cond
       (= :continue r) nil
       (and (= :done (:kind r)) (:arrived (:data r))) :arrived

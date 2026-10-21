@@ -114,7 +114,7 @@
   "Back to the stand a pick began from: :continue while the walk waits, else nil."
   [c home]
   (when (not= home (blocks/feet-cell c))
-    (when (= :continue (await (child/call-walk* c :ore-walk {:pos home :range 0 :ways #{:walk :clear-seal}})))
+    (when (= :continue (await (child/call-walk* c :ore-walk {:pos home :range 0 :ways #{:walk :dig} :may-dig #{:own}})))
       :continue)))
 
 (defn ^:async dig!

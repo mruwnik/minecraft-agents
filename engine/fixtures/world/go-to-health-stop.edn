@@ -13,11 +13,11 @@
   :limit-s 200}
  :cases
  [{:name "full-health-walk-takes-the-10-drop"
-   :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [46.5 0 16.5] 2]]}
   {:name "health-lost-on-the-way-ends-needs-health-before-the-drop"
-   :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :clear-seal}})]
+   :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]
          [:await {:source :action :kind :started :data {:name "steer"}} 30]
          [:rcon "effect give $BODY minecraft:instant_damage 1 1 true"]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :why :needs-health}} :within-s 60 :of-job true}]
@@ -25,12 +25,12 @@
   {:name "full-health-over-budget-drop-says-needs-health"
    :blocks [[:fill [1 10 1] [40 13 30] "stone"] [:fill [0 13 0] [40 13 31] "stone"]]
    :body {:at [3.5 14 16.5]}
-   :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :why :needs-health :heal :full}} :within-s 60 :of-job true}]
    :after [[:body-far [46.5 0 16.5] 10]]}
   {:name "allow-over-budget-takes-the-drop"
    :blocks [[:fill [1 10 1] [40 13 30] "stone"] [:fill [0 13 0] [40 13 31] "stone"]]
    :body {:at [3.5 14 16.5]}
-   :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 1}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own} :floor {:health 1}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}]
    :after [[:body-near [46.5 0 16.5] 2]]}]}

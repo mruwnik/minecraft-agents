@@ -14,22 +14,22 @@
    ;; at the edge, so regeneration has no walk to heal over (from x 3.5 a body at 14 hp was full again at the drop)
    :body {:at [38.5 10 16.5]}
    :act [[:rcon "effect give $BODY minecraft:instant_damage 1 1 true"]
-         [:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :clear-seal}})]]
+         [:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :why :needs-health :heal :regen}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :go-to.over-budget} :for-s 2}]
    :after [[:body-far [46.5 0 16.5] 4]]}
   {:name "hungry-body-goes-over-its-budget"
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY foodLevel" "data: ([0-9]|1[01])$" 20]
-         [:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 1}})]]
+         [:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own} :floor {:health 1}})]]
    :expect [{:event {:source :job :kind :go-to.over-budget} :within-s 30 :of-job true}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [46.5 0 16.5] 2]]}
   {:name "min-health-is-never-crossed"
-   :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 14}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own} :floor {:health 14}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :why :needs-health}} :within-s 60 :of-job true}]
    :after [[:body-far [46.5 0 16.5] 4]]}
   {:name "max-damage-0-never-drops"
-   :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :clear-seal} :spend {:health 0}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own} :spend {:health 0}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :go-to.over-budget} :for-s 5}]
    :after [[:body-far [46.5 0 16.5] 4]]}]}

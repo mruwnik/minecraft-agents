@@ -19,25 +19,25 @@
  :cases
  [{:name "carried-torch-lights-the-drop-without-fetching"
    :act [[:rcon "item replace entity $BODY weapon.offhand with shield"] [:rcon "clear $BODY minecraft:torch"] [:rcon "item replace entity $BODY weapon.mainhand with minecraft:stone_pickaxe"] [:rcon "give $BODY minecraft:torch 4"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:offHand {:name "shield"} :mainHand {:name "stone_pickaxe"}}}] 10]
-         [:job (jobs.movement.go-to {:pos #at [24 -2 16] :range 1 :ways #{:walk :clear-seal} :unknown true :torches :carried :ignore-zones? true})]]
+         [:job (jobs.movement.go-to {:pos #at [24 -2 16] :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true :torches :carried :ignore-zones? true})]]
    :expect [{:event {:kind :walk.torch-placed} :within-s 100 :of-job true}
             {:event {:source :job :kind :completed :data {:arrived true :spent [:any]}} :within-s 110 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:torches :none}} :for-s 110 :until {:source :job :kind #{:completed :stopped}}}
             {:no-event {:source :job :kind :go-to.off-hand-kept} :for-s 110 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "torch" 3] [:body-near [24.5 -2 16.5] 3]]}
   {:name "unknown-without-torches-returns-the-off-hand-torch"
-   :act [[:job (jobs.movement.go-to {:pos #at [24 -2 16] :range 1 :ways #{:walk :clear-seal} :unknown true :ignore-zones? true})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 -2 16] :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :go-to.off-hand-torch} :within-s 100 :of-job true}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 110 :of-job true}
             {:no-event {:kind :walk.torch-placed} :for-s 110 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "torch" 4]]}
   {:name "torch-left-by-a-cancelled-call-is-returned-at-the-next-call"
    ;; the first call is cancelled while it runs, once the torch is in the off hand: the await and the cancel fail the case if the call ended first
-   :act [[:job (jobs.movement.go-to {:pos #at [24 -2 16] :range 1 :ways #{:walk :clear-seal} :unknown true :ignore-zones? true})]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 -2 16] :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true :ignore-zones? true})]
          [:await {:source :job :kind :go-to.off-hand-torch} 100]
          [:http :cancel "$event-job" {:ok true}]
          [:await {:source :job :kind :cancelled} 10]
-         [:job (jobs.movement.go-to {:pos #at [12 3 16] :range 1 :ways #{:walk :clear-seal}})]]
+         [:job (jobs.movement.go-to {:pos #at [12 3 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :cancelled} :within-s 120}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:item "torch" 4]]}
@@ -45,7 +45,7 @@
    ;; the feet and head cells of the corridor's end belong to another owner: no torch goes there
    :zones [{:name "takeoff" :min [12 3 16] :max [13 4 16] :owner "Other" :allow #{}}]
    :act [[:rcon "item replace entity $BODY weapon.offhand with shield"] [:rcon "clear $BODY minecraft:torch"] [:rcon "item replace entity $BODY weapon.mainhand with minecraft:stone_pickaxe"] [:rcon "give $BODY minecraft:torch 4"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:offHand {:name "shield"} :mainHand {:name "stone_pickaxe"}}}] 10]
-         [:job (jobs.movement.go-to {:pos #at [24 -2 16] :range 1 :ways #{:walk :clear-seal} :unknown true :torches :carried})]]
+         [:job (jobs.movement.go-to {:pos #at [24 -2 16] :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true :torches :carried})]]
    :expect [{:event {:source :job :kind :stopped :data {:why :unseen-floor-dark}} :within-s 100 :of-job true}
             {:no-event {:kind :walk.torch-placed} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:not-block [13 4 16] "wall_torch"] [:not-block [12 4 16] "wall_torch"] [:item "torch" 4]]}]}

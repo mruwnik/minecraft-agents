@@ -31,7 +31,7 @@
             [:fill [16 0 15] [16 3 16] "air"]
             [:set [16 -1 16] "air"]]
    :body {:at [16.5 0 16.2] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [22 4 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 4 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :status :stopped}} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:status :stopped}} :within-s 60 :of-job true}]
    :limit-s 70}]}

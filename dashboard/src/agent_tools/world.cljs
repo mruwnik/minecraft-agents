@@ -64,7 +64,7 @@
                                     (pos-args action args 3)))
                         (some? range) (assoc :range (num range "--range"))
                         (some? doors) (assoc :doors (keyword doors))
-                        no-escalate (assoc :ways #{:walk :clear-seal})))
+                        no-escalate (assoc :ways #{:walk :dig} :may-dig #{:own})))
       "dig" (list 'jobs.blocks.dig (zones (pos-args action args 3)))
       "place" (list 'jobs.blocks.place (zones (assoc (pos-args action args 4) :item (nth args 3))))
       "use-on" (list 'jobs.items.use (cond-> {:on (:pos (pos-args action args 3))} (seq item) (assoc :item item) (seq face) (assoc :face face)))

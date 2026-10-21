@@ -1,4 +1,4 @@
-;; Cards 8fd2c246 and 8d0a1898: jobs.access.cleanup walks to the scaffold it placed through go-to (:ways #{:walk :clear-seal}: never
+;; Cards 8fd2c246 and 8d0a1898: jobs.access.cleanup walks to the scaffold it placed through go-to (:ways #{:walk :dig} :may-dig #{:own}: never
 ;; digging a way) and holds a cell :unreachable only on a permanent verdict. The body pillars 2 cobblestone at x 8, is moved
 ;; to x 28 behind a stone wall at x 18 (the wall ring keeps it on the plot), and cleans up. "Walks round" has a gap at the
 ;; wall's south end: the body walks round and takes the pillar back. "sealed" has no gap: go-to says unreachable (a permanent

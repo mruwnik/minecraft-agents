@@ -190,7 +190,7 @@
   :again, :continue (go-to waits) or :done."
   [c pos]
   (let [r (await (child/call-chase* c :walk {:pos pos :range (reach) :leg-s (walk-leg-s)
-                                                               :walk {:doors :shut :ways #{:walk :clear-seal}}}))
+                                                               :walk {:doors :shut :ways #{:walk :dig} :may-dig #{:own}}}))
         res (when-not (= :continue r) (:data r))]
     (if (= :continue r)
       :continue

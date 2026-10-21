@@ -24,12 +24,12 @@
  :cases
  [  {:name "stair-100-east-arrives"
    :body {:at [230.5 11 8.5]}
-   :act [[:job (jobs.movement.go-to {:pos #at [60 0 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [60 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 280 :of-job true}]
    :after [[:body-near [60.5 0 16.5] 3]]}
   {:name "stair-walled-shut-unreachable"
    :body {:at [230.5 11 8.5]}
    :blocks [[:fill [331 11 7] [331 12 9] "stone"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [60 0 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [60 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable}} :within-s 120 :of-job true}]
    :after [[:body-near [125.5 11 8.5] 112]]}]}

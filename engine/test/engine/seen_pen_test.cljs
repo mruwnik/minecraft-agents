@@ -151,7 +151,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (ht/setup (ht/world {}))
-              _ (core/submit! (:eng s) '(jobs.movement.go-to {:pos [13 63 3] :range 4 :doors :never :ways #{:walk :clear-seal} :spend {:tries 1}}) {})
+              _ (core/submit! (:eng s) '(jobs.movement.go-to {:pos [13 63 3] :range 4 :doors :never :ways #{:walk :dig} :may-dig #{:own} :spend {:tries 1}}) {})
               _ (await (ht/run-ticks s 10))]
           (is (empty? (ht/events-of s :walker-fault)) (pr-str (ht/events-of s :walker-fault)))
           (is (= [10 64 3] (mapv #(js/Math.floor %) (:pos (fake/self (:p s))))) "in the gate's cell")

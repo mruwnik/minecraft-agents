@@ -47,13 +47,13 @@
    :after [[:block [15 0 15] "lever[powered=false]"] [:block [16 0 16] "iron_door[half=lower,open=false]"] [:body-near [22.5 0 16.5] 2]]}
   {:name "doors-never-keeps-the-lever-door-a-wall"
    :blocks [[:set [15 0 15] "lever[face=wall,facing=west,powered=false]"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :doors :never :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :doors :never :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :child_ended :data {:ending {:data {:arrived false}}}} :within-s 60 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "useOn"}} :for-s 20 :until {:source :job :kind :child_ended :data {:ending {:data {:arrived [:any]}}}}}]
    :after [[:block [15 0 15] "lever[powered=false]"] [:block [16 0 16] "iron_door[half=lower,open=false]"] [:body-far [22.5 0 16.5] 4]]}
   {:name "button-not-wired-to-the-door-stays-shut"
    ;; the button [15 1 14] sits on a wall block that does not touch the door: nothing opens it
    :blocks [[:set [15 1 14] "stone_button[face=wall,facing=west]"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 90 :of-job true}]
    :after [[:block [16 0 16] "iron_door[half=lower,open=false]"] [:body-far [22.5 0 16.5] 4]]}]}

@@ -10,7 +10,7 @@
   :limit-s 300}
  :cases
  [{:name "zombie-cuts-far-walk-then-arrives"
-   :act [[:job (jobs.movement.go-to {:pos #at [310 0 16] :range 1 :ways #{:walk :clear-seal}})]
+   :act [[:job (jobs.movement.go-to {:pos #at [310 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]
          [:until-pos {:x-min 20} 30]
          [:rcon "execute at $BODY run summon zombie ~4 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} 30]
@@ -23,7 +23,7 @@
   ;; of line), not 6-block steps; the resumed go-to then costs the remembered :threat spot and arrives without a second flight
   ;; before it. (A later flight at the goal, when the zombie walks up, is fine and not judged.)
   {:name "zombie-left-alive-whole-flights"
-   :act [[:job (jobs.movement.go-to {:pos #at [310 0 16] :range 1 :ways #{:walk :clear-seal}})]
+   :act [[:job (jobs.movement.go-to {:pos #at [310 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]
          [:until-pos {:x-min 20} 30]
          [:rcon "execute at $BODY run summon zombie ~4 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 40}

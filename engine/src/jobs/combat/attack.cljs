@@ -248,7 +248,7 @@
 (defn walk-opts
   "The options of one walk towards a target: a :hostiles fight leaves doors as they are and aims again every ::chase-timeout-s, the mob moves."
   [c]
-  (merge {:dangers false :ways #{:walk :clear-seal} :look-round false}
+  (merge {:dangers false :ways #{:walk :dig} :may-dig #{:own} :look-round false}
          (if (hostile/hostiles? c)
            {:leg-s (hostile/chase-timeout-s)}
            {:doors :shut :leg-s (settings/get settings ::walk-timeout-s)})))

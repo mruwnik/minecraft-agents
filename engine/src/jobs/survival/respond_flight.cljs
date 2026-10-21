@@ -24,7 +24,7 @@
   2b. A lone melee mob (no creeper, enderman, spider, flyer or shooter) between ::cover-gap (5) and ::refuge-gap (10) that a fight would not win, with
      pillar-height blocks carried: pillar up, else seal in, before any flee step (a walk gains little on it); when neither can be
      done the flight walks. Each flee step emits debug retreat.step-speed {:blocks :seconds :bps}.
-  3. Walks a short step (the respond.state ::step setting, 6 blocks) away from all chasers (nearer ones weigh more) with a go-to child (:ways #{:walk :clear-seal}),
+  3. Walks a short step (the respond.state ::step setting, 6 blocks) away from all chasers (nearer ones weigh more) with a go-to child (:ways #{:walk :dig} :may-dig #{:own}),
      leaning toward the first closed room of 2. (else a home it is nearer to than every hostile it knows, none on the way; else the :goal, the destination of the walk the flight
      interrupted, while it is safe: jobs.survival.respond.goal/verdict, judged every step in three dimensions against every hostile it knows and the places of those it fled lately; else the latest :bed or :home within respond.cover/home-range) when not through the
      hostiles (a closed room behind them: turned respond.walk ::flank-turn degrees toward it, to go round them, while it still gains on them so:

@@ -12,7 +12,7 @@
  [{:name "big-sealed-yard-is-goal-enclosed"
    :plot {:length 64} ; a cell whose free ring is under the sealed-start drain ends start-enclosed
    :blocks [[:fill [3 0 3] [28 3 28] "stone" :hollow]]
-   :act [[:job (jobs.movement.go-to {:pos #at [16 1 16] :range 1 :ways #{:walk :clear-seal} :checks {:safe? (not (threatened))}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [16 1 16] :range 1 :ways #{:walk :dig} :may-dig #{:own} :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :why :goal-enclosed}} :within-s 90 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "walkTo"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :why :goal-enclosed}}}]
    :after [[:body-far [16.5 0 16.5] 12]]}
@@ -21,22 +21,22 @@
    ;; the hollow fills lay a stone floor at y 0: body and goal stand at y 1, inside the shells
    :body {:at [16.5 1 16.5]}
    :blocks [[:fill [3 0 3] [28 3 28] "stone" :hollow] [:fill [14 0 14] [18 3 18] "stone" :hollow] [:fill [40 0 3] [50 3 13] "stone" :hollow]]
-   :act [[:job (jobs.movement.go-to {:pos #at [45 1 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [45 1 8] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :why :start-enclosed}} :within-s 30 :of-job true}]}
   {:name "big-yard-with-a-gap-in-the-wall-arrives"
    :blocks [[:fill [3 0 3] [28 3 28] "stone" :hollow] [:fill [3 0 16] [3 3 17] "air"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [16 1 16] :range 1 :ways #{:walk :clear-seal} :checks {:safe? (not (threatened))}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [16 1 16] :range 1 :ways #{:walk :dig} :may-dig #{:own} :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:why :goal-enclosed}} :for-s 120 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [16.5 1 16.5] 3]]}
   {:name "gateless-fence-pen-is-enclosed-in-round-1"
    :blocks [[:fill [10 0 10] [21 0 10] "oak_fence"] [:fill [10 0 21] [21 0 21] "oak_fence"] [:fill [10 0 10] [10 0 21] "oak_fence"] [:fill [21 0 10] [21 0 21] "oak_fence"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :go-to.wall-walk} :within-s 30 :of-job true}
             {:event {:source :job :kind :stopped :data {:arrived false :why :goal-enclosed}} :within-s 60 :of-job true}]
    :after [[:body-near [9.5 0 16.5] 1.5]]}
   {:name "fence-pen-with-a-gate-arrives"
    :blocks [[:fill [10 0 10] [21 0 10] "oak_fence"] [:fill [10 0 21] [21 0 21] "oak_fence"] [:fill [10 0 10] [10 0 21] "oak_fence"] [:fill [21 0 10] [21 0 21] "oak_fence"] [:set [10 0 16] "oak_fence_gate[facing=east,open=false]"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [16.5 0 16.5] 3]]}]}

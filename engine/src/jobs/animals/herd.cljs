@@ -225,7 +225,7 @@
           (and searching (<= n (escort/max-search-rounds))) :continue
           searching (lure-lost! c :unreachable)
           (not leg) (await (settle-at! c 0 (settle-out-ms) #(set-phase! c :clear-out)))
-          :else (do (await (child/call-walk* c :walk {:pos leg :range 1 :doors :never :ways #{:walk :clear-seal}}))
+          :else (do (await (child/call-walk* c :walk {:pos leg :range 1 :doors :never :ways #{:walk :dig} :may-dig #{:own}}))
                     :continue))))))
 
 (defn ^:async step! [c phase]

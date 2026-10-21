@@ -138,7 +138,7 @@
   (and (= :done (:kind r)) (boolean (:arrived (:data r)))))
 
 (defn ^:async walk! [c {:keys [land]}]
-  (let [r (await (child/call-walk* c :bank {:pos (select-keys land [:x :y :z]) :range 1 :ways #{:walk :clear-seal}}))]
+  (let [r (await (child/call-walk* c :bank {:pos (select-keys land [:x :y :z]) :range 1 :ways #{:walk :dig} :may-dig #{:own}}))]
     (cond
       (= :continue r) :continue
       (arrived? r) :arrived

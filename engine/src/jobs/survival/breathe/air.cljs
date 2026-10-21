@@ -212,5 +212,5 @@
   "One go-to child call to target: true when it reports arrival. A call that yields or does not end :done is a failed
   try (the walk-only go-to waits on nothing)."
   [c slot target range]
-  (let [e (await (ctx/call c slot 'jobs.movement.go-to {:pos target :range range :ways #{:walk :clear-seal} :floor {:health 1} :settings {:jobs.lib.cost.planner/lethal-air true}}))]
+  (let [e (await (ctx/call c slot 'jobs.movement.go-to {:pos target :range range :ways #{:walk :dig} :may-dig #{:own} :floor {:health 1} :settings {:jobs.lib.cost.planner/lethal-air true}}))]
     (and (= :done (:kind e)) (boolean (:arrived (:data e))))))

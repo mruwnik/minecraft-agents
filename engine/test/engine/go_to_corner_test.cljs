@@ -14,7 +14,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (g/go! (assoc-in corner-world [:self :food] 6) {:pos [1 65 1] :ways #{:walk :clear-seal}}))]
+        (let [{:keys [out p]} (await (g/go! (assoc-in corner-world [:self :food] 6) {:pos [1 65 1] :ways #{:walk :dig} :may-dig #{:own}}))]
           (is (= :corner-jump (:kind @out)) (pr-str @out))
           (is (re-find #"shut in" (:text @out)) "a sealed body is told it is shut in, not only that it lacks a sprint")
           (is (= [0 64 0] (g/at p)) "the body did not move"))))))

@@ -232,7 +232,7 @@
 (defn ^:async walk-to!
   "A go-to child to the cell [x y z] (range 0, no escalation). :continue while it waits; :ok on arrival, else :failed."
   [c [x y z]]
-  (let [r (await (child/call-walk* c :step {:pos {:x x :y y :z z} :range 0 :ways #{:walk :clear-seal}
+  (let [r (await (child/call-walk* c :step {:pos {:x x :y y :z z} :range 0 :ways #{:walk :dig} :may-dig #{:own}
                                             :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (cond
       (= :continue r) :continue

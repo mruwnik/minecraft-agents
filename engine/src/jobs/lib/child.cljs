@@ -109,7 +109,7 @@
 (def entry-depth "Blocks below both ends a walk to or from a line's entry may plan." 16)
 
 (defn walk-into-args [slot cell]
-  (cond-> {:pos cell :range 0 :ways #{:walk :clear-seal}}
+  (cond-> {:pos cell :range 0 :ways #{:walk :dig} :may-dig #{:own}}
     (#{:in :out} slot) (assoc :settings {:jobs.lib.walk.world/y-margin entry-depth})))
 
 (defn ^:async walk-into!*

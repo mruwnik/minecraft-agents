@@ -20,12 +20,12 @@
  [{:name "chest-of-torches-is-fetched-and-the-dark-drop-is-lit"
    :blocks [[:set [12 4 15] "air"]
            [:set [12 3 15] "chest{Items:[{Slot:0b,id:\"minecraft:torch\",count:8}]}"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :unknown true :torches :fetch :ignore-zones? true})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true :torches :fetch :ignore-zones? true})]]
    :expect [{:event {:kind :walk.torch-placed} :within-s 100 :of-job true}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 110 :of-job true}]
    :after [[:item "torch" [:>= 1]] [:body-near [24.5 0 16.5] 3]]}
   {:name "no-torch-in-view-ends-unseen-floor-dark-and-books-the-failure"
-   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :unknown true :torches :fetch :ignore-zones? true})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true :torches :fetch :ignore-zones? true})]]
    :expect [{:event {:source :job :kind :stopped :data {:why :unseen-floor-dark}} :within-s 100 :of-job true}
             {:no-event {:kind :walk.torch-placed} :for-s 10}]
    :after [[:item "torch" 0] [:memory {:entries {:go-to/torch-fetch-failed [{:t [:any]}]}}]]}]}

@@ -423,7 +423,7 @@
               _ (await (tu/with-near-spy calls* (fn ^:async b [] (await (first-round-ms '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 6}) {:inventory sword :entities [(zombie 5 0)]} 20)))))
               opts (map #(nth % 2) @calls*)]
           (is (seq opts))
-          (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (= 10 (:leg-s %)) (false? (:look-round %)) (false? (:dangers %))) opts)
+          (is (every? #(and (= #{:walk :dig} (:ways %)) (= 10 (:leg-s %)) (false? (:look-round %)) (false? (:dangers %))) opts)
               "a moving mob is chased in legs, never dug or pillared toward"))))))
 
 (deftest hostile-attack-is-already-done-when-nothing-is-near

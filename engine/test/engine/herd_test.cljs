@@ -1198,7 +1198,7 @@
               s (await (tu/with-near-spy calls* (fn ^:async b [] (await (scenario {:target 1} {:entities [(cow 1 4 3)]} 300)))))
               opts (map #(nth % 2) @calls*)]
           (is (seq opts))
-          (is (every? #(= #{:walk :clear-seal} (:ways %)) opts) "a body shut in the pen is not dug or pillared out through its fence")
+          (is (every? #(= #{:walk :dig} (:ways %)) opts) "a body shut in the pen is not dug or pillared out through its fence")
           (is (= :brought (:reason (done-event s)))))))))
 
 (deftest with-no-lead-and-food-carried-the-cows-are-lured-in

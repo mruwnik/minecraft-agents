@@ -187,7 +187,7 @@
 (defn ^:async harvest!
   "Walk to the hive and use the tool once; book the outcome."
   [c pos tool]
-  (let [w (await (near/go-near! c pos (reach) {:ways #{:walk :clear-seal}}))]
+  (let [w (await (near/go-near! c pos (reach) {:ways #{:walk :dig} :may-dig #{:own}}))]
     (case w
       :partial :continue
       :blocked (do (skip! c pos :unreachable) :again)

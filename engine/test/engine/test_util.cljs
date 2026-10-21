@@ -306,7 +306,7 @@
 (defn as-near
   "The go-near! arguments [pos range opts] for walk-style args [pos range opts]: :timeout-s becomes :spend :job-time, no escalation."
   [[pos range opts]]
-  [pos range (cond-> (merge {:ways #{:walk :clear-seal}} (dissoc opts :timeout-s))
+  [pos range (cond-> (merge {:ways #{:walk :dig} :may-dig #{:own}} (dissoc opts :timeout-s))
                (:timeout-s opts) (assoc :spend {:job-time (:timeout-s opts)}))])
 
 (defn shutdown-at!

@@ -330,14 +330,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out seen]} (await (run-go-to in-tunnel {:pos [9 61 0] :range 1 :ways #{:walk :clear-seal}} dark-and-looked))]
+        (let [{:keys [out seen]} (await (run-go-to in-tunnel {:pos [9 61 0] :range 1 :ways #{:walk :dig} :may-dig #{:own}} dark-and-looked))]
           (is (= {:arrived true} out) (pr-str (last seen))))))))
 
 (deftest go-to-with-unknown-does-not-drop-into-a-dark-shaft-it-cannot-see
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out seen p]} (await (run-go-to in-tunnel {:pos [9 61 0] :range 1 :ways #{:walk :clear-seal} :unknown true} dark-and-looked))]
+        (let [{:keys [out seen p]} (await (run-go-to in-tunnel {:pos [9 61 0] :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true} dark-and-looked))]
           (is (= [false :unseen-floor-dark] [(:arrived out) (:why out)]) (pr-str out))
           (is (re-find #":torches" (str (:text out))) "the words say what would help")
           (is (= 64 (js/Math.floor (second (:pos (fake/self p))))) "never dropped")
@@ -353,7 +353,7 @@
                        (add-watch (fake/state p) :off-hand
                                   (fn [_ _ _ w] (when (= "torch" (get-in w [:equipment "offHand" :name])) (reset! held true)))))
               {:keys [out seen]} (await (run-go-to (assoc in-tunnel :inventory [{:name "torch" :count 4}])
-                                                   {:pos [9 61 0] :range 1 :ways #{:walk :clear-seal} :unknown true} watch!))]
+                                                   {:pos [9 61 0] :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true} watch!))]
           (is (true? @held) "the off hand held the torch during the walk")
           (is (= 1 (count (filter #(= :go-to.off-hand-torch (:kind %)) seen))) "once per call")
           (is (= [:unseen-floor-dark [0 64 0] [1 61 0]] [(:why out) (:at out) (vals (:dark-best out))])
@@ -369,7 +369,7 @@
                        (add-watch (fake/state p) :off-hand
                                   (fn [_ _ _ w] (when-let [n (get-in w [:equipment "offHand" :name])] (reset! held n)))))
               {:keys [out p]} (await (run-go-to (assoc in-tunnel :inventory [{:name "soul_torch" :count 4}])
-                                                {:pos [9 61 0] :range 1 :ways #{:walk :clear-seal} :unknown true} watch!))
+                                                {:pos [9 61 0] :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true} watch!))
               w @(fake/state p)]
           (is (= "soul_torch" @held) "the off hand held the soul torch during the walk")
           (is (= :unseen-floor-dark (:why out)) (pr-str out))
@@ -385,7 +385,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [seen p]} (await (run-go-to (assoc in-tunnel :inventory [{:name "torch" :count 4}])
-                                                 {:pos [9 61 0] :range 1 :ways #{:walk :clear-seal} :unknown true} dark-and-looked))
+                                                 {:pos [9 61 0] :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true} dark-and-looked))
               w @(fake/state p)]
           (is (= 1 (count (filter #(= :go-to.off-hand-torch (:kind %)) seen))) "it was held")
           (is (nil? (get-in w [:equipment "offHand"])) "off hand empty again")
@@ -397,7 +397,7 @@
       (fn ^:async t []
         (let [{:keys [out seen p]} (await (run-go-to (assoc in-tunnel :inventory [{:name "torch" :count 4}]
                                                             :equipment {"offHand" {:name "shield" :count 1}})
-                                                     {:pos [9 61 0] :range 1 :ways #{:walk :clear-seal} :unknown true} dark-and-looked))]
+                                                     {:pos [9 61 0] :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true} dark-and-looked))]
           (is (empty? (filter #(= :go-to.off-hand-torch (:kind %)) seen)))
           (is (= "shield" (get-in @(fake/state p) [:equipment "offHand" :name])))
           (is (= :unseen-floor-dark (:why out)) (pr-str out)))))))
@@ -410,7 +410,7 @@
         (let [{:keys [out seen]} (await (run-job-unpinned 'jobs.movement.go-to
                                                           (assoc in-tunnel :jitter 0.55 :inventory [{:name "torch" :count 4}]
                                                                  :equipment {"offHand" {:name "shield" :count 1}})
-                                                          {:pos [9 61 0] :range 1 :ways #{:walk :clear-seal} :unknown true} dark-and-looked))]
+                                                          {:pos [9 61 0] :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true} dark-and-looked))]
           (is (empty? (filter #(= :walker-fault (:kind %)) seen)) (pr-str (filter #(= :walker-fault (:kind %)) seen)))
           (is (= :unseen-floor-dark (:why out)) (pr-str out)))))))
 
@@ -419,7 +419,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [seen p]} (await (run-go-to (assoc in-tunnel :equipment {"offHand" {:name "torch" :count 4}})
-                                                 {:pos [9 61 0] :range 1 :ways #{:walk :clear-seal} :unknown true} dark-and-looked
+                                                 {:pos [9 61 0] :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true} dark-and-looked
                                                  #(mem/write! (:store %) torch/kind {:held true} {:cap 1 :ttl :forever})))
               w @(fake/state p)]
           (is (nil? (get-in w [:equipment "offHand"])) "off hand empty")
@@ -439,7 +439,7 @@
                                                       (throw (js/Error. "pathWorld broke")))
                                                     (apply pw xs)))))
               {:keys [seen p]} (await (run-go-to (assoc in-tunnel :inventory [{:name "torch" :count 4}])
-                                                 {:pos [9 61 0] :range 1 :ways #{:walk :clear-seal} :unknown true} throw-held!))
+                                                 {:pos [9 61 0] :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true} throw-held!))
               w @(fake/state p)]
           (is (= 1 (count (filter #(= :go-to.off-hand-torch (:kind %)) seen))) "it was held")
           (is (nil? (get-in w [:equipment "offHand"])) "off hand empty again")
@@ -462,7 +462,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p]} (await (run-go-to (assoc in-tunnel :equipment {"offHand" {:name "torch" :count 4}})
-                                            {:pos [9 61 0] :range 1 :ways #{:walk :clear-seal} :unknown true} dark-and-looked))]
+                                            {:pos [9 61 0] :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true} dark-and-looked))]
           (is (= "torch" (get-in @(fake/state p) [:equipment "offHand" :name]))))))))
 
 (defn ^:async quote-route
@@ -605,7 +605,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out seen]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true :blocks (slime-pit slime-floor)}
-                                                   {:pos [1 56 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}))]
+                                                   {:pos [1 56 0] :range 0 :ways #{:walk :dig} :may-dig #{:own} :floor {:health 20}}))]
           (is (= {:arrived true} out) (pr-str (last seen))))))))
 
 (defn record-moves!
@@ -628,7 +628,7 @@
       (fn ^:async t []
         (let [acts (atom [])
               {:keys [out]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true :blocks (slime-pit slime-floor)}
-                                              {:pos [1 56 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}
+                                              {:pos [1 56 0] :range 0 :ways #{:walk :dig} :may-dig #{:own} :floor {:health 20}}
                                               (record-moves! acts)))
               steers (filter (comp #{:steer} first) @acts)]
           (is (= {:arrived true} out))
@@ -673,7 +673,7 @@
                (finally (set! wplan/plan-within! orig)))
           (is (= [true] @masks) "the unseen pad is not read from the raw chunks"))))))
 
-(def pit-job {:pos [1 56 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}})
+(def pit-job {:pos [1 56 0] :range 0 :ways #{:walk :dig} :may-dig #{:own} :floor {:health 20}})
 
 (defn pit-sneaks
   "The sneaking steer ticks of go-to over the slime pit with the body's spec extras and blocks."
@@ -750,7 +750,7 @@
       (fn ^:async t []
         (let [{:keys [out]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true
                                                :blocks (slime-pit {[1 0] "slime_block"})}
-                                              {:pos [1 56 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}))]
+                                              {:pos [1 56 0] :range 0 :ways #{:walk :dig} :may-dig #{:own} :floor {:health 20}}))]
           (is (= [:needs-health :unreachable] ((juxt :why :reason) out)) (pr-str out)))))))
 
 (def glass-shaft
@@ -764,7 +764,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out seen]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true :blocks glass-shaft}
-                                                   {:pos [1 56 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}))]
+                                                   {:pos [1 56 0] :range 0 :ways #{:walk :dig} :may-dig #{:own} :floor {:health 20}}))]
           (is (= {:arrived true} out) (pr-str (last seen))))))))
 
 (deftest go-to-refuses-a-drop-onto-a-stone-pit-floor
@@ -773,7 +773,7 @@
       (fn ^:async t []
         (let [{:keys [out]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true
                                                :blocks (slime-pit {})}
-                                              {:pos [1 56 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}))]
+                                              {:pos [1 56 0] :range 0 :ways #{:walk :dig} :may-dig #{:own} :floor {:health 20}}))]
           (is (= [:needs-health :unreachable] ((juxt :why :reason) out)) (pr-str out)))))))
 
 (def probed (atom nil))
@@ -814,7 +814,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true :blocks (cliff-foot "stone")}
-                                              {:pos [1 54 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}))]
+                                              {:pos [1 54 0] :range 0 :ways #{:walk :dig} :may-dig #{:own} :floor {:health 20}}))]
           (is (= [:needs-health :unreachable] ((juxt :why :reason) out)) (pr-str out)))))))
 
 (deftest go-to-takes-a-slime-pad-drop-at-a-cliff-foot-whose-face-is-glass
@@ -822,5 +822,5 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out seen]} (await (run-go-to {:self {:pos {:x -6.5 :y 60 :z 0.5}} :exact-eye true :bodyHitbox true :blocks (cliff-foot "glass")}
-                                                   {:pos [1 54 0] :range 0 :ways #{:walk :clear-seal} :floor {:health 20}}))]
+                                                   {:pos [1 54 0] :range 0 :ways #{:walk :dig} :may-dig #{:own} :floor {:health 20}}))]
           (is (= {:arrived true} out) (pr-str (last seen))))))))

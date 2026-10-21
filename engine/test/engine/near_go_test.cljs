@@ -47,7 +47,7 @@
 (deftest a-target-no-way-leads-to-is-blocked
   (async done
     ((fn ^:async t []
-       (let [{:keys [out walk]} (await (run-probe! (merge in-pit {:blocks stone-pit}) {:x 10 :y 64 :z 0} 2 {:ways #{:walk :clear-seal}}))]
+       (let [{:keys [out walk]} (await (run-probe! (merge in-pit {:blocks stone-pit}) {:x 10 :y 64 :z 0} 2 {:ways #{:walk :dig} :may-dig #{:own}}))]
          (is (= :blocked @out) "escalation off: nothing leads to the target")
          (is (not= :done (:kind @walk)) "the walk's verdict is kept for the caller")
          (done))))))
@@ -71,7 +71,7 @@
   (let [{:keys [eng p]} (e/setup {:blocks (floor -2 -3 60 3)})
         firsts (atom [])
         job {:round (fn ^:async leg-round [c]
-                      (swap! firsts conj (await (near/go-near! c {:x 35 :y 64 :z 0} 0 {:leg-s 1 :ways #{:walk :clear-seal}})))
+                      (swap! firsts conj (await (near/go-near! c {:x 35 :y 64 :z 0} 0 {:leg-s 1 :ways #{:walk :dig} :may-dig #{:own}})))
                       (ctx/end c :done nil))}
         eng (update eng :jobs assoc 'leg-probe job 'jobs.movement.go-to (leg-cut-go-to x))]
     (core/submit! eng '(leg-probe) {})
@@ -94,7 +94,7 @@
   (async done
     ((fn ^:async t []
        (let [cliff (merge (floor -2 -3 10 3) (floor 60 11 -3 47 3))
-             {:keys [out p]} (await (run-probe! {:blocks cliff} {:x 120 :y 61 :z 0} 1 {:ways #{:walk :clear-seal}}))]
+             {:keys [out p]} (await (run-probe! {:blocks cliff} {:x 120 :y 61 :z 0} 1 {:ways #{:walk :dig} :may-dig #{:own}}))]
          (is (= :blocked @out))
          (is (= 64 (js/Math.floor (second (e/feet p)))) "still on the plateau")
          (done))))))

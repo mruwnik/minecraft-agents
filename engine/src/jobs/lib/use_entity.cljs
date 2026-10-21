@@ -60,7 +60,7 @@
       (nil? target) (finish-entity! c id item :gone)
       (and (> (u/dist (u/self-pos c) target) (reach))
            (not (some-> (:arrived (ctx/mem c)) (u/dist target) (< 1))))
-      (let [r (await (child/call-walk* c :walk {:pos target :range 2 :ways #{:walk :clear-seal}}))]
+      (let [r (await (child/call-walk* c :walk {:pos target :range 2 :ways #{:walk :dig} :may-dig #{:own}}))]
         (cond
           (= :continue r) :continue
           (and (= :done (:kind r)) (:arrived (:data r))) (do (ctx/update-mem! c assoc :arrived target) :again)

@@ -1,6 +1,6 @@
-;; Card b10c0b4f: go-to walks to no door spot or wall spot when :clear-path is not an allowed way. A body in a 9x9 stone room (x 12..20, z 12..20,
+;; Card b10c0b4f: go-to walks to no door spot or wall spot when :dig is not an allowed way. A body in a 9x9 stone room (x 12..20, z 12..20,
 ;; hand-diggable; the goal outside is unseen, so :safe? is overridden to keep the real clock out) with :ways #{:walk} walks its partial path to the wall nearest the goal (within budget) and gives up there (arrived false,
-;; nothing dug); with :clear-path allowed it walks to the wall and clears its way out.
+;; nothing dug); with :dig allowed it walks to the wall and clears its way out.
 {:defaults
  {:tags [:movement :access :go-to]
   :time :any
@@ -16,6 +16,6 @@
    :after [[:block [20 0 16] "stone"] [:body-near [19.5 0 16.5] 1.5]]
    :limit-s 60}
   {:name "clear-path-allowed-walks-to-the-wall-and-clears-it"
-   :act [[:job (jobs.movement.go-to {:pos #at [26 0 16] :range 1 :checks {:safe? (not (threatened))} :ways #{:walk :clear-path}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [26 0 16] :range 1 :checks {:safe? (not (threatened))} :ways #{:walk :dig}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [26.5 0 16.5] 2]]}]}

@@ -598,7 +598,7 @@
               [_ _ p] (await (tu/with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
             (fn ^:async b [] (await (build! (spec "stone" 63 (kit {})) {"line" (line-plan {})} {})))))]
           (is (seq @opts))
-          (is (every? #(= #{:walk :clear-seal} (:ways %)) @opts) "a walk to a stand never digs through the line")
+          (is (every? #(= #{:walk :dig} (:ways %)) @opts) "a walk to a stand never digs through the line")
           (is (empty? (h/calls p "dig"))))))))
 
 (deftest a-lever-line-is-built-switched-and-proved-in-one-round

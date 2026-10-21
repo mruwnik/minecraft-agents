@@ -133,7 +133,7 @@
         (reset! wsearch/searches {})
         (let [{:keys [eng]} (gt/setup {:blocks shaft-blocks :self {:pos {:x 4.5 :y 64 :z 8.5} :inWater true :oxygen 10}})
               out (atom :not-done)
-              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out {:pos [18 70 8] :range 1 :ways #{:walk :clear-seal}})))]
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (gt/recording-parent out {:pos [18 70 8] :range 1 :ways #{:walk :dig} :may-dig #{:own}})))]
           (core/submit! eng '(recording-parent) {})
           (await (gt/tick-out! eng 30))
           (reset! wsearch/searches {})
@@ -186,7 +186,7 @@
                                            (js/Promise.resolve {:result {:status :searching :fresh false} :status "searching"
                                                                 :from (:pos c) :to (:pos c)}))]
             (let [{:keys [out]} (await (gt/go! {:self {:pos [0.5 64 0.5]} :blocks floor-blocks :clock clock}
-                                               {:pos [30 64 0] :range 1 :ways #{:walk :clear-seal} :spend {:job-time 3}}))]
+                                               {:pos [30 64 0] :range 1 :ways #{:walk :dig} :may-dig #{:own} :spend {:job-time 3}}))]
               (is (false? (:arrived @out)) (pr-str @out))
               (is (= :search-spent (:why @out)) (pr-str @out))
               (is (<= @rounds 6) "it gave up within a few slices"))))))))

@@ -44,7 +44,7 @@
       (u/within? (u/self-pos c) g (gate-look-range))
       (do (ctx/update-mem! c #(-> % (assoc :gate-visited true) (dissoc :looked-pen)))
           :continue)
-      (= :blocked (await (near/go-near! c g (gate-look-range) {:doors :never :ways #{:walk :clear-seal}}))) (finish! c :no-pen (unseen-extra answer))
+      (= :blocked (await (near/go-near! c g (gate-look-range) {:doors :never :ways #{:walk :dig} :may-dig #{:own}}))) (finish! c :no-pen (unseen-extra answer))
       :else :continue)))
 
 (defn ^:async check-unknown!
@@ -59,7 +59,7 @@
     (cond
       (nil? unk) (await (look-from-gate! c answer))
       (not (u/within? here unk (look-range)))
-      (if (= :blocked (await (near/go-near! c unk (look-range) {:doors :never :ways #{:walk :clear-seal}})))
+      (if (= :blocked (await (near/go-near! c unk (look-range) {:doors :never :ways #{:walk :dig} :may-dig #{:own}})))
         (await (look-from-gate! c answer))
         :continue)
       :else (do (await (sense/look-at! c (cell unk)))
@@ -110,7 +110,7 @@
         unseen (when refuse (unseen-approach c extra))]
     (cond
       (and unseen (< (:approach-walks (ctx/mem c) 0) (max-approach-walks))
-           (not= :there (await (near/go-near! c (centre unseen) (look-range) {:doors :never :ways #{:walk :clear-seal} :see true}))))
+           (not= :there (await (near/go-near! c (centre unseen) (look-range) {:doors :never :ways #{:walk :dig} :may-dig #{:own} :see true}))))
       (do (ctx/update-mem! c update :approach-walks (fnil inc 0))
           :continue)
       unseen
@@ -142,7 +142,7 @@
 (defn ^:async survey! [c]
   (let [centre (box-centre (pen-box c))]
     (if (> (u/dist (u/self-pos c) centre) (near-pen))
-      (if (= :blocked (await (near/go-near! c centre (approach-range) {:doors :never :ways #{:walk :clear-seal}})))
+      (if (= :blocked (await (near/go-near! c centre (approach-range) {:doors :never :ways #{:walk :dig} :may-dig #{:own}})))
         (finish! c :unreachable)
         :continue)
       (let [answer (await (pen-read/read! c (pen-opts c) #(= :unloaded (:reason %))))]

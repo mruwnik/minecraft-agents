@@ -246,7 +246,7 @@
   [c {:keys [at dir]}]
   (let [goal (away-goal (:primitives c) at (:away (:args c)) dir)
         r (when goal
-            (await (child/run!* c :away 'jobs.movement.go-to {:pos goal :range 1 :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
+            (await (child/run!* c :away 'jobs.movement.go-to {:pos goal :range 1 :ways #{:walk :dig} :may-dig #{:own} :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
     (ctx/forget-where! c :make-room-tossed (constantly true))
     r))
 
