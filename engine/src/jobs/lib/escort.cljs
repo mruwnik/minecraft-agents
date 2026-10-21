@@ -69,6 +69,7 @@
    ::wait-look-s {:default 0.25 :doc "Seconds of one look's wait while the body holds still for the animal." :spec (a/num-in 0 nil)}
    ::lead-deeper-gap {:default 3.5 :doc "An animal this near the body (flat) and outside the box has stopped tempted: lead on." :spec (a/num-in 0 nil)}
    ::lure-reach {:default 6 :doc "A lured animal is waited for once the body is this near it, in blocks." :spec (a/num-in 0 nil)}
+   ::max-backs {:default 2 :doc "Walks back to the same last sighting (within ::back-near) after which an animal that is lost again from there counts as lost: the body walked back, saw it, went on and lost it again, round and round." :spec (a/int-in 0 nil)}
    ::back-blocks {:default 20 :doc "An animal out of sight for unseen-lost-ms is looked for by walking back toward where it was last seen, when that is no farther from the body than this." :spec (a/num-in 0 nil)}})
 (defn leg-steps [] (settings/get settings ::leg-steps))
 (defn wait-look-s [] (settings/get settings ::wait-look-s))
@@ -99,6 +100,12 @@
 (defn watch-radius [] (settings/get settings ::watch-radius))
 (defn stall-ms [] (* 1000 (settings/get settings ::stall-s)))
 (defn back-blocks [] (settings/get settings ::back-blocks))
+(defn max-backs [] (settings/get settings ::max-backs))
+
+(defn backs-to
+  "How many finished walks back went to a spot within back-near of seen."
+  [m seen]
+  (count (filter #(>= (back-near) (u/flat-dist % seen)) (:back-spots m))))
 
 (def end-of
   "The :end a bring result names for a lead-to or lure-to reason: :tie (tied to the post), :free (let go at the spot), :led (it stands at the spot, still following)."
@@ -192,7 +199,8 @@
             elapsed (- now since)
             seen (:last-seen m)
             away (some->> seen (u/flat-dist me))
-            back? (and away (< (back-near) away (inc (back-blocks))) (< elapsed (back-limit-ms)))]
+            back? (and away (< (back-near) away (inc (back-blocks))) (< elapsed (back-limit-ms))
+                      (< (backs-to m seen) (max-backs)))]
         (ctx/update-mem! c #(-> % (assoc :unseen-since since) (dissoc :progress)
                                 (assoc :back-to (when (and back? (<= (unseen-lost-ms) elapsed)) seen))))
         (cond
@@ -243,7 +251,7 @@
     (cond
       (= :continue r) :yield
       (nil? to) (do (await (child/pause! c (wait-look-s) :waiting-for-animal)) (ctx/hold-still! c nil) :again)
-      (and (= :done (:kind r)) (:arrived (:data r))) :again
+      (and (= :done (:kind r)) (:arrived (:data r))) (do (ctx/update-mem! c update :back-spots (fnil conj []) to) :again)
       :else (do (ctx/update-mem! c #(-> % (dissoc :back-to) (assoc :no-turn true)))
                 (await (child/pause! c (wait-look-s) :waiting-for-animal))
                 (ctx/hold-still! c nil)

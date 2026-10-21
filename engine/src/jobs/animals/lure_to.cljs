@@ -35,7 +35,7 @@
   jobs.animals.lead-to (doors left open for the animal and shut afterwards); the go-to child of a leg plans its walk again after the leg was planned here). After each leg the animal is looked at:
   unseen or more than 5 blocks behind (jobs.lib.escort/::lure-gap), the body holds still (:waiting-for-animal) for it and the first look of the wait emits info
   escort.waiting (both positions, the distance); unseen for 3 s the body walks back toward where it was last seen (up to
-  20 blocks) then looks round once from there (a small animal hides behind grass or an edge) and only then ends :lost (an allowed adult within 10 blocks takes its place at once); seen beyond the gap and not
+  20 blocks) then looks round once from there (a small animal hides behind grass or an edge) and only then ends :lost; a third walk back to the same spot (::max-backs of escort) is not made, the animal counts as lost (an allowed adult within 10 blocks takes its place at once); seen beyond the gap and not
   coming nearer for 3 s the body turns back toward it (a cow loses the food past about 10 blocks); after
   ::max-turns such turns, or 10 s without progress (::stall-s), :animal-stalled. An animal that keeps closing in is waited for
   however far it fell behind. The plan of each leg is searched before the body walks: a search still running never sends
@@ -70,7 +70,7 @@
    :ignore-zones? :shared})
 
 (a/defargs settings
-  {::job-time-s {:default 180 :doc "The call's :spend :job-time when it gives none: seconds of the job's own working time before the lure gives up." :spec (a/num-in 0 nil)}
+  {::job-time-s {:default 300 :doc "The call's :spend :job-time when it gives none: seconds of the job's own working time before the lure gives up." :spec (a/num-in 0 nil)}
    ::note-age-s {:default 600 :doc "Seconds a note of an animal of the kind seen within :radius of the start stays worth walking to when none is in sight." :spec (a/num-in 0 nil)}
    ::sighting-age-s {:default 30 :doc "Seconds a chosen animal's last sighting stays worth walking back to while the animal is out of sight." :spec (a/num-in 0 nil)}
    ::arrive-range {:default 2 :doc "How close to :pos counts as there." :spec (a/num-in 0 nil)}

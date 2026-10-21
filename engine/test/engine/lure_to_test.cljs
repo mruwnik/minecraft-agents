@@ -551,6 +551,19 @@
           (is (< (self-x p) (- @hid-at 3)) "the body went back toward the last sighting")
           (is (some? (get-in (done-event s) [:lost :last-seen]))))))))
 
+(deftest an-animal-lost-again-from-the-same-spot-after-walks-back-to-it-ends-lost
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 3.5)]} 50)
+              herd (:entities @(fake/state p))]
+          ;; the cow stays put and is out of sight from 9 blocks on: the body walks on, loses it, walks back to see it, and so on
+          (after-acts! p (fn [p _]
+                           (swap! (fake/state p) assoc :entities (if (< (self-x p) 9) herd []))))
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
+          (await (run-until-done s 400))
+          (is (= :lost (:reason (done-event s)))))))))
+
 (deftest a-plan-search-that-is-still-running-never-sends-the-body-the-whole-way-in-one-walk
   (async done
     (tu/run-async done
