@@ -38,23 +38,36 @@
                 (not day?) (conj night-note))]
     (cond-> reading (seq notes) (assoc :note (apply str (interpose " " notes))))))
 
-(defn report [ctx body now]
+(defn read-pose
+  "The body's pose.json as a map, or {:why kw} when it cannot be used."
+  [ctx body]
   (try
     (let [file (.join path (:world-dir ctx) "agents" body "view" "pose.json")]
-      (when (<= (.-size (.statSync fs file)) 1048576)
-        (let [pose (js->clj (js/JSON.parse (.readFileSync fs file "utf8")) :keywordize-keys true)
-              tick (:timeOfDay pose) seen (:t pose)]
-          ;; Offline pose timestamps are disconnect times, not observations.
-          (when (and (= (:world ctx) (:world pose)) (= "online" (:status pose))
-                     (#{"overworld" "minecraft:overworld"} (:dimension pose))
-                     (js/Number.isFinite tick) (<= 0 tick) (< tick 24000)
-                     (js/Number.isFinite seen) (<= 0 (- now seen) stale-ms))
-            {:ok true :world (:world ctx) :time-of-day tick :day? (or (< tick 12542) (> tick 23460))
-             :seen-at seen :age-ms (- now seen) :by body}))))
-    (catch :default _ nil)))
+      (if (> (.-size (.statSync fs file)) 1048576)
+        {:why :pose-too-big}
+        (js->clj (js/JSON.parse (.readFileSync fs file "utf8")) :keywordize-keys true)))
+    (catch :default e {:why (if (= "ENOENT" (.-code e)) :no-pose :pose-unreadable)})))
+
+(defn why-unusable
+  "Why a pose gives no clock reading (nil when it does). Offline pose timestamps are disconnect times, not observations."
+  [ctx pose now]
+  (let [tick (:timeOfDay pose) seen (:t pose)]
+    (cond
+      (:why pose) (:why pose)
+      (not= (:world ctx) (:world pose)) :other-world
+      (not= "online" (:status pose)) :offline
+      (not (#{"overworld" "minecraft:overworld"} (:dimension pose))) :other-dimension
+      (not (and (js/Number.isFinite tick) (<= 0 tick) (< tick 24000))) :no-time-of-day
+      (not (and (js/Number.isFinite seen) (<= 0 (- now seen) stale-ms))) :stale)))
+
+(defn report [ctx body now]
+  (let [pose (read-pose ctx body)]
+    (when-not (why-unusable ctx pose now)
+      {:ok true :world (:world ctx) :time-of-day (:timeOfDay pose) :day? (or (< (:timeOfDay pose) 12542) (> (:timeOfDay pose) 23460))
+       :seen-at (:t pose) :age-ms (- now (:t pose)) :by body})))
 
 (defn clock
-  "The asking body's reading when it has a fresh one, else the newest body's."
+  "The asking body's reading when it has a fresh one, else the newest body's. Without one, :bodies says why each body gave none."
   [ctx now asker]
   (let [dir (.join path (:world-dir ctx) "agents")
         bodies (try (->> (array-seq (.readdirSync fs dir #js {:withFileTypes true}))
@@ -62,7 +75,8 @@
                          (map #(.-name %)))
                     (catch :default e (if (= "ENOENT" (.-code e)) [] (throw e))))]
     (or (some-> (first (sort-by (juxt (comp not #(= asker (:by %))) (comp - :seen-at) :by) (keep #(report ctx % now) bodies))) noted)
-        {:ok false :world (:world ctx) :reason :time-unknown})))
+        {:ok false :world (:world ctx) :reason :time-unknown
+         :bodies (into {} (map (fn [b] [b (why-unusable ctx (read-pose ctx b) now)])) bodies)})))
 
 (defn with-missed!
   "A dawn result with what happened to the asking body (else the one that gave the clock) since its observer last looked (:missed)."

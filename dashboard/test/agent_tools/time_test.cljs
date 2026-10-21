@@ -50,7 +50,11 @@
 
 (deftest a-stale-or-offline-reading-is-no-clock
   (is (= {:ok false :reason :time-unknown} (select-keys (clock-of pose (+ 1000000 time/stale-ms 1)) [:ok :reason])))
-  (is (false? (:ok (clock-of (assoc pose :status "offline") 1001000)))))
+  (is (false? (:ok (clock-of (assoc pose :status "offline") 1001000))))
+  (is (= [:stale :offline :no-time-of-day]
+         (mapv #(-> (clock-of % 1001000) :bodies vals first)
+               [(assoc pose :t 1) (assoc pose :status "offline") (assoc pose :timeOfDay nil)]))
+      "an unknown clock says per body why it gave none"))
 
 (deftest a-dawn-result-without-a-checkpoint-or-body-gets-no-missed
   (async done

@@ -316,6 +316,19 @@ test('native plan checks report overlapping saved claims', async () => {
   } finally { fx.close() }
 })
 
+test('validate judges an inline plan against the saved zones and claims like check does', async () => {
+  const fx = fixture()
+  try {
+    const validate = () => invoke('plan', fx, ['validate', 'home', '--edn', planText('home')])
+    assert.deepEqual((await validate()).value.zones.state, keyword('unknown'))
+    fs.writeFileSync(path.join(fx.state, 'worlds', 'fixture', 'zones.edn'),
+      '[{:name "wall" :owner "Other" :min [0 64 0] :max [1 64 0]}]\n')
+    const zones = (await validate()).value.zones
+    assert.deepEqual(zones.state, keyword('saved'))
+    assert.equal(zones.overlaps.total, 1)
+  } finally { fx.close() }
+})
+
 const SHAFT = ['mineshaft', 'pit', '--at', '0,64,0', '--heading', 'east', '--to-y', '62', '--by', 'Digger']
 
 test('mineshaft writes a :mineshaft plan with one :stair part that passes validation; show and list name its depth and heading', async () => {

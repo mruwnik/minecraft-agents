@@ -425,7 +425,7 @@
               inline (mapv blueprint-form (:blueprint req))]
           (when-not (= (:id value) (:id req)) (fail! :bad-plan (str "plan :id must be \"" (:id req) "\"")))
           (-> (js/Promise.resolve (if (= command "check") (check-plan ctx source (:id req) inline (assoc req :dim (shape/plan-dim value) :plan-value value))
-                                      (prepare ctx source (:id req) inline nil [])))
+                                      (prepare ctx source (:id req) inline (read-zone-text ctx) (mapv :value (current-docs ctx :claim)))))
               (.then (fn [result]
                        (write (compact-result (cond-> result (= command "check") (assoc :revision (:revision doc))) req source))
                        (if (false? (:ok result)) 1 0))))))
