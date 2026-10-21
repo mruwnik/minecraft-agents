@@ -646,7 +646,9 @@
           (is (nil? (found-of s)) "the cell is in view and holds air: the note is out of date")
           (is (= :stopped (:kind (not-found-of s)))))))))
 
-;; a body in water does not look round (it sinks and drowns while it does): it walks on, and a leg ending in water fails
+(defn looks [{:keys [p]}] (count (filter #(= "look" (.-name %)) (.-calls (.-world p)))))
+
+;; a body in water does not turn to look round (it sinks and drowns while it does): it glances at what it faces and walks on
 (deftest a-body-in-water-does-not-look-round-where-it-is
   (async done
     (tu/run-async done
@@ -654,9 +656,7 @@
         (let [s (await (search! {:target "diamond_block" :max-distance 20} {:self {:pos [0.5 64 0.5] :inWater true}}))
               e (not-found-of s)]
           (is (finished? s))
-          (is (zero? (get-in e [:coverage :scans])) (pr-str e)))))))
-
-(defn looks [{:keys [p]}] (count (filter #(= "look" (.-name %)) (.-calls (.-world p)))))
+          (is (zero? (looks s)) (pr-str e)))))))
 
 (deftest a-target-already-seen-is-found-without-looking-round
   (async done

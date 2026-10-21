@@ -1,0 +1,23 @@
+;; Treeless island start: a 9 x 9 sand islet in open water (surface water, floor 1 below, 40 to 50 blocks to the east shore, water all round
+;; the rest), and the only tree 35 blocks inland from the east shore. obtain oak_log with :explore: the search walks out over the water to the
+;; far shore (go-to swims) and on to the tree, which is felled.
+;; Should-succeed: the log is got. Should-fail: with the far search off (explore-rounds 1) the first search ends and obtain stops no-source.
+;; Water ends 4 short of the plot edges (dry banks) and a 3 high wall runs round the plot, so the body cannot walk off it.
+;; Open sky, so the case needs daylight (an untimed case runs in the sweep's day pass; a roofed plot would make the body "buried" and stair up).
+{:defaults
+ {:tags [:items :obtain :explore :water :jobs]
+  :plot {:height 12 :length 200 :width 64 :floor "stone" :light :sky}
+  :body {:at [100.5 0 32.5] :yaw 270 :settle-s 2 :inventory [["iron_axe" 1]] :effects [["resistance" 600 4]]}
+  :blocks [[:fill [4 -2 4] [150 -2 59] "stone"] [:fill [4 -1 4] [150 -1 59] "water"] [:fill [0 0 0] [199 2 0] "stone"] [:fill [0 0 63] [199 2 63] "stone"] [:fill [0 0 0] [0 2 63] "stone"] [:fill [199 0 0] [199 2 63] "stone"]
+           [:fill [96 -1 28] [104 -1 36] "sand"]
+           [:fill [185 0 32] [185 4 32] "oak_log"] [:fill [184 4 31] [186 6 33] "oak_leaves[persistent=true]"]]
+  :limit-s 400}
+ :cases
+ [{:name "wooded-shore-across-the-water-is-swum-to"
+   :act [[:job (jobs.items.obtain {:item "oak_log" :count 1 :ways #{:gather} :explore true})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 380 :of-job true}]
+   :after [[:item "oak_log" [:>= 1]]]}
+  {:name "one-search-only-ends-no-source"
+   :act [[:job (jobs.items.obtain {:item "oak_log" :count 1 :ways #{:gather} :explore true :settings {:jobs.items.obtain.base/explore-rounds 1}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 200 :of-job true}]
+   :after [[:item "oak_log" 0]]}]}

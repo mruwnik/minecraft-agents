@@ -39,7 +39,7 @@
   A leg needs a standing cell in its column from 12 above the feet down to :descent (40) below, read top down through leaves. An unloaded,
   wet or standless column is recorded failed (:not-loaded, :wet, :no-surface, :unseen) and the next candidate is tried
   in the same round. A loaded column not yet seen (:unseen) is walked toward in steps of up to 12 blocks (not
-  counted in max-legs) and looked at again; within 3 blocks of it, it is recorded failed. An unloaded column is not tried but looked at again later. When only unloaded ones are
+  counted in max-legs) and looked at again (over water the step swims, glancing ahead as it goes, so a far shore comes into sight; a step ending in water is progress, not a failure); within 3 blocks of it, it is recorded failed. An unloaded column is not tried but looked at again later. When only unloaded ones are
   left the round pauses 2 s (jobs.time.noop, holding :chunks-loading) and yields, until they load or the call's time is spent (a body just logged in has no chunks
   yet). A walk go-to gives up on is recorded :unreachable. Three of those in
   a row end the search (:stuck); until a leg arrives, a leg within 60 degrees of the way one failed from where the
@@ -319,7 +319,8 @@
 
 (defn ^:async scan!
   "Look round (every heading, once per spot: not again within look/near-blocks of the last look round), unless what is
-  seen already makes up :count; note what was seen and the spot as searched, book the findings."
+  seen already makes up :count; note what was seen and the spot as searched, book the findings. In water only a glance at what it
+  faces (turning to look round would leave it sinking)."
   [c names]
   (let [{:keys [scan-radius] want :count} (:args c)
         seen-ttl-s (settings/get settings ::seen-ttl-s)
@@ -328,7 +329,9 @@
         seen #(vec (takeable c (sense (:primitives c) names scan-radius)))
         short? #(< (count (add-found (:found (ctx/mem c) []) (seen) want)) want)
         _ (when (short?)
-            (when-not (await (look/survey! c :near (look/search-effort))) (look/see! c (look/search-effort))))
+            (if (breath/in-water? (:primitives c))
+              (look/see! c (look/search-effort))
+              (when-not (await (look/survey! c :near (look/search-effort))) (look/see! c (look/search-effort)))))
         _ (do (ctx/update-mem! c dissoc :vantage) (await (hear-lead! c names short?)))
         sighted (seen)
         [x y z] (here c)
@@ -428,7 +431,8 @@
       (let [{:keys [in-water why] :as data} (:data r)
             cause (contract/cause-key r)
             res (assoc data :reason cause)
-            arrived (and (:arrived data) (not in-water))
+            step? (some? (:leg-column (ctx/mem c)))
+            arrived (and (:arrived data) (or step? (not in-water)))
             dangerous? (= :goal-dangerous (or why cause))
             in-row (cond arrived 0 dangerous? (:failed-in-row (ctx/mem c) 0) :else (inc (:failed-in-row (ctx/mem c) 0)))
             [hx _ hz] (here c)]
@@ -494,7 +498,7 @@
         max-distance (distance-limit)
         names (targets c)
         resumed (:choosing (ctx/mem c))
-        _ (when-not (or resumed (breath/in-water? (:primitives c))) (await (scan! c names)))
+        _ (when-not resumed (await (scan! c names)))
         ns (notes/notes c)
         m (ctx/mem c)
         near (min (:scan-radius (:args c)) (near-sight))
