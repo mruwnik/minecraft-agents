@@ -75,8 +75,7 @@
       (and (not (:arrived walked)) (not (:leg walked)) (await (clear-seal! c pos))) :next
       (:leg walked)
       (let [nearer (nearer? before (u/self-pos c) pos)]
-        (ctx/update-mem! c #(cond-> (assoc % :recheck true)
-                              (not nearer) (assoc :blocked true)))
+        (ctx/update-mem! c assoc :recheck true :blocked (not nearer))
         (if nearer (child/progress! c :go) (child/fruitless! c :go))
         (dth/save-trip! c)
         :next)
