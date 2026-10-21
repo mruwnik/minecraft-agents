@@ -568,3 +568,8 @@
       (fn ^:async t []
         (let [s (await (scenario {:item "rotten_flesh" :count 1} {:inventory h/sword :entities [(animal 1 "zombie" 3 {:kind "hostile"})]} 20))]
           (is (empty? (events-of s :animal.killed))))))))
+
+(deftest fish-items-have-a-mob-that-drops-them
+  (is (= ["salmon"] (hunting/mobs {:args {:item "salmon"}})))
+  (is (= ["cod"] (hunting/mobs {:args {:item "cod"}})))
+  (is (= ["cod"] (hunting/mobs {:args {:item "bone_meal"}}))))

@@ -24,7 +24,12 @@
    "skeleton" ["bone" "arrow"]
    "spider" ["string" "spider_eye"]
    "creeper" ["gunpowder"]
-   "enderman" ["ender_pearl"]})
+   "enderman" ["ender_pearl"]
+   "salmon" ["salmon"]
+   "cod" ["cod" "bone_meal"]
+   "tropical_fish" ["tropical_fish"]
+   "pufferfish" ["pufferfish"]
+   "squid" ["ink_sac"]})
 
 (def drops
   "raw-drops with the cooked meat of each raw meat added."
