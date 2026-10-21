@@ -125,7 +125,7 @@
                  [{:keep 1 :radius 10} [(cow 1 3) (cow 2 30)] "outside the radius does not count"]]]
           (let [{:keys [eng p] :as s} (h/setup {:inventory h/sword :entities entities})]
             (core/submit! eng (spec args) {})
-            (await (core/tick! eng))
+            (await (run-ticks s 40 700))
             (is (zero? (count (h/calls p "attack"))) note)
             (is (zero? (count (h/calls p "equip"))) note)
             (is (= [:too-few] (distinct (map :reason (events-of s :waiting)))) note)
@@ -223,7 +223,7 @@
         (let [{:keys [eng p] :as s} (h/setup {:inventory h/sword
                                               :entities [(cow 1 3) (cow 2 4) (baby-cow 3 2) (baby-cow 4 2) (baby-cow 5 2)]})]
           (core/submit! eng (spec {:item "beef" :keep 2}) {})
-          (await (core/tick! eng))
+          (await (run-ticks s 40 700))
           (is (= [:too-few] (distinct (map :reason (events-of s :waiting)))) "two adults and three babies: nothing to take")
           (is (zero? (count (h/calls p "attack")))))))))
 
@@ -354,7 +354,7 @@
                  [{:item "bone" :radius 24} [(animal 1 "skeleton" 32 {:kind "hostile"})]
                   {:keep 0 :in-range 0 :radius 24 :nearest 32} "a hostile kind keeps none, with none in range to say it is hostile"]]]
           (let [{:keys [eng]} (h/setup {:inventory h/sword :entities entities})
-                cause (:cause (:ending (await (tu/child-outcome eng 'jobs.combat.hunt args 20))))]
+                cause (:cause (:ending (await (tu/child-outcome eng 'jobs.combat.hunt args 60))))]
             (is (= (assoc want :reason :too-few :mob (first (hunting/mobs {:args args})) :killed 0)
                    (select-keys cause [:reason :mob :killed :keep :in-range :radius :nearest])) note)
             (is (= (pos? (:keep want)) (str/includes? (:text cause) "keeping")) note)))))))
@@ -393,9 +393,24 @@
         (let [s (h/setup {:inventory h/sword :entities []} 20)
               _ (hear-passives-until! (:p s) (constantly false))
               _ (core/submit! (:eng s) (spec {:item "beef" :count 1 :keep 0 :radius 24}) {})
-              _ (await (run-ticks s 20 700))]
+              _ (await (run-ticks s 60 700))]
           (is (zero? (count (h/calls (:p s) "steer"))) "no sound, no steps")
           (is (= [:too-few] (distinct (map :reason (events-of s :waiting))))))))))
+
+(deftest a-cow-behind-the-body-is-hunted-once-the-body-has-looked-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory h/sword :entities [(cow 1 8)]} 20)
+              p (:p s)
+              orig (.-entities p)]
+          (set! (.-entities p)
+                (fn [opts] (let [all (.call orig p opts)]
+                             (if (seq (h/calls p "look")) all (.filter all #(not= "passive" (.-kind %)))))))
+          (core/submit! (:eng s) (spec {:item "beef" :count 1 :keep 0 :radius 24}) {})
+          (await (run-ticks s 20 700))
+          (is (seq (h/calls p "look")) "the body turned before it called the hunt too-few")
+          (is (= [1] (distinct (attacked s)))))))))
 
 ;; ------------------------------------------------------------------ colour
 
@@ -432,7 +447,7 @@
                 [[{:item "white_wool" :count 1 :keep 1} [(sheep 1 3 "white") (sheep 2 5 "brown") (sheep 3 6 "brown")] :too-few "one white, keep 1: too few, however many of other colours"]
                  [{:item "white_wool" :count 1 :keep 2} [(sheep 1 3 "brown")] :no-color "none of the colour wins over too-few"]]]
           (let [{:keys [eng]} (h/setup {:inventory h/sword :entities entities})
-                r (await (tu/child-outcome eng 'jobs.combat.hunt args 20))]
+                r (await (tu/child-outcome eng 'jobs.combat.hunt args 60))]
             (is (= reason (:reason r)) note)))))))
 
 (deftest a-colour-hunt-skips-sheared-sheep-and-says-when-only-sheared-ones-are-in-range

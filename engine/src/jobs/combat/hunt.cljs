@@ -31,7 +31,7 @@
   spares (jobs.lib.animal-spare: kinds in ::off-limits, animals in a zone or plan of its own or a closed enclosure unless ::spare-pens
   is false) are never targets either. Weapons: the call's :use :tools (default the best carried); a hostile kind with none gets a sword
   first (jobs.lib.need; a failed fetch ends the job with its cause).
-  Needs: fit? (waits :low-health for a hostile kind only); at its start it waits :unarmed (hostile, no weapon, ways #{:carried}), :no-color or
+  Needs: fit? (waits :low-health for a hostile kind only); at its start it first looks round (an animal behind the body is not in view), then waits :unarmed (hostile, no weapon, ways #{:carried}), :no-color or
   :too-few (:in-range, :radius, :keep, :nearest) unless the kind is heard and not in sight, when it first steps up to four times
   toward the sound (jobs.lib.vantage).
   done? holds once :count of the item are carried.
@@ -198,13 +198,14 @@
 
 (def start-fact
   "Later with the cause that bars a hunt's first step: no weapon for a hostile kind (ways #{:carried}), nothing of the :color in range, or :keep or fewer adults.
-  Ok while the kind is heard and not in sight: the first steps look for it."
+  Ok while the kind is heard and not in sight: the first steps look for it, and while the job has not looked round (see survey)."
   (checks/refusing
    :quarry "there is something to hunt"
    (fn [c]
      (when-not (or (:started (ctx/mem c)) (heard-kind c))
        (cond
          (unarmed-cause c) (unarmed-cause c)
+         (and (not (look/surveyed? c)) (empty? (present-any c))) nil
          (and (color-of c) (empty? (present c))) (no-color c)
          (<= (count (present c)) (keep-of c)) (too-few-cause c))))))
 
@@ -218,6 +219,8 @@
 (def can-start?
   "Waits while the body is outside the call's area, then on a start fact."
   (cond/and bad-args area/inside start-fact))
+
+(def can-run? "The start fact again between steps, until the first step is made." start-fact)
 
 (defn carried "How many of the call's :item are carried." [c] (u/carried-count (:primitives c) (:item (:args c))))
 
@@ -282,8 +285,18 @@
   [c]
   {:radius (+ (:radius (:args c)) 8) :give-up give-up! :job "jobs.combat.hunt" :rule-fn allowed-by})
 
-(defn ^:async step
-  "One step: attack the target, collect, finish, or pick the next target. :again, :yield (a child is waiting on the world) or :done."
+(defn ^:async survey
+  "Before the first step, with no animal in view: look round (an animal behind the body is not in view until it turns), and
+  face the first one seen, so the next step sees it. :again, which runs can-run? (the start fact) before the next step: a hunt with
+  nothing in sight then waits :too-few."
+  [c]
+  (when-let [e (await (look/survey-until! c #(first (present-any c))))]
+    (ctx/update-mem! c assoc :looked (look/cell-of (u/self-pos c)))
+    (await (ctx/act c :look (clj->js {:pos (.-pos e)}))))
+  :again)
+
+(defn ^:async hunt-step
+  "The step proper: attack the target, collect, finish, or pick the next target."
   [c]
   (let [now (ctx/now c)
         wanted (:count (:args c))
@@ -305,6 +318,13 @@
         (nil? next-target) (await (hunting/search! c #(finish! % :none)))
         :else (do (ctx/update-mem! c assoc :target (.-id next-target) :misses 0)
                   (await (hunting/attack! c (attack-opts c))))))))
+
+(defn ^:async step
+  "One step: attack the target, collect, finish, or pick the next target. :again, :yield (a child is waiting on the world) or :done."
+  [c]
+  (if (and (not (:started (ctx/mem c))) (not (look/surveyed? c)) (empty? (present-any c)))
+    (await (survey c))
+    (await (hunt-step c))))
 
 (defn ^:async hunt-round
   "The whole hunt of one kind: steps until it ends; yields only while a child waits on the world."
