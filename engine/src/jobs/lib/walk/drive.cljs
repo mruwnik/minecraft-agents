@@ -182,6 +182,23 @@
   (when-let [m (wwatch/damage-mismatch planned (ctx/since c :hurt began) (or margin (wwatch/fall-margin)))]
     (ctx/emit! c :damage-mismatch :info m)))
 
+(def start-retries
+  "Waits (start-wait-ms each) a walk makes when the planner finds the body's own cell not standable: the body is mid-step
+  or the world snapshot is a tick behind a block it just broke or placed, and a moment later the cell stands."
+  4)
+(def start-wait-ms 150)
+
+(defn ^:async plan-settled
+  "plan-fn's plan; while it says :start-not-standable, settle, wait start-wait-ms and plan again, start-retries times."
+  [c plan-fn]
+  (loop [n 0]
+    (let [plan (await (plan-fn []))]
+      (if (and (< n start-retries) (= "start-not-standable" (some-> ^js (:r plan) .-reason)))
+        (do (await (ctx/act c :wait #js {:ms start-wait-ms}))
+            (await (walk/settle! c))
+            (recur (inc n)))
+        plan))))
+
 (defn ^:async walk-to!
   "Walk the body to within range of the goal cell to ([x y z]): settle, plan, follow the plan (follow!: at most timeout-s
   seconds a walk, planning again in the same call when the way ahead changes, a partial plan is refreshed or a mob is in the
@@ -196,7 +213,7 @@
         end (fn [result walked walk-ms] {:result result :walked walked :walk-ms walk-ms})]
     (loop [replans 0 walked 0 walk-ms 0]
       (await (walk/settle! c))
-      (let [plan (await (plan-fn []))]
+      (let [plan (await (plan-settled c plan-fn))]
         (if-let [no (wplan/no-walk plan replans (wworld/body-policy c))]
           (end no walked walk-ms)
           (let [{:keys [r steps status]} plan]
