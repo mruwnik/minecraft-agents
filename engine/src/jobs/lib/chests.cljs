@@ -10,6 +10,7 @@
             [jobs.lib.stock :as stock]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]
+            [jobs.lib.world :as known]
             [jobs.lib.waits :as waits]))
 
 (defn retracted?
@@ -22,6 +23,17 @@
 
 (defn cell-pos [cell] (zipmap [:x :y :z] cell))
 
+(defn own-plan-chests
+  "The cells of chests in the plans this body made (plan cells that want a chest) that stand there now: a player uses
+  every chest of their own base."
+  [c]
+  (let [cells (known/memo c [:own-chest-cells (ctx/self-name c)]
+                          #(vec (for [id (access/own-plans c)
+                                      {:keys [pos want]} (:cells (known/plan c id))
+                                      :when (= "chest" (if (map? want) (:block want) want))]
+                                  (vec pos))))]
+    (filterv #(= "chest" (u/seen-name (:primitives c) (cell-pos %))) cells)))
+
 (defn chests
   "{:pool cells :open cells :group? bool}: the chests to try. group? when the body's storage group is in play (no :chest
   argument, or one in the group): the :chest argument or place first, then the group nearest first. Else only the
@@ -31,7 +43,7 @@
   (let [view (ctx/view c)
         args (:args c)
         main (some-> (storage/chest-of view args) storage/cell-of)
-        members (storage/group view)
+        members (vec (distinct (concat (storage/group view) (own-plan-chests c))))
         group? (or (nil? (:chest args)) (some? (some #{main} members)))
         here (u/self-pos c)
         near (sort-by (fn [[x y z]] (+ (js/Math.abs (- x (:x here))) (js/Math.abs (- y (:y here))) (js/Math.abs (- z (:z here))))) members)

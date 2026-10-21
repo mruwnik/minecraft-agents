@@ -160,6 +160,15 @@
    :expect [{:event {:source :job :kind :completed :context {:job-id "j2"}} :within-s 80}]
    :after [[:item "dirt" 0] [:item "sand" 0]]
    :limit-s 100}
+  {:name "deposit-uses-a-chest-of-the-bodys-own-plan-when-the-first-is-full"
+   :blocks [[:set [20 0 16] "chest[facing=west]{Items:[{Slot:0b,id:\"minecraft:stone\",count:64},{Slot:1b,id:\"minecraft:stone\",count:64},{Slot:2b,id:\"minecraft:stone\",count:64},{Slot:3b,id:\"minecraft:stone\",count:64},{Slot:4b,id:\"minecraft:stone\",count:64},{Slot:5b,id:\"minecraft:stone\",count:64},{Slot:6b,id:\"minecraft:stone\",count:64},{Slot:7b,id:\"minecraft:stone\",count:64},{Slot:8b,id:\"minecraft:stone\",count:64},{Slot:9b,id:\"minecraft:stone\",count:64},{Slot:10b,id:\"minecraft:stone\",count:64},{Slot:11b,id:\"minecraft:stone\",count:64},{Slot:12b,id:\"minecraft:stone\",count:64},{Slot:13b,id:\"minecraft:stone\",count:64},{Slot:14b,id:\"minecraft:stone\",count:64},{Slot:15b,id:\"minecraft:stone\",count:64},{Slot:16b,id:\"minecraft:stone\",count:64},{Slot:17b,id:\"minecraft:stone\",count:64},{Slot:18b,id:\"minecraft:stone\",count:64},{Slot:19b,id:\"minecraft:stone\",count:64},{Slot:20b,id:\"minecraft:stone\",count:64},{Slot:21b,id:\"minecraft:stone\",count:64},{Slot:22b,id:\"minecraft:stone\",count:64},{Slot:23b,id:\"minecraft:stone\",count:64},{Slot:24b,id:\"minecraft:stone\",count:64},{Slot:25b,id:\"minecraft:stone\",count:64},{Slot:26b,id:\"minecraft:stone\",count:64}]}"] [:set [20 0 12] "chest[facing=west]"]]
+   :plans [{:id "store" :metadata {:by "$body"} :parts [{:id "chest" :cells [#at [20 0 12]] :want {:block "chest"}}]}]
+   :memory [{:kind :chest :data {:pos #xyz [20 0 16]} :policy {:cap 1 :ttl :forever}}]
+   :body {:inventory [["sand" 5]]}
+   :act [[:job (jobs.storage.deposit {:items ["sand"] :make-chests? false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
+   :after [[:item "sand" 0]]
+   :limit-s 100}
   {:name "deposit-of-mined-cobblestone-is-not-found-goods"
    :blocks [[:set [20 0 16] "chest[facing=west]"]]
    :memory [{:kind :chest :data {:pos #xyz [20 0 16]} :policy {:cap 1 :ttl :forever}}

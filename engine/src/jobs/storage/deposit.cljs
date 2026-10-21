@@ -39,7 +39,7 @@
   recorded when none is recorded or the recorded one is gone, never over a different live one (place.kept
   event; jobs.memory.set-place moves it).
   Storage group: with no :chest, or a :chest that is the :chest place or one of the group (memory :storage/chests,
-  jobs.lib.storage/group), chests are tried in turn; one that answers full or takes nothing is skipped. When all are
+  jobs.lib.storage/group, or a chest of a plan this body made), chests are tried in turn; one that answers full or takes nothing is skipped. When all are
   full and :make-chests? is true, a chest (jobs.blocks.place child, fetched or crafted by the call's :ways; #{:carried} only a carried one) goes down
   beside a full one and joins the group. A place that ends for a reason of the cell (a zone, the body in it, nothing to place against,
   unreachable, occupied) tries the next free spot (warn deposit.no-chest); a place that ends :need (no chest to be had) ends condition-failed

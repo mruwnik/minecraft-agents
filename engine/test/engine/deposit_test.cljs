@@ -227,15 +227,31 @@
 (def other-zone {:name "farm" :owner "Miles"})
 
 (defn setup-zoned
-  "setup-far with an engine world holding zones."
-  [world zones]
+  "setup-far with an engine world holding zones (and plans)."
+  ([world zones] (setup-zoned world zones {}))
+  ([world zones plans]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake-on-floor world))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
-                          :world (world/of-data {} {} zones)
+                          :world (world/of-data plans {} zones)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    {:eng eng :p p :seen seen}))
+    {:eng eng :p p :seen seen})))
+
+(deftest deposit-uses-a-chest-standing-in-the-bodys-own-plan-before-making-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (fn [by] {"base" {:id "base" :metadata {:by by} :parts [{:id "c" :cells [[11 64 0]] :want {:block "chest"}}]}})]
+          (doseq [[by expected] [["Fake" [{:name "dirt" :count 5}]] ["Miles" []]]]
+            (let [{:keys [eng p]} (setup-zoned {:inventory [{:name "dirt" :count 5}]
+                                                :blocks {"10,64,0" "chest" "11,64,0" "chest"}
+                                                :containers {"10,64,0" [] "11,64,0" []}} [] (plan by))]
+              (wt/know-place! eng :chest chest)
+              (full-at p [10 64 0])
+              (await (wt/ending-of eng job {:items ["dirt"] :make-chests? false} 30))
+              (is (= expected (mapv #(select-keys % [:name :count]) (get-in @(fake/state p) [:containers [11 64 0]])))
+                  (str "plan made by " by))))))))) 
 
 (def one-chest-world {:inventory [{:name "dirt" :count 5} {:name "chest" :count 1}]
                       :blocks {"10,64,0" "chest"} :containers {"10,64,0" [] "9,64,0" []}})
