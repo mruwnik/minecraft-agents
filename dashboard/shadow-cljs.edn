@@ -139,7 +139,7 @@
                                :goalUsage agent-tools.goal/usage
                                :goalMain agent-tools.goal/main!
                                :progressUsage agent-tools.progress/usage
-                               :progressMain agent-tools.progress/main!
+                               :progressMain agent-tools.progress/main-js!
                                :worldUsage agent-tools.api/world-usage
                                :worldMain agent-tools.api/world-main
                                :worldRequestFor agent-tools.api/world-request-for

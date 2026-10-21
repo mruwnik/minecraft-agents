@@ -111,14 +111,20 @@
       (not (and (every? #(finite? (get-in pose [:eye %])) [:x :y :z]) (finite? (:yaw pose)) (finite? (:pitch pose))))
       {:reason :no-pose :message "the pose has no position; the body never fully started"})))
 
-(defn file-name [now]
-  (str "snap-" (str/replace (.toISOString (js/Date. now)) #"[:.]" "-") ".png"))
+(defn file-name
+  ([now] (file-name now "snap"))
+  ([now prefix] (str prefix "-" (str/replace (.toISOString (js/Date. now)) #"[:.]" "-") ".png")))
+
+(def stamp-pattern "\\d{4}-\\d\\d-\\d\\dT\\d\\d-\\d\\d-\\d\\d-\\d{3}Z\\.png")
 
 (defn prune
-  "The snapshot files among `names` beyond the newest `keep` (oldest first); other files are never listed."
-  [names keep]
-  (let [ours (sort (filter #(re-matches #"snap-\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d-\d{3}Z\.png" %) names))]
-    (vec (take (max 0 (- (count ours) keep)) ours))))
+  "The snapshot files among `names` beyond the newest `keep` (oldest first); other files are never listed. `prefix`
+  is the file-name prefix of the group pruned (\"snap\", or \"warn-<key>\" files of a warning, all keys together)."
+  ([names keep] (prune names keep "snap"))
+  ([names keep prefix]
+   (let [pattern (re-pattern (str (if (= "warn" prefix) "warn-[a-z0-9-]+?" prefix) "-" stamp-pattern))
+         ours (sort (filter #(re-matches pattern %) names))]
+     (vec (take (max 0 (- (count ours) keep)) ours)))))
 
 (defn- round1 [n] (/ (js/Math.round (* 10 n)) 10))
 (defn- coords [xs] (str/join " " xs))
@@ -215,11 +221,11 @@
 
 (defn- write-snapshot!
   "Writes `png` as a new file in the verified real folder `dir` (never following a link at the file) and prunes old ones."
-  [dir name png]
+  [dir name png prefix]
   (let [fd (.openSync fs (.join path dir name)
                       (bit-or (.. fs -constants -O_WRONLY) (.. fs -constants -O_CREAT) (.. fs -constants -O_EXCL) (.. fs -constants -O_NOFOLLOW)))]
     (try (.writeSync fs fd png) (finally (.closeSync fs fd))))
-  (doseq [old (prune (array-seq (.readdirSync fs dir)) keep-count)]
+  (doseq [old (prune (array-seq (.readdirSync fs dir)) keep-count (if (str/starts-with? prefix "warn") "warn" prefix))]
     (.rmSync fs (.join path dir old) #js {:force true})))
 
 (defn- center-of [center]
@@ -256,7 +262,7 @@
            (.then #(execute-with! opts render now pose %)))))))
 
 (defn execute-with!
-  [{:keys [ctx body workspace width height max-dist] :as opts} render now pose {:keys [entities heard entities-error]}]
+  [{:keys [ctx body workspace width height max-dist prefix] :or {prefix "snap"} :as opts} render now pose {:keys [entities heard entities-error]}]
   (let [pose (when pose (assoc pose :entities entities))
         expected (real-target (.join path workspace "snapshots"))]
     (if-let [problem (or (pose-problem pose (:world ctx) now) (unsafe-dir-problem workspace expected))]
@@ -273,11 +279,11 @@
                        (let [dir (.join path workspace "snapshots")
                              _ (.mkdirSync fs dir #js {:recursive true})
                              real (.realpathSync fs dir)
-                             name (file-name now)]
+                             name (file-name now prefix)]
                          (if (or (not= real expected) (symlink? dir))
                            (merge {:ok false :body body} unsafe-dir)
                            (do
-                             (write-snapshot! real name (unchecked-get out "png"))
+                             (write-snapshot! real name (unchecked-get out "png") prefix)
                              (merge {:ok true :body body :png (.relative path workspace (.join path dir name)) :size [width height]}
                                     (summary {:pose pose :camera cam :width width :height height
                                               :center (center-of (unchecked-get out "center"))

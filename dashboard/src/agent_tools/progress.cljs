@@ -13,6 +13,7 @@
             [agent-tools.observe.request :as observe-request]
             [agent-tools.observe.status :as status :refer [clip coded code-of round1]]
             [agent-tools.vitals :as vitals]
+            [agent-tools.warn-snapshot :as warn-snapshot]
             [agent-tools.world-data :as data]
             [clojure.string :as str]
             ["node:fs" :as fs]
@@ -75,9 +76,9 @@
     (let [{:keys [positionals values]} (map-tool/parse-options (vec argv)
                                           {:state {:type "string"} :worlds {:type "string"} :world {:type "string"}
                                            :goal {:type "string"} :want {:type "string"} :wait {:type "string"}
-                                           :stall {:type "string"} :no-danger {:type "boolean" :default false} :danger-below {:type "string"}})
+                                           :stall {:type "string"} :workspace {:type "string"} :no-danger {:type "boolean" :default false} :danger-below {:type "string"}})
           [agent & extra] positionals
-          {:keys [world goal want wait stall no-danger danger-below]} values]
+          {:keys [world goal want wait stall no-danger danger-below workspace]} values]
       (when-not (and (string? agent) (re-matches observe-request/body-name agent)) (throw (js/Error. "agent must be a body name")))
       (when-not (and (string? world) (re-matches observe-request/world-name world)) (throw (js/Error. "missing or invalid --world <world>")))
       (when (seq extra) (throw (js/Error. "progress takes one body name")))
@@ -87,7 +88,8 @@
       (let [state (bodies/storage-root values map-tool/default-state-dir)]
         (cond-> {:base {:agent agent :world world :state state
                         :socket-path (.join path (bodies/body-dir state world agent) "engine" "events.sock")}
-                 :plan-file (plan-file state world agent)}
+                 :plan-file (plan-file state world agent)
+                 :workspace (.resolve path (or workspace (bodies/body-dir state world agent)))}
           goal (assoc :goal goal)
           want (assoc :want (if (= "none" want) "none" (parse-want want)))
           wait (assoc :wait-ms (duration-ms "--wait" wait)
@@ -266,7 +268,7 @@
     :job-finished (cond
                     (= goal (:job wake)) {:wake :goal-ended :text (str goal " " (word (:result wake)) " " (clip (:message wake) 120))}
                     (#{:completed :cancelled} (:result wake)) nil
-                    :else {:wake :gave-up :text (str (:job wake) " " (word (:result wake)) " " (clip (:message wake) 120))})
+                    :else {:wake :gave-up :job (:job wake) :text (str (:job wake) " " (word (:result wake)) " " (clip (:message wake) 120))})
     nil))
 
 (defn item-text [{:keys [wake event job result message]}]
@@ -280,9 +282,10 @@
 
 (defn wake-text
   "The printed answer of a wait: a WAKE line, the progress line and up to max-items items."
-  [{:keys [wake text line items vitals]}]
+  [{:keys [wake text line items vitals snapshot]}]
   (str (str/join "\n" (concat (when-let [hurt (:hurt vitals)] [(str "HURT: " hurt)])
                               [(str "WAKE " (word wake) (when (seq text) (str ": " text)))]
+                              (when snapshot [(str "SNAPSHOT " snapshot " (what the body saw)")])
                               (when line [line])
                               (when (seq (dissoc vitals :hurt)) [(str "NOW " (str/join " " (map (fn [[k v]] (str (name k) " " (if (coll? v) (str/join "," v) v))) (dissoc vitals :hurt))))])
                               (map #(str "- " %) (take-last max-items items))))
@@ -346,7 +349,7 @@
   "Run the command; a promise of the exit code. Options (for tests): :output (text -> promise or nil), :request-fn."
   ([] (main! (vec (.slice (.-argv js/process) 2))))
   ([argv] (main! argv {}))
-  ([argv {:keys [output request-fn] :or {output observe/print-text!}}]
+  ([argv {:keys [output request-fn render] :or {output observe/print-text!}}]
    (let [r (request-for argv)
          output #(js/Promise.resolve (output %))
          get! (fn [socket-path endpoint options] (observe/get! socket-path endpoint (cond-> options request-fn (assoc :request-fn request-fn))))]
@@ -361,10 +364,17 @@
                       (let [r (remember-plan! r)]
                         (if (:wait-ms r)
                           (.then (vitals/around! (get-in r [:base :socket-path]) get! #(wait-progress! r get! (.-signal controller)))
-                                 (fn [[wake report]] (output (wake-text (assoc wake :vitals report)))))
+                                 (fn [[wake report]]
+                                    (.then (warn-snapshot/capture! (assoc (:base r) :workspace (:workspace r) :render render) wake)
+                                           #(output (wake-text (assoc wake :vitals report :snapshot %))))))
                           (.then (read-view! get! r (.-signal controller)) #(output (str (progress-line %) "\n")))))))
              (.then (constantly 0))
              (.catch (fn [error] (-> (output (observe/failure-text (:base r) error)) (.then (constantly 2)))))
              (.finally (fn []
                          (.removeListener js/process "SIGINT" cancel)
                          (.removeListener js/process "SIGTERM" cancel)))))))))
+
+(defn main-js!
+  "The launcher's entry: `render` is renderView of tools/view/render.mjs, drawing the picture of a trouble wake."
+  [argv render]
+  (main! (vec argv) {:render render}))
