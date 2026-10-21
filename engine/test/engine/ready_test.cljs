@@ -2,6 +2,7 @@
   "jobs.lib.ready: the safe? and fit? checkers a job binds, as statuses over the shelter, the light and the mobs."
   (:require [cljs.test :refer [deftest is are]]
             [engine.hut-shelter-test :as hut]
+            [engine.ctx :as ctx]
             [engine.core.ending :as ending]
             [engine.registry :as registry]
             [engine.shelter-support :as st]
@@ -151,6 +152,14 @@
     kitchen/safe? {:furnace outside}
     pick-up-loose/safe? {}
     set-spawn/safe? {:bed [15 64 0]}))
+
+(deftest a-smelt-puts-its-own-furnace-down-instead-of-walking-to-a-chosen-dark-one
+  (let [world (assoc night-hut :inventory [{:name "cobblestone" :count 8}])
+        chosen {:furnace outside}
+        verdict (fn [world mem] (with-redefs [ctx/mem (constantly mem)] (first (smelt/safe? (ctx-of world)))))]
+    (is (= :ok (lit 0 15 #(verdict world chosen))) "an unloaded choice 10 blocks out in the dark is dropped")
+    (is (= :later (lit 0 15 #(verdict world (assoc chosen :owed {:count 4})))) "a load in it still calls for the walk")
+    (is (= :later (lit 0 15 #(verdict (assoc night-hut :inventory []) chosen))) "no cobblestone to make one: the walk stays")))
 
 ;; plain safe-at counts darkness by day too (it broke set-spawn); the debug probe wraps it, so it is not caught
 (deftest no-job-binds-plain-safe-at

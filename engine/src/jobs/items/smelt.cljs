@@ -81,6 +81,17 @@
 
 (defn carried [c] (u/inventory (:primitives c)))
 
+(defn can-put-own?
+  "Whether the body carries a furnace or the 8 cobblestone to make one."
+  [c]
+  (let [inv (carried c)]
+    (or (pos? (storage/carried inv "furnace")) (>= (storage/carried inv "cobblestone") 8))))
+
+(defn exposed-furnace?
+  "Whether a seen furnace at pos is one a player would not walk to: it lies in the dark (readiness :exposed) and the body can put one down where it stands."
+  [c pos]
+  (and (can-put-own? c) (not= :ok (first (ready/exposed c pos)))))
+
 (defn nearest-furnace
   "The nearest furnace, blast furnace or smoker the body has seen within seen-radius, still that block now, that
   cooks item (or, when item is nil, anything carried; any kind when nothing carried is smeltable); nil when none."
@@ -89,7 +100,7 @@
         kinds (filter (fn [kind] (some #(sp/smelts? kind %) names)) (keys sp/cook-ticks))
         ok? (if (or item (seq kinds)) (set kinds) furnace-block?)]
     (->> (look/seen-blocks (:primitives c) {:names furnace-block? :radius (seen-radius) :max 16 :live? true})
-         (some #(when (ok? (:name %)) (:pos %))))))
+         (some #(when (and (ok? (:name %)) (not (exposed-furnace? c (:pos %)))) (:pos %))))))
 
 (defn needs-attention?
   "Whether the block at pos is loaded and is no longer a lit furnace: it is not lit (the fuel ran out, or the cook
@@ -130,6 +141,13 @@
   "Whether job memory m owes a load whose cook is not due: the job only waits."
   [c m]
   (and (furnace/loaded? m) (some? (:ready-at m)) (not (due? c m))))
+
+(defn furnace-to-reach
+  "The furnace the job walks to, nil when it will put its own down where it stands: a furnace it chose for itself, with no load in it, that is exposed (the arg and a load in it stay)."
+  [c]
+  (let [f (furnace-of c)]
+    (when-not (and f (not (:furnace (:args c))) (not (furnace/loaded? (ctx/mem c))) (exposed-furnace? c f))
+      f)))
 
 (defn furnace-positions [c] (keep identity [(furnace-of c)]))
 
@@ -321,6 +339,9 @@
   furnace, read it, then load (first) or collect. A furnace out of sight is looked for once by can-start? (a :look status); none after that ends no-furnace-seen."
   [c]
   (or (when (cooking-in? c (ctx/mem c)) :continue)
+      (when (and (:furnace (ctx/mem c)) (nil? (furnace-to-reach c)))
+        (ctx/update-mem! c dissoc :furnace)
+        nil)
       (when-not (or (furnace-of c) (some? (:owed (ctx/mem c))))
         (await (acquire-furnace! c (sp/input-of (:item (:args c)) (carried c)))))
       (await (sf/fetch-stages! c (fetch-fuels) (fetch-wood-fuels)))
@@ -385,7 +406,7 @@
 (def target [:item])
 (def ways need/fetch-ways)
 
-(def safe? (ready/safe-at-by-night furnace-of))
+(def safe? (ready/safe-at-by-night furnace-to-reach))
 (def fit? ready/ok)
 
 (defn default-time

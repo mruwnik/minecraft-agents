@@ -102,4 +102,14 @@
    :body {:inventory [["raw_iron" 2] ["coal" 2] ["crafting_table" 1] ["cobblestone" 16]]}
    :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2})]]
    :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 100 :of-job true}]
-   :after [[:item "iron_ingot" 2] [:item "cobblestone" 16]]}]}
+   :after [[:item "iron_ingot" 2] [:item "cobblestone" 16]]}
+ ;; card 60655c1d: at night a seen furnace in the dark 12 blocks off is not walked to; the lit body makes its own from carried cobblestone
+  {:name "night-dark-far-furnace-is-passed-over-for-an-own-one"
+   :time :night :time-why :night-light
+   :settings {:jobs.items.smelt/seen-radius 16 :jobs.lib.stock/chest-radius 12}
+   :blocks [[:set [28 0 16] "furnace[facing=west]"] [:set [14 0 14] "torch"] [:set [14 0 18] "torch"] [:set [18 0 14] "torch"] [:set [18 0 18] "torch"]]
+   :body {:inventory [["raw_iron" 2] ["coal" 2] ["crafting_table" 1] ["cobblestone" 16]]}
+   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2})]]
+   :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 20 :of-job true :until {:source :job :kind :completed}}]
+   :after [[:item "iron_ingot" 2]]}]}
