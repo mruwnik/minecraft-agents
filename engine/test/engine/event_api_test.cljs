@@ -58,6 +58,7 @@
    :triggers triggers/all
    :results (atom {})
    :running (atom running)
+   :waiting (atom {})
    :now (constantly 123)})
 
 (deftest status-names-the-engine-build-and-its-start
@@ -184,6 +185,7 @@
                :primitives primitives
                :jobs registry/jobs
                :triggers triggers/all
+               :waiting (atom {})
                :running (atom {:id "j1" :round 2 :reflex :hungry})
                :now (constantly 123)}
           server (event-api/create socket-path eng)
