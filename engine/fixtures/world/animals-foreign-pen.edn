@@ -1,0 +1,25 @@
+;; Others' penned animals are not fair game whatever the zones say (owner: "if not penned, then yes"). Plot outside every zone and plan.
+;; Pen: oak fence ring x 18..24, z 13..19, shut gate west at [18 0 16]; the body stands outside.
+;; Should-succeed: a free sheep outside the pen is shorn. Should-fail: shear of the only sheep, inside the fenced pen, is declined :refused
+;; and nothing is shorn.
+{:defaults
+ {:tags [:animals :jobs :access :pen]
+  :time :any
+  :plot {:floor "grass_block" :height 8}
+  :body {:at [10.5 0 16.5] :yaw 270 :inventory [["shears" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "shear-sheep-in-a-fenced-pen-without-a-zone-refused"
+   :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"] [:fill [19 0 14] [23 0 18] "air"]
+            [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"]]
+   :act [[:summon "sheep" [21.5 0 16.5] "{NoAI:1b}"]
+         [:job (jobs.animals.shear {:count 1 :collect false})]]
+   :expect [{:event {:source :job :kind :shear.declined :data {:reason :refused}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :completed :data {:reason :shorn}} :for-s 30 :until {:source :job :kind :shear.declined}}]}
+  {:name "shear-free-sheep-beside-a-fenced-pen-acts"
+   :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"] [:fill [19 0 14] [23 0 18] "air"]
+            [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"]]
+   :act [[:summon "sheep" [14.5 0 16.5] "{NoAI:1b}"]
+         [:job (jobs.animals.shear {:count 1 :collect false})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :shorn}} :within-s 80 :of-job true}
+            {:no-event {:source :job :kind :shear.declined} :for-s 20 :until {:source :job :kind :completed}}]}]}

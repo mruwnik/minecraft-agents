@@ -190,6 +190,21 @@
             (is (= acted (vec (sort (map #(.-id (.-args %)) (calls-of s "interact"))))) (pr-str owner extra))
             (is (= declined (mapv :reason (events-of s :shear.declined))) (pr-str owner extra))))))))
 
+(deftest shear-leaves-sheep-in-a-fenced-pen-that-is-not-its-own
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wall (merge (tu/box 6 64 -8 20 66 -8 "oak_planks") (tu/box 6 64 8 20 66 8 "oak_planks")
+                          (tu/box 6 64 -8 6 66 8 "oak_planks") (tu/box 20 64 -8 20 66 8 "oak_planks"))
+              world {:inventory shears :blocks wall
+                     :entities [(sheep 1 14) (sheep 2 2)]}
+              run (fn ^:async r [extra]
+                    (let [{:keys [eng] :as s} (h/setup world)]
+                      (core/submit! eng (list 'jobs.animals.shear (merge {:collect false} extra)) {})
+                      (await (tu/run-ticks eng (:clock s) 20 700))
+                      (vec (sort (map #(.-id (.-args %)) (calls-of s "interact"))))))]
+          (is (= [2] (await (run {}))) "the sheep inside the foreign pen is left, the free one shorn"))))))
+
 (deftest shear-ends-refused-when-every-animal-is-refused
   (async done
     (tu/run-async done

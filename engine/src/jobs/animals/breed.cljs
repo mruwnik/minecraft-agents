@@ -236,9 +236,9 @@
   (let [{:keys [mob radius]} (:args c)
         {:keys [fed refused given-up]} (ctx/mem c)
         skip (into (set fed) (concat refused (keys given-up)))]
-    (->> (animals/adults (:primitives c) mob radius)
-         (filterv #(not (contains? skip (animals/key-of %))))
-         (animals/allowed c :breed.declined "breed" :harvest))))
+    (animals/allowed c :breed.declined "breed" :harvest
+                     (filterv #(not (contains? skip (animals/key-of %))) (animals/adults (:primitives c) mob radius))
+                     {:penned-ok? true})))
 
 (defn out-reason
   "Why the job ends with no candidate to feed."

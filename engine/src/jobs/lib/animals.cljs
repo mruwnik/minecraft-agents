@@ -4,7 +4,12 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.access :as access]
+            [jobs.lib.animal-spare :as spare]
             [jobs.lib.bait :as bait]
+            [jobs.lib.child :as child]
+            [jobs.lib.food-animals :as food-animals]
+            [jobs.lib.pen-read :as pen-read]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
@@ -56,22 +61,50 @@
   (let [{:keys [x y z]} (u/pos-of (.-pos e))]
     {:x (js/Math.floor x) :y (js/Math.floor (+ y 0.01)) :z (js/Math.floor z)}))
 
+(defn key-of
+  "The key an animal is tracked by: its uuid (entity ids change when chunks
+  reload), else its id."
+  [e]
+  (or (.-uuid e) (.-id e)))
+
+(defn foreign-penned
+  "The animals of es standing in a fenced enclosure that is not the body's own (a zone or plan of its own): another
+  player's kept animals, off limits wherever the zones put their box. Empty with :ignore-zones?."
+  [c es]
+  (if (:ignore-zones? (:args c))
+    []
+    (let [pens (atom [])]
+      (let [booked (set (:penned (ctx/mem c)))]
+        (filterv #(or (contains? booked (key-of %))
+                      (and (not (access/in-own-area? c (u/pos-of (.-pos %)))) (spare/enclosed? c pens %)))
+                 es)))))
+
 (defn refusal-of
   "Why the zone rules let the job act on none of es with action: :refused, :no-zones, else nil. Quiet: no warn, no memory."
   [c action es]
-  (let [{:keys [allowed refusal]} (gate/look c action (map cell-of es) {:own-plans-ok? true})]
-    (when (and refusal (empty? allowed)) refusal)))
+  (let [penned (set (foreign-penned c es))
+        free (remove penned es)
+        {:keys [allowed refusal]} (gate/look c action (map cell-of free) {:own-plans-ok? true})]
+    (cond (and refusal (empty? allowed)) refusal
+          (and (seq penned) (empty? allowed)) :refused)))
 
 (defn allowed
   "The animals of es (JS entities) the zone rules let the job act on with action (:harvest :take), judged at the cell
-  each stands in. One decline warn of kind (for job-name) names what refuses, or :no-zones. :ignore-zones? lets all.
-  The last verdict is kept in the job's memory (see refusal)."
-  [c kind job-name action es]
-  (let [{:keys [allowed refusal]} (gate/judge c kind job-name action (map cell-of es) {:own-plans-ok? true})
+  each stands in; animals in another's fenced pen are left whatever the zones say (foreign-penned). One decline warn of
+  kind (for job-name) names what refuses, or :no-zones. :ignore-zones? lets all.
+  The last verdict is kept in the job's memory (see refusal). :penned-ok? true (breed, told its pen) keeps the pen test off."
+  ([c kind job-name action es] (allowed c kind job-name action es {}))
+  ([c kind job-name action es {:keys [penned-ok?]}]
+  (let [penned (if penned-ok? #{} (set (foreign-penned c es)))
+        free (filterv (complement penned) es)
+        {:keys [allowed refusal]} (gate/judge c kind job-name action (map cell-of free) {:own-plans-ok? true})
+        refusal (or refusal (when (seq penned) :refused))
         ok (set allowed)]
+    (when (seq penned)
+      (ctx/warn-once! c [:access :penned] kind {:reason :refused :text (str job-name " declined: " (count penned) " animal(s) stand in a fenced pen that is not the body's own")}))
     (when (:token c) ; done? asks this in a check, which holds no token and writes nothing
       (ctx/update-mem! c #(if refusal (assoc % :refusal refusal) (dissoc % :refusal))))
-    (filterv #(contains? ok (cell-of %)) es)))
+    (filterv #(contains? ok (cell-of %)) free))))
 
 (defn refusal
   "Why the job found nothing to act on, when the zone rules refused animals: :refused, :no-zones, else nil."
@@ -88,11 +121,25 @@
   [p mob radius]
   (filterv #(true? (.-baby %)) (herd p mob radius)))
 
-(defn key-of
-  "The key an animal is tracked by: its uuid (entity ids change when chunks
-  reload), else its id."
-  [e]
-  (or (.-uuid e) (.-id e)))
+(defn ^:async pen-looked!
+  "Reads the surroundings of e once per call of a round (jobs.lib.pen-read, which looks at remembered cells). Closed and fenced and
+  not the body's own: books e as penned (foreign-penned then leaves it) and gives :looked. Out of sight: walks within
+  food-animals/::pen-look-range of it, once per animal (:continue while it runs, then :looked). Else nil. No-op with :ignore-zones?."
+  [c e]
+  (let [k (key-of e)
+        {:keys [x y z] :as pos} (u/pos-of (.-pos e))
+        answer (when-not (:ignore-zones? (:args c))
+                 (await (pen-read/read! c {:at {:x (js/Math.floor x) :y (js/Math.floor (+ y 0.01)) :z (js/Math.floor z)}
+                                           :max-cells (settings/get spare/settings ::spare/pen-max-cells)}
+                                        #(= :unloaded (:reason %)))))]
+    (cond (nil? answer) nil
+          (and (:closed? answer) (spare/fenced? c (:inside answer)) (not (access/in-own-area? c pos)))
+          (do (ctx/update-mem! c update :penned (fnil conj []) k) :looked)
+          (or (not= :unloaded (:reason answer)) (contains? (set (:looked (ctx/mem c))) k)) nil
+          :else
+          (let [r (await (child/run!* c :pen-look 'jobs.movement.go-to {:pos pos :range (settings/get food-animals/settings ::food-animals/pen-look-range) :ways #{:walk}}))]
+            (when-not (= :continue r) (ctx/update-mem! c update :looked (fnil conj []) k))
+            (if (= :continue r) :continue :looked)))))
 
 (defn leashed?
   "True when the sensing says the animal is on a lead (to anyone)."

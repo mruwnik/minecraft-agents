@@ -224,7 +224,11 @@
       (not (shears-carried? c)) (await (no-shears! c))
       (and n (>= (count (:shorn m)) n)) (go-collect! c :shorn)
       (empty? cands) (out-of-sheep! c)
-      :else (await (engage! c (animals/pick c cands))))))
+      :else (let [sheep (animals/pick c cands)
+                  r (await (animals/pen-looked! c sheep))]
+              (cond (= :continue r) :continue
+                    r :again
+                    :else (await (engage! c sheep)))))))
 
 (defn ^:async round
   "The whole attempt: steps (a pace between; done? and can-run? are asked between them) until one ends or yields."

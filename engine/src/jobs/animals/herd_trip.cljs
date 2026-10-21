@@ -88,10 +88,11 @@
   (let [{:keys [mob radius]} (:args c)
         [origin listed] (range-from-origin c)
         skip (set (skip-keys c))]
-    (->> (animals/adults (:primitives c) mob listed)
-         (filterv #(and (not (animals/leashed? %)) (not (skip (animals/key-of %)))
-                        (<= (u/dist origin (u/pos-of (.-pos %))) radius)))
-         (animals/allowed c :herd.declined "herd" :take))))
+    (animals/allowed c :herd.declined "herd" :take
+                     (filterv #(and (not (animals/leashed? %)) (not (skip (animals/key-of %)))
+                                    (<= (u/dist origin (u/pos-of (.-pos %))) radius))
+                              (animals/adults (:primitives c) mob listed))
+                     {:penned-ok? true})))
 
 (defn ^:async search!
   "Nothing brought and no animal of :mob listed within :radius of the start: walk and look for one (jobs.explore.search,

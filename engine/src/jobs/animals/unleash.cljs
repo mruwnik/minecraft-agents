@@ -124,9 +124,9 @@
   [c]
   (let [{:keys [freed given-up]} (ctx/mem c)
         skip (into (set freed) (keys given-up))]
-    (->> (on-a-lead c)
-         (filterv #(not (contains? skip (animals/key-of %))))
-         (animals/allowed c :unleash.declined "unleash" :take))))
+    (animals/allowed c :unleash.declined "unleash" :take
+                     (filterv #(not (contains? skip (animals/key-of %))) (on-a-lead c))
+                     {:penned-ok? true})))
 
 (defn done?
   "Ok before any work when no animal in reach is on a lead; later with the animals freed and those still on a lead:
