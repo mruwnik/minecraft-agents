@@ -159,6 +159,19 @@
 (deftest water-breathing-never-fires
   (is (= [false false] (fires? {:self {:inWater true :oxygen 0 :effects [{:name "water_breathing" :left 600}]} :blocks long-shaft}))))
 
+(defn climb-ctx
+  "A ctx over p whose job memory holds data."
+  [p data]
+  {:primitives p :root "j1" :slots []
+   :view (fn [] {:now 0 :data {:entries {:job/j1 [{:t 0 :data data}]}}})})
+
+(deftest a-climb-that-rose-goes-on-while-the-head-is-under-though-the-air-left-fits
+  (let [p (tu/fake {:self {:inWater true :oxygen 20} :blocks short-shaft})]
+    (is (nil? (b/situation-of (climb-ctx p {}))) "no swim yet: plenty of air, no run")
+    (is (= :drowning (b/situation-of (climb-ctx p {:best-y 65}))) "a swim rose without surfacing: swim on")
+    (is (nil? (b/situation-of (climb-ctx (tu/fake {:self {:inWater true :oxygen 20} :blocks {"0,64,0" "water"}}) {:best-y 65})))
+        "head out of the water: the climb is over")))
+
 (deftest suffocating-is-registered-with-breathe
   (let [t (get triggers/all :suffocating)]
     (is (= '(jobs.survival.breathe) (:job t)))

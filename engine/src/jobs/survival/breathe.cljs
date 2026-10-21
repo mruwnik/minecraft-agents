@@ -53,6 +53,7 @@
   A mob that hits the body (a hostile within the fight radius and a hit within the window, jobs.survival.breathe.fight) is fought with
   jobs.combat.attack, holding where it floats, when the body can breathe (surfaced, still in water) or when the swim up has risen no
   higher for the stall seconds while drowning.
+  A swim that rose without surfacing keeps the run drowning while the head is under water, whatever the air left.
   Done at once when the body is neither drowning, enclosed nor surfaced but still in water. A reflex
   (level danger): it exhausts its ways before it stops and never yields :continue (only a cut round returns it, unseen). Ends :done when the head is clear
   and, after a swim, the body stands on solid ground out of the water. Else nothing-possible:
@@ -122,8 +123,19 @@
                 (:surfaced (ctx/mem c))
                 (not (on-land? (:primitives c))))))
 
+(defn climbing?
+  "A swim of this run rose without surfacing and the head is still under water: the climb goes on although the air left
+  now fits the rest of it (a player does not stop swimming up half way)."
+  [c]
+  (boolean (and (:view c) (:best-y (ctx/mem c)) (breath/head-under? (:primitives c)))))
+
+(defn situation-of
+  "breath/situation, or :drowning while a climb is on."
+  [c]
+  (or (breath/situation (:primitives c)) (when (climbing? c) :drowning)))
+
 (defn needs-air? [c]
-  (or (some? (breath/situation (:primitives c)))
+  (or (some? (situation-of c))
       (boolean (surfaced-in-water? c))))
 
 (def target [])
@@ -390,7 +402,7 @@
   "One look at the world and one try. :again or :held for another pass, else :done (perhaps stopped)."
   [c]
   (let [p (:primitives c)
-        why (breath/situation p)]
+        why (situation-of c)]
     (cond
       (and (nil? why) (surfaced-in-water? c)) (await (if (fight/attacked? c) (fight/fight! c) (head-for-land! c)))
       (nil? why) :done
@@ -410,7 +422,7 @@
           (let [drowning? (= :drowning why)
                 ok (await (if drowning? (air/drown-out! c) (air/dig-out! c)))]
             (cond
-              (nil? (breath/situation p)) :again
+              (nil? (situation-of c)) :again
               (and drowning? ok) :again
               (= :dug ok) (do (ctx/update-mem! c dissoc :failures) :again)
               drowning? (fail-air! c)
