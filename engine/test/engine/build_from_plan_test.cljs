@@ -612,6 +612,16 @@
         (is (= [[] []] (await (build-bed 1000))))
         (is (= [[] []] (await (build-bed 14000))))))))
 
+(deftest a-finished-plan-with-a-bed-records-the-bed-and-home-there
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (start {:blocks ground :time 1000 :inventory [{:name "white_bed" :count 1}]}
+                                   {"house" {:id "house" :parts bed-parts}})
+              _ (await (child-outcome eng job {:plan "house"} 200))
+              view (mem/view (:store eng))]
+          (is (= [{:x 4 :y 64 :z 3} {:x 4 :y 64 :z 3}] [(mem/place view :bed) (mem/place view :home)])))))))
+
 (deftest a-wall-torch-is-placed-with-a-torch-on-its-wall-and-a-floor-torch-looking-down
   (async done
     (tu/run-async done

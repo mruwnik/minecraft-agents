@@ -1,0 +1,14 @@
+;; build.from-plan records the bed of a finished plan as the body's :bed and :home (the night walks to the house it built).
+{:defaults
+ {:tags [:build] :time :any
+  :plot {:height 14}
+  :limit-s 120
+  :body {:at [11.5 0 8.5] :inventory [["white_bed" 1]] :effects [["resistance" 600 4]] :settle-s 4}}
+ :cases
+ [{:name "finished-bed-plan-records-bed-and-home"
+   :plans [{:id "bedroom" :metadata {:by "$body"}
+            :parts [{:id "bed-foot" :cells [#at [12 0 11]] :want {:block "white_bed" :facing :south :part :foot}}
+                    {:id "bed-head" :cells [#at [12 0 12]] :want {:block "white_bed" :facing :south :part :head}}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:bedroom"})]]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 90 :of-job true}]
+   :after [[:memory {:entries {:bed [{:data {:pos [:any]}}] :home [{:data {:pos [:any]}}]}}]]}]}
