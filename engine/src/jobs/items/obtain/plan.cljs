@@ -69,6 +69,16 @@
     (cond-> (apply dissoc gather (map key free))
       (seq free) (update "log" (fnil + 0) (reduce + 0 (vals free))))))
 
+(defn any-of-logs
+  "The picked plan with its logs as \"log\" when the plans of the other names gather a log of another species: any
+  species then does (planks of any wood), not only the first name's."
+  [pl plans]
+  (let [log-keys (fn [p] (filter trees/log-name? (keys (:gather p))))]
+    (if (< 1 (count (set (mapcat log-keys plans))))
+      (update pl :gather (fn [g] (-> (apply dissoc g (log-keys pl))
+                                     (update "log" (fnil + 0) (reduce + 0 (map #(get g %) (log-keys pl)))))))
+      pl)))
+
 (defn gather-plan
   "The craft chain for the first of names that has one once the raw items it lacks are gathered, with :gather
   {name n} when it lacks any, else nil. A sapling has no recipe: its plan is just :gather {name n}, when its leaves are seen (or its child is running).
@@ -102,4 +112,4 @@
     (if (= 1 (count names))
       (allowed (plan-of (first names)))
       (let [plans (keep (comp allowed plan-of) names)]
-        (pick-plan c (or (not-empty (filter #(raw-seen? c %) plans)) plans))))))
+        (some-> (pick-plan c (or (not-empty (filter #(raw-seen? c %) plans)) plans)) (any-of-logs plans))))))

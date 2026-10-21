@@ -1,0 +1,13 @@
+;; Planks of any species are found by looking for any log, not for the first name's (oak) alone.
+;; Should-succeed: oak_planks or birch_planks wanted, a birch tree far from the body (out of sight) and nothing else: the search finds the birch tree and one log makes 4 planks.
+{:defaults
+ {:tags [:obtain :explore] :time :any
+  :plot {:height 8 :length 64 :width 64}
+  :body {:at [10.5 0 10.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "any-planks-explores-for-any-log"
+   :blocks [[:fill [50 0 50] [50 3 50] "birch_log"] [:set [50 4 50] "birch_leaves[persistent=true]"]]
+   :act [[:job (jobs.items.obtain {:any-of ["oak_planks" "birch_planks"] :count 2 :explore true})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 180 :of-job true}]
+   :after [[:item "birch_planks" 4]]}]}

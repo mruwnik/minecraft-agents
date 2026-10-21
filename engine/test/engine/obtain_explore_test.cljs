@@ -127,6 +127,15 @@
           (is (= [nil :north] (mapv :heading (f/events-of s :obtain.exploring))) "rings first, then outward")
           (is (= :no-source (:reason (first (f/events-of s :stopped))))))))))
 
+(deftest planks-of-any-species-search-for-any-log
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (ore-world {} []) [f/own-zone])]
+          (await (obtain-small! s {:any-of ["oak_planks" "spruce_planks" "birch_planks"] :count 2 :ways #{:gather :craft} :explore true} 200))
+          (is (seq (f/events-of s :obtain.exploring)))
+          (is (every? #(< 1 (count (:for %))) (f/events-of s :obtain.exploring)) "searches for logs of every species, not oak alone"))))))
+
 (deftest water-out-of-sight-is-explored-for-and-the-bucket-filled
   (async done
     (tu/run-async done
