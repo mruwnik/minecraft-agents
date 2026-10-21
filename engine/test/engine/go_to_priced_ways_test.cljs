@@ -38,7 +38,7 @@
     (is (nil? (span/bridge-span at (constantly false) [1 64 0] [-8 64 0] (opts 5))) "the way west leads nowhere nearer than the way back")))
 
 (deftest down-stair-needs-a-goal-two-below-and-cuts-it-may-dig
-  (let [stone (box -5 40 -5 5 63 5 "stone")
+  (let [stone (box -25 40 -5 20 63 5 "stone")
         at (block-at-of-map stone)
         none (constantly false)]
     (is (= {:step :stair :dir :down :heading :east :steps 10 :aside 2} (span/down-stair at [0 63 0] [8 53 0] (constantly true) none #{})))

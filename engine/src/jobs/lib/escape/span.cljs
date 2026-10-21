@@ -9,7 +9,7 @@
 
 (a/defargs settings
   {::max-descent {:default 32 :doc "The most steps a go-to's stair down to a goal below cuts." :spec (a/int-in 1 nil)}
-   ::max-aside {:default 12 :doc "The most blocks a go-to's stair down may end beside or past its goal's column (the rest is dug flat)." :spec (a/int-in 0 nil)}
+   ::max-aside {:default 16 :doc "The most blocks a go-to's stair down may end beside or past its goal's column (the rest is dug flat)." :spec (a/int-in 0 nil)}
    ::max-bridge {:default 16 :doc "The longest gap (blocks) a go-to bridges." :spec (a/int-in 1 nil)}})
 
 (defn max-descent [] (settings/get settings ::max-descent))

@@ -203,13 +203,13 @@
 
 (defn with-spans
   "e (a way from escape/choose, walled-step or none, planned from cell from) or, when e is none or a walk to the wall
-  (spans fill what it lacks) or priced? and price (jobs.lib.cost) says a span from the feet is cheaper than the real
+  (spans fill what it lacks) or price (jobs.lib.cost) says a span from the feet is cheaper than the real
   way e: the cheapest span."
-  [c feet from goal may-dig? opts e priced?]
+  [c feet from goal may-dig? opts e]
   (let [extra (spans c feet goal may-dig? opts)
         real? (not (#{:none :approach} (:step e)))]
-    (if (and (seq extra) (or (not real?) priced?))
-      (apply min-key #(price c (if (= e %) from feet) %) (cond-> extra (and real? priced?) (conj e)))
+    (if (seq extra)
+      (apply min-key #(price c (if (= e %) from feet) %) (cond-> extra real? (conj e)))
       e)))
 
 (defn goal-way-plan
@@ -221,7 +221,7 @@
         here? (or ((:skip opts) :approach) (>= (to-goal near) (dec (to-goal feet))))
         from (if here? feet near)
         e (walled-step c from goal here? may-dig? opts)]
-    {:best (with-spans c feet from goal may-dig? opts e true) :e e :near near :here? here?}))
+    {:best (with-spans c feet from goal may-dig? opts e) :e e :near near :here? here?}))
 
 (defn goal-way
   "A free body's way to a goal it cannot walk to (walled in, or cut off by a drop), the cheapest by price over: what

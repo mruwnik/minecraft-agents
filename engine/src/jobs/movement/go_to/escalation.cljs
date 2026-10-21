@@ -145,7 +145,7 @@
         into? (or (goal-walled? c result) (cut-off-way? c pos result))
         ;; a shut-in body (a pit, a plateau it cannot walk off) whose goal is walled in digs straight into it when it can
         dig-in? (and (not into?) (= :goal-enclosed (some-> (:reason result) keyword)))
-        shut-in-way (fn [e may-dig?] (with-spans c feet feet goal may-dig? opts e false))
+        shut-in-way (fn [e may-dig?] (with-spans c feet feet goal may-dig? opts e))
         choose (cond into? #(goal-way c feet goal % opts)
                      dig-in? #(shut-in-way (or (dig-way (:primitives c) feet goal % opts) (escape/choose (:primitives c) feet goal % opts)) %)
                      :else #(shut-in-way (escape/choose (:primitives c) feet goal % opts) %))
@@ -219,12 +219,12 @@
 
 (defn escalated!
   "The child made a way (or part of one, done false): walk again from a fresh count, or escalate again at once after an
-  approach, after a whole stair that left the body shut in under the goal (climb-on?), or after any stair that left it
+  approach, after a whole stair down (the rest is dug flat) or one that left the body shut in under the goal (climb-on?), or after any stair that left it
   under ground on its climb away from a dive (dive-climb-on?). Its holes are put back once a walk round gets on past
   it (restore-next!). An approach does not count toward max-escalations (its look may show a wall to dig or not), but
   its cell is not walked to twice (memory :approached), so a chain of them ends."
-  [c pos {:keys [step]} done?]
-  (let [again? (or (= :approach step) (and (= :stair step) (or (and done? (climb-on? c pos)) (dive-climb-on? c pos))))
+  [c pos {:keys [step dir]} done?]
+  (let [again? (or (= :approach step) (and (= :stair step) (or (and done? (or (= :down dir) (climb-on? c pos))) (dive-climb-on? c pos))))
         target (some-> (:escalation (ctx/mem c)) :pos vec)]
     (ctx/update-mem! c #(cond-> (-> % (dissoc :escalation :escalation-from :planned :holes-before :best)
                                     (cond-> (= :approach step) (-> (update :approached (fnil conj #{}) target)
@@ -264,12 +264,12 @@
 
 (defn escalation-stopped!
   "The child changed something before it stopped: walk again (escalated!) after a go-to.escalation-stopped warn. On a
-  climb away from a dive (dive-climb-on?) the next stair takes another heading instead."
+  climb away from a dive (dive-climb-on?), or a stop at an unbreakable block, the next stair takes another heading instead."
   [c pos {:keys [step] :as detail}]
   (ctx/emit! c :go-to.escalation-stopped :warn (assoc detail :text (str (name step) " stopped part way: "
                                                                         (some-> (:reason detail) name)
                                                                         (if (dive-climb-on? c pos) "; climbing on another way" "; walking again"))))
-  (when (dive-climb-on? c pos)
+  (when (or (dive-climb-on? c pos) (= :unbreakable (:reason detail)))
     (ctx/update-mem! c update :skipped-steps (fnil conj #{}) (skip-key (:escalation (ctx/mem c)))))
   (escalated! c pos detail false))
 
