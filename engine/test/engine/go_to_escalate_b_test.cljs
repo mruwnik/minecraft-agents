@@ -391,6 +391,18 @@
           (is (empty? (events-of seen :go-to.escalated)))
           (is (empty? (calls p "dig"))))))))
 
+(deftest go-to-escalates-when-the-door-opens-onto-a-step-under-its-lintel
+  ;; the room's door leads out onto ground one block higher, with the wall's top over the doorway: no walk or jump leaves
+  ;; the doorway, so the door beside the body is no way out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [stepped (-> room (merge (box 4 64 -6 12 64 6 "grass_block")) (assoc "3,64,0" "oak_door" "3,65,0" "oak_door"))
+              states {"3,64,0" {:open true :half "lower" :facing "east"} "3,65,0" {:open true :half "upper" :facing "east"}}
+              {:keys [out seen]} (await (run-job! (merge in-room {:blocks stepped :states states}) {:pos [8 65 0] :range 1}))]
+          (is (seq (events-of seen :go-to.escalated)) (pr-str @out))
+          (is (= {:arrived true} @out)))))))
+
 (deftest go-to-with-doors-never-digs-out-past-a-door-in-the-wall
   ;; live go-to-escalate/oak-door-with-doors-never-digs: the planner's only way is the door, refused (:abilities :open)
   (async done
