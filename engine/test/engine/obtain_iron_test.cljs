@@ -292,3 +292,13 @@
 (deftest the-bad-args-text-names-the-arg-and-its-value
   (is (re-find #":count.*\"16\"" (base/args-error {:item "torch" :count "16"})))
   (is (re-find #":item.*nil" (base/args-error {:count 4}))))
+
+(deftest ore-in-water-is-left-for-the-next-ore
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pool (into {} (for [x (range 0 5) y [64 65 66] z [2 3 4 5 6]] [(str x "," y "," z) "water"]))
+              blocks (merge pool {"1,64,4" "iron_ore" "3,64,5" "iron_ore"})
+              s (f/start (ore-world blocks [{:name "stone_pickaxe" :count 1}]) [])]
+          (await (obtain! s {:item "raw_iron" :count 1} 200))
+          (is (= [{:x 1 :y 64 :z 4} {:x 3 :y 64 :z 5}] (take 2 (map :at (filter (comp #{:obtain.gathering} :kind) @(:seen s)))))))))))

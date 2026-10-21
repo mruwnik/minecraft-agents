@@ -31,6 +31,7 @@
         (let [s (await (st/stair! {:blocks st/ground :inventory [worn]} east (fn [_])))]
           (is (= :done (:status @(:out s))))
           (is (contains? (kinds s) :tool.no-spare))
+          (is (contains? (kinds s) :obtain.exploring) "a spare not in sight is looked for, not given up on")
           (is (= 1 (count (st/events-of s :tool.no-spare)))))))))
 
 (deftest a-healthy-pickaxe-or-a-second-one-needs-no-spare
@@ -113,3 +114,19 @@
         (let [s (await (st/stair! {:blocks st/ground :inventory [worn {:name "cobblestone" :count 12} {:name "stick" :count 4} {:name "crafting_table" :count 1}]}
                                   east tu/seeing-all))]
           (is (= :done (:status @(:out s))) (pr-str @(:out s))))))))
+
+(deftest a-spare-worn-down-in-its-turn-gets-another
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wear (fn [p]
+                     (let [world (.-world p)]
+                       (.override world "dig"
+                                  (fn ^:async f [token a impl]
+                                    (let [r (await (impl token a))]
+                                      (swap! (.. world -state) update :inventory
+                                             (fn [inv] (mapv #(assoc % :durability 3) inv)))
+                                      r)))))
+              two-spares {:blocks (assoc st/ground chest "chest") :containers {chest [{:name "stone_pickaxe" :count 2}]}}
+              s (await (st/stair! (assoc two-spares :inventory [worn]) east (fn [p] (tu/seeing-all p) (wear p))))]
+          (is (= 2 (count (st/events-of s :tool.spare))) (pr-str (kinds s))))))))

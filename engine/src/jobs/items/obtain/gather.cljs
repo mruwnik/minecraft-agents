@@ -46,7 +46,7 @@
   (if (declined? e) (child/max-fruitless) (:max-runs need (child/max-fruitless))))
 
 (defn gather-failed!
-  "A gather run that brought nothing. Trees seen but unreachable (:no-tree) with :explore on send the body to look
+  "A gather run that brought nothing (a mine that ended :wet or :flooded leaves its ore's column out of the next sight). Trees seen but unreachable (:no-tree) with :explore on send the body to look
   elsewhere (bounded by [:explored key]); a mine that lost its pickaxe (:no-tool) that the pickaxe step can replace
   goes to that step; neither counts as a fruitless run. A stair that found no stone while stone is seen (behind
   glass, bedrock) is :unreachable, not a missing source."
@@ -163,6 +163,7 @@
             (when (= 'jobs.forestry.harvest-wood (:job need))
               (ctx/update-mem! c assoc-in [:gather :tree] (select-keys need [:key :job :args])))
             (let [at (:pos (seen-of c need))]
+              (when at (ctx/update-mem! c assoc-in [:gather :at] [(:x at) (:z at)]))
               (ctx/emit! c :obtain.gathering :info
                          {:message (str "getting " (:key need) " with " (:job need)
                                         (when at (str " from " (:x at) " " (:y at) " " (:z at))))
@@ -184,12 +185,15 @@
             (if (= :continue e)
               :continue
               (let [res (merge (when (map? (:cause e)) (:cause e)) (:data e))
-                    before (get-in (ctx/mem c) [:gather :before])]
-                (ctx/update-mem! c update :gather dissoc :before :item :tree)
+                    before (get-in (ctx/mem c) [:gather :before])
+                    at (get-in (ctx/mem c) [:gather :at])]
+                (ctx/update-mem! c update :gather dissoc :before :item :tree :at)
                 (release-crafting-items! c)
                 (if (> (gather-carried p need) before)
                   (do (child/progress! c :gather) :again)
                   (do (when-let [w (or (:why res) (spared-why res))] (ctx/update-mem! c assoc-in [:gather :why] w))
+                      (when-let [col (and (#{:flooded :wet} (contract/cause-key e)) at)]
+                        (ctx/update-mem! c update :cut-off (fnil conj #{}) col))
                       (when-let [cols (seq (:columns res))] (ctx/update-mem! c update :cut-off (fnil into #{}) (map vec) cols))
                       (gather-failed! c names need (if (= :done (:kind e)) :nothing-gathered (contract/cause-key e)) e))))))))))
 
