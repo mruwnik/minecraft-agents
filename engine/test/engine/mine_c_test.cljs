@@ -103,6 +103,27 @@
           (is (= 1 @landed))
           (is (= [{:reason :tunnel-length :length 4}] (map #(select-keys % [:reason :length]) (tunnel-ends s))) (pr-str (map :text (tunnel-ends s)))))))))
 
+(deftest gravel-that-fills-the-line-cell-under-the-body-is-dug-and-the-tunnel-goes-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world (rock-world {})})
+              landed (atom 0)]
+          (doseq [walk ["moveTo" "steer"]]
+            (.override (.-world (:p s)) walk
+                       (fn ^:async f [token a impl]
+                         (let [r (await (impl token a))
+                               st (fake/state (:p s))
+                               [x _ z] (:pos (:self @st))]
+                           (when (and (zero? @landed) (<= 2 x 3) (= "air" (block-at s 2 64 0)))
+                             (swap! landed inc)
+                             (swap! st #(-> % (fake/put-block [2 64 0] "gravel") (assoc-in [:self :pos] [2.5 65 (+ z 0)]))))
+                           r))))
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 4 :ways #{:seen :strip-tunnel}}) {})
+          (await (run-ticks s 250))
+          (is (= 1 @landed))
+          (is (= [{:reason :tunnel-length :length 4}] (map #(select-keys % [:reason :length]) (tunnel-ends s))) (pr-str (map :text (tunnel-ends s)))))))))
+
 (defn ^:async branch-run
   "A stay-level 7-block tunnel east in rock, ore at the 4th cell of the branch north of the third junction; branches as given."
   [branches]

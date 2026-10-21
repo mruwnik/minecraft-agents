@@ -129,6 +129,18 @@
   (and (not (passable (name-at cell)))
        (< (:redigs (ctx/mem c) 0) (settings/get settings ::max-redigs))))
 
+(defn under [cell] (update (zipmap [:x :y :z] cell) :y dec))
+
+(defn ^:async redig-line!
+  "A falling block (gravel) filled the line cell the walk was bound for, and the walk ended on top of it: dig that cell again,
+  as a player would, then the step goes on from it. :continue while the dig waits."
+  [c cell]
+  (let [e (await (ctx/call c :redig 'jobs.blocks.dig (merge (select-keys (:args c) [:ignore-zones?])
+                                                          {:pos (access/cell cell) :ways #{:carried} :accept [:falling-block]})))]
+    (if (= :continue e)
+      :continue
+      (do (ctx/update-mem! c update :redigs (fnil inc 0)) :again))))
+
 (defn ^:async stair-step!
   "The next cells by a jobs.access.stair child, one :level step (it judges, digs, seals exposed lava, plugs laid-open
   water, bridges a missing floor and steps in). With :stay-level a cut that opened into air beyond the tunnel has that air
@@ -147,6 +159,8 @@
     (when-not (= :continue r) (ctx/update-mem! c update :dug into (:dug res)))
     (cond
       (= :continue r) :continue
+      (and (= :off-stair (:reason res)) (:cell res) (landed? c name-at (under (:cell res))))
+      (await (redig-line! c (under (:cell res))))
       (not= :done (:status res)) (let [{:keys [reason at]} (step-stop res)]
                                    (finish! c reason at next (when (= :step-failed reason) (some->> (:because r) result-of (walk-of c next)))))
       :else
@@ -204,6 +218,8 @@
           (some #(within-own-zone c 0 (access/cell %)) cut) (finish! c :own-zone next)
           (>= steps (:limit (:args c))) (finish! c :tunnel-length nil)
           (do (reset! walk (await (back-on-line! c from))) (= :continue @walk)) :continue
+          (and @walk (= :done (:status @walk)) (landed? c #(u/seen-name (:primitives c) %) from))
+          (await (redig-line! c from))
           @walk (finish! c :walk-failed from nil @walk)
           (and (look/unseen? (:primitives c) cut) (not= next (:glanced m)))
           (do (ctx/update-mem! c assoc :glanced next)

@@ -15,6 +15,13 @@
             {:no-event {:source :job :kind :mine.left-behind} :for-s 100 :until {:source :job :kind #{:completed :stopped} :data {:got 1}}}]
    :after [[:item "raw_iron" 1] [:not-block [20 0 16] "iron_ore"]]
    :limit-s 120}
+  {:name "gravel-falling-into-the-line-the-tunnel-goes-on"
+   ;; gravel stacked over the line falls into the cut cells (the walk may end on top of it): the body digs it again and reaches the ore behind
+   :blocks [[:fill [19 2 16] [20 5 16] "gravel"] [:set [24 0 16] "iron_ore"]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 10 :radius 8})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 150 :of-job true}]
+   :after [[:item "raw_iron" 1]]
+   :limit-s 170}
   {:name "ore-in-line-twice"
    :blocks [[:set [19 0 16] "iron_ore"] [:set [22 0 16] "iron_ore"]]
    :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 2 :direction :east :tunnel-length 10 :radius 8})]]
