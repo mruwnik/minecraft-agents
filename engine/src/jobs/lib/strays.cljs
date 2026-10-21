@@ -11,6 +11,8 @@
     "melon" "pumpkin" "sugar_cane" "bamboo" "bamboo_sapling" "sweet_berry_bush" "nether_wart" "cocoa" "torchflower_crop"
     "pitcher_crop"}))
 
+(def ground-blocks #{"grass_block" "podzol" "mycelium"})
+
 (defn crop-want? [want] (and (map? want) (contains? want :crop)))
 (defn tree-want? [want] (and (map? want) (contains? want :tree)))
 
@@ -30,6 +32,7 @@
           (= "farmland" n) :wrong
           (and (crop-blocks n) (= :headroom want)) nil
           (and (crop-blocks n) (crop-want? want)) :wrong
+          (and (ground-blocks n) (crop-want? want)) :wrong
           :else :dig))
       :else (when (= :wrong (shape/judge want block)) :wrong))))
 

@@ -278,7 +278,13 @@
         (ctx/warn-once! c [(fa/plan c) :blocked] :farm-tend.blocked
                         {:plan (fa/plan c) :cells (:blocked field)
                          :text (str "tend of " (fa/plan c) ": " (count (:blocked field)) " crop cells are filled by other blocks ("
-                                    (str/join ", " (distinct (map :found (:blocked field)))) "); farm.tidy clears them")}))
+                                    (str/join ", " (distinct (map :found (:blocked field)))) "); farm.tidy clears what it may dig")}))
+      (when-let [ground (seq (tend-plan/ground-level-cells (:blocked field)))]
+        (ctx/warn-once! c [(fa/plan c) :ground-level] :farm-tend.plan-error
+                        {:plan (fa/plan c) :cells (vec ground)
+                         :text (str "plan error in " (fa/plan c) ": " (count ground) " crop cells are at ground level (they hold "
+                                    (str/join ", " (distinct (map :found ground))) "), so nothing can be sown there; the crop layer must be one above the soil: "
+                                    (str/join " " (map (comp pr-str :pos) (take 6 ground))))}))
       (when (seq (:wrong field))
         (ctx/emit! c :farm-tend.wrong :warn
                    {:plan (fa/plan c) :cells (:wrong field)

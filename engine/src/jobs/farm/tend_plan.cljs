@@ -80,6 +80,24 @@
                    {:pos [x y z] :found found})))
              crops)))
 
+(defn clearable-cells
+  "[pos] of the plan's crop cells holding a block farm.tidy digs (its verdict, not a chest, bed or ground block) that the
+  access rules let the body dig: what a clearing pass can empty."
+  [c crops]
+  (let [p (:primitives c)
+        plan (fa/plan c)
+        opts {:ignore-zones? (:ignore-zones? (:args c))}]
+    (vec (keep (fn [[{:keys [x y z] :as pos} crop]]
+                 (when (and (= :dig (strays/classify {:crop crop} (when-let [n (u/seen-name p pos)] {:name n})))
+                            (permit/ok? c plan :dig pos opts))
+                   [x y z]))
+               crops))))
+
+(defn ground-level-cells
+  "[{:pos :found}] of the blocked cells holding the ground itself: the plan put its crop cells at the soil's level."
+  [blocked]
+  (filterv #(strays/ground-blocks (:found %)) blocked))
+
 (defn refusers
   "What refuses the hoe on untilled ground cells of the plan for a social reason: {:refused n :zones :claims :plans
   :owners}, or nil when nothing is refused. It names them so a run with nothing else to do says why."

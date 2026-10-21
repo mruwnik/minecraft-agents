@@ -240,6 +240,34 @@
           (is (= [{:pos [2 64 2] :found "oak_log"} {:pos [3 64 2] :found "oak_leaves"}] (:blocked (:field (done-event s)))))
           (is (= 1 (count (events-of s :farm-tend.blocked)))))))))
 
+(deftest crop-cells-at-ground-level-are-a-plan-error-naming-the-cells
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run {:area {:plan "mix"}}
+                            (world-of (ground "farmland" [[2 3] [3 3]])
+                                      {:blocks {(k 2 64 2) "grass_block" (k 3 64 2) "chest"}}
+                                      all-seed)
+                            {"mix" (plan-of)} 60))
+              [e] (events-of s :farm-tend.plan-error)]
+          (is (= [[2 64 2]] (map :pos (:cells e))))
+          (is (re-find #"ground level" (:text e))))))))
+
+(deftest maintain-clears-a-tree-on-its-crop-cells-but-not-a-chest-or-the-ground
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup (world-of (ground "farmland" [[2 3] [3 3]])
+                                 {:blocks {(k 2 64 2) "oak_log" (k 3 64 2) "chest"}}
+                                 all-seed)
+                       {"mix" (plan-of)} [])]
+          (core/submit! (:eng s) (list 'jobs.farm.maintain {:area {:plan "mix"} :irrigate false}) {})
+          (await (tu/run-ticks (:eng s) (:clock s) 80 700))
+          (is (contains? (dug s) [2 64 2]))
+          (is (not (contains? (dug s) [3 64 2])))
+          (is (= "chest" (block-at s 3 64 2)))
+          (is (true? (finished? s))))))))
+
 (deftest cells-outside-the-plan-are-untouched
   (async done
     (tu/run-async done

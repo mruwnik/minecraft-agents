@@ -68,7 +68,7 @@
                        (u/inventory (:primitives c)))))
 
 (defn facts
-  "{:keep :waste :stored :blocked}: what is kept carried, the seed above it, the farm goods above it and the plan's crop cells another block fills."
+  "{:keep :waste :stored :blocked}: what is kept carried, the seed above it, the farm goods above it and the plan's crop cells holding a block tidy may dig."
   [c]
   (let [inventory (u/inventory (:primitives c))
         keep (stock/keeps (sow-reserve c) (rsv/held c :maintain) (:keep (:args c)))]
@@ -76,7 +76,7 @@
      :waste (stock/surplus inventory keep crops/waste-seeds)
      :stored (stock/surplus inventory keep crops/farm-goods)
      :blocked (if (and (fa/plan c) (empty? (fa/parts c)))
-                (count (tend-plan/blocked-cells (:primitives c) (:crops (tend-plan/planned c))))
+                (count (tend-plan/clearable-cells c (:crops (tend-plan/planned c))))
                 0)}))
 
 (defn decide

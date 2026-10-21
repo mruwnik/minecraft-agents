@@ -97,6 +97,9 @@
     {:crop "wheat"} "air" nil
     {:crop "wheat"} nil nil
     {:crop "wheat"} "carrots" :wrong
+    {:crop "wheat"} "grass_block" :wrong
+    {:crop "wheat"} "dirt" :dig
+    {:crop "wheat"} "chest" [:kept :container]
     {:crop "wheat"} "farmland" :wrong
     {:crop "melon"} "melon_stem" nil
     {:crop "melon"} "attached_melon_stem" nil
