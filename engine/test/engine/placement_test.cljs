@@ -144,6 +144,9 @@
     "torch" {[0 63 0] "oak_fence" [1 64 0] "stone"}
     {:item "torch" :click {:against [0 63 0] :cursor [0.5 1 0.5] :pitch (- (/ pi 2))}}
 
+    "torch" {[0 63 0] "crafting_table"}
+    {:item "torch" :click {:against [0 63 0] :cursor [0.5 1 0.5] :pitch (- (/ pi 2)) :sneak true}}
+
     "torch" {[1 64 0] "stone"}
     {:item "torch" :refused :no-support}
 
