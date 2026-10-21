@@ -129,6 +129,8 @@
 (deftest each-step-decides-from-its-facts
   (are [expected step args facts] (= expected (:skip (maintain/decide step args facts)))
     nil :tend {:area ft/box} {}
+    :nothing-blocked :tidy {:area {:plan "p"}} {:blocked 0}
+    nil :tidy {:area {:plan "p"}} {:blocked 3}
     :no-composter :compost {} {:waste ["wheat_seeds"]}
     :no-surplus-seed :compost {:composter {:x 1 :y 1 :z 1}} {:waste []}
     nil :compost {:composter {:x 1 :y 1 :z 1}} {:waste ["wheat_seeds"] :keep {}}
@@ -143,6 +145,9 @@
            (:args (:call (maintain/decide :tend {:area ft/box :till true :irrigate false :fertilize true} {})))))
     (is (= {:chest given :items :farm-goods :keep keep}
            (:args (:call (maintain/decide :deposit {:chest given} {:stored ["wheat"] :keep keep})))))))
+
+(deftest tidy-gets-the-plan-and-its-part
+  (is (= {:plan "p" :part "wheat"} (:args (:call (maintain/decide :tidy {:area {:plan "p" :part "wheat"}} {:blocked 2}))))))
 
 (deftest a-plan-reserves-twice-its-cells-per-crop
   (is (= {"wheat_seeds" 4 "carrot" 2}

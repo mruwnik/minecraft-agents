@@ -24,4 +24,11 @@
    :body {:inventory [["carrot" 40]]}
    :act [[:job (jobs.farm.tend {:area {:plan "$plan:field"}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:plant {:planted 2}} :field {:blocked [:any]}}} :within-s 100 :of-job true}]
-   :after [[:block [10 0 16] "oak_log"] [:block [11 0 16] "oak_leaves"] [:block [12 0 16] "carrots[age=0]"] [:block [13 0 16] "carrots[age=0]"]]}]}
+   :after [[:block [10 0 16] "oak_log"] [:block [11 0 16] "oak_leaves"] [:block [12 0 16] "carrots[age=0]"] [:block [13 0 16] "carrots[age=0]"]]}
+  ;; maintain clears a tree standing on its own plan cells itself (a tidy step), then sows them
+  {:name "maintain-clears-a-tree-on-its-crop-cells-then-sows-them"
+   :blocks [[:set [10 0 16] "oak_log"] [:set [11 0 16] "oak_leaves"]]
+   :body {:inventory [["carrot" 40] ["stone_hoe" 1]]}
+   :act [[:job (jobs.farm.maintain {:area {:plan "$plan:field"} :irrigate false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:tidy {:dug [:>= 1]}}}} :within-s 110 :of-job true}]
+   :after [[:block [10 0 16] "carrots[age=0]"] [:block [11 0 16] "carrots[age=0]"]]}]}
