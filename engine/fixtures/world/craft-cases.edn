@@ -24,6 +24,13 @@
    :act [[:job (jobs.items.craft {:item "stick"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
    :after [[:item "stick" 4]]}
+  ;; card 0ef3fbfc: an item already carried ends done with text that says so, not "crafted 0"
+  {:name "craft-of-an-item-already-carried-says-already-carried"
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.items.craft {:item "stone_pickaxe"})]]
+   :expect [{:event {:source :job :kind :completed :data {:text [:contains "already carried 1 stone_pickaxe"]}} :within-s 40 :of-job true}]
+   :after [[:item "stone_pickaxe" 1]]
+   :limit-s 60}
   {:name "white-bed-short-of-planks-and-no-table-is-not-crafted"
    :body {:inventory [["white_wool" 3] ["oak_planks" 1]]}
    :act [[:job (jobs.items.craft {:item "white_bed" :ways #{:carried}})]]
