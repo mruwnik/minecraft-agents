@@ -35,7 +35,7 @@
   - condition-failed :missing (no container at the chest; a recorded :chest place is retracted, one chest_missing warn)
     or :no-chest: at once.
   - nothing-possible, the cause the transfer status (:unreachable, :full, :nothing-moved, ..): after three failed transfers in a row.
-  Memory: a :chest argument that took at least one item and finished clean, not in another body's zone or claim, is offered to the :chest place. It is
+  Memory: a :chest argument that took at least one item and finished clean, not in another body's zone or claim, joins the storage group (so a later call without :chest tries it) and is offered to the :chest place. It is
   recorded when none is recorded or the recorded one is gone, never over a different live one (place.kept
   event; jobs.memory.set-place moves it).
   Storage group: with no :chest, or a :chest that is the :chest place or one of the group (memory :storage/chests,
@@ -239,6 +239,7 @@
     (cond
       (nil? pick) (do (when (offer-owed? c)
                         (places/offer! c :chest (:chest (:args c)))
+                        (storage/add-to-group! c (storage/chest-of (ctx/view c) (:args c)))
                         (ctx/update-mem! c assoc :offered true))
                       (ctx/end c :done nil))
       (empty? pool) (stop! c :condition-failed :no-chest)

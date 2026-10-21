@@ -187,6 +187,17 @@
             (is (= #{[10 64 0] [11 64 0]} (chests-in p)))
             (is (= [{"dirt" 5}] [(into {} (map (juxt :name :count)) (get-in @(fake/state p) [:containers [11 64 0]]))]))))))))
 
+(deftest deposit-into-an-explicit-chest-joins-it-to-the-group
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-far {:inventory [{:name "dirt" :count 5}]
+                                          :blocks {"10,64,0" "chest" "11,64,0" "chest"}
+                                          :containers {"10,64,0" [] "11,64,0" []}})]
+          (wt/know-place! eng :chest chest)
+          (is (= :done (:kind (await (wt/ending-of eng job {:items ["dirt"] :chest [11 64 0]} 30)))))
+          (is (contains? (group-cells eng) [11 64 0])))))))
+
 (deftest deposit-stops-with-a-reason-when-the-chests-are-full-and-making-is-off
   (async done
     (tu/run-async done
