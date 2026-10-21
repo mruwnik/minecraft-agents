@@ -39,8 +39,8 @@
    :expect [{:event {:source :job :kind :completed :data {:stand #at [19 4 22]}} :within-s 220 :of-job true}
             {:no-event {:source :job :kind :idle :level :warn} :for-s 220 :until {:source :job :kind :completed}}]
    :after [[:body-near [20.5 4 22.5] 3]]}
-  ;; card 283abe11: a heading and a length, no target, dig that far from the body's cell at its height
-  {:name "heading-and-length-dig-east-from-the-bodys-cell"
-   :act [[:job (jobs.access.tunnel {:heading :east :length 10})]]
+  ;; card 283abe11: :heading limits the approach to one line; a target 11 east on the body's row is dug from its cell
+  {:name "heading-east-digs-to-the-target-from-the-bodys-cell"
+   :act [[:job (jobs.access.tunnel {:target #at [14 4 16] :heading :east})]]
    :expect [{:event {:source :job :kind :completed :data {:stand #at [13 4 16]}} :within-s 220 :of-job true}]
    :after [[:body-near [13.5 4 16.5] 2] [:block [14 4 16] "stone"]]}]}
