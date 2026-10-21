@@ -142,9 +142,12 @@
         (is (fled? (await (flight-round respond {:self {:health 20} :inventory [{:name "iron_pickaxe" :count 1}]
                                                 :entities [(zombie 3 0)]})))
             "a pickaxe is not a weapon: retreat")
+        (is (fought? (await (flight-round respond {:self {:health 20} :inventory sword
+                                                  :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]})))
+            "a lone creeper within fuse range with a sword: hit-and-back")
         (is (fled? (await (flight-round respond {:self {:health 20} :inventory sword
-                                                :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]})))
-            "a creeper: retreat")
+                                                :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}} (zombie 9 4 1)]})))
+            "a creeper with another mob near: retreat")
         (is (fled? (await (flight-round respond {:self {:health 20} :inventory sword
                                                 :entities [(zombie 7 3 0) (zombie 8 3 1) (zombie 9 3 -1)]})))
             "outnumbered: retreat")
@@ -1141,6 +1144,8 @@
     (is (= 3.45 (/ (js/Math.round (* 100 (cost/fight-damage {:weapon "iron_sword" :equipment iron-armour :mobs [z]}))) 100))
         "iron armour: vanilla's 13.5 effective points against 3 hp hits take 54% off")
     (is (= 3.75 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [(assoc z :hits 2)]})) "a struck mob has less left")
+    (is (= 6 (cost/fight-damage {:weapon "stone_sword" :equipment nil :mobs [{:name "creeper" :distance 3}]}))
+        "a creeper: 4 swings at 1.5 each (hit-and-back), not the 43 blast")
     (is (= 10 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [{:name "skeleton" :distance 13}]}))
         "a skeleton shoots while the body closes 10 blocks")))
 
@@ -1155,7 +1160,9 @@
         (doseq [[why spec want] [["no weapon vs one zombie" {:entities [(zombie 3 0)]} :flee]
                                  ["sword vs one zombie" {:inventory sword :entities [(zombie 3 0)]} :fight]
                                  ["no weapon vs three zombies" {:entities [(zombie 7 3 0) (zombie 8 3 1) (zombie 9 3 -1)]} :flee]
-                                 ["sword vs a creeper" {:inventory sword :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} :flee]
+                                 ["sword vs a creeper within fuse range: hit-and-back" {:inventory sword :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} :fight]
+                                 ["sword vs a creeper farther off" {:inventory sword :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 7.8 :y 64 :z 0}}]} :flee]
+                                 ["no weapon vs a creeper" {:entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} :flee]
                                  ["sword vs a skeleton at range" {:inventory sword :entities [(assoc (skeleton 7 12 0) :visible true)]} :fight]
                                  ["no weapon vs a skeleton at range" {:entities [(assoc (skeleton 7 12 0) :visible true)]} :flee]
                                  ["sword vs two zombies, no armour" {:inventory sword :entities [(zombie 7 3 0) (zombie 8 3 1)]} :flee]
@@ -1445,3 +1452,9 @@
           (core/submit! eng respond {})
           (await (core/tick! eng))
           (is (= [] (mutes eng))))))))
+
+(deftest a-body-backs-off-from-a-creeper-along-open-ground
+  (let [flat (fn [{:keys [y]}] (if (< y 64) "stone" "air"))
+        cell (hostile-fight/back-cell flat {:x 0.5 :y 64 :z 0.5} {:x 2.5 :y 64 :z 0.5} 3)]
+    (is (<= (:x cell) -2) "three blocks straight away from the creeper")
+    (is (nil? (hostile-fight/back-cell (constantly "stone") {:x 0.5 :y 64 :z 0.5} {:x 2.5 :y 64 :z 0.5} 3)) "walled in: no cell")))

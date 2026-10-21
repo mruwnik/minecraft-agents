@@ -8,6 +8,8 @@
             [jobs.lib.danger :as danger-q]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.look :as look]
+            [jobs.survival.respond.walk :as walk]
+            [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -15,6 +17,10 @@
    ::ranged-chase {:default 6 :doc "Farthest a ranged mob may be for the body to cross open ground to it while another hostile is in range; beyond it the fight declines." :spec (a/num-in 0 nil)}
    ::chase-timeout-s {:default 10 :doc "Seconds one walk toward a hostile may take: it moves, so the walk aims again at where it is now this often." :spec (a/num-in 0 nil)}
    ::point-blank {:default 1.5 :doc "Blocks within which a hostile (a shooter too, not a creeper or an enderman) is in the body's own cell or beside it: a cornered body fights a shooter this close instead of hiding from it." :spec (a/num-in 0 nil)}
+   ::creeper-range {:default 7 :doc "Blocks within which an armed, healthy body fights a lone creeper hit-and-back instead of fleeing it (a creeper met this near cannot be outrun)." :spec (a/num-in 0 nil)}
+   ::creeper-returns {:default 2 :doc "Flights from a creeper within ::creeper-return-s after which an armed, healthy body fights the next lone creeper however far it is (it keeps coming back). 0: never." :spec (a/int-in 0 nil)}
+   ::creeper-return-s {:default 600 :doc "Seconds a flight from a creeper counts toward ::creeper-returns." :spec (a/num-in 0 nil)}
+   ::back-step {:default 6 :doc "Blocks the body backs off from a creeper after each hit: its fuse runs on, so it ends out of the blast's reach (about 6)." :spec (a/num-in 1 nil)}
    ::leash {:default 20 :doc "Blocks from where a hostile fight started beyond which a hostile is not chased." :spec (a/num-in 0 nil)}})
 
 (defn hostiles? [c] (= :hostiles (:targets (:args c))))
@@ -89,11 +95,11 @@
                      cells)))))
 
 (defn held?
-  "Whether the call waits for target instead of walking to it: :hold, or in a :hostiles fight a melee mob in or beside unlit space
+  "Whether the call waits for target instead of walking to it: :hold, a creeper (it comes, the body hits and backs off), or in a :hostiles fight a melee mob in or beside unlit space
   (a player does not chase into unlit space: more may be there, unseen)."
   [c target]
   (boolean (and (not (combat/ranged? target))
-                (or (:hold (:args c)) (and (hostiles? c) (dark-around? c target))))))
+                (or (:hold (:args c)) (combat/creeper? target) (and (hostiles? c) (dark-around? c target))))))
 
 (defn held-idle?
   "Whether a held fight has waited ::hold-s since its last swing (or its start) with no mob coming within reach."
@@ -140,9 +146,42 @@
                         :equipment (cost/equipment-of (.-equipment self))
                         :mobs (map #(mob-of p (struck-of (.-id %)) %) hostiles)})))
 
+(defn creeper-fled-from
+  "How many times the body fled a creeper within ::creeper-return-s, by the :hostile entries (c is a ctx)."
+  [c]
+  (let [since (- (ctx/now c) (* 1000 (settings/get settings ::creeper-return-s)))]
+    (count (filter #(and (> (:t %) since) (= "creeper" (get-in % [:data :mob])) (= :flee (get-in % [:data :decision])))
+                   (ctx/entries c :hostile)))))
+
+(defn hit-and-back?
+  "Whether the body fights hostiles hit-and-back (combat.attack): exactly one, a creeper, a sword or axe carried, and the
+  creeper within ::creeper-range or fled from ::creeper-returns times lately. Health is weighed by the fight's price."
+  [c hostiles]
+  (let [p (:primitives c)
+        creeper (first hostiles)
+        returns (settings/get settings ::creeper-returns)]
+    (boolean (and (= 1 (count hostiles))
+                  (combat/creeper? creeper)
+                  (contains? weapon/weapon-damage-by-name (combat/best-weapon p (combat/weapons c)))
+                  (or (<= (danger-q/mob-distance p creeper) (settings/get settings ::creeper-range))
+                      (and (pos? returns) (>= (creeper-fled-from c) returns)))))))
+
+(defn back-cell
+  "The cell n blocks (at most) from from in the open direction that ends farthest from threat, gaining at least a block on
+  it; nil when none does. block-at: cell -> block name (as respond.options/block-at-fn)."
+  [block-at from threat n]
+  (let [now (u/dist from threat)]
+    (->> (range 0 360 45)
+         (keep #(peek (walk/walk-cells block-at from (walk/rotate (or (walk/unit (- (:x from) (:x threat)) (- (:z from) (:z threat))) [1 0]) %) n)))
+         (filter #(>= (u/dist % threat) (inc now)))
+         (sort-by #(- (u/dist % threat)))
+         first)))
+
+(defn back-step [] (settings/get settings ::back-step))
+
 (defn wins?
   "Whether fighting hostiles leaves :reserve health (jobs.lib.danger/fight-reserve): the one weighing the response and the
-  flight's cornered options share. Never against a creeper, nor against none."
+  flight's cornered options share. Never against a creeper (hit-and-back? decides that), nor against none."
   ([c hostiles] (wins? c hostiles (constantly nil)))
   ([c hostiles struck-of]
    (boolean (and (seq hostiles)

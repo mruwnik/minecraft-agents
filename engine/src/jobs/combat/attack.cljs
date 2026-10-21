@@ -8,6 +8,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.access :as access]
             [jobs.lib.look :as look]
             [jobs.lib.vantage :as vantage]
             [jobs.lib.cost.weapon :as weapon]
@@ -339,16 +340,43 @@
   (let [carried (map :name (u/inventory p))]
     (some (fn [use] (->> carried (filter #(str/includes? % use)) (sort-by weapon/weapon-score >) first)) uses)))
 
+(declare strike!)
+(def back-leg-s "Seconds one step back from a creeper may take." 2)
+(def look-settle-ms "Time for sensing to show the creeper again after the body turns back to it." 400)
+
+(defn ^:async back-off!
+  "Step out of a creeper's reach after a hit, or from one whose fuse is lit (it blows on its own, harmlessly past ~6 blocks): true when the body moved. Nothing when no open cell gains on it."
+  [c creeper]
+  (let [p (:primitives c)
+        at (access/sensed-at p access/hidden-guess)
+        from (u/self-pos c)
+        cell (hostile/back-cell (fn [{:keys [x y z]}] (at [x y z])) from (u/pos-of (.-pos creeper)) (hostile/back-step))]
+    (when cell
+      (await (ctx/call c :back 'jobs.movement.run-away {:pos cell :range 0 :leg-s back-leg-s}))
+      (let [{:keys [x y z]} (u/pos-of (.-pos creeper))]
+        (await (ctx/act c :look #js {:pos #js {:x x :y (+ 1 y) :z z}}))
+        (await (ctx/act c :wait #js {:ms look-settle-ms}))
+        true))))
+
 (defn ^:async engage!
-  "Equip, walk to the nearest target and swing once."
+  "Equip, walk to the nearest target and swing once; a creeper is waited for, hit once and backed away from."
   [c target]
   (await (combat/equip-best! c (weapon-for (:primitives c) (ctx/use c :tools))))
+  (if (and (hostile/hostiles? c) (true? (.-fusing target)) (await (back-off! c target)))
+    :again
+    (await (strike! c target)))
+  :again)
+
+(defn ^:async strike!
+  "Walk to target, swing once and, for a creeper, step back out of its blast."
+  [c target]
   (case (await (walk! c target))
     :there (await (swing-or-close-in! c target false))
     :arrived (await (swing-or-close-in! c target true))
     (:partial :held) nil
     (fail! c target))
-  :again)
+  (when (and (hostile/hostiles? c) (combat/creeper? target) (not (some #{(.-id target)} (:killed (ctx/mem c)))) (<= (u/dist (u/self-pos c) (u/pos-of (.-pos target))) (reach)))
+    (await (back-off! c target))))
 
 (defn swing-gap-ms
   "The least time between swings at target: ::vehicle-gap-ms for a vehicle, else the call's or weapon's gap."

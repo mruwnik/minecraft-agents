@@ -223,7 +223,7 @@
                                :fighting? (fight-begun? c m near)
                                :single? (= 1 (count near))
                                :cannot-outrun? (not (cost/outruns? (or (.-food self) 20) (map cost/mob-kind (remove combat/ranged? near))))
-                               :creeper? (boolean (some combat/creeper? near))
+                               :creeper? (boolean (and (some combat/creeper? near) (not (hostile/hit-and-back? c near))))
                                :reserve reserve
                                :damage (hostile/damage c near #(struck-of c %))}))
         stay? (stay-under-roof? c near)

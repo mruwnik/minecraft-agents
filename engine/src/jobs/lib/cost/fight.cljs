@@ -26,15 +26,19 @@
   name, nil a fist) wearing equipment (jobs.lib.cost.armour).
   The mobs die one at a time, each after ceil(health left / weapon damage) hits swing-gap-ms apart. Every
   mob hurts the body (jobs.lib.cost.threat/mob-hurt, after armour) until it dies. A ranged mob also shoots while the
-  body walks up to it (distance less 3, at walk-speed)."
+  body walks up to it (distance less 3, at walk-speed). A creeper costs threat/creeper-exchange per swing (hit-and-back), not its blast."
   [{:keys [weapon equipment mobs]}]
   (let [stats (armour/armour-stats equipment)
         dmg (weapon/weapon-damage weapon)
         gap-s (/ (swing-gap-ms weapon) 1000)
         approach (fn [m] (if (contains? weapon/ranged-mobs (:name m)) (/ (max 0 (- (:distance m 0) 3)) walk-speed) 0))
-        kill-s (fn [m] (* gap-s (js/Math.ceil (/ (max 0 (weapon/remaining-health (assoc m :damage dmg))) dmg))))
-        ends (rest (reductions + 0 (map #(+ (approach %) (kill-s %)) mobs)))]
-    (reduce + 0 (map (fn [m end] (threat/mob-hurt stats (:name m) end)) mobs ends))))
+        swings (fn [m] (js/Math.ceil (/ (max 0 (weapon/remaining-health (assoc m :damage dmg))) dmg)))
+        kill-s (fn [m] (* gap-s (swings m)))
+        ends (rest (reductions + 0 (map #(+ (approach %) (kill-s %)) mobs)))
+        hurt (fn [m end] (if (= "creeper" (:name m))
+                           (* (swings m) (threat/creeper-exchange))
+                           (threat/mob-hurt stats (:name m) end)))]
+    (reduce + 0 (map hurt mobs ends))))
 
 (defn leaves-reserve?
   "Whether a fight costing damage leaves at least reserve of health."
@@ -42,7 +46,7 @@
   (<= damage (- health reserve)))
 
 (defn decide
-  "Pure but for its settings: :flee from any creeper, else :fight when the expected damage leaves at least reserve
+  "Pure but for its settings: :flee when creeper? (a creeper the body will not fight hit-and-back), else :fight when the expected damage leaves at least reserve
   health, or when a fight already begun (fighting?) is against a single mob (single?) above ::hysteresis-health, or
   against a mob the body cannot outrun (cannot-outrun?: the flight would lose as well), else :flee."
   [{:keys [health damage creeper? reserve fighting? single? cannot-outrun?]}]

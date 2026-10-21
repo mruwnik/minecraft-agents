@@ -11,6 +11,7 @@
 
 (a/defargs settings
   {::creeper-blast {:default 43 :doc "Damage a creeper's blast is costed at." :spec (a/int-in 0 nil)}
+   ::creeper-exchange {:default 1.5 :doc "Damage costed per swing of a hit-and-back fight with a lone creeper (a late step back lets the fuse run on); the fight never costs the blast." :spec (a/num-in 0 nil)}
    ::provoked-share {:default 0.1 :doc "What a provoked-only mob's threat counts for when it is met, not fought." :spec (a/num-in 0 nil)}})
 
 (def mob-dps
@@ -19,6 +20,7 @@
    "witch" 3 "pillager" 2 "vindicator" 8 "slime" 2 "silverfish" 1 "endermite" 2 "phantom" 2 "enderman" 7})
 
 (defn creeper-blast [] (settings/get settings ::creeper-blast))
+(defn creeper-exchange [] (settings/get settings ::creeper-exchange))
 (def provoked-only #{"enderman" "zombified_piglin"})
 (defn provoked-share [] (settings/get settings ::provoked-share))
 
