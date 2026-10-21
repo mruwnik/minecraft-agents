@@ -11,7 +11,7 @@
             [jobs.lib.util :as u]
             [jobs.survival.respond.state :as flight]
             [jobs.lib.rooms :as room-lib]
-            [jobs.survival.respond.walk :as walk]))
+            [jobs.lib.flee-walk :as walk]))
 
 (a/defargs settings
   {::blast-cone {:default 90 :doc "Degrees either side of the line to a goal within which a creeper in blast reach of the body lies on the way: a step toward such a goal that is no step away from it lets the creeper reach the body." :spec (a/num-in 0 180)}

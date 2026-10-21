@@ -9,7 +9,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.look :as look]
-            [jobs.survival.respond.walk :as walk]
+            [jobs.lib.flee-walk :as walk]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.util :as u]))
 

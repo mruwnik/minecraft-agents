@@ -25,7 +25,7 @@
             [jobs.survival.respond.state :as flight]
             [jobs.survival.respond.refuge :as refuge]
             [jobs.survival.respond.cover :as cover]
-            [jobs.survival.respond.walk :as respond.walk]
+            [jobs.lib.flee-walk :as flee-walk]
             [jobs.lib.seal :as seal]
             [jobs.survival.respond.pillar :as respond.pillar]
             [jobs.survival.wall-placer :as wall-placer]))
@@ -873,9 +873,9 @@
   (fn [{:keys [x y z]}] (if (and (= y 63) (<= x edge) (= z 0)) "stone" "air")))
 
 (deftest walk-cells-stop-at-the-edge-of-a-floor
-  (is (= [1 2 3] (mapv :x (respond.walk/walk-cells (edge-world 3) {:x 0.5 :y 64 :z 0.5} [1 0] 6))) "the cells past the edge have no floor")
-  (is (= [1 2 3] (mapv :x (respond.walk/walk-cells (edge-world 3) {:x 0.5 :y 64 :z 0.5} [1 0] 3))))
-  (is (= [1 2 3 4 5 6] (mapv :x (respond.walk/walk-cells (edge-world 9) {:x 0.5 :y 64 :z 0.5} [1 0] 6)))))
+  (is (= [1 2 3] (mapv :x (flee-walk/walk-cells (edge-world 3) {:x 0.5 :y 64 :z 0.5} [1 0] 6))) "the cells past the edge have no floor")
+  (is (= [1 2 3] (mapv :x (flee-walk/walk-cells (edge-world 3) {:x 0.5 :y 64 :z 0.5} [1 0] 3))))
+  (is (= [1 2 3 4 5 6] (mapv :x (flee-walk/walk-cells (edge-world 9) {:x 0.5 :y 64 :z 0.5} [1 0] 6)))))
 
 (defn sealed-world
   "Floor at y 63 everywhere, stone at feet and head height on the four sides of cell 0,0 only: the diagonals open."
@@ -886,9 +886,9 @@
     :else "air"))
 
 (deftest walk-cells-do-not-cut-a-corner-between-two-blocks
-  (is (= [] (respond.walk/walk-cells sealed-world {:x 0.5 :y 64 :z 0.5} (respond.walk/unit 1 1) 2))
+  (is (= [] (flee-walk/walk-cells sealed-world {:x 0.5 :y 64 :z 0.5} (flee-walk/unit 1 1) 2))
       "a body walled in on four sides cannot squeeze out diagonally")
-  (is (= 2 (count (respond.walk/walk-cells (fn [{:keys [y]}] (if (= y 63) "stone" "air")) {:x 0.5 :y 64 :z 0.5} (respond.walk/unit 1 1) 2)))
+  (is (= 2 (count (flee-walk/walk-cells (fn [{:keys [y]}] (if (= y 63) "stone" "air")) {:x 0.5 :y 64 :z 0.5} (flee-walk/unit 1 1) 2)))
       "past no corner, the diagonal is open"))
 
 (defn ^:async first-act-round

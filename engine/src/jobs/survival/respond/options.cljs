@@ -28,7 +28,7 @@
             [jobs.lib.rooms :as room-lib]
             [jobs.survival.respond.pillar :as pillar]
             [jobs.survival.respond.refuge :as refuge]
-            [jobs.survival.respond.walk :as walk]))
+            [jobs.lib.flee-walk :as walk]))
 
 (def tool-weapons
   "Item name substrings a cornered body with no weapon and no seal swings: any of them beats the fist."

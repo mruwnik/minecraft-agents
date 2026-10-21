@@ -14,7 +14,7 @@
             [jobs.lib.shot :as shot]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
-            [jobs.survival.respond.walk :as walk]
+            [jobs.lib.flee-walk :as walk]
             [clojure.string :as str]))
 
 (a/defargs settings
@@ -62,7 +62,7 @@
   (ctx/update-mem! c update :placed-cells (fnil conj []) {:cell (u/cell-vec cell) :item item}))
 
 (defn floor
-  "The lowest feet height a flight step may end at under rock: respond.walk/max-descent below where the flight began."
+  "The lowest feet height a flight step may end at under rock: flee-walk/max-descent below where the flight began."
   [c]
   (- (:y (or (:flight-from (ctx/mem c)) (u/self-pos c))) (walk/max-descent)))
 

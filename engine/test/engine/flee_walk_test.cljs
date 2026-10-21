@@ -1,10 +1,10 @@
-(ns engine.respond-walk-test
-  "jobs.survival.respond.walk's choice of a flight target: water is slow, cover from a ranged mob comes first (pure,
+(ns engine.flee-walk-test
+  "jobs.lib.flee-walk's choice of a flight target: water is slow, cover from a ranged mob comes first (pure,
   over block-at fns)."
   (:require [cljs.test :refer [deftest is]]
             [jobs.lib.reach :as reach]
             [jobs.survival.respond.cover :as cover]
-            [jobs.survival.respond.walk :as walk]))
+            [jobs.lib.flee-walk :as walk]))
 
 (defn pond-world
   "Stone up to y 62; at y 63 water in the band x >= 1, |z| <= 2 (a pond straight ahead of a body fleeing +x), stone

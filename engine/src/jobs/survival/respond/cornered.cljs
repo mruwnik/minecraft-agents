@@ -30,7 +30,7 @@
             [jobs.lib.rooms :as room-lib]
             [jobs.survival.respond.pillar :as pillar]
             [jobs.survival.respond.refuge :as refuge]
-            [jobs.survival.respond.walk :as walk]))
+            [jobs.lib.flee-walk :as walk]))
 
 
 (defn fist-hold?

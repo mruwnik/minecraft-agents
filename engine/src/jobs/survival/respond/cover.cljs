@@ -17,7 +17,7 @@
             [jobs.survival.respond.goal :as respond.goal]
             [jobs.lib.rooms :as room-lib]
             [jobs.survival.respond.refuge :as refuge]
-            [jobs.survival.respond.walk :as walk]
+            [jobs.lib.flee-walk :as walk]
             [jobs.survival.respond.options :as cornered]
             [jobs.survival.respond.cornered :as pick]))
 

@@ -1,4 +1,4 @@
-(ns jobs.survival.respond.walk
+(ns jobs.lib.flee-walk
   "Where a fleeing body can walk: the open cells along a direction and the walk target away from the threats (pure,
   over a block-at fn)."
   (:require [engine.args :as a]

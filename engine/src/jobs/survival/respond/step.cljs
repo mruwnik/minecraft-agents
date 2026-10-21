@@ -17,7 +17,7 @@
             [jobs.survival.respond.goal :as respond.goal]
             [jobs.survival.respond.pillar :as pillar]
             [jobs.survival.respond.refuge :as refuge]
-            [jobs.survival.respond.walk :as walk]))
+            [jobs.lib.flee-walk :as walk]))
 
 (a/defargs settings
   {::eat-gap {:default 12 :doc "Blocks to the nearest hostile at which a bite is eaten per flee step." :spec (a/num-in 0 nil)}

@@ -30,7 +30,7 @@
             [jobs.survival.respond.state :as respond.state]
             [jobs.lib.seal :as seal]
             [jobs.survival.respond.goal :as respond.goal]
-            [jobs.survival.respond.walk :as respond.walk]))
+            [jobs.lib.flee-walk :as flee-walk]))
 
 (def ms-per-call
   "Game time one primitive call takes in these tests: a flight ends by time (out of line, its bound), so the clock moves
@@ -1121,7 +1121,7 @@
               s (buried-setup {:inventory [] :entities [(zombie 7 6 {})]})]
           (await (run-job! (stub-go-to s calls identity) 'test.flight {:goal {:x -9 :y 64 :z 0}}))
           (is (= {:x -9 :y 64 :z 0} (:pos (first @calls))) "the leg goes to the goal")
-          (is (= (respond.walk/max-descent) (get-in (first @calls) [:settings :jobs.lib.walk.world/y-margin])) "and its plan may not dip under the descent floor"))))))
+          (is (= (flee-walk/max-descent) (get-in (first @calls) [:settings :jobs.lib.walk.world/y-margin])) "and its plan may not dip under the descent floor"))))))
 
 (deftest a-buried-flight-with-no-stair-digs-a-pocket-before-any-hop
   (async done

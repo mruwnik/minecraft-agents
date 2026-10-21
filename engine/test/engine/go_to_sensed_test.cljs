@@ -34,7 +34,7 @@
             [jobs.movement.go-to.torch :as torch]
             [jobs.movement.go-to.walk :as gwalk]
             [jobs.survival.respond.options :as cornered]
-            [jobs.survival.respond.walk :as walk]))
+            [jobs.lib.flee-walk :as walk]))
 
 (defn sensed-only
   "Wrapped fake primitives for spec, lit, whose raw blockAt throws. rawWorld stays, as on the body: go-to's planner
