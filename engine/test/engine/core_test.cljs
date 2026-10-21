@@ -2050,3 +2050,16 @@
           (dotimes [_ 10] (swap! clock + 10000) (await (core/tick! eng)))
           (is (= 1 (count (silent))) "once per spell")
           (is (= 1 (count (:attention (core/state eng))))))))))
+
+(deftest an-act-in-flight-past-the-limit-is-aborted-and-names-the-act
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (update (setup {}) :eng assoc :jobs
+                                           (assoc registry 'hang (tu/job (fn ^:async hang-round [c] (await (ctx/act c :wait #js {:ms 10})) (done c)))))]
+          (aset p "wait" (fn [& _] (js/Promise. (fn [_ _]))))
+          (core/submit! eng '(hang) {})
+          (await (settings/with-settings {:engine.core.round/act-max-s 1} #(core/tick! eng)))
+          (is (some #(and (= :stuck (:kind %)) (= "wait" (:name %))) @seen) "action.stuck names the act")
+          (is (re-find #"act-stuck: wait" (str (get-in (core/state eng) [:failed "j1" :error]))) "the job is parked failed")
+          (is (nil? (core/holder eng)) "the body is free"))))))

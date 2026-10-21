@@ -24,7 +24,10 @@
 (a/defargs settings
   {:engine.core.round/spin-calls
    {:default 100000 :spec (a/int-in 1000 nil)
-    :doc "Engine calls (checks, writes, acts, alive? tests) one job may make inside a single event-loop turn before it is failed as spinning: a loop that never awaits starves every other body and trigger."}})
+    :doc "Engine calls (checks, writes, acts, alive? tests) one job may make inside a single event-loop turn before it is failed as spinning: a loop that never awaits starves every other body and trigger."}
+   :engine.core.round/act-max-s
+   {:default 300 :spec (a/num-in 1 nil)
+    :doc "Seconds one act (a primitive call) may stay in flight before it is aborted as stuck: the job fails with the act named, the body is free. :offline is allowed this plus its own time."}})
 
 (def ^:private spin-count (volatile! 0))
 
@@ -45,6 +48,11 @@
   (when quote-deadline (throw (js/Error. "a quote cannot act, call or write")))
   (when-not (owner? eng token) (throw (cut-error))))
 
+(defn stuck-after
+  "A promise that rejects with an act-stuck error after ms; on-stuck gets the timer id so the caller can clear it."
+  [ms k on-stuck]
+  (js/Promise. (fn [_ reject] (on-stuck (js/setTimeout #(reject (js/Error. (str "act-stuck: " (name k) " in flight over " (js/Math.round (/ ms 1000)) " s"))) ms)))))
+
 (defn ^:async act!
   "Every acting primitive call from a job: check the ownership token, save
   memory, emit action.started, call, count what it used and yielded on every frame of the chain (engine.core.tally),
@@ -55,7 +63,8 @@
   (limits/check-act! eng base k args)
   (act-started! eng token root k args)
   (save-memory-soon! eng)
-  (let [useful? (useful-act? eng root k)
+  (let [timer (volatile! nil)
+        useful? (useful-act? eng root k)
         action-id (.randomUUID crypto)
         fields {:level :debug :job id :chain chain :round round :reflex reflex :name (name k)
                 :action-id action-id}
@@ -70,7 +79,10 @@
             (emit! eng (merge fields {:source :action :kind :logged-out :level :info} away-record)))]
     (try
       (when useful? (body-act! eng 1))
-      (let [r (await (if (= :chat k) (chat/gate! eng p token args) (.call (aget p (name k)) p token args)))
+      (let [limit-ms (+ (* 1000 (settings/get settings :engine.core.round/act-max-s))
+                        (if (= :offline k) (+ 600000 (or (some-> args .-ms) 0)) 0))
+            r (await (js/Promise.race #js [(if (= :chat k) (chat/gate! eng p token args) (.call (aget p (name k)) p token args))
+                                           (stuck-after limit-ms k #(vreset! timer %))]))
             _ (when (= "offline" (some-> r .-status)) (throw (offline-cut-error)))
             to (when (= :moveTo k) (self-pos p))]
         (when (= :moveTo k)
@@ -87,6 +99,8 @@
                        (number? (.-distance r)) (assoc :distance (/ (js/Math.round (* 100 (.-distance r))) 100)))))
         r)
       (catch :default e
+        (when (re-find #"^act-stuck" (str (.-message e)))
+          (emit! eng (merge fields {:source :action :kind :stuck :level :warn :text (.-message e) :args (js->clj args)})))
         (tally/count-act! eng root slots before)
         (save-memory-soon! eng)
         (emit! eng (cond-> (merge fields {:source :action :kind :done
@@ -94,6 +108,7 @@
                      (not (cut? e)) (assoc :error (str e))))
         (throw e))
       (finally
+        (js/clearTimeout @timer)
         (act-ended! eng token)
         (when useful? (body-act! eng -1))
         (when away-record (reset! (:away eng) nil))))))
