@@ -13,7 +13,7 @@
   "Pick where a farm patch would go: the footprint of :plan (a plan id), else :w x :h. Ranks patches by flatness first, then water
   within 4, open sky and nearness to :center. It tries patches nearest-first and stops once ::limit flat open-sky ones are found (with
   water within 4, when water is in range). A patch of 8 or more is tried at every fourth corner. Reads blocks only: it never digs or marks
-  anything. A scan reads at most jobs.lib.patch's ::max-reads blocks, then settles for the best spots so far. It never walks to the spot: a
+  anything. A patch whose seen crop-cell light (block or sky) is under 9 is skipped. A scan reads at most jobs.lib.patch's ::max-reads blocks, then settles for the best spots so far. It never walks to the spot: a
   parent does.
   The search is one jobs.explore.search child with :patch: it looks round and scans the area round :center (or the body); while no patch
   is found it walks that job's legs and scans where each ends, and stops at the first patch.

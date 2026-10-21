@@ -21,4 +21,16 @@
   ;; Card e3e88fbd: the ending lists every spot with its score and level, not only the best.
   {:name "ending-lists-every-spot-with-score-and-level"
    :act [[:job (jobs.farm.find-spot {:range 20 :settings {:jobs.farm.find-spot/depth 7 :jobs.farm.find-spot/limit 3}})]]
-   :expect [{:event {:source :job :kind :completed :data {:spots [:has {:level [:>= 0] :score [:any]}]}} :within-s 60 :of-job true}]}]}
+   :expect [{:event {:source :job :kind :completed :data {:spots [:has {:level [:>= 0] :score [:any]}]}} :within-s 60 :of-job true}]}
+  ;; Card b019a678: crops need light 9+, so a dark cave floor is no field (the job keeps exploring, never completes) and a lit one is.
+  {:name "dark-cave-floor-is-no-spot"
+   :plot {:light :dark :height 6 :floor "grass_block"}
+   :body {:at [64.5 0 32.5] :settle-s 2}
+   :act [[:job (jobs.farm.find-spot {:range 12})]]
+   :expect [{:event {:source :job :kind :planned} :within-s 40}
+            {:no-event {:source :job :kind :completed} :for-s 40}]}
+  {:name "lit-cave-floor-is-a-spot"
+   :plot {:light :lit :height 6 :floor "grass_block"}
+   :body {:at [64.5 0 32.5] :settle-s 2}
+   :act [[:job (jobs.farm.find-spot {:range 12})]]
+   :expect [{:event {:source :job :kind :completed :data {:spots [:has {:pos [:any]}]}} :within-s 60 :of-job true}]}]}

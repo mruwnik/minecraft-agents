@@ -80,6 +80,19 @@
           (when (or (nil? n) (open? n))
             (recur (inc y)))))))
 
+(def crop-light "The light a crop needs (block light, or sky light undarkened: the clock does not decide)." 9)
+
+(defn crop-lit-fn
+  "(fn [x y z]) whether the cell over the top y of a column gets crop-light; true where the body has no light data there."
+  [p]
+  (let [raw (look/raw-of p)]
+    (fn [x y z]
+      (let [y (inc y)]
+        (or (nil? raw)
+            (not (look/light-known? raw x y z))
+            (let [packed (.lightAt ^js raw x y z)]
+              (<= crop-light (max (bit-and packed 15) (bit-shift-right packed 4)))))))))
+
 (defn patch-ring
   "How many cells out from the centre of the patch with NW corner x z lies (the larger of its x and z offsets, rounded up)."
   [{:keys [w h]} from x z]
@@ -125,6 +138,7 @@
                            (let [r (apply f k)] (vswap! store assoc k r) r))))
         top-of (memo tops (fn [x z] (surface/column-top name-fn x z (:y from) depth)))
         sky-of (memo skies (fn [x z t] (sky-above? name-fn x z t (:y from) depth)))
+        lit? (crop-lit-fn p)
         wet? (fn [x z y] (farm/hydrated? waters x y z))
         fx (:x from) fz (:z from)
         by-ring (corners-by-ring a from)
@@ -134,6 +148,7 @@
                  (let [cols (for [dx (clojure.core/range w) dz (clojure.core/range h)] [(+ x dx) (+ z dz)])
                        tops (mapv (fn [[cx cz]] (top-of cx cz)) cols)]
                    (when (and (not-any? nil? tops)
+                              (every? true? (map (fn [[cx cz] t] (lit? cx t cz)) cols tops))
                               (not (some true? (map (fn [[cx cz] t] (and blocked? (blocked? cx t cz))) cols tops))))
                      (let [wetn (count (filter true? (map (fn [[cx cz] t] (wet? cx cz t)) cols tops)))
                            sky (every? true? (map (fn [[cx cz] t] (sky-of cx cz t)) cols tops))

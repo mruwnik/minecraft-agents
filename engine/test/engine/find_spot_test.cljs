@@ -88,8 +88,11 @@
       "stone" nil
       "stone" "stone"
       "dirt" "stone")
+    (is (nil? (surface/column-top (cave "stone" "stone") 0 0 64 12 false)) "a building's surface never goes down under rock")
     (is (nil? (surface/column-top (fn [{:keys [y]}] (if (= y 63) "water" (if (<= 64 y 67) "air" "stone"))) 0 0 64 12)) "a lake floor is no spot")
-    (is (nil? (surface/column-top (constantly "stone") 0 0 64 12)) "solid rock all through")))
+    (is (nil? (surface/column-top (constantly "stone") 0 0 64 12)) "solid rock all through")
+    (is (nil? (surface/column-top (fn [{:keys [y]}] (cond (= y 63) "dirt" (<= 64 y 67) "air" (<= y 70) "stone" (= y 71) nil :else "air")) 0 0 64 12))
+        "a surface with nothing seen above it and rock under it is no roof: the pocket below is not its top")))
 
 (deftest score-patch-table
   (are [in expected] (= expected (pt/score-patch in))
@@ -259,6 +262,19 @@
         roofed (scan-at (merge (patch 2 0 3 3 63 "dirt") {"3,79,1" "oak_leaves"}) {:x 0 :y 64 :z 0} {} {:x 0 :y 64 :z 0})]
     (is (= [true] (mapv :sky open)) "stone far below must not matter")
     (is (= [false] (mapv :sky roofed)) "leaves at from-y + depth + 3 over one column")))
+
+(defn lit-scan [light]
+  (let [p (tu/fake {:blocks (patch 2 0 3 3 63 "dirt") :self {:pos {:x 0 :y 64 :z 0}} :time 6000 :light {} :light-default light})]
+    (pt/scan p {:w 3 :h 3 :range 6 :depth 12 :limit 50} {:x 0 :y 64 :z 0})))
+
+(deftest a-dark-floor-is-no-field-and-a-lit-one-is
+  (are [light n] (= n (count (lit-scan light)))
+    [0 0] 0
+    [8 0] 0
+    [0 8] 0
+    [0 9] 1
+    [9 0] 1
+    [15 0] 1))
 
 (deftest scan-sees-water-sitting-on-the-platform
   (let [world (assoc (patch -3 -3 9 9 99 "stone") "6,100,0" "water")

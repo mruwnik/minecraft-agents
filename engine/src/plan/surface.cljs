@@ -14,7 +14,7 @@
   returns the block name seen there, nil when unseen."
   [name-at]
   (let [name-fn (fn [pos] (let [n (name-at pos)] (if (and n (re-find on-ground n)) "air" n)))]
-    (fn [x z y] (spot/column-top name-fn x z y depth))))
+    (fn [x z y] (spot/column-top name-fn x z y depth false))))
 
 (defn follow
   "cells ({:pos [x y z]}) with each column [x z] moved up or down as a whole so its lowest cell stands on the top of the
