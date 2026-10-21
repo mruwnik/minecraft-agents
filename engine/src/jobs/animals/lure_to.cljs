@@ -241,15 +241,20 @@
   [c {:keys [x y z]}]
   (contains? (pg/gate-index (:world (:engine c))) [(js/Math.floor x) (js/Math.floor (+ y 0.01)) (js/Math.floor z)]))
 
-(defn cell-of [{:keys [x y z]}]
-  [(js/Math.floor x) (js/Math.floor (+ y 0.01)) (js/Math.floor z)])
+(defn animal-cell [a] ((juxt :x :y :z) (animals/cell-of a)))
 
-(defn destination-cells
+(defn read-destination
   "The feet cells ([x y z] set) the animal is to end up in: the :box, else the fenced enclosure around :pos; nil when :pos is in the open."
   [c]
   (if-let [{:keys [min max]} (pen-read/arg-box c)]
     (set (for [x (range (:x min) (inc (:x max))) y (range (:y min) (inc (:y max))) z (range (:z min) (inc (:z max)))] [x y z]))
-    (spare/enclosure c (cell-of (:pos (:args c))))))
+    (spare/enclosure c (u/cell-vec (:pos (:args c))))))
+
+(defn destination-cells
+  "read-destination, read once per run (the first step keeps it in memory)."
+  [c]
+  (let [m (ctx/mem c)]
+    (if (contains? m :dest-cells) (:dest-cells m) (read-destination c))))
 
 (defn at-destination?
   "True when the animal stands in :box, else within arrive-range plus arrive-slack of :pos (and in the fenced enclosure :pos is in, when it is in one), and not in a gate's cell."
@@ -261,7 +266,7 @@
          (if box
            (animals/in-box? box there)
            (and (<= (u/flat-dist there pos) (+ (arrive-range) (arrive-slack)))
-                (if-let [pen (destination-cells c)] (contains? pen (cell-of there)) true))))))
+                (if-let [pen (destination-cells c)] (contains? pen (animal-cell a)) true))))))
 
 (defn free-adults
   "The adults within radius of the start, on nobody's lead, none already in :box, nearest first. The animal sighted at the
@@ -362,10 +367,10 @@
   gate on the far side is walked round to, not leaned across."
   [c a]
   (let [cells (destination-cells c)
-        me (cell-of (u/self-pos c))
+        me (u/cell-vec (u/self-pos c))
         there (u/pos-of (.-pos a))
         block-at (u/seen-block-at-fn (:primitives c))]
-    (when (and (seq cells) (contains? cells me) (not (contains? cells (cell-of there))))
+    (when (and (seq cells) (contains? cells me) (not (contains? cells (animal-cell a))))
       (let [outs (for [[x y z] cells [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
                        :let [g {:x (+ x dx) :y y :z (+ z dz)}]
                        :when (and (not (contains? cells [(:x g) y (:z g)])) (some-> (block-at g) .-name (str/ends-with? "_fence_gate")))]
@@ -443,7 +448,7 @@
     (when a (ctx/update-mem! c #(-> % (dissoc :unseen-since) (assoc :last-seen (u/pos-of (.-pos a))))))
     (cond
       (:ending (ctx/mem c)) (conclude! c (:ending (ctx/mem c)))
-      (nil? phase) (do (ctx/update-mem! c assoc :method :lure :origin (u/self-pos c) :phase :start) :again)
+      (nil? phase) (do (ctx/update-mem! c assoc :method :lure :origin (u/self-pos c) :phase :start :dest-cells (read-destination c)) :again)
       (= :start phase) (await (start! c))
       (nil? a) (if-let [next-one (successor c)]
                  (do (ctx/update-mem! c #(-> % (assoc :animal (animals/key-of next-one)) (dissoc :unseen-since))) :again)
