@@ -90,22 +90,23 @@
 ;; ------------------------------------------------------------------ world
 
 (defn free-cell?
-  "The two cells ahead of cell at eye level (feet y + 1) have been seen and are not solid: a toss into a cell never
+  "The first n cells ahead of cell at eye level (feet y + 1) have been seen and are not solid: a toss into a cell never
   looked at may hit a wall."
-  [p {:keys [x y z]} [dx dz]]
+  [p {:keys [x y z]} [dx dz] n]
   (every? #(let [pos {:x (+ x (* % dx)) :y (+ y 1) :z (+ z (* % dz))}]
              (and (some? (u/seen-name p pos)) (not (sh-sense/solid-at? p pos))))
-          [1 2]))
+          (range 1 (inc n))))
 
 (defn direction
-  "The first cardinal [dx dz] with free cells ahead, else nil: a toss into a wall comes straight back. With away
-  (a position) the cardinals are tried most opposite to it first."
+  "The first cardinal [dx dz] with two free cells ahead, else with one (a stair or a bend in a tunnel has no more:
+  the items still land clear of the feet), else nil: a toss into a wall comes straight back. With away (a position)
+  the cardinals are tried most opposite to it first."
   [p away]
   (let [feet (sh-sense/feet p)
         order (if away
                 (sort-by (fn [[dx dz]] (+ (* dx (- (:x away) (:x feet))) (* dz (- (:z away) (:z feet))))) cardinals)
                 cardinals)]
-    (first (filter #(free-cell? p feet %) order))))
+    (some (fn [n] (first (filter #(free-cell? p feet % n) order))) [2 1])))
 
 (defn ^:async direction!
   "direction, after one look around when none is free yet (once per run, tracked in run's :looked): cells never

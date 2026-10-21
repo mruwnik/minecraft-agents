@@ -864,6 +864,15 @@
     (aset p "sensedAt" (fn [pos] (if (> (.-x pos) fx) #js {:unknown true} (omniscient pos))))
     (is (= [-1 0] (mr/direction p nil)) "the east cells were never looked at: west")))
 
+(deftest a-toss-direction-settles-for-one-free-cell-in-a-stair
+  (let [p (tu/seeing-all (tu/fake-on-floor {}))
+        {fx :x fy :y fz :z} (sh-sense/feet p)
+        omniscient (.-sensedAt p)
+        walled? (fn [pos] (and (= (.-y pos) (+ fy 1))
+                               (or (= (.-x pos) (+ fx 2)) (= (.-x pos) (- fx 1)) (not= (.-z pos) fz))))]
+    (aset p "sensedAt" (fn [pos] (if (walled? pos) #js {:name "stone"} (omniscient pos))))
+    (is (= [1 0] (mr/direction p nil)) "east has one open cell at eye level, every other side is rock")))
+
 (deftest a-toss-the-body-takes-back-is-reported-by-the-cleanup-as-taken-back
   (async done
     (tu/run-async done

@@ -1,0 +1,15 @@
+;; Card 7f4c1ee9: a full pack of cobblestone in a stair (the body at the bottom, one open cell east at eye level, rock all round, no
+;; chest) still tosses the cobble above :keep-blocks 64; walled in only on the second cell, the old make-room said "nothing it may put away or toss".
+{:defaults
+ {:tags [:make-room :storage :jobs] :time :any
+  :plot {:height 14}
+  :blocks [[:fill [10 0 12] [30 10 20] "deepslate"] [:fill [16 0 16] [16 1 16] "air"] [:fill [17 1 16] [17 2 16] "air"] [:fill [18 2 16] [18 3 16] "air"]]
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 100}
+ :cases
+ [{:name "full-pack-of-cobble-in-a-stair-tosses-the-extra"
+   :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64]]}
+   :act [[:job (jobs.storage.make-room {:free 4})]]
+   :expect [{:event {:source :job :kind :make-room.tossed :data {:item "cobblestone"}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 90 :of-job true}]
+   :after [[:item "stone_pickaxe" 1]]}]}
