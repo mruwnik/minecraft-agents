@@ -163,15 +163,18 @@
       (let [held? (await (torch/place! c choice block-at))]
         (if held? (booked! c (vec cell)) (left-out! c booked cell :place-failed))))))
 
+(defn owed-site
+  "The cell the torch of this round hangs from (the site due-spot asks about), as hang-torch! picks it."
+  [c branch]
+  (let [{:keys [tunnel]} (ctx/mem c)]
+    (vec-of (cond (= :stair branch) (zipmap [:x :y :z] (stair-site c))
+                  branch (:site (branch-site tunnel (cell-of (u/self-pos c))))
+                  :else (step-cell tunnel (dec (:steps tunnel)))))))
+
 (defn lit-here?
-  "Whether the body's cell is already lit (block light, or sky light less the darkening): a torch is not needed there."
+  "Whether the body's cell is lit as the torch plan judges light (torch/perceived-dark?): a torch is not needed there."
   [c]
-  (let [p (:primitives c)
-        cell (cell-of (u/self-pos c))
-        raw (look/raw-of p)
-        block (sense/block-light-at p cell)
-        sky (sense/sky-light-at p cell)]
-    (boolean (and raw block sky (look/lit-light? block sky (look/sky-subtract raw))))))
+  (not (torch/perceived-dark? (:primitives c) (vec-of (cell-of (u/self-pos c))))))
 
 (defn no-torches-text [branch]
   (str "dig-for stopped: no torches left for the " (cond (= :stair branch) "stair" branch "branch" :else "tunnel")
@@ -196,7 +199,7 @@
         (if (= :continue e) :continue :again))
 
       (and (zero? n) (lit-here? c))
-      (let [{:keys [x y z]} (cell-of (u/self-pos c))] (left-out! c [x y z] [x y z] :lit) (mouth-done! c branch) :again)
+      (let [here (vec-of (cell-of (u/self-pos c)))] (left-out! c (owed-site c branch) here :lit) (mouth-done! c branch) :again)
 
       (zero? n) :no-torches
 

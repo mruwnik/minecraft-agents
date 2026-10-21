@@ -1,0 +1,15 @@
+;; Card c9c137b7: a tunnel with a torch ahead of the body lights the cell it stands on but not the far cells behind it. With no torch carried
+;; the torch step leaves the owed site out once (reason :lit) and the dig goes on, instead of asking again at the same site for ever.
+;; Stone mass x 2..30, z 2..30, y 0..6; tunnel cut x 4..20 with a wall torch at x 12. Should-succeed: the ore at x 22 is dug.
+{:defaults
+ {:tags [:mine :torch :jobs] :time :any
+  :plot {:light :dark :height 12}
+  :blocks [[:fill [2 0 2] [30 6 30] "stone"] [:fill [4 0 16] [20 1 16] "air"]
+           [:set [12 1 16] "torch"] [:set [22 0 16] "iron_ore"] [:set [22 1 16] "iron_ore"]]
+  :body {:at [4.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["cobblestone" 16]] :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "a-tunnel-lit-ahead-with-no-torch-carried-goes-on-digging"
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 20 :radius 24 :mend false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got #{1 2}}} :within-s 140 :of-job true}]
+   :after [[:item "raw_iron" [:>= 1]]]}]}

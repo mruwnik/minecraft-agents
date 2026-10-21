@@ -108,6 +108,21 @@
           (is (> (count (filter #(= :place-failed (:reason %)) (events-of s :mine.torch-left-out))) 3)
               "a failed torch is no light source: later steps are still owed torches"))))))
 
+(deftest a-lit-cell-leaves-the-torch-out-once-and-the-tunnel-goes-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake-on-floor (assoc (torch-world [{:name "iron_pickaxe" :count 1}]) :floor-block floor-block))
+              lit (into {} (for [x (range 1 41) y [64 65] z [-1 0 1]] [[x y z] [0 8]]))
+              _ (swap! (fake/state p) assoc :light-default [0 0] :light lit)
+              s (start {:p p})]
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 13}) {})
+          (await (run-ticks s 200))
+          (is (every? #(= :lit (:reason %)) (events-of s :mine.torch-left-out)))
+          (let [cells (map :cell (events-of s :mine.torch-left-out))]
+            (is (= (count cells) (count (set cells))) "each owed site is left out once"))
+          (is (some #(>= (first %) 10) (dug-cells s)) "the tunnel is dug on past the lit cells"))))))
+
 ;; the glance at the support before a torch is for support not yet seen: all is seen here, so hanging adds no looks
 (deftest a-torch-on-seen-support-is-hung-without-a-glance
   (async done
