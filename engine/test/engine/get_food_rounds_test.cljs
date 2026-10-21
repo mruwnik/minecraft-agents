@@ -717,19 +717,29 @@
   [seen]
   (pr-str (filterv #(and (= :job (:source %)) (= :stopped (:kind %))) @seen)))
 
+(def bread-chest {:floor [-30 -10 100 10] :containers {"60,64,0" [{:name "bread" :count 4}]}})
+
 (def creeper {:id 5 :name "creeper" :kind "hostile" :health 20})
 
-(deftest a-body-on-low-health-does-not-search-at-first-light
+(deftest a-body-on-low-health-walks-to-near-food-in-the-dark-but-not-to-far-food
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen p]} (setup {:self {:food 10 :health 2} :time 23800} :step-ms 5)]
-          (await (one-round! eng {}))
-          (is (= [] (searches seen)) "no search")
-          (is (= [] (tu/walk-calls p)))
-          (is (= [] (entries eng :hungry)) "not a fruitless search: no rest written")
-          (is (= 1 (count (entries eng :food-too-dangerous))))
-          (is (re-find #":reason :too-dangerous" (stop-text seen))))))))
+        (let [{:keys [eng seen p]} (setup (merge bread-chest {:self {:food 10 :health 2} :time 15000}) :step-ms 5)]
+          (know-source! eng {:x 60 :y 64 :z 0} :chest)
+          (await (one-round! eng {:explore false}))
+          (is (= [] (calls p "transfer")) "a chest 60 blocks off is out of the walk a hurt body risks in the dark")
+          (is (re-find #"out of the walk" (stop-text seen))))))))
+
+(deftest a-body-on-low-health-walks-to-food-within-range-in-the-dark
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:floor [-30 -10 100 10] :containers {"10,64,0" [{:name "bread" :count 4}]} :self {:food 10 :health 2} :time 15000} :step-ms 5)]
+          (know-source! eng {:x 10 :y 64 :z 0} :chest)
+          (core/submit! eng (list 'jobs.survival.get-food {:carry 0 :explore false}) {})
+          (await (tu/run-until-empty eng 60))
+          (is (= ["bread"] (call-args p "transfer" "item"))))))))
 
 (deftest a-body-on-low-health-searches-on-a-calm-day
   (async done
@@ -739,7 +749,6 @@
           (await (one-round! eng {}))
           (is (= 1 (count (searches seen)))))))))
 
-(def bread-chest {:floor [-30 -10 100 10] :containers {"60,64,0" [{:name "bread" :count 4}]}})
 
 (deftest a-body-on-low-health-does-not-walk-past-a-known-creeper-to-a-source
   (async done

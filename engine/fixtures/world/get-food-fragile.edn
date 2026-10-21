@@ -1,9 +1,9 @@
-;; survival.get-food and the :hungry trigger at hp 2 (fragile: health 6 or less) with no food carried: it walks out only on a calm
-;; day (not at night, past the dawn grace, no hostile known within 40) and never past a known hostile that would likely kill it.
+;; survival.get-food and the :hungry trigger at hp 2 (fragile: health 6 or less) with no food carried: in the dark or with a hostile known near
+;; it walks only to food within 16 blocks, and never past a known hostile that would likely kill it.
 ;; The body faces east (yaw 270): the creepers are summoned east of it and a silent one is seen only in its view cone.
 ;; Hunger is drained by RCON (food 9-10), then `damage` sets hp 2.
 ;; Should-succeed: a calm day, a known chest of bread 24 blocks off: walked to and eaten from; raw beef is eaten raw with no furnace walk or dig; a cow 8 blocks off is hunted.
-;; Should-fail: at night the trigger never fires; a creeper known on the route ends a get-food call condition-failed :too-dangerous with the body staying put.
+;; Should-fail: at night the 24-block chest is out of its walk (:too-dangerous, body stays); a creeper known on the route ends a get-food call condition-failed :too-dangerous with the body staying put.
 {:defaults
  {:tags [:survival :hungry :get-food :fragile]
   :time :day :time-why :dawn-decision
@@ -16,11 +16,11 @@
         [:rcon "damage $BODY 18 minecraft:generic"]]
   :limit-s 90}
  :cases
- [{:name "night-hungry-waits-for-a-calm-day"
+ [{:name "night-hungry-does-not-walk-to-a-far-chest"
    :time :night
    :blocks [[:set [28 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:bread\",count:8}]}"]]
    :memory [{:kind :food-source :data {:pos #xyz [28 0 16] :kind :chest}}]
-   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :for-s 40}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :too-dangerous}} :within-s 40}]
    :after [[:body-near [4.5 0 16.5] 4] [:item "bread" 0]]}
   {:name "calm-day-walks-to-the-known-chest-and-eats"
    :blocks [[:set [28 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:bread\",count:8}]}"]]

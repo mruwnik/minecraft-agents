@@ -84,13 +84,15 @@
     (is (not (level {:time night :self {:food 4}})) "in the dark nothing is searched for: the body waits sheltered")
     (is (level {:time night :self {:food 4} :inventory [{:name "bread" :count 1}]}) "carried food is eaten at night")))
 
-(deftest hungry-on-low-health-waits-sheltered-for-a-calm-day
-  (let [level (fn [world] ((:when (get triggers/all :hungry)) (tu/fake world) {} {}))
+(deftest hungry-on-low-health-holds-day-and-night-and-leaves-the-walk-to-get-foods-risk-check
+  (let [level (fn [world] ((:when (get triggers/all :hungry)) (tu/with-light-data (tu/fake world)) {} {}))
         creeper {:id 5 :name "creeper" :kind "hostile" :pos {:x 20.5 :y 64 :z 0.5} :health 20}]
-    (is (not (level {:time 23800 :self {:food 10 :health 2}})) "first light: the dawn grace has not passed")
-    (is (not (level {:time 6000 :self {:food 10 :health 2} :entities [creeper]})) "a known creeper about")
-    (is (level {:time 6000 :self {:food 10 :health 2}}) "a calm day: it goes")
-    (is (level {:time 23800 :self {:food 10 :health 2} :inventory [{:name "bread" :count 1}]}) "carried food is eaten")
+    (are [world] (level world)
+      {:time 23800 :self {:food 10 :health 2}}
+      {:time 15000 :self {:food 10 :health 2}}
+      {:time 6000 :self {:food 10 :health 2} :entities [creeper]}
+      {:time 6000 :self {:food 10 :health 2}})
+    (is (not (level {:time 15000 :self {:food 10 :health 20}})) "a healthy body waits in the dark")
     (is (level {:time 23800 :self {:food 4 :health 20}}) "a healthy body goes at first light")))
 
 ;; ------------------------------------------- the hungry reflex with nothing to eat
