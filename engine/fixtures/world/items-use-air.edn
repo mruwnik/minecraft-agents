@@ -1,0 +1,17 @@
+;; items.use :air throws an egg at an empty spot (no block needs to be clicked); a food item is refused.
+;; Should-succeed: egg-thrown-at-a-spot (one egg is spent). Should-fail: bread-is-not-throwable (nothing spent).
+{:defaults
+ {:tags [:items]
+  :time :any
+  :plot {:height 12}
+  :body {:at [16.5 0 16.5] :inventory [["egg" 4] ["bread" 2]] :effects [["resistance" 600 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "egg-thrown-at-a-spot"
+   :act [[:job (jobs.items.use {:on #at [20 2 16] :item "egg" :air true})]]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 30 :of-job true}]
+   :after [[:item "egg" 3]]}
+  {:name "bread-is-not-throwable"
+   :act [[:job (jobs.items.use {:on #at [20 2 16] :item "bread" :air true})]]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :cannot}} :within-s 30 :of-job true}]
+   :after [[:item "bread" 2]]}]}

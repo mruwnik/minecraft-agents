@@ -372,3 +372,18 @@ test('a fence post leaves gaps: a block behind a fence is clicked', async () => 
   await p.useOn('t1', { pos: at(3, 64, 0), item: 'diamond_hoe' })
   assert.equal(calls(bot, 'activateBlock').length, 1)
 })
+
+test('air: an egg is thrown at a spot with no block, used when the count drops', async () => {
+  const items = [{ name: 'egg', count: 4, slot: 36 }]
+  const { bot, p } = rig({ items })
+  bot.activateItem = async () => { items[0].count -= 1 }
+  const r = await p.useOn('t1', { pos: at(8.5, 66, 3.5), item: 'egg', air: true })
+  assert.deepEqual([r.status, r.consumed], ['used', 1])
+})
+
+test('air: a non-throwable or missing item is refused without activating', async () => {
+  const { bot, p } = rig({ items: [{ name: 'bread', count: 1, slot: 36 }] })
+  assert.equal((await p.useOn('t1', { pos: at(8, 66, 3), item: 'bread', air: true })).reason, 'not-throwable')
+  assert.equal((await p.useOn('t1', { pos: at(8, 66, 3), item: 'egg', air: true })).status, 'no-item')
+  assert.equal(calls(bot, 'activateItem').length, 0)
+})
