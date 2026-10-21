@@ -196,6 +196,11 @@
           (.then (fn [{:keys [code out]}]
                    (is (= 0 code))
                    (is (= {:id "j3" :name "go" :status :queued :round 2 :spec '(jobs.x) :waiting {:reason :no-tree :radius 2}} (data/read-edn out)))))
+          (.then (fn [_] (run-main! state ["show" "j4"]
+                                    (fn [_] {:text "{:id \"j4\" :name \"get-kit\" :status :stopped :finished? true :ended-at 5 :result {:reason :no-source :why \"no source\"}}"}))))
+          (.then (fn [{:keys [out]}]
+                   (is (= {:id "j4" :name "get-kit" :status :stopped :finished? true :ended-at 5 :result {:reason :no-source :why "no source"}}
+                          (data/read-edn out)))))
           (.then (fn [_] (run-main! state ["list"] (fn [_] {:status 404 :text "{:ok false :reason :not-found}"}))))
           (.then (fn [{:keys [code out]}]
                    (is (= 2 code))
