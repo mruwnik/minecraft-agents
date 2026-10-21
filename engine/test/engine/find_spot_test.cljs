@@ -262,7 +262,9 @@
   (let [world (merge (patch 2 0 3 3 63 "dirt") (patch -14 0 3 3 63 "dirt"))
         spots (scan-at world {:x 0 :y 64 :z 0} {:range 20} {:x -12 :y 64 :z 1})]
     (is (= {:x -14 :y 63 :z 0} (:pos (first spots))) "the patch near :center beats the one near the body")
-    (is (= [{:x -14 :y 63 :z 0} {:x 2 :y 63 :z 0}] (mapv :pos spots)))))
+    (is (= [{:x -14 :y 63 :z 0} {:x 2 :y 63 :z 0}] (mapv :pos spots)))
+    (is (= [3 3] ((juxt :w :h) (first spots))) "a spot says its size, so :pos reads as the corner of a w x h box")
+    (is (= 1 (:away (first spots))) "the distance is from the patch centre (-13,1) to :center (-12,1), not from the corner")))
 
 (deftest scan-is-one-call-in-slices-of-a-read-budget
   (async done

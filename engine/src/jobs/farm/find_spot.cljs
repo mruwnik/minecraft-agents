@@ -22,8 +22,10 @@
   Ends with data {:spot pos :spots [...]}: done with the spots, or nothing-possible :none with :why :distance (no leg left), :legs
   (the search's max legs walked), :stuck (three walks in a row failed), :time (the call's :job-time spent) or :no-plan (the plan is
   missing or unreadable).
-  :spots best first up to ::limit, each {:pos :score :level :work :step :water-share :sky :away :y :farmable}; :step is
-  the largest height difference between two neighbouring cells of the patch. A pos is the north-west corner at ground level.
+  :spots best first up to ::limit, each {:pos :w :h :score :level :work :step :water-share :sky :away :y :farmable}; :step is
+  the largest height difference between two neighbouring cells of the patch. A pos is the north-west (minimum x and z) corner at
+  ground level of the :w x :h patch, not its centre; :spot is the first spot's pos. :away is the distance from the patch's centre
+  to :center (the body's cell without one), not from the corner.
   Score = level (% of the patch's cells at its commonest ground height y, 0-100) + water-weight x water-share + sky-weight for open sky,
   less :work (sum of blocks the other cells are off y, at most work-cap), :away / 4 (blocks from :center, at most away-cap)
   and up to farmable-weight for cells a hoe cannot make farmland of (the weights are jobs.lib.patch settings). A spot with level under 100

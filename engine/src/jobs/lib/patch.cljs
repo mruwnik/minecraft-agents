@@ -147,7 +147,7 @@
                        (when s
                          (let [step (max-step tops h)]
                            (when (or (nil? limit-step) (<= step limit-step))
-                             (assoc s :step step :pos {:x x :y (:y s) :z z})))))))))]
+                             (assoc s :step step :w w :h h :pos {:x x :y (:y s) :z z})))))))))]
     (loop [rs (drop-while #(< % next-ring) rings) found found]
       (if (empty? rs)
         {:next-ring ##Inf :found found :done true :reads @reads}
