@@ -621,7 +621,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (seeing-scenario {:mob "cow"} (chest-world []) 120))]
+        (let [s (await (seeing-scenario {:mob "cow" :ways #{:carried :chest}} (chest-world []) 120))]
           (is (finished? s))
           (is (= :no-food (:reason (done-event s))))
           (is (some? (:because (done-event s))) "the fetch's ending comes up"))))))
