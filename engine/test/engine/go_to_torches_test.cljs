@@ -109,11 +109,20 @@
           (is (= 1 (count (filter #(= :walk.torch-placed (:kind %)) seen))))
           (is (empty? (filter #(= :gate-breach (:kind %)) seen))))))))
 
-(deftest go-to-without-torches-places-none
+(deftest go-to-lights-the-dark-drop-by-default-when-a-torch-is-carried
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p]} (await (gs/run-go-to shielded {:pos below :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true :ignore-zones? true}
+                                                   dark-with-torch-light))]
+          (is (true? (:arrived out)) (pr-str out))
+          (is (= [[0 65 0]] (torch-cells p))))))))
+
+(deftest go-to-with-torches-never-places-none
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (gs/run-go-to shielded {:pos below :range 1 :ways #{:walk :dig} :may-dig #{:own} :unknown true :torches :never :ignore-zones? true}
                                                    dark-with-torch-light))]
           (is (= :unseen-floor-dark (:why out)) (pr-str out))
           (is (empty? (torch-cells p)))

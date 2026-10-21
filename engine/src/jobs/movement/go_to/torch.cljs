@@ -11,7 +11,7 @@
     dark with a torch carried and the off hand empty it first holds the torch in the off hand (info go-to.off-hand-torch,
     once a call: it sees deeper) and plans again; it puts the torch back into the inventory before an escalation child runs and when the call ends (full: it
     stays, info go-to.off-hand-kept); one a cut call left in the hand goes back at the next call's start.
-  - :torches :carried or :fetch (with :unknown; default :never) may light such a dark floor instead: the planner prices a torch
+  - :torches :carried or :fetch (with :unknown; default :carried) may light such a dark floor instead: the planner prices a torch
     (jobs.lib.cost/light-cost) where it can stand on the takeoff, in no other owner's zone or
     claim; the walk stops there, places one (an off-hand stack goes back to the inventory first; info walk.torch-placed) and
     walks on once it sees the floor. With none carried, :fetch fetches torches once a call (a jobs.lib.need child);
@@ -108,7 +108,7 @@
     (fn [x y z] (or (:ignore-zones? in) (ok? [x y z]) (ok? [x (inc y) z])))))
 
 (defn round-unknown
-  "The mask spec of this round (c's :unknown): with :torches and a torch carried or a fetch still open, torches on
+  "The mask spec of this round (c's :unknown): with :torches not :never and a torch carried or a fetch still open, torches on
   (wworld/with-light), priced by jobs.lib.cost/light-cost."
   [c]
   (let [u (:unknown c)
