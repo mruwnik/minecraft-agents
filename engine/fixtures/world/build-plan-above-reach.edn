@@ -41,14 +41,15 @@
    :limit-s 450}
   {:name "roof-hole-of-a-sealed-room"
    :plans [{:id "roof" :metadata {:by "$body"}
-            :parts [{:id "r" :box [#at [17 4 22] #at [17 4 22]] :want "stone"}]}]
-   :blocks [[:fill [15 0 20] [19 4 24] "stone"]
-            [:fill [16 1 21] [18 3 23] "air"]
-            [:set [17 4 22] "air"]]
-   :body {:at [16.5 0 14.5] :inventory [["stone" 4] ["dirt" 8]]}
+            :parts [{:id "r" :box [#at [17 3 22] #at [17 3 22]] :want "stone"}]}]
+   :blocks [[:fill [15 0 20] [19 3 24] "stone"]
+            [:fill [16 1 21] [18 2 23] "air"]
+            [:set [17 3 22] "air"]
+            [:fill [16 0 15] [18 3 17] "stone"]]
+   :body {:at [17.5 4 16.5] :inventory [["stone" 4] ["dirt" 8]]}
    :act [[:job (jobs.build.from-plan {:plan "$plan:roof"})]]
    :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 200 :of-job true}]
-   :after [[:block [17 4 22] "stone"]]
+   :after [[:block [17 3 22] "stone"]]
    :limit-s 230}
   {:name "wall-on-an-island-from-a-bridge-row"
    :plans [{:id "wall" :metadata {:by "$body"}

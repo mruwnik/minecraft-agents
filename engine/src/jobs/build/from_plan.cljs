@@ -244,7 +244,9 @@
     (when (and (= :blocked w) (not (sealed-in-shelter? c)))
       (ctx/update-mem! c #(cond-> (-> (walk-fail % (:pos cell) :unreachable limit (u/self-pos c))
                                       (update :bad-stands (fnil conj []) stand))
-                            (= :budget (:why (:data (near/last-walk c)))) (update :budget-streak (fnil inc 0)))))
+                            (= :budget (:why (:data (near/last-walk c)))) (update :budget-streak (fnil inc 0))
+                            (and (not (:dig? cell)) (#{:budget :no-progress} (:why (:data (near/last-walk c)))))
+                            (update :needs-scaffold (fnil conj #{}) (:pos cell)))))
     (when (#{:there :partial} w) (ctx/update-mem! c dissoc :budget-streak))
     (when (and (= :there w) (nil? (:found cell)))
       (let [pos (:pos cell)]
