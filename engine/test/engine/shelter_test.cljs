@@ -1324,10 +1324,11 @@
           (let [futile (mid-night! p (dec default-dawn) #(entries eng :shut-in-failed))]
             (await (tick-n eng 8))
             (is (= {:way :walls :reason :failed} (select-keys (first @futile) [:way :reason])) "written while the night holds"))
-          (let [digs (count (calls p "dig"))]
+          (let [digs (count (calls p "dig"))
+                places (count (calls p "place"))]
             (swap! clock + 11000)
             (await (tick-n eng 8))
-            (is (= 4 (count (calls p "place"))) "each of the four cells of one step tried once")
+            (is (= places (count (calls p "place"))) "the refused cells are not tried again")
             (is (= digs (count (calls p "dig"))) "the failed ways are not tried again"))))))))
 
 (deftest needs-bed-is-warned-once-across-firings

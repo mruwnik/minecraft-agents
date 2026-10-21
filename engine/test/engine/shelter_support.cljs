@@ -40,9 +40,9 @@
   12)
 
 (defn walls-cheap
-  "Run f (a test body) with the night walls priced low enough that the quote picks them over a pit: these tests are about the walls."
+  "A test body that runs f with the night walls priced low enough that the quote picks them over a pit: these tests are about the walls. Returns a thunk for tu/run-async, so f runs (and is awaited) inside the test."
   [f]
-  (settings/with-settings {:jobs.survival.plug-way/night-place-s 0.1} f))
+  #(settings/with-settings {:jobs.survival.plug-way/night-place-s 0.1} f))
 
 (defn setup [world]
   (let [clock (atom 1000000)
