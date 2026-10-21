@@ -25,6 +25,7 @@
    ::level-slack {:default 12 :doc "Blocks above the tunnel level a stopped stair may leave the body and the strip tunnel still run there; higher, the run ends :descent-stopped (ore is not found that far above its level)." :spec (a/int-in 0 nil)}
    ::own-stair-reach {:default 32 :doc "Blocks from the body the top of a stair it cut earlier may lie for the descent to walk down that stair instead of cutting a new one." :spec (a/int-in 0 nil)}
    ::dig-here-reach {:default 8 :doc "Stone gathered on soil or sand: a seen stone block farther than this from the body is not walked to; the stair down is cut where the body stands, as a player digs down to stone." :spec (a/num-in 0 nil)}
+   ::back-reach {:default 32 :doc "Blocks from the stair's last step the body may be for the descent to walk back onto it; farther, it starts a new stair where it stands." :spec (a/int-in 0 nil)}
    ::max-restairs {:default 3 :doc "Times the descent starts a new stair where the body stands after the stair found it off its line (a reflex, a fall or a drop pick-up moved it) before the stop stands." :spec (a/int-in 0 nil)}})
 
 (defn max-restairs [] (settings/get settings ::max-restairs))
@@ -205,11 +206,15 @@
   (let [{:keys [at top]} (:descent (ctx/mem c))
         cell (or at top)]
     (when (and cell (nil? (get-in (ctx/mem c) [:children :stair])) (not= cell (access/cell (cell-of (u/self-pos c)))))
-      (let [r (await (child/walk-into!* c :stair-back cell))]
-        (cond
-          (= :continue r) :continue
-          (= cell (access/cell (cell-of (u/self-pos c)))) nil
-          :else cell)))))
+      (if (> (u/dist (u/self-pos c) (zipmap [:x :y :z] cell)) (settings/get settings ::back-reach))
+        (do (ctx/emit! c :mine.restair :info {:at (access/cell (cell-of (u/self-pos c))) :text (str "mine's stair at " (str/join "," cell) " is too far to walk back to; it starts a new stair here")})
+            (ctx/update-mem! c update :descent dissoc :top :at)
+            nil)
+        (let [r (await (child/walk-into!* c :stair-back cell))]
+          (cond
+            (= :continue r) :continue
+            (= cell (access/cell (cell-of (u/self-pos c)))) nil
+            :else cell))))))
 
 (defn ^:async step-down!
   "One step of the stair down: the jobs.access.stair child and what its ending means for the descent. A stop that blocks only

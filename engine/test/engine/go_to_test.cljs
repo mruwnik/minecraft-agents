@@ -850,8 +850,8 @@
                                (mob 4 "skeleton" [10 64 12]) (mob 5 "skeleton" [10 64 -17])]})]
     (is (= [3 1 4] (mapv #(.-id %) (danger-q/hostiles-near-way p {:x 20 :y 64 :z 0} 8 {:ranged-radius 16}))))))
 
-(deftest air-reasons-have-words
-  (doseq [why [:air :air-lethal]]
+(deftest air-and-budget-reasons-have-words
+  (doseq [why [:air :air-lethal :budget]]
     (is (not (str/includes? (end/give-up-words [10 64 0] {:why why}) "no path (")) (str why)))
   (is (str/includes? (end/give-up-words [10 64 0] {:why :air-lethal}) "drown")))
 

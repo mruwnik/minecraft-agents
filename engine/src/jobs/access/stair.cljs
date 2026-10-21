@@ -26,6 +26,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.tools :as tools]
+            [jobs.lib.util :as u]
             [jobs.lib.trip :as trip]
             [jobs.lib.walk.drive :as drive]
             [plan.shape :as shape]))
@@ -88,8 +89,10 @@
   {::job-time-s {:default 1800 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 3600 :doc "Seconds one call may last from its start, the waits on checks and the jobs that run between its rounds included (:limit-reached)." :spec (a/num-in 0 nil)}
    ::max-returns {:default 3 :doc "Walks back onto the stair's line (after a reflex moved the body off it) one call makes before it stops :off-stair." :spec (a/int-in 0 nil)}
+   ::return-reach {:default 32 :doc "Blocks from the stair's line the body may be found for a call to walk back onto it; farther, it stops :off-stair (the caller starts a stair where the body is)." :spec (a/num-in 0 nil)}
    ::cell-s {:default 1.2 :doc "Mean seconds one cut cell of a step takes (look, dig, walk), for the quote." :spec (a/num-in 0 nil)}})
 (defn max-returns [] (settings/get settings ::max-returns))
+(defn return-reach [] (settings/get settings ::return-reach))
 
 (def safe? ready/safe-at-from)
 
@@ -267,7 +270,8 @@
   (let [{:keys [dir heading]} (:args c)
         {:keys [origin at-step returns]} (ctx/mem c)
         cell (shape/add origin (mapv #(* (or at-step 0) %) (geo/delta dir heading)))]
-    (when (< (or returns 0) (max-returns))
+    (when (and (< (or returns 0) (max-returns))
+               (<= (u/dist (u/self-pos c) (zipmap [:x :y :z] cell)) (return-reach)))
       (let [r (await (child/call-walk* c :return (ready/forage-walk c (child/walk-into-args :return cell))))]
         (when-not (= :continue r)
           (ctx/update-mem! c update :returns (fnil inc 0))

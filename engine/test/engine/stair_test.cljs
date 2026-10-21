@@ -401,8 +401,9 @@
             (is (= block (block-at p [1 65 0])) block)))))))
 
 (defn move-after-digs
-  "A prep that puts the body on [7 65 2] (on the ground beside the stair) after each of the first n digs (a reflex walking it off the stair)."
-  [n]
+  "A prep that puts the body on [7 65 2] (on the ground beside the stair), or on pos, after each of the first n digs (a reflex walking it off the stair)."
+  ([n] (move-after-digs n [7 65 2]))
+  ([n pos]
   (fn [p]
     (let [world (.-world p)
           left (atom n)]
@@ -411,8 +412,8 @@
                    (let [r (await (impl token a))]
                      (when (pos? @left)
                        (swap! left dec)
-                       (swap! (.. world -state) assoc-in [:self :pos] [7 65 2]))
-                     r))))))
+                       (swap! (.. world -state) assoc-in [:self :pos] pos))
+                     r)))))))
 
 ;; Sorrel #14: a night reflex took the body home between two digs; the resumed stair ended :off-stair.
 (deftest a-stair-that-finds-the-body-off-its-line-walks-back-and-goes-on
@@ -423,6 +424,14 @@
           (is (= :done (:status @out)))
           (is (= 3 (:steps @out)))
           (is (seq (events-of s :stair.return))))))))
+
+(deftest a-stair-whose-line-is-far-off-stops-off-stair-without-walking-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (stair! {:blocks ground} east (move-after-digs 1 [90 65 2])))]
+          (is (= :off-stair (:reason @out)))
+          (is (empty? (events-of s :stair.return))))))))
 
 (deftest off-stair-stands-once-the-walks-back-are-used-up-and-says-where-the-body-is
   (async done
