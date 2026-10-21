@@ -24,17 +24,18 @@
 
 (defn why
   "Why a hunt leaves an adult animal alone, or nil: :off-limits, :pen (in a zone or plan of the body's own, unless
-  ::spare-pens is false) or :kept (no more than `keep` adults of its kind in sight, unless starved?)."
+  ::spare-pens is false) or :kept (a breeding pair: 2 up to `keep` adults of its kind in sight, unless starved?; a lone adult is no pair)."
   [keep kind adults-of-kind in-own-area? starved?]
   (cond (contains? (off-limits) kind) :off-limits
         (and (spare-pens?) in-own-area?) :pen
-        (and (<= adults-of-kind keep) (not starved?)) :kept))
+        (and (<= 2 adults-of-kind keep) (not starved?)) :kept))
 
 (defn allowed-by
-  "Which rule let a hunt take an adult why left alone: :pen-taken (::spare-pens false and it stood in a pen), :surplus (more
-  than `keep` of its kind) or :starved (the kept pair, lifted by hunger)."
+  "Which rule let a hunt take an adult why left alone: :pen-taken (::spare-pens false and it stood in a pen), :lone (the only
+  one of its kind in sight), :surplus (more than `keep` of its kind) or :starved (the kept pair, lifted by hunger)."
   [keep adults-of-kind in-own-area?]
   (cond (and in-own-area? (not (spare-pens?))) :pen-taken
+        (< adults-of-kind 2) :lone
         (> adults-of-kind keep) :surplus
         :else :starved))
 

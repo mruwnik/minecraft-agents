@@ -599,6 +599,14 @@
 
 (defn killed-events [seen] (filterv #(= :food.killed (:kind %)) @seen))
 
+(deftest get-food-hunts-a-lone-wild-adult-no-pair-to-keep
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (hunt-world [cow] nil)]
+          (await (run-until-empty eng 40))
+          (is (= [{:adults 1 :rule :lone}] (mapv #(select-keys % [:adults :rule]) (killed-events seen)))))))))
+
 (deftest get-food-takes-the-surplus-of-its-own-pen-when-nothing-else-is-found
   (async done
     (tu/run-async done
