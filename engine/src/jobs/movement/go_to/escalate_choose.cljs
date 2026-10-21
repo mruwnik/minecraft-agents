@@ -52,10 +52,13 @@
 
 (defn escalate-reason?
   "Whether a walk result's reason proves the way needs the world changed (escalate-reasons), or is the planner's way
-  through a door that :doors :never refuses (:abilities of kind :open): such a door is a wall."
+  through a door that :doors :never refuses (:abilities of kind :open): such a door is a wall. :goal-unloaded counts too:
+  the caller also requires the body shut in (escape/enclosed?), and a shut-in body's search can end at a loaded edge
+  beyond its walls (an unseen cell refused) instead of :start-enclosed."
   [result doors]
   (let [reason (some-> (:reason result) keyword)]
     (boolean (or (contains? escalate-reasons reason)
+                 (= :goal-unloaded reason)
                  (and (= :abilities reason) (= :never doors) (= :open (some-> (:kind result) keyword)))))))
 
 (defn dive?

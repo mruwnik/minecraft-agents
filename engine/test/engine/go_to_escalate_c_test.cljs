@@ -42,6 +42,7 @@
   (let [ok? (fn [result doors] (choose/escalate-reason? result doors))]
     (is (true? (ok? {:reason :exhausted} :shut)))
     (is (true? (ok? {:reason :start-enclosed} :shut)) "a pen sealed in the loaded world, goal far and unloaded (card 5a822a99)")
+    (is (true? (ok? {:reason :goal-unloaded} :shut)) "a shut-in body's search that ended at a loaded edge beyond its walls (escalate? also requires it shut in)")
     (is (true? (ok? {:reason :abilities :kind :open} :never)) "the planner's way through a door, refused as a wall")
     (is (false? (ok? {:reason :abilities :kind :open} :shut)))
     (is (false? (ok? {:reason :abilities :kind :break} :never)))
