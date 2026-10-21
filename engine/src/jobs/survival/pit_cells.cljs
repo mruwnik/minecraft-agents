@@ -78,7 +78,7 @@
 (defn material-stop
   "Whether the body can roof the pit with what it has and digs, cell by cell in dig order: a stop (stop) when a cell needs a
   tool it lacks with no block to roof with yet or that the hand breaks slower than ::night-hand-clear-ms for :night, else tools/quick-clear-ms (:no-tool, naming the block), or none is
-  carried or dropped by the end (:no-blocks); nil otherwise. A cell it cannot harvest is still dug by hand once a block is in hand."
+  carried or dropped by the end (:no-blocks); nil otherwise. A cell it cannot harvest is still dug by hand once a block is in hand. A cell not seen yet (rock-name only guesses it) never stops the pit: it is judged when dug, as seen."
   [c blocks cells]
   (let [p (:primitives c)]
     (loop [[cell & more] cells have (boolean (lb/pick c blocks))]
@@ -86,7 +86,7 @@
         (when-not have (stop :no-blocks "nothing to roof the pit with"))
         (let [name (look/rock-name p cell)
               ok (tools/can-harvest? p name)]
-          (if (and (not ok) (or (not have) (> (tools/clear-ms p name) (hand-clear-ms c))))
+          (if (and (u/seen-name p cell) (not ok) (or (not have) (> (tools/clear-ms p name) (hand-clear-ms c))))
             (stop :no-tool (str "cannot harvest " name (if have " in good time" "; nothing to roof the pit with") ", so not digging") name)
             (recur more (or have (and ok (boolean (some #{(lb/item-name {:block name})} blocks)))))))))))
 

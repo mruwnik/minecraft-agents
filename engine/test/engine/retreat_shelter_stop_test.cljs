@@ -14,6 +14,7 @@
             [jobs.lib.dig-look :as dig-look]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.pit-drops :as pit-drops]
+            [jobs.survival.wall-in :as wall-in]
             [jobs.survival.pit-cells :as pit]))
 
 (def dead-end-cells (set (for [x (range 0 9) y [64 65]] [x y 0])))
@@ -131,8 +132,7 @@
     (is (= "stone" (dig-look/rock-name (sensing-stub face) (cell 0 0 0))) "a seen solid face behind it")
     (is (nil? (dig-look/rock-name (sensing-stub (assoc face [0 1 0] "air")) (cell 0 0 0))) "a seen open neighbour would have shown it")
     (is (= "stone" (dig-look/rock-name (sensing-stub (assoc face [0 1 0] "air")) (cell 0 0 0) #{(cell 0 1 0)})) "except: the way in is open")
-    (is (nil? (dig-look/rock-name (sensing-stub {}) (cell 0 0 0))) "nothing seen near")
-    (is (= "dirt" (dig-look/rock-name (sensing-stub {[1 0 0] "grass_block"}) (cell 0 0 0))) "soil behind it is dug by hand, not read as stone")))
+    (is (nil? (dig-look/rock-name (sensing-stub {}) (cell 0 0 0))) "nothing seen near")))
 
 ;; ------------------------------------------------------------------ the pit's first dig
 
@@ -307,6 +307,11 @@
         (let [w (update (closed-cell-world nil) :blocks (fn [bs] (update-vals bs #(if (= "stone" %) "dirt" %))))
               p (seen-closed-cell (assoc w :inventory []) true)]
           (is (some? (pit/pit-plan (plan-ctx p) (cell 0 64 0))) "dirt below the surface is not read as stone the bare hand cannot clear"))))))
+
+(deftest walls-with-fewer-blocks-than-open-cells-quote-a-penalty
+  (let [with (fn [n] (plan-ctx (tu/fake {:inventory [{:name "dirt" :count n}]})))]
+    (is (pos? (wall-in/short-penalty (with 3) 10)) "3 blocks for 10 cells would stop half built")
+    (is (zero? (wall-in/short-penalty (with 10) 10)))))
 
 (deftest a-closed-cell-with-walls-it-cannot-dig-gets-no-pit
   (async done

@@ -18,7 +18,7 @@
   hostile stands in a cell (not with :for :night), no block is left or a place is refused. A place refused for a mob in the cell is waited out
   (jobs.lib.seal/mob-wait-ticks), then fails; one refused otherwise goes after the others (blocks.fill-cells: the walls are placed one cell a step through it, in place, ledgered; a torch in a cell is dug first, an open door shut) and fails with the other failures; a block that stays in a cell is left alone. Every block goes to the scaffold ledger with :for (default :danger, ledger :retreat-plug, taken
   back by jobs.access.cleanup once no hostile is near; :night: ledger :shelter, left alone). Quote: time, a placement per open cell
-  (##Inf with no block carried). With :for :night the quote counts night seconds only (placing), and a block worth more than the ::wall-value setting
+  (##Inf with no block carried; ::short-s more with fewer blocks than open cells). With :for :night the quote counts night seconds only (placing), and a block worth more than the ::wall-value setting
   (jobs.lib.cost/item-value) adds the dig back at dawn; it needs a carried block for every open cell. A cell another's zone refuses adds plug-way's ::trespass-s.
   Picked by jobs.survival.shut-in, which shuts the body in by the cheapest way.")
 
@@ -30,6 +30,7 @@
 (a/defargs settings
   {::wall-value {:default 3 :doc ":night: a block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85, stone 2.85, planks 3.4, log 12.8) is taken back at dawn, which the quote counts" :spec (a/num-in 0 nil)}
    ::job-time-s {:default 60 :doc "Seconds a walls attempt may take." :spec (a/num-in 0 nil)}
+   ::short-s {:default 60 :doc "Seconds the quote adds when fewer blocks are carried than open cells: the walls would stop half built, so a way that can finish (a pit digs its own plug) is chosen first." :spec (a/num-in 0 nil)}
    ::dear-s {:default 0.4 :doc "Seconds a wall block worth more than ::wall-value adds per cell for the night: it is dug again at dawn." :spec (a/num-in 0 nil)}})
 
 (def target [])
@@ -66,10 +67,15 @@
     (contract/later :no-blocks "no block to wall the body in with")
     (contract/ok :blocks "a block to wall with")))
 
+(defn short-penalty
+  "::short-s when fewer blocks are carried than open cells, else 0."
+  [c open]
+  (if (< (reduce + (map :count (lb/carried c (flight/blocks c)))) open) (settings/get settings ::short-s) 0))
+
 (defn quote-of [c]
   (let [cells (dig-cells/open-cells (:primitives c) (sh-sense/feet (:primitives c)))
         open (count cells)]
-    (way/quote-of c (if (why-not c) ##Inf (+ (* open (cell-seconds c open)) (way/zone-penalty c {:place cells})))
+    (way/quote-of c (if (why-not c) ##Inf (+ (* open (cell-seconds c open)) (way/zone-penalty c {:place cells}) (short-penalty c open)))
                   (settings/get settings ::job-time-s))))
 
 (def safe? ready/ok)

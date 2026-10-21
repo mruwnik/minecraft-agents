@@ -153,7 +153,10 @@
           (let [r (await (pit/pit-round! c plan))]
             (if (:stop r)
               (way/stop! c r)
-              (case r :hidden :done :again :again nil)))))))
+              (case r
+                :hidden :done
+                :again :again
+                (way/stop! c {:stop :failed :text (str "the pit round ended with " (pr-str r) " at " (pr-str (sh-sense/feet (:primitives c))))}))))))))
 
 (defn can-start?
   "With :for :night: ground where a pit fits is in sight, and the pit does not cut into a plan the body made. Floors not yet seen are no fact here: the round looks first."

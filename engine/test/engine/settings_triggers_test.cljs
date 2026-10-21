@@ -40,6 +40,13 @@
   ([now t cause]
    {:now now :data {:entries {:job-report [{:t t :data {:job 'jobs.survival.get-food :kind :nothing-possible :cause cause}}]}}}))
 
+(deftest hungry-does-not-search-for-food-with-a-hostile-near-even-when-fragile
+  (let [zed {:id 1 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}
+        at (fn [entities] (tu/fake-on-floor {:self {:food 3 :health 2.3} :entities entities}))
+        view {:data {} :now 0}]
+    (is (hungry/hungry (at []) view {}) "hurt and hungry with nothing near: searches")
+    (is (not (hungry/hungry (at [zed]) view {})) "a zombie near, no food carried: hides first")))
+
 (deftest hungry-rests-after-a-give-up-but-a-starving-body-only-a-minute
   (let [at (fn [food health] (tu/fake {:self {:food food :health health}}))]
     (is (not (hungry/hungry (at 3 10) (gave-up 100000 50000) {})) "hungry, 50 s: resting")
