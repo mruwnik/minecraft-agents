@@ -93,7 +93,10 @@
 
 (def safe? ready/safe-at-from)
 
-(def fit? ready/fit?)
+(defn fit?
+  "ready/fit?, but a stair up is the way out of a cave for a weak body and is not held for health it cannot regain below."
+  [c]
+  (if (= :up (:dir (:args c))) (checks/survival-mode c) (ready/fit? c)))
 
 (def ways need/fetch-ways)
 

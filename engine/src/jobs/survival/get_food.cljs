@@ -12,6 +12,7 @@
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
+            [jobs.items.obtain.surface :as surface]
             [jobs.lib.foods :as foods]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.cost.food :as food-cost]
@@ -50,7 +51,7 @@
   :field Last: it walks to the nearest zone or plan of its own it has not visited in this job and cuts and replants the ripe wheat there
          (jobs.farm.harvest); the wheat is baked next (:bake).
   Then, once per job (:explore, default on; a starving body again after foods/::starving-rest-ms) it searches for food animals and crops (jobs.explore.search, the
-  ::explore setting; not while the search would wait (dark sky, danger near)) and goes on if it found some; at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
+  ::explore setting; not while the search would wait (dark sky, danger near)) and goes on if it found some (an animal only a note gave, with none in sight, is walked toward first; a hungry body under rock climbs out first, jobs.items.obtain.surface); at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
   flesh, with :allow-bad). Still nothing: it ends nothing-possible :no-food (the text says what was searched, the nearest known source) and writes
   :hungry, which widens the next search; the hungry trigger rests after that ending (its :rest-s).
   :eat false: only gathers, done when the pack holds :carry food points (jobs.survival.eat fetches this way; a job cannot call its own caller).
@@ -75,7 +76,7 @@
 (a/defargs args
   {:food {:doc "hungry below this much food (of 20)" :spec (a/num-in 0 20) :default foods/default-food}
    :health {:doc "below this health eat up to a full bar" :spec (a/num-in 0 20) :default foods/default-health}
-   :explore {:doc "with nothing known or seen, walk and look for food animals and crops once per job (a starving body again after foods/::starving-rest-ms; not underground unless starving): false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default true}
+   :explore {:doc "with nothing known or seen, walk and look for food animals and crops once per job (a starving body again after foods/::starving-rest-ms; a hungry body under rock first climbs out; a starving one searches there): false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default true}
    :carry {:doc "carry food worth this many hunger points: a fed body takes the ways below until the pack holds it (0: only feed)" :spec (a/num-in 0 nil) :default food-cost/reserve-points}
    :eat {:doc "eat what is carried and what the ways bring: false only gathers (the way jobs.survival.eat fetches: it is the caller, and a job cannot call its own caller), done when the pack holds :carry food points" :spec boolean? :default true}
    :ignore-zones? :shared})
@@ -340,20 +341,35 @@
 (defn widen-explore [opts k]
   (-> opts (update :max-distance #(some-> % (* k) (min search-max-distance))) (update :max-legs #(some-> % (* k))) (update-in [:spend :job-time] #(some-> % (* k)))))
 
+(def noted-range "Blocks from an animal another body noted that the walk toward it ends; its place is then looked at." 12)
+
+(defn ^:async walk-to-noted!
+  "The walk toward an animal the search found only in a note (nothing is in sight to hunt): :continue while it goes, :again once it ends."
+  [c]
+  (let [pos (:walk-to (ctx/mem c))
+        e (await (child/run!* c :noted-walk 'jobs.movement.go-to {:pos (zipmap [:x :y :z] pos) :range noted-range :ways #{:walk}}))]
+    (if (= :continue e)
+      :continue
+      (do (ctx/update-mem! c dissoc :walk-to) :again))))
+
 (defn ^:async explore!
   "Once per job, with nothing known or seen: search for food animals and ripe crops (jobs.explore.search, :explore),
-  not in a dark sky (a body sheltered for the night stays in) nor in the dark or with danger near unless starving (safe-if-lit), nor underground (sh-sense/buried?) unless starving, nor when risk refuses it. :again when the search found something to hunt or dig, else nil with what it
+  not in a dark sky (a body sheltered for the night stays in) nor in the dark or with danger near unless starving (safe-if-lit), nor underground (a hungry body under rock first climbs out, jobs.items.obtain.surface; a starving one searches there), nor when risk refuses it. :again when the search found something to hunt or dig, else nil with what it
   covered remembered."
   [c]
   (let [e (:explore (:args c))]
     (cond
+      (and e (:walk-to (ctx/mem c))) (await (walk-to-noted! c))
       (or (not e) (explore-done? (ctx/mem c) (starving? c) (ctx/now c) (foods/starving-rest-ms))) nil
       (risk/refused? c nil)
       (do (ctx/update-mem! c assoc :explored (str "not searched: " (:too-dangerous (ctx/mem c)))) nil)
       (search-waits? c)
       (do (ctx/update-mem! c assoc :explored "not searched: dark or danger near") nil)
       (and (sh-sense/buried? (:primitives c)) (not (starving? c)))
-      (do (ctx/update-mem! c assoc :explored "not searched underground: the caves are dark and full of mobs; surface or eat first") nil)
+      (case (await (surface/step! c))
+        :continue :continue
+        :out :again
+        (do (ctx/update-mem! c assoc :explored "not searched: no way up out of the cave") nil))
       :else
       (do
         (ctx/update-mem! c assoc :explored "started" :explored-at (ctx/now c))
@@ -368,6 +384,8 @@
                                (reduce max 0 (for [{[x y z] :pos} (:found res) :when x] (+ 4 (u/dist (u/self-pos c) {:x x :y y :z z})))))
               (ctx/update-mem! c assoc :explored
                                (report/explored-text res))
+              (when-let [noted (and (nil? (animals/nearest c (animal-opts c false))) (first (filter :id (:found res))))]
+                (ctx/update-mem! c assoc :walk-to (:pos noted)))
               (when (= :done (:kind e)) :again))))))))
 
 (defn rod-carried?

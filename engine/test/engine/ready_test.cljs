@@ -194,6 +194,11 @@
     {:inventory []} [:later :unarmed]
     {:inventory sword :self {:pos {:x 0 :y 64 :z 0} :health 3}} [:later :low-health]))
 
+(deftest a-stair-up-is-not-held-for-health-a-stair-down-is
+  (are [dir expected] (= expected (first (stair/fit? (assoc (ctx-of (assoc at-origin :self {:pos {:x 0 :y 64 :z 0} :health 3})) :args {:dir dir}))))
+    :up :ok
+    :down :later))
+
 (deftest a-job-whose-checks-default-to-armed-and-healthy-runs-them-from-the-declared-forms
   (are [world expected] (= expected (first (ending/run-status (get registry/jobs 'jobs.access.cleanup) (ctx-of (merge at-origin world)))))
     {:inventory sword} :ok
@@ -372,6 +377,7 @@
 (deftest the-work-jobs-bind-their-place-by-night
   (are [world job args expected] (= expected (lit 0 15 #(first ((:safe? job) (assoc (ctx-of world) :args args)))))
     open-night {:safe? place/safe?} {:pos [15 64 0]} :later
+    open-night {:safe? place/safe?} {:pos [1 64 0]} :ok
     night-hut {:safe? place/safe?} {:pos [6 64 0]} :ok
     open-night {:safe? light-area/safe?} {:cells [[15 64 0]]} :later
     night-hut {:safe? light-area/safe?} {:cells [[6 64 0]]} :ok

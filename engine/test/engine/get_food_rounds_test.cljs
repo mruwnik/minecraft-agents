@@ -2,6 +2,8 @@
   "get-food as one whole attempt (job-rounds design): one round eats, or gets food and eats, or stops with a reason;
   a cut round resumes from the world; jobs.lib.child/run!* runs a child to its end."
   (:require [cljs.test :refer [deftest is async]]
+            ["fs" :as fs]
+            ["path" :as path]
             [engine.registry :as registry]
             [engine.settings :as settings]
             [engine.core :as core]
@@ -10,6 +12,7 @@
             [engine.fake :as fake]
             [engine.hut-shelter-test :as hs]
             [engine.memory :as mem]
+            [engine.notes :as notes]
             [engine.scenario :as scenario]
             [jobs.lib.world-files :as ew]
             [engine.test-util :as tu]
@@ -23,8 +26,9 @@
 (defn setup
   "step-ms: the engine's clock moves on by that much each time it is read (time passing while a round runs); the
   world's furnaces cook by the same fake time, 50 ms a tick."
-  [world & {:keys [step-ms zones] :or {step-ms 0}}]
-  (let [clock (atom 1000000)
+  [world & {:keys [step-ms zones other-notes] :or {step-ms 0}}]
+  (let [dir (tu/tmp-dir)
+        clock (atom 1000000)
         carry (atom 0)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor} world)))
@@ -33,8 +37,12 @@
                 (swap! carry - (* ticks 50))
                 (when (pos? ticks) (.advance (.-world p) ticks)))
               (swap! clock + step-ms))
+        _ (when other-notes
+            (fs/mkdirSync (path/join dir "notes") #js {:recursive true})
+            (fs/writeFileSync (path/join dir "notes" "Other.edn") (notes/render "Other" other-notes)))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
-                          :world (ew/of-data {} {} zones)
+                          :world (cond-> (ew/of-data {} {} zones)
+                                   other-notes (assoc :notes (notes/open {:world-dir dir :body "Fake" :emit (fn [_])})))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen :clock clock}))
 
@@ -501,6 +509,24 @@
           (is (= 1 (count (searches seen))) "one search for animals and crops")
           (is (re-find #"explored" (str (:text (first (none-endings seen)))))))))))
 
+(deftest an-animal-only-another-body-noted-is-walked-toward-not-given-up-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [note [{:kind :seen :what "cow" :id "u1" :pos [40 64 0] :by "Other" :t 1 :until 9e15}]
+              {:keys [eng seen]} (setup {:time 6000 :self {:food 8 :health 10}} :step-ms 5 :other-notes note)]
+          (await (one-round! eng {}))
+          (is (some #(= :noted-walk (:slot %)) (events-of seen :child_ended)) "the search ended on the note with no animal in sight: the body walks toward it"))))))
+
+(deftest hungry-underground-by-a-wall-climbs-before-it-searches
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:time 6000 :blocks {"0,66,0" "stone" "1,64,0" "stone" "1,65,0" "stone"} :self {:food 8 :health 10}} :step-ms 5)]
+          (await (one-round! eng {}))
+          (is (= [] (searches seen)) "not searched while under rock")
+          (is (some #(re-find #"dig-out" (name (:slot %))) (events-of seen :child_ended)) "it cuts a stair up from the wall"))))))
+
 (deftest explore-false-gives-up-without-searching
   (async done
     (tu/run-async done
@@ -569,14 +595,14 @@
     (is (false? (waits? [15 15])) "night, lit place: the search goes on")
     (is (true? (waits? [15 0])) "night, dark place: it waits")))
 
-(deftest hungry-underground-does-not-explore-the-caves
+(deftest hungry-underground-with-no-wall-to-climb-does-not-search
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:time 6000 :blocks {"0,66,0" "stone"} :self {:food 8 :health 10}} :step-ms 5)]
           (await (one-round! eng {}))
           (is (= [] (searches seen)) "food 8 underground: no search through the dark caves")
-          (is (re-find #"underground" (str (:text (first (none-endings seen)))))))))))
+          (is (re-find #"no way up" (str (:text (first (none-endings seen)))))))))))
 
 (deftest a-starving-body-underground-explores-the-caves
   (async done

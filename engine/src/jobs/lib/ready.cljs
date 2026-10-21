@@ -166,6 +166,12 @@
     (with-meta (fn [c] (if (by-night? c) (at c) (if walk? (threatened-walking c (f c)) (threatened c))))
       {::exposure (fn [c] (if (by-night? c) ((::exposure (meta at)) c) (contract/ok :day "an unseen place's light is no reason to wait")))}))))
 
+(defn ok-when-near
+  "safe, but ok while (near? c) holds: the job makes no walk there, so it meets no exposure the body is not already in (a wall closed beside a weak body at night is the safe act)."
+  [near? safe]
+  (with-meta (fn [c] (if (near? c) (contract/ok :in-reach "no walk to make, nothing to wait for") (safe c)))
+    {::exposure (fn [c] (if (near? c) (contract/ok :in-reach "no walk to make") ((::exposure (meta safe)) c)))}))
+
 (def safe-at-chest
   "The checker of a job that goes to its chest (the :chest arg or the known :chest place)."
   (safe-at-by-night #(storage/chest-of (ctx/view %) (:args %))))

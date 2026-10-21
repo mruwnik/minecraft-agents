@@ -1,0 +1,15 @@
+;; Card 8bb0b431: a block placed in reach is not refused for the dark of the cell: closing a wall beside the body at night is the safe act.
+;; Open plot at night, the body on grass with cobblestone; the cell [17 0 16] is next to it.
+;; Should-succeed: place completes. Should-fail: none (a far cell still waits for light, covered by the ready tests).
+{:defaults
+ {:tags [:blocks :place :night]
+  :time :night :time-why :night-light
+  :plot {:height 8 :floor "grass_block"}
+  :body {:at [16.5 0 16.5] :settle-s 2 :inventory [["cobblestone" 4]] :effects [["resistance" 600 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "a-wall-block-beside-the-body-is-placed-in-the-dark"
+   :act [[:job (jobs.blocks.place {:pos #at [17 0 16] :item "cobblestone"})]]
+   :expect [{:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 40 :of-job true}
+            {:no-event {:source :job :data {:reason :exposed}} :for-s 5 :of-job true}]
+   :after [[:block [17 0 16] "cobblestone"]]}]}

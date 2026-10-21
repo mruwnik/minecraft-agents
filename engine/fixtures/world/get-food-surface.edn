@@ -1,0 +1,17 @@
+;; survival.get-food: a hungry body under rock climbs out before it looks for food (it was refused "not searched underground").
+;; Stone mass x 2..30, z 2..30, y 0..5 on the plot floor; a sealed cave x 13..17, z 13..17, y 0..2 with the body in it; a cow stands on top
+;; at [20.5 6 15.5] (NoAI). The body is fed (food 20) but carries no food, so get-food's default :carry sends it hunting (a starving body would search the cave instead); it has an iron pickaxe.
+;; Should-succeed: it cuts a stair up through the roof, then hunts the cow.
+;; Should-fail: none.
+{:defaults
+ {:tags [:survival :get-food :cave]
+  :time :any
+  :plot {:height 14}
+  :blocks [[:fill [2 0 2] [30 5 30] "stone"] [:fill [13 0 13] [17 2 17] "air"]]
+  :body {:at [15.5 0 15.5] :inventory [["iron_sword" 1] ["iron_pickaxe" 1]] :settle-s 2}
+  :limit-s 200}
+ :cases
+ [{:name "hungry-body-sealed-in-a-cave-climbs-out-and-hunts-the-cow-above"
+   :act [[:summon "cow" [20.5 6 15.5] "{NoAI:1b}"]
+         [:job (jobs.survival.get-food {})]]
+   :expect [{:event {:source :job :kind :food.killed} :within-s 180}]}]}

@@ -62,7 +62,9 @@
 
 (def ways need/fetch-ways)
 
-(def safe? (ready/safe-at-by-night (ready/near-unseen-here (fn [c] (a/cell (:pos (:args c)))))))
+(def safe?
+  (ready/ok-when-near (fn [c] (let [{:keys [pos error]} (b/parse (:args c))] (and (not error) (b/in-reach? c pos (:see (:args c))))))
+                      (ready/safe-at-by-night (ready/near-unseen-here (fn [c] (a/cell (:pos (:args c))))))))
 
 (def fit? ready/ok)
 
