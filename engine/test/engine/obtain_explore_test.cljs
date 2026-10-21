@@ -6,7 +6,10 @@
             [engine.fake :as fake]
             [engine.settings :as settings]
             [engine.test-util :as tu]
-            [jobs.items.obtain.gather :as gather]))
+            [jobs.items.obtain.gather :as gather]
+            [jobs.items.obtain.seen :as seen]
+            [jobs.lib.access :as access]
+            [jobs.lib.look :as look]))
 
 (def village-trunk
   "A trunk at x 3 inside a foreign zone."
@@ -45,6 +48,21 @@
               s (f/start (ore-world (merge (:blocks village-trunk) free) []) (:zones village-trunk))]
           (await (obtain! s {:any-of ["oak_log"] :count 2 :ways #{:gather} :explore true} 400))
           (is (<= 2 (get (f/inv s) "oak_log" 0)) "logs were got from the tree outside the zone"))))))
+
+(def arity1 "access/rules-input is called through its 1-arity property" "cljs$core$IFn$_invoke$arity$1")
+
+(deftest the-seen-log-to-take-is-found-beyond-more-than-64-nearer-barred-logs
+  (let [barred (for [i (range 100)] {:name "oak_log" :pos {:x i :y 64 :z 0}})
+        free {:name "oak_log" :pos {:x 150 :y 64 :z 0}}
+        real (aget access/rules-input arity1)]
+    (aset access/rules-input arity1 (constantly {}))
+    (try
+      (with-redefs [look/seen-blocks (fn [_ {:keys [max]}] (vec (take max (concat barred [free]))))
+                    access/may? (fn [_ _ pos] {:ok (= 150 (:x pos))})
+                    seen/cut-off? (constantly false)]
+        (is (= free (first (seen/seen-blocks-of {:primitives nil} {:seen #{"oak_log"}} false)))
+            "the nearest 64 seen are all barred, the free log lies past them"))
+      (finally (aset access/rules-input arity1 real)))))
 
 (deftest a-tree-cut-off-from-the-body-is-explored-past-with-explore
   (async done

@@ -39,6 +39,8 @@
   [c b]
   (contains? (get (ctx/mem c) :cut-off #{}) [(:x (:pos b)) (:z (:pos b))]))
 
+(def seen-cap "Seen blocks read before the access filter; the nearest few dozen may all be a village's or plan's, with the log to take beyond them." 1024)
+
 (defn seen-blocks-of
   "The seen blocks of a need (within the seen radius), nearest first, with those a zone, claim or plan footprint bars
   taking left out unless all? is true."
@@ -47,7 +49,7 @@
     (let [in (access/rules-input c)
           blocks (if (= "water_bucket" (:key need))
                    (look/seen-water-sources (:primitives c) (seen-radius))
-                   (look/seen-blocks (:primitives c) {:match #((:seen need) %) :radius (seen-radius) :max (if all? 1 64)}))]
+                   (look/seen-blocks (:primitives c) {:match #((:seen need) %) :radius (seen-radius) :max (if all? 1 seen-cap)}))]
       (if all? blocks (filter #(and (:ok (access/may? in :harvest (:pos %))) (not (cut-off? c %))) blocks)))))
 
 (defn growable?
