@@ -40,7 +40,16 @@
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :bag-full}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :cart-failed}} :for-s 100 :until {:source :job :kind :stopped}}]
    :after [[:item "iron_ingot" 0] [:entities "type=chest_minecart,tag=wt" [[2 -1 10] [30 4 22]] 1]]}
-  {:name "no-shears-stops-no-tool-leaving-the-cobweb"
+   {:name "a-worn-last-pickaxe-gets-a-spare-from-a-chest-before-the-rails"
+   :blocks [[:set [8 0 15] "chest{Items:[{Slot:0b,id:\"minecraft:stone_pickaxe\",count:1}]}"]]
+   :body {:inventory [["stone_pickaxe" 1] ["torch" 8] ["bread" 8]]}
+   :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=128]"]
+         [:until-seen {:block "chest"} 10]
+         [:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:rail]})]]
+   :expect [{:event {:source :job :kind :tool.spare} :within-s 100}
+            {:event {:source :job :kind #{:completed :stopped}} :within-s 140 :of-job true}]
+   :after [[:item "stone_pickaxe" [:>= 1]] [:not-block [14 0 16] "rail"]]}
+ {:name "no-shears-stops-no-tool-leaving-the-cobweb"
    :body {:inventory [["stone_pickaxe" 1] ["torch" 8] ["bread" 8]]}
    :act [[:job (jobs.strip.corridor {:segment #seg {:axis :x :y 0 :line 16 :from 6 :to 26} :entry #at [6 0 16] :take [:cobweb]})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-tool}} :within-s 100 :of-job true}

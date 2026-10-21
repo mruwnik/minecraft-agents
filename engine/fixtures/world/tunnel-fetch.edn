@@ -59,4 +59,14 @@
    :expect [{:event {:source :job :kind :child_ended :data {:slot :need :status :done}} :within-s 180 :of-job true}
             {:event {:source :job :kind :completed} :within-s 260 :of-job true}]
    :limit-s 280
-   :after [[:item "stone_pickaxe" [:>= 1]]]}]}
+   :after [[:item "stone_pickaxe" [:>= 1]]]}
+  {:name "tunnel-with-a-worn-last-pickaxe-fetches-a-spare-then-cuts"
+   :blocks [[:set [14 10 19] "chest{Items:[{Slot:0b,id:\"minecraft:stone_pickaxe\",count:1}]}"]]
+   :body {:inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 8]]}
+   :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=128]"]
+         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
+         [:job (jobs.access.tunnel {:target #at [16 6 20] :max-length 12})]]
+   :expect [{:event {:source :job :kind :tool.spare} :within-s 90}
+            {:event {:source :job :kind :completed} :within-s 200 :of-job true}]
+   :limit-s 220
+   :after [[:item "stone_pickaxe" [:>= 1]] [:block [15 6 20] "air"]]}]}
