@@ -83,9 +83,10 @@
   (let [has-end? (into #{} (keep #(when (terminal-kinds (:kind %)) (get-in % [:context :job-id]))) events)]
     (into (vec events)
           (keep (fn [id]
-                  (when-let [{:keys [status result text]} (and (not (has-end? id)) (get recorded id))]
+                  (when-let [{:keys [status result text result-clipped]} (and (not (has-end? id)) (get recorded id))]
                     (cond-> {:seq 0 :generation-id generation :source :job :kind status
                              :context {:job-id id :chain [id]} :data (or result {})}
+                      result-clipped (assoc-in [:data :result-clipped] true)
                       text (assoc :message text)))))
           ids)))
 

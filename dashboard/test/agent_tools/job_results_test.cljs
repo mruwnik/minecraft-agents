@@ -141,3 +141,7 @@
           (.then (fn [history] (count (:events history))) (fn [error] (.-code error)))
           (.then (fn [outcome] (is (= results/result-limit outcome))))
           (.finally (fn [] (set! (.-now js/Date) real-now) (done)))))))
+
+(deftest a-recorded-end-with-clipped-result-says-so
+  (let [[e] (results/with-recorded [] "g" {"j1" {:status :stopped :result {:reason :x} :result-clipped true}} ["j1"])]
+    (is (= {:reason :x :result-clipped true} (:data e)))))
