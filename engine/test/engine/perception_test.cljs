@@ -614,6 +614,21 @@
     (is (= (repeat 20 true) (seen-in-one-pass open 1 [[0 63 20]])))
     (is (= (repeat 20 false) (seen-in-one-pass walled 1 [[0 63 20]])))))
 
+(def tunnel-world
+  (apply dissoc (tu/box -3 63 -2 3 66 34 "stone") (for [y [64 65] z (range -2 35)] (str "0," y "," z))))
+
+(deftest a-one-wide-tunnels-walls-and-ceiling-are-seen-far-down-it-in-one-pass-at-every-jitter
+  (let [lining (for [z (range 5 28) [x y] [[-1 64] [-1 65] [1 64] [1 65] [0 66]]] [x y z])
+        behind (for [z (range 5 28) x [-2 2] y [64 65]] [x y z])]
+    (is (= (repeat 20 []) (for [j jitters]
+                            (let [{:keys [per]} (rig tunnel-world {:rand (constantly j)})]
+                              (perception/pass! per)
+                              (vec (remove #(seen-name per %) lining))))))
+    (is (= (repeat 20 []) (for [j jitters]
+                            (let [{:keys [per]} (rig tunnel-world {:rand (constantly j)})]
+                              (perception/pass! per)
+                              (vec (filter #(seen-name per %) behind))))))))
+
 (deftest a-lower-effort-casts-fewer-rays
   (let [rays (fn [effort]
                (let [{:keys [per]} (rig (tu/floor -20 0 20 40) {:rand (constantly 0.5)})]

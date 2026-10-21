@@ -81,6 +81,6 @@
     (dotimes [i 4] (pass! i))
     (store-checksum per)))
 
-(deftest real-raw-world-hills (is (= [59 69318 895800427] (real-seen "hills"))))
+(deftest real-raw-world-hills (is (= [59 69407 827997028] (real-seen "hills"))))
 (deftest real-raw-world-cave-dark (is (= [4 232 97244877] (real-seen "cave"))))
-(deftest real-raw-world-pen-with-fences (is (= [50 93064 899788773] (real-seen "pen"))))
+(deftest real-raw-world-pen-with-fences (is (= [50 93195 634842412] (real-seen "pen"))))

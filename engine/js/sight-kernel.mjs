@@ -194,13 +194,13 @@ function stateIn (raw, ids, x, y, z, i) {
 }
 
 // The unit directions of rays [from, to) of a pass into out (3 per ray; NaN x: a ray outside the cone or past the grid).
-// A pass casts its ground rows first, then its grid in tiles of tileRays taken in golden-stride order (see rays.cljs).
-// p: {b (the view basis: 9 numbers), hx, hy, cols, rows, jx, jy, ground (flat [d l ...]), tiles, stride, tileRays, fx, fz,
-// rx, rz, eyeHeight}.
+// A pass casts its aimed rows first, then its grid in tiles of tileRays taken in golden-stride order (see rays.cljs).
+// p: {b (the view basis: 9 numbers), hx, hy, cols, rows, jx, jy, ground (flat [d l dy ...]: forward, sideways, height above the eye), tiles, stride, tileRays, fx, fz,
+// rx, rz}.
 export function sliceDirs (out, from, to, p) {
-  const { b, hx, hy, cols, rows, jx, jy, ground, tiles, stride, tileRays, fx, fz, rx, rz, eyeHeight } = p
+  const { b, hx, hy, cols, rows, jx, jy, ground, tiles, stride, tileRays, fx, fz, rx, rz } = p
   const nGrid = cols * rows
-  const nGround = ground.length / 2
+  const nGround = ground.length / 3
   const du = (2 * hx) / cols; const dv = (2 * hy) / rows
   for (let q = from; q < to; q++) {
     const j = q - from
@@ -215,8 +215,8 @@ export function sliceDirs (out, from, to, p) {
       dy = b[1] + v * b[7]
       dz = b[2] + a * b[5] + v * b[8]
     } else {
-      const d = ground[2 * q]; const l = ground[2 * q + 1]
-      dx = d * fx + l * rx; dy = -eyeHeight; dz = d * fz + l * rz
+      const d = ground[3 * q]; const l = ground[3 * q + 1]
+      dx = d * fx + l * rx; dy = ground[3 * q + 2]; dz = d * fz + l * rz
       const f = dx * b[0] + dy * b[1] + dz * b[2]
       if (!(f > 0 && Math.abs(dx * b[3] + dz * b[5]) <= hx * f && Math.abs(dx * b[6] + dy * b[7] + dz * b[8]) <= hy * f)) { out[3 * j] = NaN; continue }
     }

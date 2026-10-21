@@ -42,26 +42,34 @@
 
 (defn steps-per-pass [{:keys [opts]}] (max 1 (js/Math.round (/ (:pass-ms opts) (:step-ms opts)))))
 (defn rays-per-pass
-  "The rays of the last pass started (grid and ground rows), else of a full-effort grid."
+  "The rays of the last pass started (grid and aimed rows), else of a full-effort grid."
   [{:keys [grid st]}]
   (or (.-passRays ^js st) (* (:cols grid) (:rows grid))))
 
-(defn ground-rays
-  "The ground rows of a pass from an eye at yaw and pitch: for each ground distance d from ground-from (plus jy) to
-  ground-to, a row of rays ground-across blocks apart (offset by jx) at the ground eye-height below the eye, kept when
-  inside the view cone. A flat [d l ...] array (forward, sideways, in blocks): far ground at a grazing angle falls
-  between grid rays, a row per block of distance does not."
-  [{:keys [ground-from ground-to ground-across]} hx hy yaw pitch jx jy]
+(defn aimed-rays
+  "The rays a pass aims at fixed places, from an eye at yaw and pitch, kept when inside the view cone. A flat
+  [d l dy ...] array (forward and sideways blocks along the yaw, and height above the eye), cast in that order. Surfaces
+  that run along the line of sight (far ground, a tunnel's walls and ceiling) fall between grid rays, so for each block of
+  distance there is a row of
+    ground rays: ground-across blocks apart at the ground an eye height below the eye, from ground-from to ground-to;
+    wall rays: at each of wall-lanes sideways (both sides) and each of wall-heights, from wall-from to wall-to."
+  [{:keys [ground-from ground-to ground-across wall-from wall-to wall-lanes wall-heights]} hx hy yaw pitch jx jy]
   (let [b (basis yaw pitch)
         fx (- (js/Math.sin yaw)) fz (- (js/Math.cos yaw)) rx (js/Math.cos yaw) rz (- (js/Math.sin yaw))
-        out #js []]
+        out #js []
+        aim! (fn [d l dy]
+               (when (in-cone? b hx hy (+ (* d fx) (* l rx)) dy (+ (* d fz) (* l rz)))
+                 (.push out d l dy)))]
     (loop [d (+ ground-from jy)]
       (when (< d ground-to)
         (let [k (js/Math.ceil (/ (* hx (+ d game/eye-height)) ground-across))]
           (doseq [i (range (- k) (inc k))]
-            (let [l (* ground-across (+ i jx))]
-              (when (in-cone? b hx hy (+ (* d fx) (* l rx)) (- game/eye-height) (+ (* d fz) (* l rz)))
-                (.push out d l)))))
+            (aim! d (* ground-across (+ i jx)) (- game/eye-height))))
+        (recur (inc d))))
+    (loop [d (+ wall-from jy)]
+      (when (< d wall-to)
+        (doseq [lane wall-lanes side (if (zero? lane) [1] [-1 1]) dy wall-heights]
+          (aim! d (* side lane) dy))
         (recur (inc d))))
     out))
 
@@ -212,13 +220,13 @@
                                 :effort (or effort (:effort opts)) :done false})
     (let [{:keys [cols rows hx hy]} (grid opts (or effort (:effort opts)))
           jx ((:rand opts)) jy ((:rand opts))
-          ground (ground-rays opts hx hy (.-yaw eye) (.-pitch eye) jx jy)]
+          ground (aimed-rays opts hx hy (.-yaw eye) (.-pitch eye) jx jy)]
       (set! (.-pass st) #js {:next 0 :jx jx :jy jy :cols cols :rows rows :ground ground
-                             :total (+ (* cols rows) (/ (.-length ground) 2)) :why why})
+                             :total (+ (* cols rows) (/ (.-length ground) 3)) :why why})
       (let [^js pass (.-pass st) tiles (js/Math.ceil (/ (* cols rows) tile-rays))]
         (set! (.-tiles pass) tiles)
         (set! (.-stride pass) (stride-of tiles))
-        (set! (.-span pass) (+ (/ (.-length ground) 2) (* tiles tile-rays))))
+        (set! (.-span pass) (+ (/ (.-length ground) 3) (* tiles tile-rays))))
       (count-why! st why :passes 1)
       (set! (.-passRays st) (.-span (.-pass st))))))
 
@@ -279,11 +287,11 @@
                 #js {:b (basis yaw (.-pitch eye)) :hx (:hx grid) :hy (:hy grid) :cols (.-cols pass) :rows (.-rows pass)
                      :jx (.-jx pass) :jy (.-jy pass) :ground (.-ground pass) :tiles (.-tiles pass) :stride (.-stride pass)
                      :tileRays tile-rays :fx (- (js/Math.sin yaw)) :fz (- (js/Math.cos yaw))
-                     :rx (js/Math.cos yaw) :rz (- (js/Math.sin yaw)) :eyeHeight game/eye-height})
+                     :rx (js/Math.cos yaw) :rz (- (js/Math.sin yaw))})
     out))
 
 (defn cast-slice!
-  "Casts rays [from, to) of the pass from the eye's current place and look: the ground rows first (along the
+  "Casts rays [from, to) of the pass from the eye's current place and look: the aimed rows first (along the
   eye's yaw now, and only those still inside the view cone), then the grid in tiles. Returns the cells entered."
   [{:keys [raw opts] :as per} ^js st ^js pass ^js eye from to now]
   (let [^js sight (.-sight st)

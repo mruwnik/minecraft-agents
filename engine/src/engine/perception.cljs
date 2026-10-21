@@ -11,9 +11,11 @@
     Light rule: vanilla's lightmap brightness `seeing` of the cell's light is at least 0.2, or the cell is within `:near` (4; `:near-torch` 7 with a torch in either hand) blocks.
     A sight-blocking cell is lit by the brighter of itself and the cell the ray came from.
     A dark cell is not recorded and the ray goes on, so a lit room is seen across a dark gap.
-    Ground rows: besides the grid, one row of rays per block of ground distance from `:ground-from` (8) to `:ground-to`
-    (32), aimed at the ground an eye height below the eye, `:ground-across` (0.7) blocks apart, inside the cone only.
-    `:effort` (0-1) scales the grid: a pass casts effort-min (0.15) to all of a `:ray-deg` grid; ground rows always.
+    Aimed rows: besides the grid, per block of distance ahead, a row of ground rays from `:ground-from` (8) to `:ground-to`
+    (32) at the ground an eye height below the eye, `:ground-across` (0.7) blocks apart, and wall rays from `:wall-from` (4)
+    to `:wall-to` (32) at each of `:wall-lanes` to either side and `:wall-heights` above the eye (a tunnel's walls and ceiling),
+    inside the cone only. Surfaces along the line of sight fall between grid rays; these rows see them as a player does.
+    `:effort` (0-1) scales the grid: a pass casts effort-min (0.15) to all of a `:ray-deg` grid; aimed rows always.
     A forced pass with `{:reuse? true}` (jobs.lib.look/see!) casts nothing when the last finished pass had the same eye spot, look, world and light, at the same effort or more, less than 2 s ago.
     A pass is spread over `:pass-ms` (1.5 s) in slices of `:step-ms` (one game tick).
     Slices share one mark stamp while the raw-world epoch, darkness and near stay and for 2 s at most, wherever the eye moves: a cell recorded in it is not read again, so its recorded time is up to 2 s old (a thin block is read every time).
@@ -92,6 +94,10 @@
    :engine.perception/ground-from {:default 8 :spec (a/num-in 0 nil) :doc "Ground rows start this many blocks ahead."}
    :engine.perception/ground-to {:default 32 :spec (a/num-in 0 nil) :doc "Ground rows end this many blocks ahead."}
    :engine.perception/ground-across {:default 0.7 :spec (a/num-in 0.1 nil) :doc "Blocks between the rays of a ground row."}
+   :engine.perception/wall-from {:default 4 :spec (a/num-in 0 nil) :doc "Wall rows (along a tunnel's walls and ceiling) start this many blocks ahead."}
+   :engine.perception/wall-to {:default 32 :spec (a/num-in 0 nil) :doc "Wall rows end this many blocks ahead."}
+   :engine.perception/wall-lanes {:default [0 0.5 1 1.7] :spec (a/coll-of (a/num-in 0 nil)) :doc "Blocks to the side (both sides) a wall row aims at."}
+   :engine.perception/wall-heights {:default [-1.1 -0.1 0.4 1.4] :spec (a/coll-of (a/num-in nil nil)) :doc "Heights above the eye a wall row aims at, in blocks."}
    :engine.perception/pass-ms {:default 1500 :spec (a/int-in 1 nil) :doc "How long one looking pass may take, ms of wall clock."}
    :engine.perception/step-ms {:default 50 :spec (a/int-in 1 nil) :doc "How long one looking step may take, ms of wall clock."}
    :engine.perception/idle-ms {:default 3000 :spec (a/int-in 1 nil) :doc "A still body looks again this often when the world around it changed, ms."}
