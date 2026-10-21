@@ -228,7 +228,7 @@
             (perception/pass! (aget (:p s) "perception")))
           (core/submit! (:eng s) (list 'jobs.items.craft {:item "stone_pickaxe"}) {})
           (await (f/run-ticks s 30))
-          (is (= [:dark] (distinct (map :reason (f/events-of s :waiting)))))
+          (is (= [:exposed] (distinct (map :reason (f/events-of s :waiting)))) "harvest-wood judges the tree it walks to, not the room")
           (is (= 1 (count (f/events-of s :waiting))) "one wait, not one per round")
           (is (empty? (filter #(= :stopped (:kind %)) @(:seen s)))))))))
 
