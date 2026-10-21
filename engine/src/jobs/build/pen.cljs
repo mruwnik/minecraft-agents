@@ -42,7 +42,7 @@
   :gap cell and on top of each :climb or :perch-in cell, then the pen is checked again. Nothing else is placed that the plan does not ask for.
   Needs: the plan, a zone list (unless :ignore-zones?), and the blocks of the fence (fetched by the builder unless
   the call's ways leave out :chest :craft :gather). Returns, as the data of its ending, {:closed? :reason :cells :leaks :gates :built {:placed :missing
-  :short :given-up :wrong :refused}}. :reason is nil when closed, else :leak, :unbounded, :unloaded or :no-start.
+  :short :given-up :wrong :refused}}. :reason is nil when closed, else :leak, :unbounded, :unloaded (only after 3 walks back to the pen left cells unsensed) or :no-start.
   The pen ends with the body outside and the gate shut.
   Endings: done when the pen holds; nothing-possible with the :reason as cause when it does not (the data's :leaks name {:pos :why} (:gap :open-gate :climb :perch-in :open :unloaded; at most 12), and :built what the
   build left: :refused, :given-up, :short); nothing-possible :inside when the body cannot get out of the finished
@@ -230,14 +230,32 @@
   (when-let [cell (first (filter #(and (pen-read/barrier? (:want %)) (not (gate? (:want %)))) cells))]
     (or (:item cell) (first (pen-read/want-blocks (:want cell))))))
 
+(def max-return-walks 3)
+
+(defn ^:async return-walk!
+  "Cells the body cannot sense are unknown, not leaks (it may have been walked away from the site): walk back to the
+  pen, up to max-return-walks times, and read again. :continue while a walk waits, :again after a walk, nil when the
+  walks are spent."
+  [c cells]
+  (let [n (or (:return-walks (ctx/mem c)) 0)
+        [x y z] (:pos (first (filter #(pen-read/barrier? (:want %)) cells)))]
+    (when (and x (< n max-return-walks))
+      (let [r (await (child/call-walk* c :return {:pos {:x x :y y :z z} :range 4 :ways #{:walk :clear-seal}}))]
+        (if (= :continue r)
+          :continue
+          (do (ctx/update-mem! c update :return-walks (fnil inc 0))
+              :again))))))
+
 (defn ^:async finish!
   "Read the pen (looking at the remembered cells in sight first), emit the outcome and end: done when it holds, else nothing-possible with the reason."
   [c cells]
   (let [plan (:plan (:args c))
         built (:built (ctx/mem c))
         answer (pen/summary (await (pen-read/read! c (pen-opts c cells))))
-        result (result-of c answer)]
+        result (result-of c answer)
+        back (when (= :unloaded (:reason answer)) (await (return-walk! c cells)))]
     (cond
+      back back
       (:closed? answer)
       (ctx/end c :done nil (assoc result :text (str "pen of " plan " holds, " (:cells answer) " cells, placed " (:placed built))))
       (and (ctx/way? c :patch) (seq (pen-patch/patch-cells (:leaks answer))) (patch-item cells)

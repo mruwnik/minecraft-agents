@@ -309,6 +309,19 @@
 
 ;; ---------------------------------------------------------------- resuming
 
+(deftest an-unsensed-pen-is-walked-back-to-before-it-is-judged
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig pen-read/read!
+              reads (atom 0)
+              unseen {:closed? false :reason :unloaded :inside #{} :leaks [{:pos {:x 2 :y 64 :z 2} :why :unloaded}]}]
+          (set! pen-read/read! (fn ([c opts] (if (< (swap! reads inc) 3) (js/Promise.resolve unseen) (orig c opts))) ([c opts r] (orig c opts r))))
+          (try
+            (let [[_ _ _ e] (await (build! (spec kit (dissoc built-pen "3,64,4")) {"pen" (ring-plan)} {}))]
+              (is (= {:kind :done :cause nil} (kc e)) "once back in sight the pen is read, not judged unloaded"))
+            (finally (set! pen-read/read! orig))))))))
+
 (deftest a-cut-mid-build-resumes-and-finishes-once
   (async done
     (tu/run-async done
