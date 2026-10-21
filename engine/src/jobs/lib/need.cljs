@@ -16,6 +16,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.storage :as storage]
             [jobs.lib.waits :as waits]
             [jobs.lib.util :as u]))
 
@@ -118,9 +119,9 @@
           (contract/with-because e)))))
 
 (defn counts
-  "{name n} carried of names (0 when none)."
+  "{name n} carried of names (0 when none), worn-out tools left out."
   [c names]
-  (let [inv (u/inventory (:primitives c))]
+  (let [inv (storage/usable (u/inventory (:primitives c)))]
     (into {} (map (fn [n] [n (transduce (comp (filter #(= n (:name %))) (map :count)) + 0 inv)])) names)))
 
 (defn got-names

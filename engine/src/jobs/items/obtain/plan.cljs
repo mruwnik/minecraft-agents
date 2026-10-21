@@ -22,7 +22,7 @@
   any other :craft) makes n more of from what is carried, else nil."
   [c names n]
   (let [p (:primitives c)
-        have (storage/carried-totals (u/inventory p))
+        have (storage/usable-totals (u/inventory p))
         mem (ctx/mem c)
         table? (and (not (get-in mem [:craft :table-unreachable]))
                     (boolean (or (:table mem) (crafting-table/nearest p (craft-radius)))))
@@ -75,7 +75,7 @@
   Of several names that lack wool, the one gathering the least (pick-plan)."
   [c names n]
   (let [p (:primitives c)
-        have (storage/carried-totals (u/inventory p))
+        have (storage/usable-totals (u/inventory p))
         version (game/version-of p)
         seen? #(seq (look/seen-blocks p {:names (vec (material-blocks version %)) :radius (seen-radius) :max 1}))
         seen (set (filter seen? (recipes/stone-materials version)))

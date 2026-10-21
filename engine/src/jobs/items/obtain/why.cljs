@@ -84,7 +84,7 @@
 (defn no-source-why
   "Text for the no-source wait: what each allowed source lacks."
   [c names n]
-  (let [have (storage/carried-totals (u/inventory (:primitives c)))
+  (let [have (storage/usable-totals (u/inventory (:primitives c)))
         version (game/version-of (:primitives c))]
     (clojure.string/join
      "; "

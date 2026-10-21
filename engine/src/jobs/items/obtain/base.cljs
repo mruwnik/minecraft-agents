@@ -61,7 +61,7 @@
       (not (and (int? (:count a)) (pos? (:count a)))) (str ":count is a positive whole number, got " (pr-str (:count a))))))
 
 (defn carried-of [inv names]
-  (reduce + 0 (map #(storage/carried inv %) names)))
+  (reduce + 0 (map #(storage/usable-carried inv %) names)))
 
 (defn shortfall
   "How many more of names than are carried the call's :count asks for."

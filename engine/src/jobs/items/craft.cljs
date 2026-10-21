@@ -105,7 +105,7 @@
   "Done once :count of :item are carried; else progress."
   [c]
   (let [{:keys [item count]} (:args c)
-        have (storage/carried (u/inventory (:primitives c)) item)
+        have (storage/usable-carried (u/inventory (:primitives c)) item)
         start (:start (ctx/mem c) have)
         made (max 0 (- have start))
         data [:units :items :done made :left (max 0 (- count have)) :result {:made made}]]
@@ -119,7 +119,7 @@
   "{name n} of the ingredients this call may use: carried less what the register holds, the item made counted whole."
   [c]
   (let [item (:item (:args c))]
-    (assoc (storage/carried-totals (reserve/free c :craft)) item (storage/carried (u/inventory (:primitives c)) item))))
+    (assoc (storage/carried-totals (reserve/free c :craft)) item (storage/usable-carried (u/inventory (:primitives c)) item))))
 
 (defn quote-of
   "P: the cheapest recipe for the rest of :count of :item from what is carried. It uses its ingredients (net of the item
@@ -127,7 +127,7 @@
   [c]
   (let [{:keys [item]} (:args c)
         p (:primitives c)
-        count (max 0 (- (:count (:args c)) (storage/carried (u/inventory p) item)))
+        count (max 0 (- (:count (:args c)) (storage/usable-carried (u/inventory p) item)))
         rs (get (recipes/recipes-for (game/version-of p)) item)
         st {:have (storage/carried-totals (u/inventory p))}
         r (first (sort-by #(recipes/short-count st % (recipes/ceil-div count (:count %))) rs))
@@ -363,10 +363,10 @@
   (let [p (:primitives c)
         {:keys [item count]} (:args c)
         _ (when-not (contains? (ctx/mem c) :start)
-            (ctx/update-mem! c assoc :start (storage/carried (u/inventory p) item)))
+            (ctx/update-mem! c assoc :start (storage/usable-carried (u/inventory p) item)))
         start (:start (ctx/mem c))
         target count
-        have (storage/carried (u/inventory p) item)]
+        have (storage/usable-carried (u/inventory p) item)]
     (if (>= have target)
       (finish! c (- have start) {})
       (let [held? (seq (reserve/held c :craft))
@@ -386,10 +386,10 @@
           {:keys [item]} (:args c)
           {:keys [r table start]} act
           status (.-status r)
-          made (- (storage/carried (u/inventory p) item) start)]
+          made (- (storage/usable-carried (u/inventory p) item) start)]
       (when table (ctx/update-mem! c assoc :table table))
       (case status
-        "crafted" (if (< (storage/carried (u/inventory p) item) (:count (:args c)))
+        "crafted" (if (< (storage/usable-carried (u/inventory p) item) (:count (:args c)))
                     (do (u/progress! c) :again)
                     (finish! c made {:text (str "crafted " made " " item)}))
         "no-item" (await (short-from! c item r made))

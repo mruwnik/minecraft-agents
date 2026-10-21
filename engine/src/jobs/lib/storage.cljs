@@ -26,8 +26,10 @@
 (def group-kind :storage/chests)
 
 (a/defargs settings
-  {::group-cap {:default 16 :spec (a/int-in 1 nil) :doc "Most storage chests (memory :storage/chests) the body keeps."}})
+  {::group-cap {:default 16 :spec (a/int-in 1 nil) :doc "Most storage chests (memory :storage/chests) the body keeps."}
+   ::worn-out {:default 5 :spec (a/int-in 0 nil) :doc "A carried tool with this many uses left or fewer does not count as had (usable-totals)."}})
 (defn group-cap [] (settings/get settings ::group-cap))
+(defn worn-out [] (settings/get settings ::worn-out))
 
 (defn cell-of [pos] (let [{:keys [x y z]} (if (vector? pos) {:x (pos 0) :y (pos 1) :z (pos 2)} pos)] [x y z]))
 
@@ -58,3 +60,12 @@
   "{name total} of the carried items."
   [items]
   (reduce (fn [acc {:keys [name count]}] (update acc name (fnil + 0) count)) {} items))
+
+(defn usable
+  "The items without the tools worn out (at most ::worn-out uses left): a job that wants a tool must make a fresh one."
+  [items]
+  (remove #(and (:durability %) (<= (:durability %) (worn-out))) items))
+
+(defn usable-totals "{name total} of the carried items, worn-out tools left out." [items] (carried-totals (usable items)))
+
+(defn usable-carried "Total carried of name, worn-out tools left out." [items name] (carried (usable items) name))

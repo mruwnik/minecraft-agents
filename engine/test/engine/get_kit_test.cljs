@@ -163,6 +163,15 @@
           (is (= {"feet" "iron_boots"} (worn s)))
           (is (= {:status :done :have ["iron_pickaxe" "iron_boots"]} (select-keys @(:out s) [:status :have]))))))))
 
+(deftest a-carried-tool-worn-out-does-not-count-as-had
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (world [{:name "iron_pickaxe" :count 1 :durability 1 :max-durability 250}] {})
+                       {:items ["iron_pickaxe"] :explore false :food false})]
+          (await (f/run-ticks s 60))
+          (is (= {:status :stopped :reason :no-source} (select-keys @(:out s) [:status :reason]))))))))
+
 (defn hungry-world [inv food]
   (assoc-in (world inv {}) [:self :food] food))
 

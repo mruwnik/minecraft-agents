@@ -97,7 +97,7 @@
   (let [p (:primitives c)
         inv (u/inventory p)]
     {:inv inv
-     :carried (storage/carried-totals inv)
+     :carried (storage/usable-totals inv)
      :worn (armour/worn-of (.-equipment (.self p)))}))
 
 (defn to-wear

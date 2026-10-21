@@ -13,7 +13,7 @@
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]))
 
-(defn carried [c] (storage/carried-totals (u/inventory (:primitives c))))
+(defn carried [c] (storage/usable-totals (u/inventory (:primitives c))))
 
 (defn todo
   "The bill's entries [item n] not yet carried or worn, in order."
