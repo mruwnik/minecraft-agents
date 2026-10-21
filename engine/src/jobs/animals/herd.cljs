@@ -58,7 +58,8 @@
   One round trip per animal:
   - Leash the nearest adult outside the pen (jobs.animals.leash, :radius). Babies, animals in the pen or in another closed enclosure,
     animals given up on and animals already fetched twice and still outside are skipped.
-  - Approach the cell 4 out from the gate and wait until the animal rests (up to 8 s). A walk (or lure) that cannot reach it tries the cell one nearer, down to out-1, for the rest of the run, before ending :unreachable.
+  - Approach the cell 4 out from the gate (the first of out-4 .. out-2 that is no fence-gate cell and lies in no other closed fenced pen, else out-1) and wait until the animal rests (up to 8 s). A walk (or lure) that cannot reach it tries the cell one nearer, down to out-1, for the rest of the run, before ending :unreachable.
+  An adult standing in a closed pocket of ground that does not hold that cell (a pit) is given up :no-exit before any walk to it.
   - Wait up to 10 s for other adults to leave the cells inside the gate (one info herd.crowded-gate).
   - Line up on the cells 3, 2 and 1 out (each waits up to 8 s for the animal to rest), open the gate
     (jobs.access.toggle), then step through the gate and 5 cells in. Each of those stops waits up to 6 s.
@@ -102,7 +103,7 @@
   :gate pos :escaped n :animals [{:kind :id :pos}] (the livestock on the pen cells)}. :inside is counted on the pen's cells at the end. An animal is booked brought once, however often it is led. Reasons:
   :brought (pen holds :target), :short (fewer than :target in the pen: some came, or none came and no other
   reason), :full,
-  :no-pen, :leaky, :no-gate, :too-shallow, :unreachable (a walk was blocked), :gate-stuck, :lost,
+  :no-pen, :leaky, :no-gate, :too-shallow, :unreachable (a walk was blocked), :gate-stuck, :lost, :no-exit (every animal left stands in a pit it cannot leave),
   :no-food (a lure run found no food), :no-hold (the food would not stay in hand),
   :none (nobody left to fetch), or :no-leash with the leash child's ending as the :because. The body ends outside with the gate shut. Endings: done when the pen
   holds :target (:brought, :full) or the call's :least (default 1) animals were brought; else condition-failed for

@@ -61,18 +61,22 @@
         inside (:inside answer)]
     (when (and (seq inside) (fenced? c inside)) inside)))
 
+(defn cell-enclosed?
+  "Whether the feet cell lies in a closed enclosure the body has seen with a fence, wall or gate in it: the pen check from it,
+  the fenced enclosures found so far kept in `pens` (an atom of cell sets)."
+  [c pens cell]
+  (or (boolean (some #(contains? % cell) @pens))
+      (let [answer (pen/check {:block-at (u/seen-block-at-fn (:primitives c)) :at {:x (cell 0) :y (cell 1) :z (cell 2)}
+                               :max-cells (settings/get settings ::pen-max-cells)})
+            penned? (and (:closed? answer) (fenced? c (:inside answer)))]
+        (when penned? (swap! pens conj (:inside answer)))
+        penned?)))
+
 (defn enclosed?
-  "Whether the animal stands inside a closed enclosure the body has seen with a fence, wall or gate in it: the pen check from its
-  feet cell, the fenced enclosures found so far kept in `pens` (an atom of cell sets)."
+  "Whether the animal stands inside a closed enclosure the body has seen with a fence, wall or gate in it (cell-enclosed? at its feet)."
   [c pens e]
-  (let [{:keys [x y z]} (u/pos-of (.-pos e))
-        cell [(js/Math.floor x) (js/Math.floor (+ y 0.01)) (js/Math.floor z)]]
-    (or (boolean (some #(contains? % cell) @pens))
-        (let [answer (pen/check {:block-at (u/seen-block-at-fn (:primitives c)) :at {:x (cell 0) :y (cell 1) :z (cell 2)}
-                                 :max-cells (settings/get settings ::pen-max-cells)})
-              penned? (and (:closed? answer) (fenced? c (:inside answer)))]
-          (when penned? (swap! pens conj (:inside answer)))
-          penned?))))
+  (let [{:keys [x y z]} (u/pos-of (.-pos e))]
+    (cell-enclosed? c pens [(js/Math.floor x) (js/Math.floor (+ y 0.01)) (js/Math.floor z)])))
 
 (defn penned?
   "Whether an adult animal stands in a zone or plan of the body's own or in a closed enclosure (see enclosed?)."

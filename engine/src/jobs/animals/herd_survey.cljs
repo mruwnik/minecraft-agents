@@ -4,13 +4,14 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.check-cache :as check-cache]
+            [jobs.lib.animal-spare :as spare]
             [jobs.lib.gate :as gate]
             [jobs.lib.near :as near]
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.sense :as sense]
             [jobs.lib.animals :as animals]
             [jobs.lib.util :as u]
-            [jobs.animals.herd-pen :refer [approach-cells approach-free? axis choose-gate depth free-floor? gate-diagnosis gate-look-range look-range max-approach-walks min-depth other-leaks precheck?]]
+            [jobs.animals.herd-pen :refer [approach-cells approach-free? axis choose-gate depth free-floor? gate-diagnosis gate-look-range look-range max-approach-walks min-depth open-stage other-leaks precheck?]]
             [jobs.animals.herd-run :refer [approach-range box-centre cell detail-text pen-box finish! in-pen-adults near-pen pen-opts read-pen]]))
 
 (defn box-gates
@@ -107,7 +108,8 @@
   [c answer]
   (let [{:keys [refuse extra chosen]} (verdict c answer)
         {:keys [gate in out]} chosen
-        unseen (when refuse (unseen-approach c extra))]
+        unseen (when refuse (unseen-approach c extra))
+        axis-cells (when chosen (axis (:primitives c) (:inside answer) (cell gate) in out (depth (:inside answer) (cell gate) in)))]
     (cond
       (and unseen (< (:approach-walks (ctx/mem c) 0) (max-approach-walks))
            (not= :there (await (near/go-near! c (centre unseen) (look-range) {:doors :never :ways #{:walk :clear-seal} :see true}))))
@@ -121,7 +123,12 @@
       (finish! c refuse extra)
       :else
       (do (ctx/update-mem! c assoc :phase :leash :in-pen-start (mapv animals/key-of (in-pen-adults c answer)) :gate gate :inside-cell (u/cell-pos in) :outside-cell (u/cell-pos out)
-                           :axis (axis (:primitives c) (:inside answer) (cell gate) in out (depth (:inside answer) (cell gate) in)))
+                           :axis axis-cells
+                           :stage (open-stage axis-cells (let [pens (atom #{})
+                                                  held? (fn [[x y z :as cell]]
+                                                          (or (some-> (u/seen-name (:primitives c) {:x x :y y :z z}) (.endsWith "_fence_gate"))
+                                                              (spare/cell-enclosed? c pens (vec cell))))]
+                                              held?)))
           :continue))))
 
 (defn pen-refusal

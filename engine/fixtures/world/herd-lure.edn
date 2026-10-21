@@ -20,11 +20,11 @@
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
            [:block [18 0 16] "oak_fence_gate[open=false]"]
            [:item "wheat" [:>= 4]]]}
-  ;; the gate opens on a 1-wide aisle (x 17) and a second pen's wall, with a doorway in line, stands behind it: the 4-out cell lies inside that pen
+  ;; the gate opens on a 1-wide aisle (x 17) and a second pen's wall, with a shut gate in line, stands behind it: the 4-out cell lies inside that pen
   {:name "gate-on-an-aisle-beside-another-pen-still-brings-the-cow"
    :blocks [[:fill [9 0 12] [16 0 20] "oak_fence"]
             [:fill [10 0 13] [15 0 19] "air"]
-            [:set [16 0 16] "air"]]
+            [:set [16 0 16] "oak_fence_gate[facing=east,open=false]"]]
    :body {:at [6.5 0 16.5] :yaw 270 :inventory [["wheat" 4]] :effects [["resistance" 900 4]]}
    :act [[:summon "cow" [6.5 0 19.5]]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
@@ -64,6 +64,15 @@
             {:no-event {:source :job :kind :completed :data {:reason :brought}} :for-s 200 :until {:source :job :kind :stopped}}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 0]]
    :limit-s 260}
+  ;; should fail: the only cow stands in a 3x3 glass courtyard with 2-high walls (seen through, a cow cannot step up 2): the run ends :no-exit, no walk to it
+  {:name "cow-in-a-pit-it-cannot-leave-ends-no-exit"
+   :blocks [[:fill [4 0 17] [8 1 21] "glass"]
+            [:fill [5 0 18] [7 1 20] "air"]]
+   :act [[:summon "cow" [6.5 0 19.5]]
+         [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-exit}} :within-s 150 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 0]]
+   :limit-s 200}
   ;; the pen is planned and pen-gate is registered: the reflex must not fight the open gate, and the run must end (no toggle loop)
   {:name "planned-pen-lure-ends-without-reflex-or-loop"
    :register [{:trigger :pen-gate}]

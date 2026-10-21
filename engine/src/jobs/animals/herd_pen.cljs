@@ -342,6 +342,12 @@
                   nil))))
         :settled))))
 
+(defn open-stage
+  "Index of the first of the approach cells out-4 .. out-2 that enclosed? (cell -> bool) does not call fenced in, else out-1:
+  the cell an animal is brought to before the gate stands in no other pen."
+  [axis enclosed?]
+  (or (first (remove #(enclosed? (nth axis %)) (range out-1))) out-1))
+
 (defn nearer-stage
   "The staging cell index one cell nearer the gate than stage s, nil at out-1 already."
   [s]

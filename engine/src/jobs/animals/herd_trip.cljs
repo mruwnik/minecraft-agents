@@ -94,6 +94,26 @@
                               (animals/adults (:primitives c) mob listed))
                      {:penned-ok? true})))
 
+(defn trapped?
+  "Whether animal a stands in a closed pocket of ground (a pit it cannot step out of) that does not hold the staging cell."
+  [c a]
+  (let [{:keys [x y z]} (u/pos-of (.-pos a))
+        answer (pen/check {:block-at (u/seen-block-at-fn (:primitives c)) :at {:x (js/Math.floor x) :y (js/Math.floor (+ y 0.01)) :z (js/Math.floor z)}
+                           :max-cells (settings/get spare/settings ::spare/pen-max-cells)})]
+    (boolean (and (:closed? answer) (seq (:inside answer))
+                  (not (contains? (:inside answer) (vec (nth (:axis (ctx/mem c)) (stage c)))))))))
+
+(defn book-trapped!
+  "Looks once at the nearest candidate: one trapped in a pocket is given up :no-exit. True when it was."
+  [c]
+  (let [m (ctx/mem c)
+        a (first (remove #(contains? (set (:exit-checked m)) (animals/key-of %)) (lure-candidates c)))
+        k (some-> a animals/key-of)]
+    (when a
+      (let [trapped (trapped? c a)]
+        (ctx/update-mem! c #(cond-> (update % :exit-checked (fnil conj []) k) trapped (update :given-up assoc k :no-exit)))
+        trapped))))
+
 (defn ^:async search!
   "Nothing brought and no animal of :mob listed within :radius of the start: walk and look for one (jobs.explore.search,
   once per run, within :radius of the start). The count asked for is one more than the animals of the kind in view now, so
@@ -222,7 +242,9 @@
             (await (look-back! c lost))
             (if (search-due? c)
               (await (search! c))
-              (if (lure? c) (await (lure-next! c)) (await (lead-next! c)))))))))
+              (if (book-trapped! c)
+                :continue
+                (if (lure? c) (await (lure-next! c)) (await (lead-next! c))))))))))
 
 (defn prune-led!
   "Drop from :led the animals no longer on this body's lead, booking each (:lead-broke seen, :lost not seen);

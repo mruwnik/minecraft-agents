@@ -389,6 +389,25 @@
   (is (= [1 2 3 nil] (mapv hp/nearer-stage [0 1 2 3])))
   (is (= [[:line-up {:pos-index 1}] [:line-up {:pos-index 3}] [:open nil]] (mapv hp/after-stage [0 2 3]))))
 
+(deftest the-staging-cell-is-the-first-of-out-4-to-out-2-that-no-other-pen-holds
+  (let [axis [[0 0 0] [1 0 0] [2 0 0] [3 0 0]]]
+    (is (= 0 (hp/open-stage axis (constantly false))))
+    (is (= 2 (hp/open-stage axis #{[0 0 0] [1 0 0]})))
+    (is (= 3 (hp/open-stage axis #{[0 0 0] [1 0 0] [2 0 0]})) "all held: out-1")))
+
+(def pit-walls
+  (into {} (for [[x z] [[3 3] [5 3] [4 2] [4 4]] y [64 65]] [(str x "," y "," z) "stone"])))
+
+(deftest a-cow-in-a-pit-it-cannot-step-out-of-is-given-up-no-exit-without-a-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:target 1} {:entities [(cow 1 4.5 3.5)] :blocks pit-walls} 200))
+              e (done-event s)]
+          (is (= :no-exit (:reason e)))
+          (is (= {"u1" :no-exit} (:given-up e)))
+          (is (empty? (on-lead s))))))))
+
 (deftest a-led-animal-is-let-go-when-the-way-to-the-gate-is-blocked
   (async done
     (tu/run-async done

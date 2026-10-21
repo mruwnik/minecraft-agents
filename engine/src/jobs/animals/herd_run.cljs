@@ -200,7 +200,9 @@
         rows (animals/in-pen-rows (:primitives c) answer (watch-radius))
         brought (filterv inside (:brought m))
         reason (or reason
-                   (if (>= (count (remove (set (keys (:given-up m))) inside)) target) :brought :short))
+                   (cond (>= (count (remove (set (keys (:given-up m))) inside)) target) :brought
+                         (and (empty? (:brought m)) (seq (:given-up m)) (every? #{:no-exit} (vals (:given-up m)))) :no-exit
+                         :else :short))
         kind (ending-kind reason (count brought) least)
         text (str (end-text c reason (count inside)) (detail-text extra))
         result (merge {:reason reason :inside (count inside) :target target :brought brought
