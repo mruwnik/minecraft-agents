@@ -264,6 +264,7 @@
    ::drown-hp {:default 0 :doc "Health the body may lose to drowning before it counts as drowning (an unusual job may allow some)." :spec (a/num-in 0 nil)}
    ::ticks-per-oxygen {:default 15 :doc "Game ticks a drowning body loses one point of oxygen in (the game's rule)." :spec (a/int-in 1 nil)}
    ::ticks-per-health {:default 10 :doc "Game ticks between the 2 health a drowning body loses once the oxygen is gone (the game's rule)." :spec (a/int-in 1 nil)}
+   ::look-share {:default 0.15 :doc "Share of the air left (oxygen, then health) that looking for air may take before the search goes on with what it has seen." :spec (a/num-in 0 1)}
    ::swim-ms {:default planner/swim-sub-ms :doc "Milliseconds a swimmer takes per block, to price a swim to a pocket of air (the planner's price of a swim with the head under water)." :spec (a/num-in 0 nil)}})
 
 (defn swim-ms [] (settings/get settings ::swim-ms))
@@ -387,17 +388,22 @@
 
 (defn ^:async find-air!
   "The nearest air target after looking: up the own column first, then, only when a block is seen over the own column,
-  once at each other column in radius (the first cell not seen there); nil if none."
+  once at each other column in radius (the first cell not seen there); nil if none. The looks stop at the ::look-share
+  of the air left: a body sinks while it looks."
   [c pos radius reach]
   (let [p (:primitives c)
         fx (js/Math.floor (:x pos)) fy (js/Math.floor (:y pos)) fz (js/Math.floor (:z pos))
-        failed (:failed-columns (ctx/mem c))]
+        failed (:failed-columns (ctx/mem c))
+        until (+ (js/Date.now) (* (settings/get settings ::look-share) (air-left-ms (.self p))))]
     (await (look-column! c fx fz fy reach false))
     (or (nearest-air p pos radius reach failed true)
         (when-not (column-open? p fx fz fy reach)
-          (doseq [[dx dz] (rest (columns radius))]
-              (await (look-column! c (+ fx dx) (+ fz dz) fy reach true)))
-            (nearest-air p pos radius reach failed true)))))
+          (loop [todo (rest (columns radius))]
+            (when (and (seq todo) (< (js/Date.now) until))
+              (let [[dx dz] (first todo)]
+                (await (look-column! c (+ fx dx) (+ fz dz) fy reach true))
+                (recur (rest todo)))))
+          (nearest-air p pos radius reach failed true)))))
 
 (defn side-cell
   "A horizontal neighbour of the feet cell where the body fits (feet and head

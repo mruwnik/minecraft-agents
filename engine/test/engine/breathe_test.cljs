@@ -989,6 +989,20 @@
           (is (= [[:completed nil]] (ended seen)) (pr-str (stopped-data seen)))
           (is (= "air" (.-name (.blockAt p (apply tu/pos [0 73 0])))) "the cap is dug once the body is under it"))))))
 
+(deftest a-swim-that-rises-and-stops-under-a-cap-digs-it-in-the-same-pass
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [deep (merge (into {} (for [y (range 64 73)] [(str "0," y ",0") "water"]))
+                          (into {} (for [y (range 64 73) [x z] [[-1 0] [0 1] [0 -1] [1 0]]] [(str x "," y "," z) "stone"]))
+                          {"0,73,0" "dirt"})
+              {:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :blocks deep})]
+          (swap! (fake/state p) assoc :dig-ms 0)
+          (await (one-run! eng cap-args))
+          (is (= [[:completed nil]] (ended seen)) (pr-str (stopped-data seen)))
+          (is (= "air" (.-name (.blockAt p (tu/pos 0 73 0)))) "the cap is dug")
+          (is (= 1 (count (filter #{"swim"} (call-names p)))) (pr-str (call-names p))))))))
+
 (defn ^:async never-dug!
   "A cap of block: stopped :no-air with :cap why, the block still there, no dig call."
   [done block why]

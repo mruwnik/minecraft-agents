@@ -229,7 +229,9 @@
                  (or (true? r)
                      (breath/straight-up-reaches-air? (:primitives c) fx fy fz (swim/reach))
                      (nil? (breath/flood-air (:primitives c) self (swim/air-radius) (swim/air-radius) (:failed-air (ctx/mem c)))))))
-          r
+          ;; a swim that rose and did not surface came up under something: dig it now, before the body sinks back for the next search
+          (do (when (and (true? r) (not (:surfaced (ctx/mem c)))) (await (dig-cap! c (cap-dig-share))))
+              r)
           (true? (await (go-air! c))) true
           :else
           (let [d (await (dig-cap! c (cap-dig-share)))]

@@ -662,7 +662,8 @@
   #{"water" "kelp" "kelp_plant" "seagrass" "tall_seagrass" "bubble_column"})
 
 (defn swim
-  "Rises to the top water cell (see swims-up) above the body and refills oxygen; swimFails makes it time out unmoved. With :toward it
+  "Rises to the top water cell (see swims-up) above the body and refills oxygen; swimFails makes it time out unmoved, and a solid
+  block over the head ends it timed out under that block, as a real swim does. With :toward it
   swims there by the steer's kinematics (steer/swim-lands?): landed on the target, else timed out on a jump crest
   where it was, out of the water and off the ground."
   [w {:keys [toward]}]
@@ -675,6 +676,7 @@
         crest #(-> % (assoc-in [:self :inWater] false) (assoc-in [:self :onGround] false))]
     (cond
       (:swim-fails w) [w {:status "timeout" :oxygen {:before before :after before}}]
+      (and (not toward) (not (#{"air" "cave_air"} (block-name w' (head w'))))) [w' {:status "timeout" :oxygen {:before before :after before}}]
       (not toward) [(assoc-in w' [:self :inWater] true) {:status "surfaced" :oxygen oxygen}]
       (or (> (dist (body-pos w') toward) 6) (not (steer/swim-lands? w' toward))) [(crest w') {:status "timeout" :oxygen oxygen}]
       :else [(-> w' (assoc-in [:self :pos] toward) settle (assoc-in [:self :onGround] true)) {:status "landed" :oxygen oxygen}])))
