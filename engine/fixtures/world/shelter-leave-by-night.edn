@@ -1,0 +1,18 @@
+;; Card 81275805: a leave-shelter run while the sky is dark and the body is still sealed in its dug pit shelter holds; it never ends
+;; "out of the shelter, nothing left to take up" (the old pending? was false at night), which left the next walk "shut in".
+;; Dirt pad y -6..-1, the shaft at x 16 z 16 (y -2 and -1 dug out) roofed by a dirt block at y 0, door cells beside it at x 17 still solid.
+;; Should-succeed: no leave-shelter :completed while the body stays in the pit. Should-fail: leave-shelter completes at once.
+{:defaults
+ {:tags [:night :survival :dig-in]
+  :time :night :time-why :dawn-decision
+  :plot {:height 8}
+  :blocks [[:fill [8 -6 8] [24 -1 24] "dirt"] [:fill [16 -2 16] [16 -1 16] "air"] [:fill [16 0 16] [16 0 16] "dirt"]]
+  :memory [{:kind :shelter :data {:pos #xyz [16 -2 16] :state :built :start #xyz [16 0 16] :door [#xyz [17 -2 16] #xyz [17 -1 16]]}
+            :policy {:cap 10 :ttl 1200000}}]
+  :body {:at [16.5 -2 16.5] :inventory [["dirt" 12] ["stone_pickaxe" 1]] :effects [["resistance" 600 4]] :settle-s 3}
+  :limit-s 60}
+ :cases
+ [{:name "leave-shelter-by-night-stays-sealed-and-is-not-done"
+   :act [[:job (jobs.survival.leave-shelter)]]
+   :expect [{:count-event {:source :job :kind :completed :data {:name "jobs.survival.leave-shelter"}} :for-s 30 :at-most 0}]
+   :after [[:body-near [16.5 -2 16.5] 1]]}]}
