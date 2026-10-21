@@ -43,7 +43,7 @@
     to stand, once; then dig the head block, the block above it if solid, and step up.
   - Surfaced and still in water: the ways out are read from what is seen; when none shows, the unseen cells that read touched are looked at (jobs.lib.sense/decide!, bounded) before the run gives up. Each pass takes the first way left: swim to the nearest shore cell (land with its
     rim at most one block above the water) within the shore-radius setting (6), another direction after each failed swim; a go-to
-    child onto land within the search-radius setting (48) (at most 3 targets per spot, a failed target excludes its direction),
+    child onto a climbable shore cell (as for the shore swim) within the search-radius setting (48) (at most 3 targets per spot, a failed target excludes its direction),
     which also counts dry cells joined to the body by seen water and air, however far up (the steps of a flooded stair shaft);
     then a step block: with a carried pillar block (jobs.lib.choose/fillers :climb), one placed (jobs.blocks.place child,
     zones respected) in the nearest top water cell within the shore-radius setting that has support and two air cells above,
@@ -312,8 +312,8 @@
         ways (fn []
                (let [shore (shore/nearest-land p pos (shore-radius) (:failed-shores m) shore-cell?)
                      land (when (and in-budget? (< (:land-tries m 0) (land-tries)))
-                            (or (shore/nearest-land p pos (search-radius) (:failed-land m) (constantly true))
-                                (shore/reachable-land p pos (search-radius) (:failed-land m))))
+                            (or (shore/nearest-land p pos (search-radius) (:failed-land m) shore-cell?)
+                                (shore/reachable-land p pos (search-radius) (:failed-land m) shore-cell?)))
                      stepcell (when (< (:steps m 0) (max-steps)) (step-cell p pos (shore-radius) (:failed-steps m)))
                      legs (when (and in-budget? (< (:legs m 0) (max-legs)))
                             (some (fn [h] (when-let [t (leg-target p pos (:start m) h)] [h t]))

@@ -1355,6 +1355,14 @@
     (is (not (shore/standable? p cell)) "unseen: no land")
     (is (not (b/shore-cell? p shore)) "unseen: no shore")))
 
+(deftest the-top-of-a-wall-two-above-the-water-is-reachable-air-but-no-shore
+  (let [world (merge {"0,62,0" "water" "0,63,0" "water"}
+                     (into {} (for [y (range 60 66)] [(str "1," y ",0") "stone"])))
+        {:keys [p]} (setup {:self {:inWater true :oxygen 20 :pos {:x 0.5 :y 64 :z 0.5}} :blocks world})
+        pos {:x 0.5 :y 64 :z 0.5}]
+    (is (= {:x 1 :y 66 :z 0} (shore/reachable-land p pos 4 nil)) "joined by air to the wall top")
+    (is (nil? (shore/reachable-land p pos 4 nil b/shore-cell?)) "the wall is no cell a swimmer climbs onto")))
+
 (defn neighbour-column
   "water-column capped over the body, and an adjacent +x column of bubble_column cells (drag as given) open to air."
   [drag]

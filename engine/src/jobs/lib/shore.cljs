@@ -74,7 +74,8 @@
 (defn reachable-land
   "The nearest dry stand cell joined to the body by seen water and air cells (a flooded stair or shaft, however far up),
   within radius sideways and radius above the feet; nil if none. nearest-land only reads columns near the feet's height."
-  [p self-pos radius failed]
-  (let [skip (set failed)]
-    (breath/find-joined p self-pos radius radius
-                        (fn [cell] (and (not (contains? skip cell)) (bs/air (u/seen-name p cell)) (standable? p cell))))))
+  ([p self-pos radius failed] (reachable-land p self-pos radius failed (constantly true)))
+  ([p self-pos radius failed keep?]
+   (let [skip (set failed)]
+     (breath/find-joined p self-pos radius radius
+                         (fn [cell] (and (not (contains? skip cell)) (bs/air (u/seen-name p cell)) (standable? p cell) (keep? p cell)))))))
