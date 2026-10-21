@@ -195,6 +195,28 @@
           (is (empty? (of-kind seen :stopped)))
           (is (= 1 (count (of-kind seen :completed)))))))))
 
+(deftest a-tall-falling-column-over-the-head-is-one-obstacle-not-a-cap
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:blocks (into {} (map (fn [y] [(str "0," y ",0") "gravel"]) (range 66 74)))})]
+          (core/submit! eng (list job {:height 4}) {})
+          (await (ticks s eng 40))
+          (is (finished? eng))
+          (is (= [0 68 0] (feet p)))
+          (is (empty? (of-kind seen :stopped)) "8 gravel blocks are more than max-ceiling-digs, but they fall back: one obstacle"))))))
+
+(deftest a-falling-block-that-landed-in-the-head-cell-is-dug-out-and-the-pillar-goes-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:blocks {"0,65,0" "sand"}})]
+          (core/submit! eng (list job {:height 2}) {})
+          (await (ticks s eng 12))
+          (is (finished? eng))
+          (is (= [0 66 0] (feet p)))
+          (is (empty? (of-kind seen :stopped))))))))
+
 (deftest too-few-blocks-at-the-start-waits-saying-so
   (async done
     (tu/run-async done
