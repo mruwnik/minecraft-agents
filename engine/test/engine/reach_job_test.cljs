@@ -42,7 +42,7 @@
         none (constantly false)]
     (is (= {:step :stair :dir :down :heading :east :steps 10 :aside 2} (span/down-stair at [0 63 0] [8 53 0] (constantly true) none #{})))
     (is (nil? (span/down-stair at [0 63 0] [8 62 0] (constantly true) none #{})) "one below is a drop or a dig-route")
-    (is (= :west (:heading (span/down-stair at [0 63 0] [8 53 0] (constantly true) none #{[:stair :east] [:stair :south] [:stair :north]}))))
+    (is (nil? (span/down-stair at [0 63 0] [8 53 0] (constantly true) none #{[:stair :east] [:stair :south] [:stair :north]})) "west ends 18 blocks off the goal's column")
     (is (nil? (span/down-stair at [0 63 0] [8 53 0] (constantly false) none #{})) "no cell may be dug")))
 
 (deftest the-ways-are-priced-in-seconds-by-their-blocks
@@ -96,4 +96,4 @@
                                                     {:pos [14 44 0] :range 0}))]
           (is (true? (:arrived @out)) (pr-str @out))
           (is (= [14 44 0] (feet p)))
-          (is (= [:approach :stair] (take 2 (map :step (events-of seen :reach.span)))) "a dug route of over 16 cells is over the dig limit"))))))
+          (is (= [:stair] (distinct (map :step (events-of seen :reach.span)))) "a dug route of over 16 cells is over the dig limit"))))))

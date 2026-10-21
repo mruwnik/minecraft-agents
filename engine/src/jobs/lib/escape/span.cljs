@@ -24,19 +24,23 @@
 
 (defn down-stair
   "{:step :stair :dir :down :heading kw :steps n :aside a} for a goal at least 2 below feet: n steps down to the goal's
-  height (at most max-descent) that end a blocks (at most max-aside) off the goal's column, on the first heading
-  toward the goal (not in skip as [:stair heading]) whose every cut cell is escape/diggable? and most of them solid (no stair through air); nil when none."
+  height (at most max-descent) along the heading, among the four, whose landing is nearest the goal's column and at most
+  max-aside blocks off it (the rest is dug flat), not in skip as [:stair heading], every cut cell escape/diggable? and most of them solid (no stair through air); nil when none."
   [block-at feet goal may-dig? own? skip]
-  (let [n (- (second feet) (second goal))
-        aside (js/Math.abs (- n (js/Math.hypot (- (goal 0) (feet 0)) (- (goal 2) (feet 2)))))]
-    (when (and (>= n 2) (<= n (max-descent)) (<= aside (max-aside)) (not (skip :stair)))
-      (some (fn [heading]
-              (when (and (not (skip [:stair heading]))
-                         (let [cells (shape/stair-cells {:from feet :heading heading :to-y (second goal)})]
-                           (and (every? #(escape/diggable? block-at may-dig? own? %) cells)
-                                (> (* 2 (count (filter #(escape/solid? (block-at %)) cells))) (count cells)))))
-                {:step :stair :dir :down :heading heading :steps n :aside (js/Math.round aside)}))
-            (headings-toward feet goal)))))
+  (let [n (- (second feet) (second goal))]
+    (when (and (>= n 2) (<= n (max-descent)) (not (skip :stair)))
+      (->> (headings-toward feet goal)
+           (remove #(skip [:stair %]))
+           (keep (fn [heading]
+                   (let [cells (shape/stair-cells {:from feet :heading heading :to-y (second goal)})
+                         [lx _ lz] (last cells)
+                         aside (js/Math.round (js/Math.hypot (- lx (goal 0)) (- lz (goal 2))))]
+                     (when (and (<= aside (max-aside))
+                                (every? #(escape/diggable? block-at may-dig? own? %) cells)
+                                (> (* 2 (count (filter #(escape/solid? (block-at %)) cells))) (count cells)))
+                       {:step :stair :dir :down :heading heading :steps n :aside aside}))))
+           (sort-by :aside)
+           first))))
 
 (defn gap-along
   "The bridge along d ([dx dz]) from feet: {:length g :landing cell} when the g floor cells ahead (g from 1, at most

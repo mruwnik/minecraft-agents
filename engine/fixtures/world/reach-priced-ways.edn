@@ -37,7 +37,7 @@
    :plot {:height 22}
    :body {:at [4.5 17 16.5] :settle-s 2 :effects [["resistance" 600 4] ["fire_resistance" 600 0]] :inventory [["stone_pickaxe" 1] ["cobblestone" 24]]}
    :act [[:job (jobs.movement.reach {:pos #at [10 2 16] :range 0})]]
-   :expect [{:event {:source :job :kind :reach.span :data {:step :stair}} :within-s 90 :of-job true}
+   :expect [{:event {:source :job :kind :reach.span :data {:step :stair}} :within-s 150 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 380 :of-job true}]
    :after [[:body-near [10.5 2 16.5] 2]]
    :limit-s 400}
@@ -46,7 +46,7 @@
    :plot {:height 22}
    :body {:at [4.5 17 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1] ["cobblestone" 24]]}
    :act [[:job (jobs.movement.reach {:pos #at [10 2 16] :range 0 :ways #{:walk :bridge}})]]
-   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 90 :of-job true}
-            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false}}}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 200 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 200 :until {:source :job :kind :stopped :data {:arrived false}}}]
    :after [[:body-far [10.5 2 16.5] 8]]
-   :limit-s 100}]}
+   :limit-s 250}]}

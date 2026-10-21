@@ -117,9 +117,9 @@
         opts {:own? own? :skip skip :fetch? (choose/fetch-tool? p (:doors (:walk (:args c)))) :pillar-item (escape/pillar-item c)}
         stair-from (fn [cell] (span/down-stair block-at cell goal may-dig? own? skip))
         stair (when (allowed? c :stair)
-                (or (stair-from feet)
-                    (when-not (skip :approach)
-                      (when (>= (- (second feet) (second goal)) 2) (stair-stand p feet stair-from)))))
+                (let [here (stair-from feet)
+                      stand (when (and (not (skip :approach)) (>= (- (second feet) (second goal)) 2)) (stair-stand p feet stair-from))]
+                  (if (and stand (or (nil? here) (<= (+ 2 (:aside (:then stand))) (:aside here)))) stand here)))
         spans (into [] (remove nil?)
                     [stair (when (allowed? c :bridge) (span/bridge-span block-at (escape/unseen-of p) feet goal opts))])
         priced (fn [e] (price p feet (or (:then e) e)))]
@@ -161,21 +161,29 @@
   [c e]
   (contract/with-because (ctx/end c (:kind e) (:cause e) (:data e)) e))
 
+(def refusals
+  "go-to's nothing-possible reasons that no change to the world answers: a goal or call that is not valid."
+  #{:bad-pos :bad-name :unsupported :no-way :goal-on-magma})
+
 (defn no-way?
-  "Whether go-to's ending e says the world must change for the goal: nothing-possible with a planner :why that proves it."
+  "Whether go-to's ending e says the walk found no way: nothing-possible for a reason that is no refusal."
   [e]
   (and (= :nothing-possible (:kind e))
-       (contains? choose/escalate-reasons (some-> (or (:why (:data e)) (:why (:cause e))) keyword))))
+       (not (contains? refusals (some-> (or (:why (:data e)) (:why (:cause e)) (:reason (:cause e))) keyword)))))
 
 (defn pick!
-  "After a walk found no way: remember the cheapest span (span-way) to build, else that the whole go-to runs."
-  [c]
+  "After a walk found no way (ending e): remember the cheapest span (span-way) to build and return ::next; else, when the
+  call allows no way but walking, e is this job's ending, else the whole go-to runs (::next)."
+  [c e]
   (let [m (ctx/mem c)
         goal (mapv #(js/Math.floor %) ((juxt :x :y :z) (goal-of c)))
         span (when (< (:built m 0) (settings/get settings ::max-rounds)) (span-way c (feet-of c) goal (:skip m #{})))]
     (when span
-      (ctx/emit! c :reach.span :info {:step (:step span) :at (feet-of c) :text (str "no way on foot: " (name (:step span)) (when (= :approach (:step span)) " to where a stair can start"))}))
-    (ctx/update-mem! c (fn [m] (if span (assoc m :span span :from (feet-of c)) (assoc m :full true))))))
+      (ctx/emit! c :reach.span :info {:step (:step (or (:then span) span)) :approach (= :approach (:step span)) :at (feet-of c) :text (str "no way on foot: " (name (:step span)) (when (= :approach (:step span)) " to where a stair can start"))}))
+    (if (and (not span) (= #{:walk} (disj (set (or (:ways (ctx/frozen-call c)) ways)) :bridge)))
+      (forward c e)
+      (do (ctx/update-mem! c (fn [m] (if span (assoc m :span span :from (feet-of c)) (assoc m :full true))))
+          ::next))))
 
 (defn ^:async build-span!
   "One call of the span in memory (:span): :continue while its child waits; else the span is over. One that changed
@@ -200,12 +208,12 @@
                     (:span m) (await (build-span! c))
                     (:full m) (let [e (await (child/call-walk* c :full (walk-args c true)))]
                                 (if (= :continue e) :continue (forward c e)))
-                    (:direct m) (do (ctx/update-mem! c dissoc :direct) (pick! c) ::next)
+                    (:direct m) (do (ctx/update-mem! c dissoc :direct) (pick! c (:last-walk m)))
                     :else
                     (let [e (await (child/call-walk* c (keyword (str "walk-" (:built m 0))) (walk-args c false)))]
                       (cond
                         (= :continue e) :continue
                         (:arrived (:data e)) (forward c e)
                         (not (no-way? e)) (forward c e)
-                        :else (do (pick! c) ::next))))]
+                        :else (do (ctx/update-mem! c assoc :last-walk (select-keys e [:kind :cause :data])) (pick! c e)))))]
       (if (or (= ::next stepped) (and (:span m) (not= :continue stepped))) (recur) stepped))))
