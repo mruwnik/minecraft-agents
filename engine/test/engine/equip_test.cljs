@@ -192,6 +192,30 @@
           (is (= #{"leather_helmet"} (carried p)))
           (is (= [{:item "iron_helmet" :slot "head"}] (:worn @out))))))))
 
+(def iron-on {:head {:name "iron_helmet" :count 1} :feet {:name "iron_boots" :count 1}})
+
+(deftest off-takes-a-named-piece-or-all-worn-armour-into-the-pockets
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [named (await (equip (assoc (stacks "dirt") :equipment iron-on) {:item "iron_helmet" :off true}))
+              all (await (equip (assoc (stacks "dirt") :equipment iron-on) {:off true}))]
+          (is (= {"feet" "iron_boots"} (worn (:p named))))
+          (is (= #{"dirt" "iron_helmet"} (carried (:p named))))
+          (is (= [{:item "iron_helmet" :slot "head"}] (:off @(:out named))))
+          (is (= {} (worn (:p all))))
+          (is (= #{"dirt" "iron_helmet" "iron_boots"} (carried (:p all))))
+          (is (= 2 (count (:off @(:out all))))))))))
+
+(deftest off-with-a-full-pack-ends-no-free-slot-and-keeps-the-piece-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [full {:inventory (mapv #(hash-map :name (str "item_" %) :count 1) (range 36))}
+              {:keys [p out]} (await (equip (assoc full :equipment iron-on) {:item "iron_helmet" :off true}))]
+          (is (= [:condition-failed :no-free-slot] [(:kind (:ending @out)) (:reason @out)]))
+          (is (= {"head" "iron_helmet" "feet" "iron_boots"} (worn p))))))))
+
 (deftest equipping-armour-quotes-a-time-per-piece
   (async done
     (tu/run-async done

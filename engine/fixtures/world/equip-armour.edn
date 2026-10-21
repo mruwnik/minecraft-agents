@@ -1,5 +1,6 @@
 ;; jobs.items.equip puts armour on; a named piece not carried is fetched (jobs.lib.need) unless the call is :ways #{:carried}, which waits :no-item.
 ;; Should-succeed: a carried helmet is worn; a helmet in the chest beside the body is fetched and worn.
+;; Take-off: :off true moves worn armour to the pack, or ends :no-free-slot with the pack full.
 ;; Should-fail: :ways #{:carried} with the piece not carried waits :no-item and wears nothing.
 {:defaults
  {:tags [:items :equip]
@@ -19,4 +20,10 @@
    :blocks [[:set [18 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:iron_helmet\",count:1}]}"]]
    :act [[:job (jobs.items.equip {:item "iron_helmet" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-item}} :within-s 20 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 10}]}]}
+            {:no-event {:source :job :kind :completed} :for-s 10}]}
+  {:name "takes-a-worn-helmet-off"
+   :time :any
+   :act [[:rcon "item replace entity $BODY armor.head with minecraft:iron_helmet"]
+         [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:head {:name "iron_helmet"}}}] 10]
+         [:job (jobs.items.equip {:item "iron_helmet" :off true})]]
+   :expect [{:event {:source :job :kind :completed :data {:off [{:item "iron_helmet" :slot "head"}]}} :within-s 20 :of-job true}]}]}

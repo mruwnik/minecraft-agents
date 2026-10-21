@@ -1,9 +1,10 @@
 // Why JavaScript: tests unequip.mjs, which stays JS: Mineflayer boundary; calls bot.unequip.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { emptyHand, emptyOffHand, hasRoom } from './unequip.mjs'
+import { emptyHand, emptySlot, hasRoom } from './unequip.mjs'
 
 const ctx = { alive: () => {} }
+const emptyOffHand = (bot, c) => emptySlot(bot, c, 'off-hand')
 const stack = name => ({ name, count: 1 })
 const full = (from, to) => Object.fromEntries(Array.from({ length: to - from }, (_, i) => [from + i, stack('dirt')]))
 
@@ -66,4 +67,15 @@ test('emptyOffHand says full when only part of the stack merged and the rest sta
   const bot = makeBot({ slots: { ...full(36, 45), 20: { name: 'torch', count: 62, stackSize: 64 }, 45: { name: 'torch', count: 4, stackSize: 64 } } })
   bot.unequip = async where => { bot.calls.push(where); bot.inventory.slots[45] = { name: 'torch', count: 2, stackSize: 64 } }
   assert.deepEqual(await emptyOffHand(bot, ctx), { status: 'full', kept: 2 })
+})
+
+test('emptySlot takes an armour piece off into a free slot and says full when the pockets are packed', async () => {
+  const bot = makeBot({ slots: { 5: stack('iron_helmet') } })
+  bot.unequip = async where => { bot.calls.push(where); delete bot.inventory.slots[5] }
+  assert.deepEqual(await emptySlot(bot, ctx, 'head'), { status: 'ok', item: 'iron_helmet' })
+  assert.deepEqual(bot.calls, ['head'])
+  assert.deepEqual(await emptySlot(makeBot(), ctx, 'feet'), { status: 'empty' })
+  const packed = makeBot({ slots: { ...full(36, 45), 8: stack('iron_boots') } })
+  assert.deepEqual(await emptySlot(packed, ctx, 'feet'), { status: 'full' })
+  assert.deepEqual(packed.calls, [])
 })

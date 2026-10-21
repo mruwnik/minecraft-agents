@@ -22,15 +22,19 @@ export async function emptyHand (bot, ctx) {
 const hasMerge = (bot, item) => Array.from({ length: 36 }, (_, i) => bot.inventory.slots[9 + i])
   .some(s => s && s.name === item.name && s.count < s.stackSize)
 
-// The off hand (slot 45) back into the inventory: room is a free slot or an unfilled stack of it. What did not fit
-// stays in the off hand (full, kept: its count).
-export async function emptyOffHand (bot, ctx) {
-  const held = bot.inventory.slots[45]
+// The off hand (slot 45) or an armour slot (head 5, torso 6, legs 7, feet 8) back into the inventory: room is a free
+// slot or an unfilled stack of it. What did not fit stays in the slot (full, kept: its count).
+const SLOT_INDEX = { head: 5, torso: 6, legs: 7, feet: 8, 'off-hand': 45 }
+
+export const emptiable = dest => dest in SLOT_INDEX
+
+export async function emptySlot (bot, ctx, dest) {
+  const held = bot.inventory.slots[SLOT_INDEX[dest]]
   if (!held) return { status: 'empty' }
   if (!hasRoom(bot) && !hasMerge(bot, held)) return { status: 'full' }
-  await bot.unequip('off-hand')
+  await bot.unequip(dest)
   ctx.alive()
-  const left = bot.inventory.slots[45]
+  const left = bot.inventory.slots[SLOT_INDEX[dest]]
   if (left && left.name === held.name && left.count < held.count) return { status: 'full', kept: left.count }
   if (left) return { status: 'failed', reason: 'still-held' }
   return { status: 'ok', item: held.name }
