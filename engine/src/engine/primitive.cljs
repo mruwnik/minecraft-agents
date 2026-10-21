@@ -131,7 +131,7 @@
    :trade (fixed [:id :op :offer :times] [:id] #{"bought" "ok"} (fails #{"gone" "no-item" "full"} #{"cannot" "out-of-reach"}) 8)
    :unequip (fixed [:dest] [] #{"ok" "empty"} (fails #{"full"} #{}) 2)
    :sleep (fixed [:pos] [:pos] #{"sleeping"} (fails #{"missing" "occupied" "not-night" "monsters-near"} #{"unreachable"}) 5)
-   :look (fixed [:pos :yaw :pitch] [:pos] #{"ok"} (fails #{} #{}) 1)
+   :look (fixed [:pos :yaw :pitch] [:pos] #{"ok"} (fails #{} #{}) 0.3)
    :swim (entry [:ms :toward :tread] [] #{"surfaced" "landed" "timeout"} (fails #{} #{})
                 (fn [_ {:keys [ms]}]
                   (timed (/ (min (or ms (js-setting "prim/swim-default-ms" 3000)) (js-setting "prim/swim-max-ms" 10000))

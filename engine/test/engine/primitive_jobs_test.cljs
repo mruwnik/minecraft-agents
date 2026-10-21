@@ -152,6 +152,17 @@
                                    (await (ctx/act c :place #js {:pos #js {:x i :y 64 :z 2} :item "cobblestone"}))))))
             :continue)})
 
+(def looks-once {:defaults {:spend {:job-time 0.5}} :round (fn ^:async look-round [c] (await (ctx/act c :look #js {:yaw 0 :pitch 0})) (ctx/end c :done nil))})
+
+(deftest a-look-fits-half-a-second-of-job-time
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {'looks looks-once})]
+          (core/submit! eng '(looks) {})
+          (await (core/tick! eng))
+          (is (= 1 (calls p "look"))))))))
+
 (deftest the-refusal-is-not-held-by-an-atomic-section
   (async done
     (tu/run-async done
