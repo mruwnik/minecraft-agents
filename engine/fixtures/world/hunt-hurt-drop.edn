@@ -1,0 +1,27 @@
+;; A hurt body that cannot heal (hunger drained its food, nothing edible carried) may spend hp on the chase to an animal it hunts for food:
+;; it walks down a 5-block drop (2 hp) from a stone tower (feet y 5) to a cow on the ground below, with 5 hp. A hurt body that carries bread heals first.
+;; Should-succeed: the starving body kills the cow (beef). Should-fail: the body with bread takes no fall in the first 8 s (it heals first, and walks down later).
+{:defaults
+ {:tags [:animals :hunt :movement :readiness]
+  :time :any
+  :plot {:height 8}
+  :blocks [[:fill [4 0 12] [8 4 20] "stone"]]
+  :body {:at [6.5 5 16.5] :yaw 270 :inventory [["iron_sword" 1]] :effects [] :settle-s 2}
+  :limit-s 90}
+ :cases
+ [{:name "hurt-starving-body-hunts-a-cow-down-a-drop"
+   :act [[:summon "cow" [12.5 0 16.5] "{NoAI:1b}"]
+         [:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 13 minecraft:generic"]
+         [:job (jobs.combat.hunt {:item "beef" :keep 0 :radius 24})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.combat.hunt"}} :within-s 75 :of-job true}]
+   :after [[:item "beef" [:>= 1]]]
+   :limit-s 90}
+  {:name "hurt-fed-body-does-not-hunt-down-a-drop"
+   :body {:inventory [["iron_sword" 1] ["bread" 4]]}
+   :act [[:summon "cow" [12.5 0 16.5] "{NoAI:1b}"]
+         [:rcon "damage $BODY 13 minecraft:generic"]
+         [:job (jobs.combat.hunt {:item "beef" :keep 0 :radius 24})]]
+   :expect [{:event {:source :job :kind :queued} :within-s 10 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 8}]
+   :limit-s 20}]}

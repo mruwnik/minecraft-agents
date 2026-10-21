@@ -247,7 +247,7 @@
   (when (= :up (:dir (:args c))) (await (sstep/clear-jump-edge! c next-feet)))
   (let [r (await (child/walk-into!* c :walk next-feet))
         r (if (= :duplicate-call (when (= :condition-failed (:kind r)) (contract/cause-key r)))
-            (await (child/call-walk* c :walk-centre (update (child/walk-into-args :walk next-feet) :pos (fn [[x y z]] [(+ x 0.5) y (+ z 0.5)]))))
+            (await (child/call-walk* c :walk-centre (update (ready/forage-walk c (child/walk-into-args :walk next-feet)) :pos (fn [[x y z]] [(+ x 0.5) y (+ z 0.5)]))))
             r)]
     (cond
       (= :continue r) :continue
@@ -268,7 +268,7 @@
         {:keys [origin at-step returns]} (ctx/mem c)
         cell (shape/add origin (mapv #(* (or at-step 0) %) (geo/delta dir heading)))]
     (when (< (or returns 0) (max-returns))
-      (let [r (await (child/walk-into!* c :return cell))]
+      (let [r (await (child/call-walk* c :return (ready/forage-walk c (child/walk-into-args :return cell))))]
         (when-not (= :continue r)
           (ctx/update-mem! c update :returns (fnil inc 0))
           (let [arrived (= cell (reach/standing-vec (:primitives c)))]

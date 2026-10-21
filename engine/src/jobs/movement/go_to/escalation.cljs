@@ -332,7 +332,7 @@
   (let [{:keys [step] :as e} (:escalation (ctx/mem c))
         [job args] (escalation-job e (hole-tag c) (boolean (:ignore-zones? (:args c))) (boolean (:by-hand (ctx/mem c))) (fetch-tool? c))
         _ (await (torch/return-torch! c))
-        r (await (ctx/call c :escalation job (update args :checks #(some->> % (ready/unforced c)))))]
+        r (await (ctx/call c :escalation job (cond-> (update args :checks #(some->> % (ready/unforced c))) (= :approach step) (->> (ready/forage-walk c)))))]
     (let [dug (concat (:planned (ctx/mem c)) (when (not= :continue r) (:dug (:data r))))]
       (forget-dug-own! c dug)
       (when-not (:own e) (note-holes! c dug)))

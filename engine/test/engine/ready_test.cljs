@@ -13,6 +13,7 @@
             [jobs.explore.look :as look]
             [jobs.movement.go-to :as go-to]
             [jobs.explore.search :as search]
+            [jobs.combat.attack :as attack]
             [jobs.food.fish :as fish]
             [jobs.movement.look-around :as look-around]
             [jobs.access.stair :as stair]
@@ -490,3 +491,11 @@
   (is (= :later (with-redefs [sh-sense/seen-cell? (constantly false)]
                   (settings/with-settings {:jobs.lib.ready/unseen-judged-here-within 2}
                     #(kind (ready/safe-at-by-night (ready/near-unseen-here (constantly {:x 4 :y 68 :z 0}))) tunnel))))))
+
+(deftest an-attack-walk-to-an-animal-spends-hp-only-while-the-body-cannot-heal
+  (let [hurt {:pos {:x 0 :y 64 :z 0} :health 5}]
+    (are [food targets expected]
+         (= expected (select-keys (attack/walk-opts (assoc (ctx-of {:self (assoc hurt :food food) :inventory []}) :args {:targets targets})) [:floor :leg-s]))
+      8 ["cow"] {:floor {:health 1} :leg-s 30}
+      20 ["cow"] {:leg-s 5}
+      8 :hostiles {:leg-s 10})))

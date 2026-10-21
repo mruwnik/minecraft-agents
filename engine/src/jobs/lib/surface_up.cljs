@@ -5,6 +5,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.ready :as ready]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
             [jobs.movement.go-to.column :as column]))
@@ -83,7 +84,7 @@
         wall (wall-of p feet)
         [stand wall-cell] (when-not (or own wall) (stand-by-wall p))]
     (cond
-      own (let [r (await (child/call-walk* c :own-way-walk {:pos own :range 1 :ways #{:walk} :spend {:tries 1}}))]
+      own (let [r (await (child/call-walk* c :own-way-walk (ready/forage-walk c {:pos own :range 1 :ways #{:walk} :spend {:tries 1}})))]
             (when-not (= :continue r) (ctx/update-mem! c assoc-in [:surface :own-tried] true))
             :continue)
       (and (not buried) (or (ring-free? p) (>= extra extra-steps)))
@@ -91,7 +92,7 @@
       wall (do (when-not buried (ctx/update-mem! c assoc-in [:surface :extra] (inc extra)))
                (await (climb! c wall)))
       (nil? stand) :stopped
-      :else (let [r (await (child/call-walk* c :surface-walk {:pos stand :range 0 :ways #{:walk} :spend {:tries 1}}))]
+      :else (let [r (await (child/call-walk* c :surface-walk (ready/forage-walk c {:pos stand :range 0 :ways #{:walk} :spend {:tries 1}})))]
               (cond
                 (= :continue r) :continue
                 (:arrived (:data r)) :continue

@@ -63,6 +63,7 @@
    ::no-damage-hits {:default 16 :doc "Swings in a row that do no damage before a target is given up on (a lagging server drops many swings at the cooldown, so it is many)." :spec (a/int-in 1 nil)}
    ::seen-memory-s {:default 5 :doc "Seconds a hostile seen and then out of sight (round a corner) still counts as a target, walked to at its last place; one only ever heard never does." :spec (a/num-in 0 nil)}
    ::walk-timeout-s {:default 5 :doc "Seconds one walk towards a target may take." :spec (a/num-in 0 nil)}
+   ::forage-walk-timeout-s {:default 30 :doc "Seconds one walk towards an animal may take while the body can not heal and walks over its health budget (that search is slow)." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 120 :doc "Seconds from the first round before a fight gives up." :spec (a/num-in 0 nil)}})
 (defn max-hits [] (settings/get settings ::max-hits))
 (defn reach [] (settings/get settings ::reach))
@@ -255,12 +256,13 @@
         (>= (get hits id 0) (max-hits)) (give-up! c target :too-many-hits)))))
 
 (defn walk-opts
-  "The options of one walk towards a target: a :hostiles fight leaves doors as they are and aims again every ::chase-timeout-s, the mob moves."
+  "The options of one walk towards a target: a :hostiles fight leaves doors as they are and aims again every ::chase-timeout-s, the mob moves.
+  A walk to an animal may spend hp (with a longer leg, ::forage-walk-timeout-s) while the body can not heal (ready/forage-walk): the animal is the food."
   [c]
-  (merge {:dangers false :ways #{:walk :clear-seal} :look-round false}
-         (if (hostile/hostiles? c)
-           {:leg-s (hostile/chase-timeout-s)}
-           {:doors :shut :leg-s (settings/get settings ::walk-timeout-s)})))
+  (if (hostile/hostiles? c)
+    {:dangers false :ways #{:walk :clear-seal} :look-round false :leg-s (hostile/chase-timeout-s)}
+    (let [walk (ready/forage-walk c {:dangers false :ways #{:walk :clear-seal} :look-round false :doors :shut :leg-s (settings/get settings ::walk-timeout-s)})]
+      (cond-> walk (:floor walk) (assoc :leg-s (settings/get settings ::forage-walk-timeout-s))))))
 
 (def chase-gap-ms "How long a held body waits for a mob to come before it looks again." 200)
 

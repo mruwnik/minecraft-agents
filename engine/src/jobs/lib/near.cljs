@@ -234,9 +234,9 @@
   caller chasing something that moves; default one 60 s go-to steer), :look-round (default true; false for a caller that keeps moving, the go-to.tuning setting for this walk),
   :one-way (go-to's arg, default :closed here: no drop the body cannot climb back; not the :one-way key of a give-up
   result), :see (go-to's: in range only where the eye sees the block at pos), always one try (the job counts its own
-  tries), :checks (go-to's call key), :y-margin (the walk.world setting for this walk); :ignore-zones? comes from the job's args."
+  tries), :checks (go-to's call key), :floor (go-to's call key), :y-margin (the walk.world setting for this walk); :ignore-zones? comes from the job's args."
   ([c pos range] (go-near! c pos range nil))
-  ([c pos range {:keys [doors dangers tolls ways spend leg-s look-round one-way see checks y-margin] :or {doors :shut dangers true look-round true one-way :closed}}]
+  ([c pos range {:keys [doors dangers tolls ways spend leg-s look-round one-way see checks floor y-margin] :or {doors :shut dangers true look-round true one-way :closed}}]
    (let [cell (cell-of pos)
          walk-settings (cond-> {} (false? dangers) (assoc :jobs.lib.walk.world/dangers false)
                                   (false? look-round) (assoc :jobs.movement.go-to.tuning/look-round false)
@@ -248,6 +248,7 @@
        :else (let [walk (cond-> {:pos cell :range range :doors doors :tolls tolls
                                  :one-way one-way :see (boolean see) :spend (merge {:tries 1} spend) :ignore-zones? (boolean (:ignore-zones? (:args c)))}
                           checks (assoc :checks checks)
+                          floor (assoc :floor floor)
                           (seq walk-settings) (assoc :settings walk-settings)
                           ways (assoc :ways ways))
                    e (await (if leg-s

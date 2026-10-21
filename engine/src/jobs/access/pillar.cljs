@@ -291,7 +291,7 @@
     (let [{sx :x sz :z} (reach/standing-cell (:primitives c))
           on-column? (= [x z] [sx sz])
           r (when-not on-column?
-              (await (child/call-walk* c :recentre {:pos {:x hx :y y :z hz} :range 0 :ways #{:walk :clear-seal}})))]
+              (await (child/call-walk* c :recentre (ready/forage-walk c {:pos {:x hx :y y :z hz} :range 0 :ways #{:walk :clear-seal}}))))]
       (if (= :continue r)
         :continue
         (do (await (walk/centre! c hx hz))
