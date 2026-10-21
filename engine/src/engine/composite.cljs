@@ -125,6 +125,13 @@
       (contract/status :later :resting (str "resting after " (name (:after r))) r)
       s)))
 
+(defn rest!
+  "Start the rest r: the round that did it declares the same wait the rest-status check will give, so it is not silent."
+  [c r]
+  (ctx/update-mem! c assoc :rest r)
+  (some-> (:child-wait c) (reset! (contract/status-cause (contract/status :later :resting (str "resting after " (name (:after r))) r))))
+  :continue)
+
 (defn ran!
   "After the child's ending e: ends as e when it was impossible or cut off (any refusal, in a reflex job, which runs
   one round); a rest when it could not finish (each in a row doubles it), or of ::rest-s, not counted, when its goal
@@ -134,13 +141,12 @@
   (cond
     (and (refused? e) (or (:reflex c) (#{:impossible :cut-off} (:kind e)))) (stop c e)
     (already? e)
-    (do (ctx/update-mem! c assoc :rest {:until (+ (ctx/now c) (* 1000 (settings/get settings ::rest-s))) :after :already :kind :done})
-        :continue)
+    (rest! c {:until (+ (ctx/now c) (* 1000 (settings/get settings ::rest-s))) :after :already :kind :done})
     (refused? e)
     (let [fails (inc (:fails (ctx/mem c) 0))
           s (min (settings/get settings ::rest-max-s) (* (settings/get settings ::rest-s) (js/Math.pow 2 (dec fails))))]
-      (ctx/update-mem! c assoc :fails fails :rest {:until (+ (ctx/now c) (* 1000 s)) :after (contract/cause-key e) :kind (:kind e)})
-      :continue)
+      (ctx/update-mem! c assoc :fails fails)
+      (rest! c {:until (+ (ctx/now c) (* 1000 s)) :after (contract/cause-key e) :kind (:kind e)}))
     :else
     (do (ctx/update-mem! c #(-> % (update :runs (fnil inc 0)) (dissoc :fails :rest)))
         (if (and times (>= (:runs (ctx/mem c)) times)) (ctx/end c :done nil) :continue))))

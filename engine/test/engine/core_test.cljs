@@ -2041,7 +2041,8 @@
 (def silent-registry
   (merge expr-registry
          {'looky (tu/job [(fn [_] (contract/look :exposed "light not seen" :look-at [[1 2 3]]))] count-round)
-          'idle (tu/job (fn ^:async idle-round [_] :continue))}))
+          'idle (tu/job (fn ^:async idle-round [_] :continue))
+          'nothing (tu/job (fn ^:async nothing-round [c] (ctx/end c :condition-failed {:reason :nothing-to-do} nil)))}))
 
 (deftest repeat-over-a-child-that-needs-a-look-calls-it-and-rests-with-a-reason
   (async done
@@ -2065,6 +2066,15 @@
           (dotimes [_ 10] (swap! clock + 10000) (await (core/tick! eng)))
           (is (= 1 (count (silent))) "once per spell")
           (is (= 1 (count (:attention (core/state eng))))))))))
+
+(deftest a-repeat-whose-child-keeps-finding-nothing-to-do-never-raises-job-silent
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (update (expr-setup) :eng assoc :jobs silent-registry)]
+          (core/submit! eng '(repeat (nothing)) {})
+          (dotimes [_ 60] (swap! clock + 20000) (await (core/tick! eng)))
+          (is (empty? (filter #(= :silent (:kind %)) @seen)) "each round ends in a rest, which is its wait reason"))))))
 
 (deftest an-act-in-flight-past-the-limit-is-aborted-and-names-the-act
   (async done
