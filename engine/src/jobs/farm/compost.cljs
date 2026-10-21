@@ -85,7 +85,7 @@
    ::meal-look {:default 20 :doc "Bone meal on the ground is looked for this far from the body, in blocks." :spec (a/num-in 0 nil)}
    ::meal-reach {:default 3 :doc "Bone meal this close to the composter counts as its own, in blocks." :spec (a/num-in 0 nil)}})
 
-(def fit? (ready/fit-min #(settings/get settings ::min-health)))
+(defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
 (def target [:at])
 
 (def defaults {:spend {:job-time ::job-time-s}})

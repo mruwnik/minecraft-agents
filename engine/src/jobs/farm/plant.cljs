@@ -60,7 +60,7 @@
    ::reach {:default u/eye-reach :doc "Cells whose centre is this close to the eye (place accepts 4.5) are planted without walking, in blocks." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
    ::max-fails {:default 3 :doc "Failures before the job gives up." :spec (a/int-in 0 nil)}})
-(def fit? (ready/fit-min #(settings/get settings ::min-health)))
+(defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
 (defn reach [] (settings/get settings ::reach))
 (defn max-fails [] (settings/get settings ::max-fails))
 

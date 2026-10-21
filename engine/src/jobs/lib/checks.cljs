@@ -105,16 +105,16 @@
 (defn day "Day, else :later with reason." [reason] (cond/because reason "night" (cond/daytime)))
 
 (defn low-health-min
-  "A checker like low-health with the floor (floor-fn) the job's own setting gives instead of risky-min-health."
-  [floor-fn]
-  (fn [c]
-    (if-let [hurt (or (body/off-mode (:primitives c)) (body/too-hurt (:primitives c) (floor-fn)))]
-      (cause-status :later hurt)
-      (contract/ok :healthy "health enough"))))
+  "low-health with the health floor the job's own setting gives instead of risky-min-health."
+  [floor c]
+  (if-let [hurt (or (body/off-mode (:primitives c)) (body/too-hurt (:primitives c) floor))]
+    (cause-status :later hurt)
+    (contract/ok :healthy "health enough")))
 
-(def low-health
+(defn low-health
   "Health at jobs.lib.body/risky-min-health or above, not poisoned and not in spectator or creative mode, else :later :low-health {:health :min-health}, :poisoned or :game-mode."
-  (low-health-min body/risky-min-health))
+  [c]
+  (low-health-min (body/risky-min-health) c))
 
 (defn survival-mode
   "Later :game-mode while the body is a spectator or in creative mode."

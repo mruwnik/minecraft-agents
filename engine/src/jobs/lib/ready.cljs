@@ -216,12 +216,12 @@
   (let [s (safe c)]
     (if (and (not= :ok (first s)) (zero? (.-food (.self (:primitives c))))) (threatened c) s)))
 
-(def fit? "Later :low-health below the risky health, :poisoned while poisoned." checks/low-health)
+(defn fit? "Later :low-health below the risky health, :poisoned while poisoned." [c] (checks/low-health c))
 
 (defn fit-min
-  "fit? with the health floor (floor-fn) a job's own setting gives, for jobs whose acts need less than risky-min-health."
-  [floor-fn]
-  (checks/low-health-min floor-fn))
+  "fit? with the health floor a job's own setting gives, for jobs whose acts need less than risky-min-health."
+  [floor c]
+  (checks/low-health-min floor c))
 
 (defn cannot-heal?
   "Whether the body of ctx c can not heal by waiting: food under foods/top-up-food and nothing a meal would eat carried."

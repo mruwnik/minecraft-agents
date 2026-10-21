@@ -51,7 +51,7 @@
    ::accept {:default #{:fluid-adjacent} :doc "Dig hazards accepted: :fluid-adjacent (water beside; lava beside is :lava-adjacent and is not accepted by default), :falling-block."
              :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block})}
    ::job-time-s {:default 600 :doc "Seconds a tidy run may take: the digs, the walks and the drops." :spec (a/num-in 0 nil)}})
-(def fit? (ready/fit-min #(settings/get settings ::min-health)))
+(defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
 (defn accepted [] (settings/get settings ::accept))
 
 ;; ------------------------------------------------------------------ conditions

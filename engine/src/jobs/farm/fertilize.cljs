@@ -70,7 +70,7 @@
                 :doc "Health (of 20) below which the job waits to heal; 0 = never (its acts are short and in the body's own field). Poison still holds."}
    ::job-time-s {:default 300 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}})
 
-(def fit? (ready/fit-min #(settings/get settings ::min-health)))
+(defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
 (def target [:area :grass])
 
 (def defaults {:spend {:job-time ::job-time-s}})

@@ -56,7 +56,7 @@
    ::job-time-s {:default 600 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
    ::max-cells {:default 256 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}
    ::max-tries {:default 2 :doc "Attempts before the job gives up." :spec (a/int-in 0 nil)}})
-(def fit? (ready/fit-min #(settings/get settings ::min-health)))
+(defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
 (defn max-cells [] (settings/get settings ::max-cells))
 (def ground-cover
   "What lies on a cell and is dug first: the plants, small flowers and snow layer a placement clears (b/clearable) and the tall flowers."
