@@ -20,7 +20,8 @@
   "Get :items in order (default the iron kit: pickaxe, sword, axe, helmet, chestplate, leggings, boots) and, with
   :wear, wear each armour piece once it is carried. One call is the whole goal; it yields (:continue) only while a
   child waits on the world.
-  The items not carried or worn (a better armour piece worn in its slot counts) are one bill for a jobs.items.obtain child
+  The items not carried or worn (a better armour piece worn in its slot counts) whose furnace material the carried ingots already cover are one bill
+  first and worn at once; the rest are one bill for a jobs.items.obtain child
   (jobs.items.obtain.bill: the furnace material all pieces need together first, so the ore is mined and smelted in one go, then
   one piece after the other), with a :spend :job-time of ::job-time-s; the pieces are worn when it is done.
   While furnace material is still short (mining or smelting ahead; pure crafting needs no food) and fewer than
@@ -58,7 +59,7 @@
 (defn restarted
   "The job memory after a death: the children and the bill went with the body; the job starts from now."
   [m now]
-  (-> m (dissoc :children :bill :bill-done :fed) (assoc :since now)))
+  (-> m (dissoc :children :bill :bill-done :covered :covered-done :fed) (assoc :since now)))
 
 (defn why-of
   "The text a child ending e gives for its stop: its data's :why, else its cause map's."
@@ -113,7 +114,7 @@
 (defn made-of
   "The bill's items among those had."
   [c have]
-  (filterv (set have) (keys (:bill (ctx/mem c)))))
+  (filterv (set have) (concat (keys (:covered (ctx/mem c))) (keys (:bill (ctx/mem c))))))
 
 (defn done?
   "Ok when every item is carried or worn (with :wear, no carried piece is left to put on) and no child is under way."
@@ -137,6 +138,19 @@
         t (* n (settings/get settings ::item-s))]
     {:uses {:job-time [0 t ##Inf]}}))
 
+(defn covered-of
+  "The bill {item 1} of the items, in order, that the carried furnace material (ingots) already covers, each one's share
+  taken off what is left for the next; {} when none or all (then the one bill does it)."
+  [version items carried]
+  (let [covered (first (reduce (fn [[bill left] item]
+                                 (let [need (bill/furnace-short version [item] {})]
+                                   (if (every? (fn [[k n]] (<= n (get left k 0))) need)
+                                     [(assoc bill item 1) (merge-with - left need)]
+                                     [bill left])))
+                               [{} (select-keys carried (keys (bill/furnace-short version items {})))]
+                               items))]
+    (if (= (count covered) (count items)) {} covered)))
+
 (defn bill-of
   "The bill {item 1} of the items not had, booked once in memory so the obtain child's args hold still."
   [c]
@@ -148,9 +162,9 @@
 
 (defn ^:async run-bill!
   "The obtain child of the bill: :continue, nil when it got everything, else the stop (stop-of) of its ending."
-  [c bill]
+  [c slot bill]
   (let [a (:args c)
-        e (await (need/call! c :bill (quote jobs.items.obtain)
+        e (await (need/call! c slot (quote jobs.items.obtain)
                              {:bill bill :explore (:explore a) :spend {:job-time (settings/get settings ::job-time-s)}}))]
     (cond
       (= :continue e) :continue
@@ -215,6 +229,15 @@
 
           (empty? todo) (finish! c items have nil)
 
+          (and (not (:covered-done (ctx/mem c))) (seq (or (:covered (ctx/mem c)) (covered-of version todo (:carried st)))))
+          (let [covered (or (:covered (ctx/mem c)) (covered-of version todo (:carried st)))
+                _ (ctx/update-mem! c assoc :covered covered)
+                r (await (run-bill! c :covered covered))]
+            (cond (= :continue r) :continue
+                  (some? r) (finish! c items have (update r :item #(or % (first (keys covered)))))
+                  :else (do (ctx/update-mem! c assoc :covered-done true)
+                            :again)))
+
           (and (:food a) (< fp food-cost/reserve-points) (not (:fed (ctx/mem c)))
                (seq (bill/furnace-short version todo (:carried st))))
           (let [r (await (run-food! c))]
@@ -230,7 +253,7 @@
           (finish! c items have (stop-of :nothing-possible {:reason :kit-incomplete} "the bill is carried but the kit is not complete") )
 
           :else
-          (let [r (await (run-bill! c (bill-of c)))]
+          (let [r (await (run-bill! c :bill (bill-of c)))]
             (cond (= :continue r) :continue
                   (some? r) (finish! c items have (update r :item #(or % (first todo))))
                   :else (do (ctx/update-mem! c assoc :bill-done true)

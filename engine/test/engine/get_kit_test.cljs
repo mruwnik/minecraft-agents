@@ -91,6 +91,19 @@
           (is (= {:status :done :made ["iron_pickaxe" "iron_helmet"]} (select-keys @(:out s) [:status :made])))
           (is (= [["iron_pickaxe" "iron_helmet"]] (mapv :items (f/events-of s :kit.plan))) "the plan is stated once at the start"))))))
 
+(deftest carried-ingots-make-and-wear-every-piece-they-cover-before-the-rest-is-fetched
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (-> (world [{:name "iron_ingot" :count 10}] {})
+                    (update :recipes assoc "iron_chestplate" {:count 1 :needs {"iron_ingot" 8} :table true}))
+              s (start w {:items ["iron_helmet" "iron_chestplate" "iron_boots"] :explore false})]
+          (await (f/run-ticks s 200))
+          (is (= #{"iron_helmet" "iron_boots"} (set (crafted s))))
+          (is (= {"head" "iron_helmet" "feet" "iron_boots"} (worn s)))
+          (is (= {:status :stopped :item "iron_chestplate" :reason :no-source}
+                 (select-keys @(:out s) [:status :item :reason]))))))))
+
 (deftest ingots-that-cannot-be-got-stop-the-job-at-once-naming-the-ingots
   (async done
     (tu/run-async done
@@ -113,7 +126,7 @@
           (await (f/run-ticks s 120))
           (is (= 1 (get (f/inv s) "iron_pickaxe")))
           (is (nil? (get (f/inv s) "iron_helmet")))
-          (is (= {:status :stopped :item "iron_helmet" :reason :no-source}
+          (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
                  (select-keys @(:out s) [:status :item :reason]))))))))
 
 (deftest items-before-the-furnace-material-are-made-first
