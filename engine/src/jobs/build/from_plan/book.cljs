@@ -6,6 +6,7 @@
             [jobs.lib.job-common :as common]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]
             [jobs.build.from-plan.cells :refer [pos-map]]
             [plan.shape :as shape]
@@ -98,18 +99,20 @@
       (ctx/update-mem! c #(cond-> (dissoc % :placing) placed? (update :placed (fnil inc 0)))))))
 
 (defn ^:async dig-one!
-  "Dig the wrong block of the cell (a blocks.dig child) after asking the access rules once more; a refusal is
-  booked, a failed dig counts a failure, a dug cell counts a dig (given up as :refilled when it keeps coming back)."
+  "Dig the wrong block of the cell (a blocks.dig child) after asking the access rules once more and getting a spare
+  for a worn last tool (jobs.lib.trip/tool-ready!); a refusal is booked, a failed dig counts a failure, a dug cell counts a dig (given up as :refilled when it keeps coming back)."
   [c {:keys [pos]} limit]
   (let [v (access/may-dig? (rules-input c) (pos-map pos))
         accept (set (:accept (:args c)))
         judged (access/judge v accept)]
     (case judged
-      :ok (let [e (await (blocks/dig-cell-ending! c (pos-map pos)
-                                                  {:accept accept
-                                                   :ignore-zones? (boolean (:ignore-zones? (:args c)))
-                                                   :for-plan (:plan (:args c))}))
-                outcome (blocks/dig-outcome e)]
+      :ok (let [spare (await (trip/tool-ready! c (u/seen-name (:primitives c) (pos-map pos))))
+                e (when-not spare
+                    (await (blocks/dig-cell-ending! c (pos-map pos)
+                                                    {:accept accept
+                                                     :ignore-zones? (boolean (:ignore-zones? (:args c)))
+                                                     :for-plan (:plan (:args c))})))
+                outcome (if spare :continue (blocks/dig-outcome e))]
             (case outcome
               :continue :continue
               :dug (ctx/update-mem! c #(let [m (update-in (dissoc % :budget-streak) [:digs pos] (fnil inc 0))]

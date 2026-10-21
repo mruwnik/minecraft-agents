@@ -1471,6 +1471,12 @@
     (is (re-find #"50 older" (:note (observe-events/window history events))))
     (is (nil? (:note (observe-events/window {:snapshot {:cursor {:seq 2}}} [{:seq 1} {:seq 2}]))))))
 
+(deftest a-kind-without-its-prefix-matches-the-dotted-kinds-ending-in-it
+  (let [match (observe-events/matcher {:kinds #{"broke"}})]
+    (is (match {:seq 1 :kind :tool.broke :level :warn}))
+    (is (not (match {:seq 2 :kind :tool.low :level :warn})))
+    (is (not (match {:seq 3 :kind :unbroke :level :warn})))))
+
 (deftest kept-events-reads-every-log-file-for-the-kinds-asked
   (async done
     (let [dir (.mkdtempSync fs (.join path (.tmpdir os) "kept-"))

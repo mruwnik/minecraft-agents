@@ -32,7 +32,7 @@
   (let [min-level (get levels level 1)]
     (fn [e]
       (and (>= (get levels (:level e :info) 1) min-level)
-           (or (empty? kinds) (contains? kinds (name (:kind e))))
+           (or (empty? kinds) (let [n (name (:kind e))] (some #(or (= % n) (str/ends-with? n (str "." %))) kinds)))
            (or (nil? job) (= job (get-in e [:context :job-id])) (= job (first (get-in e [:context :chain]))))
            (or (nil? since-ms) (>= (:time-ms e 0) since-ms))
            (or (nil? until-ms) (<= (:time-ms e 0) until-ms))
@@ -80,7 +80,7 @@
   [socket-path kinds]
   (let [dir (.dirname path socket-path)
         names (try (log-files (await (.readdir fsp dir))) (catch :default _ nil))
-        needles (map #(str ":kind :" %) (conj (set kinds) "died"))]
+        needles (conj (set kinds) ":kind :died")]
     (when (seq names)
       (loop [[f & more] names out []]
         (if-not f

@@ -241,9 +241,9 @@
 ;; ---- item lists
 
 (defn add-to
-  "Items with count of name added to the first stack of it (or a new one)."
+  "Items with count of name added to the first stack of it (or a new one; a tool with a durability does not stack)."
   [items item n]
-  (let [i (first (keep-indexed #(when (= item (:name %2)) %1) items))]
+  (let [i (first (keep-indexed #(when (and (= item (:name %2)) (not (:durability %2))) %1) items))]
     (if i (update-in items [i :count] + n) (conj items {:name item :count n}))))
 
 (defn take-from

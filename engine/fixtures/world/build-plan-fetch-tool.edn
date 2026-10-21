@@ -24,4 +24,11 @@
          [:job (jobs.build.from-plan {:plan "$plan:wall" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :incomplete}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 40 :until {:source :job :kind :stopped}}]
-   :after [[:block [20 0 16] "stone"] [:item "stone_pickaxe" 0]]}]}
+   :after [[:block [20 0 16] "stone"] [:item "stone_pickaxe" 0]]},
+  {:name "worn-last-pickaxe-gets-a-spare-from-the-chest-before-the-dig"
+   :body {:inventory [["dirt" 4] ["iron_pickaxe[damage=249]" 1]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 45 20"] [:until-seen {:block "chest"} 10]
+         [:job (jobs.build.from-plan {:plan "$plan:wall"})]]
+   :expect [{:event {:source :job :kind :tool.spare} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed :data {:kind :done}} :within-s 100 :of-job true}]
+   :after [[:block [20 0 16] "dirt"] [:item "stone_pickaxe" 1]]}]}

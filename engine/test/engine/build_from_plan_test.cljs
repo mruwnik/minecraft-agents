@@ -707,6 +707,14 @@
           (is (= 2 (count (h/calls p "dig"))))
           (is (= 2 (count (ce/ends seen :dug)))))))))
 
+(deftest a-dig-with-the-last-worn-pickaxe-warns-that-no-spare-was-had
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [worn {:name "iron_pickaxe" :count 1 :durability 4 :max-durability 250}
+              [_ _ seen] (await (fence-run {"4,64,3" "stone"} (conj kit worn) {} {}))]
+          (is (= 1 (count (h/events-of seen :tool.no-spare)))))))))
+
 (deftest a-wrong-hand-block-outside-the-soft-names-is-dug-by-hand-not-given-up-as-no-tool
   (async done
     (tu/run-async done
