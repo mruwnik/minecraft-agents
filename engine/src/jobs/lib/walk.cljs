@@ -59,7 +59,7 @@
 
 (defn pose-of [pose]
   {:x (.-x pose) :y (.-y pose) :z (.-z pose) :vx (.-vx pose) :vy (.-vy pose) :vz (.-vz pose) :on-ground (.-onGround pose)
-   :on-climbable (.-onClimbable pose) :on-scaffolding (.-onScaffolding pose) :in-water (.-inWater pose) :under-water (.-underWater pose) :in-lava (.-inLava pose) :collided (.-collided pose)})
+   :on-climbable (.-onClimbable pose) :on-scaffolding (.-onScaffolding pose) :in-water (.-inWater pose) :under-water (.-underWater pose) :in-lava (.-inLava pose) :collided (.-collided pose) :collided-y (.-collidedVertically pose)})
 
 (def room-margin-s "Seconds a steer leaves of the time left, for the time between asking and the act's check." 0.05)
 (def min-steer-s "The shortest steer a walk holds to the time left; with less left the act's refusal ends the call." 0.5)
@@ -182,9 +182,23 @@
   [{:keys [on-ground on-scaffolding] :as pose}]
   (cond-> pose (and on-ground on-scaffolding) (assoc :on-climbable false)))
 
+(defn felt-solid
+  "The replan done map when a body swimming vertically is stopped by a block the plan took for water: it felt the floor
+  (swim-down) or the roof (swim-up), so that cell is solid and the plan is made again at once. nil otherwise."
+  [steps i {:keys [x y z on-ground collided-y]}]
+  (let [{:keys [move] :as step} (nth steps i nil)
+        gap (- y (executor/stand-y step))
+        arrive (:arrive-y executor/policy)
+        cell (case move
+               :swim-down (when (and on-ground (> gap arrive)) [(:x step) (:y step) (:z step)])
+               :swim-up (when (and collided-y (not on-ground) (< gap (- arrive))) [(:x step) (inc (:y step)) (:z step)])
+               nil)]
+    (when cell
+      {:status :replan :why :changed :learned true :felt true :cells [cell] :at [x y z] :step i})))
+
 (defn decide-tick
   "One tick of a walk, pure: [state' out] for the pose, out {:done map} or {:controls :yaw :pitch} (with :warn, a gate
-  breach). state {:exec :gate} holds the executor's and the gate's state. env {:policy :steps :watch-stop :gate}:
+  breach). state {:exec :gate} holds the executor's and the gate's state. env {:policy :steps :watch-stop :gate :felt?}: felt?, over a mask, ends the walk at a floor or roof the body felt (felt-solid);
   watch-stop (fn [i state' pose]) the look-ahead's done map or nil; gate (nil: off) {:see :plain? :floors :opts} for
   jobs.lib.walk.sight."
   [{:keys [policy steps watch-stop gate] :as env} {:keys [exec] :as state} pose]
@@ -193,7 +207,7 @@
       (gate-tick env state pose)
       (let [i (:i exec)
             {exec' :state :keys [done controls yaw pitch]} (executor/tick policy exec pose)
-            done (or done (when watch-stop (watch-stop i exec' pose)))
+            done (or done (when (:felt? env) (felt-solid steps (:i exec') pose)) (when watch-stop (watch-stop i exec' pose)))
             state' (assoc state :exec exec')]
         [state' (if done
                   {:done done}
@@ -225,7 +239,7 @@
   [c steps timeout-s watch]
   (let [gate (gate-env (:primitives c) steps)
         watch (cond-> watch (and watch gate) (update :skip (fnil into #{}) (wsight/floor-cells steps)))
-        env {:policy (wworld/body-policy c) :steps steps :gate gate
+        env {:policy (wworld/body-policy c) :steps steps :gate gate :felt? (boolean (:unknown c))
              :watch-stop (when watch (fn [i exec' pose] (wwatch/watch-stop watch steps i exec' pose)))}
         state (volatile! (start-state steps (let [pos (.-pos (.self (:primitives c)))] {:x (.-x pos) :z (.-z pos)})))
         last-done (volatile! nil)
@@ -234,6 +248,8 @@
                        _ (when-let [on-pose (:on-pose c)] (on-pose pose))
                        [state' {:keys [done controls yaw pitch warn]}] (decide-tick env @state pose)]
                    (vreset! state state')
+                   (when-let [[x y z] (and (:unknown c) (:felt done) (first (:cells done)))]
+                     (.add ^js (.-blocked ^js (:unknown c)) (str x "," y "," z)))
                    (when warn (ctx/emit! c :gate-breach :warn warn))
                    (if done
                      (do (vreset! last-done done) #js {:done (clj->js done)})

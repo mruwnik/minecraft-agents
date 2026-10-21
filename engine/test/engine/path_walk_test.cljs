@@ -431,6 +431,24 @@
           (is (= "partial" (:status far)))
           (is (nil? (:stopped-short far))))))))
 
+(def flooded-corridor
+  (merge (box 8 62 0 40 67 2 "stone") (box 9 64 1 36 65 1 "water")))
+
+(deftest an-unfinished-masked-search-keeps-a-submerged-body-swimming-toward-the-goal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake {:blocks flooded-corridor :self {:pos {:x 9.5 :y 64 :z 1.5} :inWater true :oxygen 20}})
+              _ (reset! wsearch/searches {})
+              free (await (tu/with-expansion-budget 16 #(walk/plan-walk! {:primitives p} (.pathWorld p) [30 64 1] 0 (walk/default-weight) {:budget 32})))
+              search {:walled (.pathWorld p) :limited #js {:progress (fn [] #js {:path (.-path (:r free)) :startDistance 100 :distance 80})}}
+              floats (wsearch/unfinished-plan search 1)
+              swims (wsearch/unfinished-plan search 1 nil true (constantly true))]
+          (reset! wsearch/searches {})
+          (is (= "searching" (:status floats)) "unmasked: a way through water is not walked unfinished")
+          (is (= "partial" (:status swims)))
+          (is (every? :swim (:steps swims))))))))
+
 (deftest retreat-cell-is-the-last-walked-step-a-block-clear-of-a-blocking-mob
   (let [steps (mapv (fn [x] {:x x :y 64 :z 1}) (range 0 12))
         cell (fn [steps dangers] (wplan/retreat-cell steps dangers))]

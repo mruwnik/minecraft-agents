@@ -277,3 +277,9 @@
         r (pf/plan snap {:from plateau :goals goals} {:goalFlood 0 :yMargin 3})]
     (is (= "found" (:status r)))
     (is (= 64 (nth (last-cell r) 1)))))
+
+(deftest progress-to-a-near-goal-high-over-a-pool-ends-at-the-surface
+  (let [pool [(stone -2 -2 8 6 56 55) [-2 56 -2 8 63 6 "water"] [0 56 2 0 69 2 "stone"]]
+        r (run pool {:x 6 :y 56 :z 2} (near 0 70 2))]
+    (is (= "partial" (:status r)))
+    (is (= 63 (nth (last-cell r) 1)))))

@@ -86,7 +86,7 @@
      (if (some? problem)
       (.finish s problem)
       (do
-        (set! (.-start-distance s) (.distanceTo s (.-from-x s) (.-from-z s)))
+        (set! (.-start-distance s) (.progressTo s (.-from-x s) (.-from-y s) (.-from-z s)))
         (let [shape (.startShape s)
               region (bit-and shape 15)]
           (if (neg? shape)
@@ -135,7 +135,7 @@
                  (or (nil? (.-goal-seen s)) (true? ((.-goal-seen s) x y z))))
           (do (set! (.-goal-node s) i)
               (.finish s nil))
-          (let [d (.distanceTo s x z)]
+          (let [d (.progressTo s x y z)]
             (when (and (not deadly) (< d (.-best-distance s)))
               (set! (.-best-distance s) d)
               (set! (.-best-node s) i))

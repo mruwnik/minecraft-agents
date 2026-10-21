@@ -50,6 +50,20 @@
           best))
       (.octileTo s x z (.-goal-x s) (.-goal-z s))))
 
+  ;; the distance progress counts: distanceTo, and for a sphere (near) goal octile again of that and the height gap, so a
+  ;; node under or over the goal is not as close as one beside it
+  (progressTo [s x y z]
+    (let [tilt (fn [h dy] (+ (js/Math.max h dy) (* (- SQRT2 1) (js/Math.min h dy))))]
+      (if (pos? (.-n-goals s))
+        (loop [i 0 best js/Infinity]
+          (if (< i (.-n-goals s))
+            (let [h (.octileTo s x z (aget ^js (.-g-xs s) i) (aget ^js (.-g-zs s) i))
+                  d (if (== 1 (aget ^js (.-g-near s) i)) (tilt h (js/Math.abs (- y (aget ^js (.-g-ys s) i)))) h)]
+              (recur (inc i) (js/Math.min best d)))
+            best))
+        (let [h (.octileTo s x z (.-goal-x s) (.-goal-z s))]
+          (if ^boolean (.-near s) (tilt h (js/Math.abs (- y (.-goal-y s)))) h)))))
+
   ;; a goal set's heuristic is the least of its goals' (each admissible and consistent, so their least is too); a block costs
   ;; at least the cheapest of a walk, a sprint and a swim (a sneaking walk is dearer than a swim)
   (heuristic [s x z]

@@ -222,18 +222,20 @@
   past a step the body cannot undo and stands at the loaded edge (progress oneWay.open, the rule open-path applies to a
   search that ended) walks the path to that node instead when it is progress-blocks nearer, with :one-way-taken (live: a
   gap jump down as go-to's first move kept every round of a 300-block search from walking, and it gave up :searching).
-  The search without the limits has no progress to walk, nor has one with progress false (go-to after a walk to a
-  frontier: the nearest node of a search that has not ended may be the dead end an ended one walked away from)."
+  A masked search's swimming steps count as out of water as in a finished partial plan (wet-ok?, masked-wet-ok): a submerged
+  body keeps swimming while the search goes on. The search without the limits has no progress to walk, nor has one with
+  progress false (go-to after a walk to a frontier: the nearest node of a search that has not ended may be the dead end an ended one walked away from)."
   ([search ms] (unfinished-plan search ms nil true))
   ([search ms one-way] (unfinished-plan search ms one-way true))
-  ([search ms one-way progress]
+  ([search ms one-way progress] (unfinished-plan search ms one-way progress (constantly false)))
+  ([search ms one-way progress wet-ok?]
    (let [walled (:walled search)
          ^js pr (when (and progress (not (:unlimited search))) (.progress ^js (:limited search)))
          nearer? (fn [distance] (>= (- (.-startDistance pr) distance) progress-blocks))
          ^js ow (when pr (.-oneWay pr))
          past (when (and (= :open one-way) ow (true? (.-open ow)) (nearer? (.-distance ow))) (.-path ow))
          path (or past (when (and pr (.-path pr) (nearer? (.-distance pr))) (.-path pr)))
-         dry (when path (wplan/dry-end (wplan/path-steps walled path) (wplan/head-wet-fn walled)))
+         dry (when path (wplan/dry-end (wplan/path-steps walled path) (wplan/head-wet-fn walled) wet-ok?))
          steps (when path (wplan/stop-short dry (.-dangers ^js walled)))
          walk? (>= (count steps) 2)
          r #js {:status (if walk? "partial" "searching") :reason "searching" :path (when walk? path) :ms ms}]
@@ -263,7 +265,7 @@
       (do (swap! searches dissoc who)
           (when known (learn-known! known (:r within)))
           (wplan/walk-plan c (:walled search) (:walled search) to one-way frontier within))
-      (let [plan (assoc (unfinished-plan search ms one-way progress) :fresh fresh?)]
+      (let [plan (assoc (unfinished-plan search ms one-way progress (if (:unknown c) (wplan/masked-wet-ok c) (constantly false))) :fresh fresh?)]
         (if (= "partial" (:status plan))
           (swap! searches dissoc who)
           (swap! searches assoc who search))

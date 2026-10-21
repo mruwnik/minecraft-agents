@@ -319,7 +319,7 @@
                                       (not ^boolean (.endsOnMagma s (aget (.-xs s) (.-best-node s)) (aget (.-ys s) (.-best-node s)) (aget (.-zs s) (.-best-node s)) (aget (.-hs s) (.-best-node s)))))})]
         (when (or (some? cut) (some? one-way))
           #js {:path (when (some? cut) (.pathTo s cut))
-               :distance (if (some? cut) (.distanceTo s (aget (.-xs s) cut) (aget (.-zs s) cut)) (.-start-distance s))
+               :distance (if (some? cut) (.progressTo s (aget (.-xs s) cut) (aget (.-ys s) cut) (aget (.-zs s) cut)) (.-start-distance s))
                :startDistance (.-start-distance s)
                :oneWay one-way}))))
 

@@ -26,9 +26,13 @@
             :else -1)))))
 
   ;; the head at x,y,z breathes (base/breathable?) and the body has seen or felt that block (options.airSeen): where a plan to air ends
+  ;; A head cell never seen counts when it is as high as the goal's feet: a dive up a dark shaft to a goal at its top assumes
+  ;; the water ends there.
   (breathes [s x y z]
-    (and (breathable? (.-table s) (.stateAt s x (inc y) z))
-         (or (nil? (.-air-known s)) (true? ((.-air-known s) x (inc y) z)))))
+    (let [head (.stateAt s x (inc y) z)]
+      (or (and (breathable? (.-table s) head)
+               (or (nil? (.-air-known s)) (true? ((.-air-known s) x (inc y) z))))
+          (and ^boolean (.isUnknown s head) (>= (inc y) (.-goal-y s))))))
 
   ;; head in water (a waterlogged block too) that is not a bubble column: the breath runs
   (submerged [s x y z]

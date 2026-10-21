@@ -36,7 +36,7 @@ const onScaffolding = (bot, cell) =>
 
 export function createSteer ({ act, getBot, badArgs }) {
   const pose = bot => {
-    const { position, velocity, onGround, isInWater, isInLava, isCollidedHorizontally, yaw } = bot.entity
+    const { position, velocity, onGround, isInWater, isInLava, isCollidedHorizontally, isCollidedVertically, yaw } = bot.entity
     const cell = new Vec3(Math.floor(position.x), Math.floor(position.y), Math.floor(position.z))
     return {
       x: position.x,
@@ -52,6 +52,7 @@ export function createSteer ({ act, getBot, badArgs }) {
       underWater: underWater(bot, position),
       inLava: isInLava,
       collided: isCollidedHorizontally,
+      collidedVertically: isCollidedVertically,
       yaw,
       t: Date.now()
     }

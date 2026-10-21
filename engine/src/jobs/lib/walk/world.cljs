@@ -84,7 +84,7 @@
            known (when unknown (memory-sections p))
            mask (when known
                   (js/Object.assign #js {} unknown
-                                    #js {:id (first (blocks/state-ids table "void_air")) :blockedId (first (blocks/state-ids table "stone")) :known known
+                                    #js {:id (first (blocks/state-ids table (if (breath/head-under? p) "seagrass" "void_air"))) :blockedId (first (blocks/state-ids table "stone")) :known known
                                          :seeDepth (see-depth-now p) :seeLit (look/see-lit-fn p)}))]
        (when-let [pw (if mask (.pathWorld p mask) (.pathWorld p))]
          (js/Object.assign #js {:table table :space space/space} pw))))))

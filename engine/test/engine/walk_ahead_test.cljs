@@ -583,3 +583,17 @@
       (finally (set! ctx/since orig-since)))
     (is (= [[:damage-mismatch :info {:planned 3 :lost 5}] [:damage-mismatch :info {:planned 3 :lost 5}]] @emitted)
         "default margin 1 and margin 1: 5 is over 3 + 1; margin 2: 5 is not over 3 + 2")))
+
+(deftest a-vertical-swim-stopped-by-a-block-it-took-for-water-replans-at-once
+  (let [down [(step 0 64 0 :start) (step 0 61 0 :swim-down)]
+        up [(step 0 64 0 :start) (step 0 66 0 :swim-up)]
+        pose {:x 0.5 :y 63.2 :z 0.5 :vx 0 :vy 0 :vz 0 :in-water true :under-water true}
+        felt (fn [steps pose] (:cells (walk/felt-solid steps 1 pose)))]
+    (is (= [[0 61 0]] (felt down (assoc pose :on-ground true))))
+    (is (nil? (felt down (assoc pose :collided-y true))))
+    (is (nil? (felt down pose)))
+    (is (nil? (felt down (assoc pose :on-ground true :y 61.1))))
+    (is (= [[0 67 0]] (felt up (assoc pose :y 64.2 :collided-y true))))
+    (is (nil? (felt up (assoc pose :y 64.2))))
+    (is (nil? (felt up (assoc pose :y 64.2 :collided-y true :on-ground true))) "standing on the floor is vertical contact too")
+    (is (nil? (felt up (assoc pose :y 66 :collided-y true))))))
