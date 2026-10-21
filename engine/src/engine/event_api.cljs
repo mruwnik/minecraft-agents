@@ -104,6 +104,8 @@
 (def armour-slots #{:head :torso :legs :feet})
 (def equipment-slots [:head :torso :legs :feet :offHand :mainHand])
 
+(def result-chars 4000) ; A finished job's cause names every child down the chain; it stays whole.
+
 (defn short-text [x n]
   (when (string? x) (subs x 0 (min n (count x)))))
 
@@ -258,16 +260,17 @@
       {:names names :radius radius :max max})))
 
 (defn bounded-value
-  "A small EDN-safe copy of user-supplied job args or specs: depth at most 4, strings cut to 160
+  "A small EDN-safe copy of user-supplied job args or specs: depth at most 4, strings cut to max-chars (default 160)
   characters, at most budget nodes in all, scalar entries of a map before its collections. Cut parts read :truncated."
-  [value depth budget]
+  ([value depth budget] (bounded-value value depth budget 160))
+  ([value depth budget max-chars]
   (cond
     (zero? @budget) :truncated
     (> depth 4) :truncated
     (or (nil? value) (string? value) (keyword? value) (symbol? value)
         (number? value) (boolean? value))
     (do (vswap! budget dec)
-        (if (string? value) (short-text value 160) value))
+        (if (string? value) (short-text value max-chars) value))
     (map? value)
     (do (vswap! budget dec)
         (loop [entries (seq (sort-by (fn [[_ v]] (if (coll? v) 1 0)) value)) out {}]
@@ -276,15 +279,15 @@
             (let [[k v] (first entries)]
               (recur (next entries)
                      (assoc out
-                            (bounded-value k (inc depth) budget)
-                            (bounded-value v (inc depth) budget)))))))
+                            (bounded-value k (inc depth) budget max-chars)
+                            (bounded-value v (inc depth) budget max-chars)))))))
     (or (sequential? value) (set? value))
     (do (vswap! budget dec)
         (loop [items (seq value) out []]
           (if (or (empty? items) (zero? @budget))
             (cond-> out (seq items) (conj :truncated))
-            (recur (next items) (conj out (bounded-value (first items) (inc depth) budget))))))
-    :else (do (vswap! budget dec) (short-text (pr-str value) 160))))
+            (recur (next items) (conj out (bounded-value (first items) (inc depth) budget max-chars))))))
+    :else (do (vswap! budget dec) (short-text (pr-str value) max-chars)))))
 
 (defn instance-status
   "A job's status; running-id is the instance whose round is in flight now (the state's :current can lag it)."
@@ -392,7 +395,7 @@
   (let [s (core/state eng)]
     (if-let [done (and (not (get-in s [:instances id])) (get (core/recent-results eng) id))]
       {:ok true :generation-id (:generation-id s) :id id :name (short-text (:name done) 160) :finished? true
-       :status (:status done) :result (some-> (:result done) (bounded-value 0 (volatile! 32)))
+       :status (:status done) :result (some-> (:result done) (bounded-value 0 (volatile! 64) result-chars))
        :ended-at (:ended-at done)}
     (when-let [inst (get-in s [:instances id])]
       (let [[_ args] (core/job-of eng inst)

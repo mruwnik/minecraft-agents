@@ -461,6 +461,14 @@
            (:results (event-api/results eng ["j5" "j6"])))
         "the listing answers for the asked ids only, without the order counter")))
 
+(deftest a-finished-jobs-long-cause-reads-whole-from-job-detail
+  (let [eng (status-engine #js {:isOffline (fn [] false) :isSettling (fn [] false)
+                                :self (fn [] #js {:username "Probe"})}
+                           {} nil)
+        why (apply str (repeat 60 "gathering was tried and ended :no-torches; "))]
+    (reset! (:results eng) {"j5" {:name "get-kit" :status :stopped :result {:why why} :ended-at 7 :n 1}})
+    (is (= why (get-in (event-api/job-detail eng "j5" 4) [:result :why])))))
+
 (deftest results-leave-out-ids-that-are-running-now
   (let [eng (status-engine #js {:isOffline (fn [] false) :isSettling (fn [] false)
                                 :self (fn [] #js {:username "Probe"})}

@@ -114,6 +114,9 @@
 (def terminal-kinds #{:completed :failed :cancelled :stopped})
 
 (def max-result-chars 2000)
+(def cause-keys
+  "What a recorded result keeps when its data prints past max-result-chars: the stop's cause, whole."
+  [:status :kind :cause :reason :why :because :text :item :name :error])
 
 (defn results
   "The recorded outcomes of ended jobs {id {:name :status :result :ended-at :reflex? :n}}; :n orders them."
@@ -121,7 +124,7 @@
   (some-> (:results eng) deref))
 
 (defn result-entry
-  "The recent-results entry of a job's terminal event: {:name :status :result :ended-at :reflex? :n}, :result the event's data (dropped with :result-clipped true when it prints past max-result-chars). name and reflex come from
+  "The recent-results entry of a job's terminal event: {:name :status :result :ended-at :reflex? :n}, :result the event's data (past max-result-chars cut to the cause-keys, with :result-clipped true). name and reflex come from
   the event, else from the job's instance."
   [eng event ended-at]
   (let [data (:data event)
@@ -131,9 +134,9 @@
         name (or (:name event) (some-> (:spec inst) expr/label))]
     (cond-> {:name name :status (:kind event) :ended-at ended-at}
       reflex (assoc :reflex? true)
-      (and (seq data) (not clipped?)) (assoc :result data)
+      (seq data) (assoc :result (if clipped? (select-keys data cause-keys) data))
       clipped? (assoc :result-clipped true)
-      (string? (:text event)) (assoc :text (subs (:text event) 0 (min 200 (count (:text event))))))))
+      (string? (:text event)) (assoc :text (:text event)))))
 
 (defn trim-results
   "kept without the oldest (lowest :n) entries of each kind past its limit: listed jobs and reflexes count apart."

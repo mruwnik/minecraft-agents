@@ -54,11 +54,13 @@
       :else (js/Number value))))
 
 (defn ^:async read!
-  "The query's answer from the retained history (job-results/history! with the result window): {:ok true :events .. :next-before ..
+  "The query's answer from the retained history (job-results/history! with the result window; a --job's recorded end stands in when its stopped event has aged out): {:ok true :events .. :next-before ..
   :window {:scanned n :oldest-seq s :partial? bool}}, or {:ok false :reason :no-death-retained}."
-  [get! socket-path {:keys [since until] :as query} now-ms]
-  (let [history (await (job-results/history! get! socket-path {:limit job-results/result-limit}))
-        events (:events history)
+  [get! socket-path {:keys [since until job] :as query} now-ms]
+  (let [history (await (job-results/history! get! socket-path (cond-> {:limit job-results/result-limit}
+                                                                 job (assoc :record-ids [job]))))
+        events (cond-> (:events history)
+                 job (job-results/with-recorded (get-in history [:snapshot :generation-id]) (:recorded history) [job]))
         since-ms (when since (resolve-time since events now-ms))
         until-ms (when until (resolve-time until events now-ms))]
     (if (or (and since (nil? since-ms)) (and until (nil? until-ms)))

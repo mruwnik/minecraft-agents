@@ -8,6 +8,7 @@
 (def history-limit 1000)
 (def result-limit 8000) ; Events a result read scans back (a job's outcome sits among scheduler noise).
 (def event-limit 8)
+(def max-string-chars 4000) ; A stop's cause names every child down the chain; it must stay whole.
 (def scan-deadline-ms 15000) ; A read of the result-limit window is some 16 pages; a loaded body answers each slowly.
 (def terminal-kinds
   "Every event kind that ends a job (the engine's end statuses); one definition for results and observe wakes."
@@ -28,8 +29,8 @@
                 (do (vreset! clipped true) :truncated)
                 (do (vswap! budget dec)
                     (cond
-                      (string? v) (if (> (count v) 240)
-                                    (do (vreset! clipped true) (str (subs v 0 240) "…")) v)
+                      (string? v) (if (> (count v) max-string-chars)
+                                    (do (vreset! clipped true) (str (subs v 0 max-string-chars) "…")) v)
                       (map? v) (do (when (> (count v) 32) (vreset! clipped true))
                                    (into {} (map (fn [[k x]] [(if (> (count (str k)) 80) (do (vreset! clipped true) (subs (str k) 0 80)) k) (trim x (inc depth))])) (take 32 v)))
                       (coll? v) (do (when (> (count v) 32) (vreset! clipped true))
