@@ -11,7 +11,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.forestry :as lib]
             [jobs.forestry.prepare-rule :as rule]
-            [jobs.lib.trees :refer [debts forget-plot-debts! unloaded-kind unloaded-policy target-of with-sapling sapling-for sapling-of sapling-name? log-name? replant-kind species]
+            [jobs.lib.trees :refer [debts forget-plot-debts! stalled-kind stalled-policy target-of with-sapling sapling-for sapling-of sapling-name? log-name? replant-kind species]
              :rename {species all-species}]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]))
@@ -202,20 +202,21 @@
             (ctx/end c :done nil {:pos (:pos t)}))))))
 
 (defn ^:async step
-  "One piece of the planting: :again, :continue (a child waits on the world) or the ending."
+  "One piece of the planting: :again, :continue (a child waits on the world) or the ending. A failed ending leaves the debt
+  noted in stalled-kind so the replant-owed trigger does not refire it at once."
   [c]
   (forget-plot-debts! c)
   (let [t (current-target c)
         sapling (when t (sapling-for (u/inventory (:primitives c)) (:species t)))
-        refused #(refusal c (:pos t))]
-    (cond
-      (nil? t) (ctx/end c :done nil {})
-      (refused) (ctx/end c :condition-failed (refused) {:pos (:pos t)})
-      (nil? (u/sensed (:primitives c) (:pos t)))
-      (do (ctx/remember! c unloaded-kind {:pos (:pos t)} unloaded-policy)
-          (ctx/end c :condition-failed {:reason :not-loaded :pos (:pos t)} {:pos (:pos t)}))
-      (nil? sapling) (await (fetch-sapling! c (problem c)))
-      :else (await (place! c t sapling)))))
+        refused #(refusal c (:pos t))
+        e (cond
+            (nil? t) (ctx/end c :done nil {})
+            (refused) (ctx/end c :condition-failed (refused) {:pos (:pos t)})
+            (nil? sapling) (await (fetch-sapling! c (problem c)))
+            :else (await (place! c t sapling)))]
+    (when (and t (map? e) (not= :cut-off (:kind e)) (not= :done (:kind e)))
+      (ctx/remember! c stalled-kind {:pos (:pos t)} stalled-policy))
+    e))
 
 (defn ^:async round
   [c]

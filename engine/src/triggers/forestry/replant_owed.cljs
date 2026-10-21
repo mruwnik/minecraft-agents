@@ -3,7 +3,7 @@
   carries. Its job, jobs.forestry.plant-sapling with the carried saplings only, plants the oldest such debt, then the
   next, until none is left. A debt whose sapling is not carried waits until one is: the trigger never sends the body
   to fetch. A debt whose cell is not loaded is no reason to act (the walk would end :not-loaded and refire): it waits
-  until the body is near enough for the chunk to load, and for two minutes after plant-sapling found its cell unloaded."
+  until the body is near enough for the chunk to load, and for two minutes after plant-sapling failed there (a walk that ended :not-loaded, :unreachable ..)."
   (:require [engine.memory :as mem]
             [jobs.lib.body :as body]
             [jobs.lib.trees :as trees :refer [replant-kind]]
@@ -17,4 +17,4 @@
   (boolean
    (and (not (body/recovery-pending? view :replant-owed))
         (not (false? (.-onGround (.self p))))
-        (some #(u/block-at p (:pos %)) (trees/with-sapling (trees/without-unloaded view (map :data (mem/entries view replant-kind))) (u/inventory p))))))
+        (some #(u/block-at p (:pos %)) (trees/with-sapling (trees/without-stalled view (map :data (mem/entries view replant-kind))) (u/inventory p))))))

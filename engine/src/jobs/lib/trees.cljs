@@ -193,17 +193,17 @@
          (filter #(if want (= want %) (and (sapling-name? %) (not (str/ends-with? % "_fungus")))))
          first)))
 
-(def unloaded-kind
-  "Entries {:pos} of replant debts plant-sapling could not reach because their cell is not loaded: the replant-owed trigger
+(def stalled-kind
+  "Entries {:pos} of replant debts plant-sapling failed to plant (the walk ended :not-loaded, :unreachable ..): the replant-owed trigger
   leaves them alone while they last."
-  :forestry/replant-unloaded)
+  :forestry/replant-stalled)
 
-(def unloaded-policy {:cap 50 :ttl (* 2 60 1000)})
+(def stalled-policy {:cap 50 :ttl (* 2 60 1000)})
 
-(defn without-unloaded
-  "The debts minus those plant-sapling found unloaded lately, read from memory (a view or the body's)."
+(defn without-stalled
+  "The debts minus those plant-sapling failed on lately, read from memory (a view or the body's)."
   [memory debts]
-  (let [skip (into #{} (map (comp :pos :data)) (mem/entries memory unloaded-kind))]
+  (let [skip (into #{} (map (comp :pos :data)) (mem/entries memory stalled-kind))]
     (remove (comp skip :pos) debts)))
 
 (defn with-sapling

@@ -117,19 +117,19 @@
     (is (false? (holds ro/replant-owed {} debt [{:name "birch_sapling" :count 1}])) "another species")
     (is (false? (holds ro/replant-owed {} debt [sapling] nil ["6,64,0"]))
         "the debt's cell is not loaded: the walk would end :not-loaded and refire")
-    (is (false? (holds ro/replant-owed {} (conj debt [trees/unloaded-kind {:pos {:x 6 :y 64 :z 0}}]) [sapling]))
-        "plant-sapling found the cell unloaded lately: no refire")
-    (is (true? (holds ro/replant-owed {} (conj debt [trees/unloaded-kind {:pos {:x 9 :y 64 :z 0}}]) [sapling]))
+    (is (false? (holds ro/replant-owed {} (conj debt [trees/stalled-kind {:pos {:x 6 :y 64 :z 0}}]) [sapling]))
+        "plant-sapling failed there lately: no refire")
+    (is (true? (holds ro/replant-owed {} (conj debt [trees/stalled-kind {:pos {:x 9 :y 64 :z 0}}]) [sapling]))
         "another cell's note leaves the debt owed")))
 
-(deftest plant-sapling-notes-an-unloaded-debt-cell-so-the-trigger-stays-quiet
+(deftest plant-sapling-notes-a-failed-debt-cell-so-the-trigger-stays-quiet
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (lt/setup {:blocks (fm/ground [[6 0]]) :inventory [sapling] :unloaded ["6,64,0"]})]
           (mem/write! (:store eng) :forestry/replant {:pos {:x 6 :y 64 :z 0} :species "oak"} {:cap 50 :ttl :forever})
           (await (tu/child-outcome eng 'jobs.forestry.plant-sapling {:ways #{:carried}} 50))
-          (is (= [{:pos {:x 6 :y 64 :z 0}}] (mapv :data (mem/entries (mem/view (:store eng)) trees/unloaded-kind)))))))))
+          (is (= [{:pos {:x 6 :y 64 :z 0}}] (mapv :data (mem/entries (mem/view (:store eng)) trees/stalled-kind)))))))))
 
 (deftest plant-sapling-takes-the-debt-whose-sapling-is-carried-before-an-older-one
   (async done
