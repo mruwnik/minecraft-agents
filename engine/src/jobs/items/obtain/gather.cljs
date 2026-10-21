@@ -9,6 +9,7 @@
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
             [jobs.lib.breath :as breath]
+            [jobs.lib.foods :as foods]
             [jobs.lib.surface-up :as surface]
             [jobs.items.obtain.table :refer [animal? gather-need searchable?]]
             [jobs.lib.waits :as waits]
@@ -176,15 +177,19 @@
         _ (when (and (zero? k0) (not (:explore-start (ctx/mem c))))
             (ctx/update-mem! c assoc :explore-start [(.-x here) (.-y here) (.-z here)]))
         o (round-opts c k0)
-        _ (ctx/emit! c :obtain.exploring :info
+        said [(:key need) k0]
+        _ (when-not (= said (:explore-said (ctx/mem c)))
+            (ctx/update-mem! c assoc :explore-said said)
+            (ctx/emit! c :obtain.exploring :info
                      {:message (str "nothing seen to get " (str/join "/" targets) ": walking to look for it, up to " (:max-distance o)
                                     " blocks out and " (:max-legs o) " legs, from " (js/Math.floor (.-x here)) " "
                                     (js/Math.floor (.-y here)) " " (js/Math.floor (.-z here)))
                       :attention :notice
                       :for targets :max-distance (:max-distance o) :max-legs (:max-legs o) :heading (:heading o)
-                      :from (mapv #(js/Math.floor %) [(.-x here) (.-y here) (.-z here)])})
+                      :from (mapv #(js/Math.floor %) [(.-x here) (.-y here) (.-z here)])}))
         e (waits/waiting-out c (await (ctx/call c :explore 'jobs.explore.search
-                           (child/search-args (merge o {:target targets :count 1 :scan-radius (search-scan-radius) :use-notes false :takeable true :avoid (vec (:cut-off (ctx/mem c)))})))))]
+                           (child/search-args (merge o {:target targets :count 1 :scan-radius (search-scan-radius) :use-notes false :takeable true :avoid (vec (:cut-off (ctx/mem c)))}
+                                                     (when (animal? need) {:forage (boolean (foods/edible? (:key need)))}))))))]
     (if (= :continue e)
       :continue
       (let [res (:data e)
@@ -193,6 +198,7 @@
             ;; a search that ran out of its own time is not counted, unless that keeps happening
             out-of-time? (and timed-out? (<= timeouts max-search-timeouts))
             k (cond-> (get-in (ctx/mem c) [:explored (:key need)] 0) (not out-of-time?) inc)]
+        (ctx/update-mem! c dissoc :explore-said)
         (ctx/update-mem! c assoc-in [:explore-timeouts (:key need)] (if out-of-time? timeouts 0))
         (ctx/update-mem! c assoc-in [:explored (:key need)] k)
         (ctx/update-mem! c update :gather update :unreachable dissoc (:key need))

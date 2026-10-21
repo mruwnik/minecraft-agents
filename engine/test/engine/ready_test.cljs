@@ -342,6 +342,16 @@
       20 [] ["cow"] :later
       8 [] ["cow" "iron_ore"] :later)))
 
+(deftest a-hurt-foodless-body-does-not-roam-for-wool-or-wood
+  (are [health food inventory args expected]
+       (= expected (bound search/fit? {:self {:pos {:x 0 :y 64 :z 0} :health health :food food} :inventory inventory} args))
+    8.2 5 [] {:target ["sheep"] :forage false} :later
+    8.2 5 [] {:target ["oak_log"]} :later
+    8.2 5 [] {:target ["sheep"]} :ok
+    8.2 5 [{:name "bread" :count 1}] {:target ["oak_log"]} :ok
+    8.2 20 [] {:target ["oak_log"]} :ok
+    12 5 [] {:target ["oak_log"]} :ok))
+
 (deftest a-starving-body-works-its-field-in-the-dark-and-a-fed-one-waits
   (let [safe? (:safe? (get registry/jobs 'jobs.farm.harvest))]
     (are [food health inventory expected]

@@ -91,6 +91,7 @@
    :skip-ids {:doc "entity ids that do not count as found (animals the caller cannot use, e.g. a baby)" :spec (a/coll-of (a/pred "an entity id" some?)) :default nil}
    :avoid {:doc "columns [x z] whose blocks do not count as found" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
    :patch {:doc "look for a patch of ground instead of named things: {:w :h :range :depth :limit :max-step :plan :farmland?} as jobs.lib.patch scans (jobs.farm.find-spot builds it); the search ends at the first look round with one, and :found is then [{:what \"patch\" :pos :spots}]" :spec map? :default nil}
+   :forage {:doc "whether the search is for food (the body hunts or picks it to eat); nil: every target is a food animal or food block. A search for wool or leather from a food animal says false" :spec boolean? :default nil}
    :use-notes {:doc "targets noted (by any body) within the max-distance setting count as found" :spec boolean? :default true}})
 
 (a/defargs settings
@@ -113,6 +114,7 @@
    ::near-sight {:default 6 :doc "Within this many blocks a look misses no animal: a noted animal not seen there is taken as gone." :spec (a/num-in 0 nil)}
    ::leg-tries {:default 2 :doc "Walks toward one spot (any job or body) that may start before the spot is dropped as tried; counted in notes, so a walk cut off by a reflex (a drowning) counts too." :spec (a/int-in 1 nil)}
    ::leg-tried-ttl-s {:default 3600 :doc "Seconds a note of a walk started toward a spot lasts." :spec (a/num-in 0 nil)}
+   ::roam-min-health {:default 10 :doc "A search that is not for food waits :low-health below this health while the body can not heal (cannot-heal?: food low, nothing edible carried), so a hurt, foodless body does not roam for wool or wood." :spec (a/num-in 0 20)}
    ::stand-cap {:default 48 :doc "Stand cells one choice reads; past it :more says candidates are left for the next step." :spec (a/int-in 0 nil)}})
 (defn distance-limit [] (settings/get settings ::max-distance))
 (defn time-s [] (settings/get settings ::job-time-s))
@@ -140,14 +142,19 @@
   (into animals/food-animals (concat (keys crops/food-ripe-age) (keys crops/wild-food))))
 
 (defn forage?
-  "Whether every target is a food animal or food block."
+  "Whether the search is for food: the :forage arg, else every target is a food animal or food block."
   [c]
-  (boolean (and (seq (targets c)) (every? foraged (targets c)))))
+  (let [f (:forage (:args c))]
+    (if (some? f)
+      f
+      (boolean (and (seq (targets c)) (every? foraged (targets c)))))))
 
 (defn fit?
-  "ready/fit?, but ready/fit-to-forage while the search is for food."
+  "ready/fit-to-forage while the search is for food; else ready/fit?, with the higher ::roam-min-health floor while the body can not heal."
   [c]
-  (if (forage? c) (ready/fit-to-forage c) (ready/fit? c)))
+  (cond (forage? c) (ready/fit-to-forage c)
+        (ready/cannot-heal? c) (ready/fit-min (settings/get settings ::roam-min-health) c)
+        :else (ready/fit? c)))
 
 (defn xz-dist [[ax az] [bx bz]]
   (js/Math.hypot (- ax bx) (- az bz)))
