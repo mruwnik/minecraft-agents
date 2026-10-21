@@ -256,6 +256,17 @@
         (let [s (await (run (list job (assoc args :chest far-chest)) {:inventory [(item "beef" 3)] :containers {"200,64,0" []}} 3))]
           (is (seq (events-of s :round_started))))))))
 
+(deftest two-far-kitchens-do-not-hold-each-other-off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far (list job (assoc args :chest far-chest))
+              {:keys [eng] :as s} (setup {:inventory [(item "beef" 3)] :containers {"200,64,0" []}})]
+          (core/submit! eng far {})
+          (core/submit! eng far {})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (seq (events-of s :round_started))))))))
+
 (deftest a-kitchen-near-its-chest-runs-while-another-job-is-listed
   (async done
     (tu/run-async done

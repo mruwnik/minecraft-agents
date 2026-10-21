@@ -1,5 +1,5 @@
 (ns jobs.lib.standing
-  "A standing job (one kept in the queue under repeat) declines far from its site while a job that is not standing
+  "A standing job (one kept in the queue under repeat, or a site job) declines far from its site while a job that is not standing
   is listed, or deep below it (away-cause), so it does not walk the body home between or after trips;
   standing jobs are the listed ones under repeat (standing-ids)."
   (:require [clojure.string :as str]
@@ -17,10 +17,17 @@
 
 (defn root-id [c] (first (str/split (:id c) #"/")))
 
+(def site-jobs
+  "The jobs that decline here: they must not hold each other off, or two far ones wait for ever."
+  #{'jobs.farm.tend 'jobs.animals.maintain 'jobs.items.kitchen})
+
 (defn standing-ids
-  "The ids of the listed jobs kept under repeat."
+  "The ids of the listed jobs kept under repeat, and of the site jobs."
   [c]
-  (into #{} (comp (filter (comp #{:repeat} :op :spec val)) (map key)) (:instances @(:state (:engine c)))))
+  (into #{}
+        (comp (filter (fn [[_ inst]] (let [spec (:spec inst)] (or (= :repeat (:op spec)) (site-jobs (:job spec))))))
+              (map key))
+        (:instances @(:state (:engine c)))))
 
 (defn away-cause
   "nil, or the cause {:reason :away ..} when site (a position, or nil) is farther than
