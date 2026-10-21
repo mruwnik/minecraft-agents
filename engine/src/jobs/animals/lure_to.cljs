@@ -6,6 +6,7 @@
             [jobs.lib.pen-read :as pen-read]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.notes :as notes]
             [engine.settings :as settings]
             [jobs.lib.bait :as bait]
             [jobs.lib.escort :as escort]
@@ -38,7 +39,7 @@
   ::max-turns such turns, or 10 s without progress (::stall-s), :animal-stalled. An animal that keeps closing in is waited for
   however far it fell behind. The plan of each leg is searched before the body walks: a search still running never sends
   the body the whole way in one go. With no animal in sight at the start it walks to where the chosen one was last seen
-  (up to ::sighting-age-s old), looks round once and steps toward a heard animal of the kind (jobs.lib.vantage) before
+  (up to ::sighting-age-s old) or, with none, to the nearest animal of the kind noted within ::note-age-s, looks round once and steps toward a heard animal of the kind (jobs.lib.vantage) before
   ending :no-animal; a sound is a direction, never a place. Each round
   the food is checked in hand and held again if not (a cut, another job's equip); none left ends :no-food.
 
@@ -69,6 +70,7 @@
 
 (a/defargs settings
   {::job-time-s {:default 180 :doc "The call's :spend :job-time when it gives none: seconds of the job's own working time before the lure gives up." :spec (a/num-in 0 nil)}
+   ::note-age-s {:default 600 :doc "Seconds a note of an animal of the kind seen within :radius of the start stays worth walking to when none is in sight." :spec (a/num-in 0 nil)}
    ::sighting-age-s {:default 30 :doc "Seconds a chosen animal's last sighting stays worth walking back to while the animal is out of sight." :spec (a/num-in 0 nil)}
    ::arrive-range {:default 2 :doc "How close to :pos counts as there." :spec (a/num-in 0 nil)}
    ::near-spot {:default 6 :doc "An animal this close (flat) to :pos counts as :near." :spec (a/num-in 0 nil)}
@@ -76,6 +78,8 @@
    ::gate-hold-range {:default 10 :doc "Planned gates this near :pos are held open while the lure runs, in blocks." :spec (a/num-in 0 nil)}
    ::gate-near {:default 3 :doc "An animal this close (flat) to the cell outside the destination's gate is led in as it is, not round to the gate first." :spec (a/num-in 0 nil)}
    ::ground-search {:default 16 :doc "Blocks above and below :pos looked over for the ground of its column when the unreachable text names it." :spec (a/int-in 0 nil)}})
+(defn note-age-ms [] (* 1000 (settings/get settings ::note-age-s)))
+
 (defn sighting-age-ms [] (* 1000 (settings/get settings ::sighting-age-s)))
 (defn near-spot [] (settings/get settings ::near-spot))
 (defn arrive-slack [] (settings/get settings ::arrive-slack))
@@ -309,16 +313,34 @@
       :else (do (ctx/update-mem! c assoc :food-ending e)
                 (finish! c :no-food)))))
 
+(defn noted-sighting
+  "The nearest recent :seen note of an animal of :mob within :radius of the start not yet walked to, as a sighting."
+  [c]
+  (let [{:keys [mob radius]} (:args c)
+        {:keys [origin noted-tried]} (ctx/mem c)
+        now (ctx/now c)
+        me (u/self-pos c)
+        at (fn [n] (let [[x y z] (:pos n)] {:x x :y y :z z}))]
+    (when-let [n (->> (notes/notes c)
+                      (filter #(and (= :seen (:kind %)) (= mob (:what %)) (:id %) (not (contains? (set noted-tried) (:id %)))
+                                    (< (- now (:t %)) (note-age-ms)) (<= (u/flat-dist origin (at %)) radius)))
+                      (sort-by #(u/flat-dist me (at %)))
+                      first)]
+      {:key (:id n) :pos (at n) :at now :note-id (:id n)})))
+
 (defn ^:async look-for!
-  "No animal to lure in sight: walk to where the chosen one was seen when that is fresh (::sighting-age-s), else look round
+  "No animal to lure in sight: walk to where the chosen one was seen when that is fresh (::sighting-age-s), else to the nearest animal of the kind another search or look noted within ::note-age-s, else look round
   once, then step toward a sound of the kind (jobs.lib.vantage; a heard animal gives a direction, never a place).
   :again or :yield after trying; nil when nothing is left to try."
   [c]
   (let [{:keys [mob radius uuid]} (:args c)
         {:keys [sighting looked]} (ctx/mem c)
         found? #(seq (candidates c))
-        heard (when-not uuid (vantage/heard c [mob] radius))]
+        heard (when-not uuid (vantage/heard c [mob] radius))
+        noted (when-not (or uuid sighting) (noted-sighting c))]
     (cond
+      noted (do (ctx/update-mem! c #(-> % (assoc :sighting (dissoc noted :note-id)) (update :noted-tried (fnil conj []) (:note-id noted))))
+                :again)
       (and sighting (< (- (ctx/now c) (:at sighting)) (sighting-age-ms)))
       (let [r (await (near/go-near! c (:pos sighting) 2 {:doors :shut}))]
         (if (= :partial r)

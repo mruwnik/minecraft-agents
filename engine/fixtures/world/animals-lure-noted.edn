@@ -1,0 +1,18 @@
+;; jobs.animals.lure-to with no animal in sight walks to an animal of the kind a search noted lately (card 925e3294), then lures it.
+;; Open grass; body at x 12.5; a cow 14 east. A search sights and notes it, then a stone wall (x 22, 9 high, z 8..24) is raised between them
+;; so the lure starts with no cow in view. Should-succeed: the body walks round the wall to the noted cow and the lure goes on
+;; (the cow may stray, so it ends :arrived or :lost). Should-fail: the old ending, :no-animal.
+{:defaults
+ {:tags [:animals :jobs :lure]
+  :time :any
+  :plot {:floor "grass_block" :height 12}
+  :body {:at [12.5 0 16.5] :yaw 270 :inventory [["wheat" 4]] :effects [["resistance" 900 4]]}
+  :limit-s 300}
+ :cases
+ [{:name "lure-walks-to-the-cow-a-search-noted-behind-a-wall"
+   :act [[:summon "cow" [26.5 0 16.5]]
+         [:job (jobs.explore.search {:target "cow" :scan-radius 24 :use-notes false :settings {:jobs.explore.search/max-legs 0}})]
+         [:rcon "execute at $BODY run fill ~10 ~ ~-8 ~10 ~8 ~8 stone"]
+         [:job (jobs.animals.lure-to {:mob "cow" :pos #xyz [6 0 16] :radius 20})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:reason #{:arrived :lost}}} :within-s 240 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :no-animal}} :for-s 30 :until {:source :job :kind #{:completed :stopped}}}]}]}

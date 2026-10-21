@@ -97,6 +97,7 @@
   {::max-distance {:default 96 :doc "How far (XZ) from the origin a leg may go and a noted or remembered target still counts." :spec (a/int-in 1 nil)}
    ::max-legs {:default 32 :doc "Legs walked before the search gives up." :spec (a/int-in 0 nil)}
    ::seen-ttl-s {:default 259200 :doc "Seconds a note of a block seen lasts." :spec (a/num-in 0 nil)}
+   ::stale-s {:default 60 :doc "Seconds after which an animal last seen is reported with how long ago, not as in view." :spec (a/num-in 0 nil)}
    ::entity-ttl-s {:default 600 :doc "Seconds a note of an entity seen lasts." :spec (a/num-in 0 nil)}
    ::searched-ttl-s {:default 86400 :doc "Seconds a note of searched ground lasts." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds from the first round before a search gives up." :spec (a/num-in 0 nil)}
@@ -302,15 +303,27 @@
        (map (fn [b] {:what (:name b) :pos (cell-of (:pos b))}))
        (filter #(<= (xz-dist [((:pos %) 0) ((:pos %) 2)] [ox oz]) max-distance))))
 
+(defn aged
+  "found with :ago-s (seconds) on each entity last seen more than the ::stale-s setting ago (by its notes)."
+  [c found]
+  (let [ns (notes/notes c)
+        now (ctx/now c)
+        stale-ms (* 1000 (settings/get settings ::stale-s))
+        seen-at (fn [{:keys [id]}] (when id (some->> ns (filter #(and (= :seen (:kind %)) (= id (:id %)))) (map :t) seq (apply max))))]
+    (mapv (fn [f] (let [t (seen-at f)] (cond-> f (and t (> (- now t) stale-ms)) (assoc :ago-s (quot (- now t) 1000))))) found)))
+
+(defn finding-text [{:keys [pos ago-s]}]
+  (str (str/join "," pos) (when ago-s (str " (last seen " (max 1 (js/Math.round (/ ago-s 60))) " min ago)"))))
+
 (defn finish!
   "End the call: done when found (or nothing was left to find), else the ending of why; the text and findings are the ending's data."
   [c reason why]
   (let [m (ctx/mem c)
         what (str/join "/" (targets c))
-        found (:found m [])
+        found (aged c (:found m []))
         result (cond-> {:reason reason :found found :coverage (coverage m)
                         :text (if (= :found reason)
-                                (str "found " (count found) " " what " at " (str/join ", " (map #(str/join "," (:pos %)) found)))
+                                (str "found " (count found) " " what " at " (str/join ", " (map finding-text found)))
                                 (str "no " what " found (" (name why) ") after " (:legs m 0) " legs, "
                                      (:scans m 0) " looks of " (:scan-radius (:args c)) " blocks round, " (:farthest m 0) " blocks out"
                                      (when (pos? (:skipped m 0)) (str ", " (:skipped m) " legs skipped as already searched"))))}

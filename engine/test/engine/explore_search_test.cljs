@@ -371,7 +371,7 @@
               penned (await (run! [3 64 3]))
               wild (await (run! [12 64 12]))]
           (is (= :stopped (:kind (not-found-of penned))) "the penned cow is not counted")
-          (is (re-find #"12,64,12" (str (:text (found-of wild)))) "the text says where"))))))
+          (is (re-find #"12,64,12 \(last seen \d+ min ago\)" (str (:text (found-of wild)))) "the text says where and how long ago"))))))
 
 (deftest legs-that-cannot-be-stood-on-or-walked-are-recorded-and-skipped
   (async done
