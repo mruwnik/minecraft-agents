@@ -444,6 +444,7 @@
         bare (vec (distinct (concat (:bare m) (map :pos (:replant m)) lost)))
         no-crop? (and (not (:plan-cells c)) (zero? (:cut m 0)) (empty? (:replant m)) (not (crop-seen? c)))
         result {:cut (:cut m 0) :replanted (:replanted m 0) :bare bare :lost lost :gave-up (gave-up? c)}
+        result (cond-> result (seq (:skipped m)) (assoc :skipped (vec (:skipped m))))
         done-text (str "harvest done: cut " (:cut m 0) ", replanted " (:replanted m 0) ", bare " (count bare))
         worked (max (:cut result) (:replanted result))
         left (count (:skipped m))]

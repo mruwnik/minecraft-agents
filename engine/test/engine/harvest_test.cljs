@@ -262,7 +262,7 @@
           (is (zero? (count (calls p "dig"))))
           (is (= 1 (count (events-of seen :harvest.gave-up))))
           (is (= 4 (:unreachable warn)))
-          (is (= {:cut 0 :replanted 0 :bare [] :lost [] :gave-up true} (dissoc result :status :reason :text))))))))
+          (is (= {:cut 0 :replanted 0 :bare [] :lost [] :gave-up true :skipped (mapv #(hash-map :x % :y 64 :z 0) (range 8 12))} (dissoc result :status :reason :text))))))))
 
 (deftest farmland-gone-before-replanting-leaves-the-cell-bare
   (async done
@@ -382,7 +382,7 @@
                                               :noPath cells}})
               result (await (child-outcome eng job {:area {:pos origin :radius 14}} 100))]
           (is (zero? (count (calls p "dig"))))
-          (is (= {:cut 0 :replanted 0 :bare [] :lost [] :gave-up true} (dissoc result :status :reason :text))))))))
+          (is (= {:cut 0 :replanted 0 :bare [] :lost [] :gave-up true :skipped (mapv #(hash-map :x % :y 64 :z 0) (range 8 12))} (dissoc result :status :reason :text))))))))
 
 (deftest a-crop-is-skipped-at-the-third-blocked-walk
   (async done
@@ -394,7 +394,7 @@
               _ (tu/short-walks! p 1) ; every steer runs for no time: blocked walks without a reason
               result (await (child-outcome eng job {} 100))]
           (is (= 6 (count (filter #(and (= "j1/kid/walk" (:job %)) (:ending %)) (events-of seen :child_ended))))) ; go-to's own walks and escalation do not count
-          (is (= {:cut 0 :replanted 0 :bare [] :lost [] :gave-up false} (dissoc result :status :reason :text)))
+          (is (= {:cut 0 :replanted 0 :bare [] :lost [] :gave-up false :skipped (mapv #(hash-map :x % :y 64 :z 0) (range 8 10))} (dissoc result :status :reason :text)))
           (is (= [] (:list (core/state eng)))))))))
 
 (deftest a-replanted-cell-lost-before-the-finish-is-bare

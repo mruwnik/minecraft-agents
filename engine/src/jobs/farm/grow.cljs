@@ -70,12 +70,12 @@
      :yields {:items {(item-of (:crop (:args c))) [0 n n]}}}))
 
 (defn standing
-  "The crops of :crop the body has seen standing, that its zones allow cutting and no harvest gave up on."
+  "The crops of :crop the body has seen standing, that its zones allow cutting and no harvest gave up on (the cells it left)."
   [c]
   (let [in (access/rules-input c)
         given-up (:given-up (ctx/mem c))]
     (filterv #(and (:ok (access/may? in :harvest (:pos %)))
-                   (every? (fn [g] (> (u/dist (:pos %) g) crops/cut-radius)) given-up))
+                   (every? (fn [g] (> (u/dist (:pos %) g) 0.5)) given-up))
              (crops/seen-crops (:primitives c) [(:crop (:args c))] 64 256))))
 
 (defn ripe? [crop b] (some-> (:age b) (>= (crops/ripe-age crop))))
@@ -165,7 +165,7 @@
                                (cond-> {:crops [crop] :area {:pos (:pos ripe) :radius crops/cut-radius}} ignore-zones? (assoc :ignore-zones? true))))]
         (cond
           (= :continue e) :continue
-          (not= :done (:kind e)) (do (ctx/update-mem! c update :given-up (fnil conj []) (:pos ripe)) :again)
+          (not= :done (:kind e)) (do (ctx/update-mem! c update :given-up into (or (seq (:skipped (:data e))) [(:pos ripe)])) :again)
           :else :again))
 
       (seq seen)
