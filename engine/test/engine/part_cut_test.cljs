@@ -79,8 +79,8 @@
     (doseq [[kind data] entries] (mem/write! s kind data {:cap 8 :ttl :forever}))
     (mem/view s)))
 
-(defn holds [t blocks & [entries inventory zones]]
-  (let [p (:p (lt/setup {:blocks blocks :inventory inventory}))]
+(defn holds [t blocks & [entries inventory zones unloaded]]
+  (let [p (:p (lt/setup (cond-> {:blocks blocks :inventory inventory} unloaded (assoc :unloaded unloaded))))]
     (t p (view entries) {} (ew/of-data {} {} (or zones [])) nil)))
 
 (deftest the-part-cut-tree-trigger-holds-for-a-hanging-trunk-only
@@ -105,7 +105,9 @@
     (is (true? (holds ro/replant-owed {} debt [sapling])))
     (is (false? (holds ro/replant-owed {} debt)) "no sapling carried: the trigger never fetches")
     (is (false? (holds ro/replant-owed {} [] [sapling])) "nothing owed")
-    (is (false? (holds ro/replant-owed {} debt [{:name "birch_sapling" :count 1}])) "another species")))
+    (is (false? (holds ro/replant-owed {} debt [{:name "birch_sapling" :count 1}])) "another species")
+    (is (false? (holds ro/replant-owed {} debt [sapling] nil ["6,64,0"]))
+        "the debt's cell is not loaded: the walk would end :not-loaded and refire")))
 
 (deftest plant-sapling-takes-the-debt-whose-sapling-is-carried-before-an-older-one
   (async done
