@@ -26,19 +26,19 @@
             {:no-event {:source :job :kind :shelter.exposed} :for-s 120 :until {:source :job :kind :shut-in.sealed}}]
    :after [[:block [16 -1 16] "dirt"]]
    :limit-s 140}
-  ;; Card b7d85dd0. A pit dug in 3 stone opens onto a lit tunnel 80 long; looking at the unseen edge of that tunnel must not walk the body
-  ;; down it (look-edge/max-edge-walk), as the flood of a cave once carried a body 150 blocks.
+  ;; Card b7d85dd0. A body roofed in the middle of a lit tunnel 96 long, whose ends it has not seen, must not walk to them to look
+  ;; (look-edge/max-edge-walk), as the flood of a cave once carried a body 150 blocks. Both ends are over 24 blocks away.
   {:name "pit-opening-onto-a-long-tunnel-does-not-edge-walk-down-it"
-   :time :night :time-why :night-light ; the job's dig-in decision reads the night sky; the tunnel's torches are the lit side the edge look needs
+   :time :any
    :plot {:length 96}
    :blocks [[:fill [0 -6 14] [95 -1 18] "stone"] [:fill [0 -5 16] [95 -4 16] "air"]
-            [:set [8 -5 16] "torch"] [:set [24 -5 16] "torch"] [:set [40 -5 16] "torch"] [:set [56 -5 16] "torch"] [:set [72 -5 16] "torch"] [:set [88 -5 16] "torch"]
-            [:fill [8 -3 8] [24 -1 24] "stone"]]
-   :body {:inventory [["iron_pickaxe" 1] ["cobblestone" 8]]}
+            [:set [8 -5 16] "torch"] [:set [24 -5 16] "torch"] [:set [40 -5 16] "torch"] [:set [56 -5 16] "torch"] [:set [72 -5 16] "torch"] [:set [88 -5 16] "torch"]]
+   :body {:at [48.5 -5 16.5] :inventory [["iron_pickaxe" 1] ["cobblestone" 8]]}
    :act [[:job (jobs.survival.night)]
          [:await {:source :job :kind :completed :data {:name "jobs.survival.night"}} 150]]
-   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 150 :of-job true}]
-   :after [[:body-near [16.5 -4 16.5] 30]]
+   :expect [{:no-event {:source :job :kind :child_started :data {:slot :edge-walk}} :for-s 150 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 150 :of-job true}]
+   :after [[:body-near [48.5 -5 16.5] 8]]
    :limit-s 170}
   {:name "no-site-logs-out-and-ends-exposed"
    :time :night-exclusive
