@@ -1092,12 +1092,23 @@
             (is (pos? (count (concat (calls p "sleep") (calls p "place")))) (str how " the hold looked for a bed again"))))))))
 
 (deftest a-failed-sleep-is-tried-again-once-the-entry-expires
-  (let [{:keys [eng p clock]} (setup {:time night :blocks (merge floor {"3,64,0" "red_bed"}) :floor [-4 -4 4 4]})
-        bed-to-use #(sh-beds/bed-to-use p (mem/view (:store eng)) 32 (constantly true))]
-    (mem/write! (:store eng) :sleep-failed {:pos {:x 3 :y 64 :z 0}} sh-beds/sleep-failed-policy)
-    (is (nil? (bed-to-use)) "the failed entry holds it off")
-    (swap! clock + (:ttl sh-beds/sleep-failed-policy) 1000)
-    (is (some? (bed-to-use)) "after the entry expired the bed is tried again")))
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup {:time night :blocks (merge floor {"3,64,0" "red_bed"}) :floor [-4 -4 4 4]})
+              tries (atom 0)
+              night-once (fn ^:async once [] (swap! clock + 11000) (.setTime (.-world p) night)
+                           (core/submit! eng '(jobs.survival.night {:settings {:jobs.lib.shelter.beds/max-days-awake 0}}) {})
+                           (await (tick-n eng 6)))]
+          (set! (.-sleep p) (fn [& _] (swap! tries inc) (js/Promise.resolve #js {:status "occupied"})))
+          (await (night-once))
+          (let [first-tries @tries]
+            (is (pos? first-tries))
+            (await (night-once))
+            (is (= first-tries @tries) "the failed entry holds it off")
+            (swap! clock + (:ttl sh-beds/sleep-failed-policy) 11000)
+            (await (night-once))
+            (is (< first-tries @tries) "after the entry expired the bed is tried again")))))))
 
 (deftest a-place-failure-holds-only-near-where-it-happened
   (let [p (tu/fake {:time night})]
