@@ -103,6 +103,7 @@
    ::explore {:default {:max-distance 64 :max-legs 12 :spend {:job-time 120}} :doc "jobs.explore.search options of the search for food (:explore true)." :spec map?}
    ::kept-lifted-below {:default -1 :doc "At this much food or less, with no food carried, the last adults of a kind (kept for breeding) are hunted too; -1 (default) never." :spec (a/int-in -1 20)}
    ::eat-bad-food {:default 6 :doc "At this much food or less the last resort eats harmful food carried (rotten flesh); above it harmful food is not food." :spec (a/num-in 0 20)}
+   ::max-chases {:default 3 :doc "Chases of one animal in a call before it is passed over as tried: a missed chase is repeated, a fleeing rabbit is chased again." :spec (a/int-in 1 nil)}
    ::max-ways {:default 12 :doc "Ways one call tries without getting fed before it ends :still-hungry." :spec (a/int-in 0 nil)}})
 
 (defn hunt-radius
@@ -113,6 +114,7 @@
 (defn drop-radius [] (settings/get settings ::drop-radius))
 
 (defn max-ways [] (settings/get settings ::max-ways))
+(defn max-chases [] (settings/get settings ::max-chases))
 
 (defn eat-bad-food [] (settings/get settings ::eat-bad-food))
 
@@ -202,7 +204,7 @@
 
 (defn ^:async hunt!
   "Kill the nearest food animal with the real job (combat.hunt; own?: animals.cull over its own pen): :again, or nil when
-  there is none (after a look around) or the walk to it is refused (risk). An animal is chosen once per job, killed or not."
+  there is none (after a look around) or the walk to it is refused (risk). A hunt that gave up on the animal (it fled) is repeated, up to ::max-chases times."
   [c own?]
   (let [target (await (animals/nearest-or-look c (animal-opts c own?)))
         animal (:entity target)]
@@ -215,9 +217,13 @@
             e (await (child/run!* c :kill job args))]
         (if (= :continue e)
           :continue
-          (do (ctx/update-mem! c update :skipped-animals (fnil conj []) (.-id animal))
-              (animals/note-kill! c target)
-              :again))))))
+          (let [id (.-id animal)
+                tries (inc (get-in (ctx/mem c) [:chases id] 0))]
+            (ctx/update-mem! c assoc-in [:chases id] tries)
+            (when (or (not= :gave-up (:reason (:data e))) (>= tries (max-chases)))
+              (ctx/update-mem! c update :skipped-animals (fnil conj []) id))
+            (animals/note-kill! c target)
+            :again))))))
 
 ;; ------------------------------------------------------------------ bread
 
@@ -362,11 +368,20 @@
   [found spared]
   (and (seq found) (every? #(and (:id %) (spared (:id %))) found)))
 
+(defn explore-again?
+  "Whether the search ran and passed-over animals have been met since (a miss, a pair, a baby), within child/max-fruitless searches: it runs again with them skipped."
+  [c]
+  (let [m (ctx/mem c)]
+    (boolean (and (:explored m) (:explored-spared m)
+                  (< (:explore-runs m 0) (child/max-fruitless))
+                  (> (count (spared-uuids c)) (:explored-spared m))))))
+
 (defn ^:async explore!
-  "Once per job, with nothing known or seen: search for food animals and ripe crops (jobs.explore.search, :explore),
+  "Once per job (again after meeting more passed-over animals, explore-again?), with nothing known or seen: search for food animals and ripe crops (jobs.explore.search, :explore),
   not in a dark sky (a body sheltered for the night stays in) nor in the dark or with danger near unless starving (safe-if-lit), nor underground (a hungry body under rock first climbs out, jobs.lib.surface-up; a starving one searches there), nor when risk refuses it. :again when the search found something to hunt or dig, else nil with what it
   covered remembered."
   [c]
+  (when (explore-again? c) (ctx/update-mem! c dissoc :explored))
   (let [e (:explore (:args c))]
     (cond
       (and e (:walk-to (ctx/mem c))) (await (walk-to-noted! c))
@@ -382,7 +397,7 @@
         (do (ctx/update-mem! c assoc :explored "not searched: no way up out of the cave") nil))
       :else
       (do
-        (ctx/update-mem! c assoc :explored "started" :explored-at (ctx/now c))
+        (ctx/update-mem! c #(-> % (assoc :explored "started" :explored-at (ctx/now c) :explored-spared (count (spared-uuids c))) (update :explore-runs (fnil inc 0))))
         (let [opts (widen-explore (merge (settings/get settings ::explore) (when (map? e) e)) (widen c))
               e (await (child/run!* c :explore 'jobs.explore.search
                                     (child/search-args (assoc opts :skip-ids (vec (spared-uuids c)) :target (vec (concat (sort animals/food-animals) (keys sources/ripe-age) (keys sources/wild-food)))))
@@ -392,7 +407,7 @@
             (let [res (:data e)]
               (ctx/update-mem! c assoc :found-reach
                                (reduce max 0 (for [{[x y z] :pos} (:found res) :when x] (+ 4 (u/dist (u/self-pos c) {:x x :y y :z z})))))
-              (if (only-spared? (:found res) (spared-uuids c))
+              (if (and (only-spared? (:found res) (spared-uuids c)) (< (:explore-runs (ctx/mem c)) (child/max-fruitless)))
                 (do (ctx/update-mem! c #(-> % (assoc :skip-ids (vec (spared-uuids c))) (dissoc :explored)))
                     :again)
                 (do

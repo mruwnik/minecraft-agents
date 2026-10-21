@@ -12,4 +12,12 @@
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:summon "cow" [24.5 0 24.5] "{NoAI:1b}"]
          [:job (jobs.survival.get-food {})]]
-   :expect [{:event {:source :job :kind :food.killed} :within-s 90}]}]}
+   :expect [{:event {:source :job :kind :food.killed} :within-s 90}]}
+  {:name "a-fleeing-lone-rabbit-is-chased-until-caught"
+   :time :any
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:summon "rabbit" [14.5 0 24.5]]
+         [:job (jobs.survival.get-food {})]]
+   :expect [{:event {:source :job :kind :food.killed} :within-s 90}]
+   :after [[:entities "type=rabbit,tag=wt" [[0 0 0] [31 3 31]] 0]]}]}

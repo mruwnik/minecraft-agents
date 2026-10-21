@@ -342,6 +342,34 @@
             (is (= [{:name "cow" :id 7 :why :baby :pos [5 64 0]}] (mapv #(select-keys % [:name :id :why :pos]) (:animals none))))
             (is (re-find #"passed over 1 animal \(cow: baby at \[" (str (:text none))))))))))
 
+(deftest a-missed-chase-is-repeated-then-the-animal-is-passed-over-as-tried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:food 1} :entities [cow]} :step-ms 5)
+              run* child/run!*
+              chases (atom 0)]
+          (with-redefs [child/run!* (fn ^:async f
+                                      ([c slot job args] (await (f c slot job args {})))
+                                      ([c slot job args opts]
+                                       (if (= :kill slot)
+                                         (do (swap! chases inc) {:kind :nothing-possible :data {:reason :gave-up :killed 0}})
+                                         (await (run* c slot job args opts)))))]
+            (core/submit! eng '(jobs.survival.get-food {:carry 0 :explore false}) {})
+            (await (tu/run-until-empty eng 40)))
+          (is (= 3 @chases) "a hunt that gave up is repeated max-chases times")
+          (is (= [:tried] (mapv :why (:animals (first (none-endings seen)))))))))))
+
+(deftest the-search-runs-again-only-after-meeting-more-passed-over-animals-and-within-the-fruitless-cap
+  (doseq [[mem spared again?] [[{:explored "x" :explored-spared 1 :explore-runs 1} #{1 2} true]
+                               [{:explored "x" :explored-spared 2 :explore-runs 1} #{1 2} false]
+                               [{:explored "x" :explored-spared 1 :explore-runs 3} #{1 2} false]
+                               [{:explored "not searched: dark" } #{1 2} false]
+                               [{:explored-spared 1} #{1 2} false]]]
+    (with-redefs [ctx/mem (constantly mem)
+                  get-food/spared-uuids (constantly spared)]
+      (is (= again? (get-food/explore-again? nil)) (pr-str mem spared)))))
+
 (deftest food-none-names-the-pair-seen-in-a-look-though-the-last-look-left-it-out-of-view
   (async done
     (tu/run-async done
