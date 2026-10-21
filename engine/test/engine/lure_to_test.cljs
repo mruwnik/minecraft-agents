@@ -564,6 +564,18 @@
               (is (< 10 (count (tu/walked-to (:eng s)))) (pr-str (tu/walked-to (:eng s)))))
             (finally (set! wsearch/round-budget budget))))))))
 
+(deftest a-far-target-whose-plan-search-finds-nothing-is-walked-toward-in-straight-legs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (with-redefs [escort/leg-plan (fn [_ _] (js/Promise.resolve {:searching true}))
+                      escort/max-search-rounds (constantly 1)]
+          (let [s (await (scenario {:pos {:x 38 :y 64 :z 0}} {:floor [-30 -30 40 30] :inventory wheat :entities [(cow 1 2)]} 10))
+                legs (tu/walked-to (:eng s))]
+            (is (not= :unreachable (:reason (done-event s))) "a search that finds nothing is not unreachable")
+            (is (< 2 (count legs)) (pr-str legs))
+            (is (every? #(< (:x %) 38) (butlast legs)) (pr-str legs))))))))
+
 (deftest the-leg-plan-may-open-gates-as-go-to-plans-them
   (async done
     (tu/run-async done
