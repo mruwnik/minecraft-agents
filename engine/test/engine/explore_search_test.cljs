@@ -341,6 +341,23 @@
           (is (= 8 (get-in e [:coverage :skipped])))
           (is (= :distance (:why e))))))))
 
+(deftest a-spot-walked-toward-twice-without-a-look-is-not-walked-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [marks (for [[x z] (search/spiral-points [0 0] 16 23)]
+                      {:kind :leg-tried :what ["diamond_block"] :pos [x 64 z] :n 2 :by "Other" :t 1 :until 9e15})
+              s (await (search! {:target "diamond_block" :max-distance 23} {} 400 #(write-other! % "Other" marks)))]
+          (is (= [] (walks s)))
+          (is (= :distance (:why (not-found-of s)))))))))
+
+(deftest a-walk-start-is-noted-for-the-next-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (search! {:target "diamond_block" :max-distance 23} {} 400))]
+          (is (some #(= :leg-tried (:kind %)) (file-notes s))))))))
+
 (deftest an-outward-search-goes-on-past-searched-ground-ahead
   (async done
     (tu/run-async done

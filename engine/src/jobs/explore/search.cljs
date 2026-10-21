@@ -110,6 +110,8 @@
    ::held-angle {:default 60 :doc "A leg lies the way a failed leg went when the angle between them, seen from the body, is under this many degrees." :spec (a/num-in 0 180)}
    ::held-near {:default 4 :doc "Blocks from where a leg failed within which its way still holds others back." :spec (a/num-in 0 nil)}
    ::near-sight {:default 6 :doc "Within this many blocks a look misses no animal: a noted animal not seen there is taken as gone." :spec (a/num-in 0 nil)}
+   ::leg-tries {:default 2 :doc "Walks toward one spot (any job or body) that may start before the spot is dropped as tried; counted in notes, so a walk cut off by a reflex (a drowning) counts too." :spec (a/int-in 1 nil)}
+   ::leg-tried-ttl-s {:default 3600 :doc "Seconds a note of a walk started toward a spot lasts." :spec (a/num-in 0 nil)}
    ::stand-cap {:default 48 :doc "Stand cells one choice reads; past it :more says candidates are left for the next step." :spec (a/int-in 0 nil)}})
 (defn distance-limit [] (settings/get settings ::max-distance))
 (defn time-s [] (settings/get settings ::job-time-s))
@@ -402,6 +404,14 @@
                 (range (inc (js/Math.ceil (/ max-distance spacing))))))
       (sort-by #(xz-dist [x z] %) (spiral-points [ox oz] spacing max-distance)))))
 
+(defn leg-tries
+  "How many walks toward the XZ point [x z] were started and not followed by a look there (:leg-tried notes within the leg spacing's third)."
+  [ns names [x z]]
+  (transduce (comp (filter #(and (= :leg-tried (:kind %)) (every? (set (:what %)) names)
+                                 (<= (xz-dist [x z] [((:pos %) 0) ((:pos %) 2)]) 3)))
+                   (map :n))
+             (completing max) 0 ns))
+
 (defn stand-cap [] (settings/get settings ::stand-cap))
 (defn near-sight [] (settings/get settings ::near-sight))
 
@@ -452,6 +462,7 @@
         (or (tried pt) (> (xz-dist pt origin) max-distance) (= pt [ox oz])) (recur more reads acc)
         (held? (:blocked m) [ox oz] pt) (recur more reads (update acc :held inc))
         (some #(notes/covers? % pt names) ns) (recur more reads (-> acc (update :tried conj pt) (update :skipped inc)))
+        (>= (leg-tries ns names pt) (settings/get settings ::leg-tries)) (recur more reads (-> acc (update :tried conj pt) (update :failed conj {:pos [(pt 0) y (pt 1)] :reason :tried-before})))
         :else (let [{sy :y fail :fail} (let [r (stand-cell block-at (pt 0) (pt 1) y)] (if (underground? (:y r) pt) {:fail :underground} r))
                     failed {:pos [(pt 0) y (pt 1)] :reason fail}
                     step (when (= :unseen fail)
@@ -469,6 +480,14 @@
   "Whether go-to's result res is an interruption (the walk was cut or the body pushed about), not a verdict on the leg."
   [{:keys [why reason]}]
   (boolean (or (interrupted why) (interrupted reason))))
+
+(defn note-leg-start!
+  "Note a walk toward the spot started, counting those before it: the walk may end in a reflex that drops the whole job
+  (a drowning), and the next job's search then knows the spot was tried."
+  [c [x y z]]
+  (let [names (targets c)
+        n (inc (leg-tries (notes/notes c) names [x z]))]
+    (notes/note! c [{:kind :leg-tried :what (vec names) :pos [x y z] :n n :ttl-ms (* 1000 (settings/get settings ::leg-tried-ttl-s))}])))
 
 (defn ^:async walk!
   "One go-to call toward the leg (the last one before the failed legs in a row end the search may dig out); on its end book the leg arrived or failed. :continue when go-to yields, else :again
@@ -535,6 +554,7 @@
         (cond
           leg (do (ctx/update-mem! c (fn [m] (-> m (assoc :leg leg :leg-column column)
                                                  (update :legs (fnil + 0) (if step 0 1)))))
+                  (note-leg-start! c leg)
                   (await (walk! c)))
           more :again
           (and (empty? unloaded) (pos? held)) (do (ctx/update-mem! c dissoc :blocked) :again)
