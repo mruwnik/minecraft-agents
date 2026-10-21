@@ -108,6 +108,7 @@
    ::off-bed-tries {:default 3 :doc "Walks off a bed or bottom slab the body stands on, before the roof cells over it are given up." :spec (a/int-in 1 nil)}
    ::hole-depth {:default 2 :doc "Levels of walls round the body from its feet up that make it a body in a hole, whose walks may climb out." :spec (a/int-in 1 nil)}
    ::hole-walks {:default 2 :doc "Walks in a row that fail from a hole after which the build stops :shut-in." :spec (a/int-in 1 nil)}
+   ::stall-steps {:default 3 :doc "Steps in a row that return :again with the job memory unchanged (nothing placed, dug, walked or booked) after which the build stops :stalled." :spec (a/int-in 1 nil)}
    ::budget-streak {:default 4 :doc "Places or digs in a row (no cell placed or dug between) whose walk ended :unreachable :budget (a search that flooded the loaded land and found no stand) after which the build stops :unreachable: the next cells would flood the same land." :spec (a/int-in 1 nil)}
    ::look-range {:default 16 :doc "Cells farther than this from the eye are walked to, not looked at: they may be unloaded, which a look cannot tell." :spec (a/num-in 0 nil)}
    ::cell-s {:default 3 :doc "Seconds one cell of the plan is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
@@ -445,9 +446,20 @@
 
 (defn ^:async round
   "The whole attempt: loop the steps until the plan is built or nothing more applies (finish); :continue only while a
-  walk or a fetch waits on the world."
+  walk or a fetch waits on the world. Steps that go round again with nothing booked end it :stalled, so the body is
+  never held with no act."
   [c]
-  (await (pace/steps! c (fn ^:async s [] (await (step c))))))
+  (let [same (volatile! 0)]
+    (await (pace/steps! c (fn ^:async s []
+                            (let [before (ctx/mem c)
+                                  r (await (step c))]
+                              (cond
+                                (or (not= :again r) (not= before (ctx/mem c))) (do (vreset! same 0) r)
+                                (< (vswap! same inc) (settings/get settings ::stall-steps)) r
+                                :else (ctx/end c :nothing-possible :stalled
+                                               (assoc (result-data c (:cells (planned c)))
+                                                      :text (str "build of " (:plan (:args c)) " stopped: " (settings/get settings ::stall-steps)
+                                                                 " steps in a row did nothing and booked nothing")))))))))) 
 
 (defn ^:async cleanup
   "However the call ends: take the scaffold back."

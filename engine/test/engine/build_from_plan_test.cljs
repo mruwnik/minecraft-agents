@@ -307,6 +307,17 @@
               _ (await (child-outcome eng job {:plan "roof"} 300))]
           (is (some #(= :swalk (:slot %)) (h/events-of seen :child_started)) "the scaffold stand is walked to instead of the place walking again"))))))
 
+(deftest steps-that-go-round-again-with-nothing-booked-stop-the-build-stalled
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [already {:ways [:carried] :round (fn ^:async w [c] (ctx/end c :done nil {:reason :already}))}
+              plan {:id "post" :parts [{:id "p" :cells [[3 64 3]] :want "oak_fence"}]}
+              {:keys [eng]} (start {:inventory kit :self {:pos {:x 3.5 :y 64 :z 1.5}}} {"post" plan} [] {'jobs.blocks.place already})
+              result (await (child-outcome eng job {:plan "post"} 300))]
+          (is (= [:nothing-possible :stalled] [(get-in result [:ending :kind]) (get-in result [:ending :cause])]) (pr-str result))
+          (is (= [[3 64 3]] (:missing result))))))))
+
 (deftest the-hole-in-the-roof-of-a-sealed-room-gets-a-scaffold-stand-when-the-walks-end-budget
   (async done
     (tu/run-async done
