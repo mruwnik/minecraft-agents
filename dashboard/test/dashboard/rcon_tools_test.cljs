@@ -4,7 +4,7 @@
 
 (def t "ClaudeProbe")
 
-(def hostile ["zombie" "skeleton" "creeper" "spider" "enderman" "witch" "drowned" "husk" "stray" "zombie_villager"
+(def hostile ["zombie" "skeleton" "creeper" "spider" "enderman" "witch" "drowned" "husk" "stray" "parched" "bogged" "zombie_villager"
               "phantom" "slime" "pillager" "vindicator"])
 
 (defn build [argv] (vec (tools/build-command (clj->js argv) [t])))
