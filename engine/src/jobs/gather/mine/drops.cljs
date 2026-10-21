@@ -20,7 +20,8 @@
 
 (a/defargs settings
   {::pickup-grace-ms {:default 400 :doc "How long the body waits for a drop to be picked up, in ms." :spec (a/int-in 0 nil)}
-   ::drop-cut-max {:default 4 :doc "The most cells dug to open a way beside a dug cell whose drop did not come in and that no walk gets beside; 0: no such cut." :spec (a/int-in 0 nil)}})
+   ::drop-cut-max {:default 4 :doc "The most cells dug to open a way beside a dug cell whose drop did not come in and that no walk gets beside; 0: no such cut." :spec (a/int-in 0 nil)}
+   ::target-cut-max {:default 12 :doc "The most cells dug to open a way beside a seen ore that no walk gets beside; 0: no such cut." :spec (a/int-in 0 nil)}})
 
 (defn pickup-grace-ms [] (settings/get settings ::pickup-grace-ms))
 
@@ -89,6 +90,7 @@
   (await (blocks/dig-cell! c pos {:accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
 
 (defn drop-cut-max [] (settings/get settings ::drop-cut-max))
+(defn target-cut-max [] (settings/get settings ::target-cut-max))
 
 (defn drop-cut
   "The cells to dig, in walking order, for the cheapest way (jobs.lib.dig-route, falls of 1 at most, a cell never seen
@@ -104,13 +106,13 @@
          first)))
 
 (defn ^:async cut-to-drop!
-  "Open a way beside the dug cell (drop-cut), one dig child per cell, at most ::drop-cut-max tries per dug cell; the
+  "Open a way beside the cell dug (drop-cut), one dig child per cell, at most cap tries per cell (a dug cell's drop: ::drop-cut-max; a seen ore: ::target-cut-max); the
   way is planned again after each dig and a look at what it laid open. :cut (open: walk again), :partial (a dig waits on
   the world) or nil (no way, or a dig failed)."
-  [c dug]
+  [c dug cap]
   (loop []
     (let [n (get-in (ctx/mem c) [:drop-cut dug] 0)
-          cells (drop-cut c dug (- (drop-cut-max) n))]
+          cells (drop-cut c dug (- cap n))]
       (cond
         (nil? cells) nil
         (empty? cells) :cut
@@ -192,7 +194,7 @@
             w (await (go!))
             w (if (and (= :blocked w) (await (look-floor-toward! c dug-at))) (await (go!)) w)
             cut (when (and (= :blocked w) (not (ways/stay-level? (:args c))) (cut-after? (near/last-walk c)))
-                  (await (cut-to-drop! c dug-at)))
+                  (await (cut-to-drop! c dug-at (drop-cut-max))))
             w (case cut :cut (await (go!)) :partial :partial w)]
         (when (= :there w) (await (peek-over-lip! c dug-at)))
         (when-not (= :partial w) (ctx/update-mem! c assoc :drop-walked dug-at))

@@ -9,7 +9,7 @@
             [engine.settings :as settings]
             [jobs.gather.mine.cause :as cause]
             [jobs.gather.mine.descent :refer [descend-due? descend-round! shaft-due? shaft-under-way? shaft-round!]]
-            [jobs.gather.mine.drops :refer [collect! dig-cell!]]
+            [jobs.gather.mine.drops :refer [collect! dig-cell! cut-to-drop! cut-after? target-cut-max]]
             [jobs.gather.mine.end :refer [stop! wanted]]
             [jobs.gather.mine.branch :as branch]
             [jobs.gather.mine.side :as wall]
@@ -267,8 +267,17 @@
       (and (some? pos) (way-floor c [pos])) (do (skip! c pos) :again)
       (and (some? pos) (last-exit? c pos)) (do (ctx/emit! c :mine.spared-exit :info {:pos (access/cell pos) :text (str "mine leaves " (str/join "," (access/cell pos)) ": it is the body's last way out")})
                                                (skip! c pos) :again)
-      (some? pos) (let [walked (await (walk-to-dig! c pos))]
+      (some? pos) (let [walked (await (walk-to-dig! c pos))
+                        cell (access/cell pos)
+                        cut (when (and (= :blocked walked) (not (mw/stay-level? (:args c))) (cut-after? (near/last-walk c))
+                                       (not (#{:off-plan :needs-health} (result/why (near/last-walk c))))
+                                       (not (contains? (:target-cut (ctx/mem c)) cell)))
+                              (let [r (await (cut-to-drop! c cell (target-cut-max)))]
+                                (ctx/emit! c :mine.cut-toward :info {:pos cell :result r :text (str "mine cuts toward " (str/join "," cell) ": " (or (some-> r name) "no way"))})
+                                r))]
                     (cond
+                      (= :cut cut) (do (ctx/update-mem! c update :target-cut (fnil conj #{}) cell) :again)
+                      (= :partial cut) :continue
                       (and (= :blocked walked) (result/unreachable-walk? (near/last-walk c))) (do (skip-unreachable! c pos) :again)
                       (= :blocked walked) (let [w (near/last-walk c)]
                                             (ctx/emit! c :mine.walk-failed :info {:pos (access/cell pos) :why (result/why w) :cause (contract/cause-key w)

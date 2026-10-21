@@ -1,0 +1,13 @@
+;; jobs.gather.mine and seen ore it cannot walk to (card f7ccc5a7): the ore is seen through a glass wall five blocks thick that spans the plot; the mine cuts through the wall to stand beside it and takes the ore instead of skipping it as out of reach.
+;; Dirt floor; body at [16.5 0 16.5] with a stone pickaxe; the wall is x 20..24, the ore at [26 0 16].
+{:defaults
+ {:tags [:mine :jobs] :time :any
+  :plot {:light :lit :height 12 :floor "dirt"}
+  :body {:at [16.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "seen-ore-behind-glass-is-cut-to"
+   :blocks [[:fill [20 0 0] [24 12 31] "glass"] [:set [26 0 16] "iron_ore"]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :item "raw_iron" :count 1 :radius 12 :ways #{:seen}})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 150 :of-job true}]
+   :after [[:item "raw_iron" 1] [:not-block [26 0 16] "iron_ore"]]}]}
