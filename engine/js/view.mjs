@@ -494,8 +494,8 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   const writeHud = coalescedWriter(hudFile(stateDir, world, agent), err => reportError(err))
 
   // main-thread time here (snapshot, change key, stringify) is counted as poseMs, apart from the column ms
-  const tickPose = () => {
-    if (!bot || !live) return Promise.resolve()
+  const tickPose = (force = false) => {
+    if (!bot || !(live || force)) return Promise.resolve()
     const start = performance.now()
     const json = (() => {
       try {
@@ -523,8 +523,8 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     return track(writePose(json))
   }
 
-  const tickHud = () => {
-    if (!bot || !live) return Promise.resolve()
+  const tickHud = (force = false) => {
+    if (!bot || !(live || force)) return Promise.resolve()
     const hud = (() => {
       try { return timed(() => hudSnapshot(bot, now())) } catch (err) { reportError(err); return null }
     })()
@@ -648,6 +648,8 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     try { tableFor(target) } catch (err) { reportError(err) }
     stats.relightTableMs += performance.now() - tableStart
     startTimers()
+    // an unwatched body still announces itself once: /agents lists bodies by their pose file
+    if (!live && mode === 'demand') { tickPose(true).catch(reportError); tickHud(true).catch(reportError) }
     checkWatch().catch(reportError)
   }
 
@@ -656,7 +658,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     unhook()
     unhook = () => {}
     bot = null
-    if (!live) return Promise.resolve()
+    if (!live && !lastPose) return Promise.resolve()
     return track(writePose(JSON.stringify(offlinePose({ world, now: now(), mcVersion, last: lastPose }))))
   }
 

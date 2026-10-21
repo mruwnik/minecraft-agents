@@ -540,7 +540,9 @@ test('demand mode dumps only while the watch marker is fresh, and dumps the load
   await view.flushColumns()
   await view.tickPose()
   assert.equal(view.isLive(), false)
-  assert.deepEqual(fs.readdirSync(dir), [])
+  await view.idle()
+  assert.deepEqual(fs.readdirSync(path.dirname(poseFile(dir, 'w', 'Bob'))).sort(), ['hud.json', 'pose.json']) // the one announcement, no columns
+  assert.equal(fs.existsSync(worldChunks(dir)), false)
   bot.emit('blockUpdate', null, { position: new Vec3(3, 70, 3), stateId: stone })
   assert.equal(view.pendingCount(), 0) // nothing is dumped while off, so nothing is queued
 
