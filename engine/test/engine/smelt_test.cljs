@@ -228,6 +228,7 @@
           (is (= 1 (count (of-kind seen :job.notify))) "while it cooks the body does the other job")
           (is (= ["read" "load"] (ops p)) "and the furnace is left alone")
           (is (= 1 (count (:list (core/state eng)))) "the smelt job stays listed")
+          (is (some #(and (= :holding (:kind %)) (= :cooking (:reason %))) @seen) "the wait for the cook is declared")
           (swap! clock + 20000)
           (await (ticks eng 3))
           (is (= ["read" "load"] (ops p)) "20 s after the load three items are not cooked: still not looked at")

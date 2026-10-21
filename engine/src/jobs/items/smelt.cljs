@@ -348,7 +348,7 @@
   a body that cannot have one stops before it spends logs on fuel), fetch the missing input and fuel, reach the
   furnace, read it, then load (first) or collect. A furnace out of sight is looked for once by can-start? (a :look status); none after that ends no-furnace-seen."
   [c]
-  (or (when (cooking-in? c (ctx/mem c)) :continue)
+  (or (when (cooking-in? c (ctx/mem c)) (ctx/hold-still! c :cooking) :continue)
       (when (and (:furnace (ctx/mem c)) (nil? (furnace-to-reach c)))
         (ctx/update-mem! c dissoc :furnace)
         nil)
