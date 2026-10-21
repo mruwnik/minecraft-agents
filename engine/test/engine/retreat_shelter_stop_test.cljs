@@ -131,7 +131,8 @@
     (is (= "stone" (dig-look/rock-name (sensing-stub face) (cell 0 0 0))) "a seen solid face behind it")
     (is (nil? (dig-look/rock-name (sensing-stub (assoc face [0 1 0] "air")) (cell 0 0 0))) "a seen open neighbour would have shown it")
     (is (= "stone" (dig-look/rock-name (sensing-stub (assoc face [0 1 0] "air")) (cell 0 0 0) #{(cell 0 1 0)})) "except: the way in is open")
-    (is (nil? (dig-look/rock-name (sensing-stub {}) (cell 0 0 0))) "nothing seen near")))
+    (is (nil? (dig-look/rock-name (sensing-stub {}) (cell 0 0 0))) "nothing seen near")
+    (is (= "dirt" (dig-look/rock-name (sensing-stub {[1 0 0] "grass_block"}) (cell 0 0 0))) "soil behind it is dug by hand, not read as stone")))
 
 ;; ------------------------------------------------------------------ the pit's first dig
 
@@ -298,6 +299,14 @@
           (is (= 1 (+ (Math/abs (- (:x lo) 0)) (Math/abs (- (:z lo) 0)))) "beside the feet")
           (is (= (update lo :y inc) hi) "head cell over it")
           (is (= (:to (first (:steps plan))) (update lo :y dec)) "the first drop is into the side column"))))))
+
+(deftest an-empty-pack-in-soil-digs-a-pit-with-the-dirt-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (update (closed-cell-world nil) :blocks (fn [bs] (update-vals bs #(if (= "stone" %) "dirt" %))))
+              p (seen-closed-cell (assoc w :inventory []) true)]
+          (is (some? (pit/pit-plan (plan-ctx p) (cell 0 64 0))) "dirt below the surface is not read as stone the bare hand cannot clear"))))))
 
 (deftest a-closed-cell-with-walls-it-cannot-dig-gets-no-pit
   (async done

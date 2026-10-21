@@ -41,10 +41,12 @@
 
 (def loose-ground #{"sand" "red_sand" "gravel"})
 
+(def soil #{"dirt" "grass_block" "coarse_dirt" "podzol" "mycelium" "rooted_dirt"})
+
 (defn rock-name
   "The block name at cell as a player reads rock: what the body sees or remembers, else for a loaded cell it has
   not sensed the nearest seen solid block behind it within rock-depth cells along some axis (as loose-ground: sand and
-  gravel are dug by hand and fall) or \"stone\" (any other), when no neighbour is seen open (an open neighbour would have
+  gravel are dug by hand and fall; soil reads \"dirt\") or \"stone\" (any other), when no neighbour is seen open (an open neighbour would have
   shown it; cells in except, the way in, are not counted). nil when it is not loaded or no seen face is near. The shelter
   plans (pit, pocket, niche) read the rock they dig through this way, then dig to see (jobs.lib.dig-look)."
   ([p cell] (rock-name p cell #{}))
@@ -56,7 +58,7 @@
               nearest (->> neighbours (keep (fn [d] (when-let [n (behind d)] [(count (take-while #(nil? (name-at d %)) (range 1 (inc (rock-depth))))) n]))) sort first second)]
           (when (and (every? #(or (nil? %) (solid/solid? %)) (map #(when-not (except (shift cell %)) (name-at % 1)) neighbours))
                      nearest)
-            (if (loose-ground nearest) nearest "stone")))))))
+            (cond (loose-ground nearest) nearest (soil nearest) "dirt" :else "stone")))))))
 
 (defn rock-solid?
   "Whether cell is solid rock as the body reads it (rock-name)."
