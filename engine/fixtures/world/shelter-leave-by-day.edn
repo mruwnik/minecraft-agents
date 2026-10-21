@@ -30,8 +30,10 @@
    :after [[:body-near [16.5 -2 21.5] 3]]},
   {:name "dawn-hold-names-the-husk-over-the-shaft"
    :mobs :keep
+   :settings {:jobs.lib.dawn/unarmed-grace-ticks 24000}
+   :register []
    :act [[:summon "husk" [16.5 0 17.5] "{NoAI:1b}"] [:until-seen {:entity "husk"} 10]
-         [:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
-   :expect [{:event {:source :job :kind :night.dawn-hold :data {:text [:contains "husk seen"]}} :within-s 60}
+         [:job (jobs.survival.leave-shelter {})]]
+   :expect [{:event {:source :job :kind :holding :data {:reason [:contains "first light: husk seen"]}} :within-s 60}
             {:no-event {:source :job :kind :dig-in.left} :for-s 20}]
    :after [[:body-near [16.5 -2 16.5] 2]]}]}
