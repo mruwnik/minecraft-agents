@@ -288,7 +288,7 @@
           (is (= {:kind :condition-failed :cause :no-crop-seen} (kc e))))
         (is (= {:kind :condition-failed :cause {:reason :no-zones}}
                (kcm (await (ending-of (ht/start {:world ht/zoned-world :shared (ew/of-data {} {} nil)}) harvest {:area {:pos {:x 0 :y 64 :z 0} :radius 6}} 20)))))
-        (is (= {:kind :condition-failed :cause {:reason :refused}}
+        (is (= {:kind :condition-failed :cause {:reason :refused :zones ["farm"] :claims [] :plans []}}
                (kcm (await (ending-of (ht/start {:world ht/zoned-world :shared (ew/of-data {} {} [(ht/zone-over-crop "Miles")])}) harvest {:area {:pos {:x 0 :y 64 :z 0} :radius 6}} 20)))))
         (is (= {:kind :done :cause :already}
                (kc (await (ending-of (ht/start {:world {:blocks (ht/field "wheat" 3 [2 3] [2]) :ages (ht/ages 3 [2 3] [2])}}) harvest {} 20)))))))))

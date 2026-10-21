@@ -10,6 +10,7 @@
             [jobs.lib.job-common :as common]
             [jobs.farm.field :as fld]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.access :as access]
             [jobs.lib.gate :as gate]
             [jobs.lib.crops :as crops]
             [jobs.lib.look :as look]
@@ -234,7 +235,9 @@
               (:collect m)
               (and (cutting? c) (seq (ripe-of c (:skipped m))))
               (blind? c)) nil
-          (and (cutting? c) (seq (ripe-raw c (:skipped m)))) {:reason :refused}
+          (and (cutting? c) (seq (ripe-raw c (:skipped m))))
+          (assoc (access/refusal-fields (:refusals (gate/look c (cut-action c) (ripe-raw c (:skipped m)) {:except (fa/plan c) :own-plans-ok? true})))
+                 :reason :refused)
           :else {:reason :nothing-to-do}))))
 
 (defn can-run? [c] (pf/plan-can-run? (planned c)))

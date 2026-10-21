@@ -38,6 +38,7 @@
    :plans [{:id "theirs" :metadata {:by "Other"}
             :parts [{:id "row" :box [#at [10 0 20] #at [13 0 20]] :want {:crop "wheat"}}]}]
    :act [[:job (jobs.farm.harvest {:area {:pos #xyz [10 0 14] :radius 16}})]]
-   :expect [{:no-event {:source :job :kind :completed} :for-s 40 :of-job true}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :refused :text [:contains "refused by plan"]}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 40 :of-job true}]
    :after [[:item "wheat" 0] [:block [10 0 20] "wheat[age=7]"]]
    :limit-s 60}]}
