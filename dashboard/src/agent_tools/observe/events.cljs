@@ -1,6 +1,10 @@
 (ns agent-tools.observe.events
   "observe.mjs events: a bounded, paged look at the retained past events (the post-mortem of a death, a job, a reflex)."
-  (:require [agent-tools.job-results :as job-results]))
+  (:require [agent-tools.job-results :as job-results]
+            [cljs.reader :as reader]
+            [clojure.string :as str]
+            ["node:fs/promises" :as fsp]
+            ["node:path" :as path]))
 
 (def default-limit 20)
 (def max-limit 64)
@@ -64,12 +68,38 @@
       (pos? (or unsearched 0)) (assoc :older-not-searched unsearched
                                       :note (str "only the newest " (count events) " events were searched; " unsearched " older ones were not")))))
 
+(defn log-files
+  "The kept log files of the events.sock in dir, oldest first: events.edn.N ... events.edn.1, events.edn."
+  [names]
+  (let [rank #(if-let [n (second (re-matches #"events\.edn\.(\d+)" %))] (- (js/parseInt n)) 1)]
+    (->> names (filter #(re-matches #"events\.edn(\.\d+)?" %)) (sort-by rank))))
+
+(defn ^:async kept-events!
+  "The events of the given kinds (and deaths, for --since/--until death) in every kept log file next to the socket,
+  or nil when there is no log there. A substring test on each line skips the parse of the rest."
+  [socket-path kinds]
+  (let [dir (.dirname path socket-path)
+        names (try (log-files (await (.readdir fsp dir))) (catch :default _ nil))
+        needles (map #(str ":kind :" %) (conj (set kinds) "died"))]
+    (when (seq names)
+      (loop [[f & more] names out []]
+        (if-not f
+          out
+          (let [text (try (await (.readFile fsp (.join path dir f) "utf8")) (catch :default _ ""))
+                found (->> (str/split-lines text)
+                           (filter (fn [line] (some #(str/includes? line %) needles)))
+                           (keep (fn [line] (try (reader/read-string line) (catch :default _ nil)))))]
+            (recur more (into out found))))))))
+
 (defn ^:async read!
   "The query's answer from the retained history (job-results/history! with the result window; a --job's recorded end stands in when its stopped event has aged out): {:ok true :events .. :next-before ..
   :window {:scanned n :oldest-seq s :partial? bool}}, or {:ok false :reason :no-death-retained}."
   [get! socket-path {:keys [since until job] :as query} now-ms]
-  (let [history (await (job-results/history! get! socket-path (cond-> {:limit job-results/result-limit}
-                                                                 job (assoc :record-ids [job]))))
+  (let [kept (when (and (seq (:kinds query)) (nil? job)) (await (kept-events! socket-path (:kinds query))))
+        history (if kept
+                  {:events kept}
+                  (await (job-results/history! get! socket-path (cond-> {:limit job-results/result-limit}
+                                                                  job (assoc :record-ids [job])))))
         events (cond-> (:events history)
                  job (job-results/with-recorded (get-in history [:snapshot :generation-id]) (:recorded history) [job]))
         since-ms (when since (resolve-time since events now-ms))

@@ -1471,6 +1471,20 @@
     (is (re-find #"50 older" (:note (observe-events/window history events))))
     (is (nil? (:note (observe-events/window {:snapshot {:cursor {:seq 2}}} [{:seq 1} {:seq 2}]))))))
 
+(deftest kept-events-reads-every-log-file-for-the-kinds-asked
+  (async done
+    (let [dir (.mkdtempSync fs (.join path (.tmpdir os) "kept-"))
+          line (fn [seq kind] (str "{:seq " seq ", :source :body, :kind :" kind "}\n"))]
+      (.writeFileSync fs (.join path dir "events.edn.1") (str (line 1 "hurt") (line 2 "planned") (line 3 "died")))
+      (.writeFileSync fs (.join path dir "events.edn") (str (line 4 "planned") (line 5 "hurt")))
+      (.writeFileSync fs (.join path dir "events.edn.debug") (line 9 "hurt"))
+      (finish! done
+               (-> (observe-events/kept-events! (.join path dir "events.sock") #{"hurt"})
+                   (.then (fn [events]
+                            (is (= [1 3 5] (mapv :seq events)) "hurts and deaths from the old file too, oldest first, no debug chain")
+                            (.rmSync fs dir #js {:recursive true :force true})))))))
+  )
+
 (deftest observe-events-without-filters-is-the-newest-page-and-is-bounded
   (async done
     (finish! done
