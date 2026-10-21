@@ -6,6 +6,7 @@
 (a/defargs settings
   {:jobs.movement.go-to.tuning/max-blocked {:default 3 :doc "Fruitless walks of a go-to call in a row before it gives up (or escalates)." :spec (a/int-in 1 nil)}
    :jobs.movement.go-to.tuning/max-searching {:default 100 :doc "Search slices in a row whose search is still going on and began afresh (a body pushed or drifting off its search's start every slice) before a go-to gives up; a search that goes on from the same cell always ends after the planner's maxNodes." :spec (a/int-in 1 nil)}
+   :jobs.movement.go-to.tuning/budget-near {:default 6 :doc "Blocks from the goal at or under which a walk whose search ran out of nodes (:budget) is read as a goal walled in, so the call digs toward it (a door approach blocked by one block) instead of giving up." :spec (a/num-in 0 nil)}
    :jobs.movement.go-to.tuning/max-escalations {:default 3 :doc "Ways out in a row, none starting nearer the goal than one before, that a go-to tries before it gives up." :spec (a/int-in 1 nil)}
    :jobs.movement.go-to.tuning/y-slack {:default 4 :doc "Blocks a go-to :pos y with no standable cell within :range may be re-aimed up or down its column to the ground; 0: never." :spec (a/int-in 0 nil)}
    :jobs.movement.go-to.tuning/goal-danger {:default :wait :doc "When a go-to's goal lies within the full-cost radius of a known mob the body would flee: :wait (walk on; an info goal-in-danger says so once), :end (give up at once, :why :goal-dangerous with the mob)." :spec #{:wait :end}}
@@ -36,6 +37,7 @@
 
 (defn max-blocked [] (settings/get settings :jobs.movement.go-to.tuning/max-blocked))
 (defn max-searching [] (settings/get settings :jobs.movement.go-to.tuning/max-searching))
+(defn budget-near [] (settings/get settings :jobs.movement.go-to.tuning/budget-near))
 (defn max-escalations [] (settings/get settings :jobs.movement.go-to.tuning/max-escalations))
 (defn y-slack [] (settings/get settings :jobs.movement.go-to.tuning/y-slack))
 (defn goal-danger [] (settings/get settings :jobs.movement.go-to.tuning/goal-danger))

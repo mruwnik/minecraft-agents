@@ -21,7 +21,7 @@
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.holes :refer [may-dig-fn own-placed-fn]]
             [jobs.movement.go-to.result :as end]
-            [jobs.movement.go-to.tuning :refer [max-blocked max-route-s]]
+            [jobs.movement.go-to.tuning :refer [budget-near max-blocked max-route-s]]
             [jobs.movement.go-to.way-steps :as ways]))
 
 (defn skips
@@ -106,11 +106,15 @@
     (climb/recut feet (ledger/ways-of c))))
 
 (defn goal-walled?
-  "Whether a give-up with result is a free body's (not escape/enclosed?) whose goal the planner proved walled in: the
-  ways that change the world run toward the goal (goal-way)."
+  "Whether a give-up with result is a free body's (not escape/enclosed?) whose goal the planner proved walled in, or whose
+  search spent its node budget (:budget) with the body within budget-near of the goal (:goal-left): a goal that close
+  with no whole way found is walled off, whatever the flood could not prove. The ways that change the world run toward
+  the goal (goal-way)."
   [c result]
-  (and (= :goal-enclosed (some-> (:reason result) keyword))
-       (not (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword)))))
+  (boolean
+   (and (or (= :goal-enclosed (some-> (:reason result) keyword))
+           (and (= :budget (some-> (:reason result) keyword)) (some-> (:goal-left result) (<= (budget-near)))))
+       (not (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword))))))
 
 (defn route-cells
   "[{:cell :block :guess}]: the cheapest cells to dig for a walk from feet cell from down or across into goal

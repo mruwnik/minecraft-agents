@@ -570,3 +570,10 @@
           (is (<= 72 (second (feet p))))
           (is (= [:stair] (take 1 (mapv :step (events-of seen :go-to.escalated)))) "a pillar under unseen dirt is not first")
           (is (empty? (events-of seen :go-to.retrying)) "the partial walk down its own stair is not taken"))))))
+
+(deftest a-budget-give-up-close-to-the-goal-reads-as-a-walled-in-goal
+  (let [c {:primitives (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (box -20 63 -20 20 63 20 "stone")})}
+        walled? #(choose/goal-walled? c %)]
+    (is (true? (walled? {:status :no-path :reason :budget :goal-left 3})) "three blocks off")
+    (is (false? (walled? {:status :no-path :reason :budget :goal-left 40})) "far off: the unseen land is the problem")
+    (is (false? (walled? {:status :no-path :reason :budget})) "no distance known")))

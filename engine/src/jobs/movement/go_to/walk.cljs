@@ -430,7 +430,9 @@
                 _ (note-fault! c walked)
                 unstuck? (await (unstick/swim-out! c pos walked))
                 [starts looped?] (note-start (:starts (ctx/mem c)) (mapv #(js/Math.floor (% from)) [:x :y :z]) best)
-                result (cond-> result looped? (assoc :status :no-path :reason (if (escape/enclosed? (:primitives c) doors) :start-enclosed :no-progress)))
+                result (cond-> result
+                         looped? (assoc :status :no-path :reason (if (escape/enclosed? (:primitives c) doors) :start-enclosed :no-progress))
+                         (= :budget (some-> (:reason result) keyword)) (assoc :goal-left left))
                 progress? (and (not looped?) (or (< left (dec best)) explored? nearer? (learned-round? result)))
                 tries (cond looped? (max-blocked) progress? 0 :else (inc (:blocked (ctx/mem c) 0)))]
             (when-not progress? (ctx/book-try! c 'jobs.movement.go-to (or (:reason result) :no-progress)))

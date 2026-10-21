@@ -1,0 +1,15 @@
+;; Card 5bcdc1e0: a closed hut whose only door has one dirt block in front of it (a night seal left behind). go-to into the hut digs the
+;; block instead of giving up "no path (budget)"; go-to puts the dirt back after; the walk then goes through the door and shuts it.
+{:defaults
+ {:tags [:movement :access :door] :time :any
+  :plot {:height 8}
+  :blocks [[:fill [10 0 10] [16 3 16] "dirt"] [:fill [11 0 11] [15 2 15] "air"]
+           [:set [13 0 10] "oak_door[facing=south,half=lower,open=false]"] [:set [13 1 10] "oak_door[facing=south,half=upper,open=false]"]
+           [:set [13 0 9] "dirt"]]
+  :body {:at [13.5 0 6.5] :inventory [["iron_pickaxe" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "dirt-block-in-front-of-the-door-is-dug"
+   :act [[:job (jobs.movement.go-to {:pos #at [13 0 12] :range 0})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}]
+   :after [[:body-near [13.5 0 12.5] 2]]}]}
