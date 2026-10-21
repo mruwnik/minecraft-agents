@@ -262,7 +262,8 @@
   "Whether a give-up after tries fruitless walks with result may escalate instead: a carried block fills the 1-cell gap it was refused (gap-fill), its only way dives (dive?), the goal is walled in (goal-walled?), or the walker failed max-blocked walks running (walker-fault?; one stuck walk of a :tries 1 caller is no proof) and no door or gate borders where it can walk
   (escape/door-beside?: that is its way out; an iron door, or any door under :doors :never, is a wall), or the planner's
   reason proves the way needs the world changed and the body is shut in (reach-room/enclosed?, which already counts doors
-  as opened: a door that leads nowhere, e.g. onto a step under its lintel, is no way out). Never out of
+  as opened: a door that leads nowhere, e.g. onto a step under its lintel, is no way out), or the search ran out of
+  land (:exhausted, after the walks that looked at every edge) in a mine or cave larger than a room. Never out of
   the body's own shelter: it is shut in on purpose."
   [c tries result]
   (and (ways/escalating? c)
@@ -276,7 +277,9 @@
            (let [doors (some-> (:doors (:args c)) keyword)]
              (or (and (walker-fault? result) (>= tries (max-blocked))
                       (not (escape/door-beside? (:primitives c) (end/feet-cell c) doors)))
-                 (and (escalate-reason? result doors) (escape/enclosed? (:primitives c) doors)))))))
+                 (and (escalate-reason? result doors)
+                      (or (= :exhausted (some-> (:reason result) keyword))
+                          (escape/enclosed? (:primitives c) doors))))))))
 
 (defn climb-on?
   "Whether a stair that is done leaves the body still shut in (escape/enclosed?) under the goal pos: a walk could only
