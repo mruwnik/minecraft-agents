@@ -15,14 +15,18 @@
    ::urgent-food {:default 2 :doc "At or below this food the trigger holds at :urgent (it cuts a job's comfort section) instead of its default :comfort." :spec (a/int-in 0 20)}
    ::rest-s {:default 600 :doc "Seconds the trigger rests after get-food found nothing, unless food comes to hand." :spec (a/int-in 0 nil)}})
 
+(def gave-up-causes
+  "Nothing-possible causes of get-food that leave the body unfed: no food found, or 12 ways tried without being fed."
+  #{:no-food :still-hungry})
+
 (defn gave-up-at
-  "When get-food last ended for finding no food (its nothing-possible :no-food ending, as body memory :job-report
+  "When get-food last ended unfed (its nothing-possible :no-food or :still-hungry ending, as body memory :job-report
   keeps it), or nil."
   [view]
   (some (fn [{:keys [t data]}]
           (when (and (= 'jobs.survival.get-food (:job data))
                      (= :nothing-possible (:kind data))
-                     (= :no-food (contract/cause-key data)))
+                     (gave-up-causes (contract/cause-key data)))
             t))
         (rseq (mem/entries view :job-report))))
 
@@ -62,7 +66,7 @@
   Args: :food, :health, :rest-s.
   In the dark it holds only with food carried to eat: a search in the dark walks into mobs, and starvation stops at half a heart.
   A fragile body (foods/fragile?) with no food carried holds only in the light and calm (jobs.lib.dawn/calm?): it waits sheltered.
-  It rests (resting?) for :rest-s (600; at most foods/::starving-rest-ms, 60 s, when starving) after get-food found nothing, so a body with nothing at hand is not sent
+  It rests (resting?) for :rest-s (600; at most foods/::starving-rest-ms, 60 s, when starving) after get-food ended unfed (:no-food, :still-hungry), so a body with nothing at hand is not sent
   searching again every cooldown. The rest ends when food is carried, wheat to bake is, or a food source is learned."
   [world memory args]
   (let [self (.self world)

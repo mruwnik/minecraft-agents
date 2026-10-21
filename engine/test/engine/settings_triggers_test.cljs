@@ -35,8 +35,10 @@
     (settings/with-settings {:triggers.storage.inventory-nearly-full/rest-s 300}
       (fn [] (is (false? (nearly-full/inventory-nearly-full full (rested 200000 50000) {})))))))
 
-(defn gave-up [now t]
-  {:now now :data {:entries {:job-report [{:t t :data {:job 'jobs.survival.get-food :kind :nothing-possible :cause :no-food}}]}}})
+(defn gave-up
+  ([now t] (gave-up now t :no-food))
+  ([now t cause]
+   {:now now :data {:entries {:job-report [{:t t :data {:job 'jobs.survival.get-food :kind :nothing-possible :cause cause}}]}}}))
 
 (deftest hungry-rests-after-a-give-up-but-a-starving-body-only-a-minute
   (let [at (fn [food health] (tu/fake {:self {:food food :health health}}))]
@@ -45,6 +47,11 @@
     (is (not (hungry/hungry (at 0 10) (gave-up 100000 50000) {})) "food 0, 50 s: still resting")
     (is (hungry/hungry (at 3 5) (gave-up 120000 50000) {}) "losing health while hungry: 70 s is enough")
     (is (not (hungry/hungry (at 6 15) (gave-up 120000 50000) {})) "hungry but healthy, 70 s: still resting")))
+
+(deftest hungry-rests-after-twelve-ways-without-being-fed-too
+  (let [body (tu/fake {:self {:food 4 :health 10}})]
+    (is (not (hungry/hungry body (gave-up 100000 50000 :still-hungry) {})) "50 s after :still-hungry: resting")
+    (is (hungry/hungry body (gave-up 700000 50000 :still-hungry) {}) "650 s after: fires again")))
 
 (defn refused [now t]
   {:now now :data {:entries {:food-too-dangerous [{:t t :data {:why :creeper}}]}}})
