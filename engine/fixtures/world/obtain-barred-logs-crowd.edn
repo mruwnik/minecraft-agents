@@ -1,0 +1,27 @@
+;; Card 84292004: items.obtain's gather reads the seen logs it may take, however many barred ones lie nearer. A wall of 72 logs
+;; (two halves with a gap) is another body's plan footprint; one free tree stands beyond the gap, farther than every wall log.
+;; Should-succeed: the free tree is felled (obtain.gathering, the whole 4-log tree carried) with no exploring first.
+;; Should-fail: the wall alone (no free tree) is not a source: the body explores, never gathers.
+{:defaults
+ {:tags [:items :obtain :access :zones :forestry]
+  :time :any
+  :plot {:height 12 :floor "grass_block"}
+  :blocks [[:fill [5 0 12] [13 3 12] "oak_log"]
+           [:fill [19 0 12] [27 3 12] "oak_log"]]
+  :plans [{:id "wall" :metadata {:by "SomeoneElse"}
+           :parts [{:id "w" :box [#at [5 0 12] #at [27 3 12]] :want "oak_log"}]}]
+  :body {:at [16.5 0 18.5] :yaw 180 :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "free-tree-beyond-72-barred-logs-is-felled"
+   :blocks [[:fill [16 0 3] [16 3 3] "oak_log"] [:fill [15 4 2] [17 5 4] "oak_leaves[persistent=true]"]]
+   :act [[:job (jobs.items.obtain {:item "oak_log" :count 2 :ways #{:gather} :explore true})]]
+   :expect [{:event {:source :job :kind :obtain.gathering} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :obtain.exploring} :for-s 40 :until {:source :job :kind :obtain.gathering}}
+            {:event {:source :job :kind :completed} :within-s 120 :of-job true}]
+   :after [[:item "oak_log" 4]]}
+  {:name "barred-wall-alone-is-explored-past"
+   :act [[:job (jobs.items.obtain {:item "oak_log" :count 1 :ways #{:gather} :explore true})]]
+   :expect [{:event {:source :job :kind :obtain.exploring} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :obtain.gathering} :for-s 40 :until {:source :job :kind :obtain.exploring}}]
+   :limit-s 90}]}

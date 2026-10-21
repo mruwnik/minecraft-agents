@@ -51,8 +51,8 @@
 
 (def arity1 "access/rules-input is called through its 1-arity property" "cljs$core$IFn$_invoke$arity$1")
 
-(deftest the-seen-log-to-take-is-found-beyond-more-than-64-nearer-barred-logs
-  (let [barred (for [i (range 100)] {:name "oak_log" :pos {:x i :y 64 :z 0}})
+(deftest the-seen-log-to-take-is-found-beyond-any-number-of-nearer-barred-logs
+  (let [barred (for [i (range 3000)] {:name "oak_log" :pos {:x i :y 64 :z 0}})
         free {:name "oak_log" :pos {:x 150 :y 64 :z 0}}
         real (aget access/rules-input arity1)]
     (aset access/rules-input arity1 (constantly {}))
@@ -61,7 +61,7 @@
                     access/may? (fn [_ _ pos] {:ok (= 150 (:x pos))})
                     seen/cut-off? (constantly false)]
         (is (= free (first (seen/seen-blocks-of {:primitives nil} {:seen #{"oak_log"}} false)))
-            "the nearest 64 seen are all barred, the free log lies past them"))
+            "every nearer log is barred, the free one lies past them"))
       (finally (aset access/rules-input arity1 real)))))
 
 (deftest a-tree-cut-off-from-the-body-is-explored-past-with-explore

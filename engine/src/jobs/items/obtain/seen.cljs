@@ -39,18 +39,24 @@
   [c b]
   (contains? (get (ctx/mem c) :cut-off #{}) [(:x (:pos b)) (:z (:pos b))]))
 
-(def seen-cap "Seen blocks read before the access filter; the nearest few dozen may all be a village's or plan's, with the log to take beyond them." 1024)
-
 (defn seen-blocks-of
   "The seen blocks of a need (within the seen radius), nearest first, with those a zone, claim or plan footprint bars
-  taking left out unless all? is true."
+  taking left out unless all? is true. The nearest n are read and filtered, n doubling until one may be taken or
+  none is left, so barred blocks never crowd out a free one."
   [c need all?]
   (when (:seen need)
     (let [in (access/rules-input c)
-          blocks (if (= "water_bucket" (:key need))
-                   (look/seen-water-sources (:primitives c) (seen-radius))
-                   (look/seen-blocks (:primitives c) {:match #((:seen need) %) :radius (seen-radius) :max (if all? 1 seen-cap)}))]
-      (if all? blocks (filter #(and (:ok (access/may? in :harvest (:pos %))) (not (cut-off? c %))) blocks)))))
+          water? (= "water_bucket" (:key need))
+          read (fn [n] (if water?
+                         (look/seen-water-sources (:primitives c) (seen-radius))
+                         (look/seen-blocks (:primitives c) {:match #((:seen need) %) :radius (seen-radius) :max n})))
+          takeable (fn [blocks] (filter #(and (:ok (access/may? in :harvest (:pos %))) (not (cut-off? c %))) blocks))]
+      (if all?
+        (read 1)
+        (loop [n 64]
+          (let [blocks (read n)
+                ok (takeable blocks)]
+            (if (or (seq ok) water? (< (count blocks) n)) ok (recur (* 2 n)))))))))
 
 (defn growable?
   "Whether a crop need can be grown from nothing: the crop's seed is broken out of grass (wheat)."
