@@ -43,6 +43,17 @@
    :expect [{:event {:source :job :kind :stopped :data {:text [:contains "looks of 8 blocks round"]}} :within-s 70 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 70 :of-job true :until {:source :job :kind :stopped}}]
    :limit-s 80}
+  ;; card c19b798f: a body in a tunnel under 20+ blocks of rock searching for a rail that is nowhere: the old search stepped toward unseen columns
+  ;; at feet height, i.e. into rock, and go-to retried "no way found" for the whole job time. Now it ends at once: stopped, no limit_reached.
+  {:name "underground-search-with-no-target-ends-without-walking-into-rock"
+   :time :any
+   :plot {:height 24}
+   :blocks [[:fill [4 0 4] [30 22 28] "stone"] [:fill [14 0 16] [26 1 16] "air"]]
+   :body {:at [16.5 0 16.5]}
+   :act [[:job (jobs.explore.search {:target ["rail" "cobweb"] :scan-radius 32 :here true :use-notes false :spend {:job-time 100}})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :limit_reached} :for-s 60 :of-job true :until {:source :job :kind :stopped}}]
+   :limit-s 80}
   ;; card d5729c6e: an emerald the body saw 20 blocks east (beyond :scan-radius 8, inside :max-distance 30) is found from memory,
   ;; one allowed leg unused: the old search walked its 8-block leg, saw nothing in range and stopped.
   {:name "seen-target-beyond-the-scan-radius-is-found"

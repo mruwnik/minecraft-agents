@@ -36,6 +36,8 @@
   jobs.movement.go-to as a child (range 2). One call is the whole search; it yields (:continue) only while go-to waits
   on the world or for leg columns to load (:chunks-loading).
 
+  Under rock a step toward an unseen column is only taken to a seen open cell (a tunnel or cave), never at feet height into unseen rock: the search then ends :distance when no tunnel leads on.
+
   For farm animals (cow, pig, sheep, chicken, rabbit) a body under rock first climbs out (jobs.lib.surface-up), and a leg whose stand is under rock (no sky light) is skipped (:underground): they live on the surface.
 
   Legs are ::spacing apart: :spiral points on rings round the origin, the one nearest the body first (so a body in a corridor walks on), or :outward ahead along :heading (a :heading alone means :outward), then the sides, and on further ahead once those are tried or searched. A
@@ -421,6 +423,7 @@
         p (:primitives c)
         block-at (seen-at p)
         surface? (surface-only? names)
+        buried? (sh-sense/buried? p)
         underground? (fn [sy pt] (and surface? sy (sh-sense/buried-at? p {:x (pt 0) :y sy :z (pt 1)})))]
     (loop [[pt & more] (candidates c m) reads 0 acc {:tried [] :failed [] :skipped 0 :held 0 :unloaded (vec (:deferred m))}]
       (cond
@@ -431,7 +434,9 @@
         (some #(notes/covers? % pt names) ns) (recur more reads (-> acc (update :tried conj pt) (update :skipped inc)))
         :else (let [{sy :y fail :fail} (let [r (stand-cell block-at (pt 0) (pt 1) y)] (if (underground? (:y r) pt) {:fail :underground} r))
                     failed {:pos [(pt 0) y (pt 1)] :reason fail}
-                    step (when (= :unseen fail) (step-toward block-at (here c) (pt 0) (pt 1)))]
+                    step (when (= :unseen fail)
+                          (let [s (step-toward block-at (here c) (pt 0) (pt 1))]
+                            (when (or (not buried?) (and s (open? (block-at s)))) s)))]
                 (cond
                   step (assoc acc :leg step :step true :column pt)
                   (= :not-loaded fail) (recur more (inc reads) (update acc :unloaded conj failed))

@@ -443,6 +443,18 @@
           (let [ps (map :pos (get-in e [:coverage :failed]))]
             (is (= (count ps) (count (set ps))) "a column whose step failed is not stepped toward again")))))))
 
+(deftest a-body-under-rock-never-steps-into-unseen-rock-toward-an-unseen-column
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blind-far (fn [{:keys [p]}]
+                          (let [at (.-sensedAt p)]
+                            (aset p "sensedAt" (fn [pos] (if (or (> (js/Math.abs (.-x pos)) 8) (> (js/Math.abs (.-z pos)) 8)) #js {:unknown true} (at pos))))))
+              pocket (merge (tu/box -12 70 -12 12 120 12 "stone") (tu/box 0 80 0 0 81 0 "air"))
+              s (await (search! {:target "rail" :max-distance 20} {:self {:pos [0.5 80 0.5]} :blocks pocket} 60 blind-far))]
+          (is (finished? s))
+          (is (empty? (walks s)) "no go-to toward a point inside rock"))))))
+
 (deftest the-last-leg-before-stuck-digs-out-of-a-sealed-pocket
   (async done
     (tu/run-async done
