@@ -1,0 +1,19 @@
+;; Card 6b150e30: a body on the surface walking to a cell in unloaded land prices each block of descent (go-to.tuning/surface-descent): the
+;; way down is a guess with no known way back up, so the level way (to the end of the slab) is taken before a slope that leads nearer the goal in a straight line.
+;; A stone slab (feet y 10, x 0..50, z 8..16) with a slope of one-block steps down along its south side (z 17..21); the goal is 1000 blocks east and far south.
+;; Should-succeed: after 7 s of walking the body is on the slab near its east end, not down the slope.
+;; Should-fail: the old plan took the slope first (the body is at the foot, y 5, or lower).
+{:defaults
+ {:tags [:movement :go-to]
+  :time :any
+  :plot {:height 16 :length 64}
+  :blocks [[:fill [0 0 8] [50 9 16] "stone"]
+           [:fill [0 0 17] [50 8 17] "stone"] [:fill [0 0 18] [50 7 18] "stone"] [:fill [0 0 19] [50 6 19] "stone"]
+           [:fill [0 0 20] [50 5 20] "stone"] [:fill [0 0 21] [50 4 21] "stone"]]
+  :body {:at [3.5 10 12.5] :settle-s 3}
+  :limit-s 60}
+ :cases
+ [{:name "slab-end-before-the-slope-toward-an-unloaded-goal"
+   :act [[:job (jobs.movement.go-to {:pos #at [1000 10 400] :range 1 :spend {:job-time 7}})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 30 :of-job true}]
+   :after [[:body-near [45.5 10 12.5] 9]]}]}
