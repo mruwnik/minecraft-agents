@@ -325,6 +325,7 @@
             floor (assoc :dive-floor floor :dive-stair (climb-stair))
             (and floor (not (:cave-ok (ctx/mem c0)))) (assoc :cave-floor (- (+ floor (climb-dip)) (climb/cave-dip))))
         from (u/self-pos c)
+        _ (when-not (breath/head-under? (:primitives c)) (ctx/update-mem! c0 assoc :last-air from))
         d (u/dist from pos)
         pw (wworld/path-world (:primitives c))
         stand (when (and pw (not way) (or (:lookout-due (ctx/mem c)) (hidden-in-ground? c pos))) (lookout c pos))]
@@ -346,7 +347,7 @@
             seen-goal? (and (see-cell c) (not (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))))
             opts (cond-> (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
                    seen-goal? (assoc :explore false))
-            stair-check (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d)))
+            stair-check (lookout-check c pos (plan-check c pos (let [stairs (choose/stair-check c pos) air-check (air/air-spent-check c)] (fn [plan first?] (or (when stairs (stairs plan first?)) (air-check plan first?)))) (straight-from! c d)))
             {walked :result status :status to :to} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))
             _ (ctx/hold-still! c (when (= "searching" status) :searching))
             fetched (when (= :no-torch (:status walked)) (await (fetch-torches! c)))
@@ -388,6 +389,11 @@
             (if-let [e (choose/detour-way c pos)]
               (esc/detour-escalate! c (:blocked (ctx/mem c) 0) why e)
               (end/give-up! c pos {:status :no-path :reason :detour} why)))
+
+          (and (= "stair" status) (:air-spent (:why walked)))
+          (do (await (air/surface! c (dissoc opts :progress) pos))
+              (ctx/update-mem! c assoc :escalate-now true :stair-tried true)
+              :again)
 
           (= "stair" status)
           (do (ctx/update-mem! c #(cond-> (assoc % :escalate-now true) (not= :retreats (:why walked)) (assoc :stair-tried true))) :again)

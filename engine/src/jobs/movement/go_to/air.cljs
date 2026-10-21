@@ -24,6 +24,7 @@
             [jobs.lib.near :as near]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
+            [jobs.lib.walk.plan :as wplan]
             [jobs.lib.column-kinds :as kinds]
             [jobs.movement.go-to.column :as column]
             [jobs.lib.swim :as swim]
@@ -59,6 +60,21 @@
   "Seconds of air the body has left before it drowns: the planner's airSupply less the air its oxygen says is used."
   [p]
   (- (unchecked-get base/DEFAULT-COSTS "airSupply") (cost/air-used (.-oxygen (.self p)))))
+
+(defn air-spent-check
+  "near/walk-round!'s :stair-check of a walk under water: {:air-spent true} for a re-plan whose swim, at the planner's own price
+  per cell, takes more than the air left of the half a body under water turns back at (masked-wet-limit-s of its supply),
+  while a swim to the air it came by is left (not the first plan: it was made with the air whole)."
+  [c]
+  (let [p (:primitives c)]
+    (fn [{:keys [steps]} first?]
+      (when (and (not first?) (breath/head-under? p)
+                 (< (:surfacings (ctx/mem c) 0) max-surfacings)
+                 (:last-air (ctx/mem c))
+                 (let [left (air-left p)]
+                   (and (< left wplan/masked-wet-limit-s)
+                        (> (* (count (filter :swim steps)) (unchecked-get base/DEFAULT-COSTS "swimSubH")) left))))
+        {:air-spent true}))))
 
 (defn look-cells
   "The cells a drowning body looks again at for air, those still unknown: the goal's head cell, then the cell over the
@@ -105,6 +121,16 @@
             (recur more))))
       true)))
 
+(defn last-air
+  "The cell the body last stood with its head out of water in this call (mem :last-air), the way it came by, when it is within
+  twice the air-radius setting and not the cell it stands in: a swim back to the air it breathed last, along cells it swam through."
+  [c pos]
+  (when-let [from (:last-air (ctx/mem c))]
+    (let [cell (zipmap [:x :y :z] (mapv #(js/Math.floor (% from)) [:x :y :z]))]
+      (when (and (<= (u/dist pos from) (* 2 (swim/air-radius)))
+                 (not= cell (zipmap [:x :y :z] (mapv #(js/Math.floor (% pos)) [:x :y :z]))))
+        cell))))
+
 (defn ^:async swim-to-air!
   "Look for air (up the own column first, then the columns beside it, breath/find-air!), else read seen air within
   the air-radius setting of survival.breathe, and walk one round (near/walk-round! with walk-opts) to that surface cell, range 0: a way to air, whose
@@ -116,7 +142,8 @@
   (let [p (:primitives c)
         pos (u/self-pos c)
         target (or (await (breath/find-air! c pos (:radius look-args) (:reach look-args)))
-                   (breath/nearest-air p pos (swim/air-radius) (:reach look-args) nil false))]
+                   (breath/nearest-air p pos (swim/air-radius) (:reach look-args) nil false)
+                   (last-air c pos))]
     (if-not target
       (if (breath/column-open? p (js/Math.floor (:x pos)) (js/Math.floor (:z pos)) (js/Math.floor (:y pos)) (:reach look-args))
         (do (counted)
