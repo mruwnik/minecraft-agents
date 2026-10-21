@@ -166,11 +166,11 @@
           (is (= [0 68 0] (feet p)))
           (is (= 1 (count (of-kind seen :completed)))))))))
 
-(deftest a-ceiling-stops-the-pillar-below-it
+(deftest a-roof-that-cannot-be-dug-stops-the-pillar-below-it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen] :as s} (setup {:blocks {"0,68,0" "stone"}})]
+        (let [{:keys [eng p seen] :as s} (setup {:blocks {"0,68,0" "bedrock"}})]
           (core/submit! eng (list job {:height 6}) {})
           (await (ticks s eng 8))
           (is (finished? eng))
@@ -182,6 +182,18 @@
             (is (= (column base 2) (:cells g)))
             (is (= [:ceiling] (mapv :reason (of-kind seen :stopped))) "the job ends stopped with the reason, not completed")
             (is (empty? (of-kind seen :completed)))))))))
+
+(deftest a-dirt-roof-is-dug-out-and-the-pillar-goes-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:blocks {"0,65,0" "dirt"}})]
+          (core/submit! eng (list job {:height 4}) {})
+          (await (ticks s eng 12))
+          (is (finished? eng))
+          (is (= [0 68 0] (feet p)))
+          (is (empty? (of-kind seen :stopped)))
+          (is (= 1 (count (of-kind seen :completed)))))))))
 
 (deftest too-few-blocks-at-the-start-waits-saying-so
   (async done
@@ -608,7 +620,7 @@
                                         (fn [_t _a _i] (js/Promise.resolve #js {:status "failed" :placed 0 :reason "not-raised"}))))]
           (is (= {:event :completed :kind :done} (await (ending (list job {:height 2}) {}))))
           (is (= {:event :stopped :kind :condition-failed :reason :ceiling}
-                 (await (ending (list job {:height 6}) {:blocks {"0,68,0" "stone"}}))))
+                 (await (ending (list job {:height 6}) {:blocks {"0,68,0" "bedrock"}}))))
           (is (= {:event :stopped :kind :condition-failed :reason :zone}
                  (await (ending (list job {:height 6}) {:zones [{:name "keep-out" :min [-3 66 -3] :max [3 66 3]}]}))))
           (is (= {:event :stopped :kind :condition-failed :reason :too-few-blocks}

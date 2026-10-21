@@ -24,7 +24,7 @@
 (def doc
   "Pillar up :height blocks (or until the feet are at :y) from the cell the body stands in, by jump-placing one block at a time under itself.
   Done (:already before the start) when the body stands on the ground with its feet at :y or above.
-  One call builds the whole pillar; it yields :continue only while a recentring go-to waits on the world.
+  A roof over the head (one of the two cells above the feet) is dug out first. One call builds the whole pillar; it yields :continue only while a recentring go-to or a roof dig waits on the world.
 
   Every block is written to the scaffold ledger (jobs.lib.ledger, body memory) as an intent before its
   jump and confirmed when the cell is seen holding it, so a cleanup can take the pillar back after a cut or
@@ -52,7 +52,7 @@
   Run short part way, it gives up :too-few-blocks. Every give-up ends the job, so a parent running this as a child
   reads the ending.
 
-  Ends :done, or with a cause {:reason r ...}: :condition-failed for :too-few-blocks (:short still owed), :mob-in-cell, :ceiling,
+  Ends :done, or with a cause {:reason r ...}: :condition-failed for :too-few-blocks (:short still owed), :mob-in-cell, :ceiling (a roof that cannot be dug, or more than max-ceiling-digs blocks of it; :dig the outcome),
   :not-on-solid, :zone, :footprint, :no-zones, :not-loaded, :not-replaceable and :bad-args; :nothing-possible for
   :off-column (the body left the column it started in) and :place-failed (3 failed jumps in a row with the body in
   the column, :detail the primitive's reason). Data {:cells [[x y z] ...] :built n :height n}: :cells are this job's
@@ -68,6 +68,7 @@
   {::job-time-s {:default 120 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::max-height {:default 64 :doc "Tallest pillar a call may ask for, in blocks." :spec (a/int-in 0 nil)}
    ::max-failures {:default 3 :doc "Failed placements before the pillar gives up." :spec (a/int-in 0 nil)}
+   ::max-ceiling-digs {:default 6 :doc "Blocks a pillar digs out of the roof over its head (counting ones that fall back) before it gives up :ceiling." :spec (a/int-in 0 nil)}
    ::mob-waits {:default 20 :doc "Looks a pillar waits for a mob to leave the cell it places into before it gives up :mob-in-cell." :spec (a/int-in 0 nil)}
    ::max-displacements {:default 8 :doc "Knockbacks (a failed jump with the body airborne or off its column) a pillar rides out before it gives up :off-column." :spec (a/int-in 0 nil)}
    ::mob-step-ms {:default 500 :doc "Wait between looks for a mob in the pillar's cell, in ms." :spec (a/int-in 1 nil)}
@@ -369,6 +370,24 @@
       (when (look/unknown? (:primitives c) cell)
         (await (look/look-at! c cell))))))
 
+(defn ^:async dig-ceiling!
+  "A diggable roof over the head is dug out (a jobs.blocks.dig child, by hand when no carried tool harvests it), up to
+  max-ceiling-digs blocks per call: :again, :continue while the child waits, or the :ceiling give-up with the dig's outcome."
+  [c l {:keys [at] :as step}]
+  (let [n (:ceiling-digs (ctx/mem c) 0)]
+    (if (>= n (settings/get settings ::max-ceiling-digs))
+      (finish! c l step)
+      (let [[x y z] at
+            e (await (blocks/dig-cell-ending! c {:x x :y y :z z}
+                                              (cond-> {:accept #{:falling-block} :walk false :collect false :need-drop false}
+                                                (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))
+            outcome (blocks/dig-outcome e)]
+        (ctx/update-mem! c update :ceiling-digs (fnil inc 0))
+        (case outcome
+          :continue :continue
+          (:dug :missing) :again
+          (finish! c l (assoc step :dig outcome)))))))
+
 (defn ^:async step!
   "One block of the pillar (or its end): :again, :continue while a recentring go-to waits, or the ending."
   [c]
@@ -385,11 +404,14 @@
           step (step-now c l feet base)]
       (when (not= l seen) (ledger/remember! c l))
       (ctx/update-mem! c #(-> % (assoc :base base :stand feet) (update :home (fn [h] (or h (let [{:keys [x z]} (u/self-pos c)] [x z]))))))
-      (if (= :place (:step step))
+      (cond
+        (= :place (:step step))
         (if-let [mob (mob-in-cell c (:cell step))]
           (await (wait-out-mob! c l step mob))
           (await (place! c l step)))
-        (finish! c l step)))))
+
+        (= :ceiling (:reason step)) (await (dig-ceiling! c l step))
+        :else (finish! c l step)))))
 
 (defn ^:async fetch-first!
   "Before the first block, outside the urgent section: walk back after a fetch, and with no listed block carried get

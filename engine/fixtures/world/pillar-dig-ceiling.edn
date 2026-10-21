@@ -1,0 +1,21 @@
+;; Card 53bff399: a pillar under a diggable roof digs it out and goes on; a roof it cannot dig (bedrock) ends :ceiling.
+;; A 1x2 pocket in a stone mass, two dirt blocks over it, a dark chamber above; dark and sealed, so any time of day.
+{:defaults
+ {:tags [:access]
+  :mobs :keep
+  :time :any
+  :plot {:height 24}
+  :blocks [[:fill [2 0 8] [30 14 24] "stone"] [:fill [16 5 16] [16 6 16] "air"] [:fill [16 9 16] [16 12 16] "air"]]
+  :body {:at [16.5 5 16.5] :inventory [["dirt" 8]]}}
+ :cases
+ [{:name "dirt-roof-is-dug-and-pillar-done"
+   :blocks [[:fill [16 7 16] [16 8 16] "dirt"]]
+   :act [[:job (jobs.access.pillar {:height 3})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
+   :after [[:body-near [16.5 8 16.5] 2]]
+   :limit-s 100}
+  {:name "bedrock-roof-ends-ceiling"
+   :blocks [[:fill [16 7 16] [16 8 16] "bedrock"]]
+   :act [[:job (jobs.access.pillar {:height 3})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :ceiling}} :within-s 60 :of-job true}]
+   :limit-s 70}]}

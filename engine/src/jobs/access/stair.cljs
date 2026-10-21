@@ -73,7 +73,7 @@
   breaks, after a spare was tried once; a way out digs on with the call's :settings {:jobs.lib.trip/spent-uses 0}. :need-drop false digs a block no carried tool clears bare-handed (go-to's last resort).")
 
 (a/defargs args
-  {:dir {:doc ":down, :up or :level (a flat run, :steps only)" :spec #{:down :up :level} :default :down}
+  {:dir {:doc ":down, :up or :level (a flat run, :steps only); nil: toward :y from the feet at the first round, else :down" :spec #{:down :up :level} :default nil}
    :heading {:doc ":north :east :south or :west; nil: the way the body faces" :spec #{:north :east :south :west} :default nil}
    :steps {:doc "steps to cut; or give :y" :spec (a/int-in 1 nil) :default nil}
    :y {:doc "feet height to end at, instead of :steps" :spec (a/num-in nil nil) :default nil}
@@ -93,10 +93,20 @@
 
 (def safe? ready/safe-at-from)
 
+(defn dir-of
+  "The call's :dir, else the one the first round chose (job memory), else :up or :down toward :y from the feet, else :down."
+  [c]
+  (let [{:keys [dir y]} (:args c)
+        fy (second (reach/standing-vec (:primitives c)))]
+    (or dir
+        (some-> (:dir (ctx/mem c)) keyword)
+        (when (number? y) (if (> y fy) :up :down))
+        :down)))
+
 (defn fit?
   "ready/fit?, but a stair up is the way out of a cave for a weak body and is not held for health it cannot regain below."
   [c]
-  (if (= :up (:dir (:args c))) (checks/survival-mode c) (ready/fit? c)))
+  (if (= :up (dir-of c)) (checks/survival-mode c) (ready/fit? c)))
 
 (def ways need/fetch-ways)
 
@@ -109,11 +119,10 @@
 
 (defn with-heading
   "c with the :heading arg filled when the call gave none: the heading the first round chose (job memory), else the way
-  the body faces."
+  the body faces; likewise :dir (dir-of)."
   [c]
-  (if (:heading (:args c))
-    c
-    (assoc-in c [:args :heading] (keyword (or (:heading (ctx/mem c)) (look/facing (:primitives c)))))))
+  (cond-> (assoc-in c [:args :dir] (dir-of c))
+    (not (:heading (:args c))) (assoc-in [:args :heading] (keyword (or (:heading (ctx/mem c)) (look/facing (:primitives c)))))))
 
 ;; ------------------------------------------------------------------ the contract
 
@@ -200,10 +209,10 @@
   (ctx/end c :done nil {}))
 
 (defn quote-of [c]
-  (let [{:keys [dir]} (:args c)
+  (let [dir (dir-of c)
         heading (heading-of c)
         feet (reach/standing-vec (:primitives c))
-        t (geo/target-steps (assoc (:args c) :heading heading) feet)
+        t (geo/target-steps (assoc (:args c) :heading heading :dir dir) feet)
         n (if (map? t) 0 t)
         s (* n (if (= :level dir) 2 3) (settings/get settings ::cell-s))]
     {:uses {:job-time [(* 0.5 s) s (* 4 s)]} :done [0 n n]
@@ -379,6 +388,7 @@
   [c0]
   (let [c (with-heading c0)]
     (when-not (:heading (:args c0)) (ctx/update-mem! c assoc :heading (name (:heading (:args c)))))
+    (when-not (:dir (:args c0)) (ctx/update-mem! c assoc :dir (name (:dir (:args c)))))
     (await (pace/steps! c #(next! c)))))
 
 (def meta {:tags [:mine :dig] :position-bound? true})

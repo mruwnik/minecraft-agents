@@ -181,7 +181,7 @@
       "a way wholly inside the new one is dropped")
   (is (= {:floors [[3 66 0]] :gone #{}} (sc/joined-way [[[9 60 9]]] [2 65 0] [[3 66 0]]))))
 
-(declare block-at stair! east ground setup tick-out!)
+(declare block-at stair! east ground setup tick-out! stone)
 
 (deftest a-finished-stair-remembers-its-floors-and-a-second-one-stops-at-them
   (async done
@@ -200,6 +200,14 @@
               ways (mapcat (comp :floors :data) (mem/entries (mem/view (:store eng)) :stair-way))]
           (is (= :done (:status @out)) (pr-str @out))
           (is (= [[0 63 1] [0 62 2]] (vec ways))))))))
+
+(deftest a-stair-with-a-y-above-the-feet-and-no-dir-goes-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (stair! {:blocks (merge ground (stone -3 12 67 72))} {:heading :east :y 67} (fn [_])))]
+          (is (= :done (:status @out)) (pr-str @out))
+          (is (= 2 (:steps @out))))))))
 
 (def second-east {:dir :down :heading :east :steps 1})
 
