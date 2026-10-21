@@ -8,6 +8,7 @@
             [jobs.items.obtain.need :refer [explore-opts gather-viable? pickaxe-first? search-names tools-wanted trees-unreachable?]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
+            [jobs.items.obtain.surface :as surface]
             [jobs.items.obtain.table :refer [gather-need searchable?]]
             [jobs.lib.waits :as waits]
             [jobs.lib.child :as child]
@@ -86,9 +87,17 @@
       (pickaxe-first? c names need) (tried! c :gather {:pickaxe (contract/cause-key e)})
       :else :again)))
 
+(defn ^:async surface-step!
+  "One round of the way up (jobs.items.obtain.surface): :continue while it goes on, else the gather source fails (:no-way-up)."
+  [c]
+  (case (await (surface/step! c))
+    :continue :continue
+    :out :again
+    (do (ctx/update-mem! c dissoc :surface) (tried! c :gather :no-way-up))))
+
 (defn ^:async explore-walk!
-  "Walk and look for need (a jobs.explore.search child): :again once it is seen; a search that finds none stops the
-  gather source, as does the third search for one need."
+  "Walk and look for need (a jobs.explore.search child): :again once it is seen, or when none is and the body is still
+  under rock (the next round stairs up); else a search that finds none stops the gather source, as does the third search for one need."
   [c need]
   (let [targets (search-names need)
         o (explore-opts c)
@@ -108,7 +117,7 @@
             k (inc (get-in (ctx/mem c) [:explored (:key need)] 0))]
         (ctx/update-mem! c assoc-in [:explored (:key need)] k)
         (ctx/update-mem! c update :gather update :unreachable dissoc (:key need))
-        (if (and (= :found (:reason res)) (seen-of c need))
+        (if (or (and (= :found (:reason res)) (seen-of c need)) (surface/surfacing? c need))
           :again
           (tried! c :gather (cond-> {:searched (:key need) :for targets :result (or (:reason res) (contract/cause-key e))}
                               (:why res) (assoc :why (:why res))
@@ -134,6 +143,9 @@
       (nil? need) (tried! c :gather :no-plan)
       (and (not (get-in (ctx/mem c) [:gather :before])) (pickaxe-first? c names need) (or (explore-opts c) (seen-of c need)))
       (await (pickaxe-step! c names need))
+      (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (searchable? need) (not (:tunnel? need))
+           (not (seen-of c need)) (surface/surfacing? c need))
+      (await (surface-step! c))
       (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (searchable? need) (not (:tunnel? need))
            (or (not (seen-of c need)) (get-in (ctx/mem c) [:gather :unreachable (:key need)]) (trees-unreachable? c need))
            (< (get-in (ctx/mem c) [:explored (:key need)] 0) (child/max-fruitless)))

@@ -1,0 +1,18 @@
+;; Card 5f4a3ba0: a body shut in a cave under 8 blocks of rock, empty-handed, with a tree on the surface 12 blocks off. Its first
+;; search finds nothing (no sight through rock), so obtain walks to a wall and cuts a stair up (by hand) to the sky, then finds the tree.
+;; Stone x 0..31, z 0..31, y 0..9 (surface y 10); a 7x2x7 hollow round the body at feet y 0.
+;; Should-succeed: oak logs carried. Should-fail: none (the dig must not stop :no-source or :no-way-up).
+{:defaults
+ {:tags [:obtain :explore :mining :no-tool] :time :any
+  :plot {:height 16}
+  :blocks [[:fill [0 0 0] [31 9 31] "stone"] [:fill [13 0 13] [19 1 19] "air"]
+           [:fill [27 10 15] [29 11 17] "oak_leaves[persistent=true]"] [:fill [28 10 16] [28 13 16] "oak_log"]
+           [:fill [27 12 15] [29 13 17] "oak_leaves[persistent=true]"]]
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 700}
+ :cases
+ [{:name "sealed-cave-stairs-up-then-fells-the-tree"
+   :act [[:job (jobs.items.obtain {:item "oak_log" :count 2 :explore true})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 680 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 600 :until {:source :job :kind :completed}}]
+   :after [[:item "oak_log" [:>= 2]]]}]}

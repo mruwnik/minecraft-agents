@@ -3,7 +3,8 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.fetch-test :as f]
             [engine.obtain-iron-test :refer [ore-world obtain! mine-events]]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [engine.fake :as fake]))
 
 (def village-trunk
   "A trunk at x 3 inside a foreign zone."
@@ -64,3 +65,21 @@
           (await (obtain! s {:item "oak_log" :count 2 :explore true} 60))
           (is (seq (f/events-of s :obtain.exploring)) "walks to look for other logs")
           (is (empty? (filter #(= :no-tree (:reason %)) (f/events-of s :stopped))) "not stopped no-tree before that"))))))
+
+(def sealed-cave
+  "Stone to y 70 over x -22..48, z -22..22, with a hollow 5x2x5 inside it where the body stands: no way out but through rock. A tree stands on the stone 40 blocks off."
+  (merge (into {} (for [x (range -22 49) z (range -22 23) y (range 63 71)
+                         :when (not (and (<= -2 x 2) (<= -2 z 2) (<= 64 y 65)))]
+                    [(str x "," y "," z) (if (= y 63) "andesite" "stone")]))
+         (into {} (for [y [71 72 73 74]] [(str "40," y ",0") "oak_log"]))
+         {"40,75,0" "oak_leaves"}))
+
+(deftest a-body-sealed-in-a-cave-stairs-up-to-the-sky-when-its-search-finds-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (ore-world sealed-cave []) [f/own-zone])]
+          (swap! (fake/state (:p s)) assoc :light (into {} (for [x (range -6 7) z (range -6 7) y (range 64 71)] [[x y z] [0 0]])))
+          (await (obtain! s {:item "oak_log" :count 1 :explore true} 900))
+          (is (seq (f/events-of s :stair.step)) "a stair was cut up through the roof")
+          (is (<= 1 (get (f/inv s) "oak_log" 0)) "and the tree outside was felled"))))))
