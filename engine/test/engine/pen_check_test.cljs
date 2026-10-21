@@ -488,6 +488,15 @@
           (is (true? (:closed? event)) (pr-str event))
           (is (= 1 (get-in event [:patched :placed]))))))))
 
+(deftest a-perched-gate-gets-no-fence-on-top
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [event p]} (await (run-patching {:at [2 64 2] :settings {:jobs.animals.pen-check/max-cells 100}}
+                                                     (world {"5,64,2" "oak_fence_gate" "6,64,2" "stone"} {"5,64,2" {:open false :facing "east"}})))]
+          (is (= "air" (tu/true-block-name p 5 65 2)) "an open gate would be a doorway one block high")
+          (is (= :perch-in (:why (first (:leaks event)))) (pr-str event)))))))
+
 (deftest an-open-gate-is-shut
   (async done
     (tu/run-async done

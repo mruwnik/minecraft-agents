@@ -198,12 +198,12 @@
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
    :expect [{:event {:source :job :kind :completed :data {:closed? true :patched {:placed 1}}} :within-s 60 :of-job true}]
    :limit-s 90}
-  ;; ground outside a gate row stands as high as the gate top: the patch stacks a fence on the shut gate too
-  {:name "perch-in-at-the-gate-row-is-patched"
+  ;; ground outside a gate row stands as high as the gate top: the fences beside get one on top, the gate none (an open gate would be a doorway one block high), so its perch-in stays reported
+  {:name "perch-in-at-the-gate-row-leaves-the-gate-unroofed"
    :body {:at [5.5 0 5.5] :yaw 0 :inventory [["oak_fence" 4]]}
    :blocks [[:set [5 0 2] "oak_fence_gate[facing=south,open=false]"] [:fill [4 0 1] [6 0 1] "stone"]]
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
-   :expect [{:event {:source :job :kind :completed :data {:closed? true :patched {:placed 3}}} :within-s 90 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:closed? false :reason :leak :leaks [{:why :perch-in}] :patched {:placed 2}}} :within-s 90 :of-job true}]
    :limit-s 120}
   {:name "stone-beside-the-fence-top-is-a-perch-in-for-a-box"
    :blocks [[:set [9 0 5] "stone"]]

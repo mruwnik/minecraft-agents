@@ -2,7 +2,9 @@
   "Patching a pen's leaks, shared by jobs.animals.pen-check and jobs.build.pen: a :gap is filled with a fence, a :climb
   or :perch-in fence gets one on top, each by a jobs.blocks.place child. Only the choice of the fence item differs between the jobs."
   (:require [engine.ctx :as ctx]
-            [jobs.lib.need :as need]))
+            [clojure.string :as str]
+            [jobs.lib.need :as need]
+            [jobs.lib.util :as u]))
 
 (def patchable #{:gap :climb :perch-in})
 
@@ -22,8 +24,16 @@
   [pass pass-ok max-passes]
   (and (< (or pass 0) max-passes) (or (zero? (or pass 0)) (pos? (or pass-ok 0)))))
 
+(defn over-gate?
+  "Whether pos is the cell right above a fence gate: a block there leaves an open gate a doorway one block high."
+  [c [x y z]]
+  (some-> (u/seen-name (:primitives c) {:x x :y (dec y) :z z}) (str/ends-with? "_fence_gate")))
+
 (defn ^:async place-fence!
-  "One fence at pos by a blocks.place child (phase :patch); its result, or :continue while it runs. Args pass :ignore-zones?; extra is merged into the child's args."
+  "One fence at pos by a blocks.place child (phase :patch); its result, or :continue while it runs. Args pass :ignore-zones?; extra is merged into the child's args.
+  Never above a gate: that result is a :nothing-possible :over-gate and the leak stays reported."
   [c pos item extra]
-  (await (ctx/call c :patch 'jobs.blocks.place
-                   (merge (select-keys (:args c) [:ignore-zones?]) extra {:pos pos :item item}))))
+  (if (over-gate? c pos)
+    {:kind :nothing-possible :cause {:reason :over-gate :why "a fence above a gate would shut the doorway"}}
+    (await (ctx/call c :patch 'jobs.blocks.place
+                     (merge (select-keys (:args c) [:ignore-zones?]) extra {:pos pos :item item})))))
