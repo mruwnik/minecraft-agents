@@ -350,6 +350,31 @@
           (is (nil? (:after-section @world)))
           (is (= {:kind :limit-reached :cause {:line :health :floor 12}} (stopped seen))))))))
 
+(def section-kid
+  {:defaults {:floor {:health 12}}
+   :round (fn ^:async section-kid-round [c]
+            (hurt! c 11)
+            (await (look! c))
+            (ctx/end c :done nil {}))})
+
+(def section-parent
+  {:round (fn ^:async section-parent-round [c]
+            (swap! world assoc :kid-ending
+                   (await (ctx/atomic c :urgent :take-back #(ctx/call c :kid section-kid {}))))
+            (swap! world assoc :after-section true)
+            (ctx/end c :done nil {}))})
+
+(deftest a-line-a-child-crossed-inside-a-section-does-not-end-the-caller-once-the-child-has-returned
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {'section-parent section-parent})]
+          (core/submit! eng '(section-parent) {})
+          (await (core/tick! eng))
+          (is (true? (:after-section @world)) "the child's crossing had no call boundary left to end")
+          (is (empty? (job-ev seen :limit_reached)) "no frame was ended by it")
+          (is (= :done (:kind (:kid-ending @world)))))))))
+
 (deftest a-quotes-pause-adds-to-its-job-time-against-wall-time
   (let [state {:call {:spend {:wall-time 10}} :started-ms 0 :ran-ms 0}
         crossed (fn [uses] (map first (contract/most-crossings state {:uses uses} {} 0 0)))]

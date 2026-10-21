@@ -107,12 +107,14 @@
       (throw (tag! eng root x)))))
 
 (defn section-closed!
-  "After a ctx/atomic section of base's round closed: throw the crossing it held, once no section is open."
-  [eng {:keys [root section-depth held]}]
+  "After a ctx/atomic section of base's round closed: throw the crossing it held, once no section is open. A crossing
+  of a frame inside the section (a child call that has returned) is dropped: no call boundary is left to end."
+  [eng {:keys [root slots section-depth held]}]
   (when (and held (zero? @section-depth))
     (when-let [x @held]
       (reset! held nil)
-      (throw (tag! eng root x)))))
+      (when (= (:slots x) (subvec slots 0 (min (count slots) (count (:slots x)))))
+        (throw (tag! eng root x))))))
 
 (defn ending
   "The :limit-reached ending of the frame at slots of root when limit error e ends it (no e: when it is tagged), else
