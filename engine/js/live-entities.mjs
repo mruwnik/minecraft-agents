@@ -54,3 +54,10 @@ export const liveEntities = bot => Object.values(bot.entities ?? {})
 export const liveEntity = (bot, id) => liveEntities(bot).find(e => e.id === id)
 
 export const itemSpawn = (bot, id) => spawns.get(bot)?.get(id)
+
+// Whether item entity id is the body's own toss of that item: its spawn came within ownTossMs after the toss call.
+const ownTossMs = 2000
+export const isOwnToss = (bot, id, item) => {
+  const s = itemSpawn(bot, id)
+  return Boolean(s?.tosses?.some(t => t.item === item && s.at - t.at >= 0 && s.at - t.at <= ownTossMs))
+}

@@ -178,4 +178,19 @@
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :goods.found} :for-s 60 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "dirt" 0]]
-   :limit-s 80}]}
+   :limit-s 80}
+  ;; card 81d67115: cobblestone the body threw at its feet and picked up again is its own, not found goods
+  {:name "deposit-of-cobblestone-tossed-down-and-picked-up-again-is-not-found-goods"
+   :blocks [[:set [20 0 16] "chest[facing=west]"]]
+   :memory [{:kind :chest :data {:pos #xyz [20 0 16]} :policy {:cap 1 :ttl :forever}}]
+   :body {:inventory [["cobblestone" 300] ["dirt" 40]]}
+   :act [[:job (jobs.primitive.look {:pos #at [16.5 -1 16.5]})]
+         [:await {:source :job :kind :completed} 20]
+         [:job (jobs.primitive.toss {:item "cobblestone" :count 300})]
+         [:await {:source :job :kind :completed} 20]
+         [:wait-s 6]
+         [:job (jobs.storage.deposit {:chest #xyz [20 0 16]})]]
+   :expect [{:event {:source :job :kind :completed :context {:job-id "j3"}} :within-s 90}
+            {:no-event {:source :job :kind :goods.found} :for-s 30 :until {:source :job :kind :completed :context {:job-id "j3"}}}]
+   :after [[:item "dirt" 0]]
+   :limit-s 140}]}

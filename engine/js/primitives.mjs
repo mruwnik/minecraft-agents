@@ -16,7 +16,7 @@ import { createUseOn } from './use-on.mjs'
 import { createSteer } from './steer.mjs'
 import { trackLeashes } from './leash.mjs'
 import { mobFields } from './interact.mjs'
-import { trackLiveEntities, liveEntities } from './live-entities.mjs'
+import { trackLiveEntities, liveEntities, isOwnToss } from './live-entities.mjs'
 import { trackVehicles } from './vehicle.mjs'
 import { avoidEnderStare } from './gaze.mjs'
 import { traceSteps } from './step-trace.mjs'
@@ -301,7 +301,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
       playerCollect: (collector, collected) => {
         if (collector !== target.entity) return
         const item = collected && droppedItem(target, collected)
-        if (item) emit({ kind: 'picked-up', item: item.name, count: item.count, pos: here(), ...(ownWorkNear() && { own: true }) })
+        if (item) emit({ kind: 'picked-up', item: item.name, count: item.count, pos: here(), ...((ownWorkNear() || isOwnToss(target, collected.id, item.name)) && { own: true }) })
       },
       spawn: () => {
         emit({ kind: 'spawned' })

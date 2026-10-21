@@ -183,7 +183,7 @@ never dig or build; hazards (powder snow, cobweb, magma, campfires) add cost, an
 ### Body events
 
 `primitives.onBodyEvent(listener)` delivers `{kind, ...}` objects: `hurt` (health, food, amount, cause, attacker), `died`
-(pos, inventory, experience, cause: lava/fire/void from the block, else the lethal hit's attacker or damage type), `respawned`, `chat`, `picked-up`, `woke`, `player-joined`/`player-left`, `weather-changed` (raining, thundering), `spawned`,
+(pos, inventory, experience, cause: lava/fire/void from the block, else the lethal hit's attacker or damage type), `respawned`, `chat`, `picked-up` (`own` when it follows the body's own dig, use or transfer, or is its own toss picked up again), `woke`, `player-joined`/`player-left`, `weather-changed` (raining, thundering), `spawned`,
 `disconnected`, `error`, `reconnect-failed`, `world-not-loaded`, `physics-stalled`, `offline`, `online`, `sleep-status`
 (the action bar's sleep count: `sleeping`, `needed`, or `skipping`), `spawn-set` (pos; the "Respawn point set" line) and `spawn-reset` (the bed is gone). The engine
 turns each into a body-memory entry of that kind. `hurt` events are merged into one per second in the event log. A death

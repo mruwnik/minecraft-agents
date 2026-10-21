@@ -2,7 +2,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
-import { trackLiveEntities, liveEntities, itemSpawn, noteToss } from './live-entities.mjs'
+import { trackLiveEntities, liveEntities, itemSpawn, noteToss, isOwnToss } from './live-entities.mjs'
 
 const drop = (id, count) => ({ id, name: 'item', type: 'other', position: { x: 0, y: 0, z: 0 }, getDroppedItem: () => ({ name: 'stick', count }) })
 const botWith = entities => Object.assign(new EventEmitter(), { _client: new EventEmitter(), entities })
@@ -79,6 +79,20 @@ test('an item\'s spawn carries the body\'s recent tosses', () => {
   assert.equal(t.item, 'cobblestone')
   assert.equal(t.count, 3)
   assert.equal(itemSpawn(bot, 2).player, undefined, 'no player near')
+})
+
+test('an item that spawned right after the body\'s toss of its kind is its own toss; another kind or no toss is not', () => {
+  const bot = botWith({})
+  trackLiveEntities(bot)
+  bot.entities[2] = itemAt(2, 0, 64, 0)
+  bot.emit('entitySpawn', bot.entities[2])
+  assert.equal(isOwnToss(bot, 2, 'cobblestone'), false, 'no toss yet')
+  noteToss(bot, 'cobblestone', 3)
+  bot.entities[3] = itemAt(3, 0, 64, 0)
+  bot.emit('entitySpawn', bot.entities[3])
+  assert.equal(isOwnToss(bot, 3, 'cobblestone'), true)
+  assert.equal(isOwnToss(bot, 3, 'dirt'), false)
+  assert.equal(isOwnToss(bot, 99, 'cobblestone'), false, 'unknown entity')
 })
 
 test('the spawn record is forgotten with the entity', () => {
