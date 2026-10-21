@@ -154,7 +154,7 @@
 
 (defn ^:async explore-walk!
   "Walk and look for need (a jobs.explore.search child): :again once it is seen; a search that finds none stops the
-  gather source, as does the last of the explore-rounds searches for one need. Also :again when none is found and the body is still under rock (the next round stairs up)."
+  gather source, as does the last of the explore-rounds searches for one need. Also :again when none is found and the body is still under rock (the next round stairs up), and after a search that ran out of its own time (no verdict: not counted, the next round looks from where the body stands)."
   [c need]
   (let [targets (search-names need)
         k0 (get-in (ctx/mem c) [:explored (:key need)] 0)
@@ -174,7 +174,8 @@
     (if (= :continue e)
       :continue
       (let [res (:data e)
-            k (inc (get-in (ctx/mem c) [:explored (:key need)] 0))]
+            out-of-time? (boolean (some #(= :limit-reached (:kind %)) (take-while some? (iterate :because e))))
+            k (cond-> (get-in (ctx/mem c) [:explored (:key need)] 0) (not out-of-time?) inc)]
         (ctx/update-mem! c assoc-in [:explored (:key need)] k)
         (ctx/update-mem! c update :gather update :unreachable dissoc (:key need))
         (let [found? (= :found (:reason res))
@@ -183,7 +184,7 @@
           (when (and pos (not lead?) (< 12 (let [now (.-pos (.self (:primitives c)))] (js/Math.hypot (- x (.-x now)) (- z (.-z now))))))
             (ctx/update-mem! c assoc :approach {:x x :y y :z z}))
           (cond
-            (or (and found? (seen-of c need)) (surfacing? c need)) :again
+            (or (and found? (seen-of c need)) (surfacing? c need) out-of-time?) :again
             lead? (do (ctx/emit! c :obtain.lead :info {:message (str "found " (str/join "/" targets) " at " (str/join " " pos) " out of sight: walking to it") :pos pos})
                       (ctx/update-mem! c assoc-in [:gather :lead] {:key (:key need) :pos pos})
                       :again)
