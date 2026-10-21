@@ -186,11 +186,22 @@
           (is (= 2 (count (calls s "useOn"))))
           (is (true? (finished? s))))))))
 
+(deftest ground-the-plan-names-as-dirt-under-a-crop-cell-is-tilled
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (update (plan-of) :parts conj {:id "soil" :cells [[2 63 2]] :want "dirt"})
+              s (await (run {:area {:plan "mix"}} (world-of (ground "dirt" [[2 2]]) (ground "farmland" [[3 2]])
+                                                    {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 6)]})
+                            {"mix" plan} 60))]
+          (is (= "farmland" (block-at s 2 63 2)))
+          (is (= #{[2 64 2] [3 64 2]} (set (keys (placed s))))))))))
+
 (deftest ground-the-plan-names-as-something-else-is-not-tilled
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan (update (plan-of) :parts conj {:id "path" :cells [[2 63 2]] :want "dirt"})
+        (let [plan (update (plan-of) :parts conj {:id "path" :cells [[2 63 2]] :want "stone"})
               s (await (run {:area {:plan "mix"}} (world-of (ground "dirt" [[2 2]]) (ground "farmland" [[3 2]])
                                                     {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 6)]})
                             {"mix" plan} 60))]

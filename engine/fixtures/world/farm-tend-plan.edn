@@ -31,4 +31,15 @@
    :body {:inventory [["carrot" 40] ["stone_hoe" 1]]}
    :act [[:job (jobs.farm.maintain {:area {:plan "$plan:field"} :irrigate false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:tidy {:dug [:>= 1]}}}} :within-s 110 :of-job true}]
-   :after [[:block [10 0 16] "carrots[age=0]"] [:block [11 0 16] "carrots[age=0]"]]}]}
+   :after [[:block [10 0 16] "carrots[age=0]"] [:block [11 0 16] "carrots[age=0]"]]}
+  ;; the plan names the soil under the crop cells as dirt (a soil part): maintain still tills it and sows
+  {:name "maintain-tills-the-dirt-a-plan-names-under-its-crop-cells"
+   :blocks [[:fill [10 -1 16] [13 -1 16] "dirt"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]
+            [:set [10 0 16] "air"]]
+   :plans [{:id "field" :metadata {:by "$body"}
+            :parts [{:id "soil" :box [#at [10 -1 16] #at [13 -1 16]] :want "dirt"}
+                    {:id "row" :box [#at [10 0 16] #at [13 0 16]] :want {:crop "carrots"}}]}]
+   :body {:inventory [["carrot" 40] ["stone_hoe" 1]]}
+   :act [[:job (jobs.farm.maintain {:area {:plan "$plan:field" :part "row"} :irrigate false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:tend {:field {:crops 4 :untilled 0}}}}} :within-s 110 :of-job true}]
+   :after [[:block [10 -1 16] "farmland"] [:block [10 0 16] "carrots[age=0]"] [:block [13 0 16] "carrots[age=0]"]]}]}

@@ -449,6 +449,19 @@
             (is (= :nothing-to-do (:reason w)))
             (is (= 9 (:covered w)) "9 tillable cells have a block over them: the box sits too low")))))))
 
+(deftest nothing-to-do-over-a-box-names-who-refuses-the-tilling
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup (world (ground "dirt" all-cells) {:inventory [(item "stone_hoe" 1) (item "wheat_seeds" 4)]}) [foreign-zone])
+              _ (tu/seeing-after-look (:p s))]
+          (core/submit! (:eng s) (list 'jobs.farm.tend {:area box :till true}) {})
+          (await (tu/run-ticks (:eng s) (:clock s) 6 700))
+          (let [w (last (events-of s :waiting))]
+            (is (= :nothing-to-do (:reason w)))
+            (is (= 9 (:refused w)))
+            (is (= ["Miles"] (:owners w)))))))))
+
 (def far-box {:min {:x 202 :y 63 :z 2} :max {:x 204 :y 64 :z 4}})
 (def far-ripe
   (world {:blocks (into {} (map (fn [[x z]] [(k (+ x 200) 63 z) "farmland"])) all-cells)}

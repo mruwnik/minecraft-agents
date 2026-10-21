@@ -41,6 +41,16 @@
   (let [in (access/rules-input c)]
     (filterv #(not (gate/refused? (access/may? in action %))) poss)))
 
+(defn refusers
+  "Who refuses the hoe on the poss: {:zones :claims :plans :owners} of the refusals, nil when nothing is refused. It names
+  the plans so a wait says when it is the body's own plan."
+  [c poss]
+  (let [in (access/rules-input c)
+        vs (filter gate/refused? (map #(access/may? in :dig %) poss))]
+    (when (seq vs)
+      {:zones (vec (distinct (keep :zone vs))) :claims (vec (distinct (keep :claim vs)))
+       :plans (vec (distinct (keep :plan vs))) :owners (vec (distinct (keep :owner vs)))})))
+
 (defn ground-box
   "The box's ground layer as the box irrigate and its need work over."
   [{lo :min hi :max}]
@@ -81,6 +91,7 @@
                     (sort-by #(u/dist me %))
                     vec)
      :refused (- (count raw-untilled) (count (box-permitted c :dig raw-untilled)))
+     :refusers (refusers c raw-untilled)
      :covered (count (filter gr/covered? ground))
      :bare bare
      :seeds (transduce (map #(get (farm/sowable c) % 0)) + 0 seed-items)

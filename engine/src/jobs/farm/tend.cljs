@@ -57,7 +57,7 @@
   per cell, with the crop the plan names there:
   - harvest never digs a wrong crop. A ripe crop of another kind in a crop cell stays standing and is listed in
     :field :wrong {:pos :found :want} (warn farm-tend.wrong).
-  - till hoes the ground under a crop cell (the cell below, unless the plan names it as something else) while
+  - till hoes the ground under a crop cell (the cell below, unless the plan names it as something that is not soil (dirt, grass, farmland)) while
     a hoe is carried, the cell's seed outnumbers the bare farmland waiting for it and the access rules allow it.
     Farmland the plan wants without a crop over it is not tilled, since it would revert.
   - plant sows every bare crop cell with its own crop's seed. A cell whose seed is not carried stays bare, with one

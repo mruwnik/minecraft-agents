@@ -7,6 +7,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.gate :as gate]
             [jobs.lib.util :as u]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.crops :as crops]
             [jobs.farm.field :as fld]
             [jobs.farm.plant :as plant]
@@ -21,17 +22,18 @@
             [jobs.lib.world :as known]))
 
 (defn farmland-want?
-  "Whether a plan want accepts farmland: the block, a block map of it, or an :any naming it."
+  "Whether a plan want accepts farmland: farmland or the soil a hoe makes it of (a crop cell needs it above), as the
+  block, a block map of it, or an :any naming it."
   [want]
   (cond
-    (string? want) (= "farmland" want)
-    (map? want) (= "farmland" (:block want))
+    (string? want) (contains? bs/farmable-ground want)
+    (map? want) (contains? bs/farmable-ground (:block want))
     (vector? want) (boolean (some farmland-want? (rest want)))
     :else false))
 
 (defn ground-cells
   "{ground-pos crop}: the plan's farmland under the crop cells crops {pos crop}, the cell below each unless the plan
-  (answer) names it with a want that is not farmland."
+  (answer) names it with a want that is not soil (stone, a floor)."
   [answer crops]
   (let [wants (into {} (map (fn [{:keys [pos want]}] [(u/cell-pos pos) want])) (:cells answer))]
     (into {} (keep (fn [[pos crop]]
