@@ -152,12 +152,13 @@
   (:recover-danger, for ::danger-memory-ms; an assumed killer alone only while its guard lasts; at most until ::hold-slack
   times the walk back from the flight's end (est/flight-s) and the collect, as trip-s quotes them, would end at the despawn)
   and end condition-failed :danger: the hostile reflex takes the body away. The died trigger and the check rest for this
-  death meanwhile, then the danger is weighed anew. A hold under ::min-hold-s is no wait: the pile is fetched under the danger."
+  death meanwhile, then the danger is weighed anew. A hold under ::min-hold-s is no wait, and neither is a second hold
+  for the same mobs where a finished hold saw them: the pile is fetched under the danger."
   [c entry decided]
   (let [need-ms (* 1000 (cfg/hold-slack) (+ (second (await (trip-s c (:pos (:data entry))))) (:flight-s decided 0)))
         room (- (window-ms c entry) need-ms)
         hold-ms (min room (:hold-ms decided (cfg/danger-memory-ms)))]
-    (if (>= hold-ms (cfg/min-hold-ms))
+    (if (and (>= hold-ms (cfg/min-hold-ms)) (not (est/unchanged-after-hold? c decided)))
       (retreat! c entry decided hold-ms)
       (go-under-danger! c entry decided room))))
 

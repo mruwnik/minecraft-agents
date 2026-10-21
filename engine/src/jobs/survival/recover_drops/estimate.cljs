@@ -83,6 +83,15 @@
                :when (and (not (sees? m)) (not (still-there? m)))]
            m))))
 
+(defn unchanged-after-hold?
+  "True when a hold for this death (its :recover-danger entry) has run out and the mobs decided saw ({:seen-mobs}) all stand
+  where that hold left them: waiting longer would change nothing."
+  [c decided]
+  (let [entry (last (filter #(= (:death-t (ctx/mem c)) (:death-t (:data %))) (mem/entries (ctx/view c) :recover-danger)))
+        before (:mobs (:data entry))
+        same? (fn [m] (some #(and (= (:name m) (:name %)) (<= (u/dist (:pos m) (:pos %)) (cfg/mob-spot-radius))) before))]
+    (boolean (and entry (<= (:until (:data entry)) (ctx/now c)) (seq (:seen-mobs decided)) (every? same? (:seen-mobs decided))))))
+
 (defn flight-s
   "Seconds a flight from the priced mobs ([{:name :pos}]) may add to the walk back: until the farthest gives up the chase
   (jobs.lib.threats/follow-range past it), at walking speed."

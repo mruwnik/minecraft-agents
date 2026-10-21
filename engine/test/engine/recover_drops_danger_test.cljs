@@ -424,6 +424,23 @@
             (await (run-until-empty eng 20))
             (is (= :collected (:decision (recovered eng))))))))))
 
+(deftest a-mob-still-standing-where-a-finished-hold-saw-it-is-no-reason-to-hold-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pile dt/death-pile-of-the-field-report
+              {:keys [eng clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) dt/zombie-by-the-way)})
+              dear '(jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}})]
+          (die! eng {:pos dt/death-pos :inventory pile})
+          (core/submit! eng dear {})
+          (await (run-until-empty eng 5))
+          (is (= 1 (count (mem/entries (mem/view (:store eng)) :recover-danger))) "the first sight of the danger holds")
+          (swap! clock + 151000)
+          (core/submit! eng dear {})
+          (await (run-until-empty eng 20))
+          (is (= 1 (count (mem/entries (mem/view (:store eng)) :recover-danger))) "no second hold for the same mob")
+          (is (= :collected (:decision (recovered eng)))))))))
+
 (deftest a-pile-worth-fetching-is-fetched-under-the-danger-when-the-window-cannot-hold-a-wait
   (async done
     (tu/run-async done
