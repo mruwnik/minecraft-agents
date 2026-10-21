@@ -20,6 +20,7 @@
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.pit-drops :as pit-drops]
+            [jobs.survival.respond.pillar :as pillar]
             [jobs.survival.respond.state :as flight]
             [jobs.survival.wall-placer :as wall-placer]))
 
@@ -337,7 +338,7 @@
       (empty? cells) :hidden
       (nil? (lb/pick c (flight/blocks c))) (stop :no-blocks "nothing to roof the pit with")
       :else
-      (case (await (wall-placer/fill! c cells))
+      (case (if (await (pillar/strike-out! c (map u/cell-vec cells))) :hit (await (wall-placer/fill! c cells)))
         :ok (if-let [held (first (filter #(wall-placer/occupied? c %) cells))]
               (stop :roof-failed (str "cannot seal the pit: the plug cell is occupied by " (or (u/seen-name p held) "a block") " that does not seal"))
               (do (u/progress! c) :again))

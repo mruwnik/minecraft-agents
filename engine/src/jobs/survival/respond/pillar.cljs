@@ -125,22 +125,26 @@
 
 (def max-knocks 6)
 
-(defn ^:async knock-off!
-  "A hostile stands in the feet cell the pillar's next block goes into (the server refuses a block where a mob stands):
-  strike it once, which knocks it out of the cell. True when it was struck, false when none is there or the knocks are used."
-  [c]
+(defn ^:async strike-out!
+  "A hostile stands in one of cells (the server refuses a block where a mob stands): strike it once, which knocks it out
+  of the cell. True when it was struck, false when none is there or the knocks are used."
+  [c cells]
   (let [p (:primitives c)
-        feet (sh-sense/feet p)
         hostiles (filter #(= "hostile" (:kind %)) (lk/seen-entities p {:radius 4}))
-        ;; the jump may still be in the air: the cell of the block is the feet cell or the one under it
         mob (when (< (:knocks (ctx/mem c) 0) max-knocks)
-              (some #(pl/mob-in hostiles [(:x feet) % (:z feet)]) [(:y feet) (dec (:y feet))]))]
+              (some #(pl/mob-in hostiles %) cells))]
     (when mob
       (ctx/update-mem! c update :knocks (fnil inc 0))
       (let [{:keys [x y z]} (:pos mob)]
         (await (ctx/act c :look #js {:pos #js {:x x :y (+ y 1) :z z}}))
         (await (ctx/act c :attack #js {:id (:id mob)}))
         true))))
+
+(defn ^:async knock-off!
+  "strike-out! of the feet cell the pillar's next block goes into; the jump may still be in the air, so the cell under it counts too."
+  [c]
+  (let [feet (sh-sense/feet (:primitives c))]
+    (await (strike-out! c (map (fn [y] [(:x feet) y (:z feet)]) [(:y feet) (dec (:y feet))])))))
 
 (defn ^:async raise!
   "A pillared body that was hit: raise the pillar pillar-extend blocks from the top (its cells added to the refuge) when

@@ -778,9 +778,9 @@
       (fn ^:async t []
         (let [{:keys [p]}
               (await (hidden-round '(test.flight) {:blocks deep-dead-end :inventory [{:name "stone_pickaxe" :count 1}]
-                                            :entities [(zombie 1.5 64 0)]}
+                                            :entities [(zombie 1.0 64 0)]}
                                    1000 (fn [_] nil)))]
-          (is (zero? (count (calls p "attack"))) "a pickaxe and a pit beat a pickaxe fight")
+          (is (pos? (count (calls p "attack"))) "the zombie touching the roof cell is struck at before the roof goes in")
           (is (= [[0 63 0] [0 62 0]] (mapv #(let [pos (.. % -args -pos)] [(.-x pos) (.-y pos) (.-z pos)]) (calls p "dig"))) "two cells down: quicker than a pocket's four")
           (is (some #{[0 64 0]} (placed-cells p)) "the roof goes in above the head, shut against the zombie"))))))
 
