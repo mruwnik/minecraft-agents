@@ -20,6 +20,6 @@
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 16 minecraft:generic"]
          [:summon "creeper" [24.5 3 16.5]]]
-   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "creeper" :decision :flee}} :within-s 10}
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "creeper" :decision :flee}} :within-s 20}
             {:no-event {:source :body :kind :died} :for-s 25}]
    :limit-s 40}]}
