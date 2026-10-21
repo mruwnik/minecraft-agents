@@ -1,6 +1,6 @@
-;; Card 86035c28: a plan floor cell with its wall already built above it has no stand; the build gives it up unwalked and
-;; finishes the rest instead of searching for a stand until the job time is gone.
-;; Should-fail: the build ends nothing-possible :incomplete, the floor cell left empty.
+;; Card af57cc32: a plan floor cell with its wall already built above it is placed from beside it, as a player does;
+;; one shut in by stone on every side has no stand and is given up unwalked while the rest is built.
+;; Should-succeed: floor-cell-under-a-built-wall-is-placed. Should-fail: floor-cell-shut-in-is-given-up (nothing-possible :incomplete, cell left empty).
 {:defaults
  {:tags [:build] :time :any
   :plot {:height 8 :floor "stone"}
@@ -10,8 +10,14 @@
   :body {:at [4.5 0 12.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["cobblestone" 40]]}
   :limit-s 120}
  :cases
- [{:name "floor-cell-under-a-built-wall-is-given-up-unwalked"
+ [{:name "floor-cell-under-a-built-wall-is-placed"
    :blocks [[:set [12 1 12] "cobblestone"]]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:hut"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:block [12 0 12] "cobblestone"]]}
+  {:name "floor-cell-shut-in-is-given-up"
+   :body {:at [12.5 2 10.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["cobblestone" 40]]}
+   :blocks [[:fill [9 0 9] [15 1 15] "cobblestone"] [:set [12 0 12] "air"]]
    :act [[:job (jobs.build.from-plan {:plan "$plan:hut"})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :incomplete}} :within-s 100 :of-job true}]
    :after [[:not-block [12 0 12] "cobblestone"]]}]}

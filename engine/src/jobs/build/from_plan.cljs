@@ -293,7 +293,7 @@
   [c cells]
   (let [_ (ctx/update-mem! c retry-walks (u/self-pos c) false)
         _ (ctx/update-mem! c #(reduce (fn [m cell] (cond-> m (not (contains? (:given-up m) (:pos cell))) (assoc-in [:given-up (:pos cell)] :unreachable)))
-                                      % (covered cells)))
+                                      % (covered (:primitives c) cells (js/Math.floor (:y (u/self-pos c))) (set (:bad-stands (ctx/mem c))))))
         closed #(merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
         wanted (buildable cells (storage/carried-totals (u/inventory (:primitives c))) (closed))
         digs (diggable c (digging cells) (closed))

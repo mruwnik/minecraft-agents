@@ -196,17 +196,28 @@
           (is (= {[40 64 0] :unreachable} (:given-up result)))
           (is (= 0 (:placed result))))))))
 
-(deftest a-floor-cell-under-a-built-wall-is-given-up-without-a-walk
+(deftest a-floor-cell-under-a-built-wall-is-placed-from-beside-it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [plan {:id "hut" :parts [{:id "floor" :cells [[3 63 2]] :want "stone"}
-                                      {:id "wall" :cells [[3 64 2]] :want "stone"}]}
-              {:keys [eng p]} (start {:inventory [{:name "stone" :count 8}] :blocks {"3,64,2" "stone" "3,63,2" "air"}} {"hut" plan})
+        (let [plan {:id "hut" :parts [{:id "floor" :cells [[3 64 2]] :want "stone"}
+                                      {:id "wall" :cells [[3 65 2]] :want "stone"}]}
+              {:keys [eng]} (start {:inventory [{:name "stone" :count 8}] :blocks {"3,65,2" "stone" "3,64,2" "air" "3,63,2" "stone"}} {"hut" plan})
               result (await (child-outcome eng job {:plan "hut"} 200))]
-          (is (= {[3 63 2] :unreachable} (:given-up result)))
-          (is (= 0 (:placed result)))
-          (is (empty? (tu/walk-calls p))))))))
+          (is (= 1 (:placed result)))
+          (is (empty? (:given-up result))))))))
+
+(deftest a-floor-cell-shut-in-under-a-built-block-is-given-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "hut" :parts [{:id "floor" :cells [[3 64 2]] :want "stone"}
+                                      {:id "chest" :cells [[3 65 2]] :want "stone"}]}
+              ring (into {} (for [x (range 0 7) z (range -1 6) y [63 64 65]] [(str x "," y "," z) "stone"]))
+              {:keys [eng]} (start {:inventory [{:name "stone" :count 8}] :blocks (merge ring {"3,65,2" "stone" "3,64,2" "air" "3,63,2" "stone"}) :self {:pos {:x 9.5 :y 64 :z 2.5}}} {"hut" plan})
+              result (await (child-outcome eng job {:plan "hut"} 200))]
+          (is (= {[3 64 2] :unreachable} (:given-up result)))
+          (is (= 0 (:placed result))))))))
 
 (deftest walks-that-keep-ending-budget-stop-the-build-instead-of-trying-every-cell
   (async done
