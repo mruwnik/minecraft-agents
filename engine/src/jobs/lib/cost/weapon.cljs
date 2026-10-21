@@ -66,7 +66,7 @@
 
 (def mob-max-health
   "Full health of the common hostiles; unknown ones count as 20."
-  {"zombie" 20 "husk" 20 "drowned" 20 "zombie_villager" 20 "skeleton" 20 "stray" 20 "parched" 20 "bogged" 16 "breeze" 30 "blaze" 20 "ghast" 10
+  {"zombie" 20 "husk" 20 "drowned" 20 "zombie_villager" 20 "skeleton" 20 "stray" 20 "parched" 20 "bogged" 16
    "spider" 16 "cave_spider" 12 "creeper" 20 "witch" 26 "pillager" 24 "slime" 16 "silverfish" 8
    "endermite" 8 "phantom" 20 "vindicator" 24 "enderman" 40})
 
