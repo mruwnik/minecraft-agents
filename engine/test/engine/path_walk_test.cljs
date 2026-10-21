@@ -218,6 +218,7 @@
         ok? #(<= (:air %) wplan/masked-wet-limit-s)]
     (is (= [0 1 2] (mapv :x (wplan/dry-end [(s 0 3) (s 1 6) (s 2 8) (s 3 11)] (constantly false) ok?))) "kept to the last step within the air limit")
     (is (= [] (wplan/dry-end [(s 0 11)] (constantly false) ok?)))
+    (is (= [0 1] (mapv :x (wplan/dry-end [(s 0 3) (s 1 6) (s 2 11) {:x 3 :move :walk :air 2}] (constantly false) ok?))) "a dry step past a refused swim is not kept")
     (is (= [] (wplan/dry-end [(s 0 3)])) "without wet-ok? swimming steps are cut")))
 
 (deftest masked-wet-ok-keeps-swimming-steps-while-the-air-left-brings-the-body-back

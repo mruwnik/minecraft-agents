@@ -236,11 +236,13 @@
 (defn dry-end
   "A partial plan up to its last step out of water: a walk that cannot reach the goal never leaves the body swimming (at a
   bank too high to climb out, say), nor with its head in water (wet?, head-wet-fn: on a waterlogged ladder). With wet-ok? (a
-  masked walk), a swimming step it accepts counts as out of water too (a plan cut short by unseen water, not one that ran out of air)."
+  masked walk), the plan is first cut before the first swimming step it refuses, and the swimming steps left count as out of water too (a plan cut short by unseen water, not one that ran out of air)."
   ([steps] (dry-end steps (constantly false)))
-  ([steps wet?] (dry-end steps wet? (constantly false)))
+  ([steps wet?] (dry-end steps wet? nil))
   ([steps wet? wet-ok?]
-   (let [k (last (keep-indexed (fn [i s] (when (or (not (or (:swim s) (wet? s))) (wet-ok? s)) i)) steps))]
+   (let [steps (if wet-ok? (first (masked-cut steps wet-ok?)) steps)
+         swim-dry? (if wet-ok? (comp boolean :swim) (constantly false))
+         k (last (keep-indexed (fn [i s] (when (or (not (or (:swim s) (wet? s))) (swim-dry? s)) i)) steps))]
      (if k (subvec steps 0 (inc k)) []))))
 
 (defn- near-blocker-fn
