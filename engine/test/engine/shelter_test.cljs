@@ -907,7 +907,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :blocks ground})]
+        (let [{:keys [eng p seen]} (setup {:time night :blocks ground :inventory [{:name "iron_sword" :count 1}]})]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night} {:trigger :dawn}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
           (await (night-then-day eng p 4 #(fake/add-entity! p {:id 7 :name "zombie" :kind "hostile" :pos {:x 2 :y 64 :z 0}}) 6))
@@ -1184,7 +1184,7 @@
           (core/register-reflex! eng {:trigger :always-shelter})
           (let [held (mid-night! p (dec default-dawn) #(hash-map :futile (entries eng :shut-in-failed) :places (count (calls p "place")) :digs (count (calls p "dig"))))]
             (await (tick-n eng 6))
-            (is (= #{{:way :pit :reason :roof-failed} {:way :walls :reason :failed}} (set (map #(select-keys % [:way :reason]) (:futile @held)))) "written while the night holds")
+            (is (= #{{:way :pit :reason :roof-failed} {:way :walls :reason :nothing-possible}} (set (map #(select-keys % [:way :reason]) (:futile @held)))) "written while the night holds")
             (is (= 4 (:places @held)) "the pit's roof and the walls' first place, each refused once; no second pit is roofed")
             (await (tick-nights eng clock 3))
             (is (= (:digs @held) (count (calls p "dig"))) "the hold does not dig again"))
@@ -1323,7 +1323,7 @@
           (core/register-reflex! eng {:trigger :always-shelter})
           (let [futile (mid-night! p (dec default-dawn) #(entries eng :shut-in-failed))]
             (await (tick-n eng 8))
-            (is (= {:way :walls :reason :failed} (select-keys (first @futile) [:way :reason])) "written while the night holds"))
+            (is (= {:way :walls :reason :nothing-possible} (select-keys (first @futile) [:way :reason])) "written while the night holds"))
           (let [digs (count (calls p "dig"))
                 places (count (calls p "place"))]
             (swap! clock + 11000)
