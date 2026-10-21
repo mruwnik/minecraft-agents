@@ -597,6 +597,29 @@
           (is (= :arrived (:reason (done-event s))) (pr-str (done-event s)))
           (is (< 3 (first (:pos (cow-of s 1))) 12) "the cow ends inside the ring"))))))
 
+(deftest a-cow-stopped-at-the-shut-gate-is-let-in-by-walking-out-and-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng clock] :as s} (h/setup {:floor tu/walk-floor :self {:pos {:x 8 :y 64 :z 0}} :inventory wheat :entities [(cow 1 0)]
+                                                    :blocks (merge ring (tu/box 12 63 -1 12 63 1 "stone") {"12,64,0" "oak_fence_gate"})
+                                                    :states {"12,64,0" {:open false :facing "east"}}} 50)
+              out-x (atom 0)
+              trail! (fn [token a impl]
+                       (.then (impl token a)
+                              (fn [r]
+                                (let [bx (.. p self -pos -x)]
+                                  (swap! out-x max bx)
+                                  (when (<= 13 @out-x) (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :pos [(min 13.5 (- bx 2.4)) 64 0]) es)))))
+                                r)))]
+          (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :pos [13.5 64 0]) es)))
+          (doseq [act ["steer" "wait"]] (.override (.-world p) act trail!))
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos {:x 8 :y 64 :z 0}}) {})
+          (loop [i 0] (when (and (< i 200) (not (finished? s))) (swap! clock + 700) (await (core/tick! eng)) (recur (inc i))))
+          (is (<= 13 @out-x) "the body went out through the gate")
+          (is (= :arrived (:reason (done-event s))) (pr-str (done-event s)))
+          (is (< 3 (first (:pos (cow-of s 1))) 12) "the cow ends inside the ring"))))))
+
 (deftest a-body-inside-a-pen-walks-out-through-the-gate-to-a-cow-far-outside
   (async done
     (tu/run-async done

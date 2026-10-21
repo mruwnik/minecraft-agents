@@ -76,6 +76,17 @@
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
            [:block [24 0 16] "oak_fence_gate[open=false]"]]
    :limit-s 200}
+  ;; card 37227f3b: the cow waits just outside the shut gate (within 3 of the cell two past it): the body still goes out and in so the gate opens for it
+  {:name "cow-waiting-at-the-shut-gate-is-let-in"
+   :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"]
+            [:fill [19 0 14] [23 0 18] "air"]
+            [:set [24 0 16] "oak_fence_gate[facing=east,open=false]"]]
+   :body {:at [21.5 0 16.5] :yaw 270 :inventory [["wheat" 4]] :effects [["resistance" 900 4]]}
+   :act [[:summon "cow" [25.5 0 16.5]]
+         [:job (jobs.animals.lure-to {:mob "cow" :pos #xyz [21 0 16] :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :arrived :in-box true}} :within-s 150 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
+           [:block [24 0 16] "oak_fence_gate[open=false]"]]}
   ;; should fail: a cow that does not move never follows; the run ends with a reason, never :arrived, and the cow stays out
   {:name "cow-that-never-follows-is-not-arrived"
    :act [[:summon "cow" [10.5 0 18.5] "{NoAI:1b}"]

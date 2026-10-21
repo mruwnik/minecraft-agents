@@ -48,7 +48,7 @@
   :lost / :stalled detail for those reasons}. Reasons:
   - :arrived: the body stands within ::arrive-range of :pos and the animal is seen in :box (none: within ::arrive-range + ::arrive-slack blocks of :pos, in the fenced pen :pos is in, if any) and not in the cell of a planned gate, else the
     body holds still for it up to 10 s and the end is :animal-outside (seen elsewhere) or :lost (not seen). The food is then put away (another carried item in hand when no slot is free); :near says whether the animal is by the spot.
-  A body that stands in the destination (:box, or the fenced pen around :pos) with the animal outside it first walks out of the pen's fence gate to the cell two past it, the animal following, and then in again (the animal follows food over the ground, not across a fence), unless the animal is within ::gate-near of that cell.
+  A body that stands in the destination (:box, or the fenced pen around :pos) with the animal outside it first walks out of the pen's fence gate to the cell two past it, the animal following, and then in again (the animal follows food over the ground, not across a fence). An animal waiting at the shut gate counts as outside: the body goes out and the legs open the gate on the way in.
   - :animal-outside: the body is at :pos but the animal is not in the destination; the result gives :distance (animal to :pos).
   Every ending the job concludes itself gives :distance: the animal's, or its last sighting's when it is unseen (the engine's limit ending carries no data).
   - :no-animal (no animal to lure within :radius), :no-food, :no-hold (the food would not stay in hand), :lost, :animal-stalled (result :stalled {:animal :body :distance}),
@@ -76,7 +76,6 @@
    ::near-spot {:default 6 :doc "An animal this close (flat) to :pos counts as :near." :spec (a/num-in 0 nil)}
    ::arrive-slack {:default 3 :doc "Without :box the animal arrives when it is within ::arrive-range plus this many blocks (flat) of :pos: it follows the food a few blocks behind." :spec (a/num-in 0 nil)}
    ::gate-hold-range {:default 10 :doc "Planned gates this near :pos are held open while the lure runs, in blocks." :spec (a/num-in 0 nil)}
-   ::gate-near {:default 3 :doc "An animal this close (flat) to the cell outside the destination's gate is led in as it is, not round to the gate first." :spec (a/num-in 0 nil)}
    ::ground-search {:default 16 :doc "Blocks above and below :pos looked over for the ground of its column when the unreachable text names it." :spec (a/int-in 0 nil)}})
 (defn note-age-ms [] (* 1000 (settings/get settings ::note-age-s)))
 
@@ -85,7 +84,6 @@
 (defn arrive-slack [] (settings/get settings ::arrive-slack))
 (defn arrive-range [] (settings/get settings ::arrive-range))
 (defn gate-hold-range [] (settings/get settings ::gate-hold-range))
-(defn gate-near [] (settings/get settings ::gate-near))
 (defn ground-search [] (settings/get settings ::ground-search))
 
 (def ways need/fetch-ways)
@@ -385,8 +383,9 @@
 
 (defn gate-waypoint
   "The cell two past the destination's nearest fence gate (to the animal) when the body stands inside the destination and
-  the animal outside it, farther than ::gate-near from that cell; else nil. The animal follows the food over the ground, so a
-  gate on the far side is walked round to, not leaned across."
+  the animal outside it; else nil. The animal follows the food over the ground, so a gate on the far side is walked round
+  to, not leaned across, and an animal stopped at the shut gate is let in by walking out and in again. The cell is at the
+  ground there (the gate may hang over a slope)."
   [c a]
   (let [cells (destination-cells c)
         me (u/cell-vec (u/self-pos c))
@@ -396,9 +395,10 @@
       (let [outs (for [[x y z] cells [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
                        :let [g {:x (+ x dx) :y y :z (+ z dz)}]
                        :when (and (not (contains? cells [(:x g) y (:z g)])) (some-> (block-at g) .-name (str/ends-with? "_fence_gate")))]
-                   {:x (+ (:x g) (* 2 dx) 0.5) :y y :z (+ (:z g) (* 2 dz) 0.5)})
-            nearest (first (sort-by #(u/flat-dist there %) outs))]
-        (when (and nearest (< (gate-near) (u/flat-dist there nearest))) nearest)))))
+                   (let [wx (+ (:x g) (* 2 dx)) wz (+ (:z g) (* 2 dz))
+                         wy (or (some #(when (reach/standable-cell? (:primitives c) {:x wx :y % :z wz}) %) [y (dec y) (- y 2) (inc y)]) y)]
+                     {:x (+ wx 0.5) :y wy :z (+ wz 0.5)}))]
+        (first (sort-by #(u/flat-dist there %) outs))))))
 
 (defn ^:async arrive!
   "The body stands at :pos: the job ends :arrived once the led animal is at the destination; until then the body holds
