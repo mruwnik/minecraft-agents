@@ -907,11 +907,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :blocks ground :inventory [{:name "iron_sword" :count 1}]})]
+        (let [{:keys [eng p seen]} (setup {:time night :blocks ground})
+              day? (atom false)]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night} {:trigger :dawn}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
-          (await (night-then-day eng p 4 #(fake/add-entity! p {:id 7 :name "zombie" :kind "hostile" :pos {:x 2 :y 64 :z 0}}) 6))
-          (is (>= (:y (pos-of p)) 64) "out of the pit: a hostile is the hostile reflex's business, not the shelter's")
+          ;; the fake clock only moves when told: each hold of the day lets 1500 ticks pass, so the unarmed grace runs out
+          (on-wait! p (fn [n] (when @day? (.setTime (.-world p) (+ noon (* n 1500))))))
+          (await (night-then-day eng p 4 #(do (reset! day? true) (fake/add-entity! p {:id 7 :name "zombie" :kind "hostile" :pos {:x 2 :y 64 :z 0}})) 12))
+          (is (>= (:y (pos-of p)) 64) "out of the pit once the unarmed grace is over: a hostile is the hostile reflex's business, not the shelter's")
           (is (nil? (core/holder eng)) "no hold: the shelter ended")
           (is (empty? (emitted seen :dig-in.staying)))
           (is (empty? (emitted seen :stopped)))
