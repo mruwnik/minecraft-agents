@@ -119,6 +119,18 @@
                                              {:pos [8 64 0] :range 1} zones))]
           (is (true? (:arrived @out)) "a body inside the zone is never shut in by it"))))))
 
+(deftest go-to-leaving-a-zone-never-digs-in-the-zone-round-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zones [{:name "vault" :owner "Miles" :min [-3 60 -3] :max [2 70 3]}
+                     {:name "outer" :owner "Miles" :min [-60 0 -60] :max [60 120 60]}]
+              {:keys [out p]} (await (run-job! (merge in-room {:blocks room}) 'jobs.movement.go-to
+                                               {:pos [8 64 0] :range 1} zones))
+              dug-in-outer (remove #(<= -3 (first %) 2) (dug-cells p))]
+          (is (empty? dug-in-outer) "the way out ignores the vault, not the zone round it")
+          (is (= {:step :none :why :zone} (:escalation @out))))))))
+
 (deftest go-to-never-digs-in-another-s-zone
   (async done
     (tu/run-async done

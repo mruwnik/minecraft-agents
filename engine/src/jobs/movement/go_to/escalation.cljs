@@ -130,6 +130,17 @@
   [c [x y z]]
   (some? (access/foreign-holder c {:x x :y y :z z})))
 
+(defn exit-dig-fn
+  "(may-dig? cell) for the way out of the holding at feet: zones are ignored only in cells that holding covers or that
+  nobody holds, so a neighbouring zone, claim or plan still refuses."
+  [c feet]
+  (let [home (access/foreign-holder c (zipmap [:x :y :z] feet))
+        free (may-dig-fn (assoc-in c [:args :ignore-zones?] true))]
+    (fn [cell]
+      (and (free cell)
+           (let [h (access/foreign-holder c (zipmap [:x :y :z] cell))]
+             (or (nil? h) (= h home)))))))
+
 (defn ^:async escalate!
   "Start the next escalation for the give-up kept in memory (:give-up), or give up with it when there is none (or
   with failed, the detail of the escalation that just failed, when there is none left after it; past max-escalations
@@ -157,7 +168,7 @@
               (own-stair c feet goal)
               (choose (may-dig-fn c)))
         choosable? #(not= :none (:step (choose %)))
-        zone-free (may-dig-fn (assoc-in c [:args :ignore-zones?] true))
+        zone-free (exit-dig-fn c feet)
         e (cond
             (not= :none (:step e)) e
             (and (access/spare-own-builds) (choosable? (may-dig-fn c false)))
