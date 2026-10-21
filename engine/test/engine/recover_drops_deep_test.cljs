@@ -181,3 +181,38 @@
           (is (= {:decision :abandoned :reason :unreachable} (select-keys (recovered eng) [:decision :reason])) (pr-str (recovered eng)))
           (is (= 1 (count (filter #(and (= :stopped (:kind %)) (= :unreachable (:reason %))) @seen))))
           (is (re-find #":no-tool \(no pickaxe could be got\)" (:detail (recovered eng))) (pr-str (recovered eng))))))))
+
+(defn stair-script
+  "A deep-ground run whose first n stairs end stopped on :no-floor (the later ones are real)."
+  [n]
+  (fn ^:async t []
+    (let [calls (atom 0)
+          {:keys [eng p seen]} (setup {:blocks deep-ground :inventory [{:name "iron_pickaxe" :count 1} {:name "torch" :count 16}]
+                                       :entities [{:id 1 :name "item" :kind "item" :pos pile-pos :item {:name "diamond" :count 5}}]})
+          real (get registry/jobs 'jobs.access.tunnel)
+          eng (assoc-in eng [:jobs 'jobs.access.tunnel]
+                        (assoc real :round (fn ^:async stub [c]
+                                             (if (< @calls n)
+                                               (do (swap! calls inc)
+                                                   (ctx/end c :condition-failed :no-floor {:reason :no-floor :cell [20 49 0]}))
+                                               (await ((:round real) c))))))]
+      (die! eng {:pos pile-pos :inventory pile} 5000)
+      (core/submit! eng job {})
+      (await (run-until-empty eng 200))
+      {:eng eng :calls calls})))
+
+(deftest a-stair-stopped-on-the-world-is-tried-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng calls]} (await ((stair-script 2)))]
+          (is (= 2 @calls))
+          (is (= :collected (:decision (recovered eng))) (pr-str (recovered eng))))))))
+
+(deftest a-stair-that-keeps-stopping-on-the-world-is-given-up-after-three
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng calls]} (await ((stair-script 10)))]
+          (is (= 3 @calls))
+          (is (= {:decision :abandoned :reason :unreachable} (select-keys (recovered eng) [:decision :reason])) (pr-str (recovered eng))))))))
