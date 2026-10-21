@@ -81,4 +81,16 @@
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 40 :of-job true :until {:source :job :kind :completed}}]
    :after [[:body-near [8.5 0 16.5] 2]]
-   :limit-s 60}]}
+   :limit-s 60}
+  ;; card 47a84af2: farm animals live on the surface, so a body sealed under rock climbs out (stair up) and then sees the cow;
+  ;; the old search planned legs to cave stands under rock and never went up. Body in a 3x3x2 room in a stone mass 7 high, cow 14 east on the grass.
+  {:name "farm-animal-search-from-a-sealed-room-climbs-out-and-finds-the-cow"
+   :time :any
+   :plot {:height 12}
+   :blocks [[:fill [10 0 10] [22 6 22] "stone"] [:fill [15 0 15] [17 1 17] "air"]]
+   :body {:at [16.5 0 16.5] :inventory [["iron_pickaxe" 1]]}
+   :act [[:summon "cow" [30.5 0 16.5] "{NoAI:1b}"]
+         [:job (jobs.explore.search {:target ["cow" "pig" "sheep" "chicken"] :count 1 :scan-radius 32 :use-notes false :spend {:job-time 150}})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 160 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 160 :of-job true :until {:source :job :kind :completed}}]
+   :limit-s 170}]}

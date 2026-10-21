@@ -21,7 +21,8 @@
             [jobs.lib.world-files :as world]
             [jobs.lib.child :as child]
             [plan.shape :as shape]
-            [jobs.explore.search :as search]))
+            [jobs.explore.search :as search]
+            [jobs.lib.shelter.sense :as sh-sense]))
 
 (def ground
   "Grass at y 63 under every column within r of the origin (r a little past the search's :max-distance): every leg the
@@ -636,6 +637,15 @@
         (let [s (await (search! {:target "iron_ore" :count 1 :max-distance 8 :settings {:jobs.explore.search/spacing 4} :scan-radius 16 :spend {:job-time 40}}
                                 {:blocks sealed-room :cone? true :self {:pos {:x 16.5 :y 64 :z 16.5}}} 60))]
           (is (nil? (found-of s)) (pr-str (:found (found-of s)))))))))
+
+(deftest a-leg-for-farm-animals-never-stands-under-rock-but-one-for-ore-may
+  (let [p (tu/seeing-all (tu/fake {:blocks (ground 36)}))
+        choose (fn [names] (with-redefs [sh-sense/sky-light-at (constantly 0)]
+                             (settings/with-settings {:jobs.explore.search/spacing 4 :jobs.explore.search/max-distance 8}
+                               #(search/choose-leg {:args {:pattern :spiral} :primitives p} {:origin [0 64 0]} names []))))]
+    (is (nil? (:leg (choose ["cow" "pig"]))))
+    (is (every? #(= :underground (:reason %)) (:failed (choose ["cow" "pig"]))))
+    (is (some? (:leg (choose ["diamond_block"]))))))
 
 (deftest a-note-of-a-block-the-body-now-sees-as-something-else-is-not-a-finding
   (async done

@@ -11,6 +11,9 @@
             [jobs.lib.area :as area]
             [jobs.lib.breath :as breath]
             [jobs.lib.child :as child]
+            [jobs.lib.food-animals :as food-animals]
+            [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.surface-up :as surface-up]
             [jobs.lib.look :as look]
             [jobs.lib.patch :as patch]
             [jobs.lib.pace :as pace]
@@ -30,6 +33,8 @@
   found too, nearest first. It ends when :count are found. Otherwise it walks the next leg with
   jobs.movement.go-to as a child (range 2). One call is the whole search; it yields (:continue) only while go-to waits
   on the world or for leg columns to load (:chunks-loading).
+
+  For farm animals (cow, pig, sheep, chicken, rabbit) a body under rock first climbs out (jobs.lib.surface-up), and a leg whose stand is under rock (no sky light) is skipped (:underground): they live on the surface.
 
   Legs are ::spacing apart: :spiral points on rings round the origin, the one nearest the body first (so a body in a corridor walks on), or :outward ahead along :heading (a :heading alone means :outward), then the sides, and on further ahead once those are tried or searched. A
   leg is never tried twice and never goes beyond the max-distance setting (XZ) of the origin. It is skipped (:skipped)
@@ -54,7 +59,7 @@
   The ending's data: {:found [{:what :pos :id? :noted? :by?}] :coverage {:legs :scans
   :failed [{:pos :reason}] :skipped :farthest} :why :text} and the ending:
   - :done: :count found.
-  - :nothing-possible :distance (no leg left), :legs (::max-legs walked) or :stuck (three failed walks in a row).
+  - :nothing-possible :distance (no leg left), :no-way-up (animals that live at the surface, the body under rock and no stair up), :legs (::max-legs walked) or :stuck (three failed walks in a row).
   - :limit-reached :job-time (the call's :spend :job-time, default ::job-time-s) or :wall-time (default ::wall-time-s); the engine ends it, with the data of done? ({:found :coverage :why}) and neither event; with :least targets found (default 1) the engine ends it :done instead.
   - A call with no :target and no :patch never runs (:bad-args).
 
@@ -184,6 +189,11 @@
             (or (open? n) (leaves? n)) (recur (dec h))
             (and (= :solid (reach/kind-of #js {:name n})) (open? (block-at [x (inc h) z])) (open? (block-at [x (+ h 2) z]))) {:y (inc h)}
             :else {:fail :no-surface}))))))
+
+(defn surface-only?
+  "Whether every name is an animal that spawns on lit grass at the surface: nothing is looked for underground."
+  [names]
+  (every? food-animals/food-animals names))
 
 (defn finding-key [{:keys [what id pos]}] [what (or id pos)])
 
@@ -395,7 +405,9 @@
         origin [((:origin m) 0) ((:origin m) 2)]
         tried (into (set (:tried m)) (map (fn [{[x _ z] :pos}] [x z])) (:deferred m))
         p (:primitives c)
-        block-at (seen-at p)]
+        block-at (seen-at p)
+        surface? (surface-only? names)
+        underground? (fn [sy pt] (and surface? sy (sh-sense/buried-at? p {:x (pt 0) :y sy :z (pt 1)})))]
     (loop [[pt & more] (candidates c m) reads 0 acc {:tried [] :failed [] :skipped 0 :held 0 :unloaded (vec (:deferred m))}]
       (cond
         (nil? pt) acc
@@ -403,7 +415,7 @@
         (or (tried pt) (> (xz-dist pt origin) max-distance) (= pt [ox oz])) (recur more reads acc)
         (held? (:blocked m) [ox oz] pt) (recur more reads (update acc :held inc))
         (some #(notes/covers? % pt names) ns) (recur more reads (-> acc (update :tried conj pt) (update :skipped inc)))
-        :else (let [{sy :y fail :fail} (stand-cell block-at (pt 0) (pt 1) y)
+        :else (let [{sy :y fail :fail} (let [r (stand-cell block-at (pt 0) (pt 1) y)] (if (underground? (:y r) pt) {:fail :underground} r))
                     failed {:pos [(pt 0) y (pt 1)] :reason fail}
                     step (when (= :unseen fail) (step-toward block-at (here c) (pt 0) (pt 1)))]
                 (cond
@@ -463,8 +475,15 @@
   "Start the next leg, or end the search for want of one."
   [c names ns]
   (let [m (ctx/mem c)]
-    (if (>= (:legs m 0) (settings/get settings ::max-legs))
+    (cond
+      (and (surface-only? names) (sh-sense/buried? (:primitives c)))
+      (case (await (surface-up/step! c))
+        :continue :continue
+        :out :again
+        (finish! c :not-found :no-way-up))
+      (>= (:legs m 0) (settings/get settings ::max-legs))
       (finish! c :not-found :legs)
+      :else
       (let [{:keys [leg step column tried failed skipped unloaded more held]} (choose-leg c m names ns)]
         (ctx/update-mem! c (fn [m] (-> m
                                        (update :tried (fnil into []) tried)
