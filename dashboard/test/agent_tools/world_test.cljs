@@ -18,9 +18,9 @@
 
 (deftest every-action-is-a-job-submit-by-the-driver
   (are [args spec] (= spec (apply spec-of args))
-    ["move-to" "1" "64" "-2"] '(jobs.movement.go-to {:pos {:x 1 :y 64 :z -2}})
+    ["move-to" "1" "64" "-2"] '(jobs.movement.reach {:pos {:x 1 :y 64 :z -2}})
     ["move-to" "1" "64" "-2" "--range" "2" "--doors" "leave-open" "--no-escalate"]
-    '(jobs.movement.go-to {:pos {:x 1 :y 64 :z -2} :range 2 :doors :leave-open :ways #{:walk :clear-seal}})
+    '(jobs.movement.reach {:pos {:x 1 :y 64 :z -2} :range 2 :walk {:doors :leave-open} :ways #{:walk :clear-seal}})
     ["dig" "1" "64" "2"] '(jobs.blocks.dig {:pos {:x 1 :y 64 :z 2}})
     ["dig" "1" "64" "2" "--ignore-zones"] '(jobs.blocks.dig {:pos {:x 1 :y 64 :z 2} :ignore-zones? true})
     ["place" "1" "64" "2" "oak_planks"] '(jobs.blocks.place {:pos {:x 1 :y 64 :z 2} :item "oak_planks"})
@@ -113,8 +113,8 @@
 
 (deftest move-to-with-two-numbers-is-a-column-goal
   (are [args spec] (= spec (apply spec-of args))
-    ["move-to" "10" "-35"] '(jobs.movement.go-to {:pos [10 -35]})
-    ["move-to" "10" "-35" "--range" "2"] '(jobs.movement.go-to {:pos [10 -35] :range 2}))
+    ["move-to" "10" "-35"] '(jobs.movement.reach {:pos [10 -35]})
+    ["move-to" "10" "-35" "--range" "2"] '(jobs.movement.reach {:pos [10 -35] :range 2}))
   (is (fails-with #"x z or x y z" ["--world" "w" "Probe" "submit" "move-to" "1"])))
 
 (deftest usage-points-gates-and-doors-at-access-toggle

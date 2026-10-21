@@ -11,7 +11,7 @@
 
 (def usage
   (str "usage: world.mjs <agent> submit <action> [args] --world <world> [--worlds <dir>] [--state <legacy-parent>] [--who NAME] [--exclusive]\n"
-       "  submit move-to <x> <y> <z> | <x> <z> (a column: its surface) [--range <n>] [--doors shut|leave-open|never] [--no-escalate]   (jobs.movement.go-to)\n"
+       "  submit move-to <x> <y> <z> | <x> <z> (a column: its surface) [--range <n>] [--doors shut|leave-open|never] [--no-escalate]   (jobs.movement.reach)\n"
        "  submit dig <x> <y> <z> [--ignore-zones] | submit place <x> <y> <z> <item> [--ignore-zones]   (jobs.blocks.dig / place)\n"
        "  submit use-on <x> <y> <z> [--item <item>|none] [--face up|down|north|south|east|west]   (jobs.items.use)\n"
        "  For gates, doors, trapdoors and levers prefer jobs.mjs submit '(jobs.access.toggle {:pos [x y z] :state :open|:closed|:on|:off|:press})': it reads the state first and says why it could not change it.\n"
@@ -57,13 +57,13 @@
   [action args {:keys [range doors no-escalate ignore-zones item face hand]}]
   (let [zones #(cond-> % ignore-zones (assoc :ignore-zones? true))]
     (case action
-      "move-to" (list 'jobs.movement.go-to
+      "move-to" (list 'jobs.movement.reach
                       (cond-> (if (= 2 (count args))
                                 {:pos [(num (first args) "x") (num (second args) "z")]}
                                 (do (when-not (= 3 (count args)) (fail "move-to needs x z or x y z"))
                                     (pos-args action args 3)))
                         (some? range) (assoc :range (num range "--range"))
-                        (some? doors) (assoc :doors (keyword doors))
+                        (some? doors) (assoc-in [:walk :doors] (keyword doors))
                         no-escalate (assoc :ways #{:walk :clear-seal})))
       "dig" (list 'jobs.blocks.dig (zones (pos-args action args 3)))
       "place" (list 'jobs.blocks.place (zones (assoc (pos-args action args 4) :item (nth args 3))))

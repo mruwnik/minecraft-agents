@@ -15,6 +15,7 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.waits :as waits]
+            [jobs.movement.go-to.column :as column]
             [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.holes :as holes]
             [jobs.movement.go-to.way-steps :as way-steps]))
@@ -35,7 +36,7 @@
   Quote: a walk to the goal.")
 
 (a/defargs args
-  {:pos {:doc "where to go, [x y z] or {:x :y :z}" :spec ::a/pos :default nil}
+  {:pos {:doc "where to go: [x y z] or {:x :y :z}; [x z] or {:x :z}: the ground of that column (go-to walks it, no span is built)" :spec column/pos-or-column? :default nil}
    :range {:doc "how close counts as there, in blocks" :spec (a/num-in 0 nil) :default 1}
    :walk {:doc "the go-to call to walk with: its args and call keys, but not :pos, :range or :ways" :spec map? :default {}}
    :ignore-zones? :shared})
@@ -206,7 +207,7 @@
     (let [m (ctx/mem c)
           stepped (cond
                     (:span m) (await (build-span! c))
-                    (:full m) (let [e (await (child/call-walk* c :full (walk-args c true)))]
+                    (or (:full m) (nil? (goal-of c))) (let [e (await (child/call-walk* c :full (walk-args c true)))]
                                 (if (= :continue e) :continue (forward c e)))
                     (:direct m) (do (ctx/update-mem! c dissoc :direct) (pick! c (:last-walk m)))
                     :else
