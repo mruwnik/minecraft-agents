@@ -7,6 +7,9 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.need :as need]
+            [jobs.lib.ledger :as ledger]
+            [jobs.lib.waits :as waits]
+            [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.dig-look :as dig-look]
@@ -79,7 +82,7 @@
   fence_gates, wooden_trapdoors ...) is built in one species chosen for the plan (carried most, else the nearest log seen,
   else oak), booked, fetched by that species, and named in the result (:wood \"birch\"); a species name (oak_planks) stays exact.
   When cells are missing but none of their blocks is carried and none can be fetched, the call ends condition-failed :no-items with :needs.
-  Material: while cells wait for an item not carried (and not given up or refused), each round fetches it, once no cell can be placed from what is carried (a missing bed never holds up the cells above it; when the ways allow it,
+  Material: while cells wait for an item not carried (and not given up or refused), each round fetches it, once no cell can be placed from what is carried (a missing bed never holds up the cells above it, and a bed the body put down itself within ::own-bed-radius is broken and taken up (jobs.access.cleanup, :purpose :bed) before one is fetched; when the ways allow it,
   jobs.lib.need with :explore on: a jobs.items.obtain child for the missing count, walking off to look for what is unseen; an item whose fetch failed is not asked again in the call); a pickaxe block to dig without a pickaxe fetches the tool the same way
   (jobs.items.get-tool). With ways #{:carried}, or once a fetch failed, the build goes on with what is carried and ends
   short (the text and :fetch-failed name each failed fetch and why), a pickaxe block given up :no-tool.")
@@ -101,6 +104,7 @@
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one build may take." :spec (a/int-in 1 nil)}
    ::give-up {:default 3 :doc "Refused places or failed walks after which a cell is given up." :spec (a/int-in 1 nil)}
+   ::own-bed-radius {:default 64 :doc "Blocks within which a bed the body put down itself (scaffold ledger purpose :bed) is taken up for a plan bed before a new one is fetched." :spec (a/int-in 0 nil)}
    ::off-bed-tries {:default 3 :doc "Walks off a bed or bottom slab the body stands on, before the roof cells over it are given up." :spec (a/int-in 1 nil)}
    ::hole-depth {:default 2 :doc "Levels of walls round the body from its feet up that make it a body in a hole, whose walks may climb out." :spec (a/int-in 1 nil)}
    ::hole-walks {:default 2 :doc "Walks in a row that fail from a hole after which the build stops :shut-in." :spec (a/int-in 1 nil)}
@@ -381,21 +385,45 @@
               (ctx/update-mem! c retry-walks (u/self-pos c) true)
               (if (= before (ctx/mem c)) (finish! c cells) :again)))))
 
+(defn own-bed-near?
+  "Whether a bed this body put down (scaffold ledger purpose :bed) still stands within ::own-bed-radius and no cleanup holds it."
+  [c]
+  (let [view (ctx/view c)
+        held (ledger/held-cells view)
+        me (u/self-pos c)]
+    (boolean (some (fn [{:keys [cell item]}]
+                     (and (not (held cell)) (<= (u/dist me (u/cell-pos cell)) (settings/get settings ::own-bed-radius))
+                          (ledger/same-block? item (u/seen-name (:primitives c) (u/cell-pos cell)))))
+                   (filter #(= :bed (:purpose %)) (ledger/open-entries view))))))
+
+(defn ^:async take-own-bed!
+  "Break the bed this body put down and pick it up (jobs.access.cleanup): :continue while that waits, else :again."
+  [c]
+  (let [r (waits/waiting-out c (await (ctx/call c :take-bed 'jobs.access.cleanup
+                                                {:of :all :purpose #{:bed} :near {:pos (u/self-pos c) :radius (settings/get settings ::own-bed-radius)} :ignore-zones? true
+                                                 :checks {:fit? '(always) :safe? '(not (threatened))}})))]
+    (if (= :continue r)
+      :continue
+      (do (sh-spawn/retract-bed! c (:removed (:data r))) :again))))
+
 (defn ^:async fetch-step!
   "Fetch what the plan lacks (jobs.lib.need) when a fetch is due: :continue while the child waits on the world, :again
-  once it ended (a failed one, a limit too, is booked), nil when nothing is due."
+  once it ended (a failed one, a limit too, is booked), nil when nothing is due. A bed the plan lacks is first taken up
+  from where the body put its own down, when one stands near."
   [c]
   (when-let [w (plan/problem c)]
-    (let [o (assoc (need/fetch-opts c) :explore (:explore (:args c)) :for-plan (:plan (:args c)))
-          bed? (and (= :need (:reason w)) (wood/bed? (:item w)))
-          e (await (cond
-                     bed? (need/blocks! c wood/bed-names (:count w) o)
-                     (= :need (:reason w)) (need/item! c (:item w) (:count w) o)
-                     :else (need/tool! c {:block (:block w)} o)))]
-      (cond
-        (= :continue e) :continue
-        (= :done (:kind e)) :again
-        :else (do (book-failed! c w e) :again)))))
+    (let [bed? (and (= :need (:reason w)) (wood/bed? (:item w)))]
+      (if (and bed? (need/fetch-opts c) (own-bed-near? c))
+        (await (take-own-bed! c))
+        (let [o (assoc (need/fetch-opts c) :explore (:explore (:args c)) :for-plan (:plan (:args c)))
+              e (await (cond
+                         bed? (need/blocks! c wood/bed-names (:count w) o)
+                         (= :need (:reason w)) (need/item! c (:item w) (:count w) o)
+                         :else (need/tool! c {:block (:block w)} o)))]
+          (cond
+            (= :continue e) :continue
+            (= :done (:kind e)) :again
+            :else (do (book-failed! c w e) :again)))))))
 
 (defn hold-bed!
   "A bed the plan still has to place, and one carried: reserved for the call's life, so the night does not make it a camp bed."

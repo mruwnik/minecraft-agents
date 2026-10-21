@@ -1091,6 +1091,20 @@
           (is (= [] (:missing result)))
           (is (< (.indexOf names "place") (.indexOf names "transfer")) "the carried planks go in before the body goes for the bed"))))))
 
+(deftest a-plan-bed-is-the-bed-the-body-put-down-itself-taken-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "house" :parts [{:id "bed-head" :cells [[4 64 4]] :want {:block "bed" :facing :south :part :head}}
+                                        {:id "bed-foot" :cells [[4 64 3]] :want {:block "bed" :facing :south :part :foot}}]}
+              {:keys [eng p]} (start {:blocks (assoc ground "1,64,1" "red_bed")} {"house" plan})
+              _ (ledger/write! (:store eng) [{:cell [1 64 1] :item "red_bed" :before "air" :job "j9" :purpose :bed :state :placed}])
+              _ (tu/seeing-all p)
+              result (await (child-outcome eng job {:plan "house"} 300))]
+          (is (= [] (:missing result)))
+          (is (= "red_bed" (block p [4 64 3])) "the plan's bed is the one taken up")
+          (is (= "air" (block p [1 64 1])) "from where the night put it down"))))))
+
 (deftest missing-material-is-fetched-from-a-seen-chest-by-default
   (async done
     (tu/run-async done

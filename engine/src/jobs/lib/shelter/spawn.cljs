@@ -103,6 +103,15 @@
       (ctx/remember! c :spawn-lost {:pos pos :why why} spawn-lost-policy)
       (ctx/emit! c :spawn_lost :warn {:pos pos :why why :text (str "the respawn bed at " (pr-str pos) " is gone (" (name why) "): the next death respawns at the world spawn")}))))
 
+(defn retract-bed!
+  "A bed cleanup took (an item ending _bed among the removed cells) is no longer the remembered :bed or :home, nor the respawn bed."
+  [c removed]
+  (when-let [pos (some-> (first (filter #(.endsWith (str (:item %)) "_bed") removed)) :cell u/cell-pos)]
+    (doseq [kind [:bed :home]
+            :when (= (mem/place (ctx/view c) kind) pos)]
+      (ctx/remember! c kind {:gone true :was pos} mem/place-policy))
+    (lose-spawn! c pos :taken)))
+
 (defn spawn-bed-at?
   "Whether the live :spawn-bed is within spawn-near of pos (the bed's other half counts)."
   [view pos]

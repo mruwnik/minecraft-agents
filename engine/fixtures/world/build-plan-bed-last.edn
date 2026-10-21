@@ -1,11 +1,10 @@
-;; Card b1fac1cb: jobs.build.from-plan places the carried blocks above a missing bed's level before it fetches the bed.
-;; A plan wants a bed on the floor and a dirt cell on top of the stone at [20 0 16]; the body carries the dirt, a seen chest
-;; at [14 0 19] holds a red bed. Should-succeed: the dirt goes in before the need child starts, then the bed is fetched and placed.
+;; Card b1fac1cb: jobs.build.from-plan gets a plan bed last, and from the body's own put-down bed first.
+;; A plan wants a bed on the floor and a dirt cell on top of the stone at [20 0 16]; the body carries the dirt.
+;; Case 1: a seen chest at [14 0 19] holds a red bed. The dirt goes in before the need child starts, then the bed is fetched and placed.
+;; Case 2: no chest; the bed the night put down (scaffold ledger :bed) stands at [12 0 12]. It is broken and placed in the plan, no fetch.
 {:defaults
  {:tags [:build :fetch] :time :any
   :plot {:height 8}
-  :blocks [[:set [20 0 16] "stone"]
-           [:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:red_bed\",count:1}]}"]]
   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["dirt" 4]]}
   :plans [{:id "house" :metadata {:by "$body"}
            :parts [{:id "bed-foot" :cells [#at [17 0 19]] :want {:block "bed" :facing :south :part :foot}}
@@ -14,9 +13,20 @@
   :limit-s 150}
  :cases
  [{:name "carried-cell-above-the-bed-goes-in-before-the-bed-is-fetched"
+   :blocks [[:set [20 0 16] "stone"]
+            [:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:red_bed\",count:1}]}"]]
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 45 20"] [:until-seen {:block "chest"} 10]
          [:job (jobs.build.from-plan {:plan "$plan:house"})]]
    :expect [{:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 100 :of-job true
              :until {:source :job :kind :child_ended :data {:slot :place}}}
             {:event {:source :job :kind :completed :data {:kind :done}} :within-s 140 :of-job true}]
-   :after [[:block [20 1 16] "dirt"] [:block [17 0 19] "red_bed"]]}]}
+   :after [[:block [20 1 16] "dirt"] [:block [17 0 19] "red_bed"]]}
+  {:name "own-placed-bed-is-taken-up-for-the-plan-bed-not-fetched"
+   :blocks [[:set [20 0 16] "stone"]
+            [:set [12 0 12] "red_bed[facing=east,part=foot]"] [:set [13 0 12] "red_bed[facing=east,part=head]"]]
+   :memory [{:kind :scaffold :data {:entries [{:cell #at [12 0 12] :item "red_bed" :before "air" :job "j99" :purpose :bed :state :placed}]}}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:house"})]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :take-bed}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed :data {:kind :done}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 100 :of-job true :until {:source :job :kind :completed}}]
+   :after [[:block [17 0 19] "red_bed"] [:block [12 0 12] "air"]]}]}

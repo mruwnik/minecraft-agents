@@ -2,7 +2,6 @@
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [engine.ctx :as ctx]
-            [engine.memory :as mem]
             [jobs.lib.checks :as checks]
             [jobs.lib.combat :as combat]
             [jobs.lib.dawn :as dawn]
@@ -62,15 +61,6 @@
       (doseq [cell cells] (ctx/remember! c :doorway-stuck-warned {:cell cell} stuck-warned-policy))
       (ctx/emit! c :night.doorway-stuck :warn {:cells cells :text (str "could not open the doorway it filled at " (pr-str cells) "; trying again quietly")}))))
 
-(defn retract-bed!
-  "A bed cleanup took (an item ending _bed among the removed cells) is no longer the remembered :bed or :home, nor the respawn bed."
-  [c removed]
-  (when-let [pos (some-> (first (filter #(.endsWith (str (:item %)) "_bed") removed)) :cell u/cell-pos)]
-    (doseq [kind [:bed :home]
-            :when (= (mem/place (ctx/view c) kind) pos)]
-      (ctx/remember! c kind {:gone true :was pos} mem/place-policy))
-    (sh-spawn/lose-spawn! c pos :taken)))
-
 (defn ^:async take-back!
   "Take back what the night put down outside its own zones, the doorway blocks it filled and the bed (scaffold ledger
   purposes :doorway and :bed), with one jobs.access.cleanup call that walks to them, digs and picks up the drops. Cells it
@@ -80,7 +70,7 @@
                                                 {:of :all :purpose #{:doorway :bed} :ignore-zones? true
                                                  :checks {:fit? '(always) :safe? '(not (threatened))}})))]
     (when-not (= :continue r)
-      (retract-bed! c (:removed (:data r)))
+      (sh-spawn/retract-bed! c (:removed (:data r)))
       (warn-stuck! c (let [held (ledger/held-cells (ctx/view c))]
                        (filterv #(held (:cell %)) (ledger/open-entries (ctx/view c))))))
     :again))
