@@ -20,7 +20,8 @@
             [jobs.survival.respond.pillar :as pillar]))
 
 (a/defargs settings
-  {::on-lava {:default :seal :doc ":seal: lava a plug's dig lays open is filled with a carried block; :stop: the pocket or pit is dropped and the lava left." :spec #{:seal :stop}}})
+  {::on-lava {:default :seal :doc ":seal: lava a plug's dig lays open is filled with a carried block; :stop: the pocket or pit is dropped and the lava left." :spec #{:seal :stop}}
+   ::creeper-range {:default 16 :doc "Blocks within which a creeper past its swell range is too near for a plug to be begun (walls, pit or pocket): the walls take longer than it needs to arrive. The flight runs, fights or pillars instead." :spec (a/num-in 0 nil)}})
 (defn held?
   "Whether a retreat child (its memory, as the parent sees it) holds a refuge: sealed in, on a pillar or in a pit."
   [child-mem]
@@ -88,11 +89,20 @@
                   (ctx/update-mem! c assoc :zone-dig true))
                 nil))))
 
+(defn creeper-coming?
+  "Whether a known creeper is past swell-range and within ::creeper-range of the body: the walls would come too late
+  and the body has time to do better. One already swelling beside the body is walled off."
+  [c]
+  (let [p (:primitives c) range (settings/get settings ::creeper-range)]
+    (boolean (some #(and (combat/creeper? %) (< danger-q/swell-range (danger-q/mob-distance p %) (inc range)))
+                   (flight/near-known p (set (flight/dead-ids c)) range range)))))
+
 (defn ^:async plug-option!
   "A plug option of a cornered body (:plug: the walls, :plug-dig: pit or pocket), once a flight: plug!'s result, nil when
-  it failed or was tried; a pit or pocket is not dug in a body already shut in (its walls did not keep the hostile off)."
+  it failed or was tried or a creeper is near (creeper-coming?: not begun, not tried either); a pit or pocket is not dug in a body already shut in (its walls did not keep the hostile off)."
   [c option ways]
   (when-not (or (flight/tried? c option)
+                (and (not (:plugging (ctx/mem c))) (creeper-coming? c))
                 (and (#{:plug-dig :plug-dig-zone} option) (dig-cells/sealed-in? (:primitives c) :walls sh-sense/default-roof-height)))
     (or (await (plug! c option ways)) (do (flight/tried! c option) nil))))
 

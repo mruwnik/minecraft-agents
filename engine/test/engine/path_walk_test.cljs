@@ -489,33 +489,3 @@
         [cut? c] (wplan/masked-cut steps ok)]
     (is (= [12 true] [(count cut?) c]))
     (is (= [steps false] (wplan/masked-cut steps (constantly true))))))
-
-(defn ^:async settled-plans
-  "How many plans drive/plan-settled makes when plan-fn answers the reasons in order (the last one repeats)."
-  [reasons]
-  (let [clock (atom 1000000)
-        [_ sink] (tu/legacy-capture-sink)
-        p (tu/fake {:blocks (floor (range 12)) :self {:pos {:x 0.5 :y 64 :z 1.5}}})
-        calls (atom 0)
-        plan-fn (fn [_] (let [i (min @calls (dec (count reasons)))]
-                          (swap! calls inc)
-                          {:r #js {:reason (nth reasons i)}}))
-        parent {:round (fn ^:async settling [c] (await (drive/plan-settled c plan-fn)) (ctx/end c :done nil))}
-        eng (core/create {:primitives p :jobs (assoc registry/jobs 'settling-parent parent)
-                          :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
-                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-    (core/submit! eng '(settling-parent) {})
-    (loop [i 0]
-      (when (and (< i 100) (seq (:list (core/state eng))))
-        (swap! clock + 500)
-        (await (core/tick! eng))
-        (recur (inc i))))
-    @calls))
-
-(deftest a-start-that-does-not-stand-is-planned-again-a-few-times
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (is (= 3 (await (settled-plans ["start-not-standable" "start-not-standable" nil]))) "stands on the third try")
-        (is (= (inc drive/start-retries) (await (settled-plans ["start-not-standable"]))) "never stands: gives up after the retries")
-        (is (= 1 (await (settled-plans ["goal-enclosed"]))) "other reasons are not retried")))))

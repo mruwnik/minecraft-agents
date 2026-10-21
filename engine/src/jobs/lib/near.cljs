@@ -127,7 +127,7 @@
   "Plan from where the body stands and follow the plan (drive/follow!: planned again in the same round when the look-ahead
   sees the way change, a partial plan is due a refresh, or a mob is in the way of a stuck body; each replan is a :replan
   info event {:why :ms :kept :replans :at}): the walk's result map (jobs.lib.walk), or the no-path result of a plan that
-  is not walked. Every plan reads a fresh pathWorld; the caller has checked there is one. A plan that finds the body's own cell not standable is made again a few times (drive/plan-settled). Each steer is bounded by timeout-s.
+  is not walked. Every plan reads a fresh pathWorld; the caller has checked there is one. Each steer is bounded by timeout-s.
   With doors other than :never, a plan may open blocks (iron ones are, unless a button, lever or plate works them); one that will not open is a wall for one more
   plan, then the result is :no-path :door-stuck. Before and after the walk, the blocks this job opened and left (a cut
   round, a walk that ended in a doorway) are shut when within reach (pass/shut-leftovers!); farther ones, and those a cut
@@ -150,7 +150,7 @@
                     (pass/walk! c steps {:timeout-s timeout-s :doors doors :shut-also shut-also :watch watch})))]
     (when-not (= :never doors) (await (pass/shut-leftovers! c)))
     (let [result (loop [walls [] stuck nil]
-                   (let [plan (await (drive/plan-settled c (fn [_] (plan! c to range doors (policy-of) walls explore one-way budget progress dangers avoid dark tolls unknown))))]
+                   (let [plan (await (plan! c to range doors (policy-of) walls explore one-way budget progress dangers avoid dark tolls unknown))]
                      (if-let [no (wplan/no-walk plan 0 (policy-of))]
                        (if stuck (door-stuck stuck) (with-sight no plan to))
                        (if-let [why (and stair-check (empty? walls) (stair-check plan true))]

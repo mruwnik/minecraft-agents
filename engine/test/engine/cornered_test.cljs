@@ -1598,6 +1598,21 @@
           (is (nil? out))
           (is (zero? @plugs) "no pit or pocket is dug in a sealed cell, the hide-hold loop"))))))
 
+(deftest a-plug-is-not-begun-with-a-creeper-coming-from-beyond-its-swell-range
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[x begun] [[10 0] [3 1] [30 1]]]
+          (let [m (atom {})
+                p (tu/fake-on-floor {:entities [(creeper x 64 0)]})
+                plugs (atom 0)]
+            (with-redefs [ctx/call (fn ^:async f [& _] (swap! plugs inc) :continue)
+                          ctx/use (constantly nil)
+                          ctx/mem (fn [c] @(:mem c))
+                          ctx/update-mem! (fn [c f & args] (apply swap! (:mem c) f args))]
+              (await (refuge/plug-option! (assoc (stub-ctx p m) :args {}) :plug #{:walls})))
+            (is (= begun @plugs) (str "creeper " x " blocks off"))))))))
+
 (defn mob-at [mob-name x] #js {:name mob-name :id 9 :seen true :pos #js {:x x :y 64 :z 0} :distance x})
 
 (def hut
