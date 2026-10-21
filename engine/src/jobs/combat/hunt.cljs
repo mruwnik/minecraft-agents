@@ -203,7 +203,7 @@
   (checks/refusing
    :quarry "there is something to hunt"
    (fn [c]
-     (when-not (or (:started (ctx/mem c)) (heard-kind c))
+     (when-not (or (:started (ctx/mem c)) (area/outside c) (heard-kind c))
        (cond
          (unarmed-cause c) (unarmed-cause c)
          (and (not (look/surveyed? c)) (empty? (present-any c))) nil
@@ -218,8 +218,8 @@
     (contract/never :bad-args "no mob drops that item" :why "no mob drops that item")))
 
 (def can-start?
-  "Waits while the body is outside the call's area, then on a start fact."
-  (cond/and bad-args area/inside start-fact))
+  "Waits on a start fact (none while the body is outside the area: the first step walks there)."
+  (cond/and bad-args start-fact))
 
 (def can-run? "The start fact again between steps, until the first step is made." start-fact)
 
@@ -323,9 +323,13 @@
 (defn ^:async step
   "One step: attack the target, collect, finish, or pick the next target. :again, :yield (a child is waiting on the world) or :done."
   [c]
-  (if (and (not (:started (ctx/mem c))) (not (look/surveyed? c)) (empty? (present-any c)))
-    (await (survey c))
-    (await (hunt-step c))))
+  (let [w (await (area/walk-in! c))]
+    (cond
+      (= :there w) :again
+      (= :continue w) :yield
+      w w
+      (and (not (:started (ctx/mem c))) (not (look/surveyed? c)) (empty? (present-any c))) (await (survey c))
+      :else (await (hunt-step c)))))
 
 (defn ^:async hunt-round
   "The whole hunt of one kind: steps until it ends; yields only while a child waits on the world."

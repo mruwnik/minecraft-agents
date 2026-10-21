@@ -4,7 +4,7 @@
 ;; unsheared one and spares the sheared; obtain 2 white wool from 4 white sheep kills 2 and keeps 2; with only brown sheep it
 ;; takes brown (obtain.wool-colour); a pig 8 blocks off is hunted with keep 0.
 ;; Should-fail: all white sheep sheared: the hunt stops :no-color; a pig 30 blocks off with radius 24 waits :too-few naming the
-;; nearest.
+;; nearest. A pig in an area 24 blocks off (:center, radius 8) is walked to and hunted.
 {:defaults
  {:tags [:animals :hunt :wool]
   :plot {:height 6}
@@ -63,6 +63,12 @@
             {:count-event {:source :job :kind :animal.killed :data {:rule :cull}} :for-s 90 :at-least 2}]
    :after [[:entities "type=sheep,tag=wt,nbt={Color:12b}" [[0 0 0] [31 3 31]] 2]
            [:entities "type=sheep,tag=wt,nbt={Color:0b}" [[0 0 0] [31 3 31]] 2]]}
+  ;; a :center away from the body: the hunt walks there first, never waits :outside-area
+  {:name "hunt-pig-in-an-area-24-blocks-off-walks-there"
+   :act [[:summon "pig" [28.5 0 16.5] "{NoAI:1b}"]
+         [:job (jobs.combat.hunt {:item "porkchop" :keep 0 :radius 8 :center #at [28 0 16]})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.combat.hunt"}} :within-s 80}]
+   :after [[:item "porkchop" [:>= 1]]]}
   {:name "hunt-pig-8-blocks-off-with-keep-0"
    :act [[:summon "pig" [12.5 0 16.5] "{NoAI:1b}"]
          [:job (jobs.combat.hunt {:item "porkchop" :keep 0 :radius 24})]]

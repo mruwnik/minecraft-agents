@@ -397,6 +397,17 @@
           (is (zero? (count (h/calls (:p s) "steer"))) "no sound, no steps")
           (is (= [:too-few] (distinct (map :reason (events-of s :waiting))))))))))
 
+(deftest a-hunt-over-an-area-far-away-walks-there-then-hunts
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory h/sword :entities [(cow 1 45)]} 20)
+              _ (core/submit! (:eng s) (spec {:item "beef" :count 1 :keep 0 :radius 10 :center [45 64 0]}) {})
+              _ (await (run-ticks s 200 700))]
+          (is (empty? (events-of s :waiting)) "never waits outside the area")
+          (is (= :count (:reason (done-event s))))
+          (is (= [1] (distinct (attacked s)))))))))
+
 (deftest a-cow-behind-the-body-is-hunted-once-the-body-has-looked-round
   (async done
     (tu/run-async done
