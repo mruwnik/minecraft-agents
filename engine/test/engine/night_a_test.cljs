@@ -260,7 +260,8 @@
               mid (atom nil)]
           (st/on-wait! p (fn [n] (case n
                                 1 (reset! mid {:sleeps (mapv st/arg-pos (st/calls p "sleep")) :placed (mapv :cell (ledger/open-entries (mem/view (:store eng))))})
-                                2 (do (fake/swap-self! p assoc :isSleeping false) (.setTime (.-world p) noon))
+                                2 (do (mem/write! (:store eng) :spawn-bed {:pos (first (:sleeps @mid))} {:cap 1 :ttl :forever})
+                                      (fake/swap-self! p assoc :isSleeping false) (.setTime (.-world p) noon))
                                 nil)))
           (core/submit! eng '(jobs.survival.night) {})
           (await (core/tick! eng))
@@ -274,6 +275,7 @@
             (is (= [(u-cell foot)] (:placed @mid)) "outside any own zone: entered in the ledger for the morning")
             (is (= [foot] (mapv st/arg-pos (st/calls p "dig"))) "picked up by day by leave-shelter")
             (is (= [] (ledger/open-entries (mem/view (:store eng)))) "taken back")
+            (is (= 1 (count (st/emitted seen :spawn_lost))) "the respawn bed it took is noted lost")
             (is (empty? (st/calls p "moveTo")) "the drop is picked up without a direct move")
             (is (= [] (:list (core/state eng))))))))))
 

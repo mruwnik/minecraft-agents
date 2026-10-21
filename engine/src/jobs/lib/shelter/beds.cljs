@@ -203,8 +203,7 @@
                (ledger/open-entries view)))))
 
 (defn bed-to-collect
-  "By day: the foot cell [x y z] of the bed the night put down outside the body's own zones (ledger purpose :bed; slept in
-  and made the respawn point, it is no longer an entry) while it still stands, else nil."
+  "By day: the foot cell [x y z] of the bed the night put down outside the body's own zones (ledger purpose :bed, the respawn bed too) while it still stands, else nil."
   [p view]
   (:cell (first (standing-entries p view :bed))))
 

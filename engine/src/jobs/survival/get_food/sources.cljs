@@ -220,7 +220,10 @@
                               {:chest pos :items {item (+ before n)} :ignore-zones? (:ignore-zones? (:args c))}))]
     (cond
       (= :continue st) :continue
-      (> (carried-count c item) before) :again
+      (> (carried-count c item) before)
+      (do (ctx/emit! c :food.took-from-chest :info {:pos pos :item item :count (- (carried-count c item) before)
+                                                    :text (str "took " (- (carried-count c item) before) " " item " from the chest at " (pr-str pos))})
+          :again)
       :else (bury-source! c pos))))
 
 (defn ^:async chest!

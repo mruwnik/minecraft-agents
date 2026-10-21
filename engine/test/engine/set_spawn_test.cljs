@@ -49,7 +49,7 @@
           (is (= [{:pos bed}] (entries eng :spawn-bed)))
           (is (= [nil] (mapv :why (emitted seen :completed)))))))))
 
-(deftest a-bed-the-night-put-down-that-becomes-the-spawn-bed-leaves-the-ledger
+(deftest a-bed-the-night-put-down-that-becomes-the-spawn-bed-stays-in-the-ledger-to-be-picked-up
   (async done
     (run-async done
       (fn ^:async t []
@@ -57,7 +57,7 @@
               {:keys [eng]} (await (run-set-spawn bed-world {} (fn [e]
                                                                  (know-bed! e bed)
                                                                  (ledger/write! (:store e) [(night-bed [6 64 0]) (night-bed [40 64 0])]))))]
-          (is (= [[40 64 0]] (mapv :cell (ledger/open-entries (mem/view (:store eng))))) "only the respawn bed stays"))))))
+          (is (= [[6 64 0] [40 64 0]] (mapv :cell (ledger/open-entries (mem/view (:store eng))))) "the respawn bed is picked up too"))))))
 
 (deftest set-spawn-clicks-from-within-the-servers-bed-range
   (async done

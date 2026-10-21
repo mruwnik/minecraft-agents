@@ -15,6 +15,7 @@
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.util :as u]
             [jobs.survival.night.hold :as hold]))
 
@@ -23,7 +24,7 @@
   trigger starts it; night itself ends when the body is sheltered or the night is over.
   Waits :night by night. Done once nothing is left: no shelter the body is shut in (jobs.lib.dig-in-leave/leave!: walls
   dug, a pit climbed, the shelter's valuable blocks taken back), no doorway the night filled (still holding a block it
-  put there) to dig again, no bed it put down outside its own zones (not the respawn bed) to dig up, no drop to walk
+  put there) to dig again, no bed it put down outside its own zones (the respawn bed too: the body keeps its only bed, and the respawn point is noted lost) to pick up, no drop to walk
   over. A shelter with no way out ends nothing-possible :no-way-out (the cell is remembered as :shelter-trapped, so the
   trigger lets go). A shelter it left is remembered the same way, so a walk back through its cell is no new dawn. A body shut in stays while a known hostile is near and the dawn grace lasts (night.dawn-hold; longer with no weapon carried).
   A doorway cell it could not open is warned night.doorway-stuck once and tried again quietly.
@@ -62,11 +63,13 @@
       (ctx/emit! c :night.doorway-stuck :warn {:cells cells :text (str "could not open the doorway it filled at " (pr-str cells) "; trying again quietly")}))))
 
 (defn retract-bed!
-  "A bed cleanup took (an item ending _bed among the removed cells) is no longer the remembered :bed."
+  "A bed cleanup took (an item ending _bed among the removed cells) is no longer the remembered :bed or :home, nor the respawn bed."
   [c removed]
-  (when-let [{:keys [cell]} (first (filter #(.endsWith (str (:item %)) "_bed") removed))]
-    (when (= (mem/place (ctx/view c) :bed) (u/cell-pos cell))
-      (ctx/remember! c :bed {:gone true :was (u/cell-pos cell)} mem/place-policy))))
+  (when-let [pos (some-> (first (filter #(.endsWith (str (:item %)) "_bed") removed)) :cell u/cell-pos)]
+    (doseq [kind [:bed :home]
+            :when (= (mem/place (ctx/view c) kind) pos)]
+      (ctx/remember! c kind {:gone true :was pos} mem/place-policy))
+    (sh-spawn/lose-spawn! c pos :taken)))
 
 (defn ^:async take-back!
   "Take back what the night put down outside its own zones, the doorway blocks it filled and the bed (scaffold ledger

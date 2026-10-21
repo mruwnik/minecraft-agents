@@ -100,6 +100,7 @@
           (await (one-round! eng {}))
           (is (= [] (:list (core/state eng))) "one round")
           (is (= ["bread"] (call-args p "transfer" "item")))
+          (is (= [{:pos {:x 20 :y 64 :z 0} :item "bread" :count 4}] (mapv #(select-keys % [:pos :item :count]) (filterv #(= :food.took-from-chest (:kind %)) @seen))) "says where the bread came from")
           (is (= 20 (food p)))
           (is (= [:completed] (mapv :kind (ended seen)))))))))
 
