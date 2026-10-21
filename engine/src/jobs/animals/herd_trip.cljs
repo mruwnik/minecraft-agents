@@ -9,12 +9,14 @@
             [jobs.lib.child :as child]
             [engine.ctx :as ctx]
             [jobs.lib.pen :as pen]
-            [jobs.lib.util :as u]
+            [jobs.lib.pen-read :as pen-read]
+            [jobs.lib.sense :as sense]
+                        [jobs.lib.util :as u]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.bait :as bait]
             [jobs.animals.herd-run :refer [animal-now deepest end! finish! gate-open? held-by-me? in-pen-adults lure? near-pen out-1 read-pen regather-radius set-phase! stage]]
-            [jobs.animals.herd-pen :refer [animal-pos nearer-stage! pinned-ms settle-at! step-in-step]]))
+            [jobs.animals.herd-pen :refer [look-range animal-pos nearer-stage! pinned-ms settle-at! step-in-step]]))
 
 
 (a/defargs settings
@@ -94,24 +96,48 @@
                               (animals/adults (:primitives c) mob listed))
                      {:penned-ok? true})))
 
-(defn trapped?
-  "Whether animal a stands in a closed pocket of ground (a pit it cannot step out of) that does not hold the staging cell."
+(def max-pit-looks 12)
+
+(defn unseen-wall
+  "The nearest cell of answer's :unloaded leaks (never seen) not yet looked at from where the eye sees it, or nil."
+  [c answer]
+  (let [here (u/self-pos c)
+        looked (set (:looked-pit (ctx/mem c)))]
+    (->> (:leaks answer) (filter #(= :unloaded (:why %))) (map :pos)
+         (remove #(contains? looked [(:x %) (:y %) (:z %)]))
+         (take (- max-pit-looks (count looked)))
+         (sort-by #(u/dist here {:x (+ (:x %) 0.5) :y (+ (:y %) 0.5) :z (+ (:z %) 0.5)}))
+         first)))
+
+(defn ^:async trapped?
+  "Whether animal a stands in a closed pocket of ground (a pit it cannot step out of) that does not hold the staging cell:
+  true, false, or :walking when a round went on walking to or looking at a wall cell of the pocket never seen (a wall faces
+  away from the rim on its far side). A cell still unknown after its look is no wall: the animal is not judged trapped."
   [c a]
   (let [{:keys [x y z]} (u/pos-of (.-pos a))
-        answer (pen/check {:block-at (u/seen-block-at-fn (:primitives c)) :at {:x (js/Math.floor x) :y (js/Math.floor (+ y 0.01)) :z (js/Math.floor z)}
-                           :max-cells (settings/get spare/settings ::spare/pen-max-cells)})]
-    (boolean (and (:closed? answer) (seq (:inside answer))
-                  (not (contains? (:inside answer) (vec (nth (:axis (ctx/mem c)) (stage c)))))))))
+        answer (pen-read/read (:primitives c) {:at {:x (js/Math.floor x) :y (js/Math.floor (+ y 0.01)) :z (js/Math.floor z)}
+                                               :max-cells (settings/get spare/settings ::spare/pen-max-cells)})
+        unk (when (= :unloaded (:reason answer)) (unseen-wall c answer))]
+    (if unk
+      (let [cell [(:x unk) (:y unk) (:z unk)]
+            r (await (near/go-near! c unk (look-range) {:doors :never :ways #{:walk :clear-seal} :see true}))]
+        (when-not (= :partial r)
+          (when (= :there r) (await (sense/look-at! c cell)))
+          (ctx/update-mem! c update :looked-pit (fnil conj []) cell))
+        :walking)
+      (boolean (and (:closed? answer) (seq (:inside answer))
+                    (not (contains? (:inside answer) (vec (nth (:axis (ctx/mem c)) (stage c))))))))))
 
-(defn book-trapped!
-  "Looks once at the nearest candidate: one trapped in a pocket is given up :no-exit. True when it was."
+(defn ^:async book-trapped!
+  "Looks once at the nearest candidate: one trapped in a pocket is given up :no-exit. True when it was or the walk to look is still on (the round is used)."
   [c]
   (let [m (ctx/mem c)
         a (first (remove #(contains? (set (:exit-checked m)) (animals/key-of %)) (lure-candidates c)))
         k (some-> a animals/key-of)]
     (when a
-      (let [trapped (trapped? c a)]
-        (ctx/update-mem! c #(cond-> (update % :exit-checked (fnil conj []) k) trapped (update :given-up assoc k :no-exit)))
+      (let [trapped (await (trapped? c a))]
+        (when-not (= :walking trapped)
+          (ctx/update-mem! c #(cond-> (update % :exit-checked (fnil conj []) k) trapped (update :given-up assoc k :no-exit))))
         trapped))))
 
 (defn ^:async search!
@@ -242,7 +268,7 @@
             (await (look-back! c lost))
             (if (search-due? c)
               (await (search! c))
-              (if (book-trapped! c)
+              (if (await (book-trapped! c))
                 :continue
                 (if (lure? c) (await (lure-next! c)) (await (lead-next! c))))))))))
 

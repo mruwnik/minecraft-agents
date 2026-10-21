@@ -398,7 +398,7 @@
 (def pit-walls
   (into {} (for [[x z] [[3 3] [5 3] [4 2] [4 4]] y [64 65]] [(str x "," y "," z) "stone"])))
 
-(deftest a-cow-in-a-pit-it-cannot-step-out-of-is-given-up-no-exit-without-a-walk
+(deftest a-cow-in-a-pit-it-cannot-step-out-of-is-given-up-no-exit
   (async done
     (tu/run-async done
       (fn ^:async t []

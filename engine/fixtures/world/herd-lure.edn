@@ -64,11 +64,10 @@
             {:no-event {:source :job :kind :completed :data {:reason :brought}} :for-s 200 :until {:source :job :kind :stopped}}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 0]]
    :limit-s 260}
-  ;; should fail: the only cow stands in a 3x3 glass courtyard with 2-high walls (seen through, a cow cannot step up 2): the run ends :no-exit, no walk to it
+  ;; should fail: the only cow stands in a 3x3 pit 3 deep dug into the ground, its walls solid ground the body has not seen; the body is outside it. The run looks into the pit, finds it closed and ends :no-exit, the cow is never lured
   {:name "cow-in-a-pit-it-cannot-leave-ends-no-exit"
-   :blocks [[:fill [4 0 17] [8 1 21] "glass"]
-            [:fill [5 0 18] [7 1 20] "air"]]
-   :act [[:summon "cow" [6.5 0 19.5]]
+   :blocks [[:fill [5 -3 18] [7 -1 20] "air"]]
+   :act [[:summon "cow" [6.5 -3 19.5]]
          [:job (jobs.animals.herd {:mob "cow" :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :target 1})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-exit}} :within-s 150 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 0]]
