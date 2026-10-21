@@ -26,6 +26,17 @@
       (str "; carrying " (str/join ", " (map (fn [[n k]] (str k " " n)) bad))
            ", skipped on purpose (raw or rotten food hurts; eat with :allow-bad via the eat job)"))))
 
+(defn explored-text
+  "What the exploring search covered: \"2 found (cow at [1 64 2], wheat at [3 64 4]), 3 legs, time\"; the finds are named so a
+  find the hunt then could not use is visible."
+  [res]
+  (let [found (:found res)]
+    (str (count found) " found"
+         (when (seq found)
+           (str " (" (str/join ", " (map (fn [{:keys [what pos]}] (str (name (or what "?")) (when pos (str " at " (pr-str pos))))) (take 4 found))) ")"))
+         ", " (get-in res [:coverage :legs] 0) " legs"
+         (when (:why res) (str ", " (name (:why res)))))))
+
 (defn none-text
   "Why nothing was found: what was searched within radius, the animals passed over, the mobs in range when none
   qualified (around) and the nearest known source."
@@ -33,7 +44,7 @@
   (let [near (nearest-known-source c)
         wheat (sources/carried-count c "wheat")
         reason (no-bake-reason c)]
-    (str "no food: carried none" (harmful-carried-text (u/inventory (:primitives c))) ", searched for animals and ripe crops within " radius " blocks"
+    (str "no food: carried none" (harmful-carried-text (u/inventory (:primitives c))) ", searched for animals and ripe crops within " (js/Math.round radius) " blocks"
          (when explored (str ", explored: " explored))
          (when (and (>= wheat 3) reason)
            (str "; carrying " wheat " wheat but cannot bake (" reason ")"))

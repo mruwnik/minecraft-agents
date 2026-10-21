@@ -14,6 +14,7 @@
             [jobs.lib.world-files :as ew]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.survival.get-food.report :as report]
             [jobs.lib.child :as child]
             [jobs.lib.pace :as pace]
             [jobs.survival.get-food :as get-food]))
@@ -1064,3 +1065,8 @@
           (await (core/tick! eng))
           (is (= [] (filterv #(= :food.no-cook (:kind %)) @seen)) "no give-up while the load cooks")
           (is (some #{"take"} (call-args p "furnace" "op")) "the cooked output was taken"))))))
+
+(deftest the-explored-text-names-what-the-search-found
+  (is (= "2 found (cow at [1 64 2], wheat at [3 64 4]), 0 legs"
+         (report/explored-text {:found [{:what "cow" :pos [1 64 2]} {:what :wheat :pos [3 64 4]}] :coverage {:legs 0}})))
+  (is (= "0 found, 3 legs, time" (report/explored-text {:coverage {:legs 3} :why :time}))))

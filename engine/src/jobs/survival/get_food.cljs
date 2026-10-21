@@ -367,8 +367,7 @@
               (ctx/update-mem! c assoc :found-reach
                                (reduce max 0 (for [{[x y z] :pos} (:found res) :when x] (+ 4 (u/dist (u/self-pos c) {:x x :y y :z z})))))
               (ctx/update-mem! c assoc :explored
-                               (str (count (:found res)) " found, " (get-in res [:coverage :legs] 0) " legs"
-                                    (when (:why res) (str ", " (name (:why res))))))
+                               (report/explored-text res))
               (when (= :done (:kind e)) :again))))))))
 
 (defn rod-carried?
@@ -429,8 +428,8 @@
   "Fed but the pack cannot be filled: end :no-carry (no :hungry entry, the body is not hungry)."
   [c]
   (let [have (foods/stock-points (u/inventory (:primitives c)))]
-    (stop! c :no-carry (str "fed (food " (food-level c) ") but carries " have " of " (:carry (:args c))
-                            " food points and found no more within " (hunt-radius c) " blocks")
+    (stop! c :no-carry (str "not hungry (food " (food-level c) ", nothing eaten) but carries " have " of " (:carry (:args c))
+                            " food points and found no more within " (js/Math.round (hunt-radius c)) " blocks")
            :food (food-level c) :carry (:carry (:args c)) :have have)))
 
 (defn ^:async round
