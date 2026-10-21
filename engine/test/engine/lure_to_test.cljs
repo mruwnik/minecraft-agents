@@ -427,9 +427,9 @@
   s)
 
 (defn after-acts!
-  "After every steer and wait, (f p) runs: the scripted behaviour of an animal that is not following."
+  "After every steer, wait and moveTo, (f p) runs: the scripted behaviour of an animal that is not following."
   [p f]
-  (doseq [act ["steer" "wait"]]
+  (doseq [act ["steer" "wait" "moveTo"]]
     (.override (.-world p) act (fn [token a impl] (.then (impl token a) (fn [r] (f p act) r))))))
 
 (defn set-cow-x! [p x] (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :pos [x 64 0.5]) es))))
@@ -447,8 +447,23 @@
             (is (< (self-x p) 16) "the body stopped where it stood instead of walking on")
             (is (= 3.5 (get-in e [:stalled :animal :x])))
             (is (number? (get-in e [:stalled :body :x])))
-            (is (< 7 (get-in e [:stalled :distance])))
+            (is (< 5 (get-in e [:stalled :distance])))
             (is (re-find #"stopped following" (:text (first (stopped s)))))))))))
+
+(deftest a-cow-that-lost-interest-is-walked-back-to-and-follows-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 3)]} 50)
+              turned (atom false)]
+          (after-acts! p (fn [p _]
+                           (let [x (self-x p)]
+                             (when (and (< 8 x) (not= :back @turned)) (reset! turned :gone))
+                             (when (and (= :gone @turned) (< x 7)) (reset! turned :back))
+                             (set-cow-x! p (if (= :back @turned) (- x 2) 3.5)))))
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
+          (await (run-until-done s 120))
+          (is (= :arrived (:reason (done-event s))) (pr-str (:stalled (done-event s)))))))))
 
 (deftest the-wait-for-an-animal-shows-both-positions-and-the-distance
   (async done
@@ -462,7 +477,7 @@
             (is (some? w))
             (is (number? (get-in w [:animal-pos :x])))
             (is (number? (get-in w [:body-pos :x])))
-            (is (< 7 (:distance w)))))))))
+            (is (< 5 (:distance w)))))))))
 
 (deftest a-cow-that-fell-far-behind-but-keeps-closing-is-waited-for-not-given-up
   (async done
@@ -494,11 +509,13 @@
                              (when (= "wait" act) (swap! cow-x + 0.0015))
                              ;; the cow swims in for 20 s (twice the stall time), then keeps up
                              (when (< 400 @waits) (reset! cow-x (- (self-x p) 2)))
+                             ;; once the body has turned back to it, it keeps up
+                             (when (< (- (self-x p) @cow-x) 5) (reset! cow-x (- (self-x p) 2)))
                              (set-cow-x! p @cow-x))))
           (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
           (await (run-until-done s 60))
           (is (some? @cow-x) "the cow fell behind")
-          (is (< 300 @waits) "the body waited for it")
+          (is (< 50 @waits) "the body waited for it")
           (is (= :arrived (:reason (done-event s))) "a third of a block in 10 s is still closing in"))))))
 
 (deftest a-cow-out-of-sight-is-walked-back-toward-where-it-was-last-seen

@@ -31,10 +31,11 @@
   be got the job ends :no-food with the fetch's ending as its :because. It picks the nearest adult within :radius that is on nobody's lead and not already in :box (the zone rules let
   it), holds the food, walks within 6 blocks of it and then to :pos in short go-to legs, the same legs as
   jobs.animals.lead-to (doors left open for the animal and shut afterwards); the go-to child of a leg plans its walk again after the leg was planned here). After each leg the animal is looked at:
-  unseen or more than 7 blocks behind, the body holds still (:waiting-for-animal) for it and the first look of the wait emits info
+  unseen or more than 5 blocks behind (jobs.lib.escort/::lure-gap), the body holds still (:waiting-for-animal) for it and the first look of the wait emits info
   escort.waiting (both positions, the distance); unseen for 3 s the body walks back toward where it was last seen (up to
-  12 blocks) and then ends :lost (an allowed adult within 10 blocks takes its place at once); seen more than 7 behind and not
-  coming nearer for 10 s (jobs.lib.escort/::stall-s), :animal-stalled. An animal that keeps closing in is waited for
+  20 blocks) and then ends :lost (an allowed adult within 10 blocks takes its place at once); seen beyond the gap and not
+  coming nearer for 3 s the body turns back toward it (a cow loses the food past about 10 blocks); after
+  ::max-turns such turns, or 10 s without progress (::stall-s), :animal-stalled. An animal that keeps closing in is waited for
   however far it fell behind. The plan of each leg is searched before the body walks: a search still running never sends
   the body the whole way in one go. With no animal in sight at the start it walks to where the chosen one was last seen
   (up to ::sighting-age-s old), looks round once and steps toward a heard animal of the kind (jobs.lib.vantage) before
@@ -357,7 +358,7 @@
                 (await (escort/wait-for-animal! c))))))
 
 (defn ^:async walk-legs-to-pos! [c]
-  (let [r (await (escort/walk-legs! c :walk (:pos (:args c)) (arrive-range) (escort/safe-gap)))]
+  (let [r (await (escort/walk-legs! c :walk (:pos (:args c)) (arrive-range) (escort/lure-gap)))]
     (cond
       (= :waiting r) :yield
       (= :searching r) :again
@@ -398,7 +399,7 @@
       (= :start phase) (await (start! c))
       (nil? a) (if-let [next-one (successor c)]
                  (do (ctx/update-mem! c #(-> % (assoc :animal (animals/key-of next-one)) (dissoc :unseen-since))) :again)
-                 (if (= :lost (escort/escort-problem c (escort/safe-gap)))
+                 (if (= :lost (escort/escort-problem c (escort/lure-gap)))
                    (finish! c :lost)
                    (await (escort/wait-for-animal! c))))
       :else (do (await (watch/watch! c {})) (await (walk! c))))))

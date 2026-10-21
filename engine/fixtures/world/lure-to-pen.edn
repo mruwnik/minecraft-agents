@@ -41,6 +41,18 @@
          [:job (jobs.animals.lure-to {:mob "cow" :pos #xyz [22 0 16] :box {:min #xyz [19 0 14] :max #xyz [23 0 18]} :radius 12})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :arrived :in-box true}} :within-s 150 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 2]]}
+  ;; card 3e8a8f83: a real cow led 25+ blocks: the body keeps within 5 blocks of it and turns back when it stops following, never ends :lost
+  {:name "cow-led-25-blocks-into-a-far-pen"
+   :plot {:length 64 :width 32}
+   :blocks [[:fill [50 0 13] [56 0 19] "oak_fence"]
+            [:fill [51 0 14] [55 0 18] "air"]
+            [:set [50 0 16] "oak_fence_gate[facing=east,open=false]"]]
+   :body {:at [26.5 0 16.5] :yaw 270 :inventory [["wheat" 4]] :effects [["resistance" 900 4]]}
+   :act [[:summon "cow" [28.5 0 18.5]]
+         [:job (jobs.animals.lure-to {:mob "cow" :pos #xyz [53 0 16] :box {:min #xyz [51 0 14] :max #xyz [55 0 18]}})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :arrived :in-box true}} :within-s 170 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[51 0 14] [55 1 18]] 1]]
+   :limit-s 200}
   ;; should fail: a cow that does not move never follows; the run ends with a reason, never :arrived, and the cow stays out
   {:name "cow-that-never-follows-is-not-arrived"
    :act [[:summon "cow" [10.5 0 18.5] "{NoAI:1b}"]

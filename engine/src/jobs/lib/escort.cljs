@@ -52,6 +52,9 @@
 (a/defargs settings
   {::watch-radius {:default 64 :doc "Blocks from the body within which the lured or led animal is looked for." :spec (a/num-in 0 nil)}
    ::stall-s {:default 10 :doc "Seconds a seen animal beyond the safe gap may make no progress toward the body before the walk ends :animal-stalled." :spec (a/num-in 0 nil)}
+   ::lure-gap {:default 5 :doc "The body does not walk on while a seen lured animal trails it by more than this many blocks: a cow follows food held within about 8-10 blocks." :spec (a/num-in 0 nil)}
+   ::turn-back-s {:default 3 :doc "Seconds a lured animal beyond the gap may make no progress before the body turns back toward it (it has stopped following)." :spec (a/num-in 0 nil)}
+   ::max-turns {:default 2 :doc "Times the body turns back to a lured animal that stopped following before the walk ends :animal-stalled." :spec (a/int-in 0 nil)}
    ::safe-gap {:default 7 :doc "The body does not walk on while a seen animal trails it by more than this many blocks: the lead breaks past engine.game/leash-break." :spec (a/num-in 0 nil)}
    ::max-wait-s {:default 10 :doc "Seconds spent waiting for an animal to come into sight at the destination before the job gives it up." :spec (a/num-in 0 nil)}
    ::unseen-lost-s {:default 3 :doc "Seconds the animal must stay out of sight, from the first look that missed it, before it counts as lost (a ledge or tree can hide a led animal)." :spec (a/num-in 0 nil)}
@@ -64,13 +67,16 @@
    ::wait-look-s {:default 0.25 :doc "Seconds of one look's wait while the body holds still for the animal." :spec (a/num-in 0 nil)}
    ::lead-deeper-gap {:default 3.5 :doc "An animal this near the body (flat) and outside the box has stopped tempted: lead on." :spec (a/num-in 0 nil)}
    ::lure-reach {:default 6 :doc "A lured animal is waited for once the body is this near it, in blocks." :spec (a/num-in 0 nil)}
-   ::back-blocks {:default 12 :doc "An animal out of sight for unseen-lost-ms is looked for by walking back toward where it was last seen, when that is no farther from the body than this." :spec (a/num-in 0 nil)}})
+   ::back-blocks {:default 20 :doc "An animal out of sight for unseen-lost-ms is looked for by walking back toward where it was last seen, when that is no farther from the body than this." :spec (a/num-in 0 nil)}})
 (defn leg-steps [] (settings/get settings ::leg-steps))
 (defn wait-look-s [] (settings/get settings ::wait-look-s))
 (defn follow-reach [] (settings/get settings ::follow-reach))
 (defn lead-deeper-gap [] (settings/get settings ::lead-deeper-gap))
 (defn lure-reach [] (settings/get settings ::lure-reach))
 (defn safe-gap [] (settings/get settings ::safe-gap))
+(defn max-turns [] (settings/get settings ::max-turns))
+(defn lure-gap [] (settings/get settings ::lure-gap))
+(defn turn-back-ms [] (* 1000 (settings/get settings ::turn-back-s)))
 (defn max-wait-ms [] (* 1000 (settings/get settings ::max-wait-s)))
 (defn unseen-lost-ms [] (* 1000 (settings/get settings ::unseen-lost-s)))
 (defn back-limit-ms [] (* 1000 (settings/get settings ::back-limit-s)))
@@ -161,7 +167,8 @@
 (defn follow-verdict
   "Why a walk with the animal a (nil: not seen) must stop: :lost (unseen for unseen-lost-ms and no walk back to where
   it was last seen is left), :lead-broke (following? false), :animal-stalled (seen beyond gap and not closing in for
-  stall-ms), :wait (the body holds still: unseen, or beyond gap but coming), else nil. The state is in the caller's
+  stall-ms), :wait (the body holds still: unseen, or beyond gap but coming; a lured animal that stopped coming for
+  turn-back-ms sets :back-to to it instead, so the body walks back to it), else nil. The state is in the caller's
   memory: :unseen-since, :last-seen, :back-to (where wait-for-animal! walks back to), :progress {:best :at}."
   [c a following? gap]
   (let [now (ctx/now c)
@@ -181,15 +188,17 @@
           :else :lost))
       (let [pos (u/pos-of (.-pos a))
             d (u/flat-dist pos me)]
-        (ctx/update-mem! c #(-> % (dissoc :unseen-since :back-to) (assoc :last-seen pos)))
+        (ctx/update-mem! c #(-> % (dissoc :unseen-since) (assoc :last-seen pos)))
         (cond
           (not following?) :lead-broke
-          (<= d gap) (do (ctx/update-mem! c dissoc :progress :waiting) nil)
+          (<= d gap) (do (ctx/update-mem! c dissoc :progress :waiting :back-to :no-turn) nil)
           :else (let [{:keys [best]} (:progress m)
-                      prog (if (or (nil? best) (< d (- best (closing-blocks)))) {:best d :at now} (:progress m))]
-                  (ctx/update-mem! c assoc :progress prog)
+                      prog (if (or (nil? best) (< d (- best (closing-blocks)))) {:best d :at now} (:progress m))
+                      turn? (and (= :lure (:method m)) (not (:no-turn m)) (or (:back-to m) (> (- now (:at prog)) (turn-back-ms))))]
+                  (ctx/update-mem! c #(cond-> (assoc % :progress prog :back-to (when turn? pos))
+                                        (and turn? (not (:back-to m))) (update :turns (fnil inc 0))))
                   (note-wait! c a me)
-                  (if (> (- now (:at prog)) (stall-ms)) :animal-stalled :wait)))))))
+                  (if (or (> (- now (:at prog)) (stall-ms)) (< (max-turns) (:turns (ctx/mem c) 0))) :animal-stalled :wait)))))))
 
 (defn escort-problem
   "follow-verdict for the led animal of the caller's memory (:animal)."
@@ -200,17 +209,22 @@
 (defn ^:async wait-for-animal!
   "Hold still on purpose for one look's wait; the caller then looks again. When follow-verdict set :back-to the body
   walks back toward the last sighting instead (one round of a go-to child, with doors per the caller: :leave-open by
-  default, :never for a caller that does not shut gates after; :yield while it is not done). Else :again."
+  default, :never for a caller that does not shut gates after; :yield while it is not done). A walk back that did not
+  arrive is not tried again until the animal is near (:no-turn) and the wait is held. Else :again."
   ([c] (wait-for-animal! c :leave-open))
   ([c doors]
-  (if-let [to (:back-to (ctx/mem c))]
-    (if (= :continue (await (child/call-walk* c :back {:pos to :range 2 :doors doors :ways #{:walk :clear-seal}
-                                                       :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
-      :yield
-      :again)
-    (do (await (child/pause! c (wait-look-s) :waiting-for-animal))
-        (ctx/hold-still! c nil)
-        :again))))
+  (let [to (:back-to (ctx/mem c))
+        r (when to
+            (await (child/call-walk* c :back {:pos to :range 2 :doors doors :ways #{:walk :clear-seal}
+                                              :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
+    (cond
+      (= :continue r) :yield
+      (nil? to) (do (await (child/pause! c (wait-look-s) :waiting-for-animal)) (ctx/hold-still! c nil) :again)
+      (and (= :done (:kind r)) (:arrived (:data r))) :again
+      :else (do (ctx/update-mem! c #(-> % (dissoc :back-to) (assoc :no-turn true)))
+                (await (child/pause! c (wait-look-s) :waiting-for-animal))
+                (ctx/hold-still! c nil)
+                :again)))))
 
 (defn deep-cell
   "The middle of the box cell farthest from the animal, one cell in from its far edge when the box is wider than two."
