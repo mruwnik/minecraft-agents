@@ -18,6 +18,7 @@
             [jobs.lib.storage :as storage]
             [jobs.lib.watch :as watch]
             [jobs.lib.near :as near]
+            [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.pace :as pace]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.build.plan :as plan :refer [retry-distance max-retries facing-of facing-ok? body-cells count-fail stands-for plan-trouble owed need-of shortage hazards decide rules-input refuse permitted judged no-zones planned how placeable misplaced missing covered digging unseen buildable problem]]
@@ -280,7 +281,7 @@
       (do (ctx/update-mem! c walk-fail (:pos cell) :unreachable (give-up) (u/self-pos c))
           :again)
       (let [shut? (or (in-hole? c) (shut-in-walk? c))
-            w (await (walk-stand! c cell stand (cond-> {} (not shut?) (assoc :ways #{:walk :clear-seal}))))]
+            w (await (walk-stand! c cell stand (cond-> {} (not shut?) (assoc :ways (cond-> #{:walk :clear-seal} (sh-inside/sheltered-in c) (into [:stair :dig-out]))))))]
         (if (and (= :blocked w) (or shut? (shut-in-walk? c)))
           (hole-blocked! c)
           (do (ctx/update-mem! c dissoc :hole-blocked)

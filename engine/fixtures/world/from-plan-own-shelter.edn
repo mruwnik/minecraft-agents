@@ -1,0 +1,25 @@
+;; Card 0ceab59a: a build whose stands lie outside the body's own night shelter waits there (no :shut-in stop, no cells given up) while the night lasts,
+;; then the dawn lets go-to out of the shelter and the plan is built.
+;; Sky plot at night (the real clock decides when the shelter opens). Stone room x 14..18, z 14..18, roof y 2, glass east wall; :shelter memory at the body's cell. Pickaxe and cobblestone carried.
+;; Should-succeed: from-plan does not stop before dawn; after [:time-set 1000] the body leaves the shelter, places both cells and the job ends :completed. Should-fail: the job stops :shut-in ("shut in a hole").
+{:defaults
+ {:tags [:build :from-plan :shelter :night]
+  :time :night :time-why :dawn-decision
+  :plot {:height 8 :floor "grass_block" :light :sky :length 48}
+  :blocks [[:fill [14 0 14] [18 2 18] "stone"] [:fill [15 0 15] [17 1 17] "air"] [:fill [18 0 15] [18 1 17] "glass"]]
+  :memory [{:kind :shelter :data {:pos #xyz [16 0 16] :roof #xyz [16 2 16] :state :built}
+            :policy {:cap 10 :ttl 1200000}}]
+  :plans [{:id "pair" :metadata {:by "$body"}
+           :parts [{:id "cobbles" :cells [#at [30 0 16] #at [31 0 16]] :want "cobblestone"}]}]
+  :register []
+  :body {:at [16.5 0 16.5] :settle-s 2 :inventory [["stone_pickaxe" 1] ["cobblestone" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 230}
+ :cases
+ [{:name "sealed-in-own-shelter-waits-then-builds-at-dawn"
+   :act [[:job (jobs.build.from-plan {:plan "$plan:pair"})]
+         [:wait-s 30]
+         [:time-set 1000]]
+   :expect [{:no-event {:source :job :kind :stopped} :for-s 30}
+            {:event {:source :job :kind :completed} :within-s 190 :of-job true}]
+   :limit-s 200
+   :after [[:block [30 0 16] "cobblestone"] [:block [31 0 16] "cobblestone"]]}]}
