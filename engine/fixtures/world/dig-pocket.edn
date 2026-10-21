@@ -1,6 +1,8 @@
 ;; jobs.survival.dig-pocket on its own (shut-in step 2): a pocket cut into a hillside. A stone hill face at x 22..30 with
 ;; a pickaxe: sealed. Should-fail with {:reason :no-site}: flat ground, a sand hill (falls), the body's own plan. A 3x3 hill with
 ;; water at its core (unseen, so a pocket is started) stops :failed once the dig shows the water; a stone hill with no pickaxe fails :no-tool.
+;; Empty-handed on a sand field (night shut-in, ways pit and pocket): the pit has no roof block (sand falls), so it digs a shaft by hand
+;; down to the sandstone and pockets into it; with the rock deeper than the shaft goes it says so.
 {:defaults
  {:tags [:survival :cornered]
   :time :any
@@ -41,4 +43,18 @@
    :act [[:job (jobs.survival.dig-pocket {})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-site}} :within-s 30 :of-job true}]
    :after [[:block [22 0 16] "stone"] [:block [23 0 16] "stone"]]
-   :limit-s 45}]}
+   :limit-s 45}
+  {:name "night-sand-over-sandstone-sinks-and-pockets"
+   :blocks [[:fill [0 0 0] [31 5 31] "sandstone"] [:fill [0 6 0] [31 9 31] "sand"]]
+   :body {:at [16.5 10 16.5] :inventory []}
+   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit :pocket} :for :night})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 150 :until {:source :job :kind :completed}}]
+   :after [[:block [16 9 16] "air"]]
+   :limit-s 170}
+  {:name "night-sand-over-deep-rock-says-no-site"
+   :blocks [[:fill [0 0 0] [31 9 31] "sand"]]
+   :body {:at [16.5 10 16.5] :inventory []}
+   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit :pocket} :for :night})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-way}} :within-s 150 :of-job true}]
+   :limit-s 170}]}

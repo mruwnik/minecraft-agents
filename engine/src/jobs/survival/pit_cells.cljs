@@ -200,6 +200,7 @@
   and harvestable with what is carried (any, once the job is cutting by hand), with no hazard in or beside them (the way in
   may be wet: a drowning body digs from the water), solid all round them except the way in (floor, roof, both sides, the far end
   and the far end's corners; a cell never sensed counts as stone, the dig looks at it), the roof not a falling block, and a dug block that can seal the way in (carried or dropped).
+  Sand or gravel carried seals the way in when the floor under the near pair holds it (a falling block needs support at placement).
   by-hand? (default the job's :by-hand memory) ignores whether a carried tool harvests."
   ([c feet side] (pocket-cells c feet side (:by-hand (ctx/mem c))))
   ([c feet [dx dz] by-hand?]
@@ -216,6 +217,7 @@
         ;; a far cell never sensed reads stone: the dig looks at it and stops if it lays open a gap
         wall-name #(or (look/rock-name p %) (when (unknown? %) "stone"))
         ;; the far pair lies behind cells the body has not dug yet: unsensed, it reads stone like the walls, the dig looks and stops on a gap
+        floor-holds? (every? #(let [n (wall-name (at % -1 [0 0]))] (and (solid/solid? n) (not (rules/falling? n)))) [1 2])
         names (map-indexed (fn [i cell] (if (< i 2) (dug-name cell) (or (dug-name cell) (when (unknown? cell) "stone")))) dug)]
     (when (and (every? #(solid/solid? %) names)
                (every? #(solid/solid? (wall-name %)) walls)
@@ -223,7 +225,8 @@
                (every? #(and (rules/natural? %) (not (escape/protected? %)) (not (rules/falling? %))) names)
                (not-any? #(rules/falling? (wall-name %)) (map #(at % 2 [0 0]) [1 2]))
                (or by-hand? (every? #(tools/can-harvest? p %) names))
-               (or (lb/pick c blocks) (some (set blocks) (map #(lb/item-name {:block %}) names))))
+               (or (lb/pick c blocks) (some (set blocks) (map #(lb/item-name {:block %}) names))
+                   (and floor-holds? (lb/pick c (vec look/loose-ground)))))
       (vec dug)))))
 
 (defn fluid-shown?
@@ -285,6 +288,7 @@
         wet-way-in? (boolean (some #(dig-cells/wet? p %) [feet (update feet :y inc)]))
         stop! (fn [reason text] (ctx/update-mem! c assoc :stop {:reason reason :text text}) nil)]
     (when-let [cells (pocket-site c feet)]
+      (when-not (lb/pick c (flight/blocks c)) (ctx/update-mem! c assoc :loose-plug true))
       (let [in (access/rules-input c)]
         (access/trespass! c "shut-in" (some #(access/trespass-refusal in :dig %) cells)))
       (loop [[cell & more] cells]
@@ -399,7 +403,7 @@
             cell-stop* (delay (cell-stop p cell))
             under? (= cell (update feet :y dec))
             _ (when cell (await (look-cell! c cell)))
-            material (when cell (material-stop c (flight/blocks c) (remove #(dig-cells/open-cell? p %) (concat prep (mapcat :dig steps)))))]
+            material (when (and cell (not (:sink refuge))) (material-stop c (flight/blocks c) (remove #(dig-cells/open-cell? p %) (concat prep (mapcat :dig steps)))))]
         (cond
           (and cell @cell-stop*) @cell-stop*
           (and under? (not (dig-cells/known-solid? p floor))) (stop :no-floor (str (or (u/seen-name p floor) "an unseen cell") " under the hole; not digging through it"))

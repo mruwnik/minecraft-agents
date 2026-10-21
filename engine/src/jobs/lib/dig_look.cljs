@@ -39,21 +39,24 @@
 (defn shift [{:keys [x y z]} [dx dy dz]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
 
 
+(def loose-ground #{"sand" "red_sand" "gravel"})
+
 (defn rock-name
-  "The block name at cell as a player reads rock: what the body sees or remembers, else \"stone\" for a loaded cell it has
-  not sensed when a seen solid block lies behind it within rock-depth cells along some axis and no neighbour is seen
-  open (an open neighbour would have shown it; cells in except, the way in, are not counted). nil when it is not loaded
-  or no seen face is near. The shelter plans (pit, pocket, niche) read the rock they dig through this way, then dig to
-  see (jobs.lib.dig-look)."
+  "The block name at cell as a player reads rock: what the body sees or remembers, else for a loaded cell it has
+  not sensed the nearest seen solid block behind it within rock-depth cells along some axis (as loose-ground: sand and
+  gravel are dug by hand and fall) or \"stone\" (any other), when no neighbour is seen open (an open neighbour would have
+  shown it; cells in except, the way in, are not counted). nil when it is not loaded or no seen face is near. The shelter
+  plans (pit, pocket, niche) read the rock they dig through this way, then dig to see (jobs.lib.dig-look)."
   ([p cell] (rock-name p cell #{}))
   ([p cell except]
   (or (u/seen-name p cell)
       (when (some-> (u/sensed p cell) .-unknown)
-        (let [name-at (fn [d k] (u/seen-name p (shift cell (mapv #(* k %) d))))]
+        (let [name-at (fn [d k] (u/seen-name p (shift cell (mapv #(* k %) d))))
+              behind (fn [d] (first (filter solid/solid? (take 1 (remove nil? (map #(name-at d %) (range 1 (inc (rock-depth)))))))))
+              nearest (->> neighbours (keep (fn [d] (when-let [n (behind d)] [(count (take-while #(nil? (name-at d %)) (range 1 (inc (rock-depth))))) n]))) sort first second)]
           (when (and (every? #(or (nil? %) (solid/solid? %)) (map #(when-not (except (shift cell %)) (name-at % 1)) neighbours))
-                     (some (fn [d] (some solid/solid? (take 1 (remove nil? (map #(name-at d %) (range 1 (inc (rock-depth))))))))
-                           neighbours))
-            "stone"))))))
+                     nearest)
+            (if (loose-ground nearest) nearest "stone")))))))
 
 (defn rock-solid?
   "Whether cell is solid rock as the body reads it (rock-name)."

@@ -139,7 +139,7 @@
 (defn failed-way!
   "A way ended other than :done: dropped for this call, remembered for the night, its cause kept for the :no-way ending."
   [c way e]
-  (night/fail! c way (cond (and (= :walls way) (= "failed" (get-in e [:data :status]))) :walls-server-refused :else (or (get-in e [:data :reason]) (:cause e))) (:start (ctx/mem c)))
+  (night/fail! c way (cond (and (= :walls way) (= "failed" (get-in e [:data :status]))) :walls-server-refused :else (or (get-in e [:data :reason]) (when-not (#{nil :failed} (:cause e)) (:cause e)) (:kind e))) (:start (ctx/mem c)))
   (ctx/update-mem! c #(-> % (dissoc :way) (update :failed-ways (fnil conj []) way) (assoc-in [:why way] (or (:text (:data e)) (:cause e))) (assoc-in [:statuses way] (:status (:data e))) (assoc-in [:stops way] (select-keys (:data e) [:reason :needs])))))
 
 (defn why-not
