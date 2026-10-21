@@ -103,7 +103,7 @@
         e (if (= :fight decision)
             (await (ctx/call c :fight 'jobs.combat.attack
                              {:targets :hostiles :radius (danger-q/hostile-radius) :ranged-radius (danger-q/ranged-radius)
-                              :use {:tools (combat/weapons c)} :hold (or hold (hold? c)) :prior (:fight-prior (ctx/mem c))
+                              :use {:tools (combat/weapons c)} :hold (or hold (hold? c)) :commit (hostile/committed? c (near c)) :prior (:fight-prior (ctx/mem c))
                               :checks {:safe? '(always) :fit? '(always)}}))
             (await (flight/flee! c)))]
     (cond
@@ -217,8 +217,10 @@
         m (ctx/mem c)
         hits (note-hits (when (= :flee (:decision m)) (:hits m)) (ctx/now c) (:last-health m (.-health self)) (.-health self) (hit-window-ms))
         _ (ctx/update-mem! c assoc :hits hits :last-health (.-health self))
-        chosen (if (some combat/enderman? near)
-                   :flee
+        chosen (cond
+                 (some combat/enderman? near) :flee
+                 (hostile/committed? c near) :fight
+                 :else
                    (cost/decide {:health (.-health self)
                                :fighting? (fight-begun? c m near)
                                :single? (= 1 (count near))

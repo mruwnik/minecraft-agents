@@ -22,6 +22,9 @@
    ::creeper-returns {:default 2 :doc "Flights from a creeper within ::creeper-return-s after which an armed, healthy body fights the next lone creeper however far it is (it keeps coming back). 0: never." :spec (a/int-in 0 nil)}
    ::creeper-return-s {:default 600 :doc "Seconds a flight from a creeper counts toward ::creeper-returns." :spec (a/num-in 0 nil)}
    ::creeper-health-floor {:default 14 :doc "Health below which the body never fights a creeper hit-and-back: a late step back lets part of a blast land." :spec (a/num-in 0 nil)}
+   ::ranged-returns {:default 2 :doc "Flights from ranged mobs (skeletons and the like) within ::ranged-return-s after which an armed body of at least ::commit-health fights the next ones to the end, however far, instead of fleeing again (arrows outrun a walker, so the flights only repeat). 0: never." :spec (a/int-in 0 nil)}
+   ::ranged-return-s {:default 600 :doc "Seconds a flight from a ranged mob counts toward ::ranged-returns." :spec (a/num-in 0 nil)}
+   ::commit-health {:default 10 :doc "Health below which the body does not commit to a fight with ranged mobs it has fled before (::ranged-returns)." :spec (a/num-in 0 nil)}
    ::back-step {:default 6 :doc "Blocks the body backs off from a creeper after each hit: its fuse runs on, so it ends out of the blast's reach (about 6)." :spec (a/num-in 1 nil)}
    ::leash {:default 20 :doc "Blocks from where a hostile fight started beyond which a hostile is not chased." :spec (a/num-in 0 nil)}})
 
@@ -73,9 +76,10 @@
   (first (remove danger-q/seen-only? (in-range c))))
 
 (defn too-far-to-chase?
-  "Whether target is a ranged mob beyond ::ranged-chase while another hostile is in range."
+  "Whether target is a ranged mob beyond ::ranged-chase while another hostile is in range, unless the fight is committed (:commit)."
   [c target]
-  (and (combat/ranged? target)
+  (and (not (:commit (:args c)))
+       (combat/ranged? target)
        (> (danger-q/mob-distance (:primitives c) target) (settings/get settings ::ranged-chase))
        (some #(not= (.-id %) (.-id target)) (in-range c))))
 
@@ -154,6 +158,26 @@
   (let [since (- (ctx/now c) (* 1000 (settings/get settings ::creeper-return-s)))]
     (count (filter #(and (> (:t %) since) (= "creeper" (get-in % [:data :mob])) (= :flee (get-in % [:data :decision])))
                    (ctx/entries c :hostile)))))
+
+(defn ranged-fled-from
+  "How many times the body fled a ranged mob within ::ranged-return-s, by the :hostile entries (c is a ctx)."
+  [c]
+  (let [since (- (ctx/now c) (* 1000 (settings/get settings ::ranged-return-s)))]
+    (count (filter #(and (> (:t %) since) (contains? weapon/ranged-mobs (get-in % [:data :mob])) (= :flee (get-in % [:data :decision])))
+                   (ctx/entries c :hostile)))))
+
+(defn committed?
+  "Whether the body fights hostiles to the end whatever it costs: all of them ranged, a sword or axe carried, health at
+  least ::commit-health and ::ranged-returns flights from ranged mobs lately (they keep coming back and a flight cannot outrun arrows)."
+  [c hostiles]
+  (let [p (:primitives c)
+        returns (settings/get settings ::ranged-returns)]
+    (boolean (and (pos? returns)
+                  (seq hostiles)
+                  (every? combat/ranged? hostiles)
+                  (contains? weapon/weapon-damage-by-name (combat/best-weapon p (combat/weapons c)))
+                  (>= (.-health (.self p)) (settings/get settings ::commit-health))
+                  (>= (ranged-fled-from c) returns)))))
 
 (defn back-cell
   "The cell n blocks (at most) from from in the open direction that ends farthest from threat, gaining at least a block on

@@ -877,6 +877,30 @@
 
 (defn skeleton [id x z] {:id id :name "skeleton" :kind "hostile" :pos {:x x :y 64 :z z}})
 
+(deftest a-body-that-fled-ranged-mobs-twice-fights-them-to-the-end-however-far
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:self {:health 14} :inventory sword :entities [(skeleton 1 10 0) (skeleton 2 11 1)]}
+              fled-before (fn [n] (fn [{:keys [eng]}] (dotimes [_ n] (mem/write! (:store eng) :hostile {:mob "skeleton" :decision :flee} respond-to-hostile/hostile-policy))))
+              round (fn ^:async f [n]
+                      (let [s (setup-flight world)]
+                        ((fled-before n) s)
+                        (core/submit! (:eng s) respond {})
+                        (await (core/tick! (:eng s)))
+                        s))]
+          (is (= [:flee] (map :decision (decided (:seen (await (round 1)))))) "one flight so far: the fight is too dear, retreat")
+          (is (= [:fight] (map :decision (decided (:seen (await (round 2)))))) "the second return: fight, though they stand beyond the ranged chase"))))))
+
+(deftest hostile-attack-walks-to-far-ranged-mobs-only-when-committed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:inventory sword :entities [(skeleton 1 10 0) (skeleton 2 11 1)]}
+              walks (fn ^:async f [commit] (count (tu/walked-to (:eng (await (first-round-ms `(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 6 :commit ~commit}) world 20))))))]
+          (is (zero? (await (walks false))) "beyond the ranged chase with another in range: declined, no walk")
+          (is (pos? (await (walks true))) "committed: walked up to them"))))))
+
 (deftest hostile-near-counts-ranged-mobs-out-to-the-ranged-radius
   (is (holds? {:entities [(skeleton 1 13 0)]} {:radius 8 :ranged-radius 16}) "a skeleton at 13")
   (is (not (holds? {:entities [(zombie 13 0)]} {:radius 8 :ranged-radius 16})) "a zombie at 13 is beyond 8")
