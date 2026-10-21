@@ -15,6 +15,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger]
+            [jobs.lib.dawn :as dawn]
             [jobs.lib.foods :as foods]
             [jobs.lib.look-edge :as look-edge]
             [jobs.lib.sense :as sense]
@@ -104,6 +105,15 @@
   (if (check-cache/cached c ::threatened #(danger/hostile-near? (:primitives c) (ctx/view c) (trigger-args c)))
     (contract/later :hostile-near "a hostile is near")
     (contract/ok :no-hostile-near "no hostile near")))
+
+(defn unarmed-threatened
+  "Later :hostile-near while no weapon is carried and a hostile is known within jobs.lib.dawn's hostile radius (seen,
+  heard or remembered; jobs.lib.dawn/::with-hostile lifts it): a player with bare hands does not set out with one about."
+  [c]
+  (if (and (not (combat/best-weapon (:primitives c) combat/default-weapons))
+           (check-cache/cached c ::unarmed-threatened #(dawn/hostile-known? (:primitives c))))
+    (contract/later :hostile-near "no weapon carried and a hostile is known near")
+    (contract/ok :armed-or-clear "a weapon is carried or no hostile is known near")))
 
 (defn leads-away?
   "Whether the straight walk from the body to `goal` ({:x :y :z}) never takes it nearer to any hostile it knows within the

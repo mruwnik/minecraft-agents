@@ -27,6 +27,7 @@
             [jobs.movement.stay-near :as stay-near]
             [jobs.movement.mount :as mount]
             [jobs.items.kitchen :as kitchen]
+            [jobs.items.get-kit :as get-kit]
             [jobs.items.pick-up-loose :as pick-up-loose]
             [jobs.items.smelt :as smelt]
             [jobs.storage.deposit :as deposit]
@@ -195,6 +196,17 @@
     {:inventory sword} [:ok :healthy]
     {:inventory []} [:later :unarmed]
     {:inventory sword :self {:pos {:x 0 :y 64 :z 0} :health 3}} [:later :low-health]))
+
+(def far-husk {:id 9 :name "husk" :kind "hostile" :pos {:x 30 :y 64 :z 0}})
+
+(deftest an-unarmed-body-waits-while-a-hostile-is-known-within-the-dawn-radius
+  (are [world expected] (= expected (first (ready/unarmed-threatened (ctx-of (merge at-origin world)))))
+    {:inventory [] :entities [far-husk]} :later
+    {:inventory sword :entities [far-husk]} :ok
+    {:inventory []} :ok))
+
+(deftest get-kit-binds-the-unarmed-hostile-wait
+  (is (= :later (first (get-kit/safe? (ctx-of (merge at-origin {:inventory [] :entities [far-husk]})))))))
 
 (deftest a-stair-up-is-not-held-for-health-a-stair-down-is
   (are [dir expected] (= expected (first (stair/fit? (assoc (ctx-of (assoc at-origin :self {:pos {:x 0 :y 64 :z 0} :health 3})) :args {:dir dir}))))

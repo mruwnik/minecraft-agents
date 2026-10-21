@@ -53,7 +53,7 @@
 
 (def target [:items])
 
-(def safe? ready/threatened)
+(defn safe? [c] (contract/all [(ready/threatened c) (ready/unarmed-threatened c)]))
 (def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s}})
