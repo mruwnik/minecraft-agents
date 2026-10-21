@@ -226,6 +226,13 @@
       #(and (<= (or (:air %) 0) masked-wet-limit-s)
             (<= (* masked-swim-pace-s (vswap! cells inc)) left)))))
 
+(defn masked-cut
+  "A found masked plan's steps up to its first swimming step wet-ok? refuses, and whether it cut: the unseen cells above a dark
+  swim read as air to breathe, so only the plan's first masked-wet-ok swim is trusted (of a body not yet under water: one under it swims to air)."
+  [steps wet-ok?]
+  (let [k (first (keep-indexed (fn [i s] (when (and (:swim s) (not (wet-ok? s))) i)) steps))]
+    (if k [(subvec steps 0 k) true] [steps false])))
+
 (defn dry-end
   "A partial plan up to its last step out of water: a walk that cannot reach the goal never leaves the body swimming (at a
   bank too high to climb out, say), nor with its head in water (wet?, head-wet-fn: on a waterlogged ladder). With wet-ok? (a
@@ -314,7 +321,10 @@
         out (and frontier (not beyond) (not edge) (true? (.-searchedOut r)))
         past (when (and (not edge) (not out) (= :open one-way)) (open-path r))
         steps (cond edge (path-steps walled (:path edge)) past (path-steps walled past) :else steps)
-        status (if (or edge past) "partial" (.-status r))
+        [steps cut] (if (and (:unknown c) (= "found" (.-status r)) (not (or edge past)) (nil? (:air-used (wworld/body-policy c))))
+                      (masked-cut steps (masked-wet-ok c))
+                      [steps false])
+        status (if (or edge past cut) "partial" (.-status r))
         dry (if (= "partial" status)
               (dry-end steps (head-wet-fn walled) (if (and (:unknown c) (not= "air" (.-reason r))) (masked-wet-ok c) (constantly false)))
               steps)

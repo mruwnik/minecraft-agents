@@ -480,3 +480,11 @@
           (is (= [10 5] [(:x (first (first @ran))) (:x (peek (first @ran)))]) "from where the body stands back to the first cell a block clear")
           (await (back! (subvec walked 0 5)))
           (is (empty? @ran) "clear already: no walk"))))))
+
+(deftest masked-cut-ends-a-found-plan-before-the-swim-air-does-not-cover
+  (let [swim (fn [x] {:x x :swim true :air 0})
+        steps (conj (mapv swim (range 20)) {:x 20})
+        ok (wplan/masked-wet-ok {:primitives (tu/fake {:self {:pos [0 64 0] :inWater true :oxygen 20}})})
+        [cut? c] (wplan/masked-cut steps ok)]
+    (is (= [12 true] [(count cut?) c]))
+    (is (= [steps false] (wplan/masked-cut steps (constantly true))))))
