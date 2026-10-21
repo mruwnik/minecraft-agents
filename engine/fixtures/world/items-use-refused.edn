@@ -1,0 +1,14 @@
+;; items.use with a bucket on a cell in another body's plan footprint: waits :not-allowed and the text names the plan.
+;; Should-fail (refused): nothing is poured, the bucket stays.
+{:defaults
+ {:tags [:items :access]
+  :time :any
+  :plot {:height 12}
+  :body {:at [16.5 0 16.5] :inventory [["bucket" 1]] :effects [["resistance" 600 4]]}
+  :plans [{:id "theirs" :metadata {:by "SomeoneElse"} :parts [{:id "w" :cells [#at [20 0 14]] :want [:any "cobblestone"]}]}]
+  :limit-s 60}
+ :cases
+ [{:name "bucket-on-another-bodys-plan-names-the-plan"
+   :act [[:job (jobs.items.use {:on #at [20 0 14] :item "bucket"})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :not-allowed :by :footprint :text [:contains "refused by plan"]}} :within-s 30 :of-job true}]
+   :after [[:item "bucket" 1]]}]}
