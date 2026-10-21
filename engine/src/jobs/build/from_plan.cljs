@@ -1,5 +1,6 @@
 (ns jobs.build.from-plan
   (:require [jobs.lib.child :as child]
+            [jobs.lib.build.wood :as wood]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -356,9 +357,11 @@
   [c]
   (when-let [w (plan/problem c)]
     (let [o (assoc (need/fetch-opts c) :explore (:explore (:args c)) :for-plan (:plan (:args c)))
-          e (await (if (= :need (:reason w))
-                     (need/item! c (:item w) (:count w) o)
-                     (need/tool! c {:block (:block w)} o)))]
+          bed? (and (= :need (:reason w)) (wood/bed? (:item w)))
+          e (await (cond
+                     bed? (need/blocks! c wood/bed-names (:count w) o)
+                     (= :need (:reason w)) (need/item! c (:item w) (:count w) o)
+                     :else (need/tool! c {:block (:block w)} o)))]
       (cond
         (= :continue e) :continue
         (= :done (:kind e)) :again

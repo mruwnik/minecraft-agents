@@ -456,6 +456,16 @@
           (is (= ["upper" "head"] [(:half (state-at p [2 65 2])) (:part (state-at p [4 64 4]))]))
           (is (= {:placed 2 :missing [] :wrong [] :given-up {}} (select-keys result [:placed :missing :wrong :given-up]))))))))
 
+(deftest a-bed-want-takes-any-colour-of-bed-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (build [{:id "bed-head" :cells [[4 64 4]] :want {:block "bed" :facing :south :part :head}}
+                                        {:id "bed-foot" :cells [[4 64 3]] :want {:block "bed" :facing :south :part :foot}}]
+                                       ground [{:name "brown_bed" :count 1}]))]
+          (is (= [[[4 64 3] "brown_bed"]] (sort (places p))))
+          (is (= {:placed 1 :missing [] :wrong [] :given-up {}} (select-keys result [:placed :missing :wrong :given-up]))))))))
+
 (deftest a-body-standing-on-a-bed-steps-off-it-before-it-builds
   (async done
     (tu/run-async done
@@ -934,6 +944,18 @@
           (is (every? #(= "oak_fence" (block p %)) ring))
           (is (= {:placed 9 :missing []} (select-keys result [:placed :missing])))
           (is (nil? (chest-fences p))))))))
+
+(deftest a-bed-want-fetches-a-bed-of-any-colour-from-a-chest
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (start {:blocks (assoc ground fence-chest "chest") :containers {fence-chest [{:name "red_bed" :count 1}]}}
+                                     {"house" {:id "house" :parts [{:id "bed-head" :cells [[4 64 4]] :want {:block "bed" :facing :south :part :head}}
+                                                                   {:id "bed-foot" :cells [[4 64 3]] :want {:block "bed" :facing :south :part :foot}}]}})
+              _ (tu/seeing-all p)
+              result (await (child-outcome eng job {:plan "house"} 300))]
+          (is (= [] (:missing result)))
+          (is (= "red_bed" (block p [4 64 3]))))))))
 
 (deftest fetch-false-builds-what-it-can-and-leaves-the-chest
   (async done

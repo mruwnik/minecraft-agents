@@ -156,15 +156,6 @@
 
 (def tall-plants #{"tall_grass" "large_fern" "sunflower" "lilac" "rose_bush" "peony" "tall_seagrass" "pitcher_plant"})
 
-(defn companion?
-  "Whether want is the other half of a two-block item: a door's or tall plant's upper half, a bed's head. The lower or
-  foot cell places both; the companion is never a target of its own."
-  [want]
-  (let [b (when (map? want) (:block want))
-        is (fn [k v] (= v (some-> (get want k) name)))]
-    (boolean (and b (or (and (is :half "upper") (or (str/ends-with? b "_door") (tall-plants b)))
-                        (and (is :part "head") (str/ends-with? b "_bed")))))))
-
 (defn plan-trouble
   "Why a plan answer with these cells cannot be built, or nil."
   [answer cells]
@@ -234,6 +225,16 @@
     (cond-> {:name (.-name b)}
       (.-properties b) (assoc :state (js->clj (.-properties b) :keywordize-keys true)))))
 
+(defn companion?
+  "Whether want is the other half of a two-block item: a door's or tall plant's upper half, a bed's head. The lower or
+  foot cell places both; the companion is never a target of its own."
+  [want]
+  (let [want (if (vector? want) (second want) want)
+        b (when (map? want) (:block want))
+        is (fn [k v] (= v (some-> (get want k) name)))]
+    (boolean (and b (or (and (is :half "upper") (or (str/ends-with? b "_door") (tall-plants b)))
+                        (and (is :part "head") (str/ends-with? b "_bed")))))))
+
 (defn allot
   "cells with their :item. carried {name n}: an :any want takes the first choice still left after the cells before it
   (each cell to place takes one), so a choice that runs out passes to the next, and the first choice when none is
@@ -244,7 +245,7 @@
     (:cells
      (reduce (fn [{:keys [left] :as acc} cell]
                (let [item (item-for (:want cell) left)
-                     take? (and item (#{:missing :wrong} (:answer cell)))]
+                     take? (and item (not (companion? (:want cell))) (#{:missing :wrong} (:answer cell)))]
                  (-> acc
                      (update :cells conj (assoc cell :item item))
                      (cond-> take? (update-in [:left item] #(max 0 (dec (or % 0))))))))
@@ -269,7 +270,7 @@
   [p answer part carried sp]
   (->> (:cells answer)
        (filter #(or (nil? part) (= part (:part %))))
-       (mapv #(cond-> % sp (update :want wood/resolve-want sp)))
+       (mapv #(-> % (cond-> sp (update :want wood/resolve-want sp)) (update :want wood/resolve-bed)))
        (#(shape/plan-minus-world % (partial world-block p)))
        (allot carried)))
 

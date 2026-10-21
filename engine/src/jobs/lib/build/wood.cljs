@@ -4,7 +4,7 @@
   `wooden_pressure_plates` (a name or a block with state) is satisfied by any species, as Minecraft's tags are. A species
   name (oak_planks) stays exact. One species is chosen for the plan: the one carried most, else the nearest log seen,
   else oak; it is listed first among the choices (the rest follow, so a block of another species already standing counts).
-  Not wood: bamboo, crimson and warped."
+  Not wood: bamboo, crimson and warped. A want of `bed` (a name or a block with state) is any colour of bed, white first."
   (:require [clojure.string :as str]))
 
 (def species ["oak" "spruce" "birch" "jungle" "acacia" "dark_oak" "mangrove" "cherry" "pale_oak"])
@@ -66,3 +66,19 @@
             state (when (map? want) (dissoc want :block))
             one #(let [name (str % "_" kind)] (if (seq state) (assoc state :block name) name))]
         (into [:any] (map one) ordered)))))
+
+(def bed-colours ["white" "orange" "magenta" "light_blue" "yellow" "lime" "pink" "gray" "light_gray" "cyan" "purple" "blue" "brown" "green" "red" "black"])
+
+(def bed-names (mapv #(str % "_bed") bed-colours))
+
+(defn bed? [item] (contains? (set bed-names) item))
+
+(defn resolve-bed
+  "The want with a `bed` made [:any white_bed orange_bed ...] (state kept); other wants stay. Any colour of bed will do,
+  so a bed carried or standing counts whatever its colour."
+  [want]
+  (if (not= "bed" (want-name want))
+    want
+    (let [state (when (map? want) (dissoc want :block))
+          one #(if (seq state) (assoc state :block %) %)]
+      (into [:any] (map one) bed-names))))

@@ -4,8 +4,8 @@
        "r" {:block "chest" :facing :south :type :right}
        "F" {:block "furnace" :facing :west}
        "t" {:block "torch"}
-       "B" {:block "white_bed" :facing :east :part :foot}
-       "H" {:block "white_bed" :facing :east :part :head}
+       "B" {:block "bed" :facing :east :part :foot}
+       "H" {:block "bed" :facing :east :part :head}
        "D" {:block "oak_door" :facing :north :half :lower}
        "d" {:block "oak_door" :facing :north :half :upper}}
  :layers [["PPPPPPP" "PPPPPPP" "PPPPPPP" "PPPPPPP" "PPPPPPP"]

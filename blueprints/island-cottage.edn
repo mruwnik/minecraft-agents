@@ -4,8 +4,8 @@
 {:id "island-cottage" :front :south
  :key {"S" "cobblestone" "P" "oak_planks" "G" "glass_pane" "i" "torch" "." :clear
        "L" {:block "oak_log" :axis :y}
-       "B" {:block "white_bed" :facing :south :part :foot}
-       "H" {:block "white_bed" :facing :south :part :head}
+       "B" {:block "bed" :facing :south :part :foot}
+       "H" {:block "bed" :facing :south :part :head}
        "D" {:block "oak_door" :facing :north :half :lower}
        "d" {:block "oak_door" :facing :north :half :upper}
        "E" {:block "oak_stairs" :facing :east :half :bottom}

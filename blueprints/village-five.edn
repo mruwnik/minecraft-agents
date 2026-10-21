@@ -3,8 +3,8 @@
 {:id "village-five" :front :south
  :key {"S" "cobblestone" "W" "cobblestone" "T" "torch" "A" "composter" "C" "lectern" "E" "fletching_table" "." :clear
        "G" {:block "oak_fence_gate" :facing :east}
-       "F" {:block "white_bed" :facing :south :part :foot}
-       "H" {:block "white_bed" :facing :south :part :head}}
+       "F" {:block "bed" :facing :south :part :foot}
+       "H" {:block "bed" :facing :south :part :head}}
  :layers [["SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS"
            "SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS"]
           ["WWWWWWWWWW" "W.F.F.F.FW" "W.H.H.H.HW" "W.TAACT.TW" "W.F.F.F.FW"

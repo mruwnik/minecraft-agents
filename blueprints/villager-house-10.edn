@@ -5,8 +5,8 @@
 {:id "villager-house-10" :front :south
  :key {"S" "cobblestone" "W" "oak_planks" "T" "torch" "." :clear
        "G" {:block "oak_fence_gate" :facing :east}
-       "B" {:block "white_bed" :facing :south :part :foot}
-       "H" {:block "white_bed" :facing :south :part :head}}
+       "B" {:block "bed" :facing :south :part :foot}
+       "H" {:block "bed" :facing :south :part :head}}
  :layers [["SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS"
            "SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS" "SSSSSSSSSS"]
           ["WWWWWWWWWW" "W.B.B.B.BW" "W.H.H.H.HW" "W.T...T.TW" "W.B.B.B.BW"
