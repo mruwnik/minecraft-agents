@@ -111,11 +111,14 @@
     need))
 
 (defn with-avoid
-  "The need with the columns of trees found cut off in its args when it fells trees."
+  "The need with the columns of trees found cut off in its args when it fells trees, and the cells a mine gave up on when it mines."
   [c need]
-  (if-let [cut (seq (:cut-off (ctx/mem c)))]
-    (cond-> need (= 'jobs.forestry.harvest-wood (:job need)) (assoc-in [:args :avoid] (vec cut)))
-    need))
+  (let [cut (seq (:cut-off (ctx/mem c)))
+        skip (seq (:skip-cells (ctx/mem c)))]
+    (case (:job need)
+      jobs.forestry.harvest-wood (cond-> need cut (assoc-in [:args :avoid] (vec cut)))
+      jobs.gather.mine (cond-> need skip (assoc-in [:args :skip] (vec skip)))
+      need)))
 
 (defn gather-slot
   "The child slot of a gather need: one per source, since a slot's memory outlives its job while it runs and another job must not start over it."

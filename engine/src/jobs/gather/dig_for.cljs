@@ -77,6 +77,7 @@
    :radius :shared
    :center :shared
    :wet :shared
+   :skip {:doc "cells [x y z] never targeted (a caller passes the ones an earlier call gave up on: :skipped of its result)" :spec (a/coll-of (a/pred "a cell [x y z]" #(and (sequential? %) (= 3 (count %)) (every? number? %)))) :default nil}
    :ignore-zones? :shared
    :track-ground {:doc "dig the 5x5x2 ground under the start last and list the cells of it that were open at the end or dug in :ground of the result, for a caller that fills them again" :spec boolean? :default false}
    :heading :shared
@@ -343,6 +344,7 @@
         (ctx/update-mem! c assoc
                          :goal (:count (:args c)) :had now :start start
                          :failures 0 :dry 0 :last-carried now
+                         :skipped (mapv (fn [[x y z]] {:x x :y y :z z}) (:skip (:args c)))
                          :heading (or heading faced)
                          :ground (if (:track-ground (:args c)) (snapshot c start) [])
                          :phase :dig)

@@ -46,6 +46,15 @@
   [need e]
   (if (declined? e) (child/max-fruitless) (:max-runs need (child/max-fruitless))))
 
+(defn note-skipped
+  "Memory m with the cells a mine gave up on: one given up on in two runs is left out of the next (a single give-up may be a passing fault)."
+  [m cells]
+  (let [cells (map vec cells)
+        again (filter (:skipped-once m #{}) cells)]
+    (-> m
+        (update :skipped-once (fnil into #{}) cells)
+        (update :skip-cells (fnil into #{}) again))))
+
 (defn gather-failed!
   "A gather run that brought nothing (a mine that ended :wet or :flooded leaves its ore's column out of the next sight). Trees seen but unreachable (:no-tree) with :explore on send the body to look
   elsewhere (bounded by [:explored key]); a mine that lost its pickaxe (:no-tool) that the pickaxe step can replace
@@ -277,6 +286,7 @@
                 (if (> (gather-carried p need) before)
                   (do (child/progress! c :gather) :again)
                   (do (when-let [w (or (:why res) (spared-why res))] (ctx/update-mem! c assoc-in [:gather :why] w))
+                      (when-let [cells (seq (:skipped res))] (ctx/update-mem! c note-skipped cells))
                       (when-let [cols (seq (:columns res))] (ctx/update-mem! c update :cut-off (fnil into #{}) (map vec) cols))
                       (if-let [col (and (#{:flooded :wet} (contract/cause-key e)) at)]
                         (do (ctx/update-mem! c update :cut-off (fnil conj #{}) col) :again)

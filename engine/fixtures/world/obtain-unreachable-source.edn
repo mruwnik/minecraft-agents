@@ -22,4 +22,17 @@
    :expect [{:event {:source :job :kind :obtain.exploring} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 20 :until {:source :job :kind :obtain.exploring} :of-job true}]
    :after [[:item "oak_log" 0]]
-   :limit-s 100}]}
+   :limit-s 100}
+  {:name "stone-on-pillars-given-up-in-two-runs-is-not-walked-to-in-the-third"
+   :doc "Four stones on bedrock pillars the walk cannot reach, nothing else to mine (card 02f9c3f0): each run skips them (mine.unreachable); the ones given up on in two runs are passed to the third, so there are at most two runs' worth of events, not one per try."
+   :plot {:height 12 :floor "dirt"}
+   :blocks [[:fill [13 0 16] [13 6 16] "bedrock"] [:set [13 7 16] "stone"]
+            [:fill [19 0 16] [19 6 16] "bedrock"] [:set [19 7 16] "stone"]
+            [:fill [16 0 13] [16 6 13] "bedrock"] [:set [16 7 13] "stone"]
+            [:fill [16 0 19] [16 6 19] "bedrock"] [:set [16 7 19] "stone"]]
+   :body {:inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.items.obtain {:item "cobblestone" :count 3 :explore false})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 110 :of-job true}
+            {:count-event {:source :job :kind :mine.unreachable} :for-s 110 :at-least 4 :at-most 8 :of-job true}]
+   :after [[:item "cobblestone" 0]]
+   :limit-s 130}]}

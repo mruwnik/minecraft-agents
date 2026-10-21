@@ -1,6 +1,7 @@
 (ns engine.obtain-iron-test
   "Iron as a source of items.obtain: raw ores mined from their seen ore blocks, smelt products made by a smelt child."
   (:require [cljs.test :refer [deftest is async]]
+            [jobs.items.obtain.gather :as gather]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.fetch-test :as f]
@@ -314,3 +315,9 @@
           (is (every? (set (map :at (filter (comp #{:obtain.gathering} :kind) @(:seen s))))
                       [{:x 1 :y 64 :z 4} {:x 3 :y 64 :z 5} {:x 0 :y 64 :z 6} {:x 4 :y 64 :z 3}])
               "each flooded ore is left for the next, none counted fruitless"))))))
+
+(deftest a-cell-a-mine-gave-up-on-in-two-runs-is-left-out-of-the-third
+  (let [once (gather/note-skipped {} [[1 2 3] [4 5 6]])
+        twice (gather/note-skipped once [[1 2 3]])]
+    (is (empty? (:skip-cells once)))
+    (is (= #{[1 2 3]} (:skip-cells twice)))))

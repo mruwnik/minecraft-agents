@@ -457,3 +457,19 @@
           (await (run-ticks s 60))
           (is (= [:no-progress :no-progress :no-progress] (mapv :why (events-of s :mine.walk-failed))))
           (is (= :gave-up (:reason (done-event s)))))))))
+
+(deftest cells-a-call-gave-up-on-are-passed-on-and-not-walked-to-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [stub {:round (fn [c] (ctx/end c :nothing-possible {:reason :unreachable :why :no-progress} {:arrived false}))}
+              world {:world {:blocks (cells "sand" [15] [64] [-1 0 1 2])} :jobs (assoc registry/jobs 'jobs.movement.go-to stub)}
+              first-run (start world)
+              _ (core/submit! (:eng first-run) (spec {:block "sand" :count 4 :ways #{:seen}}) {})
+              _ (await (run-ticks first-run 60))
+              gave-up (:skipped (done-event first-run))
+              s (start world)]
+          (is (= 3 (count gave-up)))
+          (core/submit! (:eng s) (spec {:block "sand" :count 4 :ways #{:seen} :skip gave-up}) {})
+          (await (run-ticks s 60))
+          (is (= [:no-progress] (mapv :why (events-of s :mine.walk-failed)))))))))
