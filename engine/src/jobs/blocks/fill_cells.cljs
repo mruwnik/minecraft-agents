@@ -35,7 +35,7 @@
   no fluid and drops no sand or gravel column; a block so borrowed is marked :borrowed in its ledger entry. With :purpose each placed block
   goes to the scaffold ledger under it (jobs.access.cleanup takes the plug purposes back). A cell the place refused or that had
   nothing to place against goes behind the others, and is given up after ::max-refusals failed steps. A mob standing in the next
-  cell is waited out a second at a time (::mob-waits) when seen, and for jobs.lib.seal/mob-wait-ticks when only a refused place names it, not counted a failed step. A cell a
+  cell is waited out a second at a time (::mob-waits) when seen (a hostile is not waited on: the call fails), and for jobs.lib.seal/mob-wait-ticks when only a refused place names it, not counted a failed step. A cell a
   place answers occupied for (a block that stays) is left alone, not owed. It yields :continue only when a child waits
   on the world.
 
@@ -247,6 +247,11 @@
   [c cell]
   (pl/mob-in (sight/seen-entities (:primitives c) {:radius 4}) [(:x cell) (:y cell) (:z cell)]))
 
+(defn hostile-in?
+  "Whether the mob in cell is a hostile: it hits while waited on, so the call fails at once for its caller to deal with it."
+  [c cell]
+  (= "hostile" (:kind (mob-in c cell))))
+
 (defn ^:async wait-mob!
   "A mob stands in the cell: wait a second for it to move on (:continue when the pause is cut, else :again)."
   [c]
@@ -288,6 +293,8 @@
       (or (>= (or failures 0) (settings/get settings ::max-failures)) (and (nil? pos) (some given-up? cells))) (finish! c :nothing-possible {:reason :failed})
       (and (nil? item) (seq (need/fetch-how c))) (await (fetch! c names (count cells)))
       (nil? item) (finish! c :condition-failed {:reason :need :any-of names})
+      (and pos (not loose?) (hostile-in? c pos)) (do (ctx/update-mem! c assoc :refusal {:status "failed" :text (refusal-text pos "failed" ", a hostile stands in the cell")})
+                                                      (finish! c :nothing-possible {:reason :failed}))
       (and pos (not loose?) (< (:mob-waits (ctx/mem c) 0) (settings/get settings ::mob-waits)) (mob-in c pos)) (await (wait-mob! c))
       :else
       (let [r (cond shut? (await (shut! c pos))

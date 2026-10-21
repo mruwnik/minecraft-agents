@@ -168,6 +168,17 @@
             (is (= :done (:kind e)))
             (is (= 1 (count (bd/calls p "place"))) "no place was tried while the cow stood there")))))))
 
+(deftest a-hostile-standing-in-the-cell-fails-the-call-at-once-without-waiting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ender {:id 8 :name "enderman" :kind "hostile" :width 0.6 :height 2.9 :pos {:x 2.5 :y 64 :z 0.5}}
+              env (bd/setup {:self body :inventory [{:name "dirt" :count 5}] :entities [ender]})
+              e (await (ending-of env {:cells [(first cells)] :use {:blocks ["dirt"]} :checks {:safe? '(always)}}))]
+          (is (= :nothing-possible (:kind e)))
+          (is (empty? (bd/calls (:p env) "wait")) "it did not wait while the enderman hit")
+          (is (empty? (bd/calls (:p env) "place"))))))))
+
 (defn refuse-at
   "A place override refusing the cells whose x is in xs."
   [xs]
