@@ -168,12 +168,12 @@
        (empty? (candidates c names))))
 
 (defn chests-to-try
-  "The candidates, minus the unlooked-in far ones when a chain from what is carried makes the need: crafting now is
-  cheaper than a long walk to a chest that may not hold it."
+  "The candidates, minus the ones further than near-chest when a chain from what is carried makes the need: crafting now
+  is cheaper than a long walk, to a chest that may not hold it or to one that does."
   [c m names n]
   (let [cs (candidates c names)]
     (if (and (makes? c) (not (get-in m [:tried :craft])) (craft-plan c names n))
-      (filter #(or (:stock %) (u/within? (u/self-pos c) (:pos %) (near-chest))) cs)
+      (filter #(u/within? (u/self-pos c) (:pos %) (near-chest)) cs)
       cs)))
 
 (defn ^:async step! [c]

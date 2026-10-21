@@ -10,7 +10,9 @@
             [engine.library-test :as lt]
             [engine.obtain-iron-test :as oi]
             [engine.obtain-obsidian-test :as oo]
+            [engine.memory :as mem]
             [engine.registry :as registry]
+            [jobs.lib.stock :as stock]
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.table :as table]
             [jobs.lib.look :as look]
@@ -255,6 +257,17 @@
           (is (= :done (:kind e)))
           (is (= 4 (get-in e [:data :got])))
           (is (empty? (f/events-of s :obtain.chest)) "no walk to the chest"))))))
+
+(deftest a-craft-from-carried-materials-beats-a-walk-to-a-far-chest-known-to-hold-the-item
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far-at "400,64,0"
+              s (f/start (update (f/bare [{:name "oak_planks" :count 2}]) :blocks assoc far-at "chest") [(assoc f/own-zone :min [-20 60 -20] :max [500 70 20])])
+              _ (mem/write! (:store (:eng s)) stock/stock-kind {:pos [400 64 0] :items {"stick" 8}} stock/stock-policy)
+              e (await (ending-of s 'jobs.items.obtain {:item "stick" :count 4 :explore false} 30))]
+          (is (= :done (:kind e)))
+          (is (empty? (f/events-of s :obtain.chest)) "no walk to the far chest"))))))
 
 (deftest a-chest-in-another-players-zone-is-not-looked-into
   (async done
