@@ -42,7 +42,7 @@
     (seen/observe! c (sample bot (cons (.-entity bot) es)) 0)
     (into {} (map (juxt :type :sense)) (:entities (seen/snapshot c 0)))))
 
-(deftest a-thing-is-listed-by-perceptions-rule-line-light-cone-or-hearing
+(deftest a-thing-is-listed-by-the-rule-the-jobs-see-by-line-cone-or-hearing
   (let [dark {[0 64 10] [0 0] [0 65 10] [0 0]}]
     (is (= {"player" :self "cow" :seen "item" :seen}
            (listed (rig {}) [(mob 2 "cow" 64 0.5 40.5) (mob 3 "item" 64 0.5 3.5)])) "in front: seen")
@@ -51,9 +51,9 @@
         "behind: a cow is heard (and turned to), a drop makes no sound and is out of the cone")
     (is (= {"player" :self} (listed (rig {}) [(mob 2 "cow" 64 0.5 -40.5) (mob 3 "item" 64 0.5 -30.5)]))
         "behind and out of hearing")
-    (is (= {"player" :self "cow" :heard}
+    (is (= {"player" :self "cow" :seen "item" :seen}
            (listed (rig {:light dark}) [(mob 2 "cow" 64 0.5 10.5) (mob 3 "item" 64 0.5 10.5)]))
-        "in a dark room in front: the cow is only heard, the drop is not made out")
+        "in front with a clear line: seen whatever the light at its cell, as the jobs' entities() sees it")
     (is (= {"player" :self "cow" :heard}
            (listed (rig {:blocks (tu/box 5 64 -3 5 69 3 "stone")}) [(mob 2 "cow" 64 12.5 0.5)])) "through a wall: heard")))
 

@@ -57,10 +57,10 @@
   (boolean (or (= "hostile" (.-type e)) (re-find #"(?i)hostile" (str (.-kind e))))))
 
 (defn sense
-  "How the body perceives entity e, a non-hostile one (hostile mobs: see `known-sense`). Uses
-  perception/sense-thing: a clear line from the eye to any of the entity's sight points (senses/can-see?), within sight, lit and in
-  the view cone, or heard within hearing range unless it makes no sound. per is the perception (nil: no
-  world, so nothing is sensed). Returns :self, :seen, :heard or nil."
+  "How the body perceives entity e, a non-hostile one (hostile mobs: see `known-sense`). Seen is what the jobs see
+  (senses/in-view?: a clear line from the eye to any sight point of the entity, in the view cone or sounding within
+  hearing; light plays no part), within sight; otherwise heard within hearing unless it makes no sound. per is the
+  perception (nil: no world, so nothing is sensed). Returns :self, :seen, :heard or nil."
   [per ^js source ^js e]
   (let [^js raw (:raw per)
         ^js eye (when raw (.eye raw))
@@ -70,11 +70,13 @@
       (and source (identical? e (.-entity source))) :self
       (or (nil? eye) (nil? p) (nil? table) (zero? (.-length table))) nil
       :else
-      (perception/sense-thing per eye p
-                              (and (<= (js/Math.hypot (- (.-x p) (.-x eye)) (- (+ (.-y p) mobs/mob-middle) (.-y eye)) (- (.-z p) (.-z eye)))
-                                       (:radius (:opts per)))
-                                   (senses/can-see? raw eye #js {:pos p :height (.-height e) :width (.-width e)}))
-                              (boolean (silent-types (entity-type e)))))))
+      (let [silent? (boolean (silent-types (entity-type e)))]
+        (cond
+          (and (<= (js/Math.hypot (- (.-x p) (.-x eye)) (- (+ (.-y p) mobs/mob-middle) (.-y eye)) (- (.-z p) (.-z eye)))
+                   (:radius (:opts per)))
+               (senses/in-view? raw eye #js {:pos p :height (.-height e) :width (.-width e) :kind (when silent? "item")}))
+          :seen
+          (mobs/heard-at? (:hearing (:opts per)) eye p silent?) :heard)))))
 
 (defn known-sense
   "How the body perceives hostile mob e by perception's known-mobs entry (a knownMobs() row, or nil when the body knows
