@@ -478,17 +478,35 @@
       (fn ^:async t []
         (is (seq (events-of (await (far-run false)) :round_started)))))))
 
-(def high-box {:min {:x 2 :y 93 :z 2} :max {:x 4 :y 94 :z 4}})
+(def high-box {:min {:x 202 :y 93 :z 2} :max {:x 204 :y 94 :z 4}})
 
-(deftest a-tend-far-below-its-field-declines-though-nothing-else-is-listed
+(def high-ripe
+  (world {:blocks (into {} (map (fn [[x z]] [(k (+ x 200) 93 z) "farmland"])) all-cells)}
+         {:blocks (into {} (map (fn [[x z]] [(k (+ x 200) 94 z) "wheat"])) all-cells)
+          :ages (into {} (map (fn [[x z]] [(k (+ x 200) 94 z) 7])) all-cells)}))
+
+(defn ^:async below-run
+  "A tend far below its field with nothing else listed, kept under repeat or alone."
+  [repeat?]
+  (let [s (setup high-ripe)
+        job (list 'jobs.farm.tend {:area high-box})]
+    (core/submit! (:eng s) (if repeat? (list 'repeat job) job) {})
+    (await (tu/run-ticks (:eng s) (:clock s) 3 700))
+    s))
+
+(deftest a-tend-under-repeat-far-below-its-field-declines-though-nothing-else-is-listed
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (setup far-ripe)]
-          (core/submit! (:eng s) (list 'jobs.farm.tend {:area high-box}) {})
-          (await (tu/run-ticks (:eng s) (:clock s) 3 700))
+        (let [s (await (below-run true))]
           (is (empty? (events-of s :round_started)))
           (is (some #(= :away (:reason %)) (events-of s :waiting))))))))
+
+(deftest a-lone-tend-far-below-its-field-walks-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (seq (events-of (await (below-run false)) :round_started)))))))
 
 ;; ------------------------------------------------------------------ contract
 
