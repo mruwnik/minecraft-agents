@@ -66,7 +66,7 @@
   (let [{:keys [w]} (sensed wall-world)
         masked (wworld/path-world w (wworld/unknown-spec))
         plain (wworld/path-world w)]
-    (is (= 100000 (.-maxNodes (wplan/plan-options masked 1 nil nil))) "a goal no seen route reaches floods unseen cells: stops at the setting")
+    (is (= 12000 (.-maxNodes (wplan/plan-options masked 1 nil nil))) "a goal no seen route reaches floods unseen cells: stops at the setting")
     (is (= 5000 (.-maxNodes (settings/with-settings {:jobs.lib.walk.world/unknown-max-nodes 5000} #(wplan/plan-options masked 1 nil nil)))))
     (is (undefined? (.-maxNodes (wplan/plan-options plain 1 nil nil))) "an unmasked search keeps the planner's 200000")))
 

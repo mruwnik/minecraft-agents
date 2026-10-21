@@ -1,0 +1,16 @@
+;; Card 719b8dae: a masked go-to (:unknown true) toward a goal over a big unseen void. The deck ends at x 12, the plot's floor
+;; is cut away beyond it (6 deep), the goal floats at x 60. A player at the cliff sees there is no way; the body must end
+;; not arrived within the limit instead of searching the unseen space for minutes.
+;; Should-fail (not arrived): the goal over the void.
+{:defaults
+ {:tags [:movement :go-to :unknown :planner]
+  :plot {:height 16 :length 90 :width 32}
+  :body {:at [2.5 0 16.5] :settle-s 2}
+  :limit-s 150}
+ :cases
+ [{:name "goal-over-a-void-is-given-up"
+   :time :any
+   :blocks [[:fill [13 -6 0] [89 -1 31] "air"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [60 0 16] :range 1 :unknown true :ways #{:walk}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 100 :of-job true}]
+   :after [[:body-far [60.5 0 16.5] 20]]}]}

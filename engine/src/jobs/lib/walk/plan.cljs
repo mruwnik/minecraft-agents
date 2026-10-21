@@ -177,9 +177,11 @@
 
 (defn beyond-needed?
   "Whether a search within the walker's limits that found no whole path leaves a search without them to run: only when
-  the limits turned some move away (r.limited). Otherwise the search without them would search the very same moves."
-  [r]
-  (and (not= "found" (.-status r)) (true? (.-limited r))))
+  the limits turned some move away (r.limited). Otherwise the search without them would search the very same moves. A
+  masked search (pw) that ran out of nodes flooded unseen cells: the search without the limits would flood them again."
+  [r pw]
+  (and (not= "found" (.-status r)) (true? (.-limited r))
+       (not (and (wworld/unknown-of pw) (= "budget" (.-reason r))))))
 
 (defn ^:async plan-within!
   "Plan within the executor's abilities (policy, default executor/policy): {:r :steps} (steps nil when r has no path), in
@@ -189,7 +191,7 @@
   [c pw to range weight policy]
   (let [r (await (plan-from! c pw to range weight (executor/planner-limits policy (wworld/solid-fn pw)) policy))
         within (within-of pw r)]
-    (if (beyond-needed? r)
+    (if (beyond-needed? r pw)
       (with-beyond within pw policy (await (plan-from! c pw to range weight nil policy)))
       within)))
 

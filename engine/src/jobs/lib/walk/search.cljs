@@ -202,7 +202,7 @@
 
           over
           (let [r (.result phase)]
-            (if (wplan/beyond-needed? r)
+            (if (wplan/beyond-needed? r walled)
               (recur (assoc search :r r :unlimited (planner/create-plan (.-snapshot walled) (wplan/plan-query c to range)
                                                                         (cond-> (wplan/with-drops (wplan/plan-options walled weight nil (wplan/box-of policy)) policy (wworld/landing-seen (:primitives c)))
                                                                           (:edge-stop search) (doto (unchecked-set "stopAtEdge" true)))))
