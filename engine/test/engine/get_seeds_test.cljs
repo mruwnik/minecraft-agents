@@ -144,6 +144,14 @@
           (is (= {:kind :completed :reason :count} (ending-of s)))
           (is (pos? (dig-count s))))))))
 
+(deftest grass-beyond-a-radius-under-the-reach-is-walked-to-until-it-is-inside
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:radius 1 :count 1} {:blocks (patch "short_grass" [30 31 32] [0 1]) :drops seed-drops} 60))]
+          (is (= {:kind :completed :reason :count} (ending-of s)))
+          (is (pos? (dig-count s))))))))
+
 (deftest the-none-text-without-any-grass-seen-says-so
   (async done
     (tu/run-async done

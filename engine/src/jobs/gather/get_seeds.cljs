@@ -38,7 +38,7 @@
      judged by jobs.lib.access.rules. At most the per-round setting (4) of the permitted ones are walked to (within 3) and
      dug, each judged again right before its dig.
 
-  With none within :radius, the nearest one seen up to 64 blocks away is walked to (within the reach setting) and the batch goes on from there.
+  With none within :radius, the nearest one seen up to 64 blocks away is walked to (within the reach setting or :radius, the smaller) and the batch goes on from there.
 
   Skipped blocks: a cell in a zone that bars :dig or in an active plan's footprint is skipped for good and
   remembered. So is one with a hazard not in :accept, one whose walk is blocked or partial, and one whose dig
@@ -292,7 +292,7 @@
 (defn ^:async approach!
   "Walk toward the nearest source seen beyond :radius so it lies within it: :continue while the walk waits on the world, else :again (a blocked walk skips that block)."
   [c pos]
-  (let [walked (await (near/go-near! c pos (reach)))]
+  (let [walked (await (near/go-near! c pos (min (reach) (:radius (:args c)))))]
     (when (= :blocked walked) (skip! c pos))
     (if (= :partial walked) :continue :again)))
 
