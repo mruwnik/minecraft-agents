@@ -383,7 +383,7 @@
 (defn ^:async dig-ceiling!
   "A diggable roof over the head is dug out (a jobs.blocks.dig child, by hand when no tool harvests it), up to
   max-ceiling-digs blocks per call (a falling block does not count: its column is one obstacle, see clear-landed!); after a dig
-  with a falling block over the cell it waits for it to drop. :again, :continue while the child waits, or the :ceiling give-up
+  with a falling block over a cell above the head it waits for it to drop (over the head cell it does not: the block lands on the body, clear-landed! digs it at once). :again, :continue while the child waits, or the :ceiling give-up
   with the dig's outcome."
   [c l {:keys [at block] :as step}]
   (let [n (:ceiling-digs (ctx/mem c) 0)
@@ -395,9 +395,10 @@
         (when-not falling? (ctx/update-mem! c update :ceiling-digs (fnil inc 0)))
         (case outcome
           :continue :continue
-          (:dug :missing) (do (when (rules/falling? (block-at (up at 1)))
-                                (await (child/pause! c (/ (settings/get settings ::fall-wait-ms) 1000) :falling-block)))
-                              :again)
+          (:dug :missing) (if (and (rules/falling? (block-at (up at 1))) (not= at (up (pl/feet-cell c) 1))
+                                   (= :continue (await (child/pause! c (/ (settings/get settings ::fall-wait-ms) 1000) :falling-block))))
+                            :continue
+                            :again)
           (finish! c l (assoc step :dig outcome)))))))
 
 (defn ^:async clear-landed!

@@ -28,5 +28,6 @@
   {:name "tall-sand-over-the-head-never-buries-the-body"
    :blocks [[:fill [16 7 16] [16 12 16] "sand"] [:fill [16 13 16] [16 14 16] "stone"]]
    :act [[:job (jobs.access.pillar {:height 5})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :ceiling}} :within-s 90 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :ceiling}} :within-s 90 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["suffocation"]}} :for-s 90 :until {:source :job :kind :stopped} :of-job true}]
    :limit-s 100}]}

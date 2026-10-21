@@ -206,6 +206,16 @@
           (is (= [0 68 0] (feet p)))
           (is (empty? (of-kind seen :stopped)) "8 gravel blocks are more than max-ceiling-digs, but they fall back: one obstacle"))))))
 
+(deftest digging-the-head-cell-under-a-falling-column-does-not-wait-for-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as s} (setup {:blocks (into {} (map (fn [y] [(str "0," y ",0") "gravel"]) (range 66 74)))})]
+          (core/submit! eng (list job {:height 4}) {})
+          (await (settings/with-settings {:jobs.access.pillar/fall-wait-ms 100000000} #(ticks s eng 40)))
+          (is (finished? eng) "the head cell is dug and refilled gravel dug at once: no wait while the body's head is in it")
+          (is (empty? (of-kind seen :stopped))))))))
+
 (deftest a-falling-block-that-landed-in-the-head-cell-is-dug-out-and-the-pillar-goes-on
   (async done
     (tu/run-async done
