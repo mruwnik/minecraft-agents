@@ -15,26 +15,32 @@
 
 (defn outside
   "{:reason :outside-area :center :distance :radius :text} while the call has a :center and the body stands farther
-  than :radius from it, else nil."
-  [c]
-  (let [radius (:radius (:args c))
-        at (center c)
+  than :radius (or the given limit) from it, else nil."
+  ([c] (outside c (:radius (:args c))))
+  ([c radius]
+  (let [at (center c)
         d (when at (u/dist (u/self-pos c) at))]
     (when (and at (> d radius))
       {:reason :outside-area :center at :radius radius :distance (js/Math.round d)
-       :text (str "the body stands " (js/Math.round d) " blocks from the area centre " (pr-str at) " (radius " radius ")")})))
+       :text (str "the body stands " (js/Math.round d) " blocks from the area centre " (pr-str at) " (radius " radius ")")}))))
 
-(defn ^:async walk-in!
+(defn ^:async walk-within!
   "While the call's body stands outside its area (outside), one walk round toward the centre: :continue while go-to goes on or
-  waits, :there once inside, or the :nothing-possible ending {:reason :area-unreachable} when go-to gave up. nil when already inside."
-  [c]
-  (when-let [out (outside c)]
+  waits, :there once inside, or the :nothing-possible ending {:reason :area-unreachable} when go-to gave up. nil when already inside.
+  limit replaces the call's :radius."
+  [c limit]
+  (when-let [out (outside c limit)]
     (let [w (await (jc/walk-to! c (:center out) (max 1 (min 3 (:radius out)))))]
       (if (#{:there :continue} w)
         w
         (ctx/end c :nothing-possible :area-unreachable
                  {:reason :area-unreachable :center (:center out) :distance (:distance out)
                   :text (str "could not walk to the area centre " (pr-str (:center out)) ", " (:distance out) " blocks away")})))))
+
+(defn walk-in!
+  "walk-within! the call's :radius."
+  [c]
+  (walk-within! c (:radius (:args c))))
 
 (defn unless-outside
   "check, except ok while the body is outside the area: the job walks there first, and the check reads the place it works."

@@ -602,23 +602,10 @@
     (:patch (:args c)) (await (patch-round! c))
     :else (await (step! c))))
 
-(defn ^:async walk-to-center!
-  "Before the search has an origin, a :center beyond the max-distance setting from the body is walked to first: :there,
-  :continue, or the :area-unreachable ending. nil when there is nothing to walk."
-  [c]
-  (let [at (area/center c)]
-    (when (and at (nil? (:origin (ctx/mem c))) (> (u/flat-dist (u/self-pos c) at) (distance-limit)))
-      (let [w (await (jc/walk-to! c at 3))]
-        (if (#{:there :continue} w)
-          w
-          (ctx/end c :nothing-possible :area-unreachable
-                   {:reason :area-unreachable :center at
-                    :text (str "could not walk to the search centre " (pr-str at))}))))))
-
 (defn ^:async search-step!
   "One pass: end, walk the leg under way, or look and start the next leg. :again goes on, else a round result."
   [c]
-  (let [w (await (walk-to-center! c))]
+  (let [w (when-not (:origin (ctx/mem c)) (await (area/walk-within! c (distance-limit))))]
     (cond
       (= :there w) :again
       (= :continue w) :continue
