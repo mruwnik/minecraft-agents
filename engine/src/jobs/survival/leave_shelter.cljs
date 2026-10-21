@@ -86,13 +86,13 @@
     :again))
 
 (defn pending?
-  "Whether the morning still has work: a dig-out, a shelter to leave, a doorway the night filled to open, a
+  "Whether the morning still has work (by night too, so a run then is no \"nothing left\"): a dig-out, a shelter to leave, a doorway the night filled to open, a
   bed put down to collect."
   [c]
   (let [p (:primitives c)
         m (ctx/mem c)]
     (boolean (or (:dig-out m)
-                 (sh-inside/shut-in-by-day? p (:data (ctx/latest c :shelter)) (:data (ctx/latest c :shelter-trapped)))
+                 (sh-inside/shut-in-own? p (:data (ctx/latest c :shelter)) (:data (ctx/latest c :shelter-trapped)))
                  (sh-beds/doorway-to-open p (ctx/view c))
                  (sh-beds/bed-to-collect p (ctx/view c))))))
 

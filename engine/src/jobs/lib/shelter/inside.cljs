@@ -132,13 +132,17 @@
   "Policy of the :shelter-trapped entries written when leave-shelter got out: the walk back through its cell is no new dawn for half a day."
   {:cap 3 :ttl (/ sh-clock/ms-per-day 2)})
 
-(defn shut-in-by-day?
-  "By day: the body is shut in its own shelter (data) and no :shelter-trapped entry (data) says leave! found no way
-  out of this cell. Never at night."
+(defn shut-in-own?
+  "The body is shut in its own shelter (data) and no :shelter-trapped entry (data) says leave! found no way out of this
+  cell. Day or night."
   [p shelter trapped]
-  (boolean (and (not (sh-sense/dark-outside? p))
-                (in-own-shelter p shelter)
+  (boolean (and (in-own-shelter p shelter)
                 (not= (:pos shelter) (:pos trapped)))))
+
+(defn shut-in-by-day?
+  "shut-in-own?, never at night."
+  [p shelter trapped]
+  (and (not (sh-sense/dark-outside? p)) (shut-in-own? p shelter trapped)))
 
 (defn shelter-hint
   "{:inside-own-shelter pos :hint text} when the body is sealed in its own shelter (a go-to, attack or hunt that cannot

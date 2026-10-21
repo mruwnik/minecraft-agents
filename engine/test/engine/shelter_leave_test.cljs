@@ -54,6 +54,18 @@
           (is (false? (fires? {:time st/noon :blocks {"0,66,0" "stone"}} (mem/view (:store eng))))
               "a walk back through the shelter's cell is no new dawn"))))))
 
+(deftest leave-shelter-run-by-night-in-the-shelter-is-not-done
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (await (dug-in-world {}))
+              before (count (st/emitted seen :completed))]
+          (.setTime (.-world p) st/night)
+          (core/submit! eng '(jobs.survival.leave-shelter) {})
+          (await (st/tick-n eng 12))
+          (is (= {:x 0.5 :y 64 :z 0.5} (st/pos-of p)) "still sealed in")
+          (is (= before (count (st/emitted seen :completed))) "no \"out of the shelter, nothing left\" while shut in"))))))
+
 (deftest a-trapped-body-is-tried-once-not-every-cooldown
   (async done
     (tu/run-async done
