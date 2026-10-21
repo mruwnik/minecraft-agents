@@ -1,0 +1,19 @@
+;; Card 8996f28a: a calm enderman beside the route of a death pile is no danger (provoked-only, never fought), so recover-drops fetches the pile.
+;; Same course as death-pile-guarded: death at [22 0 22], respawn at [4 0 4], a NoAI enderman at [18 0 18].
+{:defaults
+ {:tags [:survival :death :jobs]
+  :body {:at [22.5 0 22.5] :spawnpoint [4 0 4] :effects [["resistance" 600 4]]
+         :inventory [["raw_iron" 24] ["cobblestone" 64] ["cobblestone" 36]]}
+  :mobs :keep
+  :act [[:kill-body]
+        [:await {:source :body :kind :respawned} 30]
+        [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]
+        [:summon "enderman" [18.5 0 18.5] "{NoAI:1b,Silent:1b}"]
+        [:wait-s 2]]
+  :limit-s 200}
+ :cases
+ [{:name "calm-enderman-near-the-pile-is-no-reason-to-skip"
+   :act [[:job (jobs.survival.recover-drops)]]
+   :expect [{:no-event {:source :job :kind :waiting :data {:reason :danger}} :for-s 30}
+            {:event {:source :job :kind :completed :data {:decision :collected}} :within-s 190}]
+   :after [[:item "raw_iron" 24]]}]}
