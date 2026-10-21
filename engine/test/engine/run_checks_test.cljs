@@ -257,7 +257,7 @@
           (core/tick! eng)
           (swap! clock + 5000)
           (await (core/tick! eng))
-          (is (nil? (core/waiting eng id)) "the reason of before the reflex began is gone")
+          (is (= :reflex-holds (:reason (core/waiting eng id))) "the reason of before the reflex began is replaced by the hold")
           (@release nil))))))
 
 (deftest a-held-trigger-asks-its-check-once-per-window
