@@ -1,5 +1,6 @@
 (ns jobs.farm.fertilize
   (:require [engine.args :as a]
+            [engine.settings :as settings]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
@@ -65,13 +66,15 @@
 (def ways need/fetch-ways)
 
 (a/defargs settings
-  {::job-time-s {:default 300 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}})
+  {::min-health {:default 0 :spec (a/num-in 0 20)
+                :doc "Health (of 20) below which the job waits to heal; 0 = never (its acts are short and in the body's own field). Poison still holds."}
+   ::job-time-s {:default 300 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}})
 
+(def fit? (ready/fit-min #(settings/get settings ::min-health)))
 (def target [:area :grass])
 
 (def defaults {:spend {:job-time ::job-time-s}})
 (def safe? (ready/safe-at-by-night work-place/spot))
-(def fit? ready/fit?)
 
 (defn raw-targets
   "The positions to fertilize (unripe crops, or open grass with :grass), before the zone rules and the refused ones."

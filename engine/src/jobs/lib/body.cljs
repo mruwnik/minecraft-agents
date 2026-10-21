@@ -138,10 +138,10 @@
   "The wait reason {:reason :low-health :health :min-health :text} of a risky job while the body's health (primitives
   p) is below risky-min-health, or {:reason :poisoned :health :text} while it is poisoned or withered, else nil.
   Healing is up to the body: carried food (the hungry trigger eats it), a cure (the poisoned trigger drinks it), or rest
-  at food 18+."
-  [p]
-  (let [health (.-health (.self p))
-        floor (risky-min-health)]
+  at food 18+. floor (default risky-min-health) is the job's own lower bound."
+  ([p] (too-hurt p (risky-min-health)))
+  ([p floor]
+  (let [health (.-health (.self p))]
     (cond
       (< health floor)
       {:reason :low-health :health health :min-health floor
@@ -149,4 +149,4 @@
 
       (poisoned? p)
       {:reason :poisoned :health health
-       :text "poisoned: drink milk or wait until the effect is gone before the risk (natural healing stops)"})))
+       :text "poisoned: drink milk or wait until the effect is gone before the risk (natural healing stops)"}))))

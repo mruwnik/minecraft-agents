@@ -1,6 +1,7 @@
 ;; Card 8e09b650: jobs.farm.fertilize :grass true uses bone meal once on each seen open grass block. Grass plot, 3 bone meal carried,
 ;; :max 3, radius 6 round the middle. Should-succeed: bone meal is spent (the job ends with used >= 1, count down). Should-fail: a plot of
 ;; plain dirt has no open grass: ends used 0 and keeps its bone meal; without bone meal and :ways #{:carried} the job waits :need (a failing start condition parks it).
+;; Card ba78073d: a hurt body (4 hp, after hunger and damage) still fertilizes: field jobs have no health floor by default (setting min-health).
 {:defaults
  {:tags [:farm :fertilize :jobs] :time :any
   :plot {:height 8 :floor "grass_block"}
@@ -20,4 +21,11 @@
    :body {:inventory []}
    :act [[:job (jobs.farm.fertilize {:grass true :area {:pos #xyz [16 0 16] :radius 6} :max 3 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :need :item "bone_meal"}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :completed} :for-s 15}]}]}
+            {:no-event {:source :job :kind :completed} :for-s 15}]}
+  {:name "hurt-body-fertilizes-its-field"
+   :body {:effects []}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 16 minecraft:generic"]
+         [:job (jobs.farm.fertilize {:grass true :area {:pos #xyz [16 0 16] :radius 6} :max 3})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:used [:>= 1]}} :within-s 70 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :low-health}} :for-s 5 :of-job true}]
+   :after [[:item "bone_meal" [:<= 2]]]}]}

@@ -218,6 +218,11 @@
 
 (def fit? "Later :low-health below the risky health, :poisoned while poisoned." checks/low-health)
 
+(defn fit-min
+  "fit? with the health floor (floor-fn) a job's own setting gives, for jobs whose acts need less than risky-min-health."
+  [floor-fn]
+  (checks/low-health-min floor-fn))
+
 (defn cannot-heal?
   "Whether the body of ctx c can not heal by waiting: food under foods/top-up-food and nothing a meal would eat carried."
   [c]

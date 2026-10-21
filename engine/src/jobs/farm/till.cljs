@@ -51,9 +51,12 @@
 (def ways need/fetch-ways)
 
 (a/defargs settings
-  {::job-time-s {:default 600 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
+  {::min-health {:default 0 :spec (a/num-in 0 20)
+                :doc "Health (of 20) below which the job waits to heal; 0 = never (its acts are short and in the body's own field). Poison still holds."}
+   ::job-time-s {:default 600 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
    ::max-cells {:default 256 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}
    ::max-tries {:default 2 :doc "Attempts before the job gives up." :spec (a/int-in 0 nil)}})
+(def fit? (ready/fit-min #(settings/get settings ::min-health)))
 (defn max-cells [] (settings/get settings ::max-cells))
 (def ground-cover
   "What lies on a cell and is dug first: the plants, small flowers and snow layer a placement clears (b/clearable) and the tall flowers."
@@ -78,7 +81,6 @@
 (def target [:area])
 (def defaults {:use {:tools :till} :spend {:job-time ::job-time-s}})
 (def safe? (ready/safe-at-by-night work-place/spot))
-(def fit? ready/fit?)
 
 (defn listed
   "The hoes the call names (:use {:tools [..]}) as a set, or nil when it names none (the engine's default list is not given)."
