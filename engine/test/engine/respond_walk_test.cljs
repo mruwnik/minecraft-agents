@@ -157,6 +157,12 @@
     (is (not (on-way? {:x -5 :y 64 :z 0.5})) "behind the body")
     (is (not (on-way? {:x 60 :y 64 :z 0.5})) "beyond the destination")))
 
+(deftest a-wider-cone-puts-a-threat-off-to-the-side-on-the-way
+  (let [threat {:x 3 :y 64 :z 4}
+        dest {:x 40.5 :y 64 :z 0.5}]
+    (is (not (walk/on-the-way? from [threat] dest)) "54 degrees off: outside the default cone")
+    (is (walk/on-the-way? from [threat] dest 90) "inside a 90 degree cone")))
+
 (defn corridor-world
   "Stone up to y 63 and walls at y 64-65 except along z 0: a corridor along x."
   [{:keys [y z]}]

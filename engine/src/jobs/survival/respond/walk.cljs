@@ -72,18 +72,19 @@
       :else away))))
 
 (defn on-the-way?
-  "Whether any threat (position) lies toward dest from `from`: nearer than dest and within route-cone degrees of the
-  line to it, so a walk there leads to or past the hostile."
-  [from threats dest]
-  (let [[dx dz] [(- (:x dest) (:x from)) (- (:z dest) (:z from))]
-        d (js/Math.hypot dx dz)
-        cos-cone (js/Math.cos (* (route-cone) (/ js/Math.PI 180)))]
-    (boolean (some (fn [t]
-                     (let [[tx tz] [(- (:x t) (:x from)) (- (:z t) (:z from))]
-                           td (js/Math.hypot tx tz)]
-                       (and (< td d)
-                            (or (< td 1) (>= (/ (+ (* dx tx) (* dz tz)) (* d td)) cos-cone)))))
-                   threats))))
+  "Whether any threat (position) lies toward dest from `from`: nearer than dest and within cone degrees (default
+  route-cone) of the line to it, so a walk there leads to or past the hostile."
+  ([from threats dest] (on-the-way? from threats dest (route-cone)))
+  ([from threats dest cone]
+   (let [[dx dz] [(- (:x dest) (:x from)) (- (:z dest) (:z from))]
+         d (js/Math.hypot dx dz)
+         cos-cone (js/Math.cos (* cone (/ js/Math.PI 180)))]
+     (boolean (some (fn [t]
+                      (let [[tx tz] [(- (:x t) (:x from)) (- (:z t) (:z from))]
+                            td (js/Math.hypot tx tz)]
+                        (and (< td d)
+                             (or (< td 1) (>= (/ (+ (* dx tx) (* dz tz)) (* d td)) cos-cone)))))
+                    threats)))))
 
 (defn column-along
   "The [x z] column k blocks along [ux uz] from the centre of from's cell (a

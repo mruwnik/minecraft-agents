@@ -14,7 +14,8 @@
             [jobs.survival.respond.walk :as walk]))
 
 (a/defargs settings
-  {::drift {:default 3 :doc "Blocks a walk to the goal may take the body farther from the goal's height than where that walk began: a leg that does ends the walk to the goal (a plan that ends under or over the goal, nearer only in x and z, is no way to it)." :spec (a/num-in 0 nil)}
+  {::blast-cone {:default 90 :doc "Degrees either side of the line to a goal within which a creeper in blast reach of the body lies on the way: a step toward such a goal that is no step away from it lets the creeper reach the body." :spec (a/num-in 0 180)}
+   ::drift {:default 3 :doc "Blocks a walk to the goal may take the body farther from the goal's height than where that walk began: a leg that does ends the walk to the goal (a plan that ends under or over the goal, nearer only in x and z, is no way to it)." :spec (a/num-in 0 nil)}
    ::steep-rise {:default 4 :doc "Blocks of height between body and goal above which a goal farther up or down than it is across is no goal of a flight: a climb or a shaft is no way out." :spec (a/num-in 0 nil)}
    ::buried-rise {:default 8 :doc "Blocks of height between a body under ground and its goal above which the flight does not go there: under rock it knows no way." :spec (a/num-in 0 nil)}
    ::hostile-gap {:default 8 :doc "Blocks from the goal within which a known hostile, or the last known place of a mob fled within jobs.lib.threats/fled-memory-ms, makes it no goal of a flight." :spec (a/num-in 0 nil)}
@@ -27,6 +28,7 @@
 (defn drift [] (settings/get settings ::drift))
 (defn steep-rise [] (settings/get settings ::steep-rise))
 (defn buried-rise [] (settings/get settings ::buried-rise))
+(defn blast-cone [] (settings/get settings ::blast-cone))
 (defn hostile-gap [] (settings/get settings ::hostile-gap))
 (defn same-place [] (settings/get settings ::same-place))
 (defn retry-s [] (settings/get settings ::retry-s))
@@ -62,6 +64,16 @@
           (comp (map :data) (remove #(ids (:id %))) (keep #(or (:pos %) (danger-q/rough-pos %))))
           (threats/listed-threats p (threats/fresh-threats (ctx/view c))))))
 
+(defn blast-spots
+  "Where the creepers the body knows within respond.state/::blast-reach of it are."
+  [c]
+  (let [p (:primitives c)
+        dead (set (flight/dead-ids c))]
+    (->> (flight/known-chasers p)
+         (remove #(dead (.-id %)))
+         (filter #(flight/blaster? p %))
+         (mapv #(danger-q/mob-pos p %)))))
+
 (defn safe-home
   "Pure: the first of homes (positions: a closed room's cell, the home) the body at from is nearer to than every
   hostile (positions) is, with none on the way to it (walk/on-the-way?); nil when none."
@@ -84,13 +96,14 @@
   farther so than across; :under-rock: buried? and more than buried-rise up or down; :hostile-there: one of hostiles
   (positions) within hostile-gap of it; :past-hostile: one on the way to it; :home-safer: home (safe-home) lies
   elsewhere (farther than same-place from it); :died-there: within flight/::died-radius of a place the body died."
-  [from goal {:keys [hostiles buried? home died]}]
+  [from goal {:keys [hostiles blasts buried? home died]}]
   (let [rise (js/Math.abs (- (:y goal) (:y from)))]
     (cond
       (and (> rise (steep-rise)) (> rise (u/flat-dist from goal))) :steep
       (and buried? (> rise (buried-rise))) :under-rock
       (some #(< (u/dist goal %) (hostile-gap)) hostiles) :hostile-there
       (walk/on-the-way? from hostiles goal) :past-hostile
+      (walk/on-the-way? from blasts goal (blast-cone)) :past-hostile
       (flight/near-died? died goal) :died-there
       (and home (> (u/dist home goal) (same-place))) :home-safer)))
 
@@ -106,7 +119,7 @@
      :why (when goal
             (if (given-up? c goal)
               :given-up
-              (verdict from goal {:hostiles spots :buried? (sh-sense/buried? (:primitives c)) :home home :died (flight/died-spots c)})))}))
+              (verdict from goal {:hostiles spots :blasts (blast-spots c) :buried? (sh-sense/buried? (:primitives c)) :home home :died (flight/died-spots c)})))}))
 
 (defn usable
   "The goal of judged (judge) when nothing speaks against it, else nil."

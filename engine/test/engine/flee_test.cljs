@@ -891,6 +891,13 @@
                            [nil {:x -14 :y 64 :z 3} {:hostiles [{:x 6 :y 64 :z 0}] :home {:x -12 :y 64 :z 0}}]]]
     (is (= why (respond.goal/verdict here goal opts)) (pr-str goal opts))))
 
+(deftest a-goal-a-step-toward-which-nears-a-creeper-in-blast-reach-is-no-goal
+  (let [goal {:x 9 :y 64 :z 20}]
+    (is (= :past-hostile (respond.goal/verdict here goal {:blasts [{:x 3 :y 64 :z 1}]}))
+        "the creeper 3 blocks off lies 53 degrees off the line to the goal: a tangent that lets it close in")
+    (is (nil? (respond.goal/verdict here goal {:blasts [{:x -3 :y 64 :z 1}]})) "a creeper behind the body")
+    (is (nil? (respond.goal/verdict here goal {:hostiles [{:x 3 :y 64 :z 1}]})) "any other mob keeps the 45 degree cone")))
+
 (deftest a-home-is-safer-only-when-the-body-is-nearer-it-than-every-hostile-and-none-is-on-the-way
   (let [home {:x -12 :y 64 :z 0}]
     (is (= home (respond.goal/safe-home here [{:x 6 :y 64 :z 0}] [home])))
