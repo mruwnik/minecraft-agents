@@ -348,7 +348,7 @@
   [c creeper]
   (let [cell (hostile/back-cell-of c creeper)]
     (when cell
-      (await (ctx/call c :back 'jobs.movement.run-away {:pos cell :range 0 :leg-s back-leg-s}))
+      (await (ctx/call c :back 'jobs.movement.run-away {:pos cell :range 0 :leg-s back-leg-s :checks {:safe? '(always) :fit? '(always)}}))
       (let [{:keys [x y z]} (u/pos-of (.-pos creeper))]
         (await (ctx/act c :look #js {:pos #js {:x x :y (+ 1 y) :z z}}))
         (await (ctx/act c :wait #js {:ms look-settle-ms}))

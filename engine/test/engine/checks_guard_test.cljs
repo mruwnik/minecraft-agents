@@ -18,7 +18,8 @@
    ['jobs.survival.leave-shelter 'jobs.survival.get-food] "the dawn hold shares night's hold, which calls get-food only when starving with no danger near"
    ['jobs.survival.extinguish 'jobs.access.cleanup] "the scoop call passes :checks (always) itself: putting the fire out is not refused for the danger it answers"
    ['jobs.survival.breathe 'jobs.combat.attack] "the fight call passes :checks (always) itself: a reflex fight is not refused for the danger it answers"
-   ['jobs.survival.stand-in 'jobs.combat.attack] "the cornered fight call (respond options) passes :checks (always) itself: a reflex fight is not refused for the danger it answers"})
+   ['jobs.survival.stand-in 'jobs.combat.attack] "the cornered fight call (respond options) passes :checks (always) itself: a reflex fight is not refused for the danger it answers"
+   ['jobs.combat.attack 'jobs.movement.run-away] "the back-off call passes :checks (always) itself: stepping back from a creeper is not refused for the exposure it answers"})
 
 (defn source-of [ns-sym]
   (.readFileSync fs (str "src/" (-> (str ns-sym) (str/replace "-" "_") (str/replace "." "/")) ".cljs") "utf8"))
