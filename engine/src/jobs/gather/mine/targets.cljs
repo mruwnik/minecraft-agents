@@ -343,14 +343,14 @@
                   {:name id :min (apply mapv min ks) :max (apply mapv max ks)}))))))
 
 (defn buildings
-  "Boxes {:name :min :max} of what a stair is not started beside: plan footprints near cell, zones of other owners and live claims the
-  body is not inside (a dig inside one is refused as it stands), and the :home place (3 blocks round it). None with :ignore-zones?."
+  "Boxes {:name :min :max} of what a stair is not started beside: plan footprints near cell, zones of other owners that do not allow :dig (the body inside one is walked out of it first), live claims the
+  body is not inside, and the :home place (3 blocks round it). None with :ignore-zones?."
   [c cell]
   (when-not (:ignore-zones? (:args c))
     (let [self (ctx/self-name c)
           home (mem/place (ctx/view c) :home)]
       (concat (footprint-boxes c cell)
-              (remove #(zones/in-box? cell %) (filter #(zones/foreign-owner? (:owner %) self) (known/zones c)))
+              (filter #(and (zones/foreign-owner? (:owner %) self) (not (contains? (:allow %) :dig))) (known/zones c))
               (for [cl (known/claims c) :when (not (or (zones/same-owner? (:owner cl) self) (zones/in-box? cell cl)))] (assoc cl :name (:id cl)))
               (when home [{:name "home" :min [(- (:x home) 3) (- (:y home) 3) (- (:z home) 3)] :max [(+ (:x home) 3) (+ (:y home) 3) (+ (:z home) 3)]}])))))
 

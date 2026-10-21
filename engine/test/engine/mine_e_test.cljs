@@ -275,6 +275,17 @@
                               (ew/of-data {} {} [(assoc farm-zone :min [6 60 -2] :max [8 70 2])]) 60))]
           (is (= "farm" (:zone (first (events-of s :mine.left-zone))))))))))
 
+(deftest a-stair-is-not-started-inside-another-owners-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (zoned {:block "stone" :count 1 :ways #{:seen :descend-stair :descend-shaft} :direction "east" :trip true :torches false}
+                              {:floor [-30 -30 40 30] :blocks (soil-over-stone 63 59) :drops {"stone" "cobblestone"} :inventory pickaxe}
+                              (ew/of-data {} {} [(assoc farm-zone :min [-3 60 -3] :max [3 70 3])]) 200))
+              left (first (events-of s :mine.left-zone))]
+          (is (= "farm" (:zone left)))
+          (is (or (> (js/Math.abs (first (:to left))) 3) (> (js/Math.abs (nth (:to left) 2)) 3)) "it digs from outside the zone"))))))
+
 (deftest after-leaving-a-building-the-descent-still-walks-down-its-own-stair
   (async done
     (tu/run-async done

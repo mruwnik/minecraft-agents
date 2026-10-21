@@ -14,6 +14,12 @@
    :expect [{:event {:source :job :kind :mine.left-zone :data {:zone [:contains "hut"]}} :within-s 120 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 220 :of-job true}]
    :after [[:block [16 9 17] "stone"]]}
+  {:name "stair-start-inside-the-others-zone-walks-out-of-it"
+   :zones [{:name "yard" :min [15 8 24] :max [26 14 28] :owner "Other"}]
+   :body {:at [16.5 10 26.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 16]] :effects [["resistance" 900 4]]}
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :level #at [16 4 16] :count 1 :heading :north :tunnel-length 3 :radius 8 :mend false})]]
+   :expect [{:event {:source :job :kind :mine.left-zone :data {:zone [:contains "yard"]}} :within-s 120 :of-job true}
+            {:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 220 :of-job true}]}
   {:name "ignore-zones-starts-the-stair-where-it-stands"
    :act [[:job (jobs.gather.mine {:block "iron_ore" :level #at [16 4 16] :count 1 :heading :south :tunnel-length 3 :radius 8 :mend false :ignore-zones? true})]]
    :expect [{:no-event {:source :job :kind :mine.left-zone} :for-s 40 :of-job true}
