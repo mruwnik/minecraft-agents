@@ -227,6 +227,19 @@
           (is (= 1 (count (events-of s :farm-tend.wrong))))
           (is (true? (finished? s))))))))
 
+(deftest crop-cells-filled-by-a-tree-are-reported-blocked-while-the-rest-is-tended
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (run {:area {:plan "mix"}}
+                            (world-of (ground "farmland" [[2 3] [3 3]])
+                                      {:blocks {(k 2 64 2) "oak_log" (k 3 64 2) "oak_leaves"}}
+                                      all-seed)
+                            {"mix" (plan-of)} 60))]
+          (is (= {[2 64 3] "carrot" [3 64 3] "carrot"} (placed s)))
+          (is (= [{:pos [2 64 2] :found "oak_log"} {:pos [3 64 2] :found "oak_leaves"}] (:blocked (:field (done-event s)))))
+          (is (= 1 (count (events-of s :farm-tend.blocked)))))))))
+
 (deftest cells-outside-the-plan-are-untouched
   (async done
     (tu/run-async done

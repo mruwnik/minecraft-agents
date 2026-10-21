@@ -41,10 +41,10 @@
   A step that ran keeps its summary even if it is skipped later in the same run.
   Start facts, failed conditions: impossible {:reason :no-box} unless the area is a box with a crop layer and at most 2048 cells, or a plan;
   {:reason :away :site :limit} far from the field while another job is listed, or deep below it;
-  {:reason :nothing-to-do} (with :covered, :refused, :food-reserve) or {:reason :short-seed :seeds} when no
+  {:reason :nothing-to-do} (with :covered, :refused, :blocked (plan crop cells another block fills), :food-reserve) or {:reason :short-seed :seeds} when no
   step would run, after one look round from here when a cell was never seen. A started run always continues. A step under
   way is not re-decided.
-  Ends :done with data {:steps {step summary} :field {:crops :bare :untilled}} when some step
+  Ends :done with data {:steps {step summary} :field {:crops :bare :untilled}} (a plan adds :wrong and, when crop cells hold a tree or other block, :blocked [{:pos :found}] with one farm-tend.blocked warn) when some step
   changed something (units steps); nothing-possible :gave-up with the same data when children ran and none did;
   condition-failed :nothing-to-do when no step ran. A child that ends in any failure, a limit of its own too, is booked
   with what it did and the run goes on; tend's own time spend is the only limit it ends on.
@@ -149,7 +149,7 @@
   "The wait reason when no step would run: :covered counts tillable cells with a block over them (the box sits too low),
   :refused untilled cells a zone or claim refuses, :food-reserve the seed the reserve keeps from dry cells."
   [f]
-  (cond-> (into (into {:reason :nothing-to-do} (filter (comp pos? val)) (select-keys f [:covered :refused])) (:refusers f))
+  (cond-> (into (into {:reason :nothing-to-do} (filter (comp pos? val)) (select-keys f [:covered :refused :blocked])) (:refusers f))
     (:till-held f) (assoc :food-reserve (:till-held f))))
 
 (defn part-status
@@ -235,7 +235,7 @@
   covered cells, no look owed)."
   [c]
   (let [[kind _ data] (part-status c)]
-    (and (= :later kind) (= {:reason :nothing-to-do} (dissoc data :text)))))
+    (and (= :later kind) (= {:reason :nothing-to-do} (dissoc data :text :blocked)))))
 
 (defn done?
   "Ok once a pass changed something and every part is in order (no step would run); else later with the steps that
@@ -274,6 +274,11 @@
         field (dissoc seen :short)]
     (when (fa/plan c)
       (tend-plan/note-short! c short)
+      (when (seq (:blocked field))
+        (ctx/warn-once! c [(fa/plan c) :blocked] :farm-tend.blocked
+                        {:plan (fa/plan c) :cells (:blocked field)
+                         :text (str "tend of " (fa/plan c) ": " (count (:blocked field)) " crop cells are filled by other blocks ("
+                                    (str/join ", " (distinct (map :found (:blocked field)))) "); farm.tidy clears them")}))
       (when (seq (:wrong field))
         (ctx/emit! c :farm-tend.wrong :warn
                    {:plan (fa/plan c) :cells (:wrong field)

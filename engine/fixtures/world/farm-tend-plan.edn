@@ -3,7 +3,7 @@
 ;; of one plant stay under it). Plan row: 4 carrot cells [10..13 0 16] on farmland at y -1 (water beside), only [10 0 16] is ripe.
 ;; Floor y -1 is the ground layer; no hoe, so the till step is skipped.
 ;; Should-succeed: the ripe cell is cut and replanted (carrots[age=0]), harvest summary cut 1 replanted 1. Should-fail (control): the three
-;; bare cells stay bare below the reserve.
+;; bare cells stay bare below the reserve. Card b969dd9c: with a log and leaves on two cells, tend reports them blocked and sows the other two.
 {:defaults
  {:tags [:farm :tend :food-reserve :jobs]
   :time :any
@@ -17,4 +17,11 @@
  [{:name "just-harvested-cell-replanted-below-the-reserve"
    :act [[:job (jobs.farm.tend {:area {:plan "$plan:field"}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:harvest {:cut 1 :replanted 1}}}} :within-s 100 :of-job true}]
-   :after [[:block [10 0 16] "carrots[age=0]"] [:block [11 0 16] "air"] [:block [12 0 16] "air"] [:block [13 0 16] "air"]]}]}
+   :after [[:block [10 0 16] "carrots[age=0]"] [:block [11 0 16] "air"] [:block [12 0 16] "air"] [:block [13 0 16] "air"]]}
+  ;; a tree standing on crop cells is reported (:field :blocked) while the free cells are sown; tend never digs it
+  {:name "crop-cells-filled-by-a-tree-are-reported-blocked-and-the-rest-sown"
+   :blocks [[:set [10 0 16] "oak_log"] [:set [11 0 16] "oak_leaves"]]
+   :body {:inventory [["carrot" 40]]}
+   :act [[:job (jobs.farm.tend {:area {:plan "$plan:field"}})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:plant {:planted 2}} :field {:blocked [:any]}}} :within-s 100 :of-job true}]
+   :after [[:block [10 0 16] "oak_log"] [:block [11 0 16] "oak_leaves"] [:block [12 0 16] "carrots[age=0]"] [:block [13 0 16] "carrots[age=0]"]]}]}

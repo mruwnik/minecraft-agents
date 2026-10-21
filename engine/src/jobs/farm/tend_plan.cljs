@@ -70,6 +70,16 @@
                    {:pos [x y z] :found found :want (shape/want-text {:crop crop})})))
              crops)))
 
+(defn blocked-cells
+  "[{:pos :found}] of the crop cells holding a block that is neither air nor a crop (a tree, its leaves, stone): the
+  plan wants a crop there and no step can sow it."
+  [p crops]
+  (vec (keep (fn [[{:keys [x y z]} _]]
+               (let [found (u/seen-name p {:x x :y y :z z})]
+                 (when (and found (not (shape/air? found)) (not (strays/crop-blocks found)))
+                   {:pos [x y z] :found found})))
+             crops)))
+
 (defn refusers
   "What refuses the hoe on untilled ground cells of the plan for a social reason: {:refused n :zones :claims :plans
   :owners}, or nil when nothing is refused. It names them so a run with nothing else to do says why."
@@ -145,6 +155,7 @@
      :till-short (count dry)
      :till-held (reserve-held c dry)
      :refusers (refusers c plan (map key untilled))
+     :blocked (count (blocked-cells p crops))
      :bare (- (count bare) (count (:refused sowing)))
      :seed (boolean (seq (:ready sowing)))
      :short (:short sowing)
@@ -160,14 +171,16 @@
                      :text (str "tend of " (fa/plan c) ": no " seed " carried for the bare cells that want it")})))
 
 (defn plan-census
-  "The live {:crops :bare :untilled :wrong} of the plan's field, and the seeds short for its bare cells as :short."
+  "The live {:crops :bare :untilled :wrong} of the plan's field (and :blocked, the crop cells another block fills, when
+  there are any), and the seeds short for its bare cells as :short."
   [c]
   (let [p (:primitives c)
         {:keys [answer crops]} (planned c)
         crops (or crops {})
         have (set (map :name (u/inventory p)))]
-    {:crops (count (filter (fn [[pos crop]] (contains? (shape/crop-names crop) (u/seen-name p pos))) crops))
-     :bare (count (fld/planned-bare p crops))
-     :untilled (count (filter #(gr/untilled? (ground-cell p %)) (keys (ground-cells answer crops))))
-     :wrong (wrong-crops p crops)
-     :short (into #{} (comp (map :seed) (remove have)) (fld/planned-bare p crops))}))
+    (cond-> {:crops (count (filter (fn [[pos crop]] (contains? (shape/crop-names crop) (u/seen-name p pos))) crops))
+             :bare (count (fld/planned-bare p crops))
+             :untilled (count (filter #(gr/untilled? (ground-cell p %)) (keys (ground-cells answer crops))))
+             :wrong (wrong-crops p crops)
+             :short (into #{} (comp (map :seed) (remove have)) (fld/planned-bare p crops))}
+      (seq (blocked-cells p crops)) (assoc :blocked (blocked-cells p crops)))))
