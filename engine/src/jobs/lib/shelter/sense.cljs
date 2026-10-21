@@ -198,10 +198,10 @@
 (defn light-view
   "Read-only light the body perceives, for observe light. A cell {:x :y :z} gives {:cell :seen? :block :sky :sky-subtract
   :light (effective) :lit?}, nil values (also :lit?, and :seen? false) where no light data is loaded. With :radius (a cube around the cell)
-  the light-read of its cells plus :cells :seen. The cell defaults to the feet."
+  the light-read of its cells plus :cells :seen. The cell defaults to the feet; with no position (the body is offline) {:seen? false :note ..}."
   [p {:keys [cell radius]}]
-  (let [cell (or cell (feet p))
-        {:keys [x y z]} cell]
+  (if-let [cell (or cell (when (.-pos (.self p)) (feet p)))]
+   (let [{:keys [x y z]} cell]
     (if-not radius
       (let [known? (some? (light-at p cell))]
         {:cell [x y z] :seen? known?
@@ -210,7 +210,8 @@
       (let [cells (for [dx (range (- radius) (inc radius)) dy (range (- radius) (inc radius)) dz (range (- radius) (inc radius))]
                     {:x (+ x dx) :y (+ y dy) :z (+ z dz)})]
         (assoc (light-read p cells) :cell [x y z] :radius radius :cells (count cells)
-               :seen (count (filter #(seen-cell? p %) cells)))))))
+               :seen (count (filter #(seen-cell? p %) cells))))))
+   {:seen? false :note "the body is offline, so it has no cell to read the light at; give x y z or retry"}))
 
 (defn light-in
   "Seconds until no cell of cells (a cell, or a vector of them) is dark (lit-here?): the slowest cell, nil when some dark
