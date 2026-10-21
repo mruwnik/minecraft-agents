@@ -12,6 +12,8 @@
 
 (def got (atom []))
 
+(def clock (atom 1000000))
+
 (def ending-of
   "The [kind cause] a fetch child ends with for a step's reason; any other reason is :nothing-possible."
   {:no-source [:condition-failed :no-source]
@@ -37,6 +39,7 @@
   ends on one other than :done."
   [call-fn {:keys [obtain-step obtain-start tool-step]}]
   (reset! got [])
+  (reset! clock 1000000)
   (let [obtain (atom [])
         tool (atom [])
         walks (atom [])
@@ -56,8 +59,8 @@
                                 (let [e (await (call-fn c))]
                                   (swap! got conj e)
                                   (if (and (map? e) (not= :done (:kind e))) e :continue)))}}
-        eng (core/create {:primitives p :dir (tu/tmp-dir) :now (constantly 1000000) :jobs jobs :triggers {}
-                          :events (events/make {:body "Fake" :sinks [sink] :now (constantly 1000000)})})]
+        eng (core/create {:primitives p :dir (tu/tmp-dir) :now (fn [] @clock) :jobs jobs :triggers {}
+                          :events (events/make {:body "Fake" :sinks [sink] :now (fn [] @clock)})})]
     (core/submit! eng '(caller {}) {})
     {:eng eng :p p :seen seen :obtain obtain :tool tool :walks walks}))
 
@@ -264,8 +267,18 @@
           (await (core/tick! (:eng r)))
           (is (= [5 5] (mapv :count @(:obtain r))) "the 2 more are on top of the 3 carried when the child began, not of the 5 carried later"))))))
 
-(deftest a-child-that-lacks-a-free-slot-is-waited-out-not-failed
-  (let [full (contract/ending :condition-failed {:reason :no-free-slot} nil)
-        refused (contract/ending :condition-failed {:reason :refused} nil)]
-    (is (= :continue (waits/waiting-out {} full)))
+(deftest a-child-that-lacks-a-free-slot-is-waited-out-until-the-pack-stays-full-too-long
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [full (contract/ending :condition-failed {:reason :no-free-slot} nil)
+              r (setup #(waits/waiting-out % full) nil)]
+          (dotimes [_ 4]
+            (await (core/tick! (:eng r)))
+            (swap! clock + (/ waits/full-pack-limit-ms 3)))
+          (is (= [:continue :continue :continue :inventory-full] (mapv #(if (map? %) (:reason (:cause %)) %) @got))
+              "waits while the pack may clear, ends naming the full pack once it stayed full for the limit"))))))
+
+(deftest a-refused-child-is-passed-through-waiting-out
+  (let [refused (contract/ending :condition-failed {:reason :refused} nil)]
     (is (= refused (waits/waiting-out {} refused)))))
