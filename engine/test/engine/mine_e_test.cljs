@@ -325,7 +325,7 @@
               {:keys [at heading to-y] :as suggest} (:shaft-suggest e)]
           (is (= {:at [0 64 0] :heading :east} (select-keys suggest [:at :heading])))
           (is (< to-y 64) "the bottom of the stair")
-          (is (re-find (re-pattern (str "declare it with plans.mjs mineshaft <id> --at=0,64,0 --heading east --to-y " to-y)) (:text e)))
+          (is (re-find (re-pattern (str "declare it with ./bin/plans mineshaft <id> --at=0,64,0 --heading east --to-y " to-y)) (:text e)))
           (is (empty? (shape/plan-errors {:id "x" :kind :mineshaft :parts [{:id "stair" :stair {:from at :heading heading :to-y to-y} :want :clear}]} "x"))
               "the suggestion is a valid shaft"))))))
 

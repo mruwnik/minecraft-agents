@@ -67,7 +67,7 @@
   [in feet cells accept]
   (let [filler? (:filler? in)
         stop (geo/stop-of (assoc in :feet feet) (assoc cells :filler? filler?) accept)]
-    (when-not (and filler? (= :no-floor (:reason stop)) (bs/air (:block stop)))
+    (when-not (and filler? (= :no-floor (:reason stop)) (bs/open-floor? (:block stop)))
       stop)))
 
 (defn line-stop

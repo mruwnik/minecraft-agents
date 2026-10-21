@@ -25,6 +25,13 @@
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:stop :no-floor}} :for-s 100 :until {:source :job :kind #{:completed :stopped} :data {:stop [:any]}}}]
    :after [[:block [18 -1 16] "cobblestone"] [:not-block [20 0 16] "stone"]]}
+  ;; the floor cells [18 -1 16] and [19 -1 16] hold leaf_litter on rock (a plant a placement overwrites: a body would sink into the cut): bridged like air
+  {:name "floor-of-leaf-litter-is-bridged-with-a-carried-block"
+   :blocks [[:set [18 -2 16] "stone"] [:fill [18 -1 16] [19 -1 16] "leaf_litter"]]
+   :body {:inventory [["stone_pickaxe" 1] ["cobblestone" 8]]}
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind #{:completed :stopped} :data {:stop :no-floor}} :for-s 100 :until {:source :job :kind #{:completed :stopped} :data {:stop [:any]}}}]
+   :after [[:block [18 -1 16] "cobblestone"] [:not-block [20 0 16] "stone"]]}
   ;; the tunnel's own cells are glass (drops nothing): mined stone would drop cobblestone, which the tunnel bridges with
   {:name "floor-gap-with-no-block-ends-no-floor"
    :blocks [[:fill [17 0 16] [21 1 16] "glass"] [:fill [18 -1 16] [19 -1 16] "air"]]

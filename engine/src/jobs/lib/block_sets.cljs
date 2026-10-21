@@ -13,6 +13,11 @@
   plants, snow and invisible light blocks a placement overwrites."
   (into (into air fluids) #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "snow" "vine" "glow_lichen" "leaf_litter" "hanging_roots"}))
 
+(defn open-floor?
+  "Whether a floor cell holds nothing a placement cannot overwrite: air or a plant (not a fluid)."
+  [name]
+  (boolean (and name (replaceable name) (not (fluids name)))))
+
 (def flowers
   "Flowers and small plants a body walks through and a placement does not overwrite."
   #{"dandelion" "poppy" "blue_orchid" "allium" "azure_bluet" "red_tulip" "orange_tulip" "white_tulip" "pink_tulip"

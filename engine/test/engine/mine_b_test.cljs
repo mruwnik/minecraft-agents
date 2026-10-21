@@ -294,6 +294,14 @@
           (is (not (no-floor-end? s)) (pr-str (map :text (tunnel-ends s))))
           (is (= "cobblestone" (block-at s 1 63 0))))))))
 
+(deftest the-tunnel-bridges-a-floor-of-leaf-litter-like-air
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (bridge-run (conj pickaxe {:name "cobblestone" :count 5}) "leaf_litter"))]
+          (is (not (no-floor-end? s)) (pr-str (map :text (tunnel-ends s))))
+          (is (= "cobblestone" (block-at s 1 63 0))))))))
+
 (deftest the-tunnel-stops-at-a-missing-floor-when-it-carries-no-block
   (async done
     (tu/run-async done

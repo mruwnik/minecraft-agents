@@ -210,10 +210,11 @@
 (def corridor (into {} (for [x (range 1 6) y [64 65]] [(str x "," y ",0") "air"])))
 
 (defn ^:async bridge-run
-  "A 3-long strip tunnel east over a gap in the floor at [1 63 0], carrying inv."
-  [inv]
-  (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 3}
-                   (assoc (rock-world {"1,63,0" "air" "2,63,0" "air"}) :inventory inv) 120)))
+  "A 3-long strip tunnel east over a gap (air, or the block gap) in the floor at [1 63 0], carrying inv."
+  ([inv] (await (bridge-run inv "air")))
+  ([inv gap]
+   (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 3}
+                    (assoc (rock-world {"1,63,0" gap "2,63,0" gap}) :inventory inv) 120))))
 
 (defn no-floor-end? [s] (boolean (some #(= :no-floor (:reason %)) (tunnel-ends s))))
 

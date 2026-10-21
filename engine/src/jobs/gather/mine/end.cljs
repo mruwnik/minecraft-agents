@@ -18,7 +18,7 @@
       {:at top :heading top-heading :to-y bottom-y})))
 
 (defn suggest-text [{:keys [at heading to-y]}]
-  (str "; declare it with plans.mjs mineshaft <id> --at=" (str/join "," at) " --heading " (name heading) " --to-y " to-y " --by <you>"))
+  (str "; declare it with ./bin/plans mineshaft <id> --at=" (str/join "," at) " --heading " (name heading) " --to-y " to-y " --by <you>"))
 
 (defn dug-text
   "The descent and the tunnel of a run, for the end texts: \"; stair down 6 steps; tunnel 3 blocks east at y 58\" (empty for neither)."

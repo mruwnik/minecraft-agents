@@ -200,7 +200,7 @@
     (or (when-let [r (await (sstep/clear-own-cell! c in feet accept))] (if (= :continue r) :again r))
         (await (sstep/lava-step! c :tunnel.sealed (:block-at in) feet cut))
         (let [stop (await (sstep/judge! c in cells accept))]
-          (if (and (= :no-floor (:reason stop)) (bs/air (:block stop)))
+          (if (and (= :no-floor (:reason stop)) (bs/open-floor? (:block stop)))
             (await (sstep/bridge! c in cells))
             stop))
         (if-let [cell (first (remove #(bs/air ((:block-at in) %)) cut))]

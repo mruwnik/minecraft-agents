@@ -304,7 +304,7 @@
                              (when-let [r (await (sstep/clear-own-cell! c in feet accept))] (case r :continue :again :yield :continue r))
                              (await (sstep/water-step! c (:block-at in) accept cut))
                              (await (sstep/judge-after-lava! c in step-cells accept cut feet)))]
-                (if (and (= :no-floor (:reason stop)) (bs/air (:block stop)))
+                (if (and (= :no-floor (:reason stop)) (bs/open-floor? (:block stop)))
                   (await (sstep/bridge! c in step-cells))
                   (or stop
                     (if-let [cell (first (remove #(bs/air ((:block-at in) %)) cut))]
