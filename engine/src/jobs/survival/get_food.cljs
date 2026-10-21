@@ -344,9 +344,9 @@
   (not= :ok (first (ready/or-starving ready/safe-if-lit c))))
 
 (defn explore-done?
-  "Whether this job's search is over: it ran, and a starving body's foods/::starving-rest-ms has not passed since."
+  "Whether this job's search is over: it ran to its end (\"started\" is a search a cut or a wait left open, resumed), and a starving body's foods/::starving-rest-ms has not passed since."
   [mem starving? now rest-ms]
-  (boolean (and (:explored mem) (not (and starving? (>= (- now (:explored-at mem 0)) rest-ms))))))
+  (boolean (and (:explored mem) (not= "started" (:explored mem)) (not (and starving? (>= (- now (:explored-at mem 0)) rest-ms))))))
 
 (def search-max-distance "The largest :max-distance jobs.explore.search accepts." 128)
 
@@ -403,7 +403,8 @@
         (do (ctx/update-mem! c assoc :explored "not searched: no way up out of the cave") nil))
       :else
       (do
-        (ctx/update-mem! c #(-> % (assoc :explored "started" :explored-at (ctx/now c) :explored-spared (count (spared-uuids c))) (update :explore-runs (fnil inc 0))))
+        (when-not (= "started" (:explored (ctx/mem c)))
+          (ctx/update-mem! c #(-> % (assoc :explored "started" :explored-at (ctx/now c) :explored-spared (count (spared-uuids c))) (update :explore-runs (fnil inc 0)))))
         (let [opts (widen-explore (merge (settings/get settings ::explore) (when (map? e) e)) (widen c))
               e (await (child/run!* c :explore 'jobs.explore.search
                                     (child/search-args (assoc opts :skip-ids (vec (spared-uuids c)) :target (vec (concat (sort animals/food-animals) (keys sources/ripe-age) (keys sources/wild-food)))))
