@@ -304,7 +304,7 @@
       {:health pool :drown-prices (cost/drown-prices pool hp-s)})))
 
 (defn dive-paused?
-  "Whether a breathe reflex fired within ::dive-pause-near blocks of the body in the last ::dive-pause-s seconds (the :breathe entries)."
+  "Whether a breathe reflex fired within ::dive-pause-near blocks of the body in the last ::dive-pause-s seconds (the :breathe entries); breathe's own walks set the pause to 0."
   [c]
   (when (:view c)
    (let [pos (.-pos (.self (:primitives c)))
