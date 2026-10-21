@@ -33,6 +33,7 @@
   met target is done with 0 births), else with the cause:
   - condition-failed :no-food: a feed child ended without food. :no-bed: no free bed and none could be put down.
   - nothing-possible :no-births: 3 attempts in a row without a birth (untried pairs first; with none left the nearest pair is tried again, as a birth is chance).
+  A villager of the tried pair out of sight after an attempt makes the next attempt a wait for it where the body stands.
   A pair a feed could not complete (villager gone, unreachable, would not take food) counts as an attempt without a
   birth. What was tried, the birth baseline and the wait are kept in job memory, so a cut and restart re-checks the
   count and goes on. It yields :continue while a feed, walk or the wait is under way.")
@@ -175,7 +176,7 @@
   (ctx/end c kind reason (data-of c seen)))
 
 (defn choose!
-  "Pick the two nearest untried adults (none left after an attempt: the nearest two again) and book them with the baseline count; fewer than two adults after an attempt ends :no-births, none at all yields (can-run? answers). :again, :continue or an ending."
+  "Pick the two nearest untried adults (none left after an attempt: the nearest two again) and book them with the baseline count; fewer than two adults after an attempt (one wandered out of sight) is a wait where the body stands for them to come back, and a fruitless attempt; none at all yields (can-run? answers). :again or :continue."
   [c vs seen]
   (let [m (ctx/mem c)
         me (u/self-pos c)
@@ -185,7 +186,9 @@
         fresh (nearest (remove #(tried (.-uuid %)) adults))
         pair (if (and (< (count fresh) 2) (seq tried)) (nearest adults) fresh)]
     (cond
-      (< (count pair) 2) (if (seq tried) (child/give-up c :pair :no-births (data-of c seen)) :continue)
+      (< (count pair) 2) (if (seq tried)
+                           (do (ctx/update-mem! c assoc :waiting true :at me) :again)
+                           :continue)
       :else (do (ctx/update-mem! c #(assoc % :pair (mapv (fn [e] (.-uuid e)) pair) :fed (filterv (set (:stocked %)) (map (fn [e] (.-uuid e)) pair)) :baseline (:kids seen)
                                            :tried (into (vec (:tried %)) (map (fn [e] (.-uuid e))) pair)))
                 :again))))

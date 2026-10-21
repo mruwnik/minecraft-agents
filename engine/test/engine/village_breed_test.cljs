@@ -119,6 +119,15 @@
           (is (= 2 (count (tosses p))) "the food they took stays unspent")
           (is (= 3 (count (filter #(and (= :child_ended (:kind %)) (= :wait (:slot %)) (not= :continue (:status %))) @seen))) "three waits on the one pair"))))))
 
+(deftest a-villager-out-of-sight-after-an-attempt-is-waited-for-not-given-up-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (breed {:entities pair :inventory bread} args 300
+                                              #(feeding % 0 :after (fn [n] (when (= 2 n) (swap! (fake/state %) update :entities (fn [es] (filterv (fn [e] (not= "v-2" (:uuid e))) es))))))))]
+          (is (= :no-births (:reason @out)))
+          (is (= 3 (count (filter #(and (= :child_ended (:kind %)) (= :wait (:slot %)) (not= :continue (:status %))) @seen))) "three waits, the one villager left in sight does not end it after the first"))))))
+
 (deftest fewer-than-two-adults-or-no-food-never-starts
   (async done
     (tu/run-async done
