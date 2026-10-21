@@ -1,0 +1,25 @@
+;; Card da20dfa8: a 4-HP body floating in a pond whose bank is a block above the water runs from a creeper 13 blocks off that walks up. Its flee
+;; steps are 1 s legs (close-leg-s); a go-to look or a stuck-in-water swim whose quote did not fit the leg was refused, so the body
+;; stood in the water until the blast. Glowstone in the platform lights the plot (underground it is dark). A creeper that reaches the body blasts it dead at 4 HP.
+;; Stone block x 0..30, z 0..31, y 0..2 (platform feet y 3); a pond x 9..13, z 14..18 one deep (y 2) in the platform top.
+{:defaults
+ {:tags [:hostile :survival :flee :water :creeper]
+  :time :any
+  :mobs :keep
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile)}]
+  :blocks [[:fill [0 0 0] [30 2 31] "stone"] [:fill [0 3 0] [30 8 31] "air"]
+           [:fill [9 2 14] [13 2 18] "water"]
+           [:fill [8 2 12] [8 2 12] "glowstone"] [:fill [8 2 20] [8 2 20] "glowstone"] [:fill [15 2 12] [15 2 12] "glowstone"]
+           [:fill [15 2 20] [15 2 20] "glowstone"] [:fill [20 2 16] [20 2 16] "glowstone"] [:fill [4 2 16] [4 2 16] "glowstone"]
+           [:fill [22 2 12] [22 2 12] "glowstone"] [:fill [22 2 20] [22 2 20] "glowstone"] [:fill [28 2 16] [28 2 16] "glowstone"] [:fill [26 2 12] [26 2 12] "glowstone"] [:fill [26 2 20] [26 2 20] "glowstone"]]
+  :body {:at [11.5 2 16.5] :yaw -90}
+  :limit-s 60}
+ :cases
+ [{:name "low-health-body-in-a-pond-gets-away-from-a-creeper"
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 16 minecraft:generic"]
+         [:summon "creeper" [24.5 3 16.5]]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "creeper" :decision :flee}} :within-s 10}
+            {:no-event {:source :body :kind :died} :for-s 25}]
+   :limit-s 40}]}

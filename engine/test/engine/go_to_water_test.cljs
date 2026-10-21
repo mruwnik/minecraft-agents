@@ -267,6 +267,17 @@
                   "the bank beside the one the walk was stuck at, said in an event")
               (is (= [:none] (map :attention (gt/events-of s :walker-fault))) "a fault the call gets over wakes no waiting agent"))))))))
 
+(deftest a-stuck-swim-fits-a-short-call-by-swimming-for-what-job-time-is-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walks (atom 0)]
+          (with-redefs [near/walk-round! (stuck-in-water near/walk-round! walks)]
+            (let [{:keys [out] :as s} (await (gt/go! {:self {:pos [6.5 63 0.5] :inWater true} :blocks shallow}
+                                                     {:pos [12 64 0] :range 0 :ways #{:walk :clear-seal} :spend {:job-time 1}}))]
+              (is (= [[[7 64 -1] "landed"]] (map (juxt :toward :status) (gt/events-of s :go-to.unstuck)))
+                  (str "the 2.5 s swim was cut to the second left, not refused: " @out)))))))))
+
 (deftest swims-at-a-bank-are-bounded-and-a-body-still-stuck-gives-up-with-a-reason
   (async done
     (tu/run-async done

@@ -27,19 +27,27 @@
          (filter bank?)
          (sort-by (juxt #(= stuck %) far)))))
 
+(def min-swim-ms "A swim shorter than this lands nowhere: not begun." 250)
+
+(defn swim-ms
+  "Milliseconds one swim holds: the setting, no more than the job time the call chain has left (an act whose quote does
+  not fit is refused, so a short flee step could never swim at all)."
+  [c]
+  (min (settings/get settings ::swim-ms) (* 1000 (get-in (ctx/left c) [:spend :job-time] ##Inf))))
+
 (defn ^:async swim-out!
   "After a walk that ended walked ({:status :stuck :target ...}) toward goal: a body in water swims at the banks round it
   (banks) until one swim lands, within the call's ::swims (mem :unstuck). True when it stands on a bank."
   [c goal walked]
   (let [p (:primitives c)
         left (- (settings/get settings ::swims) (:unstuck (ctx/mem c) 0))]
-    (when (and (= :stuck (:status walked)) (pos? left) (breath/in-water? p))
+    (when (and (= :stuck (:status walked)) (pos? left) (>= (swim-ms c) min-swim-ms) (breath/in-water? p))
       (let [[x y z] (mapv #(js/Math.floor (% (u/self-pos c))) [:x :y :z])]
         (loop [[bank & more] (take left (banks (column/kind-at p false) [x y z] goal (:target walked)))]
           (when bank
             (let [n (inc (:unstuck (ctx/mem c) 0))
                   _ (ctx/update-mem! c assoc :unstuck n)
-                  r (await (ctx/act c :swim (clj->js {:toward (zipmap [:x :y :z] bank) :ms (settings/get settings ::swim-ms)})))
+                  r (await (ctx/act c :swim (clj->js {:toward (zipmap [:x :y :z] bank) :ms (swim-ms c)})))
                   status (.-status r)]
               (ctx/emit! c :go-to.unstuck :info
                          {:toward bank :status status :swim n
