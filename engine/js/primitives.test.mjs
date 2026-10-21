@@ -746,6 +746,15 @@ test('the died event carries the death position, the inventory and the experienc
   }])
 })
 
+test('the died event lists the worn armour with its durability, as it drops with the pile', () => {
+  const worn = [{ name: 'iron_helmet', count: 1, slot: 5, durabilityUsed: 15 }, { name: 'iron_boots', count: 1, slot: 8 }]
+  const { bot, p } = rig({ ...world, worn })
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  bot.emit('death')
+  assert.deepEqual(seen[0].inventory.slice(-2), [{ name: 'iron_helmet', count: 1, slot: 5, durability: 150 }, { name: 'iron_boots', count: 1, slot: 8, durability: 195 }])
+})
+
 const emptiedAtDeath = (snapshotOn) => {
   const items = []
 for (const [block, cause] of [['lava', 'lava'], ['fire', 'fire'], ['soul_fire', 'fire']]) {

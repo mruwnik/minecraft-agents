@@ -173,7 +173,9 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   // ---- body events ----
 
   const emit = event => listeners.forEach(fn => fn(event))
-  const inventoryNow = () => inventory().map(i => ({ name: i.name, count: i.count, slot: i.slot }))
+  // What a death drops: the carried stacks and the worn ones (armour, off-hand), each with the durability left.
+  const inventoryNow = () => [...inventory(), ...Object.values(WORN_SLOTS).map(slot => bot.inventory.slots[slot]).filter(Boolean)]
+    .map(i => { const { durability, enchants } = gearView(i); return { name: i.name, count: i.count, slot: i.slot, ...(durability !== undefined && { durability }), ...(enchants && { enchants }) } })
 
   const relayEntityDeath = (entity, removal) => entityDeathListeners.forEach(fn => fn({ entity, source: bot, dimension: bot.game?.dimension, removal }))
   // item entities that leave the world (despawn, pickup) are forgotten by the entity cache too
