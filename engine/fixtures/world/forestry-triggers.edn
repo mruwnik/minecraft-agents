@@ -21,6 +21,18 @@
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :within-s 40}
             {:event {:source :reflex :kind :ended :context {:reflex-id :part-cut-tree} :data {:kind :done}} :within-s 140}]
    :after [[:not-block [16 4 16] "oak_log"] [:not-block [16 6 16] "oak_log"] [:item "oak_log" [:>= 1]]]}
+  {:name "part-cut-tree-trigger-waits-for-a-cow-lure"
+   :register [{:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}]
+   :body {:inventory [["iron_axe" 1] ["wheat" 4]]}
+   :act [[:summon "cow" [13.5 0 21.5]]
+         [:job (jobs.animals.lure-to {:mob "cow" :pos #xyz [12 0 6]})]
+         [:rcon "execute at $BODY run fill ~2 ~0 ~-6 ~2 ~9 ~-6 air"]
+         [:rcon "execute at $BODY run fill ~2 ~1 ~-6 ~2 ~6 ~-6 oak_log"]
+         [:rcon "execute at $BODY run fill ~0 ~5 ~-8 ~4 ~7 ~-4 oak_leaves[persistent=true]"]
+         [:rcon "execute at $BODY run fill ~2 ~5 ~-6 ~2 ~6 ~-6 oak_log"]]
+   :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :for-s 110 :until {:source :job :kind :completed}}]
+   :limit-s 150}
   {:name "part-cut-tree-trigger-leaves-a-whole-tree"
    :register [{:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}]
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
