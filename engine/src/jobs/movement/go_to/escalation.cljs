@@ -27,6 +27,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.step-off :as step-off]
+            [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.access :as access]
             [jobs.lib.dig-in-leave :as dig-leave]
@@ -303,14 +304,14 @@
 
 (defn other-heading?
   "Whether escalation e is a stair (not the body's own) and escape/choose finds another way with its heading skipped
-  that cuts no block (the one it had no tool for)."
-  [c pos {:keys [step own] :as e} block]
+  that cuts no block the body has no tool for (stone is not left for andesite: both want the pickaxe)."
+  [c pos {:keys [step own] :as e}]
   (and (= :stair step) (not own)
        (let [p (:primitives c)
              goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
              block-at (escape/block-at-of p)
              may-dig? (may-dig-fn c)]
-         (not= :none (:step (escape/choose p (end/feet-cell c) goal #(and (may-dig? %) (not= block (block-at %)))
+         (not= :none (:step (escape/choose p (end/feet-cell c) goal #(and (may-dig? %) (not (tools/needs-tool-to-clear? p (block-at %))))
                                            {:own? (own-placed-fn c) :skip (conj (skips c) (skip-key e)) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c)}))))))
 
 (defn ^:async escalation-failed!
@@ -321,7 +322,7 @@
   [c pos detail]
   (let [e (:escalation (ctx/mem c))
         no-tool (and (no-tool? detail) (not (:by-hand (ctx/mem c))))
-        other? (and no-tool (other-heading? c pos e (or (:block detail) (:block (:wait detail)))))
+        other? (and no-tool (other-heading? c pos e))
         hand? (and no-tool (not other?))]
     (when other? (ctx/update-mem! c update :skipped-steps (fnil conj #{}) (skip-key e)))
     (when hand? (by-hand! c detail))

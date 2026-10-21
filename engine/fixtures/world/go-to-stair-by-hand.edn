@@ -1,0 +1,16 @@
+;; Shut in a stone shaft with no pickaxe and nothing in the bag: every wall wants a pickaxe (stone east, andesite on the other
+;; sides), so no heading is free of the missing tool and the stair toward the goal is dug by hand, not skipped for a detour.
+;; Mass: stone x 10..22, z 10..22, y 0..1 (top feet y 2), a 1x1 shaft at x 16, z 16; goal east on top.
+{:defaults
+ {:tags [:movement :access]
+  :plot {:height 10}
+  :blocks [[:fill [10 0 10] [22 1 22] "stone"] [:fill [14 0 14] [15 1 18] "andesite"] [:fill [16 0 14] [18 1 15] "andesite"]
+           [:fill [16 0 17] [18 1 18] "andesite"] [:fill [16 0 16] [16 1 16] "air"]]
+  :body {:at [16.5 0 16.5]}
+  :limit-s 300 :time :any}
+ :cases
+ [{:name "stone-and-andesite-walls-no-pickaxe-stair-by-hand"
+   :act [[:job (jobs.movement.go-to {:pos #at [20 2 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.by-hand :data {:step :stair}} :within-s 120 :of-job true}
+            {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 280 :of-job true}]
+   :after [[:body-near [20.5 2 16.5] 2]]}]}

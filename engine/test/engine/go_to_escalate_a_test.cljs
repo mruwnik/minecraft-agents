@@ -238,6 +238,17 @@
           (is (= [:stair] (mapv :step (events-of seen :go-to.by-hand))) "said once")
           (is (seq (calls p "dig"))))))))
 
+(deftest go-to-with-no-pickaxe-digs-the-stair-by-hand-though-the-other-walls-are-another-stone
+  ;; andesite wants the pickaxe too: it is no heading that needs no tool, so the first stair is run again by hand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walls (merge stone-pit (box -2 60 -2 -1 63 2 "andesite") (box -2 60 -2 2 63 -1 "andesite"))
+              {:keys [out p seen]} (await (run-job! (merge in-pit {:blocks walls}) {:pos [10 64 0] :range 1}))]
+          (is (= {:arrived true} @out))
+          (is (= [:stair] (mapv :step (events-of seen :go-to.by-hand))))
+          (is (contains? (dug-cells p) [1 63 0]) "the heading toward the goal, not a detour round it"))))))
+
 (deftest go-to-stairs-out-of-a-pit-under-gravel-beside-it
   (async done
     (tu/run-async done
