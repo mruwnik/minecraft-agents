@@ -158,11 +158,12 @@
   (if (= :stair step) [:stair heading] step))
 
 (defn walk-args
-  "The go-to call of a round: the :walk map with the goal and ways (walk-only unless all? and then the call's, :bridge left out)."
+  "The go-to call of a round: the :walk map with the goal and ways (walk-only unless all? and then the call's, :bridge left out).
+  :torches defaults to :fetch: a player lights a dark way first, so an :unseen-floor-dark ending means no torch could be had."
   [c all?]
   (let [{:keys [pos range walk]} (:args c)
         call-ways (:ways (ctx/frozen-call c))]
-    (cond-> (assoc walk :pos pos :range range)
+    (cond-> (assoc (merge {:torches :fetch} walk) :pos pos :range range)
       (not all?) (assoc :ways #{:walk})
       (and all? call-ways) (assoc :ways (disj (set call-ways) :bridge)))))
 

@@ -128,3 +128,8 @@
           (is (true? (:arrived @out)) (pr-str @out))
           (is (= [10 64 0] (feet p)))
           (is (= [[:bridge true] [:bridge false]] (distinct (map (juxt :step :approach) (events-of seen :reach.span)))) "walked to the edge first"))))))
+
+(deftest the-walk-lights-a-dark-way-before-a-span-is-built
+  (are [walk want] (= want (:torches (reach/walk-args {:quote-call {} :args {:pos [1 2 3] :range 1 :walk walk}} false)))
+    {} :fetch
+    {:torches :never} :never))
