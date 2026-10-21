@@ -342,7 +342,7 @@
 
 (defn ^:async explore!
   "Once per job, with nothing known or seen: search for food animals and ripe crops (jobs.explore.search, :explore),
-  not in a dark sky (a body sheltered for the night stays in) nor in the dark or with danger near unless starving (safe-if-lit), nor underground (sh-sense/buried?) unless starving and not fragile, nor when risk refuses it. :again when the search found something to hunt or dig, else nil with what it
+  not in a dark sky (a body sheltered for the night stays in) nor in the dark or with danger near unless starving (safe-if-lit), nor underground (sh-sense/buried?) unless starving, nor when risk refuses it. :again when the search found something to hunt or dig, else nil with what it
   covered remembered."
   [c]
   (let [e (:explore (:args c))]
@@ -352,7 +352,7 @@
       (do (ctx/update-mem! c assoc :explored (str "not searched: " (:too-dangerous (ctx/mem c)))) nil)
       (search-waits? c)
       (do (ctx/update-mem! c assoc :explored "not searched: dark or danger near") nil)
-      (and (sh-sense/buried? (:primitives c)) (or (not (starving? c)) (foods/fragile? (.self (:primitives c)))))
+      (and (sh-sense/buried? (:primitives c)) (not (starving? c)))
       (do (ctx/update-mem! c assoc :explored "not searched underground: the caves are dark and full of mobs; surface or eat first") nil)
       :else
       (do
@@ -429,7 +429,8 @@
   [c]
   (let [have (foods/stock-points (u/inventory (:primitives c)))]
     (stop! c :no-carry (str "not hungry (food " (food-level c) ", nothing eaten) but carries " have " of " (:carry (:args c))
-                            " food points and found no more within " (js/Math.round (hunt-radius c)) " blocks")
+                            " food points and found no more within " (js/Math.round (hunt-radius c)) " blocks"
+                            (when-let [x (:explored (ctx/mem c))] (str ", explored: " x)))
            :food (food-level c) :carry (:carry (:args c)) :have have)))
 
 (defn ^:async round

@@ -16,6 +16,7 @@
             [engine.triggers :as triggers]
             [jobs.survival.get-food.report :as report]
             [jobs.lib.child :as child]
+            [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.survival.get-food :as get-food]))
 
@@ -332,6 +333,22 @@
           (let [none (first (none-endings seen))]
             (is (= [{:name "cow" :id 7 :why :baby :pos [5 64 0]}] (mapv #(select-keys % [:name :id :why :pos]) (:animals none))))
             (is (re-find #"passed over 1 animal \(cow: baby at \[" (str (:text none))))))))))
+
+(deftest food-none-names-the-pair-seen-in-a-look-though-the-last-look-left-it-out-of-view
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:food 1} :entities (vec (take 2 herd))} :step-ms 5)]
+          (with-redefs [look/survey-until! (fn ^:async f
+                                             ([c per test-fn] (when (= :cell per)
+                                                                (test-fn)
+                                                                (swap! (fake/state p) assoc :entities []))
+                                                              nil)
+                                             ([c per test-fn _] (await (f c per test-fn))))]
+            (await (one-round! eng {})))
+          (let [none (first (none-endings seen))]
+            (is (= [7 8] (sort (map :id (:animals none)))))
+            (is (re-find #"passed over 2 animals" (str (:text none))))))))))
 
 (deftest food-none-lists-what-the-scan-saw-when-no-animal-qualified
   (async done

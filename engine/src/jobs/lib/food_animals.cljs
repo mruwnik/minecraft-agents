@@ -64,10 +64,30 @@
           :continue
           (do (await (undecided?)) (nearest c opts)))))))
 
-(defn ^:async nearest-or-look
-  "The nearest food animal in sight (an in-sight entry), its surroundings looked at first when they may be a pen (see pen-looked); with none, the body looks around once from where it stands and tries again."
+(defn cell-of
+  "The rounded cell [x y z] of a position map or JS object, or nil when the sighting gave none."
+  [pos]
+  (when pos
+    (let [p (if (map? pos) pos (u/pos-of pos))]
+      (mapv #(js/Math.round %) [(:x p) (:y p) (:z p)]))))
+
+(defn spared-sightings
+  "The animals in sight that were not hunted, as {:name :id :why :pos}."
   [c opts]
-  (when-let [target (or (nearest c opts) (await (look/survey-until! c :cell #(nearest c opts))))]
+  (->> (in-sight c opts) (filter :why)
+       (mapv (fn [{:keys [entity why]}] {:name (.-name entity) :id (.-id entity) :why why :pos (cell-of (.-pos entity))}))))
+
+(defn note-spared!
+  "Remember the animals spared now by id: entities are sensed only in the view cone, so a later look at the end of a survey no longer lists them."
+  [c opts]
+  (let [seen (spared-sightings c opts)]
+    (when (seq seen)
+      (ctx/update-mem! c update :spared-seen #(merge % (into {} (map (juxt :id identity)) seen))))))
+
+(defn ^:async nearest-or-look
+  "The nearest food animal in sight (an in-sight entry), its surroundings looked at first when they may be a pen (see pen-looked); with none, the body looks around once from where it stands and tries again, remembering what it spared on the way."
+  [c opts]
+  (when-let [target (or (nearest c opts) (await (look/survey-until! c :cell (fn [] (note-spared! c opts) (nearest c opts)))))]
     (if (= :own-pen (:rule target)) target (await (pen-looked c opts target)))))
 
 (defn note-kill!
@@ -84,18 +104,12 @@
                                                        " (" adults " adults, keep " (:keep why) ", food " food ", " (name rule) ")")}
                                            why))))
 
-(defn cell-of
-  "The rounded cell [x y z] of a position map or JS object, or nil when the sighting gave none."
-  [pos]
-  (when pos
-    (let [p (if (map? pos) pos (u/pos-of pos))]
-      (mapv #(js/Math.round %) [(:x p) (:y p) (:z p)]))))
-
 (defn passed-over
-  "The animals in sight that were not hunted, as {:name :id :why :pos}."
+  "The animals not hunted, as {:name :id :why :pos}: those in sight now and those spared earlier in a look."
   [c opts]
-  (->> (in-sight c opts) (filter :why)
-       (mapv (fn [{:keys [entity why]}] {:name (.-name entity) :id (.-id entity) :why why :pos (cell-of (.-pos entity))}))))
+  (let [now (spared-sightings c opts)
+        ids (set (map :id now))]
+    (into now (remove #(ids (:id %))) (vals (:spared-seen (ctx/mem c))))))
 
 (defn nearby
   "The mobs of any kind the body sees or heard within radius, as {:name :kind :distance :pos}: tells a hunt filter from
