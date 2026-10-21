@@ -302,6 +302,22 @@
             (is (= 1 (:collected result)))
             (is (= 1 (bd/carried p "oak_log")))))))))
 
+(deftest look-holes-ends-the-looks-on-the-dug-cell-so-a-drop-beside-it-is-in-the-view-cone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[look? n] [[true 1] [false 0]]]
+          (let [{:keys [eng p]} (bd/setup {:self body})]
+            (drop! p [4 64 0] "oak_log")
+            (.override (.-world p) "look"
+                       (fn [token a impl]
+                         (let [at-dug? (and (< (js/Math.abs (- 3.5 (.. a -pos -x))) 0.1) (< (js/Math.abs (- 64.5 (.. a -pos -y))) 0.1))]
+                           (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :visible at-dug?) es))))
+                       (impl token a)))
+            (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :visible false) es)))
+            (await (tu/child-outcome eng job {:radius 6 :holes [[3 64 0]] :look-holes? look?} 60))
+            (is (= n (bd/carried p "oak_log")) (str "look-holes? " look?))))))))
+
 (deftest ids-all-picked-up-end-done-with-no-left
   (async done
     (tu/run-async done

@@ -380,9 +380,11 @@ test('craftItem: a cursor holding something at entry closes the open window befo
   assert.deepEqual(log[1], ['sync'])
 })
 
-test('craftItem: recipes that differ in one wood are mixed slot by slot, as vanilla does with a tag', async () => {
+const PLANKS = { oak_planks: ['oak_planks', 'cherry_planks'], cherry_planks: ['oak_planks', 'cherry_planks'] }
+
+test('craftItem: stand-in items mix slot by slot, as vanilla does with a tag', async () => {
   const { bot, items } = setup({ items: inv(['oak_planks', 1], ['cherry_planks', 1]) })
-  const r = await craftItem(bot, ctx, { item: 'stick' }, opts)
+  const r = await craftItem(bot, ctx, { item: 'stick', standIns: PLANKS }, opts)
   assert.equal(r.status, 'crafted')
   assert.deepEqual(r.used, { oak_planks: 1, cherry_planks: 1 })
   assert.equal(items.find(i => i.name === 'stick').count, 4)

@@ -52,6 +52,7 @@
    :least-items {:doc "item names that count towards the call's :least; every collected item when nil" :spec (a/coll-of a/item?) :default nil}
    :ids {:doc "entity ids to collect (only those); any item when nil" :spec (a/coll-of number?) :default nil}
    :dig {:doc "dig a way to a drop that cannot be walked to (the cells are left for the caller's tidy)" :spec boolean? :default false}
+   :look-holes? {:doc "look at each of :holes (and down its column) once before the round turns round" :spec boolean? :default false}
    :holes {:doc "cells the caller dug: an item lower than the feet at or under one of them, or one column beside, is in that hole"
            :spec (a/coll-of a/position?) :default nil}})
 
@@ -505,12 +506,28 @@
       :continue
       (do (book! c item start-held t) :again))))
 
+(defn ^:async look-at-holes!
+  "Once per run and hole of :holes, glance at the dug cell and the cell under it, then down the column at each unsensed cell,
+  ending on the dug cell again: a drop beside it is outside the view cone of a head turned steeply down. Returns the
+  candidates the looks showed."
+  [c anchor]
+  (let [looked (:holes-looked (ctx/mem c))]
+    (loop [holes (remove (set looked) (:holes (:args c)))]
+      (when-let [dug (first holes)]
+        (ctx/update-mem! c update :holes-looked (fnil conj []) dug)
+        (await (dig-look/look-at! c dug))
+        (await (dig-look/look-at! c (update dug 1 dec)))
+        (await (dig-look/look-unknown! c (map #(update dug 1 - %) [2 3 4])))
+        (await (dig-look/look-at! c dug))
+        (or (seq (candidates c anchor)) (recur (rest holes)))))))
+
 (defn ^:async step!
   "One step of the sweep: the nearest drop in sight, else a search cell, else the end. :again, :continue or an ending."
   [c anchor]
   (if-not (ctx/alive? c)
     :continue
     (let [items (or (seq (candidates c anchor))
+                    (when (:look-holes? (:args c)) (await (look-at-holes! c anchor)))
                     (await (look/survey-until! c :cell #(seq (candidates c anchor)))))
           _ (note-last-cells! c items)
           item (first items)]

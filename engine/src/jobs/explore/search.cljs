@@ -15,7 +15,6 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.child :as child]
             [jobs.lib.food-animals :as food-animals]
-            [jobs.lib.job-common :as jc]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.surface-up :as surface-up]
             [jobs.lib.look :as look]

@@ -23,18 +23,20 @@ const eyeDistance = (bot, block) => {
 }
 
 
-// Vanilla takes any member of a tag (#planks) in each slot, but minecraft-data lists one recipe per member. Recipes of
-// one result and one layout are merged slot by slot: a slot's ids across them are interchangeable, so 7 cherry + 1 oak
-// plank make a chest. Returns a runnable variant filled from what is carried (most plentiful member first), or null.
-const layoutKey = r => JSON.stringify([r.result.count, r.inShape ? r.inShape.map(row => row.map(c => c.id === -1 ? 0 : 1)) : r.ingredients.length])
+// Vanilla takes any member of a tag (#planks) in each slot, but minecraft-data lists one recipe per member. standIns
+// ({name: [names]}, from jobs.items.recipes/interchange) names the members that stand in for each other: a slot takes
+// any of them, so 7 cherry + 1 oak plank make a chest. Returns a runnable variant filled from what is carried (most
+// plentiful member first), or null.
 const slotsOf = r => r.inShape ? r.inShape.flat() : r.ingredients
-const mixedRecipe = (bot, id, table) => {
+const mixedRecipe = (bot, id, table, standIns = {}) => {
   const usable = bot.recipesAll(id, null, table ?? true).filter(r => table || !r.requiresTable)
   const left = Object.fromEntries(bot.inventory.items().map(i => [i.type, 0]))
   bot.inventory.items().forEach(i => { left[i.type] += i.count })
   for (const base of usable) {
-    const group = usable.filter(r => layoutKey(r) === layoutKey(base))
-    const slots = slotsOf(base).map((_, i) => [...new Set(group.map(r => slotsOf(r)[i].id))])
+    const slots = slotsOf(base).map(c => {
+      const name = bot.registry.items[c.id]?.name
+      return c.id === -1 || !standIns[name] ? [c.id] : standIns[name].map(n => bot.registry.itemsByName[n]?.id).filter(x => x !== undefined)
+    })
     const chosen = []
     const stock = { ...left }
     for (const ids of slots) {
@@ -229,10 +231,10 @@ export async function craftItem (bot, ctx, a, { timeScale = 1, reach = constants
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const made = (carriedCounts(bot)[item] ?? 0) - start
     if (made >= count) break
-    const r = bot.recipesFor(id, null, 1, table)[0] ?? mixedRecipe(bot, id, table)
+    const r = bot.recipesFor(id, null, 1, table)[0] ?? mixedRecipe(bot, id, table, a.standIns)
     if (!r) {
       await resync(bot, ctx, timeScale)
-      if (bot.recipesFor(id, null, 1, table)[0] || mixedRecipe(bot, id, table)) continue
+      if (bot.recipesFor(id, null, 1, table)[0] || mixedRecipe(bot, id, table, a.standIns)) continue
       // a recipe that needs a table is carried, but no table was handed over (the 2x2 ones, e.g. a re-dye, hide that)
       if (!table && bot.recipesFor(id, null, 1, true)[0]) return { status: 'unreachable', reason: 'no-table' }
       shortage = shortOf(bot, id, table)
