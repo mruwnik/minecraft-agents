@@ -247,6 +247,11 @@
       (ctx/update-mem! c walk-fail (:pos cell) :unreachable limit (u/self-pos c)))
     w))
 
+(defn shut-in-walk?
+  "Whether the last walk ended because the body is shut in (go-to refuses to dig or build out of a restricted walk)."
+  [c]
+  (boolean (:shut-in (:data (near/last-walk c)))))
+
 (defn ^:async walk-to!
   "Walk to a stand cell beside cell (:continue while the walk waits, else :again); a cell that cannot be walked to, or is still out of reach (or unseen, as
   :unloaded) on arrival, counts a failure."
@@ -261,8 +266,9 @@
     (if-not stand
       (do (ctx/update-mem! c walk-fail (:pos cell) :unreachable (give-up) (u/self-pos c))
           :again)
-      (let [w (await (walk-stand! c cell stand (cond-> {} (not (in-hole? c)) (assoc :ways #{:walk :clear-seal}))))]
-        (if (and (= :blocked w) (in-hole? c))
+      (let [shut? (or (in-hole? c) (shut-in-walk? c))
+            w (await (walk-stand! c cell stand (cond-> {} (not shut?) (assoc :ways #{:walk :clear-seal}))))]
+        (if (and (= :blocked w) (or shut? (shut-in-walk? c)))
           (hole-blocked! c)
           (do (ctx/update-mem! c dissoc :hole-blocked)
               (if (= :partial w) :continue :again)))))))
