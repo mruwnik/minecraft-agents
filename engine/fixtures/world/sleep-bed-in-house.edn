@@ -1,0 +1,27 @@
+;; Sleeping in a bed inside a closed house replaces a recorded :bed and :home that lie on open ground (an open-air bed set down
+;; outside the house). The body starts outside, beside the old bed (it sees both beds), walks in through the shut door and sleeps.
+;; Hut: planks x 12..18, z 12..18, y 0..3 (hollow), room 13..17, shut oak door at [15 0..1 18]; bed in it at [16 0 14]; old bed at [10 0 20].
+;; Should-succeed: the body sleeps and :bed and :home are the bed in the house.
+{:defaults
+ {:tags [:night :survival :sleep]
+  :time :night :time-why :sleep
+  :blocks [[:fill [12 0 12] [18 3 18] "oak_planks" :hollow]
+           [:fill [13 0 13] [17 2 17] "air"]
+           [:set [15 2 13] "glowstone"]
+           [:fill [15 0 18] [15 1 18] "air"]
+           [:set [15 0 18] "oak_door[facing=south,half=lower,hinge=left,open=false]"]
+           [:set [15 1 18] "oak_door[facing=south,half=upper,hinge=left,open=false]"]
+           [:set [16 0 14] "red_bed[facing=south,part=foot]"]
+           [:set [16 0 15] "red_bed[facing=south,part=head]"]
+           [:set [10 0 20] "white_bed[facing=south,part=foot]"]
+           [:set [10 0 21] "white_bed[facing=south,part=head]"]]
+  :body {:at [12.5 0 20.5] :yaw 180 :effects [["resistance" 600 4]] :settle-s 3}
+  :limit-s 120}
+ :cases
+ [{:name "sleeping-in-the-house-bed-replaces-the-open-air-bed"
+   :memory [{:kind :bed :data {:pos #xyz [10 0 20]} :policy {:cap 1 :ttl :forever}}
+            {:kind :home :data {:pos #xyz [10 0 20]} :policy {:cap 1 :ttl :forever}}]
+   :act [[:job (jobs.survival.sleep {:bed #at [16 0 14]})]
+         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 90]]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}]
+   :after [[:memory {:entries {:bed [{:data {:pos #xyz [16 0 14]}}] :home [{:data {:pos #xyz [16 0 14]}}]}}]]}]}

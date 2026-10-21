@@ -33,7 +33,7 @@
   :bed-unloaded and :bed-unusable.
   A bed that is not there is not retried; if it was the remembered bed, :bed is overwritten with {:gone true :was pos}, so it no longer reads as a place.
   With a :bed argument the radius is ignored. After sleeping there it is recorded as :bed
-  when none is recorded or the recorded one is gone. A live recorded :bed is kept (one place.kept event). Every sleep also records :home there unless a live :home is recorded.
+  when none is recorded, the recorded one is gone, or it lies in the open and this bed in a closed roofed room. Another live recorded :bed is kept (one place.kept event). Every sleep also records :home there on the same terms.
   Warns spawn_not_set when it sleeps and no :spawn-set (the body event for the Respawn point set line) follows, unless one
   was seen within 3 blocks of the bed before (kept as :spawn-bed, forever, until a later :spawn-reset):
   death would then send the body to the world spawn.
@@ -172,7 +172,7 @@
                      (if (sh-spawn/spawn-known? (ctx/view c) bed t0)
                        (sh-spawn/remember-spawn-bed! c bed)
                        (ctx/emit! c :spawn_not_set :warn {:pos bed :text "slept in the bed but the server did not say the respawn point was set"}))
-                     (when (:bed (:args c)) (places/offer! c :bed bed))
+                     (places/offer! c :bed bed)
                      (places/offer! c :home bed)
                      (ctx/end c :done nil {:pos bed}))
       "not-night" (ctx/end c :condition-failed :not-night)

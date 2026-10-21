@@ -79,13 +79,24 @@
   (aset p "sensedAt" f)
   (when (aget p "perception") (aset p "blockAt" f)))
 
+(defn beyond-floor?
+  "Whether the column of pos lies outside the floor rectangle [x0 z0 x1 z1] (or [y x0 z0 x1 z1]): ground the world never built, which a body
+  has not seen rather than sees as air."
+  [rect pos]
+  (let [[x0 z0 x1 z1] (take-last 4 rect)
+        x (js/Math.floor (aget pos "x")) z (js/Math.floor (aget pos "z"))]
+    (not (and (<= x0 x x1) (<= z0 z z1)))))
+
 (defn sensed-by
   "A sensedAt over p's blockAt that answers {:unknown true} for a position whose coordinates are not finite numbers
-  (a malformed pos): perception knows nothing there, while the fake's blockAt would say air."
+  (a malformed pos): perception knows nothing there, while the fake's blockAt would say air. Likewise for a column
+  beyond the floor rectangle of a world made with :open-ground true (:floor-rect): real ground goes on there, unseen; a fake without it sees air."
   [p]
-  (fn [pos] (if (every? #(js/Number.isFinite (aget pos %)) ["x" "y" "z"])
-              (.blockAt (oracle p) pos)
-              #js {:unknown true :pos pos})))
+  (let [rect (:floor-rect @(fake-world/state (oracle p)))]
+    (fn [pos] (if (and (every? #(js/Number.isFinite (aget pos %)) ["x" "y" "z"])
+                       (not (and rect (beyond-floor? rect pos))))
+                (.blockAt (oracle p) pos)
+                #js {:unknown true :pos pos}))))
 
 (defn with-sky-only
   "p with a raw reader of its world giving the sky and no light for any cell (lightAt -1): the body knows the time but
@@ -102,10 +113,12 @@
   y 63 over that rectangle (floor) added under the spec's :blocks, for walks over the path planner."
   ([] (fake {}))
   ([spec]
-   (let [spec (if-let [rect (:floor spec)]
-                (-> spec (dissoc :floor) (update :blocks #(merge (apply floor rect) %)))
+   (let [floor-rect (or (:floor spec) (:floor-rect spec))
+         spec (if (:floor spec)
+                (-> spec (dissoc :floor) (update :blocks #(merge (apply floor (:floor spec)) %)))
                 spec)]
      (let [p (fake-world/create spec)]
+       (when (and floor-rect (:open-ground spec)) (swap! (fake-world/state p) assoc :floor-rect floor-rect))
        (aset p "sensedAt" (sensed-by p))
        (cond (not (contains? spec :time)) p
              (:light spec) (do (swap! (fake-world/state p) assoc :light (:light spec) :light-default (:light-default spec)) (aset p "rawWorld" (fake-raw/create p)) (seeing-all p))
@@ -134,7 +147,7 @@
         y (if (= 5 (count rect)) (first rect) 63)
         built (into #{} (map (fn [k] (let [[x _ z] (.split (name k) ",")] (str x "," y "," z)))) (keys (:blocks spec)))
         ground (reduce dissoc (ground-of rect (:floor-block spec "stone")) built)]
-    (fake (-> spec (dissoc :floor :floor-block) (assoc :blocks (merge ground (:blocks spec)))))))
+    (fake (-> spec (dissoc :floor :floor-block) (assoc :floor-rect rect :blocks (merge ground (:blocks spec)))))))
 
 (defn act-clock
   "A now fn for an engine over fake p: the clock atom's ms plus ms for every primitive call p has recorded, so time

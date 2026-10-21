@@ -5,7 +5,9 @@
             [engine.core :as core]
             [engine.events :as events]
             [engine.expr :as expr]
+            [engine.hut-shelter-test :refer [hut-world]]
             [engine.job-api :as api]
+            [jobs.lib.reach.room :as reach-room]
             [engine.memory :as mem]
             [jobs.lib.places :as places]
             [engine.registry :as registry]
@@ -366,6 +368,35 @@
           (let [{:keys [eng seen]} (await (sleep-in {:recorded recorded}))]
             (is (= bed-a (place eng :bed)) (pr-str recorded))
             (is (= [] (events-of seen :place.kept)))))))))
+
+(deftest a-bare-floor-patch-is-no-closed-room
+  (is (nil? (reach-room/room (tu/fake {:floor [-5 -5 5 5] :open-ground true}) {:x 0 :y 64 :z 0}))
+      "the ground goes on past the built floor, unseen: the flood leaks there"))
+
+(def hut-night (merge (hut-world {:x 5 :y 64 :z 0} {"6,64,0" "red_bed" "20,64,0" "white_bed"}) {:time night :open-ground true}))
+
+(deftest sleeping-in-a-bed-in-a-closed-room-replaces-a-recorded-bed-in-the-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup hut-night)]
+          (mem/write! (:store eng) :bed {:pos bed-b} mem/place-policy)
+          (mem/write! (:store eng) :home {:pos bed-b} mem/place-policy)
+          (await (run-job eng (list 'jobs.survival.sleep {:bed bed-a})))
+          (is (.-isDay (.self p)) "it slept")
+          (is (= bed-a (place eng :bed)))
+          (is (= bed-a (place eng :home)))
+          (is (= [] (events-of seen :place.kept))))))))
+
+(deftest sleeping-in-a-bed-in-the-open-keeps-a-recorded-bed-in-a-closed-room
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (assoc-in hut-night [:self :pos] {:x 19 :y 64 :z 0}))]
+          (mem/write! (:store eng) :bed {:pos bed-a} mem/place-policy)
+          (await (run-job eng (list 'jobs.survival.sleep {:bed bed-b})))
+          (is (.-isDay (.self p)) "it slept")
+          (is (= bed-a (place eng :bed))))))))
 
 (deftest a-recorded-bed-in-an-unloaded-chunk-is-not-called-gone
   (async done

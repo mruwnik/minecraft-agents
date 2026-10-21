@@ -8,6 +8,7 @@
   retract-if-missing! drops a recorded place whose block a job found missing."
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
             [engine.memory :as mem]))
 
@@ -161,9 +162,18 @@
 
 ;; ------------------------------------------------------------------ jobs recording and dropping places
 
+(defn better-home?
+  "Whether an offered :bed or :home in a closed roofed room beats the recorded one seen in the open."
+  [p kind recorded offered]
+  (and (contains? #{:bed :home} kind)
+       (some? (u/seen-block p recorded))
+       (not (sh-sense/shut-in-room? p recorded))
+       (sh-sense/shut-in-room? p offered)))
+
 (defn offer!
-  "A job found a place of kind at pos (anything parse-pos reads) by itself. Record it when none is recorded or the
-  recorded one is gone (its block is loaded and not of that kind); the memory layer emits one place.set (:auto true). A different live recorded
+  "A job found a place of kind at pos (anything parse-pos reads) by itself. Record it when none is recorded, the
+  recorded one is gone (its block is loaded and not of that kind), or (:bed, :home) it lies in the open and the offered one in a
+  closed roofed room; the memory layer emits one place.set (:auto true). A different live recorded
   place is kept, and one place.kept event says which and why. The same place changes nothing."
   [c kind pos]
   (let [offered (:pos (parse-pos pos))
@@ -171,7 +181,8 @@
     (cond
       (nil? offered) nil
       (= offered recorded) nil
-      (or (nil? recorded) (gone? kind (u/block-name (:primitives c) recorded)))
+      (or (nil? recorded) (gone? kind (u/block-name (:primitives c) recorded))
+          (better-home? (:primitives c) kind recorded offered))
       (ctx/remember! c kind {:pos offered} mem/place-policy)
       :else
       (ctx/emit! c :place.kept :info {:name kind :kept recorded :offered offered

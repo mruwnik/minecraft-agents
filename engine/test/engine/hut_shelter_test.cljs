@@ -415,7 +415,7 @@
   (let [p (tu/fake (merge (hut-world {:x 5 :y 64 :z 0} {}) {:blocks (assoc (:blocks (hut-world {:x 5 :y 64 :z 0} {})) "9,64,0" "red_bed")}))]
     (is (nil? (sh-beds/seen-bed p)))))
 
-(deftest a-placed-bed-does-not-overwrite-a-known-bed-beyond-the-radius
+(deftest a-placed-bed-in-the-closed-hut-replaces-a-known-open-air-bed-beyond-the-radius
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -427,8 +427,8 @@
           (await (st/tick-n eng 8))
           (is (= 1 (count (st/calls p "place"))) "put the carried one down")
           (is (= 1 (count (st/calls p "sleep"))))
-          (is (= far (mem/place (mem/view (:store eng)) :bed)) "the known bed is kept")
-          (is (seq (st/emitted seen :place.kept)) "and one place.kept event says so"))))))
+          (is (not= far (mem/place (mem/view (:store eng)) :bed)) "the bed in the closed room beats the one in the open")
+          (is (empty? (st/emitted seen :place.kept))))))))
 
 (deftest a-placed-bed-is-set-with-a-click-facing-along-the-row
   (async done
