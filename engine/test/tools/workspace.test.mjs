@@ -85,7 +85,7 @@ test('all tool routing preserves arguments and binds shared tools without a body
     if (['plans', 'blueprints'].includes(command)) expected.push('--repo', path.resolve(repo))
     if (['map', 'world-changes'].includes(command)) expected.push('--repo-root', path.resolve(repo))
     if (command === 'world-changes') expected.push('--observer', 'B')
-    if (command === 'snapshot') expected.push('--workspace', f.workspace)
+    if (['snapshot', 'progress'].includes(command)) expected.push('--workspace', f.workspace)
     if (command === 'world') expected.push('--who', 'B')
     assert.deepEqual(tools.workspaceRoute(f.context, command, input), [...expected, ...input])
     for (const override of ['--world', '--worlds=/other', '--state', '--body=B', '--agent', '--repo', '--repo-root=/other', '--workspace=/other']) {
