@@ -196,7 +196,7 @@
   footprint does not make a chest anyone's. Honours the job's :ignore-zones? arg."
   [c action pos]
   (when pos
-    (let [v (may? c action pos)]
+    (let [v (may? (assoc (if (:primitives c) (rules-input c) c) :footprints {}) action pos)]
       (when (contains? #{:zone :claim} (:reason v))
         v))))
 

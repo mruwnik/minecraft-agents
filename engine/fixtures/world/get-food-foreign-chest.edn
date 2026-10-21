@@ -1,0 +1,25 @@
+;; Hungry with nothing carried, a chest of bread in another body's zone that the body knows (a :food-source note, or a stock it booked
+;; when it looked in): get-food never takes from it, even starving (docs: a chest in another's zone is skipped).
+;; Should-succeed: the control chest outside any zone is emptied of bread. Should-fail: the chest inside another's zone keeps all its bread.
+{:defaults
+ {:tags [:survival :get-food :zones]
+  :plot {:height 6 :floor "grass_block"}
+  :body {:at [10.5 0 16.5] :settle-s 2}
+  :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+        [:rcon "damage $BODY 5 minecraft:generic"]
+        [:job (jobs.survival.get-food {:explore false})]]
+  :limit-s 100}
+ :cases
+ [{:name "a-chest-in-anothers-zone-is-not-taken-from"
+   :zones [{:name "pantry" :min [20 -2 14] :max [24 4 18] :owner "Other"}]
+   :plans [{:id "pantry" :metadata {:by "Other"} :parts [{:id "chest" :cells [#at [22 0 16]] :want "chest"}]}]
+   :blocks [[:set [22 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:bread\",count:13}]}"]]
+   :memory [{:kind :food-source :data {:pos #xyz [22 0 16] :kind :chest}}
+            {:kind :fetch/stock :data {:pos [22 0 16] :items {"bread" 13}}}]
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 90 :of-job true}]
+   :after [[:item "bread" 0]]}
+  {:name "a-chest-outside-any-zone-is-taken-from"
+   :blocks [[:set [22 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:bread\",count:13}]}"]]
+   :memory [{:kind :food-source :data {:pos #xyz [22 0 16] :kind :chest}}]
+   :expect [{:event {:source :job :kind :food.took-from-chest} :within-s 80 :of-job true}]
+   :after [[:body-near [21.5 0 16.5] 4]]}]}

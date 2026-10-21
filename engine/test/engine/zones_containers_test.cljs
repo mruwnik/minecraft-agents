@@ -12,12 +12,12 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]))
 
-(defn setup [world zones]
+(defn setup [world zones & [plans]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor} world)))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
-                          :world (ew/of-data {} {} zones)
+                          :world (ew/of-data (or plans {}) {} zones)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen :clock clock}))
 
@@ -119,6 +119,19 @@
           (core/submit! eng '(jobs.survival.get-food) {})
           (await (run-until-empty eng 30))
           (is (= ["apple"] (mapv #(.-item (.-args %)) (calls p "transfer")))))))))
+
+(def pantry-plan {"pantry" {:id "pantry" :metadata {:by "Miles"} :parts [{:id "chest" :cells [[20 64 0]] :want "chest"}]}})
+
+(deftest a-chest-in-anothers-zone-and-plan-is-refused-the-plan-footprint-does-not-hide-the-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pantry {:name "pantry" :min [19 60 -1] :max [21 70 1] :owner "Miles"}
+              {:keys [eng p]} (setup {:self {:food 0} :containers two-chests} [pantry] pantry-plan)]
+          (mem/write! (:store eng) :fetch/stock {:pos [20 64 0] :items {"bread" 4}} {:cap 5 :ttl :forever})
+          (core/submit! eng '(jobs.survival.get-food) {})
+          (await (run-until-empty eng 30))
+          (is (empty? (calls p "transfer"))))))))
 
 ;; ------------------------------------------------------------------ smelt
 
