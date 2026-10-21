@@ -133,3 +133,15 @@
   (are [walk want] (= want (:torches (reach/walk-args {:quote-call {} :args {:pos [1 2 3] :range 1 :walk walk}} false)))
     {} :fetch
     {:torches :never} :never))
+
+(deftest a-body-in-a-mine-wider-than-a-room-stairs-up-to-a-surface-goal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [rock (box -30 0 -30 30 40 30 "stone")
+              mine (reduce dissoc rock (for [x (range -20 21) y (range 10 13) z (range -20 21)] (str x "," y "," z)))
+              {:keys [out p seen]} (await (run-job! {:self {:pos {:x -19.5 :y 10 :z 0.5}} :blocks mine :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                    'jobs.movement.reach
+                                                    {:pos [0 41 0] :range 1}))]
+          (is (true? (:arrived @out)) (pr-str @out (mapv (juxt :kind :text) @seen)))
+          (is (<= 40 (second (feet p)))))))))

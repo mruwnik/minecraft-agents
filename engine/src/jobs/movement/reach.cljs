@@ -18,6 +18,7 @@
             [jobs.lib.waits :as waits]
             [jobs.movement.go-to.column :as column]
             [jobs.movement.go-to.escalate-choose :as choose]
+            [jobs.movement.go-to.escalation :as escalation]
             [jobs.movement.go-to.holes :as holes]
             [jobs.movement.go-to.way-steps :as way-steps]))
 
@@ -29,7 +30,7 @@
   {:arrived true}. A walk that finds no way (nothing-possible with a planner :why that proves the world must change) prices the
   stair down and the bridge from where the body stands: when the cheaper of them is no dearer than go-to's own way it is
   built (jobs.access.stair :dir :down, jobs.access.bridge) and the next round walks on; else the whole go-to runs once with
-  all the :ways it allows and its ending is this job's. A span that changed nothing is not tried again; at most the
+  all the :ways it allows; when that finds no route either, the way go-to would make (jobs.lib.escape/choose: an approach to a wall, pillar, stair up, dug door) is built here, since go-to escalates only a body it finds shut in, and the ending is go-to's once none is left. A span that changed nothing is not tried again; at most the
   max-rounds setting of them are built. Other endings of the walk (a limit, a refused condition, a danger) pass up unchanged.
   :ways (default all) are go-to's plus :bridge; :stair covers the stair down. Every cell a span cuts or fills is checked
   against zones and plans (the cells go-to's :ignore-zones? lets through), natural blocks are cut only with :stair.
@@ -141,11 +142,29 @@
         (when (or (nil? real) (<= (priced best) (price p feet real)))
           best)))))
 
+(defn up-way
+  "go-to's own way (a pillar, stair up or dug door: escape/choose) from feet toward goal, as {:step :up :way e}; nil when
+  the call allows no such way or there is none. go-to escalates only a body it finds shut in, and a walk that ran out of
+  land in a mine larger than that room is none, so the way is built here."
+  [c feet goal skip]
+  (let [p (:primitives c)
+        may-dig? (holes/may-dig-fn c)
+        e (escape/choose p feet goal may-dig? {:own? (holes/own-placed-fn c) :skip (into skip (way-steps/barred-steps c)) :fetch? (choose/fetch-tool? p (:doors (:walk (:args c)))) :pillar-item (escape/pillar-item c)})]
+    (when (#{:pillar :stair :clear-path :approach} (:step e))
+      {:step :up :way e})))
+
+(defn set-up!
+  "Remember up (up-way) as the span to build."
+  [c up]
+  (ctx/emit! c :reach.span :info {:step (:step (:way up)) :up true :at (feet-of c) :text (str "no route on foot: " (name (:step (:way up))))})
+  (ctx/update-mem! c assoc :span up :from (feet-of c)))
+
 (defn span-job
   "[job args] of the child that builds span e."
   [{:keys [step] :as e} ignore-zones? fetch?]
   (let [ways-for (if fetch? #{:carried :chest :craft :gather} #{:carried})]
     (case step
+      :up (escalation/escalation-job (:way e) nil ignore-zones? false fetch?)
       :approach ['jobs.movement.go-to {:pos (zipmap [:x :y :z] (:pos e)) :range 0 :ways #{:walk} :checks {:fit? '(always)}}]
       :stair ['jobs.access.stair {:dir :down :heading (:heading e) :steps (:steps e) :checks {:fit? '(always)} :accept #{:falling-block}
                                   :ways ways-for :settings {:jobs.lib.trip/spent-uses 0} :ignore-zones? ignore-zones? :need-drop true}]
@@ -154,8 +173,10 @@
 
 (defn skip-key
   "What a span that changed nothing rules out: a stair only its heading, a bridge itself."
-  [{:keys [step heading]}]
-  (if (= :stair step) [:stair heading] step))
+  [{:keys [step heading way]}]
+  (cond (= :up step) (escalation/skip-key way)
+        (= :stair step) [:stair heading]
+        :else step))
 
 (defn walk-args
   "The go-to call of a round: the :walk map with the goal and ways (walk-only unless all? and then the call's, :bridge left out).
@@ -218,8 +239,8 @@
 
 (defn ^:async build-span!
   "One call of the span in memory (:span): :continue while its child waits; else the span is over. One that changed
-  nothing is skipped from now on; an approach that moved the body is followed by the next span without a walk first
-  (a walk would take the body back to the nearest point)."
+  nothing is skipped from now on; an approach that moved the body, or a way up that stopped part-way or leaves it shut in under the goal, is followed by the next span without a walk first
+  (a walk would take the body back to the nearest point or down its stair)."
   [c]
   (let [{:keys [span from built]} (ctx/mem c)
         [job args] (span-job span (boolean (:ignore-zones? (:args c))) (choose/fetch-tool? (:primitives c) (:doors (:walk (:args c)))))
@@ -228,7 +249,14 @@
     (when-not (= :continue r)
       (ctx/update-mem! c #(cond-> (-> % (dissoc :span :from) (update :built (fnil inc 0)))
                             (not moved?) (update :skip (fnil conj #{}) (skip-key span))
-                            (and moved? (= :approach (:step span))) (assoc :direct true))))
+                            (and moved? (= :approach (:step span))) (assoc :direct true)))
+      (when-let [up (when (and moved? (= :up (:step span)) (< (:built (ctx/mem c) 0) (settings/get settings ::max-rounds)))
+                      (let [approach? (= :approach (:step (:way span)))
+                            failed? (not= :done (:kind r))]
+                        (when (or approach? failed? (choose/climb-on? c (goal-of c)))
+                          (up-way c (feet-of c) (mapv #(js/Math.floor %) ((juxt :x :y :z) (goal-of c)))
+                                  (cond-> (:skip (ctx/mem c) #{}) approach? (conj :approach) failed? (conj (skip-key span)))))))]
+        (set-up! c up)))
     r))
 
 (defn ^:async round
@@ -237,8 +265,14 @@
     (let [m (ctx/mem c)
           stepped (cond
                     (:span m) (await (build-span! c))
-                    (or (:full m) (nil? (goal-of c))) (let [e (await (child/call-walk* c :full (walk-args c true)))]
-                                (if (= :continue e) :continue (forward c e)))
+                    (or (:full m) (nil? (goal-of c))) (let [e (await (child/call-walk* c :full (walk-args c true)))
+                                                           m (ctx/mem c)
+                                                           up (when (and (no-way? e) (goal-of c) (< (:built m 0) (settings/get settings ::max-rounds)))
+                                                                (up-way c (feet-of c) (mapv #(js/Math.floor %) ((juxt :x :y :z) (goal-of c))) (:skip m #{})))]
+                                                       (cond
+                                                         (= :continue e) :continue
+                                                         up (do (set-up! c up) ::next)
+                                                         :else (forward c e)))
                     (:direct m) (do (ctx/update-mem! c dissoc :direct) (await (pick! c (:last-walk m))))
                     :else
                     (let [e (await (child/call-walk* c (keyword (str "walk-" (:built m 0))) (walk-args c false)))]
