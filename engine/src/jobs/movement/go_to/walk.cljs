@@ -314,11 +314,11 @@
       (surface-descent-s))))
 
 (defn second-surfacing-in-air?
-  "Whether a swim to air has just brought the body, head out, back to the air it breathed last in this call (mem :last-air)
-  a second time: the dive from there does not fit its air, so another try would repeat it (go-to escalates instead)."
+  "Whether a swim to air has just brought the body, head out, back to the air it started the dive from (mem :last-air):
+  the dive from there did not fit its air, so another try would repeat it (go-to escalates instead)."
   [c]
   (let [{:keys [surfacings last-air]} (ctx/mem c)]
-    (boolean (and (>= (or surfacings 0) 2) last-air (not (breath/head-under? (:primitives c)))
+    (boolean (and (>= (or surfacings 0) 1) last-air (not (breath/head-under? (:primitives c)))
                   (<= (u/dist (u/self-pos c) last-air) 2)))))
 
 (defn ^:async land-at-air!
@@ -328,7 +328,7 @@
   (let [last-air (:last-air (ctx/mem c))]
     (when (and last-air (breath/in-water? (:primitives c)) (not (breath/head-under? (:primitives c)))
                (<= (u/dist (u/self-pos c) last-air) 3))
-      (await (near/walk-round! c (zipmap [:x :y :z] (mapv #(js/Math.floor (% last-air)) [:x :y :z])) 0 (dissoc opts :progress))))))
+      (await (near/walk-round! (assoc c :to-air true) (zipmap [:x :y :z] (mapv #(js/Math.floor (% last-air)) [:x :y :z])) 0 (dissoc opts :progress))))))
 
 (defn ^:async walk! [c0 pos range doors]
   (let [way (own-way c0 pos (dive-floor! c0 pos))
@@ -440,7 +440,7 @@
 
           surveyed? :again
 
-          (and surfaced? (second-surfacing-in-air? c))
+          (and (or surfaced? (= :air (:reason walked))) (ways/way? c :stair) (not (:stair-tried (ctx/mem c))) (second-surfacing-in-air? c))
           (do (await (land-at-air! c opts))
               (when-not (breath/in-water? (:primitives c))
                 (ctx/update-mem! c assoc :escalate-now true :stair-tried true))

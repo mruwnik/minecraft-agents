@@ -139,7 +139,7 @@
         (counted)
         (ctx/emit! c :go-to.surfacing :info {:at target :text (str why ": swimming up to " [(:x target) (:y target) (:z target)] " first")})
         (loop [n 0]
-          (let [{:keys [status]} (await (near/walk-round! c target 0 walk-opts))]
+          (let [{:keys [status]} (await (near/walk-round! (assoc c :to-air true) target 0 walk-opts))]
             (if (and (= "searching" status) (< n max-search-rounds) (breath/head-under? p))
               (recur (inc n))
               (contains? #{"arrived" "partial" "searching"} status))))))))

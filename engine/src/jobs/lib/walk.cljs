@@ -371,6 +371,10 @@
            j (if (and u o) (min u o) (or u o))
            rebase (fn [d] (cond-> d (:step d) (update :step + base)))]
        (cond
+         (and (or (pos? base) (seq looked)) (wplan/swim-outlasts-air? c steps))
+         (let [pos (.-pos (.self p))]
+           [(rebase {:status :replan :why :air :at [(.-x pos) (.-y pos) (.-z pos)] :step 0}) ms])
+
          (and (= 1 j) (= 1 u)) (let [r (await (look-ahead! c steps))]
                                  (if-let [end (:end r)]
                                    [(rebase end) ms]

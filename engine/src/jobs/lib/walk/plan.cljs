@@ -231,17 +231,17 @@
 (def max-surfacings "Walks to air one go-to call makes at most." 3)
 
 (defn swim-outlasts-air?
-  "Whether a body under water that has been in air since this go-to call began (mem :last-air) and has surfaced less than
+  "Whether a body under water (not on a walk to air: c :to-air) that has been in air since this go-to call began (mem :last-air) and has surfaced less than
   max-surfacings times should turn back: it is past the half of its air masked-wet-limit-s allows, and either the steps'
-  swim, at the planner's own price per cell, takes more than the air left, or the plan surfaces at a cell whose air it has
+  swim, at masked-swim-pace-s a cell (it stops to look), takes more than the air left, or the plan surfaces at a cell whose air it has
   not seen (an unseen head cell reads as air to the planner; a player does not swim on for a guess)."
   [c steps]
   (when-some [used (:air-used (wworld/body-policy c))]
     (let [m (ctx/mem c)
           left (- (unchecked-get base/DEFAULT-COSTS "airSupply") used)
           exit (first (remove :swim steps))]
-      (and (:last-air m) (< (:surfacings m 0) max-surfacings) (< left masked-wet-limit-s)
-           (or (> (* (count (filter :swim steps)) (unchecked-get base/DEFAULT-COSTS "swimSubH")) left)
+      (and (:last-air m) (not (:to-air c)) (< (:surfacings m 0) max-surfacings) (< left masked-wet-limit-s)
+           (or (> (* (count (filter :swim steps)) masked-swim-pace-s) left)
                (and exit (not (breath/air? (breath/seen-water-name (:primitives c) {:x (:x exit) :y (inc (:y exit)) :z (:z exit)})))))))))
 
 (defn masked-cut
