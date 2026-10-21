@@ -296,6 +296,15 @@
           (await (f/run-ticks s 200))
           (is (= 1 (get (f/inv s) "charcoal")) "the cook finished and its output was collected"))))))
 
+(deftest a-charcoal-smelt-of-the-only-logs-carried-burns-some-of-them
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (ore-world {"1,64,2" "furnace"} [{:name "spruce_log" :count 3}]) [f/own-zone])]
+          (await (obtain! s {:item "charcoal" :ways #{:craft :smelt :gather}} 6))
+          (is (empty? (f/events-of s :obtain.exploring)) "no walk to look for oak")
+          (is (= ["spruce_log"] (keep :fuel (f/events-of s :smelt.loaded))) "the carried logs burn"))))))
+
 (deftest nuggets-carried-are-combined-into-an-ingot-with-ways-given
   (async done
     (tu/run-async done

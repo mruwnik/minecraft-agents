@@ -24,12 +24,16 @@
     (or (:count (:args c)) (max 1 have))))
 
 (defn fuel-capacity
-  "How many items the carried fuel (only :fuel when given) would smelt."
-  [c item]
+  "How many items the carried fuel (only :fuel when given) would smelt, with a wood input's spare logs burnt as fuel
+  beyond the n to smelt."
+  [c item n]
   (let [{:keys [fuel]} (:args c)]
-    (transduce (comp (filter #(and (not= item (:name %)) (or (nil? fuel) (= fuel (:name %)))))
-                     (keep #(some-> (fuel/fuel-per-unit "furnace" (:name %)) (* (:count %)))))
-               + 0 (carried c))))
+    (+ (transduce (comp (filter #(and (not= item (:name %)) (or (nil? fuel) (= fuel (:name %)))))
+                        (keep #(some-> (fuel/fuel-per-unit "furnace" (:name %)) (* (:count %)))))
+                  + 0 (carried c))
+       (if (fuel/wood-fuel? item)
+         (* (fuel/fuel-per-unit "furnace" item) (max 0 (- (storage/carried (carried c) item) n)))
+         0))))
 
 (defn stage-problem
   "The :need wait of the fetch stage in memory (:input or :fuel) while it is unmet, else nil."
@@ -43,7 +47,7 @@
         (:fuel :wood-fuel)
         (let [fuel (:fuel (:args c))
               names (cond fuel [fuel] (= :fuel (:fetch-stage (ctx/mem c))) fuels :else wood-fuels)
-              short (- n (fuel-capacity c item))
+              short (- n (fuel-capacity c item n))
               need (js/Math.ceil (/ short (fuel/fuel-per-unit "furnace" (first names))))]
           (when (and (pos? short) (not (and fuel (= :wood-fuel (:fetch-stage (ctx/mem c))))))
             (if fuel

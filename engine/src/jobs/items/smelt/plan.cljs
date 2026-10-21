@@ -92,6 +92,17 @@
               {:fuel best}
               {:give-up "no-fuel"}))))
 
+(defn self-fuel
+  "A wood input burns as its own fuel when nothing else does: the most of n more items that the carried spare logs
+  cook with some of them burnt, as {:count :fuel {:item :count}}, else nil."
+  [{:keys [kind item] :as m} n e existing]
+  (let [per (fuel/fuel-per-unit kind item)
+        have (spare m item)
+        units-for (fn [k] (js/Math.ceil (/ (max 0 (- (+ e k) existing)) per)))
+        k (first (filter #(<= (+ % (units-for %)) have) (range n 0 -1)))]
+    (when (and per k (fuel/wood-fuel? item))
+      {:count k :fuel {:item item :count (units-for k)}})))
+
 (defn fuel-plan
   "Fuel for n more items on top of e already in the slot. {:count n :fuel {:item :count}|nil}, with n cut to what
   the fuel covers (n 0 is a load already made that only needs its fire fed), or {:give-up reason}."
@@ -105,6 +116,7 @@
             slot (:fuel state)]
         (cond
           (and (:give-up picked) (> existing e)) {:count (min n (- existing e)) :fuel nil}
+          (and (= "no-fuel" (:give-up picked)) (self-fuel m n e existing)) (self-fuel m n e existing)
           (:give-up picked) picked
           (and slot (not= (:name slot) name)) {:give-up "fuel-busy"}
           :else (let [per (fuel/fuel-per-unit kind name)

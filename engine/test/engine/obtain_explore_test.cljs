@@ -136,6 +136,18 @@
           (is (seq (f/events-of s :obtain.exploring)))
           (is (every? #(< 1 (count (:for %))) (f/events-of s :obtain.exploring)) "searches for logs of every species, not oak alone"))))))
 
+(deftest searches-that-keep-running-out-of-time-still-end-the-gather
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (ore-world {} []) [f/own-zone])
+              short {:jobs.items.obtain.base/explore {:max-distance 16 :max-legs 2 :spend {:job-time 0.01}}
+                     :jobs.items.obtain.base/explore-far {:max-distance 32 :max-legs 2 :spend {:job-time 0.01}}
+                     :jobs.items.obtain.base/explore-rounds 2}]
+          (await (settings/with-settings short #(obtain! s {:any-of ["oak_log"] :count 1 :ways #{:gather} :explore true} 400)))
+          (is (<= 2 (count (f/events-of s :obtain.exploring)) 10) "a bounded number of searches")
+          (is (= :no-source (:reason (first (f/events-of s :stopped))))))))))
+
 (deftest water-out-of-sight-is-explored-for-and-the-bucket-filled
   (async done
     (tu/run-async done

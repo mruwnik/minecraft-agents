@@ -23,7 +23,7 @@
   yield (:continue) until the cook is due, take the output. :item may be a list, and then
   every one is cooked: one child smelt per item, each with the same :count (data {:smelted n :wanted n :items {item result}},
   :failed the items that gave up). What is owed is kept in memory before the load, so a restart loads nothing twice.
-  Needs: the input, the fuel (the :fuel item, else coal, charcoal or planks, sized by what one item smelts) and a furnace. With fetching ways
+  Needs: the input, the fuel (the :fuel item, else coal, charcoal or planks, sized by what one item smelts; a wood input with no other fuel burns some of itself) and a furnace. With fetching ways
   (the call's :ways minus :carried, default all; jobs.lib.need) a furnace comes first (a seen one, a carried one put down, else one fetched), then what else is
   missing is fetched by obtain children; the fetch's ending is the :because. :ways #{:carried} skips it.
   can-start?: never :not-smeltable for an item no furnace cooks. can-start? and can-run?: later :refused {:zones :claims} while a zone

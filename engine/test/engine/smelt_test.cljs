@@ -83,6 +83,14 @@
     {:carried (inv "raw_iron" 3 "stick" 8 "oak_planks" 4) :item "raw_iron" :count 3}
     {:item "raw_iron" :count 3 :fuel {:item "oak_planks" :count 2}}))
 
+(deftest logs-with-no-other-fuel-burn-as-their-own-fuel
+  (are [m expected] (= expected (plan m))
+    {:carried (inv "spruce_log" 5) :item "spruce_log" :count 4}
+    {:item "spruce_log" :count 3 :fuel {:item "spruce_log" :count 2}}
+
+    {:carried (inv "spruce_log" 5) :item "spruce_log" :count 4 :fuel "spruce_planks"}
+    {:item "spruce_log" :count 3 :fuel {:item "spruce_log" :count 2}}))
+
 (deftest a-quick-kind-is-not-over-fuelled
   (are [kind item expected] (= expected (plan {:carried (inv item 20 "coal" 3) :item item :count 20 :state (assoc empty-furnace :kind kind)}))
     "blast_furnace" "raw_iron" {:item "raw_iron" :count 20 :fuel {:item "coal" :count 3}}
@@ -108,7 +116,7 @@
     {:carried (inv "raw_iron" 3 "coal" 3) :item "raw_iron" :state (assoc empty-furnace :kind "smoker")} "not-smeltable"
     {:carried (inv "raw_iron" 3) :item "raw_iron"} "no-fuel"
     {:carried (inv "raw_iron" 3 "dirt" 1) :item "raw_iron" :fuel "coal"} "no-fuel"
-    {:carried (inv "raw_iron" 3 "oak_log" 5) :item "oak_log" :count 3} "no-fuel"
+    {:carried (inv "raw_iron" 3 "oak_log" 1) :item "oak_log" :count 1} "no-fuel"
     {:carried (inv "raw_iron" 3 "coal" 3) :item "raw_iron" :state (assoc empty-furnace :input {:name "beef" :count 2})} "furnace-busy"
     {:carried (inv "raw_iron" 3 "coal" 3) :item "raw_iron" :state (assoc empty-furnace :input {:name "raw_iron" :count 64})} "furnace-full"
     {:carried (inv "raw_iron" 3 "coal" 3) :item "raw_iron" :state (assoc empty-furnace :fuel {:name "oak_planks" :count 1})} "fuel-busy"

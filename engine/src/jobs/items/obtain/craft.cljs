@@ -3,10 +3,12 @@
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.items.craft :as craft]
-            [jobs.items.obtain.base :refer [carried-of child-ways tried!]]
+            [jobs.items.obtain.base :refer [carried-of child-ways seen-radius tried!]]
             [jobs.items.obtain.plan :refer [craft-plan]]
             [jobs.items.smelt :as smelt]
             [jobs.lib.child :as child]
+            [jobs.lib.look :as look]
+            [jobs.lib.trees :as trees]
             [jobs.lib.util :as u]
             [jobs.lib.need :as need]
             [jobs.lib.waits :as waits]))
@@ -25,10 +27,16 @@
     (contract/cause-key e)))
 
 (defn wood-fuel
-  "The planks kind to burn: the first of the smelt's wood fuels carried, else the first."
-  [inv]
-  (let [fuels (smelt/fetch-wood-fuels)]
-    (or (first (filter #(pos? (carried-of inv [%])) fuels)) (first fuels))))
+  "The planks kind to burn: a smelt wood fuel carried, else that of a log species carried, else of the nearest log
+  seen, else the first. A kind whose logs are at hand is not searched for far away."
+  [c]
+  (let [p (:primitives c)
+        inv (u/inventory p)
+        fuels (smelt/fetch-wood-fuels)
+        of-log (fn [n] (let [f (str (trees/species-of n) "_planks")] (when (some #{f} fuels) f)))
+        carried-log (some #(when (and (trees/log-name? (:name %)) (pos? (:count %))) (of-log (:name %))) inv)
+        seen-log (some-> (look/seen-blocks p {:names trees/log-names :radius (seen-radius) :max 1}) first :name of-log)]
+    (or (first (filter #(pos? (carried-of inv [%])) fuels)) carried-log seen-log (first fuels))))
 
 (defn ^:async smelt-step!
   "Run a smelt step of the plan as a jobs.items.smelt child (it fetches its own fuel and furnace) until it ends.
@@ -38,7 +46,7 @@
   (ctx/update-mem! c assoc-in [:craft :step] step)
   (let [e (waits/waiting-out c (await (ctx/call c :smelt 'jobs.items.smelt
                            (cond-> {:item (:item step) :count (:count step) :ways (child-ways c) :explore (boolean (:explore (:args c)))}
-                             (= "charcoal" (:item step)) (assoc :fuel (wood-fuel (u/inventory (:primitives c))))))))]
+                             (= "charcoal" (:item step)) (assoc :fuel (wood-fuel c))))))]
     (if (= :continue e)
       :continue
       (do (ctx/update-mem! c update :craft dissoc :step)

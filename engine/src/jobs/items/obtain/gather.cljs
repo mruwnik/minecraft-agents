@@ -141,6 +141,8 @@
       :continue
       (do (ctx/update-mem! c update :gather dissoc :lead) :again))))
 
+(def max-search-timeouts 3)
+
 (def heading-ring [:north :north-east :east :south-east :south :south-west :west :north-west])
 
 (defn far-heading
@@ -186,8 +188,12 @@
     (if (= :continue e)
       :continue
       (let [res (:data e)
-            out-of-time? (boolean (some #(= :limit-reached (:kind %)) (take-while some? (iterate :because e))))
+            timed-out? (boolean (some #(= :limit-reached (:kind %)) (take-while some? (iterate :because e))))
+            timeouts (if timed-out? (inc (get-in (ctx/mem c) [:explore-timeouts (:key need)] 0)) 0)
+            ;; a search that ran out of its own time is not counted, unless that keeps happening
+            out-of-time? (and timed-out? (<= timeouts max-search-timeouts))
             k (cond-> (get-in (ctx/mem c) [:explored (:key need)] 0) (not out-of-time?) inc)]
+        (ctx/update-mem! c assoc-in [:explore-timeouts (:key need)] (if out-of-time? timeouts 0))
         (ctx/update-mem! c assoc-in [:explored (:key need)] k)
         (ctx/update-mem! c update :gather update :unreachable dissoc (:key need))
         (let [found? (= :found (:reason res))
