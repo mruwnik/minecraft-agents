@@ -18,10 +18,10 @@
 (def eye-height 1.62)
 
 (defn state-at-pos
-  "The state id of the fake's block at pos: its name's default state, with the :states props the planner reads."
+  "The state id of the fake's block at pos: its name's default state, with the :states props the planner reads and a crop's :age."
   [w pos]
   (let [name (get (:blocks w) pos "air")
-        props (doors/path-props w pos)]
+        props (merge (doors/path-props w pos) (select-keys (get-in w [:states pos]) [:age]))]
     (if (empty? props) (state-of name) (fx/state-id name props))))
 
 (defn state-at-slow [w x y z]

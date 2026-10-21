@@ -127,6 +127,16 @@
     (fake/set-block! p [0 65 -4] "iron_block")
     (is (= ["iron_block" "gold_block"] (mapv #(seen-name per %) [[0 65 4] [0 65 -4]])))))
 
+(deftest a-crops-age-ten-blocks-away-is-re-read-when-it-grows-in-view
+  (let [pos [0 65 10]
+        {:keys [p per]} (rig {"0,64,10" "farmland" "0,65,10" "wheat"})]
+    (swap! (fake/state p) assoc-in [:states pos] {:age 6})
+    (perception/start-listening! per)
+    (perception/pass! per)
+    (swap! (fake/state p) assoc-in [:states pos] {:age 7})
+    (perception/pass! per)
+    (is (= "7" (get-in (perception/seen-block per pos) [:properties :age])))))
+
 (deftest a-change-behind-a-wall-is-not-seen
   (let [{:keys [p per]} (rig (assoc (wall 3 3 [] {}) "0,65,6" "gold_block"))]
     (perception/start-listening! per)

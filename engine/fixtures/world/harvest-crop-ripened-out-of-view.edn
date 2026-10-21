@@ -1,0 +1,19 @@
+;; Wheat the body saw at age 6, 10 blocks off, ripens (age 7) while it looks away; once it faces the field again the memory is the true age,
+;; so a harvest cuts it. A player who turns back sees the ripe crop.
+;; Wheat [20 0 16] on farmland (water beside), body at [10.5 0 16.5] looking east.
+{:defaults
+ {:tags [:farm :harvest :sensing :jobs]
+  :time :any
+  :plot {:height 8}
+  :blocks [[:set [20 -1 16] "farmland[moisture=7]"] [:set [20 -1 17] "water"] [:set [20 0 16] "wheat[age=6]"]]
+  :body {:at [10.5 0 16.5] :yaw 270 :effects [["resistance" 600 4]] :settle-s 3}
+  :limit-s 90}
+ :cases
+ [{:name "wheat-ripened-while-looking-away-is-cut-after-looking-back"
+   :act [[:wait-s 4]
+         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"] [:until-rcon "data get entity $BODY Rotation[0]" "data: 90\\b" 10]
+         [:rcon "execute positioned $X $Y $Z run setblock ~20 ~ ~16 wheat[age=7]"] [:wait-s 1]
+         [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:until-facing {:yaw 270} 10] [:wait-s 4]
+         [:job (jobs.farm.harvest {:area {:pos #xyz [20 0 16] :radius 3} :replant false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:cut 1}} :within-s 70 :of-job true}]
+   :after [[:block [20 0 16] "air"]]}]}
