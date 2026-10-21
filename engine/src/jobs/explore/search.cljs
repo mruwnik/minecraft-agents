@@ -15,6 +15,7 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.child :as child]
             [jobs.lib.food-animals :as food-animals]
+            [jobs.lib.job-common :as jc]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.surface-up :as surface-up]
             [jobs.lib.look :as look]
@@ -591,7 +592,7 @@
       (finish! c :found nil)
       (await (advance! c names ns)))))
 
-(defn ^:async search-step!
+(defn ^:async search-leg!
   "One pass: end, walk the leg under way, or look and start the next leg. :again goes on, else a round result."
   [c]
   (ctx/update-mem! c (fn [m] (cond-> m (nil? (:origin m)) (assoc :origin (or (some-> (area/center c) cell-of) (here c))))))
@@ -599,6 +600,29 @@
     (:leg (ctx/mem c)) (await (walk! c))
     (:patch (:args c)) (await (patch-round! c))
     :else (await (step! c))))
+
+(defn ^:async walk-to-center!
+  "Before the search has an origin, a :center beyond the max-distance setting from the body is walked to first: :there,
+  :continue, or the :area-unreachable ending. nil when there is nothing to walk."
+  [c]
+  (let [at (area/center c)]
+    (when (and at (nil? (:origin (ctx/mem c))) (> (u/flat-dist (u/self-pos c) at) (distance-limit)))
+      (let [w (await (jc/walk-to! c at 3))]
+        (if (#{:there :continue} w)
+          w
+          (ctx/end c :nothing-possible :area-unreachable
+                   {:reason :area-unreachable :center at
+                    :text (str "could not walk to the search centre " (pr-str at))}))))))
+
+(defn ^:async search-step!
+  "One pass: end, walk the leg under way, or look and start the next leg. :again goes on, else a round result."
+  [c]
+  (let [w (await (walk-to-center! c))]
+    (cond
+      (= :there w) :again
+      (= :continue w) :continue
+      w w
+      :else (await (search-leg! c)))))
 
 (defn ^:async round [c]
   (await (pace/steps! c #(search-step! c))))

@@ -104,4 +104,13 @@
          [:job (jobs.explore.search {:target ["cow" "pig" "sheep" "chicken"] :count 1 :scan-radius 32 :use-notes false :spend {:job-time 150}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 160 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 160 :of-job true :until {:source :job :kind :completed}}]
-   :limit-s 170}]}
+   :limit-s 170}
+  ;; card df469cc1: a :center beyond the max-distance setting from the body is walked to, then searched round (it used to end :distance
+  ;; at once, 0 legs). Emerald 2 east of a centre 42 east of the body, distance bound 20. Should-succeed: found.
+  {:name "far-center-is-walked-to-and-searched"
+   :blocks [[:set [54 0 16] "emerald_block"]]
+   :act [[:job (jobs.explore.search {:target "emerald_block" :center #at [52 0 16] :scan-radius 8
+                                     :use-notes false :settings {:jobs.explore.search/max-distance 20} :spend {:job-time 120}})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 130 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 130 :of-job true :until {:source :job :kind :completed}}]
+   :limit-s 140}]}

@@ -585,6 +585,15 @@
           (is (seq (walks centred)))
           (is (not= (walks own) (walks centred)) "the legs are laid out from the centre, not from the body"))))))
 
+(deftest a-center-beyond-the-distance-from-the-body-is-walked-to-and-searched-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (search! {:target "diamond_block" :max-distance 40 :center [90 64 0]}
+                                {:blocks (merge (tu/box 40 63 -30 130 63 30 "grass_block") {"96,64,2" "diamond_block"})}))]
+          (is (= nil (not-found-of s)))
+          (is (= [{:what "diamond_block" :pos [96 64 2]}] (:found (found-of s)))))))))
+
 (deftest an-unknown-pattern-or-heading-is-refused-at-submit
   (is (re-find #":pattern must be one of :outward, :spiral, got :zigzag"
                (expr/problem registry/jobs '(jobs.explore.search {:target "diamond_block" :pattern :zigzag}))))
