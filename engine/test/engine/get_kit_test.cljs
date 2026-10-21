@@ -172,6 +172,19 @@
           (await (f/run-ticks s 60))
           (is (= {:status :stopped :reason :no-source} (select-keys @(:out s) [:status :reason]))))))))
 
+(deftest a-fresh-pickaxe-is-made-beside-a-worn-one-and-the-worn-one-keeps-its-own-stack
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (world [{:name "iron_pickaxe" :count 1 :durability 1 :max-durability 250}
+                               {:name "iron_ingot" :count 3} {:name "stick" :count 2}] {})
+                       {:items ["iron_pickaxe"] :explore false :food false})]
+          (await (f/run-ticks s 60))
+          (is (= :done (:status @(:out s))))
+          (is (= #{{:count 1 :durability 1} {:count 1 :durability nil}}
+                 (->> (:inventory @(fake/state (:p s))) (filter #(= "iron_pickaxe" (:name %)))
+                      (map #(merge {:durability nil} (select-keys % [:count :durability]))) set))))))))
+
 (defn hungry-world [inv food]
   (assoc-in (world inv {}) [:self :food] food))
 

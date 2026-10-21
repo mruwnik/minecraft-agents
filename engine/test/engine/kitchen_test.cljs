@@ -42,7 +42,7 @@
 
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
-(defn inv [{:keys [p]}] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
+(defn inv [{:keys [p]}] (reduce (fn [m i] (update m (.-name i) (fnil + 0) (.-count i))) {} (.-inventory (.self p))))
 (defn chest-items [{:keys [p]}] (into {} (map (juxt :name :count)) (get-in @(fake/state p) [:containers [10 64 0]])))
 
 (def args {:furnace furnace :chest chest :reserve {} :stock {"bread" 1 "cooked_beef" 8 "cooked_chicken" 8}})

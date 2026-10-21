@@ -21,7 +21,7 @@
 (defn block-at [p x y z] (some-> (.blockAt p #js {:x x :y y :z z}) (.-name)))
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 (defn dug [p] (set (map #(let [pos (.-pos (.-args %))] [(.-x pos) (.-y pos) (.-z pos)]) (calls p "dig"))))
-(defn inv [p] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
+(defn inv [p] (reduce (fn [m i] (update m (.-name i) (fnil + 0) (.-count i))) {} (.-inventory (.self p))))
 (defn of-kind [seen kind] (filterv #(= kind (:kind %)) @seen))
 
 (defn start

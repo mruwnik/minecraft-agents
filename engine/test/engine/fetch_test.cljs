@@ -50,7 +50,7 @@
 
 (defn calls [{:keys [p]} name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
-(defn inv [{:keys [p]}] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
+(defn inv [{:keys [p]}] (reduce (fn [m i] (update m (.-name i) (fnil + 0) (.-count i))) {} (.-inventory (.self p))))
 (defn block-at [{:keys [p]} x y z] (some-> (.blockAt p (tu/pos x y z)) .-name))
 (defn chest-items [{:keys [p]} pos] (get-in @(fake/state p) [:containers pos]))
 (defn listed [{:keys [eng]}] (:list (core/state eng)))

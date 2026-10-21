@@ -22,7 +22,7 @@
     {:eng eng :p p :seen seen :clock clock}))
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
-(defn inv [p] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
+(defn inv [p] (reduce (fn [m i] (update m (.-name i) (fnil + 0) (.-count i))) {} (.-inventory (.self p))))
 (defn events-of [seen kind] (filterv #(= kind (:kind %)) @seen))
 
 (def chest {:x 10 :y 64 :z 0})

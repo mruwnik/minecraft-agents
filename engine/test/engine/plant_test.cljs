@@ -49,7 +49,7 @@
           (recur (inc i))))))
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
-(defn inv-of [p] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
+(defn inv-of [p] (reduce (fn [m i] (update m (.-name i) (fnil + 0) (.-count i))) {} (.-inventory (.self p))))
 (defn block-at [p x y z] (some-> (.blockAt p #js {:x x :y y :z z}) (.-name)))
 (defn age-at [p x y z] (some-> (.blockAt p #js {:x x :y y :z z}) (.-age)))
 (defn events-of [seen kind] (filterv #(= kind (:kind %)) @seen))

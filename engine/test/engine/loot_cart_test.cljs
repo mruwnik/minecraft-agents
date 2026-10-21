@@ -21,7 +21,7 @@
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
     {:eng eng :p p :seen seen :clock clock})))
 
-(defn inv [p] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
+(defn inv [p] (reduce (fn [m i] (update m (.-name i) (fnil + 0) (.-count i))) {} (.-inventory (.self p))))
 (defn cart-ids [p] (set (map :id (filter #(= "chest_minecart" (:name %)) (fake/entities p)))))
 
 (defn cart

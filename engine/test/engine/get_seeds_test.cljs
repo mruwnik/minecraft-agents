@@ -43,7 +43,7 @@
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
 (defn done-event "The root ending's event." [{:keys [seen]}] (first (filter #(#{:completed :stopped} (:kind %)) @seen)))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
-(defn inv [{:keys [p]}] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
+(defn inv [{:keys [p]}] (reduce (fn [m i] (update m (.-name i) (fnil + 0) (.-count i))) {} (.-inventory (.self p))))
 (defn job-mem [{:keys [eng]}] (core/job-memory eng "j1"))
 (defn ending-of
   "{:kind :completed|:stopped :reason cause} of the job's end event."

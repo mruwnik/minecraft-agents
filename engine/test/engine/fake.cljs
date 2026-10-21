@@ -240,11 +240,19 @@
 
 ;; ---- item lists
 
+(def stack-sizes (delay (let [by-name (.-itemsByName (minecraft-data game/default-version))] #(or (some-> (aget by-name %) .-stackSize) 64))))
+
 (defn add-to
-  "Items with count of name added to the first stack of it (or a new one; a tool with a durability does not stack)."
+  "Items with n of item added: first to the stacks of it with room, then to new stacks (tools never stack)."
   [items item n]
-  (let [i (first (keep-indexed #(when (and (= item (:name %2)) (not (:durability %2))) %1) items))]
-    (if i (update-in items [i :count] + n) (conj items {:name item :count n}))))
+  (let [size (@stack-sizes item)
+        fill (fn [items i n] (let [room (- size (:count (items i)))
+                                   put (min room n)]
+                               [(update-in items [i :count] + put) (- n put)]))
+        [items n] (reduce (fn [[items n] i] (if (pos? n) (fill items i n) (reduced [items 0])))
+                          [items n]
+                          (keep-indexed #(when (and (= item (:name %2)) (< (:count %2) size)) %1) items))]
+    (into items (map (fn [c] {:name item :count c}) (concat (repeat (quot n size) size) (when (pos? (rem n size)) [(rem n size)]))))))
 
 (defn take-from
   "[items' taken]: up to n of item out of the first stack of it; an emptied stack goes."

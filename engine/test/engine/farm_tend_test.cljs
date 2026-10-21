@@ -70,7 +70,7 @@
 (defn done-events [s] (filterv #(#{:completed :stopped} (:kind %)) @(:seen s)))
 (defn done-event [s] (first (done-events s)))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
-(defn inv [{:keys [p]}] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
+(defn inv [{:keys [p]}] (reduce (fn [m i] (update m (.-name i) (fnil + 0) (.-count i))) {} (.-inventory (.self p))))
 (defn block-at [{:keys [p]} x y z] (some-> (.blockAt p #js {:x x :y y :z z}) (.-name)))
 (defn age-at [{:keys [p]} x y z] (some-> (.blockAt p #js {:x x :y y :z z}) (.-age)))
 (defn xz-of [call] (let [pos (.-pos (.-args call))] [(.-x pos) (.-z pos)]))

@@ -37,7 +37,7 @@
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 (defn entities [p] (fake/entities p))
-(defn inv [p] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
+(defn inv [p] (reduce (fn [m i] (update m (.-name i) (fnil + 0) (.-count i))) {} (.-inventory (.self p))))
 (defn has-event? [{:keys [seen]} kind] (boolean (some #(= kind (:kind %)) @seen)))
 
 (defn take-drops!

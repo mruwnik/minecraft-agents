@@ -41,7 +41,7 @@
   [{:keys [seen]}]
   (first (filter #(and (= :job (:source %)) (#{:completed :stopped} (:kind %))) @seen)))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
-(defn inv [{:keys [p]}] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
+(defn inv [{:keys [p]}] (reduce (fn [m i] (update m (.-name i) (fnil + 0) (.-count i))) {} (.-inventory (.self p))))
 (defn world-ids [{:keys [p]}] (set (map :id (fake/entities p))))
 
 (defn rounds [{:keys [seen]}] (count (filter #(= :round_started (:kind %)) @seen)))

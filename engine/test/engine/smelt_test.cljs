@@ -204,7 +204,7 @@
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 (defn ops [p] (mapv #(.-op (.-args %)) (calls p "furnace")))
-(defn inv-of [p] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
+(defn inv-of [p] (reduce (fn [m i] (update m (.-name i) (fnil + 0) (.-count i))) {} (.-inventory (.self p))))
 (defn furnace-of [p] (get (:furnaces @(fake/state p)) (fake/parse-cell pos-key)))
 (defn advance! [p ticks] (.advance (.-world p) ticks))
 (defn of-kind [seen kind] (filterv #(= kind (:kind %)) @seen))

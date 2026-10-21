@@ -20,7 +20,7 @@
     {:eng eng :p p :seen seen}))
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
-(defn inv [p] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
+(defn inv [p] (reduce (fn [m i] (update m (.-name i) (fnil + 0) (.-count i))) {} (.-inventory (.self p))))
 (defn chest-items [p] (get-in @(fake/state p) [:containers [10 64 0]]))
 (defn know-place! [eng kind pos] (mem/write! (:store eng) kind {:pos pos} mem/place-policy))
 

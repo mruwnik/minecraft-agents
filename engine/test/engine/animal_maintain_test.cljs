@@ -55,7 +55,7 @@
   [s]
   (count (filter #(and (= 2 (count (:chain %))) (= :done (:status %))) (events-of s :child_ended))))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
-(defn inv [{:keys [p]}] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
+(defn inv [{:keys [p]}] (reduce (fn [m i] (update m (.-name i) (fnil + 0) (.-count i))) {} (.-inventory (.self p))))
 (defn interacts [{:keys [p]}] (h/calls p "interact"))
 (defn attacked [{:keys [p]}] (mapv #(.-id (.-args %)) (h/calls p "attack")))
 

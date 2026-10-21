@@ -66,7 +66,7 @@
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
 (defn done-event [s] (first (filterv #(#{:completed :stopped} (:kind %)) @(:seen s))))
 (defn finished? [{:keys [eng]}] (empty? (:list (core/state eng))))
-(defn inv [{:keys [p]}] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
+(defn inv [{:keys [p]}] (reduce (fn [m i] (update m (.-name i) (fnil + 0) (.-count i))) {} (.-inventory (.self p))))
 (defn world-ids [{:keys [p]}] (set (map :id (fake/entities p))))
 (defn job-mem [{:keys [eng]}] (core/job-memory eng "j1"))
 

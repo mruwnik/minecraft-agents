@@ -292,7 +292,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:blocks (merge eight {"1,63,1" "stone" "2,63,1" "stone" "1,63,2" "stone" "2,63,2" "stone"})}) ; a drop in the dug box is picked up from its floor
               result (await (child-outcome eng job box 40))
-              carried (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p)))]
+              carried (reduce (fn [m i] (update m (.-name i) (fnil + 0) (.-count i))) {} (.-inventory (.self p)))]
           (is (= 8 (:dug result)))
           (is (= {"dirt" 4 "stone" 4} (select-keys carried ["dirt" "stone"]))))))))
 

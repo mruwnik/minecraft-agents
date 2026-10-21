@@ -33,7 +33,7 @@
 
 (defn arg-of [k call] (aget (.-args call) k))
 
-(defn inv [p] (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self p))))
+(defn inv [p] (reduce (fn [m i] (update m (.-name i) (fnil + 0) (.-count i))) {} (.-inventory (.self p))))
 
 (defn carried
   "{name total} over all stacks (inv keeps only the last stack of a name)."

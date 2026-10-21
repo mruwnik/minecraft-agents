@@ -74,7 +74,7 @@
           (mem/write! (:store (:eng s)) :reserve {:id "kit-raw" :item "raw_iron" :count 5 :strength 0.9} {:cap 100 :ttl :forever})
           (core/submit! (:eng s) '(jobs.combat.hunt {:item "beef" :count 1 :keep 0}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 40 700))
-          (let [carried (into {} (map (juxt #(.-name %) #(.-count %))) (.-inventory (.self (:p s))))]
+          (let [carried (reduce (fn [m i] (update m (.-name i) (fnil + 0) (.-count i))) {} (.-inventory (.self (:p s))))]
             (is (contains? (set (map :kind @(:seen s))) :trip.deposited))
             (is (= 5 (get carried "raw_iron")))
             (is (nil? (get carried "junk_0")) "the rest went into the chest")))))))
