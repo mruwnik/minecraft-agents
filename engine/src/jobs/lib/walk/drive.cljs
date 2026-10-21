@@ -3,6 +3,7 @@
   loop: settle, plan, follow, plan again when off the plan) and way-back."
   (:require [engine.ctx :as ctx]
             [engine.path.executor :as executor]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.plan :as wplan]
@@ -51,13 +52,29 @@
       (when (> (count steps) 1)
         (await (walk-fn steps nil))))))
 
+(def free-learned
+  "Learned replans a follow! does not count: a void edge teaches a column per replan, each a search."
+  6)
+
+(defn ^:async look-over-edge!
+  "A floor the body learned is not there (a drop at the takeoff's edge): look at the ground round the body at several
+  distances, as a player looks over an edge once, so the next plan does not drop at the next unseen column."
+  [c [_ y _]]
+  (let [{:keys [x z]} (u/self-pos c)]
+    (loop [points (for [d [3 7] [dx dz] [[1 0] [1 1] [0 1] [-1 1] [-1 0] [-1 -1] [0 -1] [1 -1]]]
+                    {:x (+ x (* d dx)) :y (+ y 0.5) :z (+ z (* d dz))})]
+      (when-let [pt (first points)]
+        (await (ctx/act c :look (clj->js {:pos pt})))
+        (look/see! c)
+        (recur (rest points))))))
+
 (defn ^:async follow!
   "Walk plan (a plan-walk! result) and plan again from the body's cell, in the same call, whenever the walk stops for it:
   the look-ahead saw the way change (:changed: the new plan is walked), a partial plan is due a refresh (:refresh: the new
   plan is walked only when take-refresh? says it is clearly better, else the rest of the old one), or the body is stuck with
   a mob in its way (:mob: wait, plan round it). A replan that proves the goal cut off or enclosed ends the call with that
   no-walk; so does one the caller refused (plan-fn's {:refused true}, with its :stop) for any why but :refresh, whose old
-  plan nothing speaks against. At most max-watch-replans; past that the plan is walked unwatched (a kept plan counts as a replan, and is watched). A replan with :learned (a gate or the look-ahead gave an unseen cell up or found it solid) is not counted against it the first time for its cells: those are finite, and the same cells again have taught nothing.
+  plan nothing speaks against. At most max-watch-replans; past that the plan is walked unwatched (a kept plan counts as a replan, and is watched). A replan with :learned (a gate or the look-ahead gave an unseen cell up or found it solid) is not counted against it, up to free-learned of them: a void edge teaches one column per replan.
   opts: :plan-fn (fn [walls]) -> a plan-walk! result (or a promise of one: plan-walk!) from where the body stands now, the
   cells {:x :y :z} read as walls;
   :walk-fn (fn [steps watch]) -> [done ms] (walk! or jobs.lib.pass/walk!); :to the goal cell; :policy for no-walk;
@@ -77,9 +94,10 @@
         searching? (fn [pl] (= :searching (:status (wplan/no-walk pl 0 policy))))
         cut-length (fn [steps k] (walk/path-length (subvec steps 0 (min (count steps) (max 1 k)))))]
     (loop [plan plan steps (:steps plan) n 0 ms 0 walked 0 damage 0]
-      (let [spent (- n (count @learned))
+      (let [spent (- n (min free-learned (count @learned)))
             watch (when (< spent wwatch/max-watch-replans) (wwatch/watch-of c plan known))
             [done wms] (await (walk-fn steps watch))
+
             ms (+ ms wms)
             k (or (:step done) (count steps))
             walked' (+ walked (cut-length steps k))
@@ -127,6 +145,8 @@
           (and (= :replan (:status done)) (< spent wwatch/max-watch-replans))
           (let [_ (wsight/note-missed! (:pw plan) done)
                 _ (when (:learned done) (swap! learned conj [(:cells done) (:why done)]))
+                _ (when (and (:learned done) (= :changed (:why done)) (not (:felt done)))
+                    (await (look-over-edge! c (first (:cells done)))))
                 t (js/performance.now)
                 fresh (await (plan-fn []))
                 plan-ms (- (js/performance.now) t)

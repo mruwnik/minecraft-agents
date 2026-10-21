@@ -65,6 +65,14 @@
           (is (empty? (f/events-of s :obtain.exploring)))
           (is (<= 1 (get (f/inv s) "raw_iron" 0)) "the mine went for the ore and got it"))))))
 
+(deftest ore-floating-over-a-void-edge-is-given-up-after-one-look-over-the-edge
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (ore-world (into {} (for [x [0 1 2] y [63 64 65]] [(str x "," y ",38") "iron_ore"])) [{:name "stone_pickaxe" :count 1}]) [] (assoc f/sight-opts :radius 48 :ray-deg 4))]
+          (await (obtain! s {:item "raw_iron" :ways #{:craft :smelt :gather}} 200))
+          (is (zero? (get (f/inv s) "raw_iron" 0)) "the ore over the void is not reachable; the run ends instead of replanning per void column"))))))
+
 (deftest logs-only-on-a-bedrock-pillar-are-explored-for-before-obtain-stops
   (async done
     (tu/run-async done
