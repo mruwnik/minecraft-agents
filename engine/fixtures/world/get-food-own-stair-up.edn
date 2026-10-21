@@ -1,0 +1,22 @@
+;; Card c08bb318: a hungry body at the foot of a stair it cut itself (memory :stair-way, recorded by jobs.access.stair) walks it up to the open sky
+;; before it hunts, instead of cutting a new stair at the nearest wall. Stone mass x 8..24, z 8..24, y 0..9 (dark, sealed); the body cuts a 6-step stair
+;; east from the top at x 10 (floors x 11..16, y 4..9) and stands at its foot; a cow stands on top at [12.5 10 20.5] (NoAI), out of sight from the stair.
+;; Hunger is drained by RCON (food 9-10); it carries only a sword and a pickaxe.
+;; Should-succeed: it climbs the stair and kills the cow; the rock beside the foot stays stone (no new stair).
+;; Should-fail: none.
+{:defaults
+ {:tags [:survival :get-food :stairs]
+  :time :any
+  :plot {:height 20}
+  :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
+  :body {:at [10.5 10 16.5] :inventory [["iron_sword" 1] ["iron_pickaxe" 1]] :settle-s 2}
+  :limit-s 400}
+ :cases
+ [{:name "hungry-body-at-the-foot-of-its-own-stair-climbs-it-and-cuts-no-new-one"
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 6})]
+         [:await {:source :job :kind :completed} 120]
+         [:summon "cow" [12.5 10 20.5] "{NoAI:1b}"]
+         [:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
+         [:job (jobs.survival.get-food {})]]
+   :expect [{:event {:source :job :kind :food.killed} :within-s 360}]
+   :after [[:block [17 4 16] "stone"] [:block [16 4 17] "stone"] [:block [16 4 15] "stone"] [:block [17 5 16] "stone"]]}]}
