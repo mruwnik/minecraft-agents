@@ -1,0 +1,16 @@
+;; Breathe at the bottom of a deep wide lake (card 9d1e1c07): the air search must not spend the air on floods and looks of the whole lake; the body
+;; surfaces and the reflex ends cleared, the body never dies. Plot 60 x 60, water 12 deep (y 0..11) inside a stone basin whose rim is 2 above the water.
+{:defaults
+ {:tags [:survival :water] :time :any
+  :plot {:height 16 :length 60 :width 60}
+  :blocks [[:fill [0 0 0] [59 11 59] "stone"]
+           [:fill [4 0 4] [55 11 55] "water"]]
+  :limit-s 150}
+ :cases
+ [{:name "deep-lake-bottom-surfaces-without-dying"
+   :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+               :job (jobs.survival.breathe)}]
+   :body {:at [30.5 1 30.5] :settle-s 1}
+   :expect [{:event {:source :reflex :kind :fired} :within-s 60}
+            {:event {:source :reflex :kind :ended :data {:outcome :done :how :cleared}} :within-s 120}
+            {:no-event {:source :body :kind :died} :until {:source :reflex :kind :ended} :for-s 120}]}]}

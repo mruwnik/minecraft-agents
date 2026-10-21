@@ -121,9 +121,10 @@
         failed (:failed-air (ctx/mem c))
         column (fn [] (breath/nearest-air p pos (swim/air-radius) (swim/reach) failed false))
         find-surface #(or (column) (breath/flood-air p pos (swim/air-radius) (swim/air-radius) failed))
+        until (breath/look-until (.self p))
         surface (loop [k 0]
                   (let [found (find-surface)]
-                    (if (and (< k (:rounds edge-looks)) (await (look-along-water! c pos found)))
+                    (if (and (< k (:rounds edge-looks)) (< (js/Date.now) until) (await (look-along-water! c pos found)))
                       (recur (inc k))
                       found)))
         stair? (and surface (nil? (column)))

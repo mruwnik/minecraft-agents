@@ -144,6 +144,11 @@
     15 long-shaft [false false]
     14 long-shaft [true true]))
 
+(deftest a-flood-of-a-lake-stops-at-the-cell-cap
+  (let [lake (into {} (for [x (range -20 21) y (range 60 65) z (range -20 21)] [(str x "," y "," z) "water"]))
+        p (tu/seeing-all (tu/fake {:self {:inWater true :oxygen 4} :blocks lake}))]
+    (is (< (dec breath/flood-cells) (count (breath/joined-cells p 0 62 0 24 10)) (* 41 41 5)) "the flood stops a layer after the cap, short of the whole lake")))
+
 (deftest the-swim-price-is-the-planners-dive-price
   (is (= planner/swim-sub-ms (breath/swim-ms))))
 

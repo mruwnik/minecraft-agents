@@ -169,16 +169,20 @@
 
 (def neighbours rules/neighbour-deltas)
 
+(def flood-cells
+  "Most cells a flood through seen water looks at: a lake is 80k cells, a flood of all of it takes seconds the body does not have."
+  6000)
+
 (defn joined-cells
   "The seen water and air cells joined to the feet by a walk through such cells, at most radius sideways of the feet and
-  from one below to reach above."
+  from one below to reach above, nearest first up to flood-cells."
   [p fx fy fz radius reach]
   (let [open? (fn [{:keys [x y z] :as cell}]
                 (and (<= (js/Math.abs (- x fx)) radius) (<= (js/Math.abs (- z fz)) radius) (<= (dec fy) y (+ fy reach))
                      (passable-water-or-air? (seen-water-name p cell))))
         start {:x fx :y fy :z fz}]
     (loop [frontier [start] seen #{start}]
-      (if (empty? frontier)
+      (if (or (empty? frontier) (<= flood-cells (count seen)))
         seen
         (let [next (->> (for [c frontier [dx dy dz] neighbours] (-> c (update :x + dx) (update :y + dy) (update :z + dz)))
                         (remove seen)
@@ -201,10 +205,6 @@
          (filter #(nil? (seen-water-name p %)))
          (sort-by dist)
          (take limit))))
-
-(def flood-cells
-  "Most cells find-joined looks at."
-  6000)
 
 (defn find-joined
   "The nearest cell, by steps through seen water and air cells joined to the feet (a flooded stair has no straight
@@ -371,6 +371,11 @@
   (settings/ticks->ms (+ (* (settings/get settings ::ticks-per-oxygen) (max 0 (.-oxygen self)))
                          (* (settings/get settings ::ticks-per-health) (max 0 (or (.-health self) 20))))))
 
+(defn look-until
+  "Epoch ms the looks for air stop at: the ::look-share of the air left from now."
+  [self]
+  (+ (js/Date.now) (* (settings/get settings ::look-share) (air-left-ms self))))
+
 (defn ^:async look-column!
   "Look up the column x z from fy, one look per cell not yet seen, until a seen cell that is neither water nor air or
   reach cells are done (at most reach + 1 looks; with first-only? one look, at the first unseen cell). A look glances
@@ -394,7 +399,7 @@
   (let [p (:primitives c)
         fx (js/Math.floor (:x pos)) fy (js/Math.floor (:y pos)) fz (js/Math.floor (:z pos))
         failed (:failed-columns (ctx/mem c))
-        until (+ (js/Date.now) (* (settings/get settings ::look-share) (air-left-ms (.self p))))]
+        until (look-until (.self p))]
     (await (look-column! c fx fz fy reach false))
     (or (nearest-air p pos radius reach failed true)
         (when-not (column-open? p fx fz fy reach)
