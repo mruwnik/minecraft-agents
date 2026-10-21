@@ -13,7 +13,8 @@
             {:event {:source :job :kind :completed} :within-s 140 :of-job true}]
    :after [[:item "cobblestone" [:>= 3]]]}
   {:name "far-stone-from-a-built-floor-is-walked-to-not-dug-down"
-   :blocks [[:fill [15 9 15] [17 9 17] "oak_planks"]]
+   ;; the whole surface is a built floor, so walking toward the stone never reaches natural soil
+   :blocks [[:fill [2 9 4] [30 9 28] "oak_planks"]]
    :act [[:job (jobs.items.obtain {:item "cobblestone" :count 1 :explore false})]]
    :expect [{:no-event {:source :job :kind :mine.stair-plan} :of-job true :for-s 60 :until {:source :job :kind :completed}}
             {:event {:source :job :kind :completed} :within-s 140 :of-job true}]
