@@ -228,13 +228,20 @@
              {:placed (:placed (ctx/mem c) 0)
               :text (str "build of " (:plan (:args c)) " stopped: the body is shut in a hole and cannot climb out")})))
 
+(defn sealed-in-shelter?
+  "Whether the last walk was refused because the body is sealed in its own shelter, which the night job opens by day: no verdict on the cell or the body's way out."
+  [c]
+  (let [e (near/last-walk c)]
+    (boolean (or (:inside-own-shelter (:data e)) (:inside-own-shelter (:cause e))))))
+
 (defn ^:async walk-stand!
   "Walk to stand beside cell with go-near options opts; a walk that is blocked (the stand is then bad), or an arrival
-  with the cell unseen (:unloaded, :buried) or out of reach, counts a failure. Resolves to go-near's answer."
+  with the cell unseen (:unloaded, :buried) or out of reach, counts a failure. Resolves to go-near's answer; :partial
+  (no failure) when the body is sealed in its own shelter."
   [c cell stand opts]
   (let [limit (give-up)
         w (await (near/go-near! c (zipmap [:x :y :z] stand) 0 opts))]
-    (when (= :blocked w)
+    (when (and (= :blocked w) (not (sealed-in-shelter? c)))
       (ctx/update-mem! c #(cond-> (-> (walk-fail % (:pos cell) :unreachable limit (u/self-pos c))
                                       (update :bad-stands (fnil conj []) stand))
                             (= :budget (:why (:data (near/last-walk c)))) (update :budget-streak (fnil inc 0)))))
@@ -247,7 +254,7 @@
           (ctx/update-mem! c walk-fail pos (if (buried? (:primitives c) pos) :buried :unloaded) limit (u/self-pos c)))))
     (when (and (= :there w) (:found cell) (empty? (if (:dig? cell) (in-dig-reach c [cell]) (in-reach c [cell]))))
       (ctx/update-mem! c walk-fail (:pos cell) :unreachable limit (u/self-pos c)))
-    w))
+    (if (and (= :blocked w) (sealed-in-shelter? c)) :partial w)))
 
 (defn shut-in-walk?
   "Whether the last walk ended because the body is shut in (go-to refuses to dig or build out of a restricted walk)."

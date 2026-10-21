@@ -1130,6 +1130,22 @@
           (is (<= (count @walks) 3) "not one failed walk per planned cell")
           (is (every? (comp nil? :ways) (rest @walks)) "after a shut-in verdict go-to may dig or build out"))))))
 
+(deftest a-body-sealed-in-its-own-shelter-waits-instead-of-stopping-shut-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "far" :parts [{:id "posts" :cells [[40 64 0] [41 64 0] [42 64 0] [43 64 0]] :want "oak_fence"}]}
+              walks (atom 0)
+              {:keys [eng]} (start {:inventory kit :self {:pos {:x 4.5 :y 64 :z 4.5}}} {"far" plan})
+              result (await (tu/with-near-stub (fn ^:async f [c _ _ _]
+                                                 (swap! walks inc)
+                                                 (ctx/update-mem! c assoc :near-walk {:data {:why :exhausted :inside-own-shelter {:x 4 :y 64 :z 4}}})
+                                                 :blocked)
+                              (fn ^:async b [] (await (child-outcome eng job {:plan "far"} 12)))))]
+          (is (not= :shut-in (:reason result)))
+          (is (empty? (:given-up result)) "the shelter is no verdict on the cells")
+          (is (< 3 @walks) "the build keeps trying while the shelter is shut"))))))
+
 (deftest a-whole-plan-is-built-in-one-round
   (async done
     (tu/run-async done
