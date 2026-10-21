@@ -2,7 +2,6 @@
   "Where get-food finds food it knows of: remembered farms and chests, ripe crops in sight."
   (:require [engine.settings :as settings]
             [engine.args :as a]
-            [engine.constants :as constants]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.access.zones :as zones]
@@ -23,17 +22,6 @@
    ::stock-radius {:default 256 :doc "Blocks within which a chest the body booked food in (memory :fetch/stock, what it saw when it opened it) counts as a food source." :spec (a/int-in 0 nil)}})
 
 (defn reach [] (settings/get settings ::reach))
-
-(def ripe-age
-  "The growth stage at which each crop block can be harvested. Wheat is left
-  out: only the :field way cuts it, in a field of its own."
-  (dissoc crops/ripe-age "wheat"))
-
-(def berry-bush (select-keys constants/crop-ripe-age ["sweet_berry_bush"]))
-
-(def melon-block "A melon has no growth stage: it is always ripe." {"melon" 0})
-
-(def wild-food "Blocks dug for food besides the crops." (merge berry-bush melon-block))
 
 (defn carried-count [c name] (storage/carried (u/inventory (:primitives c)) name))
 
@@ -188,7 +176,7 @@
   (case (await (go-near! c pos))
     :continue :continue
     :far (bury-source! c pos)
-    (or (await (dig-ripe! c ripe-age pos farm-radius (last-resort? c)))
+    (or (await (dig-ripe! c crops/food-ripe-age pos farm-radius (last-resort? c)))
         (do (pass-over! c pos) nil))))
 
 (defn loaves-wanted

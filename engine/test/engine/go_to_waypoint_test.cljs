@@ -13,6 +13,7 @@
             [jobs.movement.go-to.tuning :as gts]
             [jobs.movement.go-to.aim :as gaim]
             [jobs.movement.go-to.walk :as gwalk]
+            [jobs.lib.column-kinds :as kinds]
             [jobs.movement.go-to.column :as column]
             [jobs.movement.go-to.result :as end]))
 
@@ -30,7 +31,7 @@
 (deftest an-off-line-seen-stand-nearer-the-column-is-a-waypoint-when-the-line-gives-none
   ;; at the cliff foot: the plateau top over the line (z 0..3) is out of sight, so the line gives no stand nearer x 60
   (let [p (hiding cliff-with-ramp (fn [[x _ z]] (and (> x 30) (<= z 3))))
-        way (column/waypoint (column/seen-kind-at p) 60 0 [30 64 0])]
+        way (column/waypoint (kinds/seen-kind-at p) 60 0 [30 64 0])]
     (is (some? way) "the ramp")
     (is (<= (across way [60 0]) 28) (pr-str way))
     (is (>= (:z way) 4) (str "on the ramp: " (pr-str way)))))
@@ -41,8 +42,8 @@
   (let [land (slope 64 1)
         head-hidden (hiding land (fn [[x y _]] (or (> x 44) (and (= x 44) (= y 79)))))
         feet-hidden (hiding land (fn [[x y _]] (or (> x 44) (and (= x 44) (#{78 79} y)))))]
-    (is (= {:x 44 :y 78 :z 0} (column/waypoint (column/seen-kind-at head-hidden) 60 0 [0 64 0])))
-    (is (not= 44 (:x (column/waypoint (column/seen-kind-at feet-hidden) 60 0 [0 64 0]))))))
+    (is (= {:x 44 :y 78 :z 0} (column/waypoint (kinds/seen-kind-at head-hidden) 60 0 [0 64 0])))
+    (is (not= 44 (:x (column/waypoint (kinds/seen-kind-at feet-hidden) 60 0 [0 64 0]))))))
 
 (deftest a-column-across-an-uncrossable-gap-gives-up-with-a-reason-after-a-few-walks
   ;; flat ground to x 20, nothing at x 21..29 (a gap no walk crosses), the column x 60 on land at feet 84 beyond it
@@ -107,7 +108,7 @@
 
 (deftest a-stand-already-walked-to-is-no-waypoint-again
   (let [p (hiding cliff-with-ramp (fn [[x _ z]] (and (> x 30) (<= z 3))))
-        ka (column/seen-kind-at p)
+        ka (kinds/seen-kind-at p)
         way (column/waypoint ka 60 0 [30 64 0])
         again (column/waypoint ka 60 0 [30 64 0] 2 #{[(:x way) (:y way) (:z way)]})]
     (is (not= way again))))
@@ -118,5 +119,5 @@
       (fn ^:async t []
         (let [p (hiding cliff-with-ramp (fn [[x _ z]] (and (> x 30) (<= z 3))))
               narrow (await (settings/with-settings {:jobs.movement.go-to.tuning/off-line-cone 5}
-                              #(column/waypoint (column/seen-kind-at p) 60 0 [30 64 0])))]
+                              #(column/waypoint (kinds/seen-kind-at p) 60 0 [30 64 0])))]
           (is (nil? narrow)))))))

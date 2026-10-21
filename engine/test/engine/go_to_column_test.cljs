@@ -13,6 +13,7 @@
             [jobs.movement.go-to.torch :as gtorch]
             [jobs.movement.go-to.aim :as gaim]
             [jobs.movement.go-to.walk :as gwalk]
+            [jobs.lib.column-kinds :as kinds]
             [jobs.movement.go-to.column :as column]))
 
 (def flat (floor -2 -3 40 3))
@@ -329,8 +330,8 @@
         p (hiding plateau (fn [[x _ z]] (= [30 0] [x z])))
         ys (atom #{})
         unseen (fn [_ y _] (swap! ys conj y) :unknown)]
-    (is (= 100 (column/estimate (column/seen-kind-at p) 30 0 70)) "the plateau's surface, 30 above the feet")
-    (is (= 64 (column/estimate (column/seen-kind-at p) 30 0 64)) "36 above the feet: out of reach, the feet")
+    (is (= 100 (column/estimate (kinds/seen-kind-at p) 30 0 70)) "the plateau's surface, 30 above the feet")
+    (is (= 64 (column/estimate (kinds/seen-kind-at p) 30 0 64)) "36 above the feet: out of reach, the feet")
     (is (= 64 (column/estimate unseen 30 0 64)))
     (is (= [(- 64 column/estimate-reach 1) (+ 64 column/estimate-reach 1)] [(apply min @ys) (apply max @ys)])
         "an unseen neighbourhood is read only within estimate-reach of the feet")))
@@ -384,7 +385,7 @@
 (deftest a-lookout-is-a-seen-stand-in-reach-that-sees-the-goal-until-the-lookouts-are-spent
   (let [[x y z :as stand] (gaim/lookout (mound-from-22 29 {}) {:x 30 :y 64 :z 0})]
     (is (<= (js/Math.hypot (- x 30) (- y 64) z) gaim/lookout-reach) (pr-str stand))
-    (is (column/stands? (column/seen-kind-at (:primitives (mound-from-22 29 {}))) x y z) (pr-str stand)))
+    (is (column/stands? (kinds/seen-kind-at (:primitives (mound-from-22 29 {}))) x y z) (pr-str stand)))
   (is (nil? (gaim/lookout (mound-from-22 29 {:lookouts (vec (repeat gaim/max-lookouts [0 0 0]))}) {:x 30 :y 64 :z 0})))
   (is (nil? (gaim/lookout (mound-from-22 29 {:re-aim true}) {:x 30 :y 64 :z 0})) "re-aimed: the goal is no longer that cell"))
 
@@ -423,7 +424,7 @@
 
 (deftest a-waypoint-is-the-seen-ground-on-the-line-nearest-the-column
   (let [land (slope 64 1)]
-    (is (= {:x 44 :y 78 :z 0} (column/waypoint (column/seen-kind-at (hiding land (fn [[x _ _]] (> x 44)))) 60 0 [0 64 0]))
+    (is (= {:x 44 :y 78 :z 0} (column/waypoint (kinds/seen-kind-at (hiding land (fn [[x _ _]] (> x 44)))) 60 0 [0 64 0]))
         "the farthest seen column toward x 60")
-    (is (nil? (column/waypoint (column/seen-kind-at (hiding land (fn [[x _ _]] (> x 0)))) 60 0 [0 64 0]))
+    (is (nil? (column/waypoint (kinds/seen-kind-at (hiding land (fn [[x _ _]] (> x 0)))) 60 0 [0 64 0]))
         "nothing seen ahead: no waypoint, never the unseen ground")))

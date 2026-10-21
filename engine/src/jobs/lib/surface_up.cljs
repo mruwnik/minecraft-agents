@@ -8,7 +8,7 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
-            [jobs.movement.go-to.column :as column]))
+            [jobs.lib.column-kinds :as kinds]))
 
 (def wall-reach "Blocks out from the feet the nearest wall is looked for." 8)
 
@@ -54,11 +54,11 @@
   (let [p (:primitives c)
         feet (sh-sense/feet p)
         stairs (ledger/stair-stands c)
-        kind-at (column/seen-kind-at p)
-        surface-at (column/surface-kind-at p)
+        kind-at (kinds/seen-kind-at p)
+        surface-at (kinds/surface-kind-at p)
         top? (fn [[x y z]] (and (not-any? (fn [[dx dz]] (contains? stairs [(+ x dx) (inc y) (+ z dz)])) [[1 0] [-1 0] [0 1] [0 -1]])
                                 (keyword-identical? :open (kind-at x (+ y 2) z))
-                                (= y (column/top surface-at x z))))]
+                                (= y (kinds/top surface-at x z))))]
     (->> stairs
          (filter (fn [[_ y _ :as cell]] (and (> y (inc (:y feet))) (top? cell))))
          (map (fn [[x y z]] {:x x :y y :z z}))

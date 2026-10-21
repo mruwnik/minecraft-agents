@@ -16,6 +16,7 @@
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.world :as known]
+            [jobs.lib.column-kinds :as kinds]
             [jobs.movement.go-to.column :as column]
             [jobs.movement.go-to.tuning :as tuning :refer [max-waypoint-misses waypoint-gain way-looks]]))
 
@@ -66,7 +67,7 @@
 
 (defn seen-stand-within?
   "Whether a cell within r0 (at most column/approach-range) of the cell [x y z] stands by the cells the body has seen
-  (kind-at: column/seen-kind-at)."
+  (kind-at: kinds/seen-kind-at)."
   [kind-at [x y z] r0]
   (let [reach (min r0 column/approach-range)
         r (js/Math.floor reach)]
@@ -81,7 +82,7 @@
   walk opens it."
   [c pos]
   (boolean (and (:unknown c) (:y pos)
-                (let [ka (column/seen-kind-at (:primitives c))
+                (let [ka (kinds/seen-kind-at (:primitives c))
                       cell (mapv #(js/Math.floor (% pos)) [:x :y :z])
                       [x y z] cell
                       k (apply ka cell)
@@ -90,7 +91,7 @@
                       roofed? (and (keyword-identical? :unknown k)
                                    (<= (js/Math.hypot (- x (:x me)) (- z (:z me))) column/approach-range)
                                    (some #(keyword-identical? :solid (ka x (+ y %) z)) (range 1 (inc (tuning/y-slack)))))]
-                  (and (or roofed? (not (or (keyword-identical? :unknown k) (column/free? k) door?)))
+                  (and (or roofed? (not (or (keyword-identical? :unknown k) (kinds/free? k) door?)))
                        (not (seen-stand-within? ka cell (:range (:args c) 1))))))))
 
 (def lookout-reach "Blocks from a y goal hidden in seen ground (hidden-in-ground?) a stand go-to looks at it from may be." 4)
@@ -119,7 +120,7 @@
         p (:primitives c)
         [x y z :as cell] (mapv #(js/Math.floor (% pos)) [:x :y :z])]
     (when (and (:unknown c) (not re-aim) (nil? column-open) (< (count tried) max-lookouts) (sense/unknown? p cell))
-      (let [ka (column/seen-kind-at p)
+      (let [ka (kinds/seen-kind-at p)
             sees? (aim/stand-sees-fn p cell)
             r lookout-reach
             from (u/self-pos c)]
@@ -160,7 +161,7 @@
   [c pos]
   (when (waypoint-due? c)
     (let [{:keys [x y z]} (u/self-pos c)]
-      (column/waypoint (column/seen-kind-at (:primitives c)) (:x pos) (:z pos) (mapv #(js/Math.floor %) [x y z]) (waypoint-gain)
+      (column/waypoint (kinds/seen-kind-at (:primitives c)) (:x pos) (:z pos) (mapv #(js/Math.floor %) [x y z]) (waypoint-gain)
                        (:waypoints-tried (ctx/mem c) #{})))))
 
 (defn ^:async look-along!

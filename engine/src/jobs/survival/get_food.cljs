@@ -22,6 +22,7 @@
             [jobs.survival.get-food.cook :as cook]
             [jobs.survival.get-food.report :as report]
             [jobs.survival.get-food.risk :as risk]
+            [jobs.lib.crops :as crops]
             [jobs.survival.get-food.sources :as sources]))
 
 (def doc
@@ -319,7 +320,7 @@
 
 (defn ^:async dig-crops!
   [c last-resort?]
-  (sources/dig-ripe! c (merge sources/ripe-age sources/wild-food) (u/self-pos c) (hunt-radius c) last-resort?))
+  (sources/dig-ripe! c (merge crops/food-ripe-age crops/wild-food) (u/self-pos c) (hunt-radius c) last-resort?))
 
 (defn ^:async next-way!
   "The first allowed way with something to do: :again (try eating, then the ways, again), :continue (yield), or nil when
@@ -407,7 +408,7 @@
           (ctx/update-mem! c #(-> % (assoc :explored "started" :explored-at (ctx/now c) :explored-spared (count (spared-uuids c))) (update :explore-runs (fnil inc 0)))))
         (let [opts (widen-explore (merge (settings/get settings ::explore) (when (map? e) e)) (widen c))
               e (await (child/run!* c :explore 'jobs.explore.search
-                                    (child/search-args (assoc opts :skip-ids (vec (spared-uuids c)) :target (vec (concat (sort animals/food-animals) (keys sources/ripe-age) (keys sources/wild-food)))))
+                                    (child/search-args (assoc opts :skip-ids (vec (spared-uuids c)) :target (vec (concat (sort animals/food-animals) (keys crops/food-ripe-age) (keys crops/wild-food)))))
                                     {:max-calls 1}))]
           (if (= :continue e)
             :continue

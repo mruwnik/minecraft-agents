@@ -15,20 +15,16 @@
   column whose ground is not made out is looked at after a fruitless walk (at most 3 a call); with no stand in reach of its guess it walks to seen stands toward it (column/waypoint, off the line past a cliff), until ::max-waypoint-misses bring it no nearer. A cell over a short floor (farmland, a path, a bottom slab) stands for that
   block's own cell, where the body's feet are. :place (a name such as :home, set by jobs.memory.set-place) walks to
   that place's recorded position instead of :pos; a name not in memory falls back to the shared marker of that name (jobs.lib.world/marker)."
-  (:require [jobs.lib.block-sets :as bs]
-            [engine.args :as a]
+  (:require [engine.args :as a]
+            [jobs.lib.column-kinds :refer [kind free? top top-y surface-kind-at seen-kind-at]]
             [jobs.lib.places :as places]
             [jobs.lib.reach :as reach]
-            [jobs.lib.surface :as surface]
-            [jobs.lib.util :as u]
             [jobs.movement.go-to.tuning :refer [off-line-cone off-line-radius]]))
 
 (def approach-range
   "Blocks from a column's provisional cell go-to first walks to while no ground of it is seen, and looks: a guess out of
   reach (a floating block, a tree's leaves) does not stop it short of seeing the column."
   8)
-
-(def top-y "The highest feet y a column goal looks for ground at (the head cell above is the build limit's last)." (- places/max-y 2))
 
 (defn column-xz
   "[x z] of a column pos ([x z] or {:x :z} with no :y), else nil."
@@ -48,29 +44,6 @@
     (let [parsed (places/parse-pos [x 0 z])]
       (if (:reason parsed) parsed {:pos (dissoc (:pos parsed) :y)}))))
 
-(defn kind
-  "A block as a stand test reads it: :unknown (nil: unseen or unloaded), :hazard, else reach/kind-of."
-  [b]
-  (cond (nil? b) :unknown
-        (bs/harms-in-cell (.-name b)) :hazard
-        :else (reach/kind-of b)))
-
-(defn surface-kind-at
-  "As seen-kind-at, a log or leaf block read as :open: a tree is not the surface."
-  [p]
-  (if (some? (.-sensedAt p))
-    (fn [x y z] (let [b (u/seen-block p {:x x :y y :z z})]
-                  (if (and b (surface/canopy? (.-name b))) :open (kind b))))
-    (constantly :unknown)))
-
-(defn seen-kind-at
-  "(fn [x y z]) -> kind of the block the body of primitives p sees or remembers there, :unknown when never seen (or when
-  p senses nothing)."
-  [p]
-  (if (some? (.-sensedAt p))
-    (fn [x y z] (kind (u/seen-block p {:x x :y y :z z})))
-    (constantly :unknown)))
-
 (defn kind-at
   "(fn [x y z]) -> as seen-kind-at; an unseen cell from the raw world (reach/lookup) when raw?."
   [p raw?]
@@ -79,8 +52,6 @@
     (if raw
       (fn [x y z] (let [k (seen x y z)] (if (keyword-identical? :unknown k) (raw x y z) k)))
       seen)))
-
-(defn free? [k] (or (keyword-identical? :open k) (keyword-identical? :water k)))
 
 (defn stands?
   "Feet and head cells open or water, and a solid floor under open feet."
@@ -97,19 +68,6 @@
                    (cond (and (<= up hi) (stands? kind-at x up z) (ok? up)) up
                          (and (pos? d) (>= down lo) (stands? kind-at x down z) (ok? down)) down)))
          (range 0 (inc (max (- hi y) (- y lo)))))))
-
-(defn top
-  "The y of the highest stand of the column x z (from lo to hi: default the build height) with no solid or hazard over it
-  up to hi, else nil."
-  ([kind-at x z] (top kind-at x z places/min-y top-y))
-  ([kind-at x z lo hi]
-   ;; one read per cell, as stands? reads them: the feet of y are the head of y - 1
-   (loop [y hi head (kind-at x (inc y) z) feet (kind-at x y z)]
-     (when (>= y lo)
-       (let [floor (kind-at x (dec y) z)]
-         (cond (and (free? feet) (free? head) (or (keyword-identical? :water feet) (keyword-identical? :solid floor))) y
-               (#{:solid :hazard} feet) nil
-               :else (recur (dec y) feet floor)))))))
 
 (defn cached
   "kind-at reading each cell once: one aim reads the cells of a column over the whole build height, and again for its

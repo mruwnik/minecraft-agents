@@ -6,6 +6,7 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.util :as u]
+            [jobs.lib.column-kinds :as kinds]
             [jobs.movement.go-to.column :as column]))
 
 (a/defargs settings
@@ -64,8 +65,8 @@
   (let [p (:primitives c)
         stairs (ledger/stair-stands c)
         own (into stairs (ledger/tunnel-stands c))
-        kind-at (column/seen-kind-at p)
-        surface-at (column/surface-kind-at p)
+        kind-at (kinds/seen-kind-at p)
+        surface-at (kinds/surface-kind-at p)
         low (- (second feet) (cave-dip))
         goes-on? (fn [[x y z]] (some (fn [[dx dz]] (contains? stairs [(+ x dx) (inc y) (+ z dz)])) escape/cardinals))]
     (when (seq stairs)
@@ -75,7 +76,7 @@
              (fn [[x y z :as cell]]
                (and (contains? stairs cell)
                     (or (>= y (dec top))
-                        (and (not (goes-on? cell)) (keyword-identical? :open (kind-at x (+ y 2) z)) (= y (column/top surface-at x z))))))
+                        (and (not (goes-on? cell)) (keyword-identical? :open (kind-at x (+ y 2) z)) (= y (kinds/top surface-at x z))))))
              (own-way-search)))))
 
 (defn hop

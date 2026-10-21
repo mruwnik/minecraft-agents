@@ -24,6 +24,7 @@
             [jobs.lib.near :as near]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
+            [jobs.lib.column-kinds :as kinds]
             [jobs.movement.go-to.column :as column]
             [jobs.lib.swim :as swim]
             [jobs.movement.go-to.tuning :as tuning]))

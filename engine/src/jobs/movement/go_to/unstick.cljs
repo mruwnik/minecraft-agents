@@ -7,6 +7,7 @@
             [engine.settings :as settings]
             [jobs.lib.breath :as breath]
             [jobs.lib.util :as u]
+            [jobs.lib.column-kinds :as kinds]
             [jobs.movement.go-to.column :as column]))
 
 (a/defargs settings

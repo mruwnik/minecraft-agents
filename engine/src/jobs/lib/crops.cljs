@@ -15,6 +15,14 @@
   "The field crops: farm jobs plant, tend and cut these; nether wart, berries and cocoa need other handling."
   (select-keys constants/crop-ripe-age ["wheat" "carrots" "potatoes" "beetroots"]))
 
+(def food-ripe-age
+  "The growth stage at which each crop block can be harvested for food. Wheat is left out: only the :field way cuts it, in a field of its own."
+  (dissoc ripe-age "wheat"))
+
+(def wild-food
+  "Blocks dug for food besides the crops (a melon has no growth stage: it is always ripe)."
+  (merge (select-keys constants/crop-ripe-age ["sweet_berry_bush"]) {"melon" 0}))
+
 (def field-items
   "Per field crop: the seed that sows it and the items its harvest drops (the one place these lists live)."
   {"wheat" {:seed "wheat_seeds" :produce ["wheat" "wheat_seeds"]}

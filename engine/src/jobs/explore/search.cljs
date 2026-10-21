@@ -10,7 +10,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.area :as area]
             [jobs.lib.food-animals :as animals]
-            [jobs.survival.get-food.sources :as sources]
+            [jobs.lib.crops :as crops]
             [jobs.lib.breath :as breath]
             [jobs.lib.child :as child]
             [jobs.lib.food-animals :as food-animals]
@@ -130,7 +130,7 @@
 
 (def foraged
   "The target names of a search for food: the food animals and the food blocks."
-  (into animals/food-animals (concat (keys sources/ripe-age) (keys sources/wild-food))))
+  (into animals/food-animals (concat (keys crops/food-ripe-age) (keys crops/wild-food))))
 
 (defn forage?
   "Whether every target is a food animal or food block."

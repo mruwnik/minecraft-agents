@@ -31,6 +31,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.walk.world :as wworld]
             [jobs.movement.go-to.climb :as climb]
+            [jobs.lib.column-kinds :as kinds]
             [jobs.movement.go-to.column :as column]
             [jobs.movement.go-to.detour :as detour]
             [jobs.movement.go-to.escalate-choose :as choose]
@@ -60,7 +61,7 @@
 (defn seen-blocked?
   "Whether the body has seen a solid in the feet or head of the stand cell [x y z]."
   [c [x y z]]
-  (let [kind-at (column/seen-kind-at (:primitives c))]
+  (let [kind-at (kinds/seen-kind-at (:primitives c))]
     (boolean (some #(keyword-identical? :solid (kind-at x % z)) [y (inc y)]))))
 
 (defn own-way
@@ -109,7 +110,7 @@
   and stands under ground, unless pos lies ::climb-rise or more above it (the climb's)."
   [c pos stair-check straight]
   (let [p (:primitives c)
-        kind-at (column/seen-kind-at p)
+        kind-at (kinds/seen-kind-at p)
         unseen? #(keyword-identical? :unknown (kind-at %1 %2 %3))
         bound? (and (some? (.-sensedAt p)) (< (- (:y pos) (:y (u/self-pos c))) (climb-rise)))]
     (fn [{:keys [status steps] :as plan} first?]
