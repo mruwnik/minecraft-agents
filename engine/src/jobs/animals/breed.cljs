@@ -356,11 +356,8 @@
   [(js/Math.floor x) (js/Math.floor z)])
 
 (defn ^:async walk-to-pen!
-  "Walk to the middle of the known pen, once; the cell the body started from is kept for the way out. Resolves to
-  :continue while the walk goes on, else :again."
+  "Walk to the middle of the known pen, once. Resolves to :continue while the walk goes on, else :again."
   [c box]
-  (when-not (:from (ctx/mem c))
-    (ctx/update-mem! c assoc :from (pen-cell (u/self-pos c))))
   (let [r (await (child/call-walk* c :pen {:pos (pen-read/look-pos box) :range 3}))]
     (if (= :continue r)
       :continue
@@ -376,9 +373,16 @@
       (when (= :continue (await (child/call-walk* c :leave {:pos from :range 1})))
         :continue))))
 
+(defn note-from!
+  "With a known pen, keep the cell the run started from (once) for the way out, whether or not the body walks to the pen first."
+  [c]
+  (when (and (pen-box c) (not (:from (ctx/mem c))))
+    (ctx/update-mem! c assoc :from (pen-cell (u/self-pos c)))))
+
 (defn ^:async step
   "One walk or feeding, or the end."
   [c]
+  (note-from! c)
   (let [{:keys [mob]} (:args c)
         n (wanted c)
         m (ctx/mem c)
