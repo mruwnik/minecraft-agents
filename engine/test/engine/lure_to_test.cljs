@@ -597,6 +597,19 @@
           (is (= :arrived (:reason (done-event s))) (pr-str (done-event s)))
           (is (< 3 (first (:pos (cow-of s 1))) 12) "the cow ends inside the ring"))))))
 
+(deftest a-body-inside-a-pen-walks-out-through-the-gate-to-a-cow-far-outside
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng clock] :as s} (h/setup {:floor tu/walk-floor :self {:pos {:x 8 :y 64 :z 0}} :inventory wheat :entities [(cow 1 -3)]
+                                                    :blocks (merge ring (tu/box 12 63 -1 12 63 1 "stone") {"12,64,0" "oak_fence_gate"})
+                                                    :states {"12,64,0" {:open false :facing "east"}}} 50)
+              out-x (atom 0)]
+          (.override (.-world p) "steer" (fn [token a impl] (.then (impl token a) (fn [r] (swap! out-x max (.. p self -pos -x)) r))))
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :radius 14 :pos {:x 8 :y 64 :z 0}}) {})
+          (loop [i 0] (when (and (< i 60) (not (finished? s))) (swap! clock + 700) (await (core/tick! eng)) (recur (inc i))))
+          (is (<= 13 @out-x) (str "the body went out through the shut gate toward the cow " (pr-str (done-event s)))))))))
+
 (deftest the-animal-is-named-by-the-start-of-its-uuid
   (async done
     (tu/run-async done
