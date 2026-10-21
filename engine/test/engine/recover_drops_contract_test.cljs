@@ -114,3 +114,34 @@
           (core/submit! eng job {})
           (await (run-until-empty eng 5))
           (is (= {:kind :nothing-possible :reason :unreachable} (end-of (atom (take-last 1 (filter #(#{:completed :stopped} (:kind %)) @seen)))))))))))
+
+(deftest drops-not-all-back-end-nothing-possible
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities [(dt/drop-item 1 20 "diamond_pickaxe")]})]
+          (die! eng {:pos dt/death-pos :inventory dt/diamonds})
+          (core/submit! eng job {})
+          (await (run-until-empty eng 20))
+          (is (= {:kind :nothing-possible :reason :not-visible} (end-of seen))))))))
+
+(deftest a-closed-window-ends-condition-failed-gone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (setup {:floor tu/walk-floor :entities dt/drops})]
+          (die! eng {:pos dt/death-pos :inventory dt/diamonds})
+          (swap! clock + 300000)
+          (core/submit! eng job {})
+          (await (run-until-empty eng 5))
+          (is (= {:kind :condition-failed :reason :gone} (end-of seen))))))))
+
+(deftest nothing-left-at-the-death-point-ends-condition-failed-nothing-found
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:floor tu/walk-floor})]
+          (die! eng {:pos dt/death-pos :inventory dt/diamonds})
+          (core/submit! eng job {})
+          (await (run-until-empty eng 5))
+          (is (= {:kind :condition-failed :reason :nothing-found} (end-of seen))))))))
