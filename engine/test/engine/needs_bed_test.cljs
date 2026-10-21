@@ -17,7 +17,7 @@
       (reset! clock (- (* 10 sh-clock/ms-per-day) (* age sh-clock/ms-per-day)))
       (mem/write! store kind data {:cap 8 :ttl (* 20 sh-clock/ms-per-day)}))
     (reset! clock (* 10 sh-clock/ms-per-day))
-    (f (tu/seeing-all (tu/fake-on-floor (cond-> {:floor [-10 -10 10 10] :inventory (or inv []) :entities entities :blocks blocks} night (assoc :time 18000) time (assoc :time time))))
+    (f (tu/seeing-all (tu/fake-on-floor (cond-> {:floor [-10 -10 10 10] :inventory (or inv []) :entities entities :blocks blocks :time (or time 9000)} night (assoc :time 18000))))
        (mem/view store) {})))
 
 (defn holds? [opts] (run nb/needs-bed opts))
@@ -38,6 +38,11 @@
 (deftest a-rested-body-or-one-with-no-memory-does-not
   (is (false? (holds? {:entries [[:slept {:pos {:x 0 :y 64 :z 0}} 1] [:looked {} 4]]})))
   (is (false? (holds? {}))))
+
+(deftest early-in-the-day-the-body-s-own-work-goes-first
+  (is (false? (holds? {:entries slept-long-ago :time 3000})))
+  (is (true? (holds? {:entries slept-long-ago :time (- sh-clock/dusk-tick 5000)})))
+  (is (false? (holds? {:entries slept-long-ago :time sh-clock/dusk-tick}))))
 
 (deftest at-night-the-night-job-sleeps-so-no-errand
   (is (false? (holds? {:entries slept-long-ago :night true}))))

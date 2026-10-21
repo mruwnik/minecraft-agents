@@ -4,6 +4,7 @@
             [cljs.reader :as reader]
             [engine.core :as core]
             [engine.core.base :as base]
+            [engine.core.schedule :as schedule]
             [engine.ctx :as ctx]
             [engine.hurt :as hurt]
             [engine.job-api :as job-api]
@@ -583,6 +584,14 @@
           (await (core/tick! eng))
           (is (= ["j1" "j3" "j1"] (ran seen)) "the cut job runs before j2")
           (is (= ["j2"] (listed eng))))))))
+
+(deftest a-comfort-reflex-cut-off-rests-its-cooldown-from-the-cut
+  (let [eng {:now (constantly 50000)
+             :state (atom {:register [{:id :a :level :comfort :persistence :cooldown :cooldown-s 600}
+                                      {:id :b :level :urgent :persistence :cooldown :cooldown-s 10}
+                                      {:id :c :level :comfort :persistence :retry}]})}]
+    (doseq [id [:a :b :c]] (schedule/rest-cut-comfort! eng id))
+    (is (= {:a {:cooldown-until 650000}} (:reflex-state @(:state eng))))))
 
 (deftest an-interval-reflex-cuts-a-listed-job-which-resumes-after-the-look
   (async done

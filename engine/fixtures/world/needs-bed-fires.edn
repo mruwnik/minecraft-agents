@@ -2,7 +2,7 @@
 ;; with no args), and a register that names :needs-bed reaches the body. The respawn bed the body remembers (:spawn-bed at [8 0 16]) is
 ;; gone (a newer :spawn-reset; the trigger does not look at the cell itself), so the trigger holds by day; wool, planks and a crafting table beside the body make the bed.
 ;; Should-succeed: the reflex fires, obtain does not stop bad-args, the body ends with a bed. Should-fail: a body that still sees its
-;; remembered spawn bed does not fire it.
+;; remembered spawn bed does not fire it. The errand holds only in the last 6000 ticks before dusk, so the firing cases set the time to 9000 once registered (the early-day hold is pinned in needs-bed-test: the clock at the start is not fixed, so no case can register before it).
 {:defaults
  {:tags [:survival :triggers :items]
   :plot {:height 6}
@@ -16,6 +16,7 @@
             {:kind :spawn-reset :data {:pos #xyz [8 0 16]} :age-s 30}]
    :blocks [[:set [20 0 16] "crafting_table"]]
    :body {:inventory [["white_wool" 3] ["oak_planks" 3]]}
+   :act [[:time-set 9000]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :needs-bed}} :within-s 30}
             {:no-event {:source :job :kind :stopped :data {:reason :bad-args}} :for-s 60 :until {:source :reflex :kind :ended}}
             {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 80}]
@@ -32,6 +33,7 @@
    :memory [{:kind :food-source :data {:pos #xyz [4 0 4]} :age-s 4800 :policy {:cap 5 :ttl :forever}}]
    :blocks [[:set [20 0 16] "crafting_table"]]
    :body {:inventory [["white_wool" 3] ["oak_planks" 3]]}
+   :act [[:time-set 9000]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :needs-bed}} :within-s 30}
             {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 80}]
    :after [[:item "white_bed" [:>= 1]]]}

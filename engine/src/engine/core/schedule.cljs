@@ -86,6 +86,15 @@
   [eng]
   (running eng))
 
+(defn rest-cut-comfort!
+  "A comfort reflex of cooldown persistence that was cut off rests its cooldown from now, as after its own end: a run
+  that a danger cut short never reaches judge-end!, and its trigger would refire the moment the danger passed."
+  [eng reflex]
+  (let [entry (some #(when (= reflex (:id %)) %) (:register (state eng)))]
+    (when (and (= :comfort (:level entry)) (= :cooldown (:persistence entry)))
+      (swap! (:state eng) assoc-in [:reflex-state reflex :cooldown-until]
+             (+ (now eng) (* 1000 (:cooldown-s entry 0)))))))
+
 (defn cut!
   "Take the body from holder h for entry; cause is the seq of the firing. A reflex job is dropped, unless it is in its
   cleanup: a pause is not an ending, so it stays (paused-reflex) and resumes. Writes the memory at once: the cut round
@@ -97,7 +106,8 @@
   (let [paused? (or (not (:reflex h)) (cleanup/closing? eng (:id h) []))]
     (cond
       (not (:reflex h)) (swap! (:state eng) assoc :resume (:id h) :current nil)
-      (not paused?) (drop-reflex-job! eng (:id h) (:reflex h) :dropped {:how :dropped :by by :cause cause}))
+      (not paused?) (do (drop-reflex-job! eng (:id h) (:reflex h) :dropped {:how :dropped :by by :cause cause})
+                        (rest-cut-comfort! eng (:reflex h))))
     (when paused?
       (emit! eng (merge (job-fields eng (:id h)) {:source :job :kind :cut :level :info :by by :cause cause})))))
 
