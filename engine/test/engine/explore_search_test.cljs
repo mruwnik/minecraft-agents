@@ -6,6 +6,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.fake :as fake]
+            [engine.entity-observations :as obs]
             [engine.events :as events]
             [engine.expr :as expr]
             [engine.memory :as mem]
@@ -141,6 +142,31 @@
           (is (seq (walks s))))))))
 
 ;; ------------------------------------------------------------------ the job
+
+(defn hear-cow-until-north!
+  "The cows are out of sight (entities() drops passives) and heard as heardMobs rows until the body stands at z <= -2."
+  [^js p]
+  (let [orig (.-entities p)
+        sees? #(<= (.-z (.-pos (.self p))) -2)]
+    (set! (.-entities p) (fn [opts] (let [all (.call orig p opts)] (if (sees?) all (.filter all #(not= "passive" (.-kind %)))))))
+    (set! (.-heardMobs p)
+          (fn [_]
+            (let [me (.-pos (.self p)) from {:x (.-x me) :y (.-y me) :z (.-z me)}]
+              (into-array (when-not (sees?)
+                            (for [^js e (array-seq (.call orig p #js {:radius 24 :kind "passive"}))
+                                  :let [pos (.-pos e)]]
+                              (clj->js (assoc (obs/rough-hearing from {:x (.-x pos) :y (.-y pos) :z (.-z pos)})
+                                              :id (.-id e) :name (.-name e) :kind "passive" :distance (.-distance e)))))))))))
+
+(deftest an-animal-heard-but-not-seen-is-walked-toward-before-any-leg
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (search! {:target "cow"}
+                                {:entities [{:id 3 :uuid "u3" :name "cow" :kind "passive" :pos {:x 0.5 :y 64 :z -8.5}}]}
+                                400 #(hear-cow-until-north! (:p %))))]
+          (is (= "cow" (:what (first (:found (found-of s))))) "the cow was found by stepping toward the sound")
+          (is (zero? (:legs (:coverage (found-of s)))) "no leg was walked"))))))
 
 (deftest a-target-in-sight-is-found-without-walking
   (async done

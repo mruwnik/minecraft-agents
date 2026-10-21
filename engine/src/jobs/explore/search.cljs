@@ -15,11 +15,14 @@
             [jobs.lib.patch :as patch]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
+            [jobs.lib.vantage :as vantage]
             [engine.notes :as notes]))
 
 (def doc
   "Look for :count things named :target (a block or entity name, or several) by walking legs from where the job
   starts (the origin), or from :center when given.
+
+  A look round that finds too few and hears target animals it cannot see walks up to 4 short steps toward the sound, looking round after each.
 
   Each step looks around (blocks and entities with those names within :scan-radius; not again within 3 blocks of the
   last look round, nor when what it has seen already makes up :count), notes what it saw (:seen) and
@@ -303,6 +306,14 @@
       (seq avoid) (remove #(and (not (:id %)) (avoid [((:pos %) 0) ((:pos %) 2)])))
       takeable (filter #(or (:id %) (:ok (access/may? in :harvest (:pos %))))))))
 
+(defn ^:async hear-lead!
+  "Still short after a look round: walk a few blocks toward the nearest target animal the body hears but cannot see and look
+  round there (jobs.lib.vantage), as a player walks toward a sound. Ends when found, when nothing is heard or after the steps."
+  [c names short?]
+  (let [rows (when (short?) (vantage/heard c names (:scan-radius (:args c))))]
+    (when (and (seq rows) (= :next (await (vantage/step! c rows #(not (short?))))))
+      (await (hear-lead! c names short?)))))
+
 (defn ^:async scan!
   "Look round (every heading, once per spot: not again within look/near-blocks of the last look round), unless what is
   seen already makes up :count; note what was seen and the spot as searched, book the findings."
@@ -312,8 +323,10 @@
         entity-ttl-s (settings/get settings ::entity-ttl-s)
         searched-ttl-s (settings/get settings ::searched-ttl-s)
         seen #(vec (takeable c (sense (:primitives c) names scan-radius)))
-        _ (when (< (count (add-found (:found (ctx/mem c) []) (seen) want)) want)
+        short? #(< (count (add-found (:found (ctx/mem c) []) (seen) want)) want)
+        _ (when (short?)
             (when-not (await (look/survey! c :near (look/search-effort))) (look/see! c (look/search-effort))))
+        _ (do (ctx/update-mem! c dissoc :vantage) (await (hear-lead! c names short?)))
         sighted (seen)
         [x y z] (here c)
         [ox _ oz] (:origin (ctx/mem c))]

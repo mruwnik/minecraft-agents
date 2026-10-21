@@ -1,0 +1,14 @@
+;; Card d3843032: explore.search for cows the body only hears (3 of them 4-5 blocks below a pit lip, out of sight) steps toward the sound and looks
+;; before walking any leg. Same plot as hunt-heard-below-lip: dirt pad y -8..-1, pit x 16..18, z 20..22, y -5..-1; the body 3 blocks short of the lip.
+{:defaults
+ {:tags [:animals :explore :sensing :heard]
+  :time :any
+  :plot {:height 8}
+  :blocks [[:fill [8 -8 8] [24 -1 26] "dirt"] [:fill [16 -5 20] [18 -1 22] "air"]]
+  :body {:at [17.5 0 16.5] :yaw 0 :effects [["resistance" 600 4]] :settle-s 3}
+  :limit-s 120}
+ :cases
+ [{:name "search-steps-to-the-lip-and-finds-a-heard-cow"
+   :act [[:summon "cow" [16.5 -5 20.5] "{NoAI:1b}"] [:summon "cow" [17.5 -5 21.5] "{NoAI:1b}"] [:summon "cow" [18.5 -5 20.5] "{NoAI:1b}"]
+         [:job (jobs.explore.search {:target "cow"})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.explore.search" :reason :found}} :within-s 60 :of-job true}]}]}
