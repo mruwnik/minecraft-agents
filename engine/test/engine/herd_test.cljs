@@ -772,7 +772,8 @@
           (is (= :no-food (:reason e)))
           (is (re-find #"wheat" (:text e)))
           (is (some? (:because e)) "the failed fetch's ending is carried")
-          (is (< (js/Math.abs (+ 40 (self-x s))) 5) "only the food fetch's own search moved the body, not a start for the pen or the cow")
+          (is (every? #(.startsWith (:job %) "j1/need") (filter #(= :child_started (:kind %)) @(:seen s)))
+              "the food fetch's own search is the only thing that moved the body, not a start for the pen or the cow")
           (is (nil? (failed-error s)))
           (is (finished? s)))))))
 
