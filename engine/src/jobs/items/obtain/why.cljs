@@ -55,9 +55,15 @@
 (defn make-why
   "Why item cannot be made: a smelted product (iron_ingot) lacks its input, whatever packed-block recipe also makes it."
   [c version have item n]
-  (if-let [input (and (way? c :smelt) (smelt-plan/made-from item))]
-    (str "smelting " item " needs " input ", have " (get have input 0))
-    (recipes/lacking version have item n)))
+  (cond
+    (= "water_bucket" item)
+    (str "a water bucket is a bucket filled at a seen water source; "
+         (if (pos? (get have "bucket" 0)) "a bucket is carried" (recipes/lacking version have "bucket" 1)))
+
+    :else
+    (if-let [input (and (way? c :smelt) (smelt-plan/made-from item))]
+      (str "smelting " item " needs " input ", have " (get have input 0))
+      (recipes/lacking version have item n))))
 
 (defn no-source-why
   "Text for the no-source wait: what each allowed source lacks."

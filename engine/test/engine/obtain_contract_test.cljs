@@ -157,13 +157,25 @@
           (is (= :done (:kind e)))
           (is (= {:got 1 :item "water_bucket"} (select-keys (:data e) [:got :item]))))))))
 
-(deftest water-seen-but-no-bucket-carried-is-no-source
+(deftest water-seen-but-no-bucket-or-iron-is-no-source-that-names-the-bucket
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (update (f/bare []) :blocks merge {"4,63,0" "water"}) [f/own-zone])
               e (await (ending-of s 'jobs.items.obtain {:item "water_bucket" :explore false} 20))]
-          (is (= {:kind :condition-failed :cause :no-source} (kc e))))))))
+          (is (= {:kind :condition-failed :cause :no-source} (kc e)))
+          (is (re-find #"bucket" (get-in e [:cause :why])))
+          (is (not (re-find #"no recipe makes" (get-in e [:cause :why])))))))))
+
+(deftest a-bucket-is-crafted-from-iron-then-filled-at-seen-water
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (-> (f/bare [{:name "iron_ingot" :count 3} {:name "crafting_table" :count 1}]) (update :blocks merge {"4,63,0" "water"})
+                          (assoc :recipes {"bucket" {:count 1 :needs {"iron_ingot" 3} :table true}})) [f/own-zone])
+              e (await (ending-of s 'jobs.items.obtain {:item "water_bucket" :explore false} 120))]
+          (is (= :done (:kind e)))
+          (is (= {:got 1 :item "water_bucket"} (select-keys (:data e) [:got :item]))))))))
 
 (deftest sugar-cane-is-cut-from-a-seen-stand-by-get-seeds
   (async done

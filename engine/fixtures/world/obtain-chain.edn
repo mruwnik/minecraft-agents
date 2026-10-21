@@ -190,4 +190,11 @@
    :body {:inventory [["bucket" 1]]}
    :act [[:job (jobs.items.obtain {:item "water_bucket" :explore false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "water_bucket" 1]]}
+  ;; no bucket carried: it is crafted from 3 iron ingots (obtain child), then filled at the seen water
+  {:name "water-bucket-with-iron-crafts-the-bucket-then-fills-it"
+   :blocks [[:set [19 0 16] "water"]]
+   :body {:inventory [["iron_ingot" 3] ["crafting_table" 1]]}
+   :act [[:job (jobs.items.obtain {:item "water_bucket" :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
    :after [[:item "water_bucket" 1]]}]}

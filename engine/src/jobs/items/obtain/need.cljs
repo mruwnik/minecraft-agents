@@ -10,6 +10,7 @@
             [jobs.items.obtain.seen :refer [gather-slot seen-of with-block]]
             [jobs.items.obtain.table :refer [gather-needs searchable?]]
             [jobs.lib.tools :as tools]
+            [jobs.lib.util :as u]
             [jobs.lib.trees :as trees]))
 
 (declare tools-wanted explorable? gather-viable?)
@@ -69,15 +70,18 @@
 
 (defn tools-wanted
   "For a mined need (dirt is dug by hand) whose block the carried tools do not harvest, with :craft allowed: the tools
-  that do, cheapest first (wooden_pickaxe for stone, stone_pickaxe for iron_ore), less those wanted; else nil."
+  that do, cheapest first (wooden_pickaxe for stone, stone_pickaxe for iron_ore), less those wanted; for a water bucket
+  with no bucket carried, the bucket; else nil."
   [c names need]
   (let [p (:primitives c)
         block (:block (:args need))
         tools (when (and (= 'jobs.gather.mine (:job need)) (not= "dirt" (:key need)) block
                          (way? c :craft) (not (tools/can-harvest? p block)))
                 (get-tool/tools-for p {:block block}))]
-    (when (vector? tools)
-      (not-empty (vec (remove (set names) tools))))))
+    (if (and (= "water_bucket" (:key need)) (not (some #(= "bucket" (:name %)) (u/inventory p))))
+      ["bucket"]
+      (when (vector? tools)
+        (not-empty (vec (remove (set names) tools)))))))
 
 (defn pickaxe-first? [c names need] (boolean (tools-wanted c names need)))
 
