@@ -136,3 +136,8 @@
     (is (= 0 (:air-limit (policy 31000 {:pos at}))) "30 s after, on the spot")
     (is (nil? (:air-limit (policy 31000 {:pos {:x 100 :y 64 :z 0}}))) "far from the spot")
     (is (nil? (:air-limit (policy 1000000 {:pos at}))) "long after")))
+
+(deftest the-dive-setting-false-bars-the-walk-from-planning-a-dive
+  (let [policy (fn [kvs] (settings/with-settings kvs (fn [] (wworld/body-policy {:primitives (tu/fake {:self {:health 20 :food 20 :pos {:x 0 :y 64 :z 0}}}) :args {}}))))]
+    (is (= 0 (:air-limit (policy {:jobs.lib.walk.world/dive false}))))
+    (is (nil? (:air-limit (policy {}))))))

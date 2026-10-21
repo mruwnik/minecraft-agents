@@ -446,6 +446,7 @@
 (deftest a-stay-level-walk-to-ore-plans-no-way-over-the-ground
   (is (= 8 (:y-margin (mine/dig-walk-opts {:ways #{:seen :strip-tunnel}} false nil))) "a way round over a hill is no way for a run that stays level")
   (is (nil? (:y-margin (mine/dig-walk-opts {} false nil))))
+  (is (false? (:dive (mine/dig-walk-opts {} false nil))) "a walk to a block to dig plans no dive")
   (is (= #{:walk :clear-seal} (:ways (mine/dig-walk-opts {:ways #{:seen :strip-tunnel}} true nil))))
   (is (= {:safe? '(not (threatened))} (:checks (mine/dig-walk-opts {} false {:safe? '(not (threatened))})))))
 

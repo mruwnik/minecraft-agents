@@ -230,9 +230,9 @@
                  (contains? (ledger/ways-of c) (access/cell (update feet :y dec)))))))
 
 (defn dig-walk-opts
-  "The go-near! options of the walk to a dig: other ways only beyond reach, walks inside own cuts ignore the dark (the :checks forms given, when any), a level bound with :stay-level."
+  "The go-near! options of the walk to a dig: other ways only beyond reach, no dive under water, walks inside own cuts ignore the dark (the :checks forms given, when any), a level bound with :stay-level."
   [args in-reach? checks]
-  (cond-> {}
+  (cond-> {:dive false}
     in-reach? (assoc :ways #{:walk :clear-seal})
     (seq checks) (assoc :checks checks)
     (mw/stay-level? args) (assoc :y-margin (settings/get settings ::stay-margin))))

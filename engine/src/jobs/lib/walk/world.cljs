@@ -29,6 +29,7 @@
    ::y-margin {:default false :doc "Blocks a walk's search may reach above the higher and below the lower of body and goal (a route dipping deeper, such as through deep caves, is not planned); false: 96, and a buried body's dive floor applies." :spec (a/or-of false? (a/int-in 0 nil))}
    ::unknown-max-nodes {:default 12000 :doc "The most nodes a walk's search over what the body has seen only (go-to :unknown) holds before it ends :budget: a goal no seen route reaches floods unseen cells otherwise to the planner's limit (200000)." :spec (a/int-in 1000 nil)}
    ::dive-pause-s {:default 120 :doc "Seconds after a breathe reflex fired in which walks near the spot (::dive-pause-near) plan no dive (head under water) except to air: the walk that was cut would plan the same dive again." :spec (a/num-in 0 nil)}
+   ::dive {:default true :doc "Whether walks may plan a dive (head under water); false plans none except to air, as after a breathe reflex (a walk to a block to dig has no business under a lake)." :spec boolean?}
    ::dive-pause-near {:default 30 :doc "Blocks from where a breathe reflex fired within which walks plan no dive for ::dive-pause-s." :spec (a/num-in 0 nil)}
    ::gait {:default :auto :doc "How go-to walks when its :gait is nil: :auto, :walk or :sneak." :spec cost/gaits}})
 
@@ -346,7 +347,7 @@
       (or under? (and (.-inWater self) (number? (.-oxygen self)) (< (.-oxygen self) 20))) (-> (cond-> under? (-> (dissoc :air-grace) (merge (cost/air-profile nil (array-seq (.-effects self)))))) (assoc :air-used (cost/air-used (.-oxygen self)))
                                                (merge (drowning self (cost/walk-hp-seconds)))
                                                (merge (some->> (known-fn (:primitives c)) (hash-map :air-seen))))
-      (dive-paused? c) (assoc :air-limit 0)
+      (or (dive-paused? c) (false? (settings/get settings ::dive))) (assoc :air-limit 0)
       (and (number? food) (<= food 6)) (assoc :sprint false)
       (= :walk (gait c)) (assoc :sprint false :gait :walk)
       (= :sneak (gait c)) (assoc :sprint false :gait :sneak))))
