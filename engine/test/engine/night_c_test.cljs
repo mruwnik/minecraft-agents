@@ -110,14 +110,24 @@
           (is (nothing-placed-at-the-start? p) "10 dim blocks cost more than a lit walk, still under the pit's quote")
           (is (= 10 (js/Math.floor (:x (st/pos-of p)))) "walked home"))))))
 
-(deftest a-home-beyond-the-walk-radius-is-not-walked-to
+(def far-home-world (assoc lit-world :blocks (assoc wide-ground "40,66,0" "stone")))
+
+(deftest a-home-beyond-the-time-left-before-dark-is-not-walked-to
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (await (night-at-home (assoc lit-world :blocks (assoc wide-ground "40,66,0" "stone")) {:x 40 :y 64 :z 0}))]
+        (let [{:keys [eng p]} (await (night-at-home far-home-world {:x 40 :y 64 :z 0} {:settings {:jobs.survival.night.sites/home-walk-margin-s 0}}))]
           (await (core/tick! eng))
           (is (seq (st/calls p "place")))
           (is (< (:x (st/pos-of p)) 5)))))))
+
+(deftest a-home-the-walk-to-fits-the-time-before-dark-is-walked-to-though-farther-than-the-home-radius
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (await (night-at-home far-home-world {:x 40 :y 64 :z 0}))]
+          (await (tu/run-until-empty eng 60))
+          (is (= 40 (js/Math.floor (:x (st/pos-of p)))) "walked home with no bed to use or carry"))))))
 
 (deftest a-home-with-no-seen-roof-is-not-walked-to
   (async done

@@ -46,7 +46,7 @@
   - asleep: hold (:sleeping).
   - roofed or buried in a closed region with sides never seen: a look at the nearest, else a walk to it, 15 failed cells and 200 steps a night at most (an unseen side is open until seen: a lit tunnel with its walls seen is shelter, one with an unseen branch is not).
   - sheltered (slept, dug in, shut in): log out for a stint while someone else sleeps, else hold (:sheltered) while a bed to use or a sleeper keeps the trigger firing, else end so the queue runs.
-  - a roofed :roofed-places place within the night.sites ::home-radius setting, a bed to use or carry and the body not roofed: jobs.survival.enter-room walks in (one try tonight); a carried bed is not put down in the open while one is close (night.bed-kept).
+  - a roofed :roofed-places place within the night.sites ::home-radius setting (bed to use or carry), or farther while the walk fits the time left before the dark plus a margin (night.sites home-walk-*; bed or not), and the body not roofed: jobs.survival.enter-room walks in (one try tonight); a carried bed is not put down in the open while one is close (night.bed-kept).
   - an open door of the closed room the body stands in is shut; the room's doorway is filled before a carried bed goes down (ledger :doorway; one that cannot be filled for want of blocks, or was filled, is :doorway-tried, not tried again tonight).
   - a bed to use or carried (sh-beds/bed-to-use): jobs.survival.bed-down, called again until it ends; one that stops hostile-near makes the night hold :monsters-near.
   - someone else asleep: jobs.survival.log-out, a 30 s stint, not retried tonight when not ok.
@@ -204,6 +204,18 @@
     (when (and (map? w) (= :no-blocks (contract/cause-key w)))
       (some->> (room-lib/gap c) first (#(ctx/remember! c :doorway-tried % room-lib/doorway-tried-policy))))
     :again))
+
+(defn ^:async walkable-far-home
+  "The nearest remembered roofed place (:roofed-places) beyond the walk radius (nearer ones shut-in prices against digging
+  in) that enter-room quotes within the time left before the dark plus a margin (its walk with dark cells priced in; no
+  quote for a place that cannot be closed), else nil."
+  [c]
+  (let [p (:primitives c)
+        beyond? #(< (sites/walk-radius) (u/dist (sh-sense/feet p) (:pos %)))]
+    (when-let [place (first (filter beyond? (room-lib/roofed-places-in c (:args c) (sites/home-walk-radius p))))]
+      (let [[_ mean] (get-in (await (ctx/quote c 'jobs.survival.enter-room {:place (:name place)})) [:uses :job-time])]
+        (when (and mean (<= mean (sites/home-walk-budget-s p)))
+          place)))))
 
 (defn ^:async hold-exposed!
   "Nothing shelters the body tonight: hold it anyway until day (:exposed; the first time one shelter.exposed warn).
@@ -373,7 +385,7 @@
                                               escape (assoc :escape escape))))))
 
 (defn carried-bed-wanted? [c]
-  (sh-beds/bed-place-wanted? (:primitives c) (ctx/view c) (bed-down/radius c) (bed-down/bed-permit c)))
+  (bed-down/place-wanted? c))
 
 (defn note-bed-kept!
   "Once a night, with a carried bed and a roofed home close that could not be entered: say the bed stays in the bag."
@@ -426,7 +438,8 @@
       (let [bed (when bed-way (await (sense/decide! c ::bed #(sh-beds/bed-to-use p (ctx/view c) (bed-down/radius c) (bed-down/bed-permit c)))))
             bed-wanted (and bed-way (carried-bed-wanted? c))
             door (sh/open-room-door p (ctx/view c))
-            home-near (when-not roofed (first (room-lib/roofed-places-in c (:args c) (sites/home-radius))))]
+            home-near (when-not roofed (first (room-lib/roofed-places-in c (:args c) (sites/home-radius))))
+            far-home (when (and (not roofed) (not home-near) (not bed) (walk-home-wanted? c)) (await (walkable-far-home c)))]
         (when (and bed-way (not bed)) (note-bed-far! c))
         (when (and bed-way home-near (:roof-walk-failed (ctx/mem c)) (not bed)) (note-bed-kept! c))
         (when breached
@@ -438,6 +451,7 @@
           (:bed-down (ctx/mem c)) (await (bed-down-step c (:bed (:bed-down (ctx/mem c)))))
           (and roofed bed-wanted (not bed) (sh-beds/bed-layout c true) (room-lib/gap c)) (await (enter-room! c nil))
           (and home-near (walk-home-wanted? c) (or bed bed-wanted)) (await (enter-room! c (:name home-near)))
+          far-home (await (enter-room! c (:name far-home)))
           (or bed (and bed-wanted (not home-near))) (await (bed-down-step c bed))
           (and bed-way (log-out-wanted? c)) (await (log-out-step c))
           (and (:enclose (ctx/mem c)) (not= :dug-in sheltered)) (await (enclose! c))

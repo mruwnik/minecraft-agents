@@ -2,6 +2,7 @@
   (:require [jobs.lib.block-sets :as bs]
             [engine.game :as game]
             [jobs.lib.ready :as ready]
+            [jobs.lib.reserve :as reserve]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -23,7 +24,7 @@
   "Go to bed: sleep in a bed to use, else put a carried bed down beside the body and sleep in it. One step per call, run to its end by the caller (jobs.survival.night).
   Conditions at the start (a listed call waits on them): night (:not-night; asked again before every round), and a bed to use or a bed item to put down (:no-bed; the engine looks round once first; with the default ways, a bed is fetched instead through jobs.lib.need: jobs.items.obtain of any colour, then put down; a failed fetch ends with the cause {:reason :need} and its ending as :because).
   The bed: the :bed argument, else sh-beds/bed-to-use (seen, or remembered within the jobs.lib.shelter.beds bed radius, the urgent radius once max-days-awake days passed without sleep; never an occupied one or one given up on; unless that long without sleep or an underground body sees another player sleep and the bed is near (courtesy), never one whose walk leaves an underground, dug-in or room shelter): jobs.survival.sleep on it.
-  A bed in the open is slept in only by a body overdue for sleep or one that just put the bed down; a sleep that stops :bed-open writes :bed-open and ends condition-failed :bed-open.
+  A carried bed the reserve register holds (jobs.lib.reserve, chooser :night) is not put down. A bed in the open is slept in only by a body overdue for sleep or one that just put the bed down; a sleep that stops :bed-open writes :bed-open and ends condition-failed :bed-open.
   A sleep that ends otherwise without sleeping writes :sleep-failed (5 minutes) and ends nothing-possible :sleep-failed.
   A bed item carried and no bed to use: put down beside the body (roofed cells first, else in the open unless :roofed-only; never in a doorway, on a chest, table or other kept block, or in another's zone, claim or plan footprint), recorded as :bed unless a live :bed is, and as a scaffold-ledger entry (purpose :bed, for survival.leave-shelter to take back by day unless it became the respawn bed) outside the body's own zones (info night.bed-placed {:pos :own-zone}). A placement the server refuses is tried again (twice at most on one foot cell, three in all). No room, or a failed placement, writes :bed-place-failed (10 minutes) and ends nothing-possible :bed-place-failed.
   Ends done {:slept true :bed pos} when asleep, condition-failed :not-night when the day came first or :bed-open {:slept false :bed-open true}; :continue while walking or sleeping. Quote: time by the walk to the bed, done 1 sleep.")
@@ -48,6 +49,12 @@
 (defn overdue? [c]
   (let [days (sh-beds/days-awake c)]
     (and (some? days) (>= days (sh-beds/max-days-awake)))))
+
+(defn place-wanted?
+  "sh-beds/bed-place-wanted?, unless the reserve register holds the carried bed (a plan's, or the agent's) for something else."
+  [c]
+  (and (sh-beds/bed-place-wanted? (:primitives c) (ctx/view c) (radius c) (bed-permit c))
+       (boolean (some #(.endsWith (:name %) "_bed") (reserve/free c :night)))))
 
 (defn bed-to-use
   "The :bed argument, else the bed sh-beds/bed-to-use picks."
@@ -75,9 +82,8 @@
 (defn problem
   "The need wait for a bed while there is none to use and none carried to put down, else nil."
   [c]
-  (let [p (:primitives c)]
-    (when-not (or (bed-to-use c) (sh-beds/bed-place-wanted? p (ctx/view c) (radius c) (bed-permit c)))
-      {:reason :need :any-of bed-names :count 1})))
+  (when-not (or (bed-to-use c) (place-wanted? c))
+    {:reason :need :any-of bed-names :count 1}))
 
 (defn bed-status
   "A bed to use, a bed item to put down or a bed to fetch, else :no-bed (:look until the body looked round)."
@@ -193,7 +199,7 @@
                 (await (sense/decide! c ::bed #(sh-beds/bed-to-use p (ctx/view c) (radius c) (bed-permit c)))))]
     (cond
       bed (await (sleep! c bed (overdue? c)))
-      (sh-beds/bed-place-wanted? p (ctx/view c) (radius c) (bed-permit c)) (await (place-bed-and-sleep! c))
+      (place-wanted? c) (await (place-bed-and-sleep! c))
       :else (let [o (need/fetch-opts c)
                   e (when (and o (problem c)) (await (need/blocks! c bed-names 1 o)))]
               (cond

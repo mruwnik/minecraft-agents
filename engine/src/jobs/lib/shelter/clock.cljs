@@ -20,6 +20,8 @@
   "The first time of day (ticks) that self().isDay counts as night."
   12542)
 
+(def dark-tick "The time of day (ticks) by which the open sky is dark enough for monsters to spawn." 13000)
+
 (def home-limit "Farthest home, in blocks, worth the walk (go-home's :limit default, the dusk-home trigger's bound)." 160)
 
 (def day-tick "The time of day (game ticks) at which the sun is up again (engine.senses/day-at?)." 23460)

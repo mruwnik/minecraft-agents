@@ -1,6 +1,7 @@
 (ns jobs.build.from-plan
   (:require [jobs.lib.child :as child]
             [jobs.lib.build.wood :as wood]
+            [jobs.lib.reserve :as reserve]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -382,11 +383,18 @@
         (= :done (:kind e)) :again
         :else (do (book-failed! c w e) :again)))))
 
+(defn hold-bed!
+  "A bed the plan still has to place, and one carried: reserved for the call's life, so the night does not make it a camp bed."
+  [c cells]
+  (when (and (some #(wood/bed? (:item %)) (missing cells)) (some #(wood/bed? (:name %)) (u/inventory (:primitives c))))
+    (reserve/hold! c (str (:id c) "-bed") {:tag :bed :why "bed for the plan"})))
+
 (defn ^:async step [c]
-  (let [{:keys [trouble wood]} (planned c)]
+  (let [{:keys [trouble wood cells]} (planned c)]
     (if trouble
       :continue
       (do (when (and wood (nil? (:wood (ctx/mem c)))) (ctx/update-mem! c assoc :wood wood))
+          (hold-bed! c cells)
           (or (await (fetch-step! c))
               (let [cells (:cells (planned c))]
                 (settle-placing! c cells)

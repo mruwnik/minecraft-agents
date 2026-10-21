@@ -279,6 +279,17 @@
             (is (empty? (st/calls p "moveTo")) "the drop is picked up without a direct move")
             (is (= [] (:list (core/state eng))))))))))
 
+(deftest the-night-keeps-a-carried-bed-the-reserve-register-holds-in-the-bag
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup {:time night :inventory [{:name "red_bed" :count 1}] :skipNight false})]
+          (mem/write! (:store eng) :reserve {:id "plan-bed" :tag :bed :count 1 :strength 1 :by "agent"} {:cap 100 :ttl :forever})
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (core/tick! eng))
+          (is (empty? (st/calls p "sleep")) "not slept in")
+          (is (empty? (st/calls p "place")) "the reserved bed (the only thing carried) is not put down"))))))
+
 (deftest bed-down-puts-a-carried-bed-down-and-sleeps-in-it
   (async done
     (tu/run-async done
