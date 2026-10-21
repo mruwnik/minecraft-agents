@@ -5,9 +5,9 @@
             [jobs.lib.child :as child]
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.breath :as breath]
-            [jobs.lib.land :as land]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.ready :as ready]
+            [jobs.lib.shore :as shore]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
             [jobs.lib.column-kinds :as kinds]))
@@ -104,33 +104,25 @@
 
 (def water-radius "Blocks out from the feet a body in water looks for a dry stand." 12)
 
-(defn dry-stand
-  "The nearest seen dry stand within water-radius of the feet not in the set skip of [x y z], as {:x :y :z}, else nil."
-  [p skip]
-  (let [{:keys [x y z] :as feet} (sh-sense/feet p)
-        r water-radius]
-    (->> (for [dx (range (- r) (inc r)) dz (range (- r) (inc r)) dy (range -2 9)]
-           {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
-         (remove #(contains? skip [(:x %) (:y %) (:z %)]))
-         (filter #(land/land-cell? (fn [cell] (u/seen-name p cell)) %))
-         (sort-by #(u/dist feet %))
-         first)))
-
 (defn ^:async leave-water!
-  "A body in water first walks to the nearest seen dry stand, as a player climbs out before mining. :continue while it
-  walks, :again after a walk that ended short of its stand (the next round tries another, up to max-failed-stands), :out when it is dry or sees no stand."
+  "A body in water first walks to a dry stand joined to it by seen water and air (the shore.reachable-land within
+  water-radius), as a player climbs out before mining; the stand is chosen once and kept in mem until the walk ends.
+  :continue while it walks, :again after a walk that ended short (the next round picks another, up to max-failed-stands
+  in a row), :out when it is dry, arrived or sees no stand."
   [c]
   (let [p (:primitives c)
-        failed (get-in (ctx/mem c) [:leave-water :failed] #{})
-        stand (when (and (breath/in-water? p) (< (count failed) max-failed-stands)) (dry-stand p failed))
-        stand-key (some-> stand ((juxt :x :y :z)))]
+        m (:leave-water (ctx/mem c))
+        failed (:failed m #{})
+        stand (when (and (breath/in-water? p) (< (count failed) max-failed-stands))
+                (or (:stand m) (shore/reachable-land p (u/self-pos c) water-radius failed)))]
     (cond
       (nil? stand) :out
-      :else (let [_ (when-not (get-in (ctx/mem c) [:leave-water :said])
-                      (ctx/update-mem! c assoc-in [:leave-water :said] true)
+      :else (let [_ (when-not (:stand m)
+                      (ctx/update-mem! c assoc-in [:leave-water :stand] stand)
                       (ctx/emit! c :obtain.leave-water :info {:message (str "in water: walking to dry land at " (:x stand) " " (:y stand) " " (:z stand)) :pos stand}))
                   r (await (child/call-walk* c :leave-water-walk (ready/forage-walk c {:pos stand :range 0 :ways #{:walk} :spend {:tries 1}})))]
               (cond
                 (= :continue r) :continue
-                (:arrived (:data r)) :out
-                :else (do (ctx/update-mem! c update-in [:leave-water :failed] (fnil conj #{}) stand-key) :again))))))
+                (:arrived (:data r)) (do (ctx/update-mem! c dissoc :leave-water) :out)
+                :else (do (ctx/update-mem! c update :leave-water #(-> % (dissoc :stand) (update :failed (fnil conj #{}) ((juxt :x :y :z) stand))))
+                          :again))))))

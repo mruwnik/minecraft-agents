@@ -3,6 +3,7 @@
   non-hazard block) with water at the level of that block beside it and air over the water."
   (:require [jobs.lib.block-sets :as bs]
             [jobs.lib.blocks :as b]
+            [jobs.lib.breath :as breath]
             [jobs.lib.land :as land]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
@@ -42,3 +43,38 @@
                        :when (standable? p land)]
                    {:land land :water {:x x :y y :z z}})))
        (sort-by #(u/dist from (vehicle/centre (:land %))))))
+
+(defn same-way?
+  "cell lies within 45 degrees of a failed target as seen from the offset (dx, dz): a swim toward that way already
+  failed (a wall), so its neighbours would too."
+  [dx dz failed fx fz]
+  (some (fn [t]
+          (let [tx (- (:x t) fx) tz (- (:z t) fz)
+                dot (+ (* dx tx) (* dz tz))]
+            (and (pos? dot)
+                 (>= (* dot dot) (* 0.5 (+ (* dx dx) (* dz dz)) (+ (* tx tx) (* tz tz)))))))
+        failed))
+
+(defn nearest-land
+  "The nearest land cell within radius sideways of self-pos, feet y from one below to two above, that keep? accepts;
+  nil if none. A failed target (a seq of cells) and the cells in its direction are skipped."
+  ([p self-pos radius] (nearest-land p self-pos radius nil (constantly true)))
+  ([p self-pos radius failed keep?]
+   (let [fx (js/Math.floor (:x self-pos))
+         fy (js/Math.floor (:y self-pos))
+         fz (js/Math.floor (:z self-pos))]
+     (->> (for [[dx dz] (breath/columns radius)
+                :when (not (same-way? dx dz failed fx fz))
+                dy [0 -1 1 2]]
+            {:x (+ fx dx) :y (+ fy dy) :z (+ fz dz)})
+          (remove (set failed))
+          (filter #(and (standable? p %) (keep? p %)))
+          first))))
+
+(defn reachable-land
+  "The nearest dry stand cell joined to the body by seen water and air cells (a flooded stair or shaft, however far up),
+  within radius sideways and radius above the feet; nil if none. nearest-land only reads columns near the feet's height."
+  [p self-pos radius failed]
+  (let [skip (set failed)]
+    (breath/find-joined p self-pos radius radius
+                        (fn [cell] (and (not (contains? skip cell)) (bs/air (u/seen-name p cell)) (standable? p cell))))))

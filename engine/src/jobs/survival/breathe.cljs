@@ -167,17 +167,6 @@
   (let [cell (breath/surface-in-column p (js/Math.floor (:x pos)) (js/Math.floor (:z pos)) (js/Math.floor (:y pos)) reach)]
     (if cell (assoc pos :y (:y cell)) pos)))
 
-(defn same-way?
-  "cell lies within 45 degrees of a failed target as seen from the offset (dx, dz): a swim toward that way already
-  failed (a wall), so its neighbours would too."
-  [dx dz failed fx fz]
-  (some (fn [t]
-          (let [tx (- (:x t) fx) tz (- (:z t) fz)
-                dot (+ (* dx tx) (* dz tz))]
-            (and (pos? dot)
-                 (>= (* dot dot) (* 0.5 (+ (* dx dx) (* dz dz)) (+ (* tx tx) (* tz tz)))))))
-        failed))
-
 (defn shore-cell?
   "A land cell a swimming body can climb onto: a side neighbour has room (feet and head cells air or water) over water
   one or two blocks below the land cell's feet, so its rim is at most one block above the water. Land behind a wall,
@@ -189,30 +178,6 @@
             (and (breath/passable-water-or-air? (at 0)) (breath/passable-water-or-air? (at 1))
                  (or (= "water" (at -1)) (= "water" (at -2))))))
         [[1 0] [-1 0] [0 1] [0 -1]]))
-
-(defn nearest-land
-  "The nearest land cell within radius sideways of self-pos, feet y from one below to two above, that keep? accepts;
-  nil if none. A failed target (a seq of cells) and the cells in its direction are skipped."
-  ([p self-pos radius] (nearest-land p self-pos radius nil (constantly true)))
-  ([p self-pos radius failed keep?]
-   (let [fx (js/Math.floor (:x self-pos))
-         fy (js/Math.floor (:y self-pos))
-         fz (js/Math.floor (:z self-pos))]
-     (->> (for [[dx dz] (breath/columns radius)
-                :when (not (same-way? dx dz failed fx fz))
-                dy [0 -1 1 2]]
-            {:x (+ fx dx) :y (+ fy dy) :z (+ fz dz)})
-          (remove (set failed))
-          (filter #(and (shore/standable? p %) (keep? p %)))
-          first))))
-
-(defn reachable-land
-  "The nearest dry stand cell joined to the body by seen water and air cells (a flooded stair or shaft, however far up),
-  within radius sideways and radius above the feet; nil if none. nearest-land only reads columns near the feet's height."
-  [p self-pos radius failed]
-  (let [skip (set failed)]
-    (breath/find-joined p self-pos radius radius
-                        (fn [cell] (and (not (contains? skip cell)) (bs/air (u/seen-name p cell)) (shore/standable? p cell))))))
 
 (def headings
   "Swim headings [dx dz], east first, then south, west, north, then the diagonals."
@@ -345,10 +310,10 @@
         carried? (boolean (escape/pillar-item c))
         in-budget? (< (:travelled m 0) (* 3 (swim-range)))
         ways (fn []
-               (let [shore (nearest-land p pos (shore-radius) (:failed-shores m) shore-cell?)
+               (let [shore (shore/nearest-land p pos (shore-radius) (:failed-shores m) shore-cell?)
                      land (when (and in-budget? (< (:land-tries m 0) (land-tries)))
-                            (or (nearest-land p pos (search-radius) (:failed-land m) (constantly true))
-                                (reachable-land p pos (search-radius) (:failed-land m))))
+                            (or (shore/nearest-land p pos (search-radius) (:failed-land m) (constantly true))
+                                (shore/reachable-land p pos (search-radius) (:failed-land m))))
                      stepcell (when (< (:steps m 0) (max-steps)) (step-cell p pos (shore-radius) (:failed-steps m)))
                      legs (when (and in-budget? (< (:legs m 0) (max-legs)))
                             (some (fn [h] (when-let [t (leg-target p pos (:start m) h)] [h t]))

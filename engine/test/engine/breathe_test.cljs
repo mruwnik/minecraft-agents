@@ -1739,10 +1739,10 @@
 (deftest dry-steps-high-up-a-flooded-stair-shaft-are-land-the-body-can-reach
   (let [p (tu/seeing-all (tu/fake {:self {:inWater true :pos {:x 0.5 :y 64 :z 0.5}} :blocks (flooded-stair 6 9)}))
         pos {:x 0.5 :y 64 :z 0.5}]
-    (is (nil? (b/nearest-land p pos 48 nil (constantly true))) "the column search reads only a few cells above the feet")
-    (is (= {:x 6 :y 70 :z 0} (b/reachable-land p pos 48 nil)) "the first dry step, found through the flooded ones")
-    (is (nil? (b/reachable-land p pos 48 [{:x 6 :y 70 :z 0} {:x 7 :y 71 :z 0} {:x 8 :y 72 :z 0}])) "failed steps are skipped")
-    (is (nil? (b/reachable-land p pos 3 nil)) "bounded by the radius")))
+    (is (nil? (shore/nearest-land p pos 48 nil (constantly true))) "the column search reads only a few cells above the feet")
+    (is (= {:x 6 :y 70 :z 0} (shore/reachable-land p pos 48 nil)) "the first dry step, found through the flooded ones")
+    (is (nil? (shore/reachable-land p pos 48 [{:x 6 :y 70 :z 0} {:x 7 :y 71 :z 0} {:x 8 :y 72 :z 0}])) "failed steps are skipped")
+    (is (nil? (shore/reachable-land p pos 3 nil)) "bounded by the radius")))
 
 (deftest the-unseen-cells-beside-the-water-joined-to-the-body-are-where-a-flooded-stair-goes-on
   (let [p (tu/seeing-all (tu/fake {:self {:inWater true :pos {:x 0.5 :y 64 :z 0.5}} :blocks (flooded-stair 6 9)}))
@@ -1751,7 +1751,7 @@
         pos {:x 0.5 :y 64 :z 0.5}]
     (is (empty? (breath/unseen-beside-joined p 0 64 0 24 24 4 nil)) "all seen: nothing to look at")
     (tu/set-sensed! p (fn [q] (if (hidden? q) #js {:unknown true :pos q} (seen q))))
-    (is (nil? (b/reachable-land p pos 48 nil)) "the stair is cut where it is not seen")
+    (is (nil? (shore/reachable-land p pos 48 nil)) "the stair is cut where it is not seen")
     (is (= [{:x 3 :y 67 :z 0} {:x 3 :y 68 :z 0}] (breath/unseen-beside-joined p 0 64 0 24 24 4 nil)) "the unseen cells touching the water, nearest first, not the one behind them")))
 
 (deftest drowning-at-the-foot-of-a-flooded-stair-swims-up-it-to-the-dry-steps
