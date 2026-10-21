@@ -320,7 +320,7 @@
 
 (defn fight-unsettled?
   "Whether a round that now sees no danger may be a blink: the fight child yielded :continue or the body was hurt within
-  hit-window-ms (a mob knocked a cell off is still there). The round then looks once more before it ends."
+  hit-window-ms (a mob knocked a cell off is still there). The round then looks again, up to ::max-unchanged times, before it ends."
   [c outcome]
   (boolean (or (= :continue outcome)
                (seq (ctx/since c :hurt (- (ctx/now c) (hit-window-ms)))))))
@@ -332,7 +332,7 @@
   [c]
   (when-not (contains? (ctx/mem c) :goal)
     (ctx/update-mem! c assoc :goal (goal/interrupted-goal (ctx/view c) (:root c))))
-  (loop [unchanged 0 looked? false]
+  (loop [unchanged 0 looks 0]
     (let [hs (near c)
           before (signature c hs)
           outcome (cond
@@ -348,11 +348,11 @@
                      (cond-> {:flight-ended (:cause outcome)} (:text (:data outcome)) (assoc :text (:text (:data outcome))))))
         (cond
           (:left-heard outcome) (ctx/end c :done nil (:left-heard outcome))
-          (and (empty? after) (not (hiding? c)) (not (and (not looked?) (fight-unsettled? c outcome)))) (ctx/end c :done nil (:flight-end (ctx/mem c)))
-          (and (empty? after) (not (hiding? c))) (do (await (pace/pace!)) (recur unchanged true))
+          (and (empty? after) (not (hiding? c)) (not (and (< looks (max-unchanged)) (fight-unsettled? c outcome)))) (ctx/end c :done nil (:flight-end (ctx/mem c)))
+          (and (empty? after) (not (hiding? c))) (do (await (pace/pace!)) (recur unchanged (inc looks)))
           :else
           (let [n (if (= before (signature c after)) (inc unchanged) 0)]
             (if (>= n (max-unchanged))
               (do (mute-heard! c hs)
                   (ctx/end c :nothing-possible :no-response {:text (str "a hostile is still near and " n " tries changed nothing")}))
-              (do (await (pace/pace!)) (recur n false)))))))))
+              (do (await (pace/pace!)) (recur n 0)))))))))

@@ -18,6 +18,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.near :as near]
+            [jobs.lib.pace :as pace]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.lib.look :as look]
@@ -322,6 +323,18 @@
                                                                 :from (:pos c) :to (:pos c)}))]
             (await (run-job! s 'test.flight {})))
           (is (<= @searches 2) "a body hurt a moment ago, with nothing seen in reach, does not stand searching a whole leg"))))))
+
+(deftest a-body-hit-a-moment-ago-with-no-hostile-in-sight-looks-again-before-the-response-ends
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (setup {:entities [(zombie 7 5 {})]})
+              paces (atom 0)]
+          (mem/write! (:store (:eng s)) :hurt {:amount 5 :health 10 :attacker {:name "zombie"}} {:cap 50 :ttl 60000})
+          (with-redefs [pace/pace! (fn [] (swap! paces inc) (js/Promise.resolve nil))
+                        respond/respond (fn [_ _] (swap! (fake/state (:p s)) assoc :entities []) (js/Promise.resolve nil))]
+            (await (run-job! s 'jobs.survival.respond-to-hostile {})))
+          (is (>= @paces 2) "a hit within the hit window keeps the response looking, not one blink look"))))))
 
 (defn ^:async searches-in-flee-leg
   "Runs a flight whose search never finishes (1 s a round) and returns the search rounds, the longest a go-to leg searched (ms) and the attacks. act: called with
