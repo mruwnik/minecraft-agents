@@ -2,8 +2,8 @@
 ;; the dug crop is noted for the tidy-up with the seed to sow, restore itself is not checked here). Plan-less planting stays refused by
 ;; the plan (farm.plant is not given an override), covered by farm-tend-zones.
 ;; A row of 4 ripe potato cells x 22..25, z 22 on farmland (water at z 23 over stone). Hunger drained by RCON, nothing carried.
-;; Should-succeed: on another body's plan the field is dug and get-food.trespass-last-resort is warned; on the body's own plan it is dug
-;; with no warning. Should-fail: none (the refusal text is a unit test).
+;; Should-succeed: on another body's plan, with the caller's :ignore-zones?, the field is dug and get-food.trespass-last-resort is warned; on the body's own plan it is dug
+;; with no warning. Should-fail: without :ignore-zones? the foreign potatoes stay and get-food ends :no-food naming them.
 {:defaults
  {:tags [:survival :get-food :farm :zones]
   :plot {:height 6 :floor "grass_block"}
@@ -11,24 +11,41 @@
            [:fill [22 0 22] [25 0 22] "potatoes[age=7]"]]
   :body {:at [10.5 0 16.5] :settle-s 2}
   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
-        [:rcon "damage $BODY 5 minecraft:generic"]
-        [:job (jobs.survival.get-food {})]]
+        [:rcon "damage $BODY 5 minecraft:generic"]]
   :limit-s 100}
  :cases
  [{:name "ripe-potatoes-in-anothers-plan-are-dug-as-a-last-resort-with-a-warning"
    :plans [{:id "field" :metadata {:by "SomeoneElse"} :parts [{:id "row" :box [#at [22 0 22] #at [25 0 22]] :want {:crop "potatoes"}}]}]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:job (jobs.survival.get-food {:ignore-zones? true})]]
    :body {:at [18.5 0 19.5]}
    :expect [{:event {:source :job :kind :get-food.trespass-last-resort} :within-s 80 :of-job true}
             {:event {:source :job :kind #{:completed :stopped}} :within-s 90 :of-job true}]
    :after [[:not-block [22 0 22] "potatoes[age=7]"]]}
+  {:name "ripe-potatoes-in-anothers-plan-are-left-without-ignore-zones"
+   :plans [{:id "field" :metadata {:by "SomeoneElse"} :parts [{:id "row" :box [#at [22 0 22] #at [25 0 22]] :want {:crop "potatoes"}}]}]
+   :body {:at [18.5 0 19.5]}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :get-food.trespass-last-resort} :for-s 10}]
+   :after [[:block [22 0 22] "potatoes[age=7]"]]}
   {:name "ripe-potatoes-in-the-own-plan-are-dug-without-a-warning"
    :plans [{:id "field" :metadata {:by "$body"} :parts [{:id "row" :box [#at [22 0 22] #at [25 0 22]] :want {:crop "potatoes"}}]}]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:job (jobs.survival.get-food {})]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :get-food.trespass-last-resort} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:not-block [22 0 22] "potatoes[age=7]"]]}
   ;; Card dd4ba7a7: with tidy-pending registered, the dug cell of another's plan is replanted from the bag (tidy entry :any-of [potato]); no stopped :not-restored
   {:name "dug-potatoes-of-anothers-plan-are-replanted-by-the-tidy-up"
    :plans [{:id "field" :metadata {:by "SomeoneElse"} :parts [{:id "row" :box [#at [22 0 22] #at [25 0 22]] :want {:crop "potatoes"}}]}]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:job (jobs.survival.get-food {:ignore-zones? true})]]
    :register [{:trigger :tidy-pending}]
    :expect [{:event {:source :job :kind :get-food.trespass-last-resort} :within-s 80 :of-job true}
             {:event {:source :reflex :kind :ended :context {:reflex-id :tidy-pending}} :within-s 160}

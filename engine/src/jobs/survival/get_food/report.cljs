@@ -48,6 +48,8 @@
          (when explored (str ", explored: " explored))
          (when (and (>= wheat 3) reason)
            (str "; carrying " wheat " wheat but cannot bake (" reason ")"))
+         (when-let [f (seq (vals (:foreign-food (ctx/mem c))))]
+           (str "; left alone food in another's area (only a caller's :ignore-zones? takes it): " (str/join ", " f)))
          (when (seq passed)
            (str "; passed over " (count passed) " animal" (when (> (count passed) 1) "s") " ("
                 (str/join ", " (map (fn [a] (str (:name a) ": " (if (= :kept (:why a)) "kept for breeding" (name (:why a)))

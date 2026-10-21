@@ -204,18 +204,22 @@
 
 (def two-carrots {:floor tu/walk-floor :blocks {"2,64,0" "carrots" "3,64,0" "carrots"} :ages {"2,64,0" 7 "3,64,0" 7} :drops {:carrots "carrot"}})
 
-(deftest get-food-digs-the-permitted-crop-first-and-a-foreign-one-only-when-alone
+(deftest get-food-digs-the-permitted-crop-first-and-a-foreign-one-only-when-alone-and-told-to
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[world zones expected warns] [[two-carrots [(zone "Miles" [2 64 0] [2 64 0])] [{:x 3 :y 64 :z 0}] []]
-                                              [(update two-carrots :blocks dissoc "3,64,0") [(zone "Miles" [2 64 0] [2 64 0])] [{:x 2 :y 64 :z 0}] [["vault"]]]
-                                              [(update two-carrots :blocks dissoc "3,64,0") nil [{:x 2 :y 64 :z 0}] []]]]
-          (let [{:keys [eng p seen]} (setup (assoc world :self {:food 2}) zones)]
-            (core/submit! eng '(jobs.survival.get-food {:carry 0}) {})
-            (await (run-until-empty eng 6))
-            (is (= expected (take (count expected) (dug p))) (pr-str [zones expected]))
-            (is (= warns (mapv :zones (trespass seen :get-food.trespass-last-resort))) (pr-str [zones expected]))))))))
+        (let [foreign [(zone "Miles" [2 64 0] [2 64 0])]
+              one-carrot (update two-carrots :blocks dissoc "3,64,0")]
+          (doseq [[world zones args expected warns] [[two-carrots foreign {:ignore-zones? true} [{:x 3 :y 64 :z 0}] []]
+                                                     [one-carrot foreign {:ignore-zones? true} [{:x 2 :y 64 :z 0}] [["vault"]]]
+                                                     [one-carrot foreign {} [] []]
+                                                     [one-carrot nil {} [{:x 2 :y 64 :z 0}] []]]]
+            (let [{:keys [eng p seen]} (setup (assoc world :self {:food 2}) zones)]
+              (core/submit! eng (list 'jobs.survival.get-food (assoc args :carry 0)) {})
+              (await (run-until-empty eng 6))
+              (is (= expected (take (count expected) (dug p))) (pr-str [zones args]))
+              (is (= (count expected) (count (dug p))) (pr-str [zones args]))
+              (is (= warns (mapv :zones (trespass seen :get-food.trespass-last-resort))) (pr-str [zones args])))))))))
 
 (deftest get-food-takes-from-anothers-area-only-when-hungry-with-nothing-edible-carried
   (async done
@@ -227,10 +231,22 @@
                                    [{:self {:food 3}} [{:x 2 :y 64 :z 0}]]
                                    [{:self {:food 3} :inventory [{:name "bread" :count 2}]} []]]]
             (let [{:keys [eng p seen]} (setup (merge one-carrot self) foreign)]
-              (core/submit! eng '(jobs.survival.get-food {}) {})
+              (core/submit! eng '(jobs.survival.get-food {:ignore-zones? true}) {})
               (await (run-until-empty eng 6))
               (is (= expected (take (count expected) (dug p))) (pr-str self))
               (is (= (count expected) (count (trespass seen :get-food.trespass-last-resort))) (pr-str self)))))))))
+
+(deftest get-food-without-ignore-zones-leaves-anothers-crop-and-names-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup (assoc (update two-carrots :blocks dissoc "3,64,0") :self {:food 3})
+                                          [(zone "Miles" [2 64 0] [2 64 0])])]
+          (core/submit! eng '(jobs.survival.get-food {:explore false}) {})
+          (await (run-until-empty eng 6))
+          (is (= [] (dug p)))
+          (is (some #(and (= :stopped (:kind %)) (re-find #"left alone food in another's area.*crop at .*vault" (str (:text %)))) @seen)
+              (pr-str (filterv #(= :stopped (:kind %)) @seen))))))))
 
 ;; ------------------------------------------------------------------ :ignore-zones?
 

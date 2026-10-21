@@ -32,6 +32,7 @@
   (let [v (when (= :chest kind) (access/container-refusal c :take pos))]
     (when v
       (let [fields (access/refusal-fields [v])]
+        (ctx/update-mem! c update :foreign-food assoc pos (str "chest at " (pr-str pos) " (" (access/refusal-text fields) ")"))
         (ctx/warn-once! c [:skipped pos] :get-food.skipped
                         (assoc fields :pos pos :text (str "skipped the chest at " (pr-str pos) ": " (access/refusal-text fields))))))
     (boolean v)))
@@ -152,15 +153,25 @@
 
 (defn ^:async dig-ripe!
   "Dig the nearest ripe block in a permitted place (blocks.dig walks there and collects the drops): :again, or nil
-  when there is none. Another's area counts only when last-resort? and then only after every permitted block. A block
-  not dug is skipped from then on."
+  when there is none. Another's area is dug only when the caller passed :ignore-zones? and last-resort? (hungry,
+  nothing edible carried), after every permitted block; otherwise the block is left and noted in the :foreign-food
+  memory for the end text. A block not dug is skipped from then on."
   [c ripe-ages center radius last-resort?]
   (when (empty? (ripe-blocks c ripe-ages center radius))
     (await (look/survey! c :cell)))
-  (let [{pos :option trespass :trespass} (access/choose c :dig (ripe-blocks c ripe-ages center radius) vector)]
-    (when (and pos (or last-resort? (not trespass)))
+  (let [in (assoc (access/rules-input c) :ignore-zones? false)
+        refusal #(access/trespass-refusal in :dig %)
+        blocks (ripe-blocks c ripe-ages center radius)
+        permitted (remove refusal blocks)
+        foreign (keep (fn [pos] (when-let [v (refusal pos)] [pos v])) blocks)
+        [pos trespass] (if-let [p (first permitted)]
+                         [p nil]
+                         (when (and last-resort? (:ignore-zones? (:args c))) (first foreign)))]
+    (doseq [[fpos v] foreign]
+      (ctx/update-mem! c update :foreign-food assoc fpos
+                       (str "crop at " (pr-str fpos) " (" (access/refusal-text (access/refusal-fields [v])) ")")))
+    (when pos
       (access/trespass! c "get-food" trespass)
-      ;; access/choose made the zone call (a missing zone list never blocks survival); the dig notes a trespass for restore-broken
       (let [e (await (child/run!* c :dig 'jobs.blocks.dig {:pos pos :ignore-zones? true}))]
         (cond
           (= :continue e) :continue

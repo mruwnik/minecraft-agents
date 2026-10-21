@@ -643,7 +643,7 @@ them: `act!` and the primitives check neither, and a job may ignore them. The he
   with one warn naming the zone, claim or plan; a cell two plans share is such a target, and `:ignore-zones? true` acts on it anyway.
 - `withdraw`, `deposit`, `haul`, `smelt` and jobs built on them wait `:refused` (`can-start?`/`can-run?`; a called child ends condition-failed `:refused`) on a foreign container.
 - Survival jobs (`breathe`, `extinguish`, `shut-in`, the crop dig of `get-food`) prefer a permitted option and break
-  another's block only as a last resort (warn `<job>.trespass-last-resort`). They never take from a foreign container. A
+  another's block only as a last resort (warn `<job>.trespass-last-resort`); `get-food` takes another's crops only with the caller's `:ignore-zones?` plus real hunger, else its no-food text names what it left. They never take from a foreign container. A
   missing zone list never blocks a survival job.
 - A plan's footprint is the body's own when its `:metadata :by` equals the body's username (case-insensitive).
 - `access.stair` and `gather.mine` never dig a base block (chest, bed, furnace, table, door, sign: `rules/base-block?`), anyone's.

@@ -68,8 +68,8 @@
   :too-dangerous; the hungry trigger then rests (its :rest-s) while the body stays fragile
   (jobs.survival.get-food.risk). Not shut in a shelter, it first looks around from where it stands (once per place) so hostiles outside its view count.
   Wheat is cut only by :field, in a zone or plan of its own. Babies, animals in another's zone or claim, animals in a zone or plan of the body's own (but for the :pen way) or inside a closed enclosure (::spare-pens), kinds in ::off-limits, and a breeding pair (2 up to ::keep-adults (2) adults of a kind in sight; a lone adult is hunted; kept even when starving, unless ::kept-lifted-below lifts it) are never hunted (:ignore-zones? lifts the others' zone only). Each animal chosen is a food.killed info with its name, cell, adults counted, :keep, food and the rule that allowed it; the data carries :killed. A chest in another's zone or claim is skipped and never taken from, even when starving
-  (one get-food.skipped warning). A crop in another's zone or claim is dug only as the last way, when no permitted crop, field or other way is left and the body is hungry with nothing edible carried (one
-  get-food.trespass-last-resort warning). :ignore-zones? lifts both.
+  (one get-food.skipped warning). A crop in another's zone or claim is dug only when the caller passed :ignore-zones?, as the last way, when no permitted crop, field or other way is left and the body is hungry with nothing edible carried (one
+  get-food.trespass-last-resort warning). Without :ignore-zones? the foreign crops and chests seen are left and named in the no-food text.
   A cut call starts again from the world: carried food first, then the ways.
   Memory: reads :food-source and :hungry. Writes :hungry {:food} (cap 10, one hour). Job memory (hints for
   this run): :no-bake, :no-cook, :tried-sources, :tried-fields, :skipped-blocks, :skipped-animals. Quote: F, a search.")
