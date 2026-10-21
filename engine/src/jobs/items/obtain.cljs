@@ -31,7 +31,7 @@
   A bill runs one obtain child per item still missing, in order, after the furnace material (iron_ingot ..) the missing items need together, which is got in one go and reserved against deposits; each child gets a :spend :job-time of the ::bill-item-s setting. The first child that fails ends the bill with its kind and cause, data {:item the one it stopped at :why}.
 
   Needs: valid :item or :any-of and :count, or a :bill (else impossible :bad-args); a source (else condition-failed :no-source with :why naming what each way lacks).
-  Returns :done {:got n :item name} only with the count carried (a bill: {:have [items]}); nothing-possible :no-source, :table-unreachable or the gather's walk cause (:zone-exit ..) when every allowed way was tried, data {:got :tried :why}; limit-reached :timeout after :spend :job-time (default ::job-time-s).
+  Returns :done {:got n :item name} only with the count carried (the call's :least, default :all, may name fewer) (a bill: {:have [items]}); nothing-possible :no-source, :table-unreachable or the gather's walk cause (:zone-exit ..) when every allowed way was tried, data {:got :tried :why}; limit-reached :timeout after :spend :job-time (default ::job-time-s).
   Quote: the count as yield, time a guess per step, no most for a gather; a bill two gathers' time per missing item.")
 
 (a/defargs args
@@ -60,7 +60,7 @@
   #{:unreachable :not-back :zone-exit :walk-failed :walk-in-failed :shut-in :exhausted :tree-unreachable
     :no-approach :out-of-reach :one-way :way-dives :detour :door-stuck :cut-again :replan-limit})
 
-(def defaults {:ways (set ways) :spend {:job-time ::job-time-s}})
+(def defaults {:least :all :ways (set ways) :spend {:job-time ::job-time-s}})
 
 (defn source-cause
   "nil when a way would start: a usable seen chest that might hold one of the names, a chain made from what is

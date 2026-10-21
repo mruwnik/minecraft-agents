@@ -1,4 +1,4 @@
-;; jobs.items.obtain no-source wording and refusals: cards 45f23f14 (no :explore: the text says to pass it), c9a3ebea (a tree
+;; jobs.items.obtain no-source wording and refusals (and a time limit with part of the count is not completed): cards 45f23f14 (no :explore: the text says to pass it), c9a3ebea (a tree
 ;; barred by another body's zone is named "seen but not taken", a free tree is felled instead), 6120e61d (wool with no sheep waits
 ;; no-source and the check does not throw).
 ;; Open plot, body at [16.5 0 12.5] looking south (yaw 0); a zone tree at x 9 z 22 inside the yard [6..13 19..25], a free tree at x 22.
@@ -37,4 +37,11 @@
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 40 :of-job true}
             {:no-event {:source :system :kind :error} :for-s 30}]
    :after [[:item "white_wool" 0]]
-   :limit-s 60}]}
+   :limit-s 60}
+  {:name "part-of-the-count-at-the-time-limit-is-not-completed"
+   :body {:inventory [["wheat" 1]]}
+   :act [[:job (jobs.items.obtain {:item "wheat" :count 4 :explore false :spend {:job-time 25}})]]
+   :expect [{:no-event {:source :job :kind :completed} :for-s 45}]
+   :after [[:item "wheat" 1]]
+   :limit-s 60}
+]}

@@ -242,3 +242,6 @@
               source (await (run "0"))]
           (is (= :no-source (:reason flowing)) (pr-str flowing))
           (is (= :done (:status source)) (pr-str source)))))))
+
+(deftest obtain-defaults-to-the-whole-count-so-a-limit-with-part-carried-is-not-done
+  (is (= :all (get-in registry/jobs ['jobs.items.obtain :defaults :least]))))
