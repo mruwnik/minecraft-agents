@@ -297,6 +297,16 @@
           (is (= :not-done result))
           (is (<= (count placed) 30) "at most one place call per tick"))))))
 
+(deftest a-cell-in-reach-that-place-cannot-walk-to-gets-a-scaffold-stand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [no-walk {:ways [:carried] :round (fn ^:async w [c] (ctx/end c :nothing-possible :unreachable {:why :budget :placed false :reason :unreachable}))}
+              plan {:id "roof" :parts [{:id "r" :cells [[3 64 4]] :want "stone"}]}
+              {:keys [eng seen]} (start {:inventory [{:name "stone" :count 4} {:name "dirt" :count 10}] :self {:pos {:x 3.5 :y 64 :z 2.5}}} {"roof" plan} [] {'jobs.blocks.place no-walk})
+              _ (await (child-outcome eng job {:plan "roof"} 300))]
+          (is (some #(= :swalk (:slot %)) (h/events-of seen :child_started)) "the scaffold stand is walked to instead of the place walking again"))))))
+
 (deftest an-unseen-cell-is-looked-at-before-it-is-given-up
   (async done
     (tu/run-async done

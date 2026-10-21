@@ -289,7 +289,7 @@
   (let [body (u/self-pos c)
         facing (when-not (or (:click cell) (:dig? cell)) (facing-of (:want cell)))
         stands (plan/grounded-stands (:primitives c) (:pos cell) (js/Math.floor (:y body)) facing (set (map :pos cells)) (set (:bad-stands (ctx/mem c))))
-        grounded (reaching c stands (:pos cell))]
+        grounded (when-not (contains? (:needs-scaffold (ctx/mem c)) (:pos cell)) (reaching c stands (:pos cell)))]
     (or (when-not (seq grounded) (await (scaffold/start! c cells cell (result-data c cells))))
         (await (walk-to! c cells cell)))))
 
@@ -322,7 +322,8 @@
         held (set (filter #(shuts-out? c % wanted) (in-reach c placeable-now)))
         todo (let [open (remove held placeable-now)] (if (seq open) open placeable-now))
         layer (layer-of todo)
-        near (in-reach c layer)
+        near (cond->> (in-reach c layer)
+               (not= :up (scaffold/phase c)) (remove #(contains? (:needs-scaffold (ctx/mem c)) (:pos %))))
         mine (body-cells (u/self-pos c))
         _ (ctx/update-mem! c update :stood (fnil into #{}) mine)
         feet (first (sort mine))

@@ -23,11 +23,19 @@
   "The field crops: item they give, the crop block cut for it (jobs.farm.harvest cuts the ripe ones)."
   {"wheat" "wheat" "carrot" "carrots" "potato" "potatoes" "beetroot" "beetroots"})
 
+(def dirt-blocks
+  "The seen blocks digging which by hand gives dirt (grass drops it)."
+  #{"dirt" "grass_block"})
+
+(def hand-dug
+  "The items dug from the ground by hand (a shovel is faster): the seen blocks that drop one. Flint is the rare drop of gravel."
+  {"dirt" dirt-blocks "sand" #{"sand"} "gravel" #{"gravel"} "clay_ball" #{"clay"} "flint" #{"gravel"}})
+
 (defn source-opts
-  "The recipes/plan options of the gather and smelt sources: ore drops count as gathered, and every furnace product
+  "The recipes/plan options of the gather and smelt sources: ore drops and hand-dug items (sand for glass) count as gathered, and every furnace product
   (jobs.items.smelt.plan/made-from; charcoal from any overworld log) is also made by a smelt step."
   []
-  {:raw (conj (into ore-drops (concat fish-items (keys mob-drops) (keys crop-blocks))) "obsidian" "bone_meal")
+  {:raw (conj (into ore-drops (concat (keys hand-dug) fish-items (keys mob-drops) (keys crop-blocks))) "obsidian" "bone_meal")
    :smelts (assoc (into {} (map (fn [[out in]] [out [in]])) smelt-plan/made-from) "charcoal" trees/log-names)})
 
 (defn leaves-of
@@ -51,14 +59,6 @@
    (when (contains? (recipes/stone-materials version) item)
     (let [bs (set (for [[b d] b/drop-item :when (= d item)] b))]
       (if (seq bs) bs #{item})))))
-
-(def dirt-blocks
-  "The seen blocks digging which by hand gives dirt (grass drops it)."
-  #{"dirt" "grass_block"})
-
-(def hand-dug
-  "The items dug from the ground by hand (a shovel is faster): the seen blocks that drop one. Flint is the rare drop of gravel."
-  {"dirt" dirt-blocks "sand" #{"sand"} "gravel" #{"gravel"} "clay_ball" #{"clay"} "flint" #{"gravel"}})
 
 (defn animal?
   "Whether a gather need is hunted (wool from sheep, leather from cows ..), not mined or felled."

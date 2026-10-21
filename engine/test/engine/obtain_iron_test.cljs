@@ -34,6 +34,11 @@
     (is (= 8 (get-in pl [:gather "raw_iron"])))
     (is (some #(and (= :smelt (:op %)) (= "iron_ingot" (:item %))) (:steps pl)))))
 
+(deftest the-plan-for-glass-panes-from-nothing-gathers-sand-and-smelts
+  (let [pl (recipes/plan game/default-version {} "glass_pane" 16 (assoc (table/source-opts) :gather? true))]
+    (is (= 6 (get-in pl [:gather "sand"])))
+    (is (some #(and (= :smelt (:op %)) (= "glass" (:item %))) (:steps pl)))))
+
 (deftest raw-iron-is-mined-from-a-seen-iron-ore
   (async done
     (tu/run-async done
