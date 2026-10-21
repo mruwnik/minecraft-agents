@@ -1,0 +1,23 @@
+;; Card db92f510: a pile 14 below and 16 aside in a dark stone cave, reached by a dug stair that meets a 2-wide shaft with no floor.
+;; Stone mass x 0..31, y 0..19, z 0..31; a 1-wide corridor along z 16 at y 14..15 from x 2 to 10 (the respawn at its west end), then a 2-wide shaft (x 11..12, y 8..15,
+;; no floor over its 8 depth) cutting the corridor; the pile chamber [24 0 14]..[28 2 18] (glowstone in its roof keeps mobs out, the rest is dark) where the body dies.
+;; The body respawns with a pickaxe given after the respawn and no building block (they were in the pile).
+;; Should-succeed: the stair stops on the gap, the body gets building blocks (digs stone for cobblestone) and bridges it, then the pile is collected.
+{:defaults
+ {:tags [:survival :death :jobs]
+  :time :any
+  :plot {:height 24}
+  :blocks [[:fill [0 0 0] [31 19 31] "stone"] [:fill [2 14 16] [10 15 16] "air"] [:fill [11 8 16] [12 15 16] "air"]
+           [:fill [24 0 14] [28 2 18] "air"] [:set [26 3 16] "glowstone"]]
+  :body {:at [26.5 0 16.5] :spawnpoint [2 14 16] :effects [["resistance" 600 4]]
+         :inventory [["raw_iron" 24] ["cobblestone" 64] ["cobblestone" 36]]}
+  :act [[:kill-body]
+        [:await {:source :body :kind :respawned} 30]
+        [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]
+        [:job (jobs.survival.recover-drops)]]
+  :limit-s 330}
+ :cases
+ [{:name "stair-meets-a-gap-gets-blocks-and-bridges"
+   :act [[:rcon "give $BODY minecraft:iron_pickaxe 1"]]
+   :expect [{:event {:source :job :kind :completed :data {:decision :collected}} :within-s 300 :of-job true}]
+   :after [[:item "raw_iron" 24]]}]}

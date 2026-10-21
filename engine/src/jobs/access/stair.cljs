@@ -38,9 +38,9 @@
   A cell the body has not seen is taken for stone and looked at before it is judged and after it is dug. Each step is
   judged when chosen and each cell again right before its dig. A stair at its last step is done without the way-back check.
 
-  Floors: a step's floor must be solid. A floor of air gets a carried building block (jobs.lib.choose/fillers :build) after the rules'
+  Floors: a step's floor must be solid. A floor of air gets a carried building block (none carried: got with jobs.items.obtain when the call's ways allow a fetch) (jobs.lib.choose/fillers :build) after the rules'
   may-place?, against a neighbour or from the cell under it (jobs.lib.bridge/bridge-plans); a stair down also bridges back along
-  its line up to setting bridge-depth cells, and, when nothing near gives a face, lays a flat bridge ahead (a jobs.access.bridge child, at most jobs.lib.escape.span's max-bridge) to the first step whose floor has one; the stair goes on from the bridge's end (its steps count from there). No block: :no-floor; no face to place against: :no-support-floor (the cut cell over the
+  its line up to setting bridge-depth cells, and, when nothing near gives a face, lays a flat bridge ahead (a jobs.access.bridge child, at most jobs.lib.escape.span's max-bridge) to the first step whose floor has one; the stair goes on from the bridge's end (its steps count from there). No block and none got: :no-floor; no face to place against: :no-support-floor (the cut cell over the
   gap is shut with a carried block, :sealed, else :open-to). A lava or water floor is never bridged. A go-to stair (:note) writes its
   floors to the scaffold ledger for jobs.access.cleanup (setting take-back-floors?).
 

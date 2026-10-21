@@ -709,12 +709,20 @@
                              (fn ^:async kept [] (scaffold (await (stair! {:blocks cave-gap :inventory inv} noted (fn [_]))))))))
               "the setting keeps go-to's floor too"))))))
 
+(deftest a-gap-in-the-next-floor-without-filler-gets-some-and-bridges
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (stair! {:blocks (assoc cave-gap "-1,64,0" "dirt" "-1,64,1" "dirt" "-1,64,-1" "dirt") :inventory pick} up-east (fn [_])))]
+          (is (= :done (:status @out)) (pr-str (:ending @out)))
+          (is (not= "air" (block-at p [1 65 0])) "the floor was placed with blocks it got"))))))
+
 (deftest a-gap-in-the-next-floor-without-filler-says-so
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [inv (conj pick {:name "diamond" :count 5} {:name "gold_block" :count 5})
-              {:keys [out p]} (await (stair! {:blocks cave-gap :inventory inv} up-east (fn [_])))]
+              {:keys [out p]} (await (stair! {:blocks cave-gap :inventory inv} (assoc up-east :ways #{:carried}) (fn [_])))]
           (is (= :no-floor (:reason @out)))
           (is (= :none (:filler @out)))
           (is (re-find #"filler" (:why @out)))
@@ -730,7 +738,7 @@
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                                 :now #(deref clock) :world (world/of-data {} {} [])
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-          (core/submit! eng (list job up-east) {})
+          (core/submit! eng (list job (assoc up-east :ways #{:carried})) {})
           (await (tick-out! {:eng eng :clock clock}))
           (let [ended (filter #(and (= :job (:source %)) (#{:completed :stopped} (:kind %))) @seen)
                 e (first ended)]
@@ -794,7 +802,7 @@
       (fn ^:async t []
         (let [inv (conj pick {:name "cobblestone" :count 10})
               sealed (await (stair! {:blocks cave-void :inventory inv} (assoc east :steps 1) (fn [_])))
-              bare (await (stair! {:blocks cave-void :inventory pick} (assoc east :steps 1) (fn [_])))]
+              bare (await (stair! {:blocks cave-void :inventory pick} (assoc east :steps 1 :ways #{:carried}) (fn [_])))]
           (is (= :no-support-floor (:reason @(:out sealed))))
           (is (= [[1 64 0]] (:sealed @(:out sealed))))
           (is (= "cobblestone" (block-at (:p sealed) [1 64 0])) "the cut cell the cave opens into is shut")

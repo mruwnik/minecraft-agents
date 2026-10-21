@@ -369,22 +369,40 @@
                :else (await (bridge/place-plans! c in item plans (take-back-floor? c))))]
     stop))
 
+(def fetch-blocks "Filler blocks a bridge fetches when it carries none." 6)
+
+(defn ^:async fetch-filler!
+  "With no filler carried and a fetch allowed: get some (jobs.items.obtain; need/return! walks the body back). :continue
+  while it goes on, :again once it got some, the stop map when it failed, nil when there is nothing to fetch."
+  [c floor]
+  (when (and (nil? (choose/filler c :build)) (seq (need/fetch-how c)))
+    (let [e (await (need/blocks! c (choose/filler-names c :build) fetch-blocks {:return? true :explore true :how (need/fetch-how c)}))
+          why (contract/cause-key e)]
+      (cond
+        (= :continue e) :continue
+        (= :done (:kind e)) :again
+        :else {:reason :no-floor :cell floor :filler :none :fetch why
+               :why (str "no floor and no filler block carried; getting some failed: " (pr-str why))}))))
+
 (defn ^:async bridge!
   "Place carried filler on the missing floor of the step (bridge/bridge-plans, a plan whose placing found no support gives way
-  to the next). A stair down with no face to place against anywhere sets memory :run, a flat bridge ahead (plan-run!) that
-  run-bridge! lays before the stair goes on. :again, or a stop map (:no-support-floor when no plan works), with the opening shut-opening! leaves."
+  to the next); with none carried, first get some (fetch-filler!). A stair down with no face to place against anywhere sets memory :run, a flat bridge ahead (plan-run!) that
+  run-bridge! lays before the stair goes on. :again, :continue while a fetch goes on, or a stop map (:no-support-floor when no plan works), with the opening shut-opening! leaves."
   [c in {:keys [floor] :as cs}]
-  (await (look-back! c floor))
-  (await (clear-box! c floor))
-  (let [item (choose/filler c :build)
-        plans (bridge/bridge-plans (:block-at in) floor (bridge/eye-y c) (bridge-opts c))
-        run (when (and (empty? plans) (= :down (:dir (:args c)))) (await (plan-run! c in)))
-        stop (when-not run (await (bridge-stop! c in cs item plans)))
-        run (or run (when (and (= :no-support-floor (:reason stop)) (= :down (:dir (:args c)))) (await (plan-run! c in))))]
-    ;; a refusal may be the body's own entity in the cell: one more round before giving up
-    (cond
-      run (do (ctx/update-mem! c assoc :run run) :again)
-      (and (= :place-failed (:reason stop)) (not= (:cell stop) (:refused (ctx/mem c))))
-      (do (ctx/update-mem! c assoc :refused (:cell stop)) :again)
-      stop (await (shut-opening! c in stop cs item))
-      :else :again)))
+  (or (await (need/return! c))
+      (await (fetch-filler! c floor))
+      (do
+        (await (look-back! c floor))
+        (await (clear-box! c floor))
+        (let [item (choose/filler c :build)
+              plans (bridge/bridge-plans (:block-at in) floor (bridge/eye-y c) (bridge-opts c))
+              run (when (and (empty? plans) (= :down (:dir (:args c)))) (await (plan-run! c in)))
+              stop (when-not run (await (bridge-stop! c in cs item plans)))
+              run (or run (when (and (= :no-support-floor (:reason stop)) (= :down (:dir (:args c)))) (await (plan-run! c in))))]
+          ;; a refusal may be the body's own entity in the cell: one more round before giving up
+          (cond
+            run (do (ctx/update-mem! c assoc :run run) :again)
+            (and (= :place-failed (:reason stop)) (not= (:cell stop) (:refused (ctx/mem c))))
+            (do (ctx/update-mem! c assoc :refused (:cell stop)) :again)
+            stop (await (shut-opening! c in stop cs item))
+            :else :again)))))

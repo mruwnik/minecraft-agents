@@ -162,21 +162,8 @@
       (retreat! c entry decided hold-ms)
       (go-under-danger! c entry decided room))))
 
-(def world-stops
-  "Stair stops that a new look or another position can clear (a gap or unseen floor in a dark cave), unlike a missing tool."
-  #{:no-floor :cave-below :floor-unseen :not-loaded :step-failed :walk-failed})
-
-(defn world-stop? "Whether the stair child r stopped for one of world-stops." [r]
-  (contains? world-stops (contract/cause-key r)))
-
-(defn retry-stair?
-  "Counts one more fruitless stair (r its ending); whether another may be tried."
-  [c r]
-  (child/fruitless! c :dig (when (map? r) r))
-  (not (child/exhausted? c :dig)))
-
 (defn ^:async dig-down!
-  "A stair down to the pile (jobs.access.tunnel): :next once it ended there (or stopped on the world, up to child/max-fruitless times in a row), else the trip ends :abandoned. Not when
+  "A stair down to the pile (jobs.access.tunnel): :next once it ended there, else the trip ends :abandoned. Not when
   the window left cannot hold it (about ::stair-step-s per block): go-to has no way down and would only stand above."
   [c entry pos {:keys [below aside]}]
   (let [need-s (* (cfg/stair-step-s) (max below aside))
@@ -198,9 +185,9 @@
               (not (ctx/alive? c)) :continue
               (and (= :continue r) (< n (child/default-max-calls))) (do (await (pace/pace!)) (recur (inc n)))
               (= :continue r) (dg/decline! c :unreachable "the stair down to the pile is waiting on the world" {:pos pos})
-              (and (world-stop? r) (retry-stair? c r)) :next
               :else (give-up! :unreachable (str "no stair down to the pile: " (pr-str (contract/cause-key r))
-                                                    (when (get-in r [:cause :because]) " (no pickaxe could be got)"))))))))))
+                                                    (when (get-in r [:cause :because]) " (no pickaxe could be got)")
+                                                    (when-let [why (some #(get-in % [:cause :why]) (take-while some? (iterate :because r)))] (str ": " why)))))))))))
 
 (defn ^:async trip!
   "The decision, then the walk and the collect passes of a trip inside its window."
