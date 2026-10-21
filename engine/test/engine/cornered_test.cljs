@@ -1532,6 +1532,27 @@
             (is (= ["zombie"] (map :name hostiles)) "the hit names who was near")
             (is (every? number? (:pos (first hostiles))) "and where")))))))
 
+(deftest a-pillared-body-hit-again-after-a-raise-raises-it-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks doorway :inventory [{:name "dirt" :count 20}] :entities [(zombie 0 64 1)]})
+              hits (atom 0)
+              placed-at-hit (atom -1)]
+          (.override (.-world p) "wait"
+                     (fn [token a impl]
+                       (let [n (count (calls p "jumpPlace"))]
+                         (when (and (hiding? seen) (< @hits 2) (> n @placed-at-hit) (>= n (+ 3 (* 2 @hits))))
+                           (reset! placed-at-hit n)
+                           (swap! hits inc)
+                           (swap! (fake/state p) update-in [:self :health] - 2))
+                         (when (>= n 7) (swap! (fake/state p) assoc :entities [])))
+                       (impl token a)))
+          (core/submit! eng hiding-retreat {})
+          (await (core/tick! eng))
+          (is (= 7 (count (calls p "jumpPlace"))) "three blocks, then two more after each of two hits")
+          (is (= 2 (count (filter #(= :retreat.hide-hurt (:kind %)) @seen)))))))))
+
 (defn stub-ctx
   "A ctx over a fake world whose job memory is the atom m."
   [p m]

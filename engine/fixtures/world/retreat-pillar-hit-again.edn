@@ -1,0 +1,29 @@
+;; A body hit on its pillar raises it again (respond.pillar/::pillar-raises), not once only: a mob close under the top keeps hitting.
+;; The yard of retreat-pillar.edn: four NoAI zombies make the body pillar up. Once it stands 3 up the east zombie is
+;; killed and a ramp is built east (after the pillar, so it was no ledge when the pillar was planned) to a block 4 high
+;; beside the pillar, and a helmeted zombie walks up it: its feet are level with the body's, then 1 under it after a raise.
+{:defaults
+ {:tags [:hostile :survival :cornered]
+  :time :any
+  :plot {:height 24}
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile)}]
+  :blocks [[:fill [14 0 14] [18 2 18] "stone" :hollow] [:fill [15 0 15] [17 2 17] "air"]]
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 2]] :inventory [["dirt" 16]]}
+  :mobs :keep
+  :limit-s 120}
+ :cases
+ [{:name "hit-under-the-top-raises-the-pillar-again"
+   :act [[:summon "zombie" [15.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "zombie" [17.5 0 16.5] "{NoAI:1b,Tags:[\"east\"],equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "zombie" [16.5 0 15.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "zombie" [16.5 0 17.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:until-pos {:y-min 3} 60]
+         [:wait-s 1]
+         [:rcon "kill @e[$BOX,type=zombie,tag=east]"]
+         [:rcon "execute positioned $X $Y $Z run fill ~21 ~ ~16 ~21 ~ ~16 stone"]
+         [:rcon "execute positioned $X $Y $Z run fill ~20 ~ ~16 ~20 ~1 ~16 stone"]
+         [:rcon "execute positioned $X $Y $Z run fill ~19 ~ ~16 ~19 ~2 ~16 stone"]
+         [:rcon "execute positioned $X $Y $Z run fill ~17 ~ ~16 ~18 ~3 ~16 stone"]
+         [:summon "zombie" [23.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:count-event {:source :job :kind :child_ended :data {:slot :pillar}} :at-least 3 :for-s 100}]}]}

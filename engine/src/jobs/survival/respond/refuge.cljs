@@ -40,25 +40,6 @@
     (flight/tried! c kind)
     :again))
 
-(def max-knocks 3)
-
-(defn ^:async knock-off!
-  "A hostile stands in the feet cell the pillar's next block goes into (the server refuses a block where a mob stands):
-  strike it once, which knocks it out of the cell. True when it was struck, false when none is there or the knocks are used."
-  [c]
-  (let [p (:primitives c)
-        feet (sh-sense/feet p)
-        hostiles (filter #(= "hostile" (:kind %)) (look/seen-entities p {:radius 4}))
-        ;; the jump may still be in the air: the cell of the block is the feet cell or the one under it
-        mob (when (< (:knocks (ctx/mem c) 0) max-knocks)
-              (some #(pl/mob-in hostiles [(:x feet) % (:z feet)]) [(:y feet) (dec (:y feet))]))]
-    (when mob
-      (ctx/update-mem! c update :knocks (fnil inc 0))
-      (let [{:keys [x y z]} (:pos mob)]
-        (await (ctx/act c :look #js {:pos #js {:x x :y (+ y 1) :z z}}))
-        (await (ctx/act c :attack #js {:id (:id mob)}))
-        true))))
-
 (defn ^:async refuge-round!
   "A step in a refuge: building the pillar (a hostile in the cell of the next block is struck out of it; one more try after a refusal, which a hit or knockback can cause), or hidden in it (one hold step, :again, until it ends the flight)."
   [c]
@@ -67,7 +48,7 @@
       (await (hide-hold! c))
       (case (await (pillar/step! c refuge))
         :failed (cond
-                  (and (= :pillar kind) (await (knock-off! c))) :again
+                  (and (= :pillar kind) (await (pillar/knock-off! c))) :again
                   (or (not= :pillar kind) (:retried refuge)) (await (abandon-refuge! c))
                   :else (do (ctx/update-mem! c assoc-in [:refuge :retried] true) :again))
         :hidden (hide-now! c refuge (hide-texts kind))

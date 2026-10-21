@@ -9,17 +9,21 @@
             [jobs.lib.blocks :as lb]
             [jobs.lib.dig-look :as look]
             [jobs.lib.escape :as escape]
+            [jobs.lib.look :as lk]
             [jobs.lib.pillar :as pl]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.survival.respond.state :as flight]))
 
 (a/defargs settings
   {::pillar-height {:default 3 :doc "Height of the pillar built as a refuge, in blocks." :spec (a/int-in 0 nil)}
    ::pillar-spare {:default 3 :doc "Blocks a body must carry beyond the pillar's own for it to be the first refuge; with fewer the dig-down comes first (the night's dig-in cannot roof in on a pillar top without blocks)." :spec (a/int-in 0 nil)}
-   ::pillar-extend {:default 2 :doc "Blocks a body hit on its pillar raises it by, once, before it gives the refuge up; 0: it gives up at once." :spec (a/int-in 0 nil)}
+   ::pillar-extend {:default 2 :doc "Blocks a body hit on its pillar raises it by (up to ::pillar-raises times) before it gives the refuge up; 0: it gives up at once." :spec (a/int-in 0 nil)}
+   ::pillar-raises {:default 3 :doc "Times a body hit on its pillar raises it before it gives the refuge up: a mob can stand on a block close under the top." :spec (a/int-in 0 nil)}
    ::climb-radius {:default 4 :doc "Blocks round the pillar within which a mob's climb to its top is looked for." :spec (a/int-in 0 nil)}})
 (defn climb-radius [] (settings/get settings ::climb-radius))
 (defn pillar-height [] (settings/get settings ::pillar-height))
 (defn pillar-extend [] (settings/get settings ::pillar-extend))
+(defn pillar-raises [] (settings/get settings ::pillar-raises))
 (defn pillar-spare [] (settings/get settings ::pillar-spare))
 
 (defn pillar-item
@@ -119,17 +123,42 @@
       (>= r 2) :hidden
       :else :failed)))
 
+(def max-knocks 6)
+
+(defn ^:async knock-off!
+  "A hostile stands in the feet cell the pillar's next block goes into (the server refuses a block where a mob stands):
+  strike it once, which knocks it out of the cell. True when it was struck, false when none is there or the knocks are used."
+  [c]
+  (let [p (:primitives c)
+        feet (sh-sense/feet p)
+        hostiles (filter #(= "hostile" (:kind %)) (lk/seen-entities p {:radius 4}))
+        ;; the jump may still be in the air: the cell of the block is the feet cell or the one under it
+        mob (when (< (:knocks (ctx/mem c) 0) max-knocks)
+              (some #(pl/mob-in hostiles [(:x feet) % (:z feet)]) [(:y feet) (dec (:y feet))]))]
+    (when mob
+      (ctx/update-mem! c update :knocks (fnil inc 0))
+      (let [{:keys [x y z]} (:pos mob)]
+        (await (ctx/act c :look #js {:pos #js {:x x :y (+ y 1) :z z}}))
+        (await (ctx/act c :attack #js {:id (:id mob)}))
+        true))))
+
 (defn ^:async raise!
-  "A pillared body that was hit: once, raise the pillar pillar-extend blocks from the top (its cells added to the
-  refuge) when that many blocks are carried: :again when it rose, else :failed."
+  "A pillared body that was hit: raise the pillar pillar-extend blocks from the top (its cells added to the refuge) when
+  that many blocks are carried, up to pillar-raises times: :again when it rose, else :failed. A hostile standing in the cell of
+  a block (a mob beside the top overlaps it) is struck out of it, and the rest is built."
   [c]
   (let [{:keys [kind cells] :as refuge} (:refuge (ctx/mem c))
         n (pillar-extend)
         item (when (= :pillar kind) (pillar-item c n))
         top (peek cells)]
-    (if-not (and item (pos? n) (not (:raised refuge)))
+    (if-not (and item (pos? n) (< (:raised refuge 0) (pillar-raises)))
       :failed
-      (let [r (await (build! c n item))
-            built (if (number? r) r 0)]
-        (ctx/update-mem! c update :refuge assoc :raised true :cells (into cells (take built (mapv #(escape/up top %) (range 1 (inc n))))))
+      (let [built (loop [built 0]
+                    (if (>= built n)
+                      built
+                      (let [r (await (build! c (- n built) item))
+                            more (if (number? r) r 0)
+                            built (+ built more)]
+                        (if (and (< built n) (await (knock-off! c))) (recur built) built))))]
+        (ctx/update-mem! c update :refuge assoc :raised (inc (:raised refuge 0)) :cells (into cells (take built (mapv #(escape/up top %) (range 1 (inc n))))))
         (if (pos? built) :again :failed)))))
