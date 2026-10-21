@@ -291,3 +291,10 @@
   (is (true? (room-lib/closed-home? (home-p roofed-room))) "the north doorway is the roof's only way out")
   (is (false? (room-lib/closed-home? (home-p overhang-beside-gap))) "shutting the gap leaves the roof's open side")
   (is (true? (room-lib/closed-home? (home-p (assoc roofed-room "11,64,-1" "stone" "11,65,-1" "stone")))) "a shut room"))
+
+(deftest a-bed-too-far-to-walk-to-does-not-call-a-buried-miner-out-to-look
+  (let [{:keys [eng p]} (setup (dissoc (tunnel-world buried-light) :sees-all))
+        look? #(sh/unlooked-for-bed? p (mem/view (:store eng)))]
+    (is (true? (look?)) "a bed in reach with unseen cells beside the feet: look first")
+    (st/know-bed! eng {:x 300 :y 64 :z 0})
+    (is (false? (look?)) "a bed beyond the bed radius is none to look for")))

@@ -23,6 +23,14 @@
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}
             {:no-event {:source :job :kind :log-out} :for-s 25}]
    :after [[:body-near [28.5 4 16.5] 1.5]]}
+  {:name "buried-corridor-far-bed-silent"
+   :time :night :time-why :sleep
+   ;; a bed remembered 130 blocks off (beyond the bed radius, too far to walk to) is no reason to call a miner in a sealed lit corridor out to look round
+   :blocks [[:fill [26 4 16] [28 5 16] "air"] [:set [27 4 16] "torch"]]
+   :memory [{:kind :bed :data {:pos #xyz [130 70 12]} :policy {:cap 1 :ttl :forever}}]
+   :body {:at [28.5 4 16.5] :inventory [["cobblestone" 16]]}
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 40}]
+   :after [[:body-near [28.5 4 16.5] 1.5]]}
   {:name "deep-diagonal-stair-open-to-the-surface-shelters"
    ;; a 1-wide stair of 12 steps down from the top of a 29-high mass (the shape jobs.access.stair cuts): the body at its
    ;; bottom has sky light 0 but a mob can walk down the stair, so it is no shelter
