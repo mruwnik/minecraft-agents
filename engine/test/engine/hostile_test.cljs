@@ -881,6 +881,10 @@
   (is (holds? {:entities [(skeleton 1 13 0)]} {}) "a skeleton at 13 with the default ranged radius (16)")
   (is (not (holds? {:entities [(skeleton 1 17 0)]} {})) "a skeleton at 17 is beyond the default"))
 
+(deftest hostile-near-counts-every-skeleton-variant-as-ranged
+  (doseq [mob ["stray" "parched" "bogged"]]
+    (is (holds? {:entities [(assoc (skeleton 1 13 0) :name mob)]} {:radius 8 :ranged-radius 16}) (str mob " at 13"))))
+
 (defn arrow-wall
   "Blocks of name at x 3 across z -3..3 for each y in ys, except the cells in gaps ([y z])."
   [name ys & [gaps]]

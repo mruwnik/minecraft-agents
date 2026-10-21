@@ -2,6 +2,7 @@
   "jobs.lib.cost.weapon: the fight inputs (weapon damage, attack gap, mob health) and the one tool-material table."
   (:require [cljs.test :refer [deftest is]]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.threat :as threat]
             [jobs.lib.cost.weapon :as weapon]))
 
 (deftest attack-gap-ms-is-the-held-weapons-cooldown
@@ -10,6 +11,11 @@
                      ["copper_sword" 625] ["copper_axe" 1250] ["golden_axe" 1000] ["diamond_axe" 1000] ["netherite_axe" 1000]
                      ["iron_pickaxe" 500] ["stick" 500] [nil 500]]]
     (is (= ms (weapon/attack-gap-ms item)) (str item))))
+
+(deftest every-skeleton-variant-is-ranged-and-priced
+  (doseq [mob ["skeleton" "stray" "parched" "bogged"]]
+    (is (contains? weapon/ranged-mobs mob) mob)
+    (is (= 2 (get threat/mob-dps mob)) mob)))
 
 (deftest remaining-health-estimates-what-is-left-of-a-mob
   (is (= 8 (weapon/remaining-health {:name "zombie" :hits 2 :damage 6})) "20 less two iron sword hits")

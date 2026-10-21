@@ -65,9 +65,19 @@ export const isCut = err => err?.code === 'cut'
 export const failed = err => ({ status: 'failed', reason: String(err?.message ?? err).slice(0, 200) })
 export const need = (ok, message) => { if (!ok) throw badArgs(message) }
 
+// Mobs the registry does not class as hostile (a newer server's mob) that hurt the body: hostile from then on, by name,
+// or by entity id when the registry does not even know the name.
+const hurtBy = { names: new Set(), ids: new Set() }
+export const learnHostile = e => {
+  if (!e || entityKind(e) !== 'other') return
+  if (e.type === 'mob') hurtBy.names.add(e.name)
+  else if (e.type === 'other' && !e.name) hurtBy.ids.add(e.id)
+}
+
 export const entityKind = e => {
   if (e.type === 'player') return 'player'
   if (e.name === 'item' || e.name === 'item_stack' || e.displayName === 'Item') return 'item'
+  if (hurtBy.names.has(e.name) || hurtBy.ids.has(e.id)) return 'hostile'
   if (e.type === 'hostile' || /hostile/i.test(e.kind ?? '')) return 'hostile'
   if (['passive', 'animal', 'ambient', 'water_creature'].includes(e.type) || /passive|animal/i.test(e.kind ?? '')) return 'passive'
   return 'other'

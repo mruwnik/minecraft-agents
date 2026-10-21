@@ -24,7 +24,7 @@ import { missingPatches, missingRequired } from './deps-check.mjs'
 import { wrapBlockAt } from './offset-shapes.mjs'
 import { say } from './chat.mjs'
 import vec3 from 'vec3'
-import { BODY_HALF_WIDTH, EYE_HEIGHT, sleepMs, waitForWorld, xyz, isNum, vec, cutError, badArgs, isCut, failed, need, attempt, sleepStatusOf, spawnSetMessage, droppedItem, itemCounts } from './prim-base.mjs'
+import { BODY_HALF_WIDTH, EYE_HEIGHT, sleepMs, waitForWorld, xyz, isNum, vec, cutError, badArgs, isCut, failed, need, attempt, learnHostile, sleepStatusOf, spawnSetMessage, droppedItem, itemCounts } from './prim-base.mjs'
 import { createWalk } from './prim-walk.mjs'
 import { createSense } from './prim-sense.mjs'
 import { createMove } from './prim-move.mjs'
@@ -220,6 +220,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     const onDamage = packet => {
       if (packet.entityId !== target.entity?.id) return
       const source = packet.sourceCauseId > 0 ? target.entities?.[packet.sourceCauseId - 1] : undefined
+      learnHostile(source)
       damages = fresh(damages) // a hit that never lowered health would otherwise stay for good
       // Only the way the hit came from, as a player feels it (the camera tilts), never the shooter's place.
       const from = source?.position ?? packet.sourcePosition

@@ -41,7 +41,7 @@ export const mountRefusal = (name, riders) => {
 // position is set from the mount's: mount position + seat height - the rider's riding offset. Small tables, vanilla
 // values; unknown names fall back to 0.75 of the mount's height and 0.14.
 const SEAT_Y = { skeleton_horse: 1.31875, zombie_horse: 1.31875, horse: 1.31875, donkey: 1.2, mule: 1.2, camel: 2.0, strider: 1.4, spider: 0.8, chicken: 0.5, pig: 0.7 }
-const RIDING_OFFSET = { skeleton: 0.7, stray: 0.7, wither_skeleton: 0.7, bogged: 0.7, zombie: 0.14, drowned: 0.14, husk: 0.14, player: 0.14 }
+const RIDING_OFFSET = { skeleton: 0.7, stray: 0.7, parched: 0.7, wither_skeleton: 0.7, bogged: 0.7, zombie: 0.14, drowned: 0.14, husk: 0.14, player: 0.14 }
 const BOAT_SEAT_Y = -0.1
 export const seatPosition = (mount, rider) => {
   const seat = BOAT.test(mount.name ?? '') ? BOAT_SEAT_Y : SEAT_Y[mount.name] ?? (mount.height ?? 1) * 0.75

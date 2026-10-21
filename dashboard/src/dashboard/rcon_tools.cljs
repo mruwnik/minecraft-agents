@@ -73,7 +73,7 @@
 (def blocks ["air" "water" "lava" "stone" "dirt" "cobblestone" "oak_planks" "fire" "glass" "torch" "red_bed" "chest"])
 ;; kill-mobs targets only these: a selector cannot or-together types, so it is one kill command per type, and
 ;; villagers, pets, item frames and players are never in the list
-(def hostile-mobs ["zombie" "skeleton" "creeper" "spider" "enderman" "witch" "drowned" "husk" "stray"
+(def hostile-mobs ["zombie" "skeleton" "creeper" "spider" "enderman" "witch" "drowned" "husk" "stray" "parched" "bogged"
                    "zombie_villager" "phantom" "slime" "pillager" "vindicator"])
 
 (def max-give 64)

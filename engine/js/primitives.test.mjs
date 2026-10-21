@@ -2,7 +2,7 @@
 import { test, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { createPrimitives, createPrimitivesFromBot, mcToMineflayerLook, mineflayerToMcLook } from './primitives.mjs'
-import { BODY_HALF_WIDTH } from './prim-base.mjs'
+import { BODY_HALF_WIDTH, entityKind } from './prim-base.mjs'
 import { EventEmitter } from 'node:events'
 import { stubBot, names, Vec3 } from './testing/stub-bot.mjs'
 import registryFor from 'prismarine-registry'
@@ -713,6 +713,16 @@ for (const [label, fields, kind, creeper] of mobCases) {
     assert.deepEqual([e.kind, e.name, Boolean(e.creeper)], [kind, fields.name, creeper])
   })
 }
+
+test('a mob the registry does not class hostile is hostile from the moment it hurts the body', () => {
+  const { bot } = hurtRig()
+  bot.entities[9] = { id: 9, name: 'new_golem', type: 'mob', position: at(2, 64, 0) }
+  bot.entities[10] = { id: 10, type: 'other', position: at(3, 64, 0) }
+  const kinds = () => [9, 10].map(id => entityKind(bot.entities[id]))
+  assert.deepEqual(kinds(), ['other', 'other'])
+  for (const id of [9, 10]) bot._client.emit('damage_event', { entityId: bot.entity.id, sourceTypeId: 1, sourceCauseId: id + 1, sourceDirectId: id + 1 })
+  assert.deepEqual(kinds(), ['hostile', 'hostile'])
+})
 
 // ---- death and respawn events ----
 
