@@ -4,7 +4,7 @@
 
 (def wait-reasons
   "The :reason of every :later these checkers give: a job that declines for one is waiting out the world, not failing."
-  #{:exposed :dark :hostile-near :low-health :poisoned :unarmed})
+  #{:exposed :dark :hostile-near :low-health :poisoned :unarmed :no-free-slot})
 
 (defn waiting-out
   "r, a called child's answer, but :continue (the caller waits with the reason) when the child ended condition-failed for

@@ -1,0 +1,15 @@
+;; Card 81d67115: a mine with a full pack of cobblestone and no chest makes room (the reflex tosses the extra cobble) and goes on to the ore.
+;; Stone mass x 2..30, z 8..24, y 0..6; body at the west end of a 4-long tunnel at [16 0 16] facing east (the toss needs open cells ahead) with a stone pickaxe and 35 full stacks of cobblestone; iron ore at [20 0 16].
+{:defaults
+ {:tags [:mine :make-room :storage :jobs] :time :any
+  :plot {:height 12}
+  :blocks [[:fill [2 0 8] [30 6 24] "stone"] [:fill [16 0 16] [19 1 16] "air"] [:set [20 0 16] "iron_ore"]]
+  :body {:at [16.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64] ["cobblestone" 64]] :effects [["resistance" 600 4]]}
+  :limit-s 240}
+ :cases
+ [{:name "full-pack-of-cobble-makes-room-and-reaches-the-ore"
+   :register [{:trigger :inventory-nearly-full}]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 8 :mend false})]]
+   :expect [{:event {:source :job :kind :make-room.tossed :data {:item "cobblestone"}} :within-s 120}
+            {:event {:source :job :kind :completed} :within-s 200 :of-job true}]
+   :after [[:item "raw_iron" 1]]}]}

@@ -7,7 +7,8 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.test-util :as tu]
-            [jobs.lib.need :as need]))
+            [jobs.lib.need :as need]
+            [jobs.lib.waits :as waits]))
 
 (def got (atom []))
 
@@ -262,3 +263,9 @@
           (give! (:p r) "cobblestone" 2)
           (await (core/tick! (:eng r)))
           (is (= [5 5] (mapv :count @(:obtain r))) "the 2 more are on top of the 3 carried when the child began, not of the 5 carried later"))))))
+
+(deftest a-child-that-lacks-a-free-slot-is-waited-out-not-failed
+  (let [full (contract/ending :condition-failed {:reason :no-free-slot} nil)
+        refused (contract/ending :condition-failed {:reason :refused} nil)]
+    (is (= :continue (waits/waiting-out {} full)))
+    (is (= refused (waits/waiting-out {} refused)))))
