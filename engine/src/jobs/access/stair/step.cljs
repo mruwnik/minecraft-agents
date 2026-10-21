@@ -5,6 +5,7 @@
             [jobs.lib.need :as need]
             [clojure.string :as str]
             [engine.constants :as constants]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.stair-cells :as cells]
             [jobs.lib.stair-memory :as mem]
@@ -17,6 +18,7 @@
             [jobs.lib.choose :as choose]
             [jobs.lib.dig-look :refer [unknown? look-at! see-round!]]
             [jobs.lib.escape :as escape]
+            [jobs.lib.escape.span :as span]
             [jobs.lib.lava :as lava]
             [jobs.lib.reach :as reach]
             [jobs.lib.tools :as tools]
@@ -317,22 +319,71 @@
         [_ fy _] (reach/standing-vec (:primitives c))]
     (await (clear-box! c [nx fy nz] constants/body-half-width))))
 
-(defn ^:async bridge!
-  "Place carried filler on the missing floor of the step (bridge/bridge-plans, a plan whose placing found no support gives way
-  to the next). :again, or a stop map (:no-support-floor when no plan works), with the opening shut-opening! leaves."
-  [c in {:keys [floor] :as cs}]
-  (await (look-back! c floor))
-  (await (clear-box! c floor))
-  (let [item (choose/filler c :build)
-        plans (bridge/bridge-plans (:block-at in) floor (bridge/eye-y c) (bridge-opts c))
-        stop (cond
+(defn ^:async plan-run!
+  "The flat bridge a stair down takes when the floor of its next step has nothing to place against (bridge/flat-run along the
+  heading, the cells ahead looked at once each): {:length n}, or nil when no run reaches support, the body carries no filler or the ledge is not open."
+  [c in]
+  (let [p (:primitives c)
+        feet (reach/standing-vec p)
+        h (shape/headings (:heading (:args c)))
+        item (choose/filler c :build)
+        at (fn [k dy] (mapv + feet [(* k (first h)) dy (* k (second h))]))]
+    (when item
+      (loop [k 1]
+        (when (<= k (span/max-bridge))
+          (doseq [cell [(at k 0) (at k 1) (at k -1) (at (inc k) -2)]]
+            (when (and (unknown? p cell) (not (contains? (:run-looked (ctx/mem c)) cell)))
+              (ctx/update-mem! c update :run-looked (fnil conj #{}) cell)
+              (await (look-at! c cell))))
+          (if-let [n (bridge/flat-run (:block-at in) feet h (bridge/eye-y c) (bridge-opts c) k)]
+            {:length n :item item}
+            (recur (inc k))))))))
+
+(defn ^:async run-bridge!
+  "The flat bridge of memory :run (a jobs.access.bridge child along the heading): :continue while it works. Once done the
+  stair goes on from the bridge's end, which is its new origin (the cells above it are recorded as a way); :again, or a
+  stop map when the bridge failed."
+  [c]
+  (let [{:keys [run origin at-step]} (ctx/mem c)
+        {:keys [dir heading ignore-zones?]} (:args c)
+        e (await (ctx/call c :run 'jobs.access.bridge {:heading heading :length (:length run) :item (:item run) :ways (need/call-ways c)
+                                                      :ignore-zones? ignore-zones? :checks {:fit? '(always)}}))]
+    (if (= :continue e)
+      :continue
+      (let [feet (reach/standing-vec (:primitives c))]
+        (ctx/update-mem! c dissoc :run)
+        (if (not= :done (:kind e))
+          {:reason :no-support-floor :cell feet :why (str "the flat bridge over the void stopped: " (some-> (contract/cause-key e) name))}
+          (do (when (pos? at-step) (mem/record-way! c origin dir heading at-step))
+              (ctx/update-mem! c #(-> % (assoc :origin feet :at-step 0 :checked nil) (update :target - at-step)))
+              :again))))))
+
+(defn ^:async bridge-stop!
+  "Place the floor of the step with the plans (bridge/bridge-plans): nil once placed, else the stop that ends it (:no-floor, :no-support-floor)."
+  [c in {:keys [floor]} item plans]
+  (let [stop (cond
                (nil? item) {:reason :no-floor :cell floor :block ((:block-at in) floor) :filler :none
                             :why (str "no floor and no filler block carried (" (str/join ", " (take 4 (choose/fillers :build))) " ...)")}
                (empty? plans) {:reason :no-support-floor :cell floor :tried [floor (update floor 1 dec)]
                                :why (str "no block beside or under " (pr-str floor) " to place " item " against: the floor opens into a void")}
                :else (await (bridge/place-plans! c in item plans (take-back-floor? c))))]
+    stop))
+
+(defn ^:async bridge!
+  "Place carried filler on the missing floor of the step (bridge/bridge-plans, a plan whose placing found no support gives way
+  to the next). A stair down with no face to place against anywhere sets memory :run, a flat bridge ahead (plan-run!) that
+  run-bridge! lays before the stair goes on. :again, or a stop map (:no-support-floor when no plan works), with the opening shut-opening! leaves."
+  [c in {:keys [floor] :as cs}]
+  (await (look-back! c floor))
+  (await (clear-box! c floor))
+  (let [item (choose/filler c :build)
+        plans (bridge/bridge-plans (:block-at in) floor (bridge/eye-y c) (bridge-opts c))
+        run (when (and (empty? plans) (= :down (:dir (:args c)))) (await (plan-run! c in)))
+        stop (when-not run (await (bridge-stop! c in cs item plans)))
+        run (or run (when (and (= :no-support-floor (:reason stop)) (= :down (:dir (:args c)))) (await (plan-run! c in))))]
     ;; a refusal may be the body's own entity in the cell: one more round before giving up
     (cond
+      run (do (ctx/update-mem! c assoc :run run) :again)
       (and (= :place-failed (:reason stop)) (not= (:cell stop) (:refused (ctx/mem c))))
       (do (ctx/update-mem! c assoc :refused (:cell stop)) :again)
       stop (await (shut-opening! c in stop cs item))

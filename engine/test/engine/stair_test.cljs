@@ -75,6 +75,16 @@
     (is (empty? (bridge/bridge-plans (fn [cell] (when-not (= cell [2 60 0]) "air")) floor 70.0 {:back [-1 0] :depth 2}))
         "an unseen support is no support: the stair looks at it first")))
 
+(deftest a-flat-run-ends-where-the-next-floor-has-a-face-or-is-solid
+  (let [feet [0 65 0]
+        void-to (fn [x] (fn [[cx cy _ :as cell]] (if (and (<= cy 64) (>= cx x)) "stone" (when (<= cy 70) "air"))))
+        run (fn [block-at max] (bridge/flat-run block-at feet [1 0] 70.0 nil max))]
+    (is (= 3 (run (void-to 5) 8)) "the third bridge cell leaves a next floor [4 63 0] with stone [5 63 0] ahead of it")
+    (is (nil? (run (void-to 12) 8)) "no support within the length")
+    (is (nil? (run (fn [cell] (when-not (= cell [2 65 0]) ((void-to 5) cell))) 8)) "an unsensed cell on the way")
+    (is (nil? (run (fn [cell] (if (= cell [1 64 0]) "stone" ((void-to 5) cell))) 8)) "the first floor is solid: the ledge does not end there")
+    (is (nil? (run (fn [cell] (if (= cell [2 65 0]) "stone" ((void-to 5) cell))) 8)) "no room for the body over a cell of the run")))
+
 (deftest a-cave-floor-bridge-looks-at-the-unseen-cells-back-along-the-line-once
   (async done
     (tu/run-async done
@@ -774,8 +784,9 @@
           (is (= 1 (count (filter #(= "place" (.-name %)) (.-calls (.-world p))))) "one block, no chain behind it"))))))
 
 (def cave-void
-  "The cave of cave-below reaches back past the bridge depth: no solid cell within reach of the floor."
-  (apply dissoc cave-below (for [x (range -3 3) y (range 60 64) z (range -1 2)] (str x "," y "," z))))
+  "The cave of cave-below reaches back past the bridge depth and on under the whole ground: no solid cell within reach of
+  the floor, and no flat run ahead reaches one."
+  (apply dissoc cave-below (for [x (range -3 13) y (range 60 64) z (range -2 3)] (str x "," y "," z))))
 
 (deftest a-stair-that-cannot-bridge-a-cave-shuts-its-opening-or-names-it
   (async done
@@ -824,6 +835,23 @@
               {:keys [out p]} (await (stair! {:blocks (dissoc ground "1,63,0" "1,62,0") :inventory inv} (assoc east :steps 1) prep))]
           (is (= :done (:status @out)) (pr-str (dissoc @out :dug)))
           (is (= "cobblestone" (block-at p [1 63 0]))))))))
+
+(def ledge-over-void
+  "The body stands on the last stone of a ledge (x 0, y 64) with a void under it and east of it (x 1..5), nothing to place against,
+  then solid ground again."
+  (apply dissoc ground (concat (for [x (range -3 6) y (range 56 64) z (range -2 3)] (str x "," y "," z))
+                               (for [x (range 1 6) z (range -2 3)] (str x ",64," z)))))
+
+(deftest a-stair-down-on-a-ledge-over-a-void-bridges-flat-to-the-far-side-and-goes-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [inv (conj pick {:name "cobblestone" :count 16})
+              {:keys [out p]} (await (stair! {:blocks ledge-over-void :inventory inv} east (fn [_])))]
+          (is (= :done (:status @out)) (pr-str (dissoc @out :dug)))
+          (is (every? #(not= "air" (block-at p [% 64 0])) [1 2 3 4]) "the flat bridge over the void")
+          (is (= 3 (:steps @out)) "the three steps asked, counted from the bridge's end")
+          (is (= [7 62 0] (:at @out))))))))
 
 (deftest a-floor-the-world-keeps-refusing-ends-place-failed
   (async done

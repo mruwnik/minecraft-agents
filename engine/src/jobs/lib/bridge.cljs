@@ -49,6 +49,23 @@
                    (filterv #(bs/open-floor? (block-at %)) plan)))]
      (vec (distinct (concat (plans false) (some-> (chain-plan block-at floor opts) vector) (plans true)))))))
 
+(defn flat-run
+  "The length (1 to max) of a flat bridge along h ([dx dz]) from feet, after which a stair down's next floor is solid or has
+  a face to place against: every floor of the run open or solid with room over it, the first floor open (the ledge ends
+  there). nil when none comes within max or a cell is unsensed."
+  [block-at feet h eye-y opts max]
+  (let [at (fn [k dy] (mapv + feet [(* k (first h)) dy (* k (second h))]))
+        clear? (fn [cell] (let [n (block-at cell)] (and n (bs/replaceable n) (not (bs/fluids n)))))
+        floor-ok? (fn [k] (let [n (block-at (at k -1))] (and n (or (bs/open-floor? n) (rules/solid-floor? block-at (at k -1))))))]
+    (when (bs/open-floor? (block-at (at 1 -1)))
+      (loop [k 1]
+        (when (and (<= k max) (floor-ok? k) (clear? (at k 0)) (clear? (at k 1)))
+          (let [next-floor (at (inc k) -2)
+                n (block-at next-floor)]
+            (if (and n (or (not (bs/open-floor? n)) (seq (bridge-plans block-at next-floor eye-y opts))))
+              k
+              (recur (inc k)))))))))
+
 (defn ^:async place-floor!
   "Place item at cell (in the scaffold ledger when take-back?): nil when it stands, else a stop map. in: the rules input."
   [c in item cell take-back?]
