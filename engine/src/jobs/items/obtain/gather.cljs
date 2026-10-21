@@ -98,9 +98,9 @@
       :else :again)))
 
 (defn surfacing?
-  "surface/surfacing? for a need not seen: an animal in sight is walked to, not climbed toward."
+  "surface/surfacing? for a need not seen: an animal or a water source in sight is walked to, not climbed toward."
   [c need]
-  (and (not (and (animal? need) (seen-of c need))) (surface/surfacing? c need)))
+  (and (not (and (or (animal? need) (= "water_bucket" (:key need))) (seen-of c need))) (surface/surfacing? c need)))
 
 (defn ^:async surface-step!
   "One round of the way up (jobs.lib.surface-up): :continue while it goes on, else the gather source fails (:no-way-up)."

@@ -197,4 +197,13 @@
    :body {:inventory [["iron_ingot" 3] ["crafting_table" 1]]}
    :act [[:job (jobs.items.obtain {:item "water_bucket" :explore false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
-   :after [[:item "water_bucket" 1]]}]}
+   :after [[:item "water_bucket" 1]]}
+  ;; the only water, a pond, lies 56 blocks off, out of sight: obtain explores (the shared search) and fills the bucket there
+  {:name "water-out-of-sight-is-searched-for-then-filled"
+   :plot {:height 6 :length 96 :width 32}
+   :blocks [[:fill [70 0 14] [74 1 18] "water"]]
+   :body {:inventory [["bucket" 1]]}
+   :act [[:job (jobs.items.obtain {:item "water_bucket" :explore true})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}]
+   :after [[:item "water_bucket" 1]]
+   :limit-s 120}]}

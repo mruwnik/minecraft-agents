@@ -87,10 +87,9 @@
                                               (grass-seeds name) (grass-seeds name)
                                               (stalks name) #{name}
                                               (= "water_bucket" name) #{"water"})]
-                    (when (and (or (= name (get-in (ctx/mem c) [:gather :item]))
-                                   (seq (if (= "water_bucket" name)
-                                          (look/seen-water-sources p (seen-radius))
-                                          (look/seen-blocks p {:names (vec seen-of-name) :radius (seen-radius) :max 1})))))
+                    (when (or (= "water_bucket" name)
+                              (= name (get-in (ctx/mem c) [:gather :item]))
+                              (seq (look/seen-blocks p {:names (vec seen-of-name) :radius (seen-radius) :max 1})))
                       {:steps [] :gather {name n} :item name})
                     (let [opts (merge (source-opts)
                                       {:table? (boolean (or (:table (ctx/mem c)) (crafting-table/nearest p (craft-radius))))

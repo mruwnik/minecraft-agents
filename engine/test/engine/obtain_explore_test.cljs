@@ -126,3 +126,12 @@
           (await (obtain-small! s {:any-of ["oak_log"] :count 1 :ways #{:gather} :explore true} 200))
           (is (= [nil :north] (mapv :heading (f/events-of s :obtain.exploring))) "rings first, then outward")
           (is (= :no-source (:reason (first (f/events-of s :stopped))))))))))
+
+(deftest water-out-of-sight-is-explored-for-and-the-bucket-filled
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (update (f/bare [{:name "bucket" :count 1}]) :blocks merge {"30,63,4" "water"}) [f/own-zone])]
+          (await (obtain! s {:item "water_bucket" :explore true} 600))
+          (is (seq (f/events-of s :obtain.exploring)) "walks to look for water")
+          (is (= 1 (get (f/inv s) "water_bucket" 0))))))))

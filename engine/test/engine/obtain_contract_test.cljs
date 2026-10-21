@@ -146,7 +146,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (f/bare [{:name "bucket" :count 1}]) [])
-              e (await (ending-of s 'jobs.items.obtain {:item "water_bucket"} 20))]
+              e (await (ending-of s 'jobs.items.obtain {:item "water_bucket" :explore false} 20))]
           (is (= {:kind :condition-failed :cause :no-source} (kc e)))
           (is (re-find #"water" (get-in e [:cause :why]))))))))
 
