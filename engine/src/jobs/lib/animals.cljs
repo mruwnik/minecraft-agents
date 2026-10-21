@@ -135,10 +135,10 @@
     (cond (nil? answer) nil
           (and (:closed? answer) (spare/fenced? c (:inside answer)) (not (access/in-own-area? c pos)))
           (do (ctx/update-mem! c update :penned (fnil conj []) k) :looked)
-          (or (not= :unloaded (:reason answer)) (contains? (set (:looked (ctx/mem c))) k)) nil
+          (or (not= :unloaded (:reason answer)) (contains? (set (:pen-looked (ctx/mem c))) k)) nil
           :else
           (let [r (await (child/run!* c :pen-look 'jobs.movement.go-to {:pos pos :range (settings/get food-animals/settings ::food-animals/pen-look-range) :ways #{:walk}}))]
-            (when-not (= :continue r) (ctx/update-mem! c update :looked (fnil conj []) k))
+            (when-not (= :continue r) (ctx/update-mem! c update :pen-looked (fnil conj []) k))
             (if (= :continue r) :continue :looked)))))
 
 (defn leashed?

@@ -2,6 +2,7 @@
 ;; walked out into the dark by a search or a dig whose place lies outside. A 3x3 stone room at x 12..16, z 20..24 with a torch: its
 ;; feet cell is lit, so a check that judged only the body's own cell would let the job walk out.
 ;; Should-fail (wait, body stays in): explore.search roams; mine works at a :center outside.
+;; shear a sheep seen through the glass window, beyond the torch's light (a sheep it lights is no spawn risk, so the job may go out).
 ;; Should-succeed: shear a sheep that stands inside the room.
 ;; The body looks round first (a hut is closed only as far as it has seen its walls).
 ;; Night: the sky must be dark for the room to be the shelter; run with --allow-time --time-log <the shared time log>.
@@ -9,7 +10,8 @@
  {:tags [:night :readiness :jobs]
   :plot {:floor "grass_block"}
   :time :night :time-why :dawn-decision
-  :blocks [[:fill [12 0 20] [16 3 24] "stone" :hollow] [:fill [13 0 21] [15 2 23] "air"] [:set [13 0 21] "torch"]]
+  :blocks [[:fill [12 0 20] [16 3 24] "stone" :hollow] [:fill [13 0 21] [15 2 23] "air"] [:set [13 0 21] "torch"]
+           [:fill [16 1 22] [16 2 22] "glass"]]
   :body {:at [14.5 0 22.5] :yaw 270 :settle-s 2 :inventory [["shears" 1] ["iron_pickaxe" 1]] :effects [["resistance" 900 4]]}
   :limit-s 60}
  :cases
@@ -24,6 +26,14 @@
          [:job (jobs.gather.mine {:block "stone" :count 1 :center #at [26 0 22] :radius 8})]]
    :expect [{:event {:source :job :kind :waiting} :within-s 30 :of-job true}
             {:no-event {:source :job :kind :completed :data {:name "jobs.gather.mine"}} :for-s 15}]
+   :after [[:body-near [14.5 0 22.5] 2]]}
+  {:name "shear-waits-in-the-room-for-a-sheep-outside"
+   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+         [:summon "sheep" [28.5 0 22.5] "{NoAI:1b}"]
+         [:until-seen {:entity "sheep"} 10]
+         [:job (jobs.animals.shear {:radius 16})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :completed :data {:name "jobs.animals.shear"}} :for-s 15}]
    :after [[:body-near [14.5 0 22.5] 2]]}
   {:name "shear-shears-a-sheep-inside-the-room"
    :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
