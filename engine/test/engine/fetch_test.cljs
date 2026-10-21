@@ -504,6 +504,16 @@
           (await (run-ticks s 120))
           (is (= 1 (get (inv s) "stone_pickaxe"))))))))
 
+(deftest a-remembered-chest-beyond-far-chest-is-not-walked-to-while-another-way-could-get-the-item
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (-> (world {}) (update :blocks dissoc chest-at)) [own-zone])]
+          (mem/write! (:store (:eng s)) stock/stock-kind {:pos [4000 64 3] :items {"iron_ingot" 5}} stock/stock-policy)
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "iron_ingot" :ways #{:chest :gather} :explore false}) {})
+          (await (run-ticks s 20))
+          (is (empty? (events-of s :obtain.chest)) "no walk to the chest 4000 blocks away"))))))
+
 (deftest obtain-any-of-takes-the-first-name-the-chest-holds
   (async done
     (tu/run-async done

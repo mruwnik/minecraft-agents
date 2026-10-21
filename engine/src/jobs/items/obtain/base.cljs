@@ -12,6 +12,7 @@
    :jobs.items.obtain.base/seen-radius {:default 48 :doc "Blocks within which a seen raw block (ore, dirt, leaves) counts as a source; the gather gets the same radius." :spec (a/int-in 0 64)}
    :jobs.items.obtain.base/animal-radius {:default 24 :doc "Blocks within which animals (sheep for wool, cow, chicken, spider, skeleton for their drops) are looked for." :spec (a/num-in 0 nil)}
    :jobs.items.obtain.base/near-chest {:default 10 :doc "Blocks within which a chest is worth the walk even when a craft from what is carried would do." :spec (a/num-in 0 nil)}
+   :jobs.items.obtain.base/far-chest {:default 160 :doc "Blocks beyond which a remembered chest is not walked to while a craft or gather way could get the item instead (with only the chest way it is walked to however far)." :spec (a/num-in 0 nil)}
    :jobs.items.obtain.base/sapling-leaf-limit {:default 60 :doc "Leaves broken for one sapling at most (a drop is about 1 in 20); one run, no retries." :spec (a/int-in 1 nil)}
    :jobs.items.obtain.base/search-scan-radius {:default 16 :doc "How far round the body each look of a search for a raw need reaches." :spec (a/num-in 0 nil)}
    :jobs.items.obtain.base/craft-step-s {:default 5 :doc "Guess of the seconds one craft step takes, walks included (the quote)." :spec (a/num-in 0 nil)}
@@ -25,6 +26,7 @@
 (defn max-inspections [] (settings/get settings :jobs.items.obtain.base/max-inspections))
 (defn animal-radius [] (settings/get settings :jobs.items.obtain.base/animal-radius))
 (defn near-chest [] (settings/get settings :jobs.items.obtain.base/near-chest))
+(defn far-chest [] (settings/get settings :jobs.items.obtain.base/far-chest))
 (defn sapling-leaf-limit [] (settings/get settings :jobs.items.obtain.base/sapling-leaf-limit))
 (defn search-scan-radius [] (settings/get settings :jobs.items.obtain.base/search-scan-radius))
 (defn craft-step-s [] (settings/get settings :jobs.items.obtain.base/craft-step-s))

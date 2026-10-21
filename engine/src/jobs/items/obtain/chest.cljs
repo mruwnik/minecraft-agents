@@ -2,7 +2,7 @@
   "The chest source: the seen chests worth a look or a withdraw, and the steps that do either."
   (:require [engine.ctx :as ctx]
             [clojure.string]
-            [jobs.items.obtain.base :refer [holds names-of]]
+            [jobs.items.obtain.base :refer [far-chest gathers? holds makes? names-of]]
             [jobs.lib.access :as access]
             [jobs.lib.waits :as waits]
             [jobs.lib.chests :as chests]
@@ -20,15 +20,18 @@
        (remove #(access/container-refusal c :take %))))
 
 (defn candidates
-  "Usable chests not yet withdrawn from or given up, the seen ones and the remembered ones holding a name at any
-  distance, nearest first: [{:pos :stock items-or-nil}]."
+  "Usable chests not yet withdrawn from or given up, the seen ones and the remembered ones holding a name, nearest
+  first (a remembered one beyond far-chest only when no craft or gather way could get the item instead): [{:pos :stock items-or-nil}]."
   [c names]
   (let [stock (stock/stock-of (ctx/view c))
         done (:done-chests (ctx/mem c) #{})
         me (u/self-pos c)
         seen (stock/usable-chests c)
         seen-cells (set (map stock/cell-of seen))
-        far (remove #(seen-cells (stock/cell-of %)) (remembered-chests c stock names))]
+        alternatives? (or (gathers? c) (makes? c))
+        far (->> (remembered-chests c stock names)
+                 (remove #(seen-cells (stock/cell-of %)))
+                 (remove #(and alternatives? (not (u/within? me % (far-chest))))))]
     (->> (concat seen far)
          (keep (fn [pos]
                  (let [cell (stock/cell-of pos)
