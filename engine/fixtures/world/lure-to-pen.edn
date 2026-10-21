@@ -112,6 +112,15 @@
             {:no-event {:source :job :kind :stopped :data {:reason #{:lost :no-hold}}} :for-s 190 :until {:source :job :kind :completed}}]
    :after [[:item "wheat_seeds" [:>= 7]]]
    :limit-s 220}
+  ;; card 0cb69273: a chicken 15 blocks off, small and wandering, is led into the pen, not given up on as lost
+  {:name "chicken-fifteen-blocks-off-is-led-into-the-pen"
+   :body {:at [12.5 0 16.5] :yaw 270 :inventory [["wheat_seeds" 8]] :effects [["resistance" 900 4]]}
+   :act [[:summon "chicken" [1.5 0 28.5]]
+         [:job (jobs.animals.lure-to {:mob "chicken" :radius 24 :pos #xyz [21 0 16] :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :arrived :in-box true}} :within-s 190 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :lost}} :for-s 190 :until {:source :job :kind :completed}}]
+   :after [[:entities "type=chicken,tag=wt" [[19 0 14] [23 1 18]] 1]]
+   :limit-s 220}
   ;; card 8d02af07: an empty :uuid would match every animal, and a start that two animals share names none of them: it waits, leading nobody
   ;; card c6817a46: the named animal already in the box ends the lure at once, without fetching food
   {:name "named-animal-already-in-the-box-ends-at-once"

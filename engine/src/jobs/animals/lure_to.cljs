@@ -34,7 +34,7 @@
   jobs.animals.lead-to (doors left open for the animal and shut afterwards); the go-to child of a leg plans its walk again after the leg was planned here). After each leg the animal is looked at:
   unseen or more than 5 blocks behind (jobs.lib.escort/::lure-gap), the body holds still (:waiting-for-animal) for it and the first look of the wait emits info
   escort.waiting (both positions, the distance); unseen for 3 s the body walks back toward where it was last seen (up to
-  20 blocks) and then ends :lost (an allowed adult within 10 blocks takes its place at once); seen beyond the gap and not
+  20 blocks) then looks round once from there (a small animal hides behind grass or an edge) and only then ends :lost (an allowed adult within 10 blocks takes its place at once); seen beyond the gap and not
   coming nearer for 3 s the body turns back toward it (a cow loses the food past about 10 blocks); after
   ::max-turns such turns, or 10 s without progress (::stall-s), :animal-stalled. An animal that keeps closing in is waited for
   however far it fell behind. The plan of each leg is searched before the body walks: a search still running never sends
@@ -467,7 +467,7 @@
   (hold-gates! c)
   (let [{:keys [phase]} (ctx/mem c)
         a (when (:animal (ctx/mem c)) (escort/animal-now c))]
-    (when a (ctx/update-mem! c #(-> % (dissoc :unseen-since) (assoc :last-seen (u/pos-of (.-pos a))))))
+    (when a (ctx/update-mem! c #(-> % (dissoc :unseen-since :looked-lost) (assoc :last-seen (u/pos-of (.-pos a))))))
     (cond
       (:ending (ctx/mem c)) (conclude! c (:ending (ctx/mem c)))
       (nil? phase) (do (ctx/update-mem! c assoc :method :lure :origin (u/self-pos c) :phase :start :dest-cells (read-destination c)) :again)
@@ -475,7 +475,7 @@
       (nil? a) (if-let [next-one (successor c)]
                  (do (ctx/update-mem! c #(-> % (assoc :animal (animals/key-of next-one)) (dissoc :unseen-since))) :again)
                  (if (= :lost (escort/escort-problem c (escort/lure-gap)))
-                   (finish! c :lost)
+                   (if (await (escort/lost-after-look? c)) (finish! c :lost) :again)
                    (await (escort/wait-for-animal! c))))
       :else (do (await (watch/watch! c {})) (await (walk! c))))))
 

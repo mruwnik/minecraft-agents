@@ -10,6 +10,7 @@
             [jobs.lib.bait :as bait]
             [jobs.lib.child :as child]
             [jobs.lib.doors :as doors]
+            [jobs.lib.look :as look]
             [jobs.lib.pass :as pass]
             [jobs.lib.places :as places]
             [jobs.lib.reach :as reach]
@@ -217,6 +218,16 @@
   [c gap]
   (let [a (animal-now c)]
     (follow-verdict c a (or (nil? a) (following? c a)) gap)))
+
+(defn ^:async lost-after-look?
+  "The animal counts as lost (follow-verdict said so): true after one look round from the spot where the body gave up
+  (a small animal hides behind grass or a block edge a step away); false once, after that look, while it may have found it."
+  [c]
+  (if (:looked-lost (ctx/mem c))
+    true
+    (do (ctx/update-mem! c assoc :looked-lost true)
+        (await (look/look-around-until! c #(animal-now c) (look/search-effort)))
+        false)))
 
 (defn ^:async wait-for-animal!
   "Hold still on purpose for one look's wait; the caller then looks again. When follow-verdict set :back-to the body

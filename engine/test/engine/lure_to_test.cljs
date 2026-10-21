@@ -741,6 +741,29 @@
     (is (re-find #"no standable cell at y70.*ground at y64" (lure-to/stop-text (c 70) :unreachable)))
     (is (not (re-find #"standable" (lure-to/stop-text (c 64) :unreachable))) "a standable spot is not blamed")))
 
+(deftest a-cow-hidden-near-the-body-is-found-by-a-look-round-before-it-counts-as-lost
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng] :as s} (h/setup {:floor tu/walk-floor :self {:pos {:x 26 :y 64 :z 0}} :inventory wheat :entities [(cow 1 24)]} 50)
+              cow-es (:entities @(fake/state p))
+              hidden (atom false)
+              hide! (fn [token a impl]
+                      (.then (impl token a)
+                             (fn [r]
+                               (when (and (not @hidden) (>= (.. p self -pos -x) 27)) (reset! hidden true) (swap! (fake/state p) assoc :entities []))
+                               r)))
+              show! (fn [token a impl]
+                      (.then (impl token a)
+                             (fn [r]
+                               (when @hidden (swap! (fake/state p) assoc :entities cow-es))
+                               r)))]
+          (.override (.-world p) "steer" hide!)
+          (.override (.-world p) "look" show!)
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
+          (await (run-until-done s 150))
+          (is (not= :lost (:reason (done-event s))) (pr-str (done-event s))))))))
+
 (deftest a-cow-only-heard-is-stepped-toward-and-then-lured
   (async done
     (tu/run-async done

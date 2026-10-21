@@ -403,7 +403,7 @@
   (let [{:keys [fence]} (:args c)]
     (let [{:keys [phase animal]} (ctx/mem c)
           a (when animal (escort/animal-now c))]
-      (when a (ctx/update-mem! c dissoc :unseen-since))
+      (when a (ctx/update-mem! c dissoc :unseen-since :looked-lost))
       (cond
         (:ending (ctx/mem c)) (conclude! c (:ending (ctx/mem c)))
         (and fence (contains? #{nil :arrive} phase) (not-fence? c)) (finish! c :no-fence)
@@ -412,7 +412,9 @@
         (= :get-lead phase) (await (get-lead! c))
         (= :leash phase) (await (leash! c))
         (and (#{:gather :arrive} phase) (nil? a)) (if (= :lost (escort/escort-problem c (escort/safe-gap)))
-                                                    (do (ctx/update-mem! c assoc :still-led false) (finish! c :lost))
+                                                    (if (await (escort/lost-after-look? c))
+                                                      (do (ctx/update-mem! c assoc :still-led false) (finish! c :lost))
+                                                      :again)
                                                     (await (escort/wait-for-animal! c)))
         (and (#{:walk :gather :arrive} phase) a (not (animals/led-by-me? a))) (do (ctx/update-mem! c assoc :still-led false) (finish! c :lead-broke))
         (= :walk phase) (do (await (watch/watch! c {})) (await (walk! c)))
