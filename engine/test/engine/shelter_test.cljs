@@ -837,8 +837,7 @@
           (know-bed! eng {:x 6 :y 64 :z 0})
           (core/submit! eng '(jobs.survival.night) {})
           (await (run-until-empty eng 8))
-          (is (= [{:gone true :was {:x 6 :y 64 :z 0}}] (entries eng :bed)))
-          (is (= [] (calls p "offline")) "nobody else online: no log-out"))))))
+          (is (= [{:gone true :was {:x 6 :y 64 :z 0}}] (entries eng :bed))))))))
 
 (deftest a-dug-in-shelter-holds-the-body-until-day-then-the-queued-job-runs
   (async done
@@ -1022,7 +1021,7 @@
       (swap! clock + 11000)
       (recur (inc i)))))
 
-(deftest a-shelter-that-cannot-roof-holds-the-body-until-day-without-refiring
+(deftest a-shelter-that-cannot-roof-logs-out-and-fires-again-without-digging-in-again
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1030,16 +1029,16 @@
           (refuse-placing! p)
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night} {:trigger :dawn}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
-          (let [mid (mid-night! p 10 #(hash-map :holder (some? (core/holder eng)) :places (count (calls p "place"))
-                                               :exposed (count (emitted seen :shelter.exposed)) :notified (notified seen)))]
+          (await (tick-nights eng clock 1))
+          (let [places (count (calls p "place"))]
+            (is (= (+ 5 (* 4 (sites/max-sites))) places) "4 places per shut-in call (one per wall), max-sites calls, after the first walls try of 4 walls and a roof")
+            (is (= 1 (count (emitted seen :shelter.exposed))) "one warn that the body is unsheltered")
             (await (tick-nights eng clock 2))
-            (is (= {:holder true :exposed 1 :notified 0} (dissoc @mid :places))
-                "held at night; one warn that the body is unsheltered; the queued job waits")
-            (is (= (+ 5 (* 4 (sites/max-sites))) (:places @mid)) "4 places per shut-in call (one per wall), max-sites calls, after the first walls try of 4 walls and a roof"))
-          (is (= [] (declined-events seen :night)) "never declined, so never dropped and fired again")
-          (is (= 1 (count (filter #(= :fired (:kind %)) (emitted-by seen :reflex :night)))) "fired once")
-          (is (nil? (core/holder eng)) "the shelter ended at day")
-          (is (= 1 (notified seen)) "then the queued job ran"))))))
+            (is (= places (count (calls p "place"))) "the failed sites are not dug in again")
+            (is (pos? (count (calls p "offline"))) "logged out, not held")
+            (is (< 1 (count (filter #(= :fired (:kind %)) (emitted-by seen :reflex :night)))) "the night fires again after its cooldown")
+            (is (= [] (declined-events seen :night)))
+            (is (pos? (notified seen)) "the queued job ran between firings")))))))
 
 (deftest a-body-with-no-pickaxe-on-a-stone-floor-at-night-seals-in-above-ground-and-digs-no-pit
   (async done
@@ -1059,15 +1058,12 @@
         (doseq [[blocks reason] [[{"0,63,0" "stone" "0,62,0" "air"} :no-floor]
                                  [{"0,63,0" "stone" "0,62,0" "water"} :no-floor]
                                  [{"0,63,0" "water"} :hazard-below]]]
-          (let [{:keys [eng p seen]} (setup {:time night :blocks blocks :inventory [{:name "dirt" :count 1} {:name "iron_pickaxe" :count 1}]})
-                mid (mid-night! p 4 #(hash-map :jobs (count (:list (core/state eng)))
-                                               :futile (:reason (first (entries eng :shut-in-failed)))))]
+          (let [{:keys [eng p seen]} (setup {:time night :blocks blocks :inventory [{:name "dirt" :count 1} {:name "iron_pickaxe" :count 1}]})]
             (core/submit! eng '(jobs.survival.night) {})
             (await (tick-n eng 3))
             (is (= [] (calls p "dig")) (pr-str blocks))
             (is (= 5 (count (no-way-stops seen))) (str (pr-str blocks) ": one try at the site, then max-sites sites in all, then the niche"))
-            (is (= {:jobs 1 :futile reason} @mid) (str (pr-str blocks) ": held exposed at night, dig-in's futile entry written"))
-            (is (= [] (entries eng :shut-in-failed)) "forgotten when the night ends")))))))
+            (is (= reason (:reason (first (entries eng :shut-in-failed)))) (str (pr-str blocks) ": dig-in's futile entry written and kept for the next firing in the dark"))))))))
 
 (deftest night-over-an-open-floor-walks-to-another-site-before-holding
   (async done
@@ -1079,19 +1075,6 @@
           (await (tick-n eng 30))
           (let [pos (pos-of p)]
             (is (> (js/Math.hypot (:x pos) (:z pos)) 9) "left the site whose floor is hollow (a player cannot see that, dig-in finds out)")))))))
-
-(deftest an-unsheltered-hold-logs-out-once-someone-falls-asleep
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:time night :inventory wall-stack :blocks floor})]
-          (refuse-placing! p)
-          (let [before (mid-night! p 3 #(do (.emit (.-world p) #js {:kind "sleep-status" :sleeping 1 :needed 2})
-                                            (count (calls p "offline"))))]
-            (core/submit! eng '(jobs.survival.night) {})
-            (await (tick-n eng 3))
-            (is (= 0 @before) "nobody asleep")
-            (is (pos? (count (calls p "offline"))) "the hold chose again and logged out")))))))
 
 (deftest an-unsheltered-hold-sleeps-in-a-bed-given-or-seen-later
   (async done
@@ -1108,38 +1091,13 @@
             (await (tick-nights eng clock 3))
             (is (pos? (count (concat (calls p "sleep") (calls p "place")))) (str how " the hold looked for a bed again"))))))))
 
-(deftest an-unsheltered-hold-does-not-thrash-while-nothing-changes
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p clock]} (setup {:time night :inventory wall-stack :blocks floor})]
-          (refuse-placing! p)
-          (let [at3 (atom nil)
-                at9 (atom nil)]
-            (dawn-after! p 10 (fn [n] (case n 3 (reset! at3 (count (.-calls (.-world p))))
-                                            9 (reset! at9 (vec (.-calls (.-world p))))
-                                            nil)))
-            (core/submit! eng '(jobs.survival.night) {})
-            (await (tick-nights eng clock 2))
-            (is (every? #{"wait"} (map #(.-name %) (drop @at3 @at9))) "only waits while nothing changes")))))))
-
 (deftest a-failed-sleep-is-tried-again-once-the-entry-expires
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p clock]} (setup {:time night :blocks (merge floor {"3,64,0" "red_bed"}) :floor [-4 -4 4 4]})
-              tries (atom 0)]
-          (set! (.-sleep p) (fn [& _] (swap! tries inc) (js/Promise.resolve #js {:status "occupied"})))
-          (let [at2 (atom nil)
-                at4 (atom nil)]
-            (dawn-after! p 7 (fn [n] (case n 2 (reset! at2 @tries)
-                                           4 (do (reset! at4 @tries) (swap! clock + (:ttl sh-beds/sleep-failed-policy)))
-                                           nil)))
-            (core/submit! eng '(jobs.survival.night {:settings {:jobs.lib.shelter.beds/max-days-awake 0}}) {})
-            (await (tick-nights eng clock 2))
-            (is (pos? @at2))
-            (is (= @at2 @at4) "the failed entry holds it off")
-            (is (< @at4 @tries) "after the entry expired the bed is tried again")))))))
+  (let [{:keys [eng p clock]} (setup {:time night :blocks (merge floor {"3,64,0" "red_bed"}) :floor [-4 -4 4 4]})
+        bed-to-use #(sh-beds/bed-to-use p (mem/view (:store eng)) 32 (constantly true))]
+    (mem/write! (:store eng) :sleep-failed {:pos {:x 3 :y 64 :z 0}} sh-beds/sleep-failed-policy)
+    (is (nil? (bed-to-use)) "the failed entry holds it off")
+    (swap! clock + (:ttl sh-beds/sleep-failed-policy) 1000)
+    (is (some? (bed-to-use)) "after the entry expired the bed is tried again")))
 
 (deftest a-place-failure-holds-only-near-where-it-happened
   (let [p (tu/fake {:time night})]
@@ -1149,19 +1107,17 @@
       {:pos {:x 20 :y 64 :z 0}} false
       {} true)))
 
-(deftest an-unsheltered-hold-after-a-futile-dig-ends-by-day
+(deftest an-unsheltered-night-after-a-futile-dig-digs-nothing-and-lets-the-queue-run
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:time night :drops {"iron_ore" "raw_iron"} :inventory [{:name "iron_pickaxe" :count 1}]
-                                           :blocks ore-ground})]
+        (let [{:keys [eng p seen clock]} (setup {:time night :drops {"iron_ore" "raw_iron"} :inventory [{:name "iron_pickaxe" :count 1}]
+                                                 :blocks ore-ground})]
           (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night} {:trigger :dawn}]}"))
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
-          (let [mid (mid-night! p 2 #(hash-map :digs (count (calls p "dig")) :holder (some? (core/holder eng))))]
-            (await (tick-n eng 6))
-            (is (= {:digs 0 :holder true} @mid) "nothing to roof the pit with: no dig; held at night"))
-          (is (nil? (core/holder eng)) "the shelter ended at day")
-          (is (= 1 (notified seen)) "then the queued job ran"))))))
+          (await (tick-nights eng clock 1))
+          (is (= 0 (count (calls p "dig"))) "nothing to roof the pit with: no dig")
+          (is (= 1 (notified seen)) "the queued job ran"))))))
 
 (deftest shelter-retries-dig-in-at-night-beside-an-unroofed-shelter
   (async done
@@ -1177,7 +1133,7 @@
   {:time night :drops {"iron_ore" "raw_iron"} :inventory [{:name "iron_pickaxe" :count 1}]
    :blocks (merge hard-ground {"0,63,0" "iron_ore" "0,62,0" "iron_ore" "0,61,0" "stone"})})
 
-(deftest a-futile-pit-is-not-dug-again-while-the-shelter-holds
+(deftest a-futile-pit-is-not-dug-again-on-later-firings
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1185,34 +1141,13 @@
               eng (update eng :triggers assoc :always-shelter always-shelter)]
           (refuse-placing! p)
           (core/register-reflex! eng {:trigger :always-shelter})
-          (let [held (mid-night! p (dec default-dawn) #(hash-map :futile (entries eng :shut-in-failed) :places (count (calls p "place")) :digs (count (calls p "dig"))))]
-            (await (tick-n eng 6))
-            (is (= #{{:way :pit :reason :roof-failed} {:way :walls :reason :nothing-possible}} (set (map #(select-keys % [:way :reason]) (:futile @held)))) "written while the night holds")
-            (is (= 4 (:places @held)) "the pit's roof and the walls' first place, each refused once; no second pit is roofed")
+          (await (tick-n eng 6))
+          (let [held {:futile (entries eng :shut-in-failed) :places (count (calls p "place")) :digs (count (calls p "dig"))}]
+            (is (= #{{:way :pit :reason :roof-failed} {:way :walls :reason :nothing-possible}} (set (map #(select-keys % [:way :reason]) (:futile held)))) "written in the first firing")
+            (is (= 4 (:places held)) "the pit's roof and the walls' first place, each refused once; no second pit is roofed")
             (await (tick-nights eng clock 3))
-            (is (= (:digs @held) (count (calls p "dig"))) "the hold does not dig again"))
+            (is (= (:digs held) (count (calls p "dig"))) "later firings do not dig again"))
           (is (= [] (declined-events seen :always-shelter))))))))
-
-(deftest a-futile-pit-is-not-dug-again-on-the-next-firing-after-a-cut
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p clock]} (setup futile-world)
-              eng (update eng :triggers assoc :always-shelter always-shelter)]
-          (refuse-placing! p)
-          (core/register-reflex! eng {:trigger :always-shelter})
-          (let [held-again (atom false)
-                places (atom nil)
-                digs (atom nil)]
-            (on-wait! p (fn [n] (case n
-                                  2 (do (reset! digs (count (calls p "dig"))) (core/cut! eng (core/holder eng) :test nil) (swap! clock + 11000))
-                                  3 (do (reset! held-again (some? (core/holder eng))) (reset! places (count (calls p "place"))))
-                                  4 (.setTime (.-world p) noon)
-                                  nil)))
-            (await (tick-n eng 6))
-            (is (true? @held-again) "fired again and holds")
-            (is (= 4 @places) "the second firing roofs no second pit")
-            (is (= @digs (count (calls p "dig"))) "the second firing does not dig")))))))
 
 (deftest dig-in-refuses-lateral-fluid-before-opening-a-pit
   (async done
@@ -1324,9 +1259,8 @@
               eng (update eng :triggers assoc :always-shelter always-shelter)]
           (refuse-placing! p)
           (core/register-reflex! eng {:trigger :always-shelter})
-          (let [futile (mid-night! p (dec default-dawn) #(entries eng :shut-in-failed))]
-            (await (tick-n eng 8))
-            (is (= {:way :walls :reason :nothing-possible} (select-keys (first @futile) [:way :reason])) "written while the night holds"))
+          (await (tick-n eng 8))
+          (is (= {:way :walls :reason :nothing-possible} (select-keys (first (entries eng :shut-in-failed)) [:way :reason])) "written in the first firing")
           (let [digs (count (calls p "dig"))
                 places (count (calls p "place"))]
             (swap! clock + 11000)

@@ -1,6 +1,5 @@
-;; Night as one whole attempt (cards 3df7476d, 65b99a04): one round from the start to the morning leave, every hold
-;; declared (job.holding while exposed), a body that digs in ends the night at once (the morning trigger lets it out), a site
-;; where dig-in stops is left for another pit site 9+ blocks away, and a night with no site holds exposed and ends nothing-possible :exposed at day. Dirt pad y -6..-1 (the plot floor is over void); the wet-site case
+;; Night as one whole attempt (cards 3df7476d, 65b99a04): one round from the start to the morning leave, a body that digs in ends the night at once (the morning trigger lets it out), a site
+;; where dig-in stops is left for another pit site 9+ blocks away, and a night with no site logs out and ends nothing-possible :exposed (the trigger fires it again). Dirt pad y -6..-1 (the plot floor is over void); the wet-site case
 ;; covers the whole plot, since sites 9+ away are judged from the surface and dig-in finds the void.
 ;; jobs.survival.night is submitted in :act. Needs night: --allow-time --time-log <the shared time log>, one case per call.
 {:defaults
@@ -41,15 +40,15 @@
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 150 :of-job true}]
    :after [[:body-near [16.5 -4 16.5] 30]]
    :limit-s 170}
-  {:name "no-site-holds-exposed-then-stops-at-day"
+  {:name "no-site-logs-out-and-ends-exposed"
    :time :night-exclusive
+   :time-why :dawn-decision
    :blocks [[:fill [8 -6 8] [24 -1 24] "air"] [:fill [12 -1 12] [20 -1 20] "stone"]]
    :act [[:job (jobs.survival.night {:ways #{:bed :shelter}})]
          [:await {:source :job :kind :shelter.exposed} 60]
-         [:await {:source :job :kind :holding :data {:reason [:contains "exposed: "]}} 30]
-         [:time-set 1000]]
+         [:await {:source :job :kind :stopped :data {:kind :nothing-possible :reason :exposed}} 120]]
    :expect [{:event {:source :job :kind :shelter.exposed} :within-s 60}
-            {:event {:source :job :kind :holding :data {:reason [:contains "exposed: "]}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :child_started :data {:slot :log-out}} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :exposed}} :within-s 120 :of-job true}]
    :limit-s 140}
   ;; Card 97fac480 (fix 57d67d3b). Night 1 relocates off a wet start site (a :shut-in-failed entry) and ends roofed; the entries are
@@ -104,15 +103,13 @@
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 200 :of-job true}]
    :limit-s 230}
   ;; Card 62278915 (fix b0462852): pit-site? needs ground the carried tools dig. A stone pad and no pickaxe: dig-in refuses at once
-  ;; ("cannot harvest stone", no pit dug) and the night holds exposed; the same pad with a stone pickaxe is dug in.
+  ;; ("cannot harvest stone", no pit dug) and the night ends exposed; the same pad with a stone pickaxe is dug in.
   {:name "stone-pad-no-pickaxe-starts-no-pit"
    :time :night-exclusive
    :blocks [[:fill [8 -6 8] [24 -1 24] "stone"]]
    :act [[:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0}})]
          [:await {:source :job :kind :shelter.exposed} 90]
-         [:await {:source :job :kind :holding :data {:reason [:contains "exposed: "]}} 30]
-         [:wait-s 10] ; deliberate hold: exposed with no pickaxe, a pit must not start before dawn
-         [:time-set 1000]]
+         [:await {:source :job :kind :stopped :data {:reason :exposed}} 120]]
    :expect [{:event {:source :job :kind :shelter.exposed} :within-s 90}
             {:no-event {:source :job :kind :shut-in.sealed} :for-s 90 :until {:source :job :kind :stopped :data {:reason :exposed}}}
             {:event {:source :job :kind :stopped :data {:reason :exposed}} :within-s 150 :of-job true}]

@@ -25,7 +25,7 @@
             [jobs.lib.targets :as targets]
             [jobs.survival.night :as night]
             [jobs.survival.night.sites :as sites]
-            [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home walled-pen bed-world bed-places with-room dug-into-home stone-room block-at room-with-doorway doorway-shut-early dawn-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night held-with-raw-beef furnace-ops held-starving cow zombie]]))
+            [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home walled-pen bed-world bed-places with-room dug-into-home stone-room block-at room-with-doorway doorway-shut-early dawn-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night]]))
 
 (deftest a-roof-over-a-breached-room-does-not-end-the-night
   (run-night-in {:blocks breached-room :inventory st/wall-stack}

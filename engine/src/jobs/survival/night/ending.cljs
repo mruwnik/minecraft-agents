@@ -1,6 +1,7 @@
 (ns jobs.survival.night.ending
   "How a night ends: the result it carries (how it sheltered, what it placed, the flees), its cleanup, and the exposed ending."
   (:require [engine.ctx :as ctx]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spent :as spent]
             [jobs.survival.dig-pit-site :as pit-site]
             [jobs.survival.night.sites :as sites]))
@@ -23,9 +24,10 @@
   (cond-> (spent-fields c) how (assoc :night how) (fled c) (assoc :fled (fled c))))
 
 (defn forget-night!
-  "The night's cleanup: tonight's failed sites (sites/forget-failed!) are forgotten."
+  "The night's cleanup: tonight's failed sites (sites/forget-failed!) are forgotten unless the round ends exposed in the dark: those are kept so the next firing does not dig them again."
   [c]
-  (sites/forget-failed! c))
+  (when-not (and (= :exposed (:sheltered (ctx/mem c))) (sh-sense/dark-outside? (:primitives c)))
+    (sites/forget-failed! c)))
 
 (defn end-exposed!
   "Nothing sheltered the body tonight: end nothing-possible :exposed {:sites}."

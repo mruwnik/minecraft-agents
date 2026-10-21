@@ -25,7 +25,7 @@
             [jobs.lib.targets :as targets]
             [jobs.survival.night :as night]
             [jobs.survival.night.sites :as sites]
-            [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home walled-pen bed-world bed-places dug-into-home stone-room block-at room-with-doorway doorway-shut-early dawn-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night held-with-raw-beef furnace-ops held-starving cow zombie]]))
+            [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home walled-pen bed-world bed-places dug-into-home stone-room block-at room-with-doorway doorway-shut-early dawn-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night held-starving zombie]]))
 
 (deftest with-flee-radius-0-the-night-holds-exposed
   (async done
@@ -201,7 +201,7 @@
           (is (= 1 (count (:list (core/state eng)))) "the call holds")
           (is (= [:monsters-near] (distinct (map :reason (st/emitted seen :holding))))))))))
 
-(deftest a-hostile-near-holds-the-night-as-monsters-near-without-calling-bed-down-every-pass
+(deftest a-hostile-near-ends-the-night-nothing-possible-monsters-near-without-calling-bed-down-every-pass
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -209,8 +209,8 @@
           (core/submit! eng '(jobs.survival.night) {})
           (await (core/tick! eng))
           (is (empty? (st/calls p "sleep")) "no sleep with a hostile near")
-          (is (>= 12 (count (filterv #(and (= :child_started (:kind %)) (= :bed-down (:slot %))) @seen))) "one bed-down per hold, not per pass")
-          (is (= [:monsters-near] (distinct (map :reason (st/emitted seen :holding))))))))))
+          (is (>= 1 (count (filterv #(and (= :child_started (:kind %)) (= :bed-down (:slot %))) @seen))) "one bed-down, then the round ends")
+          (is (= [:monsters-near] (distinct (map :reason (st/emitted seen :stopped))))))))))
 
 (deftest an-occupied-bed-not-yet-looked-at-is-refused-before-the-sleep
   (async done
@@ -237,119 +237,6 @@
             (is (< (.indexOf names "look") (.indexOf names "place")) "the room was looked at before the bed went down")
             (is (not= -1 (.indexOf names "look"))))
           (is (empty? (st/ended-because seen :bed-place-failed))))))))
-
-(deftest a-held-hungry-body-cooks-raw-beef-at-a-furnace-in-the-room
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (held-with-raw-beef "2,64,0")]
-          (core/submit! eng '(jobs.survival.night) {})
-          (await (core/tick! eng))
-          (is (some #{"take"} (furnace-ops p)) "the cooked beef was taken")
-          (is (> (.-food (.self p)) 5) "and eaten"))))))
-
-(defn roofed-carrier
-  "A held body with a carried furnace and a stone pickaxe; when roofed?, a walled and roofed room of two cells and the bed, its own shelter and a bed to hold for."
-  [roofed?]
-  (let [r (held-with-raw-beef nil [{:name "furnace" :count 1} {:name "stone_pickaxe" :count 1}])]
-    (when roofed?
-      (doseq [cell [[0 66 0] [-1 66 0] [-2 64 0] [-2 65 0] [-1 64 1] [-1 65 1] [-1 64 -1] [-1 65 -1] [0 64 1] [0 65 1] [0 64 -1] [0 65 -1] [1 65 0]]]
-        (fake/set-block! (:p r) cell "stone"))
-      (fake/set-block! (:p r) [1 64 0] "red_bed")
-      (mem/write! (:store (:eng r)) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} {:cap 10 :ttl 1200000}))
-    r))
-
-(deftest a-held-hungry-body-cooks-with-a-carried-furnace-and-takes-it-back
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (roofed-carrier true)
-              placed (atom nil)]
-          (.override (.-world p) "place" (fn ^:async f [token a impl]
-                                           (reset! placed (js->clj (.-pos a)))
-                                           (await (impl token a))))
-          (.override (.-world p) "dig" (fn ^:async f [token a impl]
-                                         (if (= @placed (js->clj (.-pos a)))
-                                           (await (impl token a))
-                                           #js {:status "refused"})))
-          (core/submit! eng '(jobs.survival.night) {})
-          (dotimes [_ 8] (await (core/tick! eng)))
-          (is (some #{"take"} (furnace-ops p)) "the cooked beef was taken")
-          (is (> (.-food (.self p)) 5) "and eaten")
-          (is (= 1 (:count (first (filter #(= "furnace" (:name %)) (u/inventory p))))) "the furnace is carried again"))))))
-
-(deftest a-held-body-exposed-to-the-night-does-not-put-its-furnace-down
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (roofed-carrier false)]
-          (core/submit! eng '(jobs.survival.night) {})
-          (dotimes [_ 4] (await (core/tick! eng)))
-          (is (empty? (filter #(= "furnace" (.-item (.-args %))) (st/calls p "place"))) "no furnace put down in the open")
-          (is (= 1 (:count (first (filter #(= "furnace" (:name %)) (u/inventory p))))) "still carried"))))))
-
-(deftest a-furnace-that-cannot-be-dug-up-stays-remembered-for-the-next-hold
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (roofed-carrier true)]
-          (.override (.-world p) "dig" (fn ^:async f [token a impl] #js {:status "refused"}))
-          (core/submit! eng '(jobs.survival.night) {})
-          (dotimes [_ 8] (await (core/tick! eng)))
-          (is (< 1 (count (st/calls p "dig"))) "the dig-up is tried again, not given up"))))))
-
-(deftest a-held-hungry-body-eats-raw-beef-when-the-furnace-is-far
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (held-with-raw-beef "40,64,0")]
-          (core/submit! eng '(jobs.survival.night) {})
-          (await (core/tick! eng))
-          (is (= [] (furnace-ops p)) "no walk out to a furnace at night")
-          (is (> (.-food (.self p)) 5) "ate raw"))))))
-
-(deftest a-held-starving-body-hunts-a-cow-in-reach
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (held-starving [cow (assoc cow :id 8 :pos {:x 6 :y 64 :z 0}) (assoc cow :id 9 :pos {:x 7 :y 64 :z 0})])
-              ticked (await (js/Promise.race #js [(.then (core/tick! eng) (constantly true))
-                                                  (js/Promise. (fn [res _] (js/setTimeout #(res false) 20000)))]))]
-          (is ticked "the tick ended (a body that waits on the night yields instead of spinning)")
-          (is (seq (filterv #(= "attack" (.-name %)) (.-calls (.-world p)))) "it went for the cow instead of starving in the hold"))))))
-
-(deftest a-held-hungry-body-leaves-the-bait-an-animal-job-reserved
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [ate (fn ^:async ate* [reserve?]
-                    (let [{:keys [eng p]} (held-starving [] {:food 5 :health 20} [{:name "carrot" :count 10}])]
-                      (when reserve? (mem/write! (:store eng) :reserve {:id "bait-carrot" :item "carrot" :count :all :strength 0.8} {:cap 100 :ttl :forever}))
-                      (await (core/tick! eng))
-                      (count (filterv #(= "eat" (.-name %)) (.-calls (.-world p))))))]
-          (is (zero? (await (ate true))) "reserved bait is not eaten at food 5")
-          (is (pos? (await (ate false))) "unreserved carrots are"))))))
-
-(deftest a-held-starving-body-stays-put-with-a-hostile-near
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (held-starving [cow zombie])]
-          (await (core/tick! eng))
-          (is (empty? (filterv #(= "attack" (.-name %)) (.-calls (.-world p)))) "no hunt with a danger near"))))))
-
-(deftest a-sheltered-starving-hold-does-not-walk-out-to-hunt
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (st/setup {:time night :blocks closed-hut :self {:food 0 :health 15} :entities [cow]})
-              waits (atom 0)]
-          (.override (.-world p) "wait" (fn ^:async w [token a impl]
-                                          (when (>= (swap! waits inc) 12) (.setTime (.-world p) st/noon))
-                                          (await (impl token a))))
-          (core/submit! eng '(jobs.survival.night) {})
-          (await (tu/run-until-empty eng 40))
-          (is (empty? (filterv #(= "attack" (.-name %)) (.-calls (.-world p)))) "shut in against the night: no hunt outside"))))))
 
 (deftest the-dig-in-at-an-open-bed-never-digs-a-bed-half
   (async done

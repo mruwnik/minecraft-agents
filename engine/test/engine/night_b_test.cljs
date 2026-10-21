@@ -25,7 +25,7 @@
             [jobs.survival.dig-pit-site :as pit-site]
             [jobs.survival.night :as night]
             [jobs.survival.night.sites :as sites]
-            [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home walled-pen bed-world bed-places dug-into-home stone-room block-at room-with-doorway doorway-shut-early dawn-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night held-with-raw-beef furnace-ops held-starving cow zombie]]))
+            [engine.night-support :refer [night noon roof holds? write! status! closed-hut holds-after? sleeper offline-why on-return! sleep-count! log-out-child fired wide-ground hillside breached-room run-night-in home-roof lit-world know-home! night-at-home with-child-log walled-home walled-pen bed-world bed-places dug-into-home stone-room block-at room-with-doorway doorway-shut-early dawn-holds-now? dark-world flee-home-night stone-and-dirt-patch flee-with cave-blocks cave-night zombie]]))
 
 (deftest a-queued-log-out-ends-done-without-acting-when-another-job-logged-out-meanwhile
   (async done
@@ -195,17 +195,16 @@
               "one pit; the second firing does not dig deeper (the other digs are the stair out by day)")
           (is (= 2 (fired seen)) "fired again after the cut"))))))
 
-(deftest with-no-site-left-the-night-holds-exposed-then-stops-at-morning
+(deftest with-no-site-left-the-night-logs-out-and-ends-exposed
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (st/setup {:time night :blocks st/ground :inventory [{:name "iron_pickaxe" :count 1}]})
-              mid (atom nil)]
+              ]
           (st/refuse-placing! p)
-          (st/dawn-after! p 4 (fn [n] (when (= n 2) (reset! mid (:reason (core/holding eng "j1"))))))
           (core/submit! eng '(jobs.survival.night) {})
           (await (core/tick! eng))
-          (is (re-find #"^exposed: " (str @mid)) "a declared hold")
+          (is (seq (filterv #(and (= :child_started (:kind %)) (= :log-out (:slot %))) @seen)) "a log-out stint")
           (is (= 1 (count (st/emitted seen :shelter.exposed))))
           (let [[s & more] (st/emitted seen :stopped)]
             (is (empty? more))
@@ -228,12 +227,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (st/setup {:time night :blocks (merge st/floor (tu/box -4 60 -4 4 62 4 "stone")) :inventory st/dirt-stack :floor [-4 -4 4 4]})
-              mid (atom nil)]
+              ]
           (.override (.-world p) "place" (fn ^:async f [_ _ _] #js {:status "failed" :reason "Server refused the placement"}))
-          (st/dawn-after! p 4 (fn [n] (when (= n 2) (reset! mid (:reason (core/holding eng "j1"))))))
           (core/submit! eng '(jobs.survival.night) {})
           (await (core/tick! eng))
-          (is (re-find #"^exposed: " (str @mid)) "the hold names its why")
           (is (re-find #"spawn protection" (:text (first (st/emitted seen :shelter.exposed)))) "the notice too")
           (is (re-find #"spawn protection" (:text (first (st/emitted seen :stopped))))))))))
 
@@ -289,32 +286,6 @@
           (await (core/tick! eng))
           (set! ctx/call call)
           (is (= [] @seen-sites) "the yield left no failed site, and the next call resumed the dig-in"))))))
-
-(deftest a-body-held-exposed-tries-to-dig-in-again-later
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p clock seen]} (st/setup {:time night :blocks st/floor})
-              tries (atom 0)
-              call ctx/call]
-          (st/refuse-placing! p)
-          (st/on-wait! p (fn [n] (if (< n 10) (swap! clock + 660000) (.setTime (.-world p) st/noon))))
-          (set! ctx/call (fn ^:async f [c k sym a]
-                           (when (= :shut-in k) (swap! tries inc))
-                           (await (call c k sym a))))
-          (core/submit! eng '(jobs.survival.night) {})
-          (await (core/tick! eng))
-          (set! ctx/call call)
-          (is (= (inc (sites/max-retries)) @tries) "one dig-in, then one more per retry of the exposed hold"))))))
-
-(deftest an-exposed-hold-retries-only-from-futile-radius-plus-one-away
-  (let [due? (fn [feet]
-               (with-redefs [ctx/mem (constantly {:exposed {:pos {:x 0 :y 0 :z 0} :at 0 :retries 0}})
-                             ctx/now (constantly 1000)
-                             sh-sense/feet (constantly feet)]
-                 (sites/retry-due? {:primitives nil})))]
-    (is (not (due? {:x 8 :y 0 :z 1})) "8.06 away is still inside dig-in's futile check")
-    (is (due? {:x 9 :y 0 :z 0}))))
 
 (deftest a-pit-site-is-judged-by-the-surface-a-player-sees
   (let [p (tu/fake {:blocks (into {} (for [x (range -2 3) z (range -2 3)] [(str x ",63," z) "dirt"]))})]
