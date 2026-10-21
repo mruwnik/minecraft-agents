@@ -75,6 +75,7 @@
      :ticks (spec-entry "ticks of paddling" (a/int-in 0 nil) '(a/int-in 0 nil))
      :turn (spec-entry "left or right" #{"left" "right"} #{"left" "right"})
      :forward (spec-entry "paddle forward" boolean? 'boolean?)
+     :tread (spec-entry "stay head out of the water, treading, for the whole ms" boolean? 'boolean?)
      :why (spec-entry "why the act is done" text 'string?)}))
 
 (defn args-data [k]

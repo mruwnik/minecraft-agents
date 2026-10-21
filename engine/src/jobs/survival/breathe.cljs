@@ -83,7 +83,7 @@
    ::min-leg {:default 8 :doc "Blocks a swim leg must move to count as moved." :spec (a/int-in 0 nil)}
    ::max-passes {:default 120 :doc "Passes one run makes before it stops :no-way-out, a safety net against a world that never changes." :spec (a/int-in 0 nil)}
    ::afloat-near {:default 16 :doc "Blocks around a spot in which a later run takes over the start and failed headings of an earlier stop." :spec (a/int-in 0 nil)}
-   ::tread-ms {:default 3000 :doc "Milliseconds a body with every way out spent treads water, head out, before the run stops (the lungs refill)." :spec (a/num-in 0 nil)}
+   ::tread-ms {:default 3000 :doc "Milliseconds a body with every way out spent treads water, head out, before the run stops (the lungs refill)." :spec a/pos-num?}
    ::max-steps {:default 2 :doc "Step blocks one spot places at most." :spec (a/int-in 0 nil)}})
 (defn shore-radius [] (settings/get settings ::shore-radius))
 (defn search-radius [] (settings/get settings ::search-radius))
