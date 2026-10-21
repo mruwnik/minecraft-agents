@@ -74,14 +74,16 @@
 
 (defn ^:async look-for-drop!
   "Once per dug cell, glance at the dug cell and the cell under it, then down the column at each unsensed cell (jobs.lib.dig-look),
-  where a drop of the dig that fell may lie out of sight."
+  where a drop of the dig that fell may lie out of sight; the head ends on the dug cell again, since a drop beside it is outside the
+  view cone of a head turned steeply down."
   [c]
   (let [dug (:dug-at (ctx/mem c))]
     (when (and dug (not= dug (:drop-looked (ctx/mem c))))
       (ctx/update-mem! c assoc :drop-looked dug)
       (await (dig-look/look-at! c dug))
       (await (dig-look/look-at! c (update dug 1 dec)))
-      (await (dig-look/look-unknown! c (map #(update dug 1 - %) [2 3 4]))))))
+      (await (dig-look/look-unknown! c (map #(update dug 1 - %) [2 3 4])))
+      (await (dig-look/look-at! c dug)))))
 
 (defn ^:async dig-cell!
   "Dig pos with a jobs.blocks.dig child: this job's rules judged the cell, the hazards it accepts are the child's."

@@ -490,6 +490,28 @@
           (await (run-ticks s 30))
           (is (= 1 (get (inv s) "raw_iron")) "the drop under the dug cell was looked for, seen and collected"))))))
 
+(deftest a-drop-is-in-sight-only-while-the-head-faces-the-dug-cell-so-the-looks-end-on-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks {"3,64,0" "iron_ore" "3,62,0" "stone"} :drops {"iron_ore" "raw_iron"} :inventory pickaxe :yaw 270}})
+              p (:p s)]
+          (.override (.-world p) "dig"
+                     (fn [token args impl]
+                       (.then (impl token args)
+                              (fn [r]
+                                (swap! (fake/state p) update :entities
+                                       (fn [es] (mapv #(if (= "item" (:kind %)) (assoc % :visible false) %) es)))
+                                r))))
+          (.override (.-world p) "look"
+                     (fn [token a impl]
+                       (let [at-dug? (and (< (js/Math.abs (- 3.5 (.. a -pos -x))) 0.1) (< (js/Math.abs (- 64.5 (.. a -pos -y))) 0.1))]
+                         (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :visible at-dug?) es))))
+                       (impl token a)))
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :ways #{:seen}}) {})
+          (await (run-ticks s 30))
+          (is (= 1 (get (inv s) "raw_iron")) "a head turned down the column left the drop outside the view cone"))))))
+
 (deftest drops-out-of-reach-are-reported-left-behind
   (async done
     (tu/run-async done
