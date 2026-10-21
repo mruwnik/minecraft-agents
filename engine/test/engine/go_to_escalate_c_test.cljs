@@ -546,3 +546,26 @@
                                                     {:pos [8 64 0] :range 1}))]
           (is (true? (:arrived @out)) (pr-str @out))
           (is (< 6 (first (feet p)))))))))
+
+(def hill-stair
+  "A stone plain (top y 71) with a dirt hill x 94..110 (y 72..75) and the body's own stair cut up inside them from
+  [86 58 0] to its dead end [100 72 0], under 3 blocks of the hill."
+  (let [carve (for [k (range 15) y [(+ 58 k) (+ 59 k) (+ 60 k)]] [(+ 86 k) y 0])]
+    (apply dissoc (merge (box -60 40 -10 110 71 10 "stone") (box 94 72 -10 110 75 10 "dirt"))
+           (map (fn [[x y z]] (str x "," y "," z)) carve))))
+
+(deftest go-to-from-the-top-of-its-own-stair-under-a-hill-digs-out-instead-of-walking-down-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:pos {:x 100.5 :y 72 :z 0.5}} :blocks hill-stair
+                                           :inventory [{:name "iron_pickaxe" :count 1}]})
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [40 72 0] :range 1})))
+              _ (mem/write! (:store eng) :stair-way {:dim "overworld" :floors (vec (for [k (range 15)] [(+ 86 k) (+ 57 k) 0]))})
+              _ (core/submit! eng '(recording-parent) {})
+              _ (await (tick-out! eng 1000))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (<= 72 (second (feet p))))
+          (is (= [:stair] (take 1 (mapv :step (events-of seen :go-to.escalated)))))
+          (is (empty? (events-of seen :go-to.retrying)) "the partial walk down its own stair is not taken"))))))

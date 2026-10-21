@@ -269,6 +269,8 @@
     the body's own (climb/dives?), or below c :own-floor back down a stair of its own (climb/returns?);
   - :cheaper: it is a whole path costing more seconds than 3 such stairs (a stair cut in the dark costs as much more as the dark walk does), the goal is stair-first-rise or more above
     the feet and the stair has not been tried this call.
+  - :retreats: it is a partial plan (the way on is shut), a re-plan too, that goes down the body's own stair, for a goal no lower than
+    the feet, and escape/choose has a way that changes the world: the stair was cut to get up, not to go back down.
   Else nil."
   [c pos]
   (let [m (ctx/mem c)
@@ -277,14 +279,17 @@
         cave (when (:dive-stair c) (:cave-floor c))
         back (:own-floor c)
         cheaper? (and (not (:stair-tried m)) (>= (- (second goal) (second feet)) stair-first-rise))
-        stair (delay (let [e (escape/choose (:primitives c) feet goal (may-dig-fn c) {:own? (own-placed-fn c) :skip (skips c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c)})]
-                       (when (= :stair (:step e)) e)))]
-    (when (and (ways/way? c :stair) (not (sh-inside/sheltered-in c)) (or cave cheaper? back))
+        retreats? (>= (second goal) (second feet))
+        chosen (delay (escape/choose (:primitives c) feet goal (may-dig-fn c) {:own? (own-placed-fn c) :skip (skips c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c)}))
+        stair (delay (when (= :stair (:step @chosen)) @chosen))
+        way (delay (not (#{:none :approach} (:step @chosen))))]
+    (when (and (ways/way? c :stair) (not (sh-inside/sheltered-in c)) (or cave cheaper? back retreats?))
       (fn [{:keys [status steps ^js r]} first?]
         (let [seconds (some-> r .-path .-cost .-priced)]
           (cond
             (and cave (climb/dives? steps cave (ledger/ways-of c)) @stair) :dives
             (and back (climb/returns? steps back (ledger/stair-stands c)) @stair) :dives
+            (and retreats? (= "partial" status) (climb/returns? steps (second feet) (ledger/stair-stands c)) @way) :retreats
             (and first? cheaper? (= "found" status) (number? seconds) @stair (> seconds (* 3 (stair-step-s-here c) (:steps @stair)))) :cheaper))))))
 
 (defn cut-off-way?

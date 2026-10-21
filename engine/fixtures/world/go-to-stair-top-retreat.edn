@@ -1,0 +1,25 @@
+;; Card 4be0d8bb: a body at the top of its own stair, under a hill, with the goal on the plain beside it, cuts on up and out; it does not walk down its own stair first (the plan that goes back down is only partial).
+;; Stone mass x 2..61, y 0..21 (the plain's feet y 22), z 2..29; a dirt hill x 16..61, y 22..25; the stair (memory :stair-way, floors = feet y - 1) rises east from [8 8 16] to its dead end [22 22 16] under the hill, cut 3 high.
+;; Should-succeed: go-to.escalated before any go-to.retrying, arrives at the plain. Should-fail: :ways #{:walk} neither digs nor arrives.
+{:defaults
+ {:tags [:movement :go-to :stairs]
+  :time :any
+  :plot {:length 64 :height 30}
+  :blocks [[:fill [2 0 2] [61 21 29] "stone"] [:fill [16 22 2] [61 25 29] "dirt"] [:fill [8 8 16] [8 10 16] "air"] [:fill [9 9 16] [9 11 16] "air"] [:fill [10 10 16] [10 12 16] "air"] [:fill [11 11 16] [11 13 16] "air"] [:fill [12 12 16] [12 14 16] "air"] [:fill [13 13 16] [13 15 16] "air"] [:fill [14 14 16] [14 16 16] "air"] [:fill [15 15 16] [15 17 16] "air"] [:fill [16 16 16] [16 18 16] "air"] [:fill [17 17 16] [17 19 16] "air"] [:fill [18 18 16] [18 20 16] "air"] [:fill [19 19 16] [19 21 16] "air"] [:fill [20 20 16] [20 22 16] "air"] [:fill [21 21 16] [21 23 16] "air"] [:fill [22 22 16] [22 24 16] "air"]
+           [:set [5 22 15] "torch"]]
+  :memory [{:kind :stair-way :data {:dim "overworld" :floors [#at [8 7 16] #at [9 8 16] #at [10 9 16] #at [11 10 16] #at [12 11 16] #at [13 12 16] #at [14 13 16] #at [15 14 16] #at [16 15 16] #at [17 16 16] #at [18 17 16] #at [19 18 16] #at [20 19 16] #at [21 20 16] #at [22 21 16]]}}]
+  :body {:at [22.5 22 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1] ["cobblestone" 4]]}
+  :limit-s 300}
+ :cases
+ [{:name "top-of-its-own-stair-under-a-hill-cuts-out-instead-of-walking-down"
+   :act [[:job (jobs.movement.go-to {:pos #at [3 22 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :go-to.retrying} :for-s 90 :until {:source :job :kind :go-to.escalated}}
+            {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 280 :of-job true}]
+   :after [[:body-near [3.5 22 16.5] 3]]}
+  {:name "walk-only-stays-in-its-stair"
+   :act [[:job (jobs.movement.go-to {:pos #at [3 22 16] :range 1 :ways #{:walk}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated} :for-s 120 :until {:source :job :kind :stopped :data {:arrived false}}}]
+   :after [[:body-far [3.5 22 16.5] 8]]
+   :limit-s 150}]}

@@ -362,7 +362,7 @@
               (end/give-up! c pos {:status :no-path :reason :detour} why)))
 
           (= "stair" status)
-          (do (ctx/update-mem! c assoc :stair-tried true :escalate-now true) :again)
+          (do (ctx/update-mem! c #(cond-> (assoc % :escalate-now true) (not= :retreats (:why walked)) (assoc :stair-tried true))) :again)
 
           (and frontier (tour-spent? c))
           (end/give-up! c pos {:status :no-path :reason :explore-spent}
