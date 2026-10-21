@@ -8,7 +8,9 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.access.zones :as zones]
+            [jobs.lib.build.wood :as wood]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.world-files :as world]
             [jobs.lib.shelter.clock :as sh-clock]
@@ -146,16 +148,22 @@
   "Policy of the :bed-open entries the night job writes for a bed it found open and dug in beside instead: half a day."
   {:cap 5 :ttl (quot sh-clock/ms-per-day 2)})
 
+(defn seen-bed-places
+  "The bed cells the body has seen (still beds) within radius, nearest first."
+  [p radius]
+  (map :pos (look/seen-blocks p {:names wood/bed-names :radius (min 16 radius) :live? true :max 8})))
+
 (defn bed-to-use
   "The bed a body awake at night sleeps in: one it sees (seen-bed), else the remembered :bed within radius, under any
   roof or none. Never one permit? refuses (occupied), one in an unexpired :bed-unreachable entry, or one whose walk
   would take the body out of a kept-shelters shelter (unless overdue: max-days-awake days since :slept, phantoms, or a
   courtesy-walk?: another player sleeps and the bed is near);
-  none after a sleep tonight (:slept within half an in-game day)
-  or while a :sleep-failed entry is unexpired. nil otherwise."
+  none after a sleep tonight (:slept within half an in-game day) while the body is safe from the night (a body woken
+  outside goes back to a bed), or while a :sleep-failed entry is unexpired. nil otherwise. Beds the body has seen
+  (perception's memory, within radius) count as well as the remembered one."
   [p view radius permit?]
   (when (and (sh-sense/night? p) (not (sh-sense/sleeping? p))
-             (zero? (mem/count-in view :slept sh-clock/slept-tonight-ms))
+             (or (zero? (mem/count-in view :slept sh-clock/slept-tonight-ms)) (not (sh-inside/safe-from-night? p)))
              (empty? (mem/entries view :sleep-failed)))
     (let [shelter (:data (mem/latest view :shelter))
           overdue? (>= (or (days-awake-in view) 0) (max-days-awake))
@@ -163,7 +171,11 @@
                              (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-open))
                              (or overdue? (not (kept-shelters (sh-inside/walk-leaves-shelter? p shelter pos 1))) (courtesy-walk? p view pos))))]
       (or (seen-bed p ok?)
-          (first (filter ok? (sh-spawn/standing-beds p view radius)))))))
+          (->> (concat (sh-spawn/standing-beds p view radius) (seen-bed-places p radius))
+               distinct
+               (sort-by #(u/dist (u/self-pos {:primitives p}) %))
+               (filter ok?)
+               first)))))
 
 (def bed-place-failed-policy
   "Policy of the :bed-place-failed entry the night job writes when it could not set up a carried bed: one, ten

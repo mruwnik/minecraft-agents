@@ -114,6 +114,23 @@
     (is (= far-bed (bed-to-use world)))
     (is (true? (holds? world)))))
 
+(defn bed-after-looking
+  "bed-to-use for a body that has looked round, `slept` true when it already slept tonight."
+  [world slept]
+  (let [{:keys [eng p]} (setup world)
+        _ (st/looked-round! eng p)
+        _ (when slept (mem/write! (:store eng) :slept {:pos {:x 0 :y 64 :z 0}} {:cap 10 :ttl (* 10 sh-clock/ms-per-day)}))]
+    (sh-beds/bed-to-use p (mem/view (:store eng)) 64 (constantly true))))
+
+(def open-bed-world {:sees-all true :floor tu/walk-floor :self {:pos {:x 5 :y 64 :z 0}} :time st/night :blocks {"40,64,0" "red_bed" "8,64,0" "red_bed"}})
+
+(deftest a-body-takes-the-nearest-bed-it-has-seen-though-another-is-remembered
+  (is (= {:x 8 :y 64 :z 0} (bed-after-looking open-bed-world false))))
+
+(deftest a-body-woken-in-the-open-goes-back-to-a-bed-but-a-sheltered-one-stays
+  (is (= {:x 8 :y 64 :z 0} (bed-after-looking open-bed-world true)) "slept tonight, still outside")
+  (is (nil? (bed-after-looking (tunnel-world buried-light) true)) "slept tonight, safe in the tunnel"))
+
 (deftest a-body-shut-in-a-hut-does-not-walk-out-to-a-far-bed
   (let [world (merge (hut/hut-world {:x 5 :y 64 :z 0} {"30,64,0" "red_bed"}) {:time st/night})]
     (is (false? (hut/holds-with world (fn [eng] (st/know-bed! eng {:x 30 :y 64 :z 0})))))))

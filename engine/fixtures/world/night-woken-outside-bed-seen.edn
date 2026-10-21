@@ -1,0 +1,21 @@
+;; A body that slept tonight and stands outside its hut at night, with no :bed on record, walks to the bed it sees
+;; through the doorway and sleeps there again. Time: sleeping needs the real night.
+;; Hut: stone x 8..14, z 8..14, roof y 3, open door [11 0..1 14], torches inside; bed at [11 0 10]-[11 0 11].
+{:defaults
+ {:tags [:night :survival :sleep]
+  :time :night :time-why :sleep
+  :blocks [[:fill [8 0 8] [14 3 14] "stone" :hollow]
+           [:fill [9 0 9] [13 2 13] "air"]
+           [:set [11 0 14] "oak_door[facing=south,half=lower,open=true,hinge=left]"] [:set [11 1 14] "oak_door[facing=south,half=upper,open=true,hinge=left]"]
+           [:set [9 1 9] "torch"] [:set [13 1 9] "torch"] [:set [9 1 13] "torch"] [:set [13 1 13] "torch"]
+           [:set [11 0 10] "red_bed[facing=south,part=foot]"] [:set [11 0 11] "red_bed[facing=south,part=head]"]
+           [:set [10 0 17] "sea_lantern"] [:set [12 0 17] "sea_lantern"]]
+  :register [{:trigger :night}]
+  :body {:at [11.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 3}}
+ :cases
+ [{:name "woken-outside-walks-to-the-seen-bed-and-sleeps-again"
+   :memory [{:kind :slept :data {:pos #xyz [11 0 10]} :policy {:cap 10 :ttl 604800000}}]
+   :act [[:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 90]]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}]
+   :after [[:body-near [11.5 0 10.5] 3]]
+   :limit-s 150}]}
