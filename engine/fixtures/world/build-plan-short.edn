@@ -100,6 +100,18 @@
    :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 40 :of-job true}
             {:event {:source :job :kind :completed :data {:missing []}} :within-s 130 :of-job true}]
    :after [[:block [20 0 14] "cobblestone"]]}
+  {:name "walls-fetched-before-a-roof-cell-with-nothing-below" :time :any
+   :blocks [[:set [21 1 13] "stone"]
+            [:set [14 0 19] "chest{Items:[{Slot:0b,id:\"minecraft:cobblestone\",count:4}]}"]]
+   :body {:inventory [["oak_planks" 2]]}
+   :plans [{:id "hut" :metadata {:by "$body"}
+            :parts [{:id "walls" :cells [#at [20 0 14] #at [22 0 14]] :want "cobblestone"}
+                    {:id "roof" :cells [#at [21 1 14]] :want "oak_planks"}]}]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 20"] [:until-seen {:block "chest"} 10]
+         [:job (jobs.build.from-plan {:plan "$plan:hut"})]]
+   :expect [{:no-event {:source :job :kind :child_started :data {:slot :place}} :for-s 100 :until {:source :job :kind :child_started :data {:slot :need}}}
+            {:event {:source :job :kind :completed :data {:missing []}} :within-s 130 :of-job true}]
+   :after [[:block [20 0 14] "cobblestone"] [:block [22 0 14] "cobblestone"] [:block [21 1 14] "oak_planks"]]}
   ;; card a8b2455b: a from-plan check that cannot pass waits with its reason, a few events at most, not a warning each tick (farm.tend: farm-tend-zones.edn keeps tend waiting :nothing-to-do)
   {:name "unmet-need-waits-without-warning-each-tick"
    :plans [{:id "gold" :metadata {:by "$body"} :parts [{:id "g" :cells [#at [22 0 16]] :want "gold_block"}]}]
