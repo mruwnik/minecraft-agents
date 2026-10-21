@@ -306,9 +306,18 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (bridge-run pickaxe))]
+        (let [s (await (scenario {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 3 :ways #{:carried}}
+                                 (assoc (rock-world {"1,63,0" "air" "2,63,0" "air"}) :inventory pickaxe) 120))]
           (is (no-floor-end? s) (pr-str (map :text (tunnel-ends s))))
           (is (= "air" (block-at s 1 63 0))))))))
+
+(deftest the-tunnel-gets-a-block-for-a-missing-floor-when-it-carries-none
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (bridge-run pickaxe))]
+          (is (not (no-floor-end? s)) (pr-str (map :text (tunnel-ends s))))
+          (is (not= "air" (block-at s 1 63 0))))))))
 
 (deftest the-tunnel-stops-before-lava
   (async done

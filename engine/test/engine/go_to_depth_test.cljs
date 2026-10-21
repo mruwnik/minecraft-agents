@@ -124,9 +124,10 @@
           (is (empty? (concat (gt/events-of s :go-to.restored) (gt/events-of s :go-to.restore-skipped)))
               "the stair that got the body away from the dive is not filled again"))))))
 
-;; The mine with the floor of one step of the climb's westward stair missing ([-8 47 0]: no block carried to lay), and
+;; The mine with water as the floor of one step of the climb's westward stair ([-8 47 0]: never bridged, and a missing floor
+;; would now get filler fetched), and
 ;; more dirt south of there (x -9..0, y 44..59, z 2..14) for a stair on another heading.
-(def holed-mine (merge (dissoc mine "-8,47,0") (box -9 44 2 0 59 14 "dirt")))
+(def holed-mine (merge (assoc mine "-8,47,0" "water") (box -9 44 2 0 59 14 "dirt")))
 
 (deftest a-climb-whose-stair-stops-part-way-goes-on-along-another-heading
   (async done
@@ -134,7 +135,7 @@
       (fn ^:async t []
         (let [{:keys [out p] :as s} (await (climb! (assoc in-mine :blocks holed-mine) {:pos on-top}))]
           (is (true? (:arrived @out)))
-          (is (= [:no-floor] (map :reason (gt/events-of s :go-to.escalation-stopped))))
+          (is (= [:hazard] (map :reason (gt/events-of s :go-to.escalation-stopped))))
           (is (<= 16 (lowest-walk s)) "it did not walk back down toward the dive"))))))
 
 (deftest with-the-climb-stair-setting-off-the-dive-is-given-up
