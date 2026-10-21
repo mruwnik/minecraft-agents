@@ -8,6 +8,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.body :as body]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.combat :as combat]
             [jobs.lib.cond :as lcond]
@@ -210,12 +211,6 @@
     (with-meta (fn [c] (if (f c) (at c) (safe-if-lit c)))
       {::exposure (fn [c] (if (f c) ((::exposure (meta at)) c) (dark-sky c)))})))
 
-(defn or-starving
-  "The status of `safe` for c, or at food 0 (a starving body walks by night) the status of threatened when `safe` is not ok."
-  [safe c]
-  (let [s (safe c)]
-    (if (and (not= :ok (first s)) (zero? (.-food (.self (:primitives c))))) (threatened c) s)))
-
 (defn fit? "Later :low-health below the risky health, :poisoned while poisoned." [c] (checks/low-health c))
 
 (defn fit-min
@@ -237,6 +232,25 @@
     (if (and (= :low-health (:reason (nth s 2 nil))) (cannot-heal? c))
       (contract/ok :forage "hurt, but only food heals it")
       s)))
+
+(defn starving?
+  "Whether the body must get food whatever the dark: food 0, or health under the risky health with food under foods/top-up-food and nothing a meal would eat carried (cannot-heal?: only food heals it)."
+  [c]
+  (let [self (.self (:primitives c))]
+    (boolean (or (zero? (.-food self))
+                 (and (< (.-health self) (body/risky-min-health)) (cannot-heal? c))))))
+
+(defn or-starving
+  "The status of `safe` for c, or while starving? the status of threatened when `safe` is not ok (a starving body walks by night)."
+  [safe c]
+  (let [s (safe c)]
+    (if (and (not= :ok (first s)) (starving? c)) (threatened c) s)))
+
+(defn when-fed
+  "The checker `safe` that lifts its waits (not a hostile near) while the body is starving?: the food it works at is how it heals."
+  [safe]
+  (with-meta (fn [c] (or-starving safe c))
+    {::exposure (fn [c] (if (starving? c) (contract/ok :starving "starving: food first") ((::exposure (meta safe)) c)))}))
 
 (defn forage-walk
   "go-to args for a walk that serves food-finding: with :floor {:health 1} (all but 1 hp may be spent, go-to's survivable budget) while the body can not heal, else args as they are."
@@ -275,7 +289,7 @@
    'exposed {:args [] :type :status :doc "the place of the frame's own safe? is exposed (dark)"
              :fn #(lcond/not exposure-of)}
    'threatened {:args [] :type :status :doc "a hostile is near (ready/threatened)" :fn #(lcond/not threatened)}
-   'job-safe-or-starving {:args [] :type :status :doc "the frame's own safe? holds, or at food 0 no hostile is near"
+   'job-safe-or-starving {:args [] :type :status :doc "the frame's own safe? holds, or while starving (food 0, or hurt with food unreachable) no hostile is near"
                           :fn (fn [] #(or-starving (own-export :safe?) %))}
    'healthy {:args [] :type :status :doc "health is enough and the body is not poisoned (fit?)" :fn (fn [] fit?)}
    'armed {:args [] :type :status :doc "a weapon is carried" :fn (fn [] armed)}

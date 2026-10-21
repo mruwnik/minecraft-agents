@@ -55,7 +55,7 @@
 (defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
 (def target [:area])
 (def defaults {:spend {:job-time ::job-time-s}})
-(def safe? (ready/safe-at-by-night work-place/spot))
+(def safe? (ready/when-fed (ready/safe-at-by-night work-place/spot)))
 
 (def steps [:tidy :tend :compost :deposit])
 

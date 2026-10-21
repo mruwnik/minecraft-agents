@@ -61,7 +61,7 @@
   A go-to that waits on the world, or a child still going after jobs.lib.child's call cap, yields :continue; a reflex
   call (it never yields) waits it out in the round.
   More than 12 ways in one call without getting fed ends nothing-possible :still-hungry.
-  Ready: safe? and fit? always ok: it eats carried food whatever is near. Its walks and searches run under :checks (job-safe-or-starving); a merely hungry body waits for dawn in the open (intended).
+  Ready: safe? and fit? always ok: it eats carried food whatever is near. Its walks and searches run under :checks (job-safe-or-starving); a merely hungry body waits for dawn in the open (intended); a starving one (ready/starving?) does not.
   Fragile (health at or below foods/::fragile-health, 6) with no food carried, it walks out (a search, a source, its pen,
   an animal, a furnace to cook at) only on a calm day (jobs.lib.dawn/calm?) and not past known hostiles whose route
   danger (jobs.lib.cost/route-danger) is its health or more; with nothing else to try it writes a :food-too-dangerous entry (no :hungry) and ends condition-failed
@@ -355,15 +355,18 @@
   (-> opts (update :max-distance #(some-> % (* k) (min search-max-distance))) (update :max-legs #(some-> % (* k))) (update-in [:spend :job-time] #(some-> % (* k)))))
 
 (def noted-range "Blocks from an animal another body noted that the walk toward it ends; its place is then looked at." 12)
+(def noted-near-range "The range of the second walk, when the first ended in range with the animal still not in sight (behind rock or a ledge)." 3)
 
 (defn ^:async walk-to-noted!
   "The walk toward an animal the search found only in a note (nothing is in sight to hunt): :continue while it goes, :again once it ends."
   [c]
   (let [pos (:walk-to (ctx/mem c))
-        e (await (child/run!* c :noted-walk 'jobs.movement.go-to (ready/forage-walk c {:pos (zipmap [:x :y :z] pos) :range noted-range :ways #{:walk}})))]
-    (if (= :continue e)
-      :continue
-      (do (ctx/update-mem! c dissoc :walk-to) :again))))
+        e (await (child/run!* c :noted-walk 'jobs.movement.go-to (ready/forage-walk c {:pos (zipmap [:x :y :z] pos) :range (if (:noted-near (ctx/mem c)) noted-near-range noted-range) :ways #{:walk}})))]
+    (cond
+      (= :continue e) :continue
+      (and (not (:noted-near (ctx/mem c))) (nil? (animals/nearest c (animal-opts c false))))
+      (do (ctx/update-mem! c assoc :noted-near true) :again)
+      :else (do (ctx/update-mem! c dissoc :walk-to :noted-near) :again))))
 
 (defn spared-uuids
   "The uuids of the animals passed over (a baby, a pen's, the last adults): the search must not end on one the hunt cannot use."

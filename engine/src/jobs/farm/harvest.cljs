@@ -219,7 +219,7 @@
 
 (def target [:area])
 (def defaults {:least 1 :spend {:job-time ::job-time-s}})
-(def safe? (ready/safe-at-by-night work-place/spot))
+(def safe? (ready/when-fed (ready/safe-at-by-night work-place/spot)))
 
 (defn problem
   "Why the call cannot start now, a cause map, or nil: no zone list read (unless :ignore-zones?), a plan that cannot be

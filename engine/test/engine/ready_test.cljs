@@ -330,6 +330,16 @@
       20 [] ["cow"] :later
       8 [] ["cow" "iron_ore"] :later)))
 
+(deftest a-starving-body-works-its-field-in-the-dark-and-a-fed-one-waits
+  (let [safe? (:safe? (get registry/jobs 'jobs.farm.harvest))]
+    (are [food health inventory expected]
+         (= expected (lit 0 15 #(kind safe? (assoc open-night :self {:pos {:x 0 :y 64 :z 0} :food food :health health} :inventory inventory))))
+      6 3.8 [] :ok
+      6 3.8 [{:name "bread" :count 1}] :later
+      20 3.8 [] :later
+      6 15 [] :later
+      0 15 [] :ok)))
+
 (deftest a-hurt-body-that-cannot-heal-fishes-and-walks-for-food-over-its-health-budget
   (let [hurt {:pos {:x 0 :y 64 :z 0} :health 5}
         walk {:pos {:x 3 :y 64 :z 0}}]

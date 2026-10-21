@@ -547,6 +547,15 @@
           (await (one-round! eng {}))
           (is (some #(= :noted-walk (:slot %)) (events-of seen :child_ended)) "the search ended on the note with no animal in sight: the body walks toward it"))))))
 
+(deftest a-noted-animal-within-range-but-out-of-sight-is-walked-up-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [note [{:kind :seen :what "cow" :id "u1" :pos [8 64 0] :by "Other" :t 1 :until 9e15}]
+              {:keys [eng p]} (setup {:time 6000 :self {:food 8 :health 10} :blocks (tu/box 3 64 -2 3 66 2 "stone")} :step-ms 5 :other-notes note)]
+          (await (one-round! eng {}))
+          (is (> (.-x (.-pos (.self p))) 4) "inside the 12-block range of the note the body still walks closer when the animal is not in sight"))))))
+
 (deftest a-baby-in-sight-does-not-end-the-search-for-an-adult-noted-farther-off
   (async done
     (tu/run-async done
