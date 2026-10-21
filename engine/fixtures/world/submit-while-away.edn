@@ -1,0 +1,19 @@
+;; Card bd88ebb6: a submit while the body is logged out is queued; plain submit says the body is logged out, --wait waits for the job after the log-in.
+{:defaults
+ {:tags [:night :survival :tool]
+  :time :night :time-why :sleep
+  :plot {:height 8}
+  :blocks [[:set [4 0 4] "torch"] [:set [4 0 28] "torch"] [:set [28 0 4] "torch"] [:set [28 0 28] "torch"]]
+  :body {:at [16.5 0 16.5] :spawnpoint [4 0 4]}
+  :limit-s 120}
+ :cases
+ [{:name "submit-during-log-out-says-logged-out"
+   :act [[:http :submit (jobs.survival.log-out {:offline-ms 20000 :news-ms 500}) [] {:ok true}]
+         [:until [:cli "observe" ["$body" "--world" "$world" "status"] {:offline [:any]}] 30]
+         [:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.memory.set-place {:name \"away-probe\" :pos {:x 1 :y 64 :z 1}})"] {:ok true :hint [:contains "logged out"]}]]
+   :expect [{:count-event {:source :job :kind :queued :data {:name "jobs.memory.set-place"}} :for-s 5 :at-least 1}]}
+  {:name "submit-wait-during-log-out-finishes-after-log-in"
+   :act [[:http :submit (jobs.survival.log-out {:offline-ms 20000 :news-ms 500}) [] {:ok true}]
+         [:until [:cli "observe" ["$body" "--world" "$world" "status"] {:offline [:any]}] 30]
+         [:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.memory.set-place {:name \"away-probe\" :pos {:x 1 :y 64 :z 1}})" "--wait" "--timeout" "90s"] {:ok true :wait {:wake :job-finished :result :completed}}]]
+   :expect [{:count-event {:source :job :kind :queued :data {:name "jobs.memory.set-place"}} :for-s 5 :at-least 1}]}]}
