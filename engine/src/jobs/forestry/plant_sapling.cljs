@@ -11,7 +11,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.forestry :as lib]
             [jobs.forestry.prepare-rule :as rule]
-            [jobs.lib.trees :refer [debts forget-plot-debts! target-of with-sapling sapling-for sapling-of sapling-name? log-name? replant-kind species]
+            [jobs.lib.trees :refer [debts forget-plot-debts! unloaded-kind unloaded-policy target-of with-sapling sapling-for sapling-of sapling-name? log-name? replant-kind species]
              :rename {species all-species}]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]))
@@ -211,6 +211,9 @@
     (cond
       (nil? t) (ctx/end c :done nil {})
       (refused) (ctx/end c :condition-failed (refused) {:pos (:pos t)})
+      (nil? (u/sensed (:primitives c) (:pos t)))
+      (do (ctx/remember! c unloaded-kind {:pos (:pos t)} unloaded-policy)
+          (ctx/end c :condition-failed {:reason :not-loaded :pos (:pos t)} {:pos (:pos t)}))
       (nil? sapling) (await (fetch-sapling! c (problem c)))
       :else (await (place! c t sapling)))))
 
