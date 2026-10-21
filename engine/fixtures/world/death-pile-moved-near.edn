@@ -1,0 +1,19 @@
+;; Card 9e6fc4cb: a pile skipped as too far to reach before it despawns is weighed again once the body is moved near it (a tp), inside the window.
+;; The death is memory 280 s old at [60 0 60], 81 blocks from the body: the walk would end after the 300 s despawn. Should-succeed: the first run skips (not-worth, too far), and after the body is put 2 blocks from the pile a second run does not wait on that decision: it weighs the pile again (it walks and ends nothing-possible unreachable here: the plot has no way to the pile).
+{:defaults
+ {:tags [:survival :death :jobs]
+  :time :any
+  :memory [{:kind :died :age-s 280
+            :data {:pos #xyz [60 0 60] :dimension "overworld" :inventory [{:name "diamond_pickaxe" :count 1 :slot 0} {:name "diamond_sword" :count 1 :slot 1}] :experience {:level 0 :points 0}}}
+           {:kind :respawned :age-s 278 :data {:pos #xyz [2 0 2]}}]
+  :body {:at [2.5 0 2.5] :effects [["resistance" 600 4]]}
+  :limit-s 100}
+ :cases
+ [{:name "too-far-skip-is-weighed-again-after-a-tp-near-the-pile"
+   :act [[:job (jobs.survival.recover-drops)]
+         [:await {:source :job :kind :stopped} 30]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~58 ~ ~58"]
+         [:wait-s 3]
+         [:job (jobs.survival.recover-drops)]]
+   :expect [{:event {:source :job :kind :stopped :data {:decision :skip}} :within-s 30}
+            {:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :unreachable}} :within-s 30}]}]}

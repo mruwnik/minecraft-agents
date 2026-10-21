@@ -9,13 +9,17 @@
             [jobs.survival.recover-drops.config :as cfg]))
 
 (defn retried-deaths
-  "With :retry, the latest death whose pile an earlier run ended :abandoned while its despawn window is still open."
+  "The latest death to weigh again while its despawn window is open: with :retry, one whose pile an earlier run ended
+  :abandoned; always, one skipped as :too-far from a spot the body has since left (::moved-blocks), as a player runs
+  for a pile that is now in reach."
   [c]
   (let [view (ctx/view c)
         died (mem/latest view :died)
-        recovered (last (filter #(= (:t died) (:death-t (:data %))) (mem/entries view :recovered)))]
-    (when (and (:retry (:args c)) died (= :abandoned (:decision (:data recovered)))
-               (< (game/ticks-since died view) game/despawn-ticks))
+        recovered (:data (last (filter #(= (:t died) (:death-t (:data %))) (mem/entries view :recovered))))
+        moved? (fn [{:keys [from]}] (and from (> (u/dist (u/self-pos c) from) (cfg/moved-blocks))))]
+    (when (and died (< (game/ticks-since died view) game/despawn-ticks)
+               (or (and (:retry (:args c)) (= :abandoned (:decision recovered)))
+                   (and (= :skip (:decision recovered)) (= :too-far (:reason recovered)) (moved? recovered))))
       [died])))
 
 (defn stale-deaths

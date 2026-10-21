@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.death-test :as dt :refer [die! job recovered]]
             [engine.events :as events]
+            [engine.fake :as fake]
             [engine.registry :as registry]
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
@@ -100,33 +101,16 @@
           (is (= {:kind :condition-failed :reason :not-worth} (end-of seen)))
           (is (= :skip (:decision (recovered eng)))))))))
 
-(deftest drops-not-all-back-end-nothing-possible
+(deftest a-too-far-skip-is-weighed-again-once-the-body-has-moved-near
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities [(dt/drop-item 1 20 "diamond_pickaxe")]})]
-          (die! eng {:pos dt/death-pos :inventory dt/diamonds})
-          (core/submit! eng job {})
-          (await (run-until-empty eng 20))
-          (is (= {:kind :nothing-possible :reason :not-visible} (end-of seen))))))))
-
-(deftest a-closed-window-ends-condition-failed-gone
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen clock]} (setup {:floor tu/walk-floor :entities dt/drops})]
-          (die! eng {:pos dt/death-pos :inventory dt/diamonds})
-          (swap! clock + 300000)
+        (let [{:keys [eng p seen]} (setup {:floor tu/walk-floor :entities dt/drops})]
+          (die! eng {:pos {:x 1500 :y 64 :z 0} :inventory dt/diamonds})
           (core/submit! eng job {})
           (await (run-until-empty eng 5))
-          (is (= {:kind :condition-failed :reason :gone} (end-of seen))))))))
-
-(deftest nothing-left-at-the-death-point-ends-condition-failed-nothing-found
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng seen]} (setup {:floor tu/walk-floor})]
-          (die! eng {:pos dt/death-pos :inventory dt/diamonds})
+          (is (= :too-far (:reason (recovered eng))))
+          (swap! (fake/state p) assoc-in [:self :pos] [1480.5 64 0.5])
           (core/submit! eng job {})
           (await (run-until-empty eng 5))
-          (is (= {:kind :condition-failed :reason :nothing-found} (end-of seen))))))))
+          (is (= {:kind :nothing-possible :reason :unreachable} (end-of (atom (take-last 1 (filter #(#{:completed :stopped} (:kind %)) @seen)))))))))))

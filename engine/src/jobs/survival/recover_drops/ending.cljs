@@ -2,6 +2,7 @@
   "How a recover-drops trip ends: the :recovered entry and the ending by decision."
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.lib.util :as u]
             [jobs.survival.recover-drops.config :as cfg]
             [jobs.survival.recover-drops.deaths :as dth]
             [jobs.survival.recover-drops.estimate :as est]))
@@ -29,5 +30,7 @@
         pos (:pos (:data death))
         text (cond-> (est/decision-text decision fields (cfg/margin))
                (= :abandoned decision) (str "; the pile at " (str/join " " (map #(js/Math.floor (% pos)) [:x :y :z]))))]
-    (ctx/remember! c :recovered (merge {:decision decision :death-t (:t death)} (dissoc fields :at :flight-s)) cfg/recovered-policy)
+    (ctx/remember! c :recovered (merge {:decision decision :death-t (:t death)}
+                                         (when (= :skip decision) {:from (select-keys (u/self-pos c) [:x :y :z])})
+                                         (dissoc fields :at :flight-s)) cfg/recovered-policy)
     (ending-for c decision fields text pos)))

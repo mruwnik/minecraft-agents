@@ -25,6 +25,7 @@
    ::leg-s {:default 6 :doc "The walk to the pile goes in legs of this many seconds; after each the danger and the cost are weighed again." :spec (a/num-in 0.1 120)}
    ::see-range {:default 32 :doc "A hostile a declined trip saw stays priced where it stood until the body is this near the place with a clear line to it and no such mob is known there." :spec (a/num-in 0 nil)}
    ::mob-spot-radius {:default 6 :doc "A known hostile of the same kind this near a remembered mob's place is that mob." :spec (a/num-in 0 nil)}
+   ::moved-blocks {:default 10 :doc "A pile skipped as too far to reach before it despawns is weighed again, window permitting, once the body stands this far from where it skipped." :spec (a/num-in 0 nil)}
    ::bed-away-blocks {:default 10 :doc "A respawn farther than this from the bed the body slept in is reported." :spec (a/int-in 0 nil)}})
 
 (defn seal-radius [] (settings/get settings ::seal-radius))
@@ -40,6 +41,8 @@
 (defn wet-danger [] (settings/get settings ::wet-danger))
 
 (defn arrive-range [] (settings/get settings ::arrive-range))
+
+(defn moved-blocks [] (settings/get settings ::moved-blocks))
 
 (defn max-hostile-cuts [] (settings/get settings ::max-hostile-cuts))
 
