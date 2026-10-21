@@ -528,6 +528,18 @@
           (is (= 1 (get (inv s) "raw_iron")) "the body cut its way beside the dug cell and picked the drop up")
           (is (= :count (:reason (done-event s)))))))))
 
+(deftest a-walk-whose-search-ran-out-is-cut-past-like-an-unreachable-one
+  (is (true? (drops/cut-after? {:kind :stopped :cause {:why :budget}})))
+  (is (true? (drops/cut-after? {:kind :stopped :cause {:why :detour}})))
+  (is (false? (drops/cut-after? {:kind :stopped :cause {:why :door-stuck}}))))
+
+(deftest a-drop-is-lost-only-when-judged-from-near-the-dug-cell
+  (is (= :lost (drops/drop-verdict [0 64 0] 3 [] [])))
+  (is (= :unreached (drops/drop-verdict [0 64 0] 40 [] [])))
+  (is (nil? (drops/drop-verdict [0 64 0] 40 [] [[0 64 0]])) "said once")
+  (is (= :lost (drops/drop-verdict [0 64 0] 3 [] [[0 64 0]])) "unreached far away, then lost from beside it")
+  (is (nil? (drops/drop-verdict [0 64 0] 3 [[0 64 0]] []))))
+
 (deftest a-cut-beside-a-dug-cell-never-opens-a-cell-under-gravel
   (let [cut (fn [blocks] (let [s (start {:world {:blocks blocks :inventory pickaxe :yaw 270}})]
                            (drops/drop-cut {:primitives (:p s)} [2 64 0] 4)))]

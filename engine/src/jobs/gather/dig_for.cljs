@@ -52,7 +52,7 @@
      tool carried (none that harvests the block, or every one nearly spent) ends :no-tool; no torch left to hang ends :no-torches.
      Each text says what is missing and that jobs.gather.mine gets it first.
   1. Collecting the drop of a dig (mine.targets, mine.drops): collect-drops within the collect-radius setting, one walk or cut to the dug cell, a
-     drop still lying is mine.left-behind, a dig that brought nothing and shows no drop is mine.drop-lost. The count is the inventory's.
+     drop still lying is mine.left-behind, a dig that brought nothing and shows no drop is mine.drop-lost (judged within 8 blocks of the dug cell; from farther mine.drop-unreached). The count is the inventory's.
   2. Carrying the goal ends :count; max-failures digs failed in a row end :gave-up; :dry-digs (setting) digs that raised no count end :no-drops.
   3. Dig the nearest target (the 5x5x2 ground under the start last with :track-ground; a walk within reach first; mine.targets).
   4. No target: look round once per cell, then by a mineshaft (:descend-shaft, mine.descent) or a stair down (:descend-stair, :descend-limit, to the ore's :level) to

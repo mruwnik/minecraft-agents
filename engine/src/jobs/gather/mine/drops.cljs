@@ -43,15 +43,33 @@
       (ctx/update-mem! c update :left merge fresh))
     fresh))
 
+(def lost-range
+  "Blocks from the dug cell within which a dig that brought nothing and shows no drop is declared lost: a look from farther says nothing."
+  8)
+
+(defn drop-verdict
+  "What is said of a dig that brought nothing and shows no drop, the body being dist blocks from the dug cell: :lost within
+  lost-range, :unreached beyond it, nil when it was said already (dug-at is in said-lost or said-unreached)."
+  [dug-at dist said-lost said-unreached]
+  (cond
+    (nil? dug-at) nil
+    (some #{dug-at} said-lost) nil
+    (<= dist lost-range) :lost
+    (some #{dug-at} said-unreached) nil
+    :else :unreached))
+
 (defn drop-lost!
-  "A dig after which the carried count did not rise and no drop of the item lies in sight: said once per dug cell, and
-  kept for the result's :lost."
+  "A dig after which the carried count did not rise and no drop of the item lies in sight, judged from within lost-range of
+  the dug cell: said once per dug cell, and kept for the result's :lost. From farther away the drop is only unreached (said once)."
   [c]
-  (let [{:keys [dug-at lost]} (ctx/mem c)]
-    (when (and dug-at (not (some #{dug-at} lost)))
-      (ctx/emit! c :mine.drop-lost :info {:cell dug-at
-                                          :text (str "mine dug at " (str/join "," dug-at) ": nothing came in and no drop is in sight")})
-      (ctx/update-mem! c update :lost (fnil conj []) dug-at))))
+  (let [{:keys [dug-at lost drops-unreached]} (ctx/mem c)
+        cell (str/join "," dug-at)]
+    (case (drop-verdict dug-at (u/dist (u/self-pos c) (zipmap [:x :y :z] dug-at)) lost drops-unreached)
+      :lost (do (ctx/emit! c :mine.drop-lost :info {:cell dug-at :text (str "mine dug at " cell ": nothing came in and no drop is in sight")})
+                (ctx/update-mem! c update :lost (fnil conj []) dug-at))
+      :unreached (do (ctx/emit! c :mine.drop-unreached :info {:cell dug-at :text (str "mine dug at " cell ": no way back to look for the drop")})
+                     (ctx/update-mem! c update :drops-unreached (fnil conj []) dug-at))
+      nil)))
 
 (defn ^:async look-for-drop!
   "Once per dug cell, glance at the dug cell and the cell under it, then down the column at each unsensed cell (jobs.lib.dig-look),
@@ -150,6 +168,17 @@
       (await (dig-look/look-unknown! c unseen))
       (boolean (seq unseen)))))
 
+(def search-ended-whys
+  "go-to's :why of a walk whose search ended without a verdict on the cell (a big open cave ate the budget): the dug cell may still be walled in."
+  #{:budget :search-spent :moved-while-searching :no-progress})
+
+(defn cut-after?
+  "Whether the blocked walk res (go-to's ending) leaves a cut beside the dug cell worth trying: a verdict on the cell, a detour,
+  or a search that ran out before it had one."
+  [res]
+  (boolean (or (result/unreachable-walk? res)
+               (contains? (conj search-ended-whys :detour) (result/why res)))))
+
 (defn ^:async walk-to-drop!
   "A dig whose drop did not come in: once per dug cell, walk within 1 of it (near/go-near!, no escalation), where a drop
   out of sight or out of reach from the dig spot is seen and picked up; a dug cell no walk gets beside (dug from a
@@ -162,7 +191,7 @@
             go! #(near/go-near! c pos 1 {:ways #{:walk :dig} :may-dig #{:own}})
             w (await (go!))
             w (if (and (= :blocked w) (await (look-floor-toward! c dug-at))) (await (go!)) w)
-            cut (when (and (= :blocked w) (not (ways/stay-level? (:args c))) (let [res (near/last-walk c)] (or (result/unreachable-walk? res) (= :detour (result/why res)))))
+            cut (when (and (= :blocked w) (not (ways/stay-level? (:args c))) (cut-after? (near/last-walk c)))
                   (await (cut-to-drop! c dug-at)))
             w (case cut :cut (await (go!)) :partial :partial w)]
         (when (= :there w) (await (peek-over-lip! c dug-at)))
