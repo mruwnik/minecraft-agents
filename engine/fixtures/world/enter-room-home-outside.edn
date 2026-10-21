@@ -1,0 +1,24 @@
+;; A shut-in for the night when the remembered home is a bed set down outside the house, not a bed in it. The closed house
+;; behind a shut door is the room: the body walks in and shuts the door, it does not wall itself in beside the door.
+;; Hut: planks x 12..18, z 12..18, y 0..3 (hollow), room 13..17, shut oak door at [15 0..1 18]; a bed on open ground at [10 0 20] is the
+;; remembered home; body 2 south of the door.
+;; Should-succeed: the body ends inside the hut with the door shut and no block placed outside it.
+{:defaults
+ {:tags [:night :survival]
+  :time :any
+  :plot {:floor "grass_block" :length 48 :width 48}
+  :blocks [[:fill [12 0 12] [18 3 18] "oak_planks" :hollow]
+           [:fill [13 0 13] [17 2 17] "air"]
+           [:fill [15 0 18] [15 1 18] "air"]
+           [:set [15 0 18] "oak_door[facing=south,half=lower,hinge=left,open=false]"]
+           [:set [15 1 18] "oak_door[facing=south,half=upper,hinge=left,open=false]"]
+           [:set [10 0 20] "red_bed[facing=south,part=foot]"]
+           [:set [10 0 21] "red_bed[facing=south,part=head]"]]
+  :body {:at [15.5 0 20.5] :yaw 180 :effects [["resistance" 600 4]] :settle-s 3 :inventory [["cobblestone" 16]]}
+  :limit-s 90}
+ :cases
+ [{:name "home-bed-outside-the-house-body-enters-the-house"
+   :memory [{:kind :home :data {:pos #xyz [10 0 20]} :policy {:cap 1 :ttl :forever}}]
+   :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.shut-in"}} :within-s 70 :of-job true}]
+   :after [[:block [15 0 18] "oak_door[half=lower,open=false]"] [:body-near [15.5 0 15.5] 2.5] [:not-block [15 0 19] "cobblestone"]]}]}

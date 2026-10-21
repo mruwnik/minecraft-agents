@@ -75,27 +75,40 @@
 
 (defn nearest-seen
   "{:pos} of the nearest closed room behind one of the first ::max-judged doors the body has seen, nil when none. A door
-  either side of which a zone refuses is skipped; a room whose inside is not seen yet counts (the walk shows it).
+  either side of which a zone refuses is skipped; a room whose inside is not seen yet counts (the walk shows it), but only
+  when no door side is a known closed room (the open ground outside a door reads unseen too).
   Read-only (a quote runs this), so nothing is cached."
   [c]
   (let [p (:primitives c)
         starts (take (settings/get settings ::max-judged) (room-lib/starts p nil))
-        refused-door? (fn [door] (some #(refused? c (:pos %)) (filter #(= door (:door %)) starts)))]
-    (->> starts
-         (remove #(refused-door? (:door %)))
-         (keep (fn [{:keys [pos]}] (when (or (room-lib/refuge-room? p pos) (reach-room/unseen-room? p pos)) {:pos pos})))
-         first)))
+        refused-door? (fn [door] (some #(refused? c (:pos %)) (filter #(= door (:door %)) starts)))
+        poses (->> starts (remove #(refused-door? (:door %))) (map :pos))]
+    (some->> (or (first (filter #(room-lib/refuge-room? p %) poses))
+                 (first (filter #(reach-room/unseen-room? p %) poses)))
+             (hash-map :pos))))
+
+(defn unclosable?
+  "Whether the room seen at pos can be closed by nothing the job does: a seen room that is no closed room, with an
+  unroofed cell and no doorway that shuts it (a roof on open sides). An unroofed cell whose roof column is unseen is
+  walked to and looked at, but only while the room is closed: a flood that leaks through seen open cells is a roof on open
+  sides, whatever its unseen roof. Read-only."
+  [p pos]
+  (let [{:keys [cell closed?]} (reach-room/unroofed-cell p pos)
+        hidden? (and cell (look-edge/unseen-roof? p cell) closed?)]
+    (boolean (and (not (room-lib/refuge-room? p pos)) (not (reach-room/unseen-room? p pos))
+                  cell (not hidden?) (nil? (room-lib/shut-by p pos cell any?))))))
 
 (defn target-of
-  "{:name :pos} of the room to enter: the call's :place, else the home, else (no :place and no home remembered) the nearest
-  closed room seen ({:pos} only); nil when none, or when a zone refuses the place."
+  "{:name :pos} of the room to enter: the call's :place, else the home, else (no :place, and no home remembered or the home
+  open ground, like a bed set down outside the house) the nearest closed room seen ({:pos} only); nil when none, or when a
+  zone refuses the place."
   [c]
   (let [nm (or (:place (:args c)) :home)
         pos (mem/place (ctx/view c) nm)]
     (cond
       (:at (:args c)) (let [at (:at (:args c))] (when-not (refused? c at) {:pos at}))
-      pos (when-not (refused? c pos) {:name nm :pos pos})
-      (:place (:args c)) nil
+      (:place (:args c)) (when (and pos (not (refused? c pos))) {:name nm :pos pos})
+      (and pos (not (unclosable? (:primitives c) pos))) (when-not (refused? c pos) {:name nm :pos pos})
       :else (nearest-seen c))))
 
 (defn at-target?
@@ -164,17 +177,6 @@
     (boolean (and (seq threats)
                   (or (some combat/creeper? threats)
                       (and way (not (room-lib/race-won? p room way threats))))))))
-
-(defn unclosable?
-  "Whether the room seen at pos can be closed by nothing the job does: a seen room that is no closed room, with an
-  unroofed cell and no doorway that shuts it (a roof on open sides). An unroofed cell whose roof column is unseen is
-  walked to and looked at, but only while the room is closed: a flood that leaks through seen open cells is a roof on open
-  sides, whatever its unseen roof. Read-only."
-  [p pos]
-  (let [{:keys [cell closed?]} (reach-room/unroofed-cell p pos)
-        hidden? (and cell (look-edge/unseen-roof? p cell) closed?)]
-    (boolean (and (not (room-lib/refuge-room? p pos)) (not (reach-room/unseen-room? p pos))
-                  cell (not hidden?) (nil? (room-lib/shut-by p pos cell any?))))))
 
 (defn can-start?
   "A room to enter: a place, the home or a closed room seen, or the body already in one; and, in it already, a block to
