@@ -79,3 +79,17 @@
         (let [e (ended (await (bring! {:inventory wheat :entities []} {})))]
           (is (= :stopped (:kind e)))
           (is (= [:lure :no-animal] ((juxt :method :reason) e))))))))
+
+(deftest with-no-animal-in-sight-it-searches-before-giving-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (bring! {:inventory wheat :entities []} {}))]
+          (is (some #(and (= :child_started (:kind %)) (= "j1/explore" (:job %))) @(:seen s))))))))
+
+(deftest an-animal-the-search-found-beyond-the-radius-is-then-taken
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (bring! {:inventory wheat :entities [(cow 1 20)]} {})) e (ended s)]
+          (is (= [:completed :lure "u1"] ((juxt :kind :method :animal) e))))))))

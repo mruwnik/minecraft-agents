@@ -3,11 +3,13 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.animals :as animals]
+            [jobs.lib.child :as child]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.checks :as checks]
-            [jobs.lib.ready :as ready]))
+            [jobs.lib.ready :as ready]
+            [jobs.lib.util :as u]))
 
 (def doc
   "Bring one animal of type :mob to :pos (or to the fence post :fence). A one-shot order that starts and ends itself;
@@ -22,7 +24,8 @@
 
   A :fence needs :lead and :box or :uuid need :lure; either with the other way is never startable (:bad-way). Without
   :mob or a destination it can never start (:no-mob, :no-destination). Fetching what the way needs (a lead, the food) is
-  the child's.
+  the child's. A child that ends with no animal to take (:no-animal, :none; not with :uuid) is followed by up to 3
+  jobs.explore.search calls for the mob, then called again, its :radius widened to reach what was found.
 
   Result: the child's. Both ways give {:end :animal :animal-at :at :reason :text}; :end is :tie (tied to the post), :free
   (let go at :pos; lead only) or :led (lure only: the animal stands at the spot and still follows); lead adds :still-led
@@ -92,11 +95,36 @@
   "The args the way's job takes, from this call's."
   [c method]
   (let [args (:args c)
+        reach (:reach (ctx/mem c))
         common (cond-> (select-keys args [:mob :pos :radius :ignore-zones?])
+                 (and reach (> reach (:radius args))) (assoc :radius reach)
                  (some? (:ways args)) (assoc :ways (:ways args)))]
     (case method
       :lead (merge common (select-keys args [:fence :gather-radius]))
       :lure (merge common (select-keys args [:box :uuid :keep-food])))))
+
+(def max-searches 3)
+
+(defn no-animal?
+  "Whether the child ended for want of an animal of :mob (lure :no-animal, lead :none) that a walk could still find."
+  [c e]
+  (and (not (:uuid (:args c)))
+       (#{:no-animal :none} (:cause e))
+       (< (:searches (ctx/mem c) 0) max-searches)))
+
+(defn ^:async search!
+  "No animal in reach: walk and look for one (jobs.explore.search; one in view beyond :radius counts). :continue while it
+  runs, :again once it found one (the child is called again), else nil."
+  [c]
+  (let [e (await (ctx/call c :explore 'jobs.explore.search
+                           (child/search-args {:target (:mob (:args c)) :count 1 :max-legs 12 :takeable true})))]
+    (cond
+      (= :continue e) :continue
+      (= :done (:kind e)) (let [me (u/self-pos c)
+                                far (apply max 0 (keep #(some->> (:pos %) (zipmap [:x :y :z]) (u/flat-dist me)) (:found (:data e))))]
+                            (ctx/update-mem! c #(-> % (update :searches (fnil inc 0)) (update :reach (fnil max 0) (js/Math.ceil far))))
+                            :again)
+      :else (do (ctx/update-mem! c assoc :searches max-searches) nil))))
 
 (defn ^:async step [c]
   (let [method (or (:method (ctx/mem c)) (method-of c))
@@ -104,9 +132,10 @@
         e (await (ctx/call c :bring (child-job method) (child-args c method)))]
     (if (= :continue e)
       :continue
-      (let [data (assoc (:data e) :method method)]
-        (when (= :done (:kind e)) (ctx/update-mem! c assoc :brought data))
-        (contract/with-because (ctx/end c (:kind e) (:cause e) data) e)))))
+      (or (when (no-animal? c e) (await (search! c)))
+          (let [data (assoc (:data e) :method method)]
+            (when (= :done (:kind e)) (ctx/update-mem! c assoc :brought data))
+            (contract/with-because (ctx/end c (:kind e) (:cause e) data) e))))))
 
 (defn ^:async round [c]
   (await (pace/steps! c #(step c))))
