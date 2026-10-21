@@ -18,6 +18,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.look :as look]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.threats :as threats]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
@@ -67,7 +68,8 @@
   cell: a row over a drop is taken back end first. Ground with no head room beside the row is no way off it.
 
   The body's own column is dug only from on top: the block under the feet when the cell below is solid floor
-  (the body falls one block and lands). Deeper cells wait for the descent (:under-body). Over a hole it stops
+  (the body falls one block and lands). That floor is what it has seen, an entry of the ledger, or the ground under a
+  pillar entry; the body looks down at an unseen cell first. Deeper cells wait for the descent (:under-body). Over a hole it stops
   (:no-floor-below).
 
   A block on the footprint of a plan this body made is the plan's: its entry is dropped (cleanup.plan-cell) and the cell
@@ -149,12 +151,22 @@
                  (some #(<= (u/dist (danger-q/mob-pos p %) {:x x :y y :z z}) r)
                        (danger-q/known-hostiles p (+ r (danger-q/known-scan)) {}))))))
 
+(defn floor-at
+  "block-at for the cell under a floor block: what the body has seen, else the item of an entry of the ledger l in that cell,
+  else \"stone\" under a pillar entry (the body stood on that ground to place the pillar's first block): a dark column
+  is never seen, but what the body built and stood on is known."
+  [c l]
+  (let [seen (access/seen-at (:primitives c))
+        items (into {} (map (juxt :cell :item)) l)
+        pillar-bases (into #{} (comp (filter #(= :pillar (:purpose %))) (map (fn [{[x y z] :cell}] [x (dec y) z]))) l)]
+    (fn [cell] (or (seen cell) (items cell) (when (pillar-bases cell) "stone")))))
+
 (defn inputs
   "next-step's input now: entries to work on, the whole ledger l for the rules."
   [c l entries zones]
   (let [{:keys [accept]} (:args c)]
     (merge (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))})
-           {:feet (reach/standing-vec (:primitives c)) :eye (eye-of c) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :floor-at (access/seen-at (:primitives c)) :entries entries
+           {:feet (reach/standing-vec (:primitives c)) :eye (eye-of c) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :floor-at (floor-at c l) :entries entries
             :can-clear? #(not (tools/needs-tool-to-clear? (:primitives c) %))
             :bucket? (boolean (some #(= "bucket" (:name %)) (u/inventory (:primitives c))))
             :hostile-near? (hostile-near? (:primitives c)) :opens-dark? (stay/opens-dark? (:primitives c)) :keep-at-night? (stay/at-night?)
@@ -384,13 +396,36 @@
                             (update :dropped (fnil into []) (map (fn [e] (select-keys e [:cell :item :found]))) dropped)))
     ledger))
 
+(declare work-step!)
+
+(defn under-floor-to-look-at
+  "The cell under the floor block the body stands on when that floor is an entry it works on and the cell has never been
+  seen (digging the floor needs the cell below seen solid), once per cell; else nil."
+  [c picked]
+  (let [p (:primitives c)
+        [fx fy fz] (reach/standing-vec p)
+        below [fx (- fy 2) fz]]
+    (when (and (contains? picked [fx (dec fy) fz])
+               (dig-look/unknown? p below)
+               (not= below (:looked-under (ctx/mem c))))
+      below)))
+
 (defn ^:async work!
   "One pass: settle, then one step. Resolves :again, :continue (a dig waits) or the ending."
   [c zones]
   (let [view (ctx/view c)
         l (ledger/open-entries view)
         picked (set (map :cell (ledger/select l view (:of (:args c)) (ledger/near-of-args c (:args c)) (purposes-of c))))
-        settled (settle! c l picked)
+        under (under-floor-to-look-at c picked)]
+    (if under
+      (do (ctx/update-mem! c assoc :looked-under under)
+          (await (dig-look/look-at! c under))
+          :again)
+      (await (work-step! c zones l picked)))))
+
+(defn ^:async work-step!
+  [c zones l picked]
+  (let [settled (settle! c l picked)
         step (next-step (inputs c settled (filterv #(picked (:cell %)) settled) zones))
         m (ctx/mem c)]
     (case (:step step)

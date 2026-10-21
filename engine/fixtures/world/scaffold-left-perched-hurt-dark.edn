@@ -1,0 +1,19 @@
+;; Card 9987564a: a hurt body (4 hp) perched on its own 4-block pillar in the dark comes down by digging under its feet, one block
+;; at a time, with no fall of 2+: scaffold-left offers the column under the feet in any light and does not hold it for low health.
+;; Sealed dark plot (:time :any), no hostile.
+{:defaults
+ {:tags [:cleanup :scaffold-left :access :survival] :time :any
+  :plot {:height 10}
+  :body {:at [16.5 4 16.5] :inventory [["iron_pickaxe" 1] ["iron_sword" 1]] :settle-s 2}
+  :limit-s 90}
+ :cases
+ [{:name "perched-hurt-body-in-the-dark-comes-down"
+   :register [{:trigger :scaffold-left :args {} :job (jobs.access.cleanup {})}]
+   :blocks [[:fill [16 0 16] [16 3 16] "cobblestone"]]
+   :memory [{:kind :scaffold :data {:entries [{:cell #at [16 0 16] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}
+                                              {:cell #at [16 1 16] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}
+                                              {:cell #at [16 2 16] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}
+                                              {:cell #at [16 3 16] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}]}}]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 16 minecraft:generic"]]
+   :expect [{:event {:source :reflex :kind :ended :data {:removed [[:any] [:any] [:any] [:any]]}} :within-s 80}]
+   :after [[:not-block [16 0 16] "cobblestone"] [:not-block [16 3 16] "cobblestone"] [:body-near [16.5 0 16.5] 1.5]]}]}

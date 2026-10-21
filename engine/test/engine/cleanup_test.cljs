@@ -206,7 +206,7 @@
 (deftest the-trigger-leaves-scaffold-beyond-its-radius-for-an-explicit-cleanup
   (let [p (tu/fake {:blocks {"0,64,0" "dirt" "50,64,0" "dirt"}})
         args scaffold-left/defaults]
-    (is (= {:near {:radius 32}} args))
+    (is (= {:near {:radius 32} :checks {:safe? '(not (threatened)) :fit? '(armed)}} args))
     (is (true? (fires? p (trigger-store [(entry [20 64 0])] []) [] args)) "near")
     (is (false? (fires? p (trigger-store [(entry [50 64 0])] []) [] args)) "far: nothing for the reflex")
     (is (false? (fires? p (trigger-store [(entry [50 64 0])] []) [])) "no radius given: the default radius, as a saved register's old spec has")
@@ -236,6 +236,12 @@
       (fn []
         (is (true? (fires? (night) dirt [])))
         (is (true? (fires? (hostile) dirt [])))))))
+
+(deftest a-body-perched-on-its-pillar-comes-down-in-the-dark
+  (let [night #(tu/with-light-data (tu/fake {:self {:pos {:x 0.5 :y 68 :z 0.5}} :blocks {"0,67,0" "dirt" "3,67,0" "dirt"} :time 14000}))
+        at (fn [cell] (trigger-store [(entry cell)] []))]
+    (is (true? (fires? (night) (at [0 67 0]) [])) "the pillar under the feet")
+    (is (false? (fires? (night) (at [3 67 0]) [])) "scaffold beside the body waits for light")))
 
 (deftest a-plug-sealing-the-body-into-a-dark-pocket-does-not-count-the-pocket-as-what-it-opens-onto
   (let [rock {"1,64,0" "dirt" "2,64,0" "stone" "1,63,0" "stone" "1,65,0" "stone" "1,64,1" "stone" "1,64,-1" "stone"}

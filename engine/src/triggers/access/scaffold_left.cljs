@@ -6,7 +6,7 @@
     no cleanup held in the last 10 minutes
     within :near's :radius (32) of the body, so a far scaffold never drags the body back to it
     not deeper below the feet than jobs.lib.ledger/max-below, not within jobs.lib.ledger/died-radius of a place the body died, not roofed (a solid block within jobs.lib.ledger/roof-height above it) while the body is in the open (jobs.access.cleanup.step/walk-blocker)
-  It holds only in the light (a retreat plug is taken back in the dark too: the body sits inside it, but not while it opens onto a dark cell, which cleanup keeps), past the dawn grace and with no known hostile near (jobs.lib.dawn/calm?), and not within
+  It holds only in the light (a retreat plug is taken back in the dark too: the body sits inside it, but not while it opens onto a dark cell, which cleanup keeps; so is scaffold in the body's own column under its feet: a body perched on its pillar comes down by digging under itself, a step at a time, whatever the light or its health), past the dawn grace and with no known hostile near (jobs.lib.dawn/calm?), and not within
   jobs.lib.threats/fled-memory-ms of a flight, unless ::at-night / ::with-hostile are set: the night's seal is scaffold
   too, and the body is inside it.
   Runs jobs.access.cleanup, which takes exactly those entries.
@@ -30,7 +30,13 @@
   {::at-night {:default false :doc "Whether the trigger may fire in the dark." :spec boolean?}
    ::with-hostile {:default false :doc "Whether the trigger may fire in the first light, while a known hostile is near, or just after a flight." :spec boolean?}})
 
-(def defaults {:near {:radius 32}})
+(def defaults {:near {:radius 32} :checks {:safe? '(not (threatened)) :fit? '(armed)}})
+
+(defn perched-on?
+  "Whether the entry e lies in the column under the body's feet."
+  [feet e]
+  (let [[fx fy fz] feet [x y z] (:cell e)]
+    (and (= [x z] [fx fz]) (< y fy))))
 
 (defn block-at-of
   "Names only loaded cells: an unseen one is offered too (the run looks at it)."
@@ -51,12 +57,13 @@
   (let [dark-ok? (or (settings/get settings ::at-night) (not (look/dark-here? p)))
         opens-dark? (stay/opens-dark? p)
         plug-kept? #(and (stay/at-night?) (opens-dark? (:cell %)))
-        entries (ledger/open-entries memory)]
+        entries (ledger/open-entries memory)
+        feet (reach/standing-vec p)]
     (boolean (and (not (body/recovery-pending? memory :scaffold-left))
                   (some? (world/zones kn))
                   (or (settings/get settings ::with-hostile)
                       (and (dawn/calm? p) (not (threats/fled-recently? p memory))))
                   (some #(and (not (walk-blocked? p memory entries %))
-                              (or dark-ok? (and (= :retreat-plug (:purpose %)) (not (plug-kept? %)))))
+                              (or dark-ok? (perched-on? feet %) (and (= :retreat-plug (:purpose %)) (not (plug-kept? %)))))
                         (ledger/offered memory (block-at-of p) nil
                                         (ledger/near-of-args {:primitives p} args)))))))
