@@ -9,12 +9,13 @@
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
             [jobs.items.obtain.surface :as surface]
-            [jobs.items.obtain.table :refer [gather-need searchable?]]
+            [jobs.items.obtain.table :refer [animal? gather-need searchable?]]
             [jobs.lib.waits :as waits]
             [jobs.lib.child :as child]
             [jobs.lib.need :as fetch-need]
             [jobs.lib.torch-stock :as torch-stock]
-            [jobs.lib.reserve :as reserve]))
+            [jobs.lib.reserve :as reserve]
+            [jobs.lib.util :as u]))
 
 (defn keep-crafting-items!
   "Reserve the carried units the craft chain will take, against every chooser but the crafts, while a gather child runs:
@@ -87,6 +88,11 @@
       (pickaxe-first? c names need) (tried! c :gather {:pickaxe (contract/cause-key e)})
       :else :again)))
 
+(defn surfacing?
+  "surface/surfacing? for a need not seen: an animal in sight is walked to, not climbed toward."
+  [c need]
+  (and (not (and (animal? need) (seen-of c need))) (surface/surfacing? c need)))
+
 (defn ^:async surface-step!
   "One round of the way up (jobs.items.obtain.surface): :continue while it goes on, else the gather source fails (:no-way-up)."
   [c]
@@ -94,6 +100,34 @@
     :continue :continue
     :out :again
     (do (ctx/update-mem! c dissoc :surface) (tried! c :gather :no-way-up))))
+
+(def max-approaches "Walks toward an animal in sight whose herd is not all in sight, before the hunt's keep rule counts it alone." 2)
+
+(defn approach-due?
+  "Whether the hunt for an animal need seen declines :too-few (the pair it spares is not all in sight): the body walks closer to count the herd."
+  [c need]
+  (and (animal? need) (seen-of c need)
+       (< (get-in (ctx/mem c) [:gather :approaches (:key need)] 0) max-approaches)
+       (let [s (ctx/child-status c (gather-slot need) (:job need) (:args need))]
+         (and (= :later (first s)) (= :too-few (:reason (contract/status-cause s)))))))
+
+(defn approach!
+  "Set the lead to the animal in sight; :again."
+  [c need]
+  (let [{:keys [x y z]} (u/pos-of (.-pos (seen-of c need)))]
+    (ctx/update-mem! c update-in [:gather :approaches (:key need)] (fnil inc 0))
+    (ctx/update-mem! c assoc-in [:gather :lead] {:key (:key need) :pos [x y z]})
+    :again))
+
+(defn ^:async lead-step!
+  "An animal the search found but the body does not see now (the look that found it faced elsewhere): walk to within 6 blocks
+  of where it was found. :continue while it walks, else :again."
+  [c]
+  (let [{:keys [pos]} (get-in (ctx/mem c) [:gather :lead])
+        r (await (child/call-walk* c :lead-walk {:pos (zipmap [:x :y :z] pos) :range 6 :ways #{:walk} :spend {:tries 1}}))]
+    (if (= :continue r)
+      :continue
+      (do (ctx/update-mem! c update :gather dissoc :lead) :again))))
 
 (defn ^:async explore-walk!
   "Walk and look for need (a jobs.explore.search child): :again once it is seen, or when none is and the body is still
@@ -117,11 +151,15 @@
             k (inc (get-in (ctx/mem c) [:explored (:key need)] 0))]
         (ctx/update-mem! c assoc-in [:explored (:key need)] k)
         (ctx/update-mem! c update :gather update :unreachable dissoc (:key need))
-        (if (or (and (= :found (:reason res)) (seen-of c need)) (surface/surfacing? c need))
+        (if (or (and (= :found (:reason res)) (seen-of c need)) (surfacing? c need))
           :again
+          (if-let [pos (and (= :found (:reason res)) (animal? need) (:pos (first (:found res))))]
+            (do (ctx/emit! c :obtain.lead :info {:message (str "found " (str/join "/" targets) " at " (str/join " " pos) " out of sight: walking to it") :pos pos})
+                (ctx/update-mem! c assoc-in [:gather :lead] {:key (:key need) :pos pos})
+                :again)
           (tried! c :gather (cond-> {:searched (:key need) :for targets :result (or (:reason res) (contract/cause-key e))}
                               (:why res) (assoc :why (:why res))
-                              (:coverage res) (assoc :legs (:legs (:coverage res)) :farthest (:farthest (:coverage res))))))))))
+                              (:coverage res) (assoc :legs (:legs (:coverage res)) :farthest (:farthest (:coverage res)))))))))))
 
 (defn ^:async torch-step!
   "Before a mine that must stair or tunnel down to an ore not seen starts (its own ways lack :gather, so it cannot stock torches itself): get the
@@ -141,10 +179,14 @@
     (cond
       stocking stocking
       (nil? need) (tried! c :gather :no-plan)
+      (= (:key need) (get-in (ctx/mem c) [:gather :lead :key]))
+      (await (lead-step! c))
+      (and (not (get-in (ctx/mem c) [:gather :before])) (approach-due? c need))
+      (approach! c need)
       (and (not (get-in (ctx/mem c) [:gather :before])) (pickaxe-first? c names need) (or (explore-opts c) (seen-of c need)))
       (await (pickaxe-step! c names need))
       (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (searchable? need) (not (:tunnel? need))
-           (surface/surfacing? c need))
+           (surfacing? c need))
       (await (surface-step! c))
       (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (searchable? need) (not (:tunnel? need))
            (or (not (seen-of c need)) (get-in (ctx/mem c) [:gather :unreachable (:key need)]) (trees-unreachable? c need))
