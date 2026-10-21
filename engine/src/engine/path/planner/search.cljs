@@ -155,4 +155,6 @@
    ;; each node's older record of the same key (a rival, see consider) plus 1, 0 for none: the records of one cell, newest first
    ^:mutable rivals
    ;; options.goalSeen (fn x y z; nil: every cell): a cell in the goal's area is reached only when it answers true
-   ^js goal-seen])
+   ^js goal-seen
+   ;; costs.descentS: seconds a block of descent adds to a move's cost
+   c-descent])

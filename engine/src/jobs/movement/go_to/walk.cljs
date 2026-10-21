@@ -34,6 +34,7 @@
             [jobs.lib.sense :as sense]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.escape :as escape]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
             [jobs.lib.walk.search :as wsearch]
             [jobs.lib.walk.world :as wworld]
@@ -49,7 +50,7 @@
             [jobs.movement.go-to.health :as health]
             [jobs.movement.go-to.own-way :refer [dive-end dive-floor! own-way own-way-left! plan-check straight-from! walk-own-way!]]
             [jobs.movement.go-to.result :as end :refer [known-frontier-result unloaded-end]]
-            [jobs.movement.go-to.tuning :as tuning :refer [dry-walk-rounds climb-dip climb-stair surface-air wet-restarts waypoint-gain dry-radius leave-water max-blocked max-searching]]
+            [jobs.movement.go-to.tuning :as tuning :refer [surface-descent-s dry-walk-rounds climb-dip climb-stair surface-air wet-restarts waypoint-gain dry-radius leave-water max-blocked max-searching]]
             [jobs.movement.go-to.torch :as torch :refer [dark-end fetch-torches! round-unknown]]
             [jobs.movement.go-to.unstick :as unstick]
             [jobs.movement.go-to.way-steps :as ways]
@@ -303,6 +304,15 @@
   [{:keys [status learned]}]
   (and (= :replan status) (boolean learned)))
 
+(defn surface-descent
+  "The price (s per block) of a plan step down for this round, or nil: the body is not under ground and the goal (a cell,
+  not a column) lies in unloaded land, where the plan is a guess and a way down has no known way back up (it costs the climb back)."
+  [c pos]
+  (let [pw (wworld/path-world (:primitives c))]
+    (when (and pw (:y pos) (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))
+               (not (sh-sense/buried? (:primitives c))))
+      (surface-descent-s))))
+
 (defn ^:async walk! [c0 pos range doors]
   (let [way (own-way c0 pos (dive-floor! c0 pos))
         _ (own-way-left! c0 way)
@@ -311,6 +321,7 @@
         c (cond-> c0
             (and own-way-top (not cave-ok)) (assoc :own-floor (- own-way-top (climb/cave-dip)))
             (:over-budget (ctx/mem c0)) (assoc :over-budget true)
+            (surface-descent c0 pos) (assoc :descent-s (surface-descent c0 pos))
             floor (assoc :dive-floor floor :dive-stair (climb-stair))
             (and floor (not (:cave-ok (ctx/mem c0)))) (assoc :cave-floor (- (+ floor (climb-dip)) (climb/cave-dip))))
         from (u/self-pos c)

@@ -24,6 +24,7 @@
    :jobs.movement.go-to.tuning/dry-walk-rounds {:default 3 :doc "Walk rounds (search slices or walks) the walk on from an arrival in water to a dry stand takes at most." :spec (a/int-in 1 nil)}
    :jobs.movement.go-to.tuning/climb-rise {:default 16 :doc "Blocks a goal must lie above a body under ground for its go-to to plan no dive (:jobs.movement.go-to.tuning/climb-dip)." :spec (a/num-in 0 nil)}
    :jobs.movement.go-to.tuning/climb-dip {:default 24 :doc "Blocks below where it began that a go-to of a body under ground to a goal far above (:jobs.movement.go-to.tuning/climb-rise) may plan; a way that dives deeper is not walked (:way-dives)." :spec (a/num-in 0 nil)}
+   :jobs.movement.go-to.tuning/surface-descent {:default 0.5 :doc "Seconds a block of descent costs a go-to plan of a body on the surface to a goal in unloaded land: the way down is a guess with no known way back up, so a level way is preferred (a way down is still taken when it is the only one)." :spec (a/num-in 0 nil)}
    :jobs.movement.go-to.tuning/climb-stair {:default true :doc "Whether a go-to that would give up :way-dives cuts a stair up instead (its escalation, when the call allows :stair)." :spec boolean?}
    :jobs.movement.go-to.tuning/max-waypoint-misses {:default 3 :doc "Waypoint walks toward a column goal whose ground is only guessed that a call takes while they bring the body no nearer it." :spec (a/int-in 0 nil)}
    :jobs.movement.go-to.tuning/waypoint-gain {:default 2 :doc "Blocks (across) a waypoint must lie nearer a guessed column goal than the body, and a waypoint walk must bring the body nearer, not to be a miss." :spec (a/num-in 1 nil)}
@@ -58,6 +59,7 @@
 (defn dry-walk-rounds [] (settings/get settings :jobs.movement.go-to.tuning/dry-walk-rounds))
 (defn climb-rise [] (settings/get settings :jobs.movement.go-to.tuning/climb-rise))
 (defn climb-dip [] (settings/get settings :jobs.movement.go-to.tuning/climb-dip))
+(defn surface-descent-s [] (settings/get settings :jobs.movement.go-to.tuning/surface-descent))
 (defn climb-stair [] (settings/get settings :jobs.movement.go-to.tuning/climb-stair))
 (defn max-waypoint-misses [] (settings/get settings :jobs.movement.go-to.tuning/max-waypoint-misses))
 (defn off-line-radius [] (settings/get settings :jobs.movement.go-to.tuning/off-line-radius))

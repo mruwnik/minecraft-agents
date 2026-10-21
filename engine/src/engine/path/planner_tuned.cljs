@@ -419,7 +419,8 @@
      ;; rivals
      (js/Int32Array. cap)
      ;; goal-seen
-     (.-goalSeen options))))
+     (.-goalSeen options)
+     (unchecked-get costs "descentS"))))
 
 ;; the body's box reaches this far from its centre in x and z: the client physics' width, which decides what holds it up
 (def HITBOX-HALF constants/body-half-width)

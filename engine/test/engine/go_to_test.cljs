@@ -227,6 +227,17 @@
           (is (= 61 (js/Math.floor (second (at p)))) "down the drop")
           (is (> (first (at p)) 40) "on to the loaded edge"))))))
 
+(deftest go-to-prefers-a-level-way-to-a-guessed-descent-toward-an-unloaded-goal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        ;; a level plateau runs east to the loaded edge; a slope of one-block steps leads south and down, nearer the far goal
+        ;; in a straight line. The slope's foot has no known way back, so the first walk takes the plateau's end.
+        (let [slope (apply merge (floor 63 -2 -3 47 3)
+                           (for [i (range 5)] (floor (- 62 i) -2 (+ 4 i) 47 (+ 4 i))))
+              {:keys [eng]} (await (go! {:blocks slope} {:pos [60 64 40]}))]
+          (is (= 64 (:y (:to (last (moved eng))))) (pr-str (map (juxt :status :to) (moved eng)))))))))
+
 (deftest go-to-never-drops-into-a-closed-pit
   (async done
     (tu/run-async done

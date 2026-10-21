@@ -65,7 +65,7 @@
   #js {:climbUp 0.43 :climbDown 0.33 :jumpClimb 0.5 :open 1.0 :openRedstone 1.5 :openLever 6 :openPlate 0 :besideMagmaColumn 1
        :swimH 0.5 :swimSubH 0.26 :swimUp 0.3 :swimDown 0.35 :exit 0.6 :current 0.3 :bubbleUp 0.08 :bubbleDown 0.12
        :airSupply 15 :airLimit 12 :airDrain 1 :airGrace 0 :airUsed 0 :maxWaterDrop 64 :dripleaf 0.2 :dripleafRisk 0.5
-       :dropFactor 1 :lethalAir 0 :drownSlack 1
+       :dropFactor 1 :descentS 0 :lethalAir 0 :drownSlack 1
        :walkS WALK-S :sprintS SPRINT-S})
 
 (def BODY (js/Math.ceil (* 16 constants/body-height))) ; in 1/16, rounded up

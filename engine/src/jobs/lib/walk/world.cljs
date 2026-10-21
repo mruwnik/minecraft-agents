@@ -343,7 +343,8 @@
                    {:drop-cost (cost/walk-drop-cost)}
                    (when-some [costs (cost/walk-costs)] {:costs costs})
                    (when-some [m (y-margin)] {:y-margin m})
-                   (when-some [f (:dive-floor c)] {:y-below (max 0 (- (js/Math.floor (.-y (.-pos self))) f))}))
+                   (when-some [f (:dive-floor c)] {:y-below (max 0 (- (js/Math.floor (.-y (.-pos self))) f))})
+                   (when-some [d (:descent-s c)] {:costs (assoc (cost/walk-costs) :descent d)}))
       (or under? (and (.-inWater self) (number? (.-oxygen self)) (< (.-oxygen self) 20))) (-> (cond-> under? (-> (dissoc :air-grace) (merge (cost/air-profile nil (array-seq (.-effects self)))))) (assoc :air-used (cost/air-used (.-oxygen self)))
                                                (merge (drowning self (cost/walk-hp-seconds)))
                                                (merge (some->> (known-fn (:primitives c)) (hash-map :air-seen))))

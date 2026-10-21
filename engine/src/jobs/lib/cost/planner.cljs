@@ -28,7 +28,7 @@
    :swim-down "swimDown" :exit "exit" :current "current" :bubble-up "bubbleUp" :bubble-down "bubbleDown"
    :open-redstone "openRedstone" :open-lever "openLever" :open-plate "openPlate" :beside-magma-column "besideMagmaColumn"
    :max-water-drop "maxWaterDrop" :dripleaf "dripleaf" :dripleaf-risk "dripleafRisk" :lethal-air "lethalAir"
-   :drown-slack "drownSlack"})
+   :drown-slack "drownSlack" :descent "descentS"})
 
 (defn water-breathing-s
   "Seconds of Water Breathing left in self's :effects (their :left ticks), 0 when none or infinite."
