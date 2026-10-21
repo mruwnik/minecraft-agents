@@ -40,6 +40,11 @@ test('engine builds output under ../engine/out', () => {
     assert.match(build(id), /:output-to "\.\.\/engine\/out\//, id)
 })
 
+test('every engine build that runs the whole engine adds the job namespaces', () => {
+  for (const id of ['body', 'body-release', 'test', 'test-golden', 'planner-record'])
+    assert.match(build(id), /engine\.build-hooks\/add-job-namespaces/, id)
+})
+
 test('the body-release build writes its bundle with no character above U+00FF', () => {
   assert.match(build('body-release'), /engine\.build-hooks\/ascii-output/)
 })
