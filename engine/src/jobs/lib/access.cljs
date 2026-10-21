@@ -174,6 +174,14 @@
                                (when (seq claims) (str "claim " (str/join ", " claims)))
                                (when (seq plans) (str "plan " (str/join ", " plans)))])))
 
+(defn targets-text
+  "Which targets a decline names: \"every target is\" without counts, else \"the target is\" or \"n of m targets are\"."
+  [{:keys [refused of]}]
+  (cond (not (and refused of)) "every target is"
+        (= 1 of) "the target is"
+        (= refused of) "every target is"
+        :else (str refused " of " of " targets are")))
+
 (defn decline!
   "For a check that declines. Warns kind once per reason (:no-zones or :refused) and waits via ctx/wait with the
   reason and fields, which the agent sees as why the job waits."
@@ -181,7 +189,7 @@
   (ctx/warn-once! c [:access reason] kind
                   (assoc fields :text (if (= :no-zones reason)
                                         (str job-name " declined: no zone list has been read (zones.edn missing or never valid)")
-                                        (str job-name " declined: every target is refused by " (refusal-text fields)))))
+                                        (str job-name " declined: " (targets-text fields) " refused by " (refusal-text fields)))))
   (ctx/wait c fields))
 
 (defn container-refusal

@@ -71,7 +71,8 @@
 
       :else
       (do (ctx/update-mem! c assoc-in [:craft :step] step)
-          (let [e (await (ctx/call c :craft 'jobs.items.craft {:item (:item step) :count (need/carry-count c :craft [(:item step)] (:count step)) :ways #{:carried} :avoid (:avoid (:args c)) :for-plan (:for-plan (:args c))
+          (let [before (carried-of (u/inventory (:primitives c)) [(:item step)])
+                e (await (ctx/call c :craft 'jobs.items.craft {:item (:item step) :count (need/carry-count c :craft [(:item step)] (:count step)) :ways #{:carried} :avoid (:avoid (:args c)) :for-plan (:for-plan (:args c))
                                                                     :keep-table (nil? (:for-plan (:args c)))}))]
             (if (= :continue e)
               :continue
@@ -79,6 +80,9 @@
                 (ctx/update-mem! c update :craft dissoc :step)
                 (cond
                   (and (= :done (:kind e)) (pos? (get-in e [:data :made] 0))) :again
+
+                  ;; a craft cut by its time limit (the walk to a table used it) after it made some: the rest is a new call
+                  (> (carried-of (u/inventory (:primitives c)) [(:item step)]) before) :again
 
                   ;; the seen table cannot be reached: plan again without it, so a carried or new table is put down
                   (and (#{:unreachable :no-table} (contract/cause-key e)) (not (:table-unreachable mem)))

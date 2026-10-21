@@ -28,7 +28,7 @@
   ([c kind job-name action poss opts]
    (let [{:keys [allowed refusal refusals]} (look c action poss opts)]
      (when refusal
-       (access/decline! c kind job-name (assoc (access/refusal-fields refusals) :reason refusal)))
+       (access/decline! c kind job-name (assoc (access/refusal-fields refusals) :reason refusal :refused (count refusals) :of (count poss))))
      {:allowed allowed :refusal refusal})))
 
 (defn allowed

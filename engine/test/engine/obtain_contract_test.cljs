@@ -5,6 +5,7 @@
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
+            [engine.fake :as fake]
             [engine.farm-contract-test :refer [ending-of]]
             [engine.fetch-test :as f]
             [engine.library-test :as lt]
@@ -12,6 +13,7 @@
             [engine.obtain-obsidian-test :as oo]
             [engine.memory :as mem]
             [engine.registry :as registry]
+            [jobs.lib.access :as access]
             [jobs.lib.stock :as stock]
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.table :as table]
@@ -58,6 +60,25 @@
               e (await (ending-of s 'jobs.items.obtain {:item "oak_planks" :count 4 :explore false} 30))]
           (is (= :done (:kind e)))
           (is (= {:got 4 :item "oak_planks"} (select-keys (:data e) [:got :item]))))))))
+
+(deftest a-craft-cut-by-its-time-limit-after-it-made-some-is-run-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig ctx/call
+              s (f/start (f/bare [{:name "oak_log" :count 2}]) [])
+              runs (atom 0)]
+          (set! ctx/call (fn [c slot j args]
+                           (if (= 'jobs.items.craft j)
+                             (do (fake/add-item! (:p s) "oak_planks" 4)
+                                 (contract/ending (if (= 1 (swap! runs inc)) :limit-reached :done)
+                                                  (if (= 1 @runs) {:line :job-time} nil)
+                                                  {:made 4}))
+                             (orig c slot j args))))
+          (let [e (try (await (ending-of s 'jobs.items.obtain {:item "oak_planks" :count 8 :explore false} 30))
+                       (finally (set! ctx/call orig)))]
+            (is (= :done (:kind e)))
+            (is (= 2 @runs))))))))
 
 (deftest nothing-to-get-it-from-is-condition-failed-no-source
   (async done
@@ -295,3 +316,10 @@
 
 (deftest obtain-defaults-to-the-whole-count-so-a-limit-with-part-carried-is-not-done
   (is (= :all (get-in registry/jobs ['jobs.items.obtain :defaults :least]))))
+
+(deftest a-decline-counts-the-refused-targets
+  (are [fields text] (= text (access/targets-text fields))
+    {} "every target is"
+    {:refused 1 :of 1} "the target is"
+    {:refused 3 :of 3} "every target is"
+    {:refused 1 :of 4} "1 of 4 targets are"))
