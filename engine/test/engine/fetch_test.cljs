@@ -409,6 +409,17 @@
           (is (re-find #"no seen chest that may hold dirt" (no-source-why s :stopped)))
           (is (re-find #"no recipe makes dirt" (no-source-why s :stopped))))))))
 
+(deftest obtain-short-after-emptying-a-chest-says-the-chest-was-taken-from
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (-> (world {chest-at [{:name "dirt" :count 1}]}) (assoc :inventory [{:name "dirt" :count 2}])) [own-zone])]
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:item "dirt" :count 5}) {})
+          (await (run-ticks s 30))
+          (is (= 3 (get (inv s) "dirt")) "the chest's dirt is carried")
+          (is (re-find #"1 chest\(s\) already looked in or taken from hold no more dirt \(3 carried\)" (no-source-why s :stopped)))
+          (is (not (re-find #"no seen chest" (no-source-why s :stopped)))))))))
+
 (deftest obtain-books-a-chest-that-would-not-open-as-blocked-not-empty
   (async done
     (tu/run-async done

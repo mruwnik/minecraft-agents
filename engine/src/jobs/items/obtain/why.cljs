@@ -1,6 +1,7 @@
 (ns jobs.items.obtain.why
   "The texts of a source that has nothing: why no source, what a failed try adds."
-  (:require [engine.game :as game]
+  (:require [engine.ctx :as ctx]
+            [engine.game :as game]
             [jobs.items.obtain.base :refer [animal-radius gathers? makes? seen-radius way?]]
             [jobs.items.obtain.need :refer [explore-opts]]
             [jobs.items.obtain.plan :refer [gather-plan]]
@@ -65,6 +66,16 @@
       (str "smelting " item " needs " input ", have " (get have input 0))
       (recipes/lacking version have item n))))
 
+(defn chest-why
+  "Text for the chest source: no chest seen, or the chests already looked in or taken from (their stock is carried now)."
+  [c names have]
+  (let [looked (count (:done-chests (ctx/mem c)))
+        label (clojure.string/join "/" names)]
+    (if (zero? looked)
+      (str "no seen chest that may hold " label)
+      (str "the " looked " chest(s) already looked in or taken from hold no more " label
+           " (" (reduce + (keep #(get have %) names)) " carried)"))))
+
 (defn no-source-why
   "Text for the no-source wait: what each allowed source lacks."
   [c names n]
@@ -72,7 +83,7 @@
         version (game/version-of (:primitives c))]
     (clojure.string/join
      "; "
-     (concat (when (way? c :chest) [(str "no seen chest that may hold " (clojure.string/join "/" names))])
+     (concat (when (way? c :chest) [(chest-why c names have)])
              (when (makes? c) [(make-why c version have (first names) n)])
              (when (gathers? c) [(unseen-why c names n)])
              (when-let [w (and (gathers? c) (pickaxe-why version have names))] [w])))))
