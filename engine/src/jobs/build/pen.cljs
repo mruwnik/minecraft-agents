@@ -8,6 +8,7 @@
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.build.from-plan :as from-plan]
@@ -166,13 +167,14 @@
 
 (def uneven-problem
   "Later :uneven for a ring that steps over max-step or a gate that drops too far onto the seen ground, unless :uneven?
-  (ground the body sees changes, so at the start only)."
+  (ground the body sees changes, so at the start only). A cell of the body's own scaffold ledger counts as open: the tidy phase takes it up."
   (checks/refusing
    :even "the ground is even"
    (fn [c]
-     (let [{:keys [cells trouble]} (judged-plan c)]
+     (let [{:keys [cells trouble]} (judged-plan c)
+           own (ledger/cells (ledger/open-entries (ctx/view c)))]
        (when-not (or trouble (:uneven? (:args c)))
-         (when-let [bad (seq (uneven cells (plan/top-fn c) (fn [x y z] (u/seen-name (:primitives c) {:x x :y y :z z}))))]
+         (when-let [bad (seq (uneven cells (plan/top-fn c) (fn [x y z] (when-not (own [x y z]) (u/seen-name (:primitives c) {:x x :y y :z z})))))]
            {:reason :uneven :why (uneven-text bad)}))))))
 
 (def ways (into [:build :patch] need/fetch-ways))
@@ -305,7 +307,7 @@
         mid (fn [a b] (/ (+ a b 1) 2))
         r (await (ctx/call c :tidy 'jobs.access.cleanup
                            (merge (select-keys (:args c) [:ignore-zones?])
-                                  {:of :all
+                                  {:of :all :checks {:fit? '(always)}
                                    :near {:pos {:x (mid (:x min) (:x max)) :y (mid (apply js/Math.min ys) (apply js/Math.max ys)) :z (mid (:z min) (:z max))}
                                           :radius (+ tidy-margin (js/Math.hypot (- (:x max) (:x min)) (- (:z max) (:z min)) (- (apply js/Math.max ys) (apply js/Math.min ys))))}})))]
     (if (= :continue r)

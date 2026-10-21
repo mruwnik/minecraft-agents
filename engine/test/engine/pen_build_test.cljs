@@ -389,11 +389,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen] :as w} (b/start (spec (conj kit {:name "iron_pickaxe" :count 1} {:name "iron_sword" :count 1}) {"5,64,3" "cobblestone" "5,65,3" "cobblestone"})
+        (let [{:keys [eng p seen] :as w} (b/start (spec (conj kit {:name "iron_pickaxe" :count 1}) {"5,64,3" "cobblestone" "5,65,3" "cobblestone" "3,64,1" "cobblestone" "3,65,1" "cobblestone"})
                                                   {"pen" (ring-plan)} [])
               entry (fn [cell] {:cell cell :item "cobblestone" :before "air" :job "j9" :purpose :shelter :state :placed})]
-          (ledger/write! (:store eng) [(entry [5 64 3]) (entry [5 65 3])])
+          (ledger/write! (:store eng) [(entry [5 64 3]) (entry [5 65 3]) (entry [3 64 1]) (entry [3 65 1])])
           (let [e (await (ending-of w job {:plan "pen"} 300))]
             (is (true? (:closed? (:data e))))
-            (is (every? #{nil "air"} (map #(h/block-at p 5 % 3) [64 65])) "the shelter blocks beside the fence are gone")
+            (is (every? #{nil "air"} (concat (map #(h/block-at p 5 % 3) [64 65]) (map #(h/block-at p 3 % 1) [64 65]))) "the shelter blocks beside the fence and in front of the gate are gone, with no weapon carried")
             (is (some #(= :tidy (:slot %)) (kinds-of seen :child_started)))))))))
