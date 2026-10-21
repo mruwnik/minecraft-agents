@@ -779,8 +779,10 @@
         (let [{:keys [p]}
               (await (hidden-round '(test.flight) {:blocks deep-dead-end :inventory [{:name "stone_pickaxe" :count 1}]
                                             :entities [(zombie 1.0 64 0)]}
-                                   1000 (fn [_] nil)))]
-          (is (pos? (count (calls p "attack"))) "the zombie touching the roof cell is struck at before the roof goes in")
+                                   1000 (fn [_] nil) []
+                                   (fn [p] (.override (.-world p) "attack"
+                                                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) update :entities (partial mapv #(assoc-in % [:pos 0] 3.0))) r))))))))]
+          (is (= 1 (count (calls p "attack"))) "the zombie touching the roof cell is knocked out of it by one hit, then the roof goes in")
           (is (= [[0 63 0] [0 62 0]] (mapv #(let [pos (.. % -args -pos)] [(.-x pos) (.-y pos) (.-z pos)]) (calls p "dig"))) "two cells down: quicker than a pocket's four")
           (is (some #{[0 64 0]} (placed-cells p)) "the roof goes in above the head, shut against the zombie"))))))
 
