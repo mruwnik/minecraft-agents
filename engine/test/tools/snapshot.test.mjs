@@ -63,8 +63,9 @@ test('snapshot renders the fixture wall into the workspace and names the block u
 test('a direction override changes the picture and the crosshair but not the pose file', t => {
   const f = fixture(t)
   f.pose({})
-  const before = f.run('--width', '64', '--height', '36')
+  const before = f.run('--width', '64', '--height', '36') // each run waits 4 s for a body that never dumps, so the pose is re-stamped before the next
   const poseFile = path.join(path.dirname(f.workspace), 'worlds', WORLD, 'agents', AGENT, 'view', 'pose.json')
+  f.pose({})
   const poseText = fs.readFileSync(poseFile, 'utf8')
   const turned = f.run('--width', '64', '--height', '36', '--yaw', '0')
   assert.equal(turned.status, 0, turned.stdout)
@@ -72,6 +73,7 @@ test('a direction override changes the picture and the crosshair but not the pos
   assert.equal(turned.edn.crosshair, null)
   assert.notDeepEqual(pixels(path.join(f.workspace, before.edn.png)).rgba, pixels(path.join(f.workspace, turned.edn.png)).rgba)
   assert.equal(fs.readFileSync(poseFile, 'utf8'), poseText)
+  f.pose({})
   const aimed = f.run('--width', '64', '--height', '36', '--look-at', '13,66,4')
   assert.equal(aimed.edn.crosshair.block, 'diamond_ore')
 })
