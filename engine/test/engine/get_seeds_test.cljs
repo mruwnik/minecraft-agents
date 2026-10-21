@@ -184,6 +184,22 @@
           (is (zero? (dig-count s)))
           (is (finished? s)))))))
 
+(deftest a-body-shut-in-ends-shut-in-after-one-walk-instead-of-skipping-every-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cells (patch "short_grass" (range 6 12) (range 0 10))
+              walks (atom 0)
+              s (await (tu/with-near-stub (fn ^:async f [c _ _ _]
+                                            (swap! walks inc)
+                                            (ctx/update-mem! c assoc :near-walk {:data {:why :exhausted :shut-in true}})
+                                            :blocked)
+                         (fn ^:async b [] (await (scenario {} {:blocks cells :drops seed-drops} 20)))))]
+          (is (= :shut-in (:reason (done-event s))))
+          (is (= 1 @walks) "not one failed walk per grass block")
+          (is (empty? (:skipped (job-mem s))) "no block is blamed for the body's trouble")
+          (is (finished? s)))))))
+
 (deftest too-few-blocks-end-none-with-the-partial-got
   (async done
     (tu/run-async done

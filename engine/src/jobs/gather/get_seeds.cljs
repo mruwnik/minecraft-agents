@@ -40,6 +40,8 @@
 
   With none within :radius, the nearest one seen up to 64 blocks away is walked to (within the reach setting or :radius, the smaller) and the batch goes on from there.
 
+  A walk that gave up because the body itself is shut in skips nothing: the job ends nothing-possible :shut-in at once.
+
   Skipped blocks: a cell in a zone that bars :dig or in an active plan's footprint is skipped for good and
   remembered. So is one with a hazard not in :accept, one whose walk is blocked or partial, and one whose dig
   is neither dug nor missing (tall grass takes its other half with it, so missing is fine).
@@ -50,7 +52,7 @@
 
   done? is :ok when the goal is carried and no child is under way: ends :done (data {:got n :reason :count}). Any
   other end is condition-failed with the cause :refused or :none, else nothing-possible with the cause
-  :dry or :barren, and data {:got n :reason r :text}; :got is how many more are
+  :dry, :barren or :shut-in, and data {:got n :reason r :text}; :got is how many more are
   carried than at the start, at least 0.
 
   Conditions (the check waits with the reason): :no-source (a material with no known way), :no-zones (break way with no zone list read), :too-short (cane or bamboo in range but no
@@ -268,12 +270,18 @@
                   ok)))
             [] poss)))
 
+(defn shut-in-walk?
+  "Whether the last walk gave up because the body itself is shut in: no block is to blame, so none is skipped."
+  [c]
+  (boolean (:shut-in (:data (near/last-walk c)))))
+
 (defn ^:async dig-one!
-  "Walk to pos and dig it: :dug, :missing, :walking (the walk waits on the world: yield) or :skipped (a blocked walk, a cell the rules no longer permit, or a dig that is neither dug nor missing)."
+  "Walk to pos and dig it: :dug, :missing, :walking (the walk waits on the world: yield), :shut-in (the walk found the body shut in) or :skipped (a blocked walk, a cell the rules no longer permit, or a dig that is neither dug nor missing)."
   [c pos]
   (let [walked (await (near/go-near! c pos (reach)))]
     (cond
       (= :partial walked) :walking
+      (and (= :blocked walked) (shut-in-walk? c)) :shut-in
       (= :blocked walked) (do (skip! c pos) :skipped)
       :else
       (let [v (access/may-dig? (access/rules-input c) pos)
@@ -293,17 +301,20 @@
   "Walk toward the nearest source seen beyond :radius so it lies within it: :continue while the walk waits on the world, else :again (a blocked walk skips that block)."
   [c pos]
   (let [walked (await (near/go-near! c pos (min (reach) (:radius (:args c)))))]
-    (when (= :blocked walked) (skip! c pos))
-    (if (= :partial walked) :continue :again)))
+    (when (and (= :blocked walked) (not (shut-in-walk? c))) (skip! c pos))
+    (cond (= :partial walked) :continue
+          (and (= :blocked walked) (shut-in-walk? c)) :shut-in
+          :else :again)))
 
 (defn ^:async dig-batch!
-  "Dig the positions in order; {:dug n :skipped m} counts, plus :walking true when a walk waits on the world (the rest is left for the next round)."
+  "Dig the positions in order; {:dug n :skipped m} counts, plus :walking true when a walk waits on the world (the rest is left for the next round) or :shut-in true when the body is shut in."
   [c targets]
   (loop [todo targets counts {:dug 0 :skipped 0}]
     (if-let [pos (first todo)]
       (let [r (await (dig-one! c pos))]
-        (if (= :walking r)
-          (assoc counts :walking true)
+        (case r
+          :walking (assoc counts :walking true)
+          :shut-in (assoc counts :shut-in true)
           (recur (rest todo) (cond-> counts (contains? counts r) (update r inc)))))
       counts)))
 
@@ -320,9 +331,10 @@
     (if (= :continue r) :continue :again)))
 
 (defn ^:async dig-round! [c targets]
-  (let [{:keys [dug skipped walking]} (await (dig-batch! c targets))
+  (let [{:keys [dug skipped walking shut-in]} (await (dig-batch! c targets))
         barren (if (zero? (+ dug skipped)) (inc (:barren (ctx/mem c) 0)) 0)]
     (cond
+      (and shut-in (zero? dug)) (give-up! c :shut-in)
       (and walking (zero? (+ dug skipped))) :continue
       :else (do (ctx/update-mem! c assoc :barren barren :collecting true)
                 (if (>= barren 2)
@@ -356,7 +368,7 @@
       (and (empty? targets) (seq (:refused (ctx/mem c)))) (refuse-up! c)
       (and (empty? targets) (not (look/surveyed? c))) (do (await (look/survey! c)) :again)
       (and (empty? targets) (can-fertilize? c)) (await (fertilize! c))
-      (empty? targets) (if-let [pos (first (vet! c (source-blocks c far-radius)))] (await (approach! c pos)) (finish! c :none))
+      (empty? targets) (if-let [pos (first (vet! c (source-blocks c far-radius)))] (let [r (await (approach! c pos))] (if (= :shut-in r) (give-up! c :shut-in) r)) (finish! c :none))
       :else (await (dig-round! c targets)))))
 
 (defn ^:async round
