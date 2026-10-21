@@ -1613,6 +1613,12 @@
     (is (= {:x 19 :y 64 :z 0} (look-edge/walkable-near p [23 64 0])) "the farthest cell whose roof was seen, not past the dead end")
     (is (= {:x 5 :y 64 :z 0} (look-edge/walkable-near p [5 64 3])))))
 
+(deftest walkable-near-is-nil-when-the-ground-is-farther-than-an-edge-walk-may-go
+  (let [p (tunnel-seen-body)]
+    (with-redefs [look-edge/max-edge-walk 10]
+      (is (nil? (look-edge/walkable-near p [23 64 0])))
+      (is (= {:x 5 :y 64 :z 0} (look-edge/walkable-near p [5 64 3]))))))
+
 (deftest walkable-near-stays-inside-the-closed-region-and-does-not-open-its-door
   (let [{:keys [blocks light]} (lit-tunnel-box false)
         raw-p (tu/fake {:time night :yaw -90 :blocks (assoc blocks "10,64,0" "oak_door" "10,65,0" "oak_door")})

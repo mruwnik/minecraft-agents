@@ -20,6 +20,11 @@
   within this of the nearest, so a long tunnel is seen in a few strides."
   6)
 
+(def max-edge-walk
+  "Farthest, in blocks from the feet, a walk to look at an edge may go: a player judging a room does not cross a cave system
+  the dig opened into, which the closed-region flood then covers."
+  24)
+
 (defn lit-side?
   "A predicate on an unseen side cell [x y z]: some flood cell beside it is bright enough to be seen, so a look or a walk can
   show it. A side of a dark stretch is never shown (a dark cell is not recorded), so the region stays open there."
@@ -68,7 +73,7 @@
   "The cell {:x :y :z} of the closed region the body stands in (doors shut, as pending reads it) nearest cell [x y z], or nil.
   Only cells with a seen roof, and not a doorway beside a cell without one: a player judging a room does not walk out through
   its doorway to look at the outside, nor stand in the doorway (the flood runs past an open one over seen cells), where the
-  night could not fill it."
+  night could not fill it. Nil when that cell lies farther than max-edge-walk from the feet."
   [p [x y z]]
   (let [feet (sh-sense/feet p)
         flood (set (map vec (:cells (reach-room/room-flood p (reach-room/room-kind-at p (reach-room/shut-kind-at p)) (:x feet) (:y feet) (:z feet)))))
@@ -76,7 +81,8 @@
         exit? (fn [[cx cy cz]] (and (sh-sense/doorway? p {:x cx :y cy :z cz})
                                     (some (fn [[dx dz]] (let [n [(+ cx dx) cy (+ cz dz)]] (and (flood n) (not (roofed n))))) [[1 0] [-1 0] [0 1] [0 -1]])))
         best (first (sort-by (fn [[cx cy cz]] (+ (js/Math.abs (- cx x)) (js/Math.abs (- cy y)) (js/Math.abs (- cz z)))) (remove exit? roofed)))]
-    (when best {:x (best 0) :y (best 1) :z (best 2)})))
+    (when (and best (<= (u/dist feet {:x (best 0) :y (best 1) :z (best 2)}) max-edge-walk))
+      {:x (best 0) :y (best 1) :z (best 2)})))
 
 (defn ^:async look!
   "A closed region with sides never seen is not yet known shut (an unseen cell may be an opening). The nearest of cells is
