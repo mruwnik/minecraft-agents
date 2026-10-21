@@ -408,9 +408,9 @@
                                                                                (assoc :vitals report))) "\n"))
                                               (if (:follow waited) 1 0)))))))))))))))
 
-(defn clash-hint [body submitted {:keys [id name label status]}]
+(defn clash-hint [submitted {:keys [id name label status]}]
   (str id " " name (when label (str " (" label ")")) " is " (cljs.core/name status) " on this body; submitting " submitted " can undo its work (two digs undercut each other). "
-       "Wait for it (observe.mjs " body " --wait --watch " id "), stop it (jobs.mjs " body " cancel " id "), or run both anyway: repeat this submit with --alongside."))
+       "Wait for it (" (follow-command id) "), stop it (./bin/jobs cancel " id "), or run both anyway: repeat this submit with --alongside."))
 
 (defn clashes-for
   "A promise of the live jobs of the body that share the submit's job name or are both digging jobs (nil when none, or the list is unreadable)."
@@ -438,7 +438,7 @@
   (-> (clashes-for r opts)
       (.then (fn [clashes]
                (if (seq clashes)
-                 (do (output (str (data/write-edn {:ok false :reason :job-clash :clashes clashes :hint (clash-hint (:body r) (:clash-name r) (first clashes))}) "\n"))
+                 (do (output (str (data/write-edn {:ok false :reason :job-clash :clashes clashes :hint (clash-hint (:clash-name r) (first clashes))}) "\n"))
                      1)
                  (run-submit! r output opts))))
       (.catch (fn [error]

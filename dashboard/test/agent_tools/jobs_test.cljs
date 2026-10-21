@@ -438,6 +438,8 @@
                      (is (false? (posted? result)) "nothing was submitted")
                      (is (= :job-clash (:reason answer)) out)
                      (is (= [{:id "j1442" :name "jobs.gather.mine" :status :running}] (:clashes answer)) out)
+                     (is (str/includes? (:hint answer) "./bin/observe --wait --watch j1442") out)
+                     (is (str/includes? (:hint answer) "./bin/jobs cancel j1442") out)
                      (is (re-find #"--alongside" (str (:hint answer))) out)
                      (is (re-find #"cancel j1442" (str (:hint answer))) out))))
           (.then (fn [_] (run-main! state ["submit" mine-spec] (listing-engine [{:id "j7" :name "jobs.gather.mine" :status :queued}]))))
