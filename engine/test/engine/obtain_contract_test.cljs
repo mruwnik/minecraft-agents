@@ -219,6 +219,16 @@
           (is (= 4 (get-in e [:data :got])))
           (is (empty? (f/events-of s :obtain.chest)) "no walk to the chest"))))))
 
+(deftest a-chest-in-another-players-zone-is-not-looked-into
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[owner looks?] [["Miles" false] ["Fake" true]]]
+          (let [s (f/start (update (f/bare []) :blocks assoc "4,64,0" "chest")
+                           [(assoc f/own-zone :min [-20 60 -20] :max [-10 70 -10]) {:name "hut" :min [2 60 -2] :max [8 70 2] :owner owner}])
+                _ (await (ending-of s 'jobs.items.obtain {:any-of ["wheat"] :count 1 :explore false} 30))]
+            (is (= looks? (boolean (seq (f/events-of s :obtain.chest)))) owner)))))))
+
 (deftest a-bucket-is-filled-only-at-a-water-source-not-at-flowing-water
   (async done
     (tu/run-async done

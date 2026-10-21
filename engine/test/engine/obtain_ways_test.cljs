@@ -6,6 +6,8 @@
             [engine.fake :as fake]
             [engine.game :as game]
             [engine.hostile-test :as h]
+            [engine.expr :as expr]
+            [engine.registry :as registry]
             [engine.test-util :as tu]
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.base :as base]
@@ -81,3 +83,12 @@
 (deftest a-carried-bill-is-done
   (let [c {:primitives (tu/fake {:inventory [{:name "beef" :count 2}]}) :args {:bill {"beef" 2}} :view (fn [] {:data {} :now 0})}]
     (is (= :ok (first (obtain/done? c))))))
+
+(deftest every-gather-need-passes-only-args-its-job-has
+  (let [items (concat (keys table/mob-drops) (keys table/crop-blocks) (keys table/grass-seeds) table/stalks
+                      (keys table/hand-dug) table/ore-drops table/fish-items
+                      ["log" "oak_log" "oak_sapling" "cobblestone" "obsidian" "bone_meal" "water_bucket" "white_wool"])]
+    (doseq [item items
+            need (table/gather-needs {item 1})]
+      (is (nil? (expr/problem registry/jobs (list (:job need) (:args need))))
+          (str item " via " (:job need))))))

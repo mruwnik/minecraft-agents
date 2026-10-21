@@ -38,11 +38,13 @@
      judged by jobs.lib.access.rules. At most the per-round setting (4) of the permitted ones are walked to (within 3) and
      dug, each judged again right before its dig.
 
+  With none within :radius, the nearest one seen up to 64 blocks away is walked to (within the reach setting) and the batch goes on from there.
+
   Skipped blocks: a cell in a zone that bars :dig or in an active plan's footprint is skipped for good and
   remembered. So is one with a hazard not in :accept, one whose walk is blocked or partial, and one whose dig
   is neither dug nor missing (tall grass takes its other half with it, so missing is fine).
 
-  No block left ends :refused (the ending carries :zones and :plans) when any was refused, else
+  No block left in reach ends :refused (the ending carries :zones and :plans) when any was refused, else
   :none (the text names the radius and the nearest source seen beyond it). Two batches in a row where nothing was diggable (none dug, none skipped: all missing) end :barren
   (the ending says so). A batch of only skipped blocks is not barren.
 
@@ -109,10 +111,13 @@
   (let [at #(u/seen-name (:primitives c) {:x x :y % :z z})]
     (and (= name (at (dec y))) (not= name (at (- y 2))))))
 
+(def far-radius "How far a source seen beyond :radius is still walked to." 64)
+
 (defn source-blocks
-  "Source blocks within :radius not skipped, nearest first, as positions (for a stand, its cut cells)."
-  [c]
-  (let [{:keys [radius sources item] :as a} (:args c)
+  "Source blocks within radius (default :radius) not skipped, nearest first, as positions (for a stand, its cut cells)."
+  ([c] (source-blocks c (:radius (:args c))))
+  ([c radius]
+  (let [{:keys [sources item] :as a} (:args c)
         stalk? (= :stalk (mode a))
         names (cond stalk? [(:block (materials item))] sources sources :else (:sources (materials item)))
         skipped (set (:skipped (ctx/mem c)))
@@ -122,7 +127,7 @@
          (remove skipped)
          (filter #(or (not stalk?) (cut-cell? c (first names) %)))
          (sort-by #(u/dist here %))
-         vec)))
+         vec))))
 
 (defn stalks-in-range?
   "Whether any block of the stalk material is within :radius (a stand there may be too short to cut)."
@@ -162,7 +167,7 @@
   the round's own."
   [c]
   (let [m (mode (:args c))]
-    (when-not (or (= :unknown m) (zones-missing? c) (:goal (ctx/mem c)) (can-fertilize? c) (seq (source-blocks c)))
+    (when-not (or (= :unknown m) (zones-missing? c) (:goal (ctx/mem c)) (can-fertilize? c) (seq (source-blocks c far-radius)))
       (cond
         (and (= :stalk m) (stalks-in-range? c)) (decline! c :too-short)
         (look/surveyed? c) :nothing-in-range))))
@@ -220,7 +225,7 @@
   ([c reason] (finish! c reason {}))
   ([c reason fields]
   (let [got (got c)
-        data (merge {:got got :reason reason :text (str "get-seeds done: " (if (= :none reason) (none-why c) (name reason)) ", got " got)}
+        data (merge {:got got :reason reason :text (str (if (= :count reason) "get-seeds done: " "get-seeds ended: ") (if (= :none reason) (none-why c) (name reason)) ", got " got)}
                     fields)]
     (if (= :count reason)
       (ctx/end c :done nil data)
@@ -284,6 +289,13 @@
               :missing :missing
               (do (skip! c pos) :skipped))))))))
 
+(defn ^:async approach!
+  "Walk toward the nearest source seen beyond :radius so it lies within it: :continue while the walk waits on the world, else :again (a blocked walk skips that block)."
+  [c pos]
+  (let [walked (await (near/go-near! c pos (reach)))]
+    (when (= :blocked walked) (skip! c pos))
+    (if (= :partial walked) :continue :again)))
+
 (defn ^:async dig-batch!
   "Dig the positions in order; {:dug n :skipped m} counts, plus :walking true when a walk waits on the world (the rest is left for the next round)."
   [c targets]
@@ -344,7 +356,7 @@
       (and (empty? targets) (seq (:refused (ctx/mem c)))) (refuse-up! c)
       (and (empty? targets) (not (look/surveyed? c))) (do (await (look/survey! c)) :again)
       (and (empty? targets) (can-fertilize? c)) (await (fertilize! c))
-      (empty? targets) (finish! c :none)
+      (empty? targets) (if-let [pos (first (vet! c (source-blocks c far-radius)))] (await (approach! c pos)) (finish! c :none))
       :else (await (dig-round! c targets)))))
 
 (defn ^:async round

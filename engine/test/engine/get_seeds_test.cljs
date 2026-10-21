@@ -110,7 +110,7 @@
       (fn ^:async t []
         (await (tu/each-async [[{} {} "nothing at all"]
                                [{} {:blocks {"2,64,0" "dirt"}} "other blocks"]
-                               [{:radius 5} {:blocks {"9,64,0" "short_grass"}} "grass outside the radius"]]
+                               [{:radius 5} {:blocks {"90,64,0" "short_grass"}} "grass beyond the far radius"]]
                               (fn ^:async one [[args world note]]
                                 (let [s (setup-seeing world)]
                                   (core/submit! (:eng s) (spec args) {})
@@ -136,15 +136,13 @@
           (is (= 8 (count (h/calls (:p s) "look"))) "exactly one look-around (8 glances) before concluding there is nothing")
           (is (zero? (dig-count s))))))))
 
-(deftest the-none-text-names-the-radius-and-the-nearest-grass-beyond-it
+(deftest grass-seen-beyond-the-radius-is-walked-to-and-broken
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:radius 10} {:blocks (patch "short_grass" [30] [0])} 10))
-              text (:text (done-event s))]
-          (is (= :none (:reason (done-event s))))
-          (is (re-find #"no short_grass/tall_grass within 10" text) text)
-          (is (re-find #"nearest seen is 30 away" text) text))))))
+        (let [s (await (scenario {:radius 10 :count 2} {:blocks (patch "short_grass" [30 31 32] [0 1]) :drops seed-drops} 60))]
+          (is (= {:kind :completed :reason :count} (ending-of s)))
+          (is (pos? (dig-count s))))))))
 
 (deftest the-none-text-without-any-grass-seen-says-so
   (async done
@@ -340,7 +338,7 @@
       (fn ^:async t []
         (await (tu/each-async [[{:item "bamboo"} {}]
                                [{:item "bamboo"} {:blocks (stand "sugar_cane" 3 0 3)}]
-                               [{:item "bamboo" :radius 5} {:blocks (stand "bamboo" 9 0 3)}]]
+                               [{:item "bamboo" :radius 5} {:blocks (stand "bamboo" 90 0 3)}]]
                               (fn ^:async one [[args world]]
                                 (let [s (setup-seeing world)]
                                   (core/submit! (:eng s) (spec args) {})

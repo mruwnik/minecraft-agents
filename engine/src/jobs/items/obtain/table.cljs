@@ -118,7 +118,7 @@
              :args {:item k :count n :radius (animal-radius)}})
           (for [[k n] gather :when (crop-blocks k)]
             {:key k :count n :job 'jobs.farm.harvest :crop (crop-blocks k) :seen #{(crop-blocks k)} :max-runs 1
-             :args {:crops [(crop-blocks k)] :radius (seen-radius)}})
+             :args {:crops [(crop-blocks k)]}})
           (for [[k n] gather :when (wool? k)]
             {:key k :count n :job 'jobs.combat.hunt :sheep (wool-color k) :max-runs 1
              :args {:item k :count n :radius (animal-radius)}})
