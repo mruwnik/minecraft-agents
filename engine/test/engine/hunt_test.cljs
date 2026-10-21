@@ -540,6 +540,18 @@
   (merge (tu/box 3 64 -2 12 65 -2 "stone") (tu/box 3 64 2 12 65 2 "stone")
          (tu/box 3 64 -1 3 65 1 "stone") (tu/box 12 64 -1 12 65 1 "stone")))
 
+(def planks-pen
+  (merge (tu/box 3 64 -2 12 65 -2 "oak_planks") (tu/box 3 64 2 12 65 2 "oak_planks")
+         (tu/box 3 64 -1 3 65 1 "oak_planks") (tu/box 12 64 -1 12 65 1 "oak_planks")))
+
+(deftest a-hunt-spares-animals-in-a-pen-walled-with-full-blocks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (spared-hunt {} {:inventory h/sword :self {:pos {:x 10.5 :y 64 :z 0.5}} :entities (four-sheep) :blocks planks-pen} nil))]
+          (is (empty? (attacked s)))
+          (is (= {:pen 4} (:spared-by (done-event s)))))))))
+
 (deftest a-hunt-takes-animals-in-a-hollow-closed-by-plain-terrain
   (async done
     (tu/run-async done

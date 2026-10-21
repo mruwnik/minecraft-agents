@@ -39,15 +39,17 @@
         (> adults-of-kind keep) :surplus
         :else :starved))
 
+(def built-block #"_fence$|_fence_gate$|_wall$|_planks$|bricks?$|^cobblestone$|^mossy_cobblestone$|_slab$")
+
 (defn fenced?
-  "Whether a fence, wall or gate stands beside a feet cell of the enclosure (head or foot height): a pit or hollow
-  closed by plain terrain is no pen."
+  "Whether a fence, wall, gate or other player-made block (planks, bricks, cobblestone) stands beside a feet cell of the
+  enclosure (head or foot height): a pit or hollow closed by plain terrain is no pen."
   [c inside]
   (let [block-at (u/seen-block-at-fn (:primitives c))]
     (boolean
      (some (fn [[x y z]]
              (some (fn [[dx dy dz]]
-                     (some->> (block-at {:x (+ x dx) :y (+ y dy) :z (+ z dz)}) .-name (re-find #"_fence$|_fence_gate$|_wall$")))
+                     (some->> (block-at {:x (+ x dx) :y (+ y dy) :z (+ z dz)}) .-name (re-find built-block)))
                    [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [1 1 0] [-1 1 0] [0 1 1] [0 1 -1]]))
            inside))))
 
