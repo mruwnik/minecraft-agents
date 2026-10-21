@@ -1,0 +1,23 @@
+;; Card 0967797b: the died record lists the worn armour and the off-hand item, so recover-drops values a pile of worn iron armour and a shield (the body carries nothing else) and fetches it instead of skipping it as worthless.
+;; The kit is put on with RCON (equip is not under test); the body dies at [14 0 14], well inside the plot (a drop flung against the wall is not found), and respawns at [4 0 4].
+{:defaults
+ {:tags [:survival :death :jobs]
+  :time :any
+  :body {:at [14.5 0 14.5] :spawnpoint [4 0 4]}
+  :act [[:rcon "item replace entity $BODY armor.head with minecraft:iron_helmet"]
+        [:rcon "item replace entity $BODY armor.chest with minecraft:iron_chestplate"]
+        [:rcon "item replace entity $BODY armor.legs with minecraft:iron_leggings"]
+        [:rcon "item replace entity $BODY armor.feet with minecraft:iron_boots"]
+        [:rcon "item replace entity $BODY weapon.offhand with minecraft:shield"]
+        [:wait-s 1]
+        [:kill-body]
+        [:await {:source :body :kind :respawned} 30]
+        [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]
+        [:job (jobs.survival.recover-drops)]]
+  :limit-s 150}
+ :cases
+ [{:name "worn-armour-and-shield-pile-fetched"
+   :expect [{:event {:source :body :kind :died :data {:inventory [:has {:name "iron_chestplate"}]}} :within-s 30}
+            {:event {:source :body :kind :died :data {:inventory [:has {:name "shield"}]}} :within-s 30}
+            {:event {:source :job :kind :completed :data {:decision :collected}} :within-s 120 :of-job true}]
+   :after [[:item "iron_chestplate" 1] [:item "iron_boots" 1] [:item "shield" 1]]}]}
