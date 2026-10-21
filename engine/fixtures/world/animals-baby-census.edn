@@ -49,7 +49,7 @@
    :act [[:summon "cow" [21.5 0 15.5] "{PersistenceRequired:1b}"]
          [:summon "cow" [22.5 0 17.5] "{PersistenceRequired:1b}"]
          [:job (jobs.animals.breed {:mob "cow" :pairs 1 :radius 12 :ways #{:carried} :box {:min #xyz [15 0 14] :max #xyz [23 0 18]}})]]
-   :expect [{:event {:source :job :message [:contains "breed done: fed, fed 2"]} :within-s 120 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done :babies 1}} :within-s 120 :of-job true}]
    :after [[:body-near [10.5 0 16.5] 3.2] [:block [14 0 16] "oak_fence_gate[open=false]"]]}
   ;; Should-succeed (card 7671afe8): a pen 20 blocks off, two AI cows in it, none in view (:radius 12): breed with the known :box walks
   ;; in through the gate first, feeds both, and walks back out (go-to shuts the gate), so the call is done with 2 fed.
@@ -61,5 +61,5 @@
    :act [[:summon "cow" [30.5 0 15.5] "{PersistenceRequired:1b}"]
          [:summon "cow" [31.5 0 17.5] "{PersistenceRequired:1b}"]
          [:job (jobs.animals.breed {:mob "cow" :pairs 1 :radius 12 :ways #{:carried} :box {:min #xyz [29 0 14] :max #xyz [32 0 18]}})]]
-   :expect [{:event {:source :job :message [:contains "breed done: fed, fed 2"]} :within-s 120 :of-job true}]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done :babies 1}} :within-s 120 :of-job true}]
    :after [[:block [28 0 16] "oak_fence_gate[open=false]"]]}]}

@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.hostile-test :as h]
             [engine.fake :as fake]
+            [engine.settings :as settings]
             [engine.look-support :as ls]
             [engine.test-util :as tu]
             [engine.build-from-plan-test :as b]
@@ -41,7 +42,7 @@
   [args world n]
   (let [s (h/setup world 50)]
     (core/submit! (:eng s) (spec args) {})
-    (await (tu/run-ticks (:eng s) (:clock s) n 700))
+    (await (settings/with-settings {:jobs.animals.breed/calf-wait-s 0} #(tu/run-ticks (:eng s) (:clock s) n 700)))
     s))
 
 (defn events-of [{:keys [seen]} kind] (filterv #(= kind (:kind %)) @seen))
@@ -358,7 +359,7 @@
   [form plans world n]
   (let [s (h/setup world 50 (ew/of-data plans {} []))]
     (core/submit! (:eng s) form {})
-    (await (tu/run-ticks (:eng s) (:clock s) n 700))
+    (await (settings/with-settings {:jobs.animals.breed/calf-wait-s 0} #(tu/run-ticks (:eng s) (:clock s) n 700)))
     s))
 
 (deftest a-pen-part-of-a-plan-gives-the-box-the-kind-and-the-target

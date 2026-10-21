@@ -76,7 +76,7 @@
                          (when (and calf? (= 2 (swap! fed inc))) (fake/add-entity! (:p s) (cow 3 4 {:baby true})))
                          (impl token args)))
             (core/submit! (:eng s) (list 'jobs.animals.breed {:mob "cow"}) {})
-            (await (run-ticks s 12 700))
+            (await (settings/with-settings {:jobs.animals.breed/calf-wait-s 3} #(run-ticks s 24 700)))
             (is (= babies (:babies (done-event s))) label)
             (is (= paused? (boolean (seq (events-of s :holding)))) "a wait for a calf is a pause child holding still")))))))
 

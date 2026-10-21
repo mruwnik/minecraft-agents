@@ -52,8 +52,9 @@
   :restored, :emptied or :full (no free slot: the food stays in hand, warn breed.hand-full). There is no :hand
   when nothing was fed. A cancel or the engine's limit restores it too.
 
-  After a pair was fed with no baby in view, the run pauses (a jobs.time.noop child) the setting calf-wait-s for the
-  calf before it counts the babies, so :babies is what the body sees.
+  After a pair was fed with no baby in view, the run watches for the calf, a one-second pause (a jobs.time.noop child)
+  at a time, until one shows or the setting calf-wait-s (the 30 s the animals stay in love) is over: the fed pair must
+  first walk together, and the calf shows a few seconds after they meet. :babies is what the body sees.
 
   A run that fed at least two animals writes one memory entry of kind :bred/<mob> (data {:fed [uuids]}, default
   one hour). A trigger can use it, e.g. (or (not (known? (since :bred/cow))) (> (since :bred/cow) 1200)).
@@ -72,7 +73,7 @@
 
 (a/defargs settings
   {::job-time-s {:default 120 :doc "Seconds of working, fetching included, before breeding gives up." :spec (a/num-in 0 nil)}
-   ::calf-wait-s {:default 4 :doc "Seconds to wait for the calf to be seen after a pair was fed, before the count of babies is reported." :spec (a/num-in 0 nil)}
+   ::calf-wait-s {:default 30 :doc "Longest wait, in seconds, for the calf to be seen after a pair was fed (love lasts 30 s), watching each second, before the count of babies is reported." :spec (a/num-in 0 nil)}
    ::max-in-row {:default 3 :doc "Animals in a row that brought nothing (refused, given up on) before the run ends." :spec (a/int-in 0 nil)}})
 (defn max-in-row [] (settings/get settings ::max-in-row))
 (defn calf-wait-ms [] (* 1000 (settings/get settings ::calf-wait-s)))
@@ -223,12 +224,12 @@
 
 (defn ^:async finish!
   "Emit the outcome and end the call: the ending of reason (ending-of, else nothing-possible), with ending (a failed
-  fetch's) as its :because. The hand is put back by cleanup. Resolves to :continue while a calf is awaited (a pause child)."
+  fetch's) as its :because. The hand is put back by cleanup. Resolves to :continue while a calf is awaited (one-second pause children, re-asked each round)."
   [c reason & [ending]]
   (if-not (calf-pending? c)
     (finish-now! c reason ending)
-    (let [e (await (child/pause! c (/ (calf-wait-ms) 1000) :calf-wait))]
-      (if (= :continue e) :continue (finish-now! c reason ending)))))
+    (do (await (child/pause! c 1 :calf-wait))
+        :continue)))
 
 (defn candidates
   "The adults within radius not fed, refused or given up on, nearest first."
