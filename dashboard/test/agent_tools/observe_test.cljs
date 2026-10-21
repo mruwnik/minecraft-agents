@@ -83,6 +83,7 @@
            [["status" "--raw"] "/snapshot"]
            [["job" "j12"] "/job?id=j12"]
            [["catalog" "job" "jobs.movement.go-to"] "/catalog?kind=job&name=jobs.movement.go-to"]
+           [["catalog" "jobs.movement.go-to"] "/catalog?kind=job&name=jobs.movement.go-to"]
            [["catalog" "trigger" "health-low"] "/catalog?kind=trigger&name=health-low"]
            [["catalog" "jobs" "jobs.movement." "--limit" "5" "--offset" "10"]
             "/catalog?kind=jobs&prefix=jobs.movement.&limit=5&offset=10"]
