@@ -217,6 +217,21 @@
             (is (= expected (take (count expected) (dug p))) (pr-str [zones expected]))
             (is (= warns (mapv :zones (trespass seen :get-food.trespass-last-resort))) (pr-str [zones expected]))))))))
 
+(deftest get-food-takes-from-anothers-area-only-when-hungry-with-nothing-edible-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [foreign [(zone "Miles" [2 64 0] [2 64 0])]
+              one-carrot (update two-carrots :blocks dissoc "3,64,0")]
+          (doseq [[self expected] [[{:self {:food 18}} []]
+                                   [{:self {:food 3}} [{:x 2 :y 64 :z 0}]]
+                                   [{:self {:food 3} :inventory [{:name "bread" :count 2}]} []]]]
+            (let [{:keys [eng p seen]} (setup (merge one-carrot self) foreign)]
+              (core/submit! eng '(jobs.survival.get-food {}) {})
+              (await (run-until-empty eng 6))
+              (is (= expected (take (count expected) (dug p))) (pr-str self))
+              (is (= (count expected) (count (trespass seen :get-food.trespass-last-resort))) (pr-str self)))))))))
+
 ;; ------------------------------------------------------------------ :ignore-zones?
 
 (deftest ignore-zones-lifts-the-preference-and-the-warning-of-the-survival-jobs

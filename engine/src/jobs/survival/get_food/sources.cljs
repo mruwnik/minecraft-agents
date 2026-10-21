@@ -155,14 +155,22 @@
          (filter #(<= (u/dist % center) radius))
          (remove skipped))))
 
+(defn last-resort?
+  "Whether the body may take food from another's area: truly hungry (below the hungry line) and nothing edible carried."
+  [c]
+  (let [self (.self (:primitives c))]
+    (and (foods/hungry? (.-food self) (.-health self) (:args c))
+         (not (foods/carries-food? self)))))
+
 (defn ^:async dig-ripe!
-  "Dig the nearest ripe block, permitted ones first (blocks.dig walks there and collects the drops): :again, or nil
-  when there is none. A block not dug is skipped from then on."
-  [c ripe-ages center radius]
+  "Dig the nearest ripe block in a permitted place (blocks.dig walks there and collects the drops): :again, or nil
+  when there is none. Another's area counts only when last-resort? and then only after every permitted block. A block
+  not dug is skipped from then on."
+  [c ripe-ages center radius last-resort?]
   (when (empty? (ripe-blocks c ripe-ages center radius))
     (await (look/survey! c :cell)))
   (let [{pos :option trespass :trespass} (access/choose c :dig (ripe-blocks c ripe-ages center radius) vector)]
-    (when pos
+    (when (and pos (or last-resort? (not trespass)))
       (access/trespass! c "get-food" trespass)
       ;; access/choose made the zone call (a missing zone list never blocks survival); the dig notes a trespass for restore-broken
       (let [e (await (child/run!* c :dig 'jobs.blocks.dig {:pos pos :ignore-zones? true}))]
@@ -180,7 +188,7 @@
   (case (await (go-near! c pos))
     :continue :continue
     :far (bury-source! c pos)
-    (or (await (dig-ripe! c ripe-age pos farm-radius))
+    (or (await (dig-ripe! c ripe-age pos farm-radius (last-resort? c)))
         (do (pass-over! c pos) nil))))
 
 (defn loaves-wanted

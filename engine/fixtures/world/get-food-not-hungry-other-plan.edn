@@ -1,0 +1,17 @@
+;; Card aac69884: a body that is not hungry (get-food only asked to carry 20 points) never takes ripe potatoes of another's plan as a
+;; "last resort", with nothing else to do. A row of 4 ripe potato cells x 22..25, z 22 on farmland. Nothing carried, food full.
+;; Should-succeed: the job ends without get-food.trespass-last-resort and the row stays ripe. Should-fail: none.
+{:defaults
+ {:tags [:survival :get-food :farm :zones]
+  :plot {:height 6 :floor "grass_block"}
+  :blocks [[:fill [22 -1 22] [25 -1 22] "farmland[moisture=7]"] [:fill [22 -2 23] [25 -2 23] "stone"] [:fill [22 -1 23] [25 -1 23] "water"]
+           [:fill [22 0 22] [25 0 22] "potatoes[age=7]"]]
+  :body {:at [18.5 0 19.5] :settle-s 2}
+  :act [[:job (jobs.survival.get-food {:carry 20 :explore false})]]
+  :limit-s 100}
+ :cases
+ [{:name "not-hungry-leaves-anothers-potatoes-alone"
+   :plans [{:id "field" :metadata {:by "SomeoneElse"} :parts [{:id "row" :box [#at [22 0 22] #at [25 0 22]] :want {:crop "potatoes"}}]}]
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :get-food.trespass-last-resort} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:block [22 0 22] "potatoes[age=7]"] [:block [25 0 22] "potatoes[age=7]"]]}]}
