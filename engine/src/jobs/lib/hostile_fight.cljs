@@ -6,6 +6,7 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.access :as access]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.look :as look]
             [jobs.survival.respond.walk :as walk]
@@ -20,6 +21,7 @@
    ::creeper-range {:default 7 :doc "Blocks within which an armed, healthy body fights a lone creeper hit-and-back instead of fleeing it (a creeper met this near cannot be outrun)." :spec (a/num-in 0 nil)}
    ::creeper-returns {:default 2 :doc "Flights from a creeper within ::creeper-return-s after which an armed, healthy body fights the next lone creeper however far it is (it keeps coming back). 0: never." :spec (a/int-in 0 nil)}
    ::creeper-return-s {:default 600 :doc "Seconds a flight from a creeper counts toward ::creeper-returns." :spec (a/num-in 0 nil)}
+   ::creeper-health-floor {:default 14 :doc "Health below which the body never fights a creeper hit-and-back: a late step back lets part of a blast land." :spec (a/num-in 0 nil)}
    ::back-step {:default 6 :doc "Blocks the body backs off from a creeper after each hit: its fuse runs on, so it ends out of the blast's reach (about 6)." :spec (a/num-in 1 nil)}
    ::leash {:default 20 :doc "Blocks from where a hostile fight started beyond which a hostile is not chased." :spec (a/num-in 0 nil)}})
 
@@ -153,19 +155,6 @@
     (count (filter #(and (> (:t %) since) (= "creeper" (get-in % [:data :mob])) (= :flee (get-in % [:data :decision])))
                    (ctx/entries c :hostile)))))
 
-(defn hit-and-back?
-  "Whether the body fights hostiles hit-and-back (combat.attack): exactly one, a creeper, a sword or axe carried, and the
-  creeper within ::creeper-range or fled from ::creeper-returns times lately. Health is weighed by the fight's price."
-  [c hostiles]
-  (let [p (:primitives c)
-        creeper (first hostiles)
-        returns (settings/get settings ::creeper-returns)]
-    (boolean (and (= 1 (count hostiles))
-                  (combat/creeper? creeper)
-                  (contains? weapon/weapon-damage-by-name (combat/best-weapon p (combat/weapons c)))
-                  (or (<= (danger-q/mob-distance p creeper) (settings/get settings ::creeper-range))
-                      (and (pos? returns) (>= (creeper-fled-from c) returns)))))))
-
 (defn back-cell
   "The cell n blocks (at most) from from in the open direction that ends farthest from threat, gaining at least a block on
   it; nil when none does. block-at: cell -> block name (as respond.options/block-at-fn)."
@@ -178,6 +167,33 @@
          first)))
 
 (defn back-step [] (settings/get settings ::back-step))
+
+(defn back-cell-of
+  "The cell the body backs off to from creeper over what it senses (back-cell), nil when none."
+  [c creeper]
+  (let [at (access/sensed-at (:primitives c) access/hidden-guess)]
+    (back-cell (fn [{:keys [x y z]}] (at [x y z])) (u/self-pos c) (u/pos-of (.-pos creeper)) (back-step))))
+
+(defn hit-and-back-ok?
+  "Whether the body can fight hostiles hit-and-back: exactly one, a creeper, a sword or axe carried, health at least
+  ::creeper-health-floor and an open cell to back off to. Ends the fight when it stops holding."
+  [c hostiles]
+  (let [p (:primitives c)
+        creeper (first hostiles)]
+    (boolean (and (= 1 (count hostiles))
+                  (combat/creeper? creeper)
+                  (contains? weapon/weapon-damage-by-name (combat/best-weapon p (combat/weapons c)))
+                  (>= (.-health (.self p)) (settings/get settings ::creeper-health-floor))
+                  (back-cell-of c creeper)))))
+
+(defn hit-and-back?
+  "Whether the body starts a hit-and-back fight (combat.attack): hit-and-back-ok? and the creeper within ::creeper-range or
+  fled from ::creeper-returns times lately."
+  [c hostiles]
+  (let [returns (settings/get settings ::creeper-returns)]
+    (boolean (and (hit-and-back-ok? c hostiles)
+                  (or (<= (danger-q/mob-distance (:primitives c) (first hostiles)) (settings/get settings ::creeper-range))
+                      (and (pos? returns) (>= (creeper-fled-from c) returns)))))))
 
 (defn wins?
   "Whether fighting hostiles leaves :reserve health (jobs.lib.danger/fight-reserve): the one weighing the response and the

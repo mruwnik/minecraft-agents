@@ -8,7 +8,6 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
-            [jobs.lib.access :as access]
             [jobs.lib.look :as look]
             [jobs.lib.vantage :as vantage]
             [jobs.lib.cost.weapon :as weapon]
@@ -347,10 +346,7 @@
 (defn ^:async back-off!
   "Step out of a creeper's reach after a hit, or from one whose fuse is lit (it blows on its own, harmlessly past ~6 blocks): true when the body moved. Nothing when no open cell gains on it."
   [c creeper]
-  (let [p (:primitives c)
-        at (access/sensed-at p access/hidden-guess)
-        from (u/self-pos c)
-        cell (hostile/back-cell (fn [{:keys [x y z]}] (at [x y z])) from (u/pos-of (.-pos creeper)) (hostile/back-step))]
+  (let [cell (hostile/back-cell-of c creeper)]
     (when cell
       (await (ctx/call c :back 'jobs.movement.run-away {:pos cell :range 0 :leg-s back-leg-s}))
       (let [{:keys [x y z]} (u/pos-of (.-pos creeper))]
@@ -410,6 +406,7 @@
     (cond
       (and target (hostile/held-idle? c (hostile/held? c target))) (declined c :hold-timeout)
       (and target (hostile/too-far-to-chase? c target)) (declined c :too-far)
+      (and target (combat/creeper? target) (not (hostile/hit-and-back-ok? c (hostile/in-range c)))) (declined c :creeper-unsafe)
       (and last-attack (< (.-health (.self p)) (:health0 (ctx/mem c)))) :continue
       (nil? target) (if-let [heard (hostile/heard c)]
                       (do (await (ctx/act c :look (let [{:keys [x y z]} (danger-q/mob-pos p heard)] #js {:pos #js {:x x :y (+ 1 y) :z z}})))

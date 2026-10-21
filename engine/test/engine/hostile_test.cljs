@@ -1161,6 +1161,7 @@
                                  ["sword vs one zombie" {:inventory sword :entities [(zombie 3 0)]} :fight]
                                  ["no weapon vs three zombies" {:entities [(zombie 7 3 0) (zombie 8 3 1) (zombie 9 3 -1)]} :flee]
                                  ["sword vs a creeper within fuse range: hit-and-back" {:inventory sword :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} :fight]
+                                 ["sword at 12 health vs a creeper within fuse range: below the health floor" {:self {:health 12} :inventory sword :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} :flee]
                                  ["sword vs a creeper farther off" {:inventory sword :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 7.8 :y 64 :z 0}}]} :flee]
                                  ["no weapon vs a creeper" {:entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} :flee]
                                  ["sword vs a skeleton at range" {:inventory sword :entities [(assoc (skeleton 7 12 0) :visible true)]} :fight]
@@ -1172,6 +1173,14 @@
                 got (:decision (first (hostile-entries (:eng s))))]
             (is (= want got) why)
             (is (= (= :flee want) (fled-by-walker? s)) (str why ": flees with the engine walker, no swing"))))))))
+
+(deftest respond-flees-a-creeper-from-a-dead-end-it-cannot-back-off-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (flight-round respond {:inventory sword :blocks (wall-cells (concat (for [x (range -1 9)] [x 1]) (for [x (range -1 9)] [x -1]) [[-1 0]]))
+                                              :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]}))]
+          (is (= :flee (:decision (first (hostile-entries (:eng s)))))))))))
 
 (deftest respond-fights-with-the-best-weapon-equipped
   (async done
