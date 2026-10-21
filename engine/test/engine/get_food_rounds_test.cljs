@@ -62,6 +62,8 @@
 
 (defn none-endings [seen] (filterv #(and (= :stopped (:kind %)) (= :no-food (:reason %))) @seen))
 
+(defn waits [seen] (mapv :reason (filter #(= :waiting (:kind %)) @seen)))
+
 (defn ^:async one-round!
   "Submit get-food with args and run exactly one tick."
   [eng args]
@@ -377,7 +379,7 @@
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:food 1} :entities (vec (take 2 herd))} :step-ms 5)]
           (with-redefs [look/survey-until! (fn ^:async f
-                                             ([c per test-fn] (when (= :cell per)
+                                             ([c per test-fn] (when (and (= :cell per) (empty? (:slots c)))
                                                                 (test-fn)
                                                                 (swap! (fake/state p) assoc :entities []))
                                                               nil)
@@ -662,7 +664,8 @@
         (let [{:keys [eng seen]} (setup {:self {:food 1} :time 15000} :step-ms 5)]
           (await (one-round! eng {}))
           (is (= [] (searches seen)))
-          (is (re-find #"dark" (str (:text (first (none-endings seen)))))))))))
+          (is (= [:dark] (waits seen)) "the search child waits for light and the job waits with it, no no-food ending")
+          (is (= [] (none-endings seen))))))))
 
 (deftest the-search-waits-for-light-not-for-the-hour
   (let [waits? (fn [light]
@@ -706,7 +709,8 @@
                                         :step-ms 5)]
           (await (one-round! eng {}))
           (is (= [] (searches seen)) "a hostile near: no search")
-          (is (re-find #"dark" (str (:text (first (none-endings seen)))))))))))
+          (is (= [:hostile-near] (waits seen)) "the search child waits on the hostile and the job waits with it")
+          (is (= [] (none-endings seen))))))))
 
 (deftest carried-bread-is-eaten-at-night-with-a-hostile-near
   (async done

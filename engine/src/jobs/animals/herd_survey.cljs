@@ -150,7 +150,8 @@
   (let [centre (box-centre (pen-box c))]
     (if (> (u/dist (u/self-pos c) centre) (near-pen))
       (if (= :blocked (await (near/go-near! c centre (approach-range) {:doors :never :ways #{:walk :clear-seal}})))
-        (finish! c :unreachable)
+        (let [walk (:data (:near-walk (ctx/mem c)))]
+          (finish! c :unreachable {:why (:why walk) :walk (:text walk)}))
         :continue)
       (let [answer (await (pen-read/read! c (pen-opts c) #(= :unloaded (:reason %))))]
         (if (= :unloaded (:reason answer))

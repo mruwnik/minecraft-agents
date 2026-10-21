@@ -1540,3 +1540,7 @@
           (let [e (done-event s)]
             (is (= :brought (:reason e)) (pr-str (select-keys e [:reason :given-up])))
             (is (empty? (:given-up e)))))))))
+
+(deftest the-detail-text-of-a-blocked-walk-names-why-and-what-go-to-said
+  (is (= " (off-plan): gave up walking to [938 94 -978]: left the plan at step 17"
+         (hr/detail-text {:why :off-plan :walk "gave up walking to [938 94 -978]: left the plan at step 17"}))))

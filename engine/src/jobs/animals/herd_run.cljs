@@ -186,7 +186,8 @@
         cell (or (:cell result) (some-> leak :pos cell))]
     (when (or (:why result) cell)
       (str " (" (some-> (or (:why result) (:why leak)) name) (when cell (str " at " (pr-str cell)))
-           (when (:need result) (str ", " (:depth result) " cells in a line, " (:need result) " needed")) ")"))))
+           (when (:need result) (str ", " (:depth result) " cells in a line, " (:need result) " needed")) ")"
+           (when (:walk result) (str ": " (:walk result)))))))
 
 (defn finish!
   "Count the pen, emit the outcome and end with its ending (ending-kind; the call's :least, default 1, of animals

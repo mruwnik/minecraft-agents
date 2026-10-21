@@ -104,7 +104,7 @@
   :gate pos :escaped n :animals [{:kind :id :pos}] (the livestock on the pen cells)}. :inside is counted on the pen's cells at the end. An animal is booked brought once, however often it is led. Reasons:
   :brought (pen holds :target), :short (fewer than :target in the pen: some came, or none came and no other
   reason), :full,
-  :no-pen, :leaky, :no-gate, :too-shallow, :unreachable (a walk was blocked), :gate-stuck, :lost, :no-exit (every animal left stands in a pit it cannot leave),
+  :no-pen, :leaky, :no-gate, :too-shallow, :unreachable (a walk was blocked; the text and :walk say go-to's reason), :gate-stuck, :lost, :no-exit (every animal left stands in a pit it cannot leave),
   :no-food (a lure run found no food), :no-hold (the food would not stay in hand),
   :none (nobody left to fetch), or :no-leash with the leash child's ending as the :because. The body ends outside with the gate shut. Endings: done when the pen
   holds :target (:brought, :full) or the call's :least (default 1) animals were brought; else condition-failed for
