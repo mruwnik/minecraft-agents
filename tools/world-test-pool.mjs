@@ -597,13 +597,16 @@ const bodyCap = () => Math.max(1, (slotConfig().kinds.body.max ?? 1) - 1)
 const availableMb = () => Number(fs.readFileSync('/proc/meminfo', 'utf8').match(/MemAvailable:\s+(\d+)/)[1]) / 1024
 
 // One child per unit: the ordinary one-body entry point (it takes the body slot and the body claim itself). Exit 75 = busy: ask again.
+// the ids go to the child in a file: thousands of --match-id flags overflow the argv limit (E2BIG)
+export const childMatchArgs = (ids, file) => { fs.writeFileSync(file, ids.join('\n') + '\n'); return ['--match-ids', file] }
 const spawnChild = (script, pass, matchIds, { file, match, worker, batch, barrier, attempt = 0 }, tmpResults, reaper, traceDir) => new Promise((resolve) => {
-  const argv = [script, file, ...pass, ...(traceDir ? ['--trace-dir', traceDir, '--trace-attempt', String(attempt)] : []), ...(batch ? ['--night-batch', batch] : []), ...(batch && barrier ? ['--night-barrier', String(barrier)] : []), '--body', worker.body, '--first-plot', String(worker.firstPlot), '--results', tmpResults, ...(match ? ['--match-id', match, '--repeat', '1'] : withMatchIds(matchIds))]
+  const idsFile = !match && matchIds.length ? `${tmpResults}.ids` : null
+  const argv = [script, file, ...pass, ...(traceDir ? ['--trace-dir', traceDir, '--trace-attempt', String(attempt)] : []), ...(batch ? ['--night-batch', batch] : []), ...(batch && barrier ? ['--night-barrier', String(barrier)] : []), '--body', worker.body, '--first-plot', String(worker.firstPlot), '--results', tmpResults, ...(match ? ['--match-id', match, '--repeat', '1'] : (idsFile ? childMatchArgs(matchIds, idsFile) : []))]
   // the pool reports the @@test events itself (fixed total, final status per case), so a child prints none
   const { TEST_EVENTS: _events, ...env } = process.env
   const child = spawn(process.execPath, argv, { stdio: 'inherit', env: { ...env, WORLD_TEST_POOL_PID: String(process.pid) } })
   const entry = reaper.add(child, tmpResults)
-  child.on('close', (code) => { reaper.done(entry); resolve(code ?? 1) })
+  child.on('close', (code) => { reaper.done(entry); if (idsFile) fs.rmSync(idsFile, { force: true }); resolve(code ?? 1) })
 })
 
 // every case of the fixture files as the children will select them (--list needs no world); null when the listing fails

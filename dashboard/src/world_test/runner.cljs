@@ -60,6 +60,7 @@
       (= a "--refresh-build") (recur (rest all) (assoc opts :refresh-build true))
       (= a "--night-classes") (recur (rest all) (assoc opts :night-classes true))
       (= a "--match-id") (recur more (update opts :match-ids (fnil conj #{}) b))
+      (= a "--match-ids") (recur more (update opts :match-ids (fnil into #{}) (remove str/blank? (str/split-lines (fs/readFileSync b "utf8")))))
       (= a "--repeat") (recur more (assoc opts :repeat (js/Number b)))
       (= a "--body") (recur more (assoc opts :body b))
       (= a "--world") (recur more (assoc opts :world b))

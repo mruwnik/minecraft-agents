@@ -665,6 +665,13 @@
     #js [] :night-barrier nil
     #js [] :changed-since-pass nil))
 
+(deftest match-ids-file-is-read-one-id-per-line
+  (let [file (path/join (os/tmpdir) (str "wt-ids-" js/process.pid ".txt"))]
+    (fs/writeFileSync file "a/c1\n\nb/c2\n")
+    (let [opts (r/parse-args #js ["--match-ids" file "--match-id" "c/c3"])]
+      (fs/rmSync file)
+      (is (= #{"a/c1" "b/c2" "c/c3"} (:match-ids opts))))))
+
 (deftest phase-is-an-option
   (is (= "night" (:phase (r/parse-args #js ["--phase" "night"]))))
   (is (nil? (:phase (r/parse-args #js []))))

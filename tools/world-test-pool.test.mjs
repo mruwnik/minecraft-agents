@@ -5,7 +5,7 @@ import net from 'node:net'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe, matchIdsFrom, parseNightClasses, nightBatchEndArgs, sleepRuleRestoreArgs, nightBatches, durationsById, runNightBatches, waitForBodies, PRECHECK_EXIT, BOOT_EXIT, traceDirOf, durationFiles, main, parseMspt, gateLoad, SWEEP_MIN_BODIES, markSweep, skipKnown, withoutUnskipped } from './world-test-pool.mjs'
+import { splitForms, scanForms, failSig, summarize, unitOrder, parsePoolArgs, workerSpecs, runPool, mergeText, poolCap, createReaper, countListed, listArgs, knownFailures, parseListed, unitsWithCases, noCasesSelected, serverProbe, matchIdsFrom, parseNightClasses, nightBatchEndArgs, sleepRuleRestoreArgs, nightBatches, durationsById, runNightBatches, waitForBodies, PRECHECK_EXIT, BOOT_EXIT, traceDirOf, durationFiles, main, parseMspt, gateLoad, SWEEP_MIN_BODIES, markSweep, skipKnown, withoutUnskipped, childMatchArgs } from './world-test-pool.mjs'
 
 const form = (id, status, secs = 1, extra = '') =>
   `{:plot 0, :file "${id.split('/')[0]}", :expects [{:status :pass, :evidence "a } \\" {"}], :status :${status}, :id "${id}", :elapsed-s ${secs}${extra}}`
@@ -906,4 +906,14 @@ test('unskip: --unskip-id and --unskip-ids FILE name known failures that run any
   const r = skipKnown(['a/c1', 'a/c2', 'a/c3'], withoutUnskipped(known, ['a/c1', 'a/c3']))
   assert.deepEqual(r.keep, ['a/c1', 'a/c3'])
   assert.deepEqual(r.forms.map(summarize).map((s) => s.id), ['a/c2'])
+})
+
+test('childMatchArgs: thousands of kept ids go in a file, so the child argv stays small', () => {
+  const ids = Array.from({ length: 3000 }, (_, i) => `some-fixture-file/a-fairly-long-case-name-number-${i}`)
+  const file = path.join(os.tmpdir(), `pool-ids-test-${process.pid}.txt`)
+  const args = childMatchArgs(ids, file)
+  const text = fs.readFileSync(file, 'utf8')
+  fs.rmSync(file)
+  assert.deepEqual(args, ['--match-ids', file])
+  assert.deepEqual(text.split('\n').filter(Boolean), ids)
 })
