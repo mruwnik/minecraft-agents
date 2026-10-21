@@ -14,25 +14,71 @@
             [jobs.lib.world :as known]))
 
 (defn block-at-fn
-  "A block-at over what the body sees or remembers that adds each cell it reads from memory only to stale (a volatile set of [x y z])."
-  [p stale]
-  (fn [pos]
-    (let [s (u/sensed p pos)]
-      (when-not (or (nil? s) (true? (.-unknown s)))
-        (when-not (or (true? (.-visible s)) (true? (.-felt s)))
-          (vswap! stale conj (u/cell-vec pos)))
-        s))))
+  "A block-at over what the body sees or remembers that adds each cell it reads from memory only to stale (a volatile set of [x y z]),
+  and each read (pos block) to trace (a JS array) when given."
+  ([p stale] (block-at-fn p stale nil))
+  ([p stale ^js trace]
+   (fn [pos]
+     (let [s (u/sensed p pos)
+           b (when-not (or (nil? s) (true? (.-unknown s)))
+               (when-not (or (true? (.-visible s)) (true? (.-felt s)))
+                 (vswap! stale conj (u/cell-vec pos)))
+               s)]
+       (when trace (.push trace pos b))
+       b))))
 
 (defn read-fresh
-  "read without the memo."
-  [p opts]
+  "read without the memo; with trace (a JS array) it gets pos, block for every cell read."
+  ([p opts] (read-fresh p opts nil))
+  ([p opts trace]
+   (let [stale (volatile! #{})
+         answer (pen/check (assoc opts :block-at (block-at-fn p stale trace)))]
+     (assoc answer :remembered (vec @stale)))))
+
+(defn same-block?
+  "Whether a and b (blocks as block-at gives them, or nil) are the same to pen/check: its answer reads only the name and properties."
+  [^js a ^js b]
+  (or (identical? a b)
+      (and a b
+           (identical? (.-name a) (.-name b))
+           (let [pa (.-properties a) pb (.-properties b)]
+             (or (identical? pa pb)
+                 (and pa pb
+                      (let [ks (js/Object.keys pa)]
+                        (and (== (.-length ks) (.-length (js/Object.keys pb)))
+                             (every? #(identical? (aget pa %) (aget pb %)) ks)))))))))
+
+(defn revalidate
+  "The remembered cells (a vector) of the trace's reads if every cell reads now as it did (same name and properties), else nil.
+  pen/check is a function of those reads, so its answer then stands; only which cells are remembered can differ."
+  [p ^js trace]
   (let [stale (volatile! #{})
-        answer (pen/check (assoc opts :block-at (block-at-fn p stale)))]
-    (assoc answer :remembered (vec @stale))))
+        read (block-at-fn p stale)]
+    (when (loop [i 0]
+            (or (>= i (.-length trace))
+                (and (same-block? (aget trace (inc i)) (read (aget trace i)))
+                     (recur (+ i 2)))))
+      (vec @stale))))
+
+(def max-traces 16)
+
+(defn read-traced
+  "read-fresh, or the answer of an earlier read of the same opts whose cells all read as they did then."
+  [p ^js st opts]
+  (let [traces (or (.-penTraces st) (set! (.-penTraces st) (volatile! {})))
+        old (get @traces opts)
+        remembered (when old (revalidate p (:trace old)))]
+    (if remembered
+      (assoc (:answer old) :remembered remembered)
+      (let [trace #js []
+            answer (read-fresh p opts trace)]
+        (vswap! traces #(assoc (if (>= (count %) max-traces) {} %) opts {:trace trace :answer answer}))
+        answer))))
 
 (defn read
   "jobs.lib.pen/check with opts (without :block-at), plus :remembered, a vector of [x y z]. While the perception's
-  memo-key stays (every cell reads as before), the same opts answer from the memo: a look round reads the same pen many times."
+  memo-key stays (every cell reads as before), the same opts answer from the memo: a look round reads the same pen many times.
+  When it changes (a tick, a head turn), the cells of the last read are read again and the answer stands if none differs."
   [p opts]
   (let [per (aget p "perception")
         key (when per (perception/memo-key per))]
@@ -45,7 +91,7 @@
                    (set! (.-penMemo st) #js [(key 0) (key 1) (volatile! {})]))
             hit (get @(aget memo 2) opts)]
         (or hit
-            (let [answer (read-fresh p opts)]
+            (let [answer (read-traced p st opts)]
               (vswap! (aget memo 2) assoc opts answer)
               answer))))))
 

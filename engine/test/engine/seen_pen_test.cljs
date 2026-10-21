@@ -12,7 +12,8 @@
             [jobs.animals.herd-survey :as hs]
             [jobs.animals.herd-run :as hr]
             [jobs.lib.pen :as pen]
-            [jobs.lib.pen-gate :as pg]))
+            [jobs.lib.pen-gate :as pg]
+            [jobs.lib.pen-read :as pen-read]))
 
 (defn coarse-world
   "ht/world with sight rays 4 degrees apart: the fence stays in view and a pass costs a quarter. The ray jitter is
@@ -40,22 +41,35 @@
 
 (defn read [s] (hr/read-pen {:primitives (:p s) :args {:box ht/box}}))
 
-(deftest a-pen-read-is-reused-until-what-the-body-knows-changes
+(deftest a-pen-read-is-reused-while-the-cells-it-read-read-the-same
   (let [s (seeing {} false)
+        p (:p s)
+        opts {:box ht/box}
         calls (atom 0)
-        check pen/check]
+        check pen/check
+        read! #(pen-read/read p opts)
+        fresh! #(pen-read/read-fresh p opts)]
     (with-redefs [pen/check (fn [o] (swap! calls inc) (check o))]
-      (let [a (read s)
-            b (read s)]
-        (is (= a b))
+      (let [a (read!)]
+        (is (= a (read!)))
         (is (= 1 @calls) "same tick, same eye, same memory: one check")
         (swap! (:clock s) + 5000)
-        (read s)
-        (is (= 2 @calls) "a later tick reads again")
-        (perception/pass! (aget (:p s) "perception"))
-        (swap! (fake/state (:p s)) assoc :yaw 17)
-        (read s)
-        (is (= 3 @calls) "a turned head reads again")))))
+        (is (= (fresh!) (read!)) "a later tick answers as a fresh read")
+        (perception/pass! (aget p "perception"))
+        (swap! (fake/state p) assoc :yaw 17)
+        (is (= (fresh!) (read!)) "a turned head answers as a fresh read")
+        (swap! (fake/state p) assoc :yaw 200 :pitch 60)
+        (perception/pass! (aget p "perception"))
+        (is (= (fresh!) (read!)) "a pass that moves the view answers as a fresh read")
+        (is (= 4 @calls) "the memoised reads ran no check: only the first read and the three fresh ones did")
+        (reset! calls 0)
+        (swap! (:clock s) + 5000)
+        (fake/remove-block! p {:x 10 :y 64 :z 1})
+        (scan! s)
+        (let [changed (read!)]
+          (is (= (fresh!) changed) "a pen cell that changed is read again")
+          (is (not= (:leaks a) (:leaks changed)))
+          (is (= 2 @calls) "the changed read and the fresh one ran the check"))))))
 
 (defn gate-unknown? [s]
   (boolean (some #(and (= :unloaded (:why %)) (= ht/gate (:pos %))) (:leaks (read s)))))
