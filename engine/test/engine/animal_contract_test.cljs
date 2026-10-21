@@ -192,13 +192,13 @@
         (doseq [[args world kind reason]
                 [[{} {:inventory wheat :entities [(cow-at 1 2)]} :condition-failed :too-few]
                  [{:mob "rock"} {:inventory wheat :entities []} :impossible :unknown-mob]
-                 [{:pairs 2} {:inventory [{:name "wheat" :count 1}] :entities (mapv #(cow-at % %) [1 2 3 4])} :nothing-possible :food-out]]]
+                 [{:pairs 2 :ways #{:chest :craft}} {:inventory [{:name "wheat" :count 1}] :entities (mapv #(cow-at % %) [1 2 3 4])} :nothing-possible :food-out]]]
           (is (= {:event :stopped :kind kind :reason reason} (await (ending-with-calves (list 'jobs.animals.breed (merge {:mob "cow"} args)) world)))))
         (is (= {:event :stopped :kind :nothing-possible :reason :no-baby}
                (await (ending '(jobs.animals.breed {:mob "cow" :settings {:jobs.animals.breed/calf-wait-s 0}}) {:inventory wheat :entities [(cow-at 1 2) (cow-at 2 3)]})))
             "a pair fed and no calf seen is not done")
         (is (= {:event :completed}
-               (select-keys (await (ending-with-calves '(jobs.animals.breed {:mob "cow" :pairs 2 :least 1}) {:inventory [{:name "wheat" :count 1}] :entities (mapv #(cow-at % %) [1 2 3 4])})) [:event]))
+               (select-keys (await (ending-with-calves '(jobs.animals.breed {:mob "cow" :pairs 2 :least 1 :ways #{:chest :craft}}) {:inventory [{:name "wheat" :count 1}] :entities (mapv #(cow-at % %) [1 2 3 4])})) [:event]))
             "one fed meets :least 1")))))
 
 (deftest a-pen-check-answers-closed-and-a-leaky-pen-as-done-an-unbounded-fill-as-nothing-possible
@@ -277,6 +277,6 @@
           (is (= {:event :completed} (select-keys (await (lure {} world)) [:event])))
           (is (= {:event :stopped :kind :impossible :reason :no-mob} (await (ending (list 'jobs.animals.lure-to {:pos far-pos}) world))))
           (is (= {:event :stopped :kind :impossible :reason :no-destination} (await (ending '(jobs.animals.lure-to {:mob "cow"}) world))))
-          (is (= {:event :stopped :kind :condition-failed :reason :no-food} (await (lure {} (assoc world :inventory [])))))
+          (is (= {:event :stopped :kind :condition-failed :reason :no-food} (await (lure {:ways #{:chest :craft}} (assoc world :inventory [])))))
           (is (= {:event :stopped :kind :nothing-possible :reason :no-animal} (await (lure {} (assoc world :entities [])))))
           (is (= {:event :stopped :kind :limit-reached :reason :job-time} (await (lure {:spend {:job-time 0}} world)))))))))

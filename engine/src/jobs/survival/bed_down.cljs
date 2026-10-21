@@ -6,6 +6,7 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
@@ -26,7 +27,7 @@
   The bed: the :bed argument, else sh-beds/bed-to-use (seen, or remembered within the jobs.lib.shelter.beds bed radius, the urgent radius once max-days-awake days passed without sleep; never an occupied one or one given up on; unless that long without sleep or an underground body sees another player sleep and the bed is near (courtesy), never one whose walk leaves an underground, dug-in or room shelter): jobs.survival.sleep on it.
   A carried bed the reserve register holds (jobs.lib.reserve, chooser :night) is not put down. A bed in the open is slept in only by a body overdue for sleep or one that just put the bed down; a sleep that stops :bed-open writes :bed-open and ends condition-failed :bed-open.
   A sleep that ends otherwise without sleeping writes :sleep-failed (5 minutes) and ends nothing-possible :sleep-failed.
-  A bed item carried and no bed to use: put down beside the body (roofed cells first, else in the open unless :roofed-only; never in a doorway, on a chest, table or other kept block, or in another's zone, claim or plan footprint), recorded as :bed unless a live :bed is, and as a scaffold-ledger entry (purpose :bed, for survival.leave-shelter to take back by day unless it became the respawn bed) outside the body's own zones (info night.bed-placed {:pos :own-zone}). A placement the server refuses is tried again (twice at most on one foot cell, three in all). No room, or a failed placement, writes :bed-place-failed (10 minutes) and ends nothing-possible :bed-place-failed.
+  A bed item carried and no bed to use: put down beside the body (a body outside walks first into a :home that lies in a closed roofed room; roofed cells first, else in the open unless :roofed-only; never in a doorway, on a chest, table or other kept block, or in another's zone, claim or plan footprint), recorded as :bed unless a live :bed is, and as a scaffold-ledger entry (purpose :bed, for survival.leave-shelter to take back by day unless it became the respawn bed) outside the body's own zones (info night.bed-placed {:pos :own-zone}). A placement the server refuses is tried again (twice at most on one foot cell, three in all). No room, or a failed placement, writes :bed-place-failed (10 minutes) and ends nothing-possible :bed-place-failed.
   Ends done {:slept true :bed pos} when asleep, condition-failed :not-night when the day came first or :bed-open {:slept false :bed-open true}; :continue while walking or sleeping. Quote: time by the walk to the bed, done 1 sleep.")
 
 (a/defargs args
@@ -152,7 +153,17 @@
       :else (do (await (ctx/act c :wait #js {:ms 250}))
                 (recur (inc tries))))))
 
-(defn ^:async put-down-bed!
+(defn ^:async walk-into-home!
+  "A body outside, with a :home that lies in a closed roofed room: walk there so the bed goes down inside it.
+  :continue while walking; nil when no such home or the walk failed (the bed then goes down where the body is)."
+  [c]
+  (let [p (:primitives c)
+        home (mem/place (ctx/view c) :home)]
+    (when (and home (not (sh-sense/shut-in-room? p (sh-sense/feet p))) (sh-sense/shut-in-room? p home))
+      (let [w (await (child/call-walk* c :home-walk {:pos home :range 1}))]
+        (when (= :continue w) :continue)))))
+
+(defn ^:async put-down-bed-here!
   "Walk to the layout's stand cell if the body is not on it, then place the carried bed on the foot cell (facing along
   the row) and record it as :bed unless a live :bed is recorded, and as a scaffold-ledger entry (purpose :bed) when outside the body's own zones.
   A placement the server refuses is counted (job memory :bed-refused) and tried again while fewer than ::bed-tries failed.
@@ -180,6 +191,12 @@
               foot)))
         (let [w (await (child/call-walk* c :bed-walk {:pos stand :range 0}))]
           (when (or (= :continue w) (= :done (:kind w))) :continue))))))
+
+(defn ^:async put-down-bed!
+  "put-down-bed-here!, after a walk into a home that is a closed roofed room when the body is outside it."
+  [c]
+  (or (await (walk-into-home! c))
+      (await (put-down-bed-here! c))))
 
 (defn ^:async place-bed-and-sleep!
   "A bed carried and none to use: set it down beside the body and sleep in it."

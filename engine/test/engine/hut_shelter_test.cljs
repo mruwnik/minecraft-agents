@@ -430,6 +430,18 @@
           (is (not= far (mem/place (mem/view (:store eng)) :bed)) "the bed in the closed room beats the one in the open")
           (is (empty? (st/emitted seen :place.kept))))))))
 
+(deftest a-carried-bed-is-put-down-inside-the-home-hut-when-the-body-stands-outside
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup (merge (hut-world {:x 5 :y 64 :z 6} {})
+                                               {:time st/night :inventory [{:name "red_bed" :count 1}]}))]
+          (mem/write! (:store eng) :home {:pos {:x 5 :y 64 :z 0}} mem/place-policy)
+          (core/submit! eng '(jobs.survival.bed-down) {})
+          (await (st/tick-n eng 12))
+          (let [foot (st/arg-pos (first (st/calls p "place")))]
+            (is (and (<= 4 (:x foot) 6) (<= -1 (:z foot) 1)) (str "the bed went down in the room, not beside the door: " foot))))))))
+
 (deftest a-placed-bed-is-set-with-a-click-facing-along-the-row
   (async done
     (tu/run-async done

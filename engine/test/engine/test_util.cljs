@@ -80,21 +80,21 @@
   (when (aget p "perception") (aset p "blockAt" f)))
 
 (defn beyond-floor?
-  "Whether the column of pos lies outside the floor rectangle [x0 z0 x1 z1] (or [y x0 z0 x1 z1]): ground the world never built, which a body
-  has not seen rather than sees as air."
-  [rect pos]
+  "Whether pos lies outside the floor rectangle [x0 z0 x1 z1] (or [y x0 z0 x1 z1]) and in no column the world built on: ground
+  the world never made, which a body has not seen rather than sees as air."
+  [rect built pos]
   (let [[x0 z0 x1 z1] (take-last 4 rect)
         x (js/Math.floor (aget pos "x")) z (js/Math.floor (aget pos "z"))]
-    (not (and (<= x0 x x1) (<= z0 z z1)))))
+    (not (or (and (<= x0 x x1) (<= z0 z z1)) (contains? built [x z])))))
 
 (defn sensed-by
   "A sensedAt over p's blockAt that answers {:unknown true} for a position whose coordinates are not finite numbers
   (a malformed pos): perception knows nothing there, while the fake's blockAt would say air. Likewise for a column
-  beyond the floor rectangle of a world made with :open-ground true (:floor-rect): real ground goes on there, unseen; a fake without it sees air."
+  outside the floor rectangle the world was made with (:floor-rect) and its built columns: real ground goes on there, unseen."
   [p]
-  (let [rect (:floor-rect @(fake-world/state (oracle p)))]
+  (let [{:keys [floor-rect built-columns]} @(fake-world/state (oracle p))]
     (fn [pos] (if (and (every? #(js/Number.isFinite (aget pos %)) ["x" "y" "z"])
-                       (not (and rect (beyond-floor? rect pos))))
+                       (not (and floor-rect (beyond-floor? floor-rect built-columns pos))))
                 (.blockAt (oracle p) pos)
                 #js {:unknown true :pos pos}))))
 
@@ -118,7 +118,8 @@
                 (-> spec (dissoc :floor) (update :blocks #(merge (apply floor (:floor spec)) %)))
                 spec)]
      (let [p (fake-world/create spec)]
-       (when (and floor-rect (:open-ground spec)) (swap! (fake-world/state p) assoc :floor-rect floor-rect))
+       (when floor-rect
+         (swap! (fake-world/state p) #(assoc % :floor-rect floor-rect :built-columns (into #{} (map (fn [[x _ z]] [x z])) (keys (:blocks %))))))
        (aset p "sensedAt" (sensed-by p))
        (cond (not (contains? spec :time)) p
              (:light spec) (do (swap! (fake-world/state p) assoc :light (:light spec) :light-default (:light-default spec)) (aset p "rawWorld" (fake-raw/create p)) (seeing-all p))

@@ -370,10 +370,10 @@
             (is (= [] (events-of seen :place.kept)))))))))
 
 (deftest a-bare-floor-patch-is-no-closed-room
-  (is (nil? (reach-room/room (tu/fake {:floor [-5 -5 5 5] :open-ground true}) {:x 0 :y 64 :z 0}))
+  (is (nil? (reach-room/room (tu/fake {:floor [-5 -5 5 5]}) {:x 0 :y 64 :z 0}))
       "the ground goes on past the built floor, unseen: the flood leaks there"))
 
-(def hut-night (merge (hut-world {:x 5 :y 64 :z 0} {"6,64,0" "red_bed" "20,64,0" "white_bed"}) {:time night :open-ground true}))
+(def hut-night (merge (hut-world {:x 5 :y 64 :z 0} {"6,64,0" "red_bed" "20,64,0" "white_bed"}) {:time night}))
 
 (deftest sleeping-in-a-bed-in-a-closed-room-replaces-a-recorded-bed-in-the-open
   (async done

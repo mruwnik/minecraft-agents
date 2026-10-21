@@ -1,13 +1,15 @@
 ;; Sleeping in a bed inside a closed house replaces a recorded :bed and :home that lie on open ground (an open-air bed set down
 ;; outside the house). The body starts outside, beside the old bed (it sees both beds), walks in through the shut door and sleeps.
-;; Hut: planks x 12..18, z 12..18, y 0..3 (hollow), room 13..17, shut oak door at [15 0..1 18]; bed in it at [16 0 14]; old bed at [10 0 20].
-;; Should-succeed: the body sleeps and :bed and :home are the bed in the house.
+;; Hut (glass windows in the south wall, so the body sees inside): planks x 12..18, z 12..18, y 0..3 (hollow), room 13..17, shut oak door at [15 0..1 18]; bed in it at [16 0 14]; old bed at [10 0 20].
+;; Should-succeed: the body sleeps and :bed and :home are the bed in the house; a carried bed with :home in the house is put down
+;; inside it, not outside the door (second case, no beds anywhere; the body first walks in and out, so it has seen the room).
 {:defaults
  {:tags [:night :survival :sleep]
   :time :night :time-why :sleep
   :blocks [[:fill [12 0 12] [18 3 18] "oak_planks" :hollow]
            [:fill [13 0 13] [17 2 17] "air"]
            [:set [15 2 13] "glowstone"]
+           [:set [13 1 18] "glass"] [:set [14 1 18] "glass"] [:set [16 1 18] "glass"] [:set [17 1 18] "glass"]
            [:fill [15 0 18] [15 1 18] "air"]
            [:set [15 0 18] "oak_door[facing=south,half=lower,hinge=left,open=false]"]
            [:set [15 1 18] "oak_door[facing=south,half=upper,hinge=left,open=false]"]
@@ -24,4 +26,14 @@
    :act [[:job (jobs.survival.sleep {:bed #at [16 0 14]})]
          [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 90]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}]
-   :after [[:memory {:entries {:bed [{:data {:pos #xyz [16 0 14]}}] :home [{:data {:pos #xyz [16 0 14]}}]}}]]}]}
+   :after [[:memory {:entries {:bed [{:data {:pos #xyz [16 0 14]}}] :home [{:data {:pos #xyz [16 0 14]}}]}}]]}
+  {:name "carried-bed-is-put-down-inside-the-home-house"
+   :blocks [[:set [16 0 14] "air"] [:set [16 0 15] "air"] [:set [10 0 20] "air"] [:set [10 0 21] "air"]]
+   :memory [{:kind :home :data {:pos #xyz [15 0 15]} :policy {:cap 1 :ttl :forever}}]
+   :act [[:job (jobs.movement.go-to {:pos #at [15 0 15]})] [:await {:source :job :kind :completed :after-previous true} 40]
+         [:job (jobs.movement.go-to {:pos #at [12 0 21]})] [:await {:source :job :kind :completed :after-previous true} 40]
+         [:rcon "clear $BODY red_bed"] [:rcon "give $BODY red_bed 1"]
+         [:job (jobs.survival.bed-down {})]
+         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 100]]
+   :expect [{:event {:source :job :kind :place.set :data {:name :bed :auto true :pos [:near #at [15 0 15] 3.5]}} :within-s 100}]
+   :after [[:body-near [15.5 0 15.5] 3.5]]}]}
