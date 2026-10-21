@@ -63,6 +63,10 @@
   "Stone around the water column, except the +x side, so only air above is open."
   (into {} (for [y (range 64 68) [x z] [[-1 0] [0 1] [0 -1]]] [(str x "," y "," z) "stone"])))
 
+(def boxed
+  "water-column with stone on every side and a ceiling beyond the cap dig."
+  (merge water-column walls {"0,70,0" "stone"} (into {} (for [y (range 64 68)] [(str "1," y ",0") "stone"]))))
+
 (def cases
   [["drowning: low oxygen, head under water"
     {:self {:inWater true :oxygen 4} :blocks water-column} true]
@@ -190,19 +194,28 @@
           (is (empty? (of-kind seen :holding)) "no hold")
           (is (empty? (of-kind seen :afloat))))))))
 
-(deftest drowning-with-a-failing-swim-is-stopped-no-air-with-one-warning
+(deftest drowning-with-a-failing-swim-tries-the-other-ways-then-is-stopped
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :swimFails true :blocks water-column})]
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4} :swimFails true :blocks boxed})]
           (await (one-run! eng defaults))
           (is (= [] (:list (core/state eng))))
-          (is (= ["swim" "swim" "swim"] (call-names p)) "three tries in the one run")
-          (is (= [[:stopped :no-air]] (ended seen)))
-          (is (empty? (of-kind seen :no_air)) "the ending carries it")
-          (is (every? some? ((juxt :air-radius :cap :pocket) (first (of-kind seen :stopped))))))))))
+          (is (= [[:stopped :no-blocks]] (ended seen)) "a go-to and a footing block were tried; none carried")
+          (is (empty? (of-kind seen :no_air)) "the ending carries it"))))))
 
 (def side-args (tune defaults :radius 1))
+
+(deftest a-column-seen-open-whose-swim-rises-no-higher-is-left-for-the-next-column
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:self {:inWater true :oxygen 4} :swimFails true
+                     :blocks (merge water-column
+                                    {"1,64,0" "water" "1,65,0" "water" "1,66,0" "water" "1,67,0" "water"})}
+              {:keys [eng p]} (setup world)]
+          (await (one-run! eng side-args))
+          (is (= ["swim" "moveTo"] (take 2 (call-names p))) "the failed column is not swum again; the body steps to the next"))))))
 
 (deftest drowning-in-a-capped-column-moves-sideways-then-swims-up-in-one-run
   (async done
@@ -1598,6 +1611,15 @@
 (defn ^:async ending [world args]
   (await (sc/ending-of #(tu/seeing-all (tu/fake world)) (list breathe args))))
 
+(defn glass-shaft
+  "A water shaft (feet y 64..67) under a one-cell dirt cap (y 68) with air over it, in stone; a seen air pocket two columns
+  east behind a glass window."
+  []
+  (merge (into {} (for [x (range -9 9) z (range -8 9) y (range 63 72)] [(str x "," y "," z) "stone"]))
+         (into {} (for [y (range 64 68)] [(str "0," y ",0") "water"]))
+         {"0,68,0" "dirt" "1,64,0" "glass" "1,65,0" "glass" "2,64,0" "air" "2,65,0" "air" "3,64,0" "air" "3,65,0" "air"}
+         (into {} (for [y (range 69 72)] [(str "0," y ",0") "air"]))))
+
 (deftest a-body-with-air-is-done-already
   (is (= [:ok :air] (tu/kind-reason (b/done? {:primitives (tu/fake {}) :args defaults})))))
 
@@ -1610,22 +1632,6 @@
                                                                  {"0,68,0" "stone"
                                                                   "1,64,0" "water" "1,65,0" "water" "1,66,0" "water" "1,67,0" "water"})}
                                                  side-args)))))))))
-
-(deftest a-body-with-no-air-found-is-nothing-possible
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (is (= {:event :stopped :kind :nothing-possible :reason :no-air}
-               (await (ending {:self {:inWater true :oxygen 4} :swimFails true :blocks water-column} defaults))))))))
-
-(defn glass-shaft
-  "A water shaft (feet y 64..67) under a one-cell dirt cap (y 68) with air over it, in stone; a seen air pocket two columns
-  east behind a glass window."
-  []
-  (merge (into {} (for [x (range -9 9) z (range -8 9) y (range 63 72)] [(str x "," y "," z) "stone"]))
-         (into {} (for [y (range 64 68)] [(str "0," y ",0") "water"]))
-         {"0,68,0" "dirt" "1,64,0" "glass" "1,65,0" "glass" "2,64,0" "air" "2,65,0" "air" "3,64,0" "air" "3,65,0" "air"}
-         (into {} (for [y (range 69 72)] [(str "0," y ",0") "air"]))))
 
 (deftest a-pocket-behind-glass-is-not-a-target-the-cap-is-dug
   (async done

@@ -61,7 +61,11 @@
       (or (await (swim!)) :no-air)
 
       (nil? target) :no-air
-      (breath/surface-in-column p fx fz fy (reach)) (await (swim!))
+      (and (= fx (:x target)) (= fz (:z target)))
+      (or (await (swim!))
+          ;; seen as open yet the swim rose no higher: something the body cannot see holds it, so the next search skips this column
+          (do (ctx/update-mem! c update :failed-columns (fnil conj []) target)
+              false))
 
       :else
       ;; raw moveTo kept: an emergency step to air or out of water (range 0), where the planner may have no standable cell; no time for a plan.

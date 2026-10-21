@@ -17,6 +17,7 @@
             [jobs.lib.block-sets :as bs]
             [jobs.lib.cost.planner :as planner]
             [engine.args :as a]
+            [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.memory :as mem]
             [engine.settings :as settings]
@@ -389,13 +390,14 @@
   once at each other column in radius (the first cell not seen there); nil if none."
   [c pos radius reach]
   (let [p (:primitives c)
-        fx (js/Math.floor (:x pos)) fy (js/Math.floor (:y pos)) fz (js/Math.floor (:z pos))]
+        fx (js/Math.floor (:x pos)) fy (js/Math.floor (:y pos)) fz (js/Math.floor (:z pos))
+        failed (:failed-columns (ctx/mem c))]
     (await (look-column! c fx fz fy reach false))
-    (or (nearest-air p pos radius reach)
+    (or (nearest-air p pos radius reach failed true)
         (when-not (column-open? p fx fz fy reach)
           (doseq [[dx dz] (rest (columns radius))]
               (await (look-column! c (+ fx dx) (+ fz dz) fy reach true)))
-            (nearest-air p pos radius reach)))))
+            (nearest-air p pos radius reach failed true)))))
 
 (defn side-cell
   "A horizontal neighbour of the feet cell where the body fits (feet and head

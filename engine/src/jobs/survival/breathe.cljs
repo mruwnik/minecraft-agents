@@ -38,6 +38,7 @@
     its corner cut); a go-to child's planner rides one to its bottom and swims back up, so it routes round one when it can. Air is looked for only in cells the body has seen or looked at (perception memory), never through
     stone: it looks up the own column first, and when no block is seen over it (a dark column learns nothing) swims
     up it at once; only a seen block over the own column sends the looks to the neighbour columns.
+    A column seen open whose swim rose no higher is skipped by the next air search (the body steps to the next column).
   - Enclosed (head cell holds a suffocating block, see jobs.lib.breath): step to a side cell with room
     to stand, once; then dig the head block, the block above it if solid, and step up.
   - Surfaced and still in water: the ways out are read from what is seen; when none shows, the unseen cells that read touched are looked at (jobs.lib.sense/decide!, bounded) before the run gives up. Each pass takes the first way left: swim to the nearest shore cell (land with its
