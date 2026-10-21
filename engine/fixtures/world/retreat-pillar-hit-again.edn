@@ -1,7 +1,7 @@
 ;; A body hit on its pillar raises it again (respond.pillar/::pillar-raises), not once only: a mob close under the top keeps hitting.
 ;; The yard of retreat-pillar.edn: four NoAI zombies make the body pillar up. Once it stands 3 up the east zombie is
 ;; killed and a ramp is built east (after the pillar, so it was no ledge when the pillar was planned) to a block 4 high
-;; beside the pillar, and a helmeted zombie walks up it: its feet are level with the body's, then 1 under it after a raise.
+;; beside the pillar, and a helmeted zombie walks up it: its feet are level with the body's, then 1 under it after a raise. The raises must lift the body clear: no "every escape failed" (the refuge given up while still hit).
 {:defaults
  {:tags [:hostile :survival :cornered]
   :time :any
@@ -26,4 +26,5 @@
          [:rcon "execute positioned $X $Y $Z run fill ~19 ~ ~16 ~19 ~2 ~16 stone"]
          [:rcon "execute positioned $X $Y $Z run fill ~17 ~ ~16 ~18 ~3 ~16 stone"]
          [:summon "zombie" [23.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:count-event {:source :job :kind :child_ended :data {:slot :pillar}} :at-least 3 :for-s 100}]}]}
+   :expect [{:count-event {:source :job :kind :child_ended :data {:slot :pillar}} :at-least 3 :for-s 100}
+            {:no-event {:source :job :message [:contains "every escape failed"]} :for-s 100}]}]}
