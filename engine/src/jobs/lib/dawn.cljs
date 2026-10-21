@@ -29,10 +29,10 @@
 
 (defn hostile-hold?
   "Whether a body in shelter stays in at first light: within ::grace-ticks of the night's end (::unarmed-grace-ticks when
-  it carries no weapon), with a known hostile within ::hostile-radius, unless ::with-hostile is set."
-  [p armed?]
+  it carries no weapon), with a known hostile within ::hostile-radius, unless ::with-hostile is set. since is the ticks
+  since the night ended; the caller counts it on its own clock, as the world's time can be set under a waiting body."
+  [p armed? since]
   (boolean
-   (and (< (ticks-since-dawn (.-timeOfDay (.self p)))
-           (max (settings/get settings ::grace-ticks) (if armed? 0 (settings/get settings ::unarmed-grace-ticks))))
+   (and (< since (max (settings/get settings ::grace-ticks) (if armed? 0 (settings/get settings ::unarmed-grace-ticks))))
         (not (settings/get settings ::with-hostile))
         (seq (danger/known-hostiles p (settings/get settings ::hostile-radius) {:ranged-radius (danger/ranged-radius)})))))

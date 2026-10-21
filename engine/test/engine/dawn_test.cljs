@@ -8,7 +8,7 @@
 (def husk {:id 7 :name "husk" :kind "hostile" :pos {:x 12 :y 64 :z 0}})
 
 (defn holds? [time armed? entities]
-  (dawn/hostile-hold? (tu/fake-on-floor {:floor [-10 -10 10 10] :time time :entities entities}) armed?))
+  (dawn/hostile-hold? (tu/fake-on-floor {:floor [-10 -10 10 10] :entities entities}) armed? (dawn/ticks-since-dawn time)))
 
 (deftest an-unarmed-body-stays-in-past-the-dawn-grace-while-a-hostile-is-near
   (are [time armed? expected] (= expected (holds? time armed? [husk]))

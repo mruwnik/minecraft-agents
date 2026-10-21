@@ -6,6 +6,7 @@
             [engine.hostile-test :as h]
             [engine.memory :as mem]
             [engine.scenario :as scenario]
+            [engine.settings :as settings]
             [engine.shelter-support :as st]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -154,23 +155,30 @@
 (def far-zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 12 :y 64 :z 2}})
 
 (defn ^:async held-in-then-out
-  "A dug-in body at first light with the given mobs near, the dawn trigger registered, the dawn grace over at the
-  fourth hold: [whether the body was still sealed in at the third hold (nil: no hold made), whether it ended outside]."
-  [entities]
-  (let [{:keys [eng p]} (await (dug-in-world {:entities entities}))
+  "A dug-in body at first light with the given mobs near, the dawn trigger registered, (act p clock) called at the
+  fourth hold and again at the seventh: [sealed in at the third hold, sealed in at the sixth (nil: no such hold),
+  ended outside]."
+  [entities act-4 act-7]
+  (let [{:keys [eng p clock]} (await (dug-in-world {:entities entities}))
         sealed {:x 0.5 :y 64 :z 0.5}
-        third (atom nil)]
+        seen (atom {})]
     (st/on-wait! p (fn [n]
-                     (when (= n 3) (reset! third (= sealed (st/pos-of p))))
-                     (when (= n 4) (.setTime (.-world p) grace-passed))))
+                     (when (#{3 6} n) (swap! seen assoc n (= sealed (st/pos-of p))))
+                     (when (= n 4) (act-4 p clock))
+                     (when (= n 7) (act-7 p clock))))
     (.setTime (.-world p) first-light)
     (core/load-scenario! eng (scenario/parse (str "{:register [{:trigger " shut-in-trigger "}]}")))
     (await (st/tick-n eng 12))
-    [@third (not= sealed (st/pos-of p))]))
+    [(@seen 3) (@seen 6) (not= sealed (st/pos-of p))]))
+
+(defn wait-out-grace! [_ clock] (swap! clock + (settings/ticks->ms grace-passed)))
+(defn set-world-time! [p _] (.setTime (.-world p) grace-passed))
 
 (deftest a-dug-in-body-waits-at-first-light-for-a-known-hostile-near-until-the-grace-is-over
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= [nil true] (await (held-in-then-out []))) "nobody near: out at first light, no hold")
-        (is (= [true true] (await (held-in-then-out [far-zombie]))) "a zombie near: held in, out once the grace is over")))))
+        (is (= [nil nil true] (await (held-in-then-out [] wait-out-grace! wait-out-grace!))) "nobody near: out at first light, no hold")
+        (is (= [true nil true] (await (held-in-then-out [far-zombie] wait-out-grace! wait-out-grace!))) "a zombie near: held in, out once the grace is over")
+        (is (= [true true true] (await (held-in-then-out [far-zombie] set-world-time! wait-out-grace!)))
+            "the world's time set under the hold does not end it: the grace runs on the engine's clock")))))

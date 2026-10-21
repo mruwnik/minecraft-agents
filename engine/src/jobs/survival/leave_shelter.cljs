@@ -105,6 +105,17 @@
   (let [most (settings/get settings ::morning-s)]
     {:uses {:job-time [0 (/ most 2) most]}}))
 
+(defn ticks-since-dawn
+  "Ticks since the night ended: read from the world clock at the first look this morning, then counted on the engine's
+  own clock, so a time set under the waiting body does not end the hold."
+  [c p]
+  (let [now (ctx/now c)
+        {:keys [ticks at]} (or (:dawn-clock (ctx/mem c))
+                               (let [m {:ticks (dawn/ticks-since-dawn (.-timeOfDay (.self p))) :at now}]
+                                 (ctx/update-mem! c assoc :dawn-clock m)
+                                 m))]
+    (+ ticks (settings/ms->ticks (- now at)))))
+
 (defn ^:async step!
   "One choice of the morning: hold for a known hostile at first light, a filled doorway opened, out of the shelter, a bed
   picked up."
@@ -114,7 +125,7 @@
         doorway (sh-beds/doorway-to-open p (ctx/view c))
         shelter (or doorway (dig-leave/sheltered-in c))]
     (cond
-      (and shelter (dawn/hostile-hold? p (boolean (combat/best-weapon p (combat/weapons c)))))
+      (and shelter (dawn/hostile-hold? p (boolean (combat/best-weapon p (combat/weapons c))) (ticks-since-dawn c p)))
       (do (when-not (:dawn-noted (ctx/mem c))
             (ctx/update-mem! c assoc :dawn-noted true)
             (ctx/emit! c :night.dawn-hold :info {:text "first light, but a hostile is known near the shelter; staying in until it is gone or the grace is over"}))
