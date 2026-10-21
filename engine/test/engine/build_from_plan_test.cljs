@@ -269,7 +269,7 @@
               budget-walk {:ways [:walk :clear-seal]
                            :round (fn ^:async w [c] (swap! walks inc) (ctx/end c :nothing-possible :unreachable {:why :budget :arrived false}))}
               plan {:id "far" :parts [{:id "posts" :cells (mapv (fn [i] [(+ 40 (* 2 i)) 64 0]) (range 8)) :want "oak_fence"}]}
-              {:keys [eng]} (start {:inventory kit :floor [30 -5 60 5]} {"far" plan} [] {'jobs.movement.go-to budget-walk})
+              {:keys [eng]} (start {:inventory kit :floor [-5 -5 60 5]} {"far" plan} [] {'jobs.movement.go-to budget-walk})
               result (await (child-outcome eng job {:plan "far"} 400))]
           (is (= [:nothing-possible :unreachable] [(get-in result [:ending :kind]) (get-in result [:ending :cause])]) (pr-str result))
           (is (<= @walks 12) (str @walks " walks")))))))
