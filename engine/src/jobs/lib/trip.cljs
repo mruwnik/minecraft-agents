@@ -149,29 +149,31 @@
   (slot :spare; chest, craft, gather, and a walk to look for what is not seen, as a player goes up for wood; a table is never put in the dig line). Resolves nil to go on, :continue while the
   get waits on the world. Told per tool name in the job's memory: info tool.spare when one came (the next worn one gets another), warn
   tool.no-spare with the get's reason when not, told once per tool in body memory (:tool.no-spare-told) and tried once per job (:spare-tried; the job goes on with the worn tool). amount (the digs the job will make,
-  optional) is spare-need's. The job's fetch off (ways #{:carried}) skips it; so does a job under a spare
-  fetch (no spare of a spare)."
+  optional) is spare-need's. The job's fetch off (ways #{:carried}) only tells tool.no-spare (reason :fetch-off); a job under a spare
+  fetch skips it (no spare of a spare)."
   ([c block-name] (tool-ready! c block-name nil))
   ([c block-name amount]
    (let [p (:primitives c)
-         worn (when (and block-name (not (in-spare? c)) (some? (need/fetch-opts c)))
+         worn (when (and block-name (not (in-spare? c)))
                 (spare-need c block-name amount))
-         tool-name (when worn (spare-name p block-name worn))]
-     (when (and worn (not (contains? (:spare-tried (ctx/mem c)) tool-name)))
+         tool-name (when worn (spare-name p block-name worn))
+         told? #(some (fn [x] (= tool-name (:name (:data x)))) (ctx/entries c tools/no-spare-told-kind))
+         tell! (fn [why tried]
+                 (ctx/remember! c tools/no-spare-told-kind {:name tool-name} {:cap 10 :ttl :forever})
+                 (ctx/emit! c :tool.no-spare :warn {:tool tool-name :durability (:uses-left worn) :reason why :tried tried
+                                                    :text (str "the last " tool-name " is worn (" (:uses-left worn) " left) and no spare could be had"
+                                                               (when why (str ": " (name why))))}))]
+     (cond
+       (nil? worn) nil
+       (nil? (need/fetch-opts c)) (do (when-not (told?) (tell! :fetch-off nil)) nil)
+       (contains? (:spare-tried (ctx/mem c)) tool-name) nil
+       :else
        (let [e (await (need/fetch! c 'jobs.items.obtain {:item tool-name :count 1 :avoid (line-ahead c)} :need {:item tool-name :count 1} {:slot :spare :explore true}))]
          (if (= :continue e)
            :continue
-           (let [why (need/cause-why e)]
-             (cond
-               (= :done (:kind e))
-               (do (ctx/forget-where! c tools/no-spare-told-kind #(= tool-name (:name %)))
-                   (ctx/emit! c :tool.spare :info {:tool tool-name :text (str "carrying a spare " tool-name)}))
-               (some #(= tool-name (:name (:data %))) (ctx/entries c tools/no-spare-told-kind)) nil
-               :else
-               (do (ctx/remember! c tools/no-spare-told-kind {:name tool-name} {:cap 10 :ttl :forever})
-                   (ctx/emit! c :tool.no-spare :warn {:tool tool-name :durability (:uses-left worn) :reason why :tried (get-in e [:data :tried])
-                                                      :text (str "the last " tool-name " is worn (" (:uses-left worn) " left) and no spare could be had"
-                                                                 (when why (str ": " (name why))))})))
-             (when-not (= :done (:kind e))
-               (ctx/update-mem! c update :spare-tried (fnil conj #{}) tool-name))
-             nil)))))))
+           (do (if (= :done (:kind e))
+                 (do (ctx/forget-where! c tools/no-spare-told-kind #(= tool-name (:name %)))
+                     (ctx/emit! c :tool.spare :info {:tool tool-name :text (str "carrying a spare " tool-name)}))
+                 (do (when-not (told?) (tell! (need/cause-why e) (get-in e [:data :tried])))
+                     (ctx/update-mem! c update :spare-tried (fnil conj #{}) tool-name)))
+               nil)))))))

@@ -573,14 +573,14 @@
           (is (= 1 (count (kinds s :tool.spare))))
           (is (= 2 (get (lt/inv (:p s)) "stone_axe"))))))))
 
-(deftest a-worn-last-axe-with-fetch-off-gets-no-spare
+(deftest a-worn-last-axe-with-fetch-off-says-so-and-gets-no-spare
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (fell (axe-world [worn-axe] [{:name "stone_axe" :count 1}]) {:radius 10 :ways #{:carried :pillar}} 400))]
           (is (= 8 (:logs (:out s))))
           (is (empty? (kinds s :tool.spare)))
-          (is (empty? (kinds s :tool.no-spare))))))))
+          (is (= [:fetch-off] (map :reason (kinds s :tool.no-spare)))))))))
 
 ;; ------------------------------------------------------------------ a body fenced in its own pen
 

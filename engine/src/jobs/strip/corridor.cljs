@@ -327,6 +327,7 @@
       (and work? (due-spot c seg feet)) (await (hang-torch! c (due-spot c seg feet) feet))
       cart (await (loot! c cart))
       dark (await (hang-torch! c (first (torch-spots (access/seen-at p) (:axis seg) dark)) dark))
+      (and target (= :continue (await (trip/tool-ready! c (:name target))))) :continue
       target (await (dig! c target))
       (not (:looked (ctx/mem c))) (await (look-end! c seg))
       mouth (await (look-mouth! c seg mouth))

@@ -150,3 +150,13 @@
               two-spares {:blocks (assoc st/ground chest "chest") :containers {chest [{:name "stone_pickaxe" :count 2}]}}
               s (await (st/stair! (assoc two-spares :inventory [worn]) east (fn [p] (tu/seeing-all p) (wear p))))]
           (is (= 2 (count (st/events-of s :tool.spare))) (pr-str (kinds s))))))))
+
+(deftest a-worn-last-pickaxe-with-fetching-off-says-so-instead-of-skipping-silently
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (st/stair! (assoc spare-chest :inventory [worn]) (assoc east :ways #{:carried}) tu/seeing-all))
+              [told] (st/events-of s :tool.no-spare)]
+          (is (= 1 (count (st/events-of s :tool.no-spare))))
+          (is (= :fetch-off (:reason told)))
+          (is (not (contains? (kinds s) :tool.spare))))))))

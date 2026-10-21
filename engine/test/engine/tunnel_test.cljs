@@ -731,3 +731,16 @@
         seen-at (fn [[_ y _]] (when (> y 65) "air"))]
     (is (nil? (ln/surface block-at seen-at [3 5] 40 80)))
     (is (= 65 (apply min @read)) (pr-str @read))))
+
+(def worn-pick {:name "stone_pickaxe" :count 1 :durability 4 :max-durability 131})
+
+(deftest a-tunnel-with-a-worn-last-pickaxe-gets-a-spare-before-it-digs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (tunnel! {:blocks (assoc ground "6,57,0" "iron_ore" "1,65,1" "chest")
+                                                     :containers {"1,65,1" [{:name "stone_pickaxe" :count 1}]}
+                                                     :inventory [worn-pick]}
+                                                    {:target [6 57 0]} tu/seeing-all))]
+          (is (= :done (:status @out)))
+          (is (= 1 (count (events-of s :tool.spare)))))))))

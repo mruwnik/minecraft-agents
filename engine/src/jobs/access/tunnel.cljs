@@ -26,6 +26,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
+            [jobs.lib.trip :as trip]
             [jobs.lib.walk.drive :as drive]))
 
 (def doc
@@ -90,6 +91,7 @@
   [x y z] :dug [{:cell :block}] :inside bool :line {:entry :heading :dir :steps :run :stand :target}}
   plus detail. :inside is true when the body is off the entry, on the way in. 
 
+  Before the first dig a worn last pickaxe gets a spare (jobs.lib.trip/tool-ready!; tool.no-spare says when none could be had).
   Every carried pickaxe down to jobs.lib.trip's ::spent-uses (3) uses stops the tunnel {:reason :tool-spent} before the last breaks (jobs.access.stair; the call's :settings {:jobs.lib.trip/spent-uses 0} digs on).
   The call's :ways (jobs.lib.need; only #{:carried} ends :no-tool): a missing pickaxe is got inside the jobs.blocks.dig child of the dig
   (the stair's and the run's own), then the body walks back and goes on; a fetch that fails or cures nothing ends :no-tool with its reason as :because. :need-drop false digs a block no carried tool clears
@@ -367,6 +369,10 @@
     (cond
       (:leg m) (await (leg! c (:leg m)))
       (nil? (:plan m)) (await (choose! c))
+      (not (:spare-checked m)) (let [{:keys [steps run]} (:plan m)]
+                                 (if (= :continue (await (trip/tool-ready! c "stone" (* 3 (+ steps run)))))
+                                   :continue
+                                   (do (ctx/update-mem! c assoc :spare-checked true) :again)))
       :else (let [r (await (work! c))]
               (cond
                 (#{:again :continue} r) r
