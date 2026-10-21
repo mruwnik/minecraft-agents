@@ -125,17 +125,18 @@
    :body {:at [16.5 0 16.5] :inventory [["cobblestone" 16]]}
    :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 90}]
    :limit-s 100}
-  ;; 1fbd292f, b0e3b890: in its own 1-wide tunnel the body keeps working; the night reflex does not fire
+  ;; 1fbd292f, b0e3b890, 49c6d276: in a dark 1-wide tunnel it cut itself the body keeps working; the night reflex does not fire (it saw each wall close up as it cut, a tunnel it never walked is not known shut)
   {:name "own-tunnel-keeps-working-at-night"
-   :blocks [[:fill [2 0 2] [30 9 30] "stone"] [:fill [4 0 16] [28 1 16] "air"]]
+   :blocks [[:fill [2 0 2] [30 9 30] "stone"] [:fill [4 0 16] [4 1 16] "air"]]
    :plot {:height 12}
    :register [{:trigger :night}]
-   :body {:at [20.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
-   :act [[:job (jobs.blocks.dig {:pos #at [29 0 16]})]]
-   :expect [{:event {:source :job :kind :completed :data {:name "jobs.blocks.dig"}} :within-s 60 :of-job true}
-            {:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 60 :until {:source :job :kind :completed :data {:name "jobs.blocks.dig"}}}
-            {:no-event {:source :job :kind :shut-in.sealed} :for-s 60 :until {:source :job :kind :completed :data {:name "jobs.blocks.dig"}}}]
-   :limit-s 70}
+   :body {:at [4.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.gather.strip-tunnel {:heading "east" :limit 16 :torches false})]
+         [:job (jobs.blocks.dig {:pos #at [21 0 16]})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.blocks.dig"}} :within-s 120 :of-job true}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 120 :until {:source :job :kind :completed :data {:name "jobs.blocks.dig"}}}
+            {:no-event {:source :job :kind :shut-in.sealed} :for-s 120 :until {:source :job :kind :completed :data {:name "jobs.blocks.dig"}}}]
+   :limit-s 130}
   ;; 33e6bf20: a walk inside an open cave is not held as sheltered, even with a dug-in entry left from an earlier night
   {:name "walk-in-an-open-cave-is-not-held"
    :blocks [[:fill [2 0 2] [42 9 42] "stone"] [:fill [4 0 4] [40 6 40] "air"]]
