@@ -1,0 +1,16 @@
+;; A dry 2-deep pocket (its floor and the water's surface level apart: water never flows into it) in a stone slab whose only way on is a water tunnel longer than a breath, with land beyond.
+;; Should-succeed: go-to does not give up for air; it stairs out of the pocket (go-to.escalated :stair) and walks the slab top to the goal.
+{:defaults
+ {:tags [:movement :go-to :water :air] :time :any
+  :plot {:length 112 :width 16 :height 12}
+  :blocks [[:fill [0 0 4] [110 3 12] "stone"]
+           [:fill [6 2 4] [110 3 12] "air"] [:fill [6 2 4] [110 2 12] "stone"] [:fill [6 2 8] [94 2 8] "glass"] [:fill [4 2 8] [5 3 8] "air"] [:fill [6 3 7] [6 3 9] "stone"]
+           [:fill [5 0 8] [94 1 8] "water"] [:fill [95 2 8] [95 3 8] "water"] [:fill [95 0 8] [95 1 8] "water"]]
+  :body {:at [4.5 2 8.5] :yaw 270 :inventory [["stone_pickaxe" 1]]}
+  :limit-s 150}
+ :cases
+ [{:name "stairs-out-of-a-pocket-whose-only-way-is-a-long-swim"
+   :act [[:job (jobs.movement.go-to {:pos #at [100 4 8] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}]
+   :after [[:body-near [100.5 4 8.5] 3]]}]}

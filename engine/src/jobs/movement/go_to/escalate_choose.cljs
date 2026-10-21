@@ -9,6 +9,7 @@
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.breath :as breath]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
@@ -60,6 +61,15 @@
     (boolean (or (contains? escalate-reasons reason)
                  (= :goal-unloaded reason)
                  (and (= :abilities reason) (= :never doors) (= :open (some-> (:kind result) keyword)))))))
+
+(defn air-pocket?
+  "Whether a give-up with result is a dry body's whose every way is a swim past its air (:air, :air-lethal) from a pocket it can walk out of
+  only through water: it digs or builds out as a player would."
+  [c result]
+  (let [p (:primitives c)]
+    (boolean (and (#{:air :air-lethal} (some-> (:reason result) keyword))
+                  (not (breath/in-water? p))
+                  (reach-room/dry-shut-in? p)))))
 
 (defn dive?
   "Whether a give-up with result is a way that dives (:way-dives) that go-to may climb out of by a stair (c :dive-stair,
@@ -261,6 +271,7 @@
            (some? (gap-fill c result (skips c)))
            (sprint-only? result)
            (dive? c result)
+           (air-pocket? c result)
            (goal-walled? c result)
            (let [doors (some-> (:doors (:args c)) keyword)]
              (or (and (walker-fault? result) (>= tries (max-blocked))

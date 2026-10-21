@@ -106,6 +106,12 @@
                budget)
      false)))
 
+(defn dry-shut-in?
+  "Whether the body is shut in when water is a wall: a dry pocket whose only way on is a swim."
+  [p]
+  (let [base (lookup p body-kind-of)]
+    (shut-in? p (fn [x y z] (let [k (base x y z)] (if (keyword-identical? :water k) :solid k))))))
+
 (defn closes-in?
   "Whether the body has room to walk now but would be left fewer than shut-room-cells cells with cell [x y z] solid.
   Both floods read the cells through one lookup; the filled one goes first, as it is mostly open."

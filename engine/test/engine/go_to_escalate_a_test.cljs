@@ -155,6 +155,19 @@
           (is (= "dirt" (block p [1 63 0])))
           (is (= [[2 63 0]] (mapv :cell (:cells skipped))) "nothing left to put back the third"))))))
 
+(def lake-pocket
+  "A dry 3-deep pocket (feet y 60) in stone x -2..70, y 56..62; the only walk out is a 60-block water tunnel (y 60..61) east to a surface cell, longer than a breath."
+  (merge (apply dissoc (box -2 56 -3 70 62 3 "stone") ["0,60,0" "0,61,0" "0,62,0"]) (box 1 60 0 60 61 0 "water") {"60,62,0" "water"}))
+
+(deftest go-to-stairs-out-of-a-dry-pocket-whose-only-walk-is-a-swim-past-its-air
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 0 :y 60 :z 0}} :blocks lake-pocket}
+                                                  'jobs.movement.go-to {:pos [66 63 0] :range 1 :ways #{:walk :stair}}))]
+          (is (= {:arrived true} @out))
+          (is (= [:stair] (mapv :step (events-of seen :go-to.escalated)))))))))
+
 (deftest go-to-does-not-walk-back-down-its-stair-to-put-it-back
   (async done
     (tu/run-async done
