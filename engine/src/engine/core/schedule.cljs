@@ -46,8 +46,9 @@
 
 (defn check-passes?
   "Whether listed instance id would start now (ctx/check-status; a job closing for its cleanup always would). Its wait reason is told once with
-  note-waiting!. A throwing check is a bug, not a world state: the job is parked like a round that threw."
-  [eng id]
+  note-waiting!; a passing job is told waiting for held (a reflex holds the body) when that is given. A throwing check is a bug, not a world state: the job is parked like a round that threw."
+  ([eng id] (check-passes? eng id nil))
+  ([eng id held]
   (let [inst (get-in (state eng) [:instances id])
         wait (atom nil)
         ok? (try (let [[def args] (job-of eng inst)]
@@ -63,8 +64,8 @@
                                               :message (str "Job failed and is parked until retried or cancelled: " error)
                                               :state-update #(assoc-in % [:failed id] {:error error :t (now eng)})}))
                    false))]
-    (note-waiting! eng id (if ok? ::passed @wait))
-    ok?))
+    (note-waiting! eng id (cond (not ok?) @wait held held :else ::passed))
+    ok?)))
 
 (defn choose-listed
   "The listed job to run next, never a failed one nor, while the body is dead, one kept through the death: the cut
@@ -241,14 +242,21 @@
 (defonce rechecked (js/WeakMap.))
 
 (defn recheck-waits!
-  "While a reflex holds the body, the listed jobs' wait reasons are asked again every held-recheck-ms: a reason told
-  before it started (the dark of a night gone) would else stay on the list."
-  [eng]
+  "While reflex job h holds the body, the listed jobs' wait reasons are asked again every held-recheck-ms: a reason told
+  before it started (the dark of a night gone) would else stay on the list, and a job that could start says it waits for h."
+  [eng h]
   (let [t (now eng)
         key (:waiting eng)]
     (when (>= (- t (or (.get rechecked key) 0)) (settings/get settings ::held-recheck-ms))
       (.set rechecked key t)
-      (doseq [id (:list (state eng))] (check-passes? eng id)))))
+      (doseq [id (:list (state eng))]
+        (check-passes? eng id {:reason :reflex-holds :reflex (:reflex h) :job (:id h)})))))
+
+(defn clear-held-waits!
+  "No reflex holds the body: the listed jobs told waiting for one (recheck-waits!) are not waiting for it any more."
+  [eng]
+  (when (some #(= :reflex-holds (:reason %)) (vals @(:waiting eng)))
+    (swap! (:waiting eng) #(into {} (remove (fn [[_ r]] (= :reflex-holds (:reason r)))) %))))
 
 (defn tick-online!
   "One scheduling pass for a body that is on the server."
@@ -261,8 +269,8 @@
         firing (choose-firing! eng order (remove #(contains? paused (:id %)) (evaluate-register! eng order)) h)]
     (cond
       firing (fire! eng firing h)
-      (running eng) (do (when (:reflex h) (recheck-waits! eng)) (check-idle! eng))
-      :else (when-let [id (or (paused-reflex eng order) (choose-listed eng))] (start-round! eng id)))))
+      (running eng) (do (when (:reflex h) (recheck-waits! eng h)) (check-idle! eng))
+      :else (do (clear-held-waits! eng) (when-let [id (or (paused-reflex eng order) (choose-listed eng))] (start-round! eng id))))))
 
 (defn tick!
   "One scheduling pass. Synchronous; returns the promise of a round it

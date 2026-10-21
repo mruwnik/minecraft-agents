@@ -91,3 +91,27 @@
           (core/submit! eng '(torch-lit) {})
           (await (ticks eng 2))
           (is (= [[:few-torches "waiting: inventory torch 0 < 4"]] (mapv (juxt :reason :text) (waits seen)))))))))
+
+(deftest a-job-behind-a-holding-reflex-says-so-and-the-reason-ends-with-the-reflex
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              release (atom nil)
+              held (js/Promise. (fn [r] (reset! release r)))
+              reg (assoc registry 'night-hold (tu/job [] (fn ^:async r [c] (await held) (ctx/end c :done nil nil))))
+              [_ sink] (tu/legacy-capture-sink)
+              eng (core/create {:primitives (tu/fake {}) :jobs reg
+                                :triggers {:night {:name :night :job '(night-hold) :persistence :stop :when (constantly true)}}
+                                :dir (tu/tmp-dir) :now #(deref clock)
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
+              id (core/submit! eng '(gated) {})]
+          (reset! gate true)
+          (core/register-reflex! eng {:trigger :night})
+          (let [night (core/tick! eng)]
+            (core/tick! eng)
+            (is (= :reflex-holds (get-in (job-api/summary eng id) [:waiting :reason])) "queued behind the reflex, and says so")
+            (@release nil)
+            (await night))
+          (await (ticks eng 2))
+          (is (nil? (:waiting (job-api/summary eng id))) "the reason goes with the reflex"))))))

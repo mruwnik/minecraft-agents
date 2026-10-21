@@ -492,7 +492,7 @@ waits, so it fires in the gap. Urgent sections: door transit, table placement an
 
 **Waiting is never silent.** A check says why with `(ctx/wait ctx reason)` (a keyword or a map with `:reason`). The
 scheduler emits one `job.waiting` when a check first declines and again only when the reason changes; it shows as
-`:waiting` in `jobs show`/`list` and `observe`. A parent whose round returns a child's `:declined` keeps the child's reason, not told while that job's next round runs.
+`:waiting` in `jobs show`/`list` and `observe`. A parent whose round returns a child's `:declined` keeps the child's reason, not told while that job's next round runs. A listed job that could start but waits behind a reflex job holding the body says `{:reason :reflex-holds :reflex id :job id}` (asked again every `held-recheck-ms`), gone when the reflex ends.
 
 **List edits** (agent): `submit!` (appends; opts `:next?`, `:now?`, `:exclusive?`, `:survive-death?`, `:by`), `cancel!`, `retry!`
 (clears a failed mark), `do-now!` (cuts the running listed job, sections or not, never a reflex, lists the new job directly before it as a
