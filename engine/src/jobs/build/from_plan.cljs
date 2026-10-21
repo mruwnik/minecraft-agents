@@ -19,7 +19,7 @@
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.check-cache :as check-cache]
-            [jobs.lib.build.plan :as plan :refer [retry-distance max-retries facing-of facing-ok? body-cells count-fail stands-for plan-trouble owed need-of shortage hazards decide rules-input refuse permitted judged no-zones planned how placeable misplaced missing digging unseen buildable problem]]
+            [jobs.lib.build.plan :as plan :refer [retry-distance max-retries facing-of facing-ok? body-cells count-fail stands-for plan-trouble owed need-of shortage hazards decide rules-input refuse permitted judged no-zones planned how placeable misplaced missing covered digging unseen buildable problem]]
             [jobs.lib.build.scaffold :as scaffold]
             [jobs.build.from-plan.cells :refer [diggable in-reach in-dig-reach seals? shuts-out? exit-point off-low-floor buried? reaching support-looks]]
             [jobs.build.from-plan.book :refer [walk-fail retry-walks warn-way-in! place-one! settle-placing! dig-one! result-data finish! book-failed!]]
@@ -292,6 +292,8 @@
   "One step of the build (:again, or :continue while a walk waits): place or dig what is in reach, else walk, else finish."
   [c cells]
   (let [_ (ctx/update-mem! c retry-walks (u/self-pos c) false)
+        _ (ctx/update-mem! c #(reduce (fn [m cell] (cond-> m (not (contains? (:given-up m) (:pos cell))) (assoc-in [:given-up (:pos cell)] :unreachable)))
+                                      % (covered cells)))
         closed #(merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
         wanted (buildable cells (storage/carried-totals (u/inventory (:primitives c))) (closed))
         digs (diggable c (digging cells) (closed))

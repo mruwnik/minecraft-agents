@@ -196,6 +196,18 @@
           (is (= {[40 64 0] :unreachable} (:given-up result)))
           (is (= 0 (:placed result))))))))
 
+(deftest a-floor-cell-under-a-built-wall-is-given-up-without-a-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "hut" :parts [{:id "floor" :cells [[3 63 2]] :want "stone"}
+                                      {:id "wall" :cells [[3 64 2]] :want "stone"}]}
+              {:keys [eng p]} (start {:inventory [{:name "stone" :count 8}] :blocks {"3,64,2" "stone" "3,63,2" "air"}} {"hut" plan})
+              result (await (child-outcome eng job {:plan "hut"} 200))]
+          (is (= {[3 63 2] :unreachable} (:given-up result)))
+          (is (= 0 (:placed result)))
+          (is (empty? (tu/walk-calls p))))))))
+
 (deftest walks-that-keep-ending-budget-stop-the-build-instead-of-trying-every-cell
   (async done
     (tu/run-async done

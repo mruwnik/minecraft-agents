@@ -394,6 +394,13 @@
   [cells]
   (filterv #(and (= :missing (:answer %)) (:item %) (not (:companion %))) cells))
 
+(defn covered
+  "The missing cells with a built block of the plan right above (a wall, chest or furnace laid before the floor under it):
+  no stand reaches them, and searching for one floods the loaded land."
+  [cells]
+  (let [built (into #{} (comp (filter #(and (= :match (:answer %)) (:item %) (not (:companion %)))) (map :pos)) cells)]
+    (filterv #(built (update (:pos %) 1 inc)) (missing cells))))
+
 (defn digging
   "The cells holding a wrong block to dig before they are placed."
   [cells]

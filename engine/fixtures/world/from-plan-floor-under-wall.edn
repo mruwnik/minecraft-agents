@@ -1,0 +1,17 @@
+;; Card 86035c28: a plan floor cell with its wall already built above it has no stand; the build gives it up unwalked and
+;; finishes the rest instead of searching for a stand until the job time is gone.
+;; Should-fail: the build ends nothing-possible :incomplete, the floor cell left empty.
+{:defaults
+ {:tags [:build] :time :any
+  :plot {:height 8 :floor "stone"}
+  :plans [{:id "hut" :metadata {:by "$body"}
+           :parts [{:id "floor" :cells [#at [12 0 12]] :want "cobblestone"}
+                   {:id "wall" :cells [#at [12 1 12]] :want "cobblestone"}]}]
+  :body {:at [4.5 0 12.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["cobblestone" 40]]}
+  :limit-s 120}
+ :cases
+ [{:name "floor-cell-under-a-built-wall-is-given-up-unwalked"
+   :blocks [[:set [12 1 12] "cobblestone"]]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:hut"})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :incomplete}} :within-s 100 :of-job true}]
+   :after [[:not-block [12 0 12] "cobblestone"]]}]}
