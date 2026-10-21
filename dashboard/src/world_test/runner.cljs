@@ -534,7 +534,7 @@
   (the queue and register), unless restore?."
   ([opts scenario] (body-argv opts scenario false))
   ([opts scenario restore?]
-   (into-array (concat ["--max-old-space-size=160" "--max-semi-space-size=8" "out/body-release.cjs" "--agent" (:body opts) "--world" (:world opts) "--scenario" scenario]
+   (into-array (concat ["--max-old-space-size=160" "--heap-growing-percent=100" "--max-semi-space-size=8" "out/body-release.cjs" "--agent" (:body opts) "--world" (:world opts) "--scenario" scenario]
                        (when-not restore? ["--fresh"])))))
 
 (defn await-online!

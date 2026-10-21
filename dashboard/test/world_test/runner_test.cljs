@@ -12,7 +12,7 @@
 (deftest the-body-launch-argv-caps-the-v8-heap
   (let [argv (vec (r/body-argv {:body "B" :world "w"} "/tmp/s.edn"))
         script (.indexOf argv "out/body-release.cjs")]
-    (is (= ["--max-old-space-size=160" "--max-semi-space-size=8"] (subvec argv 0 script)))
+    (is (= ["--max-old-space-size=160" "--heap-growing-percent=100" "--max-semi-space-size=8"] (subvec argv 0 script)))
     (is (= ["--agent" "B" "--world" "w" "--scenario" "/tmp/s.edn" "--fresh"]
            (vec (drop (inc script) argv))))))
 
