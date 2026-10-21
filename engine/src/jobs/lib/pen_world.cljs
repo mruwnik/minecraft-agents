@@ -186,6 +186,7 @@
   (for [x (range (:x min) (inc (:x max)))
         z (range (:z min) (inc (:z max)))
         :when (not (outside? box x z))
-        s (surfaces-in world x z (:y min) (:y max))
+        :let [here (surfaces-in world x z (:y min) (:y max))]
+        s (if (seq here) here (take 1 (surfaces-in world x z (- (:y min) (max-drop)) (dec (:y min)))))
         :when (not (:perch? s))]
     s))

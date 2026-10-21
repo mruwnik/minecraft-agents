@@ -34,7 +34,7 @@
   Ends with the data {:closed? :reason :cells :leaks :gates}: :done when closed, or when a leak was found and :patch is not allowed (a leak is
   then the answer, not a failure); with :patch allowed a leak left after the patches is nothing-possible :leak (the leaks name what remains). Else condition-failed (:no-start) or nothing-possible (:unbounded, :unloaded: the check gave up) with the :reason as the cause:
   - :reason is nil when closed, else :leak, :unbounded, :unloaded (a cell, or the start's floor, was never seen) or :no-start (:at is no floor to stand on).
-  - :leaks lists {:pos {:x :y :z} :why}, why one of :open-gate :gap :climb :perch-in :open :unloaded (only when :reason is not :leak; :perch-in: open ground within a block of a fence top outside the pen, :stand names the ground cell; :climb with a box names the fence, wall or gate top first stood on, reached from a block or raised floor beside it). At most 12 are
+  - :leaks lists {:pos {:x :y :z} :why}, why one of :open-gate :gap :climb :perch-in :open :unloaded (only when :reason is not :leak; :gap also names the cell under a fence hung over lower ground (a plan box as high as its fence starts the fill from the ground below); :perch-in: open ground within a block of a fence top outside the pen, :stand names the ground cell; :climb with a box names the fence, wall or gate top first stood on, reached from a block or raised floor beside it). At most 12 are
     listed, :leaks-total gives the count when more.
   - :cells counts the inside cells. For a leaky pen without a box it counts the cells the pen would enclose with
     its leaks shut, and 0 when shutting up to 4 rounds of them does not close it (a low wall all round).

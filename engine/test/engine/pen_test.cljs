@@ -376,6 +376,12 @@
     (is (false? (:closed? (check floating (assoc box :at nil)))) "from a box taller than the floor")
     (is (false? (:closed? (check floating (assoc-in (assoc box :at nil) [:box :min :y] 63)))) "box starting below the floor")))
 
+(deftest a-box-as-high-as-the-fence-over-lower-ground-names-the-gap-under-it
+  (let [r (check (ring "oak_fence" [65]) {:at nil :box {:min {:x -1 :y 65 :z -1} :max {:x 5 :y 65 :z 5}}})]
+    (is (false? (:closed? r)))
+    (is (= #{:gap} (set (map :why (:leaks r)))))
+    (is (every? #(= 64 (:y (:pos %))) (:leaks r)) "at the cell under the fence")))
+
 ;; ------------------------------------------------------------------ uneven ground
 
 (deftest a-block-inside-beside-a-fence-names-the-fence-top-as-the-climb

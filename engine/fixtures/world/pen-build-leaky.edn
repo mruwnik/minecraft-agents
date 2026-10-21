@@ -45,6 +45,20 @@
    :act [[:job (jobs.build.pen {:plan "$plan:ring" :ways #{:carried :patch}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
    :after [[:block [10 0 12] "oak_fence"]]}
+  ;; Card a5d213e2: a ring planned one above the ground on its west side (the rest stands on a raised terrace) leaves a gap under those fences; the check names them and the patch fills them (a player fills under a floating fence).
+  {:name "a-fence-over-lower-ground-gets-the-gap-filled"
+   :body {:at [12.5 1 12.5] :inventory [["oak_fence" 24] ["oak_fence_gate" 1]]}
+   :blocks [[:fill [11 0 10] [14 0 14] "stone"]]
+   :plans [{:id "ring" :metadata {:by "$body"}
+            :parts [{:id "n" :box [#at [10 1 10] #at [14 1 10]] :want "oak_fence"}
+                    {:id "s" :box [#at [10 1 14] #at [14 1 14]] :want "oak_fence"}
+                    {:id "w" :box [#at [10 1 11] #at [10 1 13]] :want "oak_fence"}
+                    {:id "e1" :box [#at [14 1 11] #at [14 1 11]] :want "oak_fence"}
+                    {:id "g" :box [#at [14 1 12] #at [14 1 12]] :want "oak_fence_gate"}
+                    {:id "e2" :box [#at [14 1 13] #at [14 1 13]] :want "oak_fence"}]}]
+   :act [[:job (jobs.build.pen {:plan "$plan:ring" :uneven? true})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
+   :after [[:block [10 0 11] "oak_fence"] [:block [10 0 12] "oak_fence"] [:block [10 0 13] "oak_fence"]]}
   ;; Card 3f51b63a (f449d14b): a tree inside the ring (leaves reach the fence tops) is cleared first; the pen closes and the ground stays.
   {:name "a-tree-inside-the-ring-is-cleared"
    :blocks [[:fill [11 0 13] [11 1 13] "oak_log"] [:fill [11 1 12] [11 1 12] "oak_leaves"] [:fill [10 1 13] [10 1 13] "oak_leaves"] [:fill [11 2 13] [11 2 13] "oak_leaves"]]

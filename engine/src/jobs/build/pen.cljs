@@ -304,13 +304,13 @@
       :else (composite/stop c r))))
 
 (defn exit-cell
-  "The cell {:x :y :z} just outside the box beside a gate of cells, or nil without a gate on the box's edge."
+  "The column {:x :z} just outside the box beside a gate of cells (its ground may lie below the gate), or nil without a gate on the box's edge."
   [box cells]
   (first (for [{[x y z] :pos :keys [want]} cells
                :when (gate? want)
                [nx nz] [[(inc x) z] [(dec x) z] [x (inc z)] [x (dec z)]]
                :when (not (inside? box {:x nx :y y :z nz}))]
-           {:x nx :y y :z nz})))
+           {:x nx :z nz})))
 
 (defn ^:async exit-step!
   "While the body is inside the box: walk out beside the gate. Then on to shutting the gate, or the check if the body

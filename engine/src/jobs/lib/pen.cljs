@@ -112,13 +112,28 @@
          (let [after (first (drop-while #(<= (Math/abs (- (s %) up)) 0.25) (range (inc i) (count path))))]
            (boolean (and after (< (s after) (- up 0.25))))))))
 
+(defn under-fence?
+  "True when a fence, wall or closed gate stands in the cell just above [x y z], the cell an animal walks in: it walks under the fence."
+  [{:keys [cell]} [x y z]]
+  (let [c (cell x (inc y) z)]
+    (boolean (and c (not (:unloaded? c)) (not (:hazard? c)) (zero? (:lo c)) (> (:hi c) 1)))))
+
+(defn under-fence-leaks
+  "A :gap leak for every cell of seen that is under a fence: one patch pass fills them all."
+  [world seen]
+  (->> (keys seen)
+       (filter #(under-fence? world %))
+       (sort)
+       (mapv (fn [[x y z]] {:pos {:x x :y y :z z} :why :gap}))))
+
 (defn evidence
-  "The first cell of path that shows how the animal got out, {:index :why}, or nil: an open gate, then a gap
+  "The first cell of path that shows how the animal got out, {:index :why}, or nil: an open gate, then a gap under a fence, then a gap
   with a barrier either side at 1 cell, then a ridge climbed over, then a gap at 2 cells."
   [world path]
   (let [first-where (fn [pred] (first (filter pred (range (count path)))))
         key-at (fn [i] (:key (nth path i)))]
     (or (some->> (first-where #(open-gate-at? world (key-at %))) (hash-map :why :open-gate :index))
+        (some->> (first-where #(under-fence? world (key-at %))) (hash-map :why :gap :index))
         (some->> (first-where #(barrier-both-sides? world (key-at %) 1)) (hash-map :why :gap :index))
         (some->> (first-where #(ridge? path %)) (hash-map :why :climb :index))
         (some->> (first-where #(barrier-both-sides? world (key-at %) 2)) (hash-map :why :gap :index)))))
@@ -295,7 +310,8 @@
     (when (or (seq seeds) (seq @(:unloaded world)))
       (let [{:keys [seen exits truncated?] end :last :as fill} (fill world seeds box max-cells)
             found (cond
-                    (seq exits) (keep #(leak-at world (conj (path-to seen (:from %)) {:key (:to %) :s (:top %) :perch? (:perch? %)}) true) exits)
+                    (seq exits) (concat (keep #(leak-at world (conj (path-to seen (:from %)) {:key (:to %) :s (:top %) :perch? (:perch? %)}) true) exits)
+                                        (under-fence-leaks world seen))
                     (and truncated? (not box)) (keep identity [(leak-at world (path-to seen end) false)])
                     (and (not box) (seq @(:unloaded world)))
                     (let [path (path-to seen (last (:order fill)))]
