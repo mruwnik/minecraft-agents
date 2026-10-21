@@ -277,10 +277,10 @@
                 (if (> (gather-carried p need) before)
                   (do (child/progress! c :gather) :again)
                   (do (when-let [w (or (:why res) (spared-why res))] (ctx/update-mem! c assoc-in [:gather :why] w))
-                      (when-let [col (and (#{:flooded :wet} (contract/cause-key e)) at)]
-                        (ctx/update-mem! c update :cut-off (fnil conj #{}) col))
                       (when-let [cols (seq (:columns res))] (ctx/update-mem! c update :cut-off (fnil into #{}) (map vec) cols))
-                      (gather-failed! c names need (if (= :done (:kind e)) :nothing-gathered (contract/cause-key e)) e))))))))))
+                      (if-let [col (and (#{:flooded :wet} (contract/cause-key e)) at)]
+                        (do (ctx/update-mem! c update :cut-off (fnil conj #{}) col) :again)
+                        (gather-failed! c names need (if (= :done (:kind e)) :nothing-gathered (contract/cause-key e)) e)))))))))))
 
 (defn ^:async finish-tree!
   "The log child of an earlier round was cut before it ended: runs it to its end even when the logs carried are enough

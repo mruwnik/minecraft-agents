@@ -67,7 +67,7 @@
    :body {:inventory [["iron_ingot" 10] ["cooked_beef" 3]]}
    :act [[:job (jobs.items.get-kit {:items ["iron_helmet" "iron_chestplate" "iron_boots"] :wear true :explore false :food false})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :wear :ending {:kind :done :data {:worn [:any]}}}} :within-s 100 :of-job true}
-            {:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 160 :of-job true}]
+            {:event {:source :job :kind :stopped :data {:reason :no-source :item "iron_chestplate"}} :within-s 160 :of-job true}]
    :after [[:item "iron_helmet" 0] [:item "iron_boots" 0] [:item "iron_chestplate" 0] [:item "iron_ingot" 1]]
    :limit-s 180}
   ;; card a1a67cc5 (fix 75f53a09 of 9d844aa3): raw iron smelting on thin fuel (planks only): the kit waits out the cook and finishes, never "stopped: cooking"

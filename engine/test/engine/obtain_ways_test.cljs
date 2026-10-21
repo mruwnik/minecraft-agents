@@ -110,6 +110,11 @@
   (let [c {:primitives (tu/fake {:inventory [{:name "beef" :count 2}]}) :args {:bill {"beef" 2}} :view (fn [] {:data {} :now 0})}]
     (is (= :ok (first (obtain/done? c))))))
 
+(deftest a-worn-piece-of-the-bill-counts-as-had
+  (let [c {:primitives (tu/fake {:inventory [{:name "beef" :count 1}] :equipment {:head {:name "iron_helmet" :count 1}}})
+           :args {:bill {"beef" 1 "iron_helmet" 1}} :view (fn [] {:data {} :now 0})}]
+    (is (= :ok (first (obtain/done? c))))))
+
 (deftest every-gather-need-passes-only-args-its-job-has
   (let [items (concat (keys table/mob-drops) (keys table/crop-blocks) (keys table/grass-seeds) table/stalks
                       (keys table/hand-dug) table/ore-drops table/fish-items

@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [engine.game :as game]
             [jobs.items.obtain.base :refer [bill-item-s bill-of carried-of]]
+            [jobs.lib.armour :as armour]
             [jobs.items.recipes :as recipes]
             [jobs.items.smelt.plan :as smelt-plan]
             [jobs.lib.need :as need]
@@ -15,10 +16,11 @@
 (defn carried [c] (storage/carried-totals (u/inventory (:primitives c))))
 
 (defn todo
-  "The bill's entries [item n] not yet carried, in order."
+  "The bill's entries [item n] not yet carried or worn, in order."
   [c]
-  (let [have (carried c)]
-    (filterv (fn [[item n]] (< (get have item 0) n)) (bill-of (:args c)))))
+  (let [have (carried c)
+        worn (set (vals (armour/worn-of (.-equipment (.self (:primitives c))))))]
+    (filterv (fn [[item n]] (and (< (get have item 0) n) (not (worn item)))) (bill-of (:args c)))))
 
 (defn furnace-short
   "{material n}: the furnace products (iron_ingot ..) that the first recipes of items need together, beyond carried
