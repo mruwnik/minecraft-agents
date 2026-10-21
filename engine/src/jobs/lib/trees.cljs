@@ -8,7 +8,8 @@
             [engine.memory :as mem]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.world :as known]))
 
 (a/defargs settings
   {::leaf-reach {:default 3.5 :doc "Blocks within which a leaf block counts as part of a tree." :spec (a/num-in 0 nil)}
@@ -135,6 +136,17 @@
 
 (defn debts [c]
   (mapv :data (ctx/entries c replant-kind)))
+
+(defn on-crop-plot?
+  "Whether the debt cell pos is a planned crop cell or the soil under one: a tree is not put back into a field."
+  [c {:keys [x y z]}]
+  (let [crops (known/crop-cells c)]
+    (boolean (or (crops [x y z]) (crops [x (inc y) z])))))
+
+(defn forget-plot-debts!
+  "Drop the debts that lie on a planned crop plot."
+  [c]
+  (ctx/forget-where! c replant-kind #(on-crop-plot? c (:pos %))))
 
 ;; ------------------------------------------------------------ planting
 

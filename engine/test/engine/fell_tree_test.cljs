@@ -354,6 +354,15 @@
             (is (= {:base {:x 6 :y 64 :z 0} :logs 3 :axe :skipped-small-tree} (dissoc out :text)) "the stump log is the base")
             (is (= [{:pos {:x 6 :y 64 :z 0} :species "oak"}] (lt/debts (:eng s))) "the replant is on the ground, not on the log above it")))))))
 
+(deftest a-tree-felled-on-a-planned-crop-plot-owes-no-replant
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plans {"field" {:id "field" :parts [{:id "wheat" :cells [[6 65 0]] :want {:crop "wheat"}}]}}
+              s (fm/start {:blocks (lt/tree 6 0 "oak" 3)} plans)]
+          (await (child-outcome (:eng s) 'jobs.forestry.fell-tree {:radius 10} 100))
+          (is (= [] (lt/debts (:eng s))) "a field is not planted with trees"))))))
+
 (deftest a-2x2-trunk-owes-one-replant-per-cell
   (async done
     (tu/run-async done

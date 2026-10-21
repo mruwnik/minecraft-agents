@@ -53,6 +53,15 @@
  {:event {:source :reflex :kind :ended :context {:reflex-id :replant-owed} :data {:kind :done}} :within-s 120}]
    :after [[:block [16 0 16] "dark_oak_sapling"] [:block [17 0 16] "dark_oak_sapling"]
            [:block [16 0 17] "dark_oak_sapling"] [:block [17 0 17] "dark_oak_sapling"] [:item "dark_oak_sapling" 0]]}
+  {:name "harvest-wood-owes-no-sapling-on-the-bodys-own-wheat-plot"
+   :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 10}]
+   :body {:inventory [["iron_axe" 1] ["oak_sapling" 1]]}
+   :plans [{:id "field" :metadata {:by "$body"}
+            :parts [{:id "wheat" :cells [#at [16 1 16]] :want {:crop "wheat"}}]}]
+   :act [[:job (jobs.forestry.harvest-wood {:radius 16 :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :replant-owed}} :for-s 40 :until {:source :job :kind :completed}}]
+   :after [[:not-block [16 0 16] "oak_log"] [:not-block [16 0 16] "oak_sapling"] [:item "oak_sapling" 1]]}
   {:name "no-axe-carried-one-is-fetched-from-a-seen-chest"
    :blocks [[:set [14 0 20] "chest{Items:[{Slot:0b,id:\"minecraft:iron_axe\",count:1}]}"]
             [:fill [14 8 14] [18 10 18] "air"] [:fill [16 8 16] [16 9 16] "oak_log"]]

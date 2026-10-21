@@ -28,6 +28,11 @@
   [ctx]
   (world/live-claims (world/area-claims (:world (:engine ctx))) (ctx/now ctx)))
 
+(defn crop-cells
+  "The set of [x y z] cells any plan wants a crop on: farm plots, where no tree is owed back."
+  [ctx]
+  (world/crop-cells (:world (:engine ctx))))
+
 (defn plan-authors
   "{plan-id by}: the body each plan names as its maker (:metadata :by); a plan without it is not listed."
   [ctx]

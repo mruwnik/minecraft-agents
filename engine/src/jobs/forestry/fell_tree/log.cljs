@@ -100,7 +100,7 @@
   "Write the replant debt for the log cell pos of the tree of species, once. The cell of the debt when it wrote one."
   [c pos species]
   (when-let [at (debt-pos (:primitives c) pos)]
-    (when-not (some #(= at (:pos %)) (debts c))
+    (when-not (or (some #(= at (:pos %)) (debts c)) (trees/on-crop-plot? c at))
       (ctx/remember! c replant-kind {:pos at :species species} {:cap 50 :ttl :forever :durable? true})
       at)))
 

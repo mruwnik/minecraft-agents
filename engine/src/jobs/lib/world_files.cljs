@@ -461,6 +461,19 @@
     (do (refresh! w)
         (memo w :shaft-ids #(into #{} (keep (fn [[id e]] (when (= :mineshaft (:kind (value-if e ":mineshaft"))) id))) (:plans @(:state w)))))))
 
+(defn crop-cells
+  "The set of [x y z] cells every plan wants a crop on (a want map with :crop); #{} for a nil world."
+  [w]
+  (if-not w
+    #{}
+    (do (refresh! w)
+        (memo w :crop-cells
+              #(into #{} (comp (keep (fn [[_ x]] (some-> x deref)))
+                               (mapcat :cells)
+                               (filter (fn [{:keys [want]}] (and (map? want) (contains? want :crop))))
+                               (map (comp vec :pos)))
+                     (:expanded @(:state w)))))))
+
 (defn plan-authors
   "{plan-id by}: the :metadata :by (the body that made the plan) of each plan that names one; {} for a nil world."
   [w]

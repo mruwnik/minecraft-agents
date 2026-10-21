@@ -11,13 +11,13 @@
             [jobs.lib.look :as look]
             [jobs.lib.forestry :as lib]
             [jobs.forestry.prepare-rule :as rule]
-            [jobs.lib.trees :refer [debts target-of with-sapling sapling-for sapling-of sapling-name? log-name? replant-kind species]
+            [jobs.lib.trees :refer [debts forget-plot-debts! target-of with-sapling sapling-for sapling-of sapling-name? log-name? replant-kind species]
              :rename {species all-species}]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]))
 
 (def doc
-  "Plant a sapling at :at, or at the oldest replant debt (then at the next, until none is owed), and clear that debt.
+  "Plant a sapling at :at, or at the oldest replant debt (then at the next, until none is owed), and clear that debt. A debt on a planned crop plot is dropped, never planted.
   With no :species a debt whose sapling is carried comes before older ones.
   With :near and :within only the debts within :within blocks of :near count; the others stay owed.
   A missing sapling is got with jobs.lib.need (a seen chest, or the leaves of its tree broken for the drop) unless the call's :ways are #{:carried}
@@ -204,6 +204,7 @@
 (defn ^:async step
   "One piece of the planting: :again, :continue (a child waits on the world) or the ending."
   [c]
+  (forget-plot-debts! c)
   (let [t (current-target c)
         sapling (when t (sapling-for (u/inventory (:primitives c)) (:species t)))
         refused #(refusal c (:pos t))]

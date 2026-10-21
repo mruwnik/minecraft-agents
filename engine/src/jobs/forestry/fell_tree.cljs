@@ -29,7 +29,7 @@
 (def doc
   "Fell the nearest tree: a log column with leaves near its top, lowest log first, the whole of it in one call. It yields
   (:continue) while a child waits on the world.
-  The base log's :forestry/replant debt (one per cell of a 2x2 trunk; none with :replant? false) is written before it is dug; a lower log of the
+  The base log's :forestry/replant debt (one per cell of a 2x2 trunk; none with :replant? false or on a planned crop plot) is written before it is dug; a lower log of the
   column seen later becomes the base. It ends on the ground: from the canopy it walks down beside the base (warn
   a :stranded true result when it cannot). With :at it fells that one column instead (:radius and :species are then unused).
   The tree is the one the body walks to soonest among at most 32 candidates, nearest in a line first (jobs.lib.targets);
