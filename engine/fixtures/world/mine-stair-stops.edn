@@ -36,6 +36,15 @@
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 220 :of-job true}
             {:no-event {:source :job :kind :child_ended :data {:ending {:cause {:reason :cave-below}}}} :for-s 220 :of-job true
              :until {:source :job :kind #{:completed :stopped} :data {:stop [:any]}}}]}
+  {:name "stair-over-a-three-deep-void-places-cobblestone-and-goes-on"
+   ;; a cavern from the third step on (x 19..24, y 4..9, z 14..18, floor y 3): the steps' floors have no block beside or under them
+   ;; but the last stone behind; cobblestone is carried
+   :blocks [[:fill [19 4 14] [24 9 18] "air"]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false :direction :east})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 220 :of-job true}
+            {:no-event {:source :job :kind :mine.descent-stopped} :for-s 220 :of-job true
+             :until {:source :job :kind #{:completed :stopped} :data {:stop [:any]}}}]
+   :after [[:block [19 6 16] "cobblestone"]]}
   {:name "table-in-the-first-step-turns-the-stair-to-another-heading"
    :blocks [[:set [17 10 16] "crafting_table"]]
    :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false})]]
