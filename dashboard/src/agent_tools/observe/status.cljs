@@ -187,12 +187,12 @@
                 (some-> (:time-ms e) (< started-ms)))))
 
 (defn stale-death?
-  "Whether a death (or the hurt before it) stamped before the wait began is old news: the body has respawned since (a
-  later online/spawned/respawned in the backlog), so the summary carries it and the body is alive."
+  "Whether a death or a hit stamped before the wait began is old news the summary carries, not a wake: a hit is
+  (the health is in the status); a death is once the body has respawned (a later online/spawned/respawned in the backlog)."
   [e later started-ms]
   (boolean (and (= :body (:source e)) (#{:died :hurt} (:kind e)) started-ms
                 (some-> (:time-ms e) (< started-ms))
-                (some recovered? later))))
+                (or (= :hurt (:kind e)) (some recovered? later)))))
 
 (defn classify
   "The wake an event causes under the options, or nil. Options: :from :chatter :watch :danger :disconnect
