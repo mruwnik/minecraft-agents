@@ -246,8 +246,7 @@
         (ctx/update-mem! c assoc :cells (:cells result))
         (let [{:keys [patched pass pass-ok] :or {pass 0}} (ctx/mem c)
               queue (when (and (= :leak (:reason result)) (ctx/way? c :patch)
-                               (< pass (settings/get settings ::max-passes))
-                               (or (zero? pass) (pos? (or pass-ok 0))))
+                               (pen-patch/another-pass? pass pass-ok (settings/get settings ::max-passes)))
                       (patch-plan c result))
               result (cond-> result patched (assoc :patched (merge {:placed 0 :shut 0 :failed 0} patched)))]
           (cond

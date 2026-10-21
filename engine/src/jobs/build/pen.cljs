@@ -35,7 +35,7 @@
   gate (a jobs.movement.go-to child to the cell outside it) and jobs.maintenance.shut shuts it. Phase 3 checks the pen
   over that box with jobs.lib.pen (see jobs.animals.pen-check): a step out of the box is a leak.
   A leak left after the build (a hole in the plan, or a cell the build refused, gave up on or lacked material for) is
-  patched once unless the call's :ways (:build, :patch) leaves :patch out: a jobs.blocks.place child puts one fence of the plan's kind in each
+  patched in up to ::max-passes passes (each fills the listed leaks, then reads again; a pass that put nothing right is the last) unless the call's :ways (:build, :patch) leaves :patch out: a jobs.blocks.place child puts one fence of the plan's kind in each
   :gap cell and on top of each :climb or :perch-in cell, then the pen is checked again. Nothing else is placed that the plan does not ask for.
   Needs: the plan, a zone list (unless :ignore-zones?), and the blocks of the fence (fetched by the builder unless
   the call's ways leave out :chest :craft :gather). Returns, as the data of its ending, {:closed? :reason :cells :leaks :gates :built {:placed :missing
@@ -67,6 +67,7 @@
 
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one pen build may take." :spec (a/int-in 1 nil)}
+   ::max-passes {:default 3 :doc "Patch passes (patch, then read again) before the leaks that remain are reported." :spec (a/int-in 1 nil)}
    ::max-cells {:default pen/default-max-cells :doc "Most cells the pen check visits before it gives up with :unbounded." :spec (a/int-in 1 nil)}})
 (defn max-cells [] (settings/get settings ::max-cells))
 
@@ -224,8 +225,9 @@
     (cond
       (:closed? answer)
       (ctx/end c :done nil (assoc result :text (str "pen of " plan " holds, " (:cells answer) " cells, placed " (:placed built))))
-      (and (ctx/way? c :patch) (not (:patched (ctx/mem c))) (seq (pen-patch/patch-cells (:leaks answer))) (patch-item cells))
-      (do (ctx/update-mem! c assoc :phase :patch :patched true :patch-queue (pen-patch/patch-cells (:leaks answer)))
+      (and (ctx/way? c :patch) (seq (pen-patch/patch-cells (:leaks answer))) (patch-item cells)
+           (let [{:keys [pass pass-ok]} (ctx/mem c)] (pen-patch/another-pass? pass pass-ok (settings/get settings ::max-passes))))
+      (do (ctx/update-mem! c #(assoc % :phase :patch :pass (inc (or (:pass %) 0)) :pass-ok 0 :patch-queue (pen-patch/patch-cells (:leaks answer))))
           :again)
       :else
       (ctx/end c :nothing-possible (:reason answer) result))))
@@ -286,7 +288,7 @@
     (let [r (await (pen-patch/place-fence! c [x y z] (patch-item cells) {:for-plan (:plan (:args c)) :ways (need/pass-ways c)}))]
       (if (= :continue r)
         :continue
-        (do (ctx/update-mem! c update :patch-queue rest) :again)))
+        (do (ctx/update-mem! c #(-> % (update :patch-queue rest) (update :pass-ok (fnil + 0) (if (= :done (:kind r)) 1 0)))) :again)))
     (do (ctx/update-mem! c assoc :phase :check) :again)))
 
 (defn ^:async build-step!

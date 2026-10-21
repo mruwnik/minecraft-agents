@@ -137,6 +137,21 @@
           (is (true? (:closed? result)) (pr-str (:leaks result)))
           (is (= "oak_fence" (h/block-at p 3 64 4))))))))
 
+;; The pen check lists at most 12 leaks: more gaps than that need more than one patch pass.
+(deftest more-gaps-than-one-check-lists-are-patched-in-further-passes
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ring (concat (for [x (range 1 12)] [x 64 11]) (for [z (range 10 0 -1)] [11 64 z]) (for [x (range 10 0 -1)] [x 64 1]) (for [z (range 2 11)] [1 64 z]))
+              gate [6 64 1]
+              gaps (take 16 (remove #{gate} (take-nth 2 (rest ring))))
+              wide (into {} (for [x (range -2 14) z (range -2 14)] [(h/cell-key x 63 z) "stone"]))
+              plan {:id "pen" :parts [{:id "fence" :cells (vec (remove (conj (set gaps) gate) ring)) :want "oak_fence"}
+                                      {:id "gate" :cells [gate] :want {:block "oak_fence_gate" :facing :north}}]}
+              [result _ p] (await (build! {:inventory [{:name "oak_fence" :count 50} {:name "oak_fence_gate" :count 1}] :blocks wide} {"pen" plan} {}))]
+          (is (true? (:closed? result)) (pr-str (:leaks result)))
+          (is (every? #(= "oak_fence" (h/block-at p (first %) 64 (nth % 2))) gaps)))))))
+
 (deftest an-open-gate-is-a-leak
   (async done
     (tu/run-async done

@@ -17,6 +17,11 @@
   [leaks]
   (vec (distinct (keep patch-cell leaks))))
 
+(defn another-pass?
+  "Whether a patch pass may follow: under max-passes done, and the last pass (if any) put something right."
+  [pass pass-ok max-passes]
+  (and (< (or pass 0) max-passes) (or (zero? (or pass 0)) (pos? (or pass-ok 0)))))
+
 (defn ^:async place-fence!
   "One fence at pos by a blocks.place child (phase :patch); its result, or :continue while it runs. Args pass :ignore-zones?; extra is merged into the child's args."
   [c pos item extra]
