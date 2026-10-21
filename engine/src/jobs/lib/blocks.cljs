@@ -61,8 +61,8 @@
   (memoize
    (fn [version]
      (let [data (minecraft-data version)]
-       (into {} (map (fn [b] [(.-name b) (vec (keep #(some-> (aget (.-items data) %) .-name) (array-seq (.-drops b))))]))
-             (array-seq (.-blocksArray data)))))))
+       (into {} (map (fn [b] [(.-name b) (vec (keep #(some-> (aget data "items" %) .-name) (array-seq (aget b "drops"))))]))
+             (array-seq (aget data "blocksArray")))))))
 
 (defn drops-of
   "The item names block-name drops by minecraft-data (tool and enchantment ignored), or the block's own name when

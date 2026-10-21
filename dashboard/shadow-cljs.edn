@@ -119,6 +119,7 @@
                                :timeMain agent-tools.api/time-main
                                :snapshotUsage agent-tools.snapshot/usage
                                :snapshotMain agent-tools.snapshot/main!
+                               :snapshotEntityKind agent-tools.snapshot/entity-kind-js
                                :jobsUsage agent-tools.api/jobs-usage
                                :jobsRequestFor agent-tools.api/jobs-request-for
                                :jobsMain agent-tools.api/jobs-main

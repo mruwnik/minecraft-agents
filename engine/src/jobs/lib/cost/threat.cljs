@@ -26,9 +26,9 @@
   "Whether mob {:name :kind} is hostile for minecraft-data version: its entity type \"hostile\" (or category
   \"Hostile mobs\"); a name minecraft-data does not know goes by :kind."
   [version {:keys [name kind]}]
-  (let [e (some-> (minecraft-data version) .-entitiesByName (aget name))]
+  (let [e (some-> (minecraft-data version) (aget "entitiesByName") (aget name))]
     (if e
-      (or (= "hostile" (.-type e)) (= "Hostile mobs" (.-category e)))
+      (or (= "hostile" (aget e "type")) (= "Hostile mobs" (aget e "category")))
       (= "hostile" kind))))
 
 (defn damage-type [mob-name]

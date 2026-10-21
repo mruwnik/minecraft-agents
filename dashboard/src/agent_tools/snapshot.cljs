@@ -135,6 +135,11 @@
   (cond (= "player" type) "player"
         (and version (threat/hostile? version {:name type})) "hostile"))
 
+(defn entity-kind-js
+  "entity-kind for the bundle-level test: the release bundle must read minecraft-data entity fields by name."
+  [version type]
+  (entity-kind version type))
+
 (defn perceived
   "{:entities :heard} from the body's /entities rows: the :seen rows as pose entities for the renderer, and the :heard
   rows (no position) as {:name :direction :band}. Remembered rows and the body itself are not drawn."

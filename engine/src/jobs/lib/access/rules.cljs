@@ -57,7 +57,7 @@
   item that places no block."
   [version item]
   (let [block (if (contains? item-block item) (item-block item) item)
-        shape (some-> block (->> (aget (.-blocksByName (minecraft-data version)))) .-boundingBox)]
+        shape (some-> block (->> (aget (aget (minecraft-data version) "blocksByName"))) (aget "boundingBox"))]
     (boolean (and block (or (= "empty" shape) (and shape (str/ends-with? block "_carpet")))))))
 
 (def not-a-floor bs/bad-floor)
