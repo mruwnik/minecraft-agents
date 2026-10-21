@@ -125,6 +125,11 @@
                                :planned (planned-cells (:primitives c) e feet) :holes-before (count (own-holes c))))
     :again))
 
+(defn zone-exit?
+  "Whether the body stands in another's zone, claim or plan: leaving it is never refused by it."
+  [c [x y z]]
+  (some? (access/foreign-holder c {:x x :y y :z z})))
+
 (defn ^:async escalate!
   "Start the next escalation for the give-up kept in memory (:give-up), or give up with it when there is none (or
   with failed, the detail of the escalation that just failed, when there is none left after it; past max-escalations
@@ -152,10 +157,12 @@
               (own-stair c feet goal)
               (choose (may-dig-fn c)))
         choosable? #(not= :none (:step (choose %)))
+        zone-free (may-dig-fn (assoc-in c [:args :ignore-zones?] true))
         e (cond
             (not= :none (:step e)) e
             (and (access/spare-own-builds) (choosable? (may-dig-fn c false)))
             {:step :none :why (if (choosable? (may-dig-fn c true false)) :own-pen :own-build)}
+            (and (zone-exit? c feet) (choosable? zone-free)) (assoc (choose zone-free) :exit-zone true)
             (choosable? (constantly true)) {:step :none :why :zone}
             :else e)]
     (cond
@@ -330,7 +337,7 @@
   the way."
   [c pos]
   (let [{:keys [step] :as e} (:escalation (ctx/mem c))
-        [job args] (escalation-job e (hole-tag c) (boolean (:ignore-zones? (:args c))) (boolean (:by-hand (ctx/mem c))) (fetch-tool? c))
+        [job args] (escalation-job e (hole-tag c) (boolean (or (:exit-zone e) (:ignore-zones? (:args c)) (zone-exit? c (end/feet-cell c)))) (boolean (:by-hand (ctx/mem c))) (fetch-tool? c))
         _ (await (torch/return-torch! c))
         r (await (ctx/call c :escalation job (cond-> (update args :checks #(some->> % (ready/unforced c))) (= :approach step) (->> (ready/forage-walk c)))))]
     (let [dug (concat (:planned (ctx/mem c)) (when (not= :continue r) (:dug (:data r))))]

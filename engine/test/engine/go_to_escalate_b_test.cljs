@@ -110,11 +110,20 @@
           (is (false? (:arrived @out)) (pr-str @out))
           (is (empty? (calls p "dig")) "an :intent for another item is no proof the cobblestone there is its own"))))))
 
-(deftest go-to-never-digs-in-another-s-zone
+(deftest go-to-leaves-another-s-zone-it-stands-in-by-digging
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [zones [{:name "vault" :owner "Miles" :min [-3 60 -3] :max [3 70 3]}]
+              {:keys [out]} (await (run-job! (merge in-room {:blocks room}) 'jobs.movement.go-to
+                                             {:pos [8 64 0] :range 1} zones))]
+          (is (true? (:arrived @out)) "a body inside the zone is never shut in by it"))))))
+
+(deftest go-to-never-digs-in-another-s-zone
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zones [{:name "vault" :owner "Miles" :min [3 60 -3] :max [3 70 3]}]
               {:keys [out p seen]} (await (run-job! (merge in-room {:blocks room}) 'jobs.movement.go-to
                                                 {:pos [8 64 0] :range 1} zones))]
           (is (= false (:arrived @out)))
@@ -221,7 +230,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [zones [{:name "vault" :owner "Miles" :min [-3 60 -3] :max [3 70 3]}]
+        (let [zones [{:name "vault" :owner "Miles" :min [-3 62 -3] :max [3 70 3]}]
               {:keys [out p seen]} (await (run-job! (merge in-pit {:blocks (assoc pit "0,63,0" "dirt")
                                                                    :inventory [{:name "dirt" :count 5}]})
                                                 'jobs.movement.go-to {:pos [10 64 0] :range 1} zones))]
@@ -387,7 +396,7 @@
     (tu/run-async done
       (fn ^:async t []
         ;; another owner's zone covers the pit's column: the pillar may not place there, the stair digs beside it
-        (let [zones [{:name "shaft" :owner "Miles" :min [0 60 0] :max [0 64 0]}]
+        (let [zones [{:name "shaft" :owner "Miles" :min [0 62 0] :max [0 64 0]}]
               {:keys [out p seen]} (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 5}]})
                                                 'jobs.movement.go-to {:pos [10 64 0] :range 1} zones))]
           (is (= {:arrived true} @out))
