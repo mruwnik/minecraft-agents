@@ -4,7 +4,7 @@
   go-to planner costs near a known danger (its options.dangers).
 
   route-danger per mob: hostile (jobs.lib.cost.threat; provoked-only mobs x0.1) or named in overrides; mob-hurt over 3 s
-  after armour, dearer for a body that cannot afford to fight it (no-answer-factor);
+  after armour, dearer for a body that cannot afford to fight it (no-answer-factor; not for a provoked-only mob, which is never fought, and a mob with :angry false adds none);
   weight 1 within 2 blocks of the route, falling to 0 at :radius; counts only if a melee mob can walk to
   the route or a ranged mob has a line of fire to it. Overrides {mob-name number-or-{:times n}}: threat before armour.
 
@@ -48,9 +48,9 @@
   "{:name :pos {:x :y :z} :kind} of a mob given as a cljs map or a JS entity."
   [m]
   (if (map? m)
-    (select-keys m [:name :pos :kind :id])
+    (select-keys m [:name :pos :kind :id :angry])
     (let [pos (.-pos m)]
-      {:name (.-name m) :kind (.-kind m) :id (.-id m) :pos (when pos {:x (.-x pos) :y (.-y pos) :z (.-z pos)})})))
+      {:name (.-name m) :kind (.-kind m) :id (.-id m) :angry (.-angry m) :pos (when pos {:x (.-x pos) :y (.-y pos) :z (.-z pos)})})))
 
 (defn override-fn [o]
   (cond (number? o) (constantly o)
@@ -109,6 +109,7 @@
         rows (when (seq route)
                (for [m (map mob-of mobs)
                      :when (and (string? (:name m)) (:pos m)
+                                (not (false? (:angry m)))
                                 (or (contains? overrides (:name m)) (threat/hostile? version m)))
                      :let [cells (->> route
                                       (map (fn [c] [(u/dist (:pos m) (centre c)) c]))
@@ -122,7 +123,7 @@
                            threat (threat-fn (:threat (threat/base-threat (:name m) (exposure-s))))]
                      :when (and (pos? weight) (pos? threat) (reaches? kind-at m (map second cells)))
                      :let [hurt (threat/mob-hurt stats (:name m) (exposure-s) threat-fn)
-                           scale (no-answer-factor equipment weapon health (:name m) d)]]
+                           scale (if (contains? threat/provoked-only (:name m)) 1 (no-answer-factor equipment weapon health (:name m) d))]]
                  {:name (:name m) :pos (:pos m) :distance d :weight weight :threat threat :danger (* weight hurt scale)}))
         rows (vec (sort-by :danger > rows))]
     {:danger (reduce + 0 (map :danger rows)) :mobs rows}))

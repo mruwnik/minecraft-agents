@@ -141,3 +141,9 @@
 (deftest an-unreachable-or-passive-mob-stays-free-however-weak-the-body
   (is (= 0 (:danger (route-danger (world :blocks skeleton-wall) route [(mob 1 "skeleton" 15 8)] naked :weapon nil :health 4))))
   (is (= 0 (:danger (route-danger (world) route [{:id 1 :name "cow" :kind "passive" :pos {:x 15.5 :y 64 :z 1.5}}] naked :weapon nil :health 4)))))
+
+(deftest an-enderman-is-not-priced-as-a-fight-the-body-cannot-win
+  (let [p (world)
+        ender (mob 1 "enderman" 15 2)]
+    (is (< 0 (danger p [ender] :health 20) 20) "provoked-only share, no no-answer multiplier")
+    (is (= 0 (danger p [(assoc ender :angry false)])) "a calm enderman adds nothing")))
