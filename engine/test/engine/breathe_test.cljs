@@ -1680,3 +1680,31 @@
           (let [names (call-names p)]
             (is (some #{"attack"} names) (pr-str names))
             (is (< 0 (.indexOf names "attack")) "after the swim up, the body that surfaced fights")))))))
+
+(defn flooded-stair
+  "A 1-wide stair up along x from (0,64,0), three cells high per step over stone: water in the first flooded steps, air
+  after them, rock all round."
+  [flooded steps]
+  (into {} (for [x (range -1 (+ steps 2)) y (range 62 (+ 70 steps)) z [-1 0 1]
+                 :let [i x
+                       open? (and (= z 0) (<= 0 i (dec steps)) (<= (+ 64 i) y (+ 66 i)))
+                       floor? (and (= z 0) (<= 0 i (dec steps)) (= y (+ 63 i)))]]
+             [(str x "," y "," z) (cond open? (if (< i flooded) "water" "air") floor? "stone" :else "stone")])))
+
+(deftest dry-steps-high-up-a-flooded-stair-shaft-are-land-the-body-can-reach
+  (let [p (tu/seeing-all (tu/fake {:self {:inWater true :pos {:x 0.5 :y 64 :z 0.5}} :blocks (flooded-stair 6 9)}))
+        pos {:x 0.5 :y 64 :z 0.5}]
+    (is (nil? (b/nearest-land p pos 48 nil (constantly true))) "the column search reads only a few cells above the feet")
+    (is (= {:x 6 :y 70 :z 0} (b/reachable-land p pos 48 nil)) "the first dry step, found through the flooded ones")
+    (is (nil? (b/reachable-land p pos 48 [{:x 6 :y 70 :z 0} {:x 7 :y 71 :z 0} {:x 8 :y 72 :z 0}])) "failed steps are skipped")
+    (is (nil? (b/reachable-land p pos 3 nil)) "bounded by the radius")))
+
+(deftest drowning-at-the-foot-of-a-flooded-stair-swims-up-it-to-the-dry-steps
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0.5 :y 64 :z 0.5}} :blocks (flooded-stair 6 9)})]
+          (await (one-run! eng defaults))
+          (is (>= (:x (core/self-pos p)) 6) "up the stair, on a dry step")
+          (is (not (.-inWater (.self p))))
+          (is (= [[:completed nil]] (ended seen))))))))

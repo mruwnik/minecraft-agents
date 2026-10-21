@@ -1,0 +1,29 @@
+;; The breathe reflex in a flooded 1-wide stair shaft (a body at the foot of its own stair, water to the top of the lower steps):
+;; there is no air in any straight column, only up the stair, so the body must swim up the steps to the dry ones and not stop "afloat".
+;; The stair climbs along +x from x 4, three cells high per step over solid stone; steps 0..2 are water, 3..9 air (a little water flows into the first dry cells).
+;; Glowstone in the side wall every second step lights the shaft (a dark cell beyond 4 blocks is not made out).
+;; The stair is dry at first and the body looks up it for 20 s, so it has seen the steps (it sees only its view cone); then the lower steps are flooded.
+;; Should-succeed: the reflex fires, the body is on a dry step (x 7 and beyond) and not dead.
+{:defaults
+ {:tags [:survival :water] :time :any
+  :plot {:height 16}
+  :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
+              :job (jobs.survival.breathe)}]
+  :blocks [[:fill [0 0 0] [31 15 31] "stone"]
+           [:fill [4 1 6] [4 3 6] "air"] [:fill [5 2 6] [5 4 6] "air"] [:fill [6 3 6] [6 5 6] "air"]
+           [:fill [7 4 6] [7 6 6] "air"] [:fill [8 5 6] [8 7 6] "air"] [:fill [9 6 6] [9 8 6] "air"]
+           [:fill [10 7 6] [10 9 6] "air"] [:fill [11 8 6] [11 10 6] "air"] [:fill [12 9 6] [12 11 6] "air"]
+           [:fill [13 10 6] [13 12 6] "air"]
+           [:set [4 2 7] "glowstone"] [:set [6 4 7] "glowstone"] [:set [8 6 7] "glowstone"]
+           [:set [10 8 7] "glowstone"] [:set [12 10 7] "glowstone"]]
+  :body {:at [4.5 1 6.5] :yaw 270 :pitch -45 :effects [["resistance" 600 4]] :settle-s 1}
+  :limit-s 120}
+ :cases
+ [{:name "foot-of-a-flooded-stair-swims-up-to-the-dry-steps"
+   :act [[:wait-s 20]
+         [:rcon "execute positioned $X $Y $Z run fill ~4 ~1 ~6 ~4 ~3 ~6 water"]
+         [:rcon "execute positioned $X $Y $Z run fill ~5 ~2 ~6 ~5 ~4 ~6 water"]
+         [:rcon "execute positioned $X $Y $Z run fill ~6 ~3 ~6 ~6 ~5 ~6 water"]]
+   :expect [{:event {:source :reflex :kind :fired} :within-s 60}
+            {:no-event {:source :body :kind :died} :for-s 60}]
+   :after [[:body-near [9.5 6 6.5] 3.5]]}]}

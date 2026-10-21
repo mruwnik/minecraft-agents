@@ -185,6 +185,27 @@
                         (filter open?))]
           (recur next (into seen next)))))))
 
+(defn flood-air
+  "The nearest cell whose feet are seen water or air and whose head cell is air, joined to the feet by seen water and air
+  (a flooded stair has no air in any straight column), within radius sideways and reach above, not in the feet column (swum up directly); nil if none or all are in
+  failed. Cells are read as nearest-air reads them."
+  [p self-pos radius reach failed]
+  (let [fx (js/Math.floor (:x self-pos)) fy (js/Math.floor (:y self-pos)) fz (js/Math.floor (:z self-pos))
+        skip (set failed)
+        open? (fn [{:keys [x y z] :as cell}]
+                (and (<= (js/Math.abs (- x fx)) radius) (<= (js/Math.abs (- z fz)) radius) (<= (dec fy) y (+ fy reach))
+                     (passable-water-or-air? (seen-water-name p cell))))
+        surface? (fn [cell] (and (not (contains? skip cell)) (not (and (= fx (:x cell)) (= fz (:z cell)))) (air? (seen-water-name p (update cell :y inc)))))
+        start {:x fx :y fy :z fz}]
+    (loop [frontier [start] seen #{start}]
+      (when (and (seq frontier) (< (count seen) 6000))
+        (or (first (filter surface? frontier))
+            (let [next (->> (for [c frontier [dx dy dz] neighbours] (-> c (update :x + dx) (update :y + dy) (update :z + dz)))
+                            (remove seen)
+                            distinct
+                            (filter open?))]
+              (recur next (into seen next))))))))
+
 (defn nearest-air
   "The surface cell of the nearest column within radius that reaches air, not one of failed (a seq of cells); nil if none.
   Every column is read only through cells the body has seen or feels, never through stone, and joined to the body by seen

@@ -94,7 +94,8 @@
       ms)))
 
 (defn ^:async go-air!
-  "Drowning with no air near: a go-to child to the nearest air-reaching surface within the air-radius setting, else to the nearest
+  "Drowning with no air near: a go-to child to the nearest air-reaching surface within the air-radius setting (also the
+  air at the top of a flooded stair, joined by seen water, however high), else to the nearest
   seen air below the feet joined to the body by water or air within the depth setting (breath/nearest-pocket: the way the body
   came), not failed before, when the swim there fits the air left and is not dearer than the cap dig (cap-dig-ms). True
   on arrival (the body has surfaced); nil when it did not, :none when there is no target. The target is remembered as
@@ -103,7 +104,8 @@
   (let [p (:primitives c)
         pos (u/self-pos c)
         failed (:failed-air (ctx/mem c))
-        surface (breath/nearest-air p pos (swim/air-radius) (swim/reach) failed false)
+        surface (or (breath/nearest-air p pos (swim/air-radius) (swim/reach) failed false)
+                    (breath/flood-air p pos (swim/air-radius) (swim/air-radius) failed))
         pocket (when-not surface (breath/nearest-pocket p pos (swim/air-radius) (depth) failed))
         swim-ms (* (:steps pocket 0) (breath/swim-ms))
         pocket? (and pocket
@@ -198,7 +200,13 @@
       :else
       (let [r (await (swim/swim-up! c target))]
         (cond
-          (not= :no-air r) r
+          ;; a swim up a column that was not seen to reach air and failed leaves a flooded stair to go-air!, when one is seen
+          (and (not= :no-air r)
+               (let [self (u/self-pos c) fx (js/Math.floor (:x self)) fy (js/Math.floor (:y self)) fz (js/Math.floor (:z self))]
+                 (or (true? r)
+                     (breath/straight-up-reaches-air? (:primitives c) fx fy fz (swim/reach))
+                     (nil? (breath/flood-air (:primitives c) self (swim/air-radius) (swim/air-radius) (:failed-air (ctx/mem c)))))))
+          r
           (true? (await (go-air! c))) true
           :else
           (let [d (await (dig-cap! c (cap-dig-share)))]
