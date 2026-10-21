@@ -76,6 +76,16 @@
     (is (= {:entry [0 50 0] :heading :south :dir :down :steps 0 :run 19 :length 20 :stand [0 50 19] :target [0 50 20]} a)
         "the surface stair is 16 long, shorter than the level run")))
 
+(def corridor
+  (into {} (for [x (range -8 1) y [40 41]] [[x y 0] "air"])))
+
+(deftest a-body-at-a-corridor-end-starts-the-stair-further-back-where-the-run-up-is-open
+  (is (= {:entry [-3 40 0] :heading :east :dir :down :steps 14 :run 0 :length 15 :stand [11 26 0] :target [12 26 0]}
+         (approach corridor [12 26 0] :feet [0 40 0]))
+      "the stair needs 15 blocks of run; the corridor behind the body has 8")
+  (is (= :too-far (:reason (approach (assoc corridor [-1 41 0] "stone") [12 26 0] :feet [0 40 0])))
+      "a shut row is no way back to an entry"))
+
 (deftest a-body-that-cannot-stand-where-it-is-is-no-entry
   (is (not= [0 60 0] (:entry (approach {} [4 57 0] :feet [0 60 0])))))
 

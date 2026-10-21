@@ -1,0 +1,20 @@
+;; Card a2f56a2d: a pile 14 below and 12 aside of a corridor end. The stair needs 15 blocks of run, the corridor behind the body has 8 open cells: the body walks back and starts the stair there.
+;; Stone mass x 0..31, y 0..19, z 0..31; a 1-wide corridor along z 16 at y 14..15 from x 2 to 10 (the respawn at its east end); the pile chamber [20 0 14]..[24 2 18] (glowstone in its roof keeps mobs out, the rest is dark).
+{:defaults
+ {:tags [:survival :death :jobs]
+  :time :any
+  :plot {:height 24}
+  :blocks [[:fill [0 0 0] [31 19 31] "stone"] [:fill [2 14 16] [10 15 16] "air"]
+           [:fill [20 0 14] [24 2 18] "air"] [:set [22 3 16] "glowstone"]]
+  :body {:at [22.5 0 16.5] :spawnpoint [10 14 16] :effects [["resistance" 600 4]]
+         :inventory [["raw_iron" 24] ["cobblestone" 64]]}
+  :act [[:kill-body]
+        [:await {:source :body :kind :respawned} 30]
+        [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]
+        [:rcon "give $BODY minecraft:iron_pickaxe 1"]
+        [:job (jobs.survival.recover-drops)]]
+  :limit-s 330}
+ :cases
+ [{:name "stair-starts-behind-the-body-where-the-run-up-is-open"
+   :expect [{:event {:source :job :kind :completed :data {:decision :collected}} :within-s 300 :of-job true}]
+   :after [[:item "raw_iron" 24]]}]}

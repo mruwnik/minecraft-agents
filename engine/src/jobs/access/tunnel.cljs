@@ -34,7 +34,7 @@
 
   The way is one straight line along a heading (:heading limits it to one) through the target's column:
   1. An entry stand: on the surface (the column's top cell over a solid floor, two open cells; no entry from
-     water), or the body's own cell when it stands underground in the entry column.
+     water), or the body's own height when it stands underground in the entry column or can walk to it along an open row (a corridor's run-up behind it).
   2. A 1-wide stair down (or up) to the target's height, cut by jobs.access.stair as a child with :y set, so it
      resumes from any step.
   3. A flat run, 1 wide and 2 high (head cell first), up to the stand. Never a shaft, and the run never passes

@@ -83,12 +83,24 @@
   (and (pillar/clear? (block-at [x y z])) (pillar/clear? (block-at [x (inc y) z]))
        (boolean (rules/solid-floor? block-at [x (dec y) z]))))
 
+(def walk-in-max
+  "Blocks the body walks to an entry before a longer line from where it stands is taken instead."
+  24)
+
+(defn open-row?
+  "Whether every cell from feet to [ex fy ez] along one row is standable: the body walks it to an entry there."
+  [block-at [fx fy fz :as feet] [ex ez]]
+  (let [dx (- ex fx) dz (- ez fz)
+        n (+ (js/Math.abs dx) (js/Math.abs dz))]
+    (and (or (zero? dx) (zero? dz)) (<= n walk-in-max)
+         (every? #(standable? block-at [(+ fx (* % (js/Math.sign dx))) fy (+ fz (* % (js/Math.sign dz)))]) (range (inc n))))))
+
 (defn entry-heights
-  "The feet heights an entry in column [ex ez] may take: the surface, and the body's own cell when it stands in
-  that column (a cave or tunnel roof hides the surface from a body underground)."
+  "The feet heights an entry in column [ex ez] may take: the surface, and the body's own height when it stands in
+  that column or can walk to it along an open row (a cave or tunnel roof hides the surface from a body underground)."
   [block-at seen-at [ex ez] lo hi feet]
-  (let [[fx fy fz] feet
-        own (when (and feet (= [fx fz] [ex ez]) (<= lo fy hi) (standable? block-at feet)) fy)]
+  (let [[_ fy _] feet
+        own (when (and feet (<= lo fy hi) (open-row? block-at feet [ex ez])) fy)]
     (distinct (keep identity [(surface block-at seen-at [ex ez] lo hi) own]))))
 
 (defn fits
@@ -105,10 +117,6 @@
         (assoc plan :stand (:stand (line plan)))))))
 
 (defn dist2 [[x y z] [a b c]] (+ (* (- x a) (- x a)) (* (- y b) (- y b)) (* (- z c) (- z c))))
-
-(def walk-in-max
-  "Blocks the body walks to an entry before a longer line from where it stands is taken instead."
-  24)
 
 (defn far-entry?
   "Whether the entry of plan is more than walk-in-max from feet: such a line loses to any nearer one."
