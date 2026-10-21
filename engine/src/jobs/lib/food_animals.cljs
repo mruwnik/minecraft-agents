@@ -3,6 +3,7 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [engine.notes :as notes]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.animal-spare :as spare]
@@ -12,9 +13,31 @@
             [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::pen-look-range {:default 4 :doc "Blocks from a food animal the body walks to when the cells round it were out of sight and may be a fenced pen." :spec (a/num-in 0 nil)}})
+  {::note-ttl-s {:default 600 :doc "Seconds a note of a food animal seen lasts: it counts toward the pair a hunt keeps." :spec (a/num-in 0 nil)}
+   ::pen-look-range {:default 4 :doc "Blocks from a food animal the body walks to when the cells round it were out of sight and may be a fenced pen." :spec (a/num-in 0 nil)}})
 
 (def food-animals #{"cow" "pig" "sheep" "chicken" "rabbit"})
+
+(defn noted-adults
+  "The uuids of adult animals of `kind` that live :seen notes (any body's) place within radius of the body and that are not among `seen-uuids`: a pair standing out of each other's sight is still a pair."
+  [c kind seen-uuids radius]
+  (let [me (u/self-pos c)]
+    (into #{}
+          (comp (filter #(and (= :seen (:kind %)) (= kind (:what %)) (:id %) (not (:baby %)) (not (seen-uuids (:id %)))
+                              (<= (u/flat-dist me (zipmap [:x :y :z] (:pos %))) radius)))
+                (map :id))
+          (notes/notes c))))
+
+(defn note-seen!
+  "Write the adults and babies of food animals in sight as :seen notes, so a later look at one of a pair counts the other."
+  [c {:keys [radius]}]
+  (let [seen (look/seen-objs (:primitives c) {:radius radius :kind "passive" :names food-animals :max 16})]
+    (when (seq seen)
+      (notes/note! c (mapv (fn [e] (let [p (u/pos-of (.-pos e))]
+                                     {:kind :seen :what (.-name e) :id (.-uuid e) :baby (true? (.-baby e))
+                                      :pos (mapv #(js/Math.floor %) [(:x p) (:y p) (:z p)])
+                                      :ttl-ms (* 1000 (settings/get settings ::note-ttl-s))}))
+                           seen)))))
 
 (defn in-sight
   "The food animals the entity scan lists within radius, nearest first, as {:entity e :why r :adults n :rule k}: r is nil for one
@@ -25,7 +48,10 @@
   [c {:keys [radius lift own?]}]
   (let [skipped (set (:skipped-animals (ctx/mem c)))
         seen (look/seen-objs (:primitives c) {:radius radius :kind "passive" :names food-animals :max 16})
-        adults (frequencies (map #(.-name %) (remove #(true? (.-baby %)) seen)))
+        adult-es (remove #(true? (.-baby %)) seen)
+        seen-uuids (set (map #(.-uuid %) seen))
+        adults (merge-with + (frequencies (map #(.-name %) adult-es))
+                           (into {} (map (fn [k] [k (count (noted-adults c k seen-uuids radius))])) (distinct (map #(.-name %) adult-es))))
         self (.self (:primitives c))
         pens (atom [])
         starved? (and (<= (.-food self) lift) (not (foods/carries-food? self)))]
@@ -87,6 +113,7 @@
 (defn ^:async nearest-or-look
   "The nearest food animal in sight (an in-sight entry), its surroundings looked at first when they may be a pen (see pen-looked); with none, the body looks around once from where it stands and tries again, remembering what it spared on the way."
   [c opts]
+  (note-seen! c opts)
   (when-let [target (or (nearest c opts) (await (look/survey-until! c :cell (fn [] (note-spared! c opts) (nearest c opts)))))]
     (if (= :own-pen (:rule target)) target (await (pen-looked c opts target)))))
 
@@ -98,6 +125,7 @@
         cell (mapv #(js/Math.floor %) [(:x p) (:y p) (:z p)])
         food (.-food (.self (:primitives c)))
         why {:adults adults :keep (spare/keep-adults) :food food :rule rule}]
+    (notes/note! c [{:kind :seen :what (.-name animal) :id (.-uuid animal) :pos cell :ttl-ms 0}])
     (ctx/update-mem! c update :killed (fnil conj []) (merge {:name (.-name animal) :pos cell} why))
     (ctx/emit! c :food.killed :info (merge {:name (.-name animal) :pos cell
                                             :text (str "hunted a " (.-name animal) " at " (pr-str cell)

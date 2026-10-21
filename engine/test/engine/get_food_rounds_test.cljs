@@ -556,6 +556,15 @@
           (await (one-round! eng {}))
           (is (> (.-x (.-pos (.self p))) 4) "inside the 12-block range of the note the body still walks closer when the animal is not in sight"))))))
 
+(deftest a-cow-seen-alone-is-kept-when-its-pair-mate-is-noted-nearby
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [note [{:kind :seen :what "cow" :id "u1" :pos [20 64 0] :by "Other" :t 1 :until 9e15}]
+              {:keys [eng p]} (setup {:time 6000 :self {:food 8 :health 10} :entities [(assoc cow :uuid "u2")]} :step-ms 5 :other-notes note)]
+          (await (one-round! eng {}))
+          (is (empty? (calls p "attack")) "two known cows are the last pair, though only one is in sight"))))))
+
 (deftest a-baby-in-sight-does-not-end-the-search-for-an-adult-noted-farther-off
   (async done
     (tu/run-async done
