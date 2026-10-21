@@ -41,11 +41,12 @@
   "An engine over the fake world spec with the plans {id plan} and the zones (default none; nil: never read) as its
   world data."
   ([spec plans] (start spec plans []))
-  ([spec plans zones]
+  ([spec plans zones] (start spec plans zones nil))
+  ([spec plans zones jobs]
   (let [[seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake-on-floor spec))
         w (world/of-data plans {} zones)
-        eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref h/clock)
+        eng (core/create {:primitives p :jobs (merge registry/jobs jobs) :triggers triggers/all :dir (tu/tmp-dir) :now #(deref h/clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref h/clock)})
                           :world w})]
     {:eng eng :p p :seen seen :w w})))
@@ -194,6 +195,19 @@
               result (await (child-outcome eng job {:plan "far"} 200))]
           (is (= {[40 64 0] :unreachable} (:given-up result)))
           (is (= 0 (:placed result))))))))
+
+(deftest walks-that-keep-ending-budget-stop-the-build-instead-of-trying-every-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walks (atom 0)
+              budget-walk {:ways [:walk :clear-seal]
+                           :round (fn ^:async w [c] (swap! walks inc) (ctx/end c :nothing-possible :unreachable {:why :budget :arrived false}))}
+              plan {:id "far" :parts [{:id "posts" :cells (mapv (fn [i] [(+ 40 (* 2 i)) 64 0]) (range 8)) :want "oak_fence"}]}
+              {:keys [eng]} (start {:inventory kit :floor [30 -5 60 5]} {"far" plan} [] {'jobs.movement.go-to budget-walk})
+              result (await (child-outcome eng job {:plan "far"} 400))]
+          (is (= [:nothing-possible :unreachable] [(get-in result [:ending :kind]) (get-in result [:ending :cause])]) (pr-str result))
+          (is (<= @walks 12) (str @walks " walks")))))))
 
 (deftest an-unloaded-cell-is-walked-to-not-taken-as-built
   (async done

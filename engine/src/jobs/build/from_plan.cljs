@@ -101,6 +101,7 @@
    ::off-bed-tries {:default 3 :doc "Walks off a bed or bottom slab the body stands on, before the roof cells over it are given up." :spec (a/int-in 1 nil)}
    ::hole-depth {:default 2 :doc "Levels of walls round the body from its feet up that make it a body in a hole, whose walks may climb out." :spec (a/int-in 1 nil)}
    ::hole-walks {:default 2 :doc "Walks in a row that fail from a hole after which the build stops :shut-in." :spec (a/int-in 1 nil)}
+   ::budget-streak {:default 4 :doc "Places or digs in a row (no cell placed or dug between) whose walk ended :unreachable :budget (a search that flooded the loaded land and found no stand) after which the build stops :unreachable: the next cells would flood the same land." :spec (a/int-in 1 nil)}
    ::look-range {:default 16 :doc "Cells farther than this from the eye are walked to, not looked at: they may be unloaded, which a look cannot tell." :spec (a/num-in 0 nil)}
    ::cell-s {:default 3 :doc "Seconds one cell of the plan is guessed to take, for the quote." :spec (a/num-in 0 nil)}})
 
@@ -232,8 +233,10 @@
   (let [limit (give-up)
         w (await (near/go-near! c (zipmap [:x :y :z] stand) 0 opts))]
     (when (= :blocked w)
-      (ctx/update-mem! c #(-> (walk-fail % (:pos cell) :unreachable limit (u/self-pos c))
-                              (update :bad-stands (fnil conj []) stand))))
+      (ctx/update-mem! c #(cond-> (-> (walk-fail % (:pos cell) :unreachable limit (u/self-pos c))
+                                      (update :bad-stands (fnil conj []) stand))
+                            (= :budget (:why (:data (near/last-walk c)))) (update :budget-streak (fnil inc 0)))))
+    (when (#{:there :partial} w) (ctx/update-mem! c dissoc :budget-streak))
     (when (and (= :there w) (nil? (:found cell)))
       (let [pos (:pos cell)]
         ;; a cell outside the view cone is seen only by turning to it
@@ -314,6 +317,10 @@
         dig-near (in-dig-reach c digs)
         nearest #(first (sort-by (fn [cell] (u/dist (u/self-pos c) (zipmap [:x :y :z] (:pos cell)))) %))]
     (cond
+      (<= (settings/get settings ::budget-streak) (:budget-streak (ctx/mem c) 0))
+      (ctx/end c :nothing-possible :unreachable
+               {:placed (:placed (ctx/mem c) 0)
+                :text (str "build of " (:plan (:args c)) " stopped: " (:budget-streak (ctx/mem c)) " cells in a row had no stand the body could walk to (the search ran out of its node budget each time)")})
       (scaffold/working? c) (await (scaffold/step! c (give-up)))
       (scaffold/stale? c) (do (scaffold/begin-clean! c) :again)
       (:leave (ctx/mem c)) (await (leave! c))

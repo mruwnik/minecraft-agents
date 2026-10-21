@@ -80,10 +80,12 @@
           :continue :continue
           :placed (let [wrong (misplaced want item (:block (:data e)))]
                     (warn-gap! c pos item)
-                    (ctx/update-mem! c #(cond-> (update (dissoc % :placing) :placed (fnil inc 0))
+                    (ctx/update-mem! c #(cond-> (update (dissoc % :placing :budget-streak) :placed (fnil inc 0))
                                           wrong (assoc-in [:misplaced pos] wrong))))
           :already (ctx/update-mem! c dissoc :placing)
-          (:occupied :need :no-item :no-support :unreachable) (ctx/update-mem! c #(count-fail (dissoc % :placing) pos (if (= :need outcome) :no-item outcome) limit))
+          (:occupied :need :no-item :no-support :unreachable)
+          (ctx/update-mem! c #(cond-> (count-fail (dissoc % :placing) pos (if (= :need outcome) :no-item outcome) limit)
+                                (and (= :unreachable outcome) (= :budget (:why (:data e)))) (update :budget-streak (fnil inc 0))))
           (ctx/update-mem! c #(count-fail (dissoc % :placing) pos :refused limit)))))))
 
 (defn settle-placing!
@@ -102,18 +104,20 @@
         accept (set (:accept (:args c)))
         judged (access/judge v accept)]
     (case judged
-      :ok (let [outcome (await (blocks/dig-cell! c (pos-map pos)
-                                                 {:accept accept
-                                                  :ignore-zones? (boolean (:ignore-zones? (:args c)))
-                                                  :for-plan (:plan (:args c))}))]
+      :ok (let [e (await (blocks/dig-cell-ending! c (pos-map pos)
+                                                  {:accept accept
+                                                   :ignore-zones? (boolean (:ignore-zones? (:args c)))
+                                                   :for-plan (:plan (:args c))}))
+                outcome (blocks/dig-outcome e)]
             (case outcome
               :continue :continue
-              :dug (ctx/update-mem! c #(let [m (update-in % [:digs pos] (fnil inc 0))]
+              :dug (ctx/update-mem! c #(let [m (update-in (dissoc % :budget-streak) [:digs pos] (fnil inc 0))]
                                          (if (>= (get-in m [:digs pos]) limit)
                                            (assoc-in m [:given-up pos] :refilled)
                                            m)))
               :missing (ctx/update-mem! c count-fail pos :missing limit)
-              (ctx/update-mem! c count-fail pos :refused limit)))
+              (ctx/update-mem! c #(cond-> (count-fail % pos :refused limit)
+                                    (and (= :unreachable outcome) (= :budget (:why (:data e)))) (update :budget-streak (fnil inc 0))))))
       :refused (ctx/update-mem! c refuse pos (select-keys v [:reason :zone :plan :claim]))
       :hazard (ctx/update-mem! c refuse pos {:reason :hazard
                                              :hazards (vec (distinct (remove accept (map access/hazard-key (:hazards v)))))})
