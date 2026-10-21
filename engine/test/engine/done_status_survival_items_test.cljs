@@ -30,6 +30,11 @@
     (stack 2) {} {:start 0 :table-placed {:x 1 :y 64 :z 0} :picked-up true} [:ok :crafted]
     (stack 2) {} {:start 0 :table-placed {:x 5 :y 64 :z 0}} [:ok :crafted]))
 
+(deftest craft-already-carried-says-so-not-crafted-0
+  (let [text (fn [m] (nth (done-of 'jobs.items.craft {:inventory (stack 2)} {:item "stick" :count 2} m) 1))]
+    (is (= "already carried 2 stick; pass :count N for more" (text {:start 2})))
+    (is (= "crafted 2 stick" (text {:start 0})))))
+
 (def load3 {:item "raw_iron" :count 3 :base 0})
 
 (deftest smelt-is-done-when-the-load-is-taken

@@ -110,7 +110,9 @@
         made (max 0 (- have start))
         data [:units :items :done made :left (max 0 (- count have)) :result {:made made}]]
     (if (>= have count)
-      (apply contract/ok :crafted (str "crafted " made " " item) data)
+      (if (and (zero? made) (pos? have))
+        (apply contract/ok :crafted (str "already carried " have " " item "; pass :count N for more") data)
+        (apply contract/ok :crafted (str "crafted " made " " item) data))
       (apply contract/later :crafting (str "craft: " made " of " count " " item) data))))
 
 (defn spendable

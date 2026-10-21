@@ -121,7 +121,9 @@
       (or (get-in m [:gather :tree]) (checks/child-under-way? c))
       (apply contract/later :wrapping-up "obtain: the count is carried, wrapping up" (conj data :result {:got got :item (held-name inv names)}))
 
-      :else (apply contract/ok :carried (str "obtained " got " " (held-name inv names)) (conj data :result {:got got :item (held-name inv names)})))))
+      :else (apply contract/ok :carried (if (zero? got)
+                                          (str "already carried " have " " (held-name inv names) "; pass :count N for more")
+                                          (str "obtained " got " " (held-name inv names))) (conj data :result {:got got :item (held-name inv names)})))))
 
 (defn done?
   "Ok when the count (or every item of the bill) is carried and no child is under way."
