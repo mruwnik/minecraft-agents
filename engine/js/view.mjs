@@ -21,7 +21,6 @@ export * from './view-pose.mjs'
 const deflate = promisify(zlib.deflate)
 
 export const FLUSH_MS = 500
-const DECODED_MAX = 64
 export const MAX_COLUMNS_PER_FLUSH = 8
 export const POSE_HZ = 0
 export const POSE_REFRESH_MS = 2000
@@ -172,8 +171,6 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   const overlays = new Map()
   const dirty = new Map() // column key -> Map of block changes waiting for the body to come near (a Set of section indices: over the point bound, the whole column)
   let changes = new Map()
-  // per column key: the loaded column with its decoded state and light sections, dropped when a block or the light changes
-  const decoded = new Map()
   const inflight = new Set()
   const running = new Set()
 
@@ -204,21 +201,17 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     const cx = Math.floor(point.x / 16)
     const cz = Math.floor(point.z / 16)
     overlays.delete(`${cx},${cz}`)
-    decoded.delete(`${cx},${cz}`)
     dirty.delete(`${cx},${cz}`) // the reloaded column carries the server's light, changes included
     markColumn(cx, cz)
   })
   const onUnload = safely(point => {
     const key = `${Math.floor(point.x / 16)},${Math.floor(point.z / 16)}`
     overlays.delete(key)
-    decoded.delete(key)
     dirty.delete(key)
   })
   const onUpdate = safely((oldBlock, newBlock) => {
     const p = (newBlock ?? oldBlock)?.position
     if (!p) return
-    const held = decoded.get(`${p.x >> 4},${p.z >> 4}`)
-    if (held) held.states[(p.y - held.column.minY) >> 4] = undefined
     if (live) markColumn(Math.floor(p.x / 16), Math.floor(p.z / 16)) // off: flushColumns clears pending unread, and turning on marks every column
     if (oldBlock?.stateId === newBlock?.stateId) return
     const at = bot?.entity?.position
@@ -309,38 +302,18 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   const relightChanges = (target, queued, start, blocked) => {
     const table = tableFor(target)
     const hasSky = hasSkyLight(target.game?.dimension)
-    // a loaded column with its section caches (states and light decoded lazily, kept across flushes), or null
-    const seen = new Map()
-    const lookup = (cx, cz, key) => {
-      const column = target.world.getColumn(cx, cz)
-      if (!column) {
-        decoded.delete(key)
-        return null
-      }
-      const held = decoded.get(key)
-      if (held?.column === column) return held
-      const info = { key, column, states: [], light: [] }
-      decoded.set(key, info)
-      if (decoded.size > DECODED_MAX) decoded.delete(decoded.keys().next().value)
-      return info
-    }
+    const infosByKey = new Map()
+    // a loaded column with its section caches (states and light decoded lazily, once per flush), or null
     const columnAt = (cx, cz) => {
       const key = `${cx},${cz}`
-      if (!seen.has(key)) seen.set(key, lookup(cx, cz, key))
-      return seen.get(key)
+      if (infosByKey.has(key)) return infosByKey.get(key)
+      const column = target.world.getColumn(cx, cz)
+      const info = column ? { key, column, states: [], light: [] } : null
+      infosByKey.set(key, info)
+      return info
     }
     const statesOf = (info, s) => info.states[s] ??= columnStateSection(info.column, s)
-    // the server replaces a light section's arrays when it sends one, so the same arrays mean the same light
-    const lightOf = (info, s) => {
-      const c = info.column
-      const l = s + 1
-      const from = [c.skyLightSections[l], c.blockLightSections[l], c.skyLightMask.get(l), c.emptySkyLightMask.get(l), c.blockLightMask.get(l)]
-      const held = info.light[s]
-      if (held && held.from.every((v, i) => v === from[i])) return held.value
-      const value = columnLightSection(c, s, hasSky)
-      info.light[s] = { from, value }
-      return value
-    }
+    const lightOf = (info, s) => info.light[s] ??= columnLightSection(info.column, s, hasSky)
     const stateAt = (x, y, z) => {
       const info = columnAt(x >> 4, z >> 4)
       if (!info) return null
@@ -658,7 +631,6 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
   const attach = target => {
     unhook()
     overlays.clear()
-    decoded.clear()
     dirty.clear()
     changes = new Map()
     bot = target

@@ -918,26 +918,6 @@ test('relight: a change at a column border writes the neighbour column too, and 
   assert.deepEqual(fs.readdirSync(worldChunks(dir)).sort(), ['1.1.bin', '2.1.bin'])
 })
 
-test('relight: a section a later flush needs again is not decoded again unless a block in it changed', async () => {
-  const world = makeWorld()
-  room(world, 28, 20, 8)
-  lightWorld(world)
-  const bot = worldBot(world)
-  const { view } = makeView(bot)
-  const container = world.map.get('1,1').sections[3].data
-  const get = mock.method(container.data, 'get')
-  applyEdits(world, bot, [[31, 62, 23, 'torch']])
-  await view.flushColumns()
-  const first = get.mock.callCount()
-  assert.ok(first > 0)
-  applyEdits(world, bot, [[32, 62, 23, 'torch']])
-  await view.flushColumns()
-  assert.equal(get.mock.callCount(), first)
-  applyEdits(world, bot, [[31, 62, 23, 'air']])
-  await view.flushColumns()
-  assert.ok(get.mock.callCount() > first)
-})
-
 test('relight: in the nether (no sky) open air never gets sky light', async () => {
   const world = makeWorld()
   // the server sends a skyless dimension no sky light at all: no data and no empty flag
