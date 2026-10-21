@@ -1,0 +1,24 @@
+;; Card e8308c98: jobs.build.pen takes up the body's own leftover scaffold-ledger blocks in and around the box before it builds
+;; (a night shelter's cheap blocks stay after dawn, and an animal steps from one onto a fence). The body walls itself in with
+;; cobblestone right beside the ring's east fence (shut-in :for :night, ledger :shelter), is moved into the ring, and builds the pen.
+;; Should-succeed: the pen holds and the shelter's walls are gone. Should-fail: the walls left standing.
+{:defaults
+ {:tags [:build :pen :cleanup] :time :any
+  :plot {:height 8 :floor "stone"}
+  :body {:at [16.5 0 12.5] :settle-s 2 :inventory [["oak_fence" 16] ["oak_fence_gate" 1] ["cobblestone" 16] ["iron_pickaxe" 1] ["iron_sword" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "shelter-walls-beside-the-fence-are-taken-up"
+   :plans [{:id "ring" :metadata {:by "$body"}
+            :parts [{:id "n" :box [#at [10 0 10] #at [14 0 10]] :want "oak_fence"}
+                    {:id "s" :box [#at [10 0 14] #at [14 0 14]] :want "oak_fence"}
+                    {:id "w" :box [#at [10 0 11] #at [10 0 13]] :want "oak_fence"}
+                    {:id "e1" :box [#at [14 0 11] #at [14 0 11]] :want "oak_fence"}
+                    {:id "g" :box [#at [14 0 12] #at [14 0 12]] :want "oak_fence_gate"}
+                    {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}]}]
+   :act [[:job (jobs.survival.shut-in {:ways #{:walls} :for :night :ignore-zones? true})]
+         [:await {:source :job :kind :completed} 60]
+         [:rcon "execute positioned $X $Y $Z as $BODY run tp @s ~-4 ~ ~"]
+         [:job (jobs.build.pen {:plan "$plan:ring" :ways #{:carried :patch} :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]
+   :after [[:not-block [15 0 12] "cobblestone"] [:not-block [17 0 12] "cobblestone"]]}]}

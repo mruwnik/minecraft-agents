@@ -9,6 +9,7 @@
             [engine.harvest-test :as h]
             [engine.test-util :as tu]
             [jobs.build.pen :as pen]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.pen-read :as pen-read]))
 
 (def job 'jobs.build.pen)
@@ -383,3 +384,16 @@
           (is (every? #{nil "air"} (map #(h/block-at p 3 % 3) [64 65])))
           (is (contains? #{nil "air"} (h/block-at p 3 65 4)))
           (is (= "stone" (h/block-at p 3 63 3))))))))
+
+(deftest the-bodys-own-leftover-shelter-block-beside-the-fence-is-taken-up-before-the-build
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen] :as w} (b/start (spec (conj kit {:name "iron_pickaxe" :count 1} {:name "iron_sword" :count 1}) {"5,64,3" "cobblestone" "5,65,3" "cobblestone"})
+                                                  {"pen" (ring-plan)} [])
+              entry (fn [cell] {:cell cell :item "cobblestone" :before "air" :job "j9" :purpose :shelter :state :placed})]
+          (ledger/write! (:store eng) [(entry [5 64 3]) (entry [5 65 3])])
+          (let [e (await (ending-of w job {:plan "pen"} 300))]
+            (is (true? (:closed? (:data e))))
+            (is (every? #{nil "air"} (map #(h/block-at p 5 % 3) [64 65])) "the shelter blocks beside the fence are gone")
+            (is (some #(= :tidy (:slot %)) (kinds-of seen :child_started)))))))))

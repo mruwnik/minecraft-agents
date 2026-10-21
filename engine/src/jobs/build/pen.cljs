@@ -31,6 +31,7 @@
   Phase 0 fells each trunk seen inside the box with a jobs.forestry.fell-tree child (:at its base log), then clears
   the logs and leaves left, up to the fence tops, with a jobs.blocks.clear-cells child (:only), so no leaf staircase
   leads over the fence; trees not seen yet are left to the check.
+  Then a jobs.access.cleanup child takes up the body's own scaffold-ledger blocks in and around the box (a night shelter's cheap blocks stay after dawn; an animal steps from one onto a fence).
   Phase 1 runs jobs.build.from-plan on the plan. Its arg :accept passes through, and its rules
   (zones, other plans' footprints, materials, cuts) apply. Phase 2: a body still inside the box walks out through the
   gate (a jobs.movement.go-to child to the cell outside it) and jobs.maintenance.shut shuts it. Phase 3 checks the pen
@@ -274,7 +275,7 @@
   (let [trees (trees-in c cells)
         felled (set (:felled (ctx/mem c)))]
     (if (empty? trees)
-      (do (ctx/update-mem! c assoc :phase :build) :again)
+      (do (ctx/update-mem! c assoc :phase :tidy) :again)
       (if-let [[x y z :as base] (first (trunk-bases c trees felled))]
         (let [r (await (ctx/call c (keyword (str "fell-" x "-" y "-" z)) 'jobs.forestry.fell-tree
                                  (merge (assoc (select-keys (:args c) [:ignore-zones?]) :ways (need/pass-ways c))
@@ -291,7 +292,25 @@
                                          :only tree-endings})))]
           (if (= :continue r)
             :continue
-            (do (ctx/update-mem! c assoc :phase :build) :again)))))))
+            (do (ctx/update-mem! c assoc :phase :tidy) :again)))))))
+
+(def tidy-margin "Blocks around the box within which the body's own leftover blocks are taken up before the build." 4)
+
+(defn ^:async tidy-step!
+  "Take up the body's own scaffold-ledger blocks (a night shelter's cheap blocks stay after dawn) in and around the box
+  with a jobs.access.cleanup child, so no animal steps from one onto a fence. Whatever it ends with, on to the build."
+  [c cells]
+  (let [{:keys [min max]} (pen-read/barrier-box cells)
+        ys (map (comp second :pos) cells)
+        mid (fn [a b] (/ (+ a b 1) 2))
+        r (await (ctx/call c :tidy 'jobs.access.cleanup
+                           (merge (select-keys (:args c) [:ignore-zones?])
+                                  {:of :all
+                                   :near {:pos {:x (mid (:x min) (:x max)) :y (mid (apply js/Math.min ys) (apply js/Math.max ys)) :z (mid (:z min) (:z max))}
+                                          :radius (+ tidy-margin (js/Math.hypot (- (:x max) (:x min)) (- (:z max) (:z min)) (- (apply js/Math.max ys) (apply js/Math.min ys))))}})))]
+    (if (= :continue r)
+      :continue
+      (do (ctx/update-mem! c assoc :phase :build) :again))))
 
 (defn ^:async patch-step!
   "One fence of the patch queue by a blocks.place child (its ending, placed or not, passes it on); then back to the check."
@@ -358,6 +377,7 @@
     (cond
       trouble :continue
       (= :trees phase) (await (trees-step! c cells))
+      (= :tidy phase) (await (tidy-step! c cells))
       (= :exit phase) (await (exit-step! c cells))
       (= :patch phase) (await (patch-step! c cells))
       (= :shut phase) (await (shut-step! c))
