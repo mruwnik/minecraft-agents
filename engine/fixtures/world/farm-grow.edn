@@ -31,9 +31,9 @@
    :after [[:item "wheat_seeds" 9] [:block [18 -1 16] "grass_block"]]
    :limit-s 80}
   {:name "obtain-wheat-cuts-a-ripe-field-14-blocks-off"
-   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["wooden_hoe" 1]]}
+   :body {:at [16.5 0 16.5] :yaw 90 :settle-s 2 :effects [["resistance" 600 4]] :inventory [["wooden_hoe" 1]]}
    :blocks [[:fill [2 -1 16] [3 -1 16] "farmland[moisture=7]"] [:fill [2 0 16] [3 0 16] "wheat[age=7]"]]
-   :act [[:job (jobs.items.obtain {:item "wheat" :count 2 :ways #{:crops}})]]
+   :act [[:wait-s 4] [:job (jobs.items.obtain {:item "wheat" :count 2 :ways #{:crops}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]
    :after [[:item "wheat" [:>= 2]]]
    :limit-s 140}]}
