@@ -30,7 +30,7 @@
             [jobs.lib.swim :as swim]
             [jobs.movement.go-to.tuning :as tuning]))
 
-(def max-surfacings "Walks to air one go-to call makes at most." 3)
+(def max-surfacings wplan/max-surfacings)
 
 (def max-search-rounds "Rounds a swim to the air it knows keeps searching for its way: it is a few cells, and the air is running out." 20)
 
@@ -60,21 +60,6 @@
   "Seconds of air the body has left before it drowns: the planner's airSupply less the air its oxygen says is used."
   [p]
   (- (unchecked-get base/DEFAULT-COSTS "airSupply") (cost/air-used (.-oxygen (.self p)))))
-
-(defn air-spent-check
-  "near/walk-round!'s :stair-check of a walk under water: {:air-spent true} for a re-plan whose swim, at the planner's own price
-  per cell, takes more than the air left of the half a body under water turns back at (masked-wet-limit-s of its supply),
-  while a swim to the air it came by is left (not the first plan: it was made with the air whole)."
-  [c]
-  (let [p (:primitives c)]
-    (fn [{:keys [steps]} first?]
-      (when (and (not first?) (breath/head-under? p)
-                 (< (:surfacings (ctx/mem c) 0) max-surfacings)
-                 (:last-air (ctx/mem c))
-                 (let [left (air-left p)]
-                   (and (< left wplan/masked-wet-limit-s)
-                        (> (* (count (filter :swim steps)) (unchecked-get base/DEFAULT-COSTS "swimSubH")) left))))
-        {:air-spent true}))))
 
 (defn look-cells
   "The cells a drowning body looks again at for air, those still unknown: the goal's head cell, then the cell over the

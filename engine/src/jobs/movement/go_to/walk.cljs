@@ -313,6 +313,23 @@
                (not (sh-sense/buried? (:primitives c))))
       (surface-descent-s))))
 
+(defn second-surfacing-in-air?
+  "Whether a swim to air has just brought the body, head out, back to the air it breathed last in this call (mem :last-air)
+  a second time: the dive from there does not fit its air, so another try would repeat it (go-to escalates instead)."
+  [c]
+  (let [{:keys [surfacings last-air]} (ctx/mem c)]
+    (boolean (and (>= (or surfacings 0) 2) last-air (not (breath/head-under? (:primitives c)))
+                  (<= (u/dist (u/self-pos c) last-air) 2)))))
+
+(defn ^:async land-at-air!
+  "A body in water with its head out after a swim to air (the shaft under its pocket) walks the last cell or two to where it
+  last stood dry (mem :last-air): a stair cannot be cut from the water."
+  [c opts]
+  (let [last-air (:last-air (ctx/mem c))]
+    (when (and last-air (breath/in-water? (:primitives c)) (not (breath/head-under? (:primitives c)))
+               (<= (u/dist (u/self-pos c) last-air) 3))
+      (await (near/walk-round! c (zipmap [:x :y :z] (mapv #(js/Math.floor (% last-air)) [:x :y :z])) 0 (dissoc opts :progress))))))
+
 (defn ^:async walk! [c0 pos range doors]
   (let [way (own-way c0 pos (dive-floor! c0 pos))
         _ (own-way-left! c0 way)
@@ -347,7 +364,7 @@
             seen-goal? (and (see-cell c) (not (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))))
             opts (cond-> (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
                    seen-goal? (assoc :explore false))
-            stair-check (lookout-check c pos (plan-check c pos (let [stairs (choose/stair-check c pos) air-check (air/air-spent-check c)] (fn [plan first?] (or (when stairs (stairs plan first?)) (air-check plan first?)))) (straight-from! c d)))
+            stair-check (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d)))
             {walked :result status :status to :to} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))
             _ (ctx/hold-still! c (when (= "searching" status) :searching))
             fetched (when (= :no-torch (:status walked)) (await (fetch-torches! c)))
@@ -392,7 +409,9 @@
 
           (and (= "stair" status) (:air-spent (:why walked)))
           (do (await (air/surface! c (dissoc opts :progress) pos))
-              (ctx/update-mem! c assoc :escalate-now true :stair-tried true)
+              (await (land-at-air! c opts))
+              (when-not (breath/in-water? (:primitives c))
+                (ctx/update-mem! c assoc :escalate-now true :stair-tried true))
               :again)
 
           (= "stair" status)
@@ -420,6 +439,12 @@
           looked? :again
 
           surveyed? :again
+
+          (and surfaced? (second-surfacing-in-air? c))
+          (do (await (land-at-air! c opts))
+              (when-not (breath/in-water? (:primitives c))
+                (ctx/update-mem! c assoc :escalate-now true :stair-tried true))
+              :again)
 
           surfaced? :again
 

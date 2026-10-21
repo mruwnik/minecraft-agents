@@ -147,12 +147,19 @@
       (subvec exec-steps 0 n)
       (into exec-steps (subvec steps (count exec-steps) n)))))
 
+(defn air-stop
+  "The replan done map when the body, at a new step, swims on past the air it may spend (wplan/swim-outlasts-air?) so the
+  re-plan can turn it back; nil otherwise (the look-ahead does not run in water)."
+  [c steps i i2 {:keys [x y z]}]
+  (when (and (> i2 i) (wplan/swim-outlasts-air? c (subvec steps (min i2 (count steps)))))
+    {:status :replan :why :air :at [x y z] :step i2}))
+
 (defn gate-tick
   "decide-tick with the floor gate (jobs.lib.walk.sight): a body standing on a pending floor ends the walk :pushed; the
   pending floors are sensed (a plain one resolves, another ends :changed); the executor gets the steps up to the first
   pending gate's takeoff (a walk that starts on the takeoff walks to it), its arrival there does not end the walk, nor its
   stuck clock on the takeoff; the gate's controller holds the body."
-  [{:keys [policy steps watch-stop gate]} {:keys [exec] :as state} pose]
+  [{:keys [policy steps watch-stop gate air-c]} {:keys [exec] :as state} pose]
   (let [i (:i exec)
         at [(:x pose) (:y pose) (:z pose)]
         before (wsight/pending steps (:resolved (:gate state) #{}) i)]
@@ -169,7 +176,7 @@
                 held? (and k (= (:i exec') (dec k)))
                 on? (and k (wsight/on-takeoff? (nth steps (dec k)) held? gstate pose))
                 edone (when-not (or (and held? (= :arrived (:status edone))) (and on? (= :stuck (:status edone)))) edone)
-                done (or done edone (when watch-stop (watch-stop i exec' pose)))
+                done (or done edone (when air-c (air-stop air-c steps i (:i exec') pose)) (when watch-stop (watch-stop i exec' pose)))
                 base {:controls (gait-controls policy exec' pose controls) :yaw yaw :pitch pitch}]
             (cond
               done [(assoc state :exec exec' :gate gstate) {:done done}]
@@ -208,7 +215,7 @@
       (gate-tick env state pose)
       (let [i (:i exec)
             {exec' :state :keys [done controls yaw pitch]} (executor/tick policy exec pose)
-            done (or done (when (:felt? env) (felt-solid steps (:i exec') pose)) (when watch-stop (watch-stop i exec' pose)))
+            done (or done (when (:felt? env) (felt-solid steps (:i exec') pose)) (when-let [c (:air-c env)] (air-stop c steps i (:i exec') pose)) (when watch-stop (watch-stop i exec' pose)))
             state' (assoc state :exec exec')]
         [state' (if done
                   {:done done}
@@ -240,7 +247,7 @@
   [c steps timeout-s watch]
   (let [gate (gate-env (:primitives c) steps)
         watch (cond-> watch (and watch gate) (update :skip (fnil into #{}) (wsight/floor-cells steps)))
-        env {:policy (wworld/body-policy c) :steps steps :gate gate :felt? (boolean (:unknown c))
+        env {:policy (wworld/body-policy c) :steps steps :gate gate :felt? (boolean (:unknown c)) :air-c c
              :watch-stop (when watch (fn [i exec' pose] (wwatch/watch-stop watch steps i exec' pose)))}
         state (volatile! (start-state steps (let [pos (.-pos (.self (:primitives c)))] {:x (.-x pos) :z (.-z pos)})))
         last-done (volatile! nil)

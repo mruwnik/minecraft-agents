@@ -2,8 +2,10 @@
   "The walk driver's planning: plan the walk from the body's cell to a goal within the executor's abilities (walk/plan-walk!, plan-within!),
   in slices that yield to the event loop, and say when a plan is not walked (no-walk)."
   (:require [engine.ctx :as ctx]
+            [engine.path.planner.base :as base]
             [engine.path.executor :as executor]
             [engine.path.planner-tuned :as planner]
+            [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.walk.sight :as wsight]
@@ -225,6 +227,22 @@
       (constantly false)
       #(and (<= (or (:air %) 0) masked-wet-limit-s)
             (<= (* masked-swim-pace-s (vswap! cells inc)) left)))))
+
+(def max-surfacings "Walks to air one go-to call makes at most." 3)
+
+(defn swim-outlasts-air?
+  "Whether a body under water that has been in air since this go-to call began (mem :last-air) and has surfaced less than
+  max-surfacings times should turn back: it is past the half of its air masked-wet-limit-s allows, and either the steps'
+  swim, at the planner's own price per cell, takes more than the air left, or the plan surfaces at a cell whose air it has
+  not seen (an unseen head cell reads as air to the planner; a player does not swim on for a guess)."
+  [c steps]
+  (when-some [used (:air-used (wworld/body-policy c))]
+    (let [m (ctx/mem c)
+          left (- (unchecked-get base/DEFAULT-COSTS "airSupply") used)
+          exit (first (remove :swim steps))]
+      (and (:last-air m) (< (:surfacings m 0) max-surfacings) (< left masked-wet-limit-s)
+           (or (> (* (count (filter :swim steps)) (unchecked-get base/DEFAULT-COSTS "swimSubH")) left)
+               (and exit (not (breath/air? (breath/seen-water-name (:primitives c) {:x (:x exit) :y (inc (:y exit)) :z (:z exit)})))))))))
 
 (defn masked-cut
   "A found masked plan's steps up to its first swimming step wet-ok? refuses, and whether it cut: the unseen cells above a dark

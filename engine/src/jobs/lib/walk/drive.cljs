@@ -120,6 +120,9 @@
               (:refused fresh) (finish (wplan/no-walk fresh 0 policy) fresh walked')
               :else (recur plan (subvec steps (max 0 (dec k))) (inc n) ms walked' kept-damage)))
 
+          (and (= :replan (:status done)) (= :air (:why done)))
+          (finish {:status :stair-cheaper :why {:air-spent true}} plan walked')
+
           (and (= :replan (:status done)) (= :health (:why done)))
           (let [t (js/performance.now)
                 fresh (await (plan-fn []))
