@@ -187,7 +187,7 @@
     (tu/run-async done
       (fn ^:async t []
         (is (= {:event :completed} (select-keys (await (ending-with-calves '(jobs.animals.breed {:mob "cow"}) {:inventory wheat :entities [(cow-at 1 2) (cow-at 2 3)]})) [:event])))
-        (is (= {:event :completed} (select-keys (await (ending-with-calves '(jobs.animals.breed {:mob "cow" :pairs 3}) {:inventory wheat :entities (mapv #(cow-at % %) [1 2 3 4 5 6])})) [:event]))
+        (is (= {:event :completed} (select-keys (await (ending-with-calves '(jobs.animals.breed {:mob "cow" :pairs 3 :ways #{:chest :craft}}) {:inventory wheat :entities (mapv #(cow-at % %) [1 2 3 4 5 6])})) [:event]))
             "the food ran out after four: done with the count fed")
         (doseq [[args world kind reason]
                 [[{} {:inventory wheat :entities [(cow-at 1 2)]} :condition-failed :too-few]

@@ -7,6 +7,7 @@
             [engine.game :as game]
             [engine.hostile-test :as h]
             [engine.expr :as expr]
+            [engine.farm-grow-test :as grow]
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [jobs.items.obtain :as obtain]
@@ -45,6 +46,22 @@
         (let [s (await (scenario {:item "beef" :count 1 :ways #{:hunt}} herd 40))]
           (is (seq (attacked s)) "a cow was attacked")
           (is (= 'jobs.combat.hunt (:via (first (filter #(= :obtain.gathering (:kind %)) @(:seen s)))))))))))
+
+(defn ^:async gathered-via [world]
+  (let [s (grow/setup world)
+        _ (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wheat" :count 1 :ways #{:crops}}) {})
+        _ (await (tu/run-ticks (:eng s) (:clock s) 6 700))]
+    (:via (first (filter #(= :obtain.gathering (:kind %)) @(:seen s))))))
+
+(defn young-or-ripe [age] {:blocks {"3,63,0" "farmland" "3,64,0" "wheat"} :ages {"3,64,0" age}})
+
+(deftest the-crops-way-grows-wheat-when-no-ripe-crop-is-in-sight-and-cuts-one-that-is
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= 'jobs.farm.grow (await (gathered-via {}))) "nothing seen")
+        (is (= 'jobs.farm.grow (await (gathered-via (young-or-ripe 3)))) "a crop still growing")
+        (is (= 'jobs.farm.harvest (await (gathered-via (young-or-ripe 7)))) "a ripe crop")))))
 
 (deftest without-the-hunt-way-no-animal-is-hunted
   (async done

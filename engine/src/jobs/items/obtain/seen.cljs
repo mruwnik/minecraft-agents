@@ -3,7 +3,9 @@
   (:require [engine.ctx :as ctx]
             [jobs.items.obtain.base :refer [animal-radius seen-radius]]
             [jobs.lib.access :as access]
+            [jobs.items.obtain.table :refer [grass-seeds]]
             [jobs.lib.animals :as animals]
+            [jobs.lib.crops :as crops]
             [jobs.lib.foods :as foods]
             [jobs.lib.stock :as stock]
             [jobs.lib.look :as look]
@@ -48,10 +50,22 @@
                    (look/seen-blocks (:primitives c) {:match #((:seen need) %) :radius (seen-radius) :max (if all? 1 64)}))]
       (if all? blocks (filter #(and (:ok (access/may? in :harvest (:pos %))) (not (cut-off? c %))) blocks)))))
 
+(defn growable?
+  "Whether a crop need can be grown from nothing: the crop's seed is broken out of grass (wheat)."
+  [need]
+  (boolean (and (:crop need) (grass-seeds (crops/seed-of (:crop need))))))
+
+(defn ripe-seen?
+  "Whether a ripe crop of the need's kind that may be cut is in sight."
+  [c need]
+  (boolean (some #(some-> (:age %) (>= (crops/ripe-age (:crop need))))
+                 (crops/seen-crops (:primitives c) [(:crop need)] (seen-radius) 256))))
+
 (defn seen-of
-  "The nearest seen block of a need that may be taken, or for a wool need a sheep of its colour in range, for a drop of an animal one adult in range, else nil."
+  "The nearest seen block of a need that may be taken, or for a wool need a sheep of its colour in range, for a drop of an animal one adult in range; a growable crop need with none seen is sourced by growing it ({:grow true}); else nil."
   [c need]
   (cond
+    (growable? need) (or (first (seen-blocks-of c need false)) {:grow true})
     (:sheep need) (first (filter #(= (:sheep need) (.-color %)) (sheep-in-range c)))
     (:mob need) (first (remove #(true? (.-baby %)) (animals/herd (:primitives c) (:mob need) (animal-radius))))
     :else (first (seen-blocks-of c need false))))
@@ -67,6 +81,9 @@
          (empty? (look/seen-blocks (:primitives c) {:names ["obsidian"] :radius (seen-radius) :max 1})))
     (assoc need :job 'jobs.gather.cast-obsidian :args {:count (:count need) :radius (seen-radius) :ways #{:carried}})
 
+    (and (growable? need) (not (ripe-seen? c need)))
+    (assoc need :job 'jobs.farm.grow :args {:crop (:crop need) :count (:count need)})
+
     (= "water_bucket" (:key need))
     (cond-> need (seen-of c need) (assoc-in [:args :on] (:pos (seen-of c need))))
 
@@ -79,6 +96,7 @@
   "The need with the items to carry in all (the :count of harvest-wood, fish, get-seeds, hunt and mine) in its args: those carried and those it lacks."
   [p need]
   (case (:job need)
+    jobs.farm.grow (assoc-in need [:args :count] (+ (gather-carried p need) (:count need)))
     jobs.gather.get-seeds (assoc-in need [:args :count] (+ (gather-carried p need) (:count need)))
     jobs.gather.mine (assoc-in need [:args :count] (+ (gather-carried p need) (:count need)))
     jobs.forestry.harvest-wood (assoc-in need [:args :count] (+ (gather-carried p need) (:count need)))

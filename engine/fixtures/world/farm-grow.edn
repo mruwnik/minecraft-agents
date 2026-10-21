@@ -1,0 +1,31 @@
+;; Card a408e733: jobs.farm.grow makes a field when no crop stands, waits for it and cuts it; a field already growing is waited for,
+;; never started again. Lit grass plot (no sky); the water comes from the bucket carried.
+;; Should-succeed: with a hoe, seed, a water bucket and bone meal carried the job picks a spot, tills, sows, bone-meals and cuts (wheat carried);
+;; with only a hoe it breaks grass for seed first (seed comes by chance, so the field is 2 x 2).
+;; Should-fail: a young crop already standing keeps the job waiting; it sows nothing and makes no second field.
+{:defaults
+ {:tags [:farm :grow :jobs]
+  :time :any
+  :plot {:light :lit :floor "grass_block" :height 6}
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]
+         :inventory [["wooden_hoe" 1] ["wheat_seeds" 9] ["water_bucket" 1] ["bone_meal" 24]]}
+  :limit-s 400}
+ :cases
+ [{:name "no-field-seed-and-bone-meal-grows-and-cuts-wheat"
+   :act [[:job (jobs.farm.grow {:count 2 :w 3 :h 3})]]
+   :expect [{:event {:source :job :kind :completed :data {:got [:>= 2] :item "wheat"}} :within-s 380 :of-job true}]
+   :after [[:item "wheat" [:>= 2]]]}
+  {:name "seed-is-broken-out-of-grass-first"
+   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["wooden_hoe" 1] ["water_bucket" 1] ["bone_meal" 24]]}
+   :blocks [[:fill [8 0 8] [24 0 24] "short_grass"]]
+   :act [[:job (jobs.farm.grow {:count 1 :w 2 :h 2})]]
+   :expect [{:event {:source :job :kind :completed :data {:got [:>= 1] :item "wheat"}} :within-s 380 :of-job true}]
+   :after [[:item "wheat" [:>= 1]]]
+   :limit-s 420}
+  {:name "a-growing-field-is-waited-for-not-replaced"
+   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["wooden_hoe" 1] ["wheat_seeds" 9]]}
+   :blocks [[:fill [14 -1 14] [15 -1 15] "farmland[moisture=7]"] [:fill [14 0 14] [15 0 15] "wheat[age=1]"]]
+   :act [[:job (jobs.farm.grow {:count 2})]]
+   :expect [{:no-event {:source :job :kind :completed} :for-s 60}]
+   :after [[:item "wheat_seeds" 9] [:block [18 -1 16] "grass_block"]]
+   :limit-s 80}]}

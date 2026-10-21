@@ -381,11 +381,11 @@
     night-hut {:safe? stair/safe?} {} :ok))
 
 (defn jobs-under
-  "The registry's jobs in the namespaces under the prefixes, but find-spot (which roams)."
+  "The registry's jobs in the namespaces under the prefixes, but find-spot and grow (which roam)."
   [& prefixes]
   (for [j (sort (keys registry/jobs))
         :when (some #(.startsWith (str j) %) prefixes)
-        :when (not= j 'jobs.farm.find-spot)]
+        :when (not (#{'jobs.farm.find-spot 'jobs.farm.grow} j))]
     j))
 
 (def work-jobs (jobs-under "jobs.farm." "jobs.build."))
@@ -451,7 +451,7 @@
 
 (deftest jobs-that-go-to-a-place-keep-its-exposure-for-exposed-checks
   (doseq [job (concat work-jobs (jobs-under "jobs.animals." "jobs.apiary." "jobs.village." "jobs.strip." "jobs.food.")
-                      '[jobs.farm.find-spot])]
+                      '[jobs.farm.find-spot jobs.farm.grow])]
     (is (contains? (meta (safe-of job)) ::ready/exposure) (str job))))
 
 (deftest near-unseen-here-judges-a-hidden-cell-within-reach-where-the-body-stands
