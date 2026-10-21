@@ -16,6 +16,7 @@
    ::deep-drop {:default 8 :doc "A pile this many blocks or more below the body, within ::deep-reach aside, is reached by a stair down (jobs.access.tunnel) once the walk did not arrive." :spec (a/int-in 1 nil)}
    ::deep-reach {:default 24 :doc "How far aside of a deep pile the walk goes on before the stair down is cut." :spec (a/num-in 0 nil)}
    ::stair-step-s {:default 3 :doc "Seconds one block of a stair down and its run is reckoned to take, against the despawn window left." :spec (a/num-in 0 nil)}
+   ::kit-detour {:default 40 :doc "A kit is fetched only from a chest that adds no more than this many blocks to the walk from the body to the pile." :spec (a/num-in 0 nil)}
    ::killer-guard-ms {:default 60000 :doc "How long after a death its killer is assumed to still stand at the pile; later only the hostiles the body knows of count." :spec (a/num-in 0 nil)}
    ::pause-s {:default 1 :doc "Seconds one wait for the respawn, the settling or a kit fetch pauses (jobs.time.noop) before it looks again." :spec (a/num-in 0 nil)}
    ::danger-memory-ms {:default 150000 :doc "How long a skip for danger is remembered: the died trigger rests and the job waits (:danger) for that death, then the danger is weighed anew. A skip for the assumed killer alone lasts only while the killer guard does." :spec (a/num-in 0 nil)}
@@ -81,6 +82,8 @@
 
 (defn min-hold-ms [] (* 1000 (settings/get settings ::min-hold-s)))
 
+
+(defn kit-detour [] (settings/get settings ::kit-detour))
 
 (defn leg-s [] (settings/get settings ::leg-s))
 

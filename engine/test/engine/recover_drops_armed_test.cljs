@@ -129,3 +129,16 @@
           (is (number? (:minutes @opts)) "the fetch carries a time limit")
           (is (<= (:minutes @opts) 3) "never above the configured limit")
           (is (< 0 (:minutes @opts) 5) "within the 5 minute window"))))))
+
+(deftest a-chest-away-from-the-pile-is-no-kit-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pile dt/death-pile-of-the-field-report
+              {:keys [eng seen p]} (setup {:floor tu/walk-floor :entities (vec (pile-drops pile))})]
+          (mem/write! (:store eng) stock/stock-kind {:pos [-300 64 3] :items {"iron_sword" 1}} stock/stock-policy)
+          (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"})
+          (core/submit! eng job {})
+          (await (run-until-empty eng 60))
+          (is (empty? (filter #(= :obtain.chest (:kind %)) @seen)))
+          (is (nil? (get (inv p) "iron_sword"))))))))

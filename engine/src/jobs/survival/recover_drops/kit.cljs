@@ -16,10 +16,18 @@
                         [jobs.survival.recover-drops.deaths :as dth]
             [jobs.survival.recover-drops.estimate :as est]))
 
+(defn on-the-way?
+  "Whether a chest at cell costs at most ::kit-detour blocks more than the walk from the body to the pile: the pile
+  despawns, so a kit is not worth a trip away from it."
+  [c pile cell]
+  (let [here (u/self-pos c)
+        at (zipmap [:x :y :z] cell)]
+    (<= (- (+ (u/dist here at) (u/dist at pile)) (u/dist here pile)) (cfg/kit-detour))))
+
 (defn stock-names
-  "The item names the known chests hold (:fetch/stock)."
-  [c]
-  (into #{} (mapcat keys) (vals (stock/stock-of (ctx/view c)))))
+  "The item names the known chests on the way to the pile hold (:fetch/stock)."
+  [c pile]
+  (into #{} (comp (filter #(on-the-way? c pile (key %))) (mapcat (comp keys val))) (stock/stock-of (ctx/view c))))
 
 (defn piece-points
   "Armour points of one piece (jobs.lib.cost/armour-stats), 0 for nil."
@@ -27,12 +35,12 @@
   (if item (:points (cost/armour-stats {slot {:name item}})) 0))
 
 (defn kit-problem
-  "The need wait of the best weapon, else of the best piece for an empty or weaker armour slot, that a known chest holds
+  "From the chests on the way to the pile, the need wait of the best weapon, else of the best piece for an empty or weaker armour slot, that a known chest holds
   and the body does not carry (ranked by jobs.lib.cost: damage per attack gap, armour points); nil when none."
-  [c]
+  [c pile]
   (let [p (:primitives c)
         have (set (map :name (u/inventory p)))
-        stock (remove have (stock-names c))
+        stock (remove have (stock-names c pile))
         worn (armour/worn-of (.-equipment (.self p)))
         weapons (->> stock (filter #(combat/weapon? combat/default-weapons %)) (sort-by #(/ (cost/weapon-damage %) (cost/attack-gap-ms %)) >))
         pieces (fn [slot] (->> stock
@@ -73,10 +81,10 @@
   nothing to do, else :continue for a cut."
   [c entry]
   (let [limits (need/fetch-opts c)]
-    (if (or (:kit-done (ctx/mem c)) (not limits) (nil? (kit-problem c)) (not (kit-called-for? c entry)))
+    (if (or (:kit-done (ctx/mem c)) (not limits) (nil? (kit-problem c (:pos (:data entry)))) (not (kit-called-for? c entry)))
       (do (ctx/update-mem! c assoc :kit-done true) nil)
       (loop []
-        (let [wanted (kit-problem c)
+        (let [wanted (kit-problem c (:pos (:data entry)))
               r (if wanted (await (need/blocks! c (:any-of wanted) 1 (assoc limits :minutes (kit-minutes c entry)))) :done)]
           (cond
             (nil? wanted)
