@@ -4,6 +4,7 @@
             [jobs.lib.click :as click]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.util :as u]
+            [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.sense :as sh-sense]))
 
 (defn shut-in?
@@ -126,6 +127,10 @@
 (def trapped-policy
   "Policy of the :shelter-trapped entries written when leave! found no way out: up to 3, five minutes."
   {:cap 3 :ttl 300000})
+
+(def left-policy
+  "Policy of the :shelter-trapped entries written when leave-shelter got out: the walk back through its cell is no new dawn for half a day."
+  {:cap 3 :ttl (/ sh-clock/ms-per-day 2)})
 
 (defn shut-in-by-day?
   "By day: the body is shut in its own shelter (data) and no :shelter-trapped entry (data) says leave! found no way

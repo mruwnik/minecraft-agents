@@ -50,7 +50,9 @@
           (core/load-scenario! eng (scenario/parse (str "{:register [{:trigger " shut-in-trigger "}]}")))
           (await (st/tick-n eng 12))
           (is (not= {:x 0 :y 64 :z 0} (st/pos-of p)) "the reflex ran leave!: the body stepped out of its walls")
-          (is (empty? (filter :reflex (vals (:instances (core/state eng))))) "and the reflex ended"))))))
+          (is (empty? (filter :reflex (vals (:instances (core/state eng))))) "and the reflex ended")
+          (is (false? (fires? {:time st/noon :blocks {"0,66,0" "stone"}} (mem/view (:store eng))))
+              "a walk back through the shelter's cell is no new dawn"))))))
 
 (deftest a-trapped-body-is-tried-once-not-every-cooldown
   (async done

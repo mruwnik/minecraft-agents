@@ -24,7 +24,7 @@
   dug, a pit climbed, the shelter's valuable blocks taken back), no doorway the night filled (still holding a block it
   put there) to dig again, no bed it put down outside its own zones (not the respawn bed) to dig up, no drop to walk
   over. A shelter with no way out ends nothing-possible :no-way-out (the cell is remembered as :shelter-trapped, so the
-  trigger lets go). A body shut in stays while a known hostile is near and the dawn grace lasts (night.dawn-hold).
+  trigger lets go). A shelter it left is remembered the same way, so a walk back through its cell is no new dawn. A body shut in stays while a known hostile is near and the dawn grace lasts (night.dawn-hold).
   A doorway cell it could not open is warned night.doorway-stuck once and tried again quietly.
   The doorway blocks and the bed are scaffold-ledger entries (purposes :doorway, :bed); one jobs.access.cleanup call takes them back.
   Memory: job memory :dig-out, :take-back; body memory :shelter-trapped, :doorway-stuck-warned.")
@@ -120,7 +120,9 @@
       (let [r (await (dig-leave/leave! c))]
         (cond
           (= :continue r) :again
-          (= :out (:reason r)) :again
+          (= :out (:reason r))
+          (do (ctx/remember! c :shelter-trapped {:pos (:pos (:data (ctx/latest c :shelter)))} sh-inside/left-policy)
+              :again)
           (= :no-way-out (:reason r))
           (let [text "no way out of the shelter by day; giving the body back"]
             (ctx/remember! c :shelter-trapped {:pos (sh-sense/feet p)} sh-inside/trapped-policy)
