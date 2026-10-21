@@ -439,6 +439,19 @@
           (await (ticks eng 3))
           (is (= 3 (get (inv-of p) "iron_ingot"))))))))
 
+(deftest a-cook-cut-after-the-load-takes-the-input-back-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup base-world)
+              id (core/submit! eng iron-job {})
+              _ (await (ticks eng 1))
+              _ (is (= {:name "raw_iron" :count 3} (:input (furnace-of p))) "loaded")
+              _ (core/cancel! eng id)
+              _ (await (ticks eng 4))]
+          (is (= 5 (get (inv-of p) "raw_iron")) "the cleanup took the 3 raw back to the 2 carried")
+          (is (nil? (:input (furnace-of p)))))))))
+
 (deftest the-furnace-broken-mid-cook-ends-the-job-with-a-reason
   (async done
     (tu/run-async done

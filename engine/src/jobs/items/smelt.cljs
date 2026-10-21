@@ -31,6 +31,7 @@
   without touching the furnace.
   Quote: the cook time of the count, the input, fuel and product items; open-ended with no furnace given or seen. Default :spend
   :job-time is ::job-time-s plus the cook (10 s an item); :wall-time adds ::away-s for other jobs done while it cooks.
+  Cut off with a load not taken, the cleanup walks back and takes the output and leftover input out of the furnace (nothing-possible :load-left when it cannot).
   Ends :done {:smelted n :wanted n}: :wanted is the count this job loaded, :smelted what came of it (input and output already in the
   furnace do not count; 0 of N is never :done). A give-up carries the same data plus :text, with the cause:
   - condition-failed: no-furnace-seen, no-furnace, not-a-furnace, furnace-gone, no-item, nothing-smeltable, not-smeltable, no-fuel,
@@ -410,6 +411,24 @@
   (if-let [items (batch-items c)]
     (await (batch-round c items))
     (await (item-round c))))
+
+(defn ^:async cleanup
+  "A call cut off with a load still in the furnace: walk back to it and take the output and the leftover input
+  into the pockets. :continue while the walk waits; nothing-possible :load-left (data :furnace) when it cannot be reached or taken."
+  [c ending]
+  (let [m (ctx/mem c)
+        f (furnace-of c)]
+    (if-not (and (= :cut-off (:kind ending)) f (furnace/loaded? m) (< (:got m 0) (:count (:owed m) 0)))
+      (ctx/end c :done nil {})
+      (let [r (await (near/go-near! c f 3))]
+        (if (= :partial r)
+          :continue
+          (let [t (when (= :there r) (await (visit! c "take" {:input true})))]
+            (if (= "ok" (:status t))
+              (do (ctx/emit! c :smelt.load-taken-back :info {:furnace f :text (str "took the load back from the furnace at " (:x f) " " (:y f) " " (:z f))})
+                  (ctx/end c :done nil {}))
+              (do (ctx/emit! c :smelt.load-left :warn {:furnace f :text (str "the load stays in the furnace at " (:x f) " " (:y f) " " (:z f))})
+                  (ctx/end c :nothing-possible :load-left {:furnace f})))))))))
 
 ;; ------------------------------------------------------------------ the contract
 
