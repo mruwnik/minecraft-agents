@@ -13,6 +13,8 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.places :as places]
             [jobs.lib.ready :as ready]
+            [jobs.lib.result :as result]
+            [jobs.lib.shelter.inside :as inside]
             [jobs.lib.part-cut :as part-cut]
             [jobs.lib.trees :as trees :refer [scan-logs logs-at debts replant-kind dig-reach log-name?]]
             [jobs.lib.util :as u]))
@@ -134,7 +136,7 @@
 
 (defn ^:async walk-near!
   "Walk until the body's cell is within range of pos with a go-to child (slot :walk, no retry): :there, :partial (go-to
-  waits on the world, or a leg got nearer: call again) or :blocked (it gave up, or pos is no cell)."
+  waits on the world, a leg got nearer, or the body is shut in its shelter and no tree is to blame: call again; such rounds are not counted against the tree) or :blocked (it gave up, or pos is no cell)."
   [c pos range]
   (let [column? (nil? (:y pos))
         cell (if column? pos (:pos (places/parse-pos pos)))]
@@ -145,8 +147,9 @@
                                                       :one-way :closed :see false :spend {:tries 1}
                                                       :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
               (cond
-                (= :continue e) :partial
+                (= :continue e) (do (when (inside/sheltered-in c) (ctx/update-mem! c assoc :partials 0)) :partial)
                 (and (= :done (:kind e)) (:arrived (:data e))) :there
+                (result/body-side? e) (do (ctx/update-mem! c assoc :partials 0) :partial)
                 :else (do (ctx/update-mem! c assoc :walk-why (some-> (:why (:data e)) name))
                           :blocked))))))
 

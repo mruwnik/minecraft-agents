@@ -19,6 +19,7 @@
             [jobs.forestry.fell-tree :as fell-tree]
             [jobs.forestry.fell-tree.log :as log]
             [jobs.lib.ready :as ready]
+            [jobs.lib.shelter.inside :as inside]
             [jobs.lib.targets :as targets]
             [jobs.lib.trees :as trees :refer [axe-fetch-limits]]
             [jobs.lib.ledger :as ledger]
@@ -711,6 +712,40 @@
                                      (apply call! c k job more)))]
             (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 10 :at {:x 6 :y 64 :z 0}} 60)))
           (is (some #{{:x 7 :y 66 :z 0}} @asked) "the leaf beside the top log was dug after the log could not be"))))))
+
+(deftest a-walk-ended-by-the-body-shut-in-its-shelter-holds-the-tree-instead-of-writing-it-off
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (fm/start {:blocks (lt/tree 6 0 "oak" 3) :self {:pos {:x 40 :y 64 :z 0}}} {})
+              shut (atom 0)
+              call! ctx/call]
+          (with-redefs [ctx/call (fn [c k job & more]
+                                   (if (and (= :walk k) (= 'jobs.movement.go-to job) (< @shut 8))
+                                     (do (swap! shut inc)
+                                         {:kind :nothing-possible :cause {:reason :unreachable :why :start-enclosed}
+                                          :data {:why :start-enclosed :inside-own-shelter {:x 40 :y 64 :z 0}}})
+                                     (apply call! c k job more)))]
+            (let [out (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 40} 400))]
+              (is (<= 8 @shut) "the walk ended shut in more often than the partial limit")
+              (is (not= :tree-unreachable (:reason out)) "the tree is not written off")
+              (is (seq (fm/digs p)) "the tree is felled once the body is out"))))))))
+
+(deftest walk-rounds-out-of-its-own-shelter-are-not-counted-against-the-tree
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (fm/start {:blocks (lt/tree 6 0 "oak" 3) :self {:pos {:x 40 :y 64 :z 0}}} {})
+              rounds (atom 0)
+              call! ctx/call]
+          (with-redefs [inside/sheltered-in (fn [_] (< @rounds 8))
+                        ctx/call (fn [c k job & more]
+                                   (if (and (= :walk k) (= 'jobs.movement.go-to job) (< @rounds 8))
+                                     (do (swap! rounds inc) :continue)
+                                     (apply call! c k job more)))]
+            (let [out (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 40} 400))]
+              (is (not= :tree-unreachable (:reason out)) "the tree is not written off")
+              (is (seq (fm/digs p)) "the tree is felled once the body is out"))))))))
 
 (deftest the-final-pick-up-of-the-logs-is-held-back-by-a-threat-only
   (async done

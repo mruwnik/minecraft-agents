@@ -10,6 +10,16 @@
   (when (map? e)
     (or (when (map? (:cause e)) (:why (:cause e))) (:why (:data e)))))
 
+(defn body-side?
+  "Whether go-to's ending e is about the body, not the target: shut in (:start-enclosed) or sealed in its own shelter
+  (:inside-own-shelter). The walk may succeed once the body is out, so it is no verdict on the target."
+  [e]
+  (and (map? e)
+       (not= :done (:kind e))
+       (boolean (or (= :start-enclosed (why e))
+                    (:inside-own-shelter (:data e))
+                    (:inside-own-shelter (:cause e))))))
+
 (defn permanent-walk?
   "Whether go-to's ending e is a verdict on the cell (held :unreachable), not something that may pass: a refused call
   (:bad-pos, :unsupported) or an :unreachable whose :why is permanent (a door stuck, a stuck step, no progress, a move

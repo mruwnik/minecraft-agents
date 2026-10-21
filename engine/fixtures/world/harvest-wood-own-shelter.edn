@@ -1,0 +1,26 @@
+;; Card dec692ce: a body shut in its own night shelter is not a tree problem. harvest-wood holds (no :tree-unreachable stop,
+;; no tree written off) while the night lasts, then the dawn lets go-to out of the shelter and the tree is felled.
+;; Sky plot at night (the real clock decides when the shelter opens). Stone room x 14..18, z 14..18, roof y 2, glass east wall so the
+;; oak at x 36 (torches beside it: lit trees are seen at night, 20 blocks off the body so its feet stay dark) is in sight; :shelter memory at the body's cell. A pickaxe is carried for the way out.
+;; Should-succeed: harvest-wood does not stop before dawn; after [:time-set 1000] the body leaves the shelter and the oak is felled (the job's cleanup afterwards is its own matter). Should-fail: the job stops :tree-unreachable.
+{:defaults
+ {:tags [:forestry :harvest-wood :fell-tree :shelter :night]
+  :time :night :time-why :dawn-decision
+  :plot {:height 8 :floor "grass_block" :light :sky :length 48}
+  :blocks [[:fill [36 0 16] [36 2 16] "oak_log"] [:fill [35 3 15] [37 4 17] "oak_leaves[persistent=true]"] [:set [35 0 15] "torch"] [:set [35 0 17] "torch"]
+           [:fill [14 0 14] [18 2 18] "stone"] [:fill [15 0 15] [17 1 17] "air"] [:fill [18 0 15] [18 1 17] "glass"]]
+  :memory [{:kind :shelter :data {:pos #xyz [16 0 16] :roof #xyz [16 2 16] :state :built}
+            :policy {:cap 10 :ttl 1200000}}]
+  :register []
+  :body {:at [16.5 0 16.5] :settle-s 2 :inventory [["iron_axe" 1] ["stone_pickaxe" 1] ["dirt" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 230}
+ :cases
+ [{:name "shut-in-own-shelter-holds-the-trees-and-fells-one-at-dawn"
+   :act [[:job (jobs.forestry.harvest-wood {:count 1 :radius 24})]
+         [:wait-s 30]
+         [:time-set 1000]]
+   :expect [{:no-event {:source :job :kind :stopped :data {:reason :tree-unreachable}} :for-s 30}
+            {:event {:source :job :kind :go-to.escalated :data {:step :leave-shelter}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :tree-unreachable}} :for-s 150 :until {:source :job :kind :completed}}]
+   :limit-s 200
+   :after [[:block [36 0 16] "air"]]}]}
