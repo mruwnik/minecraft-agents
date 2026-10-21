@@ -61,7 +61,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [wall ["oak_planks" "bricks" "glass"]]
+        (doseq [wall ["oak_planks" "bricks" "glass" "oak_log"]]
           (let [built (apply dissoc (merge room (box -3 64 -3 3 65 3 wall))
                              (for [x (range -2 3) z (range -2 3) y [64 65]] (str x "," y "," z)))
                 {:keys [out p seen]} (await (run-job! (merge in-room {:blocks built :inventory [{:name "dirt" :count 9}]})
@@ -380,7 +380,11 @@
     (is (false? (in-yard "iron_door")) "iron doors are walls")
     (is (false? (in-yard "oak_trapdoor")) "a trapdoor in a wall is no exit")
     (is (false? (escape/door-beside? (at "oak_door") [2 64 0] :never)) "doors :never makes every door a wall")
-    (is (true? (escape/door-beside? (at "oak_door") [2 64 0] :leave-open)))))
+    (is (true? (escape/door-beside? (at "oak_door") [2 64 0] :leave-open)))
+    (is (false? (escape/door-beside? (tu/fake {:self {:pos {:x 0 :y 64 :z 0}}
+                                                :blocks (assoc room "3,64,0" "spruce_fence_gate" "4,65,0" "oak_log")})
+                                     [2 64 0]))
+        "a gate with a trunk over the cell behind it leads nowhere")))
 
 (deftest go-to-with-a-usable-door-beside-does-not-escalate
   (async done
@@ -402,6 +406,21 @@
               {:keys [out seen]} (await (run-job! (merge in-room {:blocks stepped :states states}) {:pos [8 65 0] :range 1}))]
           (is (seq (events-of seen :go-to.escalated)) (pr-str @out))
           (is (= {:arrived true} @out)))))))
+
+(deftest go-to-escalates-out-of-a-pen-whose-gate-has-a-trunk-behind-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ring (into {} (for [x (range -3 4) z (range -3 4) :when (or (= 3 (js/Math.abs x)) (= 3 (js/Math.abs z)))]
+                              [(str x ",64," z) "oak_fence"]))
+              ;; the ground rises one outside the gate, and a trunk stands on the first cell of the rise
+              pen (merge (box -6 63 -6 12 63 6 "stone") (box 4 64 -6 12 64 6 "stone") ring
+                         {"3,64,0" "spruce_fence_gate" "4,65,0" "oak_log" "4,66,0" "oak_log" "4,67,0" "oak_log" "4,68,0" "oak_leaves"})
+              {:keys [out p seen]} (await (run-job! (merge in-room {:blocks pen :inventory [{:name "iron_axe" :count 1}]})
+                                                    {:pos [6 65 2] :range 1}))]
+          (is (seq (events-of seen :go-to.escalated)) (pr-str @out))
+          (is (= "air" (block p [4 65 0])) "the trunk over the cell behind the gate is cut")
+          (is (= "oak_fence" (block p [3 64 1])) "the fence is a build and stays"))))))
 
 (deftest go-to-with-doors-never-digs-out-past-a-door-in-the-wall
   ;; live go-to-escalate/oak-door-with-doors-never-digs: the planner's only way is the door, refused (:abilities :open)

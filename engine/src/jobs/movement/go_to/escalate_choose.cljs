@@ -131,7 +131,7 @@
                      (when-not (and (not floors-unseen-ok?) (dig-look/unknown? p cell) (dig-route/open? (block-at [x (inc y) z]))
                                     (not (dig-look/unknown? p [x (inc y) z])))
                        (block-at cell)))
-        cells (:dig (dig-route/route seen-floor from goal {:dig-s cost/dig-cost
+        cells (:dig (dig-route/route seen-floor from goal {:dig-s (fn [name cell] (when (escape/diggable? block-at may-dig? own? cell) (cost/dig-cost name)))
                                                          :step-s (:cost (cost/walk-cost {:distance 1}))}))]
     (when (and cells (every? #(escape/diggable? block-at may-dig? own? %) cells)
                (<= (transduce (map #(/ (cond-> (tools/clear-ms p (block-at %))

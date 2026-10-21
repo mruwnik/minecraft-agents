@@ -58,8 +58,12 @@
     (is (= {:problem :no-route} (dr/route (at (merge roof free)) [0 9 0] [3 9 0] {:margin 0})) "the straight line is all under falling blocks")
     (is (not-any? (comp #{[1 10 0] [2 10 0]} identity) (opened (dr/route (at (merge roof free)) [0 9 0] [3 9 0] {:margin 2 :max-digs 30}))) "the detour opens nothing under them")))
 
-(deftest a-block-is-priced-once-however-many-steps-reach-it
+(deftest a-cell-is-priced-once-however-many-steps-reach-it
   (let [calls (atom [])
-        dig-s (fn [n] (swap! calls conj n) 1)]
+        dig-s (fn [n cell] (swap! calls conj [n cell]) 1)]
     (dr/route (world {[8 8 8] "air"}) [0 10 0] [8 8 8] {:dig-s dig-s :step-s 0.5})
     (is (= (count @calls) (count (set @calls))))))
+
+(deftest a-walker-passes-a-gate-and-a-plant-but-not-a-fence-or-wall
+  (is (every? dr/open? ["air" "oak_fence_gate" "oak_sapling" "poppy"]))
+  (is (not-any? dr/open? ["oak_fence" "cobblestone_wall" "stone" nil])))

@@ -133,6 +133,19 @@
             {:no-event {:source :job :kind :go-to.escalated :data {:step :clear-path}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :no-dig}}}}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false :escalation {:step :none :why :no-dig}}}}]
    :after [[:block [20 1 16] "cobblestone"] [:block [20 2 16] "cobblestone"]]}
+  {:name "pen-gate-behind-a-tree-trunk-cuts-the-trunk"
+   ;; a fence pen (a build, never dug) whose gate gives onto a tree: the log over the cell behind the gate shuts the walk;
+   ;; the goal is off the trunk's row, so the body sees it; the body cuts the trunk, not the fence, and walks out through the gate
+   :time :any
+   :blocks [[:fill [10 0 10] [24 5 22] "air"] [:fill [8 0 8] [26 0 26] "stone"] [:fill [10 8 10] [26 8 26] "light"]
+            [:fill [12 1 12] [20 1 12] "oak_fence"] [:fill [12 1 20] [20 1 20] "oak_fence"] [:fill [12 1 12] [12 1 20] "oak_fence"] [:fill [20 1 12] [20 1 20] "oak_fence"]
+            [:set [20 1 16] "oak_fence_gate[facing=east]"]
+            [:fill [21 1 12] [26 1 20] "stone"] [:fill [21 2 16] [21 4 16] "oak_log"] [:set [21 5 16] "oak_leaves"]]
+   :body {:at [16.5 1 16.5] :settle-s 3 :inventory [["iron_axe" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [23 2 18] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 160 :of-job true}
+            {:no-event {:source :job :kind #{:completed :stopped} :data {:escalation {:why :no-dig}}} :for-s 160 :until {:source :job :kind :completed :data {:arrived true}}}]
+   :after [[:body-near [23.5 2 18.5] 2] [:block [20 1 16] "oak_fence_gate"] [:block [20 1 15] "oak_fence"]]}
   {:name "oak-log-wall-room-is-never-dug"
    :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
             [:fill [12 0 12] [20 3 20] "oak_log" :hollow]]

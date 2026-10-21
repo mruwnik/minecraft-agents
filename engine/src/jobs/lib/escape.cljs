@@ -139,13 +139,17 @@
     (reach-room/enclosed? p)
     (reach-room/shut-in? p (reach/lookup p reach/kind-of))))
 
-(defn open-door-beside?
-  "door-beside? without the :doors check."
-  [p [fx fy fz]]
+(defn scan-doors
+  "Whether a door or gate the body can open borders a cell it can walk to from feet, with room behind it for the body
+  (want-room? true) or without (false: a trunk over the cell behind a gate)."
+  [p [fx fy fz] want-room?]
   (let [kind-at (reach/lookup p reach-room/body-kind-of)
         block-at (block-at-of p)
-        door? (fn [[x y z]] (some (fn [[dx dz]] (some #(some->> (block-at [(+ x dx) (+ y %) (+ z dz)]) (re-find usable-door))
-                                                     [0 1]))
+        room-at? (fn [x y z] (and (reach/passable? kind-at x y z) (reach/passable? kind-at x (inc y) z)))
+        door? (fn [[x y z]] (some (fn [[dx dz]]
+                                    (and (some #(some->> (block-at [(+ x dx) (+ y %) (+ z dz)]) (re-find usable-door)) [0 1])
+                                         (let [ax (+ x (* 2 dx)) az (+ z (* 2 dz))]
+                                           (= want-room? (boolean (or (room-at? ax y az) (room-at? ax (inc y) az)))))))
                                   cardinals))]
     (loop [queue #queue [[fx fy fz]] seen #{[fx fy fz]}]
       (if-let [cell (peek queue)]
@@ -156,6 +160,17 @@
               false
               (recur (into (pop queue) nbrs) (into seen nbrs)))))
         false))))
+
+(defn open-door-beside?
+  "door-beside? without the :doors check: a door with room behind it (scan-doors)."
+  [p feet]
+  (scan-doors p feet true))
+
+(defn blocked-door-beside?
+  "Whether a door the body can open borders its room with no room behind it (a trunk over the cell behind a gate): its
+  way out is to clear what stands there."
+  [p feet]
+  (scan-doors p feet false))
 
 (defn door-beside?
   "Whether a door or gate the body can open is beside, at feet or head height, a cell the body can walk to from feet
@@ -197,13 +212,33 @@
   ([block-at feet dir max-thick] (door block-at (constantly false) feet dir max-thick))
   ([block-at unseen? feet dir max-thick] (door-from block-at unseen? feet dir max-thick 1)))
 
+(defn log? [n] (boolean (and n (re-find #"_log$" n))))
+
+(def tree-gap
+  "How far up a trunk is followed past cells already cut out of it."
+  12)
+
+(defn tree-log?
+  "Whether the log at cell belongs to a tree: its column of logs stands on natural ground and leaves grow at its top.
+  A log wall or pillar of a build has no leaves, so it stays a build; a trunk part cut away (air between its logs) is
+  still a trunk."
+  [block-at cell]
+  (let [base (last (take-while #(log? (block-at %)) (iterate #(up % -1) cell)))
+        reach (take-while #(or (log? (block-at %)) (= "air" (block-at %))) (take tree-gap (iterate #(up % 1) cell)))
+        top (last (filter #(log? (block-at %)) reach))]
+    (boolean (and (rules/natural? (block-at (up base -1)))
+                  (some (fn [d] (some->> (block-at (add top d)) (re-find #"_leaves$")))
+                        (for [dx [-1 0 1] dy (range 4) dz [-1 0 1]] [dx dy dz]))))))
+
 (defn diggable?
-  "Whether an escalation may cut cell: it is open (air or a plant), or natural terrain or a block the body placed
-  itself (own?: (own? cell block)) that may-dig? allows."
+  "Whether an escalation may cut cell: it is open (air or a plant), or natural terrain (a tree's log too) or a block
+  the body placed itself (own?: (own? cell block)) that may-dig? allows."
   ([block-at may-dig? cell] (diggable? block-at may-dig? (constantly false) cell))
   ([block-at may-dig? own? cell]
    (let [n (block-at cell)]
-     (or (bs/passable? n) (and (or (rules/natural? n) (boolean (and n (own? cell n)))) (boolean (may-dig? cell)))))))
+     (or (bs/passable? n)
+         (and (or (rules/natural? n) (and (log? n) (tree-log? block-at cell)) (boolean (and n (own? cell n))))
+              (boolean (may-dig? cell)))))))
 
 (defn stair-heading
   "The first heading of dirs (each [dx dz]) with a solid block in front at feet height to stand on (bridge?: or none,
