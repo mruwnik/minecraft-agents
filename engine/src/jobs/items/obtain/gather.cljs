@@ -8,6 +8,7 @@
             [jobs.items.obtain.need :refer [explore-opts gather-viable? pickaxe-first? search-names tools-wanted trees-unreachable?]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
+            [jobs.lib.breath :as breath]
             [jobs.lib.surface-up :as surface]
             [jobs.items.obtain.table :refer [animal? gather-need searchable?]]
             [jobs.lib.waits :as waits]
@@ -94,7 +95,9 @@
     (when-not (= :continue e) (ctx/update-mem! c dissoc :said-pickaxe))
     (cond
       (= :continue e) :continue
-      (pickaxe-first? c names need) (tried! c :gather {:pickaxe (contract/cause-key e)})
+      (pickaxe-first? c names need)
+      (do (when-let [w (and (map? (:cause e)) (:why (:cause e)))] (ctx/update-mem! c assoc-in [:gather :why] w))
+          (tried! c :gather {:pickaxe (contract/cause-key e)}))
       :else :again)))
 
 (defn surfacing?
@@ -224,10 +227,13 @@
   (let [p (:primitives c)
         pl (gather-plan c names (- target have))
         need (some->> (some-> pl :gather (gather-need (game/version-of p))) (with-block c) (with-count p) (with-avoid c))
-        stocking (await (torch-step! c need))]
+        stocking (await (torch-step! c need))
+        wet (when (and need (not stocking) (not (get-in (ctx/mem c) [:gather :before])) (not= "water_bucket" (:key need)) (not (animal? need)) (breath/in-water? p))
+              (#{:continue :again} (await (surface/leave-water! c))))]
     (cond
       stocking stocking
       (:approach (ctx/mem c)) (await (approach-step! c))
+      wet wet
       (nil? need) (tried! c :gather :no-plan)
       (= (:key need) (get-in (ctx/mem c) [:gather :lead :key]))
       (await (lead-step! c))

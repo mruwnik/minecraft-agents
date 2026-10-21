@@ -1,0 +1,12 @@
+;; Card be2d96f1: a body that stands in a pond with a wooden pickaxe gets out onto dry land before it mines (a mine from under water
+;; ends :flooded at once), so the cobblestone is gathered. Pond x 14..18 z 14..18, flush with the ground; stone 4 blocks east of it.
+{:defaults
+ {:tags [:obtain :mining :movement] :time :any
+  :plot {:height 8}
+  :body {:at [16.5 -3 16.5] :inventory [["wooden_pickaxe" 1]] :effects [["resistance" 600 4]] :settle-s 3}
+  :limit-s 150}
+ :cases
+ [{:name "cobblestone-from-a-pond"
+   :blocks [[:fill [14 -5 14] [18 -1 18] "water"] [:fill [21 -1 14] [23 0 18] "stone"]]
+   :act [[:job (jobs.items.obtain {:item "cobblestone" :count 3})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]}]}

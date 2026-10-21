@@ -327,6 +327,15 @@
                       [{:x 1 :y 64 :z 4} {:x 3 :y 64 :z 5} {:x 0 :y 64 :z 6} {:x 4 :y 64 :z 3}])
               "each flooded ore is left for the next, none counted fruitless"))))))
 
+(deftest a-body-standing-in-water-walks-to-dry-land-before-it-mines
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pool (into {} (for [x (range -2 3) y [64 65 66] z (range -2 3)] [(str x "," y "," z) "water"]))
+              s (f/start (ore-world (merge pool {"0,64,8" "iron_ore"}) [{:name "stone_pickaxe" :count 1}]) [])]
+          (await (obtain! s {:item "raw_iron" :count 1} 100))
+          (is (seq (f/events-of s :obtain.leave-water)) "the body left the pool before the first mine"))))))
+
 (deftest a-cell-a-mine-gave-up-on-in-two-runs-is-left-out-of-the-third
   (let [once (gather/note-skipped {} [[1 2 3] [4 5 6]])
         twice (gather/note-skipped once [[1 2 3]])]
