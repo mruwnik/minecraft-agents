@@ -111,7 +111,7 @@
    (ctx/update-mem! c (fn [m] (-> m
                              (cond-> why (assoc :unreachable-why why))
                              (update :unreachable (fnil conj []) [(get-in m [:column :x]) (get-in m [:column :z])])
-                             (dissoc :column :species :base :pillar :logs-seen :stand-avoid)
+                             (dissoc :column :species :base :pillar :logs-seen :stand-avoid :shut-ins)
                              (assoc :partials 0))))))
 
 (defn blocked!
@@ -137,6 +137,20 @@
         held (ledger/held-cells view)]
     (boolean (some #(and (ledger/of-instance? (:id c) %) (not (held (:cell %)))) (ledger/open-entries view)))))
 
+(def max-shut-in-rounds
+  "Walks in a row that ended with the body shut in before the tree is given up: they cost the tree nothing, but each
+  one returns at once, so a body that stays shut in must not call them for ever."
+  30)
+
+(defn shut-in-round!
+  "A walk ended by the body shut in: :partial, or :blocked (walk-why shut-in) once max-shut-in-rounds ran in a row."
+  [c]
+  (let [n (inc (:shut-ins (ctx/mem c) 0))]
+    (ctx/update-mem! c assoc :partials 0 :shut-ins n)
+    (if (< n max-shut-in-rounds)
+      :partial
+      (do (ctx/update-mem! c assoc :walk-why "shut-in") :blocked))))
+
 (defn ^:async walk-near!
   "Walk until the body's cell is within range of pos with a go-to child (slot :walk, no retry): :there, :partial (go-to
   waits on the world, a leg got nearer, or the body is shut in its shelter and no tree is to blame: call again; such rounds are not counted against the tree) or :blocked (it gave up, or pos is no cell)."
@@ -145,14 +159,14 @@
         cell (if column? pos (:pos (places/parse-pos pos)))]
     (cond
       (nil? cell) :blocked
-      (and (not column?) (u/within? (u/self-pos c) cell range)) :there
+      (and (not column?) (u/within? (u/self-pos c) cell range)) (do (ctx/update-mem! c assoc :shut-ins 0) :there)
       :else (let [e (await (child/call-walk* c :walk {:pos cell :range range :doors :shut
                                                       :one-way :closed :see false :spend {:tries 1}
                                                       :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
               (cond
                 (= :continue e) (do (when (inside/sheltered-in c) (ctx/update-mem! c assoc :partials 0)) :partial)
-                (and (= :done (:kind e)) (:arrived (:data e))) :there
-                (result/body-side? e) (do (ctx/update-mem! c assoc :partials 0) :partial)
+                (and (= :done (:kind e)) (:arrived (:data e))) (do (ctx/update-mem! c assoc :shut-ins 0) :there)
+                (result/body-side? e) (shut-in-round! c)
                 :else (do (ctx/update-mem! c assoc :walk-why (some-> (:why (:data e)) name))
                           :blocked))))))
 

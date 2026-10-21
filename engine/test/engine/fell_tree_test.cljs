@@ -731,6 +731,23 @@
               (is (not= :tree-unreachable (:reason out)) "the tree is not written off")
               (is (seq (fm/digs p)) "the tree is felled once the body is out"))))))))
 
+(deftest a-body-that-stays-shut-in-gives-the-tree-up-after-a-bounded-number-of-walks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (fm/start {:blocks (lt/tree 6 0 "oak" 3) :self {:pos {:x 40 :y 64 :z 0}}} {})
+              walks (atom 0)
+              call! ctx/call]
+          (with-redefs [ctx/call (fn [c k job & more]
+                                   (if (and (= :walk k) (= 'jobs.movement.go-to job))
+                                     (do (swap! walks inc)
+                                         {:kind :nothing-possible :cause {:reason :unreachable :why :goal-not-standable}
+                                          :data {:why :goal-not-standable :inside-own-shelter {:x 40 :y 64 :z 0}}})
+                                     (apply call! c k job more)))]
+            (let [out (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 40} 400))]
+              (is (= :tree-unreachable (:reason out)) "the job ends instead of walking for ever")
+              (is (<= @walks (inc log/max-shut-in-rounds)) "the walks are bounded"))))))))
+
 (deftest walk-rounds-out-of-its-own-shelter-are-not-counted-against-the-tree
   (async done
     (tu/run-async done

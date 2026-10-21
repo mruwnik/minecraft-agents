@@ -33,7 +33,7 @@
   column seen later becomes the base. It ends on the ground: from the canopy it walks down beside the base (warn
   a :stranded true result when it cannot). With :at it fells that one column instead (:radius and :species are then unused).
   The tree is the one the body walks to soonest among at most 32 candidates, nearest in a line first (jobs.lib.targets);
-  one whose walk is blocked, or partial three times in a row, is marked unreachable. A log out of reach from the foot
+  one whose walk is blocked, or partial three times in a row, or ended 30 times in a row by the body shut in, is marked unreachable. A log out of reach from the foot
   is felled from a pillar (jobs.forestry.fell-tree.pillar: built of dirt, cobblestone and the logs cut, taken back; unless the call's :ways leave out :pillar); a tree that pillar cannot reach
   or whose pillar digs no log counts as unreachable. Once a tree is chosen the rest of it is a comfort section
   (ctx/atomic): reflexes at or below that level wait for it, up to their caps.
