@@ -35,6 +35,13 @@
           (is (<= 2 (get (ft/inv s) "wheat" 0)))
           (is (true? (ft/finished? s))))))))
 
+(deftest a-ripe-crop-beyond-the-harvest-radius-of-the-body-is-cut
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:count 1} (ft/world (ft/farm "wheat" 7 [[25 2]] [[25 2]]) ft/wheat-drops {:inventory kit}) 60))]
+          (is (<= 1 (get (ft/inv s) "wheat" 0))))))))
+
 (deftest a-growing-field-is-waited-for-and-no-field-is-started
   (async done
     (tu/run-async done

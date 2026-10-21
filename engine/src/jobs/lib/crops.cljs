@@ -9,6 +9,8 @@
   (->> (look/seen-blocks p {:names names :radius radius :max max :live? true :properties? true})
        (map (fn [b] (assoc b :age (some-> (get-in b [:properties :age]) js/Number))))))
 
+(def cut-radius "Blocks round a ripe crop that a harvest called for it works (harvest alone works 12 round the body)." 16)
+
 (def ripe-age
   "The field crops: farm jobs plant, tend and cut these; nether wart, berries and cocoa need other handling."
   (select-keys constants/crop-ripe-age ["wheat" "carrots" "potatoes" "beetroots"]))

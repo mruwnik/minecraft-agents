@@ -2,6 +2,7 @@
 ;; never started again. Lit grass plot, 6 high (a cave with a low ceiling); the water comes from the bucket carried.
 ;; Should-succeed: with a hoe, seed, a water bucket and bone meal carried the job picks a spot, tills, sows, bone-meals and cuts (wheat carried);
 ;; with only a hoe it breaks grass for seed first (seed comes by chance, so the field is 2 x 2).
+;; A ripe field 14 blocks off (past harvest's 12 round the body) is walked to and cut by obtain's crops way and by grow.
 ;; Should-fail: a young crop already standing keeps the job waiting; it sows nothing and makes no second field.
 {:defaults
  {:tags [:farm :grow :jobs]
@@ -28,4 +29,11 @@
    :act [[:job (jobs.farm.grow {:count 2})]]
    :expect [{:no-event {:source :job :kind :completed} :for-s 60}]
    :after [[:item "wheat_seeds" 9] [:block [18 -1 16] "grass_block"]]
-   :limit-s 80}]}
+   :limit-s 80}
+  {:name "obtain-wheat-cuts-a-ripe-field-14-blocks-off"
+   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["wooden_hoe" 1]]}
+   :blocks [[:fill [2 -1 16] [3 -1 16] "farmland[moisture=7]"] [:fill [2 0 16] [3 0 16] "wheat[age=7]"]]
+   :act [[:job (jobs.items.obtain {:item "wheat" :count 2 :ways #{:crops}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]
+   :after [[:item "wheat" [:>= 2]]]
+   :limit-s 140}]}

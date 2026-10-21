@@ -55,11 +55,14 @@
   [need]
   (boolean (and (:crop need) (grass-seeds (crops/seed-of (:crop need))))))
 
-(defn ripe-seen?
-  "Whether a ripe crop of the need's kind that may be cut is in sight."
+(defn ripe-crop
+  "The nearest ripe crop of the need's kind that may be cut and is no cut-off column, else nil."
   [c need]
-  (boolean (some #(some-> (:age %) (>= (crops/ripe-age (:crop need))))
-                 (crops/seen-crops (:primitives c) [(:crop need)] (seen-radius) 256))))
+  (let [in (access/rules-input c)]
+    (first (filter #(and (some-> (:age %) (>= (crops/ripe-age (:crop need))))
+                         (:ok (access/may? in :harvest (:pos %)))
+                         (not (cut-off? c %)))
+                   (crops/seen-crops (:primitives c) [(:crop need)] (seen-radius) 256)))))
 
 (defn seen-of
   "The nearest seen block of a need that may be taken, or for a wool need a sheep of its colour in range, for a drop of an animal one adult in range; a growable crop need with none seen is sourced by growing it ({:grow true}); else nil."
@@ -81,8 +84,11 @@
          (empty? (look/seen-blocks (:primitives c) {:names ["obsidian"] :radius (seen-radius) :max 1})))
     (assoc need :job 'jobs.gather.cast-obsidian :args {:count (:count need) :radius (seen-radius) :ways #{:carried}})
 
-    (and (growable? need) (not (ripe-seen? c need)))
+    (and (growable? need) (not (ripe-crop c need)))
     (assoc need :job 'jobs.farm.grow :args {:crop (:crop need) :count (:count need)})
+
+    (:crop need)
+    (cond-> need (ripe-crop c need) (assoc-in [:args :area] {:pos (:pos (ripe-crop c need)) :radius crops/cut-radius}))
 
     (= "water_bucket" (:key need))
     (cond-> need (seen-of c need) (assoc-in [:args :on] (:pos (seen-of c need))))

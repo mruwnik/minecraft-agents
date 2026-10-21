@@ -63,6 +63,15 @@
         (is (= 'jobs.farm.grow (await (gathered-via (young-or-ripe 3)))) "a crop still growing")
         (is (= 'jobs.farm.harvest (await (gathered-via (young-or-ripe 7)))) "a ripe crop")))))
 
+(deftest a-ripe-crop-far-from-the-body-is-harvested
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (grow/setup {:blocks {"25,63,0" "farmland" "25,64,0" "wheat"} :ages {"25,64,0" 7}})
+              _ (core/submit! (:eng s) (list 'jobs.items.obtain {:item "wheat" :count 1 :ways #{:crops}}) {})
+              _ (await (tu/run-ticks (:eng s) (:clock s) 40 700))]
+          (is (not-any? #(= :no-crop-seen (get-in % [:data :cause :cause])) @(:seen s))))))))
+
 (deftest without-the-hunt-way-no-animal-is-hunted
   (async done
     (tu/run-async done

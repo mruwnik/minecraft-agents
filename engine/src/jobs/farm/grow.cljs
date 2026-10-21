@@ -142,7 +142,9 @@
         seen (standing c)]
     (cond
       (some #(ripe? crop %) seen)
-      (let [e (await (ctx/call c :harvest 'jobs.farm.harvest (cond-> {:crops [crop]} ignore-zones? (assoc :ignore-zones? true))))]
+      (let [ripe (first (filter #(ripe? crop %) seen))
+            e (await (ctx/call c :harvest 'jobs.farm.harvest
+                               (cond-> {:crops [crop] :area {:pos (:pos ripe) :radius crops/cut-radius}} ignore-zones? (assoc :ignore-zones? true))))]
         (if (= :continue e) :continue :again))
 
       (seq seen)
