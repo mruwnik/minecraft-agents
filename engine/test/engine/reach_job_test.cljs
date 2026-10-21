@@ -5,6 +5,7 @@
             [jobs.lib.cost.ways :as cost]
             [jobs.lib.escape :as escape]
             [jobs.lib.escape.span :as span]
+            [jobs.movement.reach :as reach]
             [engine.test-util :as tu :refer [box]]
             [engine.go-to-escalate-support :refer [run-job! feet events-of]]))
 
@@ -97,3 +98,33 @@
           (is (true? (:arrived @out)) (pr-str @out))
           (is (= [14 44 0] (feet p)))
           (is (= [:stair] (distinct (map :step (events-of seen :reach.span)))) "a dug route of over 16 cells is over the dig limit"))))))
+
+(deftest only-a-walk-with-no-route-is-no-case-for-a-span
+  (are [kind why want] (= want (reach/no-way? {:kind kind :data {:why why :kind :gap-up}}))
+    :nothing-possible :goal-cut-off true
+    :nothing-possible :goal-enclosed true
+    :nothing-possible :exhausted true
+    :nothing-possible :detour true
+    :nothing-possible :abilities true
+    :nothing-possible :door-stuck false
+    :nothing-possible :stuck false
+    :nothing-possible :goal-dangerous false
+    :nothing-possible :unseen-floor-dark true
+    :nothing-possible :needs-health false
+    :condition-failed :goal-cut-off false
+    :limit-reached :goal-cut-off false))
+
+(deftest a-sprint-or-door-the-body-lacks-is-no-case-for-a-span
+  (are [kind] (false? (reach/no-way? {:kind :nothing-possible :data {:why :abilities :kind kind}}))
+    :corner-jump :gap-sprint :open))
+
+(deftest a-body-far-from-the-gap-walks-to-its-edge-and-bridges
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p seen]} (await (run-job! {:self {:pos {:x -12.5 :y 64 :z 0.5}} :blocks gulf :inventory [{:name "dirt" :count 9}]}
+                                                    'jobs.movement.reach
+                                                    {:pos [10 64 0] :range 0}))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (= [10 64 0] (feet p)))
+          (is (= [[:bridge true] [:bridge false]] (distinct (map (juxt :step :approach) (events-of seen :reach.span)))) "walked to the edge first"))))))

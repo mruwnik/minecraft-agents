@@ -7,6 +7,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.ways :as cw]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.escape :as escape]
             [jobs.lib.escape.span :as span]
             [jobs.lib.places :as places]
@@ -94,22 +95,24 @@
 (defn feet-of [c]
   (mapv #(js/Math.floor %) (let [{:keys [x y z]} (u/self-pos c)] [x y z])))
 
-(defn stair-stand
-  "{:step :approach :pos cell :then stair}: the cell the body can walk to (a flood of at most reach-room/room-cells cells)
-  from which stair-from (span/down-stair) is cheapest to reach the goal: the fewest blocks it ends aside the goal's column,
-  then the nearest to feet; nil when none."
-  [p feet stair-from]
-  (let [kind-at (reach/lookup p reach-room/body-kind-of)
-        far (fn [cell] (u/dist (zipmap [:x :y :z] cell) (zipmap [:x :y :z] feet)))
-        stands (->> (:cells (reach-room/flood-visit #(reach/forward kind-at %1 %2 %3) (reach/standing-vec p) reach-room/room-cells))
-                    (keep (fn [cell] (let [cell (vec cell)] (when-let [stair (stair-from cell)] {:step :approach :pos cell :then stair})))))]
-    (when (seq stands)
-      (first (sort-by (juxt #(:aside (:then %)) #(far (:pos %))) stands)))))
+(defn stands
+  "The cells [x y z] the body can walk to (a flood of at most reach-room/room-cells cells)."
+  [p]
+  (let [kind-at (reach/lookup p reach-room/body-kind-of)]
+    (map vec (:cells (reach-room/flood-visit #(reach/forward kind-at %1 %2 %3) (reach/standing-vec p) reach-room/room-cells)))))
+
+(defn approach
+  "{:step :approach :pos cell :then span} for the best cell the body can walk to from which (span-from cell) gives a span,
+  ranked by (rank span cell) then by the nearest to feet; nil when none."
+  [p feet span-from rank]
+  (let [far (fn [cell] (u/dist (zipmap [:x :y :z] cell) (zipmap [:x :y :z] feet)))
+        options (keep (fn [cell] (when-let [span (span-from cell)] {:step :approach :pos cell :then span})) (stands p))]
+    (first (sort-by (juxt #(rank (:then %) (:pos %)) #(far (:pos %))) options))))
 
 (defn span-way
   "The cheapest span from feet toward goal that the call allows and that is no dearer than the way go-to itself would make
   (dig route, else escape/choose's pillar, stair up or dug door); nil when there is none. A stair down that starts too
-  far from the goal's column to end at it starts at a cell the body can walk to instead: {:step :approach :pos cell :then stair}."
+  far from the goal's column to end at it starts at a cell the body can walk to instead: {:step :approach :pos cell :then stair}; likewise to the edge a bridge starts from."
   [c feet goal skip]
   (let [p (:primitives c)
         block-at (escape/block-at-of p)
@@ -119,16 +122,22 @@
         stair-from (fn [cell] (span/down-stair block-at cell goal may-dig? own? skip))
         stair (when (allowed? c :stair)
                 (let [here (stair-from feet)
-                      stand (when (and (not (skip :approach)) (>= (- (second feet) (second goal)) 2)) (stair-stand p feet stair-from))]
+                      stand (when (and (not (skip :approach)) (>= (- (second feet) (second goal)) 2))
+                              (approach p feet stair-from (fn [stair _] (:aside stair))))]
                   (if (and stand (or (nil? here) (<= (+ 2 (:aside (:then stand))) (:aside here)))) stand here)))
-        spans (into [] (remove nil?)
-                    [stair (when (allowed? c :bridge) (span/bridge-span block-at (escape/unseen-of p) feet goal opts))])
-        priced (fn [e] (price p feet (or (:then e) e)))]
+        bridge-from (fn [cell] (span/bridge-span block-at (escape/unseen-of p) cell goal opts))
+        bridge (when (allowed? c :bridge)
+                 (or (bridge-from feet)
+                     (when-not (skip :approach)
+                       (approach p feet #(when (>= (second %) (second feet)) (bridge-from %))
+                                 (fn [b _] (u/dist (zipmap [:x :y :z] (:landing b)) (zipmap [:x :y :z] goal)))))))
+        spans (into [] (remove nil?) [stair bridge])
+        priced (fn [e] (price p feet (or (:then e) e)))
+        real (or (choose/dig-way p feet goal may-dig? opts)
+                 (let [e (escape/choose p feet goal may-dig? opts)]
+                   (when-not (#{:none :approach} (:step e)) e)))]
     (when (seq spans)
-      (let [best (apply min-key priced spans)
-            real (or (choose/dig-way p feet goal may-dig? opts)
-                     (let [e (escape/choose p feet goal may-dig? opts)]
-                       (when-not (#{:none :approach} (:step e)) e)))]
+      (let [best (apply min-key priced spans)]
         (when (or (nil? real) (<= (priced best) (price p feet real)))
           best)))))
 
@@ -162,25 +171,45 @@
   [c e]
   (contract/with-because (ctx/end c (:kind e) (:cause e) (:data e)) e))
 
-(def refusals
-  "go-to's nothing-possible reasons that no change to the world answers: a goal or call that is not valid."
-  #{:bad-pos :bad-name :unsupported :no-way :goal-on-magma})
+(def no-route-reasons
+  "go-to's reasons for a walk that found no route: the planner ran out of land or the goal is cut off or walled in, or the only way goes down onto floors never seen in the dark (a stair needs no light).
+  Others (a danger, a door or mob in the way, health, a wait) are no case for a span."
+  (conj choose/escalate-reasons :detour :unseen-floor-dark))
+
+(defn walk-why
+  "The reason go-to's ending e gives for not arriving."
+  [e]
+  (some-> (or (:why (:data e)) (:why (:cause e))) keyword))
+
+(def gap-kinds
+  "The :abilities kinds that are a gap or step the body cannot cross (not a sprint it lacks the food for, nor a door)."
+  #{:gap :gap-up :gap-down :gap-width})
 
 (defn no-way?
-  "Whether go-to's ending e says the walk found no way: nothing-possible for a reason that is no refusal."
+  "Whether go-to's ending e says walking has no route: a no-route reason, or the only way needing a gap or step the body
+  cannot make (gap-kinds)."
   [e]
   (and (= :nothing-possible (:kind e))
-       (not (contains? refusals (some-> (or (:why (:data e)) (:why (:cause e)) (:reason (:cause e))) keyword)))))
+       (let [why (walk-why e)]
+         (or (contains? no-route-reasons why)
+             (and (= :abilities why) (contains? gap-kinds (some-> (:kind (:data e)) keyword)))))))
 
-(defn pick!
+(defn ^:async look-ahead!
+  "Look at each floor cell along the four headings from feet, nearest first, that the body has not sensed, so a bridge
+  is judged over cells it has seen."
+  [c feet]
+  (await (dig-look/look-unknown! c (for [k (range 1 (inc (span/max-bridge))) d escape/cardinals] (escape/up (escape/ahead feet d k) -1)))))
+
+(defn ^:async pick!
   "After a walk found no way (ending e): remember the cheapest span (span-way) to build and return ::next; else, when the
   call allows no way but walking, e is this job's ending, else the whole go-to runs (::next)."
   [c e]
+  (await (look-ahead! c (feet-of c)))
   (let [m (ctx/mem c)
         goal (mapv #(js/Math.floor %) ((juxt :x :y :z) (goal-of c)))
         span (when (< (:built m 0) (settings/get settings ::max-rounds)) (span-way c (feet-of c) goal (:skip m #{})))]
     (when span
-      (ctx/emit! c :reach.span :info {:step (:step (or (:then span) span)) :approach (= :approach (:step span)) :at (feet-of c) :text (str "no way on foot: " (name (:step span)) (when (= :approach (:step span)) " to where a stair can start"))}))
+      (ctx/emit! c :reach.span :info {:why (walk-why e) :step (:step (or (:then span) span)) :approach (= :approach (:step span)) :at (feet-of c) :text (str "no way on foot: " (name (:step span)) (when (= :approach (:step span)) " to where a stair can start"))}))
     (if (and (not span) (= #{:walk} (disj (set (or (:ways (ctx/frozen-call c)) ways)) :bridge)))
       (forward c e)
       (do (ctx/update-mem! c (fn [m] (if span (assoc m :span span :from (feet-of c)) (assoc m :full true))))
@@ -209,12 +238,12 @@
                     (:span m) (await (build-span! c))
                     (or (:full m) (nil? (goal-of c))) (let [e (await (child/call-walk* c :full (walk-args c true)))]
                                 (if (= :continue e) :continue (forward c e)))
-                    (:direct m) (do (ctx/update-mem! c dissoc :direct) (pick! c (:last-walk m)))
+                    (:direct m) (do (ctx/update-mem! c dissoc :direct) (await (pick! c (:last-walk m))))
                     :else
                     (let [e (await (child/call-walk* c (keyword (str "walk-" (:built m 0))) (walk-args c false)))]
                       (cond
                         (= :continue e) :continue
                         (:arrived (:data e)) (forward c e)
                         (not (no-way? e)) (forward c e)
-                        :else (do (ctx/update-mem! c assoc :last-walk (select-keys e [:kind :cause :data])) (pick! c e)))))]
+                        :else (do (ctx/update-mem! c assoc :last-walk (select-keys e [:kind :cause :data])) (await (pick! c e))))))]
       (if (or (= ::next stepped) (and (:span m) (not= :continue stepped))) (recur) stepped))))
