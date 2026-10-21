@@ -37,6 +37,7 @@
   With :dig, a drop go-to cannot reach, or one too deep in the dug hole, is dug to once: the fewest cells (jobs.lib.dig-route,
   over the blocks the body has seen, an unseen one taken for stone) that open a way to it, each a jobs.blocks.dig child (zones, claims, hazards
   are its rules), then the walk is tried again. No such way leaves the drop :no-route, a dig that fails with that dig's outcome (:refused, :cannot, :unreachable ...).
+  A sweep that sees no drop turns round once from each cell it ends in (entities are sensed only in the view cone) before it ends.
   Needs nothing; the sweep is the whole job. Ends :done with data {:collected n}, the number of items that entered the
   inventory, with :left [{:pos :reason}] for those (also in :loose-left, so the :loose-items reflex leaves them); none in
   sight at all is :done with 0 (an open sweep). Drops tried, or a :search that found none, and none collected: :nothing-possible :none-collected, same data;
@@ -385,7 +386,8 @@
                   (seq (:left m)) :left
                   (seq (remove (set (:skipped m)) (:ids (:args c)))) :ids-unseen
                   (and (pos? (:search (:args c))) (< (wanted-count c) (least c))) :searching
-                  (and (zero? n) (or (seq (:skipped m)) (pos? (:search (:args c))))) :skipped)]
+                  (and (zero? n) (or (seq (:skipped m)) (pos? (:search (:args c))))) :skipped
+                  (not (look/surveyed? c :cell)) :looking)]
     (if waiting
       (contract/later waiting (str "collect-drops: " n " collected, " in-sight " in sight") :units :items :done n :left in-sight :result {:collected n})
       (contract/ok :collected (str "collect-drops: " n " collected, no drop in sight") :units :items :done n :left 0 :result {:collected n}))))
@@ -508,7 +510,8 @@
   [c anchor]
   (if-not (ctx/alive? c)
     :continue
-    (let [items (candidates c anchor)
+    (let [items (or (seq (candidates c anchor))
+                    (await (look/survey-until! c :cell #(seq (candidates c anchor)))))
           _ (note-last-cells! c items)
           item (first items)]
       (cond

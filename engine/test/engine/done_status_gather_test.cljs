@@ -238,9 +238,10 @@
     {"3,63,0" "dirt"} [{:name "oak_sapling" :count 1}] {:begun true} [:later :planting]))
 
 (deftest collect-drops-is-done-when-no-wanted-drop-is-in-sight
-  (are [args m reason] (= reason (tu/kind-reason (done-of 'jobs.items.collect-drops {} args m)))
+  (are [args m reason] (= reason (tu/kind-reason (done-of 'jobs.items.collect-drops {} args (merge {:looked {:x 0 :y 64 :z 0}} m))))
     {} {} [:ok :collected]
     {} {:collected 2} [:ok :collected]
+    {} {:looked nil} [:later :looking]
     {:search 4} {:collected 1} [:later :searching]
     {:search 4} {:collected 1 :wanted 1} [:ok :collected]
     {} {:collected 0 :skipped [7]} [:later :skipped]

@@ -88,7 +88,8 @@
         (let [{:keys [eng p]} (setup (world {:inventory (inv "shears" 1)}))
               pauses (atom 0)
               orig child/pause!]
-          (delay-items! p 3)
+          (let [orig-entities (.bind (.-entities p) p)]
+            (aset p "entities" (fn [q] (if (and (seq (calls p "useOn")) (zero? @pauses)) #js [] (orig-entities q)))))
           (with-redefs [child/pause! (fn ^:async pause [c s why]
                                        (if (= 1 (swap! pauses inc))
                                          :continue

@@ -27,6 +27,11 @@
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :nothing-to-do}} :for-s 20 :of-job true}]
    :after [[:item "wheat" [:>= 1]]]}
+  {:name "plan-harvest-collects-every-cut-crop"
+   :blocks [[:fill [10 0 16] [13 0 16] "wheat[age=7]"]]
+   :act [[:job (jobs.farm.harvest {:area {:plan "$plan:field"}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:item "wheat" [:>= 4]]]}
   {:name "radius-harvest-inside-the-own-plan-cuts"
    :blocks [[:fill [10 0 16] [13 0 16] "wheat[age=7]"]]
    :act [[:job (jobs.farm.harvest {:area {:pos #xyz [10 0 14] :radius 16}})]]

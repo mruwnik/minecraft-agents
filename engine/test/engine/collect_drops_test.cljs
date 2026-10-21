@@ -287,6 +287,21 @@
             (is (= [{:reason :unseen :ids [999]}] (:left result)))
             (is (= [:unseen] (mapv :reason (bd/left-drops seen))))))))))
 
+(deftest a-drop-outside-the-view-cone-is-found-by-turning-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self body})]
+          (drop! p [4 64 0] "oak_log")
+          (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :visible false) es)))
+          (.override (.-world p) "look"
+                     (fn [token args impl]
+                       (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :visible true) es)))
+                       (impl token args)))
+          (let [result (await (tu/child-outcome eng job {:radius 6} 60))]
+            (is (= 1 (:collected result)))
+            (is (= 1 (bd/carried p "oak_log")))))))))
+
 (deftest ids-all-picked-up-end-done-with-no-left
   (async done
     (tu/run-async done
