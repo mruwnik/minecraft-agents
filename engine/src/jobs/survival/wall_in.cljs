@@ -8,6 +8,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.plug-way :as way]
+            [jobs.survival.wall-placer :as placer]
             [jobs.survival.respond.state :as flight]))
 
 (def doc
@@ -48,11 +49,13 @@
       (+ (way/place-s c) (if (>= have open) 0 (settings/get settings ::dear-s))))))
 
 (defn why-not
-  "The stop {:stop :no-blocks :text} when too few blocks are carried: none, or for the night fewer than open cells; nil otherwise."
+  "The stop {:stop :no-blocks :text} when too few blocks are carried: none, or for the night fewer than open cells; for the night also {:stop :own-plan} when an open cell lies in a plan the body made; nil otherwise."
   [c]
-  (let [open (count (dig-cells/open-cells (:primitives c) (sh-sense/feet (:primitives c))))
+  (let [cells (dig-cells/open-cells (:primitives c) (sh-sense/feet (:primitives c)))
+        open (count cells)
         have (reduce + (map :count (lb/carried c (flight/blocks c))))]
     (cond
+      (placer/own-plan-cell c cells) {:stop :own-plan :text "the walls need a cell of the body's own plan"}
       (nil? (lb/pick c (flight/blocks c))) {:stop :no-blocks :text "no block to wall the body in with"}
       (and (= :night (:for (:args c))) (< have open)) {:stop :no-blocks :text (str "fewer blocks carried than the " open " open cells")})))
 

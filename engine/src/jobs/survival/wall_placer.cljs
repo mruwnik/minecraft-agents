@@ -166,6 +166,14 @@
           (when-not (= :continue r) (ctx/update-mem! c assoc :door-stepped true))
           :again)))))
 
+(defn own-plan-cell
+  "With :for :night, the first of cells that lies in a plan the body made (a crop field it tends), else nil: a night wall
+  never fills those."
+  [c cells]
+  (when (= :night (:for (:args c)))
+    (let [in (access/rules-input c {:spare-own? true})]
+      (some #(when (access/own-keep in %) %) cells))))
+
 (defn ^:async seal-cells!
   "The body of seal!: place the open cells round the feet."
   [c]
@@ -184,6 +192,8 @@
       (and (not= :night (:for (:args c))) (some (seal/hostile-cells p radius) cells)) :failed
       (and (false? (:trespass? (:args c))) (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
       (do (ctx/update-mem! c assoc :stop {:reason :trespass :text "the walls need a cell of another's area"}) :failed)
+      (own-plan-cell c cells)
+      (do (ctx/update-mem! c assoc :stop {:reason :own-plan :text "the walls need a cell of the body's own plan"}) :failed)
       (nil? (lb/pick c blocks)) :failed
       :else
       (do (when (seal/off-centre? p) (await (seal/centre! c)))

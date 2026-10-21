@@ -193,6 +193,16 @@
       (await (core/tick! (:eng s)))
       (recur (inc i)))))
 
+(deftest the-night-walls-keep-out-of-the-bodys-own-plan-cells
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (shape/with-author {:id "field" :parts [{:id "wheat" :want "wheat" :cells [[1 64 0] [0 64 1] [-1 64 0] [0 64 -1]]}]} "Fake")
+              {:keys [p seen] :as s} (setup [] {:plans {"field" plan} :inventory [{:name "dirt" :count 8}]})]
+          (await (run-wall! s {:for :night}))
+          (is (= "air" (block-at p [1 64 0])) "no dirt in a planned crop cell")
+          (is (= :own-plan (get-in (failed seen) [:reason]))))))))
+
 (deftest wall-in-holds-for-want-of-a-block-of-the-calls-use-even-with-others-carried
   (async done
     (tu/run-async done
