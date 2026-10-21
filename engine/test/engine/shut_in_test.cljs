@@ -250,3 +250,20 @@
         (let [{:keys [p]} (await (plug! {:blocks {"0,63,0" "stone"} :floor [0 0 0 0] :inventory cobble :entities [(ct/skeleton 4 64 0)]
                                          :zones [{:name "keep-out" :min [-1 63 -1] :max [1 63 1]}]} {} needs-support!))]
           (is (empty? (filterv (fn [[_ y _]] (= 63 y)) (cells-of p "place"))) "nothing is placed under the wall cells"))))))
+
+(defn place-holds-block!
+  "As the real place primitive does, take the placed item in the hand."
+  [p]
+  (.override (.-world p) "place"
+             (fn ^:async f [token args impl]
+               (swap! (fake/state p) assoc-in [:self :held] (.-item args))
+               (await (impl token args)))))
+
+(deftest the-item-held-before-the-walls-is-held-again-after
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (plug! {:blocks ct/dead-end :self {:held "wheat"} :inventory (into cobble [{:name "wheat" :count 3}])
+                                             :entities [(ct/skeleton 4 64 0)]} {} place-holds-block!))]
+          (is (= :done (:kind out)))
+          (is (= "wheat" (get-in @(fake/state p) [:self :held])) "the wheat of a lure is back in the hand"))))))

@@ -9,6 +9,7 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spent :as spent]
+            [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.dig-pit :as dig-pit]
             [jobs.survival.plug-way :as way]
@@ -121,10 +122,21 @@
   "Blocks within which a hostile is at the body: a way that failed ends the step so the round and the triggers see it before the next way starts."
   2)
 
+(defn ^:async restore-hand!
+  "Put the item the hand held at the first round back (a wall placed the hand's block in it): a body that was luring animals
+  with wheat holds the wheat again, not the dirt."
+  [c]
+  (let [before (:hand-before (ctx/mem c))
+        p (:primitives c)]
+    (when (and before (not= before (.-held (.self p))) (some #(= before (:name %)) (u/inventory p)))
+      (await (ctx/act c :equip #js {:item before})))))
+
 (defn ^:async prepare!
-  "Once, before anything is placed: the top of the 1x1 shaft the body stands at the bottom of (the shelter entry's :start), and for
+  "Once, before anything is placed: the item in the hand, the top of the 1x1 shaft the body stands at the bottom of (the shelter entry's :start), and for
   the night a look for the pit (dig-pit/look!)."
   [c]
+  (when-not (contains? (ctx/mem c) :hand-before)
+    (ctx/update-mem! c assoc :hand-before (.-held (.self (:primitives c)))))
   (when-not (contains? (ctx/mem c) :shaft-start)
     (let [{:keys [x z] :as feet} (sh-sense/feet (:primitives c))
           y (dig-cells/shaft-top (:primitives c) feet)]
@@ -180,11 +192,12 @@
                                                                     (update :barred (fn [b] (vec (distinct (into (or b []) (:barred chosen)))))))))
             way (:way (ctx/mem c))]
         (if (nil? way)
-          (no-way! c)
+          (do (await (restore-hand! c)) (no-way! c))
           (let [e (await (run-way! c way))]
             (cond
               (= :continue e) :continue
               (and (= :done (:kind e)) (way/enclosed? c)) (do (absorb! c (:data e))
+                                                              (await (restore-hand! c))
                                                               (end! c :done nil {:pos (sh-sense/feet (:primitives c)) :way way}))
               :else (do (absorb! c (:data e))
                         (failed-way! c way (if (= :done (:kind e)) {:kind :nothing-possible :cause :unsealed :data {:reason :unsealed :text (str "the " (name way) " did not leave the body enclosed")}} e))
