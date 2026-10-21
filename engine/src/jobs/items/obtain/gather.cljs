@@ -8,7 +8,7 @@
             [jobs.items.obtain.need :refer [explore-opts gather-viable? pickaxe-first? search-names tools-wanted trees-unreachable?]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
-            [jobs.items.obtain.surface :as surface]
+            [jobs.lib.surface-up :as surface]
             [jobs.items.obtain.table :refer [animal? gather-need searchable?]]
             [jobs.lib.waits :as waits]
             [jobs.lib.child :as child]
@@ -94,7 +94,7 @@
   (and (not (and (animal? need) (seen-of c need))) (surface/surfacing? c need)))
 
 (defn ^:async surface-step!
-  "One round of the way up (jobs.items.obtain.surface): :continue while it goes on, else the gather source fails (:no-way-up)."
+  "One round of the way up (jobs.lib.surface-up): :continue while it goes on, else the gather source fails (:no-way-up)."
   [c]
   (case (await (surface/step! c))
     :continue :continue

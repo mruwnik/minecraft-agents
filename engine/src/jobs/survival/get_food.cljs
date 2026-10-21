@@ -12,7 +12,7 @@
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
-            [jobs.items.obtain.surface :as surface]
+            [jobs.lib.surface-up :as surface]
             [jobs.lib.foods :as foods]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.cost.food :as food-cost]
@@ -51,7 +51,7 @@
   :field Last: it walks to the nearest zone or plan of its own it has not visited in this job and cuts and replants the ripe wheat there
          (jobs.farm.harvest); the wheat is baked next (:bake).
   Then, once per job (:explore, default on; a starving body again after foods/::starving-rest-ms) it searches for food animals and crops (jobs.explore.search, the
-  ::explore setting; not while the search would wait (dark sky, danger near)) and goes on if it found some (an animal only a note gave, with none in sight, is walked toward first; a hungry body under rock climbs out first, jobs.items.obtain.surface); at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
+  ::explore setting; not while the search would wait (dark sky, danger near)) and goes on if it found some (an animal only a note gave, with none in sight, is walked toward first; a hungry body under rock climbs out first, jobs.lib.surface-up); at ::eat-bad-food (6) or below it then eats harmful food carried (rotten
   flesh, with :allow-bad). Still nothing: it ends nothing-possible :no-food (the text says what was searched, the nearest known source) and writes
   :hungry, which widens the next search; the hungry trigger rests after that ending (its :rest-s).
   :eat false: only gathers, done when the pack holds :carry food points (jobs.survival.eat fetches this way; a job cannot call its own caller).
@@ -354,7 +354,7 @@
 
 (defn ^:async explore!
   "Once per job, with nothing known or seen: search for food animals and ripe crops (jobs.explore.search, :explore),
-  not in a dark sky (a body sheltered for the night stays in) nor in the dark or with danger near unless starving (safe-if-lit), nor underground (a hungry body under rock first climbs out, jobs.items.obtain.surface; a starving one searches there), nor when risk refuses it. :again when the search found something to hunt or dig, else nil with what it
+  not in a dark sky (a body sheltered for the night stays in) nor in the dark or with danger near unless starving (safe-if-lit), nor underground (a hungry body under rock first climbs out, jobs.lib.surface-up; a starving one searches there), nor when risk refuses it. :again when the search found something to hunt or dig, else nil with what it
   covered remembered."
   [c]
   (let [e (:explore (:args c))]

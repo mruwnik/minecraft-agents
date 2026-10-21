@@ -1,4 +1,4 @@
-(ns jobs.items.obtain.surface
+(ns jobs.lib.surface-up
   "Up out of a cave for the gather source: a body under rock whose search found nothing walks to the nearest wall and cuts a stair up (by hand if it must) until sky shows."
   (:require [engine.ctx :as ctx]
             [jobs.lib.child :as child]
