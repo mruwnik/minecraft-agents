@@ -1,0 +1,20 @@
+;; Treeless start: the only tree stands 100 blocks east, past the first search (64 blocks round the start). obtain oak_log with :explore
+;; walks on outward along headings (later searches reach 192 blocks) until the tree is seen, then fells it.
+;; Plot 220 x 64, lit underground, bare stone floor; body at the west end, tree at x 100 z 32.
+;; Should-succeed: the log is got. Should-fail: with the far search off (explore-rounds 1) the first search ends and obtain stops no-source.
+{:defaults
+ {:tags [:items :obtain :explore :large :jobs]
+  :time :any
+  :plot {:height 12 :length 220 :width 64}
+  :body {:at [1.5 0 32.5] :yaw 270 :settle-s 2 :inventory [["iron_axe" 1]] :effects [["resistance" 600 4]]}
+  :blocks [[:fill [100 0 32] [100 4 32] "oak_log"] [:fill [99 4 31] [101 6 33] "oak_leaves[persistent=true]"]]
+  :limit-s 600}
+ :cases
+ [{:name "tree-beyond-the-first-search-is-found-by-walking-on"
+   :act [[:job (jobs.items.obtain {:item "oak_log" :count 1 :ways #{:gather} :explore true})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 580 :of-job true}]
+   :after [[:item "oak_log" 4]]}
+  {:name "one-search-only-ends-no-source"
+   :act [[:job (jobs.items.obtain {:item "oak_log" :count 1 :ways #{:gather} :explore true :settings {:jobs.items.obtain.base/explore-rounds 1}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 200 :of-job true}]
+   :after [[:item "oak_log" 0]]}]}

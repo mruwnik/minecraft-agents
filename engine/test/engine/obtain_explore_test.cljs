@@ -3,13 +3,23 @@
   (:require [cljs.test :refer [deftest is async]]
             [engine.fetch-test :as f]
             [engine.obtain-iron-test :refer [ore-world obtain!]]
+            [engine.fake :as fake]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
-            [engine.fake :as fake]))
+            [jobs.items.obtain.gather :as gather]))
 
 (def village-trunk
   "A trunk at x 3 inside a foreign zone."
   {:blocks (into {} (for [y [64 65 66]] [(str "3," y ",4") "oak_log"]))
    :zones [f/own-zone {:name "village" :min [2 60 3] :max [4 70 5] :owner "Miles"}]})
+
+(def small-explore
+  {:jobs.items.obtain.base/explore {:max-distance 16 :max-legs 2 :spend {:job-time 60}}
+   :jobs.items.obtain.base/explore-far {:max-distance 32 :max-legs 2 :spend {:job-time 60}}
+   :jobs.items.obtain.base/explore-rounds 2})
+
+(defn ^:async obtain-small! [s args n]
+  (await (settings/with-settings small-explore #(obtain! s args n))))
 
 (defn free-trees
   "A tree 30 blocks off on each side: the search starts the way its legs sort first, which the test must not depend on."
@@ -22,9 +32,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (ore-world (:blocks village-trunk) []) (:zones village-trunk))]
-          (await (obtain! s {:any-of ["oak_log" "birch_log"] :count 2 :ways #{:gather} :explore true} 12))
+          (await (obtain-small! s {:any-of ["oak_log" "birch_log"] :count 2 :ways #{:gather} :explore true} 12))
           (is (seq (f/events-of s :obtain.exploring)) "walks to look for logs it may take")
-          (await (f/run-ticks s 600))
+          (await (settings/with-settings small-explore #(f/run-ticks s 600)))
           (is (re-find #"seen but not taken.*zone" (str (:why (first (f/events-of s :stopped))))) "when exploring fails the stop names the refusal"))))))
 
 (deftest a-tree-it-may-take-is-preferred-to-logs-in-a-foreign-zone
@@ -62,7 +72,7 @@
         (let [pillar (into {} (concat (for [y (range 63 67)] [(str "0," y ",4") "bedrock"])
                                       (for [y (range 67 73)] [(str "0," y ",4") "oak_log"])))
               s (f/start (ore-world pillar []) [f/own-zone])]
-          (await (obtain! s {:item "oak_log" :count 2 :explore true} 60))
+          (await (obtain-small! s {:item "oak_log" :count 2 :explore true} 60))
           (is (seq (f/events-of s :obtain.exploring)) "walks to look for other logs")
           (is (empty? (filter #(= :no-tree (:reason %)) (f/events-of s :stopped))) "not stopped no-tree before that"))))))
 
@@ -83,3 +93,18 @@
           (await (obtain! s {:item "oak_log" :count 1 :explore true} 900))
           (is (seq (f/events-of s :stair.step)) "a stair was cut up through the roof")
           (is (<= 1 (get (f/inv s) "oak_log" 0)) "and the tree outside was felled"))))))
+
+(deftest far-searches-run-on-and-then-turn-so-eight-take-eight-ways
+  (is (= :north (gather/far-heading [0 64 0] [3 64 2] 1)) "still at the start: north")
+  (is (= :east (gather/far-heading [0 64 0] [60 64 -2] 1)) "away from the start")
+  (is (= :south-west (gather/far-heading [0 64 0] [-50 64 50] 1)))
+  (is (= 8 (count (set (map #(gather/far-heading [0 64 0] [0 64 -40] %) (range 1 9))))) "eight searches, eight headings"))
+
+(deftest a-search-that-finds-nothing-is-followed-by-one-outward-along-a-heading-until-the-rounds-are-spent
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (ore-world {} []) [f/own-zone])]
+          (await (obtain-small! s {:any-of ["oak_log"] :count 1 :ways #{:gather} :explore true} 200))
+          (is (= [nil :north] (mapv :heading (f/events-of s :obtain.exploring))) "rings first, then outward")
+          (is (= :no-source (:reason (first (f/events-of s :stopped))))))))))
