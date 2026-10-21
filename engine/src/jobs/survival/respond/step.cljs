@@ -151,7 +151,7 @@
             _ (when leg (respond.goal/start-leg! c))
             from (u/self-pos c)
             moved (await (cornered/leg-step! c :step target 1
-                                    (cond (or (seq (close-hitters c)) (pick/recently-hurt? c)) (cornered/close-leg-s)
+                                    (cond (or (seq (close-hitters c)) (cornered/recently-hurt? c)) (cornered/close-leg-s)
                                           low? (low-leg-s)
                                           :else (cornered/flight-timeout-s))
                                     (if leg (respond.goal/margin c) (respond.goal/leg-margin))))]

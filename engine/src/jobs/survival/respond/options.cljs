@@ -254,13 +254,21 @@
       why (await (hold! c option why))
       :else :again)))
 
+(defn hurt-window-s [] (settings/get settings ::hurt-window-s))
+
+(defn recently-hurt?
+  "Whether the body lost health within hurt-window-s."
+  [c]
+  (pos? (ctx/count-in c :hurt (* 1000 (hurt-window-s)))))
+
 (defn ^:async blocked!
   "Every option failed: forget them all, warn once a flight, pause a moment (why cornered) and go on: the next step
-  tries them again from the start (the danger still stands). The second sweep in a row ends the flight :cannot-escape."
+  tries them again from the start (the danger still stands); no pause while the body is being hit. The second sweep in a row ends the flight :cannot-escape."
   [c why]
   (ctx/update-mem! c #(-> % (dissoc :tried) flight/count-sweep))
   (when-not (:blocked-warned (ctx/mem c))
     (ctx/update-mem! c assoc :blocked-warned true)
     (ctx/emit! c :retreat_blocked :warn {:text (str why "; every escape failed, trying them again")}))
-  (await (child/pause! c (/ (flight/wait-ms) 1000) "cornered"))
+  (when-not (recently-hurt? c)
+    (await (child/pause! c (/ (flight/wait-ms) 1000) "cornered")))
   (if (flight/cannot-escape? (ctx/mem c)) (flight/end-flight! c :cannot-escape) :again))

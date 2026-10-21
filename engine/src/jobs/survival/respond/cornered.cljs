@@ -2,7 +2,7 @@
   "The cornered step of a flight: the conditions that rank its options (pressed, beaten, under fire, boxed in) and cornered!, which takes the first option it can."
   (:require [engine.settings :as settings]
             [jobs.survival.respond-choose :refer [escape-order with-zone-pillar]]
-            [jobs.survival.respond.options :as rc :refer [settings near-hostiles hitters close-radius hurt-by press-gap hit-reach fist-sweeps tool-weapons fight! outrun? angry-enderman? fight-wins? in-water? stand! back-off! blocked!]]
+            [jobs.survival.respond.options :as rc :refer [settings near-hostiles hitters close-radius hurt-by press-gap hit-reach fist-sweeps tool-weapons fight! outrun? angry-enderman? fight-wins? in-water? stand! back-off! blocked! recently-hurt? hurt-window-s]]
             [engine.args :as a]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
@@ -71,13 +71,6 @@
   [c]
   (ctx/update-mem! c flight/count-sweep)
   :again)
-
-(defn hurt-window-s [] (settings/get settings :jobs.survival.respond.options/hurt-window-s))
-
-(defn recently-hurt?
-  "Whether the body lost health within hurt-window-s."
-  [c]
-  (pos? (ctx/count-in c :hurt (* 1000 (hurt-window-s)))))
 
 (defn pressed?
   "Whether an armed body has a melee mob (hitters) on it: one within press-gap, or one within hit-reach and the body

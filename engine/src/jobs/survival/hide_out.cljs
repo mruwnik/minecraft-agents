@@ -22,7 +22,7 @@
   Done {:hold :quiet} once the ::quiet-s setting (30 s) has passed since the last such danger; {:hold :spent}
   once ::hide-s (60 s) have passed in the refuge with no real danger on the body as it stands (danger/danger-near?, the
   hostile-near trigger's test), though a hostile stays; a melee hostile within ::foot-reach waiting at the foot holds it to
-  ::hide-max-s. Sealed in a plug or pit with such a hostile at the foot past ::hide-s it first digs a stair up and away from
+  ::hide-max-s. Sealed in a plug or pit with such a hostile at the foot past ::hide-s it (not a climber, which follows up the stair) first digs a stair up and away from
   it (jobs.access.stair, ::dig-out-steps steps; the next heading when one stops), then ends done {:hold :spent :dug-out true}.
   Nothing-possible :hurt {:ids [mobs within ::reach-radius]} when the body loses health in the refuge (a mob reaching it
   round a corner of the seal), :breached {:id :name} when a creeper (its blast breaks any refuge) or, against a pillar, a
@@ -152,7 +152,7 @@
         dig-out? (or (:dig-out (ctx/mem c))
                      (and (#{:plug :pit} (:kind (:args c)))
                           (>= held-ms (* 1000 (hide-s)))
-                          (seq (waiting-melee c))
+                          (let [waiting (waiting-melee c)] (and (seq waiting) (not-any? combat/climber? waiting)))
                           (not (danger-on-body?))))]
     (cond
       hurt? (ctx/end c :nothing-possible :hurt

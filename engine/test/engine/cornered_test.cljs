@@ -378,6 +378,17 @@
           (is (every? #(<= (.. % -args -pos -x) 0) (calls p "dig")) "away from the zombie at x 3, none towards it")
           (is (= [:spent] (hidden-holds seen))))))))
 
+(deftest a-sealed-body-with-a-spider-at-its-foot-past-hide-s-keeps-hiding-instead-of-digging-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spider {:id 9 :name "spider" :kind "hostile" :pos {:x 3 :y 64 :z 0} :health 16}
+              {:keys [p]}
+              (await (hide-steps '(test.flight) {:blocks long-dead-end :inventory [{:name "cobblestone" :count 20} {:name "stone_pickaxe" :count 1}]
+                                                 :entities [(assoc spider :pos {:x 4 :y 64 :z 0})]}
+                                 [[[spider] 61000] [[spider] 1000]]))]
+          (is (empty? (calls p "dig")) "a spider climbs any stair: opening the seal beside it is the death in a pack"))))))
+
 (deftest a-sealed-body-listens-for-a-quiet-period-after-the-last-danger
   (async done
     (tu/run-async done
