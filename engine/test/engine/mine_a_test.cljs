@@ -147,6 +147,15 @@
             (is (empty? (calls s "dig")) note)
             (is (= 10 (count (calls s "look"))) note)))))))
 
+(deftest a-dig-over-an-area-far-away-walks-there-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:block "sand" :count 1 :ways #{:seen} :radius 5 :center [30 64 0]} {:blocks {"31,64,0" "sand"}} 60))]
+          (is (empty? (filterv #(= :outside-area (:reason %)) (events-of s :waiting))))
+          (is (= :count (:reason (done-event s))) "dug the sand in the area")
+          (is (pos? (dig-count s))))))))
+
 (deftest wet-targets-are-skipped-unless-asked
   (async done
     (tu/run-async done

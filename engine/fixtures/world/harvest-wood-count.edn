@@ -9,7 +9,14 @@
   :body {:at [3.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 130}
  :cases
- [{:name "reachable-tree-count-2-completes"
+ [;; an area 25 blocks off: the job walks there first, never waits :outside-area
+  {:name "area-far-off-is-walked-to-and-its-tree-felled"
+   :blocks [[:fill [28 0 8] [28 3 8] "oak_log"] [:fill [26 3 6] [30 4 10] "oak_leaves[persistent=true]"] [:set [28 3 8] "oak_log"]]
+   :body {:inventory [["iron_axe" 1] ["oak_sapling" 1]]}
+   :act [[:job (jobs.forestry.harvest-wood {:radius 6 :center #at [28 0 12]})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}]
+   :after [[:item "oak_log" [:>= 3]]]}
+  {:name "reachable-tree-count-2-completes"
    :blocks [[:fill [3 0 8] [3 3 8] "oak_log"] [:fill [1 3 6] [5 4 10] "oak_leaves[persistent=true]"] [:set [3 3 8] "oak_log"]]
    :body {:inventory [["iron_axe" 1] ["oak_sapling" 1]]}
    :act [[:job (jobs.forestry.harvest-wood {:radius 32 :count 2})]]

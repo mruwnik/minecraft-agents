@@ -39,7 +39,7 @@
 (def doc
   "Dig for an item (:item, or what :block drops; several items count together) until :count of it are carried, from where the body stands, with what it carries: the
   digging half of jobs.gather.mine, which equips first, calls this and walks back. The blocks that drop it come from the drop table (an ore's
-  stone and deepslate kinds both); :block narrows them. The run's own area is :center / :radius (waits :outside-area while the body is farther; jobs.lib.area).
+  stone and deepslate kinds both); :block narrows them. The run's own area is :center / :radius (walks there first while the body is farther; jobs.lib.area).
 
   Needs: a pickaxe carried when the block wants one (a shovel or axe block drops by hand), torches carried or craftable when a
   tunnel or stair is lit, health (fit? waits :low-health, at the start only), and a read zone list (:no-zones unless
@@ -149,9 +149,8 @@
       (surface-cause (:args c) (sh-sense/sky-light-at p {:x x :y (inc y) :z z})))))
 
 (def can-start?
-  (cond/and area/inside
-            target-given
-            (checks/refusing :underground "not in the open" on-surface)
+  (cond/and target-given
+            (area/unless-outside (checks/refusing :underground "not in the open" on-surface))
             (checks/refusing :zones-read "zone list read" no-zones)
             (checks/refusing :target "a target no zone refuses" all-refused)))
 
@@ -332,8 +331,12 @@
 (defn ^:async step [c]
   (settle-dig! c)
   (let [m (ctx/mem c)
-        {:keys [heading direction]} (:args c)]
+        {:keys [heading direction]} (:args c)
+        w (when (nil? (:phase m)) (await (area/walk-in! c)))]
     (cond
+      (= :there w) :again
+      (= :continue w) :continue
+      w w
       (stop-cause c) (let [cause (stop-cause c)]
                        (stop! c (:reason cause) (select-keys cause [:tool :why :text])))
 

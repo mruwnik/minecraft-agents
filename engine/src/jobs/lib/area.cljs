@@ -3,6 +3,7 @@
   names :center, so calls over different areas are not duplicates. A job over an area works where the body stands;
   a caller that names a :center walks there first."
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
             [jobs.lib.job-common :as jc]
@@ -39,3 +40,8 @@
         (ctx/end c :nothing-possible :area-unreachable
                  {:reason :area-unreachable :center (:center out) :distance (:distance out)
                   :text (str "could not walk to the area centre " (pr-str (:center out)) ", " (:distance out) " blocks away")})))))
+
+(defn unless-outside
+  "check, except ok while the body is outside the area: the job walks there first, and the check reads the place it works."
+  [check]
+  (fn [c] (if (outside c) (contract/ok :walking-to-area "the job walks to its area first") (check c))))

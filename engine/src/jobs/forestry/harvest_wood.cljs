@@ -18,7 +18,7 @@
 (def doc
   "Fell trees (jobs.forestry.fell-tree, which picks up its own logs; the :replant-owed trigger plants the saplings) until
   :count logs are carried, or one tree without :count.
-  :center (default: where the body stands at the first round) with :radius is the area: a call waits (:outside-area, jobs.lib.area) while the body stands farther than :radius from the centre; the caller walks there first.
+  :center (default: where the body stands at the first round) with :radius is the area: a call first walks to the centre while the body stands farther than :radius from it (jobs.lib.area).
   Before the first tree it deposits at the known chest when the bag is fullish (jobs.lib.trip/ready!).
   With :count, the felling repeats on the next tree until that many logs are carried; done? holds at once when they are carried already (:done :already).
   Needs: a tree in range (a start wait :no-tree until one shows); an axe is fetched (from the call's :ways, which may leave out :pillar).
@@ -59,9 +59,18 @@
   [c e]
   (ctx/end c (:kind e) (:cause e) (assoc (:data e) :got (logs-carried c))))
 
+(declare fell!)
+
 (defn ^:async step
   "Calls the fell child once; a tree felled starts the next while :count asks for more logs, else the job is done. A
   child that waits on the world is :continue."
+  [c]
+  (let [w (when-not (:logs-before (ctx/mem c)) (await (area/walk-in! c)))]
+    (if w
+      (case w :there :again :continue :continue w)
+      (await (fell! c)))))
+
+(defn ^:async fell!
   [c]
   (when-not (:logs-before (ctx/mem c)) (ctx/update-mem! c assoc :logs-before (logs-carried c)))
   (let [e (await (ctx/call c :fell 'jobs.forestry.fell-tree (fell-args (:args c))))]
@@ -100,7 +109,7 @@
         (no-tree c)
         (contract/ok :tree-found "a tree is felled or not wanted now")))))
 
-(def can-start? (cond/and area/inside no-tree-to-fell))
+(def can-start? (area/unless-outside no-tree-to-fell))
 
 (defn done?
   "Ok once the last tree is felled, or (with :count) the logs are carried and no tree is under way; else later with the

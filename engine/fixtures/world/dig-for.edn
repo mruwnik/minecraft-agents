@@ -9,7 +9,13 @@
   :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["torch" 8]] :effects [["resistance" 600 4]]}
   :limit-s 120}
  :cases
- [{:name "dig-for-stays-where-the-dig-ends"
+ [;; an area 22 blocks off: the job walks there first, never waits :outside-area
+  {:name "dig-for-walks-to-a-far-area-then-digs"
+   :body {:at [2.5 0 16.5]}
+   :act [[:job (jobs.gather.dig-for {:torches false :block "iron_ore" :level false :count 1 :ways #{:seen} :radius 4 :center #at [24 0 16]})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1 :reason :count}} :within-s 110 :of-job true}]
+   :after [[:item "raw_iron" 1] [:not-block [24 0 16] "iron_ore"]]}
+  {:name "dig-for-stays-where-the-dig-ends"
    :act [[:job (jobs.gather.dig-for {:torches false :block "iron_ore" :level false :count 1 :ways #{:seen} :radius 10})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1 :reason :count}} :within-s 100 :of-job true}]
    :after [[:item "raw_iron" 1] [:not-block [24 0 16] "iron_ore"] [:body-far [16.5 0 16.5] 2]]}

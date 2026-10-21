@@ -323,7 +323,7 @@
 (defn ^:async step
   "One step: attack the target, collect, finish, or pick the next target. :again, :yield (a child is waiting on the world) or :done."
   [c]
-  (let [w (await (area/walk-in! c))]
+  (let [w (when-not (:started (ctx/mem c)) (await (area/walk-in! c)))]
     (cond
       (= :there w) :again
       (= :continue w) :yield
