@@ -1562,3 +1562,17 @@
           (is (seq torches) "a torch hung in the dark site")
           (is (every? #(= "oak_fence" (block p %)) ring))
           (is (= [] (:missing result)) (pr-str result)))))))
+
+(deftest a-body-standing-in-light-beside-a-dark-site-still-lights-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (update (pen-plan) :parts #(vec (butlast %)))
+              {:keys [eng p]} (start {:inventory (conj (vec (butlast kit)) {:name "torch" :count 4})
+                                      :self {:pos {:x 8.5 :y 64 :z 8.5}}
+                                      :time 18000 :light {[8 64 8] [15 0] [8 65 8] [15 0]} :light-default [0 0]}
+                                     {"pen" plan})
+              result (await (child-outcome eng job {:plan "pen"} 400))
+              torches (for [x (range 0 7) y [64 65] z (range 0 7) :when (= "torch" (block p [x y z]))] [x y z])]
+          (is (seq torches) "a torch hung at the dark site")
+          (is (= [] (:missing result)) (pr-str result)))))))

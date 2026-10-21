@@ -22,16 +22,21 @@
     (with-meta (lit safe) (update (meta safe) :jobs.lib.ready/exposure #(some-> % lit)))))
 
 (defn dark-site?
-  "Whether the cell the body stands in is dark as it knows it (a solid plan cell has no light of its own to read)."
-  [c]
-  (let [p (:primitives c)]
-    (not (sense/lit-here? p (sense/feet p)))))
+  "Whether the body's cell or an open cell at or over an owed cell is dark as the body knows it (a solid cell has no light of
+  its own to read)."
+  [c cells]
+  (let [p (:primitives c)
+        open (for [{[x y z] :pos} cells dy [0 1]
+                   :let [cell {:x x :y (+ y dy) :z z}]
+                   :when (not (sense/solid-at? p cell))]
+               cell)]
+    (boolean (some #(not (sense/lit-here? p %)) (cons (sense/feet p) open)))))
 
 (defn ^:async light!
   "jobs.build.light-area over the box round the owed cells while the site is dark, called again while it goes on; once it ends, :light-tried
   whatever came of it (the build goes on in the dark rather than ask again). :continue while it waits, :again once ended, nil when not due."
   [c cells]
-  (when (and (can-light? c) (dark-site? c) (seq (plan/owed cells)))
+  (when (and (can-light? c) (dark-site? c (plan/owed cells)) (seq (plan/owed cells)))
     (let [ps (map :pos (plan/owed cells))
           lo (apply mapv min ps)
           hi (apply mapv max ps)
