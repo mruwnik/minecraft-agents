@@ -1,0 +1,17 @@
+;; items.obtain over several foods with water in sight but no rod carried: it takes the animal way (searches for
+;; the cow 40 blocks off, beyond the 32-block animal radius), never starts fishing without a rod.
+;; Lit underground plot 64 long: stone floor, a pond 6x6 beside the body, one NoAI cow at x 50.
+;; Should-succeed: it looks for the cow (obtain.exploring) and no fishing child starts.
+{:defaults
+ {:tags [:obtain :fish :hunt]
+  :time :any
+  :plot {:height 8 :length 64}
+  :blocks [[:fill [10 -1 10] [15 -1 15] "water"]]
+  :body {:at [4.5 0 12.5] :settle-s 2}
+  :limit-s 90}
+ :cases
+ [{:name "water-without-a-rod-hunts-the-far-cow"
+   :act [[:summon "cow" [50.5 0 12.5] "{NoAI:1b}"]
+         [:job (jobs.items.obtain {:any-of ["beef" "cod"] :count 1})]]
+   :expect [{:event {:source :job :kind :obtain.exploring :data {:for ["cow"]}} :within-s 30}
+            {:no-event {:source :job :kind :obtain.gathering :data {:via jobs.food.fish}} :for-s 30}]}]}
