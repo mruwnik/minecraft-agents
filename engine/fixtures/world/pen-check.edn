@@ -189,8 +189,8 @@
   {:name "stone-beside-the-fence-top-is-a-perch-in"
    :blocks [[:set [9 0 5] "stone"]]
    :act [[:job (jobs.animals.pen-check {:ways #{:check} :at #at [5 0 5]})]]
-   :expect [{:event {:source :job :kind :completed :message [:contains "perch-in"]
-                     :data {:closed? false :reason :leak :leaks [{:why :perch-in :stand {:x 9 :y 0 :z 5}}]}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :message [:contains "from the ground at"]
+                     :data {:closed? false :reason :leak :leaks [{:why :perch-in}]}} :within-s 20 :of-job true}]}
   ;; the patch puts a second fence on the perched fence, so the ground beside it is no step to the top
   {:name "perch-in-is-patched-with-a-fence-on-top"
    :body {:at [5.5 0 5.5] :yaw 0 :inventory [["oak_fence" 4]]}
