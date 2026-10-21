@@ -53,6 +53,17 @@
    :expect [{:event {:source :job :kind :completed :data {:reason :arrived :in-box true}} :within-s 170 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[51 0 14] [55 1 18]] 1]]
    :limit-s 200}
+  ;; card 45ea0058: body inside a pen whose gate is on the far side from the cow (east, the cow by the west fence): it leads the cow round and in
+  {:name "cow-outside-the-fence-is-led-round-to-the-far-gate"
+   :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"]
+            [:fill [19 0 14] [23 0 18] "air"]
+            [:set [24 0 16] "oak_fence_gate[facing=east,open=false]"]]
+   :body {:at [21.5 0 16.5] :yaw 270 :inventory [["wheat" 4]] :effects [["resistance" 900 4]]}
+   :act [[:summon "cow" [16.5 0 16.5]]
+         [:job (jobs.animals.lure-to {:mob "cow" :pos #xyz [21 0 16] :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :arrived :in-box true}} :within-s 150 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
+           [:block [24 0 16] "oak_fence_gate[open=false]"]]}
   ;; should fail: a cow that does not move never follows; the run ends with a reason, never :arrived, and the cow stays out
   {:name "cow-that-never-follows-is-not-arrived"
    :act [[:summon "cow" [10.5 0 18.5] "{NoAI:1b}"]

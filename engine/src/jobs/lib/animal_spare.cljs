@@ -53,6 +53,14 @@
                    [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [1 1 0] [-1 1 0] [0 1 1] [0 1 -1]]))
            inside))))
 
+(defn enclosure
+  "The feet cells ([x y z] set) of the fenced enclosure around cell, an open gate counted shut; nil when there is none."
+  [c cell]
+  (let [answer (pen/check {:block-at (u/seen-block-at-fn (:primitives c)) :at {:x (cell 0) :y (cell 1) :z (cell 2)}
+                           :max-cells (settings/get settings ::pen-max-cells)})
+        inside (:inside answer)]
+    (when (and (seq inside) (fenced? c inside)) inside)))
+
 (defn enclosed?
   "Whether the animal stands inside a closed enclosure the body has seen with a fence, wall or gate in it: the pen check from its
   feet cell, the fenced enclosures found so far kept in `pens` (an atom of cell sets)."
