@@ -178,7 +178,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out eng]} (await (go! {:blocks pool-platform :self {:pos {:x 0.5 :y 64 :z 0.5}} :viewChunks 2}
-                                            {:pos [34 100 -30] :range 1 :ways #{:walk :dig} :may-dig #{:own}}))]
+                                            {:pos [34 100 -30] :range 1 :ways #{:walk :clear-seal}}))]
           (is (= {:arrived false :reason :unreachable :why :goal-cut-off} (select-keys @out [:arrived :reason :why]))
               (str "result " @out))
           (is (every? #(<= (dist-to [(:x (:to %)) (:y (:to %)) (:z (:to %))] [34 100 -30]) 50) (moved eng))
@@ -194,7 +194,7 @@
       (fn ^:async t []
         (with-redefs [wsearch/round-budget 1000]
           (let [{:keys [out]} (await (go! {:blocks high-deck-floor :self {:pos {:x 20.5 :y 64 :z 20.5}}}
-                                          {:pos [20 71 20] :range 1 :ways #{:walk :dig} :may-dig #{:own} :spend {:health 0}
+                                          {:pos [20 71 20] :range 1 :ways #{:walk :clear-seal} :spend {:health 0}
                                            :settings {:jobs.movement.go-to.tuning/max-searching 2}}))]
             (is (= {:arrived false :reason :unreachable :why :goal-cut-off} (select-keys @out [:arrived :reason :why]))
                 (str "result " @out))))))))
@@ -204,7 +204,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (go! {:blocks high-deck-floor :self {:pos {:x 20.5 :y 64 :z 20.5}}}
-                                        {:pos [20 71 20] :range 1 :ways #{:walk :dig} :may-dig #{:own}}))]
+                                        {:pos [20 71 20] :range 1 :ways #{:walk :clear-seal}}))]
           (is (= {:reason :unreachable :at [20 64 20]} (select-keys @out [:reason :at])) (str "result " @out))
           (is (number? (:near @out)) (str "result " @out)))))))
 
@@ -218,7 +218,7 @@
 
 (defn ^:async small-deck-cut-off! [blocks]
   (let [{:keys [out eng p]} (await (go! {:blocks blocks :self {:pos {:x 2.5 :y 64 :z 16.5}}}
-                                        {:pos [17 75 17] :range 1 :ways #{:walk :dig} :may-dig #{:own} :spend {:health 0}}))]
+                                        {:pos [17 75 17] :range 1 :ways #{:walk :clear-seal} :spend {:health 0}}))]
     (is (= {:arrived false :reason :unreachable :why :goal-cut-off} (select-keys @out [:arrived :reason :why]))
         (str "result " @out))
     (is (< (dist-to (at p) [17 64 17]) 1.5)
@@ -229,7 +229,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (go! {:blocks small-deck :self {:pos {:x 2.5 :y 64 :z 16.5}}}
-                                        {:pos [17 75 17] :range 1 :ways #{:walk :dig} :may-dig #{:own}}))]
+                                        {:pos [17 75 17] :range 1 :ways #{:walk :clear-seal}}))]
           (is (= {:arrived false :reason :unreachable :why :goal-cut-off} (select-keys @out [:arrived :reason :why]))
               (str "result " @out)))))))
 
@@ -270,7 +270,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out eng]} (await (go! {:blocks abyss-strip :self {:pos {:x 2.5 :y 64 :z 0.5}} :viewChunks 1}
-                                            {:pos [-400 64 0] :range 1 :ways #{:walk :dig} :may-dig #{:own} :settings {:jobs.lib.cost.value/tour-worth 12}}))
+                                            {:pos [-400 64 0] :range 1 :ways #{:walk :clear-seal} :settings {:jobs.lib.cost.value/tour-worth 12}}))
               walked (reduce + (map #(dist-to [(:x (:from %)) 0 (:z (:from %))] [(:x (:to %)) 0 (:z (:to %))]) (moved eng)))]
           (is (= {:arrived false :reason :unreachable :why :explore-spent} (select-keys @out [:arrived :reason :why]))
               (str "result " @out " walks: " (mapv (juxt :status :from :to) (moved eng))))
@@ -306,7 +306,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out eng walked]} (await (go-walked! {:blocks abyss-strip :self {:pos {:x 2.5 :y 64 :z 0.5}} :viewChunks 1}
-                                                         {:pos [-400 64 0] :range 1 :ways #{:walk :dig} :may-dig #{:own}}))]
+                                                         {:pos [-400 64 0] :range 1 :ways #{:walk :clear-seal}}))]
           (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])) (str "result " @out))
           (is (< walked 800) (str "walked " walked ": " (mapv (juxt :status :from :to) (moved eng)))))))))
 
@@ -317,7 +317,7 @@
       (fn ^:async t []
         (let [blocks (merge abyss-strip (box -401 63 199 -1 63 200 "stone") (box -401 63 -1 -399 63 198 "stone"))
               {:keys [out walked]} (await (go-walked! {:blocks blocks :self {:pos {:x 2.5 :y 64 :z 0.5}} :viewChunks 1}
-                                                      {:pos [-400 64 0] :range 1 :ways #{:walk :dig} :may-dig #{:own}}))]
+                                                      {:pos [-400 64 0] :range 1 :ways #{:walk :clear-seal}}))]
           (is (= {:arrived true} (select-keys @out [:arrived])) (str "result " @out))
           ;; south end 191, back to the north end 390, the bridge 400 and back south 200
           (is (< walked 1500) (str "walked " walked)))))))
@@ -331,7 +331,7 @@
       (fn ^:async t []
         (let [blocks (merge abyss-strip (box 4 65 -1 6 65 1 "stone") (box -100 65 0 3 65 0 "stone"))
               {:keys [out eng walked]} (await (go-walked! {:blocks blocks :self {:pos {:x 10.5 :y 64 :z 0.5}} :viewChunks 1}
-                                                         {:pos [5 66 0] :range 1 :ways #{:walk :dig} :may-dig #{:own}}))]
+                                                         {:pos [5 66 0] :range 1 :ways #{:walk :clear-seal}}))]
           (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason]))
               (str "result " @out " walks: " (mapv (juxt :status :to) (moved eng))))
           (is (= [true true] [(vector? (:at @out)) (number? (:near @out))]) (str "result " @out))
@@ -350,7 +350,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out eng]} (await (go! {:blocks ravine :self {:pos {:x 10.5 :y 64 :z 3.5}} :viewChunks 1}
-                                            {:pos [10 64 -3] :range 1 :ways #{:walk :dig} :may-dig #{:own}}))]
+                                            {:pos [10 64 -3] :range 1 :ways #{:walk :clear-seal}}))]
           (is (= {:arrived true} (select-keys @out [:arrived])) (str "result " @out " walks: " (mapv (juxt :status :to) (moved eng)))))))))
 
 (deftest go-to-a-tour-floor-of-zero-gives-the-ravine-up-again
@@ -358,7 +358,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (go! {:blocks ravine :self {:pos {:x 10.5 :y 64 :z 3.5}} :viewChunks 1}
-                                        {:pos [10 64 -3] :range 1 :ways #{:walk :dig} :may-dig #{:own} :settings {:jobs.lib.cost.value/tour-floor-blocks 0}}))]
+                                        {:pos [10 64 -3] :range 1 :ways #{:walk :clear-seal} :settings {:jobs.lib.cost.value/tour-floor-blocks 0}}))]
           (is (= :explore-spent (:why @out)) (str "result " @out)))))))
 
 (deftest a-solid-cell-the-body-feels-but-has-not-seen-does-not-loop-the-replan

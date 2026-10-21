@@ -102,7 +102,7 @@
   reason). Not an arrival ends the trip :partial too."
   [c [x y z] pos names radius pile]
   (ctx/update-mem! c assoc :looked true)
-  (await (child/run!* c :look 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 1 :ways #{:walk :dig} :may-dig #{:own} :checks cfg/own-checks}))
+  (await (child/run!* c :look 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 1 :ways #{:walk :clear-seal} :checks cfg/own-checks}))
   (let [again (vec (await (find-ids! c pos names radius)))]
     (if (seq again)
       (do (ctx/update-mem! c update :passes (fnil inc 0)) (dth/save-trip! c) :next)
@@ -116,7 +116,7 @@
   (loop [cells (let [r (cfg/search-radius)]
                  (map-indexed (fn [i [dx dz]] [i {:x (+ x dx) :y y :z (+ z dz)}]) [[r 0] [0 r] [(- r) 0] [0 (- r)]]))]
     (when-let [[i cell] (first cells)]
-      (await (child/run!* c (keyword (str "search" i)) 'jobs.movement.go-to {:pos cell :range 1 :ways #{:walk :dig} :may-dig #{:own} :checks cfg/own-checks}))
+      (await (child/run!* c (keyword (str "search" i)) 'jobs.movement.go-to {:pos cell :range 1 :ways #{:walk :clear-seal} :checks cfg/own-checks}))
       (or (seq (await (find-ids! c pos names radius))) (recur (rest cells))))))
 
 (defn ^:async collect!

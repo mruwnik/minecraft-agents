@@ -88,7 +88,7 @@
           (cond
             (nil? boat) (ctx/end c :condition-failed :gone {:id id})
             (> (u/dist (u/self-pos c) (:pos boat)) (reach))
-            (let [w (await (child/call-walk* c :walk {:pos (:pos boat) :range 2 :ways #{:walk :dig} :may-dig #{:own}}))]
+            (let [w (await (child/call-walk* c :walk {:pos (:pos boat) :range 2 :ways #{:walk :clear-seal}}))]
               (cond
                 (= :continue w) :continue
                 (= :done (:kind w)) (recur hits failed)

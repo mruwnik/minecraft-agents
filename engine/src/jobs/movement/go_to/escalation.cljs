@@ -1,20 +1,20 @@
 (ns jobs.movement.go-to.escalation
   "go-to's way out of a shut-in body, or in to a walled-in goal: run the way escalate-choose picked (pillar, stair,
-  clear-path, dig route, stair down, bridge or a walk to the wall), note the holes it dug, put them back once the walk is on past them.
+  clear-path, dig route or a walk to the wall), note the holes it dug, put them back once the walk is on past them.
 
   Rules of go-to:
-  - :dig (its leave-shelter step): a body sealed in its own shelter (a :shelter entry) by day, when the walk finds no way, leaves it first (dig-in-leave/leave!, a go-to.escalated {:step :leave-shelter}); never at night.
+  - :dig-out: a body sealed in its own shelter (a :shelter entry) by day, when the walk finds no way, leaves it first (dig-in-leave/leave!, a go-to.escalated {:step :leave-shelter}); never at night.
   - With an escalating way: a body that is shut in (jobs.lib.reach.room/enclosed?), not in its own shelter, and whose
     search ran out of land (:exhausted, :goal-enclosed or :goal-cut-off), any body whose only way needs a sprint it lacks the food for (:abilities :corner-jump or :gap-sprint), or any body whose last 3 walks failed at the walker (stuck, off-plan, steer failed, no nearer; escalation/walker-fault?) with no door it can open beside its room, makes a way instead of giving up, one child job
     each (jobs.lib.escape/choose, over the ways the call allows), at most 3 in a row that start no nearer the goal than one before (escalation/count-escalation): standing on a stair of its own under the goal, that stair cut again (escalation/own-stair: a cap it put in the stair is dug, :why :own-way-blocked); else jobs.access.pillar up out of a pit when it carries enough blocks; else
     jobs.access.clear-path through a wall up to 3 thick toward the goal (into a walled-in goal no door or stair reaches:
     the fewest cells dug down or across to it, escalation/dig-way, tried first for a shut-in body, none that takes over max-route-s seconds to dig with the pickaxe it carries or would fetch); else jobs.access.stair up out of a pit or
     toward a higher goal (as far as the goal is above, at most 8; a stair that leaves the body shut in under the goal is
-    followed by the next escalation at once); else a walk to the nearest wall first. A body whose goal is walled in or cut off by a drop (free or shut in) also weighs a stair down to a goal 2 or more below (escape.span/down-stair) and a bridge over a gap toward it (escape.span/bridge-span) by price (escalate-choose/price): the dearer way of the two is not taken, and a walk to the wall is only a way when neither is there. Each emits go-to.escalated {:step :why :n}. Once
+    followed by the next escalation at once); else a walk to the nearest wall first. Each emits go-to.escalated {:step :why :n}. Once
     through, it puts back what clear-path or stair dug in another's zone, claim or plan (with :ignore-zones?;
     its own diggings elsewhere stay) (jobs.blocks.place, the dug block or its drop, when carried): info
     go-to.restored, warn go-to.restore-skipped for cells it could not. Pillar blocks and a stair's placed floors are
-    left to jobs.access.cleanup. Its walk child (ctx/call) has :ways #{:walk :dig} :may-dig #{:own}. Jobs that must not change the world
+    left to jobs.access.cleanup. Its walk child (ctx/call) has :ways #{:walk :clear-seal}. Jobs that must not change the world
     on the way pass :ways #{:walk}: a shut-in body then gives up with :shut-in true and says so in the text."
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -32,7 +32,7 @@
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.escalate-choose :refer [climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? gap-fill
-                                                         goal-way dig-way goal-walled? cut-off-way? way-opts own-stair route-cells shelter-exit? skips sprint-only? with-spans]]
+                                                         goal-way dig-way goal-walled? own-stair route-cells shelter-exit? skips sprint-only?]]
             [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag may-dig-fn note-holes! own-holes own-placed-fn planned-cells]]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.torch :as torch]
@@ -50,10 +50,9 @@
   [{:keys [step] :as e} tag ignore-zones? by-hand? fetch?]
   (case step
     :pillar ['jobs.access.pillar (cond-> {:height (:height e) :ways #{:carried} :ignore-zones? ignore-zones? :checks {:safe? '(not (exposed)) :fit? '(always)}} (:item e) (assoc :use {:blocks [(:item e)]}))]
-    :stair ['jobs.access.stair {:dir (or (:dir e) :up) :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :checks {:fit? '(always)} :accept #{:falling-block} :ways (ways-for fetch?) :settings {:jobs.lib.trip/spent-uses 0} :ignore-zones? ignore-zones? :need-drop (not by-hand?)}]
-    :bridge ['jobs.access.bridge (cond-> {:heading (:heading e) :length (:length e) :ways (ways-for fetch?) :ignore-zones? ignore-zones? :checks {:fit? '(always)}} (:item e) (assoc :item (:item e)))]
+    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :checks {:fit? '(always)} :accept #{:falling-block} :ways (ways-for fetch?) :settings {:jobs.lib.trip/spent-uses 0} :ignore-zones? ignore-zones? :need-drop (not by-hand?)}]
     :clear-path ['jobs.access.clear-path {:checks {:fit? '(always)} :heading (:heading e) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :ways #{:carried}}]
-    :approach ['jobs.movement.go-to {:checks {:fit? '(always)} :pos (zipmap [:x :y :z] (:pos e)) :range 0 :ways #{:walk :dig} :may-dig #{:own}}]
+    :approach ['jobs.movement.go-to {:checks {:fit? '(always)} :pos (zipmap [:x :y :z] (:pos e)) :range 0 :ways #{:walk :clear-seal}}]
     :fill-gap ['jobs.blocks.place {:pos (zipmap [:x :y :z] (:cell e)) :use {:blocks [(:item e)]} :ways #{:carried} :ignore-zones? ignore-zones?}]))
 
 (defn succeeded? [{:keys [step]} e]
@@ -141,14 +140,13 @@
         n (:fruitless counted)
         _ (when (<= n (tuning/max-escalations)) (await (look-round! c feet)))
         goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
-        opts (way-opts c)
-        into? (or (goal-walled? c result) (cut-off-way? c pos result))
+        opts {:own? (own-placed-fn c) :skip (skips c) :fetch? (fetch-tool? c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c)}
+        into? (goal-walled? c result)
         ;; a shut-in body (a pit, a plateau it cannot walk off) whose goal is walled in digs straight into it when it can
         dig-in? (and (not into?) (= :goal-enclosed (some-> (:reason result) keyword)))
-        shut-in-way (fn [e may-dig?] (with-spans c feet feet goal may-dig? opts e))
         choose (cond into? #(goal-way c feet goal % opts)
-                     dig-in? #(shut-in-way (or (dig-way (:primitives c) feet goal % opts) (escape/choose (:primitives c) feet goal % opts)) %)
-                     :else #(shut-in-way (escape/choose (:primitives c) feet goal % opts) %))
+                     dig-in? #(or (dig-way (:primitives c) feet goal % opts) (escape/choose (:primitives c) feet goal % opts))
+                     :else #(escape/choose (:primitives c) feet goal % opts))
         e (or (when (shelter-exit? c result) {:step :leave-shelter})
               (gap-fill c result (:skip opts))
               (own-stair c feet goal)
@@ -206,7 +204,7 @@
   :again)
 
 (defn ^:async give-up-or-escalate! [c pos tries status result]
-  (if (escalate? c tries result pos)
+  (if (escalate? c tries result)
     (do (ctx/update-mem! c assoc :dive-climb (dive? c result)
                          :give-up {:tries tries :status status
                                    :result (select-keys result [:status :reason :kind :cells :near :one-way :at :from :dip :rise :move :why :step :partial])})
@@ -219,12 +217,12 @@
 
 (defn escalated!
   "The child made a way (or part of one, done false): walk again from a fresh count, or escalate again at once after an
-  approach, after a whole stair down (the rest is dug flat) or one that left the body shut in under the goal (climb-on?), or after any stair that left it
+  approach, after a whole stair that left the body shut in under the goal (climb-on?), or after any stair that left it
   under ground on its climb away from a dive (dive-climb-on?). Its holes are put back once a walk round gets on past
   it (restore-next!). An approach does not count toward max-escalations (its look may show a wall to dig or not), but
   its cell is not walked to twice (memory :approached), so a chain of them ends."
-  [c pos {:keys [step dir]} done?]
-  (let [again? (or (= :approach step) (and (= :stair step) (or (and done? (or (= :down dir) (climb-on? c pos))) (dive-climb-on? c pos))))
+  [c pos {:keys [step]} done?]
+  (let [again? (or (= :approach step) (and (= :stair step) (or (and done? (climb-on? c pos)) (dive-climb-on? c pos))))
         target (some-> (:escalation (ctx/mem c)) :pos vec)]
     (ctx/update-mem! c #(cond-> (-> % (dissoc :escalation :escalation-from :planned :holes-before :best)
                                     (cond-> (= :approach step) (-> (update :approached (fnil conj #{}) target)
@@ -264,12 +262,12 @@
 
 (defn escalation-stopped!
   "The child changed something before it stopped: walk again (escalated!) after a go-to.escalation-stopped warn. On a
-  climb away from a dive (dive-climb-on?), or a stop at an unbreakable block, the next stair takes another heading instead."
+  climb away from a dive (dive-climb-on?) the next stair takes another heading instead."
   [c pos {:keys [step] :as detail}]
   (ctx/emit! c :go-to.escalation-stopped :warn (assoc detail :text (str (name step) " stopped part way: "
                                                                         (some-> (:reason detail) name)
                                                                         (if (dive-climb-on? c pos) "; climbing on another way" "; walking again"))))
-  (when (or (dive-climb-on? c pos) (= :unbreakable (:reason detail)))
+  (when (dive-climb-on? c pos)
     (ctx/update-mem! c update :skipped-steps (fnil conj #{}) (skip-key (:escalation (ctx/mem c)))))
   (escalated! c pos detail false))
 

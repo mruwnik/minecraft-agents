@@ -571,6 +571,6 @@
               s (await (tu/with-near-spy calls* (fn ^:async b [] (await (scenario {:targets [7]} {:floor tu/walk-floor :inventory h/sword :entities [(zed 7 10)]} 3)))))
               opts (map #(nth % 2) @calls*)]
           (is (seq opts))
-          (is (every? #(and (= #{:walk :dig} (:ways %)) (= 5 (:leg-s %)) (false? (:look-round %)) (false? (:dangers %)) (= :shut (:doors %))) opts)
+          (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (= 5 (:leg-s %)) (false? (:look-round %)) (false? (:dangers %)) (= :shut (:doors %))) opts)
               "a moving target is chased in legs, never dug or pillared toward"))))))
 

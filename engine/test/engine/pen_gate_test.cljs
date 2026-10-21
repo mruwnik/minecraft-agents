@@ -428,7 +428,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [stub {'jobs.movement.go-to {:args {} :ways [:walk :dig] :round (fn ^:async r [_c] :continue)}}
+        (let [stub {'jobs.movement.go-to {:args {} :ways [:walk :clear-seal] :round (fn ^:async r [_c] :continue)}}
               s (await (run-job (pen-world true 2 7) {"pen-a" pen-a} {} 1 stub))]
           (is (empty? (events-of s :stopped)) "the job is not ended")
           (is (empty? (events-of s :shut.gave-up)) "no warn: it is not a verdict on the gate")

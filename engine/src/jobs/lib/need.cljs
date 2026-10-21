@@ -209,7 +209,7 @@
       (not back) nil
       (= cell (feet c)) (do (ctx/update-mem! c dissoc :need/return) nil)
       :else (let [[x y z] cell
-                  r (await (child/call-walk* c :need-back {:pos {:x x :y y :z z} :range 0 :ways #{:walk :dig} :may-dig #{:own}
+                  r (await (child/call-walk* c :need-back {:pos {:x x :y y :z z} :range 0 :ways #{:walk :clear-seal}
                                                             :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
               (when-not (= :continue r)
                 (ctx/update-mem! c dissoc :need/return))

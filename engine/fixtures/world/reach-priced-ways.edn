@@ -1,8 +1,8 @@
-;; Card 53d05972 (D19): go-to's ways that change the world are chosen by price when no walk is found, for a free body too.
+;; Card 53d05972 (D19): jobs.movement.reach builds a stair down or a bridge, chosen by price, where go-to finds no walk.
 ;; Tunnel (wall torches light it and the pit): stone mass x 2..30, y -5..3, z 14..18, a 1x2 tunnel along z 16 from x 4 to x 28 cut by a chasm x 12..16 (3 deep, lava at the bottom, lit by it). Should-succeed: dirt carried: a 5-block bridge (go-to.escalated :bridge) and the far end is reached; a side tunnel round
-;; the pit is walked, nothing placed. Should-fail: :ways #{:walk} stops at the pit edge, the pit stays open.
+;; the pit is walked, nothing placed. Should-fail: reach :ways #{:walk} stops at the pit edge, the pit stays open.
 ;; Cave: stone mass x 2..30, y 0..16, z 2..30, the body on top; a pocket 15 below and 6 across (the stair runs 15 on, the rest is dug back) is too far for a dug route (16 cells at
-;; most), so a stair down is cut (:stair). Should-fail: :may-dig #{:own} cuts nothing natural.
+;; most), so a stair down is cut (:stair). Should-fail: :ways without :stair cut no stair down.
 {:defaults
  {:tags [:movement :go-to :access]
   :time :any
@@ -12,40 +12,40 @@
  [{:name "pit-in-the-tunnel-is-bridged"
    :blocks [[:fill [2 -5 14] [30 3 18] "stone"] [:fill [4 0 16] [28 1 16] "air"] [:fill [12 -3 16] [16 -1 16] "air"] [:fill [12 -4 16] [16 -4 16] "lava"] [:set [8 1 15] "wall_torch[facing=south]"] [:set [14 1 15] "wall_torch[facing=south]"] [:set [20 1 15] "wall_torch[facing=south]"] [:set [26 1 15] "wall_torch[facing=south]"]]
    :body {:at [5.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4] ["fire_resistance" 600 0]] :inventory [["dirt" 9]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [27 0 16] :range 0})]]
-   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :bridge}} :within-s 60 :of-job true}
+   :act [[:job (jobs.movement.reach {:pos #at [27 0 16] :range 0})]]
+   :expect [{:event {:source :job :kind :reach.span :data {:step :bridge}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 160 :of-job true}]
    :after [[:block [14 -1 16] "dirt"] [:body-near [27.5 0 16.5] 2]]}
   {:name "walk-round-the-pit-is-taken-before-a-bridge"
    :blocks [[:fill [2 -5 14] [30 3 20] "stone"] [:fill [4 0 16] [28 1 16] "air"] [:fill [12 -3 16] [16 -1 16] "air"] [:fill [12 -4 16] [16 -4 16] "lava"] [:set [8 1 15] "wall_torch[facing=south]"] [:set [14 1 15] "wall_torch[facing=south]"] [:set [20 1 15] "wall_torch[facing=south]"] [:set [26 1 15] "wall_torch[facing=south]"]
             [:fill [4 0 17] [4 1 17] "air"] [:fill [4 0 18] [28 1 18] "air"] [:fill [28 0 17] [28 1 17] "air"]]
    :body {:at [5.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4] ["fire_resistance" 600 0]] :inventory [["dirt" 9]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [27 0 16] :range 0})]]
+   :act [[:job (jobs.movement.reach {:pos #at [27 0 16] :range 0})]]
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}
-            {:no-event {:source :job :kind :go-to.escalated} :for-s 120 :until {:source :job :kind :completed :data {:arrived true}}}]
+            {:no-event {:source :job :kind :reach.span} :for-s 120 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:block [14 -1 16] "air"] [:body-near [27.5 0 16.5] 2]]}
   {:name "walk-only-does-not-bridge"
    :blocks [[:fill [2 -5 14] [30 3 18] "stone"] [:fill [4 0 16] [28 1 16] "air"] [:fill [12 -3 16] [16 -1 16] "air"] [:fill [12 -4 16] [16 -4 16] "lava"] [:set [8 1 15] "wall_torch[facing=south]"] [:set [14 1 15] "wall_torch[facing=south]"] [:set [20 1 15] "wall_torch[facing=south]"] [:set [26 1 15] "wall_torch[facing=south]"]]
    :body {:at [5.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4] ["fire_resistance" 600 0]] :inventory [["dirt" 9]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [27 0 16] :range 0 :ways #{:walk}})]]
+   :act [[:job (jobs.movement.reach {:pos #at [27 0 16] :range 0 :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 90 :of-job true}
-            {:no-event {:source :job :kind :go-to.escalated} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false}}}]
+            {:no-event {:source :job :kind :reach.span} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false}}}]
    :after [[:block [14 -1 16] "air"] [:body-far [27.5 0 16.5] 8]]
    :limit-s 100}
   {:name "cave-far-below-is-reached-by-a-stair-down"
    :blocks [[:fill [2 0 2] [30 16 30] "stone"] [:fill [10 2 16] [10 3 16] "air"] [:fill [2 19 2] [30 19 30] "light"]]
    :plot {:height 22}
    :body {:at [4.5 17 16.5] :settle-s 2 :effects [["resistance" 600 4] ["fire_resistance" 600 0]] :inventory [["stone_pickaxe" 1] ["cobblestone" 24]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [10 2 16] :range 0})]]
-   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
+   :act [[:job (jobs.movement.reach {:pos #at [10 2 16] :range 0})]]
+   :expect [{:event {:source :job :kind :reach.span :data {:step :stair}} :within-s 90 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 380 :of-job true}]
    :after [[:body-near [10.5 2 16.5] 2]]
    :limit-s 400}
-  {:name "own-blocks-only-cuts-no-stair-down"
+  {:name "ways-without-stair-cut-no-stair-down"
    :blocks [[:fill [2 0 2] [30 16 30] "stone"] [:fill [10 2 16] [10 3 16] "air"] [:fill [2 19 2] [30 19 30] "light"]]
    :plot {:height 22}
    :body {:at [4.5 17 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1] ["cobblestone" 24]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [10 2 16] :range 0 :ways #{:walk :dig :stair} :may-dig #{:own}})]]
+   :act [[:job (jobs.movement.reach {:pos #at [10 2 16] :range 0 :ways #{:walk :bridge}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 90 :of-job true}
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false}}}]
    :after [[:body-far [10.5 2 16.5] 8]]

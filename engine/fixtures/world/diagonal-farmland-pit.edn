@@ -10,27 +10,27 @@
  [{:name "pit-east-of-diagonal-farmland-kept"
    :blocks [[:set [11 0 10] "air"] [:set [11 -1 10] "farmland[moisture=7]"]]
    :body {:at [10.5 1 10.5]}
-   :act [[:job (jobs.movement.go-to {:pos #at [11 1 11] :range 0 :ways #{:walk :dig} :may-dig #{:own}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [11 1 11] :range 0 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}
             {:event {:source :job :kind :planned :data {:nodes 3}} :within-s 40 :of-job true}]
    :after [[:block [11 -1 10] "farmland"] [:body-near [11.5 1 11.5] 1.5]]}
   {:name "pit-south-of-diagonal-farmland-kept"
    :blocks [[:set [10 0 11] "air"] [:set [10 -1 11] "farmland[moisture=7]"]]
    :body {:at [10.5 1 10.5]}
-   :act [[:job (jobs.movement.go-to {:pos #at [11 1 11] :range 0 :ways #{:walk :dig} :may-dig #{:own}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [11 1 11] :range 0 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}
             {:event {:source :job :kind :planned :data {:nodes 3}} :within-s 40 :of-job true}]
    :after [[:block [10 -1 11] "farmland"] [:body-near [11.5 1 11.5] 1.5]]}
   {:name "stone-floored-pit-diagonal-still-arrives"
    :blocks [[:set [11 0 10] "air"]]
    :body {:at [10.5 1 10.5]}
-   :act [[:job (jobs.movement.go-to {:pos #at [11 1 11] :range 0 :ways #{:walk :dig} :may-dig #{:own}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [11 1 11] :range 0 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}
             {:event {:source :job :kind :planned :data {:nodes 2}} :within-s 40 :of-job true}]
    :after [[:block [11 -1 10] "stone"] [:body-near [11.5 1 11.5] 1.5]]}
   {:name "shelf-corner-over-farmland-kept"
    :blocks [[:fill [8 1 8] [11 1 11] "stone"] [:fill [12 0 12] [16 0 16] "farmland[moisture=7]"] [:set [14 0 17] "water"] [:set [14 1 17] "stone"]]
    :body {:at [11.5 2 11.5]}
-   :act [[:job (jobs.movement.go-to {:pos #at [18 1 18] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [18 1 18] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 50 :of-job true}]
    :after [[:block [12 0 12] "farmland"] [:block [13 0 13] "farmland"] [:body-near [18.5 1 18.5] 2.5]]}]}

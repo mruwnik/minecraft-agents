@@ -1,11 +1,10 @@
-(ns engine.go-to-priced-ways-test
-  "go-to's world-changing ways chosen by price for a free body: a stair down to a goal far below, a bridge over a gap,
-  and a walk that exists is taken before either (jobs.lib.escape.span, escalate-choose/goal-way)."
+(ns engine.reach-job-test
+  "jobs.movement.reach: a stair down to a goal far below and a bridge over a gap, chosen by price over go-to; a walk that
+  exists is taken before either (jobs.lib.escape.span)."
   (:require [cljs.test :refer [deftest is are async]]
-            [jobs.lib.cost :as cost]
+            [jobs.lib.cost.ways :as cost]
             [jobs.lib.escape :as escape]
             [jobs.lib.escape.span :as span]
-            [jobs.movement.go-to.escalate-choose :as choose]
             [engine.test-util :as tu :refer [box]]
             [engine.go-to-escalate-support :refer [run-job! feet events-of]]))
 
@@ -59,19 +58,21 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p seen]} (await (run-job! {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks gulf :inventory [{:name "dirt" :count 9}]}
+                                                    'jobs.movement.reach
                                                     {:pos [10 64 0] :range 0}))]
           (is (true? (:arrived @out)) (pr-str @out))
           (is (= [10 64 0] (feet p)))
-          (is (= [:bridge] (map :step (events-of seen :go-to.escalated)))))))))
+          (is (= [:bridge] (map :step (events-of seen :reach.span)))))))))
 
 (deftest a-walk-only-call-does-not-bridge
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks gulf :inventory [{:name "dirt" :count 9}]}
+                                                  'jobs.movement.reach
                                                   {:pos [10 64 0] :range 0 :ways #{:walk}}))]
-          (is (= false (:arrived @out)))
-          (is (empty? (events-of seen :go-to.escalated))))))))
+          (is (= false (:arrived @out)) (pr-str @out (mapv (juxt :kind :text) @seen)))
+          (is (empty? (events-of seen :reach.span))))))))
 
 (deftest a-walk-round-the-gap-is-taken-before-a-bridge
   (async done
@@ -79,10 +80,11 @@
       (fn ^:async t []
         (let [round (merge gulf (box 1 63 -20 5 63 -19 "stone"))
               {:keys [out p seen]} (await (run-job! {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks round :inventory [{:name "dirt" :count 9}]}
+                                                    'jobs.movement.reach
                                                     {:pos [10 64 0] :range 0}))]
           (is (true? (:arrived @out)) (pr-str @out))
           (is (= [10 64 0] (feet p)))
-          (is (empty? (events-of seen :go-to.escalated))))))))
+          (is (empty? (events-of seen :reach.span))))))))
 
 (deftest a-free-body-cuts-a-stair-down-to-a-goal-far-below
   (async done
@@ -90,8 +92,8 @@
       (fn ^:async t []
         (let [deep (apply dissoc (box -20 30 -20 40 63 20 "stone") ["14,44,0" "14,45,0"])
               {:keys [out p seen]} (await (run-job! {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks deep :inventory [{:name "stone_pickaxe" :count 1}]}
-                                                    {:pos [14 44 0] :range 0}))
-              first-way (first (events-of seen :go-to.escalated))]
+                                                    'jobs.movement.reach
+                                                    {:pos [14 44 0] :range 0}))]
           (is (true? (:arrived @out)) (pr-str @out))
           (is (= [14 44 0] (feet p)))
-          (is (= :stair (:step first-way)) "a dug route of over 16 cells is over the dig limit"))))))
+          (is (= [:approach :stair] (take 2 (map :step (events-of seen :reach.span)))) "a dug route of over 16 cells is over the dig limit"))))))

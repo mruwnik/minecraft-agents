@@ -137,7 +137,7 @@
     (is (some? (:can-start? j)))
     (is (nil? (:check j)) "no old check")
     (is (= [:pos :place] (:target j)) "a go-to may call go-to to another place")
-    (is (= [:walk :dig :pillar :stair :bridge] (:ways j)))))
+    (is (= [:walk :clear-seal :clear-path :pillar :stair :dig-out] (:ways j)))))
 
 (deftest go-to-reads-its-walk-limits-from-the-call
   (are [given frozen limits] (= limits (go-to/walk-limits given frozen 12))

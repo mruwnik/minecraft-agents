@@ -8,9 +8,9 @@
   :limit-s 240}
  :cases
  [{:name "unloaded-goal-gives-up-then-second-call-arrives"
-   :act [[:job (jobs.movement.go-to {:pos #at [1500 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]
+   :act [[:job (jobs.movement.go-to {:pos #at [1500 0 16] :range 1 :ways #{:walk :clear-seal}})]
          [:await {:source :job :kind :stopped :data {:arrived false}} 200]
-         [:job (jobs.movement.go-to {:pos #at [330 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
+         [:job (jobs.movement.go-to {:pos #at [330 0 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 200 :of-job true}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 230 :of-job true}]
    :after [[:body-near [330.5 0 16.5] 3]]}]}

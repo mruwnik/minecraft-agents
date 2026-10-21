@@ -11,12 +11,12 @@
    :blocks [[:fill [0 0 0] [31 8 0] "stone"] [:fill [0 0 31] [31 8 31] "stone"] [:fill [0 0 0] [0 8 31] "stone"] [:fill [31 0 0] [31 8 31] "stone"]
             [:fill [1 0 1] [15 3 30] "stone"]]
    :body {:at [14.5 4 16.5]}
-   :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [16 0 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 30 :of-job true}]
    :after [[:body-near [16.5 0 16.5] 2.5]]}
   {:name "far-goal-beyond-the-search-box"
    :plot {:height 8 :length 320 :width 16}
    :body {:at [2.5 0 8.5]}
-   :act [[:job (jobs.movement.go-to {:pos #at [300 0 8] :range 2 :ways #{:walk :dig} :may-dig #{:own}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [300 0 8] :range 2 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [300.5 0 8.5] 4]]}]}

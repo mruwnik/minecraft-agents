@@ -39,7 +39,7 @@
                                          (box 2 58 0 31 59 0 "water") (box 32 58 0 32 59 0 "air"))})
               eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                                 :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-          (core/submit! eng '(jobs.movement.go-to {:pos [32 58 0] :range 0 :ways #{:walk :dig} :may-dig #{:own}}) {})
+          (core/submit! eng '(jobs.movement.go-to {:pos [32 58 0] :range 0 :ways #{:walk :clear-seal}}) {})
           (dotimes [_ 6] (await (core/tick! eng)))
           (let [data (map #(or (:data %) %) (filter #(= :planned (:kind %)) @seen))]
             (is (= 10 (:oxygen (first data))) (pr-str (first data)))

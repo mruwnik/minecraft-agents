@@ -14,7 +14,7 @@
 (defn ^:async walk!
   "nil when the body stands within reach of pos, else why not: :continue (the walk goes on or waits) or :unreachable."
   [c pos ways]
-  (let [e (await (child/call-walk* c :walk {:pos pos :range (reach) :doors :never :ways ways :may-dig #{:own}}))
+  (let [e (await (child/call-walk* c :walk {:pos pos :range (reach) :doors :never :ways ways}))
         res (:data e)]
     (ctx/update-mem! c dissoc :blocker)
     (cond

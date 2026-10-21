@@ -953,13 +953,13 @@
 
 (defn failing-step-offs
   "env whose go-to walks fail (why :no-path) once the cell under the feet is dug; escalations holds whether each failed
-  walk may escalate (its :ways more than :walk and :dig)."
+  walk may escalate (its :ways more than :walk and :clear-seal)."
   [env escalations]
   (let [go-to (get (:jobs (:eng env)) 'jobs.movement.go-to)
         round (:round go-to)
         stub (fn ^:async failing-step-off [c]
                (if (= "air" (block-at (:p env) under-feet))
-                 (do (swap! escalations conj (not (contains? #{#{:walk} #{:walk :dig}} (:ways (:args c)))))
+                 (do (swap! escalations conj (not (contains? #{#{:walk} #{:walk :clear-seal}} (:ways (:args c)))))
                      (ctx/end c :done nil {:arrived false :why :no-path}))
                  (await (round c))))]
     (assoc-in env [:eng :jobs 'jobs.movement.go-to] (assoc go-to :round stub))))

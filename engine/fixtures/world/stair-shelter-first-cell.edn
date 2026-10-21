@@ -18,6 +18,6 @@
    :after [[:block [10 5 10] "air"]]}
   {:name "cell-opened-then-go-to-at-once"
    :act [[:rcon "execute positioned $X $Y $Z run setblock ~10 ~5 ~10 air"]
-         [:job (jobs.movement.go-to {:pos #at [10 5 10] :range 0 :ways #{:walk :dig} :may-dig #{:own}})]]
+         [:job (jobs.movement.go-to {:pos #at [10 5 10] :range 0 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}]
    :after [[:body-near [10.5 5 10.5] 1.5]]}]}

@@ -259,7 +259,7 @@
         pos (or table (find-table (:primitives c) (table-radius)))]
     (if-not pos
       (give-up! c "no-table" {})
-      (let [r (await (near/go-near! c pos (reach) {:ways #{:walk :dig} :may-dig #{:own}}))]
+      (let [r (await (near/go-near! c pos (reach) {:ways #{:walk :clear-seal}}))]
         (case r
           :partial :continue
           :blocked (fail-up! c "unreachable")

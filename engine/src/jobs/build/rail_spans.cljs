@@ -65,7 +65,7 @@
             there? (= [x y z] [(:x self) (:y self) (:z self)])
             count-try! #(ctx/update-mem! c update-in [:span-tries stand] (fnil inc 0))]
         (if-not there?
-          (let [r (await (child/call-walk* c :span-walk {:pos {:x x :y y :z z} :range 0 :ways #{:walk :dig} :may-dig #{:own}
+          (let [r (await (child/call-walk* c :span-walk {:pos {:x x :y y :z z} :range 0 :ways #{:walk :clear-seal}
                                                          :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
             (if (or (= :continue r) (= :cut-off (:kind r))) :continue (do (count-try!) :again)))
           (let [[job args] (child-call c span)

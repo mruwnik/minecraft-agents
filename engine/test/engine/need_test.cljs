@@ -41,7 +41,7 @@
         walks (atom [])
         p (tu/fake {})
         [seen sink] (tu/capture-sink)
-        walker {:ways [:walk :dig]
+        walker {:ways [:walk :clear-seal]
                 :round (fn [c]
                          (let [{:keys [x y z]} (:pos (:args c))]
                            (swap! walks conj (:args c))

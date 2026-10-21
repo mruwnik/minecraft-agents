@@ -40,9 +40,10 @@
     outside the world), :bad-name (a :place that is not a valid name), :unsupported (a body with no pathWorld sensing)
     or :bad-args (a given :floor :health over 20, a :spend :job-time under 0.1); condition-failed :unknown-place (no
     recorded position). A call whose :ways leave out :walk ends nothing-possible :no-way.
-  - Ways (:ways, all by default): :walk, and those that change the world: :dig (the body's own ledger blocks round the body shut in by them, or round a
-    goal it cannot reach, taken back, one jobs.access.cleanup child a call; and, unless :may-dig leaves out :natural, a door dug through a wall, a dug route, a way out of its own shelter), :pillar (a pillar, a gap filled with a
-    block), :stair (a stair up or down, its own stair cut again) and :bridge (a row of blocks over a gap). They are chosen by price when the walk finds no way (escalate-choose/priced-way).
+  - Ways (:ways, all by default): :walk, and those that change the world: :clear-seal (its own ledger blocks round the body shut in by them, or round a
+    goal it cannot reach taken back, one jobs.access.cleanup child a call), :pillar (a pillar, a gap filled with a
+    block), :clear-path (a door dug through a wall), :stair (a stair up, its own stair cut again) and :dig-out (out of
+    its own shelter).
   - Its safe? is: at night jobs.lib.ready/safe-at the goal (a hostile near, or the goal or the walk to it exposed: later,
     waiting for dawn; a goal whose light is unseen is walked to), by day not threatened (a walk leading away from every hostile near is not held); always ok with the head under water (it swims up for air first). A caller's :checks (an escape job's
     defaults, an agent's own) replace it.
@@ -81,7 +82,6 @@
    :tolls {:doc "cells to cross only as a last resort, [{:x :y :z :factor}]: each costs factor times its own seconds more; ##Inf: no way through it is planned (jobs.lib.cost farm-tolls, zone-tolls; jobs.lib.pen-entry gives a block job the gates of pens holding animals)" :spec (a/valid-by "a list of {:x :y :z :factor}, x y z finite numbers, :factor >= 0 (##Inf allowed)" wworld/tolls-problem) :default nil}
    :gait {:doc "how the body walks: :auto (sprints on long straight runs and over gaps, as the walker does), :walk (never sprints: no gap jump over 2 or more), :sneak (slow, never sprints; holds sneak on level steps so it never walks off an edge, lets go for a planned drop, gap, climb or water); nil: the body's setting jobs.lib.walk.world/gait (:auto)" :spec #{:auto :walk :sneak} :default nil}
    :one-way {:doc "arg, not the :one-way key of a give-up result: :closed takes no drop of 2 or 3 or gap jump down that the body cannot climb back, and walks to no frontier of loaded land (a walk to something visible); :open (default) takes one when the land past it runs on into unloaded land (under :unknown also land the body has not seen)" :spec #{:open :closed} :default :open}
-   :may-dig {:doc "what the :dig way may cut: #{:own :natural} (default both), #{:own} only the blocks the body placed (its seals and plugs taken back; no door, route, stair or way out of a shelter through natural ground)" :spec (a/coll-of #{:own :natural}) :default nil}
    :ignore-zones? :shared})
 
 (defn ^:async step!

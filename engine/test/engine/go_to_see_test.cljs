@@ -46,12 +46,12 @@
 
 (deftest see-gives-up-on-a-block-no-stand-in-range-sees
   ;; the goal is buried in the ground under the surface: every stand within range 3 has stone between the eye and it.
-  ;; :ways #{:walk :dig} :may-dig #{:own}, as jobs.lib.blocks walks (the small test ground floods as shut in)
+  ;; :ways #{:walk :clear-seal}, as jobs.lib.blocks walks (the small test ground floods as shut in)
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out ticks] :as s} (await (gt/go! (update pit-world :blocks assoc "5,62,0" "gold_block")
-                                                       {:pos [5 62 0] :range 3 :see true :ways #{:walk :dig} :may-dig #{:own}}))]
+                                                       {:pos [5 62 0] :range 3 :see true :ways #{:walk :clear-seal}}))]
           (is (false? (:arrived @out)) (pr-str @out))
           (is (= :out-of-sight (:why @out)) (pr-str @out))
           (is (< ticks 30) "ends"))))))
@@ -66,7 +66,7 @@
               {:keys [out p]} (await (gt/go! (-> pit-world
                                                  (update :blocks #(-> (merge % (box 12 60 -3 15 64 3 "stone")) (assoc "5,62,0" "gold_block")))
                                                  (assoc :self {:pos start} :unloaded (keys (box 16 55 -3 40 70 3 "x"))))
-                                             {:pos [5 62 0] :range 3 :see true :ways #{:walk :dig} :may-dig #{:own}}))]
+                                             {:pos [5 62 0] :range 3 :see true :ways #{:walk :clear-seal}}))]
           (is (= :out-of-sight (:why @out)) (pr-str @out))
           (is (< (first (gt/at p)) 11) (str "did not walk out to the loaded edge: " (gt/at p))))))))
 

@@ -695,7 +695,7 @@
 (defn stub-child-ctx
   "A ctx whose go-to child call resolves to the ending e, with a go-to registry entry."
   [e]
-  {:engine {:jobs {'jobs.movement.go-to {:ways [:walk :dig] :round (fn [_] nil)}}}
+  {:engine {:jobs {'jobs.movement.go-to {:ways [:walk :clear-seal] :round (fn [_] nil)}}}
    :call (fn [_slot _def _args] (js/Promise.resolve e))})
 
 (deftest a-go-to-child-that-continues-or-does-not-end-done-is-a-failed-try
@@ -715,7 +715,7 @@
               c (assoc (stub-child-ctx nil) :call (fn [_slot _def args] (reset! sent args) (js/Promise.resolve (contract/ending :done nil {:arrived true}))))]
           (await (air/go! c :leg {:x 0 :y 64 :z 0} 2))
           (is (= {:jobs.lib.cost.planner/lethal-air true} (:settings @sent)))
-          (is (= #{:walk :dig} (:ways @sent)) "changes nothing on the way but its own seal round the air"))))))
+          (is (= #{:walk :clear-seal} (:ways @sent)) "changes nothing on the way but its own seal round the air"))))))
 
 (deftest a-refire-after-a-stop-keeps-the-searched-area
   (let [entries [{:data {:start {:x 0 :y 64 :z 0} :pos {:x 100 :y 65 :z 100} :headings []}}

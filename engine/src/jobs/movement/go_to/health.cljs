@@ -109,7 +109,7 @@
   [c [x y z]]
   (let [pos (u/self-pos c)]
     (or (= [x y z] (mapv #(js/Math.floor (% pos)) [:x :y :z]))
-        (:arrived (:data (await (child/run!* c :lip 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 0 :ways #{:walk :dig} :may-dig #{:own} :spend {:health 0}})))))))
+        (:arrived (:data (await (child/run!* c :lip 'jobs.movement.go-to {:pos {:x x :y y :z z} :range 0 :ways #{:walk :clear-seal} :spend {:health 0}})))))))
 
 (defn ^:async look-at-drops!
   "A drop the budget refuses may be priced by what the body has not looked at: a bounce counts only on a pad in view

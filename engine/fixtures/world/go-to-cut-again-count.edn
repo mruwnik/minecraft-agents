@@ -13,14 +13,14 @@
  :cases
  [{:name "goal-beside-zombie-gives-up-cut-again"
    :act [[:summon "zombie" [24.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-         [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
+         [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :stopped :data {:why :cut-again}} :within-s 115 :of-job true}
             {:count-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 115 :at-least 2 :at-most 12}]
    :limit-s 120}
   {:name "kills-in-place-do-not-count-as-cuts"
    :plot {:height 12 :length 120 :width 32}
    :body {:at [1.5 0 16.5] :inventory [["stone_sword" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]
+   :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 1 :ways #{:walk :clear-seal}})]
          [:until-pos {:x-min 20} 30]
          [:rcon "execute at $BODY run summon zombie ~4 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:await {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} 10] [:until-seen {:entity "zombie"} 5] [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]

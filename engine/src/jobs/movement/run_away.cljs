@@ -9,7 +9,7 @@
 
 (def doc
   "One flee step: a jobs.movement.chase leg of at most :leg-s seconds toward :pos, the cell a flight picked away from its
-  danger. A flee never digs or pillars (ways #{:walk :dig}, :may-dig #{:own}), keeps the walk's look-round off, may take the body down
+  danger. A flee never digs or pillars (ways #{:walk :clear-seal}), keeps the walk's look-round off, may take the body down
   to 1 health (the danger is the cost that counts), plans no route deeper or higher than :y-margin blocks past body and
   target (nil: the walk setting), and prices known dangers as any walk.
   Ends as chase does: done {:arrived true}, limit-reached {:reason :leg} with {:arrived false :leg true :nearer bool}, or
@@ -49,7 +49,7 @@
   (let [{:keys [pos range leg-s y-margin]} (:args c)
         e (await (child/call-chase* c :run
                                     {:pos pos :range range :leg-s leg-s
-                                     :walk {:ways #{:walk :dig} :may-dig #{:own}
+                                     :walk {:ways #{:walk :clear-seal}
                                             :settings (cond-> {:jobs.movement.go-to.tuning/look-round false}
                                                         y-margin (assoc :jobs.lib.walk.world/y-margin y-margin))
                                             :floor {:health 1}}}))]

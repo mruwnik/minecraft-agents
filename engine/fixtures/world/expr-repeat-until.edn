@@ -26,13 +26,13 @@
   ;; rest 30 s (waiting :resting) before they call it again; none reads it as done and goes on.
   {:name "seq-stops-at-a-failed-child"
    :blocks [[:fill [27 0 27] [29 2 29] "bedrock"] [:set [28 0 28] "air"]]
-   :act [[:job (seq (jobs.movement.go-to {:pos #at [28 0 28] :range 0 :spend {:tries 1} :ways #{:walk :dig} :may-dig #{:own}}) (jobs.time.noop {:seconds 0.5 :why :idle}))]]
+   :act [[:job (seq (jobs.movement.go-to {:pos #at [28 0 28] :range 0 :spend {:tries 1} :ways #{:walk :clear-seal}}) (jobs.time.noop {:seconds 0.5 :why :idle}))]]
    :expect [{:event {:source :job :kind :stopped} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :c1}} :for-s 80 :until {:source :job :kind :stopped}}]
    :limit-s 100}
   {:name "repeat-stops-at-a-failed-child"
    :blocks [[:fill [27 0 27] [29 2 29] "bedrock"] [:set [28 0 28] "air"]]
-   :act [[:job (repeat (jobs.movement.go-to {:pos #at [28 0 28] :range 0 :spend {:tries 1} :ways #{:walk :dig} :may-dig #{:own}}))]]
+   :act [[:job (repeat (jobs.movement.go-to {:pos #at [28 0 28] :range 0 :spend {:tries 1} :ways #{:walk :clear-seal}}))]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :resting}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]
    :limit-s 100}
@@ -40,7 +40,7 @@
    :time :any
    :blocks [[:fill [27 0 27] [29 2 29] "bedrock"] [:set [28 0 28] "air"]
             [:fill [14 0 14] [18 3 18] "stone"] [:fill [15 0 15] [17 2 17] "air"]]
-   :act [[:job (until (jobs.time.wait-for-light) (jobs.movement.go-to {:pos #at [28 0 28] :range 0 :spend {:tries 1} :ways #{:walk :dig} :may-dig #{:own}}))]]
+   :act [[:job (until (jobs.time.wait-for-light) (jobs.movement.go-to {:pos #at [28 0 28] :range 0 :spend {:tries 1} :ways #{:walk :clear-seal}}))]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :resting}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]
    :limit-s 100}]}

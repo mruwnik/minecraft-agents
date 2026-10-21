@@ -258,7 +258,7 @@
   does not arrive."
   [results]
   (let [left (atom results)]
-    {:target [] :ways #{:walk :dig} :may-dig #{:own}
+    {:target [] :ways #{:walk :clear-seal}
      :round (fn ^:async stub-round [c]
               (let [r (first @left)]
                 (swap! left rest)

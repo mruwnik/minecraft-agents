@@ -228,7 +228,7 @@
         {:keys [walks last-unseen] :or {walks 0}} (ctx/mem c)
         stuck (if (= unseen last-unseen) walks 0)
         walk (when (and unseen (< stuck (settings/get settings ::max-walks)))
-               (await (near/go-near! c unseen 1 {:doors :never :ways #{:walk :dig} :may-dig #{:own}})))]
+               (await (near/go-near! c unseen 1 {:doors :never :ways #{:walk :clear-seal}})))]
     (case walk
       :partial :continue
       :there (do (ctx/update-mem! c assoc :walks (inc stuck) :last-unseen unseen) :continue)

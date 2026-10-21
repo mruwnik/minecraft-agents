@@ -1011,7 +1011,7 @@
               result (await (tu/with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
             (fn ^:async b [] (await (child-outcome eng job {:plan "far"} 6)))))]
           (is (seq @opts))
-          (is (every? #(= #{:walk :dig} (:ways %)) @opts) "a walk to a stand never digs through the build")
+          (is (every? #(= #{:walk :clear-seal} (:ways %)) @opts) "a walk to a stand never digs through the build")
           (is (not= :unreachable (get-in result [:given-up [40 64 0]]))))))))
 
 (deftest a-body-in-a-hole-walks-with-escalation-so-it-can-climb-out

@@ -5,7 +5,7 @@
  :time :any
  :plot {:height 12 :length 80 :width 32}
  :body {:at [1.5 0 16.5] :effects [["resistance" 600 4]]}
- :act [[:job (jobs.movement.go-to {:pos #at [40 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
+ :act [[:job (jobs.movement.go-to {:pos #at [40 0 16] :range 1 :ways #{:walk :clear-seal}})]]
  :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}
           {:count-event {:source :job :kind :memory_written} :of-job true :for-s 90 :at-least 3 :at-most 20}]
  :after [[:body-near [40.5 0 16.5] 3]]

@@ -47,19 +47,19 @@
    :limit-s 100}
   {:name "never-treats-the-door-as-a-wall"
    :blocks [[:set [16 0 16] "oak_door[facing=east,half=lower,open=false]"] [:set [16 1 16] "oak_door[facing=east,half=upper,open=false]"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :doors :never :ways #{:walk :dig} :may-dig #{:own}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :doors :never :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 40 :of-job true}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=false]"] [:body-near [10.5 0 16.5] 8]]}
   {:name "iron-door-room-says-unreachable-in-words"
    ;; card 90f95646 (move-to is go-to now): from the room shut by the iron door the result names why, never :off-plan.
    :blocks [[:set [16 0 16] "iron_door[facing=east,half=lower,open=false]"] [:set [16 1 16] "iron_door[facing=east,half=upper,open=false]"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 0 :ways #{:walk :dig} :may-dig #{:own}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 0 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why #{:exhausted :start-enclosed :goal-enclosed}}}
              :within-s 20 :of-job true}]
    :after [[:block [16 0 16] "iron_door[half=lower,open=false]"] [:body-near [10.5 0 16.5] 8]]
    :limit-s 30}
   {:name "iron-door-without-button-stays-shut"
    :blocks [[:set [16 0 16] "iron_door[facing=east,half=lower,open=false]"] [:set [16 1 16] "iron_door[facing=east,half=upper,open=false]"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 40 :of-job true}]
    :after [[:block [16 0 16] "iron_door[half=lower,open=false]"] [:body-near [10.5 0 16.5] 8]]}]}

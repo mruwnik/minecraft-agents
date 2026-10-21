@@ -287,7 +287,7 @@
       (do (ctx/update-mem! c assoc :table table)
           (if (u/within? (u/self-pos c) table (reach))
             (if handed? (give-up! c made :unreachable) :again)
-            (let [r (await (near/go-near! c table (reach) {:ways #{:walk :dig} :may-dig #{:own}}))]
+            (let [r (await (near/go-near! c table (reach) {:ways #{:walk :clear-seal}}))]
               (cond
                 (= :partial r) :continue
                 (and (= :there r) (u/within? (u/self-pos c) table (reach))) :again

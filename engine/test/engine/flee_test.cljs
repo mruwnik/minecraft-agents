@@ -155,7 +155,7 @@
               {:keys [p out]} (await (run-job! s 'test.flight {}))]
           (is (= :far (:ended out)))
           (is (pos? (count @args)) "every flight step is a go-to call")
-          (is (every? #(and (not-any? #{:pillar :stair :bridge} (:ways %)) (= #{:own} (:may-dig %))) @args) "a flee never digs natural ground or pillars")
+          (is (every? #(not-any? #{:pillar :stair :clear-path :dig-out} (:ways %)) @args) "a flee never digs or pillars")
           (is (every? #(= 16 (get-in % [:settings :jobs.lib.walk.world/y-margin])) @args) "a flee plans no route far below or above itself and its goal")
           (is (every? #(and (= 1 (get-in % [:spend :tries])) (false? (get-in % [:settings :jobs.movement.go-to.tuning/look-round]))) @args)
               "a step that gains nothing ends at once and never looks round")

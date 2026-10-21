@@ -205,7 +205,7 @@
       :wrong-way (give-up! c :wrong-way pos state (str text " moved, but not to " (name state)) facts))))
 
 (defn ^:async walk! [c pos state block]
-  (let [r (await (child/call-walk* c :walk {:pos pos :range (reach c) :doors :never :ways #{:walk :dig} :may-dig #{:own}}))]
+  (let [r (await (child/call-walk* c :walk {:pos pos :range (reach c) :doors :never :ways #{:walk :clear-seal}}))]
     (cond
       (= :continue r) :continue
       (:arrived (:data r)) (do (ctx/update-mem! c assoc :arrived true) :again)

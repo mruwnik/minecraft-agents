@@ -682,7 +682,7 @@
                          (await (scenario {:fence {:x 31 :y 64 :z 0}} {:inventory lead :blocks fence :entities [(cow 1 3)]} 12)))))
               opts (map #(nth % 2) @calls*)]
           (is (seq opts))
-          (is (every? #(and (= #{:walk :dig} (:ways %)) (= :never (:doors %))) opts))
+          (is (every? #(and (= #{:walk :clear-seal} (:ways %)) (= :never (:doors %))) opts))
           (is (= :tied (:reason (done-event s)))))))))
 
 (def gate-wall

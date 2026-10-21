@@ -8,7 +8,7 @@
   :limit-s 60}
  :cases
  [{:name "valid-tolls-arrive"
-   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :dig} :may-dig #{:own} :tolls [{:x 0 :y 0 :z 0 :factor 3}]})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :tolls [{:x 0 :y 0 :z 0 :factor 3}]})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 45 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 45 :until {:source :job :kind :completed :data {:arrived true}} :of-job true}]
    :after [[:body-near [24.5 0 16.5] 2]]}]}

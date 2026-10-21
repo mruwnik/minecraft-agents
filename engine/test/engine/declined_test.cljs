@@ -35,20 +35,20 @@
     (first @out))))
 
 (def walker
-  {:ways [:walk :dig]
+  {:ways [:walk :clear-seal]
    :round (fn ^:async w [c] (ctx/end c :done nil {:arrived true}))})
 
 (def stranded
-  {:ways [:walk :dig]
+  {:ways [:walk :clear-seal]
    :round (fn ^:async w [c] (ctx/end c :nothing-possible :unreachable {:why :no-route}))})
 
 (def contract-gave-up
-  {:ways [:walk :dig]
+  {:ways [:walk :clear-seal]
    :round (fn ^:async w [c] (ctx/end c :nothing-possible :tree-unreachable {:tried 2}))})
 
 (def walks-twice
   (let [n (atom 0)]
-    {:ways [:walk :dig]
+    {:ways [:walk :clear-seal]
      :round (fn ^:async w [c]
               (if (< (swap! n inc) 3) :continue (ctx/end c :done nil {:arrived true})))}))
 
@@ -112,7 +112,7 @@
           (let [args (atom nil)
                 go-to (assoc walker :round (fn ^:async w [c] (reset! args (:args c)) (ctx/end c :done nil {:arrived true})))]
             (await (in-parent go-to (fn ^:async g [c] (await (child/walk-into!* c slot [1 65 0])))))
-            (is (= (merge {:pos [1 65 0] :range 0 :ways #{:walk :dig} :may-dig #{:own}} expect) (select-keys @args [:pos :range :ways :may-dig :checks :settings])) (str slot))))))))
+            (is (= (merge {:pos [1 65 0] :range 0 :ways #{:walk :clear-seal}} expect) (select-keys @args [:pos :range :ways :checks :settings])) (str slot))))))))
 
 (deftest fruitless-rounds-count-per-slot-until-progress
   (async done

@@ -18,7 +18,7 @@
   despawn, crop growth, a birth) or a companion walk.
   Each round: within range it looks at the player's head, pauses 500 ms (a noop child holding :following for a player,
   :lingering for a cell) and yields :continue; out of range (pushed away, the player moved, or at the start) it walks with
-  jobs.movement.chase legs (re-aimed at the player, doors :shut, ways #{:walk :dig}, :may-dig #{:own}). A player out of sight is walked to
+  jobs.movement.chase legs (re-aimed at the player, doors :shut, ways #{:walk :clear-seal}). A player out of sight is walked to
   where they were last seen, then waited for there; one never seen is waited for beside the body (held as :player-unseen,
   or :player-out-of-sight at the last-seen cell).
   Only time held in range counts toward :for-s (a pause that ended done adds its 500 ms, kept in job memory): walking, a cut
@@ -133,7 +133,7 @@
   [c pos range]
   (loop [blocked 0 out 0]
     (let [{:keys [player]} (:args c)
-          r (await (child/call-chase* c :walk (cond-> {:pos pos :range range :leg-s (leg-s) :walk {:doors :shut :ways #{:walk :dig} :may-dig #{:own}}}
+          r (await (child/call-chase* c :walk (cond-> {:pos pos :range range :leg-s (leg-s) :walk {:doors :shut :ways #{:walk :clear-seal}}}
                                                  player (assoc :player player))))
           res (:data r)
           blocked (if (or (:arrived res) (:nearer res)) 0 (inc blocked))

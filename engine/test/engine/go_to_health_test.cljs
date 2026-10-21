@@ -49,7 +49,7 @@
 
 (defn y-of [p] (js/Math.floor (second (g/at p))))
 
-(def args {:pos [40 60 0] :ways #{:walk :dig} :may-dig #{:own} :floor {:health 1}})
+(def args {:pos [40 60 0] :ways #{:walk :clear-seal} :floor {:health 1}})
 
 (deftest a-hurt-fed-body-neither-waits-nor-eats-it-gives-up-needs-health
   (async done

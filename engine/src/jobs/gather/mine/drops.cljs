@@ -188,7 +188,7 @@
   (let [{:keys [dug-at drop-walked last-carried]} (ctx/mem c)]
     (when (and dug-at (not= dug-at drop-walked) (<= (carried c) (or last-carried 0)))
       (let [pos (zipmap [:x :y :z] dug-at)
-            go! #(near/go-near! c pos 1 {:ways #{:walk :dig} :may-dig #{:own}})
+            go! #(near/go-near! c pos 1 {:ways #{:walk :clear-seal}})
             w (await (go!))
             w (if (and (= :blocked w) (await (look-floor-toward! c dug-at))) (await (go!)) w)
             cut (when (and (= :blocked w) (not (ways/stay-level? (:args c))) (cut-after? (near/last-walk c)))

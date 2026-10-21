@@ -109,7 +109,7 @@
   (let [{:keys [top to-y heading id]} (shaft-for c s)
         above? (and top (> (:y (u/self-pos c)) (inc to-y)))
         cell (if above? top (vec3 (:at s)))
-        w (await (child/call-walk* c :enter (cond-> {:pos cell :range (if above? 1 2)} above? (assoc :ways #{:walk :dig} :may-dig #{:own}))))]
+        w (await (child/call-walk* c :enter (cond-> {:pos cell :range (if above? 1 2)} above? (assoc :ways #{:walk :clear-seal}))))]
     (cond
       (= :continue w) :continue
       (not= :done (:kind w)) (stop! c (if (= :nothing-possible (:kind w)) :unreachable :child-failed)

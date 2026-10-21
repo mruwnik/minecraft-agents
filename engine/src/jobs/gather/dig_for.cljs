@@ -232,7 +232,7 @@
   "The go-near! options of the walk to a dig: other ways only beyond reach, walks inside own cuts ignore the dark (the :checks forms given, when any), a level bound with :stay-level."
   [args in-reach? checks]
   (cond-> {}
-    in-reach? (assoc :ways #{:walk :dig} :may-dig #{:own})
+    in-reach? (assoc :ways #{:walk :clear-seal})
     (seq checks) (assoc :checks checks)
     (mw/stay-level? args) (assoc :y-margin (settings/get settings ::stay-margin))))
 

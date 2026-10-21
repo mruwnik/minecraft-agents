@@ -145,7 +145,7 @@
 (defn ^:async walk!
   "The walk to the pocket's standing cell once: :again to go on, :continue while it works, or the ending of a walk that failed."
   [c stand]
-  (let [e (await (ctx/call c :walk 'jobs.movement.go-to {:pos stand :range 0 :ways #{:walk :dig} :may-dig #{:own} :floor {:health 1}}))]
+  (let [e (await (ctx/call c :walk 'jobs.movement.go-to {:pos stand :range 0 :ways #{:walk :clear-seal} :floor {:health 1}}))]
     (cond (= :continue e) :continue
           (not= :done (:kind e)) (fail! c :walk-failed "could not walk to a wall to pocket")
           (not (side-here? c (sh-sense/feet (:primitives c)) (:by-hand (ctx/mem c)))) (fail! c :walk-failed "walked to a wall but no side fits there")

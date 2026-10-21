@@ -115,7 +115,7 @@
   [c]
   (when (on-canopy? c)
     (let [{:keys [x y z]} (:base (ctx/mem c))
-          e (await (child/call-walk* c :down {:pos [x y z] :range 2 :ways #{:walk :dig} :may-dig #{:own}}))]
+          e (await (child/call-walk* c :down {:pos [x y z] :range 2 :ways #{:walk :clear-seal}}))]
       (cond
         (= :continue e) :continue
         (not (and (= :done (:kind e)) (:arrived (:data e))))

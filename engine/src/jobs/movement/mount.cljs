@@ -161,7 +161,7 @@
           (cond
             (nil? e) :continue
             (> (u/dist (u/self-pos c) (u/pos-of (.-pos e))) reach)
-            (let [r (await (child/call-walk* c :walk {:pos (u/pos-of (.-pos e)) :range 2 :ways #{:walk :dig} :may-dig #{:own}}))]
+            (let [r (await (child/call-walk* c :walk {:pos (u/pos-of (.-pos e)) :range 2 :ways #{:walk :clear-seal}}))]
               (cond
                 (= :continue r) :continue
                 (>= (inc fails) (max-walks)) (stop! c id :nothing-possible :unreachable {:why (contract/cause-key r)})

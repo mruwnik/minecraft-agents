@@ -834,7 +834,7 @@
 (defn stub-go-to
   "A go-to that records its args and the call's :ways in calls and ends with result."
   [calls result]
-  {:target [] :ways #{:walk :dig} :may-dig #{:own}
+  {:target [] :ways #{:walk :clear-seal}
    :round (fn [c]
             (swap! calls conj (merge (:args c) (select-keys (ctx/frozen-call c) [:ways])))
             (if (= :stopped (:status result))

@@ -178,7 +178,7 @@
 (defn ^:async walk-to-remembered!
   "The remembered boat is beyond ::radius, so its cell was only remembered, not seen: walk close enough to look (one go-to call), then a later round decides."
   [c cell]
-  (let [r (await (child/run!* c :walk 'jobs.movement.go-to {:pos cell :range (max 1 (- (radius) 2)) :ways #{:walk :dig} :may-dig #{:own}}))]
+  (let [r (await (child/run!* c :walk 'jobs.movement.go-to {:pos cell :range (max 1 (- (radius) 2)) :ways #{:walk :clear-seal}}))]
     (if (= :continue r)
       :continue
       (if (and (= :done (:kind r)) (:arrived (:data r)))

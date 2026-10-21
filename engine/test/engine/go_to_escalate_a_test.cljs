@@ -221,7 +221,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p seen]} (await (run-job! (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 5}]})
-                                                {:pos [10 64 0] :range 1 :ways #{:walk :dig} :may-dig #{:own}}))]
+                                                {:pos [10 64 0] :range 1 :ways #{:walk :clear-seal}}))]
           (is (= false (:arrived @out)))
           (is (= :unreachable (:reason @out)))
           (is (empty? (events-of seen :go-to.escalated)))
@@ -258,24 +258,23 @@
           (is (= 1 (count (events-of seen :go-to.by-hand))))
           (is (seq (calls p "dig"))))))))
 
-(deftest a-free-body-makes-a-way-to-a-goal-cut-off-unless-walk-only
+(deftest go-to-on-open-ground-never-escalates
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [tower (merge (box -20 63 -20 20 63 20 "stone") (box 8 64 0 8 68 0 "stone"))
-              world {:self {:pos {:x 0 :y 64 :z 0}} :blocks tower :inventory [{:name "dirt" :count 9}]}
-              {:keys [out seen]} (await (run-job! world {:pos [8 69 0] :range 0}))
-              walk-only (await (run-job! world {:pos [8 69 0] :range 0 :ways #{:walk}}))]
-          (is (= false (:arrived @out)) "the fake world cannot finish the climb")
-          (is (= :goal-cut-off (:why (first (events-of seen :go-to.escalated)))) "the top of a 5-high stone column is cut off: a free body makes a way")
-          (is (empty? (events-of (:seen walk-only) :go-to.escalated)) ":ways #{:walk} changes nothing")
-          (is (empty? (calls (:p walk-only) "jumpPlace"))))))))
+              {:keys [out p seen]} (await (run-job! {:self {:pos {:x 0 :y 64 :z 0}} :blocks tower
+                                                 :inventory [{:name "dirt" :count 9}]}
+                                                {:pos [8 69 0] :range 0}))]
+          (is (= false (:arrived @out)) "the top of a 5-high stone column cannot be walked to")
+          (is (empty? (events-of seen :go-to.escalated)) "not shut in: go-to does not change the world")
+          (is (empty? (calls p "jumpPlace"))))))))
 
 (deftest a-shut-in-body-that-may-not-escalate-says-it-is-shut-in
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out seen]} (await (run-job! (merge in-pit {:blocks pit}) {:pos [10 64 0] :range 1 :ways #{:walk :dig} :may-dig #{:own}}))]
+        (let [{:keys [out seen]} (await (run-job! (merge in-pit {:blocks pit}) {:pos [10 64 0] :range 1 :ways #{:walk :clear-seal}}))]
           (is (= false (:arrived @out)))
           (is (true? (:shut-in @out)) "the result says the body is shut in")
           (is (re-find #"shut in" (:text @out)) "and so does the text, not 'no walkable way'")
@@ -302,7 +301,7 @@
       (fn ^:async t []
         (let [tower (merge (box -20 63 -20 20 63 20 "stone") (box 8 64 0 8 68 0 "stone"))
               {:keys [out]} (await (run-job! {:self {:pos {:x 0 :y 64 :z 0}} :blocks tower}
-                                             {:pos [8 69 0] :range 0 :ways #{:walk :dig} :may-dig #{:own}}))]
+                                             {:pos [8 69 0] :range 0 :ways #{:walk :clear-seal}}))]
           (is (false? (:arrived @out)))
           (is (nil? (:shut-in @out))))))))
 
@@ -314,7 +313,7 @@
                                                                :inventory [{:name "dirt" :count 5}]})
                                                 'jobs.blocks.dig {:pos [10 64 0]}))]
           (is (= {:status :stopped :reason :unreachable} (select-keys @out [:status :reason])) "the dig cannot reach the cell")
-          (is (empty? (events-of seen :go-to.escalated)) "its go-to child runs with :ways #{:walk :dig} :may-dig #{:own}")
+          (is (empty? (events-of seen :go-to.escalated)) "its go-to child runs with :ways #{:walk :clear-seal}")
           (is (empty? (calls p "jumpPlace"))))))))
 
 (deftest go-to-sealed-in-its-own-shelter-by-night-stays-in-it

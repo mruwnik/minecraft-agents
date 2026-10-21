@@ -243,7 +243,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [cliff (merge (floor -2 -3 10 3) (floor 60 11 -3 47 3))
-              {:keys [p]} (await (go! {:blocks cliff} {:pos [120 61 0] :one-way :closed :ways #{:walk :dig} :may-dig #{:own}}))]
+              {:keys [p]} (await (go! {:blocks cliff} {:pos [120 61 0] :one-way :closed :ways #{:walk :clear-seal}}))]
           (is (= 64 (js/Math.floor (second (at p)))) "still on the plateau"))))))
 
 (deftest go-to-drop-cost-false-takes-no-drop-and-a-number-keeps-it
@@ -251,8 +251,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [cliff (merge (floor -2 -3 10 3) (floor 60 11 -3 47 3))
-              no (await (go! {:blocks cliff} {:pos [120 61 0] :settings {:jobs.lib.cost.planner/drop-cost false} :ways #{:walk :dig} :may-dig #{:own}}))
-              dear (await (go! {:blocks cliff} {:pos [120 61 0] :settings {:jobs.lib.cost.planner/drop-cost 2} :ways #{:walk :dig} :may-dig #{:own}}))]
+              no (await (go! {:blocks cliff} {:pos [120 61 0] :settings {:jobs.lib.cost.planner/drop-cost false} :ways #{:walk :clear-seal}}))
+              dear (await (go! {:blocks cliff} {:pos [120 61 0] :settings {:jobs.lib.cost.planner/drop-cost 2} :ways #{:walk :clear-seal}}))]
           (is (= 64 (js/Math.floor (second (at (:p no))))) "no drop: still on the plateau")
           (is (= 61 (js/Math.floor (second (at (:p dear))))) "a dear drop is still the only way"))))))
 
@@ -261,10 +261,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [cliff (merge (floor -2 -3 10 3) (floor 59 11 -3 47 3))
-              plain (await (go! {:blocks cliff} {:pos [120 60 0] :ways #{:walk :dig} :may-dig #{:own}}))
-              none (await (go! {:blocks cliff} {:pos [120 60 0] :ways #{:walk :dig} :may-dig #{:own} :spend {:health 0}}))
+              plain (await (go! {:blocks cliff} {:pos [120 60 0] :ways #{:walk :clear-seal}}))
+              none (await (go! {:blocks cliff} {:pos [120 60 0] :ways #{:walk :clear-seal} :spend {:health 0}}))
               boots (await (go! {:blocks cliff :equipment {:feet {:name "iron_boots" :enchants [{:name "feather_falling" :lvl 4}]}}}
-                                {:pos [120 60 0] :ways #{:walk :dig} :may-dig #{:own}}))]
+                                {:pos [120 60 0] :ways #{:walk :clear-seal}}))]
           (is (= 60 (js/Math.floor (second (at (:p plain))))) "plain body: 1 hp is within the budget")
           (is (= 64 (js/Math.floor (second (at (:p none))))) ":spend {:health 0}: no 4-block drop")
           (is (= 60 (js/Math.floor (second (at (:p boots))))) "feather falling IV: it drops"))))))
@@ -274,7 +274,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [steps (merge (floor -2 -3 10 3) (floor 62 11 -3 47 3))
-              {:keys [p]} (await (go! {:blocks steps} {:pos [120 63 0] :settings {:jobs.lib.cost.planner/drop-cost false} :ways #{:walk :dig} :may-dig #{:own}}))]
+              {:keys [p]} (await (go! {:blocks steps} {:pos [120 63 0] :settings {:jobs.lib.cost.planner/drop-cost false} :ways #{:walk :clear-seal}}))]
           (is (= 63 (js/Math.floor (second (at p)))) "a 1-block step-down is no drop"))))))
 
 (defn refusal [args] (expr/problem registry/jobs (list 'jobs.movement.go-to args)))
@@ -450,7 +450,7 @@
       (fn ^:async t []
         (doseq [[args want] [[{} 3] [{:spend {:tries 2}} 2] [{:spend {:tries 1}} 1]]]
           (let [steers (atom 0)
-                {:keys [out]} (await (go-prepped! {:blocks flat} (merge {:pos [10 64 0] :range 0 :ways #{:walk :dig} :may-dig #{:own}} args)
+                {:keys [out]} (await (go-prepped! {:blocks flat} (merge {:pos [10 64 0] :range 0 :ways #{:walk :clear-seal}} args)
                                                   #(override-steer! % (fn ^:async f [_ _ _] (swap! steers inc) #js {:status "done"}))))]
             (is (= want @steers) (str "walks for " args))
             (is (= {:arrived false :reason :unreachable :why :no-progress} (dissoc @out :at :near :text :status :tries))
@@ -463,7 +463,7 @@
         (doseq [n [1 2]]
           (let [steers (atom 0)
                 out (atom :not-done)
-                parent (assoc (recording-parent out {:pos [10 64 0] :range 0 :ways #{:walk :dig} :may-dig #{:own}}) :defaults {:spend {:tries n}})
+                parent (assoc (recording-parent out {:pos [10 64 0] :range 0 :ways #{:walk :clear-seal}}) :defaults {:spend {:tries n}})
                 {:keys [eng p]} (setup {:blocks flat :jobs {'recording-parent parent}})]
             (override-steer! p (fn ^:async f [_ _ _] (swap! steers inc) #js {:status "done"}))
             (core/submit! eng '(recording-parent) {})
@@ -486,7 +486,7 @@
       (fn ^:async t []
         ;; a stone wall at x 5 cuts the floor: the goal's side is walled in
         (let [walled (merge (box -2 63 -2 10 63 4 "stone") (box 5 64 -2 5 65 4 "stone"))
-              {:keys [out eng p]} (await (go! {:blocks walled} {:pos [8 64 1] :range 0 :ways #{:walk :dig} :may-dig #{:own}}))]
+              {:keys [out eng p]} (await (go! {:blocks walled} {:pos [8 64 1] :range 0 :ways #{:walk :clear-seal}}))]
           (is (= {:arrived false :reason :unreachable :why :goal-cut-off} (dissoc @out :at :near :text :status :shut-in)))
           (is (= [3 64 0] (at p)) "the shortest walk among the cells within 1.5 of the nearest the goal it can reach")
           (is (= ["blocked" "arrived" "blocked"] (mapv :status (moved eng))) "no try again after the walk to the wall"))))))
@@ -1131,7 +1131,7 @@
       (fn ^:async t []
         (doseq [[n food] [[2 0] [2 6] [3 0] [3 6]]]
           (let [{:keys [out p]} (await (go! {:blocks (gap-strip n) :self {:pos {:x 0.5 :y 64 :z 0.5} :food food}}
-                                            {:pos [(+ 7 n) 64 0] :range 0 :ways #{:walk :dig} :may-dig #{:own}}))]
+                                            {:pos [(+ 7 n) 64 0] :range 0 :ways #{:walk :clear-seal}}))]
             (is (false? (:arrived @out)) (str "gap " n " food " food " " (pr-str @out)))
             (is (= [:abilities :gap-sprint] ((juxt :why :kind) @out)) (str "gap " n " food " food " " (pr-str @out)))
             (is (< (first (at p)) 5) (str "gap " n " food " food " at " (at p)))))))))
@@ -1143,7 +1143,7 @@
         (doseq [n [2 3]]
           (let [blocks (merge (box 3 59 -6 26 59 6 "stone") (box 4 63 0 8 63 0 "stone") (box (+ 9 n) 63 0 (+ 13 n) 63 0 "stone"))
                 {:keys [out p]} (await (go! {:blocks blocks :self {:pos {:x 6.5 :y 64 :z 0.5} :food 0}}
-                                            {:pos [(+ 10 n) 64 0] :range 0 :ways #{:walk :dig} :may-dig #{:own}}))]
+                                            {:pos [(+ 10 n) 64 0] :range 0 :ways #{:walk :clear-seal}}))]
             (is (false? (:arrived @out)) (str "gap " n " " (pr-str @out)))
             (is (< (first (at p)) 9) (str "gap " n " at " (at p)))))))))
 

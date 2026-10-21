@@ -201,7 +201,7 @@
           (await (tu/with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
             (fn ^:async b [] (await (child-outcome eng job {:radius 30} 6)))))
           (is (seq @opts))
-          (is (every? #(= #{:walk :dig} (:ways %)) @opts) "a walk to a hive never digs or pillars")
+          (is (every? #(= #{:walk :clear-seal} (:ways %)) @opts) "a walk to a hive never digs or pillars")
           (is (empty? (calls p "useOn"))))))))
 
 (defn with-stub-mem [m f]

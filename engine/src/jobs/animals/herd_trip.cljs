@@ -199,7 +199,7 @@
   (animals count only while in view, and the run's one survey was at the start); then it is booked looked-for.
   :continue while the walk or the look goes on."
   [c {:keys [key pos]}]
-  (let [r (await (near/go-near! c pos (look-back-range) {:doors :never :ways #{:walk :dig} :may-dig #{:own} :see true}))]
+  (let [r (await (near/go-near! c pos (look-back-range) {:doors :never :ways #{:walk :clear-seal} :see true}))]
     (cond
       (= :partial r) :continue
       (await (look/survey! c :near)) :continue

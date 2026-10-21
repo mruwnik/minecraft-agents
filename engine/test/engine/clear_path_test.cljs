@@ -127,7 +127,7 @@
               r (await (run-door (assoc wall :inventory [{:name "wooden_pickaxe" :count 1}]) nil
                                  {:heading :east} {'jobs.movement.go-to go-to} identity))]
           (is (= [:nothing-possible :step-failed] [(:kind r) (contract/cause-key r)]) (pr-str r))
-          (is (= [[3 64 0] 0 #{:walk :dig}] ((juxt :pos :range :ways) @asked)) (pr-str @asked)))))))
+          (is (= [[3 64 0] 0 #{:walk :clear-seal}] ((juxt :pos :range :ways) @asked)) (pr-str @asked)))))))
 
 (deftest a-missing-heading-is-impossible
   (async done
