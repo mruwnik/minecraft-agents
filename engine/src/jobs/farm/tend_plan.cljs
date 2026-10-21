@@ -86,7 +86,7 @@
   [c crops]
   (let [p (:primitives c)
         plan (fa/plan c)
-        opts {:ignore-zones? (:ignore-zones? (:args c))}]
+        opts {:ignore-zones? (:ignore-zones? (:args c)) :own-plans-ok? true}]
     (vec (keep (fn [[{:keys [x y z] :as pos} crop]]
                  (when (and (= :dig (strays/classify {:crop crop} (when-let [n (u/seen-name p pos)] {:name n})))
                             (permit/ok? c plan :dig pos opts))

@@ -225,6 +225,15 @@
           (is (= {:dug 8 :skipped {}} (select-keys result [:dug :skipped])))
           (is (= 8 (count (calls p "dig")))))))))
 
+(deftest a-plan-the-body-made-is-no-obstacle-without-for-plan
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks eight} (ew/of-data {"pad" (assoc pad-plan :metadata {:by "Fake"})} {} []))
+              result (await (child-outcome eng job box 40))]
+          (is (= {:dug 8 :skipped {}} (select-keys result [:dug :skipped])))
+          (is (= 8 (count (calls p "dig")))))))))
+
 (deftest a-box-wholly-refused-declines-without-a-warn-and-stays-listed
   (async done
     (tu/run-async done

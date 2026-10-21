@@ -11,7 +11,7 @@
   "The social half of the rules' input, read now (jobs.lib.access/zone-input): zones nil when the zone file was never
   read, claims, footprints of every plan but this one, the body's name, the clock and the job's :ignore-zones? arg."
   [c]
-  (access/zone-input c {:except (:plan (:args c)) :ignore-zones? (:ignore-zones? (:args c))}))
+  (access/zone-input c {:except (:plan (:args c)) :own-plans-ok? true :ignore-zones? (:ignore-zones? (:args c))}))
 
 ;; ------------------------------------------------------------------ the rule, pure
 
