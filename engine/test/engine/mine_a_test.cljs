@@ -212,7 +212,7 @@
               s (await (scenario {:block "sand" :count 4}
                                  {:blocks (merge floor sand) :unreachable (vec (keys sand))} 30))]
           (is (= 4 (count (events-of s :mine.unreachable))))
-          (is (zero? (dig-count s)))
+          (is (zero? (:failures (job-mem s) 0)))
           (is (finished? s)))))))
 
 (deftest seen-ore-behind-a-wall-the-walk-cannot-pass-is-cut-to-once-then-skipped
