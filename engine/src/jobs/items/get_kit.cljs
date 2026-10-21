@@ -30,6 +30,7 @@
   the 3-day food reserve (60 points) are carried (harmful food does not count), one jobs.survival.get-food child (with :explore;
   it fills the pack to its :carry default, the reserve) runs before the bill (:food false: none). A child that stops warns kit.no-food; with no food carried and a food bar below ::min-food-to-dig the kit stops {:reason :no-food} (no mining on an empty stomach); a fuller bar goes on.
   With furnace material short and no weapon carried, one jobs.items.obtain child first makes a sword (iron, stone or wooden); if it cannot, kit.unarmed warns and the work goes on.
+  With :explore, a bill that stops because a gathering ended (a mine that stopped, no way up) runs again (kit.retry, the pieces newly covered made first), up to 3 rounds without new furnace material.
   Get a base first.
   A death since the job began (body memory :died) clears the children and the bill; the next round re-plans from
   what is carried. A death only keeps the job listed when it was submitted with :survive-death?.
@@ -62,7 +63,7 @@
 (defn restarted
   "The job memory after a death: the children and the bill went with the body; the job starts from now."
   [m now]
-  (-> m (dissoc :children :bill :bill-done :covered :covered-done :fed :stop) (assoc :since now)))
+  (-> m (dissoc :children :bill :bill-done :covered :covered-done :fed :stop :bill-tries :bill-round :bill-material) (assoc :since now)))
 
 (defn why-of
   "The text a child ending e gives for its stop: its data's :why, else its cause map's."
@@ -225,6 +226,36 @@
       (= :done (:kind e)) nil
       :else {:cause (contract/cause-key e) :why (why-of e)})))
 
+(def max-bill-tries
+  "Bill rounds a kit runs before a gathering that keeps ending without material is final."
+  3)
+
+(defn retry?
+  "Whether the bill's stop r is a gathering try that ended (a mine that stopped, no way up ..) and the kit may run the bill again: it was searching (:explore), and fewer than max-bill-tries fruitless rounds passed."
+  [r tries explore]
+  (boolean (and r explore (< (inc tries) max-bill-tries)
+                (= :no-source (:reason r))
+                (re-find #"gathering was tried and ended" (str (:why r)))
+                (not (re-find #"gathering was tried and ended :none-seen" (str (:why r)))))))
+
+(defn material-of
+  "The furnace material (ingots, counting raw ore) carried, to tell whether a bill round gained any."
+  [st]
+  (reduce + 0 (vals (select-keys (with-raw (:carried st)) (keys smelt-plan/made-from)))))
+
+(defn retry!
+  "Book another bill round: a fresh child slot, the pieces the new material covers made first. A round that gained material
+  starts the count again."
+  [c r tries]
+  (let [gained? (> (material-of (state c)) (:bill-material (ctx/mem c) 0))
+        tries' (if gained? 1 (inc tries))]
+    (ctx/emit! c :kit.retry :warn {:cause (:reason r) :why (:why r) :tries tries'
+                                   :text (str "gathering ended without enough (" (:why r) "): trying again, round " (inc tries'))})
+    (ctx/update-mem! c (fn [m] (-> m (dissoc :covered :covered-done :bill)
+                                   (assoc :bill-tries tries' :bill-material (material-of (state c)))
+                                   (update :bill-round (fnil inc 0)))))
+    :again))
+
 (defn ^:async round [c]
   (let [a (:args c)
         items (vec (:items a))
@@ -298,8 +329,12 @@
           (finish! c items have (stop-of :nothing-possible {:reason :kit-incomplete} "the bill is carried but the kit is not complete") )
 
           :else
-          (let [r (await (run-bill! c :bill (bill-of c)))]
+          (let [tries (:bill-tries (ctx/mem c) 0)
+                round (:bill-round (ctx/mem c) 0)
+                _ (when-not (:bill-material (ctx/mem c)) (ctx/update-mem! c assoc :bill-material (material-of st)))
+                r (await (run-bill! c (if (zero? round) :bill (keyword (str "bill" round))) (bill-of c)))]
             (cond (= :continue r) :continue
+                  (retry? r tries (:explore a)) (retry! c r tries)
                   (some? r) (stop-after-wear! c (update r :item #(or % (first todo))))
                   :else (do (ctx/update-mem! c assoc :bill-done true)
                             (ctx/emit! c :kit.progress :info {:text (str "got " (str/join ", " todo))})

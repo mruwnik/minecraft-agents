@@ -78,6 +78,16 @@
   (is (= {"iron_helmet" 1} (kit/covered-of game/default-version ["iron_helmet" "iron_chestplate"] {"raw_iron" 11})))
   (is (= {"iron_helmet" 1} (kit/covered-of game/default-version ["iron_helmet" "iron_chestplate"] {"raw_iron" 3 "iron_ingot" 2}))))
 
+(deftest a-gathering-that-ended-is-tried-again-up-to-three-rounds-when-searching
+  (let [r {:reason :no-source :why "no source for iron_helmet: gathering was tried and ended :no-plan; no seen chest"}]
+    (is (kit/retry? r 0 true))
+    (is (kit/retry? r 1 true))
+    (is (not (kit/retry? r 2 true)))
+    (is (not (kit/retry? r 0 false)) "without :explore nothing new can be found")
+    (is (not (kit/retry? (assoc r :why "gathering was tried and ended :none-seen") 0 true)))
+    (is (not (kit/retry? {:reason :no-source :why "no seen chest"} 0 true)))
+    (is (not (kit/retry? nil 0 true)))))
+
 (deftest a-death-after-the-start-makes-the-memory-stale
   (is (kit/stale? {:since 100} {:t 200}))
   (is (not (kit/stale? {:since 300} {:t 200})))

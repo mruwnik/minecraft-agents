@@ -124,6 +124,15 @@
    :expect [{:event {:source :job :kind :completed} :within-s 380 :of-job true}]
    :after [[:item "iron_pickaxe" 1]]
    :limit-s 400}
+  ;; card 876e53b2: a mine that finds no iron ends its try; the kit runs the bill again (kit.retry) instead of stopping at the first end
+  {:name "a-mine-that-ends-without-iron-is-tried-again"
+   :time :any
+   :plot {:height 12 :floor "grass_block"}
+   :blocks [[:fill [4 -8 12] [31 3 20] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
+   :body {:at [16.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["stone_sword" 1] ["stick" 2] ["cooked_beef" 3] ["torch" 16] ["cobblestone" 8] ["coal" 4] ["crafting_table" 1]] :effects [["resistance" 900 4]]}
+   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore true :food false})]]
+   :expect [{:event {:source :job :kind :kit.retry} :within-s 500 :of-job true}]
+   :limit-s 520}
   ;; card ac825512: the nearer ore stands against water seen through glass; the kit takes the dry ore farther along the wall and finishes, never "stopped: flooded"
   {:name "flooded-ore-is-left-for-the-dry-ore"
    :time :any
