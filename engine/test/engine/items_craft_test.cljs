@@ -447,6 +447,15 @@
           (is (= 1 (count (placed-at p2))))
           (is (not= {:x 1 :y 64 :z 0} (first (placed-at p2))) "the avoided cell is left free"))))))
 
+(deftest craft-puts-its-table-down-on-snow-layers-beside-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [snow (into {} (for [x [-1 0 1] z [-1 0 1] :when (not= [0 0] [x z]) [y n] [[63 "stone"] [64 "snow"]]] [(str x "," y "," z) n]))
+              [result p] (await (craft {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}] :blocks snow} {:item "bread"}))]
+          (is (= 1 (:made result)) (pr-str result))
+          (is (= 1 (count (placed-at p)))))))))
+
 (deftest craft-never-puts-its-table-over-a-bed-or-in-a-doorway
   (async done
     (tu/run-async done

@@ -19,6 +19,8 @@
 
 (defn solid? [n] (and n (not (bs/air n)) (not (bs/fluids n)) (not (b/clearable n))))
 
+(defn free? [n] (boolean (and n (or (bs/air n) (b/clearable n)))))
+
 (defn home-cell?
   "Whether a table in pos would spoil a room: on a bed, or in the cell beside a door (the way in and out)."
   [p {:keys [x y z] :as pos}]
@@ -46,7 +48,7 @@
       [pos (update pos :y dec)])))
 
 (defn table-spot
-  "A free cell beside the body to put a table in: air at the body's level with a solid block under it, or nil. Where
+  "A free cell beside the body to put a table in: air or a plant or snow layer (placing digs it out) at the body's level with a solid block under it, or nil. Where
   fewer than three of the four cells beside the body are open (a tunnel, a pocket), a cell that leads on to more open
   air is a passage and is not taken: it would shut the way along the corridor."
   [c]
@@ -54,12 +56,12 @@
         {:keys [x y z]} (u/self-pos c)
         [x y z] (mapv #(js/Math.floor %) [x y z])
         sides [[1 0] [-1 0] [0 1] [0 -1]]
-        open? (fn [cx cz] (bs/air (u/seen-name p {:x cx :y y :z cz})))
+        open? (fn [cx cz] (free? (u/seen-name p {:x cx :y y :z cz})))
         cramped? (< (count (filter (fn [[dx dz]] (open? (+ x dx) (+ z dz))) sides)) 3)
         passage? (fn [{px :x pz :z}]
                    (some (fn [[dx dz]] (and (not= [(+ px dx) (+ pz dz)] [x z]) (open? (+ px dx) (+ pz dz)))) sides))]
     (some (fn [[pos floor]]
-            (when (and (bs/air (u/seen-name p pos)) (solid? (u/seen-name p floor))
+            (when (and (free? (u/seen-name p pos)) (solid? (u/seen-name p floor))
                        (not (and cramped? (= y (:y pos)) (= 1 (+ (js/Math.abs (- x (:x pos))) (js/Math.abs (- z (:z pos)))))
                                  (passage? pos))))
               pos))

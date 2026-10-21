@@ -1,0 +1,16 @@
+;; Card 0df9b80c: a carried table is put down on snow layers: the cells beside the body hold snow, which a placement digs out.
+;; Should-succeed: lit stone room, snow layers on every floor cell round the body, table carried: the pickaxe is crafted.
+{:defaults
+ {:tags [:items :craft :jobs]
+  :time :any
+  :plot {:height 8}
+  :body {:at [12.5 0 12.5] :settle-s 2 :effects [["resistance" 600 4]]
+         :inventory [["oak_planks" 3] ["stick" 2] ["crafting_table" 1]]}
+  :limit-s 90}
+ :cases
+ [{:name "carried-table-goes-down-on-snow-layers"
+   :blocks [[:fill [10 0 10] [14 3 14] "stone" :hollow] [:fill [11 0 11] [13 2 13] "air"] [:set [12 2 10] "glowstone"]
+            [:fill [11 0 11] [13 0 13] "snow[layers=2]"]]
+   :act [[:job (jobs.items.craft {:item "wooden_pickaxe"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
+   :after [[:item "wooden_pickaxe" 1]]}]}
