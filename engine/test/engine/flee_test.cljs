@@ -143,6 +143,14 @@
                  (mapv #(select-keys % [:mob :id :uuid :ended]) (threat-entries eng))) "one :threat entry")
           (is (= {:cap 20 :ttl 300000} (mem/policy (mem/view (:store eng)) :threat))))))))
 
+(deftest a-flee-end-over-an-unseen-floor-is-avoided
+  (let [p (tu/fake-on-floor {:blocks {"3,63,0" "sand"}})
+        _ (tu/set-sensed! p (fn [pos] #js {:unknown true :pos pos}))
+        seen (tu/seeing-all (tu/fake-on-floor {:blocks {"3,63,0" "sand"}}))
+        end {:x 3 :y 64 :z 0}]
+    (is (respond.state/unseen-floor-end? p end) "nothing seen: the planner would not stand there")
+    (is (not (respond.state/unseen-floor-end? seen end)))))
+
 (deftest flight-steps-walk-through-a-go-to-child-that-never-escalates
   (async done
     (tu/run-async done
