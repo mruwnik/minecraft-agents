@@ -8,7 +8,7 @@
          h is the stand height above the cell floor in 1/16 block; px/pz is the point to stand at.
   Pose:  {:x :y :z :vy :on-ground :on-climbable :in-water :in-lava :collided}, feet position; :vx :vz (horizontal velocity, blocks
          per tick) and :under-water (the eyes in water) when the body reports them.
-  State: {:steps :i :since :tick :yaw} (+ :near, the least distance to the aim yet on this step, :near-y the least height still to swim); i is the index of the step walked to, since the tick at which it
+  State: {:steps :i :since :tick :yaw} (+ :near, the least distance to the aim yet on this step, :near-y the greatest height still to swim since the body last rose, so a plunge's sink is not held against its climb); i is the index of the step walked to, since the tick at which it
          became current, tick the number of calls, yaw the last yaw sent while moving, landed (when set) the tick a :bounce
          drop's bounce began.
   Done:  {:status :arrived :at} | {:status :off-plan :at :step} | {:status :stuck :at :step :move :target :why}.
@@ -24,8 +24,7 @@
   {:moves #{:start :walk :diagonal :corner :jump :drop :gap :climb-up :climb-down :jump-climb
             :swim :swim-up :swim-down :exit}
    :max-replans 5          ; re-plans before giving up
-   :no-progress-ticks 60   ; 3 s on one step without reaching it -> stuck
-   :swim-no-progress-ticks 60  ; the same for a step in water; rising or sinking toward the step's height is progress too
+   :no-progress-ticks 60   ; 3 s on one step without nearer or (in water) higher/lower toward it -> stuck
    :progress-xz 0.1        ; nearer the aim by this much restarts the no-progress clock
    :swim-float 0.2         ; in water, jump while the feet are below the step's height plus this (head out at the surface)
    :bend-xz 0.15           ; a bend step (a corner round a stalk inside a tight cell) is reached this close to its point
@@ -455,9 +454,6 @@
       (>= (- tick landed) (:settle-ticks step)) (-> state (update-in [:steps i] dissoc :bounce) (assoc :since tick) (dissoc :landed))
       :else state)))
 
-(defn no-progress-ticks [policy step]
-  (if (water-step? step) (:swim-no-progress-ticks policy) (:no-progress-ticks policy)))
-
 (defn stuck-why [{:keys [i tick since steps]}]
   (let [s (nth steps i)]
     (str "no progress on step " i " (" (pr-str (:move s)) " to " (pr-str [(:x s) (:y s) (:z s)]) ") for "
@@ -602,10 +598,11 @@
 (defn nearer
   "state with the no-progress clock restarted when the body is nearer the aim than it has been on this step: a slowed
   body (potion, web, soul sand) still closes in, which is progress however slowly. dy, the height still to swim on a water step (nil
-  on land), counts the same: a swim straight up has no way to go sideways."
+  on land), counts the same: a swim straight up has no way to go sideways. Rising p above the lowest point reached is progress, so a
+  body that plunged in, sank and climbs back is not stuck; one that rises nothing in the limit (3 s, a swimmer climbs ~1.2 blocks/s) is."
   [policy {:keys [near near-y tick] :as state} d dy]
   (let [p (:progress-xz policy)
-        state (cond-> state (and dy (nil? near-y)) (assoc :near-y dy))]
+        state (cond-> state (and dy (or (nil? near-y) (> dy near-y))) (assoc :near-y dy))]
     (cond
       (nil? near) (assoc state :near d)
       (< d (- near p)) (assoc state :near d :since tick)
@@ -636,7 +633,7 @@
                       (off-plan? policy (nth steps (dec i)) step aim pose)))
       {:state state' :done {:status :off-plan :at at :step i}}
 
-      (and (not landed) (> (- n since) (no-progress-ticks policy step)))
+      (and (not landed) (> (- n since) (:no-progress-ticks policy)))
       {:state state'
        :done {:status :stuck :at at :step i :move (:move step) :target [(:x step) (:y step) (:z step)]
               :why (stuck-why state')}}

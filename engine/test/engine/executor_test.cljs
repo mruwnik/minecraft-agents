@@ -700,14 +700,6 @@
     (wet 1.7 62.0 2.5) :off-plan
     (wet 1.7 66.0 0.5) :off-plan))
 
-(deftest a-swim-step-gets-longer-before-stuck
-  (let [ticks (:swim-no-progress-ticks p)
-        ps (wet 1.6 59.0 0.5)
-        stuck? (fn [tick] (= :stuck (:status (:done (ex/tick p (state-at pond 2 :tick tick) ps)))))]
-    (is (> ticks (:no-progress-ticks p)))
-    (is (false? (stuck? (dec ticks))))
-    (is (true? (stuck? ticks)))))
-
 (deftest a-slowed-body-closing-in-is-not-stuck
   (let [ticks (:no-progress-ticks p)
         tick-at (fn [x] (:done (ex/tick p (state-at straight 3 :tick ticks :near 0.9) (pose x 64.0 3.5))))]

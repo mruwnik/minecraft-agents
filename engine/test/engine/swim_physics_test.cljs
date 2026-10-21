@@ -210,4 +210,5 @@
 (deftest a-swim-up-that-rises-is-progress-one-that-does-not-is-stuck
   (let [at (fn [y] {:x 0.5 :z 0.5 :y y :vy 0 :in-water true :under-water true :on-ground false})]
     (is (= {:ticks 61 :status :stuck} (ticks-until-done (constantly (at 58)) 200)) "held in place: 3 s")
-    (is (nil? (ticks-until-done #(at (+ 58 (* 0.05 %))) 70)) "rising 1 block a second is not stuck")))
+    (is (nil? (ticks-until-done #(at (+ 58 (* 0.05 %))) 70)) "rising 1 block a second is not stuck")
+    (is (nil? (ticks-until-done #(at (if (< % 50) (- 58 (* 0.05 %)) (+ 55.5 (* 0.05 (- % 50))))) 100)) "plunged, sank 2.5 blocks in 2.5 s, then rose: not stuck (counting from the start height it would be)")))
