@@ -130,10 +130,11 @@
 (defn candidates
   "The trees the job may fell, nearest in a line first (lazily): the one at :at (none once marked unreachable), else
   those of species within radius not marked unreachable; a tree whose base log the zones refuse is left out, and with
-  :part-cut? one that is not a part-cut trunk."
+  :part-cut? one that is not a part-cut trunk or whose column a fell-tree gave up on lately (the trigger skips those too)."
   [c radius species]
   (let [p (:primitives c)
-        excluded (into (unreachable-set (ctx/mem c)) (map vec) (:avoid (:args c)))
+        given-up (when (:part-cut? (:args c)) (into #{} (map (comp :column :data)) (ctx/entries c trees/unreachable-kind)))
+        excluded (-> (unreachable-set (ctx/mem c)) (into (map vec) (:avoid (:args c))) (into given-up))
         logs (delay (into #{} (map :pos) (trees/scan-logs p radius nil)))
         wanted? (fn [t] (or (not (:part-cut? (:args c))) (part-cut/part-cut? p logs t)))]
     (if-let [at (:at (:args c))]

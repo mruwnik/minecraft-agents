@@ -74,6 +74,15 @@
               {:keys [p]} (await (fell {:blocks (merge (fm/ground [[6 0]]) (part-cut 6))} zones {}))]
           (is (= [] (fm/digs p))))))))
 
+(deftest fell-tree-part-cut-leaves-a-column-it-gave-up-on-lately
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng]} (lt/setup {:blocks (merge (fm/ground [[6 0]]) (part-cut 6))})]
+          (mem/write! (:store eng) trees/unreachable-kind {:column [6 0]} trees/unreachable-policy)
+          (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:part-cut? true :radius 12 :ways #{:carried}} 150))
+          (is (= [] (fm/digs p))))))))
+
 (defn view [entries]
   (let [s (mem/open (tu/tmp-dir) {:now (constantly 1000000)})]
     (doseq [[kind data] entries] (mem/write! s kind data {:cap 8 :ttl :forever}))
