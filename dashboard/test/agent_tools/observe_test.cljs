@@ -1403,11 +1403,14 @@
                 (timed 8 :job :go-to.unreachable {:job "j2" :message "gave up"})]
                (map #(timed % :job :explore.leg {:job "j2" :message (str "leg " %)}) (range 9 40)))))
 
+(def long-why (apply str "no source: " (repeat 60 "gathering was tried and ended :no-torches; ")))
+
 (defn events-handler [{:keys [path]}]
   (let [after (js/Number (second (re-find #"after=(\d+)" (or path ""))))
         limit (js/Number (second (re-find #"limit=(\d+)" (or path ""))))]
     (cond
       (= "/snapshot" path) {:text (data/write-edn {:body "ProbeBody" :generation-id "g" :cursor {:stream-id "s" :seq 39}})}
+      (str/starts-with? (or path "") "/results?ids=") {:text (data/write-edn {:results {"j9" {:status :stopped :result {:why long-why} :text long-why}}})}
       :else {:text (data/write-edn {:stream-id "s" :latest-seq 39 :gap? false
                                     :events (vec (take limit (filter #(> (:seq %) after) past-events)))})})))
 
@@ -1430,6 +1433,15 @@
                           (is (= [:queued :dig-in.done] (mapv :kind (:events (:view job)))) "j1 without the debug memory write")
                           (is (= [:queued :memory_written :dig-in.done] (mapv :kind (:events (:view debug)))))
                           (is (= {:cells 4} (:data (last (:events (:view job))))))))))))
+
+(deftest observe-events-for-a-job-finds-its-recorded-stop-whole-when-the-event-has-aged-out
+  (async done
+    (finish! done
+             (-> (events-out "--job" "j9" "--kinds" "stopped")
+                 (.then (fn [{:keys [view]}]
+                          (is (= [:stopped] (mapv :kind (:events view))))
+                          (is (= long-why (:message (first (:events view)))))
+                          (is (= long-why (get-in view [:events 0 :data :why])))))))))
 
 (deftest observe-events-until-death-shows-what-led-up-to-it-and-pages-back
   (async done
