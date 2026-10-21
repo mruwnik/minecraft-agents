@@ -249,7 +249,7 @@
       (ctx/update-mem! c #(cond-> (-> (walk-fail % (:pos cell) :unreachable limit (u/self-pos c))
                                       (update :bad-stands (fnil conj []) stand))
                             (= :budget (:why (:data (near/last-walk c)))) (update :budget-streak (fnil inc 0))
-                            (not (or (:dig? cell) (in-hole? c) (shut-in-walk? c)))
+                            (not (or (:dig? cell) (in-hole? c) (shut-in-walk? c) (= :stuck (:why (:data (near/last-walk c))))))
                             (update :needs-scaffold (fnil conj #{}) (:pos cell)))))
     (when (#{:there :partial} w) (ctx/update-mem! c dissoc :budget-streak))
     (when (and (= :there w) (nil? (:found cell)))
