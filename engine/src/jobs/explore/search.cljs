@@ -71,7 +71,7 @@
   With :patch it looks for ground, not things: each look round (the origin first, then every leg's arrival) scans for a patch
   of the footprint (jobs.lib.patch, in slices) and ends :done at the first that has one, :found [{:what \"patch\" :pos :spots}]; notes are neither read nor written.
 
-  Memory: :origin :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :blocked (the ways legs
+  Memory: :origin :legs :scans :found :tried :failed :skipped :farthest :failed-in-row :stepped (the nearest a step has come to each unseen column: a step must end nearer) :blocked (the ways legs
   failed since the last arrival) :deferred (unloaded legs set aside while a sweep goes on), and :leg while
   a walk is under way, so a cut or restart resumes it.")
 
@@ -456,7 +456,7 @@
                     failed {:pos [(pt 0) y (pt 1)] :reason fail}
                     step (when (= :unseen fail)
                           (let [s (step-toward block-at (here c) (pt 0) (pt 1))]
-                            (when (or (not buried?) (and s (open? (block-at s)))) s)))]
+                            (when (and s (< (xz-dist [(s 0) (s 2)] pt) (dec (get-in m [:stepped pt] ##Inf))) (or (not buried?) (open? (block-at s)))) s)))]
                 (cond
                   step (assoc acc :leg step :step true :column pt)
                   (= :not-loaded fail) (recur more (inc reads) (update acc :unloaded conj failed))
@@ -490,6 +490,7 @@
             [hx _ hz] (here c)]
         (ctx/update-mem! c (fn [m] (cond-> (assoc (dissoc m :leg :leg-column) :failed-in-row in-row)
                                      arrived (dissoc :blocked)
+                                     (and arrived (:leg-column m)) (update-in [:stepped (:leg-column m)] (fnil min ##Inf) (xz-dist [hx hz] (:leg-column m)))
                                      (not (or arrived dangerous?)) (update :blocked (fnil conj []) {:at [hx hz] :leg [x z]})
                                      (not arrived) (update :failed (fnil conj []) {:pos [x y z] :reason (cond dangerous? :goal-dangerous in-water :wet :else :unreachable)})
                                      (and (not arrived) (not (interrupted? res)) (:leg-column m)) (-> (update :tried (fnil conj []) (:leg-column m))
