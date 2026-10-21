@@ -330,6 +330,17 @@
                (<= (u/dist (u/self-pos c) last-air) 3))
       (await (near/walk-round! (assoc c :to-air true) (zipmap [:x :y :z] (mapv #(js/Math.floor (% last-air)) [:x :y :z])) 0 (dissoc opts :progress))))))
 
+(def max-landings "Landings at the air a go-to call tries before it escalates from wherever it is." 3)
+
+(defn ^:async land-and-escalate!
+  "land-at-air!, then a stair escalation once the body stands out of the water; else the next round plans again (landings are capped)."
+  [c opts]
+  (ctx/update-mem! c update :landings (fnil inc 0))
+  (await (land-at-air! c opts))
+  (when-not (breath/in-water? (:primitives c))
+    (ctx/update-mem! c assoc :escalate-now true :stair-tried true))
+  :again)
+
 (defn ^:async walk! [c0 pos range doors]
   (let [way (own-way c0 pos (dive-floor! c0 pos))
         _ (own-way-left! c0 way)
@@ -407,12 +418,9 @@
               (esc/detour-escalate! c (:blocked (ctx/mem c) 0) why e)
               (end/give-up! c pos {:status :no-path :reason :detour} why)))
 
-          (and (= "stair" status) (:air-spent (:why walked)))
+          (and (= "stair" status) (:air-spent (:why walked)) (< (:landings (ctx/mem c) 0) max-landings))
           (do (await (air/surface! c (dissoc opts :progress) pos))
-              (await (land-at-air! c opts))
-              (when-not (breath/in-water? (:primitives c))
-                (ctx/update-mem! c assoc :escalate-now true :stair-tried true))
-              :again)
+              (await (land-and-escalate! c opts)))
 
           (= "stair" status)
           (do (ctx/update-mem! c #(cond-> (assoc % :escalate-now true) (not= :retreats (:why walked)) (assoc :stair-tried true))) :again)
@@ -440,11 +448,8 @@
 
           surveyed? :again
 
-          (and (or surfaced? (= :air (:reason walked))) (ways/way? c :stair) (not (:stair-tried (ctx/mem c))) (second-surfacing-in-air? c))
-          (do (await (land-at-air! c opts))
-              (when-not (breath/in-water? (:primitives c))
-                (ctx/update-mem! c assoc :escalate-now true :stair-tried true))
-              :again)
+          (and (or surfaced? (= :air (:reason walked))) (ways/way? c :stair) (not (:stair-tried (ctx/mem c))) (< (:landings (ctx/mem c) 0) max-landings) (second-surfacing-in-air? c))
+          (await (land-and-escalate! c opts))
 
           surfaced? :again
 
