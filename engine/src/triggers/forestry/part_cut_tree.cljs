@@ -3,12 +3,14 @@
   (jobs.lib.part-cut). Its job, jobs.forestry.fell-tree with :part-cut? true, fells the nearest such trunk with the
   logs the body carries (no fetch trip), collects the logs and writes the replant debt on the ground under it.
   A trunk whose base cell a zone or claim of another player refuses is not a part-cut tree to finish: it does not hold
-  the trigger, nor one whose column fell-tree lately gave up on (:tree-unreachable, 10 min). The sight is read at most every ::recheck-s seconds: a scan of every seen log is too much for each tick."
+  the trigger, nor one whose column fell-tree lately gave up on (:tree-unreachable, 10 min). It does not hold at night: the
+  night job walks the body in and a felling walk out again would undo it. The sight is read at most every ::recheck-s seconds: a scan of every seen log is too much for each tick."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.body :as body]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.part-cut :as part-cut]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.trees :refer [default-radius recently-unreachable]]
             [jobs.lib.world-files :as world]))
 
@@ -42,9 +44,10 @@
         seen))))
 
 (defn part-cut-tree
-  "Holds alive, on the ground, when a part-cut trunk that no other player's zone or claim refuses is in sight."
+  "Holds alive, by day, on the ground, when a part-cut trunk that no other player's zone or claim refuses is in sight."
   [p view _args kn _live]
   (boolean
    (and (not (body/recovery-pending? view :part-cut-tree))
+        (not (sh-sense/night? p))
         (not (false? (.-onGround (.self p))))
         (trunks-seen? p kn view))))

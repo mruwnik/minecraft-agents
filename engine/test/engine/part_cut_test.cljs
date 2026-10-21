@@ -88,6 +88,10 @@
   (is (false? (holds pct/part-cut-tree (merge (fm/ground [[6 0]]) (lt/tree 6 0 "oak" 4)))))
   (is (false? (holds pct/part-cut-tree wall))))
 
+(deftest the-part-cut-tree-trigger-does-not-hold-at-night
+  (let [p (:p (lt/setup {:time 14000 :blocks (merge (fm/ground [[6 0]]) (part-cut 6))}))]
+    (is (false? (pct/part-cut-tree p (view []) {} (ew/of-data {} {} []) nil)))))
+
 (deftest the-part-cut-tree-trigger-ignores-a-trunk-in-another-player-s-zone
   (let [blocks (merge (fm/ground [[6 0]]) (part-cut 6))
         zone (fn [owner] [{:name "apiary" :owner owner :min [5 60 -1] :max [7 80 1] :allow #{}}])

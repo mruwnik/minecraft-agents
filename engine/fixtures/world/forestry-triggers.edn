@@ -33,6 +33,21 @@
    :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :for-s 110 :until {:source :job :kind :completed}}]
    :limit-s 150}
+  ;; Card a6143307: a body shut in a closed room at night, a hanging trunk in sight through a glass wall: the night trigger has
+  ;; nothing to do and part-cut-tree does not walk the body out (it ping-ponged with the night job at the door, a job per 2 s).
+  ;; Needs night (the :night trigger reads the clock): run with --allow-time --time-log <the shared time log>.
+  {:name "part-cut-tree-does-not-walk-a-sheltered-body-out-at-night"
+   :time :night-exclusive :time-why :dawn-decision
+   :register [{:trigger :night :persistence :cooldown :cooldown-s 10} {:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}]
+   :blocks [[:fill [12 0 20] [16 3 24] "stone" :hollow] [:fill [13 0 21] [15 2 23] "air"]
+            [:fill [16 1 22] [16 3 22] "glass"]
+            [:fill [19 0 22] [19 11 22] "air"] [:fill [17 5 20] [21 8 24] "oak_leaves[persistent=true]"]
+            [:fill [19 3 22] [19 5 22] "oak_log"]]
+   :body {:at [14.5 0 22.5] :yaw 270 :inventory [["iron_axe" 1]]}
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :for-s 60}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 60}]
+   :after [[:body-near [14.5 0 22.5] 2.5] [:block [19 3 22] "oak_log"]]
+   :limit-s 80}
   {:name "part-cut-tree-trigger-leaves-a-whole-tree"
    :register [{:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}]
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
