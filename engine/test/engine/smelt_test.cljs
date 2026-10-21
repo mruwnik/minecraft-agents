@@ -962,6 +962,17 @@
           (is (= {:smelted 3 :wanted 3} (select-keys r [:smelted :wanted])))
           (is (= 1 (count (furnaces-at p)))))))))
 
+(deftest a-seen-furnace-the-body-cannot-reach-is-dropped-and-its-own-is-crafted
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r p] (await (fetched-run {:blocks {"20,64,0" "furnace" "-2,64,3" "crafting_table"} :unreachable ["20,64,0"]
+                                         :recipes {"furnace" {:count 1 :needs {"cobblestone" 8} :table true}}
+                                         :inventory (conj iron-and-coal {:name "cobblestone" :count 8})}
+                                        {:item "raw_iron" :count 3}))]
+          (is (= {:smelted 3 :wanted 3} (select-keys r [:smelted :wanted])))
+          (is (= 1 (count (remove #(= (fake/parse-cell "20,64,0") (key %)) (furnaces-at p))))))))))
+
 (deftest no-furnace-to-be-had-stops-before-the-logs-become-fuel
   (async done
     (tu/run-async done

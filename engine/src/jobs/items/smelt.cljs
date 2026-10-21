@@ -35,7 +35,7 @@
   furnace do not count; 0 of N is never :done). A give-up carries the same data plus :text, with the cause:
   - condition-failed: no-furnace-seen, no-furnace, not-a-furnace, furnace-gone, no-item, nothing-smeltable, not-smeltable, no-fuel,
     unknown-fuel, rejected-fuel, fuel-busy, furnace-busy, furnace-full, inventory-full (the output stays in the furnace).
-  - nothing-possible: furnace-not-placed (:why says why), out-of-fuel (leftover input is taken back), output-gone, unreachable, or the
+  - nothing-possible: furnace-not-placed (:why says why), out-of-fuel (leftover input is taken back), output-gone, unreachable (a :furnace arg, or one holding a load, that cannot be reached; a furnace the job chose itself and cannot reach is dropped, and another is taken or its own put down), or the
     furnace's own status.")
 
 (a/defargs args
@@ -94,13 +94,14 @@
 
 (defn nearest-furnace
   "The nearest furnace, blast furnace or smoker the body has seen within seen-radius, still that block now, that
-  cooks item (or, when item is nil, anything carried; any kind when nothing carried is smeltable); nil when none."
+  cooks item (or, when item is nil, anything carried; any kind when nothing carried is smeltable) and that a walk has not
+  found unreachable (mem :unreachable-furnaces); nil when none."
   [c item]
   (let [names (if item [item] (map :name (carried c)))
         kinds (filter (fn [kind] (some #(sp/smelts? kind %) names)) (keys sp/cook-ticks))
         ok? (if (or item (seq kinds)) (set kinds) furnace-block?)]
     (->> (look/seen-blocks (:primitives c) {:names furnace-block? :radius (seen-radius) :max 16 :live? true})
-         (some #(when (and (ok? (:name %)) (not (exposed-furnace? c (:pos %)))) (:pos %))))))
+         (some #(when (and (ok? (:name %)) (not (contains? (:unreachable-furnaces (ctx/mem c)) (:pos %))) (not (exposed-furnace? c (:pos %)))) (:pos %))))))
 
 (defn needs-attention?
   "Whether the block at pos is loaded and is no longer a lit furnace: it is not lit (the fuel ran out, or the cook
@@ -294,12 +295,21 @@
               (stop! c "output-gone")
               (finish! c {})))))
 
+(defn leave-furnace!
+  "A furnace the job chose for itself and cannot reach, with no load in it, is dropped for this job (the next round takes another or puts its own down): :continue. Else give-up! \"unreachable\"."
+  [c pos]
+  (if (or (:furnace (:args c)) (furnace/loaded? (ctx/mem c)))
+    (give-up! c "unreachable")
+    (do (ctx/update-mem! c #(-> % (update :unreachable-furnaces (fnil conj #{}) pos) (dissoc :furnace)))
+        (ctx/emit! c :smelt.furnace-unreachable :info {:furnace pos :text (str "the furnace at " (:x pos) " " (:y pos) " " (:z pos) " cannot be reached: taking another")})
+        :continue)))
+
 (defn ^:async round-at!
   "Reach the furnace, read it, then load (first) or collect."
   [c furnace owed?]
   (case (await (near/go-near! c furnace 3))
     :partial :continue
-    :blocked (give-up! c "unreachable")
+    :blocked (leave-furnace! c furnace)
     (let [state (await (visit! c "read" {}))]
       (case (:status state)
         "ok" (if (and owed? (:ready-at (ctx/mem c)))
@@ -307,7 +317,7 @@
                (await (start! c state)))
         "missing" (stop! c (if owed? "furnace-gone" "no-furnace") (:block state))
         "cannot" (stop! c (if owed? "furnace-gone" "not-a-furnace") (:block state))
-        "unreachable" (give-up! c "unreachable")
+        "unreachable" (leave-furnace! c furnace)
         (stop! c (str "furnace " (:status state)))))))
 
 (defn ^:async round-with

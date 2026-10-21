@@ -13,7 +13,15 @@
   :body {:at [16.5 0 16.5]}
   :limit-s 120}
  :cases
- [{:name "blast-furnace-iron-on-planks"
+ [;; card 39a6ae54: the only furnace seen stands on a bedrock pillar nobody can reach: smelt drops it, crafts its own from carried cobblestone and smelts there
+  {:name "unreachable-seen-furnace-is-dropped-for-an-own-one"
+   :blocks [[:fill [20 0 14] [20 9 14] "bedrock"] [:set [20 10 14] "furnace[facing=west]"]]
+   :body {:inventory [["raw_iron" 3] ["coal" 3] ["cobblestone" 8] ["crafting_table" 1]]}
+   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 3})]]
+   :expect [{:event {:source :job :kind :completed :data {:smelted 3}} :within-s 150 :of-job true}]
+   :after [[:item "iron_ingot" 3]]
+   :limit-s 160}
+  {:name "blast-furnace-iron-on-planks"
    :blocks [[:set [20 0 14] "blast_furnace[facing=west]"]]
    :body {:inventory [["raw_iron" 4] ["oak_planks" 6]]}
    :act [[:job (jobs.items.smelt {:furnace #xyz [20 0 14] :item "raw_iron" :count 4})]]
