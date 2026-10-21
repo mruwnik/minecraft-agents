@@ -1,5 +1,5 @@
 (ns jobs.lib.animal-spare
-  "Which food animals a hunt leaves alone: kinds on the body's off-limits list, animals in the body's own pens or in any closed enclosure, and the
+  "Which food animals a hunt leaves alone: kinds on the body's off-limits list, animals in the body's own pens or in any closed enclosure with a fence or wall, and the
   last few adults of a kind so a breeding pair survives."
   (:require [engine.args :as a]
             [engine.settings :as settings]
@@ -39,17 +39,30 @@
         (> adults-of-kind keep) :surplus
         :else :starved))
 
+(defn fenced?
+  "Whether a fence, wall or gate stands beside a feet cell of the enclosure (head or foot height): a pit or hollow
+  closed by plain terrain is no pen."
+  [c inside]
+  (let [block-at (u/seen-block-at-fn (:primitives c))]
+    (boolean
+     (some (fn [[x y z]]
+             (some (fn [[dx dy dz]]
+                     (some->> (block-at {:x (+ x dx) :y (+ y dy) :z (+ z dz)}) .-name (re-find #"_fence$|_fence_gate$|_wall$")))
+                   [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [1 1 0] [-1 1 0] [0 1 1] [0 1 -1]]))
+           inside))))
+
 (defn enclosed?
-  "Whether the animal stands inside a closed fence or wall the body has seen: the pen check from its feet cell, the
-  closed pens found so far kept in `pens` (an atom of cell sets)."
+  "Whether the animal stands inside a closed enclosure the body has seen with a fence, wall or gate in it: the pen check from its
+  feet cell, the fenced enclosures found so far kept in `pens` (an atom of cell sets)."
   [c pens e]
   (let [{:keys [x y z]} (u/pos-of (.-pos e))
         cell [(js/Math.floor x) (js/Math.floor (+ y 0.01)) (js/Math.floor z)]]
     (or (boolean (some #(contains? % cell) @pens))
         (let [answer (pen/check {:block-at (u/seen-block-at-fn (:primitives c)) :at {:x (cell 0) :y (cell 1) :z (cell 2)}
-                                 :max-cells (settings/get settings ::pen-max-cells)})]
-          (when (:closed? answer) (swap! pens conj (:inside answer)))
-          (boolean (:closed? answer))))))
+                                 :max-cells (settings/get settings ::pen-max-cells)})
+              penned? (and (:closed? answer) (fenced? c (:inside answer)))]
+          (when penned? (swap! pens conj (:inside answer)))
+          penned?))))
 
 (defn penned?
   "Whether an adult animal stands in a zone or plan of the body's own or in a closed enclosure (see enclosed?)."
