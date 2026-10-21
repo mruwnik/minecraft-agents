@@ -43,6 +43,12 @@
 (def in-1 "Index in the axis cells of the cell inside the gate." 5)
 (def deepest "Index in the axis cells of the last position the body steps to (in-5)." 9)
 
+(defn stage
+  "Index in the axis cells of the cell the animal is lured or led to before the gate: out-4 (0) until a walk to it fails,
+  then each cell nearer the gate."
+  [c]
+  (:stage (ctx/mem c) 0))
+
 (defn settle-out-ms [] (settings/get settings ::settle-out-ms))
 (defn crowd-ms [] (settings/get settings ::crowd-ms))
 (defn shut-look-ms [] (settings/get settings ::shut-look-ms))

@@ -13,8 +13,8 @@
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
             [jobs.lib.bait :as bait]
-            [jobs.animals.herd-run :refer [animal-now deepest end! finish! gate-open? held-by-me? in-pen-adults lure? near-pen out-1 read-pen regather-radius set-phase!]]
-            [jobs.animals.herd-pen :refer [animal-pos pinned-ms settle-at! step-in-step]]))
+            [jobs.animals.herd-run :refer [animal-now deepest end! finish! gate-open? held-by-me? in-pen-adults lure? near-pen out-1 read-pen regather-radius set-phase! stage]]
+            [jobs.animals.herd-pen :refer [animal-pos nearer-stage! pinned-ms settle-at! step-in-step]]))
 
 
 (a/defargs settings
@@ -141,7 +141,7 @@
         [_ listed] (range-from-origin c)
         _ (child/progress! c :equip)
         e (await (ctx/call c :lure 'jobs.animals.lure-to
-                           (cond-> {:mob (:mob (:args c)) :pos (u/cell-pos (nth (:axis (ctx/mem c)) 0)) :uuid (str k)
+                           (cond-> {:mob (:mob (:args c)) :pos (u/cell-pos (nth (:axis (ctx/mem c)) (stage c))) :uuid (str k)
                                     :radius listed :ways #{:carried} :keep-food true}
                              (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))
         why (contract/cause-key e)]
@@ -150,6 +150,7 @@
       (= :done (:kind e)) (start-trip! c k {:walked true})
       (= :no-food why) (finish! c :no-food {:because (select-keys e [:kind :cause])})
       (= :no-hold why) (finish! c :no-hold)
+      (and (= :unreachable why) (nearer-stage! c)) :continue
       :else (do (ctx/update-mem! c update :given-up assoc k (if (= :animal-outside why) :lost why))
                 :continue))))
 

@@ -385,6 +385,10 @@
           (is (not (gate-open? s)))
           (is (empty? (held-entries s))))))))
 
+(deftest a-staging-cell-that-cannot-be-reached-moves-nearer-the-gate-and-the-line-up-follows-it
+  (is (= [1 2 3 nil] (mapv hp/nearer-stage [0 1 2 3])))
+  (is (= [[:line-up {:pos-index 1}] [:line-up {:pos-index 3}] [:open nil]] (mapv hp/after-stage [0 2 3]))))
+
 (deftest a-led-animal-is-let-go-when-the-way-to-the-gate-is-blocked
   (async done
     (tu/run-async done

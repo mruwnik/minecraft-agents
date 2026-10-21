@@ -9,7 +9,7 @@
             [jobs.lib.near :as near]
             [jobs.lib.pen-blocks :as pen]
             [jobs.lib.util :as u]
-            [jobs.animals.herd-run :refer [adults animal-now approach-range box-centre cell detail-text pen-box drop-gate! end! finish! gate-cell gate-index gate-open? hold-gate! in-pen-adults max-reopens near-pen orthogonal out-1 pause! pen-opts read-pen set-phase! shut-failed!]]))
+            [jobs.animals.herd-run :refer [adults animal-now approach-range box-centre cell detail-text pen-box drop-gate! end! finish! gate-cell gate-index gate-open? hold-gate! in-pen-adults max-reopens near-pen orthogonal out-1 pause! pen-opts read-pen set-phase! shut-failed! stage]]))
 
 ;; ------------------------------------------------------------------ the pen and its gate
 
@@ -342,13 +342,37 @@
                   nil))))
         :settled))))
 
+(defn nearer-stage
+  "The staging cell index one cell nearer the gate than stage s, nil at out-1 already."
+  [s]
+  (when (< s out-1) (inc s)))
+
+(defn after-stage
+  "[phase more] that follows arriving at staging cell s: lining up on the cells after it, or opening the gate when it was out-1."
+  [s]
+  (if (nearer-stage s)
+    [:line-up {:pos-index (inc s)}]
+    [:open nil]))
+
+(defn nearer-stage!
+  "The cell the animal is brought to before the gate cannot be reached: move it one cell nearer the gate. False when it is out-1 already."
+  [c]
+  (when-let [s (nearer-stage (stage c))]
+    (ctx/update-mem! c #(-> % (assoc :stage s) (update :children dissoc :walk :lure) (dissoc :walked)))
+    true))
+
+(defn line-up-from-stage!
+  [c]
+  (let [[phase more] (after-stage (stage c))]
+    (set-phase! c phase more)))
+
 (defn ^:async settle-at!
-  "walk-settle! at axis cell i; (on-done :settled or :pinned), a blocked walk gives up :unreachable."
+  "walk-settle! at axis cell i; (on-done :settled or :pinned). A blocked walk to the staging cell tries the next one nearer the gate, else gives up :unreachable."
   [c i max-ms on-done]
   (let [r (await (walk-settle! c (nth (:axis (ctx/mem c)) i) max-ms))]
     (case r
       nil :continue
-      :unreachable (end! c :unreachable)
+      :unreachable (if (and (= i (stage c)) (nearer-stage! c)) :continue (end! c :unreachable))
       (on-done r))))
 
 (defn ^:async look-wait! [c]

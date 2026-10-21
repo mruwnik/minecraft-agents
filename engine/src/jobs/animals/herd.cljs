@@ -13,10 +13,10 @@
             [jobs.lib.escort :as escort]
             [jobs.lib.watch :as watch]
             [jobs.lib.bait :as bait]
-            [jobs.animals.herd-run :refer [adults after-shut! pen-box pen-count-text cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? animal-now out-1 pause! read-pen release-step! set-phase! settle-out-ms shut-failed! shut-look-ms transient-keys]]
+            [jobs.animals.herd-run :refer [adults after-shut! pen-box pen-count-text cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? animal-now out-1 pause! read-pen release-step! set-phase! settle-out-ms shut-failed! shut-look-ms stage transient-keys]]
             [jobs.lib.pace :as pace]
             [jobs.animals.herd-survey :refer [pen-refusal survey!]]
-            [jobs.animals.herd-pen :refer [body-in-pen? cell-middle crowded-near? exit-dash! go-then! let-go-cell look-wait! max-leaves min-depth on-gate? set-gate! settle-at! shut-side! shut-when-clear! wait-clear! waited-ms]]
+            [jobs.animals.herd-pen :refer [body-in-pen? cell-middle crowded-near? exit-dash! go-then! let-go-cell line-up-from-stage! look-wait! max-leaves min-depth nearer-stage! on-gate? set-gate! settle-at! shut-side! shut-when-clear! wait-clear! waited-ms]]
             [jobs.animals.herd-trip :refer [food-first! leash-next! pinned! remember-start! prune-led! regather! regather-or-lose! released! step-position!]]))
 
 (def doc
@@ -58,7 +58,7 @@
   One round trip per animal:
   - Leash the nearest adult outside the pen (jobs.animals.leash, :radius). Babies, animals in the pen or in another closed enclosure,
     animals given up on and animals already fetched twice and still outside are skipped.
-  - Approach the cell 4 out from the gate and wait until the animal rests (up to 8 s).
+  - Approach the cell 4 out from the gate and wait until the animal rests (up to 8 s). A walk (or lure) that cannot reach it tries the cell one nearer, down to out-1, for the rest of the run, before ending :unreachable.
   - Wait up to 10 s for other adults to leave the cells inside the gate (one info herd.crowded-gate).
   - Line up on the cells 3, 2 and 1 out (each waits up to 8 s for the animal to rest), open the gate
     (jobs.access.toggle), then step through the gate and 5 cells in. Each of those stops waits up to 6 s.
@@ -212,7 +212,7 @@
   [c]
   (let [m (ctx/mem c)
         a (animal-now c (:animal m))
-        target (u/cell-pos (nth (:axis m) 0))
+        target (u/cell-pos (nth (:axis m) (stage c)))
         verdict (escort/follow-verdict c a (or (nil? a) (animals/led-by-me? a)) (escort/safe-gap))]
     (if verdict
       (if (= :wait verdict)
@@ -223,8 +223,8 @@
         (ctx/update-mem! c assoc :search-rounds (if searching n 0))
         (cond
           (and searching (<= n (escort/max-search-rounds))) :continue
-          searching (lure-lost! c :unreachable)
-          (not leg) (await (settle-at! c 0 (settle-out-ms) #(set-phase! c :clear-out)))
+          searching (if (nearer-stage! c) :continue (lure-lost! c :unreachable))
+          (not leg) (await (settle-at! c (stage c) (settle-out-ms) #(set-phase! c :clear-out)))
           :else (do (await (child/call-walk* c :walk {:pos leg :range 1 :doors :never :ways #{:walk :clear-seal}}))
                     :continue))))))
 
@@ -239,9 +239,9 @@
       :leash (await (leash-next! c))
       :approach (if-not (:walked m)
                   (await (lure-approach! c))
-                  (await (settle-at! c 0 (settle-out-ms) #(set-phase! c :clear-out))))
+                  (await (settle-at! c (stage c) (settle-out-ms) #(set-phase! c :clear-out))))
       :clear-out (await (wait-clear! c (crowded-near? c (axis-cell in-1) (crowd-out-radius)) (crowd-ms) :out
-                                     #(set-phase! c :line-up {:pos-index 1})))
+                                     #(line-up-from-stage! c)))
       :line-up (let [i (:pos-index m)]
                  (await (settle-at! c i (settle-out-ms)
                                     #(if (= i out-1) (set-phase! c :open) (set-phase! c :line-up {:pos-index (inc i)})))))
@@ -251,7 +251,7 @@
       ;; waited for, then the gate stays open), out-4
       :retry-back (await (go-then! c (axis-cell out-1) :retry-shut))
       :retry-shut (await (shut-when-clear! c (shut-look-ms) :retry-out nil #(set-phase! c :retry-out)))
-      :retry-out (await (settle-at! c 0 (settle-out-ms) #(set-phase! c :line-up {:pos-index 1})))
+      :retry-out (await (settle-at! c (stage c) (settle-out-ms) #(line-up-from-stage! c)))
       ;; the animal is clear of the gate cell: step back one cell and shut; one that stays on it is waited for, then
       ;; looked at once more from the deepest cell, else it is as good as pinned
       :shut-behind (cond
