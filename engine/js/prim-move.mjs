@@ -274,6 +274,8 @@ export function createMove (env) {
         ctx.alive()
       }
       if (failure && /occupied/i.test(failure.message)) return { status: 'occupied' }
+      // the server refuses when a monster the body has not sensed yet is near: same outcome as the sensed case
+      if (failure && /monsters nearby/i.test(failure.message)) return { status: 'monsters-near' }
       if (failure) throw failure
       return { status: 'sleeping' }
     })

@@ -203,6 +203,7 @@ const statuses = [
   ['sleep', { pos: at(9, 64, 9) }, {}, 'missing'],
   ['sleep', { pos: at(2, 64, 1), notNight: true }, {}, 'not-night'],
   ['sleep', { pos: at(2, 64, 1), monstersNear: true }, {}, 'monsters-near'],
+  ['sleep', { pos: at(2, 64, 1) }, { entities: {}, reject: { sleep: 'There are monsters nearby' } }, 'monsters-near'],
   ['sleep', { pos: at(2, 64, 1), }, { entities: {} }, 'sleeping'],
   ['inspectContainer', { pos: at(9, 64, 9) }, {}, 'missing'],
   ['inspectContainer', { pos: at(3, 64, 0) }, {}, 'ok'],
