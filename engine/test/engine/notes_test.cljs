@@ -101,6 +101,14 @@
     (is (= 1 (count (notes/all s 2000))))
     (is (= 3 (count (notes/all s 4000))))))
 
+(deftest another-bodys-expired-notes-are-not-kept-in-memory
+  (let [dir (world-dir)
+        _ (write-other! dir "B" (notes/render "B" [(log 1 1 {:by "B" :until 2000}) (log 2 2 {:by "B"})]))
+        [s _] (store dir "A")]
+    (is (= 2 (count (notes/all s 1000))))
+    (is (= 1 (count (notes/all s 4000))))
+    (is (= [[2 64 2]] (map :pos (get-in @(:state s) [:files "B" :value]))))))
+
 (deftest a-broken-file-keeps-its-last-good-copy-with-one-warn
   (let [dir (world-dir)
         _ (write-other! dir "B" (notes/render "B" [(log 1 1 {:by "B"})]))

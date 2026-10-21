@@ -336,7 +336,7 @@ Each call emits debug `job.child_started` and `job.child_ended`.
 (`<id>.edn` in the repo's `blueprints/` beside the engine, or the folder of `--blueprints <dir>` / `:engine.main/blueprints-dir`; the files are untracked, so a worktree body must point at the main checkout's), zones, claims and the shared markers (`places.json`, written by the agent tools only) read-only (`jobs.lib.world/marker`, `find-markers` {:text :kind :near :limit}, 50 at most, default 10; coordinates as given, no dimension), re-stat-ed every 3 s by a timer (so a plan written at any time logs `world.reloaded`); a file that turns invalid keeps its last
 good copy and warns once. Jobs read it through `jobs.lib.world` (`plan`, `zones`, `claims`, `markers`, `marker`, `footprints`). The engine
 calls job code only through `engine.hooks`, named in `src/jobs/hooks.edn` (world open and blank; `:use/default`, the list a call's `:use` gets for a purpose the job's `defaults :use` names a chooser for: `{:tools :dig}` is `choose/tools-for` for the args' `:block` or the block at `:pos`; an explicit `:use` wins).
-`engine.notes` is what bodies saw (`worlds/<world>/notes/<body>.edn`, each body writes only its own file;
+`engine.notes` is what bodies saw (`worlds/<world>/notes/<body>.edn`, each body writes only its own file; other bodies' notes are held live-only;
 `notes/notes`, `notes/note!`). `engine.chat` holds the chat limits (at least 1 s between lines, at most 5 in 30 s, per body).
 
 ## Settings

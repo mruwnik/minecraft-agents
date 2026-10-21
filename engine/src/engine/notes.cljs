@@ -126,6 +126,12 @@
       (swap! state assoc :own-loaded? true :own (or value []) :broken-own? (boolean errors))
       (when errors ((:emit opts) (warn-event (:body opts) {:error (first errors) :kept false}))))))
 
+(defn forget-expired
+  "files {body entry} with each entry's notes cut to those live at now: a long-run body would otherwise hold every body's
+  expired notes (a file keeps them until its owner rewrites it)."
+  [files now]
+  (reduce-kv (fn [m id e] (assoc m id (cond-> e (:value e) (update :value live now)))) {} files))
+
 (defn refresh!
   "Stat the other bodies' files when due and fold in what changed, a warn per newly broken file."
   [{:keys [state opts]} now]
@@ -139,7 +145,7 @@
                                     [entries (cond-> warns warn (conj warn))]))
                                 [(fsync/drop-gone old stamps) []]
                                 (fsync/stale-ids old stamps))]
-      (swap! state assoc :files files :checked-at now)
+      (swap! state assoc :files (forget-expired files now) :checked-at now)
       (doseq [w warns] ((:emit opts) (warn-event (:id w) w))))))
 
 ;; ------------------------------------------------------------------ stores

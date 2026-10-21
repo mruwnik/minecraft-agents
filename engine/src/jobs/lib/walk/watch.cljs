@@ -62,7 +62,7 @@
   (let [k (str (:px prev) "," (:pz prev) "," (:y prev) "," (:px step) "," (:pz step) "," (:y step))]
     (or (.get leg-cells k)
         (let [cells (doall (step-cells-of prev step))]
-          (when (> (.-size leg-cells) 4096) (.clear leg-cells))
+          (when (> (.-size leg-cells) 512) (.clear leg-cells))
           (.set leg-cells k cells)
           cells))))
 
