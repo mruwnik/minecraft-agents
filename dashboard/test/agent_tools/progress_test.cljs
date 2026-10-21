@@ -104,7 +104,9 @@
                                     {:job "j8" :name "pen" :holding {:reason :searching}}
                                     {:job "j9" :name "pen"}]}
                 {:wake :idle :jobs [{:job "j9" :name "noop" :idle-ok true}
-                                    {:job "j14" :name "smelt" :waiting :cooking}]}]]
+                                    {:job "j14" :name "smelt" :waiting :cooking}]}
+                {:wake :idle :jobs [{:job "j1" :name "noop" :idle-ok true}
+                                    {:job "j30" :name "go-to" :waiting {:reason :exposed :lowered-by #{:light}}}]}]]
     (is (nil? (progress/wake-verdict wake "j14")) (pr-str wake))))
 
 (deftest needs-you-wakes-end-the-wait

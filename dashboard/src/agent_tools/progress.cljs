@@ -114,9 +114,13 @@
 
 (defn reason-of [waiting] (if (map? waiting) (:reason waiting) waiting))
 
-(defn routine-wait? [waiting] (contains? routine-reasons (reason-of waiting)))
-
 (defn word [x] (if (keyword? x) (name x) (str x)))
+
+(defn routine-wait?
+  "A wait the engine ends itself: a routine reason, or a check that daylight lowers (:lowered-by has :light)."
+  [waiting]
+  (or (contains? routine-reasons (reason-of waiting))
+      (and (map? waiting) (boolean (some #(= "light" (word %)) (:lowered-by waiting))))))
 
 (defn wait-text [waiting]
   (str (word (reason-of waiting)) (when-let [item (and (map? waiting) (:item waiting))] (str " " item))))
