@@ -298,6 +298,11 @@
     (ctx/emit! c :go-to.retrying :info {:reason reason :try tries
                                         :text (str "no way found (" (name reason) "), planning again (try " tries " of " (max-blocked) ")")})))
 
+(defn learned-round?
+  "A round that ran out of re-plans while each taught the planner an unseen cell (a void edge, a floor it could not light): the next plan knows more."
+  [{:keys [status learned]}]
+  (and (= :replan status) (boolean learned)))
+
 (defn ^:async walk! [c0 pos range doors]
   (let [way (own-way c0 pos (dive-floor! c0 pos))
         _ (own-way-left! c0 way)
@@ -426,7 +431,7 @@
                 unstuck? (await (unstick/swim-out! c pos walked))
                 [starts looped?] (note-start (:starts (ctx/mem c)) (mapv #(js/Math.floor (% from)) [:x :y :z]) best)
                 result (cond-> result looped? (assoc :status :no-path :reason (if (escape/enclosed? (:primitives c) doors) :start-enclosed :no-progress)))
-                progress? (and (not looped?) (or (< left (dec best)) explored? nearer?))
+                progress? (and (not looped?) (or (< left (dec best)) explored? nearer? (learned-round? result)))
                 tries (cond looped? (max-blocked) progress? 0 :else (inc (:blocked (ctx/mem c) 0)))]
             (when-not progress? (ctx/book-try! c 'jobs.movement.go-to (or (:reason result) :no-progress)))
             (ctx/update-mem! c assoc :blocked tries :starts starts :searching 0 :wet-fresh 0 :best (if (< left (dec best)) left best)

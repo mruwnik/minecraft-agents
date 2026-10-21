@@ -516,11 +516,12 @@
           (is (= (set (map (fn [[x z]] [x 71 z]) stones)) (set (:unreached e))))
           (is (re-find #"seen ore out of reach" (:text e))))))))
 
-;; The pit is walled so that no way round through unseen ground competes with the drop. The ore and the floor under the drop were seen from over the floor first (the platform's wall hides its foot from the rim, and go-to drops no deeper than 5 onto a floor it has not seen), so only go-to's health floor decides the drop.
-(defn ^:async drop-to-ore [top]
+;; walled?: the pit has a wall round it, so no way round through unseen ground competes with the drop; open: the platform's other sides
+;; lead off over unseen floor. The ore and the floor under the drop were seen from over the floor first (the platform's wall hides its foot from the rim, and go-to drops no deeper than 5 onto a floor it has not seen), so only go-to's health floor decides the drop.
+(defn ^:async drop-to-ore [top walled?]
   (let [high (range 62 (+ top 3))
-        s (start {:world {:blocks (assoc (merge (cells "stone" (range -4 1) (range 64 top) (range -4 5)) (cells "stone" (range 1 13) [62] (range -4 5))
-                                                (cells "stone" (range -5 14) high [-5 5]) (cells "stone" [-5 13] high (range -4 5)))
+        wall (when walled? (merge (cells "stone" (range -5 14) high [-5 5]) (cells "stone" [-5 13] high (range -4 5))))
+        s (start {:world {:blocks (assoc (merge (cells "stone" (range -4 1) (range 64 top) (range -4 5)) (cells "stone" (range 1 13) [62] (range -4 5)) wall)
                                          "6,63,0" "iron_ore")
                           :yaw 90 :pitch 70 :bodyHitbox true :drops {"iron_ore" "raw_iron"} :self {:pos [6.5 (+ top 2) 0.5]} :inventory pickaxe}
                   :sight {:radius 24}})]
@@ -536,7 +537,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (drop-to-ore 77))
+        (let [s (await (drop-to-ore 77 true))
               e (done-event s)]
           (is (= [:stopped 0] ((juxt :status :got) e)))
           (is (= [[6 63 0]] (:unreached e)))
@@ -545,10 +546,18 @@
           (is (empty? (filter #(re-find #"stuck on drop" %) (walk-texts s))))
           (is (= "iron_ore" (block-at s 6 63 0))))))))
 
+(deftest an-open-platform-over-unseen-floor-still-ends-on-the-refused-drop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [e (done-event (await (drop-to-ore 77 false)))]
+          (is (= [:stopped 0] ((juxt :status :got) e)))
+          (is (= :needs-health (get-in e [:because :cause :why]))))))))
+
 (deftest a-drop-of-five-blocks-to-a-seen-ore-is-taken
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (drop-to-ore 69))]
+        (let [s (await (drop-to-ore 69 true))]
           (is (= 1 (:got (done-event s))))
           (is (empty? (filter #(re-find #"stuck on drop" %) (walk-texts s)))))))))
