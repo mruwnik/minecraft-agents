@@ -30,7 +30,7 @@
                                    :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})}
                             (sequential? zones) (assoc :world (ew/of-data {} {} zones))
                             (map? zones) (assoc :world (ew/of-data (:plans zones) {} []))))]
-     {:eng eng :p p :seen seen})))
+     {:eng eng :p p :seen seen :clock clock})))
 
 (defn recording-parent
   "A parent that runs job with args as its child and keeps the child's result in out."
@@ -46,16 +46,27 @@
       (do (await (core/tick! eng))
           (recur (inc i))))))
 
+(defn ^:async tick-clocked!
+  "tick-out! with the engine's clock moving 500 ms a tick, for waits that end on time."
+  [eng clock n]
+  (loop [i 0]
+    (if (or (>= i n) (empty? (:list (core/state eng))))
+      i
+      (do (swap! clock + 500)
+          (await (core/tick! eng))
+          (recur (inc i))))))
+
 (defn ^:async run-job!
   "Run job (default go-to) with args as a child over world (zones: a zone list); {:eng :p :seen :out}."
   ([world args] (run-job! world 'jobs.movement.go-to args))
   ([world job args] (run-job! world job args nil))
-  ([world job args zones]
-   (let [{:keys [eng] :as s} (setup world zones)
+  ([world job args zones] (run-job! world job args zones false))
+  ([world job args zones clocked?]
+   (let [{:keys [eng clock] :as s} (setup world zones)
          out (atom :not-done)
          eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out job args)))]
      (core/submit! eng '(recording-parent) {})
-     (let [n (await (tick-out! eng 1000))]
+     (let [n (await (if clocked? (tick-clocked! eng clock 1000) (tick-out! eng 1000)))]
        (assoc s :eng eng :out out :ticks n)))))
 
 (defn feet [p] (let [pos (.-pos (.self p))] (mapv js/Math.floor [(.-x pos) (.-y pos) (.-z pos)])))

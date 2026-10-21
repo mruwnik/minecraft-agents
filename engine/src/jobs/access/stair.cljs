@@ -48,7 +48,7 @@
   :lava-exposed instead); after a seal it waits half a second, looking, before it digs or steps on; a failed seal, or lava flowing back after a reseal, backs the body off and stops :lava-unsealed. A cut that
   now touches seen water is plugged the same way (stops :hazard with :plugged; :water-unplugged if it cannot). :accept
   (#{:fluid-adjacent :lava-adjacent :falling-block}, default #{}) takes those hazards. A falling block over the body's own column is
-  never taken. The stair never digs the block it stands on, a cell it plugged (memory :stair-plug; setting dig-plugs? digs it),
+  never taken, and the body does not walk into an open cut with one still standing over it until it has dropped. The stair never digs the block it stands on, a cell it plugged (memory :stair-plug; setting dig-plugs? digs it),
   a crop, or a base block.
 
   Needs a pickaxe and room for the drops. A call starts only when the first step is not refused, the args give a length and the next
@@ -310,7 +310,7 @@
                     (if-let [cell (first (remove #(bs/air ((:block-at in) %)) cut))]
                       (or (await (sstep/peek! c cell))
                           (let [r (await (sstep/dig! c in cell cut accept))] (case r :continue :again :yield :continue r)))
-                      (or (await (settle! c cut)) (await (step! c next cut))))))))))))))
+                      (or (sstep/fall-wait c (:block-at in) cut) (await (settle! c cut)) (await (step! c next cut))))))))))))))
 
 (defn back-cell
   "The stair's cell one step back toward its origin from where the body stands, or nil at the origin or off the line."

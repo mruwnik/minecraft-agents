@@ -45,6 +45,18 @@
     (when (and (rules/falling? n) (not (some #{above} cut)))
       [{:reason :falling-block :block n :at above}])))
 
+(def hang-scan "How many cells above a cut column's top cell are searched for a falling block." 8)
+
+(defn hanging-above
+  "The first falling block that stands over the open cut with only air between: [name pos], or nil. It drops into the cut
+  as soon as the world updates it, so the body must not stand in the cut before it has."
+  [block-at cut]
+  (first (for [[x y z] (vals (reduce (fn [m [x y z :as c]] (update m [x z] #(if (and % (> (% 1) y)) % c))) {} cut))
+               :let [above (->> (range 1 (inc hang-scan)) (map #(let [at [x (+ y %) z]] [(block-at at) at]))
+                                (drop-while (comp bs/air first)) first)]
+               :when (and above (rules/falling? (first above)))]
+           above)))
+
 (defn cell-verdict
   "The dig verdict of cell: the rules' refusal, else {:ok true :hazards [...]} with the stair's hazards added."
   [in cut]

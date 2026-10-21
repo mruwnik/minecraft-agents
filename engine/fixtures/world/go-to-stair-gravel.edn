@@ -1,5 +1,7 @@
 ;; Card 806e51f6: go-to's escalation stair accepts a falling block over its next column: gravel over the first step's head
 ;; cell falls into the cut and is dug again, the stair goes on and the body arrives. One :stair escalation.
+;; Card 4c2dcf34: a stack of gravel over the next column drains into the cut one block at a time; the body waits for it
+;; and is never suffocated (no resistance in that case).
 ;; Stone mass x 10..22, z 10..22, y 0..3 (top feet y 4), a 1x1 shaft at x 16, z 16, y 1..3; goal east on top.
 {:defaults
  {:tags [:movement :access]
@@ -12,4 +14,12 @@
    :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
+   :after [[:body-near [20.5 4 16.5] 2]]}
+  {:name "stacked-gravel-over-the-next-column-never-suffocates-the-body"
+   :blocks [[:fill [17 5 16] [17 8 16] "gravel"]]
+   :body {:effects []}
+   :act [[:job (jobs.movement.go-to {:pos #at [20 4 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
+            {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 180 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [20.5 4 16.5] 2]]}]}

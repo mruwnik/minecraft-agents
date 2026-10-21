@@ -261,6 +261,14 @@
     (is (nil? (stop (assoc named [0 68 0] "stone" [1 68 0] "gravel" [1 67 0] "stone") #{:falling-block} :dir :up))
         "gravel over the next column falls into the cut")))
 
+(deftest gravel-hangs-over-a-cut-column-through-air-only
+  (let [cut [[0 67 0] [1 67 0] [1 66 0]]
+        at (fn [m] #(get m % "air"))]
+    (is (= ["gravel" [1 70 0]] (sc/hanging-above (at {[1 70 0] "gravel"}) cut)) "air between")
+    (is (nil? (sc/hanging-above (at {[1 70 0] "gravel" [1 69 0] "stone"}) cut)) "rock holds it")
+    (is (nil? (sc/hanging-above (at {[1 70 0] "gravel"}) [[1 60 0]])) "out of the scan range")
+    (is (= ["sand" [0 68 0]] (sc/hanging-above (at {[0 68 0] "sand"}) cut)) "the body's own column too")))
+
 (deftest target-steps-from-args
   (are [args steps] (= steps (sc/target-steps args [0 65 0]))
     {:dir :down :heading :east :steps 4} 4
@@ -1086,6 +1094,47 @@
             (is (= :done (:status @out)) (pr-str cell))
             (is (= 3 (:steps @out)) (pr-str cell))
             (is (= "air" (block-at p cell)) (pr-str cell))))))))))
+
+(def hanging-gravel-world
+  "Stone round a body at [0 65 0] with two cells of gravel stacked over the top cell of a stair up east."
+  (-> (stone -3 12 50 75)
+      (dissoc "0,65,0" "0,66,0")
+      (assoc "1,68,0" "gravel" "1,69,0" "gravel")))
+
+(deftest gravel-standing-over-the-open-cut-has-dropped-before-the-body-walks-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock out]} (setup {:blocks hanging-gravel-world} (assoc up-east :accept #{:falling-block}) (fn [_]))
+              opened (atom nil)
+              walked-under (atom false)]
+          (loop [i 0]
+            (when (and (< i 300) (seq (:list (core/state eng))))
+              (swap! clock + 500)
+              (await (core/tick! eng))
+              (when (and (nil? @opened) (= "air" (block-at p [1 67 0]))) (reset! opened @clock))
+              (when (and (= "gravel" (block-at p [1 68 0])) (< 0.5 (.-x (.-pos (.self p))))) (reset! walked-under true))
+              (when (and @opened (>= (- @clock @opened) 2000))
+                (doseq [c [[1 68 0] [1 69 0]]] (fake/set-block! p c "air")))
+              (recur (inc i))))
+          (is (= :done (:status @out)) (pr-str @out))
+          (is (false? @walked-under) "the body stayed out of the cut while gravel stood over it"))))))
+
+(deftest gravel-that-keeps-landing-on-the-body-ends-the-stair-instead-of-suffocating-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [land (fn [p] (let [world (.-world p)]
+                             (.override world "dig" (fn ^:async f [token a impl]
+                                                      (let [r (await (impl token a))
+                                                            pos (.-pos (.self p))]
+                                                        (fake/set-block! p [(js/Math.floor (.-x pos)) (inc (js/Math.floor (.-y pos))) (js/Math.floor (.-z pos))] "gravel")
+                                                        r)))))
+              {:keys [out p]} (await (stair! {:blocks (dissoc (stone -3 12 50 75) "0,65,0" "0,66,0")}
+                                             {:dir :up :heading :east :steps 6 :accept #{:falling-block}} land))]
+          (is (= :stopped (:status @out)))
+          (is (= :hazard (:reason @out)) (pr-str (:reason @out)))
+          (is (<= (count (digs p)) (+ 3 sstep/max-landings))))))))
 
 (deftest a-cell-put-back-that-does-not-fall-is-named-as-placed
   (async done

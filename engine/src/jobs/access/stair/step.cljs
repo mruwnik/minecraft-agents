@@ -228,12 +228,30 @@
                                 :because (let [cause (:cause e)] (when (map? cause) (:why cause)))}
                       {:reason :dig-failed :cell cell :block block :dig outcome})))))))))))
 
+(def fall-wait-ms "How long after a dig the stair waits for a falling block over the open cut to drop before it walks in." 4000)
+
+(defn fall-wait
+  "Falling blocks (gravel, sand) still standing over the open cut drop into it one after another once the cell under them
+  is open, and one landing on the body suffocates it: :continue until they have dropped, at most fall-wait-ms after the
+  last dig (a block that does not fall is not waited for); else nil."
+  [c block-at cut]
+  (when (and (cells/hanging-above block-at cut)
+             (< (ctx/now c) (+ (:dug-at (ctx/mem c) 0) fall-wait-ms)))
+    :continue))
+
+(def max-landings "Falling blocks that may land on the body in one stair before it stops: each one suffocates it." 2)
+
 (defn ^:async clear-own-cell!
   "A falling block (gravel, sand) landed in the body's own head or feet cell as it walked in, so no walk out of it starts
-  standable: dug, head first. Nil when both cells are open, else dig!'s result."
+  standable: dug, head first, until max-landings have landed (then the stop :hazard). Nil when both cells are open, else dig!'s result."
   [c in feet accept]
   (when-let [cell (first (filter #(rules/falling? ((:block-at in) %)) [(update feet 1 inc) feet]))]
-    (await (dig! c in cell [cell] accept))))
+    (if (>= (:landed (ctx/mem c) 0) max-landings)
+      {:reason :hazard :cell cell :hazards [{:reason :falling-block :block ((:block-at in) cell) :at cell :on-body true}]
+       :why "falling blocks keep landing on the body"}
+      (let [r (await (dig! c in cell [cell] accept))]
+        (when (= :continue r) (ctx/update-mem! c update :landed (fnil inc 0)))
+        r))))
 
 (defn take-back-floor?
   "Whether a floor this stair places goes into the scaffold ledger: a go-to stair (:note), unless the setting keeps it."

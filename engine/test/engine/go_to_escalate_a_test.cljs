@@ -243,7 +243,7 @@
     (tu/run-async done
       (fn ^:async t []
         ;; gravel over the stair's next column falls into the cut, not onto the body: the stair digs on
-        (let [{:keys [out p seen]} (await (run-job! (merge in-pit {:blocks (assoc pit "1,64,0" "gravel")}) {:pos [10 64 0] :range 1}))]
+        (let [{:keys [out p seen]} (await (run-job! (merge in-pit {:blocks (assoc pit "1,64,0" "gravel")}) 'jobs.movement.go-to {:pos [10 64 0] :range 1} nil true))]
           (is (= {:arrived true} @out))
           (is (= [:stair] (mapv :step (events-of seen :go-to.escalated))))
           (is (contains? (dug-cells p) [1 63 0])))))))
