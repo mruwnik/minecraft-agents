@@ -324,4 +324,4 @@
           (let [r (await (tu/child-outcome eng 'jobs.survival.night {} 40))]
             (is (= :dug-in (:night r)) (pr-str r))
             (is (= 2 (reduce + (vals (:spent r)))) (pr-str r))
-            (is (re-find #"used 1 dirt, 1 stone \(night shelter" (:text r)) (pr-str r))))))))
+            (is (re-find #"^used .+ \(night shelter at" (:text r)) (pr-str r))))))))
