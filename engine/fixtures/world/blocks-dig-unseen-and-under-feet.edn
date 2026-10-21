@@ -42,6 +42,6 @@
    :blocks [[:fill [12 0 12] [20 2 20] "stone"]]
    :body {:at [16.5 3 16.5] :inventory [["iron_pickaxe" 1]]}
    :act [[:job (jobs.blocks.dig {:pos #at [16 0 16]})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :unreachable :why :out-of-sight}} :within-s 20 :of-job true}
+   :expect [{:event {:source :job :kind :stopped :data {:reason :unreachable :cause {:why :out-of-sight}}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :planned :data {:why "budget"}} :for-s 20 :until {:source :job :kind :stopped}}]
    :limit-s 30}]}

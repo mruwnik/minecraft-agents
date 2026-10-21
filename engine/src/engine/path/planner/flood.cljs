@@ -36,8 +36,10 @@
                       h (.nodeH s x y z)]
                   (cond
                     (> (+ (* dx dx) (* dy dy) (* dz dz)) (* (.-goal-range s) (.-goal-range s))) (recur dx dy (inc dz) magma unseen)
-                    ;; an unseen goal cell (options.unknown) may be standable
-                    ^boolean (.unknownNear s x y z) nil
+                    ;; an unseen goal cell (options.unknown) may be standable, unless goalSeen already refuses it
+                    ^boolean (.unknownNear s x y z) (if (and (some? (.-goal-seen s)) (not (true? ((.-goal-seen s) x y z))))
+                                                      (recur dx dy (inc dz) magma true)
+                                                      nil)
                     (neg? h) (recur dx dy (inc dz) magma unseen)
                     ^boolean (.endsOnMagma s x y z h) (recur dx dy (inc dz) true unseen)
                     (and (some? (.-goal-seen s)) (not (true? ((.-goal-seen s) x y z)))) (recur dx dy (inc dz) magma true)
