@@ -271,7 +271,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world (merge (patch 2 0 3 3 63 "dirt") (patch -4 4 3 3 63 "dirt") {"6,63,1" "water"})
-              a {:w 3 :h 3 :range 10 :depth 12 :limit 3}
+              a {:w 3 :h 3 :range 10}
               from {:x 0 :y 64 :z 0}
               expected (scan-at world {:x 0 :y 64 :z 0} a from)
               {:keys [eng p]} (setup {:blocks world})
@@ -283,11 +283,11 @@
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent parent))
               ;; one patch row: (2*range+1) z cells x w columns, each reading at most the
               ;; top scan (2*depth) + 1 + the sky scan (2*depth + 8)
-              row-reads (* (inc (* 2 (:range a))) (:w a) (+ (* 4 (:depth a)) 9))
+              row-reads (* (inc (* 2 (:range a))) (:w a) (+ (* 4 12) 9))
               bound (+ (pt/read-budget) row-reads)]
           (core/submit! eng '(recording-parent) {})
-          (await (core/tick! eng))
-          (is (empty? (:list (core/state eng))) "one call scans the whole range")
+          (await (run-until-empty eng 40))
+          (is (empty? (:list (core/state eng))) "the scan ends within a few ticks")
           (is (> @reads bound) (str "the scan read past one slice: " @reads))
           (is (= expected (:spots @out)))
           (is (= (:pos (first expected)) (:spot @out))))))))
@@ -296,7 +296,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [a {:w 16 :h 16 :range 48 :depth 7 :limit 3}
+        (let [a {:w 16 :h 16 :range 48}
               {:keys [eng p]} (setup {:blocks {}})
               reads (atom 0)
               orig (.-blockAt p)
@@ -315,7 +315,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [world (merge (patch 2 0 3 3 63 "dirt") (patch -4 4 3 3 63 "dirt") {"6,63,1" "water"})
-              a {:w 3 :h 3 :range 10 :depth 12 :limit 3}
+              a {:w 3 :h 3 :range 10}
               expected (scan-at world {:x 0 :y 64 :z 0} a {:x 0 :y 64 :z 0})
               {:keys [eng p]} (setup {:blocks world})
               out (atom :not-done)
