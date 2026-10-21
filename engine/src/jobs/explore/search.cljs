@@ -45,7 +45,7 @@
   Legs are ::spacing apart: :spiral points on rings round the origin, the one nearest the body first (so a body in a corridor walks on), or :outward ahead along :heading (a :heading alone means :outward), then the sides, and on further ahead once those are tried or searched. A
   leg is never tried twice and never goes beyond the max-distance setting (XZ) of the origin. It is skipped (:skipped)
   when a live :searched note of any body, this one included, listing every target name lies within half its
-  radius.
+  radius; with :use-notes false only a note this job made counts.
 
   A leg needs a standing cell in its column from 12 above the feet down to :descent (40) below, read top down through leaves. An unloaded,
   wet or standless column is recorded failed (:not-loaded, :wet, :no-surface, :unseen) and the next candidate is tried
@@ -455,6 +455,7 @@
         block-at (seen-at p)
         surface? (surface-only? names)
         buried? (sh-sense/buried? p)
+        covering (if (false? (:use-notes (:args c))) (filter #(>= (:t %) (:t0 m 0)) ns) ns)
         underground? (fn [sy pt] (and surface? sy (sh-sense/buried-at? p {:x (pt 0) :y sy :z (pt 1)})))]
     (loop [[pt & more] (candidates c m) reads 0 acc {:tried [] :failed [] :skipped 0 :held 0 :unloaded (vec (:deferred m))}]
       (cond
@@ -462,7 +463,7 @@
         (>= reads (stand-cap)) (assoc acc :more true)
         (or (tried pt) (> (xz-dist pt origin) max-distance) (= pt [ox oz])) (recur more reads acc)
         (held? (:blocked m) [ox oz] pt) (recur more reads (update acc :held inc))
-        (some #(notes/covers? % pt names) ns) (recur more reads (-> acc (update :tried conj pt) (update :skipped inc)))
+        (some #(notes/covers? % pt names) covering) (recur more reads (-> acc (update :tried conj pt) (update :skipped inc)))
         (>= (leg-tries ns names pt) (settings/get settings ::leg-tries)) (recur more reads (-> acc (update :tried conj pt) (update :failed conj {:pos [(pt 0) y (pt 1)] :reason :tried-before})))
         :else (let [{sy :y fail :fail} (let [r (stand-cell block-at (pt 0) (pt 1) y)] (if (underground? (:y r) pt) {:fail :underground} r))
                     failed {:pos [(pt 0) y (pt 1)] :reason fail}
@@ -595,7 +596,7 @@
 (defn ^:async search-leg!
   "One pass: end, walk the leg under way, or look and start the next leg. :again goes on, else a round result."
   [c]
-  (ctx/update-mem! c (fn [m] (cond-> m (nil? (:origin m)) (assoc :origin (or (some-> (area/center c) cell-of) (here c))))))
+  (ctx/update-mem! c (fn [m] (cond-> m (nil? (:origin m)) (assoc :origin (or (some-> (area/center c) cell-of) (here c)) :t0 (ctx/now c)))))
   (cond
     (:leg (ctx/mem c)) (await (walk! c))
     (:patch (:args c)) (await (patch-round! c))

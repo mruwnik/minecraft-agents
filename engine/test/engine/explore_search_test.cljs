@@ -702,6 +702,16 @@
                                 {:blocks sealed-room :cone? true :self {:pos {:x 16.5 :y 64 :z 16.5}}} 60))]
           (is (nil? (found-of s)) (pr-str (:found (found-of s)))))))))
 
+(deftest use-notes-false-ignores-searched-notes-older-than-the-job
+  (let [p (tu/seeing-all (tu/fake {:blocks (ground 36)}))
+        note (fn [t] {:kind :searched :what ["sheep"] :pos [0 64 0] :r 200 :t t})
+        choose (fn [use-notes? ns]
+                 (settings/with-settings {:jobs.explore.search/spacing 4 :jobs.explore.search/max-distance 8}
+                   #(search/choose-leg {:args {:pattern :spiral :use-notes use-notes?} :primitives p} {:origin [0 64 0] :t0 100} ["sheep"] ns)))]
+    (is (nil? (:leg (choose true [(note 50)]))) "default: an old note covers the ground")
+    (is (some? (:leg (choose false [(note 50)]))) "fresh look: an old note is ignored")
+    (is (nil? (:leg (choose false [(note 150)]))) "a note this job made still covers")))
+
 (deftest a-leg-for-farm-animals-never-stands-under-rock-but-one-for-ore-may
   (let [p (tu/seeing-all (tu/fake {:blocks (ground 36)}))
         choose (fn [names] (with-redefs [sh-sense/sky-light-at (constantly 0)]
