@@ -14,6 +14,15 @@
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :go-to.over-budget} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [16.5 13 16.5] 5] [:block [22 0 16] "iron_ore"] [:item "raw_iron" 0]]}
+  ;; card 6ce69619: dark plot, torches carried, the platform's other sides lead off over unseen floor: the walk learns cell by cell (an unlit floor, a void edge)
+  ;; and must end on go-to's own refusal of the drop (:one-way: no climb back from 13 blocks, in the dark), not :no-progress. A torch beside the ore shows it from the platform.
+  {:name "thirteen-block-drop-in-the-dark-ends-on-the-drop-refusal"
+   :plot {:light :dark :height 18}
+   :blocks [[:fill [12 0 12] [16 12 20] "stone"] [:set [21 0 16] "torch"]]
+   :body {:at [16.5 13 16.5] :inventory [["stone_pickaxe" 1] ["torch" 8]]}
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :count 1 :radius 16 :ways #{:seen} :mend false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:got 0 :because {:because {:cause {:why :one-way}}}}} :within-s 150 :of-job true}]
+   :after [[:body-near [16.5 13 16.5] 5] [:block [22 0 16] "iron_ore"] [:item "raw_iron" 0]]}
   {:name "five-block-drop-to-a-seen-ore-is-taken"
    :body {:at [16.5 5 16.5]}
    :blocks [[:fill [12 0 12] [16 4 20] "stone"]]
