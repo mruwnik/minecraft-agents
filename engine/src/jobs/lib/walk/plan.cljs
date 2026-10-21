@@ -209,13 +209,22 @@
   8)
 (def masked-wet-min-s 2)
 
+(def masked-swim-pace-s
+  "Seconds a masked walk really takes per swimming cell: it stops to look and replan every few cells, so the planner's price
+  (0.26) is about 2.5 times too cheap and its unseen head cells read as air to breathe."
+  0.65)
+
 (defn masked-wet-ok
-  "(fn [step]) for dry-end of a masked walk: a swimming step is kept while the air used at it stays within masked-wet-limit-s,
-  and none is when the body has less than masked-wet-min-s of that left."
+  "(fn [step]) for dry-end of a masked walk, called on the swimming steps in order: one is kept while the air used at it stays
+  within masked-wet-limit-s and the swim so far, at masked-swim-pace-s a cell, stays within the air left of that limit; none is
+  when the body has less than masked-wet-min-s of it left."
   [c]
-  (if (< (- masked-wet-limit-s (or (:air-used (wworld/body-policy c)) 0)) masked-wet-min-s)
-    (constantly false)
-    #(<= (or (:air %) 0) masked-wet-limit-s)))
+  (let [left (- masked-wet-limit-s (or (:air-used (wworld/body-policy c)) 0))
+        cells (volatile! 0)]
+    (if (< left masked-wet-min-s)
+      (constantly false)
+      #(and (<= (or (:air %) 0) masked-wet-limit-s)
+            (<= (* masked-swim-pace-s (vswap! cells inc)) left)))))
 
 (defn dry-end
   "A partial plan up to its last step out of water: a walk that cannot reach the goal never leaves the body swimming (at a

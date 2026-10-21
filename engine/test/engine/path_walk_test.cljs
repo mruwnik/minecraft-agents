@@ -229,6 +229,11 @@
       14 wplan/masked-wet-limit-s true
       11 0 false)))
 
+(deftest masked-wet-ok-stops-a-long-swim-at-the-pace-a-masked-walk-really-keeps
+  (let [ok (wplan/masked-wet-ok {:primitives (tu/fake {:self {:pos [0 64 0] :inWater true :oxygen 20}})})
+        kept (count (take-while #(ok {:swim true :air 0}) (range 100)))]
+    (is (= (long (/ wplan/masked-wet-limit-s wplan/masked-swim-pace-s)) kept))))
+
 (deftest stop-short-ends-a-partial-plan-out-of-reach-of-a-blocking-mob
   (let [steps (mapv (fn [x] {:x x :y 12 :z 16}) (range 0 12))
         d (fn [x block] #js {:x x :y 12 :z 16.5 :block block})
