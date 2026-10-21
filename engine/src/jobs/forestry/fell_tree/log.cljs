@@ -130,9 +130,12 @@
        (<= (Math/abs (- (:z pos) (:z base))) 1)))
 
 (defn open-scaffold?
-  "Whether this job's scaffold ledger entries (its own or a child's) are still open: a pillar left by a cut or a restart."
+  "Whether this job's scaffold ledger entries (its own or a child's) are still open: a pillar left by a cut or a restart.
+  Cells a cleanup held (it could not take them back) are not: they stay for the scaffold-left trigger."
   [c]
-  (boolean (some #(ledger/of-instance? (:id c) %) (ledger/open-entries (ctx/view c)))))
+  (let [view (ctx/view c)
+        held (ledger/held-cells view)]
+    (boolean (some #(and (ledger/of-instance? (:id c) %) (not (held (:cell %)))) (ledger/open-entries view)))))
 
 (defn ^:async walk-near!
   "Walk until the body's cell is within range of pos with a go-to child (slot :walk, no retry): :there, :partial (go-to

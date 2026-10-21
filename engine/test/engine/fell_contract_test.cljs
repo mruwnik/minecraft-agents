@@ -278,6 +278,15 @@
         (is (= {:r [:blocked "cannot take the pillar back"] :started false} (await (step-with-scaffold true :done))) "still open: ends, plans nothing")
         (is (= {:r :continue :started false} (await (step-with-scaffold true :continue))) "the cleanup child waits")))))
 
+(deftest an-open-scaffold-cell-a-cleanup-held-does-not-keep-the-felling-open
+  (with-redefs [ctx/view (constantly nil)
+                ledger/open-entries (constantly [{:cell [1 5 1] :owner "j"} {:cell [1 6 1] :owner "j"}])
+                ledger/of-instance? (constantly true)
+                ledger/held-cells (constantly #{[1 6 1]})]
+    (is (true? (log/open-scaffold? {:id "j"})) "one cell is not held")
+    (with-redefs [ledger/held-cells (constantly #{[1 5 1] [1 6 1]})]
+      (is (false? (log/open-scaffold? {:id "j"})) "all held: left to the scaffold-left trigger"))))
+
 (deftest fell-tree-quotes-axe-wear-and-the-logs-it-picks-up
   (async done
     (tu/run-async done
