@@ -32,7 +32,7 @@
             {:event {:source :job :kind :stopped :data {:reason :exposed}} :within-s 120}
             {:no-event {:source :job :kind :holding :data {:reason "exposed"}} :for-s 30}
             {:event {:source :job :kind :job.notify} :within-s 150}
-            {:count-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 200 :at-least 2}]
+            {:count-event {:source :job :kind :child_started :data {:slot :log-out}} :for-s 200 :at-least 2}]
    :limit-s 240}
   {:name "monster-near-ends-the-round-then-sleeps-once-the-zombie-is-killed"
    :time-why :sleep
