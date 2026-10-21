@@ -2,6 +2,9 @@
   "Where a farm or build job works, for its safe? export (ready/safe-at): the cell at the middle of the place its args
   name, nil (here) when they name none."
   (:require [engine.args :as a]
+            [jobs.lib.look :as look]
+            [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.util :as u]
             [jobs.lib.world :as known]))
 
 (defn middle
@@ -48,3 +51,34 @@
         (when (and from to) (middle (map corner-vec [from to])))
         (a/cell center)
         (when (:x center) (select-keys center [:x :z])))))
+
+(defn nearest-mob
+  "The cell of the nearest mob the body sees within radius, of the names given (a coll) or, with none, any passive one; nil for none."
+  [c names radius]
+  (let [p (:primitives c)
+        feet (u/pos-of (.-pos (.self p)))
+        opts (cond-> {:radius radius :max 16} (seq names) (assoc :names (vec names)) (empty? names) (assoc :kind "passive"))]
+    (some->> (look/seen-objs p opts)
+             (map #(u/pos-of (.-pos %)))
+             (sort-by #(u/dist feet %))
+             first
+             (#(update-vals % js/Math.floor)))))
+
+(defn nearest-block
+  "The cell of the nearest seen live block of name, nil for none."
+  [c block radius]
+  (when block
+    (some-> (look/seen-blocks (:primitives c) {:names [block] :radius radius :max 1 :live? true}) first :pos (update-vals js/Math.floor))))
+
+(defn dig-spot
+  "Where a dig works: the place of c's args (spot), else the nearest seen block of :block within :radius."
+  [c]
+  (or (spot c) (nearest-block c (:block (:args c)) (or (:radius (:args c)) 16))))
+
+(defn ahead
+  "The cell one block along :heading from the tunnel's :origin or the body's cell, nil without a heading."
+  [c]
+  (let [{:keys [heading origin]} (:args c)
+        [dx dz] (get {"north" [0 -1] "south" [0 1] "east" [1 0] "west" [-1 0]} heading)
+        {:keys [x y z]} (or (a/cell origin) (sh-sense/feet (:primitives c)))]
+    (when dx {:x (+ x dx) :y y :z (+ z dz)})))

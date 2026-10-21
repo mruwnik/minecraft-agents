@@ -85,7 +85,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def safe? ready/safe-if-lit)
+(def safe? (ready/safe-at-or-roaming #(fell-tree/place (update % :args fell-args))))
 
 (def fit? ready/fit?)
 

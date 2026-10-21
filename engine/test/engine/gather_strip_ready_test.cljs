@@ -4,6 +4,10 @@
   (:require [cljs.test :refer [deftest is are]]
             [engine.ready-test :as rt]
             [engine.shelter-support :as st]
+            [jobs.animals.shear :as shear]
+            [jobs.combat.hunt :as hunt]
+            [jobs.explore.search :as search]
+            [jobs.gather.strip-tunnel :as strip-tunnel]
             [jobs.items.collect-drops :as collect-drops]
             [jobs.forestry.fell-tree :as fell-tree]
             [jobs.forestry.harvest-wood :as harvest-wood]
@@ -26,6 +30,24 @@
 (deftest roaming-jobs-wait-at-night-above-ground
   (are [check] (= [:later :ok] [(kind check rt/open-night {}) (kind check rt/tunnel {})])
     get-seeds/safe? cast-obsidian/safe? mine/safe? harvest-wood/safe? collect-drops/safe?))
+
+(deftest roaming-jobs-do-not-leave-a-room-under-a-dark-sky
+  (are [check args] (= [:later :ok] [(kind check rt/night-hut args) (kind check rt/tunnel args)])
+    search/safe? {}
+    harvest-wood/safe? {:radius 16 :ignore-zones? true}
+    hunt/safe? {:radius 24}
+    shear/safe? {:radius 16}))
+
+(def sheep-outside {:id 8 :name "sheep" :kind "passive" :pos {:x 15 :y 64 :z 0}})
+
+(deftest animal-jobs-judge-the-animal-they-walk-to
+  (is (= [:later :ok]
+         [(kind shear/safe? (assoc rt/night-hut :entities [sheep-outside]) {:radius 16})
+          (kind shear/safe? (assoc rt/night-hut :entities [(assoc sheep-outside :pos {:x 3 :y 64 :z 0})]) {:radius 16})])
+      "a sheep outside the hut is a walk into the dark; one inside it is not"))
+
+(deftest a-tunnel-dug-from-a-hut-at-night-is-not-a-walk-out
+  (is (= :ok (kind strip-tunnel/safe? rt/night-hut {:heading "east"}))))
 
 (deftest jobs-going-to-a-place-judge-that-place
   (are [check arg] (= [:ok :later] [(kind check rt/night-hut {arg inside}) (kind check rt/night-hut {arg outside})])

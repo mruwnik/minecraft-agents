@@ -16,6 +16,7 @@
             [jobs.lib.area :as area]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
+            [jobs.lib.work-place :as work-place]
             [jobs.lib.ready :as ready]
             [jobs.lib.waits :as waits]
             [jobs.lib.look :as look]
@@ -55,7 +56,7 @@
 (def target [:item :center])
 
 (def defaults {:spend {:job-time ::job-time-s} :least 1 :use {:tools :attack} :checks {:safe? '(not (exposed))}})
-(def safe? ready/safe-if-lit)
+(def safe? (ready/safe-at-or-roaming (fn [c] (work-place/nearest-mob c nil (:radius (:args c))))))
 (declare hostile?)
 
 (defn fit?

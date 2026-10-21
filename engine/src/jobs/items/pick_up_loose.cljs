@@ -26,7 +26,14 @@
 
 (def meta {:category :reflex})
 
-(def safe? ready/safe-if-lit)
+(defn place
+  "The cell of the nearest loose item worth taking, nil for none."
+  [c]
+  (some-> (first (loose/candidates (:primitives c) (ctx/view c) (:world (:engine c)) {} (:root c)))
+          loose/item-pos
+          (update-vals js/Math.floor)))
+
+(def safe? (ready/safe-at-or-roaming place))
 (def fit? ready/ok)
 
 (def defaults {:least 1})

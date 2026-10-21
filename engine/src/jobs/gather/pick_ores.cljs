@@ -22,7 +22,6 @@
 
 (def meta {:tags [:mine :dig :ore]})
 
-(def safe? ready/safe-if-lit)
 (def fit? ready/ok)
 
 (def defaults {})
@@ -42,6 +41,11 @@
   [c]
   (contract/later :picking "pick-ores: the round ends the call" :units :ores :done (count (ore-pick/picked c))
                   :result {:picked (ore-pick/picked c)}))
+
+(defn place "The nearest seen ore cell to pick, nil for none." [c]
+  (some-> (ore-pick/candidates c (assoc (opts-of c) :skipped (:left (opts-of c)))) first :pos (update-vals js/Math.floor)))
+
+(def safe? (ready/safe-at-or-roaming place))
 
 (defn can-start?
   [c]

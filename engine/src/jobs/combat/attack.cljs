@@ -73,8 +73,15 @@
 (def target [:targets])
 
 (def defaults {:spend {:job-time ::job-time-s} :use {:tools :attack} :checks {:safe? '(not (exposed))}})
-(def safe? ready/safe-if-lit)
 (declare present)
+
+(defn place
+  "The cell of the nearest present target when the targets are not hostiles' (a hostile comes to the body), else nil."
+  [c]
+  (when-not (or (hostile/hostiles? c) (:hold (:args c)))
+    (some-> (first (present c)) .-pos u/pos-of (update-vals js/Math.floor))))
+
+(def safe? (ready/safe-at-or place ready/safe-if-lit))
 
 (defn fit?
   "ready/fit?, but not for passive animals alone: they cannot hurt the body, and killing one is the way to the food that heals (survival mode only)."

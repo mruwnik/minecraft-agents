@@ -1,6 +1,7 @@
 (ns jobs.gather.strip-tunnel
   (:require [clojure.string :as str]
             [engine.args :as a]
+            [jobs.lib.work-place :as work-place]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -58,7 +59,7 @@
 
 (def target [:heading])
 
-(def safe? ready/safe-if-lit)
+(def safe? (ready/safe-at-or work-place/ahead ready/safe-if-lit true))
 
 (def fit? ready/fit?)
 

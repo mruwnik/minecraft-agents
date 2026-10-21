@@ -204,12 +204,38 @@
   "The checker of a job that roams: not threatened, and no dark sky over it."
   (with-meta (fn [c] (contract/all [(threatened c) (dark-sky c)])) {::exposure dark-sky}))
 
+(defn sheltered-dark
+  "Later :dark while the body is shut in a hut (a wide closed room, not a dug tunnel) and the open sky is dark: a walk that has no
+  place (a search, a roam) leaves the room into the dark."
+  [c]
+  (let [p (:primitives c)]
+    (if (and (sh-sense/dark-outside? p) (not (sh-sense/sleeping? p)) (sh-sense/shut-in-hut? p) (sh-inside/safe-from-night? p))
+      (contract/later :dark "sheltered for the night, a walk with no place leaves the room under a dark sky"
+                      :recheck-after-ms (* 1000 (sh-sense/sky-in p)))
+      (contract/ok :lit "no room to leave under a dark sky"))))
+
+(def safe-roaming
+  "The checker of a job that roams and may leave a room: safe-if-lit, and not sheltered under a dark sky (sheltered-dark)."
+  (with-meta (fn [c] (contract/all [(threatened c) (dark-sky c) (sheltered-dark c)]))
+    {::exposure (fn [c] (contract/all [(dark-sky c) (sheltered-dark c)]))}))
+
+(defn safe-at-or
+  "The checker of a job that goes to the place (f c) when it has one, else (fallback c): safe-at-by-night there (dug?: the job digs to it)."
+  ([f fallback] (safe-at-or f fallback false))
+  ([f fallback dug?]
+   (let [at (safe-at-by-night f false dug?)]
+     (with-meta (fn [c] (if (f c) (at c) (fallback c)))
+       {::exposure (fn [c] (if (f c) ((::exposure (meta at)) c) ((::exposure (meta fallback)) c)))}))))
+
 (defn safe-at-or-if-lit
   "The checker of a job that goes to the place (f c) when it has one, else roams: safe-at-by-night, or safe-if-lit when (f c) is nil."
   [f]
-  (let [at (safe-at-by-night f)]
-    (with-meta (fn [c] (if (f c) (at c) (safe-if-lit c)))
-      {::exposure (fn [c] (if (f c) ((::exposure (meta at)) c) (dark-sky c)))})))
+  (safe-at-or f safe-if-lit))
+
+(defn safe-at-or-roaming
+  "safe-at-or-if-lit for a job that leaves the room on its way: with no place it is safe-roaming."
+  ([f] (safe-at-or-roaming f false))
+  ([f dug?] (safe-at-or f safe-roaming dug?)))
 
 (defn fit? "Later :low-health below the risky health, :poisoned while poisoned." [c] (checks/low-health c))
 

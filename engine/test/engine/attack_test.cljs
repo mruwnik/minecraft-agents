@@ -67,7 +67,7 @@
               night (await (scenario {:targets [1]} {:inventory h/sword :time st/night :entities [(zed 1 2)]} 6))]
           (is (seq (attacked day)) "a zombie next to the body is attacked by day")
           (is (empty? (attacked night)))
-          (is (= [:dark] (distinct (map :reason (events-of night :waiting))))))))))
+          (is (= [:exposed] (distinct (map :reason (events-of night :waiting))))))))))
 
 ;; ------------------------------------------------------------ pure helpers
 

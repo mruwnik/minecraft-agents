@@ -1,5 +1,6 @@
 (ns jobs.animals.herd
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.work-place :as work-place]
+            [jobs.lib.ready :as ready]
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -142,7 +143,8 @@
 
 (def target [:mob :box])
 
-(def safe? ready/safe-if-lit)
+(def safe? (ready/safe-at-or-roaming
+            (fn [c] (work-place/nearest-mob c (remove nil? [(:mob (:args c))]) (or (:radius (:args c)) 24)))))
 (def fit? ready/fit?)
 
 

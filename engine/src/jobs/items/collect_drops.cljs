@@ -58,7 +58,23 @@
 
 (def defaults {:least 1})
 
-(def safe? ready/safe-if-lit)
+(declare radius-of)
+
+(defn place
+  "Where the job goes: the cell of the nearest seen item it is after, nil when none is in sight (a search for unseen ones roams)."
+  [c]
+  (let [{:keys [items ids]} (:args c)
+        wanted? (fn [e] (and (or (nil? ids) (some #{(.-id e)} ids))
+                             (or (nil? items) (some #{(some-> (.-item e) .-name)} items))))
+        feet (sh-sense/feet (:primitives c))]
+    (some->> (loose/seen (:primitives c) {:radius (radius-of c)})
+             (filter wanted?)
+             (map loose/item-pos)
+             (sort-by #(u/dist feet %))
+             first
+             (#(update-vals % js/Math.floor)))))
+
+(def safe? (ready/safe-at-or-roaming place))
 
 (def fit? ready/ok)
 

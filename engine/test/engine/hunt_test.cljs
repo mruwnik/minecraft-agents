@@ -480,7 +480,7 @@
       (fn ^:async t []
         (let [s (await (scenario {:item "beef" :count 1 :keep 0} {:inventory h/sword :time st/night :entities [(cow 1 3)]} 10))]
           (is (empty? (attacked s)) "nothing attacked at night")
-          (is (= [:dark] (distinct (map :reason (events-of s :waiting))))))))))
+          (is (= [:exposed] (distinct (map :reason (events-of s :waiting))))))))))
 
 (deftest the-calls-checks-reach-the-attack-child
   (async done

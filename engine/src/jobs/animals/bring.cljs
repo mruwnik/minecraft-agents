@@ -8,6 +8,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.checks :as checks]
+            [jobs.lib.work-place :as work-place]
             [jobs.lib.ready :as ready]
             [jobs.lib.util :as u]))
 
@@ -50,7 +51,8 @@
 
 (def target [:mob :pos :fence])
 
-(def safe? ready/safe-if-lit)
+(def safe? (ready/safe-at-or-roaming
+            (fn [c] (work-place/nearest-mob c (remove nil? [(:mob (:args c))]) (or (:radius (:args c)) 8)))))
 (def fit? checks/survival-mode)
 
 (def defaults {:spend {:job-time ::job-time-s}})

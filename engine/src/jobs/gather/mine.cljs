@@ -1,6 +1,7 @@
 (ns jobs.gather.mine
   (:require [clojure.string :as str]
             [engine.args :as a]
+            [jobs.lib.work-place :as work-place]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -78,7 +79,7 @@
 
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
-(def safe? ready/safe-if-lit)
+(def safe? (ready/safe-at-or work-place/dig-spot ready/safe-if-lit true))
 
 (def fit? ready/fit?)
 
