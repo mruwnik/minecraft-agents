@@ -33,6 +33,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.sense :as sense]
             [jobs.lib.step-off :as step-off]
+            [jobs.lib.escape :as escape]
             [jobs.lib.util :as u]
             [jobs.lib.walk.search :as wsearch]
             [jobs.lib.walk.world :as wworld]
@@ -223,6 +224,17 @@
       :else (do (ctx/update-mem! c assoc :column-near true) :again))))
 
 (def seal-clear-radius 3)
+(def loop-starts "Rounds of one call that begin from the same cell, none improving the best distance, before they count as a loop." 4)
+
+(defn note-start
+  "[starts looped?]: starts (cell -> {:n rounds begun there :best the best distance when the first began}) with a round
+  from cell added. Looped when the cell began loop-starts rounds and the best distance never improved by a block since the
+  first, whatever each round reported (a budget-ended search whose partial walk goes back and forth)."
+  [starts cell best]
+  (let [seen (get starts cell {:n 0 :best best})
+        n (inc (:n seen))]
+    [(assoc starts cell (assoc seen :n n))
+     (and (>= n loop-starts) (>= best (dec (:best seen))))]))
 
 (defn ^:async clear-goal-seal!
   "A goal the walk could not reach (:goal-enclosed, :goal-cut-off, or a search that ran out of land: :exhausted, :out-of-sight, :ladder-gap, :start-enclosed)
@@ -412,10 +424,12 @@
           (let [result (cond-> result (:needs-health handled) (-> (assoc :status :no-path :reason :needs-health) (merge (select-keys handled [:heal :health :hp-cost :hp-budget]))))
                 _ (note-fault! c walked)
                 unstuck? (await (unstick/swim-out! c pos walked))
-                progress? (or (< left (dec best)) explored? nearer?)
-                tries (if progress? 0 (inc (:blocked (ctx/mem c) 0)))]
+                [starts looped?] (note-start (:starts (ctx/mem c)) (mapv #(js/Math.floor (% from)) [:x :y :z]) best)
+                result (cond-> result looped? (assoc :status :no-path :reason (if (escape/enclosed? (:primitives c) doors) :start-enclosed :no-progress)))
+                progress? (and (not looped?) (or (< left (dec best)) explored? nearer?))
+                tries (cond looped? (max-blocked) progress? 0 :else (inc (:blocked (ctx/mem c) 0)))]
             (when-not progress? (ctx/book-try! c 'jobs.movement.go-to (or (:reason result) :no-progress)))
-            (ctx/update-mem! c assoc :blocked tries :searching 0 :wet-fresh 0 :best (if (< left (dec best)) left best)
+            (ctx/update-mem! c assoc :blocked tries :starts starts :searching 0 :wet-fresh 0 :best (if (< left (dec best)) left best)
                              :closest (min left (:closest (ctx/mem c) left)) :last-dist left
                              :frontier-best (cond-> fbests frontier (assoc frontier (min fbest (u/dist to fcell))))
                              :target-best (cond-> tbests target (assoc target (min tdist (get tbests target js/Infinity)))))
@@ -425,7 +439,7 @@
               (do (when (and (pos? tries) (not unstuck?)) (retrying! c result tries))
                   :again)
               (let [unloaded? (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))
-                    result (dive-end c pos (dark-end c result))
+                    result (dive-end c pos (if (choose/escalate? c tries result) result (dark-end c result)))
                     ended (cond-> (if (choose/escalate? c tries result) result (sight-end c pos (unloaded-end result unloaded?)))
                             (:waypoint-why (ctx/mem c)) (assoc :waypoint-why (:waypoint-why (ctx/mem c))))]
                 (cond

@@ -1,0 +1,26 @@
+;; Cards 96976c4c, 9ef05bc3: a body sealed in its own shelter (memory :shelter) whose only seen way on is a dark shaft it cannot see the floor of
+;; leaves the shelter (go-to.escalated :leave-shelter, one escape) and walks on over the surface; it does not give up :unseen-floor-dark and does not
+;; re-plan in place. Underground the sky is not dark, so the shelter counts as by day.
+;; Stone block x 10..48, y -4..8 with a sealed room (x 11..13, feet y 3) over a 6-deep dark shaft at x 13 and a tunnel east of its foot (the decoy);
+;; the goal is 32 blocks east on top of the block. No torches carried.
+;; Should-succeed: the shelter is left once and the go-to arrives. Should-fail: the call ends :unseen-floor-dark.
+{:defaults
+ {:tags [:movement :go-to :shelter]
+  :time :any
+  :plot {:height 14 :length 64 :light :dark}
+  :blocks [[:fill [10 -4 14] [48 8 18] "stone"]
+           [:fill [11 3 16] [13 4 16] "air"]
+           [:fill [13 -3 16] [13 2 16] "air"]
+           [:fill [14 -3 16] [24 -2 16] "air"]]
+  :memory [{:kind :shelter :data {:pos #xyz [12 3 16] :roof #xyz [12 5 16] :state :built}
+            :policy {:cap 10 :ttl 1200000}}]
+  :body {:at [12.5 3 16.5] :settle-s 3 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1] ["dirt" 8]]}
+  :limit-s 150}
+ :cases
+ [{:name "sealed-in-own-shelter-leaves-it-and-walks-the-surface"
+   :act [[:job (jobs.movement.go-to {:pos #at [44 9 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :leave-shelter}} :within-s 100 :of-job true}
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:why :unseen-floor-dark}} :for-s 140 :until {:source :job :kind #{:completed :stopped}}}
+            {:count-event {:source :job :kind :go-to.escalated :data {:step :leave-shelter}} :for-s 20 :at-most 1}]
+   :after [[:body-near [44.5 9 16.5] 3]]}]}

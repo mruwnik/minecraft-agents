@@ -32,6 +32,7 @@
             [jobs.movement.go-to.health :as gth]
             [jobs.movement.go-to.restore :as restore]
             [jobs.movement.go-to.torch :as torch]
+            [jobs.movement.go-to.walk :as gwalk]
             [jobs.survival.respond.options :as cornered]
             [jobs.survival.respond.walk :as walk]))
 
@@ -342,6 +343,34 @@
           (is (re-find #":torches" (str (:text out))) "the words say what would help")
           (is (= 64 (js/Math.floor (second (:pos (fake/self p))))) "never dropped")
           (is (empty? (filter #(= :go-to.off-hand-torch (:kind %)) seen)) "no torch carried"))))))
+
+(def shelter-over-shaft
+  "Rock (stone x -2..12, y 52..66, z -2..2) with a room (x -1..1, y 64..65, z -1..1, the body's own shelter at the origin)
+  over a 6-deep shaft at x 1 (feet cells y 63..58, floor 57) and a tunnel east from its foot (x 2..9, y 58..59, z 0)."
+  (apply dissoc (box -2 52 -2 12 66 2 "stone")
+         (concat (for [x (range -1 2) y [64 65] z (range -1 2)] (str x "," y "," z))
+                 (for [y (range 58 64)] (str "1," y ",0"))
+                 (for [x (range 2 10) y [58 59]] (str x "," y ",0")))))
+
+(defn shelter-entry! [eng]
+  (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built} {:cap 10 :ttl 86400000}))
+
+(deftest go-to-shut-in-its-own-shelter-by-day-leaves-it-instead-of-giving-up-on-a-dark-shaft
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen out]} (await (run-go-to {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks shelter-over-shaft :time 1000
+                                                :inventory [{:name "stone_pickaxe" :count 1}]}
+                                               {:pos [9 58 0] :range 1 :unknown true}
+                                               dark-and-looked shelter-entry!))]
+          (is (= :leave-shelter (first (mapv :step (filter #(= :go-to.escalated (:kind %)) seen)))) (pr-str out)))))))
+
+(deftest rounds-from-one-cell-with-no-gain-are-a-loop
+  (let [rounds (fn [bests] (reduce (fn [[starts _] best] (gwalk/note-start starts [13 85 -237] best)) [{} false] bests))]
+    (is (false? (second (rounds [20 20 20]))) "three rounds are fruitless tries, not yet a loop")
+    (is (true? (second (rounds [20 20 20 20]))))
+    (is (true? (second (rounds [20 19.5 20 19.5]))) "under a block of gain")
+    (is (false? (second (rounds [20 20 18 18]))) "a block nearer is progress")))
 
 (deftest go-to-with-unknown-holds-a-carried-torch-in-the-dark
   (async done
