@@ -50,7 +50,7 @@
 
   Conditions: :no-tree (none in sight
   after one look around; data :radius, :species; with :at and no log there it is impossible, data :at).
-  Its safe? is ready/safe-at-by-night :at with :at, else ready/safe-if-lit.
+  Its safe? is ready/safe-at-by-night at :at, else at the base of the tree it goes to, ready/safe-if-lit with no tree.
   Ends :done with {:base pos :logs n :axe why}: n logs dug; :axe is :carried, :skipped-fetch-off, :skipped-small-tree or
   :none-found (fetch failed: chopped by hand). Condition-failed :no-tree, :gone (no log left, none dug) or :logs-left
   (cause {:left n}: the pick-up stopped short). Nothing-possible :tree-unreachable when every tree in sight proved out of
@@ -397,7 +397,12 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(defn place "The cell of :at, nil without it." [c] (a/cell (:at (:args c))))
+(defn place
+  "Where the job goes: the cell of :at, else the base of the tree it has chosen or would choose first, nil when none."
+  [c]
+  (or (a/cell (:at (:args c)))
+      (:base (ctx/mem c))
+      (:base (first (candidates c (:radius (:args c)) (:species (:args c)))))))
 
 (def safe? (ready/safe-at-or-if-lit place))
 

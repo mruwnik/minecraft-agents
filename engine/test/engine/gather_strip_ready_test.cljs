@@ -39,6 +39,13 @@
   (are [check] (= :later (kind check rt/open-night {}))
     fell-tree/safe? loot-cart/safe?))
 
+(def tree-outside
+  (update rt/night-hut :blocks merge {"15,64,0" "oak_log" "15,65,0" "oak_log" "15,66,0" "oak_log" "15,67,0" "oak_leaves"}))
+
+(deftest fell-tree-without-an-at-judges-the-tree-it-would-walk-to
+  (is (= [:later :ok] [(kind fell-tree/safe? tree-outside {:radius 16 :ignore-zones? true}) (kind fell-tree/safe? rt/night-hut {:radius 16 :ignore-zones? true})])
+      "a sheltered body is not sent out to a tree in the dark; with no tree there is nothing to leave for"))
+
 (def zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}})
 (def segment {:y 64 :axis :x :line 0 :from 0 :to 8 :open-ends #{}})
 (def zombie-day (assoc rt/open-night :time st/noon :entities [zombie]))

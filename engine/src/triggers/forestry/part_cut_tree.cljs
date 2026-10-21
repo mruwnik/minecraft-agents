@@ -10,7 +10,6 @@
             [jobs.lib.body :as body]
             [jobs.lib.access.zones :as zones]
             [jobs.lib.part-cut :as part-cut]
-            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.trees :refer [default-radius recently-unreachable]]
             [jobs.lib.world-files :as world]))
 
@@ -44,10 +43,9 @@
         seen))))
 
 (defn part-cut-tree
-  "Holds alive, by day, on the ground, when a part-cut trunk that no other player's zone or claim refuses is in sight."
+  "Holds alive, on the ground, when a part-cut trunk that no other player's zone or claim refuses is in sight."
   [p view _args kn _live]
   (boolean
    (and (not (body/recovery-pending? view :part-cut-tree))
-        (not (sh-sense/night? p))
         (not (false? (.-onGround (.self p))))
         (trunks-seen? p kn view))))
