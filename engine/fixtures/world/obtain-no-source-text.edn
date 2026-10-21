@@ -38,6 +38,12 @@
             {:no-event {:source :system :kind :error} :for-s 30}]
    :after [[:item "white_wool" 0]]
    :limit-s 60}
+  {:name "pickaxe-without-a-table-names-the-table"
+   :body {:inventory [["iron_ingot" 5] ["stick" 2]]}
+   :act [[:job (jobs.items.obtain {:item "iron_pickaxe" :count 1 :explore false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "needs a crafting_table"]}} :within-s 40 :of-job true}]
+   :after [[:item "iron_pickaxe" 0]]
+   :limit-s 60}
   {:name "part-of-the-count-at-the-time-limit-is-not-completed"
    :body {:inventory [["wheat" 1]]}
    :act [[:job (jobs.items.obtain {:item "wheat" :count 4 :explore false :spend {:job-time 25}})]]

@@ -65,7 +65,7 @@
 
 (defn ceil-div [a b] (js/Math.ceil (/ a b)))
 
-(declare make)
+(declare make lacking)
 
 (defn gathered?
   "Whether item counts as gathered, not crafted, in plan state st."
@@ -129,7 +129,12 @@
             batches (ceil-div n (:count r))
             short (keep (fn [[k v]] (let [h (get have k 0)] (when (< h (* v batches)) (str "needs " (* v batches) " " k ", have " h))))
                         (:needs r))]
-        (str "crafting " item " " (if (seq short) (clojure.string/join "; " short) "has no ingredient short, but no chain works"))))))
+        (str "crafting " item " "
+             (cond
+               (seq short) (clojure.string/join "; " short)
+               (and (:table? r) (not= item table-item) (zero? (get have table-item 0)))
+               (str "needs a crafting_table, none carried; " (lacking version have table-item 1))
+               :else "has no ingredient short, but no chain works"))))))
 
 (defn plan
   "See the ns doc. n is the amount still lacking: a gatherable item is planned as {:gather {item n}} whatever is carried."
