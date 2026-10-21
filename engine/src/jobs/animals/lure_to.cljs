@@ -1,5 +1,6 @@
 (ns jobs.animals.lure-to
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.checks :as checks]
+            [jobs.lib.ready :as ready]
             [clojure.string :as str]
             [engine.args :as a]
             [jobs.lib.pen-read :as pen-read]
@@ -84,7 +85,7 @@
 (def target [:mob :pos])
 
 (def safe? ready/safe-if-lit)
-(def fit? ready/fit?)
+(def fit? "Survival mode only: a passive animal cannot hurt the body, so a weak body still brings one to food." checks/survival-mode)
 
 
 (def defaults {:spend {:job-time ::job-time-s}})

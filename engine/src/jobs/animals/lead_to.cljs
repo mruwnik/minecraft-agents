@@ -1,5 +1,6 @@
 (ns jobs.animals.lead-to
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.checks :as checks]
+            [jobs.lib.ready :as ready]
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -185,7 +186,7 @@
 (def target [:mob :pos :fence])
 
 (def safe? ready/safe-if-lit)
-(def fit? ready/fit?)
+(def fit? "Survival mode only: a passive animal cannot hurt the body, so a weak body still brings one to food." checks/survival-mode)
 
 
 (def defaults {:spend {:job-time ::job-time-s}})

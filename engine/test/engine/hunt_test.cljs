@@ -449,13 +449,15 @@
           (is (= :no-color (:reason cause)))
           (is (re-find #"sheared" (:text cause))))))))
 
-(deftest a-badly-hurt-body-waits-to-heal-before-it-hunts
+(deftest a-badly-hurt-body-hunts-a-passive-animal-but-waits-to-heal-before-a-hostile-one
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:item "beef" :count 1 :keep 0} {:inventory h/sword :self {:health 0.5} :entities [(cow 1 3)]} 10))]
-          (is (empty? (attacked s)) "nothing attacked at 0.5 hp")
-          (is (= [:low-health] (distinct (map :reason (events-of s :waiting))))))))))
+        (let [cow-hunt (await (scenario {:item "beef" :count 1 :keep 0} {:inventory h/sword :self {:health 0.5} :entities [(cow 1 3)]} 20))
+              zombie-hunt (await (scenario {:item "rotten_flesh" :count 1} {:inventory h/sword :self {:health 0.5} :entities [(zombie 1 3)]} 10))]
+          (is (= #{1} (set (attacked cow-hunt))) "the cow is the way to the food that heals")
+          (is (empty? (attacked zombie-hunt)) "nothing hostile attacked at 0.5 hp")
+          (is (= [:low-health] (distinct (map :reason (events-of zombie-hunt :waiting))))))))))
 
 (deftest a-hunt-at-night-in-the-open-waits-for-dawn
   (async done
@@ -477,11 +479,11 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p eng] :as s} (h/setup {:inventory h/sword :entities [(cow 1 3) (cow 2 5)]} 20)]
+        (let [{:keys [p eng] :as s} (h/setup {:inventory h/sword :entities [(zombie 1 3) (zombie 2 5)]} 20)]
           (.override (.-world p) "attack" (fn [token a impl] (-> (impl token a) (.then (fn [r] (fake/swap-self! p assoc :health 0.5) r)))))
-          (core/submit! eng (spec {:item "beef" :count 2 :keep 0}) {})
+          (core/submit! eng (spec {:item "rotten_flesh" :count 2}) {})
           (await (run-ticks s 15 700))
-          (is (= #{1} (set (attacked s))) "the first cow was attacked, the second waits for the body to heal")
+          (is (= #{1} (set (attacked s))) "the first zombie was attacked, the second waits for the body to heal")
           (is (not (finished? s)) "low health does not end the hunt")
           (is (= :low-health (:reason (last (events-of s :waiting))))))))))
 

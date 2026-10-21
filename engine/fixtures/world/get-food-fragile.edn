@@ -2,9 +2,8 @@
 ;; day (not at night, past the dawn grace, no hostile known within 40) and never past a known hostile that would likely kill it.
 ;; The body faces east (yaw 270): the creepers are summoned east of it and a silent one is seen only in its view cone.
 ;; Hunger is drained by RCON (food 9-10), then `damage` sets hp 2.
-;; Should-succeed: a calm day, a known chest of bread 24 blocks off: walked to and eaten from; raw beef is cooked at a known furnace
-;; 24 blocks off.
-;; Should-fail: at night the trigger never fires; a creeper known on the route ends a get-food call condition-failed :too-dangerous with the body staying put; a creeper by the furnace makes it eat the raw beef instead of cooking (no cooking).
+;; Should-succeed: a calm day, a known chest of bread 24 blocks off: walked to and eaten from; raw beef is eaten raw with no furnace walk or dig; a cow 8 blocks off is hunted.
+;; Should-fail: at night the trigger never fires; a creeper known on the route ends a get-food call condition-failed :too-dangerous with the body staying put.
 {:defaults
  {:tags [:survival :hungry :get-food :fragile]
   :time :day :time-why :dawn-decision
@@ -38,20 +37,25 @@
    ;; called by hand or by the hungry reflex, the call ends condition-failed :too-dangerous
    :expect [{:event {:source :job :kind :stopped :data {:reason :too-dangerous}} :within-s 60 :of-job true}]
    :after [[:body-near [4.5 0 16.5] 4] [:item "bread" 0]]}
-  {:name "raw-beef-is-cooked-at-the-furnace-on-a-calm-day"
+  {:name "raw-beef-is-eaten-instead-of-a-walk-to-a-known-furnace"
    :blocks [[:set [28 0 16] "furnace[facing=west]"]]
    :memory [{:kind :furnace :data {:pos #xyz [28 0 16]} :policy {:cap 1 :ttl :forever}}]
-   :body {:inventory [["beef" 2] ["coal" 2]]}
-   :expect [{:event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :within-s 80}]}
-  {:name "creeper-by-the-furnace-eats-the-beef-raw"
-   :blocks [[:set [28 0 16] "furnace[facing=west]"]]
-   :memory [{:kind :furnace :data {:pos #xyz [28 0 16]} :policy {:cap 1 :ttl :forever}}]
-   :body {:inventory [["beef" 2] ["coal" 2]]}
-   ;; the eaten beef leaves hp 2 hungry, so the body may search on (the creeper is out of sight 22 off): the check is that it never reached the furnace
-   ;; the job is submitted below, after the damage: the hungry trigger would fire at food 8, before the damage lands, and call it as a healthy body; the 2 s wait lets the body see the hp 2 and the creeper before the call
+   :body {:inventory [["beef" 5] ["coal" 2]]}
    :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
                :job (jobs.survival.respond-to-hostile)}]
-   :act [[:summon "creeper" [26.5 0 18.5] "{NoAI:1b,Silent:1b}"] [:until-seen {:entity "creeper"} 10]
+   :act [[:job (jobs.survival.get-food {:carry 0 :explore false})]]
+   :expect [{:no-event {:source :job :kind :child_started :data {:slot :cook}} :for-s 40}]
+   :after [[:item "beef" [:<= 2]] [:body-far [28.5 0 16.5] 6]]}
+  {:name "raw-beef-is-eaten-instead-of-mining-for-a-furnace"
+   :blocks [[:fill [8 0 14] [12 2 18] "stone"]]
+   :body {:inventory [["beef" 5] ["wooden_pickaxe" 1]]}
+   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile)}]
+   :act [[:job (jobs.survival.get-food {:carry 0 :explore false})]]
+   :expect [{:no-event {:source :job :kind :child_started :data {:slot :cook}} :for-s 40}]
+   :after [[:item "beef" [:<= 2]] [:body-near [4.5 0 16.5] 4]]}
+  {:name "hungry-body-with-nothing-to-eat-hunts-the-cow-nearby"
+   :body {:inventory [["iron_sword" 1]]}
+   :act [[:summon "cow" [12.5 0 16.5] "{NoAI:1b}"] [:until-seen {:entity "cow"} 10]
          [:job (jobs.survival.get-food {})]]
-   :expect [{:no-event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :for-s 40}]
-   :after [[:item "beef" [:<= 1]] [:body-far [28.5 0 16.5] 6]]}]}
+   :expect [{:event {:source :job :kind :food.killed} :within-s 70}]}]}

@@ -72,7 +72,15 @@
 
 (def defaults {:spend {:job-time ::job-time-s} :use {:tools :attack} :checks {:safe? '(not (exposed))}})
 (def safe? ready/safe-if-lit)
-(def fit? ready/fit?)
+(declare present)
+
+(defn fit?
+  "ready/fit?, but not for passive animals alone: they cannot hurt the body, and killing one is the way to the food that heals (survival mode only)."
+  [c]
+  (let [targets (when-not (hostile/hostiles? c) (present c))]
+    (if (and (seq targets) (every? #(= "passive" (.-kind %)) targets))
+      (checks/survival-mode c)
+      (ready/fit? c))))
 
 (defn target-list
   "targets as a vector: nil is empty, a bare id or name is one target."

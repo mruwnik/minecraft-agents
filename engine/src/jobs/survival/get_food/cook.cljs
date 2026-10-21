@@ -112,12 +112,14 @@
 (defn can-cook?
   "Mid-cook, or raw food carried and no failed cook in this job, with a furnace known or cooking worth a furnace of its
   own (worth-cooking?); never when rushed? (a cook under way is dropped then). The clock is no reason to refuse (Q334): the smelt
-  child's own safe? (exposure, threats) decides, so a sealed dark room cooks."
+  child's own safe? (exposure, threats) decides, so a sealed dark room cooks. A fragile body starts no cook: a furnace and its
+  fuel can mean a long walk or a dig, and the raw food feeds it as well."
   [c]
   (boolean
    (and (not (rushed? c))
         (or (:cooking (ctx/mem c))
             (and (seq (raw-carried c))
+                 (not (foods/fragile? (.self (:primitives c))))
                  (not (:no-cook (ctx/mem c)))
                  (or (nearest-cooker c) (worth-cooking? c)))))))
 

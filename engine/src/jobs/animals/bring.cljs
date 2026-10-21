@@ -6,6 +6,7 @@
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.pen-read :as pen-read]
+            [jobs.lib.checks :as checks]
             [jobs.lib.ready :as ready]))
 
 (def doc
@@ -47,7 +48,7 @@
 (def target [:mob :pos :fence])
 
 (def safe? ready/safe-if-lit)
-(def fit? ready/fit?)
+(def fit? checks/survival-mode)
 
 (def defaults {:spend {:job-time ::job-time-s}})
 

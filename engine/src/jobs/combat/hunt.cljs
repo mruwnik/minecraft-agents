@@ -31,7 +31,7 @@
   spares (jobs.lib.animal-spare: kinds in ::off-limits, animals in a zone or plan of its own or a closed enclosure unless ::spare-pens
   is false) are never targets either. Weapons: the call's :use :tools (default the best carried); a hostile kind with none gets a sword
   first (jobs.lib.need; a failed fetch ends the job with its cause).
-  Needs: fit? (waits :low-health); at its start it waits :unarmed (hostile, no weapon, ways #{:carried}), :no-color or
+  Needs: fit? (waits :low-health for a hostile kind only); at its start it waits :unarmed (hostile, no weapon, ways #{:carried}), :no-color or
   :too-few (:in-range, :radius, :keep, :nearest) unless the kind is heard and not in sight, when it first steps up to four times
   toward the sound (jobs.lib.vantage).
   done? holds once :count of the item are carried.
@@ -56,7 +56,12 @@
 
 (def defaults {:spend {:job-time ::job-time-s} :least 1 :use {:tools :attack} :checks {:safe? '(not (exposed))}})
 (def safe? ready/safe-if-lit)
-(def fit? ready/fit?)
+(declare hostile?)
+
+(defn fit?
+  "ready/fit? for a hostile kind; a passive animal cannot hurt the body, and hunting it is the way to the food that heals (survival mode only)."
+  [c]
+  (if (hostile? c) (ready/fit? c) (checks/survival-mode c)))
 
 (defn mobs
   "The mob names that drop the call's :item."

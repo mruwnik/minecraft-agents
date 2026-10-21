@@ -57,6 +57,13 @@
           (is (= :completed (:kind e)))
           (is (= [:lead :free "u1"] ((juxt :method :end :animal) e))))))))
 
+(deftest a-badly-hurt-body-still-leads-a-cow
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [e (ended (await (bring! {:inventory lead :self {:health 2} :entities [(cow 1 3)]} {})))]
+          (is (= :completed (:kind e))))))))
+
 (deftest lures-a-cow-with-wheat
   (async done
     (tu/run-async done

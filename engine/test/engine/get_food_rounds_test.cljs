@@ -866,19 +866,12 @@
     (await (run-until-idle! eng p 40))
     w))
 
-(deftest raw-beef-is-cooked-on-low-health-on-a-calm-day
+(deftest raw-beef-is-eaten-raw-on-low-health-without-a-furnace-walk
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p]} (await (low-health-cook! []))]
-          (is (some #{"take"} (call-args p "furnace" "op"))))))))
-
-(deftest raw-beef-is-eaten-raw-on-low-health-with-a-creeper-by-the-furnace
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [p]} (await (low-health-cook! [(assoc creeper :pos {:x 33.5 :y 64 :z 0.5})]))]
-          (is (= [] (calls p "furnace")) "the walk would likely kill it")
+          (is (= [] (calls p "furnace")) "a fragile body does not walk to a furnace")
           (is (> (food p) 5)))))))
 
 (deftest raw-beef-is-cooked-at-a-remembered-furnace-beyond-the-cook-radius
