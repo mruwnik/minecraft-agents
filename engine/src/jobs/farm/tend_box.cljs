@@ -41,15 +41,19 @@
   (let [in (access/rules-input c)]
     (filterv #(not (gate/refused? (access/may? in action %))) poss)))
 
+(defn refusal-names
+  "{:zones :claims :plans :owners} named by the refused verdicts vs, nil when there are none. It names the plans so a wait
+  says when it is the body's own plan."
+  [vs]
+  (when (seq vs)
+    {:zones (vec (distinct (keep :zone vs))) :claims (vec (distinct (keep :claim vs)))
+     :plans (vec (distinct (keep :plan vs))) :owners (vec (distinct (keep :owner vs)))}))
+
 (defn refusers
-  "Who refuses the hoe on the poss: {:zones :claims :plans :owners} of the refusals, nil when nothing is refused. It names
-  the plans so a wait says when it is the body's own plan."
+  "Who refuses the hoe on the poss: refusal-names of the refusals."
   [c poss]
-  (let [in (access/rules-input c)
-        vs (filter gate/refused? (map #(access/may? in :dig %) poss))]
-    (when (seq vs)
-      {:zones (vec (distinct (keep :zone vs))) :claims (vec (distinct (keep :claim vs)))
-       :plans (vec (distinct (keep :plan vs))) :owners (vec (distinct (keep :owner vs)))})))
+  (let [in (access/rules-input c)]
+    (refusal-names (filter gate/refused? (map #(access/may? in :dig %) poss)))))
 
 (defn ground-box
   "The box's ground layer as the box irrigate and its need work over."

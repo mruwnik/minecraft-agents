@@ -105,9 +105,7 @@
   :owners}, or nil when nothing is refused. It names them so a run with nothing else to do says why."
   [c plan cells]
   (let [vs (keep (fn [pos] (let [v (permit/permit c plan :dig pos)] (when (gate/refused? v) v))) cells)]
-    (when (seq vs)
-      {:refused (count vs) :zones (vec (distinct (keep :zone vs))) :claims (vec (distinct (keep :claim vs)))
-       :plans (vec (distinct (keep :plan vs))) :owners (vec (distinct (keep :owner vs)))})))
+    (some-> (box/refusal-names vs) (assoc :refused (count vs)))))
 
 (defn reserve-held
   "What the food reserve keeps of the seeds of the crops of cells {pos crop}: {:seed :held :kept :reserve-points :cells}
