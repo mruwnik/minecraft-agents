@@ -20,4 +20,16 @@
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 8 :accept #{:falling-block}})]]
    :expect [{:event {:source :job :kind :completed :data {:steps 8}} :within-s 190 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 150 :until {:source :job :kind :completed} :of-job true}]
-   :after [[:not-block [13 7 16] "gravel"] [:not-block [14 6 16] "gravel"]]}]}
+   :after [[:not-block [13 7 16] "gravel"] [:not-block [14 6 16] "gravel"]]}
+  ;; Card fda17d97: a stair up out of a 1x1 pocket with gravel over its first headroom cell takes the landing on the body and digs it out
+  {:name "stair-up-under-gravel-with-accept-digs-it-out"
+   :blocks [[:fill [10 3 16] [10 4 16] "air"] [:fill [10 6 16] [10 7 16] "gravel"]]
+   :body {:at [10.5 3 16.5] :yaw 270}
+   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4 :accept #{:falling-block}})]]
+   :expect [{:event {:source :job :kind :completed :data {:steps 4}} :within-s 190 :of-job true}]
+   :after [[:body-near [14.5 7 16.5] 1.5] [:not-block [10 6 16] "gravel"]]}
+  {:name "stair-up-under-gravel-without-accept-stops-naming-the-hazard"
+   :blocks [[:fill [10 3 16] [10 4 16] "air"] [:fill [10 6 16] [10 7 16] "gravel"]]
+   :body {:at [10.5 3 16.5] :yaw 270}
+   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :hazard}} :within-s 120 :of-job true}]}]}

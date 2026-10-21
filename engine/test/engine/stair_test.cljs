@@ -272,10 +272,10 @@
   (is (= {:reason :zone :zone "keep" :cell [1 64 0]}
          (stop {} #{:fluid-adjacent} :zones [{:name "keep" :min [1 60 0] :max [1 64 0]}]))))
 
-(deftest gravel-over-the-head-going-up-is-a-hazard-no-accept-takes
+(deftest gravel-over-the-head-going-up-is-a-hazard-only-:falling-block-takes
   (let [named {[0 67 0] "stone" [0 68 0] "gravel" [1 65 0] "stone"}]
     (is (= :hazard (:reason (stop named #{:fluid-adjacent} :dir :up))))
-    (is (= [:on-body] (map access/stair-hazard-key (:hazards (stop named #{:falling-block} :dir :up)))) "it would land on the body")
+    (is (nil? (stop named #{:falling-block} :dir :up)) "accepted: it lands on the body and is dug out")
     (is (nil? (stop (assoc named [0 68 0] "stone" [1 68 0] "gravel" [1 67 0] "stone") #{:falling-block} :dir :up))
         "gravel over the next column falls into the cut")))
 

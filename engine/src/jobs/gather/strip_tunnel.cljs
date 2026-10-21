@@ -121,7 +121,7 @@
   [res]
   (let [h (first (:hazards res))
         at (some-> (or (when (= :hazard (:reason res)) (:at h)) (:cell res)) (#(zipmap [:x :y :z] %)))]
-    {:reason (cond (nil? res) :refused (and h (= :hazard (:reason res))) (access/stair-hazard-key h) :else (:reason res)) :at at}))
+    {:reason (cond (nil? res) :refused (and h (= :hazard (:reason res))) (access/hazard-key h) :else (:reason res)) :at at}))
 
 (defn landed?
   "The walk into the cut stalled on a line cell that is solid again (a falling block landed in it after the cut): the step is cut again."

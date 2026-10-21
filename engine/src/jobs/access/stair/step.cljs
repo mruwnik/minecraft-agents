@@ -202,7 +202,7 @@
               block ((:block-at in) cell)]
           (cond
             (not (:ok v)) (assoc (dissoc v :ok) :cell cell)
-            (not-every? (comp accept access/stair-hazard-key) (:hazards v)) {:reason :hazard :cell cell :hazards (:hazards v) :why (cells/hazards-why (:hazards v))}
+            (not-every? (comp accept access/hazard-key) (:hazards v)) {:reason :hazard :cell cell :hazards (:hazards v) :why (cells/hazards-why (:hazards v))}
             (bs/air block) :continue
             :else
             (do
@@ -249,7 +249,7 @@
   [c in feet accept]
   (when-let [cell (first (filter #(rules/falling? ((:block-at in) %)) [(update feet 1 inc) feet]))]
     (if (>= (:landed (ctx/mem c) 0) max-landings)
-      {:reason :hazard :cell cell :hazards [{:reason :falling-block :block ((:block-at in) cell) :at cell :on-body true}]
+      {:reason :hazard :cell cell :hazards [{:reason :falling-block :block ((:block-at in) cell) :at cell}]
        :why "falling blocks keep landing on the body"}
       (let [r (await (dig! c in cell [cell] accept))]
         (when (= :continue r) (ctx/update-mem! c update :landed (fnil inc 0)))

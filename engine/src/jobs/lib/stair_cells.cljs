@@ -63,10 +63,7 @@
   (let [v (rules/may-dig? in)]
     (if-not (:ok v)
       v
-      (let [[fx _ fz] (:feet in)
-            hs (vec (for [h (distinct (concat (:hazards v) (stair-hazards (:block-at in) (:cell in) cut)))
-                          :let [[x _ z] (:at h)]]
-                      (cond-> h (and (= :falling-block (:reason h)) (= [x z] [fx fz])) (assoc :on-body true))))]
+      (let [hs (vec (distinct (concat (:hazards v) (stair-hazards (:block-at in) (:cell in) cut))))]
         (cond-> {:ok true} (seq hs) (assoc :hazards hs))))))
 
 (defn way-floors
@@ -130,7 +127,7 @@
                 (let [v (cell-verdict (assoc in :cell cell) cut)]
                   (cond
                     (not (:ok v)) (assoc (dissoc v :ok) :cell cell)
-                    (not-every? (comp accept access/stair-hazard-key) (:hazards v))
+                    (not-every? (comp accept access/hazard-key) (:hazards v))
                     {:reason :hazard :cell cell :hazards (:hazards v) :why (hazards-why (:hazards v))}))))
             cut))))
 

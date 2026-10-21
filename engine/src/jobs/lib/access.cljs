@@ -150,12 +150,6 @@
   [{:keys [reason fluid]}]
   (if (and (= :fluid-adjacent reason) (= "lava" fluid)) :lava-adjacent reason))
 
-(defn stair-hazard-key
-  "hazard-key, but a falling block over the
-  body's own column is :on-body, which no :accept takes (it would land on the body)."
-  [{:keys [reason fluid on-body]}]
-  (if on-body :on-body (hazard-key {:reason reason :fluid fluid})))
-
 (defn judge
   "What a dig job does with verdict v given the hazards it accepts (keyed by hazard-key):
   :ok (dig), :refused (zone, claim or another plan's footprint: leave the cell for good), :hazard (a hazard not
