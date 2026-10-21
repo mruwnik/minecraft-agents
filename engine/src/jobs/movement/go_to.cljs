@@ -71,7 +71,7 @@
     doors are walls.")
 
 (a/defargs args
-  {:pos {:doc "target position [x y z] or {:x :y :z}; [x z] or {:x :z}: the ground of that column nearest the body's feet" :spec column/pos-or-column? :default nil}
+  {:pos {:doc "target position [x y z] or {:x :y :z}; [x z] or {:x :z}: the surface of that column (highest seen stand open to the sky; a column seen only under cover: the stand nearest the feet)" :spec column/pos-or-column? :default nil}
    :place {:doc "name of a place in body memory (:home, :bed, ...) to walk to instead of :pos" :spec (a/or-of keyword? string?) :default nil}
    :range {:doc "how close counts as there: arrive within this many cells of :pos (a sphere)" :spec (a/num-in 0 nil) :default 1}
    :see {:doc "true: a cell within :range counts as there only when the eye there sees the block at :pos (jobs.lib.aim: a clear line over seen cells to its centre or a face), as a body that digs, places or uses it needs; a [x z] column goal ignores it" :spec boolean? :default false}
