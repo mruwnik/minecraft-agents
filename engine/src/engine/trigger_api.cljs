@@ -250,6 +250,13 @@
     (cond-> (merge base (select-keys given [:persistence :cooldown-s :level :backoff :builtin? :by]))
       (:ttl-s given) (assoc :until (+ (core/ttl-now eng) (* 1000 (:ttl-s given)))))))
 
+(defn cancel-running!
+  "End the reflex jobs trigger id has running: a mute must free the body from them too."
+  [eng id]
+  (doseq [[job inst] (:instances (core/state eng))
+          :when (= id (:reflex inst))]
+    (core/cancel! eng job :agent)))
+
 (defn attention-job
   "The job id an entry's backoff request is filed under (requests are per job)."
   [id]
@@ -403,7 +410,7 @@
 (defn request!
   "Apply one POST /triggers request; the reply, or a refusal naming the
   offending part. Runs between ticks (the handler and tick! share one event
-  loop); a reflex job in flight is never cut by an edit."
+  loop); a mute ends the reflex jobs its trigger has running."
   [eng r]
   (or (request-problem eng r)
       (let [{:keys [op ttl-s]} r
@@ -413,7 +420,7 @@
           :upgrade (upgrade! eng (:ids r))
           :decline (decline! eng (:ids r))
           :remove (remove! eng id)
-          :mute (do (core/mute! eng id ttl-s) (changed eng op id))
+          :mute (do (core/mute! eng id ttl-s) (cancel-running! eng id) (changed eng op id))
           :move (do (core/move! eng id (select-keys r [:above :below]) ttl-s) (changed eng op id))
           :clear (do (core/clear-change! eng id (:property r)) (changed eng op id))))))
 

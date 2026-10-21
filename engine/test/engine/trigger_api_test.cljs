@@ -313,6 +313,21 @@
           (is (= [:declined] (mapv :outcome (of-kind seen :reflex :ended))) "its one round ended it")
           (is (= 1 (count (of-kind seen :job :round_started))) "no second round"))))))
 
+(deftest muting-a-trigger-ends-the-reflex-job-it-has-running
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen] :as r} (setup)]
+          (api/request! eng (assoc adhoc :job '(spin)))
+          (swap! flags conj :low)
+          (reset! (:clock r) t0)
+          (let [round (core/tick! eng)]
+            (is (= :bread-low (:reflex (core/running eng))) "the reflex job is running")
+            (is (:ok (api/request! eng {:op :mute :id :bread-low :ttl-s 60})))
+            (await round))
+          (is (= {} (:instances (core/state eng))))
+          (is (= [:cancelled] (mapv :outcome (of-kind seen :reflex :ended)))))))))
+
 ;; ---------------------------------------------------------------- restart and scenario
 
 (deftest restart-restores-the-register-and-recompiles-conditions
