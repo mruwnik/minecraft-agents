@@ -40,6 +40,17 @@
          [:summon "cow" [17.5 0 17.5] "{PersistenceRequired:1b}"]
          [:job (jobs.animals.breed {:mob "cow" :pairs 1 :radius 12 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :babies 1}} :within-s 60 :of-job true}]}
+  ;; Should-succeed: the cows are already in view of a gated pen (known :box); breed walks in through the gate to feed, then leaves
+  ;; to where it started with the gate shut, so the body is not left inside and the calf cannot slip out.
+  {:name "breed-with-the-cows-in-view-leaves-the-pen-and-shuts-the-gate"
+   :blocks [[:fill [14 0 13] [24 0 13] "oak_fence"] [:fill [14 0 19] [24 0 19] "oak_fence"]
+            [:fill [14 0 14] [14 0 18] "oak_fence"] [:fill [24 0 14] [24 0 18] "oak_fence"]
+            [:set [14 0 16] "oak_fence_gate[facing=east,open=false]"]]
+   :act [[:summon "cow" [21.5 0 15.5] "{PersistenceRequired:1b}"]
+         [:summon "cow" [22.5 0 17.5] "{PersistenceRequired:1b}"]
+         [:job (jobs.animals.breed {:mob "cow" :pairs 1 :radius 12 :ways #{:carried} :box {:min #xyz [15 0 14] :max #xyz [23 0 18]}})]]
+   :expect [{:event {:source :job :message [:contains "breed done: fed, fed 2"]} :within-s 120 :of-job true}]
+   :after [[:body-near [10.5 0 16.5] 3.2] [:block [14 0 16] "oak_fence_gate[open=false]"]]}
   ;; Should-succeed (card 7671afe8): a pen 20 blocks off, two AI cows in it, none in view (:radius 12): breed with the known :box walks
   ;; in through the gate first, feeds both, and walks back out (go-to shuts the gate), so the call is done with 2 fed.
   {:name "breed-with-a-known-pen-walks-to-it"
@@ -50,4 +61,5 @@
    :act [[:summon "cow" [30.5 0 15.5] "{PersistenceRequired:1b}"]
          [:summon "cow" [31.5 0 17.5] "{PersistenceRequired:1b}"]
          [:job (jobs.animals.breed {:mob "cow" :pairs 1 :radius 12 :ways #{:carried} :box {:min #xyz [29 0 14] :max #xyz [32 0 18]}})]]
-   :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 120 :of-job true}]}]}
+   :expect [{:event {:source :job :message [:contains "breed done: fed, fed 2"]} :within-s 120 :of-job true}]
+   :after [[:block [28 0 16] "oak_fence_gate[open=false]"]]}]}
