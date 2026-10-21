@@ -12,9 +12,9 @@
 (a/defargs settings
   {:engine.events/max-bytes {:default (* 64 1024 1024) :spec (a/int-in 1024 nil)
                              :doc "The event log's size cap over the active and rotated segments, bytes."}
-   :engine.events/debug-max-bytes {:default (* 8 1024 1024) :spec (a/int-in 1024 nil)
+   :engine.events/debug-max-bytes {:default (* 128 1024 1024) :spec (a/int-in 1024 nil)
                                    :doc "Size cap of the separate chain that holds :debug events, bytes; the main chain keeps everything else."}
-   :engine.events/debug-max-age-ms {:default (* 15 60 1000) :spec (a/int-in 1000 nil)
+   :engine.events/debug-max-age-ms {:default (* 3 60 60 1000) :spec (a/int-in 1000 nil)
                                     :doc "How long :debug events are kept, ms."}
    :engine.events/recent-count {:default 256 :spec (a/int-in 1 nil) :doc "Events kept in memory for the live reader; an older cursor reads from disk."}
    :engine.events/recent-bytes {:default (* 256 1024) :spec (a/int-in 1 nil) :doc "Bytes of events kept in memory for the live reader."}
@@ -301,7 +301,8 @@
         ;; A non-numeric :cause is the body's own datum (died/hurt: "lava"), not a cause sequence.
         extra (cond-> (reduce-kv (fn [m k v] (if (or (nil? v) (contains? known-keys k)) m (assoc m k v))) {} event)
                 (and (some? (:cause event)) (not (number? (:cause event)))) (assoc :cause (:cause event)))
-        pos (or (:pos event) (when pos-fn (pos-fn)))
+        ;; Job debug events (state writes, child starts) carry the job id; their position doubled the debug log's size.
+        pos (or (:pos event) (when (and pos-fn (not (and (= :job source) (= :debug (:level event))))) (pos-fn)))
         data (cond-> (merge (or (:data event) {}) extra)
                (and pos (nil? (get (or (:data event) {}) :pos)))
                (assoc :pos (select-keys pos [:x :y :z])))
