@@ -6,6 +6,7 @@
             [jobs.lib.waits :as waits]
             [jobs.lib.farm :as farm]
             [jobs.farm.till :as till]
+            [jobs.farm.field :as fld]
             [jobs.lib.field-area :as fa]
             [jobs.lib.blocks :as b]
             [jobs.lib.checks :as checks]
@@ -17,6 +18,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.ready :as ready]
             [jobs.lib.util :as u]
+            [jobs.lib.world :as known]
             [jobs.lib.work-place :as work-place]))
 
 (def doc
@@ -24,7 +26,7 @@
   the field the body has seen, farmland or ground a hoe would till, is dry when every block within 4 in x and z of it, at its height
   and one above, is seen and none is water; a cell with an unseen block in reach and no water is unknown, never dry. For the spot
   that wets the most dry cells (one of the field's own cells under open air whose four sides are seen solid and underside not seen open, nearest
-  first) it digs the cell (a jobs.blocks.dig child) and pours a water bucket in it (a jobs.items.use child), then
+  first) (with :for-plan, when the plan has a water cell, never one under its crop cells) it digs the cell (a jobs.blocks.dig child) and pours a water bucket in it (a jobs.items.use child), then
   looks again (a pour that fails, or a bucket gone before it, has the cell refilled with dirt (a jobs.blocks.place child); a cell that stays open is named in :holes and ends the call, a refilled one only drops that spot); one bucket wets one spot, so it ends when no cell is dry, no water bucket is left or no spot helps. A pour
   counts only once the cell is seen as water. A water bucket is fetched (jobs.lib.need, from the call's :ways) when dry cells are left and none is carried; a
   failed fetch ends the call with its ending as the :because. Zones: a spot in another owner's zone or claim, or in a
@@ -126,6 +128,21 @@
        (let [under {:x x :y (dec y) :z z}]
          (or (nil? (u/seen-name p under)) (solid-at? p under)))))
 
+(defn water-planned?
+  "Whether the plan has a cell that wants water (or any alternative naming it): then it is where the water goes."
+  [want]
+  (cond (= "water" want) true
+        (map? want) (= "water" (:block want))
+        (vector? want) (boolean (some water-planned? (rest want)))
+        :else false))
+
+(defn crop-ground
+  "With :for-plan naming a water cell, the cells under the plan's crop cells: farmland the plan keeps, never turned into water."
+  [c]
+  (let [answer (some->> (:for-plan (:args c)) (known/plan c))]
+    (when (some (comp water-planned? :want) (:cells answer))
+      (into #{} (map #(update % :y dec)) (keys (fld/crop-cells answer nil))))))
+
 (defn spot
   "The field cell to turn into water: the one that wets the most of dry, nearest first; nil when none helps. Only a
   cell with air above and a contained hole, not given up, that the zone rules let the body dig."
@@ -135,6 +152,7 @@
         failed (:failed (ctx/mem c) #{})
         open (->> (field-cells c)
                   (remove failed)
+                  (remove (or (crop-ground c) #{}))
                   (remove (set (:poured (ctx/mem c))))
                   (filter #(= "air" (u/seen-name p (update % :y inc))))
                   (filter #(contained? p %))
@@ -214,7 +232,7 @@
 (defn ^:async restore!
   "Put dirt back in the dug cell; a cell that stays open is booked in :holes. :continue while the child waits."
   [c hole]
-  (let [e (waits/waiting-out c (await (ctx/call c :restore 'jobs.blocks.place (merge (select-keys (:args c) [:ignore-zones?]) {:pos hole :item "dirt" :clear false}))))]
+  (let [e (waits/waiting-out c (await (ctx/call c :restore 'jobs.blocks.place (merge (select-keys (:args c) [:ignore-zones? :for-plan]) {:pos hole :item "dirt" :clear false}))))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) (do (ctx/update-mem! c #(-> (dissoc % :restore) (update :restored (fnil conj #{}) hole))) :again)
@@ -223,7 +241,7 @@
 (defn ^:async pour!
   "Pour the bucket in the dug hole. :again, or :continue while the child waits."
   [c hole]
-  (let [e (waits/waiting-out c (await (ctx/call c :pour 'jobs.items.use (merge (select-keys (:args c) [:ignore-zones?]) {:on hole :item "water_bucket"}))))]
+  (let [e (waits/waiting-out c (await (ctx/call c :pour 'jobs.items.use (merge (select-keys (:args c) [:ignore-zones? :for-plan]) {:on hole :item "water_bucket"}))))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) (do (ctx/update-mem! c #(-> (dissoc % :hole) (update :poured (fnil conj #{}) hole))) :again)

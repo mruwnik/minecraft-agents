@@ -9,12 +9,12 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]))
 
-(defn setup [world & [zones]]
+(defn setup [world & [zones plans]]
   (let [clock (atom 1000000)
         [_ sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake world))]
     {:eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
-                        :world (ew/of-data {} {} (or zones []))
+                        :world (ew/of-data (or plans {}) {} (or zones []))
                         :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
      :p p}))
 
@@ -122,6 +122,17 @@
                 water (filterv #(= "water" (block-at p {:x % :y 63 :z 0})) (range 9))]
             (is (not-any? #{4} water) open)
             (is (= 1 (count (:poured r))) open)))))))
+
+(deftest a-plan-keeps-its-crop-ground-and-gets-water-in-its-own-water-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "p" :parts [{:id "water" :cells [[2 63 0]] :want "water"}
+                                    {:id "wheat" :cells (mapv (fn [x] [x 64 0]) (remove #{2} (range 9))) :want {:crop "wheat"}}]}
+              {:keys [eng p]} (setup {:inventory bucket :blocks (strip 9)} [] {"p" plan})
+              r (await (tu/child-outcome eng job (assoc (args 9) :for-plan "p") 40))]
+          (is (= "water" (block-at p {:x 2 :y 63 :z 0})) "the plan's water cell, not the cell that wets most")
+          (is (= 1 (count (:poured r)))))))))
 
 (deftest a-spot-in-anothers-zone-is-skipped
   (async done

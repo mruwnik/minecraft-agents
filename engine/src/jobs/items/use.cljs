@@ -32,6 +32,7 @@
    :item {:doc "the item to hold for the click; nil: a block keeps the hand as it is, an entity gets the empty hand; none: the empty hand" :spec a/item? :default nil}
    :see {:doc "block only. true: click only from where the eye sees the block (jobs.lib.aim), walking to such a stand first (go-to :see; none: :unreachable); false: within reach is enough, though a wall in between refuses the click" :spec boolean? :default false}
    :ignore-zones? :shared
+   :for-plan {:doc "block only: id of the plan whose work this is: its own footprint does not refuse the bucket; nil: every plan's footprint does" :spec a/name? :default nil}
    :range {:doc "block only: how many cells from :on the walk may stop (go-to :range); a click the server checks by distance, a bed's 3 blocks, wants less" :spec (a/num-in 0 nil) :default 3}
    :face {:doc "block only: the face clicked: up down north south east west" :spec #{"up" "down" "north" "south" "east" "west"} :default "up"}})
 
