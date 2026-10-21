@@ -1,7 +1,7 @@
 ;; observe chests after deposits and across body memory age (cards 6619bcc6 951c71f8 54e6e8b4). Open plot, body at [16.5 0 16.5];
 ;; chests at [20 0 16] (east) and [20 0 20] (a second one).
 ;; Should-succeed: a deposit books what the chest now holds, so observe chests lists it; a deposit with an explicit :chest uses that
-;; chest, not the recorded :chest place; stock booked 40 min ago (past the old 30 min ttl) is still listed.
+;; chest, not the recorded :chest place; stock booked 40 min ago (past the old 30 min ttl) is still listed; a bare inspect-container books the chest too.
 {:defaults
  {:tags [:agent-tools :observe :storage :tool]
   :time :any
@@ -26,6 +26,13 @@
          [:until [:cli "observe" ["$body" "--world" "$world" "chests"] {:ok true :chests [{:pos #at [20 0 20] :items {"bread" 6}}]}] 40]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.storage.deposit"}} :within-s 40}]
    :after [[:item "bread" 0]]}
+  {:name "inspect-container-books-the-chest-stock-for-observe"
+   :blocks [[:set [20 0 16] "chest[facing=west]{Items:[{Slot:0b,id:\"minecraft:bread\",count:5}]}"]]
+   :act [[:job (jobs.primitive.inspect-container {:pos #xyz [20 0 16]})]
+         [:await {:source :job :kind :completed} 40]
+         [:cli "observe" ["$body" "--world" "$world" "chests"] {:ok true :chests [{:pos #at [20 0 16] :items {"bread" 5}}]}]]
+   :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
+   :after [[:block [20 0 16] "chest"]]}
   {:name "stock-booked-forty-minutes-ago-is-still-listed"
    :blocks [[:set [20 0 16] "chest[facing=west]"]]
    :memory [{:kind :fetch/stock :data {:pos #at [20 0 16] :items {"bread" 12}} :policy {:cap 64 :ttl 21600000} :age-s 2400}]

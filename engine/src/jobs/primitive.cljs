@@ -6,7 +6,8 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.primitive :as primitive]
-            [jobs.lib.checks :as checks]))
+            [jobs.lib.checks :as checks]
+            [jobs.lib.stock :as stock]))
 
 (def also-required
   "Args beside the table's target that the act cannot go without."
@@ -106,5 +107,7 @@
                 (if (instance? js/Error r)
                   (ctx/end c :impossible {:reason :bad-args :why (.-message r)})
                   (let [e (ending r)
+                        _ (when (and (= :inspectContainer k) (= :done (:kind e)) (:pos (:args c)) (.-items r))
+                            (stock/note-stock! c (:pos (:args c)) (.-items r)))
                         data (js->clj r :keywordize-keys true)]
                     (ctx/end c (:kind e) (:cause e) (cond-> data (not= :done (:kind e)) (assoc :text (failure-text k data))))))))}))

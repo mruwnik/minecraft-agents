@@ -7,11 +7,13 @@
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.expr :as expr]
+            [engine.memory :as mem]
             [engine.fake :as fake]
             [engine.registry :as registry]
             [engine.settings :as settings]
             [engine.test-util :as tu]
             [engine.primitive :as primitive]
+            [jobs.lib.stock :as stock]
             [jobs.primitive :as primitive-job]))
 
 (def world (atom {}))
@@ -334,3 +336,14 @@
 (deftest every-arg-of-the-table-has-a-spec-of-its-own
   (is (= [] (for [[k {:keys [args]}] primitive/table, arg args :when (not (contains? primitive-job/arg-specs arg))] [k arg])))
   (is (= [] (for [[arg e] primitive-job/arg-specs :when (= 'some? (:form e))] arg))))
+
+(deftest an-inspected-container-is-booked-as-chest-stock
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup registry/jobs)]
+          (fake/swap-self! p assoc :pos [10 64 1])
+          (swap! (fake/state p) assoc-in [:containers [10 64 0]] [{:name "bread" :count 3}])
+          (core/submit! eng '(jobs.primitive.inspect-container {:pos [10 64 0]}) {})
+          (await (core/tick! eng))
+          (is (= {[10 64 0] {"bread" 3}} (stock/stock-of (mem/view (:store eng))))))))))
