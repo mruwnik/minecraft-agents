@@ -38,16 +38,18 @@
          (sort-by #(u/dist me (:pos %))))))
 
 (defn say-chest!
-  "One info event per chest the walk goes to, naming the item wanted there."
-  [c pos what]
+  "One info event per chest the walk goes to, naming the item wanted there and, when given, why this way (why)."
+  [c pos what & [why]]
   (when-not (= pos (:said-chest (ctx/mem c)))
     (ctx/update-mem! c assoc :said-chest pos)
     (ctx/emit! c :obtain.chest :info
-               {:message (str what " chest at " (:x pos) " " (:y pos) " " (:z pos))
+               {:message (str what " chest at " (:x pos) " " (:y pos) " " (:z pos) (some->> why (str " ")))
                 :at pos})))
 
-(defn ^:async withdraw! [c pos items names have]
-  (say-chest! c pos (str "taking " (holds items names) " from the"))
+(defn ^:async withdraw! [c pos items names have crafts?]
+  (say-chest! c pos (str "taking " (holds items names) " from the")
+              (str "(" (js/Math.round (u/dist (u/self-pos c) pos)) " blocks away, "
+                   (if crafts? "near enough to beat crafting" "nothing carried makes it") ")"))
   (let [name (holds items names)
         need (- (:target (:start (ctx/mem c))) have)
         e (waits/waiting-out c (await (ctx/call c :take 'jobs.storage.withdraw

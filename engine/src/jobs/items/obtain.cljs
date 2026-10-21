@@ -207,7 +207,7 @@
                 known (first (filter :stock cs))
                 unknown (first (remove :stock cs))]
             (cond
-              known (await (withdraw! c (:pos known) (:stock known) names have))
+              known (await (withdraw! c (:pos known) (:stock known) names have (boolean (and (makes? c) (craft-plan c names (- target have))))))
               (and unknown (< (:inspected m 0) (max-inspections))) (await (inspect! c (:pos unknown)))
               :else (tried! c :chest (cond (seq (:blocked-chests m)) :blocked (or (seq (:done-chests m)) (pos? (:inspected m 0))) :lacking :else :none-seen))))
           (and (makes? c) (not (get-in m [:tried :craft]))
