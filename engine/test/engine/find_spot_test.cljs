@@ -89,6 +89,9 @@
       "stone" "stone"
       "dirt" "stone")
     (is (nil? (surface/column-top (cave "stone" "stone") 0 0 64 12 false)) "a building's surface never goes down under rock")
+    (are [world] (= 63 (surface/column-top world 0 0 64 12 false))
+      (fn [{:keys [y]}] (case y 63 "dirt" 64 "air" nil))
+      (fn [{:keys [y]}] (case y 63 "dirt" nil)))
     (is (nil? (surface/column-top (fn [{:keys [y]}] (if (= y 63) "water" (if (<= 64 y 67) "air" "stone"))) 0 0 64 12)) "a lake floor is no spot")
     (is (nil? (surface/column-top (constantly "stone") 0 0 64 12)) "solid rock all through")
     (is (nil? (surface/column-top (fn [{:keys [y]}] (cond (= y 63) "dirt" (<= 64 y 67) "air" (<= y 70) "stone" (= y 71) nil :else "air")) 0 0 64 12))

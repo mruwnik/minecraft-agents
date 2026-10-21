@@ -16,23 +16,23 @@
   surface (nil). nil for an
   unloaded cell below that air, a fluid, ice or magma surface, nothing; grass,
   flowers and trees (logs, leaves) are skipped (the top is the ground under
-  them, where till works). With roof-skip? false (default true) rock over air is the top, never skipped: a building must not go under an overhang. name-fn takes {:x :y :z} and returns a block name or nil."
+  them, where till works). With roof-skip? false (default true) rock over air is the top, never skipped: a building must not go under an overhang; unseen cells above the first seen one are open sky there. name-fn takes {:x :y :z} and returns a block name or nil."
   ([name-fn x z from-y depth] (column-top name-fn x z from-y depth true))
   ([name-fn x z from-y depth roof-skip?]
   (let [low (inc (- from-y depth))
         open-cell? #(or (open? %) (canopy? %))]
-    (loop [y (+ from-y depth) roof? roof-skip?]
+    (loop [y (+ from-y depth) roof? roof-skip? sky? (not roof-skip?)]
       (when (>= y low)
         (let [n (name-fn {:x x :y y :z z})]
           (cond
             (and roof? (or (nil? n) (not (open-cell? n))) (not (no-floor n)))
             (cond
-              (nil? n) (recur (dec y) true)
+              (nil? n) (recur (dec y) true false)
               (some-> (name-fn {:x x :y (inc y) :z z}) open-cell?) y
               (and (nil? (name-fn {:x x :y (inc y) :z z})) (not (open-cell? (name-fn {:x x :y (dec y) :z z})))) nil
-              :else (recur (dec y) true))
-            (nil? n) nil
-            (open-cell? n) (recur (dec y) false)
+              :else (recur (dec y) true false))
+            (nil? n) (when sky? (recur (dec y) false true))
+            (open-cell? n) (recur (dec y) false false)
             (no-floor n) nil
-            :else (when-let [above (name-fn {:x x :y (inc y) :z z})]
-                    (when (open-cell? above) y)))))))))
+            :else (let [above (name-fn {:x x :y (inc y) :z z})]
+                    (when (if (nil? above) sky? (open-cell? above)) y)))))))))
