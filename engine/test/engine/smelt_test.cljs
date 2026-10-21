@@ -439,18 +439,30 @@
           (await (ticks eng 3))
           (is (= 3 (get (inv-of p) "iron_ingot"))))))))
 
-(deftest a-cook-cut-after-the-load-takes-the-input-back-out
+(deftest a-load-is-noted-in-memory-until-the-furnace-is-taken-empty
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup base-world)
+        (let [{:keys [eng p clock]} (setup base-world)
+              notes #(mapv :data (mem/entries (mem/view (:store eng)) :smelt/cooking))
+              _ (core/submit! eng iron-job {})
+              _ (await (ticks eng 1))
+              _ (is (= [{:pos {:x 1 :y 64 :z 0} :item "raw_iron" :count 3}] (notes)) "noted at the load")
+              _ (advance! p 600)
+              _ (swap! clock + 40000)
+              _ (await (ticks eng 4))]
+          (is (empty? (notes)) "taken out: forgotten"))))))
+
+(deftest a-cut-cook-leaves-its-note-for-get-food
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup base-world)
               id (core/submit! eng iron-job {})
               _ (await (ticks eng 1))
-              _ (is (= {:name "raw_iron" :count 3} (:input (furnace-of p))) "loaded")
               _ (core/cancel! eng id)
-              _ (await (ticks eng 4))]
-          (is (= 5 (get (inv-of p) "raw_iron")) "the cleanup took the 3 raw back to the 2 carried")
-          (is (nil? (:input (furnace-of p)))))))))
+              _ (await (ticks eng 3))]
+          (is (= 1 (count (mem/entries (mem/view (:store eng)) :smelt/cooking)))))))))
 
 (deftest the-furnace-broken-mid-cook-ends-the-job-with-a-reason
   (async done

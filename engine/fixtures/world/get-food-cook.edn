@@ -1,7 +1,7 @@
 ;; Cards 698d6896 2e4d9b7d 08af40de 1bda3325 (cook gaps).
 ;; survival.get-food cooks raw meat before eating it (owner: cook whenever it can) and the night hold cooks a furnace-side meal too.
 ;; Hunger is drained by RCON (food 8 after 5 s, near 0 after 8 s) and damage sets hp 15, so the body is hungry; the mobs are NoAI.
-;; Should-succeed: raw chicken beside a seen furnace is smelted first by the hungry reflex; a carried furnace is put down
+;; Should-succeed: a cook cut after its load is collected by the next get-food; raw chicken beside a seen furnace is smelted first by the hungry reflex; a carried furnace is put down
 ;; and 2 raw chops cooked; food near 0 with a furnace in sight still cooks; the night hold in a closed hut cooks beef at a furnace
 ;; inside and then eats it; reserved bait carrots are eaten by neither the hungry reflex nor the night hold.
 ;; Should-fail: a creeper in sight rushes the body: the raw beef is eaten, no cooking; with carrots reserved as bait the
@@ -22,6 +22,20 @@
             {:event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :within-s 80}
             {:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome #{:done :stopped}}} :within-s 90}]
    :after [[:item "chicken" 0]]}
+  ;; 427bf185: a cook cut by another job leaves its food in the furnace; the next get-food collects and eats it
+  {:name "cook-cut-after-the-load-is-collected-by-the-next-get-food"
+   :blocks [[:set [8 0 16] "furnace[facing=west]"]]
+   :body {:inventory [["porkchop" 3] ["coal" 2]]}
+   :act [[:job (jobs.items.smelt {:furnace #xyz [8 0 16] :item "porkchop" :count 3})]
+         [:await {:source :job :kind :smelt.loaded} 60]
+         [:http :cancel "$job" {:ok true}]
+         [:await {:source :job :kind :cancelled} 10]
+         [:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 5 minecraft:generic"]
+         [:job (jobs.survival.get-food {:explore false :carry 0})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
+   :after [[:item "porkchop" 0] [:item "cooked_porkchop" 0]]
+   :limit-s 140}
   {:name "carried-furnace-is-put-down-and-two-chops-cooked"
    :body {:inventory [["furnace" 1] ["porkchop" 2] ["coal" 2]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]

@@ -4,7 +4,6 @@
 ;; stock withdrawn from the chest first (seq).
 ;; Should-fail (a :stopped job event with its reason, nothing smelted): no fuel, no furnace at the position, nothing
 ;; smeltable carried, an item this kind of furnace does not cook.
-;; A cook cut after the load takes the raw input back out of the furnace.
 ;; A full stack under an explicit :spend {:job-time 5} ends limit-reached :job-time and the furnace output stays (the default
 ;; budget scaling with the count is pinned by smelt-test).
 {:defaults
@@ -22,16 +21,6 @@
    :expect [{:event {:source :job :kind :completed :data {:smelted 3}} :within-s 150 :of-job true}]
    :after [[:item "iron_ingot" 3]]
    :limit-s 160}
-  {:name "cook-cut-after-the-load-takes-the-raw-input-back"
-   ;; the call is cancelled once the furnace is loaded: its cleanup takes the raw iron out again (the body is never left with its food in a furnace)
-   :blocks [[:set [20 0 14] "furnace[facing=west]"]]
-   :body {:inventory [["raw_iron" 3] ["coal" 3]]}
-   :act [[:job (jobs.items.smelt {:furnace #xyz [20 0 14] :item "raw_iron" :count 3})]
-         [:await {:source :job :kind :smelt.loaded} 60]
-         [:http :cancel "$job" {:ok true}]
-         [:await {:source :job :kind :cancelled} 10]]
-   :expect [{:event {:source :job :kind :cancelled} :within-s 30 :of-job true}]
-   :after [[:item "raw_iron" 3] [:item "iron_ingot" 0]]}
   {:name "blast-furnace-iron-on-planks"
    :blocks [[:set [20 0 14] "blast_furnace[facing=west]"]]
    :body {:inventory [["raw_iron" 4] ["oak_planks" 6]]}

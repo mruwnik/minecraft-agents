@@ -12,6 +12,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
+            [jobs.lib.near :as near]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.survival.get-food.risk :as risk]))
@@ -29,6 +30,7 @@
    ::meat-wild-premium {:default 3 :doc "Extra worth of raw meat from wild animals (times its cooking gain) when none of the kind is near and no pen breeds it: every hunt leaves fewer." :spec (a/num-in 0 nil)}
    ::meat-wild-relief {:default 4 :doc "Wild adults of a kind in sight that halve the wild premium." :spec (a/num-in 0.1 nil)}
    ::meat-radius {:default 32 :doc "Blocks within which the animals of a kind count toward the replacement cost of its meat." :spec (a/int-in 1 nil)}
+   ::cook-recheck-ms {:default 6000 :doc "How often a furnace holding the body's food that is still cooking is looked at again, in ms." :spec (a/int-in 0 nil)}
    ::cook-kinds {:default (set foods/raw-meals) :doc "Raw foods the cook step puts in a furnace." :spec (a/set-of a/item?)}})
 
 (defn shelter-cook-reach [] (settings/get settings ::shelter-cook-reach))
@@ -109,6 +111,11 @@
                       (boolean (some #(contains? #{"furnace" "smoker"} (:name %)) (u/inventory (:primitives c))))
                       (assoc (cook-costs) :meat-factor (meat-factor-fn c)))))
 
+(defn pending
+  "The cooking note (jobs.lib.furnace/note-cooking!) of a load of the body's within ::cook-far-radius: food it put in a furnace and has not taken out."
+  [c]
+  (furnace/cooking-near c (settings/get settings ::cook-far-radius) (cook-kinds)))
+
 (defn can-cook?
   "Mid-cook, or raw food carried and no failed cook in this job, with a furnace known or cooking worth a furnace of its
   own (worth-cooking?); never when rushed? (a cook under way is dropped then). The clock is no reason to refuse (Q334): the smelt
@@ -118,6 +125,7 @@
   (boolean
    (and (not (rushed? c))
         (or (:cooking (ctx/mem c))
+            (pending c)
             (and (seq (raw-carried c))
                  (not (foods/fragile? (.self (:primitives c))))
                  (not (:no-cook (ctx/mem c)))
@@ -126,12 +134,34 @@
 (defn cook-first?
   "Cook before eating: can-cook? and the cook worth its time now (a cook under way goes on)."
   [c]
-  (boolean (and (can-cook? c) (or (:cooking (ctx/mem c)) (worth-cooking? c)))))
+  (boolean (and (can-cook? c) (or (:cooking (ctx/mem c)) (pending c) (worth-cooking? c)))))
 
 (defn loaded-in
   "The count the smelt child in slot has loaded while the cook is not due, else nil (read from its memory)."
   [c slot]
   (furnace/loaded-count (mem/job-mem ((:view c)) (:root c) (conj (:slots c) slot)) (ctx/now c)))
+
+(defn ^:async collect-cooked!
+  "Take the food out of the furnace of cooking note p: :again when something came out or the furnace holds nothing of it any more,
+  :continue while it walks or the cook is still on, nil when the furnace cannot be reached or is gone."
+  [c p]
+  (let [pos (:pos p)
+        now (ctx/now c)]
+    (if (< now (:recheck-at (ctx/mem c) 0))
+      (do (ctx/hold-still! c :cooking) :continue)
+      (let [w (await (near/go-near! c pos 3))]
+        (case w
+          :partial :continue
+          :blocked (do (furnace/forget-cooking! c pos) nil)
+          (let [r (js->clj (await (ctx/act c :furnace (clj->js {:pos pos :op "take"}))) :keywordize-keys true)
+                got (reduce + 0 (map :count (:taken r)))]
+            (cond
+              (not= "ok" (:status r)) (do (furnace/forget-cooking! c pos) nil)
+              (pos? got) (do (when-not (:input r) (furnace/forget-cooking! c pos)) :again)
+              (:input r) (do (ctx/update-mem! c assoc :recheck-at (+ now (settings/get settings ::cook-recheck-ms)))
+                             (ctx/hold-still! c :cooking)
+                             :continue)
+              :else (do (furnace/forget-cooking! c pos) nil))))))))
 
 (defn ^:async cook!
   "Smelt the raw food carried (the smelt job, fuel as it takes it) in the furnace known (or the given one); the cooking
@@ -139,6 +169,8 @@
   ([c] (await (cook! c nil)))
   ([c cooker] (await (cook! c cooker nil)))
   ([c cooker extra]
+   (if-let [p (and (not (:cooking (ctx/mem c))) (not cooker) (pending c))]
+     (await (collect-cooked! c p))
   (let [cooking
         (or (:cooking (ctx/mem c))
             (let [{:keys [name count]} (first (raw-carried c))
@@ -159,4 +191,4 @@
                       :again
                       (let [reason (if (= :done (:kind e)) "short" (name (contract/cause-key e)))]
                         (ctx/update-mem! c assoc :no-cook reason)
-                        nil)))))))))
+                        nil))))))))))

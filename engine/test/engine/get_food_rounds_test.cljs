@@ -846,6 +846,19 @@
           (is (not-any? #{"chicken"} (map #(.-name %) (.-inventory (.self p)))) "no raw chicken left")
           (is (> (food p) 2) "and eaten"))))))
 
+(deftest food-cooking-in-a-furnace-after-a-cut-cook-is-collected-and-eaten
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks {"2,64,0" "furnace"} :self {:food 2}
+                                      :furnaces {"2,64,0" {:output {:name "cooked_chicken" :count 2}}}} :step-ms 2000)]
+          (mem/write! (:store eng) :smelt/cooking {:pos {:x 2 :y 64 :z 0} :item "chicken" :count 2} {:cap 5 :ttl :forever})
+          (core/submit! eng (list 'jobs.survival.get-food {:carry 0}) {})
+          (await (run-until-idle! eng p 40))
+          (is (some #{"take"} (call-args p "furnace" "op")) "the cooked output was taken")
+          (is (> (food p) 2) "and eaten")
+          (is (empty? (entries eng :smelt/cooking)) "the note is gone"))))))
+
 (deftest raw-chicken-is-cooked-in-the-dark-sky-at-a-furnace-the-body-can-reach
   (async done
     (tu/run-async done
