@@ -7,7 +7,7 @@
 #         --rebased-ok lands the rebased branch anyway (use only when the upstream commits it printed touch none of your files).
 # Exit 5: the branch was rebased over commits that touch files it changes and no clean test run (a .claude/live-tests/*.log ending
 #         "0 failures, 0 errors"; for a change of engine/fixtures/ files only, a fixtures-suite log "0 failed" counts too) is newer than that rebase; the overlapping files are named. Rerun the tests, then land.sh again.
-# Exit 1: rebase conflict (aborted; branch unchanged), dirty worktree, or no checkout has the branch you were cut from.
+# Exit 1: rebase conflict (aborted; branch unchanged), uncommitted or untracked files in the worktree (printed; nothing lands), or no checkout has the branch you were cut from.
 # A landing that changes the agent-tools bundle sources starts a detached rebuild of the main checkout bundle.
 # Exit 6: a commit being landed adds a conflict marker (<<<<<<<, =======, >>>>>>>); the file:line is printed.
 # Exit 4: the main checkout has uncommitted edits to a file the landing changes (git refused; nothing moved): wait or ask the lead.
@@ -24,7 +24,9 @@ esac
 [ $# -le 1 ] || { usage >&2; exit 2; }
 branch=$(git symbolic-ref --short HEAD)
 [[ "$branch" == fix/* ]] || { echo "land: not on a fix/* branch ($branch)" >&2; exit 1; }
-git diff --quiet HEAD -- || { echo "land: tracked changes not committed" >&2; exit 1; }
+# Untracked files count too: landing removes the worktree, which would lose them (ignored build output and .claude/ test logs do not count).
+dirty=$(git status --porcelain -- . ':!.claude')
+[ -z "$dirty" ] || { echo "land: uncommitted or untracked files; commit them or delete them, nothing landed and the worktree stays:" >&2; echo "$dirty" >&2; exit 1; }
 common=$(cd "$(git rev-parse --git-common-dir)" && pwd)
 repo=$(dirname "$common")
 # The branch the fix branch was cut from (fixer-worktree.sh records it), landed on the checkout that has it checked out.

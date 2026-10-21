@@ -67,6 +67,23 @@ test('land fast-forwards main, then removes the worktree and its branch', () => 
   } finally { fs.rmSync(root, { recursive: true, force: true }) }
 })
 
+test('land refuses while the worktree holds an untracked or uncommitted file, and keeps it', () => {
+  const { root, repo, wt } = fakeRepo()
+  try {
+    run(repo, 'fixer-worktree.sh', CARD)
+    commitIn(wt, 'a.txt', 'fixed\n')
+    fs.writeFileSync(path.join(wt, 'new-fixture.edn'), '{}\n')
+    const r = run(wt, 'land.sh')
+    assert.equal(r.status, 1, r.stderr)
+    assert.match(r.stderr, /new-fixture\.edn/)
+    assert.equal(fs.existsSync(path.join(wt, 'new-fixture.edn')), true)
+    assert.equal(fs.readFileSync(path.join(repo, 'a.txt'), 'utf8'), 'one\n')
+    fs.rmSync(path.join(wt, 'new-fixture.edn'))
+    fs.writeFileSync(path.join(wt, 'engine/out/x.js'), '')
+    assert.equal(run(wt, 'land.sh').status, 0, 'ignored build output does not block')
+  } finally { fs.rmSync(root, { recursive: true, force: true }) }
+})
+
 test('a branch behind main is rebased and not landed until land.sh runs again', () => {
   const { root, repo, wt } = fakeRepo()
   try {
