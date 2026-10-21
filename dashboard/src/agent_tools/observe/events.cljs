@@ -53,6 +53,17 @@
       amount (- now-ms (* (js/Number amount) ({"ms" 1 "s" 1000 "m" 60000 "h" 3600000} unit)))
       :else (js/Number value))))
 
+(defn window
+  "The answer's :window: how many events were scanned, from which seq, and (when the log held more) how many older ones were not searched."
+  [history events]
+  (let [latest (get-in history [:snapshot :cursor :seq])
+        unsearched (when (and (:truncated? history) (number? latest) (seq events)) (max 0 (dec (:seq (first events)))))]
+    (cond-> {:scanned (count events)}
+      (seq events) (assoc :oldest-seq (:seq (first events)))
+      (:partial? history) (assoc :partial? true)
+      (pos? (or unsearched 0)) (assoc :older-not-searched unsearched
+                                      :note (str "only the newest " (count events) " events were searched; " unsearched " older ones were not")))))
+
 (defn ^:async read!
   "The query's answer from the retained history (job-results/history! with the result window; a --job's recorded end stands in when its stopped event has aged out): {:ok true :events .. :next-before ..
   :window {:scanned n :oldest-seq s :partial? bool}}, or {:ok false :reason :no-death-retained}."
@@ -67,6 +78,4 @@
       {:ok false :reason :no-death-retained :window {:scanned (count events)}}
       (merge {:ok true}
              (select events (assoc query :since-ms since-ms :until-ms until-ms))
-             {:window (cond-> {:scanned (count events)}
-                        (seq events) (assoc :oldest-seq (:seq (first events)))
-                        (:partial? history) (assoc :partial? true))}))))
+             {:window (window history events)}))))

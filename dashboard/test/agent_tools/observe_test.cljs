@@ -3,6 +3,7 @@
             [agent-tools.fake-socket :as fake]
             [agent-tools.job-results :as job-results]
             [agent-tools.observe :as observe]
+            [agent-tools.observe.events :as observe-events]
             [agent-tools.observe.lock :as observe-lock]
             [agent-tools.observe.request :as observe-request]
             [agent-tools.observe.status :as observe-status]
@@ -1462,6 +1463,13 @@
                           (is (= 4 (:next-before (:view newest))))
                           (is (= [:queued :fired] (mapv :kind (:events (:view older)))))
                           (is (not (contains? (:view older) :next-before)) "nothing older is left")))))))
+
+(deftest the-events-window-says-how-many-older-events-were-not-searched
+  (let [events [{:seq 51} {:seq 52}]
+        history {:snapshot {:cursor {:seq 100}} :truncated? true}]
+    (is (= 50 (:older-not-searched (observe-events/window history events))))
+    (is (re-find #"50 older" (:note (observe-events/window history events))))
+    (is (nil? (:note (observe-events/window {:snapshot {:cursor {:seq 2}}} [{:seq 1} {:seq 2}]))))))
 
 (deftest observe-events-without-filters-is-the-newest-page-and-is-bounded
   (async done
