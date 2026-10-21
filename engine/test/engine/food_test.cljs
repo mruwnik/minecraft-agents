@@ -603,8 +603,9 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (hunt-world [cow] nil)]
+        (let [{:keys [eng p seen]} (hunt-world [cow] nil)]
           (await (run-until-empty eng 40))
+          (is (seq (calls p "attack")) "the hunt is not told to keep a pair back from a lone adult")
           (is (= [{:adults 1 :rule :lone}] (mapv #(select-keys % [:adults :rule]) (killed-events seen)))))))))
 
 (deftest get-food-takes-the-surplus-of-its-own-pen-when-nothing-else-is-found

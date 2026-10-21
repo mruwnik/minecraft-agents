@@ -182,9 +182,10 @@
     (and (<= (.-food self) (settings/get settings ::kept-lifted-below)) (not (foods/carries-food? self)))))
 
 (defn keep-for
-  "Adults of the kind the kill leaves alive: the spare rule's keep, none when starved."
-  [c]
-  (if (starved? c) 0 (spare/keep-adults)))
+  "Adults of the kind the kill leaves alive: the spare rule's keep, none when starved or when the animal is a lone adult
+  (the hunt would end :keep at once with fewer than keep in range)."
+  [c {:keys [adults]}]
+  (if (or (starved? c) (< (or adults 0) (spare/keep-adults))) 0 (spare/keep-adults)))
 
 (def meat-of
   "The raw meat each food animal drops: what a hunt of it is for."
@@ -192,8 +193,8 @@
 
 (defn kill-job
   "The real job and args that kill the food animal of target: animals.cull over the own pen it stands in (own?), else combat.hunt."
-  [c own? {animal :entity}]
-  (let [common {:mob (.-name animal) :count 1 :keep (keep-for c) :spend {:job-time 60}
+  [c own? {animal :entity :as target}]
+  (let [common {:mob (.-name animal) :count 1 :keep (keep-for c target) :spend {:job-time 60}
                 :checks {:safe? '(job-safe-or-starving) :fit? '(always)}}
         pos (u/pos-of (.-pos animal))
         box (when own? (sources/box-around c pos))]

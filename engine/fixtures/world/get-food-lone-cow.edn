@@ -1,4 +1,5 @@
 ;; Card fe000369: a single wild cow is no breeding pair, so a hungry body with nothing to eat hunts it (get-food-last-pair.edn: two are kept).
+;; The rabbit case: a lone rabbit is killed (its meat drops only half the time, so the kill is the check).
 ;; Hunger is drained by RCON (food 9-10), hp 15; only a sword.
 {:defaults
  {:tags [:survival :get-food :animals]
@@ -18,6 +19,6 @@
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
          [:summon "rabbit" [14.5 0 24.5]]
-         [:job (jobs.survival.get-food {})]]
-   :expect [{:event {:source :job :kind :food.killed} :within-s 90}]
+         [:job (jobs.survival.get-food {:carry 0})]]
+   :expect [{:event {:source :job :kind :animal.killed :data {:animal "rabbit"}} :within-s 90}]
    :after [[:entities "type=rabbit,tag=wt" [[0 0 0] [31 3 31]] 0]]}]}
