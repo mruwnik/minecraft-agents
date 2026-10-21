@@ -12,7 +12,7 @@
             [jobs.gather.shaft-descent :refer [pick-shaft xyz]]
             [jobs.lib.util :as u]
             [jobs.lib.look :refer [cell-of]]
-            [jobs.gather.mine.targets :refer [base-ore main-block step-cell within-own-zone]]
+            [jobs.gather.mine.targets :refer [base-ore main-block step-cell within-keep-clear within-own-zone]]
             [jobs.gather.mine.end :refer [stop!]]
             [jobs.gather.mine.way-set :as ways]
             [jobs.gather.mine.torches :refer [mouth-torch-due? stair-torch-due? torch-step!]]
@@ -42,6 +42,8 @@
 
 (def stone-types #{"stone" "cobblestone" "deepslate" "andesite" "granite" "diorite" "tuff"})
 
+(def natural-ground #{"dirt" "grass_block" "coarse_dirt" "podzol" "rooted_dirt" "mycelium" "sand" "red_sand" "gravel" "clay"})
+
 (defn to-level?
   "Whether the dig phase should first stair down to the tunnel level: one is set, the body stands above it, the tunnel is owed and not
   begun, and the stair has not stopped."
@@ -68,12 +70,14 @@
 
 (defn dig-here-due?
   "Whether the stair down should start where the body stands instead of a walk to the seen stone block at pos: the descent is due for a stone
-  block, the body stands on ground that is not stone, and pos is farther than ::dig-here-reach."
+  block, the body stands on natural soil or sand outside any plan, zone or home it keeps clear of (a built floor is walked off, never cut
+  through), and pos is farther than ::dig-here-reach."
   [c pos]
   (let [feet (cell-of (u/self-pos c))
         under (u/seen-name (:primitives c) (update feet :y dec))]
     (boolean (and (descend-due? c) (contains? stone-types (main-block (:args c)))
-                  under (not (contains? stone-types under))
+                  (contains? natural-ground under)
+                  (not (within-keep-clear c 0 (access/cell feet) true))
                   (> (u/dist (u/self-pos c) pos) (settings/get settings ::dig-here-reach))))))
 
 (defn shaft-under-way?
