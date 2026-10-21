@@ -170,7 +170,7 @@
           (is (= 1 (count (torch-cells p))) (pr-str (torch-cells p)))
           (is (= 3 (torches-held p))))))))
 
-(deftest go-to-places-a-torch-it-holds-in-the-off-hand
+(deftest go-to-sees-the-drop-by-the-torch-it-holds-in-the-off-hand-and-places-none
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -179,8 +179,8 @@
                                                          :torches :carried :ignore-zones? true}
                                                         dark-with-torch-light))]
           (is (= {:arrived true} (select-keys out [:arrived])) (pr-str out))
-          (is (= 1 (count (torch-cells p))))
-          (is (= 3 (torches-held p))))))))
+          (is (zero? (count (torch-cells p))) "the held torch's light shows the floor over the rim: nothing to place")
+          (is (= 4 (torches-held p))))))))
 
 ;; ---------------------------------------------------------------- zones, prices, failures
 
