@@ -126,3 +126,13 @@
     (let [o (wplan/with-drops #js {} {:air-used 11.25 :health 10 :drown-prices [0 20]})]
       (is (= 10 (.-health o)))
       (is (= [0 20] (vec (.-drownPrices o)))))))
+
+;; a walk cut by the breathe reflex would plan the same dive again at once: for a while near the spot it plans none (airLimit 0), anywhere else or later it does
+(deftest a-recent-breathe-reflex-near-the-body-bars-the-walk-from-planning-a-dive
+  (let [at {:x 0 :y 64 :z 0}
+        policy (fn [now data]
+                 (wworld/body-policy {:primitives (tu/fake {:self {:health 20 :food 20 :pos at}}) :args {}
+                                      :view (fn [] {:now now :data {:entries {:breathe [{:t 1000 :data data}]}}})}))]
+    (is (= 0 (:air-limit (policy 31000 {:pos at}))) "30 s after, on the spot")
+    (is (nil? (:air-limit (policy 31000 {:pos {:x 100 :y 64 :z 0}}))) "far from the spot")
+    (is (nil? (:air-limit (policy 1000000 {:pos at}))) "long after")))

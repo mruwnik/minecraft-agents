@@ -28,6 +28,8 @@
    ::dark {:default true :doc "Whether walks cost a dark cell (seen dark, or unseen at night) twice a lit one; false plans dark cells like lit ones." :spec boolean?}
    ::y-margin {:default false :doc "Blocks a walk's search may reach above the higher and below the lower of body and goal (a route dipping deeper, such as through deep caves, is not planned); false: 96, and a buried body's dive floor applies." :spec (a/or-of false? (a/int-in 0 nil))}
    ::unknown-max-nodes {:default 12000 :doc "The most nodes a walk's search over what the body has seen only (go-to :unknown) holds before it ends :budget: a goal no seen route reaches floods unseen cells otherwise to the planner's limit (200000)." :spec (a/int-in 1000 nil)}
+   ::dive-pause-s {:default 120 :doc "Seconds after a breathe reflex fired in which walks near the spot (::dive-pause-near) plan no dive (head under water) except to air: the walk that was cut would plan the same dive again." :spec (a/num-in 0 nil)}
+   ::dive-pause-near {:default 30 :doc "Blocks from where a breathe reflex fired within which walks plan no dive for ::dive-pause-s." :spec (a/num-in 0 nil)}
    ::gait {:default :auto :doc "How go-to walks when its :gait is nil: :auto, :walk or :sneak." :spec cost/gaits}})
 
 (defn unknown-spec
@@ -301,6 +303,20 @@
     (when (and (number? pool) (js/isFinite pool))
       {:health pool :drown-prices (cost/drown-prices pool hp-s)})))
 
+(defn dive-paused?
+  "Whether a breathe reflex fired within ::dive-pause-near blocks of the body in the last ::dive-pause-s seconds (the :breathe entries)."
+  [c]
+  (when (:view c)
+   (let [pos (.-pos (.self (:primitives c)))
+        now (ctx/now c)
+        near (settings/get settings ::dive-pause-near)
+        within (* 1000 (settings/get settings ::dive-pause-s))]
+    (boolean (some (fn [{:keys [t data]}]
+                     (let [q (:pos data)]
+                       (and (< (- now t) within)
+                            (<= (js/Math.hypot (- (.-x pos) (:x q)) (- (.-y pos) (:y q)) (- (.-z pos) (:z q))) near))))
+                   (ctx/entries c :breathe))))))
+
 (defn body-policy
   "executor/policy for the body: the gait (:walk, :sneak) never sprints; with the walk's food (food-of) 6 or less the client does not sprint, so :sprint is false (a corner jump past
   a high block is then refused). :damage-budget (hp, damage-budget) and :damage-weight (seconds an hp costs at its health)
@@ -330,6 +346,7 @@
       (or under? (and (.-inWater self) (number? (.-oxygen self)) (< (.-oxygen self) 20))) (-> (cond-> under? (-> (dissoc :air-grace) (merge (cost/air-profile nil (array-seq (.-effects self)))))) (assoc :air-used (cost/air-used (.-oxygen self)))
                                                (merge (drowning self (cost/walk-hp-seconds)))
                                                (merge (some->> (known-fn (:primitives c)) (hash-map :air-seen))))
+      (dive-paused? c) (assoc :air-limit 0)
       (and (number? food) (<= food 6)) (assoc :sprint false)
       (= :walk (gait c)) (assoc :sprint false :gait :walk)
       (= :sneak (gait c)) (assoc :sprint false :gait :sneak))))

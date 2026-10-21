@@ -99,7 +99,7 @@
     (unchecked-set options "landing" (cost/planner-landing (:landing policy) gait))
     (when (some? seen) (unchecked-set options "landingSeen" seen))
     (when-some [f (:goal-seen policy)] (unchecked-set options "goalSeen" f))
-    (when (or (seq (:costs policy)) (contains? #{:walk :sneak} gait) (:air-drain policy) (:air-grace policy) (:air-used policy) (:swim-h policy))
+    (when (or (seq (:costs policy)) (contains? #{:walk :sneak} gait) (:air-drain policy) (:air-limit policy) (:air-grace policy) (:air-used policy) (:swim-h policy))
       (unchecked-set options "costs" (js/Object.assign (cost/gait-costs gait)
                                                        (cost/air-costs policy)
                                                        (cost/planner-costs (:costs policy)))))

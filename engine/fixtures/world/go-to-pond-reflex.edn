@@ -2,6 +2,7 @@
 ;; Pond x 8..29 across the plot, 2 deep (water y 1..2, banks y 3, feet y 4), stone rim at z 0 and 15. The body starts on the west bank, the goal is the east bank.
 ;;   surface-swim-crosses (should-succeed): the pond is open; the body can swim with the head out, so it arrives and the reflex never fires.
 ;;   roofed-dive-taken (should-succeed): the pond 3 deep under a stone ridge over x 14..25 (a 12 cell dive, about 6 s, no way round): taken, and the reflex stays quiet because the air behind or ahead is never farther than the air left allows.
+;;   roofed-dive-refused-after-a-breathe (should-fail): the same roofed pond, but a :breathe entry from seconds ago at the body: go-to plans no dive near it (a walk cut by the reflex would dive again at once), so it stops unreachable :why :air and the reflex never fires. Without the entry the dive is taken (roofed-dive-taken).
 ;;   flooded-tunnel-air-behind (should-succeed): a sealed flooded tunnel (x 8..29, 2 high) the body starts in at x 20 with the air at its west end (x 6..7) and a sealed east end; no job: the reflex fires once the air left is short of the swim back plus the margin, and breathe leads the body to the west air pocket, alive.
 {:defaults
  {:tags [:movement :water :air] :time :any
@@ -25,6 +26,12 @@
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}
             {:no-event {:source :reflex :kind :fired} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [34.5 4 8.5] 3]]}
+  {:name "roofed-dive-refused-after-a-breathe"
+   :blocks [[:fill [8 3 1] [29 3 14] "water"] [:fill [14 4 0] [25 9 15] "stone"]]
+   :memory [{:kind :breathe :data {:pos #xyz [4.5 4 8.5] :why :drowning :oxygen 11} :age-s 5}]
+   :act [[:job (jobs.movement.go-to {:pos #at [34 4 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}
+            {:no-event {:source :reflex :kind :fired} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]}
   {:name "flooded-tunnel-air-behind"
    :blocks [[:fill [8 1 1] [29 3 14] "stone"]
             [:fill [6 1 7] [29 2 8] "water"]

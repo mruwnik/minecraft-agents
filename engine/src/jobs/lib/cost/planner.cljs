@@ -80,7 +80,7 @@
   (if (number? oxygen) (+ (* (- 20 oxygen) 0.75) 0.375) 0))
 
 (defn air-costs
-  "The planner's options.costs airDrain (with airLimit, the supply less the default margin in seconds at that drain), airGrace, airUsed and swimH (a JS object) for a policy's :air-drain,
+  "The planner's options.costs airDrain (with airLimit, the supply less the default margin in seconds at that drain), airGrace, airUsed and swimH (a JS object) for a policy's :air-drain, :air-limit (a cap that wins over the drain's),
   :air-grace, :air-used and :swim-h, those it has."
   [policy]
   (let [o #js {}]
@@ -92,6 +92,7 @@
       (let [supply (unchecked-get base/DEFAULT-COSTS "airSupply")
             margin (- supply (unchecked-get base/DEFAULT-COSTS "airLimit"))]
         (unchecked-set o "airLimit" (- supply (* margin d)))))
+    (when-some [l (:air-limit policy)] (unchecked-set o "airLimit" l))
     (when-some [g (:air-grace policy)] (unchecked-set o "airGrace" g))
     (when-some [u (:air-used policy)] (unchecked-set o "airUsed" u))
     o))
