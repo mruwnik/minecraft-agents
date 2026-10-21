@@ -1,6 +1,6 @@
 ;; Others' penned animals are not fair game whatever the zones say (owner: "if not penned, then yes"). Plot outside every zone and plan.
 ;; Pen: oak fence ring x 18..24, z 13..19, shut gate west at [18 0 16]; the body stands outside.
-;; Should-succeed: a free sheep outside the pen is shorn. Should-fail: shear of the only sheep, inside the fenced pen, is declined :refused
+;; Should-succeed: a free sheep outside the pen is shorn; explore.search counts a free cow. Should-fail: shear of the only sheep, inside the fenced pen, is declined :refused
 ;; and nothing is shorn.
 {:defaults
  {:tags [:animals :jobs :access :pen]
@@ -22,4 +22,20 @@
    :act [[:summon "sheep" [14.5 0 16.5] "{NoAI:1b}"]
          [:job (jobs.animals.shear {:count 1 :collect false})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :shorn}} :within-s 80 :of-job true}
-            {:no-event {:source :job :kind :shear.declined} :for-s 20 :until {:source :job :kind :completed}}]}]}
+            {:no-event {:source :job :kind :shear.declined} :for-s 20 :until {:source :job :kind :completed}}]}
+  ;; explore.search :takeable does not count a cow standing in another's fenced pen: it ends :stopped, never "found 1".
+  {:name "search-does-not-count-a-cow-in-a-fenced-pen"
+   :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"] [:fill [19 0 14] [23 0 18] "air"]
+            [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"]]
+   :act [[:summon "cow" [21.5 0 16.5] "{NoAI:1b}"]
+         [:job (jobs.explore.search {:target "cow" :takeable true :use-notes false :scan-radius 16
+                                     :settings {:jobs.explore.search/max-distance 20 :jobs.explore.search/max-legs 1} :spend {:job-time 60}})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :completed :data {:reason :found}} :for-s 30 :until {:source :job :kind :stopped}}]}
+  {:name "search-counts-a-free-cow-beside-a-fenced-pen"
+   :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"] [:fill [19 0 14] [23 0 18] "air"]
+            [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"]]
+   :act [[:summon "cow" [14.5 0 16.5] "{NoAI:1b}"]
+         [:job (jobs.explore.search {:target "cow" :takeable true :use-notes false :scan-radius 16
+                                     :settings {:jobs.explore.search/max-distance 20 :jobs.explore.search/max-legs 1} :spend {:job-time 60}})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 80 :of-job true}]}]}

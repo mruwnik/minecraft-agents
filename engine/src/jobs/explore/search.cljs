@@ -8,6 +8,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.animal-spare :as spare]
             [jobs.lib.area :as area]
             [jobs.lib.food-animals :as animals]
             [jobs.lib.crops :as crops]
@@ -321,11 +322,16 @@
 (defn takeable
   "found without the blocks in :avoid columns, the blocks on the footprint of a plan the body made (its
   posts and walls are not material to cut), the noted entities standing in a zone or plan of the body's own (its pens),
-  the entities of :skip-ids, and (when :takeable is on) those a zone, claim or plan footprint bars taking."
+  the entities of :skip-ids, and (when :takeable is on) those a zone, claim or plan footprint bars taking and the
+  entities standing in a closed fenced enclosure that is not the body's own (kept animals)."
   [c found]
   (let [{:keys [takeable avoid skip-ids]} (:args c)
         avoid (set (map vec avoid))
         skip (set skip-ids)
+        pens (atom [])
+        kept? (fn [{:keys [pos]}]
+                (and (not (access/in-own-area? c (zipmap [:x :y :z] pos)))
+                     (spare/cell-enclosed? c pens (vec pos))))
         in (when takeable (access/rules-input c))
         own (access/rules-input c {:spare-own? true})]
     (cond->> found
@@ -333,7 +339,8 @@
       true (remove #(and (not (:id %)) (access/own-keep own (zipmap [:x :y :z] (:pos %)))))
       true (remove #(and (:noted %) (:id %) (access/in-own-area? c (zipmap [:x :y :z] (:pos %)))))
       (seq avoid) (remove #(and (not (:id %)) (avoid [((:pos %) 0) ((:pos %) 2)])))
-      takeable (filter #(or (:id %) (:ok (access/may? in :harvest (:pos %))))))))
+      takeable (remove #(and (:id %) (kept? %)))
+      takeable (filter #(:ok (access/may? in (if (:id %) :take :harvest) (:pos %)))))))
 
 (defn ^:async hear-lead!
   "Still short after a look round: walk a few blocks toward the nearest target animal the body hears but cannot see and look

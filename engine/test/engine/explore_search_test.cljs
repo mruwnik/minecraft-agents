@@ -243,6 +243,19 @@
           (is (= [{:what "cow" :pos [30 64 0] :id "u3"}] (:found (found-of s))))
           (is (some #(= [:seen "cow" "u3"] ((juxt :kind :what :id) %)) (file-notes s))))))))
 
+(deftest a-cow-in-a-fenced-pen-of-another-is-found-only-without-takeable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [ground (into {} (for [x (range -4 14) z (range -4 14)] [(str x ",63," z) "stone"]))
+              ring (into {} (for [x (range 3 10) z (range 3 10) :when (or (#{3 9} x) (#{3 9} z))] [(str x ",64," z) "oak_fence"]))
+              spec {:blocks (merge ground ring)
+                    :entities [{:id 3 :uuid "u3" :name "cow" :kind "passive" :pos {:x 6.5 :y 64 :z 6.5}}]}
+              any (await (search! {:target "cow" :max-distance 20 :settings {:jobs.explore.search/max-legs 0}} spec))
+              own (await (search! {:target "cow" :takeable true :max-distance 20 :settings {:jobs.explore.search/max-legs 0}} spec))]
+          (is (= [[6 64 6]] (map :pos (:found (found-of any)))))
+          (is (= :stopped (:kind (not-found-of own))) "the penned cow is not counted"))))))
+
 (deftest a-target-seen-beyond-the-scan-radius-is-found-without-a-leg
   (async done
     (tu/run-async done
