@@ -114,11 +114,6 @@
     (is (= [] (danger-ids p)))
     (is (false? (hostile-near? p)))))
 
-(deftest a-hostile-listed-in-the-bodys-own-cell-is-no-mob
-  (let [{:keys [p]} (rig {:entities [{:id 1 :name "stray" :kind "hostile" :pos {:x 0.7 :y 64 :z 0.3}}
-                                     {:id 2 :name "stray" :kind "hostile" :pos {:x 2.5 :y 64 :z 0.5}}]})]
-    (is (= [2] (mapv #(.-id %) (array-seq (.knownMobs p)))) "only the stray a body's width away is known")))
-
 (deftest a-mob-the-client-stops-tracking-is-dropped
   (let [{:keys [p]} (rig {:entities [(mob 1 "zombie" 0 4)]})]
     (is (= [1] (danger-ids p)))

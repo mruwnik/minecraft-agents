@@ -63,17 +63,6 @@
   [per ^js eye ^js e]
   (sense-thing per eye (.-pos e) (true? (.-visible e)) (and (silent-mobs (.-name e)) (not (true? (.-fusing e))))))
 
-(def body-overlap
-  "Blocks (horizontal) within which a mob cannot stand beside the body: mobs and players keep about 0.6 apart."
-  0.4)
-
-(defn in-body?
-  "Whether a hostile at pos (feet) overlaps the body at eye: no real mob stands in the cell a player fills, so such a
-  listing is a stale or mis-placed entity, not something sensed."
-  [^js eye ^js pos]
-  (and (< (js/Math.hypot (- (.-x pos) (.-x eye)) (- (.-z pos) (.-z eye))) body-overlap)
-       (< (js/Math.abs (- (.-y pos) (- (.-y eye) game/eye-height))) game/body-height)))
-
 (defn sense-mobs!
   "One mob sample over primitives src: sensed mobs take their place and time, mobs the client no longer tracks or that
   could have drifted :mob-drift blocks since they were last sensed are forgotten. Returns the map of live entities
@@ -88,7 +77,7 @@
       sensed
       (let [listed (js/Set.)]
         (doseq [^js e (array-seq (.entities src #js {:radius (:mob-scan opts) :kind "hostile" :max 64}))
-                :when (and (.-pos e) (not (in-body? eye (.-pos e))))]
+                :when (.-pos e)]
           (.add listed (.-id e))
           (when-let [how (mob-sense per eye e)]
             (let [^js old (.get mobs (.-id e))
