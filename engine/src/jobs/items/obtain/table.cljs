@@ -66,9 +66,9 @@
   (boolean (or (:sheep need) (:mob need))))
 
 (defn searchable?
-  "Whether a need is looked for by walking: a block, not an animal or a crop of the field (own ripe crops only)."
+  "Whether a need is looked for by walking: a block or an animal, not a crop of the field (own ripe crops only)."
   [need]
-  (not (or (animal? need) (:crop need))))
+  (not (:crop need)))
 
 (defn need-way
   "The way a gather need belongs to: :hunt for animals, :crops for a field crop, else :gather."

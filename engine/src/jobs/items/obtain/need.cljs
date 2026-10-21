@@ -41,9 +41,12 @@
     (explore-setting)))
 
 (defn search-names
-  "The block names a search for a need looks for."
+  "The block or animal names a search for a need looks for."
   [need]
-  (if (set? (:seen need)) (vec (sort (:seen need))) trees/log-names))
+  (cond (:sheep need) ["sheep"]
+        (:mob need) [(:mob need)]
+        (set? (:seen need)) (vec (sort (:seen need)))
+        :else trees/log-names))
 
 (defn trees-unreachable?
   "Whether a seen log need's child declines :no-tree (the logs seen are not ones it can fell): the search looks

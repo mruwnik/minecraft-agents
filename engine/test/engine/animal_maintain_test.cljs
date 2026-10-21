@@ -150,8 +150,8 @@
     {:skip :at-pair} 4 2
     {:skip :at-pair} 0 0
     {:skip :at-pair} 1 1
-    {:call {:slot :herd :job 'jobs.animals.herd :args {:mob "cow" :box box :target 2}}} 4 1
-    {:call {:slot :herd :job 'jobs.animals.herd :args {:mob "cow" :box box :target 1}}} 1 0))
+    {:call {:slot :herd :job 'jobs.animals.herd :args {:mob "cow" :box box :target 2 :radius 64}}} 4 1
+    {:call {:slot :herd :job 'jobs.animals.herd :args {:mob "cow" :box box :target 1 :radius 64}}} 1 0))
 
 (deftest items-inside-the-box-are-collected-and-those-outside-left
   (async done

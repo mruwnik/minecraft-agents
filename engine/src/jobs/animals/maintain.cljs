@@ -4,6 +4,7 @@
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.animals :as animals]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
@@ -25,7 +26,7 @@
     was seen as something else (blown away), so the plan's fence is built again. Only cells the body has seen count; a gap
     that stays rests the pen.
   - :herd (jobs.animals.herd for 2 adults, or :target if less): fewer adults than that are in the box, so breeding cannot start; herd fetches
-    and searches for animals of the kind within its default radius and brings them in.
+    and searches for animals of the kind within ::herd-radius (64) of the body and brings them in.
   - :breed (jobs.animals.breed, 2 animals): adults plus babies are below :target, at least 2 adults, breeding
     food carried (breed fetches it unless the ways are only #{:carried}).
   - :cull (jobs.animals.cull): adults exceed :keep, the larger of 2 and :target minus the babies.
@@ -70,7 +71,10 @@
 (def target [:plan :part :box])
 
 (a/defargs settings
-  {::job-time-s {:default 600 :doc "Seconds a maintain pass may take." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 600 :doc "Seconds a maintain pass may take." :spec (a/num-in 0 nil)}
+   ::herd-radius {:default 64 :doc "Blocks from the body within which the herd step fetches or searches for animals of the kind." :spec (a/num-in 0 nil)}})
+
+(defn herd-radius [] (settings/get settings ::herd-radius))
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
@@ -154,7 +158,7 @@
   [{:keys [mob box ways target]} {:keys [adults]}]
   (if (<= (min 2 target) adults)
     {:skip :at-pair}
-    {:call {:slot :herd :job (jobs :herd) :args (cond-> {:mob mob :box box :target (min 2 target)} (some? ways) (assoc :ways ways))}}))
+    {:call {:slot :herd :job (jobs :herd) :args (cond-> {:mob mob :box box :target (min 2 target) :radius (herd-radius)} (some? ways) (assoc :ways ways))}}))
 
 (defn decide-breed
   [{:keys [mob target ways box]} {:keys [adults babies food reach]}]

@@ -26,7 +26,7 @@
   - :loose: items of the wanted kind lying in sight, picked up by a jobs.items.collect-drops child.
   - :chest: seen containers that allow :take, known stock withdrawn, unknown stock looked into (nearest first, a few per call).
   - :craft and :smelt: a chain planned from the recipes over what is carried (a table is put down when needed); each step a craft or smelt child.
-  - :gather, :hunt, :crops, :search: what a chain lacks, or a raw item itself, is felled, mined, fished, cut or scooped (:gather), hunted (:hunt: leather, raw meat, wool, shearing), cut ripe in a field of its own (:crops: wheat, carrot, potato, beetroot) by one child per round; with :search an unseen block need is searched for (jobs.explore.search; :explore false drops it).
+  - :gather, :hunt, :crops, :search: what a chain lacks, or a raw item itself, is felled, mined, fished, cut or scooped (:gather), hunted (:hunt: leather, raw meat, wool, shearing), cut ripe in a field of its own (:crops: wheat, carrot, potato, beetroot) by one child per round; with :search an unseen block or animal need is searched for (jobs.explore.search; :explore false drops it).
   A child that brings in nothing three times ends that way (:tried).
   A bill runs one obtain child per item still missing, in order, after the furnace material (iron_ingot ..) the missing items need together, which is got in one go and reserved against deposits; each child gets a :spend :job-time of the ::bill-item-s setting. The first child that fails ends the bill with its kind and cause, data {:item the one it stopped at :why}.
 
