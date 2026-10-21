@@ -206,4 +206,15 @@
    :act [[:job (jobs.items.obtain {:item "water_bucket" :explore true})]]
    :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}]
    :after [[:item "water_bucket" 1]]
+   :limit-s 120}
+  ;; water seen 20 blocks east, then the body turns away and walks 14 blocks west: the pond is remembered, behind it; :explore false
+  {:name "water-seen-then-left-behind-is-walked-back-to-and-filled"
+   :plot {:height 6 :length 96 :width 32}
+   :blocks [[:fill [35 0 15] [37 0 17] "water"]]
+   :body {:inventory [["bucket" 1]]}
+   :act [[:until-seen {:block "water"} 10]
+         [:rcon "execute as $BODY at @s run tp @s ~-14 ~ ~ 90 0"] [:until-facing {:yaw 90 :pitch 0} 10]
+         [:job (jobs.items.obtain {:item "water_bucket" :explore false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 90 :of-job true}]
+   :after [[:item "water_bucket" 1]]
    :limit-s 120}]}
