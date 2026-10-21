@@ -71,3 +71,14 @@
                                             :inventory (conj kit (ft/item "torch" 8))}) 160))]
           (is (seq (ft/calls s "place")) "a torch was placed")
           (is (some #(= "wheat" (apply ft/block-at s %)) (for [[x z] cells] [x 64 z])) "seeds were sown"))))))
+
+(deftest a-ripe-crop-the-harvest-cannot-reach-is-given-up-and-a-field-is-made-elsewhere
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cells (for [x (range -2 8) z (range -2 8)] [x z])
+              s (await (scenario {:count 2 :spend {:job-time 600}}
+                                 (ft/world (ft/farm "wheat" 7 [[12 4]] [[12 4]]) (ft/ground "dirt" cells)
+                                           {:unreachable [(ft/k 12 64 4)]} ft/wheat-drops {:inventory kit}) 200))]
+          (is (= "wheat" (ft/block-at s 12 64 4)) "the unreachable crop stands")
+          (is (some #(= "wheat" (apply ft/block-at s %)) (for [[x z] cells] [x 64 z])) "seeds were sown elsewhere"))))))
