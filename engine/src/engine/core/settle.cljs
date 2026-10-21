@@ -1,7 +1,8 @@
 (ns engine.core.settle
   "Settling a round: booking a listed job's or a reflex job's outcome, judging reflex ends against the
   entry's persistence, and starting a round."
-  (:require [engine.core.base :refer [delete-root! drop-instance! drop-reflex-job! emit! free-owner! hold-trigger! job-fields exclusive-job now paused? reflex-text remove-listed running save-memory! set-owner! state stopped-result? wait-reason waiting-text]]
+  (:require [engine.core.activity :as activity]
+            [engine.core.base :refer [delete-root! drop-instance! drop-reflex-job! emit! free-owner! hold-trigger! job-fields exclusive-job now paused? reflex-text remove-listed running save-memory! set-owner! state stopped-result? wait-reason waiting-text]]
             [engine.core.attention :refer [request-attention! resolve-job-attention!]]
             [engine.core.ending :refer [refused?]]
             [engine.core.fruitless :refer [book-round! note-fruitless! note-silent!]]
@@ -270,6 +271,7 @@
         inst (get-in s [:instances id])
         run {:id id :token token :reflex (:reflex inst) :round (:round inst)}]
     (reset! (:running eng) run)
+    (activity/keep-hold! eng id)
     (reset! (:activity eng) {:token token :id id :in-flight 0 :last-at (now eng)})
     (when-not refused? (emit! eng (merge (job-fields eng id) {:source :job :kind :round_started :level :debug})))
     (-> (run-round eng run inst)

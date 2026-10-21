@@ -109,6 +109,19 @@
    :expect [{:event {:source :job :kind :completed} :within-s 380 :of-job true}]
    :after [[:item "iron_pickaxe" 1]]
    :limit-s 400}
+  ;; card ac825512: the nearer ore stands against water seen through glass; the kit takes the dry ore farther along the wall and finishes, never "stopped: flooded"
+  {:name "flooded-ore-is-left-for-the-dry-ore"
+   :time :any
+   :plot {:height 12 :floor "grass_block"}
+   :blocks [[:fill [4 -16 12] [31 3 20] "stone"] [:fill [12 0 12] [20 2 18] "air"]
+            [:fill [11 0 17] [11 1 17] "water"] [:fill [12 0 17] [12 1 17] "glass"] [:set [11 0 16] "iron_ore"] [:set [11 1 16] "iron_ore"] [:set [11 0 13] "iron_ore"]
+            [:set [14 3 14] "glowstone"] [:set [18 3 14] "glowstone"] [:set [14 3 18] "glowstone"] [:set [18 3 18] "glowstone"]]
+   :body {:at [14.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["stone_sword" 1] ["stick" 2] ["cooked_beef" 3] ["torch" 16] ["cobblestone" 8] ["coal" 4] ["crafting_table" 1] ["furnace" 1]] :effects [["resistance" 900 4]]}
+   :act [[:job (jobs.items.get-kit {:items ["iron_shovel"] :explore false :food false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 240 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 200 :of-job true :until {:source :job :kind :completed}}]
+   :after [[:item "iron_shovel" 1] [:not-block [11 0 13] "iron_ore"]]
+   :limit-s 260}
   ;; card fc0d4f6f: get-kit writes the kit reserve entries and the mine under it keeps them on its trip deposit (the raw iron stays in the bag, the junk goes in the chest)
   {:name "kit-trip-deposit-keeps-the-raw-iron"
    :plot {:height 12 :floor "grass_block" :length 64 :width 32}

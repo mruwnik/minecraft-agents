@@ -252,6 +252,7 @@
              :away (atom nil)
              :waiting (atom {})
              :activity (atom nil)
+             :holds (atom {})
              :deferred (atom {})
              :held-triggers (atom {})
              :fruitless (atom {})

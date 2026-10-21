@@ -23,8 +23,13 @@
 
 (defn no-source [_] (contract/later :no-source "no stone in sight"))
 
+(defn ^:async cook-round [c]
+  (ctx/hold-still! c :cooking)
+  :continue)
+
 (def jobs
-  {'filler {:round filler-round :idle-ok true}
+  {'cook {:round cook-round}
+   'filler {:round filler-round :idle-ok true}
    'work {:round work-round}
    'stuck (tu/job [no-source] work-round)})
 
@@ -77,6 +82,17 @@
                     {:job "j2" :name "(repeat filler)" :idle-ok true}]
                    (:jobs e)))
             (is (re-find #"j1 stuck waiting: no stone in sight" (:text e)) (:text e))))))))
+
+(deftest a-job-that-held-and-yielded-is-told-as-holding
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (setup {})]
+          (core/submit! eng '(cook) {})
+          (core/submit! eng '(repeat (filler)) {})
+          (await (run-for eng clock 12000))
+          (is (= {:reason :cooking} (select-keys (:holding (first (:jobs (first (idles seen))))) [:reason]))
+              (pr-str (:jobs (first (idles seen))))))))))
 
 (deftest a-real-job-acting-is-not-idle
   (async done

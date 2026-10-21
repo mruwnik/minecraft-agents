@@ -48,6 +48,15 @@
     (when (and a (= id (:id a)) (= (:token a) (:token (running eng))))
       (or (:hold a) (:wait-hold a)))))
 
+(defn keep-hold!
+  "Before the round of job id starts: the hold the previous round declared stays on record for its job (a job that
+  yields :continue while it cooks is still holding), and id's own is dropped."
+  [eng id]
+  (let [{:keys [hold wait-hold] :as prev} @(:activity eng)
+        h (or hold wait-hold)]
+    (swap! (:holds eng) #(cond-> (dissoc % id)
+                           h (assoc (:id prev) h)))))
+
 (defn emit-holding! [eng root reason t]
   (emit! eng (merge (job-fields eng root)
                     {:source :job :kind :holding :level :info :reason reason :since t
@@ -135,7 +144,7 @@
   "What listed or reflex job id does while the body idles: {:job :name} and :waiting, :holding, :failed or :idle-ok."
   [eng id]
   (let [waiting (waiting eng id)
-        hold (holding eng id)
+        hold (or (holding eng id) (get @(:holds eng) id))
         failed (get-in (state eng) [:failed id])]
     (cond-> {:job id :name (some-> (get-in (state eng) [:instances id :spec]) expr/label)}
       waiting (assoc :waiting waiting)
