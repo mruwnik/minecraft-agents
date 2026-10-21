@@ -1,5 +1,5 @@
 // Why JavaScript: Mineflayer boundary; block use/activate calls and the safety guards before the click.
-// useOn: right-click a block with an item (the held stack when none is named, or 'none' for an empty hand) and report what changed.
+// useOn: right-click a block with an item (the held stack when none is named, or 'none' for an empty hand) and report what changed; with `air` use the item toward the spot pos instead (a throw).
 import vec3 from 'vec3'
 import { setting } from './settings.mjs'
 import { spawnSetMessage } from './prim-base.mjs'
@@ -18,6 +18,8 @@ const HAZARDS = new Set(['flint_and_steel', 'fire_charge', 'lava_bucket'])
 // Animal foods a lure holds: several share a name with their crop block (wheat, carrots), so the block-name test must not stow them. Mirror of jobs.lib.animals/breeding-food.
 const LURE_FOODS = new Set(['wheat', 'wheat_seeds', 'melon_seeds', 'pumpkin_seeds', 'beetroot_seeds', 'torchflower_seeds', 'carrot', 'potato', 'beetroot', 'golden_carrot'])
 const PLACING = /_bucket$|_spawn_egg$|_boat$|_raft$|minecart/
+// Items a player uses in the air by looking at a spot and right-clicking; anything else (food, bows, blocks) would start another action.
+const THROWN = /^(egg|snowball|ender_pearl|experience_bottle|wind_charge|splash_potion|lingering_potion|trident)$/
 const isAir = name => name === 'air' || name.endsWith('_air')
 const isNum = n => typeof n === 'number' && Number.isFinite(n)
 const sleepMs = ms => new Promise(resolve => setTimeout(resolve, ms))
@@ -46,9 +48,35 @@ export function createUseOn ({ act, getBot, inventory, eye, lookNow, timeScale, 
 
   const placing = (bot, name) => name && !LURE_FOODS.has(name) && (HAZARDS.has(name) || PLACING.test(name) || bot.registry?.blocksByName?.[name])
 
+  // Air use: look at the spot pos (any point) and activate the held item; used when the carried count dropped.
+  const throwAt = (token, { pos, item }) => {
+    if (!pos || !isNum(pos.x) || !isNum(pos.y) || !isNum(pos.z)) throw badArgs('useOn needs pos {x, y, z}')
+    if (typeof item !== 'string') throw badArgs('useOn in the air needs an item name')
+    return act(token, { boundS: 5 }, async ctx => {
+      const bot = getBot()
+      if (!THROWN.test(item)) return { status: 'cannot', reason: 'not-throwable', consumed: 0 }
+      const stack = inventory().find(i => i.name === item)
+      if (!stack) return { status: 'no-item', consumed: 0 }
+      const before = carried(item)
+      await bot.equip(stack, 'hand')
+      ctx.alive()
+      await lookNow(() => bot.lookAt(new Vec3(pos.x, pos.y, pos.z), true))
+      ctx.alive()
+      await bot.activateItem()
+      const deadline = Date.now() + setting('use-on/wait-ms') * timeScale
+      while (carried(item) >= before && Date.now() < deadline) {
+        await sleepMs(setting('use-on/poll-ms') * timeScale)
+        ctx.alive()
+      }
+      const consumed = Math.max(0, before - carried(item))
+      return { status: consumed > 0 ? 'used' : 'unchanged', consumed }
+    })
+  }
+
   return async function useOn (token, a = {}) {
     if (!isOwner(token)) throw cutError()
     const { pos, face = 'up' } = a
+    if (a.air) return throwAt(token, a)
     // item undefined: keep whatever is in hand; 'none': the empty hand.
     const keepHand = a.item === undefined
     const item = a.item === 'none' ? undefined : a.item

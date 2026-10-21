@@ -79,7 +79,17 @@
 
 (def face-delta {"up" [0 1 0] "down" [0 -1 0] "north" [0 0 -1] "south" [0 0 1] "east" [1 0 0] "west" [-1 0 0]})
 
-(defn use-on [w {:keys [pos face] :or {face "up"} :as args}]
+(def thrown #{"egg" "snowball" "ender_pearl" "experience_bottle" "wind_charge" "splash_potion" "lingering_potion" "trident"})
+
+(defn throw-at
+  "An air use of item: one is spent when it is a throwable that is carried."
+  [w {:keys [item]}]
+  (cond
+    (not (thrown item)) [w {:status "cannot" :reason "not-throwable" :consumed 0}]
+    (not-any? #(= item (:name %)) (:inventory w)) [w {:status "no-item" :consumed 0}]
+    :else [(-> w (take-one item) (assoc-in [:self :held] item)) {:status "used" :consumed 1}]))
+
+(defn use-on-block [w pos face args]
   (let [keep-hand? (nil? (:item args))
         item (when-not (= "none" (:item args)) (:item args))
         here (get-in w [:blocks pos] "air")
@@ -144,3 +154,8 @@
           (done (-> w (take-one item) (assoc-in [:states pos :level] (if (= (inc level) 7) 8 (inc level)))) "used" 1)
 
           :else (done w "unchanged"))))))
+
+(defn use-on [w {:keys [pos face air] :or {face "up"} :as args}]
+  (if air
+    (throw-at w args)
+    (use-on-block w pos face args)))

@@ -169,3 +169,13 @@
       (fn ^:async t []
         (is (true? (await (waits? (stacks "dirt") 'jobs.items.equip {:item "iron_helmet" :ways #{:carried}}))) "not carried")
         (is (true? (await (waits? {} 'jobs.items.pick-up-loose {}))) "no loose item in sight")))))
+
+(deftest use-in-the-air-throws-a-carried-throwable-without-a-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [e (await (ending-of (stacks "egg") 'jobs.items.use {:on [5 64 0] :item "egg" :air true}))]
+          (is (= {:kind :done :used true} {:kind (:kind e) :used (:used (:data e))}) "no block at the spot is needed"))
+        (is (= {:kind :condition-failed :cause :no-item} (kc (await (ending-of {} 'jobs.items.use {:on [5 64 0] :item "egg" :air true})))))
+        (is (= {:kind :condition-failed :cause :cannot} (kc (await (ending-of (stacks "bread") 'jobs.items.use {:on [5 64 0] :item "bread" :air true})))))
+        (is (= {:kind :impossible :cause :bad-args} (kc (await (ending-of (stacks "egg") 'jobs.items.use {:on [5 64 0] :air true})))) "an air use names its item")))))

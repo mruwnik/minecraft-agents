@@ -4,6 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.cond :as cond]
+            [jobs.lib.use-air :as air]
             [jobs.lib.use-block :as block]
             [jobs.lib.use-entity :as entity]))
 
@@ -21,6 +22,9 @@
   condition-failed: :no-item, :missing, :cannot, :occupied (a bucket's cell is filled). nothing-possible: :unreachable (a walk that failed twice, :why),
   :unchanged, :no-room, :failed.
 
+  In the air (:air true): look at the spot :on and use :item without a block (throw an egg, snowball, ender pearl); data {:used :pos :item :reason :raw};
+  condition-failed :no-item, :cannot (not a throwable); nothing-possible :unchanged, :failed.
+
   An entity: find it in sight, walk into reach (a go-to child, range 2, no escalation; again when the entity moved since the walk arrived), click
   with :item (nil or none: the empty hand). An entity that drops out of sight (the pit rim, a wall) between the sighting and the click is walked to at
   its last seen place and clicked there (the click finds it by id); it is :gone when the click does not. Ends with data {:used true|false :id :item
@@ -31,6 +35,7 @@
   {:on {:doc "what to click: a block, [x y z] or {:x :y :z}, or an entity id (observe entities lists them)" :spec (a/or-of a/position? (a/int-in 1 nil)) :default nil}
    :item {:doc "the item to hold for the click; nil: a block keeps the hand as it is, an entity gets the empty hand; none: the empty hand" :spec a/item? :default nil}
    :see {:doc "block only. true: click only from where the eye sees the block (jobs.lib.aim), walking to such a stand first (go-to :see; none: :unreachable); false: within reach is enough, though a wall in between refuses the click" :spec boolean? :default false}
+   :air {:doc "true: no block is clicked; the body looks at the spot :on (any point, a whole cell at its centre) and uses :item in the air, as a player throws an egg, snowball or ender pearl. No walk; needs :item (egg snowball ender_pearl experience_bottle wind_charge splash_potion lingering_potion trident); :used when one was spent. Zones are not asked" :spec boolean? :default false}
    :ignore-zones? :shared
    :for-plan {:doc "block only: id of the plan whose work this is: its own footprint does not refuse the bucket; nil: every plan's footprint does" :spec a/name? :default nil}
    :range {:doc "block only: how many cells from :on the walk may stop (go-to :range); a click the server checks by distance, a bed's 3 blocks, wants less" :spec (a/num-in 0 nil) :default 3}
@@ -45,7 +50,9 @@
 (defn ops
   "The functions of the kind of target (jobs.lib.use-block or jobs.lib.use-entity)."
   [c]
-  (if (entity? c) entity/ops block/ops))
+  (cond (entity? c) entity/ops
+        (:air (:args c)) air/ops
+        :else block/ops))
 
 (def target [:on :item])
 (def defaults {:spend {:job-time ::job-time-s}})
