@@ -24,7 +24,7 @@
             [jobs.lib.build.plan :as plan :refer [retry-distance max-retries facing-of facing-ok? body-cells count-fail stands-for plan-trouble owed need-of shortage hazards decide rules-input refuse permitted judged no-zones planned how placeable misplaced missing covered digging unseen buildable problem]]
             [jobs.lib.build.scaffold :as scaffold]
             [jobs.build.from-plan.cells :refer [diggable in-reach in-dig-reach seals? shuts-out? exit-point off-low-floor buried? reaching support-looks]]
-            [jobs.build.from-plan.book :refer [walk-fail retry-walks warn-way-in! place-one! settle-placing! dig-one! result-data finish! book-failed! offer-built-bed!]]
+            [jobs.build.from-plan.book :refer [walk-fail retry-walks warn-way-in! place-one! settle-placing! dig-one! result-data finish! book-failed!]]
             [jobs.build.from-plan.light :as light]
             [jobs.lib.build.text :refer [summary stopped-text assoc-fetch-failed]]))
 
@@ -64,7 +64,6 @@
   slope; :sturdy-ground true accepts a sturdy block on the ground of a rail line (plan.rail/ground) where the plan wants
   fill, not listed :wrong.
   done? holds when no cell is owed, none came out wrong; the engine then ends it :done.
-  However the call ends, a finished plan with a built bed offers :bed and :home at it (jobs.lib.places/offer!), so the night can walk to the house bed.
   Ends with data {:placed n :missing [[x y z] ...] :short {item n} :given-up {[x y z] reason} :wrong [{:pos :found
   :want}] :refused [...] :fetch-failed {item {:failed :why}}}: done when nothing is missing (and no block came out wrong: nothing-possible :wrong-blocks) or the cells placed meet
   the call's :least (default :all); else with :text naming the missing count and what it left: nothing-possible
@@ -423,8 +422,6 @@
   (await (pace/steps! c (fn ^:async s [] (await (step c))))))
 
 (defn ^:async cleanup
-  "However the call ends: a finished plan's bed is recorded, the scaffold taken back."
+  "However the call ends: take the scaffold back."
   [c _]
-  (let [{:keys [cells trouble]} (planned c)]
-    (when-not trouble (offer-built-bed! c cells (result-data c cells))))
   (or (await (scaffold/take-back! c)) (ctx/end c :done nil {})))

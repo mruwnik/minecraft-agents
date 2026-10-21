@@ -6,7 +6,6 @@
             [jobs.lib.job-common :as common]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
-            [jobs.lib.places :as places]
             [jobs.lib.trip :as trip]
             [jobs.lib.util :as u]
             [jobs.build.from-plan.cells :refer [pos-map]]
@@ -147,19 +146,6 @@
       (seq short) (ctx/end c :condition-failed {:reason :no-items :needs short} data)
       (seq refused) (ctx/end c :condition-failed :refused data)
       :else (ctx/end c :nothing-possible :incomplete data))))
-
-(defn offer-built-bed!
-  "A finished plan with a built bed: the body knows where it put its bed, so the bed and the home are offered there
-  (places/offer! keeps a recorded one unless the offered lies in a closed room and the recorded in the open)."
-  [c cells result]
-  (let [bed? (fn [{:keys [want answer]}]
-               (let [b (if (map? want) (:block want) want)]
-                 (and (= :match answer) (string? b) (or (= "bed" b) (str/ends-with? b "_bed")))))
-        beds (filter bed? cells)
-        foot (or (first (filter #(= :foot (:part (:want %))) beds)) (first beds))]
-    (when (and foot (empty? (:missing result)))
-      (places/offer! c :bed (:pos foot))
-      (places/offer! c :home (:pos foot)))))
 
 (defn finish! [c cells]
   (ending-of c (result-data c cells)))
