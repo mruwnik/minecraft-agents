@@ -7,6 +7,7 @@
             [engine.test-util :as tu]
             [engine.core :as core]
             [engine.game :as game]
+            [engine.hostile-test :as h]
             [engine.sense-test :as sense]
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.seen :as seen]
@@ -50,3 +51,14 @@
   (let [p (tu/fake {:inventory [{:name "salmon" :count 2} {:name "cod" :count 1}]})
         need (first (table/gather-needs {"cod" 2}))]
     (is (= 5 (get-in (seen/with-count p need) [:args :count])))))
+
+(deftest water-seen-without-a-rod-does-not-pick-fishing-over-a-known-animal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup (assoc (ft/world [] {}) :entities [{:id 1 :name "rabbit" :kind "passive" :pos {:x 39 :y 64 :z 4} :drops [{:name "rabbit" :count 1}]}]) 50)]
+          (core/submit! (:eng s) '(jobs.items.obtain {:any-of ["rabbit" "cod"]}) {})
+          (await (tu/run-ticks (:eng s) (:clock s) 12 700))
+          (let [vias (set (map :via (filter #(= :obtain.gathering (:kind %)) @(:seen s))))]
+            (is (contains? vias 'jobs.combat.hunt) (pr-str vias))
+            (is (not (contains? vias 'jobs.food.fish)))))))))

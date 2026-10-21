@@ -54,9 +54,12 @@
 
 (defn raw-seen?
   "Whether every raw need of a gather plan (but wool, left to pick-plan) has a block seen: of several names, the plans
-  whose blocks are seen come before one that would have to look for them (coal unseen, logs seen: charcoal)."
+  whose blocks are seen come before one that would have to look for them (coal unseen, logs seen: charcoal). Fish
+  seen at water count only with a rod carried: a rod costs more than a search for another food."
   [c plan]
-  (every? #(or (:sheep %) (seen-of c %)) (some-> plan :gather (gather-needs (game/version-of (:primitives c))))))
+  (let [rod? (pos? (storage/carried (u/inventory (:primitives c)) "fishing_rod"))]
+    (every? #(or (:sheep %) (and (seen-of c %) (or rod? (not= 'jobs.food.fish (:job %)))))
+            (some-> plan :gather (gather-needs (game/version-of (:primitives c)))))))
 
 (defn any-log
   "The gather map with the logs any species would do as \"log\" (summed); a log only its own species makes (oak_log
