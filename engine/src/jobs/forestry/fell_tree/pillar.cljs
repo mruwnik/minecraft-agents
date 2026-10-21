@@ -76,16 +76,22 @@
 
 (defn log-cell [l] (let [{:keys [x y z]} (:pos l)] [x y z]))
 
+(defn plan-sizes
+  "How many of the highest logs each planning attempt aims at, most first: all, half, the top one. Each attempt searches
+  every column and height round the tree on the event loop, so a tall tree is not tried log by log."
+  [n]
+  (vec (distinct (filter pos? [n (quot (inc n) 2) 1]))))
+
 (defn pillar-plan
-  "The approach plan (jobs.lib.access.approach/plan) for the highest logs: every log, then without the lowest one at a
-  time until the planner finds a stand or a pillar (a zone refusal included)."
+  "The approach plan (jobs.lib.access.approach/plan) for the highest logs: all of them, then fewer (plan-sizes) until
+  the planner finds a stand or a pillar (a zone refusal included)."
   [c logs avoid]
   (let [in (assoc (access/rules-input c {:except (:for-plan (:args c)) :own-plans-ok? true}) :reach dig-reach :avoid avoid)
         top-down (vec (sort-by #(- (:y (:pos %))) logs))]
-    (loop [n (count top-down)]
+    (loop [[n & more] (plan-sizes (count top-down))]
       (let [r (approach/plan (assoc in :targets (set (map log-cell (take n top-down)))))]
-        (if (and (:reason r) (> n 1))
-          (recur (dec n))
+        (if (and (:reason r) more)
+          (recur more)
           r)))))
 
 (defn pillar-blocks
@@ -136,9 +142,7 @@
   "Plan a stand or a pillar for the highest logs and remember it. A refusal that read unseen floor cells is decided again
   after a look at them (jobs.lib.sense/decide!); one that stays ends the call."
   [c]
-  (let [t0 (js/Date.now)
-        r (await (sense/decide! c ::pillar #(pillar-plan c (tree-logs c) (:stand-avoid (ctx/mem c))) {:retry? :reason}))]
-    (ctx/emit! c :fell-tree.pillar-plan :debug {:ms (- (js/Date.now) t0) :logs (count (tree-logs c)) :found (cond (:stand r) :stand (:pillar r) :pillar :else (:reason r))})
+  (let [r (await (sense/decide! c ::pillar #(pillar-plan c (tree-logs c) (:stand-avoid (ctx/mem c))) {:retry? :reason}))]
     (cond
       (:stand r) (do (set-pillar! c {:phase :collect :plan {:stand (first (:stand r))}}) :again)
       (:pillar r) (do (set-pillar! c {:phase :collect :plan (:pillar r)}) :again)

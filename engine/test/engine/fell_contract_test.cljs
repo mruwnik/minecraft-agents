@@ -259,7 +259,7 @@
       (contract/ending :condition-failed :need {}) :condition-failed :need)
     (is (= :again (pillar/pass-up! {} (contract/ending :nothing-possible :no-source {}))))))
 
-(deftest the-pillar-plan-keeps-dropping-the-lowest-log-past-a-zone-refusal
+(deftest the-pillar-plan-aims-at-fewer-logs-past-a-zone-refusal
   (let [logs (mapv (fn [y] {:pos {:x 0 :y y :z 0}}) [64 65 66 67 68])
         asked (atom [])]
     (with-redefs [access/rules-input (fn ([_] {}) ([_ _] {}))
@@ -267,7 +267,15 @@
                                   (swap! asked conj (count (:targets in)))
                                   (if (> (count (:targets in)) 2) {:reason :zone} {:pillar {:height 3}}))]
       (is (= {:pillar {:height 3}} (pillar/pillar-plan {:args {}} logs #{})))
-      (is (= [5 4 3 2] @asked)))))
+      (is (= [5 3 1] @asked)))))
+
+(deftest the-pillar-plan-searches-at-most-three-times-however-tall-the-tree
+  (let [logs (mapv (fn [y] {:pos {:x 0 :y y :z 0}}) (range 64 94))
+        asked (atom 0)]
+    (with-redefs [access/rules-input (fn ([_] {}) ([_ _] {}))
+                  approach/plan (fn [_] (swap! asked inc) {:reason :no-stand})]
+      (is (= {:reason :no-stand} (pillar/pillar-plan {:args {}} logs #{})))
+      (is (= 3 @asked)))))
 
 (defn ^:async step-with-scaffold
   "pillar/round! on a call with no pillar yet and an open scaffold; the cleanup child leaves it open-after."
