@@ -1,0 +1,15 @@
+;; Card 1e799b00: a part whose cell stands on a planned cell of another part builds that cell first (a torch on the plan's table), as a player places the table and then the torch.
+;; Should-succeed: torch-part-places-its-table-first.
+{:defaults
+ {:tags [:build] :time :any
+  :plot {:height 8 :floor "stone"}
+  :plans [{:id "hut" :metadata {:by "$body"}
+           :parts [{:id "table" :cells [#at [12 0 12]] :want "crafting_table"}
+                   {:id "torch" :cells [#at [12 1 12]] :want "torch"}]}]
+  :body {:at [4.5 0 12.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["crafting_table" 1] ["torch" 1]]}
+  :limit-s 120}
+ :cases
+ [{:name "torch-part-places-its-table-first"
+   :act [[:job (jobs.build.from-plan {:plan "$plan:hut" :part "torch"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:block [12 0 12] "crafting_table"] [:block [12 1 12] "torch"]]}]}

@@ -216,6 +216,18 @@
               _ (await (child-outcome eng job {:plan "hut"} 200))]
           (is (empty? (places p)) "the wall cell is not placed over the dirt that is still to dig"))))))
 
+(deftest a-part-builds-the-cells-of-other-parts-it-stands-on-first
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "hut" :parts [{:id "table" :cells [[3 64 2]] :want "crafting_table"}
+                                      {:id "torch" :cells [[3 65 2]] :want "torch"}]}
+              {:keys [eng]} (start {:inventory [{:name "crafting_table" :count 1} {:name "torch" :count 1}]
+                                    :blocks {"3,64,2" "air" "3,65,2" "air" "3,63,2" "stone"}} {"hut" plan})
+              result (await (child-outcome eng job {:plan "hut" :part "torch"} 200))]
+          (is (= 2 (:placed result)) "the table under the torch is placed first")
+          (is (empty? (:given-up result))))))))
+
 (deftest a-floor-cell-under-a-built-wall-is-placed-from-beside-it
   (async done
     (tu/run-async done

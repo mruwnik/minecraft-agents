@@ -264,12 +264,22 @@
     answer
     (update answer :cells surface/follow (top-fn c))))
 
+(defn with-supports
+  "The cells of part, and the cells of other parts under them, down the column: a part's cell stands on them, so the part builds them first."
+  [cells part]
+  (let [by-pos (into {} (map (juxt :pos identity)) cells)
+        mine (filter #(= part (:part %)) cells)
+        below (fn [cell] (by-pos (update (:pos cell) 1 dec)))
+        supports (->> mine
+                      (mapcat #(take-while (fn [x] (and x (not= :clear (:want x)))) (rest (iterate below %))))
+                      (remove #(= part (:part %))))]
+    (distinct (concat mine supports))))
+
 (defn judged
-  "The plan's cells (of part) judged against the world, each with the :item to place it with. A generic wood want
+  "The plan's cells (of part, and the cells of other parts they stand on) judged against the world, each with the :item to place it with. A generic wood want
   (jobs.lib.build.wood) is wanted in species sp first, any other counts where it stands."
   [p answer part carried sp]
-  (->> (:cells answer)
-       (filter #(or (nil? part) (= part (:part %))))
+  (->> (if (nil? part) (:cells answer) (with-supports (:cells answer) part))
        (mapv #(-> % (cond-> sp (update :want wood/resolve-want sp)) (update :want wood/resolve-bed)))
        (#(shape/plan-minus-world % (partial world-block p)))
        (allot carried)))

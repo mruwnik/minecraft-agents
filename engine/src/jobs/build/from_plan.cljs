@@ -85,7 +85,7 @@
 
 (a/defargs args
   {:plan {:doc "id of a plan of the body's world" :spec a/name? :default nil}
-   :part {:doc "only the cells of this part" :spec a/name? :default nil}
+   :part {:doc "only the cells of this part, and the cells of other parts it stands on (down the column), built first" :spec a/name? :default nil}
    :accept {:doc "fluid hazards of a cell taken: :fluid-adjacent (water beside; placing beside or into water seals and bridges), :lava-adjacent (lava beside; not taken by default: the body stands beside the cell), :falling-block (a dig under sand or gravel that falls in)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default [:fluid-adjacent]}
    :explore {:doc "walk off to look for blocks and tools that are not in sight when the plan lacks them" :spec boolean? :default true}
    :ignore-zones? :shared})
