@@ -622,6 +622,40 @@
           (is (= :arrived (:reason (done-event s))) (pr-str (done-event s)))
           (is (< 3 (first (:pos (cow-of s 1))) 12) "the cow ends inside the ring"))))))
 
+(deftest a-spot-inside-a-pen-is-walked-to-exactly-after-a-walk-to-outside-its-gate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [legs (atom [])
+              box {:min {:x 4 :y 64 :z -1} :max {:x 11 :y 64 :z 1}}]
+          (with-redefs [escort/walk-legs! (fn [_ _ target range _] (swap! legs conj [(:x target) range]) (js/Promise.resolve :failed))]
+            (await (scenario {:pos {:x 10 :y 64 :z 0} :box box}
+                             {:self {:pos {:x 17 :y 64 :z 0}} :inventory wheat :entities [(cow 1 19.5)]
+                              :blocks (merge ring {"12,64,0" "oak_fence_gate"}) :states {"12,64,0" {:open false :facing "east"}}} 6)))
+          (is (= [[12.5 0] [10 0]] (take 2 @legs)) "first into the gateway, then into the spot itself (a fence is see-through: range 0)"))))))
+
+(deftest a-spot-in-the-open-is-walked-to-within-the-arrive-range
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [legs (atom [])]
+          (with-redefs [escort/walk-legs! (fn [_ _ target range _] (swap! legs conj [(:x target) range]) (js/Promise.resolve :failed))]
+            (await (scenario {} {:inventory wheat :entities [(cow 1 2)]} 6)))
+          (is (= [[30 2]] (take 1 @legs))))))))
+
+(deftest a-body-outside-a-pen-goes-in-by-its-south-gate-to-the-spot-inside
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng clock] :as s} (h/setup {:floor tu/walk-floor :self {:pos {:x 13.5 :y 64 :z 0.5}} :inventory wheat :entities [(cow 1 14.5)]
+                                                    :blocks (merge ring (tu/box 7 63 2 9 63 2 "stone") {"8,64,2" "oak_fence_gate"})
+                                                    :states {"8,64,2" {:open false :facing "south"}}} 50)
+              min-z (atom 99)]
+          (doseq [act ["steer"]] (.override (.-world p) act (fn [token a impl] (.then (impl token a) (fn [r] (swap! min-z min (.. p self -pos -z)) r)))))
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos {:x 11 :y 64 :z 1} :box {:min {:x 4 :y 64 :z -1} :max {:x 11 :y 64 :z 1}}}) {})
+          (loop [i 0] (when (and (< i 60) (not (finished? s))) (swap! clock + 700) (await (core/tick! eng)) (recur (inc i))))
+          (is (not= :unreachable (:reason (done-event s))) (pr-str (done-event s))))))))
+
 (deftest a-cow-stopped-at-the-shut-gate-is-let-in-by-walking-out-and-in
   (async done
     (tu/run-async done

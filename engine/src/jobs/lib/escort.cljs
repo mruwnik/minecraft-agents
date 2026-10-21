@@ -267,9 +267,9 @@
 
 (defn ^:async lead-deeper!
   "A tempted animal stops a couple of blocks behind the food, so a body that stopped at the box edge leaves it outside:
-  walk to the far side of the box once (slot :deeper). :yield while the walk goes on, else :again."
+  walk into the far side of the box once (slot :deeper; range 0: a fence is see-through, so a body next to it outside is within range 1 of a cell inside). :yield while the walk goes on, else :again."
   [c box animal-pos]
-  (if (= :continue (await (child/call-walk* c :deeper {:pos (deep-cell box animal-pos) :range 1 :doors :leave-open :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
+  (if (= :continue (await (child/call-walk* c :deeper {:pos (deep-cell box animal-pos) :range 0 :doors :leave-open :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
     :yield
     (do (ctx/update-mem! c assoc :led-deeper true) :again)))
 

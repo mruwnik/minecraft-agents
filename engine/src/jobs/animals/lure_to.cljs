@@ -49,6 +49,7 @@
   :lost / :stalled detail for those reasons}. Reasons:
   - :arrived: the body stands within ::arrive-range of :pos and the animal is seen in :box (none: within ::arrive-range + ::arrive-slack blocks of :pos, in the fenced pen :pos is in, if any) and not in the cell of a planned gate, else the
     body holds still for it up to 10 s and the end is :animal-outside (seen elsewhere) or :lost (not seen). The food is then put away (another carried item in hand when no slot is free); :near says whether the animal is by the spot.
+  A :pos inside the destination is walked to exactly (range 0, a fence being see-through), after a step into the destination's gateway when the body is outside it, so the body goes in by the gate.
   A body that stands in the destination (:box, or the fenced pen around :pos) with the animal outside it first walks out of the pen's fence gate to the cell two past it, the animal following, and then in again (the animal follows food over the ground, not across a fence). An animal waiting at the shut gate counts as outside: the body goes out and the legs open the gate on the way in.
   - :animal-outside: the body is at :pos but the animal is not in the destination; the result gives :distance (animal to :pos).
   Every ending the job concludes itself gives :distance: the animal's, or its last sighting's when it is unseen (the engine's limit ending carries no data).
@@ -131,7 +132,7 @@
 (defn quote-of [c]
   {:uses {:job-time [0 60 ##Inf]}})
 
-(declare at-destination?)
+(declare at-destination? walk-legs-in!)
 
 (defn named-there
   "The animal the :uuid start names when it already stands at the destination before the lure chose one."
@@ -383,24 +384,36 @@
       (nil? food) (finish! c :no-food)
       :else (if (= :no-hold (await (bait/hold! c food))) (finish! c :no-hold) :again))))
 
+(defn gates-of
+  "The fence gates of the destination cells: [{:gate cell-map :past cell two past it, outside}], the past cell at the ground there (the gate may hang over a slope)."
+  [c cells]
+  (let [block-at (u/seen-block-at-fn (:primitives c))]
+    (for [[x y z] cells [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+          :let [g {:x (+ x dx) :y y :z (+ z dz)}]
+          :when (and (not (contains? cells [(:x g) y (:z g)])) (some-> (block-at g) .-name (str/ends-with? "_fence_gate")))]
+      (let [wx (+ (:x g) (* 2 dx)) wz (+ (:z g) (* 2 dz))
+            wy (or (some #(when (reach/standable-cell? (:primitives c) {:x wx :y % :z wz}) %) [y (dec y) (- y 2) (inc y)]) y)]
+        {:gate {:x (+ (:x g) 0.5) :y y :z (+ (:z g) 0.5)} :past {:x (+ wx 0.5) :y wy :z (+ wz 0.5)}}))))
+
 (defn gate-waypoint
   "The cell two past the destination's nearest fence gate (to the animal) when the body stands inside the destination and
   the animal outside it; else nil. The animal follows the food over the ground, so a gate on the far side is walked round
-  to, not leaned across, and an animal stopped at the shut gate is let in by walking out and in again. The cell is at the
-  ground there (the gate may hang over a slope)."
+  to, not leaned across, and an animal stopped at the shut gate is let in by walking out and in again."
   [c a]
   (let [cells (destination-cells c)
         me (u/cell-vec (u/self-pos c))
-        there (u/pos-of (.-pos a))
-        block-at (u/seen-block-at-fn (:primitives c))]
+        there (u/pos-of (.-pos a))]
     (when (and (seq cells) (contains? cells me) (not (contains? cells (animal-cell a))))
-      (let [outs (for [[x y z] cells [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
-                       :let [g {:x (+ x dx) :y y :z (+ z dz)}]
-                       :when (and (not (contains? cells [(:x g) y (:z g)])) (some-> (block-at g) .-name (str/ends-with? "_fence_gate")))]
-                   (let [wx (+ (:x g) (* 2 dx)) wz (+ (:z g) (* 2 dz))
-                         wy (or (some #(when (reach/standable-cell? (:primitives c) {:x wx :y % :z wz}) %) [y (dec y) (- y 2) (inc y)]) y)]
-                     {:x (+ wx 0.5) :y wy :z (+ wz 0.5)}))]
-        (first (sort-by #(u/flat-dist there %) outs))))))
+      (first (sort-by #(u/flat-dist there %) (map :past (gates-of c cells)))))))
+
+(defn entry-gate
+  "The cell of the destination's gate nearest the body when the body stands outside the destination; else nil. The body
+  steps into the gateway first: from there the pen is in sight and the way in is short."
+  [c]
+  (let [cells (destination-cells c)
+        me (u/self-pos c)]
+    (when (and (seq cells) (not (contains? cells (u/cell-vec me))))
+      (first (sort-by #(u/flat-dist me %) (map :gate (gates-of c cells)))))))
 
 (defn ^:async arrive!
   "The body stands at :pos: the job ends :arrived once the led animal is at the destination; until then the body holds
@@ -419,8 +432,19 @@
       :else (do (ctx/update-mem! c assoc :arrive-since since)
                 (await (escort/wait-for-animal! c))))))
 
+(defn spot-in-destination?
+  "True when :pos is a cell of the destination (box or fenced pen): the body must stand in it, not just within range of it across the fence."
+  [c]
+  (contains? (set (destination-cells c)) (u/cell-vec (:pos (:args c)))))
+
 (defn ^:async walk-legs-to-pos! [c]
-  (let [r (await (escort/walk-legs! c :walk (:pos (:args c)) (arrive-range) (escort/lure-gap)))]
+  (if-let [wp (when (and (spot-in-destination? c) (not (:entered (ctx/mem c)))) (entry-gate c))]
+    (do (ctx/update-mem! c assoc :via-gate wp :via-flag :entered) :again)
+    (await (walk-legs-in! c))))
+
+(defn ^:async walk-legs-in! [c]
+  (let [r (await (escort/walk-legs! c :walk (:pos (:args c)) (if (spot-in-destination? c) 0 (arrive-range)) (escort/lure-gap)))]
+    (when-not (= :arrived r) (ctx/update-mem! c dissoc :arrive-since))
     (cond
       (= :waiting r) :yield
       (= :searching r) :again
@@ -433,8 +457,8 @@
 (defn ^:async via-gate!
   "Walk out to the waypoint outside the gate with the animal following; then the legs to :pos go in through it."
   [c waypoint]
-  (let [r (await (escort/walk-legs! c :gate waypoint 1 (escort/lure-gap)))
-        done #(ctx/update-mem! c (fn [m] (-> m (dissoc :via-gate :arrive-since) (assoc :gated true))))]
+  (let [r (await (escort/walk-legs! c :gate waypoint (if (= :entered (:via-flag (ctx/mem c))) 0 1) (escort/lure-gap)))
+        done #(ctx/update-mem! c (fn [m] (-> m (dissoc :via-gate :via-flag :arrive-since) (assoc (or (:via-flag m) :gated) true))))]
     (cond
       (= :waiting r) :yield
       (= :searching r) :again

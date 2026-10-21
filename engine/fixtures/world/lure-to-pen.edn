@@ -87,6 +87,20 @@
    :expect [{:event {:source :job :kind :completed :data {:reason :arrived :in-box true}} :within-s 150 :of-job true}]
    :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
            [:block [24 0 16] "oak_fence_gate[open=false]"]]}
+  ;; card 96c54d87: a small pen (3x3 inside, gate on the south side) with the spot next to its east fence, the body and a chicken east of it: the fence is
+  ;; see-through, so the body must go round to the gate and in, not stop across the fence within range of the spot
+  {:name "chicken-led-into-a-small-pen-with-the-spot-by-the-far-fence"
+   :plot {:length 64 :width 32}
+   :blocks [[:fill [50 0 13] [54 0 17] "oak_fence"]
+            [:fill [51 0 14] [53 0 16] "air"]
+            [:set [52 0 17] "oak_fence_gate[facing=south,open=false]"]]
+   :body {:at [57.5 0 15.5] :yaw 90 :inventory [["wheat_seeds" 8]] :effects [["resistance" 900 4]]}
+   :act [[:summon "chicken" [58.5 0 17.5]]
+         [:job (jobs.animals.lure-to {:mob "chicken" :pos #xyz [53 0 15] :box {:min #xyz [51 0 14] :max #xyz [53 0 16]}})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :arrived :in-box true}} :within-s 170 :of-job true}]
+   :after [[:entities "type=chicken,tag=wt" [[51 0 14] [53 1 16]] 1]
+           [:block [52 0 17] "oak_fence_gate[open=false]"]]
+   :limit-s 200}
   ;; should fail: a cow that does not move never follows; the run ends with a reason, never :arrived, and the cow stays out
   {:name "cow-that-never-follows-is-not-arrived"
    :act [[:summon "cow" [10.5 0 18.5] "{NoAI:1b}"]
