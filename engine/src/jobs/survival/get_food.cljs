@@ -76,7 +76,7 @@
 (a/defargs args
   {:food {:doc "hungry below this much food (of 20)" :spec (a/num-in 0 20) :default foods/default-food}
    :health {:doc "below this health eat up to a full bar" :spec (a/num-in 0 20) :default foods/default-health}
-   :explore {:doc "with nothing known or seen, walk and look for food animals and crops once per job (a starving body again after foods/::starving-rest-ms; a hungry body under rock first climbs out; a starving one searches there): false, true (the ::explore setting) or jobs.explore.search options over it" :spec (a/or-of boolean? map?) :default true}
+   :explore {:doc "with nothing known or seen, walk and look for food animals and crops once per job (a starving body again after foods/::starving-rest-ms; a hungry body under rock first climbs out; a starving one searches there): false, true (the ::explore setting) or a map of the search's options over it (:max-distance, :max-legs, :spend; not :radius)" :spec (a/or-of boolean? map?) :default true}
    :carry {:doc "carry food worth this many hunger points: a fed body takes the ways below until the pack holds it (0: only feed)" :spec (a/num-in 0 nil) :default food-cost/reserve-points}
    :eat {:doc "eat what is carried and what the ways bring: false only gathers (the way jobs.survival.eat fetches: it is the caller, and a job cannot call its own caller), done when the pack holds :carry food points" :spec boolean? :default true}
    :ignore-zones? :shared})

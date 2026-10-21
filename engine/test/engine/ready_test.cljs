@@ -319,6 +319,15 @@
     stay-near/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 5}} {:player "Steve"} :later
     mount/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 5}} {} :later))
 
+(deftest a-hurt-body-that-cannot-heal-may-search-for-food-only
+  (let [hurt {:pos {:x 0 :y 64 :z 0} :health 5}]
+    (are [self inventory target expected] (= expected (bound search/fit? {:self (assoc hurt :food self) :inventory inventory} {:target target}))
+      8 [] ["cow" "carrots"] :ok
+      8 [{:name "rotten_flesh" :count 3}] ["cow"] :ok
+      8 [{:name "bread" :count 1}] ["cow"] :later
+      20 [] ["cow"] :later
+      8 [] ["cow" "iron_ore"] :later)))
+
 (deftest a-hurt-body-waits-to-start-the-access-and-boat-jobs
   (doseq [j '[jobs.access.tunnel jobs.access.stair jobs.access.pillar jobs.access.clear-path jobs.access.bridge jobs.access.toggle
               jobs.movement.boat-launch jobs.movement.boat-land jobs.movement.boat-recover jobs.movement.boat-drive jobs.movement.mount]]

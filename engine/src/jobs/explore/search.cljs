@@ -9,6 +9,8 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.area :as area]
+            [jobs.lib.food-animals :as animals]
+            [jobs.survival.get-food.sources :as sources]
             [jobs.lib.breath :as breath]
             [jobs.lib.child :as child]
             [jobs.lib.food-animals :as food-animals]
@@ -115,8 +117,6 @@
 (def target [:target :center])
 
 (def safe? ready/safe-if-lit)
-(def fit? ready/fit?)
-
 (def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 
 
@@ -127,6 +127,15 @@
   [c]
   (let [t (:target (:args c))]
     (if (string? t) [t] (vec (sort (set t))))))
+
+(def foraged
+  "The target names of a search for food: the food animals and the food blocks."
+  (into animals/food-animals (concat (keys sources/ripe-age) (keys sources/wild-food))))
+
+(defn fit?
+  "ready/fit?, but ready/fit-to-forage while every target is a food animal or food block."
+  [c]
+  (if (and (seq (targets c)) (every? foraged (targets c))) (ready/fit-to-forage c) (ready/fit? c)))
 
 (defn xz-dist [[ax az] [bx bz]]
   (js/Math.hypot (- ax bx) (- az bz)))

@@ -14,6 +14,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger]
+            [jobs.lib.foods :as foods]
             [jobs.lib.look-edge :as look-edge]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter.inside :as sh-inside]
@@ -216,6 +217,17 @@
     (if (and (not= :ok (first s)) (zero? (.-food (.self (:primitives c))))) (threatened c) s)))
 
 (def fit? "Later :low-health below the risky health, :poisoned while poisoned." checks/low-health)
+
+(defn fit-to-forage
+  "The fit? of a job that looks for food: fit?, but a :low-health wait is lifted while the body can not heal (food under foods/top-up-food, nothing a meal would eat carried), else it would never end."
+  [c]
+  (let [s (fit? c)
+        self (.self (:primitives c))]
+    (if (and (= :low-health (:reason (nth s 2 nil)))
+             (< (.-food self) foods/top-up-food)
+             (not (foods/carries-food? self)))
+      (contract/ok :forage "hurt, but only food heals it")
+      s)))
 
 (defn armed
   "Later :unarmed while the body carries no weapon (jobs.lib.combat/default-weapons)."
