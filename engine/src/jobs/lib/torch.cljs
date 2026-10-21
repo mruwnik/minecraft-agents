@@ -32,6 +32,12 @@
 
 (defn torches-held [p] (+ (torches-carried p) (off-hand-torches p)))
 
+(defn lightable?
+  "Whether the body has torches, or coal and sticks (or planks) to craft them."
+  [p]
+  (or (pos? (torches-held p))
+      (and (pos? (fuel-held p)) (pos? (stick-supply p)))))
+
 (defn ^:async off-hand-to-inventory!
   "With no torch in the inventory but some in the off hand (the off-hand torch aid moves the whole stack), move them
   back so the place act finds them: true when the inventory holds a torch now."

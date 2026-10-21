@@ -26,11 +26,14 @@
   Needs: the area seen, torches (carried or fetchable). Ends done {:torches [cells hung this call] :uncovered []} when no
   spawnable cell of the area is dark (at once, with none hung, when none is); nothing-possible :uncovered when dark cells
   remain that no spot can light or whose torch could not be placed (data :uncovered, :torches); condition-failed :need
-  when the torch is missing and cannot be had, :refused when a zone or claim refuses a spot. Impossible :bad-args with no area.")
+  when the torch is missing and cannot be had, :refused when a zone or claim refuses a spot. With :level those cells must reach that block
+  light (not just 1), and with :beside? the torches hang round the area, not in it. Impossible :bad-args with no area.")
 
 (a/defargs args
   {:cells {:doc "cells of the area, each [x y z] or {:x :y :z}" :spec (a/coll-of a/position?) :default []}
    :boxes {:doc "boxes of the area, each two opposite corners [[x y z] [x y z]]; their cells come first, x then y then z" :spec (a/coll-of (a/coll-of a/position?)) :default []}
+   :level {:doc "the block light every area cell must reach, 1 to 14 (1: no spawn ground stays dark; a crop needs 9); a torch lights 14 less its steps" :spec (a/int-in 1 14) :default 1}
+   :beside? {:doc "hang torches only in the cells round the area, not in it (a field keeps its cells for crops)" :spec boolean? :default false}
    :ignore-zones? :shared})
 
 (a/defargs settings
@@ -58,6 +61,15 @@
 
 (def can-start? bad-args)
 
+(defn ring-cells
+  "The cells [x y z] touching the area's cells sideways, not in the area."
+  [c]
+  (let [in? (set (area c))]
+    (vec (distinct (for [[x y z] in? dx [-1 0 1] dz [-1 0 1]
+                         :let [cell [(+ x dx) y (+ z dz)]]
+                         :when (not (in? cell))]
+                     cell)))))
+
 (defn spawn-cells
   "The cells of the area the body has seen as spawn ground."
   [c]
@@ -71,10 +83,15 @@
         block-at (access/seen-at p)
         here (u/self-pos c)
         {:keys [torches failed]} (ctx/mem c)
+        {:keys [level beside?]} (:args c)
         cells (spawn-cells c)
-        spots (->> cells (remove (set failed))
+        hangs (if beside? (filterv #(sh-sense/spawnable? p (zipmap [:x :y :z] %)) (ring-cells c)) cells)
+        spots (->> hangs (remove (set failed))
                    (sort-by #(u/dist here (zipmap [:x :y :z] %))))]
-    (tp/plan {:cells cells :dark? #(torch/perceived-dark? p %)
+    (tp/plan {:cells cells :spread (- 14 (or level 1))
+              :dark? (if (> (or level 1) 1)
+                       #(< (or (sh-sense/light-at p (zipmap [:x :y :z] %)) 0) level)
+                       #(torch/perceived-dark? p %))
               :open? #(let [n (block-at %)] (and n (not (solid/solid? n))))
               :spots spots :sources torches})))
 

@@ -61,3 +61,9 @@
 (deftest the-spot-lighting-most-is-chosen-and-a-tie-goes-to-the-earlier-listed
   (is (= [[13 0 0]] (:spots (solve (line 27) :spots (line 27)))) "reach limit 13 each way")
   (is (= [[5 0 0]] (:spots (solve (line 14) :spots [[5 0 0] [4 0 0]])))))
+
+(deftest a-shorter-spread-takes-more-torches
+  (let [cells (line 27)
+        spots (fn [spread] (count (:spots (tp/plan {:cells cells :dark? (constantly true) :open? (open-in cells) :spots cells :spread spread}))))]
+    (is (= 3 (spots 4)) "a torch lights 4 cells each way: 9 cells")
+    (is (= 1 (spots 13)))))

@@ -12,25 +12,26 @@
 
 (defn lit-by
   "The set of cells a torch hung at spot lights: those within spread steps of it through cells open? lets light through."
-  [open? spot]
+  ([open? spot] (lit-by open? spot spread))
+  ([open? spot reach]
   (loop [seen #{spot} edge [spot] depth 0]
-    (if (or (empty? edge) (= depth spread))
+    (if (or (empty? edge) (= depth reach))
       seen
       (let [next (into [] (comp (mapcat (fn [c] (map #(mapv + c %) neighbours)))
                                 (filter #(and (not (seen %)) (open? %)))
                                 (distinct))
                        edge)]
-        (recur (into seen next) next (inc depth))))))
+        (recur (into seen next) next (inc depth)))))))
 
 (defn plan
   "Torch spots lighting every dark cell of cells (in the order given):
   {:cells the cells that must not stay dark (spawnable ones) :dark? (fn [cell]) :open? (fn [cell]) light passes
-   :spots the cells a torch may hang in, best first :sources torches already hanging}
+   :spots the cells a torch may hang in, best first :sources torches already hanging :spread steps a torch lights (default spread)}
   -> {:spots [cell ...] :uncovered [cell ...]}. Takes the first dark cell no spot chosen yet lights, then the spot
   lighting it that lights most cells still dark (the earliest listed on a tie): a line gets one torch per 2 x spread
   cells. :uncovered are the cells no spot can reach."
-  [{:keys [cells dark? open? spots sources]}]
-  (let [reach (memoize #(lit-by open? %))
+  [{:keys [cells dark? open? spots sources] reach-steps :spread :or {reach-steps spread}}]
+  (let [reach (memoize #(lit-by open? % reach-steps))
         lit (into #{} (mapcat reach) sources)]
     (loop [todo (vec (remove lit (filter dark? cells))) chosen [] gone []]
       (if (empty? todo)

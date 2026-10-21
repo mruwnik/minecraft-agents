@@ -8,6 +8,7 @@
             [jobs.lib.crops :as crops]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
+            [jobs.lib.patch :as patch]
             [jobs.lib.ready :as ready]
             [jobs.lib.util :as u]))
 
@@ -19,10 +20,10 @@
   2. A crop seen, none ripe: wait (a jobs.time.noop pause of ::wait-s, holding still, then look again). A field growing is never replaced.
   3. No crop seen: get a hoe (jobs.items.get-tool) and one seed per cell of a :w x :h field (jobs.items.obtain; wheat seeds are
      broken out of grass), pick the spot (jobs.farm.find-spot, nearest to the body) and work it with jobs.farm.tend (till,
-     irrigate, plant, bone meal when carried), once per round. Three tends that leave no crop standing end the run.
+     irrigate, plant, bone meal when carried), once per round; a spot that is dark is lit first (jobs.build.light-area to crop light, torches hung beside the field). Three tends that leave no crop standing end the run.
   Needs: a source of a hoe and seed (the fetch jobs say what lacks), a field spot in range, a zone list.
   Done once :count of the crop's item is carried. Ends nothing-possible with the failed child's cause: :no-spot (find-spot found none),
-  :not-planted (three tends planted nothing), or a fetch's :need/:tool; limit-reached :timeout after :spend :job-time.
+  :not-planted (three tends planted nothing), :no-light (the spot could not be lit), or a fetch's :need/:tool; limit-reached :timeout after :spend :job-time.
   Quote: the count as yield; time is the wait for ripening, a guess.")
 
 (a/defargs args
@@ -112,8 +113,23 @@
         e (await (ctx/call c :spot 'jobs.farm.find-spot {:w w :h h}))]
     (cond
       (= :continue e) :continue
-      (= :done (:kind e)) (do (ctx/update-mem! c assoc :area (box-of (first (:spots (:data e))))) :again)
+      (= :done (:kind e)) (do (let [spot (first (:spots (:data e)))]
+                                        (ctx/update-mem! c assoc :area (box-of spot) :dark? (boolean (:dark? spot)))
+                                        :again))
       :else (ctx/end c :nothing-possible :no-spot (select-keys (:data e) [:why])))))
+
+(defn ^:async light-step!
+  "A dark spot: light the field to crop light with torches hung beside it, once. nil when lit or done, :continue while it waits, else the ending."
+  [c]
+  (let [{:keys [area dark? lit]} (ctx/mem c)]
+    (when (and dark? (not lit))
+      (let [e (await (ctx/call c :light 'jobs.build.light-area
+                               (cond-> {:boxes [[(:min area) (:max area)]] :level patch/crop-light :beside? true}
+                                 (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
+        (cond
+          (= :continue e) :continue
+          (= :done (:kind e)) (do (ctx/update-mem! c assoc :lit true) nil)
+          :else (ctx/end c :nothing-possible :no-light (select-keys (:data e) [:uncovered])))))))
 
 (defn ^:async tend-step!
   "One tend pass over the field: :again after it, :continue while it waits; three passes in a row that left no crop end the run."
@@ -135,7 +151,7 @@
     (cond
       f f
       (nil? (:area (ctx/mem c))) (await (spot-step! c))
-      :else (await (tend-step! c)))))
+      :else (or (await (light-step! c)) (await (tend-step! c))))))
 
 (defn ^:async step [c]
   (let [{:keys [crop ignore-zones?]} (:args c)

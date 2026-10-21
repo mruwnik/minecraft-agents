@@ -59,3 +59,15 @@
                                  (ft/world (ft/ground "dirt" (for [x (range -2 8) z (range -2 8)] [x z]))
                                            {:inventory kit}) 120))]
           (is (some #(= "wheat" (apply ft/block-at s %)) (for [x (range -2 8) z (range -2 8)] [x 64 z])) "seeds were sown"))))))
+
+(deftest a-dark-floor-is-lit-with-carried-torches-and-then-sown
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cells (for [x (range -2 8) z (range -2 8)] [x z])
+              s (await (scenario {:count 2 :spend {:job-time 600}}
+                                 (ft/world (ft/ground "dirt" cells)
+                                           {:light {} :light-default [0 0]
+                                            :inventory (conj kit (ft/item "torch" 8))}) 160))]
+          (is (seq (ft/calls s "place")) "a torch was placed")
+          (is (some #(= "wheat" (apply ft/block-at s %)) (for [[x z] cells] [x 64 z])) "seeds were sown"))))))

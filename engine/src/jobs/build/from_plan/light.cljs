@@ -9,10 +9,8 @@
 (defn can-light?
   "Whether torches are carried, or coal and sticks (or planks) to craft them, and the site is not lit yet this call."
   [c]
-  (let [p (:primitives c)]
-    (and (not (:light-tried (ctx/mem c)))
-         (or (pos? (torch/torches-held p))
-             (and (pos? (torch/fuel-held p)) (pos? (torch/stick-supply p)))))))
+  (and (not (:light-tried (ctx/mem c)))
+       (torch/lightable? (:primitives c))))
 
 (defn lights-itself
   "safe, but ok where it only waits for light (:exposed, lowered by :light) and the body can hang torches itself."

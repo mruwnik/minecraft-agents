@@ -82,6 +82,8 @@
 
 (def crop-light "The light a crop needs (block light, or sky light undarkened: the clock does not decide)." 9)
 
+(def dark-penalty "Score a spot loses when it has to be lit with torches first." 15)
+
 (defn crop-lit-fn
   "(fn [x y z]) whether the cell over the top y of a column gets crop-light; true where the body has no light data there."
   [p]
@@ -125,7 +127,7 @@
   spots are in hand (the ring it is in is finished first). Returns {:next-ring
   :found :done :reads :cache}; found is the best :limit spots so far. The column
   caches (:cache) are passed back in the state, so a later slice reads no column twice."
-  [p {:keys [w h range depth limit blocked? farmland?] limit-step :max-step :or {farmland? true} :as a} from {:keys [next-ring found cache]} budget]
+  [p {:keys [w h range depth limit blocked? farmland? dark-ok?] limit-step :max-step :or {farmland? true} :as a} from {:keys [next-ring found cache]} budget]
   (let [reads (volatile! 0)
         name-fn (fn [pos] (vswap! reads inc) (u/seen-name p pos))
         waters (->> (look/seen-blocks p {:names ["water"] :radius (+ range w h 4) :max 4096 :live? true})
@@ -148,7 +150,7 @@
                  (let [cols (for [dx (clojure.core/range w) dz (clojure.core/range h)] [(+ x dx) (+ z dz)])
                        tops (mapv (fn [[cx cz]] (top-of cx cz)) cols)]
                    (when (and (not-any? nil? tops)
-                              (every? true? (map (fn [[cx cz] t] (lit? cx t cz)) cols tops))
+                              (or dark-ok? (every? true? (map (fn [[cx cz] t] (lit? cx t cz)) cols tops)))
                               (not (some true? (map (fn [[cx cz] t] (and blocked? (blocked? cx t cz))) cols tops))))
                      (let [wetn (count (filter true? (map (fn [[cx cz] t] (wet? cx cz t)) cols tops)))
                            sky (every? true? (map (fn [[cx cz] t] (sky-of cx cz t)) cols tops))
@@ -158,7 +160,9 @@
                        (when s
                          (let [step (max-step tops h)]
                            (when (or (nil? limit-step) (<= step limit-step))
-                             (assoc s :step step :w w :h h :pos {:x x :y (:y s) :z z})))))))))]
+                             (let [dark? (not (every? true? (map (fn [[cx cz] t] (lit? cx t cz)) cols tops)))]
+                               (cond-> (assoc s :step step :w w :h h :pos {:x x :y (:y s) :z z} :dark? dark?)
+                                 dark? (update :score - dark-penalty)))))))))))]
     (loop [rs (drop-while #(< % next-ring) rings) found found]
       (if (empty? rs)
         {:next-ring ##Inf :found found :done true :reads @reads}

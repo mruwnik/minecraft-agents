@@ -1,6 +1,7 @@
 (ns jobs.farm.find-spot
   (:require [engine.settings :as settings]
             [engine.args :as a]
+            [jobs.lib.torch :as torch]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
@@ -13,7 +14,7 @@
   "Pick where a farm patch would go: the footprint of :plan (a plan id), else :w x :h. Ranks patches by flatness first, then water
   within 4, open sky and nearness to :center. It tries patches nearest-first and stops once ::limit flat open-sky ones are found (with
   water within 4, when water is in range). A patch of 8 or more is tried at every fourth corner. Reads blocks only: it never digs or marks
-  anything. A patch whose seen crop-cell light (block or sky) is under 9 is skipped. A scan reads at most jobs.lib.patch's ::max-reads blocks, then settles for the best spots so far. It never walks to the spot: a
+  anything. A patch whose seen crop-cell light (block or sky) is under 9 is skipped, unless the body carries torches or coal and sticks to light it (:dark? true on the spot; jobs.farm.grow lights it). A scan reads at most jobs.lib.patch's ::max-reads blocks, then settles for the best spots so far. It never walks to the spot: a
   parent does.
   The search is one jobs.explore.search child with :patch: it looks round and scans the area round :center (or the body); while no patch
   is found it walks that job's legs and scans where each ends, and stops at the first patch.
@@ -22,7 +23,7 @@
   Ends with data {:spot pos :spots [...]}: done with the spots, or nothing-possible :none with :why :distance (no leg left), :legs
   (the search's max legs walked), :stuck (three walks in a row failed), :time (the call's :job-time spent) or :no-plan (the plan is
   missing or unreadable).
-  :spots best first up to ::limit, each {:pos :w :h :score :level :work :step :water-share :sky :away :y :farmable}; :step is
+  :spots best first up to ::limit, each {:pos :w :h :score :level :work :step :water-share :sky :away :y :farmable :dark?}; :step is
   the largest height difference between two neighbouring cells of the patch. A pos is the north-west (minimum x and z) corner at
   ground level of the :w x :h patch, not its centre; :spot is the first spot's pos. :away is the distance from the patch's centre
   to :center (the body's cell without one), not from the corner.
@@ -88,7 +89,8 @@
                (when-not (known/unreadable? pl) (footprint (:cells pl))))
              (select-keys a [:w :h]))]
     (when fp
-      (merge fp (select-keys a [:plan :range :max-step])
+      (merge fp (select-keys a [:plan :range :max-step]) {:dark-ok? (torch/lightable? (:primitives c))}
+             
              {:depth (settings/get settings ::depth) :limit (settings/get settings ::limit)}))))
 
 (defn ^:async step

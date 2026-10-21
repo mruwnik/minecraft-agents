@@ -85,3 +85,16 @@
     (is (false? (half? {64 "air" 65 "air" 63 "stone"})))
     (is (false? (half? {64 "stone" 65 nil 63 nil})) "rock is not a room cell")
     (is (false? (half? {})) "an unseen cell is the other frontier clause")))
+
+(deftest a-field-box-is-lit-to-its-level-with-torches-beside-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [box [[3 64 3] [5 64 5]]
+              [{:keys [p]} r] (await (run room (constantly false) {:boxes [box] :level 9 :beside? true}))
+              hung (torch-cells p room)
+              inside? (fn [[x _ z]] (and (<= 3 x 5) (<= 3 z 5)))]
+          (is (= :done (:status r)) (pr-str r))
+          (is (seq hung))
+          (is (not-any? inside? hung) "the field's own cells stay free for crops")
+          (is (every? (fn [[x _ z]] (and (<= 2 x 6) (<= 2 z 6))) hung) "only the ring round the field"))))))

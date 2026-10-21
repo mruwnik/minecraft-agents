@@ -279,6 +279,13 @@
     [9 0] 1
     [15 0] 1))
 
+(deftest a-dark-floor-is-a-spot-when-the-body-can-light-it
+  (let [p (tu/fake {:blocks (patch 2 0 3 3 63 "dirt") :self {:pos {:x 0 :y 64 :z 0}} :time 6000 :light {} :light-default [0 0]})
+        spots (pt/scan p {:w 3 :h 3 :range 6 :depth 12 :limit 50 :dark-ok? true} {:x 0 :y 64 :z 0})]
+    (is (= [true] (mapv :dark? spots)))
+    (is (= [false] (mapv :dark? (lit-scan [9 0]))) "a lit patch is not marked dark")
+    (is (< (:score (first spots)) (:score (first (lit-scan [9 0])))) "a lit patch is preferred")))
+
 (deftest scan-sees-water-sitting-on-the-platform
   (let [world (assoc (patch -3 -3 9 9 99 "stone") "6,100,0" "water")
         spots (scan-at world {:x 0 :y 100 :z 0} {:range 8} {:x 0 :y 100 :z 0})
