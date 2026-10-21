@@ -12,6 +12,9 @@
     :radius     columns searched around the targets, default 3; widened to max-radius whenever nothing usable is found
     :max-height tallest pillar considered, default 10
     :avoid      optional set of cells that are neither a stand nor a base (ones the walker could not reach)
+    :beside?    optional, one target: no ground stand, only a pillar whose top is the feet cell level with and next to it
+    :sight?     optional: a stand also needs a clear line from its eye to the centre of every target (a hole in a roof is
+                placed from above the roof, not from beside the wall)
 
   Output, the first that applies:
     {:stand [cell ...]}   cells to walk to (go-to goal set), nearest to the feet first, 3D (a cell 5 up is 5 away)
@@ -29,9 +32,12 @@
   pillar."
   (:require [clojure.string :as str]
             [engine.args :as a]
+            [engine.game :as game]
             [engine.settings :as settings]
+            [engine.sight :as sight]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.block-sets :as bs]
+            [jobs.lib.solid :as solid]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -82,6 +88,17 @@
   (let [here {:x (+ x 0.5) :y y :z (+ z 0.5)}]
     (every? #(<= (u/eye-dist here %) reach) targets)))
 
+(defn in-view?
+  "in-reach?, and with :sight? the eye also sees the centre of every target past the solid cells between."
+  [{:keys [reach targets block-at sight?]} [x y z :as stand]]
+  (and (in-reach? reach targets stand)
+       (or (not sight?)
+           (let [eye [(+ x 0.5) (+ y game/eye-height) (+ z 0.5)]]
+             (every? (fn [[tx ty tz]]
+                       (sight/line-clear (eye 0) (eye 1) (eye 2) (+ tx 0.5) (+ ty 0.5) (+ tz 0.5)
+                                         #(solid/solid? (block-at [%1 %2 %3]))))
+                     targets)))))
+
 (defn dist3 [[ax ay az] [bx by bz]]
   (js/Math.hypot (- ax bx) (- ay by) (- az bz)))
 
@@ -103,7 +120,7 @@
   "Standing cells with every target in reach, nearest to feet first."
   [{:keys [block-at floor-at targets reach feet avoid] :as in} cols ys]
   (->> (for [[x z] cols y ys :let [c [x y z]]
-             :when (and (not (contains? targets c)) (not (contains? avoid c)) (standing-cell? block-at (or floor-at block-at) c) (in-reach? reach targets c)
+             :when (and (not (contains? targets c)) (not (contains? avoid c)) (standing-cell? block-at (or floor-at block-at) c) (in-view? in c)
                         (not (floor-refused? in c)))]
          c)
        (sort-by (juxt #(dist3 feet %) identity))))
@@ -119,16 +136,22 @@
         (when-not (and (passable? block-at [bx (+ by n) bz]) (passable? block-at [bx (+ by n 1) bz]))
           {:ok false :reason :headroom}))))
 
+(defn beside-cell?
+  "Whether stand is the feet cell level with, and next to, the one target cell."
+  [targets [x y z]]
+  (let [[tx ty tz] (first targets)]
+    (and (= y ty) (= 1 (+ (js/Math.abs (- x tx)) (js/Math.abs (- z tz)))))))
+
 (defn base-plans
   "Every pillar over a ground cell of cols, as {:base :height :stand :cost :refusal}. A base with no workable height
   carries the refusal of its last try."
-  [{:keys [block-at floor-at targets reach feet max-height avoid] :as in} cols ys]
+  [{:keys [block-at floor-at targets reach feet max-height avoid beside?] :as in} cols ys]
   (for [[x z] cols y ys :let [base [x y z]]
         :when (and (not (contains? targets base)) (not (contains? avoid base)) (standing-cell? block-at (or floor-at block-at) base))
         :let [floor-refusal (when (floor-refused? in base) (rules/refuse :floor))
               tries (for [n (range 1 (inc max-height))
                           :let [stand [x (+ y n) z]]
-                          :when (in-reach? reach targets stand)]
+                          :when (if beside? (beside-cell? targets stand) (in-view? in stand))]
                       [n stand (or floor-refusal (column-verdict in base n))])
               ok (first (filter (comp nil? #(nth % 2)) tries))
               last-try (last tries)]]
@@ -140,7 +163,7 @@
 (defn plan-at-radius [in radius]
   (let [cols (columns (:targets in) radius)
         ys (y-range (:targets in) (:reach in) (:max-height in))
-        found (stands in cols ys)]
+        found (when-not (:beside? in) (stands in cols ys))]
     (if (seq found)
       {:stand (vec found)}
       (let [plans (base-plans in cols ys)

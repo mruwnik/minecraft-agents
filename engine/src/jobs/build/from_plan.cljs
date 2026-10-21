@@ -371,11 +371,11 @@
                            :continue
                            (recur (rest left)))
                          :again))
-      (= :up (scaffold/phase c)) (do (scaffold/finish-up! c cells todo (nearest layer) (give-up)) :again)
+      (= :up (scaffold/phase c)) (do (scaffold/finish-up! c cells (into todo (unseen cells given-up)) (nearest layer) (give-up)) :again)
       (seq todo) (await (reach-cell! c cells (nearest layer)))
       (seq digs) (await (walk-to! c cells (nearest digs)))
       (seq (support-looks c wanted)) (await (look-for-support! c cells (support-looks c wanted)))
-      (seq (unseen cells given-up)) (await (walk-to! c cells (nearest (unseen cells given-up))))
+      (seq (unseen cells given-up)) (await (reach-cell! c cells (nearest (unseen cells given-up))))
       standing (do (ctx/update-mem! c assoc :leave (exit-point cells (u/self-pos c)) :stepped-off (:pos standing))
                    :again)
       :else (let [before (ctx/mem c)]

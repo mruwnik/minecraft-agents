@@ -143,3 +143,19 @@
 (deftest a-plan-footprint-floor-is-no-stand-even-when-natural
   (let [r (plan :targets #{[0 66 0]} :footprints #{[3 63 0]})]
     (is (not-any? #{[3 64 0]} (:stand r)))))
+
+(def roof-world
+  "A roof plate at y 66 over x 1..5, z -2..2, with a hole at [3 66 0]."
+  (apply world {} (for [x (range 1 6) z (range -2 3) :let [c [x 66 z]] e [c (if (= c [3 66 0]) "air" "stone")]] e)))
+
+(deftest a-stand-must-see-the-target-when-sight-is-asked
+  (let [stands (fn [& {:as in}] (set (:stand (plan :targets #{[3 66 0]} :feet [0 64 0] :block-at roof-world :radius 3 in))))]
+    (is (contains? (stands) [0 64 0]) "in eye reach, though the roof hides the cell")
+    (is (not (contains? (stands :sight? true) [0 64 0])))
+    (is (contains? (stands :sight? true) [3 67 1]) "on the roof, looking down")))
+
+(deftest a-beside-plan-rises-to-the-feet-cell-next-to-the-target
+  (let [p (:pillar (plan :targets #{[1 67 0]} :feet [0 64 0] :block-at roof-world :beside? true))]
+    (is (= 67 (second (:stand p))))
+    (is (= 1 (+ (Math/abs (- (first (:stand p)) 1)) (Math/abs (nth (:stand p) 2)))))
+    (is (= [0 64 0] (:base p)))))
