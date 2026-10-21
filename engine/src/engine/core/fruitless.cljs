@@ -137,3 +137,40 @@
         (doseq [[request-id request] (:attention (state eng))
                 :when (same-request? request id :fruitless)]
           (resolve-attention! eng request-id :progress))))))
+
+(def silent-spell-ms
+  "How long a listed job may be given rounds that do nothing, say nothing and wait for nothing before job.silent."
+  180000)
+
+(def silent-rounds "Least such rounds in a row for job.silent." 5)
+
+(defn silent-round?
+  "Whether the round of listed job id that ended with status did no act, declared no hold and left no wait reason on the job."
+  [eng id status round]
+  (let [a @(:activity eng)]
+    (and (#{:continue :declined} status)
+         (zero? (:acts round 0))
+         (not (and (= id (:id a)) (:hold a)))
+         (nil? (get @(:waiting eng) id)))))
+
+(defn note-silent!
+  "After the settled round of listed job id: count rounds in a row that were silent (silent-round?). A spell of
+  silent-rounds rounds and silent-spell-ms raises job.silent, a required attention request, once per spell; any other round
+  ends the spell and resolves it. It only flags: the job keeps its turns."
+  [eng id status round]
+  (let [t (now eng)]
+    (if (silent-round? eng id status round)
+      (let [{:keys [since rounds raised?]} (get (swap! (:silent eng) update id #(-> (or % {:since t :rounds 0}) (update :rounds inc))) id)]
+        (when (and (not raised?) (>= rounds silent-rounds) (>= (- t since) silent-spell-ms))
+          (swap! (:silent eng) assoc-in [id :raised?] true)
+          (request-attention! eng {:job-id id :reason :silent :kind :silent
+                                   :context (select-keys (job-fields eng id) [:round :chain])
+                                   :data {:rounds rounds :since-ms (- t since)}
+                                   :message (str "Job " id " got " rounds " rounds in " (js/Math.round (/ (- t since) 1000))
+                                                 " s that did no act, held no pose and gave no wait reason; it is runnable but idle")})))
+      (when-let [spell (get @(:silent eng) id)]
+        (swap! (:silent eng) dissoc id)
+        (when (:raised? spell)
+          (doseq [[request-id request] (:attention (state eng))
+                  :when (same-request? request id :silent)]
+            (resolve-attention! eng request-id :progress)))))))

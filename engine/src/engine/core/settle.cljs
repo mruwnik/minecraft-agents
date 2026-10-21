@@ -4,7 +4,7 @@
   (:require [engine.core.base :refer [delete-root! drop-instance! drop-reflex-job! emit! free-owner! hold-trigger! job-fields exclusive-job now paused? reflex-text remove-listed running save-memory! set-owner! state stopped-result? wait-reason waiting-text]]
             [engine.core.attention :refer [request-attention! resolve-job-attention!]]
             [engine.core.ending :refer [refused?]]
-            [engine.core.fruitless :refer [book-round! note-fruitless!]]
+            [engine.core.fruitless :refer [book-round! note-fruitless! note-silent!]]
             [engine.core.list-edits :refer [drop-cancelled!]]
             [engine.core.register :refer [trigger-holds?]]
             [engine.core.round :refer [run-round]]
@@ -246,9 +246,11 @@
                       outcome)]
         (book-round! eng run outcome)
         (settle-reflex! eng run outcome))
-      (do (note-fruitless! eng (:id run) (:status outcome) (get @(:rounds eng) (:id run)))
-          (swap! (:rounds eng) dissoc (:id run))
-          (settle-listed! eng run outcome)))
+      (let [round (get @(:rounds eng) (:id run))]
+        (note-fruitless! eng (:id run) (:status outcome) round)
+        (swap! (:rounds eng) dissoc (:id run))
+        (settle-listed! eng run outcome)
+        (note-silent! eng (:id run) (:status outcome) round)))
     (save-memory! eng))
   nil)
 

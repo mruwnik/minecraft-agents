@@ -2022,3 +2022,31 @@
     (is (= 60000 (:stats-ms (mk {}))))
     (is (= 2000 (:stats-ms (settings/with-settings {:engine.core.base/stats-ms 2000} #(mk {})))))
     (is (= 500 (:stats-ms (settings/with-settings {:engine.core.base/stats-ms 2000} #(mk {:stats-ms 500})))))))
+
+(def silent-registry
+  (merge expr-registry
+         {'looky (tu/job [(fn [_] (contract/look :exposed "light not seen" :look-at [[1 2 3]]))] count-round)
+          'idle (tu/job (fn ^:async idle-round [_] :continue))}))
+
+(deftest repeat-over-a-child-that-needs-a-look-calls-it-and-rests-with-a-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (update (expr-setup) :eng assoc :jobs silent-registry)]
+          (core/submit! eng '(repeat (looky)) {})
+          (dotimes [_ 12] (swap! clock + 3000) (await (core/tick! eng)))
+          (is (= 2 (count (ran seen))) "a round at the start and one after the 30 s rest, not one per tick")
+          (is (= :resting (:reason (core/waiting eng "j1")))))))))
+
+(deftest a-job-with-silent-rounds-for-minutes-raises-job-silent-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (update (expr-setup) :eng assoc :jobs silent-registry)
+              silent #(filter (fn [e] (= :silent (:kind e))) @seen)]
+          (core/submit! eng '(idle) {})
+          (dotimes [_ 10] (swap! clock + 10000) (await (core/tick! eng)))
+          (is (empty? (silent)) "under three minutes")
+          (dotimes [_ 10] (swap! clock + 10000) (await (core/tick! eng)))
+          (is (= 1 (count (silent))) "once per spell")
+          (is (= 1 (count (:attention (core/state eng))))))))))

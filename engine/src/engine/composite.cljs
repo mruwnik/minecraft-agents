@@ -34,6 +34,11 @@
 
 (defn ok? [s] (= :ok (first s)))
 
+(defn startable?
+  "Whether a child with status s may be called: :ok, or :look, which the child's own round looks round for."
+  [s]
+  (contains? #{:ok :look} (first s)))
+
 (def ready (contract/ok :ready "ready"))
 
 (defn held
@@ -46,10 +51,10 @@
     :else :continue))
 
 (defn ^:async call
-  "One ctx/call round of child i of kids, or held when it would not start."
+  "One ctx/call round of child i of kids, or held when it would not start. A :look child is called: its round looks first."
   [c kids i]
   (let [s (kid-status c kids i)]
-    (if-not (ok? s)
+    (if-not (startable? s)
       (held c s)
       (let [[def args] (kids i)]
         (await (ctx/call c (slot i) def args))))))
@@ -88,7 +93,7 @@
   refusal. No child passing and none refused: held."
   [kids]
   (let [refused (fn [c] (:refused (ctx/mem c) {}))
-        first-passing (fn [c] (first (filter #(and (not (contains? (refused c) (slot %))) (ok? (kid-status c kids %))) (range (count kids)))))]
+        first-passing (fn [c] (first (filter #(and (not (contains? (refused c) (slot %))) (startable? (kid-status c kids %))) (range (count kids)))))]
     (contract-def
      "any"
      (fn any-status [c] (if (or (some? (first-passing c)) (seq (refused c))) ready (kid-status c kids 0)))
@@ -116,7 +121,7 @@
   [c kids i]
   (let [s (kid-status c kids i)
         r (resting c)]
-    (if (and (ok? s) r)
+    (if (and (startable? s) r)
       (contract/status :later :resting (str "resting after " (name (:after r))) r)
       s)))
 

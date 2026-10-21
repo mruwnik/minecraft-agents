@@ -255,6 +255,7 @@
              :deferred (atom {})
              :held-triggers (atom {})
              :fruitless (atom {})
+             :silent (atom {})
              :asked (atom {})
              :seen-done (atom {})
              :looks (atom {})
