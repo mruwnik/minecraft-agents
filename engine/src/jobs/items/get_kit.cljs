@@ -61,7 +61,7 @@
 (defn restarted
   "The job memory after a death: the children and the bill went with the body; the job starts from now."
   [m now]
-  (-> m (dissoc :children :bill :bill-done :covered :covered-done :fed) (assoc :since now)))
+  (-> m (dissoc :children :bill :bill-done :covered :covered-done :fed :stop) (assoc :since now)))
 
 (defn why-of
   "The text a child ending e gives for its stop: its data's :why, else its cause map's."

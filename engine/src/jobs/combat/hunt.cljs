@@ -25,7 +25,7 @@
 
 (def doc
   "Get the item :item (e.g. \"white_wool\", \"beef\", \"rotten_flesh\") by killing adult animals or mobs that drop it,
-  within :radius of :center (the body's place at the first run; it waits :outside-area while the body is farther),
+  within :radius of :center (the body's place at the first run),
   collecting the drops until :count of it are carried, in one call that yields only while a child waits on the world. The mobs come from the drops table
   (jobs.lib.hunting/raw-drops); an item no mob drops is impossible (:bad-args). A wool item hunts only sheep of that colour.
   Never takes the last :keep adults of the kind (nil: 2 for animals, 0 for hostile mobs); babies are never targets. Animals the body

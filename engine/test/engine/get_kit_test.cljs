@@ -347,3 +347,7 @@
           (is (= {:status :done :made ["iron_pickaxe"]} (select-keys @(:out s) [:status :made]))
               (pr-str (select-keys @(:out s) [:status :item :reason :why])))
           (is (= 1 (get (f/inv s) "iron_pickaxe"))))))))
+
+(deftest a-restart-drops-the-stop-booked-in-the-earlier-life
+  (let [m (kit/restarted {:since 1 :stop {:reason :no-iron} :bill {:a 1} :fed true} 9)]
+    (is (= {:since 9} m))))

@@ -5,7 +5,6 @@
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [jobs.lib.checks :as checks]
             [jobs.lib.job-common :as jc]
             [jobs.lib.util :as u]))
 
@@ -24,10 +23,6 @@
     (when (and at (> d radius))
       {:reason :outside-area :center at :radius radius :distance (js/Math.round d)
        :text (str "the body stands " (js/Math.round d) " blocks from the area centre " (pr-str at) " (radius " radius ")")})))
-
-(def inside
-  "The check that the body stands within :radius of the call's :center (nil: any place)."
-  (checks/refusing :inside-area "in the call's area" outside))
 
 (defn ^:async walk-in!
   "While the call's body stands outside its area (outside), one walk round toward the centre: :continue while go-to goes on or
