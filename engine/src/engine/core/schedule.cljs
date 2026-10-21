@@ -88,10 +88,11 @@
 
 (defn rest-cut-comfort!
   "A comfort reflex of cooldown persistence that was cut off rests its cooldown from now, as after its own end: a run
-  that a danger cut short never reaches judge-end!, and its trigger would refire the moment the danger passed."
-  [eng reflex]
+  that a danger cut short never reaches judge-end!, and its trigger would refire the moment the danger passed.
+  Not when it fired at a higher level than :comfort (starving hungry): that need is still pressing once the danger ends."
+  [eng reflex fired-level]
   (let [entry (some #(when (= reflex (:id %)) %) (:register (state eng)))]
-    (when (and (= :comfort (:level entry)) (= :cooldown (:persistence entry)))
+    (when (and (= :comfort (:level entry) (or fired-level :comfort)) (= :cooldown (:persistence entry)))
       (swap! (:state eng) assoc-in [:reflex-state reflex :cooldown-until]
              (+ (now eng) (* 1000 (:cooldown-s entry 0)))))))
 
@@ -103,11 +104,12 @@
   (free-owner! eng)
   (reset! (:running eng) nil)
   (save-memory! eng)
-  (let [paused? (or (not (:reflex h)) (cleanup/closing? eng (:id h) []))]
+  (let [paused? (or (not (:reflex h)) (cleanup/closing? eng (:id h) []))
+        fired-level (get-in (state eng) [:instances (:id h) :fired-level])]
     (cond
       (not (:reflex h)) (swap! (:state eng) assoc :resume (:id h) :current nil)
       (not paused?) (do (drop-reflex-job! eng (:id h) (:reflex h) :dropped {:how :dropped :by by :cause cause})
-                        (rest-cut-comfort! eng (:reflex h))))
+                        (rest-cut-comfort! eng (:reflex h) fired-level)))
     (when paused?
       (emit! eng (merge (job-fields eng (:id h)) {:source :job :kind :cut :level :info :by by :cause cause})))))
 
@@ -160,7 +162,7 @@
         fired (emit! eng {:source :reflex :kind :fired :level :info :reflex (:id entry)
                           :job id :interrupted (:id h) :text (reflex-text (:id entry) node)})]
     (when h (cut! eng h (:id entry) fired))
-    (swap! (:state eng) add-instance id node {:reflex (:id entry)})
+    (swap! (:state eng) add-instance id node {:reflex (:id entry) :fired-level (:level entry)})
     (mem/create-job! (:store eng) id (expr/label node) (second (job-of eng {:spec node})))
     (start-round! eng id)))
 

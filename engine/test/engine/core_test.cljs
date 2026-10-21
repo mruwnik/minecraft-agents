@@ -590,8 +590,14 @@
              :state (atom {:register [{:id :a :level :comfort :persistence :cooldown :cooldown-s 600}
                                       {:id :b :level :urgent :persistence :cooldown :cooldown-s 10}
                                       {:id :c :level :comfort :persistence :retry}]})}]
-    (doseq [id [:a :b :c]] (schedule/rest-cut-comfort! eng id))
+    (doseq [id [:a :b :c]] (schedule/rest-cut-comfort! eng id :comfort))
     (is (= {:a {:cooldown-until 650000}} (:reflex-state @(:state eng))))))
+
+(deftest a-comfort-reflex-that-fired-urgent-does-not-rest-when-cut
+  (let [eng {:now (constantly 50000)
+             :state (atom {:register [{:id :hungry :level :comfort :persistence :cooldown :cooldown-s 90}]})}]
+    (schedule/rest-cut-comfort! eng :hungry :urgent)
+    (is (nil? (:reflex-state @(:state eng))))))
 
 (deftest an-interval-reflex-cuts-a-listed-job-which-resumes-after-the-look
   (async done

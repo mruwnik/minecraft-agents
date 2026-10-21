@@ -404,7 +404,7 @@ Each tick the engine fires the first entry whose `:when` holds, which is not mut
   and resumes (before the list, first by register order; its entry does not fire again meanwhile) once no reflex holds the body. What it must not lose lives in body memory
   (recover-drops' `:recover-trip`, recover's `:hurt`, the shelter's `:shelter`).
 - **Persistence**, when the trigger still holds as the job ends: `:retry` fires again next tick; `:cooldown` waits
-  `:cooldown-s` counted from the job end; `:stop` waits until the condition has been false once. An entry's own values
+  `:cooldown-s` counted from the job end; `:stop` waits until the condition has been false once. A `:comfort` `:cooldown` reflex that fired at `:comfort` and is cut off rests its cooldown from the cut (an urgent firing, e.g. starving `:hungry`, does not). An entry's own values
   override the trigger's. A contract job ending `:impossible` stops the entry as `:stop` does, whatever its persistence;
   `reflex.ended` carries the ending's `:kind` and its data. An entry's `:job` may carry call keys (`:spend`, `:ways`).
 - **Settling**: after a login, reconnect, respawn or teleport (a forced move over 16 blocks) no trigger is evaluated until
