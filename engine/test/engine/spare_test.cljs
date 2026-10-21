@@ -2,6 +2,8 @@
   "jobs.lib.trip/tool-ready!: a stair that would dig with the last worn pickaxe gets a spare first, or says why not."
   (:require [cljs.test :refer [deftest is async]]
             [engine.blocks-dig-test :as bd]
+            [engine.core :as core]
+            [engine.fake :as fake]
             [engine.mine-support :as m]
             [engine.stair-test :as st]
             [engine.test-util :as tu]))
@@ -33,6 +35,24 @@
           (is (contains? (kinds s) :tool.no-spare))
           (is (contains? (kinds s) :obtain.exploring) "a spare not in sight is looked for, not given up on")
           (is (= 1 (count (st/events-of s :tool.no-spare)))))))))
+
+(deftest a-missing-spare-is-told-once-across-jobs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [args (atom east)
+              looked (atom 0)
+              s (await (st/tick-out! (st/setup {:blocks st/ground :inventory [worn]} args (fn [_]))))
+              {:keys [eng p]} s]
+          (is (= 1 (count (st/events-of s :tool.no-spare))))
+          (reset! looked (count (st/events-of s :obtain.exploring)))
+          (swap! (.. p -world -state) assoc-in [:self :pos] [0 64 0])
+          (fake/set-block! p [0 64 0] "air")
+          (reset! (:out s) :not-done)
+          (core/submit! eng '(recording-parent) {})
+          (await (st/tick-out! s))
+          (is (> (count (st/events-of s :obtain.exploring)) @looked) "the second job looked for a spare too")
+          (is (= 1 (count (st/events-of s :tool.no-spare))) "a second job does not tell it again"))))))
 
 (deftest a-healthy-pickaxe-or-a-second-one-needs-no-spare
   (async done
