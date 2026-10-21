@@ -9,17 +9,25 @@
 
 (defn column-top
   "The y of the surface of column x z: the highest non-air block scanning from
-  (+ from-y depth) down to (- (+ from-y 1) depth), when air lies above it. nil
-  for an unloaded cell on the way, a fluid, ice or magma surface, nothing, or a
-  covered top; grass, flowers and trees (logs, leaves) are skipped (the top is the ground under them, where till works). name-fn takes {:x :y :z} and returns a block name or nil."
+  (+ from-y depth) down to (- (+ from-y 1) depth), when air lies above it. Rock
+  or unseen cells at the start of the scan are a roof (a cave ceiling) and are
+  skipped down to the first air, so the top is the cave floor. nil for an
+  unloaded cell below that air, a fluid, ice or magma surface, nothing; grass,
+  flowers and trees (logs, leaves) are skipped (the top is the ground under
+  them, where till works). name-fn takes {:x :y :z} and returns a block name or nil."
   [name-fn x z from-y depth]
-  (let [low (inc (- from-y depth))]
-    (loop [y (+ from-y depth)]
+  (let [low (inc (- from-y depth))
+        open-cell? #(or (open? %) (canopy? %))]
+    (loop [y (+ from-y depth) roof? true]
       (when (>= y low)
         (let [n (name-fn {:x x :y y :z z})]
           (cond
+            (and roof? (or (nil? n) (not (open-cell? n))) (not (no-floor n)))
+            (if (and n (some-> (name-fn {:x x :y (inc y) :z z}) open-cell?))
+              y
+              (recur (dec y) true))
             (nil? n) nil
-            (or (open? n) (canopy? n)) (recur (dec y))
+            (open-cell? n) (recur (dec y) false)
             (no-floor n) nil
             :else (when-let [above (name-fn {:x x :y (inc y) :z z})]
-                    (when (or (open? above) (canopy? above)) y))))))))
+                    (when (open-cell? above) y))))))))

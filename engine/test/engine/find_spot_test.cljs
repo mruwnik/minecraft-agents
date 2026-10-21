@@ -82,6 +82,15 @@
   (is (nil? (surface/column-top (fn [{:keys [y]}] (cond (= y 63) "dirt" (= y 64) nil :else "air")) 0 0 64 12)) "unloaded above the top")
   (is (= 63 (surface/column-top (fn [{:keys [y]}] (case y 63 "dirt" "cave_air")) 0 0 64 12))))
 
+(deftest column-top-is-the-floor-under-a-cave-ceiling
+  (let [cave (fn [roof above] (fn [{:keys [y]}] (cond (= y 63) "dirt" (<= 64 y 67) "air" (= y 68) roof :else above)))]
+    (are [roof above] (= 63 (surface/column-top (cave roof above) 0 0 64 12))
+      "stone" nil
+      "stone" "stone"
+      "dirt" "stone")
+    (is (nil? (surface/column-top (fn [{:keys [y]}] (if (= y 63) "water" (if (<= 64 y 67) "air" "stone"))) 0 0 64 12)) "a lake floor is no spot")
+    (is (nil? (surface/column-top (constantly "stone") 0 0 64 12)) "solid rock all through")))
+
 (deftest score-patch-table
   (are [in expected] (= expected (pt/score-patch in))
     {:tops [63 63 63 63] :water-share 0 :sky true :away 0}
