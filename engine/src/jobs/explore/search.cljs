@@ -78,6 +78,7 @@
    :heading {:doc "a compass heading (:north, :north-east, :east ...), for :outward (default :north)" :spec (set (keys headings)) :default nil}
    :scan-radius {:doc "how far round the body each look reaches" :spec (a/num-in 0 nil) :default 24}
    :takeable {:doc "leave out blocks a zone, claim or plan footprint bars this body from taking" :spec boolean? :default false}
+   :skip-ids {:doc "entity ids that do not count as found (animals the caller cannot use, e.g. a baby)" :spec (a/coll-of (a/pred "an entity id" some?)) :default nil}
    :avoid {:doc "columns [x z] whose blocks do not count as found" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
    :patch {:doc "look for a patch of ground instead of named things: {:w :h :range :depth :limit :max-step :plan :farmland?} as jobs.lib.patch scans (jobs.farm.find-spot builds it); the search ends at the first look round with one, and :found is then [{:what \"patch\" :pos :spots}]" :spec map? :default nil}
    :use-notes {:doc "targets noted (by any body) within the max-distance setting count as found" :spec boolean? :default true}})
@@ -294,13 +295,15 @@
 (defn takeable
   "found without the blocks in :avoid columns, the blocks on the footprint of a plan the body made (its
   posts and walls are not material to cut), the noted entities standing in a zone or plan of the body's own (its pens),
-  and (when :takeable is on) those a zone, claim or plan footprint bars taking."
+  the entities of :skip-ids, and (when :takeable is on) those a zone, claim or plan footprint bars taking."
   [c found]
-  (let [{:keys [takeable avoid]} (:args c)
+  (let [{:keys [takeable avoid skip-ids]} (:args c)
         avoid (set (map vec avoid))
+        skip (set skip-ids)
         in (when takeable (access/rules-input c))
         own (access/rules-input c {:spare-own? true})]
     (cond->> found
+      (seq skip) (remove #(skip (:id %)))
       true (remove #(and (not (:id %)) (access/own-keep own (zipmap [:x :y :z] (:pos %)))))
       true (remove #(and (:noted %) (:id %) (access/in-own-area? c (zipmap [:x :y :z] (:pos %)))))
       (seq avoid) (remove #(and (not (:id %)) (avoid [((:pos %) 0) ((:pos %) 2)])))

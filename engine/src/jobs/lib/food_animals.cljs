@@ -75,7 +75,7 @@
   "The animals in sight that were not hunted, as {:name :id :why :pos}."
   [c opts]
   (->> (in-sight c opts) (filter :why)
-       (mapv (fn [{:keys [entity why]}] {:name (.-name entity) :id (.-id entity) :why why :pos (cell-of (.-pos entity))}))))
+       (mapv (fn [{:keys [entity why]}] {:name (.-name entity) :id (.-id entity) :uuid (.-uuid entity) :why why :pos (cell-of (.-pos entity))}))))
 
 (defn note-spared!
   "Remember the animals spared now by id: entities are sensed only in the view cone, so a later look at the end of a survey no longer lists them."

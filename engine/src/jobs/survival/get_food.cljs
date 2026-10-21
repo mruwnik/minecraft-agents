@@ -352,6 +352,16 @@
       :continue
       (do (ctx/update-mem! c dissoc :walk-to) :again))))
 
+(defn spared-uuids
+  "The uuids of the animals passed over (a baby, a pen's, the last adults): the search must not end on one the hunt cannot use."
+  [c]
+  (into (set (:skip-ids (ctx/mem c))) (keep :uuid) (animals/passed-over c (animal-opts c false))))
+
+(defn only-spared?
+  "Whether the search's finds are all animals the hunt passes over."
+  [found spared]
+  (and (seq found) (every? #(and (:id %) (spared (:id %))) found)))
+
 (defn ^:async explore!
   "Once per job, with nothing known or seen: search for food animals and ripe crops (jobs.explore.search, :explore),
   not in a dark sky (a body sheltered for the night stays in) nor in the dark or with danger near unless starving (safe-if-lit), nor underground (a hungry body under rock first climbs out, jobs.lib.surface-up; a starving one searches there), nor when risk refuses it. :again when the search found something to hunt or dig, else nil with what it
@@ -375,18 +385,22 @@
         (ctx/update-mem! c assoc :explored "started" :explored-at (ctx/now c))
         (let [opts (widen-explore (merge (settings/get settings ::explore) (when (map? e) e)) (widen c))
               e (await (child/run!* c :explore 'jobs.explore.search
-                                    (child/search-args (assoc opts :target (vec (concat (sort animals/food-animals) (keys sources/ripe-age) (keys sources/wild-food)))))
+                                    (child/search-args (assoc opts :skip-ids (vec (spared-uuids c)) :target (vec (concat (sort animals/food-animals) (keys sources/ripe-age) (keys sources/wild-food)))))
                                     {:max-calls 1}))]
           (if (= :continue e)
             :continue
             (let [res (:data e)]
               (ctx/update-mem! c assoc :found-reach
                                (reduce max 0 (for [{[x y z] :pos} (:found res) :when x] (+ 4 (u/dist (u/self-pos c) {:x x :y y :z z})))))
-              (ctx/update-mem! c assoc :explored
-                               (report/explored-text res))
-              (when-let [noted (and (nil? (animals/nearest c (animal-opts c false))) (first (filter :id (:found res))))]
-                (ctx/update-mem! c assoc :walk-to (:pos noted)))
-              (when (= :done (:kind e)) :again))))))))
+              (if (only-spared? (:found res) (spared-uuids c))
+                (do (ctx/update-mem! c #(-> % (assoc :skip-ids (vec (spared-uuids c))) (dissoc :explored)))
+                    :again)
+                (do
+                  (ctx/update-mem! c assoc :explored
+                                   (report/explored-text res))
+                  (when-let [noted (and (nil? (animals/nearest c (animal-opts c false))) (first (filter :id (:found res))))]
+                    (ctx/update-mem! c assoc :walk-to (:pos noted)))
+                  (when (= :done (:kind e)) :again))))))))))
 
 (defn rod-carried?
   "Whether a fishing rod is carried: jobs.food.fish itself looks for a bank beside seen water two deep within its ::bank-radius."
