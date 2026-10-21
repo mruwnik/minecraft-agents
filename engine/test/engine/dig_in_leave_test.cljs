@@ -152,6 +152,19 @@
           (is (zero? (count (emitted seen :dig-in.trapped))) "not trapped")
           (is (<= 64 (second (feet p))) "out of the pit"))))))
 
+(deftest a-way-up-is-dug-with-a-worn-last-pickaxe
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p out] :as s} (setup {:blocks (shaft) :self {:pos {:x 0.5 :y 60 :z 0.5}}
+                                            :ways #{:walls}
+                                            :inventory [{:name "stone_pickaxe" :count 1 :durability 3} {:name "dirt" :count 32}]})]
+          (await (dig-in! s))
+          (is (= 60 (second (feet p))) "shut in at the bottom")
+          (await (leave-at-dawn! s))
+          (is (= [:done :out] ((juxt :status :reason) @out)) "stair not stopped :tool-spent")
+          (is (<= 64 (second (feet p)))))))))
+
 (deftest out-of-the-pit-a-go-to-ten-blocks-away-arrives
   (async done
     (tu/run-async done

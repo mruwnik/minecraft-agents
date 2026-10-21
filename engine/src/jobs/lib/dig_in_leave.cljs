@@ -178,7 +178,7 @@
 (defn ^:async climb!
   "One stair attempt out of a pit (jobs.access.stair :up, a child of the caller): to the :start height, or with no
   :start one step at a time until nothing solid is within sh-sense/default-roof-height above, at most max-climb steps. A
-  stopped stair books its reason and the next heading is tried; so does one that cannot start (it lacks a slot),
+  stopped stair books its reason and the next heading is tried; so does one that cannot start (it lacks a slot), and it digs on with a worn last pickaxe (a way out),
   instead of waiting, because the caller (jobs.survival.night) must end failed, not wait, when trapped."
   [c {:keys [start]} toward]
   (let [{:keys [i order tries climbed] :or {i 0 tries [] climbed 0}} (leave-mem c)
@@ -194,7 +194,7 @@
       (let [slot (keyword (str "dig-out-" i))
             _ (update-leave! c assoc :heading (:heading attempt))
             e (waits/waiting-out c (await (ctx/call c slot 'jobs.access.stair
-                                     (merge {:dir :up :checks (ready/unforced c {:fit? '(always)}) :heading (:heading attempt) :ways #{:carried} :need-drop false :ignore-zones? (or (:ignore-zones? attempt) (:ignore-zones? (:args c)))}
+                                     (merge {:dir :up :checks (ready/unforced c {:fit? '(always)}) :heading (:heading attempt) :ways #{:carried} :need-drop false :ignore-zones? (or (:ignore-zones? attempt) (:ignore-zones? (:args c))) :settings {:jobs.lib.trip/spent-uses 0}}
                                             (if start {:y (:y start)} {:steps 1})))))
             data (:data e)]
         (when (and (not= :continue e) (:ignore-zones? attempt)) (note-trespass! c (:dug data)))

@@ -46,6 +46,9 @@
   (is (false? (holds? {:entries slept-long-ago :time 400})))
   (is (false? (holds? {:entries slept-long-ago :entities [zombie]}))))
 
+(deftest a-body-under-rock-does-not-leave-its-work-for-a-bed
+  (is (false? (holds? {:entries slept-long-ago :blocks {"0,66,0" "stone"}}))))
+
 (deftest a-carried-or-remembered-bed-needs-no-errand
   (is (false? (holds? {:entries slept-long-ago :inv [{:name "red_bed" :count 1}]})))
   (is (false? (holds? {:entries (conj slept-long-ago [:bed {:pos {:x 5 :y 64 :z 0}} 2]) :blocks {"5,64,0" "red_bed"}})))

@@ -15,4 +15,11 @@
    :act [[:job (jobs.items.obtain {:item "oak_log" :count 2 :explore true})]]
    :expect [{:event {:source :job :kind :completed} :within-s 680 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 600 :until {:source :job :kind :completed}}]
+   :after [[:item "oak_log" [:>= 2]]]}
+  {:name "sealed-cave-stairs-up-with-a-worn-last-pickaxe"
+   :tags [:obtain :explore :mining]
+   :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=128]"]
+         [:job (jobs.items.obtain {:item "oak_log" :count 2 :explore true})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 680 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 600 :until {:source :job :kind :completed}}]
    :after [[:item "oak_log" [:>= 2]]]}]}

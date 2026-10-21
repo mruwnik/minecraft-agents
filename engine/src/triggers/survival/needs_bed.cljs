@@ -22,12 +22,13 @@
         {:why :unslept :days days}))))
 
 (defn needs-bed
-  "Holds by day, awake, with no bed item carried, when why names a reason."
+  "Holds by day, awake, on the surface (wool and planks are not underground), with no bed item carried, when why names a reason."
   [p view _args]
   (boolean
    (and (not (body/recovery-pending? view :needs-bed))
         (not (sh-sense/night? p))
         (not (sh-sense/sleeping? p))
+        (not (sh-sense/buried? p))
         (dawn/calm? p)
         (nil? (sh-beds/carried-bed p))
         (some? (why p view)))))
