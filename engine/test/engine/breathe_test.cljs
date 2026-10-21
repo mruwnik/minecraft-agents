@@ -11,6 +11,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.world-files :as world-files]
             [jobs.lib.breath :as breath]
+            [jobs.lib.cost.planner :as planner]
             [jobs.lib.shore :as shore]
             [jobs.lib.swim :as swim]
             [jobs.survival.breathe :as b]
@@ -123,9 +124,11 @@
 (def short-shaft "Air from y 68: 3 blocks (1.5 s) up." (shaft 67))
 (def long-shaft "Air from y 81: 16 blocks (8 s) up." (shaft 80))
 
-(defn fires? [world & kvs]
+(defn fires?
+  "Whether the trigger's holds? and check? fire, with a swim of half a second a block (the shafts' geometry) unless kvs say otherwise."
+  [world & kvs]
   (let [p (tu/fake world)]
-    (settings/with-settings (apply hash-map kvs) (fn [] [(holds? p {}) (check? p {})]))))
+    (settings/with-settings (apply hash-map :jobs.lib.breath/swim-ms 500 kvs) (fn [] [(holds? p {}) (check? p {})]))))
 
 (deftest fires-when-air-left-is-short-of-the-swim-to-air-plus-margin
   (are [oxygen blocks expected] (= expected (fires? {:self {:inWater true :oxygen oxygen} :blocks blocks}))
@@ -136,6 +139,9 @@
     ;; 8 s to air: oxygen 15 leaves 11.25 s, over 8 + 3; oxygen 14 leaves 10.5 s, under it
     15 long-shaft [false false]
     14 long-shaft [true true]))
+
+(deftest the-swim-price-is-the-planners-dive-price
+  (is (= planner/swim-sub-ms (breath/swim-ms))))
 
 (deftest the-drown-allowance-and-margin-move-the-fire-point
   (let [world {:self {:inWater true :oxygen 12} :blocks long-shaft}]

@@ -234,7 +234,7 @@
    ::drown-hp {:default 0 :doc "Health the body may lose to drowning before it counts as drowning (an unusual job may allow some)." :spec (a/num-in 0 nil)}
    ::ticks-per-oxygen {:default 15 :doc "Game ticks a drowning body loses one point of oxygen in (the game's rule)." :spec (a/int-in 1 nil)}
    ::ticks-per-health {:default 10 :doc "Game ticks between the 2 health a drowning body loses once the oxygen is gone (the game's rule)." :spec (a/int-in 1 nil)}
-   ::swim-ms {:default 500 :doc "Milliseconds a swimmer takes per block, to price a swim to a pocket of air." :spec (a/num-in 0 nil)}})
+   ::swim-ms {:default planner/swim-sub-ms :doc "Milliseconds a swimmer takes per block, to price a swim to a pocket of air (the planner's price of a swim with the head under water)." :spec (a/num-in 0 nil)}})
 
 (defn swim-ms [] (settings/get settings ::swim-ms))
 

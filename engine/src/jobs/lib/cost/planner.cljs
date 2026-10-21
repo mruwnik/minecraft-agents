@@ -14,6 +14,10 @@
   would make the search inadmissible (the spec refusal names it)."
   base/WALK-S)
 
+(def swim-sub-ms
+  "Milliseconds a swim block takes with the head under water (the planner's swimSubH): breathe's trigger prices the swim to air the same."
+  (* 1000 (unchecked-get base/DEFAULT-COSTS "swimSubH")))
+
 (def floored
   "The :costs keys that stand in for a block of horizontal walking and may not go under walk-floor."
   #{:swim-h :swim-sub-h :exit})

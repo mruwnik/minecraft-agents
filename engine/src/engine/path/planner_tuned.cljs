@@ -67,7 +67,7 @@
      with the plan's certain damage to options.health (20) is lethal, each air-out (under since the last breath) counting its 2 hp hits as ceil(seconds + costs.drownSlack (1)): refused (reason air-lethal) unless options.costs.lethalAir is 1 (go-to :costs :lethal-air, breathe's), then it costs LETHAL-S (times the dearest second the caller's prices allow) more, so a lethal plan comes back only when no other does. Any
      other plan swims no further than airLimit from airUsed.
    - options.unknown (nil: off, every loaded cell as it is) {id floorId cell floor seeDepth seeLit seeLitDepth lightDepth peekS aimS lightCost lightOk
-     torchBase missed noLight}: a cell of state id (void_air) is one the body has not seen, air to the body. A stand on such a
+     torchBase missed noLight}: a cell of state id (void_air) is one the body has not seen, air to the body (but never breath: a swim in water under an unseen head cell drains the air like a dive). A stand on such a
      floor is a phantom floor (read as floorId, stone; not under water): allowed only after a move the walk can stop before
      (walk, diagonal, corner, jump, drop; not after a gap, climb, trapdoor open, swim, exit or bounce: else result unseenRefused; a
      gap may jump over it, not through an unseen feet or head cell) and only where it can be seen: a drop of d (level and

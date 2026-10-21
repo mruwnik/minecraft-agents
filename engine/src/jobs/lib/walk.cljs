@@ -8,6 +8,7 @@
             [engine.game :as game]
             [engine.path.blocks :as blocks]
             [engine.path.executor :as executor]
+            [jobs.lib.breath :as breath]
             [jobs.lib.look :as look]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
@@ -277,6 +278,25 @@
                            (when (and (pos? i) (or (new? [x y z]) (new? [x (inc y) z]))) i))
                          steps))))
 
+(defn unseen-overhead
+  "The first cell over a swim step's head cell that the body never saw, when the cells between are seen water (the air a
+  dive comes up in is two or three cells over the head); nil when the step is not a swim with its head under or the
+  first cell over the water is seen."
+  [p {:keys [x y z swim]}]
+  (when (and swim (not (breath/air? (breath/seen-water-name p {:x x :y (inc y) :z z}))))
+    (loop [dy 2]
+      (when (<= dy 3)
+        (let [cell {:x x :y (+ y dy) :z z}]
+          (cond
+            (sense/unknown? p [x (+ y dy) z]) [x (+ y dy) z]
+            (let [n (breath/seen-water-name p cell)] (and n (not (breath/air? n)) (breath/passable-water-or-air? n))) (recur (inc dy))
+            :else nil))))))
+
+(defn first-unseen-overhead
+  "The index of the first step from 1 on that is a swim with an unseen cell over its head (unseen-overhead) not in looked, nil when there is none."
+  [p steps looked]
+  (first (keep-indexed (fn [i s] (when (pos? i) (when-let [cell (unseen-overhead p s)] (when-not (contains? looked cell) i)))) steps)))
+
 (defn occluded?
   "Whether a seen solid block lies between the body's eye and the centre of cell: what it cannot see there is rock, not
   a place it has failed to look at."
@@ -338,13 +358,19 @@
   ([c steps timeout-s] (walk! c steps timeout-s nil))
   ([c steps timeout-s watch]
    (loop [steps steps base 0 ms 0 looked #{}]
-     (let [j (when (:unknown c) (first-unseen-step (:primitives c) steps looked))
+     (let [p (:primitives c)
+           u (when (:unknown c) (first-unseen-step p steps looked))
+           o (first-unseen-overhead p steps looked)
+           j (if (and u o) (min u o) (or u o))
            rebase (fn [d] (cond-> d (:step d) (update :step + base)))]
        (cond
-         (= 1 j) (let [r (await (look-ahead! c steps))]
-                   (if-let [end (:end r)]
-                     [(rebase end) ms]
-                     (recur steps base ms (into looked (:looked r)))))
+         (and (= 1 j) (= 1 u)) (let [r (await (look-ahead! c steps))]
+                                 (if-let [end (:end r)]
+                                   [(rebase end) ms]
+                                   (recur steps base ms (into looked (:looked r)))))
+         (= 1 j) (let [cell (unseen-overhead p (nth steps 1))]
+                   (await (sense/look-at! c cell))
+                   (recur steps base ms (conj looked cell)))
          (nil? j) (let [[done wms] (await (walk-lit! c steps (max 1 (- timeout-s (/ ms 1000))) watch))]
                     [(rebase done) (+ ms wms)])
          :else (let [[done wms] (await (walk-lit! c (subvec steps 0 j) (max 1 (- timeout-s (/ ms 1000))) watch))

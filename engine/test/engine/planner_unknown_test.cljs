@@ -194,6 +194,14 @@
       (is (not (:unseenRefused r)))
       (is (some #{[2 63 2]} (pf/cells r))))))
 
+(deftest a-swim-under-unseen-cells-uses-the-air-like-a-dive
+  (let [pond (fn [over] (pf/snapshot {:fill [[0 62 2 10 62 2 "stone"] [0 63 2 10 63 2 "water"] [0 64 2 10 64 2 over]]
+                                      :blocks [[11 63 2 "stone"]]}))
+        start {:x 0 :y 63 :z 2}
+        options (assoc (unk {}) :costs {:airLimit 3})]
+    (is (found? (run (pond "air") (pf/near 11 64 2) options start)) "seen air over the pond: swum head out")
+    (is (not (found? (run (pond U) (pf/near 11 64 2) options start))) "unseen cells over it are not air: the swim is a dive past the limit")))
+
 (deftest a-drop-into-water-over-an-unseen-bed-is-planned
   (let [w (line [0 63 "stone"] [1 62 "water"] [1 61 U])
         r (run w (pf/near 1 62 2) (unk {:seeDepth 0}))]

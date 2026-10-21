@@ -39,6 +39,15 @@
     (let [head (.stateAt s x (inc y) z)]
       (and (not (== head UNLOADED)) (pos? (aget (.-wet (.-table s)) head)) (zero? (aget (.-tbl-bubble s) head)))))
 
+  ;; the head breathes no air here as far as the body knows: submerged, or in water with a head cell never seen (an unseen cell is never counted as air)
+  (airUnder [s x y z]
+    (or ^boolean (.submerged s x y z) ^boolean (.unseenHeadInWater s x y z)))
+
+  (unseenHeadInWater [s x y z]
+    (and (>= (.-unk-id s) 0)
+         (== (aget (.-tbl-kind s) (.stateAt s x y z)) WATER)
+         ^boolean (.isUnknown s (.stateAt s x (inc y) z))))
+
   ;; Dominance: a submerged sideways move in open water is never better than swimming at the surface over it. A cell's column
   ;; is open when its water reaches plain air; then surfaceY is the top water cell, else NONE. Cached per cell.
   (surfaceScan [s x y z]
@@ -123,7 +132,9 @@
   ;; then calls swimEnd. `base` seconds of swimming count for the air (airStep), `extra` seconds of current do not.
   ;; src-sub: the body starts the move with its head in water. target-water: it ends in a water cell.
   (swimBegin [s i ^boolean target-water x2 y2 z2 base extra ^boolean src-sub]
-    (if ^boolean (.airStep s i (or src-sub (and target-water ^boolean (.submerged s x2 y2 z2))) base (+ base extra))
+    (if ^boolean (.airStep s i (or src-sub (and target-water ^boolean (.airUnder s x2 y2 z2))
+                      (and (>= i 0) ^boolean (.unseenHeadInWater s (aget (.-xs s) i) (aget (.-ys s) i) (aget (.-zs s) i))))
+                  base (+ base extra))
       (do (set! (.-move-water s) (+ base extra))
           true)
       false))
@@ -164,7 +175,7 @@
   ;; a move that is not a swim (a climb, a walk, a drop): with the head in a wet cell (a waterlogged ladder, scaffolding
   ;; or trapdoor) where it starts or ends, its seconds drain the air like a swim's (airStep); else they breathe it back
   (headAir [s i x y z dsec]
-    (.airStep s i (or ^boolean (.submerged s (aget (.-xs s) i) (aget (.-ys s) i) (aget (.-zs s) i)) ^boolean (.submerged s x y z)) dsec dsec))
+    (.airStep s i (or ^boolean (.airUnder s (aget (.-xs s) i) (aget (.-ys s) i) (aget (.-zs s) i)) ^boolean (.airUnder s x y z)) dsec dsec))
 
   (swimEnd [s]
     (set! (.-move-air s) 0)

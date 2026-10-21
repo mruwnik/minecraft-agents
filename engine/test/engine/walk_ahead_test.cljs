@@ -30,6 +30,24 @@
   (is (= #{[0 63 0] [0 64 0] [0 65 0] [0 66 0] [1 63 0] [1 64 0] [1 65 0] [1 66 0]}
          (set (wwatch/step-cells (step 0 64 0 :walk) (step 1 64 0 :walk))))))
 
+(defn sees
+  "Primitives that know only the named cells: {[x y z] block-name}; every other cell is unseen."
+  [known]
+  #js {:sensedAt (fn [pos] (let [n (get known [(.-x pos) (.-y pos) (.-z pos)])]
+                             (if n #js {:name n} #js {:unknown true})))})
+
+(deftest a-dive-looks-up-at-the-first-unseen-cell-over-its-head
+  (let [swim (fn [x] (assoc (step x 63 0 :swim) :swim true))
+        steps [(swim 0) (swim 1) (swim 2)]
+        p (sees {[1 64 0] "water" [1 65 0] "water" [2 64 0] "water" [2 65 0] "water" [2 66 0] "air"})]
+    (is (= [1 66 0] (walk/unseen-overhead p (nth steps 1))) "water seen up to the head, the next cell unseen")
+    (is (nil? (walk/unseen-overhead p (nth steps 2))) "air seen over the water: nothing to look for")
+    (is (nil? (walk/unseen-overhead (sees {[1 64 0] "air"}) (nth steps 1))) "head out of the water: the surface swim breathes")
+    (is (nil? (walk/unseen-overhead p (step 1 63 0 :walk))) "a walk is no dive")
+    (is (= 1 (walk/first-unseen-overhead p steps #{})))
+    (is (nil? (walk/first-unseen-overhead p (subvec steps 2) #{})))
+    (is (nil? (walk/first-unseen-overhead p steps #{[1 66 0]})) "each cell is looked at once")))
+
 (deftest the-cells-of-a-diagonal-step-include-both-side-columns
   (is (= #{[0 0] [1 0] [0 1] [1 1]}
          (set (map (fn [[x _ z]] [x z]) (wwatch/step-cells (step 0 64 0 :walk) (step 1 64 1 :diagonal)))))))
