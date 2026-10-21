@@ -196,3 +196,18 @@
   (let [{:keys [done ticks]} (swim tunnel [5 60 1] [16 60 1])]
     (is (= :arrived (:status done)))
     (is (<= ticks (* 1.25 20 (/ 11 3.92))) (str ticks " ticks for 11 cells"))))
+
+(defn ticks-until-done
+  "Ticks of the pose sequence (a fn of the tick) until the executor ends the walk on a swim-up from y 58 to a step at y 62, nil when it does not in n."
+  [pose-at n]
+  (let [steps [{:move :swim :x 0 :y 58 :z 0 :px 0.5 :pz 0.5 :h 0 :swim true}
+               {:move :swim-up :x 0 :y 62 :z 0 :px 0.5 :pz 0.5 :h 0 :swim true}]]
+    (loop [state (ex/start steps 0) k 0]
+      (when (< k n)
+        (let [{s :state :keys [done]} (ex/tick ex/policy state (pose-at k))]
+          (if done {:ticks (inc k) :status (:status done)} (recur s (inc k))))))))
+
+(deftest a-swim-up-that-rises-is-progress-one-that-does-not-is-stuck
+  (let [at (fn [y] {:x 0.5 :z 0.5 :y y :vy 0 :in-water true :under-water true :on-ground false})]
+    (is (= {:ticks 61 :status :stuck} (ticks-until-done (constantly (at 58)) 200)) "held in place: 3 s")
+    (is (nil? (ticks-until-done #(at (+ 58 (* 0.05 %))) 70)) "rising 1 block a second is not stuck")))
