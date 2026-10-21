@@ -455,3 +455,10 @@
           (await (run-until-empty eng 20))
           (is (empty? (mem/entries (mem/view (:store eng)) :recover-danger)) "no wait for the danger to pass was set")
           (is (= :collected (:decision (recovered eng)))))))))
+
+(deftest a-climb-toward-a-pile-far-above-is-progress-though-the-distance-hardly-shrinks
+  (let [pile {:x 220 :y 79 :z 174}]
+    (is (fetch/nearer? {:x 53 :y 50 :z -100} {:x 53 :y 51 :z -100} pile))
+    (is (fetch/nearer? {:x 0 :y 70 :z 0} {:x 30 :y 70 :z 0} pile))
+    (is (not (fetch/nearer? {:x 53 :y 50 :z -100} {:x 53 :y 50 :z -100} pile)))
+    (is (not (fetch/nearer? {:x 53 :y 51 :z -100} {:x 53 :y 50 :z -100} pile)))))

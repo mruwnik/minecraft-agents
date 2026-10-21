@@ -33,18 +33,29 @@
         (ctx/update-mem! c assoc :seal-cleared true)))
     :next))
 
+(def blocked-leg-factor
+  "A leg after one that got no nearer is this many times longer: go-to's ways out (a stair, by hand last) start over each leg and a 6 s leg ends before the last one is reached."
+  3)
+
 (defn ^:async walk-leg!
   "One leg of the walk to pos: [:danger d] when a danger the trip has not priced is near (no walk is made), else [r] of
   a chase leg of ::leg-s seconds (:continue, or its ending; its :data has the result, with :arrived or :leg)."
   [c pos]
   (if-let [d (dg/threatened? c)]
     [:danger d]
-    [(await (child/call-chase* c :go {:pos pos :range (cfg/arrive-range) :leg-s (cfg/leg-s) :walk {:checks cfg/own-checks}}))]))
+    [(await (child/call-chase* c :go {:pos pos :range (cfg/arrive-range) :leg-s (* (cfg/leg-s) (if (:blocked (ctx/mem c)) blocked-leg-factor 1)) :walk {:checks cfg/own-checks}}))]))
 
 (defn refused?
   "Whether the walk's ending r is go-to's verdict on the goal cell alone, given before any search (as chase passes it on)."
   [r]
   (boolean (some #{:goal-not-standable :goal-on-magma} [(result/why r) (result/why (:because r)) (result/why (get-in r [:cause :because]))])))
+
+(defn nearer?
+  "Whether a leg from `before` to `after` made progress toward pos: more than a block nearer, or a block closer in height
+  (a body under ground climbs out one block at a time, which a straight-line distance of hundreds of blocks hides)."
+  [before after pos]
+  (or (< (u/dist after pos) (- (u/dist before pos) 1))
+      (<= 1 (- (js/Math.abs (- (:y before) (:y pos))) (js/Math.abs (- (:y after) (:y pos)))))))
 
 (defn ^:async go!
   "Walk one leg (:leg-s) toward the death point: :next once there (the collect phase) or after a leg (the danger and the
@@ -52,7 +63,7 @@
   world, or it did not arrive (the body's own seal near the pile is taken back first): the next run walks again while the pile is worth it, and the window closes it). A walk
   go-to refused for the body's own shelter (:inside-own-shelter) is no failed try: the window closes the trip."
   [c pos]
-  (let [before (u/dist (u/self-pos c) pos)
+  (let [before (u/self-pos c)
         [r danger] (await (walk-leg! c pos))
         walked (:data r)]
     (cond
@@ -63,14 +74,15 @@
       (dg/decline! c :unreachable (str "the walk to " (pr-str pos) " is refused: the body is sealed in its own shelter, which opens by day") {:pos pos})
       (and (not (:arrived walked)) (not (:leg walked)) (await (clear-seal! c pos))) :next
       (:leg walked)
-      (let [nearer? (< (u/dist (u/self-pos c) pos) (- before 1))]
+      (let [nearer (nearer? before (u/self-pos c) pos)]
         (ctx/update-mem! c #(cond-> (assoc % :recheck true)
-                              (not nearer?) (assoc :blocked true)))
-        (when-not nearer? (child/fruitless! c :go) (dth/save-trip! c))
+                              (not nearer) (assoc :blocked true)))
+        (if nearer (child/progress! c :go) (child/fruitless! c :go))
+        (dth/save-trip! c)
         :next)
       (not (:arrived walked))
       (do (ctx/update-mem! c assoc :blocked true)
-          (when-not (and (refused? r) (>= (u/dist (u/self-pos c) pos) (- before 1)))
+          (when-not (and (refused? r) (not (nearer? before (u/self-pos c) pos)))
             (child/fruitless! c :go))
           (dth/save-trip! c)
           (dg/decline! c :unreachable (str "the walk to " (pr-str pos) " did not arrive") {:pos pos}))

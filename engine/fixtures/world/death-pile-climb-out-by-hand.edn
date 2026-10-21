@@ -1,0 +1,18 @@
+;; Card 6b150e30: a body that respawns sealed in stone with no tool has to dig itself out (go-to's last resort, by hand) to reach a
+;; pile on the surface; a leg that climbs a block is progress and a leg after a stuck one is longer, so the trip is not given up :unreachable.
+;; Should-succeed: respawn in a lit stone chamber 8 under the surface, pile 24 aside on the surface, no pickaxe: the pile is collected.
+{:defaults
+ {:tags [:survival :death :jobs]
+  :plot {:height 24}
+  :body {:at [26.5 8 26.5] :spawnpoint [2 0 26] :effects [["resistance" 600 4] ["haste" 600 4]]
+         :inventory [["raw_iron" 24]]}
+  :act [[:kill-body]
+        [:await {:source :body :kind :respawned} 30]
+        [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]
+        [:job (jobs.survival.recover-drops)]]
+  :limit-s 330}
+ :cases
+ [{:name "stone-chamber-no-tool-climbs-out-and-collects"
+   :blocks [[:fill [0 0 0] [31 7 31] "stone"] [:fill [1 0 25] [3 2 27] "air"] [:fill [3 2 27] [3 2 27] "glowstone"]]
+   :expect [{:event {:source :job :kind :completed :data {:decision :collected}} :within-s 300 :of-job true}]
+   :after [[:item "raw_iron" 24]]}]}
