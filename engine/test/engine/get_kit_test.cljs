@@ -74,6 +74,10 @@
 (deftest nothing-is-short-when-the-ingots-are-carried
   (is (= {} (bill/furnace-short game/default-version ["iron_pickaxe"] {"iron_ingot" 3}))))
 
+(deftest carried-raw-iron-covers-the-pieces-it-smelts-to
+  (is (= {"iron_helmet" 1} (kit/covered-of game/default-version ["iron_helmet" "iron_chestplate"] {"raw_iron" 11})))
+  (is (= {"iron_helmet" 1} (kit/covered-of game/default-version ["iron_helmet" "iron_chestplate"] {"raw_iron" 3 "iron_ingot" 2}))))
+
 (deftest a-death-after-the-start-makes-the-memory-stale
   (is (kit/stale? {:since 100} {:t 200}))
   (is (not (kit/stale? {:since 300} {:t 200})))

@@ -77,6 +77,14 @@
             {:event {:source :job :kind :stopped :data {:reason :no-source :item "iron_chestplate"}} :within-s 160 :of-job true}]
    :after [[:item "iron_helmet" 0] [:item "iron_boots" 0] [:item "iron_chestplate" 0] [:item "iron_ingot" 1]]
    :limit-s 180}
+  ;; card 876e53b2: 5 raw iron cover the helmet (the chestplate needs 8): the kit smelts and wears it before it stops for the missing iron
+  {:name "carried-raw-iron-makes-and-wears-the-covered-piece-before-the-stop"
+   :blocks [[:set [20 0 14] "furnace[facing=west]"]]
+   :body {:inventory [["raw_iron" 5] ["coal" 3] ["cooked_beef" 3]]}
+   :act [[:job (jobs.items.get-kit {:items ["iron_helmet" "iron_chestplate"] :wear true :explore false :food false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :item "iron_ingot"}} :within-s 220 :of-job true}]
+   :after [[:item "iron_helmet" 0] [:item "iron_chestplate" 0]]
+   :limit-s 240}
   ;; card a1a67cc5 (fix 75f53a09 of 9d844aa3): raw iron smelting on thin fuel (planks only): the kit waits out the cook and finishes, never "stopped: cooking"
   {:name "raw-iron-on-plank-fuel-waits-for-the-cook"
    :blocks [[:set [20 0 14] "furnace[facing=west]"]]

@@ -8,6 +8,7 @@
             [engine.game :as game]
             [engine.settings :as settings]
             [jobs.items.obtain.bill :as bill]
+            [jobs.items.smelt.plan :as smelt-plan]
             [jobs.lib.armour :as armour]
             [jobs.lib.checks :as checks]
             [jobs.lib.combat :as combat]
@@ -21,7 +22,7 @@
   "Get :items in order (default the iron kit: pickaxe, sword, axe, helmet, chestplate, leggings, boots) and, with
   :wear, wear each armour piece once it is carried. One call is the whole goal; it yields (:continue) only while a
   child waits on the world.
-  The items not carried or worn (a better armour piece worn in its slot counts) whose furnace material the carried ingots already cover are one bill
+  The items not carried or worn (a better armour piece worn in its slot counts) whose furnace material the carried ingots (or the raw ore that smelts to them) already cover are one bill
   first and worn at once; the rest are one bill for a jobs.items.obtain child
   (jobs.items.obtain.bill: the furnace material all pieces need together first, so the ore is mined and smelted in one go, then
   one piece after the other), with a :spend :job-time of ::job-time-s; the pieces are worn when it is done.
@@ -140,11 +141,18 @@
         t (* n (settings/get settings ::item-s))]
     {:uses {:job-time [0 t ##Inf]}}))
 
+(defn with-raw
+  "The carried totals with each raw input of a furnace product counted as the product it will smelt to (raw_iron as ingots)."
+  [carried]
+  (reduce (fn [m [out in]] (cond-> m (pos? (get carried in 0)) (update out (fnil + 0) (get carried in))))
+          carried smelt-plan/made-from))
+
 (defn covered-of
-  "The bill {item 1} of the items, in order, that the carried furnace material (ingots) already covers, each one's share
+  "The bill {item 1} of the items, in order, that the carried furnace material (ingots, or the raw input to smelt) already covers, each one's share
   taken off what is left for the next; {} when none or all (then the one bill does it)."
-  [version items carried]
-  (let [covered (first (reduce (fn [[bill left] item]
+  [version items carried*]
+  (let [carried (with-raw carried*)
+        covered (first (reduce (fn [[bill left] item]
                                  (let [need (bill/furnace-short version [item] {})]
                                    (if (every? (fn [[k n]] (<= n (get left k 0))) need)
                                      [(assoc bill item 1) (merge-with - left need)]
@@ -225,7 +233,7 @@
     (cond
       (nil? (:since m)) (let [st (state c)
                               todo (remove #(had? (:carried st) (:worn st) %) items)
-                              short (bill/furnace-short version todo (:carried st))]
+                              short (bill/furnace-short version todo (with-raw (:carried st)))]
                           (ctx/update-mem! c assoc :since (ctx/now c))
                           (ctx/emit! c :kit.plan :info {:items (vec todo) :short short
                                                         :text (str "kit: getting " (str/join ", " todo)
@@ -262,7 +270,7 @@
                             :again)))
 
           (and (not (:armed (ctx/mem c))) (nil? (combat/best-weapon (:primitives c) combat/default-weapons))
-               (seq (bill/furnace-short version todo (:carried st))))
+               (seq (bill/furnace-short version todo (with-raw (:carried st)))))
           (let [r (await (run-arm! c))]
             (if (= :continue r)
               :continue
@@ -273,7 +281,7 @@
                   :again)))
 
           (and (:food a) (< fp food-cost/reserve-points) (not (:fed (ctx/mem c)))
-               (seq (bill/furnace-short version todo (:carried st))))
+               (seq (bill/furnace-short version todo (with-raw (:carried st)))))
           (let [r (await (run-food! c))]
             (if (= :continue r)
               :continue
