@@ -588,3 +588,8 @@
     {:blocks (merge flat start-box room)} [7 64 0] "start-enclosed"
     {:blocks (merge flat start-box)} [20 64 0] "start-enclosed"
     {:blocks (merge flat room)} [7 64 0] "goal-enclosed"))
+
+(deftest a-goal-no-stand-in-range-sees-is-refused-before-any-search
+  (are [seen status reason] (= {:status status :reason reason} (plan-over {:blocks flat} [30 64 0] {:goalSeen (fn [& _] seen)}))
+    true "found" nil
+    false "none" "goal-unseen"))

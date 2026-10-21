@@ -317,6 +317,13 @@
      :stopped-short (< (count walked) (count dry))
      :stop (when (and step (not past) (not edge)) (stopped-one-way r (or (peek walked) (first steps) (wworld/body-cell c)) to step))}))
 
+(defn planner-reason
+  "A no-path result's reason as go-to's: the planner's goal-unseen (no stand in range sees the block, found before any
+  search) is the same verdict as a search that ran out of land under :see."
+  [^js r]
+  (let [k (some-> (.-reason r) keyword)]
+    (if (= :goal-unseen k) :exhausted k)))
+
 (defn no-walk
   "The result of a plan that is not walked, nil when it is: no path within abilities (:beyond), a goal the planner proved
   walled in or cut off by a drop (:goal-enclosed, :goal-cut-off: its partial plan's nearer end gets the body no nearer to arriving), a plan cut at a one-way step with no step left, no path, a plan the policy (default
@@ -343,7 +350,7 @@
        (assoc stop :replans replans)
 
        (or (= "none" status) (and partial? (< (count steps) 2)))
-       (cond-> {:status :no-path :reason (some-> (.-reason r) keyword) :replans replans}
+       (cond-> {:status :no-path :reason (planner-reason r) :replans replans}
          stopped-short (assoc :stopped-short true)
          (true? (some-> r .-damageRefused)) (assoc :damage-refused true))
 

@@ -14,29 +14,33 @@
           rz (+ (- z (.-from-z s)) HALF)]
       (and (>= rx 0) (< rx SPAN) (>= rz 0) (< rz SPAN))))
 
-  ;; nil when a cell within range may end a route; else why none can: "goal-on-magma" when the standable ones are all on
-  ;; magma or in a magma column (endsOnMagma: a route never ends there), "goal-not-standable" when there are none
+  ;; nil when a cell within range may end a route; else why none can: "goal-unseen" when the standable ones all fail
+  ;; goalSeen (go-to's :see: no search of the whole loaded land would find a stand that sees the block), "goal-on-magma"
+  ;; when they are all on magma or in a magma column (endsOnMagma: a route never ends there), "goal-not-standable" when
+  ;; there are none
   (goalStandProblem [s]
     (when (and ^boolean (.-near s) (not ^boolean (.-goal-unloaded s)))
       (let [r (js/Math.ceil (.-goal-range s))]
         (loop [dx (- r)
                dy (- r)
                dz (- r)
-               magma false]
+               magma false
+               unseen false]
           (if (> dx r)
-            (if ^boolean magma "goal-on-magma" "goal-not-standable")
+            (cond ^boolean unseen "goal-unseen" ^boolean magma "goal-on-magma" :else "goal-not-standable")
             (if (> dy r)
-              (recur (inc dx) (- r) (- r) magma)
+              (recur (inc dx) (- r) (- r) magma unseen)
               (if (> dz r)
-                (recur dx (inc dy) (- r) magma)
+                (recur dx (inc dy) (- r) magma unseen)
                 (let [x (+ (.-goal-x s) dx) y (+ (.-goal-y s) dy) z (+ (.-goal-z s) dz)
                       h (.nodeH s x y z)]
                   (cond
-                    (> (+ (* dx dx) (* dy dy) (* dz dz)) (* (.-goal-range s) (.-goal-range s))) (recur dx dy (inc dz) magma)
+                    (> (+ (* dx dx) (* dy dy) (* dz dz)) (* (.-goal-range s) (.-goal-range s))) (recur dx dy (inc dz) magma unseen)
                     ;; an unseen goal cell (options.unknown) may be standable
                     ^boolean (.unknownNear s x y z) nil
-                    (neg? h) (recur dx dy (inc dz) magma)
-                    ^boolean (.endsOnMagma s x y z h) (recur dx dy (inc dz) true)
+                    (neg? h) (recur dx dy (inc dz) magma unseen)
+                    ^boolean (.endsOnMagma s x y z h) (recur dx dy (inc dz) true unseen)
+                    (and (some? (.-goal-seen s)) (not (true? ((.-goal-seen s) x y z)))) (recur dx dy (inc dz) magma true)
                     :else nil)))))))))
 
   ;; a bubble column lifts and drags in ways the flood does not enumerate: meeting one marks the flood leaked

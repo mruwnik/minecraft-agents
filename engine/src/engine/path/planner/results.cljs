@@ -266,7 +266,7 @@
 
   ;; the first one-way step on the way to the node nearest the goal, -1 when there is none or the result has no partial end
   (oneWayNode [s]
-    (if (or (nil? (.-reason s)) (identical? (.-reason s) "start-not-standable") (identical? (.-reason s) "goal-not-standable") (identical? (.-reason s) "goal-on-magma") ^boolean (.-returnable s) (== (.-best-node s) -1))
+    (if (or (nil? (.-reason s)) (identical? (.-reason s) "start-not-standable") (identical? (.-reason s) "goal-not-standable") (identical? (.-reason s) "goal-on-magma") (identical? (.-reason s) "goal-unseen") ^boolean (.-returnable s) (== (.-best-node s) -1))
       -1
       (.firstOneWay s (.-best-node s))))
 
@@ -488,7 +488,7 @@
   ;; the returnable search then run ({path distance})
   (resultFrom [s one-way-node ^js clean-end]
     (cond
-      (or (identical? (.-reason s) "start-not-standable") (identical? (.-reason s) "goal-not-standable") (identical? (.-reason s) "goal-on-magma")) (.outcome s "none" (.-reason s) nil nil)
+      (or (identical? (.-reason s) "start-not-standable") (identical? (.-reason s) "goal-not-standable") (identical? (.-reason s) "goal-on-magma") (identical? (.-reason s) "goal-unseen")) (.outcome s "none" (.-reason s) nil nil)
       (nil? (.-reason s)) (let [^js r (.outcome s "found" (.-reason s) (.pathTo s (.-goal-node s)) nil)]
                       ;; a goal set's result names the goal reached (the first whose area holds the end)
                       (when (pos? (.-n-goals s))

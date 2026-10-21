@@ -801,6 +801,7 @@ the recorded pins (`planner_{bench,options,goals,courses}_golden.cljs`, `js/path
 - A partial plan ends at the node nearest the goal that the body can come back from (one-way drops, gap jumps and ways into a
   downward bubble column above its bottom are not taken), walked only to its last step with the head out of water. `go-near!` never leads the body off a ledge it cannot climb back.
 - A route never ends on magma or in a magma bubble column: a goal with no other cell in range ends `goal-on-magma` before any search, and go-to gives up at once.
+- Under go-to's `:see` a goal whose in-range stands none sees the block ends `goal-unseen` before any search (go-to: `:exhausted`, then `:out-of-sight`), not after flooding the loaded land to the node budget.
 - A search that runs out of loaded land names a frontier (a loaded edge) at most `options.frontierReach` (256) farther from
   the goal than the start. go-to tours frontiers until every one is spent, walking land it has searched once (its searches stop
   at the first edge, then expand as many nodes again or to the round's budget, so land they read stays known once it unloads;
