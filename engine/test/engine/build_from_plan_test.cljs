@@ -525,6 +525,17 @@
           (is (= ["upper" "head"] [(:half (state-at p [2 65 2])) (:part (state-at p [4 64 4]))]))
           (is (= {:placed 2 :missing [] :wrong [] :given-up {}} (select-keys result [:placed :missing :wrong :given-up]))))))))
 
+(deftest a-door-fits-a-gap-under-a-built-lintel
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (build [{:id "door" :cells [[2 64 2]] :want {:block "oak_door" :facing :north :half :lower}}
+                                        {:id "door-top" :cells [[2 65 2]] :want {:block "oak_door" :facing :north :half :upper}}]
+                                       (assoc ground "2,66,2" "stone" "1,64,2" "stone" "1,65,2" "stone" "3,64,2" "stone" "3,65,2" "stone")
+                                       [{:name "oak_door" :count 1}]))]
+          (is (= [[[2 64 2] "oak_door"]] (places p)))
+          (is (= {:placed 1 :missing [] :wrong [] :given-up {}} (select-keys result [:placed :missing :wrong :given-up]))))))))
+
 (deftest a-bed-want-takes-any-colour-of-bed-carried
   (async done
     (tu/run-async done
