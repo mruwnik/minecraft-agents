@@ -65,11 +65,13 @@ export const isCut = err => err?.code === 'cut'
 export const failed = err => ({ status: 'failed', reason: String(err?.message ?? err).slice(0, 200) })
 export const need = (ok, message) => { if (!ok) throw badArgs(message) }
 
-// Mobs the registry does not class as hostile (a newer server's mob) that hurt the body: hostile from then on, by name,
-// or by entity id when the registry does not even know the name.
+// Mobs the registry does not class as hostile (a newer server's mob, an angry wolf) that hurt the body: hostile from then on,
+// by name, or by entity id when the registry does not even know the name (a wolf: always by id).
 const hurtBy = { names: new Set(), ids: new Set() }
 export const learnHostile = e => {
-  if (!e || entityKind(e) !== 'other') return
+  if (!e) return
+  if (e.name === 'wolf') { hurtBy.ids.add(e.id); return } // a wolf bites only when angry, and a tame one never bites its owner
+  if (entityKind(e) !== 'other') return
   if (e.type === 'mob') hurtBy.names.add(e.name)
   else if (e.type === 'other' && !e.name) hurtBy.ids.add(e.id)
 }

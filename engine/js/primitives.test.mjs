@@ -725,6 +725,16 @@ test('a mob the registry does not class hostile is hostile from the moment it hu
   assert.deepEqual(kinds(), ['hostile', 'hostile'])
 })
 
+test('a wolf is hostile from the moment it bites the body, only that wolf', () => {
+  const { bot } = hurtRig()
+  bot.entities[11] = { id: 11, name: 'wolf', type: 'animal', kind: 'Passive mobs', position: at(2, 64, 0) }
+  bot.entities[12] = { id: 12, name: 'wolf', type: 'animal', kind: 'Passive mobs', position: at(3, 64, 0) }
+  const kinds = () => [11, 12].map(id => entityKind(bot.entities[id]))
+  assert.deepEqual(kinds(), ['passive', 'passive'])
+  bot._client.emit('damage_event', { entityId: bot.entity.id, sourceTypeId: 1, sourceCauseId: 13, sourceDirectId: 13 })
+  assert.deepEqual(kinds(), ['passive', 'hostile'])
+})
+
 // ---- death and respawn events ----
 
 test('the died event carries the death position, the inventory and the experience at that moment', () => {

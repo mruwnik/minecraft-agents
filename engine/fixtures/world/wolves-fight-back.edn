@@ -1,0 +1,20 @@
+;; Angry wolves are hostile once they bite (the damage packet names the wolf): the hostile reflex fires and the body fights
+;; back with a sword in iron armour. The wolves are angered by a hit from the body (a pack turns on it). Light plot, any clock.
+{:defaults
+ {:tags [:hostile :combat] :time :any
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile)}]
+  :body {:at [16.5 0 16.5] :inventory [["iron_sword" 1]]}}
+ :cases
+ [{:name "angry-wolves-are-fought"
+   :act [[:rcon "item replace entity $BODY armor.head with minecraft:iron_helmet"]
+         [:rcon "item replace entity $BODY armor.chest with minecraft:iron_chestplate"]
+         [:rcon "item replace entity $BODY armor.legs with minecraft:iron_leggings"]
+         [:rcon "item replace entity $BODY armor.feet with minecraft:iron_boots"]
+         [:summon "wolf" [20.5 0 16.5] "{Tags:[\"wt\"]}"]
+         [:summon "wolf" [20.5 0 18.5] "{Tags:[\"wt\"]}"]
+         [:wait-s 2]
+         [:rcon "damage @e[type=wolf,tag=wt,limit=1,$BOX] 1 minecraft:player_attack by $BODY"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 25}
+            {:event {:source :job :kind :child_started :data {:slot :fight}} :within-s 30}]
+   :limit-s 60}]}
