@@ -1408,6 +1408,14 @@
         (let [{:keys [seen]} (await (flight-round respond {:inventory sword :entities [{:id 100 :name "enderman" :kind "hostile" :pos {:x 5 :y 64 :z 0}}]}))]
           (is (= [:flee] (mapv :decision (decided seen)))))))))
 
+(deftest no-fight-wins-against-an-enderman-however-much-health
+  (let [{:keys [p]} (setup {:inventory sword :equipment {:torso {:name "iron_chestplate" :count 1}}})
+        c {:primitives p :args {} :root "j1" :slots [] :view (fn [] {:now 0 :data {:entries {}}})}
+        mob (fn [n] (clj->js {:id 100 :name n :type "hostile" :pos {:x 2 :y 64 :z 0} :health 20}))]
+    (fake/swap-self! p assoc :health 200)
+    (is (hostile-fight/wins? c [(mob "zombie")]) "control: the same kit beats a zombie")
+    (is (not (hostile-fight/wins? c [(mob "enderman")])) "however much health: still a loss")))
+
 (deftest a-calm-enderman-is-no-danger-an-angry-one-is
   (async done
     (tu/run-async done

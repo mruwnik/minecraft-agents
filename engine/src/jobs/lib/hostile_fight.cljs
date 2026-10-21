@@ -221,10 +221,12 @@
 
 (defn wins?
   "Whether fighting hostiles leaves :reserve health (jobs.lib.danger/fight-reserve): the one weighing the response and the
-  flight's cornered options share. Never against a creeper (hit-and-back? decides that), nor against none."
+  flight's cornered options share. Never against a creeper (hit-and-back? decides that), nor against none, nor against an
+  enderman: only thorns armour with tamed wolves would win, and the body cannot see wolves."
   ([c hostiles] (wins? c hostiles (constantly nil)))
   ([c hostiles struck-of]
    (boolean (and (seq hostiles)
                  (not-any? combat/creeper? hostiles)
+                 (not-any? combat/enderman? hostiles)
                  (cost/leaves-reserve? {:health (.-health (.self (:primitives c))) :reserve (danger-q/fight-reserve)
                                         :damage (damage c hostiles struck-of)})))))
