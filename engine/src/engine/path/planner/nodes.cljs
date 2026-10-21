@@ -66,9 +66,12 @@
           (if ^boolean (.-near s) (tilt h (js/Math.max 0 (- (js/Math.abs (- y (.-goal-y s))) (.-goal-range s)))) h)))))
 
   ;; a goal set's heuristic is the least of its goals' (each admissible and consistent, so their least is too); a block costs
-  ;; at least the cheapest of a walk, a sprint and a swim (a sneaking walk is dearer than a swim)
+  ;; at least the cheapest of a walk, a sprint and a swim (a sneaking walk is dearer than a swim). With options.unknown it
+  ;; also costs the prices of a stand on unseen land: without them the search floods the land round the way (weight 1.2
+  ;; cannot make up a 1.5 times dearer step), the more so as the unseen land is most of what lies between a far goal and the body.
   (heuristic [s x z]
-    (let [per-block (js/Math.min (.-c-walk-s s) (.-c-sprint-s s) (.-c-swim-h s))]
+    (let [cheapest (js/Math.min (.-c-walk-s s) (.-c-sprint-s s) (.-c-swim-h s))
+          per-block (if (neg? (.-unk-id s)) cheapest (+ (* cheapest (+ 1 (* 2 (.-unk-cell s)) (.-unk-floor s))) (/ (.-aim-s s) SQRT2)))]
       (if (pos? (.-n-goals s))
         (loop [i 0 best js/Infinity]
           (if (< i (.-n-goals s))
