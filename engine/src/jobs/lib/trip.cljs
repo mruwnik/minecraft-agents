@@ -88,11 +88,22 @@
             :continue
             (do (done! c :deposited (assoc (select-keys p [:free :cost]) :result (:data e))) nil)))))))
 
+(declare spare-name)
+
+(defn dear-tool?
+  "Whether the tool (carried item name) to dig block-name with is dearer than the stone pickaxe a player would make from the
+  cobblestone carried: a finished iron pickaxe is not worn out on stone."
+  [p block-name item]
+  (let [cheap (spare-name p block-name nil)]
+    (boolean (and cheap (= "stone" (weapon/material-of cheap)) (> (weapon/cheap-rank item) (weapon/cheap-rank cheap))
+                  (<= 3 (transduce (comp (filter #(= "cobblestone" (:name %))) (map :count)) + 0 (u/inventory p)))))))
+
 (defn spare-need
   "The carried tool ({:item :uses-left :max}) that tool-ready! wants a spare for when digging block-name, or nil. With
   an amount (digs the job will make) the chooser (jobs.lib.choose/tools-for) must be short of it: the listed tools'
   uses together fall under amount. Without one, they must fall under ::spare-fraction of the first tool's durability.
-  A tool with no known durability counts as whole."
+  A tool with no known durability counts as whole. A first tool dearer than a stone pickaxe, with cobblestone to make one
+  (dear-tool?), is wanted a spare too, marked :dear."
   ([c block-name] (spare-need c block-name nil))
   ([c block-name amount]
    (let [{uses :list short :short} (choose/tools-for c [:dig block-name] (or amount 1))
@@ -101,8 +112,10 @@
          worn? (if amount
                  (pos? short)
                  (< (transduce (map :uses-left) + 0 uses) (inc (js/Math.floor (* (spare-fraction) (or full 0))))))]
-     (when (and best full worn?)
-       (assoc best :max full)))))
+     (when (and best full)
+       (cond
+         worn? (assoc best :max full)
+         (dear-tool? (:primitives c) block-name (:item best)) (assoc best :max full :dear true))))))
 
 (defn spent-tool?
   "Whether every carried tool that digs block-name is down to ::spent-uses uses or fewer (a tool with no known durability counts as whole) and some is carried:
@@ -165,7 +178,7 @@
                                                                (when why (str ": " (name why))))}))]
      (cond
        (nil? worn) nil
-       (nil? (need/fetch-opts c)) (do (when-not (told?) (tell! :fetch-off nil)) nil)
+       (nil? (need/fetch-opts c)) (do (when-not (or (:dear worn) (told?)) (tell! :fetch-off nil)) nil)
        (contains? (:spare-tried (ctx/mem c)) tool-name) nil
        :else
        (let [e (await (need/fetch! c 'jobs.items.obtain {:item tool-name :count 1 :avoid (line-ahead c)} :need {:item tool-name :count 1} {:slot :spare :explore true}))]
@@ -174,6 +187,6 @@
            (do (if (= :done (:kind e))
                  (do (ctx/forget-where! c tools/no-spare-told-kind #(= tool-name (:name %)))
                      (ctx/emit! c :tool.spare :info {:tool tool-name :text (str "carrying a spare " tool-name)}))
-                 (do (when-not (told?) (tell! (need/cause-why e) (get-in e [:data :tried])))
+                 (do (when-not (or (:dear worn) (told?)) (tell! (need/cause-why e) (get-in e [:data :tried])))
                      (ctx/update-mem! c update :spare-tried (fnil conj #{}) tool-name)))
                nil)))))))

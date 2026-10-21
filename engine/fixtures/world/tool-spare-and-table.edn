@@ -29,6 +29,17 @@
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 4})]]
    :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :tool.spare :data {:tool "iron_pickaxe"}} :for-s 60 :until {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}}}]}
+  ;; card 040fa149: a whole iron pickaxe is kept for iron and diamond: with cobblestone carried a stone one is made for the stair
+  {:name "whole-iron-pick-gets-a-stone-spare-when-cobble-is-carried"
+   :body {:inventory [["iron_pickaxe" 1] ["oak_log" 4] ["torch" 8] ["cobblestone" 8]]}
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 4})]]
+   :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
+            {:event {:source :job :kind :completed :data {:steps 4}} :within-s 200 :of-job true}]}
+  {:name "whole-iron-pick-with-no-cobble-digs-on-with-no-spare"
+   :body {:inventory [["iron_pickaxe" 1] ["oak_log" 4] ["torch" 8]]}
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 2})]]
+   :expect [{:event {:source :job :kind :completed :data {:steps 2}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind #{:tool.spare :tool.no-spare}} :for-s 60 :until {:source :job :kind :completed}}]}
   {:name "fell-tree-with-a-worn-last-axe-gets-a-stone-spare"
    :blocks [[:fill [16 10 16] [16 17 16] "oak_log"] [:fill [14 16 14] [18 18 18] "oak_leaves[persistent=true]"] [:fill [16 16 16] [16 17 16] "oak_log"]]
    :body {:at [16.5 10 21.5] :yaw 180 :inventory [["iron_axe[damage=249]" 1] ["oak_planks" 12] ["stick" 4] ["cobblestone" 4]]}

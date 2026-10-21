@@ -160,3 +160,15 @@
           (is (= 1 (count (st/events-of s :tool.no-spare))))
           (is (= :fetch-off (:reason told)))
           (is (not (contains? (kinds s) :tool.spare))))))))
+
+(deftest a-whole-iron-pickaxe-is-spared-for-a-stone-one-when-cobblestone-is-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [iron {:name "iron_pickaxe" :count 1 :durability 240 :max-durability 250}
+              cobble {:name "cobblestone" :count 20}
+              run (fn [inv] (st/stair! (assoc spare-chest :inventory inv) east tu/seeing-all))
+              with (await (run [iron cobble]))
+              without (await (run [iron]))]
+          (is (= ["stone_pickaxe"] (map :tool (st/events-of with :tool.spare))))
+          (is (not-any? #{:tool.spare :tool.no-spare} (kinds without)) "no cobblestone to make one: the iron pickaxe digs"))))))
