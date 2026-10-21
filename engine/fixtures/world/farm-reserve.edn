@@ -1,3 +1,4 @@
+;; maintain-keeps-two-wheat-as-bait-for-a-lure: 5 wheat carried, no reserve entry: maintain stores 3 and keeps 2 for a lure.
 ;; Farm jobs leave what an agent memory.reserve entry holds (reserve register: jobs.lib.reserve/free, held).
 ;; Should-succeed: plant sows the unreserved seed type; with all seed reserved it sows nothing and keeps it; compost feeds the leaves and
 ;; leaves the reserved seed; get-seeds' fertilize way spends only the 1 unreserved of 8 bone meal on grass; fertilize uses only the 2 unreserved of 5 bone meal; maintain stores the 2 unreserved of 5 wheat and composts the 4 seed above the reserved 66.
@@ -71,4 +72,11 @@
          [:await {:source :job :kind :completed} 20]
          [:job (jobs.farm.maintain {:area {:min #xyz [10 -1 16] :max #xyz [10 0 16]} :chest #xyz [9 0 16] :composter #xyz [11 0 16]})]]
    :expect [{:event {:source :job :kind #{:completed :stopped :waiting} :data {:name "jobs.farm.maintain"}} :within-s 70 :of-job true}]
-   :after [[:item "wheat" 3] [:item "wheat_seeds" 66]]}]}
+   :after [[:item "wheat" 3] [:item "wheat_seeds" 66]]}
+  {:name "maintain-keeps-two-wheat-as-bait-for-a-lure"
+   :blocks [[:set [10 -1 16] "farmland[moisture=7]"] [:set [10 -2 17] "stone"] [:set [10 -1 17] "water"] [:set [10 0 16] "wheat[age=3]"]
+            [:set [9 0 16] "chest"]]
+   :body {:inventory [["wheat" 5]]}
+   :act [[:job (jobs.farm.maintain {:area {:min #xyz [10 -1 16] :max #xyz [10 0 16]} :chest #xyz [9 0 16]})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped :waiting} :data {:name "jobs.farm.maintain"}} :within-s 70 :of-job true}]
+   :after [[:item "wheat" 2]]}]}

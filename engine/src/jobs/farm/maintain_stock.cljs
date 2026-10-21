@@ -8,8 +8,10 @@
             [jobs.farm.tend-ground :as gr]))
 
 (a/defargs settings
-  {::seed-backup {:default 64 :doc "A stack of each seed type stays carried; the rest is composted." :spec (a/int-in 0 nil)}})
+  {::seed-backup {:default 64 :doc "A stack of each seed type stays carried; the rest is composted." :spec (a/int-in 0 nil)}
+   ::bait-wheat {:default 2 :doc "Wheat stays carried as bait: a lure or bring between two jobs finds it in hand instead of walking to the chest." :spec (a/int-in 0 nil)}})
 (defn seed-backup [] (settings/get settings ::seed-backup))
+(defn bait-wheat [] (settings/get settings ::bait-wheat))
 
 (defn surplus
   "The names (in the order of names) of which more is carried than the keep map holds back."
@@ -18,10 +20,10 @@
     (filterv #(> (get have % 0) (get keep % 0)) names)))
 
 (defn keeps
-  "{name count} kept carried: the sowing reserve, a backup stack of each seed type, the units the reserve register
+  "{name count} kept carried: the sowing reserve, a backup stack of each seed type, the bait wheat, the units the reserve register
   holds (held: jobs.lib.reserve/held) and the :keep entries, whichever is largest for a name."
   [sow held keep]
-  (merge-with max sow (zipmap crops/waste-seeds (repeat (seed-backup))) held keep))
+  (merge-with max sow (zipmap crops/waste-seeds (repeat (seed-backup))) {"wheat" (bait-wheat)} held keep))
 
 (defn box-reserve
   "{seed count} to keep: twice the beds in all, taken one at a time from each carried seed that has more than is reserved already."

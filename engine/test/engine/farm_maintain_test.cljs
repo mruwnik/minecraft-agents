@@ -34,8 +34,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:chest ft/chest} goods-world 40))]
-          (is (= {"wheat" 5} (ft/chest-items s)) "a stack of backup seed and the 3-day food stay carried")
-          (is (= {"wheat_seeds" 10 "iron_hoe" 1 "bread" 2} (ft/inv s)))
+          (is (= {"wheat" 3} (ft/chest-items s)) "a stack of backup seed, the 3-day food and two wheat of bait stay carried")
+          (is (= {"wheat" 2 "wheat_seeds" 10 "iron_hoe" 1 "bread" 2} (ft/inv s)))
           (is (= {:gave-up false} (select-keys (ft/step s :deposit) [:gave-up])))
           (is (true? (ft/finished? s))))))))
 
@@ -80,9 +80,9 @@
           (is (= {:skipped :no-composter} (ft/step s :compost))))
         (let [s (await (scenario {:composter {:x 6 :y 64 :z 2} :chest ft/chest}
                                  (ft/world (ft/farm "wheat" 3 [[2 2] [3 2]] [[2 2] [3 2]]) {:blocks {"6,64,2" "composter"}}
-                                        {:inventory [(ft/item "wheat_seeds" 4) (ft/item "wheat" 2)] :containers {"10,64,0" []}}) 40))]
+                                        {:inventory [(ft/item "wheat_seeds" 4) (ft/item "wheat" 3)] :containers {"10,64,0" []}}) 40))]
           (is (= {:skipped :no-surplus-seed} (ft/step s :compost)))
-          (is (= {"wheat" 2} (ft/chest-items s))))))))
+          (is (= {"wheat" 1} (ft/chest-items s)) "two wheat stay as bait"))))))
 
 (deftest reserve-sows-the-field-twice-over-one-seed-at-a-time
   (are [expected beds inventory] (= expected (stock/box-reserve beds inventory))
@@ -97,11 +97,11 @@
 
 (deftest the-keep-holds-sowing-seed-a-backup-stack-per-seed-and-the-held-units
   (are [expected sow held keep] (= expected (stock/keeps sow held keep))
-    {"wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64} {} {} {}
-    {"wheat_seeds" 100 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64} {"wheat_seeds" 100} {} {}
-    {"wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64 "bread" 4 "carrot" 9}
+    {"wheat" 2 "wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64} {} {} {}
+    {"wheat" 2 "wheat_seeds" 100 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64} {"wheat_seeds" 100} {} {}
+    {"wheat" 2 "wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 64 "bread" 4 "carrot" 9}
     {"carrot" 2} {"bread" 4 "carrot" 9} {}
-    {"wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 70} {} {} {"pumpkin_seeds" 70}))
+    {"wheat" 2 "wheat_seeds" 64 "beetroot_seeds" 64 "melon_seeds" 64 "pumpkin_seeds" 70} {} {} {"pumpkin_seeds" 70}))
 
 (deftest crops-are-stored-down-to-the-food-reserve
   (async done
