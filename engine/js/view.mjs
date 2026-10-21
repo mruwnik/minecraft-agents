@@ -218,12 +218,7 @@ export function createView ({ stateDir, agent, world, onEvent = () => {}, now = 
     const p = (newBlock ?? oldBlock)?.position
     if (!p) return
     const held = decoded.get(`${p.x >> 4},${p.z >> 4}`)
-    if (held) {
-      const rel = p.y - held.column.minY
-      const section = held.states[rel >> 4]
-      if (section && newBlock) section[(rel & 15) << 8 | (p.z & 15) << 4 | (p.x & 15)] = newBlock.stateId
-      else held.states[rel >> 4] = undefined
-    }
+    if (held) held.states[(p.y - held.column.minY) >> 4] = undefined
     if (live) markColumn(Math.floor(p.x / 16), Math.floor(p.z / 16)) // off: flushColumns clears pending unread, and turning on marks every column
     if (oldBlock?.stateId === newBlock?.stateId) return
     const at = bot?.entity?.position
