@@ -1,10 +1,13 @@
 (ns jobs.lib.surface-up
-  "Up out of a cave for the gather source: a body under rock whose search found nothing walks to the nearest wall and cuts a stair up (by hand if it must) until sky shows."
+  "Up out of a cave for the gather source: a body under rock whose search found nothing first walks up a stair of its own
+  that ends under the open sky (go-to weighs it against a new one), else walks to the nearest wall and cuts a stair up (by hand if it must) until sky shows."
   (:require [engine.ctx :as ctx]
             [jobs.lib.child :as child]
             [jobs.lib.dig-in-leave :as dig-leave]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.movement.go-to.column :as column]))
 
 (def wall-reach "Blocks out from the feet the nearest wall is looked for." 8)
 
@@ -44,6 +47,23 @@
       (and (pos? (get-in (ctx/mem c) [:explored (:key need)] 0))
            (sh-sense/buried? (:primitives c)))))
 
+(defn own-top
+  "The nearest top of a stair of the body's own that ends under the open sky above its feet, as {:x :y :z}, else nil."
+  [c]
+  (let [p (:primitives c)
+        feet (sh-sense/feet p)
+        stairs (ledger/stair-stands c)
+        kind-at (column/seen-kind-at p)
+        surface-at (column/surface-kind-at p)
+        top? (fn [[x y z]] (and (not-any? (fn [[dx dz]] (contains? stairs [(+ x dx) (inc y) (+ z dz)])) [[1 0] [-1 0] [0 1] [0 -1]])
+                                (keyword-identical? :open (kind-at x (+ y 2) z))
+                                (= y (column/top surface-at x z))))]
+    (->> stairs
+         (filter (fn [[_ y _ :as cell]] (and (> y (inc (:y feet))) (top? cell))))
+         (map (fn [[x y z]] {:x x :y y :z z}))
+         (sort-by #(u/dist feet %))
+         first)))
+
 (defn ^:async climb!
   "One stair step up from a wall (jobs.lib.dig-in-leave/climb!): :continue while it goes on, :stopped when no stair goes up."
   [c wall]
@@ -57,10 +77,15 @@
         feet (sh-sense/feet p)
         buried (sh-sense/buried? p)
         extra (:extra (:surface (ctx/mem c)) 0)
-        _ (ctx/update-mem! c assoc :surface {:on true :extra (if buried 0 extra)})
+        own-tried (:own-tried (:surface (ctx/mem c)))
+        _ (ctx/update-mem! c assoc :surface {:on true :extra (if buried 0 extra) :own-tried own-tried})
+        own (when (and buried (not own-tried)) (own-top c))
         wall (wall-of p feet)
-        [stand wall-cell] (when-not wall (stand-by-wall p))]
+        [stand wall-cell] (when-not (or own wall) (stand-by-wall p))]
     (cond
+      own (let [r (await (child/call-walk* c :own-way-walk {:pos own :range 1 :ways #{:walk} :spend {:tries 1}}))]
+            (when-not (= :continue r) (ctx/update-mem! c assoc-in [:surface :own-tried] true))
+            :continue)
       (and (not buried) (or (ring-free? p) (>= extra extra-steps)))
       (do (ctx/update-mem! c dissoc :surface) :out)
       wall (do (when-not buried (ctx/update-mem! c assoc-in [:surface :extra] (inc extra)))

@@ -537,6 +537,26 @@
           (is (= [] (searches seen)) "not searched while under rock")
           (is (some #(re-find #"dig-out" (name (:slot %))) (events-of seen :child_ended)) "it cuts a stair up from the wall"))))))
 
+;; A dirt mass (x -2..22, y 30..59, z -1..1) with the body's own stair cut through it: stands (i, 40+i, 0) up to the sky at x 20.
+(def own-stair-floors (vec (for [i (range 21)] [i (+ 39 i) 0])))
+
+(def mass-with-own-stair
+  (let [cut (set (for [[x y z] own-stair-floors dy [1 2 3]] (str x "," (+ y dy) "," z)))]
+    (into {} (for [x (range -2 23) y (range 30 60) z (range -1 2)
+                   :let [k (str x "," y "," z)] :when (not (cut k))]
+               [k "dirt"]))))
+
+(deftest hungry-at-the-foot-of-its-own-stair-underground-walks-it-up-and-cuts-no-new-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:time 6000 :light {} :light-default [0 0] :floor [200 200 201 201] :blocks mass-with-own-stair :self {:food 8 :health 10 :pos {:x 0.5 :y 40 :z 0.5}}} :step-ms 5)]
+          (mem/write! (:store eng) :stair-way {:dim "overworld" :floors own-stair-floors} {:cap 5 :ttl :forever})
+          (core/submit! eng '(jobs.survival.get-food {:carry 0}) {})
+          (dotimes [_ 12] (await (core/tick! eng)))
+          (is (<= 60 (.-y (.-pos (.self p)))) "it stands at the top of the stair")
+          (is (not-any? #(re-find #"dig-out" (name (:slot %))) (events-of seen :child_ended)) "no new stair is cut"))))))
+
 (deftest explore-false-gives-up-without-searching
   (async done
     (tu/run-async done
