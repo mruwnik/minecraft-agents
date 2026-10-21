@@ -290,7 +290,7 @@
             (let [r (await (near/go-near! c table (reach) {:ways #{:walk :clear-seal}}))]
               (cond
                 (= :partial r) :continue
-                (= :there r) :again
+                (and (= :there r) (u/within? (u/self-pos c) table (reach))) :again
                 arg? (give-up! c made :unreachable)
                 :else (do (ctx/update-mem! c #(-> % (update :unreachable-tables (fnil conj #{}) (crafting-table/cell-vec table)) (dissoc :table)))
                           (or (await (table-fetch! c)) :again)))))))))

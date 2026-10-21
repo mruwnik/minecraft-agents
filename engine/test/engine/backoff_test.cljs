@@ -612,7 +612,7 @@
           (is (nil? (entry eng :t))))))))
 
 (deftest only-the-documented-default-triggers-opt-out-of-backoff
-  (is (= #{:suffocating :burning :hostile-near :night}
+  (is (= #{:suffocating :burning :hostile-near :night :dawn}
          (set (keep (fn [[k v]] (when (false? (:backoff v)) k)) trigger-defaults/all)))
       "a new :backoff false in triggers/defaults.edn must be added here deliberately, with its reason beside it"))
 
