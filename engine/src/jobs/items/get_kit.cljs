@@ -10,6 +10,7 @@
             [jobs.items.obtain.bill :as bill]
             [jobs.lib.armour :as armour]
             [jobs.lib.checks :as checks]
+            [jobs.lib.combat :as combat]
             [jobs.lib.cost.food :as food-cost]
             [jobs.lib.foods :as foods]
             [jobs.lib.need :as need]
@@ -26,7 +27,8 @@
   one piece after the other), with a :spend :job-time of ::job-time-s; the pieces are worn when it is done.
   While furnace material is still short (mining or smelting ahead; pure crafting needs no food) and fewer than
   the 3-day food reserve (60 points) are carried (harmful food does not count), one jobs.survival.get-food child (with :explore;
-  it fills the pack to its :carry default, the reserve) runs before the bill (:food false: none). A child that stops warns kit.no-food and the work goes on.
+  it fills the pack to its :carry default, the reserve) runs before the bill (:food false: none). A child that stops warns kit.no-food; with no food carried at all the kit stops {:reason :no-food} (no mining on an empty stomach).
+  With furnace material short and no weapon carried, one jobs.items.obtain child first makes a sword (iron, stone or wooden); if it cannot, kit.unarmed warns and the work goes on.
   Get a base first.
   A death since the job began (body memory :died) clears the children and the bill; the next round re-plans from
   what is carried. A death only keeps the job listed when it was submitted with :survive-death?.
@@ -196,6 +198,15 @@
       (or (= :done (:kind e)) (= :not-hungry cause)) nil
       :else {:cause cause :why (why-of e)})))
 
+(defn ^:async run-arm!
+  "One obtain child round for a sword (the best it can make): :continue, nil when armed, or {:cause :why} when it could not."
+  [c]
+  (let [e (await (ctx/call c :arm 'jobs.items.obtain {:any-of ["iron_sword" "stone_sword" "wooden_sword"] :count 1 :explore (:explore (:args c))}))]
+    (cond
+      (= :continue e) :continue
+      (= :done (:kind e)) nil
+      :else {:cause (contract/cause-key e) :why (why-of e)})))
+
 (defn ^:async round [c]
   (let [a (:args c)
         items (vec (:items a))
@@ -238,6 +249,17 @@
                   :else (do (ctx/update-mem! c assoc :covered-done true)
                             :again)))
 
+          (and (not (:armed (ctx/mem c))) (nil? (combat/best-weapon (:primitives c) combat/default-weapons))
+               (seq (bill/furnace-short version todo (:carried st))))
+          (let [r (await (run-arm! c))]
+            (if (= :continue r)
+              :continue
+              (do (ctx/update-mem! c assoc :armed true)
+                  (when r
+                    (ctx/emit! c :kit.unarmed :warn {:cause (:cause r) :why (:why r)
+                                                     :text (str "no sword could be made (" (name (:cause r)) "), going on unarmed")}))
+                  :again)))
+
           (and (:food a) (< fp food-cost/reserve-points) (not (:fed (ctx/mem c)))
                (seq (bill/furnace-short version todo (:carried st))))
           (let [r (await (run-food! c))]
@@ -246,8 +268,11 @@
               (do (ctx/update-mem! c assoc :fed true)
                   (when r
                     (ctx/emit! c :kit.no-food :warn {:cause (:cause r) :why (:why r) :food fp
-                                                     :text (str "no food found (" (name (:cause r)) "), going on with " fp " food points carried")}))
-                  :again)))
+                                                     :text (str "no food found (" (name (:cause r)) ")")}))
+                  (if (and r (zero? (foods/stock-points (:inv (state c)))))
+                    (finish! c items have (assoc (stop-of :nothing-possible {:reason :no-food} (str "no food carried and none found (" (name (:cause r)) "); mining ahead needs some"))
+                                                 :item (first todo)))
+                    :again))))
 
           (:bill-done (ctx/mem c))
           (finish! c items have (stop-of :nothing-possible {:reason :kit-incomplete} "the bill is carried but the kit is not complete") )

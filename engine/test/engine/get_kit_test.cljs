@@ -97,7 +97,7 @@
       (fn ^:async t []
         (let [w (-> (world [{:name "iron_ingot" :count 10}] {})
                     (update :recipes assoc "iron_chestplate" {:count 1 :needs {"iron_ingot" 8} :table true}))
-              s (start w {:items ["iron_helmet" "iron_chestplate" "iron_boots"] :explore false})]
+              s (start w {:items ["iron_helmet" "iron_chestplate" "iron_boots"] :explore false :food false})]
           (await (f/run-ticks s 200))
           (is (= #{"iron_helmet" "iron_boots"} (set (crafted s))))
           (is (= {"head" "iron_helmet" "feet" "iron_boots"} (worn s)))
@@ -109,7 +109,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world [{:name "stick" :count 2}] {})
-                       {:items ["iron_pickaxe" "iron_helmet" "iron_boots"] :explore false})]
+                       {:items ["iron_pickaxe" "iron_helmet" "iron_boots"] :explore false :food false})]
           (await (f/run-ticks s 120))
           (is (not-any? #{"iron_pickaxe" "iron_helmet" "iron_boots"} (crafted s)))
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
@@ -122,7 +122,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world [{:name "iron_ingot" :count 3} {:name "stick" :count 2}] {})
-                       {:items ["iron_pickaxe" "iron_helmet"] :explore false})]
+                       {:items ["iron_pickaxe" "iron_helmet"] :explore false :food false})]
           (await (f/run-ticks s 120))
           (is (= 1 (get (f/inv s) "iron_pickaxe")))
           (is (nil? (get (f/inv s) "iron_helmet")))
@@ -135,7 +135,7 @@
       (fn ^:async t []
         (let [w (-> (world [{:name "cobblestone" :count 2} {:name "stick" :count 3}] {})
                     (update :recipes assoc "stone_sword" {:count 1 :needs {"cobblestone" 2 "stick" 1} :table true}))
-              s (start w {:items ["stone_sword" "iron_pickaxe"] :explore false})]
+              s (start w {:items ["stone_sword" "iron_pickaxe"] :explore false :food false})]
           (await (f/run-ticks s 120))
           (is (= #{"stone_sword"} (set (crafted s))))
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
@@ -146,7 +146,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (world [] {:head {:name "iron_helmet" :count 1}})
-                       {:items ["iron_helmet" "iron_boots"] :explore false})]
+                       {:items ["iron_helmet" "iron_boots"] :explore false :food false})]
           (await (f/run-ticks s 40))
           (is (empty? (crafted s)))
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source :have ["iron_helmet"]}
@@ -186,13 +186,25 @@
           (is (= 1 (get (f/inv s) "iron_pickaxe")))
           (is (= :done (:status @(:out s)))))))))
 
-(deftest a-body-with-no-food-to-be-found-goes-on-with-the-work
+(deftest a-body-with-no-food-to-be-found-stops-before-the-mining
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (hungry-world [] 0) {:items ["iron_pickaxe"] :explore false})]
           (await (f/run-ticks s 80))
           (is (= 1 (count (f/events-of s :kit.no-food))) "asked once, not again")
+          (is (= {:status :stopped :item "iron_pickaxe" :reason :no-food}
+                 (select-keys @(:out s) [:status :item :reason]))))))))
+
+(deftest an-unarmed-body-makes-a-sword-before-the-mining
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (-> (world [{:name "cobblestone" :count 2} {:name "stick" :count 3} {:name "bread" :count 12}] {})
+                    (update :recipes assoc "stone_sword" {:count 1 :needs {"cobblestone" 2 "stick" 1} :table true}))
+              s (start w {:items ["iron_pickaxe"] :explore false})]
+          (await (f/run-ticks s 120))
+          (is (= #{"stone_sword"} (set (crafted s))))
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
                  (select-keys @(:out s) [:status :item :reason]))))))))
 
@@ -254,14 +266,14 @@
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
                  (select-keys @(:out s) [:status :item :reason]))))))))
 
-(deftest a-fed-body-with-no-food-source-goes-on-naming-no-carry
+(deftest a-fed-body-with-no-food-source-stops-naming-no-carry
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (start (hungry-world [] 20) {:items ["iron_pickaxe"] :explore false})]
           (await (f/run-ticks s 80))
           (is (= [:no-carry] (mapv :cause (f/events-of s :kit.no-food))))
-          (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
+          (is (= {:status :stopped :item "iron_pickaxe" :reason :no-food}
                  (select-keys @(:out s) [:status :item :reason]))))))))
 
 (defn raw-world
