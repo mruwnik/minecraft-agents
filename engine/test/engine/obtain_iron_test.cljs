@@ -253,6 +253,16 @@
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))))
           (is (seq (f/calls s "dig")) "a log was felled for the charcoal"))))))
 
+(deftest a-torch-with-no-coal-seen-is-made-from-charcoal-of-seen-logs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (ore-world (merge f/tree-blocks {"1,64,2" "furnace"}) [{:name "stick" :count 2}]) [f/own-zone])]
+          (await (obtain! s {:item "torch" :count 4 :ways #{:craft :smelt :gather}} 60))
+          (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))))
+          (is (seq (f/calls s "dig")) "a log was felled for the charcoal")
+          (is (seq (f/events-of s :smelt.loaded)) "the logs went in the furnace"))))))
+
 (deftest a-charcoal-smelt-burns-the-planks-kind-carried
   (async done
     (tu/run-async done
