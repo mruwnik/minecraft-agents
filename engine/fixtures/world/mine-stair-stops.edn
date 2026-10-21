@@ -56,6 +56,12 @@
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 220 :of-job true}
             {:no-event {:source :job :kind :child_ended :data {:ending {:cause {:reason :hazard}}}} :for-s 220 :of-job true
              :until {:source :job :kind #{:completed :stopped} :data {:stop [:any]}}}]}
+  {:name "unaccepted-gravel-in-the-first-step-turns-the-stair-to-another-heading"
+   ;; with nothing accepted, gravel over the first step is a :hazard on that heading only; a player digs down on another side
+   :blocks [[:fill [17 9 16] [17 10 16] "gravel"]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false :accept []})]]
+   :expect [{:event {:source :job :kind :mine.turned :data {:from "east" :stop :hazard}} :within-s 120 :of-job true}
+            {:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 220 :of-job true}]}
   {:name "water-in-the-first-step-of-a-given-heading-turns-the-stair"
    :blocks [[:set [17 9 16] "water"]]
    :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level #at [16 4 16] :count 1 :tunnel-length 3 :radius 8 :mend false :heading :east})]]
