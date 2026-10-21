@@ -85,7 +85,7 @@
           :already (ctx/update-mem! c dissoc :placing)
           (:occupied :need :no-item :no-support :unreachable)
           (ctx/update-mem! c #(cond-> (count-fail (dissoc % :placing) pos (if (= :need outcome) :no-item outcome) limit)
-                                (and (= :unreachable outcome) (#{:budget :no-progress} (:why (:data e)))) (update :needs-scaffold (fnil conj #{}) pos)
+                                (= :unreachable outcome) (update :needs-scaffold (fnil conj #{}) pos)
                                 (and (= :unreachable outcome) (= :budget (:why (:data e)))) (update :budget-streak (fnil inc 0))))
           (ctx/update-mem! c #(count-fail (dissoc % :placing) pos :refused limit)))))))
 

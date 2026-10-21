@@ -234,6 +234,8 @@
   (let [e (near/last-walk c)]
     (boolean (or (:inside-own-shelter (:data e)) (:inside-own-shelter (:cause e))))))
 
+(declare shut-in-walk?)
+
 (defn ^:async walk-stand!
   "Walk to stand beside cell with go-near options opts; a walk that is blocked (the stand is then bad), or an arrival
   with the cell unseen (:unloaded, :buried) or out of reach, counts a failure. Resolves to go-near's answer; :partial
@@ -245,7 +247,7 @@
       (ctx/update-mem! c #(cond-> (-> (walk-fail % (:pos cell) :unreachable limit (u/self-pos c))
                                       (update :bad-stands (fnil conj []) stand))
                             (= :budget (:why (:data (near/last-walk c)))) (update :budget-streak (fnil inc 0))
-                            (and (not (:dig? cell)) (#{:budget :no-progress} (:why (:data (near/last-walk c)))))
+                            (not (or (:dig? cell) (in-hole? c) (shut-in-walk? c)))
                             (update :needs-scaffold (fnil conj #{}) (:pos cell)))))
     (when (#{:there :partial} w) (ctx/update-mem! c dissoc :budget-streak))
     (when (and (= :there w) (nil? (:found cell)))

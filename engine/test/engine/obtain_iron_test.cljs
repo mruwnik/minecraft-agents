@@ -39,6 +39,12 @@
     (is (= 6 (get-in pl [:gather "sand"])))
     (is (some #(and (= :smelt (:op %)) (= "glass" (:item %))) (:steps pl)))))
 
+(deftest the-plan-for-a-white-bed-gathers-wool-or-string
+  (let [pl (recipes/plan game/default-version {"oak_planks" 3} "white_bed" 1 (assoc (table/source-opts) :gather? true))]
+    (is (= 3 (get-in pl [:gather "white_wool"])) (pr-str pl)))
+  (let [pl (recipes/plan game/default-version {"oak_planks" 3 "string" 12} "white_bed" 1 (assoc (table/source-opts) :gather? true))]
+    (is (= 0 (get-in pl [:gather "white_wool"] 0)) (pr-str pl))))
+
 (deftest raw-iron-is-mined-from-a-seen-iron-ore
   (async done
     (tu/run-async done

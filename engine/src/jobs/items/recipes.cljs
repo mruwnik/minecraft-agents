@@ -84,7 +84,9 @@
           deficit (- n use)]
       (cond
         (zero? deficit) st
-        (gathered? st item) (update-in st [:gather item] (fnil + 0) deficit)
+        (gathered? st item) (if-let [crafted (make rs (assoc st :gather? false) item deficit chain depth)]
+                              (-> crafted (assoc :gather? true) (update-in [:have item] - deficit))
+                              (update-in st [:gather item] (fnil + 0) deficit))
         :else (when-let [st (make rs st item deficit chain depth)]
                 (update-in st [:have item] - deficit))))))
 
