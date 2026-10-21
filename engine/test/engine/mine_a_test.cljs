@@ -211,7 +211,8 @@
         (let [sand (cells "sand" [6] [64] [-1 0 1 2])
               s (await (scenario {:block "sand" :count 4}
                                  {:blocks (merge floor sand) :unreachable (vec (keys sand))} 30))]
-          (is (= 4 (count (events-of s :mine.unreachable))))
+          (is (= [4] (map :cluster (events-of s :mine.unreachable))) "one event per touching cluster, not per block")
+          (is (empty? (filter (set (map #(mapv js/Number (clojure.string/split % #",")) (keys sand))) (dug-cells s))) "the unreachable ore is never dug")
           (is (zero? (:failures (job-mem s) 0)))
           (is (finished? s)))))))
 

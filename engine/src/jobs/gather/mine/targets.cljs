@@ -249,13 +249,25 @@
   (skip! c pos)
   (ctx/update-mem! c update :failures (fnil inc 0)))
 
+(defn cluster-of
+  "pos and the cells of targets joined to it by touching sides, edges or corners."
+  [pos targets]
+  (let [touching? (fn [a b] (and (not= a b) (every? #(<= (js/Math.abs (- (% a) (% b))) 1) [:x :y :z])))]
+    (loop [found #{pos} todo [pos]]
+      (if-let [cur (peek todo)]
+        (let [more (remove found (filter #(touching? cur %) targets))]
+          (recur (into found more) (into (pop todo) more)))
+        found))))
+
 (defn skip-unreachable!
-  "Skip a target the walk cannot reach (result/unreachable-walk?): no failure counted, so a vein of such cells never ends the run."
-  [c pos]
-  (ctx/emit! c :mine.unreachable :info {:pos (access/cell pos) :why (result/why (near/last-walk c))
-                                        :text (str "mine skips " (str/join "," (access/cell pos)) ": no way to stand beside it")})
-  (skip! c pos)
-  (ctx/update-mem! c update :unreached #(into (vec %) (remove (set %)) [(access/cell pos)])))
+  "Skip a target the walk cannot reach (result/unreachable-walk?) and the targets touching it: their stands are the same cells, so
+  the verdict holds. No failure counted, so a vein of such cells never ends the run."
+  [c pos targets]
+  (let [cluster (cluster-of pos targets)]
+    (ctx/emit! c :mine.unreachable :info {:pos (access/cell pos) :why (result/why (near/last-walk c)) :cluster (count cluster)
+                                          :text (str "mine skips " (str/join "," (access/cell pos)) (when (> (count cluster) 1) (str " and " (dec (count cluster)) " touching") ) ": no way to stand beside it")})
+    (doseq [cell cluster] (skip! c cell))
+    (ctx/update-mem! c update :unreached #(into (vec %) (remove (set %)) (map access/cell cluster)))))
 
 (defn stall-rounds [] (settings/get settings ::stall-rounds))
 

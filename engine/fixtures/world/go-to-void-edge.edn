@@ -13,4 +13,14 @@
    :blocks [[:fill [13 -6 0] [89 -1 31] "air"]]
    :act [[:job (jobs.movement.go-to {:pos #at [60 0 16] :range 1 :unknown true :ways #{:walk}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 100 :of-job true}]
-   :after [[:body-far [60.5 0 16.5] 20]]}]}
+   :after [[:body-far [60.5 0 16.5] 20]]}
+  {:name "mine-ore-cluster-over-a-void-is-given-up-at-once"
+   ;; Card 3bd3b848: a 3x3x3 ore cluster floats beyond the cliff. The first block with no way to stand beside it skips
+   ;; the whole touching cluster: one mine.unreachable, not one per block (25 walks of ~1.5 s each).
+   ;; The body may still pillar up to a block from the void floor and finish; either end is fine within the limit.
+   :body {:at [2.5 0 16.5] :settle-s 2 :inventory [["stone_pickaxe" 1]]}
+   :blocks [[:fill [13 -6 0] [89 -1 31] "air"] [:fill [40 0 15] [42 2 17] "iron_ore"]]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :count 1 :radius 40 :ways #{:seen}})]]
+   :expect [{:event {:source :job :kind :mine.unreachable} :within-s 40 :of-job true}
+            {:event {:source :job :kind #{:completed :stopped}} :within-s 40 :of-job true}]
+   :limit-s 60}]}

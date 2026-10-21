@@ -197,7 +197,7 @@
                 s (start {:world {:blocks (cells "sand" [15] [64] [-1 0 1 2])} :jobs (assoc registry/jobs 'jobs.movement.go-to stub)})]
             (core/submit! (:eng s) (spec {:block "sand" :count 4 :ways #{:seen}}) {})
             (await (run-ticks s 60))
-            (is (= 4 (count (events-of s :mine.unreachable))) (str why))))))))
+            (is (= [4] (map :cluster (events-of s :mine.unreachable))) (str why))))))))
 
 ;; Juniper j754: the walk to an ore waited for day for ever (go-to at night); mine gave the round back for 12 minutes.
 (deftest a-walk-that-keeps-waiting-is-skipped-after-the-stall-rounds

@@ -278,7 +278,7 @@
                     (cond
                       (= :cut cut) (do (ctx/update-mem! c update :target-cut (fnil conj #{}) cell) :again)
                       (= :partial cut) :continue
-                      (and (= :blocked walked) (result/unreachable-walk? (near/last-walk c))) (do (skip-unreachable! c pos) :again)
+                      (and (= :blocked walked) (result/unreachable-walk? (near/last-walk c))) (do (skip-unreachable! c pos targets) :again)
                       (= :blocked walked) (let [w (near/last-walk c)]
                                             (ctx/emit! c :mine.walk-failed :info {:pos (access/cell pos) :why (result/why w) :cause (contract/cause-key w)
                                                                                   :text (str "mine's walk to " (str/join "," (access/cell pos)) " gave up (" (result/why w) "); it skips the target and counts a failure")})
