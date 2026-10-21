@@ -2,11 +2,12 @@
 ;; never started again. Lit grass plot (no sky); the water comes from the bucket carried.
 ;; Should-succeed: with a hoe, seed, a water bucket and bone meal carried the job picks a spot, tills, sows, bone-meals and cuts (wheat carried);
 ;; with only a hoe it breaks grass for seed first (seed comes by chance, so the field is 2 x 2).
+;; The plot is 14 high: find-spot scans 12 above the body, and a ceiling inside that reach covers the ground.
 ;; Should-fail: a young crop already standing keeps the job waiting; it sows nothing and makes no second field.
 {:defaults
  {:tags [:farm :grow :jobs]
   :time :any
-  :plot {:light :lit :floor "grass_block" :height 6}
+  :plot {:light :lit :floor "grass_block" :height 14}
   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]
          :inventory [["wooden_hoe" 1] ["wheat_seeds" 9] ["water_bucket" 1] ["bone_meal" 24]]}
   :limit-s 400}
