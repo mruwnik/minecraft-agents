@@ -223,6 +223,17 @@
                          n (first (filter #(= :seen (:kind %)) (file-notes s)))]
                      (is (= 100000 (- (:until n) (:t n))))))))))))
 
+(deftest a-searched-note-for-farm-animals-lasts-the-short-animal-ttl
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [notes-of (fn ^:async notes-of* [target] (let [s (await (search! {:target target :settings {:jobs.explore.search/max-legs 0}} {:blocks (ground 36)}))]
+                                              (first (filter #(= :searched (:kind %)) (file-notes s)))))
+              animal (await (notes-of "cow"))
+              block (await (notes-of "diamond_block"))]
+          (is (= 120000 (- (:until animal) (:t animal))))
+          (is (= 86400000 (- (:until block) (:t block)))))))))
+
 (deftest the-whole-search-is-one-round
   (async done
     (tu/run-async done

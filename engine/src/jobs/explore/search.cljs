@@ -45,7 +45,7 @@
   Legs are ::spacing apart: :spiral points on rings round the origin, the one nearest the body first (so a body in a corridor walks on), or :outward ahead along :heading (a :heading alone means :outward), then the sides, and on further ahead once those are tried or searched. A
   leg is never tried twice and never goes beyond the max-distance setting (XZ) of the origin. It is skipped (:skipped)
   when a live :searched note of any body, this one included, listing every target name lies within half its
-  radius; with :use-notes false only a note this job made counts.
+  radius (a note for farm animals lasts only ::animal-searched-ttl-s, they wander); with :use-notes false only a note this job made counts.
 
   A leg needs a standing cell in its column from 12 above the feet down to :descent (40) below, read top down through leaves. An unloaded,
   wet or standless column is recorded failed (:not-loaded, :wet, :no-surface, :unseen) and the next candidate is tried
@@ -101,6 +101,7 @@
    ::stale-s {:default 60 :doc "Seconds after which an animal last seen is reported with how long ago, not as in view." :spec (a/num-in 0 nil)}
    ::entity-ttl-s {:default 600 :doc "Seconds a note of an entity seen lasts." :spec (a/num-in 0 nil)}
    ::searched-ttl-s {:default 86400 :doc "Seconds a note of searched ground lasts." :spec (a/num-in 0 nil)}
+   ::animal-searched-ttl-s {:default 120 :doc "Seconds a note of ground searched for farm animals lasts: they wander, so old ground is looked at again." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds from the first round before a search gives up." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 3600 :doc "Seconds from the first round before a search gives up, waits included." :spec (a/num-in 0 nil)}
    ::max-failed-in-row {:default 3 :doc "Failed attempts in a row before the search gives up." :spec (a/int-in 0 nil)}
@@ -374,7 +375,7 @@
   (let [{:keys [scan-radius] want :count} (:args c)
         seen-ttl-s (settings/get settings ::seen-ttl-s)
         entity-ttl-s (settings/get settings ::entity-ttl-s)
-        searched-ttl-s (settings/get settings ::searched-ttl-s)
+        searched-ttl-s (settings/get settings (if (surface-only? names) ::animal-searched-ttl-s ::searched-ttl-s))
         seen #(vec (takeable c (sense (:primitives c) names scan-radius)))
         short? #(< (count (add-found (:found (ctx/mem c) []) (seen) want)) want)
         _ (when (short?)
