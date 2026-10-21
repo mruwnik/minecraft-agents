@@ -1,0 +1,25 @@
+;; Card d790ad75: a flight on a sand floor (desert) walks away at once: go-to never answers goal-not-standable for a flee
+;; step onto sand, and the body never holds "cornered" with open sand all round. Second case: the body stands in a
+;; one-deep pit it dug in the sand, the chaser on the rim side.
+{:defaults
+ {:tags [:hostile :movement]
+  :time :any
+  :mobs :keep
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile)}]
+  :plot {:height 12 :length 64 :width 64 :floor "sand"}
+  :body {:at [40.5 0 32.5] :effects [["resistance" 900 4]]}
+  :limit-s 100}
+ :cases
+ [{:name "flat-sand-flees-a-zombie"
+   :act [[:summon "zombie" [46.5 0 32.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:decision :flee}} :within-s 20}
+            {:no-event {:source :job :kind :holding :data {:reason "cornered"}} :for-s 12}
+            {:no-event {:source :job :kind :planned :data {:why "goal-not-standable"}} :for-s 12}]}
+  {:name "pit-on-sand-flees-a-zombie"
+   :blocks [[:set [40 -1 32] "air"]]
+   :body {:at [40.5 -1 32.5]}
+   :act [[:summon "zombie" [46.5 0 32.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:decision :flee}} :within-s 20}
+            {:no-event {:source :job :kind :holding :data {:reason "cornered"}} :for-s 12}
+            {:no-event {:source :job :kind :planned :data {:why "goal-not-standable"}} :for-s 12}]}]}
