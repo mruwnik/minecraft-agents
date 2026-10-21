@@ -4,6 +4,7 @@
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [jobs.lib.checks :as checks]
+            [jobs.lib.combat :as combat]
             [jobs.lib.dawn :as dawn]
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.ledger :as ledger]
@@ -24,7 +25,7 @@
   dug, a pit climbed, the shelter's valuable blocks taken back), no doorway the night filled (still holding a block it
   put there) to dig again, no bed it put down outside its own zones (not the respawn bed) to dig up, no drop to walk
   over. A shelter with no way out ends nothing-possible :no-way-out (the cell is remembered as :shelter-trapped, so the
-  trigger lets go). A shelter it left is remembered the same way, so a walk back through its cell is no new dawn. A body shut in stays while a known hostile is near and the dawn grace lasts (night.dawn-hold).
+  trigger lets go). A shelter it left is remembered the same way, so a walk back through its cell is no new dawn. A body shut in stays while a known hostile is near and the dawn grace lasts (night.dawn-hold; longer with no weapon carried).
   A doorway cell it could not open is warned night.doorway-stuck once and tried again quietly.
   The doorway blocks and the bed are scaffold-ledger entries (purposes :doorway, :bed); one jobs.access.cleanup call takes them back.
   Memory: job memory :dig-out, :take-back; body memory :shelter-trapped, :doorway-stuck-warned.")
@@ -110,7 +111,7 @@
         doorway (sh-beds/doorway-to-open p (ctx/view c))
         shelter (or doorway (dig-leave/sheltered-in c))]
     (cond
-      (and shelter (dawn/hostile-hold? p))
+      (and shelter (dawn/hostile-hold? p (boolean (combat/best-weapon p (combat/weapons c)))))
       (do (when-not (:dawn-noted (ctx/mem c))
             (ctx/update-mem! c assoc :dawn-noted true)
             (ctx/emit! c :night.dawn-hold :info {:text "first light, but a hostile is known near the shelter; staying in until it is gone or the grace is over"}))

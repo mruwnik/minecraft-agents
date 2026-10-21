@@ -151,7 +151,7 @@
 ;; ------------------------------------------------------------------ dawn exit
 
 (def first-light 200)
-(def grace-passed 3000)
+(def grace-passed 7000)
 (def far-zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 12 :y 64 :z 2}})
 
 (defn ^:async held-in-then-out
