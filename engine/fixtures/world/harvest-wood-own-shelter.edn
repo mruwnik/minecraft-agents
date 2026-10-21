@@ -2,7 +2,7 @@
 ;; no tree written off) while the night lasts, then the dawn lets go-to out of the shelter and the tree is felled.
 ;; Sky plot at night (the real clock decides when the shelter opens). Stone room x 14..18, z 14..18, roof y 2, glass east wall so the
 ;; oak at x 36 (torches beside it: lit trees are seen at night, 20 blocks off the body so its feet stay dark) is in sight; :shelter memory at the body's cell. A pickaxe is carried for the way out.
-;; Should-succeed: harvest-wood does not stop before dawn; after [:time-set 1000] the body leaves the shelter and the oak is felled and the job ends :completed (stair blocks the cleanup cannot reach are left held, not a failure). Should-fail: the job stops :tree-unreachable.
+;; Should-succeed: harvest-wood does not stop before dawn; after [:time-set 1000] the body leaves the shelter and the oak is felled and the job ends :completed. By day (second case) the shelter, which records no door or pit start, is left through the wall at ground level: no stair is laid up into the air. Should-fail: the job stops :tree-unreachable.
 {:defaults
  {:tags [:forestry :harvest-wood :fell-tree :shelter :night]
   :time :night :time-why :dawn-decision
@@ -24,4 +24,10 @@
             {:no-event {:source :job :kind :stopped :data {:reason :tree-unreachable}} :for-s 150 :until {:source :job :kind :completed}}
             {:event {:source :job :kind :completed} :within-s 190 :of-job true}]
    :limit-s 200
-   :after [[:block [36 0 16] "air"]]}]}
+   :after [[:block [36 0 16] "air"]]}
+  {:name "own-shelter-by-day-is-left-through-the-wall-at-the-floor"
+   :time :any :time-why nil
+   :act [[:job (jobs.forestry.harvest-wood {:count 1 :radius 24})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 190 :of-job true}]
+   :limit-s 200
+   :after [[:block [36 0 16] "air"] [:block [19 2 16] "air"] [:block [20 3 16] "air"]]}]}

@@ -277,6 +277,18 @@
           (is (= [:done :out] ((juxt :status :reason) @out)) "leave! ends, it does not step in and out of the door")
           (is (<= 64 (second (feet p))) "up out of the pit"))))))
 
+(deftest a-roofed-room-with-no-door-or-start-is-left-through-the-wall-at-the-floor-not-by-a-stair-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [room (into {} (for [[x z] [[1 0] [-1 0] [0 1] [0 -1]] y [64 65]] [(str x "," y "," z) "stone"]))
+              {:keys [eng p out] :as s} (setup {:blocks (assoc (merge (ground) room) "0,66,0" "stone") :self {:pos {:x 0.5 :y 64 :z 0.5}} :inventory dirt-kit})]
+          (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built} {:cap 10 :ttl 1200000})
+          (await (leave-at-dawn! s))
+          (is (= [:done :out] ((juxt :status :reason) @out)))
+          (is (= 64 (second (feet p))) "out at ground level")
+          (is (empty? (calls p "place")) "no stair step was laid"))))))
+
 (defn have [p item]
   (->> (array-seq (.-inventory (.self p))) (filter #(= item (.-name %))) (map #(.-count %)) (reduce + 0)))
 

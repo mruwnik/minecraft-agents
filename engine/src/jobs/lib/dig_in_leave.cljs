@@ -9,6 +9,7 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.escape :as escape]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]))
 
@@ -175,6 +176,45 @@
           (skip-cell! c cell (keyword (.-status r))))
         :continue))))
 
+(defn level-exit
+  "{:heading :cells :through} for the first heading (nearest toward first) not yet tried (leave-mem :level-tried) whose wall
+  is at most escape/max-door thick, has a floor beyond at the feet's level and may be dug here; else nil."
+  [c toward]
+  (let [p (:primitives c)
+        feet (sh-sense/feet p)
+        cell [(:x feet) (:y feet) (:z feet)]
+        block-at (escape/block-at-of p)
+        tried (:level-tried (leave-mem c))]
+    (some (fn [h]
+            (when-not (contains? tried h)
+              (let [d (get headings h)
+                    {:keys [cells through] :as door} (escape/door block-at (escape/unseen-of p) cell d (escape/max-door))]
+                (when (and door (not-any? #(tidy/refusal c :dig (zipmap [:x :y :z] %)) cells))
+                  {:heading h :cells cells :through through}))))
+          (heading-order feet toward))))
+
+(defn ^:async level-exit!
+  "One step of walking out of a shelter that records neither a door nor a pit start, at the floor through the wall as a
+  player would, not by a stair up: digs the exit's solid cells, then steps through. nil when no wall can be dug (the
+  stair is the way)."
+  [c toward]
+  (let [p (:primitives c)
+        e (or (:exit (leave-mem c)) (level-exit c toward))]
+    (when e
+      (update-leave! c assoc :exit e)
+      (if-let [cell (first (filter #(sh-sense/solid-at? p (zipmap [:x :y :z] %)) (:cells e)))]
+        (let [pos (zipmap [:x :y :z] cell)
+              _ (await (tools/equip-for! c (u/seen-name p pos) {:fast true}))
+              r (await (tidy/dig! c pos))]
+          (when-not (= "dug" (.-status r))
+            (update-leave! c #(-> % (update :level-tried (fnil conj #{}) (:heading e)) (dissoc :exit))))
+          :continue)
+        (let [[x y z] (:through e)]
+          ;; raw moveTo kept: a step through the hole the job just dug, range 0.5; the planner has no standable goal in its own wall.
+          (await (ctx/act c :moveTo (clj->js {:pos {:x x :y y :z z} :range 0.5})))
+          (update-leave! c #(-> % (update :level-tried (fnil conj #{}) (:heading e)) (dissoc :exit)))
+          :continue)))))
+
 (defn ^:async climb!
   "One stair attempt out of a pit (jobs.access.stair :up, a child of the caller): to the :start height, or with no
   :start one step at a time until nothing solid is within sh-sense/default-roof-height above, at most max-climb steps. A
@@ -241,4 +281,5 @@
        (not shut?) (leave-result! c :done :out (select-keys (leave-mem c) [:heading]))
        why (leave-result! c :stopped :unsafe {:why why})
        (some #(sh-sense/solid-at? p %) (:door entry)) (await (open-door! c (:door entry)))
+       (and (not (:start entry)) (not (:door entry)) (or (:exit (leave-mem c)) (level-exit c toward))) (await (level-exit! c toward))
        :else (await (climb! c entry toward))))))
