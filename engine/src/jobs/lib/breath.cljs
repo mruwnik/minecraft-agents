@@ -185,26 +185,55 @@
                         (filter open?))]
           (recur next (into seen next)))))))
 
-(defn flood-air
-  "The nearest cell whose feet are seen water or air and whose head cell is air, joined to the feet by seen water and air
-  (a flooded stair has no air in any straight column), within radius sideways and reach above, not in the feet column (swum up directly); nil if none or all are in
-  failed. Cells are read as nearest-air reads them."
-  [p self-pos radius reach failed]
+(defn unseen-beside-joined
+  "Up to limit cells never seen that touch the joined cells (see joined-cells), nearest toward (a cell, or the feet) first:
+  where a flooded stair goes on out of sight, to be looked at."
+  [p fx fy fz radius reach limit toward]
+  (let [joined (joined-cells p fx fy fz radius reach)
+        in-range? (fn [{:keys [x y z]}] (and (<= (js/Math.abs (- x fx)) radius) (<= (js/Math.abs (- z fz)) radius) (<= (dec fy) y (+ fy reach))))
+        {tx :x ty :y tz :z} (or toward {:x fx :y fy :z fz})
+        dist (fn [{:keys [x y z]}] (+ (js/Math.abs (- x tx)) (js/Math.abs (- y ty)) (js/Math.abs (- z tz))))]
+    (->> (for [c joined [dx dy dz] neighbours] (-> c (update :x + dx) (update :y + dy) (update :z + dz)))
+         distinct
+         (remove joined)
+         (filter in-range?)
+         (filter #(nil? (seen-water-name p %)))
+         (sort-by dist)
+         (take limit))))
+
+(def flood-cells
+  "Most cells find-joined looks at."
+  6000)
+
+(defn find-joined
+  "The nearest cell, by steps through seen water and air cells joined to the feet (a flooded stair has no straight
+  column), within radius sideways and reach above, for which (found? cell) holds; nil if none."
+  [p self-pos radius reach found?]
   (let [fx (js/Math.floor (:x self-pos)) fy (js/Math.floor (:y self-pos)) fz (js/Math.floor (:z self-pos))
-        skip (set failed)
         open? (fn [{:keys [x y z] :as cell}]
                 (and (<= (js/Math.abs (- x fx)) radius) (<= (js/Math.abs (- z fz)) radius) (<= (dec fy) y (+ fy reach))
                      (passable-water-or-air? (seen-water-name p cell))))
-        surface? (fn [cell] (and (not (contains? skip cell)) (not (and (= fx (:x cell)) (= fz (:z cell)))) (air? (seen-water-name p (update cell :y inc)))))
         start {:x fx :y fy :z fz}]
     (loop [frontier [start] seen #{start}]
-      (when (and (seq frontier) (< (count seen) 6000))
-        (or (first (filter surface? frontier))
+      (when (and (seq frontier) (< (count seen) flood-cells))
+        (or (first (filter found? frontier))
             (let [next (->> (for [c frontier [dx dy dz] neighbours] (-> c (update :x + dx) (update :y + dy) (update :z + dz)))
                             (remove seen)
                             distinct
                             (filter open?))]
               (recur next (into seen next))))))))
+
+(defn flood-air
+  "The nearest cell whose feet are seen water, or air over a seen block, and whose head cell is air, found by find-joined,
+  not in the feet column (swum up directly) and not in failed; nil if none."
+  [p self-pos radius reach failed]
+  (let [skip (set failed)
+        fx (js/Math.floor (:x self-pos)) fz (js/Math.floor (:z self-pos))]
+    (find-joined p self-pos radius reach
+                 (fn [cell] (and (not (contains? skip cell)) (not (and (= fx (:x cell)) (= fz (:z cell))))
+                                 (air? (seen-water-name p (update cell :y inc)))
+                                 (or (contains? swimmable (seen-water-name p cell))
+                                     (let [below (seen-water-name p (update cell :y dec))] (and below (not (air? below))))))))))
 
 (defn nearest-air
   "The surface cell of the nearest column within radius that reaches air, not one of failed (a seq of cells); nil if none.

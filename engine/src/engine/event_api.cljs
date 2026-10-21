@@ -322,7 +322,7 @@
      :updated-at (:updated-at request)}))
 
 (defn status
-  "The compact status view: mode, position, health, food, the current job, up to limit queued jobs,
+  "The compact status view: mode, position, health, food, air (oxygen) and in-water (online only), the current job, up to limit queued jobs,
   failed jobs, outstanding attention requests and the event cursor. extras is {status-key (fn [memory-view])}:
   each result is added under its key (job-side facts, e.g. a death summary)."
   ([eng requested-limit] (status eng requested-limit nil))
@@ -356,6 +356,8 @@
      :last-known (when known true)
      :health (let [h (if known (:health known) (.-health self))] (when (number? h) h))
      :food (let [f (if known (:food known) (.-food self))] (when (number? f) f))
+     :air (when-not known (let [o (.-oxygen self)] (when (number? o) o)))
+     :in-water (when-not known (when (boolean? (.-inWater self)) (.-inWater self)))
      :current (when current
                 (when-let [summary (job-summary s current-id nil (:id (core/running eng)))]
                   (assoc summary

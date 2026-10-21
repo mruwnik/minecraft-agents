@@ -93,6 +93,21 @@
                (<= ms (* (cap-dig-share) (breath/air-left-ms (.self p)))))
       ms)))
 
+(def ^:private edge-looks
+  "Cells looked at per round beside the water joined to the body, and the rounds."
+  {:cells 6 :rounds 4})
+
+(defn ^:async look-along-water!
+  "Look at the unseen cells beside the water joined to the body, nearest toward (a cell or nil) first, so a flooded stair
+  that goes on out of sight, or flows, is read before the body swims it; true when it looked at any."
+  [c pos toward]
+  (let [p (:primitives c)
+        cells (breath/unseen-beside-joined p (js/Math.floor (:x pos)) (js/Math.floor (:y pos)) (js/Math.floor (:z pos))
+                                           (swim/air-radius) (swim/air-radius) (:cells edge-looks) toward)
+        unseen (filterv #(look/unknown? p [(:x %) (:y %) (:z %)]) cells)]
+    (doseq [cell unseen] (await (look/look-at! c [(:x cell) (:y cell) (:z cell)])))
+    (boolean (seq unseen))))
+
 (defn ^:async go-air!
   "Drowning with no air near: a go-to child to the nearest air-reaching surface within the air-radius setting (also the
   air at the top of a flooded stair, joined by seen water, however high), else to the nearest
@@ -104,8 +119,14 @@
   (let [p (:primitives c)
         pos (u/self-pos c)
         failed (:failed-air (ctx/mem c))
-        surface (or (breath/nearest-air p pos (swim/air-radius) (swim/reach) failed false)
-                    (breath/flood-air p pos (swim/air-radius) (swim/air-radius) failed))
+        column (fn [] (breath/nearest-air p pos (swim/air-radius) (swim/reach) failed false))
+        find-surface #(or (column) (breath/flood-air p pos (swim/air-radius) (swim/air-radius) failed))
+        surface (loop [k 0]
+                  (let [found (find-surface)]
+                    (if (and (< k (:rounds edge-looks)) (await (look-along-water! c pos found)))
+                      (recur (inc k))
+                      found)))
+        stair? (and surface (nil? (column)))
         pocket (when-not surface (breath/nearest-pocket p pos (swim/air-radius) (depth) failed))
         swim-ms (* (:steps pocket 0) (breath/swim-ms))
         pocket? (and pocket
@@ -114,7 +135,9 @@
         target (or surface (when pocket? (:cell pocket)))]
     (if-not target
       :none
-      (let [arrived? (await (go! c :air target 0))]
+      (let [arrived? (or (await (go! c :air target 0))
+                         ;; raw moveTo kept: the go-to planner may find no route up a flooded stair it cannot see whole (range 0, no time for a plan)
+                         (and stair? (= "arrived" (swim/status (await (ctx/act c :moveTo (clj->js {:pos {:x (+ 0.5 (:x target)) :y (:y target) :z (+ 0.5 (:z target))} :range 0 :timeoutS 6})))))))]
         (ctx/update-mem! c update :failed-air (fnil conj []) target)
         ;; a pocket below is the way the body came, not open water: no shore to head for from it
         (when arrived? (ctx/update-mem! c #(cond-> (dissoc % :best-y) surface (assoc :surfaced true))))

@@ -87,6 +87,8 @@
        :died (when (:died s) (died-view (:died s)))
        :health (:health s)
        :food (:food s)
+       :air (:air s)
+       :in-water (when (:in-water s) true)
        :current (when current (job-view current))
        :exclusive (when exclusive (clean-pairs :job (:job exclusive) :name (clip (:name exclusive) 80)))
        :jobs (when (nonzero queued-total)

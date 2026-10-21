@@ -870,6 +870,12 @@
          (:offline (observe-status/compact-status {:mode :offline :offline {:by :shelter :job "j563" :why :logged-out-for-night :back-at 1020000}} 1020000))))
   (is (not (contains? (observe-status/compact-status {:mode :scheduled}) :offline))))
 
+(deftest compact-status-shows-air-and-in-water-only-when-in-water
+  (let [out (observe-status/compact-status {:mode :scheduled :air 12 :in-water true})]
+    (is (= 12 (:air out)))
+    (is (true? (:in-water out))))
+  (is (not (contains? (observe-status/compact-status {:mode :scheduled :air 20 :in-water false}) :in-water))))
+
 (deftest compact-status-says-how-long-until-a-planned-return-and-marks-last-known-readings
   (let [s {:mode :offline :offline {:by :shelter :why :logged-out-for-night :back-at 1020000}
            :position {:x 1.04 :y 64 :z 2} :health 18 :food 15 :last-known true}

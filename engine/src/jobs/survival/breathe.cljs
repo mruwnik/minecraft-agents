@@ -191,29 +191,13 @@
           (filter #(and (shore/standable? p %) (keep? p %)))
           first))))
 
-(def flood-cells
-  "Most cells reachable-land looks at."
-  6000)
-
 (defn reachable-land
   "The nearest dry stand cell joined to the body by seen water and air cells (a flooded stair or shaft, however far up),
   within radius sideways and radius above the feet; nil if none. nearest-land only reads columns near the feet's height."
   [p self-pos radius failed]
-  (let [fx (js/Math.floor (:x self-pos)) fy (js/Math.floor (:y self-pos)) fz (js/Math.floor (:z self-pos))
-        skip (set failed)
-        open? (fn [{:keys [x y z] :as cell}]
-                (and (<= (js/Math.abs (- x fx)) radius) (<= (js/Math.abs (- z fz)) radius) (<= (dec fy) y (+ fy radius))
-                     (breath/passable-water-or-air? (breath/seen-water-name p cell))))
-        land? (fn [cell] (and (not (contains? skip cell)) (bs/air (u/seen-name p cell)) (shore/standable? p cell)))
-        start {:x fx :y fy :z fz}]
-    (loop [frontier [start] seen #{start}]
-      (when (and (seq frontier) (< (count seen) flood-cells))
-        (or (first (filter land? frontier))
-            (let [next (->> (for [c frontier [dx dy dz] breath/neighbours] (-> c (update :x + dx) (update :y + dy) (update :z + dz)))
-                            (remove seen)
-                            distinct
-                            (filter open?))]
-              (recur next (into seen next))))))))
+  (let [skip (set failed)]
+    (breath/find-joined p self-pos radius radius
+                        (fn [cell] (and (not (contains? skip cell)) (bs/air (u/seen-name p cell)) (shore/standable? p cell))))))
 
 (def headings
   "Swim headings [dx dz], east first, then south, west, north, then the diagonals."

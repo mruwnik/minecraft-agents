@@ -66,6 +66,15 @@
     (is (= #{:commit :started-at} (set (keys (:build view)))))
     (is (number? (:started-at (:build view))))))
 
+(deftest status-of-an-online-body-shows-its-air-and-whether-it-is-in-water
+  (let [view (event-api/status
+              (status-engine #js {:isOffline (fn [] false) :isSettling (fn [] false)
+                                  :self (fn [] #js {:oxygen 12 :inWater true})}
+                             {} nil)
+              nil)]
+    (is (= 12 (:air view)))
+    (is (true? (:in-water view)))))
+
 (deftest read-commit-reads-the-build-id-beside-the-bundle
   (let [dir (fs/mkdtempSync (path/join (.tmpdir (js/require "os")) "build-id-"))]
     (is (nil? (build/read-commit dir)))
