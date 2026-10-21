@@ -31,6 +31,13 @@
    :expect [{:event {:source :job :kind :completed :data {:text [:contains "already carried 1 stone_pickaxe"]}} :within-s 40 :of-job true}]
    :after [[:item "stone_pickaxe" 1]]
    :limit-s 60}
+  ;; card ea827c9b: a tag recipe takes any mix of woods (vanilla), not 8 of one species
+  {:name "chest-from-seven-cherry-and-one-oak-planks-at-a-table"
+   :blocks [[:set [24 0 16] "crafting_table"]]
+   :body {:inventory [["cherry_planks" 7] ["oak_planks" 1]]}
+   :act [[:job (jobs.items.craft {:item "chest" :ways #{:carried}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
+   :after [[:item "chest" 1]]}
   {:name "white-bed-short-of-planks-and-no-table-is-not-crafted"
    :body {:inventory [["white_wool" 3] ["oak_planks" 1]]}
    :act [[:job (jobs.items.craft {:item "white_bed" :ways #{:carried}})]]

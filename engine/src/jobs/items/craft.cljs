@@ -116,10 +116,12 @@
       (apply contract/later :crafting (str "craft: " made " of " count " " item) data))))
 
 (defn spendable
-  "{name n} of the ingredients this call may use: carried less what the register holds, the item made counted whole."
-  [c]
-  (let [item (:item (:args c))]
-    (assoc (storage/carried-totals (reserve/free c :craft)) item (storage/usable-carried (u/inventory (:primitives c)) item))))
+  "{name n} of the ingredients this call may use: carried less what the register holds, the item made counted whole.
+  Members of an interchange class (planks of any wood) count at the class total unless raw?."
+  [c & [raw?]]
+  (let [item (:item (:args c))
+        free (storage/carried-totals (reserve/free c :craft))]
+    (assoc (if raw? free (recipes/pooled (game/version-of (:primitives c)) free)) item (storage/usable-carried (u/inventory (:primitives c)) item))))
 
 (defn quote-of
   "P: the cheapest recipe for the rest of :count of :item from what is carried. It uses its ingredients (net of the item
@@ -348,7 +350,7 @@
         needs (for [r rs :let [b (recipes/ceil-div todo (:count r))]]
                 (into {} (map (fn [[k v]] [k (* v b)])) (dissoc (:needs r) item)))]
     (when (and (seq needs) (every? #(seq (craft/missing-for % have)) needs))
-      (await (short! c item (craft/no-item needs have) have (- (get have item 0) start))))))
+      (await (short! c item (craft/no-item needs have) (spendable c true) (- (get have item 0) start))))))
 
 (defn ^:async short-from!
   "short! for a craft call that answered no-item."

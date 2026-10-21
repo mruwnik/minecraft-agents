@@ -15,7 +15,8 @@
   (lacking version have item n) says why a craft cannot start."
   (:require ["minecraft-data" :as minecraft-data]
             [jobs.lib.game-facts :as facts]
-            [clojure.string]))
+            [clojure.string]
+            [clojure.set]))
 
 (def table-item "crafting_table")
 
@@ -45,6 +46,42 @@
                             acc)))
                       acc (array-seq rs)))
             {} (js/Object.entries (.-recipes md)))))
+
+(defn slots-of
+  "The ingredient ids of a recipe, in slot order (-1 for an empty cell)."
+  [r]
+  (if (.-inShape r)
+    (map #(or (id-of %) -1) (mapcat array-seq (array-seq (.-inShape r))))
+    (map #(or (id-of %) -1) (array-seq (.-ingredients r)))))
+
+(defn interchange-classes
+  "{name #{names}} for a version: items that stand in the same slot of recipes making the same result in the same layout
+  (every plank species in a chest). Vanilla takes any member of such a tag in each slot, so carried members add up."
+  [version]
+  (let [md (minecraft-data version)
+        name-of (fn [id] (some-> (aget (.-items md) id) .-name))
+        groups (group-by (fn [r] [(id-of (.-result r)) (map #(= -1 %) (slots-of r))])
+                         (mapcat (comp array-seq second) (js/Object.entries (.-recipes md))))
+        pairs (for [rs (vals groups) :when (> (count rs) 1)
+                    slot (apply map vector (map slots-of rs))
+                    :let [names (set (keep name-of (remove #{-1} slot)))]
+                    :when (> (count names) 1)]
+                names)
+        merged (reduce (fn [classes names]
+                         (let [hit (filter #(seq (clojure.set/intersection % names)) classes)]
+                           (conj (remove (set hit) classes) (apply clojure.set/union names hit))))
+                       [] pairs)]
+    (into {} (for [cls merged n cls] [n cls]))))
+
+(def interchange (memoize interchange-classes))
+
+(defn pooled
+  "have with every member of an interchange class counted at the class total: a recipe asking one species of plank is
+  satisfied by a mix. Enough to judge whether a craft can start, not to plan several crafts from one stock."
+  [version have]
+  (let [classes (interchange version)]
+    (reduce (fn [acc [n cls]] (if-let [c (get classes n)] (assoc acc n (reduce + 0 (map #(get have % 0) c))) acc))
+            have have)))
 
 (def recipes-for (memoize recipes-of))
 

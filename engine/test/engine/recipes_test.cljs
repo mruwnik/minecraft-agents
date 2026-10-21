@@ -102,3 +102,8 @@
 (deftest lacking-asks-for-the-torch-fuel-carried
   (is (= "crafting torch needs 3 stick, have 2" (recipes/lacking game/default-version {"coal" 15 "stick" 2} "torch" 12)) "coal carried: not charcoal")
   (is (= "crafting torch needs 3 stick, have 2" (recipes/lacking game/default-version {"charcoal" 15 "stick" 2} "torch" 12)) "charcoal carried: it is the fuel"))
+
+(deftest planks-of-any-wood_pool_for_a_recipe_that_names_one
+  (let [pooled (recipes/pooled game/default-version {"cherry_planks" 7 "oak_planks" 1 "cobblestone" 3})]
+    (is (= 8 (get pooled "cherry_planks") (get pooled "oak_planks")))
+    (is (= 3 (get pooled "cobblestone")))))

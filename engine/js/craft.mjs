@@ -22,6 +22,50 @@ const eyeDistance = (bot, block) => {
   return Math.hypot(c.x + 0.5 - p.x, c.y + 0.5 - (p.y + (bot.entity.eyeHeight ?? constants.eyeHeight)), c.z + 0.5 - p.z)
 }
 
+
+// Vanilla takes any member of a tag (#planks) in each slot, but minecraft-data lists one recipe per member. Recipes of
+// one result and one layout are merged slot by slot: a slot's ids across them are interchangeable, so 7 cherry + 1 oak
+// plank make a chest. Returns a runnable variant filled from what is carried (most plentiful member first), or null.
+const layoutKey = r => JSON.stringify([r.result.count, r.inShape ? r.inShape.map(row => row.map(c => c.id === -1 ? 0 : 1)) : r.ingredients.length])
+const slotsOf = r => r.inShape ? r.inShape.flat() : r.ingredients
+const mixedRecipe = (bot, id, table) => {
+  const usable = bot.recipesAll(id, null, table ?? true).filter(r => table || !r.requiresTable)
+  const left = Object.fromEntries(bot.inventory.items().map(i => [i.type, 0]))
+  bot.inventory.items().forEach(i => { left[i.type] += i.count })
+  for (const base of usable) {
+    const group = usable.filter(r => layoutKey(r) === layoutKey(base))
+    const slots = slotsOf(base).map((_, i) => [...new Set(group.map(r => slotsOf(r)[i].id))])
+    const chosen = []
+    const stock = { ...left }
+    for (const ids of slots) {
+      if (ids[0] === -1) { chosen.push(-1); continue }
+      const pick = ids.filter(x => (stock[x] ?? 0) > 0).sort((a, b) => stock[b] - stock[a])[0]
+      if (pick === undefined) break
+      stock[pick]--
+      chosen.push(pick)
+    }
+    if (chosen.length < slots.length) continue
+    // slots that accept the same ids take the scarcest first: the cursor then never holds a stack of another kind when the next is picked up
+    const byKey = {}
+    slots.forEach((ids, i) => { if (ids[0] !== -1) (byKey[ids.join()] ??= []).push(i) })
+    for (const idx of Object.values(byKey)) {
+      const vals = idx.map(i => chosen[i])
+      const tally = vals.reduce((acc, x) => ({ ...acc, [x]: (acc[x] ?? 0) + 1 }), {})
+      vals.sort((a, b) => tally[a] - tally[b] || a - b)
+      idx.forEach((i, k) => { chosen[i] = vals[k] })
+    }
+    const fill = (cells, from) => cells.map(c => ({ ...c, id: chosen[from.next()] }))
+    const order = { n: 0, next () { return this.n++ } }
+    const filled = base.inShape
+      ? { inShape: base.inShape.map(row => fill(row, order)) }
+      : { ingredients: fill(base.ingredients, order) }
+    const delta = Object.entries(chosen.filter(x => x !== -1).reduce((acc, x) => ({ ...acc, [x]: (acc[x] ?? 0) + 1 }), {}))
+      .map(([x, n]) => ({ id: Number(x), count: -n }))
+    return { ...base, ...filled, delta: [...delta, ...base.delta.filter(d => d.count > 0)] }
+  }
+  return null
+}
+
 const isTable = block => block?.name === 'crafting_table'
 
 const posOf = block => ({ x: block.position.x, y: block.position.y, z: block.position.z })
@@ -185,10 +229,10 @@ export async function craftItem (bot, ctx, a, { timeScale = 1, reach = constants
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const made = (carriedCounts(bot)[item] ?? 0) - start
     if (made >= count) break
-    const r = bot.recipesFor(id, null, 1, table)[0]
+    const r = bot.recipesFor(id, null, 1, table)[0] ?? mixedRecipe(bot, id, table)
     if (!r) {
       await resync(bot, ctx, timeScale)
-      if (bot.recipesFor(id, null, 1, table)[0]) continue
+      if (bot.recipesFor(id, null, 1, table)[0] || mixedRecipe(bot, id, table)) continue
       // a recipe that needs a table is carried, but no table was handed over (the 2x2 ones, e.g. a re-dye, hide that)
       if (!table && bot.recipesFor(id, null, 1, true)[0]) return { status: 'unreachable', reason: 'no-table' }
       shortage = shortOf(bot, id, table)

@@ -22,6 +22,7 @@ const ID = Object.fromEntries(Object.values(REG).map(i => [i.name, i.id]))
 
 const recipe = (result, count, ingredients, requiresTable = false) => ({
   requiresTable,
+  ingredients: Object.entries(ingredients).flatMap(([n, c]) => Array.from({ length: c }, () => ({ id: ID[n] }))),
   result: { id: ID[result], count },
   delta: [...Object.entries(ingredients).map(([n, c]) => ({ id: ID[n], count: -c })), { id: ID[result], count }]
 })
@@ -377,4 +378,12 @@ test('craftItem: a cursor holding something at entry closes the open window befo
   await craftItem(bot, ctx, { item: 'bread', table }, opts)
   assert.deepEqual(log[0], ['close', win])
   assert.deepEqual(log[1], ['sync'])
+})
+
+test('craftItem: recipes that differ in one wood are mixed slot by slot, as vanilla does with a tag', async () => {
+  const { bot, items } = setup({ items: inv(['oak_planks', 1], ['cherry_planks', 1]) })
+  const r = await craftItem(bot, ctx, { item: 'stick' }, opts)
+  assert.equal(r.status, 'crafted')
+  assert.deepEqual(r.used, { oak_planks: 1, cherry_planks: 1 })
+  assert.equal(items.find(i => i.name === 'stick').count, 4)
 })
