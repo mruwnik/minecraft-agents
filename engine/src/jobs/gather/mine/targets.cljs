@@ -139,7 +139,8 @@
   zone or plan refuses, :wet? true when an unskipped block was rejected only for water, :wet-n how many}. Only seen blocks that are
   still there count."
   [c]
-  (let [{:keys [radius wet accept]} (:args c)
+  (let [{:keys [radius wet]} (:args c)
+        accept (ways/accept (:args c))
         p (:primitives c)
         skipped (set (:skipped (ctx/mem c)))
         ground (into #{} (map :pos) (:ground (ctx/mem c)))

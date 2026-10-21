@@ -95,7 +95,7 @@
           (is (not= "air" (block-at s 0 63 0)) "the hole over the lava is mended")
           (is (#{{:x 1 :y 64 :z 0} {:x -1 :y 64 :z 0} {:x 0 :y 64 :z 1} {:x 0 :y 64 :z -1}} (:target (first (moved s))))
               "it steps to the floor beside before the dig, so it does not drop onto the unseen cell below")
-          (is (not (contains? (:default (:accept mine/args)) :under-feet))))))))
+          (is (not (contains? (way-set/accept {}) :under-feet))))))))
 
 (deftest a-cell-under-the-feet-with-no-side-stand-is-a-refusal-not-a-failure
   (async done
@@ -384,6 +384,8 @@
   (is (not (way-set/tunnel? {:tunnel-length 0})) "a tunnel of no blocks is no way")
   (is (not (way-set/stay-level? {})))
   (is (way-set/stay-level? {:ways #{:seen :strip-tunnel}}))
+  (is (= [:falling-block] (way-set/stair-accept {})) "a stair takes no water unless the call says so")
+  (is (= [:fluid-adjacent] (way-set/stair-accept {:accept #{:fluid-adjacent}})))
   (is (not (way-set/stay-level? {:ways #{:seen :strip-tunnel :descend-shaft}}))))
 
 (deftest ore-in-view-is-left-when-seen-is-not-a-way

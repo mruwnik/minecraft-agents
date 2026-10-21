@@ -156,7 +156,7 @@
             r (waits/waiting-out c (await (ctx/call c :tunnel 'jobs.gather.strip-tunnel
                                {:heading (:heading m) :origin (:origin t) :steps (or steps 0) :limit (branch/segment-limit c (or steps 0) (- (:tunnel-length args) (:spent m 0)))
                                 :hung (vec (:hung m)) :torches (:torches args) :watch-kinds (vec (watch-kinds c))
-                                :radius (:radius args) :wet (boolean (:wet args)) :accept (vec (:accept args)) :stay-level (ways/stay-level? args)
+                                :radius (:radius args) :wet (boolean (:wet args)) :accept (vec (ways/accept args)) :stay-level (ways/stay-level? args)
                                 :ways (need/pass-ways c) :ignore-zones? (:ignore-zones? args)
                                 :block (main-block args)})))]
         (if (= :continue r)

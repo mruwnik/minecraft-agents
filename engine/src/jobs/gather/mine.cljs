@@ -61,7 +61,8 @@
    :shaft :shared
    :descend-limit :shared
    :torches :shared
-   :accept :shared})
+   :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :lava-adjacent :falling-block), a set or list; nil: the dig takes :fluid-adjacent and :falling-block, its stair only :falling-block (it stops or plugs beside water); the lava and :wet rules still hold"
+            :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default nil}})
 
 
 (a/defargs settings

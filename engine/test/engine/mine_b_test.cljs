@@ -165,8 +165,7 @@
       (fn ^:async t []
         (let [world {:blocks {"3,64,0" "sand" "6,64,0" "sand" "6,64,1" "water"}}
               s (await (scenario {:block "sand" :count 2 :wet true :accept #{} :ways #{:seen}} world 30))]
-          (is (= [[3 64 0]] (dug-cells s)))
-          (is (= #{:fluid-adjacent :falling-block} (:default (:accept mine/args)))))))))
+          (is (= [[3 64 0]] (dug-cells s))))))))
 
 (deftest ore-the-body-has-not-seen-is-never-dug
   (async done

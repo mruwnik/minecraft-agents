@@ -20,3 +20,13 @@
   "A run that may tunnel but never go down keeps the level it starts at: seen ore only beside the tunnel, breaches sealed."
   [args]
   (and (contains? (ways args) :strip-tunnel) (not (descends? args))))
+
+(defn accept
+  "The dig hazards the run takes: the call's :accept, else water and falling blocks."
+  [args]
+  (set (or (:accept args) [:fluid-adjacent :falling-block])))
+
+(defn stair-accept
+  "What the stair takes: the call's :accept as given, else only falling blocks, so a stair stops or plugs beside water."
+  [args]
+  (vec (or (:accept args) [:falling-block])))

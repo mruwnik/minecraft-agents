@@ -87,7 +87,7 @@
   "Dig pos with a jobs.blocks.dig child: this job's rules judged the cell, the hazards it accepts are the child's."
   [c pos]
   (book-ground! c pos)
-  (await (blocks/dig-cell! c pos {:accept (set (:accept (:args c))) :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
+  (await (blocks/dig-cell! c pos {:accept (ways/accept (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))})))
 
 (defn drop-cut-max [] (settings/get settings ::drop-cut-max))
 (defn target-cut-max [] (settings/get settings ::target-cut-max))
