@@ -129,7 +129,10 @@
                                              (cond-> {:by by} (:survive-death? request) (assoc :survive-death? true)))
                                       {:ok true :job (summary eng job-id)})
                          :cancel (do (core/cancel! eng id by)
-                                   {:ok true :id id :status :cancelled})
+                                   (if (get-in (core/state eng) [:instances id])
+                                     {:ok true :id id :status :cleaning-up
+                                      :hint "the job's cleanup runs first (up to about a minute); it ends cancelled once the cleanup is done, and a second cancel does not cut it"}
+                                     {:ok true :id id :status :cancelled}))
                          :cancel-all (let [ids (:list (core/state eng))]
                                        (run! #(core/cancel! eng % by) ids)
                                        {:ok true :cancelled (vec ids)})

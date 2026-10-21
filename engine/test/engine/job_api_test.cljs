@@ -224,3 +224,19 @@
     (is (true? (:survive-death? (first (:items (api/list-jobs eng 0 8))))))
     (is (= :bad-field (:reason (command eng "bad" :submit {:spec '(done) :survive-death? "yes"}))))
     (core/shutdown! eng)))
+
+(deftest a-cancel-of-a-job-with-a-cleanup-owed-says-cleaning-up-not-cancelled
+  (async done
+    (tu/run-async done
+      (fn ^:async run []
+        (let [p (tu/fake {})
+              eng (core/create {:primitives p :triggers {} :dir (tu/tmp-dir) :events (events/make {:stdout? false})
+                                :jobs {'tidy {:args {} :round (fn [_] :continue)
+                                              :cleanup (fn [c _] (ctx/end c :done nil))}}})]
+          (command eng "s" :submit {:spec '(tidy)})
+          (await (core/tick! eng))
+          (is (= {:ok true :id "j1" :status :cleaning-up} (select-keys (command eng "c" :cancel {:id "j1"}) [:ok :id :status])))
+          (is (= ["j1"] (:list (core/state eng))))
+          (await (core/tick! eng))
+          (is (= [] (:list (core/state eng))))
+          (core/shutdown! eng))))))
