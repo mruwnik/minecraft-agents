@@ -460,10 +460,21 @@
     (some #(due c %) (cond-> (vec waits) tool (conj tool)))))
 
 (defn placeable-now?
-  "Whether a cell can be placed from what is carried: the fetch for the rest waits until these are in."
+  "Whether a cell can be placed from what is carried: the fetch for the rest waits until these are in. A cell above one
+  that lacks an item a fetch is still due for does not count: a player has the walls before the roof goes on air."
   [c]
-  (let [mem (ctx/mem c)]
-    (boolean (seq (buildable (:cells (planned c)) (storage/carried-totals (u/inventory (:primitives c))) (merge (:given-up mem) (:refused mem)))))))
+  (let [mem (ctx/mem c)
+        closed (merge (:given-up mem) (:refused mem))
+        cells (:cells (planned c))
+        carried (storage/carried-totals (u/inventory (:primitives c)))
+        lowest-short (some->> (missing cells)
+                              (filter #(and (not (contains? closed (:pos %)))
+                                            (not (pos? (get carried (:item %) 0)))
+                                            (due c {:reason :need :item (:item %)})))
+                              (map #(get (:pos %) 1))
+                              seq
+                              (apply min))]
+    (boolean (some #(<= (get (:pos %) 1) (or lowest-short ##Inf)) (buildable cells carried closed)))))
 
 (defn problem
   "The fetch due for the plan as it stands now, nil when none or the plan is in trouble. While a cell can be placed from

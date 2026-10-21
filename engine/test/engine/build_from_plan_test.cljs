@@ -936,6 +936,21 @@
           (is (pos? first-take))
           (is (< first-place first-take) "the carried fences go in before the body walks to the chest"))))))
 
+(deftest the-walls-are-fetched-before-a-roof-cell-with-nothing-below-it-is-laid
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "hut" :parts [{:id "walls" :cells [[2 64 2] [4 64 2]] :want "cobblestone"}
+                                      {:id "roof" :cells [[3 65 2]] :want "oak_planks"}]}
+              spec {:inventory [{:name "oak_planks" :count 2}]
+                    :blocks (assoc ground fence-chest "chest" (h/cell-key 3 65 1) "stone")
+                    :containers {fence-chest [{:name "cobblestone" :count 2}]}}
+              {:keys [eng p]} (start spec {"hut" plan})
+              _ (tu/seeing-all p)
+              result (await (child-outcome eng job {:plan "hut"} 300))]
+          (is (= [] (:missing result)))
+          (is (= ["cobblestone" "cobblestone" "oak_planks"] (mapv second (places p))) "the walls first, then the roof"))))))
+
 (deftest missing-material-is-fetched-from-a-seen-chest-by-default
   (async done
     (tu/run-async done
