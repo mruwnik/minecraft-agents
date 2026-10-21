@@ -9,10 +9,23 @@
             [jobs.lib.util :as u]
             [engine.args :as a]))
 
+(defn bucket? [item] (and (string? item) (boolean (re-find #"bucket$" item))))
+
+(def face-steps {"up" [0 1 0] "down" [0 -1 0] "north" [0 0 -1] "south" [0 0 1] "east" [1 0 0] "west" [-1 0 0]})
+
+(defn target
+  "The cell a bucket fills or scoops: :on itself, or with a :face the cell beside that face of the block :on (a
+  player clicks a block's face). nil when :on is not a position."
+  [{:keys [on item face]}]
+  (let [cell (a/cell on)]
+    (if (and cell (bucket? item) (face-steps face))
+      (zipmap [:x :y :z] (map + ((juxt :x :y :z) cell) (face-steps face)))
+      on)))
+
 (defn block-args
-  "The args as the block jobs read them: :on becomes :pos."
+  "The args as the block jobs read them: :on becomes :pos (a bucket's target, see target)."
   [c]
-  (-> (:args c) (assoc :pos (:on (:args c))) (dissoc :on)))
+  (-> (:args c) (assoc :pos (target (:args c))) (dissoc :on)))
 
 (def safe? (ready/safe-at-by-night (ready/near-unseen-here (fn [c] (a/cell (:on (:args c)))))))
 
@@ -27,11 +40,9 @@
         walk (if (or error (b/in-reach? c pos (:see (:args c)))) 0 (u/eye-dist (u/self-pos c) pos))]
     {:uses {:job-time [0.5 (+ 1 (/ walk 4)) (+ 10 walk)]}}))
 
-(defn bucket? [item] (and (string? item) (boolean (re-find #"bucket$" item))))
-
 (defn bad-args [c]
-  (let [{:keys [face] :or {face "up"}} (:args c)
-        error (or (:error (b/parse (block-args c))) (when-not (faces face) (str "face is one of " (pr-str (sort faces)))))]
+  (let [{:keys [face]} (:args c)
+        error (or (:error (b/parse (block-args c))) (when-not (or (nil? face) (faces face)) (str "face is one of " (pr-str (sort faces)))))]
     (when error (str "items.use " error))))
 
 (def zones
@@ -53,14 +64,14 @@
   [c {:keys [pos item face]}]
   (let [r (await (if (bucket? item)
                    (ctx/act c :place (clj->js {:pos pos :item item}))
-                   (ctx/act c :useOn (clj->js (cond-> {:pos pos :face face} item (assoc :item item))))))
+                   (ctx/act c :useOn (clj->js (cond-> {:pos pos :face (or face "up")} item (assoc :item item))))))
         status (keyword (.-status r))]
     [(if (and (bucket? item) (= :placed status)) :used status) r]))
 
 (defn ^:async attempt-block!
   "One step: walk into reach (:again after a failed walk, until the limit), else click and end."
   [c pos]
-  (let [{:keys [item face see range] :or {face "up"}} (:args c)
+  (let [{:keys [item face see range]} (:args c)
         w (when-not (b/in-reach? c pos see) (await (b/walk-into-reach! c pos see range)))]
     (cond
       (:unreachable w) (finish-block! c :nothing-possible {:used false :pos pos :item item :face face :reason :unreachable :why (:unreachable w)})

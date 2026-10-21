@@ -12,8 +12,8 @@
   from observe entities). One call is the whole attempt. :continue only when the walk waits on the world.
 
   A block: walk into reach (one jobs.movement.go-to call, within :range, no escalation), click on :face with :item (nil: whatever is held stays
-  in hand; none: the empty hand). A bucket :item (water_bucket pours, lava_bucket pours lava, bucket scoops) is used on the cell :on itself, through the
-  place act: the liquid goes there, or is taken from there; :face is ignored. A bad call is never (:bad-args); a bucket changes the cell, so zones,
+  in hand; none: the empty hand). A bucket :item (water_bucket pours, lava_bucket pours lava, bucket scoops) is used on the cell :on itself (with a :face, on the cell beside that face of the block :on, as a player clicks), through the
+  place act: the liquid goes there, or is taken from there. A bad call is never (:bad-args); a bucket changes the cell, so zones,
   claims and plans may refuse it (a pour asks :place, a scoop :harvest; {:reason :not-allowed :pos :by ...}, :ignore-zones? skips the rule); a plain
   click changes no block by itself and asks no zone. Ends with data {:used true|false :pos :item :face :reason :raw (the primitive's answer: before,
   after, consumed)}, plus :spawn-set true when a bed answered \"respawn point set\" (a bed is used by day to set the spawn; not in the Nether or End).
@@ -34,7 +34,7 @@
    :ignore-zones? :shared
    :for-plan {:doc "block only: id of the plan whose work this is: its own footprint does not refuse the bucket; nil: every plan's footprint does" :spec a/name? :default nil}
    :range {:doc "block only: how many cells from :on the walk may stop (go-to :range); a click the server checks by distance, a bed's 3 blocks, wants less" :spec (a/num-in 0 nil) :default 3}
-   :face {:doc "block only: the face clicked: up down north south east west" :spec #{"up" "down" "north" "south" "east" "west"} :default "up"}})
+   :face {:doc "block only: the face clicked: up down north south east west; nil: up for an item, and for a bucket :on itself is the cell. A bucket with a face fills (or scoops) the cell beside that face of the block :on" :spec #{"up" "down" "north" "south" "east" "west"} :default nil}})
 
 
 (a/defargs settings

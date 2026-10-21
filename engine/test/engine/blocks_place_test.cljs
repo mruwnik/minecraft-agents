@@ -503,6 +503,16 @@
             (is (= [true "water_bucket"] [(:used scooped) (some #(when (= "water_bucket" (:name %)) (:name %)) (u/inventory (:p env)))]))
             (is (not= "water" (.-name (.blockAt (:p env) (clj->js at)))))))))))
 
+(deftest a-use-on-bucket-with-a-face-pours-in-the-cell-beside-the-clicked-face
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/setup {:self body :inventory [{:name "water_bucket" :count 1}]})
+              floor (update at :y dec)
+              poured (await (tu/child-outcome (:eng env) use-on {:on floor :face "up" :item "water_bucket"} 40))]
+          (is (= [true at] ((juxt :used :pos) poured)))
+          (is (= "water" (.-name (.blockAt (:p env) (clj->js at))))))))))
+
 (deftest a-use-on-bucket-in-anothers-zone-waits-not-allowed-but-a-plain-click-does-not
   (async done
     (tu/run-async done

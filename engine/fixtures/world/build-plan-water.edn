@@ -1,0 +1,18 @@
+;; A water cell of a plan is poured from the carried water bucket (it used to count the bucket as no water and stay short);
+;; items.use with a bucket and a :face pours into the cell beside the clicked face (the floor's top face fills the cell above it).
+{:defaults
+ {:tags [:build :items]
+  :time :any
+  :plot {:height 8}
+  :body {:at [16.5 0 16.5] :settle-s 2 :inventory [["water_bucket" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "water-part-is-poured-from-the-carried-bucket"
+   :plans [{:id "pool" :metadata {:by "$body"} :parts [{:id "water" :cells [#at [20 0 16]] :want "water"}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:pool" :part "water" :ways #{:carried}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:block [20 0 16] "water"] [:item "bucket" 1]]}
+  {:name "bucket-clicked-on-the-floor-face-fills-the-cell-above"
+   :act [[:job (jobs.items.use {:on #at [20 -1 16] :face "up" :item "water_bucket"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
+   :after [[:block [20 0 16] "water"] [:item "bucket" 1]]}]}

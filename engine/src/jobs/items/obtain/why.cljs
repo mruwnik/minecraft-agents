@@ -6,7 +6,7 @@
             [jobs.items.obtain.need :refer [explore-opts]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [seen-blocks-of seen-of]]
-            [jobs.items.obtain.table :refer [animal? gather-needs material-blocks]]
+            [jobs.items.obtain.table :refer [animal? gather-needs material-blocks source-opts]]
             [jobs.items.recipes :as recipes]
             [jobs.items.smelt.plan :as smelt-plan]
             [jobs.lib.look :as look]
@@ -59,7 +59,12 @@
   (cond
     (= "water_bucket" item)
     (str "a water bucket is a bucket filled at a seen water source; "
-         (if (pos? (get have "bucket" 0)) "a bucket is carried" (recipes/lacking version have "bucket" 1)))
+         (cond
+           (pos? (get have "bucket" 0)) "a bucket is carried"
+           (recipes/plan version have "bucket" 1 (assoc (source-opts) :table? true)) "a bucket can be made from what is carried"
+           :else (recipes/lacking version have "bucket" 1))
+         (when (empty? (look/seen-water-sources (:primitives c) (seen-radius)))
+           (str "; no water source seen within " (seen-radius) " blocks")))
 
     :else
     (if-let [input (and (way? c :smelt) (smelt-plan/made-from item))]

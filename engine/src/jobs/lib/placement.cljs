@@ -48,9 +48,11 @@
   #"_(fence|wall)$")
 
 (defn item-of
-  "The item that places block (a wall torch or wall sign is placed with the standing one)."
+  "The item that places block (a wall torch or wall sign is placed with the standing one; water and lava with their bucket)."
   [block]
-  (str/replace block #"(^|_)wall_(torch|sign|hanging_sign|banner)$" "$1$2"))
+  (case block
+    ("water" "lava") (str block "_bucket")
+    (str/replace block #"(^|_)wall_(torch|sign|hanging_sign|banner)$" "$1$2")))
 
 (defn family [block]
   (condp re-find block

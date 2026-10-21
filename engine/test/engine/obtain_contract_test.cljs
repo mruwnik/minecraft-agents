@@ -177,6 +177,31 @@
           (is (= :done (:kind e)))
           (is (= {:got 1 :item "water_bucket"} (select-keys (:data e) [:got :item]))))))))
 
+(deftest a-bucket-short-one-ingot-smelts-the-carried-raw-iron
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (-> (oi/ore-world {"1,64,2" "furnace"} [{:name "iron_ingot" :count 2} {:name "raw_iron" :count 3} {:name "coal" :count 2} {:name "crafting_table" :count 1}])
+                             (assoc :recipes {"bucket" {:count 1 :needs {"iron_ingot" 3} :table true}})) [f/own-zone])]
+          (await (oi/obtain! s {:item "bucket" :explore false} 20))
+          (is (seq (f/events-of s :smelt.loaded)) "the carried raw iron went in the furnace")
+          (.advance (.-world (:p s)) 2000)
+          (await (f/run-ticks s 200))
+          (is (= 1 (get (f/inv s) "bucket")) "the ingot came out and the bucket was crafted"))))))
+
+(deftest no-water-seen-with-the-ingots-carried-says-the-water-is-missing-not-the-chain
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (-> (f/bare [{:name "iron_ingot" :count 5} {:name "crafting_table" :count 1}])
+                             (assoc :recipes {"bucket" {:count 1 :needs {"iron_ingot" 3} :table true}})) [f/own-zone])
+              e (await (ending-of s 'jobs.items.obtain {:item "water_bucket" :explore false} 20))
+              why (get-in e [:cause :why])]
+          (is (= {:kind :condition-failed :cause :no-source} (kc e)))
+          (is (re-find #"no water source seen" why))
+          (is (re-find #"bucket can be made" why))
+          (is (not (re-find #"no chain works" why))))))))
+
 (deftest sugar-cane-is-cut-from-a-seen-stand-by-get-seeds
   (async done
     (tu/run-async done

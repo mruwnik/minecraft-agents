@@ -84,6 +84,16 @@
                  result))
           (is (empty? (h/events-of seen :build.done)) "the ending tells it"))))))
 
+(deftest a-water-cell-is-poured-from-the-carried-water-bucket
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "pool" :parts [{:id "water" :cells [[5 64 5]] :want "water"}]}
+              {:keys [eng p]} (start {:inventory [{:name "water_bucket" :count 1}]} {"pool" plan})
+              result (await (child-outcome eng job {:plan "pool"} 200))]
+          (is (= "water" (block p [5 64 5])))
+          (is (= [1 {} {}] ((juxt :placed :short :given-up) result)) (pr-str result)))))))
+
 (deftest a-facing-no-click-gives-is-placed-from-the-side-it-faces-away-from
   (async done
     (tu/run-async done
