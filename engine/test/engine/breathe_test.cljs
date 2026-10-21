@@ -203,7 +203,8 @@
           (is (= {:x 0 :y 67 :z 0} (core/self-pos p)) "feet at the top water block, head in air")
           (is (= [] (:list (core/state eng))) "one run")
           (is (= [[:stopped :no-land-in-range]] (ended seen)) "no land and no water to swim on: stopped, not completed")
-          (is (= ["swim"] (call-names p)) "the swim surfaces; nothing else to try")
+          (is (= ["swim" "swim"] (call-names p)) "the swim surfaces; the last way is treading water before the stop")
+          (is (true? (.-tread (.-args (last (array-seq (.. p -world -calls)))))) "the body treads, its head stays out while it stops")
           (is (empty? (of-kind seen :holding)) "no hold")
           (is (empty? (of-kind seen :afloat))))))))
 

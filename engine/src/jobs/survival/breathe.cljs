@@ -50,6 +50,7 @@
     written to the scaffold ledger (purpose :breathe-step, for jobs.access.cleanup), at most 2 per spot; the next
     pass's shore swim climbs onto it; then a swim leg, a go-to to the farthest loaded surface water 8..leg-length (32) blocks out, outward from the run's
     start only, inside swim-range (96) of it, at most max-legs (6) legs (a leg that moved starts afresh at its end).
+  Before it stops afloat it treads water for the tread-ms setting (3000) so the lungs refill and the head is out when it ends.
   A mob that hits the body (a hostile within the fight radius and a hit within the window, jobs.survival.breathe.fight) is fought with
   jobs.combat.attack, holding where it floats, when the body can breathe (surfaced, still in water) or when the swim up has risen no
   higher for the stall seconds while drowning.
@@ -82,6 +83,7 @@
    ::min-leg {:default 8 :doc "Blocks a swim leg must move to count as moved." :spec (a/int-in 0 nil)}
    ::max-passes {:default 120 :doc "Passes one run makes before it stops :no-way-out, a safety net against a world that never changes." :spec (a/int-in 0 nil)}
    ::afloat-near {:default 16 :doc "Blocks around a spot in which a later run takes over the start and failed headings of an earlier stop." :spec (a/int-in 0 nil)}
+   ::tread-ms {:default 3000 :doc "Milliseconds a body with every way out spent treads water, head out, before the run stops (the lungs refill)." :spec (a/num-in 0 nil)}
    ::max-steps {:default 2 :doc "Step blocks one spot places at most." :spec (a/int-in 0 nil)}})
 (defn shore-radius [] (settings/get settings ::shore-radius))
 (defn search-radius [] (settings/get settings ::search-radius))
@@ -251,10 +253,12 @@
               (when (and cell (= "water" (u/seen-name p cell))) cell)))
           (range (leg-length) (dec (min-leg)) -1))))
 
-(defn stop-afloat!
-  "Every way out of the water is spent: remember the spot's failed headings and stop with reason (:no-land-in-range, or
-  :no-blocks when a step cell was left and no block to place)."
+(defn ^:async stop-afloat!
+  "Every way out of the water is spent: tread water a while (a body left idle sinks, its head goes under again), remember
+  the spot's failed headings and stop with reason (:no-land-in-range, or :no-blocks when a step cell was left and no
+  block to place)."
   [c reason]
+  (await (ctx/act c :swim (clj->js {:ms (settings/get settings ::tread-ms) :tread true})))
   (let [m (ctx/mem c)
         pos (u/self-pos c)
         failed (:failed-headings m #{})]
@@ -365,8 +369,8 @@
       land (await (land-by-go-to! c land))
       (and stepcell carried?) (await (step! c stepcell))
       legs (await (swim-leg! c (first legs) (second legs)))
-      stepcell (stop-afloat! c :no-blocks)
-      :else (stop-afloat! c :no-land-in-range))))
+      stepcell (await (stop-afloat! c :no-blocks))
+      :else (await (stop-afloat! c :no-land-in-range)))))
 
 (defn note!
   "Write the :breathe entry once per job instance."

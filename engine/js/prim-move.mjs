@@ -108,6 +108,7 @@ export function createMove (env) {
     if (!isOwner(token)) throw cutError()
     need(a.ms === undefined || a.ms === null || (isNum(a.ms) && a.ms > 0), 'swim needs ms, a number of milliseconds above 0')
     need(a.toward === undefined || a.toward === null || isPos(a.toward), 'swim toward needs {x, y, z}')
+    need(a.tread === undefined || typeof a.tread === 'boolean', 'swim tread needs true or false')
     const ms = Math.min(a.ms ?? setting('prim/swim-default-ms'), setting('prim/swim-max-ms'))
     const toward = a.toward ?? null
     const before = oxygenNow()
@@ -140,7 +141,13 @@ export function createMove (env) {
           await sleepMs(setting('prim/poll-ms') * timeScale)
           ctx.alive()
         }
-        return result('surfaced')
+        if (!a.tread) return result('surfaced')
+        // treading water: jump stays held for the rest of ms, so the head stays out while the lungs refill
+        press('jump')
+        for (;;) {
+          await sleepMs(setting('prim/poll-ms') * timeScale)
+          ctx.alive()
+        }
       } finally {
         release()
       }
