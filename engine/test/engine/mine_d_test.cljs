@@ -306,6 +306,17 @@
           (is (empty? (events-of s :mine.turned)))
           (is (= :no-stone-found (:reason (done-event s)))))))))
 
+(deftest a-given-heading-is-turned-when-water-fills-its-first-step
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks (merge (soil-over-stone 63 59) {"-1,64,0" "water"}) :drops cobble
+                                :inventory [{:name "stone_pickaxe" :count 1}]}})]
+          (core/submit! (:eng s) (spec {:block "stone" :count 2 :heading "west" :tunnel-length 4}) {})
+          (await (run-ticks s 300))
+          (is (seq (events-of s :mine.turned)))
+          (is (<= 2 (get (inv s) "cobblestone" 0))))))))
+
 ;; Alder j48: between two stair steps something moved the body off the stair line; the stair stopped :off-stair and mine ended with no stone.
 (deftest a-stair-that-finds-the-body-off-its-line-goes-on-along-it
   (async done

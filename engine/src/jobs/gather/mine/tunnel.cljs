@@ -61,7 +61,7 @@
 (defn turn-heading!
   "Turn the run to the next of the four headings not yet tried (memory :tried-headings), forgetting the stop and the tunnel
   begun on the old one; info mine.turned. A tunnel of steps > 0 is kept as a leg (memory :legs, :spent); the way back along
-  it, or up the stair down, is not a heading. False (nothing changed) when a heading arg was given or all are tried."
+  it, or up the stair down, is not a heading. False (nothing changed) when all are tried, or a direction arg was given, or a heading arg was given and the stop is not water in the cut (a player picks another way round water, not round an order)."
   [c stop]
   (let [m (ctx/mem c)
         {:keys [heading direction]} (:args c)
@@ -72,7 +72,7 @@
         cycle ["north" "east" "south" "west"]
         order (map #(nth cycle (mod (+ (.indexOf cycle (:heading m)) %) 4)) (range 1 4))
         to (first (remove tried order))]
-    (when (and to (nil? heading) (nil? direction))
+    (when (and to (nil? direction) (or (nil? heading) (= :fluid-in-cut stop)))
       (ctx/emit! c :mine.turned :info {:from (:heading m) :to to :stop stop :length (or steps 0)
                                        :text (str "mine's " (name stop) " blocks its heading " (:heading m) (when mid? (str " after " steps " blocks")) "; it turns " to)})
       (when mid? (stay/record-tunnel! c tunnel (headings (:heading m))))

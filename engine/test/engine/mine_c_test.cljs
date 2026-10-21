@@ -389,6 +389,15 @@
             (is (= stops? (boolean (some #(= :hazard (:stop %)) (events-of s :mine.descent-stopped)))) (pr-str accept))
             (is (= (not stops?) (boolean (some #(< (second %) 64) (dug-cells s)))) "the stair cut below the start")))))))
 
+(deftest the-stair-down-goes-on-beside-water-when-it-is-accepted-as-a-list
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[accept stops?] [[[:fluid-adjacent] false] [[] true]]]
+          (let [s (await (scenario {:block "iron_ore" :count 1 :direction "east" :level 60 :tunnel-length 3 :accept accept}
+                                   (deep-rock {"1,64,1" "water" "1,65,1" "water"}) 60))]
+            (is (= stops? (boolean (some #(= :hazard (:stop %)) (events-of s :mine.descent-stopped)))) (pr-str accept))))))))
+
 (deftest a-stair-stopped-far-above-the-level-ends-the-run-instead-of-tunnelling-there
   (async done
     (tu/run-async done

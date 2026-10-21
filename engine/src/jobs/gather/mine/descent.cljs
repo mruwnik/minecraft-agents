@@ -208,7 +208,7 @@
             (ctx/update-mem! c update :descent assoc :top (access/cell (cell-of (u/self-pos c))) :top-heading (keyword (:heading (ctx/mem c)))))
         r (waits/waiting-out c (await (ctx/call c :stair 'jobs.access.stair
                                  {:dir :down :heading (keyword (:heading (ctx/mem c))) :steps 1 :ways (if level? (need/pass-ways c) (set need/fetch-ways))
-                                  :accept (filterv #{:falling-block} (:accept (:args c)))
+                                  :accept (vec (:accept (:args c)))
                                   :ignore-zones? (:ignore-zones? (:args c))})))
         res (result-of r)]
     (cond

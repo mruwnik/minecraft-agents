@@ -18,8 +18,8 @@
    :shaft {:doc "a mineshaft plan id for :descend-shaft to use; nil: the nearest usable one within reach, when a descent is due" :spec '(a/pred "a shaft plan id or nil" #(or (nil? %) (string? %))) :default nil}
    :descend-limit {:doc "the most steps of stair down through soil to find stone, when the block is stone-type and none is in sight (the :descend-stair way)" :spec '(a/int-in 0 nil) :default 12}
    :torches {:doc "hang torches where jobs.lib.torch-plan says a dug cell would stay dark; false: none" :spec 'boolean? :default true}
-   :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block); the lava and :wet rules above still hold"
-            :spec '(a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}})
+   :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent :falling-block), a set or list; the lava and :wet rules above still hold"
+            :spec '(a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}})
 
 (defn expand
   "data with each :shared entry replaced by its entry in shared; groups recurse."
