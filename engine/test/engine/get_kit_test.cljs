@@ -104,6 +104,18 @@
           (is (= {:status :stopped :item "iron_chestplate" :reason :no-source}
                  (select-keys @(:out s) [:status :item :reason]))))))))
 
+(deftest a-piece-made-in-the-bill-is-worn-though-a-later-item-stops-the-kit
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (-> (world [{:name "iron_ingot" :count 5}] {})
+                    (update :recipes assoc "iron_leggings" {:count 1 :needs {"leather" 1} :table true}))
+              s (start w {:items ["iron_helmet" "iron_leggings"] :explore false :food false})]
+          (await (f/run-ticks s 200))
+          (is (= {"head" "iron_helmet"} (worn s)))
+          (is (= {:status :stopped :reason :no-source}
+                 (select-keys @(:out s) [:status :reason]))))))))
+
 (deftest ingots-that-cannot-be-got-stop-the-job-at-once-naming-the-ingots
   (async done
     (tu/run-async done

@@ -183,6 +183,12 @@
                (merge data (select-keys out [:item :why])
                       {:text (str "kit stopped at " (:item out) ": " (name (:reason out)) (when (:why out) (str " (" (:why out) ")")))})))))
 
+(defn stop-after-wear!
+  "Book the stop; the next step puts on the carried pieces first, then ends with it."
+  [c out]
+  (ctx/update-mem! c assoc :stop out)
+  :again)
+
 (defn food-args
   "The get-food child's args: feed the body, then fill the pack to get-food's :carry default."
   [c]
@@ -242,6 +248,8 @@
                   out (finish! c items have (assoc out :item wear))
                   :else :again))
 
+          (:stop (ctx/mem c)) (finish! c items have (:stop (ctx/mem c)))
+
           (empty? todo) (finish! c items have nil)
 
           (and (not (:covered-done (ctx/mem c))) (seq (or (:covered (ctx/mem c)) (covered-of version todo (:carried st)))))
@@ -249,7 +257,7 @@
                 _ (ctx/update-mem! c assoc :covered covered)
                 r (await (run-bill! c :covered covered))]
             (cond (= :continue r) :continue
-                  (some? r) (finish! c items have (update r :item #(or % (first (keys covered)))))
+                  (some? r) (stop-after-wear! c (update r :item #(or % (first (keys covered)))))
                   :else (do (ctx/update-mem! c assoc :covered-done true)
                             :again)))
 
@@ -284,7 +292,7 @@
           :else
           (let [r (await (run-bill! c :bill (bill-of c)))]
             (cond (= :continue r) :continue
-                  (some? r) (finish! c items have (update r :item #(or % (first todo))))
+                  (some? r) (stop-after-wear! c (update r :item #(or % (first todo))))
                   :else (do (ctx/update-mem! c assoc :bill-done true)
                             (ctx/emit! c :kit.progress :info {:text (str "got " (str/join ", " todo))})
                             :again)))))))))
