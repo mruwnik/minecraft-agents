@@ -55,10 +55,6 @@
    ::max-cells {:default 256 :doc "Cells one call looks at before it gives the round back." :spec (a/int-in 0 nil)}
    ::max-tries {:default 2 :doc "Attempts before the job gives up." :spec (a/int-in 0 nil)}})
 (defn max-cells [] (settings/get settings ::max-cells))
-(def loosened
-  "Grounds a hoe first turns into dirt (a second use makes farmland)."
-  #{"coarse_dirt" "rooted_dirt"})
-(def tillable (into #{"dirt" "grass_block" "dirt_path"} loosened))
 (def ground-cover
   "What lies on a cell and is dug first: the plants, small flowers and snow layer a placement clears (b/clearable) and the tall flowers."
   (into b/clearable #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "snow" "sunflower" "lilac" "rose_bush" "peony"}))
@@ -131,12 +127,12 @@
         p (:primitives c)]
     (reduce (fn [acc pos]
               (let [n (when-not (contains? skipped pos) (u/seen-name p pos))
-                    v (when (and (not (contains? skipped pos)) (not= "farmland" n) (or (nil? n) (tillable n))) (when refuse (refuse pos)))]
+                    v (when (and (not (contains? skipped pos)) (not= "farmland" n) (or (nil? n) (bs/tillable n))) (when refuse (refuse pos)))]
                 (cond
                   (contains? skipped pos) acc
                   (= "farmland" n) acc
                   v (-> acc (assoc :todo? true) (update :verdicts conj v))
-                  (or (nil? n) (tillable n)) (reduced (assoc acc :todo? true :work? true))
+                  (or (nil? n) (bs/tillable n)) (reduced (assoc acc :todo? true :work? true))
                   :else (assoc acc :todo? true))))
             {:verdicts []} cs)))
 
@@ -189,7 +185,7 @@
         p (:primitives c)
         names (remove #{"farmland"} (map #(u/seen-name p %) cs))
         n (count names)
-        uses (+ n (count (filter loosened names)))
+        uses (+ n (count (filter bs/loosened names)))
         h (hoe c)]
     {:uses (cond-> {:job-time [(* 0.5 n) (* 2 n) (* 10 n)]} (and h (pos? n)) (assoc :wear {h [uses uses uses]}))
      :done [0 n n]}))
@@ -246,7 +242,7 @@
   [c]
   (let [p (:primitives c)
         todo (pending c)
-        bad (into [] (comp (filter (fn [[_ n]] (and (some? n) (not (tillable n))))) (map first)) todo)]
+        bad (into [] (comp (filter (fn [[_ n]] (and (some? n) (not (bs/tillable n))))) (map first)) todo)]
     (when (seq bad) (skip! c bad :not-tillable))
     (let [unpermitted (into [] (comp (map first) (remove (set bad)) (remove #(permitted? c :dig %))) todo)
           _ (when (seq unpermitted) (skip! c unpermitted :not-permitted))
@@ -294,7 +290,7 @@
                           (and (= :used status) (= "farmland" (some-> (.-after raw) .-name)))
                           (ctx/update-mem! c #(-> % (update :tilled (fnil conj #{}) target) (update :cell-tries dissoc target)))
 
-                          (and (= :used status) (loosened (some-> (.-before raw) .-name)) (= "dirt" (some-> (.-after raw) .-name)))
+                          (and (= :used status) (bs/loosened (some-> (.-before raw) .-name)) (= "dirt" (some-> (.-after raw) .-name)))
                           nil
 
                           (= :missing status) (skip! c [target] :gone)

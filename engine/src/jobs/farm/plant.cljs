@@ -1,5 +1,6 @@
 (ns jobs.farm.plant
   (:require [engine.contract :as contract]
+            [jobs.lib.block-sets :as bs]
             [engine.settings :as settings]
             [engine.args :as a]
             [clojure.string :as str]
@@ -21,7 +22,6 @@
             [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
             [jobs.farm.field :as fld]
-            [jobs.farm.till :as till]
             [jobs.lib.farm :refer [bare-cells pick-seed sowable]]
             [jobs.lib.plan-field :as pf]
             [jobs.lib.world :as known]))
@@ -70,7 +70,7 @@
         y (:y min)]
     (vec (for [x (range (:x min) (inc (:x max))) z (range (:z min) (inc (:z max)))
                :let [pos {:x x :y y :z z}]
-               :when (contains? till/tillable (u/seen-name p pos))]
+               :when (contains? bs/tillable (u/seen-name p pos))]
            pos))))
 
 (defn held-back

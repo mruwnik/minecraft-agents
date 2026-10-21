@@ -1,11 +1,8 @@
 (ns jobs.access.cleanup.step
   "The pure step decision of jobs.access.cleanup: which ledger cell to dig, walk to, retreat from, or give up."
   (:require [jobs.lib.block-sets :as bs]
-            [jobs.lib.access.rules :as rules]))
-
-(defn centre [[x y z]] [(+ x 0.5) (+ y 0.5) (+ z 0.5)])
-
-(defn distance [a b] (apply js/Math.hypot (map - a b)))
+            [jobs.lib.access.rules :as rules]
+            [jobs.lib.ledger :refer [centre distance]]))
 
 (defn hazard-reason
   "The :accept key of a dig hazard: lava beside is :lava-adjacent, kept apart from water."
@@ -113,23 +110,6 @@
     (when (and (some? way)
                (some (fn [e] (and (= floor (:cell e)) (#{:no-floor-below :no-exit} (:reason (blocker in e))))) entries))
       (update (second way) 1 inc))))
-
-(defn roofed?
-  "Whether a solid block that is not a ledger cell lies within roof-height above cell."
-  [{:keys [block-at ledger roof-height]} cell]
-  (boolean (some (fn [dy] (let [c (rules/offset cell 0 dy 0)
-                                n (block-at c)]
-                            (and n (not (bs/replaceable n)) (not (contains? ledger c)))))
-                 (range 1 (inc roof-height)))))
-
-(defn walk-blocker
-  "Why the body should not walk to the entry at cell, as {:reason ...}, or nil: :far-below (more than max-below under
-  the feet), :died-near (died-near? of the cell), :roofed (under cover where the body is not)."
-  [{:keys [feet max-below died-near?] :as in} {:keys [cell]}]
-  (cond
-    (> (- (get feet 1) (get cell 1)) max-below) {:reason :far-below}
-    (and died-near? (died-near? cell)) {:reason :died-near}
-    (and (roofed? in cell) (not (roofed? in (update feet 1 dec)))) {:reason :roofed}))
 
 (defn next-step
   "The next step over entries (each holding its item, or unloaded), from {:feet :eye [x y z] :block-at :entries

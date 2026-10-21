@@ -1,6 +1,9 @@
 (ns jobs.lib.shelter.beds
   "The bed a body uses, carries, places and collects, the rest clock behind it, and the doorways the night fills."
   (:require [engine.args :as a]
+            [jobs.lib.access :as access]
+            [jobs.lib.block-sets :as bs]
+            [jobs.lib.tidy-rules :as tidy-rules]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.settings :as settings]
@@ -220,3 +223,40 @@
   "In-game days since the body last rested (days-awake-in), or nil when it remembers nothing."
   [c]
   (days-awake-in (ctx/view c)))
+
+(def bed-dirs [[1 0] [-1 0] [0 1] [0 -1]])
+
+(defn refused-twice? [c {:keys [x y z]}]
+  (<= 2 (get (:bed-refused (ctx/mem c)) [x y z] 0)))
+
+(defn bed-layout
+  "{:stand :foot :head} for a bed set down beside the body: three cells in a row, the body standing at one end (a placed
+  bed faces away from the body), the foot next to it, the head after it. All three free (air, with a solid floor that is no container, bed or other kept block, and
+  the body's headroom for the stand cell) within 3 cells of the body, the foot and head not in a doorway or another's
+  zone, claim or plan footprint (a missing zone list refuses nothing), and roofed within roof-height when roofed? is
+  set, and not a foot cell the server refused twice. The stand cell nearest the body first (its own cell when it fits); nil
+  when no row fits."
+  [c roofed?]
+  (let [p (:primitives c)
+        roof (sh-sense/roof-height)
+        {:keys [x y z]} (sh-sense/feet p)
+        in (access/rules-input c)
+        air? #(bs/air (u/seen-name p %))
+        free? (fn [pos] (and (air? pos) (sh-sense/solid-at? p (update pos :y dec))
+                             (nil? (tidy-rules/keep-why (u/seen-name p (update pos :y dec))))))
+        covered? (fn [pos] (or (not roofed?) (some #(sh-sense/solid-at? p (update pos :y + %)) (range 1 (inc roof)))))
+        permitted? #(and (nil? (access/trespass-refusal in :place %)) (not (sh-sense/doorway? p %)))
+        stands (sort-by (fn [[dx dz]] (+ (js/Math.abs dx) (js/Math.abs dz)))
+                        (for [dx (range -3 4) dz (range -3 4)] [dx dz]))]
+    (first (for [[sx sz] stands
+                 [dx dz] bed-dirs
+                 :let [stand {:x (+ x sx) :y y :z (+ z sz)}
+                       foot {:x (+ x sx dx) :y y :z (+ z sz dz)}
+                       head {:x (+ x sx dx dx) :y y :z (+ z sz dz dz)}]
+                 :when (and (or (zero? (+ (js/Math.abs sx) (js/Math.abs sz))) (free? stand))
+                            (air? (update stand :y inc))
+                            (free? foot) (free? head) (covered? foot) (covered? head)
+                            (permitted? foot) (permitted? head)
+                            (not= foot (sh-sense/feet p))
+                            (not (refused-twice? c foot)))]
+             {:stand stand :foot foot :head head}))))

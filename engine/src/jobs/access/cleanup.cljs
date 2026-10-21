@@ -5,11 +5,11 @@
             [jobs.lib.ready :as ready]
             [engine.game :as game]
             [engine.memory :as mem]
-            [jobs.access.cleanup.step :refer [centre distance plan-cells blocker next-step]]
+            [jobs.access.cleanup.step :refer [plan-cells blocker next-step]]
             [jobs.access.stair :as stair]
             [jobs.lib.reach :as reach]
             [jobs.lib.danger :as danger-q]
-            [jobs.lib.ledger :as ledger]
+            [jobs.lib.ledger :as ledger :refer [centre distance dig-reach eye-of]]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.keep :as stay]
             [jobs.lib.access.rules :as rules]
@@ -52,7 +52,7 @@
   its entry.
 
   Then one step, passes repeated (paced) until nothing is left to do:
-  - Dig the highest (then nearest) cell within ::reach of the eye that may be dug. The entry is marked
+  - Dig the highest (then nearest) cell within jobs.lib.ledger/reach of the eye that may be dug. The entry is marked
     :removing before the dig, so a cut or restart is decided from the cell.
   - Else walk to within 3 of the nearest (jobs.movement.go-to as a child, :ways #{:walk}: never digging a way), in legs of
     ::leg-s. Before each leg a known hostile within ::danger-radius of the cell, or a flight from one near it or the body,
@@ -109,8 +109,7 @@
 
 
 (a/defargs settings
-  {::reach {:default u/bucket-reach :doc "Cells whose centre is this close to the eye are dug from where the body stands, in blocks." :spec (a/num-in 0 nil)}
-   ::leg-s {:default 6 :doc "A walk goes in legs of this many seconds; the danger is weighed again after each." :spec (a/num-in 0.1 120)}
+  {::leg-s {:default 6 :doc "A walk goes in legs of this many seconds; the danger is weighed again after each." :spec (a/num-in 0.1 120)}
    ::give-up {:default 2 :doc "Walks ending out of reach, or failed digs, after which a cell is held." :spec (a/int-in 1 nil)}
    ::walk-range {:default 3 :doc "How near a scaffold block the body walks before it digs it." :spec (a/int-in 0 nil)}
    ::max-collect-radius {:default 48 :doc "Blocks around the body in which dropped scaffold is collected, at most." :spec (a/int-in 0 nil)}
@@ -122,17 +121,11 @@
 
 (defn max-collect-radius [] (settings/get settings ::max-collect-radius))
 
-(defn dig-reach [] (settings/get settings ::reach))
-
 (defn leg-s [] (settings/get settings ::leg-s))
 
 (defn give-up [] (settings/get settings ::give-up))
 
 (defn danger-radius [] (settings/get settings ::danger-radius))
-
-(defn eye-of [c]
-  (let [{:keys [x y z]} (u/self-pos c)]
-    [x (+ y game/eye-height) z]))
 
 (defn hostile-near?
   "Whether a known hostile (heard or seen) is within the longest follow range (ranged ones within the danger ranged radius)."

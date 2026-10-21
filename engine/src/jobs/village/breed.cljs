@@ -11,7 +11,8 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.cond :as cond]
             [jobs.lib.shelter.beds :as sh-beds]
-            [jobs.survival.bed-down :as bed-down]
+            [jobs.lib.build.wood :as wood]
+            [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -119,7 +120,7 @@
   (let [p (:primitives c)
         vs (villager/seen p)]
     (if (and (bed-short? c vs) (nil? (sh-beds/carried-bed p)) (not (need/fetch-opts c)))
-      (contract/later :no-bed "no free bed seen, none carried and no fetch for one" :need {:reason :need :any-of bed-down/bed-names :count 1})
+      (contract/later :no-bed "no free bed seen, none carried and no fetch for one" :need {:reason :need :any-of wood/bed-names :count 1})
       (contract/ok :bed "a free bed is seen, carried or fetched"))))
 
 (defn pair-lost
@@ -206,12 +207,12 @@
       (>= (:beds-placed (ctx/mem c) 0) (max-beds)) (stop)
       (and (nil? item) (nil? opts)) (stop)
       (nil? item)
-      (let [e (await (need/blocks! c bed-down/bed-names 1 opts))]
+      (let [e (await (need/blocks! c wood/bed-names 1 opts))]
         (cond (= :continue e) :continue
               (and (= :done (:kind e)) (sh-beds/carried-bed p)) :again
               :else (stop)))
       :else
-      (if-let [{:keys [foot head]} (bed-down/bed-layout c false)]
+      (if-let [{:keys [foot head]} (sh-beds/bed-layout c false)]
         (let [r (await (ctx/call c (keyword (str "bed-" (:beds-placed (ctx/mem c) 0))) 'jobs.blocks.place {:pos foot :item item :facing (facing-of foot head)}))]
           (cond (= :continue r) :continue
                 (= :done (:kind r)) (do (ctx/update-mem! c update :beds-placed (fnil inc 0)) :again)

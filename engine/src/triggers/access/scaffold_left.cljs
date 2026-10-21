@@ -5,7 +5,7 @@
     belongs to a job that is no longer live (its job memory is gone: done, cancelled, discarded)
     no cleanup held in the last 10 minutes
     within :near's :radius (32) of the body, so a far scaffold never drags the body back to it
-    not deeper below the feet than jobs.lib.ledger/max-below, not within jobs.lib.ledger/died-radius of a place the body died, not roofed (a solid block within jobs.lib.ledger/roof-height above it) while the body is in the open (jobs.access.cleanup.step/walk-blocker)
+    not deeper below the feet than jobs.lib.ledger/max-below, not within jobs.lib.ledger/died-radius of a place the body died, not roofed (a solid block within jobs.lib.ledger/roof-height above it) while the body is in the open (jobs.lib.ledger/walk-blocker)
   It holds only in the light (a retreat plug is taken back in the dark too: the body sits inside it, but not while it opens onto a dark cell, which cleanup keeps; so is scaffold in the body's own column under its feet: a body perched on its pillar comes down by digging under itself, a step at a time, whatever the light or its health), past the dawn grace and with no known hostile near (jobs.lib.dawn/calm?), and not within
   jobs.lib.threats/fled-memory-ms of a flight, unless ::at-night / ::with-hostile are set: the night's seal is scaffold
   too, and the body is inside it.
@@ -15,8 +15,6 @@
   (:require [jobs.lib.body :as body]
             [engine.args :as a]
             [engine.settings :as settings]
-            [jobs.access.cleanup :as cleanup]
-            [jobs.access.cleanup.step :as step]
             [jobs.lib.dawn :as dawn]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.reach :as reach]
@@ -44,10 +42,10 @@
   (access/sensed-at p access/hidden-guess))
 
 (defn walk-blocked?
-  "Whether the entry e, out of the body's dig reach, is not worth a walk: far below, near a death, roofed (step/walk-blocker)."
+  "Whether the entry e, out of the body's dig reach, is not worth a walk: far below, near a death, roofed (ledger/walk-blocker)."
   [p memory entries e]
-  (boolean (and (> (step/distance (cleanup/eye-of {:primitives p}) (step/centre (:cell e))) (cleanup/dig-reach))
-                (step/walk-blocker {:feet (reach/standing-vec p) :max-below (ledger/max-below) :roof-height (ledger/roof-height)
+  (boolean (and (> (ledger/distance (ledger/eye-of {:primitives p}) (ledger/centre (:cell e))) (ledger/dig-reach))
+                (ledger/walk-blocker {:feet (reach/standing-vec p) :max-below (ledger/max-below) :roof-height (ledger/roof-height)
                                :died-near? (ledger/died-near-of memory) :block-at (access/sensed-at p access/hidden-guess)
                                :ledger (ledger/cells entries)}
                               e))))

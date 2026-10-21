@@ -5,7 +5,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.surface :as surface :refer [open?]]
-            [jobs.farm.till :as till]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.look :as look]
             [jobs.lib.world :as known]
             [jobs.lib.access.zones :as zones]
@@ -63,10 +63,6 @@
     (fn [x y z]
       (boolean (or (contains? cols [x z])
                    (zones/foreign-holder {:zones zones :claims claims :self self :now now :cell [x y z]}))))))
-
-(def farmable-ground
-  "The grounds that are farmland or a hoe makes farmland of (coarse and rooted dirt in two passes)."
-  (conj till/tillable "farmland"))
 
 (defn read-budget [] (settings/get settings ::read-budget))
 
@@ -141,7 +137,7 @@
                               (not (some true? (map (fn [[cx cz] t] (and blocked? (blocked? cx t cz))) cols tops))))
                      (let [wetn (count (filter true? (map (fn [[cx cz] t] (wet? cx cz t)) cols tops)))
                            sky (every? true? (map (fn [[cx cz] t] (sky-of cx cz t)) cols tops))
-                           farm (when farmland? (count (filter true? (map (fn [[cx cz] t] (contains? farmable-ground (name-fn {:x cx :y t :z cz}))) cols tops))))
+                           farm (when farmland? (count (filter true? (map (fn [[cx cz] t] (contains? bs/farmable-ground (name-fn {:x cx :y t :z cz}))) cols tops))))
                            s (score-patch {:tops tops :water-share (/ wetn (count cols)) :sky sky :farmable (some-> farm (/ (count cols)))
                                            :away (js/Math.hypot (- (+ x (/ (dec w) 2)) fx) (- (+ z (/ (dec h) 2)) fz))})]
                        (when s

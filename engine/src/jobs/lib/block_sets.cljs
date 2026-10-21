@@ -8,6 +8,14 @@
 
 (def fluids #{"water" "lava" "bubble_column"})
 
+(def loosened
+  "Grounds a hoe first turns into dirt (a second use makes farmland)."
+  #{"coarse_dirt" "rooted_dirt"})
+
+(def tillable (into #{"dirt" "grass_block" "dirt_path"} loosened))
+
+(def farmable-ground "The grounds that are farmland or a hoe makes farmland of." (conj tillable "farmland"))
+
 (def replaceable
   "Names a placed block takes the place of: air, fluids (plugging a source, bridging water, sealing a leak) and the
   plants, snow and invisible light blocks a placement overwrites."

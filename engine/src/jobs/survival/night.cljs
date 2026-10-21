@@ -436,7 +436,7 @@
         (cond
           door (await (enter-room! c nil))
           (:bed-down (ctx/mem c)) (await (bed-down-step c (:bed (:bed-down (ctx/mem c)))))
-          (and roofed bed-wanted (not bed) (bed-down/bed-layout c true) (room-lib/gap c)) (await (enter-room! c nil))
+          (and roofed bed-wanted (not bed) (sh-beds/bed-layout c true) (room-lib/gap c)) (await (enter-room! c nil))
           (and home-near (walk-home-wanted? c) (or bed bed-wanted)) (await (enter-room! c (:name home-near)))
           (or bed (and bed-wanted (not home-near))) (await (bed-down-step c bed))
           (and bed-way (log-out-wanted? c)) (await (log-out-step c))

@@ -295,7 +295,7 @@
   (is (= '(jobs.access.cleanup) (:job (:scaffold-left triggers/all)))))
 
 (defn blocker [& {:as in}]
-  (cleanup-step/walk-blocker (merge {:feet [3 64 0] :block-at (constantly "air") :ledger #{} :max-below 4 :roof-height 4} in) (entry (:cell in [10 64 0]))))
+  (ledger/walk-blocker (merge {:feet [3 64 0] :block-at (constantly "air") :ledger #{} :max-below 4 :roof-height 4} in) (entry (:cell in [10 64 0]))))
 
 (deftest walk-blocker-says-why-a-scaffold-is-not-worth-a-walk
   (is (= {:reason :far-below} (blocker :feet [3 70 0] :cell [10 60 0])))

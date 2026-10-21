@@ -31,6 +31,7 @@
   (:require [jobs.lib.block-sets :as bs]
             [clojure.string :as str]
             [engine.args :as a]
+            [engine.game :as game]
             [engine.settings :as settings]
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
@@ -40,11 +41,38 @@
 (a/defargs settings
   {::max-below {:default 4 :doc "Blocks below the body a scaffold may lie to be walked to; the scaffold-left trigger ignores a deeper one (a cave, a pit)." :spec (a/int-in 0 nil)}
    ::roof-height {:default 4 :doc "Blocks above a scaffold block within which a solid block (not scaffold) roofs it; the scaffold-left trigger does not offer a roofed one from the open." :spec (a/int-in 0 nil)}
+   ::reach {:default u/bucket-reach :doc "Cells whose centre is this close to the eye are dug from where the body stands, in blocks (jobs.access.cleanup digs them; the scaffold-left trigger walks to the rest)." :spec (a/num-in 0 nil)}
    ::died-radius {:default 24 :doc "Blocks around a place the body died within which the scaffold-left trigger does not offer a scaffold." :spec (a/num-in 0 nil)}})
 
 (defn max-below [] (settings/get settings ::max-below))
 (defn roof-height [] (settings/get settings ::roof-height))
 (defn died-radius [] (settings/get settings ::died-radius))
+(defn dig-reach [] (settings/get settings ::reach))
+
+(defn centre [[x y z]] [(+ x 0.5) (+ y 0.5) (+ z 0.5)])
+
+(defn distance [a b] (apply js/Math.hypot (map - a b)))
+
+(defn eye-of [c]
+  (let [{:keys [x y z]} (u/self-pos c)]
+    [x (+ y game/eye-height) z]))
+
+(defn roofed?
+  "Whether a solid block that is not a ledger cell lies within roof-height above cell."
+  [{:keys [block-at ledger roof-height]} cell]
+  (boolean (some (fn [dy] (let [c (rules/offset cell 0 dy 0)
+                                n (block-at c)]
+                            (and n (not (bs/replaceable n)) (not (contains? ledger c)))))
+                 (range 1 (inc roof-height)))))
+
+(defn walk-blocker
+  "Why the body should not walk to the entry at cell, as {:reason ...}, or nil: :far-below (more than max-below under
+  the feet), :died-near (died-near? of the cell), :roofed (under cover where the body is not)."
+  [{:keys [feet max-below died-near?] :as in} {:keys [cell]}]
+  (cond
+    (> (- (get feet 1) (get cell 1)) max-below) {:reason :far-below}
+    (and died-near? (died-near? cell)) {:reason :died-near}
+    (and (roofed? in cell) (not (roofed? in (update feet 1 dec)))) {:reason :roofed}))
 
 (defn died-near-of
   "A fn of a cell: whether a :died entry of view lies within died-radius of it."

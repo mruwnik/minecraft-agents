@@ -51,14 +51,13 @@
 (def defaults {:spend {:job-time ::job-time-s}})
 (def fit? ready/fit?)
 
-(def field-ground (conj till/tillable "farmland"))
 
 (defn field-cells
   "The seen cells of the box that are farmland or ground a hoe tills (none for bad cell args, which can-start? refuses)."
   [c]
   (let [p (:primitives c)
         cs (try (till/cells (:args c)) (catch :default _ []))]
-    (filterv #(field-ground (u/seen-name p %)) cs)))
+    (filterv #(bs/farmable-ground (u/seen-name p %)) cs)))
 
 ;; The first step only looks: with no field cell seen there is nothing to risk the dark for. Seen cells bring the exposure check back.
 (def safe-at-box (ready/safe-at-by-night work-place/spot))
