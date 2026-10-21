@@ -165,6 +165,16 @@
     (is (= ["skeleton"]
            (mapv :name (:top-mobs (estimate/estimate {:primitives p :args {} :view #(mem/view (:store eng))} death 5000)))))))
 
+(deftest a-route-that-drowns-and-takes-long-is-priced-for-the-air-and-the-time
+  (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities []})
+        death {:pos {:x 20 :y 64 :z 0} :inventory dt/death-pile-of-the-field-report}
+        c {:primitives p :args {} :view #(mem/view (:store eng))}
+        dry (estimate/estimate c death 5000)
+        wet (estimate/estimate c death 5000 {:uses {:job-time [60 60 120]} :route {:drown 9}})]
+    (is (= ["water"] (mapv :name (:top-mobs wet))))
+    (is (< (get-in dry [:parts :walk] 0) (get-in wet [:parts :walk])) "the quoted seconds, not the straight line, price the walk")
+    (is (< (:cost dry) (:cost wet)))))
+
 (deftest a-later-death-by-a-mob-near-an-older-pile-guards-that-pile-too
   (async done
     (tu/run-async done
@@ -413,3 +423,18 @@
             (swap! (fake/state p) update :entities #(filterv (fn [e] (not= "hostile" (:kind e))) %))
             (await (run-until-empty eng 20))
             (is (= :collected (:decision (recovered eng))))))))))
+
+(deftest a-pile-worth-fetching-is-fetched-under-the-danger-when-the-window-cannot-hold-a-wait
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pile dt/death-pile-of-the-field-report
+              {:keys [eng clock]} (setup {:floor tu/walk-floor :entities (conj (vec (pile-drops pile)) dt/zombie-by-the-way)})]
+          (die! eng {:pos dt/death-pos :inventory pile})
+          (swap! clock + 270000)
+          (mem/write! (:store eng) :recover-trip {:death-t (:t (mem/latest (mem/view (:store eng)) :died)) :cuts 2 :hostile-cut true :phase :go}
+                      {:cap 1 :ttl 1000000})
+          (core/submit! eng '(jobs.survival.recover-drops {:danger-overrides {"zombie" 1000}}) {})
+          (await (run-until-empty eng 20))
+          (is (empty? (mem/entries (mem/view (:store eng)) :recover-danger)) "no wait for the danger to pass was set")
+          (is (= :collected (:decision (recovered eng)))))))))

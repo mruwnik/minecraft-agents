@@ -19,11 +19,13 @@
 (a/defargs settings
   {::radius {:default 2 :doc "Columns this far sideways are searched for air." :spec (a/num-in 0 nil)}
    ::depth {:default 24 :doc "Blocks below the feet a drowning body looks for seen air, the way it came (within air-radius sideways)." :spec (a/int-in 0 64)}
+   ::slice-s {:default 10 :doc "Seconds one go-to child of a run may take; a body that did not get there is looked at again (hit? fight?) before the next try." :spec (a/num-in 0.1 nil)}
    ::max-cap-digs {:default 3 :doc "Cap digs one run makes at most." :spec (a/int-in 0 nil)}
    ::cap-dig-share {:default 0.5 :doc "Share of the air left (oxygen, then health) a cap dig may take; a slower dig is not started and the dig gives up at it." :spec (a/num-in 0 1)}})
 (defn radius [] (settings/get settings ::radius))
 (def status swim/status)
 (defn depth [] (settings/get settings ::depth))
+(defn slice-s [] (settings/get settings ::slice-s))
 (defn max-cap-digs [] (settings/get settings ::max-cap-digs))
 (defn cap-dig-share [] (settings/get settings ::cap-dig-share))
 
@@ -212,5 +214,5 @@
   "One go-to child call to target: true when it reports arrival. A call that yields or does not end :done is a failed
   try (the walk-only go-to waits on nothing)."
   [c slot target range]
-  (let [e (await (ctx/call c slot 'jobs.movement.go-to {:pos target :range range :ways #{:walk :dig} :may-dig #{:own} :floor {:health 1} :settings {:jobs.lib.cost.planner/lethal-air true}}))]
+  (let [e (await (ctx/call c slot 'jobs.movement.go-to {:pos target :range range :ways #{:walk :dig} :may-dig #{:own} :floor {:health 1} :spend {:job-time (slice-s)} :settings {:jobs.lib.cost.planner/lethal-air true}}))]
     (and (= :done (:kind e)) (boolean (:arrived (:data e))))))

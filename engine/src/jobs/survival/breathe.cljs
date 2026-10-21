@@ -17,7 +17,8 @@
             [jobs.lib.shore :as shore]
             [jobs.lib.swim :as swim]
             [jobs.lib.util :as u]
-            [jobs.survival.breathe.air :as air]))
+            [jobs.survival.breathe.air :as air]
+            [jobs.survival.breathe.fight :as fight]))
 
 (def doc
   "Get air when drowning or stuck inside a block, then out of the water, in one run (a reflex; never yields).
@@ -47,6 +48,9 @@
     written to the scaffold ledger (purpose :breathe-step, for jobs.access.cleanup), at most 2 per spot; the next
     pass's shore swim climbs onto it; then a swim leg, a go-to to the farthest loaded surface water 8..leg-length (32) blocks out, outward from the run's
     start only, inside swim-range (96) of it, at most max-legs (6) legs (a leg that moved starts afresh at its end).
+  A mob that hits the body (a hostile within the fight radius and a hit within the window, jobs.survival.breathe.fight) is fought with
+  jobs.combat.attack, holding where it floats, when the body can breathe (surfaced, still in water) or when the swim up has risen no
+  higher for the stall seconds while drowning.
   Done at once when the body is neither drowning, enclosed nor surfaced but still in water. A reflex
   (level danger): it exhausts its ways before it stops and never yields :continue (only a cut round returns it, unseen). Ends :done when the head is clear
   and, after a swim, the body stands on solid ground out of the water. Else nothing-possible:
@@ -280,14 +284,17 @@
     :again))
 
 (defn ^:async land-by-go-to!
-  "A go-to child onto land at target. :done when the body then stands on land, else :again (target excluded)."
+  "A go-to child onto land at target. :done when the body then stands on land, else :again (target excluded, unless the
+  child's time slice ended with the body nearer by the min-leg setting: that try does not count)."
   [c target]
-  (ctx/update-mem! c (fn [m] (-> m (update :land-tries (fnil inc 0)) (update :travelled (fnil + 0) (hdist (u/self-pos c) target)))))
-  (await (air/go! c :land target 0))
-  (if (on-land? (:primitives c))
-    :done
-    (do (ctx/update-mem! c update :failed-land (fnil conj []) target)
-        :again)))
+  (let [before (hdist (u/self-pos c) target)]
+    (ctx/update-mem! c (fn [m] (-> m (update :land-tries (fnil inc 0)) (update :travelled (fnil + 0) before))))
+    (await (air/go! c :land target 0))
+    (cond
+      (on-land? (:primitives c)) :done
+      (>= (- before (hdist (u/self-pos c) target)) (min-leg)) (do (ctx/update-mem! c update :land-tries dec) :again)
+      :else (do (ctx/update-mem! c update :failed-land (fnil conj []) target)
+                :again))))
 
 (defn ^:async swim-leg!
   "One swim leg with a go-to child to target along heading; the run's memory is updated by after-leg."
@@ -374,8 +381,10 @@
   (let [p (:primitives c)
         why (breath/situation p)]
     (cond
-      (and (nil? why) (surfaced-in-water? c)) (await (head-for-land! c))
+      (and (nil? why) (surfaced-in-water? c)) (await (if (fight/attacked? c) (fight/fight! c) (head-for-land! c)))
       (nil? why) :done
+
+      (and (= :drowning why) (fight/stalled? c) (fight/attacked? c)) (await (fight/fight! c))
 
       :else
       (let [side (when (and (= :enclosed why) (not (:side-tried (ctx/mem c))))

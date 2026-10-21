@@ -63,12 +63,13 @@
           (is (nil? (recovered eng)) "the death stays open")
           (is (< (:until danger) (+ (death-t eng) 300000))))))))
 
-(deftest a-back-off-with-no-time-to-come-back-abandons-the-pile
+(deftest a-back-off-with-no-time-to-come-back-fetches-the-pile-under-the-danger
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (await ((dear-run 288000)))]
-          (is (= {:decision :abandoned :reason :danger} (select-keys (recovered eng) [:decision :reason]))))))))
+        (let [{:keys [eng danger]} (await ((dear-run 288000)))]
+          (is (nil? danger) "no wait that the window cannot hold")
+          (is (not= :abandoned (:decision (recovered eng)))))))))
 
 (defn on-first-leg!
   "Cut the first walk step short (2 s, a few blocks, the clock moved on by them so the leg's seconds are used) and run (f) as it is taken."
@@ -143,5 +144,6 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng]} (await ((dear-run 281000)))]
-          (is (= {:decision :abandoned :reason :danger} (select-keys (recovered eng) [:decision :reason]))))))))
+        (let [{:keys [eng danger]} (await ((dear-run 281000)))]
+          (is (nil? danger) "the flight and the walk back leave no time to wait")
+          (is (not= :abandoned (:decision (recovered eng)))))))))

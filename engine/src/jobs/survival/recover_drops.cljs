@@ -28,7 +28,7 @@
   "After a death, go back for the drops when they are worth it. Serves the :died entry no :recovered covers (the keyed one, else the open pile best net of the walk); one run is the whole trip and writes :recovered {:decision :skip|:collected|:partial|:abandoned}. A run cut by a reflex or a restart goes on with the same trip (:recover-trip).
   Ready: never waits for light or dawn; the drops despawn 5 min after the death (game/despawn-ticks). The children run under :checks {:safe? (always)}: the trip prices its own danger.
   Decision: the carried items' value (jobs.lib.cost/item-value, args :value-overrides) against the walk's cost (jobs.lib.cost/fetch-cost, route-danger, args :danger-overrides, ::margin); infinite for lava, fire, the void or a walk ending after the despawn.
-  Danger: a real danger (jobs.lib.danger/nearest-danger) is weighed once per mob; a skip for danger alone is remembered (:recover-danger, ::danger-memory-ms, the mobs priced where they stood until their place is seen empty (in range, clear line)), after which can-run? is :later :danger and the died trigger rests; :retry weighs now and ends at once.
+  Danger: a real danger (jobs.lib.danger/nearest-danger) is weighed once per mob; a skip for danger alone is remembered (:recover-danger, ::danger-memory-ms, the mobs priced where they stood until their place is seen empty (in range, clear line)), after which can-run? is :later :danger and the died trigger rests; :retry weighs now and ends at once. The walk is priced from go-to's quote (its seconds, the air the route spends); a hold that would leave under ::hold-slack times the walk of the despawn window, or under ::min-hold-s, is no wait: the pile is fetched under the danger.
   Kit: a pile worth it were the route safe, and no weapon or armour: fetch the best piece a known chest holds (the call's ways, jobs.lib.need) and wear it.
   Fetch: legs of ::leg-s (weighed again after each), then up to 3 collect passes (jobs.items.collect-drops), a look and a walk round the pile; own seal blocks near it are taken back (jobs.access.cleanup), a deep pile is reached by a stair (jobs.access.tunnel).
   Ends: :collected done; :skip condition-failed :not-worth; :partial nothing-possible :unreachable or :not-visible; :abandoned by reason (:window-closed condition-failed :gone, :danger, :nothing-found condition-failed, :unreachable nothing-possible). Data :decision :text :pos :value :items :left. A walk that did not arrive leaves the death open.
@@ -77,10 +77,15 @@
             n (if (:baseline (ctx/mem c)) (pl/recovered-items c pile) 0)]
         (contract/later :recovering (str n " of " total " items back") :units :items :done n :left (- total n))))))
 
+(defn ^:async quote-trip
+  "go-to's quote of the walk to pos (its planned seconds, and the hp the route drowns), nil without a pos."
+  [c pos]
+  (when pos (await (ctx/quote c 'jobs.movement.go-to {:pos pos :range (cfg/arrive-range)}))))
+
 (defn ^:async trip-s
   "[least mean] seconds of the walk to pos as go-to quotes it, the mean with ::collect-s at the pile."
   [c pos]
-  (let [[least mean] (or (when pos (get-in (await (ctx/quote c 'jobs.movement.go-to {:pos pos :range (cfg/arrive-range)})) [:uses :job-time])) [0 0])]
+  (let [[least mean] (or (get-in (await (quote-trip c pos)) [:uses :job-time]) [0 0])]
     [least (+ mean (settings/get settings ::collect-s))]))
 
 (defn window-ms
@@ -106,13 +111,14 @@
       (dth/window-closed? c entry) (do (ctx/hold-still! c nil) :closed)
       :else (do (await (child/pause! c (cfg/pause-s) reason)) (await (pace/pace!)) (recur)))))
 
-(defn decide!
+(defn ^:async decide!
   "The decision of this trip: the saved one, else the estimate, save it. A resumed trip estimates again once (from
   where the body stands, with the hostiles it knows now), and so does a walk after each leg; its baseline stays."
   [c entry]
   (if (and (:decided (ctx/mem c)) (not (:recheck (ctx/mem c))) (or (zero? (:cuts (ctx/mem c) 0)) (:reestimated (ctx/mem c))))
     (:decided (ctx/mem c))
-    (let [e (-> (est/estimate c (:data entry) (settings/ticks->ms (game/ticks-since entry (ctx/view c))))
+    (let [quoted (await (quote-trip c (:pos (:data entry))))
+          e (-> (est/estimate c (:data entry) (settings/ticks->ms (game/ticks-since entry (ctx/view c))) quoted)
                 (update :cost est/finite)
                 (assoc :at (ctx/now c)))]
       (ctx/update-mem! c #(cond-> (assoc % :decided e :reestimated true :recheck false) (nil? (:baseline %)) (assoc :baseline (storage/carried-totals (u/inventory (:primitives c))))))
@@ -131,19 +137,29 @@
     (ctx/end c :condition-failed :danger {:top-mobs (:top-mobs decided) :hold-s (js/Math.round (/ hold-ms 1000)) :pos (:pos (:data entry))})
     :next))
 
+(defn go-under-danger!
+  "The window cannot hold a wait for the danger to pass (a pile worth fetching were the route safe): fetch it now with the
+  danger left out of the cost, the hostile reflexes meeting the mobs on the way (Q367: never wait out a pile)."
+  [c entry decided room-ms]
+  (ctx/emit! c :recover.under-danger :info
+             {:text (str "fetching under the danger: " (js/Math.round (/ (max 0 room-ms) 1000)) " s of the window are left after the walk, too little to wait for it to pass")})
+  (ctx/update-mem! c update :decided assoc :cost (- (:cost decided) (get-in decided [:parts :danger])) :under-danger true)
+  (dth/save-trip! c)
+  :next)
+
 (defn ^:async retry-later!
   "A skip for danger backs off while the trip can still come back: report it, forget the estimate, remember the danger
-  (:recover-danger, for ::danger-memory-ms; an assumed killer alone only while its guard lasts; at most until the walk back
-  from the flight's end (est/flight-s) and the collect, as trip-s quotes them, would end at the despawn) and end condition-failed :danger: the hostile reflex
-  takes the body away. The died trigger and the check rest for this death meanwhile, then the danger is weighed anew.
-  No time left to come back: the pile is abandoned :danger."
+  (:recover-danger, for ::danger-memory-ms; an assumed killer alone only while its guard lasts; at most until ::hold-slack
+  times the walk back from the flight's end (est/flight-s) and the collect, as trip-s quotes them, would end at the despawn)
+  and end condition-failed :danger: the hostile reflex takes the body away. The died trigger and the check rest for this
+  death meanwhile, then the danger is weighed anew. A hold under ::min-hold-s is no wait: the pile is fetched under the danger."
   [c entry decided]
-  (let [room (- (window-ms c entry) (* 1000 (+ (second (await (trip-s c (:pos (:data entry))))) (:flight-s decided 0))))
-        hold-ms (min room (:hold-ms decided (cfg/danger-memory-ms)))
-        mobs (str/join ", " (map :name (:top-mobs decided)))]
-    (if (pos? room)
+  (let [need-ms (* 1000 (cfg/hold-slack) (+ (second (await (trip-s c (:pos (:data entry))))) (:flight-s decided 0)))
+        room (- (window-ms c entry) need-ms)
+        hold-ms (min room (:hold-ms decided (cfg/danger-memory-ms)))]
+    (if (>= hold-ms (cfg/min-hold-ms))
       (retreat! c entry decided hold-ms)
-      (end/finish! c :abandoned (assoc decided :reason :danger :detail (str mobs " guard it and no walk back would end before it despawns"))))))
+      (go-under-danger! c entry decided room))))
 
 (defn ^:async dig-down!
   "A stair down to the pile (jobs.access.tunnel): :next once it ended there, else the trip ends :abandoned. Not when
@@ -177,7 +193,7 @@
   (let [margin (cfg/margin)
         radius-to-collect (settings/get settings ::collect-radius)
         kit (await (kt/kit! c entry))
-        decided (when-not kit (decide! c entry))
+        decided (when-not kit (await (decide! c entry)))
         pos (:pos (:data entry))]
     (cond
       kit kit
@@ -189,7 +205,7 @@
           (end/finish! c :abandoned (assoc decided :reason :unreachable :detail (est/unreachable-detail c pos)))
           (end/finish! c :skip decided)))
 
-      (>= (:cuts (ctx/mem c) 0) (cfg/max-hostile-cuts))
+      (and (>= (:cuts (ctx/mem c) 0) (cfg/max-hostile-cuts)) (not (:under-danger decided)))
       (end/finish! c :abandoned (assoc decided :reason :danger))
 
       (child/exhausted? c :go)

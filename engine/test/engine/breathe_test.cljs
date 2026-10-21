@@ -15,6 +15,7 @@
             [jobs.lib.swim :as swim]
             [jobs.survival.breathe :as b]
             [jobs.survival.breathe.air :as air]
+            [jobs.survival.breathe.fight :as fight]
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
@@ -30,7 +31,7 @@
          p (tu/seeing-all (tu/fake world))
          eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                            :events (events/make {:body "Fake" :sinks [sink #(swap! raw conj %)] :now #(deref clock)})})]
-     {:eng eng :p p :seen seen})))
+     {:eng eng :p p :seen seen :clock clock})))
 
 (defn holds? [p args]
   ((:when (get triggers/all :suffocating)) p nil args))
@@ -1652,3 +1653,30 @@
 (deftest a-stop-before-the-cap-was-reached-says-not-tried-not-no-cap
   (is (= {:air-radius 24 :cap :not-tried :pocket :not-tried} (b/air-stop-fields {})))
   (is (= :too-slow (:cap (b/air-stop-fields {:cap :too-slow})))))
+
+(deftest a-swim-up-that-rises-no-higher-while-attacked-is-stalled
+  (settings/with-settings {:jobs.survival.breathe.fight/stall-s 4 :jobs.survival.breathe.fight/rise 0.5}
+    (fn []
+      (are [rise y now expected] (= expected (fight/step-rise rise y now))
+        nil 64 1000 [{:y 64 :t 1000} false]
+        {:y 64 :t 1000} 65 3000 [{:y 65 :t 3000} false]
+        {:y 64 :t 1000} 64.3 4000 [{:y 64 :t 1000} false]
+        {:y 64 :t 1000} 64.3 5100 [{:y 64 :t 1000} true]))))
+
+(deftest surfaced-in-a-pool-with-a-mob-hitting-it-the-body-fights-before-it-swims-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (setup {:self {:inWater true :oxygen 4}
+                                      :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 1.5 :y 64 :z 0.5} :health 20}]
+                                      :blocks (merge pool {"3,64,0" "stone" "3,63,0" "stone"})})]
+          (.override (.-world p) "attack"
+                     (fn [token a impl]
+                       (swap! clock + 700)
+                       (swap! (fake/state p) assoc :entities [])
+                       (impl token a)))
+          (.emit (.-world p) (clj->js {:kind "hurt" :food 20 :health 17 :amount 3 :attacker {:id 7 :name "zombie"}}))
+          (await (one-run! eng {:settings {:jobs.survival.breathe/max-passes 8}}))
+          (let [names (call-names p)]
+            (is (some #{"attack"} names) (pr-str names))
+            (is (< 0 (.indexOf names "attack")) "after the swim up, the body that surfaced fights")))))))

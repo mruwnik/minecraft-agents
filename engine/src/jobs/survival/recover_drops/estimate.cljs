@@ -92,8 +92,9 @@
 
 (defn estimate
   "{:value :cost :parts :reason :top-items :top-mobs :hold-ms :flight-s} (:hold-ms: how long a skip for this danger is remembered,
-  ::danger-memory-ms, or what is left of the killer guards when only assumed killers add danger; :flight-s: flight-s) of recovering the drops of the :died data (cost js/Infinity when they cannot be fetched)."
-  [c {:keys [pos inventory cause experience]} elapsed]
+  ::danger-memory-ms, or what is left of the killer guards when only assumed killers add danger; :flight-s: flight-s) of recovering the drops of the :died data (cost js/Infinity when they cannot be fetched). quoted, go-to's quote of the walk when given, lengthens the walk to its planned seconds and prices the hp its route drowns as danger."
+  ([c data elapsed] (estimate c data elapsed nil))
+  ([c {:keys [pos inventory cause experience]} elapsed quoted]
   (let [p (:primitives c)
         seen (danger-q/seen-hostiles p)
         known-spots (mapv (fn [m] {:name (.-name m) :pos (danger-q/mob-pos p m)}) seen)
@@ -110,10 +111,13 @@
                  (cost/route-danger version kind-at route (concat known guard) (.-equipment (.self p))
                                     :overrides (:danger-overrides (:args c)) :weapon (combat/best-weapon p combat/default-weapons) :health (.-health (.self p)))
                  {:danger 0 :mobs []})
-        wet (when (or (= "drowning" cause) (wet-pile? kind-at pos))
-              {:name (if (= "drowning" cause) "drowning" "water") :danger (cfg/wet-danger)})
+        drown-hp (get-in quoted [:route :drown] 0)
+        wet (when (or (= "drowning" cause) (wet-pile? kind-at pos) (pos? drown-hp))
+              {:name (if (= "drowning" cause) "drowning" "water")
+               :danger (max drown-hp (if (or (= "drowning" cause) (wet-pile? kind-at pos)) (cfg/wet-danger) 0))})
+        quoted-s (let [mean (second (get-in quoted [:uses :job-time]))] (when (and (number? mean) (js/isFinite mean)) mean))
         threat (cond-> threat wet (-> (update :danger + (:danger wet)) (update :mobs #(vec (cons wet %)))))
-        fetch (cost/fetch-cost {:distance (when pos (u/dist here pos)) :danger (:danger threat) :elapsed-ms elapsed :cause cause})]
+        fetch (cost/fetch-cost {:distance (when pos (max (u/dist here pos) (* (or quoted-s 0) (cost/walk-blocks-per-s)))) :danger (:danger threat) :elapsed-ms elapsed :cause cause})]
     (cond-> {:value (+ (:value worth) (cost/experience-cost experience))
              :cost (:cost fetch)
              :hold-ms (if (and (seq (:mobs threat)) (every? guard-spots (map :pos (:mobs threat))))
@@ -124,7 +128,7 @@
       (:parts fetch) (assoc :parts (:parts fetch))
       (:reason fetch) (assoc :reason (:reason fetch))
       (seq (:mobs threat)) (assoc :seen-mobs (vec (for [m (:mobs threat) :when (and (:pos m) (not (guard-spots (:pos m))))] (select-keys m [:name :pos])))
-                                  :top-mobs (mapv #(select-keys % [:name :danger]) (take (cfg/top-n) (:mobs threat)))))))
+                                  :top-mobs (mapv #(select-keys % [:name :danger]) (take (cfg/top-n) (:mobs threat))))))))
 
 (defn danger-only?
   "Whether the estimate e is a skip for danger alone: the pile would be fetched were the route safe."
