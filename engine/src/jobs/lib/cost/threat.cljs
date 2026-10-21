@@ -17,7 +17,7 @@
 (def mob-dps
   "Damage a mob deals per second while it can hit the body (normal difficulty). Unknown mobs count as 3."
   {"zombie" 3 "husk" 3 "drowned" 3 "zombie_villager" 3 "skeleton" 2 "stray" 2 "parched" 2 "bogged" 2 "spider" 2 "cave_spider" 3
-   "witch" 3 "pillager" 2 "vindicator" 8 "slime" 2 "silverfish" 1 "endermite" 2 "phantom" 2 "enderman" 7})
+   "witch" 3 "pillager" 2 "vindicator" 8 "slime" 2 "silverfish" 1 "endermite" 2 "phantom" 2 "enderman" 5})
 
 (defn creeper-blast [] (settings/get settings ::creeper-blast))
 (defn creeper-exchange [] (settings/get settings ::creeper-exchange))

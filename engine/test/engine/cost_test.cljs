@@ -56,6 +56,12 @@
   (is (= 3.45 (round2 (cost/fight-damage {:weapon "iron_sword" :equipment iron-set :mobs [{:name "zombie" :distance 3}]})))
       "4 swings, 2.5 s of 3 hp hits: vanilla's 13.5 effective points take 54% off"))
 
+(deftest an-enderman-costs-a-full-iron-body-about-twelve-health
+  (let [cost-of #(cost/fight-damage {:weapon "iron_sword" :equipment iron-set :mobs [{:name "enderman" :distance 3 :health %}]})]
+    (is (< 10 (cost-of 40) 13) "7 swings of 6, 5 s of an enderman's 5 hp/s (2.2 per hit in iron measured), 46% through the armour")
+    (is (cost/leaves-reserve? {:health 20 :reserve 4 :damage (cost-of 40)}) "a full-health body wins")
+    (is (not (cost/leaves-reserve? {:health 12 :reserve 4 :damage (cost-of 40)})) "at 12 it would end near 0")))
+
 (deftest burning-bypasses-armour-points-but-not-fire-protection
   (let [burn #(cost/after-armour (cost/armour-stats %) :burning 10 1)]
     (is (= (burn nil) (burn iron-set)) "armour points do nothing against burning")
