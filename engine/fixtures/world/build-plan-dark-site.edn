@@ -1,0 +1,30 @@
+;; Card 89b0286a: jobs.build.from-plan builds a dark site by torchlight: with torches carried it lights the work area first
+;; (build.light-area over the owed cells' box) instead of waiting for light, then places the plan.
+;; Sealed dark plot (no clock). Should-succeed: dark-room-is-lit-then-built (planks placed, a room corner lit by a torch it hung).
+;; Also: no-torch-dark-room-is-still-built-unlit (no torch, none craftable: nothing is hung, the build still ends done underground).
+{:defaults
+ {:tags [:build :light :torches] :time :any
+  :plot {:height 8 :light :dark :length 64}
+  :blocks [[:fill [0 0 8] [60 3 24] "stone"] [:fill [3 0 12] [11 1 20] "air"]]
+  :body {:at [7.5 0 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "dark-room-is-lit-then-built"
+   :body {:inventory [["torch" 8] ["oak_planks" 6]]}
+   :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [5 0 14] #at [6 0 14] #at [9 0 18]] :want "oak_planks"}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]
+         [:await {:source :job :kind :completed} 150]
+         [:wait-s 1]
+         [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [3 0 12]] {:ok true :light {:lit? true}}]
+         [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [11 0 20]] {:ok true :light {:lit? true}}]]
+   :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 150 :of-job true}]
+   :after [[:block [5 0 14] "oak_planks"] [:block [6 0 14] "oak_planks"] [:block [9 0 18] "oak_planks"]]}
+  {:name "no-torch-dark-room-is-still-built-unlit"
+   :body {:inventory [["oak_planks" 6]]}
+   :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [5 0 14] #at [6 0 14]] :want "oak_planks"}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]
+         [:await {:source :job :kind :completed} 150]
+         [:wait-s 1]
+         [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [11 0 20]] {:ok true :light {:lit? false}}]]
+   :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 150 :of-job true}]
+   :after [[:block [5 0 14] "oak_planks"]]}]}

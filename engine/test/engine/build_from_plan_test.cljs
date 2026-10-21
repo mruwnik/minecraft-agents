@@ -1548,3 +1548,17 @@
               order (mapv first (places p))]
           (is (= 6 (:placed result)) (pr-str order (:given-up result)))
           (is (not (reach-room/enclosed? p))))))))
+
+(deftest a-dark-site-is-lit-with-carried-torches-before-it-is-built
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (update (pen-plan) :parts #(vec (butlast %)))
+              {:keys [eng p]} (start {:inventory (conj (vec (butlast kit)) {:name "torch" :count 4})
+                                      :time 18000 :light {} :light-default [0 0]}
+                                     {"pen" plan})
+              result (await (child-outcome eng job {:plan "pen"} 400))
+              torches (for [x (range 0 7) y [64 65] z (range 0 7) :when (= "torch" (block p [x y z]))] [x y z])]
+          (is (seq torches) "a torch hung in the dark site")
+          (is (every? #(= "oak_fence" (block p %)) ring))
+          (is (= [] (:missing result)) (pr-str result)))))))

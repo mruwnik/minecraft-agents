@@ -24,6 +24,7 @@
             [jobs.lib.build.scaffold :as scaffold]
             [jobs.build.from-plan.cells :refer [diggable in-reach in-dig-reach seals? shuts-out? exit-point off-low-floor buried? reaching support-looks]]
             [jobs.build.from-plan.book :refer [walk-fail retry-walks warn-way-in! place-one! settle-placing! dig-one! result-data finish! book-failed!]]
+            [jobs.build.from-plan.light :as light]
             [jobs.lib.build.text :refer [summary stopped-text assoc-fetch-failed]]))
 
 (def doc
@@ -93,7 +94,7 @@
 
 (def target [:plan :part])
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
-(def safe? (ready/safe-at-by-night work-place/spot))
+(def safe? (light/lights-itself (ready/safe-at-by-night work-place/spot)))
 (def fit? ready/fit?)
 
 (a/defargs settings
@@ -396,6 +397,7 @@
       (do (when (and wood (nil? (:wood (ctx/mem c)))) (ctx/update-mem! c assoc :wood wood))
           (hold-bed! c cells)
           (or (await (fetch-step! c))
+              (await (light/light! c cells))
               (let [cells (:cells (planned c))]
                 (settle-placing! c cells)
                 (await (build-step! c cells))))))))
