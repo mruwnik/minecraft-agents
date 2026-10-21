@@ -8,8 +8,10 @@
 
 (a/defargs settings
   {::reach {:default 10 :doc "Blocks above the feet the air search climbs." :spec (a/num-in 0 nil)}
+   ::step-s {:default 3 :doc "Seconds the sideways step to another air column may take; the body is drowning, so a longer one is given up and the air is looked for again." :spec (a/num-in 0.1 nil)}
    ::air-radius {:default 24 :doc "When no air is near, a go-to child searches for air-reaching water this many blocks sideways." :spec (a/int-in 1 32)}})
 (defn reach [] (settings/get settings ::reach))
+(defn step-s [] (settings/get settings ::step-s))
 (defn air-radius [] (settings/get settings ::air-radius))
 
 (defn rose?
@@ -69,5 +71,6 @@
 
       :else
       ;; raw moveTo kept: an emergency step to air or out of water (range 0), where the planner may have no standable cell; no time for a plan.
-      (= "arrived" (status (await (ctx/act c :moveTo (clj->js {:pos {:x (:x target) :y fy :z (:z target)}
-                                                                :range 0}))))))))
+      (do (ctx/emit! c :breathe.step :info {:text (str "air column at " (:x target) " " (:z target) ": stepping sideways from " fx " " fz) :target target :from {:x fx :y fy :z fz}})
+          (= "arrived" (status (await (ctx/act c :moveTo (clj->js {:pos {:x (:x target) :y fy :z (:z target)}
+                                                                    :range 0 :timeoutS (step-s)})))))))))

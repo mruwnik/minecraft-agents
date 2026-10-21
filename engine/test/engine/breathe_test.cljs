@@ -247,6 +247,8 @@
               {:keys [eng p seen]} (setup world)]
           (await (one-run! eng side-args))
           (is (= ["moveTo" "swim"] (take 2 (call-names p))) "sideways at feet height, then up the adjacent column")
+          (is (= (swim/step-s) (some-> (first (filter #(= "moveTo" (.-name %)) (.-calls (.-world p)))) .-args .-timeoutS))
+              "the sideways step is time-bounded: a drowning body must not hang in a planner for seconds")
           (is (= {:x 0 :y 69 :z 0} (core/self-pos p)) "then walked onto the cap, the one land in reach")
           (is (= [[:completed nil]] (ended seen))))))))
 
