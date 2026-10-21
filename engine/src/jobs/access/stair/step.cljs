@@ -153,6 +153,8 @@
         (= :again r) (do (mem/plug! c cell) {:reason :hazard :cell cell :plugged cell :hazards [{:reason :fluid-adjacent :fluid "water" :at w}]})
         :else (assoc r :reason :water-unplugged)))))
 
+(def no-tool-hint "no tool harvests it: pass :need-drop false to dig it by hand (slow, no drop)")
+
 (defn by-hand?
   "Whether block is dug bare-handed: `:need-drop false` asks for it."
   [c block]

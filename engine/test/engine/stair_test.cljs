@@ -1365,6 +1365,7 @@
           (dotimes [_ 6]
             (swap! clock + 700)
             (await (core/tick! eng)))
+          (is (re-find #":need-drop false" (:hint (core/waiting eng id))) "the wait says how to dig it by hand")
           (is (= :no-tool (:reason (core/waiting eng id))) "listed: it waits, it does not start and end")
           (is (empty? (digs p))))))))
 

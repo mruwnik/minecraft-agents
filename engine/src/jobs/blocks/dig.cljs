@@ -318,6 +318,9 @@
   pick up) or :unreachable (the primitive says out of reach)."
   [c pos block]
   (await (tools/equip! c block {:only (use-tools c)}))
+  (when (tools/needs-tool-to-clear? (:primitives c) block)
+    (ctx/emit! c :blocks.dig.by-hand :info {:pos (b/cell pos) :block block
+                                            :text (str "digging " block " at " (pr-str (b/cell pos)) " by hand (slow, no drop)")}))
   (let [before (u/inventory (:primitives c))
         r (await (tidy/dig! c pos))
         status (.-status r)

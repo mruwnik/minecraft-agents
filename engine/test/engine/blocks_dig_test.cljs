@@ -187,9 +187,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:self body :blocks {"2,64,0" "stone"}})
+        (let [{:keys [eng p seen]} (setup {:self body :blocks {"2,64,0" "stone"}})
               result (await (tu/child-outcome eng job {:pos at :need-drop false :collect false} 5))]
           (is (= {:dug true :collected 0} (select-keys result [:dug :collected])))
+          (is (= 1 (count (filter #(= :blocks.dig.by-hand (:kind %)) @seen))) "a hand dig says so, so it is seen working")
           (is (= "air" (block-at p at))))))))
 
 (def farm-zone {:name "farm" :min [2 60 0] :max [2 70 0] :owner "Miles"})

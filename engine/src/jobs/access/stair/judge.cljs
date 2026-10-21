@@ -61,7 +61,7 @@
         block (some #(let [n (when-not (unknown? p %) (block-at %))] (when (and n (not (bs/air n)) (not (rules/unbreakable n))) n)) (next-cut c))]
     (cond
       (nil? block) nil
-      (sstep/lacks-tool? c block) {:reason :no-tool :tool (tools/needed-kind p block) :block block}
+      (sstep/lacks-tool? c block) {:reason :no-tool :tool (tools/needed-kind p block) :block block :hint sstep/no-tool-hint}
       (not (sstep/drop-room? c block)) {:reason :no-free-slot :block block})))
 
 (defn unmet

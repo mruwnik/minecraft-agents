@@ -37,7 +37,8 @@
    ;; card 21f32f58: :need-drop false digs a block no carried tool harvests (slow, the drop is lost)
    :blocks [[:set [18 0 16] "stone"]]
    :act [[:job (jobs.blocks.dig {:pos #at [18 0 16] :need-drop false})]]
-   :expect [{:event {:source :job :kind :completed :data {:reason :dug}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :blocks.dig.by-hand} :within-s 30 :of-job true}
+            {:event {:source :job :kind :completed :data {:reason :dug}} :within-s 60 :of-job true}]
    :after [[:block [18 0 16] "air"] [:item "cobblestone" 0]]
    :limit-s 90}
   {:name "dig-iron-ore-with-a-wooden-pickaxe-waits-for-the-drop"
