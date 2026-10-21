@@ -130,8 +130,8 @@
         (let [spec {:blocks (merge (lt/tree 3 0 "oak" 3) (lt/tree 6 0 "oak" 3))}]
           (is (= [3 3 3] (await (fell-at spec {:radius 10}))) "without :at the nearest tree")
           (is (= [6 6 6] (await (fell-at spec {:radius 10 :at {:x 6 :y 64 :z 0}}))))
-          (is (= [6 6 6] (await (fell-at (assoc spec :self {:pos {:x 40 :y 64 :z 0}}) {:radius 10 :at {:x 6 :y 64 :z 0}})))
-              "also from beyond the radius"))))))
+          (is (= [6 6 7 6] (await (fell-at (assoc spec :self {:pos {:x 40 :y 64 :z 0}}) {:radius 10 :at {:x 6 :y 64 :z 0}})))
+              "also from beyond the radius (the leaf at x 7 hides the top log from the east: dug first)"))))))
 
 (deftest fell-tree-walks-to-the-foot-of-the-column-and-digs-high-logs-from-there
   (async done

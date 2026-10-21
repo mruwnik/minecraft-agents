@@ -213,8 +213,8 @@
   before it is dug (write-ahead; withdrawn when the log is still standing after the round). Resolves to :ok,
   :partial (the walk made progress but is not in reach yet; call again), :high (the log is out of reach from the ground
   and a pillar is allowed, and the body is not on one: climbing?) or a non-ok outcome for the round to count as a failure (:unreachable, :cannot, :refused and
-  :out-of-reach mean the tree cannot be dug from here). A log the dig cannot walk to a sight of
-  because leaves hide it from the eye has the leaf in the way dug instead: :ok, the log is met again next round."
+  :out-of-reach mean the tree cannot be dug from here). A log in reach that leaves hide from the eye has the leaf in the way dug first (as a player cuts in), not a
+  walk round the tree to a sight: :ok, the log is met again next round."
   [c l {:keys [base species climbing?]}]
   (let [pos (:pos l)
         w (await (approach! c pos (:y base)))]
@@ -224,6 +224,8 @@
       (cond
         (not (log-allowed? c pos)) :refused
         (and (ctx/way? c :pillar) (not climbing?) (> (u/eye-dist (u/self-pos c) pos) dig-reach)) :high
+        (some->> (blocking-leaf c pos) (log-allowed? c))
+        (outcome (await (ctx/call c :dig 'jobs.blocks.dig (log-dig-args c (blocking-leaf c pos)))))
         :else
         (let [wrote? (and (:replant? (:args c)) (trunk-cell? base pos) (record-debt! c pos species))
               e (await (ctx/call c :dig 'jobs.blocks.dig (log-dig-args c pos)))]
@@ -231,8 +233,4 @@
             (ctx/update-mem! c #(-> % (update :dug (fnil inc 0)) (update :drop-ids (fnil into []) (:ids (:data e))))))
           (when (and wrote? (some-> (u/seen-name (:primitives c) pos) log-name?))
             (ctx/forget-where! c replant-kind #(= wrote? (:pos %))))
-          (let [r (outcome e)
-                leaf (when (= :unreachable r) (blocking-leaf c pos))]
-            (if (and leaf (log-allowed? c leaf))
-              (outcome (await (ctx/call c :dig 'jobs.blocks.dig (log-dig-args c leaf))))
-              r)))))))
+          (outcome e))))))

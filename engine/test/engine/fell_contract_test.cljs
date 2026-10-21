@@ -195,6 +195,18 @@
             (await (tu/run-until-empty eng 200)))
           (is (= [true] @open-at-collect) "one collect, made while the pillar still stood"))))))
 
+(deftest a-leaf-between-the-eye-and-a-log-in-reach-is-dug-before-the-log
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spec {:blocks (merge (lt/tree 3 0 "oak" 3) {"2,64,0" "oak_leaves" "2,65,0" "oak_leaves"})}
+              s (fm/start spec {})]
+          (ft/eye-reach! (:p s) (:lose-logs? spec))
+          (core/submit! (:eng s) '(jobs.forestry.fell-tree {:radius 10}) {})
+          (await (tu/run-until-empty (:eng s) 200))
+          (is (some #{[2 64 0] [2 65 0]} (take 2 (fm/digs (:p s)))) "a leaf in the line is the first dig")
+          (is (empty? (lt/calls (:p s) "walk")) "no walk round the tree to a sight of the log"))))))
+
 (deftest a-drop-resting-on-a-leaf-out-of-reach-is-lowered-by-digging-the-leaf
   (async done
     (tu/run-async done
