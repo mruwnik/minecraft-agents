@@ -35,8 +35,10 @@
                     :else -1)))))))))
 
   (dropIntoWater [s i x y z h region c x2 y2 z2 h0 slow-from ^boolean tight-src]
-    (let [fall (- h0 (* y2 16))]
-      (when-not (or (< (.swimAt s x2 y2 z2) 0) (> fall (* (.-c-max-water-drop s) 16)))
+    (let [fall (- h0 (* y2 16))
+          ;; water the body has not seen lately may be gone: it is landed in only as far as ground would be
+          reach (if ^boolean (.landSeen s x2 y2 z2 false) (.-c-max-water-drop s) (js/Math.min (.-c-max-water-drop s) (.-max-drop s)))]
+      (when-not (or (< (.swimAt s x2 y2 z2) 0) (> fall (* reach 16)))
         (let [sec (+ (* (.-c-walk-s s) (+ 1 (* SLOW-EXTRA slow-from))) (* 0.25 (js/Math.sqrt (/ fall 16))))]
           (if (or tight-src ^boolean (.isTight s x2 y2 z2))
             (.tightMove s i x y z h region c x2 y2 z2 0 MOVE-DROP sec (.swimRisk s x2 y2 z2) 0 SNAP 0)

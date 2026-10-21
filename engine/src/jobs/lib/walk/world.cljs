@@ -301,13 +301,6 @@
     (when (and (number? pool) (js/isFinite pool))
       {:health pool :drown-prices (cost/drown-prices pool hp-s)})))
 
-(defn- water-drop-capped
-  "policy with the longest water landing no longer than the longest drop it survives on ground: the planner lands in
-  water at no cost, and the water may be gone or not as seen."
-  [{:keys [max-drop] :as policy}]
-  (cond-> policy
-    max-drop (update-in [:costs :max-water-drop] #(min (or % max-drop) max-drop))))
-
 (defn body-policy
   "executor/policy for the body: the gait (:walk, :sneak) never sprints; with the walk's food (food-of) 6 or less the client does not sprint, so :sprint is false (a corner jump past
   a high block is then refused). :damage-budget (hp, damage-budget) and :damage-weight (seconds an hp costs at its health)
@@ -339,8 +332,7 @@
                                                (merge (some->> (known-fn (:primitives c)) (hash-map :air-seen))))
       (and (number? food) (<= food 6)) (assoc :sprint false)
       (= :walk (gait c)) (assoc :sprint false :gait :walk)
-      (= :sneak (gait c)) (assoc :sprint false :gait :sneak)
-      true water-drop-capped)))
+      (= :sneak (gait c)) (assoc :sprint false :gait :sneak))))
 
 (defn body-cell
   "The cell the body stands in, as a step's {:x :y :z}."

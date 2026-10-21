@@ -74,13 +74,13 @@
                                              #js {:controls #js {:forward true :sneak true} :yaw (js/Math.atan2 (- dx) (- dz))})))))))
 
 (defn settled?
-  "Whether looking at drop would change nothing about its price: its landing is water, or its floor is in fresh view and no bouncing block (a plain fall; a pad is judged by what the body sees)."
+  "Whether looking at drop would change nothing about its price: its landing is water in view, or its floor is in fresh view and no bouncing block (a plain fall; a pad is judged by what the body sees)."
   [p {:keys [floor]} [lx ly lz]]
   (let [seen (wworld/landing-seen p)
         name-at (fn [x y z] (some-> (u/seen-block p {:x x :y y :z z}) .-name))
         [fx fy fz] floor]
     (boolean (and seen
-                  (or (= "water" (name-at lx ly lz))
+                  (or (and (= "water" (name-at lx ly lz)) (seen lx ly lz false))
                       (and (seen fx fy fz false) (not (some #{(name-at fx fy fz)} wworld/bounce-blocks))))))))
 
 (defn drops

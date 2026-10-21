@@ -57,7 +57,7 @@
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [22.5 0 16.5] 2]]}
   ;; card 555ba3aa: at 4 hp (hunger first, no regeneration) a walk that may go over the budget still takes no drop its fall damage reaches the health on,
-  ;; ground or water (the water may not be where it was seen): the 10 drop costs 7 hp, so the body stays on the block.
+  ;; onto ground: the 10 drop costs 7 hp, so the body stays on the block; into water in view the fall costs nothing and it jumps.
   {:name "hurt-body-over-budget-does-not-take-the-10-drop-to-ground"
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 16 minecraft:generic"]
          [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 1}})]]
@@ -65,13 +65,13 @@
             {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-far [22.5 0 16.5] 4]]
    :limit-s 150}
-  {:name "hurt-body-over-budget-does-not-take-the-10-drop-into-water"
+  {:name "hurt-body-over-budget-takes-the-10-drop-into-water"
    :blocks [[:fill [18 0 12] [26 0 20] "water"]]
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 16 minecraft:generic"]
          [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 1}})]]
-   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 90 :of-job true}
             {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
-   :after [[:body-far [22.5 0 16.5] 4]]
+   :after [[:body-near [22.5 0 16.5] 3]]
    :limit-s 150}
   ;; card e753a3ca: a hay bale landing cuts fall damage to a fifth, so the 9 drop (hay top y 1) fits the budget of 5 that the same drop onto stone would not
   {:name "hay-landing-9-drop-at-floor-14-arrives"

@@ -57,11 +57,6 @@
     (is (= [1 16] ((juxt :damage-budget :max-drop) (policy {:health 20 :food 20} {:min-health 18}))) "a floor of 18: the drops it refuses are the budget's to refuse")
     (is (= [3 6] ((juxt :damage-budget :max-drop) (policy {:health 20 :food 20} {:max-damage 3}))))))
 
-(deftest a-water-landing-is-no-longer-than-the-drop-the-body-survives-on-ground
-  (let [water-drop (fn [self] (some-> (wplan/with-drops #js {} (wworld/body-policy {:primitives (tu/fake {:self self}) :args {}})) .-costs .-maxWaterDrop))]
-    (is (= 16 (water-drop {:health 20 :food 20})))
-    (is (= 7 (water-drop {:health 5 :food 20})) "the water may not be there: the fall must not reach the health")))
-
 (deftest with-drops-passes-the-policys-budget-to-the-planner
   (let [o (wplan/with-drops #js {} {:damage-budget 7 :damage-weight 10 :fall-factor 0.5 :max-drop 10})]
     (is (= [7 10 0.5 10] [(.-damageBudget o) (.-damageWeight o) (.-fallFactor o) (.-maxDrop o)]))

@@ -182,6 +182,10 @@
   (let [r (run (drop-world 20 2) {:x 2 :y 84 :z 2} (near 12 63 2 1) {:costs {:maxWaterDrop 10}})]
     (is (not (found? r)))))
 
+(deftest water-not-seen-lately-is-landed-in-only-as-far-as-ground
+  (let [plan (fn [seen] (found? (run (drop-world 20 2) {:x 2 :y 84 :z 2} (near 12 63 2 1) {:landingSeen (fn [_ _ _ _] seen)})))]
+    (is (= [true false] [(plan true) (plan false)]))))
+
 (deftest drop-onto-land-of-same-height-is-limited-by-max-drop
   (let [r (run (world [[0 64 0 4 71 4 "stone"]]) {:x 2 :y 72 :z 2} (near 8 64 2 0) {:goalFlood 0})]
     (is (not (found? r)))))
