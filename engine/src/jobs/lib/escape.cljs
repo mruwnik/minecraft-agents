@@ -311,7 +311,8 @@
   allows (go-to: no other owner's zone or claim); opts :pillar-item ({:item :count} or nil, escape/pillar-item) replaces the climb block read from the inventory. opts :skip is a set of steps that already failed (a stair heading
   that failed: [:stair :east]): the next one is chosen; opts :approached, the cells an approach already walked to.
   - {:step :pillar :height n :item}: in a pit d deep with room above the head and at least n pillar blocks carried: n
-    the rim-pillar (d - 1, then a step onto the rim), d when no side has a rim to step onto.
+    the rim-pillar (d - 1, then a step onto the rim), d when no side has a rim to step onto. First only when the
+    column over the pit is seen to be clear to the top; with an unseen or solid cell in it, after the dig ways.
   - {:step :stair :heading kw :steps n}: a block in front to stair up on, n how far the goal is above or the pit's
     depth, whichever is more, at most max-depth (the pit's depth when the longer cut is not all diggable?), every cell
     of its cut diggable?.
@@ -339,6 +340,8 @@
          rim-n (when (and item (not (skip :pillar))) (rim-pillar block-at (unseen-of p) feet dir))
          height (when (pos? depth) (min depth (or rim-n depth)))
          pillar-blocks? (and (not (skip :pillar)) height item (>= count height))
+         headroom? (bs/passable? (block-at (up feet 2)))
+         open-above? (and pillar-blocks? (every? #(bs/passable? (block-at (up feet %))) (range 2 (+ height 2))))
          rise (min (max-depth) (max depth (- (second goal) (second feet))))
          stair-dirs (remove #(skip [:stair (heading-names %)]) (distinct (cond->> cardinals dir (cons dir))))
          [stair rise] (if (or (skip :stair) (not (pos? rise)))
@@ -358,7 +361,7 @@
          door? (and gap (every? #(diggable? block-at may-dig? own? %) (:cells gap)))
          rim (when (and rim-n (>= count rim-n)) rim-n)]
      (cond
-       (and pillar-blocks? (bs/passable? (block-at (up feet 2))))
+       (and open-above? headroom?)
        {:step :pillar :height height :item item}
 
        (and door? (<= (second goal) (second feet)))
@@ -387,6 +390,9 @@
 
        @climb
        (let [[heading n] @climb] {:step :stair :heading heading :steps n})
+
+       (and pillar-blocks? headroom?)
+       {:step :pillar :height height :item item}
 
        rim
        {:step :pillar :height rim :item item}

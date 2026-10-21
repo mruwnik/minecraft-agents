@@ -559,7 +559,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:self {:pos {:x 100.5 :y 72 :z 0.5}} :blocks hill-stair
-                                           :inventory [{:name "iron_pickaxe" :count 1}]})
+                                           :inventory [{:name "iron_pickaxe" :count 1} {:name "cobblestone" :count 4}]})
               out (atom :not-done)
               eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [40 72 0] :range 1})))
               _ (mem/write! (:store eng) :stair-way {:dim "overworld" :floors (vec (for [k (range 15)] [(+ 86 k) (+ 57 k) 0]))})
@@ -567,5 +567,5 @@
               _ (await (tick-out! eng 1000))]
           (is (true? (:arrived @out)) (pr-str @out))
           (is (<= 72 (second (feet p))))
-          (is (= [:stair] (take 1 (mapv :step (events-of seen :go-to.escalated)))))
+          (is (= [:stair] (take 1 (mapv :step (events-of seen :go-to.escalated)))) "a pillar under unseen dirt is not first")
           (is (empty? (events-of seen :go-to.retrying)) "the partial walk down its own stair is not taken"))))))
