@@ -1,0 +1,15 @@
+;; Card 5311abf3: a two-log trunk at x 28, z 16 walled in by leaves (3x3 round both logs, crown above, leaves y 0..3), body empty-handed
+;; 11 blocks west in view. A player cuts a leaf and steps in, or reaches a log from a free side; obtain must get both logs every time.
+;; Untimed: lit open plot. Should-succeed: 2 oak logs carried, the job completes. Should-fail: it ends :no-source or :no-path with one log.
+{:defaults
+ {:tags [:obtain :forestry :fell-tree :no-tool]
+  :plot {:height 8 :floor "grass_block" :isolate true :light :sky}
+  :blocks [[:fill [27 0 15] [29 3 17] "oak_leaves[persistent=true]"] [:fill [28 0 16] [28 1 16] "oak_log"]]
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "two-logs-walled-in-by-leaves"
+   :act [[:job (jobs.items.obtain {:item "oak_log" :count 2 :explore true})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 110 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 100 :until {:source :job :kind :completed}}]
+   :after [[:item "oak_log" [:>= 2]]]}]}

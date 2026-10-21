@@ -301,14 +301,14 @@
         (for [k (range 1 d) dy [0 1]] [k dy])))
 
 (defn search-cells
-  "Cells round the anchor at 2 blocks and at :search blocks in the eight directions, nearest to the body first: per column the
+  "Cells round the anchor at 1, 2 and :search blocks (1: the hole a dig left in a leaf wall, where the body steps in to look) in the eight directions, nearest to the body first: per column the
   standable one at the anchor's height or one above or below, else (nothing seen there, a wall in the way) the anchor's height
   when what is seen of it allows standing (unseen-open?)."
   [c anchor]
   (let [p (:primitives c)
         {:keys [search]} (:args c)
         [ax ay az] (u/cell-vec anchor)
-        dists (distinct [(min 2 search) search])
+        dists (distinct [(min 1 search) (min 2 search) search])
         cells (for [d dists dx [-1 0 1] dz [-1 0 1] :when (not (and (zero? dx) (zero? dz)))
                     dy [0 1 -1]
                     :let [cell {:x (+ ax (* d dx)) :y (+ ay dy) :z (+ az (* d dz))}]
@@ -335,10 +335,17 @@
 
 (defn ^:async search-step!
   "Walks to the next unvisited search cell (one go-to call, slot :search; a cell go-to cannot reach is dropped).
-  :continue while go-to waits on the world, :waited after search-waits calls in a row did, :walked after a cell, nil when none is left."
+  :continue while go-to waits on the world, :waited after search-waits calls in a row did, :walked after a cell, nil when none is left.
+  Once the queue is spent the cell nearest the anchor is visited again: a drop is sensed late (pickup delay) and may only show from there."
   [c anchor]
-  (let [queue (or (:search-queue (ctx/mem c))
-                  (let [q (vec (search-cells c anchor))] (ctx/update-mem! c assoc :search-queue q) q))]
+  (let [m (ctx/mem c)
+        seed! (fn [q] (ctx/update-mem! c assoc :search-queue q) q)
+        queue (cond
+                (nil? (:search-queue m)) (seed! (vec (search-cells c anchor)))
+                (and (empty? (:search-queue m)) (not (:search-revisited m)))
+                (do (ctx/update-mem! c assoc :search-revisited true)
+                    (seed! (vec (take 1 (sort-by #(u/dist (u/cell-pos (u/cell-vec anchor)) %) (search-cells c anchor))))))
+                :else (:search-queue m))]
     (when-let [cell (first queue)]
       (let [r (await (child/run!* c :search 'jobs.movement.go-to (walk-args c {:pos (u/cell-vec cell) :range (if (reach/seen-standable? (:primitives c) cell) 0 1) :ways #{:walk :clear-seal}})))]
         (if (= :continue r)
