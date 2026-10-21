@@ -33,7 +33,15 @@
 
 (defn holds "A :ok status for a check with nothing to say." [] (contract/ok :holds "no precondition"))
 
-(defn cause-text [m] (str (or (:why m) (:text m) (name (:reason m)))))
+(defn refusal-named
+  "What refused a :refused or :not-allowed cause, \"refused by plan hollis-field\"; the :by when it names no zone, claim or plan; else nil."
+  [m]
+  (when (#{:refused :not-allowed} (:reason m))
+    (let [named (access/refusal-text (merge (access/refusal-fields [m]) (select-keys m [:zones :claims :plans])))]
+      (cond (seq named) (str "refused by " named)
+            (:by m) (str "refused: " (name (:by m)))))))
+
+(defn cause-text [m] (str (or (:why m) (:text m) (refusal-named m) (name (:reason m)))))
 
 (defn cause-status
   "[kind text data] for a cause, a map {:reason ..} or just the reason keyword, with text or cause-text; nil is :ok

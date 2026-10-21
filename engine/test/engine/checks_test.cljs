@@ -17,6 +17,14 @@
   (is (= [:later "text" {:reason :zone :zone "keep"}] (checks/cause-status :later {:reason :zone :zone "keep"} "text")))
   (is (= [:never "text" {:reason :claim :id 3}] (checks/cause-status :never {:reason :claim :id 3} "text"))))
 
+(deftest a-refusal-text-names-what-refused
+  (are [cause text] (= text (second (checks/cause-status :later cause)))
+    {:reason :not-allowed :by :footprint :plan "hollis-field" :pos [1 2 3]} "refused by plan hollis-field"
+    {:reason :not-allowed :by :zone :zone "den" :owner "Miles"} "refused by zone den"
+    {:reason :not-allowed :by :no-zones} "refused: no-zones"
+    {:reason :refused :zones ["den"] :claims [] :plans ["jizo-farm"]} "refused by zone den; plan jizo-farm"
+    {:reason :refused :zones [] :claims [] :plans []} "refused"))
+
 (deftest no-cause-is-ok
   (is (= [:ok :holds] (tu/kind-reason (checks/cause-status :later nil)))))
 
