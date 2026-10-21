@@ -436,6 +436,44 @@
 
 (def bodies (atom {}))
 
+(def retired-cpu
+  "Per body name: CPU seconds by thread group of its earlier (stopped) processes."
+  (atom {}))
+
+(defn parse-task-stat
+  "[group ticks] of one /proc/<pid>/task/<tid>/stat line: group :main (the process's own thread), :v8 (V8 worker
+  threads: GC helpers, compiler) or :other; ticks = utime + stime. The comm may hold spaces and parens, so fields
+  count from the last paren."
+  [main? line]
+  (let [comm (second (re-find #"\((.*)\)" line))
+        fields (str/split (str/trim (subs line (inc (str/last-index-of line ")")))) #" ")
+        ticks (+ (js/Number (nth fields 11)) (js/Number (nth fields 12)))]
+    [(cond main? :main (str/starts-with? comm "V8") :v8 :else :other) ticks]))
+
+(defn process-cpu
+  "CPU seconds by thread group {:main :v8 :other} of a live process, read from /proc (all threads; --cpu-prof sees only
+  the main one). Empty when the process is gone."
+  [pid]
+  (let [dir (str "/proc/" pid "/task")]
+    (try
+      (->> (array-seq (fs/readdirSync dir))
+           (map (fn [tid] (try (parse-task-stat (= (str tid) (str pid)) (fs/readFileSync (str dir "/" tid "/stat") "utf8"))
+                               (catch :default _ nil))))
+           (remove nil?)
+           (reduce (fn [m [g t]] (update m g (fnil + 0) (/ t 100))) {}))
+      (catch :default _ {}))))
+
+(defn body-cpu
+  "CPU seconds by thread group so far of the body's processes: stopped ones plus the live one."
+  [body]
+  (merge-with + (get @retired-cpu body {}) (some-> (get @bodies body) .-pid process-cpu)))
+
+(defn cpu-delta
+  "Per group seconds from sample a to b (rounded to 0.01), with :total."
+  [a b]
+  (let [d (into {} (map (fn [[k v]] [k (/ (js/Math.round (* 100 (- v (get a k 0)))) 100)])) b)]
+    (assoc d :total (/ (js/Math.round (* 100 (reduce + (vals d)))) 100))))
+
 (defn running? [{:keys [body]}]
   (str/includes? (or (.-stdout (cp/spawnSync "pgrep" #js ["-af" (str "out/body(-release)?\\.cjs --agent " body " ")] #js {:encoding "utf8"})) "")
                  (str "--agent " body " ")))
@@ -592,6 +630,7 @@
   [opts]
   (if-let [child (get @bodies (:body opts))]
     (js/Promise. (fn [resolve]
+                   (swap! retired-cpu update (:body opts) #(merge-with + % (process-cpu (.-pid child))))
                    (swap! bodies dissoc (:body opts))
                    (if (some? (.-exitCode child))
                      (resolve nil)
@@ -1851,7 +1890,10 @@
         starting (atom nil)
         start-cursor (log-cursor (events-file opts))
         weather (atom nil)
-        result (fn [m] (cond-> (merge {:id (:id c) :run run :plot i :origin origin :elapsed-s (/ (- (js/Date.now) started) 1000)} m)
+        cpu-start (body-cpu (:body opts))
+        result (fn [m] (cond-> (merge {:id (:id c) :run run :plot i :origin origin :elapsed-s (/ (- (js/Date.now) started) 1000)
+                                       :body-cpu-s (cpu-delta cpu-start (body-cpu (:body opts)))
+                                       :load1 (/ (js/Math.round (* 100 (first (.loadavg os)))) 100)} m)
                          @weather (assoc :weather @weather)))]
     (-> (let [phase (lock-phase opts rc)
               batch (lock-batch opts rc)]
@@ -1973,7 +2015,9 @@
 
 (defn report! [r]
   (ev/emit! (ev/result r))
-  (log! (str/upper-case (name (:status r))) " " (:id r) " #" (:run r) " (plot " (:plot r) ", " (.toFixed (:elapsed-s r) 1) " s)"
+  (log! (str/upper-case (name (:status r))) " " (:id r) " #" (:run r) " (plot " (:plot r) ", " (.toFixed (:elapsed-s r) 1) " s"
+        (when-let [cpu (:body-cpu-s r)] (str ", cpu " (:total cpu) " s = main " (:main cpu 0) " + v8 " (:v8 cpu 0) " + other " (:other cpu 0) ", load " (:load1 r)))
+        ")"
         (when (:weather r) (str " [" (name (:weather r)) "]"))
         (when (:why r) (str ": " (:why r))))
   (when-not (= :pass (:status r))

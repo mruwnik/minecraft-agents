@@ -1755,3 +1755,14 @@
                    (is (= "gamemode" (peek sent)) "a starting body is parked after the build")
                    (is (not= "gamemode" (first sent)))
                    (done)))))))
+
+(deftest a-task-stat-line-gives-its-thread-group-and-cpu-ticks
+  (let [stat (fn [comm] (str "123 (" comm ") S 1 1 1 0 -1 4194560 100 0 0 0 250 50 0 0 20 0 8 0 99 1000 200"))]
+    (is (= [:main 300] (r/parse-task-stat true (stat "node"))))
+    (is (= [:v8 300] (r/parse-task-stat false (stat "V8 WorkerThread"))))
+    (is (= [:other 300] (r/parse-task-stat false (stat "libuv-worker"))))
+    (is (= [:v8 300] (r/parse-task-stat false (stat "V8 (w) x"))) "parens and spaces in the name")))
+
+(deftest cpu-delta-subtracts-per-group-and-totals
+  (is (= {:main 1.5 :v8 0.5 :total 2}
+         (r/cpu-delta {:main 1 :v8 0.25} {:main 2.5 :v8 0.75}))))
