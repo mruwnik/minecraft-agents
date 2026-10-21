@@ -132,10 +132,15 @@
   "The target names of a search for food: the food animals and the food blocks."
   (into animals/food-animals (concat (keys sources/ripe-age) (keys sources/wild-food))))
 
-(defn fit?
-  "ready/fit?, but ready/fit-to-forage while every target is a food animal or food block."
+(defn forage?
+  "Whether every target is a food animal or food block."
   [c]
-  (if (and (seq (targets c)) (every? foraged (targets c))) (ready/fit-to-forage c) (ready/fit? c)))
+  (boolean (and (seq (targets c)) (every? foraged (targets c)))))
+
+(defn fit?
+  "ready/fit?, but ready/fit-to-forage while the search is for food."
+  [c]
+  (if (forage? c) (ready/fit-to-forage c) (ready/fit? c)))
 
 (defn xz-dist [[ax az] [bx bz]]
   (js/Math.hypot (- ax bx) (- az bz)))
@@ -446,6 +451,7 @@
   [c]
   (let [[x y z] (:leg (ctx/mem c))
         r (await (child/call-walk* c :leg (cond-> {:pos {:x x :y y :z z} :range 2 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}
+                                                           (forage? c) (->> (ready/forage-walk c))
                                                            (< (:failed-in-row (ctx/mem c) 0) (dec (max-failed-in-row))) (assoc :ways #{:walk :clear-seal}))))]
     (if (= :continue r)
       :continue

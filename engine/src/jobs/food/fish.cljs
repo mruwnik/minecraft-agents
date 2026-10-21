@@ -52,7 +52,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 (def safe? (ready/safe-at-or-if-lit #(when (:pos (:args %)) (work-place/spot %))))
-(def fit? ready/fit?)
+(def fit? ready/fit-to-forage)
 
 (defn rod-carried? [c] (boolean (some #(= "fishing_rod" (:name %)) (u/inventory (:primitives c)))))
 
@@ -138,7 +138,7 @@
   (and (= :done (:kind r)) (boolean (:arrived (:data r)))))
 
 (defn ^:async walk! [c {:keys [land]}]
-  (let [r (await (child/call-walk* c :bank {:pos (select-keys land [:x :y :z]) :range 1 :ways #{:walk :clear-seal}}))]
+  (let [r (await (child/call-walk* c :bank (ready/forage-walk c {:pos (select-keys land [:x :y :z]) :range 1 :ways #{:walk :clear-seal}})))]
     (cond
       (= :continue r) :continue
       (arrived? r) :arrived

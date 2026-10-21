@@ -218,16 +218,25 @@
 
 (def fit? "Later :low-health below the risky health, :poisoned while poisoned." checks/low-health)
 
-(defn fit-to-forage
-  "The fit? of a job that looks for food: fit?, but a :low-health wait is lifted while the body can not heal (food under foods/top-up-food, nothing a meal would eat carried), else it would never end."
+(defn cannot-heal?
+  "Whether the body of ctx c can not heal by waiting: food under foods/top-up-food and nothing a meal would eat carried."
   [c]
-  (let [s (fit? c)
-        self (.self (:primitives c))]
-    (if (and (= :low-health (:reason (nth s 2 nil)))
-             (< (.-food self) foods/top-up-food)
-             (not (foods/carries-food? self)))
+  (let [self (.self (:primitives c))]
+    (and (< (.-food self) foods/top-up-food)
+         (not (foods/carries-food? self)))))
+
+(defn fit-to-forage
+  "The fit? of a job that looks for food: fit?, but a :low-health wait is lifted while the body can not heal (cannot-heal?), else it would never end."
+  [c]
+  (let [s (fit? c)]
+    (if (and (= :low-health (:reason (nth s 2 nil))) (cannot-heal? c))
       (contract/ok :forage "hurt, but only food heals it")
       s)))
+
+(defn forage-walk
+  "go-to args for a walk that serves food-finding: with :floor {:health 1} (all but 1 hp may be spent, go-to's survivable budget) while the body can not heal, else args as they are."
+  [c args]
+  (cond-> args (cannot-heal? c) (assoc :floor {:health 1})))
 
 (defn armed
   "Later :unarmed while the body carries no weapon (jobs.lib.combat/default-weapons)."

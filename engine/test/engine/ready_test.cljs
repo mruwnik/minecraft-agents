@@ -13,6 +13,7 @@
             [jobs.explore.look :as look]
             [jobs.movement.go-to :as go-to]
             [jobs.explore.search :as search]
+            [jobs.food.fish :as fish]
             [jobs.movement.look-around :as look-around]
             [jobs.access.stair :as stair]
             [jobs.build.light-area :as light-area]
@@ -327,6 +328,16 @@
       8 [{:name "bread" :count 1}] ["cow"] :later
       20 [] ["cow"] :later
       8 [] ["cow" "iron_ore"] :later)))
+
+(deftest a-hurt-body-that-cannot-heal-fishes-and-walks-for-food-over-its-health-budget
+  (let [hurt {:pos {:x 0 :y 64 :z 0} :health 5}
+        walk {:pos {:x 3 :y 64 :z 0}}]
+    (are [food inventory expected-fit expected-walk]
+         (let [c (assoc (ctx-of {:self (assoc hurt :food food) :inventory inventory}) :args {})]
+           (= [expected-fit expected-walk] [(first (fish/fit? c)) (ready/forage-walk c walk)]))
+      8 [] :ok (assoc walk :floor {:health 1})
+      8 [{:name "bread" :count 1}] :later walk
+      20 [] :later walk)))
 
 (deftest a-hurt-body-waits-to-start-the-access-and-boat-jobs
   (doseq [j '[jobs.access.tunnel jobs.access.stair jobs.access.pillar jobs.access.clear-path jobs.access.bridge jobs.access.toggle

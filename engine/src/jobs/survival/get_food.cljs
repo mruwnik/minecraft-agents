@@ -347,7 +347,7 @@
   "The walk toward an animal the search found only in a note (nothing is in sight to hunt): :continue while it goes, :again once it ends."
   [c]
   (let [pos (:walk-to (ctx/mem c))
-        e (await (child/run!* c :noted-walk 'jobs.movement.go-to {:pos (zipmap [:x :y :z] pos) :range noted-range :ways #{:walk}}))]
+        e (await (child/run!* c :noted-walk 'jobs.movement.go-to (ready/forage-walk c {:pos (zipmap [:x :y :z] pos) :range noted-range :ways #{:walk}})))]
     (if (= :continue e)
       :continue
       (do (ctx/update-mem! c dissoc :walk-to) :again))))

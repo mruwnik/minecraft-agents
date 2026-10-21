@@ -1,0 +1,29 @@
+;; Card 6c040ecc: a hurt body that cannot heal (hunger drained its food, nothing edible carried) may spend hp on the way to food: fishing walks
+;; down a 5-block drop (2 hp) from a stone tower (x 4..8, feet y 5) to the bank at x 11 of a pond (water y -2..-1, x 12..20), with 5 hp.
+;; Go-to's default budget is 0 hp at that health, so a plain walk to the same bank is refused :needs-health.
+;; Should-succeed: the fishing body lands on the bank and casts (fish.caught). Should-fail: a plain go-to to the bank stops, takes no fall.
+{:defaults
+ {:tags [:food :fish :movement :readiness]
+  :time :any
+  :plot {:height 8}
+  :blocks [[:fill [10 -4 8] [22 -1 24] "stone"] [:fill [12 -2 10] [20 -1 22] "water"]
+           [:fill [4 0 12] [8 4 20] "stone"]]
+  :body {:at [6.5 5 16.5] :yaw 270 :effects [] :settle-s 2}
+  :limit-s 90}
+ :cases
+ [{:name "hurt-starving-body-fishes-down-a-drop"
+   :body {:inventory [["fishing_rod" 1]]}
+   :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 15 minecraft:generic"]
+         [:job (jobs.food.fish {:count 1 :ways #{:carried}})]]
+   :expect [{:event {:source :job :kind :fish.caught} :within-s 170 :of-job true}
+            {:no-event {:source :job :kind :stopped} :of-job true :for-s 20}]
+   :after [[:body-far [6.5 5 16.5] 4]]
+   :limit-s 185}
+  {:name "hurt-starving-body-plain-walk-to-the-bank-is-refused"
+   :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 15 minecraft:generic"]
+         [:job (jobs.movement.go-to {:pos #at [11 0 16] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-far [11.5 0 16.5] 4]]}]}
