@@ -7,7 +7,9 @@
   :time :any
   :plot {:height 12}
   :blocks [[:fill [10 0 10] [22 2 22] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
-  :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "z" :box [#at [10 2 10] #at [22 2 22]] :want "stone"}]}]
+  :plans [{:id "z" :metadata {:by "SomeoneElse"} :parts [{:id "w" :box [#at [10 0 10] #at [15 2 22]] :want "stone"} {:id "e" :box [#at [17 0 10] #at [22 2 22]] :want "stone"}
+                                                     {:id "n" :box [#at [16 0 10] #at [16 2 15]] :want "stone"} {:id "s" :box [#at [16 0 17] #at [16 2 22]] :want "stone"}
+                                                     {:id "r" :box [#at [16 2 16] #at [16 2 16]] :want "stone"}]}]
   :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
   :limit-s 150}
  :cases
