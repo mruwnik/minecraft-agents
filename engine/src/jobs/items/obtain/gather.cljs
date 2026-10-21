@@ -144,7 +144,7 @@
       (and (not (get-in (ctx/mem c) [:gather :before])) (pickaxe-first? c names need) (or (explore-opts c) (seen-of c need)))
       (await (pickaxe-step! c names need))
       (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (searchable? need) (not (:tunnel? need))
-           (not (seen-of c need)) (surface/surfacing? c need))
+           (surface/surfacing? c need))
       (await (surface-step! c))
       (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (searchable? need) (not (:tunnel? need))
            (or (not (seen-of c need)) (get-in (ctx/mem c) [:gather :unreachable (:key need)]) (trees-unreachable? c need))

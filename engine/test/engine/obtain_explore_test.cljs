@@ -71,15 +71,15 @@
   (merge (into {} (for [x (range -22 49) z (range -22 23) y (range 63 71)
                          :when (not (and (<= -2 x 2) (<= -2 z 2) (<= 64 y 65)))]
                     [(str x "," y "," z) (if (= y 63) "andesite" "stone")]))
-         (into {} (for [y [71 72 73 74]] [(str "40," y ",0") "oak_log"]))
-         {"40,75,0" "oak_leaves"}))
+         (into {} (for [y [71 72 73 74]] [(str "24," y ",0") "oak_log"]))
+         {"24,75,0" "oak_leaves"}))
 
 (deftest a-body-sealed-in-a-cave-stairs-up-to-the-sky-when-its-search-finds-nothing
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (ore-world sealed-cave []) [f/own-zone])]
-          (swap! (fake/state (:p s)) assoc :light (into {} (for [x (range -6 7) z (range -6 7) y (range 64 71)] [[x y z] [0 0]])))
+          (swap! (fake/state (:p s)) assoc :light (into {} (for [x (range -20 21) z (range -20 21) y (range 64 71)] [[x y z] [0 0]])))
           (await (obtain! s {:item "oak_log" :count 1 :explore true} 900))
           (is (seq (f/events-of s :stair.step)) "a stair was cut up through the roof")
           (is (<= 1 (get (f/inv s) "oak_log" 0)) "and the tree outside was felled"))))))
