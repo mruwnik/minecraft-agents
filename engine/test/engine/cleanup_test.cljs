@@ -257,6 +257,16 @@
     (is (true? ((opens-dark? (lit nil)) [3 64 0])) "own cell dark: the unseen side is guessed dark")
     (is (false? ((opens-dark? (lit {[0 64 0] [0 14]})) [3 64 0])) "own cell lit by the opened side: the unseen side is not guessed dark")))
 
+(deftest a-seen-dark-neighbour-keeps-a-shelter-block-only-while-the-body-is-in-the-dark-or-under-a-roof
+  (let [world (fn [blocks light] (let [p (tu/with-light-data (tu/fake {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks (merge {"3,64,0" "air" "3,63,0" "stone" "4,64,0" "air" "2,64,0" "air" "3,65,0" "air" "3,64,1" "air" "3,64,-1" "air"} blocks) :time 14000}))]
+                                   (aset p "seenBlockAt" (fn [pos] #js {:name (get-in @(fake/state p) [:blocks (str (.-x pos) "," (.-y pos) "," (.-z pos))] "air") :pos pos :age-ms 0}))
+                                   (swap! (fake/state p) merge {:light-default [0 0]} {:light (merge (zipmap [[3 64 0] [4 64 0] [2 64 0] [3 65 0] [3 64 1] [3 64 -1]] (repeat [0 0])) light)})
+                                   p))
+        dark-inside [3 64 0]]
+    (is (true? ((keep/opens-dark? (world {} {})) dark-inside)) "body in the dark: the dark cell counts")
+    (is (false? ((keep/opens-dark? (world {} {[0 64 0] [0 14]})) dark-inside)) "body in the light outside: the emptied shelter's dark inside does not")
+    (is (true? ((keep/opens-dark? (world {"0,66,0" "stone"} {[0 64 0] [0 14]})) dark-inside)) "body under a roof, lit by a torch: still sheltering")))
+
 (deftest a-run-that-removed-a-block-holds-no-night-only-leftovers
   (let [night [{:cell [1 64 0] :reason :night}]
         hostile [{:cell [1 64 0] :reason :hostile-near}]]

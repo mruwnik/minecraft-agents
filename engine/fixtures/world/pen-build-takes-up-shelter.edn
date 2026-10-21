@@ -1,11 +1,11 @@
 ;; Card e8308c98: jobs.build.pen takes up the body's own leftover scaffold-ledger blocks in and around the box before it builds
 ;; (a night shelter's cheap blocks stay after dawn, and an animal steps from one onto a fence). The body walls itself in with
-;; cobblestone (under a glowstone roof (it lights the shelter), so the cleanup's night keep does not hold the walls) right in front of the ring's gate, with no weapon carried (shut-in :for :night, ledger :shelter), is moved into the ring, and builds the pen.
+;; cobblestone (lit from outside by glowstone, the walls shut the light out: the inside is dark, as an emptied shelter is by day) right in front of the ring's gate, with no weapon carried (shut-in :for :night, ledger :shelter), is moved into the ring, and builds the pen.
 ;; Should-succeed: the pen holds and the shelter's walls are gone. Should-fail: the walls left standing.
 {:defaults
  {:tags [:build :pen :cleanup] :time :any
   :plot {:height 8 :floor "stone"}
-  :blocks [[:fill [16 2 12] [16 2 12] "glowstone"]]
+  :blocks [[:set [16 2 12] "stone"] [:set [19 1 12] "glowstone"] [:set [15 2 8] "glowstone"] [:set [15 2 16] "glowstone"] [:set [19 1 8] "glowstone"] [:set [19 1 16] "glowstone"]]
   :body {:at [16.5 0 12.5] :settle-s 2 :inventory [["oak_fence" 16] ["oak_fence_gate" 1] ["cobblestone" 16] ["iron_pickaxe" 1]] :effects [["resistance" 600 4]]}
   :limit-s 150}
  :cases

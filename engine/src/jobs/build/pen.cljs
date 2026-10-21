@@ -307,7 +307,7 @@
         mid (fn [a b] (/ (+ a b 1) 2))
         r (await (ctx/call c :tidy 'jobs.access.cleanup
                            (merge (select-keys (:args c) [:ignore-zones?])
-                                  {:of :all :checks {:fit? '(always)}
+                                  {:of :all :checks {:fit? '(healthy)}
                                    :near {:pos {:x (mid (:x min) (:x max)) :y (mid (apply js/Math.min ys) (apply js/Math.max ys)) :z (mid (:z min) (:z max))}
                                           :radius (+ tidy-margin (js/Math.hypot (- (:x max) (:x min)) (- (:z max) (:z min)) (- (apply js/Math.max ys) (apply js/Math.min ys))))}})))]
     (if (= :continue r)

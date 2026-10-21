@@ -13,15 +13,17 @@
 (defn opens-dark?
   "A fn of a cell: whether a neighbour of it is not solid and dark: a cell the body has seen by its light, one it has not
   by the guess (the sky's darkening, or the body underground: unseen cave cells are dark), unless the light reaches the
-  body's own cell: a half-opened seal shows the far side is lit. The body's own two cells do not
+  body's own cell while it is not under a roof: a half-opened seal shows the far side is lit, and a body standing in the
+  light outside an emptied shelter has no use for its dark inside. The body's own two cells do not
   count: the pocket it sealed itself into is dark by the seal, not by what lies outside."
   [p]
   (let [own (sh-sense/feet p)
         own? #{own (update own :y inc)}
         buried? (sh-sense/buried-at? p own)
         own-lit? (sh-sense/lit-here? p own)
+        sheltered? (sh-sense/roofed? p 2)
         dark? (fn [n] (if (sh-sense/seen-cell? p n)
-                        (not (sh-sense/lit-here? p n))
+                        (and (not (sh-sense/lit-here? p n)) (or sheltered? (not own-lit?)))
                         (and (not own-lit?) (or buried? (look/dark-guess? p)))))]
     (fn [[x y z]]
       (boolean (some (fn [[dx dy dz]]
