@@ -68,6 +68,14 @@
   (is (nil? (bed-to-use (tunnel-world buried-light))))
   (is (false? (holds? (tunnel-world buried-light))) "the night trigger does not hold"))
 
+(def open-dark-tunnel
+  "The tunnel with both plugs gone and no torch light: buried, but open at the ends and dark."
+  (-> (tunnel-world (into {} (for [x (range 0 21) y [64 65]] [[x y 0] [0 0]])))
+      (update :blocks dissoc "-1,64,0" "-1,65,0" "21,64,0" "21,65,0" "40,64,0")))
+
+(deftest a-buried-miner-in-an-open-dark-tunnel-is-not-called-in-by-the-night
+  (is (false? (holds? open-dark-tunnel)) "no sky light reaches it: waiting for day changes nothing"))
+
 (deftest a-buried-body-neither-places-a-carried-bed-nor-logs-out-for-a-sleeper
   (let [carrying (assoc (tunnel-world buried-light) :inventory [{:name "red_bed" :count 1}])
         {:keys [eng p]} (setup carrying)]

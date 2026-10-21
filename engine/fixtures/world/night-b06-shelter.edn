@@ -137,6 +137,17 @@
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 120 :until {:source :job :kind :completed :data {:name "jobs.blocks.dig"}}}
             {:no-event {:source :job :kind :shut-in.sealed} :for-s 120 :until {:source :job :kind :completed :data {:name "jobs.blocks.dig"}}}]
    :limit-s 130}
+  ;; f7bf9239: underground no sky light reaches the body, so the night reflex does not call a miner out of a big dark cave
+  {:name "buried-miner-in-an-open-dark-cave-keeps-working-at-night"
+   :time :night :time-why :night-light
+   :blocks [[:fill [2 0 2] [42 9 42] "stone"] [:fill [4 0 4] [40 3 40] "air"]]
+   :plot {:length 48 :width 48 :height 12}
+   :register [{:trigger :night}]
+   :body {:at [6.5 0 16.5] :inventory [["stone_pickaxe" 1]]}
+   :act [[:job (jobs.blocks.dig {:pos #at [3 0 16]})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.blocks.dig"}} :within-s 60 :of-job true}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 60 :until {:source :job :kind :completed :data {:name "jobs.blocks.dig"}}}]
+   :limit-s 70}
   ;; 33e6bf20: a walk inside an open cave is not held as sheltered, even with a dug-in entry left from an earlier night
   {:name "walk-in-an-open-cave-is-not-held"
    :blocks [[:fill [2 0 2] [42 9 42] "stone"] [:fill [4 0 4] [40 6 40] "air"]]
