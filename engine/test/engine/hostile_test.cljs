@@ -344,6 +344,16 @@
           (is (empty? (tu/walked-to eng)) "it does not advance on the mob")
           (is (empty? (calls p "attack")) "and does not swing at one it cannot reach"))))))
 
+(deftest hostile-attack-waits-for-a-mob-on-a-dark-cell-and-walks-to-one-in-the-light
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[light walks?] [[[0 0] false] [[15 0] true]]]
+          (let [s (setup-seeing {:inventory sword :entities [(zombie 5 0)]} light 20)]
+            (core/submit! (:eng s) '(jobs.combat.attack {:targets :hostiles :ranged-radius 16 :radius 6}) {})
+            (await (core/tick! (:eng s)))
+            (is (= walks? (boolean (seq (tu/walked-to (:eng s))))) (str "light " light))))))))
+
 (deftest the-fight-holds-position-in-the-dark-with-more-than-one-hostile-known
   (are [world held?] (= held? (respond-to-hostile/hold? {:primitives (tu/with-light-data (tu/fake world)) :view (fn [] {:data {} :now 0}) :args {}}))
     {:time 14000 :entities [(zombie 7 5 0) (zombie 8 6 3)]} true

@@ -1,0 +1,20 @@
+;; Card 2fe83dd7: a fight never walks to a melee mob standing on a dark cell (a player does not chase into unlit space, where
+;; more may wait unseen); it waits, and one in the light is walked to and struck. A stone corridor torched at its west end;
+;; the zombie (NoAI, helmeted against sun burn) stands 4 blocks east, in the dark or, in the twin, beside a torch.
+{:defaults
+ {:tags [:hostile :combat]
+  :time :any
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile)}]
+  :body {:at [17.5 0 16.5] :inventory [["iron_sword" 1]] :effects [["resistance" 600 3]]}
+  :limit-s 50}
+ :cases
+ [{:name "fight-does-not-walk-to-a-zombie-in-the-dark"
+   :blocks [[:fill [2 -1 10] [30 4 22] "stone"] [:fill [5 0 16] [29 1 16] "air"] [:set [8 1 16] "torch"] [:set [21 1 16] "minecraft:light[level=3]"]]
+   :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "zombie" :decision :fight}} :within-s 15}
+            {:no-event {:source :action :kind :started :data {:name "attack"}} :for-s 25}]}
+  {:name "fight-walks-to-a-zombie-in-the-light"
+   :blocks [[:fill [2 -1 10] [30 4 22] "stone"] [:fill [5 0 16] [29 1 16] "air"] [:set [8 1 16] "torch"] [:set [21 1 16] "minecraft:light[level=15]"]]
+   :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :action :kind :started :data {:name "attack"}} :within-s 25}]}]}

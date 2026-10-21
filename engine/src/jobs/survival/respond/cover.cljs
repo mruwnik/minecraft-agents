@@ -24,7 +24,7 @@
 (a/defargs settings
   {::home-range {:default 64 :doc "Blocks within which the latest :bed or :home entry is a home a flight runs or leans to." :spec (a/num-in 0 nil)}
    ::swim-factor {:default 0 :doc "Blocks of walking a block of swimming costs a flight; 0: jobs.lib.cost/swim-factor of the boots." :spec (a/num-in 0 nil)}
-   ::way-reach {:default 14 :doc "Blocks within which the stairs the body cut are a way out of a flight." :spec (a/num-in 0 nil)}})
+   ::way-reach {:default 14 :doc "Blocks within which the stairs the body cut and the places its recent walks began are a way out of a flight." :spec (a/num-in 0 nil)}})
 (defn home-range [] (settings/get settings ::home-range))
 (defn way-reach [] (settings/get settings ::way-reach))
 
@@ -118,13 +118,20 @@
          (mapcat (fn [d] (when-let [pos (or (:pos d) (danger-q/rough-pos d))]
                            (repeat (if (= "creeper" (:mob d)) 3 1) pos)))))))
 
+(defn trail-floors
+  "The floors [x y z] under the places the body's recent walks (memory :moved) began: the way it came, as the stairs it cut are."
+  [c]
+  (set (for [{{:keys [from]} :data} (ctx/entries c :moved)
+             :when from]
+         [(js/Math.floor (:x from)) (dec (js/Math.floor (:y from))) (js/Math.floor (:z from))])))
+
 (defn way-up
-  "Underground, the feet cell on a stair this body cut (ledger/ways-of) that leads up and away from threats
-  (walk/way-target), else nil."
+  "Underground, the feet cell on a stair this body cut (ledger/ways-of) or where a recent walk of its began (trail-floors)
+  that leads up and away from threats (walk/way-target), else nil."
   [c threats]
   (let [p (:primitives c)]
     (when (and (seq threats) (sh-sense/buried? p))
-      (walk/way-target (u/self-pos c) (mapv #(danger-q/mob-pos p %) threats) (ledger/ways-of c) (way-reach)))))
+      (walk/way-target (u/self-pos c) (mapv #(danger-q/mob-pos p %) threats) (into (ledger/ways-of c) (trail-floors c)) (way-reach)))))
 
 (defn ^:async flight-target!
   "The walk target away from threats (walk/choose-target over what the body sees, after glance-away!; cover from the

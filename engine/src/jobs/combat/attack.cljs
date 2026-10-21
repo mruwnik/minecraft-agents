@@ -40,9 +40,10 @@
   The job does not guard the body's health: the survival register above it cuts it.
   {:targets :hostiles} is the reflex fight (respond-to-hostile, respond.options): hostiles within :radius (ranged ones
   within :ranged-radius), except the ids in :skip. Only a hostile the body has seen is fought; one only heard is turned
-  toward (:nothing-possible :heard-only), never walked to. One beyond hostile-fight/::leash of where the fight began is not
-  chased. With :hold a melee hostile beyond reach is waited for (:nothing-possible :hold-timeout after hostile-fight/::hold-s
-  without a swing); a ranged one farther than hostile-fight/::ranged-chase while another is in range ends :too-far. No
+  toward (:nothing-possible :heard-only), never walked to. One beyond hostile-fight/::leash of where the fight began is not a target.
+  A melee hostile beyond reach is waited for, never walked to, with :hold or when it stands in or beside unlit space (hostile-fight/dark-around?: a player
+  does not chase into unlit space, more may be there unseen); the wait declines :nothing-possible :hold-timeout after hostile-fight/::hold-s
+  without a swing; a ranged one farther than hostile-fight/::ranged-chase while another is in range ends :too-far. No
   hostile in range: :done :cleared. When the body lost health since the call began the job yields (:continue). Every ending
   but :done also carries :struck {id {:name :hits :health ...}}; a caller passes that ending's data back as :prior.")
 
@@ -262,7 +263,7 @@
   (let [tpos (u/pos-of (.-pos target))]
     (cond
       (<= (u/dist (u/self-pos c) tpos) (reach)) :there
-      (and (:hold (:args c)) (not (combat/ranged? target))) (do (await (combat/wait-gap! c (ctx/now c) chase-gap-ms))
+      (hostile/held? c target) (do (await (combat/wait-gap! c (ctx/now c) chase-gap-ms))
                                                                  :held)
       :else
       (case (await (near/go-near! c tpos 2 (walk-opts c)))
@@ -369,7 +370,7 @@
         last-attack (:last-attack (ctx/mem c))]
     (when-not (:start (ctx/mem c)) (ctx/update-mem! c assoc :start (u/self-pos c) :started-at (ctx/now c)))
     (cond
-      (and target (hostile/held-idle? c)) (declined c :hold-timeout)
+      (and target (hostile/held-idle? c (hostile/held? c target))) (declined c :hold-timeout)
       (and target (hostile/too-far-to-chase? c target)) (declined c :too-far)
       (and last-attack (< (.-health (.self p)) (:health0 (ctx/mem c)))) :continue
       (nil? target) (if-let [heard (hostile/heard c)]

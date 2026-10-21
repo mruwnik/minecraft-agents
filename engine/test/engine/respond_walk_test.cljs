@@ -3,6 +3,7 @@
   over block-at fns)."
   (:require [cljs.test :refer [deftest is]]
             [jobs.lib.reach :as reach]
+            [jobs.survival.respond.cover :as cover]
             [jobs.survival.respond.walk :as walk]))
 
 (defn pond-world
@@ -201,3 +202,9 @@
                        :else "rail"))]
     (is (< 3 (:x (walk/choose-target meadow from [threat] nil [] 6)))
         "flowers and rails are no walls: the flight runs straight away from the threat")))
+
+(deftest the-places-recent-walks-began-are-ways-back-like-stairs
+  (let [c {:view (fn [] {:now 1000 :data {:entries {:moved [{:t 900 :data {:from {:x 4.5 :y 15 :z -2.2} :to {:x 1 :y 3 :z 1}}}
+                                                           {:t 950 :data {:from {:x 4.7 :y 15 :z -2.4} :to {:x 1 :y 3 :z 1}}}]}
+                                           :policies {:moved {:cap 20 :ttl 600000}}}})}]
+    (is (= #{[4 14 -3]} (cover/trail-floors c)) "the floor under each start, once")))

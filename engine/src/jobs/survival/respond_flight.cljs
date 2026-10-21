@@ -18,7 +18,7 @@
      low in a ranged chaser's line of fire (the cover step below comes first). Any cell of the room counts as home:
      there an open door of the room is shut (a step back to one out of reach first), and a chaser still with a way in
      gets the cornered options (4.), its plug the walls alone (no pit or pocket dug in the hut): it does not walk out.
-  Underground (jobs.lib.shelter.sense/buried?) it first takes the stairs the body cut (ledger/ways-of: the highest stair cell within 14
+  Underground (jobs.lib.shelter.sense/buried?) it first takes the stairs the body cut (ledger/ways-of) or the places its recent walks began (cover/trail-floors): the highest such cell within 14
   blocks, above it and no nearer a chaser), before any walk to the :goal, and with none digs a side pocket (as below) before it walks across the open cave,
   unless a creeper or a melee mob is within cover-gap.
   2b. A lone melee mob (no creeper, enderman, spider, flyer or shooter) between ::cover-gap (5) and ::refuge-gap (10) that a fight would not win, with

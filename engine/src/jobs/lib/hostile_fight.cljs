@@ -6,6 +6,8 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.block-sets :as bs]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -62,12 +64,37 @@
        (> (danger-q/mob-distance (:primitives c) target) (settings/get settings ::ranged-chase))
        (some #(not= (.-id %) (.-id target)) (in-range c))))
 
+(defn dark-around?
+  "Whether mob e stands in or beside unlit space: its cell, the four cells next to it and the one 2 past it from the body,
+  those open or not sensed, include one the body sees as dark (look/dark-fn: a cell not sensed counts as dark underground).
+  A mob in the dark is hardly seen, so what shows is the lit edge of the dark it stands at."
+  [c e]
+  (let [p (:primitives c)
+        pos (u/pos-of (.-pos e))
+        me (u/self-pos c)
+        [x y z] (mapv #(js/Math.floor %) [(:x pos) (:y pos) (:z pos)])
+        away (fn [d] (let [v (- (d pos) (d me))] (cond (> v 0.5) 2 (< v -0.5) -2 :else 0)))
+        cells [[x y z] [(inc x) y z] [(dec x) y z] [x y (inc z)] [x y (dec z)] [(+ x (away :x)) y (+ z (away :z))]]]
+    (boolean (when-let [dark (look/dark-fn p)]
+               (some (fn [[cx cy cz]]
+                       (and (let [n (u/seen-name p {:x cx :y cy :z cz})] (or (nil? n) (bs/passable-or-water? n)))
+                            (= 1 ((:at dark) cx cy cz))))
+                     cells)))))
+
+(defn held?
+  "Whether the call waits for target instead of walking to it: :hold, or in a :hostiles fight a melee mob in or beside unlit space
+  (a player does not chase into unlit space: more may be there, unseen)."
+  [c target]
+  (boolean (and (not (combat/ranged? target))
+                (or (:hold (:args c)) (and (hostiles? c) (dark-around? c target))))))
+
 (defn held-idle?
   "Whether a held fight has waited ::hold-s since its last swing (or its start) with no mob coming within reach."
-  [c]
-  (let [m (ctx/mem c)]
-    (and (:hold (:args c))
-         (> (- (ctx/now c) (or (:last-attack m) (:started-at m))) (hold-ms)))))
+  ([c] (held-idle? c (:hold (:args c))))
+  ([c held?]
+   (let [m (ctx/mem c)]
+     (and held?
+          (> (- (ctx/now c) (or (:last-attack m) (:started-at m))) (hold-ms))))))
 
 (defn struck
   "What the fight counted per mob, as {id {:name :hits :health :blocked :blocked-health :quiet}} (the last three only
