@@ -482,7 +482,8 @@
 
 (defn placeable-now?
   "Whether a cell can be placed from what is carried: the fetch for the rest waits until these are in. A cell above one
-  that lacks an item a fetch is still due for does not count: a player has the walls before the roof goes on air."
+  that lacks an item a fetch is still due for does not count: a player has the walls before the roof goes on air. A missing
+  bed holds nothing up and never blocks the cells above it: it is fetched last."
   [c]
   (let [mem (ctx/mem c)
         closed (merge (:given-up mem) (:refused mem))
@@ -490,6 +491,7 @@
         carried (storage/carried-totals (u/inventory (:primitives c)))
         lowest-short (some->> (missing cells)
                               (filter #(and (not (contains? closed (:pos %)))
+                                            (not (wood/bed? (:item %)))
                                             (not (pos? (get carried (:item %) 0)))
                                             (due c {:reason :need :item (:item %)})))
                               (map #(get (:pos %) 1))

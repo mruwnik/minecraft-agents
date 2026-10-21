@@ -1074,6 +1074,23 @@
           (is (= [] (:missing result)))
           (is (= ["cobblestone" "cobblestone" "oak_planks"] (mapv second (places p))) "the walls first, then the roof"))))))
 
+(deftest a-missing-bed-is-fetched-after-the-carried-cells-above-its-level
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "house" :parts [{:id "bed-head" :cells [[4 64 4]] :want {:block "bed" :facing :south :part :head}}
+                                        {:id "bed-foot" :cells [[4 64 3]] :want {:block "bed" :facing :south :part :foot}}
+                                        {:id "roof" :cells [[3 65 2]] :want "oak_planks"}]}
+              spec {:inventory [{:name "oak_planks" :count 1}]
+                    :blocks (assoc ground fence-chest "chest" (h/cell-key 3 65 1) "stone")
+                    :containers {fence-chest [{:name "red_bed" :count 1}]}}
+              {:keys [eng p]} (start spec {"house" plan})
+              _ (tu/seeing-all p)
+              result (await (child-outcome eng job {:plan "house"} 300))
+              names (mapv #(.-name %) (.-calls (.-world p)))]
+          (is (= [] (:missing result)))
+          (is (< (.indexOf names "place") (.indexOf names "transfer")) "the carried planks go in before the body goes for the bed"))))))
+
 (deftest missing-material-is-fetched-from-a-seen-chest-by-default
   (async done
     (tu/run-async done

@@ -79,7 +79,7 @@
   fence_gates, wooden_trapdoors ...) is built in one species chosen for the plan (carried most, else the nearest log seen,
   else oak), booked, fetched by that species, and named in the result (:wood \"birch\"); a species name (oak_planks) stays exact.
   When cells are missing but none of their blocks is carried and none can be fetched, the call ends condition-failed :no-items with :needs.
-  Material: while cells wait for an item not carried (and not given up or refused), each round fetches it, once no cell can be placed from what is carried (when the ways allow it,
+  Material: while cells wait for an item not carried (and not given up or refused), each round fetches it, once no cell can be placed from what is carried (a missing bed never holds up the cells above it; when the ways allow it,
   jobs.lib.need with :explore on: a jobs.items.obtain child for the missing count, walking off to look for what is unseen; an item whose fetch failed is not asked again in the call); a pickaxe block to dig without a pickaxe fetches the tool the same way
   (jobs.items.get-tool). With ways #{:carried}, or once a fetch failed, the build goes on with what is carried and ends
   short (the text and :fetch-failed name each failed fetch and why), a pickaxe block given up :no-tool.")
