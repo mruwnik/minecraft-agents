@@ -40,6 +40,16 @@
     {:method :lure :pos nil} [:never :no-destination]
     {} [:ok :order]))
 
+(def box {:min {:x 28 :y 64 :z -1} :max {:x 32 :y 64 :z 1}})
+
+(deftest a-lure-into-a-box-that-leaves-no-animal-in-it-is-short
+  (are [args data want] (= want (bring/short? (ctx-of wheat args) data))
+    {:box box} {:end :led :inside 0} true
+    {:box box} {:end :led :inside 1} false
+    {:box box} {:end :led} false
+    {} {:end :led :inside 0} false
+    {:box box} {:end :tie :inside 0} false))
+
 (defn ^:async bring! [world args]
   (let [{:keys [eng clock] :as s} (h/setup (merge {:floor tu/walk-floor} world) 50)]
     (core/submit! eng (list 'jobs.animals.bring (merge {:mob "cow" :pos goal} args)) {})

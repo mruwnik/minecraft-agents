@@ -184,7 +184,22 @@
          [:summon "sheep" [6.5 0 4.5] "{NoAI:1b}"]
          [:summon "cow" [11.5 0 5.5] "{NoAI:1b}"] [:until-seen {:entity "cow" :min 2} 10]
          [:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
-   :expect [{:event {:source :job :kind :completed :data {:closed? true :animals-in 2 :inside {"cow" 1 "sheep" 1}}} :within-s 20 :of-job true}]}
+   :expect [{:event {:source :job :kind :completed :data {:closed? true :animals-in 2 :inside {"cow" {:adults 1 :babies 0} "sheep" {:adults 1 :babies 0}}}} :within-s 20 :of-job true}]}
+  ;; card e0f1380b: a pocket dug under a fence post that is walled in below keeps the pen closed, and the answer names the cells below the pen floor; one that opens outside is a way out under the fence
+  {:name "sealed-pocket-under-the-fence-is-closed-and-named"
+   :body {:at [7.5 -1 5.5] :yaw 270}
+   :blocks [[:fill [2 -2 2] [8 -2 8] "stone"] [:set [7 -1 5] "air"] [:set [8 -1 5] "air"] [:set [9 0 5] "stone"]]
+   :act [[:job (jobs.animals.pen-check {:ways #{:check} :at #at [7 -1 5]})]]
+   :expect [{:event {:source :job :kind :completed :data {:closed? true :cells 26 :text [:contains "below the pen floor"]}} :within-s 40 :of-job true}]}
+  {:name "tunnel-under-the-fence-to-open-ground-leaks"
+   :body {:at [7.5 -1 5.5] :yaw 270}
+   :blocks [[:fill [2 -2 2] [10 -2 8] "stone"] [:set [7 -1 5] "air"] [:set [8 -1 5] "air"] [:set [9 -1 5] "air"]]
+   :act [[:job (jobs.animals.pen-check {:ways #{:check} :at #at [7 -1 5]})]]
+   :expect [{:event {:source :job :kind :completed :data {:closed? false :reason :leak}} :within-s 40 :of-job true}]}
+  {:name "dug-out-floor-with-the-ring-intact-is-closed"
+   :blocks [[:fill [2 -2 2] [8 -2 8] "stone"] [:fill [3 -1 3] [7 -1 7] "air"]]
+   :act [[:job (jobs.animals.pen-check {:ways #{:check} :at #at [5 -1 5]})]]
+   :expect [{:event {:source :job :kind :completed :data {:closed? true :leaks []}} :within-s 25 :of-job true}]}
   ;; card 3547b880: no :at, :box or :plan ends impossible :no-pen
   {:name "no-pen-given-is-impossible"
    :act [[:job (jobs.animals.pen-check {})]]

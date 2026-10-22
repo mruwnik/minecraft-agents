@@ -46,8 +46,9 @@
   - :remembered lists the cells the answer rests on that are remembered, not in view even after a look (at most 12,
     :remembered-total when more).
   - :gate-drops (only when found) lists {:gate :from :to :drop}: a gate whose side of the pen is cut off by a drop of more than 1 block (animals will not step down 2).
+  - :below-floor (only when found) lists {:x :y :z} of the inside cells below the pen's usual floor level (a floor dug out, a pocket under a fence an animal can drop into); they are part of the pen when walled in, a leak when they lead out, and the text names them.
   - :gates lists every fence gate in or beside those cells with :open?.
-  - :animals lists the livestock on those cells (or up to 3 above one: a ledge inside the fence) as {:kind :id :pos [x y z]}, :animals-in counts them and :inside counts them by kind (a map of kind to count), so a loss can be dated from the log. Only animals in view are listed: :unseen-cells counts the inside cells known from memory only, :animals-complete? is false while any.")
+  - :animals lists the livestock on those cells (or up to 3 above one: a ledge inside the fence) as {:kind :id :pos [x y z]}, :animals-in counts them and :inside counts them by kind and age ({kind {:adults n :babies m}}; a baby row carries :baby true), so a loss can be dated from the log. Only animals in view are listed: :unseen-cells counts the inside cells known from memory only, :animals-complete? is false while any.")
 
 (a/defargs args
   {:at {:doc "feet cell [x y z] or {:x :y :z} of a spot inside the pen (the floor's top, where the animal's feet are)" :spec ::a/pos :default nil}
@@ -128,21 +129,27 @@
   {:uses {:job-time [1 5 30]}})
 
 (defn unseen-leak
-  "The nearest-listed leak cell that is unseen and not more than one layer below the start cell at, as {:x :y :z}: an
-  animal cannot leave through ground under the pen floor, and those cells can never be seen."
+  "The nearest-listed leak cell that is unseen and not more than two layers below the start cell at (the floor of a pocket dug one under the pen floor), as {:x :y :z}: an
+  animal cannot leave through ground further under the pen floor, and those cells can never be seen."
   [checked at]
-  (let [floor-y (dec (if (map? at) (:y at) (second at)))]
+  (let [floor-y (- (if (map? at) (:y at) (second at)) 2)]
     (:pos (first (filter #(and (= :unloaded (:why %)) (>= (:y (:pos %)) floor-y)) (:leaks checked))))))
+
+(defn side-cells
+  "The four cells beside [x y z]: a :gap whose sides are unseen may be a stretch of a way out the fill took through cells it never saw."
+  [[x y z]]
+  [[(inc x) y z] [(dec x) y z] [x y (inc z)] [x y (dec z)]])
 
 (defn seen-leak?
   "Whether the final read of a pen still waiting on unseen cells names a leak, other than the start cell at, at a cell the
-  body has seen: the way out is known and the unseen cells lie past it. An open gate is no proof: it may divide the
+  body has seen (a :gap also with every cell beside it seen): the way out is known and the unseen cells lie past it. An open gate is no proof: it may divide the
   pen, with more of the pen unseen beyond it."
   [p final at]
   (boolean (some (fn [{:keys [pos why]}]
                    (let [start (if (map? at) [(:x at) (:y at) (:z at)] (vec at))
                          cell [(:x pos) (:y pos) (:z pos)]]
-                     (and (not (#{:unloaded :open-gate} why)) (not= cell start) (not (dig-look/unknown? p cell)))))
+                     (and (not (#{:unloaded :open-gate} why)) (not= cell start) (not (dig-look/unknown? p cell))
+                          (or (not= :gap why) (not-any? #(dig-look/unknown? p %) (side-cells cell))))))
                  (:leaks final))))
 
 (defn answered?
@@ -181,6 +188,18 @@
   [{:keys [inside remembered]}]
   (let [n (count (filter inside remembered))]
     {:unseen-cells n :animals-complete? (zero? n)}))
+
+(defn inside-by-kind
+  "{kind {:adults n :babies m}} of the animal rows."
+  [rows]
+  (update-vals (group-by :kind rows)
+               (fn [rs] {:adults (count (remove :baby rs)) :babies (count (filter :baby rs))})))
+
+(defn below-floor
+  "The inside cells ([x y z]) lying below the pen's usual floor level (its most common y): a floor dug out, or a pocket under a fence an animal can drop into."
+  [{:keys [inside]}]
+  (let [level (key (apply max-key val (frequencies (map second inside))))]
+    (vec (sort (filter #(< (second %) level) inside)))))
 
 (defn start-near
   "[x y z] the unloaded leaks are listed nearest to: the pen's spot, else the body."
@@ -243,7 +262,7 @@
         {:keys [walks last-unseen] :or {walks 0}} (ctx/mem c)
         stuck (if (= unseen last-unseen) walks 0)
         walk (when (and unseen (< stuck (settings/get settings ::max-walks)))
-               (await (near/go-near! c unseen 1 {:doors :never :ways #{:walk :clear-seal}})))]
+               (await (near/go-near! c unseen 4 {:doors :never :see true :ways #{:walk :clear-seal}})))]
     (case walk
       :partial :continue
       :there (do (ctx/update-mem! c assoc :walks (inc stuck) :last-unseen unseen) :continue)
@@ -251,10 +270,13 @@
             ;; a seen leak is the answer: the unseen ground beyond it is no extra finding
             checked (cond-> checked (= :leak (:reason checked)) (update :leaks #(vec (remove (comp #{:unloaded} :why) %))))
             rows (animals/in-pen-rows p checked (settings/get settings ::animal-radius))
-            result (merge (pen/summary checked) (pen-read/listed checked (u/self-pos c)) {:animals rows :animals-in (count rows) :inside (frequencies (map :kind rows))} (animal-coverage checked)
-                          (when (herd-note c checked) {:herdable? false}))
+            low (when (seq (:inside checked)) (below-floor checked))
+            result (merge (pen/summary checked) (pen-read/listed checked (u/self-pos c)) {:animals rows :animals-in (count rows) :inside (inside-by-kind rows)} (animal-coverage checked)
+                          (when (herd-note c checked) {:herdable? false})
+                          (when (seq low) {:below-floor (mapv (fn [[x y z]] {:x x :y y :z z}) (take (pen/max-listed) low))}))
             result (assoc result :text (if (:closed? result)
                                          (str "pen closed, " (:cells result) " cells" (pen-patch/gate-drop-text result)
+                                              (when (seq low) (str "; " (count low) " cells lie below the pen floor (dug out), e.g. " (pr-str (first low))))
                                               (when-let [note (herd-note c checked)] (str "; but " note)))
                                          (str "pen not closed: " (name (:reason result)) (pen-patch/leak-text result) (pen-patch/gate-drop-text result))))]
         (ctx/update-mem! c assoc :cells (:cells result))

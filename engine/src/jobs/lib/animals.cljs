@@ -55,7 +55,8 @@
    (->> (look/seen-objs p {:radius radius :names livestock :max 64})
         (filter #(let [pos (u/pos-of (.-pos %))] (or (pen/in-pen? answer pos) (also? pos))))
         (mapv (fn [e] (let [{:keys [x y z]} (u/pos-of (.-pos e))]
-                        {:kind (.-name e) :id (.-id e) :pos [(/ (js/Math.round (* 10 x)) 10) y (/ (js/Math.round (* 10 z)) 10)]}))))))
+                        (cond-> {:kind (.-name e) :id (.-id e) :pos [(/ (js/Math.round (* 10 x)) 10) y (/ (js/Math.round (* 10 z)) 10)]}
+                          (true? (.-baby e)) (assoc :baby true))))))))
 
 (defn cell-of [e]
   (let [{:keys [x y z]} (u/pos-of (.-pos e))]

@@ -135,12 +135,17 @@
         (let [es [{:id 7 :name "cow" :kind "passive" :pos [2.5 64 2.5]}
                   {:id 8 :name "sheep" :kind "passive" :pos [3.5 64 1.5]}
                   {:id 9 :name "cow" :kind "passive" :pos [8.5 64 2.5]}
-                  {:id 10 :name "zombie" :kind "hostile" :pos [1.5 64 1.5]}]
+                  {:id 10 :name "zombie" :kind "hostile" :pos [1.5 64 1.5]}
+                  {:id 11 :name "cow" :kind "passive" :baby true :pos [3.5 64 3.5]}]
               {:keys [event]} (await (run-job {:at [2 64 2] :checks {:safe? (quote (always))}} (assoc (world {}) :entities es)))]
-          (is (= 2 (:animals-in event)))
-          (is (= {"cow" 1 "sheep" 1} (:inside event)))
+          (is (= 3 (:animals-in event)))
+          (is (= {"cow" {:adults 1 :babies 1} "sheep" {:adults 1 :babies 0}} (:inside event)))
           (is (= [{:kind "cow" :id 7 :pos [2.5 64 2.5]} {:kind "sheep" :id 8 :pos [3.5 64 1.5]}]
-                 (sort-by :id (:animals event)))))))))
+                 (remove :baby (sort-by :id (:animals event))))))))))
+
+(deftest below-floor-lists-the-inside-cells-under-the-usual-floor
+  (is (= [[3 63 3]] (pen-check/below-floor {:inside #{[2 64 2] [2 64 3] [3 64 2] [3 63 3]}})))
+  (is (= [] (pen-check/below-floor {:inside #{[2 64 2] [2 64 3]}}))))
 
 (deftest dedupe-leaks-keeps-first-seen-order-past-eight-leaks
   (let [leaks (mapv (fn [i] {:pos {:x i :y 64 :z 0} :why :gap}) (range 12))]
@@ -313,6 +318,7 @@
   (let [leak (fn [y] {:pos {:x 1 :y y :z 1} :why :unloaded})]
     (are [ys want] (= want (pen-check/unseen-leak {:leaks (mapv leak ys)} [2 64 2]))
       [60 61] nil
+      [60 62] {:x 1 :y 62 :z 1}
       [60 63] {:x 1 :y 63 :z 1}
       [64 60] {:x 1 :y 64 :z 1})))
 

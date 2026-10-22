@@ -30,7 +30,7 @@
   jobs.explore.search calls for the mob, then called again, its :radius widened to reach what was found.
 
   Result: the child's. Both ways give {:end :animal :animal-at :at :reason :text}; :end is :tie (tied to the post), :free
-  (let go at :pos; lead only) or :led (lure only: the animal stands at the spot and still follows); lead adds :still-led
+  (let go at :pos; lead only), :led (lure only: the animal stands at the spot and still follows) or :short (lure with :box: it was led there but none of the kind stands in the box at the end; ends nothing-possible :animal-outside); lead adds :still-led
   and :gathered, lure adds :near, :in-box and :distance. Done only with an :end.")
 
 (a/defargs args
@@ -129,6 +129,15 @@
                             :again)
       :else (do (ctx/update-mem! c assoc :searches max-searches) nil))))
 
+(defn short?
+  "Whether a lure that ended :led into a :box saw no animal of the kind inside it at the end (it left or fell out of the box)."
+  [c data]
+  (boolean (and (= :led (:end data)) (:box (:args c)) (zero? (:inside data 1)))))
+
+(defn short-text [data]
+  (str "bring stopped: the animal was led to the box but 0 animals of the kind stand in it now (at "
+       (pr-str (some-> (:animal-at data) (select-keys [:x :y :z]))) ")"))
+
 (defn ^:async step [c]
   (let [method (or (:method (ctx/mem c)) (method-of c))
         _ (ctx/update-mem! c assoc :method method)
@@ -137,8 +146,10 @@
       :continue
       (or (when (no-animal? c e) (await (search! c)))
           (let [data (assoc (:data e) :method method)]
-            (when (= :done (:kind e)) (ctx/update-mem! c assoc :brought data))
-            (contract/with-because (ctx/end c (:kind e) (:cause e) data) e))))))
+            (if (short? c data)
+              (ctx/end c :nothing-possible :animal-outside (assoc data :end :short :text (short-text data)))
+              (do (when (= :done (:kind e)) (ctx/update-mem! c assoc :brought data))
+                  (contract/with-because (ctx/end c (:kind e) (:cause e) data) e))))))))
 
 (defn ^:async round [c]
   (await (pace/steps! c #(step c))))
