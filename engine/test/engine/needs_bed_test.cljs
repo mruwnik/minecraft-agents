@@ -1,28 +1,31 @@
 (ns engine.needs-bed-test
   "The :needs-bed trigger: a body overdue for sleep with no bed gets one."
-  (:require [cljs.test :refer [deftest is]]
+  (:require [cljs.test :refer [are deftest is]]
             [engine.memory :as mem]
             [engine.test-util :as tu]
             [jobs.lib.shelter.clock :as sh-clock]
+            [jobs.lib.world-files :as world]
             [triggers.survival.needs-bed :as nb]))
 
 (def zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 8 :y 64 :z 0}})
 
 (defn run
-  "f over a fake world (night? and inv given) and a view of the memory entries [[kind data age-days] ..] written age-days ago."
-  [f {:keys [night inv entries time entities blocks] :or {entries []}}]
+  "f over a fake world (night? and inv given), a view of the memory entries [[kind data age-days] ..] written age-days ago,
+  the world's plans {id plan} and the listed jobs [[id label args] ..]."
+  [f {:keys [night inv entries time entities blocks plans jobs] :or {entries []}}]
   (let [clock (atom 0)
         store (mem/open (tu/tmp-dir) {:now #(deref clock)})]
     (doseq [[kind data age] entries]
       (reset! clock (- (* 10 sh-clock/ms-per-day) (* age sh-clock/ms-per-day)))
       (mem/write! store kind data {:cap 8 :ttl (* 20 sh-clock/ms-per-day)}))
     (reset! clock (* 10 sh-clock/ms-per-day))
+    (doseq [[id label args] jobs] (mem/create-job! store id label args))
     (f (tu/seeing-all (tu/fake-on-floor (cond-> {:floor [-10 -10 10 10] :inventory (or inv []) :entities entities :blocks blocks :time (or time 9000)} night (assoc :time 18000))))
-       (mem/view store) {})))
+       (mem/view store) {} (world/of-data (or plans {}) {}) (set (map first jobs)))))
 
 (defn holds? [opts] (run nb/needs-bed opts))
 
-(defn why [opts] (run (fn [p view _] (nb/why p view)) opts))
+(defn why [opts] (run (fn [p view & _] (nb/why p view)) opts))
 
 (def slept-long-ago [[:slept {:pos {:x 0 :y 64 :z 0}} 4]])
 
@@ -86,3 +89,17 @@
   (is (= {:why :spawn-lost :pos {:x 5 :y 64 :z 0}}
          (why {:entries (conj rested spawn-bed-at-5 [:spawn-reset {} 0.2])})))
   (is (nil? (why {:entries rested}))))
+
+(def hut {:id "hut" :parts [{:id "house" :cells [[3 64 3]] :want "oak_planks"}
+                            {:id "bed" :cells [[4 64 3]] :want {:block "bed" :facing :east :part :foot}}]})
+(def red-hut {:id "red-hut" :parts [{:id "bed" :cells [[4 64 3]] :want "red_bed[facing=east,part=foot]"}]})
+
+(deftest a-listed-job-that-brings-a-bed-is-waited-for
+  (are [jobs expected] (= expected (holds? {:entries slept-long-ago :plans {"hut" hut "red-hut" red-hut} :jobs jobs}))
+    [["j1" "jobs.build.from-plan" {:plan "hut"}]] false
+    [["j1" "jobs.build.from-plan" {:plan "hut" :part "bed"}]] false
+    [["j1" "jobs.build.from-plan" {:plan "hut" :part "house"}]] true
+    [["j1" "jobs.build.from-plan" {:plan "red-hut"}]] false
+    [["j1" "jobs.items.obtain" {:any-of ["white_bed" "red_bed"]}]] false
+    [["j1" "jobs.items.get-kit" {}]] true
+    [] true))

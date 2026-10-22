@@ -4,11 +4,12 @@
             [engine.ctx :as ctx]
             [engine.game :as game]
             [jobs.items.get-tool :as get-tool]
-            [jobs.items.obtain.base :refer [explore-setting gathers? makes? way?]]
+            [jobs.items.obtain.base :refer [explore-setting gathers? makes? names-of way?]]
             [jobs.items.obtain.chest :refer [candidates]]
             [jobs.items.obtain.plan :refer [craft-plan gather-plan]]
             [jobs.items.obtain.seen :refer [gather-slot seen-of with-block]]
             [jobs.items.obtain.table :refer [gather-needs searchable?]]
+            [jobs.lib.cost :as cost]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.trees :as trees]))
@@ -62,11 +63,25 @@
                       (let [s (ctx/child-status c (gather-slot need) (:job need) (:args need))]
                         (or (= :ok (first s)) (lights-itself? c (contract/status-cause s))))))))))
 
+(defn priced-search
+  "{:max-distance :spend} of a :priced call's search: as far out as what is wanted is worth to the body here
+  (jobs.lib.cost/worth-to, search-reach), spending that worth's seconds less a trip; nil when it pays for no block."
+  [c]
+  (let [p (:primitives c)
+        at (u/self-pos c)
+        body (cost/death-body p (ctx/view c))
+        worth (cost/worth-to body (or (seq (names-of (:args c))) (keys (:bill (:args c)))) at)
+        reach (js/Math.floor (cost/search-reach body worth at))]
+    (when (pos? reach)
+      {:max-distance reach :spend {:job-time (- worth (cost/trip))}})))
+
 (defn explore-opts
-  "The search options, or nil when the :search way is off (or :explore false)."
+  "The search options, or nil when the :search way is off (or :explore false), or a :priced call's worth pays for none."
   [c]
   (when (and (:explore (:args c)) (way? c :search))
-    (explore-setting)))
+    (if (:priced (:args c))
+      (some->> (priced-search c) (merge (explore-setting)))
+      (explore-setting))))
 
 (defn search-names
   "The block or animal names a search for a need looks for."

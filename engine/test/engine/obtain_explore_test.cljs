@@ -6,7 +6,9 @@
             [engine.fake :as fake]
             [engine.settings :as settings]
             [engine.test-util :as tu]
+            [engine.memory :as mem]
             [jobs.items.obtain.gather :as gather]
+            [jobs.items.obtain.need :as need]
             [jobs.items.obtain.seen :as seen]
             [jobs.lib.access :as access]
             [jobs.lib.look :as look]))
@@ -34,6 +36,20 @@
   (is (= 96 (:max-distance (gather/within-site {:max-distance 192} [490 61 250]))) "the far search is cut to the site radius")
   (is (= 64 (:max-distance (gather/within-site {:max-distance 64} [490 61 250]))) "a nearer search is kept")
   (is (= 192 (:max-distance (gather/within-site {:max-distance 192} nil))) "no centre: unbounded as before"))
+
+(defn search-at
+  "explore-opts of an obtain of args by a fake body with health."
+  [health args]
+  (let [view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))]
+    (need/explore-opts {:primitives (tu/fake-on-floor {:self {:health health}}) :view (constantly view) :args (merge {:explore true} args)})))
+
+(def bed {:any-of ["white_bed" "red_bed"] :priced true})
+
+(deftest a-priced-search-ranges-as-far-as-the-find-is-worth-less-when-hurt
+  (let [full (:max-distance (search-at 20 bed))]
+    (is (< (:max-distance (search-at 4 bed)) full) "a hurt body ranges less")
+    (is (< (or (:max-distance (search-at 20 {:item "wooden_sword" :priced true})) 0) full) "a sword is worth a shorter search than a bed")
+    (is (= 64 (:max-distance (search-at 20 (dissoc bed :priced)))) "unpriced: the explore setting")))
 
 (deftest logs-seen-only-in-a-foreign-zone-are-explored-past-and-then-named
   (async done

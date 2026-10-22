@@ -346,6 +346,20 @@
     (is (= 2 (:rate (danger 3600000))))
     (is (zero? (:rate (danger 8000000))))))
 
+(deftest a-respawn-point-here-is-worth-the-deaths-it-brings-nearer
+  (let [here {:x 0 :y 64 :z 0}
+        lost (cost/spawn-worth {:carried 100} here)]
+    (is (> lost (cost/spawn-worth {:carried 0} here)) "with no respawn the carried items are lost too")
+    (is (> lost (cost/spawn-worth {:respawn far} here) 0) "a far respawn bed is worth less to replace")
+    (is (zero? (cost/spawn-worth {:respawn here} here)))))
+
+(deftest a-search-ranges-as-far-as-its-find-is-worth-and-less-when-hurt
+  (let [here {:x 0 :y 64 :z 0}
+        reach #(cost/search-reach {:health %1} %2 here)]
+    (is (> (reach 20 600) (reach 5 600) (reach 2 600) 0))
+    (is (> (reach 20 600) (reach 20 300)))
+    (is (zero? (reach 20 (cost/trip))) "a find worth no more than the trip is not searched for")))
+
 (deftest a-route-with-a-death-chance-costs-more-than-the-same-route-without
   (let [body {:respawn {:x 0 :y 64 :z 0} :level 3}
         night (cost/route-death-cost body {:night? true} far)]

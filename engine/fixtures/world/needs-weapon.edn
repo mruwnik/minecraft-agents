@@ -24,6 +24,24 @@
    :expect [{:event {:source :reflex :kind :fired} :within-s 20}
             {:count-event {:source :job :kind :obtain.exploring} :for-s 25 :at-most 3}]
    :limit-s 40}
+  ;; Card 1c50b7f5: a sword is worth less than a search (a :priced obtain): with no wood in sight the reflex does not walk off to look. A sealed lit room.
+  {:name "no-wood-in-sight-no-search-for-a-sword"
+   :time :any
+   :blocks [[:fill [8 0 8] [24 4 24] "glowstone" :hollow]]
+   :body {:at [16.5 1 16.5]}
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :within-s 20}
+            {:no-event {:source :job :kind :obtain.exploring} :for-s 25}]
+   :limit-s 40}
+  ;; Card 1c50b7f5: a get-kit queued behind a wait makes the sword first itself, so the reflex waits for it (registered once the kit is listed).
+  {:name "listed-get-kit-is-waited-for"
+   :time :any
+   :register []
+   :act [[:job (jobs.time.noop {:seconds 45 :why :idle})]
+         [:job (jobs.items.get-kit {:food false})]
+         [:cli "triggers" ["$body" "--world" "$world" "put" "needs-weapon" "--trigger" "needs-weapon" "--persistence" "cooldown" "--cooldown-s" "600" "--job" "(jobs.items.obtain {:any-of [\"iron_sword\" \"stone_sword\" \"wooden_sword\"] :count 1 :explore true :priced true})" "--by" "world-test"]]]
+   :expect [{:event {:source :job :kind :queued :name "jobs.items.get-kit"} :within-s 10}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :for-s 30}]
+   :limit-s 50}
   ;; Should-stay: a sword put in a chest by name is not taken back by the reflex (it would fetch it from that chest).
   {:name "sword-put-away-by-name-stays-in-the-chest"
    :time :any

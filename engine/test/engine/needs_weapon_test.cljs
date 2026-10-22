@@ -5,6 +5,7 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.dawn :as dawn]
+            [jobs.lib.world-files :as world]
             [engine.test-util :as tu]
             [triggers.survival.needs-weapon :as nw]))
 
@@ -12,7 +13,7 @@
   (nw/needs-weapon (tu/fake-on-floor (cond-> {:floor [-10 -10 10 10] :inventory (or inv []) :self self :entities entities}
                                        night (assoc :time 18000)
                                        time (assoc :time time)))
-                   (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)})) {}))
+                   (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)})) {} nil #{}))
 
 (deftest an-unarmed-body-needs-a-sword-at-any-hour
   (are [world expected] (= expected (holds? world))
@@ -33,7 +34,7 @@
   (is (true? (settings/with-settings {::dawn/with-hostile true} #(holds? {:time 6000 :entities [zombie]})))))
 
 (defn holds-with-memory? [memory]
-  (nw/needs-weapon (tu/fake-on-floor {:floor [-10 -10 10 10] :inventory []}) memory {}))
+  (nw/needs-weapon (tu/fake-on-floor {:floor [-10 -10 10 10] :inventory []}) memory {} nil #{}))
 
 (def respawned [:respawned 1100 {}])
 
@@ -47,3 +48,15 @@
 (deftest a-sword-put-away-by-name-keeps-the-reflex-quiet
   (is (false? (holds-with-memory? (memory-with 2000 [:weapon-stowed 1000 {:item "stone_sword"}]))))
   (is (true? (holds-with-memory? (memory-with 2000)))))
+
+(defn holds-with-listed? [label args]
+  (let [store (mem/open (tu/tmp-dir) {:now (constantly 0)})]
+    (mem/create-job! store "j1" label args)
+    (nw/needs-weapon (tu/fake-on-floor {:floor [-10 -10 10 10] :inventory []}) (mem/view store) {} (world/of-data {} {}) #{"j1"})))
+
+(deftest a-listed-job-that-brings-a-weapon-is-waited-for
+  (are [label args expected] (= expected (holds-with-listed? label args))
+    "jobs.items.get-kit" {} false
+    "jobs.items.get-kit" {:items ["iron_helmet"]} true
+    "jobs.items.obtain" {:item "stone_sword"} false
+    "jobs.items.obtain" {:item "torch"} true))

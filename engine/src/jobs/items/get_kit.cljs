@@ -14,6 +14,7 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.cost.food :as food-cost]
             [jobs.lib.foods :as foods]
+            [jobs.lib.makers :as makers]
             [jobs.lib.need :as need]
             [jobs.lib.next-call :as next-call]
             [jobs.lib.pace :as pace]
@@ -42,8 +43,7 @@
   - nothing-possible {:reason :wear-failed}.
   Quote: a guess per missing item. done? is ok when every item is carried or worn.")
 
-(def iron-kit
-  ["iron_pickaxe" "iron_sword" "iron_axe" "iron_shovel" "iron_helmet" "iron_chestplate" "iron_leggings" "iron_boots"])
+(def iron-kit makers/iron-kit)
 
 (a/defargs args
   {:items {:doc "the items to get, in order" :spec (a/coll-of a/item?) :default iron-kit}

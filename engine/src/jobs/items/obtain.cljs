@@ -45,7 +45,8 @@
    :for-plan {:doc "id of the plan whose work this is: a crafting table may stand in its own cells; passed to the craft steps" :spec a/name? :default nil}
    :avoid {:doc "cells [x y z] a crafting table is never put in or dug for (a caller's dig line); passed to the craft steps" :spec (a/coll-of a/position?) :default nil}
    :center {:doc "a cell [x y z] the searches for an unseen block or animal centre on (a build's site): each starts there and stays within the ::site-radius setting of it; nil: where the body stands" :spec a/position? :default nil}
-   :explore {:doc "false drops the :search way (the base ::explore setting's search for a raw need not seen): fails :no-source instead" :spec boolean? :default true}})
+   :explore {:doc "false drops the :search way (the base ::explore setting's search for a raw need not seen): fails :no-source instead" :spec boolean? :default true}
+   :priced {:doc "one search only, out as far and as long as what is wanted is worth to the body where it starts (jobs.lib.cost/worth-to, search-reach: a hurt body ranges less), none when that pays for no block" :spec boolean? :default false}})
 
 (a/defargs settings
   {::job-time-s {:default 600 :doc "Seconds an obtain of one unit may run (its default :spend :job-time)." :spec (a/num-in 0 nil)}

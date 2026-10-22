@@ -21,7 +21,7 @@
     planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; air-profile, water-breathing-s, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; swim-profile: its swimH from Depth Strider on the boots; swim-factor: a swim block in walk blocks (a flight's water price); gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's prices of unseen cells (jobs.lib.cost.planner).
     tolls    farm-tolls, zone-tolls: go-to's :tolls for planted cells and zone cells to cross only as a last resort
              (jobs.lib.cost.tolls).
-    death    experience-cost, death-cost, death-chance, route-death-cost: death as an ordinary cost, the walk back for the items plus the experience; a route pays its chance of dying x that; death-weight, terrain-danger: a remembered death's fade and the plan cost near a death by terrain (jobs.lib.cost.death).
+    death    experience-cost, death-cost, death-chance, route-death-cost: death as an ordinary cost, the walk back for the items plus the experience; a route pays its chance of dying x that; spawn-worth, search-reach: a respawn point's worth and how far a search for something may range; death-weight, terrain-danger: a remembered death's fade and the plan cost near a death by terrain (jobs.lib.cost.death).
     base-rates  density, biome-chance, expected-density, peak-density: the ore a block of ground is expected to hold, from the game's
              own placements, and the chance of a biome on ground the body has not seen (jobs.lib.cost.base-rates)."
   (:require [jobs.lib.cost.armour :as armour]
@@ -40,6 +40,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.util :as u]))
 
 (def equipment-of armour/equipment-of)
@@ -193,6 +194,8 @@
 (def death-cost death/death-cost)
 (def death-chance death/death-chance)
 (def route-death-cost death/route-death-cost)
+(def spawn-worth death/spawn-worth)
+(def search-reach death/search-reach)
 (def death-weight death/death-weight)
 (def terrain-danger death/terrain-danger)
 
@@ -200,3 +203,21 @@
 (def biome-chance base-rates/biome-chance)
 (def expected-density base-rates/expected-density)
 (def peak-density base-rates/peak-density)
+
+(defn death-body
+  "The body of p as the death costs read it: :level, :health, :respawn (the live spawn bed, sh-spawn/spawn-bed-pos) and
+  :carried (the item-value of the inventory)."
+  [p view]
+  (let [self (.self p)]
+    {:level (or (some-> self .-experience .-level) 0)
+     :health (or (.-health self) 20)
+     :respawn (sh-spawn/spawn-bed-pos p view)
+     :carried (:value (item-value (u/inventory p)))}))
+
+(defn worth-to
+  "Seconds getting one of names is worth to body at `at`: the least item-value among them, a bed (it sets the respawn)
+  with its spawn-worth on top."
+  [body names at]
+  (apply min (map (fn [n] (+ (:value (item-value [{:name n :count 1}]))
+                             (if (.endsWith n "_bed") (spawn-worth body at) 0)))
+                  names)))

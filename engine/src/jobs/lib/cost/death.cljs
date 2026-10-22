@@ -5,8 +5,14 @@
 
   body: {:level experience levels, :respawn {:x :y :z} where it would wake}.
 
+  body: also :health, and :carried, the seconds the carried items are worth (item-value).
+
   A remembered death fades: death-weight. One by terrain (a fall, water, lava, a wall) costs go-to's plans near its spot
-  as terrain-danger."
+  as terrain-danger.
+
+  spawn-worth: what a respawn point here is worth over the next ::spawn-horizon-s, the deaths expected meanwhile times what
+  each would cost more from the respawn the body has; search-reach: how far a search for something worth that much may
+  range before the death its walk risks costs more than the find is worth."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.cost.value :as value]))
@@ -20,6 +26,14 @@
                            :doc "Chance of dying on a route over the surface at night."}
    ::chance-underground {:default 0.002 :spec (a/num-in 0 1)
                          :doc "Chance of dying on a route underground."}
+   ::roam-hp-per-block {:default 0.02 :spec (a/num-in 0 nil)
+                        :doc "hp a block of search over unseen land costs, a body dying once they add up to its health. Rough, from the needs-bed sheep hunts of 2026-10-21/22: three deaths and a 20 -> 2.5 hp walk in hunts of 60-450 blocks (docs/fresh-start-design.md, gap 2)."}
+   ::deaths-per-hour {:default 1.3 :spec (a/num-in 0 nil)
+                      :doc "Deaths an hour of play, every cause: the fresh-start trials of 2026-10-21/22 (Wicken r5, 8 deaths in 6h15; docs/fresh-start-design.md section 1)."}
+   ::spawn-walk-blocks {:default 5000 :spec (a/num-in 0 nil)
+                        :doc "Blocks from world spawn back to where a body with no respawn bed died: fresh bodies are dropped 5000 or more from it (docs/fresh-start-design.md section 4)."}
+   ::spawn-horizon-s {:default 1200 :spec (a/num-in 0 nil)
+                      :doc "Seconds a respawn point is priced over (spawn-worth): one in-game day, after which the needs-bed errand comes again."}
    ::memory-ms {:default 7200000 :spec (a/num-in 1 nil)
                 :doc "Milliseconds over which the memory of a death fades from full weight to none."}
    ::terrain-rate {:default 4 :spec (a/num-in 0 nil)
@@ -48,20 +62,39 @@
 
 (defn death-cost
   "Seconds a death at `at` ({:x :y :z}) costs: the walk from the body's :respawn to `at` and back for the items (a trip
-  and the walk price), plus experience-cost. A body with no :respawn pays the trip only."
+  and the walk price), plus experience-cost. A body with no :respawn walks ::spawn-walk-blocks from world spawn and loses
+  what it :carried: the pile despawns long before it gets there."
   [body at]
   (let [from (:respawn body)
-        dist (if (and from at)
-               (js/Math.hypot (- (:x from) (:x at)) (- (:y from) (:y at)) (- (:z from) (:z at)))
-               0)]
-    (+ (value/trip) (:cost (value/walk-cost {:distance dist})) (experience-cost body))))
+        walk (if from
+               (:cost (value/walk-cost {:distance (js/Math.hypot (- (:x from) (:x at)) (- (:y from) (:y at)) (- (:z from) (:z at)))}))
+               (+ (:cost (value/walk-cost {:distance (settings/get settings ::spawn-walk-blocks)})) (or (:carried body) 0)))]
+    (+ (value/trip) walk (experience-cost body))))
 
 (defn death-chance
-  "The chance of dying on a route {:underground? :night?}; the body is not read yet."
-  [_body {:keys [underground? night?]}]
-  (settings/get settings (cond underground? ::chance-underground night? ::chance-surface-night :else ::chance-surface-day)))
+  "The chance of dying on a route {:underground? :night?}, or on a search of :roam blocks over unseen land: ::roam-hp-per-block
+  for each against the body's :health (20 when not said), at most 1."
+  [body {:keys [underground? night? roam]}]
+  (if roam
+    (min 1 (/ (* roam (settings/get settings ::roam-hp-per-block)) (max 1 (or (:health body) 20))))
+    (settings/get settings (cond underground? ::chance-underground night? ::chance-surface-night :else ::chance-surface-day))))
 
 (defn route-death-cost
   "What a route adds to its cost for the death it risks: death-chance x death-cost at `at` (where it would die)."
   [body route at]
   (* (death-chance body route) (death-cost body at)))
+
+(defn spawn-worth
+  "Seconds a respawn point at `at` is worth to body: the deaths expected over ::spawn-horizon-s (::deaths-per-hour) times
+  what each costs more from the body's own :respawn (none: world spawn) than from `at`."
+  [body at]
+  (* (settings/get settings ::deaths-per-hour) (/ (settings/get settings ::spawn-horizon-s) 3600)
+     (max 0 (- (death-cost body at) (death-cost (assoc body :respawn at) at)))))
+
+(defn search-reach
+  "Blocks out from `at` a search for something worth `worth` seconds may range: what is left of the worth after a trip,
+  over the walk price of a block and the death a block of search risks (route-death-cost of one :roam block). 0 when it
+  pays for none, less for a hurt body."
+  [body worth at]
+  (max 0 (/ (- worth (value/trip))
+            (+ (:cost (value/walk-cost {:distance 1})) (route-death-cost body {:roam 1} at)))))

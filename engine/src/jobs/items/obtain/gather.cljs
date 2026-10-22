@@ -60,6 +60,11 @@
         (update :skipped-once (fnil into #{}) cells)
         (update :skip-cells (fnil into #{}) again))))
 
+(defn search-rounds
+  "Searches for one raw need: one for a :priced call (its worth buys one), else the explore-rounds setting."
+  [c]
+  (if (:priced (:args c)) 1 (explore-rounds)))
+
 (defn gather-failed!
   "A gather run that brought nothing (a mine that ended :wet or :flooded leaves its ore's column out of the next sight). Trees seen but unreachable (:no-tree) with :explore on send the body to look
   elsewhere (bounded by [:explored key]); a mine that lost its pickaxe (:no-tool) that the pickaxe step can replace
@@ -67,7 +72,7 @@
   glass, bedrock) is :unreachable, not a missing source."
   [c names need why e]
   (cond
-    (and (= :no-tree why) (explore-opts c) (< (get-in (ctx/mem c) [:explored (:key need)] 0) (explore-rounds)))
+    (and (= :no-tree why) (explore-opts c) (< (get-in (ctx/mem c) [:explored (:key need)] 0) (search-rounds c)))
     (do (ctx/update-mem! c assoc-in [:gather :unreachable (:key need)] true) :again)
 
     (and (= :no-tool why) (pickaxe-first? c names need)) :again
@@ -231,7 +236,7 @@
             lead? (do (ctx/emit! c :obtain.lead :info {:message (str "found " (str/join "/" targets) " at " (str/join " " pos) " out of sight: walking to it") :pos pos})
                       (ctx/update-mem! c assoc-in [:gather :lead] {:key (:key need) :pos pos})
                       :again)
-            (< k (explore-rounds)) :again
+            (< k (search-rounds c)) :again
             :else (tried! c :gather (cond-> {:searched (:key need) :for targets :result (or (:reason res) (contract/cause-key e))}
                                       (:why res) (assoc :why (:why res))
                                       (:coverage res) (assoc :legs (:legs (:coverage res)) :farthest (:farthest (:coverage res)))))))))))
@@ -344,7 +349,7 @@
       (await (surface-step! c))
       (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (searchable? need) (not (:tunnel? need))
            (or (not (seen-of c need)) (get-in (ctx/mem c) [:gather :unreachable (:key need)]) (trees-unreachable? c need))
-           (< (get-in (ctx/mem c) [:explored (:key need)] 0) (explore-rounds)))
+           (< (get-in (ctx/mem c) [:explored (:key need)] 0) (search-rounds c)))
       (await (explore-walk! c need))
       (and (not (get-in (ctx/mem c) [:gather :before])) (torch-due c (start-cause c need)))
       (book-light! c (torch-due c (start-cause c need)))
