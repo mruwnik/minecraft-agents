@@ -369,7 +369,7 @@
                         :containers {"-3,64,2" [{:name "wooden_pickaxe" :count 1}]}
                         :drops {"stone" "cobblestone"}}
                        [own-zone])
-              id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :ways #{:carried}}) {})]
+              id (core/submit! (:eng s) (list 'jobs.access.stair {:dir :down :heading :south :steps 1 :ways #{:carried} :need-drop true}) {})]
           (await (run-ticks s 10))
           (is (= :no-tool (:reason (core/waiting (:eng s) id))))
           (is (empty? (inspects s))))))))

@@ -94,8 +94,7 @@
   Before the first dig a worn last pickaxe gets a spare (jobs.lib.trip/tool-ready!; tool.no-spare says when none could be had).
   Every carried pickaxe down to jobs.lib.trip's ::spent-uses (3) uses stops the tunnel {:reason :tool-spent} before the last breaks (jobs.access.stair; the call's :settings {:jobs.lib.trip/spent-uses 0} digs on).
   The call's :ways (jobs.lib.need; only #{:carried} ends :no-tool): a missing pickaxe is got inside the jobs.blocks.dig child of the dig
-  (the stair's and the run's own), then the body walks back and goes on; a fetch that fails or cures nothing ends :no-tool with its reason as :because. :need-drop false digs a block no carried tool clears
-  bare-handed (slow, no drop) instead.")
+  (the stair's and the run's own), then the body walks back and goes on; a fetch that fails or cures nothing, or no fetch allowed, digs the block bare-handed (slow, no drop) unless :need-drop is true (then it ends :no-tool with its reason as :because); :need-drop false digs bare-handed without fetching.")
 
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds a tunnel may take." :spec (a/num-in 0 nil)}})
@@ -108,7 +107,7 @@
    :accept {:doc "dig hazards taken (jobs.lib.access.rules): #{:fluid-adjacent :lava-adjacent :falling-block}" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{}}
    :ignore-zones? :shared
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop (jobs.access.stair)" :spec #{:seal :stop} :default :seal}
-   :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of fetching a tool; a failed fetch ends :no-tool either way" :spec boolean? :default true}})
+   :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of fetching a tool; unset: bare-handed when no tool can be fetched (jobs.access.stair)" :spec (a/or-of boolean? #{:auto}) :default :auto}})
 
 (def safe? (ready/safe-at-by-night (fn [c] (a/cell (:target (:args c)))) false true))
 

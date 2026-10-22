@@ -555,8 +555,9 @@
                                       (when (= 1 (swap! n inc))
                                         (swap! (.. world -state) assoc :inventory []))
                                       r)))))
-              s (await (stair! {:blocks ground} (assoc east :ways #{:carried}) prep))]
+              s (await (stair! {:blocks ground} (assoc east :ways #{:carried} :need-drop true) prep))]
           (is (= [:stopped :no-tool "pickaxe"] ((juxt :status :reason :tool) @(:out s))))
+          (is (re-find #":need-drop false" (str (:why @(:out s)))) "the stop says how to dig it by hand")
           (is (nil? (waiting s))))))))
 
 (deftest lava-two-ahead-stops-before-opening-it
@@ -953,10 +954,19 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (stair! {:blocks ground :inventory []} (assoc east :ways #{:carried}) (fn [_])))]
+        (let [{:keys [out p]} (await (stair! {:blocks ground :inventory []} (assoc east :ways #{:carried} :need-drop true) (fn [_])))]
           (is (= [:condition-failed :no-tool] ((juxt :kind contract/cause-key) (:ending @out))))
           (is (= "pickaxe" (:tool (:cause (:ending @out)))))
           (is (empty? (digs p))))))))
+
+(deftest with-need-drop-unset-a-stair-no-pickaxe-can-be-had-for-digs-by-hand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [args [(assoc east :ways #{:carried}) east]]
+          (let [{:keys [out p]} (await (stair! {:blocks ground :inventory []} args (fn [_])))]
+            (is (= [:done 3] [(:status @out) (:steps @out)]) "no fetch allowed, or the fetch failed: the cut is dug bare-handed")
+            (is (seq (digs p)))))))))
 
 (deftest bad-args-end-at-once
   (async done
@@ -1360,8 +1370,8 @@
               unseen (fn [p]
                        (aset p "sensedAt" (fn [pos] (if @shown (.blockAt p pos) #js {:unknown true})))
                        (.override (.-world p) "look" (fn [token a impl] (reset! shown true) (impl token a))))
-              {:keys [eng clock p]} (setup {:blocks ground :inventory []} (assoc east :ways #{:carried}) unseen)
-              id (core/submit! eng (list job (assoc east :ways #{:carried})) {})]
+              {:keys [eng clock p]} (setup {:blocks ground :inventory []} (assoc east :ways #{:carried} :need-drop true) unseen)
+              id (core/submit! eng (list job (assoc east :ways #{:carried} :need-drop true)) {})]
           (dotimes [_ 6]
             (swap! clock + 700)
             (await (core/tick! eng)))
@@ -1460,7 +1470,7 @@
           (is (= [:condition-failed :base-block] (await (run {:blocks (assoc ground "1,65,0" "chest")} east (fn [_])))))
           (is (= [:condition-failed :no-zones] (await (run {:blocks ground :zones nil} east (fn [_])))))
           (is (= [:impossible :bad-args] (await (run {:blocks ground} {:dir :down} (fn [_])))))
-          (is (= [:condition-failed :no-tool] (await (run {:blocks ground :inventory []} (assoc east :ways #{:carried}) (fn [_])))))
+          (is (= [:condition-failed :no-tool] (await (run {:blocks ground :inventory []} (assoc east :ways #{:carried} :need-drop true) (fn [_])))))
           (is (= [:condition-failed :no-free-slot]
                  (await (run {:blocks ground :inventory (into pick (repeat 35 {:name "dirt" :count 64}))} east (fn [_])))))
           (is (= [:condition-failed :refused]
@@ -1491,7 +1501,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (stair! {:blocks ground :inventory []} east (fn [_])))]
+        (let [s (await (stair! {:blocks ground :inventory []} (assoc east :need-drop true) (fn [_])))]
           (is (= [:stopped :no-tool] ((juxt :status :reason) @(:out s))))
           (is (empty? (digs (:p s))) "nothing dug bare-handed"))))))
 

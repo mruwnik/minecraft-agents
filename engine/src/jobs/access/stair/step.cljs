@@ -155,21 +155,23 @@
 
 (def no-tool-hint "no tool harvests it: pass :need-drop false to dig it by hand (slow, no drop)")
 
+(defn fetch-tool?
+  "Whether the call's ways let the dig child get a missing pickaxe (it fetches inside the dig, so a missing tool is no stop)."
+  [c]
+  (seq (need/fetch-how c)))
+
 (defn by-hand?
-  "Whether block is dug bare-handed: `:need-drop false` asks for it."
+  "Whether block is dug bare-handed: `:need-drop false` asks for it; unset, when the call cannot fetch a pickaxe or the fetch failed."
   [c block]
-  (and (tools/needs-tool-to-clear? (:primitives c) block)
-       (false? (:need-drop (:args c)))))
+  (let [nd (:need-drop (:args c))]
+    (and (tools/needs-tool-to-clear? (:primitives c) block)
+         (or (false? nd)
+             (and (= :auto nd) (or (:by-hand (ctx/mem c)) (not (fetch-tool? c))))))))
 
 (defn lacks-tool?
   "A tool is needed and not carried, and the block is not dug by hand (by-hand?)."
   [c block]
   (and (not (by-hand? c block)) (tools/needs-tool-to-clear? (:primitives c) block)))
-
-(defn fetch-tool?
-  "Whether the call's ways let the dig child get a missing pickaxe (it fetches inside the dig, so a missing tool is no stop)."
-  [c]
-  (seq (need/fetch-how c)))
 
 (defn drop-room?
   "Room for block's drop, or no drop to keep: a :need-drop false dig with no tool that harvests it loses it."
@@ -189,7 +191,7 @@
                                    (not (rules/falling? block))
                                    (assoc :why "put back by something else, e.g. the night shelter closing an opened refuge again"))
       (rules/unbreakable block) {:reason :unbreakable :cell cell :block block}
-      (and seen? (not (fetch-tool? c)) (lacks-tool? c block)) {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block)}
+      (and seen? (not (fetch-tool? c)) (lacks-tool? c block)) {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block) :why no-tool-hint}
       (trip/spent-tool? p block)
       (if (= :continue (await (trip/tool-ready! c block nil)))
         :yield
@@ -228,8 +230,10 @@
                       (await (see-over! c in cell cut)))
                     (case outcome
                       (:dug :missing) :continue
-                      :no-tool {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block)
-                                :because (let [cause (:cause e)] (when (map? cause) (:why cause)))}
+                      :no-tool (if (and (= :auto (:need-drop (:args c))) (not (:by-hand (ctx/mem c))))
+                                 (do (ctx/update-mem! c assoc :by-hand true) :continue)
+                                 {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block)
+                                :because (let [cause (:cause e)] (when (map? cause) (:why cause)))})
                       {:reason :dig-failed :cell cell :block block :dig outcome})))))))))))
 
 (def fall-wait-ms "How long after a dig the stair waits for a falling block over the open cut to drop before it walks in." 4000)

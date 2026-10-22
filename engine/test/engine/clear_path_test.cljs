@@ -48,9 +48,16 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [r (await (run-door wall nil {:heading :east :ways #{:carried}}))]
+        (let [r (await (run-door wall nil {:heading :east :ways #{:carried} :need-drop true}))]
           (is (= [:stopped :dig-waits] [(:status r) (:reason r)]) (pr-str r))
           (is (= [1 65 0] (:cell r)) "the top layer first"))))))
+
+(deftest with-need-drop-unset-and-no-fetch-allowed-the-door-is-dug-by-hand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (run-door wall nil {:heading :east :ways #{:carried}}))]
+          (is (= :done (:status r)) (pr-str r)))))))
 
 (deftest the-dig-child-gets-the-call-ways
   (async done
@@ -155,7 +162,7 @@
               failing (fn ^:async failing [c] (ctx/end c :nothing-possible :failed {:dug false :primitive "timeout"}))
               east {:heading :east}]
           (is (= [:done :done nil] (await (end (merge wall pick) nil east))))
-          (is (= [:condition-failed :dig-waits :condition-failed] (await (end wall nil east))) "the dig child's wait is its because")
+          (is (= [:condition-failed :dig-waits :condition-failed] (await (end wall nil (assoc east :need-drop true)))) "the dig child's wait is its because")
           (is (= [:nothing-possible :refills nil] (await (end (merge wall pick) refilling east))))
           (is (= [:nothing-possible :dig-failed :nothing-possible] (await (end (merge wall pick) failing east))))
           (is (= [:condition-failed :no-door nil] (await (end (dissoc wall :blocks) nil east))))

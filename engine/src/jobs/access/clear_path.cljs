@@ -37,13 +37,13 @@
   :dig-failed (its ending the :because), :refills (a cell dug stair.limits/max-digs times, e.g. sand falling in) and :step-failed
   (the walk through did not arrive). Data {:dug [{:cell :block}] :at [x y z] :through [x y z]}.
   It does not put the blocks back: jobs.movement.go-to does that once through.
-  :need-drop false: a block no carried tool harvests is dug bare-handed (slow, the drop is lost) instead of stopping :dig-waits
-  :no-tool; go-to's last resort when it has no pickaxe. A tool the dig lacks is fetched (jobs.lib.need, from the call's :ways) unless they are only #{:carried}.")
+  A tool the dig lacks is fetched (jobs.lib.need, from the call's :ways) unless they are only #{:carried}; a block no carried tool harvests
+  is dug bare-handed (slow, the drop is lost) when no fetch is allowed or one failed, or at once with :need-drop false; :need-drop true stops :dig-waits :no-tool instead.")
 
 (a/defargs args
   {:heading {:doc ":north :east :south or :west" :spec #{:north :east :south :west} :default nil}
    :ignore-zones? :shared
-   :need-drop {:doc "false: dig a block no carried tool harvests bare-handed (slow, the drop is lost)" :spec boolean? :default true}})
+   :need-drop {:doc "false: dig a block no carried tool harvests bare-handed (slow, the drop is lost) without fetching; true: never; unset: bare-handed when no pickaxe can be fetched" :spec (a/or-of boolean? #{:auto}) :default :auto}})
 
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
 
@@ -159,7 +159,9 @@
   "One dig child call on the cell being dug (:digging {:cell :block :collect}, kept until the child ends, so a resumed
   call goes on with it). :again, :continue while the child waits on the world, or the ending."
   [c {:keys [cell block collect]}]
-  (let [hand? (and (false? (:need-drop (:args c))) (not (tools/can-harvest? (:primitives c) block)))
+  (let [nd (:need-drop (:args c))
+        hand? (and (not (tools/can-harvest? (:primitives c) block))
+                   (or (false? nd) (and (= :auto nd) (or (:by-hand (ctx/mem c)) (empty? (need/fetch-how c))))))
         args {:pos cell :collect (and collect (not hand?)) :need-drop (not hand?) :ways (need/call-ways c)
               :ignore-zones? (:ignore-zones? (:args c))}
         done! (fn [] (ctx/update-mem! c dissoc :digging))]
@@ -180,6 +182,8 @@
                                   (when (:dug (:data e))
                                     (ctx/update-mem! c update :dug conj {:cell cell :block block}))
                                   :again)
+          (and (declined? e) (= :auto nd) (not hand?) (= :no-tool (contract/cause-key e)))
+          (do (done!) (ctx/update-mem! c assoc :by-hand true) :again)
           (declined? e) (do (done!) (finish! c :dig-waits {:cell cell :block block}))
           :else (do (done!)
                     (finish! c :dig-failed {:cell cell :block block})))))))

@@ -1,5 +1,5 @@
-;; Card 66fa119b: a stair cut with no pickaxe and :need-drop false digs stone by hand and
-;; reaches the surface; with no pickaxe and no way to get one it stops :no-tool (a failed fetch is passed up); bedrock in the line stops it with a reason and nothing is dug. Stone mass x 8..24, z 8..24, y 0..9 (surface y 10),
+;; Card 66fa119b: a stair cut with no pickaxe and no way to get one digs stone by hand and
+;; reaches the surface; with :need-drop true it stops :no-tool (a failed fetch is passed up); bedrock in the line stops it with a reason and nothing is dug. Stone mass x 8..24, z 8..24, y 0..9 (surface y 10),
 ;; the body in a pocket at feet y 6, the stair goes up east 4 steps to feet y 10.
 {:defaults
  {:tags [:access :mining :no-tool] :time :any
@@ -9,12 +9,12 @@
   :limit-s 220}
  :cases
  [{:name "no-pickaxe-stair-up-digs-stone-by-hand-to-the-surface"
-   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4 :need-drop false})]]
+   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]]
    :expect [{:event {:source :job :kind :completed} :within-s 210 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-tool}} :for-s 200 :until {:source :job :kind :completed}}]
    :after [[:body-near [14.5 10 16.5] 3]]}
   {:name "no-pickaxe-and-no-source-stops-no-tool-with-the-fetch-as-because"
-   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]]
+   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4 :need-drop true})]]
    :expect [{:event {:source :job :kind :stopped :data {:kind :condition-failed :reason :no-tool}} :within-s 120 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 30 :of-job true}]
    :after [[:block [11 6 16] "stone"]]}

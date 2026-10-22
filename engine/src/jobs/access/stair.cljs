@@ -82,7 +82,7 @@
    :ignore-zones? :shared
    :note {:doc "a map (go-to's escalation): each cell dug in another's zone, claim or plan is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!), each floor placed to the scaffold ledger (take-back-floor?)" :spec map? :default nil}
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop" :spec #{:seal :stop} :default :seal}
-   :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of waiting :no-tool" :spec boolean? :default true}
+   :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of waiting :no-tool; true: never; unset: bare-handed only when no pickaxe can be fetched (the ways allow none, or the fetch failed)" :spec (a/or-of boolean? #{:auto}) :default :auto}
    :through {:doc "the id of a plan the stair works for (a mineshaft it runs down, a rail line it tunnels): its footprint is no obstacle" :spec string? :default nil}})
 
 (a/defargs settings
@@ -162,7 +162,7 @@
     (checks/cause-status :later lack (str "lacks " (name (:reason lack))))
     (let [p (:primitives c)
           unseen (filterv #(and (unknown? p %) (some bs/air (ore-pick/face-names p %))) (judge/next-cut c))]
-      (if (and (seq unseen) (:need-drop (:args c)) (not (judge/fetch? c)) (sstep/lacks-tool? c blocks/hidden-guess))
+      (if (and (seq unseen) (not (false? (:need-drop (:args c)))) (not (judge/fetch? c)) (tools/needs-tool-to-clear? p blocks/hidden-guess))
         (contract/look :unseen "the cells to cut were not seen" :look-at unseen)
         (contract/ok :supplied "nothing lacking")))))
 

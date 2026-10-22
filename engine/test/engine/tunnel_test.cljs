@@ -449,7 +449,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p]} (await (tunnel! {:blocks eight-down :inventory []} {:target [6 57 0] :ways #{:carried}} (fn [_])))]
+        (let [{:keys [out p]} (await (tunnel! {:blocks eight-down :inventory []} {:target [6 57 0] :ways #{:carried} :need-drop true} (fn [_])))]
           (is (= [:stopped :no-tool "pickaxe"] ((juxt :status :reason :tool) @out)))
           (is (empty? (digs p))))))))
 
@@ -508,9 +508,17 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out calls]} (await (fetching-tunnel! nil true (fn [_])))]
+        (let [{:keys [out calls]} (await (fetching-tunnel! nil true (fn [_]) {:need-drop true}))]
           (is (= 1 (count calls)) "tried once, not again")
           (is (= [:stopped :no-tool] ((juxt :status :reason) @out))))))))
+
+(deftest a-pickaxe-that-cannot-be-fetched-is-dug-without-when-need-drop-is-unset
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out calls]} (await (fetching-tunnel! nil true (fn [_])))]
+          (is (pos? (count calls)) "a fetch was tried first")
+          (is (= :reached (:reason @out))))))))
 
 (deftest need-drop-false-digs-by-hand-and-fetches-nothing
   (async done
@@ -524,7 +532,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [calls out]} (await (fetching-tunnel! "iron_pickaxe" false (fn [_])))]
+        (let [{:keys [calls out]} (await (fetching-tunnel! "iron_pickaxe" false (fn [_]) {:need-drop true}))]
           (is (empty? calls))
           (is (= [:stopped :no-tool] ((juxt :status :reason) @out))))))))
 
@@ -667,7 +675,7 @@
                              (do (swap! n inc) (js/Promise.resolve (contract/ending :done nil {:tool "iron_pickaxe"})))
                              (orig c slot job args))))
           (try
-            (let [s (await (tunnel! {:blocks (assoc ground "6,57,0" "iron_ore")} {:target [6 57 0]} prep))]
+            (let [s (await (tunnel! {:blocks (assoc ground "6,57,0" "iron_ore")} {:target [6 57 0] :need-drop true} prep))]
               (is (= [:stopped :no-tool] ((juxt :status :reason) @(:out s))) "the fetch that cured nothing is not asked again"))
             (finally (set! ctx/call orig)))
           (is (<= 1 @n 2) (str "fetch child calls " @n)))))))
@@ -709,7 +717,7 @@
                  (await (run {:blocks eight-down :zones [{:name "z" :min [6 57 0] :max [6 57 0]}]} target (fn [_])))))
           (is (= [:condition-failed :no-zones] (await (run {:blocks eight-down :zones nil} target (fn [_])))))
           (is (= [:impossible :bad-args] (await (run {:blocks eight-down} {:heading :east} (fn [_])))) "a call with no target never starts")
-          (is (= [:condition-failed :no-tool] (await (run {:blocks eight-down :inventory []} (assoc target :ways #{:carried}) (fn [_])))))
+          (is (= [:condition-failed :no-tool] (await (run {:blocks eight-down :inventory []} (assoc target :ways #{:carried} :need-drop true) (fn [_])))))
           (is (= [:condition-failed :hazard] (await (run {:blocks eight-down :inventory with-cobble} target lava-ahead))))
           (is (= [:condition-failed :tool-spent]
                  (await (run {:blocks eight-down :inventory [{:name "iron_pickaxe" :count 1 :durability 3}]} target (fn [_]))))))))))

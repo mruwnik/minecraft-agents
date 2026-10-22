@@ -97,7 +97,7 @@
                  (u/within? (u/self-pos c) (cell-of (xyz top)) 1) (do (ctx/update-mem! c assoc-in [:shaft :state] :down) :again)
                  :else (fail! c :unreachable id 0)))
       :down (let [r (waits/waiting-out c (await (ctx/call c :shaft-stair 'jobs.access.stair
-                                     {:dir :down :heading heading :y to-y :through id
+                                     {:dir :down :heading heading :y to-y :through id :need-drop true
                                       :ignore-zones? (:ignore-zones? (:args c))})))
                   e (when (map? r) (assoc (:data r) :status (if (= :done (:kind r)) :done :stopped) :reason (contract/cause-key r)))]
               (cond

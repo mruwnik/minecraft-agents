@@ -172,7 +172,7 @@
                    (end/finish! c :abandoned (assoc (:decided (ctx/mem c)) :reason reason :detail text)))]
     (if (> need-s left-s)
       (give-up! :window-closed (str "the pile is " below " blocks down: a stair takes about " (js/Math.round need-s) " s, " (js/Math.round left-s) " s are left"))
-      (let [args {:target [(js/Math.floor (:x pos)) (js/Math.floor (:y pos)) (js/Math.floor (:z pos))] :max-length 96}]
+      (let [args {:target [(js/Math.floor (:x pos)) (js/Math.floor (:y pos)) (js/Math.floor (:z pos))] :max-length 96 :need-drop true}]
         (loop [n 0]
           (let [danger (dg/threatened? c)
                 ;; a mob the trip was already weighed with must not stop the stair again
