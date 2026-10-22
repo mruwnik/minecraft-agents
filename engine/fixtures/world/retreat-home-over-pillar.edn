@@ -1,11 +1,11 @@
-;; A body at 4 hp two blocks outside its own shut house, carrying blocks, with a zombie 8 blocks off and a skeleton farther: it runs
+;; A body at 4 hp two blocks outside its own shut house, carrying blocks, with a lone zombie 8 blocks off (the early pillar's case): it runs
 ;; into the house and shuts the door; it builds no column outside (a pillar is no refuge from a shooter and would block the door).
 ;; Hut: planks x 12..18, z 12..18, y 0..3 (hollow), room 13..17, shut oak door at [15 0..1 18]; home bed inside at [14 0 14]; body 2 south of the door.
 ;; Should-succeed: the body ends inside the hut with the door shut, no cobblestone outside. Should-fail: a cobblestone column at [15 0..2 19].
 {:defaults
  {:tags [:hostile :survival :cornered]
   :time :any
-  :plot {:floor "grass_block" :length 48 :width 48}
+  :plot {:floor "grass_block" :length 48 :width 48 :height 16}
   :blocks [[:fill [12 0 12] [18 3 18] "oak_planks" :hollow]
            [:fill [13 0 13] [17 2 17] "air"]
            [:fill [15 0 18] [15 1 18] "air"]
@@ -18,11 +18,16 @@
               :job (jobs.survival.respond-to-hostile)}]
   :memory [{:kind :home :data {:pos #xyz [14 0 14]} :policy {:cap 1 :ttl :forever}}]
   :act [[:rcon "damage $BODY 16 minecraft:generic"]
-        [:summon "zombie" [15.5 0 28.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
-        [:summon "skeleton" [26.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+        [:summon "zombie" [15.5 0 27.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
   :limit-s 90}
  :cases
  [{:name "low-body-with-blocks-goes-into-its-house-not-up-a-pillar"
+   :expect [{:no-event {:source :job :kind :retreat_sealed :message [:contains "pillared up"]} :for-s 40}]
+   :after [[:block [15 0 18] "oak_door[half=lower,open=false]"] [:body-near [15.5 0 15.5] 2.5]
+           [:not-block [15 0 19] "cobblestone"] [:not-block [15 1 19] "cobblestone"]]}
+  {:name "low-body-runs-into-its-house-through-an-open-door"
+   :blocks [[:set [15 0 18] "oak_door[facing=south,half=lower,hinge=left,open=true]"]
+            [:set [15 1 18] "oak_door[facing=south,half=upper,hinge=left,open=true]"]]
    :expect [{:no-event {:source :job :kind :retreat_sealed :message [:contains "pillared up"]} :for-s 40}]
    :after [[:block [15 0 18] "oak_door[half=lower,open=false]"] [:body-near [15.5 0 15.5] 2.5]
            [:not-block [15 0 19] "cobblestone"] [:not-block [15 1 19] "cobblestone"]]}]}
