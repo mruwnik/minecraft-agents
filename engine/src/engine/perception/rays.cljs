@@ -478,7 +478,7 @@
         z0 (js/Math.floor (- oz radius)) z1 (js/Math.floor (+ oz radius))]
     (doseq [[x y z] cells
             :let [id (.stateAt ^js raw x y z)]
-            :when (pos? id)]
+            :when (>= id 0)]
       (take! x y z id true))
     (if (.-sectionStates ^js raw)
       (let [^js rg (.sectionRange ^js raw)

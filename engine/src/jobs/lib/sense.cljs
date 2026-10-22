@@ -88,10 +88,10 @@
 
 (defn ^:async look-round!
   "The :look/around hook: look at each unknown one of cells (a :look status's :look-at), at most ::max-looks looks,
-  then look-around!."
+  then look-around!: for those cells only, a full pass each look when cells is empty (the check named none)."
   [c cells]
   (await (look-at-unknown! c (targets (:primitives c) (u/self-pos c) cells #{}) (max-looks)))
-  (await (look/look-around! c (look/glance-effort) {:cells (targets (:primitives c) (u/self-pos c) cells #{})}))
+  (await (look/look-around! c (look/glance-effort) (when (seq cells) {:cells (targets (:primitives c) (u/self-pos c) cells #{})})))
   (ctx/update-mem! c (fn [m] (let [here (look/cell-of (u/self-pos c))
                                    kept (if (= here (:at (::round-looked m))) (:cells (::round-looked m)) #{})]
                                (assoc m ::round-looked {:at here :cells (into kept cells)})))))

@@ -685,8 +685,9 @@
 
 (deftest a-targeted-look-at-cells-sees-them-whatever-they-hold-and-not-through-walls
   (let [{:keys [per]} (rig (wall 5 8 [] {"1,65,3" "gold_block" "0,65,8" "diamond_ore"}))]
-    (perception/look-for! per {:cells [[1 65 3] [0 65 8]]})
+    (perception/look-for! per {:cells [[1 65 3] [0 65 8] [0 65 3]]})
     (is (= "gold_block" (seen-name per [1 65 3])))
+    (is (= "air" (seen-name per [0 65 3])) "an asked-for cell of air is seen too")
     (is (nil? (seen-name per [0 65 8])) "behind the stone")))
 
 (deftest a-room-answer-is-kept-until-memory-or-the-world-changes
