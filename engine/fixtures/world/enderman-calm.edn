@@ -1,5 +1,5 @@
 ;; A calm enderman is no danger (jobs.lib.danger), and looking around near one never provokes it. Cards 57f49df1 (gaze rule),
-;; b74a043c (calm enderman fires no retreat), ebac9484 (enderman near a night build). The angry duck (water, roof, seal)
+;; b74a043c (calm enderman fires no retreat), ebac9484 (enderman near a night build), 85a9b3cb (no fight swings at one). The angry duck (water, roof, seal)
 ;; is in hostile-reflex-gates.edn (provoked by /damage ... by the body). NoAI enderman 5 east.
 {:defaults
  {:tags [:hostile :survival :enderman]
@@ -15,4 +15,14 @@
          [:job (jobs.movement.look-around)]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 40}]
-   :after [[:entities "type=enderman,tag=wt" [[0 0 0] [31 6 31]] 1]]}]}
+   :after [[:entities "type=enderman,tag=wt" [[0 0 0] [31 6 31]] 1]]}
+  ;; Card 85a9b3cb: the hostile-near fight kills the zombie and never swings at the calm enderman, though it stands nearer.
+  ;; Should-fail: the enderman's health under 40 (a swing provokes it).
+  {:name "fight-leaves-a-calm-enderman-alone"
+   :body {:inventory [["iron_sword" 1]] :effects [["resistance" 900 4]]}
+   :act [[:summon "enderman" [18.5 0 18.5] "{NoAI:1b}"]
+         [:summon "zombie" [21.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :hostile-near}} :within-s 60}]
+   :after [[:entities "type=zombie,tag=wt" [[0 0 0] [31 6 31]] 0]
+           [:entities "type=enderman,tag=wt,nbt={Health:40.0f}" [[0 0 0] [31 6 31]] 1]]}]}

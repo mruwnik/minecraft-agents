@@ -318,6 +318,16 @@
           (is (= [7 7 7 7] (mapv #(.-id (.-args %)) (calls p "attack"))) "four hits kill the 20 health zombie")
           (is (= [] (:list (core/state eng))) "done in one call"))))))
 
+(deftest hostile-attack-never-swings-at-a-calm-enderman
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[angry want] [[false [7 7 7 7]] [true [8]]]]
+          (let [enderman {:id 8 :name "enderman" :kind "hostile" :angry angry :pos {:x 2 :y 64 :z 0}}
+                {:keys [p]} (await (first-round-ms fight {:inventory sword :entities [enderman (zombie 7 3 0)]} 20))]
+            (is (= want (take (count want) (mapv #(.-id (.-args %)) (calls p "attack"))))
+                (str "angry " angry ": the nearer enderman is hit only when already angry"))))))))
+
 (deftest hostile-attack-waits-out-the-held-weapons-cooldown
   (async done
     (tu/run-async done

@@ -53,13 +53,14 @@
 (defn in-range
   "The hostiles within :radius (ranged ones within :ranged-radius, a heard one by its band): the visible ones nearest
   first, then the hidden melee ones (a ranged mob without a line of fire, by jobs.lib.danger/danger? as the hostile-near
-  trigger, is dropped). The killed and the :skip ids are left out."
+  trigger, is dropped). The killed and the :skip ids are left out, and so is a calm enderman: a swing provokes it."
   [c]
   (let [{:keys [radius ranged-radius skip]} (:args c)
         ranged-radius (or ranged-radius radius)
         dead (into (set skip) (:killed (ctx/mem c)))
         all (->> (danger-q/known-hostiles (:primitives c) radius {:ranged-radius (max radius ranged-radius)})
                  (remove #(contains? dead (.-id %)))
+                 (remove danger-q/calm-enderman?)
                  (remove #(and (combat/ranged? %) (not (danger-q/danger? (:primitives c) %)))))]
     (into (filterv #(.-visible %) all) (remove #(.-visible %)) all)))
 
