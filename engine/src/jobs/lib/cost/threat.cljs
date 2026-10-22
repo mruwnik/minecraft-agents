@@ -2,7 +2,7 @@
   "What one mob does to a body: hostile? from minecraft-data, the damage type of its attack, and mob-hurt, the damage it
   deals over some seconds of exposure after the body's armour (jobs.lib.cost.armour).
   A witch's potions (poison, harming) bypass armour. A creeper is one blast of 43 (:explosion) however long the exposure; a ranged mob shoots (:projectile); any other
-  hits for its mob-hit (3 if unknown, scaled by the server difficulty) ::hit-rate times a second (:melee). Endermen and zombified piglins only fight when provoked."
+  hits for its mob-hit (3 if unknown, scaled by the server difficulty) one a second (:melee). Endermen and zombified piglins only fight when provoked."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             ["minecraft-data" :as minecraft-data]
@@ -52,8 +52,8 @@
 
 (def measured-hit-rate #{"zombie" "husk" "drowned" "zombie_villager" "skeleton" "stray" "parched" "bogged"})
 
-(defn hit-rate
-  "Hits a second of exposure: the measured rates for the zombie and skeleton families and spiders, else one a second."
+(defn lone-hit-rate
+  "Hits a second of a lone sword fight: the measured rates of the zombie and skeleton families and spiders, else one a second."
   [mob-name]
   (cond (contains? measured-hit-rate mob-name) (settings/get settings ::hit-rate)
         (contains? #{"spider" "cave_spider"} mob-name) (settings/get settings ::spider-hit-rate)
@@ -61,17 +61,17 @@
 
 (defn base-threat
   "{:threat :hits} of mob-name over seconds of exposure, before armour; hits is the expected count (rate x seconds, rate
-  default hit-rate)."
+  default one a second)."
   ([mob-name seconds] (base-threat mob-name seconds nil))
   ([mob-name seconds rate]
    (if (= "creeper" mob-name)
      {:threat (creeper-blast) :hits 1}
-     (let [hits (* seconds (or rate (hit-rate mob-name)))]
+     (let [hits (* seconds (or rate 1))]
        {:threat (* hits (difficulty-scale (get mob-hit mob-name 3))) :hits hits}))))
 
 (defn mob-hurt
   "The damage mob-name deals over seconds of exposure to a body with armour stats (jobs.lib.cost.armour/armour-stats),
-  threat-fn applied to the threat before armour (default identity); rate overrides the hits a second."
+  threat-fn applied to the threat before armour (default identity); rate is the hits a second (default 1: the measured lone-fight rates, lone-hit-rate, are for fight-damage)."
   ([stats mob-name seconds] (mob-hurt stats mob-name seconds identity nil))
   ([stats mob-name seconds threat-fn] (mob-hurt stats mob-name seconds threat-fn nil))
   ([stats mob-name seconds threat-fn rate]

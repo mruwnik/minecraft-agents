@@ -60,6 +60,10 @@
     (is (= "creeper" (:name (first (:mobs r)))))
     (is (= (:danger r) (reduce + (map :danger (:mobs r)))))))
 
+(deftest a-route-past-zombies-is-priced-at-a-hit-a-second-not-the-lone-fight-rate
+  (let [r (route-danger (world) route [(mob 1 "zombie" 15 2) (mob 2 "zombie" 16 2)] naked)]
+    (is (= [7.5 7.5] (mapv :threat (:mobs r))) "3 s of exposure, one hit of 2.5 (easy) a second each")))
+
 (deftest overrides-set-a-mob-s-threat
   (let [p (world)]
     (is (= 0 (danger p [(mob 1 "zombie" 15 2)] :overrides {"zombie" 0})))

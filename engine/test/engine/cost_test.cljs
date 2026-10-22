@@ -56,15 +56,15 @@
   (is (= 1.69 (round2 (cost/fight-damage {:weapon "iron_sword" :equipment iron-set :mobs [{:name "zombie" :distance 3}]})))
       "4 swings, 2.5 s of 0.6 hits a second at 2.5 hp (easy): vanilla's 13.5 effective points take off more"))
 
-(deftest mob-hits-are-priced-at-the-difficulty-and-the-measured-rate
+(deftest mob-hits-are-priced-at-the-difficulty-a-hit-a-second
   (let [bare (cost/armour-stats nil)
         zombie-s #(settings/with-settings % (fn [] (cost/mob-hurt bare "zombie" 10)))]
-    (is (= 15 (zombie-s {})) "easy: 0.6 hits a second of 2.5")
-    (is (= 18 (zombie-s {:jobs.lib.cost.threat/difficulty 2})) "normal: 0.6 hits a second of 3")
-    (is (= 27 (zombie-s {:jobs.lib.cost.threat/difficulty 3})) "hard: 4.5 a hit")
+    (is (= 25 (zombie-s {})) "easy: a hit of 2.5 a second")
+    (is (= 30 (zombie-s {:jobs.lib.cost.threat/difficulty 2})) "normal: 3 a hit")
+    (is (= 45 (zombie-s {:jobs.lib.cost.threat/difficulty 3})) "hard: 4.5 a hit")
     (is (= 0 (zombie-s {:jobs.lib.cost.threat/difficulty 0})))
-    (is (= 7 (cost/mob-hurt bare "spider" 10)) "a spider lands 0.35 hits a second of 2")
-    (is (= 10 (cost/mob-hurt bare "silverfish" 10)) "a mob not measured hits once a second")))
+    (is (= 20 (cost/mob-hurt bare "spider" 10)) "the lone-fight rate (0.35 for a spider) is fight-damage's, not mob-hurt's")
+    (is (= 10 (cost/mob-hurt bare "silverfish" 10)))))
 
 (deftest an-enderman-costs-a-full-iron-body-about-seven-health
   (let [cost-of #(cost/fight-damage {:weapon "iron_sword" :equipment iron-set :mobs [{:name "enderman" :distance 3 :health %}]})]

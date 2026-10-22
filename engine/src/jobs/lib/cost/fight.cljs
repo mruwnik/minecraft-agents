@@ -35,10 +35,10 @@
         swings (fn [m] (js/Math.ceil (/ (max 0 (weapon/remaining-health (assoc m :damage dmg))) dmg)))
         kill-s (fn [m] (* gap-s (swings m)))
         ends (rest (reductions + 0 (map #(+ (approach %) (kill-s %)) mobs)))
-        group? (< 1 (count mobs))
+        lone-sword? (and (= 1 (count mobs)) (contains? weapon/weapon-damage-by-name weapon))
         hurt (fn [m end] (if (= "creeper" (:name m))
                            (* (swings m) (threat/creeper-exchange))
-                           (threat/mob-hurt stats (:name m) end identity (when (or group? (not (contains? weapon/weapon-damage-by-name weapon))) 1))))]
+                           (threat/mob-hurt stats (:name m) end identity (when lone-sword? (threat/lone-hit-rate (:name m))))))]
     (reduce + 0 (map hurt mobs ends))))
 
 (defn leaves-reserve?
