@@ -7,6 +7,7 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.health :as cost-health]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.need :as need]
             [jobs.lib.ready :as ready]
             [jobs.lib.pace :as pace]
@@ -91,7 +92,8 @@
   [c0 pos]
   (let [c (health/with-body-food c0)
         m (ctx/mem c)]
-    (when (and (:unknown c) (:y pos)) (wworld/with-goal (:unknown c) (mapv #(js/Math.floor (% pos)) [:x :y :z])))
+    (when (:unknown c)
+      (wworld/with-seeds (:unknown c) (when (:y pos) (mapv #(js/Math.floor (% pos)) [:x :y :z])) (into (ledger/stair-stands c) (ledger/tunnel-stands c))))
     (cond
       (:restore-now m) (await (restore/restore-round! c))
       (:escalation m) (await (esc/escalation-round! c pos))

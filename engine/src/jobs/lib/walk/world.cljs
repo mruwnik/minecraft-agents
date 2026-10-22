@@ -88,10 +88,11 @@
   [p ^js unknown]
   (boolean (and unknown (not (.-edge unknown)) (rock-beyond) (not (breath/head-under? p)) (sh-sense/buried? p))))
 
-(defn with-goal
-  "The mask spec unknown with goal ([x y z]) as the goal its rock guess spares (path-world); the spec is per call, the goal per round."
-  [^js unknown goal]
-  (doto unknown (unchecked-set "goal" goal)))
+(defn with-seeds
+  "The mask spec unknown with the cells its rock guess spares (path-world): goal ([x y z], or nil) and own (feet cells the
+  body dug its ways through itself); the spec is per call, the seeds per round."
+  [^js unknown goal own]
+  (doto unknown (unchecked-set "goal" goal) (unchecked-set "own" own)))
 
 (defn path-world
   "The primitives' pathWorld sensing (a snapshot over the world) with the planner's block table and free-space module, nil when
@@ -99,7 +100,7 @@
   or felt read void_air (its known cells read as they are now), and the snapshot carries the planner's options.unknown:
   the spec with the mask's id, seeDepth (from what the body holds now) and seeLit (look/see-lit-fn). Under ground
   (sh-sense/buried?, head not under water, not :edge), an unseen cell past ::rock-beyond of every seen open cell, the
-  feet and the spec's goal (with-goal) reads stone (jobs.lib.walk.rock); the mask's rockBeyond says so (0: none)."
+  feet and the spec's seeds (with-seeds) reads stone (jobs.lib.walk.rock); the mask's rockBeyond says so (0: none)."
   ([p] (path-world p nil))
   ([p unknown]
    (when (fn? (.-pathWorld p))
@@ -113,11 +114,11 @@
                                     #js {:id (if (.-edge unknown) unloaded-id (first (blocks/state-ids table (if under? "seagrass" "void_air")))) :blockedId stone :known known
                                          :seeDepth (see-depth-now p) :seeLit (look/see-lit-fn p) :rockBeyond (or k 0)}))]
        (when-let [pw (if mask (.pathWorld p mask) (.pathWorld p))]
-         (let [pw (js/Object.assign #js {:table table :space space/space} pw)
-               {:keys [x y z]} (sh-sense/feet p)]
+         (let [pw (js/Object.assign #js {:table table :space space/space} pw)]
            (when k
-             (set! (.-snapshot pw) (rock/with-rock (.-snapshot pw) {:mask (.-id mask) :stone stone :k k :known known
-                                                                    :seeds (cond-> [[x y z]] (.-goal unknown) (conj (.-goal unknown)))})))
+             (let [{:keys [x y z]} (sh-sense/feet p)]
+               (set! (.-snapshot pw) (rock/with-rock (.-snapshot pw) {:mask (.-id mask) :stone stone :k k :known known
+                                                                      :seeds (cond-> (into [[x y z]] (.-own unknown)) (.-goal unknown) (conj (.-goal unknown)))}))))
            pw))))))
 
 (defn unknown-of
