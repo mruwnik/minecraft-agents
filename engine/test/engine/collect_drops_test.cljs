@@ -227,6 +227,8 @@
           (drop! p [4 64 0] "oak_log")
           (let [result (await (tu/child-outcome eng job {:radius 6 :items ["oak_log"] :near {:x 4 :y 64 :z 0}} 30))]
             (is (= 0 (:collected result)))
+            (is (= :none-collected (:reason result)) (pr-str result))
+            (is (re-find #"nothing collected at" (str (:text result))) (pr-str result))
             (is (= 0 (bd/carried p "oak_log")))))))))
 
 (deftest a-search-that-runs-out-of-cells-reports-what-was-collected

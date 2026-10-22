@@ -32,4 +32,8 @@
          [:job (jobs.items.collect-drops {:radius 10 :near #at [24 0 16] :search 4 :least 3 :least-items ["oak_log"]})]]
    :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 85 :of-job true}]
    :after [[:item "oak_log" 1]]
-   :limit-s 100}]}
+   :limit-s 100}
+  ;; card 24c4ea3a: a named :near place with nothing in it is no success
+  {:name "named-place-with-no-drop-does-not-complete"
+   :act [[:job (jobs.items.collect-drops {:radius 6 :near #at [24 0 16]})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :none-collected}} :within-s 40 :of-job true}]}]}

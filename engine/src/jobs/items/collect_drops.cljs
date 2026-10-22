@@ -47,7 +47,7 @@
   With :near, a sweep that sees no drop first looks at that spot, and climbs to it (go-to :pillar/:stair) when it lies over a block above the feet. A sweep without :ids that sees no drop turns round once from each cell it ends in (entities are sensed only in the view cone) before it ends; a dig's :ids sweep does not (the dig looked already, and a danger's time is short).
   Needs nothing; the sweep is the whole job. Ends :done with data {:collected n}, the number of items that entered the
   inventory, with :left [{:pos :reason}] for those (also in :loose-left, so the :loose-items reflex leaves them); none in
-  sight at all is :done with 0 (an open sweep). Drops tried, or a :search that found none, and none collected: :nothing-possible :none-collected, same data;
+  sight at all is :done with 0 (an open sweep, without :near). Drops tried, a :search that found none, or a named :near place with nothing in it, and none collected: :nothing-possible :none-collected, same data;
   :nothing-possible :search-waited when the search was held up.
   Quote: what is in sight within :radius (yields by name), time to walk to each, unbounded with :search or :dig (also the items it may yet find).")
 
@@ -434,7 +434,7 @@
                   (seq (:left m)) :left
                   (seq (remove (set (:skipped m)) (:ids (:args c)))) :ids-unseen
                   (and (pos? (:search (:args c))) (< (wanted-count c) (least c))) :searching
-                  (and (zero? n) (or (seq (:skipped m)) (pos? (:search (:args c))))) :skipped
+                  (and (zero? n) (or (seq (:skipped m)) (pos? (:search (:args c))) (:near (:args c)))) :skipped
                   (and (nil? (:ids (:args c))) (not (look/surveyed? c :cell))) :looking)]
     (if waiting
       (contract/later waiting (str "collect-drops: " n " collected, " in-sight " in sight") :units :items :done n :left in-sight :result {:collected n})
@@ -463,11 +463,20 @@
   (cond-> {:collected (:collected (ctx/mem c) 0)}
     (seq (:left (ctx/mem c))) (assoc :left (:left (ctx/mem c)))))
 
-(defn swept!
-  "The ending of a sweep with nothing left to try: done, or nothing-possible when nothing came in after items were skipped or a search ran."
+(defn none-text
+  "What the sweep saw at the named place when nothing came in."
   [c]
-  (if (and (zero? (:collected (ctx/mem c) 0)) (or (seq (:skipped (ctx/mem c))) (pos? (:search (:args c)))))
-    (ctx/end c :nothing-possible :none-collected (data-of c))
+  (let [m (ctx/mem c)]
+    (str "collect-drops: nothing collected at " (pr-str (:near (:args c))) ": "
+         (if (or (seq (:left m)) (seq (:skipped m)))
+           "items were there but out of reach"
+           "no items in sight there (taken or despawned)"))))
+
+(defn swept!
+  "The ending of a sweep with nothing left to try: done, or nothing-possible when nothing came in after items were skipped, a search ran or a :near place was named."
+  [c]
+  (if (and (zero? (:collected (ctx/mem c) 0)) (or (seq (:skipped (ctx/mem c))) (pos? (:search (:args c))) (:near (:args c))))
+    (ctx/end c :nothing-possible :none-collected (cond-> (data-of c) (:near (:args c)) (assoc :text (none-text c))))
     (ctx/end c :done nil (data-of c))))
 
 (defn ^:async search-or-end!
