@@ -1,0 +1,24 @@
+;; Card 50474488: jobs.access.cleanup leaves scaffold with seen lava near it open (:lava-near) and does not walk to it: a tidy-up is no reason to go near lava.
+;; Two dirt blocks in the ledger at x 28, the body 20 blocks off in a stone room. Should-fail (old code): the body walks to within 3 of the blocks, beside the lava.
+;; Should-succeed: the same room without lava, the cleanup takes both blocks back.
+{:defaults
+ {:tags [:cleanup :access :lava :jobs]
+  :time :any
+  :plot {:height 12}
+  :blocks [[:fill [0 0 0] [31 5 0] "stone"] [:fill [0 0 31] [31 5 31] "stone"]
+           [:fill [0 0 0] [0 5 31] "stone"] [:fill [31 0 0] [31 5 31] "stone"]
+           [:set [28 0 16] "dirt"] [:set [28 1 16] "dirt"]]
+  :memory [{:kind :scaffold :data {:entries [{:cell #at [28 0 16] :item "dirt" :before "air" :job "j0" :purpose :pillar :state :placed}
+                                             {:cell #at [28 1 16] :item "dirt" :before "air" :job "j0" :purpose :pillar :state :placed}]}}]
+  :body {:at [8.5 0 16.5] :inventory [["iron_pickaxe" 1] ["iron_shovel" 1] ["iron_sword" 1]]}
+  :limit-s 120}
+ :cases
+ [{:name "scaffold-beside-lava-is-left-and-never-walked-to"
+   :blocks [[:set [28 0 14] "lava"]]
+   :act [[:job (jobs.access.cleanup {:of :all :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :stopped :data {:open [:any :any]}} :within-s 100 :of-job true}]
+   :after [[:block [28 0 16] "dirt"] [:block [28 1 16] "dirt"] [:body-far [28.5 0 14.5] 8]]}
+  {:name "scaffold-without-lava-is-taken-back"
+   :act [[:job (jobs.access.cleanup {:of :all :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :completed :data {:removed [[:any] [:any]] :open []}} :within-s 100 :of-job true}]
+   :after [[:not-block [28 0 16] "dirt"] [:not-block [28 1 16] "dirt"]]}]}

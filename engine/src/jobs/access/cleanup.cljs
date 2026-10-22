@@ -19,6 +19,7 @@
             [jobs.lib.blocks :as blocks]
             [jobs.lib.look :as look]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.lava :as lava]
             [jobs.lib.threats :as threats]
             [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
@@ -81,6 +82,8 @@
   jobs.lib.threats/fled-memory-ms was last known within jobs.lib.threats/fled-radius of the cell or the body (:danger).
 
   A shelter's block (purpose :shelter or :retreat-plug) stays while a known hostile is near (:hostile-near) and while it opens onto a dark cell (:night; setting jobs.lib.shelter.keep ::at-night?): a neighbour that is not solid and not lit by what the body knows (an unseen one is guessed by the sky), whatever the hour, unless the body stands in the light outside any roof (then the dark inside an emptied shelter is not its use): it keeps the hostile out of the body's refuge. A run that removed a block and leaves only :night cells holds none of them (the light of the opened side may not have reached the body yet).
+
+  A block with seen lava within 4 blocks of it is left open (:lava-near, no walk to it, no dig) unless :accept names :lava-adjacent: a tidy-up is no reason to go near lava.
 
   Every dig asks jobs.lib.access.rules/may-dig? (zones, plan footprints, ledger cells) when chosen and again
   right before the dig. A refusal (:zone :footprint :no-zones :not-loaded) or a hazard :accept does not name
@@ -156,6 +159,16 @@
         pillar-bases (into #{} (comp (filter #(= :pillar (:purpose %))) (map (fn [{[x y z] :cell}] [x (dec y) z]))) l)]
     (fn [cell] (or (seen cell) (items cell) (when (pillar-bases cell) "stone")))))
 
+;; Lava seen within this many blocks of a scaffold block: the way to it and the stand beside it are a death risk for a comfort task.
+(def lava-radius 4)
+
+(defn lava-near?
+  "Whether seen lava lies within lava-radius of cell (horizontally; three blocks down and up)."
+  [p [x y z]]
+  (boolean (some #(lava/seen-lava? p %)
+                 (for [dx (range (- lava-radius) (inc lava-radius)) dz (range (- lava-radius) (inc lava-radius)) dy (range -3 4)]
+                   [(+ x dx) (+ y dy) (+ z dz)]))))
+
 (defn inputs
   "next-step's input now: entries to work on, the whole ledger l for the rules."
   [c l entries zones]
@@ -163,6 +176,7 @@
     (merge (access/zone-input c {:ignore-zones? (:ignore-zones? (:args c))})
            {:feet (reach/standing-vec (:primitives c)) :eye (eye-of c) :block-at (access/sensed-at (:primitives c) blocks/hidden-guess) :floor-at (floor-at c l) :entries entries
             :can-clear? #(not (tools/needs-tool-to-clear? (:primitives c) %))
+            :lava-near? (memoize #(lava-near? (:primitives c) %))
             :bucket? (boolean (some #(= "bucket" (:name %)) (u/inventory (:primitives c))))
             :hostile-near? (hostile-near? (:primitives c)) :opens-dark? (stay/opens-dark? (:primitives c)) :keep-at-night? (stay/at-night?)
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach (dig-reach)

@@ -154,6 +154,16 @@
   (is (= [:lava-adjacent] (:hazards (first (:open (step :entries [(entry [1 64 0])]
                                                         :block-at (lookup [1 64 0] "dirt" [1 65 0] "lava"))))))))
 
+(deftest a-block-near-seen-lava-is-left-open-and-never-walked-to-unless-lava-is-accepted
+  (let [near-lava? (fn [[x _ _]] (< x 10))
+        far [(entry [30 64 0])]
+        near [(entry [5 64 0])]]
+    (are [entries accept step-kind] (= step-kind (:step (step :entries entries :lava-near? near-lava? :accept accept)))
+      near #{:fluid-adjacent} :finish
+      near #{:fluid-adjacent :lava-adjacent} :dig
+      far #{:fluid-adjacent} :walk)
+    (is (= :lava-near (:reason (first (:open (step :entries near :lava-near? near-lava?))))))))
+
 (deftest a-zone-that-allows-digging-is-no-refusal
   (is (= :dig (:step (step :entries [(entry [1 64 0])] :block-at (lookup [1 64 0] "dirt")
                            :zones [{:name "work" :min [0 60 0] :max [5 70 5] :allow #{:dig}}])))))
