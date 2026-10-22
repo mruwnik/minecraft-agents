@@ -144,7 +144,9 @@
       (fn ^:async t []
         (let [s (await (scenario {:target 4} {:inventory [(wheat 4)] :entities [(cow 1 2) (calf 2 2) leather-on-the-ground]} 12))]
           (is (= {:skipped :too-few-adults} (get-in (done-event s) [:steps :breed])))
-          (is (some? (get-in (done-event s) [:steps :herd :ended])) "herd ran and ended short (the test pen has no gate)"))))))
+          (is (some? (get-in (done-event s) [:steps :herd :ended])) "herd ran and ended short (the test pen has no gate)")
+          (is (= :stopped (:kind (done-event s))) "a failed herd that brought nobody is no done")
+          (is (= (get-in (done-event s) [:steps :herd :cause]) (or (:cause (done-event s)) (get-in (done-event s) [:data :cause])))))))))
 
 (deftest herd-is-asked-for-a-pair-or-the-target-if-less
   (are [expected target adults] (= expected (maintain/decide :herd {:mob "cow" :box box :target target} {:adults adults}))

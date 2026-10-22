@@ -311,13 +311,19 @@
     :deposit (assoc (select-keys r [:reason]) :gave-up (boolean (:gave-up r)))))
 
 (defn finish!
-  "End the pass: done unless a step ended short of done and none ran to its end, then nothing-possible :failed-steps."
+  "End the pass: done unless a step ended short of done and none ran to its end, then nothing-possible :failed-steps; a failed herd step with
+  fewer adults than it was to bring ends with the herd's own kind and cause."
   [c report]
   (let [{:keys [mob target]} (:args c)
         {:keys [adults babies]} (hunting/census c)
         out {:mob mob :target target :adults (count adults) :babies (count babies) :steps report}]
-    (if (and (some :ended (vals report)) (not-any? #(not (or (:ended %) (:skipped %))) (vals report)))
+    (cond
+      (and (:ended (:herd report)) (< (count adults) (min 2 target)))
+      (let [{:keys [ended cause]} (:herd report)]
+        (ctx/end c ended cause (assoc out :text (str "maintain stopped: herd ended " (name ended) " " (name cause) ", " (count adults) " adults, " (count babies) " babies"))))
+      (and (some :ended (vals report)) (not-any? #(not (or (:ended %) (:skipped %))) (vals report)))
       (ctx/end c :nothing-possible :failed-steps out)
+      :else
       (ctx/end c :done nil (assoc out :text (str "maintain done: " (count adults) " adults, " (count babies) " babies"))))))
 
 (defn ^:async step-steps
