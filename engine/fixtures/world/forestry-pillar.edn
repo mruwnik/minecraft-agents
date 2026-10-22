@@ -17,7 +17,16 @@
   :body {:at [16.5 0 22.5] :yaw 180 :settle-s 2 :inventory [["iron_axe" 1]] :effects [["resistance" 600 4]]}
   :limit-s 150}
  :cases
- [{:name "dirt-carried-pillar-felled-and-taken-back"
+ [{:name "cancel-mid-pillar-cleans-up-before-the-next-job"
+   :body {:inventory [["dirt" 16]]}
+   :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})] [:until-pos {:y-min 3} 40]
+         [:http :cancel "$job" {:ok true}]
+         [:job (jobs.movement.go-to {:pos #at [16 0 26] :range 1})]]
+   :expect [{:event {:source :job :kind :cancelled} :within-s 60}
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 120 :of-job true}]
+   :after [[:body-near [16.5 0 26.5] 3] [:item "dirt" [:>= 12]]]
+   :limit-s 200}
+  {:name "dirt-carried-pillar-felled-and-taken-back"
    :body {:inventory [["dirt" 16]]}
    :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}

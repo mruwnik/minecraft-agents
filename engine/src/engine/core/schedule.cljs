@@ -70,15 +70,17 @@
     ok?)))
 
 (defn choose-listed
-  "The listed job to run next, never a failed one nor, while the body is dead, one kept through the death: the cut
-  job, else round-robin from the cursor over passing checks."
+  "The listed job to run next, never a failed one nor, while the body is dead, one kept through the death: a cancelled
+  job owing its cleanup, else the cut job, else round-robin from the cursor over passing checks."
   [eng]
   (let [{:keys [list instances resume cursor]} (state eng)
         n (count list)
         dead (dead? eng)
         failed? (fn [id] (contains? (:failed (state eng)) id))
-        runnable? (fn [id] (and (not (failed? id)) (not (and dead (:survive-death? (instances id)))) (check-passes? eng id)))]
+        runnable? (fn [id] (and (not (failed? id)) (not (and dead (:survive-death? (instances id)))) (check-passes? eng id)))
+        closing (some #(when (and (cleanup/closing? eng % []) (runnable? %)) %) list)]
     (cond
+      closing closing
       (and resume (some #{resume} list) (runnable? resume)) resume
       (zero? n) nil
       :else (some (fn [i] (let [id (nth list (mod (+ cursor i) n))] (when (runnable? id) id)))

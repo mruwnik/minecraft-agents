@@ -481,7 +481,7 @@ names (`:library`, `jobs.lib.cond`), never evaluated; only library names and lit
 2. Evaluate the register. The first firing entry that preempts the holder and is not held off by its section cuts by
    rotating the token and runs a round of its job.
 3. Otherwise, if a round is in flight, nothing.
-4. Otherwise the list: a holding job runs if its check passes (else the others run until it does); else the cut job if its check passes;
+4. Otherwise the list: a holding job runs if its check passes (else the others run until it does); else a cancelled job owing its cleanup; else the cut job if its check passes;
    else round-robin from the job after the last one run, to the next whose check passes. If every check declines, nothing
    runs until the next tick.
 

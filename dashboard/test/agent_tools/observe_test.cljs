@@ -1549,3 +1549,8 @@
             (.then (fn [_] (reset! calls 0) (observe/retry-timeout (fn [] (swap! calls inc) (timeout)))))
             (.then (fn [_] (is false "second timeout must reject"))
                    (fn [e] (is (= "ETIMEDOUT" (observe-status/code-of e))) (is (= 2 @calls)))))))))
+
+(deftest a-danger-wake-names-the-damage-and-its-causes
+  (let [w (observe-status/classify (event :body :hurt {:health 6.5 :amount 5 :causes ["spider" "zombie"]})
+                                   (assoc defaults :danger true) "Probe")]
+    (is (= {:wake :danger :event :hurt :health 6.5 :amount 5 :causes ["spider" "zombie"]} (into {} w)))))

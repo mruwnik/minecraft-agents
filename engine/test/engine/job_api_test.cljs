@@ -241,3 +241,21 @@
           (await (core/tick! eng))
           (is (= [] (:list (core/state eng))))
           (core/shutdown! eng))))))
+
+(deftest a-cancelled-job-owing-a-cleanup-runs-before-a-cut-job-resumes
+  (async done
+    (tu/run-async done
+      (fn ^:async run []
+        (let [p (tu/fake {})
+              eng (core/create {:primitives p :triggers {} :dir (tu/tmp-dir) :events (events/make {:stdout? false})
+                                :jobs {'tidy {:args {} :round (fn [_] :continue)
+                                              :cleanup (fn [c _] (ctx/end c :done nil))}
+                                       'other {:args {} :round (fn [_] :continue)}}})]
+          (command eng "a" :submit {:spec '(tidy)})
+          (command eng "b" :submit {:spec '(other)})
+          (await (core/tick! eng))
+          (command eng "c" :cancel {:id "j1"})
+          (swap! (:state eng) assoc :resume "j2" :cursor 1)
+          (await (core/tick! eng))
+          (is (= ["j2"] (:list (core/state eng))) "the cleanup went first, it did not wait behind the cut job")
+          (core/shutdown! eng))))))

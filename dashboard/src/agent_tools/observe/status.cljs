@@ -236,7 +236,8 @@
 
       (and (= :body source) (:danger opts) (= :hurt kind)
            (let [h (:health d) below (:danger-below opts)] (or (nil? below) (not (number? h)) (<= h below))))
-      (clean-pairs :wake :danger :event (:kind e) :health (:health d))
+      (clean-pairs :wake :danger :event (:kind e) :health (:health d) :amount (:amount d)
+                   :causes (not-empty (mapv #(clip % 40) (:causes d))))
 
       (and (= :body source) (:disconnect opts) (= :disconnected kind))
       (clean-pairs :wake :disconnected :reason (clip (:reason d)))
