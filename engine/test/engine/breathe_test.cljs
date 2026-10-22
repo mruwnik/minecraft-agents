@@ -18,6 +18,9 @@
             [jobs.survival.breathe.air :as air]
             [jobs.survival.breathe.fight :as fight]
             [engine.fake :as fake]
+            [engine.fake.raw-world :as fake-raw]
+            [engine.perception :as perception]
+            [engine.perception.store :as store]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]))
 
@@ -1138,6 +1141,46 @@
     {:ended (ended seen) :p p :data (stopped-data seen)
      :digs (count (filter #{"dig"} (call-names p)))
      :block (fn [cell] (.-name (.blockAt p (apply tu/pos cell))))}))
+
+;; Hollin #72: a dive under an overhang took longer than perception keeps fluids (10 s), so the way back read unknown.
+(def dived-tunnel
+  "Stone round a water tunnel at y 64..65 from z 0 to 8, open to air at z 8 (y 66 water, air from y 67)."
+  (merge (tu/box -1 63 -1 1 67 9 "stone")
+         (tu/box 0 64 0 0 65 8 "water")
+         {"0,66,8" "water" "0,67,8" "air"}))
+
+(defn dived-body
+  "A wrapped fake body drowning at the tunnel's closed end, in the dark, that saw every cell age-ms ago."
+  [age-ms]
+  (let [clock (atom 1000000)
+        p (tu/fake {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}} :blocks dived-tunnel})
+        raw (fake-raw/create p)
+        per (perception/create raw {:now #(deref clock)})
+        ^js st (:st per)
+        sections (store/store-of st (.-dim st))]
+    (swap! (fake/state p) assoc :light-default [0 0])
+    (doseq [x (range -1 2) y (range 63 68) z (range -1 10)] (store/record! st sections x y z (.stateAt raw x y z) @clock))
+    (swap! clock + age-ms)
+    (perception/wrap p per)))
+
+(deftest water-swum-through-out-of-sight-still-leads-to-air
+  (are [age-ms air] (= air (breath/flood-air (dived-body age-ms) {:x 0.5 :y 64 :z 0.5} 24 10 nil))
+    30000 {:x 0 :y 66 :z 8}
+    (* 1000 (inc (settings/get breath/settings :jobs.lib.breath/water-memory-s))) nil))
+
+(deftest a-body-that-dived-out-of-sight-swims-back-the-way-it-came
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[seen sink] (tu/legacy-capture-sink)
+              p (dived-body 30000)
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now (constantly 1000000)
+                                :events (events/make {:body "Fake" :sinks [sink] :now (constantly 1000000)})})]
+          (is (= :drowning (breath/situation p)))
+          (await (one-run! eng defaults))
+          (is (= 8 (:z (core/self-pos p))) "back at the open end")
+          (is (not-any? #{"dig" "place"} (call-names p)) "no cap dug, no pocket made")
+          (is (empty? (of-kind seen :breathe.crawl))))))))
 
 (deftest an-air-pocket-behind-stone-that-was-never-seen-is-not-a-target
   (async done

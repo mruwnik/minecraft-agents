@@ -1,0 +1,26 @@
+;; Card 64d410bf (Hollin #72): a body that swam into a dark flooded tunnel lost its way back: perception reads water (and air beside it)
+;; seen over 10 s ago as unknown, so breathe saw no air and the body drowned 8 blocks from the open water it came from.
+;; Sealed and unlit: a pool (x 1-2, z 1-2, water y 1-3, air y 4-5) and a 2 high water tunnel east along z 1 to x 10, then south to z 8.
+;; The body swims to the tunnel's end under Water Breathing; when it ends the body drowns 5 s before the reflex is registered.
+;; Should-succeed: breathe swims back to the pool and ends :cleared, no drowning damage. Fails before the fix: "no air within reach".
+{:defaults
+ {:tags [:survival :water] :time :any
+  :plot {:height 10}
+  :register []
+  :blocks [[:fill [0 0 0] [12 7 10] "stone"]
+           [:fill [1 1 1] [2 3 2] "water"]
+           [:fill [1 4 1] [2 5 2] "air"]
+           [:fill [3 1 1] [10 2 1] "water"]
+           [:fill [10 1 2] [10 2 8] "water"]]
+  :body {:at [1.5 1 1.5] :effects [["water_breathing" 25 0]] :settle-s 1}
+  :limit-s 90}
+ :cases
+ [{:name "swims-back-out-of-the-dark-tunnel"
+   :act [[:job (jobs.movement.go-to {:pos #at [10 1 8] :range 0})]
+         [:until-effect-gone "water_breathing" 60]
+         [:wait-s 5]
+         [:cli "triggers" ["$body" "--world" "$world" "put" "suffocating" "--trigger" "suffocating" "--persistence" "cooldown" "--cooldown-s" "2" "--job" "(jobs.survival.breathe)" "--by" "world-test"]]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 30 :of-job true}
+            {:event {:source :reflex :kind :fired :context {:reflex-id :suffocating}} :within-s 60}
+            {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 60}
+            {:no-event {:kind :hurt} :for-s 60 :until {:source :reflex :kind :ended :data {:how :cleared}}}]}]}

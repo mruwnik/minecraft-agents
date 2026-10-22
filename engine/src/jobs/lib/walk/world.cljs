@@ -285,8 +285,8 @@
   ((if (:over-budget c) cost/survivable-budget cost/damage-budget) (damage-body c) (walk-settings c)))
 
 (defn known-fn
-  "(fn [x y z]) true when the body of primitives p has seen or felt the block there (now or remembered, not unknown); nil
-  without a perception."
+  "(fn [x y z]) true when the body of primitives p has seen or felt the block there (now or remembered, not unknown, or
+  water and air breath/remembered-water-name still counts); nil without a perception."
   [p]
   (when (some? (.-sensedAt p))
     (let [memo (js/Map.)]
@@ -294,8 +294,9 @@
         (let [k (str x "," y "," z)]
           (if (.has memo k)
             (.get memo k)
-            (let [^js b (u/sensed p {:x x :y y :z z})
-                  known (boolean (and b (not (true? (.-unknown b)))))]
+            (let [cell {:x x :y y :z z}
+                  ^js b (u/sensed p cell)
+                  known (boolean (and b (or (not (true? (.-unknown b))) (breath/remembered-water-name p cell))))]
               (.set memo k known)
               known)))))))
 

@@ -20,6 +20,7 @@
             [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.memory :as mem]
+            [engine.perception.store :as store]
             [engine.settings :as settings]
             [jobs.lib.dig-look :as look]
             [jobs.lib.util :as u]))
@@ -94,15 +95,27 @@
   a downward one drags to the floor and is never swum into)."
   #{"water" "kelp" "kelp_plant" "seagrass" "tall_seagrass" "bubble_column"})
 
+(defn remembered-water-name
+  "The water, water plant or air the body remembers at cell from at most ::water-memory-s ago, else nil. Perception reads
+  a fluid, and an open cell beside one, older than engine.perception/mutable-max-ms as unknown; the dark water a body swam
+  down through is still its way back to air."
+  [p {:keys [x y z] :as cell}]
+  (when-let [per (when (true? (some-> (u/sensed p cell) .-unknown)) (aget p "perception"))]
+    (when-let [[id seen-at] (store/remembered (:st per) x y z)]
+      (let [n (.-name ^js (.stateInfo ^js (:raw per) id))]
+        (when (and (or (air? n) (and (contains? swimmable n) (not= "bubble_column" n)))
+                   (<= (- ((:now (:opts per))) seen-at) (* 1000 (settings/get settings ::water-memory-s))))
+          n)))))
+
 (defn seen-water-name
   "u/seen-name, but a bubble column with drag true (it pulls down, over magma) reads as \"bubble_column_down\", which is
-  not swimmable."
+  not swimmable, and remembered water and air count (remembered-water-name)."
   [p cell]
   (let [b (u/seen-block p cell)
         drag? (and b (= "bubble_column" (.-name b))
                    (let [props (or (.-properties b) (some-> (.-getProperties b) (.call b)))]
                      (or (true? (some-> props .-drag)) (= "true" (some-> props .-drag str)))))]
-    (if drag? "bubble_column_down" (some-> b .-name))))
+    (cond drag? "bubble_column_down" b (.-name b) :else (remembered-water-name p cell))))
 
 (defn passable-water-or-air? [name]
   (or (air? name) (contains? swimmable name)))
@@ -265,6 +278,7 @@
    ::ticks-per-oxygen {:default 15 :doc "Game ticks a drowning body loses one point of oxygen in (the game's rule)." :spec (a/int-in 1 nil)}
    ::ticks-per-health {:default 10 :doc "Game ticks between the 2 health a drowning body loses once the oxygen is gone (the game's rule)." :spec (a/int-in 1 nil)}
    ::look-share {:default 0.03 :doc "Share of the air left (oxygen, then health) that looking for air may take before the search goes on with what it has seen." :spec (a/num-in 0 1)}
+   ::water-memory-s {:default 120 :doc "Seconds remembered water, and air beside it, still counts for the way to air (remembered-water-name)." :spec (a/num-in 0 nil)}
    ::swim-ms {:default planner/swim-sub-ms :doc "Milliseconds a swimmer takes per block, to price a swim to a pocket of air (the planner's price of a swim with the head under water)." :spec (a/num-in 0 nil)}})
 
 (defn swim-ms [] (settings/get settings ::swim-ms))

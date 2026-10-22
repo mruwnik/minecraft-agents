@@ -418,7 +418,7 @@ Built-in triggers, in the order of `triggers/defaults.edn` (the default register
 
 | trigger | holds when | job | cooldown |
 |---|---|---|---|
-| `:suffocating` | drowning (in water, head not in air, and air left + `jobs.lib.breath/drown-hp` allowance < swim time (`jobs.lib.breath/swim-ms`, the planner's dive price swimSubH) to the nearest seen air + `jobs.lib.breath/margin-s` (3 s); never with Water Breathing or Conduit Power) or head in a suffocating block | `breathe` | 0 |
+| `:suffocating` | drowning (in water, head not in air, and air left + `jobs.lib.breath/drown-hp` allowance < swim time (`jobs.lib.breath/swim-ms`, the planner's dive price swimSubH) to the nearest seen air (water and air remembered within `jobs.lib.breath/water-memory-s` count, though perception ages fluids out at 10 s; also for breathe's air search and go-to's air goal) + `jobs.lib.breath/margin-s` (3 s); never with Water Breathing or Conduit Power) or head in a suffocating block | `breathe` | 0 |
 | `:burning` | on fire, in lava or in a fire block at the feet or head (rain clears the on-fire flag), without `fire_resistance`; plain flames yield while a real danger is near (hostile-near radii; lava and fire blocks never; setting `triggers.survival.burning/with-hostile` lifts it) | `extinguish` | 0 |
 | `:wedged` | a full block fills the cell of the feet and the eye cell is not solid (sand fallen on the body; both solid is `:suffocating`); quiet while a recent `:unwedge-blocked` entry names the cell | `survival.unwedge` | 0 |
 | `:died` | a `:died` under the despawn window (6000 game ticks) old with a newer `:respawned` and no `:recovered`, not while recover-drops remembers declining it for a danger (`jobs.lib.body/danger-hold`) | `recover-drops` | 30 s |
