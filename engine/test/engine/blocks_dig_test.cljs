@@ -1105,3 +1105,26 @@
                                    (sensed pos))))
     (is (some? before))
     (is (not= (select-keys before [:x :z]) (select-keys (stance) [:x :z])) "the stance whose feet and head were never seen is passed over")))
+
+(deftest pillar-height-wants-the-block-three-or-more-above-and-near
+  (are [pos want] (= want (dig/pillar-height {:primitives (:p (setup {:self {:pos {:x 0.5 :y 63 :z 0.5}}}))} pos))
+    {:x 1 :y 66 :z 0} 2
+    {:x 1 :y 67 :z 0} 3
+    {:x 1 :y 70 :z 0} 3
+    {:x 1 :y 65 :z 0} nil
+    {:x 6 :y 67 :z 0} nil))
+
+(def tall-room
+  (let [interior (set (keys (tu/box -2 63 -2 2 72 2 "air")))]
+    (-> (tu/box -3 62 -3 3 73 3 "stone")
+        (as-> m (apply dissoc m interior))
+        (assoc "3,69,0" "iron_ore"))))
+
+(deftest an-ore-overhead-in-a-closed-room-is-reached-by-pillaring
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup {:self {:pos {:x 0.5 :y 63 :z 0.5}} :inventory [{:name "iron_pickaxe" :count 1} {:name "cobblestone" :count 8}] :blocks tall-room})
+              _ (tu/seeing-all (:p env))
+              result (await (tu/child-outcome (:eng env) job {:pos [3 69 0]} 80))]
+          (is (= {:dug true} (select-keys result [:dug])) (pr-str result)))))))
