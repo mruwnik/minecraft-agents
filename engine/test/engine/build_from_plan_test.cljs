@@ -23,11 +23,17 @@
 
 (def job 'jobs.build.from-plan)
 
-(defn ^:async child-outcome
-  "tu/child-outcome without the status the adapter adds (the contract test reads the ending)."
+(defn ^:async child-outcome-exploring
+  "tu/child-outcome without the status the adapter adds (the contract test reads the ending). The job's default fetch
+  explores for what is short, which on the empty fake floor is a long search."
   [eng job args n]
   (let [r (await (tu/child-outcome eng job args n))]
     (if (map? r) (cond-> r (= :done (:status r)) (dissoc :status)) r)))
+
+(defn child-outcome
+  "child-outcome-exploring with :explore false unless args say otherwise: most tests are about what a shortage does, not the search."
+  [eng job args n]
+  (child-outcome-exploring eng job (merge {:explore false} args) n))
 
 (deftest left-text-names-what-a-build-left
   (are [built text] (= text (plan/left-text built))
@@ -1469,7 +1475,7 @@
                            (when (= 'jobs.items.obtain j) (swap! seen conj args))
                            (orig c slot j args)))
           (try
-            (await (child-outcome eng job {:plan "pen"} 20))
+            (await (child-outcome-exploring eng job {:plan "pen"} 20))
             (finally (set! ctx/call orig)))
           (is (some #(and (= "oak_fence" (:item %)) (true? (:explore %)) (= "pen" (:for-plan %)) (vector? (:center %))) @seen) (pr-str @seen)))))))
 
