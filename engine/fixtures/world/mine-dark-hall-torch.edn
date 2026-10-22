@@ -1,0 +1,17 @@
+;; Card 7e68c68b (Q345/Q388): mining in a dark hall longer than the 24-block spawn-free radius is priced by its spawns, not held; with torches carried the dig walks in,
+;; hangs its own torch and gets the ore. As mine-cave-torch (hall x 4..31, ore at x 32 (27 blocks from the body), ore capping its end, lit by a torch in a side alcove) but the ore lies beyond the spawn-free radius of the start. Stone mass x 2..60, z 2..30, y 0..6.
+;; Should-succeed: the ore is dug and a torch is placed. Should-fail: none (a small hall is mine-cave-torch).
+{:defaults
+ {:tags [:mine :torch :jobs] :time :any
+  :plot {:light :dark :height 12 :length 64 :width 34}
+  :blocks [[:fill [2 0 2] [60 6 30] "stone"] [:fill [4 0 16] [4 1 16] "air"]
+           [:fill [5 0 16] [31 1 16] "air"] [:fill [31 0 4] [31 1 15] "air"] [:fill [32 0 15] [32 1 17] "iron_ore"]
+           [:set [31 1 4] "wall_torch[facing=south]"]]
+  :body {:at [4.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 240}
+ :cases
+ [{:name "dark-hall-to-lit-ore-over-the-spawn-radius-hangs-a-torch-and-digs"
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 0 :radius 40 :mend false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got #{1 2}}} :within-s 230 :of-job true}
+            {:count-event {:source :action :kind :done :data {:name "place" :status "placed"}} :for-s 230 :at-least 1}]
+   :after [[:item "raw_iron" [:>= 1]]]}]}

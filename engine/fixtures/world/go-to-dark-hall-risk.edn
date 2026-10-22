@@ -1,0 +1,28 @@
+;; Card 7e68c68b (Q345/Q388): go-to's route risk prices the spawns of a roofed dark cell only where dark spawnable floor beyond the 24-block spawn-free radius is
+;; reachable on foot. Stone mass x 0..120, z 2..30; a torch-lit room x 1..3 and a dark 1x2 tunnel from x 4 on; the risk share is set to 0.01 so any priced spawn is over it.
+;; Should-succeed: a short tunnel (x 4..20) is crossed. Should-fail: the same walk through a long tunnel (x 4..110) waits :risky, the spawns of its dark floor priced. Each case walks out to the end and back first (dark cells count as seen only near), so the last walk starts in the lit room with the tunnel seen.
+{:defaults
+ {:tags [:movement :dark] :time :any
+  :plot {:light :dark :height 12 :length 130 :width 34}
+  :settings {:jobs.lib.price/risk-share 0.01}
+  :body {:at [2.5 0 16.5] :yaw 270 :settle-s 3 :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "a-short-dark-tunnel-is-crossed-with-no-spawn-price"
+   :blocks [[:fill [0 0 0] [120 6 31] "stone"] [:fill [1 0 15] [3 1 17] "air"] [:fill [4 0 16] [20 1 16] "air"] [:set [2 1 15] "torch"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [20 0 16] :range 0})]
+         [:until-pos {:x-min 18} 60]
+         [:job (jobs.movement.go-to {:pos #at [3 0 16] :range 0}) [:alongside]]
+         [:until-pos {:x-max 4} 60]
+         [:job (jobs.movement.go-to {:pos #at [20 0 16] :range 0}) [:alongside]]]
+   :expect [{:count-event {:source :job :kind :completed :data {:arrived true}} :for-s 40 :at-least 3}
+            {:no-event {:source :job :data {:reason :risky}} :for-s 1}]}
+  {:name "a-long-dark-tunnel-waits-risky-for-its-spawns"
+   :blocks [[:fill [0 0 0] [120 6 31] "stone"] [:fill [1 0 15] [3 1 17] "air"] [:fill [4 0 16] [110 1 16] "air"] [:set [2 1 15] "torch"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 0})]
+         [:until-pos {:x-min 98} 60]
+         [:job (jobs.movement.go-to {:pos #at [3 0 16] :range 0}) [:alongside]]
+         [:until-pos {:x-max 4} 60]
+         [:job (jobs.movement.go-to {:pos #at [100 0 16] :range 0}) [:alongside]]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 120}]
+   :after [[:body-near [3 0 16.5] 5]]}]}
