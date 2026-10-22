@@ -282,10 +282,14 @@
         (let [world {:self {:inWater true :oxygen 4}
                      :blocks (merge water-column walls
                                     {"0,68,0" "stone" "0,63,0" "stone"
-                                     "1,64,0" "air" "1,65,0" "air" "1,66,0" "air" "1,67,0" "air" "1,68,0" "air"})}
-              {:keys [eng p]} (setup world)]
+                                     "1,64,0" "air" "1,65,0" "air" "1,66,0" "air" "1,67,0" "air" "1,68,0" "air"
+                                     "-1,64,0" "water" "-1,65,0" "water" "-1,66,0" "water" "-1,67,0" "water" "-2,67,0" "stone"})}
+              {:keys [eng p seen]} (setup world)]
           (await (one-run! eng side-args))
-          (is (not-any? #(= 1 (some-> % .-args .-pos .-x)) (array-seq (.. p -world -calls))) "no step sideways to a cell with no floor"))))))
+          (is (not-any? #(= 1 (some-> % .-args .-pos .-x)) (array-seq (.. p -world -calls))) "no step sideways to a cell with no floor")
+          (is (neg? (:x (core/self-pos p))) "it went out by the other side, not over the drop")
+          (is (>= (:y (core/self-pos p)) 68) "and stands in air")
+          (is (= [[:completed nil]] (ended seen))))))))
 
 (deftest drowning-with-no-air-in-reach-is-stopped-no-air
   (async done
