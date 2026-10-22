@@ -2,7 +2,7 @@
 ;; there (the 60 s killer guard): the reflex stops condition-failed :danger, no walk; the died reflex rests meanwhile (no refire on its 30 s cooldown) and
 ;; fetches the pile once the guard is over. The pile (24 raw_iron) lies at [26 0 26], where an arrow-damage kill by a NoAI skeleton
 ;; (removed at once) takes the body (no resistance: the damage must kill); it respawns at [4 0 4]. An empty-handed death has no pile:
-;; a skip, no walk.
+;; a skip, no walk. A whole iron kit with six skeletons on the way back: a danger skip, no walk.
 {:defaults
  {:tags [:survival :death :jobs]
   :time :any
@@ -51,4 +51,22 @@
             {:event {:source :job :kind :recover.under-danger} :within-s 300}
             {:event {:source :reflex :kind :ended :data {:decision :collected}} :within-s 330}]
    :after [[:item "raw_iron" 24]]
-   :limit-s 340}]}
+   :limit-s 340}
+  {:name "kit-pile-left-to-a-skeleton-pack-that-would-kill-an-unarmed-body"
+   :register []
+   :body {:inventory [["iron_pickaxe" 1] ["iron_sword" 1] ["iron_axe" 1] ["iron_shovel" 1] ["iron_helmet" 1] ["iron_chestplate" 1]
+                      ["iron_leggings" 1] ["iron_boots" 1] ["raw_iron" 24]]}
+   :act [[:kill-body]
+         [:await {:source :body :kind :respawned} 30]
+         [:until [:memory {:entries {:deaths [{:data {:pos [:any]}}]}}] 15]
+         [:summon "skeleton" [14.5 0 16.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
+         [:summon "skeleton" [15.5 0 16.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
+         [:summon "skeleton" [16.5 0 16.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
+         [:summon "skeleton" [17.5 0 16.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
+         [:summon "skeleton" [18.5 0 16.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
+         [:summon "skeleton" [19.5 0 16.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
+         [:until-seen {:entity "skeleton"} 10]
+         [:job (jobs.survival.recover-drops)]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :danger}} :within-s 60}
+            {:no-event {:source :job :kind :child_started :data {:slot :go}} :for-s 40}]
+   :limit-s 120}]}
