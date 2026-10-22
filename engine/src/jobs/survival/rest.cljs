@@ -1,5 +1,6 @@
 (ns jobs.survival.rest
   (:require [engine.args :as a]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [engine.settings :as settings]
@@ -20,7 +21,7 @@
   "Rest a hurt body until it has healed, as a player would before going on. Food first: under foods/full-food it eats what it
   carries (jobs.survival.eat); under 18 with nothing carried it waits for a calm moment (no hostile known near, and above ground
   no dark sky; jobs.survival.get-food.risk) shut in, then gets food the safe way (jobs.survival.eat, which fetches through
-  get-food under get-food's own risk rules; at food 0 it does not wait). Then it shuts in where it stands (jobs.survival.shut-in, ways :room, :walls, :pit, :pocket; its
+  get-food under get-food's own risk rules; at food 0, or when the shut-in failed, it does not wait). Then it shuts in where it stands (jobs.survival.shut-in, ways :room, :walls, :pit, :pocket; its
   blocks go to the scaffold ledger and jobs.access.cleanup takes them back; walls that ran out of blocks get more with
   jobs.items.obtain, :explore false, once a stay when calm, and are tried again) and holds still (:healing) while natural regeneration works, a bite of carried food
   whenever food is under foods/full-food so it goes on. A shut-in that fails warns rest.unsheltered and the body rests where it
@@ -99,6 +100,12 @@
                                                        :text (str "could not shut in to rest (" (or (:text (:data e)) (:cause e)) "); resting here")})
                 :again))))
 
+(defn why
+  "The first text along ending e's :because chain (eat's :no-food carries get-food's ending), else its cause's name."
+  [e]
+  (or (some #(or (:text (:data %)) (:why (:cause %))) (take-while map? (iterate :because e)))
+      (some-> (contract/cause-key e) name)))
+
 (defn ^:async eat!
   "Eat up to full, fetching through get-food when fetch? (the walk ends the stay's shelter): :again once food is 18+ or
   the carried food is eaten up, else the :no-food ending."
@@ -109,16 +116,18 @@
       (= :continue e) :continue
       (>= (food c) foods/top-up-food) :again
       (and (not fetch?) (not (eat/carried-best c))) :again
-      :else (give-up! c :no-food {:health (health c) :text (str "no food to heal on: " (or (:text (:data e)) (some-> (:cause e) name)))}))))
+      :else (give-up! c :no-food {:health (health c) :text (str "no food to heal on: " (why e))}))))
 
 (defn ^:async feed!
-  "Food under 18 and nothing carried: wait shut in for a calm moment (not at food 0), then eat what get-food brings."
+  "Food under 18 and nothing carried: wait shut in for a calm moment (not at food 0), then eat what get-food brings.
+  Unsheltered, waiting neither heals nor guards the body, so it goes for food at once under get-food's own risk rules."
   [c]
-  (cond
-    (or (zero? (food c)) (not (uncalm c))) (await (eat! c true))
-    (contains? (ctx/mem c) :sheltered) (let [r (await (child/pause! c (settings/get settings ::pause-s) :calm))]
-                                         (if (= :continue r) :continue :again))
-    :else (await (shelter! c))))
+  (let [sheltered (:sheltered (ctx/mem c))]
+    (cond
+      (or (zero? (food c)) (not (uncalm c)) (false? sheltered)) (await (eat! c true))
+      sheltered (let [r (await (child/pause! c (settings/get settings ::pause-s) :calm))]
+                  (if (= :continue r) :continue :again))
+      :else (await (shelter! c)))))
 
 (defn ^:async heal-step!
   "A bite while food is under full and food is carried, one hold of ::pause-s, then judge the health it read before against now."

@@ -75,3 +75,15 @@
   (are [self expected] (= expected (boolean ((:when (get triggers/all :hungry)) (tu/fake {:self self :inventory [{:name "bread" :count 2}]}) {} {})))
     {:health 4 :food 10} false
     {:health 10 :food 10} true))
+
+(deftest a-rest-that-could-not-shut-in-goes-for-food-at-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              p (tu/seeing-all (tu/fake-on-floor {:self {:health 4 :food 12} :floor-block "bedrock"
+                                                  :entities [{:id 1 :name "zombie" :kind "hostile" :pos {:x 11 :y 64 :z 0}}]}))
+              eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now (tu/act-clock clock p 1000)})
+              r (await (tu/child-outcome eng 'jobs.survival.rest {} 200))]
+          (is (= :no-food (:reason r)) "no food anywhere: the rest ends instead of waiting in the open for the zombie to leave")
+          (is (re-find #"zombie" (str (:text r))) "the ending names what kept get-food from searching"))))))
