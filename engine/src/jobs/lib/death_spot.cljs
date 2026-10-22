@@ -8,6 +8,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.look :as look]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -35,13 +36,9 @@
   (filterv #(<= (u/dist pos (:pos %)) (settings/get settings ::radius)) deaths))
 
 (defn lit?
-  "Whether the cell at pos has light data and is lit enough that no mob spawns there (look/lit-light?)."
+  "Whether the body has seen the cell at pos and senses it lit enough that no mob spawns there (shelter.sense/lit-here?)."
   [p pos]
-  (let [{:keys [x y z]} (look/cell-of pos)
-        raw (look/raw-of p)]
-    (boolean (and raw (look/light-known? raw x y z)
-                  (let [l (.lightAt ^js raw x y z)]
-                    (look/lit-light? (bit-and l 15) (bit-shift-right l 4) (look/sky-subtract raw)))))))
+  (boolean (and (sh-sense/cell-light p pos) (sh-sense/lit-here? p pos))))
 
 (defn seen-clear?
   "Whether a mob death's spot is clear: looked at since the death (fresh sight beats the record) and lit, as a dark spot spawns the killer again.

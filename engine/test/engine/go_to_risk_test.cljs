@@ -8,6 +8,7 @@
             [engine.shelter-support :as st]
             [engine.sky-perception :as sky]
             [engine.test-util :as tu]
+            [jobs.lib.death-spot :as death-spot]
             [jobs.lib.hide-spot :as hide-spot]
             [jobs.lib.lava-risk :as lava-risk]
             [jobs.lib.look :as look]
@@ -195,6 +196,13 @@
     (is (pos? (with-redefs [look/seen-block (constantly {:name "air" :age-ms 30000})]
                 (:death-hp (risk/estimate (with-death (ready-test/ctx-of (assoc day-world :light {[80 64 5] [0 0]})) {:x 80 :y 64 :z 5} "enderman" 60000) far-goal))))
         "seen after the death but dark")))
+
+(deftest a-death-spot-counts-as-lit-only-when-seen
+  (let [p (:primitives (ready-test/ctx-of day-world))
+        at {:x 80 :y 64 :z 5}
+        lit-with (fn [seen] (with-redefs [look/seen-block (constantly seen)] (death-spot/lit? p at)))]
+    (is (true? (lit-with {:name "air" :age-ms 1000})))
+    (is (false? (lit-with {:unknown true})) "the light data of a cell never seen is no sight of it")))
 
 (deftest a-walk-over-the-allowance-goes-when-staying-costs-more
   (let [zombies (for [i (range 3)] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x (+ 8 i) :y 64 :z 3}})
