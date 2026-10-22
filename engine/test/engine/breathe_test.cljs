@@ -267,6 +267,18 @@
           (is (= {:x 0 :y 69 :z 0} (core/self-pos p)) "then walked onto the cap, the one land in reach")
           (is (= [[:completed nil]] (ended seen))))))))
 
+(deftest a-column-beside-a-waterfall-is-not-stepped-into-over-a-drop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:self {:inWater true :oxygen 4}
+                     :blocks (merge water-column walls
+                                    {"0,68,0" "stone" "0,63,0" "stone"
+                                     "1,64,0" "air" "1,65,0" "air" "1,66,0" "air" "1,67,0" "air" "1,68,0" "air"})}
+              {:keys [eng p]} (setup world)]
+          (await (one-run! eng side-args))
+          (is (not-any? #(= 1 (some-> % .-args .-pos .-x)) (array-seq (.. p -world -calls))) "no step sideways to a cell with no floor"))))))
+
 (deftest drowning-with-no-air-in-reach-is-stopped-no-air
   (async done
     (tu/run-async done

@@ -249,12 +249,24 @@
                                  (or (contains? swimmable (seen-water-name p cell))
                                      (let [below (seen-water-name p (update cell :y dec))] (and below (not (air? below))))))))))
 
+(defn holds-body?
+  "Whether a body standing or swimming in cell is held up: the cell below is a full block or still (source) water. A cell over
+  air, or over falling or flowing water, lets it drop; a cell below never seen is no reason to refuse."
+  [p cell]
+  (let [b (u/seen-block p (update cell :y dec))]
+    (or (nil? b)
+        (case (.-name b)
+          "water" (zero? (js/Number (or (some-> (.-properties b) .-level) 0)))
+          ("bubble_column" "kelp" "kelp_plant" "seagrass" "tall_seagrass") true
+          (boolean (.-fullCube (u/sensed p (update cell :y dec))))))))
+
 (defn nearest-air
   "The surface cell of the nearest column within radius that reaches air, not one of failed (a seq of cells); nil if none.
   Every column is read only through cells the body has seen or feels, never through stone, and joined to the body by seen
   water and air. With straight? (the default) a column whose straight walk crosses a downward bubble column
   (drag-between?) or a cell that is not seen water or air (walk-open?) is skipped: a raw move walks straight; a go-to
-  leg passes false, as its planner routes round one."
+  leg passes false, as its planner routes round one. A straight walk also skips a side cell that holds no body
+  (holds-body?): a step off a waterfall column over a drop is a fall."
   ([p self-pos radius reach] (nearest-air p self-pos radius reach nil true))
   ([p self-pos radius reach failed straight?]
    (let [fx (js/Math.floor (:x self-pos))
@@ -267,7 +279,8 @@
                (when-not (or (contains? skip cell)
                              (if straight?
                                (or (drag-between? p fx fz (+ fx dx) (+ fz dz) fy)
-                                   (not (walk-open? p fx fz (+ fx dx) (+ fz dz) fy)))
+                                   (not (walk-open? p fx fz (+ fx dx) (+ fz dz) fy))
+                                   (and cell (not (zero? (+ (js/Math.abs dx) (js/Math.abs dz)))) (not (holds-body? p cell))))
                                (not (contains? joined cell))))
                  cell)))
            (columns radius)))))
