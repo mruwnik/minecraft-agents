@@ -104,7 +104,7 @@
 (defn route-danger
   "{:danger total :mobs [{:name :pos :distance :weight :threat :danger} ...]} of walking route ([{:x :y :z}] cells)
   past mobs (cljs maps {:name :pos} or JS entities) for a body wearing equipment. Lists only mobs that add danger, the
-  worst first. version: the minecraft-data version; kind-at: jobs.lib.reach/lookup. Options: :overrides, :radius (16),
+  worst first. version: the minecraft-data version; kind-at: a jobs.lib.reach lookup. Options: :overrides, :radius (16),
   :weapon (the item held or to hold, default a fist) and :health (default 20): see no-answer-factor. See the ns doc."
   [version kind-at route mobs equipment & {:keys [overrides radius weapon health]}]
   (let [radius (or radius (default-radius))
