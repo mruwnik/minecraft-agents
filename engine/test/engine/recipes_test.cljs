@@ -68,6 +68,11 @@
 (deftest lacking-names-the-material-a-player-looks-for
   (is (re-find #"needs 3 cobblestone, have 0" (recipes/lacking game/default-version {} "stone_pickaxe" 1))))
 
+(deftest lacking-a-bed-names-the-plain-recipe-not-the-dyed-one
+  (let [text (recipes/lacking game/default-version {"white_wool" 1 "oak_planks" 3} "white_bed" 1)]
+    (is (re-find #"needs 3 white_wool, have 1" text))
+    (is (not (re-find #"dye|black_bed" text)))))
+
 (deftest lacking-names-the-table-when-every-ingredient-is-carried
   (is (re-find #"^crafting iron_pickaxe needs a crafting_table, none carried; crafting crafting_table needs 4 \w+_planks, have 0$"
          (recipes/lacking game/default-version {"iron_ingot" 5 "stick" 2} "iron_pickaxe" 1))))

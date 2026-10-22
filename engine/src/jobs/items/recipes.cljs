@@ -183,7 +183,8 @@
   [version have item n]
   (let [rs (get (recipes-for version) item)
         ranks (material-ranks version)
-        cheapest (fn [rs have batches-of] (first (sort-by (juxt #(short-count {:have have} % (batches-of %)) #(reduce + 0 (map (fn [k] (get ranks k 0)) (keys (:needs %))))) rs)))
+        kinds-short (fn [r have batches] (count (filter (fn [[k v]] (< (get have k 0) (* v batches))) (:needs r))))
+        cheapest (fn [rs have batches-of] (first (sort-by (juxt #(short-count {:have have} % (batches-of %)) #(kinds-short % have (batches-of %)) #(reduce + 0 (map (fn [k] (get ranks k 0)) (keys (:needs %))))) rs)))
         short-of (fn [r have n] (let [batches (ceil-div n (:count r))]
                                   (keep (fn [[k v]] (let [h (get have k 0)] (when (< h (* v batches)) (str "needs " (* v batches) " " k ", have " h))))
                                         (:needs r))))]
