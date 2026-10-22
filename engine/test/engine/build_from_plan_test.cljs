@@ -274,7 +274,7 @@
           (is (= [:nothing-possible :unreachable] [(get-in result [:ending :kind]) (get-in result [:ending :cause])]) (pr-str result))
           (is (<= @walks 12) (str @walks " walks")))))))
 
-(deftest an-unloaded-cell-is-walked-to-not-taken-as-built
+(deftest an-unloaded-cell-is-walked-to-and-waited-for
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -282,8 +282,7 @@
               {:keys [eng p]} (start {:inventory kit :unloaded ["40,64,0"]} {"far" plan})
               result (await (child-outcome eng job {:plan "far"} 200))]
           (is (seq (tu/walk-calls p)))
-          (is (= {[40 64 0] :unloaded} (:given-up result)))
-          (is (= [[40 64 0]] (:missing result))))))))
+          (is (= :not-done result) "a chunk that has not loaded is waited for, never given up"))))))
 
 (deftest a-place-child-that-waits-ends-the-round-instead-of-being-called-again-in-it
   (async done

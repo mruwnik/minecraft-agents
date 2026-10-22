@@ -57,7 +57,7 @@
   built), else finish.
   A cell whose state no neighbour gives, or with no block to click beside it yet, waits for one. If still missing at
   the end it is given up with jobs.lib.placement's reason (:no-support, after a look at any floor or neighbour never seen; :no-room, :opened, :double-slab). A cell whose place is refused, or whose stand cell
-  cannot be reached, :give-up times is given up (:refused, :occupied, :no-item, :unreachable or :unloaded).
+  cannot be reached, :give-up times is given up (:refused, :occupied, :no-item, :unreachable or :unseen).
   Zones: every place is checked against zones and the footprints of the other active plans, when the cell is
   chosen and again before the place. A cell in a zone that does not allow :place, or in another plan's footprint,
   is refused for good (not counted as given up). It is listed in :refused [{:pos :reason :zone|:claim|:footprint|:hazard}].
@@ -250,9 +250,14 @@
 
 (declare shut-in-walk?)
 
+(defn chunk-pending?
+  "Whether the cell's chunk is not loaded (just after a login, or out of range): it will load, so the build waits for it."
+  [p pos]
+  (and (some? (.-sensedAt p)) (nil? (u/sensed p (zipmap [:x :y :z] pos)))))
+
 (defn ^:async walk-stand!
   "Walk to stand beside cell with go-near options opts; a walk that is blocked (the stand is then bad), or an arrival
-  with the cell unseen (:unloaded, :buried) or out of reach, counts a failure. Resolves to go-near's answer; :partial
+  with the cell unseen (:unseen, :buried; a chunk not loaded yet is waited for) or out of reach, counts a failure. Resolves to go-near's answer; :partial
   (no failure) when the body is sealed in its own shelter. A blocked walk to a stand two or more above the body is a
   climb, not a failure: the stand is only ruled out and the cell sent to the scaffold, which plans stands that see it."
   [c cell stand opts]
@@ -271,10 +276,14 @@
         ;; a cell outside the view cone is seen only by turning to it
         (when (dig-look/unknown? (:primitives c) pos) (await (dig-look/look-at! c pos)))
         (when (nil? (u/seen-block (:primitives c) (zipmap [:x :y :z] pos)))
-          (ctx/update-mem! c walk-fail pos (if (buried? (:primitives c) pos) :buried :unloaded) limit (u/self-pos c)))))
+          (when-not (chunk-pending? (:primitives c) pos)
+            (ctx/update-mem! c walk-fail pos (if (buried? (:primitives c) pos) :buried :unseen) limit (u/self-pos c))))))
     (when (and (= :there w) (:found cell) (empty? (if (:dig? cell) (in-dig-reach c [cell]) (in-reach c [cell]))))
       (ctx/update-mem! c walk-fail (:pos cell) :unreachable limit (u/self-pos c)))
-    (if (and (= :blocked w) (sealed-in-shelter? c)) :partial w)))
+    (cond
+      (and (= :blocked w) (sealed-in-shelter? c)) :partial
+      (and (= :there w) (nil? (:found cell)) (chunk-pending? (:primitives c) (:pos cell))) :partial
+      :else w)))
 
 (defn shut-in-walk?
   "Whether the last walk ended because the body is shut in (go-to refuses to dig or build out of a restricted walk)."
@@ -283,7 +292,7 @@
 
 (defn ^:async walk-to!
   "Walk to a stand cell beside cell (:continue while the walk waits, else :again); a cell that cannot be walked to, or is still out of reach (or unseen, as
-  :unloaded) on arrival, counts a failure."
+  :unseen) on arrival, counts a failure."
   [c cells cell]
   (trace! c :walk-to! (:pos cell))
   (let [body (u/self-pos c)
