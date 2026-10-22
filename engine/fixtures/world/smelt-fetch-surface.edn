@@ -1,0 +1,17 @@
+;; Card 2d299045: a body under rock with raw iron, coal, cobblestone and a stone pickaxe but no furnace known, no table and no logs makes its own furnace:
+;; it climbs to the trees above (obtain's way up), fells one, makes planks and a table, then the furnace, and smelts.
+;; Stone mass x 2..30, z 2..30, y 0..5; a sealed cave x 13..17, z 13..17, y 0..2 with the body; an oak (log column + leaves) stands on top at x 22, z 15.
+;; Should-succeed: iron_ingot comes out. Should-fail: none.
+{:defaults
+ {:tags [:items :smelt :fetch :cave]
+  :time :any
+  :plot {:height 14}
+  :blocks [[:fill [2 0 2] [30 5 30] "stone"] [:fill [13 0 13] [17 2 17] "air"]
+           [:fill [21 8 14] [23 9 16] "oak_leaves[persistent=true]"] [:fill [22 6 15] [22 9 15] "oak_log"]]
+  :body {:at [15.5 0 15.5] :inventory [["raw_iron" 2] ["coal" 2] ["cobblestone" 20] ["stone_pickaxe" 1]] :settle-s 2}
+  :limit-s 400}
+ :cases
+ [{:name "underground-no-logs-no-furnace-climbs-for-a-log-and-makes-both"
+   :act [[:job (jobs.items.obtain {:item "iron_ingot" :count 2 :explore true})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 380 :of-job true}]
+   :after [[:item "iron_ingot" 2]]}]}
