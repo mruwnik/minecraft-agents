@@ -53,6 +53,13 @@
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:item "iron_pickaxe" 2] [:item "iron_ingot" 0]]
    :limit-s 120}
+  ;; a spent pickaxe in a kit with armour: the fresh one is made and the rest of the kit goes on (leggings, boots made and worn)
+  {:name "worn-out-pickaxe-in-a-kit-with-armour-still-finishes-the-armour"
+   :body {:inventory [["iron_pickaxe[damage=249]" 1] ["iron_ingot" 14] ["stick" 2] ["cooked_beef" 3]]}
+   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe" "iron_leggings" "iron_boots"] :wear true :explore false :food false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
+   :after [[:item "iron_pickaxe" 2] [:item "iron_ingot" 0]]
+   :limit-s 170}
   {:name "stone-pickaxe-from-carried-logs-chains-planks-and-sticks"
    :body {:inventory [["oak_log" 6] ["cobblestone" 5] ["cooked_beef" 3]]}
    :act [[:job (jobs.items.get-kit {:items ["stone_pickaxe"] :explore false :food false})]]
