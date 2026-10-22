@@ -71,4 +71,14 @@
    :expect [{:event {:source :job :kind :tool.spare} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :data {:steps 10}} :within-s 220 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :tool-spent}} :for-s 220 :until {:source :job :kind :completed}}]
+   :limit-s 240}
+  ;; card a4938409: go-to's stair (ways #{:carried}) with the same worn pickaxe, cobblestone and 6 planks but no table or sticks: a table
+  ;; is put down and the spare crafted before the last pickaxe is spent, instead of digging on by hand
+  {:name "pickaxe-wears-out-fetch-off-crafts-from-planks"
+   :body {:at [8.5 10 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 12] ["oak_planks" 6]]}
+   :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=117]"]
+         [:job (jobs.access.stair {:dir :down :heading :east :steps 10 :ways #{:carried}})]]
+   :expect [{:event {:source :job :kind :tool.spare} :within-s 120 :of-job true}
+            {:event {:source :job :kind :completed :data {:steps 10}} :within-s 220 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :tool-spent}} :for-s 220 :until {:source :job :kind :completed}}]
    :limit-s 240}]}

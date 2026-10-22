@@ -131,6 +131,15 @@
     (is (= {"stick" 2} (reserve/held c :smelt)) "the smelt burns the coal, not the sticks")
     (is (= {} (reserve/held c :craft)) "the kit's own crafts are not held off")))
 
+(deftest a-bill-with-sticks-keeps-the-carried-table-for-a-spare-pickaxe
+  (let [store (atom [])
+        c {:id "j1/bill" :primitives (tu/fake {:inventory [{:name "crafting_table" :count 1} {:name "stick" :count 2}]}) :args {:bill {"iron_pickaxe" 1}}
+           :view (fn [] {:data {:entries {:reserve @store (mem/job-kind "j1") [{:data {:children {:bill {:args {}}}}}]}} :now 0})
+           :remember (fn [_ data _] (swap! store conj {:data data}))
+           :forget (fn [_ pred] (swap! store #(vec (remove (comp pred :data) %))))}]
+    (bill/reserve! c ["iron_pickaxe"])
+    (is (= {"stick" 2 "crafting_table" 1} (reserve/held c :craft-held)))))
+
 (deftest only-stock-and-spare-crafts-respect-the-kit-holds
   (are [id chooser] (= chooser (craft/chooser {:id id}))
     "j1/bill/gather-coal/torches/torch" :craft-held

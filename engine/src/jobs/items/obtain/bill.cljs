@@ -34,13 +34,13 @@
     (into {} (keep (fn [[k v]] (let [n (- v (get carried k 0))] (when (pos? n) [k n])))) need)))
 
 (defn kit-stock
-  "[[item n why not]] of the fuel and sticks the items need: coal or charcoal for the smelt (one per 8 ingots), the sticks of the recipes."
+  "[[item n why not]] of the fuel and sticks the items need: coal or charcoal for the smelt (one per 8 ingots), the sticks of the recipes and a carried table to craft a spare pickaxe with."
   [version items]
   (let [rs (recipes/recipes-for version)
         sticks (reduce + (for [item items] (get (:needs (first (get rs item))) "stick" 0)))
         ingots (reduce + (vals (furnace-short version items {})))
         fuel (long (js/Math.ceil (/ ingots 8)))]
-    (concat (when (pos? sticks) [["stick" sticks #{:craft}]])
+    (concat (when (pos? sticks) [["stick" sticks #{:craft}] ["crafting_table" 1 #{:craft}]])
             (when (pos? fuel) (for [f ["coal" "charcoal"]] [f fuel #{:craft :smelt}])))))
 
 (defn reserve!

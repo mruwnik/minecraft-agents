@@ -209,7 +209,7 @@
   (slot :spare; chest, craft, gather, and a walk to look for what is not seen, as a player goes up for wood; a table is never put in the dig line). Resolves nil to go on, :continue while the
   get waits on the world. Told per tool name in the job's memory: info tool.spare when one came (the next worn one gets another), warn
   tool.no-spare with the get's reason when not, told once per tool in body memory (:tool.no-spare-told) and tried once per job (:spare-tried; the job goes on with the worn tool). amount (the digs the job will make,
-  optional) is spare-need's. The job's fetch off (ways #{:carried}) only tells tool.no-spare (reason :fetch-off), except for a dear first tool, whose stone spare is crafted from what is carried (:how #{:craft}); a job under a spare
+  optional) is spare-need's. The job's fetch off (ways #{:carried}) crafts the stone spare from what is carried (:how #{:craft}: cobblestone, sticks, a table or its planks) and tells tool.no-spare (reason :fetch-off) when it cannot, silently for a dear first tool; a job under a spare
   fetch skips it (no spare of a spare)."
   ([c block-name] (tool-ready! c block-name nil))
   ([c block-name amount]
@@ -225,7 +225,6 @@
                                                                (when why (str ": " (name why))))}))]
      (cond
        (nil? worn) nil
-       (and (nil? (need/fetch-opts c)) (not (:dear worn))) (do (when-not (told?) (tell! :fetch-off nil)) nil)
        (contains? (:spare-tried (ctx/mem c)) tool-name) nil
        :else
        (let [off? (nil? (need/fetch-opts c))
@@ -236,6 +235,6 @@
            (do (if (= :done (:kind e))
                  (do (ctx/forget-where! c tools/no-spare-told-kind #(= tool-name (:name %)))
                      (ctx/emit! c :tool.spare :info {:tool tool-name :text (str "carrying a spare " tool-name)}))
-                 (do (when-not (or (:dear worn) (told?)) (tell! (need/cause-why e) (get-in e [:data :tried])))
+                 (do (when-not (or (:dear worn) (told?)) (tell! (if off? :fetch-off (need/cause-why e)) (get-in e [:data :tried])))
                      (ctx/update-mem! c update :spare-tried (fnil conj #{}) tool-name)))
                nil)))))))
