@@ -1,0 +1,18 @@
+;; Card 0dbf5287: a spider that stands 3.85 blocks off in a dark cave and never comes (Hollin #80: one on a ledge 3.9 off)
+;; is out of reach; the held fight times out and the spider is watched. It stands inside danger/watch-gap, so before the
+;; fix hostile-near refired every 15 s (20+ fires); now it is answered again only if it comes nearer or the body is hurt.
+;; The spider is NoAI and helmeted. An unlit stone corridor x 5..29, y 0..1, z 15..17 (the shape of hostile-dark-chase).
+{:defaults
+ {:tags [:hostile :survival]
+  :time :any
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile)}]
+  :blocks [[:fill [2 -1 10] [30 4 22] "stone"] [:fill [5 0 15] [29 1 17] "air"]]
+  :body {:at [17.5 0 16.5] :inventory [["iron_sword" 1]]}}
+ :cases
+ [{:name "a-spider-that-never-comes-is-answered-once"
+   :act [[:summon "spider" [21.35 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:count-event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :for-s 60 :at-least 1 :at-most 1}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :hostile-near} :data {:mob "spider" :kind :done}} :within-s 40}]
+   :after [[:entities "type=spider,tag=wt" [[5 0 15] [29 1 17]] 1]]
+   :limit-s 75}]}

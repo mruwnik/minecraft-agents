@@ -97,15 +97,15 @@
   ([view] (next-mute-ms view :heard-mute))
   ([view kind] (min mute-max-ms (* mute-base-ms (js/Math.pow 2 (count (mem/entries view kind)))))))
 
-(defn watched-ids
-  "The ids of seen mobs the body watches instead of answering (a :watch-mute entry still ahead of the view's now): a held
-  fight found them neither coming nor hurting it. Empty once the body is hurt after the entry was written."
+(defn watched
+  "The seen mobs the body watches instead of answering, as {id blocks-off-when-watched} (a :watch-mute entry still ahead
+  of the view's now): a held fight found them neither coming nor hurting it. Empty once the body is hurt after the entry was written."
   [view]
   (or (when-let [m (mem/latest view :watch-mute)]
         (when (and (> (:until (:data m)) (:now view))
                    (empty? (mem/since view :hurt (:t m))))
-          (:ids (:data m))))
-      #{}))
+          (:mobs (:data m))))
+      {}))
 
 (defn open-deaths
   "The :died entries (oldest first) no :recovered entry covers: one with the death's :death-t, or, from before

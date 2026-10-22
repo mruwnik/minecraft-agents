@@ -149,7 +149,13 @@
                        (some #(reach/standable? kind-at nx (+ y %) nz) [-1 0 1])))
                    [(dec i) i (inc i)]))))
 
-(def watch-gap "Blocks within which a watched mob (jobs.lib.body/watched-ids) is answered again." 4)
+(def watch-gap "Blocks within which a watched mob (jobs.lib.body/watched) is answered again." 4)
+
+(defn answered-within
+  "Blocks within which a mob watched from d blocks off is answered again: watch-gap, or a block nearer than d for one
+  watched inside it (it stood there and did not come)."
+  [d]
+  (min watch-gap (dec d)))
 
 (def swell-range "Blocks within which a creeper swells and its blast reaches." 7)
 
@@ -177,16 +183,16 @@
   "danger? reading blocks through kind-at (shared by the mobs of one query) and, with pr, sharing walk proofs. opts
   :arrow-at is the query's shared arrow lookup (reach/lookup p reach/arrow-kind-of); without it a ranged mob builds its own.
   :ignore-heard? leaves out every mob the body has not seen (a muted heard mob, jobs.lib.body/heard-muted?).
-  :ignore-ids leaves out those mobs while they stay beyond watch-gap.
+  :watched ({id blocks-off-when-watched}) leaves out those mobs while they stay beyond answered-within.
   :way? false takes a melee mob without a way to the body (on a pillar or behind a door) as one: it stands where the body's walk will land.
   A melee mob heard but not seen counts as seen (by its rough spot) outside or in a large cave; in closed quarters
   (closed-quarters?) it is one only when heard close (heard-close?) and it could stand beside the body that way
   (beside-toward?): a heard mob in clear, lit sight is already seen (engine.perception), so a look would find nothing.
   A fusing creeper (hissing, seen or heard) within swell-range is always one; beyond it the usual tests apply."
   ([p kind-at e opts] (danger-in? p kind-at nil e opts))
-  ([p kind-at pr e {:keys [sight? arrow-at ignore-heard? ignore-ids way?] :or {sight? true way? true}}]
+  ([p kind-at pr e {:keys [sight? arrow-at ignore-heard? watched way?] :or {sight? true way? true}}]
    (cond
-     (and (contains? ignore-ids (.-id e)) (> (mob-distance p e) watch-gap)) false
+     (and (contains? watched (.-id e)) (> (mob-distance p e) (answered-within (get watched (.-id e))))) false
      (calm-enderman? e) false
      ;; it swells only while it has a line of sight to the body within 7 blocks, so its blast reaches; heard only, its
      ;; rough spot may fall in rock and fail the way test
@@ -260,4 +266,4 @@
   [world memory args]
   (boolean (and (not (body/dead? memory))
                 (danger-near? world (:radius args (hostile-radius)) (:ranged-radius args (ranged-radius))
-                              {:sight? (:visible-only args true) :ignore-heard? (body/heard-muted? memory) :ignore-ids (body/watched-ids memory)}))))
+                              {:sight? (:visible-only args true) :ignore-heard? (body/heard-muted? memory) :watched (body/watched memory)}))))

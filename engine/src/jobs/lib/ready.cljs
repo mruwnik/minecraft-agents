@@ -149,7 +149,7 @@
         view (ctx/view c)
         r (settings/get settings ::crowd-radius)
         near (check-cache/cached c ::outmatched
-                                 #(danger/dangers p r {:ranged-radius r} {:ignore-heard? (body/heard-muted? view) :ignore-ids (body/watched-ids view)}))
+                                 #(danger/dangers p r {:ranged-radius r} {:ignore-heard? (body/heard-muted? view) :watched (body/watched view)}))
         hp (if (seq near)
              (cost/fight-damage {:weapon (combat/best-weapon p combat/default-weapons)
                                  :equipment (cost/equipment-of (.-equipment (.self p)))
