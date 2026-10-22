@@ -139,10 +139,17 @@ export function createMove (env) {
           }
           return result('landed')
         }
+        // A head against a ceiling it cannot rise past ends the swim at once ('blocked'): the caller looks for another way
+        // instead of pushing up the full timeout while its air runs out.
+        let best = env.bot.entity.position.y
+        let stalled = 0
         while (headUnderwater()) {
           press('jump')
           await sleepMs(setting('prim/poll-ms') * timeScale)
           ctx.alive()
+          const y = env.bot.entity.position.y
+          if (y > best + 0.05) { best = y; stalled = 0 } else if (env.bot.entity.isCollidedVertically) stalled += 1
+          if (stalled * setting('prim/poll-ms') >= setting('prim/swim-blocked-ms')) return result('blocked')
         }
         if (!a.tread) return result('surfaced')
         // treading water: jump stays held for the rest of ms, so the head stays out while the lungs refill

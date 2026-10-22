@@ -630,4 +630,6 @@
     (is (= [[0 67 0]] (felt up (assoc pose :y 64.2 :collided-y true))))
     (is (nil? (felt up (assoc pose :y 64.2))))
     (is (nil? (felt up (assoc pose :y 64.2 :collided-y true :on-ground true))) "standing on the floor is vertical contact too")
+    (is (nil? (felt up (assoc pose :y 64.2 :collided-y true :x 0.05))) "off-centre it may have clipped the block beside the column")
+    (is (= [[0 67 0]] (felt up (assoc pose :y 64.2 :collided-y true :x 0.65 :z 0.35))))
     (is (nil? (felt up (assoc pose :y 66 :collided-y true))))))

@@ -132,7 +132,7 @@
    :unequip (fixed [:dest] [] #{"ok" "empty"} (fails #{"full"} #{}) 2)
    :sleep (fixed [:pos] [:pos] #{"sleeping"} (fails #{"missing" "occupied" "not-night" "monsters-near"} #{"unreachable"}) 5)
    :look (fixed [:pos :yaw :pitch] [:pos] #{"ok"} (fails #{} #{}) 0.3)
-   :swim (entry [:ms :toward :tread] [] #{"surfaced" "landed" "timeout"} (fails #{} #{})
+   :swim (entry [:ms :toward :tread] [] #{"surfaced" "landed" "timeout" "blocked"} (fails #{} #{})
                 (fn [_ {:keys [ms]}]
                   (timed (/ (min (or ms (js-setting "prim/swim-default-ms" 3000)) (js-setting "prim/swim-max-ms" 10000))
                             1000))))

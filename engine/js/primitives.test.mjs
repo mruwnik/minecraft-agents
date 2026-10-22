@@ -1492,6 +1492,15 @@ test('swim: holds jump until the head is out of the water, then releases and rep
   assert.deepEqual(controls(bot), [['jump', true], ['jump', false]])
 }))
 
+test('swim: a head against a ceiling it cannot rise past ends the swim blocked before its timeout', () => virtually(async () => {
+  const blocks = { '0,65,0': 'water', '0,64,0': 'water' }
+  const { bot, p } = rig({ blocks, oxygen: 4 })
+  bot.entity.isCollidedVertically = true
+  const result = await p.swim('t1', { ms: 3000 })
+  assert.equal(result.status, 'blocked')
+  assert.deepEqual(controls(bot), [['jump', true], ['jump', false]])
+}))
+
 test('swim: a head in kelp, seagrass or a bubble column is still under water: jump is held until the head is in air', () => virtually(async () => {
   for (const plant of ['kelp', 'kelp_plant', 'seagrass', 'tall_seagrass', 'bubble_column']) {
     const blocks = { '0,65,0': plant, '0,64,0': 'water' }

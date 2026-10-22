@@ -20,6 +20,7 @@ export const SPECS = {
   'prim/rise-wait-ms': { default: 800, spec: ['int-in', 0, null], doc: "How long a swim waits for the body to rise, in ms." },
   'prim/land-wait-ms': { default: 1000, spec: ['int-in', 0, null], doc: "How long a jump waits for the body to land, in ms." },
   'prim/swim-default-ms': { default: 3000, spec: ['int-in', 0, null], doc: "How long swim lasts when not told, in ms." },
+  'prim/swim-blocked-ms': { default: 300, spec: ['int-in', 0, null], doc: "Milliseconds a swim up with the head against a ceiling, with no rise, goes on before it ends 'blocked'." },
   'prim/swim-max-ms': { default: 10000, spec: ['int-in', 0, null], doc: "Longest swim a caller may ask for, in ms." },
   'prim/reconnect-tries': { default: 3, spec: ['int-in', 1, null], doc: "How many times a reconnect is tried before giving up." },
   'prim/reconnect-retry-ms': { default: 5000, spec: ['int-in', 0, null], doc: "Wait between the tries of one reconnect, in ms." },

@@ -207,16 +207,23 @@
   [{:keys [on-ground on-scaffolding] :as pose}]
   (cond-> pose (and on-ground on-scaffolding) (assoc :on-climbable false)))
 
+(defn box-in-cell?
+  "Whether the body's box at x z lies inside the cell of step: off-centre it may clip a neighbour's block, which says nothing about the cell."
+  [step x z]
+  (let [slack (- 0.5 (:body-half executor/policy))]
+    (and (<= (js/Math.abs (- x (+ (:x step) 0.5))) slack) (<= (js/Math.abs (- z (+ (:z step) 0.5))) slack))))
+
 (defn felt-solid
   "The replan done map when a body swimming vertically is stopped by a block the plan took for water: it felt the floor
-  (swim-down) or the roof (swim-up), so that cell is solid and the plan is made again at once. nil otherwise."
+  (swim-down) or the roof (swim-up, only with the box inside the step's column: off-centre it may have clipped a neighbour), so that cell is solid and the plan is made again at once. nil otherwise."
   [steps i {:keys [x y z on-ground collided-y]}]
   (let [{:keys [move] :as step} (nth steps i nil)
         gap (- y (executor/stand-y step))
         arrive (:arrive-y executor/policy)
         cell (case move
                :swim-down (when (and on-ground (> gap arrive)) [(:x step) (:y step) (:z step)])
-               :swim-up (when (and collided-y (not on-ground) (< gap (- arrive))) [(:x step) (inc (:y step)) (:z step)])
+               :swim-up (when (and collided-y (not on-ground) (< gap (- arrive)) (box-in-cell? step x z))
+                          [(:x step) (inc (:y step)) (:z step)])
                nil)]
     (when cell
       {:status :replan :why :changed :learned true :felt true :cells [cell] :at [x y z] :step i})))

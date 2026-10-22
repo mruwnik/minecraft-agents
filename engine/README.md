@@ -154,14 +154,14 @@ Statuses below are the common ones; `reason` and extra fields are in `js/primiti
 | `trade` | `{villager uuid, op: offers/buy, offer?, times?}` | `ok`, `bought`, `gone`, `out-of-reach`, `no-item`, `full`, `cannot`, `failed`; `bought` ends `stopped: window-closed` if the window closed mid-run |
 | `sleep` | `{pos}` bed | `sleeping`, `not-night`, `occupied`, `monsters-near`, `obstructed`, `missing`, `unreachable` (the three server refusals are read from its action bar line; a failure says when the server gave none) |
 | `look` / `wait` | `{pos}` or `{yaw, pitch}` / `{ms}` (max 10000) | `ok` |
-| `swim` | `{ms=3000, toward?, tread?}` | `surfaced`, `landed`, `timeout` |
+| `swim` | `{ms=3000, toward?, tread?}` | `surfaced`, `landed`, `timeout`, `blocked` |
 | `paddle` | `{ticks, turn?: 'left'/'right', forward?}` | one stroke of the boat the body is in (the boat is simulated client side, sent as `vehicle_move`; `ticks` at most 40): `ok`, `blocked` (the next forward tick leaves the water), `not-mounted`, `not-a-boat`; result `{pos, yaw, ticks, turnDeg, speed}` (the model: degrees and blocks a tick); ticks 0 reads the pose |
 | `mount` / `dismount` | `{id}` / `{yaw?, pitch?}` | `mounted` (uses the vehicle again every 400 ms for up to 3 s), `already-mounted`, `gone`, `not-mountable`, `occupied`, `out-of-reach`, `hand-full`, `timeout` / `dismounted`, `not-mounted`, `timeout` |
 | `useOn` | `{pos, item?, face='up', air?}` (`air` true: look at the point `pos` and use a thrown item (egg, snowball, ender pearl, potion, ..) with no block; `used` when one was spent, `cannot` `not-throwable`, `no-item`) | `used`, `unchanged`, `missing`, `no-item`, `no-room`, `unreachable` (`too-far`, or `no-line`: no point of the block is in view past other blocks' shapes; its own other half never blocks), `cannot` (respawn anchors, beds outside the overworld, containers, hazards); a bed used by day answers `spawnSet: true` ("respawn point set") and is `used` |
 | `offline` | `{ms=300000}` (max 600000) | `ok`, `cut`, `closed`, `unsupported`, `offline` |
 
 Bounds are 1 to 60 s per call (most 2 to 10 s). `jumpPlace` pillars up: sneak to cell centre, jump, place under the feet,
-stop at the first failure. `swim` without `toward` holds jump until the eyes (1.62 up, not the head top) are out of water; with `toward` it climbs out
+stop at the first failure. `swim` without `toward` holds jump until the eyes (1.62 up, not the head top) are out of water, ending `blocked` when the body rises no higher with a ceiling over it for `prim/swim-blocked-ms` (300); with `toward` it climbs out
 onto a rim; with `tread` it then keeps jump held for the rest of `ms` (ends `timeout`). Every bound bot has collision half-width 5079/16384, just under 0.31 (0.3 left the body flush against block faces and rejected every move), and a collision clip with a tolerance of 1e-7 on every axis (`js/clip-tolerance.mjs`: a box a rounding step into a face is held at it). The engine's physical constants (body widths, height, eye height, step height, gravity, the clip tolerance, the hostiles' chase speeds) are in `src/engine/constants.json`, the one copy: cljs reads it through `engine.constants`, the JS side imports the file.
 Acting while asleep first leaves the bed.
 
