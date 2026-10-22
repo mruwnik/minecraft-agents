@@ -1,5 +1,6 @@
 (ns jobs.movement.run-away
-  (:require [engine.args :as a]
+  (:require [jobs.lib.cost.health :as cost-health]
+            [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
@@ -52,5 +53,5 @@
                                      :walk {:ways #{:walk :clear-seal}
                                             :settings (cond-> {:jobs.movement.go-to.tuning/look-round false}
                                                         y-margin (assoc :jobs.lib.walk.world/y-margin y-margin))
-                                            :floor {:health 1}}}))]
+                                            :floor cost-health/spend-down}}))]
     (if (= :continue e) :continue (chase/forward c e))))

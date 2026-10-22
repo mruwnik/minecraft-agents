@@ -361,7 +361,7 @@
     (are [food inventory expected-fit expected-walk]
          (let [c (assoc (ctx-of {:self (assoc hurt :food food) :inventory inventory}) :args {})]
            (= [expected-fit expected-walk] [(first (fish/fit? c)) (ready/forage-walk c walk)]))
-      8 [] :ok (assoc walk :floor {:health 1})
+      8 [] :ok (assoc walk :floor {:health 0})
       8 [{:name "bread" :count 1}] :later walk
       20 [] :later walk)))
 
@@ -525,6 +525,6 @@
   (let [hurt {:pos {:x 0 :y 64 :z 0} :health 5}]
     (are [food targets expected]
          (= expected (select-keys (attack/walk-opts (assoc (ctx-of {:self (assoc hurt :food food) :inventory []}) :args {:targets targets})) [:floor :leg-s]))
-      8 ["cow"] {:floor {:health 1} :leg-s 30}
+      8 ["cow"] {:floor {:health 0} :leg-s 30}
       20 ["cow"] {:leg-s 5}
       8 :hostiles {:leg-s 10})))

@@ -1,7 +1,8 @@
 (ns jobs.survival.breathe.air
   "The air search of jobs.survival.breathe, for a body that is drowning or enclosed: swim up a column, go-to air, dig a
   cap, make a pocket, dig the head free."
-  (:require [engine.args :as a]
+  (:require [jobs.lib.cost.health :as cost-health]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
@@ -249,5 +250,5 @@
   "One go-to child call to target: true when it reports arrival. A call that yields or does not end :done is a failed
   try (the walk-only go-to waits on nothing)."
   [c slot target range]
-  (let [e (await (ctx/call c slot 'jobs.movement.go-to {:pos target :range range :ways #{:walk :clear-seal} :floor {:health 1} :spend {:job-time (slice-s)} :settings {:jobs.lib.cost.planner/lethal-air true :jobs.lib.walk.world/dive-pause-s 0}}))]
+  (let [e (await (ctx/call c slot 'jobs.movement.go-to {:pos target :range range :ways #{:walk :clear-seal} :floor cost-health/spend-down :spend {:job-time (slice-s)} :settings {:jobs.lib.cost.planner/lethal-air true :jobs.lib.walk.world/dive-pause-s 0}}))]
     (and (= :done (:kind e)) (boolean (:arrived (:data e))))))

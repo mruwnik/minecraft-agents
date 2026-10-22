@@ -25,6 +25,10 @@
 (defn walk-hp-seconds "Seconds an hp costs a walk at full health: the setting ::hp-seconds." []
   (settings/get settings ::hp-seconds))
 
+(def spend-down
+  "A call's :floor that lets go-to spend all but 1 hp (survivable-budget). 0, not 1: a body under 1 hp is below a floor of 1, so its call would fail at once."
+  {:health 0})
+
 (defn default-min-health [] (settings/get settings ::default-min-health))
 
 (defn margin [] (settings/get settings ::margin))

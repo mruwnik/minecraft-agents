@@ -3,7 +3,8 @@
   safe-at, safe-at-by-night and safe-if-lit are :later while the place is exposed (the estimate of jobs.lib.cost/exposure is
   above ::risk-limit; :look while the light there is unseen and the body has not looked round, then :later; :never when light is further off than the job waits; darkness no sky light reaches is no exposure) or a danger is near
   (threatened); fit? is :later below the risky health or while poisoned (fit-armed also while unarmed); ok never refuses."
-  (:require [clojure.string :as str]
+  (:require [jobs.lib.cost.health :as cost-health]
+            [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -289,9 +290,9 @@
     {::exposure (fn [c] (if (starving? c) (contract/ok :starving "starving: food first") ((::exposure (meta safe)) c)))}))
 
 (defn forage-walk
-  "go-to args for a walk that serves food-finding: with :floor {:health 1} (all but 1 hp may be spent, go-to's survivable budget) while the body can not heal, else args as they are."
+  "go-to args for a walk that serves food-finding: with :floor cost-health/spend-down (all but 1 hp may be spent, go-to's survivable budget; also at under 1 hp) while the body can not heal, else args as they are."
   [c args]
-  (cond-> args (cannot-heal? c) (assoc :floor {:health 1})))
+  (cond-> args (cannot-heal? c) (assoc :floor cost-health/spend-down)))
 
 (defn armed
   "Later :unarmed while the body carries no weapon (jobs.lib.combat/default-weapons)."

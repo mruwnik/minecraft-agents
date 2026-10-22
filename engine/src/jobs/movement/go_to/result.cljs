@@ -136,7 +136,7 @@
            :goal-dangerous (str "the goal is in danger: " (str/replace (str mob) "_" " ") " " mob-distance " blocks from it, a mob the body would flee")
            :moved-while-searching (str "the body was pushed about while the path was searched" (when in-water ": it is in water, which moves it; get onto dry land first"))
            :needs-health (str "a way exists but costs " hp-cost " hp, more than the " hp-budget " hp the body may spend"
-                           (if (= :full heal) " at full health (healing cannot help; only a :floor {:health 1}, or a lower :floor :health, lets it go)" ", and it cannot heal first"))
+                           (if (= :full heal) " at full health (healing cannot help; only a :floor {:health 1} or less, or a lower :floor :health, lets it go)" ", and it cannot heal first"))
            :budget "the search used up its node budget without reaching the goal, mostly over land the body has not seen (the unknown-max-nodes setting): walk nearer in stages to see more of it"
            :air "every way there under water runs out of air"
            :air-lethal "every way there under water would drown the body to death"

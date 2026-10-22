@@ -2,7 +2,8 @@
   "Look first, judge after: an unseen cell is open until looked at (a player walks up and looks). The unseen sides of the
   closed region the body stands in under a cover, and the unseen cells of a roof column, are looked at, nearest first, and
   walked towards when a look cannot show them. Memory keys :edge-looked, :edge-phase, :edge-steps are the calling job's."
-  (:require [engine.ctx :as ctx]
+  (:require [jobs.lib.cost.health :as cost-health]
+            [engine.ctx :as ctx]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as look]
             [jobs.lib.reach.room :as reach-room]
@@ -98,7 +99,7 @@
       0 (do (advance! 1) (await (dig-look/look-at! c cell)))
       1 (let [reach-to (last (take-while #(<= (u/dist {:x (first cell) :y (second cell) :z (nth cell 2)} {:x (first %) :y (second %) :z (nth % 2)}) edge-stride) cells))
               near (walkable-near (:primitives c) reach-to)
-              w (if near (await (ctx/call c :edge-walk 'jobs.movement.go-to {:pos near :range 0 :ways #{:walk} :floor {:health 1}})) :none)]
+              w (if near (await (ctx/call c :edge-walk 'jobs.movement.go-to {:pos near :range 0 :ways #{:walk} :floor cost-health/spend-down})) :none)]
           (when (not= :continue w) (advance! 2)))
       2 (do (advance! 3) (await (dig-look/look-at! c cell)))
       (ctx/update-mem! c update :edge-looked (fnil conj #{}) cell))

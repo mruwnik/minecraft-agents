@@ -1,6 +1,7 @@
 (ns jobs.survival.night.flee
   "Fleeing: when no shelter can be dug here, walk to somewhere safer (a bed, a roofed place, a cave or overhang, or natural ground)."
-  (:require [jobs.lib.choose :as choose]
+  (:require [jobs.lib.cost.health :as cost-health]
+            [jobs.lib.choose :as choose]
             [clojure.set :as set]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -112,7 +113,7 @@
   [c t]
   (hold/busy! c)
   (ctx/update-mem! c assoc :fleeing t)
-  (let [w (await (ctx/call c :flee 'jobs.movement.go-to (assoc (flee-args t) :floor {:health 1})))]
+  (let [w (await (ctx/call c :flee 'jobs.movement.go-to (assoc (flee-args t) :floor cost-health/spend-down)))]
     (if (= :continue w)
       :again
       (let [arrived (:arrived (:data w))]

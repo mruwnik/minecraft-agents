@@ -10,6 +10,7 @@
             [engine.registry :as registry]
             [engine.settings :as settings]
             [engine.test-util :as tu]
+            [jobs.lib.cost.health :as cost-health]
             [jobs.lib.world-files :as world]
             [jobs.movement.boat-drive :as boat-drive]
             [jobs.movement.go-to :as go-to]))
@@ -149,6 +150,11 @@
     {} {:floor {:health 6}} {}
     {} {:floor {:health 15}} {:min-health 15}
     {:spend {:health 2 :job-time 4}} {:spend {:health 1 :job-time 0}} {:max-damage 2}))
+
+(deftest the-spend-down-floor-holds-for-a-body-under-one-hp
+  (is (nil? (contract/below-floor {:floor cost-health/spend-down} {:health 0.7 :food 3})))
+  (is (= {:floor :health :min 1} (contract/below-floor {:floor {:health 1}} {:health 0.7 :food 3})))
+  (is (= {:allow-over-budget true} (go-to/walk-limits {:floor cost-health/spend-down} {:floor cost-health/spend-down} 12))))
 
 (deftest go-to-endings
   (async done
