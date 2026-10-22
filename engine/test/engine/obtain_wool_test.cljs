@@ -9,7 +9,9 @@
             [engine.test-util :as tu]
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.gather :as gather]
-            [jobs.lib.world-files :as ew]))
+            [jobs.lib.stock :as stock]
+            [jobs.lib.world-files :as ew]
+            [engine.memory :as mem]))
 
 (defn sheep [id x color]
   {:id id :name "sheep" :kind "passive" :pos {:x x :y 64 :z 0} :color color
@@ -114,6 +116,18 @@
         (let [inv (into h/sword (carried "iron_ingot" 1))
               s (await (scenario {:item "white_wool" :count 1}
                                  {:inventory inv :entities [(sheep 1 3 "white") (sheep 2 6 "white") (sheep 3 8 "white") (sheep 4 10 "white")]} 40))]
+          (is (seq (attacked s)) "a sheep was killed")
+          (is (re-find #"kill|hunt" (pr-str (wool-source s)))))))))
+
+(deftest wool-is-hunted-when-the-only-shears-lie-in-a-chest-too-far-to-walk-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory h/sword
+                          :entities [(sheep 1 3 "white") (sheep 2 6 "white") (sheep 3 8 "white") (sheep 4 10 "white")]} 50)
+              _ (mem/write! (:store (:eng s)) stock/stock-kind {:pos [400 64 0] :items {"shears" 1}} stock/stock-policy)
+              _ (core/submit! (:eng s) (list 'jobs.items.obtain {:item "white_wool" :count 1}) {})
+              _ (await (tu/run-ticks (:eng s) (:clock s) 40 700))]
           (is (seq (attacked s)) "a sheep was killed")
           (is (re-find #"kill|hunt" (pr-str (wool-source s)))))))))
 

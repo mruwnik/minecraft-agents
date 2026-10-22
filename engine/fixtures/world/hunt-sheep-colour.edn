@@ -3,6 +3,7 @@
 ;; Should-succeed: hunt brown among 4 brown + 2 white kills a brown and no white; hunt white among 3 unsheared + 1 sheared kills an
 ;; unsheared one and spares the sheared; obtain 2 white wool from 4 white sheep kills 2 and keeps 2; with only brown sheep it
 ;; takes brown (obtain.wool-colour); a pig 8 blocks off is hunted with keep 0.
+;; d7dfbc02: wool is hunted when the only shears are in a chest the body may not take from; a bed is made from hunted wool.
 ;; Should-fail: all white sheep sheared: the hunt stops :no-color; a pig 30 blocks off with radius 24 waits :too-few naming the
 ;; nearest. A pig in an area 24 blocks off (:center, radius 8) is walked to and hunted.
 {:defaults
@@ -53,6 +54,24 @@
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.items.obtain"}} :within-s 100 :of-job true}]
    :after [[:item "brown_bed" [:>= 1]]
            [:entities "type=sheep,tag=wt,nbt={Color:0b}" [[0 0 0] [31 3 31]] 3]]}
+  ;; d7dfbc02: shears booked in a chest a zone bars taking from are no way to shear: the wool is hunted
+  {:name "obtain-wool-with-the-only-shears-in-a-barred-chest-hunts"
+   :blocks [[:set [9 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:shears\",count:1}]}"]]
+   :zones [{:name "locked" :min [8 0 15] :max [10 3 17] :owner "Other" :allow #{:place}}]
+   :act [[:summon "sheep" [20.5 0 16.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [21.5 0 16.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [20.5 0 18.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [21.5 0 18.5] "{NoAI:1b,Color:0b}"]
+         [:job (jobs.movement.go-to {:pos #at [8 0 16] :range 1})] [:job (jobs.primitive.inspect-container {:pos #xyz [9 0 16]})] [:wait-s 2]
+         [:job (jobs.items.obtain {:item "white_wool" :count 1 :explore false})]]
+   :expect [{:event {:source :job :kind :animal.killed :data {:animal "sheep"}} :within-s 80}
+            {:event {:source :job :kind :completed :data {:name "jobs.items.obtain"}} :within-s 100 :of-job true}]
+   :after [[:item "white_wool" [:>= 1]]]}
+  ;; d7dfbc02: a bed with no shears and no iron is made from wool hunted from 5 white sheep (the last 2 live)
+  {:name "obtain-white-bed-without-shears-hunts-sheep" :limit-s 160
+   :body {:inventory [["iron_sword" 1] ["oak_planks" 3] ["crafting_table" 1]]}
+   :act [[:summon "sheep" [20.5 0 14.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [21.5 0 14.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [22.5 0 14.5] "{NoAI:1b,Color:0b}"]
+         [:summon "sheep" [20.5 0 18.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [21.5 0 18.5] "{NoAI:1b,Color:0b}"]
+         [:wait-s 2] [:job (jobs.items.obtain {:item "white_bed" :explore false})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.items.obtain"}} :within-s 150 :of-job true}]
+   :after [[:item "white_bed" [:>= 1]] [:entities "type=sheep,tag=wt,nbt={Color:0b}" [[0 0 0] [31 3 31]] 2]]}
   ;; fc812a12: animals.cull takes :color; :keep counts every adult
   {:name "cull-white-leaves-the-brown-sheep"
    :act [[:summon "sheep" [20.5 0 14.5] "{NoAI:1b,Color:12b}"] [:summon "sheep" [21.5 0 14.5] "{NoAI:1b,Color:12b}"]

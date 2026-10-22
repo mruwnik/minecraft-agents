@@ -183,7 +183,8 @@
         have (carried-of inv names)]
     (cond
       (survey-first? c names)
-      (do (await (look/survey! c))
+      (do (await (look/survey-until! c #(nil? (source-cause c))))
+          (ctx/update-mem! c assoc :looked (look/cell-of (u/self-pos c)))
           (if-let [cause (source-cause c)]
             (ctx/end c :condition-failed cause (merge {:got 0} (wanted-fields a) (when (map? cause) (select-keys cause [:why]))))
             :again))

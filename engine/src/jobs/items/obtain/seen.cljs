@@ -3,11 +3,11 @@
   (:require [engine.ctx :as ctx]
             [jobs.items.obtain.base :refer [animal-radius seen-radius]]
             [jobs.lib.access :as access]
+            [jobs.items.obtain.chest :as chest]
             [jobs.items.obtain.table :refer [grass-seeds]]
             [jobs.lib.animals :as animals]
             [jobs.lib.crops :as crops]
             [jobs.lib.foods :as foods]
-            [jobs.lib.stock :as stock]
             [jobs.lib.look :as look]
             [jobs.lib.storage :as storage]
             [jobs.lib.trees :as trees]
@@ -22,10 +22,10 @@
 
 (defn shears-source
   "How the body gets shears for wool: :carried, :craft (2 iron ingots carried), :chest (shears or 2 iron ingots in a
-  booked chest), else nil."
+  booked chest the chest source would walk to: allowed, not given up, not beyond far-chest), else nil."
   [c]
   (let [inv (u/inventory (:primitives c))
-        in-chest (fn [item n] (some #(>= (get % item 0) n) (vals (stock/stock-of (ctx/view c)))))]
+        in-chest (fn [item n] (some #(>= (get (:stock %) item 0) n) (chest/candidates c [item])))]
     (cond
       (pos? (storage/carried inv "shears")) :carried
       (>= (storage/carried inv "iron_ingot") 2) :craft

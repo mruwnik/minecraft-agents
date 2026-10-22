@@ -10,6 +10,7 @@
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
             [jobs.lib.breath :as breath]
             [jobs.lib.foods :as foods]
+            [jobs.lib.look :as look]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.surface-up :as surface]
             [jobs.items.obtain.table :refer [animal? gather-need searchable?]]
@@ -258,6 +259,8 @@
       (nil? need) (tried! c :gather :no-plan)
       (= (:key need) (get-in (ctx/mem c) [:gather :lead :key]))
       (await (lead-step! c))
+      (and (animal? need) (not (get-in (ctx/mem c) [:gather :before])) (not (look/surveyed? c :near)) (not (seen-of c need)))
+      (do (await (look/survey-until! c :near #(seen-of c need))) :again)
       (and (not (get-in (ctx/mem c) [:gather :before])) (approach-due? c need))
       (approach! c need)
       (and (not (get-in (ctx/mem c) [:gather :before])) (pickaxe-first? c names need) (or (explore-opts c) (seen-of c need)))
