@@ -1,0 +1,20 @@
+;; Card dfb79458: ./bin/time clock reads a fresh pose for a running body nobody watches (it wakes the body's view dump)
+;; instead of answering :time-unknown from a pose older than 90 s. Underground plot, no clock dependence.
+;; Should-succeed: clock-wakes-an-idle-unwatched-body, clock-wakes-a-busy-unwatched-body.
+{:defaults
+ {:tags [:time :tools] :time :any
+  :plot {:height 8 :light :dark :length 64}
+  :blocks [[:fill [0 0 8] [60 3 24] "stone"] [:fill [3 0 12] [58 1 20] "air"]]
+  :body {:at [4.5 0 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 260}
+ :cases
+ [{:name "clock-wakes-an-idle-unwatched-body"
+   :act [[:wait-s 100]
+         [:cli "time" ["--world" "$world" "--body" "$body" "clock"] {:ok true :age-ms [:<= 5000]}]]
+   :after [[:body-near [4.5 0 16.5] 2]]}
+  {:name "clock-wakes-a-busy-unwatched-body"
+   :act [[:wait-s 100]
+         [:job (jobs.movement.go-to {:pos #at [55 0 16] :range 1 :ways #{:walk :clear-seal}})]
+         [:cli "time" ["--world" "$world" "--body" "$body" "clock"] {:ok true :age-ms [:<= 5000]}]
+         [:await {:source :job :kind :completed} 100]]
+   :after [[:body-near [55.5 0 16.5] 3]]}]}
