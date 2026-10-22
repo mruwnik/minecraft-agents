@@ -1,5 +1,5 @@
 ;; Card b6f9629c: jobs.movement.boat-land brings the boat the body is in to a shore it has seen and steps off.
-;; Should-succeed: launch, land on the nearest shore (completed); land and take the boat back (:recover true, completed :recovered true).
+;; Should-succeed: launch, land on the nearest shore (completed); a hurt body afloat still lands (a landing is the retreat, not a start); land and take the boat back (:recover true, completed :recovered true).
 ;; Should-fail: on foot (waits :not-aboard); no shore within :radius (waits :no-shore); a given land cell that is no shore (:no-shore); a given shore across land (:blocked).
 ;; The dismount exit is chosen by the server from the faced cell: a body left in water would stop :not-landed.
 {:defaults
@@ -27,6 +27,12 @@
    :act [[:job (jobs.movement.boat-launch {})]
          [:job (jobs.movement.boat-land {:recover true})]]
    :expect [{:event {:source :job :kind :completed :data {:recovered true}} :within-s 120 :of-job true}]}
+  {:name "hurt-body-afloat-still-lands"
+   :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
+   :act [[:job (jobs.movement.boat-launch {})]
+         [:rcon "damage $BODY 16 minecraft:generic"]
+         [:job (jobs.movement.boat-land {})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 120 :of-job true}]}
   {:name "on-foot-is-not-aboard"
    :blocks [[:fill [12 -2 14] [24 -2 18] "stone"] [:fill [12 -1 14] [24 -1 18] "water"]]
    :act [[:job (jobs.movement.boat-land {})]]

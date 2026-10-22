@@ -76,7 +76,7 @@
 (defn max-spots [] (settings/get settings ::max-spots))
 
 (def safe? (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))
-(def fit? ready/fit?)
+(def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s}})
 

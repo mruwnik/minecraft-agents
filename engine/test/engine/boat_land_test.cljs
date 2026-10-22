@@ -48,6 +48,14 @@
           (is (not (aboard? p)))
           (is (= {:x 21 :y 64 :z 10} (:land res))))))))
 
+(deftest a-hurt-body-afloat-still-lands
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [res p]} (await (run (assoc-in world [:self :health] 3) {}))]
+          (is (= :done (:status res)) (pr-str res))
+          (is (not (aboard? p))))))))
+
 (deftest steps-off-from-the-water-cell-beside-the-shore
   (async done
     (tu/run-async done
