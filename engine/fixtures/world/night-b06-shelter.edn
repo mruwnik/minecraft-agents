@@ -280,17 +280,18 @@
             {:event {:source :job :kind :shut-in.sealed} :within-s 100}]
    :after [[:body-far [150.5 0 16.5] 100]]
    :limit-s 110}
-  ;; fadf9dd7: dug in with the bed far away, sleep waits for day instead of saying "no walkable way"
-  {:name "sleep-dug-in-with-a-far-bed-waits"
-   :plot {:length 200 :width 32}
-   :blocks [[:set [170 0 16] "red_bed[facing=east,part=foot]"] [:set [171 0 16] "red_bed[facing=east,part=head]"]]
+  ;; 9d3023bc: dug in with the bed 20 blocks off, sleep walks there (go-to prices the route) instead of waiting for day
+  {:name "sleep-dug-in-walks-to-a-bed-20-blocks-away"
+   :time :night-exclusive :time-why :sleep
+   :plot {:length 60 :width 32}
+   :blocks [[:set [24 0 16] "red_bed[facing=east,part=foot]"] [:set [25 0 16] "red_bed[facing=east,part=head]"]]
    :body {:at [4.5 0 16.5] :inventory [["cobblestone" 16]]}
    :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]
          [:await {:source :job :kind :shut-in.sealed} 60]
-         [:job (jobs.survival.sleep {:bed #at [170 0 16]})]]
-   :expect [{:event {:source :job :kind #{:waiting :holding} :data {:reason :night-sheltered}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :stopped} :for-s 30 :until {:source :job :kind #{:waiting :holding} :data {:reason :night-sheltered}}}]
-   :limit-s 80}
+         [:job (jobs.survival.sleep {:bed #at [24 0 16]})]]
+   :expect [{:no-event {:source :job :kind #{:waiting :holding} :data {:reason :night-sheltered}} :for-s 30 :until {:source :action :kind :done :data {:name "sleep" :status "sleeping"}}}
+            {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 110}]
+   :limit-s 120}
   ;; ba754e77: a body shut in at the bottom of a 1x1 shaft cuts its own stair up to a goal on the surface
   {:name "shaft-bottom-escalates-up-to-the-surface-goal"
    :time :day :time-why :dawn-decision

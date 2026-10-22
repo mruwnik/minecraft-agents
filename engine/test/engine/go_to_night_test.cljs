@@ -280,15 +280,15 @@
 
 ;; ------------------------------------------------------------------ sleep from a shelter
 
-(deftest sleep-from-a-shelter-waits-for-a-far-bed-and-leaves-for-a-near-one
+(deftest sleep-from-a-shelter-never-holds-night-sheltered-whatever-the-bed-distance
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[bed expect-wait?] [[{:x 150 :y 64 :z 0} true] [outside false]]]
+        (doseq [bed [{:x 150 :y 64 :z 0} outside]]
           (let [{:keys [eng seen]} (setup (night-hut {}))]
             (core/submit! eng (list 'jobs.survival.sleep {:bed bed}) {})
             (await (ticks eng 4))
-            (is (= expect-wait? (some? (some #{:night-sheltered} (map :reason (st/emitted seen :holding))))) (pr-str bed))))))))
+            (is (not-any? #{:night-sheltered} (map :reason (st/emitted seen :holding))) (pr-str bed))))))))
 
 (deftest a-queued-craft-whose-walk-is-too-risky-stays-in-the-hut-at-night
   (async done

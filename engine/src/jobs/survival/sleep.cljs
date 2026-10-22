@@ -11,7 +11,6 @@
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.clock :as sh-clock]
-            [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.util :as u]
@@ -24,8 +23,7 @@
   (an unexpired entry with the same position), else :bed-unreachable {:pos}; with :open-bed false and the body within 3 blocks of
   the bed, a roofed room, else :bed-open. A body already asleep is done.
   Holds (a :pause-s pause holding still with the reason, then :continue) until the call's :wall-time ends it (limit-reached): a bed
-  occupied by another player (sh-beds/bed-permit; also when it became so mid-round) :bed-occupied {:pos}; a body in a shelter with the bed more
-  than 16 blocks away :night-sheltered; a server refusal for monsters near the bed :monsters-near {:pos}.
+  occupied by another player (sh-beds/bed-permit; also when it became so mid-round) :bed-occupied {:pos};; a server refusal for monsters near the bed :monsters-near {:pos}.
   Done {:pos bed} when asleep. A server refusal \"not night\" is condition-failed :not-night; a bed block gone is :bed-missing, and a
   :bed-open bed (with :open-bed false, once the body is beside it) too. A walk that did not
   arrive is retried three times, then warns bed_unreachable and ends nothing-possible :bed-unreachable (the bed goes into
@@ -70,15 +68,7 @@
   {::pause-s {:default 5 :doc "Seconds one hold pauses (jobs.time.noop) before the call looks again." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 300 :doc "Seconds the walk to the bed and the sleep may take." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 600 :doc "Seconds a sleep may last from its start, the holds for an occupied bed or the night in a shelter included." :spec (a/num-in 0 nil)}
-   ::leave-shelter-radius {:default 16 :doc "A body in a shelter at night walks to a bed only when it is this near (blocks); a farther one is waited for." :spec (a/num-in 0 nil)}
    ::speed {:default 4.3 :doc "Blocks a second the walk to the bed covers, for the quote." :spec (a/num-in 0 nil)}})
-
-(defn far-from-shelter
-  "The kind of kept shelter (sh-beds/kept-shelters: not a bare roof) a walk to a bed beyond ::leave-shelter-radius would leave, else nil; none when another sleeps and the bed is near (courtesy-walk?)."
-  [c bed]
-  (let [p (:primitives c)]
-    (when (and (> (u/dist (u/self-pos c) bed) (settings/get settings ::leave-shelter-radius)) (not (sh-beds/courtesy-walk? p (ctx/view c) bed)))
-      (sh-beds/kept-shelters (sh-inside/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) bed 2)))))
 
 (defn bed-block? [c bed]
   (.endsWith (or (u/seen-name (:primitives c) bed) "") "_bed"))
@@ -106,13 +96,6 @@
       (unreachable-bed? c bed) (contract/later :bed-unreachable "the bed was given up on as unreachable" :pos bed)
       open (contract/later :bed-open (:text open) :pos bed)
       :else (contract/ok :bed "a bed" :pos bed))))
-
-(defn sheltered-hold
-  "The hold of a body in a shelter with the bed far off: {:reason :night-sheltered ...}, else nil."
-  [c bed]
-  (when-let [shelter (far-from-shelter c bed)]
-    {:reason :night-sheltered :shelter shelter :pos bed
-     :text (str "the bed is " (js/Math.round (u/dist (u/self-pos c) bed)) " blocks away; the body stays in its shelter until day")}))
 
 (def night (cond/because :not-night "not night" (cond/not (cond/daytime))))
 
@@ -205,16 +188,13 @@
 
 (defn ^:async round [c]
   (let [p (:primitives c)
-        bed (bed-of c)]
+        bed (bed-of c)
+        taken? #(not ((sh-beds/bed-permit p (:world (:engine c))) bed))
+        _ (await (sense/decide! c ::bed-taken #(not (taken?)) {:retry? still-permitted?}))
+        walk (when-not (taken?) (await (child/call-walk* c :go {:pos bed :range 2})))]
     (cond
-      (sheltered-hold c bed) (await (hold! c (sheltered-hold c bed)))
-      :else
-      (let [taken? #(not ((sh-beds/bed-permit p (:world (:engine c))) bed))
-            _ (await (sense/decide! c ::bed-taken #(not (taken?)) {:retry? still-permitted?}))
-            walk (when-not (taken?) (await (child/call-walk* c :go {:pos bed :range 2})))]
-        (cond
-          (taken?) (await (hold! c {:reason :bed-occupied :pos bed}))
-          (= :continue walk) :continue
-          (not= :done (:kind walk)) (give-up-unreachable! c bed walk)
-          (bed-open c bed) (ctx/end c :condition-failed :bed-open {:pos bed :text "the bed is open (not shut in a roofed room)"})
-          :else (await (sleep-at! c bed)))))))
+      (taken?) (await (hold! c {:reason :bed-occupied :pos bed}))
+      (= :continue walk) :continue
+      (not= :done (:kind walk)) (give-up-unreachable! c bed walk)
+      (bed-open c bed) (ctx/end c :condition-failed :bed-open {:pos bed :text "the bed is open (not shut in a roofed room)"})
+      :else (await (sleep-at! c bed)))))
