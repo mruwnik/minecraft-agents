@@ -27,9 +27,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (d/run! {:blocks hole} 'jobs.blocks.place {:pos {:x 1 :y 63 :z 0} :item "cobblestone" :ignore-zones? true}))
-              at-target (filter #(= {:x 1.5 :y 63.5 :z 0.5} (:pos %)) (looks p))]
-          (is (<= 1 (count at-target) 3) "place looks at the cell once; go-to's own looks at its unseen goal are capped"))))))
+        (let [{:keys [p seen]} (await (d/run! {:blocks hole} 'jobs.blocks.place {:pos {:x 1 :y 63 :z 0} :item "cobblestone" :ignore-zones? true}))
+              at-target (filter #(= {:x 1.5 :y 63.5 :z 0.5} (:pos %)) (looks p))
+              walks (count (filter #(and (= :child_started (:kind %)) (re-find #"/walk$" (:job %))) @seen))]
+          (is (<= 1 (count at-target) (inc walks)) "place looks at the cell once, and each of its walks (go-to) once at its goal while it is unseen"))))))
 
 (deftest pillar-looks-at-an-unseen-ceiling-before-it-gives-up
   (async done
