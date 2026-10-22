@@ -2,8 +2,8 @@
 ;; 11 blocks west in view. A player cuts a leaf and steps in, or reaches a log from a free side; obtain must get both logs every time.
 ;; Untimed: lit open plot. Should-succeed: 2 oak logs carried, the job completes. Should-fail: it ends :no-source or :no-path with one log.
 {:defaults
- {:tags [:obtain :forestry :fell-tree :no-tool]
-  :plot {:height 8 :floor "grass_block" :isolate true :light :sky}
+ {:tags [:obtain :forestry :fell-tree :no-tool] :time :any
+  :plot {:height 8 :floor "grass_block" :isolate true :light :lit}
   :blocks [[:fill [27 0 15] [29 3 17] "oak_leaves[persistent=true]"] [:fill [28 0 16] [28 1 16] "oak_log"]]
   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 120}
