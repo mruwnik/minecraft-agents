@@ -256,7 +256,7 @@
       '(in-water) :ok
       '(burning) :later
       '(suffocating) :later
-      '(night-unsafe) :later
+      '(night-unsafe) :ok ; afloat at night is no shelter
       '(= (blocks-near "stone" 8) 1) :ok
       '(= (time-of-day) 13000) :ok
       '(mounted) :later)))
