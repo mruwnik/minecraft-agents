@@ -251,6 +251,40 @@
           (is (empty? @targets))
           (is (= {[3 64 2] :no-tool} (:given-up result))))))))
 
+(defn corridor
+  "A fake world: a stone mass with an air corridor along x 0..5 at y 64, z 0."
+  [& {:keys [wall inventory]}]
+  (tu/seeing-all
+   (tu/fake-on-floor
+    {:inventory (or inventory [])
+     :blocks (merge (into {} (for [x (range -2 9) y [62 63 64 65 66] z (range -3 4)] [(str x "," y "," z) (or wall "stone")]))
+                    (into {} (for [x (range 0 6)] [(str x ",64,0") "air"])))})))
+
+(deftest a-block-cut-into-rock-is-filled-farthest-from-the-mouth-first
+  (let [p (corridor)
+        cells (map (fn [x] {:pos [x 64 0]}) [3 4 5])
+        dists (fp-cells/retreat-dists p [0 64 0] cells)]
+    (is (= 5 (get dists [5 64 0])) "steps through open cells from the mouth")
+    (is (= [[5 64 0] [4 64 0] [3 64 0]] (map :pos (fp-cells/fill-order dists [0 64 0] false cells))) "deepest first")
+    (is (= [[5 64 0] [4 64 0]] (map :pos (fp-cells/fill-order dists [3 64 0] true cells))) "standing in a plan cell: none nearer the mouth than it")))
+
+(deftest the-body-steps-back-one-cell-toward-the-mouth-to-fill-the-cell-it-stood-in
+  (let [dists (fp-cells/retreat-dists (corridor) [0 64 0] (map (fn [x] {:pos [x 64 0]}) [3 4 5]))]
+    (is (= [4 64 0] (fp-cells/step-back dists [5 64 0])))
+    (is (nil? (fp-cells/step-back dists [0 64 0])) "at the mouth")))
+
+(deftest a-cell-found-out-of-sight-is-tunnelled-to-again-only-up-to-the-tunnel-tries-setting
+  (let [e {:cause {:why :out-of-sight}}]
+    (is (fp-book/sightless? {:mouth [0 64 0] :tunnels {[1 1 1] (dec (plan/tunnel-tries))}} :unreachable e [1 1 1]))
+    (is (not (fp-book/sightless? {:mouth [0 64 0] :tunnels {[1 1 1] (plan/tunnel-tries)}} :unreachable e [1 1 1])))
+    (is (not (fp-book/sightless? {:tunnels {}} :unreachable e [1 1 1])) "no tunnel cut by this build: given up as before")))
+
+(deftest breaking-the-rock-round-a-cell-takes-a-tool-only-when-the-block-needs-one
+  (let [cell {:pos [3 64 0]}]
+    (is (fp-cells/needs-tool? (corridor) cell) "stone, no pickaxe")
+    (is (not (fp-cells/needs-tool? (corridor :wall "dirt") cell)) "dirt goes by hand")
+    (is (not (fp-cells/needs-tool? (corridor :inventory [{:name "stone_pickaxe" :count 1}]) cell)))))
+
 (deftest a-wall-waits-for-the-dirt-floor-under-it-though-the-floor-item-is-not-carried
   (async done
     (tu/run-async done

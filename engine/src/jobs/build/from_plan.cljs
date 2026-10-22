@@ -29,8 +29,7 @@
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.build.plan :as plan :refer [retry-distance max-retries facing-of facing-ok? body-cells count-fail stands-for plan-trouble owed need-of shortage hazards decide rules-input refuse permitted judged no-zones planned how placeable misplaced missing covered digging unseen buildable problem]]
             [jobs.lib.build.scaffold :as scaffold]
-            [jobs.lib.tools :as tools]
-            [jobs.build.from-plan.cells :refer [diggable in-reach in-dig-reach seals? shuts-out? exit-point off-low-floor buried? reaching support-looks rock-bound? retreat-dists step-back]]
+                        [jobs.build.from-plan.cells :refer [diggable in-reach in-dig-reach seals? shuts-out? exit-point off-low-floor buried? reaching support-looks rock-bound? retreat-dists step-back fill-order needs-tool?]]
             [jobs.build.from-plan.book :refer [walk-fail retry-walks warn-way-in! place-one! settle-placing! dig-one! result-data finish! book-failed!]]
             [jobs.build.from-plan.light :as light]
             [jobs.lib.build.text :refer [summary stopped-text assoc-fetch-failed]]))
@@ -322,7 +321,7 @@
         closed (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
         shut? #(shut-in? c %)]
     (when (shut? cell)
-      (if-not (tools/can-harvest? p "stone")
+      (if (needs-tool? p cell)
         (let [pos (:pos cell)
               near? (<= (u/eye-dist (u/self-pos c) pos) (plan/reach))
               [x y z] pos
@@ -337,8 +336,8 @@
                 :again)))
         (let [body (u/self-pos c)
               _ (ctx/update-mem! c update :mouth #(or % (mapv js/Math.floor [(:x body) (:y body) (:z body)])))
-              deepest (apply max-key #(u/dist body (zipmap [:x :y :z] (:pos %)))
-                             (filter #(and (not= :match (:answer %)) (not (:companion %)) (not (contains? closed (:pos %))) (shut? %)) cells))
+              open (filter #(and (not= :match (:answer %)) (not (:companion %)) (not (contains? closed (:pos %))) (shut? %)) cells)
+              deepest (if (seq open) (apply max-key #(u/dist body (zipmap [:x :y :z] (:pos %))) open) cell)
               r (await (ctx/call c :tunnel 'jobs.access.tunnel {:target (:pos deepest) :through (:plan (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
           (cond
             (= :continue r) :continue
@@ -418,18 +417,13 @@
         todo (let [open (remove held placeable-now)] (if (seq open) open placeable-now))
         layer (layer-of todo)
         mouth (:mouth (ctx/mem c))
+        fcell (let [b (u/self-pos c)] (mapv js/Math.floor [(:x b) (:y b) (:z b)]))
         dists (when mouth (retreat-dists (:primitives c) mouth cells))
         near (cond->> (remove #(shut-in? c %) (in-reach c layer))
                (not= :up (scaffold/phase c)) (remove #(contains? (:needs-scaffold (ctx/mem c)) (:pos %)))
                ;; filling a block cut into rock backs out toward the mouth: the deepest cell goes first
                ;; and no cell nearer the mouth than the one the body stands in, which it leaves by
-               mouth ((fn [ns]
-                        (let [b (u/self-pos c)
-                              feet (mapv js/Math.floor [(:x b) (:y b) (:z b)])
-                              inside? (some #(= feet (:pos %)) wanted)]
-                          (->> ns
-                               (remove #(and inside? (<= (get dists (:pos %) 0) (get dists feet 0))))
-                               (sort-by #(- (get dists (:pos %) 0))))))))
+               mouth (fill-order dists fcell (some #(= fcell (:pos %)) wanted)))
         mine (body-cells (u/self-pos c))
         _ (ctx/update-mem! c update :stood (fnil into #{}) mine)
         feet (first (sort mine))

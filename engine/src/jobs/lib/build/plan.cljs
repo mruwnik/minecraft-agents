@@ -26,12 +26,14 @@
   {::stand-level {:default 3 :doc "A body within this many blocks of a cell's height also looks for stands at its own level (after the cell's)." :spec (a/int-in 0 nil)}
    ::retry-distance {:default 8 :doc "A cell given up for a failed walk is tried again once the body is this far from where it gave up, in blocks." :spec (a/num-in 0 nil)}
    ::max-retries {:default 2 :doc "Times one cell given up for a failed walk is opened again." :spec (a/int-in 0 nil)}
+   ::tunnel-tries {:default 3 :doc "Times one cell shut in by rock, or found out of sight after the body cut into rock, is tunnelled to again before it is given up." :spec (a/int-in 0 nil)}
    ::reach {:default u/eye-reach :doc "Cells whose centre is this close to the eye are placed without walking, in blocks." :spec (a/num-in 0 nil)}})
 
 (defn stand-level [] (settings/get settings ::stand-level))
 (defn retry-distance [] (settings/get settings ::retry-distance))
 (defn reach [] (settings/get settings ::reach))
 (defn max-retries [] (settings/get settings ::max-retries))
+(defn tunnel-tries [] (settings/get settings ::tunnel-tries))
 
 ;; ------------------------------------------------------------------ pure helpers
 

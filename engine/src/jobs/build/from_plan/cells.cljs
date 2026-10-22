@@ -156,3 +156,21 @@
       (->> [[(inc x) y z] [(dec x) y z] [x y (inc z)] [x y (dec z)]]
            (filter #(= (dec d) (get dists %)))
            first))))
+
+(defn fill-order
+  "ns (cells to place or dig, in reach) in the order a block cut into rock is filled: farthest from the tunnel mouth first
+  (dists, from retreat-dists), none nearer the mouth than feet when the body stands in a cell of the plan (inside?): it
+  leaves that cell by stepping back, then fills it."
+  [dists feet inside? ns]
+  (->> ns
+       (remove #(and inside? (<= (get dists (:pos %) 0) (get dists feet 0))))
+       (sort-by #(- (get dists (:pos %) 0)))))
+
+(defn needs-tool?
+  "Whether breaking the rock round cell takes a tool the body does not carry (a block never seen counts as stone)."
+  [p cell]
+  (let [[x y z] (:pos cell)]
+    (boolean (some (fn [n] (let [b (u/sensed p (pos-map n))]
+                             (and (some? b) (not (bs/passable? (.-name b)))
+                                  (tools/needs-tool-to-clear? p (if (true? (.-unknown b)) "stone" (.-name b))))))
+                   [[(inc x) y z] [(dec x) y z] [x (inc y) z] [x (dec y) z] [x y (inc z)] [x y (dec z)]]))))

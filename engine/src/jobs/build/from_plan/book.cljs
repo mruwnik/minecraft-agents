@@ -64,7 +64,7 @@
 (defn sightless?
   "Whether an :unreachable outcome of a place or dig is a cell no stand sees, in a build that cut into rock and has not tunnelled to the cell too often: it is tunnelled to, not given up."
   [m outcome e pos]
-  (and (= :unreachable outcome) (:mouth m) (= :out-of-sight (or (:why (:data e)) (:why (:cause e)))) (< (get-in m [:tunnels pos] 0) 3)))
+  (and (= :unreachable outcome) (:mouth m) (= :out-of-sight (or (:why (:data e)) (:why (:cause e)))) (< (get-in m [:tunnels pos] 0) (plan/tunnel-tries))))
 
 (defn ^:async place-one!
   "Place the cell's item after asking the access rules and jobs.lib.placement once more; a refusal is booked, nothing
