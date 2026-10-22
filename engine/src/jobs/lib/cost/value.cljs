@@ -210,13 +210,13 @@
 
 (defn tour-worth
   "Seconds of tour a goal `straight` blocks off is worth. The setting ::tour-worth, when set, is the worth. Else with the
-  caller's `worth` of arrival (seconds), that less the trip and the straight walk (0 at least). Else a trip, and tour-ratio
+  caller's `worth` of arrival (seconds, when above 0), that less the trip and the straight walk (0 at least). Else a trip, and tour-ratio
   times the walk of its straight blocks, at least tour-floor-blocks."
   ([straight] (tour-worth straight nil))
   ([straight worth]
    (cond
      (settings/get settings ::tour-worth) (settings/get settings ::tour-worth)
-     worth (max 0 (- worth (trip) (:cost (walk-cost {:distance straight}))))
+     (pos? worth) (max 0 (- worth (trip) (:cost (walk-cost {:distance straight}))))
      :else (+ (trip) (* (settings/get settings ::tour-ratio) (:cost (walk-cost {:distance (max straight (settings/get settings ::tour-floor-blocks))})))))))
 
 (defn food-worth

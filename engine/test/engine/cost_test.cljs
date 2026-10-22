@@ -210,6 +210,7 @@
 (deftest a-goal-worth-the-caller-says-budgets-the-tour-less-the-trip-and-the-walk
   (let [walk (:cost (cost/walk-cost {:distance 50}))]
     (is (= 100 (cost/tour-worth 50 (+ 100 (cost/trip) walk))))
+    (is (= (cost/tour-worth 50) (cost/tour-worth 50 0) (cost/tour-worth 50 nil)) "no worth said (0 or nil): the default")
     (is (zero? (cost/tour-worth 50 1)) "worth less than the trip and walk: no tour")
     (is (= (+ (cost/trip) (* 3 (:cost (cost/walk-cost {:distance 50})))) (cost/tour-worth 50)) "unsaid: a trip and 3 times the walk")))
 
