@@ -2,7 +2,7 @@
   "The pure step decision of jobs.access.cleanup: which ledger cell to dig, walk to, retreat from, or give up."
   (:require [jobs.lib.block-sets :as bs]
             [jobs.lib.access.rules :as rules]
-            [jobs.lib.ledger :refer [centre distance]]))
+            [jobs.lib.ledger :refer [centre distance submerged?]]))
 
 (defn hazard-reason
   "The :accept key of a dig hazard: lava beside is :lava-adjacent, kept apart from water."
@@ -118,7 +118,10 @@
   {:step :finish :open [{:cell :item :reason ...}]}. Held cells are given up for this run."
   [{:keys [entries eye reach held retreats] :as in}]
   (let [d #(distance eye (centre (:cell %)))
-        judged (map (fn [e] [e (or (held (:cell e)) (blocker in e))]) entries)
+        far? #(> (d %) reach)
+        judged (map (fn [e] [e (or (held (:cell e)) (blocker in e)
+                                   (when (and (far? e) (submerged? (:block-at in) (:cell e))) {:reason :submerged}))])
+                    entries)
         ready (map first (remove second judged))
         near (filter #(<= (d %) reach) ready)
         far (remove #(<= (d %) reach) ready)]

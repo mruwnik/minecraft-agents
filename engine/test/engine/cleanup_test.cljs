@@ -58,6 +58,11 @@
     (is (= {:step :dig :cell [0 69 0] :item "dirt"}
            (step :feet [0 70 0] :entries (mapv entry cells) :block-at (column-world cells))))))
 
+(deftest a-far-block-under-water-is-held-not-walked-to
+  (let [s (step :feet [3 64 0] :entries [(entry [10 64 0])] :block-at (lookup [10 64 0] "dirt" [10 65 0] "water"))]
+    (is (= :finish (:step s)))
+    (is (= [:submerged] (map :reason (:open s))))))
+
 (deftest cells-under-a-block-that-is-not-its-own-wait
   (let [cells (pillar-cells [0 64 0] 6)
         s (step :feet [0 70 0] :entries (mapv entry (butlast cells)) :block-at (column-world cells))]
@@ -312,6 +317,7 @@
   (is (nil? (blocker :feet [3 62 0] :cell [10 60 0])) "two below is a walk")
   (is (nil? (blocker :feet [3 66 0] :cell [10 60 0] :max-below 8)))
   (is (= {:reason :died-near} (blocker :died-near? #(= [10 64 0] %))))
+  (is (= {:reason :submerged} (blocker :block-at (lookup [10 64 0] "dirt" [10 65 0] "water"))) "a block under water is a dive away")
   (let [roofed (lookup [10 64 0] "dirt" [10 67 0] "stone")]
     (is (= {:reason :roofed} (blocker :block-at roofed)))
     (is (nil? (blocker :block-at (lookup [10 64 0] "dirt" [10 67 0] "stone" [3 67 0] "stone"))) "a body under a roof itself has nothing to fear in a roof")

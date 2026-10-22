@@ -1,0 +1,19 @@
+;; Card d3a057ef: scaffold-left cleanup does not send the body diving for scaffold that lies under water (a body drowned walking to such blocks again and again).
+;; A 4 deep pond with one left-over cobblestone on its bed, water over it; the ground outside is level with the water and the body stands on the bank, the block 4 away and 3 below its feet.
+;; Should-succeed: the block stays and the body stays on the bank: no suffocating reflex fires (cleanup may look at the block, the unseen cell is offered once).
+;; Should-fail (old code): the trigger walks the body into the pond to within 3 of the block.
+{:defaults
+ {:tags [:cleanup :scaffold-left :access :survival :water] :time :any
+  :plot {:height 10}
+  :blocks [[:fill [0 0 0] [31 3 31] "stone"]
+           [:fill [10 0 10] [20 3 20] "water"]
+           [:set [15 1 15] "cobblestone"]]
+  :register [{:trigger :scaffold-left :args {} :job (jobs.access.cleanup {})}
+             {:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {} :job (jobs.survival.breathe)}]
+  :body {:at [7.5 4 15.5] :inventory [["iron_pickaxe" 1] ["iron_sword" 1]] :settle-s 1}
+  :limit-s 60}
+ :cases
+ [{:name "scaffold-under-water-is-not-dived-for"
+   :memory [{:kind :scaffold :data {:entries [{:cell #at [15 1 15] :item "cobblestone" :before "water" :job "j0" :purpose :pillar :state :placed}]}}]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :suffocating}} :for-s 40}]
+   :after [[:block [15 1 15] "cobblestone"] [:body-near [7.5 4 15.5] 3]]}]}

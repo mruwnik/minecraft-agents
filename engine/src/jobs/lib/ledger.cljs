@@ -66,11 +66,17 @@
                             (and n (not (bs/replaceable n)) (not (contains? ledger c)))))
                  (range 1 (inc roof-height)))))
 
+(defn submerged?
+  "Whether the cell above cell holds water: the block lies under water, and a walk to within reach of it is a dive."
+  [block-at cell]
+  (= "water" (block-at (rules/offset cell 0 1 0))))
+
 (defn walk-blocker
   "Why the body should not walk to the entry at cell, as {:reason ...}, or nil: :far-below (more than max-below under
-  the feet), :died-near (died-near? of the cell), :roofed (under cover where the body is not)."
-  [{:keys [feet max-below died-near?] :as in} {:keys [cell]}]
+  the feet), :died-near (died-near? of the cell), :submerged (water over it), :roofed (under cover where the body is not)."
+  [{:keys [feet max-below died-near? block-at] :as in} {:keys [cell]}]
   (cond
+    (submerged? block-at cell) {:reason :submerged}
     (> (- (get feet 1) (get cell 1)) max-below) {:reason :far-below}
     (and died-near? (died-near? cell)) {:reason :died-near}
     (and (roofed? in cell) (not (roofed? in (update feet 1 dec)))) {:reason :roofed}))
