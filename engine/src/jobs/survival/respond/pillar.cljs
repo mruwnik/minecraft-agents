@@ -11,6 +11,7 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.look :as lk]
             [jobs.lib.pillar :as pl]
+            [jobs.lib.reach :as reach]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.survival.respond.state :as flight]))
 
@@ -65,11 +66,18 @@
                          (filter #(and (near? %) (not (seen %)) (not= [x z] [(first %) (nth % 2)]) (standable? %))))]
             (recur (into seen nxt) (into (pop todo) nxt))))))))
 
+(defn door-beside?
+  "Whether a door, gate or trapdoor stands beside the feet or head cell: a column there would shut it."
+  [block-at [x y z]]
+  (boolean (some (fn [[dx dy dz]] (some-> (block-at [(+ x dx) (+ y dy) (+ z dz)]) reach/openable?))
+                 (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] dy [0 1]] [dx dy dz]))))
+
 (defn pillar-ok?
-  "Whether a pillar-height pillar fits here: a solid floor, the head cell and every cell the body rises into free, and
-  no ledge beside its top a mob could climb to."
+  "Whether a pillar-height pillar fits here: a solid floor, the head cell and every cell the body rises into free, no
+  door beside its foot (the column would shut it) and no ledge beside its top a mob could climb to."
   [block-at feet]
   (and (rules/solid-floor? block-at (escape/up feet -1))
+       (not (door-beside? block-at feet))
        (every? #(pl/clear? (block-at (escape/up feet %))) (range 1 (+ 2 (pillar-height))))
        (not (climbable-top? block-at feet))))
 

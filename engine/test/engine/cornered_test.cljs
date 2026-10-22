@@ -1496,7 +1496,9 @@
     (is (false? (respond.pillar/pillar-ok? (with slope) [0 64 0]))
         "a slope up to the pillar's top: a zombie walks up and reaches the body")
     (is (true? (respond.pillar/pillar-ok? (with (set (column 1 3))) [0 64 0]))
-        "a wall of the same height with no steps up to it: out of reach")))
+        "a wall of the same height with no steps up to it: out of reach")
+    (is (false? (respond.pillar/pillar-ok? (fn [pos] (if (= [0 64 1] pos) "oak_door" (floor pos))) [0 64 0]))
+        "a door beside the foot: the column would shut it")))
 
 (defn ^:async pillar-then-arrives
   "A body pillared up against a zombie; once it hides, mob replaces the zombie (the hold's next wait), and the round runs on
@@ -1577,6 +1579,23 @@
           (let [hostiles (:hostiles (first (filter #(= :retreat.hide-hurt (:kind %)) @seen)))]
             (is (= ["zombie"] (map :name hostiles)) "the hit names who was near")
             (is (every? number? (:pos (first hostiles))) "and where")))))))
+
+(deftest a-pillared-body-hurt-with-a-shooter-near-is-not-raised
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks doorway :inventory [{:name "dirt" :count 20}] :entities [(zombie 0 64 1) (assoc (skeleton 6 64 0) :visible true)]})
+              hurt (atom false)]
+          (.override (.-world p) "wait"
+                     (fn [token a impl]
+                       (when (and (hiding? seen) (not @hurt))
+                         (reset! hurt true)
+                         (lose-health! eng p {:attacker {:name "skeleton"}}))
+                       (when (and @hurt (> (count (calls p "wait")) 6)) (swap! (fake/state p) assoc :entities []))
+                       (impl token a)))
+          (core/submit! eng hiding-retreat {})
+          (await (core/tick! eng))
+          (is (= 3 (count (calls p "jumpPlace"))) "no higher: a taller pillar only lifts it into the shooter's line"))))))
 
 (deftest a-pillared-body-losing-health-to-poison-keeps-its-refuge
   (let [damage {:damageType "minecraft:magic"}]

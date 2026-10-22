@@ -147,7 +147,6 @@
         threat (first threats)
         hit? (or (cornered/hit-on-the-run! c) (pick/beaten? c) (pick/shot-on-the-run? c) (pick/bare-boxed-in? c (cornered/near-hostiles c)))
         door (when threat (respond.doors/door-to-shut c (danger-q/mob-pos p threat)))
-        early (when (and threat (not hit?) (not door)) (await (step/early-refuge! c)))
         covered? (cover/cover-fn p threats (flight/fire-spots c))
         blast (filterv #(flight/blaster? p %) threats)
         survey-now (fn []
@@ -162,6 +161,7 @@
         verdicts (when survey (room-lib/verdicts p rooms threats (not (cover/exposed-low? c covered?))))
         {:keys [room way inside?]} (room-lib/pick verdicts)
         _ (when (and glanced? room inside?) (say-once! c room))
+        early (when (and threat (not hit?) (not door) (nil? room) (not inside?)) (await (step/early-refuge! c)))
         home-now? (fn [] (or inside? (and (nil? survey) (room-lib/in-home? c (cover/home-pos c)))))
         judged (when threat (respond.goal/judge c (if (seq blast) [] (remove nil? [(:start (first rooms)) (cover/home-pos c)]))))
         _ (when threat (step/say-choice! c survey verdicts judged blast))

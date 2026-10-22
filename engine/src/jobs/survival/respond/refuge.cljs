@@ -146,10 +146,16 @@
   (when-let [refuge (await (pillar/plan! c trespass?))]
     (await (start-refuge! c refuge))))
 
+(defn ranged-known?
+  "Whether a shooter is known near: a pillar raised higher only lifts the body further into its line of fire."
+  [c]
+  (let [p (:primitives c)]
+    (boolean (some combat/ranged? (flight/near-known p (set (flight/dead-ids c)) threats/max-follow-range (danger-q/ranged-radius))))))
+
 (defn ^:async hide-hold!
   "Plugged in or up the pillar: one round of jobs.survival.hide-out (a hold, why hiding; :again) while the refuge keeps a danger off, then
   the flight ends :hidden with the job's hold. A body hurt while hidden (a mob reaching it round a corner of the seal) leaves the refuge as failed
-  (abandon-refuge!), a pillar raised once first (respond.pillar/raise!); so does one a creeper or climber would breach."
+  (abandon-refuge!), a pillar raised once first (respond.pillar/raise!) unless a shooter is known near (ranged-known?); so does one a creeper or climber would breach."
   [c]
   (let [{:keys [kind anchor cells]} (:refuge (ctx/mem c))
         e (await (ctx/call c :hide 'jobs.survival.hide-out {:kind kind :anchor anchor :cells (vec cells) :skip (flight/dead-ids c)}))]
@@ -158,7 +164,7 @@
       (= :done (:kind e)) (flight/end-flight! c :hidden (select-keys (:data e) [:hold :dug-out]))
       (= :hurt (:cause e)) (do (ctx/update-mem! c update :reached (fnil into #{}) (:ids (:data e)))
                                (ctx/emit! c :retreat.hide-hurt :warn {:text (:text (:data e)) :pos (sh-sense/feet (:primitives c)) :hostiles (mapv #(dissoc % :seen) (hostiles-known c))})
-                               (if (= :again (await (pillar/raise! c))) :again (await (abandon-refuge! c))))
+                               (if (and (not (ranged-known? c)) (= :again (await (pillar/raise! c)))) :again (await (abandon-refuge! c))))
       :else (do (ctx/update-mem! c update :reached (fnil conj #{}) (:id (:data e)))
                 (ctx/emit! c :retreat.hide-breached :warn {:text (:text (:data e)) :mob (:name (:data e)) :pos (sh-sense/feet (:primitives c))})
                 (await (abandon-refuge! c))))))

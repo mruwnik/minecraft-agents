@@ -118,6 +118,17 @@
           (is (false? (hs/door-open? p)) "the door is shut behind it")
           (is (= [] (:list (core/state eng)))))))))
 
+(deftest a-low-body-with-blocks-near-its-hut-runs-home-instead-of-pillaring-in-the-open
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (-> (hut {:x 5.5 :y 64 :z 4.5} hs/door-states [(zombie 5.5 12.5 0.4)])
+                        (assoc :inventory [{:name "cobblestone" :count 20}])
+                        (assoc-in [:self :health] 4))
+              {:keys [p seen]} (await (flee! world))]
+          (is (in-room? (body p)) (str "inside the hut: " (body p)))
+          (is (empty? (filter #(= :retreat_sealed (:kind %)) @seen)) "no refuge was built outside"))))))
+
 (deftest a-creeper-is-never-led-to-the-hut
   (async done
     (tu/run-async done
