@@ -391,6 +391,27 @@
           (is (= :done (:status @out)) (pr-str @out))
           (is (= :reached (:reason @out))))))))
 
+(deftest a-dig-child-that-waits-on-a-fallen-block-in-the-body-cell-does-not-end-the-tunnel
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom 0)
+              landed (atom false)
+              dig (update (registry/jobs 'jobs.blocks.dig) :round
+                          (fn [round] (fn ^:async waiting-round [c]
+                                        (if (and @landed (<= (swap! calls inc) 3)) :continue (await (round c))))))
+              row (merge (stone -12 12 0 64 -3 8) {"0,20,0" "air" "0,21,0" "air" "6,20,0" "iron_ore"})
+              prep (fn [p]
+                     (.override (.-world p) "dig"
+                                (fn ^:async f [token a impl]
+                                  (let [r (await (impl token a))]
+                                    (when-not (first (reset-vals! landed true)) (set-block! p "1,21,0" "gravel"))
+                                    r))))
+              {:keys [out]} (await (tunnel! {:self {:pos {:x 0.5 :y 20 :z 0.5}} :blocks row :inventory pick}
+                                            {:target [6 20 0] :max-length 24} prep
+                                            :jobs {'jobs.blocks.dig dig}))]
+          (is (= :reached (:reason @out)) (pr-str @out)))))))
+
 (deftest a-restart-resumes-from-the-body-on-the-line
   (async done
     (tu/run-async done

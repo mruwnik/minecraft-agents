@@ -198,7 +198,7 @@
         {:keys [next cut] :as cells} (assoc base :bridged? (contains? (:bridged (ctx/mem c)) (:floor base))
                                                  :filler? (some? (choose/filler c :build)))]
     (await (sstep/look-ahead! c feet next cut))
-    (or (when-let [r (await (sstep/clear-own-cell! c in feet accept))] (if (= :continue r) :again r))
+    (or (when-let [r (await (sstep/clear-own-cell! c in feet accept))] (case r :continue :again :yield :continue r))
         (await (sstep/lava-step! c :tunnel.sealed (:block-at in) feet cut))
         (let [stop (await (sstep/judge! c in cells accept))]
           (if (and (= :no-floor (:reason stop)) (bs/open-floor? (:block stop)))
