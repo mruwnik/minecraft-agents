@@ -592,6 +592,8 @@ nothing; `:by` names who asks, `:generation-id` is checked when given):
 `POST /jobs {:op :cancel-all ...}` cancels every listed job (running, queued, held, failed) through the single-cancel path,
 one `job.cancelled` event each; the register is untouched, so reflexes keep running.
 
+Job list status: `:running`, `:resuming` (a cut job next in line), `:continuing` (listed, ran a round, yielded `:continue`, waits its next turn), `:queued` (never ran), `:cleaning-up`, `:failed`.
+
 ## Exclusive run
 
 An agent's "run this job now": `jobs.mjs submit --exclusive` / `world.mjs submit --exclusive` (`POST /jobs` op `:exclusive`, `core/exclusive-run!`). Online only, one at a time, no `:next?`/`:survive-death?`. It pauses the whole engine: the holder is cut at once (a listed job continues afterwards, a reflex job is dropped), no trigger or other job runs, and the job gets one round. Any ending ends the run and returns to the agent: `:done`/`:stopped` as returned, an error `job.failed` with attention (unlisted, not parked), a cut `:stopped :cut`, `:continue` or `:declined` `:stopped :yielded` (or the child's wait reason) plus the wait text, a failing check at once `:stopped` with the check's reason. Then normal scheduling resumes, except that no listed job starts for 5 s (`exclusive-grace-ms`, reflexes still fire) so a run of calls is not dragged away between them. Other jobs wait (`:waiting {:reason :exclusive-run}`), `do-now!` lists without cutting, a death cancels the run, a restart ends it `:restart`, `cancel` ends it. Not saved. `/status` shows `:mode :exclusive`.

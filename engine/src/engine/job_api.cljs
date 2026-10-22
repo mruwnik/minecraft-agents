@@ -19,7 +19,7 @@
           (= id (:id (core/holder eng))) :running
           (cleanup/closing? eng id []) :cleaning-up
           (= id (:resume s)) :resuming
-          (some #{id} (:list s)) :queued
+          (some #{id} (:list s)) (if (pos? (or (get-in s [:instances id :round]) 0)) :continuing :queued)
           :else :absent)))
 (defn summary [eng id]
   (when-let [inst (get-in (core/state eng) [:instances id])]

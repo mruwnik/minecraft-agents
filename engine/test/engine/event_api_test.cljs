@@ -40,7 +40,9 @@
 
 (deftest resumed-job-is-not-reported-as-merely-queued
   (is (= :resuming (event-api/instance-status {:resume "j1" :list ["j1"]} "j1")))
-  (is (= :queued (event-api/instance-status {:list ["j1"]} "j1"))))
+  (is (= :queued (event-api/instance-status {:list ["j1"]} "j1")))
+  (is (= :continuing (event-api/instance-status {:list ["j1"] :instances {"j1" {:round 2}}} "j1"))
+      "a job that yielded :continue between rounds has started: not :queued"))
 
 (deftest the-running-round-is-running-in-every-view
   (is (= :running (event-api/instance-status {:list ["j1"] :current nil} "j1" "j1")) "the round in flight, state :current not yet set")

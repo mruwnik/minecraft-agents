@@ -355,7 +355,7 @@
     (str id
          (case (:status now)
            :running " is running, not lost"
-           (:queued :resuming) (str " is " (name (:status now)) " (waiting its turn or cut by a reflex), not lost"
+           (:queued :resuming :continuing) (str " is " (name (:status now)) " (waiting its turn or cut by a reflex), not lost"
                                     (when (seq holders) (str " (holding: " (str/join ", " holders) ")"))
                                     "; it runs when the body is free")
            (str " is still queued, running or cut by a reflex, not lost"
@@ -438,7 +438,7 @@
                  (if (nil? items)
                    :unreadable
                    (->> items
-                        (filter #(and (clashes? (:clash-name r) (:name %)) (#{:running :queued :resuming} (:status %)) (not (:reflex %))))
+                        (filter #(and (clashes? (:clash-name r) (:name %)) (#{:running :queued :resuming :continuing} (:status %)) (not (:reflex %))))
                         (map #(select-keys % [:id :name :label :status]))
                         vec)))))))
 
