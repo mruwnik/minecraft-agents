@@ -94,9 +94,9 @@
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [24.5 0 16.5] 2]]}
   {:name "cobble-door-onto-a-bedrock-trench-stays-in-the-room"
-   ;; a closed trench no way out of which can be dug: the shut-in body does not drop into it (:unknown false: no walk over unseen cells into it)
+   ;; a closed trench no way out of which can be dug: the shut-in body does not drop into it
    :blocks [[:fill [14 -1 14] [18 3 18] "cobblestone" :hollow] [:fill [18 0 16] [18 1 16] "air"]
             [:fill [19 -5 10] [26 -1 22] "bedrock"] [:fill [19 -3 12] [19 -1 20] "air"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :unknown false})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false}} :within-s 120 :of-job true}]
    :after [[:body-near [16.5 0 16.5] 3]]}]}

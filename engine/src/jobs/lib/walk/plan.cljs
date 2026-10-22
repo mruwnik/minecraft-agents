@@ -8,6 +8,7 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.escape :as escape]
             [jobs.lib.walk.one-way :as one-way]
             [jobs.lib.walk.sight :as wsight]
             [jobs.lib.walk.world :as wworld]))
@@ -322,12 +323,15 @@
 
 (defn one-way-priced?
   "Whether the one-way step landing at `at` is worth taking (jobs.lib.walk.one-way/taken?): the EV of its landing against the goal's worth
-  (the call's :worth). True when there is no step (nil at)."
+  (the call's :worth), and, for a drop of more than a block, a way out of the landing exists (escape/choose does not say :no-dig: a landing with nothing
+  it could dig round it is a certain trap, not a chance of one). True when there is no step (nil at)."
   [c to at small?]
   (or (nil? at)
-      (let [pos (.-pos (.self (:primitives c)))
+      (let [p (:primitives c)
+            pos (.-pos (.self p))
             [gx gy gz] to]
-        (one-way/taken? (:primitives c) at small? (js/Math.hypot (- gx (.-x pos)) (- gy (.-y pos)) (- gz (.-z pos))) (:worth (:args c))))))
+        (and (one-way/taken? p at small? (js/Math.hypot (- gx (.-x pos)) (- gy (.-y pos)) (- gz (.-z pos))) (:worth (:args c)))
+             (or small? (not= {:step :none :why :no-dig} (select-keys (escape/choose p (vec at) to) [:step :why])))))))
 
 (defn drop-index
   "Index in steps of the first step that lands after a drop of 2 or more, a gap jump down (a step the body cannot undo) or any

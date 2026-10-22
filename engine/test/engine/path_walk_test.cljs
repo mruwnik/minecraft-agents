@@ -440,6 +440,15 @@
           (is (= :drop (:kind (:one-way-taken dear-dark))))
           (is (= :drop (:kind (:one-way-taken cheap-lit)))))))))
 
+;; a drop whose landing is walled by what cannot be dug is a certain trap: no goal is worth it
+(deftest a-landing-with-nothing-to-dig-out-of-is-refused-whatever-the-goal-is-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [walled-landing (merge ledge-to-unloaded (box 3 61 30 3 63 34 "bedrock") (box 1 61 30 1 62 34 "bedrock") (box 2 61 30 2 63 30 "bedrock") (box 2 61 34 2 63 34 "bedrock"))
+              plan (await (one-budgeted-call walled-landing {:x 1.5 :y 64 :z 32.5} [120 61 32] 600 {:one-way :open :worth 100000 :world landing-seen}))]
+          (is (nil? (:one-way-taken plan))))))))
+
 ;; the same ledge with only a closed pit below it (feet 61, x 2..13, z 30..34: 12 blocks nearer) before a wall too high to
 ;; climb (feet 66, x 14..17): every cell round the pit is loaded, so the unfinished search walks nowhere
 (def ledge-over-pit (merge (box 0 63 0 1 63 63 "stone") (box 2 60 30 13 60 34 "stone") (box 14 60 0 17 65 63 "stone")))
