@@ -873,7 +873,8 @@
 (defn ^:async fetched-run
   "result-of with room for the fetch children: [result p seen]. jobs: replacements for registry jobs."
   ([world args] (await (fetched-run world args {})))
-  ([world args jobs]
+  ([world args jobs] (await (fetched-run world args jobs nil)))
+  ([world args jobs before]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/seeing-all (tu/fake-on-floor world))
@@ -882,6 +883,7 @@
         out (atom :not-done)
         parent (tu/recording-parent 'jobs.items.smelt args out)
         eng (assoc eng :jobs (merge (:jobs eng) jobs {'recording-parent parent}))]
+    (when before (before eng))
     (core/submit! eng '(recording-parent) {})
     (loop [i 0]
       (when (and (< i 80) (seq (:list (core/state eng))))
@@ -1018,6 +1020,39 @@
               carried (into {} (map (juxt :name :count)) (:inventory @(fake/state p)))]
           (is (= :no-furnace-seen (:reason r)))
           (is (= {"oak_log" 11} carried) "no log was turned into planks"))))))
+
+(def remembered-60 #(mem/write! (:store %) :furnace {:pos {:x 60 :y 64 :z 0}} mem/place-policy))
+
+(deftest a-remembered-furnace-beyond-sight-is-walked-to-when-none-can-be-made
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r p] (await (fetched-run {:blocks {"60,64,0" "furnace"} :floor [-30 -10 80 10] :inventory iron-and-coal}
+                                        {:item "raw_iron" :count 3} {} remembered-60))]
+          (is (= {:smelted 3 :wanted 3} (select-keys r [:smelted :wanted])) (pr-str r))
+          (is (= 1 (count (furnaces-at p))) "no second furnace was made"))))))
+
+(deftest a-remembered-furnace-is-walked-to-when-that-costs-less-than-making-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r p] (await (fetched-run {:blocks {"40,64,0" "furnace"} :inventory iron-and-coal}
+                                        {:item "raw_iron" :count 3} {}
+                                        #(mem/write! (:store %) :furnace {:pos {:x 40 :y 64 :z 0}} mem/place-policy)))]
+          (is (= {:smelted 3 :wanted 3} (select-keys r [:smelted :wanted])) (pr-str r))
+          (is (= 1 (count (furnaces-at p)))))))))
+
+(deftest no-furnace-to-be-had-says-why-the-fetch-failed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r] (await (fetched-run {:inventory (conj iron-and-coal {:name "cobblestone" :count 20})
+                                       :recipes {"furnace" {:count 1 :needs {"cobblestone" 8} :table true}
+                                                 "crafting_table" {:count 1 :needs {"oak_planks" 4}}}}
+                                      {:item "raw_iron" :count 3 :ways #{:carried :chest :craft}}))]
+          (is (= :no-furnace-seen (:reason r)))
+          (is (re-find #"none could be made either: \S" (str (:text r))) (pr-str r))
+          (is (not (re-find #"8 cobblestone mined" (str (:text r)))) (pr-str r)))))))
 
 ;; ------------------------------------------------------------------ several items in one call
 

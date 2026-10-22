@@ -1,12 +1,16 @@
 (ns jobs.items.smelt.fetch
   "What jobs.items.smelt gets before it loads: the missing input and fuel, and a furnace (jobs.lib.need children)."
   (:require [engine.ctx :as ctx]
+            [engine.memory :as mem]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.crafting-table :as crafting-table]
             [jobs.items.smelt.plan :as sp]
             [jobs.lib.fuel :as fuel]
             [jobs.lib.furnace :as furnace]
             [jobs.lib.need :as need]
             [jobs.lib.storage :as storage]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [clojure.string :as str]))
 
 (defn carried [c] (u/inventory (:primitives c)))
 
@@ -74,14 +78,41 @@
             (do (ctx/update-mem! c update :fetch-done (fnil conj #{}) stage)
                 (recur more))))))))
 
+(defn make-cost
+  "What a furnace of its own costs, counting only what is missing: 0 with one carried, else the cobblestone short of 8 and,
+  with no table carried or seen within 64, the table with the logs it is made of, a trip up to `surface-dy` blocks off when none are carried."
+  [c surface-dy]
+  (let [inv (carried c)
+        have (fn [pred] (transduce (comp (filter #(pred (:name %))) (map :count)) + 0 inv))
+        stone-short (max 0 (- 8 (have #{"cobblestone" "cobbled_deepslate"})))
+        table? (or (pos? (storage/carried inv "crafting_table")) (crafting-table/nearest (:primitives c) 64))
+        wood-short? (< (+ (have #(str/ends-with? % "_planks")) (* 4 (have #(str/ends-with? % "_log")))) 4)
+        value (fn [name n] (if (pos? n) (:value (cost/item-value [{:name name :count n}])) 0))]
+    (if (pos? (storage/carried inv "furnace"))
+      0
+      (+ (value "cobblestone" stone-short)
+         (if (or table? (not wood-short?)) 0 (+ (value "crafting_table" 1) (:cost (cost/walk-cost {:distance surface-dy}))))))))
+
+(defn home-furnace
+  "The furnace the body remembers (the :furnace place), not one a walk found unreachable: with anywhere? any distance,
+  else only when walking there (jobs.lib.cost/walk-cost) costs less than making a furnace. nil otherwise."
+  [c anywhere?]
+  (let [pos (mem/place (ctx/view c) :furnace)
+        me (u/self-pos c)]
+    (when (and pos (not (contains? (:unreachable-furnaces (ctx/mem c)) pos))
+               (or anywhere?
+                   (< (:cost (cost/walk-cost {:distance (u/dist me pos)})) (make-cost c (js/Math.abs (- (:y pos) (:y me)))))))
+      pos)))
+
 (defn ^:async furnace-fetch!
   "With no furnace seen: put a carried one down, else fetch one and put it down. Once per smelt. :again / :continue,
-  nil when there is nothing to do."
+  nil when there is nothing to do (memory :furnace-why then says why the fetch failed)."
   [c]
   (when-let [opts (and (not (:furnace-tried (ctx/mem c))) (fetch-opts c :furnace))]
     (let [e (when-not (pos? (storage/carried (carried c) "furnace"))
               (await (need/item! c "furnace" 1 opts)))
           r (cond (= :continue e) :continue
                   (pos? (storage/carried (carried c) "furnace")) (await (furnace/place-furnace! c)))]
-      (when-not r (ctx/update-mem! c assoc :furnace-tried true))
+      (when-not r
+        (ctx/update-mem! c assoc :furnace-tried true :furnace-why (when (map? e) (get-in e [:data :why]))))
       r)))

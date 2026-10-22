@@ -341,19 +341,27 @@
 
 ;; ------------------------------------------------------------------ the round, with the fetches
 
+(defn choose-furnace!
+  "Make the furnace at pos this job's: nil."
+  [c pos]
+  (ctx/update-mem! c assoc :furnace pos)
+  (ctx/emit! c :smelt.furnace :info {:furnace pos :text (str "smelting at the furnace seen at " (:x pos) " " (:y pos) " " (:z pos))})
+  nil)
+
 (defn ^:async acquire-furnace!
-  "With no furnace chosen: the nearest one seen is chosen (nil), else put a carried or
-  fetched one down. nil once a furnace is chosen; :continue while that goes on; a stop when none can be had."
+  "With no furnace chosen: the nearest one seen, else the remembered one when walking there is cheaper than making one, is
+  chosen (nil), else put a carried or fetched one down. nil once a furnace is chosen; :continue while that goes on; a
+  stop when none can be had, after the remembered one at any distance."
   [c input]
-  (if-let [pos (nearest-furnace c input)]
-    (do (ctx/update-mem! c assoc :furnace pos)
-        (ctx/emit! c :smelt.furnace :info {:furnace pos :text (str "smelting at the furnace seen at " (:x pos) " " (:y pos) " " (:z pos))})
-        nil)
+  (if-let [pos (or (nearest-furnace c input) (sf/home-furnace c false))]
+    (choose-furnace! c pos)
     (let [f (await (sf/furnace-fetch! c))]
       (case f
-        nil (if-let [why (and (pos? (storage/carried (carried c) "furnace")) (:furnace-refusal (ctx/mem c)))]
-              (stop! c "furnace-not-placed" nil (str "a furnace is carried but could not be put down: " why))
-              (stop! c "no-furnace-seen" nil (when (:furnace-tried (ctx/mem c)) "none could be made either: a furnace is 8 cobblestone mined with a pickaxe")))
+        nil (if-let [pos (sf/home-furnace c true)]
+              (choose-furnace! c pos)
+              (if-let [why (and (pos? (storage/carried (carried c) "furnace")) (:furnace-refusal (ctx/mem c)))]
+                (stop! c "furnace-not-placed" nil (str "a furnace is carried but could not be put down: " why))
+                (stop! c "no-furnace-seen" nil (when (:furnace-tried (ctx/mem c)) (str "none could be made either: " (or (:furnace-why (ctx/mem c)) "nothing can be fetched"))))))
         :again nil
         f))))
 

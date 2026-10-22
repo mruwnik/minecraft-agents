@@ -18,6 +18,18 @@
    :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2})]]
    :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 140 :of-job true}]
    :after [[:item "iron_ingot" 2]]}
+  ;; 2d299045: no furnace in sight, none can be made (no cobblestone, no table, no logs): the remembered furnace 36 blocks off is walked to
+  {:name "remembered-furnace-beyond-sight-is-walked-to-when-none-can-be-made"
+   :plot {:height 8 :length 64 :width 32}
+   :settings {:jobs.items.smelt/seen-radius 12 :jobs.lib.stock/chest-radius 12}
+   :blocks [[:set [40 0 16] "furnace[facing=west]"]]
+   :memory [{:kind :furnace :data {:pos #xyz [40 0 16]} :policy {:cap 1 :ttl :forever}}]
+   :body {:at [4.5 0 16.5] :inventory [["raw_iron" 2] ["coal" 2]]}
+   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2})]]
+   :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :no-furnace-seen}} :for-s 15 :of-job true :until {:source :job :kind :completed}}]
+   :after [[:item "iron_ingot" 2]]
+   :limit-s 160}
   {:name "carried-only-no-furnace-seen-gives-up"
    :settings {:jobs.items.smelt/seen-radius 12 :jobs.lib.stock/chest-radius 12}
    :body {:inventory [["raw_iron" 2] ["coal" 2] ["crafting_table" 1] ["cobblestone" 16]]}
