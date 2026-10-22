@@ -21,6 +21,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
+            [jobs.lib.rooms :as rooms]
             [jobs.lib.torch :as torch]
             [jobs.lib.tools :as tools]
             [jobs.lib.torch-stock :as stock]
@@ -118,24 +119,38 @@
   [c]
   (and (descent-wanted? c) (or (not (mw/shaft? (:args c))) (boolean (:none (pick-shaft c)))) (empty? (:targets (scan c)))))
 
+(defn goal-args [goal]
+  {:pos {:x (+ (:x goal) 0.5) :y (:y goal) :z (+ (:z goal) 0.5)} :range 2 :settings {:jobs.movement.go-to.tuning/y-slack 8}})
+
+(defn ^:async exit-order
+  "The walks tried to leave zone zn, in turn: first every exit cell on foot only, the cheapest walk first (a wall is walked round, not dug through),
+  then every cell with go-to's other ways (a dig), nearest first."
+  [c zn]
+  (let [goals (zones/exit-goals (cell-of (u/self-pos c)) zn (zone-margin))
+        priced (loop [[g & more] goals out []]
+                 (if-not g
+                   out
+                   (recur more (conj out [g (await (rooms/route-cost c (assoc (goal-args g) :ways #{:walk})))]))))
+        by-cost (map first (sort-by #(or (second %) ##Inf) priced))]
+    (ctx/emit! c :mine.leave-order :info {:zone (:name zn) :priced (mapv (fn [[g s]] [(:x g) (:z g) s]) priced)})
+    (vec (concat (map #(assoc (goal-args %) :ways #{:walk}) by-cost) (map goal-args goals)))))
+
 (defn ^:async leave-zone!
   "Before the first dig: a go-to child to a cell zone-margin outside the own zone (or, for a stair, building) zn the body stands near (the start moves with it).
-  :continue while it walks, :again once out; a walk that fails is tried toward the next side of the zone, and the trip ends :zone-exit when every side failed."
+  :continue while it walks, :again once out; a walk that fails is tried toward the next exit cell (cheapest walk first), and the trip ends :zone-exit when every one failed."
   [c zn]
   (let [m (zone-margin)
-        goals (zones/exit-goals (cell-of (u/self-pos c)) zn m)
+        goals (or (:leave-goals (ctx/mem c)) (let [g (await (exit-order c zn))] (ctx/update-mem! c assoc :leave-goals g) g))
         side (:leave-side (ctx/mem c) 0)
-        goal (goals side)
         from (:start (ctx/mem c))
-        r (await (child/call-walk* c :leave
-                                   {:pos {:x (+ (:x goal) 0.5) :y (:y goal) :z (+ (:z goal) 0.5)} :range 2 :settings {:jobs.movement.go-to.tuning/y-slack 8}}))
+        r (await (child/call-walk* c :leave (goals side)))
         here (cell-of (u/self-pos c))]
     (cond
       (= :continue r) :continue
       (not (within-keep-clear c (dec m) (access/cell here) (stair-start? c)))
       (do (ctx/emit! c :mine.left-zone :info {:zone (:name zn) :from (access/cell from) :to (access/cell here)
                                               :text (str "mine walked out of zone " (:name zn) " to " (str/join "," (access/cell here)) " before it digs")})
-          (ctx/update-mem! c assoc :start here :resume-at here :leave-side 0)
+          (ctx/update-mem! c #(-> % (assoc :start here :resume-at here :leave-side 0) (dissoc :leave-goals)))
           :again)
       (< (inc side) (count goals)) (do (ctx/update-mem! c assoc :leave-side (inc side)) :again)
       :else (let [text (str "mine could not get out of zone " (:name zn) " at " (str/join "," (access/cell here)) " before it digs")]
