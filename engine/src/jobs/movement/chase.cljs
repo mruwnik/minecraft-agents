@@ -39,7 +39,7 @@
 
 (def target [:pos])
 
-(def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def safe? (fn [_] (contract/ok :holds "go-to judges the walk")))
 (def fit? safe?)

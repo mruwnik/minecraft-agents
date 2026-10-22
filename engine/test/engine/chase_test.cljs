@@ -24,7 +24,7 @@
         p (tu/fake-on-floor world)
         out (atom :not-done)
         stub (assoc (get registry/jobs 'jobs.movement.go-to)
-                    :round (fn ^:async stub-round [c] (swap! calls conj (merge (:args c) (select-keys (ctx/frozen-call c) [:ways :floor :settings]) {:job-time (get-in (ctx/frozen-call c) [:spend :job-time])})) (ending c p)))
+                    :round (fn ^:async stub-round [c] (swap! calls conj (merge (:args c) (select-keys (ctx/frozen-call c) [:ways :floor :settings :checks]) {:job-time (get-in (ctx/frozen-call c) [:spend :job-time])})) (ending c p)))
         eng (core/create {:primitives p :jobs (merge registry/jobs {'jobs.movement.go-to stub 'recording-parent (tu/recording-parent job args out identity)})
                           :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -98,6 +98,17 @@
     {:player "Steve" :leg-s 3} [:ok :args]
     {:pos [1 64 1]} [:never :bad-args]
     {:leg-s 3} [:never :bad-args]))
+
+(deftest the-go-to-under-a-chase-leg-keeps-its-own-checks-but-one-under-a-flight-is-unchecked
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [chase-calls (atom [])
+              flee-calls (atom [])]
+          (await (run-chase {} {:pos {:x 12 :y 64 :z 0} :leg-s 3} chase-calls (fn [c _] (leg-over c))))
+          (await (run-chase {} 'jobs.movement.run-away {:pos {:x 12 :y 64 :z 0} :leg-s 3} flee-calls (fn [c _] (leg-over c))))
+          (is (nil? (:checks (first @chase-calls))) "go-to judges route risk and hostiles itself")
+          (is (= '(always) (get-in (first @flee-calls) [:checks :safe?])) "an escape walks unchecked"))))))
 
 (deftest run-away-is-a-chase-leg-with-the-flee-presets
   (async done

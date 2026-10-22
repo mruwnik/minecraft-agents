@@ -50,7 +50,7 @@
 
 (def target [:pos])
 
-(def defaults {:checks {:safe? '(always) :fit? '(always)} :spend {:job-time ::job-time-s}})
+(def defaults {:spend {:job-time ::job-time-s}})
 
 (def safe? (fn [_] (contract/ok :holds "go-to judges the walk")))
 (def fit? safe?)
@@ -146,10 +146,10 @@
   [{:keys [step] :as e} ignore-zones? fetch?]
   (let [ways-for (if fetch? #{:carried :chest :craft :gather} #{:carried})]
     (case step
-      :approach ['jobs.movement.go-to {:pos (zipmap [:x :y :z] (:pos e)) :range 0 :ways #{:walk} :checks {:fit? '(always)}}]
-      :stair ['jobs.access.stair {:dir :down :heading (:heading e) :steps (:steps e) :checks {:fit? '(always)} :accept #{:falling-block}
+      :approach ['jobs.movement.go-to {:pos (zipmap [:x :y :z] (:pos e)) :range 0 :ways #{:walk}}]
+      :stair ['jobs.access.stair {:dir :down :heading (:heading e) :steps (:steps e) :accept #{:falling-block}
                                   :ways ways-for :settings {:jobs.lib.trip/spent-uses 0} :ignore-zones? ignore-zones? :need-drop true}]
-      :bridge ['jobs.access.bridge (cond-> {:heading (:heading e) :length (:length e) :ways ways-for :ignore-zones? ignore-zones? :checks {:fit? '(always)}}
+      :bridge ['jobs.access.bridge (cond-> {:heading (:heading e) :length (:length e) :ways ways-for :ignore-zones? ignore-zones?}
                                      (:item e) (assoc :item (:item e)))])))
 
 (defn skip-key
