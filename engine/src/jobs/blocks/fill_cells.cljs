@@ -19,7 +19,9 @@
             [jobs.lib.need :as need]
             [engine.contract :as contract]
             [jobs.lib.seal :as seal]
-            [jobs.lib.util :as u]))
+            [jobs.lib.util :as u]
+            [jobs.lib.access.zones :as zones]
+            [jobs.lib.world :as known]))
 
 (def doc
   "The one job that makes cells solid. Fill cells that are air, cave_air, water or replaceable with the first carried block
@@ -210,12 +212,27 @@
   (let [least (:least (ctx/frozen-call c) :all)]
     (or (empty? (owed c)) (and (number? least) (>= (:mended (ctx/mem c) 0) least)))))
 
+(defn room-hint
+  "A sentence when the cells placed form a hollow shape of at least 3x3x3 that no zone or plan covers (a hand-built house is terrain to
+  digs unless a zone or plan holds it): the ./bin/map call that adds a zone round it. Nil for a scaffold (:purpose), a shelter (:in-place) or a covered shape."
+  [c]
+  (let [asked (set (map (juxt :x :y :z) (cells-of c)))
+        cells (distinct (filter asked (map (comp (juxt :x :y :z) cell-of a/cell :cell) (:placed (ctx/mem c)))))
+        lo (when (seq cells) (apply mapv min cells))
+        hi (when (seq cells) (apply mapv max cells))
+        dims (when lo (mapv #(inc (- %1 %2)) hi lo))
+        {:keys [purpose in-place]} (:args c)]
+    (when (and dims (every? #(>= % 3) dims) (>= (count cells) 14) (< (count cells) (apply * dims)) (not purpose) (not in-place)
+               (not-any? (fn [cell] (some #(zones/in-box? cell %) (known/zones c))) cells)
+               (not-any? (set cells) (map first (known/footprints c))))
+      (str "; not protected from digs: ./bin/map add zone <name> --box " (string/join "," lo) ":" (string/join "," hi) " --by <you>"))))
+
 (defn done?
   "Ok when no cell is owed; else later, with the cells mended and the cells left."
   [c]
   (let [left (owed c)
         mended (:mended (ctx/mem c) 0)]
-    (checks/goal (and (empty? left) (not (:collect (ctx/mem c)))) [:filled (if (pos? mended) (str "filled " mended " cells") "no cell is owed")] [:owed (str (count left) " cells are owed")]
+    (checks/goal (and (empty? left) (not (:collect (ctx/mem c)))) [:filled (if (pos? mended) (str "filled " mended " cells" (room-hint c)) "no cell is owed")] [:owed (str (count left) " cells are owed")]
                  {:units :cells :done mended :left (count left) :result {:mended mended :left left :placed (:placed (ctx/mem c) [])}})))
 
 (defn quote-of

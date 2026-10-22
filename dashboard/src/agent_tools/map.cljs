@@ -9,7 +9,7 @@
             ["node:path" :as path]
             ["node:util" :refer [parseArgs]]))
 
-(def usage "map.mjs --world WORLD find|show|add|edit|remove|renew|release [marker|zone|claim] [ID] (find takes the kind alone: find zone; edit/remove/renew/release need --revision, a refusal names the current one) [--data EDN --revision REV --by ACTOR --for 30m --dry-run --raw --center EDN --place ID --radius 128 --type TYPE --owner OWNER --status STATUS --text TEXT --limit 10 --offset 0 --worlds DIR --state LEGACY_PARENT]\nwhose --center CELL --by ME tells whether a zone or active claim of someone else holds the cell (answer :foreign? and :holder; nothing is refused).\nShared map of markers (a point: {:x :y :z :kind :note}, kind is free text such as :base or :farm, default :place, note up to 80 characters), zones ({:name :owner :min [x y z] :max [x y z] :allow :note}, a box others avoid; :owner must equal --by) and claims (a timed hold). find shows a record's :box as [[x y z] [x y z]]; --center is [x y z] or {:x :y :z}; :total counts all matches, :next-offset pages.")
+(def usage "map.mjs --world WORLD find|show|add|edit|remove|renew|release [marker|zone|claim] [ID] (find takes the kind alone: find zone; edit/remove/renew/release need --revision, a refusal names the current one) [--data EDN | --box x0,y0,z0:x1,y1,z1 (a zone's corners, e.g. round a house you built: map add zone <name> --box ... --by ME) --revision REV --by ACTOR --for 30m --dry-run --raw --center EDN --place ID --radius 128 --type TYPE --owner OWNER --status STATUS --text TEXT --limit 10 --offset 0 --worlds DIR --state LEGACY_PARENT]\nwhose --center CELL --by ME tells whether a zone or active claim of someone else holds the cell (answer :foreign? and :holder; nothing is refused).\nShared map of markers (a point: {:x :y :z :kind :note}, kind is free text such as :base or :farm, default :place, note up to 80 characters), zones ({:name :owner :min [x y z] :max [x y z] :allow :note}, a box others avoid; :owner must equal --by) and claims (a timed hold). find shows a record's :box as [[x y z] [x y z]]; --center is [x y z] or {:x :y :z}; :total counts all matches, :next-offset pages.")
 (def default-state-dir (.resolve path js/__dirname "../.."))
 
 (defn coalesce [& values] (first (filter some? values)))
@@ -40,7 +40,7 @@
 
 (defn options [argv]
   (let [{:keys [positionals values]} (parse-options argv
-           (merge (zipmap [:world :repo-root :data :revision :if-revision :by :for :center :place :radius :type :owner :status :text :limit :offset]
+           (merge (zipmap [:world :repo-root :data :box :revision :if-revision :by :for :center :place :radius :type :owner :status :text :limit :offset]
                           (repeat {:type "string"}))
                   {:state {:type "string"} :worlds {:type "string"}}
                   (zipmap [:dry-run :preview :raw] (repeat {:type "boolean"}))))
@@ -55,8 +55,8 @@
         allowed (get {:find #{:center :place :radius :type :owner :status :text :limit :offset :raw}
                       :show #{:raw}
                       :whose #{:center :by}
-                      :add #{:data :by :for :dry-run :preview :raw}
-                      :edit #{:data :revision :by :for :dry-run :preview :raw}
+                      :add #{:data :box :by :for :dry-run :preview :raw}
+                      :edit #{:data :box :revision :by :for :dry-run :preview :raw}
                       :remove #{:revision :by :dry-run :preview :raw}
                       :renew #{:revision :by :for :dry-run :preview :raw}
                       :release #{:revision :by :dry-run :preview :raw}} command)]
@@ -175,6 +175,14 @@
       (throw (data/fail :not-owner "marker authorship cannot be transferred by edit")))
     (assoc value :name id :by by :source source :kind type :note note)))
 
+(defn box-corners
+  "{:min [x y z] :max [x y z]} of a --box x0,y0,z0:x1,y1,z1 text, the corners put in order."
+  [text]
+  (let [corners (mapv #(mapv js/Number (str/split % #",")) (str/split text #":"))]
+    (when-not (and (= 2 (count corners)) (every? #(and (= 3 (count %)) (every? js/Number.isInteger %)) corners))
+      (throw (data/fail :invalid-option "--box needs x0,y0,z0:x1,y1,z1 (integers)")))
+    {:min (apply mapv min corners) :max (apply mapv max corners)}))
+
 (defn zone-value [patch value id actor]
   (when (and (contains? patch :name) (not= (:name patch) id)) (throw (data/fail :validation "name must match ID")))
   (let [value (assoc value :name id :owner (coalesce (:owner value) actor))]
@@ -218,11 +226,15 @@
               (when-not d (throw (data/fail :not-found "object not found" {:kind kind :id id})))
               (data/raw-bound (cond-> (summary d) (:raw v) (assoc :record (:value d)))))
       (let [patch (when (#{:add :edit} command)
-                    (when (or (nil? (:data v)) (> (.byteLength js/Buffer (:data v)) 65536))
+                    (when (and (nil? (:data v)) (nil? (:box v)))
+                      (throw (data/fail :invalid-data "give --data EDN map up to 64KiB (or --box x0,y0,z0:x1,y1,z1 for a zone)")))
+                    (when (and (:box v) (not= kind :zone))
+                      (throw (data/fail :invalid-option "--box applies only to zones")))
+                    (when (and (:data v) (> (.byteLength js/Buffer (:data v)) 65536))
                       (throw (data/fail :invalid-data "give --data EDN map up to 64KiB")))
-                    (let [parsed (read-edn (:data v))]
+                    (let [parsed (if (:data v) (read-edn (:data v)) {})]
                       (when-not (map? parsed) (throw (data/fail :invalid-data "data must be a map")))
-                      parsed))
+                      (merge parsed (when (:box v) (box-corners (:box v))))))
             previous (data/read-document ctx kind id)
             _ (when (and (#{:remove :renew :release} command) (nil? previous))
                 (throw (data/fail :not-found "object not found" {:kind kind :id id})))

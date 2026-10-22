@@ -215,3 +215,29 @@
           (is (false? (get-in @(fake/state (:p gate)) [:states [2 64 0] :open])))
           (is (= :condition-failed (:kind i)))
           (is (= {:reason :blocked :cell (first cells)} (select-keys (:cause i) [:reason :cell]))))))))
+
+(def shell
+  "The 26 cells round the centre of a 3x3x3 block."
+  (vec (for [x (range 2 5) y (range 64 67) z (range 2 5) :when (not= [3 65 3] [x y z])] {:x x :y y :z z})))
+
+(defn ^:async shell-text [world-spec args]
+  (let [env (bd/setup (merge {:self body :inventory [{:name "dirt" :count 30}]} world-spec))
+        e (await (ending-of env (merge {:cells shell :use {:blocks ["dirt"]}} args)))]
+    [(:kind e) (:text (:data e))]))
+
+(deftest a-hollow-shape-no-zone-or-plan-covers-is-told-not-protected-with-the-zone-command
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[kind text] (await (shell-text {} {}))]
+          (is (= :done kind))
+          (is (re-find #"filled \d+ cells; not protected from digs: \./bin/map add zone <name> --box 2,64,2:4,66,4 --by <you>" text)))))))
+
+(deftest a-hollow-shape-inside-a-zone-or-a-scaffold-gets-no-hint
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[_ zoned] (await (shell-text {:zones [{:name "hut" :min [0 60 0] :max [9 70 9] :owner "Fake"}]} {}))
+              [_ scaffold] (await (shell-text {} {:purpose :plug}))]
+          (is (not (re-find #"not protected" zoned)))
+          (is (not (re-find #"not protected" scaffold))))))))

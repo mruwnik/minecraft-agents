@@ -1,5 +1,6 @@
 (ns agent-tools.map-test
   (:require [cljs.test :refer [deftest is]]
+            [clojure.string :as str]
             [agent-tools.map :as map-tool]
             ["fs" :as fs]
             ["os" :as os]
@@ -45,3 +46,8 @@
 
 (deftest remove-without-a-revision-asks-for-one
   (is (re-find #"--revision" (failure #(map-tool/options (into ["remove" "zone" "nope" "--by" "Bot"] (world-args)))))))
+
+(deftest box-gives-a-zones-corners-in-order
+  (is (= {:min [1 2 3] :max [4 5 6]} (map-tool/box-corners "4,2,3:1,5,6")))
+  (is (re-find #"--box needs" (failure #(map-tool/box-corners "1,2:3,4"))))
+  (is (= "9,9,9" (str/join "," (:max (map-tool/box-corners "9,9,9:0,0,0"))))))
