@@ -163,6 +163,15 @@
           (is (= "air" (h/block-at p 4 65 3)) "no second fence on the perched one")
           (is (= "air" (h/block-at p 5 65 3)) "the leaves are dug away"))))))
 
+;; A plan with no fence item to patch with still clears leaves.
+(deftest a-plan-without-a-fence-item-still-queues-the-leaves-to-clear
+  (let [leaks [{:pos {:x 4 :y 64 :z 3} :why :perch-in :stand {:x 5 :y 64 :z 3} :stand-block "oak_leaves"}
+               {:pos {:x 3 :y 64 :z 4} :why :gap}]
+        gate-only [{:want {:block "oak_fence_gate"} :pos [3 64 2]}]
+        with-fence [{:want "oak_fence" :item "oak_fence" :pos [2 64 2]}]]
+    (is (= {:patch-queue [] :leaf-queue [[5 64 3]]} (pen/patch-queues gate-only leaks)))
+    (is (= {:patch-queue [[3 64 4]] :leaf-queue [[5 64 3]]} (pen/patch-queues with-fence leaks)))))
+
 ;; The pen check lists at most 12 leaks: more gaps than that need more than one patch pass.
 (deftest more-gaps-than-one-check-lists-are-patched-in-further-passes
   (async done

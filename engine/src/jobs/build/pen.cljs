@@ -234,6 +234,12 @@
   (when-let [cell (first (filter #(and (pen-read/barrier? (:want %)) (not (gate? (:want %)))) cells))]
     (or (:item cell) (first (pen-read/want-blocks (:want cell))))))
 
+(defn patch-queues
+  "{:patch-queue :leaf-queue} of the leaks: fence cells only where the plan gives a fence item (leaves are cleared without one)."
+  [cells leaks]
+  {:patch-queue (if (patch-item cells) (pen-patch/fence-cells leaks) [])
+   :leaf-queue (pen-patch/leaf-cells leaks)})
+
 (def max-return-walks 3)
 
 (defn ^:async return-walk!
@@ -262,10 +268,9 @@
       back back
       (:closed? answer)
       (ctx/end c :done nil (assoc result :text (str "pen of " plan " holds, " (:cells answer) " cells, placed " (:placed built))))
-      (and (ctx/way? c :patch) (seq (concat (pen-patch/fence-cells (:leaks answer)) (pen-patch/leaf-cells (:leaks answer)))) (patch-item cells)
+      (and (ctx/way? c :patch) (seq (apply concat (vals (patch-queues cells (:leaks answer)))))
            (let [{:keys [pass pass-ok]} (ctx/mem c)] (pen-patch/another-pass? pass pass-ok (settings/get settings ::max-passes))))
-      (do (ctx/update-mem! c #(assoc % :phase :patch :pass (inc (or (:pass %) 0)) :pass-ok 0 :patch-queue (pen-patch/fence-cells (:leaks answer))
-                                          :leaf-queue (pen-patch/leaf-cells (:leaks answer))))
+      (do (ctx/update-mem! c #(into (assoc % :phase :patch :pass (inc (or (:pass %) 0)) :pass-ok 0) (patch-queues cells (:leaks answer))))
           :again)
       :else
       (ctx/end c :nothing-possible (:reason answer)
