@@ -179,6 +179,14 @@
 (deftest water-breathing-never-fires
   (is (= [false false] (fires? {:self {:inWater true :oxygen 0 :effects [{:name "water_breathing" :left 600}]} :blocks long-shaft}))))
 
+(deftest a-dead-body-in-water-does-not-fire-until-it-respawns
+  (let [p (tu/fake {:self {:inWater true :oxygen 0} :blocks long-shaft})
+        view (fn [& kinds-at] {:now 5000 :data (reduce (fn [d [kind t]] (mem/add-entry d kind {:t t :data {}} nil)) mem/empty-data kinds-at)})]
+    (are [memory expected] (= expected ((:when (get triggers/all :suffocating)) p memory {}))
+      nil true
+      (view [:died 1000]) false
+      (view [:died 1000] [:respawned 2000]) true)))
+
 (defn climb-ctx
   "A ctx over p whose job memory holds data."
   [p data]
@@ -1151,7 +1159,7 @@
 
 (def pocket-tunnel
   "A stone block with a water tunnel at y 64..65 from x 0 to 9 and a one-cell shaft to air at x 6; the own column has a stone cap at y 66."
-  (merge (into {} (for [x (range -9 19) z (range -8 9) y [64 65 66]] [(str x "," y "," z) "stone"]))
+  (merge (into {} (for [x (range -9 19) z (range -8 9) y [63 64 65 66]] [(str x "," y "," z) "stone"]))
          (into {} (for [x (range 0 10) y [64 65]] [(str x "," y ",0") "water"]))
          {"6,66,0" "water"}))
 
@@ -1222,6 +1230,16 @@
           (is (= [[:completed nil]] ended))
           (is (= "stone" (block [0 66 0])) "no dig")
           (is (>= (:x (core/self-pos p)) 5) "went to the pocket"))))))
+
+(deftest seen-air-further-out-comes-before-a-blind-swim-up-the-own-column
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [ended p]} (await (pocket-run! (fn [[x y]] (not (and (zero? x) (>= y 66)))) pocket-tunnel))]
+          (is (= [[:completed nil]] ended))
+          (is (>= (:x (core/self-pos p)) 5) "went to the seen shaft")
+          (is (not-any? #(and (= "swim" (.-name %)) (nil? (.. % -args -toward))) (array-seq (.. p -world -calls)))
+              "no swim up the unseen own column first"))))))
 
 (deftest a-seen-pocket-that-go-to-cannot-reach-falls-back-to-the-cap
   (async done
@@ -1525,7 +1543,7 @@
       (fn ^:async t []
         (let [top 113
               {:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4}
-                                           :blocks (into {} (concat (for [y (range 64 (inc top))] [(str "0," y ",0") "water"])
+                                           :blocks (into {"0,63,0" "stone"} (concat (for [y (range 64 (inc top))] [(str "0," y ",0") "water"])
                                                                     (for [y (range 64 (inc top)) x (range -2 3) z (range -2 3) :when (not= 0 x z)]
                                                                       [(str x "," y "," z) "stone"])))})]
           (.override (.-world p) "swim"
@@ -1639,7 +1657,7 @@
               n (atom 0)
               pulled (atom false)
               {:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4}
-                                           :blocks (into {} (concat (for [y (range 64 (inc top))] [(str "0," y ",0") "water"])
+                                           :blocks (into {"0,63,0" "stone"} (concat (for [y (range 64 (inc top))] [(str "0," y ",0") "water"])
                                                                     (for [y (range 64 (inc top)) x (range -2 3) z (range -2 3) :when (not= 0 x z)]
                                                                       [(str x "," y "," z) "stone"])))})]
           ;; the first swim surfaces at the top; the first swim toward the shore ends with the body pulled back to the

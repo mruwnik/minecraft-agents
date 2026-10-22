@@ -38,7 +38,7 @@
     count as water; a downward (drag) bubble column is never swum into or crossed by a side step or a straight walk (nor
     its corner cut); a go-to child's planner rides one to its bottom and swims back up, so it routes round one when it can. Air is looked for only in cells the body has seen or looked at (perception memory), never through
     stone: it looks up the own column first, and when no block is seen over it (a dark column learns nothing) swims
-    up it at once; only a seen block over the own column sends the looks to the neighbour columns.
+    up it, unless seen air further out is known (then the go-to to it comes first); only a seen block over the own column sends the looks to the neighbour columns.
     A column seen open whose swim rose no higher is skipped by the next air search (the body steps to the next column).
   - Enclosed (head cell holds a suffocating block, see jobs.lib.breath): step to a side cell with room
     to stand, or one down a step (jobs.lib.breath/side-cell), once; then dig the head block, the block above it if solid (each with the best carried tool), and step up. When a full block still fills the

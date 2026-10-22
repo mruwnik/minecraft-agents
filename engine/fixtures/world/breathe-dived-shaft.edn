@@ -1,0 +1,28 @@
+;; Card 2aad5215 (Wicken death 7): drowning at the foot of a dark flooded shaft it never saw the top of, the reflex swam
+;; blind up the shaft first and reached the seen way back to air too late. Sealed and unlit: a pool (x 1-2, z 1-2, water
+;; y 1-3, air y 4-5), a 2 high water tunnel east along z 1 to x 10, then south to z 8, and over its end a water shaft
+;; (x 10, z 8, y 3-8) capped by stone. The body swims to the tunnel's end under Water Breathing; when it ends the reflex fires.
+;; Should-succeed: breathe goes back to the pool (the seen air) and ends :cleared, no drowning damage.
+{:defaults
+ {:tags [:survival :water] :time :any
+  :plot {:height 12}
+  :register []
+  :blocks [[:fill [0 0 0] [12 9 10] "stone"]
+           [:fill [1 1 1] [2 3 2] "water"]
+           [:fill [1 4 1] [2 5 2] "air"]
+           [:fill [3 1 1] [10 2 1] "water"]
+           [:fill [10 1 2] [10 2 8] "water"]
+           [:fill [10 3 8] [10 8 8] "water"]]
+  :body {:at [1.5 1 1.5] :effects [["water_breathing" 25 0]] :settle-s 1}
+  :limit-s 90}
+ :cases
+ [{:name "dark-shaft-over-the-tunnel-end-is-not-swum-before-the-way-back"
+   :act [[:job (jobs.movement.go-to {:pos #at [10 1 8] :range 0})]
+         [:until-effect-gone "water_breathing" 60]
+         [:wait-s 3]
+         [:cli "triggers" ["$body" "--world" "$world" "put" "suffocating" "--trigger" "suffocating" "--persistence" "cooldown" "--cooldown-s" "2" "--job" "(jobs.survival.breathe)" "--by" "world-test"]]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 30 :of-job true}
+            {:event {:source :reflex :kind :fired :context {:reflex-id :suffocating}} :within-s 60}
+            {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 60}
+            {:no-event {:kind :hurt} :for-s 60 :until {:source :reflex :kind :ended :data {:how :cleared}}}]
+   :after [[:body-near [1.5 3 1.5] 3]]}]}

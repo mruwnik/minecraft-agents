@@ -118,6 +118,13 @@
     (doseq [cell unseen] (await (dig-look/look-at! c [(:x cell) (:y cell) (:z cell)])))
     (boolean (seq unseen))))
 
+(defn seen-surface
+  "The nearest seen air-reaching surface within the air-radius setting that go-air! goes to, not one of failed: a
+  column joined by seen water, else the top of a flooded stair; nil if none."
+  [p pos failed]
+  (or (breath/nearest-air p pos (swim/air-radius) (swim/reach) failed false)
+      (breath/flood-air p pos (swim/air-radius) (swim/air-radius) failed)))
+
 (defn ^:async go-air!
   "Drowning with no air near: a go-to child to the nearest air-reaching surface within the air-radius setting (also the
   air at the top of a flooded stair, joined by seen water, however high), else to the nearest
@@ -130,7 +137,7 @@
         pos (u/self-pos c)
         failed (:failed-air (ctx/mem c))
         column (fn [] (breath/nearest-air p pos (swim/air-radius) (swim/reach) failed false))
-        find-surface #(or (column) (breath/flood-air p pos (swim/air-radius) (swim/air-radius) failed))
+        find-surface #(seen-surface p pos failed)
         until (breath/look-until (.self p))
         surface (loop [k 0]
                   (let [found (find-surface)]
@@ -254,20 +261,23 @@
       (await (ctx/act c :moveTo (clj->js {:pos spot :range 0}))))))
 
 (defn ^:async drown-out!
-  "Drowning: to seen air near; with none seen (or after a failed try) a dry pocket where it stands, after the go-to to
-  seen air further out; else swim up a column not seen capped, go-to air further out, dig up through a natural cap;
+  "Drowning: to seen air near; with none, a go-to to seen air further out (seen-surface) before a blind swim; with
+  none seen (or after a failed try) a dry pocket where it stands, after the go-to to seen air further out; else swim up
+  a column not seen capped, go-to air further out, dig up through a natural cap;
   with those spent a footing block for the pocket, then a cap dig that fits all the air left. True on progress; nil
   after a failed try, the pocket's and the cap's reasons kept for the stop."
   [c]
   (let [target (await (breath/find-air! c (u/self-pos c) (radius) (swim/reach)))
         site (when (or (nil? target) (pos? (:failures (ctx/mem c) 0))) (await (pocket/site! c)))
         _ (when (:why site) (ctx/update-mem! c assoc :pocket (:why site)))
-        far (when (:cells site) (await (go-air! c)))
-        made (when (= :none far) (await (pocket/make! c site)))]
+        ;; with no air seen near, a swim up the own column is blind: seen air further out is the known way back
+        far? (or (:cells site) (and (nil? target) (some? (seen-surface (:primitives c) (u/self-pos c) (:failed-air (ctx/mem c))))))
+        far (when far? (await (go-air! c)))
+        made (when (and (:cells site) (= :none far)) (await (pocket/make! c site)))]
     (cond
       (or (true? far) (true? made)) true
-      ;; the go-to moved the body: the site is read again next pass
-      (and (:cells site) (nil? far)) nil
+      ;; the go-to moved the body: the site and the air are read again next pass
+      (and far? (nil? far)) nil
       :else
       (let [r (await (swim/swim-up! c target))]
         (cond
