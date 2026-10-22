@@ -5,7 +5,7 @@
             [engine.ctx :as ctx]
             [engine.game :as game]
             [jobs.items.obtain.base :refer [animal-radius explore-far-setting explore-rounds search-scan-radius site-radius tried! ways-of]]
-            [jobs.items.obtain.need :refer [explore-opts gather-viable? pickaxe-first? search-names tools-wanted trees-unreachable?]]
+            [jobs.items.obtain.need :refer [explore-opts gather-viable? pickaxe-first? light-settling? search-names tools-wanted torch-due trees-unreachable?]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
             [jobs.lib.breath :as breath]
@@ -251,6 +251,26 @@
     (or (await (fetch-need/return! c))
         (await (torch-stock/torches! c)))))
 
+(defn start-cause
+  "The cause of the need's child's start check now."
+  [c need]
+  (contract/status-cause (ctx/child-status c (gather-slot need) (:job need) (:args need))))
+
+(defn book-light!
+  "Book the cell for the light step of the next round; :again."
+  [c cell]
+  (ctx/update-mem! c assoc-in [:gather :light] cell)
+  :again)
+
+(defn ^:async light-step!
+  "Hang a torch at cell (a jobs.build.light-area child, which fetches one when none is carried): :continue while it runs, else :again
+  with the cell booked as tried, and when."
+  [c cell]
+  (let [r (await (ctx/call c :light 'jobs.build.light-area {:cells [cell]}))]
+    (if (= :continue r)
+      :continue
+      (do (ctx/update-mem! c (fn [m] (-> m (update :gather dissoc :light) (assoc-in [:gather :lit cell] (ctx/now c))))) :again))))
+
 (defn ^:async gather-step!
   "One round of the gather source: the child for the first raw item the chain lacks, until it ends."
   [c names have target]
@@ -264,6 +284,8 @@
       stocking stocking
       (:approach (ctx/mem c)) (await (approach-step! c))
       wet wet
+      (get-in (ctx/mem c) [:gather :light])
+      (await (light-step! c (get-in (ctx/mem c) [:gather :light])))
       (nil? need) (tried! c :gather :no-plan)
       (= (:key need) (get-in (ctx/mem c) [:gather :lead :key]))
       (await (lead-step! c))
@@ -280,6 +302,10 @@
            (or (not (seen-of c need)) (get-in (ctx/mem c) [:gather :unreachable (:key need)]) (trees-unreachable? c need))
            (< (get-in (ctx/mem c) [:explored (:key need)] 0) (explore-rounds)))
       (await (explore-walk! c need))
+      (and (not (get-in (ctx/mem c) [:gather :before])) (torch-due c (start-cause c need)))
+      (book-light! c (torch-due c (start-cause c need)))
+      (and (not (get-in (ctx/mem c) [:gather :before])) (light-settling? c (start-cause c need)))
+      :continue
       (and (not (get-in (ctx/mem c) [:gather :before]))
            (not (if (explore-opts c)
                   ;; :later (dark, night) is the child's to wait out, not a sign that nothing is there
@@ -326,9 +352,12 @@
                   (do (when-let [w (or (:why res) (spared-why res))] (ctx/update-mem! c assoc-in [:gather :why] w))
                       (when-let [cells (seq (:skipped res))] (ctx/update-mem! c note-skipped cells))
                       (when-let [cols (seq (:columns res))] (ctx/update-mem! c update :cut-off (fnil into #{}) (map vec) cols))
-                      (if-let [col (and (#{:flooded :wet :exposed} (contract/cause-key e)) at)]
-                        (do (ctx/update-mem! c update :cut-off (fnil conj #{}) col) :again)
-                        (gather-failed! c names need (if (= :done (:kind e)) :nothing-gathered (contract/cause-key e)) e)))))))))))
+                      (cond
+                        (torch-due c (:cause e)) (book-light! c (torch-due c (:cause e)))
+                        (light-settling? c (:cause e)) :again
+                        (and (#{:flooded :wet :exposed} (contract/cause-key e)) at)
+                        (do (ctx/update-mem! c update :cut-off (fnil conj #{}) at) :again)
+                        :else (gather-failed! c names need (if (= :done (:kind e)) :nothing-gathered (contract/cause-key e)) e)))))))))))
 
 (defn ^:async finish-tree!
   "The log child of an earlier round was cut before it ended: runs it to its end even when the logs carried are enough

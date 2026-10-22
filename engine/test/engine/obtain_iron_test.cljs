@@ -379,6 +379,32 @@
               "each refused ore is left for the next, none counted as nothing seen")
           (is (not-any? #(= :none-seen (:reason %)) (f/events-of s :waiting))))))))
 
+(defn ^:async hall-refusal-run
+  "Obtain one raw_iron from a seen ore while the mine refuses a dark hall at cell until light-area has run, the refusal
+  given by refuse (the mine def, lit atom -> def); [the light-area cells asked, the raw_iron carried]."
+  [refuse]
+  (let [s (f/start (ore-world {"1,64,4" "iron_ore"} [{:name "stone_pickaxe" :count 1}]) [])
+        lit (atom [])
+        eng (-> (:eng s)
+                (update-in [:jobs 'jobs.gather.mine] refuse lit)
+                (assoc-in [:jobs 'jobs.build.light-area :round]
+                          (fn ^:async f [c] (swap! lit conj (:cells (:args c))) (ctx/end c :done nil {}))))]
+    (await (obtain! (assoc s :eng eng) {:item "raw_iron" :count 1} 120))
+    [@lit (get (f/inv s) "raw_iron")]))
+
+(def hall-cause {:reason :exposed :text "dark hall" :lowered-by #{:torch} :at {:x 0 :y 64 :z 0}})
+
+(deftest a-mine-refused-for-a-dark-hall-a-torch-ends-is-lit-first-then-mined
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (loop [[[how refuse] & more] [["its start check"
+                                        (fn [def lit] (update def :passed-status (fn [ps] (fn [c] (if (seq @lit) (ps c) [:never "dark hall" hall-cause])))))]
+                                       ["its ending"
+                                        (fn [def lit] (update def :round (fn [r] (fn [c] (if (seq @lit) (r c) (ctx/end c :impossible hall-cause))))))]]]
+          (is (= [[[{:x 0 :y 64 :z 0}]] 1] (await (hall-refusal-run refuse))) (str "refused by " how ": the hall cell is lit once, then the ore mined"))
+          (when more (recur more)))))))
+
 (deftest a-body-standing-in-water-walks-to-dry-land-before-it-mines
   (async done
     (tu/run-async done

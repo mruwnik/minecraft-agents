@@ -1,0 +1,26 @@
+;; Card c640fc51 (get-kit "stopped at iron_axe: exposed" with 8 torches): an iron ore in the east wall of a hall 3 wide and 42 long. Torches light
+;; the hall until the body has seen it and the ore, then they are taken away: a dark hall (dark floor beyond the 24-block spawn-free radius of the
+;; dig spot), which the mine's start check refuses and a torch ends. Stone mass x 0..44, z 3..9, y 0..4; hall x 1..42, z 5..7, y 0..1.
+;; Should-succeed: with torches carried the obtain hangs one at the dig spot and mines the ore. Should-fail: no torch and nothing to craft one from,
+;; the obtain stops (no source) instead of mining in the hall.
+{:defaults
+ {:tags [:obtain :mine :torch :jobs] :time :any
+  :plot {:light :dark :height 10 :length 48 :width 16}
+  :blocks [[:fill [0 0 3] [44 4 9] "stone"] [:fill [1 0 5] [42 1 7] "air"] [:set [43 0 6] "iron_ore"]
+           [:set [10 0 6] "torch"] [:set [22 0 6] "torch"] [:set [34 0 6] "torch"] [:set [41 0 7] "torch"]]
+  :body {:at [14.5 0 6.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8]]}
+  :act [[:until-seen {:block "iron_ore"} 20]
+        [:wait-s 3]
+        [:rcon "execute positioned $X $Y $Z run fill ~1 ~ ~5 ~42 ~ ~7 air replace torch"]
+        [:wait-s 2]
+        [:job (jobs.items.obtain {:item "raw_iron" :count 1 :explore false})]]
+  :limit-s 200}
+ :cases
+ [{:name "ore-in-a-dark-hall-is-lit-then-mined"
+   :expect [{:event {:source :job :kind :completed} :within-s 190 :of-job true}
+            {:count-event {:source :action :kind :done :data {:name "place" :status "placed"}} :for-s 190 :at-least 1}]
+   :after [[:item "raw_iron" [:>= 1]]]}
+  {:name "ore-in-a-dark-hall-no-torches-stops"
+   :body {:at [14.5 0 6.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["cobblestone" 16]]}
+   :expect [{:event {:source :job :kind #{:stopped}} :within-s 190 :of-job true}]
+   :after [[:item "raw_iron" [:= 0]]]}]}

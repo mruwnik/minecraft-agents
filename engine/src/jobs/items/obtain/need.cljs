@@ -24,6 +24,32 @@
                  (and (makes? c) (craft-plan c tools 1))
                  (and (gathers? c) (or (gather-viable? c tools 1) (explorable? c tools 1)))))))
 
+(defn hall-cell
+  "The cell of a dark hall refusal a torch ends (jobs.lib.ready/hall-status: :exposed, lowered by :torch, :at), else nil."
+  [cause]
+  (let [{:keys [reason lowered-by at]} (when (map? cause) cause)]
+    (when (and (= :exposed reason) (contains? lowered-by :torch)) at)))
+
+(def light-settle-ms "How long after a torch is hung its light may take to reach what the body perceives." 3000)
+
+(defn torch-due
+  "The cell to light when a refusal of the need's child (its ending's or its start check's cause) is a dark hall a torch
+  ends and no torch was hung there yet this gather; nil else. A player lights the hall, not leaves the ore."
+  [c cause]
+  (let [at (hall-cell cause)]
+    (when (and at (not (contains? (get-in (ctx/mem c) [:gather :lit]) at))) at)))
+
+(defn light-settling?
+  "Whether the refusal is a dark hall at a cell lit less than light-settle-ms ago: the light is not perceived yet."
+  [c cause]
+  (let [t (some->> (hall-cell cause) (get (get-in (ctx/mem c) [:gather :lit])))]
+    (boolean (and t (< (- (ctx/now c) t) light-settle-ms)))))
+
+(defn lights-itself?
+  "Whether the gather source deals with the refusal itself: a torch is due or its light settling."
+  [c cause]
+  (or (some? (torch-due c cause)) (light-settling? c cause)))
+
 (defn gather-viable?
   "Whether a chain is craftable once raw items are gathered, and a block for every raw need has been seen and
   the child of the first would run (or, when no carried tool harvests its block, the tool's obtain child would)."
@@ -33,7 +59,8 @@
          (let [need (with-block c (first needs))]
            (boolean (if (tools-wanted c names need)
                       (tool-viable? c names need)
-                      (= :ok (first (ctx/child-status c (gather-slot need) (:job need) (:args need))))))))))
+                      (let [s (ctx/child-status c (gather-slot need) (:job need) (:args need))]
+                        (or (= :ok (first s)) (lights-itself? c (contract/status-cause s))))))))))
 
 (defn explore-opts
   "The search options, or nil when the :search way is off (or :explore false)."
@@ -88,7 +115,8 @@
 (defn gather-held
   "When every raw need of the chain is seen and the first one's child would wait for a reason of its own (night in
   a shelter ..): that reason as a cause, the source there, only not now; else nil. A need that wants a tool first
-  has the wait of the tool's own chain (a pickaxe from logs held by the night shelter). The cause's metadata :kind is
+  has the wait of the tool's own chain (a pickaxe from logs held by the night shelter); a dark hall a torch ends is no
+  hold (the gather lights it, lights-itself?). The cause's metadata :kind is
   the child's status kind (:later or :look)."
   [c names n]
   (let [needs (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))) seq)
@@ -97,4 +125,5 @@
       (if-let [tools (tools-wanted c names need)]
         (gather-held c tools 1)
         (let [s (ctx/child-status c (gather-slot need) (:job need) (:args need))]
-          (when-not (= :ok (first s)) (with-meta (contract/status-cause s) {:kind (first s)})))))))
+          (when-not (or (= :ok (first s)) (lights-itself? c (contract/status-cause s)))
+            (with-meta (contract/status-cause s) {:kind (first s)})))))))
