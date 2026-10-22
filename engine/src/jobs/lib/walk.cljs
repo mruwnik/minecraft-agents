@@ -367,6 +367,12 @@
     (when (and (= :drop move) (>= (- (:y (nth steps (dec i))) y) landing-look-drop))
       (for [dx [-1 0 1] dz [-1 0 1] dy [0 1]] [(+ x dx) (+ y dy) (+ z dz)]))))
 
+(defn orthogonal-landing-cells
+  "The landing-cells of step i in its own column or the four columns beside it (no diagonal)."
+  [steps i]
+  (let [{:keys [x z]} (nth steps i)]
+    (filter (fn [[cx _ cz]] (<= (+ (js/Math.abs (- cx x)) (js/Math.abs (- cz z))) 1)) (landing-cells steps i))))
+
 (defn first-unseen-landing
   "The index of the first step from 1 on that is a drop (landing-cells) with a cell the body never saw and has not looked at (looked), nil when there is none."
   [p steps looked]
@@ -375,12 +381,13 @@
 
 (defn ^:async look-landing!
   "Look at the unseen cells of step 1's landing, as a player looks into a hole before jumping down. Lava in or beside the
-  landing ends the walk {:status :replan :why :changed} with the landing as walls; else {:looked cells}."
+  landing (its cell or one orthogonally beside) ends the walk {:status :replan :why :changed}, the planner then prices the
+  landing from the lava now seen and may still take it as the only way; lava only diagonal is no danger: {:looked cells}."
   [c steps]
   (let [p (:primitives c)
         cells (landing-cells steps 1)]
     (await (sense/look-at-unknown! c (u/nearest-first (u/self-pos c) identity (filter #(sense/unknown? p %) cells)) 2))
-    (if (some #(= "lava" (u/seen-name p (zipmap [:x :y :z] %))) cells)
+    (if (some #(= "lava" (u/seen-name p (zipmap [:x :y :z] %))) (orthogonal-landing-cells steps 1))
       (let [{:keys [x y z]} (nth steps 1) {sx :x sy :y sz :z} (u/self-pos c)]
         {:end {:status :replan :why :changed :learned true :cells [[x y z] [x (inc y) z]] :at [sx sy sz] :step 1}})
       {:looked cells})))

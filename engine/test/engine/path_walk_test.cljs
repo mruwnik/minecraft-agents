@@ -518,4 +518,6 @@
     (is (= 18 (count (walk/landing-cells steps 1))) "3x3 columns at feet and head level")
     (is (some #{[0 64 -1] [2 65 1]} (walk/landing-cells steps 1)))
     (is (nil? (walk/landing-cells steps 2)))
-    (is (nil? (walk/landing-cells steps 3)))))
+    (is (nil? (walk/landing-cells steps 3)))
+    (is (= 10 (count (walk/orthogonal-landing-cells steps 1))) "own column and the four beside it, feet and head")
+    (is (not-any? #{[0 64 -1] [2 65 1]} (walk/orthogonal-landing-cells steps 1)) "no diagonal")))

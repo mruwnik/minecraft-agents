@@ -1,0 +1,20 @@
+;; A 2-high drop is the only way on, and lava lies diagonal to its landing (behind glass, so it stays put): the walk looks at
+;; the landing, finds no lava in or beside it, and drops. Room x10..15 (feet y2), a 1-wide hall below turns east at z20.
+;; Should-succeed: the body arrives unhurt (it has no resistance).
+{:defaults
+ {:tags [:movement :lava :jobs]
+  :time :any
+  :plot {:height 12}
+  :blocks [[:fill [8 0 8] [24 8 24] "stone"]
+           [:fill [10 2 12] [15 4 20] "air"]
+           [:fill [16 0 16] [16 3 20] "air"]
+           [:fill [16 0 20] [22 3 20] "air"]
+           [:set [17 0 16] "glass"]
+           [:set [17 0 15] "lava"]]
+  :body {:at [11.5 2 16.5] :settle-s 3}
+  :limit-s 120}
+ :cases
+ [{:name "drop-with-diagonal-lava-is-taken-when-it-is-the-only-way"
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 20] :range 1})]]
+   :expect [{:event {:source :job :kind #{:completed} :data {:status :completed}} :within-s 100 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 90 :until {:source :job :kind #{:completed :stopped}}}]}]}
