@@ -13,8 +13,7 @@
   {::starving-rest-ms {:default 60000 :doc "The rest after a fruitless food search while starving (food 0, or hurt and hungry), for the hungry trigger." :spec (a/num-in 0 nil)}
    ::reserve-eat-below {:default 3 :doc "At this much food or less reserved items are eaten as well." :spec (a/int-in 0 20)}
    ::low-health {:default 10 :doc "Below this health (of 20) precious food is eaten unnamed." :spec (a/int-in 0 nil)}
-   ::fragile-health {:default 6 :doc "At or below this health a body with no food carried walks out for food only in the light with no hostile known near, and never past a known hostile that would likely kill it (get-food); starving, it also walks in the dark to food within ::starving-walk-range." :spec (a/num-in 0 20)}
-   ::starving-walk-range {:default 16 :doc "Blocks: how far a fragile body that cannot heal walks for a known food animal or crop in the dark or past a known hostile (the route danger still under its health)." :spec (a/num-in 0 nil)}})
+   ::fragile-health {:default 6 :doc "At or below this health a body with no food carried searches unknown ground for food only in the light with no hostile known near (get-food)." :spec (a/num-in 0 20)}})
 
 (def table-for
   "{item name {:points :saturation}} for every food minecraft-data lists for a version (memoised)."
@@ -58,7 +57,6 @@
   #{"chorus_fruit" "suspicious_stew"})
 
 (defn low-health [] (settings/get settings ::low-health))
-(defn starving-walk-range [] (settings/get settings ::starving-walk-range))
 
 (defn food? [item] (contains? (table) item))
 

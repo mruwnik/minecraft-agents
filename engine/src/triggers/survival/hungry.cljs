@@ -65,7 +65,7 @@
   Holds at :urgent when eat-now? does (low health), food is at most ::urgent-food (2), or the body is hungry? with food carried (one bite, no search), else at its :comfort level.
   Args: :food, :health, :rest-s.
   In the dark it holds only with food carried to eat: a search in the dark walks into mobs, and starvation stops at half a heart.
-  A fragile body (foods/fragile?) with no food carried holds in the dark too (only food heals it); get-food's risk check lets it walk only to known food within foods/::starving-walk-range.
+  A fragile body (foods/fragile?) with no food carried holds in the dark too (only food heals it); go-to's start check prices its walk to known food.
   Nor with a real danger near and no food carried: the body hides first, whatever its health.
   It rests (resting?) for :rest-s (600; at most foods/::starving-rest-ms, 60 s, when starving) after get-food ended unfed (:no-food, :still-hungry), so a body with nothing at hand is not sent
   searching again every cooldown. The rest ends when food is carried, wheat to bake is, or a food source is learned."
