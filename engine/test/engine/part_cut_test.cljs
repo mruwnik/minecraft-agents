@@ -146,6 +146,13 @@
     (is (false? (at 11800 0)) "at the debt the body would be due home: dusk-home would call it back at once")
     (is (true? (at 11800 4)) "a debt beside home")))
 
+(deftest the-replant-owed-trigger-follows-the-retuned-dusk-home-timing
+  (let [debt [:forestry/replant {:pos {:x 6 :y 64 :z 0} :species "oak"}]
+        at (fn [args] (ro/replant-owed (:p (lt/setup {:blocks (fm/ground [[6 0]]) :inventory [sapling] :time 11800}))
+                                       (view [debt [:home {:pos {:x 30 :y 64 :z 0}}]]) args (ew/of-data {} {} []) nil))]
+    (is (false? (at ro/defaults)) "10 s of day left, inside the default margin: due home")
+    (is (true? (at (assoc ro/defaults :margin-s 0 :slack 0))) "a retuned timing leaves time to plant")))
+
 (deftest plant-sapling-notes-a-failed-debt-cell-so-the-trigger-stays-quiet
   (async done
     (tu/run-async done

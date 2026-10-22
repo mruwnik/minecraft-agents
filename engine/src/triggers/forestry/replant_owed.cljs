@@ -5,19 +5,19 @@
   to fetch. A debt whose cell is not loaded is no reason to act (the walk would end :not-loaded and refire): it waits
   until the body is near enough for the chunk to load, and for two minutes after plant-sapling failed there (a walk that ended :not-loaded, :unreachable ..).
   Nor does a debt where the body would be due home before night (jobs.lib.shelter/home-due-at?, the dusk-home trigger's
-  timing): the walk home owns the dusk."
+  timing, which :args carry the same keys of): the walk home owns the dusk."
   (:require [engine.memory :as mem]
             [jobs.lib.body :as body]
             [jobs.lib.shelter :as sh]
             [jobs.lib.trees :as trees :refer [replant-kind]]
             [jobs.lib.util :as u]))
 
-(def defaults {})
+(def defaults sh/home-due-defaults)
 
 (defn replant-owed
   "Holds alive, on the ground, while a replant debt's sapling is carried, its cell is loaded and the body is not due home from it."
-  [p view _args _kn _live]
+  [p view args _kn _live]
   (boolean
    (and (not (body/recovery-pending? view :replant-owed))
         (not (false? (.-onGround (.self p))))
-        (some #(and (u/block-at p (:pos %)) (not (sh/home-due-at? p view (:pos %) {}))) (trees/with-sapling (trees/without-stalled view (map :data (mem/entries view replant-kind))) (u/inventory p))))))
+        (some #(and (u/block-at p (:pos %)) (not (sh/home-due-at? p view (:pos %) args))) (trees/with-sapling (trees/without-stalled view (map :data (mem/entries view replant-kind))) (u/inventory p))))))
