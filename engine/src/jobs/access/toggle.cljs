@@ -66,7 +66,7 @@
 
 (def safe? (ready/safe-at-build (fn [c] (a/cell (:pos (:args c))))))
 
-(def fit? ready/fit?)
+(def fit? ready/ok)
 
 (def target [:pos])
 

@@ -27,6 +27,12 @@
    :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :pen-gate} :data {:kind :done}} :within-s 50}]
    :after [[:block [13 0 12] "oak_fence_gate[open=false]"]
            [:block [19 0 12] "oak_fence_gate[open=true]"]]}
+  {:name "hurt-body-still-shuts-the-gate"
+   :plans [{:id "pen" :parts [{:id "gate" :cells [#at [13 0 12]] :want [:any "oak_fence_gate"]}]}]
+   :blocks [[:fill [19 0 12] [19 0 12] "oak_fence"]]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 16 minecraft:generic"]]
+   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :pen-gate} :data {:kind :done}} :within-s 60}]
+   :after [[:block [13 0 12] "oak_fence_gate[open=false]"]]}
   {:name "unplanned-gates-left-open"
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :pen-gate}} :for-s 20}]
    :after [[:block [13 0 12] "oak_fence_gate[open=true]"]
