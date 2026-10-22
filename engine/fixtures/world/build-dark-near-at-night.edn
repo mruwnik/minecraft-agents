@@ -1,0 +1,29 @@
+;; Card c9f1595d: a build job does not wait for light at a dark site within the radius no mob spawns in (24 blocks of the body):
+;; blocks.place, build.light-area and build.from-plan work there at night. Open plot at night, the body on grass; the site is 10 blocks off.
+;; Should-succeed: all three cases. Should-fail: none (a site beyond 24 blocks still waits, covered by the ready tests).
+;; Needs night: run with --allow-time --time-log <the shared time log>.
+{:defaults
+ {:tags [:build :light :night]
+  :time :night :time-why :night-light
+  :plot {:height 8 :floor "grass_block"}
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "a-torch-ten-blocks-off-is-placed-in-the-dark"
+   :body {:inventory [["torch" 4]]}
+   :act [[:job (jobs.blocks.place {:pos #at [26 0 16] :item "torch"})]]
+   :expect [{:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 60 :of-job true}
+            {:no-event {:source :job :data {:reason :exposed}} :for-s 5 :of-job true}]
+   :after [[:block [26 0 16] "torch"]]}
+  {:name "a-site-ten-blocks-off-is-lit-in-the-dark"
+   :body {:inventory [["torch" 8]]}
+   :act [[:job (jobs.build.light-area {:boxes [[#at [24 0 14] #at [28 0 18]]]})]]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 60 :of-job true}
+            {:no-event {:source :job :data {:reason :exposed}} :for-s 5 :of-job true}]}
+  {:name "a-floor-ten-blocks-off-is-built-in-the-dark"
+   :body {:inventory [["cobblestone" 4]]}
+   :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [26 0 16] #at [27 0 16]] :want "cobblestone"}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]]
+   :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 80 :of-job true}
+            {:no-event {:source :job :data {:reason :exposed}} :for-s 5 :of-job true}]
+   :after [[:block [26 0 16] "cobblestone"] [:block [27 0 16] "cobblestone"]]}]}

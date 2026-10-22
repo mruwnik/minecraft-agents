@@ -432,10 +432,12 @@
 
 (deftest the-work-jobs-bind-their-place-by-night
   (are [world job args expected] (= expected (lit 0 15 #(first ((:safe? job) (assoc (ctx-of world) :args args)))))
-    open-night {:safe? place/safe?} {:pos [15 64 0]} :later
+    open-night {:safe? place/safe?} {:pos [40 64 0]} :later
+    open-night {:safe? place/safe?} {:pos [15 64 0]} :ok
     open-night {:safe? place/safe?} {:pos [1 64 0]} :ok
     night-hut {:safe? place/safe?} {:pos [6 64 0]} :ok
-    open-night {:safe? light-area/safe?} {:cells [[15 64 0]]} :later
+    open-night {:safe? light-area/safe?} {:cells [[40 64 0]]} :later
+    open-night {:safe? light-area/safe?} {:cells [[15 64 0]]} :ok
     night-hut {:safe? light-area/safe?} {:cells [[6 64 0]]} :ok
     open-night {:safe? fill-cells/safe?} {:cells [[15 64 0]]} :later
     night-hut {:safe? fill-cells/safe?} {:cells [[6 64 0]]} :ok
@@ -491,7 +493,7 @@
       'jobs.food.fish {:pos [6 64 0]} night-hut :ok)))
 
 (deftest farm-and-build-jobs-bind-the-place-of-their-args
-  (doseq [job (remove '#{jobs.build.light-area jobs.farm.irrigate} work-jobs)]
+  (doseq [job (remove '#{jobs.build.light-area jobs.build.from-plan jobs.farm.irrigate} work-jobs)]
     (are [args world expected] (= expected (lit 0 15 #(bound (safe-of job) world args)))
       {:at [15 64 0]} night-hut :later
       {:at [6 64 0]} night-hut :ok)))
@@ -534,3 +536,14 @@
       8 ["cow"] {:floor {:health 0} :leg-s 30}
       20 ["cow"] {:leg-s 5}
       8 :hostiles {:leg-s 10})))
+
+(deftest dark-near-ok-lifts-the-wait-for-light-only-within-the-no-spawn-radius
+  (are [to expected] (= expected (lit 0 15 #(kind (ready/dark-near-ok (constantly to) (ready/safe-at-by-night (constantly to))) open-night)))
+    {:x 15 :y 64 :z 0} :ok
+    {:x 40 :y 64 :z 0} :later))
+
+
+(deftest from-plan-does-not-wait-for-light-at-a-site-in-the-no-spawn-radius
+  (are [args expected] (= expected (lit 0 15 #(bound (safe-of 'jobs.build.from-plan) open-night args)))
+    {:at [15 64 0]} :ok
+    {:at [40 64 0]} :later))

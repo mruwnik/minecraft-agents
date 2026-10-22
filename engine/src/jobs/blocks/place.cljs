@@ -66,7 +66,8 @@
 
 (def safe?
   (ready/ok-when-near (fn [c] (let [{:keys [pos error]} (b/parse (:args c))] (and (not error) (b/in-reach? c pos (:see (:args c))))))
-                      (ready/safe-at-by-night (ready/near-unseen-here (fn [c] (a/cell (:pos (:args c))))))))
+                      (let [place (ready/near-unseen-here (fn [c] (a/cell (:pos (:args c)))))]
+                        (ready/dark-near-ok place (ready/safe-at-by-night place)))))
 
 (def fit? ready/ok)
 
