@@ -216,6 +216,8 @@
 
 (defn of-kind [seen kind] (filterv #(= kind (:kind %)) @seen))
 
+(declare stopped-data)
+
 (defn ^:async one-run!
   "Submit breathe with args and run exactly one tick: one round is the whole attempt."
   [eng args]
@@ -235,6 +237,18 @@
           (is (true? (.-tread (.-args (last (array-seq (.. p -world -calls)))))) "the body treads, its head stays out while it stops")
           (is (empty? (of-kind seen :holding)) "no hold")
           (is (empty? (of-kind seen :afloat))))))))
+
+(deftest a-stop-afloat-in-a-one-wide-shaft-swims-up-and-names-the-cells-around-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:inWater true :oxygen 4}
+                                           :blocks (merge (shaft 67) (into {"0,71,0" "stone"} (for [y (range 68 71) [x z] [[1 0] [-1 0] [0 1] [0 -1]]] [(str x "," y "," z) "stone"])))})]
+          (await (one-run! eng defaults))
+          (is (= {:x 0 :y 67 :z 0} (core/self-pos p)) "swum straight up the shaft to the top water cell")
+          (is (= [[:stopped :no-land-in-range]] (ended seen)))
+          (is (= ["_#_/#_#/_#_" "_#_/#_#/_#_" "_#_/#~#/_#_" "_#_/#~#/_#_"] (:around (stopped-data seen)))
+              "layers from two above the feet down to one below: ~ water, _ air, # solid"))))))
 
 (deftest drowning-with-a-failing-swim-tries-the-other-ways-then-is-stopped
   (async done

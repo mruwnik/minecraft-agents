@@ -1,5 +1,6 @@
 (ns jobs.survival.breathe
-  (:require [jobs.lib.block-sets :as bs]
+  (:require [clojure.string :as str]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.ready :as ready]
             [jobs.lib.checks :as checks]
             [engine.args :as a]
@@ -223,6 +224,16 @@
               (when (and cell (= "water" (u/seen-name p cell))) cell)))
           (range (leg-length) (dec (min-leg)) -1))))
 
+(defn around
+  "The 3x3 cells about pos (rows by z, columns by x) as a string per layer, from two above the feet down to one below:
+  ~ water, _ air, ? unseen, # anything else. A stop carries it, so a log says what the body saw."
+  [p pos]
+  (let [fx (js/Math.floor (:x pos)) fy (js/Math.floor (:y pos)) fz (js/Math.floor (:z pos))
+        ch (fn [n] (cond (nil? n) "?" (= "water" n) "~" (bs/air n) "_" :else "#"))]
+    (vec (for [dy [2 1 0 -1]]
+           (str/join "/" (for [dz [-1 0 1]]
+                           (apply str (for [dx [-1 0 1]] (ch (u/seen-name p {:x (+ fx dx) :y (+ fy dy) :z (+ fz dz)}))))))))))
+
 (defn ^:async stop-afloat!
   "Every way out of the water is spent: tread water a while (a body left idle sinks, its head goes under again), remember
   the spot's failed headings and stop with reason (:no-land-in-range, or :no-blocks when a step cell was left and no
@@ -241,7 +252,7 @@
                            (when (= :no-blocks reason) ", and no block to step out on")))
               :unreached (count (:failed-land m))
               :searched (search-radius) :swum (js/Math.round (hdist pos (:start m pos))) :legs (:legs m 0)
-              :headings-failed (count failed)
+              :headings-failed (count failed) :around (around (:primitives c) pos)
               :step (cond (= :no-blocks reason) :no-blocks (:step-refused m) :refused (seq (:failed-steps m)) :failed :else :no-wall)})))
 
 (defn max-steps [] (settings/get settings ::max-steps))
