@@ -131,8 +131,8 @@
 
 (defn exposure
   "{:chance :lowered-by} of the walk of p to `to` ({:x :y :z}, a column {:x :z} at the feet's height; floored): the mob spawn chance per second it meets and
-  what lowers it (with :light-in, the seconds until light, when :light does), data the readiness checks read (empty: nothing foreseeable does, so never). A walk that leaves shelter
-  (sh-inside/walk-leaves-shelter?, with the body's latest :shelter entry data when given) meets the open-sky night figure, any
+  what lowers it (with :light-in, the seconds until light, when :light does), data the readiness checks read (empty: nothing foreseeable does, so never). A place outside the shelter
+  (sh-inside/walk-leaves-shelter?, with the body's latest :shelter entry data when given) that p has no light data of is guessed under open sky; any
   other the spawn-chance at `to` from the light p has seen; :light lowers a chance that darkness alone puts there and light-in says waiting lifts, but only
   at a cell the sky reaches down its column (under leaves too): a roofed dark cell (a stair, a cave) is no exposure on its own, only threats count. A cell p
   has no light data of is guessed dark and lowered by #{:look}, with :look-at [[x y z]]. A solid seen `to` is judged by the air cell over it (a solid cell has no light that night changes). Lava and the like are not spawn
@@ -150,7 +150,7 @@
          open-sky (fn [c] {:block (or (block-of c) 0) :sky 15})
          lit-by (fn [raw darkening] (fn [c] (when-let [{:keys [block sky]} (raw c)] {:block block :sky (if (< (- sky darkening) dark) 0 15)})))
          leaves? (sh-inside/walk-leaves-shelter? p shelter to 1)
-         raw (if leaves? open-sky raw-light)
+         raw (if leaves? (fn [c] (or (raw-light c) (open-sky c))) raw-light)
          darkening (sh-sense/sky-subtract-now p)
          at {:x (nth cell 0) :y (nth cell 1) :z (nth cell 2)}
          dark-chance (spawn-chance cell {:light (lit-by raw darkening)})

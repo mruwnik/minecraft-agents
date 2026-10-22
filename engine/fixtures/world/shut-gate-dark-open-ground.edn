@@ -1,0 +1,17 @@
+;; Q380/Q382: the pen-gate reflex prices the dark by expected damage (jobs.lib.price), it does not hold the gate open until dawn.
+;; Open grass at night, an own pen with its gate left open 10 blocks off. Should-succeed: the gate is shut at once, no wait for light.
+{:defaults
+ {:tags [:animals :triggers :pen-gate :night]
+  :time :night :time-why :night-light
+  :plot {:height 8 :floor "grass_block"}
+  :register [{:trigger :pen-gate}]
+  :blocks [[:fill [10 0 12] [22 0 12] "oak_fence"]
+           [:set [16 0 12] "oak_fence_gate[facing=south,open=true]"]]
+  :plans [{:id "pen" :parts [{:id "gate" :cells [#at [16 0 12]] :want [:any "oak_fence_gate"]}]}]
+  :body {:at [16.5 0 22.5] :yaw 180 :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "open-gate-is-shut-in-the-dark-without-waiting-for-dawn"
+   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :pen-gate} :data {:kind :done}} :within-s 60}
+            {:no-event {:source :job :data {:reason :exposed}} :for-s 5}]
+   :after [[:block [16 0 12] "oak_fence_gate[open=false]"]]}]}

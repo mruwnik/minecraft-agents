@@ -1,6 +1,6 @@
 (ns jobs.lib.ready
   "The readiness checkers a job binds as its safe? and fit? exports: fns of the ctx giving a status (engine.contract).
-  safe-at, safe-at-by-night and safe-if-lit are :later while the place is exposed (the estimate of jobs.lib.cost/exposure is
+  safe-at, safe-at-by-night and safe-if-lit are :later while the place is exposed and the stay there is not affordable (jobs.lib.price/priced; the estimate of jobs.lib.cost/exposure is
   above ::risk-limit; :look while the light there is unseen and the body has not looked round, then :later; :never when light is further off than the job waits; darkness no sky light reaches is no exposure) or a danger is near
   (threatened); fit? is :later below the risky health or while poisoned (fit-armed also while unarmed); ok never refuses."
   (:require [jobs.lib.cost.health :as cost-health]
@@ -16,6 +16,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger]
+            [jobs.lib.price :as price]
             [jobs.lib.dawn :as dawn]
             [jobs.lib.foods :as foods]
             [jobs.lib.look-edge :as look-edge]
@@ -94,7 +95,7 @@
   [c to]
   (let [p (:primitives c)
         to (update-vals (or to (sh-sense/feet p)) js/Math.floor)]
-    (check-cache/cached c [::exposed to (sense/round-looked c)] #(at-status c to))))
+    (price/priced c (check-cache/cached c [::exposed to (sense/round-looked c)] #(at-status c to)))))
 
 (defn trigger-args
   "The args of the register's hostile-near entry (muted or not), {} when it has none."
@@ -275,12 +276,7 @@
   [floor c]
   (checks/low-health-min floor c))
 
-(defn cannot-heal?
-  "Whether the body of ctx c can not heal by waiting: food under foods/top-up-food and nothing a meal would eat carried (reserved food, which the hungry trigger and an unnamed meal leave alone, does not count)."
-  [c]
-  (let [self (.self (:primitives c))]
-    (and (< (.-food self) foods/top-up-food)
-         (not (foods/carries-food? self (reserve/spared (ctx/view c) self))))))
+(def cannot-heal? price/cannot-heal?)
 
 (defn hurt-cannot-heal?
   "Health under foods/::low-health with only food able to heal it (cannot-heal?): work that risks the body should wait for food."

@@ -23,6 +23,7 @@
             [jobs.blocks.dig :as dig]
             [jobs.blocks.fill-cells :as fill-cells]
             [jobs.blocks.place :as place]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.world :as known]
@@ -50,10 +51,10 @@
             [jobs.time.wait-for-light :as wait-for-light]))
 
 (defn ctx-of
-  "A job's ctx over a fake body built from world (a fresh job id: the check cache is per job)."
+  "A job's ctx over a fake body built from world (a fresh job id: the check cache is per job), staying at its place long enough that no exposure is affordable (jobs.lib.price)."
   [world]
   (let [p (cond-> (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor} world))) (not (:light world)) sky/with-sky)]
-    {:id (str (random-uuid)) :slots [] :engine {:warned (atom #{})} :primitives p :view (fn [] {:now 0 :data {}})}))
+    {::price/stay-s 1e6 :id (str (random-uuid)) :slots [] :engine {:warned (atom #{})} :primitives p :view (fn [] {:now 0 :data {}})}))
 
 (def inside {:x 5 :y 64 :z 0})
 (def outside {:x 15 :y 64 :z 0})
@@ -84,6 +85,12 @@
     (is (pos? (:recheck-after-ms (nth s 2))) "a trigger held on it waits for the light")
     (is (re-find #"15 64 0" (second s)) "names the place")
     (is (re-find #"until light" (second s)) "and what helps")))
+
+(deftest an-exposed-place-is-ok-while-the-stay-there-is-affordable
+  (let [check (ready/safe-at (constantly outside))
+        status (fn [stay-s] (lit 0 15 #(check (assoc (ctx-of open-night) ::price/stay-s stay-s))))]
+    (is (= :ok (first (status 2))))
+    (is (= :later (first (status 1e6))))))
 
 (deftest safe-at-waits-for-light-only-within-the-light-patience
   (let [check (ready/safe-at (constantly outside))

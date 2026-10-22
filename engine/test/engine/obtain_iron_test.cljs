@@ -1,6 +1,7 @@
 (ns engine.obtain-iron-test
   "Iron as a source of items.obtain: raw ores mined from their seen ore blocks, smelt products made by a smelt child."
   (:require [cljs.test :refer [deftest is async]]
+            [engine.settings :as settings]
             [jobs.items.obtain.gather :as gather]
             [engine.core :as core]
             [engine.fake :as fake]
@@ -227,7 +228,7 @@
           (doseq [pitch [-80 80 0]]
             (swap! (fake/state (:p s)) assoc :pitch pitch)
             (perception/pass! (aget (:p s) "perception")))
-          (await (obtain! s {:item "stone_pickaxe" :count 1 :ways #{:craft}} 8))
+          (await (settings/with-settings {:jobs.lib.price/risk-share 0} #(obtain! s {:item "stone_pickaxe" :count 1 :ways #{:craft}} 8)))
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "logs are carried: not no-source")
           (is (some #(#{:dark :exposed} (:reason %)) (f/events-of s :waiting))))))))
 

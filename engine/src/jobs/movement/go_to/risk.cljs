@@ -6,7 +6,7 @@
   as a zombie fight with the kit carried, jobs.lib.cost/fight-damage) plus, on a walk with such a stretch (in the light a hostile is seen and avoided; the reflexes meet it), the fight with every hostile known near the way.
   A walk to a goal within the death-spot radius of a place the body died lately (jobs.lib.death-spot, fading with time) adds the fight with what killed it, weighted by how fresh the death is, underground too, only when the walk ends nearer the death than it starts (a body standing, or walking away from the spot, is no closer to it) and the spot has not been seen since the death (fresh sight beats the record; a hostile seen there prices as a known hostile); not within ::pile-radius of the goal (a walk to the body's own drops: only a hostile known there counts).
   Seen lava within ::lava-radius of a cell the straight way steps into adds ::lava-hp, scaled by its closeness (a slip beside it is lethal); a body already at the goal, or a way clear of lava, adds none.
-  Acceptable when it stays within ::risk-share of the health the body has now, or, when the caller says what the goal is worth (:worth), within the hp that worth buys (allowed)."
+  Acceptable when it stays within jobs.lib.price/::risk-share of the health the body has now, or, when the caller says what the goal is worth (:worth), within the hp that worth buys (price/allowed)."
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -17,6 +17,7 @@
             [jobs.lib.hide-spot :as hide-spot]
             [jobs.lib.danger :as danger]
             [jobs.lib.look :as look]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter.inside :as sh-inside]
@@ -25,9 +26,7 @@
             [jobs.lib.walk.world :as wworld]))
 
 (a/defargs settings
-  {::risk-share {:default 0.5 :spec (a/num-in 0 nil)
-                 :doc "Share of the health the body has that the expected damage of a walk (spawns met on its dark open stretches, hostiles near its way) may take; above it go-to's start check waits."}
-   ::surface-band {:default 4 :spec (a/num-in 0 nil)
+  {::surface-band {:default 4 :spec (a/num-in 0 nil)
                    :doc "Blocks below the higher end of a walk that unseen ground still counts as open surface; deeper is underground, where only hostiles count."}
    ::exit-blocks {:default 8 :spec (a/num-in 0 nil)
                   :doc "Blocks of open ground a walk out of a night shelter crosses before it can go under, even to a goal underground."}
@@ -35,10 +34,6 @@
                   :doc "Blocks around the goal within which a remembered death or hide adds no risk: the body walking to the spot goes for its own things, and only a hostile known there counts."}
    ::way-radius {:default 16 :spec (a/num-in 0 nil)
                  :doc "Blocks from the straight way within which a known hostile adds its fight to the risk of the walk."}
-   ::hungry-food {:default 6 :spec (a/int-in 0 20)
-                  :doc "Food at or under which the body cannot sprint away and does not heal: the damage it can afford is cut by ::hungry-share."}
-   ::hungry-share {:default 0.5 :spec (a/num-in 0 1)
-                   :doc "Share of the affordable damage a body at ::hungry-food or under may risk."}
    ::lava-radius {:default 3 :spec (a/int-in 0 nil)
                   :doc "Blocks around a cell of the walk within which seen lava is a risk."}
    ::lava-hp {:default 6 :spec (a/num-in 0 nil)
@@ -141,23 +136,6 @@
         hostile-hp (if (pos? exposed-s) (hit (mapv (fn [e] {:name (.-name e) :distance (danger/mob-distance p e) :hits 0}) hostiles)) 0)]
     {:hp (+ spawn-hp hostile-hp death-hp hide-hp lava) :lava-hp lava :hide-hp hide-hp :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :dark-s exposed-s :hostiles (count hostiles)}))
 
-(defn- round1 [x] (/ (js/Math.round (* 10 x)) 10))
-
-(defn allowed
-  "The hp of expected damage the body may take on a risk now: ::risk-share of its health (cut while hungry), all but 1 hp while it
-  can not heal by waiting (ready/cannot-heal?: waiting never lowers the price). With `worth` (seconds the caller counts the
-  goal worth, the call's :worth), as many hp as that buys at the price of an hp now (dearer when hurt), all but 1 at most, if more."
-  ([c] (allowed c (:worth (:args c))))
-  ([c worth]
-   (let [self (.self (:primitives c))
-         health (.-health self)
-         hungry? (some-> (.-food self) (<= (settings/get settings ::hungry-food)))
-         share (* (settings/get settings ::risk-share) health (if hungry? (settings/get settings ::hungry-share) 1))
-         share (if (ready/cannot-heal? c) (max share (dec health)) share)]
-     (if worth
-       (max share (min (dec health) (/ worth (* (cost/walk-hp-seconds) (cost/health-scale health)))))
-       share))))
-
 (def chest-act-s "Seconds a chest visit (deposit, withdraw) keeps the body at the chest." 3)
 
 (defn trip-s
@@ -167,37 +145,20 @@
             (+ act-s (if (and at (:y at)) (/ (* 2 (u/dist (u/self-pos c) at)) (cost/walk-blocks-per-s)) 0)))))
 
 (defn status
-  "Ok while the estimated damage of the walk to `goal` is within (allowed c), else later :risky with the
+  "Ok while the estimated damage of the walk to `goal` is within (price/allowed c), else later :risky with the
   risk and its parts."
   [c goal]
   (let [{:keys [hp spawn-hp hostile-hp death-hp hide-hp lava-hp dark-s hostiles]} (check-cache/cached c [::risk goal (sense/round-looked c)] #(estimate c goal))
-        allowed (allowed c)]
+        allowed (price/allowed c)]
     (if (<= hp allowed)
-      (contract/ok :acceptable (str "route risk " (round1 hp) " hp, within " (round1 allowed)))
-      (contract/later :risky (str "route risk " (round1 hp) " hp over the " (round1 allowed) " the body can afford: "
-                                  (round1 dark-s) " s on dark open ground costs " (round1 spawn-hp) " hp, "
-                                  hostiles " hostile(s) near the way " (round1 hostile-hp) " hp, " (round1 death-hp) " hp for a recent death near it, " (round1 hide-hp) " hp for a recent hide near it, " (round1 lava-hp) " hp for seen lava near the way")
+      (contract/ok :acceptable (str "route risk " (price/round1 hp) " hp, within " (price/round1 allowed)))
+      (contract/later :risky (str "route risk " (price/round1 hp) " hp over the " (price/round1 allowed) " the body can afford: "
+                                  (price/round1 dark-s) " s on dark open ground costs " (price/round1 spawn-hp) " hp, "
+                                  hostiles " hostile(s) near the way " (price/round1 hostile-hp) " hp, " (price/round1 death-hp) " hp for a recent death near it, " (price/round1 hide-hp) " hp for a recent hide near it, " (price/round1 lava-hp) " hp for seen lava near the way")
                       :risk hp :allowed allowed :recheck-after-ms 10000))))
 
-(defn stay-hp
-  "Expected damage of staying `seconds` where mobs spawn at `chance` per second, each a zombie fight with the kit carried."
-  [c chance seconds]
-  (* chance seconds (cost/fight-damage (assoc (wworld/kit-of c) :mobs [{:name "zombie" :distance 0 :hits 0}]))))
-
 (defn priced
-  "The checker `safe` of a job that stays put, but ok where it fails only on exposure (:exposed with a :chance) while the hp that
-  (stay-s c) seconds there cost are within (allowed c): the same rule as a walk's, so a short act in the dark goes ahead (Q382)."
+  "The checker `safe` of a job that stays put or visits a place, run with (stay-s c) seconds as its stay there: jobs.lib.price prices an
+  exposed place by it, so a short act in the dark goes ahead (Q382) and a long one waits."
   [safe stay-s]
-  (with-meta
-    (fn [c]
-      (let [s (safe c)
-            {:keys [reason chance]} (nth s 2 nil)]
-        (if (and (contains? #{:later :never} (first s)) (= :exposed reason) (number? chance))
-          (let [secs (stay-s c)
-                hp (stay-hp c chance secs)
-                ok-hp (allowed c)]
-            (if (<= hp ok-hp)
-              (contract/ok :priced (str "exposed, but " (round1 secs) " s there cost " (round1 hp) " hp, within " (round1 ok-hp)))
-              s))
-          s)))
-    (meta safe)))
+  (with-meta (fn [c] (safe (assoc c ::price/stay-s (stay-s c)))) (meta safe)))

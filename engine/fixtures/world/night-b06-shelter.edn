@@ -192,7 +192,7 @@
   ;; 33e6bf20, Q380: the same buried body asked to walk up to open ground is held when the walk's risk is too high (here a risk share of 0), with the reason
   {:name "buried-walk-up-to-open-ground-is-held-when-too-risky"
    :time-why :dawn-decision
-   :settings {:jobs.movement.go-to.risk/risk-share 0}
+   :settings {:jobs.lib.price/risk-share 0}
    :blocks [[:fill [6 -1 12] [26 8 20] "stone"] [:fill [14 0 16] [15 1 16] "air"]]
    :plot {:height 14}
    :body {:at [14.5 0 16.5]}

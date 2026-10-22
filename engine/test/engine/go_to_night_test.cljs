@@ -28,7 +28,7 @@
 
 (defn waiting-of [eng id] (core/waiting eng id))
 
-(def no-risk "A risk share of 0: every walk with a dark open stretch is too risky." {:jobs.movement.go-to.risk/risk-share 0})
+(def no-risk "A risk share of 0: every walk with a dark open stretch is too risky." {:jobs.lib.price/risk-share 0})
 
 (defn ^:async too-risky
   "Runs async fn f with every walk over a dark open stretch too risky."
@@ -232,7 +232,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p seen]} (await (fell-tree-world! (update (night-hut {}) :blocks merge oak-tree)))]
+        (let [{:keys [p seen]} (await (too-risky #(fell-tree-world! (update (night-hut {}) :blocks merge oak-tree))))]
           (is (= inside (st/pos-of p)) "stayed in the hut")
           (is (empty? (st/emitted seen :stopped)) (pr-str (map :reason (st/emitted seen :stopped)))))))))
 
@@ -318,8 +318,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup (night-hut {}))
-              id (core/submit! eng '(jobs.items.use {:on [15 64 0]}) {})]
-          (await (ticks eng 6))
-          (is (= inside (st/pos-of p)))
-          (is (= :exposed (:reason (waiting-of eng id)))))))))
+        (await (too-risky
+                 (fn ^:async t2 []
+                   (let [{:keys [eng p]} (setup (night-hut {}))
+                         id (core/submit! eng '(jobs.items.use {:on [15 64 0]}) {})]
+                     (await (ticks eng 6))
+                     (is (= inside (st/pos-of p)))
+                     (is (= :exposed (:reason (waiting-of eng id))))))))))))
