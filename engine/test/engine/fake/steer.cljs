@@ -3,7 +3,7 @@
   :self {:pos [x y z]} :controls {} :unreachable #{[x y z]} :no-path #{[x y z]}}.
 
   steer is a toy kinematic walker, not physics: every tick (a setImmediate, so tests are fast) it asks decide for
-  controls and turns the head (world :yaw/:pitch) to its yaw and pitch, then moves 0.2 blocks (0.26 sprinting) along the yaw, steps up at most 0.6 (1.25 with jump), drops to the
+  controls and turns the head (world :yaw/:pitch) to its yaw and pitch, then moves 0.2 blocks (0.26 sprinting, 0.06 sneaking) along the yaw, steps up at most 0.6 (1.25 with jump), drops to the
   next floor once its box (half-width) has left the floor it is on (supported?), and climbs or descends a ladder. A
   move into a cell holding a fence, gate, wall, pane or bamboo is
   judged by the body's box against the joined blocks' boxes (engine.path.space), so a body slips beside a post as in the game; without :body-hitbox the position kept is the cell, or :sub-pos beside a post (sub-pos). The kinematics are pure functions (body, controls, yaw, world)
@@ -27,6 +27,7 @@
 (def ticks-per-s 20)
 (def walk 0.2)
 (def sprint 0.26)
+(def sneak-walk 0.06)
 (def step 0.6)
 (def jump-step 1.25)
 (def climb 0.2)
@@ -132,9 +133,9 @@
   bamboo) is judged by the body's box against the blocks' boxes, as the planner's space judges it; a blocked move
   slides along one axis, else moves along x then z as far as the boxes let it (pressed against the block), as the
   game's collision does."
-  [w body {:keys [forward jump] :as controls} head]
+  [w body {:keys [forward jump sneak] :as controls} head]
   (if-let [yaw (heading controls head)]
-    (let [dist (if (and forward (:sprint controls)) sprint walk)
+    (let [dist (cond sneak sneak-walk (and forward (:sprint controls)) sprint :else walk)
           x (- (:x body) (* (js/Math.sin yaw) dist))
           z (- (:z body) (* (js/Math.cos yaw) dist))
           [cx cz] [(floor x) (floor z)]]

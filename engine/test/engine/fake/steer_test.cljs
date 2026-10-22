@@ -62,6 +62,15 @@
               slow (await (run (rig) (walk-to 5.5)))]
           (is (< (:ticks fast) (:ticks slow))))))))
 
+(deftest a-sneaking-walk-takes-more-ticks-than-a-plain-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [sneak (fn [pose] (if (< (js/Math.abs (- (:x pose) 2.5)) 0.3) {:done {}} {:controls {:forward true :sneak true} :yaw east}))
+              slow (await (run (rig) sneak))
+              plain (await (run (rig) (walk-to 2.5)))]
+          (is (< (:ticks plain) (:ticks slow))))))))
+
 (deftest the-first-pose-is-where-the-body-stands-on-the-ground-not-climbing
   (async done
     (tu/run-async done
