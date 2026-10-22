@@ -219,16 +219,21 @@
 
 (defn to-see?
   "Whether the job has yet to look at pos: the body has not sensed it or a face of it, and has not turned to it (memory
-  :looked)."
+  ::looked)."
   [c pos]
-  (and (unseen-near? (:primitives c) pos) (not= pos (:looked (mem-for c pos)))))
+  (and (unseen-near? (:primitives c) pos) (not= pos (::looked (mem-for c pos)))))
+
+(defn note-looked!
+  "Book that the job turned to its cell pos (to-see? then holds no more), the memory made about pos."
+  [c pos]
+  (ctx/update-mem! c #(assoc (fresh-mem % pos) ::looked pos)))
 
 (defn ^:async see-target!
   "Turn the head to the job's cell pos once when it has yet to be looked at (to-see?), so the next read is of what is
   there."
   [c pos]
   (when (to-see? c pos)
-    (ctx/update-mem! c #(assoc (fresh-mem % pos) :looked pos))
+    (note-looked! c pos)
     (await (look/look-at! c (cell pos)))))
 
 (def cell-reasons
@@ -386,7 +391,7 @@
   job has not yet looked at pos: it may have been filled since."
   [c pos]
   (let [p (:primitives c) {:keys [x y z]} pos]
-    (and (not= pos (:looked (mem-for c pos)))
+    (and (not= pos (::looked (mem-for c pos)))
          (boolean (some (fn [[dx dy dz]]
                           (let [s (u/sensed p {:x (+ x dx) :y (+ y dy) :z (+ z dz)})]
                             (and s (not (true? (.-unknown s))) (not (support-name? (.-name s))) (> (or (.-ageMs s) 0) stale-ms))))

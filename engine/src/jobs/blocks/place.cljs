@@ -323,7 +323,7 @@
   what is there now."
   [c pos]
   (if (b/stale-support? c pos)
-    (do (ctx/update-mem! c #(assoc (b/fresh-mem % pos) :looked pos))
+    (do (b/note-looked! c pos)
         (await (look/look-at! c (b/cell pos))))
     (await (b/see-target! c pos))))
 

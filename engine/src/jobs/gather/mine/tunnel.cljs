@@ -19,7 +19,7 @@
             [jobs.lib.access.rules :as rules]
             [jobs.lib.child :as child]
             [jobs.lib.ore-pick :as ore-pick]
-            [jobs.lib.look :refer [cell-of headings]]
+            [jobs.lib.look :as look :refer [cell-of headings]]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -76,7 +76,7 @@
       (ctx/emit! c :mine.turned :info {:from (:heading m) :to to :stop stop :length (or steps 0)
                                        :text (str "mine's " (name stop) " blocks its heading " (:heading m) (when mid? (str " after " steps " blocks")) "; it turns " to)})
       (when mid? (stay/record-tunnel! c tunnel (headings (:heading m))))
-      (ctx/update-mem! c #(cond-> (-> % (assoc :heading to :tried-headings tried) (dissoc :tunnel :behind :glanced :looked) (update :descent dissoc :stop))
+      (ctx/update-mem! c #(cond-> (-> % (assoc :heading to :tried-headings tried) (dissoc :tunnel :behind :glanced ::look/looked) (update :descent dissoc :stop))
                             tunnel (-> (update :legs (fnil conj []) (cond-> {:heading (:heading m) :length (or steps 0) :stop stop} (:behind m) (assoc :behind (:behind m))))
                                        (update :spent (fnil + 0) (or steps 0)))))
       true)))
@@ -168,7 +168,7 @@
                 cell (fn [v] (when v (zipmap [:x :y :z] v)))]
             (ctx/update-mem! c #(cond-> (-> % (dissoc :stepping) (assoc :tunnel (merge t (select-keys res [:origin :heading :steps])) :hung (:hung res))
                                             (cond-> (:behind res) (assoc :behind (:behind res))))
-                                  (> now (or steps 0)) (assoc :looked (step-cell {:origin origin :heading (:heading res)} now))))
+                                  (> now (or steps 0)) (assoc ::look/looked (step-cell {:origin origin :heading (:heading res)} now))))
             (book-cut! c (:dug res))
             (cond
               (:cause res) (stop! c (:reason (:cause res)) (select-keys (:cause res) [:tool :why :text]))

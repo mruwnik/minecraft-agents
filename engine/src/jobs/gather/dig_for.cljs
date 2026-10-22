@@ -191,7 +191,7 @@
 (defn dug-booked!
   "Book a dig of the mined block at pos: drops to collect, a look round at the next cell."
   [c pos]
-  (ctx/update-mem! c #(cond-> (-> % (dissoc :digging) (assoc :failures 0 :collecting true :looked :dug :dug-at (access/cell pos)))
+  (ctx/update-mem! c #(cond-> (-> % (dissoc :digging) (assoc :failures 0 :collecting true ::look/looked :dug :dug-at (access/cell pos)))
                         (mw/stay-level? (:args c)) (update :holes (fnil conj []) (access/cell pos)))))
 
 (defn settle-dig!
@@ -268,7 +268,8 @@
 
 
 (defn ^:async dig-round-1! [c]
-  (let [{:keys [goal failures dry looked]} (ctx/mem c)
+  (let [{:keys [goal failures dry]} (ctx/mem c)
+        looked (::look/looked (ctx/mem c))
         {:keys [wet]} (:args c)
         dry-digs (settings/get settings ::dry-digs)
         {:keys [targets refused wet? wet-n side far]} (scan c)
