@@ -45,6 +45,13 @@
   [health]
   (* (walk-hp-seconds) (health-scale health)))
 
+(defn commute-s
+  "Seconds a walk of secs away costs over sheltering where the body stands, which takes shelter-s: for a body in the ground
+  (in-ground?, its work goes on through the night) the walk there and back less that time; else 0 (the night stops the
+  work either way)."
+  [in-ground? secs shelter-s]
+  (if in-ground? (- (* 2 secs) shelter-s) 0))
+
 (defn drown-prices
   "The seconds the first k hp of drowning cost a body with hp left, k from 0 to n (default: hp, rounded up): each hp at
   hp-seconds x health-scale of the health it is taken from, so the price rises as the hp runs out."

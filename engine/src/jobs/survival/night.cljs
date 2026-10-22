@@ -424,7 +424,7 @@
   staying put (spawns at the feet unless underground or lit by a block (the sky's light goes with the night), over the walk's
   seconds but no longer than jobs.lib.shelter/shelter-here-s, the shelter here closing them out; the hostiles known near
   the body), both priced by jobs.lib.price/stay-hp and jobs.lib.cost/fight-damage, each hp at jobs.lib.cost/hp-price; the
-  walk also costs jobs.lib.shelter/commute-s (in the ground, the walk there and back is work time lost). r is go-to's
+  walk also costs jobs.lib.cost/commute-s (in the ground, the walk there and back is work time lost). r is go-to's
   quoted route."
   [c bed r]
   (let [p (:primitives c)
@@ -435,7 +435,7 @@
         fight #(price/way-fight-hp c %)
         hp-s (cost/hp-price (or (.-health (.self p)) 20))
         here (if (or (sh-sense/buried? p) (pos? (or (sh-sense/block-light-at p (sh-sense/feet p)) 0))) 0 chance)]
-    {:walk (+ (* hp-s (+ (price/stay-hp c chance dark-s) (fight bed))) (sh/commute-s p (ctx/view c) secs))
+    {:walk (+ (* hp-s (+ (price/stay-hp c chance dark-s) (fight bed))) (cost/commute-s (sh/in-ground? p (ctx/view c)) secs (sh/shelter-here-s)))
      :stay (* hp-s (+ (price/stay-hp c here (min secs (sh/shelter-here-s))) (fight (u/self-pos c))))}))
 
 (defn ^:async bed-walk-safe?

@@ -141,3 +141,9 @@
   (let [policy (fn [kvs] (settings/with-settings kvs (fn [] (wworld/body-policy {:primitives (tu/fake {:self {:health 20 :food 20 :pos {:x 0 :y 64 :z 0}}}) :args {}}))))]
     (is (= 0 (:air-limit (policy {:jobs.lib.walk.world/dive false}))))
     (is (nil? (:air-limit (policy {}))))))
+
+(deftest a-walk-from-the-ground-costs-there-and-back-less-the-shelter-time
+  (are [in-ground? secs expected] (= expected (cost/commute-s in-ground? secs 12))
+    true 30 48
+    true 5 -2
+    false 30 0))

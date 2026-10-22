@@ -5,6 +5,7 @@
             [engine.settings :as settings]
             [engine.contract :as contract]
             [jobs.lib.checks :as checks]
+            [jobs.lib.cost :as cost]
             [jobs.lib.child :as child]
             [jobs.lib.places :as places]
             [jobs.lib.shelter :as sh]
@@ -19,10 +20,14 @@
   A place farther than :limit blocks is a condition: the call waits (:too-far {:pos :distance :text}) while the night job digs in or sleeps. A walk that did not arrive is
   nothing-possible {:reason :walk-failed :walk go-to's cause} with {:text}. The :dusk-home trigger starts it when the day left
   no longer covers the walk; a work job it cuts is resumed by the scheduler afterwards.
+  With :commute? (the :dusk-home trigger's) a body in the ground (jobs.lib.shelter/in-ground?: its work goes on through the
+  night) whose walk there and back, by go-to's quote, costs more than sheltering where it stands (jobs.lib.cost/commute-s)
+  stays: nothing-possible {:reason :shelter-cheaper}.
   Quote: time by the straight distance at :speed blocks a second; done 1 visit.")
 
 (a/defargs args
-  {:limit {:doc "farthest place, in blocks, worth the walk" :spec (a/num-in 0 nil) :default sh-clock/home-limit}})
+  {:commute? {:doc "price the walk there and back against sheltering where the body stands, when it is in the ground" :spec boolean? :default false}
+   :limit {:doc "farthest place, in blocks, worth the walk" :spec (a/num-in 0 nil) :default sh-clock/home-limit}})
 
 (defn place [c] (sh/home-target (ctx/view c)))
 
@@ -76,8 +81,19 @@
       :else (ctx/end c :nothing-possible {:reason :walk-failed :walk (contract/cause-key e)}
                       {:text (or (get-in e [:data :text]) "could not walk home")}))))
 
+(defn ^:async commute-dearer?
+  "Whether the call is priced (:commute?), the body in the ground and go-to's quote of the way to pos dearer than sheltering here."
+  [c pos]
+  (let [p (:primitives c)]
+    (and (:commute? (:args c)) (sh/in-ground? p (ctx/view c))
+         (let [r (:route (await (ctx/quote c 'jobs.movement.go-to {:pos pos :range arrive-range})))]
+           (and (:found r) (pos? (cost/commute-s true (or (:seconds r) 0) (sh/shelter-here-s))))))))
+
 (defn ^:async round [c]
   (let [pos (place c)]
     (cond
       (nil? pos) (ctx/end c :condition-failed :no-home)
+      (await (commute-dearer? c pos))
+      (ctx/end c :nothing-possible {:reason :shelter-cheaper}
+               {:text "in the ground, the walk home and back costs more than sheltering here; its work goes on"})
       :else (await (walk! c pos)))))

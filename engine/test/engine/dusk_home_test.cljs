@@ -46,12 +46,33 @@
 (deftest a-body-under-a-lone-overhead-block-still-goes-home
   (is (true? (holds? 11000 [[:home 100 0]] {:floor [-20 -20 20 20] :blocks {"0,67,0" "stone"}}))))
 
-(deftest a-body-roofed-deep-under-its-home-shelters-there-unless-home-is-close
-  ;; Wicken's stair 16 under home: some sky light comes down it, but the walk home and back is work time lost
-  (are [home expected] (= expected (holds? 11500 [home] {:floor [-20 -20 120 20] :blocks {"0,67,0" "stone"}}))
-    [:home 100 0 70] false
-    [:home 6 0 70] true
-    [:home 100 0 64] true))
+(def stair-home-world
+  "A roof over the body at x 0 and a home at x 60, y 70, up a stair from x 55: the body is in the ground (6 under home)."
+  {:time 11500 :floor [-20 -20 120 20]
+   :blocks (into {"0,67,0" "stone"} (for [k (range 1 7)] [(str (+ 54 k) "," (+ 63 k) ",0") "stone"]))})
+
+(defn ^:async go-home-from-the-ground
+  "[blocks the body ends from the home at x, why go-home gave up] with the home at x y."
+  [x y args]
+  (let [{:keys [eng p seen]} (st/setup stair-home-world)]
+    (mem/write! (:store eng) :home {:pos {:x x :y y :z 0}} mem/place-policy)
+    (core/submit! eng (list 'jobs.survival.go-home args) {})
+    (await (tu/run-until-empty eng 30))
+    [(js/Math.abs (- x (.-x (.-pos (.self p))))) (some #(when (#{:completed :stopped} (:kind %)) (:reason %)) @seen)]))
+
+(deftest go-home-in-the-ground-stays-when-the-quoted-walk-there-and-back-costs-more-than-sheltering-here
+  ;; the trigger fires for a buried body too; go-home, called with :commute?, prices go-to's own quote
+  (is (true? (holds? 11500 [[:home 60 0 70]] stair-home-world)))
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far (await (go-home-from-the-ground 60 70 {:commute? true}))
+              near (await (go-home-from-the-ground 6 64 {:commute? true}))
+              plain (await (go-home-from-the-ground 60 70 {}))]
+          (is (> (first far) 50) "the far home is not walked to")
+          (is (= :shelter-cheaper (second far)))
+          (is (< (first near) 3) "a close home is walked to")
+          (is (< (first plain) 3) "without :commute? the call walks home"))))))
 
 (deftest go-home-walks-to-the-home-and-waits-with-none
   (async done
