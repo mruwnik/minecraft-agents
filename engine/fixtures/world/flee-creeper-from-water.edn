@@ -1,25 +1,33 @@
-;; Card da20dfa8: a 4-HP body floating in a pond whose bank is a block above the water runs from a creeper 13 blocks off that walks up. Its flee
-;; steps are 1 s legs (close-leg-s); a go-to look or a stuck-in-water swim whose quote did not fit the leg was refused, so the body
-;; stood in the water until the blast. Glowstone in the platform lights the plot (underground it is dark). A creeper that reaches the body blasts it dead at 4 HP.
-;; Stone block x 0..30, z 0..31, y 0..2 (platform feet y 3); a pond x 9..13, z 14..18 one deep (y 2) in the platform top.
+;; Card da20dfa8: a 4-HP body floating in a pond whose bank is a block above the water runs from a creeper that walks up from the front,
+;; straight ahead or diagonally. Its flee steps are 1 s legs (close-leg-s); a go-to look or a stuck-in-water swim whose quote did not fit
+;; the leg was refused, so the body stood in the water until the blast. A creeper that reaches the body blasts it dead at 4 HP.
+;; The plot is 96 long so the body has room to run: stone block x 0..95, z 0..31, y 0..2 (platform feet y 3); a pond x 58..62, z 14..18 one deep
+;; (y 2) in the platform top, the body at its middle. Glowstones every 8 blocks light the plot (surface time is :any).
 {:defaults
  {:tags [:hostile :survival :flee :water :creeper]
   :time :any
   :mobs :keep
+  :plot {:length 96 :width 32}
   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
               :job (jobs.survival.respond-to-hostile)}]
-  :blocks [[:fill [0 0 0] [30 2 31] "stone"] [:fill [0 3 0] [30 8 31] "air"]
-           [:fill [9 2 14] [13 2 18] "water"]
-           [:fill [8 2 12] [8 2 12] "glowstone"] [:fill [8 2 20] [8 2 20] "glowstone"] [:fill [15 2 12] [15 2 12] "glowstone"]
-           [:fill [15 2 20] [15 2 20] "glowstone"] [:fill [20 2 16] [20 2 16] "glowstone"] [:fill [4 2 16] [4 2 16] "glowstone"]
-           [:fill [22 2 12] [22 2 12] "glowstone"] [:fill [22 2 20] [22 2 20] "glowstone"] [:fill [28 2 16] [28 2 16] "glowstone"] [:fill [26 2 12] [26 2 12] "glowstone"] [:fill [26 2 20] [26 2 20] "glowstone"]]
-  :body {:at [11.5 2 16.5] :yaw -90}
+  :blocks [[:fill [0 0 0] [95 2 31] "stone"] [:fill [0 3 0] [95 8 31] "air"]
+           [:fill [58 2 14] [62 2 18] "water"]
+           [:fill [4 2 8] [4 2 8] "glowstone"] [:fill [4 2 24] [4 2 24] "glowstone"] [:fill [12 2 8] [12 2 8] "glowstone"] [:fill [12 2 24] [12 2 24] "glowstone"] [:fill [20 2 8] [20 2 8] "glowstone"] [:fill [20 2 24] [20 2 24] "glowstone"] [:fill [28 2 8] [28 2 8] "glowstone"] [:fill [28 2 24] [28 2 24] "glowstone"] [:fill [36 2 8] [36 2 8] "glowstone"] [:fill [36 2 24] [36 2 24] "glowstone"] [:fill [44 2 8] [44 2 8] "glowstone"] [:fill [44 2 24] [44 2 24] "glowstone"] [:fill [52 2 8] [52 2 8] "glowstone"] [:fill [52 2 24] [52 2 24] "glowstone"] [:fill [60 2 8] [60 2 8] "glowstone"] [:fill [60 2 24] [60 2 24] "glowstone"] [:fill [68 2 8] [68 2 8] "glowstone"] [:fill [68 2 24] [68 2 24] "glowstone"] [:fill [76 2 8] [76 2 8] "glowstone"] [:fill [76 2 24] [76 2 24] "glowstone"] [:fill [84 2 8] [84 2 8] "glowstone"] [:fill [84 2 24] [84 2 24] "glowstone"] [:fill [92 2 8] [92 2 8] "glowstone"] [:fill [92 2 24] [92 2 24] "glowstone"]]
   :limit-s 60}
  :cases
  [{:name "low-health-body-in-a-pond-gets-away-from-a-creeper"
+   :body {:at [60.5 2 16.5] :yaw -90}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 16 minecraft:generic"]
-         [:summon "creeper" [24.5 3 16.5]]]
+         [:summon "creeper" [73.5 3 16.5]]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "creeper" :decision :flee}} :within-s 20}
+            {:no-event {:source :body :kind :died} :for-s 25}]
+   :limit-s 40}
+  {:name "low-health-body-in-a-pond-gets-away-from-a-creeper-coming-diagonally"
+   :body {:at [60.5 2 16.5] :yaw -45}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 16 minecraft:generic"]
+         [:summon "creeper" [70.5 3 26.5]]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "creeper" :decision :flee}} :within-s 20}
             {:no-event {:source :body :kind :died} :for-s 25}]
    :limit-s 40}]}
