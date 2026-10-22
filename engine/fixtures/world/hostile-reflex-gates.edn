@@ -107,8 +107,8 @@
          [:job (jobs.survival.respond-to-hostile {})]]
    :expect [{:count-event {:source :job :kind :holding :data {:reason "in water, away from the enderman"}} :for-s 45 :at-least 1 :at-most 6 :of-job true}]
    :limit-s 60}
-  ;; card ba8479cc: mobbed by a zombie, a skeleton and an angry enderman in a sealed stone hall with no water and no 2-high gap: the roof option finds nothing and the flight falls back to a seal instead of holding on a search while hit
-  {:name "mobbed-underground-by-enderman-zombie-skeleton-body-seals"
+  ;; card ba8479cc: mobbed by a zombie, a skeleton and an angry enderman in a sealed stone hall with no water and no 2-high gap: the water and roof options find nothing and the flight falls through the options to the fight within seconds instead of holding on a search while hit
+  {:name "mobbed-underground-by-enderman-zombie-skeleton-body-falls-back"
    :blocks [[:fill [10 -1 10] [24 3 22] "stone"] [:fill [11 0 11] [23 2 21] "air"] [:set [12 1 12] "torch"] [:set [22 1 20] "torch"]]
    :body {:inventory [["dirt" 20]] :effects [["resistance" 900 4]]}
    :register []
@@ -118,7 +118,8 @@
          [:summon "zombie" [18.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:summon "skeleton" [22.5 0 19.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.survival.respond-to-hostile {})]]
-   :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}
+   :expect [{:event {:source :action :kind :started :data {:name "attack"}} :within-s 20}
+            {:no-event {:source :job :kind :holding :data {:reason "searching"}} :for-s 20}
             {:no-event {:source :body :kind :died} :for-s 40}]
    :limit-s 60}
   {:name "phantom-near-unarmed-body-seals-no-flight"
