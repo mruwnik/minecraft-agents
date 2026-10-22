@@ -105,7 +105,7 @@
             {:event {:source :reflex :kind :ended :context {:reflex-id :hungry}} :within-s 70}]
    :after [[:item "carrot" 13]]}
   {:name "unreserved-carrots-are-eaten-by-the-hungry-reflex"
-   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
+   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false :carry 0})}]
    :body {:inventory [["carrot" 13]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]]
