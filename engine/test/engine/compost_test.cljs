@@ -15,7 +15,7 @@
 (defn setup [world & [shared]]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
-        p (tu/seeing-all (tu/fake world))
+        p (tu/seeing-all ((if (:floor? world) tu/fake-on-floor tu/fake) (dissoc world :floor?)))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
                           :world (or shared (ew/of-data {} {} []))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
@@ -58,10 +58,21 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:blocks {"15,63,0" "composter"}
+        (let [{:keys [eng p]} (setup {:floor? true
+                                      :blocks {"15,63,0" "composter"}
                                       :entities [{:id 71 :name "item" :kind "item" :pos {:x 15 :y 64 :z 0} :item {:name "bone_meal" :count 1}}]})]
           (await (child-outcome eng job {:at {:x 15 :y 63 :z 0} :items ["wheat_seeds"]} 40))
           (is (= 1 (carried p "bone_meal")) "the meal 15 blocks off is inside the 20-block meal search, so the pick-up child reaches it"))))))
+
+(deftest a-meal-the-pick-up-cannot-reach-ends-the-call
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks {"15,63,0" "composter"}
+                                      :entities [{:id 71 :name "item" :kind "item" :pos {:x 15 :y 64 :z 0} :item {:name "bone_meal" :count 1}}]})
+              result (await (child-outcome eng job {:at {:x 15 :y 63 :z 0} :items ["wheat_seeds"]} 40))]
+          (is (some? result) "the call ends instead of looking again for ever")
+          (is (= 0 (carried p "bone_meal"))))))))
 
 (deftest compost-is-one-call-the-whole-run
   (async done
