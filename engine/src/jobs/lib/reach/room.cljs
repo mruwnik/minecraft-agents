@@ -163,14 +163,16 @@
 
 (defn unseen-edge?
   "Whether a walker at cell #js [x y z] may lead somewhere the body has not seen: a side feet cell, or the head cell over
-  a side block it could step onto, is unseen. Unseen is unknown, not wall."
+  a side block it could step onto, is unseen. Unseen is unknown, not wall. A side block with a seen solid two over it
+  cannot be stepped onto, so what is unseen over it leads nowhere."
   [p kind-at c]
   (let [x (aget c 0) y (aget c 1) z (aget c 2)
         unseen? (fn [x y z] (nil? (u/seen-block p {:x x :y y :z z})))]
     (some (fn [[dx dz]]
             (let [nx (+ x dx) nz (+ z dz)]
               (or (unseen? nx y nz)
-                  (and (not (passable? kind-at nx y nz)) (passable? kind-at x (+ y 2) z) (unseen? nx (inc y) nz)))))
+                  (and (not (passable? kind-at nx y nz)) (passable? kind-at x (+ y 2) z) (unseen? nx (inc y) nz)
+                       (or (unseen? nx (+ y 2) nz) (passable? kind-at nx (+ y 2) nz))))))
           [[1 0] [-1 0] [0 1] [0 -1]])))
 
 (defn room-flood

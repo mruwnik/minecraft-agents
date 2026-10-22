@@ -315,3 +315,16 @@
     (is (true? (look?)) "a bed in reach with unseen cells beside the feet: look first")
     (st/know-bed! eng {:x 300 :y 64 :z 0})
     (is (false? (look?)) "a bed beyond the bed radius is none to look for")))
+
+(def three-high-room
+  "A stone room x 10..12, z 10..11, air y 64..66 under a roof at 67, a bed at 10..11 64 10 with a stone at 11 65 10 over its head."
+  (let [inside? (fn [k] (let [[x y z] (map js/Number (.split k ","))] (and (<= 10 x 12) (<= 64 y 66) (<= 10 z 11))))]
+    (assoc (into {} (remove (comp inside? key)) (tu/box 9 63 9 13 67 12 "stone"))
+           "11,64,10" "red_bed" "10,64,10" "red_bed" "11,65,10" "stone")))
+
+(deftest an-unseen-wall-block-behind-a-bed-stone-does-not-open-a-walled-roofed-room
+  (let [{:keys [p]} (setup {:floor [0 0 20 20] :self {:pos {:x 12.5 :y 64 :z 11.5}} :time st/night :sees-all true :blocks three-high-room})
+        all (set (for [x (range 8 15) y (range 62 69) z (range 8 14)] [x y z]))
+        room-at (fn [hidden] (reach-room/room* (seeing p (apply disj all hidden)) {:x 12 :y 64 :z 11}))]
+    (is (some? (room-at #{[12 65 9]})) "an unseen cell over a seen wall block with a seen wall over it is no step up")
+    (is (nil? (room-at #{[12 65 9] [12 66 9]})) "with the cell two over unseen too, the step up cannot be ruled out")))
