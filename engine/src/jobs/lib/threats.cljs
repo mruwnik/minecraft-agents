@@ -125,9 +125,9 @@
   ([p remembered opts] (cost/danger-list (body-of p) (sensed-mobs p {:way? false}) remembered opts)))
 
 (defn death-dangers
-  "The unseen recent deaths of c as remembered dangers [{:key :mob :pos :weight}]: the plan keeps away from where a mob killed the body lately."
+  "The unseen recent deaths of c as remembered dangers [{:key :mob :pos :weight}]: the plan keeps away from where a mob killed the body lately, at a cost: the spot stays a cell a walk to the body's pile may enter."
   [c]
-  (map-indexed (fn [i {:keys [pos cause weight]}] {:key (str "death-" i) :mob cause :pos pos :weight weight}) (death-spot/unseen c)))
+  (map-indexed (fn [i {:keys [pos cause weight]}] {:key (str "death-" i) :mob cause :pos pos :weight weight :block false}) (death-spot/unseen c)))
 
 (defn planner-dangers
   "The planner's options.dangers for the body of c (JS array, nil for none): known-dangers with the :threat spots its

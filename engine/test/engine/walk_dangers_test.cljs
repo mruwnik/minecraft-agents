@@ -34,7 +34,7 @@
         p (tu/fake-on-floor (merge {:floor [-5 -20 45 20]} world))
         out (atom nil)
         parent {:round (fn ^:async planning-round [c]
-                         (doseq [t remembered] (threats/remember! c t))
+                         (doseq [t remembered] (if (:death-t t) (ctx/remember! c :deaths t core/deaths-policy) (threats/remember! c t)))
                          (reset! out (await (near/plan! (assoc c :args {}) [40 64 0] 0 :never (wworld/body-policy c) [] false nil nil true dangers)))
                          (ctx/end c :done nil))}
         eng (core/create {:primitives p :jobs (assoc registry/jobs 'planning-parent parent)
@@ -82,6 +82,17 @@
       (fn ^:async t []
         (let [steps (await (plan-past {:entities [(assoc zombie :visible false)]} [{:mob "zombie" :id 9 :uuid "u9" :pos {:x 20.5 :y 64 :z 0.5} :ended 1}] true))]
           (is (>= (nearest steps) 8) (str "nearest " (nearest steps))))))))
+
+(def death-at (fn [x] {:pos {:x x :y 64 :z 0.5} :cause "zombie" :death-t 990000}))
+
+(deftest a-recent-death-is-kept-away-from-but-a-walk-to-its-spot-goes-straight-there
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [round (await (plan-past {} [(death-at 20.5)] true))
+              to-pile (await (plan-past {} [(death-at 40.5)] true))]
+          (is (>= (nearest round) 8) (str "nearest " (nearest round)))
+          (is (= 40 (:x (last to-pile))) "the pile at the death spot is reached, not walled off"))))))
 
 (deftest a-remembered-threat-spot-of-a-mob-the-world-no-longer-has-is-forgotten
   (async done
