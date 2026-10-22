@@ -7,7 +7,9 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [engine.game :as game]
             [jobs.lib.blocks :as blocks]
+            [jobs.lib.body :as body]
             [jobs.lib.child :as child]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.danger :as danger-q]
@@ -81,8 +83,6 @@
              first
              (#(update-vals % js/Math.floor)))))
 
-(def safe? (price/staying :work (ready/safe-at-or-roaming place)))
-
 (def fit? ready/ok)
 
 (a/defargs settings
@@ -92,11 +92,28 @@
    ::dig-margin {:default 3 :doc "How far outside the box round the body and the drop the dig route may wander, in blocks." :spec (a/int-in 0 nil)}
    ::replans {:default 4 :doc "How often a dig route is planned again after a dig of it failed, the cells before it dug." :spec (a/int-in 0 nil)}
    ::dig-max-fall {:default 3 :doc "The longest fall, in blocks, the dig route plans." :spec (a/int-in 0 nil)}
+   ::pile-reach {:default 10 :doc "How far from the place of an open death a :near spot still counts as its pile, in blocks." :spec (a/num-in 0 nil)}
    ::radius {:default 16 :doc "How far from the work area a drop is looked for when the call gives no :radius, in blocks." :spec (a/num-in 0 nil)}
    ::max-moves {:default 2 :doc "How often a drop that slid to another cell while the body went to it is tried again, after a walk or dig that did not reach it." :spec (a/int-in 0 nil)}
    ::search-waits {:default 5 :doc "How many calls in a row a :search walk may wait on go-to (the night, a danger) before the search is given up." :spec (a/int-in 1 nil)}})
 
 (defn search-waits [] (settings/get settings ::search-waits))
+
+(defn at-death-pile?
+  "Whether :near lies within ::pile-reach of the place of a death whose drops have not despawned: a pile never waits for light (the despawn clock runs)."
+  [c]
+  (let [view (ctx/view c)
+        near (some->> (:near (:args c)) ((fn [n] (if (map? n) n (u/cell-pos (vec n))))))]
+    (boolean (and near
+                  (some (fn [d] (and (pos? (game/despawn-left-ticks d view))
+                                     (some-> (:pos (:data d)) (u/dist near) (<= (settings/get settings ::pile-reach)))))
+                        (body/open-deaths view))))))
+
+(def safe?
+  (let [base (price/staying :work (ready/safe-at-or-roaming place))
+        pile-ok (contract/ok :pile "a death pile does not wait for light")]
+    (with-meta (fn [c] (if (at-death-pile? c) pile-ok (base c)))
+      (update (meta base) ::ready/exposure (fn [f] (fn [c] (if (at-death-pile? c) pile-ok (f c))))))))
 
 (defn max-moves [] (settings/get settings ::max-moves))
 

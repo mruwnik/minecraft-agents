@@ -33,6 +33,7 @@
             [jobs.movement.mount :as mount]
             [jobs.movement.leave-vehicle :as leave-vehicle]
             [jobs.movement.boat-recover :as boat-recover]
+            [jobs.items.collect-drops :as collect-drops]
             [jobs.items.kitchen :as kitchen]
             [jobs.items.get-kit :as get-kit]
             [jobs.items.pick-up-loose :as pick-up-loose]
@@ -519,6 +520,16 @@
     night-hut {:safe? fill-cells/safe?} {:cells [[6 64 0]]} :ok
     open-night {:safe? stair/safe?} {:submitted-at {:x 0 :y 64 :z 0}} :later
     night-hut {:safe? stair/safe?} {} :ok))
+
+(deftest collect-drops-at-an-open-death-pile-does-not-wait-for-light
+  (let [died (fn [x] (-> mem/empty-data (mem/add-entry :died {:t 0 :data {:pos {:x x :y 64 :z 0}}} nil)))
+        status (fn [data near]
+                 (lit 0 15 #(first (collect-drops/safe? (-> (ctx-of open-night) (assoc :args {:near near :search 4}
+                                                                                              :view (fn [] {:now 1000 :data data})))))))]
+    (is (= :ok (status (died 40) {:x 38 :y 64 :z 0})) "the pile lies in the dark 40 blocks out")
+    (is (= :ok (status (died 40) [38 64 0])) "a vector :near too")
+    (is (= :later (status mem/empty-data {:x 38 :y 64 :z 0})) "no death there: a far walk in the dark waits")
+    (is (= :later (status (died 80) {:x 38 :y 64 :z 0})) "a death elsewhere is not this spot's pile")))
 
 (defn jobs-under
   "The registry's jobs in the namespaces under the prefixes, but find-spot and grow (which roam)."

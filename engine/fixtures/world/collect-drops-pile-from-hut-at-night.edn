@@ -1,0 +1,18 @@
+;; Card 99d1586f (Q367): a pile never waits for light. The body respawns shut in a closed stone hut under a dark sky; collect-drops with :near at the pile
+;; 32 blocks out (no drop in sight) is not refused with "sheltered for the night, a walk with no place ...": it walks out and collects.
+;; Needs night: run with --allow-time (night run owed while the time freeze holds). Should-succeed: the pile is collected, no :dark waiting.
+{:defaults
+ {:tags [:collect-drops :death :night]
+  :time :night :time-why :dawn-decision
+  :plot {:length 48 :width 32 :height 10 :floor "dirt"}
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16} :job (jobs.survival.respond-to-hostile)}]
+  :blocks [[:fill [2 0 14] [8 4 20] "stone" :hollow] [:fill [3 1 15] [7 3 19] "air"] [:set [5 3 17] "torch"]]
+  :body {:at [40.5 0 16.5] :spawnpoint [5 1 17] :effects [["resistance" 600 4]]
+         :inventory [["raw_iron" 24]]}
+  :act [[:kill-body] [:wait-s 3] [:job (jobs.items.collect-drops {:near #at [40 0 16] :radius 6 :search 4 :dig true})]]
+  :limit-s 200}
+ :cases
+ [{:name "pile-is-collected-from-a-sealed-hut-at-night"
+   :expect [{:no-event {:source :job :kind :waiting :data {:reason :dark}} :for-s 120 :until {:source :job :kind :completed}}
+            {:event {:source :job :kind :completed} :within-s 180 :of-job true}]
+   :after [[:item "raw_iron" 24]]}]}
