@@ -103,12 +103,12 @@
     (is (not (found? (run drop-2 (pf/near 1 62 2) (unk {:seeDepth 1 :seeLit (fn [_ _ _] 0)})))))))
 
 (deftest a-lit-drop-is-seen-only-as-deep-as-the-peek-sees
-  ;; floor-sight-pin-test: the walk's worst peek stop (x .87) sees a lit floor to d 5
+  ;; floor-sight-pin-test: the walk's worst peek stop (x .87) sees a lit floor to d 10
   (let [deep (fn [d] (pf/snapshot {:blocks [[0 63 2 "stone"] [1 (- 63 d) 2 U]] :fill [[0 40 2 0 62 2 "stone"]]}))
         opts (merge {:maxDrop 12} (unk {:seeDepth 1 :seeLit (fn [_ _ _] 1)}))]
-    (is (found? (run (deep 5) (pf/near 1 (- 64 5) 2) opts)) "d 5")
-    (let [r (run (deep 6) (pf/near 1 (- 64 6) 2) opts)]
-      (is (not (found? r)) "d 6")
+    (is (found? (run (deep 10) (pf/near 1 (- 64 10) 2) opts)) "d 10")
+    (let [r (run (deep 11) (pf/near 1 (- 64 11) 2) opts)]
+      (is (not (found? r)) "d 11")
       (is (true? (:darkRefused r))))))
 
 (deftest see-lit-depth-is-an-option

@@ -71,7 +71,7 @@
      floor is a phantom floor (read as floorId, stone; not under water): allowed only after a move the walk can stop before
      (walk, diagonal, corner, jump, drop; not after a gap, climb, trapdoor open, swim, exit or bounce: else result unseenRefused; a
      gap may jump over it, not through an unseen feet or head cell) and only where it can be seen: a drop of d (level and
-     up: 0) within seeDepth, or within seeLitDepth (5) over known air that seeLit(x, y, z) calls lit (1), or
+     up: 0) within seeDepth, or within seeLitDepth (10) over known air that seeLit(x, y, z) calls lit (1), or
      lit by a torch (lightCost seconds, the step's light true) from a takeoff whose feet are known air on a torchBase floor
      (Uint8Array by state id), d at most lightDepth (5), lightOk(x, y, z) not false and not in noLight; else result darkRefused and
      darkBest {x y z h}. A floor in missed is never seen, only lit. The floor under a door's lower half is implied. Each unseen feet or

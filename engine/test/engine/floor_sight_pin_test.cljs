@@ -69,7 +69,8 @@
    [16 peek-x :aimed :lit true]
    ;; review round 4, m1: a peek that stops at x .87 sees lit floors to d 5 only
    [5 0.87 :aimed :lit true]
-   [6 0.87 :aimed :lit true]])
+   [6 0.87 :aimed :lit true]
+   [10 0.87 :aimed :lit true]])
 
 (deftest straight-step-down-floors
   (doseq [[d ex pitch light expected] straight-rows]

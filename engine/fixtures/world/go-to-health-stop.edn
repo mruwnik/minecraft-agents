@@ -1,6 +1,6 @@
 ;; Card 2909cf46 S3: the walk's health stop. A stone block y 0..9 fills x 1..40 (feet y 10, body at x 3.5), walls all round, the goal
 ;; on the floor east of its edge at x 46: a drop of 10 (7 hp of budget at full health). Health lost mid-walk (instant damage) takes
-;; the budget under the drop, so the walk stops for it and, go-to not healing, ends :needs-health (the old plan is never walked on unwatched).
+;; the budget under the drop (a hunger effect first, so the body cannot regain it while go-to looks at the landing), so the walk stops for it and, go-to not healing, ends :needs-health (the old plan is never walked on unwatched).
 ;; Card ef52ecb4: a drop of 14 (11 hp) costs more than the 7 hp budget at full health with no way to heal: the walk ends :needs-health
 ;; with :heal :full and the hp numbers; with a given :floor {:health 1} it takes the drop.
 {:defaults
@@ -18,7 +18,8 @@
    :after [[:body-near [46.5 0 16.5] 2]]}
   {:name "health-lost-on-the-way-ends-needs-health-before-the-drop"
    :act [[:job (jobs.movement.go-to {:pos #at [46 0 16] :range 1 :ways #{:walk :clear-seal}})]
-         [:await {:source :action :kind :started :data {:name "steer"}} 30]
+         [:until-pos {:x-min 36 :x-max 39} 30]
+         [:rcon "effect give $BODY minecraft:hunger 5 255 true"]
          [:rcon "effect give $BODY minecraft:instant_damage 1 1 true"]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :why :needs-health}} :within-s 60 :of-job true}]
    :after [[:body-far [46.5 0 16.5] 4]]}

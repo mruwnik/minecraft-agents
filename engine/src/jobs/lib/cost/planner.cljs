@@ -175,7 +175,7 @@
   unseen feet or head cell, :floor the same for a stand on an unseen floor, :peek-s a drop onto one (a stop at the edge to
   look), :aim-s a level or up step onto one (a look down at the takeoff); and the depths, in blocks: :see-lit-depth the deepest
   drop a lit landing is seen over from the walk's worst peek stop, :light-depth the deepest a torch at the takeoff lights."
-  {:cell 0.1 :floor 0.3 :peek-s 0.7 :aim-s 0.1 :see-lit-depth 5 :light-depth 5})
+  {:cell 0.1 :floor 0.3 :peek-s 0.7 :aim-s 0.1 :see-lit-depth 10 :light-depth 5})
 
 (a/defargs settings
   {::drop-cost {:default 1 :doc "Scales the cost of a drop (fall seconds and damage; 1 as is, 0 free, 5 dear); false: no drop of 2 or 3 at all. :one-way :closed instead refuses only a drop the body cannot climb back." :spec (a/or-of (a/num-in 0 nil) false?)}

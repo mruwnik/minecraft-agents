@@ -7,7 +7,7 @@
 
 (set! *warn-on-infer* true)
 
-(def ^:const SEE-LIT-DEPTH 5) ; options.unknown.seeLitDepth default: the deepest drop a lit landing is seen over from the walk's worst peek stop (x .87, floor-sight-pin-test)
+(def ^:const SEE-LIT-DEPTH 10) ; options.unknown.seeLitDepth default: the deepest drop a lit landing is seen over from the walk's worst peek stop (x .87, floor-sight-pin-test)
 (def ^:const LIGHT-DEPTH 5) ; options.unknown.lightDepth default: the deepest drop a torch at the takeoff lights the landing of so it is seen
 
 (extend-type Search
