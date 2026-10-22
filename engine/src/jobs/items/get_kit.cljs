@@ -60,11 +60,22 @@
   [c]
   (boolean (some #(re-find #"_(log|planks)$|^(cobblestone|cobbled_deepslate|iron_ingot)$" (:name %)) (u/inventory (:primitives c)))))
 
-(defn arm-next?
-  "Whether the sword step is still to run and can make a sword from what is carried: it ends the unarmed state, so the
-  unarmed hold does not stop it (go-to prices the walk to a bench)."
+(declare state with-raw had?)
+
+(defn arm-due?
+  "Whether the sword step runs: no weapon carried, not made yet, and furnace material still short."
   [c]
-  (and (not (:armed (ctx/mem c))) (sword-material? c)))
+  (let [st (state c)
+        version (game/version-of (:primitives c))
+        todo (remove #(had? (:carried st) (:worn st) %) (:items (:args c)))]
+    (boolean (and (not (:armed (ctx/mem c))) (nil? (combat/best-weapon (:primitives c) combat/default-weapons))
+                  (seq (bill/furnace-short version todo (with-raw (:carried st))))))))
+
+(defn arm-next?
+  "Whether the sword step will run and can make a sword from what is carried: it ends the unarmed state, so the unarmed
+  hold does not stop it (go-to prices the walk to a bench)."
+  [c]
+  (and (arm-due? c) (sword-material? c)))
 
 (defn safe? [c] (contract/all [(ready/threatened c) (if (arm-next? c) (contract/ok :arming "the sword is made first") (ready/unarmed-threatened c))]))
 (def fit? ready/ok)
@@ -326,8 +337,7 @@
                   :else (do (ctx/update-mem! c assoc :covered-done true)
                             :again)))
 
-          (and (not (:armed (ctx/mem c))) (nil? (combat/best-weapon (:primitives c) combat/default-weapons))
-               (seq (bill/furnace-short version todo (with-raw (:carried st)))))
+          (arm-due? c)
           (let [r (await (run-arm! c))]
             (if (= :continue r)
               :continue
