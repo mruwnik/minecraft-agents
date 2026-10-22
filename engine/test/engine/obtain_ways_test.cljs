@@ -14,6 +14,7 @@
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.base :as base]
             [jobs.items.obtain.bill :as bill]
+            [jobs.items.craft :as craft]
             [jobs.lib.reserve :as reserve]
             [jobs.items.obtain.table :as table]
             [jobs.items.recipes :as recipes]))
@@ -126,9 +127,16 @@
            :remember (fn [_ data _] (swap! store conj {:data data}))
            :forget (fn [_ pred] (swap! store #(vec (remove (comp pred :data) %))))}]
     (bill/reserve! c ["iron_pickaxe"])
-    (is (= {"stick" 2 "coal" 1} (reserve/held c :craft-torch)) "a torch craft leaves the pickaxe's sticks and the smelt's coal")
+    (is (= {"stick" 2 "coal" 1} (reserve/held c :craft-held)) "a stock or spare craft leaves the pickaxe's sticks and the smelt's coal")
     (is (= {"stick" 2} (reserve/held c :smelt)) "the smelt burns the coal, not the sticks")
     (is (= {} (reserve/held c :craft)) "the kit's own crafts are not held off")))
+
+(deftest only-stock-and-spare-crafts-respect-the-kit-holds
+  (are [id chooser] (= chooser (craft/chooser {:id id}))
+    "j1/bill/gather-coal/torches/torch" :craft-held
+    "j1/bill/iron_pickaxe/dig/spare/stone_pickaxe" :craft-held
+    "j1/bill/gather-raw_iron/mine/torch-craft" :craft
+    "j1/bill/iron_pickaxe" :craft))
 
 (deftest a-bill-and-an-item-together-are-bad-args
   (are [args] (some? (base/args-error args))

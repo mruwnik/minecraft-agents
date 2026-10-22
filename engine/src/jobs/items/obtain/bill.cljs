@@ -46,7 +46,7 @@
 (defn reserve!
   "Replace this job's reserve entries (strength 0.9) with the furnace material the missing items need together and the
   raw input it is smelted from (a deposit leaves those carried units alone; the craft and smelt children spend them), and the
-  fuel and sticks they need (torch crafts leave those alone)."
+  fuel and sticks they need (torch-stock and spare-tool crafts leave those alone)."
   [c items]
   (let [version (game/version-of (:primitives c))]
     (reserve/set-job-entries!

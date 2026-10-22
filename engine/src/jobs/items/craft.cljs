@@ -126,9 +126,10 @@
       (apply contract/later :crafting (str "craft: " made " of " count " " item) data))))
 
 (defn chooser
-  "Torches ask the register as :craft-torch: the kit's fuel and sticks, held against the crafts but not the kit's own, stay out of them."
+  "A craft under a torch stock (slot :torches) or a spare tool (slot :spare) asks the register as :craft-held: the kit's fuel and sticks stay out of it.
+  Other crafts, the kit's own and the mine's light-now torches, ask as :craft."
   [c]
-  (if (= "torch" (:item (:args c))) :craft-torch :craft))
+  (if (some #{"torches" "spare"} (str/split (str (:id c)) #"/")) :craft-held :craft))
 
 (defn spendable
   "{name n} of the ingredients this call may use: carried less what the register holds, the item made counted whole.
