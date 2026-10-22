@@ -80,6 +80,7 @@
     (is (= ["gamemode survival ProbeX" "clear ProbeX"] (take 2 rcons)))
     (is (some #{[:place "ProbeX" [[1200 -3400] [5 6]]]} ss) "all candidate spots go to the placing step")
     (is (some #(re-find #"spawnpoint ProbeX ~ ~ ~" %) rcons))
+    (is (< (.indexOf ss [:place "ProbeX" [[1200 -3400] [5 6]]]) (.indexOf ss [:rcon "effect give ProbeX minecraft:slow_falling 60 0 true"])) "a body placed in the air while chunks load survives the fall")
     (is (= [:record "worlds/test/fresh-drops/ProbeX-5.edn" {:body "ProbeX" :world "test" :spots [[1200 -3400] [5 6]] :build "/b" :started-ms 5}] (last ss)))))
 
 (deftest rotated-logs-read-oldest-first-and-the-plain-file-wins

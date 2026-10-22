@@ -54,7 +54,7 @@
 (defn steps
   "The drop as data, in order: [:whitelist b] [:file path text] [:workspace b world] [:body-start b {:world :build}] [:wait-online b] [:place b spots] [:rcon text] [:record path m].
   The --fresh start wipes the body's engine state and memory; [:place body spots] puts the body on the surface at the first of the
-  candidate spots that has dry ground (the rest are for oceans); the record keeps the spot it used."
+  candidate spots that has dry ground (the rest are for oceans); slow falling then covers a placement in the air while the spot's chunks load; the record keeps the spot it used."
   [{:keys [body world build spots now] :or {world "test"}}]
   (do
     [[:whitelist body]
@@ -66,6 +66,7 @@
      [:rcon (str "gamemode survival " body)]
      [:rcon (str "clear " body)]
      [:place body spots]
+     [:rcon (str "effect give " body " minecraft:slow_falling 60 0 true")]
      [:rcon (str "execute as " body " at " body " run spawnpoint " body " ~ ~ ~")]
      [:rcon (str "effect give " body " minecraft:instant_health 1 5 true")]
      [:record (str "worlds/" world "/fresh-drops/" body "-" now ".edn") {:body body :world world :spots spots :build build :started-ms now}]]))

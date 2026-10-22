@@ -58,6 +58,7 @@
            [:body-start body {:world world :build build}]]
           (when time? [[:rcon "time set 1000"]])
           [[:rcon (str "spreadplayers " x " " z " 0 24 false " body)]
+           [:rcon (str "effect give " body " minecraft:slow_falling 60 0 true")]
            [:rcon (str "gamemode survival " body)]
            [:rcon (str "clear " body)]
            [:rcon (str "effect give " body " minecraft:instant_health 1 5 true")]
