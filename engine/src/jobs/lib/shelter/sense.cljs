@@ -121,7 +121,7 @@
 (defn cell-light
   "light-at for a cell the body has seen (its own cell is always known); nil for any other."
   [p {:keys [x y z] :as cell}]
-  (let [own (feet p)]
+  (let [own (when (.-pos (.self p)) (feet p))]
     (when (or (= [x y z] [(:x own) (:y own) (:z own)]) (seen-cell? p cell))
       (light-at p cell))))
 

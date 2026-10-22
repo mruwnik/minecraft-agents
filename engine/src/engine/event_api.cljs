@@ -578,7 +578,9 @@
                         (and (= method "GET") (= pathname "/light"))
                         (if-let [q (light-query (.-searchParams url))]
                           (if-let [view (:light-view eng)]
-                            (respond! res 200 {:ok true :light (view q)})
+                            (-> (js/Promise.resolve)
+                                (.then #(respond! res 200 {:ok true :light (view q)}))
+                                (.catch (fn [e] (engine-failed! eng res e))))
                             (respond! res 200 {:ok false :reason :no-perception}))
                           (bad! res 400 :bad-query))
 
