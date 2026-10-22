@@ -450,14 +450,21 @@
   its facing as it likes."
   {"chest" #{:type} "trapped_chest" #{:type}})
 
+(def counts-as
+  "Blocks a player takes for the wanted one: dirt in daylight beside grass turns to grass by itself."
+  {"dirt" #{"grass_block"}})
+
 (defn judge-block
   "A block want (name or block with state) against a non-air block: :match, :wrong, or :unknown when the name
-  matches, the want names state and the world gave names only. The want `bed` is a bed of any colour."
+  matches, the want names state and the world gave names only. The want `bed` is a bed of any colour; a block of
+  counts-as matches unless the want says :exact true."
   [want {:keys [name state]}]
-  (let [{wanted :block :as want} (if (string? want) {:block want} want)
-        wanted-state (apply dissoc want :block (server-decided-state (:block want)))]
+  (let [{wanted :block exact :exact :as want} (if (string? want) {:block want} want)
+        wanted-state (apply dissoc want :block :exact (server-decided-state (:block want)))]
     (cond
-      (not (or (= wanted name) (and (= "bed" wanted) (str/ends-with? (str name) "_bed")))) :wrong
+      (not (or (= wanted name)
+               (and (= "bed" wanted) (str/ends-with? (str name) "_bed"))
+               (and (not exact) (contains? (counts-as wanted) name)))) :wrong
       (empty? wanted-state) :match
       (nil? state) :unknown
       (every? (fn [[k v]] (= (state-text v) (some-> (state-of state k) state-text))) wanted-state) :match
@@ -502,7 +509,7 @@
     (vector? want) (str/join " | " (map want-text (rest want)))
     (contains? want :crop) (str "crop " (:crop want))
     (contains? want :tree) (str "tree " (:tree want))
-    :else (let [state (dissoc want :block)]
+    :else (let [state (dissoc want :block :exact)]
             (if (empty? state)
               (:block want)
               (str (:block want) "[" (str/join "," (for [[k v] (sort-by key state)] (str (name k) "=" (state-text v)))) "]")))))

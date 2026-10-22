@@ -307,6 +307,14 @@
     "bed" {:name "black_bed"} :match
     "bed" {:name "oak_planks"} :wrong))
 
+(deftest grass-counts-as-dirt-unless-the-want-is-exact
+  (are [want block answer] (= answer (shape/judge want block))
+    "dirt" {:name "grass_block"} :match
+    {:block "dirt"} {:name "grass_block"} :match
+    {:block "dirt" :exact true} {:name "grass_block"} :wrong
+    {:block "dirt" :exact true} {:name "dirt"} :match
+    "grass_block" {:name "dirt"} :wrong))
+
 (deftest a-crop-matches-at-any-stage-and-the-ground-below-is-not-judged
   (are [want block answer] (= answer (shape/judge want block))
     {:crop "wheat"} {:name "wheat" :state {:age 0}} :match
@@ -391,6 +399,7 @@
   (are [want text] (= text (shape/want-text want))
     "oak_fence" "oak_fence"
     {:block "oak_door" :facing :north :half :lower} "oak_door[facing=north,half=lower]"
+    {:block "dirt" :exact true} "dirt"
     [:any "cobblestone" "stone_bricks"] "cobblestone | stone_bricks"
     {:crop "wheat"} "crop wheat"
     {:tree "oak"} "tree oak"

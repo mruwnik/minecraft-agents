@@ -325,24 +325,27 @@
 
 (defn prepared
   "Cells (as judged) ready for the rounds: loosened; a companion half is marked :companion; a wrong block of another kind that the body carries the item for,
-  that is no container, door or gate, no rail of the wanted kind (its shape settles as its neighbours land), not already misplaced by this job, is marked :dig? (dug, then placed). So is a block that is
+  that is no container, door or gate, no rail of the wanted kind (its shape settles as its neighbours land), not already misplaced by this job,
+  not under a door of the plan that holds (digging it drops the door), is marked :dig? (dug, then placed). So is a block that is
   no replaceable one in a :clear cell (:extra), whatever is carried; a kept block (chest, table ..) there too when own holds [cell block] (the body placed it)."
   [cells carried misplaced own]
-  (mapv (fn [{:keys [answer found want item pos] :as cell}]
-          (let [wrong? (= :wrong answer)
-                extra? (= :extra answer)
-                settling? (and (rail/rail-name? found) (= found (shape/want-block want)))
-                dug? #(and (not (contains? misplaced pos))
-                           (not settling?)
-                           (or (not (kept/kept? [] found)) (and extra? (contains? own [pos found])))
-                           (not (re-find opening-pattern found)))
-                digs? (and (or extra? (and wrong? item (contains? carried item))) (dug?))
-                short? (and wrong? item (not (contains? carried item)) (dug?))]
-            (cond-> cell
-              short? (assoc :short? true)
-              (companion? want) (assoc :companion true)
-              digs? (assoc :dig? true))))
-        (loosened cells)))
+  (let [door-at (into #{} (comp (filter #(and (= :match (:answer %)) (str/ends-with? (str (:found %)) "_door"))) (map :pos)) cells)]
+    (mapv (fn [{:keys [answer found want item pos] :as cell}]
+            (let [wrong? (= :wrong answer)
+                  extra? (= :extra answer)
+                  settling? (and (rail/rail-name? found) (= found (shape/want-block want)))
+                  dug? #(and (not (contains? misplaced pos))
+                             (not settling?)
+                             (not (door-at (update pos 1 inc)))
+                             (or (not (kept/kept? [] found)) (and extra? (contains? own [pos found])))
+                             (not (re-find opening-pattern found)))
+                  digs? (and (or extra? (and wrong? item (contains? carried item))) (dug?))
+                  short? (and wrong? item (not (contains? carried item)) (dug?))]
+              (cond-> cell
+                short? (assoc :short? true)
+                (companion? want) (assoc :companion true)
+                digs? (assoc :dig? true))))
+            (loosened cells))))
 
 (defn sturdy-ground?
   "Whether the plan of the call says (:sturdy-ground true) that a sturdy block on the ground of its rail line is no wrong block."

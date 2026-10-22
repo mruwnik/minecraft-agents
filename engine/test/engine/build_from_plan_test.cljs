@@ -668,6 +668,25 @@
           (is (= [[[2 64 2] "oak_door"]] (places p)))
           (is (= {:placed 1 :missing [] :wrong [] :given-up {}} (select-keys result [:placed :missing :wrong :given-up]))))))))
 
+(deftest a-grass-floor-where-the-plan-says-dirt-is-built-and-never-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[result p] (await (build [{:id "floor" :cells [[1 63 1] [2 63 1] [1 63 2]] :want "dirt"}
+                                        {:id "chest" :cells [[1 64 1]] :want "chest"}]
+                                       (assoc ground "1,63,1" "grass_block" "2,63,1" "grass_block" "1,63,2" "grass_block" "1,64,1" "chest")
+                                       [{:name "dirt" :count 4}]))]
+          (is (empty? (h/calls p "dig")))
+          (is (= {:placed 0 :missing [] :wrong [] :given-up {}} (select-keys result [:placed :missing :wrong :given-up]))))))))
+
+(deftest a-wrong-cell-under-a-standing-door-of-the-plan-is-not-dug
+  (are [above dig?] (= dig? (boolean (:dig? (first (plan/prepared [{:pos [0 0 0] :answer :wrong :found "stone" :item "cobblestone" :want "cobblestone"}
+                                                                   above]
+                                                                  #{"cobblestone"} {} #{})))))
+    {:pos [0 1 0] :answer :match :found "oak_door" :want {:block "oak_door" :half :lower}} false
+    {:pos [0 1 0] :answer :missing :found "air" :want {:block "oak_door" :half :lower}} true
+    {:pos [0 1 0] :answer :match :found "oak_planks" :want "oak_planks"} true))
+
 (deftest a-bed-want-takes-any-colour-of-bed-carried
   (async done
     (tu/run-async done

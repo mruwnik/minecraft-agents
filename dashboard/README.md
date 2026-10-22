@@ -112,7 +112,7 @@ counts answers and lays out grids (pure), `dashboard.plan-api` builds the two en
 block names out of the dumped columns with the view's decoders.
 
 - Each part is listed as an element on the Plans page (kind = `box`, `outline`, `cells` or `blueprint`), with its own counts.
-- Cell answers: `match`, `missing` (air where something is wanted), `wrong` (another block), `extra` (a block where `:clear` is
+- Cell answers: `match`, `missing` (air where something is wanted), `wrong` (another block; grass counts as dirt unless the want has `:exact true`), `extra` (a block where `:clear` is
   wanted), `unknown` (the column was never dumped, or the want names block state: the columns give names only). Percent = match / all
   cells (unknown included). A part may have at most 200000 cells.
 - Conflicts: two plans that want different things of the same cell (`plan.conflicts`, `../engine/src/plan/conflicts.cljc`: the
