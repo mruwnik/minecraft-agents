@@ -55,8 +55,26 @@
   [resource pos body]
   (reduce + 0 (map #(* (biome-chance % pos body) (density resource pos % body)) biomes)))
 
+(def ^:private biome-set (set biomes))
+
+(defn- unseen-density
+  "expected-density at height y for a body that has seen no biome: each placement's veins times the share of the
+  ore-carrying biomes it covers, in one pass over the placements."
+  [placements y]
+  (let [n (count biomes)]
+    (reduce (fn [acc p]
+              (let [share (height-share p y)]
+                (if (zero? share)
+                  acc
+                  (+ acc (/ (* (:count p) (:size p) share (count (filter biome-set (or (:biomes p) biomes))))
+                            (* chunk-area n))))))
+            0 placements)))
+
 (defn peak-density
   "The most expected-density of resource at any height from -64 to 64, where mining is done, the figure of the best layer to look
   in; 0 for a resource with no placement."
   [resource body]
-  (apply max 0 (for [y (range -64 65)] (expected-density resource {:y y} body))))
+  (if (:biome-at body)
+    (apply max 0 (for [y (range -64 65)] (expected-density resource {:y y} body)))
+    (let [placements (get (:ores data) (keyword resource))]
+      (reduce max 0 (map #(unseen-density placements %) (range -64 65))))))

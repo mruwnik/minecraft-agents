@@ -35,3 +35,9 @@
     (is (< 0 (rates/expected-density "emerald" (at 100) unseen) meadow))
     (is (close? (rates/density "diamond" (at -55) "plains" unseen) (rates/expected-density "diamond" (at -55) unseen))
         "diamond is placed alike in every biome")))
+
+(deftest peak-density-of-a-body-without-biomes-is-the-best-expected-density
+  (doseq [r ["coal" "iron" "copper" "gold" "redstone" "lapis" "diamond" "emerald" "cheese"]]
+    (is (close? (apply max 0 (for [y (range -64 65)] (rates/expected-density r {:y y} nil)))
+                (rates/peak-density r nil))
+        r)))
