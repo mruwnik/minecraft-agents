@@ -34,7 +34,7 @@
   A bill runs one obtain child per item still missing (not carried or worn), in order, after the furnace material (iron_ingot ..) the missing items need together, which is got in one go and reserved against deposits; each child gets a :spend :job-time of the ::bill-item-s setting. The first child that fails ends the bill with its kind and cause, data {:item the one it stopped at :why}.
 
   Needs: valid :item or :any-of and :count, or a :bill (else impossible :bad-args); a source (else condition-failed :no-source with :why naming what each way lacks).
-  Returns :done {:got n :item name} only with the count carried (the call's :least, default :all, may name fewer) (a bill: {:have [items]}); nothing-possible :no-source, :table-unreachable or the gather's walk cause (:zone-exit ..) when every allowed way was tried, data {:got :tried :why :next} (:next: jobs.lib.next-call, the gather for the first unseen raw need); limit-reached :timeout after :spend :job-time (default ::job-time-s).
+  Returns :done {:got n :item name} only with the count carried (the call's :least, default :all, may name fewer) (a bill: {:have [items]}); nothing-possible :no-source, :table-unreachable or the gather's walk cause (:zone-exit ..) when every allowed way was tried, data {:got :tried :why :next} (:next: jobs.lib.next-call, the gather for the first unseen raw need); limit-reached :timeout after :spend :job-time (default-time: ::job-time-s, ::unit-s more per unit of :count beyond the first).
   Quote: the count as yield, time a guess per step, no most for a gather; a bill two gathers' time per missing item.")
 
 (a/defargs args
@@ -48,8 +48,14 @@
    :explore {:doc "false drops the :search way (the base ::explore setting's search for a raw need not seen): fails :no-source instead" :spec boolean? :default true}})
 
 (a/defargs settings
-  {::job-time-s {:default 600 :doc "Seconds an obtain may run (its default :spend :job-time)." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 600 :doc "Seconds an obtain of one unit may run (its default :spend :job-time)." :spec (a/num-in 0 nil)}
+   ::unit-s {:default 60 :doc "Seconds the default :spend :job-time grows by for each unit of :count beyond the first." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
+
+(defn default-time
+  "The call's default :spend :job-time: ::job-time-s, plus ::unit-s for each unit of the count beyond the first (27 raw iron are many mines, not one)."
+  [{:keys [count]}]
+  (+ (time-s) (* (settings/get settings ::unit-s) (max 0 (dec (or count 1))))))
 
 (def target [:item :any-of :bill])
 
@@ -64,7 +70,7 @@
   #{:unreachable :not-back :zone-exit :walk-failed :walk-in-failed :shut-in :exhausted :tree-unreachable
     :no-approach :out-of-reach :one-way :way-dives :detour :door-stuck :cut-again :replan-limit})
 
-(def defaults {:least :all :ways (set ways) :spend {:job-time ::job-time-s}})
+(def defaults {:least :all :ways (set ways) :spend {:job-time default-time}})
 
 (defn source-seen?
   "True when a way would start from what is seen or carried: a usable seen chest that might hold one of the names, a chain

@@ -52,6 +52,12 @@
           (is (nil? (contract/quote-problem q)))
           (is (= ##Inf (get-in q [:uses :job-time 2])) "a gather has no most"))))))
 
+(deftest the-default-time-limit-grows-with-the-count
+  (are [n s] (= s (obtain/default-time {:count n}))
+    nil 600
+    1 600
+    27 2160))
+
 (deftest planks-crafted-from-a-carried-log-are-done-with-what-was-got
   (async done
     (tu/run-async done
