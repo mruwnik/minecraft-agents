@@ -42,6 +42,12 @@
   #js {:sensedAt (fn [pos] (let [n (get known [(.-x pos) (.-y pos) (.-z pos)])]
                              (if n #js {:name n} #js {:unknown true})))})
 
+(deftest a-seen-cell-with-an-unseen-neighbour-still-gets-its-look
+  (let [around (fn [cells] (sees (into {} (map (fn [c] [c "air"])) cells)))
+        ring [[0 63 0] [1 63 0] [-1 63 0] [0 64 0] [0 62 0] [0 63 1]]]
+    (is (true? (drive/unseen-round? (around ring) [0 63 0])) "[0 63 -1] is unseen")
+    (is (false? (drive/unseen-round? (around (conj ring [0 63 -1])) [0 63 0])))))
+
 (deftest a-dive-looks-up-at-the-first-unseen-cell-over-its-head
   (let [swim (fn [x] (assoc (step x 63 0 :swim) :swim true))
         steps [(swim 0) (swim 1) (swim 2)]

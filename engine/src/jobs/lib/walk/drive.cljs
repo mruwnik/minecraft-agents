@@ -59,18 +59,23 @@
 
 (defn edge-points
   "The points a look over an edge aims at: the ground round self ({:x :z}) at 3 and 7 blocks in eight directions at height y,
-  those whose cell is still unknown (unknown? takes [x y z]); ground already seen is not looked at again."
+  those whose cell or a neighbour is still unknown (unknown? takes [x y z]); ground already seen is not looked at again."
   [{:keys [x z]} y unknown?]
   (for [d [3 7] [dx dz] [[1 0] [1 1] [0 1] [-1 1] [-1 0] [-1 -1] [0 -1] [1 -1]]
         :let [pt {:x (+ x (* d dx)) :y (+ y 0.5) :z (+ z (* d dz))}]
         :when (unknown? (mapv #(js/Math.floor (% pt)) [:x :y :z]))]
     pt))
 
+(defn unseen-round?
+  "Whether the cell or any of its 6 neighbours is unknown: a look glances all seven."
+  [p cell]
+  (boolean (some #(dig-look/unknown? p (dig-look/add cell %)) (cons [0 0 0] dig-look/neighbours))))
+
 (defn ^:async look-over-edge!
   "A floor the body learned is not there (a drop at the takeoff's edge): look at the unseen ground round the body at several
   distances, as a player looks over an edge once, so the next plan does not drop at the next unseen column."
   [c [_ y _]]
-  (loop [points (edge-points (u/self-pos c) y #(dig-look/unknown? (:primitives c) %))]
+  (loop [points (edge-points (u/self-pos c) y #(unseen-round? (:primitives c) %))]
     (when-let [pt (first points)]
       (await (ctx/act c :look (clj->js {:pos pt})))
       (look/see! c)
