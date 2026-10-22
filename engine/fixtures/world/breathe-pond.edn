@@ -32,6 +32,13 @@
             {:event {:source :reflex :kind :ended :data {:outcome :stopped :reason :no-land-in-range}} :within-s 80}
             {:no-event {:source :job :kind :afloat} :for-s 80 :until {:source :reflex :kind :ended :data {:outcome :stopped :reason :no-land-in-range}}}]
    :after [[:body-near [15.5 3.5 15.5] 6]]}
+  ;; the bank stands 2 above the water (the wall top), the body carries blocks: it places one and climbs out, never treading water short of air
+  {:name "high-bank-with-blocks-steps-out"
+   :body {:at [18.5 2 15.5] :inventory [["cobblestone" 8]]}
+   :expect [{:event {:source :reflex :kind :fired} :within-s 30}
+            {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 60}
+            {:no-event {:source :body :kind :died} :for-s 60 :until {:source :reflex :kind :ended :data {:how :cleared}}}]
+   :after [[:body-near [15.5 4 15.5] 6]]}
   {:name "ledge-east-lands-1"
    :blocks [[:fill [21 4 11] [21 5 20] "air"]]
    :body {:at [18.5 2 15.5]}

@@ -45,7 +45,7 @@
     rim at most one block above the water) within the shore-radius setting (6), another direction after each failed swim; a go-to
     child onto a climbable shore cell (as for the shore swim) within the search-radius setting (48) (at most 3 targets per spot, a failed target excludes its direction),
     which also counts dry cells joined to the body by seen water and air, however far up (the steps of a flooded stair shaft);
-    then a step block: with a carried pillar block (jobs.lib.choose/fillers :climb), one placed (jobs.blocks.place child,
+    then a step block (also as soon as one go-to onto land failed, before more tries): with a carried pillar block (jobs.lib.choose/fillers :climb), one placed (jobs.blocks.place child,
     zones respected) in the nearest top water cell within the shore-radius setting that has support and two air cells above,
     written to the scaffold ledger (purpose :breathe-step, for jobs.access.cleanup), at most 2 per spot; the next
     pass's shore swim climbs onto it; then a swim leg, a go-to to the farthest loaded surface water 8..leg-length (32) blocks out, outward from the run's
@@ -229,8 +229,12 @@
         failed (:failed-headings m #{})]
     (ctx/remember! c :breathe-afloat {:pos pos :start (:start m pos) :reason reason :headings (vec failed)} afloat-policy)
     (ctx/end c :nothing-possible reason
-             {:text (str "afloat; no land within " (search-radius) " blocks or a swim of " (swim-range)
-                         (when (= :no-blocks reason) ", and no block to step out on"))
+             {:text (if-let [t (first (:failed-land m))]
+                      (str "afloat; land at " (:x t) " " (:y t) " " (:z t) " was seen but the body could not get onto it"
+                           (when (= :no-blocks reason) " and has no block to step out on"))
+                      (str "afloat; no land within " (search-radius) " blocks or a swim of " (swim-range)
+                           (when (= :no-blocks reason) ", and no block to step out on")))
+              :unreached (count (:failed-land m))
               :searched (search-radius) :swum (js/Math.round (hdist pos (:start m pos))) :legs (:legs m 0)
               :headings-failed (count failed)
               :step (cond (= :no-blocks reason) :no-blocks (:step-refused m) :refused (seq (:failed-steps m)) :failed :else :no-wall)})))
@@ -331,6 +335,7 @@
           (do (ctx/update-mem! c update :failed-shores (fnil conj []) shore)
               :again)))
 
+      (and stepcell carried? (seq (:failed-land m))) (await (step! c stepcell))
       land (await (land-by-go-to! c land))
       (and stepcell carried?) (await (step! c stepcell))
       legs (await (swim-leg! c (first legs) (second legs)))

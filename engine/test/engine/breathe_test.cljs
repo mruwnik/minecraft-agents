@@ -643,6 +643,32 @@
           (is (= [[:stopped :no-land-in-range]] (ended seen)))
           (is (<= 1 (unreachable-count seen) (b/land-tries))))))))
 
+(def high-bank
+  "A pond whose east bank stands 2 blocks above the water surface: the swim cannot climb it and the walker finds no path."
+  (merge (lake -3 3 3) (into {} (for [z (range -3 4) y (range 61 67)] [(str "4," y "," z) "stone"]))))
+
+(deftest a-failed-go-to-onto-a-high-bank-is-followed-by-a-step-block-not-more-go-tos
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p]} (setup {:self {:inWater true :oxygen 4 :pos {:x 2 :y 64 :z 0}}
+                                           :blocks high-bank :inventory [{:name "dirt" :count 4}]})]
+          (.override (.-world p) "swim" (fn ^:async f [_ args impl] (if (.-toward args) #js {:status "timeout"} (await (impl _ args)))))
+          (await (one-run! eng small-args))
+          (is (<= (unreachable-count seen) 1) "at most one go-to failed before the step block")
+          (is (some #(= "place" (.-name %)) (array-seq (.. p -world -calls))) "a block was placed to climb out on"))))))
+
+(deftest a-stop-after-a-failed-go-to-names-the-land-it-could-not-reach
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:inWater true :oxygen 4 :pos {:x 0 :y 64 :z 0}}
+                                         :blocks (merge (lake -6 6 6) (bank 7 7 6) (bank -7 -7 6) wall-all-round)})]
+          (await (one-run! eng no-shore-args))
+          (let [d (stopped-data seen)]
+            (is (pos? (:unreached d)))
+            (is (re-find #"was seen but the body could not get onto it" (:text d)))))))))
+
 (deftest open-water-with-no-land-swims-legs-inside-the-bounds-then-stops
   (async done
     (tu/run-async done
