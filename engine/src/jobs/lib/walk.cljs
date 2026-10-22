@@ -408,6 +408,14 @@
         {:end {:status :replan :why :changed :learned true :cells [[x y z] [x (inc y) z]] :at [sx sy sz] :step 1}})
       {:looked cells})))
 
+(defn solid-ahead
+  "The first feet or head cell of the next look-ahead-steps steps that the body now knows is a full block, or nil. A cell the
+  plan took for air because it was unseen is seen from nearer by the time a later leg starts."
+  [p steps]
+  (first (for [{:keys [x y z]} (take look-ahead-steps (rest steps)) y' [y (inc y)]
+               :when (true? (some-> (u/sensed p {:x x :y y' :z z}) .-fullCube))]
+           [x y' z])))
+
 (defn ^:async look-ahead!
   "Over a mask (go-to :unknown) a step may enter cells the body never saw, which the plan reads as air: look round and at the
   next look-ahead-steps steps' cells first, as a player looks before climbing into the dark. A cell that turns out solid, or
@@ -450,7 +458,7 @@
   (:light) that the gate cannot see is lit by a torch (light!) and the walk goes on from its takeoff, within timeout-s
   of steering in all; light!'s other ends end the walk. Over a mask (go-to :unknown) the walk goes in legs that end
   before the first step into cells the body has not seen, looks at them there (look-ahead!) and goes on, or ends
-  {:status :replan :why :changed}."
+  {:status :replan :why :changed}; so does a leg that starts with a full block now seen in the next steps' cells (solid-ahead)."
   ([c steps timeout-s] (walk! c steps timeout-s nil))
   ([c steps timeout-s watch]
    (loop [steps steps base 0 ms 0 looked #{}]
@@ -459,8 +467,12 @@
            o (first-unseen-overhead p steps looked)
            d (first-unseen-landing p steps looked)
            j (let [js (remove nil? [u o d])] (when (seq js) (apply min js)))
-           rebase (fn [d] (cond-> d (:step d) (update :step + base)))]
+           rebase (fn [d] (cond-> d (:step d) (update :step + base)))
+           solid (when (:unknown c) (solid-ahead p steps))]
        (cond
+         solid (let [{:keys [x y z]} (u/self-pos c)]
+                 [(rebase {:status :replan :why :changed :learned true :cells [solid] :at [x y z] :step 1}) ms])
+
          (and (or (pos? base) (seq looked)) (wplan/swim-outlasts-air? c steps))
          (let [pos (.-pos (.self p))]
            [(rebase {:status :replan :why :air :at [(.-x pos) (.-y pos) (.-z pos)] :step 0}) ms])

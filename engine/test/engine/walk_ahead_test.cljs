@@ -48,6 +48,15 @@
     (is (nil? (walk/first-unseen-overhead p (subvec steps 2) #{})))
     (is (nil? (walk/first-unseen-overhead p steps #{[1 66 0]})) "each cell is looked at once")))
 
+(deftest a-cell-the-plan-took-for-air-that-is-seen-solid-by-a-later-leg-is-found-ahead
+  (let [steps [(step 0 64 0 :walk) (step 1 64 0 :walk) (step 2 65 0 :jump) (step 3 65 0 :walk) (step 4 65 0 :walk) (step 5 65 0 :walk)]
+        known (fn [solid] #js {:sensedAt (fn [pos] (let [cell [(.-x pos) (.-y pos) (.-z pos)]]
+                                                    (if (contains? solid cell) #js {:name "stone" :fullCube true} #js {:name "air" :fullCube false})))})]
+    (is (= [2 65 0] (walk/solid-ahead (known #{[2 65 0]}) steps)))
+    (is (= [2 66 0] (walk/solid-ahead (known #{[2 66 0]}) steps)) "the head cell too")
+    (is (nil? (walk/solid-ahead (known #{[5 65 0]}) steps)) "only the next look-ahead-steps steps")
+    (is (nil? (walk/solid-ahead (known #{}) steps)))))
+
 (deftest the-cells-of-a-diagonal-step-include-both-side-columns
   (is (= #{[0 0] [1 0] [0 1] [1 1]}
          (set (map (fn [[x _ z]] [x z]) (wwatch/step-cells (step 0 64 0 :walk) (step 1 64 1 :diagonal)))))))

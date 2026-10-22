@@ -2,8 +2,8 @@
 ;; EAST end, 100 / 150 blocks east of the body: the way down lies out of view. The goal is on the ground below the west part.
 ;; The fail case caps the east end (no way down): the body walks both ends to find out (about 500 blocks), then honest :unreachable on the walkway. The default tour-worth of a goal 170 off (about 3 times the straight walk) ends the swinging between the loaded edges.
 {:defaults
- {:tags [:movement :planner :large]
-  :plot {:height 16 :length 360 :width 32}
+ {:tags [:movement :planner :large] :time :any
+  :plot {:height 16 :length 360 :width 32 :light :lit}
   :limit-s 300
   :blocks
   [[:fill [20 10 8] [330 10 8] "stone"]
