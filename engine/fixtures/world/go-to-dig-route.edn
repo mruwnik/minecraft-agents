@@ -60,6 +60,13 @@
             {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 60 :until {:source :job :kind :stopped :data {:arrived false}}}]
    :after [[:block [19 5 16] "stone"] [:body-near [19.5 6 16.5] 1.5]]
    :limit-s 90}
+  ;; the farmland under a planned crop cell is the body's own plan (the plan lists only the crop cell above it): the straight shaft's first cell is never dug, the route goes round it
+  {:name "farmland-under-a-planned-crop-is-never-dug"
+   :blocks [[:set [19 5 16] "farmland[moisture=7]"] [:set [21 5 16] "water"]]
+   :plans [{:id "field" :metadata {:by "$body"} :parts [{:id "wheat" :cells [#at [19 6 16]] :want {:crop "wheat"}}]}]
+   :act [[:job (jobs.movement.go-to {:pos #at [19 2 16] :range 0 :unknown false})]]
+   :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
+   :after [[:block [19 5 16] "farmland[moisture=7]"] [:body-near [19.5 2 16.5] 1.5]]}
   ;; should fail: every cell around the pocket is another owner's plan: nothing is dug, the walls stay
   {:name "pocket-walled-by-another-plan-is-never-dug"
    :plans [{:id "other" :metadata {:by "SomeoneElse"}

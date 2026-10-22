@@ -81,6 +81,13 @@
             (when warn (warn! warn))
             (get entries id)))})
 
+(defn soil-cells
+  "The cells under each cell of expansion x wanting a crop: a field's farmland is no cell of the plan, yet the plan's own."
+  [x]
+  (into #{} (comp (filter (fn [{:keys [want]}] (and (map? want) (contains? want :crop))))
+                  (map #(update (vec (:pos %)) 1 dec)))
+        (:cells x)))
+
 (defn expand-all
   "state with :expanded rebuilt (a delay of each plan's last good copy expanded over the blueprints' last good copies), and
   the :claims and :footprints of the active plans with it (delays too). With prior (the state before), a plan whose entry
@@ -452,6 +459,15 @@
           (if (contains? claims except)
             (memo w [:footprints-except except] #(footprint-index (update-vals (dissoc (:claims @(:state w)) except) deref)))
             (if footprints @footprints {}))))))
+
+(defn soil-footprints
+  "{[x y z] plan-id}: the soil under each crop cell of the plans but except's (see soil-cells); {} for a nil world."
+  [w except]
+  (if-not w
+    {}
+    (do (refresh! w)
+        (memo w [:soil-footprints except]
+              #(footprint-index (into {} (keep (fn [[id x]] (when (not= id except) [id (soil-cells (some-> x deref))]))) (:expanded @(:state w))))))))
 
 (defn shaft-ids
   "The ids of the plans of :kind :mineshaft, as a set; #{} for a nil world."

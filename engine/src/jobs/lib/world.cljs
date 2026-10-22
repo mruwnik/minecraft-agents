@@ -45,6 +45,11 @@
   ([ctx {:keys [except]}]
    (world/footprints (:world (:engine ctx)) except)))
 
+(defn soil-footprints
+  "{[x y z] plan-id}: the farmland under the crop cells of every plan but except's. No cell of the plan itself (so never a plan cell), yet not to be dug or built on."
+  [ctx except]
+  (world/soil-footprints (:world (:engine ctx)) except))
+
 (defn shafts
   "The ids of the active :mineshaft plans (jobs.lib.access.zones: their footprint is dug through, not refused)."
   [ctx]

@@ -295,6 +295,13 @@
     (is (= "pad" (fps [0 64 0])))
     (is (= "wall" (fps [1 65 0])))))
 
+(deftest soil-footprints-are-the-cells-under-crop-cells-of-other-plans
+  (let [field {:id "field" :parts [{:id "wheat" :cells [[5 65 5]] :want {:crop "wheat"}}]}
+        w (world/of-data {"field" field} {})]
+    (is (= {[5 64 5] "field"} (world/soil-footprints w nil)))
+    (is (= {} (world/soil-footprints w "field")))
+    (is (= {[5 65 5] "field"} (world/footprints w nil)))))
+
 (deftest footprints-except-a-plan-leave-out-only-its-own-cells
   (let [w (world/of-data {"pad" pad "wall" wall} {})]
     (is (= {[1 64 0] "wall" [1 65 0] "wall"} (world/footprints w "pad")))
