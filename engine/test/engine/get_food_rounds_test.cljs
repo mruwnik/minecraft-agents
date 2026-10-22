@@ -695,14 +695,13 @@
     (is (false? (waits? [15 15])) "night, lit place: the search goes on")
     (is (true? (waits? [15 0])) "night, dark place: it waits")))
 
-(deftest hungry-underground-with-no-wall-to-climb-does-not-search
+(deftest hungry-under-a-roof-with-no-wall-to-climb-searches-from-where-it-stands
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup {:time 6000 :blocks {"0,66,0" "stone"} :self {:food 8 :health 10}} :step-ms 5)]
           (await (one-round! eng {}))
-          (is (= [] (searches seen)) "food 8 underground: no search through the dark caves")
-          (is (re-find #"no way up" (str (:text (first (none-endings seen)))))))))))
+          (is (= 1 (count (searches seen))) "no wall and no stand on free ground counts as out (surface-up): the search runs from there, once"))))))
 
 (deftest a-starving-body-underground-explores-the-caves
   (async done

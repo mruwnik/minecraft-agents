@@ -394,7 +394,7 @@
       (do (ctx/update-mem! c assoc :explored (str "not searched: " (:too-dangerous (ctx/mem c)))) nil)
       (search-waits? c)
       (do (ctx/update-mem! c assoc :explored "not searched: dark or danger near") nil)
-      (and (sh-sense/buried? (:primitives c)) (not (starving? c)))
+      (and (sh-sense/buried? (:primitives c)) (not (starving? c)) (not (surface/climbed? c)))
       (case (await (surface/step! c))
         :continue :continue
         :out :again
