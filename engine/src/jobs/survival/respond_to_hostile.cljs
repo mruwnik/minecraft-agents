@@ -90,6 +90,11 @@
                   (or (> (count (danger-q/known-hostiles p (hold-radius) {})) 1)
                       (and (stay-inside?) (or (sh-sense/shut-in-room? p) (sh-inside/sheltered-in c))))))))
 
+(defn hurt-lately?
+  "Whether the body was hurt within hit-window-ms: an unseen mob may be the one hitting it."
+  [c]
+  (boolean (seq (ctx/since c :hurt (- (ctx/now c) (hit-window-ms))))))
+
 (defn stay-under-roof?
   "Whether the body keeps its roof: ::stay-inside on, a roof over the feet, and every danger near either only heard
   or a flyer (a phantom cannot get under a roof), none a creeper or an enderman. The fight then holds and the flight does not run."
@@ -186,7 +191,16 @@
   (and (not-any? danger-q/seen-only? hs)
        (not-any? combat/creeper? hs)
        (empty? (:hits (ctx/mem c)))
-       (empty? (ctx/since c :hurt (- (ctx/now c) (hit-window-ms))))))
+       (not (hurt-lately? c))))
+
+(defn look-unheard?
+  "Whether the dangers hs are all heard only, the body not hurt lately and not yet looked around this run: it turns
+  toward the sound before it leaves the mob alone, as a player would."
+  [c hs]
+  (boolean (and (seq hs)
+                (not-any? danger-q/seen-only? hs)
+                (not (hurt-lately? c))
+                (not (look/surveyed? c)))))
 
 (defn leave-heard!
   "Mutes heard mobs (mute-heard!) and returns {:left-heard ending-data} saying which one was left, so the job the reflex cut goes on."
@@ -265,7 +279,7 @@
                                :creeper? (boolean (and (some combat/creeper? near) (not (hostile/hit-and-back? c near))))
                                :reserve reserve
                                :damage (hostile/damage c near #(struck-of c %))}))
-        stay? (stay-under-roof? c near)
+        stay? (and (not (hurt-lately? c)) (stay-under-roof? c near))
         decision (if (and (= :flee chosen) (>= (count hits) 2) (not-any? combat/creeper? near) (not-any? combat/enderman? near))
                    :fight
                    chosen)
@@ -379,6 +393,7 @@
                     (empty? hs) (when (shot/open? (:primitives c) (ctx/view c)) (await (run-child c :flee false)))
                     (gap-wanted? c hs (:gap-tried (ctx/mem c))) (await (gap! c))
                     (cover-unseen? c hs (:gap-tried (ctx/mem c))) (await (look/look-around! c))
+                    (look-unheard? c hs) (await (look/look-around! c))
                     :else (await (respond c hs)))
           after (near c)]
       (if (contract/ending? outcome)

@@ -416,6 +416,31 @@
               (is (= held? (boolean (:text (first (filter #(= :hostile.sealed-hold (:kind %)) @seen))))) (str why ": sealed-hold event with its reason"))
               (is (= held? (boolean (seq (filterv :mute-s @seen)))) (str why ": a held body with nothing to fight ends done, leaving the heard mob (not no-response)")))))))))
 
+(deftest a-roofed-body-hurt-lately-does-not-stay-for-a-mob-it-only-hears
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup-seeing (assoc {:time 14000 :blocks roofed-passage :entities [(zombie 7 0.5 -5.5)]} :self {:health 20} :inventory sword :pitch -80) nil 1000)]
+          (perception/pass! (aget p "perception"))
+          (swap! (fake/state p) assoc :pitch 0)
+          (mem/write! (:store eng) :hurt {:amount 3})
+          (core/submit! eng respond {})
+          (await (core/tick! eng))
+          (is (empty? (filter #(= :hostile.sealed-hold (:kind %)) @seen)) "hit lately: the roof is no reason to stay")
+          (is (not-any? #(= :no-response (:reason %)) @seen) "and the reflex does not end as if nothing could be done"))))))
+
+(deftest a-body-looks-toward-a-heard-mob-before-leaving-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-seeing (assoc {:time 14000 :blocks roofed-passage :entities [(zombie 7 0.5 -5.5)]} :self {:health 20} :inventory sword :pitch -80) nil 1000)]
+          (perception/pass! (aget p "perception"))
+          (swap! (fake/state p) assoc :pitch 0)
+          (core/submit! eng respond {})
+          (await (core/tick! eng))
+          (is (seq (mem/entries (mem/view (:store eng)) :heard-mute)) "muted")
+          (is (seq (calls p "look")) "after it turned to look"))))))
+
 (def wide-room
   "A 7x7 room around the body (interior -3..3), walls to y 66, roof at y 67, floor at y 63: too wide for closed quarters."
   (into {} (for [x (range -4 5) z (range -4 5) y (range 63 68)
