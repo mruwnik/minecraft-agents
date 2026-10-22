@@ -183,6 +183,13 @@
         p (hiding tree (constantly false))]
     (is (= {:pos {:x 10 :y 64 :z 0} :resolved true :why :surface} (column/aim p {:x 10 :z 0} 4 64 true)))))
 
+(deftest a-tree-column-with-its-ground-unseen-is-not-aimed-at-a-seen-tunnel-far-below
+  (let [world (merge flat (box 0 10 -3 40 62 3 "stone") (box 10 16 0 10 17 0 "air")
+                     (box 10 64 0 10 68 0 "oak_log") (box 9 69 -1 11 70 1 "oak_leaves"))
+        p (hiding world (fn [[x y z]] (and (= [10 0] [x z]) (<= 18 y 63))))]
+    (is (= {:pos {:x 10 :y 64 :z 0} :resolved true :why :surface} (column/aim p {:x 10 :z 0} 4 64 true))
+        "the ground under the trunk is hidden by the trunk and its neighbours; the tunnel is not the surface")))
+
 (deftest a-y-re-aim-says-it-is-explicit
   (let [p (hiding flat (constantly false))]
     (is (= {:pos {:x 10 :y 64 :z 0} :resolved true :why :explicit} (column/aim p {:x 10 :y 67 :z 0} 4 64 true)))))

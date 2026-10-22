@@ -4,6 +4,7 @@
             [jobs.lib.places :as places]
             [jobs.lib.reach :as reach]
             [jobs.lib.surface :as surface]
+            [jobs.lib.trees :as trees]
             [jobs.lib.util :as u]))
 
 (def top-y "The highest feet y a column goal looks for ground at (the head cell above is the build limit's last)." (- places/max-y 2))
@@ -15,12 +16,21 @@
         (bs/harms-in-cell (.-name b)) :hazard
         :else (reach/kind-of b)))
 
+(defn trunk-over?
+  "Whether the cell above x y z is a seen log; reads the cell without noting it as an unseen read."
+  [p x y z]
+  (let [^js b (.sensedAt p #js {:x x :y (inc y) :z z})]
+    (boolean (and b (not (true? (.-unknown b))) (trees/log-name? (.-name b))))))
+
 (defn surface-kind-at
-  "As seen-kind-at, a log or leaf block read as :open: a tree is not the surface."
+  "As seen-kind-at, a log or leaf block read as :open: a tree is not the surface. The ground under a trunk is never in
+  view (the trunk covers it, the ground beside it hides its sides): an unseen cell under a log reads :solid."
   [p]
   (if (some? (.-sensedAt p))
     (fn [x y z] (let [b (u/seen-block p {:x x :y y :z z})]
-                  (if (and b (surface/canopy? (.-name b))) :open (kind b))))
+                  (cond (nil? b) (if (trunk-over? p x y z) :solid :unknown)
+                        (surface/canopy? (.-name b)) :open
+                        :else (kind b))))
     (constantly :unknown)))
 
 (defn seen-kind-at

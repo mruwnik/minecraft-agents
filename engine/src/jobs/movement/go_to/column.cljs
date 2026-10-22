@@ -1,6 +1,6 @@
 (ns jobs.movement.go-to.column
   "go-to's goal y. A column goal ([x z] or {:x :z}, no y) stands on the surface of that column: its highest seen stand with
-  no seen solid over it (trees skipped), why :surface; else (the column seen only under cover) the stand nearest the body's
+  no seen solid over it (trees skipped; the unseen ground under a trunk is solid), why :surface; else (the column seen only under cover) the stand nearest the body's
   feet, why :nearest-level; over the whole build height. A column with no ground seen aims provisionally at an
   estimate (estimate: the seen ground of the nearest column around it within estimate-reach of the feet, else the feet
   y; seen open there down to an unseen cell: the lowest open cell over it, unseen-under), or, when the column is seen there
