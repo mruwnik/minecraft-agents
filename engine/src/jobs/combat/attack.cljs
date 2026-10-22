@@ -274,13 +274,16 @@
       (cond-> walk (:floor walk) (assoc :leg-s (settings/get settings ::forage-walk-timeout-s))))))
 
 (defn in-reach?
-  "Whether target at tpos is within reach by feet, or by the eye to the middle of its body as the attack primitive judges
-  it (a spider on a ledge above is hit from below although its feet are further than reach)."
-  [c tpos]
+  "Whether target is within reach by feet, or by the eye to the middle of its body as the attack primitive judges it (a
+  spider on a ledge above is hit from below although its feet are further than reach); the second only with a clear line
+  (hittable not false), so a mob above a ceiling does not stop the walk."
+  [c target]
   (let [feet (u/self-pos c)
+        tpos (u/pos-of (.-pos target))
         eye (update feet :y + game/eye-height)]
     (or (<= (u/dist feet tpos) (reach))
-        (<= (u/dist eye (update tpos :y + 0.5)) (reach)))))
+        (and (not (false? (.-hittable target)))
+             (<= (u/dist eye (update tpos :y + 0.5)) (reach))))))
 
 (def chase-gap-ms "How long a held body waits for a mob to come before it looks again." 200)
 
@@ -290,7 +293,7 @@
   [c target]
   (let [tpos (u/pos-of (.-pos target))]
     (cond
-      (in-reach? c tpos) :there
+      (in-reach? c target) :there
       (hostile/held? c target) (do (await (combat/wait-gap! c (ctx/now c) chase-gap-ms))
                                                                  :held)
       :else

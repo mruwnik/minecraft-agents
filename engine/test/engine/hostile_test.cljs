@@ -1497,6 +1497,15 @@
             (is (= [] (:list (core/state eng))) "done, so the reflex does not fire again for it")
             (is (not (danger-q/hostile-near? p view {})) "and the trigger stays quiet while it stays out there")))))))
 
+(deftest a-shooter-near-is-never-watched-with-a-held-mob
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup-seeing {:inventory sword :time 14000 :radius 6 :entities [(zombie 5 0) (skeleton 9 -4 0)]} [0 4] 1000)]
+          (core/submit! eng respond {})
+          (await (core/tick! eng))
+          (is (empty? (body/watched-ids (mem/view (:store eng))))))))))
+
 (deftest a-flight-from-a-seen-mob-that-ends-blocked-mutes-nothing
   (async done
     (tu/run-async done

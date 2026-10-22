@@ -194,11 +194,11 @@
 
 (defn leave-watched?
   "Whether a fight that held for a mob to come and gave up (:hold-timeout) leaves the dangers hs watched instead of fleeing:
-  every one seen, none a creeper, the fight landed no hit and the body was not hurt within hit-window-ms."
+  every one seen, none a creeper, shooter or fusing mob, the fight landed no hit and the body was not hurt within hit-window-ms."
   [c hs]
   (and (= :hold-timeout (:declined (ctx/mem c)))
        (every? danger-q/seen-only? hs)
-       (not-any? combat/creeper? hs)
+       (not-any? #(or (combat/creeper? %) (combat/ranged? %) (true? (.-fusing %))) hs)
        (empty? (:hits (ctx/mem c)))
        (empty? (ctx/since c :hurt (- (ctx/now c) (hit-window-ms))))))
 
