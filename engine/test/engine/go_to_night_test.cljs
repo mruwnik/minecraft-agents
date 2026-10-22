@@ -1,8 +1,7 @@
 (ns engine.go-to-night-test
-  "go-to at night from a shelter (sh-inside/walk-leaves-shelter?): its safe? is :later (:exposed, until dawn) for a walk that
-  would take the body out of it (a listed go-to waits, a child call makes its parent wait), so a queued job does not
-  lead the body into the dark and the night trigger does not dig it in again and again. A caller's :checks (an escape's
-  defaults, an agent's own) decide whether it walks."
+  "go-to at night from a shelter (sh-inside/walk-leaves-shelter?): no wait for dawn; its safe? judges the walk's risk
+  (jobs.movement.go-to.risk), so a short walk out of the hut starts. A caller's :checks (an escape's defaults, an agent's own)
+  replace it."
   (:require [engine.child-ends :as ce]
             [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
@@ -85,20 +84,15 @@
 
 ;; ------------------------------------------------------------------ a listed go-to
 
-(deftest a-listed-go-to-out-of-the-hut-waits-at-night-and-walks-by-day
+(deftest a-listed-go-to-out-of-the-hut-walks-at-night
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup (night-hut {}))
-              id (core/submit! eng (list 'jobs.movement.go-to {:pos [15 64 0]}) {})]
-          (await (ticks eng 6))
-          (is (= inside (st/pos-of p)) "the body stays in")
-          (is (= :exposed (:reason (waiting-of eng id))))
-          (is (seq (:list (core/state eng))) "the go-to is still listed")
-          (.setTime (.-world p) st/noon)
+        (let [{:keys [eng p]} (setup (night-hut {}))]
+          (core/submit! eng (list 'jobs.movement.go-to {:pos [15 64 0]}) {})
           (await (tu/run-until-empty eng 40))
           (is (empty? (:list (core/state eng))))
-          (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) "by day it walks out"))))))
+          (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) "the short walk is not waited for dawn"))))))
 
 (deftest a-walk-inside-the-room-runs-at-night
   (async done
@@ -130,58 +124,17 @@
           (await (tu/run-until-empty eng 200))
           (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) "the escape's walk does not wait for day"))))))
 
-(deftest an-exclusive-go-to-at-night-ends-at-once-with-the-reason-and-walks-with-a-checks-override
+(deftest an-exclusive-go-to-at-night-walks
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[args walks?] [[{:pos [15 64 0]} false] [{:pos [15 64 0] :checks {:safe? '(not (threatened))}} true]]]
-          (let [{:keys [eng p seen]} (setup (night-hut {}))
-                id (core/exclusive-run! eng (list 'jobs.movement.go-to args))]
-            (await (ticks eng 40))
-            (is (nil? (waiting-of eng id)) "the exclusive go-to is not held until day")
-            (is (= walks? (> 2 (js/Math.abs (- 15 (:x (st/pos-of p)))))) (pr-str args))
-            (is (= (not walks?) (some? (some #(= :exposed (:reason %)) (st/emitted seen :stopped)))) (pr-str args))))))))
+        (let [{:keys [eng p seen]} (setup (night-hut {}))]
+          (core/exclusive-run! eng (list 'jobs.movement.go-to {:pos [15 64 0]}))
+          (await (ticks eng 40))
+          (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))))
+          (is (empty? (filter #(= :risky (:reason %)) (st/emitted seen :stopped)))))))))
 
 ;; ------------------------------------------------------------------ a child go-to
-
-(deftest a-child-go-to-out-of-the-hut-ends-condition-failed-at-night
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [clock (atom 1000000)
-              [seen sink] (tu/legacy-capture-sink)
-              p (sky/with-sky (tu/fake-on-floor (night-hut {})))
-              rounds (atom [])
-              parent {:round (fn ^:async walker [c]
-                               (let [r (await (ctx/call c :walk 'jobs.movement.go-to {:pos [15 64 0]}))]
-                                 (swap! rounds conj r)
-                                 (if (= :continue r) r (ctx/end c :done nil))))}
-              eng (core/create {:primitives p :jobs (assoc registry/jobs 'walker parent) :triggers triggers/all
-                                :dir (tu/tmp-dir) :now #(deref clock)
-                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-          (core/submit! eng '(walker) {})
-          (await (ticks eng 4))
-          (is (= inside (st/pos-of p)))
-          (is (seq @rounds))
-          (is (= [:condition-failed :exposed] [(:kind (first @rounds)) (:reason (:cause (first @rounds)))]) "the child ends at once with the reason; the parent decides")
-          (is (empty? (st/emitted seen :go-to.night-sheltered)) "go-to says nothing of its own"))))))
-
-(deftest a-parent-walking-with-walk-into-shows-the-night-wait
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [clock (atom 1000000)
-              [seen sink] (tu/legacy-capture-sink)
-              p (sky/with-sky (tu/fake-on-floor (night-hut {})))
-              parent {:round (fn ^:async walker [c]
-                               (await (child/walk-into!* c :walk [15 64 0])))}
-              eng (core/create {:primitives p :jobs (assoc registry/jobs 'walker parent) :triggers triggers/all
-                                :dir (tu/tmp-dir) :now #(deref clock)
-                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-          (let [id (core/submit! eng '(walker) {})]
-            (await (ticks eng 4))
-            (is (= inside (st/pos-of p)))
-            (is (= :exposed (:reason (waiting-of eng id))) "the parent waits with the child's reason")))))))
 
 (deftest get-seeds-in-a-shelter-at-night-waits-with-the-reason-instead-of-spinning
   (async done
@@ -199,23 +152,6 @@
             (await (ticks eng 6))
             (is (= inside (st/pos-of p)))
             (is (= :dark (:reason (waiting-of eng id))))))))))
-
-(deftest a-parent-walking-with-run!-shows-the-night-wait-and-yields
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [clock (atom 1000000)
-              [seen sink] (tu/legacy-capture-sink)
-              p (sky/with-sky (tu/fake-on-floor (night-hut {})))
-              parent {:round (fn ^:async walker [c]
-                               (await (child/run!* c :walk 'jobs.movement.go-to {:pos [15 64 0]})))}
-              eng (core/create {:primitives p :jobs (assoc registry/jobs 'walker parent) :triggers triggers/all
-                                :dir (tu/tmp-dir) :now #(deref clock)
-                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
-          (let [id (core/submit! eng '(walker) {})]
-            (await (ticks eng 4))
-            (is (= inside (st/pos-of p)))
-            (is (= :exposed (:reason (waiting-of eng id))) "the parent waits with the child's reason")))))))
 
 (def oak-tree
   "A trunk of four logs with leaves on top, outside the hut."
@@ -239,23 +175,6 @@
         (let [{:keys [p seen]} (await (fell-tree-world! (update (night-hut {}) :blocks merge oak-tree)))]
           (is (= inside (st/pos-of p)) "stayed in the hut")
           (is (empty? (st/emitted seen :stopped)) (pr-str (map :reason (st/emitted seen :stopped)))))))))
-
-;; ------------------------------------------------------------------ the night trigger and a queued walk (card 4252e02e)
-
-(deftest a-queued-walk-does-not-lead-the-body-out-of-its-mended-room-at-night
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup (merge (night-hut {"5,67,0" "air"}) {:inventory st/dirt-stack}))]
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
-          (core/submit! eng '(jobs.movement.go-to {:pos [15 64 0]}) {})
-          (await (ticks eng 20))
-          (is (= inside (st/pos-of p)) "the body stays in its room all night")
-          (is (= [{:x 5 :y 67 :z 0}] (mapv st/arg-pos (st/calls p "place"))) "one block mends the roof, no dig-in after")
-          (.setTime (.-world p) st/noon)
-          (await (tu/run-until-empty eng 40))
-          (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) "by day the walk runs")
-          (is (= 1 (count (st/calls p "place")))))))))
 
 ;; ------------------------------------------------------------------ in-place jobs still run
 
@@ -282,20 +201,6 @@
             (core/submit! eng (list 'jobs.survival.sleep {:bed bed}) {})
             (await (ticks eng 4))
             (is (= expect-wait? (some? (some #{:night-sheltered} (map :reason (st/emitted seen :holding))))) (pr-str bed))))))))
-
-(deftest a-queued-craft-does-not-walk-out-of-the-hut-to-a-table-at-night
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng p]} (setup (-> (night-hut {}) (update :blocks assoc "10,64,0" "crafting_table")
-                                            (assoc :inventory [{:name "wheat" :count 3}])))]
-          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
-          (core/submit! eng '(jobs.items.craft {:item "bread" :table {:x 10 :y 64 :z 0}}) {})
-          (await (ticks eng 20))
-          (is (= inside (st/pos-of p)) "the body stays in the hut")
-          (.setTime (.-world p) st/noon)
-          (await (tu/run-until-empty eng 40))
-          (is (> 4 (js/Math.abs (- 10 (:x (st/pos-of p))))) "by day it walks to the table"))))))
 
 (deftest a-use-on-submitted-from-a-night-shelter-waits-with-the-walks-reason
   (async done

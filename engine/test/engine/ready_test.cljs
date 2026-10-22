@@ -11,7 +11,6 @@
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [jobs.explore.look :as look]
-            [jobs.movement.go-to :as go-to]
             [jobs.explore.search :as search]
             [jobs.combat.attack :as attack]
             [jobs.food.fish :as fish]
@@ -112,12 +111,6 @@
     (with-redefs [u/seen-block (hide [3 64 0])
                   sense/round-looked (constantly #{[3 64 0]})]
       (is (not= :look (first ((ready/safe-at (constantly outside)) (ctx-of night-hut))))))))
-
-(deftest go-to-keeps-a-look-at-the-walls-of-its-room
-  (let [seen-block u/seen-block
-        hide (fn [pos] (fn [p cell] (when-not (= pos [(:x cell) (:y cell) (:z cell)]) (seen-block p cell))))]
-    (with-redefs [u/seen-block (hide [3 64 0])]
-      (is (= :look (first (go-to/safe? (assoc (ctx-of (assoc night-hut :self {:pos inside})) :args {:pos outside}))))))))
 
 (deftest safe-at-open-ground-by-day-is-ok-where-the-light-is-seen
   (is (= :ok (lit 0 15 #(kind (ready/safe-at (constantly outside)) (assoc open-night :time st/noon))))))

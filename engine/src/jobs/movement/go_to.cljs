@@ -22,6 +22,7 @@
             [jobs.movement.go-to.holes :refer [note-holes!]]
             [jobs.movement.go-to.restore :as restore]
             [jobs.movement.go-to.preview :as preview]
+            [jobs.movement.go-to.risk :as risk]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.tuning :as tuning :refer [max-cut-resets]]
             [jobs.movement.go-to.torch :as torch]
@@ -44,8 +45,7 @@
     goal it cannot reach taken back, one jobs.access.cleanup child a call), :pillar (a pillar, a gap filled with a
     block), :clear-path (a door dug through a wall), :stair (a stair up, its own stair cut again) and :dig-out (out of
     its own shelter).
-  - Its safe? is: at night jobs.lib.ready/safe-at the goal (a hostile near, or the goal or the walk to it exposed: later,
-    waiting for dawn; a goal whose light is unseen is walked to), by day not threatened (a walk leading away from every hostile near is not held); always ok with the head under water (it swims up for air first). A caller's :checks (an escape job's
+  - Its safe? is: no hostile near (a walk leading away from every hostile near is not held) and the walk's risk acceptable (jobs.movement.go-to.risk: the expected damage of mobs spawning on dark open stretches by the light seen, and of hostiles near the way, within a share of the health; else later :risky with the figures; no wait for dawn); always ok with the head under water (it swims up for air first). A caller's :checks (an escape job's
     defaults, an agent's own) replace it.
   - A body already within :range of a goal with a y (not in water or hanging; under :see seeing it) ends :done, cause :already, before any round: no plan, no arrival look (done?).
   - One call is one whole attempt: it plans and walks (jobs.lib.walk: slices of about 100 ms of search, walks of at
@@ -158,23 +158,16 @@
 (defn goal-of "The cell go-to walks to, nil when its target is refused (the round says why)." [c]
   (let [t (aim/target c)] (when-not (:reason t) (:pos t))))
 
-(defn unseen-goal-ok
-  "A :look for the goal's light becomes ok: the walk is what brings the goal into sight (a cell inside a mound is seen
-  only from near), so waiting for a look from here would never end. A look at the walls of the room the body stands in
-  (:room-sides) is kept: it is made from here."
-  [[kind _ data :as status]]
-  (if (and (= :look kind) (not (:room-sides data))) (contract/ok :unseen-goal "the goal's light is seen on the way") status))
-
 (def safe?
-  "Safe at the goal (ready/safe-at-by-night; its light unseen is no reason to wait). Always ok with the head under water:
-  breathing comes before any wait, and go-to swims up for air before it walks."
-  (let [at (ready/safe-at-by-night goal-of true)]
-    (with-meta (fn [c]
+  "Not threatened (a walk leading away from a hostile is not held) and the walk's risk acceptable (risk/status). Always ok
+  with the head under water: breathing comes before any wait, and go-to swims up for air first."
+  (with-meta (fn [c]
+               (let [goal (goal-of c)]
                  (cond
                    (breath/head-under? (:primitives c)) (contract/ok :submerged "head under water: air first")
-                   (goal-of c) (unseen-goal-ok (at c))
-                   :else (contract/ok :no-goal "no goal to judge")))
-      (meta at))))
+                   goal (contract/all [(ready/threatened-walking c goal) (risk/status c goal)])
+                   :else (contract/ok :no-goal "no goal to judge"))))
+    {:jobs.lib.ready/exposure (fn [c] (if-let [goal (goal-of c)] (risk/status c goal) (contract/ok :no-goal "no goal to judge")))}))
 
 (def fit? ready/ok)
 

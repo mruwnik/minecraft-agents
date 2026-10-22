@@ -189,16 +189,6 @@
             {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 60 :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}}}]
    :after [[:body-near [17.5 0 16.5] 2.5]]
    :limit-s 70}
-  ;; 33e6bf20: the same buried body asked to walk up to open ground waits for day
-  {:name "buried-walk-up-to-open-ground-is-held"
-   :blocks [[:fill [6 -1 12] [26 8 20] "stone"] [:fill [14 0 16] [15 1 16] "air"]]
-   :plot {:height 14}
-   :body {:at [14.5 0 16.5]}
-   :act [[:job (jobs.movement.go-to {:pos #xyz [20 9 16] :range 1})]]
-   :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 30 :of-job true}
-            {:no-event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :for-s 30 :until {:source :job :kind :waiting :data {:reason :exposed}}}]
-   :after [[:body-near [14.5 0 16.5] 1.5]]
-   :limit-s 40}
   ;; 122e3c60: a parent job whose walk waits for day in a shelter waits with the walk's reason (job.waiting :exposed), not an unexplained idle
   {:name "buried-from-plan-walk-holds-with-the-night-reason"
    :blocks [[:fill [6 -1 12] [26 8 20] "stone"] [:fill [14 0 16] [15 1 16] "air"]]
