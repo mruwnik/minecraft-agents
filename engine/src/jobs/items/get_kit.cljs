@@ -20,7 +20,7 @@
             [jobs.lib.util :as u]))
 
 (def doc
-  "Get :items in order (default the iron kit: pickaxe, sword, axe, helmet, chestplate, leggings, boots) and, with
+  "Get :items in order (default the iron kit: pickaxe, sword, axe, shovel, helmet, chestplate, leggings, boots) and, with
   :wear, wear each armour piece once it is carried. One call is the whole goal; it yields (:continue) only while a
   child waits on the world.
   The items not carried or worn (a better armour piece worn in its slot counts) whose furnace material the carried ingots (or the raw ore that smelts to them) already cover are one bill
@@ -43,7 +43,7 @@
   Quote: a guess per missing item. done? is ok when every item is carried or worn.")
 
 (def iron-kit
-  ["iron_pickaxe" "iron_sword" "iron_axe" "iron_helmet" "iron_chestplate" "iron_leggings" "iron_boots"])
+  ["iron_pickaxe" "iron_sword" "iron_axe" "iron_shovel" "iron_helmet" "iron_chestplate" "iron_leggings" "iron_boots"])
 
 (a/defargs args
   {:items {:doc "the items to get, in order" :spec (a/coll-of a/item?) :default iron-kit}

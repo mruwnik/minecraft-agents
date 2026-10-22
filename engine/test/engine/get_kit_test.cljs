@@ -67,8 +67,8 @@
 
 (defn crafted [s] (mapv #(.-item (.-args %)) (f/calls s "craft")))
 
-(deftest the-iron-kit-needs-32-ingots-from-the-furnace
-  (is (= {"iron_ingot" 32} (bill/furnace-short game/default-version kit/iron-kit {}))))
+(deftest the-iron-kit-needs-33-ingots-from-the-furnace
+  (is (= {"iron_ingot" 33} (bill/furnace-short game/default-version kit/iron-kit {}))))
 
 (deftest carried-ingots-count-against-the-furnace-need
   (is (= {"iron_ingot" 1} (bill/furnace-short game/default-version ["iron_pickaxe" "iron_helmet" "iron_boots"] {"iron_ingot" 11}))))
