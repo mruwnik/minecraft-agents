@@ -502,9 +502,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [w {:floor tu/walk-floor :inventory lead :entities [(cow 1 3)]}
-              lit (await (submit (h/setup-seeing w nil call-ms) {} 12))
-              dark (await (submit (h/setup-seeing w [0 0] call-ms) {} 12))]
+        (let [w {:floor [-10 -8 20 8] :inventory lead :entities [(cow 1 3)]}
+              near {:pos {:x 10 :y 64 :z 0}}
+              lit (await (submit (h/setup-seeing w nil call-ms) near 12))
+              dark (await (submit (h/setup-seeing w [0 0] call-ms) near 12))]
           (is (empty? (watched lit)))
           (is (seq (watched dark)))
           (is (= :unleashed (:reason (done-event dark)))))))))

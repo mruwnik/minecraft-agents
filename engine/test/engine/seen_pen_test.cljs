@@ -85,10 +85,18 @@
     (is (= :unknown (pg/gate-state (:p (seeing {} true)) cell)) "a real aged gate")
     (is (= :shut (pg/gate-state (:p (seeing {} false)) cell)) "a real gate in view")))
 
+(defn small-dark-world
+  "coarse-world on a floor no larger than 24 blocks round the pen: dark floor farther than that makes a dark hall, which is exposed."
+  [w]
+  (let [floor [0 -4 24 10]]
+    (-> (coarse-world w)
+        (assoc :floor floor)
+        (update :blocks #(apply dissoc % (keys (apply dissoc ht/ground (keys (apply tu/floor floor)))))))))
+
 (defn dark-run
   "A herd run in a pitch-dark pen: a cell is made out only within 4 blocks (perception's near)."
   []
-  (let [s (ht/clock-on-wait! (h/setup-seeing (coarse-world {:entities [(ht/cow 1 4 3)]}) [0 0] 700))]
+  (let [s (ht/clock-on-wait! (h/setup-seeing (small-dark-world {:entities [(ht/cow 1 4 3)]}) [0 0] 700))]
     (ht/submit! s {:target 1})))
 
 (deftest a-dark-pen-is-looked-at-then-the-run-ends
