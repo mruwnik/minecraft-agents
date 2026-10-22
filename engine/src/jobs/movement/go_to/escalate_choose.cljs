@@ -8,7 +8,6 @@
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
-            [jobs.lib.places :as places]
             [jobs.lib.breath :as breath]
             [jobs.lib.column-kinds :as kinds]
             [jobs.lib.look :as look]
@@ -82,18 +81,14 @@
 
 (defn shelter-exit?
   "Whether a give-up with result may leave the body's own shelter instead: the walk proved the way needs the world
-  changed, the body is shut in its shelter (at any hour: the start check priced the way out) and, while the sky is dark,
-  the goal lies outside it (a goal beside the body is no walk the start check let out) and the night job has not yet shut the hole again (:reseals of the shelter entry): it would only dig it again."
+  changed and the body is shut in its shelter. Not while it is :dug-in at night (sh-inside/night-sheltered, the verdict
+  the readiness checks wait for light on): the night job would shut the hole again."
   [c result]
-  (boolean (and (not (contains? (skips c) :leave-shelter))
-                (or (escalate-reason? result (some-> (:doors (:args c)) keyword)) (sprint-only? result))
-                (sh-inside/sheltered-in c)
-                (let [p (:primitives c)
-                      goal (:pos (places/parse-pos (:pos (:args c))))
-                      shelter (:data (ctx/latest c :shelter))]
-                  (or (not (sh-sense/dark-outside? p)) (nil? goal)
-                      (and (zero? (:reseals shelter 0))
-                           (sh-inside/walk-leaves-shelter? p shelter goal 1)))))))
+  (let [p (:primitives c)]
+    (boolean (and (not (contains? (skips c) :leave-shelter))
+                  (or (escalate-reason? result (some-> (:doors (:args c)) keyword)) (sprint-only? result))
+                  (sh-inside/sheltered-in c)
+                  (not= :dug-in (sh-inside/night-sheltered p (:data (ctx/latest c :shelter))))))))
 
 (defn fetch-tool?
   "Whether the escalation may fetch a pickaxe (the stair's and a :dig-route dig's ways): the body is free (a shut-in body

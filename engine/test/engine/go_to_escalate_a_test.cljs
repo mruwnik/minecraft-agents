@@ -350,30 +350,12 @@
           (is (empty? (events-of seen :go-to.escalated)) "its go-to child runs with :ways #{:walk :clear-seal}")
           (is (empty? (calls p "jumpPlace"))))))))
 
-(deftest go-to-sealed-in-its-own-shelter-by-night-leaves-it-too
+(deftest go-to-sealed-in-its-own-shelter-by-night-does-not-dig-out-even-for-a-goal-outside
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p seen]} (await (run-in-shelter! 14000))]
-          (is (= [:leave-shelter] (mapv :step (events-of seen :go-to.escalated))) "the start check priced the way out, not the clock")
-          (is (seq (calls p "dig")))
-          (is (= {:arrived true} @out)))))))
-
-(deftest go-to-sealed-in-its-own-shelter-by-night-keeps-it-for-a-goal-beside-it
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [out p seen]} (await (run-in-shelter! 14000 [1 64 0] 0))]
-          (is (empty? (events-of seen :go-to.escalated)) "a goal at the wall is no walk out of the night shelter")
-          (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])))
-          (is (empty? (calls p "dig"))))))))
-
-(deftest go-to-sealed-in-its-own-shelter-by-night-stops-digging-out-once-the-night-job-has-shut-it-again
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [out p seen]} (await (run-in-shelter! 14000 [8 64 0] 1 {:reseals 1}))]
-          (is (empty? (events-of seen :go-to.escalated)))
+          (is (empty? (events-of seen :go-to.escalated)) "the dark outside is waited out, the first dig never happens")
           (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])))
           (is (empty? (calls p "dig"))))))))
 
