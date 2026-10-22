@@ -520,3 +520,23 @@
           (core/submit! (:eng s) (spec {:block "sand" :count 4 :ways #{:seen} :skip gave-up}) {})
           (await (run-ticks s 60))
           (is (= [:no-progress] (mapv :why (events-of s :mine.walk-failed)))))))))
+
+(deftest a-stair-that-stopped-own-zone-with-the-body-inside-the-zone-walks-out-and-digs-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [sref (atom nil)
+              calls (atom 0)
+              stub (assoc (get registry/jobs 'jobs.gather.dig-for) :quote-of nil
+                          :round (fn [c]
+                                   (if (= 1 (swap! calls inc))
+                                     (do (set-pos! @sref 0 64 0)
+                                         (ctx/end c :nothing-possible {:reason :descent-stopped} {:reason :descent-stopped :descent {:stop :own-zone}}))
+                                     (ctx/end c :done nil {:got 0}))))
+              s (start {:world {:floor [-30 -30 40 30]} :shared (ew/of-data {} {} [home-zone])
+                        :jobs (assoc registry/jobs 'jobs.gather.dig-for stub)})]
+          (reset! sref s)
+          (core/submit! (:eng s) (spec {:block "sand" :count 1 :ways #{:seen} :trip true}) {})
+          (await (run-ticks s 200))
+          (is (= 2 @calls) "the dig is called again")
+          (is (= 2 (count (events-of s :mine.left-zone))) "the body walked out of the zone again before the second dig"))))))

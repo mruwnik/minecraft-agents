@@ -12,7 +12,7 @@
             [jobs.gather.mine.end :as end :refer [end-run wanted]]
             [jobs.gather.mine.mend :as mend]
             [jobs.gather.mine.way-set :as mw]
-            [jobs.gather.mine.targets :refer [owed carried got had zone-margin within-keep-clear scan items main-block]]
+            [jobs.gather.mine.targets :refer [owed carried got had zone-margin within-keep-clear within-own-zone scan items main-block]]
                         [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.child :as child]
@@ -280,6 +280,14 @@
   [c reason]
   (and (= :surplus reason) (not (:shed-failed (ctx/mem c)))))
 
+(defn left-zone-again?
+  "Whether a dig whose stair stopped :own-zone with the body standing inside the zone (a new stair started there after a reflex took it
+  home) goes back to the equip phase, which walks it out first (at most ::max-equip-rounds times)."
+  [c e]
+  (and (= :own-zone (get-in e [:data :descent :stop]))
+       (< (:rounds (ctx/mem c) 0) (settings/get settings ::max-equip-rounds))
+       (boolean (within-own-zone c 0 (access/cell (cell-of (u/self-pos c)))))))
+
 (defn ^:async dig-step!
   "One round of the dig-for child; its ending is kept. A stop for a pickaxe or torches that the trip may get again goes back to the
   equip, to dig on from where the dig stopped; any other ending goes to the mend or the end."
@@ -290,16 +298,20 @@
       (let [reason (or (:reason (:data e)) (contract/cause-key e))]
         (ctx/update-mem! c booked e)
         (ctx/update-mem! c assoc :dig-ending (dissoc e :report))
-        (if (shed-again? c reason)
+        (cond
+          (shed-again? c reason)
           (do (ctx/update-mem! c #(-> % (assoc :phase nil :resume-at (cell-of (u/self-pos c)) :wanted reason)
                                       (dissoc :equipped?)))
               :again)
-        (if (gettable? c reason)
+          (left-zone-again? c e)
+          (do (ctx/update-mem! c #(-> % (update :rounds (fnil inc 0)) (assoc :phase nil :zoned? false :resume-at (cell-of (u/self-pos c)))))
+              :again)
+          (gettable? c reason)
           (do (ctx/update-mem! c #(-> % (update :rounds (fnil inc 0))
                                       (assoc :phase nil :resume-at (cell-of (u/self-pos c)) :wanted reason)
                                       (dissoc :equipped? :torches-tried :tool-why :tool-ending)))
               :again)
-          (to-end! c reason nil)))))))
+          :else (to-end! c reason nil))))))
 
 (defn ^:async equip-step!
   "The phase before each dig: equip once, end on a stop the equip did not cure, walk back to where the dig goes on from, out of an own
