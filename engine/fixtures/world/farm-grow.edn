@@ -5,6 +5,7 @@
 ;; A ripe field 14 blocks off (past harvest's 12 round the body) is walked to and cut by obtain's crops way and by grow.
 ;; A dark cave floor (underground, no sky) with torches carried is lit with torches beside the field, then sown and cut.
 ;; A ripe crop walled in by bedrock (nobody reaches it) is given up, not retried: the field is made and cut instead.
+;; A planted field the body is taken away from (another job listed, so tend waits :away) is waited for, not given up as not planted.
 ;; Should-fail: a young crop already standing keeps the job waiting; it sows nothing and makes no second field.
 {:defaults
  {:tags [:farm :grow :jobs]
@@ -33,6 +34,15 @@
    :expect [{:event {:source :job :kind :completed :data {:got [:>= 1] :item "wheat"}} :within-s 380 :of-job true}]
    :after [[:item "wheat" [:>= 1]]]
    :limit-s 420}
+  {:name "a-planted-field-the-body-is-away-from-is-not-given-up"
+   :plot {:light :lit :floor "grass_block" :height 6 :length 100}
+   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["wooden_hoe" 1] ["wheat_seeds" 9] ["water_bucket" 1]]}
+   :act [[:job (jobs.farm.grow {:count 1 :w 2 :h 2})] [:until-seen {:block "wheat"} 150]
+         [:rcon "execute as $BODY at @s run tp @s ~60 ~ ~"]
+         [:http :submit (jobs.time.noop {:seconds 60}) [] {:ok true}]]
+   :expect [{:no-event {:source :job :kind :nothing-possible} :for-s 80}]
+   :after [[:item "wheat_seeds" [:<= 8]]]
+   :limit-s 260}
   {:name "a-growing-field-is-waited-for-not-replaced"
    :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["wooden_hoe" 1] ["wheat_seeds" 9]]}
    :blocks [[:fill [14 -1 14] [15 -1 15] "farmland[moisture=7]"] [:fill [14 0 14] [15 0 15] "wheat[age=1]"]]

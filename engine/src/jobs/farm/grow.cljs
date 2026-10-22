@@ -20,7 +20,7 @@
   2. A crop seen, none ripe: wait (a jobs.time.noop pause of ::wait-s, holding still, then look again). A field growing is never replaced.
   3. No crop seen: get a hoe (jobs.items.get-tool) and one seed per cell of a :w x :h field (jobs.items.obtain; wheat seeds are
      broken out of grass), pick the spot (jobs.farm.find-spot, nearest to the body) and work it with jobs.farm.tend (till,
-     irrigate, plant, bone meal when carried), once per round; a spot that is dark is lit first (jobs.build.light-area to crop light, torches hung beside the field). Three tends that leave no crop standing end the run.
+     irrigate, plant, bone meal when carried), once per round; a spot that is dark is lit first (jobs.build.light-area to crop light, torches hung beside the field). Three tends that leave no crop standing end the run (a tend refused before it started, e.g. :away, is not one: the run yields). A planted field is judged from its remembered cells at any distance.
   Needs: a source of a hoe and seed (the fetch jobs say what lacks), a field spot in range, a zone list.
   Done once :count of the crop's item is carried. Ends nothing-possible with the failed child's cause: :no-spot (find-spot found none),
   :not-planted (three tends planted nothing), :no-light (the spot could not be lit), or a fetch's :need/:tool; limit-reached :timeout after :spend :job-time.
@@ -69,14 +69,29 @@
     {:uses {:job-time [0 (settings/get settings ::wait-s) (settings/get settings ::job-time-s)]}
      :yields {:items {(item-of (:crop (:args c))) [0 n n]}}}))
 
+(defn remembered
+  "The crops of :crop the body remembers in its field's area (any distance), as seen-crops gives them."
+  [c]
+  (let [{:keys [min max]} (:area (ctx/mem c))
+        crop (:crop (:args c))
+        p (:primitives c)]
+    (when min
+      (vec (for [x (range (min 0) (inc (max 0))) y (range (min 1) (inc (max 1))) z (range (min 2) (inc (max 2)))
+                 :let [pos {:x x :y y :z z}
+                       b (u/seen-block p pos)]
+                 :when (and b (= crop (.-name b)))]
+             {:name crop :pos pos :age (some-> (aget (.-properties b) "age") js/Number)})))))
+
 (defn standing
-  "The crops of :crop the body has seen standing, that its zones allow cutting and no harvest gave up on (the cells it left)."
+  "The crops of :crop the body has seen standing (its field's remembered cells first, then those near the body), that its zones allow cutting and no harvest gave up on (the cells it left)."
   [c]
   (let [in (access/rules-input c)
-        given-up (:given-up (ctx/mem c))]
+        given-up (:given-up (ctx/mem c))
+        near (crops/seen-crops (:primitives c) [(:crop (:args c))] 64 256)
+        known (remembered c)]
     (filterv #(and (:ok (access/may? in :harvest (:pos %)))
                    (every? (fn [g] (> (u/dist (:pos %) g) 0.5)) given-up))
-             (crops/seen-crops (:primitives c) [(:crop (:args c))] 64 256))))
+             (concat known (remove (fn [b] (some #(= (:pos %) (:pos b)) known)) near)))))
 
 (defn ripe? [crop b] (some-> (:age b) (>= (crops/ripe-age crop))))
 
@@ -118,7 +133,7 @@
       (= :done (:kind e)) (do (let [spot (first (:spots (:data e)))]
                                         (ctx/update-mem! c assoc :area (box-of spot) :dark? (boolean (:dark? spot)))
                                         :again))
-      :else (ctx/end c :nothing-possible :no-spot (select-keys (:data e) [:why])))))
+      :else (contract/with-because (ctx/end c :nothing-possible :no-spot (select-keys (:data e) [:why])) e))))
 
 (defn ^:async light-step!
   "A dark spot: light the field to crop light with torches hung beside it, once. nil when lit or done, :continue while it waits, else the ending."
@@ -133,17 +148,24 @@
           (= :done (:kind e)) (do (ctx/update-mem! c assoc :lit true) nil)
           :else (ctx/end c :nothing-possible :no-light (select-keys (:data e) [:uncovered])))))))
 
+(defn declined?
+  "Whether child ending e is a refusal before it ran (tend waits :away while another job is listed): no tend happened."
+  [e]
+  (and (= :condition-failed (:kind e)) (empty? (:data e))))
+
 (defn ^:async tend-step!
   "One tend pass over the field: :again after it, :continue while it waits; three passes in a row that left no crop end the run."
   [c]
   (let [e (await (ctx/call c :tend 'jobs.farm.tend
                            (cond-> {:area (:area (ctx/mem c)) :fertilize true}
                              (:ignore-zones? (:args c)) (assoc :ignore-zones? true))))]
-    (if (= :continue e)
-      :continue
+    (cond
+      (= :continue e) :continue
+      (declined? e) :continue
+      :else
       (do (child/fruitless! c :tend e)
           (if (child/exhausted? c :tend (settings/get settings ::max-tends))
-            (ctx/end c :nothing-possible :not-planted {:area (:area (ctx/mem c))})
+            (child/give-up c :tend :not-planted {:area (:area (ctx/mem c))})
             :again)))))
 
 (defn ^:async found-field!
