@@ -217,7 +217,10 @@
           (and (gathers? c) (not (get-in m [:tried :gather])))
           (await (gather-step! c names have target))
           (= :table-unreachable (get-in m [:tried :craft]))
-          (ctx/end c :nothing-possible :table-unreachable (assoc data :tried (:tried m)))
+          (ctx/end c :nothing-possible :table-unreachable
+                   (assoc data :tried (:tried m)
+                          :why (str "the seen crafting table cannot be reached and no other way makes it: "
+                                    (no-source-why c names (shortfall c names)))))
           (walk-causes (get-in m [:tried :gather]))
           (let [k (get-in m [:tried :gather])
                 why (str "could not get to a source of " (clojure.string/join "/" names) ": gathering ended " (pr-str k)

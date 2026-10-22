@@ -157,22 +157,29 @@
 
 (defn lacking
   "Why no craft of item (n more) can start, as text: the cheapest recipe's ingredients short of what is carried
-  (\"needs 3 stick, have 1\"; on a tie the commonest material, cobblestone), or that no recipe makes item. Pure."
+  (\"needs 3 stick, have 1\"; on a tie the commonest material, cobblestone), or that no recipe makes item. With no table
+  carried, the table's own ingredients are taken from what is carried first. Pure."
   [version have item n]
   (let [rs (get (recipes-for version) item)
-        st {:have have}]
+        ranks (material-ranks version)
+        cheapest (fn [rs have batches-of] (first (sort-by (juxt #(short-count {:have have} % (batches-of %)) #(reduce + 0 (map (fn [k] (get ranks k 0)) (keys (:needs %))))) rs)))
+        short-of (fn [r have n] (let [batches (ceil-div n (:count r))]
+                                  (keep (fn [[k v]] (let [h (get have k 0)] (when (< h (* v batches)) (str "needs " (* v batches) " " k ", have " h))))
+                                        (:needs r))))]
     (if (empty? rs)
       (str "no recipe makes " item)
-      (let [ranks (material-ranks version)
-            r (first (sort-by (juxt #(short-count st % (ceil-div n (:count %))) #(reduce + 0 (map (fn [k] (get ranks k 0)) (keys (:needs %))))) rs))
-            batches (ceil-div n (:count r))
-            short (keep (fn [[k v]] (let [h (get have k 0)] (when (< h (* v batches)) (str "needs " (* v batches) " " k ", have " h))))
-                        (:needs r))]
+      (let [r (cheapest rs have #(ceil-div n (:count %)))
+            short (short-of r have n)
+            table? (and (:table? r) (not= item table-item) (zero? (get have table-item 0)))
+            tr (when table? (cheapest (get (recipes-for version) table-item) have (constantly 1)))
+            after-table (when tr (reduce (fn [h [k v]] (update h k #(max 0 (- (or % 0) v)))) have (:needs tr)))
+            short-after (when (and tr (empty? (short-of tr have 1))) (short-of r after-table n))]
         (str "crafting " item " "
              (cond
                (seq short) (clojure.string/join "; " short)
-               (and (:table? r) (not= item table-item) (zero? (get have table-item 0)))
-               (str "needs a crafting_table, none carried; " (lacking version have table-item 1))
+               (seq short-after) (str "needs a crafting_table, none carried, and making one leaves "
+                                      (clojure.string/join "; " (map #(clojure.string/replace % "needs" "short:") short-after)))
+               table? (str "needs a crafting_table, none carried; " (lacking version have table-item 1))
                :else "has no ingredient short, but no chain works"))))))
 
 (defn plan

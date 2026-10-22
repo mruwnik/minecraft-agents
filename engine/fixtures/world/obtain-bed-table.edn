@@ -1,0 +1,18 @@
+;; Card 1353a855: obtain white_bed with planks and wool carried and no crafting table near puts a table down (4 planks) and crafts the bed
+;; (3 planks, 3 wool); planks of two woods count together. With planks for the bed but not for the table too, the end names what is short.
+{:defaults
+ {:tags [:fetch :crafting] :time :any
+  :plot {:height 8}
+  :body {:at [16.5 0 16.5] :settle-s 2}
+  :limit-s 90}
+ :cases
+ [{:name "planks-and-wool-no-table-makes-the-bed"
+   :body {:inventory [["cherry_planks" 4] ["oak_planks" 3] ["white_wool" 3]]}
+   :act [[:job (jobs.items.obtain {:item "white_bed"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "white_bed" 1]]}
+  {:name "planks-short-of-table-and-bed-names-the-shortage"
+   :body {:inventory [["oak_planks" 4] ["white_wool" 3]]}
+   :act [[:job (jobs.items.obtain {:item "white_bed" :explore false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source :why [:contains "short: 3 oak_planks"]}} :within-s 40 :of-job true}]
+   :after [[:item "white_bed" 0]]}]}

@@ -937,6 +937,31 @@
                   crafting-table/nearest (constantly nil)]
       (mapv :op (:steps (plan/craft-plan {:primitives (:p s)} ["wooden_pickaxe"] 1))))))
 
+(def bed-recipe {"white_bed" {:count 1 :needs {"oak_planks" 3 "white_wool" 3} :table true}})
+
+(defn ^:async obtain-bed! [items]
+  (let [s (start (assoc (far-table-world items) :recipes bed-recipe) [own-zone])]
+    (core/submit! (:eng s) (list 'jobs.items.obtain {:item "white_bed"}) {})
+    (await (run-ticks s 80))
+    s))
+
+(deftest obtain-bed-puts-down-a-table-when-the-seen-one-is-unreachable
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (obtain-bed! [{:name "oak_planks" :count 7} {:name "white_wool" :count 4}]))]
+          (is (= 1 (get (inv s) "white_bed")))
+          (is (= 2 (count (tables s)))))))))
+
+(deftest obtain-bed-without-planks-for-a-table-says-what-is-missing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (obtain-bed! [{:name "oak_planks" :count 4} {:name "white_wool" :count 4}]))
+              e (first (events-of s :stopped))]
+          (is (= :table-unreachable (:reason e)))
+          (is (re-find #"short: 3 oak_planks, have 0" (:why e))))))))
+
 (deftest obtain-plan-uses-the-remembered-table
   (is (= [:craft] (plan-ops {:table [1 64 0]}))))
 
