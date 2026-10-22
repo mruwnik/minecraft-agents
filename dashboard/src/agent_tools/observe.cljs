@@ -10,7 +10,7 @@
             ["node:path" :as path]
             [clojure.string :as str]
             ["node:timers/promises" :as timers]
-            [agent-tools.observe.status :refer [attention-changes classify old-event-ms code-of coded collect compact-status death-details death-jobs clear-reported with-death-details id-str instance-names note-notice recovered? repeat-notice? stale-notice? signature idle-before-watch? idle-too-old? stale-death? stale-idle? stale-reconnect? summary-result track-deaths with-death-jobs]]
+            [agent-tools.observe.status :refer [attention-changes classify old-event-ms code-of coded collect compact-status death-details death-jobs clear-reported with-death-details id-str instance-names note-notice recovered? repeat-notice? stale-notice? signature idle-before-watch? stale-death? stale-idle? stale-reconnect? summary-result track-deaths with-death-jobs]]
             [agent-tools.observe.missed :refer [missed!]]
             [agent-tools.observe.lock :refer [acquire! checkpoint! observer-count saved-checkpoint]]
             [agent-tools.observe.request :refer [legacy-notice request-for usage wait-options]]
@@ -152,6 +152,20 @@
                   (from (:seq (last evs)) (dec pages) acc)))))]
     (from (:seq (last (:events page))) look-ahead-pages [])))
 
+(defn- idle-job-ended?
+  "Whether a body.idle names a job the engine has recorded as ended: the idle is out of date, however far back it lies."
+  [{:keys [request get! signal deadline]} event]
+  (let [ids (when (and (= :body (:source event)) (= :idle (:kind event)))
+              (seq (keep :job (get-in event [:data :jobs]))))]
+    (if-not ids
+      (js/Promise.resolve false)
+      (-> (get! (:socket-path request) (str "/results?ids=" (str/join "," ids))
+                {:signal signal :timeout-ms (max 1 (min request-timeout-ms (- @deadline (js/Date.now))))})
+          (.then (fn [response]
+                   (boolean (and (= 200 (:status response)) (http/edn-response? (:content-type response))
+                                 (seq (:results (data/read-edn (:text response))))))))
+          (.catch (fn [error] (if (aborted? {:signal signal}) (throw error) false)))))))
+
 (defn- continue-event [{:keys [st deaths summary opts body] :as w} event more later page]
   (when (and (= :attention (:source event)) (= :resolved (:kind event)))
     (let [id (id-str (:request-id event))
@@ -175,7 +189,6 @@
                          (when-not (or (and failed? (stale-reconnect? event later))
                                        (and (= :idle (:kind event)) (= :body (:source event)) (stale-idle? event later))
                                        (idle-before-watch? event opts (:started-ms @st))
-                                       (idle-too-old? event (js/Date.now))
                                        (stale-death? event later (:started-ms @st))
                                        (repeat-notice? (:noticed @st) event)
                                        (stale-notice? event later))
@@ -184,10 +197,13 @@
           _ (swap! st update :noticed note-notice event)
           skip! (fn [] (swap! summary collect event dead-jobs (- (js/Date.now) old-event-ms)) (more))
           wake! (fn [immediate later]
-                  (if (and failed? (empty? later) (< (:seq event) (:latest-seq page)))
-                    (js-await [back? (recovered-later? w event page)]
-                      (if back? (skip!) (finish! w immediate)))
-                    (finish! w immediate)))]
+                  (js-await [gone? (idle-job-ended? w event)]
+                    (cond
+                      gone? (skip!)
+                      (and failed? (empty? later) (< (:seq event) (:latest-seq page)))
+                      (js-await [back? (recovered-later? w event page)]
+                        (if back? (skip!) (finish! w immediate)))
+                      :else (finish! w immediate))))]
       (cond
         (nil? immediate) (skip!)
         ;; The end of the event's job (or the next job change) may lie past this page.

@@ -1281,11 +1281,23 @@
     (is (true? (observe-status/stale-idle? idle [(job :queued)])))
     (is (true? (observe-status/stale-idle? idle [(started "look") (started "moveTo")])) "the body walked")))
 
-(deftest a-body-idle-older-than-ten-minutes-is-too-old-to-wake
-  (let [idle (assoc (event :body :idle {:jobs [{:job "j73"}]} "body idle 10 s") :time-ms 1000000)]
-    (is (true? (observe-status/idle-too-old? idle (+ 1000000 (* 11 60 1000)))))
-    (is (false? (observe-status/idle-too-old? idle (+ 1000000 (* 9 60 1000)))))
-    (is (false? (observe-status/idle-too-old? (assoc idle :kind :chat) (+ 1000000 (* 99 60 1000)))))))
+(defn idle-wake-check
+  "Waits over a backlog body.idle (stamped an hour back) naming job j1, when the engine has recorded `recent-results`; passes the wake to check."
+  [recent-results check]
+  (with-fixture []
+    (fn [f]
+      (swap! (:world f) assoc :recent-results recent-results)
+      (-> ((:wait! f))
+          (.then (fn [_]
+                   (push! f (assoc (event :body :idle {:jobs [{:job "j1"}]} "body idle 10 s: j1") :seq 1 :time-ms 1000))
+                   ((:wait! f))))
+          (.then check)))))
+
+(deftest a-body-idle-naming-an-ended-job-does-not-wake
+  (idle-wake-check {"j1" {:status :cancelled}} (fn [wake] (is (= :timeout (:wake wake)) (pr-str wake)))))
+
+(deftest an-old-body-idle-naming-only-live-jobs-still-wakes
+  (idle-wake-check {} (fn [wake] (is (= :idle (:wake wake)) (pr-str wake)))))
 
 (deftest a-read-the-busy-body-misses-does-not-end-the-wait-before-its-deadline
   (with-fixture ["300ms"]

@@ -170,10 +170,6 @@
     (boolean (and (seq (:watch opts)) job (not (body-notice-kinds (:kind e)))
                   (not-any? #{(first (str/split job #"/"))} (:watch opts))))))
 
-(def old-event-ms
-  "An event this much older than the wait is backlog from before the observer last looked: counted, not listed."
-  (* 10 60 1000))
-
 (def jobs-changed-kinds (conj job-results/terminal-kinds :queued))
 
 (defn stale-idle?
@@ -183,13 +179,6 @@
   (boolean (some #(or (and (= :job (:source %)) (jobs-changed-kinds (:kind %)))
                       (and (= :action (:source %)) (= :started (:kind %)) (= "moveTo" (get-in % [:data :name]))))
                  later)))
-
-(defn idle-too-old?
-  "Whether a body.idle is older than old-event-ms: its job list is out of date and the look-ahead may not reach the
-  job's end, so it is counted, not a wake."
-  [e now-ms]
-  (boolean (and (= :body (:source e)) (= :idle (:kind e))
-                (some-> (:time-ms e) (< (- now-ms old-event-ms))))))
 
 (defn idle-before-watch?
   "Whether e is a body.idle or a death stamped before the wait began, under a --watch: the watch is about its jobs, the
@@ -372,6 +361,10 @@
     (not key?) nil
     :else (let [i (first (keep-indexed (fn [i item] (when (routine-item? item) i)) items))]
             (when i (into (subvec items 0 i) (subvec items (inc i)))))))
+
+(def old-event-ms
+  "An event this much older than the wait is backlog from before the observer last looked: counted, not listed."
+  (* 10 60 1000))
 
 (defn collect
   "Fold one routine event into the bounded quiet summary {:counts :items :more}; jobs are the ones a death cancelled.
