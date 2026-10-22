@@ -212,10 +212,10 @@
   worth walking (see worth?): first one whose end (covered? true: out of a ranged mob's line of fire) gives cover, a
   full step before a short one; else the full step that takes least time per block of distance gained (walk-time: a swim is slow), turn order
   breaking ties; else the most open. With a swim-factor above 1 a direction that ends in water counts only when none ends dry (a swim is
-  slow and drowned wait in it). nil when cornered. opts {:swim-factor (default 1) :covered? (end -> bool)
+  slow and drowned wait in it); :dry-only? (a drowned is a threat: it hunts in water) leaves wet ends out even then. nil when cornered. opts {:swim-factor (default 1) :dry-only? :covered? (end -> bool)
   :flank? (home is a refuge: direction) :refused (set of [x y z] ends go-to refused, never chosen) :avoid (end -> bool fns, most wanted first: ends one is true of are left out unless that leaves none) :waterlogged? (cell -> bool: a waterlogged block is wet) :floor (lowest feet y an end under rock may have, unless it is out of a ranged mob's line of fire or on a floor of known, a set of [x y z] floors of stairs the body cut)}."
   ([block-at from threats home hazards step] (choose-target block-at from threats home hazards step nil))
-  ([block-at from threats home hazards step {:keys [swim-factor covered? flank? floor known avoid refused waterlogged?] :or {swim-factor 1 waterlogged? (constantly false)}}]
+  ([block-at from threats home hazards step {:keys [swim-factor dry-only? covered? flank? floor known avoid refused waterlogged?] :or {swim-factor 1 waterlogged? (constantly false)}}]
    (let [dir (direction from threats home flank?)
          options (->> turns
                       (map #(rotate dir %))
@@ -228,7 +228,7 @@
                       (remove #(contains? refused (mapv (:end %) [:x :y :z])))
                       (remove #(and floor (< (:y (:end %)) floor) (roofed? block-at (:end %)) (not (and covered? (covered? (:end %)))) (not (contains? known [(:x (:end %)) (dec (:y (:end %))) (:z (:end %))])))))
          dry (remove #(wet? block-at waterlogged? (:end %)) options)
-         options (if (and (> swim-factor 1) (seq dry)) dry options)
+         options (if (or dry-only? (and (> swim-factor 1) (seq dry))) dry options)
          options (reduce (fn [os bad?] (let [kept (remove #(bad? (:end %)) os)] (if (seq kept) kept os))) options avoid)
          full? #(>= (:open %) step)
          pick (or (when covered?

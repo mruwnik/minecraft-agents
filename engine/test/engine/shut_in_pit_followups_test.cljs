@@ -110,3 +110,15 @@
           (is (= :done (:status @out)) "the first looks missed the rock over the head; the failed place looks again")
           (is (= "cobblestone" (.-name (.blockAt p (tu/pos 1 65 0)))) "the open end is walled")
           (is (= "cobblestone" (.-name (.blockAt p (tu/pos 1 66 0))))))))))
+
+(def wall-shape
+  {:steps [{:to {:x 1 :y 64 :z 0} :dig [{:x 1 :y 64 :z 0}]}] :plugs [] :roof {:x 0 :y 67 :z 0}
+   :prep [{:x 1 :y 65 :z 0} {:x 1 :y 66 :z 0}]})
+
+(defn opens-with? [beyond]
+  (let [p (tu/fake {:self {:pos {:x 0.5 :y 65 :z 0.5}} :blocks (merge (seen/stone -1 1 60 70 -1 1) (when beyond (into {} (for [y [65 66]] [(str "2," y ",0") beyond]))))})]
+    (pit/opens-onto-air? p {:x 0 :y 65 :z 0} wall-shape)))
+
+(deftest a-zigzag-is-not-dug-through-a-wall-with-air-behind-it
+  (is (opens-with? nil) "a one-block wall over air")
+  (is (not (opens-with? "stone")) "rock behind the wall"))

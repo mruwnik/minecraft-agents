@@ -214,3 +214,10 @@
                                                            {:t 950 :data {:from {:x 4.7 :y 15 :z -2.4} :to {:x 1 :y 3 :z 1}}}]}
                                            :policies {:moved {:cap 20 :ttl 600000}}}})}]
     (is (= #{[4 14 -3]} (cover/trail-floors c)) "the floor under each start, once")))
+
+(deftest a-drowned-chaser-is-never-fled-into-water
+  (let [all-water (fn [{:keys [y]}] (cond (<= y 62) "stone" (= y 63) "water" :else "air"))]
+    (is (not (walk/wet? pond-world (walk/choose-target pond-world from [threat] nil [] 6 {:swim-factor 1 :dry-only? true})))
+        "even with water as fast as ground, the dry way round the pond")
+    (is (nil? (walk/choose-target all-water from [threat] nil [] 6 {:swim-factor 1 :dry-only? true}))
+        "only water to flee through: cornered, not a swim")))

@@ -91,9 +91,18 @@
             (stop :no-tool (str "cannot harvest " name (if have " in good time" "; nothing to roof the pit with") ", so not digging") name)
             (recur more (or have (and ok (boolean (some #{(lb/item-name {:block name})} blocks)))))))))))
 
+(declare open-shell)
+
+(defn opens-onto-air?
+  "Whether digging the shape's prep cells would lay open a cell the body sees not solid (a shelter's one-block wall over air):
+  nothing beside, over or under them outside the shape and the feet and head cells."
+  [p feet {:keys [steps plugs roof prep]}]
+  (let [keep (into #{feet (update feet :y inc) roof} (concat plugs prep (mapcat :dig steps) (map :to steps)))]
+    (boolean (some #(open-shell p % keep) prep))))
+
 (defn candidates
   "The pits the shapes allow from feet (dig-cells/pit-shapes) with a side column open and free of hostiles; with none, the
-  zigzags that take a rock side: :prep is its two cells at feet and head height, dug first."
+  zigzags that take a rock side whose prep cells open onto no air: :prep is its two cells at feet and head height, dug first."
   [c feet]
   (let [p (:primitives c)
         prepped (fn [shape]
@@ -103,7 +112,8 @@
     (concat (dig-cells/pit-shapes p feet #(side-open? c %))
             (->> (dig-cells/pit-shapes p feet #(not (mobs %)))
                  (filter (comp seq :plugs))
-                 (map prepped)))))
+                 (map prepped)
+                 (remove #(opens-onto-air? p feet %))))))
 
 (defn pit-plan
   "A pit to dig down from feet and plug over the head (candidates) with blocks (default the call's, flight/blocks):

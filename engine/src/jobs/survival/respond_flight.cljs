@@ -33,7 +33,7 @@
      It leaves out the ends within respond.state/::died-radius of a recent :died place, then dark ones
      (respond.state/::prefer-lit?), each only while another end is open.
      It prefers, in this order: a step whose end is out of every ranged chaser's line of fire (cover: leaves stop arrows),
-     the full step that takes least time (a swim block costs respond.cover/::swim-factor), the most open.
+     the full step that takes least time (a swim block costs respond.cover/::swim-factor; with a drowned among the chasers no step ends in water: none dry is cornered), the most open.
      It first looks away and to either side where it has not seen the ground (at most 3 looks); a cell still unseen
      reads as rock.
      Eats one bite a step (up to food 20) when the nearest chaser is at least eat-gap (12) blocks away and food is carried.

@@ -163,7 +163,7 @@
          flank? (and (some? (or refuge goal)) (cost/outruns-at? (room-lib/food p) (walk/flank-turn)))]
      (await (glance-away! c (walk/direction from threat-pos home flank?)))
      (walk/choose-target (cornered/block-at-fn p) from threat-pos home (keep (comp :pos :data) (ctx/entries c :hazard))
-                         (flight/walk-step) {:swim-factor (swim-factor c) :covered? covered? :flank? flank?
+                         (flight/walk-step) {:swim-factor (swim-factor c) :dry-only? (boolean (some #(= "drowned" (.-name %)) threats)) :covered? covered? :flank? flank?
                           :avoid (cons toward-bystander? (flight/avoid-ends c))
                           :refused (:refused (ctx/mem c))
                           :waterlogged? #(:waterlogged? (u/seen-facts p %))
