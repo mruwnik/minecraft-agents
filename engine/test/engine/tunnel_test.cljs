@@ -43,6 +43,25 @@
     (is (= 29 (:length a)))
     (is (< @reads 40000) @reads)))
 
+(deftest judging-every-refused-line-reads-a-bounded-count-of-cells-and-never-walks-the-way-ledger
+  ;; card df1cf777: a water layer refuses every stair to a deep target. The old approach read 166399 cells, and each
+  ;; step judged walked the body's ledger of way floors (1789 on a trial body): 27 s with no line found.
+  (let [reads (atom 0)
+        walks (atom 0)
+        floors (set (for [i (range 1800)] [(+ 1000 i) 60 1000]))
+        ways (reify
+               ISet
+               ILookup (-lookup [_ k] (get floors k)) (-lookup [_ k nf] (get floors k nf))
+               ISeqable (-seq [_] (swap! walks inc) (seq floors))
+               ICounted (-count [_] (count floors))
+               IWithMeta (-with-meta [this _] this))
+        layer (fn [[_ y _]] (cond (= y 50) "water" (< y 65) "stone" :else "air"))
+        a (ln/approach {:block-at (fn [cell] (swap! reads inc) (layer cell)) :zones [] :footprints #{} :ledger #{} :ways ways}
+                       [-3 37 0] [0 65 0] 96 #{})]
+    (is (= :cave-below (:reason a)))
+    (is (<= @reads (* 4 (+ ln/heading-reads 500))) @reads)
+    (is (zero? @walks))))
+
 (deftest the-surface-of-a-column
   (are [named y] (= y (ln/surface (world-fn named) [3 5] 50 80))
     {} 65
@@ -136,14 +155,19 @@
     (is (not= :east (:heading a)) "the east line would cut the way"))
   (is (= :undercuts-way (:reason (approach {} [0 60 0] :ways #{[0 61 0]})))))
 
+(def caves-off-the-row
+  "Cave air at y 61..62 under every line but those on the target's row z 0."
+  (into {} (for [x (range -30 31) z (range -30 31) y [61 62] :when (and (not (zero? z)) (> (max (abs x) (abs z)) 2))] [[x y z] "cave_air"])))
+
 (deftest declines-name-the-reason
   (are [named target opts reason] (= reason (:reason (apply approach named target (mapcat identity opts))))
     {} [0 60 0] {:max-length 4} :too-far
-    {[0 61 0] "lava"} [0 60 0] {} :hazard
+    {[0 61 0] "lava"} [0 60 0] {} :fluid-in-cut
     {[0 62 0] "water"} [0 60 0] {} :hazard
     {[0 61 0] "stone" [0 62 0] "gravel"} [0 60 0] {} :hazard
     {[0 59 0] "air"} [0 60 0] {} :no-floor
-    {[1 60 0] "water"} [0 60 0] {} :no-approach
+    {[1 60 0] "water"} [0 60 0] {} :hazard
+    caves-off-the-row [0 60 0] {:zones [{:name "w" :min [-30 40 0] :max [-3 80 0]} {:name "e" :min [3 40 0] :max [30 80 0]}]} :no-approach
     {} [0 60 0] {:zones [{:name "vault" :min [0 60 0] :max [0 60 0]}]} :zone
     {} [0 60 0] {:footprints {[0 60 0] "wall"}} :footprint
     {} [0 60 0] {:zones nil} :no-zones))

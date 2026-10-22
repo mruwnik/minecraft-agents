@@ -1,0 +1,19 @@
+;; Card df1cf777: jobs.access.tunnel with :max-length 96 (recover-drops' dig) where no line may be cut: the job stops with the
+;; refusal at once and the body stays connected (it used to judge every line of every heading for 12-51 s, and the server dropped
+;; it). Lit underground cell; stone mass y 0..12 with an open pit x/z 12..20 down to a water floor at y 3; the body stands in the
+;; pit on the one stone cell of that floor, [16 3 16], over the target [16 2 16]. The last step of every line cuts that stone cell,
+;; beside the water, and is refused; the target is in the body's column, so no leg is taken either. Lines run past the cell's
+;; shell into rock the body never saw. Should-fail: the case (no line is allowed).
+{:defaults
+ {:tags [:access :mining] :time :any
+  :plot {:height 20 :light :lit}
+  :blocks [[:fill [0 0 0] [31 12 31] "stone"] [:fill [12 4 12] [20 12 20] "air"] [:fill [12 3 12] [20 3 20] "water"]
+           [:set [16 3 16] "stone"]]
+  :body {:at [16.5 4 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "target-beside-water-under-the-body-stops-and-digs-nothing"
+   :act [[:job (jobs.access.tunnel {:target #at [16 2 16] :max-length 96})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :hazard :hazards [:has {:fluid "water"}]}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind #{:tunnel.step :tunnel.plan}} :for-s 30 :until {:source :job :kind :stopped}}]
+   :after [[:block [16 2 16] "stone"] [:block [16 3 16] "stone"]]}]}

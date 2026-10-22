@@ -100,7 +100,7 @@
   (let [plug-cell (first (filter #(and (contains? plugs %) (not (bs/air (block-at %)))) cut))
         all-ways (into (set (:ways in)) ways)
         floor-cell (known-floor block-at cut all-ways)
-        over-stand (when (and (contains? (set (map (fn [[x y z]] [x (inc y) z]) all-ways)) floor) (not (rules/solid-floor? block-at floor))) floor)
+        over-stand (when (and (contains? all-ways (shape/add floor [0 -1 0])) (not (rules/solid-floor? block-at floor))) floor)
         fluid-cell (first (filter #(bs/fluids (block-at %)) cut))
         crop-cell (first (filter #(crop-names (block-at %)) cut))
         unseen-cell (when-let [unseen? (:unseen? in)]

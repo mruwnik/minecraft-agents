@@ -71,11 +71,20 @@
       stop)))
 
 (defn line-stop
-  "The first stop on the line of plan, or nil when every step and the target may be cut."
-  [in plan accept]
+  "The first stop on the line of plan, or nil when every step and the target may be cut. stop-at: (fn [feet cells]) ->
+  the step's stop (step-stop)."
+  [stop-at plan]
   (let [{:keys [steps stand]} (line plan)]
-    (or (some (fn [[feet cells]] (step-stop in feet cells accept)) steps)
-        (step-stop in stand (geo/step-cells stand :level (:heading plan)) accept))))
+    (or (some (fn [[feet cells]] (stop-at feet cells)) steps)
+        (stop-at stand (geo/step-cells stand :level (:heading plan))))))
+
+(defn line-clear?
+  "Whether no step of the line of plan stops. Judged from the target back: the run near the target is shared by every
+  line along a heading, so with a cached stop-at a refused run ends each longer line at its first step judged."
+  [stop-at plan]
+  (let [{:keys [steps stand]} (line plan)]
+    (and (nil? (stop-at stand (geo/step-cells stand :level (:heading plan))))
+         (not-any? (fn [[feet cells]] (stop-at feet cells)) (reverse steps)))))
 
 (defn standable?
   "Whether the body can stand at feet: it and the head cell open, a solid floor under."
@@ -95,13 +104,26 @@
     (and (or (zero? dx) (zero? dz)) (<= n walk-in-max)
          (every? #(standable? block-at [(+ fx (* % (js/Math.sign dx))) fy (+ fz (* % (js/Math.sign dz)))]) (range (inc n))))))
 
+(defn stand-in?
+  "Whether column [x z] holds a cell surface could answer with feet from..to: a solid floor under two open cells, all
+  seen. Reads the range only: surface reads every cell from its hi down, so a column that cannot answer in the range is
+  not scanned from the top."
+  [block-at seen-at [x z] from to]
+  (boolean (some (fn [fy] (let [f [x (dec fy) z] a [x fy z] b [x (inc fy) z]
+                                nb (block-at b) na (block-at a) nf (block-at f)]
+                            (and nb na nf (pillar/clear? nb) (pillar/clear? na) (not (pillar/clear? nf))
+                                 (or (nil? seen-at) (every? seen-at [f a b])) (rules/solid-floor? block-at f))))
+                 (range from (inc to)))))
+
 (defn entry-heights
-  "The feet heights an entry in column [ex ez] may take: the surface, and the body's own height when it stands in
-  that column or can walk to it along an open row (a cave or tunnel roof hides the surface from a body underground)."
-  [block-at seen-at [ex ez] lo hi feet]
+  "The feet heights from..to an entry in column [ex ez] may take: the surface (scanned from hi to lo), and the body's
+  own height when it stands in that column or can walk to it along an open row (a cave or tunnel roof hides the surface
+  from a body underground)."
+  [block-at seen-at [ex ez] lo hi from to feet]
   (let [[_ fy _] feet
-        own (when (and feet (<= lo fy hi) (open-row? block-at feet [ex ez])) fy)]
-    (distinct (keep identity [(surface block-at seen-at [ex ez] lo hi) own]))))
+        own (when (and feet (<= from fy to) (open-row? block-at feet [ex ez])) fy)
+        top (when (stand-in? block-at seen-at [ex ez] from to) (surface block-at seen-at [ex ez] lo hi))]
+    (distinct (keep identity [(when (and top (<= from top to)) top) own]))))
 
 (defn fits
   "The plans of the lines along heading whose entry is n before the target, when the stair fits in it (entry: the
@@ -109,8 +131,7 @@
   [block-at seen-at target heading n max-length feet]
   (let [[tx ty tz] target
         [ex _ ez] (ahead target heading (- n))]
-    (for [y (entry-heights block-at seen-at [ex ez] (- ty max-length) (+ ty max-length 1) feet)
-          :when (<= (js/Math.abs (- y ty)) (dec n))]
+    (for [y (entry-heights block-at seen-at [ex ez] (- ty max-length) (+ ty max-length 1) (- ty (dec n)) (+ ty (dec n)) feet)]
       (let [d (- y ty)
             plan {:entry [ex y ez] :heading heading :dir (if (neg? d) :up :down) :steps (js/Math.abs d)
                   :run (- n 1 (js/Math.abs d)) :length n :target [tx ty tz]}]
@@ -128,30 +149,40 @@
   [plan feet]
   (and (zero? (:steps plan)) (= (:entry plan) feet)))
 
-(defn judged-lines
-  "[plan stop] for each line along heading with an entry n before the target, n in ns, in order."
-  [in target heading ns max-length accept feet]
-  (->> ns
-       (mapcat #(fits (or (:column-at in) (:block-at in)) (:floor-at in) target heading % max-length feet))
-       (map (fn [p] [p (line-stop in p accept)]))))
+(defn fitting-lines
+  "The plans along heading with an entry n before the target, n in ns, in order. Lazy, so ns unchunked: a caller that
+  stops at the first clear line reads no column past it."
+  [in target heading ns max-length feet]
+  (mapcat #(fits (or (:column-at in) (:block-at in)) (:floor-at in) target heading % max-length feet) ns))
 
 (defn walk-in-ns
   "The entry distances n whose entry column lies within walk-in-max of feet: the only lines far-entry? lets win by being near."
   [target heading max-length [fx _ fz]]
   (filter (fn [n] (let [[ex _ ez] (ahead target heading (- n))]
                     (<= (+ (* (- ex fx) (- ex fx)) (* (- ez fz) (- ez fz))) (* walk-in-max walk-in-max))))
-          (range 1 (inc max-length))))
+          (take max-length (iterate inc 1))))
+
+(def heading-reads
+  "Cells one heading's lines may read (each once): longer lines past it are not judged, as if none fitted. Bounds a
+  sync approach near the search budget (~100 ms) however much rock lies unseen around the target."
+  6000)
 
 (defn best-on-heading
-  "{:plan p} for the shortest valid line along heading, else {:stop s} (the shortest fitting line's stop, or
-  :too-far when none fits). The :near and :level lines are looked for among the entries the body can walk to only."
-  [in target heading max-length accept feet]
-  (let [judged (judged-lines in target heading (range 1 (inc max-length)) max-length accept feet)]
-    (if-let [[p] (first (filter (comp nil? second) judged))]
-      (let [nearby (judged-lines in target heading (walk-in-ns target heading max-length feet) max-length accept feet)]
-        {:plan p :near (some (fn [[q stop]] (when (and (nil? stop) (not (far-entry? q feet))) q)) nearby)
-         :level (some (fn [[q stop]] (when (and (nil? stop) (level-from? q feet)) q)) nearby)})
-      {:stop (or (second (first judged)) {:reason :too-far})})))
+  "{:plan p} for the shortest valid line along heading, else {:stop s}: the stop of the last step, on the cell before
+  the target, which every line shares (no line is read then), else the shortest fitting line's stop, or :too-far when
+  none fits. The :near and :level lines are looked for among the entries the body can walk to
+  only. Entry columns are read while (more?) holds."
+  [in stop-at more? target heading max-length feet]
+  (let [lines (fn [ns] (fitting-lines in target heading (take-while (fn [_] (more?)) ns) max-length feet))
+        stand (ahead target heading -1)]
+    (if-let [stop (stop-at stand (geo/step-cells stand :level heading))]
+      {:stop stop}
+      (let [fitting (lines (take max-length (iterate inc 1)))]
+        (if-let [p (first (filter #(line-clear? stop-at %) fitting))]
+          (let [nearby (filter #(line-clear? stop-at %) (lines (walk-in-ns target heading max-length feet)))]
+            {:plan p :near (first (remove #(far-entry? % feet) nearby))
+             :level (first (filter #(level-from? % feet) nearby))})
+          {:stop (if-let [q (first fitting)] (line-stop stop-at q) {:reason :too-far})})))))
 
 (defn cuts-floor?
   "Whether the line of plan cuts the floor under feet (the body would come back to a hole where it stood)."
@@ -159,6 +190,17 @@
   (let [floor (shape/add feet [0 -1 0])]
     (boolean (some (fn [[_ {:keys [cut]}]] (some #{floor} cut)) (:steps (line plan))))))
 
+
+(defn cached-reads
+  "block-at reading each cell once, counting the reads in volatile n: the world stands still during one sync approach,
+  and its lines share most cells."
+  [n block-at]
+  (let [m (js/Map.)]
+    (fn [[x y z :as cell]]
+      (let [k (str x "," y "," z)]
+        (if (.has m k)
+          (.get m k)
+          (let [b (block-at cell)] (vswap! n inc) (.set m k b) b))))))
 
 (defn approach
   "The line to cut to target (the plan map, see fits) from rules input in (without :cell and :feet), the body at
@@ -168,7 +210,14 @@
   ([in target feet max-length accept only]
   (if (and (nil? (:zones in)) (not (:ignore-zones? in)))
     {:reason :no-zones}
-    (let [per (into {} (map (fn [h] [h (best-on-heading in target h max-length accept feet)])) (if only [only] heading-order))
+    (let [reads (volatile! 0)
+          cached (partial cached-reads reads)
+          in (cond-> in (:block-at in) (update :block-at cached) (:column-at in) (update :column-at cached)
+                     (:floor-at in) (update :floor-at cached))
+          stop-at (memoize (fn [feet cells] (step-stop in feet cells accept)))
+          judge (fn [h] (let [limit (+ @reads heading-reads)]
+                          (best-on-heading in stop-at #(< @reads limit) target h max-length feet)))
+          per (into {} (map (fn [h] [h (judge h)])) (if only [only] heading-order))
           plans (distinct (mapcat (fn [h] (keep identity [(:plan (per h)) (:near (per h)) (:level (per h))])) (keys per)))]
       (if (seq plans)
         (first (sort-by (juxt #(not (level-from? % feet)) #(far-entry? % feet) :length #(cuts-floor? % feet) #(dist2 feet (:entry %))) plans))

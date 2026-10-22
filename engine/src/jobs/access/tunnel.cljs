@@ -52,7 +52,9 @@
   other plans' footprints, unloaded; a cut cell that is the floor of a stair this body cut earlier, :undercuts-way,
   from the :stair-way memory; a fluid in a cut; a fluid beside a cut or a falling block over one, taken
   only when named in :accept, default #{}; the next floor solid; the cell under it neither air nor fluid). The
-  target's own column counts as a last run step. The shortest valid line wins, among those whose entry is within 24 blocks of the body if any (the body does not walk to a far surface entry when it stands in a line underground). Among equals one that leaves the
+  target's own column counts as a last run step; when that step is refused, no line is judged and its reason is the
+  heading's. A heading reads at most jobs.access.tunnel.line/heading-reads cells: longer lines past them count as not
+  fitting. The shortest valid line wins, among those whose entry is within 24 blocks of the body if any (the body does not walk to a far surface entry when it stands in a line underground). Among equals one that leaves the
   floor under the body's start uncut wins, then the entry nearest the body.
 
   Every line refused by a zone, claim or plan waits (:refused) while all are refused. Else no
