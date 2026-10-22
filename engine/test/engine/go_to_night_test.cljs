@@ -28,6 +28,13 @@
 
 (defn waiting-of [eng id] (core/waiting eng id))
 
+(def no-risk "A risk share of 0: every walk with a dark open stretch is too risky." {:jobs.movement.go-to.risk/risk-share 0})
+
+(defn ^:async too-risky
+  "Runs async fn f with every walk over a dark open stretch too risky."
+  [f]
+  (await (settings/with-settings no-risk f)))
+
 (def walker-job
   "A parent that walks out of the hut with one go-to child call."
   {:round (fn ^:async walker [c]
@@ -104,25 +111,78 @@
           (is (empty? (:list (core/state eng))))
           (is (= {:x 6 :z -1} (select-keys (st/pos-of p) [:x :z]))))))))
 
-(deftest a-checks-override-walks-out-anyway
+(deftest a-checks-override-walks-out-anyway-when-the-walk-is-too-risky
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [safe ['(not (threatened)) '(always)]]
+        (await (too-risky (fn ^:async t2 [] (doseq [safe ['(not (threatened)) '(always)]]
           (let [{:keys [eng p]} (setup (night-hut {}))]
             (core/submit! eng (list 'jobs.movement.go-to {:pos [15 64 0] :checks {:safe? safe}}) {})
             (await (tu/run-until-empty eng 40))
             (is (empty? (:list (core/state eng))))
-            (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) (pr-str safe))))))))
+            (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) (pr-str safe)))))))))))
 
-(deftest a-child-under-an-escape-default-walks-out-at-night
+(deftest a-child-under-an-escape-default-walks-out-at-night-when-the-walk-is-too-risky
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (hut-with {'escaper escaper-job})]
-          (core/submit! eng '(escaper) {})
-          (await (tu/run-until-empty eng 200))
-          (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) "the escape's walk does not wait for day"))))))
+        (await (too-risky (fn ^:async t2 []
+                 (let [{:keys [eng p]} (hut-with {'escaper escaper-job})]
+                   (core/submit! eng '(escaper) {})
+                   (await (tu/run-until-empty eng 200))
+                   (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) "the escape's walk ignores the risk")))))))))
+
+(deftest an-exclusive-go-to-too-risky-ends-at-once-with-the-reason-and-walks-with-a-checks-override
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (too-risky (fn ^:async t2 []
+                 (doseq [[args walks?] [[{:pos [15 64 0]} false] [{:pos [15 64 0] :checks {:safe? '(not (threatened))}} true]]]
+                   (let [{:keys [eng p seen]} (setup (night-hut {}))
+                         id (core/exclusive-run! eng (list 'jobs.movement.go-to args))]
+                     (await (ticks eng 40))
+                     (is (nil? (waiting-of eng id)) "the exclusive go-to is not held")
+                     (is (= walks? (> 2 (js/Math.abs (- 15 (:x (st/pos-of p)))))) (pr-str args))
+                     (is (= (not walks?) (some? (some #(= :risky (:reason %)) (st/emitted seen :stopped)))) (pr-str args)))))))))))
+
+(defn parent-world
+  "{:eng :p :seen} for the night hut with a parent job 'walker whose round is round-fn."
+  [round-fn]
+  (let [clock (atom 1000000)
+        [seen sink] (tu/legacy-capture-sink)
+        p (sky/with-sky (tu/fake-on-floor (night-hut {})))
+        eng (core/create {:primitives p :jobs (assoc registry/jobs 'walker {:round round-fn}) :triggers triggers/all
+                          :dir (tu/tmp-dir) :now #(deref clock)
+                          :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
+    {:eng eng :p p :seen seen}))
+
+(deftest a-child-go-to-too-risky-ends-condition-failed-and-the-parent-decides
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (too-risky (fn ^:async t2 []
+                 (let [rounds (atom [])
+                       {:keys [eng p]} (parent-world (fn ^:async walker [c]
+                                                       (let [r (await (ctx/call c :walk 'jobs.movement.go-to {:pos [15 64 0]}))]
+                                                         (swap! rounds conj r)
+                                                         (if (= :continue r) r (ctx/end c :done nil)))))]
+                   (core/submit! eng '(walker) {})
+                   (await (ticks eng 4))
+                   (is (= inside (st/pos-of p)))
+                   (is (= [:condition-failed :risky] [(:kind (first @rounds)) (:reason (:cause (first @rounds)))]))))))))))
+
+(deftest a-parent-walking-with-walk-into-or-run!-waits-with-the-childs-risky-reason
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (too-risky (fn ^:async t2 []
+                 (doseq [walk [(fn ^:async walker [c] (await (child/walk-into!* c :walk [15 64 0])))
+                               (fn ^:async walker [c] (await (child/run!* c :walk 'jobs.movement.go-to {:pos [15 64 0]})))]]
+                   (let [{:keys [eng p]} (parent-world walk)
+                         id (core/submit! eng '(walker) {})]
+                     (await (ticks eng 4))
+                     (is (= inside (st/pos-of p)))
+                     (is (= :risky (:reason (waiting-of eng id))) "the parent waits with the child's reason"))))))))))
 
 (deftest an-exclusive-go-to-at-night-walks
   (async done
@@ -177,8 +237,6 @@
           (is (empty? (st/emitted seen :stopped)) (pr-str (map :reason (st/emitted seen :stopped)))))))))
 
 ;; ------------------------------------------------------------------ the night trigger and a queued walk (card 4252e02e)
-
-(def no-risk "A risk share of 0: every walk with a dark open stretch is too risky." {:jobs.movement.go-to.risk/risk-share 0})
 
 (deftest a-queued-walk-too-risky-does-not-lead-the-body-out-of-its-mended-room-at-night
   (async done

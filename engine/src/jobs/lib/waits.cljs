@@ -5,7 +5,7 @@
 
 (def wait-reasons
   "The :reason of every :later these checkers give: a job that declines for one is waiting out the world, not failing."
-  #{:exposed :dark :hostile-near :low-health :poisoned :unarmed :no-free-slot})
+  #{:exposed :risky :dark :hostile-near :low-health :poisoned :unarmed :no-free-slot})
 
 (def full-pack-limit-ms
   "How long a caller waits for a full pack to clear before it ends; a wait that went unasked for full-pack-gap-ms starts over."
