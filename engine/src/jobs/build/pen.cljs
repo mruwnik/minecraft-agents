@@ -263,7 +263,8 @@
       (do (ctx/update-mem! c #(assoc % :phase :patch :pass (inc (or (:pass %) 0)) :pass-ok 0 :patch-queue (pen-patch/patch-cells (:leaks answer))))
           :again)
       :else
-      (ctx/end c :nothing-possible (:reason answer) result))))
+      (ctx/end c :nothing-possible (:reason answer)
+               (assoc result :text (str "pen not closed: " (name (:reason answer)) (pen-patch/leak-text answer) (pen-patch/gate-drop-text answer)))))))
 
 (def tree-endings ["_log" "_wood" "_leaves"])
 

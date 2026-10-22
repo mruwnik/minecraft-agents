@@ -85,7 +85,8 @@
           (is (= {:kind :done :cause nil} (kc closed)))
           (is (true? (get-in closed [:data :closed?])))
           (is (= {:kind :nothing-possible :cause :leak} (kc leaky)))
-          (is (= :leak (get-in leaky [:data :reason]))))))))
+          (is (= :leak (get-in leaky [:data :reason])))
+          (is (re-find #"^pen not closed: leak: gap at " (get-in leaky [:data :text]))))))))
 
 (deftest a-plan-without-fence-cells-is-impossible-and-no-zone-list-a-failed-condition
   (async done

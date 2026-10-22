@@ -29,6 +29,23 @@
   [c [x y z]]
   (some-> (u/seen-name (:primitives c) {:x x :y (dec y) :z z}) (str/ends-with? "_fence_gate")))
 
+(defn leak-text
+  "\": why at [x y z]\" listing the first leaks of result, with how many more; a :perch-in names the block stood on."
+  [{:keys [leaks leaks-total]}]
+  (let [shown (take 3 leaks)
+        more (- (or leaks-total (count leaks)) (count shown))]
+    (when (seq shown)
+      (str ": " (str/join ", " (map (fn [{:keys [pos why stand stand-block]}]
+                                      (str (name why) " at [" (:x pos) " " (:y pos) " " (:z pos) "]"
+                                           (when stand (str " (an animal steps onto the top from the " (or stand-block "block") " at [" (:x stand) " " (:y stand) " " (:z stand) "]; fence higher there or take that block away)"))))
+                                    shown))
+           (when (pos? more) (str " and " more " more"))))))
+
+(defn gate-drop-text
+  [{:keys [gate-drops]}]
+  (when-let [{:keys [gate drop]} (first gate-drops)]
+    (str "; gate at [" (:x gate) " " (:y gate) " " (:z gate) "] has a drop of " drop " inside, animals will not step down")))
+
 (defn ^:async place-fence!
   "One fence at pos by a blocks.place child (phase :patch); its result, or :continue while it runs. Args pass :ignore-zones?; extra is merged into the child's args.
   Never above a gate: that result is a :nothing-possible :over-gate and the leak stays reported."

@@ -171,7 +171,7 @@
   "Leaks {:pos :why :perch-in :stand} of the pen's fences, walls and gates (a cell higher than a block beside an inside
   cell) that open ground outside lies within a block of the top of: an animal steps onto the top there and drops in.
   :stand is the {:x :y :z} ground block it steps from. world is a fresh one: cells read here are no unloaded leaks."
-  [{:keys [cell max-drop] :as world} seen]
+  [{:keys [cell block max-drop] :as world} seen]
   (let [inside-cols (into #{} (map (fn [[x _ z]] [x z])) (keys seen))
         limit (+ 50 (* 2 (count seen)))
         open (memoize #(open-ground? world %1 limit))]
@@ -187,7 +187,8 @@
                                                    (surfaces-in world ox oz (floor-cell (- t 1)) (floor-cell (+ t max-drop)))))]
                          :when from]
                      (let [[sx sy sz] (:key from)]
-                       {:pos {:x fx :y y :z fz} :why :perch-in :stand {:x sx :y (dec sy) :z sz}}))))
+                       {:pos {:x fx :y y :z fz} :why :perch-in :stand {:x sx :y (dec sy) :z sz}
+                        :stand-block (some-> (block sx (dec sy) sz) .-name)}))))
          (sort-by (juxt (comp :x :pos) (comp :y :pos) (comp :z :pos)))
          vec)))
 

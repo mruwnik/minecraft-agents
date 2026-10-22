@@ -41,14 +41,18 @@
 (deftest ground-beside-the-fence-top-is-a-way-in
   (let [r (check (assoc fence-ring [6 64 2] "stone"))]
     (is (false? (:closed? r)))
-    (is (= [{:pos {:x 5 :y 64 :z 2} :why :perch-in :stand {:x 6 :y 64 :z 2}}] (:leaks r)))))
+    (is (= [{:pos {:x 5 :y 64 :z 2} :why :perch-in :stand {:x 6 :y 64 :z 2} :stand-block "stone"}] (:leaks r)))))
+
+(deftest the-block-stood-on-is-named-and-a-carpet-beside-the-fence-is-no-step
+  (is (= "oak_leaves" (:stand-block (first (:leaks (check (assoc fence-ring [6 64 2] "oak_leaves")))))))
+  (is (:closed? (check (assoc fence-ring [6 64 2] "leaf_litter")))))
 
 (def box-opts {:box {:min {:x 0 :y 64 :z 0} :max {:x 4 :y 64 :z 4}}})
 
 (deftest ground-beside-the-fence-top-is-a-way-in-for-a-box-too
   (let [r (check (assoc fence-ring [6 64 2] "stone") (assoc box-opts :at nil))]
     (is (false? (:closed? r)))
-    (is (= [{:pos {:x 5 :y 64 :z 2} :why :perch-in :stand {:x 6 :y 64 :z 2}}] (:leaks r)))))
+    (is (= [{:pos {:x 5 :y 64 :z 2} :why :perch-in :stand {:x 6 :y 64 :z 2} :stand-block "stone"}] (:leaks r)))))
 
 (deftest a-walled-in-pocket-beside-the-fence-is-no-way-in
   (let [wall (fn [x z] (for [y (range 64 70)] [[x y z] "stone"]))

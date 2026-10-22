@@ -75,6 +75,19 @@
           (is (false? (:herdable? event)))
           (is (= "pen closed, 9 cells; but the pen is 3x3 cells; herd needs 5 in a line inward from the gate so a led animal clears the gate cell" (:text event))))))))
 
+(deftest a-closed-pen-whose-gate-approach-is-blocked-says-herd-cannot-use-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [gate {"2,64,-1" "oak_fence_gate"}
+              states {"2,64,-1" {:open false}}
+              blocked (:event (await (run-job {:at [2 64 2]} (world (assoc gate "2,64,-3" "stone" "2,65,-3" "stone" "2,66,-3" "stone") states))))
+              free (:event (await (run-job {:at [2 64 2]} (world gate states))))]
+          (is (false? (:herdable? blocked)))
+          (is (= "pen closed, 25 cells; but no free floor 4 cells out from the gate at [2 64 -3], so herd cannot lead animals in" (:text blocked)))
+          (is (= "pen closed, 25 cells" (:text free)))
+          (is (nil? (:herdable? free))))))))
+
 (deftest an-open-gate-is-a-leak-at-the-gate-and-listed
   (async done
     (tu/run-async done
@@ -222,8 +235,8 @@
       (fn ^:async t []
         (let [{:keys [event]} (await (run-job {:box {:min [0 64 0] :max [4 64 4]}} (world {"6,64,2" "stone"})))]
           (is (= :leak (:reason event)))
-          (is (= [{:pos {:x 5 :y 64 :z 2} :why :perch-in :stand {:x 6 :y 64 :z 2}}] (:leaks event)))
-          (is (= "pen not closed: leak: perch-in at [5 64 2] (an animal steps onto the top from the ground at [6 64 2])" (:text event))))))))
+          (is (= [{:pos {:x 5 :y 64 :z 2} :why :perch-in :stand {:x 6 :y 64 :z 2} :stand-block "stone"}] (:leaks event)))
+          (is (= "pen not closed: leak: perch-in at [5 64 2] (an animal steps onto the top from the stone at [6 64 2]; fence higher there or take that block away)" (:text event))))))))
 
 (deftest a-plan-names-the-pen-by-its-fence-cells
   (async done

@@ -26,6 +26,13 @@
    :blocks [[:fill [6 0 3] [6 0 6] "oak_fence"]
             [:fill [3 0 6] [6 0 6] "oak_fence"]]
    :expect [{:event {:source :job :kind :completed :data {:closed? true :cells 9 :herdable? false}} :within-s 20 :of-job true}]}
+  ;; a gate whose approach (4 cells out) is walled: closed, but herd cannot lead animals through it
+  {:name "gate-approach-walled-not-herdable"
+   :plot {:length 64 :width 64}
+   :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
+   :blocks [[:set [5 0 8] "oak_fence_gate[facing=south,open=false]"]
+            [:fill [4 0 10] [6 1 10] "stone"]]
+   :expect [{:event {:source :job :kind :completed :data {:closed? true :cells 25 :herdable? false}} :within-s 20 :of-job true}]}
   ;; the invisible light block is air to an animal: inside the ring it changes nothing, in the ring it is a gap
   {:name "light-block-inside-closed"
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
