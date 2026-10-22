@@ -1,0 +1,18 @@
+;; Card f57484db: a bed the night put down (ledger :bed) that is the live respawn bed is not scaffold: a cleanup of every bed entry (the dawn take-back, a seal-cleanup) leaves it.
+;; Should-succeed: the unslept bed (control) is dug, the respawn bed stands. Should-fail: the respawn bed is dug, or the body walks to it.
+{:defaults
+ {:tags [:cleanup :survival :bed]
+  :time :any
+  :plot {:length 40 :width 16 :height 8}
+  :body {:at [10.5 0 8.5] :inventory [["iron_pickaxe" 1] ["iron_sword" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 100}
+ :cases
+ [{:name "respawn-bed-is-not-taken-back"
+   :blocks [[:set [14 0 8] "red_bed[facing=east,part=foot]"] [:set [15 0 8] "red_bed[facing=east,part=head]"]
+            [:set [6 0 8] "red_bed[facing=east,part=foot]"] [:set [7 0 8] "red_bed[facing=east,part=head]"]]
+   :memory [{:kind :spawn-bed :data {:pos #xyz [14 0 8]} :policy {:cap 1 :ttl :forever}}
+            {:kind :scaffold :data {:entries [{:cell #at [14 0 8] :item "red_bed" :before "air" :job "j0" :purpose :bed :state :placed}
+                                              {:cell #at [6 0 8] :item "red_bed" :before "air" :job "j0" :purpose :bed :state :placed}]}}]
+   :act [[:job (jobs.access.cleanup {:of :all :purpose :bed :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.access.cleanup"}} :within-s 80 :of-job true}]
+   :after [[:not-block [6 0 8] "red_bed"] [:block [14 0 8] "red_bed"]]}]}
