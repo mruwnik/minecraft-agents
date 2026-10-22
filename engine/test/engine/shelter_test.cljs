@@ -963,7 +963,7 @@
 (defn walks-to-bed [eng]
   (count (filter #(= {:x 6 :y 64 :z 0} %) (tu/walked-to eng))))
 
-(deftest shelter-does-not-retry-a-sleep-that-already-failed
+(deftest shelter-does-not-walk-to-a-bed-no-route-reaches
   (async done
     (tu/run-async done
       (walls-cheap (fn ^:async t []
@@ -971,15 +971,10 @@
                                            :unreachable ["6,64,0"]})]
           (know-bed! eng {:x 6 :y 64 :z 0})
           (core/submit! eng '(jobs.survival.night) {})
-          (loop [i 0]
-            (when (and (< i 60) (empty? (emitted seen :bed_unreachable)))
-              (await (core/tick! eng))
-              (recur (inc i))))
-          (is (= 1 (count (emitted seen :bed_unreachable))))
-          (let [walks (walks-to-bed eng)]
-            (await (tick-n eng 12))
-            (is (= walks (walks-to-bed eng)) "no more walking at the unreachable bed")
-            (is (= 18 (count (calls p "place"))) "dig-in finished the walls"))))))))
+          (await (tick-n eng 24))
+          (is (= [{:x 6 :y 64 :z 0}] (map :bed (emitted seen :night.bed-walk-unsafe))))
+          (is (zero? (walks-to-bed eng)) "no walk at the unreachable bed")
+          (is (= 18 (count (calls p "place"))) "dig-in finished the walls")))))))
 
 (deftest shelter-treats-a-long-awake-body-as-needing-a-bed
   (async done

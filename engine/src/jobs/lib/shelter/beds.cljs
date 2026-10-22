@@ -155,7 +155,7 @@
 
 (defn bed-to-use
   "The bed a body awake at night sleeps in: one it sees (seen-bed), else the remembered :bed within radius or the live
-  :spawn-bed at any distance (go-to prices the walk), under any roof or none. Never one permit? refuses (occupied), one in an unexpired :bed-unreachable entry, or one whose walk
+  :spawn-bed at any distance (go-to prices the walk), under any roof or none. Never one permit? refuses (occupied), one in an unexpired :bed-unreachable or :bed-walk-unsafe entry, or one whose walk
   would take the body out of a kept-shelters shelter (unless overdue: max-days-awake days since :slept, phantoms, or a
   courtesy-walk?: another player sleeps and the bed is near);
   none after a sleep tonight (:slept within half an in-game day) while the body is safe from the night (a body woken
@@ -169,6 +169,7 @@
           overdue? (>= (or (days-awake-in view) 0) (max-days-awake))
           ok? (fn [pos] (and (permit? pos) (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-unreachable))
                              (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-open))
+                             (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-walk-unsafe))
                              (or overdue? (not (kept-shelters (sh-inside/walk-leaves-shelter? p shelter pos 1))) (courtesy-walk? p view pos))))]
       (or (seen-bed p ok?)
           (->> (concat (sh-spawn/standing-beds p view radius) (seen-bed-places p radius) (some-> (sh-spawn/spawn-bed-pos p view) vector))
@@ -176,6 +177,11 @@
                (sort-by #(u/dist (u/self-pos {:primitives p}) %))
                (filter ok?)
                first)))))
+
+(def walk-unsafe-policy
+  "Policy of the :bed-walk-unsafe entries the night job writes for a bed whose walk it priced unsafe: five minutes, so
+  the night trigger does not hold for it meanwhile."
+  {:cap 5 :ttl 300000})
 
 (def bed-place-failed-policy
   "Policy of the :bed-place-failed entry the night job writes when it could not set up a carried bed: one, ten

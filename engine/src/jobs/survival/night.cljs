@@ -51,7 +51,7 @@
   - sheltered (slept, dug in, shut in): log out for a stint while someone else sleeps, else end so the queue runs (no all-night hold: listed jobs run when their own start checks pass).
   - a roofed :roofed-places place within the night.sites ::home-radius setting (bed to use or carry), or farther while the walk fits the time left before the dark plus a margin (night.sites home-walk-*; bed or not), and the body not roofed: jobs.survival.enter-room walks in (one try tonight); a carried bed is not put down in the open while one is close (night.bed-kept).
   - an open door of the closed room the body stands in is shut; the room's doorway is filled before a carried bed goes down (ledger :doorway; one that cannot be filled for want of blocks, or was filled, is :doorway-tried, not tried again tonight).
-  - a bed to use or carried (sh-beds/bed-to-use): jobs.survival.bed-down, called again until it ends; one that stops hostile-near ends the round nothing-possible :monsters-near (the trigger fires again after its cooldown).
+  - a bed to use (sh-beds/bed-to-use) whose walk is safe (bed-walk-safe?: a whole route whose dark go-to prices at most night.sites ::bed-walk-dark-s), or carried: jobs.survival.bed-down, called again until it ends; one that stops hostile-near ends the round nothing-possible :monsters-near (the trigger fires again after its cooldown).
   - someone else asleep: jobs.survival.log-out, a 30 s stint, not retried tonight when not ok.
   - a roof over a room with a hole (shelter.room_open warn): walled in under the roof (:enclose).
   - roofed, buried or shut in a closed room: done {:night :roofed}.
@@ -406,6 +406,23 @@
     (when (sh-spawn/seen-not-bed? (:primitives c) pos)
       (places/retract-if-missing! c :bed pos "missing"))))
 
+(defn ^:async bed-walk-safe?
+  "Whether the night may walk to bed: within 2 blocks, or go-to's quote finds a whole route there whose dark cells the
+  planner prices at most the sites/bed-walk-dark-s setting. Else :bed-walk-unsafe {:pos bed} is remembered (sh-beds/bed-to-use
+  skips the bed meanwhile) with a night.bed-walk-unsafe info, and false."
+  [c bed]
+  (or (<= (u/dist (u/self-pos c) bed) 2)
+      (let [r (:route (await (ctx/quote c 'jobs.movement.go-to {:pos bed :range 2})))
+            dark (or (:dark-seconds r) 0)]
+        (or (and (:found r) (<= dark (sites/bed-walk-dark-s)))
+            (do (ctx/remember! c :bed-walk-unsafe {:pos bed} sh-beds/walk-unsafe-policy)
+                (ctx/emit! c :night.bed-walk-unsafe :info
+                           {:bed bed :found (boolean (:found r)) :dark-seconds dark
+                            :text (str "not walking to the bed at " (pr-str bed) ": "
+                                       (if (:found r) (str "the way's dark is priced " dark " s") "no whole way to it is known")
+                                       "; sheltering here tonight")})
+                false)))))
+
 (defn ^:async pass
   "One choice of the night (see doc): :again, or the round's end."
   [c]
@@ -444,6 +461,7 @@
             :else (ctx/end c :done nil (ending/done-data c (:sheltered (ctx/mem c))))))
       :else
       (let [bed (when bed-way (await (sense/decide! c ::bed #(sh-beds/bed-to-use p (ctx/view c) (bed-down/radius c) (bed-down/bed-permit c)))))
+            bed (when (and bed (or (:bed-down (ctx/mem c)) (await (bed-walk-safe? c bed)))) bed)
             bed-wanted (and bed-way (carried-bed-wanted? c))
             door (sh/open-room-door p (ctx/view c))
             home-near (when-not roofed (first (room-lib/roofed-places-in c (:args c) (sites/home-radius))))

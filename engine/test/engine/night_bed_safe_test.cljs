@@ -53,7 +53,7 @@
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
                           :now #(deref clock) :events (events/make {:body "Fake" :sinks [] :now #(deref clock)})})]
     (st/know-bed! eng far-bed)
-    {:eng eng :p p :raw raw}))
+    {:eng eng :p p :raw raw :clock clock}))
 
 (defn bed-to-use [world]
   (let [{:keys [eng p]} (setup world)]
@@ -156,6 +156,26 @@
                 (is (empty? (st/calls raw "sleep")))
                 (is (empty? (st/calls raw "moveTo")) "no walk toward the far bed")))
             (finally (set! js/Math.random random))))))))
+
+(def overdue-in-open-dark-tunnel
+  "The tunnel open at both ends and unlit, the far bed standing out in the open: every cell of the walk is dark."
+  (-> (tunnel-world (into {} (for [x (range 0 21) y [64 65]] [[x y 0] [0 0]])))
+      (update :blocks dissoc "-1,64,0" "-1,65,0" "21,64,0" "21,65,0")
+      (assoc :inventory [{:name "cobblestone" :count 32}])))
+
+(deftest an-overdue-miner-does-not-walk-the-dark-to-a-far-bed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p raw clock]} (setup overdue-in-open-dark-tunnel)]
+          (swap! clock + (* 4 sh-clock/ms-per-day))
+          (is (= far-bed (sh-beds/bed-to-use p (mem/view (:store eng)) 128 (constantly true))) "overdue: the far bed is the bed to use")
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (st/tick-n eng 12))
+          (is (= [far-bed] (map :pos (st/entries eng :bed-walk-unsafe))) "the dark walk was priced unsafe")
+          (is (empty? (st/calls raw "sleep")))
+          (is (empty? (filter #(< 21 (:x (st/arg-pos %))) (st/calls raw "moveTo"))) "no walk out of the tunnel")
+          (is (nil? (sh-beds/bed-to-use p (mem/view (:store eng)) 128 (constantly true))) "nor does the night trigger hold for the bed meanwhile"))))))
 
 (def hut-light
   "A closed hut: torch light and no sky light in every cell of its room."

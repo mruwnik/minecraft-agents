@@ -1,0 +1,19 @@
+;; Card 7719b054: the night does not walk a body across the dark to a far bed; it prices the walk (go-to's quote, dark
+;; cells priced) and shelters where it stands. A remembered bed 42 blocks off over unlit open ground: night.bed-walk-unsafe,
+;; then shut-in walls the body in with its cobblestone. Should-fail: the body walks to the bed and sleeps there.
+;; The lit walk to a bed is night-sleep-in-hut. Needs the night (bed use is decided by the clock).
+{:defaults
+ {:tags [:night :survival :bed]
+  :time :night :time-why :sleep
+  :plot {:light :sky :length 56 :width 16 :height 6}
+  :body {:at [6.5 0 8.5] :effects [["resistance" 600 4]] :settle-s 3 :inventory [["cobblestone" 32]]}
+  :limit-s 150}
+ :cases
+ [{:name "a-far-bed-over-dark-ground-is-not-walked-to"
+   :blocks [[:set [48 0 8] "red_bed[facing=east,part=foot]"] [:set [49 0 8] "red_bed[facing=east,part=head]"]]
+   :memory [{:kind :bed :data {:pos #xyz [48 0 8]} :policy {:cap 1 :ttl :forever}}]
+   :act [[:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0}})]]
+   :expect [{:event {:source :job :kind :night.bed-walk-unsafe} :within-s 40}
+            {:event {:source :job :kind :shut-in.sealed} :within-s 100}
+            {:no-event {:source :action :kind :done :data {:name "sleep"}} :for-s 100}]
+   :after [[:body-near [6.5 0 8.5] 3]]}]}

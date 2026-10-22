@@ -12,6 +12,7 @@
    :jobs.survival.night.sites/home-walk-speed {:default 4.3 :doc "Blocks a second used to bound the roofed places looked at for a walk." :spec (a/num-in 0 nil)}
    :jobs.survival.night.sites/home-walk-slack {:default 1.4 :doc "Factor on the straight line to a roofed place, for the real route, when bounding the places looked at." :spec (a/num-in 0 nil)}
    :jobs.survival.night.sites/walk-radius {:default 32 :doc "A roofed place (:roofed-places) farther than this is not walked to." :spec (a/num-in 0 nil)}
+   :jobs.survival.night.sites/bed-walk-dark-s {:default 4 :doc "Seconds go-to's quote may price the dark cells of a night walk to a bed at (:dark-seconds, about 1 s for 5 dark blocks for a bare body); past it, or with no whole route found, the bed is not used tonight (a dark walk meets mobs: the body shelters where it is)." :spec (a/num-in 0 nil)}
    :jobs.survival.night.sites/flee-radius {:default 64 :doc "When no shelter can be dug here, how far the night looks for somewhere safer (a known bed or roofed place, a seen cave or overhang to wall in, or seen ground the carried tools dig); 0 never flees." :spec (a/num-in 0 nil)}
    :jobs.survival.night.sites/wall-value {:default 3 :doc "A block worth more than this each (jobs.lib.cost/item-value) is not counted as a wall block when a cave is walled in, and shut-in digs it again at dawn." :spec (a/num-in 0 nil)}
    :jobs.survival.night.sites/max-sites {:default 4 :doc "Shut-in calls a night makes (each a failed site) before it cuts a niche or holds exposed." :spec (a/int-in 0 nil)}
@@ -34,6 +35,7 @@
   [p]
   (/ (* (home-walk-budget-s p) (settings/get settings :jobs.survival.night.sites/home-walk-speed))
      (settings/get settings :jobs.survival.night.sites/home-walk-slack)))
+(defn bed-walk-dark-s [] (settings/get settings :jobs.survival.night.sites/bed-walk-dark-s))
 (defn walk-radius [] (settings/get settings :jobs.survival.night.sites/walk-radius))
 (defn flee-radius [] (settings/get settings :jobs.survival.night.sites/flee-radius))
 (defn wall-value [] (settings/get settings :jobs.survival.night.sites/wall-value))
