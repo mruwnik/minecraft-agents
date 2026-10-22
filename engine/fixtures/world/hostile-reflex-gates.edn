@@ -122,6 +122,21 @@
             {:no-event {:source :job :kind :holding :data {:reason "searching"}} :for-s 20}
             {:no-event {:source :body :kind :died} :for-s 40}]
    :limit-s 60}
+  ;; card ba8479cc: as above, but a 2-high roof gap seen through glass that no walk reaches: the roof option searches for it and gives up fast. Mobbed by a zombie, a skeleton and an angry enderman in a sealed stone hall with no water and no 2-high gap: the water and roof options find nothing and the flight falls through the options to the fight within seconds instead of holding on a search while hit
+  {:name "mobbed-underground-by-enderman-zombie-skeleton-body-with-a-glassed-off-roof-gap-falls-back"
+   :blocks [[:fill [10 -1 10] [24 3 22] "stone"] [:fill [11 0 11] [23 2 21] "air"] [:fill [18 0 10] [24 1 14] "glass"] [:fill [19 0 11] [23 1 13] "air"] [:fill [18 2 10] [24 2 14] "stone"] [:set [12 1 12] "torch"] [:set [22 1 20] "torch"]]
+   :body {:inventory [["dirt" 20]] :effects [["resistance" 900 4]]}
+   :register []
+   :act [[:summon "enderman" [20.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0}]}"]
+         [:until-seen {:entity "enderman"} 10]
+         [:rcon "damage @e[type=enderman,tag=wt,$BOX,limit=1] 1 minecraft:player_attack by $BODY"]
+         [:summon "zombie" [18.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "skeleton" [22.5 0 19.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.survival.respond-to-hostile {})]]
+   :expect [{:event {:source :action :kind :started :data {:name "attack"}} :within-s 20}
+            {:no-event {:source :job :kind :holding :data {:reason "searching"}} :for-s 20}
+            {:no-event {:source :body :kind :died} :for-s 40}]
+   :limit-s 60}
   {:name "phantom-near-unarmed-body-seals-no-flight"
    :body {:inventory [["cobblestone" 20]] :effects [["resistance" 900 4]]}
    :act [[:summon "phantom" [20.5 0 16.5] "{NoAI:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]]

@@ -33,17 +33,18 @@
 (defn setup
   "An engine over a fake; its clock moves a second with every primitive call (a whole flight ends by time). The world's
   :stair-way (floors) is written to memory as stairs the body cut."
-  [world]
+  ([world] (setup world fj/jobs))
+  ([world jobs]
   (let [zones (:zones world)
         clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         p (tu/fake-on-floor (dissoc world :zones :stair-way))
         now (tu/act-clock clock p 1000)
-        eng (core/create (cond-> {:primitives p :jobs fj/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
+        eng (core/create (cond-> {:primitives p :jobs jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                                   :events (events/make {:body "Fake" :sinks [sink] :now now})}
                            zones (assoc :world (ew/of-data {} {} zones))))]
     (some->> (:stair-way world) (assoc {:dim "overworld"} :floors) (mem/write! (:store eng) :stair-way))
-    {:eng eng :p p :seen seen :clock clock}))
+    {:eng eng :p p :seen seen :clock clock})))
 
 (defn ^:async first-round [spec world]
   (let [s (setup world)]
@@ -1662,3 +1663,22 @@
   (are [hurt? s] (= s (cornered/stand-leg-s hurt?))
     true (cornered/close-leg-s)
     false (cornered/flight-timeout-s)))
+
+(deftest the-walk-under-a-roof-is-a-short-leg-only-when-the-body-was-hurt
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[hurt? leg-s] [[true (cornered/close-leg-s)] [false (cornered/flight-timeout-s)]]]
+          (let [legs (atom [])
+                spy (update fj/jobs 'jobs.movement.run-away
+                            (fn [m] (update m :round (fn [round] (fn ^:async spied [c] (swap! legs conj (:leg-s (:args c))) (await (round c)))))))
+                {:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}]
+                                        :blocks {(key-of 3 66 0) "stone" (key-of 3 63 0) "stone"}
+                                        :entities [(enderman 2.5 64 0.5)]} spy)]
+            (when hurt? (mem/write! (:store eng) :hurt {:amount 2 :attacker {:name "zombie"}} {:cap 50 :ttl 60000}))
+            (.override (.-world p) "steer"
+                       (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
+            (core/submit! eng retreat {})
+            (await (settings/with-settings {:jobs.survival.respond.options/hurt-window-s 600}
+                     (fn ^:async tick [] (await (core/tick! eng)))))
+            (is (= leg-s (first @legs)) (str "hurt? " hurt?))))))))
