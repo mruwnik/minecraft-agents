@@ -183,10 +183,10 @@
                    (assoc result :text (str "tunnel stopped: " (name reason) (some->> (:cell detail) pr-str (str " at ")))))))))
 
 (defn ^:async dig-cell!
-  "jobs.access.stair.step/dig! with :again for a dug cell (more to do), else a stop map."
+  "jobs.access.stair.step/dig! with :again for a dug cell (more to do), :continue while its child waits, else a stop map."
   [c in cell cut accept]
   (let [r (await (sstep/dig! c in cell cut accept))]
-    (if (= :continue r) :again r)))
+    (case r :continue :again :yield :continue r)))
 
 (defn ^:async run-step!
   "Dig one cell of the next run step or walk into it: :again, :continue while the walk waits, or a stop map."

@@ -378,6 +378,19 @@
         (recur (inc i))))
     (.override world "dig" nil)))
 
+(deftest a-dig-child-that-waits-does-not-end-the-tunnel
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [calls (atom 0)
+              dig (update (registry/jobs 'jobs.blocks.dig) :round
+                          (fn [round] (fn ^:async waiting-round [c]
+                                        (if (<= (swap! calls inc) 3) :continue (await (round c))))))
+              {:keys [out]} (await (tunnel! {:blocks (assoc ground "6,57,0" "iron_ore")} {:target [6 57 0]} (fn [_])
+                                            :jobs {'jobs.blocks.dig dig}))]
+          (is (= :done (:status @out)) (pr-str @out))
+          (is (= :reached (:reason @out))))))))
+
 (deftest a-restart-resumes-from-the-body-on-the-line
   (async done
     (tu/run-async done
