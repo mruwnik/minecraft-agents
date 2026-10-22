@@ -306,9 +306,9 @@
 (defn declined-reasons [s] (vec (distinct (map :reason (events-of s :waiting)))))
 
 (defn stand
-  "{\"x,y,z\" block} for a stand of height h of block on x z, base at y 64."
+  "{\"x,y,z\" block} for a stand of height h of block on x z, base at y 64 on sand."
   [block x z h]
-  (into {} (for [y (range 64 (+ 64 h))] [(str x "," y "," z) block])))
+  (into {(str x ",63," z) "sand"} (for [y (range 64 (+ 64 h))] [(str x "," y "," z) block])))
 
 (def farm-zone {:name "farm" :min [2 60 -2] :max [4 70 2] :owner "Miles"})
 (defn plan-over [id [x y z] want] {:id id :parts [{:id "p" :box [[x y z] [x y z]] :want want}]})

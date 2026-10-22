@@ -229,7 +229,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [stand (into {} (for [y [64 65 66]] [(str "3," y ",0") "sugar_cane"]))
+        (let [stand (into {"3,63,0" "sand"} (for [y [64 65 66]] [(str "3," y ",0") "sugar_cane"]))
               s (f/start (update (f/bare []) :blocks merge stand) [f/own-zone])
               e (await (ending-of s 'jobs.items.obtain {:item "sugar_cane" :explore false} 60))]
           (is (= :done (:kind e)))

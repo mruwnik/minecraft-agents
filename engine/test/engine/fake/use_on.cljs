@@ -41,13 +41,17 @@
       (update :entities conj {:id (:next-entity-id w) :name "item" :kind "item" :pos pos :item {:name name :count count}})
       (update :next-entity-id inc)))
 
+(def falls-through #{"air" "sugar_cane" "bamboo"})
+
 (defn landing
-  "Where an item popped at pos comes to rest: it falls through air, at most 8 cells."
+  "Where an item popped at pos comes to rest: it falls through air, cane and bamboo onto the first other block within 8 cells
+  below; with none there (a test world's bare ground) it stays."
   [w pos]
   (loop [p pos n 0]
-    (if (and (< n 8) (= "air" (get-in w [:blocks (update p 1 dec)] "air")))
-      (recur (update p 1 dec) (inc n))
-      p)))
+    (let [below (get-in w [:blocks (update p 1 dec)] "air")]
+      (cond (not (falls-through below)) p
+            (= 8 n) pos
+            :else (recur (update p 1 dec) (inc n))))))
 
 (defn take-one
   "World with one of the named item taken out of the inventory (a stack that empties goes)."

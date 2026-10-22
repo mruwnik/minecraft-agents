@@ -26,7 +26,7 @@
   does not move it, so drops far away, e.g. other bodies', are never chased).
   An item is tried once; one that is gone, cannot be reached or picked up is skipped. A drop that slid to another cell while the body
   walked or dug to it is judged again there (at most ::max-moves times).
-  An item more than 2 blocks off (not above the feet, at rest on a seen solid block but bamboo: a drop hanging in a cut stalk is left to the collect act), or more than a block lower than the feet, is walked to first (a jobs.movement.go-to child, range 1, which prices
+  An item more than 2 blocks off (not above the feet), or more than a block lower than the feet, is walked to first (a jobs.movement.go-to child, range 1, which prices
   falls and dangers); one it cannot reach is left, with a debug collect-drops.left {:reason :unreachable}.
   A drop in water with a known hostile within the hostile radius of it is left, with {:reason :water-danger}.
   An item lower than the feet in a hole the caller dug (:holes) is walked to only when it lies one block down at most and
@@ -209,19 +209,10 @@
 
 (defn high? [c item] (boolean (and (.-pos item) (> (- (second (item-cell item)) (feet-y c)) 1))))
 
-(defn at-rest?
-  "Whether a seen solid block lies under item: go-to has a cell to stand in for it. One hanging over nothing solid (a cut
-  stalk's drop before it settles, or on bamboo) is left to the collect act."
-  [c item]
-  (let [[x y z] (item-cell item)
-        under (u/seen-block (:primitives c) {:x x :y (dec y) :z z})]
-    (and (= :solid (reach/kind-of under)) (not (str/starts-with? (.-name under) "bamboo")))))
-
 (defn far?
-  "Whether item lies beyond the act's last step (over 2 blocks off) and not above the feet, at rest: its walk goes through go-to, which prices the route."
+  "Whether item lies beyond the act's last step (over 2 blocks off) and not above the feet: its walk goes through go-to, which prices the route."
   [c item]
-  (boolean (and (.-pos item) (not (high? c item)) (at-rest? c item)
-                (> (u/dist (sh-sense/feet (:primitives c)) (u/pos-of (.-pos item))) 2))))
+  (boolean (and (.-pos item) (not (high? c item)) (> (u/dist (sh-sense/feet (:primitives c)) (u/pos-of (.-pos item))) 2))))
 
 (defn ^:async walk-down!
   "Walk within a block of item, more than a block lower than the feet (or, with ways, higher: a column top is climbed by

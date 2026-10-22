@@ -391,7 +391,7 @@
       :else
       (let [w (-> w (drop-block pos) (update :ages dissoc pos) (update :states dissoc pos) fall)
             ids (map #(+ (:next-entity-id w) %) (range (count names)))
-            w' (reduce #(spawn %1 pos %2 1) w names)]
+            w' (reduce #(spawn %1 (use-on/landing w pos) %2 1) w names)]
         [w' {:status "dug" :block block :drops (mapv (fn [id item] {:id id :name item :count 1 :pos pos}) ids names)}]))))
 
 (defn look-at
