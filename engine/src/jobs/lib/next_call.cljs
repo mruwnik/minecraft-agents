@@ -35,10 +35,12 @@
 
 ;; A seal is offered only where the ending says the body's own passage opened into water, lava or a cave.
 (defn seal-fix
-  "The call to jobs.blocks.seal-opening at `at` when ending e's cause is one of causes, else nil."
-  [e causes at]
-  (when (and (contract/ending? e) (contains? causes (contract/cause-key e)))
-    (call 'jobs.blocks.seal-opening {:at at})))
+  "The call to jobs.blocks.seal-opening at `at` when ending e's cause is one of causes, else nil. With the optional
+  pred, the cause map must also satisfy it (a cause shared by breaches and other stops)."
+  ([e causes at] (seal-fix e causes at any?))
+  ([e causes at pred]
+   (when (and (contract/ending? e) (contains? causes (contract/cause-key e)) (pred (:cause e)))
+    (call 'jobs.blocks.seal-opening {:at at}))))
 
 (defn with-next
   "data with :next: the calls a child passed up (in data, else named by its ending e; its resubmit becomes a plain call),

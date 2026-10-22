@@ -347,14 +347,18 @@
     :end (finish! c)
     (await (equip-step! c))))
 
+(defn with-next
+  "Ending e with the calls it offers: a :wet ending repeats the run with :wet true, :flooded offers a seal at the body."
+  [c e at]
+  (let [c' (cond-> c (= :wet (contract/cause-key e)) (assoc-in [:args :wet] true))]
+    (next-call/on-ending c' e 'jobs.gather.mine args (next-call/seal-fix e #{:flooded} at))))
+
 (defn ^:async round
   [c]
   (when-not (:start (ctx/mem c))
     (let [start (cell-of (u/self-pos c))]
       (ctx/update-mem! c assoc :start start :resume-at start)))
-  (let [e (await (pace/steps! c #(step c)))]
-    (next-call/on-ending c e 'jobs.gather.mine args
-                         (next-call/seal-fix e #{:flooded :wet} (u/cell-vec (u/self-pos c))))))
+  (with-next c (await (pace/steps! c #(step c))) (u/cell-vec (u/self-pos c))))
 
 (defn ^:async cleanup
   "A run cut by the limit, a cancel or a parent's end stays where it is."

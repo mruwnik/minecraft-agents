@@ -238,6 +238,12 @@
 
 (def facts atool/facts)
 
+(defn breach?
+  "Whether a stair stop's cause is the body's passage breaking into a cave, water or lava, not falling blocks."
+  [cause]
+  (or (not= :hazard (:reason cause))
+      (boolean (some #(not= :falling-block (:reason %)) (:hazards cause)))))
+
 (defn finish!
   "End the stair: a stop remembers its way, and ends by reason a kind (facts, the rest nothing possible) with the
   detail and a :text in the cause and, with what the stair did, in the data. :done ends with the data; its way is cleanup's."
@@ -484,6 +490,7 @@
     (when-not (:dir (:args c0)) (ctx/update-mem! c assoc :dir (name (:dir (:args c)))))
     (let [e (await (pace/steps! c #(next! c)))]
       (next-call/on-ending c e 'jobs.access.stair args
-                           (next-call/seal-fix e #{:hazard :water-unplugged :lava-exposed} (u/cell-vec (u/self-pos c)))))))
+                           (next-call/seal-fix e #{:hazard :water-unplugged :lava-exposed :cave-below} (u/cell-vec (u/self-pos c))
+                                                breach?)))))
 
 (def meta {:tags [:mine :dig] :position-bound? true})

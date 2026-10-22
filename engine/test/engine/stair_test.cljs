@@ -582,7 +582,13 @@
           (is (= "lava" (block-at p [3 63 0])))
           (is (not-any? #(= {:x 2 :y 63 :z 0} %) (digs p)) "the cell beside the lava is not dug")
           (is (= "lava" (:fluid (first (:hazards @out)))))
+          (is (= ["jobs.blocks.seal-opening" "jobs.access.stair"] (mapv :job (:next @out))) "a breach into lava offers a seal")
           (is (empty? (events-of s :stair.stopped)) "the ending is job.ended's, no event restates it"))))))
+
+(deftest falling-blocks-stopping-the-stair-offer-no-seal
+  (is (false? (stair/breach? {:reason :hazard :hazards [{:reason :falling-block :at [1 64 0]}]})))
+  (is (true? (stair/breach? {:reason :hazard :hazards [{:reason :fluid-adjacent :fluid "water"}]})))
+  (is (true? (stair/breach? {:reason :cave-below}))))
 
 (deftest water-beside-stops-by-default-and-is-taken-only-when-named
   (async done

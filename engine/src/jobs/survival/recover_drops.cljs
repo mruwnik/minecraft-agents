@@ -14,7 +14,6 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.storage :as storage]
-            [jobs.lib.next-call :as next-call]
             [jobs.lib.util :as u]
             [jobs.survival.recover-drops.danger :as dg]
             [jobs.survival.recover-drops.config :as cfg]
@@ -266,9 +265,7 @@
         (if (and waited (not= :closed waited))
           waited
           (do (warn-away-from-bed! c entry)
-              (let [e (await (pace/steps! c (fn ^:async recover-step []
-                                              (let [entry (dth/current-death c)
-                                                    r (if entry (await (step! c entry)) (ctx/end c :condition-failed :no-drops))]
-                                                (if (= :next r) :again r)))))]
-                (next-call/on-ending c e 'jobs.survival.recover-drops args
-                                     (next-call/seal-fix e #{:danger} (some-> e :data :pos u/cell-vec))))))))))
+              (await (pace/steps! c (fn ^:async recover-step []
+                                      (let [entry (dth/current-death c)
+                                            r (if entry (await (step! c entry)) (ctx/end c :condition-failed :no-drops))]
+                                        (if (= :next r) :again r)))))))))))

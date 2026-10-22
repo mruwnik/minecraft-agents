@@ -22,6 +22,7 @@
             [engine.triggers :as triggers]
             [jobs.lib.world-files :as ew]
             [jobs.gather.dig-for :as mine]
+            [jobs.gather.mine :as mine-trip]
             [jobs.gather.mine.descent :as mine-descent]
             [jobs.gather.mine.end :as mine-end]
             [jobs.gather.mine.targets :as mine-targets]
@@ -597,3 +598,10 @@
           (is (= 1 (:got (done-event s))))
           (is (empty? (filter #(re-find #"stuck on drop" %) (walk-texts s)))))))))
 
+
+(deftest a-wet-ending-offers-wet-true-and-a-flooded-one-a-seal
+  (let [c {:args {:block "sand" :count 2}}
+        nxt #(mapv (juxt :job :args) (:next (:data (mine-trip/with-next c (contract/ending :condition-failed % {}) [1 2 3]))))]
+    (is (= [["jobs.gather.mine" {:block "sand" :count 2 :wet true}]] (nxt :wet)))
+    (is (= [["jobs.blocks.seal-opening" {:at [1 2 3]}] ["jobs.gather.mine" {:block "sand" :count 2}]] (nxt :flooded)))
+    (is (= [["jobs.gather.mine" {:block "sand" :count 2}]] (nxt :no-tool)))))
