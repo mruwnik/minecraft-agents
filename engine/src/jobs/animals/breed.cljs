@@ -235,6 +235,11 @@
     (do (await (child/pause! c 1 :calf-wait))
         :continue)))
 
+(defn pen-box
+  "The known pen's box ({:min :max}): :box, else the box of the plan part; nil when neither is known."
+  [c]
+  (or (pen-read/arg-box c) (:box (:args (pen-read/pen-of c)))))
+
 (defn candidates
   "The adults within radius not fed, refused or given up on, nearest first."
   [c]
@@ -243,7 +248,7 @@
         skip (into (set fed) (concat refused (keys given-up)))]
     (animals/allowed c :breed.declined "breed" :harvest
                      (filterv #(not (contains? skip (animals/key-of %))) (animals/adults (:primitives c) mob radius))
-                     {:penned-ok? true})))
+                     {:own-box (pen-box c)})))
 
 (defn out-reason
   "Why the job ends with no candidate to feed."
@@ -349,11 +354,6 @@
         (= :continue e) :continue
         (= :ok e) :again
         :else (await (no-food! c e))))))
-
-(defn pen-box
-  "The known pen's box ({:min :max}): :box, else the box of the plan part; nil when neither is known."
-  [c]
-  (or (pen-read/arg-box c) (:box (:args (pen-read/pen-of c)))))
 
 (defn pen-cell
   "The [x z] cell of pos, as go-to takes it."

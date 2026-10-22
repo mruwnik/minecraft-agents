@@ -23,6 +23,16 @@
          [:job (jobs.animals.shear {:count 1 :collect false})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :shorn}} :within-s 80 :of-job true}
             {:no-event {:source :job :kind :shear.declined} :for-s 20 :until {:source :job :kind :completed}}]}
+  ;; breed with no :box feeds nobody in another's fenced pen: declined :refused, the wheat stays.
+  {:name "breed-cows-in-a-fenced-pen-without-a-zone-refused"
+   :body {:at [10.5 0 16.5] :yaw 270 :inventory [["wheat" 4]] :effects [["resistance" 600 4]]}
+   :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"] [:fill [19 0 14] [23 0 18] "air"]
+            [:set [18 0 16] "oak_fence_gate[facing=east,open=false]"]]
+   :act [[:summon "cow" [21.5 0 15.5] "{NoAI:1b}"]
+         [:summon "cow" [21.5 0 17.5] "{NoAI:1b}"]
+         [:job (jobs.animals.breed {:mob "cow" :pairs 1 :radius 16 :ways #{:carried}})]]
+   :expect [{:event {:source :job :kind :breed.declined :data {:reason :refused}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :completed :data {:reason :fed}} :for-s 20 :until {:source :job :kind :breed.declined}}]}
   ;; explore.search :takeable does not count a cow standing in another's fenced pen: it ends :stopped, never "found 1".
   {:name "search-does-not-count-a-cow-in-a-fenced-pen"
    :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"] [:fill [19 0 14] [23 0 18] "air"]

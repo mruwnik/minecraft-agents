@@ -442,16 +442,15 @@
 (defn gate-open? [{:keys [p]}]
   (:open (js->clj (.-properties (.blockAt p #js {:x 6 :y 64 :z 0})) :keywordize-keys true)))
 
-(deftest breed-opens-a-pen-gate-to-reach-the-animals-and-leaves-it-shut
+(deftest breed-leaves-animals-in-a-pen-it-was-not-told-alone
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (await (scenario {:mob "cow"}
                                  {:inventory (wheat 2) :blocks (pen-blocks true) :states {"6,64,0" {:open false :facing "east"}}
                                   :entities [(cow 1 14 {:pos {:x 14 :y 64 :z 1}}) (cow 2 14 {:pos {:x 14 :y 64 :z -1}})]} 12))]
-          (is (= :fed (:reason (done-event s))))
-          (is (empty? (h/calls (:p s) "moveTo")) "walks with the go-to walker, not a raw moveTo")
-          (is (pos? (count (h/calls (:p s) "steer"))))
+          (is (= :refused (:reason (done-event s))))
+          (is (empty? (interacts s)))
           (is (false? (gate-open? s))))))))
 
 (def known-pen {:min {:x 7 :y 64 :z -7} :max {:x 19 :y 64 :z 7}})

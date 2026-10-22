@@ -92,10 +92,12 @@
   "The animals of es (JS entities) the zone rules let the job act on with action (:harvest :take), judged at the cell
   each stands in; animals in another's fenced pen are left whatever the zones say (foreign-penned). One decline warn of
   kind (for job-name) names what refuses, or :no-zones. :ignore-zones? lets all.
-  The last verdict is kept in the job's memory (see refusal). :penned-ok? true (breed, told its pen) keeps the pen test off."
+  The last verdict is kept in the job's memory (see refusal). :penned-ok? true keeps the pen test off; :own-box (a pen box the caller was told) keeps it off only for animals standing in that box."
   ([c kind job-name action es] (allowed c kind job-name action es {}))
-  ([c kind job-name action es {:keys [penned-ok?]}]
-  (let [penned (if penned-ok? #{} (set (foreign-penned c es)))
+  ([c kind job-name action es {:keys [penned-ok? own-box]}]
+  (let [penned (if penned-ok?
+                 #{}
+                 (set (foreign-penned c (remove #(and own-box (in-box? own-box (u/pos-of (.-pos %)))) es))))
         free (filterv (complement penned) es)
         {:keys [allowed refusal]} (gate/judge c kind job-name action (map cell-of free) {:own-plans-ok? true})
         refusal (or refusal (when (seq penned) :refused))
