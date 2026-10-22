@@ -454,6 +454,10 @@
           (is (false? (wanted {:dug 0})) "no base chosen: three logs do not pay")
           (is (true? (wanted {:dug 0 :base {:x 6 :y 64 :z 0} :column {:x 6 :z 0}})) "leaves ten blocks over the base do"))))))
 
+(deftest the-axe-fetch-carries-the-axe-minutes-limit
+  (with-redefs [need/fetch-how (constantly #{:chest})]
+    (is (= {:how #{:chest} :minutes (:minutes (axe-fetch-limits))} (fell-tree/axe-fetch-opts nil false)))))
+
 (deftest a-failed-axe-fetch-is-asked-again-by-crafting-once-two-logs-are-dug
   (let [c {:primitives (tu/fake {:blocks {}}) :args {}}
         logs (vec (repeat 8 {:name "oak_log"}))

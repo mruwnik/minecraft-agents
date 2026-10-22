@@ -4,6 +4,7 @@
             [clojure.string]
             [jobs.items.obtain.base :refer [far-chest gathers? holds makes? names-of]]
             [jobs.lib.access :as access]
+            [jobs.lib.cost :as cost]
             [jobs.lib.waits :as waits]
             [jobs.lib.chests :as chests]
             [jobs.lib.stock :as stock]
@@ -19,6 +20,12 @@
        (map (fn [[[x y z]]] {:x x :y y :z z}))
        (remove #(access/container-refusal c :take %))))
 
+(defn walkable-in-budget?
+  "Whether the walk to pos fits the call's :spend :job-time: a trip longer than the call may run is never made."
+  [c pos]
+  (<= (/ (u/dist (u/self-pos c) pos) (cost/walk-blocks-per-s))
+      (get-in (ctx/frozen-call c) [:spend :job-time] ##Inf)))
+
 (defn candidates
   "Usable chests not yet withdrawn from or given up, the seen ones and the remembered ones holding a name, nearest
   first (a remembered one beyond far-chest only when no craft or gather way could get the item instead): [{:pos :stock items-or-nil}]."
@@ -31,6 +38,7 @@
         alternatives? (or (gathers? c) (makes? c))
         far (->> (remembered-chests c stock names)
                  (remove #(seen-cells (stock/cell-of %)))
+                 (filter #(walkable-in-budget? c %))
                  (remove #(and alternatives? (not (u/within? me % (far-chest))))))]
     (->> (concat seen far)
          (keep (fn [pos]

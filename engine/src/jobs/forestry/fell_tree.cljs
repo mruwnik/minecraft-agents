@@ -238,7 +238,7 @@
   "The limits {:how} for getting an axe, nil when the call's ways and the axe's sources share none; retry? asks only to craft."
   [c retry?]
   (when-let [how (seq (set/intersection (need/fetch-how c) (:how (axe-fetch-limits))))]
-    {:how (if retry? #{:craft} (set how))}))
+    {:how (if retry? #{:craft} (set how)) :minutes (:minutes (axe-fetch-limits))}))
 
 (defn ^:async axe!
   "Get an axe before a log of a tree it pays for (axe-wanted?): nil to go on (one came, or none could be had: the tree is
