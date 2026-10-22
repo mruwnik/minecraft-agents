@@ -41,7 +41,7 @@
   With :dig, a drop go-to cannot reach, or one too deep in the dug hole, is dug to once: the fewest cells (jobs.lib.dig-route,
   over the blocks the body has seen, an unseen one taken for stone) that open a way to it, each a jobs.blocks.dig child (zones, claims, hazards
   are its rules), then the walk is tried again. A dig that ends :unseen (the dark hides the cell) sets a carried torch in the body's cell once per call, looks again and digs on. No such way leaves the drop :no-route, a dig that fails with that dig's outcome (:refused, :cannot, :unreachable ...).
-  A sweep without :ids that sees no drop turns round once from each cell it ends in (entities are sensed only in the view cone) before it ends; a dig's :ids sweep does not (the dig looked already, and a danger's time is short).
+  With :near, a sweep that sees no drop first looks at that spot, and climbs to it (go-to :pillar/:stair) when it lies over a block above the feet. A sweep without :ids that sees no drop turns round once from each cell it ends in (entities are sensed only in the view cone) before it ends; a dig's :ids sweep does not (the dig looked already, and a danger's time is short).
   Needs nothing; the sweep is the whole job. Ends :done with data {:collected n}, the number of items that entered the
   inventory, with :left [{:pos :reason}] for those (also in :loose-left, so the :loose-items reflex leaves them); none in
   sight at all is :done with 0 (an open sweep). Drops tried, or a :search that found none, and none collected: :nothing-possible :none-collected, same data;
@@ -557,6 +557,21 @@
         (await (dig-look/look-at! c dug))
         (or (seq (candidates c anchor)) (recur (rest holes)))))))
 
+(defn ^:async look-at-near!
+  "With :near: look at that spot; a spot over a block above the feet that shows no drop is walked up to (go-to :pillar/:stair), as a
+  player climbs to a pile it knows is there, and looked at again. The items seen, :continue while go-to waits, else nil."
+  [c anchor]
+  (when-let [near (:near (:args c))]
+    (let [look! (fn ^:async look* [] (await (dig-look/look-at! c (u/cell-vec near)))
+                  (look/see! c (look/glance-effort) :look-around look/hazards-only)
+                  (seq (candidates c anchor)))]
+      (or (await (look!))
+          (when (> (- (second (u/cell-vec near)) (feet-y c)) 1)
+            (let [r (await (child/run!* c :walk 'jobs.movement.go-to (walk-args c {:pos (u/cell-vec near) :range 1 :ways #{:walk :pillar :stair :clear-seal}})))]
+              (cond
+                (= :continue r) :continue
+                (and (= :done (:kind r)) (:arrived (:data r))) (await (look!)))))))))
+
 (defn ^:async step!
   "One step of the sweep: the nearest drop in sight, else a search cell, else the end. :again, :continue or an ending."
   [c anchor]
@@ -564,10 +579,12 @@
     :continue
     (let [items (or (seq (candidates c anchor))
                     (when (:look-holes? (:args c)) (await (look-at-holes! c anchor)))
+                    (await (look-at-near! c anchor))
                     (when (nil? (:ids (:args c))) (await (look/survey-until! c :cell #(seq (candidates c anchor)) (look/glance-effort) look/hazards-only))))
-          _ (note-last-cells! c items)
-          item (first items)]
+          _ (when (sequential? items) (note-last-cells! c items))
+          item (when (sequential? items) (first items))]
       (cond
+        (= :continue items) :continue
         item (await (collect-item! c item))
         (and (pos? (:search (:args c))) (< (wanted-count c) (least c)) (empty? (:left (ctx/mem c))))
         (await (search-or-end! c anchor))
