@@ -359,7 +359,8 @@
         (let [pool (into {} (for [x (range 0 5) y [64 65 66] z [2 3 4 5 6]] [(str x "," y "," z) "water"]))
               blocks (merge pool {"1,64,4" "iron_ore" "3,64,5" "iron_ore" "0,64,6" "iron_ore" "4,64,3" "iron_ore"})
               s (f/start (ore-world blocks [{:name "stone_pickaxe" :count 1}]) [])]
-          (await (obtain! s {:item "raw_iron" :count 1} 200))
+          ;; barren-ore 0: once the ore is all left, the tunnels after it are not this test's
+          (await (obtain! s {:item "raw_iron" :count 1 :settings {:jobs.items.obtain.base/barren-ore 0}} 200))
           (is (every? (set (map :at (filter (comp #{:obtain.gathering} :kind) @(:seen s))))
                       [{:x 1 :y 64 :z 4} {:x 3 :y 64 :z 5} {:x 0 :y 64 :z 6} {:x 4 :y 64 :z 3}])
               "each flooded ore is left for the next, none counted fruitless"))))))
@@ -378,6 +379,26 @@
                       [{:x 1 :y 64 :z 4} {:x 3 :y 64 :z 5} {:x 0 :y 64 :z 6}])
               "each refused ore is left for the next, none counted as nothing seen")
           (is (not-any? #(= :none-seen (:reason %)) (f/events-of s :waiting))))))))
+
+(deftest an-unseen-ore-is-mined-on-while-each-run-cuts-new-ground
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (loop [[[y dug runs why] & more] [[64 {:tunnel {:steps 32}} 5 "a run that tunnelled looked at new rock: the gather mines on"]
+                                          [64 {:legs [{:length 20} {:length 12}] :tunnel {:steps 12}} 5 "so did one that turned"]
+                                          [64 {} 3 "a run that cut nothing is fruitless: three end the gather"]
+                                          [16 {:tunnel {:steps 200}} 4 "at y 16 the second 200 blocks with no iron make the ground barren: three more runs end it"]]]
+          (let [s (f/start (-> (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]) (assoc :floor [-30 -30 40 30]) (assoc-in [:self :pos :y] y)) [f/own-zone])
+                calls (atom 0)
+                eng (assoc-in (:eng s) [:jobs 'jobs.gather.mine :round]
+                              (fn ^:async f [c]
+                                ;; a run takes a round at least, as a real dig does
+                                (if-not (:dug (ctx/mem c))
+                                  (do (swap! calls inc) (ctx/update-mem! c assoc :dug true) :continue)
+                                  (ctx/end c :nothing-possible {:reason :tunnel-length} (merge {:got 0 :reason :tunnel-length} dug)))))]
+            (await (obtain! (assoc s :eng eng) {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true} 60))
+            (is (= runs (min 5 @calls)) why))
+          (when more (recur more)))))))
 
 (defn ^:async hall-refusal-run
   "Obtain one raw_iron from a seen ore while the mine refuses a dark hall at cell until light-area has run, the refusal

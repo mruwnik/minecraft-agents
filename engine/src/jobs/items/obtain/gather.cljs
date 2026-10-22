@@ -4,11 +4,12 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
-            [jobs.items.obtain.base :refer [animal-radius explore-far-setting explore-rounds search-scan-radius site-radius tried! ways-of]]
+            [jobs.items.obtain.base :refer [animal-radius barren-ore explore-far-setting explore-rounds search-scan-radius site-radius tried! ways-of]]
             [jobs.items.obtain.need :refer [explore-opts gather-viable? pickaxe-first? light-settling? search-names tools-wanted torch-due trees-unreachable?]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
             [jobs.lib.breath :as breath]
+            [jobs.lib.cost :as cost]
             [jobs.lib.foods :as foods]
             [jobs.lib.look :as look]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -271,6 +272,41 @@
       :continue
       (do (ctx/update-mem! c (fn [m] (-> m (update :gather dissoc :light) (assoc-in [:gather :lit cell] (ctx/now c))))) :again))))
 
+(defn dug-blocks
+  "The new ground a mine run cut (data res): its tunnel legs (the last one included), else its tunnel, and its stair down."
+  [{:keys [legs tunnel descent]}]
+  (+ (if (seq legs) (reduce + 0 (map :length legs)) (:steps tunnel 0)) (:steps descent 0)))
+
+(def faces-per-block "Rock faces a 1x2 tunnel lays bare per block it cuts: two walls two high, the roof and the floor." 6)
+
+(defn ore-resource
+  "The jobs.lib.cost base-rates resource of need's ore block (\"iron\" for deepslate_iron_ore), nil for none."
+  [need]
+  (some-> (:block (:args need)) (str/replace #"^deepslate_" "") (str/replace #"_ore$" "")))
+
+(defn barren?
+  "Whether n blocks cut in a row with no find of need's ore would, at the body's height, have laid bare ::barren-ore of it
+  (cost/expected-density over faces-per-block faces a block): the ground there is too poor to mine on. Always for a block with no ore placement."
+  [c need n]
+  (let [d (cost/expected-density (ore-resource need) (u/self-pos c) nil)]
+    (or (not (pos? d)) (>= (* n faces-per-block d) (barren-ore)))))
+
+(defn strip-on!
+  "A mine for an ore not seen that cut n blocks of new ground and found none looked at new rock: the next run mines on
+  from where it stands, not counted fruitless, until the blocks cut in a row without a find make the ground barren?; info obtain.strip-on. :again."
+  [c need n]
+  (let [total (+ n (get-in (ctx/mem c) [:gather :dug (:key need)] 0))
+        y (js/Math.floor (:y (u/self-pos c)))]
+    (ctx/update-mem! c assoc-in [:gather :dug (:key need)] total)
+    (if (barren? c need total)
+      (do (ctx/update-mem! c assoc-in [:gather :why] (str "cut " total " blocks down to y " y " and saw no " (:key need) ": too little there to mine on"))
+          false)
+      (do (child/progress! c :gather)
+          (ctx/emit! c :obtain.strip-on :info
+                     {:message (str "mine cut " n " blocks at y " y " and saw no " (:key need) ": mining on (" total " blocks so far)")
+                      :item (:key need) :blocks n :total total :y y})
+          :again))))
+
 (defn ^:async gather-step!
   "One round of the gather source: the child for the first raw item the chain lacks, until it ends."
   [c names have target]
@@ -348,7 +384,7 @@
                 (ctx/update-mem! c update :gather dissoc :before :item :tree :at)
                 (release-crafting-items! c)
                 (if (> (gather-carried p need) before)
-                  (do (child/progress! c :gather) :again)
+                  (do (child/progress! c :gather) (ctx/update-mem! c update :gather dissoc :dug) :again)
                   (do (when-let [w (or (:why res) (spared-why res))] (ctx/update-mem! c assoc-in [:gather :why] w))
                       (when-let [cells (seq (:skipped res))] (ctx/update-mem! c note-skipped cells))
                       (when-let [cols (seq (:columns res))] (ctx/update-mem! c update :cut-off (fnil into #{}) (map vec) cols))
@@ -357,6 +393,7 @@
                         (light-settling? c (:cause e)) :again
                         (and (#{:flooded :wet :exposed} (contract/cause-key e)) at)
                         (do (ctx/update-mem! c update :cut-off (fnil conj #{}) at) :again)
+                        (and (:tunnel? need) (not at) (pos? (dug-blocks res)) (strip-on! c need (dug-blocks res))) :again
                         :else (gather-failed! c names need (if (= :done (:kind e)) :nothing-gathered (contract/cause-key e)) e)))))))))))
 
 (defn ^:async finish-tree!
