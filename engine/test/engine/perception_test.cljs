@@ -670,6 +670,25 @@
     (is (> r3 r1) "a block change in range casts again")
     (is (> (rays) r3) "after the generation, casts again")))
 
+(deftest a-targeted-look-records-only-wanted-cells-in-line-of-sight
+  (let [{:keys [per]} (rig (wall 5 8 ["0,65,5" "0,65,6" "0,65,7"]
+                                 {"0,65,8" "diamond_ore" "1,65,3" "gold_block" "0,65,-3" "diamond_ore" "2,65,4" "lava"
+                                  "-2,65,9" "diamond_ore"}))
+        _ (perception/look-for! per {:names #{"diamond_ore"} :radius 16})
+        rays (:rays (perception/stats per))]
+    (is (= "diamond_ore" (seen-name per [0 65 8])) "wanted and in view")
+    (is (= "lava" (seen-name per [2 65 4])) "hazards are always wanted")
+    (is (nil? (seen-name per [1 65 3])) "not wanted: left to the ambient pass")
+    (is (nil? (seen-name per [0 65 -3])) "behind the body")
+    (is (nil? (seen-name per [-2 65 9])) "behind the stone")
+    (is (= 3 rays) "one ray check per candidate in the cone, not a pass")))
+
+(deftest a-targeted-look-at-cells-sees-them-whatever-they-hold-and-not-through-walls
+  (let [{:keys [per]} (rig (wall 5 8 [] {"1,65,3" "gold_block" "0,65,8" "diamond_ore"}))]
+    (perception/look-for! per {:cells [[1 65 3] [0 65 8]]})
+    (is (= "gold_block" (seen-name per [1 65 3])))
+    (is (nil? (seen-name per [0 65 8])) "behind the stone")))
+
 (deftest a-room-answer-is-kept-until-memory-or-the-world-changes
   (let [{:keys [p per clock]} (clocked-rig {"0,65,4" "gold_block"})
         w (perception/wrap p per)

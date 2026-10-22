@@ -91,15 +91,23 @@
   (when (or (nil? (.-sensedAt p)) (up-unseen? p eye dir))
     {:x (+ (:x eye) (* (glance-near) dx)) :y (+ (:y eye) (* 1.7 (glance-near))) :z (+ (:z eye) (* (glance-near) dz))}))
 
+(def hazards-only
+  "A want for a look that searches for entities: no block is wanted, only the hazards every targeted look checks."
+  {})
+
 (defn see!
   "A sight pass now at effort (default glance-effort), so what the last look faced is in memory before the next decision.
-  A mob sample too (knownMobs): a silent creeper is sensed only inside the view cone, and the next look may turn away
+  With want ({:names :match :radius}; {} wants only hazards, for a look for entities) it ray-checks just those kinds
+  (rays/look-for!) and leaves the rest to the ambient passes. A mob sample too (knownMobs): a silent creeper is sensed only inside the view cone, and the next look may turn away
   before the timer's sample."
   ([c] (see! c (glance-effort)))
   ([c effort] (see! c effort :forced))
-  ([c effort why]
+  ([c effort why] (see! c effort why nil))
+  ([c effort why want]
    (when-let [per (aget (:primitives c) "perception")]
-     (perception/pass! per {:effort effort :reuse? true :why why})
+     (if want
+       (perception/look-for! per (assoc want :effort effort :why why))
+       (perception/pass! per {:effort effort :reuse? true :why why}))
      (when (fn? (.-knownMobs (:primitives c))) (.knownMobs (:primitives c))))))
 
 (defn ^:async glance-until!
@@ -124,9 +132,10 @@
   "Look along every heading from here at effort (default glance-effort), level, down and, unless that ray is seen
   already, up. Test (f) after each look: stop at the first truthy one, returned (nil when none; the cell is noted in
   job memory under :looked). Entities are sensed only inside the view cone, so what a job wants in view must be
-  checked between looks, not after the last."
+  checked between looks, not after the last. want: see!."
   ([c f] (look-around-until! c f (glance-effort)))
-  ([c f effort]
+  ([c f effort] (look-around-until! c f effort nil))
+  ([c f effort want]
    (let [{:keys [x y z]} (cell-of (u/self-pos c))
          eye {:x (+ x 0.5) :y (+ y game/eye-height) :z (+ z 0.5)}
          p (:primitives c)]
@@ -134,7 +143,7 @@
        (if-let [[pt d] (first steps)]
          (if-let [pt (or pt (up-glance p eye d))]
            (do (await (ctx/act c :look (clj->js {:pos pt})))
-               (see! c effort :look-around)
+               (see! c effort :look-around want)
                (or (f) (recur (rest steps))))
            (recur (rest steps)))
          (do (ctx/update-mem! c assoc :looked (cell-of (u/self-pos c)))
@@ -143,8 +152,9 @@
 (defn ^:async look-around!
   "Look around as look-around-until! does, without a test; :continue."
   ([c] (look-around! c (glance-effort)))
-  ([c effort]
-   (await (look-around-until! c (constantly nil) effort))
+  ([c effort] (look-around! c effort nil))
+  ([c effort want]
+   (await (look-around-until! c (constantly nil) effort want))
    :continue))
 
 (def near-blocks 3)
@@ -166,19 +176,21 @@
   A check that finds no work passes while the job has not surveyed (wait-unless-surveyed), so the round looks first."
   ([c] (survey! c :run))
   ([c per] (survey! c per (glance-effort)))
-  ([c per effort]
+  ([c per effort] (survey! c per effort nil))
+  ([c per effort want]
    (when-not (surveyed? c per)
-     (await (look-around! c effort)))))
+     (await (look-around! c effort want)))))
 
 (defn ^:async survey-until!
   "survey! for entities: test (f) after each look and return the first truthy one (entities count only while in view);
   (f) once when already surveyed."
   ([c f] (survey-until! c :run f))
   ([c per f] (survey-until! c per f (glance-effort)))
-  ([c per f effort]
+  ([c per f effort] (survey-until! c per f effort nil))
+  ([c per f effort want]
    (if (surveyed? c per)
      (f)
-     (await (look-around-until! c f effort)))))
+     (await (look-around-until! c f effort want)))))
 
 (defn unseen?
   "Whether the body has never seen one of cells ({:x :y :z}); false without a perception."
@@ -205,7 +217,7 @@
   (assert (or (nil? match) (fn? match)) ":match is a fn of a block name")
   (assert (not (and names match)) ":names or :match, not both")
   (assert (or names match all?) "name the blocks wanted (:names or :match), or pass :all? true")
-  (u/note-read! :area {:radius (or radius 16)})
+  (u/note-read! :area (cond-> {:radius (or radius 16)} names (assoc :names (set names)) match (assoc :match match)))
   (if-let [f (aget p "seenBlocks")]
     (let [q (cond-> {} names (assoc :names (vec names)) match (assoc :match match) radius (assoc :radius radius) max (assoc :max max))]
       (->> (array-seq (.call f p (clj->js q)))

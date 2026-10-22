@@ -268,7 +268,7 @@
       (= (:key need) (get-in (ctx/mem c) [:gather :lead :key]))
       (await (lead-step! c))
       (and (animal? need) (not (get-in (ctx/mem c) [:gather :before])) (not (look/surveyed? c :near)) (not (seen-of c need)))
-      (do (await (look/survey-until! c :near #(seen-of c need))) :again)
+      (do (await (look/survey-until! c :near #(seen-of c need) (look/glance-effort) look/hazards-only)) :again)
       (and (not (get-in (ctx/mem c) [:gather :before])) (approach-due? c need))
       (approach! c need)
       (and (not (get-in (ctx/mem c) [:gather :before])) (pickaxe-first? c names need) (or (explore-opts c) (seen-of c need)))

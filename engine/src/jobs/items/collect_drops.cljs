@@ -558,7 +558,7 @@
     :continue
     (let [items (or (seq (candidates c anchor))
                     (when (:look-holes? (:args c)) (await (look-at-holes! c anchor)))
-                    (when (nil? (:ids (:args c))) (await (look/survey-until! c :cell #(seq (candidates c anchor))))))
+                    (when (nil? (:ids (:args c))) (await (look/survey-until! c :cell #(seq (candidates c anchor)) (look/glance-effort) look/hazards-only))))
           _ (note-last-cells! c items)
           item (first items)]
       (cond

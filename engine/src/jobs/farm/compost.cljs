@@ -227,7 +227,7 @@
         block (when pos (u/seen-block p pos))]
     (cond
       (not (look/surveyed? c))
-      (let [meal (await (look/survey-until! c #(some->> (composter-at c) (meal-near c))))]
+      (let [meal (await (look/survey-until! c :run #(some->> (composter-at c) (meal-near c)) (look/glance-effort) {:names #{"composter"} :radius (settings/get settings ::radius)}))]
         (when meal (await (take-meal! c meal)))
         :again)
 

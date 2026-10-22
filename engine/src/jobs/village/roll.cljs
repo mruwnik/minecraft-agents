@@ -276,7 +276,7 @@
         (on-cell? c pos) (await (clear-cell! c pos))
         :else (await (place! c)))
       (not= item block) (stop! c :occupied)
-      (and (nil? e) (not (look/surveyed? c))) (await (look/survey! c)) ; villagers count only while in view
+      (and (nil? e) (not (look/surveyed? c))) (await (look/survey! c :run (look/glance-effort) look/hazards-only)) ; villagers count only while in view
       (nil? e) (stop! c :gone)
       (.-baby e) (stop! c :baby)
       (= "nitwit" profession) (stop! c :nitwit)

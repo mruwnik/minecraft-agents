@@ -344,7 +344,7 @@
   [c]
   (let [{:keys [species radius]} (:args c)
         walked (when (and (not (:column (ctx/mem c))) (not (first (candidates c radius species))))
-                 (or (await (walk-to-at! c)) (await (look/survey! c :cell))))
+                 (or (await (walk-to-at! c)) (await (look/survey! c :cell (look/glance-effort) {:match #(or (log-name? %) (trees/leaves-name? %)) :radius radius}))))
         _ (when (and (not (:pillar (ctx/mem c))) (log/open-scaffold? c))
             (ctx/update-mem! c assoc :pillar {}))
         fresh? (not (:column (ctx/mem c)))

@@ -445,6 +445,81 @@
           (record! st (store-of st (.-dimension eye)) x y z id ((:now opts)))
           id)))))
 
+(def hazard-names #{"lava" "fire" "soul_fire" "magma_block" "powder_snow"})
+
+(def max-targets
+  "Candidates a targeted look checks one by one; past this a full pass is cheaper."
+  400)
+
+(defn candidates
+  "The cells within radius of the eye and inside its view cone whose block name satisfies match?, and the given cells
+  (any block), as a flat array [x y z id ...], or nil when more than max-targets lie there. Read from the raw world, so
+  only cells that pass the sight rules afterwards may be recorded."
+  [{:keys [raw grid] :as per} ^js st ^js eye match? radius cells]
+  (let [^js sight (sight-of per st)
+        kinds (js/Uint8Array. (.-length sight))
+        yes? (fn [id] (and (< id (.-length kinds))
+                           (let [k (aget kinds id)]
+                             (if (zero? k)
+                               (let [hit (boolean (match? (.-name ^js (.stateInfo ^js raw id))))]
+                                 (aset kinds id (if hit 2 1))
+                                 hit)
+                               (== k 2)))))
+        ox (.-x eye) oy (.-y eye) oz (.-z eye)
+        b (basis (.-yaw eye) (.-pitch eye))
+        out #js []
+        take! (fn [x y z id wanted?]
+                (when (or wanted? (yes? id))
+                  (let [vx (- (+ x 0.5) ox) vy (- (+ y 0.5) oy) vz (- (+ z 0.5) oz)]
+                    (when (and (or wanted? (<= (js/Math.hypot vx vy vz) radius)) (in-cone? b (:hx grid) (:hy grid) vx vy vz))
+                      (.push out x y z id)))))
+        x0 (js/Math.floor (- ox radius)) x1 (js/Math.floor (+ ox radius))
+        y0 (js/Math.floor (- oy radius)) y1 (js/Math.floor (+ oy radius))
+        z0 (js/Math.floor (- oz radius)) z1 (js/Math.floor (+ oz radius))]
+    (doseq [[x y z] cells
+            :let [id (.stateAt ^js raw x y z)]
+            :when (pos? id)]
+      (take! x y z id true))
+    (if (.-sectionStates ^js raw)
+      (let [^js rg (.sectionRange ^js raw)
+            min-y (.-minY rg)]
+        (doseq [cx (range (bit-shift-right x0 4) (inc (bit-shift-right x1 4)))
+                cz (range (bit-shift-right z0 4) (inc (bit-shift-right z1 4)))
+                s (range (max 0 (bit-shift-right (- y0 min-y) 4)) (min (.-sections rg) (inc (bit-shift-right (- y1 min-y) 4))))
+                :let [^js ids (.sectionStates ^js raw cx s cz)]
+                :when ids]
+          (dotimes [i 4096]
+            (let [id (aget ids i)]
+              (when (pos? id)
+                (take! (+ (* 16 cx) (bit-and i 15)) (+ min-y (* 16 s) (bit-shift-right i 8)) (+ (* 16 cz) (bit-and (bit-shift-right i 4) 15)) id false))))))
+      (doseq [x (range x0 (inc x1)) y (range y0 (inc y1)) z (range z0 (inc z1))
+              :let [id (.stateAt ^js raw x y z)]
+              :when (pos? id)]
+        (take! x y z id false)))
+    (when (<= (/ (.-length out) 4) max-targets) out)))
+
+(defn look-for!
+  "A look that wants only some blocks: ray-checks the cells of the {:names set or :match fn} kinds and the {:cells
+  [[x y z]...]} (and always the hazards lava, fire, magma and powder snow) within {:radius} (default 16) and in view
+  now with visible-now?, and records those it sees. A full pass (pass!) when the candidates are too many or the raw
+  world is not ready. {:why} as pass!."
+  [{:keys [raw opts st] :as per} {:keys [names match radius cells effort why]}]
+  (let [^js st st ^js eye (.eye ^js raw)
+        match? (fn [n] (or (contains? hazard-names n) (and names (contains? names n)) (and match (match n))))
+        cands (when (and eye (sight-of per st)) (candidates per st eye match? (or radius 16) cells))]
+    (if-not cands
+      (pass! per {:effort effort :why (keyword (str (name (or why :forced)) "-full")) :reuse? true})
+      (let [n (/ (.-length cands) 4) now ((:now opts))]
+        (new-stamp! st)
+        (dotimes [i n]
+          (let [x (aget cands (* 4 i)) y (aget cands (+ 1 (* 4 i))) z (aget cands (+ 2 (* 4 i))) id (aget cands (+ 3 (* 4 i)))]
+            (when (visible-now? per st eye x y z id)
+              (record! st (store-of st (.-dimension eye)) x y z id now))))
+        (count-why! st :look-for :passes 1)
+        (count-why! st :look-for :rays n)
+        (set! (.-rays st) (+ (.-rays st) n))
+        true))))
+
 (def feel-margin 0.1)
 
 (defn in-reach?

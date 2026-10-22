@@ -401,7 +401,7 @@
   (let [p (:primitives c)
         cells (for [{:keys [x y z]} (take look-ahead-steps (rest steps)) y' [y (inc y)]] [x y' z])
         unseen (filter #(sense/unknown? p %) cells)]
-    (await (look/survey! c :near))
+    (await (look/survey! c :near (look/glance-effort) {:cells cells}))
     (await (sense/look-at-unknown! c (u/nearest-first (u/self-pos c) identity unseen) look-ahead-steps))
     (let [hidden (filter #(and (sense/unknown? p %) (occluded? c %)) cells)
           solid (filter #(true? (some-> (u/sensed p (zipmap [:x :y :z] %)) .-fullCube)) cells)]

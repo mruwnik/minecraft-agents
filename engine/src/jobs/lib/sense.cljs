@@ -38,6 +38,18 @@
       (throw (js/Error. "sense/decide!: the decision returned a Promise; it must be sync")))
     [v @r]))
 
+(defn want-of
+  "The look/see! want for a look round that serves a decision which read these (decide's reads): only hazards for an
+  entity query, the kinds of its seen-blocks queries, nil (a full pass) when one of them asked for any block."
+  [{:keys [area]}]
+  (cond
+    (empty? area) look/hazards-only
+    (some #(not (or (:names %) (:match %))) area) nil
+    :else (let [ms (keep :match area)]
+            {:names (into #{} (mapcat :names) area)
+             :match (when (seq ms) (fn [n] (some #(% n) ms)))
+             :radius (apply max (map :radius area))})))
+
 (defn radius
   "How far the body of primitives p sees, in blocks."
   [p]
@@ -79,7 +91,7 @@
   then look-around!."
   [c cells]
   (await (look-at-unknown! c (targets (:primitives c) (u/self-pos c) cells #{}) (max-looks)))
-  (await (look/look-around! c))
+  (await (look/look-around! c (look/glance-effort) {:cells (targets (:primitives c) (u/self-pos c) cells #{})}))
   (ctx/update-mem! c (fn [m] (let [here (look/cell-of (u/self-pos c))
                                    kept (if (= here (:at (::round-looked m))) (:cells (::round-looked m)) #{})]
                                (assoc m ::round-looked {:at here :cells (into kept cells)})))))
@@ -134,7 +146,7 @@
                        (recur (inc looks) (conj looked target) surveyed))
 
                    (and ask (not surveyed) (not (look/surveyed? c :cell)))
-                   (do (await (look/survey-until! c :cell #(let [[v] (decide decide-fn)] (when-not (retry? v) [v]))))
+                   (do (await (look/survey-until! c :cell #(let [[v] (decide decide-fn)] (when-not (retry? v) [v])) (look/glance-effort) (want-of reads)))
                        (recur looks looked true))
 
                    :else [v looked surveyed])))))

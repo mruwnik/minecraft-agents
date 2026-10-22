@@ -234,7 +234,7 @@
   (if (:looked-lost (ctx/mem c))
     true
     (do (ctx/update-mem! c assoc :looked-lost true)
-        (await (look/look-around-until! c #(animal-now c) (look/search-effort)))
+        (await (look/look-around-until! c #(animal-now c) (look/search-effort) look/hazards-only))
         false)))
 
 (defn ^:async wait-for-animal!

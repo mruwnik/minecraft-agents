@@ -121,7 +121,7 @@
   (let [cell (cell-of (u/self-pos c))]
     (when (not= cell (:animals-looked (ctx/mem c)))
       (ctx/update-mem! c dissoc :looked))
-    (let [found (await (look/survey-until! c :cell (fn [] (note-spared! c opts) (nearest c opts))))]
+    (let [found (await (look/survey-until! c :cell (fn [] (note-spared! c opts) (nearest c opts)) (look/glance-effort) look/hazards-only))]
       (ctx/update-mem! c assoc :animals-looked cell)
       found)))
 

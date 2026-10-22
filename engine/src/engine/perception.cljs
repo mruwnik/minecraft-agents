@@ -75,6 +75,7 @@
 (def seen-blocks store/seen-blocks)
 (def line-clear? rays/line-clear?)
 (def pass! rays/pass!)
+(def look-for! rays/look-for!)
 (def step! rays/step!)
 (def start-listening! rays/start-listening!)
 (def touch! rays/touch!)
