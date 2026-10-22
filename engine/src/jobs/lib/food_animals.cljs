@@ -61,11 +61,14 @@
                        mine? (and own? (access/in-own-area? c (u/pos-of (.-pos e))))
                        penned? (and (not mine?) (not (skipped (.-id e))) (not (true? (.-baby e)))
                                     (spare/penned? c pens e))
+                       refusal (when-not (or (skipped (.-id e)) (true? (.-baby e)))
+                                 (access/trespass-refusal c :take (u/pos-of (.-pos e))))
                        why (cond (skipped (.-id e)) :tried
                                  (true? (.-baby e)) :baby
-                                 (access/trespass-refusal c :take (u/pos-of (.-pos e))) :refused
+                                 refusal :refused
                                  :else (spare/why (spare/keep-adults) (.-name e) n penned? starved?))]
                    {:entity e :why why :adults n
+                    :by (when refusal (access/refusal-text (access/refusal-fields [refusal])))
                     :rule (when-not why (if mine? :own-pen (spare/allowed-by (spare/keep-adults) n penned?)))}))))))
 
 (defn nearest
@@ -101,7 +104,8 @@
   "The animals in sight that were not hunted, as {:name :id :why :pos}."
   [c opts]
   (->> (in-sight c opts) (filter :why)
-       (mapv (fn [{:keys [entity why]}] {:name (.-name entity) :id (.-id entity) :uuid (.-uuid entity) :why why :pos (cell-of (.-pos entity))}))))
+       (mapv (fn [{:keys [entity why by]}] (cond-> {:name (.-name entity) :id (.-id entity) :uuid (.-uuid entity) :why why :pos (cell-of (.-pos entity))}
+                                              by (assoc :by by))))))
 
 (defn note-spared!
   "Remember the animals spared now by id: entities are sensed only in the view cone, so a later look at the end of a survey no longer lists them."

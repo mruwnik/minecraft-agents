@@ -407,7 +407,7 @@
 
 (def safe? (ready/safe-at-or-if-lit place))
 
-(def fit? ready/fit?)
+(def fit? "ready/fit-to-forage: a body only food heals felling wood (a rod, a hoe) is not held for health." ready/fit-to-forage)
 
 (defn tree-missing
   "The cause :no-tree while no tree is chosen or marked unreachable, none is in sight and no unseen :at is to be walked

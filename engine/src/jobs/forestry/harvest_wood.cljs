@@ -96,7 +96,7 @@
 
 (def safe? (ready/safe-at-or-roaming #(fell-tree/place (update % :args fell-args))))
 
-(def fit? ready/fit?)
+(def fit? "ready/fit-to-forage: a body only food heals felling wood (a rod, a hoe) is not held for health." ready/fit-to-forage)
 
 (defn with-fell-args [check] (fn [c] (check (assoc c :args (fell-args (:args c))))))
 

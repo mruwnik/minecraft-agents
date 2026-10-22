@@ -345,6 +345,15 @@
             (is (= [{:name "cow" :id 7 :why :baby :pos [5 64 0]}] (mapv #(select-keys % [:name :id :why :pos]) (:animals none))))
             (is (re-find #"passed over 1 animal \(cow: baby at \[" (str (:text none))))))))))
 
+(deftest food-none-names-the-zone-that-refused-an-animal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:food 1} :entities [cow]} :step-ms 5
+                                        :zones [{:name "pen" :owner "Miles" :min [4 63 -1] :max [12 66 1]}])]
+          (await (one-round! eng {}))
+          (is (re-find #"cow: refused \(zone pen\) at \[" (str (:text (first (none-endings seen)))))))))))
+
 (deftest a-missed-chase-is-repeated-then-the-animal-is-passed-over-as-tried
   (async done
     (tu/run-async done
