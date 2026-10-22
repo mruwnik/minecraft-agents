@@ -30,15 +30,15 @@
             {:no-event {:source :action :kind :started :data {:name "collect"}} :for-s 50 :until {:source :job :kind :completed}}]
    :after [[:item "cobblestone" 0] [:body-far [17.5 6.2 16.5] 2]]}
   {:name "drop-in-the-cave-a-column-over-is-dug-to-with-dig"
-   :body {:at [15.5 10 16.5] :inventory [["stone_pickaxe" 1]]}
-   :blocks [[:fill [16 7 16] [16 9 16] "air"] [:fill [17 6 16] [17 7 16] "air"] [:set [16 6 16] "air"] [:set [18 6 16] "glowstone"]]
+   :body {:at [15.5 10 16.5] :inventory [["stone_pickaxe" 1] ["torch" 4]]}
+   :blocks [[:fill [16 7 16] [16 9 16] "air"] [:fill [17 6 16] [17 7 16] "air"] [:set [16 6 16] "air"]]
    :act [[:summon "item" [17.5 6.2 16.5] "{Item:{id:\"minecraft:emerald\",count:1}}"]
          [:job (jobs.items.collect-drops {:radius 6 :holes [#at [16 9 16]] :dig true})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:item "emerald" 1]]
    :limit-s 100} ;; gravel on the rim over the cell nearest the cave: the dig route must not open a cell under it (the body would be buried)
   {:name "drop-in-the-cave-dug-to-without-opening-under-gravel"
-   :body {:at [15.5 10 16.5] :inventory [["stone_pickaxe" 1]]}
+   :body {:at [15.5 10 16.5] :inventory [["stone_pickaxe" 1] ["torch" 4]]}
    :blocks [[:fill [16 7 16] [16 9 16] "air"] [:fill [17 6 16] [17 7 16] "air"] [:set [16 6 16] "air"] [:set [17 10 16] "gravel"] [:set [17 10 15] "gravel"] [:set [17 10 17] "gravel"]]
    :act [[:summon "item" [17.5 6.2 16.5] "{Item:{id:\"minecraft:emerald\",count:1}}"]
          [:job (jobs.items.collect-drops {:radius 6 :holes [#at [16 9 16]] :dig true})]]
