@@ -378,4 +378,5 @@
 (defn ^:async cleanup
   "However the call ends: take the scaffold back."
   [c _]
+  (adopt-scaffold! c (:cells (planned c)))
   (or (await (scaffold/take-back! c)) (ctx/end c :done nil {})))

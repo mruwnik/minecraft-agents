@@ -1238,6 +1238,19 @@
           (is (= "dirt" (block p [1 64 1])))
           (is (empty? (ledger/open-entries (mem/view (:store eng)))) "a cleanup would dig the wall out otherwise"))))))
 
+(deftest a-scaffold-block-landing-on-a-plan-cell-in-the-final-step-is-adopted-by-cleanup
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "wall" :parts [{:id "w" :cells [[1 64 1]] :want "dirt"}]}
+              {:keys [eng p]} (start {:blocks ground :inventory [{:name "dirt" :count 1}]} {"wall" plan})
+              _ (ledger/write! (:store eng) [{:cell [1 64 1] :item "dirt" :before "air" :job "j9/pillar" :purpose :pillar :state :placed}])
+              _ (tu/seeing-all p)
+              result (await (child-outcome eng job {:plan "wall"} 300))]
+          (is (= [] (:missing result)))
+          (is (= "dirt" (block p [1 64 1])) "the wall stays after cleanup")
+          (is (empty? (ledger/open-entries (mem/view (:store eng))))))))))
+
 (deftest missing-material-is-fetched-from-a-seen-chest-by-default
   (async done
     (tu/run-async done
