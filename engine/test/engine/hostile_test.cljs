@@ -413,7 +413,8 @@
               (core/submit! eng spec {})
               (await (core/tick! eng))
               (is (= decision (:decision (first (hostile-entries eng)))) why)
-              (is (= held? (boolean (:text (first (filter #(= :hostile.sealed-hold (:kind %)) @seen))))) (str why ": sealed-hold event with its reason")))))))))
+              (is (= held? (boolean (:text (first (filter #(= :hostile.sealed-hold (:kind %)) @seen))))) (str why ": sealed-hold event with its reason"))
+              (is (= held? (boolean (seq (filterv :mute-s @seen)))) (str why ": a held body with nothing to fight ends done, leaving the heard mob (not no-response)")))))))))
 
 (def wide-room
   "A 7x7 room around the body (interior -3..3), walls to y 66, roof at y 67, floor at y 63: too wide for closed quarters."

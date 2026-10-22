@@ -278,8 +278,9 @@
     (let [result (await (run-child c decision stay?))]
       (keep-struck! c)
       (cond
-        (or (not= :declined result) stay?) result
+        (not= :declined result) result
         (and (= :fight decision) (leave-heard? c near)) (leave-heard! c near)
+        stay? result
         (and (= :fight decision) (leave-watched? c near)) (leave-watched! c near)
         :else (await (run-child c (other decision) false))))))
 
