@@ -38,7 +38,7 @@
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.escalate-choose :refer [cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? gap-fill
                                                          goal-way dig-leg dig-way drop-fill goal-lava? leg-ends goal-walled? own-stair route-cells shelter-exit? skips sprint-only?
-                                                         route-slice routes-searching! searching? keep-routes! forget-routes!]]
+                                                         route-owner route-slice routes-searching! searching? keep-routes! forget-routes!]]
             [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag may-dig-fn note-holes! own-holes own-placed-fn planned-cells]]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.torch :as torch]
@@ -158,7 +158,7 @@
         n (:fruitless counted)
         _ (when (<= n (tuning/max-escalations)) (await (look-round! c feet)))
         goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
-        slice (route-slice (:id c))
+        slice (route-slice (route-owner c))
         shut? (delay (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword)))
         opts {:own? (own-placed-fn c) :skip (skips c) :fetch? (fetch-tool? (:primitives c) (:doors (:args c)) shut?) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c) :slice slice}
         into? (goal-walled? c result shut?)
@@ -204,7 +204,7 @@
             (choosable? (constantly true)) {:step :none :why :zone}
             :else e)
         e (if (and (= :none (:step e)) (searching? slice)) {:step :searching} e)]
-    (if (= :searching (:step e)) (keep-routes! slice) (forget-routes! (:id c)))
+    (if (= :searching (:step e)) (keep-routes! slice) (forget-routes! (route-owner c)))
     (cond
       lava-goal? (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation {:step :none :why :goal-lava}}))
       (and (:cave-climb (ctx/mem c)) (or (> n (tuning/max-escalations)) (= :none (:step e))))
@@ -231,7 +231,7 @@
   (detour-escalate!) gives the detour up at once. A dig route search that has not ended within the call's slice
   (route-slice) goes on in the next calls, each only that (routes-searching!), before the way is chosen with it."
   [c pos failed]
-  (if (routes-searching! (:id c))
+  (if (routes-searching! (route-owner c))
     (do (ctx/update-mem! c assoc :escalate-now true) :again)
     (await (choose-escalation! c pos (or failed (:escalate-failed (ctx/mem c)))))))
 

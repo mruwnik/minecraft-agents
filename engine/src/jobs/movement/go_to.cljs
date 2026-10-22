@@ -243,6 +243,6 @@
   [c _]
   (when-not (:own (:escalation (ctx/mem c))) (note-holes! c (:planned (ctx/mem c))))
   (wsearch/release! c)
-  (choose/forget-routes! (:id c))
+  (choose/forget-routes! (:route-owner (ctx/mem c)))
   (await (torch/return-torch! c))
   (ctx/end c :done nil {}))

@@ -179,7 +179,7 @@
             (is (= :goal-enclosed (:why @out)) what)
             (is (re-find #"the goal is walled in" (:text @out)) what)
             (is (empty? (calls p "dig")) what)
-            (is (empty? (events-of seen :go-to.escalated)) what)))))))
+            (is (every? #{:approach} (map :step (events-of seen :go-to.escalated))) "at most a walk to the nearest cell, to look")))))))
 
 (deftest a-walk-only-call-walks-to-the-wall-of-a-walled-in-goal-when-its-budget-allows
   (async done
@@ -575,6 +575,19 @@
           (is (every? #(<= % (settings/get dig-route/settings ::dig-route/max-nodes)) @per-call) (pr-str @per-call))
           (is (some #{(settings/get dig-route/settings ::dig-route/max-nodes)} @per-call) "a search spent a call's slice and went on")
           (is (< (count (events-of seen :go-to.escalated)) 8) (pr-str (map (juxt :step :at) (events-of seen :go-to.escalated)))))))))
+
+(deftest a-free-body-walks-to-the-cell-nearest-a-walled-in-goal-when-it-sees-no-way-from-there
+  ;; out of a walled yard on a wide floor, the goal a pocket in a stone block 40 across: seeing 30 blocks round it, the
+  ;; land by the block reads as rock and no dig route shows from the nearest cell; it walks there and looks, not round the yard
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (merge (box 0 60 0 63 62 39 "stone") (box 2 63 2 10 65 10 "stone") (box 3 63 3 9 65 9 "air")
+                            (box 44 63 26 50 65 32 "stone") {"47,63,29" "air" "47,64,29" "air"})
+              {:keys [out p seen]} (await (run-job! {:sight 30 :self {:pos {:x 6.5 :y 63 :z 6.5}} :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                    {:pos [47 63 29] :range 0}))]
+          (is (true? (:arrived @out)) (pr-str (select-keys @out [:why :text])))
+          (is (= [:clear-path :approach :approach :clear-path] (map :step (events-of seen :go-to.escalated)))))))))
 
 (deftest a-dig-route-goes-round-cells-may-dig-refuses
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air")

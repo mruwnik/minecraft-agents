@@ -224,9 +224,16 @@
   "The most route searches route-cells makes round cells may-dig? refuses."
   3)
 
-(defonce ^{:doc "Per go-to call (its ctx :id): {key search-fn} of the dig-route searches its last escalate! left unfinished
+(defonce ^{:doc "Per go-to call (route-owner): {key search-fn} of the dig-route searches its last escalate! left unfinished
   (jobs.lib.dig-route/search), gone on by later ones (route-slice)."}
   kept-routes (atom {}))
+
+(defn route-owner
+  "The key of go-to call c's kept searches (kept-routes), made once a call (memory :route-owner): a job id comes again
+  in a later engine."
+  [c]
+  (or (:route-owner (ctx/mem c))
+      (let [k (str (:id c) "/" (random-uuid))] (ctx/update-mem! c assoc :route-owner k) k)))
 
 (defn route-slice
   "A slice of route searching for one escalate! of the go-to call id: its searches together expand at most the dig-route
@@ -253,10 +260,10 @@
   (boolean (some #{:searching} (vals @(:asked slice)))))
 
 (defn keep-routes!
-  "Keep for the call's next escalate! only the searches slice asked that have not ended."
+  "Keep for the call's next escalate! only the searches slice asked, those that ended too: the choice waits on the
+  others, and asks them all again."
   [{:keys [id asked]}]
-  (let [open (set (keep (fn [[k a]] (when (= :searching a) k)) @asked))]
-    (swap! kept-routes #(let [m (select-keys (get % id) open)] (if (seq m) (assoc % id m) (dissoc % id))))))
+  (swap! kept-routes update id select-keys (keys @asked)))
 
 (defn routes-searching!
   "Go on with the call id's searches kept unfinished (kept-routes) within one slice: whether one still has not ended.
@@ -381,7 +388,7 @@
   nearest the goal (nearest-stand) is more than a block nearer, from there, as
   {:step :approach :pos cell} first. Only a door, or a stair or pillar up to a higher goal, leads in (a walk along
   the wall too, from where it stands, to a goal not below it), else the fewest cells dug (dig-way, :searching while its
-  search goes on); else {:step :none :why :no-dig}."
+  search goes on); else {:step :none :why :no-dig}, from the nearest cell once it has been walked to."
   [c feet goal may-dig? opts]
   (let [p (:primitives c)
         to-goal #(u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] goal))
@@ -398,8 +405,10 @@
                 :else (or (dig-way p from goal may-dig? opts)
                           (if (= :none (:step e)) e {:step :none :why :no-dig})))]
     (cond
-      (#{:none :searching} (:step e)) e
+      (= :searching (:step e)) e
       here? e
+      ;; from where it stands it may misread the land between (rock it has not seen): it walks nearer and looks
+      (and (= :none (:step e)) (contains? (:approached opts) near)) e
       :else {:step :approach :pos near})))
 
 (defn detour-way

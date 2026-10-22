@@ -1,0 +1,21 @@
+;; Card b110b7c2: a body shut in a walled yard on a wide lit stone floor, the goal a sealed pocket in a stone block 41
+;; across and 23 along: the walk ends goal-enclosed, escalation's dig route search runs a node slice a round and goes on
+;; in the next ones (its node budget is no refusal), the approaches head for the goal instead of round the yard, and
+;; the body digs into the pocket.
+;; Lit cell; floor x 0..63, z 0..39, y 0..2; yard walls x 2..10, z 2..10, y 3..5 (inside 3..9); block x 44..50,
+;; z 26..32, y 3..5, pocket [47 3 29] [47 4 29].
+;; Should-succeed: the body arrives in the pocket. Should-fail: it gives up (old code: approaches round the yard).
+{:defaults
+ {:tags [:movement :go-to]
+  :time :any
+  :plot {:height 10 :length 64 :width 40 :light :lit}
+  :blocks [[:fill [0 0 0] [63 2 39] "stone"]
+           [:fill [2 3 2] [10 5 10] "stone"] [:fill [3 3 3] [9 5 9] "air"]
+           [:fill [44 3 26] [50 5 32] "stone"] [:fill [47 3 29] [47 4 29] "air"]]
+  :body {:at [6.5 3 6.5] :settle-s 3 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1]]}
+  :limit-s 200}
+ :cases
+ [{:name "shut-in-body-digs-out-and-into-a-far-pocket"
+   :act [[:job (jobs.movement.go-to {:pos #at [47 3 29] :range 0 :unknown false})]]
+   :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
+   :after [[:body-near [47.5 3 29.5] 1.5]]}]}
