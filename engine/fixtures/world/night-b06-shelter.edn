@@ -292,6 +292,20 @@
    :expect [{:no-event {:source :job :kind #{:waiting :holding} :data {:reason :night-sheltered}} :for-s 30 :until {:source :action :kind :done :data {:name "sleep" :status "sleeping"}}}
             {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 110}]
    :limit-s 120}
+  ;; 9d3023bc: dug in, a known zombie stands on the dark open way to the bed: go-to refuses the walk and sleep ends with that, not a hold (night run owed, never run yet)
+  {:name "sleep-dug-in-bed-past-a-zombie-ends-not-holds"
+   :time :night-exclusive :time-why :sleep
+   :plot {:length 60 :width 32}
+   :blocks [[:set [24 0 16] "red_bed[facing=east,part=foot]"] [:set [25 0 16] "red_bed[facing=east,part=head]"]]
+   :body {:at [4.5 0 16.5] :inventory [["cobblestone" 16]]}
+   :act [[:summon "zombie" [14.5 0 16.5] "{UUID:[I;2006101,3,1,1],NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]
+         [:await {:source :job :kind :shut-in.sealed} 60]
+         [:job (jobs.survival.sleep {:bed #at [24 0 16]})]
+         [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind #{:waiting :holding} :data {:reason :night-sheltered}} :for-s 100}]
+   :limit-s 110}
   ;; ba754e77: a body shut in at the bottom of a 1x1 shaft cuts its own stair up to a goal on the surface
   {:name "shaft-bottom-escalates-up-to-the-surface-goal"
    :time :day :time-why :dawn-decision
