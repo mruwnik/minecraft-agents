@@ -5,7 +5,8 @@
 {:defaults {:tags [:movement :planner :farm]
             :plot {:height 8}
             :blocks [[:fill [0 0 0] [31 0 31] "stone"] [:set [13 0 8] "water"] [:set [13 1 8] "stone"]]
-            :limit-s 60}
+            :limit-s 60
+            :time :any}
  :cases
  [{:name "pit-east-of-diagonal-farmland-kept"
    :blocks [[:set [11 0 10] "air"] [:set [11 -1 10] "farmland[moisture=7]"]]
@@ -21,6 +22,12 @@
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}
             {:event {:source :job :kind :planned :data {:nodes 3}} :within-s 40 :of-job true}]
    :after [[:block [10 -1 11] "farmland"] [:body-near [11.5 1 11.5] 1.5]]}
+  {:name "pit-east-of-diagonal-farmland-kept-facing-away"
+   :blocks [[:set [11 0 10] "air"] [:set [11 -1 10] "farmland[moisture=7]"]]
+   :body {:at [10.5 1 10.5]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 135 0"] [:job (jobs.movement.go-to {:pos #at [11 1 11] :range 0 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}]
+   :after [[:block [11 -1 10] "farmland"] [:body-near [11.5 1 11.5] 1.5]]}
   {:name "stone-floored-pit-diagonal-still-arrives"
    :blocks [[:set [11 0 10] "air"]]
    :body {:at [10.5 1 10.5]}
