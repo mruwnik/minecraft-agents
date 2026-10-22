@@ -8,6 +8,7 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.walk.one-way :as one-way]
             [jobs.lib.walk.sight :as wsight]
             [jobs.lib.walk.world :as wworld]))
 
@@ -319,6 +320,36 @@
   (when-let [^js ow (.-oneWay r)]
     (when (true? (.-open ow)) (.-path ow))))
 
+(defn one-way-priced?
+  "Whether the one-way step landing at `at` is worth taking (jobs.lib.walk.one-way/taken?): the EV of its landing against the goal's worth
+  (the call's :worth). True when there is no step (nil at)."
+  [c to at small?]
+  (or (nil? at)
+      (let [pos (.-pos (.self (:primitives c)))
+            [gx gy gz] to]
+        (one-way/taken? (:primitives c) at small? (js/Math.hypot (- gx (.-x pos)) (- gy (.-y pos)) (- gz (.-z pos))) (:worth (:args c))))))
+
+(defn drop-index
+  "Index in steps of the first step that lands after a drop of 2 or more, a gap jump down (a step the body cannot undo) or any
+  drop onto a floor not seen (it may be a deeper fall), nil when none."
+  [steps]
+  (first (keep-indexed (fn [i [a b]] (when (and (#{:drop :gap} (:move b))
+                                                (> (:y a) (:y b))
+                                                (or (:unseen-floor b) (> (- (:y a) (:y b)) (if (= :gap (:move b)) 0 1))))
+                                       (inc i)))
+                       (partition 2 1 steps))))
+
+(defn cut-refused
+  "steps cut short before its first step that cannot be undone when priced? (a fn of the landing [x y z] and whether the drop is
+  one block) refuses it, with that step's landing as :refused; else {:steps steps}."
+  [steps priced?]
+  (let [i (drop-index steps)
+        {:keys [x y z]} (when i (nth steps i))
+        small? (when i (and (= 1 (- (:y (nth steps (dec i))) y)) (not= :gap (:move (nth steps i)))))]
+    (if (and i (not (priced? [x y z] small?)))
+      {:steps (subvec steps 0 i) :refused [x y z]}
+      {:steps steps})))
+
 (defn frontier-path
   "The planner's path to r's frontier (the searched node at the edge of what is loaded, within its reach of the goal, the
   search having run out of land) and that node's cell [x y z], with :known true when the node lies in land earlier
@@ -340,23 +371,24 @@
   (let [edge (when (and frontier (not beyond)) (frontier-path r))
         out (and frontier (not beyond) (not edge) (true? (.-searchedOut r)))
         past (when (and (not edge) (not out) (= :open one-way)) (open-path r))
-        steps (cond edge (path-steps walled (:path edge)) past (path-steps walled past) :else steps)
+        {:keys [steps refused]} (let [all (cond edge (path-steps walled (:path edge)) past (path-steps walled past) :else steps)]
+                                  (if (and (= :open one-way) (or (:unknown c) (not= "found" (.-status r)))) (cut-refused all #(one-way-priced? c to %1 %2)) {:steps all}))
+        step (or (one-way-of r) (when refused {:kind :drop :at refused}))
         [steps cut] (if (and (:unknown c) (= "found" (.-status r)) (not (or edge past)) (nil? (:air-used (wworld/body-policy c))))
                       (masked-cut steps (masked-wet-ok c))
                       [steps false])
-        status (if (or edge past cut) "partial" (.-status r))
+        status (if (or edge past cut refused) "partial" (.-status r))
         dry (if (= "partial" status)
               (dry-end steps (head-wet-fn walled) (if (and (:unknown c) (not= "air" (.-reason r))) (masked-wet-ok c) (constantly false)))
               steps)
-        walked (if (= "partial" status) (stop-short dry (.-dangers walled)) dry)
-        step (one-way-of r)]
+        walked (if (= "partial" status) (stop-short dry (.-dangers walled)) dry)]
     {:r r :steps walked :beyond beyond :status status :pw pw
      :ms (or (some-> r .-ms) 0)
-     :one-way-taken (when past step)
+     :one-way-taken (when (and past (not refused)) step)
      :frontier-taken (when (and edge (> (count walked) 1)) (cond-> {:at (:at edge)} (:known edge) (assoc :known true) (:target edge) (assoc :target (:target edge))))
      :searched-out out
      :stopped-short (< (count walked) (count dry))
-     :stop (when (and step (not past) (not edge)) (stopped-one-way r (or (peek walked) (first steps) (wworld/body-cell c)) to step))}))
+     :stop (when (and step (or refused (not (or past edge)))) (stopped-one-way r (or (peek walked) (first steps) (wworld/body-cell c)) to step))}))
 
 (defn planner-reason
   "A no-path result's reason as go-to's: the planner's goal-unseen (no stand in range sees the block, found before any

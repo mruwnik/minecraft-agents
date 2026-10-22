@@ -273,6 +273,45 @@
    :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :why :one-way}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :go-to.escalated} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false}}}]
    :after [[:block [26 10 16] "stone"] [:block [26 11 16] "stone"]]}
+  {:name "dark-drop-refused-for-a-cheap-goal"
+   ;; card 9c8a2c22 (Q385): the stair mine of the case above, stair top lit and the rest dark, the default :one-way :open: the 3 drop into the dark mine costs more than a goal worth 28 s, so the walk ends short and the body stops at the rim
+   :plot {:height 16 :light :dark}
+   :blocks [[:fill [2 0 8] [30 11 24] "stone"]
+            [:fill [3 0 16] [12 2 16] "air"] [:fill [12 3 16] [12 5 16] "air"]
+            [:fill [13 3 16] [22 5 16] "air"]
+            [:fill [23 4 16] [23 6 16] "air"] [:fill [24 5 16] [24 7 16] "air"] [:fill [25 6 16] [25 8 16] "air"] [:fill [26 7 16] [26 9 16] "air"] [:set [25 6 16] "torch"]]
+   :body {:at [26.5 7 16.5]}
+   :time :any
+   :act [[:job (jobs.movement.go-to {:pos #at [3 12 16] :range 1 :ways #{:walk} :worth 28})]]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 90 :of-job true}]
+   :after [[:body-near [13.5 3 16.5] 3] [:body-far [7.5 0 16.5] 6]]
+   :limit-s 120}
+  {:name "dark-drop-taken-for-a-valuable-goal"
+   ;; card 9c8a2c22 (Q385): the same dark mine, the goal worth 1000 s: the drop is not refused for its price: the body goes to the rim (the dark floor below is then the sight gate's to judge)
+   :plot {:height 16 :light :dark}
+   :blocks [[:fill [2 0 8] [30 11 24] "stone"]
+            [:fill [3 0 16] [12 2 16] "air"] [:fill [12 3 16] [12 5 16] "air"]
+            [:fill [13 3 16] [22 5 16] "air"]
+            [:fill [23 4 16] [23 6 16] "air"] [:fill [24 5 16] [24 7 16] "air"] [:fill [25 6 16] [25 8 16] "air"] [:fill [26 7 16] [26 9 16] "air"] [:set [25 6 16] "torch"]]
+   :body {:at [26.5 7 16.5]}
+   :time :any
+   :act [[:job (jobs.movement.go-to {:pos #at [3 12 16] :range 1 :ways #{:walk} :worth 1000})]]
+   :expect [{:no-event {:source :job :kind :stopped :data {:why :one-way}} :for-s 40}]
+   :after [[:body-near [10.5 1 16.5] 6]]
+   :limit-s 120}
+  {:name "lit-drop-taken-for-a-cheap-goal"
+   ;; card 9c8a2c22 (Q385): the same mine with torches down the stair, along the walkway and on the floor below the drop: a landing seen lit costs next to nothing, so the goal worth 28 s takes it
+   :plot {:height 16 :light :dark}
+   :blocks [[:fill [2 0 8] [30 11 24] "stone"]
+            [:fill [3 0 16] [12 2 16] "air"] [:fill [12 3 16] [12 5 16] "air"]
+            [:fill [13 3 16] [22 5 16] "air"]
+            [:fill [23 4 16] [23 6 16] "air"] [:fill [24 5 16] [24 7 16] "air"] [:fill [25 6 16] [25 8 16] "air"] [:fill [26 7 16] [26 9 16] "air"] [:set [25 6 16] "torch"] [:set [23 4 16] "torch"] [:set [19 3 16] "torch"] [:set [14 3 16] "torch"] [:set [12 0 16] "torch"] [:set [8 0 16] "torch"]]
+   :body {:at [26.5 7 16.5]}
+   :time :any
+   :act [[:job (jobs.movement.go-to {:pos #at [3 12 16] :range 1 :ways #{:walk} :worth 28})]]
+   :expect [{:no-event {:source :job :kind :stopped :data {:why :one-way}} :for-s 40}]
+   :after [[:body-near [7.5 0 16.5] 6]]
+   :limit-s 120}
   {:name "shut-in-own-hut-walls-are-not-dug"
    ;; card 6fa0c797: the pit shaft is walled by the body's own plan (the hut's corner and door cells): the escalation digs
    ;; none of them and ends with the named reason :own-build (no dirt: the open shaft would be pillared out of)
