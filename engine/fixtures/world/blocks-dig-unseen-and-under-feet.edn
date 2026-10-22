@@ -57,11 +57,11 @@
    :after [[:block [16 1 16] "air"]]
    :limit-s 120},
   {:name "ore-overhead-in-a-shut-room-is-reached-by-pillaring"
-   ;; the ore is 5 above the floor in the wall of a sealed stone room: no walk gets within reach, so the body stacks cobble under itself and digs it.
+   ;; the ore is 6 above the floor in the ceiling of a sealed stone room: no walk gets within reach, so the body stacks cobble under itself and digs it.
    :plot {:height 14}
-   :blocks [[:fill [13 3 13] [19 12 19] "stone"] [:fill [14 3 14] [18 11 18] "air"] [:set [19 8 16] "iron_ore"]]
-   :body {:at [16.5 3 16.5] :inventory [["iron_pickaxe" 1] ["cobblestone" 8]]}
-   :act [[:job (jobs.blocks.dig {:pos #at [19 8 16]})]]
+   :blocks [[:fill [13 0 13] [19 7 19] "stone"] [:fill [14 0 14] [18 5 18] "air"] [:set [16 6 16] "iron_ore"]]
+   :body {:at [16.5 0 16.5] :inventory [["iron_pickaxe" 1] ["cobblestone" 8]]}
+   :act [[:job (jobs.blocks.dig {:pos #at [16 6 16]})]]
    :expect [{:event {:source :job :kind :completed :data {:dug true :reason :dug}} :within-s 110 :of-job true}]
-   :after [[:block [19 8 16] "air"] [:item "raw_iron" [:>= 1]]]
+   :after [[:block [16 6 16] "air"] [:item "raw_iron" [:>= 1]]]
    :limit-s 120}]}
