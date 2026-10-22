@@ -1,0 +1,19 @@
+;; Card 3a8a28ce: a hut beside a hill whose top is two above the hut floor: the body arrives on the hill, level with the walls, and the roof
+;; and wall cells are within sight but need stands (the build must place them, scaffold them or give them up, never idle with no act).
+;; hut-beside-a-hill: floor, wall ring and roof are built complete.
+{:defaults
+ {:tags [:build]
+  :plot {:height 24 :floor "grass_block"}
+  :plans [{:id "hut" :metadata {:by "$body"}
+           :parts [{:id "floor" :box [#at [15 0 20] #at [17 0 22]] :want "cobblestone"}
+                   {:id "walls" :outline [#at [15 1 20] #at [17 2 22]] :want "cobblestone"}
+                   {:id "roof" :box [#at [15 3 20] #at [17 3 22]] :want "spruce_planks"}]}]
+  :blocks [[:fill [9 0 15] [14 2 26] "dirt"]]
+  :body {:at [12.5 3 21.5] :yaw 270 :inventory [["cobblestone" 40] ["spruce_planks" 12] ["dirt" 12]] :effects [["resistance" 600 4]]}
+  :time :any
+  :limit-s 330}
+ :cases
+ [{:name "hut-beside-a-hill"
+   :act [[:job (jobs.build.from-plan {:plan "$plan:hut"})]]
+   :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 300 :of-job true}]
+   :after [[:block [15 3 20] "spruce_planks"] [:block [17 2 22] "cobblestone"]]}]}

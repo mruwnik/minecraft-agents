@@ -208,6 +208,11 @@
 
 ;; ------------------------------------------------------------------ keeping a way out
 
+(defn trace!
+  "Note the branch a step took and its cell, for the :stalled ending; kept off the job memory so it never counts as progress."
+  [c branch cell]
+  (some-> (:trace c) (vreset! [branch cell])))
+
 (defn ^:async leave!
   "One go-to call (child :leave) out of the plan's footprint to the :leave cell (within :leave-range, default 1); dropped once the walk ends (arrived
   or not: the next step judges where the body stands). :continue while the walk waits, else :again."
@@ -275,6 +280,7 @@
   "Walk to a stand cell beside cell (:continue while the walk waits, else :again); a cell that cannot be walked to, or is still out of reach (or unseen, as
   :unloaded) on arrival, counts a failure."
   [c cells cell]
+  (trace! c :walk-to! (:pos cell))
   (let [body (u/self-pos c)
         planned (set (map :pos cells))
         bad (set (:bad-stands (ctx/mem c)))
@@ -351,7 +357,7 @@
                 :text (str "build of " (:plan (:args c)) " stopped: " (:budget-streak (ctx/mem c)) " cells in a row had no stand the body could walk to (the search ran out of its node budget each time)")})
       (scaffold/working? c) (await (scaffold/step! c (give-up)))
       (scaffold/stale? c) (do (scaffold/begin-clean! c) :again)
-      (:leave (ctx/mem c)) (await (leave! c))
+      (:leave (ctx/mem c)) (do (trace! c :leave! (:leave (ctx/mem c))) (await (leave! c)))
       (and (< (:off-bed (ctx/mem c) 0) (settings/get settings ::off-bed-tries)) (off-low-floor c))
       (do (ctx/update-mem! c #(-> % (assoc :leave (off-low-floor c) :leave-range 0) (update :off-bed (fnil inc 0)))) :again)
       (and underfoot (not= (:pos underfoot) (:stepped-off (ctx/mem c))))
@@ -361,7 +367,7 @@
                      (warn-way-in! c cells near)
                      (loop [left near]
                        (if (seq left)
-                         (if (seals? c (:pos (first left)))
+                         (if (do (trace! c :place-one! (:pos (first left))) (seals? c (:pos (first left))))
                            (do (ctx/update-mem! c #(-> (count-fail % (:pos (first left)) :unreachable (give-up))
                                                        (assoc :leave (exit-point cells (u/self-pos c)))))
                                :again)
@@ -371,7 +377,7 @@
                          :again)))
       (seq dig-near) (loop [left dig-near]
                        (if (seq left)
-                         (if (= :continue (await (dig-one! c (first left) (give-up))))
+                         (if (= :continue (do (trace! c :dig-one! (:pos (first left))) (await (dig-one! c (first left) (give-up)))))
                            :continue
                            (recur (rest left)))
                          :again))
@@ -448,18 +454,22 @@
   "The whole attempt: loop the steps until the plan is built or nothing more applies (finish); :continue only while a
   walk or a fetch waits on the world. Steps that go round again with nothing booked end it :stalled, so the body is
   never held with no act."
-  [c]
-  (let [same (volatile! 0)]
+  [c0]
+  (let [same (volatile! 0)
+        c (assoc c0 :trace (volatile! nil))]
     (await (pace/steps! c (fn ^:async s []
                             (let [before (ctx/mem c)
                                   r (await (step c))]
                               (cond
                                 (or (not= :again r) (not= before (ctx/mem c))) (do (vreset! same 0) r)
                                 (< (vswap! same inc) (settings/get settings ::stall-steps)) r
-                                :else (ctx/end c :nothing-possible :stalled
-                                               (assoc (result-data c (:cells (planned c)))
-                                                      :text (str "build of " (:plan (:args c)) " stopped: " (settings/get settings ::stall-steps)
-                                                                 " steps in a row did nothing and booked nothing")))))))))) 
+                                :else (let [[branch cell] @(:trace c)
+                                            text (str "build of " (:plan (:args c)) " stopped: " (settings/get settings ::stall-steps)
+                                                      " steps in a row did nothing and booked nothing (last step " branch " at " (pr-str cell) ")")]
+                                        (ctx/emit! c :build.stalled :warn {:plan (:plan (:args c)) :branch branch :cell cell :text text})
+                                        (ctx/end c :nothing-possible :stalled
+                                                 (assoc (result-data c (:cells (planned c))) :branch branch :cell cell :text text))))))))))
+
 
 (defn ^:async cleanup
   "However the call ends: take the scaffold back."

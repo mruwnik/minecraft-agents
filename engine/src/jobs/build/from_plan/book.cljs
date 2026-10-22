@@ -63,13 +63,13 @@
 
 (defn ^:async place-one!
   "Place the cell's item after asking the access rules and jobs.lib.placement once more; a refusal is booked, nothing
-  is placed."
+  is placed; a cell the rules skip counts a failure."
   [c {:keys [pos item want] :as cell} limit]
   (let [d (decide (rules-input c) (:accept (:args c)) pos)
         h (how c cell)]
     (cond
       (vector? d) (ctx/update-mem! c refuse pos (second d))
-      (not= :place d) nil
+      (not= :place d) (ctx/update-mem! c count-fail pos :skipped limit)
       (:refused h) (ctx/update-mem! c assoc-in [:unplaceable pos] (:refused h))
       :else
       (let [_ (ctx/update-mem! c assoc :placing pos)
@@ -83,7 +83,7 @@
                     (warn-gap! c pos item)
                     (ctx/update-mem! c #(cond-> (update (dissoc % :placing :budget-streak) :placed (fnil inc 0))
                                           wrong (assoc-in [:misplaced pos] wrong))))
-          :already (ctx/update-mem! c dissoc :placing)
+          :already (ctx/update-mem! c #(count-fail (dissoc % :placing) pos :already limit))
           (:occupied :need :no-item :no-support :unreachable)
           (ctx/update-mem! c #(cond-> (count-fail (dissoc % :placing) pos (if (= :need outcome) :no-item outcome) limit)
                                 (and (= :unreachable outcome) (#{:budget :no-progress} (:why (:data e)))) (update :needs-scaffold (fnil conj #{}) pos)
@@ -100,7 +100,7 @@
 
 (defn ^:async dig-one!
   "Dig the wrong block of the cell (a blocks.dig child) after asking the access rules once more and getting a spare
-  for a worn last tool (jobs.lib.trip/tool-ready!); a refusal is booked, a failed dig counts a failure, a dug cell counts a dig (given up as :refilled when it keeps coming back)."
+  for a worn last tool (jobs.lib.trip/tool-ready!); a refusal is booked, a failed dig counts a failure, a dug cell counts a dig (given up as :refilled when it keeps coming back); a cell the rules skip counts a failure."
   [c {:keys [pos]} limit]
   (let [v (access/may-dig? (rules-input c) (pos-map pos))
         accept (set (:accept (:args c)))
@@ -126,7 +126,7 @@
       :refused (ctx/update-mem! c refuse pos (select-keys v [:reason :zone :plan :claim]))
       :hazard (ctx/update-mem! c refuse pos {:reason :hazard
                                              :hazards (vec (distinct (remove accept (map access/hazard-key (:hazards v)))))})
-      nil)))
+      (ctx/update-mem! c count-fail pos judged limit))))
 
 (defn result-data
   "What the build left (text/summary), with the failed fetches of the call."
