@@ -17,6 +17,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.util :as u]
+            [jobs.movement.go-to.walk :as walk]
             [jobs.survival.night.hold :as hold]))
 
 (def doc
@@ -76,21 +77,17 @@
                        (filterv #(held (:cell %)) (ledger/open-entries (ctx/view c))))))
     :again))
 
-(def seal-radius
-  "Blocks from the feet within which a ledger entry counts as a seal that shuts the body in (go-to's seal-clear-radius)."
-  3)
-
 (def seal-purposes "Ledger purposes of the blocks that shut a body in for the night." #{:shelter :retreat-plug})
 
 (defn seals
-  "The open, unheld :shelter and :retreat-plug ledger entries within seal-radius of the feet while the body is enclosed (the test go-to gives up on)."
+  "The open, unheld :shelter and :retreat-plug ledger entries within go-to's seal-clear-radius of the feet while the body is enclosed (the test go-to gives up on)."
   [c]
   (let [p (:primitives c)]
     (when (escape/enclosed? p nil)
       (let [{:keys [x y z]} (sh-sense/feet p)
             held (ledger/held-cells (ctx/view c))]
         (seq (remove (some-fn (comp held :cell) (complement (comp seal-purposes :purpose)))
-                     (ledger/near-of (ledger/open-entries (ctx/view c)) {:pos {:x x :y y :z z} :radius seal-radius})))))))
+                     (ledger/near-of (ledger/open-entries (ctx/view c)) {:pos {:x x :y y :z z} :radius walk/seal-clear-radius})))))))
 
 (defn pending?
   "Whether the morning still has work (by night too, so a run then is no \"nothing left\"): a dig-out, a shelter to leave, a doorway the night filled to open, a
@@ -134,7 +131,7 @@
       doorway (await (take-back! c))
       (and sealed (not (:dig-out (ctx/mem c))) (not (dig-leave/sheltered-in c)))
       (let [r (await (ctx/call c :seal-cleanup 'jobs.access.cleanup
-                               {:of :all :purpose seal-purposes :near {:pos (u/self-pos c) :radius seal-radius} :checks {:fit? '(always) :safe? '(not (threatened))}}))]
+                               {:of :all :purpose seal-purposes :near {:pos (u/self-pos c) :radius walk/seal-clear-radius} :checks {:fit? '(always) :safe? '(not (threatened))}}))]
         (if (and (not= :continue r) (some (comp #{:hostile-near :danger} :reason) (get-in r [:data :open])) (escape/enclosed? p nil))
           (ctx/end c :nothing-possible :seal-kept {:text "still shut in by its own blocks, kept while a known hostile is near; giving the body back"})
           :again))
