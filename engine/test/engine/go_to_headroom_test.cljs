@@ -23,6 +23,12 @@
   (is (= {:block "red_bed" :at [9 64 0] :under [9 66 0]} (headroom/low-passage (room "red_bed" true) goal)))
   (is (= "oak_slab" (:block (headroom/low-passage (room "oak_slab" true) goal)))))
 
+(deftest a-room-cell-the-body-has-not-seen-is-no-way-to-the-low-block
+  (let [p (room "red_bed" true)
+        sensed (.-sensedAt p)]
+    (aset p "sensedAt" (fn [q] (if (= [10 64 0] [(.-x q) (.-y q) (.-z q)]) #js {:unknown true} (sensed q))))
+    (is (nil? (headroom/low-passage p goal)) "the one cell next to the bed never looked at: not walked through on the true world's word")))
+
 (deftest no-low-passage-with-headroom-or-a-full-wall
   (is (nil? (headroom/low-passage (room "red_bed" false) goal)))
   (is (nil? (headroom/low-passage (room "stone" true) goal))))

@@ -14,9 +14,9 @@
 
 (defn low-passage
   "The low block a body walled in round goal {:x :y :z} would have to step over to leave, whose cell two above is solid:
-  {:block name :at [x y z] :under [x y z]} (the first found), else nil. Walks the cells the goal reaches over the blocks seen."
+  {:block name :at [x y z] :under [x y z]} (the first found), else nil. Walks the cells the goal reaches over the blocks seen (an unseen cell is a wall)."
   [p {:keys [x y z]}]
-  (let [kind-at (reach/lookup p reach-room/body-kind-of)]
+  (let [kind-at (reach/seen-lookup p reach-room/body-kind-of)]
     (when-let [cells (reach-room/flood-cells (partial reach/forward kind-at) [x y z] reach/node-budget)]
       (first
         (for [c cells
