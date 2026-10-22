@@ -15,6 +15,8 @@
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.breath :as breath]
             [jobs.lib.escape :as escape]
+            [jobs.lib.reach :as reach]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.ready :as ready]
             [jobs.lib.work-place :as work-place]
             [jobs.lib.sense :as sense]
@@ -110,6 +112,7 @@
    ::own-bed-radius {:default 64 :doc "Blocks within which a bed the body put down itself (scaffold ledger purpose :bed) is taken up for a plan bed before a new one is fetched." :spec (a/int-in 0 nil)}
    ::off-bed-tries {:default 3 :doc "Walks off a bed or bottom slab the body stands on, before the roof cells over it are given up." :spec (a/int-in 1 nil)}
    ::hole-depth {:default 2 :doc "Levels of walls round the body from its feet up that make it a body in a hole, whose walks may climb out." :spec (a/int-in 1 nil)}
+   ::pocket-cells {:default 256 :doc "Walkable cells at most which a body whose walk ended shut in counts as shut in a pocket (the build stops :shut-in); a larger closed room is built in." :spec (a/int-in 1 nil)}
    ::hole-walks {:default 2 :doc "Walks in a row that fail from a hole after which the build stops :shut-in." :spec (a/int-in 1 nil)}
    ::stall-steps {:default 3 :doc "Steps in a row that return :again with the job memory unchanged (nothing placed, dug, walked or booked) after which the build stops :stalled." :spec (a/int-in 1 nil)}
    ::budget-streak {:default 4 :doc "Places or digs in a row (no cell placed or dug between) whose walk ended :unreachable :budget (a search that flooded the loaded land and found no stand) after which the build stops :unreachable: the next cells would flood the same land." :spec (a/int-in 1 nil)}
@@ -288,9 +291,11 @@
       :else w)))
 
 (defn shut-in-walk?
-  "Whether the last walk ended because the body is shut in (go-to refuses to dig or build out of a restricted walk)."
+  "Whether the last walk ended because the body is shut in (go-to refuses to dig or build out of a restricted walk) and the
+  room it can walk in is a pocket of at most ::pocket-cells: a larger closed hall still has room to bridge or pillar in."
   [c]
-  (boolean (:shut-in (:data (near/last-walk c)))))
+  (boolean (and (:shut-in (:data (near/last-walk c)))
+                (reach-room/enclosed? (:primitives c) #{} (reach/lookup (:primitives c) reach-room/body-kind-of) (settings/get settings ::pocket-cells)))))
 
 (defn ^:async tunnel-to!
   "A cell shut in by rock: cut a way to a stand beside it (jobs.access.tunnel) as a player with a

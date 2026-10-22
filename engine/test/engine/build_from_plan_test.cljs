@@ -1315,10 +1315,22 @@
                                                  (swap! walks conj o)
                                                  (ctx/update-mem! c assoc :near-walk {:data {:why :exhausted :shut-in true}})
                                                  :blocked)
-                              (fn ^:async b [] (await (child-outcome eng job {:plan "far"} 30)))))]
+                              (fn ^:async b [] (await (child-outcome eng job {:plan "far" :settings {:jobs.build.from-plan/pocket-cells 1000000}} 30)))))]
           (is (= :shut-in (:reason result)))
           (is (<= (count @walks) 3) "not one failed walk per planned cell")
           (is (every? (comp nil? :ways) (rest @walks)) "after a shut-in verdict go-to may dig or build out"))))))
+
+(deftest a-shut-in-verdict-in-a-room-larger-than-a-pocket-is-not-a-stop
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "far" :parts [{:id "posts" :cells [[40 64 0]] :want "oak_fence"}]}
+              {:keys [eng]} (start {:inventory kit :self {:pos {:x 4.5 :y 64 :z 4.5}}} {"far" plan})
+              result (await (tu/with-near-stub (fn ^:async f [c _ _ _]
+                                                 (ctx/update-mem! c assoc :near-walk {:data {:why :exhausted :shut-in true}})
+                                                 :blocked)
+                              (fn ^:async b [] (await (child-outcome eng job {:plan "far" :settings {:jobs.build.from-plan/pocket-cells 1}} 30)))))]
+          (is (not= :shut-in (:reason result))))))))
 
 (deftest a-body-sealed-in-its-own-shelter-waits-instead-of-stopping-shut-in
   (async done
