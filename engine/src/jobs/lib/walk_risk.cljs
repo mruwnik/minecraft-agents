@@ -1,4 +1,4 @@
-(ns jobs.movement.go-to.risk
+(ns jobs.lib.walk-risk
   "go-to's start check: the risk of the walk to the goal, in hit points, against what the body can afford. It replaces any
   wait for dawn: a night walk is judged by the light the body perceives along the straight way (Q334), a walk underground
   by the hostiles it can reach and the dark halls it crosses (a roofed dark cell prices spawns only where dark floor beyond the spawn-free radius is reachable: ready/hall-at?, Q345).

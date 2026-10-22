@@ -1,6 +1,6 @@
 (ns engine.go-to-night-test
   "go-to at night from a shelter (sh-inside/walk-leaves-shelter?): no wait for dawn; its safe? judges the walk's risk
-  (jobs.movement.go-to.risk), so a short walk out of the hut starts. A caller's :checks (an escape's defaults, an agent's own)
+  (jobs.lib.walk-risk), so a short walk out of the hut starts. A caller's :checks (an escape's defaults, an agent's own)
   replace it."
   (:require [engine.child-ends :as ce]
             [cljs.test :refer [deftest is are async]]

@@ -1,5 +1,5 @@
 (ns engine.go-to-risk-test
-  "go-to's start check judges the walk's risk (jobs.movement.go-to.risk), not the clock: hostiles near a long dark way hold it
+  "go-to's start check judges the walk's risk (jobs.lib.walk-risk), not the clock: hostiles near a long dark way hold it
   with the figures in the reason; a way that goes mostly underground costs far less than the same distance over open ground."
   (:require [cljs.test :refer [deftest is async]]
             [engine.core :as core]
@@ -16,7 +16,7 @@
             [jobs.lib.threats :as threats]
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.movement.go-to.risk :as risk]))
+            [jobs.lib.walk-risk :as risk]))
 
 (def inside {:x 5 :y 64 :z 0})
 (def night-hut (merge (hut/hut-world inside {}) {:time st/night}))

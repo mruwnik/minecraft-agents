@@ -462,7 +462,7 @@
     (tu/run-async done
       (fn ^:async t []
         (doseq [[cell-s ending] [[100 :done] [1.2 :off-stair]]]
-          (let [{:keys [out] :as s} (await (stair! {:blocks (stone -3 40 50 64)} (assoc east :settings {:jobs.access.stair/cell-s cell-s})
+          (let [{:keys [out] :as s} (await (stair! {:blocks (stone -3 40 50 64)} (assoc east :settings {:jobs.lib.stair-time/cell-s cell-s})
                                                    (move-at-dig 4 [40 65 0])))]
             (is (= ending (or (:reason @out) (:status @out))) (str "cell-s " cell-s))
             (is (= (= :done ending) (boolean (seq (events-of s :stair.return)))))))))))

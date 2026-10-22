@@ -10,6 +10,7 @@
             [jobs.lib.cond :as cond]
             [engine.settings :as settings]
             [jobs.access.stair :as stair]
+            [jobs.lib.stair-time :as stair-time]
             [jobs.access.stair.judge :as judge]
             [jobs.lib.stair-cells :as geo]
             [jobs.access.stair.step :as sstep]
@@ -145,7 +146,7 @@
 (defn quote-of [c]
   (let [feet (reach/standing-vec (:primitives c))
         t (target-of c)
-        s (* (if t (cells-estimate feet t) 0) (settings/get stair/settings ::stair/cell-s))]
+        s (* (if t (cells-estimate feet t) 0) (stair-time/cell-s))]
     (cond-> {:uses {:job-time [(* 0.5 s) s (max (* 4 s) (time-s))]}}
       t (assoc :moves-to t))))
 

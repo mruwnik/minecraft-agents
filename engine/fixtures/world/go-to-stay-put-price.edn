@@ -1,4 +1,4 @@
-;; Staying put is priced too (jobs.movement.go-to.risk/stay-estimate): a hurt body that cannot heal (hunger, no food) in a dark cave with hostiles that reach it where it stands must not wait on go-to's :risky.
+;; Staying put is priced too (jobs.lib.walk-risk/stay-estimate): a hurt body that cannot heal (hunger, no food) in a dark cave with hostiles that reach it where it stands must not wait on go-to's :risky.
 ;; A dark cave: a stone block x 10..60 with a 3-wide corridor, the body in the middle of it at 3 hp looking west, two zombies (no AI, so they only count as known hostiles) in the corridor 10 and 12 blocks behind it, the goal 25 blocks east (the walk leads away from the zombies, so go-to's hostile-near check does not hold it).
 ;; Should-succeed: the walk costs more than staying (it passes the same zombies' reach on dark ground) and the body cannot heal: go-to stops at once, cause :stranded, for the caller to seal in or take a refuge. Should-fail: it waits :risky for ever, or walks.
 {:defaults

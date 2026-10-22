@@ -14,7 +14,7 @@
             [jobs.lib.body :as body]
             [jobs.lib.price :as price]
             [jobs.lib.reach :as reach]
-            [jobs.movement.go-to.risk :as risk]
+            [jobs.lib.walk-risk :as risk]
             [jobs.lib.util :as u]))
 
 (a/defargs settings

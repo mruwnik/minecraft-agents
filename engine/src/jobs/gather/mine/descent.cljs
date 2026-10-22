@@ -8,7 +8,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
-            [jobs.access.stair :as stair]
+            [jobs.lib.stair-time :as stair-time]
             [jobs.lib.price :as price]
             [jobs.lib.escape :as escape]
             [jobs.gather.shaft-descent :refer [pick-shaft xyz]]
@@ -216,7 +216,7 @@
         cell (or at top)]
     (when (and cell (nil? (get-in (ctx/mem c) [:children :stair])) (not= cell (access/cell (cell-of (u/self-pos c)))))
       (if (and (> (u/dist (u/self-pos c) (zipmap [:x :y :z] cell)) (settings/get settings ::back-reach))
-               (not (await (price/walk-back-worth? c cell (stair/steps-s :down (max 0 (- (:y (u/self-pos c)) (cell 1))))))))
+               (not (await (price/walk-back-worth? c cell (stair-time/steps-s :down (max 0 (- (:y (u/self-pos c)) (cell 1))))))))
         (do (ctx/emit! c :mine.restair :info {:at (access/cell (cell-of (u/self-pos c))) :text (str "mine's stair at " (str/join "," cell) " is dearer to walk back to than a new stair; it starts a new stair here")})
             (ctx/update-mem! c update :descent dissoc :top :at)
             nil)

@@ -1,4 +1,4 @@
-;; go-to has no wait for dawn: its start check judges the route's risk (jobs.movement.go-to.risk) by the light seen and the hostiles known.
+;; go-to has no wait for dawn: its start check judges the route's risk (jobs.lib.walk-risk) by the light seen and the hostiles known.
 ;; Case 1 room: stone x 14..18, z 14..18, roof y 2, torch inside, a door in the east wall at [18 0 16], on open ground at night.
 ;; Should-succeed: a walk out of the room to a goal in a dark stone mound 24 blocks off starts and arrives (mostly underground: little risk).
 ;; Should-fail: a walk over dark open ground (the body outside, the hostiles in view) with three hostiles standing beside its way is held (job.waiting :risky) 
