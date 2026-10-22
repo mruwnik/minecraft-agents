@@ -380,6 +380,7 @@
             {:why :stuck :kind :jump :detail "no progress on step 3 for 3.0 s"}]
            [{:status :stuck :why "walk timed out after 60 s"} {:why :stuck :detail "walk timed out after 60 s"}]
            [{:status :off-plan :at [1 64 0] :step 2} {:why :off-plan :detail "left the plan at step 2"}]
+           [{:status :off-plan :at [1 64 0] :step 17 :partial true} {:why :off-plan :detail "walked the nearest known way to its end at step 17, still short of the goal"}]
            [{:status :failed :reason "controls lost"} {:why :steer-failed :detail "controls lost"}]
            [{:status :failed} {:why :steer-failed}]
            [{:status :arrived :at [1 64 0]} {:why :no-progress}]]]

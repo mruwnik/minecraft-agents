@@ -58,18 +58,20 @@
   "What a fruitless round's result says about why: {:why :kind :detail ...}, only the keys it has. A :no-path says the planner's
   :reason (:why, :no-path when it has none), the :kind of step that cannot be walked, and what its reason carries (:door-stuck's
   :cells, :one-way's :near and :one-way); a walk that got stuck says :stuck, the :move it was stuck on as :kind and the
-  executor's :why text as :detail; one that left its plan says :off-plan; a failed steer says :steer-failed with its reason
+  executor's :why text as :detail; one that left its plan (or walked a partial plan to its end, said so in :detail) says :off-plan; a failed steer says :steer-failed with its reason
   as :detail; a walk that ended with the body no nearer says :no-progress. A body sealed in its own shelter adds
   :inside-own-shelter (its cell) and a :hint (the shelter job lets it out by day). A failed waypoint
   walk of the call (go-to's mem :waypoint-why) rides along as :waypoint-why."
-  [{:keys [status reason kind move step] :as result}]
+  [{:keys [status reason kind move step partial] :as result}]
   (merge
    (case status
     :stuck (cond-> {:why :stuck}
              move (assoc :kind move)
              (:why result) (assoc :detail (:why result)))
     :off-plan (cond-> {:why :off-plan}
-                step (assoc :detail (str "left the plan at step " step)))
+                step (assoc :detail (if partial
+                                      (str "walked the nearest known way to its end at step " step ", still short of the goal")
+                                      (str "left the plan at step " step))))
     :failed (cond-> {:why :steer-failed}
               reason (assoc :detail (str reason)))
     (cond
