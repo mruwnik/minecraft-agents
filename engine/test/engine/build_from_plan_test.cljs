@@ -247,8 +247,8 @@
       (fn ^:async t []
         (let [targets (atom [])
               tunnel {:round (fn ^:async w [c] (swap! targets conj (js/Math.floor (:x (u/self-pos c)))) (ctx/end c :nothing-possible :dig-failed {}))}
-              plan {:id "ring" :parts [{:id "p" :cells [[3 64 2]] :want "dirt"}]}
-              rock (into {} (for [x (range -2 15) z (range -4 9) y [62 63 64 65 66]] [(str x "," y "," z) "stone"]))
+              plan {:id "ring" :parts [{:id "p" :cells [[3 75 2]] :want "dirt"}]}
+              rock (into {} (for [x (range -2 15) z (range -4 9) y (range 62 80)] [(str x "," y "," z) "stone"]))
               {:keys [eng]} (start {:inventory [{:name "stone_pickaxe" :count 1} {:name "dirt" :count 4}]
                                     :blocks (assoc rock "12,64,2" "air" "12,65,2" "air")
                                     :self {:pos {:x 12.5 :y 64 :z 2.5}}}
