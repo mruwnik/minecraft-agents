@@ -15,12 +15,13 @@ const DATA_PACKAGES = ['minecraft-data', 'prismarine-block', 'prismarine-registr
 
 const hashOf = (x) => createHash('sha1').update(JSON.stringify(x)).digest('hex').slice(0, 12)
 
-// One file per build file path, so a rebuilt bundle replaces its table instead of piling up files.
+const STALE_MS = 6 * 3600 * 1000
+
+// Keyed by the bundle's bytes, not its path, so every worktree with the same bundle shares one file.
 function keyOf (name, buildFile) {
-  const { mtimeMs, size } = fs.statSync(buildFile)
+  const content = createHash('sha1').update(fs.readFileSync(buildFile)).digest('hex')
   const versions = DATA_PACKAGES.map(p => require(`${p}/package.json`).version)
-  const prefix = `${name}-${hashOf(buildFile)}-`
-  return { prefix, file: `${prefix}${hashOf([mtimeMs, size, versions])}.bin` }
+  return { prefix: `${name}-`, file: `${name}-${hashOf([content, versions])}.bin` }
 }
 
 export function encode (table) {
@@ -60,7 +61,12 @@ export function tableCached (name, buildFile, build, cacheDir = dir) {
   const key = keyOf(name, buildFile)
   const file = path.join(cacheDir, key.file)
   if (fs.existsSync(file)) {
-    try { return decode(fs.readFileSync(file)) } catch { /* a damaged file is rebuilt below */ }
+    try {
+      const table = decode(fs.readFileSync(file))
+      const now = new Date()
+      fs.utimesSync(file, now, now)
+      return table
+    } catch { /* a damaged file is rebuilt below */ }
   }
   const table = build()
   const tmp = `${file}.${process.pid}.tmp`
@@ -68,7 +74,11 @@ export function tableCached (name, buildFile, build, cacheDir = dir) {
     fs.mkdirSync(cacheDir, { recursive: true })
     fs.writeFileSync(tmp, encode(table))
     fs.renameSync(tmp, file)
-    for (const f of fs.readdirSync(cacheDir)) if (f.startsWith(key.prefix) && f !== key.file) fs.rmSync(path.join(cacheDir, f), { force: true })
+    const old = Date.now() - STALE_MS
+    for (const f of fs.readdirSync(cacheDir)) {
+      const p = path.join(cacheDir, f)
+      if (f.startsWith(key.prefix) && f !== key.file && fs.statSync(p).mtimeMs < old) fs.rmSync(p, { force: true })
+    }
   } catch { /* an unwritable cache only costs the build next time */ }
   return table
 }
