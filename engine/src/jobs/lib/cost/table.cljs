@@ -26,7 +26,10 @@
           :wood 12 ;; a log, stem, hyphae, wood or bamboo block: the walk to a tree
           :block {"gilded_blackstone" 300}
           :ore-by-tier {1 10 2 30 3 300 4 300}
-          :ore-scan-s 0.3 ;; seconds of looking per unit of the best layer's ore density (base-rates/peak-density): find = this / density
+          ;; seconds of looking per unit of the best layer's ore density (base-rates/peak-density): find = this / density.
+          ;; Measured for iron only (trial bodies 2026-10-22: 100-147 s of mining job time per raw iron), so raw iron is about 120;
+          ;; other ores follow by density, unmeasured.
+          :ore-scan-s 1.15
           :ores {"coal" [nil 1.5] "copper" [nil 3.5] "iron" [nil 1] "lapis" [nil 6.5] "redstone" [nil 4.5] "gold" [nil 1]
                  "diamond" [nil 1.5] "emerald" [nil 1] "nether_quartz" [40 1.5] "nether_gold" [60 4]
                  "ancient_debris" [900 1]}} ;; [find drops]: a nil find comes from the base rates, a number is the hand figure of an ore they do not cover

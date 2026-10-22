@@ -215,3 +215,9 @@
   (is (> (each "gold_ingot") (each "iron_ingot")) "gold ground holds less ore than iron ground")
   (is (> (each "diamond") (each "coal")))
   (is (< (value [{:name "coal"}] :basis {:find {:ore-scan-s 0.03}}) (each "coal")) "the find is the scan over the density"))
+
+(deftest a-full-iron-kit-is-worth-hours-of-mining
+  ;; trial bodies spent 100-147 s of mining job time per raw iron, so the kit's 33 iron is 1-1.5 h of mining
+  (let [kit (map #(hash-map :name (str "iron_" %))
+                 ["pickaxe" "sword" "axe" "shovel" "helmet" "chestplate" "leggings" "boots"])]
+    (is (< 3600 (value kit) (* 4 3600)))))

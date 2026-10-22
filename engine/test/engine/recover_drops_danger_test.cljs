@@ -64,6 +64,22 @@
           (is (nil? (recovered eng)) "a danger skip stays open")
           (is (re-find #"skip: .*danger [1-9][0-9.]*,.*: skeleton" (decided-text eng))))))))
 
+(deftest a-whole-iron-kit-is-left-to-a-pack-of-skeletons-that-would-kill-an-unarmed-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pile (into dt/death-pile-of-the-field-report
+                         (map #(hash-map :name (str "iron_" %) :count 1)
+                              ["pickaxe" "sword" "axe" "shovel" "helmet" "chestplate" "leggings" "boots"]))
+              pack (for [i (range 6)] {:id (+ 20 i) :name "skeleton" :kind "hostile" :pos {:x (+ 18.5 i) :y 64 :z 3.5}})
+              {:keys [eng]} (setup {:floor tu/walk-floor :entities (vec (concat (pile-drops pile) pack))})]
+          (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"})
+          (core/submit! eng job {})
+          (await (run-until-empty eng 20))
+          (is (nil? (recovered eng)))
+          (is (re-find #"^skip: .*danger [1-9][0-9.]*,.*: skeleton" (decided-text eng)))
+          (is (< 3600 (js/parseFloat (second (re-find #"value ([0-9.]+)" (decided-text eng))))) "the kit is priced at hours"))))))
+
 (deftest a-body-with-an-iron-sword-and-armour-goes-for-the-guarded-pile
   (async done
     (tu/run-async done
