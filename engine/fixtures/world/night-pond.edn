@@ -1,4 +1,4 @@
-;; Night job: a swimmer is in no shelter. The body floats in a 3x3 pond in the floor of a closed torch-lit 11x11 stone room (roofed, small, walled:
+;; Night job: a swimmer is in no shelter (a dark variant: no torches; a pit that failed for water beside it moves only a few blocks). The body floats in a 3x3 pond in the floor of a closed torch-lit 11x11 stone room (roofed, small, walled:
 ;; safe once dry). It climbs out first and only then ends :roofed; it places nothing in the water.
 ;; Needs night: run with --allow-time --time-log <the shared time log>.
 {:defaults
@@ -15,4 +15,14 @@
    :expect [{:no-event {:source :action :kind :started :data {:name "place"}} :for-s 20}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 60 :of-job true}]
    :after [[:body-far [16.5 -1 16.5] 2] [:body-near [16.5 0 16.5] 6]]
-   :limit-s 80}]}
+   :limit-s 80}
+  ;; The room is dark and no torch makes it safe: the body walks off the water's edge onto solid floor and digs in.
+  {:name "swimmer-in-a-dark-room-climbs-out-and-digs-in"
+   :time-why :night-light ; jobs.survival.night ends at once by day after leaving the water
+   :body {:at [16.5 -1 16.5]}
+   :blocks [[:fill [10 -6 10] [22 5 22] "stone"] [:fill [11 0 11] [21 3 21] "air"] [:fill [15 -4 15] [17 -1 17] "water"]]
+   :act [[:job (jobs.survival.night)]]
+   :expect [{:no-event {:source :job :kind :shelter.exposed} :for-s 120 :until {:source :job :kind :completed :data {:name "jobs.survival.night"}}}
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 120 :of-job true}]
+   :after [[:body-far [16.5 -1 16.5] 2]]
+   :limit-s 140}]}

@@ -13,23 +13,29 @@
             [jobs.survival.shut-in-night :as shut-night]))
 
 (a/defargs settings
-  {::reach {:default 16 :doc "How far (blocks) a night pit looks for ground to dig in when the feet are no site." :spec (a/int-in 0 nil)}})
+  {::reach {:default 16 :doc "How far (blocks) a night pit looks for ground to dig in when the feet are no site." :spec (a/int-in 0 nil)}
+   ::water-radius {:default 3 :doc "Blocks around a pit that failed for fluid beside it that count as the same site: a player steps a little way from the water, not out of the room." :spec (a/int-in 0 nil)}})
 
 (defn failed
   "Tonight's failed sites [{:pos :way :reason}]."
   [c]
   (mapv :data (ctx/entries c :shut-in-failed)))
 
+(defn site-radius
+  "How far around a failed site (an entry of failed) another pit counts as the same site."
+  [entry]
+  (min (shut-night/futile-radius) (if (= :fluid-adjacent (:reason entry)) (settings/get settings ::water-radius) (shut-night/futile-radius))))
+
 (defn failed-here?
   "Whether a site that failed tonight (for way, when given) lies within shut-in's futile radius of the feet."
   [c & [way]]
   (let [here (sh-sense/feet (:primitives c))]
-    (boolean (some #(and (or (nil? way) (= way (:way %))) (<= (u/dist here (:pos %)) (shut-night/futile-radius))) (failed c)))))
+    (boolean (some #(and (or (nil? way) (= way (:way %))) (<= (u/dist here (:pos %)) (site-radius %))) (failed c)))))
 
 (defn clear-of-failed?
-  "Whether feet cell f is at least futile-radius+1 from every failed site."
+  "Whether feet cell f is at least site-radius+1 from every failed site."
   [c f]
-  (every? #(>= (u/dist (:pos %) f) (inc (shut-night/futile-radius))) (failed c)))
+  (every? #(>= (u/dist (:pos %) f) (inc (site-radius %))) (failed c)))
 
 (defn pit-site?
   "Whether feet cell f looks like a place a pit can be dug, by what a player sees from the surface: standing room, dry
@@ -53,7 +59,7 @@
   "The top of the pit the body stands in (a failed site's :start above the feet, within the futile radius), or nil."
   [c]
   (let [feet (sh-sense/feet (:primitives c))]
-    (some #(when (and (:start %) (< (:y feet) (:y (:start %))) (<= (u/dist feet (:start %)) (shut-night/futile-radius))) (:start %))
+    (some #(when (and (:start %) (< (:y feet) (:y (:start %))) (<= (u/dist feet (:start %)) (site-radius %))) (:start %))
           (failed c))))
 
 (defn relocation-site
@@ -63,7 +69,7 @@
   (let [p (:primitives c)
         feet (sh-sense/feet p)
         reach (settings/get settings ::reach)
-        here (:pos (first (filter #(and (= :pit (:way %)) (<= (u/dist feet (:pos %)) (shut-night/futile-radius))) (failed c))))
+        here (:pos (first (filter #(and (= :pit (:way %)) (<= (u/dist feet (:pos %)) (site-radius %))) (failed c))))
         danger-near (threats/danger-near-fn c)
         start (pit-start c)
         {:keys [x z]} (or start here feet)
