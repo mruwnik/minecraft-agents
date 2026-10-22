@@ -169,7 +169,7 @@
 (defn leg-target
   "The waypoint of the first leg of a target far from feet underground. Diagonal: on the body's row, one past the
   target's column, so the first leg stands in that column; the shorter axis goes first (swap? takes the longer axis
-  first). On the body's row or column but farther than max-length: max-length along it. nil when the body stands on
+  first). On the body's row or column: the target's column or row on it (farther than max-length: max-length along it). nil when the body stands on
   the surface or a leg is longer than max-length."
   [block-at [fx fy fz :as feet] [tx _ tz] max-length swap?]
   (let [dx (- tx fx) dz (- tz fz)
@@ -179,6 +179,8 @@
       (cond
         (and (zero? dz) (> (js/Math.abs dx) max-length)) [(+ fx (* max-length (js/Math.sign dx))) fy fz]
         (and (zero? dx) (> (js/Math.abs dz) max-length)) [fx fy (+ fz (* max-length (js/Math.sign dz)))]
+        (zero? dz) (when-not (zero? dx) [tx fy fz])
+        (zero? dx) [fx fy tz]
         (and (not (zero? dx)) (not (zero? dz)) (<= (inc (js/Math.abs a)) max-length) (<= (js/Math.abs b) max-length))
         (if x-first?
           [(+ tx (js/Math.sign dx)) fy fz]

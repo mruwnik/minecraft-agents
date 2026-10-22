@@ -35,7 +35,7 @@
    :blocks [[:fill [0 0 0] [31 19 31] "dirt"] [:fill [24 0 24] [28 2 28] "air"] [:fill [24 2 24] [24 2 24] "glowstone"]]
    :act [[:await {:source :job :kind :stair.step} 120]
          [:rcon "execute as $BODY at @s run summon zombie ~ ~ ~ {NoAI:1b,Tags:[\"wt\"],equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :danger}} :within-s 150 :of-job true}]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :danger}} :within-s 150 :of-job true}]
    :limit-s 200}
 ;; card 5b64bbaa: a pile 19 below on an open 1:1 slope (dirt columns x 0..18, the top falling a block a step) with no tool: the body
   ;; respawns on the top at [0 19 16] and walks down to the pile at the foot [25 0 16]; no stair is dug for a pile a walk reaches

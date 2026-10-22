@@ -592,6 +592,12 @@
           (is (= "air" (block-at p [0 20 5])) "the first leg ran to the target's row")
           (is (= "iron_ore" (block-at p [6 20 5]))))))))
 
+(deftest a-target-on-the-bodys-row-or-column-gets-a-leg-to-its-column-or-row
+  (let [leg (fn [feet target] (ln/leg-target (constantly "air") feet target 96 false))]
+    (is (= [26 -20 26] (leg [31 -20 26] [26 -40 26])) "5 east of the target column: walk to it, then the run-up fits")
+    (is (= [31 -20 26] (leg [31 -20 20] [31 -40 26])) "on the target's column, 6 along: to its row")
+    (is (nil? (leg [26 -20 26] [26 -40 26])) "already above the target: no leg")))
+
 (deftest a-given-heading-limits-the-lines-to-it
   (let [a (ln/approach {:block-at (world-fn {}) :zones [] :footprints #{} :ledger #{}} [6 57 0] [0 65 0] 24 #{} :north)]
     (is (= :north (:heading a)))))

@@ -73,7 +73,7 @@
   reached in two legs: a kept tunnel child along the shorter axis to a waypoint one past the target's column, then
   the line above from the body's own cell. A leg that stops is tried once on the other axis; a
   floor of air is bridged with a carried building block (jobs.access.stair.step/bridge!), as the stair does. A target on the body's
-  row or column farther than :max-length is cut the same way in legs of :max-length from the body's cell.
+  row or column is cut the same way: a leg to its column or row (at most :max-length long).
 
   The level run walked is remembered as a :tunnel-way, so go-to's own way up links it.
 
