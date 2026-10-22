@@ -2,7 +2,7 @@
   "floorMb": 4096,
   "kinds": {
     "body": { "needMb": 400, "max": 20, "maxLoadPerCore": 1.25, "loadCores": 1 },
-    "tests": { "needMb": 1700, "heapMb": 1024, "baseMb": 560, "perNsMb": 20, "goldenMb": 940, "max": 8, "shardMax": 6, "reserve": 1, "sweepCap": 2 },
+    "tests": { "needMb": 1700, "heapMb": 1400, "baseMb": 560, "perNsMb": 20, "goldenMb": 940, "max": 8, "shardMax": 6, "reserve": 1, "sweepCap": 2 },
     "server": { "needMb": 2000, "max": 6, "reserve": 1, "sweepCap": 1 },
     "browser": { "needMb": 600, "max": 2 }
   }

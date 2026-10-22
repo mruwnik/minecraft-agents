@@ -37,7 +37,7 @@ export const expectedMs = (nss, ms) => {
 // Backstop only: the stall watchdog (watchStall) ends a hung run; this ends one that keeps finishing tests for hours.
 export const WHOLE_RUN_CAP_S = 3600
 
-// Measured peak RSS (VmHWM, 2026-10-16): 464-476 MB for one namespace, 476-640 for 3-5, 640-722 for many, with the heap capped at kinds.tests.heapMb (uncapped, V8 let garbage grow it to 2.3 GB); a full shard (~45 namespaces) needs needMb. The table of needs is kinds.tests in res-slot.json (needMb = shard and cap, goldenMb).
+// Measured peak RSS (VmHWM, 2026-10-16): 464-476 MB for one namespace, 476-640 for 3-5, 640-722 for many, with the heap capped at kinds.tests.heapMb (shard 2 peaks near 930 MB heapUsed at 1311 tests; uncapped, V8 let garbage grow it to 2.3 GB); a full shard (~45 namespaces) needs needMb. The table of needs is kinds.tests in res-slot.json (needMb = shard and cap, goldenMb).
 export const needMb = (nsCount, tests) => Math.min(tests.needMb, tests.baseMb + tests.perNsMb * nsCount)
 
 // A hung test stops the timings file growing (one line per finished test, one {"started"} line at load), so the run is killed when it stalls, not after a whole-run time.

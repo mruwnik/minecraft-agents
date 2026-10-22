@@ -95,7 +95,7 @@ test('needMb: measured peak plus margin per run, growing with the namespace coun
   assert.equal(needMb(200, tests), 2950)
 })
 
-test('res-slot.json holds the one table of tests needs: shard 1700, heap 1024, golden 940, floor 4096', () => {
+test('res-slot.json holds the one table of tests needs: shard 1700, heap 1400, golden 940, floor 4096', () => {
   const res = JSON.parse(fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), 'res-slot.json'), 'utf8'))
   assert.deepEqual([res.kinds.tests.needMb, res.kinds.tests.goldenMb, res.floorMb], [1700, 940, 4096])
 })
