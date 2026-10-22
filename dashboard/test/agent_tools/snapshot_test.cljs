@@ -88,6 +88,15 @@
     ; --pitch -30 should look up (positive radian pitch in Mineflayer)
     (is (close? (/ pi 6) (:pitch (snap/camera p {:pitch -30}))))))
 
+(deftest a-body-in-a-log-out-stint-is-not-told-to-start
+  (let [offline (snap/pose-problem {:world "w" :status "offline"} "w" 5000)
+        msg (:message (snap/away-problem offline {:by :night :why :logged-out-for-sleeping-player :back-at "06:31"}))]
+    (is (str/includes? msg "logged out by night") msg)
+    (is (str/includes? msg "back about 06:31") msg)
+    (is (not (str/includes? msg "start it")) msg)
+    (is (= offline (snap/away-problem offline nil)) "no stint reported: the old advice stays")
+    (is (= :no-pose (:reason (snap/away-problem {:reason :no-pose :message "x"} {:by :night}))) "only an offline pose is reworded")))
+
 (deftest pose-problem-requires-a-fresh-online-pose-of-this-world
   (are [p reason] (= reason (:reason (snap/pose-problem p "w" 5000)))
     (pose {}) nil

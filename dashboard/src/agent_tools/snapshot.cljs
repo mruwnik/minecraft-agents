@@ -252,6 +252,22 @@
                    snapshot
                    (throw (js/Error. (str "the body's /entities answered " status)))))))))
 
+(defn fetch-away
+  "A promise of the engine's /status :offline map ({:by :why :back-at}) when the body is in a log-out stint, else nil."
+  [ctx body]
+  (-> (http/request {:socket-path (.join path (:world-dir ctx) "agents" body "engine" "events.sock") :path "/status"
+                     :label "status" :timeout-ms entities-timeout-ms :max-bytes entities-max-bytes})
+      (.then (fn [{:keys [status text]}] (when (= 200 status) (:offline (data/read-edn text)))))
+      (.catch (fn [_] nil))))
+
+(defn away-problem
+  "A body-offline problem whose engine says it is only logged out (a stint it ends itself) says so, not 'start it'."
+  [problem {:keys [by why back-at] :as away}]
+  (cond-> problem
+    (and away (= :body-offline (:reason problem)))
+    (assoc :message (str "the body is logged out" (when by (str " by " (name by))) (when why (str " (" (name why) ")"))
+                         (when back-at (str ", back about " back-at)) "; it comes back by itself, ask again then"))))
+
 (defn execute!
   "Renders and writes one snapshot; `render` is renderView of tools/view/render.mjs. `entities-fn` (default: ask the
   body) returns a promise of its /entities snapshot; what the body perceives, not the live entity list, is drawn, and
@@ -260,17 +276,18 @@
   ([{:keys [ctx body] :as opts} render now entities-fn]
    (let [pose (read-pose ctx body)]
      (if (pose-problem pose (:world ctx) now)
-       (execute-with! opts render now pose {})
+       (-> (js/Promise.resolve (when (= :body-offline (:reason (pose-problem pose (:world ctx) now))) (fetch-away ctx body)))
+           (.then #(execute-with! opts render now pose {:away %})))
        (-> (js/Promise.resolve ((or entities-fn #(fetch-entities ctx body))))
            (.then (fn [snapshot] (perceived (:entities snapshot) (:mcVersion pose))))
            (.catch (fn [error] {:entities [] :heard [] :entities-error (str (or (some-> error .-message) error))}))
            (.then #(execute-with! opts render now pose %)))))))
 
 (defn execute-with!
-  [{:keys [ctx body workspace width height max-dist prefix] :or {prefix "snap"} :as opts} render now pose {:keys [entities heard entities-error]}]
+  [{:keys [ctx body workspace width height max-dist prefix] :or {prefix "snap"} :as opts} render now pose {:keys [entities heard entities-error away]}]
   (let [pose (when pose (assoc pose :entities entities))
         expected (real-target (.join path workspace "snapshots"))]
-    (if-let [problem (or (pose-problem pose (:world ctx) now) (unsafe-dir-problem workspace expected))]
+    (if-let [problem (or (some-> (pose-problem pose (:world ctx) now) (away-problem away)) (unsafe-dir-problem workspace expected))]
       (js/Promise.resolve (merge {:ok false :body body} problem))
       (let [cam (camera pose opts)]
         (-> (js/Promise.resolve
