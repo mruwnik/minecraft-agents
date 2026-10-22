@@ -271,3 +271,14 @@
         rows (concat [(entity "self" "player" "overworld" {:x 0 :y 64 :z 0} now 100 119900 {:self? true :username "ProbeMove"})] arrows [stray])
         result (entities/project {:body "ProbeMove" :radius 64 :limit 10 :raw? false} (snapshot now rows))]
     (is (= "stray" (:type (first (:items result)))) "a heard stray is not pushed past the page by nearer arrows")))
+
+(deftest an-idle-body-with-no-fresh-row-or-pose-is-centred-on-its-live-position
+  (let [{:keys [state close]} (fixture)
+        now (.now js/Date)
+        request (entities/options ["ProbeMove" "--world" "w" "--state" state])
+        rows [(entity "near" "cow" "overworld" {:x 5 :y 64 :z 5} now 5 119995)]
+        result (entities/project request (assoc (snapshot now rows) :online? true :self {:pos {:x 4 :y 64 :z 4} :dimension "overworld"}))]
+    (try
+      (is (= [4 64 4] (:center result)))
+      (is (= ["uuid-near"] (mapv :uuid (:items result))))
+      (finally (close)))))

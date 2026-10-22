@@ -140,7 +140,9 @@
           pose-origin (when (and (nil? self) (true? (:online? snapshot))
                                  (or (nil? (:center request)) (nil? (:dimension request))))
                         (fresh-pose-origin request now))
-          origin (or self pose-origin)
+          live-self (when (and (nil? self) (true? (:online? snapshot)) (valid-position? (get-in snapshot [:self :pos])) (string? (get-in snapshot [:self :dimension])))
+                      (:self snapshot))
+          origin (or self live-self pose-origin)
           center (or (:center request) (:pos origin))
           dimension (or (:dimension request) (:dimension origin))]
       (when-not (and (number? now) (js/Number.isFinite now) (number? ttl) (pos? ttl))

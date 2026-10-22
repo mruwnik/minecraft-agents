@@ -375,3 +375,13 @@
     (is (= [2 3] (mapv #(.-id %) (.heardMobs p #js {:names #js ["cow"]}))))
     (is (empty? (.heardMobs p #js {:names #js ["pig"]})))
     (is (empty? (.heardMobs p #js {:radius 5})))))
+
+(deftest the-snapshot-carries-the-bodys-live-position-after-its-own-row-expired
+  (let [c (cache {:now (constantly 500)})
+        pos #js {:x 1.5 :y 64 :z 2.5}
+        bot #js {:entity #js {:id 1 :type "player" :username "Probe" :position pos}}]
+    (seen/observe! c (sample bot [(.-entity bot)]) 0)
+    (set! (.-x pos) 9.5)
+    (let [snap (seen/snapshot c 10000000)]
+      (is (empty? (:entities snap)) "the self row expired")
+      (is (= {:pos {:x 9.5 :y 64 :z 2.5} :dimension "overworld"} (:self snap))))))

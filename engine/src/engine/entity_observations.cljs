@@ -205,6 +205,7 @@
     (swap! (:state store)
            (fn [state]
              (cond-> (assoc state :entities kept :online? online? :available? true)
+               tracked (assoc :self-source source :self-dim dim)
                (pos? dropped) (assoc :dropped dropped :overflow-until (+ now (setting "ttl-ms"))))))
     nil))
 
@@ -256,6 +257,9 @@
          dropped (+ (:dropped bounded) (if (> (:overflow-until state) now) (:dropped state) 0))]
      {:ok true :world (get-in store [:opts :world]) :body (get-in store [:opts :body])
       :now now :ttl-ms (setting "ttl-ms") :online? (:online? state)
+      :self (when (and (:online? state) (:self-source state))
+              (when-let [pos (some-> ^js (:self-source state) .-entity position)]
+                {:pos pos :dimension (:self-dim state)}))
       :entities (:entities bounded) :count (count (:entities bounded)) :cached-count (count values)
       :cap (get-in store [:opts :cap]) :snapshot-cap-bytes (setting "max-snapshot-bytes")
       :truncated? (pos? dropped) :dropped dropped})))

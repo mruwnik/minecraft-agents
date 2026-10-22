@@ -80,4 +80,10 @@
          [:until [:cli "snapshot" ["$body" "--world" "$world" "--width" "160" "--height" "90"]
                   {:ok true :text [:contains " m centre"]}] 30]
          [:job (jobs.debug.notify {:text "snap"})]]
-   :expect [{:event {:source :job :kind :completed} :within-s 30 :of-job true}]}]}
+   :expect [{:event {:source :job :kind :completed} :within-s 30 :of-job true}]}
+  ;; An idle, standing body is centred on its own position: entities answers with items, not :origin-unavailable.
+  {:name "entities-of-an-idle-body-centres-on-itself"
+   :act [[:wait-s 10]
+         [:cli "entities" ["$body" "--world" "$world"] {:ok true :center [:any]}]]
+   :after [[:body-near [16.5 0 16.5] 3]]
+   :limit-s 60}]}
