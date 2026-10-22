@@ -82,24 +82,29 @@
 
 (defn torch-due? [c] (some? (tunnel-spot c)))
 
+(defn line-cells
+  "The cells a branch runs off: the tunnel's, or the start cell while no tunnel is cut (the body mines a cave from where it began)."
+  [{:keys [tunnel start]}]
+  (cond tunnel (map #(step-cell tunnel %) (range (inc (:steps tunnel 0))))
+        start [start]))
+
 (defn branch-site
-  "{:dir :site} for a torch on a branch: the run goes away from the tunnel along the axis it is farthest off on, the
+  "{:dir :site} for a torch off the line (line-cells): the run goes away from the line along the axis it is farthest off on, the
   site is the cell behind the body; nil when the body is straight above or below the line (no side to run along)."
-  [tunnel here]
-  (let [near (apply min-key #(+ (Math/pow (- (:x here) (:x %)) 2) (Math/pow (- (:z here) (:z %)) 2))
-                    (map #(step-cell tunnel %) (range (inc (:steps tunnel 0)))))
-        dx (- (:x here) (:x near))
-        dz (- (:z here) (:z near))
-        dir (if (>= (js/Math.abs dx) (js/Math.abs dz)) [(js/Math.sign dx) 0] [0 (js/Math.sign dz)])]
-    (when (not= [0 0] dir)
-      {:dir dir :site (-> here (update :x - (first dir)) (update :z - (second dir)))})))
+  [m here]
+  (when-let [cells (seq (line-cells m))]
+    (let [near (apply min-key #(+ (Math/pow (- (:x here) (:x %)) 2) (Math/pow (- (:z here) (:z %)) 2)) cells)
+          dx (- (:x here) (:x near))
+          dz (- (:z here) (:z near))
+          dir (if (>= (js/Math.abs dx) (js/Math.abs dz)) [(js/Math.sign dx) 0] [0 (js/Math.sign dz)])]
+      (when (not= [0 0] dir)
+        {:dir dir :site (-> here (update :x - (first dir)) (update :z - (second dir)))}))))
 
 (defn branch-torch-due?
-  "Whether the body, off the tunnel line, stands in a dark cell no hung torch reaches."
+  "Whether the body, off the tunnel line (or the start cell, with no tunnel), stands in a dark cell no hung torch reaches."
   [c]
-  (let [{:keys [tunnel]} (ctx/mem c)
-        here (cell-of (u/self-pos c))
-        site (some-> tunnel (branch-site here) :site vec-of)]
+  (let [here (cell-of (u/self-pos c))
+        site (some-> (branch-site (ctx/mem c) here) :site vec-of)]
     (boolean (and (on? c) site (due-spot c [(vec-of here)] [] site)))))
 
 (defn stair-site
@@ -147,7 +152,7 @@
         here (cell-of (u/self-pos c))
         {:keys [dir site]} (cond
                              (= :stair branch) {:dir (headings (:heading (ctx/mem c))) :site (zipmap [:x :y :z] (stair-site c))}
-                             branch (branch-site tunnel here)
+                             branch (branch-site (ctx/mem c) here)
                              :else {:dir (headings (:heading tunnel)) :site (step-cell tunnel (dec (:steps tunnel)))})
         pick (fn [] (when site (torch/torch-at dir [(:x site) (:y site) (:z site)] (placement/eye (u/self-pos c)) block-at)))
         choice (or (let [c0 (pick)] (when-not (:refused c0) c0))
@@ -168,7 +173,7 @@
   [c branch]
   (let [{:keys [tunnel]} (ctx/mem c)]
     (vec-of (cond (= :stair branch) (zipmap [:x :y :z] (stair-site c))
-                  branch (:site (branch-site tunnel (cell-of (u/self-pos c))))
+                  branch (:site (branch-site (ctx/mem c) (cell-of (u/self-pos c))))
                   :else (step-cell tunnel (dec (:steps tunnel)))))))
 
 (defn lit-here?

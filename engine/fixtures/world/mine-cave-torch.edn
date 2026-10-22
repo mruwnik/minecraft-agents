@@ -1,0 +1,22 @@
+;; Card c172ae4e (mine torch in a cave, no tunnel): the body starts at the foot of a dark hall (x 4..24); the ore capping its far end is lit by a torch in a
+;; side alcove (so it is seen from afar), but the way to it is dark for more than 13 cells from any torch. No tunnel is cut: the dig walks in and must hang
+;; a torch of its own before digging (jobs.gather.mine.torches branch-torch-due? off the start cell). Stone mass x 2..30, z 2..30, y 0..6.
+;; Should-succeed: the ore is dug and a torch is placed. Should-fail: no torch and nothing to craft one from, the dig ends :no-torches.
+{:defaults
+ {:tags [:mine :torch :jobs] :time :any
+  :plot {:light :dark :height 12}
+  :blocks [[:fill [2 0 2] [30 6 30] "stone"] [:fill [4 0 16] [4 1 16] "air"]
+           [:fill [5 0 16] [23 1 16] "air"] [:fill [23 0 4] [23 1 15] "air"] [:fill [24 0 15] [24 1 17] "iron_ore"]
+           [:set [23 1 4] "wall_torch[facing=south]"]]
+  :body {:at [4.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["cobblestone" 16] ["torch" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "dark-hall-to-lit-ore-hangs-a-torch-before-the-dig"
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 0 :radius 24 :mend false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got #{1 2}}} :within-s 190 :of-job true}
+            {:count-event {:source :action :kind :done :data {:name "place" :status "placed"}} :for-s 190 :at-least 1}]
+   :after [[:item "raw_iron" [:>= 1]]]}
+  {:name "dark-hall-no-torches-stops-no-torches"
+   :body {:at [4.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["cobblestone" 16]] :effects [["resistance" 600 4]]}
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 0 :radius 24 :mend false})]]
+   :expect [{:event {:source :job :kind #{:stopped} :data {:reason :no-torches}} :within-s 190 :of-job true}]}]}

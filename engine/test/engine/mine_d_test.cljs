@@ -146,6 +146,21 @@
           (is (empty? (events-of s :mine.no-torches)))
           (is (= 3 (get (inv s) "coal")) "nothing crafted"))))))
 
+(deftest a-dark-cave-walk-to-ore-hangs-a-torch-before-any-tunnel
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (assoc (rock-world far-cave) :inventory [{:name "iron_pickaxe" :count 1} {:name "torch" :count 4}])
+              p (tu/fake-on-floor (assoc world :floor-block floor-block))
+              _ (swap! (fake/state p) assoc :light-default [0 0]
+                       :light (into {} (for [y [64 65] x [5 6]] [[x y 0] [0 15]])))
+              s (start {:p p})]
+          (core/submit! (:eng s) (spec {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 0}) {})
+          (await (run-ticks s 150))
+          (is (seq (calls s "place")) "a torch is hung in the dark cave")
+          (is (nil? (:tunnel (job-mem s))) "no tunnel was cut")
+          (is (some #{[6 64 0]} (dug-cells s)) "the ore is dug"))))))
+
 (deftest torches-false-hangs-none
   (async done
     (tu/run-async done
