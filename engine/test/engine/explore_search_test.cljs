@@ -455,6 +455,17 @@
           (is (= 4 (count (walks s))))
           (is (= :distance (:why (not-found-of s)))))))))
 
+(deftest a-far-centre-whose-ground-is-unloaded-is-walked-toward-not-waited-for
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cells (mapv (fn [[x z]] (str x ",63," z)) (search/spiral-points [300 0] 16 23))
+              s (setup {:unloaded cells} 28)]
+          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :center [300 64 0] :settings {:jobs.explore.search/max-distance 20}}) {})
+          (await (tu/run-ticks (:eng s) (:clock s) 8 700))
+          (is (seq (walks s)) "a walk started")
+          (is (every? #(> (:x %) 200) (walks s)) "toward the centre"))))))
+
 (deftest ground-that-never-loads-waits-until-the-call-time-is-spent
   (async done
     (tu/run-async done

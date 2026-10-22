@@ -51,7 +51,7 @@
   in the same round. A loaded column not yet seen (:unseen) is walked toward in steps of up to 12 blocks (not
   counted in max-legs) and looked at again (over water the step swims, glancing ahead as it goes, so a far shore comes into sight; a step ending in water is progress, not a failure); within 3 blocks of it, it is recorded failed. An unloaded column is not tried but looked at again later. When only unloaded ones are
   left the round pauses 2 s (jobs.time.noop, holding :chunks-loading) and yields, until they load or the call's time is spent (a body just logged in has no chunks
-  yet). A walk go-to gives up on is recorded :unreachable. Three of those in
+  yet). Unloaded ones farther than ::load-reach (64) from the body (a far :center) are walked toward instead. A walk go-to gives up on is recorded :unreachable. Three of those in
   a row end the search (:stuck); until a leg arrives, a leg within 60 degrees of the way one failed from where the
   body stands waits (the same obstacle likely blocks it), and the search ends :stuck when only such legs are left.
   A leg whose goal lies by a mob the body would flee is not walked (go-to :goal-danger
@@ -106,6 +106,7 @@
    ::job-time-s {:default 600 :doc "Seconds from the first round before a search gives up." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 3600 :doc "Seconds from the first round before a search gives up, waits included." :spec (a/num-in 0 nil)}
    ::max-failed-in-row {:default 3 :doc "Failed attempts in a row before the search gives up." :spec (a/int-in 0 nil)}
+   ::load-reach {:default 64 :doc "Columns still unloaded this far (XZ) from the body are walked toward, since chunks load only near it; nearer ones are waited for." :spec (a/num-in 0 nil)}
    ::wait-ms {:default 2000 :doc "How long the search waits for the world to settle, in ms." :spec (a/int-in 0 nil)}
    ::descent {:default 40 :doc "How far below its feet a leg's ground is looked for, in blocks (go-to does the descent)." :spec (a/int-in 0 nil)}
    ::surface-dip {:default 8 :doc "Farm animals live on open ground: a leg whose ground lies deeper than this below the feet (a pit, ravine or cave mouth) is skipped." :spec (a/int-in 0 nil)}
@@ -578,6 +579,18 @@
            (sort-by #(xz-dist [(me 0) (me 2)] [((:pos %) 0) ((:pos %) 2)]))
            first))))
 
+(defn far-unloaded
+  "The cell at the body's height under the nearest unloaded column [{:pos [x y z]}] farther than ::load-reach from the body, nil when none."
+  [c unloaded]
+  (let [[bx y bz] (here c)
+        reach (settings/get settings ::load-reach)]
+    (some->> unloaded
+             (map (fn [{[x _ z] :pos}] [(xz-dist [bx bz] [x z]) x z]))
+             (filter #(> (first %) reach))
+             (sort-by first)
+             first
+             (#(vector (% 1) y (% 2))))))
+
 (defn ^:async advance!
   "Start the next leg, or end the search for want of one."
   [c names ns]
@@ -610,6 +623,8 @@
           more :again
           (and (empty? unloaded) (pos? held)) (do (ctx/update-mem! c dissoc :blocked) :again)
           (empty? unloaded) (finish! c :not-found :distance)
+          (far-unloaded c unloaded) (do (ctx/update-mem! c assoc :leg (far-unloaded c unloaded) :leg-column nil)
+                                        (await (walk! c)))
           :else (do (await (child/pause! c (/ (wait-ms) 1000) :chunks-loading))
                     :continue))))))
 

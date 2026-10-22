@@ -124,4 +124,14 @@
                                      :use-notes false :settings {:jobs.explore.search/max-distance 20} :spend {:job-time 120}})]]
    :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 130 :of-job true}
             {:no-event {:source :job :kind :stopped} :for-s 130 :of-job true :until {:source :job :kind :completed}}]
-   :limit-s 140}]}
+   :limit-s 140}
+  ;; card 5af8d619: a :center beyond the chunks the body has loaded (the plot is 400 long, the client sees about 160) is walked
+  ;; toward, not waited for (it held :chunks-loading for ever). Emerald at the centre 360 east. Should-succeed: found.
+  {:name "far-center-beyond-loaded-chunks-is-walked-toward"
+   :time :any :plot {:height 8 :floor "grass_block" :length 400 :width 32 :light :lit}
+   :blocks [[:set [362 0 16] "emerald_block"]]
+   :act [[:job (jobs.explore.search {:target "emerald_block" :center #at [360 0 16] :scan-radius 8
+                                     :use-notes false :settings {:jobs.explore.search/max-distance 20} :spend {:job-time 400}})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :found}} :within-s 400 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 400 :of-job true :until {:source :job :kind :completed}}]
+   :limit-s 420}]}
