@@ -15,6 +15,8 @@
             [jobs.lib.need :as need]
             [jobs.lib.util :as u]))
 
+(def meta {:tags [:goal]})
+
 (def doc
   "Feed :pairs pairs (two animals each) of type :mob (such as \"cow\") within :radius so that they breed; the goal is the
   calf. A one-shot order that ends itself; a cut job resumes.

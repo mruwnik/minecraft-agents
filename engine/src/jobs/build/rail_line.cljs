@@ -24,6 +24,8 @@
             [jobs.lib.storage :as storage]
             [jobs.lib.world :as known]))
 
+(def meta {:tags [:goal]})
+
 (def doc
   "Build the rail line a plan wants (:plan, optionally only its :part) and prove a ridden cart can run it.
   The plan's rail cells (wants naming a *rail block) must form one chain (plan.rail/line). plan.rail/layout writes

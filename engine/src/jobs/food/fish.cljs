@@ -162,4 +162,4 @@
 (defn ^:async round [c]
   (await (pace/steps! c #(step c))))
 
-(def meta {:tags [:food]})
+(def meta {:tags [:goal :food]})

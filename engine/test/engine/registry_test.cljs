@@ -59,8 +59,8 @@
     'jobs.survival.bed-down :phase '[jobs.survival.night]))
 
 (deftest a-job-declares-its-tags
-  (is (= [:mine :dig :ore :light] (:tags (get registry/jobs 'jobs.gather.mine))))
-  (is (= [:food] (:tags (get registry/jobs 'jobs.survival.get-food))))
+  (is (= [:goal :mine :dig :ore :light] (:tags (get registry/jobs 'jobs.gather.mine))))
+  (is (= [:goal :food] (:tags (get registry/jobs 'jobs.survival.get-food))))
   (is (= [] (:tags (get registry/jobs 'jobs.movement.go-to)))))
 
 (deftest a-job-declares-it-is-position-bound

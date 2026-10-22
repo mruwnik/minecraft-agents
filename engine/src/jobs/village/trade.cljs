@@ -13,6 +13,8 @@
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]))
 
+(def meta {:tags [:goal]})
+
 (def doc
   "Buy :count of :buy from the villager with uuid :villager (nil: the nearest adult with a job in sight). One call is the whole purchase: find the villager
   within jobs.lib.villager/search-radius, walk within ::reach of it, seeing it (no seen solid block, glass too, between the eye and its cell; jobs.movement.go-to legs of ::chase-timeout-s), read its offers (prices move between visits),

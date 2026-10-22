@@ -13,6 +13,8 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.util :as u]))
 
+(def meta {:tags [:goal]})
+
 (def doc
   "Bring one animal of type :mob to :pos (or to the fence post :fence). A one-shot order that starts and ends itself;
   it picks the way and runs that job as its one child, passing its ending up unchanged (kind, cause, data) with the

@@ -183,4 +183,4 @@
 (defn quote-of [c]
   {:uses {:job-time [1 (* 120 (max 1 (count (:segments (site/site c))))) (settings/get settings ::job-time-s)]}})
 
-(def meta {:tags [:mine]})
+(def meta {:tags [:goal :mine]})

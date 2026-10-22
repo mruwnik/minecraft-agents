@@ -17,6 +17,8 @@
             [jobs.lib.util :as u]
             [jobs.lib.trees :refer [default-radius]]))
 
+(def meta {:tags [:goal]})
+
 (def doc
   "Fell trees (jobs.forestry.fell-tree, which picks up its own logs; the :replant-owed trigger plants the saplings) until
   :count logs are carried, or one tree without :count.

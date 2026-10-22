@@ -19,6 +19,8 @@
             [jobs.lib.hunting :as hunting]
             [jobs.lib.world :as known]))
 
+(def meta {:tags [:goal]})
+
 (def doc
   "Keep one pen of one kind of animal in order. The pen is :box. One run is one pass over seven steps in this
   order, each a child job called once (a child that yields is called again on the next call). A step under way is not re-decided.

@@ -93,6 +93,16 @@
            [["catalog" "jobs" "--tag" "mine"] "/catalog?kind=jobs&prefix=&limit=20&offset=0&tag=mine"]]]
     (is (= expected (:path (apply request "--world" "w" "ProbeBody" argv))) (pr-str argv))))
 
+(deftest a-bare-catalog-jobs-answers-by-level-and-any-prefix-filter-or-page-the-flat-list
+  (are [argv levels] (= levels (:catalog-levels (apply request "--world" "w" "ProbeBody" "catalog" argv)))
+    ["jobs"] {:all false}
+    ["jobs" "--all"] {:all true}
+    ["jobs" "jobs.farm."] nil
+    ["jobs" "--tag" "mine"] nil
+    ["jobs" "--offset" "20"] nil
+    ["triggers"] nil)
+  (is (re-find #"--all is only valid" (:error (request "--world" "w" "ProbeBody" "catalog" "jobs" "jobs.farm." "--all")))))
+
 (deftest inventory-and-equipment-are-read-only-observe-modes-with-explicit-raw-or-slot-detail
   (is (= {:agent "ProbeBody" :world "w" :state (.resolve path "/tmp/state")
           :inventory-mode :inventory :slots false :raw false

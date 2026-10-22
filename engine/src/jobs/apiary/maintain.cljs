@@ -15,6 +15,8 @@
             [jobs.lib.steps :as steps]
             [jobs.lib.util :as u]))
 
+(def meta {:tags [:goal]})
+
 (def doc
   "Keep one apiary in order. The apiary is the :box ({:min :max}), or :center (the body's position at the first
   run) with :radius.

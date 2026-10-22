@@ -13,6 +13,8 @@
             [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.util :as u]))
 
+(def meta {:tags [:goal]})
+
 (def doc
   "Set the respawn point at a bed without sleeping: by day, click the bed (jobs.items.use walks to within 2 cells where the eye sees it (the server sets the point only within 3 blocks), through the door of a hut) and the
   server answers \"respawn point set\".

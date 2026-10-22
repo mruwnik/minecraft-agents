@@ -19,6 +19,8 @@
             [jobs.lib.util :as u]
             [clojure.string]))
 
+(def meta {:tags [:goal]})
+
 (def doc
   "Carry at least :count of :item (or of any of :any-of, in that order of preference; carried names are added up), or every item of a :bill {item n}. A body that carries them is done at once. One call is the whole attempt: it yields (:continue) only while a child waits on the world.
 
@@ -104,7 +106,7 @@
 
 (defn can-start? [c]
   (let [cause (no-source c)]
-    (contract/all [(checks/cause-status :never (bad-args c)) (checks/cause-status (:kind (meta cause) :later) cause)])))
+    (contract/all [(checks/cause-status :never (bad-args c)) (checks/cause-status (:kind (cljs.core/meta cause) :later) cause)])))
 
 (defn held-name
   "The name of names carried most of in inventory inv, else the first."

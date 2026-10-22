@@ -381,4 +381,4 @@
                             (ctx/emit! c :kit.progress :info {:text (str "got " (str/join ", " todo))})
                             :again)))))))))
 
-(def meta {:tags [:craft]})
+(def meta {:tags [:goal :craft]})

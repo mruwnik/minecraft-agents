@@ -296,4 +296,4 @@
                      :wheat0 (storage/carried (u/inventory (:primitives c)) "wheat")))
   (await (pace/steps! c #(step! c))))
 
-(def meta {:tags [:food :smelt]})
+(def meta {:tags [:goal :food :smelt]})

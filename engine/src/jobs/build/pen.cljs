@@ -25,6 +25,8 @@
             [jobs.lib.storage :as storage]
             [jobs.lib.world :as known]))
 
+(def meta {:tags [:goal]})
+
 (def doc
   "Build the fence a plan wants (:plan, optionally only its :part) and prove it holds animals.
   The pen is the bounding box of the plan's cells that want a fence, a fence gate or a wall.

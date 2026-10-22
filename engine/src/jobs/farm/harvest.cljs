@@ -25,6 +25,8 @@
             [jobs.lib.field-area :as fa]
             [jobs.lib.world :as known]))
 
+(def meta {:tags [:goal]})
+
 (def doc
   "Cut the ripe crops of the :area and replant them, then collect the drops. The area is a box (only crops inside it are cut), a circle {:pos :radius}
   (a sphere) or nil: a circle of radius 12 round the body's position when the job first runs (kept in memory). With {:plan id}

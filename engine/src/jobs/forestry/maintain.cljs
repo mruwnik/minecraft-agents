@@ -20,6 +20,8 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.step-off :as step-off]))
 
+(def meta {:tags [:goal]})
+
 (def doc
   "Keep the trees a forest plan wants (cells wanting {:tree species}; a large tree is four cells).
   One call plants bare planned cells and fells grown trees (jobs.forestry.fell-tree, which picks up its own logs, and plant-sapling as

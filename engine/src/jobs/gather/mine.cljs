@@ -346,4 +346,4 @@
   [c _]
   (ctx/end c :done nil {}))
 
-(def meta {:tags [:mine :dig :ore :light] :position-bound? true})
+(def meta {:tags [:goal :mine :dig :ore :light] :position-bound? true})

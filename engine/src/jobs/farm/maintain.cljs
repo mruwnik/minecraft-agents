@@ -18,6 +18,8 @@
             [jobs.lib.util :as u]
             [jobs.lib.work-place :as work-place]))
 
+(def meta {:tags [:goal]})
+
 (def doc
   "Keep a farm: its field in order, its stock in its place. A body farther than 16 blocks from the field first walks there
   (one jobs.movement.go-to child; one that cannot arrive ends with the go-to's own kind and cause). One run is one pass over four steps in this order, each a

@@ -209,7 +209,7 @@ built-in recipe table (`tu/fake` with a `:time` also gives the body the world's 
 
 A job is a namespace under `src/jobs/` exporting `round` (and `can-start?`, `can-run?`, each defaulting to `:ok`; Contract jobs below), and optionally `doc`, `args` and `idle-ok` (`true`: its acts are no work, see
 `body.idle`). The namespace follows the path (`src/jobs/forestry/fell_tree.cljs` is `jobs.forestry.fell-tree`).
-`(def meta {:category :phase :part-of '[jobs.survival.night]})` is read at compile time: `:category` is `:goal` (default), `:phase`, `:reflex` or `:debug` (default for `jobs.debug.*`); `catalog jobs --category` lists one kind. `:tags [:mine :light]` (resource or goal words, in the job file) add to the tags the catalog derives itself (the family and the words of the name); `catalog jobs --tag mine` lists the jobs with that tag. `:position-bound? true` marks a job whose meaning depends on where the body stands: the agent tool stamps its submit with `:submitted-at`. `:own-tries? true` marks a job that counts its own tries (`ctx/book-try!`): its children's endings are not booked on its frame's `:tries` line (go-to).
+`(def meta {:category :phase :part-of '[jobs.survival.night]})` is read at compile time: `:category` is `:goal` (default), `:phase`, `:reflex` or `:debug` (default for `jobs.debug.*`); `catalog jobs --category` lists one kind. `:tags [:mine :light]` (resource or goal words, in the job file) add to the tags the catalog derives itself (the family and the words of the name); `catalog jobs --tag mine` lists the jobs with that tag. `:goal` marks a job an agent submits for a goal (it fetches its needs); a bare `catalog jobs` lists those with their doc's first sentence, the other jobs by family, and counts phase, reflex and primitive jobs (`--all` names them). `:position-bound? true` marks a job whose meaning depends on where the body stands: the agent tool stamps its submit with `:submitted-at`. `:own-tries? true` marks a job that counts its own tries (`ctx/book-try!`): its children's endings are not booked on its frame's `:tries` line (go-to).
 
 ```clojure
 (ns jobs.survival.eat
@@ -845,7 +845,7 @@ node engine/tools/observe.mjs Bob --world test                       # compact s
 node engine/tools/observe.mjs Bob --world test --wait [--timeout 30s] [--watch j17]
 node engine/tools/observe.mjs Bob --world test job j17 | result j17
 node engine/tools/observe.mjs Bob --world test events [--until death] [--kinds died,hurt] [--job j17] [--level debug] [--since 10m] [--before SEQ] [--limit 20]   # past events, newest page first, oldest first within it; :next-before pages back; a post-mortem is `events --until death`
-node engine/tools/observe.mjs Bob --world test catalog jobs jobs.farm. --limit 10 | catalog job <name> | catalog trigger <name>
+node engine/tools/observe.mjs Bob --world test catalog jobs [--all] | catalog jobs jobs.farm. --limit 10 | catalog job <name> | catalog trigger <name>
 node engine/tools/quote.mjs Bob --world test jobs.movement.go-to '{:pos {:x 1 :y 64 :z 2}}'   (also jobs.primitive.*)
 node engine/tools/observe.mjs Bob --world test inventory [--slots] | equipment
 node engine/tools/observe.mjs Bob --world test light [x y z] [--radius 0-8]   # perceived light at a cell (default the feet): block, sky, sky-subtract, effective, lit/dark, seen

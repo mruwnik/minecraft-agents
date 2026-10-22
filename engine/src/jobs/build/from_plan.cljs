@@ -34,6 +34,8 @@
             [jobs.build.from-plan.light :as light]
             [jobs.lib.build.text :refer [summary stopped-text assoc-fetch-failed]]))
 
+(def meta {:tags [:goal]})
+
 (def doc
   "Build what a plan wants (:plan, optionally only its :part) from what the body carries.
   A planned cell that stands empty gets its block placed. So does a cell holding a replaceable block (leaf_litter,

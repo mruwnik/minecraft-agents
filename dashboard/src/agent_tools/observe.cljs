@@ -6,6 +6,7 @@
             [agent-tools.inventory :as inventory]
             [agent-tools.job-results :as job-results]
             [agent-tools.vitals :as vitals]
+            [agent-tools.observe.catalog :as catalog]
             [agent-tools.observe.events :as events]
             ["node:path" :as path]
             [clojure.string :as str]
@@ -504,6 +505,8 @@
                     (cond
                       (:wait-options request) (wait! request opts)
                       (:result-id request) (job-outcome! request opts (:result-id request))
+                      (:catalog-levels request) (-> (catalog/read! get-fn (:socket-path request) (:catalog-levels request))
+                                                    (.then #(print-outcome! output %)))
                       (:events-query request) (-> (events/read! get-fn (:socket-path request) (:events-query request) (js/Date.now))
                                                   (.then #(print-outcome! output %)))
                       :else

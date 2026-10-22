@@ -12,6 +12,8 @@
             [jobs.lib.ready :as ready]
             [jobs.lib.util :as u]))
 
+(def meta {:tags [:goal]})
+
 (def doc
   "Grow a crop and harvest it, from a body that has no field: the way to wheat for animals when none stands anywhere. Every round
   reads the world first, so a cut or restarted run takes up the field it finds (a field already standing is never started

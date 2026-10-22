@@ -10,6 +10,8 @@
             [jobs.lib.pace :as pace]
             [plan.shape :as shape]))
 
+(def meta {:tags [:goal]})
+
 (def doc
   "Pick where a farm patch would go: the footprint of :plan (a plan id), else :w x :h. Ranks patches by flatness first, then water
   within 4, open sky and nearness to :center. It tries patches nearest-first and stops once ::limit flat open-sky ones are found (with
