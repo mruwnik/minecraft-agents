@@ -36,19 +36,19 @@
          (not (foods/carries-food? self (reserve/spared (ctx/view c) self))))))
 
 (defn allowed
-  "The hp of expected damage the body may take on a risk now: ::risk-share of its health (cut while hungry), all but 1 hp while it
-  can not heal by waiting (cannot-heal?: waiting never lowers the price). With `worth` (seconds the caller counts the
-  goal worth, the call's :worth), as many hp as that buys at the price of an hp now (dearer when hurt), all but 1 at most, if more."
+  "The hp of expected damage the body may take on a risk now. With `worth` (seconds the caller counts the goal worth, the call's
+  :worth, when above 0): as many hp as that buys at the price of an hp now (dearer when hurt), all but 1 at most; a goal worth
+  little is refused a dear trip, whatever the share of health or the food (death is a cost). Without one: ::risk-share of the
+  health (cut while hungry), all but 1 hp while the body can not heal by waiting (cannot-heal?: waiting never lowers the price)."
   ([c] (allowed c (:worth (:args c))))
   ([c worth]
    (let [self (.self (:primitives c))
-         health (.-health self)
-         hungry? (some-> (.-food self) (<= (settings/get settings ::hungry-food)))
-         share (* (settings/get settings ::risk-share) health (if hungry? (settings/get settings ::hungry-share) 1))
-         share (if (cannot-heal? c) (max share (dec health)) share)]
-     (if worth
-       (max share (min (dec health) (/ worth (* (cost/walk-hp-seconds) (cost/health-scale health)))))
-       share))))
+         health (.-health self)]
+     (if (and (number? worth) (pos? worth))
+       (min (dec health) (/ worth (* (cost/walk-hp-seconds) (cost/health-scale health))))
+       (let [hungry? (some-> (.-food self) (<= (settings/get settings ::hungry-food)))
+             share (* (settings/get settings ::risk-share) health (if hungry? (settings/get settings ::hungry-share) 1))]
+         (if (cannot-heal? c) (max share (dec health)) share))))))
 
 (defn stay-hp
   "Expected damage of staying `seconds` where mobs spawn at `chance` per second, each a zombie fight with the kit carried."

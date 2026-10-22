@@ -129,6 +129,16 @@
     (is (= :later (status-for 5)) "a goal worth little buys little risk")
     (is (= :ok (status-for 400)))))
 
+(deftest a-goal-worth-sets-the-allowance-not-just-raises-it
+  (let [allowed (fn [self worth inv] (price/allowed (ready-test/ctx-of (assoc day-world :self self :inventory inv)) worth))
+        fed {:pos inside :health 10 :food 20}
+        starving {:pos inside :health 10 :food 3}]
+    (is (= 5 (allowed fed nil [])) "no worth said: half the health")
+    (is (= 9 (allowed starving nil [])) "no worth, cannot heal: all but 1")
+    (is (< (allowed fed 5 []) 0.5) "a goal worth little buys little, under the share of health")
+    (is (< (allowed starving 5 []) 0.5) "a body that cannot heal is no freer with a worthless goal")
+    (is (= 9 (allowed fed 100000 [])) "a goal worth a lot: all but 1")))
+
 (deftest a-death-by-terrain-adds-no-risk
   (let [c (ready-test/ctx-of day-world)]
     (doseq [cause ["fall" "lava" "drown" "starve" "a_new_cause" nil]]

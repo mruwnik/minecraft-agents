@@ -15,6 +15,7 @@
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as blocks]
             [jobs.lib.look :as look]
@@ -118,7 +119,7 @@
    ::max-collect-radius {:default 48 :doc "Blocks around the body in which dropped scaffold is collected, at most." :spec (a/int-in 0 nil)}
    ::danger-radius {:default 16 :doc "Blocks around a scaffold block within which a known hostile holds it (:danger) instead of a walk." :spec (a/num-in 0 nil)}
    ::collect-rounds {:default 3 :doc "Times the drops are swept again when fewer items came in than cells were removed." :spec (a/int-in 0 nil)}
-   ::worth-hp {:default 1 :doc "Hit points of risk a walk to one scaffold block may cost: the block is worth little." :spec (a/num-in 0 nil)}
+   ::worth-hp {:default 1 :doc "Hit points of risk a walk to one scaffold block may cost, at full health: the block is worth little (the walk's go-to :worth)." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds a cleanup may take: the digs, the walks, the collecting." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
 
@@ -327,7 +328,7 @@
     (do (ctx/update-mem! c assoc-in [:held cell] {:reason :no-way}) :again)
     :else
     (let [e (await (child/call-chase* c :walk {:pos cell :range (walk-range) :leg-s (leg-s)
-                                               :walk {:ways #{:walk} :ignore-zones? (boolean (:ignore-zones? (:args c)))}}))
+                                               :walk {:ways #{:walk} :worth (* (worth-hp) (cost/walk-hp-seconds)) :ignore-zones? (boolean (:ignore-zones? (:args c)))}}))
           status (if (= :done (:kind e)) :done :stopped)]
       (cond
         (:nearer (:data e)) nil
