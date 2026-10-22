@@ -15,6 +15,7 @@
             [engine.test-util :as tu :refer [run-until-empty]]
             [engine.triggers :as triggers]
             [jobs.blocks.dig :as dig]
+            [jobs.lib.child :as child]
             [jobs.lib.blocks :as b]
             [jobs.lib.lava :as lava]
             [jobs.lib.world-files :as world]
@@ -1128,3 +1129,20 @@
               _ (tu/seeing-all (:p env))
               result (await (tu/child-outcome (:eng env) job {:pos [3 69 0]} 80))]
           (is (= {:dug true} (select-keys result [:dug])) (pr-str result)))))))
+
+(deftest a-pillar-child-that-waits-is-resumed-next-round-not-skipped
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [mem (atom {})
+              runs (atom 0)
+              c {:primitives (:p (setup {:self {:pos {:x 0.5 :y 63 :z 0.5}}})) :args {}}
+              pos {:x 1 :y 67 :z 0}]
+          (with-redefs [ctx/mem (fn [_] @mem)
+                        ctx/update-mem! (fn [_ f & args] (apply swap! mem f args))
+                        child/run!* (let [f (fn [_ _ _ _] (js/Promise.resolve (if (= 1 (swap! runs inc)) :continue {:kind :done})))]
+                                      (aset f "cljs$core$IFn$_invoke$arity$4" f)
+                                      f)]
+            (is (= :continue (await (dig/pillar-up! c pos))))
+            (is (= :again (await (dig/pillar-up! c pos))) "the second round resumes the child")
+            (is (nil? (await (dig/pillar-up! c pos))) "one pillar per call once it ended")))))))

@@ -410,8 +410,8 @@
   "A block overhead that no walk reaches: a player stacks a block or two under the feet. One pillar child per call (carried blocks only); :again when it built, :continue while it waits, else nil."
   [c pos]
   (when-let [h (and (not (:pillared (ctx/mem c))) (pillar-height c pos))]
-    (ctx/update-mem! c assoc :pillared true)
     (let [r (await (child/run!* c :pillar 'jobs.access.pillar {:height h :ways #{:carried} :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+      (when-not (= :continue r) (ctx/update-mem! c assoc :pillared true))
       (cond (= :continue r) :continue
             (= :done (:kind r)) :again))))
 
