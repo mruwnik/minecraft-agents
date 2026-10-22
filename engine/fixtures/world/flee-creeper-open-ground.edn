@@ -1,0 +1,24 @@
+;; Card da20dfa8: a 4-HP body on flat lit ground runs from a creeper walking up from the front in legs that keep covering ground (it walks: food 0 cannot sprint).
+;; Plot 96 long: stone x 0..95, z 0..31, y 0..2 (platform feet y 3); glowstones every 8 blocks light it (surface time is :any).
+{:defaults
+ {:tags [:hostile :survival :flee :creeper]
+  :time :any
+  :mobs :keep
+  :plot {:length 96 :width 32}
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile)}]
+  :blocks [[:fill [0 0 0] [95 2 31] "stone"] [:fill [0 3 0] [95 8 31] "air"]
+           [:fill [4 2 8] [4 2 8] "glowstone"] [:fill [4 2 24] [4 2 24] "glowstone"] [:fill [12 2 8] [12 2 8] "glowstone"] [:fill [12 2 24] [12 2 24] "glowstone"] [:fill [20 2 8] [20 2 8] "glowstone"] [:fill [20 2 24] [20 2 24] "glowstone"] [:fill [28 2 8] [28 2 8] "glowstone"] [:fill [28 2 24] [28 2 24] "glowstone"] [:fill [36 2 8] [36 2 8] "glowstone"] [:fill [36 2 24] [36 2 24] "glowstone"] [:fill [44 2 8] [44 2 8] "glowstone"] [:fill [44 2 24] [44 2 24] "glowstone"] [:fill [52 2 8] [52 2 8] "glowstone"] [:fill [52 2 24] [52 2 24] "glowstone"] [:fill [60 2 8] [60 2 8] "glowstone"] [:fill [60 2 24] [60 2 24] "glowstone"] [:fill [68 2 8] [68 2 8] "glowstone"] [:fill [68 2 24] [68 2 24] "glowstone"] [:fill [76 2 8] [76 2 8] "glowstone"] [:fill [76 2 24] [76 2 24] "glowstone"] [:fill [84 2 8] [84 2 8] "glowstone"] [:fill [84 2 24] [84 2 24] "glowstone"] [:fill [92 2 8] [92 2 8] "glowstone"] [:fill [92 2 24] [92 2 24] "glowstone"]]
+  :limit-s 60}
+ :cases
+ [{:name "low-health-body-runs-from-a-creeper-over-open-ground-at-speed"
+   :body {:at [60.5 3 16.5] :yaw -90}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 16 minecraft:generic"]
+         [:summon "creeper" [68.5 3 16.5]]
+         [:wait-s 3]]
+   ;; after the start-up second every flee leg covers ground (a walking body does ~4 b/s; legs that stall or zigzag fall far below)
+   :expect [{:event {:source :job :kind :retreat.step-speed :data {:bps [:>= 3]}} :within-s 10}
+            {:no-event {:source :job :kind :retreat.step-speed :data {:bps [:< 2] :seconds [:>= 0.8]}} :for-s 10}
+            {:no-event {:source :body :kind :died} :for-s 15}]
+   :limit-s 40}]}
