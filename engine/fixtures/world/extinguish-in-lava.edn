@@ -1,0 +1,16 @@
+;; jobs.survival.extinguish: a body standing in lava steps out at once to a cell it has seen, without a look round first
+;; (the fire damage per tick is lethal). A one-cell lava pit in a stone platform (walls hold the source, so it does not
+;; spread); the body stands in it with resistance V so the probe survives a slow start. The job must end with it out.
+{:defaults
+ {:tags [:survival :lava :extinguish]
+  :time :any
+  :plot {:height 10 :floor "stone"}
+  :blocks [[:fill [8 0 8] [24 0 24] "stone"]
+           [:set [16 0 16] "lava"]]
+  :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 2}
+  :act [[:job (jobs.survival.extinguish {})]]
+  :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}]
+  :limit-s 60}
+ :cases
+ [{:name "pool-of-lava-steps-out"
+   :after [[:body-far [16.5 0 16.5] 0.9]]}]}

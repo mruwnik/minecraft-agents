@@ -212,6 +212,18 @@
           (is (= {:cap 20 :ttl 3600000} (select-keys (mem/policy (mem/view (:store eng)) :extinguish) [:cap :ttl])))
           (is (= {:cap 50 :ttl 21600000} (select-keys (mem/policy (mem/view (:store eng)) :hazard) [:cap :ttl]))))))))
 
+(deftest a-body-in-lava-steps-out-before-any-look
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:self {:inLava true}
+                                      :blocks (merge (floor 6) (cells "lava" [64] [0 1] [0 1]))})]
+          (core/submit! eng '(jobs.survival.extinguish) {})
+          (await (core/tick! eng))
+          (let [names (mapv #(.-name %) (.-calls (.-world p)))]
+            (is (= "moveTo" (first (filter #{"moveTo" "look" "lookAt" "look_at"} names))) (pr-str names))
+            (is (not-any? #(re-find #"look" %) (take-while #(not= "moveTo" %) names)))))))))
+
 (deftest hazards-are-not-written-twice
   (async done
     (tu/run-async done

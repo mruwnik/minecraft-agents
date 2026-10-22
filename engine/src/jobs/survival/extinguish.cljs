@@ -37,7 +37,7 @@
   Water also counts powder snow. Not in lava (or in lava once a walk was blocked), with a cover block carried (cobblestone, stone, dirt, ...) it first
   places one (a jobs.blocks.fill-cells child) on a lava cell next to the feet (side or below) with open air above it, so the body does not step past it. Never sand, gravel or
   other falling blocks, never in another's zone or claim, and at most 3 covers per run.
-  Before each decision from a new cell it looks round (level and down) so the fire at the feet and the lava beside them are seen.
+  Standing in lava it first steps to the best seen cell with no look. Before each other decision from a new cell it looks round (level and down) so the fire at the feet and the lava beside them are seen.
   5. On fire, not in lava, with no water in reach and no hazard within 1.5 blocks, there is nothing useful to do.
      With a real danger near (jobs.lib.danger, the hostile-near radii) it ends :condition-failed :hostile-near instead, never standing still beside it.
      Otherwise it holds still (:burning-wait): eats (a jobs.survival.eat child) when food is under 18 and food is carried
@@ -409,18 +409,37 @@
       :else (stuck! c (str "the way to a safe cell is blocked: "
                            (or (:text (:data e)) (name (contract/cause-key e))))))))
 
+(defn quick-exit
+  "{:cell :scanned}: the cell to step to at once, from what the body has already seen, when it stands in lava: no look
+  first, since every tick there costs hp. nil when it is not in lava or no seen cell is standable."
+  [p pos lava?]
+  (when lava?
+    (let [scanned (feel-feet p pos (scan p (scan-radius) hazards 128))]
+      (when-let [cell (best-cell p pos (step-radius) (map :pos scanned))]
+        {:cell cell :scanned scanned}))))
+
 (defn ^:async pass!
   "One try at putting the body out. :again for another pass, else :done (perhaps stopped)."
   [c]
   (let [p (:primitives c)
         me (.self p)
         cell (poured c)
-        scooped (when cell (await (scoop-pass c cell)))]
+        scooped (when cell (await (scoop-pass c cell)))
+        quick (when (and (not scooped) (body/burning? p) (not (:blocked (ctx/mem c))))
+                (quick-exit p (floor-cell (u/pos-of (.-pos me))) (boolean (.-inLava me))))]
     (cond
       scooped scooped
 
       (not (body/burning? p))
       :done
+
+      quick
+      (let [status (do (ctx/remember! c :extinguish {:pos (floor-cell (u/pos-of (.-pos me))) :cause :lava} extinguish-policy)
+                       (remember-hazards! c (:scanned quick))
+                       (await (move! c (:cell quick))))]
+        (cond (clear? c) :done
+              (= "blocked" status) (do (ctx/update-mem! c assoc :blocked true) :again)
+              :else :again))
 
       :else
       (let [{:keys [water-radius]} (:args c)
