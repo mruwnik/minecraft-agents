@@ -178,7 +178,7 @@
                        (if (= [4 3] [(.-x (.-pos args)) (.-z (.-pos args))])
                          #js {:status "no-support"}
                          (await (impl token args)))))
-          (let [result (await (child-outcome eng job {:plan "pen" :settings {:jobs.build.from-plan/give-up 1}} 200))]
+          (let [result (await (child-outcome eng job {:plan "pen" :settings {:jobs.build.from-plan.walk/give-up 1}} 200))]
             (is (= 1 (count (filter #(= [4 64 3] (first %)) (places p)))))
             (is (= {[4 64 3] :no-support} (:given-up result)))))))))
 
@@ -1349,7 +1349,7 @@
                                                  (swap! walks conj o)
                                                  (ctx/update-mem! c assoc :near-walk {:data {:why :exhausted :shut-in true}})
                                                  :blocked)
-                              (fn ^:async b [] (await (child-outcome eng job {:plan "far" :settings {:jobs.build.from-plan/pocket-cells 1000000}} 30)))))]
+                              (fn ^:async b [] (await (child-outcome eng job {:plan "far" :settings {:jobs.build.from-plan.walk/pocket-cells 1000000}} 30)))))]
           (is (= :shut-in (:reason result)))
           (is (<= (count @walks) 3) "not one failed walk per planned cell")
           (is (every? (comp nil? :ways) (rest @walks)) "after a shut-in verdict go-to may dig or build out"))))))
@@ -1363,7 +1363,7 @@
               result (await (tu/with-near-stub (fn ^:async f [c _ _ _]
                                                  (ctx/update-mem! c assoc :near-walk {:data {:why :exhausted :shut-in true}})
                                                  :blocked)
-                              (fn ^:async b [] (await (child-outcome eng job {:plan "far" :settings {:jobs.build.from-plan/pocket-cells 1}} 30)))))]
+                              (fn ^:async b [] (await (child-outcome eng job {:plan "far" :settings {:jobs.build.from-plan.walk/pocket-cells 1}} 30)))))]
           (is (not= :shut-in (:reason result))))))))
 
 (deftest a-body-sealed-in-its-own-shelter-waits-instead-of-stopping-shut-in

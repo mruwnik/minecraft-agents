@@ -13,6 +13,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.storage :as storage]
             [jobs.build.from-plan :as build]
+            [jobs.build.from-plan.walk :as fp-walk]
             [jobs.build.from-plan.book :as fp-book]
             [jobs.build.from-plan.cells :as fp-cells]
             [jobs.lib.build.plan :as plan]
@@ -181,7 +182,7 @@
     (if-not stand
       (do (ctx/update-mem! c fp-book/walk-fail (:pos cell) :unreachable (give-up) (u/self-pos c))
           :again)
-      (if (= :partial (await (build/walk-stand! c cell stand {:ways #{:walk :clear-seal}}))) :continue :again))))
+      (if (= :partial (await (fp-walk/walk-stand! c cell stand {:ways #{:walk :clear-seal}}))) :continue :again))))
 
 (defn ^:async place-run!
   "Place the cells in order while each is within reach. Returns {:placed n} and, when one was out of reach, :next cell."
@@ -189,7 +190,7 @@
   (loop [left ordered n 0]
     (if-let [cell (first left)]
       (if (seq (fp-cells/in-reach c [cell]))
-        (do (await (fp-book/place-one! c cell (build/give-up)))
+        (do (await (fp-book/place-one! c cell (fp-walk/give-up)))
             (recur (rest left) (inc n)))
         {:placed n :next cell})
       {:placed n})))
