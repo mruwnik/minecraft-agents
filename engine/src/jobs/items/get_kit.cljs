@@ -30,6 +30,7 @@
   the 3-day food reserve (60 points) are carried (harmful food does not count), one jobs.survival.get-food child (with :explore;
   it fills the pack to its :carry default, the reserve) runs before the bill (:food false: none). A child that stops warns kit.no-food; with no food carried and a food bar below ::min-food-to-dig the kit stops {:reason :no-food} (no mining on an empty stomach); a fuller bar goes on. A body that cannot heal (food 0, or health under foods/::low-health with no food carried and the bar under 18) asks get-food before more work (once more if it is still so after a fed answer), and stops {:reason :no-food} when it finds none.
   With furnace material short and no weapon carried, one jobs.items.obtain child first makes a sword (iron, stone or wooden); if it cannot, kit.unarmed warns and the work goes on.
+  Items that need no furnace material, and those the carried material covers, are made first (:partial-first, the default) so the job stops naming only the shortfall; with :partial-first false the list order rules and the job stops at the first item that cannot be made.
   With :explore, a bill that stops because a gathering ended (a mine that stopped, no way up) runs again (kit.retry, the pieces newly covered made first), up to 3 rounds without new furnace material.
   Get a base first.
   A death since the job began (body memory :died) clears the children and the bill; the next round re-plans from
@@ -47,6 +48,7 @@
   {:items {:doc "the items to get, in order" :spec (a/coll-of a/item?) :default iron-kit}
    :wear {:doc "wear each armour piece once it is carried" :spec boolean? :default true}
    :explore {:doc "passed to the obtain children: walk and look for raw needs not seen" :spec boolean? :default true}
+   :partial-first {:doc "make the items that need no furnace material (and those the carried material covers) first, then stop naming the shortfall; false: stop at the first item that cannot be made" :spec boolean? :default true}
    :food {:doc "run a get-food child when mining or smelting is ahead and fewer than the food reserve is carried" :spec boolean? :default true}})
 
 (a/defargs settings
@@ -172,13 +174,13 @@
 
 (defn covered-of
   "The bill {item 1} of the items, in order, that the carried furnace material (ingots, or the raw input to smelt) already covers, each one's share
-  taken off what is left for the next; {} when none or all (then the one bill does it). An item needing no furnace material is left to the
-  bill, so it keeps its place in the list."
-  [version items carried*]
+  taken off what is left for the next; {} when none or all (then the one bill does it). An item needing no furnace material is covered
+  only with partial?; else it is left to the bill and keeps its place in the list."
+  [version partial? items carried*]
   (let [carried (with-raw carried*)
         covered (first (reduce (fn [[bill left] item]
                                  (let [need (bill/furnace-short version [item] {})]
-                                   (if (and (seq need) (every? (fn [[k n]] (<= n (get left k 0))) need))
+                                   (if (and (or partial? (seq need)) (every? (fn [[k n]] (<= n (get left k 0))) need))
                                      [(assoc bill item 1) (merge-with - left need)]
                                      [bill left])))
                                [{} (select-keys carried (keys (bill/furnace-short version items {})))]
@@ -328,8 +330,8 @@
                             (finish! c items have (assoc (stop-of :nothing-possible {:reason :no-food} (str "hurt with no food to heal on, and none found (" (name (:cause r)) "); mining on would risk death"))
                                                          :item (first todo))))))
 
-          (and (not (:covered-done (ctx/mem c))) (seq (or (:covered (ctx/mem c)) (covered-of version todo (:carried st)))))
-          (let [covered (or (:covered (ctx/mem c)) (covered-of version todo (:carried st)))
+          (and (not (:covered-done (ctx/mem c))) (seq (or (:covered (ctx/mem c)) (covered-of version (:partial-first a) todo (:carried st)))))
+          (let [covered (or (:covered (ctx/mem c)) (covered-of version (:partial-first a) todo (:carried st)))
                 _ (ctx/update-mem! c assoc :covered covered)
                 r (await (run-bill! c :covered covered))]
             (cond (= :continue r) :continue
@@ -371,7 +373,7 @@
                 r (await (run-bill! c (if (zero? round) :bill (keyword (str "bill" round))) (bill-of c)))]
             (cond (= :continue r) :continue
                   (retry? r tries (:explore a)) (retry! c r tries)
-                  (and r (not (:covered-done (ctx/mem c))) (seq (covered-of version todo (:carried (state c)))))
+                  (and r (not (:covered-done (ctx/mem c))) (seq (covered-of version (:partial-first a) todo (:carried (state c)))))
                   (do (ctx/update-mem! c (fn [m] (-> m (dissoc :covered :bill) (update :bill-round (fnil inc 0)))))
                       :again)
                   (some? r) (stop-after-wear! c (update r :item #(or % (first todo))))

@@ -77,8 +77,8 @@
   (is (= {} (bill/furnace-short game/default-version ["iron_pickaxe"] {"iron_ingot" 3}))))
 
 (deftest carried-raw-iron-covers-the-pieces-it-smelts-to
-  (is (= {"iron_helmet" 1} (kit/covered-of game/default-version ["iron_helmet" "iron_chestplate"] {"raw_iron" 11})))
-  (is (= {"iron_helmet" 1} (kit/covered-of game/default-version ["iron_helmet" "iron_chestplate"] {"raw_iron" 3 "iron_ingot" 2}))))
+  (is (= {"iron_helmet" 1} (kit/covered-of game/default-version false ["iron_helmet" "iron_chestplate"] {"raw_iron" 11})))
+  (is (= {"iron_helmet" 1} (kit/covered-of game/default-version false ["iron_helmet" "iron_chestplate"] {"raw_iron" 3 "iron_ingot" 2}))))
 
 (deftest a-gathering-that-ended-is-tried-again-up-to-three-rounds-when-searching
   (let [r {:reason :no-source :gathered :no-plan :why "no source for iron_helmet, whatever the wording"}]
@@ -173,13 +173,25 @@
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
                  (select-keys @(:out s) [:status :item :reason]))))))))
 
-(deftest an-iron-item-first-with-no-iron-stops-before-a-later-stone-item-is-made
+(deftest partial-first-makes-the-stone-item-then-stops-at-the-iron
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [w (-> (world [{:name "wooden_sword" :count 1} {:name "cobblestone" :count 2} {:name "stick" :count 3}] {})
                     (update :recipes assoc "stone_sword" {:count 1 :needs {"cobblestone" 2 "stick" 1} :table true}))
               s (start w {:items ["iron_pickaxe" "stone_sword"] :explore false :food false})]
+          (await (f/run-ticks s 120))
+          (is (seq (crafted s)))
+          (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
+                 (select-keys @(:out s) [:status :item :reason]))))))))
+
+(deftest an-iron-item-first-with-no-iron-stops-before-a-later-stone-item-is-made
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (-> (world [{:name "wooden_sword" :count 1} {:name "cobblestone" :count 2} {:name "stick" :count 3}] {})
+                    (update :recipes assoc "stone_sword" {:count 1 :needs {"cobblestone" 2 "stick" 1} :table true}))
+              s (start w {:items ["iron_pickaxe" "stone_sword"] :partial-first false :explore false :food false})]
           (await (f/run-ticks s 120))
           (is (empty? (crafted s)))
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}

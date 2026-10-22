@@ -7,7 +7,7 @@
 ;; carried raw iron; sword and shovel from 3 ingots without nuggets; the home chest and hut blocks untouched; helmet crafted and worn.
 ;; A stone pickaxe is crafted from carried logs and cobblestone (planks, sticks, then the pickaxe).
 ;; A pickaxe with 1 use left does not count as had: a fresh one is crafted beside it.
-;; Should-fail: iron first in the list with no iron seen stops no-source at once and makes no stone tool.
+;; Iron first with no iron seen: :partial-first false stops no-source at once and makes no stone tool; the default makes the stone sword, then stops.
 {:defaults
  {:tags [:items :get-kit :jobs]
   :plot {:height 12 :floor "grass_block"}
@@ -30,11 +30,20 @@
             [:fill [20 0 22] [22 1 23] "stone"]]
    :body {:inventory [["cooked_beef" 3] ["wooden_sword" 1]]}
    :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:until-facing {:yaw 0 :pitch 10} 10]
-         [:job (jobs.items.get-kit {:items ["iron_pickaxe" "stone_sword"] :explore false :food false})]]
+         [:job (jobs.items.get-kit {:items ["iron_pickaxe" "stone_sword"] :partial-first false :explore false :food false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true :until {:source :job :kind :stopped}}]
    :after [[:item "stone_sword" 0] [:item "iron_pickaxe" 0]]
    :limit-s 80}
+  {:name "partial-first-makes-the-stone-sword-then-stops-at-the-iron"
+   :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]
+            [:fill [20 0 22] [22 1 23] "stone"]]
+   :body {:inventory [["cooked_beef" 3] ["wooden_sword" 1]]}
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 10"] [:until-facing {:yaw 0 :pitch 10} 10]
+         [:job (jobs.items.get-kit {:items ["iron_pickaxe" "stone_sword"] :explore false :food false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 200 :of-job true}]
+   :after [[:item "stone_sword" 1] [:item "iron_pickaxe" 0]]
+   :limit-s 220}
   {:name "carried-raw-iron-smelted-when-no-ore-is-seen"
    :blocks [[:set [20 0 14] "furnace[facing=west]"]]
    :body {:inventory [["raw_iron" 3] ["coal" 3] ["stick" 2] ["stone_pickaxe" 1] ["stone_sword" 1] ["cooked_beef" 3]]}
