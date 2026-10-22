@@ -367,3 +367,13 @@
           (is (seq (st/emitted seen :shelter.exposed)) "a bare roof is no shelter: the body holds exposed under it")
           (let [fled (st/emitted seen :shelter.fled)]
             (is (= [:roofed-place] (mapv :target fled)))))))))
+
+(deftest a-night-with-no-way-to-shut-in-logs-out-before-ending-exposed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (st/setup {:time night :blocks (update-vals wide-ground (constantly "obsidian")) :inventory [] :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+              log (do (core/submit! eng '(jobs.survival.night) {})
+                      (await (with-child-log #(tu/run-until-empty eng 80))))]
+          (is (= 1 (count (st/emitted seen :shelter.exposed))))
+          (is (some #(= 'jobs.survival.log-out (second %)) log) "the owner's fallback: no shelter, so log out"))))))
