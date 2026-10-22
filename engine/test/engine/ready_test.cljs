@@ -220,6 +220,12 @@
 (deftest get-kit-binds-the-unarmed-hostile-wait
   (is (= :later (first (get-kit/safe? (ctx-of (merge at-origin {:inventory [] :entities [far-husk]})))))))
 
+(deftest get-kit-makes-its-sword-while-a-hostile-is-known
+  (are [inv expected] (= expected (first (get-kit/safe? (ctx-of (merge at-origin {:inventory inv :entities [far-husk]})))))
+    [{:name "oak_planks" :count 3} {:name "stick" :count 2}] :ok
+    [{:name "cobblestone" :count 2}] :ok
+    [{:name "dirt" :count 2}] :later))
+
 (deftest a-stair-up-is-not-held-for-health-a-stair-down-is
   (are [dir expected] (= expected (first (stair/fit? (assoc (ctx-of (assoc at-origin :self {:pos {:x 0 :y 64 :z 0} :health 3})) :args {:dir dir}))))
     :up :ok

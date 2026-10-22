@@ -55,7 +55,18 @@
 
 (def target [:items])
 
-(defn safe? [c] (contract/all [(ready/threatened c) (ready/unarmed-threatened c)]))
+(defn sword-material?
+  "Whether wood, cobblestone or iron ingots are carried: a sword can be made."
+  [c]
+  (boolean (some #(re-find #"_(log|planks)$|^(cobblestone|cobbled_deepslate|iron_ingot)$" (:name %)) (u/inventory (:primitives c)))))
+
+(defn arm-next?
+  "Whether the sword step is still to run and can make a sword from what is carried: it ends the unarmed state, so the
+  unarmed hold does not stop it (go-to prices the walk to a bench)."
+  [c]
+  (and (not (:armed (ctx/mem c))) (sword-material? c)))
+
+(defn safe? [c] (contract/all [(ready/threatened c) (if (arm-next? c) (contract/ok :arming "the sword is made first") (ready/unarmed-threatened c))]))
 (def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s}})
