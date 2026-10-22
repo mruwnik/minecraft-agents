@@ -36,3 +36,35 @@
           (let [w (core/waiting eng id)]
             (is (= :risky (:reason w)))
             (is (re-find #"hp" (str (:text w))))))))))
+
+(def day-world (assoc night-hut :time st/noon))
+(def far-goal {:x 95 :y 64 :z 0})
+
+(defn with-death
+  "ctx c remembering a death of `cause` at pos, `age-ms` ago (clock at 10 hours)."
+  [c pos cause age-ms]
+  (let [now 36000000]
+    (assoc c :view (fn [] {:now now :data {:policies {:deaths core/deaths-policy} :entries {:deaths [{:t (- now age-ms) :data {:pos pos :cause cause :death-t (- now age-ms)}}]}}}))))
+
+(deftest a-recent-death-near-the-goal-adds-its-fight-to-the-risk-even-by-day
+  (let [c (ready-test/ctx-of day-world)
+        on-way (with-death c {:x 90 :y 64 :z 5} "zombie_villager" 60000)
+        off-way (with-death c {:x 50 :y 64 :z 5} "zombie_villager" 60000)]
+    (is (zero? (:hp (risk/estimate c far-goal))))
+    (is (pos? (:death-hp (risk/estimate on-way far-goal))))
+    (is (zero? (:death-hp (risk/estimate off-way far-goal))))))
+
+(deftest a-death-fades-with-time
+  (let [c (ready-test/ctx-of day-world)
+        at {:x 90 :y 64 :z 5}
+        hp-at #(:death-hp (risk/estimate (with-death c at "zombie_villager" %) far-goal))]
+    (is (> (hp-at 60000) (hp-at 3600000)))
+    (is (pos? (hp-at 3600000)))
+    (is (zero? (hp-at 8000000)))))
+
+(deftest a-hungry-body-affords-less-risk-than-a-fed-one
+  (let [status-for (fn [food] (let [c (-> (ready-test/ctx-of (assoc day-world :self {:pos inside :health 20 :food food}))
+                                          (with-death {:x 90 :y 64 :z 5} "zombie" 6480000))]
+                                (first (risk/status c far-goal))))]
+    (is (= :ok (status-for 20)))
+    (is (= :later (status-for 5)))))

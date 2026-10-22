@@ -1,0 +1,35 @@
+;; A body that died lately remembers where (memory :deaths) and does not go back to mine there while the memory is fresh.
+;; Lit plot, no clock. The body dies at [10.5 0 6.5] beside iron ore [11 0 6] (a NoAI zombie hit), respawns at [4 0 4] and is given a pickaxe.
+;; Should-succeed: a second ore at [34 0 20], further off and 27 blocks from the death, is mined instead of the near one, which stays.
+;; Should-fail: with no other ore the walk to the death-side ore is refused as :risky (mine skips it and stops :none), nothing is dug.
+{:defaults
+ {:tags [:mine :death :jobs] :time :any
+  :plot {:light :lit :height 12 :floor "dirt" :length 48 :width 48}
+  :mobs :keep
+  :body {:at [10.5 0 6.5] :spawnpoint [4 0 4] :inventory []}
+  :limit-s 240}
+ :cases
+ [{:name "other-ore-is-mined-not-the-one-where-it-died"
+   :blocks [[:set [11 0 6] "iron_ore"] [:set [34 0 20] "iron_ore"]]
+   :act [[:summon "zombie" [11.5 0 7.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
+         [:rcon "damage $BODY 100 minecraft:mob_attack by @e[type=zombie,tag=wt,$BOX,limit=1]"]
+         [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]
+         [:await {:source :body :kind :respawned} 30]
+         [:rcon "give $BODY minecraft:stone_pickaxe"]
+         [:wait-s 3]
+         [:job (jobs.gather.mine {:torches false :block "iron_ore" :item "raw_iron" :count 1 :radius 45 :ways #{:seen}})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 200 :of-job true}]
+   :after [[:item "raw_iron" 1] [:block [11 0 6] "iron_ore"] [:not-block [34 0 20] "iron_ore"]]}
+  {:name "only-ore-where-it-died-is-refused-as-risky"
+   :blocks [[:set [11 0 6] "iron_ore"]]
+   :act [[:summon "zombie" [11.5 0 7.5] "{NoAI:1b,Silent:1b,active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
+         [:rcon "damage $BODY 100 minecraft:mob_attack by @e[type=zombie,tag=wt,$BOX,limit=1]"]
+         [:rcon "kill @e[type=zombie,tag=wt,$BOX]"]
+         [:await {:source :body :kind :respawned} 30]
+         [:rcon "give $BODY minecraft:stone_pickaxe"]
+         [:wait-s 3]
+         [:job (jobs.gather.mine {:torches false :block "iron_ore" :item "raw_iron" :count 1 :radius 45 :ways #{:seen}})]]
+   :expect [{:event {:source :job :kind :mine.walk-failed :data {:cause :risky}} :within-s 90}
+            {:event {:source :job :kind :stopped :data {:reason :none}} :within-s 90 :of-job true}]
+   :after [[:block [11 0 6] "iron_ore"]]
+   :limit-s 150}]}

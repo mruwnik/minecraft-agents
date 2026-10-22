@@ -4,6 +4,7 @@
   only by the hostiles it can reach (Q279).
   Risk = the mobs expected to spawn on the exposed stretches (jobs.lib.cost/spawn-chance per second of walking, each costed
   as a zombie fight with the kit carried, jobs.lib.cost/fight-damage) plus, on a walk with such a stretch (in the light a hostile is seen and avoided; the reflexes meet it), the fight with every hostile known near the way.
+  A walk to a goal within the death-spot radius of a place the body died lately (jobs.lib.death-spot, fading with time) adds the fight with what killed it, weighted by how fresh the death is, underground too.
   Acceptable when it stays within ::risk-share of the health the body has now."
   (:require [engine.args :as a]
             [engine.contract :as contract]
@@ -11,6 +12,7 @@
             [engine.settings :as settings]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.cost :as cost]
+            [jobs.lib.death-spot :as death-spot]
             [jobs.lib.danger :as danger]
             [jobs.lib.look :as look]
             [jobs.lib.ready :as ready]
@@ -29,6 +31,10 @@
                   :doc "Blocks of open ground a walk out of a night shelter crosses before it can go under, even to a goal underground."}
    ::way-radius {:default 16 :spec (a/num-in 0 nil)
                  :doc "Blocks from the straight way within which a known hostile adds its fight to the risk of the walk."}
+   ::hungry-food {:default 6 :spec (a/int-in 0 20)
+                  :doc "Food at or under which the body cannot sprint away and does not heal: the damage it can afford is cut by ::hungry-share."}
+   ::hungry-share {:default 0.5 :spec (a/num-in 0 1)
+                   :doc "Share of the affordable damage a body at ::hungry-food or under may risk."}
    ::step {:default 4 :spec (a/num-in 1 nil)
            :doc "Blocks between the cells of the way whose light is judged."}})
 
@@ -78,9 +84,11 @@
         kit (wworld/kit-of c)
         hit (fn [mobs] (if (seq mobs) (cost/fight-damage (assoc kit :mobs mobs)) 0))
         hostiles (danger/hostiles-near-way p goal (settings/get settings ::way-radius) {})
+        deaths (death-spot/near (death-spot/recent c) goal)
+        death-hp (reduce + (for [{:keys [cause weight]} deaths] (* weight (hit [{:name cause :distance 0 :hits 0}]))))
         spawn-hp (* spawns (hit [{:name "zombie" :distance 0 :hits 0}]))
         hostile-hp (if (pos? exposed-s) (hit (mapv (fn [e] {:name (.-name e) :distance (danger/mob-distance p e) :hits 0}) hostiles)) 0)]
-    {:hp (+ spawn-hp hostile-hp) :spawn-hp spawn-hp :hostile-hp hostile-hp :dark-s exposed-s :hostiles (count hostiles)}))
+    {:hp (+ spawn-hp hostile-hp death-hp) :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :dark-s exposed-s :hostiles (count hostiles)}))
 
 (defn- round1 [x] (/ (js/Math.round (* 10 x)) 10))
 
@@ -89,11 +97,13 @@
   risk and its parts."
   [c goal]
   (let [p (:primitives c)
-        {:keys [hp spawn-hp hostile-hp dark-s hostiles]} (check-cache/cached c [::risk goal (sense/round-looked c)] #(estimate c goal))
-        allowed (* (settings/get settings ::risk-share) (.-health (.self p)))]
+        {:keys [hp spawn-hp hostile-hp death-hp dark-s hostiles]} (check-cache/cached c [::risk goal (sense/round-looked c)] #(estimate c goal))
+        self (.self p)
+        hungry? (some-> (.-food self) (<= (settings/get settings ::hungry-food)))
+        allowed (* (settings/get settings ::risk-share) (.-health self) (if hungry? (settings/get settings ::hungry-share) 1))]
     (if (<= hp allowed)
       (contract/ok :acceptable (str "route risk " (round1 hp) " hp, within " (round1 allowed)))
       (contract/later :risky (str "route risk " (round1 hp) " hp over the " (round1 allowed) " the body can afford: "
                                   (round1 dark-s) " s on dark open ground costs " (round1 spawn-hp) " hp, "
-                                  hostiles " hostile(s) near the way " (round1 hostile-hp) " hp")
+                                  hostiles " hostile(s) near the way " (round1 hostile-hp) " hp, " (round1 death-hp) " hp for a recent death near it")
                       :risk hp :allowed allowed :recheck-after-ms 10000))))

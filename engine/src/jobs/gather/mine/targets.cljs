@@ -7,6 +7,7 @@
             [jobs.lib.blocks :as blocks]
             [jobs.lib.block-sets :as bs]
             [clojure.string :as str]
+            [jobs.lib.death-spot :as death-spot]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.near :as near]
             [jobs.lib.result :as result]
@@ -135,7 +136,7 @@
          (not (contains? blocks/ores (base-ore block))))))
 
 (defn scan
-  "{:targets [pos] nearest first (the higher of two as near), those below the feet after all level or higher ones (a hole in the floor loses its drop; not soil or ores) and those over the ground snapshot after all others, :refused [verdict] of blocks a
+  "{:targets [pos] nearest first (the higher of two as near), those within a recent death's radius last of all, those below the feet after all level or higher ones (a hole in the floor loses its drop; not soil or ores) and those over the ground snapshot after all others, :refused [verdict] of blocks a
   zone or plan refuses, :wet? true when an unskipped block was rejected only for water, :wet-n how many}. Only seen blocks that are
   still there count."
   [c]
@@ -160,6 +161,7 @@
                     (filter #(and (= :ok (classify c wet (:pos %) (stay/side-face (cell-of here) %))) (= :ok (access/judge (access/may-dig? (rules-in c) (:pos %)) accept))))
                     (sort-by #(u/dist here (:pos %)))
                     vec))
+        deaths (death-spot/recent c)
         graded (map (juxt identity #(classify c wet %)) cells)
         in (rules-in c)
         judged (->> graded
@@ -167,7 +169,7 @@
                     (map (fn [[pos]] (let [v (access/may-dig? in pos)] [pos v (access/judge v accept)]))))]
     {:side side
      :far (when stay? (into [] (comp (remove #(stay/beside-body? (cell-of here) %)) (remove (set (map :pos side))) (map access/cell)) seen))
-     :targets (->> judged (filter #(= :ok (nth % 2))) (map first) (sort-by (juxt #(if (ground %) 1 0) #(if (floor-hole? c %) 1 0) #(u/dist here %) #(- (:y %)))) vec)
+     :targets (->> judged (filter #(= :ok (nth % 2))) (map first) (sort-by (juxt #(if (seq (death-spot/near deaths %)) 1 0) #(if (ground %) 1 0) #(if (floor-hole? c %) 1 0) #(u/dist here %) #(- (:y %)))) vec)
      :refused (into [] (comp (filter #(= :refused (nth % 2))) (map second)) judged)
      :wet? (boolean (some #(= :wet (second %)) graded))
      :wet-n (count (filter #(= :wet (second %)) graded))}))
