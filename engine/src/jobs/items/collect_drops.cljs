@@ -37,7 +37,7 @@
   {:pos :reason :unseen-floor|:unseen-cell|:unsafe-floor|:too-deep}. A drop still falling is judged at rest.
   With :search, when fewer than the call's :least (default 1) items (those named in :least-items, else any; a gain of :least-items in the inventory since the start counts, so a drop that flew to the body ends the search) were collected and no item is in sight (trunks or terrain hide drops), the body walks (a go-to child)
   to standable cells round the anchor, nearest first (a cell whose floor is unseen counts when nothing seen forbids it: walking there is how it gets looked at; not behind a seen solid block on the way from the anchor, which is rock), and looks again at each, until an item is seen or the cells within :search
-  blocks are tried. Underground a walk goes on at night; a search that go-to made wait :search-waits calls in a row ends with :reason :search-waited.
+  blocks are tried. With :dig a body shut in a room digs out by go-to's priced escalation (:clear-path :stair :dig-out). Underground a walk goes on at night; a search that go-to made wait :search-waits calls in a row ends with :reason :search-waited.
   While it runs it holds its work area (jobs.lib.loose :collecting), so the :loose-items reflex leaves those drops to it.
   With :ids, ids not in sight when none is left to try are booked as one :left {:reason :unseen :ids [...] :last {id [x y z]}}, the cell each was last seen in.
   A drop more than a block above the feet that the act cannot reach (a column top) is walked up to with go-to's :pillar and :stair ways, then collected; one go-to cannot stand beside (a wall niche) is pillared to from the feet when it lies 2 to 6 above and within 1 cell sideways (carried blocks).
@@ -422,6 +422,12 @@
   (let [l (or (:least (ctx/frozen-call c)) 1)]
     (if (= :all l) ##Inf l)))
 
+(defn search-ways
+  "go-to ways of a search walk: with :dig a body shut in (its own seal or shelter, a closed room) may dig out, priced by go-to's escalation."
+  [c]
+  (cond-> #{:walk :clear-seal}
+    (:dig (:args c)) (into [:clear-path :stair :dig-out])))
+
 (defn ^:async search-step!
   "Walks to the next unvisited search cell (one go-to call, slot :search; a cell go-to cannot reach is dropped).
   :continue while go-to waits on the world, :waited after search-waits calls in a row did, :walked after a cell, nil when none is left.
@@ -436,7 +442,7 @@
                     (seed! (vec (take 1 (sort-by #(u/dist (u/cell-pos (u/cell-vec anchor)) %) (search-cells c anchor))))))
                 :else (:search-queue m))]
     (when-let [cell (first queue)]
-      (let [r (await (child/run!* c :search 'jobs.movement.go-to (walk-args c {:pos (u/cell-vec cell) :range (if (reach/seen-standable? (:primitives c) cell) 0 1) :ways #{:walk :clear-seal}})))]
+      (let [r (await (child/run!* c :search 'jobs.movement.go-to (walk-args c {:pos (u/cell-vec cell) :range (if (reach/seen-standable? (:primitives c) cell) 0 1) :ways (search-ways c)})))]
         (if (= :continue r)
           (if (>= (:search-waited (ctx/mem c) 0) (search-waits))
             :waited

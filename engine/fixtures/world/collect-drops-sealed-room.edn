@@ -1,0 +1,24 @@
+;; Card a72339fe: a body walled into a closed stone room (no door, no light, buried) with a pile in the cave beyond the wall digs out when
+;; collect-drops may :dig; the search walk escalates through go-to's priced clear-path instead of ending :exhausted.
+;; Room x 8..10, wall x 11..12, cave x 13..24 (z 16, 2 high); the pile lies at x 22, out of sight.
+{:defaults
+ {:tags [:forestry :collect-drops :survival :jobs]
+  :time :any
+  :plot {:height 12}
+  :blocks [[:fill [6 0 8] [30 6 24] "stone"] [:fill [8 0 16] [10 1 16] "air"] [:fill [13 0 16] [24 1 16] "air"]]
+  :body {:at [9.5 0 16.5] :effects [["resistance" 600 4]]
+         :inventory [["stone_pickaxe" 1]]}
+  :limit-s 180}
+ :cases
+ [;; should succeed: the wall is dug through and the pile is collected
+  {:name "pile-beyond-the-wall-is-collected-with-dig"
+   :act [[:summon "item" [22.5 0 16.5] "{Item:{id:\"minecraft:oak_log\",count:1}}"]
+         [:job (jobs.items.collect-drops {:near #at [22 0 16] :radius 4 :search 4 :dig true})]]
+   :expect [{:event {:source :job :kind :completed :data {:status :completed}} :within-s 150 :of-job true}]
+   :after [[:item "oak_log" 1]]}
+  ;; should fail: without :dig the closed room stays shut and nothing is collected
+  {:name "pile-beyond-the-wall-stays-without-dig"
+   :act [[:summon "item" [22.5 0 16.5] "{Item:{id:\"minecraft:oak_log\",count:1}}"]
+         [:job (jobs.items.collect-drops {:near #at [22 0 16] :radius 4 :search 4})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :none-collected}} :within-s 150 :of-job true}]
+   :after [[:item "oak_log" 0]]}]}

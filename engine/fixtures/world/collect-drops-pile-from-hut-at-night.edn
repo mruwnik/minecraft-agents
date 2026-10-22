@@ -13,7 +13,7 @@
   :act [[:kill-body] [:wait-s 3] [:job (jobs.items.collect-drops {:near #at [40 0 16] :radius 6 :search 4 :dig true})]]
   :limit-s 200}
  :cases
- [{:name "pile-is-collected-from-a-sealed-hut-at-night"
+ [{:name "pile-is-collected-from-a-hut-with-a-door-at-night"
    :expect [{:no-event {:source :job :kind :waiting :data {:reason :dark}} :for-s 120 :until {:source :job :kind :completed}}
             {:event {:source :job :kind :completed} :within-s 180 :of-job true}]
    :after [[:item "raw_iron" 24]]}]}

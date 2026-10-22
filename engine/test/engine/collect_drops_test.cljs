@@ -588,3 +588,17 @@
           (let [result (await (tu/child-outcome eng job {:radius 16 :items ["porkchop"]} 30))]
             (is (= [:water-danger] (mapv :reason (:left result))))
             (is (empty? (collect-args p)) "no walk into the water")))))))
+
+(deftest a-search-with-dig-leaves-a-closed-room-by-digging-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [room (into {} (concat (for [x (range -6 13) z (range -6 7)] [(str x ",63," z) "stone"])
+                                    (for [x (range -2 3) z (range -2 3) y [64 65 66]
+                                          :when (or (= y 66) (= 2 (max (js/Math.abs x) (js/Math.abs z))))]
+                                      [(str x "," y "," z) "stone"])))
+              {:keys [eng p]} (bd/setup {:self body :inventory [{:name "wooden_pickaxe" :count 1}] :blocks room})]
+          (drop! p [6 64 0] "oak_log")
+          (let [result (await (tu/child-outcome eng job {:radius 6 :items ["oak_log"] :near {:x 6 :y 64 :z 0} :search 3 :dig true} 200))]
+            (is (= 1 (bd/carried p "oak_log")))
+            (is (= 1 (:collected result)))))))))
