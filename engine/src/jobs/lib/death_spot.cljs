@@ -1,11 +1,12 @@
 (ns jobs.lib.death-spot
   "Where the body died lately, by any cause, from the :deaths memory (engine.core/record-death!), and where it was hurt down to ::near-death-hp:
   a place a player avoids or goes back to prepared. A death or near-death weighs 1 when fresh and fades to 0 (jobs.lib.cost/death-weight);
-  it counts for cells within ::radius of its spot. Near-deaths within ::merge-radius of a newer spot are one."
+  it counts for cells within ::radius of its spot. A near-death fades over the :hurt memory's own ttl, and counts once with a death or newer near-death within ::merge-radius."
   (:require [clojure.string :as str]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.game :as game]
+            [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.threat :as threat]
@@ -29,12 +30,16 @@
   (or (:name attacker) (some-> damageType (str/replace #"^minecraft:" "")) cause))
 
 (defn near-deaths
-  "The :hurt entries of c that left the body at or under ::near-death-hp and carry a :pos, newest first, one per ::merge-radius."
+  "The :hurt entries of c that left the body at or under ::near-death-hp and carry a :pos, newest first, one per ::merge-radius and none within it of a death."
   [c]
   (let [limit (settings/get settings ::near-death-hp)
-        merge-r (settings/get settings ::merge-radius)]
+        merge-r (settings/get settings ::merge-radius)
+        deaths (keep #(:pos (:data %)) (ctx/entries c :deaths))]
     (reduce (fn [kept {:keys [data] :as e}]
-              (if (some #(<= (u/dist (:pos data) (:pos (:data %))) merge-r) kept) kept (conj kept e)))
+              (if (or (some #(<= (u/dist (:pos data) %) merge-r) deaths)
+                      (some #(<= (u/dist (:pos data) (:pos (:data %))) merge-r) kept))
+                kept
+                (conj kept e)))
             []
             (->> (ctx/entries c :hurt)
                  (filter #(let [{:keys [health pos]} (:data %)] (and pos health (<= health limit))))
@@ -44,13 +49,14 @@
   "The deaths and near-deaths of c still remembered: [{:pos {:x :y :z} :cause :mob? :weight :age-ms}], weight falling from 1 to 0 with age, mob? by mob-cause?."
   [c]
   (let [now (ctx/now c)
-        spot (fn [t data]
-               (let [age (- now t) w (cost/death-weight age) {:keys [x y z]} (:pos data)
+        hurt-ms (let [ttl (:ttl (or (mem/policy (ctx/view c) :hurt) mem/default-policy))] (when (number? ttl) ttl))
+        spot (fn [t data fade-ms]
+               (let [age (- now t) w (if fade-ms (cost/death-weight age fade-ms) (cost/death-weight age)) {:keys [x y z]} (:pos data)
                      cause (if (:death-t data) (:cause data) (hurt-cause data))]
                  (when (and (pos? w) x)
                    {:pos {:x x :y y :z z} :cause cause :mob? (mob-cause? (:primitives c) cause) :weight w :age-ms age})))]
-    (vec (concat (keep #(spot (:death-t (:data %)) (:data %)) (ctx/entries c :deaths))
-                 (keep #(spot (:t %) (:data %)) (near-deaths c))))))
+    (vec (concat (keep #(spot (:death-t (:data %)) (:data %) nil) (ctx/entries c :deaths))
+                 (keep #(spot (:t %) (:data %) hurt-ms) (near-deaths c))))))
 
 (defn near
   "The remembered deaths of `deaths` (from recent) within ::radius of cell `pos`."

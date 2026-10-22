@@ -96,6 +96,21 @@
     (is (= 1 (count (death-spot/recent (with-hits c (for [h (range 5 0 -1)] [h (update spot :x + h)]))))) "a fight's hits are one spot")
     (is (= 2 (count (death-spot/recent (with-hits c [[5 spot] [5 (update spot :x + 30)]])))))))
 
+(deftest a-near-death-fades-over-the-hurt-memory-ttl-and-counts-once-with-a-death
+  (let [c (ready-test/ctx-of day-world)
+        now 36000000
+        spot {:x 80 :y 64 :z 5}
+        view (fn [hurt-ttl deaths]
+               (assoc c :view (fn [] {:now now
+                                      :data {:policies {:hurt {:cap 50 :ttl hurt-ttl} :deaths core/deaths-policy}
+                                             :entries {:hurt [{:t (- now 1800000) :data {:health 3 :pos spot :attacker {:name "skeleton"}}}]
+                                                       :deaths deaths}}})))
+        weights #(mapv :weight (death-spot/recent %))]
+    (is (< 0.49 (first (weights (view 3600000 []))) 0.51) "half the 1 h hurt ttl gone")
+    (is (< 0.74 (first (weights (view 7200000 []))) 0.76) "the ttl is read from the stored policy")
+    (is (= ["zombie"] (mapv :cause (death-spot/recent (view 3600000 [{:t (- now 600000) :data {:pos (update spot :x + 3) :cause "zombie" :death-t (- now 600000)}}]))))
+        "a hit beside a death is the death's spot")))
+
 (deftest a-recent-death-near-the-goal-adds-its-fight-to-the-risk-even-by-day
   (let [c (ready-test/ctx-of day-world)
         on-way (with-death c {:x 80 :y 64 :z 5} "zombie_villager" 60000)

@@ -30,9 +30,9 @@
                      :doc "Blocks round a death by terrain past which it costs nothing: the cells that killed are near the spot."}})
 
 (defn death-weight
-  "1 for a death just now, falling to 0 at ::memory-ms age."
-  [age-ms]
-  (max 0 (min 1 (- 1 (/ age-ms (settings/get settings ::memory-ms))))))
+  "1 for a death just now, falling to 0 at ::memory-ms age (or at `memory-ms`, for a record kept shorter)."
+  ([age-ms] (death-weight age-ms (settings/get settings ::memory-ms)))
+  ([age-ms memory-ms] (max 0 (min 1 (- 1 (/ age-ms memory-ms))))))
 
 (defn terrain-danger
   "The planner danger {:x :y :z :close :radius :rate :mob :block} of a death by terrain `cause` at pos, its rate ::terrain-rate x weight
