@@ -233,7 +233,7 @@
 
 (deftest the-default-triggers-declare-their-levels
   (is (= {:suffocating :danger :burning :danger :wedged :danger :hostile-near :danger :died :danger
-          :night :urgent :dawn :urgent :dusk-home :urgent :poisoned :urgent
+          :night :urgent :dawn :urgent :dusk-home :urgent :poisoned :urgent :low-health :urgent
           :hungry :comfort :stuck-underground :comfort :door-left :comfort :inventory-nearly-full :comfort :scaffold-left :comfort :needs-bed :comfort :needs-weapon :comfort
           :tidy-pending :comfort :pen-gate :comfort :mounted :comfort :loose-items :comfort :ore-seen :comfort :part-cut-tree :comfort :replant-owed :comfort :dark-work :comfort}
          (update-vals default-triggers/all :level))))

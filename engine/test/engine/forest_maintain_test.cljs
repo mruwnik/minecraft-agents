@@ -553,8 +553,8 @@
 ;; ------------------------------------------------------------------ :accept reaches the fell child
 
 (deftest fell-tree-digs-with-the-accept-it-was-given
-  (is (= #{} (:accept (fell-log/log-dig-args {:args {:accept #{}}} {:x 0 :y 64 :z 0}))))
-  (is (= #{:fluid-adjacent} (:accept (fell-log/log-dig-args {:args {:accept #{:fluid-adjacent}}} {:x 0 :y 64 :z 0})))))
+  (is (= #{} (:accept (fell-log/log-dig-args {:args {:accept #{}} :quote-call {:ways #{}}} {:x 0 :y 64 :z 0}))))
+  (is (= #{:fluid-adjacent} (:accept (fell-log/log-dig-args {:args {:accept #{:fluid-adjacent}} :quote-call {:ways #{}}} {:x 0 :y 64 :z 0})))))
 
 (deftest maintain-hands-its-accept-to-the-fell-child
   (is (= #{:falling-block}
