@@ -21,6 +21,18 @@
    :expect [{:event {:source :job :kind :completed :data {:smelted 3}} :within-s 150 :of-job true}]
    :after [[:item "iron_ingot" 3]]
    :limit-s 160}
+  ;; a second call for a load the first put in (cut before the cook) waits for that cook: no input or fuel is fetched, the body carries neither
+  {:name "second-call-for-a-load-already-cooking-waits-for-it"
+   :blocks [[:set [20 0 14] "furnace[facing=west]"]]
+   :body {:inventory [["raw_iron" 3] ["coal" 1]]}
+   :act [[:job (jobs.items.smelt {:furnace #xyz [20 0 14] :item "raw_iron" :count 3})]
+         [:await {:source :job :kind :smelt.loaded} 60]
+         [:http :cancel "$job" {:ok true}]
+         [:await {:source :job :kind :cancelled} 10]
+         [:job (jobs.items.smelt {:item "raw_iron" :count 3})]]
+   :expect [{:event {:source :job :kind :completed :data {:smelted 3}} :within-s 120 :of-job true}
+            ]
+   :after [[:item "iron_ingot" 3]]}
   {:name "blast-furnace-iron-on-planks"
    :blocks [[:set [20 0 14] "blast_furnace[facing=west]"]]
    :body {:inventory [["raw_iron" 4] ["oak_planks" 6]]}

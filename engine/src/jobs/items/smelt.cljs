@@ -34,6 +34,7 @@
   without touching the furnace.
   Quote: the cook time of the count, the input, fuel and product items; open-ended with no furnace given or seen. Default :spend
   :job-time is ::job-time-s plus the cook (10 s an item); :wall-time adds ::away-s for other jobs done while it cooks.
+  A furnace that already cooks the whole :count of the one :item (this body's note, confirmed by a read) is only waited for and emptied: nothing is fetched or loaded.
   A load is noted in memory (jobs.lib.furnace/cooking-kind) until the furnace is taken empty, so a cut leaves it for get-food to collect.
   Ends :done {:smelted n :wanted n}: :wanted is the count this job loaded, :smelted what came of it (input and output already in the
   furnace do not count; 0 of N is never :done). A give-up carries the same data plus :text, with the cause:
@@ -334,6 +335,29 @@
         "unreachable" (leave-furnace! c furnace)
         (stop! c (str "furnace " (:status state)))))))
 
+(defn noted-load
+  "The cooking note {:pos :item :count} of the furnace this call uses when it already holds the whole of this call's count of its input, else nil."
+  [c furnace]
+  (let [{:keys [item count]} (:args c)
+        input (sp/input-of item (carried c))]
+    (when (and count (not (coll? item)))
+      (some #(when (and (= furnace (:pos %)) (= input (:item %)) (>= (:count %) count)) %)
+            (map :data (ctx/entries c furnace/cooking-kind))))))
+
+(defn ^:async adopt-load!
+  "A furnace that already cooks this call's whole count (its note says so, the read confirms): the call waits for that cook and takes the output, fetching and loading nothing. nil when the furnace holds less."
+  [c furnace]
+  (when-let [note (noted-load c furnace)]
+    (let [near (await (near/go-near! c furnace 3))
+          state (when (= :there near) (await (visit! c "read" {})))
+          input (:input state)]
+      (cond
+        (= :partial near) :continue
+        (not (and (= "ok" (:status state)) (= (:item note) (:name input)) (>= (:count input) (:count (:args c))))) nil
+        :else (do (ctx/update-mem! c assoc :target (:count input) :owed {:item (:item note) :count (:count input) :base 0})
+                  (ctx/emit! c :smelt.loaded :info {:text (str "waiting for the " (:count input) " " (:item note) " already cooking") :item (:item note) :count (:count input)})
+                  (wait-until! c (wait-ms (:kind state) state)))))))
+
 (defn ^:async round-with
   "The round once the furnace is known."
   [c furnace]
@@ -376,6 +400,7 @@
         nil)
       (when-not (or (furnace-of c) (some? (:owed (ctx/mem c))))
         (await (acquire-furnace! c (sp/input-of (:item (:args c)) (carried c)))))
+      (when-not (:owed (ctx/mem c)) (await (adopt-load! c (furnace-of c))))
       (await (sf/fetch-stages! c (fetch-fuels) (fetch-wood-fuels)))
       (await (round-with c (furnace-of c)))))
 

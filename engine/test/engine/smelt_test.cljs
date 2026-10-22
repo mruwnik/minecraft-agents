@@ -461,6 +461,25 @@
               _ (await (ticks eng 4))]
           (is (empty? (notes)) "taken out: forgotten"))))))
 
+(deftest a-second-call-for-a-load-already-cooking-waits-for-it-and-fetches-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen clock]} (setup (assoc base-world :inventory [{:name "raw_iron" :count 3} {:name "coal" :count 1}]))
+              first-id (core/submit! eng iron-job {})
+              _ (await (ticks eng 1))
+              _ (core/cancel! eng first-id)
+              _ (await (ticks eng 3))
+              _ (is (= {} (select-keys (inv-of p) ["raw_iron" "coal"])) "everything is in the furnace")
+              _ (core/submit! eng iron-job {})
+              _ (await (ticks eng 2))
+              _ (is (empty? (of-kind seen :obtain.gathering)) "no fuel or input is fetched")
+              _ (advance! p 2000)
+              _ (swap! clock + 100000)
+              _ (await (ticks eng 3))]
+          (is (empty? (of-kind seen :stopped)))
+          (is (= 3 (get (inv-of p) "iron_ingot"))))))))
+
 (deftest a-cut-cook-leaves-its-note-for-get-food
   (async done
     (tu/run-async done
