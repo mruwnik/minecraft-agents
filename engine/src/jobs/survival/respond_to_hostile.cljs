@@ -31,7 +31,7 @@
   Needs: a real danger (as the hostile-near trigger, jobs.lib.danger, in sight) within the danger ::hostile-radius setting (::ranged-radius for ranged mobs);
   none near is done at once. The call's :use :tools are the weapons, handed to both children.
   Returns: :done when no danger is near and the body holds no refuge, or when every danger is only heard and the fight declined
-  (they are muted, the ending names the mob), or when a fight held for a seen mob that neither came nor hurt the body (it is watched: muted while farther than danger/watch-gap and the body unhurt); :nothing-possible :retreat-failed (the flight's ending is the :because) when the
+  (they are muted, the ending names the mob), or when a fight held for a seen mob that neither came nor hurt the body (it is watched: muted while it comes no nearer than danger/answered-within and the body is unhurt); :nothing-possible :retreat-failed (the flight's ending is the :because) when the
   flight ends so; :nothing-possible :no-response after ::max-unchanged calls in a row that change nothing; :limit-reached on its
   time budget. Never :continue. Writes one :hostile memory entry per encounter. A danger reflex: never backed off.")
 
@@ -232,14 +232,14 @@
        (empty? (ctx/since c :hurt (- (ctx/now c) (hit-window-ms))))))
 
 (defn leave-watched!
-  "Mutes the mobs hs as watched (jobs.lib.body/watched-ids) and returns {:left-watched ending-data}, so the job the reflex cut goes on."
+  "Mutes the mobs hs as watched (jobs.lib.body/watched) and returns {:left-watched ending-data}, so the job the reflex cut goes on."
   [c hs]
   (let [mute-s (/ (body/next-mute-ms (ctx/view c) :watch-mute) 1000)
         mob (.-name (first hs))]
-    (ctx/remember! c :watch-mute {:ids (set (map #(.-id %) hs)) :until (+ (ctx/now c) (* 1000 mute-s))} body/mute-policy)
+    (ctx/remember! c :watch-mute {:mobs (into {} (map (fn [h] [(.-id h) (danger-q/mob-distance (:primitives c) h)])) hs) :until (+ (ctx/now c) (* 1000 mute-s))} body/mute-policy)
     {:left-watched {:mob mob :mute-s mute-s
                     :text (str "the " mob " neither came nor hurt the body in the hold: no flight; it is watched for " mute-s
-                               " s and answered again if it comes within " danger-q/watch-gap " blocks or the body is hurt")}}))
+                               " s and answered again if it comes nearer or the body is hurt")}}))
 
 (defn begun-fight?
   "Pure: whether the :hostile entry e (decision, mob, time t) is a fight against one of the mobs now near (names) that

@@ -77,7 +77,7 @@
                                                                           (:rand world) (assoc :rand (:rand world)))))
         eng (core/create {:primitives p :jobs fj/jobs :triggers triggers/all :dir (tu/tmp-dir) :now now
                           :events (events/make {:body "Fake" :sinks [sink] :now now})})]
-    {:eng eng :p p :seen seen :clock clock})))
+    {:eng eng :p p :raw raw :seen seen :clock clock})))
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 
@@ -1526,14 +1526,16 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup-seeing {:inventory sword :time 14000 :radius 6 :entities [(zombie 5 0)]} [0 4] 1000)]
+        (let [{:keys [eng p raw]} (setup-seeing {:inventory sword :time 14000 :radius 6 :entities [(zombie 4 0)]} [0 4] 1000)]
           (core/submit! eng respond {})
           (await (core/tick! eng))
           (let [view (mem/view (:store eng))]
-            (is (= #{7} (body/watched-ids view)) "the mob that never came is watched")
+            (is (= [7] (keys (body/watched view))) "the mob that never came is watched")
             (is (empty? (tu/walked-to eng)) "no flight")
             (is (= [] (:list (core/state eng))) "done, so the reflex does not fire again for it")
-            (is (not (danger-q/hostile-near? p view {})) "and the trigger stays quiet while it stays out there")))))))
+            (is (not (danger-q/hostile-near? p view {})) "and the trigger stays quiet while it stays there, inside danger/watch-gap")
+            (swap! (fake/state raw) assoc-in [:entities 0 :pos] [2.5 64 0])
+            (is (danger-q/hostile-near? p (mem/view (:store eng)) {}) "it fires again once the mob comes nearer")))))))
 
 (deftest only-seen-melee-mobs-may-be-watched
   (let [p (tu/fake-on-floor {:floor flight-floor :entities [(zombie 5 0) (skeleton 9 -4 0)
