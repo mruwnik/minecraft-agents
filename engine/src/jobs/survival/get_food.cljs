@@ -35,7 +35,7 @@
          a table). A failed bake is not retried in this job.
   :cook  Raw food carried (chicken, beef ...) with a furnace or smoker seen or remembered (the :furnace place) within cook's ::cook-far-radius (64), or no furnace but enough raw food
          to pay for making one (jobs.lib.cost/cook-worth?): cook it (the smelt job, which fetches a furnace and fuel, waiting out the cook in
-         the round), then eat it. Done before eating unless a danger is sensed or food is 0 and health would not outlast the cook plus cook's ::cook-margin-hp. Not at night nor while the night
+         the round), then eat it. Done before eating unless a danger is sensed or food is 0 and health would not outlast the cook plus cook's ::cook-margin-hp. Not while the night
          handler holds. A failed cook is not retried in this job (jobs.survival.get-food.cook).
   :source  The newest :food-source entry {:pos :kind} within ::source-radius, or a chest it booked food in (memory :fetch/stock) within sources' ::stock-radius (256), reached by go-to:
          :farm: dig its mature crops (blocks.dig, which collects the drops). It does not replant.

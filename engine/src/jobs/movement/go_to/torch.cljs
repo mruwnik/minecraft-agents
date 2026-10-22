@@ -3,7 +3,7 @@
   call ends. The hold is written to body memory, so the next call returns a torch a cut call left in the hand.
 
   Rules of go-to:
-  - :unknown true (default false) plans over what the body has seen or felt only: a cell it never saw is unknown (air to
+  - :unknown true (the default) plans over what the body has seen or felt only: a cell it never saw is unknown (air to
     the body), a floor it never saw is stepped onto only after the walk stops to look at it (jobs.lib.walk.sight), and
     only where it can see it from the takeoff (a drop deeper than it sees in the dark is refused). An unseen y goal
     behind a seen solid, or one a found plan tours round (jobs.movement.go-to.walk/lookout-check), is first looked at
