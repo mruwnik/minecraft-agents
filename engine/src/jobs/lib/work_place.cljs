@@ -2,7 +2,6 @@
   "Where a farm or build job works, for its safe? export (ready/safe-at): the cell at the middle of the place its args
   name, nil (here) when they name none."
   (:require [engine.args :as a]
-            [jobs.lib.xz :as xz]
             [jobs.lib.look :as look]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
@@ -51,7 +50,7 @@
         (when box (middle (map corner-vec [(:min box) (:max box)])))
         (when (and from to) (middle (map corner-vec [from to])))
         (a/cell center)
-        (xz/xz center))))
+        (a/xz center))))
 
 (defn nearest-mob
   "The cell of the nearest mob the body sees within radius, of the names given (a coll) or, with none, any passive one; nil for none."

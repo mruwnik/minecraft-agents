@@ -147,3 +147,9 @@
     (doseq [f (sort (.readdirSync fs "scenarios"))
             :when (str/ends-with? f ".edn")]
       (is (= [] (scenario/problems registry/jobs ts (scenario/with-defaults (scenario/read-file (str "scenarios/" f))))) f))))
+
+(deftest xz-takes-every-position-form
+  (are [v] (= {:x 1 :z 3} (a/xz v))
+    [1 2 3] [1 3] {:x 1 :y 2 :z 3} {:x 1 :z 3})
+  (are [v] (nil? (a/xz v))
+    [1] "x" {:x 1} nil))

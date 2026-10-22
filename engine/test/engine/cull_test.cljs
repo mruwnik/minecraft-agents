@@ -8,7 +8,6 @@
             [engine.test-util :as tu]
             [jobs.animals.cull :as cull]
             [jobs.lib.hunting :as hunting]
-            [jobs.lib.xz :as xz]
             [jobs.lib.animals :as animals]
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]))
@@ -341,9 +340,3 @@
 
 (deftest a-cull-with-no-mob-is-bad-args
   (is (= :never (first (cull/bad-args {:args {:keep 0}})))))
-
-(deftest xz-takes-every-position-form
-  (are [v] (= {:x 1 :z 3} (xz/xz v))
-    [1 2 3] [1 3] {:x 1 :y 2 :z 3} {:x 1 :z 3})
-  (are [v] (nil? (xz/xz v))
-    [1] "x" {:x 1} nil))

@@ -80,6 +80,16 @@
 
 (def position? (pred "[x y z] or {:x :y :z} of numbers" #(some? (cell %))))
 
+(defn xz
+  "{:x :z} for a position given as [x y z], [x z], {:x :y :z} or {:x :z} of numbers, else nil."
+  [v]
+  (cond
+    (and (map? v) (every? #(number? (get v %)) [:x :z])) (select-keys v [:x :z])
+    (and (sequential? v) (= 2 (count v)) (every? number? v)) (zipmap [:x :z] v)
+    :else (some-> (cell v) (select-keys [:x :z]))))
+
+(def xz-position? (pred "[x z], [x y z], {:x :z} or {:x :y :z} of numbers" #(some? (xz %))))
+
 (def point? (pred "{:x :y :z} of numbers" #(and (map? %) (every? (fn [k] (number? (get % k))) [:x :y :z]))))
 
 (defn coll-of
