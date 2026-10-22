@@ -3,6 +3,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.breath :as breath]
             [jobs.lib.click :as click]
+            [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.util :as u]
             [jobs.lib.shelter.clock :as sh-clock]
@@ -109,11 +110,25 @@
   (boolean (when-let [room (and (sh-sense/room-roofed? p at) (sealed-region p at))]
              (dark-spawn-beyond? p room at))))
 
+(defn reached-from-outside?
+  "Whether a mob could stand outside the sealed-region round feet ({:x :y :z}) right beside the body, in a side cell one lower (its
+  head in a gap over a drop), level or one higher (on the side block, under a roof no walker jumps past), so it hits the
+  body though no walker's flood gets in. Only cells the body has seen: one behind a wall is no gap."
+  [p {:keys [x y z] :as feet}]
+  (let [kind-at (reach-room/shut-kind-at p)
+        cells (:cells (sealed-region p feet))]
+    (boolean (some (fn [[dx dy dz]]
+                     (let [s [(+ x dx) (+ y dy) (+ z dz)]]
+                       (and (not (contains? cells s)) (apply reach/standable? kind-at s)
+                            (every? #(some? (u/seen-block p (zipmap [:x :y :z] %))) [s (update s 1 inc) (update s 1 dec)]))))
+                   (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] dy [-1 0 1]] [dx dy dz])))))
+
 (defn safe-from-night?
-  "Whether the body is safe from the night where it stands: safe-room-at? its feet, its head not inside a block, not afloat
+  "Whether the body is safe from the night where it stands: safe-room-at? its feet and not reached-from-outside?, its head not inside a block, not afloat
   (a swimmer is in no shelter). The one test the night trigger, night-sheltered, walk-leaves-shelter?, the night job's end and the hold share."
   [p]
-  (boolean (and (not (breath/in-water? p)) (not (sh-sense/head-in-block? p)) (safe-room-at? p (sh-sense/feet p)))))
+  (let [feet (sh-sense/feet p)]
+    (boolean (and (not (breath/in-water? p)) (not (sh-sense/head-in-block? p)) (safe-room-at? p feet) (not (reached-from-outside? p feet))))))
 
 (defn night-sheltered
   "At night, awake and safe from it (safe-from-night?), the kind of shelter the body is in (:dug-in the one shelter says

@@ -1,0 +1,25 @@
+;; Card e91cc4ec: the body stands on a ledge one block over a trench open to the outside (x 0..5, y 1..2, z 15..17).
+;; Its west feet cell [5 2 16] is a gap one high (stone over it) above the trench floor cell [5 1 16]: no walker gets in,
+;; but a mob standing in the trench has its head in the gap and hits the body. The block over the gap cannot be clicked
+;; from the body's eye, so the gap needs a block under it first. Stone mass x 2..12, z 10..22, y 0..6.
+{:defaults
+ {:tags [:survival :dig-in]
+  :time :any
+  :register []
+  :blocks [[:fill [2 0 10] [12 6 22] "stone"] [:fill [0 1 15] [5 2 17] "air"] [:fill [6 2 16] [6 3 16] "air"]]
+  :body {:at [6.5 2 16.5] :effects [["resistance" 600 4]]}}
+ :cases
+ [{:name "walls-fill-a-gap-over-a-drop-from-below"
+   :body {:inventory [["dirt" 20]]}
+   :act [[:job (jobs.survival.shut-in {:ways #{:walls} :for :night})]]
+   :expect [{:event {:source :job :kind :shut-in.sealed} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :shut-in.unsealed} :for-s 40 :until {:source :job :kind :shut-in.sealed}}]
+   :after [[:block [5 1 16] "dirt"] [:block [5 2 16] "dirt"] [:body-near [6.5 2 16.5] 1.0]]
+   :limit-s 60}
+  ;; should-fail: nothing to fill the gap with: the night does not end as if sheltered
+  {:name "night-with-a-gap-over-a-drop-and-no-blocks-is-not-sheltered"
+   :time :night :time-why :dawn-decision
+   :act [[:job (jobs.survival.night)]]
+   :expect [{:event {:source :job :kind :night.dig-in-why} :within-s 30}
+            {:no-event {:source :job :kind :completed} :for-s 45 :of-job true}]
+   :limit-s 60}]}

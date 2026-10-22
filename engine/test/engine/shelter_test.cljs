@@ -125,6 +125,11 @@
     (is (pos? (chance (unroofed 1 40) {:x 0 :y 64 :z 39})) "the walled yard reaches a far dark cell")
     (is (pos? (chance (box 5 5 true) {:x 2 :y 64 :z 2})) "open sides: a flood too big to close is never safe")))
 
+(deftest a-one-high-gap-over-a-drop-beside-a-one-cell-pocket-is-no-shelter
+  (let [safe? (fn [cells] (sh-inside/safe-from-night? (seen-box (assoc (without-blocks (box 1 1 false) cells) "-1,62,0" "stone") [0 0])))]
+    (is (true? (safe? [])))
+    (is (false? (safe? [[-1 64 0] [-1 63 0]])) "no walker gets in, but a mob in the drop below the gap reaches the body")))
+
 (deftest a-leaf-roof-keeps-mobs-out-like-stone
   (let [leaf-roof (into {} (map (fn [[k v]] [k (if (= k "0,66,0") "oak_leaves" v)])) (box 3 3 false))]
     (is (true? (sh-inside/safe-from-night? (seen-box leaf-roof [0 0]))))))
@@ -1032,7 +1037,7 @@
           (core/submit! eng '(jobs.debug.notify {:text "after"}) {})
           (await (tick-nights eng clock 1))
           (let [places (count (calls p "place"))]
-            (is (= (+ 5 (* 4 (sites/max-sites))) places) "4 places per shut-in call (one per wall), max-sites calls, after the first walls try of 4 walls and a roof")
+            (is (= (+ 1 (* 4 (sites/max-sites))) places) "4 places per shut-in call (one per wall), max-sites calls, after the first try's roof support (its walls under the 1-thick floor have nothing the eye can click)")
             (is (= 1 (count (emitted seen :shelter.exposed))) "one warn that the body is unsheltered")
             (await (tick-nights eng clock 2))
             (is (= places (count (calls p "place"))) "the failed sites are not dug in again")

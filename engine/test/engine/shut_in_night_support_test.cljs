@@ -18,14 +18,16 @@
         (for [x (range -4 5) z (range -4 5) :when (not= [0 0] [x z])] [(str x ",61," z) "stone"])))
 
 (defn needs-support!
-  "Make place answer no-support for a cell with no block beside, above or below it, as the real primitive does."
+  "Make place answer no-support for a cell with no block beside, below or (only for a cell whose top is above the eye) above it,
+  as the real primitive does."
   [p]
   (.override (.-world p) "place"
              (fn ^:async f [token args impl]
                (let [x (.-x (.-pos args)) y (.-y (.-pos args)) z (.-z (.-pos args))
+                     eye (+ 1.62 (second (:pos (fake/self p))))
                      held? (some #(let [b (some-> (.blockAt p #js {:x (+ x (nth % 0)) :y (+ y (nth % 1)) :z (+ z (nth % 2))}) .-name)]
                                     (and b (not= "air" b)))
-                                 [[0 -1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0]])]
+                                 (cond-> [[0 -1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1]] (< eye (inc y)) (conj [0 1 0])))]
                  (if held? (await (impl token args)) #js {:status "no-support"})))))
 
 (defn ^:async run-walls! [world]
@@ -42,6 +44,21 @@
         (let [{:keys [seen]} (await (run-walls! {:inventory [{:name "dirt" :count 40}] :blocks pillar :floor [0 0 0 0]}))]
           (is (empty? (filter #(= :no-way (:reason %)) (st/emitted seen :stopped))) (pr-str (map :text (filter #(= :no-way (:reason %)) (st/emitted seen :stopped)))))
           (is (= 1 (count (st/emitted seen :shut-in.sealed)))))))))
+
+(def ledge
+  "The body at the edge of a one-block drop (x -1, floor at 62), with a block beyond the drop at head height: the head cell
+  over the drop has a side to be placed against, the feet cell under it only the floor of the drop."
+  (assoc (into st/floor (for [x (range -4 5) z (range -4 5) :when (not= [0 0] [x z])] [(str x "," (if (= -1 x) 62 63) "," z) "stone"]))
+         "-2,65,0" "stone"))
+
+(deftest a-wall-cell-over-a-drop-gets-its-support-from-below-not-from-the-block-placed-over-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p seen]} (await (run-walls! {:inventory [{:name "dirt" :count 40}] :blocks ledge :floor [0 0 0 0]}))]
+          (is (empty? (st/emitted seen :shut-in.unsealed)))
+          (is (= 1 (count (st/emitted seen :shut-in.sealed))))
+          (is (= "dirt" (some-> (.blockAt p #js {:x -1 :y 63 :z 0}) .-name)) "the drop under the feet cell is filled first"))))))
 
 (deftest a-support-block-in-another-zone-is-not-placed
   (async done
@@ -81,10 +98,9 @@
           (is (= 1 (count (st/emitted seen :shut-in.sealed)))))))))
 
 (def cell {:x 0 :y 64 :z 0})
-(def avoid #{{:x 0 :y 63 :z 0} {:x 0 :y 64 :z 0}})
 
 (defn chain [blocks depth]
-  (dig-cells/support-chain (tu/fake {:blocks blocks}) cell #{} depth))
+  (dig-cells/support-chain (tu/fake {:blocks blocks}) {:x 5 :y 64 :z 5} cell depth))
 
 (deftest support-chain-is-the-cells-under-up-to-the-first-with-a-block-beside
   (is (= [] (chain {"1,64,0" "stone"} 3)) "placeable already")
@@ -96,7 +112,7 @@
 (deftest support-chain-stops-at-fluid-and-at-the-bodys-cells
   (is (nil? (chain {"0,63,0" "lava" "1,62,0" "stone"} 3)) "lava under")
   (is (nil? (chain {"0,63,0" "water" "1,62,0" "stone"} 3)) "water under")
-  (is (nil? (dig-cells/support-chain (tu/fake {:blocks {"1,62,0" "stone"}}) {:x 0 :y 65 :z 0} avoid 3)) "never into the feet or head cells"))
+  (is (nil? (dig-cells/support-chain (tu/fake {:blocks {"1,62,0" "stone"}}) {:x 0 :y 63 :z 0} {:x 0 :y 65 :z 0} 3)) "never into the feet or head cells"))
 
 (deftest walls-fill-the-support-depth-setting-cells-under-a-wall-cell
   (let [p (tu/fake {:blocks {"1,61,0" "stone"}})

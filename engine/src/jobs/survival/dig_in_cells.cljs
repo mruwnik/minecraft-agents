@@ -106,31 +106,37 @@
   ([p feet] (open-cells p feet nil))
   ([p feet threats] (fill-cells #(seal/sealed? p %) feet threats #(stand-on? p %))))
 
+(defn support-deltas
+  "The neighbours of cell a block placed there may be clicked against by a body standing at feet: all six, but the one
+  above only for a cell above the feet (the eye is over the underside of a lower block, and the server refuses that click)."
+  [feet cell]
+  (if (> (:y cell) (:y feet)) rules/neighbour-deltas (remove #{[0 1 0]} rules/neighbour-deltas)))
+
 (defn placeable?
-  "Whether a block placed in cell has a neighbour (any of the six) whose collision shape fills its cell to be placed against."
-  [p {:keys [x y z]}]
+  "Whether a block placed in cell has a neighbour (support-deltas) whose collision shape fills its cell to be placed against."
+  [p feet {:keys [x y z] :as cell}]
   (boolean (some (fn [[dx dy dz]] (:full-cube? (u/seen-facts p {:x (+ x dx) :y (+ y dy) :z (+ z dz)})))
-                 rules/neighbour-deltas)))
+                 (support-deltas feet cell))))
 
 (a/defargs settings
   {::support-depth {:default 3 :doc "How many cells under a wall cell with nothing beside it a shelter fills to give it a block to be placed against." :spec (a/int-in 0 nil)}})
 
 (defn support-chain
   "The cells to fill, lowest first, so a block can then be placed in cell: [] when cell is placeable? already, the cells
-  under it down to one that is (at most depth of them), nil when none is (or one is wet or in avoid, the body's cells)."
-  [p cell avoid depth]
-  (if (placeable? p cell)
+  under it down to one that is (at most depth of them), nil when none is (or one is wet or one of the body's cells at feet)."
+  [p feet cell depth]
+  (if (placeable? p feet cell)
     []
     (let [below (update cell :y dec)]
-      (when (and (pos? depth) (not (avoid below)) (not (wet? p below)))
-        (some-> (support-chain p below avoid (dec depth)) (conj below))))))
+      (when (and (pos? depth) (not (#{feet (update feet :y inc)} below)) (not (wet? p below)))
+        (some-> (support-chain p feet below (dec depth)) (conj below))))))
 
 (defn supported-order
-  "cells that can be placed in their order: placeable? now, or beside (any of the six) an earlier one that is placed first."
-  [p cells]
-  (let [beside (fn [{:keys [x y z]}] (map (fn [[dx dy dz]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)}) rules/neighbour-deltas))
+  "cells that can be placed in their order by a body at feet: placeable? now, or beside (support-deltas) an earlier one that is placed first."
+  [p feet cells]
+  (let [beside (fn [{:keys [x y z] :as cell}] (map (fn [[dx dy dz]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)}) (support-deltas feet cell)))
         ok (loop [ok #{}]
-             (let [more (into #{} (filter #(and (not (ok %)) (or (placeable? p %) (some ok (beside %))))) cells)]
+             (let [more (into #{} (filter #(and (not (ok %)) (or (placeable? p feet %) (some ok (beside %))))) cells)]
                (if (empty? more) ok (recur (into ok more)))))]
     (filterv ok cells)))
 
@@ -138,11 +144,10 @@
   "The next cells to place from the open cells, in order: the supported-order ones, else the first one with the support-chain
   under it (the cell alone when it has none: the place then says no-support)."
   [p cells feet]
-  (let [avoid #{feet (update feet :y inc)}
-        ready (supported-order p cells)]
+  (let [ready (supported-order p feet cells)]
     (if (or (seq ready) (empty? cells))
       ready
-      (conj (vec (support-chain p (first cells) avoid (settings/get settings ::support-depth))) (first cells)))))
+      (conj (vec (support-chain p feet (first cells) (settings/get settings ::support-depth))) (first cells)))))
 
 (defn door
   "The door cells [feet head] of one side among the placed cells: the first side

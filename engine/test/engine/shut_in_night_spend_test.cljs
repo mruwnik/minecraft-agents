@@ -11,6 +11,7 @@
 (def logs {:name "oak_log" :count 20})
 (def dirt-floor (tu/box -8 55 -8 8 63 8 "dirt"))
 (def roofed (assoc st/floor "0,66,0" "stone"))
+(def stone-floor "Solid ground for the pit: a one-thick floor leaves the pit's side cells in air under it, which no eye in the pit can place against." (tu/box -8 55 -8 8 63 8 "stone"))
 
 (defn placed [p] (frequencies (map #(.-item (.-args %)) (st/calls p "place"))))
 
@@ -32,7 +33,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (run-dig! {:inventory [pick {:name "dirt" :count 4} logs] :blocks st/floor}))]
+        (let [{:keys [p]} (await (run-dig! {:inventory [pick {:name "dirt" :count 4} logs] :blocks stone-floor}))]
           (is (nil? (get (placed p) "oak_log")) (pr-str (placed p))))))))
 
 (deftest dirt-walls-say-what-they-spent
