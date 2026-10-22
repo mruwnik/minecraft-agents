@@ -523,7 +523,8 @@
           (core/submit! eng '(mining-parent) {})
           (await (tu/run-ticks eng clock 10 700))
           (is (= {:status :stopped :got 0 :reason :no-tool :tool "pickaxe"} (select-keys @out [:status :got :reason :tool]))))))))
-;; stones on 8-high pillars: seen from the floor, no stand beside them
+;; stones on 8-high pillars: seen from the floor, no stand beside them. The radius is wide because go-to's walk to a pillar's foot
+;; takes the body off the spot, and the stones left must still count.
 (deftest seen-ore-with-no-way-to-stand-beside-it-is-listed-unreached
   (async done
     (tu/run-async done
@@ -531,7 +532,7 @@
         (let [stones [[-3 0] [3 0] [0 -3] [0 3]]
               pillars (into {} (for [[x z] stones]
                                  (into {(str x ",71," z) "stone"} (cells "bedrock" [x] (range 62 71) [z]))))
-              s (await (scenario {:block "stone" :count 3 :radius 10 :ways #{:seen}}
+              s (await (scenario {:block "stone" :count 3 :radius 30 :ways #{:seen}}
                                  {:blocks (merge floor pillars) :inventory pickaxe} 120 (constantly 0.5)))
               e (done-event s)]
           (is (= [:stopped 0] ((juxt :status :got) e)))
