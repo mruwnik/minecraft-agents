@@ -1117,6 +1117,12 @@
         moved (surface/follow cells (fn [x z _] (tops [x z])))]
     (is (= [[1 63 1] [1 64 1] [4 71 1] [7 64 1]] (mapv :pos moved)) "a column moves as a whole; an unseen one stays")))
 
+(deftest surface-follow-plan-keeps-blueprint-parts-flat
+  (let [plan {:parts [{:id "hut" :blueprint "h" :at [1 64 1]} {:id "fence" :cells [[1 64 1]] :want "oak_fence"}]}
+        cells [{:pos [1 64 1] :want "dirt" :part "hut"} {:pos [1 65 1] :want "dirt" :part "hut"} {:pos [4 64 1] :want "oak_fence" :part "fence"}]
+        moved (surface/follow-plan plan cells (fn [& _] 70))]
+    (is (= [[1 64 1] [1 65 1] [4 71 1]] (mapv :pos moved)) "only the area part follows the ground")))
+
 (deftest a-surface-build-puts-the-fence-on-the-ground-of-every-column
   (async done
     (tu/run-async done
@@ -1432,9 +1438,17 @@
 (deftest a-rail-of-the-wanted-kind-in-another-shape-is-left-to-settle-not-dug
   (are [found dig?] (= dig? (boolean (:dig? (first (plan/prepared [{:pos [0 0 0] :answer :wrong :found found :item "rail"
                                                                     :want {:block "rail" :shape "east_west"}}]
-                                                                  {"rail" 3} {})))))
+                                                                  {"rail" 3} {} #{})))))
     "rail" false
     "stone" true))
+
+(deftest an-extra-chest-in-a-clear-cell-is-dug-only-when-the-body-placed-it
+  (are [found own dig?] (= dig? (boolean (:dig? (first (plan/prepared [{:pos [0 0 0] :answer :extra :found found :want :clear}] #{} {} own)))))
+    "chest" #{[[0 0 0] "chest"]} true
+    "crafting_table" #{[[0 0 0] "crafting_table"]} true
+    "chest" #{} false
+    "chest" #{[[1 0 0] "chest"]} false
+    "dirt" #{} true))
 
 (deftest a-plan-cell-under-the-feet-is-dug-from-beside-not-refused
   (async done

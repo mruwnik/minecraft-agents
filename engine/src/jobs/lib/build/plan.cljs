@@ -264,7 +264,7 @@
   [c answer]
   (if-not (and answer (:surface (:plan answer)))
     answer
-    (update answer :cells surface/follow (top-fn c))))
+    (update answer :cells #(surface/follow-plan (:plan answer) % (top-fn c)))))
 
 (defn with-supports
   "The cells of part, and the cells of other parts under them, down the column: a part's cell stands on them, so the part builds them first."
@@ -308,18 +308,33 @@
             :else cell))
         cells))
 
+(def placed-kept-policy
+  "Body memory policy of :build-placed-kept, the chests, tables and the like a build put down itself."
+  {:cap 200 :ttl (* 7 24 60 60 1000)})
+
+(defn note-placed!
+  "Remember that this body placed item at cell when it is a kept block (jobs.lib.build.kept): a later :clear cell holding it is its own to take up."
+  [c cell item]
+  (when (kept/kept? [] item)
+    (ctx/remember! c :build-placed-kept {:cell (vec cell) :block item} placed-kept-policy)))
+
+(defn own-kept
+  "The set of [cell block] of kept blocks this body placed itself."
+  [c]
+  (set (map (comp (juxt :cell :block) :data) (ctx/entries c :build-placed-kept))))
+
 (defn prepared
   "Cells (as judged) ready for the rounds: loosened; a companion half is marked :companion; a wrong block of another kind that the body carries the item for,
   that is no container, door or gate, no rail of the wanted kind (its shape settles as its neighbours land), not already misplaced by this job, is marked :dig? (dug, then placed). So is a block that is
-  no replaceable one in a :clear cell (:extra), whatever is carried."
-  [cells carried misplaced]
+  no replaceable one in a :clear cell (:extra), whatever is carried; a kept block (chest, table ..) there too when own holds [cell block] (the body placed it)."
+  [cells carried misplaced own]
   (mapv (fn [{:keys [answer found want item pos] :as cell}]
           (let [wrong? (= :wrong answer)
                 extra? (= :extra answer)
                 settling? (and (rail/rail-name? found) (= found (shape/want-block want)))
                 dug? #(and (not (contains? misplaced pos))
                            (not settling?)
-                           (not (kept/kept? [] found))
+                           (or (not (kept/kept? [] found)) (and extra? (contains? own [pos found])))
                            (not (re-find opening-pattern found)))
                 digs? (and (or extra? (and wrong? item (contains? carried item))) (dug?))
                 short? (and wrong? item (not (contains? carried item)) (dug?))]
@@ -352,7 +367,7 @@
         wood (when usable? (wood-choice c answer carried-map))
         cells (when usable?
                 (let [carried (set (keys carried-map))]
-                  (let [cells (prepared (judged (:primitives c) answer part carried-map wood) carried (:misplaced (ctx/mem c) {}))
+                  (let [cells (prepared (judged (:primitives c) answer part carried-map wood) carried (:misplaced (ctx/mem c) {}) (own-kept c))
                         kept? (kept-ground c cells (sturdy-ground? c))]
                     (mapv #(if (and (:short? %) (kept? %)) (dissoc % :short?) %) cells))))
         trouble (or (plan-trouble answer cells)

@@ -41,7 +41,7 @@
   again.
   A door's upper half, a bed's head and a tall plant's upper half are never targets: the lower or foot cell places
   the whole item. A :clear cell holding a block that is not replaceable and no container is dug (nothing carried
-  needed). Crops and trees are not this job's.
+  needed); so is a chest, table or the like the body placed itself (body memory :build-placed-kept; its contents drop as items). Crops and trees are not this job's.
   Its walks never dig through the build, except from a hole the body stands in (2 or more levels walled): they may climb out.
   One call works until the plan is built or nothing more applies (it yields only while a walk or fetch waits). Every
   step re-reads the plan and the world and takes the first that applies: walk out of a footprint cell the body stands in
@@ -64,7 +64,7 @@
   :lava-adjacent). A cell with an untaken one is refused as :hazard.
   Plan properties: :surface true puts each column of the plan on the ground the body has seen there (the column's lowest
   cell stands on the ground's top, the rest keep their height above it; an unseen column stays as planned), for a pen on a
-  slope; :sturdy-ground true accepts a sturdy block on the ground of a rail line (plan.rail/ground) where the plan wants
+  slope (parts placed from a blueprint stay flat at their :at); :sturdy-ground true accepts a sturdy block on the ground of a rail line (plan.rail/ground) where the plan wants
   fill, not listed :wrong.
   done? holds when no cell is owed, none came out wrong; the engine then ends it :done.
   Ends with data {:placed n :missing [[x y z] ...] :short {item n} :given-up {[x y z] reason} :wrong [{:pos :found

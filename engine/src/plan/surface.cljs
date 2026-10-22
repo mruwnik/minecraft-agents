@@ -29,3 +29,14 @@
     (mapv (fn [{[x y z] :pos :as cell}]
             (let [d (get shift [x z] 0)] (if (zero? d) cell (assoc cell :pos [x (+ y d) z]))))
           cells)))
+
+(defn follow-plan
+  "follow for the cells of plan: a placed blueprint part stays flat at its :at (its shape is drawn for level ground), only area parts follow the ground."
+  [plan cells top-of]
+  (let [flat (into #{} (comp (filter :blueprint) (map :id)) (:parts plan))
+        moved (volatile! (follow (remove (comp flat :part) cells) top-of))]
+    (mapv (fn [cell]
+            (if (flat (:part cell))
+              cell
+              (let [m (first @moved)] (vswap! moved rest) m)))
+          cells)))

@@ -86,6 +86,7 @@
           :continue :continue
           :placed (let [wrong (misplaced want item (:block (:data e)))]
                     (warn-gap! c pos item)
+                    (plan/note-placed! c pos item)
                     (ctx/update-mem! c #(cond-> (update (dissoc % :placing :budget-streak) :placed (fnil inc 0))
                                           wrong (assoc-in [:misplaced pos] wrong))))
           :already (ctx/update-mem! c #(count-fail (dissoc % :placing) pos :already limit))

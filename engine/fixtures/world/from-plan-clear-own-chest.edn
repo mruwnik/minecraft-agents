@@ -1,0 +1,23 @@
+;; Card 5f09df97: jobs.build.from-plan digs up a chest the body placed itself when a :clear cell of the plan holds it (body memory :build-placed-kept), but not a chest it did not place.
+;; Sealed bedrock room, the plan wants [11 0 12] clear and a fence at [13 0 12]; the chest stands at [11 0 12].
+;; Should-succeed: with the memory of the placing, the chest is dug (not-block) and the build completes.
+;; Should-fail: without it the chest stays, as it may be someone else's, and the build ends with the cell left.
+{:defaults
+ {:tags [:build] :time :any
+  :plot {:height 8}
+  :blocks [[:fill [8 0 11] [14 2 13] "bedrock" :hollow] [:fill [9 0 12] [13 1 12] "air"] [:set [12 1 11] "glowstone"] [:set [11 0 12] "chest"]]
+  :body {:at [12.5 0 12.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["oak_fence" 2]]}
+  :plans [{:id "cleared" :metadata {:by "$body"}
+           :parts [{:id "gap" :cells [#at [11 0 12]] :want :clear}
+                   {:id "fence" :cells [#at [13 0 12]] :want "oak_fence"}]}]
+  :limit-s 100}
+ :cases
+ [{:name "own-chest-in-a-clear-cell-is-dug"
+   :memory [{:kind :build-placed-kept :data {:cell #at [11 0 12] :block "chest"} :policy {:cap 200 :ttl 604800000}}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:cleared"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
+   :after [[:not-block [11 0 12] "chest"] [:block [13 0 12] "oak_fence"]]}
+  {:name "unknown-chest-in-a-clear-cell-stays"
+   :act [[:job (jobs.build.from-plan {:plan "$plan:cleared"})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 80 :of-job true}]
+   :after [[:block [11 0 12] "chest"] [:block [13 0 12] "oak_fence"]]}]}

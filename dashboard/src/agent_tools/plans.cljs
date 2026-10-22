@@ -292,7 +292,7 @@
                            inventory (inventory-value (:inventory req))
                            seen-name (fn [{:keys [x y z]}] (some-> (.call (aget memory "blockAt") memory x y z) (aget "name")))
                            expansion (cond-> (:expansion prepared)
-                                       (:surface (:plan-value req)) (update :cells surface/follow (surface/top-fn seen-name)))
+                                       (:surface (:plan-value req)) (update :cells #(surface/follow-plan (:plan-value req) % (surface/top-fn seen-name))))
                            cells (mapv :pos (:cells expansion))]
                        (try
                          (doseq [[x y z :as pos] cells]
