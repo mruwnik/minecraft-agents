@@ -45,7 +45,8 @@
       (if (:reason parsed) parsed {:pos (dissoc (:pos parsed) :y)}))))
 
 (defn kind-at
-  "(fn [x y z]) -> as seen-kind-at; an unseen cell from the raw world (reach/lookup) when raw?."
+  "(fn [x y z]) -> as seen-kind-at; an unseen cell from the raw world (reach/lookup) when raw?. Raw is right only for
+  go-to's own :unknown false mode, where the planner itself plans over the raw world and the re-aim must agree with it."
   [p raw?]
   (let [seen (seen-kind-at p)
         raw (when raw? (reach/lookup p kind))]
