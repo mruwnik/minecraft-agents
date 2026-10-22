@@ -216,11 +216,11 @@
   (with-meta (fn [c] (contract/all [(threatened c) (dark-sky c)])) {::exposure dark-sky}))
 
 (defn sheltered-dark
-  "Later :dark while the body is shut in a hut (a wide closed room, not a dug tunnel) and the open sky is dark: a walk that has no
+  "Later :dark while the body is shut in a hut (a wide closed room, not a dug tunnel) or in its own night shelter and the open sky is dark: a walk that has no
   place (a search, a roam) leaves the room into the dark."
   [c]
   (let [p (:primitives c)]
-    (if (and (sh-sense/dark-outside? p) (not (sh-sense/sleeping? p)) (sh-sense/shut-in-hut? p) (sh-inside/safe-from-night? p))
+    (if (and (sh-sense/dark-outside? p) (not (sh-sense/sleeping? p)) (or (and (sh-sense/shut-in-hut? p) (sh-inside/safe-from-night? p)) (sh-inside/sheltered-in c)))
       (contract/later :dark "sheltered for the night, a walk with no place leaves the room under a dark sky"
                       :recheck-after-ms (* 1000 (sh-sense/sky-in p)))
       (contract/ok :lit "no room to leave under a dark sky"))))

@@ -560,7 +560,7 @@
                                 40
                                 #(mem/write! (:store (:eng %)) :shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built} {:cap 10 :ttl st/day-ms})))]
           (is (not (finished? s)) "still waiting for the shelter to be left, not ended :stuck")
-          (is (some #(and (= :holding (:kind %)) (= :night-shelter (:reason %))) @(:seen s)))
+          (is (empty? (walks s)) "safe-roaming waits :later :dark: no leg is walked")
           (is (nil? (event-of s :fruitless))))))))
 
 ;; live (Juniper, card e51d1fe9): three legs east all failed at the same rim and the search ended stuck; a leg that lies
