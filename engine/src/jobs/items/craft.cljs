@@ -125,12 +125,17 @@
         (apply contract/ok :crafted (str "crafted " made " " item) data))
       (apply contract/later :crafting (str "craft: " made " of " count " " item) data))))
 
+(defn chooser
+  "Torches ask the register as :craft-torch: the kit's fuel and sticks, held against the crafts but not the kit's own, stay out of them."
+  [c]
+  (if (= "torch" (:item (:args c))) :craft-torch :craft))
+
 (defn spendable
   "{name n} of the ingredients this call may use: carried less what the register holds, the item made counted whole.
   Members of an interchange class (planks of any wood) count at the class total unless raw?."
   [c & [raw?]]
   (let [item (:item (:args c))
-        free (storage/carried-totals (reserve/free c :craft))]
+        free (storage/carried-totals (reserve/free c (chooser c)))]
     (assoc (if raw? free (recipes/pooled (game/version-of (:primitives c)) item free)) item (storage/usable-carried (u/inventory (:primitives c)) item))))
 
 (defn quote-of
@@ -312,7 +317,7 @@
 (defn problem
   "The first ingredient of the last shortage still not carried up to the amount it needed, as {:item :count}, else nil."
   [c]
-  (let [have (reserve/free c :craft)]
+  (let [have (reserve/free c (chooser c))]
     (some (fn [[name want]]
             (let [n (storage/carried have name)]
               (when (< n want) {:item name :count (- want n)})))
@@ -381,7 +386,7 @@
         have (storage/usable-carried (u/inventory p) item)]
     (if (>= have target)
       (finish! c (- have start) {})
-      (let [held? (seq (reserve/held c :craft))
+      (let [held? (seq (reserve/held c (chooser c)))
             cap (if held? (makeable c) ##Inf)]
         (or (when (zero? cap) (await (short-of-ingredients! c 1)))
             (let [table (or (:table (ctx/mem c)) (:table (:args c)))]

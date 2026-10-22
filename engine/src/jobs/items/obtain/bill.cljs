@@ -33,15 +33,30 @@
                                       {k v}))]
     (into {} (keep (fn [[k v]] (let [n (- v (get carried k 0))] (when (pos? n) [k n])))) need)))
 
+(defn kit-stock
+  "[[item n why not]] of the fuel and sticks the items need: coal or charcoal for the smelt (one per 8 ingots), the sticks of the recipes."
+  [version items]
+  (let [rs (recipes/recipes-for version)
+        sticks (reduce + (for [item items] (get (:needs (first (get rs item))) "stick" 0)))
+        ingots (reduce + (vals (furnace-short version items {})))
+        fuel (long (js/Math.ceil (/ ingots 8)))]
+    (concat (when (pos? sticks) [["stick" sticks #{:craft}]])
+            (when (pos? fuel) (for [f ["coal" "charcoal"]] [f fuel #{:craft :smelt}])))))
+
 (defn reserve!
   "Replace this job's reserve entries (strength 0.9) with the furnace material the missing items need together and the
-  raw input it is smelted from: a deposit leaves those carried units alone; the craft and smelt children spend them."
+  raw input it is smelted from (a deposit leaves those carried units alone; the craft and smelt children spend them), and the
+  fuel and sticks they need (torch crafts leave those alone)."
   [c items]
-  (reserve/set-job-entries!
-   c (vec (for [[mat n] (furnace-short (game/version-of (:primitives c)) items {})
-                item [mat (get smelt-plan/made-from mat)]]
-            {:id (str (:id c) "-bill-" item) :item item :count n :strength 0.9 :by (:id c)
-             :why "material for the bill" :not #{:craft :smelt}}))))
+  (let [version (game/version-of (:primitives c))]
+    (reserve/set-job-entries!
+     c (vec (concat (for [[mat n] (furnace-short version items {})
+                          item [mat (get smelt-plan/made-from mat)]]
+                      {:id (str (:id c) "-bill-" item) :item item :count n :strength 0.9 :by (:id c)
+                       :why "material for the bill" :not #{:craft :smelt}})
+                    (for [[item n not] (kit-stock version items)]
+                      {:id (str (:id c) "-bill-" item) :item item :count n :strength 0.9 :by (:id c)
+                       :why "fuel and sticks for the bill" :not not}))))))
 
 (defn child-args
   "The obtain child's args for item, carrying total in all."

@@ -14,6 +14,7 @@
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.base :as base]
             [jobs.items.obtain.bill :as bill]
+            [jobs.lib.reserve :as reserve]
             [jobs.items.obtain.table :as table]
             [jobs.items.recipes :as recipes]))
 
@@ -117,6 +118,17 @@
       (is (= first-writes @writes) "same entries: nothing written again")
       (bill/reserve! c [])
       (is (empty? @store)))))
+
+(deftest a-bill-keeps-its-sticks-and-fuel-from-the-torch-crafts
+  (let [store (atom [])
+        c {:id "j1/bill" :primitives (tu/fake {:inventory [{:name "coal" :count 4} {:name "stick" :count 2}]}) :args {:bill {"iron_pickaxe" 1}}
+           :view (fn [] {:data {:entries {:reserve @store (mem/job-kind "j1") [{:data {:children {:bill {:args {}}}}}]}} :now 0})
+           :remember (fn [_ data _] (swap! store conj {:data data}))
+           :forget (fn [_ pred] (swap! store #(vec (remove (comp pred :data) %))))}]
+    (bill/reserve! c ["iron_pickaxe"])
+    (is (= {"stick" 2 "coal" 1} (reserve/held c :craft-torch)) "a torch craft leaves the pickaxe's sticks and the smelt's coal")
+    (is (= {"stick" 2} (reserve/held c :smelt)) "the smelt burns the coal, not the sticks")
+    (is (= {} (reserve/held c :craft)) "the kit's own crafts are not held off")))
 
 (deftest a-bill-and-an-item-together-are-bad-args
   (are [args] (some? (base/args-error args))
