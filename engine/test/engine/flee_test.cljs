@@ -426,6 +426,8 @@
     (is (= 6 (respond.state/nearest-gap p (vec (reverse hostiles)))))
     (is (nil? (respond.state/nearest-gap p [])))))
 
+(declare holds)
+
 (def sweeper
   "A contract job that runs retreat's blocked! until it ends the job."
   {:round (fn ^:async sweeper-round [c]
@@ -442,6 +444,15 @@
           (is (= :stopped (:status out)))
           (is (= :cannot-escape (:reason out)) "the stop reason reaches the caller")
           (is (= 1 (count (filter #(= :retreat_blocked (:kind %)) @seen))) "warned once"))))))
+
+(deftest blocked-holds-a-moment-unless-a-creeper-is-near
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[label mob holds?] [["a zombie" (zombie 7 5 {}) true]
+                                    ["a creeper" {:id 8 :uuid "u8" :name "creeper" :kind "hostile" :pos {:x 5 :y 64 :z 0}} false]]]
+          (let [{:keys [seen]} (await (run-job! (assoc-in (setup {:entities [mob]}) [:eng :jobs 'sweeper] sweeper) 'sweeper {}))]
+            (is (= holds? (boolean (seq (holds seen "cornered")))) label)))))))
 
 (defn backer
   "A job that backs off once from the zombie and keeps what back-off! answered and whether the option stays tried."

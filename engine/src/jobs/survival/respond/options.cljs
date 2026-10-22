@@ -268,12 +268,13 @@
 
 (defn ^:async blocked!
   "Every option failed: forget them all, warn once a flight, pause a moment (why cornered) and go on: the next step
-  tries them again from the start (the danger still stands); no pause while the body is being hit. The second sweep in a row ends the flight :cannot-escape."
+  tries them again from the start (the danger still stands); no pause while the body is being hit or a creeper is near (it closes in
+  and blows while the body stands, so the next step must try the fight or a walk at once). The second sweep in a row ends the flight :cannot-escape."
   [c why]
   (ctx/update-mem! c #(-> % (dissoc :tried) flight/count-sweep))
   (when-not (:blocked-warned (ctx/mem c))
     (ctx/update-mem! c assoc :blocked-warned true)
     (ctx/emit! c :retreat_blocked :warn {:text (str why "; every escape failed, trying them again")}))
-  (when-not (recently-hurt? c)
+  (when-not (or (recently-hurt? c) (some combat/creeper? (near-hostiles c)))
     (await (child/pause! c (/ (flight/wait-ms) 1000) "cornered")))
   (if (flight/cannot-escape? (ctx/mem c)) (flight/end-flight! c :cannot-escape) :again))
