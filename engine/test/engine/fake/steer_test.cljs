@@ -445,3 +445,15 @@
       (let [patched (steer/path-world @state)]
         (is (= (states-in (:snapshot (steer/path-world-build @state))) (states-in (:snapshot patched))))))
     (is (= before-ids (states-in (:snapshot before))))))
+
+(deftest a-side-or-back-key-moves-the-body-the-way-the-key-points-from-the-head
+  (let [quarter (/ js/Math.PI 2)
+        along (fn [controls head] (let [h (steer/heading controls head)] (when h (js/Math.round (/ (js/Math.atan2 (js/Math.sin h) (js/Math.cos h)) quarter)))))]
+    (are [controls head expected] (= expected (along controls head))
+      {:forward true} 0 0
+      {:back true} 0 2
+      {:left true} 0 1
+      {:right true} 0 -1
+      {:right true} quarter 0
+      {:back true} (- js/Math.PI) 0
+      {:jump true} 0 nil)))

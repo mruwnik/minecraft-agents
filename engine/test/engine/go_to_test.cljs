@@ -10,6 +10,7 @@
             [engine.events :as events]
             [engine.expr :as expr]
             [engine.fake :as fake]
+            [engine.fake.steer :as steer]
             [engine.memory :as mem]
             [engine.perception :as perception]
             [engine.perception.rays :as rays]
@@ -997,7 +998,8 @@
                                (swap! visited conj [(js/Math.floor (.-x pose)) (js/Math.floor (.-z pose))])
                                (let [^js out (decide pose)]
                                  (if (and (not (.-done out)) (<= 4.9 (.-x pose) 5.5) (= 0 (js/Math.floor (.-z pose)))
-                                          (< (js/Math.abs (- (.-yaw out) east-yaw)) 0.3))
+                                          (some-> (steer/heading (js->clj (.-controls out) :keywordize-keys true) (.-yaw out))
+                                                  (- east-yaw) js/Math.abs (< 0.3)))
                                    #js {:controls #js {} :yaw (.-yaw out)}
                                    out)))]
                  (impl token (js/Object.assign #js {} a #js {:decide wrapped}))))))

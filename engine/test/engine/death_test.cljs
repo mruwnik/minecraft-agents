@@ -765,7 +765,7 @@
             (core/submit! eng job {})
             (await (run-until-empty eng 20))
             (is (= :collected (:decision (recovered eng))))
-            (is (= #{death-pos} (set (tu/walked-to eng))) "every walk aims at the pile: a steer that times out is re-planned, never a detour")
+            (is (= [death-pos] (tu/walked-to eng)) "one walk to the pile: its steer does not run out")
             (is (= "arrived" (:status (:data (mem/latest (mem/view (:store eng)) :moved)))))
             (is (re-find #"raw_iron" text) "the main item is named")
             (is (re-find #"zombie" text) "the danger on the way is named")

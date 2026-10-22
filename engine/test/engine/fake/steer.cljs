@@ -118,15 +118,23 @@
         (let [m (/ (+ lo hi) 2)]
           (if (apply box-clear? w body (at m)) (recur m hi (inc n)) (recur lo m (inc n))))))))
 
+(defn heading
+  "The yaw the held movement keys move the body along when its head faces head (a key to the side or back moves it that way,
+  as a head turn in a walk's glance needs), nil with none held."
+  [{:keys [forward back left right]} head]
+  (let [dirs (cond-> [] forward (conj head) back (conj (+ head js/Math.PI)) left (conj (+ head (/ js/Math.PI 2))) right (conj (- head (/ js/Math.PI 2))))
+        sx (reduce + (map js/Math.sin dirs))
+        sz (reduce + (map js/Math.cos dirs))]
+    (when (> (js/Math.hypot sx sz) 1e-6) (js/Math.atan2 sx sz))))
+
 (defn horizontal
   "The body after the horizontal part of a tick. A move whose cell holds a narrow block (a post, gate, wall, pane or
   bamboo) is judged by the body's box against the blocks' boxes, as the planner's space judges it; a blocked move
   slides along one axis, else moves along x then z as far as the boxes let it (pressed against the block), as the
   game's collision does."
-  [w body {:keys [forward jump] :as controls} yaw]
-  (if-not forward
-    (assoc body :collided false)
-    (let [dist (if (:sprint controls) sprint walk)
+  [w body {:keys [forward jump] :as controls} head]
+  (if-let [yaw (heading controls head)]
+    (let [dist (if (and forward (:sprint controls)) sprint walk)
           x (- (:x body) (* (js/Math.sin yaw) dist))
           z (- (:z body) (* (js/Math.cos yaw) dist))
           [cx cz] [(floor x) (floor z)]]
@@ -154,7 +162,8 @@
             (and (< rise 0) (supported? w x (:y body) z) (not (solid? w cx cell cz)) (not (solid? w cx (inc cell) cz)))
             (assoc body :x x :z z :collided false)
             (or (<= rise step) (and (<= rise jump-step) jump)) (assoc body :x x :y g :z z :collided false)
-            :else (assoc body :collided true))))))))
+            :else (assoc body :collided true))))))
+    (assoc body :collided false)))
 
 (defn vertical
   "The body after the vertical part of a tick. A jump without forward, on the ground out of water, lifts the body to the
