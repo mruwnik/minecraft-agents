@@ -81,7 +81,7 @@
                                                 :inventory [{:name "bread" :count 4} {:name "stone_sword" :count 1}]}
                                                1000)
               food #(:food (fake/self p))]
-          (is (= [:suffocating :burning :wedged :died :hostile-near :poisoned :night :dawn :dusk-home :hungry :stuck-underground :part-cut-tree :replant-owed :needs-bed :needs-weapon :door-left
+          (is (= [:suffocating :burning :wedged :died :hostile-near :poisoned :night :low-health :dawn :dusk-home :hungry :stuck-underground :part-cut-tree :replant-owed :needs-bed :needs-weapon :door-left
                   :inventory-nearly-full :scaffold-left :tidy-pending
                   :pen-gate :mounted :dark-work]
                  (mapv :id (:register (core/state eng)))))
@@ -91,7 +91,7 @@
 
           (fake/swap-self! p assoc :health 5 :food 10)
           (await (run-ticks eng clock 3 1000))
-          (is (= [:hungry] (fired seen)) "low health below 18 food fires get-food")
+          (is (= [:hungry :low-health] (fired seen)) "low health below 18 food fires get-food, then the fed body rests")
           (is (< 10 (food)) "get-food ate where the body stands")
           (is (= [] (tu/walk-calls p)) "no walk home")
           (fake/swap-self! p assoc :health 20)
@@ -101,7 +101,7 @@
 
           (fake/add-entity! p {:id 50 :name "zombie" :kind "hostile" :pos [4 64 0] :health 20})
           (await (run-ticks eng clock 3 1000))
-          (is (= [:hungry :hostile-near] (fired seen)) "a hostile fires respond-to-hostile (a whole flight)")
+          (is (= [:hungry :low-health :hostile-near] (fired seen)) "a hostile fires respond-to-hostile (a whole flight)")
           (swap! (fake/state p) assoc :entities [])
           (await (run-ticks eng clock 10 1000))
           (is (some #(= [:reflex :ended :hostile-near] [(:source %) (:kind %) (:reflex %)]) @seen)
@@ -115,11 +115,11 @@
           (is (= {:level 3 :points 40} (:experience (:data (mem/latest (mem/view (:store eng)) :died))))
               "the died entry keeps the experience")
           (await (run-ticks eng clock 3 1000))
-          (is (= [:hungry :hostile-near] (fired seen)) "a dead body fires nothing")
+          (is (= [:hungry :low-health :hostile-near] (fired seen)) "a dead body fires nothing")
           (.respawn (.-world p))
           (swap! clock + 2500) ; the job holds still until the respawn has settled; this clock only moves between ticks
           (await (run-ticks eng clock 3 1000))
-          (is (= [:hungry :hostile-near :died] (fired seen)) "the respawn lets a death fire recover-drops, which returns the sword")
+          (is (= [:hungry :low-health :hostile-near :died] (fired seen)) "the respawn lets a death fire recover-drops, which returns the sword")
           (await (run-ticks eng clock 10 1000))
           (is (= {:decision :collected :items 3}
                  (select-keys (:data (mem/latest (mem/view (:store eng)) :recovered)) [:decision :items]))

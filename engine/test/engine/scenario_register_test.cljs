@@ -21,7 +21,7 @@
     (mapv :id (:register (core/state eng)))))
 
 (deftest missing-register-gives-the-defaults-in-order
-  (is (= [:suffocating :burning :wedged :died :hostile-near :poisoned :night :dawn :dusk-home :hungry :stuck-underground :needs-bed :needs-weapon :door-left
+  (is (= [:suffocating :burning :wedged :died :hostile-near :poisoned :night :low-health :dawn :dusk-home :hungry :stuck-underground :needs-bed :needs-weapon :door-left
           :inventory-nearly-full :scaffold-left :tidy-pending :pen-gate :mounted :part-cut-tree :replant-owed :dark-work :ore-seen :loose-items]
          (loaded-ids {})
          (loaded-ids '{:queue [(jobs.movement.look-around)]}))))

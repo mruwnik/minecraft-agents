@@ -1,0 +1,30 @@
+;; Card bcaa14c7: a body under the risky health (6) that regenerates by waiting (food 18+) rests (shut in, holding :healing,
+;; a bite of carried bread while food is under 20) before its queued walk goes on; a hungry one (food under 18, only
+;; eating heals it) is the hungry trigger's, so the low-health reflex leaves it alone and the walk runs.
+{:defaults
+ {:tags [:survival :readiness]
+  :time :any
+  :plot {:height 8 :floor "stone" :light :lit}
+  :register [{:trigger :low-health :persistence :cooldown :cooldown-s 30}]
+  :body {:at [6.5 0 16.5]}
+  :limit-s 200}
+ :cases
+ [{:name "hurt-fed-body-rests-before-its-walk"
+   :body {:inventory [["dirt" 32] ["bread" 8]]}
+   :act [[:rcon "damage $BODY 16 minecraft:generic"]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :low-health}} :within-s 10}
+            {:no-event {:source :job :kind :rest.unsheltered} :for-s 30 :until {:source :reflex :kind :ended :context {:reflex-id :low-health}}}
+            {:no-event {:source :job :kind :completed :data {:arrived true}} :for-s 120 :until {:source :reflex :kind :ended :context {:reflex-id :low-health}}}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :low-health} :data {:kind :done}} :within-s 150}
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 190 :of-job true}]
+   :after [[:body-near [22.5 0 16.5] 2]]}
+  {:name "hurt-hungry-body-walks-on"
+   :body {:inventory [["dirt" 16]] :effects [["hunger" 120 255]]}
+   :act [[:until-rcon "data get entity $BODY foodLevel" "data: ([0-9]|1[0-7])$" 20]
+         [:rcon "damage $BODY 15 minecraft:generic"]
+         [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :low-health}} :for-s 40 :until {:source :job :kind :completed}}
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [22.5 0 16.5] 2]]
+   :limit-s 90}]}

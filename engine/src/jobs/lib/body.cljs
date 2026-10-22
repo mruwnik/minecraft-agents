@@ -8,6 +8,7 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.cost.health :as cost-health]
+            [jobs.lib.foods :as foods]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -64,6 +65,11 @@
   [p]
   (boolean (or (in-hazard? p)
                (and (.-onFire (.self p)) (not (fire-resistant? p))))))
+
+(defn heals-by-rest?
+  "Whether the body (primitives p) regenerates by waiting: food at foods/top-up-food or more, not burning, poisoned or withered."
+  [p]
+  (and (>= (.-food (.self p)) foods/top-up-food) (not (burning? p)) (not (poisoned? p))))
 
 ;; A flight from heard-only mobs that ended blocked mutes heard mobs for a growing time; a seen mob fires through it.
 (def mute-policy {:cap 8 :ttl (* 60 60 1000)})
