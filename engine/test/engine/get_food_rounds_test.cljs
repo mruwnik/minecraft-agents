@@ -553,7 +553,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [note [{:kind :seen :what "cow" :id "u1" :pos [40 64 0] :by "Other" :t 1 :until 9e15}]
+        (let [note [{:kind :seen :what "cow" :id "u1" :pos [40 64 0] :by "Other" :t 999900 :until 9e15}]
               {:keys [eng seen]} (setup {:time 6000 :self {:food 8 :health 10}} :step-ms 5 :other-notes note)]
           (await (one-round! eng {}))
           (is (some #(= :noted-walk (:slot %)) (events-of seen :child_ended)) "the search ended on the note with no animal in sight: the body walks toward it"))))))
@@ -562,7 +562,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [note [{:kind :seen :what "cow" :id "u1" :pos [40 64 0] :by "Other" :t 1 :until 9e15}]
+        (let [note [{:kind :seen :what "cow" :id "u1" :pos [40 64 0] :by "Other" :t 999900 :until 9e15}]
               {:keys [eng seen]} (setup {:time 6000 :self {:food 8 :health 10} :blocks (tu/box 20 60 -30 20 80 30 "bedrock")} :step-ms 5 :other-notes note)]
           (await (one-round! eng {}))
           (let [text (str (:text (first (none-endings seen))))]
@@ -573,7 +573,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [note [{:kind :seen :what "cow" :id "u1" :pos [8 64 0] :by "Other" :t 1 :until 9e15}]
+        (let [note [{:kind :seen :what "cow" :id "u1" :pos [8 64 0] :by "Other" :t 999900 :until 9e15}]
               {:keys [eng p]} (setup {:time 6000 :self {:food 8 :health 10} :blocks (tu/box 3 64 -2 3 66 2 "stone")} :step-ms 5 :other-notes note)]
           (await (one-round! eng {}))
           (is (> (.-x (.-pos (.self p))) 4) "inside the 12-block range of the note the body still walks closer when the animal is not in sight"))))))
@@ -582,7 +582,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [note [{:kind :seen :what "cow" :id "u1" :pos [20 64 0] :by "Other" :t 1 :until 9e15}]
+        (let [note [{:kind :seen :what "cow" :id "u1" :pos [20 64 0] :by "Other" :t 999900 :until 9e15}]
               {:keys [eng p]} (setup {:time 6000 :self {:food 8 :health 10} :entities [(assoc cow :uuid "u2")]} :step-ms 5 :other-notes note)]
           (await (one-round! eng {}))
           (is (empty? (calls p "attack")) "two known cows are the last pair, though only one is in sight"))))))
@@ -591,7 +591,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [note [{:kind :seen :what "cow" :id "u1" :pos [40 64 0] :by "Other" :t 1 :until 9e15}]
+        (let [note [{:kind :seen :what "cow" :id "u1" :pos [40 64 0] :by "Other" :t 999900 :until 9e15}]
               baby (assoc cow :baby true :uuid "b1")
               {:keys [eng p]} (setup {:time 6000 :self {:food 8 :health 10} :entities [baby]} :step-ms 5 :other-notes note)]
           (await (one-round! eng {}))

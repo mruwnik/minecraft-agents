@@ -1,0 +1,19 @@
+;; jobs.explore.search counts an animal noted long ago only once the body has gone to its spot and seen it (card 925e3294).
+;; Open grass; a cow 14 east is sighted and noted by a first search, then killed; the second search (stale after 1 s) must not report it found.
+;; Should-fail: the second search ends :completed "found 1 cow ... (last seen)" at once, before the old spot is looked at.
+;; Should-succeed: it walks to the noted spot, sees nothing, and ends :stopped.
+{:defaults
+ {:tags [:explore :jobs :animals]
+  :time :any
+  :plot {:floor "grass_block" :height 12}
+  :body {:at [12.5 0 16.5] :yaw 270 :effects [["resistance" 900 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "a-noted-cow-that-is-gone-is-looked-for-not-reported-found"
+   :act [[:summon "cow" [26.5 0 16.5]]
+         [:job (jobs.explore.search {:target "cow" :scan-radius 24 :use-notes false :settings {:jobs.explore.search/max-legs 0}})]
+         [:rcon "kill @e[type=cow,tag=wt,$BOX]"]
+         [:wait-s 3]
+         [:job (jobs.explore.search {:target "cow" :scan-radius 24 :settings {:jobs.explore.search/max-legs 0 :jobs.explore.search/stale-s 1}})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :of-job true :until {:source :job :kind :stopped}}]}]}

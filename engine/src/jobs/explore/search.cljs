@@ -57,7 +57,8 @@
   A leg whose goal lies by a mob the body would flee is not walked (go-to :goal-danger
   :end): it is recorded :goal-dangerous, no stuck walk; a step toward an unseen column given up so leaves that column.
 
-  With :use-notes, live :seen notes of a target within the max-distance setting count as found (:noted true, :by), unless the body
+  With :use-notes, live :seen notes of a target within the max-distance setting count as found (:noted true, :by), an entity
+  only if noted within the ::stale-s setting (it moves; an older one is looked for again), unless the body
   sees another block at that cell now, and a noted entity standing in a zone or plan of the body's own (its pens) never counts. The
   ending text lists the positions.
 
@@ -98,7 +99,7 @@
   {::max-distance {:default 96 :doc "How far (XZ) from the origin a leg may go and a noted or remembered target still counts." :spec (a/int-in 1 nil)}
    ::max-legs {:default 32 :doc "Legs walked before the search gives up." :spec (a/int-in 0 nil)}
    ::seen-ttl-s {:default 259200 :doc "Seconds a note of a block seen lasts." :spec (a/num-in 0 nil)}
-   ::stale-s {:default 60 :doc "Seconds after which an animal last seen is reported with how long ago, not as in view." :spec (a/num-in 0 nil)}
+   ::stale-s {:default 60 :doc "Seconds after which an animal noted no longer counts as found by a note, and one seen earlier in this search is reported with how long ago." :spec (a/num-in 0 nil)}
    ::entity-ttl-s {:default 600 :doc "Seconds a note of an entity seen lasts." :spec (a/num-in 0 nil)}
    ::searched-ttl-s {:default 86400 :doc "Seconds a note of searched ground lasts." :spec (a/num-in 0 nil)}
    ::animal-searched-ttl-s {:default 120 :doc "Seconds a note of ground searched for farm animals lasts: they wander, so old ground is looked at again." :spec (a/num-in 0 nil)}
@@ -249,14 +250,17 @@
 
 (defn noted
   "Findings from live :seen notes of names within max-distance (XZ) of the origin [x y z], leaving out a block note the
-  body now sees something else at and the entity notes of the departed ids."
-  [p ns names [ox _ oz] max-distance gone]
-  (->> ns
-       (remove #(gone (:id %)))
-       (filter #(and (= :seen (:kind %)) (some #{(:what %)} names)
-                     (<= (xz-dist [((:pos %) 0) ((:pos %) 2)] [ox oz]) max-distance)
-                     (not (outdated? p %))))
-       (map (fn [n] (cond-> {:what (:what n) :pos (:pos n) :noted true :by (:by n)} (:id n) (assoc :id (:id n)))))))
+  body now sees something else at and the entity notes of the departed ids. Entity notes older than fresh-ms (they
+  move) are left out, or with stale true are the only ones kept, minus the visited ids."
+  [p ns names [ox _ oz] max-distance gone now fresh-ms visited stale]
+  (let [old? #(and (:id %) (> (- now (:t %)) fresh-ms))]
+    (->> ns
+         (remove #(gone (:id %)))
+         (filter #(and (= :seen (:kind %)) (some #{(:what %)} names)
+                       (<= (xz-dist [((:pos %) 0) ((:pos %) 2)] [ox oz]) max-distance)
+                       (not (outdated? p %))
+                       (if stale (and (old? %) (not (visited (:id %)))) (not (old? %)))))
+         (map (fn [n] (cond-> {:what (:what n) :pos (:pos n) :noted true :by (:by n)} (:id n) (assoc :id (:id n))))))))
 
 ;; ------------------------------------------------------------------ the body
 
@@ -435,6 +439,7 @@
                    (map :n))
              (completing max) 0 ns))
 
+(defn fresh-ms [] (* 1000 (settings/get settings ::stale-s)))
 (defn stand-cap [] (settings/get settings ::stand-cap))
 (defn near-sight [] (settings/get settings ::near-sight))
 
@@ -557,16 +562,34 @@
                                      spots (assoc :found [{:what "patch" :pos (:pos (first spots)) :spots spots}]))))))
     (if (= :again spots) :again (boolean spots))))
 
+(defn revisit
+  "The nearest takeable animal noted over the stale setting ago and not yet visited, within reach of the origin: the body
+  walks there and looks before the search counts it found, nil when none."
+  [c m names ns]
+  (when-not (false? (:use-notes (:args c)))
+    (let [p (:primitives c)
+          me (here c)
+          near (min (:scan-radius (:args c)) (near-sight))
+          gone (if (pos? near) (departed ns (sense p names near) me near) #{})]
+      (->> (noted p ns names (:origin m) (distance-limit) gone (ctx/now c) (fresh-ms) (set (:revisited m)) true)
+           (takeable c)
+           (sort-by #(xz-dist [(me 0) (me 2)] [((:pos %) 0) ((:pos %) 2)]))
+           first))))
+
 (defn ^:async advance!
   "Start the next leg, or end the search for want of one."
   [c names ns]
-  (let [m (ctx/mem c)]
+  (let [m (ctx/mem c)
+        stale (revisit c m names ns)]
     (cond
       (and (surface-only? names) (sh-sense/buried? (:primitives c)))
       (case (await (surface-up/step! c))
         :continue :continue
         :out :again
         (finish! c :not-found :no-way-up))
+      stale
+      (do (ctx/update-mem! c (fn [m] (-> m (update :revisited (fnil conj #{}) (:id stale)) (assoc :leg (:pos stale) :leg-column nil))))
+          (await (walk! c)))
       (>= (:legs m 0) (settings/get settings ::max-legs))
       (finish! c :not-found :legs)
       :else
@@ -611,7 +634,7 @@
         gone (if (pos? near) (departed ns (sense (:primitives c) names near) (here c) near) #{})
         found (cond-> (cond-> (:found m)
                         (not resumed) (add-found (takeable c (remembered (:primitives c) names (:origin m) max-distance)) want))
-                use-notes (add-found (takeable c (noted (:primitives c) ns names (:origin m) max-distance gone)) want))]
+                use-notes (add-found (takeable c (noted (:primitives c) ns names (:origin m) max-distance gone (ctx/now c) (fresh-ms) #{} false)) want))]
     (ctx/update-mem! c assoc :found found)
     (if (>= (count found) want)
       (finish! c :found nil)

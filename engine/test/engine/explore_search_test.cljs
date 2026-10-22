@@ -402,18 +402,20 @@
           (is (= [] (walks s)))
           (is (= :stopped (:kind (not-found-of own)))))))))
 
-(deftest a-noted-animal-in-the-bodys-own-zone-is-no-find-one-outside-is-and-the-text-gives-where
+(deftest a-noted-animal-in-the-bodys-own-zone-is-no-find-one-outside-is-and-an-old-note-is-no-find
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [note (fn [pos] [{:kind :seen :what "cow" :id "u1" :pos pos :by "Other" :t 1 :until 9e15}])
+        (let [note (fn [pos t] [{:kind :seen :what "cow" :id "u1" :pos pos :by "Other" :t t :until 9e15}])
               farm {:name "farm" :owner "Fake" :min [0 60 0] :max [10 70 10]}
-              run! (fn ^:async f [pos] (await (search! {:target "cow" :max-distance 20 :settings {:jobs.explore.search/max-legs 0}} {:zones [farm]} 20
-                                                       #(write-other! % "Other" (note pos)))))
-              penned (await (run! [3 64 3]))
-              wild (await (run! [12 64 12]))]
+              run! (fn ^:async f [pos t] (await (search! {:target "cow" :max-distance 20 :settings {:jobs.explore.search/max-legs 0}} {:zones [farm]} 20
+                                                         #(write-other! % "Other" (note pos t)))))
+              penned (await (run! [3 64 3] (js/Date.now)))
+              wild (await (run! [12 64 12] (js/Date.now)))
+              old (await (run! [12 64 12] 1))]
           (is (= :stopped (:kind (not-found-of penned))) "the penned cow is not counted")
-          (is (re-find #"12,64,12 \(last seen \d+ min ago\)" (str (:text (found-of wild)))) "the text says where and how long ago"))))))
+          (is (re-find #"12,64,12" (str (:text (found-of wild)))) "a fresh note counts and the text says where")
+          (is (= [{:x 12 :y 64 :z 12}] (walks old)) "walked to the old note") (is (= :stopped (:kind (not-found-of old))) "a note older than the stale setting is looked up again, not trusted"))))))
 
 (deftest legs-that-cannot-be-stood-on-or-walked-are-recorded-and-skipped
   (async done
