@@ -1,0 +1,41 @@
+;; survival.get-food walks to a sheep only an earlier search noted, 48 blocks off over a dark drop (the way goes down a 3-block ledge onto an
+;; unlit corridor floor the body cannot see; the sheep stands under a sea lantern at its far end). The plot is dark so a torch is due.
+;; The body is teleported to the sheep, a search notes it, and it is teleported back, so nothing is in sight when get-food starts.
+;; Should-succeed (starving, so it searches although under rock): a chest next to the body holds torches; get-food (starving, nothing carried) fetches one, lights the drop, walks there, kills the sheep.
+;; Should-fail: no torch in view: the walk ends unseen-floor-dark and the :no-food text names the unreached note and why (not "no food source is known").
+{:defaults
+ {:tags [:survival :get-food :torch :search]
+  :time :any
+  :plot {:height 12 :length 72 :width 32 :light :dark}
+  :blocks [[:fill [10 0 14] [66 8 18] "stone"]
+           [:fill [11 3 16] [13 4 16] "air"]
+           [:fill [14 0 16] [64 4 16] "air"]
+           [:set [60 3 16] "sea_lantern"]
+           [:set [12 3 15] "air"]]
+  :body {:at [11.5 3 16.5] :yaw 270 :settle-s 3}
+  :limit-s 200}
+ :cases
+ [{:name "noted-sheep-over-a-dark-drop-is-reached-with-fetched-torches"
+   :blocks [[:set [12 4 15] "air"]
+            [:set [12 3 15] "chest{Items:[{Slot:0b,id:\"minecraft:torch\",count:8}]}"]]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:wait-s 8]
+         [:rcon "damage $BODY 14 minecraft:generic"]
+         [:summon "sheep" [60.5 0 16.5] "{NoAI:1b}"]
+         [:rcon "execute at $BODY run tp $BODY ~46 ~-3 ~"] [:wait-s 3]
+         [:job (jobs.explore.search {:target "sheep" :scan-radius 16 :use-notes false :settings {:jobs.explore.search/max-legs 0}})] [:wait-s 5]
+         [:rcon "execute at $BODY run tp $BODY ~-46 ~3 ~"] [:wait-s 3]
+         [:job (jobs.survival.get-food {:explore true})]]
+   :expect [{:event {:source :job :kind :food.killed} :within-s 150}
+            {:no-event {:source :job :kind :stopped :data {:reason :no-food}} :for-s 150 :until {:source :job :kind :food.killed}}]
+   :limit-s 220}
+  {:name "noted-sheep-with-no-torch-is-named-in-the-no-food-text"
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:wait-s 8]
+         [:rcon "damage $BODY 14 minecraft:generic"]
+         [:summon "sheep" [60.5 0 16.5] "{NoAI:1b}"]
+         [:rcon "execute at $BODY run tp $BODY ~46 ~-3 ~"] [:wait-s 3]
+         [:job (jobs.explore.search {:target "sheep" :scan-radius 16 :use-notes false :settings {:jobs.explore.search/max-legs 0}})] [:wait-s 5]
+         [:rcon "execute at $BODY run tp $BODY ~-46 ~3 ~"] [:wait-s 3]
+         [:job (jobs.survival.get-food {:explore true})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food :text [:contains "was not reached"]}} :within-s 150}]
+   :limit-s 220}
+]}
