@@ -1,7 +1,7 @@
 ;; jobs.movement.go-to when the way is shut: sealed by a hand-diggable block, a soft seal over an own stair mouth, a 1-wide dirt tunnel,
 ;; a goal walled in while the body is free, bare hands. Bedrock is never dug and ends with a reason. Escalation is the default.
 ;; Should-succeed: dirt or cobble room with its door onto a 3-deep trench + bare hands; moss room + pickaxe; dirt-sealed stair; open and plugged 1-wide dirt tunnel; stone room with bare hands; free body, goal in a stone room + pickaxe.
-;; Should-fail: bedrock room (with and without a pickaxe), goal in a bedrock room: :arrived false, no bedrock dug (the unseen floor reads as rock, so a stone of the ground may be tried).
+;; Should-fail: a cobble room whose door opens onto a trench lined with bedrock (no dig-out from the bottom: the body stays in the room); bedrock room (with and without a pickaxe), goal in a bedrock room: :arrived false, no bedrock dug (the unseen floor reads as rock, so a stone of the ground may be tried).
 {:defaults
  {:tags [:movement :access :go-to]
   :time :any
@@ -92,4 +92,11 @@
             [:fill [19 -5 4] [26 -1 28] "dirt"] [:fill [19 -3 4] [19 -1 28] "air"]]
    :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
-   :after [[:body-near [24.5 0 16.5] 2]]}]}
+   :after [[:body-near [24.5 0 16.5] 2]]}
+  {:name "cobble-door-onto-a-bedrock-trench-stays-in-the-room"
+   ;; a closed trench no way out of which can be dug: the shut-in body does not drop into it (:unknown false: no walk over unseen cells into it)
+   :blocks [[:fill [14 -1 14] [18 3 18] "cobblestone" :hollow] [:fill [18 0 16] [18 1 16] "air"]
+            [:fill [19 -5 10] [26 -1 22] "bedrock"] [:fill [19 -3 12] [19 -1 20] "air"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :unknown false})]]
+   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false}} :within-s 120 :of-job true}]
+   :after [[:body-near [16.5 0 16.5] 3]]}]}

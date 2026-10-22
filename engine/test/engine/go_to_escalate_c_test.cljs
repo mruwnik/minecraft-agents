@@ -660,3 +660,12 @@
       (fn ^:async t []
         (let [{:keys [out p]} (await (run-job! {:self {:pos {:x 61.5 :y 69 :z 9.5}} :blocks oriel-house :light [0 0]} {:pos [63 69 12] :range 1}))]
           (is (true? (:arrived @out)) (pr-str @out)))))))
+
+(deftest go-to-a-house-above-an-undiggable-pit-stays-in-instead-of-dropping-into-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (merge oriel-house (into {} (for [[k v] oriel-house :when (= "dirt" v)] [k "bedrock"])))
+              {:keys [out p]} (await (run-job! {:self {:pos {:x 61.5 :y 69 :z 9.5}} :blocks blocks :light [0 0]} {:pos [63 69 12] :range 1}))]
+          (is (false? (:arrived @out)) (pr-str @out))
+          (is (= 69 (second (feet p))) "the body did not drop into the pit"))))))
