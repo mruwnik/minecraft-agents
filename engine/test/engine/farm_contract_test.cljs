@@ -235,7 +235,11 @@
         (let [e (await (ending-of (pt/start (pt/field-world (pt/inv "wheat_seeds" 9)
                                                            {:blocks (into {} (for [x (range 2 5) z (range 2 5)] [(str x ",63," z) "dirt"]))}))
                                   plant {:area pt/field-box} 20))]
-          (is (= {:kind :condition-failed :cause {:reason :nothing-to-do :untilled 9}} (kcm e))))))))
+          (is (= {:kind :condition-failed :cause {:reason :nothing-to-do :untilled 9}} (kcm e))))
+        (let [e (await (ending-of (pt/start {:blocks {"2,63,2" "dirt" "3,63,2" "grass_block"} :inventory (pt/inv "wheat_seeds" 6) :floor tu/walk-floor}
+                                             (ew/of-data (pt/shared-plans []) {} []))
+                                  plant {:area {:plan "mix"}} 20))]
+          (is (= {:kind :condition-failed :cause {:reason :nothing-to-do :untilled 2}} (kcm e)) "plan mode names dried-back cells too"))))))
 
 (deftest plant-a-carried-seed-the-food-reserve-keeps-is-a-failed-condition-and-nothing-is-fetched
   (async done

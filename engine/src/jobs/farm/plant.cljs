@@ -43,8 +43,8 @@
   :plan-trouble :why} (the plan is missing or unreadable: a wait; it has no crop cells: impossible, also later),
   :refused (every bare cell is refused), :food-reserve (a food-crop seed is carried but the reserve keeps it; nothing is
   fetched), {:reason :need ..} (no seed, :ways #{:carried}) and :nothing-to-do (no bare cell; dried-back dirt names :untilled n).
-  Ends with data {:planted n :skipped [cells] :untilled [cells]} (plan mode: :refused [{:pos :reason}] and :short [seeds
-  not carried] instead of :untilled). Done when every bare cell was sown, or some were and the number meets :least (cells,
+  Ends with data {:planted n :skipped [cells] :untilled [cells]} (plan mode adds :refused [{:pos :reason}] and :short [seeds
+  not carried]; :untilled is the planned cells over dirt). Done when every bare cell was sown, or some were and the number meets :least (cells,
   default 1); else condition-failed :need, :refused or :food-reserve for cells left without a seed or permission,
   nothing-possible :gave-up for skipped cells; none planted and nothing left, :nothing-to-do. done? counts the cells sown and the bare cells left.")
 
@@ -77,6 +77,14 @@
                :when (contains? bs/tillable (u/seen-name p pos))]
            pos))))
 
+(defn untilled-planned
+  "The planned crop cells (pos of cells) with air above ground that is dirt, grass or a path."
+  [p cells]
+  (vec (for [pos (keys cells)
+             :when (and (= "air" (u/seen-name p pos))
+                        (contains? bs/tillable (u/seen-name p (update pos :y dec))))]
+         pos)))
+
 (defn held-back
   "{:seed :held :kept :reserve-points} when no seed may be sown but a seed (seed, else any) is carried and the
   reserve register keeps it; else nil."
@@ -90,6 +98,14 @@
         {:seed n :held (carried n) :kept (kept n) :reserve-points cost/food-reserve-points}))))
 
 (declare planned sowing)
+
+(defn untilled
+  "The cells of the field whose ground needs tilling (box or plan mode)."
+  [c]
+  (let [p (:primitives c)]
+    (if (fa/plan c)
+      (untilled-planned p (:cells (planned c)))
+      (when-let [box (fa/arg-box c)] (untilled-cells p box)))))
 
 (def job-sym 'jobs.farm.plant)
 (def target [:area])
@@ -165,7 +181,8 @@
           (seq ready) nil
           (seq short) (when (nil? (fetch-opts c)) (seed-wanted c))
           (seq (fld/planned-bare (:primitives c) cells)) {:reason :refused}
-          :else {:reason :nothing-to-do})))))
+          :else (let [dry (untilled-planned (:primitives c) cells)]
+                  (cond-> {:reason :nothing-to-do} (seq dry) (assoc :untilled (count dry)))))))))
 
 (defn box-problem [c]
   (let [{:keys [seed]} (:args c)
@@ -221,7 +238,7 @@
         waiting (cond
                   (:trouble field) :plan-trouble
                   (pos? bare) :planting
-                  (and box (seq (untilled-cells (:primitives c) box))) :untilled
+                  (seq (untilled c)) :untilled
                   (and (not (:started m)) (not (look/surveyed? c :cell))) :looking
                   (and (pos? sown) (not (common/enough? c sown sown))) :short)]
     (if waiting
@@ -284,9 +301,9 @@
   box mode the dirt cells that need tilling."
   [c extra]
   (let [m (ctx/mem c)
-        untilled (when (fa/arg-box c) (untilled-cells (:primitives c) (fa/arg-box c)))]
+        dry (untilled c)]
     (cond-> (merge {:planted (:planted m 0) :skipped (vec (:skipped m))} extra)
-      (seq untilled) (assoc :untilled untilled))))
+      (seq dry) (assoc :untilled dry))))
 
 (defn conclude!
   "The ending of a run with no cell it can sow. cause: why cells are left bare (:gave-up for skipped ones, else a
