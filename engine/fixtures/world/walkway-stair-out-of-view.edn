@@ -1,6 +1,6 @@
 ;; Cards fc019ab4 / 5a4dbe11 / a1ba2b0a: a walled walkway (stone y 10, 1 wide, side walls) with a dead west end and a stair down at its
 ;; EAST end, 100 / 150 blocks east of the body: the way down lies out of view. The goal is on the ground below the west part.
-;; The fail case caps the east end (no way down): the body walks both ends to find out (about 500 blocks), then honest :unreachable on the walkway. The default tour-worth of a goal 170 off allows ~17 min of swinging between the loaded edges, so the case bounds it (:tour-worth 120, about 400 blocks away from the goal).
+;; The fail case caps the east end (no way down): the body walks both ends to find out (about 500 blocks), then honest :unreachable on the walkway. The default tour-worth of a goal 170 off (about 3 times the straight walk) ends the swinging between the loaded edges.
 {:defaults
  {:tags [:movement :planner :large]
   :plot {:height 16 :length 360 :width 32}
@@ -30,6 +30,6 @@
   {:name "stair-walled-shut-unreachable"
    :body {:at [230.5 11 8.5]}
    :blocks [[:fill [331 11 7] [331 12 9] "stone"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [60 0 16] :range 1 :ways #{:walk :clear-seal} :settings {:jobs.lib.cost.value/tour-worth 120}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [60 0 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable}} :within-s 280 :of-job true}]
    :after [[:body-near [175.5 11 8.5] 160]]}]}

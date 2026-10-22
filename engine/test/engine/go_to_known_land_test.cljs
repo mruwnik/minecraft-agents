@@ -78,7 +78,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out eng p]} (await (go! {:blocks (walkway 87) :self {:pos {:x 40.5 :y 80 :z 8.5}} :viewChunks 1}
-                                              {:pos [40 64 9] :range 1}))]
+                                              {:pos [40 64 9] :range 1 :worth 300}))]
           (is (= {:arrived true} (select-keys @out [:arrived])) (str "result " @out " at " (at p)))
           (is (<= (turns eng 40) 2)
               (str "east, then west to the stair, then east on the ground: " (mapv (juxt :status :to) (moved eng)))))))))
@@ -143,7 +143,7 @@
                             (box -40 79 8 207 79 8 "stone")
                             (apply merge (for [i (range 1 17)] (box (+ 207 i) (- 79 i) 8 (+ 207 i) (- 79 i) 8 "stone"))))
               {:keys [out eng p]} (await (go! {:blocks blocks :self {:pos {:x 40.5 :y 80 :z 8.5}} :viewChunks 1}
-                                              {:pos [-50 64 9] :range 1}))]
+                                              {:pos [-50 64 9] :range 1 :worth 300}))]
           (is (= {:arrived true} (select-keys @out [:arrived])) (str "result " @out " at " (at p) (mapv (juxt :status :to) (moved eng)))))))))
 
 ;; the stair lies far east, past the planner's frontier reach of a goal at the dead west end: the body sees the east edge
@@ -252,7 +252,7 @@
                             (box -600 79 8 47 79 8 "stone")
                             (apply merge (for [i (range 1 16)] (box (- -600 i) (- 79 i) 8 (- -600 i) (- 79 i) 8 "stone"))))
               {:keys [out eng p]} (await (go! {:blocks blocks :self {:pos {:x 40.5 :y 64 :z 9.5}} :viewChunks 1}
-                                              {:pos [0 80 8] :range 1}))]
+                                              {:pos [0 80 8] :range 1 :worth 300}))]
           (is (= {:arrived true} (select-keys @out [:arrived]))
               (str "result " @out " at " (at p) (mapv (juxt :status :to) (moved eng)))))))))
 
@@ -338,7 +338,7 @@
           (is (< walked 700) (str "walked " walked ": " (mapv (juxt :status :to) (moved eng)))))))))
 
 ;; a ravine: the goal 6 blocks north across a 4-wide gap in the strip, the only way a ring road out past the loaded edge at
-;; both ends of the strip (about 400 blocks round). The goal is near, yet worth a long tour: the floor of the tour-floor-blocks setting
+;; both ends of the strip (about 400 blocks round). The goal is near, yet the caller says it is worth a long tour (:worth)
 (def ravine
   (merge (box 0 63 2 15 63 100 "stone") (box 0 63 -100 15 63 -3 "stone")
          (box -20 63 -100 -18 63 100 "stone")
@@ -350,15 +350,15 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out eng]} (await (go! {:blocks ravine :self {:pos {:x 10.5 :y 64 :z 3.5}} :viewChunks 1}
-                                            {:pos [10 64 -3] :range 1 :ways #{:walk :clear-seal}}))]
+                                            {:pos [10 64 -3] :range 1 :ways #{:walk :clear-seal} :worth 400}))]
           (is (= {:arrived true} (select-keys @out [:arrived])) (str "result " @out " walks: " (mapv (juxt :status :to) (moved eng)))))))))
 
-(deftest go-to-a-tour-floor-of-zero-gives-the-ravine-up-again
+(deftest go-to-gives-the-ravine-up-when-the-goal-is-worth-little
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out]} (await (go! {:blocks ravine :self {:pos {:x 10.5 :y 64 :z 3.5}} :viewChunks 1}
-                                        {:pos [10 64 -3] :range 1 :ways #{:walk :clear-seal} :settings {:jobs.lib.cost.value/tour-floor-blocks 0}}))]
+                                        {:pos [10 64 -3] :range 1 :ways #{:walk :clear-seal} :worth 20}))]
           (is (= :explore-spent (:why @out)) (str "result " @out)))))))
 
 (deftest a-solid-cell-the-body-feels-but-has-not-seen-does-not-loop-the-replan

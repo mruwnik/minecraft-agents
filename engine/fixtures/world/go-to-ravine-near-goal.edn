@@ -1,6 +1,6 @@
 ;; Card 6850235b: the goal lies 6 blocks across a 5-wide ravine (two stone decks, y 10) but the only way is a bridge at the
 ;; far EAST end, ~290 blocks off, so the body must tour away from the goal (past the loaded edge) and back (~580 blocks);
-;; tour-worth floors a near goal's worth so it does not give up after the first frontier walk. The fail case removes the
+;; the caller's :worth pays for the tour, so it does not give up after the first frontier walk. The fail case removes the
 ;; bridge: no way, the body ends not arrived.
 {:defaults
  {:tags [:movement :planner :large]
@@ -13,7 +13,7 @@
  :cases
  [{:name "ravine-near-goal-arrives"
    :body {:at [40.5 11 9.5]}
-   :act [[:job (jobs.movement.go-to {:pos #at [40 11 19] :range 1 :ways #{:walk}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [40 11 19] :range 1 :ways #{:walk} :worth 400})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 280 :of-job true}]
    :after [[:body-near [40.5 11 19.5] 3]]}
   {:name "ravine-no-bridge-not-arrived"

@@ -63,12 +63,16 @@
                         :doc "Walking speed with slack for detours (4.3 flat out, 1.5x the way), blocks a second."}
    ::per-frontier-walk {:default 1 :spec (a/num-in 0 nil)
                         :doc "Each walk of a tour to the edge of loaded land that brought the body no nearer its goal, on top of its blocks, in seconds."}
-   ::tour-ratio {:default 20 :spec (a/num-in 0 nil)
-                 :doc "Times its straight walk a goal is worth a tour of loaded land on top of a trip: a near goal is worth a short tour."}
+   ::tour-ratio {:default 3 :spec (a/num-in 0 nil)
+                 :doc "Times its straight walk a goal whose worth the caller did not say is worth a tour of loaded land on top of a trip: a near goal is worth a short tour."}
    ::tour-floor-blocks {:default 32 :spec (a/num-in 0 nil)
-                        :doc "Straight blocks a goal counts as at least when worth a tour (about 670 blocks of tour): a near goal behind a ravine is still reached."}
+                        :doc "Straight blocks a goal counts as at least when worth a tour (about 100 blocks of tour): a near goal behind a ravine is still reached."}
    ::tour-worth {:default false :spec (a/or-of false? (a/num-in 0 nil))
                  :doc "Seconds a tour of frontiers may cost whatever its goal; false: from the goal's straight blocks (tour-ratio, tour-floor-blocks)."}
+   ::food-worth-per-point {:default 30 :spec (a/num-in 0 nil)
+                           :doc "Seconds reaching food is worth per food point the body is under ::food-worth-from."}
+   ::food-worth-from {:default 10 :spec (a/num-in 0 20)
+                      :doc "Food at or over which reaching food is worth nothing; it rises as the bar falls under it."}
    ::torch-place-s {:default 1.5 :spec (a/num-in 0 nil)
                     :doc "Placing a torch to light a dark floor and waiting for the light to show it, in seconds."}})
 
@@ -205,10 +209,20 @@
     {:cost (reduce + (vals parts)) :parts parts}))
 
 (defn tour-worth
-  "Seconds of tour a goal `straight` blocks off is worth: a trip, and tour-ratio times the walk of its straight blocks,
-  at least tour-floor-blocks; the setting ::tour-worth, when set, is the worth."
-  [straight]
-  (or (settings/get settings ::tour-worth) (+ (trip) (* (settings/get settings ::tour-ratio) (:cost (walk-cost {:distance (max straight (settings/get settings ::tour-floor-blocks))}))))))
+  "Seconds of tour a goal `straight` blocks off is worth. The setting ::tour-worth, when set, is the worth. Else with the
+  caller's `worth` of arrival (seconds), that less the trip and the straight walk (0 at least). Else a trip, and tour-ratio
+  times the walk of its straight blocks, at least tour-floor-blocks."
+  ([straight] (tour-worth straight nil))
+  ([straight worth]
+   (cond
+     (settings/get settings ::tour-worth) (settings/get settings ::tour-worth)
+     worth (max 0 (- worth (trip) (:cost (walk-cost {:distance straight}))))
+     :else (+ (trip) (* (settings/get settings ::tour-ratio) (:cost (walk-cost {:distance (max straight (settings/get settings ::tour-floor-blocks))})))))))
+
+(defn food-worth
+  "Seconds reaching food is worth to a body with `food` points: rising as the bar falls, 0 from ::food-worth-from up."
+  [food]
+  (* (settings/get settings ::food-worth-per-point) (max 0 (- (settings/get settings ::food-worth-from) food))))
 
 (defn per-climb [] (settings/get settings ::per-climb))
 

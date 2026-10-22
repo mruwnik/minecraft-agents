@@ -1,6 +1,7 @@
 (ns jobs.survival.get-food.sources
   "Where get-food finds food it knows of: remembered farms and chests, ripe crops in sight."
   (:require [engine.settings :as settings]
+            [jobs.lib.cost :as cost]
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
@@ -124,10 +125,15 @@
   (ctx/forget-where! c :food-source #(= pos (:pos %)))
   :again)
 
+(defn food-worth
+  "go-to's :worth for a walk to food: what the body's hunger makes reaching it worth."
+  [c]
+  (cost/food-worth (.-food (.self (:primitives c)))))
+
 (defn ^:async go-near!
   "Walk within reach of pos by one go-to call: :there, :far (it gave up) or :continue (go-to waits on the world)."
   [c pos]
-  (let [r (await (child/run!* c :goto 'jobs.movement.go-to {:pos pos :range (reach)} {:max-calls 1}))]
+  (let [r (await (child/run!* c :goto 'jobs.movement.go-to {:pos pos :range (reach) :worth (food-worth c)} {:max-calls 1}))]
     (cond
       (= :continue r) :continue
       (<= (u/dist (u/self-pos c) pos) (inc (reach))) :there

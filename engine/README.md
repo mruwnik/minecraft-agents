@@ -813,8 +813,8 @@ the recorded pins (`planner_{bench,options,goals,courses}_golden.cljs`, `js/path
   the goal than the start. go-to tours frontiers until every one is spent, walking land it has searched once (its searches stop
   at the first edge, then expand as many nodes again or to the round's budget, so land they read stays known once it unloads;
   each chunk holding a node they left unexpanded keeps one edge open), or until the tour since it last came nearer the goal
-  costs more than the goal is worth (`jobs.lib.cost/tour-cost` over `:tour-worth`, default `tour-worth` of the straight
-  distance, at least `:tour-floor-blocks` (32); `:tour-ratio`, `:per-frontier-walk` too are options): `:explore-spent`.
+  costs more than the goal is worth (`jobs.lib.cost/tour-cost` over the `:tour-worth` setting, else the call's `:worth` (seconds the caller counts arrival worth; get-food passes `cost/food-worth`) less the trip and the straight walk, else `tour-worth` of the straight
+  distance: a trip and `:tour-ratio` (3) times the walk of at least `:tour-floor-blocks` (32) blocks; `:per-frontier-walk` too is an option): `:explore-spent`. `:worth` also lets go-to's start check accept a route risk over the share of health (`go-to.risk/allowed`: the hp that worth buys at the price of an hp, all but 1 at most).
 - A masked go-to search that ends `:budget` with no progress switches the call to an edge tour (mem `:edge-mode`, info `go-to.edge-tour`): the mask reads unseen cells as loaded edge (`unknown.edge`: UNLOADED, no `options.unknown`, `hasColumn` false), and a frontier is any node with an unseen cell beside its feet or floor (`inBand`, `atLoadedEdge`), so the body walks to the edge of what it has seen, looks, and replans.
 - The walker watches the way ahead and replans when the world under the plan changed, when a mob blocks a leg (stuck, or standing 1 s in a 1-wide way ahead), when the hp planned for drops ahead is over what it may spend now (`:health`), and every 4 s
   for a partial plan. A fall that costs over 1 hp more than planned is a `damage-mismatch` warn.

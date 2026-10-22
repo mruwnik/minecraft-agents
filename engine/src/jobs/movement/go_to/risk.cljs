@@ -6,7 +6,7 @@
   as a zombie fight with the kit carried, jobs.lib.cost/fight-damage) plus, on a walk with such a stretch (in the light a hostile is seen and avoided; the reflexes meet it), the fight with every hostile known near the way.
   A walk to a goal within the death-spot radius of a place the body died lately (jobs.lib.death-spot, fading with time) adds the fight with what killed it, weighted by how fresh the death is, underground too, only when the walk ends nearer the death than it starts (a body standing, or walking away from the spot, is no closer to it) and the spot has not been seen since the death (fresh sight beats the record; a hostile seen there prices as a known hostile); not within ::pile-radius of the goal (a walk to the body's own drops: only a hostile known there counts).
   Seen lava within ::lava-radius of a cell the straight way steps into adds ::lava-hp, scaled by its closeness (a slip beside it is lethal); a body already at the goal, or a way clear of lava, adds none.
-  Acceptable when it stays within ::risk-share of the health the body has now."
+  Acceptable when it stays within ::risk-share of the health the body has now, or, when the caller says what the goal is worth (:worth), within the hp that worth buys (allowed)."
   (:require [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -145,12 +145,18 @@
 
 (defn allowed
   "The hp of expected damage the body may take on a risk now: ::risk-share of its health (cut while hungry), all but 1 hp while it
-  can not heal by waiting (ready/cannot-heal?: waiting never lowers the price)."
-  [c]
-  (let [self (.self (:primitives c))
-        hungry? (some-> (.-food self) (<= (settings/get settings ::hungry-food)))
-        share (* (settings/get settings ::risk-share) (.-health self) (if hungry? (settings/get settings ::hungry-share) 1))]
-    (if (ready/cannot-heal? c) (max share (dec (.-health self))) share)))
+  can not heal by waiting (ready/cannot-heal?: waiting never lowers the price). With `worth` (seconds the caller counts the
+  goal worth, the call's :worth), as many hp as that buys at the price of an hp now (dearer when hurt), all but 1 at most, if more."
+  ([c] (allowed c (:worth (:args c))))
+  ([c worth]
+   (let [self (.self (:primitives c))
+         health (.-health self)
+         hungry? (some-> (.-food self) (<= (settings/get settings ::hungry-food)))
+         share (* (settings/get settings ::risk-share) health (if hungry? (settings/get settings ::hungry-share) 1))
+         share (if (ready/cannot-heal? c) (max share (dec health)) share)]
+     (if worth
+       (max share (min (dec health) (/ worth (* (cost/walk-hp-seconds) (cost/health-scale health)))))
+       share))))
 
 (def chest-act-s "Seconds a chest visit (deposit, withdraw) keeps the body at the chest." 3)
 

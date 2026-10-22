@@ -207,6 +207,16 @@
          (settings/with-settings {:jobs.lib.cost.value/tour-floor-blocks 0 :jobs.lib.cost.value/tour-ratio 1} #(cost/tour-worth 10))))
   (is (= 7 (:cost (settings/with-settings {:jobs.lib.cost.value/per-frontier-walk 1} #(cost/tour-cost {:explored 0 :walks 7}))))))
 
+(deftest a-goal-worth-the-caller-says-budgets-the-tour-less-the-trip-and-the-walk
+  (let [walk (:cost (cost/walk-cost {:distance 50}))]
+    (is (= 100 (cost/tour-worth 50 (+ 100 (cost/trip) walk))))
+    (is (zero? (cost/tour-worth 50 1)) "worth less than the trip and walk: no tour")
+    (is (= (+ (cost/trip) (* 3 (:cost (cost/walk-cost {:distance 50})))) (cost/tour-worth 50)) "unsaid: a trip and 3 times the walk")))
+
+(deftest food-is-worth-more-reaching-the-lower-the-bar
+  (is (zero? (cost/food-worth 10)))
+  (is (< 0 (cost/food-worth 8) (cost/food-worth 2) (cost/food-worth 0))))
+
 (deftest dig-cost-is-the-item-base-s-dig-term
   (is (< (cost/dig-cost "dirt") (cost/dig-cost "stone") (cost/dig-cost "obsidian")))
   (is (nil? (cost/dig-cost "bedrock")) "never dug"))

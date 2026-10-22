@@ -111,6 +111,15 @@
     (is (= :later (status-for 5 bread)))
     (is (= :ok (status-for 5 [])) "nothing to eat: waiting never lowers the risk, so the walk goes")))
 
+(deftest a-goal-worth-enough-lets-a-walk-take-a-risk-over-the-share-of-health
+  (let [status-for (fn [worth] (let [c (-> (ready-test/ctx-of (assoc day-world :self {:pos inside :health 20 :food 5} :inventory [{:name "bread" :count 3}]))
+                                           (with-death {:x 80 :y 64 :z 5} "zombie" 6480000)
+                                           (assoc-in [:args :worth] worth))]
+                                 (first (risk/status c far-goal))))]
+    (is (= :later (status-for nil)) "no worth said: the share of health decides")
+    (is (= :later (status-for 5)) "a goal worth little buys little risk")
+    (is (= :ok (status-for 400)))))
+
 (deftest a-death-by-terrain-adds-no-risk
   (let [c (ready-test/ctx-of day-world)]
     (doseq [cause ["fall" "lava" "drown" "starve" "a_new_cause" nil]]

@@ -17,8 +17,8 @@
   - A search that runs out of loaded land walks to its frontier (the loaded edge), and a walk that gets nearer that edge
     is progress too: a tour of frontiers ends when every frontier within 1000 blocks of the goal is spent, or at the end of
     a frontier walk once the tour's price (jobs.lib.cost/tour-cost of the blocks and walks since the body last came nearer its goal than
-    ever in the call) passes what the goal is worth (the setting jobs.lib.cost.value/tour-worth, default jobs.lib.cost/tour-worth of the goal's straight
-    blocks at the call's start): it gives up :why :explore-spent (:explored the blocks, :walks the walks).
+    ever in the call) passes what the goal is worth (the setting jobs.lib.cost.value/tour-worth, else jobs.lib.cost/tour-worth of the goal's straight
+    blocks at the call's start and the call's :worth): it gives up :why :explore-spent (:explored the blocks, :walks the walks).
   - A walk stuck or off its plan at a cell is a :walker-fault warn; the next plans of the call cost that cell
     (up to 16; after a fall also the cells above it) far more (wworld/with-avoid), so a way round is taken when there is one.
     A body such a walk left stuck in water first swims at a bank beside it (go-to.unstick, info go-to.unstuck)."
