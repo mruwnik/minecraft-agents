@@ -66,11 +66,12 @@
 (defn sense-mobs!
   "One mob sample over primitives src: sensed mobs take their place and time, mobs the client no longer tracks or that
   could have drifted :mob-drift blocks since they were last sensed are forgotten. Returns the map of live entities
-  sensed now, by id."
-  [{:keys [raw opts st] :as per} ^js src]
+  sensed now, by id. An eye given is used instead of the body's (glance-mobs!)."
+  ([per src] (sense-mobs! per src nil))
+  ([{:keys [raw opts st] :as per} ^js src eye-given]
   (let [^js st st
         ^js mobs (.-mobs st)
-        ^js eye (.eye ^js raw)
+        ^js eye (or eye-given (.eye ^js raw))
         now ((:now opts))
         sensed (js/Map.)]
     (if-not (and eye src)
@@ -93,7 +94,15 @@
           (when (or (not (.has listed id))
                     (> (- now (.-at m)) (mob-forget-ms per (.-name m))))
             (.delete mobs id)))
-        sensed))))
+        sensed)))))
+
+(defn glance-mobs!
+  "A mob sample as if the head were turned by yaw-offset radians (level) for an instant: a hostile there that the body
+  sees is remembered. The real head stays where it is, so a walk is not deflected and an enderman is not stared at."
+  [{:keys [raw] :as per} ^js src yaw-offset]
+  (when-let [^js eye (.eye ^js raw)]
+    (sense-mobs! per src #js {:x (.-x eye) :y (.-y eye) :z (.-z eye) :dimension (.-dimension eye)
+                              :yaw (+ (or (.-yaw eye) 0) yaw-offset) :pitch 0})))
 
 (defn known-mobs
   "The hostiles the body knows of after a fresh sample over primitives src, nearest first, as entities() entries: a mob

@@ -26,12 +26,13 @@
   (into {} (for [x xs z (range 3)] [(str x "," 63 "," z) "stone"])))
 
 (defn ^:async walk-to
-  "A body at pos over blocks; a parent job calls drive/walk-to! to goal. [the driver's answer, the plan and replan
+  "A body at pos over blocks (on-p, when given, is called with its primitives first); a parent job calls drive/walk-to! to goal. [the driver's answer, the plan and replan
   kinds it announced, the body's position]."
-  [blocks goal pos]
+  ([blocks goal pos] (walk-to blocks goal pos identity))
+  ([blocks goal pos on-p]
   (let [clock (atom 1000000)
         [_ sink] (tu/legacy-capture-sink)
-        p (tu/fake {:blocks blocks :self {:pos pos}})
+        p (doto (tu/fake {:blocks blocks :self {:pos pos}}) on-p)
         out (atom nil)
         announced (atom [])
         parent {:round (fn ^:async driving-round [c]
@@ -48,7 +49,7 @@
         (await (core/tick! eng))
         (recur (inc i))))
     (let [at (.-pos (.self p))]
-      [@out @announced [(.-x at) (.-y at) (.-z at)]])))
+      [@out @announced [(.-x at) (.-y at) (.-z at)]]))))
 
 (def start {:x 0 :y 64 :z 1})
 
@@ -62,6 +63,18 @@
           (is (pos? walk-ms))
           (is (= [:plan] announced))
           (is (> (first at) 9)))))))
+
+(deftest a-walk-glances-round-for-a-creeper-behind-it-every-few-ticks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [turns (atom [])
+              [{:keys [result]}] (await (walk-to (floor (range 14)) [12 64 1] start
+                                                 #(set! (.-glanceMobs ^js %) (fn [yaw] (swap! turns conj yaw)))))]
+          (is (= :arrived (:status result)))
+          (is (<= 3 (count @turns)) "a 12-block walk glances several times")
+          (is (= js/Math.PI (first @turns)) "the first glance is straight behind")
+          (is (every? (set walk/glance-turns) @turns)))))))
 
 (deftest a-step-up-arrives
   (async done

@@ -25,8 +25,12 @@
    ::centre-tolerance {:default 0.2 :doc "How near (blocks, each axis) a centring nudge ends to its target." :spec (a/num-in 0 nil)}
    ::centre-max-ticks {:default 30 :doc "Ticks a centring nudge walks before it gives up." :spec (a/int-in 1 nil)}
    ::default-weight {:default 1.2 :doc "Cost weight of the search heuristic a walk plans with (above 1: faster, less exact)." :spec (a/num-in 1 nil)}
+   ::glance-ticks {:default 10 :doc "A walk glances round for hostiles behind it (a mob sample with the head turned, the real head and the steering untouched) every this many ticks; 0: never." :spec (a/int-in 0 nil)}
    ::light-wait-ms {:default 1500 :doc "How long a walk that placed a torch looks for the floor it lights before it gives the floor up, in ms." :spec (a/int-in 0 nil)}})
 
+(def glance-turns "Head turns of a walk's glances, in radians from the heading: behind, left, behind, right." [js/Math.PI (/ js/Math.PI 2) js/Math.PI (/ js/Math.PI -2)])
+
+(defn glance-ticks [] (settings/get settings ::glance-ticks))
 (defn max-timeout-s [] (settings/get settings ::max-timeout-s))
 (defn max-settle-waits [] (settings/get settings ::max-settle-waits))
 (defn default-weight [] (settings/get settings ::default-weight))
@@ -251,8 +255,16 @@
              :watch-stop (when watch (fn [i exec' pose] (wwatch/watch-stop watch steps i exec' pose)))}
         state (volatile! (start-state steps (let [pos (.-pos (.self (:primitives c)))] {:x (.-x pos) :z (.-z pos)})))
         last-done (volatile! nil)
+        p (:primitives c)
+        every (glance-ticks)
+        ticks (volatile! 0)
+        glance! (fn []
+                  (let [n (vswap! ticks inc)]
+                    (when (and (pos? every) (zero? (mod n every)) (fn? (.-glanceMobs p)))
+                      (.glanceMobs p (nth glance-turns (mod (dec (quot n every)) (count glance-turns)))))))
         decide (fn [js-pose]
                  (let [pose (pose-of js-pose)
+                       _ (glance!)
                        _ (when-let [on-pose (:on-pose c)] (on-pose pose))
                        [state' {:keys [done controls yaw pitch warn]}] (decide-tick env @state pose)]
                    (vreset! state state')

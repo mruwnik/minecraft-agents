@@ -62,6 +62,18 @@
             {:event {:source :job :kind :retreat_blocked} :within-s 20}
             {:no-event {:source :job :kind :child_started :data {:slot :plug}} :for-s 20 :until {:source :job :kind :retreat_blocked}}]
    :limit-s 40}
+  ;; Card e894e3c7: a walk glances behind it every few ticks, so a silent creeper behind a body walking into a dead end is seen
+  ;; mid-walk (the arrival look-round is off: without the glance nothing shows it until it hisses).
+  {:name "body-walking-into-a-dead-end-sees-a-creeper-coming-up-behind"
+   :settings {:jobs.movement.go-to.tuning/look-round false}
+   :register [{:trigger :hostile-near :args {:radius 16 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile)}]
+   :blocks [[:fill [8 0 15] [28 3 17] "stone"] [:fill [9 0 16] [27 1 16] "air"] [:fill [9 2 16] [27 2 16] "glowstone"]]
+   :body {:at [21.5 0 16.5] :yaw 90}
+   :act [[:summon "creeper" [27.5 0 16.5] "{active_effects:[{id:\"minecraft:slowness\",amplifier:6b,duration:2400}]}"]
+         [:job (jobs.movement.go-to {:pos #at [9 0 16] :range 0})]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "creeper"}} :within-s 5}]
+   :limit-s 30}
   {:name "dead-end-body-still-walls-off-a-creeper-five-blocks-off"
    :register [{:trigger :hostile-near :args {:radius 16 :ranged-radius 16}
                :job (jobs.survival.respond-to-hostile)}]

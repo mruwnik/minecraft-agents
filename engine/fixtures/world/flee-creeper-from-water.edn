@@ -30,4 +30,16 @@
          [:summon "creeper" [70.5 3 26.5]]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "creeper" :decision :flee}} :within-s 20}
             {:no-event {:source :body :kind :died} :for-s 25}]
+   :limit-s 40},
+  ;; Card e894e3c7: the body walks away west over the platform with a creeper coming up behind it; the walk's glance sees it.
+  {:name "body-walking-away-sees-a-creeper-behind-it"
+   :settings {:jobs.movement.go-to.tuning/look-round false}
+   :register [{:trigger :hostile-near :args {:radius 16 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile)}]
+   :body {:at [60.5 2 16.5] :yaw 90}
+   :act [[:job (jobs.movement.go-to {:pos #at [10 3 16] :range 1})]
+         [:wait-s 0.5]
+         [:summon "creeper" [73.5 3 16.5]]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 7}
+            {:no-event {:source :body :kind :died} :for-s 15}]
    :limit-s 40}]}

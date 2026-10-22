@@ -66,6 +66,19 @@
     (swap! (fake/state p) assoc :yaw 0)
     (is (= [1] (danger-ids p)))))
 
+(deftest a-glance-behind-remembers-a-silent-creeper-without-turning-the-head
+  (let [{:keys [p]} (rig {:entities [(mob 1 "creeper" 0 -2)]})
+        yaw #(:yaw @(fake/state p))
+        before (yaw)]
+    (.glanceMobs p js/Math.PI)
+    (is (= before (yaw)) "the real head stays")
+    (is (= [1] (danger-ids p)))))
+
+(deftest a-glance-to-the-side-does-not-see-a-creeper-behind
+  (let [{:keys [p]} (rig {:entities [(mob 1 "creeper" 0 -8)]})]
+    (.glanceMobs p (/ js/Math.PI 2))
+    (is (= [] (danger-ids p)))))
+
 (deftest the-raw-primitives-still-count-every-mob
   (let [{:keys [raw]} (rig {:entities [(mob 1 "creeper" 0 -2)]})]
     (is (= [1] (danger-ids raw)) "no perception: every tracked mob (the old rule)")))
