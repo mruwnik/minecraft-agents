@@ -251,15 +251,17 @@
 (defn ^:async walk-stand!
   "Walk to stand beside cell with go-near options opts; a walk that is blocked (the stand is then bad), or an arrival
   with the cell unseen (:unloaded, :buried) or out of reach, counts a failure. Resolves to go-near's answer; :partial
-  (no failure) when the body is sealed in its own shelter."
+  (no failure) when the body is sealed in its own shelter. A blocked walk to a stand two or more above the body is a
+  climb, not a failure: the stand is only ruled out and the cell sent to the scaffold, which plans stands that see it."
   [c cell stand opts]
   (let [limit (give-up)
-        w (await (near/go-near! c (zipmap [:x :y :z] stand) 0 opts))]
+        w (await (near/go-near! c (zipmap [:x :y :z] stand) 0 opts))
+        climb? (and (not (:dig? cell)) (not (in-hole? c)) (<= (+ 2 (js/Math.floor (:y (u/self-pos c)))) (second stand)))]
     (when (and (= :blocked w) (not (sealed-in-shelter? c)))
-      (ctx/update-mem! c #(cond-> (-> (walk-fail % (:pos cell) :unreachable limit (u/self-pos c))
-                                      (update :bad-stands (fnil conj []) stand))
+      (ctx/update-mem! c #(cond-> (update % :bad-stands (fnil conj []) stand)
+                            (not climb?) (walk-fail (:pos cell) :unreachable limit (u/self-pos c))
                             (= :budget (:why (:data (near/last-walk c)))) (update :budget-streak (fnil inc 0))
-                            (not (or (:dig? cell) (in-hole? c) (shut-in-walk? c) (= :stuck (:why (:data (near/last-walk c))))))
+                            (or climb? (not (or (:dig? cell) (in-hole? c) (shut-in-walk? c) (= :stuck (:why (:data (near/last-walk c)))))))
                             (update :needs-scaffold (fnil conj #{}) (:pos cell)))))
     (when (#{:there :partial} w) (ctx/update-mem! c dissoc :budget-streak))
     (when (and (= :there w) (nil? (:found cell)))

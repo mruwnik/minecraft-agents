@@ -333,6 +333,24 @@
               _ (await (child-outcome eng job {:plan "roof"} 300))]
           (is (some #(= :swalk (:slot %)) (h/events-of seen :child_started))))))))
 
+(deftest a-hole-in-the-middle-of-a-flat-roof-gets-a-pillar-base-walk-after-a-failed-walk-to-a-roof-stand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [targets (atom [])
+              failing-walk {:ways [:walk :clear-seal]
+                            :round (fn ^:async w [c]
+                                     (swap! targets conj (:y (:pos (:args c))))
+                                     (ctx/end c :nothing-possible :unreachable {:why :exhausted :arrived false :shut-in true}))}
+              hut (merge (into {} (for [x (range 2 7) y (range 64 69) z (range 4 9)] [(h/cell-key x y z) "stone"]))
+                         (into {} (for [x (range 3 6) y (range 65 68) z (range 5 8)] [(h/cell-key x y z) "air"]))
+                         {(h/cell-key 4 68 6) "air"})
+              plan {:id "roof" :parts [{:id "r" :cells [[4 68 6]] :want "stone"}]}
+              {:keys [eng]} (start {:inventory [{:name "stone" :count 4} {:name "dirt" :count 10}] :blocks hut :self {:pos {:x 4.5 :y 64 :z 1.5}}}
+                                   {"roof" plan} [] {'jobs.movement.go-to failing-walk})
+              _ (await (child-outcome eng job {:plan "roof"} 300))]
+          (is (some #(< % 68) (rest @targets)) (pr-str @targets)))))))
+
 (deftest an-unseen-cell-is-looked-at-before-it-is-given-up
   (async done
     (tu/run-async done
