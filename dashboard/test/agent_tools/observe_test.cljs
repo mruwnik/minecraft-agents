@@ -351,6 +351,14 @@
     (is (= {:wake :idle :message "body idle 10 s: j1 ..." :jobs jobs}
            (observe-status/classify (event :body :idle {:jobs jobs} "body idle 10 s: j1 ...") defaults "Probe")))))
 
+(deftest an-idle-wake-under-watch-keeps-only-the-watched-jobs
+  (let [jobs [{:job "j1" :name "jobs.items.craft" :waiting {:reason :reflex-holds :reflex :night :job "j9"}}
+              {:job "j2" :name "(repeat jobs.farm.maintain)" :waiting {:reason :exposed :text "dark at 1 2 3 until light"}}]
+        message "body idle 10 s with no useful act: j1 jobs.items.craft waiting: reflex-holds {:reflex :night, :job \"j9\"}; j2 (repeat jobs.farm.maintain) waiting: dark at 1 2 3 until light"
+        wake (observe-status/classify (event :body :idle {:jobs jobs} message) (assoc defaults :watch ["j1"]) "Probe")]
+    (is (= [(first jobs)] (:jobs wake)))
+    (is (= "body idle 10 s with no useful act: j1 jobs.items.craft waiting: reflex-holds {:reflex :night, :job \"j9\"}" (:message wake)))))
+
 (deftest classify-wakes-only-for-what-was-asked
   (doseq [[label e opts expected] classify-cases]
     (is (= expected (:wake (observe-status/classify e opts "Probe"))) label)))

@@ -513,7 +513,7 @@ the token so the in-flight round is never booked; the job stays listed.
   `:holding {:reason :since}`.
 - `body.idle` (info, once per stretch; wakes `observe --wait`; memory `:body-idle`): no act but `:wait` from a job not
   `idle-ok` (stay-near, wait-for-light/-dusk) for `:engine.core.activity/body-idle-s` (10); lists each job with
-  its `:waiting`/`:holding` reason. A useful act or a list change re-arms it.
+  its `:waiting`/`:holding` reason. A useful act or a list change re-arms it. Under `--watch` (and `jobs submit --wait`) the wake lists only the watched jobs.
 - Spin guard: a job that makes more than `:engine.core.round/spin-calls` (100000) engine calls (checks, writes, acts, `alive?`) inside one event-loop turn is failed with `spinning: job <id> ...` (it never awaited a timer, so nothing else ran).
 - Stuck act: an act (primitive call) in flight longer than `:engine.core.round/act-max-s` (300 s; `:offline` plus its own time) is aborted: `action.stuck` (warn, names the act), the job fails with `act-stuck: <act>` and the body is free.
 - `job.fruitless`: a required attention request when every act of a listed job failed in 3 rounds in a row (a round that

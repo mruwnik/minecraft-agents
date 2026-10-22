@@ -196,6 +196,19 @@
                 (some-> (:time-ms e) (< started-ms))
                 (or (= :hurt (:kind e)) (some recovered? later)))))
 
+(defn idle-wake
+  "The body.idle wake. Under --watch it keeps only the watched jobs' entries and message segments (\"<id> <name> waiting: ...\"),
+  so another job's wait text is never read as theirs; unchanged when none of them is listed."
+  [e watch]
+  (let [d (:data e)
+        mine (filterv #(some #{(:job %)} watch) (:jobs d))
+        [head body] (str/split (str (:message e)) #"(?<= with no useful act): " 2)
+        kept (filter (fn [segment] (some #(str/starts-with? segment (str (:job %) " ")) mine))
+                     (str/split (str body) #"; "))]
+    (if (and (seq mine) (seq kept))
+      (clean-pairs :wake :idle :message (clip (str head ": " (str/join "; " kept))) :jobs mine)
+      (clean-pairs :wake :idle :message (clip (:message e)) :jobs (:jobs d)))))
+
 (defn classify
   "The wake an event causes under the options, or nil. Options: :from :chatter :watch :danger :disconnect
   :quiet-notices. A body.idle and a death always wake, and so does any :attention :notice event but a job end; under
@@ -215,7 +228,7 @@
       (clean-pairs :wake :reconnect-failed :reason (clip (:reason d)))
 
       (and (= :body source) (= :idle kind))
-      (clean-pairs :wake :idle :message (clip (:message e)) :jobs (:jobs d))
+      (idle-wake e (:watch opts))
 
       (and (= :body source) (= :died kind))
       (clean-pairs :wake :died :cause (clip (:cause d) 80) :at (position (:pos d))
