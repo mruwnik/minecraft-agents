@@ -1,0 +1,22 @@
+;; Card 05b44e8e: a dig walk to an ore never drops into a cell beside lava. The room's floor ends in a 2-high step down into a
+;; hall; lava lies in the hall beside the landing, hidden from the west by the room's lip (the walk must look at the landing
+;; before it drops, and take the 1-high steps in the hall's corner instead). Room x 10..15 (feet y 2), hall x 16..22 (feet y 0).
+;; Should-succeed: the iron is dug and carried, the body is never hurt (it has no resistance).
+{:defaults
+ {:tags [:mine :lava :jobs]
+  :time :any
+  :plot {:height 12}
+  :blocks [[:fill [8 0 8] [24 8 24] "stone"]
+           [:fill [10 2 12] [15 4 20] "air"]
+           [:fill [16 0 12] [22 4 20] "air"]
+           [:set [16 0 20] "stone"]
+           [:set [16 0 15] "lava"]
+           [:set [22 0 16] "iron_ore"]]
+  :body {:at [11.5 2 16.5] :inventory [["stone_pickaxe" 1]] :settle-s 3}
+  :limit-s 150}
+ :cases
+ [{:name "dig-walk-does-not-drop-beside-unseen-lava"
+   :act [[:job (jobs.gather.dig-for {:torches false :block "iron_ore" :level false :count 1 :ways #{:seen} :radius 14})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 1 :reason :count}} :within-s 140 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 120 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:item "raw_iron" 1]]}]}

@@ -512,3 +512,10 @@
         [cut? c] (wplan/masked-cut steps ok)]
     (is (= [12 true] [(count cut?) c]))
     (is (= [steps false] (wplan/masked-cut steps (constantly true))))))
+
+(deftest a-drop-of-two-has-a-landing-to-look-at-a-drop-of-one-and-a-walk-have-none
+  (let [steps [{:x 0 :y 66 :z 0 :move :start} {:x 1 :y 64 :z 0 :move :drop} {:x 2 :y 63 :z 0 :move :drop} {:x 3 :y 63 :z 0 :move :walk}]]
+    (is (= 18 (count (walk/landing-cells steps 1))) "3x3 columns at feet and head level")
+    (is (some #{[0 64 -1] [2 65 1]} (walk/landing-cells steps 1)))
+    (is (nil? (walk/landing-cells steps 2)))
+    (is (nil? (walk/landing-cells steps 3)))))

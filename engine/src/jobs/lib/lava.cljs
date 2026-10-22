@@ -21,6 +21,11 @@
 
 (defn seen-lava? [p [x y z]] (= "lava" (u/seen-name p {:x x :y y :z z})))
 
+(defn beside-lava?
+  "Whether seen lava lies in or beside the stand cell: its feet and head cells and their eight horizontal neighbours."
+  [p [x y z]]
+  (boolean (some #(seen-lava? p %) (for [dx [-1 0 1] dz [-1 0 1] dy [0 1]] [(+ x dx) (+ y dy) (+ z dz)]))))
+
 (defn exposed
   "The seen lava cells among the six neighbours of the dug cell. The dug cell itself is the caller's work and is left."
   [p cell]

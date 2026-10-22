@@ -357,6 +357,34 @@
                             (true? (some-> (u/sensed p (zipmap [:x :y :z] at)) .-fullCube)))))
                    (range 1 n)))))
 
+(def landing-look-drop "A step down of at least this many blocks is looked at before the body drops: the landing and the cells beside it." 2)
+
+(defn landing-cells
+  "The cells [x y z] of step i's landing and beside it (feet and head level, the eight horizontal neighbours) when it is a drop of
+  landing-look-drop or more, else nil."
+  [steps i]
+  (let [{:keys [x y z move]} (nth steps i)]
+    (when (and (= :drop move) (>= (- (:y (nth steps (dec i))) y) landing-look-drop))
+      (for [dx [-1 0 1] dz [-1 0 1] dy [0 1]] [(+ x dx) (+ y dy) (+ z dz)]))))
+
+(defn first-unseen-landing
+  "The index of the first step from 1 on that is a drop (landing-cells) with a cell the body never saw and has not looked at (looked), nil when there is none."
+  [p steps looked]
+  (first (filter #(some (fn [cell] (and (not (contains? looked cell)) (sense/unknown? p cell))) (landing-cells steps %))
+                 (range 1 (count steps)))))
+
+(defn ^:async look-landing!
+  "Look at the unseen cells of step 1's landing, as a player looks into a hole before jumping down. Lava in or beside the
+  landing ends the walk {:status :replan :why :changed} with the landing as walls; else {:looked cells}."
+  [c steps]
+  (let [p (:primitives c)
+        cells (landing-cells steps 1)]
+    (await (sense/look-at-unknown! c (u/nearest-first (u/self-pos c) identity (filter #(sense/unknown? p %) cells)) 2))
+    (if (some #(= "lava" (u/seen-name p (zipmap [:x :y :z] %))) cells)
+      (let [{:keys [x y z]} (nth steps 1) {sx :x sy :y sz :z} (u/self-pos c)]
+        {:end {:status :replan :why :changed :learned true :cells [[x y z] [x (inc y) z]] :at [sx sy sz] :step 1}})
+      {:looked cells})))
+
 (defn ^:async look-ahead!
   "Over a mask (go-to :unknown) a step may enter cells the body never saw, which the plan reads as air: look round and at the
   next look-ahead-steps steps' cells first, as a player looks before climbing into the dark. A cell that turns out solid, or
@@ -405,7 +433,8 @@
      (let [p (:primitives c)
            u (when (:unknown c) (first-unseen-step p steps looked))
            o (first-unseen-overhead p steps looked)
-           j (if (and u o) (min u o) (or u o))
+           d (first-unseen-landing p steps looked)
+           j (let [js (remove nil? [u o d])] (when (seq js) (apply min js)))
            rebase (fn [d] (cond-> d (:step d) (update :step + base)))]
        (cond
          (and (or (pos? base) (seq looked)) (wplan/swim-outlasts-air? c steps))
@@ -413,6 +442,10 @@
            [(rebase {:status :replan :why :air :at [(.-x pos) (.-y pos) (.-z pos)] :step 0}) ms])
 
          (and (= 1 j) (= 1 u)) (let [r (await (look-ahead! c steps))]
+                                 (if-let [end (:end r)]
+                                   [(rebase end) ms]
+                                   (recur steps base ms (into looked (:looked r)))))
+         (and (= 1 j) (= 1 d)) (let [r (await (look-landing! c steps))]
                                  (if-let [end (:end r)]
                                    [(rebase end) ms]
                                    (recur steps base ms (into looked (:looked r)))))

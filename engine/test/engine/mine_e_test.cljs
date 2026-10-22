@@ -450,6 +450,16 @@
   (is (= #{:walk :clear-seal} (:ways (mine/dig-walk-opts {:ways #{:seen :strip-tunnel}} true nil))))
   (is (= {:safe? '(not (threatened))} (:checks (mine/dig-walk-opts {} false {:safe? '(not (threatened))})))))
 
+(deftest a-dig-walk-tolls-the-stands-beside-seen-lava
+  (let [p (tu/fake-on-floor {:blocks {"5,64,4" "lava" "5,63,5" "stone"}})
+        tolls (mine/lava-side-tolls {:primitives p} {:x 5 :y 63 :z 5})]
+    (is (= #{[5 63 5] [5 63 4] [4 63 5] [6 63 5] [5 64 5]}
+           (set (map (juxt :x :y :z) tolls)))
+        (pr-str tolls))
+    (is (every? #(= mine/lava-side-toll (:factor %)) tolls))
+    (is (empty? (mine/lava-side-tolls {:primitives p} {:x 20 :y 63 :z 20})))
+    (is (= tolls (:tolls (mine/dig-walk-opts {} false nil tolls))))))
+
 (deftest a-walk-that-gives-up-for-a-passing-reason-is-told-and-counted
   (async done
     (tu/run-async done

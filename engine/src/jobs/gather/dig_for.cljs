@@ -23,6 +23,7 @@
             [jobs.lib.area :as area]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
+            [jobs.lib.lava :as lava]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look :refer [cell-of heading-name facing look-around!]]
             [jobs.lib.near :as near]
@@ -232,11 +233,23 @@
 
 (defn dig-walk-opts
   "The go-near! options of the walk to a dig: other ways only beyond reach, no dive under water, walks inside own cuts ignore the dark (the :checks forms given, when any), a level bound with :stay-level."
-  [args in-reach? checks]
+  [args in-reach? checks & [tolls]]
   (cond-> {:dive false}
+    (seq tolls) (assoc :tolls tolls)
     in-reach? (assoc :ways #{:walk :clear-seal})
     (seq checks) (assoc :checks checks)
     (mw/stay-level? args) (assoc :y-margin (settings/get settings ::stay-margin))))
+
+(def lava-side-toll "The factor on a stand beside seen lava as the goal of a dig walk: the dig takes another when one reaches." 50)
+
+(defn lava-side-tolls
+  "The tolls of the stands within range 1 of the cell pos that lie beside seen lava (lava/beside-lava?)."
+  [c pos]
+  (let [p (:primitives c) {:keys [x y z]} (cell-of pos)]
+    (vec (for [[dx dy dz] [[0 0 0] [1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]
+               :let [cell [(+ x dx) (+ y dy) (+ z dz)]]
+               :when (lava/beside-lava? p cell)]
+           (zipmap [:x :y :z :factor] (conj cell lava-side-toll))))))
 
 (defn ^:async walk-to-dig!
   "Walk toward pos until the body is within reach of it, and close enough to see its drop (range 1) when the line to it
@@ -244,8 +257,10 @@
   (jobs.lib.near/go-near!)."
   [c pos]
   (let [in-reach? (u/within? (u/self-pos c) (cell-of pos) (reach))
-        walked (await (near/go-near! c pos (if (or (mw/stay-level? (:args c)) (drop-in-line? c pos)) (reach) 1)
-                                     (dig-walk-opts (:args c) in-reach? (when (underground? c) (ready/unforced c {:safe? '(not (threatened))})))))]
+        close? (not (or (mw/stay-level? (:args c)) (drop-in-line? c pos)))
+        walked (await (near/go-near! c pos (if close? 1 (reach))
+                                     (dig-walk-opts (:args c) in-reach? (when (underground? c) (ready/unforced c {:safe? '(not (threatened))}))
+                                                    (when close? (lava-side-tolls c pos)))))]
     (if (and (not= :there walked) (u/within? (u/self-pos c) (cell-of pos) (reach)))
       :there
       walked)))
