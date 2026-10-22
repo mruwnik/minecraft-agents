@@ -158,6 +158,17 @@
             {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 150 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "iron_pickaxe" 1]]
    :limit-s 230}
+  ;; card 1b97f7b8: shut in a lit bedrock pocket (no way out) with three iron ore in the wall and no raw iron carried: the gathering ends after mining them, and the kit smelts and crafts the pickaxe the 3 ingots cover before it stops for the helmet's iron
+  {:name "iron-mined-in-a-sealed-pocket-is-smelted-before-the-kit-stops"
+   :time :any
+   :plot {:height 12 :floor "grass_block"}
+   :blocks [[:fill [12 -16 12] [20 4 20] "bedrock"] [:fill [14 0 14] [18 2 18] "air"] [:set [16 3 16] "glowstone"]
+            [:set [13 0 16] "iron_ore"] [:set [13 1 16] "iron_ore"] [:set [13 0 17] "iron_ore"]]
+   :body {:at [16.5 0 16.5] :yaw 90 :inventory [["coal" 4] ["cobblestone" 16] ["oak_planks" 8] ["stone_pickaxe" 1] ["stone_sword" 1] ["torch" 16] ["stick" 4] ["cooked_beef" 3]] :effects [["resistance" 900 4]]}
+   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe" "iron_helmet"] :explore false :food false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 240 :of-job true}]
+   :after [[:item "iron_pickaxe" 1]]
+   :limit-s 260}
   ;; card ac825512: the nearer ore stands against water seen through glass; the kit takes the dry ore farther along the wall and finishes, never "stopped: flooded"
   {:name "flooded-ore-is-left-for-the-dry-ore"
    :time :any

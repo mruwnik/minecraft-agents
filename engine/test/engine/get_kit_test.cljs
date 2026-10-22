@@ -39,7 +39,8 @@
   "fetch-test's perception engine, with a recording parent that runs the job as a ctx/call child and keeps its ending in :out
   (the data, :status :done or :stopped, :kind, and for a stop the cause's keyword as :reason and a cause map's other fields)."
   ([w args] (start w args f/sight-opts))
-  ([w args sight]
+  ([w args sight] (start w args sight {}))
+  ([w args sight jobs]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         raw (tu/fake-on-floor (assoc w :floor-block "andesite"))
@@ -53,7 +54,7 @@
                                                  :status (if (= :done (:kind e)) :done :stopped)}
                                                 (when (not= :done (:kind e)) {:reason (contract/cause-key e)}))))
                            (if (= :continue e) :continue (ctx/end c :done nil))))}
-        eng (core/create {:primitives p :jobs (assoc registry/jobs 'recording-parent parent) :triggers triggers/all
+        eng (core/create {:primitives p :jobs (merge registry/jobs jobs {'recording-parent parent}) :triggers triggers/all
                           :dir (tu/tmp-dir) :now #(deref clock) :world (ew/of-data {} {} [f/own-zone])
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     (perception/pass! (aget p "perception"))
@@ -378,6 +379,35 @@
           (is (= {:status :done :made ["iron_pickaxe"]} (select-keys @(:out s) [:status :made]))
               (pr-str (select-keys @(:out s) [:status :item :reason :why])))
           (is (= 1 (get (f/inv s) "iron_pickaxe"))))))))
+
+(defn gathers-raw-iron-then-has-no-way-up
+  "An obtain whose first call adds 3 raw iron to the pack and ends as a gathering that found no way up; later calls are the real obtain."
+  []
+  (let [real (get registry/jobs 'jobs.items.obtain)
+        first? (atom true)]
+    (assoc real :round
+           (fn ^:async stub-round [c]
+             (if-not (compare-and-set! first? true false)
+               (await ((:round real) c))
+               (do (swap! (fake/state (:primitives c)) fake/give "raw_iron" 3)
+                   (ctx/end c :nothing-possible {:reason :no-source :why "gathering was tried and ended :no-way-up"}
+                            {:item "iron_pickaxe" :got 0 :tried {:gather :no-way-up}})))))))
+
+(deftest raw-iron-gathered-in-a-bill-that-ends-without-a-way-up-is-smelted-before-the-kit-stops
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (-> (world [{:name "stick" :count 2} {:name "coal" :count 4} {:name "wooden_sword" :count 1}] {})
+                    (assoc-in [:blocks "2,64,2"] "furnace"))
+              s (start w {:items ["iron_pickaxe" "iron_helmet"] :explore false :food false} f/sight-opts
+                       {'jobs.items.obtain (gathers-raw-iron-then-has-no-way-up)})]
+          (loop [i 0]
+            (await (f/run-ticks s 1))
+            (.advance (.-world (:p s)) 40)
+            (when (and (< i 3000) (= :not-done @(:out s)))
+              (recur (inc i))))
+          (is (= 1 (get (f/inv s) "iron_pickaxe")))
+          (is (= {:status :stopped :reason :no-source} (select-keys @(:out s) [:status :reason]))))))))
 
 (deftest a-restart-drops-the-stop-booked-in-the-earlier-life
   (let [m (kit/restarted {:since 1 :stop {:reason :no-iron} :bill {:a 1} :fed true} 9)]
