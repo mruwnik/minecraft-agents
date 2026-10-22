@@ -17,6 +17,7 @@
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
             [jobs.lib.trees :as trees]
+            [jobs.lib.util :as u]
             [jobs.forestry.fell-tree :as fell-tree]
             [jobs.forestry.fell-tree.log :as log]
             [jobs.forestry.fell-tree.pillar :as pillar]
@@ -224,6 +225,15 @@
             (core/submit! eng '(jobs.forestry.fell-tree {:radius 10}) {})
             (await (tu/run-until-empty eng 200)))
           (is (= [{:x 8 :y 70 :z 2}] (distinct @lowered)) "no drop in sight, yet the support found for the hidden cut log was dug"))))))
+
+(deftest hidden-support-is-sought-only-while-fewer-logs-are-picked-up-than-cut
+  (let [support (fn [mem] (with-redefs [ctx/mem (constantly mem)
+                                        u/self-pos (constantly {:x 0 :y 64 :z 0})
+                                        u/seen-name (constantly "oak_leaves")]
+                            (pillar/hidden-support {})))
+        cut {:cut-cells [[3 66 0] [3 67 0]]}]
+    (is (some? (support (assoc cut :pillar {:picked 1}))) "one log of two picked up: one is out of sight, its support is sought")
+    (is (nil? (support (assoc cut :pillar {:picked 2}))) "every cut log picked up: nothing hides, no leaf is dug")))
 
 (deftest a-drop-resting-on-a-leaf-out-of-reach-is-lowered-by-digging-the-leaf
   (async done

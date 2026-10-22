@@ -160,6 +160,12 @@
   [c centre r]
   (mapv #(.-id %) (own-log-drop-entities c centre r)))
 
+(defn note-picked!
+  "Count the drops a collect-drops ending e took in, for hidden-support's shortfall."
+  [c e]
+  (when-let [n (some-> e :data :collected)]
+    (ctx/update-mem! c update-in [:pillar :picked] (fnil + 0) n)))
+
 (defn ^:async pillar-collect!
   "Pick up the logs cut so far (they are the pillar's blocks when no dirt is carried): a collect-drops child for the
   ones lying round the base that the body may take. Finding none is no failure."
@@ -171,7 +177,8 @@
             :done)]
     (if (= :continue e)
       :continue
-      (do (ctx/update-mem! c assoc-in [:pillar :phase] :walk) :again))))
+      (do (note-picked! c e)
+          (ctx/update-mem! c assoc-in [:pillar :phase] :walk) :again))))
 
 (defn ^:async pillar-walk!
   [c {:keys [plan]}]
@@ -251,12 +258,12 @@
 
 (defn hidden-support
   "The leaf or log a log the body cut rests on when it is out of sight (on a leaf above the eye) though one is known to lie
-  unseen near the pillar (the body has cut logs): found from the cells the body cut (a drop falls from there, at most a cell aside), the highest
+  unseen near the pillar (it has cut more logs than it picked up): found from the cells the body cut (a drop falls from there, at most a cell aside), the highest
   seen leaf or log below one within dig reach. nil when none."
   [c]
   (let [feet (u/self-pos c)
         [sx _ sz] (u/cell-vec feet)]
-    (when (seq (:cut-cells (ctx/mem c)))
+    (when (> (count (:cut-cells (ctx/mem c))) (get-in (ctx/mem c) [:pillar :picked] 0))
       (->> (for [[x y z] (:cut-cells (ctx/mem c)) dy (range 1 4) dx [0 -1 1] dz [0 -1 1]] [(+ x dx) (- y dy) (+ z dz)])
            (remove (fn [[x _ z]] (and (= x sx) (= z sz))))
            (filter (fn [cell] (and (<= (u/eye-dist feet cell) dig-reach)
@@ -293,6 +300,7 @@
               (await (child/run!* c (keyword (str "tcollect" n)) 'jobs.items.collect-drops
                                   (log/collect-args c {:radius dig-reach :ids ids :near (u/self-pos c) :search 0})))
               :done)
+          _ (when-not (= :continue e) (note-picked! c e))
           at (into {} (map (juxt #(u/cell-vec (u/pos-of (.-pos %))) #(u/pos-of (.-pos %)))) ents)
           cell (when (and (not= :continue e) (< n (settings/get settings ::max-lowered))) (or (some #(drop-support c % (at %)) (left-cells e)) (hidden-support c)))]
       (cond
