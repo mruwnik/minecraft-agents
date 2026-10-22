@@ -291,6 +291,20 @@
           (is (= "dirt" (block p [5 63 0])) "the block went into the gap")
           (is (empty? (calls p "dig"))))))))
 
+(def doorway-hole
+  "Floor y 63 with a 1-cell hole at x 5 (floor under it at y 62), and a floor 1 higher from x 6: the doorway of a hut whose sill was dug."
+  (-> (merge (box -2 62 -2 4 63 4 "stone") (box 5 62 -2 5 62 4 "stone") (box 6 62 -2 12 64 4 "stone"))))
+
+(deftest go-to-fills-a-one-cell-hole-before-a-step-up-with-a-carried-block
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p seen]} (await (run-job! {:self {:pos {:x 1.5 :y 64 :z 1.5}} :blocks doorway-hole :inventory [{:name "dirt" :count 5}]}
+                                                    {:pos [10 65 1] :range 0}))]
+          (is (= {:arrived true} @out))
+          (is (= [:fill-gap] (mapv :step (events-of seen :go-to.escalated))))
+          (is (= "dirt" (block p [5 63 1])) "the block went into the hole at the takeoff's floor height"))))))
+
 (deftest go-to-gives-up-at-a-gap-under-a-low-ceiling-with-nothing-to-fill-it
   (async done
     (tu/run-async done

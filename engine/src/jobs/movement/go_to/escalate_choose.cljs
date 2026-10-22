@@ -97,14 +97,15 @@
 
 
 (defn gap-fill
-  "{:step :fill-gap :cell :item} when result (a planner no-path) is a gap jump refused for a low ceiling, a carried
-  pillar block can fill the gap's floor, and no zone refuses the place; else nil."
+  "{:step :fill-gap :cell :item} when result (a planner no-path) is a gap jump refused for a low ceiling or a gap jump
+  up, a carried pillar block can fill the gap's floor (at the takeoff's height: a step up is then walkable), and no zone
+  refuses the place; else nil."
   [c result skip]
   (let [p (:primitives c)
         {:keys [item]} (escape/pillar-item c)
-        cell (when (and (= :abilities (some-> (:reason result) keyword)) (= :gap-low-ceiling (some-> (:kind result) keyword))
+        cell (when (and (= :abilities (some-> (:reason result) keyword)) (#{:gap-low-ceiling :gap-up} (some-> (:kind result) keyword))
                         (not (skip :fill-gap)) item (:at result) (:from result))
-               (escape/gap-floor (:at result) (:from result)))]
+               (escape/gap-floor (assoc (vec (:at result)) 1 (second (:from result))) (:from result)))]
     (when (and cell (or (:ignore-zones? (:args c)) (nil? (tidy/refusal c :place (zipmap [:x :y :z] cell)))))
       {:step :fill-gap :cell cell :item item})))
 
