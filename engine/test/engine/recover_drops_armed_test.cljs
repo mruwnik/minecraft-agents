@@ -23,17 +23,17 @@
 
 (defn run-with-chest
   "Die to cause with the field-report pile; a chest holds items (nil: no chest). known?: the body booked its stock."
-  [items known? cause]
-  (fn ^:async t []
-    (let [pile dt/death-pile-of-the-field-report
-          world (cond-> {:floor tu/walk-floor :entities (vec (pile-drops pile))}
+  ([items known? cause] (run-with-chest items known? cause dt/death-pile-of-the-field-report))
+  ([items known? cause pile]
+   (fn ^:async t []
+     (let [world (cond-> {:floor tu/walk-floor :entities (vec (pile-drops pile))}
                   items (assoc :blocks {"-2,64,3" "chest"} :containers {"-2,64,3" items}))
           {:keys [eng seen p]} (setup world)]
       (when known? (mem/write! (:store eng) stock/stock-kind {:pos chest-cell :items (stock/stacks->items items)} stock/stock-policy))
       (die! eng {:pos dt/death-pos :inventory pile :cause cause})
       (core/submit! eng job {})
       (await (run-until-empty eng 60))
-      {:eng eng :seen seen :p p})))
+      {:eng eng :seen seen :p p}))))
 
 (deftest an-unarmed-body-fetches-a-sword-and-a-helmet-before-the-skeleton-trip
   (async done
@@ -142,3 +142,15 @@
           (await (run-until-empty eng 60))
           (is (empty? (filter #(= :obtain.chest (:kind %)) @seen)))
           (is (nil? (get (inv p) "iron_sword"))))))))
+
+(def armour-pile
+  [{:name "iron_helmet" :count 1} {:name "iron_chestplate" :count 1} {:name "iron_leggings" :count 1} {:name "iron_boots" :count 1}
+   {:name "cobblestone" :count 64}])
+
+(deftest armour-picked-up-from-the-pile-is-put-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng]} (await ((run-with-chest nil false "fall" armour-pile)))]
+          (is (= :collected (:decision (recovered eng))))
+          (is (= {"head" "iron_helmet" "torso" "iron_chestplate" "legs" "iron_leggings" "feet" "iron_boots"} (worn p))))))))

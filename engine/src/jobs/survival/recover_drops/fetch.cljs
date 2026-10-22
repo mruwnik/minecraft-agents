@@ -88,12 +88,13 @@
           (dg/decline! c :unreachable (str "the walk to " (pr-str pos) " did not arrive") {:pos pos}))
       :else (do (ctx/update-mem! c assoc :phase :collect :blocked false) (dth/save-trip! c) :next))))
 
-(defn finish-collect!
-  "End the collect phase: :collected when all of the pile is back, else :partial naming what is left and why."
+(defn ^:async finish-collect!
+  "End the collect phase: armour picked up is put on, then :collected when all of the pile is back, else :partial naming what is left and why."
   [c pile ids]
   (let [items (pl/recovered-items c pile)
         left (pl/left-over c pile)
         decided (:decided (ctx/mem c))]
+    (when (pos? items) (await (child/run!* c :wear-pile 'jobs.items.equip {})))
     (cond
       (empty? left) (end/finish! c :collected (assoc decided :items items))
       (zero? items) (end/finish! c :abandoned (assoc decided :items 0 :reason :nothing-found))
@@ -115,7 +116,7 @@
   (let [again (vec (await (find-ids! c pos names radius)))]
     (if (seq again)
       (do (ctx/update-mem! c update :passes (fnil inc 0)) (dth/save-trip! c) :next)
-      (finish-collect! c pile again))))
+      (await (finish-collect! c pile again)))))
 
 (defn ^:async search-round!
   "Once: items of the pile are nowhere in sight at the pile (behind a corner, in a hollow). Walk to cells around it
@@ -135,19 +136,19 @@
   (let [names (vec (distinct (map :name pile)))
         total (reduce + 0 (map :count pile))]
     (if (>= (pl/recovered-items c pile) total)
-      (finish-collect! c pile [])
+      (await (finish-collect! c pile []))
       (let [ids (vec (await (find-ids! c pos names radius)))]
         (if (empty? ids)
           (or (await (clear-seal! c pos))
               (when-not (:searched (ctx/mem c))
                 (when (await (search-round! c (mapv pos [:x :y :z]) pos names radius))
                   :next))
-              (finish-collect! c pile ids))
+              (await (finish-collect! c pile ids)))
           (let [swept (await (child/run!* c :collect 'jobs.items.collect-drops
                                           {:radius (+ radius (cfg/stray-range) 4) :ids ids :items names :checks cfg/own-checks}))
                 cell (pl/look-cell (:data swept))]
             (if (empty? (pl/left-over c pile))
-              (finish-collect! c pile [])
+              (await (finish-collect! c pile []))
               (let [again (vec (await (find-ids! c pos names radius)))
                     passes (:passes (ctx/mem c) 0)]
                 (cond
@@ -160,4 +161,4 @@
                   (and (empty? again) (not (:searched (ctx/mem c))) (await (search-round! c (mapv pos [:x :y :z]) pos names radius)))
                   :next
 
-                  :else (finish-collect! c pile again))))))))))
+                  :else (await (finish-collect! c pile again)))))))))))
