@@ -8,7 +8,7 @@
  {:tags [:survival :readiness]
   :time :any
   :plot {:height 8 :floor "stone" :light :lit}
-  :register [{:trigger :low-health :persistence :cooldown :cooldown-s 30}]
+  :register [{:trigger :low-health}]
   :body {:at [6.5 0 16.5]}
   :limit-s 200}
  :cases

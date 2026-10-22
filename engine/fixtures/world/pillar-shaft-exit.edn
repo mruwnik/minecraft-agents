@@ -4,7 +4,7 @@
 {:name "pillar-out-of-shaft-stays"
  :tags [:access :survival]
  :plot {:height 12}
- :register [{:trigger :scaffold-left :args {} :job (jobs.access.cleanup {})}]
+ :register [{:trigger :scaffold-left}]
  :blocks [[:fill [14 0 14] [18 6 18] "stone"]
           [:fill [16 0 16] [16 6 16] "air"]]
  :body {:at [16.5 0 16.5] :inventory [["dirt" 8]]}

@@ -10,7 +10,7 @@
 {:defaults
  {:tags [:survival :unwedge] :time :any
   :plot {:height 8}
-  :register [{:trigger :wedged :persistence :cooldown :cooldown-s 0 :job (jobs.survival.unwedge)}]
+  :register [{:trigger :wedged}]
   :body {:at [16.5 0 16.5] :settle-s 1}
   :limit-s 60}
  :cases

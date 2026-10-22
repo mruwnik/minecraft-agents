@@ -12,7 +12,7 @@
   :limit-s 120}
  :cases
  [{:name "propagule-replanted"
-   :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 10}]
+   :register [{:trigger :replant-owed}]
    :body {:inventory [["iron_axe" 1] ["mangrove_propagule" 1]]}
    :act [[:job (jobs.forestry.harvest-wood {:radius 32})]]
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}
@@ -20,13 +20,13 @@
            {:event {:source :reflex :kind :ended :context {:reflex-id :replant-owed} :data {:kind :done}} :within-s 120}]
    :after [[:block [16 0 16] "mangrove_propagule"] [:not-block [16 1 16] "mangrove_log"]]}
   {:name "no-propagule-plants-nothing"
-   :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 10}]
+   :register [{:trigger :replant-owed}]
    :body {:inventory [["iron_axe" 1]]}
    :act [[:job (jobs.forestry.harvest-wood {:radius 32 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:not-block [16 0 16] "mangrove_propagule"]]}
   {:name "stray-item-in-radius-not-taken"
-   :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 10}]
+   :register [{:trigger :replant-owed}]
    :body {:inventory [["iron_axe" 1] ["mangrove_propagule" 1]]}
    :act [[:summon "item" [3.5 0 16.5] "{Item:{id:\"minecraft:red_bed\",count:1}}"]
          [:job (jobs.forestry.harvest-wood {:radius 32})]]

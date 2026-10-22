@@ -8,7 +8,7 @@
   :limit-s 150}
  :cases
  [{:name "hungry-mid-mine-feeds-through-the-trigger"
-   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
+   :register [{:trigger :hungry :why "no exploring in the closed plot; a 30 s cooldown so a refire fits the case" :cooldown-s 30 :job (jobs.survival.get-food {:explore false :carry 0})}]
    :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :direction :east :tunnel-length 14 :radius 16 :mend false})]
          [:wait-s 4]
          [:rcon "effect give $BODY minecraft:hunger 8 243 true"]]

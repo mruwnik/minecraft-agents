@@ -3,7 +3,7 @@
 ;; Entries are seeded into body memory (:memory); the plot is lit by torches. Cases 3 and 4: one warn :unreachable (logged at the register, before t0, which a :no-event ignores), then no refire for 2 min (the :gave-up path needs a cell the walk reaches but a place cannot fill: not built).
 {:defaults
  {:tags [:tidy :tidy-pending]
-  :register [{:trigger :tidy-pending :persistence :cooldown :cooldown-s 10}]
+  :register [{:trigger :tidy-pending}]
   :plot {:height 12}
   :blocks [[:set [2 0 2] "torch"] [:set [2 0 14] "torch"] [:set [2 0 26] "torch"] [:set [14 0 2] "torch"] [:set [14 0 26] "torch"]
            [:set [26 0 2] "torch"] [:set [26 0 14] "torch"] [:set [26 0 26] "torch"] [:set [8 0 8] "torch"] [:set [20 0 8] "torch"]

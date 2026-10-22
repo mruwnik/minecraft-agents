@@ -19,7 +19,7 @@
             [:fill [29 10 16] [29 12 16] "air"]
             [:fill [30 11 16] [30 13 16] "air"]]
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}
-  :register [{:trigger :stuck-underground :persistence :cooldown :cooldown-s 300 :args {:idle-s 20}}]
+  :register [{:trigger :stuck-underground :why "a short idle time so the case fits its window" :args {:idle-s 20}}]
   :limit-s 150}
  :cases
  [{:name "idle-body-twelve-under-its-home-walks-out"

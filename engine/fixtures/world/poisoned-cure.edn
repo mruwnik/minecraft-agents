@@ -6,7 +6,7 @@
   :limit-s 60}
  :cases
  [{:name "poisoned-body-drinks-carried-milk"
-   :register [{:trigger :poisoned :persistence :cooldown :cooldown-s 10 :job (jobs.survival.cure)}]
+   :register [{:trigger :poisoned}]
    :body {:at [16.5 1 16.5] :inventory [["milk_bucket" 1]]}
    :act [[:rcon "damage $BODY 14 minecraft:generic"] [:rcon "effect give $BODY minecraft:poison 30 0 true"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :poisoned}} :within-s 20}

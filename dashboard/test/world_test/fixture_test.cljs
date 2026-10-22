@@ -303,6 +303,16 @@
     (is (re-find #"no longer offends" (get (lint #{"f/a" "f/gone"}) "f/gone")) "a listed case that no longer exists")
     (is (some #(re-find #":time-why" %) (:problems d)))))
 
+(deftest a-register-entry-takes-the-trigger-defaults-and-explains-each-override
+  (let [defaults {:hungry {:job '(jobs.survival.get-food) :args 'triggers.survival.hungry/defaults :persistence :cooldown :cooldown-s 90}}
+        lint (fn [e] (f/register-problems defaults [e]))]
+    (is (empty? (lint {:trigger :hungry})))
+    (is (empty? (lint {:trigger :hungry :cooldown-s 30 :why "a refire fits the case"})))
+    (is (empty? (lint {:when '(always)})) "an ad hoc condition has no defaults to copy")
+    (is (re-find #"copies the default" (first (lint {:trigger :hungry :persistence :cooldown}))))
+    (is (re-find #"needs a :why" (first (lint {:trigger :hungry :cooldown-s 30}))))
+    (is (re-find #"unknown trigger" (first (lint {:trigger :nope}))))))
+
 (deftest a-case-of-only-unanchored-no-events-checks-nothing
   (let [ps (fn [c] (f/problems (f/merge-case {} (merge {:name "a"} c))))]
     (is (seq (ps {:expect [{:no-event {:kind :x} :for-s 5}]})) "silence on an empty log proves nothing")

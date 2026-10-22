@@ -9,7 +9,7 @@
   :limit-s 90}
  :cases
  [{:name "scaffold-left-far-entry-is-left-alone"
-   :register [{:trigger :scaffold-left :args {} :job (jobs.access.cleanup {})}]
+   :register [{:trigger :scaffold-left}]
    :blocks [[:set [6 0 8] "cobblestone"]]
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}]}}]
    :body {:at [96.5 0 8.5] :inventory [["iron_pickaxe" 1] ["iron_sword" 1]] :effects [["resistance" 600 4]]}
@@ -18,7 +18,7 @@
    :after [[:block [6 0 8] "cobblestone"] [:body-near [96.5 0 8.5] 4]]
    :limit-s 50}
   {:name "scaffold-left-near-entry-is-taken-back"
-   :register [{:trigger :scaffold-left :args {} :job (jobs.access.cleanup {})}]
+   :register [{:trigger :scaffold-left}]
    :blocks [[:set [6 0 8] "cobblestone"]]
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}]}}]
    :body {:at [20.5 0 8.5] :inventory [["iron_pickaxe" 1] ["iron_sword" 1]] :effects [["resistance" 600 4]]}
@@ -26,7 +26,7 @@
             {:event {:source :reflex :kind :ended :data {:removed [[:any]]}} :within-s 70}]
    :after [[:not-block [6 0 8] "cobblestone"]]}
   {:name "tidy-pending-far-entry-is-left-alone"
-   :register [{:trigger :tidy-pending :persistence :cooldown :cooldown-s 10}]
+   :register [{:trigger :tidy-pending}]
    :blocks [[:fill [6 0 8] [6 1 8] "cobblestone"] [:set [6 0 8] "air"]]
    :memory [{:kind :tidy :data {:cell #at [6 0 8] :action :dig :was "cobblestone" :now "air" :tries 0 :plan "other"}}]
    :body {:at [96.5 0 8.5] :inventory [["cobblestone" 4]] :effects [["resistance" 600 4]]}
@@ -34,7 +34,7 @@
    :after [[:block [6 0 8] "air"] [:body-near [96.5 0 8.5] 4]]
    :limit-s 50}
   {:name "tidy-pending-entry-in-range-is-restored"
-   :register [{:trigger :tidy-pending :persistence :cooldown :cooldown-s 10}]
+   :register [{:trigger :tidy-pending}]
    :blocks [[:fill [6 0 8] [6 1 8] "cobblestone"] [:set [6 0 8] "air"]]
    :memory [{:kind :tidy :data {:cell #at [6 0 8] :action :dig :was "cobblestone" :now "air" :tries 0 :plan "other"}}]
    :body {:at [40.5 0 8.5] :inventory [["cobblestone" 4]] :effects [["resistance" 600 4]]}
@@ -45,7 +45,7 @@
   ;; Card c9815f0b: scaffold-left ignores an open entry far below the feet (past cleanup's ::max-below), so it does not refire for ever; one 3 below, reachable by steps, is taken back
   {:name "scaffold-left-entry-26-below-the-feet-is-left-alone"
    :plot {:length 120 :width 16 :height 31}
-   :register [{:trigger :scaffold-left :args {} :job (jobs.access.cleanup {})}]
+   :register [{:trigger :scaffold-left}]
    :blocks [[:set [6 0 8] "cobblestone"] [:fill [14 25 6] [18 25 10] "stone"]]
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}]}}]
    :body {:at [16.5 26 8.5] :inventory [["iron_pickaxe" 1] ["iron_sword" 1]] :effects [["resistance" 600 4]]}
@@ -53,7 +53,7 @@
    :after [[:block [6 0 8] "cobblestone"]]
    :limit-s 70}
   {:name "scaffold-left-entry-3-below-the-feet-is-taken-back"
-   :register [{:trigger :scaffold-left :args {} :job (jobs.access.cleanup {})}]
+   :register [{:trigger :scaffold-left}]
    :blocks [[:set [6 0 8] "cobblestone"] [:fill [20 -1 6] [22 2 10] "stone"] [:fill [18 -1 6] [19 1 10] "stone"] [:fill [16 -1 6] [17 0 10] "stone"]]
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}]}}]
    :body {:at [21.5 3 8.5] :inventory [["iron_pickaxe" 1] ["iron_sword" 1]] :effects [["resistance" 600 4]]}

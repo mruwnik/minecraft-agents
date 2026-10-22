@@ -5,9 +5,9 @@
 {:defaults
  {:tags [:survival :death :night :jobs]
   :time :night
-  :register [{:trigger :died :persistence :cooldown :cooldown-s 30 :args {}}
-             {:trigger :hostile-near :args {:radius 8 :ranged-radius 16} :job (jobs.survival.respond-to-hostile)}
-             {:trigger :night :persistence :cooldown :cooldown-s 10}]
+  :register [{:trigger :died}
+             {:trigger :hostile-near}
+             {:trigger :night}]
   :body {:at [26.5 0 26.5] :spawnpoint [4 0 4] :effects [["resistance" 600 4]]
          :inventory [["raw_iron" 24] ["cobblestone" 64] ["cobblestone" 36]]}
   :act [[:kill-body]]
@@ -32,7 +32,7 @@
    ;; the respawn point lies inside another body's zone: the night job relocates to a free site (shut-in.relocated) before digging in.
    ;; Dirt floor (the stone default has no pit site for a body without a pickaxe) and no :died trigger (it walks the body to the death spot, outside the zone)
    :plot {:length 40 :width 40 :height 10 :floor "dirt"}
-   :register [{:trigger :night :persistence :cooldown :cooldown-s 10}]
+   :register [{:trigger :night}]
    :zones [{:name "yard" :min [0 -2 6] :max [10 12 26] :owner "Other"}]
    :body {:at [26.5 0 26.5] :spawnpoint [5 0 16] :inventory []}
    :expect [{:event {:source :job :kind :shut-in.relocated} :within-s 90}]

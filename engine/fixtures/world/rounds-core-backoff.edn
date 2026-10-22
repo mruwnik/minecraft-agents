@@ -16,8 +16,7 @@
  ;; the backoff case is a persistently true trigger (:hungry: hunger leaves food 8 and damage hp 15, so food < 6 + 5) whose job fails every act on an unreachable chest
  ;; (deposit is a listed job, so it also warns reflex.continued once: expected here).
  [{:name "hungry-failing-job-backs-off-after-three-runs"
-   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 0 :backoff {:after 3}
-               :job (jobs.storage.deposit {:chest #at [16 0 11]})}]
+   :register [{:trigger :hungry :why "the case runs the rounds machinery with a deposit job and its own backoff" :cooldown-s 0 :backoff {:after 3} :job (jobs.storage.deposit {:chest #at [16 0 11]})}]
    :blocks [[:set [16 0 11] "chest"]]
    :body {:at [16.5 0 18.5] :inventory [["stick" 5]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 5 minecraft:generic"]]
@@ -29,7 +28,7 @@
    :expect [{:event {:source :job :kind :waiting :data {:reason :resting}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :backoff} :for-s 30 :until {:source :job :kind :waiting}}]}
   {:name "burning-never-backs-off"
-   :register [{:trigger :burning :persistence :cooldown :cooldown-s 0 :job (jobs.survival.extinguish {:water-radius 6})}]
+   :register [{:trigger :burning}]
    :blocks [[:set [10 -1 22] "netherrack"] [:set [10 0 22] "fire"]]
    :body {:at [10.5 0 22.5] :settle-s 1}
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :burning}} :within-s 20}
@@ -37,8 +36,7 @@
    :limit-s 80}
   ;; card 7fd2b650: a status-only :backoff map (no :after/:first-s/:max-s) on a reflex whose default is no backoff keeps it off
   {:name "burning-with-a-status-only-backoff-map-never-backs-off"
-   :register [{:trigger :burning :persistence :cooldown :cooldown-s 0 :backoff {:failure #{"no-water"} :neutral #{"timeout"}}
-               :job (jobs.survival.extinguish {:water-radius 6})}]
+   :register [{:trigger :burning :why "the backoff classes are what the case tests" :backoff {:failure #{"no-water"} :neutral #{"timeout"}}}]
    :blocks [[:set [10 -1 22] "netherrack"] [:set [10 0 22] "fire"]]
    :body {:at [10.5 0 22.5] :settle-s 1}
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :burning}} :within-s 20}

@@ -19,14 +19,14 @@
   ;; 5b02f58c: the hungry trigger searches only where it is not dark; with nothing carried to eat it stays quiet in a dark cell
   {:name "hungry-in-the-dark-with-nothing-carried-does-not-fire"
    :body {:effects []}
-   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
+   :register [{:trigger :hungry :why "no exploring in the closed plot; a 30 s cooldown so a refire fits the case" :cooldown-s 30 :job (jobs.survival.get-food {:explore false :carry 0})}]
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :for-s 30}]
    :after [[:body-near [16.5 0 16.5] 3] [:item "bread" 0]]
    :limit-s 45}
   {:name "hungry-in-the-dark-with-bread-eats"
-   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
+   :register [{:trigger :hungry :why "no exploring in the closed plot; a 30 s cooldown so a refire fits the case" :cooldown-s 30 :job (jobs.survival.get-food {:explore false :carry 0})}]
    :body {:inventory [["bread" 4]] :effects []}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]]
@@ -39,7 +39,7 @@
    :time :night :time-why :night-light :plot {:light :sky}
    :blocks [[:set [16 0 14] "torch"]]
    :body {:effects []}
-   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
+   :register [{:trigger :hungry :why "no exploring in the closed plot; a 30 s cooldown so a refire fits the case" :cooldown-s 30 :job (jobs.survival.get-food {:explore false :carry 0})}]
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 40}]

@@ -5,9 +5,8 @@
 {:defaults
  {:tags [:survival :hungry :get-food :rounds]
   :plot {:height 6}
-  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile)}
-             {:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:carry 0})}]
+  :register [{:trigger :hostile-near}
+             {:trigger :hungry}]
   :body {:at [4.5 0 16.5] :settle-s 2}
   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
         [:rcon "damage $BODY 5 minecraft:generic"]]
@@ -37,9 +36,8 @@
    :after [[:entities "type=cow,tag=wt" [[0 0 0] [31 3 31]] 2]]}
   ;; :explore false: with nothing known get-food first searches (120 s of job time) before :no-food; these cases check the stop itself.
   {:name "f1-no-food-stops-no-food-then-declines-quietly"
-   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile)}
-              {:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
+   :register [{:trigger :hostile-near}
+              {:trigger :hungry :why "no exploring in the closed plot; a 30 s cooldown so a refire fits the case" :cooldown-s 30 :job (jobs.survival.get-food {:explore false :carry 0})}]
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"] [:wait-s 75]] ; hold: the declined round must stay quiet past the 60 s window
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 30}
@@ -49,9 +47,8 @@
   ;; chest 58 blocks away (a long walk): the zombie cuts the walk, the chest is emptied meanwhile, the round starts again from the world
   {:name "f2-cut-while-walking-chest-emptied"
    :mobs :keep
-   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile)}
-              {:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
+   :register [{:trigger :hostile-near}
+              {:trigger :hungry :why "no exploring in the closed plot; a 30 s cooldown so a refire fits the case" :cooldown-s 30 :job (jobs.survival.get-food {:explore false :carry 0})}]
    :plot {:height 6 :length 80 :width 32}
    :body {:at [2.5 0 16.5] :inventory [["iron_sword" 1]]} ; armed: the body fights the zombie; unarmed it fled east off the plot half the runs
    :blocks [[:set [60 0 16] "chest{Items:[{Slot:0b,id:\"minecraft:bread\",count:8}]}"]]

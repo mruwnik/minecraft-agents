@@ -2,8 +2,7 @@
 ;; back with a sword in iron armour. The wolves are angered by a hit from the body (a pack turns on it). Light plot, any clock.
 {:defaults
  {:tags [:hostile :combat] :time :any
-  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile)}]
+  :register [{:trigger :hostile-near}]
   :body {:at [16.5 0 16.5] :inventory [["iron_sword" 1]]}}
  :cases
  [{:name "angry-wolves-are-fought"

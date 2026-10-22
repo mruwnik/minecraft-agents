@@ -6,8 +6,7 @@
  {:tags [:hostile :survival :cornered]
   :time :any
   :plot {:height 16}
-  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile)}]
+  :register [{:trigger :hostile-near}]
   :body {:at [10.5 0 16.5]}
   :act [[:rcon "damage $BODY 10 minecraft:generic"]
         [:summon "zombie" [17.5 0 16.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]

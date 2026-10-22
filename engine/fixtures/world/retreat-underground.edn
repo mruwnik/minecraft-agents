@@ -10,8 +10,7 @@
   :time :any
   :mobs :keep
   :plot {:height 16}
-  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile)}]
+  :register [{:trigger :hostile-near}]
   :body {:effects [["resistance" 600 4]]}
   :limit-s 70}
  :cases

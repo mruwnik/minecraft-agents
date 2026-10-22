@@ -6,7 +6,7 @@
  {:tags [:survival :death :jobs]
   :time :any
   :plot {:height 10}
-  :register [{:trigger :died :persistence :cooldown :cooldown-s 30 :args {}}]
+  :register [{:trigger :died}]
   :blocks [[:fill [2 0 10] [30 6 22] "stone"] [:fill [4 0 16] [28 1 16] "air"]]
   :body {:at [26.5 0 16.5] :spawnpoint [4 0 16] :effects [["resistance" 600 4]]
          :inventory [["raw_iron" 24] ["cobblestone" 64] ["cobblestone" 36]]}

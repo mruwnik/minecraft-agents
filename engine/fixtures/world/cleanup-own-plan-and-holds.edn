@@ -37,7 +37,7 @@
   {:name "entry-near-a-death-is-not-offered-by-the-trigger"
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "dirt" :before "air" :purpose :pillar :state :placed}]}}
             {:kind :died :data {:pos #xyz [8 0 8]}}]
-   :register [{:trigger :scaffold-left :args {} :job (jobs.access.cleanup {})}]
+   :register [{:trigger :scaffold-left}]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :scaffold-left}} :for-s 40}]
    :limit-s 50
    :after [[:block [6 0 8] "dirt"] [:body-far [6.5 0 8.5] 8]]}

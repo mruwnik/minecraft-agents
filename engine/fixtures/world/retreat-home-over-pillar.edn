@@ -14,8 +14,7 @@
            [:set [14 0 14] "red_bed[facing=south,part=foot]"]
            [:set [14 0 15] "red_bed[facing=south,part=head]"]]
   :body {:at [15.5 0 20.5] :yaw 180 :settle-s 3 :inventory [["cobblestone" 16]]}
-  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile)}]
+  :register [{:trigger :hostile-near}]
   :memory [{:kind :home :data {:pos #xyz [14 0 14]} :policy {:cap 1 :ttl :forever}}]
   :act [[:rcon "damage $BODY 16 minecraft:generic"]
         [:summon "zombie" [15.5 0 27.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]

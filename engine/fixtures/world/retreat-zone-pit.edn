@@ -7,8 +7,7 @@
   :time :any
   :plot {:height 16}
   :blocks [[:fill [9 0 15] [11 4 19] "stone"] [:fill [9 5 15] [9 6 19] "stone"] [:fill [11 5 15] [11 6 19] "stone"] [:fill [10 5 15] [10 6 15] "stone"]]
-  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile)}]
+  :register [{:trigger :hostile-near}]
   :body {:at [10.5 5 16.5] :inventory [["dirt" 4] ["iron_pickaxe" 1]]}
   :act [[:summon "zombie" [10.5 5 17.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
   :limit-s 90}

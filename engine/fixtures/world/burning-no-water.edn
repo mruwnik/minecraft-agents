@@ -5,7 +5,7 @@
 {:defaults
  {:tags [:survival :fire] :time :any
   :plot {:height 6}
-  :register [{:trigger :burning :persistence :cooldown :cooldown-s 0 :job (jobs.survival.extinguish {:water-radius 6})}]
+  :register [{:trigger :burning}]
   :blocks [[:set [10 -1 16] "netherrack"] [:set [10 0 16] "fire"]]
   :body {:at [10.5 0 16.5] :settle-s 1}
   :limit-s 90}

@@ -9,7 +9,7 @@
            [:fill [6 20 14] [6 23 16] "air"] [:fill [7 19 14] [7 23 16] "air"] [:fill [8 18 14] [8 23 16] "air"] [:fill [9 17 14] [9 23 16] "air"] [:fill [10 16 14] [10 23 16] "air"] [:fill [11 15 14] [11 23 16] "air"] [:fill [12 14 14] [12 23 16] "air"] [:fill [13 13 14] [13 23 16] "air"] [:fill [14 12 14] [14 23 16] "air"] [:fill [15 11 14] [15 23 16] "air"] [:fill [16 10 14] [16 23 16] "air"] [:fill [17 9 14] [17 23 16] "air"] [:fill [18 8 14] [18 23 16] "air"] [:fill [19 7 14] [19 23 16] "air"] [:fill [20 6 14] [20 23 16] "air"] [:fill [21 5 14] [21 23 16] "air"]
            [:fill [22 5 14] [26 8 16] "air"]
            [:set [3 20 15] "cobblestone"] [:set [23 5 15] "cobblestone"]]
-  :register [{:trigger :scaffold-left :args {} :job (jobs.access.cleanup {})}]
+  :register [{:trigger :scaffold-left}]
   :body {:at [4.5 20 15.5] :inventory [["iron_pickaxe" 1] ["iron_sword" 1]] :effects [["resistance" 600 4]] :settle-s 1}
   :limit-s 90}
  :cases

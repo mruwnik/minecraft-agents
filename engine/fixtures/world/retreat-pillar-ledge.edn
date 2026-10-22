@@ -7,8 +7,7 @@
  {:tags [:hostile :survival :cornered]
   :time :any
   :plot {:height 16}
-  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile)}]
+  :register [{:trigger :hostile-near}]
   :blocks [[:fill [14 0 14] [18 2 18] "stone" :hollow] [:fill [15 0 15] [17 2 17] "air"]]
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :inventory [["dirt" 12]]}
   :act [[:summon "zombie" [15.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]

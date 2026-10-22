@@ -4,8 +4,7 @@
 {:defaults
  {:tags [:hostile :triggers :survival]
   :time :any
-  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile)}]
+  :register [{:trigger :hostile-near}]
   :body {:at [14.5 0 16.5] :yaw -90}}
  :cases
  [{:name "shot-by-an-unseen-shooter-steps-out-of-its-line"

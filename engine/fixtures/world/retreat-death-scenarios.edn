@@ -7,8 +7,7 @@
   :time :any
   :mobs :keep
   :plot {:height 16}
-  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile)}]
+  :register [{:trigger :hostile-near}]
   :blocks [[:fill [0 0 0] [31 11 31] "stone"] [:fill [3 0 16] [20 2 16] "air"]
            [:set [3 0 16] "torch"] [:set [20 0 16] "torch"] [:set [11 0 16] "torch"]]
   :limit-s 60}

@@ -10,7 +10,7 @@
   :limit-s 150}
  :cases
  [{:name "home-300-blocks-away-never-fires-dusk-home"
-   :register [{:trigger :dusk-home :persistence :cooldown :cooldown-s 5}]
+   :register [{:trigger :dusk-home}]
    :blocks [[:set [304 0 16] "torch"]]
    :act [[:job (jobs.memory.set-place {:name :home :pos #at [304 0 16]}) [:now]]
          [:time-set 11500]]
@@ -18,7 +18,7 @@
    :after [[:body-far [304.5 0 16.5] 250]]
    :limit-s 60}
   {:name "home-100-blocks-away-fires-dusk-home-once"
-   :register [{:trigger :dusk-home :persistence :cooldown :cooldown-s 5}]
+   :register [{:trigger :dusk-home}]
    :blocks [[:set [104 0 16] "torch"]]
    :act [[:job (jobs.memory.set-place {:name :home :pos #at [104 0 16]}) [:now]]
          [:time-set 11500]]
@@ -27,7 +27,7 @@
    :after [[:body-near [104.5 0 16.5] 5]]}
   ;; card 6732741c: a body shut in a closed hut (roof 3 over the feet) is sheltered; the twin in the open fires
   {:name "body-in-a-closed-hut-never-fires-dusk-home"
-   :register [{:trigger :dusk-home :persistence :cooldown :cooldown-s 5}]
+   :register [{:trigger :dusk-home}]
    :blocks [[:set [76 0 16] "torch"] [:fill [0 0 12] [8 3 20] "stone" :hollow] [:fill [1 0 13] [7 2 19] "air"]]
    :act [[:job (jobs.memory.set-place {:name :home :pos #at [76 0 16]}) [:now]]
          [:time-set 11500]]
@@ -35,7 +35,7 @@
    :after [[:body-far [76.5 0 16.5] 40]]
    :limit-s 60}
   {:name "body-in-the-open-60-blocks-from-home-fires-dusk-home"
-   :register [{:trigger :dusk-home :persistence :cooldown :cooldown-s 5}]
+   :register [{:trigger :dusk-home}]
    :blocks [[:set [76 0 16] "torch"]]
    :act [[:job (jobs.memory.set-place {:name :home :pos #at [76 0 16]}) [:now]]
          [:time-set 11500]]

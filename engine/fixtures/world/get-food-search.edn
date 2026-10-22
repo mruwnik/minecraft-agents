@@ -130,7 +130,7 @@
             {:no-event {:source :job :kind :stopped :data {:reason :no-food}} :for-s 25 :until {:source :job :kind :completed}}]
    :limit-s 40}
   {:name "starving-hungry-reflex-fires-again-after-a-give-up"
-   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
+   :register [{:trigger :hungry :why "no exploring in the closed plot; a 30 s cooldown so a refire fits the case" :cooldown-s 30 :job (jobs.survival.get-food {:explore false :carry 0})}]
    :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 14 minecraft:generic"]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 40}

@@ -16,8 +16,7 @@
             {:event {:source :job :kind :stopped} :within-s 130 :of-job true}]}
   {:name "zombie-behind-fence-quiet"
    :tags [:hostile :triggers] :mobs :keep
-   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile)}]
+   :register [{:trigger :hostile-near}]
    :blocks [[:fill [18 0 13] [24 0 19] "air"]
             [:fill [20 0 14] [24 0 18] "oak_fence" :outline]]
    :body {:at [14.5 0 16.5] :effects [["resistance" 600 4]]}
@@ -26,8 +25,7 @@
    :after [[:entities "type=zombie,tag=wt" [[20 0 14] [24 2 18]] 1] [:entities "tag=!wt,type=!player,type=!item" [[0 -1 0] [32 6 32]] 0]]}
   {:name "zombie-behind-shut-fence-gate-quiet"
    :tags [:hostile :triggers] :mobs :keep
-   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile)}]
+   :register [{:trigger :hostile-near}]
    :blocks [[:fill [18 0 13] [24 0 19] "air"]
             [:fill [20 0 14] [24 0 18] "oak_fence" :outline]
             [:set [20 0 16] "oak_fence_gate[facing=west,open=false]"]]
@@ -37,8 +35,7 @@
    :after [[:entities "type=zombie,tag=wt" [[20 0 14] [24 2 18]] 1] [:entities "tag=!wt,type=!player,type=!item" [[0 -1 0] [32 6 32]] 0]]}
   {:name "zombie-behind-cobblestone-wall-quiet"
    :tags [:hostile :triggers] :mobs :keep
-   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile)}]
+   :register [{:trigger :hostile-near}]
    :blocks [[:fill [18 0 13] [24 0 19] "air"]
             [:fill [20 0 14] [24 0 18] "cobblestone_wall" :outline]]
    :body {:at [14.5 0 16.5] :effects [["resistance" 600 4]]}
@@ -47,8 +44,7 @@
    :after [[:entities "type=zombie,tag=wt" [[20 0 14] [24 2 18]] 1] [:entities "tag=!wt,type=!player,type=!item" [[0 -1 0] [32 6 32]] 0]]}
   {:name "skeleton-in-fence-fires"
    :tags [:hostile :triggers] :mobs :keep
-   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile)}]
+   :register [{:trigger :hostile-near}]
    :blocks [[:fill [18 0 13] [24 0 19] "air"]
             [:fill [20 0 14] [24 0 18] "oak_fence" :outline]]
    :body {:at [14.5 0 16.5] :effects [["resistance" 600 4]]}
@@ -56,8 +52,7 @@
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 20}]}
   {:name "zombie-in-low-ring-fires"
    :tags [:hostile :triggers] :mobs :keep
-   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile)}]
+   :register [{:trigger :hostile-near}]
    :blocks [[:fill [18 0 13] [24 0 19] "air"]
             [:fill [20 0 14] [24 0 18] "stone" :outline]]
    :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]]}

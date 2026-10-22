@@ -4,7 +4,7 @@
 {:defaults
  {:tags [:survival :fire :sensing] :time :any
   :plot {:height 6}
-  :register [{:trigger :burning :persistence :cooldown :cooldown-s 0 :job (jobs.survival.extinguish {:water-radius 6})}]
+  :register [{:trigger :burning}]
   :blocks [[:fill [8 0 14] [12 2 18] "stone"] [:fill [9 0 15] [11 1 17] "air"]
            [:fill [13 -2 15] [14 -2 17] "stone"] [:fill [13 -1 15] [14 -1 17] "water"]
            [:set [10 -1 16] "netherrack"] [:set [10 0 16] "fire"]]

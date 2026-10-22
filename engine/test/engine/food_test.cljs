@@ -65,7 +65,7 @@
   (let [when-fn (:when (get triggers/all :hungry))
         holds? (fn [self] (when-fn (tu/fake {:self self}) {} {}))]
     (is (= :hungry (:name (get triggers/all :hungry))))
-    (is (= '(jobs.survival.get-food) (:job (get triggers/all :hungry))))
+    (is (= '(jobs.survival.get-food {:carry 0}) (:job (get triggers/all :hungry))))
     (is (holds? {:food 4}))
     (is (holds? {:food 6 :inventory [{:name "bread" :count 7}]}) "food 6 cannot sprint")
     (is (not (holds? {:food 18})))

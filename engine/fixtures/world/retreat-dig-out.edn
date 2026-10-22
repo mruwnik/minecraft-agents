@@ -8,8 +8,7 @@
   :blocks [[:fill [2 0 10] [30 8 22] "stone"] [:fill [12 0 16] [29 1 16] "air"]
            [:set [16 1 16] "torch"] [:set [22 1 16] "torch"]]
   :body {:at [12.5 0 16.5] :inventory [["cobblestone" 20] ["stone_pickaxe" 1]]}
-  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 8 :jobs.lib.danger/ranged-radius 16 :jobs.survival.hide-out/hide-s 5}})}]
+  :register [{:trigger :hostile-near :why "a short hide so the case ends inside its window" :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 8 :jobs.lib.danger/ranged-radius 16 :jobs.survival.hide-out/hide-s 5}})}]
   }
  :cases
  [{:name "sealed-body-with-a-mob-at-its-foot-digs-up-and-away"

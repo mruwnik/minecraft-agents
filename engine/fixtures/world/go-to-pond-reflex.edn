@@ -8,8 +8,7 @@
 {:defaults
  {:tags [:movement :water :air] :time :any
   :plot {:height 10 :length 40 :width 16}
-  :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
-              :job (jobs.survival.breathe)}]
+  :register [{:trigger :suffocating}]
   :blocks [[:fill [0 0 0] [39 3 15] "stone"]
            [:fill [8 1 1] [29 3 14] "air"]
            [:fill [8 1 1] [29 2 14] "water"]]

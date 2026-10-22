@@ -4,8 +4,7 @@
 ;; Hut: stone walls x 12..20, z 12..20, roof y 3, interior 7x7. Body mid-room, skeleton (NoAI) 10 south of the south wall.
 {:defaults
  {:tags [:hostile :survival :door]
-  :register [{:trigger :hostile-near :args {:radius 12 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 12}})}]
+  :register [{:trigger :hostile-near :why "the mobs stand beyond the default radius" :args {:radius 12 :ranged-radius 16} :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 12}})}]
   :blocks [[:fill [12 0 12] [20 3 20] "stone" :hollow]
            [:fill [13 0 13] [19 2 19] "air"]
            [:set [13 1 13] "torch"] [:set [19 1 19] "torch"]]

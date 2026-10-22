@@ -3,8 +3,7 @@
 ;; Mobs are NoAI and helmeted (they never hurt, no sun burn).
 {:defaults
  {:tags [:hostile :combat] :time :any
-  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile)}]
+  :register [{:trigger :hostile-near}]
   :body {:at [16.5 0 16.5]}}
  :cases
  [{:name "skeleton-dies-stone-sword"

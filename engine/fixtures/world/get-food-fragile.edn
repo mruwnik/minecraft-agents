@@ -6,9 +6,8 @@
  {:tags [:survival :hungry :get-food :fragile]
   :time :any
   :plot {:height 6}
-  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile)}
-             {:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:carry 0})}]
+  :register [{:trigger :hostile-near}
+             {:trigger :hungry}]
   :body {:at [4.5 0 16.5] :yaw 270 :settle-s 2}
   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
         [:rcon "damage $BODY 18 minecraft:generic"]]
@@ -23,16 +22,14 @@
    :blocks [[:set [28 0 16] "furnace[facing=west]"]]
    :memory [{:kind :furnace :data {:pos #xyz [28 0 16]} :policy {:cap 1 :ttl :forever}}]
    :body {:inventory [["beef" 5] ["coal" 2]]}
-   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile)}]
+   :register [{:trigger :hostile-near}]
    :act [[:job (jobs.survival.get-food {:carry 0 :explore false})]]
    :expect [{:no-event {:source :job :kind :child_started :data {:slot :cook}} :for-s 40}]
    :after [[:item "beef" [:<= 2]] [:body-far [28.5 0 16.5] 6]]}
   {:name "raw-beef-is-eaten-instead-of-mining-for-a-furnace"
    :blocks [[:fill [8 0 14] [12 2 18] "stone"]]
    :body {:inventory [["beef" 5] ["wooden_pickaxe" 1]]}
-   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile)}]
+   :register [{:trigger :hostile-near}]
    :act [[:job (jobs.survival.get-food {:carry 0 :explore false})]]
    :expect [{:no-event {:source :job :kind :child_started :data {:slot :cook}} :for-s 40}]
    :after [[:item "beef" [:<= 2]] [:body-near [4.5 0 16.5] 4]]}

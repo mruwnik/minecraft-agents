@@ -6,8 +6,7 @@
  {:tags [:hostile :survival :cornered]
   :time :any
   :plot {:height 24}
-  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile)}]
+  :register [{:trigger :hostile-near}]
   :blocks [[:fill [14 0 14] [18 2 18] "stone" :hollow] [:fill [15 0 15] [17 2 17] "air"]]
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 2]] :inventory [["dirt" 16]]}
   :mobs :keep

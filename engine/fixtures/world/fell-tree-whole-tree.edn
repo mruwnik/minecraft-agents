@@ -35,7 +35,7 @@
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}]
    :after [[:not-block [16 0 16] "oak_log"] [:not-block [16 9 16] "oak_log"] [:block [17 1 16] "oak_log"] [:block [18 3 16] "oak_log"]]}
   {:name "harvest-wood-with-the-replant-trigger-plants-the-sapling-on-the-ground"
-   :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 10}]
+   :register [{:trigger :replant-owed}]
    :body {:inventory [["iron_axe" 1] ["oak_sapling" 1]]}
    :act [[:job (jobs.forestry.harvest-wood {:radius 16})]]
    :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}
@@ -43,7 +43,7 @@
            {:event {:source :reflex :kind :ended :context {:reflex-id :replant-owed} :data {:kind :done}} :within-s 120}]
    :after [[:block [16 0 16] "oak_sapling"] [:item "oak_log" [:>= 9]] [:item "oak_sapling" 0]]}
   {:name "harvest-wood-with-the-replant-trigger-plants-a-2x2-dark-oak-trunk-with-four-saplings"
-   :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 10}]
+   :register [{:trigger :replant-owed}]
    :blocks [[:fill [14 0 14] [18 10 18] "air"]
             [:fill [16 0 16] [17 3 17] "dark_oak_log"]
             [:fill [15 4 15] [18 5 18] "dark_oak_leaves[persistent=true]"]]
@@ -54,7 +54,7 @@
    :after [[:block [16 0 16] "dark_oak_sapling"] [:block [17 0 16] "dark_oak_sapling"]
            [:block [16 0 17] "dark_oak_sapling"] [:block [17 0 17] "dark_oak_sapling"] [:item "dark_oak_sapling" 0]]}
   {:name "harvest-wood-owes-no-sapling-on-the-bodys-own-wheat-plot"
-   :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 10}]
+   :register [{:trigger :replant-owed}]
    :body {:inventory [["iron_axe" 1] ["oak_sapling" 1]]}
    :plans [{:id "field" :metadata {:by "$body"}
             :parts [{:id "wheat" :cells [#at [16 1 16]] :want {:crop "wheat"}}]}]

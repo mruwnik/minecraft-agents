@@ -74,8 +74,7 @@
   ;; night job resumes, digs in and ends the night.
   {:name "reflex-cut-night-resumes-and-holds"
    :body {:inventory [["iron_sword" 1]]} ; a fist loses to the helmeted zombie (flee), and the flight pillars up with the last dirt
-   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile)}]
+   :register [{:trigger :hostile-near}]
    :act [[:summon "zombie" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.survival.night)]
          [:await {:source :job :kind :shut-in.sealed} 120]]
@@ -93,8 +92,7 @@
    :plot {:length 64 :width 64 :height 6}
    :body {:at [32.5 0 32.5]}
    :blocks [[:fill [0 -6 0] [63 -1 63] "dirt"]]
-   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile)}]
+   :register [{:trigger :hostile-near}]
    :act [[:summon "zombie" [38.5 0 32.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:job (jobs.survival.night)]
          [:await {:source :job :kind :shut-in.sealed} 120]]

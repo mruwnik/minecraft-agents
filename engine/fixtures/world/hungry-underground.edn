@@ -9,7 +9,7 @@
   :limit-s 90}
  :cases
  [{:name "buried-hungry-body-does-not-explore"
-   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:carry 0})}]
+   :register [{:trigger :hungry}]
    :blocks [[:fill [12 0 12] [20 4 20] "stone" :hollow] [:set [14 3 16] "glowstone"]]
    :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 14 minecraft:generic"]]

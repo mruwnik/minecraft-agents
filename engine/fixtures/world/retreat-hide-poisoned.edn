@@ -12,7 +12,6 @@
         [:rcon "effect give $BODY minecraft:poison 12 0"]]}
  :cases
  [{:name "poison-while-sealed-keeps-the-hide"
-   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 8 :jobs.lib.danger/ranged-radius 16}})}]
+   :register [{:trigger :hostile-near}]
    :expect [{:no-event {:kind :retreat.hide-hurt} :from-event {:source :job :kind :retreat_sealed} :for-s 20}]
    :limit-s 80}]}

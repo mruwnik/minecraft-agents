@@ -81,7 +81,7 @@
   {:name "l5-night-trigger-with-a-lit-bound-job-is-held"
    :time-why :dawn-decision
    :body {:at [4.5 0 12.5] :settle-s 2}
-   :register [{:trigger :night :persistence :cooldown :cooldown-s 2 :job (jobs.debug.ready-probe {:lit? true})}]
+   :register [{:trigger :night :why "a probe job stands in for the night job: the case checks the trigger or the ready checks, not that job" :job (jobs.debug.ready-probe {:lit? true})}]
    :expect [{:event {:source :reflex :kind :held :data {:reason :dark}} :within-s 40}
             {:no-event {:source :reflex :kind :fired} :for-s 30}
             {:no-event {:source :job :kind :job.ready-probe} :for-s 30}]
@@ -89,7 +89,7 @@
   {:name "l5-night-trigger-whose-job-overrides-the-check-fires"
    :time-why :night-light
    :body {:at [4.5 0 12.5] :settle-s 2}
-   :register [{:trigger :night :persistence :cooldown :cooldown-s 2 :job (jobs.debug.ready-probe {:lit? true :checks {:safe? (always)}})}]
+   :register [{:trigger :night :why "a probe job stands in for the night job: the case checks the trigger or the ready checks, not that job" :job (jobs.debug.ready-probe {:lit? true :checks {:safe? (always)}})}]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :night}} :within-s 40}
             {:event {:source :job :kind :job.ready-probe} :within-s 40}
             {:no-event {:source :reflex :kind :held} :for-s 20}]

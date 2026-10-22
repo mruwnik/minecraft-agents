@@ -8,8 +8,7 @@
 {:defaults
  {:tags [:hostile :survival :cornered]
   :time :any
-  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile)}]
+  :register [{:trigger :hostile-near}]
   :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [5 0 16] [29 1 16] "air"]
            [:set [8 1 16] "torch"] [:set [14 1 16] "torch"]]
   :body {:at [5.5 0 16.5]}}

@@ -6,8 +6,7 @@
   :time :any
   :mobs :keep
   :plot {:length 64 :width 32 :height 8 :floor "grass_block"}
-  :register [{:trigger :hostile-near :args {:radius 12 :ranged-radius 20}
-              :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 12 :jobs.lib.danger/ranged-radius 20}})}]
+  :register [{:trigger :hostile-near :why "the mobs stand beyond the default radius" :args {:radius 12 :ranged-radius 20} :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 12 :jobs.lib.danger/ranged-radius 20}})}]
   :body {:at [30.5 0 16.5] :effects [["resistance" 600 3]]}
   :limit-s 90}
  :cases

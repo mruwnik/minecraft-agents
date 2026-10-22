@@ -8,7 +8,7 @@
   :limit-s 90}
  :cases
  [{:name "perched-hurt-body-in-the-dark-comes-down"
-   :register [{:trigger :scaffold-left :args {} :job (jobs.access.cleanup {})}]
+   :register [{:trigger :scaffold-left}]
    :blocks [[:fill [16 0 16] [16 3 16] "cobblestone"]]
    :memory [{:kind :scaffold :data {:entries [{:cell #at [16 0 16] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}
                                               {:cell #at [16 1 16] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}

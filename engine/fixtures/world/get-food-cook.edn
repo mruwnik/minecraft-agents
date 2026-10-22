@@ -13,7 +13,7 @@
   :limit-s 100}
  :cases
  [{:name "reflex-cooks-raw-chicken-at-a-seen-furnace"
-   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
+   :register [{:trigger :hungry :why "no exploring in the closed plot; a 30 s cooldown so a refire fits the case" :cooldown-s 30 :job (jobs.survival.get-food {:explore false :carry 0})}]
    :blocks [[:set [8 0 16] "furnace[facing=west]"]]
    :body {:inventory [["chicken" 2] ["coal" 2]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
@@ -96,7 +96,7 @@
             {:no-event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :for-s 50 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "beef" [:<= 1]]]}
   {:name "reserved-bait-carrots-survive-the-hungry-reflex"
-   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false})}]
+   :register [{:trigger :hungry :why "no exploring in the closed plot; a 30 s cooldown so a refire fits the case" :cooldown-s 30 :job (jobs.survival.get-food {:explore false :carry 0})}]
    :body {:inventory [["carrot" 13]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]]
@@ -105,7 +105,7 @@
             {:event {:source :reflex :kind :ended :context {:reflex-id :hungry}} :within-s 70}]
    :after [[:item "carrot" 13]]}
   {:name "unreserved-carrots-are-eaten-by-the-hungry-reflex"
-   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:explore false :carry 0})}]
+   :register [{:trigger :hungry :why "no exploring in the closed plot; a 30 s cooldown so a refire fits the case" :cooldown-s 30 :job (jobs.survival.get-food {:explore false :carry 0})}]
    :body {:inventory [["carrot" 13]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]]

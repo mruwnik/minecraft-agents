@@ -34,7 +34,7 @@
   ;; Card b9a70d2f: the hungry reflex cuts the felling mid-pillar; it eats and the felling goes on with the same tree.
   ;; Full health looks for food only below 6, so the hunger runs 7 s (food about 5); the felling takes about 25 s, so it starts at 10 s.
   {:name "hungry-reflex-mid-pillar-then-the-same-tree-is-finished"
-   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:carry 0})}]
+   :register [{:trigger :hungry}]
    :body {:inventory [["iron_axe" 1] ["dirt" 20] ["bread" 8]]}
    :act [[:job (jobs.forestry.fell-tree {:at #xyz [16 0 16]})] [:until-pos {:y-min 3} 40]
          [:rcon "effect give $BODY minecraft:hunger 7 255 true"]]

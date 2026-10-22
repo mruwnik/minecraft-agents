@@ -25,8 +25,7 @@
    ;; seeds its own entry (the one c1 writes), so it does not depend on the case before it
    :keep-memory false
    :memory [{:kind :shut-in-failed :data {:pos #xyz [25 6 25] :way :pit :reason :no-floor}}]
-   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile)}]
+   :register [{:trigger :hostile-near}]
    :body {:at [25.5 6 25.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 16]]}
    :act [[:job (jobs.survival.shut-in {:ways #{:pit} :for :night})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-way}} :within-s 30 :of-job true}
@@ -34,8 +33,7 @@
    :after [[:block [25 5 25] "stone"]]
    :limit-s 40}
   {:name "c3-entry-elsewhere-does-not-block"
-   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile)}]
+   :register [{:trigger :hostile-near}]
    :body {:at [5.5 0 5.5] :inventory [["stone_pickaxe" 1]]}
    :act [[:job (jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night})]]
    ;; the pit under the stone mass is roofed by the mass itself: nothing is placed, so no shut-in.sealed

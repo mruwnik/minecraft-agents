@@ -6,8 +6,7 @@
  {:tags [:hostile :combat :sensing]
   :time :any
   :plot {:height 8 :light :dark}
-  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile)}]
+  :register [{:trigger :hostile-near}]
   :blocks [[:fill [4 -1 4] [28 6 28] "stone" :hollow]]
   :body {:at [16.5 0 16.5] :yaw -90 :inventory [["iron_sword" 1]] :effects [["resistance" 600 4]]}
   :limit-s 50}

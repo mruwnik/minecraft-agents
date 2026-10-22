@@ -7,7 +7,7 @@
 {:defaults
  {:tags [:survival :hungry]
   :plot {:height 6}
-  :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:carry 0})}]
+  :register [{:trigger :hungry}]
   :blocks [[:set [8 0 16] "red_bed[facing=east,part=foot]"] [:set [9 0 16] "red_bed[facing=east,part=head]"]]
   :body {:at [16.5 0 16.5] :settle-s 2}
   :limit-s 60}

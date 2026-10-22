@@ -7,8 +7,7 @@
 {:defaults
  {:tags [:hostile :survival :cornered :water]
   :time :any
-  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile)}]
+  :register [{:trigger :hostile-near}]
   :blocks [[:fill [3 0 9] [30 2 23] "stone"]
            [:fill [4 0 10] [14 2 22] "water"]]
   :body {:at [8.5 1 16.5] :effects [["resistance" 600 4]]}

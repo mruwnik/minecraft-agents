@@ -4,8 +4,7 @@
 ;; The place cases carry an iron sword: an unarmed body retreats from the zombie and the retreat spends carried blocks (plug, pillar), so the item count would not be the call's alone.
 {:defaults
  {:tags [:blocks :hostile]
-  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile)}]
+  :register [{:trigger :hostile-near}]
   :plot {:height 12}
   :body {:at [3.5 0 16.5] :effects [["resistance" 900 4]]}
   :limit-s 150}

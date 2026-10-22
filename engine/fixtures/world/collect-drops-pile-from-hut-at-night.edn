@@ -5,7 +5,7 @@
  {:tags [:collect-drops :death :night]
   :time :night :time-why :dawn-decision
   :plot {:length 48 :width 32 :height 10 :floor "dirt"}
-  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16} :job (jobs.survival.respond-to-hostile)}]
+  :register [{:trigger :hostile-near}]
   :blocks [[:fill [2 0 14] [8 4 20] "stone" :hollow] [:fill [3 1 15] [7 3 19] "air"] [:set [5 3 17] "torch"]]
   :body {:at [40.5 0 16.5] :spawnpoint [5 1 17] :effects [["resistance" 600 4]]
          :inventory [["raw_iron" 24]]}

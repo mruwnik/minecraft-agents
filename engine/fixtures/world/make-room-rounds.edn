@@ -24,8 +24,7 @@
    :after [[:item "diamond" 64]]
    :limit-s 70}
   {:name "hostile-reflex-first-then-make-room-ends-done"
-   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile)}]
+   :register [{:trigger :hostile-near}]
    :body {:inventory [["dirt" 64] ["coarse_dirt" 64] ["cobblestone" 64] ["cobbled_deepslate" 64] ["deepslate" 64] ["stone" 64] ["granite" 64] ["diorite" 64] ["andesite" 64] ["tuff" 64] ["gravel" 64] ["netherrack" 64] ["sand" 64] ["red_sand" 64] ["calcite" 64] ["dripstone_block" 64] ["coal" 30] ["diamond" 3] ["wooden_pickaxe" 1] ["stone_pickaxe" 1] ["iron_pickaxe" 1] ["golden_pickaxe" 1] ["diamond_pickaxe" 1] ["netherite_pickaxe" 1] ["wooden_axe" 1] ["stone_axe" 1] ["iron_axe" 1] ["golden_axe" 1] ["diamond_axe" 1] ["netherite_axe" 1] ["wooden_shovel" 1] ["stone_shovel" 1] ["iron_shovel" 1] ["golden_shovel" 1] ["diamond_shovel" 1] ["netherite_shovel" 1]]}
    :act [[:job (jobs.storage.make-room {:free 6})]
          [:rcon "execute at $BODY run summon zombie ~4 ~ ~ {Tags:[\"wt\"],PersistenceRequired:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]

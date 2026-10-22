@@ -6,8 +6,7 @@
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :inventory [["cobblestone" 20]]}}
  :cases
  [{:name "dead-end-torch-cell-no-place-loop"
-   :register [{:trigger :hostile-near :args {:radius 12 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 12}})}]
+   :register [{:trigger :hostile-near :why "the mobs stand beyond the default radius" :args {:radius 12 :ranged-radius 16} :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 12}})}]
    :blocks [[:fill [15 0 6] [17 3 28] "stone"] [:fill [16 0 7] [16 1 28] "air"] [:set [16 0 8] "torch"]]
    :body {:at [16.5 0 7.5]}
    :act [[:summon "skeleton" [16.5 0 20.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]

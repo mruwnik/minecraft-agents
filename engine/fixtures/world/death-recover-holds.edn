@@ -9,8 +9,8 @@
   :limit-s 120}
  :cases
  [{:name "hungry-before-died-waits-for-the-recovery"
-   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:carry 0})}
-              {:trigger :died :persistence :cooldown :cooldown-s 30 :args {}}]
+   :register [{:trigger :hungry}
+              {:trigger :died}]
    :act [[:kill-body]
          [:await {:source :body :kind :respawned} 30]
          [:rcon "effect give $BODY minecraft:hunger 5 255 true"]
@@ -21,9 +21,8 @@
    :after [[:item "raw_iron" 24]]}
   ;; 7d64af0a: a hostile in sight at the respawn is due too, listed after :died as in the scenarios; the corpse's pile is recovered first
   {:name "hostile-due-at-respawn-died-fires-first"
-   :register [{:trigger :died :persistence :cooldown :cooldown-s 30 :args {}}
-              {:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile)}]
+   :register [{:trigger :died}
+              {:trigger :hostile-near}]
    :act [[:summon "zombie" [8.5 0 4.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:kill-body]
          [:await {:source :body :kind :respawned} 30]]
@@ -35,7 +34,7 @@
    :blocks [[:fill [2 0 2] [8 3 8] "stone" :hollow] [:fill [3 0 3] [7 2 7] "air"] [:set [3 1 3] "torch"] [:set [7 1 7] "torch"]
             [:set [5 0 2] "oak_door[facing=south,half=lower]"] [:set [5 1 2] "oak_door[facing=south,half=upper]"]
             [:set [26 1 26] "torch"] [:set [20 0 20] "torch"]]
-   :register [{:trigger :died :persistence :cooldown :cooldown-s 30 :args {}}]
+   :register [{:trigger :died}]
    :body {:spawnpoint [5 0 5]}
    :act [[:time-set 21500]
          [:wait-s 1]

@@ -5,8 +5,7 @@
  {:tags [:hostile :survival :retreat :underground]
   :time :any
   :plot {:height 8}
-  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile)}]
+  :register [{:trigger :hostile-near}]
   :limit-s 150}
  :cases
  [{:name "dig-cut-by-seal-waits-for-the-zombie-then-resumes"

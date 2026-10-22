@@ -8,8 +8,7 @@
   :limit-s 150}
  :cases
  [{:name "deep-lake-bottom-surfaces-without-dying"
-   :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 2 :args {}
-               :job (jobs.survival.breathe)}]
+   :register [{:trigger :suffocating}]
    :body {:at [30.5 1 30.5] :settle-s 1}
    :expect [{:event {:source :reflex :kind :fired} :within-s 60}
             {:event {:source :reflex :kind :ended :data {:outcome :done :how :cleared}} :within-s 120}

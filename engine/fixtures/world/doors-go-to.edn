@@ -35,7 +35,7 @@
    ;; the walk's round is cut right after the open click (a --now job: walk 9 blocks back west), so the gate stays open
    ;; with an :opened entry; 10 s on, the door-left reflex walks back and shuts it. The body is slowed (speed -90%) so
    ;; the cut lands before it leaves the gate's column.
-   :register [{:trigger :door-left :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut)}]
+   :register [{:trigger :door-left}]
    :blocks [[:set [16 0 16] "oak_fence_gate[facing=east,open=false]"] [:set [16 1 16] "air"]]
    :body {:at [13.5 0 16.5] :effects [["slowness" 600 5]]}
    :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]

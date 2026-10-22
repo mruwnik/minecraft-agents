@@ -4,7 +4,7 @@
 {:defaults
  {:tags [:survival :hungry :memory-seed]
   :plot {:height 6}
-  :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:carry 0})}]
+  :register [{:trigger :hungry}]
   :body {:at [16.5 0 16.5] :settle-s 2}
   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
         [:rcon "damage $BODY 5 minecraft:generic"]]

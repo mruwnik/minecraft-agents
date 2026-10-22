@@ -33,8 +33,7 @@
              :within-s 120 :of-job true}]
    :after [[:body-near [8.5 0 16.5] 1.5]]}
   {:name "cut-sleep-at-night-and-walk-off"
-   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile)}]
+   :register [{:trigger :hostile-near}]
    :blocks [[:set [20 0 16] "red_bed[facing=east,part=foot]"] [:set [21 0 16] "red_bed[facing=east,part=head]"]]
    :act [[:job (jobs.survival.sleep {:bed #at [20 0 16]})]
          [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 60]

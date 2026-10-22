@@ -6,8 +6,7 @@
  {:tags [:hostile :survival :flee :water]
   :time :any
   :mobs :keep
-  :register [{:trigger :hostile-near :args {:radius 12 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 12}})}]
+  :register [{:trigger :hostile-near :why "the mobs stand beyond the default radius" :args {:radius 12 :ranged-radius 16} :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 12}})}]
   :blocks [[:fill [2 0 0] [30 2 31] "stone"]
            [:fill [2 0 8] [9 2 24] "air"]
            [:fill [2 0 8] [9 1 24] "water"]]

@@ -7,8 +7,7 @@
  {:tags [:night :survival :access]
   :time :night
   :plot {:height 24}
-  :register [{:trigger :night :persistence :cooldown :cooldown-s 2
-              :job (jobs.debug.notify {:text "night fired"})}]
+  :register [{:trigger :night :why "a probe job stands in for the night job: the case checks the trigger or the ready checks, not that job" :job (jobs.debug.notify {:text "night fired"})}]
   :blocks [[:fill [2 0 8] [30 9 24] "stone"]]
   :body {:at [16.5 10 16.5] :effects [["resistance" 600 4]]}}
  :cases

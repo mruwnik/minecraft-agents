@@ -3,7 +3,7 @@
 {:defaults
  {:tags [:survival :fire :death] :time :any
   :plot {:height 6}
-  :register [{:trigger :burning :persistence :cooldown :cooldown-s 0 :job (jobs.survival.extinguish {:water-radius 6})}]
+  :register [{:trigger :burning}]
   :blocks [[:fill [8 -2 14] [14 -2 20] "stone"] [:fill [8 -1 14] [14 -1 20] "lava"]]
   :body {:at [11.5 -1 17.5] :settle-s 1 :spawnpoint [26 0 4] :effects [["resistance" 600 4]]}
   :limit-s 90}

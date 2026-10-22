@@ -98,7 +98,8 @@
   ;; 712a8df7: first light with a hostile known near the shelter: the body stays in, and leaves once the mob is gone
   {:name "dawn-with-a-known-hostile-stays-in-until-it-is-gone"
    :time :night-exclusive
-   :register [{:trigger :night} {:trigger :dawn}]
+   :register [{:trigger :night}
+              {:trigger :dawn}]
    :sleep-skip true
    :body {:inventory [["cobblestone" 24]]}
    :act [[:summon "zombie" [28.5 0 16.5] "{UUID:[I;2006101,1,1,1],NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
@@ -114,7 +115,8 @@
   ;; d790ad75: an unarmed body stays in past the plain dawn grace (husks do not burn by day) while a hostile is known near
   {:name "dawn-unarmed-stays-in-past-the-grace-with-a-known-hostile"
    :time :night-exclusive :time-why :dawn-decision
-   :register [{:trigger :night} {:trigger :dawn}]
+   :register [{:trigger :night}
+              {:trigger :dawn}]
    :sleep-skip true
    :body {:inventory [["cobblestone" 24]]}
    :act [[:summon "zombie" [28.5 0 16.5] "{UUID:[I;2006101,2,1,1],NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]

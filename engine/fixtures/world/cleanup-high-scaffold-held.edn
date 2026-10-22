@@ -11,7 +11,7 @@
   :limit-s 100}
  :cases
  [{:name "high-scaffold-held-low-one-taken-back"
-   :register [{:trigger :scaffold-left :args {} :job (jobs.access.cleanup {})}]
+   :register [{:trigger :scaffold-left}]
    :blocks [[:set [6 0 8] "cobblestone"]]
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}
                                               {:cell #at [10 6 3] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}
@@ -20,7 +20,7 @@
    :expect [{:event {:source :reflex :kind :ended :data {:removed [[:any]] :open [[:any] [:any] [:any]]}} :within-s 70}]
    :after [[:not-block [6 0 8] "cobblestone"] [:block [10 6 3] "cobblestone"] [:block [10 8 3] "cobblestone"] [:body-near [8.5 0 8.5] 5]]}
   {:name "high-scaffold-only-is-never-walked-to"
-   :register [{:trigger :scaffold-left :args {} :job (jobs.access.cleanup {})}]
+   :register [{:trigger :scaffold-left}]
    :memory [{:kind :scaffold :data {:entries [{:cell #at [10 6 3] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}
                                               {:cell #at [10 7 3] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}
                                               {:cell #at [10 8 3] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}]}}]

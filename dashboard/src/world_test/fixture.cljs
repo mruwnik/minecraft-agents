@@ -440,6 +440,22 @@
            (into {} (for [id allowed :when (not (offenders id))]
                       [id "is on the time allow-list but no longer offends: remove it from engine/fixtures/time-allow-list.edn"])))))
 
+(defn register-problems
+  "Strings for a case's :register entries that name a default :trigger: an unknown trigger; a :job, :args, :persistence,
+  :cooldown-s or :backoff equal to the default's (drop it, the trigger already brings it); one that differs without a
+  :why on the entry. defaults is {trigger-id entry} read from triggers/defaults.edn, so cases run what bodies run."
+  [defaults register]
+  (let [fields [:job :args :persistence :cooldown-s :backoff]]
+    (vec (for [e register :when (:trigger e)
+               :let [d (get defaults (:trigger e))]
+               msg (if (nil? d)
+                     [(str "register: unknown trigger " (:trigger e))]
+                     (concat (for [k fields :when (and (contains? e k) (= (e k) (d k)))]
+                               (str "register " (:trigger e) ": " k " copies the default, drop it"))
+                             (when (and (nil? (:why e)) (some #(and (contains? e %) (not= (e %) (d %))) fields))
+                               [(str "register " (:trigger e) ": an override of the default needs a :why")])))]
+           msg))))
+
 (defn needs-sky?
   "Whether the case depends on the real sky: it sets :time other than :any (a :timed case), weather or a :time-set step."
   [c]

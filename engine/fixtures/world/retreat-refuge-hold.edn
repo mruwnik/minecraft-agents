@@ -12,8 +12,7 @@
   :time :any
   :mobs :keep
   :plot {:height 16}
-  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile)}]
+  :register [{:trigger :hostile-near}]
   :body {:at [16.5 0 16.5] :effects [["resistance" 900 4]]}
   :limit-s 120}
  :cases
@@ -66,9 +65,8 @@
    :after [[:not-block [24 0 24] "dirt"]]
    :limit-s 180}
   {:name "dead-end-seal-is-taken-back-once-the-skeleton-is-gone"
-   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile)}
-              {:trigger :scaffold-left :args {} :job (jobs.access.cleanup {:checks {:fit? (always)}})}]
+   :register [{:trigger :hostile-near}
+              {:trigger :scaffold-left :why "the body has no tool: fit? is waived so the hold under test is reached" :job (jobs.access.cleanup {:checks {:fit? (always)}})}]
    :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [5 0 16] [29 1 16] "air"]
             [:set [8 1 16] "torch"] [:set [14 1 16] "torch"]]
    :body {:at [5.5 0 16.5] :inventory [["cobblestone" 20]]}

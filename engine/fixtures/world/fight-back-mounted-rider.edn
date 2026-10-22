@@ -2,8 +2,7 @@
 ;; passengers). The horse is teleported away from the body after the reflex starts; the body must chase and kill the rider.
 {:defaults
  {:tags [:hostile :combat] :time :any
-  :register [{:trigger :hostile-near :args {:radius 12 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 12}})}]
+  :register [{:trigger :hostile-near :why "the mobs stand beyond the default radius" :args {:radius 12 :ranged-radius 16} :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 12}})}]
   :body {:at [16.5 0 16.5] :inventory [["stone_sword" 1]]}}
  :cases
  [{:name "rider-dies-after-horse-moves-east"

@@ -4,8 +4,7 @@
  {:tags [:hostile :survival :retreat :reserve :underground]
   :time :any
   :plot {:height 8}
-  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile)}]
+  :register [{:trigger :hostile-near}]
   :limit-s 100}
  :cases
  [{:name "soft-reserved-cobblestone-and-a-pickaxe-still-seal-the-tunnel"

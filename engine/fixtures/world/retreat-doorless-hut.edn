@@ -10,8 +10,7 @@
            [:fill [15 0 18] [15 1 18] "air"]
            ]
   :body {:at [15.5 0 15.5] :yaw 0 :settle-s 3 :inventory [["cobblestone" 16]]}
-  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile)}]
+  :register [{:trigger :hostile-near}]
   :memory [{:kind :home :data {:pos #xyz [14 0 14]} :policy {:cap 1 :ttl :forever}}]
   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 30"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 30"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 30"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 30"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 -50"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 -50"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 -50"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 -50"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 -80"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~6 0 0"] [:wait-s 3] [:summon "zombie" [15.5 0 28.5]]]
   :limit-s 90}

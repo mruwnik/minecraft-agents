@@ -11,7 +11,7 @@
  :cases
  [{:name "leaves-state-behind"
    :settings {:engine.backoff/after 5}
-   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:carry 0})}]
+   :register [{:trigger :hungry}]
    :memory [{:kind :food-source :data {:pos #xyz [28 0 16] :kind :chest}}]
    :body {:at [16.5 0 16.5] :settle-s 2 :inventory [["bread" 5]]}
    :act [[:job (jobs.movement.go-to {:pos #at [16 0 30] :range 1})]

@@ -8,7 +8,7 @@
   :time :day :time-why :dawn-decision
   :plot {:height 8 :floor "grass_block"}
   :body {:at [6.5 0 6.5] :settle-s 2 :inventory [["oak_sapling" 1]] :effects [["resistance" 600 4]]}
-  :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 60}]
+  :register [{:trigger :replant-owed}]
   :memory [{:kind :home :data {:pos #xyz [6 0 6]} :policy {:cap 1 :ttl :forever}}
            {:kind :forestry/replant :data {:pos #xyz [16 0 6] :species "oak"}}]
   :limit-s 100}

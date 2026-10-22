@@ -7,16 +7,14 @@
  {:tags [:hostile :survival :reflex]
   :time :any
   :mobs :keep
-  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-              :job (jobs.survival.respond-to-hostile)}]
+  :register [{:trigger :hostile-near}]
   :body {:at [16.5 0 16.5]}
   :limit-s 70}
  :cases
   ;; The gate holds only while the zombie is within 8: the flight soon passes 8 and burning rightly fires then, so the window is short.
  [{:name "set-alight-by-a-zombie-hostile-near-keeps-the-body"
-   :register [{:trigger :burning :persistence :cooldown :cooldown-s 0 :job (jobs.survival.extinguish {:water-radius 6})}
-              {:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile)}]
+   :register [{:trigger :burning}
+              {:trigger :hostile-near}]
    :body {:effects [["resistance" 900 2]]}
    :act [[:summon "zombie" [20.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
          [:until-seen {:entity "zombie"} 10]
@@ -83,8 +81,7 @@
    :after [[:body-near [21.5 0 16.5] 2]]
    :limit-s 40}
   {:name "provoked-enderman-roof-gap-body-walks-under"
-   :register [{:trigger :hostile-near :args {:radius 16 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 16 :jobs.lib.danger/ranged-radius 16}})}]
+   :register [{:trigger :hostile-near :why "the mobs stand beyond the default radius" :args {:radius 16 :ranged-radius 16} :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 16 :jobs.lib.danger/ranged-radius 16}})}]
    :blocks [[:fill [20 0 14] [20 1 14] "stone"] [:fill [24 0 18] [24 1 18] "stone"] [:fill [20 2 14] [24 2 18] "stone"]]
    :body {:inventory [["dirt" 20]] :effects [["resistance" 900 4]]}
    :act [[:summon "enderman" [11.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0}]}"]
@@ -96,8 +93,7 @@
    :limit-s 40}
   ;; card c0e1f21d: the roof gap beside the enderman is no place to run to; the hut 12 blocks the other way is
   {:name "provoked-enderman-far-roof-hut-body-runs-past-the-near-gap"
-   :register [{:trigger :hostile-near :args {:radius 16 :ranged-radius 16}
-               :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 16 :jobs.lib.danger/ranged-radius 16}})}]
+   :register [{:trigger :hostile-near :why "the mobs stand beyond the default radius" :args {:radius 16 :ranged-radius 16} :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 16 :jobs.lib.danger/ranged-radius 16}})}]
    :blocks [[:fill [22 0 14] [22 1 14] "stone"] [:fill [26 0 18] [26 1 18] "stone"] [:fill [22 2 14] [26 2 18] "stone"]
             [:fill [3 0 14] [3 1 14] "stone"] [:fill [7 0 18] [7 1 18] "stone"] [:fill [3 2 14] [7 2 18] "stone"]]
    :body {:inventory [["dirt" 20]] :effects [["resistance" 900 4]]}

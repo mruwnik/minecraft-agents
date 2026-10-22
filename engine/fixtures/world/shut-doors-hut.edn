@@ -33,7 +33,7 @@
   ;; a recorded open door with a cow stuck in its cell: the run stops (animal in the way) but keeps the entry; once the cow is gone the
   ;; reflex's next run shuts the door. The body starts in the door's column (the trigger does not hold there) and steps out once the cow stands in the cell.
   {:name "door-held-by-a-cow-shut-once-it-is-gone"
-   :register [{:trigger :door-left :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut)}]
+   :register [{:trigger :door-left}]
    :memory [{:kind :opened :data {:cell #xyz [16 0 16] :by "j0" :shut? true}}]
    :body {:at [16.5 0 16.5]}
    :act [[:summon "cow" [16.5 0 16.5] "{NoAI:1b}"]
@@ -48,7 +48,7 @@
   ;; looks, finds it shut, and drops the entry: the reflex fires once or twice, not nine times with :already. :open-s 12 gives the
   ;; body time to see the open door, turn away and have it shut before the trigger first holds.
   {:name "door-shut-out-of-sight-is-looked-at-once-then-dropped"
-   :register [{:trigger :door-left :args {:open-s 12} :persistence :cooldown :cooldown-s 5 :job (jobs.maintenance.shut)}]
+   :register [{:trigger :door-left :why "a longer open-s gives the body time to see the door and turn away before the trigger first holds" :args {:open-s 12}}]
    :memory [{:kind :opened :data {:cell #xyz [16 0 16] :by "j0" :shut? true}}]
    :act [[:wait-s 4]
          [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 0"]

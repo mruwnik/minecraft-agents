@@ -8,21 +8,21 @@
   :limit-s 150}
  :cases
  [{:name "part-cut-tree-trigger-fells-the-hanging-trunk"
-   :register [{:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}]
+   :register [{:trigger :part-cut-tree}]
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :within-s 40}
             {:event {:source :reflex :kind :ended :context {:reflex-id :part-cut-tree} :data {:kind :done}} :within-s 140}]
    :after [[:not-block [16 1 16] "oak_log"] [:not-block [16 6 16] "oak_log"] [:item "oak_log" [:>= 5]]]}
   {:name "part-cut-tree-trigger-fells-a-trunk-hanging-three-blocks-up"
-   :register [{:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}]
+   :register [{:trigger :part-cut-tree}]
    :blocks [[:fill [16 0 16] [16 11 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [16 4 16] [16 6 16] "oak_log"] [:fill [14 6 14] [18 8 18] "oak_leaves[persistent=true]"] [:fill [16 6 16] [16 6 16] "oak_log"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :within-s 40}
             {:event {:source :reflex :kind :ended :context {:reflex-id :part-cut-tree} :data {:kind :done}} :within-s 140}]
    :after [[:not-block [16 4 16] "oak_log"] [:not-block [16 6 16] "oak_log"] [:item "oak_log" [:>= 1]]]}
   {:name "part-cut-tree-trigger-waits-for-a-cow-lure"
-   :register [{:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}]
+   :register [{:trigger :part-cut-tree}]
    :body {:inventory [["iron_axe" 1] ["wheat" 4]]}
    :act [[:summon "cow" [13.5 0 21.5]]
          [:job (jobs.animals.lure-to {:mob "cow" :pos #xyz [12 0 6]})]
@@ -38,7 +38,8 @@
   ;; Needs night (the :night trigger reads the clock): run with --allow-time --time-log <the shared time log>.
   {:name "part-cut-tree-does-not-walk-a-sheltered-body-out-at-night"
    :time :night-exclusive :time-why :dawn-decision
-   :register [{:trigger :night :persistence :cooldown :cooldown-s 10} {:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}]
+   :register [{:trigger :night}
+              {:trigger :part-cut-tree}]
    :blocks [[:fill [12 0 20] [16 3 24] "stone" :hollow] [:fill [13 0 21] [15 2 23] "air"]
             [:fill [16 1 22] [16 3 22] "glass"]
             [:fill [19 0 22] [19 11 22] "air"] [:fill [17 5 20] [21 8 24] "oak_leaves[persistent=true]"]
@@ -51,21 +52,21 @@
   ;; Card 24c53a1a: in the dark (here a dark cell, at any hour) the trigger does not hold: a felling walk would leave the night's shelter.
   {:name "part-cut-tree-trigger-waits-in-the-dark"
    :plot {:height 24 :floor "grass_block" :light :dark}
-   :register [{:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}]
+   :register [{:trigger :part-cut-tree}]
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :for-s 30}]
    :after [[:block [16 6 16] "oak_log"]]
    :limit-s 40}
   {:name "part-cut-tree-trigger-leaves-a-whole-tree"
-   :register [{:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}]
+   :register [{:trigger :part-cut-tree}]
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [16 0 16] [16 5 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 5 16] "oak_log"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :for-s 30}]
    :after [[:block [16 0 16] "oak_log"]]
    :limit-s 40}
   {:name "part-cut-tree-trigger-leaves-a-trunk-in-another-players-zone"
-   :register [{:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}]
+   :register [{:trigger :part-cut-tree}]
    :zones [{:name "apiary" :min [15 0 15] :max [17 12 17] :owner "Other" :allow #{}}]
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
@@ -74,7 +75,7 @@
    :limit-s 40}
   ;; The trigger is a bounded chore: a trunk far from the remembered home, or a body already carrying a stack of logs, is left.
   {:name "part-cut-tree-trigger-leaves-a-trunk-far-from-home"
-   :register [{:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}]
+   :register [{:trigger :part-cut-tree}]
    :memory [{:kind :home :data {:pos #xyz [300 0 16]}}]
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
@@ -82,7 +83,7 @@
    :after [[:block [16 6 16] "oak_log"]]
    :limit-s 40}
   {:name "part-cut-tree-trigger-leaves-a-trunk-while-a-stack-of-logs-is-carried"
-   :register [{:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}]
+   :register [{:trigger :part-cut-tree}]
    :body {:inventory [["iron_axe" 1] ["oak_log" 64]]}
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
             [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
@@ -90,13 +91,13 @@
    :after [[:block [16 6 16] "oak_log"]]
    :limit-s 40}
   {:name "replant-owed-trigger-plants-the-carried-sapling"
-   :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 60}]
+   :register [{:trigger :replant-owed}]
    :memory [{:kind :forestry/replant :data {:pos #xyz [16 0 16] :species "oak"}}]
    :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :replant-owed} :data {:kind :done}} :within-s 90}]
    :after [[:block [16 0 16] "oak_sapling"]]
    :limit-s 100}
   {:name "replant-owed-trigger-plants-the-loaded-debt-past-an-older-far-one"
-   :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 60}]
+   :register [{:trigger :replant-owed}]
    :memory [{:kind :forestry/replant :data {:pos #xyz [1000 0 1000] :species "oak"}}
             {:kind :forestry/replant :data {:pos #xyz [16 0 16] :species "oak"}}]
    :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :replant-owed}} :within-s 90}]
@@ -110,7 +111,7 @@
    :after [[:block [16 0 16] "furnace"]]
    :limit-s 40}
   {:name "replant-owed-trigger-does-not-fetch-a-missing-sapling"
-   :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 60}]
+   :register [{:trigger :replant-owed}]
    :memory [{:kind :forestry/replant :data {:pos #xyz [16 0 16] :species "oak"}}]
    :body {:inventory []}
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :replant-owed}} :for-s 30}]
