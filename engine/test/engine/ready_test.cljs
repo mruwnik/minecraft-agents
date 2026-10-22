@@ -12,6 +12,7 @@
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
             [jobs.explore.look :as look]
+            [jobs.forestry.fell-tree :as fell-tree]
             [jobs.explore.search :as search]
             [jobs.combat.attack :as attack]
             [jobs.food.fish :as fish]
@@ -513,6 +514,12 @@
     dug-in-entry {:x 8 :y 64 :z 0} :later
     dug-in-entry {:x 20 :y 64 :z 0} :later
     dug-in-entry {:x 4 :y 64 :z 0} :ok))
+
+(deftest felling-a-tree-outside-the-night-shelter-waits-for-day-instead-of-walking-out
+  (let [check (fn [at] (let [c (assoc (ctx-of tunnel) :args {:at at} :view (fn [] {:now 0 :data {:entries {:shelter [{:t 0 :data dug-in-entry}]}}}))]
+                         (first (fell-tree/safe? c))))]
+    (is (= :later (check {:x 20 :y 64 :z 0})))
+    (is (= :ok (check {:x 4 :y 64 :z 0})))))
 
 (deftest explore-search-underground-at-night-is-ok
   (is (= :ok (bound search/safe? tunnel {}))))
