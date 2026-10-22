@@ -39,8 +39,8 @@
     (inv "bread" 2 "cookie" 1 "oak_leaves" 1 "stick" 4) {:items nil} [["oak_leaves" 1]]
     (inv "oak_leaves" 3 "oak_leaves" 2) {:items nil} [["oak_leaves" 5]]
     (inv "wheat_seeds" 5 "oak_leaves" 3) {:items ["wheat_seeds"]} [["wheat_seeds" 5]]
-    (inv "wheat_seeds" 5 "oak_leaves" 3) {:items ["wheat_seeds" "oak_leaves"] :keep {"wheat_seeds" 2}} [["wheat_seeds" 3] ["oak_leaves" 3]]
-    (inv "oak_leaves" 3) {:items nil :keep {"oak_leaves" 3}} []
+    (inv "wheat_seeds" 5 "oak_leaves" 3) {:items ["wheat_seeds" "oak_leaves"] :carry {"wheat_seeds" 2}} [["wheat_seeds" 3] ["oak_leaves" 3]]
+    (inv "oak_leaves" 3) {:items nil :carry {"oak_leaves" 3}} []
     (inv "stick" 3) {:items ["stick"]} []
     (inv "oak_leaves" 3) {:items ["wheat_seeds"]} []))
 
@@ -117,7 +117,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory (inv "oak_leaves" 4) :blocks comp-block})
-              result (await (child-outcome eng job {:at at :keep {"oak_leaves" 2}} 40))]
+              result (await (child-outcome eng job {:at at :carry {"oak_leaves" 2}} 40))]
           (is (= {"oak_leaves" 2} (:fed result)))
           (is (= :nothing-to-feed (:reason result)))
           (is (= 2 (carried p "oak_leaves"))))))))

@@ -54,7 +54,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:chest ft/chest :keep {"wheat" 2 "wheat_seeds" 1}} goods-world 40))]
+        (let [s (await (scenario {:chest ft/chest :carry {"wheat" 2 "wheat_seeds" 1}} goods-world 40))]
           (is (= {"wheat" 3} (ft/chest-items s)))
           (is (= 2 (get (ft/inv s) "wheat")))
           (is (= 10 (get (ft/inv s) "wheat_seeds"))))))))
@@ -143,7 +143,7 @@
         keep {"wheat_seeds" 64}]
     (is (= {:area ft/box :till true :irrigate false :fertilize true}
            (:args (:call (maintain/decide :tend {:area ft/box :till true :irrigate false :fertilize true} {})))))
-    (is (= {:chest given :items :farm-goods :keep keep}
+    (is (= {:chest given :items :farm-goods :carry keep}
            (:args (:call (maintain/decide :deposit {:chest given} {:stored ["wheat"] :keep keep})))))))
 
 (deftest tidy-gets-the-plan-and-its-part

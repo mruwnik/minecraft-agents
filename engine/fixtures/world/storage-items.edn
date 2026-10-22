@@ -1,4 +1,4 @@
-;; Storage and bag-room cases: cards 8fe09a52 (make-room keeps :keep-blocks of cobblestone, not of dirt), 35ce59b1 (a toss at a
+;; Storage and bag-room cases: cards 8fe09a52 (make-room keeps :carry-blocks of cobblestone, not of dirt), 35ce59b1 (a toss at a
 ;; tunnel end walks away without a "gave up walking"), 67255d82 (junk the body tossed is not picked up again), fdc3ba90 (a gathering
 ;; job deposits first when the bag is fullish and a chest is known, and goes on without one), 981c253a (deposit into a full chest
 ;; places a carried chest beside it; :make-chests? false stops), 44e15ac3 (withdraw's short text names what the chest held),
@@ -15,7 +15,7 @@
  :cases
  [{:name "make-room-keeps-cobblestone-and-tosses-the-rest"
    :body {:inventory [["cobblestone" 640] ["dirt" 128] ["sand" 64] ["gravel" 64] ["tuff" 64] ["andesite" 64] ["diorite" 64] ["granite" 64] ["netherrack" 64] ["deepslate" 64] ["calcite" 64]]}
-   :act [[:job (jobs.storage.make-room {:free 20 :settings {:jobs.storage.make-room/toss-below 5} :keep-blocks 64})]]
+   :act [[:job (jobs.storage.make-room {:free 20 :settings {:jobs.storage.make-room/toss-below 5} :carry-blocks 64})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:item "cobblestone" [:>= 64]]]}
   {:name "make-room-at-a-tunnel-end-walks-away-quietly"

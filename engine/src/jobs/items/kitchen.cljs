@@ -177,7 +177,7 @@
                  (cond
                    (not chest?) {:skip :no-chest}
                    (empty? items) {:skip :nothing-to-store}
-                   :else {:call {:slot :deposit :job (jobs :deposit) :args (merge zone {:chest chest :items items :keep keep})}})))))
+                   :else {:call {:slot :deposit :job (jobs :deposit) :args (merge zone {:chest chest :items items :carry keep})}})))))
 
 (defn decisions [c f] (into {} (map (juxt identity #(decide % (assoc (:args c) :ways (need/call-ways c)) f))) steps))
 

@@ -28,7 +28,7 @@
     the whole step back.
   - :breed (jobs.animals.breed, 2 bees): :target is given, the bees in the area (adults and babies) are below it,
     there are 2 adults, it is day, it is not raining and a flower is carried (breed fetches one unless the ways leave only :carried).
-  - :deposit (jobs.storage.deposit): a :chest is given and honeycomb or honey bottles above their :keep entry are
+  - :deposit (jobs.storage.deposit): a :chest is given and honeycomb or honey bottles above their :carry entry are
     carried. Only produce is deposited; tools, bottles, carpet, campfires and flowers stay carried.
   A step whose conditions do not hold is booked {:skipped reason} (:safe, :no-fire, :no-carpet, :no-campfire,
   :not-ripe, :no-tool, :unsafe-fire, :not-smoked, :open-fire, :no-target, :at-target, :night, :raining,
@@ -48,7 +48,7 @@
    :with {:doc "harvest tool: :shears, :bottle or :either (shears first)" :spec #{:shears :bottle :either} :default :either}
    :target {:doc "bees wanted in the area (babies count); nil: no breeding" :spec (a/int-in 0 nil) :default nil}
    :chest {:doc "chest position {:x :y :z} for the produce; nil: do not store" :spec ::a/pos :default nil}
-   :keep {:doc "{item-name count}: how many of honeycomb or honey_bottle deposit leaves carried" :spec (a/map-of a/item? (a/int-in 0 nil)) :default {}}
+   :carry {:doc "{item-name count}: how many of honeycomb or honey_bottle deposit leaves carried" :spec (a/map-of a/item? (a/int-in 0 nil)) :default {}}
    :ignore-zones? :shared})
 
 (def steps [:guard :harvest :breed :deposit])
@@ -112,7 +112,7 @@
      :raining (true? (.-raining self))
      :flower (animals/food-carried p "bee")
      :stored (into [] (filter (fn [n] (> (reduce + 0 (map :count (filter #(= n (:name %)) inventory)))
-                                         (get (:keep (:args c)) n 0)))) produce)
+                                         (get (:carry (:args c)) n 0)))) produce)
      :reach (reach c center)}))
 
 ;; ------------------------------------------------------------------ what is decided
@@ -149,11 +149,11 @@
     :else {:call {:slot :breed :args {:mob "bee" :pairs 1 :radius reach}}}))
 
 (defn decide-deposit
-  [{:keys [chest keep]} {:keys [stored]}]
+  [{:keys [chest carry]} {:keys [stored]}]
   (cond
     (nil? chest) {:skip :no-chest}
     (empty? stored) {:skip :nothing-to-store}
-    :else {:call {:slot :deposit :args {:chest chest :items stored :keep keep}}}))
+    :else {:call {:slot :deposit :args {:chest chest :items stored :carry carry}}}))
 
 (defn decide
   "{:skip reason} or {:call {:slot :args}} for a step."

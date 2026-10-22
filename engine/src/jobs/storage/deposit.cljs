@@ -32,7 +32,7 @@
 (def doc
   "Walk to the chest (one go-to) and deposit every stack in one call: the named :items in the order named, or everything but tools
   and armour (saplings included) and the units the reserve register holds (jobs.lib.reserve/held: the 3-day food reserve, bait, entries) in inventory order.
-  :keep leaves at least that many of a name carried. With explicit item names the reserve is ignored; :items :farm-goods puts away the farm goods (seeds, crops, melon, pumpkin, hay, cocoa) above the reserve and :keep.
+  :carry leaves at least that many of a name carried. With explicit item names the reserve is ignored; :items :farm-goods puts away the farm goods (seeds, crops, melon, pumpkin, hay, cocoa) above the reserve and :keep.
   Needs (can-start? and can-run?): a chest, the :chest argument or the known :chest place, else waits :no-chest (a chest place lost mid-job waits, a reflex ends
   condition-failed); a chest of the pool that zones or claims of another do not refuse :put, else waits :refused {:zones :claims}. :ignore-zones? skips it.
   Ends done when nothing is left to put away (also at once when nothing is), or at any other ending when at least the
@@ -58,7 +58,7 @@
 (a/defargs args
   {:chest {:doc "chest position [x y z] or {:x :y :z}; the known :chest place when nil" :spec ::a/pos :default nil}
    :items {:doc "item names to put away, in this order (the first name with something to spare goes first), or :farm-goods (seeds, crops, melon, pumpkin, hay, cocoa; the reserve register applies); everything but tools and armour when nil" :spec (a/or-of (a/coll-of (a/or-of string? keyword?)) (a/pred ":farm-goods" #(= :farm-goods %))) :default nil}
-   :keep {:doc "{item-name count}: leave at least this many of the name carried" :spec (a/map-of string? number?) :default {}}
+   :carry {:doc "{item-name count}: leave at least this many of the name carried" :spec (a/map-of string? number?) :default {}}
    :make-chests? {:doc "when every storage chest is full, put a new one beside them (carried, else fetched or crafted by the call's :ways; #{:carried} places only a carried one, no-chest-item otherwise); false stops with reason all-chests-full" :spec boolean? :default true}
    :ignore-zones? :shared})
 
@@ -100,7 +100,7 @@
 (defn spare-items
   "{name n} the call would put away now: the carried names the pick rules allow, each by its spare over the keep."
   [c]
-  (let [{:keys [items keep]} (:args c)
+  (let [{items :items keep :carry} (:args c)
         carried (u/inventory (:primitives c))
         goods (found/goods (ctx/view c))
         inventory (remove #(contains? goods (:name %)) carried)
@@ -236,7 +236,7 @@
 (defn ^:async step!
   "Put the next stack away, walking to the chest first: :again, :continue (go-to waits), or :done."
   [c]
-  (let [{:keys [items keep]} (:args c)
+  (let [{items :items keep :carry} (:args c)
         {:keys [pool open group?]} (chests c)
         chest (some-> (first open) cell-pos)
         carried (u/inventory (:primitives c))

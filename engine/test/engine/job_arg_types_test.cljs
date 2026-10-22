@@ -15,7 +15,7 @@
                 '(jobs.items.obtain {:any-of true})
                 '(jobs.items.obtain {:item "stick" :ways "chest"})
                 '(jobs.storage.deposit {:items true})
-                '(jobs.storage.deposit {:keep [1 2]})
+                '(jobs.storage.deposit {:carry [1 2]})
                 '(jobs.storage.withdraw {:items true})
                 '(jobs.storage.withdraw {:items ["a"]})
                 '(jobs.survival.shut-in {:use {:blocks false}})
@@ -26,7 +26,7 @@
 (deftest well-formed-list-args-pass
   (doseq [form ['(jobs.combat.attack {:targets ["zombie"] :use {:tools ["sword"]}})
                 '(jobs.items.obtain {:item "stick" :ways #{:chest :craft :smelt}})
-                '(jobs.storage.deposit {:items ["stick"] :keep {"bread" 3}})]]
+                '(jobs.storage.deposit {:items ["stick"] :carry {"bread" 3}})]]
     (is (nil? (expr/problem registry/jobs form)) (pr-str form))))
 
 (deftest scalar-args-are-typed-at-submit

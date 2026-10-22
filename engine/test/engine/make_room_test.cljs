@@ -149,32 +149,32 @@
             "dirt" 30 "cobblestone" 64 "oak_planks" 64 "diorite" 0
             "wheat_seeds" 16 "poppy" 0
             "stick" 0}
-           (ord/keep-counts inventory {:keep-food 16 :keep-blocks 64 :keep-seeds 16} nil))
+           (ord/keep-counts inventory {:carry-food 16 :carry-blocks 64 :carry-seeds 16} nil))
         "beef (8 points) keeps its 12, bread (5) the 4 left of 16; cobblestone, dirt and planks each keep up to 64, other blocks none")))
 
-(deftest keep-counts-without-keep-food-uses-the-food-reserve
+(deftest keep-counts-without-carry-food-uses-the-food-reserve
   (is (= {"bread" 12 "apple" 0 "golden_apple" 2 "dirt" 0}
          (ord/keep-counts [{:name "bread" :count 20} {:name "apple" :count 5} {:name "golden_apple" :count 2} {:name "dirt" :count 9}]
-                         {:keep-food nil :keep-blocks 0} nil))
+                         {:carry-food nil :carry-blocks 0} nil))
       "the 60-point reserve is 12 bread; golden apples are kept whole, outside the reserve")
   (is (= {"golden_apple" 2 "bread" 0}
-         (ord/keep-counts [{:name "golden_apple" :count 2} {:name "bread" :count 3}] {:keep-food 0 :keep-blocks 0} nil))))
+         (ord/keep-counts [{:name "golden_apple" :count 2} {:name "bread" :count 3}] {:carry-food 0 :carry-blocks 0} nil))))
 
 (deftest keep-counts-keep-the-held-units-up-to-the-carried-total
   (is (= {"diamond" 3 "bread" 0 "emerald" 0 "dirt" 2}
          (ord/keep-counts [{:name "diamond" :count 5} {:name "bread" :count 2} {:name "emerald" :count 1} {:name "dirt" :count 2}]
-                         {:keep-food 0 :keep-blocks 0}
+                         {:carry-food 0 :carry-blocks 0}
                          {"diamond" 3 "dirt" 9 "elytra" 1}))
       "held raises a floor, never above what is carried or for what is not carried"))
 
 (deftest keep-counts-with-zero-budgets-keep-only-the-protected
   (is (= {"iron_axe" 1 "bread" 0 "dirt" 0 "stick" 0}
          (ord/keep-counts [{:name "iron_axe" :count 1} {:name "bread" :count 3} {:name "dirt" :count 9} {:name "stick" :count 2}]
-                         {:keep-food 0 :keep-blocks 0} nil))))
+                         {:carry-food 0 :carry-blocks 0} nil))))
 
 (deftest keep-counts-keep-the-named-items-whole
-  (are [keep-items expected] (= expected (ord/keep-counts [{:name "stick" :count 40} {:name "stick" :count 40} {:name "poppy" :count 2}]
-                                                          {:keep-food 0 :keep-blocks 0 :keep-items keep-items} nil))
+  (are [carry-items expected] (= expected (ord/keep-counts [{:name "stick" :count 40} {:name "stick" :count 40} {:name "poppy" :count 2}]
+                                                          {:carry-food 0 :carry-blocks 0 :carry-items carry-items} nil))
     ["stick"] {"stick" 80 "poppy" 0}
     ["stick" "poppy"] {"stick" 80 "poppy" 2}
     [] {"stick" 0 "poppy" 0}
@@ -223,7 +223,7 @@
    {:name "wheat_seeds" :count 63 :slot 9} {:name "diorite" :count 48 :slot 10}])
 
 (deftest toss-order-spares-the-shelter-materials-of-a-full-bag
-  (let [keep (ord/keep-counts linden-bag {:keep-food 16 :keep-blocks 64 :keep-seeds 16} nil)
+  (let [keep (ord/keep-counts linden-bag {:carry-food 16 :carry-blocks 64 :carry-seeds 16} nil)
         order (names-of (ord/toss-order linden-bag keep {} 3.2))]
     (is (= #{"dandelion" "cornflower" "poppy" "oxeye_daisy" "leaf_litter" "granite" "oak_sapling" "diorite"} (set order)))
     (is (not-any? #{"dirt" "cobblestone" "wheat_seeds"} order))))
@@ -231,7 +231,7 @@
 (deftest toss-order-throws-surplus-of-kept-materials-after-everything-without-a-keep
   (let [inventory [{:name "cobblestone" :count 64 :slot 0} {:name "cobblestone" :count 64 :slot 1}
                    {:name "poppy" :count 2 :slot 2} {:name "granite" :count 3 :slot 3}]
-        keep (ord/keep-counts inventory {:keep-food 16 :keep-blocks 64 :keep-seeds 16} nil)]
+        keep (ord/keep-counts inventory {:carry-food 16 :carry-blocks 64 :carry-seeds 16} nil)]
     (is (= ["granite" "poppy" "cobblestone"] (names-of (ord/toss-order inventory keep {} 3.2))))))
 
 (deftest toss-order-orders-by-recency-before-count
@@ -434,7 +434,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:inventory (vec (concat (same "iron_pickaxe" 33 1) (same "cobblestone" 3 64)))})]
-          (await (run-reflex eng {:keep-blocks 64} {}))
+          (await (run-reflex eng {:carry-blocks 64} {}))
           (is (= 2 (count (calls p "toss"))) "at most two of the three stacks")
           (is (= 64 (get (inv p) "cobblestone")))
           (is (not (declined? seen)))
@@ -567,7 +567,7 @@
         (let [{:keys [eng p seen]} (setup {:inventory (vec (concat [{:name "coal" :count 30} {:name "raw_copper" :count 12}
                                                                    {:name "cobbled_deepslate" :count 64} {:name "tuff" :count 20}]
                                                                   (same "diamond_pickaxe" 30 1)))})]
-          (await (run-reflex eng {:free 4 :keep-blocks 0} {}))
+          (await (run-reflex eng {:free 4 :carry-blocks 0} {}))
           (is (= ["cobbled_deepslate" "tuff"] (mapv #(arg-of "item" %) (calls p "toss"))))
           (is (= {"coal" 30 "raw_copper" 12} (select-keys (carried p) ["coal" "raw_copper"])))
           (is (= [{:item "cobbled_deepslate" :count 64} {:item "tuff" :count 20}]
@@ -581,7 +581,7 @@
         (let [{:keys [eng p seen clock]} (setup {:inventory (vec (concat [{:name "coal" :count 30}
                                                                           {:name "cobbled_deepslate" :count 64} {:name "granite" :count 64}]
                                                                          (same "diamond_pickaxe" 33 1)))})]
-          (core/submit! eng '(jobs.storage.make-room {:free 2 :keep-blocks 0}) {})
+          (core/submit! eng '(jobs.storage.make-room {:free 2 :carry-blocks 0}) {})
           (await (tu/run-ticks eng clock 12 700))
           (is (seq (of-kind seen :completed)) "done is emitted, not a wait for not-ready")
           (is (empty? (:list (core/state eng))) "the job ended"))))))
@@ -628,7 +628,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out returns]} (await (run-child {:inventory (vec (concat (same "iron_pickaxe" 33 1) (same "cobblestone" 3 64)))}
-                                                      {:keep-blocks 64} nil))]
+                                                      {:carry-blocks 64} nil))]
           (is (= [:done] @returns))
           (is (= {:status :stopped :reason :short :free 2
                   :tossed [{:item "cobblestone" :count 64} {:item "cobblestone" :count 64}]}
@@ -897,7 +897,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p out]} (with-parent {:inventory (vec (concat [{:name "coal" :count 5}] (same "diamond_pickaxe" 32 1) [{:name "item_a" :count 1}]))}
-                                               {:free 3 :keep-blocks 0} nil)
+                                               {:free 3 :carry-blocks 0} nil)
               step (.-steer p)
               back (atom false)]
           (set! (.-steer p) (fn [& a]
@@ -937,10 +937,10 @@
         (is (= {:event :stopped :kind :nothing-possible :reason :nothing-to-go}
                (await (root-ending {:inventory (same "diamond" 35 1)} {}))) "nothing may go")
         (is (= {:event :stopped :kind :nothing-possible :reason :short}
-               (await (root-ending {:inventory (vec (concat (same "iron_pickaxe" 33 1) (same "cobblestone" 3 64)))} {:keep-blocks 64})))
+               (await (root-ending {:inventory (vec (concat (same "iron_pickaxe" 33 1) (same "cobblestone" 3 64)))} {:carry-blocks 64})))
             "it tossed, still short")
         (is (= {:event :completed :kind :done :reason nil}
-               (await (root-ending {:inventory (vec (concat (same "iron_pickaxe" 33 1) (same "dirt" 2 64)))} {:free 3 :keep-blocks 0}))))))))
+               (await (root-ending {:inventory (vec (concat (same "iron_pickaxe" 33 1) (same "dirt" 2 64)))} {:free 3 :carry-blocks 0}))))))))
 
 (deftest a-make-room-cut-after-a-toss-walks-away-in-its-cleanup
   (async done

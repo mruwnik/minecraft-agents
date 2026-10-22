@@ -1,5 +1,5 @@
 ;; Card 7f4c1ee9: a full pack of cobblestone in a stair (the body at the bottom, one open cell east at eye level, rock all round, no
-;; chest) still tosses the cobble above :keep-blocks 64; walled in only on the second cell, the old make-room said "nothing it may put away or toss".
+;; chest) still tosses the cobble above :carry-blocks 64; walled in only on the second cell, the old make-room said "nothing it may put away or toss".
 {:defaults
  {:tags [:make-room :storage :jobs] :time :any
   :plot {:height 14}

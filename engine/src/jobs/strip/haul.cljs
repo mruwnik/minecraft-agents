@@ -33,7 +33,7 @@
         (cond (= :continue e) :continue
               (not= :done (:kind e)) (steps/end-failed c (steps/child-fields {:child "jobs.storage.haul" :ending e}))
               :else (do (ctx/update-mem! c assoc :hauled (:moved (:data e) {})) (or (ctx/done c) :continue))))
-      (let [f (await (steps/run-all! c [[:deposit 'jobs.storage.deposit (merge {:chest (first (base-chests c)) :keep {"torch" 64} :make-chests? false} zones)]]))]
+      (let [f (await (steps/run-all! c [[:deposit 'jobs.storage.deposit (merge {:chest (first (base-chests c)) :carry {"torch" 64} :make-chests? false} zones)]]))]
         (cond (= :continue f) :continue
               f (steps/end-failed c (steps/child-fields f))
               :else (do (ctx/update-mem! c assoc :banked true) :again))))))

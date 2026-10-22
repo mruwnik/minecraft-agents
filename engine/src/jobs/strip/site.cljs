@@ -137,7 +137,7 @@
 (defn base-chests [c] (chests c (:base (:args c))))
 
 (defn ^:async deposit! [c i]
-  (await (run-all! c [[:deposit 'jobs.storage.deposit (merge {:chest (nth (base-chests c) i) :keep {"torch" 64} :make-chests? false}
+  (await (run-all! c [[:deposit 'jobs.storage.deposit (merge {:chest (nth (base-chests c) i) :carry {"torch" 64} :make-chests? false}
                                                              (select-keys (:args c) [:ignore-zones?]))]])))
 
 (defn ^:async trip!

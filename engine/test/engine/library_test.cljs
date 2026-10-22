@@ -486,7 +486,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "oak_log" :count 40} {:name "bread" :count 2} {:name "oak_log" :count 30}]
                                       :containers {"10,64,0" []}})]
-          (core/submit! eng (list 'jobs.storage.deposit {:chest {:x 10 :y 64 :z 0} :items ["oak_log"] :keep {"oak_log" 16}}) {})
+          (core/submit! eng (list 'jobs.storage.deposit {:chest {:x 10 :y 64 :z 0} :items ["oak_log"] :carry {"oak_log" 16}}) {})
           (await (run-until-empty eng 8))
           (is (= {"oak_log" 16 "bread" 2} (inv p)))
           (is (= [{:name "oak_log" :count 54}]
@@ -497,7 +497,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup chest-world)
-              result (await (child-outcome eng 'jobs.storage.deposit {:chest {:x 10 :y 64 :z 0} :keep {"oak_log" 5 "bread" 9}} 4))]
+              result (await (child-outcome eng 'jobs.storage.deposit {:chest {:x 10 :y 64 :z 0} :carry {"oak_log" 5 "bread" 9}} 4))]
           (is (zero? (count (calls p "transfer"))))
           (is (= {:status :done} (select-keys result [:status :reason :cause]))))))))
 

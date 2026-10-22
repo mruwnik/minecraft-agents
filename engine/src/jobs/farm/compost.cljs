@@ -35,7 +35,7 @@
 (a/defargs args
   {:at {:doc "the composter position; the nearest composter within :radius when nil" :spec ::a/pos :default nil}
    :items {:doc "item names to feed; every compostable thing carried except seeds and food when nil" :spec (a/coll-of a/item?) :default nil}
-   :keep {:doc "{item count} reserves never fed" :spec (a/map-of string? number?) :default {}}
+   :carry {:doc "{item count} reserves never fed" :spec (a/map-of string? number?) :default {}}
    :times {:doc "bone meal to take before done" :spec (a/int-in 1 nil) :default 1}
    :ignore-zones? :shared})
 
@@ -61,9 +61,9 @@
 
 (defn feedable
   "What to feed: [[name n] ...] from the inventory ([{:name :count}]) and args
-  {:items :keep}. With :items, those names only; else every carried compostable
-  not held back. Always minus :keep counts; nothing at zero."
-  [inventory {items :items reserve :keep}]
+  {:items :carry}. With :items, those names only; else every carried compostable
+  not held back. Always minus :carry counts; nothing at zero."
+  [inventory {items :items reserve :carry}]
   (let [held (reduce (fn [m {:keys [name count]}] (update m name (fnil + 0) count)) {} inventory)
         names (if items
                 (distinct items)
@@ -222,7 +222,7 @@
   the first feedable item. ::max-strikes failures in a row give up."
   [c]
   (let [p (:primitives c)
-        {:keys [times items] kept :keep} (:args c)
+        {:keys [times items] kept :carry} (:args c)
         mem (ctx/mem c)
         pos (composter-at c)
         block (when pos (u/seen-block p pos))]
@@ -243,7 +243,7 @@
         (let [meal (meal-near c pos)
               taken (:taken mem 0)
               level (level-of block)
-              todo (feedable (reserve/free c :compost) {:items items :keep kept})]
+              todo (feedable (reserve/free c :compost) {:items items :carry kept})]
           (cond
             meal
             (case (await (take-meal! c meal))

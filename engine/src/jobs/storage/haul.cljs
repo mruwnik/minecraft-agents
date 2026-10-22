@@ -22,7 +22,7 @@
   Needs (can-start? and can-run?): some :from, else never :bad-args; a main chest (:to, else the storage group, so a known :chest place), else waits :no-chest;
   any source still to empty that zones or claims of another refuse :take, else waits :refused {:zones :claims}. :ignore-zones? skips it.
   Sources that are in the storage group are not meant: withdraw may then take from the group's other chests.
-  Ends done {:trips n :moved {name n}} once every source is empty (or holds only :keep), or at any other ending when at
+  Ends done {:trips n :moved {name n}} once every source is empty (or holds only :leave), or at any other ending when at
   least the call's :least items are moved (default :all: only a clean finish); n counts the deposits. The data of
   every other ending has :trips and :moved so far (and :gave-up true):
   - condition-failed :bag-full (nothing to deposit yet no room to take), or the child's cause (:missing, ..);
@@ -31,7 +31,7 @@
 (a/defargs args
   {:from {:doc "[x y z] or {:x :y :z} of each chest to empty" :spec (a/coll-of ::a/pos) :default []}
    :to {:doc "the chest to fill; the storage group (the :chest place first) when nil" :spec ::a/pos :default nil}
-   :keep {:doc "item names left in the source chests" :spec (a/coll-of string?) :default []}
+   :leave {:doc "item names left in the source chests" :spec (a/coll-of string?) :default []}
    :make-chests? {:doc "when the main storage is full, put a new chest beside it (deposit's :make-chests?)" :spec boolean? :default true}
    :ignore-zones? :shared})
 
@@ -65,7 +65,7 @@
 (defn progress-data [c] (select-keys (ctx/mem c) [:trips :moved]))
 
 (defn hauled-keep
-  "{name n} for deposit's :keep: what is carried beyond the hauled count stays with the body."
+  "{name n} for deposit's :carry: what is carried beyond the hauled count stays with the body."
   [inv hauled]
   (let [carried (storage/carried-totals inv)]
     (into {} (map (fn [[n k]] [n (max 0 (- (get carried n 0) k))])) hauled)))
@@ -137,7 +137,7 @@
         {:keys [to make-chests? ignore-zones?]} (:args c)
         e (await (ctx/call c :deposit 'jobs.storage.deposit
                            (cond-> {:make-chests? make-chests? :ignore-zones? ignore-zones?
-                                    :items (vec (keys hauled)) :keep (hauled-keep (u/inventory (:primitives c)) hauled)}
+                                    :items (vec (keys hauled)) :carry (hauled-keep (u/inventory (:primitives c)) hauled)}
                              to (assoc :chest to))))
         after (storage/carried-totals (u/inventory (:primitives c)))
         gone (into {} (keep (fn [[n k]] (let [d (- k (get after n 0))] (when (pos? d) [n d])))) before)]
@@ -162,7 +162,7 @@
       (not= "ok" status) (if (u/count-fail! c) (stop! c :nothing-possible (keyword status)) :again)
       :else
       (let [stacks (map (fn [s] {:name (.-name s) :count (.-count s)}) (array-seq (:items seen)))
-            targets (load-plan stacks (:keep (:args c)) (dec free) inv)]
+            targets (load-plan stacks (:leave (:args c)) (dec free) inv)]
         (if (empty? targets)
           (do (ctx/update-mem! c update :empty (fnil conj []) cell) :again)
           (do (ctx/update-mem! c assoc :intent {:chest cell :targets targets :before (storage/carried-totals inv) :taken (apply merge-with + (map (fn [{:keys [name count]}] {name count}) (load-stacks stacks (:keep (:args c)) (dec free))))}) :again))))))

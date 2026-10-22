@@ -240,7 +240,7 @@
           (is (= :done (:status r)))
           (is (= {:wood 10} (:taken r)))
           (is (= ["z-27-0:0..20" "z-27-0:0..20" "x-27-20:-20..0" "x-27-20:0..20"] ids))
-          (is (= [{:chest (xyz chest-1) :keep {"torch" 64}}] (mapv #(select-keys % [:chest :keep]) (called env 'jobs.storage.deposit)))))))))
+          (is (= [{:chest (xyz chest-1) :carry {"torch" 64}}] (mapv #(select-keys % [:chest :carry]) (called env 'jobs.storage.deposit)))))))))
 
 (deftest no-torches-and-none-to-be-had-stops-no-torches
   (async done

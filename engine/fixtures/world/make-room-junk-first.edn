@@ -1,5 +1,5 @@
 ;; make-room throws plain junk blocks (granite, tuff, gravel, sand) before coal, raw copper and diamond (card 3133211e):
-;; 34 stacks, no chest -> junk tossed in one run (cobblestone / dirt stay: building-block floor, :keep-blocks 64; cobbled deepslate is plain junk), ores kept,
+;; 34 stacks, no chest -> junk tossed in one run (cobblestone / dirt stay: building-block floor, :carry-blocks 64; cobbled deepslate is plain junk), ores kept,
 ;; make-room.done lists :tossed; with a remembered :chest place it deposits instead; a big bag of junk only (the farm
 ;; observation: tossed stacks re-picked, no done). Card 5420805e: one run is one whole attempt.
 {:defaults

@@ -52,7 +52,7 @@
        (= want (tu/kind-reason (done-of 'jobs.storage.deposit {:inventory inventory :floor [-3 -3 3 3] :blocks {"3,64,0" "chest"}} (merge {:chest [3 64 0]} args) m)))
     [{:name "dirt" :count 5}] {} {} [:later :depositing]
     [] {} {} [:ok :deposited]
-    [{:name "dirt" :count 5}] {:keep {"dirt" 5}} {} [:ok :deposited]
+    [{:name "dirt" :count 5}] {:carry {"dirt" 5}} {} [:ok :deposited]
     [] {} {:deposited 2 :moved 5} [:later :offering]
     [] {} {:deposited 2 :moved 5 :offered true} [:ok :deposited]))
 

@@ -33,7 +33,7 @@
     pumpkin, hay, cocoa) are carried above the keep. Tools, bread and other non-crop food are never stored.
   The keep, per name, is the largest of: the sowing reserve (twice the number of beds, farmland or untilled ground cells of
   a box, or twice the planned cells of each crop of a plan), a backup stack (64) of each seed type, the units the reserve
-  register holds (jobs.lib.reserve: the 3-day food reserve, best food first; agent entries) and the :keep entry. Harvested
+  register holds (jobs.lib.reserve: the 3-day food reserve, best food first; agent entries) and the :carry entry. Harvested
   crops above it are stored; seed above it is composted.
   Skipped steps are booked {:skipped reason}: :nothing-blocked, :no-composter, :no-surplus-seed, :no-chest, :nothing-to-store, or
   :declined when the child declined.
@@ -49,7 +49,7 @@
    :fertilize {:doc "use bone meal on unripe crops" :spec boolean? :default false}
    :composter {:doc "composter position {:x :y :z} for seed above the keep; nil: do not compost" :spec ::a/pos :default nil}
    :chest {:doc "chest position {:x :y :z} for the farm goods; nil: do not store" :spec ::a/pos :default nil}
-   :keep {:doc "{item-name count}: how many of an item compost and deposit leave carried, at least the seed reserve" :spec (a/map-of string? number?) :default {}}
+   :carry {:doc "{item-name count}: how many of an item compost and deposit leave carried, at least the seed reserve" :spec (a/map-of string? number?) :default {}}
    :ignore-zones? :shared})
 
 (a/defargs settings
@@ -79,7 +79,7 @@
   "{:keep :waste :stored :blocked}: what is kept carried, the seed above it, the farm goods above it and the plan's crop cells holding a block tidy may dig."
   [c]
   (let [inventory (u/inventory (:primitives c))
-        keep (stock/keeps (sow-reserve c) (rsv/held c :maintain) (:keep (:args c)))]
+        keep (stock/keeps (sow-reserve c) (rsv/held c :maintain) (:carry (:args c)))]
     {:keep keep
      :waste (stock/surplus inventory keep crops/waste-seeds)
      :stored (stock/surplus inventory keep crops/farm-goods)
@@ -99,12 +99,12 @@
     :compost (cond
                (nil? composter) {:skip :no-composter}
                (empty? waste) {:skip :no-surplus-seed}
-               :else {:call {:slot :compost :args (cond-> {:at composter :items waste :keep keep}
+               :else {:call {:slot :compost :args (cond-> {:at composter :items waste :carry keep}
                                                     ignore-zones? (assoc :ignore-zones? true))}})
     :deposit (cond
                (nil? chest) {:skip :no-chest}
                (empty? stored) {:skip :nothing-to-store}
-               :else {:call {:slot :deposit :args {:chest chest :items :farm-goods :keep keep}}})))
+               :else {:call {:slot :deposit :args {:chest chest :items :farm-goods :carry keep}}})))
 
 (defn stock-work?
   "Whether a stock step would call its child over the facts."

@@ -19,4 +19,4 @@
  :queue [(repeat (seq (jobs.farm.harvest {:area {:plan "test-probenight-field"}})
                       (jobs.storage.deposit {:chest {:x 9104 :y 121 :z 9100}
                                              :items ["wheat" "wheat_seeds"]
-                                             :keep {"wheat_seeds" 24}})))]}
+                                             :carry {"wheat_seeds" 24}})))]}

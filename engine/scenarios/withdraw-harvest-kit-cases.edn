@@ -2,7 +2,7 @@
 ;; deposit put back too little (composite-b).
 {:register []
  :queue [(seq (jobs.storage.withdraw {:chest {:x -5003 :y 101 :z -5000} :items {"bread" 12}})
-              (jobs.storage.deposit {:chest {:x -5003 :y 101 :z -5000} :items ["bread"] :keep {"bread" 4}}))]}
+              (jobs.storage.deposit {:chest {:x -5003 :y 101 :z -5000} :items ["bread"] :carry {"bread" 4}}))]}
 ;; ---- other cases of this feature: swap the commented form in for the active one above ----
 ;; -- case from live-composite-b-1
 ;; ;; withdraw live: take bread and hoes from a chest beside the pad (composite-b).

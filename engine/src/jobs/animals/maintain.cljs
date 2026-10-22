@@ -192,7 +192,7 @@
   (cond
     (nil? chest) {:skip :no-chest}
     (empty? stored) {:skip :nothing-to-store}
-    :else {:call {:slot :deposit :job (jobs :deposit) :args {:chest chest :items stored :keep carry}}}))
+    :else {:call {:slot :deposit :job (jobs :deposit) :args {:chest chest :items stored :carry carry}}}))
 
 (defn decide-collect
   [_args {:keys [drops reach]}]

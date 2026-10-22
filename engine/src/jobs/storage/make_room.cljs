@@ -27,9 +27,9 @@
   What is thrown, like a player: names with no keep first (plain junk blocks such as granite, tuff and gravel first, whole
   big stacks before partial, then the rest by worth: flowers, saplings, leaf litter), then the surplus above the
   keep of cobblestone, dirt and planks; ores, fuel and the like are not thrown (below the toss-below setting only). Never put away or thrown: tools, weapons, armour and buckets. Food is never thrown and is put away only above
-  :keep-food (best food-points first; the body's 3-day food reserve when nil). Golden apples are never put away.
+  :carry-food (best food-points first; the body's 3-day food reserve when nil). Golden apples are never put away.
   Cobblestone, dirt and each kind of planks (what shelter, mend, furnace and tool jobs spend) are each kept up to
-  :keep-blocks; seeds up to :keep-seeds each; other blocks are not kept. Names in :keep-items are kept whole.
+  :carry-blocks; seeds up to :carry-seeds each; other blocks are not kept. Names in :carry-items are kept whole.
   Steps, in order:
   1. A chest known within the chest-range setting (32) (and not marked :chest-unusable) takes what jobs.storage.deposit may put
      away, least worth keeping first: names without a floor before food and building blocks, then the cheapest,
@@ -57,10 +57,10 @@
 
 (a/defargs args
   {:free {:doc "done once at least this many slots are free (above the trigger's 2, so it does not refire at once)" :spec (a/int-in 0 nil) :default 4}
-   :keep-food {:doc "food items kept carried (best food by points first); the body's food reserve (jobs.lib.cost/food-reserve) when nil" :spec (a/int-in 0 nil) :default nil}
-   :keep-blocks {:doc "cobblestone, dirt and each kind of planks kept carried, each up to this many" :spec (a/int-in 0 nil) :default 64}
-   :keep-items {:doc "item names kept carried whole, never put away or thrown (a caller's own inputs)" :spec (a/coll-of a/name?) :default []}
-   :keep-seeds {:doc "each kind of seeds kept carried up to this many (a farming body sows them)" :spec (a/int-in 0 nil) :default 16}
+   :carry-food {:doc "food items kept carried (best food by points first); the body's food reserve (jobs.lib.cost/food-reserve) when nil" :spec (a/int-in 0 nil) :default nil}
+   :carry-blocks {:doc "cobblestone, dirt and each kind of planks kept carried, each up to this many" :spec (a/int-in 0 nil) :default 64}
+   :carry-items {:doc "item names kept carried whole, never put away or thrown (a caller's own inputs)" :spec (a/coll-of a/name?) :default []}
+   :carry-seeds {:doc "each kind of seeds kept carried up to this many (a farming body sows them)" :spec (a/int-in 0 nil) :default 16}
    :toss-from {:doc "a position {:x :z}: toss away from it (a dig's caller gives a point ahead of the way it goes on, so it does not walk into what it threw)" :spec (a/pred "a position {:x :z}" #(and (map? %) (number? (:x %)) (number? (:z %)))) :default nil}
    :away {:doc "after tossing, walk this far away from where the items were thrown" :spec (a/num-in 0 nil) :default 4}
    :ignore-zones? :shared})
@@ -287,7 +287,7 @@
   (let [before (u/free-slots (:primitives c))
         room (room-limit (u/inventory (:primitives c)) names keep (slots-short c))
         e (await (ctx/call c :deposit 'jobs.storage.deposit
-                           (merge (select-keys (:args c) [:ignore-zones?]) {:chest chest :items (:names room) :keep (:keep room) :make-chests? true :ways #{:carried}})))]
+                           (merge (select-keys (:args c) [:ignore-zones?]) {:chest chest :items (:names room) :carry (:keep room) :make-chests? true :ways #{:carried}})))]
     (when (get-in e [:data :gave-up])
       (ctx/remember! c :chest-unusable {:pos chest :reason (contract/cause-key e)} (unusable-policy)))
     (when (> (u/free-slots (:primitives c)) before)
