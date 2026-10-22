@@ -2,6 +2,7 @@
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import './quiet-pipe.mjs'
 import { bundleSources, buildRequiredEdn, buildRequiredMessage, missingExports, newerSource, staleBundleMessage } from './agent-tools-bundle-check.mjs'
 
 const require = createRequire(import.meta.url)

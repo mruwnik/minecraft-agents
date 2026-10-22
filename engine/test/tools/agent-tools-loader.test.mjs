@@ -125,3 +125,13 @@ test('the loader warns on stderr, not stdout, when a source is newer than the bu
     fs.rmSync(dir, { recursive: true })
   }
 })
+
+test('a closed stdout pipe ends a tool quietly, with no EPIPE stack trace', () => {
+  const quietPipe = path.join(toolsDir, 'quiet-pipe.mjs')
+  const errFile = path.join(os.tmpdir(), `quiet-pipe-${process.pid}.err`)
+  const script = `import ${JSON.stringify(quietPipe)}; for (let i = 0; i < 200000; i++) process.stdout.write('line ' + i + '\\n')`
+  spawnSync('bash', ['-c', 'node --input-type=module -e "$SCRIPT" 2>"$ERR" | head -1 >/dev/null'], { env: { ...process.env, SCRIPT: script, ERR: errFile } })
+  const stderr = fs.readFileSync(errFile, 'utf8')
+  fs.rmSync(errFile)
+  assert.equal(stderr, '')
+})
