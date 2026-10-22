@@ -28,7 +28,7 @@
   one piece after the other), with a :spend :job-time of ::job-time-s; the pieces are worn when it is done.
   While furnace material is still short (mining or smelting ahead; pure crafting needs no food) and fewer than
   the 3-day food reserve (60 points) are carried (harmful food does not count), one jobs.survival.get-food child (with :explore;
-  it fills the pack to its :carry default, the reserve) runs before the bill (:food false: none). A child that stops warns kit.no-food; with no food carried and a food bar below ::min-food-to-dig the kit stops {:reason :no-food} (no mining on an empty stomach); a fuller bar goes on.
+  it fills the pack to its :carry default, the reserve) runs before the bill (:food false: none). A child that stops warns kit.no-food; with no food carried and a food bar below ::min-food-to-dig the kit stops {:reason :no-food} (no mining on an empty stomach); a fuller bar goes on. A body that cannot heal (food 0, or health under foods/::low-health with no food carried and the bar under 18) asks get-food before more work (once more if it is still so after a fed answer), and stops {:reason :no-food} when it finds none.
   With furnace material short and no weapon carried, one jobs.items.obtain child first makes a sword (iron, stone or wooden); if it cannot, kit.unarmed warns and the work goes on.
   With :explore, a bill that stops because a gathering ended (a mine that stopped, no way up) runs again (kit.retry, the pieces newly covered made first), up to 3 rounds without new furnace material.
   Get a base first.
@@ -204,6 +204,13 @@
   [c]
   {:explore (:explore (:args c))})
 
+(defn cannot-heal-hurt?
+  "Food 0, or hurt with only food able to heal it: more mining would not end well."
+  [c]
+  (let [self (.self (:primitives c))]
+    (or (zero? (.-food self))
+        (and (< (.-health self) (foods/low-health)) (ready/cannot-heal? c)))))
+
 (defn ^:async run-food!
   "One get-food child round: :continue, nil when the body is fed or not hungry, or {:cause :why} when it could not be fed."
   [c]
@@ -291,6 +298,15 @@
           (:stop (ctx/mem c)) (finish! c items have (:stop (ctx/mem c)))
 
           (empty? todo) (finish! c items have nil)
+
+          (and (:food a) (not (:hurt-fed (ctx/mem c))) (cannot-heal-hurt? c))
+          (let [r (await (run-food! c))]
+            (cond (= :continue r) :continue
+                  (nil? r) (do (when (cannot-heal-hurt? c) (ctx/update-mem! c assoc :hurt-fed true)) :again)
+                  :else (do (ctx/emit! c :kit.no-food :warn {:cause (:cause r) :why (:why r) :food fp
+                                             :text (str "no food found (" (name (:cause r)) ")")})
+                            (finish! c items have (assoc (stop-of :nothing-possible {:reason :no-food} (str "hurt with no food to heal on, and none found (" (name (:cause r)) "); mining on would risk death"))
+                                                         :item (first todo))))))
 
           (and (not (:covered-done (ctx/mem c))) (seq (or (:covered (ctx/mem c)) (covered-of version todo (:carried st)))))
           (let [covered (or (:covered (ctx/mem c)) (covered-of version todo (:carried st)))

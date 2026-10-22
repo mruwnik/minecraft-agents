@@ -2,6 +2,7 @@
 ;; with no iron near: mining/smelting is ahead, so a get-food child with :carry stocks the pack first.
 ;; Should-succeed: 3 cows near, a sword: a cow is hunted before any mining (food.killed); no sword but cobblestone, sticks and a table:
 ;; a stone sword is made first; fed (food 20) with no animals anywhere: kit.no-food warns and the kit goes on (no :no-food stop).
+;; A hurt body (8 hp) with a fair bar and nothing to eat stops :no-food too.
 ;; Should-fail: a starving body (food 0) with no food anywhere stops :no-food before any mining; :food false runs no food child; no stop :needs-food.
 {:defaults
  {:tags [:items :get-kit :food]
@@ -40,4 +41,14 @@
          [:rcon "damage $BODY 17 minecraft:generic"]
          [:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
    :expect [{:event {:source :job :kind :kit.no-food :level :warn} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason :low-health}} :for-s 40 :of-job true :from-event {:source :job :kind :kit.no-food}}]}]}
+            {:no-event {:source :job :kind :waiting :data {:reason :low-health}} :for-s 40 :of-job true :from-event {:source :job :kind :kit.no-food}}]}
+  {:name "hurt-body-with-a-fair-bar-and-no-food-stops-before-mining"
+   ;; 8 hp, a bar under 18 but over the dig line, nothing to eat, sealed rock: no heal can come, so the kit stops :no-food instead of mining on.
+   :time :any
+   :plot {:height 12}
+   :blocks [[:fill [2 0 8] [30 9 24] "stone"] [:fill [14 3 16] [18 4 16] "air"]]
+   :body {:at [16.5 3 16.5] :inventory [["iron_sword" 1]] :effects [["hunger" 2 255]]}
+   :act [[:wait-s 6]
+         [:rcon "damage $BODY 12 minecraft:generic"]
+         [:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 90 :of-job true}]}]}

@@ -352,6 +352,15 @@
           (is (= {:status :stopped :item "iron_pickaxe" :reason :no-food}
                  (select-keys @(:out s) [:status :item :reason]))))))))
 
+(deftest a-hurt-body-that-cannot-heal-stops-before-the-mining-even-with-a-fair-bar
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (assoc-in (hungry-world [] 16) [:self :health] 6) {:items ["iron_pickaxe"] :explore false})]
+          (await (f/run-ticks s 80))
+          (is (= {:status :stopped :item "iron_pickaxe" :reason :no-food}
+                 (select-keys @(:out s) [:status :item :reason]))))))))
+
 (defn raw-world
   "Nothing carried; a furnace at the camp (the crafting table is made), three oak trees on grass, then stone, coal and iron ore beyond the own zone, on an andesite floor."
   []
