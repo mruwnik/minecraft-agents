@@ -412,20 +412,35 @@
   (str id " " name (when label (str " (" label ")")) " is " (cljs.core/name status) " on this body; submitting " submitted " can undo its work (two digs undercut each other). "
        "Wait for it (" (follow-command id) "), stop it (./bin/jobs cancel " id "), or run both anyway: repeat this submit with --alongside."))
 
+(def clash-check-attempts 3)
+(def clash-check-timeout-ms 10000)
+
+(defn live-jobs!
+  "A promise of the body's job list (up to clash-check-attempts tries: a busy engine answers late), or nil when unreadable."
+  [r opts]
+  (letfn [(attempt [left]
+            (-> (http/request (cond-> {:socket-path (:socketPath r) :path "/jobs?limit=32&offset=0" :label "jobs" :timeout-ms clash-check-timeout-ms :max-bytes max-get-bytes}
+                                (:request-fn opts) (assoc :request-fn (:request-fn opts))))
+                (.then (fn [{:keys [status content-type text]}]
+                         (when (and (= 200 status) (http/edn-response? content-type))
+                           (vec (:items (data/read-edn text))))))
+                (.catch (fn [_] nil))
+                (.then (fn [items] (if (or (some? items) (<= left 1)) items (attempt (dec left)))))))]
+    (attempt clash-check-attempts)))
+
 (defn clashes-for
-  "A promise of the live jobs of the body that share the submit's job name or are both digging jobs (nil when none, or the list is unreadable)."
+  "A promise of the live jobs of the body that share the submit's job name or are both digging jobs ([] when none; :unreadable when the list cannot be read)."
   [r opts]
   (if-not (:clash-name r)
-    (js/Promise.resolve nil)
-    (-> (get! (:socketPath r) "/jobs?limit=32&offset=0" opts)
-        (.then (fn [{:keys [status content-type text]}]
-                 (when (and (= 200 status) (http/edn-response? content-type))
-                   (->> (:items (data/read-edn text))
+    (js/Promise.resolve [])
+    (-> (live-jobs! r opts)
+        (.then (fn [items]
+                 (if (nil? items)
+                   :unreadable
+                   (->> items
                         (filter #(and (clashes? (:clash-name r) (:name %)) (#{:running :queued :resuming} (:status %)) (not (:reflex %))))
                         (map #(select-keys % [:id :name :label :status]))
-                        seq
-                        vec))))
-        (.catch (fn [_] nil)))))
+                        vec)))))))
 
 (defn run-submit! [r output opts]
   (if (:wait r)
@@ -437,10 +452,15 @@
   [r output {:keys [request-fn] :as opts}]
   (-> (clashes-for r opts)
       (.then (fn [clashes]
-               (if (seq clashes)
+               (cond
+                 (= :unreadable clashes)
+                 (do (output (str (data/write-edn {:ok false :reason :clash-check-failed :confirmation :not-sent
+                                                   :message "The body's job list could not be read, so a same-name or digging job may be running; nothing was queued. Send the command again."}) "\n"))
+                     1)
+                 (seq clashes)
                  (do (output (str (data/write-edn {:ok false :reason :job-clash :clashes clashes :hint (clash-hint (:clash-name r) (first clashes))}) "\n"))
                      1)
-                 (run-submit! r output opts))))
+                 :else (run-submit! r output opts))))
       (.catch (fn [error]
                 (output (str (data/write-edn (failure-for r error)) "\n"))
                 2))))

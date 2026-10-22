@@ -464,6 +464,32 @@
           (.then (fn [result] (is (posted? result) "a non-digging job does not clash with a dig")))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
 
+(defn flaky-listing-engine
+  "listing-engine whose first `failures` job-list reads fail (a busy engine)."
+  [failures items]
+  (let [left (atom failures)
+        ok (listing-engine items)]
+    (fn [call]
+      (if (and (= "GET" (:method call)) (str/starts-with? (:path call) "/jobs?") (pos? @left))
+        (do (swap! left dec) {:error "ETIMEDOUT"})
+        (ok call)))))
+
+(deftest a-busy-engine-does-not-let-a-twin-submit-through-the-guard
+  (let [state (state-dir)
+        twin [{:id "j1" :name "jobs.gather.mine" :status :running}]]
+    (async done
+      (-> (js/Promise.resolve nil)
+          (.then (fn [_] (run-main! state ["submit" mine-spec] (flaky-listing-engine 2 twin))))
+          (.then (fn [{:keys [out] :as result}]
+                   (is (= :job-clash (:reason (data/read-edn out))) "the list read is retried")
+                   (is (false? (posted? result)))))
+          (.then (fn [_] (run-main! state ["submit" mine-spec] (flaky-listing-engine 9 twin))))
+          (.then (fn [{:keys [out code] :as result}]
+                   (is (= :clash-check-failed (:reason (data/read-edn out))) out)
+                   (is (= 1 code))
+                   (is (false? (posted? result)) "an unreadable list queues nothing")))
+          (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
+
 (deftest alongside-or-a-different-or-standing-job-goes-through
   (let [state (state-dir)
         twin {:id "j1" :name "jobs.gather.mine" :status :running}]
