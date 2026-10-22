@@ -25,7 +25,8 @@
    :expect [{:event {:source :job :kind :waiting :data {:reason :nothing-to-do}} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :waiting :data {:covered [:any]}} :for-s 30}
             {:no-event {:source :job :kind #{:completed :stopped}} :for-s 30}]
-   :after [[:block [10 -1 16] "grass_block"]]}
+   ;; grass under stone turns to dirt by itself, so the check is that nothing was tilled
+   :after [[:not-block [10 -1 16] "farmland"]]}
   {:name "bones-are-crafted-into-bone-meal-and-used"
    :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]
             [:fill [10 0 16] [13 0 16] "wheat[age=1]"]]

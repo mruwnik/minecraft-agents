@@ -217,6 +217,12 @@
          (and (fld/unwatched? (:primitives c) cells) (empty? (ripe-raw c nil)))
          (not (crop-seen? c)))))
 
+(defn shut-in-start?
+  "A body shut in (a pit) that has neither cut nor left it: it must walk out before it can tell whether there is a crop.
+  :in-pit keeps it so while the walk digs the pit open."
+  [c m]
+  (and (not (:left-pit m)) (zero? (:cut m 0)) (or (:in-pit m) (reach-room/enclosed? (:primitives c)))))
+
 (def target [:area])
 (def defaults {:least 1 :spend {:job-time ::job-time-s}})
 (def safe? (ready/when-fed (ready/safe-at-by-night work-place/spot)))
@@ -236,7 +242,8 @@
               (if field (or (seq (sowable c)) (seq (:replant m))) (seq (:replant m)))
               (:collect m)
               (and (cutting? c) (seq (ripe-of c (:skipped m))))
-              (blind? c)) nil
+              (blind? c)
+              (shut-in-start? c m)) nil
           (and (cutting? c) (seq (ripe-raw c (:skipped m))))
           (assoc (access/refusal-fields (:refusals (gate/look c (cut-action c) (ripe-raw c (:skipped m)) {:except (fa/plan c) :own-plans-ok? true})))
                  :reason :refused)
@@ -411,9 +418,10 @@
   (let [m (ctx/mem c)
         center (center-of c)
         radius (radius-of c)
-        shut-in? (and (not (:left-pit m)) (zero? (:cut m 0)) (reach-room/enclosed? (:primitives c)))]
+        shut-in? (shut-in-start? c m)]
     (when (and (or (seq (:replant m)) (:collect m) (zero? (:cut m 0)))
                (or shut-in? (> (u/dist (u/self-pos c) center) radius)))
+      (when (and shut-in? (not (:in-pit m))) (ctx/update-mem! c assoc :in-pit true))
       (if (>= (:home-fails m 0) (max-home-fails))
         (do (ctx/update-mem! c assoc :unreachable true) :finish)
         (case (await (common/walk-to! c center (if shut-in? (settings/get settings ::shut-in-walk-range) (quot radius 2))))

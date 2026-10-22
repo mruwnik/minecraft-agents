@@ -249,6 +249,25 @@
           (is (= 9 (:cut result)) (pr-str result))
           (is (= {"wheat" 9} (inv p))))))))
 
+(deftest a-body-in-a-pit-that-sees-no-crop-still-walks-out-before-concluding
+  ;; the crops are out of sight from the pit: after the look round nothing is seen, yet a shut-in body is not "nothing to do"
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:blocks (-> (tu/box -2 57 -3 10 63 6 "stone")
+                                 (dissoc "2,62,1" "2,63,1")
+                                 (merge (field "wheat" 7 (range 4 7) (range 0 3))))
+                     :ages (ages 7 (range 4 7) (range 0 3))
+                     :drops wheat-drops
+                     :self {:pos {:x 2.5 :y 62 :z 1.5}}}
+              {:keys [eng p]} (start {:world world})
+              out? #(>= (:y (u/self-pos {:primitives p})) 63)
+              wheat? #(= "wheat" (some-> % .-name))
+              blocks (aget p "seenBlocks")]
+          (aset p "seenBlocks" (fn [q] (let [bs (.call blocks p q)] (if (out?) bs (.filter bs (complement wheat?))))))
+          (let [result (await (child-outcome eng job {:area {:pos {:x 5 :y 64 :z 1} :radius 8}} 300))]
+            (is (= 9 (:cut result)) (pr-str result))))))))
+
 (deftest unreachable-crops-are-given-up-on
   (async done
     (tu/run-async done
