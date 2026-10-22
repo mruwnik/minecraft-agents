@@ -1438,19 +1438,19 @@
   (until-reply! io cmd #(f/rcon-reply-matches? % pattern) (str ":until-rcon " (pr-str cmd) " " (pr-str pattern)) limit-s))
 
 (defn until-effect-gone-step!
-  "Polls cmd (an active_effects read) until the reply names the effect and then no longer does. An effect never seen
-  within 6 polls throws with the reply: a bare negative match returns on an empty or error reply, before the effect shows."
+  "Polls cmd (an active_effects read of the one effect by id, so a long effect list cannot cut the reply) until the reply
+  shows the effect and then says \"Found no elements\". An effect never seen within 6 polls throws with the reply."
   [io cmd effect limit-s]
   (let [seen (atom false) polls (atom 0)]
     (until-reply! io cmd
                   (fn [reply]
-                    (let [has (boolean (re-find (re-pattern effect) (str reply)))]
+                    (let [gone (boolean (re-find #"Found no elements" (str reply)))
+                          has (and (not gone) (boolean (re-find (re-pattern effect) (str reply))))]
                       (swap! polls inc)
                       (when has (reset! seen true))
                       (when (and (not @seen) (> @polls 6))
-                        (throw (js/Error. (str ":until-effect-gone " (pr-str effect) " never seen: effects listed " (mapv second (re-seq #"id: \"([^\"]+)\"" (str reply)))
-                                               ", last reply " (str/trim (str reply))))))
-                      (and @seen (not has))))
+                        (throw (js/Error. (str ":until-effect-gone " (pr-str effect) " never seen, last reply " (str/trim (str reply))))))
+                      (and @seen gone)))
                   (str ":until-effect-gone " (pr-str effect)) limit-s)))
 
 (defn until-facing-step!
@@ -1524,7 +1524,7 @@
                          :until (.then (until-step! opts a b @last-job @event-job) (constantly ids))
                          :until-seen (.then (until-step! opts (f/seen-check a) b @last-job @event-job) (constantly ids))
                          :until-rcon (.then (until-rcon-step! {:send rcon! :sleep sleep} (f/substitute a (:body opts) origin box) b (nth step 3)) (constantly ids))
-                         :until-effect-gone (.then (until-effect-gone-step! {:send rcon! :sleep sleep} (f/substitute "data get entity $BODY active_effects" (:body opts) origin box) a b) (constantly ids))
+                         :until-effect-gone (.then (until-effect-gone-step! {:send rcon! :sleep sleep} (f/substitute (str "data get entity $BODY active_effects[{id:\"minecraft:" a "\"}]") (:body opts) origin box) a b) (constantly ids))
                          :until-pos (.then (until-pos-step! {:send rcon! :sleep sleep} (f/substitute "data get entity $BODY Pos" (:body opts) origin box) origin a b) (constantly ids))
                          :until-facing (.then (until-facing-step! opts a b) (constantly ids))
                          (:cli :http) (.then (do (reset! cli-ms (js/Date.now)) (tool-step! opts step @last-job @event-job))

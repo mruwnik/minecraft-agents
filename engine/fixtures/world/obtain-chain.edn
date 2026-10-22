@@ -18,7 +18,7 @@
    :after [[:item "stone_pickaxe" 1]]
    :limit-s 180}
   {:name "surface-dirt-at-low-food-is-dug"
-   :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-rcon "data get entity $BODY active_effects[{id:\"minecraft:hunger\"}]" "Found no elements" 40]
+   :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-effect-gone "hunger" 40]
          [:job (jobs.items.obtain {:item "dirt" :count 8})]]
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}
             {:no-event {:source :job :kind :child_ended :data {:ending {:data {:reason :hungry}}}} :for-s 60 :until {:source :job :kind :completed}}]

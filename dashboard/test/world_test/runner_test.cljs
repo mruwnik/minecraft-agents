@@ -849,7 +849,7 @@
 
 (deftest until-effect-gone-waits-for-the-effect-to-show-then-to-end
   (async done
-    (let [replies (atom ["no data" "[{id: \"minecraft:hunger\"}]" "[{id: \"minecraft:hunger\"}]" "[]"])
+    (let [replies (atom ["no data" "B has the following entity data: {id: \"minecraft:hunger\"}" "B has the following entity data: {id: \"minecraft:hunger\"}" "Found no elements matching active_effects[{id:\"minecraft:hunger\"}]"])
           sent (atom 0)
           io {:send (fn [_] (swap! sent inc) (js/Promise.resolve [(let [r (first @replies)] (swap! replies #(if (next %) (vec (rest %)) %)) r)]))
               :sleep (fn [_] (js/Promise.resolve nil))}]
@@ -858,13 +858,22 @@
           (.catch (fn [e] (is false (.-message e))))
           (.finally done)))))
 
+(deftest until-effect-gone-ignores-a-gone-reply-before-the-effect-was-seen
+  (async done
+    (let [io {:send (fn [_] (js/Promise.resolve ["Found no elements matching active_effects[{id:\"minecraft:hunger\"}]"]))
+              :sleep (fn [_] (js/Promise.resolve nil))}]
+      (-> (r/until-effect-gone-step! io "q" "hunger" 10)
+          (.then (fn [_] (is false "should have thrown")))
+          (.catch (fn [e] (is (re-find #"never seen" (.-message e)))))
+          (.finally done)))))
+
 (deftest until-effect-gone-throws-when-the-effect-never-shows
   (async done
     (let [io {:send (fn [_] (js/Promise.resolve ["B has the following entity data: [{show_particles: 0b, id: \"minecraft:resistance\", duration: 11899}]"]))
               :sleep (fn [_] (js/Promise.resolve nil))}]
       (-> (r/until-effect-gone-step! io "q" "hunger" 10)
           (.then (fn [_] (is false "should have thrown")))
-          (.catch (fn [e] (is (re-find #"\"hunger\" never seen: effects listed \[\"minecraft:resistance\"\], last reply B has" (.-message e)))))
+          (.catch (fn [e] (is (re-find #"\"hunger\" never seen, last reply B has" (.-message e)))))
           (.finally done)))))
 
 (deftest until-pos-polls-until-the-body-is-inside-the-plot-relative-bounds
