@@ -66,6 +66,15 @@
                  (select-keys event [:closed? :reason :cells :leaks :gates])))
           (is (empty? listed)))))))
 
+(deftest a-closed-pen-too-shallow-for-herd-says-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [event]} (await (run-job {:at [1 64 1]} (world (into {} (apply concat (for [i (range 0 4)] [[(str 3 ",64," i) "oak_fence"] [(str i ",64,3") "oak_fence"]]))))))]
+          (is (true? (:closed? event)))
+          (is (false? (:herdable? event)))
+          (is (= "pen closed, 9 cells; but the pen is 3x3 cells; herd needs 5 in a line inward from the gate so a led animal clears the gate cell" (:text event))))))))
+
 (deftest an-open-gate-is-a-leak-at-the-gate-and-listed
   (async done
     (tu/run-async done

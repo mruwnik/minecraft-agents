@@ -20,6 +20,12 @@
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]
    :blocks [[:set [5 0 2] "oak_fence_gate[facing=south,open=false]"]]
    :expect [{:event {:source :job :kind :completed :data {:closed? true :cells 25 :leaks [] :gates [{:open? false}]}} :within-s 20 :of-job true}]}
+  ;; a 3x3 inner pen is closed but herd needs 5 cells in a line, so the answer says it is not herdable
+  {:name "closed-3x3-not-herdable"
+   :act [[:job (jobs.animals.pen-check {:at #at [4 0 4]})]]
+   :blocks [[:fill [6 0 3] [6 0 6] "oak_fence"]
+            [:fill [3 0 6] [6 0 6] "oak_fence"]]
+   :expect [{:event {:source :job :kind :completed :data {:closed? true :cells 9 :herdable? false}} :within-s 20 :of-job true}]}
   ;; the invisible light block is air to an animal: inside the ring it changes nothing, in the ring it is a gap
   {:name "light-block-inside-closed"
    :act [[:job (jobs.animals.pen-check {:at #at [5 0 5]})]]

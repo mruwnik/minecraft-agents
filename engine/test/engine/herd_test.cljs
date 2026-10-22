@@ -734,7 +734,7 @@
         (let [s (await (scenario {:target 2 :box {:min {:x -33 :y 66 :z -629} :max {:x -31 :y 66 :z -627}}} {} 3))
               e (first (events-of s :stopped))]
           (is (= :too-shallow (:reason e)))
-          (is (re-find #"3x3, 5 cells in a line needed" (:text (:cause e))))
+          (is (re-find #"3x3 cells; herd needs 5 in a line" (:text (:cause e))))
           (is (empty? (calls-of s "moveTo")) "nothing was done: no run"))))))
 
 (deftest a-run-that-brought-none-is-stopped-not-failed

@@ -72,11 +72,6 @@
       (seq gates) {:why :not-in-wall :cell (cell (first gates))}
       :else {:why :no-gate-in-pen})))
 
-(def min-depth
-  "Pen cells in a straight line from in-1 the gate's axis needs: the body on in-5 puts a led animal 2.2 cells
-  inside the gate cell; on in-4 it still overlaps it."
-  5)
-
 (def max-axis-depth "Pen cells of the axis the steps use." 6)
 
 (def approach-cells "Cells out-1..out-4 outside the gate that must be free floor." 4)

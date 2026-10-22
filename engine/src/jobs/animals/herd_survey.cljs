@@ -1,6 +1,7 @@
 (ns jobs.animals.herd-survey
   "The pen read for jobs.animals.herd: the verdict on the pen and its gate from what the body sees, the looks at cells never seen, and the survey phase."
-  (:require [engine.contract :as contract]
+  (:require [plan.pen-fit :as pen-fit]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.check-cache :as check-cache]
@@ -11,7 +12,7 @@
             [jobs.lib.sense :as sense]
             [jobs.lib.animals :as animals]
             [jobs.lib.util :as u]
-            [jobs.animals.herd-pen :refer [approach-cells approach-free? axis choose-gate depth free-floor? gate-diagnosis gate-look-range look-range max-approach-walks min-depth open-stage other-leaks precheck?]]
+            [jobs.animals.herd-pen :refer [approach-cells approach-free? axis choose-gate depth free-floor? gate-diagnosis gate-look-range look-range max-approach-walks open-stage other-leaks precheck?]]
             [jobs.animals.herd-run :refer [approach-range box-centre cell detail-text pen-box finish! in-pen-adults near-pen pen-opts read-pen]]))
 
 (defn box-gates
@@ -84,8 +85,8 @@
                         :cell (first (remove #(free-floor? (:primitives c) %) (take approach-cells (axis (:primitives c) (:inside answer) (cell gate) in out 0))))})
       (seq leaks) (refuse :leaky {:leaks (vec (take 12 leaks))})
       (>= inside target) (refuse :full)
-      (< (depth (:inside answer) (cell gate) in) min-depth)
-      (refuse :too-shallow {:cell in :depth (depth (:inside answer) (cell gate) in) :need min-depth})
+      (< (depth (:inside answer) (cell gate) in) pen-fit/min-depth)
+      (refuse :too-shallow {:cell in :depth (depth (:inside answer) (cell gate) in) :need pen-fit/min-depth})
       :else {:chosen chosen})))
 
 (defn unseen-approach

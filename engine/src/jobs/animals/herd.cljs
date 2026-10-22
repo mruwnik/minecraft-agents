@@ -1,5 +1,6 @@
 (ns jobs.animals.herd
-  (:require [jobs.lib.work-place :as work-place]
+  (:require [plan.pen-fit :as pen-fit]
+            [jobs.lib.work-place :as work-place]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [engine.settings :as settings]
@@ -18,7 +19,7 @@
             [jobs.animals.herd-run :refer [adults after-shut! pen-box pen-count-text cell census! crowd-in-radius crowd-ms crowd-out-radius deepest end! exit-shut-ms gate-cell gate-index gate-open? hold-gate! in-1 in-pen-adults led-now lure? animal-now out-1 pause! read-pen release-step! set-phase! settle-out-ms shut-failed! shut-look-ms stage transient-keys]]
             [jobs.lib.pace :as pace]
             [jobs.animals.herd-survey :refer [pen-refusal survey!]]
-            [jobs.animals.herd-pen :refer [body-in-pen? cell-middle crowded-near? exit-dash! go-then! let-go-cell line-up-from-stage! look-wait! max-leaves min-depth nearer-stage! on-gate? set-gate! settle-at! shut-side! shut-when-clear! wait-clear! waited-ms]]
+            [jobs.animals.herd-pen :refer [body-in-pen? cell-middle crowded-near? exit-dash! go-then! let-go-cell line-up-from-stage! look-wait! max-leaves nearer-stage! on-gate? set-gate! settle-at! shut-side! shut-when-clear! wait-clear! waited-ms]]
             [jobs.animals.herd-trip :refer [food-first! leash-next! pinned! remember-start! prune-led! regather! regather-or-lose! released! step-position!]]))
 
 (def doc
@@ -151,16 +152,6 @@
 
 (def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 
-(defn box-sides
-  "The box's lengths in cells along x and z that a gate's axis could run, only the :gate's when it stands beside a side."
-  [{:keys [min max]} gate]
-  (let [xs (inc (- (:x max) (:x min)))
-        zs (inc (- (:z max) (:z min)))]
-    (cond
-      (and gate (or (< (:x gate) (:x min)) (> (:x gate) (:x max)))) [xs]
-      (and gate (or (< (:z gate) (:z min)) (> (:z gate) (:z max)))) [zs]
-      :else [xs zs])))
-
 (defn bad-args
   "Never without :mob or :box, or with a box no gate axis can run min-depth cells into."
   [c]
@@ -168,14 +159,11 @@
         box (pen-read/arg-box c)]
     (cond
       (not (and mob box)) (contract/never :no-mob-or-box "herd needs a :mob and a :box")
-      (< (apply max (box-sides box gate)) min-depth)
-      (let [{:keys [min max]} box]
-        (contract/never
-         :too-shallow
-         (str "herd cannot use the box " (cell min) ".." (cell max) ": it is "
-              (inc (- (:x max) (:x min))) "x" (inc (- (:z max) (:z min))) ", " min-depth
-              " cells in a line needed inward from the gate, so a led animal clears the gate cell")
-         :box box :need min-depth))
+      (not (pen-fit/deep-enough? box gate))
+      (contract/never
+       :too-shallow
+       (str "herd cannot use the box " (cell (:min box)) ".." (cell (:max box)) ": " (pen-fit/shallow-text box gate))
+       :box box :need pen-fit/min-depth)
       :else (contract/ok :args "a :mob and a box deep enough"))))
 
 (def can-start?

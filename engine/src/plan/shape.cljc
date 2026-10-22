@@ -13,7 +13,8 @@
   values as keywords or strings). Turning a blueprint turns facing, axis, rotation (signs, banners, heads) and the
   north/east/south/west connection keys (fences, panes, walls, vines). Not turned yet: rail shape (north_south,
   ascending_east, south_east ...), orientation (jigsaw, crafter), and any other state naming a side in its value."
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [plan.pen-fit :as pen-fit]))
 
 (def turns #{0 90 180 270})
 (def sides [:north :east :south :west])
@@ -156,6 +157,13 @@
     (not (and (integer? (:target herd)) (>= (:target herd) 0))) ":herd needs a :target count"
     :else (unknown-key-error herd #{:mob :target})))
 
+(defn herd-fit-error
+  "Why the part's box cannot hold a herd (see plan.pen-fit), or nil; no check for :target 0 or without :box."
+  [{:keys [box herd]}]
+  (when (and (corners? box) herd (pos? (or (:target herd) 0)))
+    (let [[lo hi] box]
+      (pen-fit/shallow-text {:min (zipmap [:x :y :z] lo) :max (zipmap [:x :y :z] hi)} nil))))
+
 (defn area-part-error [part]
   (let [wheres (filter #(contains? part %) where-keys)
         where (first wheres)]
@@ -168,7 +176,7 @@
       (and (= :cells where) (not (and (vector? (:cells part)) (seq (:cells part)) (every? coords? (:cells part)))))
       ":cells needs a non-empty list of [x y z] integers"
       (not (contains? part :want)) "a part needs a :want"
-      :else (or (want-error (:want part)) (herd-error (:herd part)) (unknown-key-error part area-part-keys)))))
+      :else (or (want-error (:want part)) (herd-error (:herd part)) (unknown-key-error part area-part-keys) (herd-fit-error part)))))
 
 (defn blueprint-part-error [part]
   (cond

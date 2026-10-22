@@ -1,5 +1,6 @@
 (ns jobs.animals.pen-check
-  (:require [jobs.lib.price :as price]
+  (:require [plan.pen-fit :as pen-fit]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.work-place :as work-place]
             [clojure.string :as str]
@@ -34,6 +35,7 @@
 
   Ends with the data {:closed? :reason :cells :leaks :gates}: :done when closed, or when a leak was found and :patch is not allowed (a leak is
   then the answer, not a failure); with :patch allowed a leak left after the patches is nothing-possible :leak (the leaks name what remains). Else condition-failed (:no-start) or nothing-possible (:unbounded, :unloaded: the check gave up) with the :reason as the cause:
+  - :herdable? false (and the text says why) when the pen is closed but too shallow for herd (plan.pen-fit).
   - :reason is nil when closed, else :leak, :unbounded, :unloaded (a cell, or the start's floor, was never seen) or :no-start (:at is no floor to stand on).
   - :leaks lists {:pos {:x :y :z} :why}, why one of :open-gate :gap :climb :perch-in :open :unloaded (only when :reason is not :leak; :gap also names the cell under a fence hung over lower ground (a plan box as high as its fence starts the fill from the ground below); :perch-in: open ground within a block of a fence top outside the pen, :stand names the ground cell; :climb with a box names the fence, wall or gate top first stood on, reached from a block or raised floor beside it). At most 12 are
     listed, :leaks-total gives the count when more.
@@ -165,6 +167,13 @@
   (when-let [{:keys [gate drop]} (first gate-drops)]
     (str "; gate at [" (:x gate) " " (:y gate) " " (:z gate) "] has a drop of " drop " inside, animals will not step down")))
 
+(defn herd-note
+  "Why herd could not fill this closed pen (too shallow for any gate axis), or nil."
+  [{:keys [closed? inside]}]
+  (when (and closed? (seq inside))
+    (let [[xs zs] (apply map vector (map (juxt first #(nth % 2)) inside))]
+      (pen-fit/shallow-text {:min {:x (apply min xs) :z (apply min zs)} :max {:x (apply max xs) :z (apply max zs)}} nil))))
+
 (defn animal-coverage
   "{:unseen-cells :animals-complete?}: the inside cells the answer reads from memory only, where an animal would not be listed."
   [{:keys [inside remembered]}]
@@ -240,9 +249,11 @@
             ;; a seen leak is the answer: the unseen ground beyond it is no extra finding
             checked (cond-> checked (= :leak (:reason checked)) (update :leaks #(vec (remove (comp #{:unloaded} :why) %))))
             rows (animals/in-pen-rows p checked (settings/get settings ::animal-radius))
-            result (merge (pen/summary checked) (pen-read/listed checked (u/self-pos c)) {:animals rows :animals-in (count rows)} (animal-coverage checked))
+            result (merge (pen/summary checked) (pen-read/listed checked (u/self-pos c)) {:animals rows :animals-in (count rows)} (animal-coverage checked)
+                          (when (herd-note checked) {:herdable? false}))
             result (assoc result :text (if (:closed? result)
-                                         (str "pen closed, " (:cells result) " cells" (gate-drop-text result))
+                                         (str "pen closed, " (:cells result) " cells" (gate-drop-text result)
+                                              (when-let [note (herd-note checked)] (str "; but " note)))
                                          (str "pen not closed: " (name (:reason result)) (leak-text result) (gate-drop-text result))))]
         (ctx/update-mem! c assoc :cells (:cells result))
         (let [{:keys [patched pass pass-ok] :or {pass 0}} (ctx/mem c)

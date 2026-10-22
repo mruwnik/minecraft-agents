@@ -76,6 +76,7 @@
     {:id "x" :box [[0 0 0] [1 0 1]] :want "stone" :harvest true} ":harvest"
     {:id "x" :box [[0 0 0] [1 0 1]] :want "air" :herd {:mob "cow"}} ":herd"
     {:id "x" :box [[0 0 0] [1 0 1]] :want "air" :herd {:mob "cow" :target 4 :food "wheat"}} "unknown key :food"
+    {:id "x" :box [[0 0 0] [2 0 2]] :want "air" :herd {:mob "cow" :target 4}} "needs 5 in a line"
     {:id "x" :box [[0 0 0] [1 0 1]] :want "stone" :yield 3} ":yield"
     {:id "x" :box [[0 0 0] [500 0 500]] :want "stone"} "too large"
     {:id "x" :stair {:from [0 64 0] :heading :east :to-y 60} :cells [[0 0 0]] :want :clear} "one of :box"
@@ -88,6 +89,11 @@
     {:id "x" :blueprint "hut" :at [0 64 0] :turn 45} ":turn"
     {:id "x" :blueprint "hut" :at [0 64 0] :want "stone"} ":want"
     {:id "x" :blueprint "hut" :at [0 64 0] :box [[0 0 0] [1 1 1]]} ":box"))
+
+(deftest a-herd-part-deep-enough-or-wanting-none-is-fine
+  (are [part] (empty? (parts-erring (with-part part)))
+    {:id "x" :box [[0 0 0] [2 0 4]] :want "air" :herd {:mob "cow" :target 4}}
+    {:id "x" :box [[0 0 0] [0 0 0]] :want "air" :herd {:mob "cow" :target 0}}))
 
 (deftest a-part-id-is-a-name-without-a-slash
   (are [id] (= [nil] (parts-erring (with-part {:id id :cells [[0 0 0]] :want "stone"})))
