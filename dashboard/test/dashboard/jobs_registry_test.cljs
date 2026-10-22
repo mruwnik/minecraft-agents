@@ -38,7 +38,7 @@
 
 (deftest every-default-trigger-is-listed
   (is (= #{"suffocating" "burning" "wedged" "hostile-near" "hungry" "night" "died" "needs-weapon" "pen-gate" "door-left"
-           "inventory-nearly-full" "scaffold-left" "tidy-pending" "mounted" "loose-items" "needs-bed" "dusk-home" "poisoned" "stuck-underground"
+           "inventory-nearly-full" "scaffold-left" "tidy-pending" "mounted" "loose-items" "needs-bed" "dusk-home" "low-health" "poisoned" "stuck-underground"
            "part-cut-tree" "replant-owed" "ore-seen" "dark-work" "dawn"}
          (set (map :id (filter #(= :trigger (:kind %)) reg/entries))))))
 
