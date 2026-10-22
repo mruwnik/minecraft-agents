@@ -68,8 +68,10 @@
         slime (.stateAt (world {:blocks [[0 70 0 "slime_block"]]}) 0 70 0)
         honey (.stateAt (world {:blocks [[0 70 0 "honey_block"]]}) 0 70 0)
         stone (.stateAt (world {:blocks [[0 70 0 "stone"]]}) 0 70 0)
+        beds (map #(.stateAt (world {:blocks [[0 70 0 %]]}) 0 70 0) ["red_bed" "white_bed" "black_bed"])
         m (cost/planner-landing nil)]
     (is (= [0.2 -1 0.2 nil] [(.get m hay) (.get m slime) (.get m honey) (.get m stone)]) "hay, slime and honey by default")
+    (is (= [0.5 0.5 0.5] (map #(.get m %) beds)) "a bed halves the fall")
     (is (= [1 nil] [(.get (cost/planner-landing {"hay_block" 1}) hay) (.get (cost/planner-landing {"hay_block" 1}) stone)]))
     (is (= 0 (.get (cost/planner-landing {"stone" 0}) stone)))))
 

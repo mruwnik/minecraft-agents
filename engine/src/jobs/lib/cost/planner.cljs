@@ -142,8 +142,11 @@
 
 (def default-landing
   "Block name -> share of a fall's damage a body takes landing on it (go-to's :landing, which overrides entry by entry): hay
-  and honey take 80% off; a negative factor (slime) is a bounce: no damage, but the body takes seconds to settle."
-  {"hay_block" 0.2 "honey_block" 0.2 "slime_block" -1})
+  and honey take 80% off, a bed 50% (the server halves the fall, so this overstates it a little); a negative factor (slime) is a
+  bounce: no damage, but the body takes seconds to settle."
+  (into {"hay_block" 0.2 "honey_block" 0.2 "slime_block" -1}
+        (map #(vector (str % "_bed") 0.5))
+        ["white" "orange" "magenta" "light_blue" "yellow" "lime" "pink" "gray" "light_gray" "cyan" "purple" "blue" "brown" "green" "red" "black"]))
 
 (defn landing-problem
   "Why landing is not a usable go-to :landing (nil, or a map of block name to a finite number), else nil."
@@ -182,7 +185,7 @@
    ::costs {:default false :doc (str "Map of price name to seconds, overriding the planner's price of a move (" (str/join " " (map name (keys planner-names))) "); a price left out keeps the planner's default. false: none.")
             :spec (a/or-of false? (a/valid-by "a map of planner price name to a number of seconds >= 0" #(planner-costs-problem %)))}
    ::lethal-air {:default false :doc "true lets a plan drown the body when no other way to air exists (breathe's); false: such a plan is refused (:why :air-lethal)." :spec boolean?}
-   ::landing {:default false :doc "Map of block name to the share of a fall's damage a landing on it takes (0.2: 80% off), negative: a bounce, no damage but settle time (only onto a pad in view, bouncing blocks or a wall all round, not under :gait :sneak); entries override the defaults hay_block 0.2, honey_block 0.2 and slime_block -1."
+   ::landing {:default false :doc "Map of block name to the share of a fall's damage a landing on it takes (0.2: 80% off), negative: a bounce, no damage but settle time (only onto a pad in view, bouncing blocks or a wall all round, not under :gait :sneak); entries override the defaults hay_block 0.2, honey_block 0.2, every bed 0.5 and slime_block -1."
               :spec (a/or-of false? (a/valid-by "a map of block name to a number" #(landing-problem %)))}
    ::unknown-prices {:default false :doc "Map of :cell :floor :peek-s :aim-s :see-lit-depth :light-depth to numbers overriding the prices of cells a walk over :unknown has not seen (unknown-prices); a go-to :unknown map wins over it." :spec (a/or-of false? (a/valid-by "a map of unknown-price name to a number >= 0" (fn [m] (when-not (or (nil? m) (and (map? m) (every? #(and (contains? unknown-prices (key %)) (number? (val %)) (>= (val %) 0)) m))) "not a map of unknown-price names to numbers >= 0"))))}})
 

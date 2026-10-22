@@ -1,0 +1,23 @@
+;; Card 3b89b671: a bed halves a fall's damage (the planner's default landing factor 0.5, jobs.lib.cost.planner/default-landing). Same course as go-to-slime:
+;; a stone block y 0..9 fills x 1..15 (the body on top at feet y 10, x 8.5), walls all round, the drop is east of its edge onto a bed laid in the floor
+;; (y -1, foot [16 -1 16], head [17 -1 16]). :floor {:health 15} leaves a budget of 4 hp (18: 2 hp); the bed drop is priced 4 hp (the fall is about 10.4), a plain landing 8.
+;; Should-succeed: the drop onto the bed at floor 15, then a walk on. Should-fail: the same drop at floor 18 is refused (stopped, not arrived), the body stays on the block.
+{:defaults
+ {:tags [:movement :planner]
+  :time :any
+  :plot {:height 16}
+  :blocks [[:fill [0 0 0] [31 12 0] "stone"] [:fill [0 0 31] [31 12 31] "stone"] [:fill [0 0 0] [0 12 31] "stone"] [:fill [31 0 0] [31 12 31] "stone"]
+           [:fill [1 0 1] [15 9 30] "stone"]
+           [:set [16 -1 16] "red_bed[facing=east,part=foot]"] [:set [17 -1 16] "red_bed[facing=east,part=head]"]]
+  :body {:at [8.5 10 16.5]}
+  :limit-s 90}
+ :cases
+ [{:name "10-drop-onto-a-bed-is-taken-at-floor-15"
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 15}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [24.5 0 16.5] 2.5]]}
+  {:name "10-drop-onto-a-bed-is-refused-at-floor-18"
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1 :ways #{:walk :clear-seal} :floor {:health 18}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 30 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-near [8.5 10 16.5] 9]]}]}
