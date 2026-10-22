@@ -161,10 +161,19 @@
   (are [world expected] (= expected (cost/decide (merge {:reserve 4 :damage 16} world)))
     {:health 20} :fight
     {:health 18} :flee
-    {:health 18 :fighting? true :single? true} :fight
-    {:health 18 :fighting? true :single? false} :flee
-    {:health 8 :fighting? true :single? true} :flee
-    {:health 18 :fighting? true :single? true :creeper? true} :flee))
+    {:health 18 :fighting? true :few? true} :fight
+    {:health 18 :fighting? true :few? false} :flee
+    {:health 8 :fighting? true :few? true} :flee
+    {:health 18 :fighting? true :few? true :creeper? true} :flee))
+
+(deftest mobs-far-off-are-not-in-the-fight-at-hand
+  (let [mob (fn [d] #js {:seen true :distance d})]
+    (are [distances expected] (= expected (respond-to-hostile/few-engaged? nil (map mob distances)))
+      [1] true
+      [1 5] true
+      [1 5 30 31] true
+      [1 5 7] false
+      [1 5 9 31] true)))
 
 (deftest a-begun-fight-is-the-same-mob-and-lasts-from-the-last-hit
   (let [entry (fn [t mob decision] {:t t :data {:mob mob :decision decision}})]
@@ -182,14 +191,14 @@
     {} :flee
     {:cannot-outrun? true} :flee
     {:cannot-outrun? true :fighting? true :health 5} :fight
-    {:cannot-outrun? true :fighting? true :single? false :health 5} :fight
-    {:fighting? true :single? true :health 5} :flee
+    {:cannot-outrun? true :fighting? true :few? false :health 5} :fight
+    {:fighting? true :few? true :health 5} :flee
     {:cannot-outrun? true :fighting? true :creeper? true} :flee))
 
 (deftest the-health-a-begun-fight-is-held-above-is-a-setting
-  (is (= :flee (cost/decide {:reserve 4 :damage 16 :health 8 :fighting? true :single? true})))
+  (is (= :flee (cost/decide {:reserve 4 :damage 16 :health 8 :fighting? true :few? true})))
   (is (= :fight (settings/with-settings {:jobs.lib.cost.fight/hysteresis-health 7}
-                  #(cost/decide {:reserve 4 :damage 16 :health 8 :fighting? true :single? true})))))
+                  #(cost/decide {:reserve 4 :damage 16 :health 8 :fighting? true :few? true})))))
 
 (defn fist-stance
   "What decide makes of a body at full health with weapon against one mob (health: what is left of it, nil full)."

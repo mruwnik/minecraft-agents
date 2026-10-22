@@ -12,7 +12,7 @@
 
 (a/defargs settings
   {::fist-gap-ms {:default 1300 :doc "Milliseconds between the hits a body with no sword or axe lands: the mob is knocked back and hops, so most of the time goes on walking up to it again." :spec (a/int-in 1 nil)}
-   ::hysteresis-health {:default 8 :doc "Above this health a fight already begun against a single mob goes on though one hit made it dearer than reserve." :spec (a/num-in 0 20)}})
+   ::hysteresis-health {:default 8 :doc "Above this health a fight already begun against few mobs goes on though one hit made it dearer than reserve." :spec (a/num-in 0 20)}})
 
 (defn swing-gap-ms
   "Milliseconds between the hits weapon lands: its attack gap, ::fist-gap-ms for anything that is no sword or axe."
@@ -47,12 +47,12 @@
 
 (defn decide
   "Pure but for its settings: :flee when creeper? (a creeper the body will not fight hit-and-back), else :fight when the expected damage leaves at least reserve
-  health, or when a fight already begun (fighting?) is against a single mob (single?) above ::hysteresis-health, or
+  health, or when a fight already begun (fighting?) has few mobs in it (few?) above ::hysteresis-health, or
   against a mob the body cannot outrun (cannot-outrun?: the flight would lose as well), else :flee."
-  [{:keys [health damage creeper? reserve fighting? single? cannot-outrun?]}]
+  [{:keys [health damage creeper? reserve fighting? few? cannot-outrun?]}]
   (if (and (not creeper?)
            (or (leaves-reserve? {:health health :damage damage :reserve reserve})
-               (and fighting? single? (> health (settings/get settings ::hysteresis-health)))
+               (and fighting? few? (> health (settings/get settings ::hysteresis-health)))
                (and fighting? cannot-outrun?)))
     :fight
     :flee))

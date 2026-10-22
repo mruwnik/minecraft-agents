@@ -39,6 +39,8 @@
    ::job-time-s {:default 480 :doc "Seconds a response to a hostile may take (a hide runs long)." :spec (a/num-in 0 nil)}
    ::hold-radius {:default 16 :doc "Hostiles known within this many blocks count for holding position in the dark." :spec (a/num-in 0 nil)}
    ::hit-window-s {:default 5 :doc "A flight hit twice within this long is failing: the body fights. Also how recent a hurt keeps a fight from leaving heard mobs, and makes a round look once more." :spec (a/num-in 0 nil)}
+   ::engage-radius {:default 8 :doc "Blocks within which a hostile is in the fight at hand; a begun fight goes on while at most ::engaged-cap of them are (farther ones are not yet in it)." :spec (a/num-in 0 nil)}
+   ::engaged-cap {:default 2 :doc "Hostiles within ::engage-radius up to which an armed body above the hysteresis health goes on with a begun fight instead of turning its back." :spec (a/int-in 1 nil)}
    ::max-unchanged {:default 3 :doc "Calls of a child in a row that leave the body and the dangers as they were before the reflex stops :no-response." :spec (a/int-in 1 nil)}
    ::struck-s {:default 30 :doc "Seconds the hits the fight landed outlive the round (:struck-hits), so a refired reflex still counts them." :spec (a/num-in 0 nil)}
    ::struck-cap {:default 8 :doc "How many :struck-hits entries memory keeps." :spec (a/int-in 1 nil)}
@@ -46,6 +48,11 @@
 
 (defn stay-inside? [] (settings/get settings ::stay-inside))
 (defn hold-radius [] (settings/get settings ::hold-radius))
+(defn few-engaged?
+  "Whether at most ::engaged-cap of the hostiles near are within ::engage-radius of the body."
+  [p near]
+  (<= (count (filter #(<= (danger-q/mob-distance p %) (settings/get settings ::engage-radius)) near))
+      (settings/get settings ::engaged-cap)))
 (defn hit-window-ms [] (* 1000 (settings/get settings ::hit-window-s)))
 (defn max-unchanged [] (settings/get settings ::max-unchanged))
 (defn struck-policy [] {:cap (settings/get settings ::struck-cap) :ttl (* 1000 (settings/get settings ::struck-s))})
@@ -249,7 +256,7 @@
                  :else
                    (cost/decide {:health (.-health self)
                                :fighting? (fight-begun? c m near)
-                               :single? (= 1 (count near))
+                               :few? (few-engaged? p near)
                                :cannot-outrun? (not (cost/outruns? (or (.-food self) 20) (map cost/mob-kind (remove combat/ranged? near))))
                                :creeper? (boolean (and (some combat/creeper? near) (not (hostile/hit-and-back? c near))))
                                :reserve reserve
