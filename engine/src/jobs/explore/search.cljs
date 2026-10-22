@@ -301,7 +301,7 @@
   "The targets the body has seen (never through walls): blocks {:what :pos}, entities {:what :pos :id}."
   [p names radius]
   (concat (map (fn [b] {:what (:name b) :pos (cell-of (:pos b))})
-               (mapcat #(look/seen-blocks p {:names [%] :radius radius :max 64 :live? true}) names))
+               (when (seq names) (look/seen-blocks p {:names names :radius radius :max (* 64 (count names)) :live? true})))
           (map (fn [e] (cond-> {:what (:name e) :pos (cell-of (:pos e))} (:uuid e) (assoc :id (:uuid e))))
                (look/seen-entities p {:names names :radius radius :max 32}))))
 
@@ -385,13 +385,16 @@
         entity-ttl-s (settings/get settings ::entity-ttl-s)
         searched-ttl-s (settings/get settings (if (surface-only? names) ::animal-searched-ttl-s ::searched-ttl-s))
         seen #(vec (takeable c (sense (:primitives c) names scan-radius)))
-        short? #(< (count (add-found (:found (ctx/mem c) []) (seen) want)) want)
-        _ (when (short?)
+        short-by? #(< (count (add-found (:found (ctx/mem c) []) % want)) want)
+        short? #(short-by? (seen))
+        first-look (seen)
+        looking? (short-by? first-look)
+        _ (when looking?
             (if (breath/in-water? (:primitives c))
               (look/see! c (look/search-effort))
               (when-not (await (look/survey! c :near (look/search-effort))) (look/see! c (look/search-effort)))))
-        _ (do (ctx/update-mem! c dissoc :vantage) (await (hear-lead! c names short?)))
-        sighted (seen)
+        _ (do (ctx/update-mem! c dissoc :vantage) (when looking? (await (hear-lead! c names short?))))
+        sighted (if looking? (seen) first-look)
         [x y z] (here c)
         [ox _ oz] (:origin (ctx/mem c))]
     (notes/note! c (conj (mapv #(assoc % :kind :seen :ttl-ms (* 1000 (if (:id %) entity-ttl-s seen-ttl-s))) sighted)

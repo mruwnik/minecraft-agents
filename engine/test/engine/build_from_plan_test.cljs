@@ -131,7 +131,7 @@
         (let [{:keys [eng p seen]} (start {:inventory [{:name "oak_fence" :count 4} {:name "oak_fence_gate" :count 1}
                                                        {:name "torch" :count 1}]}
                                           {"pen" (pen-plan)})
-              result (await (child-outcome eng job {:plan "pen" :explore false} 200))]
+              result (await (child-outcome eng job {:plan "pen"} 200))]
           (is (= 4 (count (filter #(= "oak_fence" (block p %)) ring))))
           (is (= {"oak_fence" 3} (:short result)))
           (is (= 3 (count (filter (set ring) (:missing result))))))))))
@@ -677,7 +677,7 @@
   "Build the pen with the blocks laid and the extra plans, items and args: [result p seen]."
   [blocks inventory plans args]
   (let [{:keys [eng p seen]} (start {:blocks blocks :inventory inventory} (merge {"pen" (pen-plan)} plans))
-        result (await (child-outcome eng job (merge {:plan "pen" :explore false} args) 300))]
+        result (await (child-outcome eng job (merge {:plan "pen"} args) 300))]
     [result p seen]))
 
 (deftest a-replaceable-block-in-a-wanted-cell-is-placed-into-directly
@@ -943,7 +943,7 @@
         (let [{:keys [eng]} (start {:inventory [{:name "oak_fence" :count 4} {:name "oak_fence_gate" :count 1}
                                                 {:name "torch" :count 1}]}
                                    {"pen" (pen-plan)})
-              short (await (child-outcome eng job {:plan "pen" :explore false} 200))
+              short (await (child-outcome eng job {:plan "pen"} 200))
               {eng2 :eng} (start {:inventory kit} {"pen" (pen-plan)})
               full (await (child-outcome eng2 job {:plan "pen"} 200))]
           (is (= :stopped (:status short)))
@@ -1370,7 +1370,7 @@
                     :blocks {fence-chest "chest"} :containers {fence-chest [{:name "torch" :count 4}]}}
               {:keys [eng p]} (start spec {"pen" (pen-plan)})
               _ (tu/seeing-all p)
-              result (await (child-outcome eng job {:plan "pen" :explore false} 300))]
+              result (await (child-outcome eng job {:plan "pen"} 300))]
           (is (= {"oak_fence" 7} (:short result)) "the torch was fetched though the fences could not be")
           (is (= #{"oak_fence"} (set (keys (:fetch-failed result)))))
           (is (= :stopped (:status result)))
@@ -1390,7 +1390,7 @@
               _ (set! ctx/call (fn [c slot j args]
                                  (when (= 'jobs.items.get-tool j) (swap! tool-calls conj args))
                                  (orig c slot j args)))
-              result (try (await (child-outcome eng job {:plan "pen" :explore false} 300))
+              result (try (await (child-outcome eng job {:plan "pen"} 300))
                           (finally (set! ctx/call orig)))]
           (is (contains? (:fetch-failed result) "oak_fence") (pr-str result))
           (is (some #(= {:block "stone"} (select-keys % [:block])) @tool-calls) "the pickaxe fetch is not held back")
