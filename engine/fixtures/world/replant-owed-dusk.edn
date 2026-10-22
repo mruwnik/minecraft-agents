@@ -1,0 +1,24 @@
+;; Card 629abe5c (Oriel #124): at dusk dusk-home and replant-owed cut each other 12 times in a minute (plant-sapling walked out
+;; the door, dusk-home walked the body back). replant-owed does not hold for a debt where the body would be due home
+;; (jobs.lib.shelter/home-due-at?, dusk-home's timing). Home at the body, debt 10 blocks off, oak sapling carried.
+;; Should-succeed: at 11800 (37 s of day left) no replant-owed firing; by day (6000) it plants. Should-fail: a firing at dusk.
+;; Time: the dusk-home timing reads the clock (:dawn-decision).
+{:defaults
+ {:tags [:forestry :triggers :replant-owed :dusk-home]
+  :time :day :time-why :dawn-decision
+  :plot {:height 8 :floor "grass_block"}
+  :body {:at [6.5 0 6.5] :settle-s 2 :inventory [["oak_sapling" 1]] :effects [["resistance" 600 4]]}
+  :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 60}]
+  :memory [{:kind :home :data {:pos #xyz [6 0 6]} :policy {:cap 1 :ttl :forever}}
+           {:kind :forestry/replant :data {:pos #xyz [16 0 6] :species "oak"}}]
+  :limit-s 100}
+ :cases
+ [{:name "replant-owed-waits-at-dusk-for-a-debt-away-from-home"
+   :act [[:time-set 11800]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :replant-owed}} :for-s 25}]
+   :after [[:not-block [16 0 6] "oak_sapling"]]
+   :limit-s 40}
+  {:name "replant-owed-plants-the-debt-by-day"
+   :act [[:time-set 6000]]
+   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :replant-owed} :data {:kind :done}} :within-s 90}]
+   :after [[:block [16 0 6] "oak_sapling"]]}]}

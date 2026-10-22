@@ -138,6 +138,14 @@
     (is (true? (holds ro/replant-owed {} (conj debt [trees/stalled-kind {:pos {:x 9 :y 64 :z 0}}]) [sapling]))
         "another cell's note leaves the debt owed")))
 
+(deftest the-replant-owed-trigger-leaves-the-dusk-to-the-walk-home
+  (let [debt [:forestry/replant {:pos {:x 6 :y 64 :z 0} :species "oak"}]
+        at (fn [time home-x] (ro/replant-owed (:p (lt/setup {:blocks (fm/ground [[6 0]]) :inventory [sapling] :time time}))
+                                              (view [debt [:home {:pos {:x home-x :y 64 :z 0}}]]) {} (ew/of-data {} {} []) nil))]
+    (is (true? (at 6000 0)))
+    (is (false? (at 11800 0)) "at the debt the body would be due home: dusk-home would call it back at once")
+    (is (true? (at 11800 4)) "a debt beside home")))
+
 (deftest plant-sapling-notes-a-failed-debt-cell-so-the-trigger-stays-quiet
   (async done
     (tu/run-async done

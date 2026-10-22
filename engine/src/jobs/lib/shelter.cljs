@@ -150,4 +150,19 @@
   [view]
   (or (mem/place view :home) (mem/place view :bed)))
 
+(def home-due-defaults "The dusk-home trigger's timing (triggers.survival.dusk-home)." {:margin-s 60 :speed 4.3 :slack 1.4 :arrive 4})
+
+(defn home-due-at?
+  "Whether a body standing at pos would be due home before night: its home-target within :limit and farther than
+  :arrive, and the day left no longer covering the walk (:slack times the straight line at :speed blocks a second) plus
+  :margin-s. args are merged over home-due-defaults and sh-clock/home-limit."
+  [p view pos args]
+  (let [{:keys [limit margin-s speed slack arrive]} (merge home-due-defaults {:limit sh-clock/home-limit} args)
+        left-s (/ (- sh-clock/dusk-tick (.-timeOfDay (.self p))) 20)
+        home (home-target view)]
+    (boolean
+     (and home (pos? left-s)
+          (let [d (u/dist pos home)]
+            (and (< arrive d) (<= d limit) (<= left-s (+ margin-s (/ (* slack d) speed)))))))))
+
 (def shelter-policy {:cap 10 :ttl sh-clock/ms-per-day})
