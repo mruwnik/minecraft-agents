@@ -188,7 +188,10 @@
   "Collect the item a swap made room for (:swap in memory) with an items.pick-up-loose child, then forget the swap
   (kept while the child waits on the world, so the next round resumes it)."
   [c]
-  (let [{:keys [item worth]} (:swap (ctx/mem c))
+  (let [{:keys [item worth pos]} (:swap (ctx/mem c))
+        _ (when pos ; the toss turned the body away from the item, and loose items are seen only inside the view cone
+            (await (ctx/act c :look (clj->js {:pos pos})))
+            (look/see! c))
         r (await (child/run!* c :collect 'jobs.items.pick-up-loose {}))]
     (when-not (= :continue r)
       (let [status (if (pos? (or (:collected (:data r)) 0)) "collected" "left")]
@@ -302,10 +305,17 @@
               {:item (assoc g :worth worth) :stack stack})))
         (ground-items c (swap-radius))))
 
+(defn ^:async seek-swap!
+  "Once per run, a look round for a swap target: ground items count only in the view cone."
+  [c run st]
+  (when-not (:swap-looked @run)
+    (swap! run assoc :swap-looked true)
+    (await (look/glance-until! c (vals look/headings) #(swap-target c st)))))
+
 (defn ^:async swap-in!
   "Throw stack away from item (the swap intent written first), then collect item."
   [c {:keys [item stack]}]
-  (ctx/update-mem! c assoc :swap {:id (:id item) :item (:name item) :worth (:worth item)})
+  (ctx/update-mem! c assoc :swap {:id (:id item) :item (:name item) :worth (:worth item) :pos (:pos item)})
   (if (await (toss! c stack (direction (:primitives c) (:pos item)) {:for (:name item)}))
     (await (pick-up-swap! c))
     (ctx/update-mem! c dissoc :swap)))
@@ -403,7 +413,7 @@
         chest (when-not (:chest-done @run) (usable-chest c))
         names (ord/deposit-names inventory keep recency)
         dir (await (direction! c run))
-        swap (when (and dir (zero? free-now)) (swap-target c st))
+        swap (when (and dir (zero? free-now)) (or (swap-target c st) (await (seek-swap! c run st))))
         order (when dir (ord/toss-order inventory keep recency toss-below))]
     (cond
       (>= free-now free) (await (finish-end! c nil))

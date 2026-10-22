@@ -63,7 +63,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "oak_leaves" :count 4}] :blocks {"2,63,0" "composter"}})]
           (tu/blind p)
-          (let [r (await (child-outcome eng 'jobs.farm.compost {} 10))]
+          (let [r (await (child-outcome eng 'jobs.farm.compost {:spend {:job-time 1000}} 10))]
             (is (= :no-composter (:reason r)))
             (is (empty? (calls p "useOn")))))))))
 

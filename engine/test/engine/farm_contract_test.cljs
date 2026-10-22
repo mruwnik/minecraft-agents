@@ -159,10 +159,10 @@
                                   {:at ct/at :items ["wheat_seeds"]} 40))]
           (is (= :done (:kind e)))
           (is (= 1 (get-in e [:data :bone-meal]))))
-        (is (= {:kind :condition-failed :cause {:reason :no-composter}}
-               (kcm (await (ending-of (ct/setup {:inventory (ct/inv "oak_leaves" 4)}) compost {} 10)))))
-        (is (= {:kind :condition-failed :cause {:reason :nothing-to-feed}}
-               (kcm (await (ending-of (ct/setup {:inventory (ct/inv "stick" 4) :blocks ct/comp-block}) compost {:at ct/at} 10)))))))))
+        (is (= {:kind :condition-failed :cause :no-composter}
+               (kc (await (ending-of (ct/setup {:inventory (ct/inv "oak_leaves" 4)}) compost {} 10)))))
+        (is (= {:kind :condition-failed :cause :nothing-to-feed}
+               (kc (await (ending-of (ct/setup {:inventory (ct/inv "stick" 4) :blocks ct/comp-block}) compost {:at ct/at} 10)))))))))
 
 (deftest compost-stopped-early-is-done-only-when-it-meets-least
   (async done

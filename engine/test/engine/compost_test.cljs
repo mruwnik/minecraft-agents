@@ -177,8 +177,8 @@
       (fn ^:async t []
         (doseq [[owner at-arg extra meal reason seeds]
                 [["Fake" {:at at} {} 1 nil 3] ["FAKE" {} {} 1 nil 3]
-                 ["Miles" {:at at} {} nil   :no-composter 10]
-                 ["Miles" {} {} nil :no-composter 10]
+                 ["Miles" {:at at} {} 0 :no-composter 10]
+                 ["Miles" {} {} 0 :no-composter 10]
                  ["Miles" {:at at} {:ignore-zones? true} 1 nil 3]]]
           (let [{:keys [eng p seen]} (setup {:inventory (inv "wheat_seeds" 10) :blocks comp-block}
                                             (ew/of-data {} {} [(assoc zone-over-composter :owner owner)]))

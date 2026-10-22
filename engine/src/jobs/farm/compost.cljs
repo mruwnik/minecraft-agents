@@ -175,18 +175,20 @@
   "The cause the job cannot start: no composter seen or allowed, else nothing to feed to one that has no bone meal
   to give (level 7 or 8, or meal lying by it)."
   [c]
-  (if-let [pos (composter-at c)]
-    (when (and (empty? (feedable (reserve/free c :compost) (:args c)))
+  (cond
+    (not (look/surveyed? c)) nil ; the round looks first: a composter or its meal may be out of the view cone
+    (composter-at c)
+    (let [pos (composter-at c)]
+     (when (and (empty? (feedable (reserve/free c :compost) (:args c)))
                (< (level-of (u/seen-block (:primitives c) pos)) 7)
                (nil? (meal-near c pos)))
-      {:reason :nothing-to-feed})
-    {:reason :no-composter}))
+      {:reason :nothing-to-feed}))
+    :else {:reason :no-composter}))
 
 (def can-start?
-  "Zones read, a composter seen (:look until the body has looked around) and something to feed it."
+  "Zones read; once the round has looked around, a composter seen and something to feed it or meal to take."
   (cond/and checks/zones-read
-            (checks/refusing #(if (or (look/surveyed? %) (composter-at %)) :later :look) :ready
-                             "a composter and something to feed" problem)))
+            (checks/refusing :ready "a composter and something to feed" problem)))
 
 (defn finish!
   "End the call. Taking :times bone meal is done; an early stop (extra's :reason) is done when it took the call's least,
@@ -224,8 +226,10 @@
         pos (composter-at c)
         block (when pos (u/seen-block p pos))]
     (cond
-      (and (nil? pos) (not (look/surveyed? c)))
-      (do (await (look/survey! c)) :again) ; a composter behind the body is not seen until it looks
+      (not (look/surveyed? c))
+      (let [meal (await (look/survey-until! c #(some->> (composter-at c) (meal-near c))))]
+        (when meal (await (take-meal! c meal)))
+        :again)
 
       (nil? pos)
       (finish! c {:reason :no-composter})
