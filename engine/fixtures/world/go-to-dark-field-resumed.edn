@@ -1,0 +1,19 @@
+;; A go-to cut mid-walk leaves a healing body (8 hp, food 15, bread carried) on dark open ground with the hut it was walking to 20 blocks off and a skeleton (no AI) 14 blocks off the way: waiting there costs spawns, so the rest of the walk is the cheaper risk (go-to.risk/stay-estimate).
+;; Should-succeed: go-to arrives in the lit hut. Should-fail: it waits :risky out in the dark.
+{:defaults
+ {:tags [:survival :movement :go-to]
+  :time :any
+  :plot {:height 8 :length 64 :width 40 :light :dark}
+  :blocks [[:fill [38 0 8] [44 3 14] "stone"] [:fill [39 0 9] [43 2 13] "air"] [:set [39 0 11] "torch"] [:set [43 0 11] "torch"]
+           [:fill [38 0 11] [38 1 11] "air"]]
+  :body {:at [16.5 0 11.5] :yaw 270 :settle-s 3 :inventory [["bread" 3]]}
+  :limit-s 90}
+ :cases
+ [{:name "healing-body-in-a-dark-field-goes-on-to-the-lit-hut"
+   :act [[:summon "skeleton" [28.5 0 25.5] "{NoAI:1b}"]
+         [:rcon "damage $BODY 12 minecraft:generic"]
+         [:wait-s 6]
+         [:job (jobs.movement.go-to {:pos #at [41 0 11] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :risky}} :for-s 20 :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :of-job true}]
+   :after [[:body-near [41.5 0 11.5] 2.5]]}]}

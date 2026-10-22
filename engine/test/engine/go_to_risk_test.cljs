@@ -11,6 +11,7 @@
             [jobs.lib.hide-spot :as hide-spot]
             [jobs.lib.lava-risk :as lava-risk]
             [jobs.lib.look :as look]
+            [jobs.lib.price :as price]
             [jobs.movement.go-to.risk :as risk]))
 
 (def inside {:x 5 :y 64 :z 0})
@@ -175,3 +176,10 @@
         s (risk/status c far-goal)]
     (is (= :never (first s)))
     (is (= :stranded (:reason (nth s 2))))))
+
+(deftest a-healing-body-on-dark-open-ground-goes-on-when-waiting-there-costs-as-much
+  (let [skeleton {:id 9 :name "skeleton" :kind "hostile" :pos {:x 10 :y 64 :z 14}}
+        c (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 8 :food 15} :inventory [{:name "bread" :count 3}] :entities [skeleton]))
+        goal {:x 20 :y 64 :z 0}]
+    (is (> (:hp (risk/estimate c goal)) (price/allowed c)) "over the half-of-health allowance")
+    (is (= :ok (first (risk/status c goal))))))

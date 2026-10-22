@@ -50,6 +50,16 @@
           (is (= 1 (count (st/emitted seen :shelter.exposed))))
           (is (= [[:exposed 1]] (mapv (juxt :reason :fled) (st/emitted seen :stopped)))))))))
 
+(deftest a-flee-that-go-to-ends-stranded-is-reported-as-staying-put
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (await (flee-home-night (update dark-world :blocks merge walled-home) {}))]
+          (st/dawn-after! p 6)
+          (await (with-child-log #(tu/run-until-empty eng 80)
+                   (fn [_ k _ _] (when (= :flee k) {:kind :impossible :cause {:reason :stranded}}))))
+          (is (= [true] (mapv :stranded (st/emitted seen :shelter.flee_failed)))))))))
+
 (deftest a-flee-cut-mid-walk-resumes-the-same-target-from-where-the-body-is
   (async done
     (tu/run-async done

@@ -35,6 +35,8 @@
                   :doc "Blocks around the goal within which a remembered death or hide adds no risk: the body walking to the spot goes for its own things, and only a hostile known there counts."}
    ::way-radius {:default 16 :spec (a/num-in 0 nil)
                  :doc "Blocks from the straight way within which a known hostile adds its fight to the risk of the walk."}
+   ::heal-s-per-hp {:default 4 :spec (a/num-in 0 nil)
+                    :doc "Seconds a body that can heal takes to regain an hp, for the wait that would make a risky walk affordable (stay-estimate)."}
    ::step {:default 4 :spec (a/num-in 1 nil)
            :doc "Blocks between the cells of the way whose light is judged; a way longer than ::max-cells steps is judged at that many cells, spaced wider."}
    ::max-cells {:default 256 :spec (a/int-in 1 nil)
@@ -110,14 +112,16 @@
     {:hp (+ spawn-hp hostile-hp death-hp hide-hp lava) :lava-hp lava :hide-hp hide-hp :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :dark-s exposed-s :hostiles (count hostiles)}))
 
 (defn stay-estimate
-  "hp the body expects to lose staying at its cell for the time the walk to `goal` takes (the wait that walking would end): the fight
-  with every hostile known within ::way-radius of it (they reach it where it stands) plus the spawns met at its cell by the light seen
-  there (price/stay-hp)."
-  [c goal]
+  "hp the body expects to lose staying at its cell instead of walking `route-hp` to `goal`: the fight with every hostile known near the way
+  (::way-radius: they find the body where it waits too) plus the spawns met at its cell by the light seen there (price/stay-hp), for the
+  time the walk takes, or, for a body that can heal, for the wait until its health would afford the route (::heal-s-per-hp an hp)."
+  [c goal route-hp]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
-        secs (/ (u/dist feet goal) (cost/walk-blocks-per-s))
-        hostiles (danger/hostiles-near-way p feet (settings/get settings ::way-radius) {})
+        health (.-health (.self p))
+        heal-s (if (price/cannot-heal? c) 0 (* (settings/get settings ::heal-s-per-hp) (max 0 (- (min 20 (/ route-hp (settings/get price/settings ::price/risk-share))) health))))
+        secs (max heal-s (/ (u/dist feet goal) (cost/walk-blocks-per-s)))
+        hostiles (danger/hostiles-near-way p goal (settings/get settings ::way-radius) {})
         hit (fn [mobs] (if (seq mobs) (cost/fight-damage (assoc (wworld/kit-of c) :mobs mobs)) 0))
         chance (chance-at p (update-vals feet js/Math.floor) (:y feet) false)]
     {:hp (+ (hit (mapv (fn [e] {:name (.-name e) :distance (danger/mob-distance p e) :hits 0}) hostiles))
@@ -133,7 +137,7 @@
         allowed (price/allowed c)]
     (if (<= hp allowed)
       (contract/ok :acceptable (str "route risk " (price/round1 hp) " hp, within " (price/round1 allowed)))
-      (let [stay (check-cache/cached c [::stay goal (sense/round-looked c)] #(stay-estimate c goal))
+      (let [stay (check-cache/cached c [::stay goal (sense/round-looked c)] #(stay-estimate c goal hp))
             over (str "route risk " (price/round1 hp) " hp over the " (price/round1 allowed) " the body can afford: "
                       (price/round1 dark-s) " s on dark open ground costs " (price/round1 spawn-hp) " hp, "
                       hostiles " hostile(s) near the way " (price/round1 hostile-hp) " hp, " (price/round1 death-hp) " hp for a recent death near it, " (price/round1 hide-hp) " hp for a recent hide near it, " (price/round1 lava-hp) " hp for seen lava near the way")]

@@ -3,6 +3,7 @@
   (:require [jobs.lib.cost.health :as cost-health]
             [jobs.lib.choose :as choose]
             [clojure.set :as set]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
@@ -122,7 +123,11 @@
         (if arrived
           (ctx/emit! c :shelter.fled :info (assoc (set/rename-keys (select-keys t [:kind :pos :name :distance :cost :needed]) {:kind :target})
                                                   :text (str "could not shelter here; moved somewhere safer (" (name (:kind t)) ")")))
-          (ctx/emit! c :shelter.flee_failed :info (assoc (set/rename-keys (select-keys t [:kind :pos :name]) {:kind :target})
-                                                         :text "could not shelter here and could not reach somewhere safer")))
+          (let [stranded? (= :stranded (contract/cause-key w))]
+            (ctx/emit! c :shelter.flee_failed :info (assoc (set/rename-keys (select-keys t [:kind :pos :name]) {:kind :target})
+                                                           :stranded stranded?
+                                                           :text (if stranded?
+                                                                   "could not shelter here; the walk to somewhere safer costs more than staying, so the body stays and seals in again"
+                                                                   "could not shelter here and could not reach somewhere safer")))))
         :again))))
 
