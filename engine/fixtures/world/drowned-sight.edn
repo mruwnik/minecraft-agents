@@ -1,0 +1,18 @@
+;; Card 64a7db75: a drowned swimming below the surface of a pond beside the shore is a danger (hostile-near fires): the body stands
+;; on dry stone, the drowned (NoAI, helmeted: never hurts, no sun burn) floats one block under the water surface 3 blocks away.
+;; A player sees through water and knows a drowned surfaces and comes ashore (or throws its trident).
+;; Stone x 3..30, z 9..23, y -1..2 with a pond x 4..14, z 10..22, water y 0..2 (surface level with the shore, top feet y 3).
+;; Should-succeed: the hostile-near reflex fires within 10 s.
+{:defaults
+ {:tags [:hostile :survival :water]
+  :time :any
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile)}]
+  :blocks [[:fill [3 -1 9] [30 2 23] "stone"]
+           [:fill [4 0 10] [14 2 22] "water"]]
+  :body {:at [16.5 3 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "drowned-under-the-pond-surface-fires-hostile-near"
+   :act [[:summon "drowned" [13.5 1 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 10}]}]}

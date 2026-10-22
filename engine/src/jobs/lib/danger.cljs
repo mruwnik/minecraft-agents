@@ -165,6 +165,14 @@
       (reach/cell-of rough)
       (->> (range len (+ len (/ obs/near-band 2) 1) 1) (map cell-at) (filter open?) first))))
 
+(defn surfaced
+  "Cell [x y z] of mob e when it swims (a drowned): raised to the top of the water column it stands in, as it surfaces to
+  come at the body; the way search steps up only on land."
+  [kind-at e [x y z :as cell]]
+  (if (and (= "drowned" (.-name e)) (keyword-identical? :water (kind-at x y z)))
+    (loop [y y] (if (keyword-identical? :water (kind-at x (inc y) z)) (recur (inc y)) [x y z]))
+    cell))
+
 (defn danger-in?
   "danger? reading blocks through kind-at (shared by the mobs of one query) and, with pr, sharing walk proofs. opts
   :arrow-at is the query's shared arrow lookup (reach/lookup p reach/arrow-kind-of); without it a ranged mob builds its own.
@@ -193,7 +201,7 @@
           (or (not way?)
               (let [from (u/pos-of (.-pos (.self p)))
                     body (reach/cell-of from)
-                    mob (if (seen-only? e) (reach/cell-of (mob-pos p e)) (open-cell-from kind-at from (mob-pos p e)))]
+                    mob (if (seen-only? e) (surfaced kind-at e (reach/cell-of (mob-pos p e))) (open-cell-from kind-at from (mob-pos p e)))]
                 (or (and (heard-close? p e)
                          (beside-toward? kind-at body (:direction (obs/rough-hearing from (u/pos-of (.-pos e))))))
                     (and mob

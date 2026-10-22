@@ -1521,3 +1521,12 @@
         cell (hostile-fight/back-cell flat {:x 0.5 :y 64 :z 0.5} {:x 2.5 :y 64 :z 0.5} 3)]
     (is (<= (:x cell) -2) "three blocks straight away from the creeper")
     (is (nil? (hostile-fight/back-cell (constantly "stone") {:x 0.5 :y 64 :z 0.5} {:x 2.5 :y 64 :z 0.5} 3)) "walled in: no cell")))
+
+(def pond
+  "A pond east of the body: water at x 2..4, y 62 and 63 (the shore floor's level is 63), z -2..2, stone under it."
+  (into {} (for [x (range 2 5) z (range -2 3) y [61 62 63]]
+             [(str x "," y "," z) (if (= y 61) "stone" "water")])))
+
+(deftest a-drowned-swimming-in-a-pond-beside-the-body-is-a-danger-at-any-depth
+  (are [y] (holds? {:blocks pond :entities [{:id 9 :name "drowned" :kind "hostile" :pos {:x 3.5 :y y :z 0.5}}]} {:radius 8})
+    63 62))
