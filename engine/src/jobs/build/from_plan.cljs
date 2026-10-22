@@ -13,6 +13,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.breath :as breath]
             [jobs.lib.escape :as escape]
             [jobs.lib.ready :as ready]
             [jobs.lib.work-place :as work-place]
@@ -225,10 +226,11 @@
     (if (= :continue r) :continue :again)))
 
 (defn in-hole?
-  "Whether the body stands in a hole at least ::hole-depth deep (escape/pit-depth)."
+  "Whether the body stands in a hole at least ::hole-depth deep (escape/pit-depth); afloat in water it is not in one."
   [c]
   (let [{:keys [x y z]} (u/self-pos c)]
-    (<= (settings/get settings ::hole-depth) (escape/pit-depth (escape/block-at-of (:primitives c)) [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))))
+    (and (not (breath/in-water? (:primitives c)))
+         (<= (settings/get settings ::hole-depth) (escape/pit-depth (escape/block-at-of (:primitives c)) [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)])))))
 
 (defn hole-blocked!
   "Count a failed walk from a hole; at ::hole-walks of them in a row end the build :shut-in, else :again."
@@ -296,7 +298,7 @@
           :again)
       (let [shut? (or (in-hole? c) (shut-in-walk? c))
             w (await (walk-stand! c cell stand (cond-> {} (not shut?) (assoc :ways (cond-> #{:walk :clear-seal} (sh-inside/sheltered-in c) (into [:stair :dig-out]))))))]
-        (if (and (= :blocked w) (or shut? (shut-in-walk? c)))
+        (if (and (= :blocked w) (or shut? (shut-in-walk? c)) (not= :budget (:why (:data (near/last-walk c)))))
           (hole-blocked! c)
           (do (ctx/update-mem! c dissoc :hole-blocked)
               (if (= :partial w) :continue :again)))))))
@@ -416,6 +418,13 @@
       :continue
       (do (sh-spawn/retract-bed! c (:removed (:data r))) :again))))
 
+(defn site-of
+  "The cell at the middle of the plan's cells, on their lowest layer."
+  [cells]
+  (let [ps (map :pos cells)
+        mid (fn [i] (js/Math.round (/ (+ (apply min (map #(% i) ps)) (apply max (map #(% i) ps))) 2)))]
+    (when (seq ps) [(mid 0) (apply min (map #(% 1) ps)) (mid 2)])))
+
 (defn ^:async fetch-step!
   "Fetch what the plan lacks (jobs.lib.need) when a fetch is due: :continue while the child waits on the world, :again
   once it ended (a failed one, a limit too, is booked), nil when nothing is due. A bed the plan lacks is first taken up
@@ -425,7 +434,7 @@
     (let [bed? (and (= :need (:reason w)) (wood/bed? (:item w)))]
       (if (and bed? (need/fetch-opts c) (own-bed-near? c))
         (await (take-own-bed! c))
-        (let [o (assoc (need/fetch-opts c) :explore (:explore (:args c)) :for-plan (:plan (:args c)))
+        (let [o (assoc (need/fetch-opts c) :explore (:explore (:args c)) :for-plan (:plan (:args c)) :center (site-of (:cells (planned c))))
               e (await (cond
                          bed? (need/blocks! c wood/bed-names (:count w) o)
                          (= :need (:reason w)) (need/item! c (:item w) (:count w) o)

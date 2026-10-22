@@ -1240,6 +1240,19 @@
           (is (re-find #"hole" (:text result)))
           (is (<= @walks 3) "not one failed walk per planned cell"))))))
 
+(deftest a-walk-that-gives-up-on-its-node-budget-is-no-hole-ending
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "far" :parts [{:id "posts" :cells [[40 64 0] [41 64 0] [42 64 0] [43 64 0]] :want "oak_fence"}]}
+              hole (into {} (for [x [3 4 5] z [3 4 5] y [64 65 66] :when (not= [4 4] [x z])] [(h/cell-key x y z) "dirt"]))
+              {:keys [eng]} (start {:inventory kit :blocks hole :self {:pos {:x 4.5 :y 64 :z 4.5}}} {"far" plan})
+              result (await (tu/with-near-stub (fn ^:async f [c _ _ _]
+                                                 (ctx/update-mem! c assoc :near-walk {:data {:why :budget}})
+                                                 :blocked)
+                              (fn ^:async b [] (await (child-outcome eng job {:plan "far"} 30)))))]
+          (is (not= :shut-in (:reason result)) "a node-budget give-up is not a body shut in a hole"))))))
+
 (deftest a-body-shut-in-by-a-walk-stops-shut-in-instead-of-walking-to-every-cell
   (async done
     (tu/run-async done
@@ -1442,7 +1455,7 @@
           (try
             (await (child-outcome eng job {:plan "pen"} 20))
             (finally (set! ctx/call orig)))
-          (is (some #(and (= "oak_fence" (:item %)) (true? (:explore %)) (= "pen" (:for-plan %))) @seen) (pr-str @seen)))))))
+          (is (some #(and (= "oak_fence" (:item %)) (true? (:explore %)) (= "pen" (:for-plan %)) (vector? (:center %))) @seen) (pr-str @seen)))))))
 
 (deftest stand-levels-are-the-cells-first-then-the-bodys-when-near
   (are [body cell levels] (= levels (plan/stand-levels body cell))

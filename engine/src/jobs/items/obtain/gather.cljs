@@ -4,7 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
-            [jobs.items.obtain.base :refer [animal-radius explore-far-setting explore-rounds search-scan-radius tried! ways-of]]
+            [jobs.items.obtain.base :refer [animal-radius explore-far-setting explore-rounds search-scan-radius site-radius tried! ways-of]]
             [jobs.items.obtain.need :refer [explore-opts gather-viable? pickaxe-first? search-names tools-wanted trees-unreachable?]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
@@ -167,15 +167,23 @@
                (mod (js/Math.round (/ angle (/ js/Math.PI 4))) 8))]
     (heading-ring (mod (+ base (* 3 (dec k))) 8))))
 
+(defn within-site
+  "Search options o kept within the site-radius setting of center (nil: unchanged)."
+  [o center]
+  (cond-> o center (update :max-distance min (site-radius))))
+
 (defn round-opts
   "The search options for search number k of a need: the first rings round the start, the rest outward along a heading."
   [c k]
-  (if (zero? k)
-    (explore-opts c)
-    (let [start (or (:explore-start (ctx/mem c)) [0 0 0])
-          p (.-pos (.self (:primitives c)))]
-      (assoc (explore-far-setting) :pattern :outward
-             :heading (far-heading start [(.-x p) (.-y p) (.-z p)] k)))))
+  (let [center (:center (:args c))]
+    (within-site
+     (if (zero? k)
+       (explore-opts c)
+       (let [start (or center (:explore-start (ctx/mem c)) [0 0 0])
+             p (.-pos (.self (:primitives c)))]
+         (assoc (explore-far-setting) :pattern :outward
+                :heading (far-heading start [(.-x p) (.-y p) (.-z p)] k))))
+     center)))
 
 (defn ^:async explore-walk!
   "Walk and look for need (a jobs.explore.search child): :again once it is seen; a search that finds none stops the
@@ -198,7 +206,7 @@
                       :for targets :max-distance (:max-distance o) :max-legs (:max-legs o) :heading (:heading o)
                       :from (mapv #(js/Math.floor %) [(.-x here) (.-y here) (.-z here)])}))
         e (waits/waiting-out c (await (ctx/call c :explore 'jobs.explore.search
-                           (child/search-args (merge o {:target targets :count 1 :scan-radius (search-scan-radius) :use-notes false :takeable true :avoid (vec (:cut-off (ctx/mem c)))}
+                           (child/search-args (merge o (when-let [at (:center (:args c))] {:center at}) {:target targets :count 1 :scan-radius (search-scan-radius) :use-notes false :takeable true :avoid (vec (:cut-off (ctx/mem c)))}
                                                      (when (animal? need) {:forage (boolean (foods/edible? (:key need)))}))))))]
     (if (= :continue e)
       :continue

@@ -41,6 +41,7 @@
    :count {:doc "how many to carry at least (carried at the start count)" :spec (a/int-in 1 nil) :default 1}
    :for-plan {:doc "id of the plan whose work this is: a crafting table may stand in its own cells; passed to the craft steps" :spec a/name? :default nil}
    :avoid {:doc "cells [x y z] a crafting table is never put in or dug for (a caller's dig line); passed to the craft steps" :spec (a/coll-of a/position?) :default nil}
+   :center {:doc "a cell [x y z] the searches for an unseen block or animal centre on (a build's site): each starts there and stays within the ::site-radius setting of it; nil: where the body stands" :spec a/position? :default nil}
    :explore {:doc "false drops the :search way (the base ::explore setting's search for a raw need not seen): fails :no-source instead" :spec boolean? :default true}})
 
 (a/defargs settings

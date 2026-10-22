@@ -216,6 +216,13 @@
         (let [r (await (run! #(need/item! % "coal" 1 {:for-plan "house"}) nil 1))]
           (is (= "house" (:for-plan (first @(:obtain r))))))))))
 
+(deftest a-center-option-reaches-the-obtain-child
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [r (await (run! #(need/item! % "coal" 1 {:center [10 64 20]}) nil 1))]
+          (is (= [10 64 20] (:center (first @(:obtain r))))))))))
+
 (deftest a-different-need-in-the-same-slot-starts-the-child-afresh
   (async done
     (tu/run-async done

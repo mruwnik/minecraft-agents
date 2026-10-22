@@ -30,6 +30,11 @@
   (into {"30,68,4" "oak_leaves" "31,67,4" "oak_leaves" "-30,68,4" "oak_leaves" "-31,67,4" "oak_leaves"}
         (for [x [30 -30] y [64 65 66 67]] [(str x "," y ",4") "oak_log"])))
 
+(deftest a-search-centred-on-a-site-stays-within-the-site-radius
+  (is (= 96 (:max-distance (gather/within-site {:max-distance 192} [490 61 250]))) "the far search is cut to the site radius")
+  (is (= 64 (:max-distance (gather/within-site {:max-distance 64} [490 61 250]))) "a nearer search is kept")
+  (is (= 192 (:max-distance (gather/within-site {:max-distance 192} nil))) "no centre: unbounded as before"))
+
 (deftest logs-seen-only-in-a-foreign-zone-are-explored-past-and-then-named
   (async done
     (tu/run-async done

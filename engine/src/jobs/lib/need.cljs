@@ -178,10 +178,11 @@
 
 (defn ^:async fetch!
   "Get :count more of what args name (jobs.items.obtain's :count is the amount to carry, so the carried is added here)."
-  [c job args cause-reason wanted {:keys [slot how explore return? minutes for-plan]}]
+  [c job args cause-reason wanted {:keys [slot how explore return? minutes for-plan center]}]
   (let [slot (or slot :need)
         args (cond-> (merge (assoc args :explore (boolean explore)) (child-limits job {:how how :minutes minutes}))
-                for-plan (assoc :for-plan for-plan))
+                for-plan (assoc :for-plan for-plan)
+                (and center (= job 'jobs.items.obtain)) (assoc :center center))
         want [job args]
         identity-of [job (dissoc args :count :avoid :spend)]
         _ (when (not= identity-of (get-in (ctx/mem c) [:need/slot-want slot]))
