@@ -473,3 +473,16 @@
     (is (fetch/nearer? {:x 0 :y 70 :z 0} {:x 30 :y 70 :z 0} pile))
     (is (not (fetch/nearer? {:x 53 :y 50 :z -100} {:x 53 :y 50 :z -100} pile)))
     (is (not (fetch/nearer? {:x 53 :y 51 :z -100} {:x 53 :y 50 :z -100} pile)))))
+
+(deftest the-decision-text-names-the-worth-of-the-items-it-does-not-list
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pile (into dt/death-pile-of-the-field-report
+                         [{:name "iron_pickaxe" :count 1} {:name "iron_sword" :count 1} {:name "iron_axe" :count 1} {:name "iron_shovel" :count 1}])
+              {:keys [eng]} (setup {:floor tu/walk-floor :entities (vec (pile-drops pile))})]
+          (die! eng {:pos dt/death-pos :inventory pile :cause "skeleton"})
+          (core/submit! eng job {})
+          (await (run-until-empty eng 20))
+          (let [text (decided-text eng)]
+            (is (re-find #"value [0-9.]+ \(.*, [0-9]+ other kinds [0-9.]+\)" text) text)))))))

@@ -23,9 +23,12 @@
 (defn why-text
   "The value and the cost with their main parts: \"value 3058.5 (24 raw_iron 2880, ...), cost 31 (trip 10, walk 6,
   danger 15: zombie 1.5)\"."
-  [{:keys [value cost top-items parts reason top-mobs]} margin]
+  [{:keys [value cost top-items other-items parts reason top-mobs]} margin]
   (str "value " (round1 value)
-       (when (seq top-items) (str " (" (str/join ", " (map (fn [{:keys [name count value]}] (str count " " name " " (round1 value))) top-items)) ")"))
+       (when (seq top-items)
+         (str " (" (str/join ", " (map (fn [{:keys [name count value]}] (str count " " name " " (round1 value))) top-items))
+              (when other-items (str ", " (:kinds other-items) " other kinds " (round1 (:value other-items))))
+              ")"))
        ", cost " (if (= :infinite cost) (str "infinite (" (name (or reason :unknown)) ")") (round1 cost))
        (when (seq parts)
          (str " (" (str/join ", " (map (fn [[k n]] (str (name k) " " (round1 n))) parts))
@@ -156,6 +159,8 @@
                         (cfg/danger-memory-ms))
              :flight-s (flight-s here (:mobs threat))
              :top-items (mapv #(select-keys % [:name :count :value]) (take (cfg/top-n) (:items worth)))}
+      (seq (drop (cfg/top-n) (:items worth))) (assoc :other-items (let [rest-items (drop (cfg/top-n) (:items worth))]
+                                                                    {:kinds (count rest-items) :value (reduce + 0 (map :value rest-items))}))
       drowns (assoc :reason :no-air-way :detail drowns)
       (and (not drowns) (:parts fetch)) (assoc :parts (:parts fetch))
       (and (not drowns) (:reason fetch)) (assoc :reason (:reason fetch))
