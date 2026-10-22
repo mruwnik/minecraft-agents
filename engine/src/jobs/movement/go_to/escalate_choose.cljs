@@ -4,7 +4,6 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
-            [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
@@ -80,12 +79,11 @@
 
 (defn shelter-exit?
   "Whether a give-up with result may leave the body's own shelter instead: the walk proved the way needs the world
-  changed, the body is shut in its shelter and it is not night (dig-in-leave/leave-unsafe)."
+  changed, the body is shut in its shelter (at any hour: the start check priced the way out)."
   [c result]
   (boolean (and (not (contains? (skips c) :leave-shelter))
                 (or (escalate-reason? result (some-> (:doors (:args c)) keyword)) (sprint-only? result))
-                (sh-inside/sheltered-in c)
-                (nil? (dig-leave/leave-unsafe (:primitives c))))))
+                (sh-inside/sheltered-in c))))
 
 (defn fetch-tool?
   "Whether the escalation may fetch a pickaxe (the stair's and a :dig-route dig's ways): the body is free (a shut-in body

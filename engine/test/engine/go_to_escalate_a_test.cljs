@@ -340,14 +340,14 @@
           (is (empty? (events-of seen :go-to.escalated)) "its go-to child runs with :ways #{:walk :clear-seal}")
           (is (empty? (calls p "jumpPlace"))))))))
 
-(deftest go-to-sealed-in-its-own-shelter-by-night-stays-in-it
+(deftest go-to-sealed-in-its-own-shelter-by-night-leaves-it-too
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out p seen]} (await (run-in-shelter! 14000))]
-          (is (not= {:arrived true} @out))
-          (is (empty? (events-of seen :go-to.escalated)) "no refuge exit at night")
-          (is (empty? (calls p "dig"))))))))
+          (is (= [:leave-shelter] (mapv :step (events-of seen :go-to.escalated))) "the start check priced the way out, not the clock")
+          (is (seq (calls p "dig")))
+          (is (= {:arrived true} @out)))))))
 
 (deftest go-to-sealed-in-its-own-shelter-by-day-leaves-it-and-walks-on
   (async done

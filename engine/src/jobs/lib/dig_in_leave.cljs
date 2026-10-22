@@ -266,18 +266,20 @@
   The pit and the stair are left dug. Out of it, with :take-back? (default true), the valuable blocks the shelter placed
   (the :take-back cells of its entry, still the placed block) are dug and their drops collected (jobs.items.collect-drops);
   a cell it cannot reach or dig is left, with a debug dig-in.take-back-skipped. Events: dig-in.took-back (info).
+  With :any-time? (go-to's escalation, whose route risk priced the exit) the body leaves at night too.
   Events: dig-in.left (info), dig-in.staying (info, unsafe), dig-in.trapped (warn, no way out)."
   ([c] (leave! c {}))
-  ([c {:keys [toward take-back?] :or {take-back? true}}]
+  ([c {:keys [toward take-back? any-time?] :or {take-back? true}}]
    (let [p (:primitives c)
          entry (or (:entry (leave-mem c)) (sheltered-in c))
          _ (when entry (update-leave! c assoc :entry entry))
          shut? (and entry (shut-in? p entry))
          step? (and entry (:door entry) (not shut?) (not (:stepped (leave-mem c))))
-         why (when shut? (leave-unsafe p))]
+         unsafe (when-not any-time? (leave-unsafe p))
+         why (when shut? unsafe)]
      (cond
        step? (await (open-door! c (:door entry)))
-       (and (not shut?) take-back? (not (leave-unsafe p)) (= :continue (await (take-back! c)))) :continue
+       (and (not shut?) take-back? (not unsafe) (= :continue (await (take-back! c)))) :continue
        (not shut?) (leave-result! c :done :out (select-keys (leave-mem c) [:heading]))
        why (leave-result! c :stopped :unsafe {:why why})
        (some #(sh-sense/solid-at? p %) (:door entry)) (await (open-door! c (:door entry)))

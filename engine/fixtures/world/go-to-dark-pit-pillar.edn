@@ -1,0 +1,18 @@
+;; A body at the bottom of a 1x1 pit on an unlit plot, carrying dirt, go-to the rim: it pillars out. The pit is dark, but a 3-deep pit is neither
+;; large nor hides a pit, and the start check priced the walk, so the pillar child does not wait for light (:exposed) or give up.
+;; Dark roofed plot, stone block x 10..24, y -4..2 with a 1x1 pit at x 16 z 16 (feet y -3); the goal is on the block top 6 east.
+;; Should-succeed: go-to.escalated :pillar and arrival. Should-fail: the pillar child waits or ends condition-failed, the body stays in the pit.
+{:defaults
+ {:tags [:movement :go-to :dark]
+  :time :any
+  :plot {:height 14 :length 40 :light :dark}
+  :blocks [[:fill [10 -4 10] [24 2 22] "stone"]
+           [:fill [16 -3 16] [16 2 16] "air"]]
+  :body {:at [16.5 -3 16.5] :settle-s 3 :effects [["resistance" 600 4]] :inventory [["dirt" 8]]}
+  :limit-s 120}
+ :cases
+ [{:name "dark-pit-body-pillars-out-to-the-rim"
+   :act [[:job (jobs.movement.go-to {:pos #at [22 3 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :pillar}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 100 :of-job true}]
+   :after [[:body-near [22.5 3 16.5] 2]]}]}
