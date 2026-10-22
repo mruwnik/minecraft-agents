@@ -2,7 +2,7 @@
   "A body safe from the night (underground, dug in, shut in a closed room) is not sent through the dark to a remembered
   bed: sh-beds/bed-to-use skips a bed whose walk leaves that shelter (sh-inside/walk-leaves-shelter?), so the night trigger does not
   hold for it and the night job does not walk there."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [engine.core :as core]
             [engine.events :as events]
             [engine.fake :as fake]
@@ -20,7 +20,8 @@
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.inside :as sh-inside]
-            [jobs.lib.shelter.sense :as sh-sense]))
+            [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.survival.night :as night]))
 
 (def far-bed {:x 40 :y 64 :z 0})
 
@@ -229,6 +230,20 @@
           (core/submit! eng '(jobs.survival.night) {})
           (await (st/tick-n eng 12))
           (is (= [{:x 8 :y 64 :z 0}] (mapv st/arg-pos (st/calls raw "sleep"))) "the night does not end on the light before the bed"))))))
+
+(defn walk-price
+  "night/bed-walk-price of a lit route of secs to a bed for a body standing in world (no memory)."
+  [world secs]
+  (let [p (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor :self {:pos {:x 5 :y 64 :z 0}} :time dusk} world)))
+        c {:id "j1" :slots [] :engine {:warned (atom #{})} :primitives p :view (fn [] {:now 0 :data {}})}]
+    (night/bed-walk-price c far-bed {:found true :seconds secs :dark-seconds 0})))
+
+(deftest a-long-lit-walk-to-bed-from-underground-costs-the-walk-there-and-back
+  ;; Oriel: every dusk the night walked the body home from its lit tunnel and back each morning
+  (are [world secs walks?] (= walks? (let [{:keys [walk stay]} (walk-price world secs)] (<= walk stay)))
+    {:blocks hut/tunnel} 5 true
+    {:blocks hut/tunnel} 30 false
+    {} 30 true))
 
 (deftest at-dusk-with-no-bed-the-trigger-waits-for-the-dark
   (let [{:keys [eng p]} (st/setup {:time dusk :blocks st/ground})

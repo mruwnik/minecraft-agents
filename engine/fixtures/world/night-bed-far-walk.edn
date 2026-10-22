@@ -1,5 +1,5 @@
-;; Card e9c70623 (Wicken #147): the night walked the body 564 blocks over dark open ground to its spawn bed. night/bed-walk-hp
-;; prices staying put as at most ::shelter-here-s (20 s) exposed, the time to shelter where it stands, not the whole walk.
+;; Card e9c70623 (Wicken #147): the night walked the body 564 blocks over dark open ground to its spawn bed. night/bed-walk-price
+;; prices staying put as at most jobs.lib.shelter/::shelter-here-s (20 s) exposed, the time to shelter where it stands, not the whole walk.
 ;; Overdue (max-days-awake 0): the bed 114 blocks off is within the urgent bed radius.
 ;; Should-succeed: night.bed-walk-unsafe, no sleep, the body shelters near its start. Should-fail: it walks to the bed and sleeps.
 ;; Needs the night (bed use is decided by the clock).

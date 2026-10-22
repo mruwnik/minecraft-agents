@@ -8,6 +8,8 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.access.stair :as stair]
+            [jobs.lib.price :as price]
             [jobs.lib.escape :as escape]
             [jobs.gather.shaft-descent :refer [pick-shaft xyz]]
             [jobs.lib.util :as u]
@@ -26,7 +28,7 @@
    ::level-slack {:default 12 :doc "Blocks above the tunnel level a stopped stair may leave the body and the strip tunnel still run there; higher, the run ends :descent-stopped (ore is not found that far above its level)." :spec (a/int-in 0 nil)}
    ::own-stair-reach {:default 32 :doc "Blocks from the body the top of a stair it cut earlier may lie for the descent to walk down that stair instead of cutting a new one." :spec (a/int-in 0 nil)}
    ::dig-here-reach {:default 8 :doc "Stone gathered on soil or sand: a seen stone block farther than this from the body is not walked to; the stair down is cut where the body stands, as a player digs down to stone." :spec (a/num-in 0 nil)}
-   ::back-reach {:default 32 :doc "Blocks from the stair's last step the body may be for the descent to walk back onto it; farther, it starts a new stair where it stands." :spec (a/int-in 0 nil)}
+   ::back-reach {:default 32 :doc "Blocks from the stair's last step the body may be for the descent to walk back onto it; farther, only a whole way back quoted no longer than cutting a stair down to it again is walked, else it starts a new stair where it stands." :spec (a/int-in 0 nil)}
    ::max-restairs {:default 3 :doc "Times the descent starts a new stair where the body stands after the stair found it off its line (a reflex, a fall or a drop pick-up moved it) before the stop stands." :spec (a/int-in 0 nil)}
    ::max-moves {:default 3 :doc "Times the stair down walks to another spot after all four headings were blocked at its start (water, a plug, a hazard) before the stop stands." :spec (a/int-in 0 nil)}
    ::move-reach {:default 8 :doc "Blocks from the blocked start the stair's next spot lies; it grows by 4 each move." :spec (a/int-in 1 nil)}})
@@ -213,8 +215,9 @@
   (let [{:keys [at top]} (:descent (ctx/mem c))
         cell (or at top)]
     (when (and cell (nil? (get-in (ctx/mem c) [:children :stair])) (not= cell (access/cell (cell-of (u/self-pos c)))))
-      (if (> (u/dist (u/self-pos c) (zipmap [:x :y :z] cell)) (settings/get settings ::back-reach))
-        (do (ctx/emit! c :mine.restair :info {:at (access/cell (cell-of (u/self-pos c))) :text (str "mine's stair at " (str/join "," cell) " is too far to walk back to; it starts a new stair here")})
+      (if (and (> (u/dist (u/self-pos c) (zipmap [:x :y :z] cell)) (settings/get settings ::back-reach))
+               (not (await (price/walk-back-worth? c cell (stair/steps-s :down (max 0 (- (:y (u/self-pos c)) (cell 1))))))))
+        (do (ctx/emit! c :mine.restair :info {:at (access/cell (cell-of (u/self-pos c))) :text (str "mine's stair at " (str/join "," cell) " is dearer to walk back to than a new stair; it starts a new stair here")})
             (ctx/update-mem! c update :descent dissoc :top :at)
             nil)
         (let [r (await (child/walk-into!* c :stair-back cell))]

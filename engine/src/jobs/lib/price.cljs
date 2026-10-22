@@ -109,3 +109,10 @@
     (if (seq mobs)
       (cost/fight-damage (assoc (wworld/kit-of c) :mobs (mapv (fn [e] {:name (.-name e) :distance (danger/mob-distance p e) :hits 0}) mobs)))
       0)))
+
+(defn ^:async walk-back-worth?
+  "Whether walking back to cell ([x y z]) to go on with a job there costs less than redo-s seconds of its work done again
+  where the body stands: go-to quotes a whole route there taking no longer."
+  [c cell redo-s]
+  (let [r (:route (await (ctx/quote c 'jobs.movement.go-to {:pos (zipmap [:x :y :z] cell) :range 0})))]
+    (boolean (and (:found r) (number? (:seconds r)) (<= (:seconds r) redo-s)))))

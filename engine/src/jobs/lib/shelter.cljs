@@ -20,7 +20,11 @@
    ::door-failed-ms {:default 600000 :spec (a/int-in 0 nil)
                      :doc "How long (ms) a room door the night could not shut is left alone from the cell it was tried at."}
    ::home-due {:default {:margin-s 60 :speed 4.3 :slack 1.4 :arrive 4} :spec (a/map-of keyword? number?)
-               :doc "When to head home before night, read by dusk-home, replant-owed and plant-sapling: seconds of margin, walking speed (blocks a second), slack factor on the straight line, and blocks within which the body counts as home."}})
+               :doc "When to head home before night, read by dusk-home, replant-owed and plant-sapling: seconds of margin, walking speed (blocks a second), slack factor on the straight line, and blocks within which the body counts as home."}
+   ::shelter-here-s {:default 20 :spec (a/num-in 0 nil)
+                     :doc "Seconds a body takes to shelter where it stands (dig in, wall in): staying put instead of a walk to bed or home is exposed this long at most, and costs this long."}
+   ::ground-depth {:default 6 :spec (a/int-in 0 nil)
+                   :doc "Blocks under its home (else bed) a roofed body counts as in the ground (in-ground?) though some sky light reaches it (a stair, a shaft)."}})
 
 (defn breach-near [] (settings/get settings ::breach-near))
 
@@ -162,17 +166,41 @@
   [view]
   (or (mem/place view :home) (mem/place view :bed)))
 
+(defn home-walk-s
+  "Seconds the walk from pos to the home-target is taken to last (::home-due: :slack times the straight line at :speed); 0 with none."
+  [view pos]
+  (let [{:keys [speed slack]} (settings/get settings ::home-due)]
+    (if-let [home (home-target view)] (/ (* slack (u/dist pos home)) speed) 0)))
+
 (defn home-due-at?
   "Whether a body standing at pos would be due home before night: its home-target within sh-clock/home-limit and farther
   than :arrive, and the day left no longer covering the walk (:slack times the straight line at :speed blocks a second)
   plus :margin-s. The timing is setting ::home-due."
   [p view pos]
-  (let [{:keys [margin-s speed slack arrive]} (settings/get settings ::home-due)
+  (let [{:keys [margin-s arrive]} (settings/get settings ::home-due)
         left-s (/ (- sh-clock/dusk-tick (.-timeOfDay (.self p))) 20)
         home (home-target view)]
     (boolean
      (and home (pos? left-s)
           (let [d (u/dist pos home)]
-            (and (< arrive d) (<= d sh-clock/home-limit) (<= left-s (+ margin-s (/ (* slack d) speed)))))))))
+            (and (< arrive d) (<= d sh-clock/home-limit) (<= left-s (+ margin-s (home-walk-s view pos)))))))))
+
+(defn shelter-here-s [] (settings/get settings ::shelter-here-s))
+
+(defn in-ground?
+  "Whether the body could work on through the night where it stands: buried, or roofed and ::ground-depth or more
+  under its home-target. Its work does not wait for the light, so a walk home and back is time lost."
+  [p view]
+  (boolean
+   (or (sh-sense/buried? p)
+       (let [home (home-target view)]
+         (and home (sh-sense/roofed? p (sh-sense/roof-height))
+              (<= (settings/get settings ::ground-depth) (- (:y home) (:y (sh-sense/feet p)))))))))
+
+(defn commute-s
+  "Seconds a walk of secs away costs over sheltering here (shelter-here-s): in the ground (in-ground?) the walk there and
+  back, less the shelter's own time; elsewhere 0 (the night stops the work either way)."
+  [p view secs]
+  (if (in-ground? p view) (- (* 2 secs) (shelter-here-s)) 0))
 
 (def shelter-policy {:cap 10 :ttl sh-clock/ms-per-day})

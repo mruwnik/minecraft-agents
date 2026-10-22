@@ -93,11 +93,12 @@
   {::job-time-s {:default 1800 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 3600 :doc "Seconds one call may last from its start, the waits on checks and the jobs that run between its rounds included (:limit-reached)." :spec (a/num-in 0 nil)}
    ::max-returns {:default 3 :doc "Walks back onto the stair's line (after a reflex moved the body off it) one call makes before it stops :off-stair." :spec (a/int-in 0 nil)}
-   ::return-reach {:default 32 :doc "Blocks from the stair's line the body may be found for a call to walk back onto it; farther, it stops :off-stair (the caller starts a stair where the body is)." :spec (a/num-in 0 nil)}
+   ::return-reach {:default 32 :doc "Blocks from the stair's line the body may be found for a call to walk back onto it; farther, only a whole way back quoted no longer than cutting its steps again is walked, else it stops :off-stair (the caller starts a stair where the body is)." :spec (a/num-in 0 nil)}
    ::undermine-health {:default 10 :doc "At or below this health a stair up cuts its top cell from beside the body's column also when the cell over it is unseen: a falling block hidden there lands on the body, each landing a few health." :spec (a/num-in 0 20)}
    ::cell-s {:default 1.2 :doc "Mean seconds one cut cell of a step takes (look, dig, walk), for the quote." :spec (a/num-in 0 nil)}})
 (defn max-returns [] (settings/get settings ::max-returns))
 (defn return-reach [] (settings/get settings ::return-reach))
+(defn steps-s "Mean seconds n steps of a stair dir take to cut." [dir n] (* n (if (= :level dir) 2 3) (settings/get settings ::cell-s)))
 
 (declare dir-of)
 
@@ -232,7 +233,7 @@
         feet (reach/standing-vec (:primitives c))
         t (geo/target-steps (assoc (:args c) :heading heading :dir dir) feet)
         n (if (map? t) 0 t)
-        s (* n (if (= :level dir) 2 3) (settings/get settings ::cell-s))]
+        s (steps-s dir n)]
     {:uses {:job-time [(* 0.5 s) s (* 4 s)]} :done [0 n n]
      :moves-to (mapv + feet (map #(* n %) (geo/delta dir heading)))}))
 
@@ -286,14 +287,17 @@
 
 (defn ^:async return!
   "The body is off the stair's line (a reflex walked it away): a go-to child (slot :return) back to the stair's cell of
-  step at-step, at most max-returns times per call. :continue while it walks, :again once it ended, nil when the
-  returns are used up."
+  step at-step, at most max-returns times per call, when within return-reach or go-to quotes a whole way back no longer
+  than cutting the steps done again (jobs.lib.price/walk-back-worth?). :continue while it walks, :again once it ended, nil
+  when the returns are used up or the walk back is dearer."
   [c]
   (let [{:keys [dir heading]} (:args c)
         {:keys [origin at-step returns]} (ctx/mem c)
-        cell (shape/add origin (mapv #(* (or at-step 0) %) (geo/delta dir heading)))]
+        cell (shape/add origin (mapv #(* (or at-step 0) %) (geo/delta dir heading)))
+        redo-s (steps-s dir (or at-step 0))]
     (when (and (< (or returns 0) (max-returns))
-               (<= (u/dist (u/self-pos c) (zipmap [:x :y :z] cell)) (return-reach)))
+               (or (<= (u/dist (u/self-pos c) (zipmap [:x :y :z] cell)) (return-reach))
+                   (await (price/walk-back-worth? c cell redo-s))))
       (let [r (await (child/call-walk* c :return (ready/forage-walk c (child/walk-into-args :return cell))))]
         (when-not (= :continue r)
           (ctx/update-mem! c update :returns (fnil inc 0))

@@ -4,7 +4,6 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
-            [engine.settings :as settings]
             [jobs.lib.checks :as checks]
             [jobs.lib.breath :as breath]
             [jobs.lib.child :as child]
@@ -73,8 +72,7 @@
 
 (a/defargs settings
   {::job-time-s {:default 2400 :doc "Seconds the night may take: a bound against a runaway night (the night itself ends it in about 10 minutes)." :spec (a/num-in 0 nil)}
-   ::wall-time-s {:default 3600 :doc "Seconds the night may last from its start, its yields to other jobs included." :spec (a/num-in 0 nil)}
-   ::shelter-here-s {:default 20 :doc "Seconds a body takes to shelter where it stands (dig in, wall in): staying put instead of a walk to bed is exposed this long at most." :spec (a/num-in 0 nil)}})
+   ::wall-time-s {:default 3600 :doc "Seconds the night may last from its start, its yields to other jobs included." :spec (a/num-in 0 nil)}})
 
 (def target [])
 
@@ -420,12 +418,14 @@
     (when (sh-spawn/seen-not-bed? (:primitives c) pos)
       (places/retract-if-missing! c :bed pos "missing"))))
 
-(defn bed-walk-hp
-  "{:walk :stay}: the hp the walk to bed is expected to cost (spawns over its seconds in the dark, the planner's
+(defn bed-walk-price
+  "{:walk :stay} in seconds: the hp the walk to bed is expected to cost (spawns over its seconds in the dark, the planner's
   :dark-seconds over jobs.lib.cost/dark-factor of the kit; the fight with the hostiles known near its way) against
-  staying put (spawns at the feet unless underground or lit by a block (the sky's light goes with the night), over the walk's seconds but no longer than
-  ::shelter-here-s, the shelter here closing them out; the hostiles known near the body), both
-  priced by jobs.lib.price/stay-hp and jobs.lib.cost/fight-damage. r is go-to's quoted route."
+  staying put (spawns at the feet unless underground or lit by a block (the sky's light goes with the night), over the walk's
+  seconds but no longer than jobs.lib.shelter/shelter-here-s, the shelter here closing them out; the hostiles known near
+  the body), both priced by jobs.lib.price/stay-hp and jobs.lib.cost/fight-damage, each hp at jobs.lib.cost/hp-price; the
+  walk also costs jobs.lib.shelter/commute-s (in the ground, the walk there and back is work time lost). r is go-to's
+  quoted route."
   [c bed r]
   (let [p (:primitives c)
         chance (cost/spawn-chance [0 0 0])
@@ -433,26 +433,27 @@
         secs (or (:seconds r) 0)
         dark-s (min secs (/ (or (:dark-seconds r) 0) (cost/dark-factor kit)))
         fight #(price/way-fight-hp c %)
+        hp-s (cost/hp-price (or (.-health (.self p)) 20))
         here (if (or (sh-sense/buried? p) (pos? (or (sh-sense/block-light-at p (sh-sense/feet p)) 0))) 0 chance)]
-    {:walk (+ (price/stay-hp c chance dark-s) (fight bed))
-     :stay (+ (price/stay-hp c here (min secs (settings/get settings ::shelter-here-s))) (fight (u/self-pos c)))}))
+    {:walk (+ (* hp-s (+ (price/stay-hp c chance dark-s) (fight bed))) (sh/commute-s p (ctx/view c) secs))
+     :stay (* hp-s (+ (price/stay-hp c here (min secs (sh/shelter-here-s))) (fight (u/self-pos c))))}))
 
 (defn ^:async bed-walk-safe?
-  "Whether the night may walk to bed: within 2 blocks, or go-to's quote finds a whole route there whose expected hp
-  (bed-walk-hp) is no more than staying put costs: a body on dark open ground walks, one underground stays unless the way
-  is lit. Else :bed-walk-unsafe {:pos bed} is remembered (sh-beds/bed-to-use skips the bed meanwhile) with a
+  "Whether the night may walk to bed: within 2 blocks, or go-to's quote finds a whole route there whose price
+  (bed-walk-price) is no more than staying put costs: a body on dark open ground walks, one underground stays unless the way
+  is lit and short. Else :bed-walk-unsafe {:pos bed} is remembered (sh-beds/bed-to-use skips the bed meanwhile) with a
   night.bed-walk-unsafe info, and false."
   [c bed]
   (or (<= (u/dist (u/self-pos c) bed) 2)
       (let [r (:route (await (ctx/quote c 'jobs.movement.go-to {:pos bed :range 2})))
-            {:keys [walk stay]} (when (:found r) (bed-walk-hp c bed r))]
+            {:keys [walk stay]} (when (:found r) (bed-walk-price c bed r))]
         (or (and (:found r) (<= walk stay))
             (do (ctx/remember! c :bed-walk-unsafe {:pos bed} sh-beds/walk-unsafe-policy)
                 (ctx/emit! c :night.bed-walk-unsafe :info
-                           {:bed bed :found (boolean (:found r)) :walk-hp walk :stay-hp stay
+                           {:bed bed :found (boolean (:found r)) :walk-s walk :stay-s stay
                             :text (str "not walking to the bed at " (pr-str bed) ": "
                                        (if (:found r)
-                                         (str "the walk is priced " (price/round1 walk) " hp, staying here " (price/round1 stay))
+                                         (str "the walk is priced " (price/round1 walk) " s, staying here " (price/round1 stay) " s")
                                          "no whole way to it is known")
                                        "; sheltering here tonight")})
                 false)))))

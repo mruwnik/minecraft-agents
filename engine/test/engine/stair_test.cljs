@@ -443,6 +443,30 @@
           (is (= :off-stair (:reason @out)))
           (is (empty? (events-of s :stair.return))))))))
 
+(defn move-at-dig
+  "A prep that puts the body on pos once, after the k-th dig (a reflex walking it far off the stair)."
+  [k pos]
+  (fn [p]
+    (let [world (.-world p)
+          n (atom 0)]
+      (.override world "dig"
+                 (fn ^:async f [token a impl]
+                   (let [r (await (impl token a))]
+                     (when (= k (swap! n inc))
+                       (swap! (.. world -state) assoc-in [:self :pos] pos))
+                     r))))))
+
+(deftest a-far-stair-is-walked-back-to-when-the-walk-costs-less-than-its-steps-again
+  ;; Wicken: the night took the body 90 blocks home from its stair; the resumed stair stopped :off-stair and a new one began
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[cell-s ending] [[100 :done] [1.2 :off-stair]]]
+          (let [{:keys [out] :as s} (await (stair! {:blocks (stone -3 40 50 64)} (assoc east :settings {:jobs.access.stair/cell-s cell-s})
+                                                   (move-at-dig 4 [40 65 0])))]
+            (is (= ending (or (:reason @out) (:status @out))) (str "cell-s " cell-s))
+            (is (= (= :done ending) (boolean (seq (events-of s :stair.return)))))))))))
+
 (deftest off-stair-stands-once-the-walks-back-are-used-up-and-says-where-the-body-is
   (async done
     (tu/run-async done

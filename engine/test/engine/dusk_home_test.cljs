@@ -13,8 +13,8 @@
   "The trigger over a fake body at (0 64 0) at time-of-day t, with places [[kind x z] ..] remembered."
   [t places & [over]]
   (let [store (mem/open (tu/tmp-dir) {:now (constantly 1000)})]
-    (doseq [[kind x z] places]
-      (mem/write! store kind {:pos {:x x :y 64 :z z}} mem/place-policy))
+    (doseq [[kind x z y] places]
+      (mem/write! store kind {:pos {:x x :y (or y 64) :z z}} mem/place-policy))
     (dh/dusk-home (tu/seeing-all (tu/fake-on-floor (merge {:floor [-4 -4 4 4] :time t :self {:pos {:x 0.5 :y 64 :z 0.5}}} over)))
                   (mem/view store) {})))
 
@@ -45,6 +45,13 @@
 
 (deftest a-body-under-a-lone-overhead-block-still-goes-home
   (is (true? (holds? 11000 [[:home 100 0]] {:floor [-20 -20 20 20] :blocks {"0,67,0" "stone"}}))))
+
+(deftest a-body-roofed-deep-under-its-home-shelters-there-unless-home-is-close
+  ;; Wicken's stair 16 under home: some sky light comes down it, but the walk home and back is work time lost
+  (are [home expected] (= expected (holds? 11500 [home] {:floor [-20 -20 120 20] :blocks {"0,67,0" "stone"}}))
+    [:home 100 0 70] false
+    [:home 6 0 70] true
+    [:home 100 0 64] true))
 
 (deftest go-home-walks-to-the-home-and-waits-with-none
   (async done
