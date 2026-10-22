@@ -1,0 +1,27 @@
+;; A body sealed in a 1x2 stone pocket 5 under a goal on top of the block, carrying no tool: go-to cuts a stair up by hand (slow, the drops are lost)
+;; and arrives. It is not "shut in and nothing it can walk reaches out". The second case is the same pocket as the body's own shelter (memory :shelter).
+;; Dark roofed plot, stone block x 10..24, y -4..2, z 14..18; pocket x 16 z 16, feet y -3; the goal is on the block top 6 east.
+;; Should-succeed: go-to.escalated (:stair, or :leave-shelter) and arrival. Should-fail: the call ends :start-enclosed, the body stays in the pocket.
+{:defaults
+ {:tags [:movement :go-to :shelter]
+  :time :any
+  :plot {:height 14 :length 40 :light :dark}
+  :blocks [[:fill [10 -4 14] [24 2 18] "stone"]
+           [:fill [16 -3 16] [16 -2 16] "air"]]
+  :body {:at [16.5 -3 16.5] :settle-s 3 :effects [["resistance" 600 4]] :inventory []}
+  :limit-s 300}
+ :cases
+ [{:name "no-pickaxe-pocket-stair-cut-by-hand"
+   :act [[:job (jobs.movement.go-to {:pos #at [22 3 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 280 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:cause {:why :start-enclosed}}} :for-s 280 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-near [22.5 3 16.5] 3]]}
+  {:name "no-pickaxe-own-shelter-pocket-is-left-by-hand"
+   :memory [{:kind :shelter :data {:pos #xyz [16 -3 16] :roof #xyz [16 -1 16] :state :built}
+             :policy {:cap 10 :ttl 1200000}}]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 3 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :leave-shelter}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 280 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:cause {:why :start-enclosed}}} :for-s 280 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-near [22.5 3 16.5] 3]]}]}
