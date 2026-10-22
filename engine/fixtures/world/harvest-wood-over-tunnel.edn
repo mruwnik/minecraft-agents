@@ -1,0 +1,18 @@
+;; Card 7b3979e5: harvest-wood fells a tree it can walk to on the surface; an old tunnel dug under the tree's column (the body's own
+;; strip tunnel in the trial) is not the column's ground, so the body stays up and never goes down into it.
+;; Tunnel: x 6..28, z 8, y -5..-3 under the floor (never seen by the body: it starts on the surface); tree at [20 0 8].
+{:defaults
+ {:tags [:forestry :harvest-wood :tunnel]
+  :time :any
+  :plot {:height 10 :floor "grass_block"}
+  :body {:at [3.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 130}
+ :cases
+ [{:name "tree-over-a-tunnel-is-felled-from-the-surface"
+   :blocks [[:fill [6 -5 8] [28 -3 8] "air"]
+            [:fill [20 0 8] [20 3 8] "oak_log"] [:fill [18 3 6] [22 4 10] "oak_leaves[persistent=true]"] [:set [20 3 8] "oak_log"]]
+   :body {:inventory [["iron_axe" 1] ["oak_sapling" 1]]}
+   :act [[:job (jobs.forestry.harvest-wood {:radius 32 :count 2})]]
+   :expect [{:no-event {:source :job :kind :stopped} :for-s 100 :until {:source :job :kind :completed}}
+            {:event {:source :job :kind :completed} :within-s 110 :of-job true}]
+   :after [[:item "oak_log" [:>= 2]] [:body-far [20.5 -4 8.5] 3]]}]}

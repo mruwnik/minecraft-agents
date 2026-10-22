@@ -467,3 +467,18 @@
             (is (not-any? #(air? p (:cell %)) l))
             (is (empty? (ledger/select l view :orphans)) "the default cleanup does not dig a shelter")
             (is (= (count l) (count (ledger/select l view :all))))))))))
+
+(deftest dig-in-takes-back-even-its-cheap-walls-beside-the-respawn-bed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (setup {:inventory [{:name "iron_pickaxe" :count 1} {:name "dirt" :count 20}]
+                                            :blocks (assoc (ground) "0,66,0" "stone")})]
+          (mem/write! (:store eng) :spawn-bed {:pos {:x 2 :y 64 :z 0}} {:cap 1 :ttl :forever})
+          (core/submit! eng '(jobs.survival.shut-in {:ways #{:walls} :for :night}) {})
+          (await (run-until-empty s 40))
+          (let [take-back (:take-back (last (entries eng :shelter)))]
+            (is (seq take-back) "dirt walls within reach of the bed are listed")
+            (is (< (count take-back) (count (calls p "place"))) "and only those"))
+          (await (leave-at-dawn! s))
+          (is (= "air" (block-at p [1 64 0])) "no seal is left on the bed's respawn cells"))))))

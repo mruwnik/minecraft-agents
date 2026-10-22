@@ -9,6 +9,7 @@
             [jobs.lib.pen-gate :as pen-gate]
             [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]))
 
@@ -57,7 +58,7 @@
   "The night's end of a call: the :shelter entry {:pos :state :built} (:sealed false when the world shows the body open;
   :roof the cell placed above it; :door the cells of one side placed, or of the pocket's way in; :start the cell dug from, or
   the top of the shaft walled at the bottom of; :take-back the placed {:cell :item} dearer than ::take-back-value and any near
-  a planned gate, which dig-in-leave/leave! digs again by day; :room true for a mended roof), and the shut-in.sealed / .unsealed event.
+  a planned gate or within reach of the respawn bed (a lid on its respawn cell obstructs it), which dig-in-leave/leave! digs again by day; :room true for a mended roof), and the shut-in.sealed / .unsealed event.
   way is the way that ended the call, data its result ({:placed :roof :start :spent}), sealed? whether the world shows the body shut in."
   [c way {:keys [placed roof start spent]} sealed?]
   (let [p (:primitives c)
@@ -72,9 +73,10 @@
                nil)
         start (or (case way :walls (:shaft-start (ctx/mem c)) :pit start nil) (when resealed (:start prev)))
         door (or door (when resealed (:door prev)))
+        view (ctx/view c)
         cheap (set (choose/cheap-blocks (keys spent) (settings/get settings ::take-back-value)))
         take-back (->> (concat (when resealed (:take-back prev))
-                               (for [{:keys [cell item]} placed :when (or (not (cheap item)) (near-gate? c (u/cell-pos cell)))] {:cell (u/cell-pos cell) :item item}))
+                               (for [{:keys [cell item]} placed :when (or (not (cheap item)) (near-gate? c (u/cell-pos cell)) (sh-spawn/spawn-bed-at? view (u/cell-pos cell)))] {:cell (u/cell-pos cell) :item item}))
                        (reduce #(assoc %1 (:cell %2) %2) {}) vals vec)
         cells-text (pr-str (mapv u/cell-vec cells))]
     (when (and (seq placed) (not sealed?))
