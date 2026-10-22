@@ -10,6 +10,7 @@
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
             [jobs.lib.breath :as breath]
             [jobs.lib.foods :as foods]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.surface-up :as surface]
             [jobs.items.obtain.table :refer [animal? gather-need searchable?]]
             [jobs.lib.waits :as waits]
@@ -101,10 +102,18 @@
           (tried! c :gather {:pickaxe (contract/cause-key e)}))
       :else :again)))
 
+(defn tree?
+  "Whether a gather need is a log felled from a tree: trees stand at the surface."
+  [need]
+  (= 'jobs.forestry.harvest-wood (:job need)))
+
 (defn surfacing?
-  "surface/surfacing? for a need not seen: an animal or a water source in sight is walked to, not climbed toward."
+  "surface/surfacing? for a need not seen: an animal or a water source in sight is walked to, not climbed toward. A tree
+  need not in sight is climbed toward from under rock before any search, as a player would."
   [c need]
-  (and (not (and (or (animal? need) (= "water_bucket" (:key need))) (seen-of c need))) (surface/surfacing? c need)))
+  (and (not (and (or (animal? need) (= "water_bucket" (:key need))) (seen-of c need)))
+       (or (surface/surfacing? c need)
+           (and (tree? need) (not (seen-of c need)) (sh-sense/buried? (:primitives c))))))
 
 (defn ^:async surface-step!
   "One round of the way up (jobs.lib.surface-up): :continue while it goes on, else the gather source fails (:no-way-up)."
@@ -272,7 +281,7 @@
             (ctx/update-mem! c assoc-in [:gather :before] (gather-carried p need))
             (ctx/update-mem! c assoc-in [:gather :item] (:key need))
             (keep-crafting-items! c (:uses pl))
-            (when (= 'jobs.forestry.harvest-wood (:job need))
+            (when (tree? need)
               (ctx/update-mem! c assoc-in [:gather :tree] (select-keys need [:key :job :args])))
             (let [at (:pos (seen-of c need))]
               (when at (ctx/update-mem! c assoc-in [:gather :at] [(:x at) (:z at)]))

@@ -1,4 +1,4 @@
-;; Card 5f4a3ba0: a body shut in a cave under 8 blocks of rock, empty-handed, with a tree on the surface 12 blocks off. Its first
+;; Card 5f4a3ba0 (last case: card 908ced8b, a furnace needs a table, so logs; the walk up comes before any look for trees): a body shut in a cave under 8 blocks of rock, empty-handed, with a tree on the surface 12 blocks off. Its first
 ;; search finds nothing (no sight through rock), so obtain walks to a wall and cuts a stair up (by hand) to the sky, then finds the tree.
 ;; Tree at x 28, z 16: five logs under a leaf crown. Stone x 0..31, z 0..31, y 0..9 (surface y 10); a 7x2x7 hollow round the body at feet y 0.
 ;; Untimed: day, because the tree is seen on the surface and the body waits out a dark one.
@@ -23,4 +23,11 @@
          [:job (jobs.items.obtain {:item "oak_log" :count 2 :explore true})]]
    :expect [{:event {:source :job :kind :completed} :within-s 950 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 900 :until {:source :job :kind :completed}}]
-   :after [[:item "oak_log" [:>= 2]]]}]}
+   :after [[:item "oak_log" [:>= 2]]]}
+  {:name "sealed-cave-furnace-from-carried-cobble-surfaces-for-the-table-logs"
+   :tags [:obtain :explore :mining]
+   :body {:inventory [["cobblestone" 64] ["stone_pickaxe" 1]]}
+   :act [[:job (jobs.items.obtain {:item "furnace" :count 1 :explore true})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 950 :of-job true}
+            {:no-event {:source :job :kind :obtain.exploring} :for-s 900 :until {:source :job :kind :stair.step}}]
+   :after [[:item "furnace" [:>= 1]]]}]}
