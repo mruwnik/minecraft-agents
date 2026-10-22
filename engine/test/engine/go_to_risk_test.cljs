@@ -178,8 +178,13 @@
     (is (= :stranded (:reason (nth s 2))))))
 
 (deftest a-healing-body-on-dark-open-ground-goes-on-when-waiting-there-costs-as-much
-  (let [skeleton {:id 9 :name "skeleton" :kind "hostile" :pos {:x 10 :y 64 :z 14}}
-        c (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 8 :food 15} :inventory [{:name "bread" :count 3}] :entities [skeleton]))
+  (let [c (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 5 :food 15} :inventory [{:name "bread" :count 3}]))
         goal {:x 20 :y 64 :z 0}]
     (is (> (:hp (risk/estimate c goal)) (price/allowed c)) "over the half-of-health allowance")
     (is (= :ok (first (risk/status c goal))))))
+
+(deftest a-hostile-near-the-far-end-of-a-way-does-not-make-staying-dear-enough-to-walk-past-lava
+  (let [zombie {:id 9 :name "zombie" :kind "hostile" :pos {:x 20 :y 64 :z 40}}
+        c (ready-test/ctx-of (assoc day-world :self {:pos inside :health 3 :food 5} :entities [zombie] :blocks {"22,64,20" "lava"}))]
+    (is (> (:lava-hp (risk/estimate c {:x 20 :y 64 :z 20})) (price/allowed c)))
+    (is (= :later (first (risk/status c {:x 20 :y 64 :z 20}))))))

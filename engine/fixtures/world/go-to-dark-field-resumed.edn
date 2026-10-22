@@ -1,4 +1,4 @@
-;; A go-to cut mid-walk leaves a healing body (8 hp, food 15, bread carried) on dark open ground with the hut it was walking to 20 blocks off and a skeleton (no AI) 14 blocks off the way: waiting there costs spawns, so the rest of the walk is the cheaper risk (go-to.risk/stay-estimate).
+;; A go-to cut mid-walk leaves a healing body (5 hp, food 15, bread carried) on dark open ground with the hut it was walking to 20 blocks off: waiting there costs spawns, so the rest of the walk is the cheaper risk (go-to.risk/stay-estimate).
 ;; Should-succeed: go-to arrives in the lit hut. Should-fail: it waits :risky out in the dark.
 {:defaults
  {:tags [:survival :movement :go-to]
@@ -10,8 +10,7 @@
   :limit-s 90}
  :cases
  [{:name "healing-body-in-a-dark-field-goes-on-to-the-lit-hut"
-   :act [[:summon "skeleton" [28.5 0 25.5] "{NoAI:1b}"]
-         [:rcon "damage $BODY 12 minecraft:generic"]
+   :act [[:rcon "damage $BODY 15 minecraft:generic"]
          [:wait-s 6]
          [:job (jobs.movement.go-to {:pos #at [41 0 11] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 60 :of-job true}

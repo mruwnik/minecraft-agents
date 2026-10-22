@@ -1,20 +1,20 @@
-;; Staying put is priced too (jobs.movement.go-to.risk/stay-estimate): a hurt body that cannot heal (hunger, no food) in a dark cave with hostiles about must not wait on go-to's :risky.
-;; A dark cave: a stone block x 10..60 with a 3-wide corridor, the body at its west end at 3 hp looking east, two zombies (no AI, so they only count as known hostiles) in the corridor 14 and 16 blocks east (beyond the hostile-near radius, within the way radius), the goal 30 blocks east.
-;; Should-succeed: staying costs as much as the walk, so go-to goes and arrives. Should-fail: it waits :risky. (The :stranded ending is unit-tested in engine.go-to-risk-test.)
+;; Staying put is priced too (jobs.movement.go-to.risk/stay-estimate): a hurt body that cannot heal (hunger, no food) in a dark cave with hostiles that reach it where it stands must not wait on go-to's :risky.
+;; A dark cave: a stone block x 10..60 with a 3-wide corridor, the body in the middle of it at 3 hp looking west, two zombies (no AI, so they only count as known hostiles) in the corridor 10 and 12 blocks behind it, the goal 25 blocks east (the walk leads away from the zombies, so go-to's hostile-near check does not hold it).
+;; Should-succeed: the walk costs more than staying (it passes the same zombies' reach on dark ground) and the body cannot heal: go-to stops at once, cause :stranded, for the caller to seal in or take a refuge. Should-fail: it waits :risky for ever, or walks.
 {:defaults
  {:tags [:survival :movement :go-to]
   :time :any
   :plot {:height 12 :length 64 :light :dark}
   :blocks [[:fill [10 -4 14] [60 8 18] "stone"]
            [:fill [11 3 15] [55 4 17] "air"]]
-  :body {:at [12.5 3 16.5] :yaw 270 :settle-s 3 :effects [["hunger" 300 255]]}
+  :body {:at [30.5 3 16.5] :yaw 90 :settle-s 3 :effects [["hunger" 300 255]]}
   :limit-s 90}
  :cases
- [{:name "staying-as-dear-as-the-walk-goes"
-   :act [[:summon "zombie" [26.5 3 16.5] "{NoAI:1b}"]
-         [:summon "zombie" [28.5 3 16.5] "{NoAI:1b}"]
+ [{:name "walk-dearer-than-staying-and-no-healing-ends-stranded"
+   :act [[:summon "zombie" [20.5 3 16.5] "{NoAI:1b}"]
+         [:summon "zombie" [18.5 3 16.5] "{NoAI:1b}"]
          [:rcon "damage $BODY 17 minecraft:generic"]
          [:wait-s 6]
-         [:job (jobs.movement.go-to {:pos #at [42 3 16] :range 1})]]
-   :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :waiting :data {:reason :risky}} :for-s 20 :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :of-job true}]}]}
+         [:job (jobs.movement.go-to {:pos #at [55 3 16] :range 1})]]
+   :expect [{:event {:source :job :kind :stopped :data {:cause {:reason :stranded}}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :risky}} :for-s 20 :until {:source :job :kind :stopped} :of-job true}]}]}

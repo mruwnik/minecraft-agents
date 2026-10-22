@@ -112,8 +112,8 @@
     {:hp (+ spawn-hp hostile-hp death-hp hide-hp lava) :lava-hp lava :hide-hp hide-hp :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :dark-s exposed-s :hostiles (count hostiles)}))
 
 (defn stay-estimate
-  "hp the body expects to lose staying at its cell instead of walking `route-hp` to `goal`: the fight with every hostile known near the way
-  (::way-radius: they find the body where it waits too) plus the spawns met at its cell by the light seen there (price/stay-hp), for the
+  "hp the body expects to lose staying at its cell instead of walking `route-hp` to `goal`: the fight with every hostile known within ::way-radius
+  of the body (those that reach it where it waits; one near the far end of the way does not) plus the spawns met at its cell by the light seen there (price/stay-hp), for the
   time the walk takes, or, for a body that can heal, for the wait until its health would afford the route (::heal-s-per-hp an hp)."
   [c goal route-hp]
   (let [p (:primitives c)
@@ -121,7 +121,7 @@
         health (.-health (.self p))
         heal-s (if (price/cannot-heal? c) 0 (* (settings/get settings ::heal-s-per-hp) (max 0 (- (min 20 (/ route-hp (settings/get price/settings ::price/risk-share))) health))))
         secs (max heal-s (/ (u/dist feet goal) (cost/walk-blocks-per-s)))
-        hostiles (danger/hostiles-near-way p goal (settings/get settings ::way-radius) {})
+        hostiles (danger/hostiles-near-way p feet (settings/get settings ::way-radius) {})
         hit (fn [mobs] (if (seq mobs) (cost/fight-damage (assoc (wworld/kit-of c) :mobs mobs)) 0))
         chance (chance-at p (update-vals feet js/Math.floor) (:y feet) false)]
     {:hp (+ (hit (mapv (fn [e] {:name (.-name e) :distance (danger/mob-distance p e) :hits 0}) hostiles))
