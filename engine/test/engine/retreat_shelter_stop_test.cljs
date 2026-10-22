@@ -93,8 +93,9 @@
     (tu/run-async done
       (fn ^:async t []
         (let [p (await (round (pocket-world "air") {:settings {:jobs.survival.respond.options/fist-sweeps 0}}))]
-          (is (= [[-1 64 0] [-1 65 0]] (calls p "dig")) "the near pair dug, the cave behind it showed, the far pair never dug")
-          (is (not-any? #{[-1 64 0] [-1 65 0]} (calls p "place")) "never sealed in"))))))
+          (is (= [[-1 64 0] [-1 65 0]] (take 2 (calls p "dig"))) "the near pair dug first, and the cave behind it showed")
+          (is (not-any? #{[-2 64 0] [-2 65 0]} (calls p "dig")) "the far pair never dug")
+          (is (not-any? #{[-1 65 0] [-2 64 0] [-2 65 0]} (calls p "place")) "the pocket is never sealed in with the cave open; the pit that follows roofs itself"))))))
 
 (deftest a-pocket-that-lays-open-lava-seals-it-with-a-dug-block-by-default
   (async done
