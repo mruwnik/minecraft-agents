@@ -868,16 +868,16 @@
           (await (run-until-idle! eng p 40))
           (is (some #{"take"} (call-args p "furnace" "op")) "the clock alone is no reason to skip the cook"))))))
 
-(deftest raw-chicken-in-a-roofed-hut-at-night-is-not-carried-to-a-furnace
+(deftest a-hurt-body-in-a-roofed-hut-at-night-does-not-carry-raw-chicken-to-a-far-furnace
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [pos {:x 5.5 :y 64 :z 0.5}
-              w (merge (hs/hut-world pos {"10,64,0" "furnace"})
-                       {:self {:food 2 :pos pos} :inventory [{:name "chicken" :count 2} {:name "coal" :count 2}] :time 15000})
+              w (merge (hs/hut-world pos {"40,64,0" "furnace"})
+                       {:self {:food 2 :health 8 :pos pos} :inventory [{:name "chicken" :count 2} {:name "coal" :count 2}] :time 15000})
               {:keys [eng p]} (setup w :step-ms 5)]
           (await (one-round! eng {:explore false}))
-          (is (= [] (calls p "furnace")) "a sheltered body does not walk out to a furnace at night"))))))
+          (is (= [] (calls p "furnace")) "the walk and cook in the dark cost more than the hurt body can afford; by day it goes"))))))
 
 (deftest raw-chicken-with-no-furnace-touches-no-furnace
   (async done
