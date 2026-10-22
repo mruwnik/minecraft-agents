@@ -25,6 +25,7 @@
     ["weather" "clear"] ["weather clear"]
     ["weather" "rain"] ["weather rain"]
     ["tp" t "10" "64" "-5.5"] [(str "tp " t " 10 64 -5.5")]
+    ["spawnpoint" t "10" "64" "-5"] [(str "spawnpoint " t " 10 64 -5")]
     ["give" t "bread"] [(str "give " t " minecraft:bread 1")]
     ["give" t "iron_sword" "64"] [(str "give " t " minecraft:iron_sword 64")]
     ["clear" t] [(str "clear " t)]
@@ -63,6 +64,8 @@
     ["clear" "Mallory"] #"ClaudeProbe"
     ["tp" "Mallory" "1" "2" "3"] #"not an allowed target.*ClaudeProbe"
     ["tp" t "abc" "1" "2"] #"number"
+    ["spawnpoint" "Mallory" "1" "2" "3"] #"not an allowed target.*ClaudeProbe"
+    ["spawnpoint" t "abc" "1" "2"] #"number"
     ["tp" t "~" "1" "2"] #"number"
     ["setblock" "~1" "2" "3" "stone"] #"number"
     ["tp" t "1" "2"] #"usage"

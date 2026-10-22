@@ -138,6 +138,8 @@
                        [(str "weather " v)])}
    "tp" {:arity [4 4] :usage "<target> <x> <y> <z>"
          :build (fn [[t & xyz] targets] [(str "tp " (target t targets) " " (join-coords xyz))])}
+   "spawnpoint" {:arity [4 4] :usage "<target> <x> <y> <z>"
+                 :build (fn [[t & xyz] targets] [(str "spawnpoint " (target t targets) " " (join-coords xyz))])}
    "give" {:arity [2 3] :usage "<target> <item> [count<=64]"
            :build (fn [[t item count] targets]
                     [(str "give " (target t targets) " minecraft:" (one-of item items "item") " "
