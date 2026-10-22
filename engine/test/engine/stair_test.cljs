@@ -1193,6 +1193,37 @@
           (is (= :done (:status @out)) (pr-str @out))
           (is (false? @walked-under) "the body stayed out of the cut while gravel stood over it"))))))
 
+(deftest a-stair-up-cuts-its-top-cell-from-beside-under-seen-gravel-or-an-unseen-cell-at-low-health
+  (let [cut [[0 67 0] [1 66 0] [1 65 0]]]
+    (are [over unseen health dir cuts-beside?]
+         (= cuts-beside? (some? (stair/undermine-cell (fn [c] (if (= c [0 68 0]) over "stone")) (fn [c] (and unseen (= c [0 68 0]))) health [0 65 0] dir cut)))
+      "gravel" false 20 :up true
+      "stone" true 6 :up true
+      "stone" true 20 :up false
+      "stone" false 6 :up false
+      "gravel" false 20 :down false)))
+
+(deftest gravel-over-the-bodys-own-column-is-cut-from-beside-so-it-falls-into-the-empty-column
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [landed-under (atom [])
+              fall (fn [p] (let [world (.-world p)]
+                             (.override world "dig" (fn ^:async f [token a impl]
+                                                      (let [r (await (impl token a))
+                                                            {:strs [x y z]} (js->clj (.-pos a))]
+                                                        (when (= [0 67 0] [x y z])
+                                                          (let [to (first (filter #(= "air" (block-at p [0 % 0])) (range 65 68)))]
+                                                            (fake/set-block! p [0 68 0] "air")
+                                                            (fake/set-block! p [0 to 0] "gravel")
+                                                            (swap! landed-under conj (= 0 (js/Math.floor (.. p (self) -pos -x))))))
+                                                        r)))))
+              {:keys [out p]} (await (stair! {:blocks (-> (stone -3 12 50 75) (dissoc "0,65,0" "0,66,0" "-1,65,0" "-1,66,0") (assoc "0,68,0" "gravel"))}
+                                             (assoc up-east :accept #{:falling-block}) fall))]
+          (is (= [false] @landed-under) "the gravel fell while the body stood out of its column")
+          (is (= :done (:status @out)) (pr-str @out))
+          (is (every? #(= "air" (block-at p [0 % 0])) [65 66 67]) "the gravel that fell was dug"))))))
+
 (deftest gravel-that-keeps-landing-on-the-body-ends-the-stair-instead-of-suffocating-it
   (async done
     (tu/run-async done

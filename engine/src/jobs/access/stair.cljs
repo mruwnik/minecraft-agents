@@ -19,7 +19,7 @@
             [jobs.lib.blocks :as blocks]
             [jobs.lib.child :as child]
             [jobs.lib.choose :as choose]
-            [jobs.lib.dig-look :refer [unknown? settle!]]
+            [jobs.lib.dig-look :refer [unknown? settle! look-at!]]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
@@ -49,8 +49,10 @@
   Hazards: exposed lava is filled with a building block (a jobs.blocks.place child, fetched when the call's :ways allow; :on-lava :stop stops
   :lava-exposed instead); after a seal it waits half a second, looking, before it digs or steps on; a failed seal, or lava flowing back after a reseal, backs the body off and stops :lava-unsealed. A cut that
   now touches seen water is plugged the same way (stops :hazard with :plugged; :water-unplugged if it cannot). :accept
-  (#{:fluid-adjacent :lava-adjacent :falling-block}, default #{}) takes those hazards. A falling block over the body's own column lands on the body once the cell under it is cut: it is dug out at once
-  (at most 2 landings, then :hazard), and the body does not walk into an open cut with one still standing over it until it has dropped. The stair never digs the block it stands on, a cell it plugged (memory :stair-plug; setting dig-plugs? digs it),
+  (#{:fluid-adjacent :lava-adjacent :falling-block}, default #{}) takes those hazards. A falling block over the body's own column (a stair up's top cell; also an unseen cell there at or below the
+  undermine-health setting, 10) would land on the body once the cell under it is cut: the body steps out of the column (the step behind, the cell behind, a side), cuts the column and what drops into it
+  from there, and walks back. With no cell to step to it is cut in place, and one that lands on the body is dug out at
+  once (at most 2 landings, then :hazard). The body does not walk into an open cut with one still standing over it until it has dropped. The stair never digs the block it stands on, a cell it plugged (memory :stair-plug; setting dig-plugs? digs it),
   a crop, or a base block.
 
   Needs a pickaxe and room for the drops. A call starts only when the first step is not refused, the args give a length and the next
@@ -91,6 +93,7 @@
    ::wall-time-s {:default 3600 :doc "Seconds one call may last from its start, the waits on checks and the jobs that run between its rounds included (:limit-reached)." :spec (a/num-in 0 nil)}
    ::max-returns {:default 3 :doc "Walks back onto the stair's line (after a reflex moved the body off it) one call makes before it stops :off-stair." :spec (a/int-in 0 nil)}
    ::return-reach {:default 32 :doc "Blocks from the stair's line the body may be found for a call to walk back onto it; farther, it stops :off-stair (the caller starts a stair where the body is)." :spec (a/num-in 0 nil)}
+   ::undermine-health {:default 10 :doc "At or below this health a stair up cuts its top cell from beside the body's column also when the cell over it is unseen: a falling block hidden there lands on the body, each landing a few health." :spec (a/num-in 0 20)}
    ::cell-s {:default 1.2 :doc "Mean seconds one cut cell of a step takes (look, dig, walk), for the quote." :spec (a/num-in 0 nil)}})
 (defn max-returns [] (settings/get settings ::max-returns))
 (defn return-reach [] (settings/get settings ::return-reach))
@@ -282,18 +285,90 @@
                                               :text (str "stair " (if arrived "walked back onto" "could not walk back onto") " its line at " (pr-str cell))})))
         (if (= :continue r) :continue :again)))))
 
+(defn undermine-cell
+  "The top cut cell of a stair up, in the body's own column, when a falling block stands over it, or the cell over it is
+  unseen and health is at most the undermine-health setting: cut from where the body stands, the block lands on the body
+  (each landing suffocates it). nil otherwise."
+  [block-at unseen? health feet dir cut]
+  (let [top (first cut)]
+    (when (and (= :up dir) (not (bs/air (block-at top)))
+               (or (rules/falls-on-body? block-at top feet)
+                   (and (unseen? (shape/add top [0 1 0])) (<= health (settings/get settings ::undermine-health)))))
+      top)))
+
+(defn undermine-stand
+  "A cell out of the column of feet the body can stand in while it cuts that column: the stair's step behind, the cell
+  behind at the feet's height, then the two sides; nil when none has open feet and head cells over a solid floor."
+  [block-at feet heading]
+  (let [[dx _ dz] (geo/delta :up heading)
+        open? (fn [cell] (and (bs/air (block-at cell)) (bs/air (block-at (shape/add cell [0 1 0])))
+                              (rules/solid-floor? block-at (shape/add cell [0 -1 0]))))]
+    (first (filter open? [(shape/add feet [(- dx) -1 (- dz)]) (shape/add feet [(- dx) 0 (- dz)])
+                          (shape/add feet [dz 0 dx]) (shape/add feet [(- dz) 0 (- dx)])]))))
+
+(defn undermine-start!
+  "Before the top cut cell of undermine-cell is dug (once per cell, memory :undermined): the body is to step out of the
+  column to undermine-stand (memory :undermine {:cells [top head feet] :stand}), so what falls drops into the empty
+  column. :again, or nil when there is no such cell or none to step to: the cell is cut where the body stands."
+  [c in feet cut]
+  (let [{:keys [dir heading]} (:args c)
+        block-at (:block-at in)
+        p (:primitives c)
+        top (undermine-cell block-at #(unknown? p %) (or (.-health (.self p)) 20) feet dir cut)
+        stand (when (and top (not (contains? (:undermined (ctx/mem c)) top))) (undermine-stand block-at feet heading))]
+    (when stand
+      (ctx/update-mem! c #(-> % (assoc :undermine {:cells [top (shape/add feet [0 1 0]) feet] :stand stand})
+                              (update :undermined (fnil conj #{}) top)))
+      (ctx/emit! c :stair.undermine :info {:cell top :stand stand
+                                           :text (str (if (unknown? p (shape/add top [0 1 0])) "an unseen cell" (block-at (shape/add top [0 1 0])))
+                                                      " over the body's column: cutting "
+                                                      (pr-str top) " from " (pr-str stand))})
+      :again)))
+
+(def undermine-settle-ms
+  "How long after a dig of an undermined column the stair waits before it reads the column again: a block falling from
+  over it is an entity until it lands, so neither over the column nor in it." 1500)
+
+(defn ^:async undermine!
+  "The column of memory :undermine: walk to its stand (a go-to child, slot :undermine), then dig its lowest solid cell
+  from there; after each dig it waits for what falls (fall-wait, undermine-settle-ms) and looks at the column again,
+  until it is open and nothing hangs over it; then the stair walks back onto its line. :again or :continue while it
+  works, a dig's stop, nil when none is under way or the body is in the column after the walk (the memory is dropped
+  and the cell is cut in place)."
+  [c in feet accept]
+  (when-let [{:keys [cells stand walked? looked]} (:undermine (ctx/mem c))]
+    (let [block-at (:block-at in)
+          [tx _ tz] (first cells)
+          dug-at (:dug-at (ctx/mem c) 0)]
+      (cond
+        (not walked?)
+        (let [r (await (child/walk-into!* c :undermine stand))]
+          (if (= :continue r) :continue (do (ctx/update-mem! c assoc-in [:undermine :walked?] true) :again)))
+        (= [tx tz] [(feet 0) (feet 2)]) (do (ctx/update-mem! c dissoc :undermine) nil)
+        (sstep/fall-wait c block-at cells) :continue
+        (< (ctx/now c) (+ dug-at undermine-settle-ms)) :continue
+        (not= looked dug-at) (do (doseq [cell cells] (await (look-at! c cell)))
+                                 (ctx/update-mem! c assoc-in [:undermine :looked] dug-at)
+                                 :again)
+        :else (if-let [cell (last (remove #(bs/air (block-at %)) cells))]
+                (let [r (await (sstep/dig! c in cell cells accept))] (case r :continue :again :yield :continue r))
+                (do (ctx/update-mem! c dissoc :undermine) :again))))))
+
 (defn ^:async work!
-  "One bounded piece of the stair from the body's place on it: check the way back, dig one cell or take the step."
+  "One bounded piece of the stair from the body's place on it: check the way back, cut a column from beside, dig one
+  cell or take the step."
   [c]
   (let [{:keys [dir heading]} (:args c)
         accept (set (:accept (:args c)))
         {:keys [origin target checked]} (ctx/mem c)
         feet (reach/standing-vec (:primitives c))
         in (judge/rules-in c feet)
-        i (geo/stair-index origin feet dir heading target)]
-    (ctx/update-mem! c geo/record-dug (:block-at in))
+        i (geo/stair-index origin feet dir heading target)
+        _ (ctx/update-mem! c geo/record-dug (:block-at in))
+        undermining (await (undermine! c in feet accept))]
     (when (empty? (:slots c)) (ore-pick/mark! c {}))
     (cond
+      undermining undermining
       (nil? i) (or (await (return! c))
                    {:reason :off-stair :cell feet :origin origin
                     :offset (mapv - feet origin)
@@ -325,6 +400,7 @@
                 (if (and (= :no-floor (:reason stop)) (bs/open-floor? (:block stop)))
                   (await (sstep/bridge! c in step-cells))
                   (or stop
+                    (undermine-start! c in feet cut)
                     (if-let [cell (first (remove #(bs/air ((:block-at in) %)) cut))]
                       (or (await (sstep/peek! c cell))
                           (let [r (await (sstep/dig! c in cell cut accept))] (case r :continue :again :yield :continue r)))
