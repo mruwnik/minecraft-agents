@@ -1,6 +1,6 @@
 (ns engine.path.planner.moves
   "Search methods: the moves out of a node: walks, diagonals, jumps, drops, gap jumps and climbing."
-  (:require [engine.path.planner.base :refer [CLIMB-FALL-P CLIMB-FALL-SCAN FULL-HEALTH ARC ARC-UP BODY CLIMB-TRAP-SHUT CORNER-S GAP-PIT-RISK GAP-S GAP-UP-S GRID HAZARD-SLIDE-RISK JUMP-S JUMP-UP LAVA MOVE-CLIMB-DOWN MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-OPEN MOVE-SWIM MOVE-WALK SLOW-EXTRA SNAP SQRT2 STEP UNLOADED WATER WHOLE FREE-FALL STALAGMITE-FACTOR STALAGMITE-FREE-FALL BOUNCE-S pad-cells]]
+  (:require [engine.path.planner.base :refer [CLIMB-FALL-P CLIMB-FALL-SCAN FULL-HEALTH ARC ARC-UP BODY CLIMB-TRAP-SHUT CORNER-S GAP-PIT-RISK GAP-S GAP-UP-S GRID HAZARD-SLIDE-RISK JUMP-S JUMP-UP LAVA MOVE-CLIMB-DOWN MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-OPEN MOVE-SWIM MOVE-WALK OPENABLE SLOW-EXTRA SNAP SQRT2 STEP UNLOADED WATER WHOLE FREE-FALL STALAGMITE-FACTOR STALAGMITE-FREE-FALL BOUNCE-S pad-cells]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -187,6 +187,17 @@
   (gapShortLethal [s x y z h0]
     (>= (.dropDamage s 1 (.missFall s x y z h0)) (.-lethal-hp s)))
 
+  (openableAt [s x y z]
+    (or (== (aget (.-tbl-kind s) (.stateAt ^js (.-snapshot s) x y z)) OPENABLE)
+        (== (aget (.-tbl-kind s) (.stateAt ^js (.-snapshot s) x (inc y) z)) OPENABLE)))
+
+  ;; the closed openable blocks in the n cells a gap jump from x y z along dx dz crosses
+  (gapDoors [s x y z dx dz n h]
+    (let [out #js []]
+      (dotimes [k n]
+        (.forEach ^js (.closedIn s (+ x (* dx (inc k))) y (+ z (* dz (inc k))) h) (fn [b] (.push out b))))
+      out))
+
   ;; sprint across 1..3 empty cells in a cardinal line, landing level or one lower; across 1 or 2, also up to one block
   ;; higher. A jump over 3 above a pit (pitBelow) has GAP-PIT-RISK: one that falls short traps the body, so a short way round
   ;; is taken instead. One over a hole whose fall kills (gapShortLethal) adds gap-death, the chance of a miss times the price
@@ -232,9 +243,14 @@
                                          (not (true? (^js (.-limit-gap s) x y z (- h0 (* y 16)) (if (neg? i) MOVE-WALK (aget (.-moves s) i)) lx ly lz h1)))
                                          (do (set! (.-limit-refused s) true) true)))
                         (set! (.-move-dmg s) (.-enter-dmg s))
-                        (.edge s lx ly lz h1 MOVE-GAP i
-                               (+ (* (inc n) (.-c-sprint-s s)) GAP-S (if (pos? delta) GAP-UP-S 0) (.-enter-extra s))
-                               (+ (.-enter-risk s) risk) (.-enter-slow s) 0 0)
+                        ;; (the opening pass: the closed gates the jump crosses are opened first, like the one the body stands in)
+                        (let [here (.-door-here s)]
+                          (when ^boolean (.-open-mode s)
+                            (set! (.-door-here s) (.concat ^js here (.gapDoors s x y z dx dz n (- h0 (* y 16))))))
+                          (.edge s lx ly lz h1 MOVE-GAP i
+                                 (+ (* (inc n) (.-c-sprint-s s)) GAP-S (if (pos? delta) GAP-UP-S 0) (.-enter-extra s))
+                                 (+ (.-enter-risk s) risk) (.-enter-slow s) 0 0)
+                          (set! (.-door-here s) here))
                         (set! (.-move-dmg s) 0))))
                   (recur (inc n) hole pit deadly up-arc)))))))))
 
@@ -289,8 +305,8 @@
           ;; no ground ahead at our level: the body must at least fit in the column to leave the edge
           (when ^boolean (.clear s x2 z2 h0 (+ h0 BODY))
             (.expandDrop s i x y z h region c x2 z2 h0 slow-from tight-src)
-            ;; no gap jumps out of a tight cell, none over a door (in the opening pass)
-            (when (and (not tight-src) (not ^boolean (.-open-mode s)))
+            ;; no gap jumps out of a tight cell, but over a gate or door cell: the body has no other way across the hole
+            (when (or (not tight-src) ^boolean (.openableAt s x2 y z2))
               (.expandGap s i x y z c h0)))))))
 
   (expandDiagonal [s x y z slow-from i c h0]

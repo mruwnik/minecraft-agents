@@ -218,3 +218,17 @@
     false 0 "found"
     false 1 "found"
     true 0 "partial"))
+
+(deftest a-gate-over-a-hole-is-opened-and-jumped
+  (are [props opens]
+       (let [w (world {:fill [[8 60 -2 9 63 40 "air"] [8 64 -2 8 64 40 "oak_fence"]]
+                       :blocks [[8 64 5 "oak_fence_gate" (merge {:facing "east"} props)]]})
+             r (run w start goal {:goalFlood 0})]
+         (and (= "found" (:status r)) (= opens (count (opened-by r)))
+              (some #{(:gap pf/MOVE)} (map :move (get-in r [:path :steps])))))
+    {:open false} 1
+    {:open true} 0))
+
+(deftest a-fence-over-a-hole-is-not-jumped
+  (let [w (world {:fill [[8 60 -2 9 63 40 "air"] [8 64 -2 8 64 40 "oak_fence"]]})]
+    (is (= "partial" (:status (run w start goal {:goalFlood 0}))))))

@@ -13,4 +13,12 @@
    :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :go-to.escalated} :for-s 5 :until {:source :job :kind :completed}}]
+   :after [[:block [14 0 16] "oak_fence_gate[open=false]"] [:body-near [22.5 0 16.5] 2]]}
+  {:name "leaves-its-fenced-pen-by-a-gate-over-a-hole"
+   ;; the floor under the gate and the cell outside it is gone (3 deep): the way out is opening the gate and jumping the 2-wide hole
+   :blocks [[:fill [8 0 13] [14 0 19] "oak_fence"] [:fill [9 0 14] [13 0 18] "air"]
+            [:set [14 0 16] "oak_fence_gate[facing=east,open=false]"]
+            [:fill [14 -3 12] [15 -1 20] "air"] [:fill [14 -4 12] [15 -4 20] "stone"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:block [14 0 16] "oak_fence_gate[open=false]"] [:body-near [22.5 0 16.5] 2]]}]}
