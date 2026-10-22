@@ -1247,6 +1247,15 @@
     (is (= {:x 10 :y 64 :z 0} (respond.state/chain-origin nil {:x 10 :y 64 :z 0}))
         "no earlier flight: from where this one began")))
 
+(deftest a-teleport-between-flights-or-steps-is-no-flee-distance
+  (let [start {:x 0 :y 64 :z 0}]
+    (is (= {:x 500 :y 64 :z 0} (respond.state/chain-origin {:data {:from start :at {:x 4 :y 64 :z 0}}} {:x 500 :y 64 :z 0}))
+        "the body is far from where the earlier flight ended: a new chain")
+    (is (= start (respond.state/chain-origin {:data {:from start :at {:x 4 :y 64 :z 0}}} {:x 6 :y 64 :z 0}))
+        "still where it ended: the chain goes on"))
+  (is (respond.state/jumped? {:x 0 :y 64 :z 0} {:x 0 :y 108 :z 0}) "44 blocks in one step: no walk")
+  (is (not (respond.state/jumped? {:x 0 :y 64 :z 0} {:x 6 :y 64 :z 0})) "one flight step"))
+
 (deftest short-flights-in-a-row-tell-the-agent-once-their-sum-is-far
   (async done
     (tu/run-async done

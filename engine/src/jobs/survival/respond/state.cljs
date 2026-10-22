@@ -25,6 +25,7 @@
    ::resume-gap-ms {:default 5000 :doc "A flight cut for longer than this starts its clocks afresh when it resumes." :spec (a/int-in 0 nil)}
    ::died-radius {:default 12 :doc "Blocks around a place the body died within which a flee step does not end, nor a goal lie, while another end is open; 0: off." :spec (a/num-in 0 nil)}
    ::died-ttl-ms {:default 3600000 :doc "Milliseconds after a death during which a flight keeps away from the place (::died-radius)." :spec (a/int-in 0 nil)}
+   ::jump-blocks {:default 24 :doc "Blocks between two steps of a flight that no step could cover (a teleport, a respawn): the flight's measure for hostile.fled starts again there." :spec (a/num-in 0 nil)}
    ::step {:default 6 :doc "Blocks per walk of a flight step." :spec (a/num-in 1 nil)}
    ::no-gain-steps {:default 20 :doc "Flight steps without a new best gap to the nearest chaser before the cornered options are tried." :spec (a/int-in 1 nil)}
    ::prefer-lit? {:default true :doc "By night or under ground a flee step ends on lit ground rather than dark (jobs.lib.look/dark-fn) while a lit end is open." :spec boolean?}
@@ -268,11 +269,25 @@
 
 (defn far-flight [] (settings/get settings ::far-flight))
 
+(defn jumped?
+  "Whether `to` lies farther from `from` ({:x :y :z}) than a flight step could move the body (::jump-blocks)."
+  [from to]
+  (and from to (> (u/dist from to) (settings/get settings ::jump-blocks))))
+
+(defn note-position!
+  "Remember where the body is for the next flight step; a place no step could reach from the last one (a teleport) becomes
+  the flight's start, since the way before it was not fled."
+  [c]
+  (let [pos (u/self-pos c)]
+    (ctx/update-mem! c (fn [m] (cond-> (assoc m :last-pos pos)
+                                 (jumped? (:last-pos m) pos) (assoc :flight-from pos :flight-jumped true))))))
+
 (defn chain-origin
-  "Where the chain of flights ending at `to` began: the :from of the previous flight's entry (not yet told), else `to`'s
-  own start `from`."
+  "Where the chain of flights ending at `to` began: the :from of the previous flight's entry (not yet told) when the body
+  is still where that flight ended (its :at), else `to`'s own start `from`."
   [prev from]
-  (or (:from (:data prev)) from))
+  (let [{prev-from :from at :at} (:data prev)]
+    (if (and prev-from (not (jumped? at from))) prev-from from)))
 
 (def not-chased-text
   "How a flight that ended with a chaser still on says so; any other end is a chaser that stopped."
@@ -310,13 +325,14 @@
         why (or ended (:ended (peek (vec fled))) :none)
         ids (mapv :id all)]
     (doseq [t all] (threats/remember! c t))
-    (let [origin (chain-origin (ctx/latest c :flight) (:flight-from (ctx/mem c)))
+    (let [{:keys [flight-from flight-jumped]} (ctx/mem c)
+          origin (if flight-jumped flight-from (chain-origin (ctx/latest c :flight) flight-from))
           n (fled-notice origin (u/self-pos c) all why (far-flight))]
       (ctx/forget-where! c :flight (constantly true))
       (if n
         (do (ctx/emit! c :hostile.fled :warn n)
             (ctx/remember! c :displaced {:from origin} displaced-policy))
-        (when origin (ctx/remember! c :flight {:from origin} {:cap 1 :ttl (settings/get settings ::chain-window-ms)}))))
+        (when origin (ctx/remember! c :flight {:from origin :at (u/self-pos c)} {:cap 1 :ttl (settings/get settings ::chain-window-ms)}))))
     (ctx/update-mem! c dissoc :chasers :fled :look-back :looked-back :pocket-tried :plugging :early-refuge-failed :refused)
     (if (= :cannot-escape ended)
       (ctx/end c :nothing-possible :cannot-escape {:fled ids :text "every way of escaping failed twice in a row"})
