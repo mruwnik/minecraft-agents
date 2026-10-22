@@ -18,6 +18,7 @@
             [jobs.lib.swim :as swim]
             [jobs.lib.util :as u]
             [jobs.survival.breathe.air :as air]
+            [jobs.survival.breathe.bank :as bank]
             [jobs.survival.breathe.fight :as fight]))
 
 (def doc
@@ -45,6 +46,8 @@
     rim at most one block above the water) within the shore-radius setting (6), another direction after each failed swim; a go-to
     child onto a climbable shore cell (as for the shore swim) within the search-radius setting (48) (at most 3 targets per spot, a failed target excludes its direction),
     which also counts dry cells joined to the body by seen water and air, however far up (the steps of a flooded stair shaft);
+    with no pillar block and one swim or go-to onto land failed: the bank's edge cell is dug (jobs.survival.breathe.bank: natural, over a solid block, two open cells above, beside surface water, within the shore-radius setting,
+    when the dig fits the cap-dig-share of the air left), leaving a notch the shore swim climbs onto;
     then a step block (also as soon as one go-to onto land failed, before more tries): with a carried pillar block (jobs.lib.choose/fillers :climb), one placed (jobs.blocks.place child,
     zones respected) in the nearest top water cell within the shore-radius setting that has support and two air cells above,
     written to the scaffold ledger (purpose :breathe-step, for jobs.access.cleanup), at most 2 per spot; the next
@@ -319,15 +322,19 @@
                             (or (shore/nearest-land p pos (search-radius) (:failed-land m) shore-cell?)
                                 (shore/reachable-land p pos (search-radius) (:failed-land m) shore-cell?)))
                      stepcell (when (< (:steps m 0) (max-steps)) (step-cell p pos (shore-radius) (:failed-steps m)))
+                     bankcell (when (and (not carried?) (or (seq (:failed-land m)) (seq (:failed-shores m))))
+                                (bank/bank-cell p pos (shore-radius) (:failed-banks m)))
                      legs (when (and in-budget? (< (:legs m 0) (max-legs)))
                             (some (fn [h] (when-let [t (leg-target p pos (:start m) h)] [h t]))
                                   (legal-headings pos (:start m) (:failed-headings m #{}))))]
-                 {:shore shore :land land :stepcell stepcell :legs legs}))
+                 {:shore shore :land land :stepcell stepcell :bankcell bankcell :legs legs}))
         ;; a way out is looked for in the cells the decision read and the body never saw before the run gives up
-        {:keys [shore land stepcell legs]} (await (sense/decide! c :breathe-land ways
+        {:keys [shore land stepcell bankcell legs]} (await (sense/decide! c :breathe-land ways
                                                                  {:retry? (fn [w] (not (or (:shore w) (:land w)
-                                                                                           (and carried? (:stepcell w)))))}))]
+                                                                                           (and carried? (:stepcell w)) (:bankcell w))))}))]
     (cond
+      bankcell (await (bank/dig! c bankcell (air/cap-dig-share)))
+
       shore
       (let [r (await (ctx/act c :swim (clj->js {:toward shore})))]
         (if (or (= "landed" (air/status r)) (on-land? p))

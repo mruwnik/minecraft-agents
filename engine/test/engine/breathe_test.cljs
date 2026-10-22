@@ -658,6 +658,17 @@
           (is (<= (unreachable-count seen) 1) "at most one go-to failed before the step block")
           (is (some #(= "place" (.-name %)) (array-seq (.. p -world -calls))) "a block was placed to climb out on"))))))
 
+(deftest with-no-block-a-failed-go-to-onto-a-high-bank-is-followed-by-a-dig-of-the-bank-edge
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen p]} (setup {:self {:inWater true :oxygen 4 :pos {:x 2 :y 64 :z 0}}
+                                           :blocks (merge (lake -3 3 3) (into {} (for [z (range -3 4) y (range 61 67)] [(str "4," y "," z) "dirt"])))})]
+          (.override (.-world p) "swim" (fn ^:async f [_ args impl] (if (.-toward args) #js {:status "timeout"} (await (impl _ args)))))
+          (await (one-run! eng small-args))
+          (is (<= (unreachable-count seen) 1) "at most one go-to failed before the dig")
+          (is (some #(= "dig" (.-name %)) (array-seq (.. p -world -calls))) "the bank edge cell was dug"))))))
+
 (deftest a-stop-after-a-failed-go-to-names-the-land-it-could-not-reach
   (async done
     (tu/run-async done
