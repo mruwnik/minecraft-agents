@@ -242,24 +242,29 @@
   (let [{:keys [x y z]} (u/self-pos c)]
     (= "water" ((block-at-fn (:primitives c)) {:x (js/Math.floor x) :y (js/Math.floor y) :z (js/Math.floor z)}))))
 
-(defn ^:async stand!
-  "Walk to and stand in a place of kind where (jobs.survival.stand-in: :water, :roof or :dry), a leg a step: :again while it
-  walks, and once it stands there a short hold (hold!, why; no hold without a why). nil when there is none or the walk is
-  blocked (the option is tried! then)."
-  [c option where why]
-  (let [e (await (ctx/call c option 'jobs.survival.stand-in {:where where :leg-s (flight-timeout-s)}))]
-    (cond
-      (= :continue e) :again
-      (not= :done (:kind e)) (do (flight/tried! c option) nil)
-      why (await (hold! c option why))
-      :else :again)))
-
 (defn hurt-window-s [] (settings/get settings ::hurt-window-s))
 
 (defn recently-hurt?
   "Whether the body lost health within hurt-window-s."
   [c]
   (pos? (ctx/count-in c :hurt (* 1000 (hurt-window-s)))))
+
+(defn stand-leg-s
+  "Seconds one leg to a place to stand may take: close-leg-s once the body was hurt (hurt?), else flight-timeout-s; a search that stands still is hit for its whole leg."
+  [hurt?]
+  (if hurt? (close-leg-s) (flight-timeout-s)))
+
+(defn ^:async stand!
+  "Walk to and stand in a place of kind where (jobs.survival.stand-in: :water, :roof or :dry), a leg a step: :again while it
+  walks, and once it stands there a short hold (hold!, why; no hold without a why). nil when there is none or the walk is
+  blocked (the option is tried! then)."
+  [c option where why]
+  (let [e (await (ctx/call c option 'jobs.survival.stand-in {:where where :leg-s (stand-leg-s (recently-hurt? c))}))]
+    (cond
+      (= :continue e) :again
+      (not= :done (:kind e)) (do (flight/tried! c option) nil)
+      why (await (hold! c option why))
+      :else :again)))
 
 (defn ^:async blocked!
   "Every option failed: forget them all, warn once a flight, pause a moment (why cornered) and go on: the next step

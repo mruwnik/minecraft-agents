@@ -1657,3 +1657,8 @@
     true true 2 false
     true true 3 true
     true false 9 false))
+
+(deftest a-stand-leg-is-short-once-the-body-was-hurt
+  (are [hurt? s] (= s (cornered/stand-leg-s hurt?))
+    true (cornered/close-leg-s)
+    false (cornered/flight-timeout-s)))
