@@ -28,6 +28,16 @@
             {:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 110 :of-job true}
             {:count-event {:source :reflex :kind :fired :context {:reflex-id :dawn}} :for-s 40 :at-most 2}]
    :after [[:body-near [16.5 -2 21.5] 3]]},
+  {:name "body-sealed-in-by-its-own-blocks-is-let-out-not-called-out"
+   ;; No :shelter entry, only the scaffold ledger of its two seal blocks over a 1x1 pit: leave-shelter must open them, not complete "out" while still enclosed.
+   :register []
+   :memory [{:kind :scaffold :policy {:cap 1 :ttl :forever}
+             :data {:entries [{:cell #at [16 0 16] :item "dirt" :before "air" :job "j1" :purpose :shelter :state :placed}
+                              {:cell #at [16 1 16] :item "dirt" :before "air" :job "j1" :purpose :shelter :state :placed}]}}]
+   :blocks [[:fill [14 0 14] [18 1 18] "dirt"]]
+   :act [[:job (jobs.survival.leave-shelter {})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.leave-shelter"}} :within-s 90 :of-job true}]
+   :after [[:block [16 0 16] "air"]]}
   {:name "dawn-hold-names-the-husk-over-the-shaft"
    :mobs :keep
    :settings {:jobs.lib.dawn/unarmed-grace-ticks 24000}

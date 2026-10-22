@@ -92,6 +92,14 @@
     (is (not (kit/retry? {:reason :no-source :why "gathering was tried and ended :no-plan"} 0 true)))
     (is (not (kit/retry? nil 0 true)))))
 
+(deftest a-no-source-stop-after-a-cannot-heal-gather-names-the-low-health
+  (let [c {:primitives #js {:self (fn [] #js {:health 8 :food 9})}}
+        out {:reason :no-source :gathered :cannot-heal :why "no source for iron_pickaxe"}]
+    (is (= :cannot-heal (:reason (kit/name-blocker c out))))
+    (is (re-find #"^hurt \(health 8, food 9\).*no source for iron_pickaxe" (:why (kit/name-blocker c out))))
+    (is (= (assoc out :gathered :no-plan) (kit/name-blocker c (assoc out :gathered :no-plan)))
+        "other gathers are not renamed")))
+
 (deftest a-bill-stop-carries-the-gather-that-ended-for-the-kits-retry
   (is (= {:gather :no-plan} (:tried (bill/stop-data "iron_ingot" {:data {:tried {:gather :no-plan} :why "x"}})))))
 

@@ -210,10 +210,20 @@
       :else (assoc (stop-of (:kind e) (:cause e) (why-of e)) :item (get-in e [:data :item]) :gathered (get-in e [:data :tried :gather])
                    :next (get-in e [:data :next])))))
 
+(defn name-blocker
+  "A no-source stop whose gathering ended :cannot-heal (hurt, only food heals) named for that: the real blocker leads the why."
+  [c out]
+  (if-not (= :cannot-heal (:gathered out))
+    out
+    (let [self (.self (:primitives c))]
+      (assoc out :reason :cannot-heal
+             :why (str "hurt (health " (.-health self) ", food " (.-food self) ") and only food heals the body, so mining on would risk it; " (:why out))))))
+
 (defn finish!
   "End the call: done when out is nil, else with the stop out; the data has what is had and made, and a text."
-  [c items have out]
-  (let [data {:have have :made (made-of c have)}]
+  [c items have out*]
+  (let [out (some->> out* (name-blocker c))
+        data {:have have :made (made-of c have)}]
     (if-not out
       (ctx/end c :done nil data)
       (ctx/end c (:kind out) (:cause out)
@@ -221,7 +231,7 @@
                  (merge data (select-keys out [:item :why :next])
                         {:text (str "kit stopped at " (:item out) ": " (name (:reason out)) (when (:why out) (str " (" (:why out) ")")))})
                  c 'jobs.items.get-kit args nil
-                 (when (= :no-food (:reason out)) (next-call/call 'jobs.survival.get-food nil)))))))
+                 (when (#{:no-food :cannot-heal} (:reason out)) (next-call/call 'jobs.survival.get-food nil)))))))
 
 (defn stop-after-wear!
   "Book the stop; the next step puts on the carried pieces first, then ends with it."

@@ -6,6 +6,7 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.dawn :as dawn]
             [jobs.lib.dig-in-leave :as dig-leave]
+            [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.waits :as waits]
             [jobs.lib.shelter.clock :as sh-clock]
@@ -75,6 +76,22 @@
                        (filterv #(held (:cell %)) (ledger/open-entries (ctx/view c))))))
     :again))
 
+(def seal-radius
+  "Blocks from the feet within which a ledger entry counts as a seal that shuts the body in (go-to's seal-clear-radius)."
+  3)
+
+(def seal-purposes "Ledger purposes of the blocks that shut a body in for the night." #{:shelter :retreat-plug})
+
+(defn seals
+  "The open, unheld :shelter and :retreat-plug ledger entries within seal-radius of the feet while the body is enclosed (the test go-to gives up on)."
+  [c]
+  (let [p (:primitives c)]
+    (when (escape/enclosed? p nil)
+      (let [{:keys [x y z]} (sh-sense/feet p)
+            held (ledger/held-cells (ctx/view c))]
+        (seq (remove (some-fn (comp held :cell) (complement (comp seal-purposes :purpose)))
+                     (ledger/near-of (ledger/open-entries (ctx/view c)) {:pos {:x x :y y :z z} :radius seal-radius})))))))
+
 (defn pending?
   "Whether the morning still has work (by night too, so a run then is no \"nothing left\"): a dig-out, a shelter to leave, a doorway the night filled to open, a
   bed put down to collect."
@@ -84,7 +101,8 @@
     (boolean (or (:dig-out m)
                  (sh-inside/shut-in-own? p (:data (ctx/latest c :shelter)) (:data (ctx/latest c :shelter-trapped)))
                  (sh-beds/doorway-to-open p (ctx/view c))
-                 (sh-beds/bed-to-collect p (ctx/view c))))))
+                 (sh-beds/bed-to-collect p (ctx/view c))
+                 (boolean (seals c))))))
 
 (defn done?
   "Nothing left to leave or take up (result: none)."
@@ -102,7 +120,8 @@
   (hold/busy! c)
   (let [p (:primitives c)
         doorway (sh-beds/doorway-to-open p (ctx/view c))
-        shelter (or doorway (dig-leave/sheltered-in c))
+        sealed (seals c)
+        shelter (or doorway (dig-leave/sheltered-in c) sealed)
         ds (when shelter (mapv #(dawn/describe p %) (dawn/hostile-hold p (boolean (combat/best-weapon p (combat/weapons c))))))]
     (cond
       (seq ds)
@@ -113,6 +132,12 @@
                                                :hostiles ds}))
         (await (hold/hold! c (str "first light: " what))))
       doorway (await (take-back! c))
+      (and sealed (not (:dig-out (ctx/mem c))) (not (dig-leave/sheltered-in c)))
+      (let [r (await (ctx/call c :seal-cleanup 'jobs.access.cleanup
+                               {:of :all :purpose seal-purposes :near {:pos (u/self-pos c) :radius seal-radius} :checks {:fit? '(always) :safe? '(not (threatened))}}))]
+        (if (and (not= :continue r) (some (comp #{:hostile-near :danger} :reason) (get-in r [:data :open])) (escape/enclosed? p nil))
+          (ctx/end c :nothing-possible :seal-kept {:text "still shut in by its own blocks, kept while a known hostile is near; giving the body back"})
+          :again))
       (or (:dig-out (ctx/mem c)) shelter)
       (let [r (await (dig-leave/leave! c))]
         (cond

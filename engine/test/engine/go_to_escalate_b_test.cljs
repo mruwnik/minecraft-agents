@@ -111,6 +111,24 @@
           (is (= [false :seal-kept] ((juxt :arrived :why) @out)) (pr-str @out))
           (is (empty? (calls p "dig")) "neither the seal nor the wall beside it is dug"))))))
 
+(deftest leave-shelter-agrees-with-go-to-that-a-body-its-seal-keeps-in-is-not-out
+  ;; Wicken #155: leave-shelter said "out of the shelter" while go-to gave up :seal-kept
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [seal [{:cell [3 64 1] :item "dirt" :before "air" :job "j0" :purpose :shelter :state :placed}
+                    {:cell [3 65 1] :item "dirt" :before "air" :job "j0" :purpose :shelter :state :placed}]
+              {:keys [eng p seen]} (setup {:self {:pos {:x 2.5 :y 64 :z 0.5}} :blocks room
+                                           :entities [{:id 1 :name "zombie" :kind "hostile" :pos {:x 11.5 :y 64 :z 5.5}}]})
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.survival.leave-shelter {})))]
+          (ledger/write! (:store eng) seal)
+          (core/submit! eng '(recording-parent) {})
+          (await (tick-out! eng 400))
+          (is (re-find #"seal-kept" (pr-str @out)) (pr-str @out))
+          (is (empty? (events-of seen :dig-in.left)) "never says it is out")
+          (is (empty? (calls p "dig")) "the seal is kept for the hostile"))))))
+
 (deftest go-to-does-not-dig-a-wall-its-ledger-meant-another-block-for
   (async done
     (tu/run-async done
