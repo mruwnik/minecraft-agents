@@ -47,6 +47,7 @@
     {:until 1000} [] false
     {:by "agent"} [] true
     {:by "j1"} ["j1"] true
+    {:by "j1/bill"} ["j1"] true
     {:by "j1"} [] false))
 
 (deftest the-built-in-rules-hold-through-the-same-answer

@@ -105,7 +105,7 @@
 (deftest a-bill-sets-its-reserve-once-not-every-round
   (let [store (atom [])
         writes (atom 0)
-        c {:id "j1" :primitives (tu/fake {}) :args {:bill {"iron_pickaxe" 1}}
+        c {:id "j1/bill" :primitives (tu/fake {}) :args {:bill {"iron_pickaxe" 1}}
            :view (fn [] {:data {:entries {:reserve @store (mem/job-kind "j1") [{:data {}}]}} :now 0})
            :remember (fn [_ data _] (swap! writes inc) (swap! store conj {:data data}))
            :forget (fn [_ pred] (swap! store #(vec (remove (comp pred :data) %))))}]
