@@ -348,6 +348,20 @@
     (ctx/update-mem! c assoc :escalate-now true :stair-tried true))
   :again)
 
+(def max-column-reaims "Times a learn-spent walk to a column re-aims at its newly seen ground before it gives up." 3)
+
+(defn ^:async look-or-re-aim-column!
+  "A walk to a column's estimate spent its learned replans: the column goal aims again if its ground has come into view
+  (up to max-column-reaims times), else the body looks around once from where it stands (a slope bumped into column by
+  column is seen at a glance). True when either happened."
+  [c pos]
+  (when (:column-open (ctx/mem c))
+    (let [aimed-pos (when (< (:column-reaims (ctx/mem c) 0) max-column-reaims)
+                      (:pos (aimed c {:x (:x pos) :z (:z pos)})))]
+      (if (and aimed-pos (not= (:y aimed-pos) (:y pos)))
+        (do (ctx/update-mem! c update :column-reaims (fnil inc 0)) true)
+        (boolean (await (look/survey! c :near)))))))
+
 (defn ^:async walk! [c0 pos range doors]
   (let [way (own-way c0 pos (dive-floor! c0 pos))
         _ (own-way-left! c0 way)
@@ -412,6 +426,9 @@
         (cond
           (= "arrived" status)
           (await (arrive! c pos))
+
+          (and (:learn-spent walked) (await (look-or-re-aim-column! c pos)))
+          :again
 
           (:learn-spent walked)
           (await (esc/give-up-or-escalate! c pos (max-blocked) status {:status :no-path :reason :unseen-floors :cells (:cells walked)}))
