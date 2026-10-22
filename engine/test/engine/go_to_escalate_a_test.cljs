@@ -359,6 +359,15 @@
           (is (seq (calls p "dig")))
           (is (= {:arrived true} @out)))))))
 
+(deftest go-to-sealed-in-its-own-shelter-by-night-keeps-it-for-a-goal-beside-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p seen]} (await (run-in-shelter! 14000 [1 64 0] 0))]
+          (is (empty? (events-of seen :go-to.escalated)) "a goal at the wall is no walk out of the night shelter")
+          (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])))
+          (is (empty? (calls p "dig"))))))))
+
 (deftest go-to-sealed-in-its-own-shelter-by-day-leaves-it-and-walks-on
   (async done
     (tu/run-async done

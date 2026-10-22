@@ -8,6 +8,7 @@
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.places :as places]
             [jobs.lib.breath :as breath]
             [jobs.lib.column-kinds :as kinds]
             [jobs.lib.look :as look]
@@ -81,11 +82,16 @@
 
 (defn shelter-exit?
   "Whether a give-up with result may leave the body's own shelter instead: the walk proved the way needs the world
-  changed, the body is shut in its shelter (at any hour: the start check priced the way out)."
+  changed, the body is shut in its shelter (at any hour: the start check priced the way out) and, while the sky is dark,
+  the goal lies outside it: a goal beside the body is no walk the start check let out, and the night job would shut the hole again."
   [c result]
   (boolean (and (not (contains? (skips c) :leave-shelter))
                 (or (escalate-reason? result (some-> (:doors (:args c)) keyword)) (sprint-only? result))
-                (sh-inside/sheltered-in c))))
+                (sh-inside/sheltered-in c)
+                (let [p (:primitives c)
+                      goal (:pos (places/parse-pos (:pos (:args c))))]
+                  (or (not (sh-sense/dark-outside? p)) (nil? goal)
+                      (sh-inside/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) goal 1))))))
 
 (defn fetch-tool?
   "Whether the escalation may fetch a pickaxe (the stair's and a :dig-route dig's ways): the body is free (a shut-in body
