@@ -63,6 +63,14 @@
     (is (= :finish (:step s)))
     (is (= [:submerged] (map :reason (:open s))))))
 
+(deftest a-far-block-the-trigger-would-not-walk-to-is-held-not-walked-to
+  (let [walk-blocker #(when (< (get (:cell %) 1) 60) {:reason :far-below})
+        s (step :feet [3 64 0] :walk-blocker walk-blocker :entries [(entry [10 50 0]) (entry [10 63 0])]
+                :block-at (lookup [10 50 0] "dirt" [10 63 0] "dirt"))]
+    (is (= {:step :walk :cell [10 63 0]} s) "the near one is walked to")
+    (is (= [:far-below] (map :reason (:open (step :feet [3 64 0] :walk-blocker walk-blocker :entries [(entry [10 50 0])]
+                                                  :block-at (lookup [10 50 0] "dirt"))))))))
+
 (deftest cells-under-a-block-that-is-not-its-own-wait
   (let [cells (pillar-cells [0 64 0] 6)
         s (step :feet [0 70 0] :entries (mapv entry (butlast cells)) :block-at (column-world cells))]

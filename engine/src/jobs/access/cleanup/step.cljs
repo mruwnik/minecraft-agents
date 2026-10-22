@@ -115,14 +115,15 @@
 
 (defn next-step
   "The next step over entries (each holding its item, or unloaded), from {:feet :eye [x y z] :block-at :entries
-  :ledger #{cells} :zones :footprints :accept :reach :held {cell {:reason ...}}}: {:step :dig :cell :item},
+  :ledger #{cells} :zones :footprints :accept :reach :held {cell {:reason ...}} :walk-blocker (fn of an entry: why a walk to it is not worth, or nil)}: {:step :dig :cell :item},
   {:step :walk :cell}, {:step :retreat :to stand} (only :stranding cells are left, and :retreats is under 3) or
   {:step :finish :open [{:cell :item :reason ...}]}. Held cells are given up for this run."
   [{:keys [entries eye reach held retreats] :as in}]
   (let [d #(distance eye (centre (:cell %)))
         far? #(> (d %) reach)
         judged (map (fn [e] [e (or (held (:cell e)) (blocker in e)
-                                   (when (and (far? e) (submerged? (:block-at in) (:cell e))) {:reason :submerged}))])
+                                   (when (and (far? e) (submerged? (:block-at in) (:cell e))) {:reason :submerged})
+                                   (when-let [why (and (far? e) (some-> (:walk-blocker in) (apply [e])))] (assoc why :walk-blocked true)))])
                     entries)
         ready (map first (remove second judged))
         near (filter #(<= (d %) reach) ready)

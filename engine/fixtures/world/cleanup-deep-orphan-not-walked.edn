@@ -1,0 +1,20 @@
+;; Card be5a665a: scaffold-left cleanup does not walk the body down a long stair to orphan scaffold the trigger would refuse (far below the feet), after taking the near block.
+;; Stone plateau (top y=19), a 16 step stair down to a dark chamber; a left-over cobblestone on the chamber floor 16 below the body and one beside it.
+;; Should-succeed: the near block is taken back, the deep one stays, the body stays on the plateau.
+;; Should-fail (old code): the job walks to every offered block within 32 and the body ends in the chamber.
+{:defaults
+ {:tags [:cleanup :scaffold-left :access :survival] :time :any
+  :plot {:length 40 :width 32 :height 30}
+  :blocks [[:fill [0 0 0] [39 19 31] "stone"]
+           [:fill [6 20 14] [6 23 16] "air"] [:fill [7 19 14] [7 23 16] "air"] [:fill [8 18 14] [8 23 16] "air"] [:fill [9 17 14] [9 23 16] "air"] [:fill [10 16 14] [10 23 16] "air"] [:fill [11 15 14] [11 23 16] "air"] [:fill [12 14 14] [12 23 16] "air"] [:fill [13 13 14] [13 23 16] "air"] [:fill [14 12 14] [14 23 16] "air"] [:fill [15 11 14] [15 23 16] "air"] [:fill [16 10 14] [16 23 16] "air"] [:fill [17 9 14] [17 23 16] "air"] [:fill [18 8 14] [18 23 16] "air"] [:fill [19 7 14] [19 23 16] "air"] [:fill [20 6 14] [20 23 16] "air"] [:fill [21 5 14] [21 23 16] "air"]
+           [:fill [22 5 14] [26 8 16] "air"]
+           [:set [3 20 15] "cobblestone"] [:set [23 5 15] "cobblestone"]]
+  :register [{:trigger :scaffold-left :args {} :job (jobs.access.cleanup {})}]
+  :body {:at [4.5 20 15.5] :inventory [["iron_pickaxe" 1] ["iron_sword" 1]] :effects [["resistance" 600 4]] :settle-s 1}
+  :limit-s 90}
+ :cases
+ [{:name "deep-orphan-scaffold-is-not-walked-to"
+   :memory [{:kind :scaffold :data {:entries [{:cell #at [3 20 15] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}
+                                              {:cell #at [23 5 15] :item "cobblestone" :before "air" :job "j0" :purpose :pillar :state :placed}]}}]
+   :expect [{:event {:source :reflex :kind :ended :data {:removed [[:any]] :open [[:any]]}} :within-s 60}]
+   :after [[:not-block [3 20 15] "cobblestone"] [:block [23 5 15] "cobblestone"] [:body-near [4.5 20 15.5] 5]]}]}

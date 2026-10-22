@@ -78,7 +78,7 @@
 
   Ready: safe? is jobs.lib.ready/safe-at-build here (:hostile-near; a dark cell within the spawn-free radius is no wait); fit? is jobs.lib.ready/fit-armed (:low-health, :poisoned,
   :unarmed: no weapon carried). Both are the :checks defaults, so a caller or trigger overrides them (:checks {:fit? '(always)}).
-  Which scaffold is worth a walk (far below, near a death, roofed) is the scaffold-left trigger's call, not this job's. A walk leg also stops while a mob the body fled from within
+  With :of :orphans, scaffold out of dig reach that jobs.lib.ledger/walk-blocker refuses (far below, near a death, roofed, submerged) is not walked to (held :walk-blocked). A walk leg also stops while a mob the body fled from within
   jobs.lib.threats/fled-memory-ms was last known within jobs.lib.threats/fled-radius of the cell or the body (:danger).
 
   A shelter's block (purpose :shelter or :retreat-plug) stays while a known hostile is near (:hostile-near) and while it opens onto a dark cell (:night; setting jobs.lib.shelter.keep ::at-night?): a neighbour that is not solid and not lit by what the body knows (an unseen one is guessed by the sky), whatever the hour, unless the body stands in the light outside any roof (then the dark inside an emptied shelter is not its use): it keeps the hostile out of the body's refuge. A run that removed a block and leaves only :night cells holds none of them (the light of the opened side may not have reached the body yet).
@@ -162,6 +162,15 @@
         pillar-bases (into #{} (comp (filter #(= :pillar (:purpose %))) (map (fn [{[x y z] :cell}] [x (dec y) z]))) l)]
     (fn [cell] (or (seen cell) (items cell) (when (pillar-bases cell) "stone")))))
 
+(defn walk-blocker-of
+  "Orphaned scaffold out of dig reach is walked to only where the scaffold-left trigger would offer it (ledger/walk-blocker): far below, near a death, roofed."
+  [c l]
+  (let [p (:primitives c)
+        in {:feet (reach/standing-vec p) :max-below (ledger/max-below) :roof-height (ledger/roof-height)
+            :died-near? (ledger/died-near-of (ctx/view c)) :block-at (access/sensed-at p access/hidden-guess)
+            :ledger (ledger/cells l)}]
+    #(ledger/walk-blocker in %)))
+
 (defn inputs
   "next-step's input now: entries to work on, the whole ledger l for the rules."
   [c l entries zones]
@@ -174,6 +183,7 @@
             :hostile-near? (hostile-near? (:primitives c)) :opens-dark? (stay/opens-dark? (:primitives c)) :keep-at-night? (stay/at-night?)
             :ledger (ledger/cells l) :zones zones :accept (set accept) :reach (dig-reach)
             :spare-own-builds (access/spare-own-builds)
+            :walk-blocker (when (= :orphans (:of (:args c))) (walk-blocker-of c l))
             :held (:held (ctx/mem c) {}) :retreats (:retreats (ctx/mem c) 0)})))
 
 (defn bad-of? [of] (not (or (= :orphans of) (= :all of) (string? of))))
