@@ -13,6 +13,7 @@
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.cost :as cost]
             [jobs.lib.death-spot :as death-spot]
+            [jobs.lib.hide-spot :as hide-spot]
             [jobs.lib.danger :as danger]
             [jobs.lib.look :as look]
             [jobs.lib.ready :as ready]
@@ -88,9 +89,10 @@
         hostiles (danger/hostiles-near-way p goal (settings/get settings ::way-radius) {})
         deaths (death-spot/near (death-spot/recent c) goal)
         death-hp (reduce + (for [{:keys [cause weight]} deaths] (* weight (hit [{:name cause :distance 0 :hits 0}]))))
+        hide-hp (reduce + (for [{:keys [mobs]} (hide-spot/near (hide-spot/recent c) goal)] (hit (mapv (fn [n] {:name n :distance 0 :hits 0}) mobs))))
         spawn-hp (* spawns (hit [{:name "zombie" :distance 0 :hits 0}]))
         hostile-hp (if (pos? exposed-s) (hit (mapv (fn [e] {:name (.-name e) :distance (danger/mob-distance p e) :hits 0}) hostiles)) 0)]
-    {:hp (+ spawn-hp hostile-hp death-hp) :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :dark-s exposed-s :hostiles (count hostiles)}))
+    {:hp (+ spawn-hp hostile-hp death-hp hide-hp) :hide-hp hide-hp :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :dark-s exposed-s :hostiles (count hostiles)}))
 
 (defn- round1 [x] (/ (js/Math.round (* 10 x)) 10))
 
@@ -99,7 +101,7 @@
   risk and its parts."
   [c goal]
   (let [p (:primitives c)
-        {:keys [hp spawn-hp hostile-hp death-hp dark-s hostiles]} (check-cache/cached c [::risk goal (sense/round-looked c)] #(estimate c goal))
+        {:keys [hp spawn-hp hostile-hp death-hp hide-hp dark-s hostiles]} (check-cache/cached c [::risk goal (sense/round-looked c)] #(estimate c goal))
         self (.self p)
         hungry? (some-> (.-food self) (<= (settings/get settings ::hungry-food)))
         allowed (* (settings/get settings ::risk-share) (.-health self) (if hungry? (settings/get settings ::hungry-share) 1))]
@@ -107,5 +109,5 @@
       (contract/ok :acceptable (str "route risk " (round1 hp) " hp, within " (round1 allowed)))
       (contract/later :risky (str "route risk " (round1 hp) " hp over the " (round1 allowed) " the body can afford: "
                                   (round1 dark-s) " s on dark open ground costs " (round1 spawn-hp) " hp, "
-                                  hostiles " hostile(s) near the way " (round1 hostile-hp) " hp, " (round1 death-hp) " hp for a recent death near it")
+                                  hostiles " hostile(s) near the way " (round1 hostile-hp) " hp, " (round1 death-hp) " hp for a recent death near it, " (round1 hide-hp) " hp for a recent hide near it")
                       :risk hp :allowed allowed :recheck-after-ms 10000))))

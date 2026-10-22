@@ -8,6 +8,7 @@
             [engine.shelter-support :as st]
             [engine.sky-perception :as sky]
             [engine.test-util :as tu]
+            [jobs.lib.hide-spot :as hide-spot]
             [jobs.movement.go-to.risk :as risk]))
 
 (def inside {:x 5 :y 64 :z 0})
@@ -53,6 +54,13 @@
     (is (zero? (:hp (risk/estimate c far-goal))))
     (is (pos? (:death-hp (risk/estimate on-way far-goal))))
     (is (zero? (:death-hp (risk/estimate off-way far-goal))))))
+
+(deftest a-recent-hide-near-the-goal-adds-the-fight-with-its-mobs-to-the-risk
+  (let [c (ready-test/ctx-of day-world)
+        now 36000000
+        with-hide (fn [pos] (assoc c :view (fn [] {:now now :data {:policies {:hid hide-spot/policy} :entries {:hid [{:t (- now 60000) :data {:pos pos :mobs ["zombie"]}}]}}})))]
+    (is (pos? (:hide-hp (risk/estimate (with-hide {:x 90 :y 64 :z 5}) far-goal))))
+    (is (zero? (:hide-hp (risk/estimate (with-hide {:x 50 :y 64 :z 5}) far-goal))))))
 
 (deftest a-death-fades-with-time
   (let [c (ready-test/ctx-of day-world)

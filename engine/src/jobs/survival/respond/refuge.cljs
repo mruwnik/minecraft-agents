@@ -5,6 +5,7 @@
             [engine.settings :as settings]
             [engine.ctx :as ctx]
             [jobs.lib.child :as child]
+            [jobs.lib.hide-spot :as hide-spot]
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.ready :as ready]
@@ -15,6 +16,7 @@
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spent :as spent]
             [jobs.lib.threats :as threats]
+            [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.respond.state :as flight]
             [jobs.survival.respond.pillar :as pillar]))
@@ -70,9 +72,7 @@
 
 (def all-ways #{:walls :pit :pocket})
 
-(defn ^:async plug!
-  "Shut the body in with jobs.survival.shut-in by ways and hide there (a :plug refuge): :again while it works or once shut
-  in, nil when no way shuts it. :plugging marks the option, ways and cell a plug is under way at (plugging-here?)."
+(defn ^:async plug-in!
   [c option ways]
   (let [e (await (ctx/call c option 'jobs.survival.shut-in
                            (cond-> {:ways ways :on-lava (settings/get settings ::on-lava) :trespass? (contains? #{:plug-zone :plug-dig-zone} option)}
@@ -88,6 +88,15 @@
                 (when (some (comp #{:trespass :no-site} :reason) (vals (select-keys (get-in e [:data :stops]) [:pit :pocket])))
                   (ctx/update-mem! c assoc :zone-dig true))
                 nil))))
+
+(defn ^:async plug!
+  "Shut the body in with jobs.survival.shut-in by ways and hide there (a :plug refuge): :again while it works or once shut
+  in, nil when no way shuts it, or when the body already hid from this kind of mob here lately (jobs.lib.hide-spot/repeated?:
+  hiding does not end a stream of them; the flight fights or leaves). :plugging marks the option, ways and cell a plug is under way at (plugging-here?)."
+  [c option ways]
+  (when-not (and (not (:plugging (ctx/mem c)))
+                 (hide-spot/repeated? c (u/self-pos c) (map :name (hostiles-known c))))
+    (await (plug-in! c option ways))))
 
 (defn creeper-coming?
   "Whether a known creeper is past swell-range and within ::creeper-range of the body: the walls would come too late
@@ -145,16 +154,19 @@
   "The hostiles the body knows within follow range, as [{:name :pos [x y z]}]; empty when it only heard one."
   [c]
   (let [p (:primitives c)]
-    (mapv (fn [e] {:name (.-name e) :pos (mapv #(js/Math.floor (% (danger-q/mob-pos p e))) [:x :y :z])})
-          (flight/near-known p (set (flight/dead-ids c)) threats/max-follow-range (danger-q/ranged-radius)))))
+    (->> (flight/near-known p (set (flight/dead-ids c)) threats/max-follow-range (danger-q/ranged-radius))
+         (reduce (fn [[seen out] e] (if (contains? seen (.-id e)) [seen out] [(conj seen (.-id e)) (conj out e)])) [#{} []])
+         second
+         (mapv (fn [e] {:name (.-name e) :pos (mapv #(js/Math.floor (% (danger-q/mob-pos p e))) [:x :y :z])})))))
 
 (defn hide-now! [c refuge text]
   (ctx/update-mem! c assoc :refuge (assoc refuge :hidden true))
   (let [placed (spent/log c)
         hostiles (hostiles-known c)
         from (if (seq hostiles)
-               (str/join ", " (map #(str (:name %) " at " (pr-str (:pos %))) hostiles))
+               (str/join ", " (map (fn [[{:keys [name pos]} n]] (str name (when (< 1 n) (str " x" n)) " at " (pr-str pos))) (frequencies hostiles)))
                "a hostile heard, not seen")]
+    (hide-spot/remember! c (u/self-pos c) (map :name hostiles))
     (ctx/emit! c :retreat_sealed :warn (merge {:text (str text "; hiding from " from (some->> (spent/text placed "refuge") (str "; "))) :pos (sh-sense/feet (:primitives c)) :hostiles hostiles}
                                               (when (seq placed) (spent/summary placed)))))
   :again)

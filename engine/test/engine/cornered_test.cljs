@@ -6,6 +6,7 @@
             [clojure.string :as str]
             [jobs.lib.blocks :as lb]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.hide-spot :as hide-spot]
             [jobs.lib.world-files :as ew]
             [engine.memory :as mem]
             [engine.ctx :as ctx]
@@ -496,6 +497,28 @@
           (is (zero? (count (calls p "place"))) "a wall shuts nothing out of the body's own cell")
           (is (= 4 (count (calls p "attack"))) "it hits the skeleton with its fist until it dies")
           (is (not-any? #(= :retreat_sealed (:kind %)) @seen)))))))
+
+(deftest a-body-that-hid-from-this-mob-here-lately-fights-instead-of-sealing-in-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks dead-end :inventory [{:name "cobblestone" :count 20}] :entities [(skeleton 4 64 0)]})]
+          (mem/write! (:store eng) :hid {:pos {:x 0 :y 64 :z 0} :mobs ["skeleton"]} hide-spot/policy)
+          (core/submit! eng retreat {})
+          (await (core/tick! eng))
+          (is (empty? (placed-cells p)) "no walls again")
+          (is (not-any? #(= :retreat_sealed (:kind %)) @seen))
+          (is (seq (calls p "attack")) "it fights the skeleton"))))))
+
+(deftest a-seal-notice-names-each-mob-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [twins [(assoc (skeleton 4 64 0) :id 9) (assoc (skeleton 4 64 0) :id 10)]
+              {:keys [seen]} (await (hidden-round hiding-retreat {:blocks dead-end :inventory [{:name "cobblestone" :count 20}] :entities twins}
+                                                  120000 (constantly nil)))
+              e (first (filter #(= :retreat_sealed (:kind %)) @seen))]
+          (is (str/includes? (:text e) "skeleton x2 at [4 64 0]")))))))
 
 (deftest a-cornered-body-with-nothing-fights-with-its-fist
   (async done
@@ -1609,6 +1632,7 @@
                 plugs (atom 0)]
             (with-redefs [ctx/call (fn ^:async f [& _] (swap! plugs inc) :continue)
                           ctx/use (constantly nil)
+                          hide-spot/recent (constantly [])
                           ctx/mem (fn [c] @(:mem c))
                           ctx/update-mem! (fn [c f & args] (apply swap! (:mem c) f args))]
               (await (refuge/plug-option! (assoc (stub-ctx p m) :args {}) :plug #{:walls})))

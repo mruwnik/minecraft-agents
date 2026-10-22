@@ -8,6 +8,7 @@
             [jobs.lib.block-sets :as bs]
             [clojure.string :as str]
             [jobs.lib.death-spot :as death-spot]
+            [jobs.lib.hide-spot :as hide-spot]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.near :as near]
             [jobs.lib.result :as result]
@@ -162,6 +163,7 @@
                     (sort-by #(u/dist here (:pos %)))
                     vec))
         deaths (death-spot/recent c)
+        hides (hide-spot/recent c)
         graded (map (juxt identity #(classify c wet %)) cells)
         in (rules-in c)
         judged (->> graded
@@ -169,7 +171,7 @@
                     (map (fn [[pos]] (let [v (access/may-dig? in pos)] [pos v (access/judge v accept)]))))]
     {:side side
      :far (when stay? (into [] (comp (remove #(stay/beside-body? (cell-of here) %)) (remove (set (map :pos side))) (map access/cell)) seen))
-     :targets (->> judged (filter #(= :ok (nth % 2))) (map first) (sort-by (juxt #(if (seq (death-spot/near deaths %)) 1 0) #(if (ground %) 1 0) #(if (floor-hole? c %) 1 0) #(u/dist here %) #(- (:y %)))) vec)
+     :targets (->> judged (filter #(= :ok (nth % 2))) (map first) (sort-by (juxt #(if (or (seq (death-spot/near deaths %)) (seq (hide-spot/near hides %))) 1 0) #(if (ground %) 1 0) #(if (floor-hole? c %) 1 0) #(u/dist here %) #(- (:y %)))) vec)
      :refused (into [] (comp (filter #(= :refused (nth % 2))) (map second)) judged)
      :wet? (boolean (some #(= :wet (second %)) graded))
      :wet-n (count (filter #(= :wet (second %)) graded))}))
