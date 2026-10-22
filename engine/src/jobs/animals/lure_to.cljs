@@ -28,7 +28,7 @@
 (def doc
   "Walk to :pos with one animal of type :mob following the breeding food held in hand (wheat for cows, sheep and goats,
   carrots for pigs, seeds for chickens; jobs.lib.animals/breeding-food), then put the food away. No lead is needed.
-  A one-shot order that starts and ends itself. Each step it keeps a :gate-held entry fresh for every planned gate seen open within 10 blocks of :pos, so the pen-gate trigger does not shut the gate it leads the animal through. Without :mob or :pos it can never start (impossible :no-mob, :no-destination).
+  A one-shot order that starts and ends itself. Each step it keeps a :gate-held entry fresh for every planned gate seen open within 10 blocks of :pos, so the pen-gate trigger does not shut the gate it leads the animal through; at the end (not with :keep-food) it shuts those gates itself. Without :mob or :pos it can never start (impossible :no-mob, :no-destination).
 
   A body that holds none of the food first gets it (a jobs.items.obtain child, unless the ways are only #{:carried}); when none can
   be got the job ends :no-food with the fetch's ending as its :because. It picks the nearest adult within :radius that is on nobody's lead and not already in :box (the zone rules let
@@ -67,7 +67,7 @@
    :pos {:doc "where to lure it {:x :y :z}" :spec ::a/pos :default nil}
    :box {:doc "the destination pen {:min :max} (feet cells, inclusive): animals in it are not lured, and the job arrives only when the led animal stands in it; none: the animal within 6 blocks of :pos" :spec pen-read/box-arg :default nil}
    :radius {:doc "animals within this many blocks (flat, height ignored) of where the job starts are lured" :spec (a/num-in 0 nil) :default 8}
-   :uuid {:doc "lead only this animal (its uuid or the start of it, as the entities tool shows; the id when it has none); nothing else takes its place. An empty or ambiguous start (more than one animal matches) never starts; one already at the destination ends the job at once (done? :ok)" :spec string? :default nil}
+   :uuid {:doc "lead only this animal (its uuid or the start of it, or its entity id, as the entities tool shows); nothing else takes its place. An empty or ambiguous start (more than one animal matches) never starts; one already at the destination ends the job at once (done? :ok)" :spec string? :default nil}
    :keep-food {:doc "leave the food in hand when the lure ends, for a parent that goes on with the animal (jobs.animals.herd); the gates the legs left open are still shut" :spec boolean? :default false}
    :ignore-zones? :shared})
 
@@ -115,8 +115,8 @@
   [c]
   (let [{:keys [mob uuid]} (:args c)]
     (->> (animals/adults (:primitives c) mob (escort/watch-radius))
+         (filter #(animals/named-by? % uuid))
          (map animals/key-of)
-         (filter #(str/starts-with? (str %) uuid))
          distinct
          vec)))
 
@@ -140,7 +140,7 @@
   [c]
   (let [{:keys [uuid mob]} (:args c)]
     (when (and uuid (not (str/blank? uuid)) (nil? (:animal (ctx/mem c))))
-      (let [found (filterv #(str/starts-with? (str (animals/key-of %)) uuid) (animals/adults (:primitives c) mob (escort/watch-radius)))]
+      (let [found (filterv #(animals/named-by? % uuid) (animals/adults (:primitives c) mob (escort/watch-radius)))]
         (when (and (= 1 (count found)) (at-destination? c (first found)))
           (first found))))))
 
@@ -289,7 +289,7 @@
                            (not (and (pen-read/arg-box c) (animals/in-box? (pen-read/arg-box c) (u/pos-of (.-pos e)))))
                            (not (spare/enclosed? c pens e))))]
     (->> (if uuid
-           (filterv #(and (str/starts-with? (str (animals/key-of %)) uuid) (not (animals/leashed? %))) (animals/adults (:primitives c) mob (escort/watch-radius)))
+           (filterv #(and (animals/named-by? % uuid) (not (animals/leashed? %))) (animals/adults (:primitives c) mob (escort/watch-radius)))
            (filterv free? (animals/adults (:primitives c) mob (+ radius (if sighting radius 0) (u/flat-dist origin (u/self-pos c))))))
          (sort-by #(u/flat-dist (u/self-pos c) (u/pos-of (.-pos %))))
          vec)))
@@ -490,7 +490,8 @@
         near (filter (fn [[gx _ gz]] (<= (js/Math.hypot (- gx x) (- gz z)) (gate-hold-range)))
                      (keys (pg/gate-index (:world (:engine c)))))]
     (doseq [cell (pg/seen-open-cells (:primitives c) near)]
-      (pg/hold! c cell))))
+      (pg/hold! c cell)
+      (ctx/update-mem! c update :held-gates (fnil conj #{}) (vec cell)))))
 
 (defn ^:async step [c]
   (hold-gates! c)
@@ -516,9 +517,22 @@
   (await (ctx/atomic c :comfort :lure
                      #(pace/steps! c (fn ^:async s [] (let [r (await (step c))] (if (= :yield r) :continue r)))))))
 
+(defn ^:async shut-held!
+  "Without :keep-food, the plans whose gates were held open during the run (a gate opened by hand included) are
+  shut by jobs.maintenance.shut children, so the animal does not walk out behind the body. :yield while one waits, else nil."
+  [c]
+  (let [held (:held-gates (ctx/mem c))
+        index (when (and (seq held) (not (:keep-food (:args c)))) (pg/gate-index (:world (:engine c))))]
+    (loop [plans (sort (distinct (keep index held)))]
+      (when-let [id (first plans)]
+        (let [e (await (ctx/call c (keyword (str "shut-held-" id)) 'jobs.maintenance.shut {:plan id}))]
+          (if (= :continue e) :yield (recur (rest plans))))))))
+
 (defn ^:async cleanup
-  "However the lure ended: the food is put away unless :keep-food, then the gates the legs left open are shut (escort/close-up!). Done."
+  "However the lure ended: the food is put away unless :keep-food, the gates held open are shut (not with :keep-food),
+  then the gates the legs left open are shut (escort/close-up!). Done."
   [c _]
   (when-not (:keep-food (:args c)) (await (bait/put-food-away! c)))
-  (let [r (await (escort/close-up! c (fn [c _] (ctx/end c :done nil))))]
+  (let [r (or (await (shut-held! c))
+              (await (escort/close-up! c (fn [c _] (ctx/end c :done nil)))))]
     (if (= :yield r) :continue r)))

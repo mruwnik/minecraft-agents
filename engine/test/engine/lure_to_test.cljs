@@ -716,6 +716,14 @@
                                                :entities [(cow 1 24 {:uuid "e60084c6-1111"}) (cow 2 18 {:uuid "ab12cd34-2222"})]} 20))]
           (is (= "ab12cd34-2222" (:animal (done-event s)))))))))
 
+(deftest the-animal-is-named-by-its-entity-id
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:uuid "2"} {:self {:pos {:x 22 :y 64 :z 0}} :inventory wheat
+                                             :entities [(cow 1 24 {:uuid "e60084c6-1111"}) (cow 2 18 {:uuid "ab12cd34-2222"})]} 20))]
+          (is (= "ab12cd34-2222" (:animal (done-event s)))))))))
+
 (deftest unreachable-inside-a-shut-pen-names-the-pen
   (let [c {:primitives (tu/fake {:floor tu/walk-floor :blocks ring}) :args {:mob "cow" :pos {:x 7 :y 64 :z 0}}}]
     (is (re-find #"closed pen" (lure-to/stop-text c :unreachable)))))
@@ -779,6 +787,18 @@
           (is (true? @opened) "the legs opened the gate")
           (is (= :arrived (:reason (done-event s))) (pr-str (done-event s)))
           (is (false? (gate-open? s)) "the cleanup shut the gate behind the cow and the body"))))))
+
+(deftest a-planned-gate-open-by-hand-is-shut-after-the-lure-arrived
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {"pen" {:id "pen" :parts [{:id "gate" :cells [[15 64 0]] :want "oak_fence_gate"}]}}
+              {:keys [p eng] :as s} (h/setup (assoc-in (gate-world) [:states "15,64,0" :open] true) 50 (ew/of-data plan {} []))]
+          (tu/seeing-all p)
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos {:x 22 :y 64 :z 0}}) {})
+          (await (tick-n s 60))
+          (is (= :arrived (:reason (done-event s))) (pr-str (done-event s)))
+          (is (false? (gate-open? s)) "the lure shut the gate it held open, so the cow cannot walk out"))))))
 
 (deftest the-gate-the-legs-opened-is-shut-after-a-cancel-and-another-jobs-gate-stays
   (async done

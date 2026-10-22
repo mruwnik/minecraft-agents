@@ -155,4 +155,17 @@
          [:job (jobs.animals.lure-to {:mob "cow" :uuid "00004f9d-0000-0009" :pos #xyz [21 0 16] :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
    :expect [{:no-event {:source :job :kind #{:completed :stopped}} :for-s 30 :of-job true}]
    :after [[:item "wheat" 4] [:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 0]]
-   :limit-s 50}]}
+   :limit-s 50}
+  ;; card 22688cc0: the gate was opened by hand and is a planned gate: the lure shuts it behind the cow, so the cow cannot walk out again
+  {:name "gate-opened-by-hand-is-shut-after-the-cow-is-in"
+   :plans [{:id "pen" :parts [{:id "gate" :cells [#at [18 0 16]] :want [:any "oak_fence_gate"]}]}]
+   :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"]
+            [:fill [19 0 14] [23 0 18] "air"]
+            [:set [18 0 16] "oak_fence_gate[facing=east,open=true]"]]
+   :body {:at [12.5 0 16.5] :yaw 270 :inventory [["wheat" 4]] :effects [["resistance" 900 4]]}
+   :act [[:summon "cow" [10.5 0 18.5]]
+         [:job (jobs.animals.lure-to {:mob "cow" :pos #xyz [21 0 16] :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :arrived :in-box true}} :within-s 150 :of-job true}]
+   :after [[:entities "type=cow,tag=wt" [[19 0 14] [23 1 18]] 1]
+           [:block [18 0 16] "oak_fence_gate[open=false]"]]}
+]}

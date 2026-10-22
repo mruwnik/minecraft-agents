@@ -1,6 +1,7 @@
 (ns jobs.lib.animals
   "Helpers for the animal jobs: what each mob breeds on, and the herd near the body."
-  (:require [engine.args :as args]
+  (:require [clojure.string :as str]
+            [engine.args :as args]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -67,6 +68,12 @@
   reload), else its id."
   [e]
   (or (.-uuid e) (.-id e)))
+
+(defn named-by?
+  "Whether the start of an animal's uuid, or its entity id as the entities tool shows it, names e."
+  [e start]
+  (or (str/starts-with? (str (key-of e)) start)
+      (= (str (.-id e)) start)))
 
 (defn foreign-penned
   "The animals of es standing in a fenced enclosure that is not the body's own (a zone or plan of its own): another
