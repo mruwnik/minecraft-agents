@@ -69,7 +69,6 @@
    ::wait-look-s {:default 0.25 :doc "Seconds of one look's wait while the body holds still for the animal." :spec (a/num-in 0 nil)}
    ::lead-deeper-gap {:default 3.5 :doc "An animal this near the body (flat) and outside the box has stopped tempted: lead on." :spec (a/num-in 0 nil)}
    ::lure-reach {:default 6 :doc "A lured animal is waited for once the body is this near it, in blocks." :spec (a/num-in 0 nil)}
-   ::stale-s {:default 4 :doc "Seconds without a look for the animal (a reflex held the body) after which the time it has been unseen starts again: the job was not watching." :spec (a/num-in 0 nil)}
    ::max-backs {:default 2 :doc "Walks back to the same last sighting (within ::back-near) after which an animal that is lost again from there counts as lost: the body walked back, saw it, went on and lost it again, round and round." :spec (a/int-in 0 nil)}
    ::back-blocks {:default 20 :doc "An animal out of sight for unseen-lost-ms is looked for by walking back toward where it was last seen, when that is no farther from the body than this." :spec (a/num-in 0 nil)}})
 (defn leg-steps [] (settings/get settings ::leg-steps))
@@ -89,7 +88,6 @@
 (defn max-search-rounds [] (settings/get settings ::max-search-rounds))
 (defn blind-leg [] (settings/get settings ::blind-leg))
 
-(defn stale-ms [] (* 1000 (settings/get settings ::stale-s)))
 
 (defn straight-leg
   "The cell blind-leg blocks from the body on the flat line to target, at the body's height; nil when target is that near."
@@ -192,19 +190,20 @@
   it was last seen is left), :lead-broke (following? false), :animal-stalled (seen beyond gap and not closing in for
   stall-ms), :wait (the body holds still: unseen, or beyond gap but coming; a lured animal that stopped coming for
   turn-back-ms sets :back-to to it instead, so the body walks back to it), else nil. The state is in the caller's
-  memory: :unseen-since, :last-seen, :back-to (where wait-for-animal! walks back to), :progress {:best :at}."
+  memory: :unseen-since (restarts in a new round of the job, a cut one resumed, unless it is walking back), :last-seen, :back-to (where wait-for-animal! walks back to), :progress {:best :at}."
   [c a following? gap]
   (let [now (ctx/now c)
         me (u/self-pos c)
         m (ctx/mem c)]
     (if (nil? a)
-      (let [since (if (< (stale-ms) (- now (:verdict-at m now))) now (or (:unseen-since m) now))
+      (let [fresh? (and (not= (:round c) (:unseen-round m)) (not (:back-to m)))
+            since (if fresh? now (or (:unseen-since m) now))
             elapsed (- now since)
             seen (:last-seen m)
             away (some->> seen (u/flat-dist me))
             back? (and away (< (back-near) away (inc (back-blocks))) (< elapsed (back-limit-ms))
                       (< (backs-to m seen) (max-backs)))]
-        (ctx/update-mem! c #(-> % (assoc :unseen-since since :verdict-at now) (dissoc :progress)
+        (ctx/update-mem! c #(-> % (assoc :unseen-since since :unseen-round (:round c)) (dissoc :progress)
                                 (assoc :back-to (when (and back? (<= (unseen-lost-ms) elapsed)) seen))))
         (cond
           (< elapsed (unseen-lost-ms)) (do (note-wait! c nil me) :wait)
@@ -212,7 +211,7 @@
           :else :lost))
       (let [pos (u/pos-of (.-pos a))
             d (u/flat-dist pos me)]
-        (ctx/update-mem! c #(-> % (dissoc :unseen-since) (assoc :last-seen pos :verdict-at now)))
+        (ctx/update-mem! c #(-> % (dissoc :unseen-since :unseen-round) (assoc :last-seen pos)))
         (cond
           (not following?) :lead-broke
           (<= d gap) (do (ctx/update-mem! c dissoc :progress :waiting :back-to :no-turn) nil)

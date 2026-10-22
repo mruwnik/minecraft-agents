@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is are async]]
             [engine.contract :as contract]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.core.activity :as activity]
             [engine.expr :as expr]
             [engine.registry :as registry]
@@ -567,27 +568,29 @@
           (is (< (self-x p) (- @hid-at 3)) "the body went back toward the last sighting")
           (is (some? (get-in (done-event s) [:lost :last-seen]))))))))
 
-(deftest a-pause-while-the-animal-is-out-of-sight-does-not-count-as-time-unseen
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [p eng clock] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 3)]} 50)
-              herd (:entities @(fake/state p))
-              hidden (atom nil)]
-          (after-acts! p (fn [p act]
-                           (when (nil? @hidden) (set-cow-x! p 3.5))
-                           (when (and (nil? @hidden) (= "wait" act))
-                             (reset! hidden 0)
-                             (swap! (fake/state p) assoc :entities []))
-                           (when @hidden
-                             (swap! hidden inc)
-                             ;; a reflex held the body for longer than the unseen limit
-                             (when (= 2 @hidden) (swap! clock + 60000))
-                             (when (= 4 @hidden) (swap! (fake/state p) assoc :entities herd) (set-cow-x! p 3.5)))))
-          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
-          (await (run-until-done s 120))
-          (is (some? @hidden) "the cow went out of sight")
-          (is (= :arrived (:reason (done-event s)))))))))
+(defn verdict-ctx [m clock round]
+  {:primitives #js {:self (fn [] #js {:pos #js {:x 0 :y 64 :z 0}})} :mem m :clock clock :round round
+   :emit (fn [& _] nil) :args {:mob "cow"}})
+
+(defn hidden-verdict [c gap-ms]
+  (with-redefs [ctx/mem (fn [c] @(:mem c))
+                ctx/update-mem! (fn [c f & args] (apply swap! (:mem c) f args))
+                ctx/now (fn [c] @(:clock c))]
+    (swap! (:clock c) + gap-ms)
+    (escort/follow-verdict c nil true 5)))
+
+(deftest a-cut-while-the-animal-is-out-of-sight-starts-the-unseen-time-again-in-the-resumed-round
+  (let [m (atom {:last-seen {:x 40 :y 64 :z 0}})
+        clock (atom 0)]
+    (is (= :wait (hidden-verdict (verdict-ctx m clock 1) 0)) "first look that missed it")
+    (is (= :wait (hidden-verdict (verdict-ctx m clock 2) 60000)) "a round later, a pause past the limit: the clock starts fresh")))
+
+(deftest an-animal-unseen-past-the-limit-within-one-round-is-lost-however-slow-the-looks
+  (let [m (atom {:last-seen {:x 40 :y 64 :z 0}})
+        clock (atom 0)
+        c (verdict-ctx m clock 1)]
+    (is (= :wait (hidden-verdict c 0)))
+    (is (= :lost (hidden-verdict c 6000)) "a 6 s gap between looks in one round counts in full")))
 
 (deftest an-animal-lost-again-from-the-same-spot-after-walks-back-to-it-ends-lost
   (async done
