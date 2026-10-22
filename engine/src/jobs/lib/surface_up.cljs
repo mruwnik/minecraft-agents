@@ -42,13 +42,20 @@
     (not-any? #(sh-sense/solid-at? p {:x (+ x (% 0)) :y y :z (+ z (% 1))})
               (for [dx [-1 0 1] dz [-1 0 1] :when (not= 0 dx dz)] [dx dz]))))
 
+(defn climbed?
+  "Whether the body came out on open ground and has not gone down since: it looks round from there (a search), it is not climbed toward again."
+  [c]
+  (let [done-y (:done-y (:surface (ctx/mem c)))]
+    (boolean (and done-y (> (+ (:y (sh-sense/feet (:primitives c))) 3) done-y)))))
+
 (defn surfacing?
   "Whether the way up is on: a search for the need already ran and found nothing while the body is under rock (no sky to
   see a tree or a cow from), and from then until it stands out on open ground."
   [c need]
-  (or (:on (:surface (ctx/mem c)))
-      (and (pos? (get-in (ctx/mem c) [:explored (:key need)] 0))
-           (sh-sense/buried? (:primitives c)))))
+  (and (not (climbed? c))
+       (or (:on (:surface (ctx/mem c)))
+           (and (pos? (get-in (ctx/mem c) [:explored (:key need)] 0))
+                (sh-sense/buried? (:primitives c))))))
 
 (defn own-top
   "The nearest top of a stair of the body's own that ends under the open sky above its feet, as {:x :y :z}, else nil."
@@ -89,8 +96,8 @@
       own (let [r (await (child/call-walk* c :own-way-walk (ready/forage-walk c {:pos own :range 1 :ways #{:walk} :spend {:tries 1}})))]
             (when-not (= :continue r) (ctx/update-mem! c assoc-in [:surface :own-tried] true))
             :continue)
-      (and (not buried) (or (ring-free? p) (>= extra extra-steps)))
-      (do (ctx/update-mem! c dissoc :surface) :out)
+      (and (or (not buried) (and (nil? wall) (nil? stand))) (or (ring-free? p) (>= extra extra-steps)))
+      (do (ctx/update-mem! c assoc :surface {:done-y (:y feet)}) :out)
       wall (do (when-not buried (ctx/update-mem! c assoc-in [:surface :extra] (inc extra)))
                (await (climb! c wall)))
       (nil? stand) :stopped

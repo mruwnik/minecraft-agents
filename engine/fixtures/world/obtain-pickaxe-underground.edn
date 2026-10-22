@@ -1,0 +1,16 @@
+;; Card 96631da7: a body under rock with an empty pack, asked for a stone pickaxe, goes up for wood (by hand: it has no pickaxe), then makes the pickaxe.
+;; Stone mass x 2..30, z 2..30, y 0..5; a sealed cave x 13..17, z 13..17, y 0..2 with the body; an oak stands on top at x 22, z 15.
+;; Should-succeed: a stone_pickaxe is carried. Should-fail: none.
+{:defaults
+ {:tags [:items :obtain :fetch :cave]
+  :time :any
+  :plot {:height 14}
+  :blocks [[:fill [2 0 2] [30 5 30] "stone"] [:fill [13 0 13] [17 2 17] "air"]
+           [:fill [21 8 14] [23 9 16] "oak_leaves[persistent=true]"] [:fill [22 6 15] [22 9 15] "oak_log"]]
+  :body {:at [15.5 0 15.5] :inventory [] :settle-s 2}
+  :limit-s 400}
+ :cases
+ [{:name "underground-empty-pack-climbs-for-wood-and-makes-a-stone-pickaxe"
+   :act [[:job (jobs.items.obtain {:item "stone_pickaxe" :count 1 :explore true})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 380 :of-job true}]
+   :after [[:item "stone_pickaxe" 1]]}]}

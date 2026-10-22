@@ -109,12 +109,12 @@
   (= 'jobs.forestry.harvest-wood (:job need)))
 
 (defn surfacing?
-  "surface/surfacing? for a need not seen: an animal or a water source in sight is walked to, not climbed toward. A tree
+  "surface/surfacing? for a need not seen: an animal, a tree or a water source in sight is walked to, not climbed toward. A tree
   need not in sight is climbed toward from under rock before any search, as a player would."
   [c need]
-  (and (not (and (or (animal? need) (= "water_bucket" (:key need))) (seen-of c need)))
+  (and (not (and (or (animal? need) (tree? need) (= "water_bucket" (:key need))) (seen-of c need)))
        (or (surface/surfacing? c need)
-           (and (tree? need) (not (seen-of c need)) (sh-sense/buried? (:primitives c))))))
+           (and (tree? need) (not (seen-of c need)) (not (surface/climbed? c)) (sh-sense/buried? (:primitives c))))))
 
 (defn ^:async surface-step!
   "One round of the way up (jobs.lib.surface-up): :continue while it goes on, else the gather source fails (:no-way-up)."
