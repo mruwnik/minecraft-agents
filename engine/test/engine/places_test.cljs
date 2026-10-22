@@ -74,8 +74,8 @@
     "white_bed" {:x 5 :y 64 :z 7} :no-such-block
     "bed" {:x 9 :y 64 :z 9} :no-such-block))
 
-(deftest an-unloaded-position-is-not-loaded
-  (is (= :not-loaded (:reason (places/find-block (constantly nil) {:x 0 :y 64 :z 0} "chest")))))
+(deftest an-unseen-position-is-unseen-block
+  (is (= :unseen-block (:reason (places/find-block (constantly nil) {:x 0 :y 64 :z 0} "chest")))))
 
 (deftest a-place-is-gone-when-its-block-is-loaded-and-not-of-its-kind
   (are [kind block gone] (= gone (places/gone? kind block))
@@ -182,6 +182,7 @@
   (async done (run-world done {:blind true :blocks {"5,64,5" "white_bed"}} (fn ^:async t [{:keys [eng seen]}]
     (await (run-job eng (list set-place {:name :bed :pos [5 64 5] :block "white_bed"})))
     (is (nil? (place eng :bed)))
+    (is (= [:unseen-block] (refusal-causes seen)))
     (is (empty? (events-of seen :place.set)))))))
 
 (deftest set-place-with-a-block-that-is-not-there-gives-up-and-records-nothing
@@ -202,7 +203,7 @@
   (async done (run-world done {:unloaded ["9,64,9"]} (fn ^:async t [{:keys [eng seen]}]
     (await (run-job eng (list set-place {:name :chest :pos [9 64 9] :block "chest"})))
     (is (nil? (place eng :chest)))
-    (is (= [:not-loaded] (refusal-causes seen)))))))
+    (is (= [:unseen-block] (refusal-causes seen)))))))
 
 (defn ^:async try-job
   "Run job with args in a fresh world after (prepare! eng): {:eng :seen :reasons [refusal reasons]}."

@@ -85,23 +85,25 @@
     {:x (+ x dx) :y (+ y dy) :z (+ z dz)}))
 
 (defn find-block
-  "Where block (a name) stands at pos or within 1 of it. block-at maps a cell to a block name (nil: unloaded).
+  "Where block (a name) stands at pos or within 1 of it. block-at maps a cell to a block name (nil: not seen or unloaded).
   Returns {:pos cell :block name} for pos itself when it matches, else for the only matching cell within 1.
   Otherwise a refusal:
-  - :not-loaded, pos is unloaded
+  - :unseen-block, pos has not been seen (look at it), or no cell matches and one of the cells within 1 has not been seen
   - :ambiguous, several cells around pos match and pos does not (:candidates lists them)
   - :no-such-block, none match (:found is what pos holds)"
   [block-at pos block]
   (let [here (block-at pos)]
     (cond
-      (nil? here) (refusal :not-loaded (str "the chunk at " (pr-str pos) " is not loaded"))
+      (nil? here) (refusal :unseen-block (str "the cell at " (pr-str pos) " has not been seen (or its chunk is not loaded): look at it first"))
       (block-matches? block here) {:pos pos :block here}
       :else
       (let [found (->> (around pos)
                        (keep (fn [cell] (let [n (block-at cell)] (when (block-matches? block n) {:pos cell :block n}))))
                        vec)]
         (case (count found)
-          0 (refusal :no-such-block (str "no " block " at " (pr-str pos) " or within 1 of it; that cell holds " here) :found here)
+          0 (if (some (comp nil? block-at) (around pos))
+              (refusal :unseen-block (str "no " block " seen at " (pr-str pos) " or within 1 of it; some cells there have not been seen: look first"))
+              (refusal :no-such-block (str "no " block " at " (pr-str pos) " or within 1 of it; that cell holds " here) :found here))
           1 (first found)
           (refusal :ambiguous (str (count found) " " block " blocks within 1 of " (pr-str pos) "; give the exact position of one")
                    :candidates (mapv :pos found)))))))

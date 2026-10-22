@@ -18,7 +18,7 @@
   Refused (ends :condition-failed with cause {:reason :text}): :bad-name, :reserved-name (a
   memory kind the engine uses), :not-a-place (the name holds other memory), :bad-pos, :bad-block,
   :no-such-block, :ambiguous (two such blocks lie within 1 and neither at the position: give the exact one),
-  :not-loaded.
+  :unseen-block (the cell, or one beside it, is not seen yet or not loaded: look at it).
   A name, :pos or :block wrong whatever the world holds is refused before any round: ends :impossible {:reason :bad-args :why <that reason> :text}.
   Success: ends :done with data {:name :pos}; the memory layer emits info place.set (with :was).
   To run it on a body that is running: {:op :submit :next? true :spec (jobs.memory.set-place {...})}. The
