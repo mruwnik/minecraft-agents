@@ -1533,6 +1533,23 @@
             (is (= mob-name (:mob ev)) "the arrival is logged with the mob")
             (is (empty? (filter #(= :retreat.hide-hurt (:kind %)) @seen)) "left before being hit")))))))
 
+(deftest a-body-sealed-in-stays-for-a-creeper-when-leaving-meets-a-zombie
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks dead-end :inventory [{:name "cobblestone" :count 20}] :entities [(zombie-at 4)]})
+              holds (atom 0)]
+          (.override (.-world p) "wait"
+                     (fn [token a impl]
+                       (when (hiding? seen)
+                         (when (= 1 (swap! holds inc)) (fake/add-entity! p (assoc (creeper 3 64 0) :visible true)))
+                         (when (> @holds 5) (swap! (fake/state p) assoc :entities [])))
+                       (impl token a)))
+          (core/submit! eng hiding-retreat {})
+          (await (core/tick! eng))
+          (is (< 5 @holds) "it held on while the creeper stood by")
+          (is (empty? (filter #(= :retreat.hide-breached (:kind %)) @seen)) "the refuge was not left for it"))))))
+
 (deftest a-hidden-body-looks-round-all-four-ways-while-it-holds
   (async done
     (tu/run-async done

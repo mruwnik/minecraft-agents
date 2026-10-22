@@ -5,6 +5,7 @@
             [jobs.lib.body :as body]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-in-leave :as dig-leave]
@@ -26,8 +27,8 @@
   ::hide-max-s. Sealed in a plug or pit with such a hostile at the foot past ::hide-s it (not a climber, which follows up the stair) first digs a stair up and away from
   it (jobs.access.stair, ::dig-out-steps steps; the next heading when one stops), then ends done {:hold :spent :dug-out true}.
   Nothing-possible :hurt {:ids [mobs within ::reach-radius]} when the body loses health in the refuge (a mob reaching it
-  round a corner of the seal), :breached {:id :name} when a creeper (its blast breaks any refuge) or, against a pillar, a
-  climber is within ::breaker-reach and ::leave-for-breakers is on. Needs nothing; places nothing; the refuge itself stays.
+  round a corner of the seal), :breached {:id :name} when a creeper (its blast breaks any refuge; a plug or pit is kept when leaving
+  costs more, stays-for-creeper?) or, against a pillar, a climber is within ::breaker-reach and ::leave-for-breakers is on. Needs nothing; places nothing; the refuge itself stays.
   Called by the flight (jobs.survival.respond.refuge); any agent may submit it from inside a refuge.")
 
 (a/defargs args
@@ -44,6 +45,7 @@
    ::hide-s {:default 60 :doc "Seconds in its refuge after which a hidden body hands back, though a danger it keeps off stays, once no real danger is on it as it stands." :spec (a/num-in 0 nil)}
    ::hide-max-s {:default 300 :doc "Seconds after which a hidden body hands back though a melee hostile still waits at its foot." :spec (a/num-in 0 nil)}
    ::breaker-reach {:default 6 :doc "Blocks within which a creeper or a climber counts as breaching a hidden body's refuge." :spec (a/num-in 0 nil)}
+   ::leave-s {:default 3 :doc "Seconds a body leaving a refuge is in the open among the other hostiles about: the price of leaving it for a creeper, against the blast's price were it to stay." :spec (a/num-in 0 nil)}
    ::reach-radius {:default 3 :doc "Blocks within which a hostile counts as the one that hurt a hidden body." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 900 :doc "Seconds a hide may take." :spec (a/num-in 0 nil)}})
 
@@ -116,14 +118,28 @@
           (= :done (:kind e)) :out
           :else (do (ctx/update-mem! c assoc-in [:dig-out :i] (inc i)) :again))))))
 
+(defn stays-for-creeper?
+  "Whether staying in the refuge is the cheaper of the two with a creeper at it (cost/exposure-price): a plug or pit shuts the blast off
+  the body (it only opens the walls), so it stays when leaving would meet other hostiles (::leave-s in the open among them); a pillar takes the blast and is left."
+  [c]
+  (let [p (:primitives c)
+        self (.self p)
+        body {:health (.-health self) :equipment (cost/equipment-of (.-equipment self))}
+        others (remove combat/creeper? (flight/near-known p (dead c) (danger-q/hostile-radius) (danger-q/ranged-radius)))
+        shielded? (contains? #{:plug :plug-dig :pit} (:kind (:args c)))
+        stay (if shielded? 0 (cost/exposure-price body ["creeper"]))
+        leave (* (settings/get settings ::leave-s) (cost/exposure-price body (map #(.-name %) others)))]
+    (< stay leave)))
+
 (defn breaker
-  "The known hostile that would breach the refuge: a creeper or, against a pillar, a climber, within breaker-reach; nil when none or leave-for-breakers is off."
+  "The known hostile that would breach the refuge: a creeper (unless staying is cheaper: stays-for-creeper?) or, against a pillar, a climber, within breaker-reach; nil when none or leave-for-breakers is off."
   [c]
   (when (leave-for-breakers?)
     (let [p (:primitives c)
-          reach (breaker-reach)]
+          reach (breaker-reach)
+          stay? (delay (stays-for-creeper? c))]
       (->> (flight/near-known p (dead c) reach reach)
-           (filter #(or (combat/creeper? %) (and (= :pillar (:kind (:args c))) (combat/climber? %))))
+           (filter #(or (and (combat/creeper? %) (not @stay?)) (and (= :pillar (:kind (:args c))) (combat/climber? %))))
            first))))
 
 (defn ^:async glance-round!
