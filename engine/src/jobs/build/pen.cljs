@@ -42,7 +42,7 @@
   over that box with jobs.lib.pen (see jobs.animals.pen-check): a step out of the box is a leak.
   A leak left after the build (a hole in the plan, or a cell the build refused, gave up on or lacked material for) is
   patched in up to ::max-passes passes (each fills the listed leaks, then reads again; a pass that put nothing right is the last) unless the call's :ways (:build, :patch) leaves :patch out: a jobs.blocks.place child puts one fence of the plan's kind in each
-  :gap cell and on top of each :climb or :perch-in cell, then the pen is checked again. Nothing else is placed that the plan does not ask for.
+  :gap cell and on top of each :climb or :perch-in cell (a :perch-in stepped from leaves gets the leaves cleared by a jobs.blocks.clear-cells child instead), then the pen is checked again. Nothing else is placed that the plan does not ask for.
   Needs: the plan, a zone list (unless :ignore-zones?), and the blocks of the fence (fetched by the builder unless
   the call's ways leave out :chest :craft :gather). Returns, as the data of its ending, {:closed? :reason :cells :leaks :gates :built {:placed :missing
   :short :given-up :wrong :refused}}. :reason is nil when closed, else :leak, :unbounded, :unloaded (only after 3 walks back to the pen left cells unsensed) or :no-start.
@@ -262,9 +262,10 @@
       back back
       (:closed? answer)
       (ctx/end c :done nil (assoc result :text (str "pen of " plan " holds, " (:cells answer) " cells, placed " (:placed built))))
-      (and (ctx/way? c :patch) (seq (pen-patch/patch-cells (:leaks answer))) (patch-item cells)
+      (and (ctx/way? c :patch) (seq (concat (pen-patch/fence-cells (:leaks answer)) (pen-patch/leaf-cells (:leaks answer)))) (patch-item cells)
            (let [{:keys [pass pass-ok]} (ctx/mem c)] (pen-patch/another-pass? pass pass-ok (settings/get settings ::max-passes))))
-      (do (ctx/update-mem! c #(assoc % :phase :patch :pass (inc (or (:pass %) 0)) :pass-ok 0 :patch-queue (pen-patch/patch-cells (:leaks answer))))
+      (do (ctx/update-mem! c #(assoc % :phase :patch :pass (inc (or (:pass %) 0)) :pass-ok 0 :patch-queue (pen-patch/fence-cells (:leaks answer))
+                                          :leaf-queue (pen-patch/leaf-cells (:leaks answer))))
           :again)
       :else
       (ctx/end c :nothing-possible (:reason answer)
@@ -337,15 +338,26 @@
       :continue
       (do (ctx/update-mem! c assoc :phase :build) :again))))
 
+(defn ^:async clear-leaf!
+  "The leaf block an animal steps from onto a fence, dug by a jobs.blocks.clear-cells child; its result, or :continue while it runs."
+  [c cell]
+  (await (ctx/call c :leaves 'jobs.blocks.clear-cells
+                   (merge (select-keys (:args c) [:ignore-zones?]) {:area {:cells [cell]} :only ["_leaves"]}))))
+
 (defn ^:async patch-step!
-  "One fence of the patch queue by a blocks.place child (its ending, placed or not, passes it on); then back to the check."
+  "The leaves a perched fence is stepped from first (one clear-cells child each), then one fence of the patch queue by a blocks.place child (its ending, placed or not, passes it on); then back to the check."
   [c cells]
+  (if-let [cell (first (:leaf-queue (ctx/mem c)))]
+    (let [r (await (clear-leaf! c cell))]
+      (if (= :continue r)
+        :continue
+        (do (ctx/update-mem! c #(-> % (update :leaf-queue rest) (update :pass-ok (fnil + 0) (if (= :done (:kind r)) 1 0)))) :again)))
   (if-let [[x y z] (first (:patch-queue (ctx/mem c)))]
     (let [r (await (pen-patch/place-fence! c [x y z] (patch-item cells) {:for-plan (:plan (:args c)) :ways (need/pass-ways c)}))]
       (if (= :continue r)
         :continue
         (do (ctx/update-mem! c #(-> % (update :patch-queue rest) (update :pass-ok (fnil + 0) (if (= :done (:kind r)) 1 0)))) :again)))
-    (do (ctx/update-mem! c assoc :phase :check) :again)))
+    (do (ctx/update-mem! c assoc :phase :check) :again))))
 
 (defn ^:async build-step!
   "One round of the builder as the child; the phase moves to the exit when its round ended with its data (done, or it

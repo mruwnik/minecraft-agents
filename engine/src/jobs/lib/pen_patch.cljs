@@ -19,6 +19,21 @@
   [leaks]
   (vec (distinct (keep patch-cell leaks))))
 
+(defn leaf-perch?
+  "Whether the leak is a :perch-in whose animal steps from a leaf block: taking the leaves away mends it better than a higher fence."
+  [{:keys [why stand-block]}]
+  (and (= :perch-in why) (some? stand-block) (str/ends-with? stand-block "_leaves")))
+
+(defn leaf-cells
+  "The distinct leaf blocks [x y z] the :perch-in leaks are stepped from."
+  [leaks]
+  (vec (distinct (keep #(when (leaf-perch? %) ((juxt :x :y :z) (:stand %))) leaks))))
+
+(defn fence-cells
+  "patch-cells of the leaks that are not mended by clearing leaves."
+  [leaks]
+  (patch-cells (remove leaf-perch? leaks)))
+
 (defn another-pass?
   "Whether a patch pass may follow: under max-passes done, and the last pass (if any) put something right."
   [pass pass-ok max-passes]

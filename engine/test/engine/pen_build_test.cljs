@@ -152,6 +152,17 @@
           (is (true? (:closed? result)) (pr-str (:leaks result)))
           (is (= "oak_fence" (h/block-at p 3 64 4))))))))
 
+;; A leaf block beside the fence is an animal's step onto its top: the leaves go, no fence is piled on the fence.
+(deftest leaves-an-animal-steps-from-onto-a-fence-are-cleared-not-fenced-over
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [leaves (into {} (for [y [64 65]] [(h/cell-key 5 y 3) "oak_leaves"]))
+              [result seen p] (await (build! (spec kit (merge built-pen leaves)) {"pen" (ring-plan)} {}))]
+          (is (true? (:closed? result)) (pr-str result))
+          (is (= "air" (h/block-at p 4 65 3)) "no second fence on the perched one")
+          (is (= "air" (h/block-at p 5 65 3)) "the leaves are dug away"))))))
+
 ;; The pen check lists at most 12 leaks: more gaps than that need more than one patch pass.
 (deftest more-gaps-than-one-check-lists-are-patched-in-further-passes
   (async done
