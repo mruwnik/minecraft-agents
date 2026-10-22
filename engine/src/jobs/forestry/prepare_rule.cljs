@@ -4,7 +4,6 @@
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.block-sets :as bs]
-            [clojure.string :as str]
             [jobs.lib.access.rules :as rules]
             [jobs.lib.trees :as forestry]
             [jobs.lib.tools :as tools]
@@ -21,23 +20,6 @@
   "Cells of growth space for species (the planted cell included), nil for a species not supported."
   [species]
   (get (settings/get settings ::headroom) species))
-
-(def tree-plants
-  #{"short_grass" "tall_grass" "fern" "large_fern" "dead_bush" "snow" "vine" "glow_lichen" "dandelion" "poppy"
-    "blue_orchid" "allium" "azure_bluet" "red_tulip" "orange_tulip" "white_tulip" "pink_tulip" "oxeye_daisy"
-    "cornflower" "lily_of_the_valley" "torchflower" "sunflower" "lilac" "rose_bush" "peony" "pink_petals"
-    "wildflowers" "leaf_litter" "short_dry_grass" "tall_dry_grass" "bush" "firefly_bush"})
-
-(defn tree-free?
-  "Whether a tree's growth may take the place of the block: air, leaves, saplings, plants, snow, vines, invisible light blocks."
-  [n]
-  (boolean (or (bs/air n) (= "light" n) (str/ends-with? n "_leaves") (str/ends-with? n "_sapling") (tree-plants n))))
-
-(defn cell-filled?
-  "Whether the cell seen at pos holds a block growth cannot take the place of and that is no tree log: a debt there cannot be planted."
-  [p pos]
-  (let [n (u/seen-name p pos)]
-    (boolean (and n (not (tree-free? n)) (not (forestry/log-name? n))))))
 
 (def natural-names
   #{"stone" "cobblestone" "deepslate" "cobbled_deepslate" "andesite" "diorite" "granite" "tuff" "calcite" "sand"
@@ -77,7 +59,7 @@
                 n (u/seen-name p at)]
             (cond
               (nil? n) {:state :unloaded}
-              (not (tree-free? n)) {:state :cramped :at (lib/cell-vec at) :block n})))
+              (not (forestry/tree-free? n)) {:state :cramped :at (lib/cell-vec at) :block n})))
         (range 1 (headroom-of species))))
 
 (defn soil-state

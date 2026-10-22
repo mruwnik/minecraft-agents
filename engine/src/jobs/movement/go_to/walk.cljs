@@ -231,7 +231,6 @@
       (await (look-at-column! c pos)) :again
       :else (do (ctx/update-mem! c assoc :column-near true) :again))))
 
-(def seal-clear-radius 3)
 (def loop-starts "Rounds of one call that begin from the same cell, none improving the best distance, before they count as a loop." 4)
 
 (defn note-start
@@ -246,14 +245,14 @@
 
 (defn ^:async clear-goal-seal!
   "A goal the walk could not reach (:goal-enclosed, :goal-cut-off, or a search that ran out of land: :exhausted, :out-of-sight, :ladder-gap, :start-enclosed)
-  with blocks of the body's own ledger within seal-clear-radius of the goal (a dig-in's seal beside a gate, a plug in a stair
+  with blocks of the body's own ledger within ledger/seal-clear-radius of the goal (a dig-in's seal beside a gate, a plug in a stair
   mouth) or of its feet (a retreat's seal that shuts the body in, once the hostile is gone): one jobs.access.cleanup
   child takes them back: :again, so the walk is planned again. A body shut in that the cleanup left in for a known hostile
   (an open cell held :hostile-near or :danger: the shelter keeps the hostile out) gives up :seal-kept instead: no other
   way out is cut while the shelter holds."
   [c pos result]
   (when (and (ways/way? c :clear-seal) (#{:goal-enclosed :goal-cut-off :exhausted :out-of-sight :ladder-gap :start-enclosed} (some-> (:reason result) keyword)) (not (:seal-cleared (ctx/mem c))))
-    (let [at (fn [[x y z]] {:pos {:x (js/Math.floor x) :y (js/Math.floor y) :z (js/Math.floor z)} :radius seal-clear-radius})
+    (let [at (fn [[x y z]] {:pos {:x (js/Math.floor x) :y (js/Math.floor y) :z (js/Math.floor z)} :radius ledger/seal-clear-radius})
           entries (ledger/open-entries (ctx/view c))
           near (first (filter #(seq (ledger/near-of entries %)) [(at [(:x pos) (:y pos) (:z pos)]) (at (end/feet-cell c))]))]
       (when near

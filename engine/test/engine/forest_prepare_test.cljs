@@ -13,7 +13,8 @@
             [jobs.lib.world-files :as world]
             [jobs.forestry.prepare :as prepare]
             [jobs.forestry.prepare-field :as field]
-            [jobs.forestry.prepare-rule :as rule]))
+            [jobs.forestry.prepare-rule :as rule]
+            [jobs.lib.trees :as trees]))
 
 (def job 'jobs.forestry.prepare)
 
@@ -65,7 +66,7 @@
 ;; ------------------------------------------------------------------ pure
 
 (deftest a-tree-grows-through-air-leaves-saplings-plants-and-light-blocks-only
-  (are [name free] (= free (rule/tree-free? name))
+  (are [name free] (= free (trees/tree-free? name))
     "air" true "cave_air" true "oak_leaves" true "short_grass" true "tall_grass" true "poppy" true "snow" true
     "vine" true "birch_sapling" true "light" true "stone" false "dirt" false "oak_log" false "oak_planks" false "water" false))
 

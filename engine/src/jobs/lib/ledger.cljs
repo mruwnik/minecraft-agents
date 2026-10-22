@@ -87,6 +87,8 @@
   (let [spots (keep (comp :pos :data) (mem/entries view :died))]
     (fn [[x y z]] (boolean (some #(<= (u/dist % {:x x :y y :z z}) (died-radius)) spots)))))
 
+(def seal-clear-radius "Blocks round a goal or the feet within which go-to and leave-shelter take back the body's own seals." 3)
+
 (def kind :scaffold)
 
 (def policy {:cap 1 :ttl :forever :durable? true})

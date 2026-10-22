@@ -13,7 +13,7 @@
             [jobs.lib.forestry :as lib]
             [jobs.lib.shelter :as sh]
             [jobs.forestry.prepare-rule :as rule]
-            [jobs.lib.trees :refer [debt-near-body? debts forget-plot-debts! stalled-kind stalled-policy without-stalled target-of with-sapling sapling-for sapling-of sapling-name? log-name? replant-kind species]
+            [jobs.lib.trees :refer [debt-near-body? debts forget-plot-debts! stalled-kind stalled-policy without-stalled target-of with-sapling sapling-for sapling-of sapling-name? log-name? replant-kind species tree-free? cell-filled?]
              :rename {species all-species}]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]))
@@ -121,7 +121,7 @@
         under (u/seen-name p (lib/down pos))
         space (when (rule/headroom-of species) (rule/growth-space p pos species))
         here (u/seen-name p pos)
-        light (when (and here (rule/tree-free? here)) (light-at p pos))]
+        light (when (and here (tree-free? here)) (light-at p pos))]
     (cond
       (and under (not ((lib/soil-for species) under))) {:reason :no-soil :pos pos :found under}
       (= :cramped (:state space)) (assoc (select-keys space [:at :block]) :reason :cramped :pos pos)
@@ -215,7 +215,7 @@
   noted in stalled-kind so the replant-owed trigger does not refire it at once."
   [c]
   (forget-plot-debts! c)
-  (ctx/forget-where! c replant-kind #(rule/cell-filled? (:primitives c) (:pos %)))
+  (ctx/forget-where! c replant-kind #(cell-filled? (:primitives c) (:pos %)))
   (let [t (current-target c)
         sapling (when t (sapling-for (u/inventory (:primitives c)) (:species t)))
         refused #(refusal c (:pos t))

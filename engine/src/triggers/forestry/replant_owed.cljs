@@ -8,7 +8,6 @@
   Nor does a debt where the body would be due home before night (jobs.lib.shelter/home-due-at?, setting
   jobs.lib.shelter/home-due): the walk home owns the dusk."
   (:require [engine.memory :as mem]
-            [jobs.forestry.prepare-rule :as rule]
             [jobs.lib.body :as body]
             [jobs.lib.shelter :as sh]
             [jobs.lib.trees :as trees :refer [replant-kind]]
@@ -20,4 +19,4 @@
   (boolean
    (and (not (body/recovery-pending? view :replant-owed))
         (not (false? (.-onGround (.self p))))
-        (some #(and (u/block-at p (:pos %)) (trees/debt-near-body? p (:pos %)) (not (rule/cell-filled? p (:pos %))) (not (sh/home-due-at? p view (:pos %)))) (trees/with-sapling (trees/without-stalled view (map :data (mem/entries view replant-kind))) (u/inventory p))))))
+        (some #(and (u/block-at p (:pos %)) (trees/debt-near-body? p (:pos %)) (not (trees/cell-filled? p (:pos %))) (not (sh/home-due-at? p view (:pos %)))) (trees/with-sapling (trees/without-stalled view (map :data (mem/entries view replant-kind))) (u/inventory p))))))
