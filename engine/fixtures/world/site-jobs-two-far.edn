@@ -1,0 +1,23 @@
+;; Card 7d401a4b (c31904f0): two one-shot site jobs, farm.tend at field A and animals.maintain at pen B, both more than jobs.lib.standing/away-limit (48)
+;; from the body and from each other, do not hold each other off or drag the body between the sites: each walks to its own site and finishes.
+;; Flat grass, 160 long. Body at x 8; wheat field at x 70..73 (ripe wheat on farmland, water beside); fenced pen x 130..138 with two cows inside.
+;; Should-succeed: both jobs complete, the wheat is cut, the body ends at the field it worked last (maintain ran first, then tend walked back), and neither waits :away. Should-fail: none.
+{:defaults
+ {:tags [:farm :animals :tend :maintain :jobs :scheduler]
+  :time :any
+  :plot {:floor "grass_block" :length 160}
+  :blocks [[:fill [70 -1 16] [73 -1 16] "farmland[moisture=7]"] [:fill [70 -1 17] [73 -1 17] "water"]
+           [:fill [70 0 16] [73 0 16] "wheat[age=7]"]
+           [:fill [130 0 13] [138 0 19] "oak_fence" :hollow]]
+  :body {:at [8.5 0 16.5] :effects [["resistance" 900 4]] :settle-s 2}
+  :limit-s 300}
+ :cases
+ [{:name "tend-and-maintain-far-from-each-other-both-finish"
+   :act [[:summon "cow" [133.5 0 15.5]]
+         [:summon "cow" [135.5 0 17.5]]
+         [:http :submit (jobs.farm.tend {:area {:min #xyz [70 -1 16] :max #xyz [73 0 16]}}) [] {:ok true}]
+         [:http :submit (jobs.animals.maintain {:mob "cow" :target 2 :box {:min #xyz [131 0 14] :max #xyz [137 0 18]}}) [] {:ok true}]]
+   :expect [{:no-event {:source :job :kind :waiting :data {:reason :away}} :for-s 30}
+            {:event {:source :job :kind :completed :data {:name "jobs.farm.tend"}} :within-s 200}
+            {:event {:source :job :kind :completed :data {:name "jobs.animals.maintain" :kind :done :adults 2}} :within-s 280}]
+   :after [[:not-block [70 0 16] "wheat[age=7]"] [:body-near [71.5 0 15.5] 10]]}]}
