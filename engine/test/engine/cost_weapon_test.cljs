@@ -15,7 +15,7 @@
 (deftest every-skeleton-variant-is-ranged-and-priced
   (doseq [mob ["skeleton" "stray" "parched" "bogged"]]
     (is (contains? weapon/ranged-mobs mob) mob)
-    (is (= 2 (get threat/mob-dps mob)) mob)))
+    (is (= 2 (get threat/mob-hit mob)) mob)))
 
 (deftest remaining-health-estimates-what-is-left-of-a-mob
   (is (= 8 (weapon/remaining-health {:name "zombie" :hits 2 :damage 6})) "20 less two iron sword hits")

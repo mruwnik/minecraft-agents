@@ -26,7 +26,7 @@
   name, nil a fist) wearing equipment (jobs.lib.cost.armour).
   The mobs die one at a time, each after ceil(health left / weapon damage) hits swing-gap-ms apart. Every
   mob hurts the body (jobs.lib.cost.threat/mob-hurt, after armour) until it dies. A ranged mob also shoots while the
-  body walks up to it (distance less 3, at walk-speed). A creeper costs threat/creeper-exchange per swing (hit-and-back), not its blast."
+  body walks up to it (distance less 3, at walk-speed). The measured hit rates come from sword fights: a body with no sword or axe is hit once a second. A creeper costs threat/creeper-exchange per swing (hit-and-back), not its blast."
   [{:keys [weapon equipment mobs]}]
   (let [stats (armour/armour-stats equipment)
         dmg (weapon/weapon-damage weapon)
@@ -37,7 +37,7 @@
         ends (rest (reductions + 0 (map #(+ (approach %) (kill-s %)) mobs)))
         hurt (fn [m end] (if (= "creeper" (:name m))
                            (* (swings m) (threat/creeper-exchange))
-                           (threat/mob-hurt stats (:name m) end)))]
+                           (threat/mob-hurt stats (:name m) end identity (when-not (contains? weapon/weapon-damage-by-name weapon) 1))))]
     (reduce + 0 (map hurt mobs ends))))
 
 (defn leaves-reserve?

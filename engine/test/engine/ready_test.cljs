@@ -172,7 +172,7 @@
 (deftest a-job-that-goes-to-its-place-binds-safe-at-that-place
   (are [check args] (= :later (lit 0 15 #(first (check (assoc (ctx-of open-night) :args args)))))
     smelt/safe? {:furnace outside}
-    kitchen/safe? {:furnace outside}
+    kitchen/safe? {:furnace {:x 40 :y 64 :z 0}}
     pick-up-loose/safe? {}))
 
 (deftest a-short-visit-in-the-open-night-goes-ahead-priced-by-its-exposure

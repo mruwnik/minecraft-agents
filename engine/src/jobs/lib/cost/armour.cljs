@@ -61,16 +61,16 @@
                            enchants))))
 
 (defn after-armour
-  "The damage left of threat (spread over hits, at least 1) after armour stats, for damage type dtype
+  "The damage left of threat (spread over hits, an expected count that may be a fraction) after armour stats, for damage type dtype
   (:melee :projectile :explosion :fire :burning; :fire is standing in fire or lava, armour applies; :burning
   bypasses armour points like vanilla on_fire, only fire protection counts)."
   [{:keys [points toughness enchants]} dtype threat hits]
-  (let [hit (/ threat (max 1 hits))
+  (let [hit (if (pos? hits) (/ threat hits) threat)
         armour (if (= dtype :burning)
                  0
                  (min 20 (max (/ points 5) (- points (/ (* 4 hit) (+ toughness 8))))))
         after (* hit (- 1 (/ armour 25)) (- 1 (/ (epf enchants dtype) 25)))]
-    (* after (max 1 hits))))
+    (* after (if (pos? hits) hits 1))))
 
 (defn fall-damage
   "hp a fall of blocks costs a body with equipment (vanilla: a point a block past 3; armour points do not count,

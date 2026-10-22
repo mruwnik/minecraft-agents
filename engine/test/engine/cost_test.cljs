@@ -52,15 +52,25 @@
     (is (< (cost/mob-hurt iron "skeleton" 5) (cost/mob-hurt bare "skeleton" 5)) "arrows are still reduced")))
 
 (deftest fight-damage-with-real-equipment
-  (is (= 7.5 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [{:name "zombie" :distance 3}]})))
-  (is (= 3.45 (round2 (cost/fight-damage {:weapon "iron_sword" :equipment iron-set :mobs [{:name "zombie" :distance 3}]})))
-      "4 swings, 2.5 s of 3 hp hits: vanilla's 13.5 effective points take 54% off"))
+  (is (= 3.75 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [{:name "zombie" :distance 3}]})))
+  (is (= 1.69 (round2 (cost/fight-damage {:weapon "iron_sword" :equipment iron-set :mobs [{:name "zombie" :distance 3}]})))
+      "4 swings, 2.5 s of 0.6 hits a second at 2.5 hp (easy): vanilla's 13.5 effective points take off more"))
 
-(deftest an-enderman-costs-a-full-iron-body-about-twelve-health
+(deftest mob-hits-are-priced-at-the-difficulty-and-the-measured-rate
+  (let [bare (cost/armour-stats nil)
+        zombie-s #(settings/with-settings % (fn [] (cost/mob-hurt bare "zombie" 10)))]
+    (is (= 15 (zombie-s {})) "easy: 0.6 hits a second of 2.5")
+    (is (= 18 (zombie-s {:jobs.lib.cost.threat/difficulty 2})) "normal: 0.6 hits a second of 3")
+    (is (= 27 (zombie-s {:jobs.lib.cost.threat/difficulty 3})) "hard: 4.5 a hit")
+    (is (= 0 (zombie-s {:jobs.lib.cost.threat/difficulty 0})))
+    (is (= 7 (cost/mob-hurt bare "spider" 10)) "a spider lands 0.35 hits a second of 2")
+    (is (= 10 (cost/mob-hurt bare "silverfish" 10)) "a mob not measured hits once a second")))
+
+(deftest an-enderman-costs-a-full-iron-body-about-seven-health
   (let [cost-of #(cost/fight-damage {:weapon "iron_sword" :equipment iron-set :mobs [{:name "enderman" :distance 3 :health %}]})]
-    (is (< 10 (cost-of 40) 13) "7 swings of 6, 5 s of an enderman's 5 hp/s (2.2 per hit in iron measured), 46% through the armour")
+    (is (< 6 (cost-of 40) 9) "7 swings of 6, 5 s of an enderman's 3.5 hp hits on easy, one a second, through the armour")
     (is (cost/leaves-reserve? {:health 20 :reserve 4 :damage (cost-of 40)}) "a full-health body wins")
-    (is (not (cost/leaves-reserve? {:health 12 :reserve 4 :damage (cost-of 40)})) "at 12 it would end near 0")))
+    (is (not (cost/leaves-reserve? {:health 10 :reserve 4 :damage (cost-of 40)})) "at 10 it would end near 3")))
 
 (deftest burning-bypasses-armour-points-but-not-fire-protection
   (let [burn #(cost/after-armour (cost/armour-stats %) :burning 10 1)]

@@ -122,7 +122,7 @@
 
 (deftest a-hungry-body-affords-less-risk-than-a-fed-one-unless-it-cannot-heal
   (let [status-for (fn [food inventory] (let [c (-> (ready-test/ctx-of (assoc day-world :self {:pos inside :health 20 :food food} :inventory inventory))
-                                                    (with-death {:x 80 :y 64 :z 5} "zombie" 6480000))]
+                                                    (with-death {:x 80 :y 64 :z 5} "witch" 6480000))]
                                           (first (risk/status c far-goal))))
         bread [{:name "bread" :count 3}]]
     (is (= :ok (status-for 20 [])))
@@ -131,7 +131,7 @@
 
 (deftest a-goal-worth-enough-lets-a-walk-take-a-risk-over-the-share-of-health
   (let [status-for (fn [worth] (let [c (-> (ready-test/ctx-of (assoc day-world :self {:pos inside :health 20 :food 5} :inventory [{:name "bread" :count 3}]))
-                                           (with-death {:x 80 :y 64 :z 5} "zombie" 6480000)
+                                           (with-death {:x 80 :y 64 :z 5} "witch" 6480000)
                                            (assoc-in [:args :worth] worth))]
                                  (first (risk/status c far-goal))))]
     (is (= :later (status-for nil)) "no worth said: the share of health decides")
@@ -205,7 +205,7 @@
 
 (deftest a-healing-body-on-dark-open-ground-goes-on-when-waiting-there-costs-as-much
   (let [c (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 5 :food 15} :inventory [{:name "bread" :count 3}]))
-        goal {:x 20 :y 64 :z 0}]
+        goal {:x 40 :y 64 :z 0}]
     (is (> (:hp (risk/estimate c goal)) (price/allowed c)) "over the half-of-health allowance")
     (is (= :ok (first (risk/status c goal))))))
 

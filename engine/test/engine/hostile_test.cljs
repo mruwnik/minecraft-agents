@@ -138,7 +138,7 @@
       (fn ^:async t []
         (is (fought? (await (flight-round respond {:self {:health 20} :inventory sword :entities [(zombie 3 0)]})))
             "sword and full health: fight")
-        (is (fled? (await (flight-round respond {:self {:health 10} :inventory sword :entities [(zombie 3 0)]})))
+        (is (fled? (await (flight-round respond {:self {:health 5} :inventory sword :entities [(zombie 3 0)]})))
             "hurt: retreat")
         (is (fled? (await (flight-round respond {:self {:health 20} :inventory [{:name "iron_pickaxe" :count 1}]
                                                 :entities [(zombie 3 0)]})))
@@ -209,8 +209,8 @@
 
 (deftest an-unarmed-body-at-full-health-does-not-choose-a-fist-fight
   (are [weapon mob health expected] (= expected (fist-stance weapon mob health))
-    nil "spider" nil :flee
     nil "zombie" nil :flee
+    nil "spider" nil :flee
     "stone_pickaxe" "spider" nil :flee
     nil "spider" 2 :fight
     "wooden_sword" "spider" nil :fight)
@@ -247,7 +247,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup-flight {:inventory sword :entities [(zombie 100 3 0)]})
-              health-after [10 6]
+              health-after [10 4]
               n (atom 0)]
           (.override (.-world p) "attack"
                      (fn [token a impl]
@@ -256,7 +256,7 @@
           (core/submit! eng respond {})
           (await (core/tick! eng))
           (is (= 2 (count (calls p "attack")))
-              "health 10, the zombie at 15: 5.6 expected damage leaves the reserve of 4: a second swing; health 6 then: none")
+              "health 10, the zombie at 15: 2.8 expected damage leaves the reserve of 4: a second swing; health 4 then: none")
           (is (pos? (count (tu/walked-to eng))) "it retreats instead"))))))
 
 (deftest respond-writes-one-hostile-entry-per-encounter
@@ -1200,15 +1200,15 @@
 
 (deftest combat-fight-damage-weighs-weapon-mobs-and-armour
   (let [z {:name "zombie" :distance 3}]
-    (is (= 7.5 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [z]})) "4 hits at 0.625 s while it hits 3/s")
-    (is (= 78 (cost/fight-damage {:weapon nil :equipment nil :mobs [z]})) "the fist: 20 hits, one landed every 1.3 s")
-    (is (= 22.5 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [z z]})) "the second hits until it dies too")
-    (is (= 3.45 (/ (js/Math.round (* 100 (cost/fight-damage {:weapon "iron_sword" :equipment iron-armour :mobs [z]}))) 100))
-        "iron armour: vanilla's 13.5 effective points against 3 hp hits take 54% off")
-    (is (= 3.75 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [(assoc z :hits 2)]})) "a struck mob has less left")
+    (is (= 3.75 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [z]})) "4 swings, 2.5 s at 0.6 hits/s of 2.5 (a zombie hit on easy)")
+    (is (= 65 (cost/fight-damage {:weapon nil :equipment nil :mobs [z]})) "the fist: 20 hits, one landed every 1.3 s, the zombie hitting once a second (the measured rate is for swords)")
+    (is (= 11.25 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [z z]})) "the second hits until it dies too")
+    (is (= 1.69 (/ (js/Math.round (* 100 (cost/fight-damage {:weapon "iron_sword" :equipment iron-armour :mobs [z]}))) 100))
+        "iron armour: vanilla's 13.5 effective points against 2.5 hp hits")
+    (is (= 1.875 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [(assoc z :hits 2)]})) "a struck mob has less left")
     (is (= 6 (cost/fight-damage {:weapon "stone_sword" :equipment nil :mobs [{:name "creeper" :distance 3}]}))
         "a creeper: 4 swings at 1.5 each (hit-and-back), not the 43 blast")
-    (is (= 10 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [{:name "skeleton" :distance 13}]}))
+    (is (= 6 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [{:name "skeleton" :distance 13}]}))
         "a skeleton shoots while the body closes 10 blocks")))
 
 (defn walked? [{:keys [eng]}] (pos? (count (tu/walked-to eng))))
@@ -1228,7 +1228,7 @@
                                  ["no weapon vs a creeper" {:entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} :flee]
                                  ["sword vs a skeleton at range" {:inventory sword :entities [(assoc (skeleton 7 12 0) :visible true)]} :fight]
                                  ["no weapon vs a skeleton at range" {:entities [(assoc (skeleton 7 12 0) :visible true)]} :flee]
-                                 ["sword vs two zombies, no armour" {:inventory sword :entities [(zombie 7 3 0) (zombie 8 3 1)]} :flee]
+                                 ["sword vs three zombies, no armour" {:inventory sword :entities [(zombie 7 3 0) (zombie 8 3 1) (zombie 9 3 -1)]} :flee]
                                  ["sword vs two zombies in iron armour" {:inventory sword :equipment iron-armour
                                                                          :entities [(zombie 7 3 0) (zombie 8 3 1)]} :fight]]]
           (let [s (await (flight-round respond spec))
@@ -1495,7 +1495,7 @@
   (let [near {:name "skeleton" :distance 4}
         cost-of #(cost/fight-damage {:weapon "iron_sword" :equipment iron-armour :mobs %})
         round2 #(/ (js/Math.round (* 100 %)) 100)]
-    (is (= [2.42 7.26] (mapv (comp round2 cost-of) [[near] [near near]])) "of the 16 a body at 20 may spend")
+    (is (= [1.45 4.36] (mapv (comp round2 cost-of) [[near] [near near]])) "of the 16 a body at 20 may spend")
     (is (= :fight (cost/decide {:health 20 :reserve 4 :damage (cost-of [near near])})))))
 
 (deftest a-body-that-would-fight-does-not-flee-mobs-it-only-hears

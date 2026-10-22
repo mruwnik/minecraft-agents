@@ -20,12 +20,12 @@
 (deftest rate-falls-with-a-weapon-and-armour-and-is-the-hp-a-second-not-the-price
   (let [rate #(/ (js/Math.round (* 100 (cost/danger-rate %1 %2))) 100)]
     (is (= 4 (rate unarmed "zombie")) "3 dps x 4 (flee), capped at 4")
-    (is (= 0.3 (rate armed "zombie")) "3 dps x 0.1 (fight)")
-    (is (= 0.3 (rate (assoc armed :health 10) "zombie")) "health 10: still a fight; the dearer hp is the planner's damage weight")
+    (is (= 0.15 (rate armed "zombie")) "1.5 hp a second (0.6 hits of 2.5) x 0.1 (fight)")
+    (is (= 0.15 (rate (assoc armed :health 10) "zombie")) "health 10: still a fight; the dearer hp is the planner's damage weight")
     (is (= 4 (rate (assoc armed :health 5) "zombie")) "health 5: the fight would leave too little, fled")
-    (is (= 0.2 (rate (assoc armed :equipment {:head {:name "iron_helmet"} :torso {:name "iron_chestplate"}
+    (is (= 0.1 (rate (assoc armed :equipment {:head {:name "iron_helmet"} :torso {:name "iron_chestplate"}
                                               :feet {:name "iron_boots"}}) "zombie"))
-        "10 iron points: vanilla's 8.5 effective points against a 3 hp hit take 34% off")
+        "10 iron points: vanilla's 8.5 effective points against a 2.5 hp hit take off more")
     (is (= 4 (rate armed "creeper")) "a creeper is always fled")))
 
 (deftest the-list-has-sensed-mobs-then-remembered-spots-and-the-sensed-place-wins
@@ -49,7 +49,7 @@
 (deftest known-dangers-lists-only-what-the-body-senses-and-could-be-reached-by
   (is (= [[6 4]] (mapv (juxt :x :rate) (threats/known-dangers (tu/fake-on-floor {:entities [(zombie 1 6 0)]}) [])))
       "a zombie in sight on open ground")
-  (is (= [[6 0.3]] (mapv (juxt :x #(/ (js/Math.round (* 100 (:rate %))) 100)) (threats/known-dangers (tu/fake-on-floor {:entities [(zombie 1 6 0)]
+  (is (= [[6 0.15]] (mapv (juxt :x #(/ (js/Math.round (* 100 (:rate %))) 100)) (threats/known-dangers (tu/fake-on-floor {:entities [(zombie 1 6 0)]
                                                                                     :inventory [{:name "diamond_sword" :count 1}]})
                                                                  [])))
       "the same with a diamond sword: a fight, cheap")
@@ -61,11 +61,11 @@
         sensed [{:key "a" :name "zombie" :pos {:x 5 :y 64 :z 0}}]
         shape #(select-keys (first (cost/danger-list unarmed sensed [] %)) [:close :radius :rate])]
     (is (= (rate nil) (rate {})) "no options: today's rate")
-    (is (= 4 (rate {})) "default 3 dps x 4, capped at 4")
-    (is (= 1.5 (rate {:stances {:flee 0.5}})) "the flee factor scales the rate")
-    (is (< (js/Math.abs (- 0.6 (cost/danger-rate armed "zombie" {:stances {:fight 0.2}}))) 1e-9) "the fight factor")
+    (is (= 4 (rate {})) "default 1.5 hp a second x 4 (flee), capped at 4")
+    (is (= 0.75 (rate {:stances {:flee 0.5}})) "the flee factor scales the rate")
+    (is (< (js/Math.abs (- 0.3 (cost/danger-rate armed "zombie" {:stances {:fight 0.2}}))) 1e-9) "the fight factor")
     (is (= 2 (rate {:max-rate 2})) "max-rate caps one danger")
-    (is (= 8 (rate {:max-rate 8 :stances {:flee 4}})) "a higher cap lets more through: 12 capped at 8")
+    (is (= 8 (rate {:max-rate 8 :stances {:flee 8}})) "a higher cap lets more through: 12 capped at 8")
     (is (= {:close 3 :radius 12 :rate 4} (shape nil)) "default shape")
     (is (= {:close 5 :radius 20 :rate 4} (shape {:shape {:sensed {:close 5 :radius 20}}})) "the shape is an option")
     (is (= {:close 3 :radius 7 :rate 4} (shape {:shape {:sensed {:radius 7}}})) "a partial shape keeps the other term")))

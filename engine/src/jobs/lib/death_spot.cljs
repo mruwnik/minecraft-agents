@@ -16,7 +16,7 @@
 (defn mob-cause?
   "Whether `cause` (the killer's name, else a damage type like fall or lava) is a mob the danger code knows; the cells that kill otherwise are access rules and the planner's."
   [p cause]
-  (boolean (and cause (or (contains? threat/mob-dps cause) (threat/hostile? (game/version-of p) {:name cause})))))
+  (boolean (and cause (or (contains? threat/mob-hit cause) (threat/hostile? (game/version-of p) {:name cause})))))
 
 (defn recent
   "The deaths by a mob of c still remembered: [{:pos {:x :y :z} :cause :weight :age-ms}], weight falling from 1 to 0 with age."
