@@ -18,7 +18,7 @@
   (boolean (and cause (or (contains? threat/mob-dps cause) (threat/hostile? (game/version-of p) {:name cause})))))
 
 (defn recent
-  "The deaths by a mob of c still remembered: [{:pos {:x :y :z} :cause :weight}], weight falling from 1 to 0 with age."
+  "The deaths by a mob of c still remembered: [{:pos {:x :y :z} :cause :weight :age-ms}], weight falling from 1 to 0 with age."
   [c]
   (let [now (ctx/now c)
         ttl (settings/get settings ::memory-ms)]
@@ -26,7 +26,7 @@
                :let [w (- 1 (/ (- now (:death-t data)) ttl))
                      {:keys [x y z]} (:pos data)]
                :when (and (pos? w) x (mob-cause? (:primitives c) (:cause data)))]
-           {:pos {:x x :y y :z z} :cause (:cause data) :weight (min 1 w)}))))
+           {:pos {:x x :y y :z z} :cause (:cause data) :weight (min 1 w) :age-ms (- now (:death-t data))}))))
 
 (defn near
   "The remembered deaths of `deaths` (from recent) within ::radius of cell `pos`."

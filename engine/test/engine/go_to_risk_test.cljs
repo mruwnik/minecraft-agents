@@ -9,6 +9,7 @@
             [engine.sky-perception :as sky]
             [engine.test-util :as tu]
             [jobs.lib.hide-spot :as hide-spot]
+            [jobs.lib.look :as look]
             [jobs.movement.go-to.risk :as risk]))
 
 (def inside {:x 5 :y 64 :z 0})
@@ -54,13 +55,18 @@
   (let [now 36000000]
     (assoc c :view (fn [] {:now now :data {:policies {:deaths core/deaths-policy} :entries {:deaths [{:t (- now age-ms) :data {:pos pos :cause cause :death-t (- now age-ms)}}]}}}))))
 
+(defn estimate-unseen
+  "risk/estimate with the death spots never seen (the fake world sees every cell, which would clear them)."
+  [c goal]
+  (with-redefs [look/seen-block (constantly {:unknown true})] (risk/estimate c goal)))
+
 (deftest a-recent-death-near-the-goal-adds-its-fight-to-the-risk-even-by-day
   (let [c (ready-test/ctx-of day-world)
         on-way (with-death c {:x 80 :y 64 :z 5} "zombie_villager" 60000)
         off-way (with-death c {:x 50 :y 64 :z 5} "zombie_villager" 60000)]
     (is (zero? (:hp (risk/estimate c far-goal))))
-    (is (pos? (:death-hp (risk/estimate on-way far-goal))))
-    (is (zero? (:death-hp (risk/estimate off-way far-goal))))))
+    (is (pos? (:death-hp (estimate-unseen on-way far-goal))))
+    (is (zero? (:death-hp (estimate-unseen off-way far-goal))))))
 
 (deftest a-recent-hide-near-the-goal-adds-the-fight-with-its-mobs-to-the-risk
   (let [c (ready-test/ctx-of day-world)
@@ -83,7 +89,7 @@
 (deftest a-death-fades-with-time
   (let [c (ready-test/ctx-of day-world)
         at {:x 80 :y 64 :z 5}
-        hp-at #(:death-hp (risk/estimate (with-death c at "zombie_villager" %) far-goal))]
+        hp-at #(:death-hp (estimate-unseen (with-death c at "zombie_villager" %) far-goal))]
     (is (> (hp-at 60000) (hp-at 3600000)))
     (is (pos? (hp-at 3600000)))
     (is (zero? (hp-at 8000000)))))
@@ -100,8 +106,8 @@
 (deftest a-death-by-terrain-adds-no-risk
   (let [c (ready-test/ctx-of day-world)]
     (doseq [cause ["fall" "lava" "drown" "starve" "a_new_cause" nil]]
-      (is (zero? (:death-hp (risk/estimate (with-death c {:x 80 :y 64 :z 5} cause 60000) far-goal))) cause))
-    (is (pos? (:death-hp (risk/estimate (with-death c {:x 80 :y 64 :z 5} "skeleton" 60000) far-goal))))))
+      (is (zero? (:death-hp (estimate-unseen (with-death c {:x 80 :y 64 :z 5} cause 60000) far-goal))) cause))
+    (is (pos? (:death-hp (estimate-unseen (with-death c {:x 80 :y 64 :z 5} "skeleton" 60000) far-goal))))))
 
 (deftest a-far-goal-is-judged-on-a-bounded-number-of-reads
   (let [c (ready-test/ctx-of night-hut)
@@ -117,13 +123,21 @@
   (let [c (ready-test/ctx-of day-world)
         now 36000000
         with-hide (fn [pos] (assoc c :view (fn [] {:now now :data {:policies {:hid hide-spot/policy} :entries {:hid [{:t (- now 60000) :data {:pos pos :mobs ["zombie"]}}]}}})))]
-    (is (zero? (:death-hp (risk/estimate (with-death c {:x 93 :y 64 :z 2} "zombie" 60000) far-goal))))
+    (is (zero? (:death-hp (estimate-unseen (with-death c {:x 93 :y 64 :z 2} "zombie" 60000) far-goal))))
     (is (zero? (:hide-hp (risk/estimate (with-hide {:x 93 :y 64 :z 2}) far-goal))))
-    (is (pos? (:death-hp (risk/estimate (with-death c {:x 80 :y 64 :z 5} "zombie" 60000) far-goal))))))
+    (is (pos? (:death-hp (estimate-unseen (with-death c {:x 80 :y 64 :z 5} "zombie" 60000) far-goal))))))
 
 (deftest a-walk-that-does-not-approach-a-death-pays-nothing-for-it
   (let [c (ready-test/ctx-of day-world)
         died (with-death c {:x 40 :y 64 :z 0} "enderman" 60000)]
-    (is (pos? (:death-hp (risk/estimate died {:x 20 :y 64 :z 0}))) "closer to the death than the body is")
-    (is (zero? (:death-hp (risk/estimate died inside))) "standing where the body is")
-    (is (zero? (:death-hp (risk/estimate died {:x 0 :y 64 :z 0}))) "walking away from the death")))
+    (is (pos? (:death-hp (estimate-unseen died {:x 20 :y 64 :z 0}))) "closer to the death than the body is")
+    (is (zero? (:death-hp (estimate-unseen died inside))) "standing where the body is")
+    (is (zero? (:death-hp (estimate-unseen died {:x 0 :y 64 :z 0}))) "walking away from the death")))
+
+(deftest a-death-spot-seen-since-the-death-is-no-longer-a-threat
+  (let [c (ready-test/ctx-of day-world)
+        died (with-death c {:x 80 :y 64 :z 5} "enderman" 60000)
+        hp-with (fn [seen] (with-redefs [look/seen-block (constantly seen)] (:death-hp (risk/estimate died far-goal))))]
+    (is (pos? (hp-with {:unknown true})) "never seen")
+    (is (pos? (hp-with {:name "air" :age-ms 120000})) "last seen before the death")
+    (is (zero? (hp-with {:name "air" :age-ms 30000})) "seen after the death")))
