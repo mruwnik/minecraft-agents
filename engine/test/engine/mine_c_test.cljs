@@ -649,3 +649,6 @@
           (await (run-ticks s 30))
           (is (nil? (get (inv s) "raw_iron")))
           (is (= [{:pos [8 62 0] :count 1}] (:left (done-event s)))))))))
+
+(deftest a-walk-to-a-drop-plans-no-dive
+  (is (false? (:dive drops/drop-walk-opts)) "a drop sunk into deep water is not swum after"))

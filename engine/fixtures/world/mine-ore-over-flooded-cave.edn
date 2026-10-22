@@ -1,0 +1,19 @@
+;; Card 1c2d42f7: an iron ore is the roof cell of a flooded cave, right under a torch-lit dry tunnel (x 3, y 7, z 1..14); the water below is 6 deep and the cave is sealed (dark).
+;; Should-succeed: the mine ends (took the ore or left it) within 100 s and the body never goes under: no drowning hurt. A player mines the ore from the tunnel, sees the drop sink into the dark water, and does not dive for one raw iron.
+{:defaults
+ {:tags [:mine :water :jobs] :time :any
+  :plot {:height 12}
+  :blocks [[:fill [0 0 0] [8 10 14] "stone"]
+           [:fill [1 0 1] [5 5 13] "water"]
+           [:fill [3 7 1] [3 8 14] "air"]
+           [:set [3 7 4] "torch"]
+           [:fill [2 7 7] [2 8 7] "air"]
+           [:set [3 6 7] "iron_ore"]]
+  :body {:at [3.5 7 1.5] :yaw 0 :inventory [["stone_pickaxe" 1]]}
+  :limit-s 140}
+ :cases
+ [{:name "ore-over-flooded-cave-no-dive"
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :item "raw_iron" :count 1 :radius 12 :torches false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}
+            {:no-event {:kind :hurt} :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:not-block [3 6 7] "iron_ore"]]}]}

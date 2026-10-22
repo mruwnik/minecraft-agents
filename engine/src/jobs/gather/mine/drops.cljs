@@ -170,6 +170,8 @@
   (boolean (or (result/unreachable-walk? res)
                (contains? (conj search-ended-whys :detour) (result/why res)))))
 
+(def drop-walk-opts "No dive: a drop sunk into deep water is not swum after (the card-9d1e1c07 rule of the walk to dig)." {:ways #{:walk :clear-seal} :dive false})
+
 (defn ^:async walk-to-drop!
   "A dig whose drop did not come in: once per dug cell, walk within 1 of it (near/go-near!, no escalation), where a drop
   out of sight or out of reach from the dig spot is seen and picked up; a dug cell no walk gets beside (dug from a
@@ -179,7 +181,7 @@
   (let [{:keys [dug-at drop-walked last-carried]} (ctx/mem c)]
     (when (and dug-at (not= dug-at drop-walked) (<= (carried c) (or last-carried 0)))
       (let [pos (zipmap [:x :y :z] dug-at)
-            go! #(near/go-near! c pos 1 {:ways #{:walk :clear-seal}})
+            go! #(near/go-near! c pos 1 drop-walk-opts)
             w (await (go!))
             w (if (and (= :blocked w) (await (look-floor-toward! c dug-at))) (await (go!)) w)
             cut (when (and (= :blocked w) (not (ways/stay-level? (:args c))) (cut-after? (near/last-walk c)))

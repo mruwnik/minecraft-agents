@@ -1,0 +1,21 @@
+;; Card 1c2d42f7: a flooded ravine 6 deep under a stone roof; the only air is a 1-wide opening in the roof (an ore cell the mine had dug) onto a lit dry tunnel whose floor is level with the water, 3 cells aside and 4 up from the body.
+;; No block is carried, only a pickaxe: no pocket can be made, the hole is out of sight from the side, only its light shows in the water: the body swims to the light and up through the hole.
+;; Should-succeed: breathe ends :cleared within 60 s and the body takes no drowning damage (water breathing for the setup keeps its air full; when it ends the body drowns 5 s before the reflex is registered).
+{:defaults
+ {:tags [:survival :water] :time :any
+  :plot {:height 12}
+  :register []
+  :blocks [[:fill [0 0 0] [8 10 14] "stone"]
+           [:fill [1 0 1] [5 5 9] "water"]
+           [:fill [3 6 7] [3 7 14] "air"]
+           [:set [3 6 10] "torch"]]
+  :body {:at [3.5 1 4.5] :inventory [["stone_pickaxe" 1]] :effects [["water_breathing" 20 0]] :settle-s 1}
+  :limit-s 90}
+ :cases
+ [{:name "ravine-hole-in-the-roof-is-found"
+   :act [[:until-effect-gone "water_breathing" 60]
+         [:wait-s 5]
+         [:cli "triggers" ["$body" "--world" "$world" "put" "suffocating" "--trigger" "suffocating" "--persistence" "cooldown" "--cooldown-s" "2" "--job" "(jobs.survival.breathe)" "--by" "world-test"]]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :suffocating}} :within-s 60}
+            {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 60}
+            {:no-event {:kind :hurt} :for-s 60 :until {:source :reflex :kind :ended :data {:how :cleared}}}]}]}

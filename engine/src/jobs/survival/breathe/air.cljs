@@ -7,7 +7,8 @@
             [engine.settings :as settings]
             [jobs.lib.access :as access]
             [jobs.lib.breath :as breath]
-            [jobs.lib.dig-look :as look]
+            [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.look :as look]
             [jobs.lib.escape :as escape]
             [jobs.lib.swim :as swim]
             [jobs.lib.access.rules :as rules]
@@ -22,6 +23,8 @@
    ::depth {:default 24 :doc "Blocks below the feet a drowning body looks for seen air, the way it came (within air-radius sideways)." :spec (a/int-in 0 64)}
    ::slice-s {:default 10 :doc "Seconds one go-to child of a run may take; a body that did not get there is looked at again (hit? fight?) before the next try." :spec (a/num-in 0.1 nil)}
    ::max-cap-digs {:default 3 :doc "Cap digs one run makes at most." :spec (a/int-in 0 nil)}
+   ::crawl-columns {:default 8 :doc "Brighter columns one run swims up blind under a roof, before it digs the cap." :spec (a/int-in 0 nil)}
+   ::crawl-radius {:default 4 :doc "Columns this far sideways are searched for the light of a hole in a roof." :spec (a/int-in 0 nil)}
    ::cap-dig-share {:default 0.5 :doc "Share of the air left (oxygen, then health) a cap dig may take; a slower dig is not started and the dig gives up at it." :spec (a/num-in 0 1)}})
 (defn radius [] (settings/get settings ::radius))
 (def status swim/status)
@@ -29,8 +32,12 @@
 (defn slice-s [] (settings/get settings ::slice-s))
 (defn max-cap-digs [] (settings/get settings ::max-cap-digs))
 (defn cap-dig-share [] (settings/get settings ::cap-dig-share))
+(defn crawl-radius [] (settings/get settings ::crawl-radius))
+(defn crawl-columns [] (settings/get settings ::crawl-columns))
 
 (declare go!)
+
+(def quick-dig-ms "A cap dig up to this long is made before the roof is felt along for a hole." 1500)
 
 (defn solid-at? [p cell] (breath/suffocates? p cell))
 
@@ -77,8 +84,8 @@
   (loop [k 0]
     (when (<= k 3)
       (let [cell (update head :y + k)]
-        (when (look/unknown? (:primitives c) [(:x cell) (:y cell) (:z cell)])
-          (await (look/look-at! c [(:x cell) (:y cell) (:z cell)])))
+        (when (dig-look/unknown? (:primitives c) [(:x cell) (:y cell) (:z cell)])
+          (await (dig-look/look-at! c [(:x cell) (:y cell) (:z cell)])))
         (recur (inc k))))))
 
 (defn ^:async cap-dig-ms
@@ -105,8 +112,8 @@
   (let [p (:primitives c)
         cells (breath/unseen-beside-joined p (js/Math.floor (:x pos)) (js/Math.floor (:y pos)) (js/Math.floor (:z pos))
                                            (swim/air-radius) (swim/air-radius) (:cells edge-looks) toward)
-        unseen (filterv #(look/unknown? p [(:x %) (:y %) (:z %)]) cells)]
-    (doseq [cell unseen] (await (look/look-at! c [(:x cell) (:y cell) (:z cell)])))
+        unseen (filterv #(dig-look/unknown? p [(:x %) (:y %) (:z %)]) cells)]
+    (doseq [cell unseen] (await (dig-look/look-at! c [(:x cell) (:y cell) (:z cell)])))
     (boolean (seq unseen))))
 
 (defn ^:async go-air!
@@ -175,6 +182,42 @@
                     ok?))]
         (or dug :dig-failed)))))
 
+(defn crawl-columns-near
+  "The water columns (feet and head cell seen water) within ::crawl-radius of the body at its height, not tried in this run and
+  brighter than the body's own cell, brightest first, then nearest: light seeping down a hole in the roof shows in the water under it."
+  [c]
+  (let [p (:primitives c)
+        raw (look/raw-of p)
+        feet (breath/feet-cell (.self p))
+        tried (set (:crawled (ctx/mem c)))
+        r (crawl-radius)
+        glow (fn [{:keys [x y z]}] (if (and raw (look/light-known? raw x y z)) (bit-and (.lightAt raw x y z) 15) 0))
+        own (glow feet)
+        open? (fn [cell] (every? #(contains? breath/swimmable (breath/seen-water-name p (update cell :y + %))) [0 1]))]
+    (->> (for [dx (range (- r) (inc r)) dz (range (- r) (inc r))
+               :let [cell (-> feet (update :x + dx) (update :z + dz))]
+               :when (and (not (contains? tried [(:x cell) (:z cell)])) (> (glow cell) own) (open? cell))]
+           cell)
+         (sort-by (fn [cell] [(- (glow cell)) (+ (js/Math.abs (- (:x cell) (:x feet))) (js/Math.abs (- (:z cell) (:z feet))))])))))
+
+(defn ^:async crawl-roof!
+  "Under a roof with no air seen but light in the water (a hole in the dark shows nothing from the side): swim to the brighter
+  water column near the body (crawl-columns-near) and up it blind, at most ::crawl-columns of them. True when a swim rose or surfaced; nil when none did."
+  [c]
+  (let [p (:primitives c)]
+    (loop [k 0]
+      (let [feet (breath/feet-cell (.self p))
+            next (first (crawl-columns-near c))]
+        (when (and next (< k (crawl-columns)) (pos? (breath/air-left-ms (.self p))))
+          (ctx/update-mem! c update :crawled (fnil into []) [[(:x feet) (:z feet)] [(:x next) (:z next)]])
+          (ctx/emit! c :breathe.crawl :info {:text (str "no air seen under the roof: swimming to the light at " (:x next) " " (:z next)) :target next})
+          (let [y0 (:y (u/self-pos c))
+                _ (await (ctx/act c :moveTo (clj->js {:pos next :range 0 :timeoutS 2})))
+                surfaced? (= "surfaced" (status (await (ctx/act c :swim #js {}))))]
+            (if (or surfaced? (> (:y (u/self-pos c)) (+ y0 1.2)))
+              (do (when surfaced? (ctx/update-mem! c assoc :surfaced true)) true)
+              (recur (inc k)))))))))
+
 (defn recovery-spot?
   "A seen still-water cell with room above it over a solid floor that does not burn: a pile left there lies where it can be fetched."
   [p cell]
@@ -233,9 +276,14 @@
                      (breath/straight-up-reaches-air? (:primitives c) fx fy fz (swim/reach))
                      (nil? (breath/flood-air (:primitives c) self (swim/air-radius) (swim/air-radius) (:failed-air (ctx/mem c)))))))
           ;; a swim that rose and did not surface came up under something: dig it now, before the body sinks back for the next search
-          (do (when (and (true? r) (not (:surfaced (ctx/mem c)))) (await (dig-cap! c (cap-dig-share))))
+          (do (when (and (true? r) (not (:surfaced (ctx/mem c))))
+                (let [ms (await (cap-dig-ms c))]
+                  (when-not (and ms (<= ms quick-dig-ms) (true? (await (dig-cap! c (cap-dig-share)))))
+                    (when-not (true? (await (crawl-roof! c)))
+                      (await (dig-cap! c (cap-dig-share)))))))
               r)
           (true? (await (go-air! c))) true
+          (true? (await (crawl-roof! c))) true
           :else
           (let [d (await (dig-cap! c (cap-dig-share)))]
             (cond
