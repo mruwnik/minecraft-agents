@@ -1,0 +1,18 @@
+;; A remembered death behind the body prices no walk away from it: the craft's walk to the table, 4 blocks off the other way, is not a trip towards where the body died.
+;; Lit plot, an enderman death 5 blocks west of the body 1 minute ago. Should-succeed: the pickaxe is crafted at once, no :risky wait.
+;; Should-fail: a :risky wait for a recent death near the table.
+{:defaults
+ {:tags [:items :craft :go-to :survival]
+  :time :any
+  :plot {:height 8 :floor "stone"}
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "craft-walk-away-from-a-recent-death-is-free"
+   :blocks [[:set [20 0 16] "crafting_table"] [:set [16 3 16] "glowstone"]]
+   :body {:inventory [["oak_planks" 6]]}
+   :memory [{:kind :deaths :age-s 60 :policy {:cap 10 :ttl :forever} :data {:pos #xyz [11 0 16] :cause "enderman"}}]
+   :act [[:job (jobs.items.craft {:item "wooden_pickaxe"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
+            {:no-event {:source :job :data {:reason :risky}} :for-s 5 :of-job true}]
+   :after [[:item "wooden_pickaxe" 1]]}]}

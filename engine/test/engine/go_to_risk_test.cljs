@@ -113,3 +113,10 @@
     (is (zero? (:death-hp (risk/estimate (with-death c {:x 93 :y 64 :z 2} "zombie" 60000) far-goal))))
     (is (zero? (:hide-hp (risk/estimate (with-hide {:x 93 :y 64 :z 2}) far-goal))))
     (is (pos? (:death-hp (risk/estimate (with-death c {:x 80 :y 64 :z 5} "zombie" 60000) far-goal))))))
+
+(deftest a-walk-that-does-not-approach-a-death-pays-nothing-for-it
+  (let [c (ready-test/ctx-of day-world)
+        died (with-death c {:x 40 :y 64 :z 0} "enderman" 60000)]
+    (is (pos? (:death-hp (risk/estimate died {:x 20 :y 64 :z 0}))) "closer to the death than the body is")
+    (is (zero? (:death-hp (risk/estimate died inside))) "standing where the body is")
+    (is (zero? (:death-hp (risk/estimate died {:x 0 :y 64 :z 0}))) "walking away from the death")))
