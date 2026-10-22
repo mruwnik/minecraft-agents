@@ -69,6 +69,15 @@
           (is (empty? (attacked night)))
           (is (= [:exposed] (distinct (map :reason (events-of night :waiting))))))))))
 
+(deftest a-spider-on-a-ledge-above-is-swung-at-not-walked-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spider (ent 7 "spider" "hostile" 1 {:pos {:x 1 :y 67 :z 0}})
+              s (await (scenario {:targets [7]} {:inventory h/sword :entities [spider] :unreachable ["1,67,0"]} 3))]
+          (is (seq (attacked s)) "feet are 3.2 away but the eye reaches its middle")
+          (is (not= {7 :unreachable} (:given-up (done-event s)))))))))
+
 ;; ------------------------------------------------------------ pure helpers
 
 (deftest a-mob-type-target-is-found-past-more-than-64-nearer-entities

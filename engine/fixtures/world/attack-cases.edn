@@ -61,6 +61,13 @@
    :expect [{:event {:source :job :kind :completed :data {:reason :cleared :given-up {}}} :within-s 90 :of-job true}]
    :after [[:entities "type=zombie,tag=wt" [[26 0 12] [30 3 20]] 1]
            [:entities "type=zombie,tag=wt" [[0 0 0] [25 3 31]] 0]]}
+  {:name "spider-on-a-wall-above-is-hit-from-below"
+   :blocks [[:fill [19 0 16] [19 4 16] "stone"]]
+   :act [[:summon "spider" [18.5 3 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:until-seen {:entity "spider"} 10]
+         [:job (jobs.combat.attack {:targets "spider"})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :cleared :given-up {}}} :within-s 60 :of-job true}]
+   :after [[:entities "type=spider,tag=wt" [[0 0 0] [31 6 31]] 0]]}
   {:name "zombie-in-glass-box-given-up-unreachable"
    :blocks [[:fill [20 -1 20] [24 3 24] "glass" :hollow]]
    :act [[:summon "zombie" [22.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]

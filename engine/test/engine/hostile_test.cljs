@@ -1484,6 +1484,19 @@
             (is (walked? s) "a body that cannot afford the fight still flees")
             (is (= [] (mutes eng)))))))))
 
+(deftest a-held-fight-that-no-mob-comes-to-watches-the-mob-instead-of-fleeing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-seeing {:inventory sword :time 14000 :radius 6 :entities [(zombie 5 0)]} [0 4] 1000)]
+          (core/submit! eng respond {})
+          (await (core/tick! eng))
+          (let [view (mem/view (:store eng))]
+            (is (= #{7} (body/watched-ids view)) "the mob that never came is watched")
+            (is (empty? (tu/walked-to eng)) "no flight")
+            (is (= [] (:list (core/state eng))) "done, so the reflex does not fire again for it")
+            (is (not (danger-q/hostile-near? p view {})) "and the trigger stays quiet while it stays out there")))))))
+
 (deftest a-flight-from-a-seen-mob-that-ends-blocked-mutes-nothing
   (async done
     (tu/run-async done

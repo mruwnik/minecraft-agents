@@ -30,7 +30,7 @@
   Needs: a real danger (as the hostile-near trigger, jobs.lib.danger, in sight) within the danger ::hostile-radius setting (::ranged-radius for ranged mobs);
   none near is done at once. The call's :use :tools are the weapons, handed to both children.
   Returns: :done when no danger is near and the body holds no refuge, or when every danger is only heard and the fight declined
-  (they are muted, the ending names the mob); :nothing-possible :retreat-failed (the flight's ending is the :because) when the
+  (they are muted, the ending names the mob), or when a fight held for a seen mob that neither came nor hurt the body (it is watched: muted while farther than danger/watch-gap and the body unhurt); :nothing-possible :retreat-failed (the flight's ending is the :because) when the
   flight ends so; :nothing-possible :no-response after ::max-unchanged calls in a row that change nothing; :limit-reached on its
   time budget. Never :continue. Writes one :hostile memory entry per encounter. A danger reflex: never backed off.")
 
@@ -109,7 +109,8 @@
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) (do (when (= :flee decision) (ctx/update-mem! c assoc :flight-end (:data e))) :done)
-      (= :fight decision) (do (when (:struck (:data e)) (ctx/update-mem! c assoc :fight-prior (select-keys (:data e) [:killed :given-up :names :struck])))
+      (= :fight decision) (do (ctx/update-mem! c assoc :declined (:cause e))
+                              (when (:struck (:data e)) (ctx/update-mem! c assoc :fight-prior (select-keys (:data e) [:killed :given-up :names :struck])))
                               :declined)
       :else e)))
 
@@ -191,6 +192,26 @@
                              " is not in sight and the body can afford the fight: no flight; heard mobs are left alone for "
                              mute-s " s, one that comes into sight is fought")}}))
 
+(defn leave-watched?
+  "Whether a fight that held for a mob to come and gave up (:hold-timeout) leaves the dangers hs watched instead of fleeing:
+  every one seen, none a creeper, the fight landed no hit and the body was not hurt within hit-window-ms."
+  [c hs]
+  (and (= :hold-timeout (:declined (ctx/mem c)))
+       (every? danger-q/seen-only? hs)
+       (not-any? combat/creeper? hs)
+       (empty? (:hits (ctx/mem c)))
+       (empty? (ctx/since c :hurt (- (ctx/now c) (hit-window-ms))))))
+
+(defn leave-watched!
+  "Mutes the mobs hs as watched (jobs.lib.body/watched-ids) and returns {:left-watched ending-data}, so the job the reflex cut goes on."
+  [c hs]
+  (let [mute-s (/ (body/next-mute-ms (ctx/view c) :watch-mute) 1000)
+        mob (.-name (first hs))]
+    (ctx/remember! c :watch-mute {:ids (set (map #(.-id %) hs)) :until (+ (ctx/now c) (* 1000 mute-s))} body/mute-policy)
+    {:left-watched {:mob mob :mute-s mute-s
+                    :text (str "the " mob " neither came nor hurt the body in the hold: no flight; it is watched for " mute-s
+                               " s and answered again if it comes within " danger-q/watch-gap " blocks or the body is hurt")}}))
+
 (defn begun-fight?
   "Pure: whether the :hostile entry e (decision, mob, time t) is a fight against one of the mobs now near (names) that
   was decided or last struck at (the later of e's time and last-hit-t) within window-ms of now."
@@ -243,6 +264,7 @@
       (cond
         (or (not= :declined result) stay?) result
         (and (= :fight decision) (leave-heard? c near)) (leave-heard! c near)
+        (and (= :fight decision) (leave-watched? c near)) (leave-watched! c near)
         :else (await (run-child c (other decision) false))))))
 
 (def cover-sides
@@ -348,6 +370,7 @@
                      (cond-> {:flight-ended (:cause outcome)} (:text (:data outcome)) (assoc :text (:text (:data outcome))))))
         (cond
           (:left-heard outcome) (ctx/end c :done nil (:left-heard outcome))
+          (:left-watched outcome) (ctx/end c :done nil (:left-watched outcome))
           (and (empty? after) (not (hiding? c)) (not (and (< looks (max-unchanged)) (fight-unsettled? c outcome)))) (ctx/end c :done nil (:flight-end (ctx/mem c)))
           (and (empty? after) (not (hiding? c))) (do (await (pace/pace!)) (recur unchanged (inc looks)))
           :else
