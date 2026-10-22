@@ -13,13 +13,17 @@
 
 (def max-requests 128)
 (defn text [s n] (let [s (str s)] (subs s 0 (min n (count s)))))
+(defn listed-status
+  "A listed job's status: :continuing once it ran a round (waiting its next turn), else :queued."
+  [s id]
+  (if (pos? (or (get-in s [:instances id :round]) 0)) :continuing :queued))
 (defn status [eng id]
   (let [s (core/state eng)]
     (cond (contains? (:failed s) id) :failed
           (= id (:id (core/holder eng))) :running
           (cleanup/closing? eng id []) :cleaning-up
           (= id (:resume s)) :resuming
-          (some #{id} (:list s)) (if (pos? (or (get-in s [:instances id :round]) 0)) :continuing :queued)
+          (some #{id} (:list s)) (listed-status s id)
           :else :absent)))
 (defn summary [eng id]
   (when-let [inst (get-in (core/state eng) [:instances id])]

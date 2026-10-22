@@ -297,7 +297,7 @@
     (contains? (:failed s) id) :failed
     (or (= id (:current s)) (= id running-id)) :running
     (= id (:resume s)) :resuming
-    (some #{id} (:list s)) (if (pos? (or (get-in s [:instances id :round]) 0)) :continuing :queued)
+    (some #{id} (:list s)) (job-api/listed-status s id)
     :else :unknown)))
 
 (defn job-summary
