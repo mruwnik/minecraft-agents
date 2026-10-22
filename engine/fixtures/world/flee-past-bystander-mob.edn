@@ -1,0 +1,20 @@
+;; A flee step is judged against every known hostile, not only the chaser: with a skeleton 8 blocks west (the chaser) and a zombie 18 blocks east
+;; (beyond the hostile radius, not chasing), the way straight away from the skeleton runs into the zombie, so the body turns aside and ends well
+;; clear of it. Mobs are NoAI with helmets (no sun burn). Should-succeed: the body flees and stays 9+ blocks from the zombie.
+{:defaults
+ {:tags [:hostile :survival :flee]
+  :time :any
+  :mobs :keep
+  :plot {:length 64 :width 32 :height 8}
+  :register [{:trigger :hostile-near :args {:radius 12 :ranged-radius 20}
+              :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 12 :jobs.lib.danger/ranged-radius 20}})}]
+  :body {:at [30.5 0 16.5] :effects [["resistance" 600 3]]}
+  :limit-s 60}
+ :cases
+ [{:name "flee-from-a-skeleton-does-not-run-into-a-zombie-behind"
+   :act [[:summon "zombie" [48.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "skeleton" :decision :flee}} :within-s 30}
+            {:no-event {:source :body :kind :died} :for-s 25}]
+   :after [[:body-far [48.5 0 16.5] 9]]
+   :limit-s 50}]}

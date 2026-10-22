@@ -211,6 +211,15 @@
           (is (> (js/Math.abs (- (nth target 2) 0)) 3) "sideways: not east towards the creeper")
           (is (< (first target) 4) "and not towards it"))))))
 
+(deftest a-flee-step-does-not-end-nearer-a-hostile-that-is-not-chasing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (run-job! (setup {:entities [(zombie 7 -8 {:chase {:speed 0.7}}) (zombie 8 18 {})]}) 'test.flight {}))
+              target (:target (first (filterv #(= :retreat.target (:kind %)) @seen)))]
+          (is (some? target))
+          (is (< (first target) 3) "straight away from the chaser is east, towards the other zombie: the step turns aside"))))))
+
 (deftest a-flight-ignores-the-spot-of-a-creeper-the-client-no-longer-lists
   (async done
     (tu/run-async done

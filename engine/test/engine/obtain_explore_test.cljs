@@ -127,6 +127,15 @@
           (is (= [nil :north] (mapv :heading (f/events-of s :obtain.exploring))) "rings first, then outward")
           (is (= :no-source (:reason (first (f/events-of s :stopped))))))))))
 
+(deftest a-search-held-on-the-body-says-it-is-looking-once-not-every-round
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (update (ore-world {} []) :self assoc :health 8 :food 5) [f/own-zone])]
+          (await (obtain-small! s {:item "oak_log" :count 1 :ways #{:gather} :explore true} 60))
+          (is (seq (f/events-of s :waiting)) "the hurt, foodless body's search waits")
+          (is (= 1 (count (f/events-of s :obtain.exploring))) "and the notice is said once, not each round"))))))
+
 (deftest planks-of-any-species-search-for-any-log
   (async done
     (tu/run-async done

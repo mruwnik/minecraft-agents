@@ -133,6 +133,16 @@
     (when (and (seq threats) (sh-sense/buried? p))
       (walk/way-target (u/self-pos c) (mapv #(danger-q/mob-pos p %) threats) (into (ledger/ways-of c) (trail-floors c)) (way-reach)))))
 
+(defn bystander-spots
+  "The places of the hostiles the body knows within threats/sensed-radius that are not chasing it (not in chasing, not killed): a flight step does not end nearer to one of them, so the body does not run from one mob into another."
+  [c chasing]
+  (let [p (:primitives c)
+        skip (into (set (map #(.-id %) chasing)) (flight/dead-ids c))]
+    (->> (flight/known-chasers p)
+         (remove #(skip (.-id %)))
+         (filter #(<= (danger-q/mob-distance p %) (threats/sensed-radius)))
+         (map #(danger-q/mob-pos p %)))))
+
 (defn ^:async flight-target!
   "The walk target away from threats (walk/choose-target over what the body sees, after glance-away!; cover from the
   ranged ones first, a swim slow), leaning toward the first of rooms (refuges), nil when none. covered? as cover-fn
@@ -144,6 +154,8 @@
    (let [p (:primitives c)
          from (u/self-pos c)
          threat-pos (into (into (mapv #(danger-q/mob-pos p %) threats) (lost-spots c threats)) (flight/fire-spots c))
+         bystanders (bystander-spots c threats)
+         toward-bystander? (fn [end] (some #(< (u/dist end %) (u/dist from %)) bystanders))
          refuge (:start (first rooms))
          judged (respond.goal/judge c (remove nil? [refuge (home-pos c)]))
          goal (respond.goal/usable judged)
@@ -152,7 +164,7 @@
      (await (glance-away! c (walk/direction from threat-pos home flank?)))
      (walk/choose-target (cornered/block-at-fn p) from threat-pos home (keep (comp :pos :data) (ctx/entries c :hazard))
                          (flight/walk-step) {:swim-factor (swim-factor c) :covered? covered? :flank? flank?
-                          :avoid (flight/avoid-ends c)
+                          :avoid (cons toward-bystander? (flight/avoid-ends c))
                           :refused (:refused (ctx/mem c))
                           :waterlogged? #(:waterlogged? (u/seen-facts p %))
                           :floor (flight/floor c)
