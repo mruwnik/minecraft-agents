@@ -293,7 +293,7 @@
               ring (into {} (for [x (range 0 7) z (range -1 6) y [63 64 65]] [(str x "," y "," z) "stone"]))
               {:keys [eng]} (start {:inventory [{:name "stone" :count 8}] :blocks (merge ring {"3,65,2" "stone" "3,64,2" "air" "3,63,2" "stone"}) :self {:pos {:x 9.5 :y 64 :z 2.5}}} {"hut" plan})
               result (await (child-outcome eng job {:plan "hut"} 200))]
-          (is (= {[3 64 2] :unreachable} (:given-up result)))
+          (is (= {[3 64 2] :no-tool} (:given-up result)))
           (is (= 0 (:placed result))))))))
 
 (deftest walks-that-keep-ending-budget-stop-the-build-instead-of-trying-every-cell

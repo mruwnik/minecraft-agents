@@ -61,6 +61,11 @@
                                         :text (str "build of " (:plan (:args c)) ": filling " (str/join ", " (map pr-str (take 3 fresh)))
                                                    ", where the body stood: the way in may close, the plan has no door there")}))))
 
+(defn sightless?
+  "Whether an :unreachable outcome of a place or dig is a cell no stand sees, in a build that cut into rock and has not tunnelled to the cell too often: it is tunnelled to, not given up."
+  [m outcome e pos]
+  (and (= :unreachable outcome) (:mouth m) (= :out-of-sight (or (:why (:data e)) (:why (:cause e)))) (< (get-in m [:tunnels pos] 0) 3)))
+
 (defn ^:async place-one!
   "Place the cell's item after asking the access rules and jobs.lib.placement once more; a refusal is booked, nothing
   is placed; a cell the rules skip counts a failure."
@@ -85,9 +90,11 @@
                                           wrong (assoc-in [:misplaced pos] wrong))))
           :already (ctx/update-mem! c #(count-fail (dissoc % :placing) pos :already limit))
           (:occupied :need :no-item :no-support :unreachable)
-          (ctx/update-mem! c #(cond-> (count-fail (dissoc % :placing) pos (if (= :need outcome) :no-item outcome) limit)
+          (ctx/update-mem! c #(if (sightless? % outcome e pos)
+                                (-> (dissoc % :placing) (update :sightless (fnil conj #{}) pos))
+                                (cond-> (count-fail (dissoc % :placing) pos (if (= :need outcome) :no-item outcome) limit)
                                 (and (= :unreachable outcome) (#{:budget :no-progress} (:why (:data e)))) (update :needs-scaffold (fnil conj #{}) pos)
-                                (and (= :unreachable outcome) (= :budget (:why (:data e)))) (update :budget-streak (fnil inc 0))))
+                                (and (= :unreachable outcome) (= :budget (:why (:data e)))) (update :budget-streak (fnil inc 0)))))
           (ctx/update-mem! c #(count-fail (dissoc % :placing) pos :refused limit)))))))
 
 (defn settle-placing!
@@ -120,8 +127,10 @@
                                            (assoc-in m [:given-up pos] :refilled)
                                            m)))
               :missing (ctx/update-mem! c count-fail pos :missing limit)
-              :unreachable (ctx/update-mem! c #(cond-> (assoc-in % [:given-up pos] :unreachable)
-                                                 (= :budget (:why (:data e))) (update :budget-streak (fnil inc 0))))
+              :unreachable (ctx/update-mem! c #(if (sightless? % outcome e pos)
+                                                 (update % :sightless (fnil conj #{}) pos)
+                                                 (cond-> (assoc-in % [:given-up pos] :unreachable)
+                                                   (= :budget (:why (:data e))) (update :budget-streak (fnil inc 0)))))
               (ctx/update-mem! c count-fail pos :refused limit)))
       :refused (ctx/update-mem! c refuse pos (select-keys v [:reason :zone :plan :claim]))
       :hazard (ctx/update-mem! c refuse pos {:reason :hazard

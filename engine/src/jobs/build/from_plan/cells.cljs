@@ -120,11 +120,39 @@
            [cell n]))))
 
 (defn rock-bound?
-  "Whether rock holds cell in on every side that is not another cell of the plan: no air beside it to stand in or see it
-  from (a face not loaded yet counts as open: it will load)."
-  [p cell planned]
+  "Whether rock holds cell in on every side: no air beside it to stand in or see it from (a face not loaded yet counts as
+  open: it will load; a neighbour dug open is air). A face never seen counts as rock."
+  [p cell]
   (let [[x y z] (:pos cell)
         solid? (fn [n] (let [b (u/sensed p (pos-map n))]
                          (and (some? b) (or (true? (.-unknown b)) (not (or (bs/passable? (.-name b)) (bs/fluids (.-name b))))))))]
-    (every? #(or (planned %) (solid? %))
-            [[(inc x) y z] [(dec x) y z] [x (inc y) z] [x (dec y) z] [x y (inc z)] [x y (dec z)]])))
+    (every? solid? [[(inc x) y z] [(dec x) y z] [x (inc y) z] [x (dec y) z] [x y (inc z)] [x y (dec z)]])))
+
+(defn retreat-dists
+  "{cell steps}: the open cells (as sensed) around the plan and mouth, by steps from mouth through open cells; a block
+  cut into rock is filled farthest first, so the way back to the mouth stays open until the last cell."
+  [p mouth cells]
+  (let [pts (conj (map :pos cells) mouth)
+        [lo hi] (for [f [min max]] (mapv (fn [i] (apply f (map #(nth % i) pts))) [0 1 2]))
+        in-box? (fn [[x y z]] (and (<= (- (lo 0) 2) x (+ (hi 0) 2)) (<= (- (lo 1) 2) y (+ (hi 1) 2)) (<= (- (lo 2) 2) z (+ (hi 2) 2))))
+        open? (fn [n] (let [b (u/sensed p (pos-map n))] (and (some? b) (not (true? (.-unknown b))) (bs/passable? (.-name b)))))]
+    (loop [dist {mouth 0} frontier [mouth]]
+      (if (empty? frontier)
+        dist
+        (let [next (distinct
+                    (for [[x y z] frontier
+                          n [[(inc x) y z] [(dec x) y z] [x (inc y) z] [x (dec y) z] [x y (inc z)] [x y (dec z)]]
+                          :when (and (not (contains? dist n)) (in-box? n) (open? n))]
+                      n))
+              d (inc (get dist (first frontier)))]
+          (recur (into dist (map (fn [n] [n d])) next) (vec next)))))))
+
+(defn step-back
+  "The open cell next to feet (steps from the mouth, dists) level with feet and one step nearer the mouth; nil
+  when feet is not in dists or is the mouth."
+  [dists [x y z :as feet]]
+  (let [d (get dists feet)]
+    (when (and d (pos? d))
+      (->> [[(inc x) y z] [(dec x) y z] [x y (inc z)] [x y (dec z)]]
+           (filter #(= (dec d) (get dists %)))
+           first))))

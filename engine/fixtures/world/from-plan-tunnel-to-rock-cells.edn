@@ -1,21 +1,21 @@
-;; Card bb89b977: plan cells (a 1x2 post) inside solid rock with no air stand beside them: a body with a pickaxe tunnels toward the nearest one
+;; Card bb89b977: plan cells (a 3x3x2 block, filled farthest-first while backing out) inside solid rock with no air stand beside them: a body with a pickaxe tunnels toward the nearest one
 ;; (jobs.access.tunnel) and builds them; without a pickaxe they stay given up (:no-tool).
-;; Sealed dark plot. Should-succeed: post-in-rock-is-tunnelled-to-and-built. Should-fail: post-in-rock-without-pickaxe-stays-given-up.
+;; Sealed dark plot. Should-succeed: block-in-rock-is-tunnelled-to-and-built. Should-fail: block-in-rock-without-pickaxe-stays-given-up.
 {:defaults
  {:tags [:build :access] :time :any
   :plot {:height 16 :light :dark :length 64}
   :blocks [[:fill [8 0 8] [30 14 30] "stone"] [:fill [10 1 10] [24 2 10] "air"]]
   :plans [{:id "ring" :metadata {:by "$body"}
-           :parts [{:id "ring" :box [#at [14 1 15] #at [14 2 15]] :want "dirt"}]}]
+           :parts [{:id "ring" :box [#at [14 1 13] #at [16 2 15]] :want "dirt"}]}]
   :body {:at [12.5 1 10.5] :settle-s 2 :effects [["resistance" 600 4]]}
   :limit-s 260}
  :cases
- [{:name "post-in-rock-is-tunnelled-to-and-built"
+ [{:name "block-in-rock-is-tunnelled-to-and-built"
    :body {:inventory [["stone_pickaxe" 1] ["dirt" 64]]}
    :act [[:job (jobs.build.from-plan {:plan "$plan:ring"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 200 :of-job true}]
-   :after [[:block [14 1 15] "dirt"] [:block [14 2 15] "dirt"]]}
-  {:name "post-in-rock-without-pickaxe-stays-given-up"
+   :after [[:block [14 1 15] "dirt"] [:block [16 2 15] "dirt"] [:block [15 1 14] "dirt"] [:block [14 1 13] "dirt"]]}
+  {:name "block-in-rock-without-pickaxe-stays-given-up"
    :body {:inventory [["dirt" 64]]}
    :act [[:job (jobs.build.from-plan {:plan "$plan:ring"})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :incomplete}} :within-s 200 :of-job true}]}]}

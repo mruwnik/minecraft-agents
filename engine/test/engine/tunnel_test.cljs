@@ -612,6 +612,16 @@
           (is (= :reached (:reason @out)) (pr-str (:reason @out)))
           (is (= [13 20 0] (feet p)) "beside the target, cut along the body's own row"))))))
 
+(deftest a-leg-whose-waypoint-the-body-already-stands-beside-ends-the-tunnel-not-the-leg-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [deep (merge (stone -12 12 0 64 -3 8) {"0,20,0" "air" "0,21,0" "air" "1,20,0" "air" "1,21,0" "air" "1,14,0" "iron_ore"})
+              {:keys [out]} (await (tunnel! {:self {:pos {:x 0.5 :y 20 :z 0.5}} :blocks deep}
+                                            {:target [1 14 0] :max-length 2} (fn [_])))]
+          (is (not= :not-done @out) "the tunnel ends")
+          (is (not= :reached (:reason @out))))))))
+
 (deftest a-first-leg-refused-on-the-shorter-axis-is-tried-on-the-other
   (async done
     (tu/run-async done

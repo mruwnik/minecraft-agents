@@ -30,7 +30,7 @@
             [jobs.lib.build.plan :as plan :refer [retry-distance max-retries facing-of facing-ok? body-cells count-fail stands-for plan-trouble owed need-of shortage hazards decide rules-input refuse permitted judged no-zones planned how placeable misplaced missing covered digging unseen buildable problem]]
             [jobs.lib.build.scaffold :as scaffold]
             [jobs.lib.tools :as tools]
-            [jobs.build.from-plan.cells :refer [diggable in-reach in-dig-reach seals? shuts-out? exit-point off-low-floor buried? reaching support-looks rock-bound?]]
+            [jobs.build.from-plan.cells :refer [diggable in-reach in-dig-reach seals? shuts-out? exit-point off-low-floor buried? reaching support-looks rock-bound? retreat-dists step-back]]
             [jobs.build.from-plan.book :refer [walk-fail retry-walks warn-way-in! place-one! settle-placing! dig-one! result-data finish! book-failed!]]
             [jobs.build.from-plan.light :as light]
             [jobs.lib.build.text :refer [summary stopped-text assoc-fetch-failed]]))
@@ -224,7 +224,7 @@
   or not: the next step judges where the body stands; a walk that did not arrive gives up the plan cell the body stands in, :unreachable). :continue while the walk waits, else :again."
   [c]
   (let [[x y z] (:leave (ctx/mem c))
-        r (await (child/call-walk* c :leave {:pos {:x x :y y :z z} :range (:leave-range (ctx/mem c) 1) :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+        r (await (child/call-walk* c :leave {:pos {:x x :y y :z z} :range (if (:mouth (ctx/mem c)) 0 (:leave-range (ctx/mem c) 1)) :ways (cond-> #{:walk :clear-seal} (:mouth (ctx/mem c)) (into [:stair :dig-out])) :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
     (when-not (= :continue r)
       (ctx/update-mem! c #(cond-> (dissoc % :leave :leave-range)
                             (and (not= :done (:kind r)) (:stepped-off %)) (assoc-in [:given-up (:stepped-off %)] :unreachable))))
@@ -297,19 +297,54 @@
   (boolean (and (:shut-in (:data (near/last-walk c)))
                 (reach-room/enclosed? (:primitives c) #{} (reach/lookup (:primitives c) reach-room/body-kind-of) (settings/get settings ::pocket-cells)))))
 
+(defn exit-of
+  "Where the body leaves a cell it stands in: in a block it cut into rock, one step back toward the tunnel mouth (the cell
+  it left is then filled from there); else outside the plan's box."
+  [c cells]
+  (let [mouth (:mouth (ctx/mem c))
+        feet (mapv js/Math.floor (let [b (u/self-pos c)] [(:x b) (:y b) (:z b)]))]
+    (or (when mouth (step-back (retreat-dists (:primitives c) mouth cells) feet))
+        mouth
+        (exit-point cells (u/self-pos c)))))
+
+(defn shut-in?
+  "Whether rock holds cell in, or a dig or place there found no stand that sees it after the body cut into rock."
+  [c cell]
+  (or (rock-bound? (:primitives c) cell) (contains? (:sightless (ctx/mem c)) (:pos cell))))
+
 (defn ^:async tunnel-to!
-  "A cell shut in by rock: cut a way to a stand beside it (jobs.access.tunnel) as a player with a
-  pickaxe would. :continue while that waits, :again once it is cut or failed (a failure counts against the cell), nil
-  when the cell is open to air, no pickaxe is carried, or the body already stands beside it."
+  "A cell shut in by rock: with a pickaxe, cut a way (jobs.access.tunnel) to the deepest such cell, so the body stands in the
+  plan's cells and fills them while backing out; without one the cell is given up :no-tool at once. :continue while the
+  tunnel waits, :again once it is cut or failed (a failure counts against the cell), nil when the cell is open to air or
+  the body already stands at the end of the way."
   [c cells cell]
-  (let [pos (:pos cell)]
-    (when (and (tools/can-harvest? (:primitives c) "stone") (rock-bound? (:primitives c) cell (set (map :pos cells))))
-      (let [r (await (ctx/call c :tunnel 'jobs.access.tunnel {:target pos :through (:plan (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-        (cond
-          (= :continue r) :continue
-          (and (= :done (:kind r)) (= :already (:reason (:data r)))) nil
-          (= :done (:kind r)) :again
-          :else (do (ctx/update-mem! c walk-fail pos :unreachable (give-up) (u/self-pos c)) :again))))))
+  (let [p (:primitives c)
+        closed (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
+        shut? #(shut-in? c %)]
+    (when (shut? cell)
+      (if-not (tools/can-harvest? p "stone")
+        (let [pos (:pos cell)
+              near? (<= (u/eye-dist (u/self-pos c) pos) (plan/reach))
+              [x y z] pos
+              by-rock? (some #(= :no-tool (get (:given-up (ctx/mem c)) %)) [[(inc x) y z] [(dec x) y z] [x (inc y) z] [x (dec y) z] [x y (inc z)] [x y (dec z)]])]
+          (cond
+            (and near? (not (contains? (:rock-looked (ctx/mem c)) pos)))
+            (do (ctx/update-mem! c update :rock-looked (fnil conj #{}) pos)
+                (await (dig-look/look-at! c pos))
+                :again)
+            (or near? by-rock?)
+            (do (ctx/update-mem! c assoc-in [:given-up pos] :no-tool)
+                :again)))
+        (let [body (u/self-pos c)
+              _ (ctx/update-mem! c update :mouth #(or % (mapv js/Math.floor [(:x body) (:y body) (:z body)])))
+              deepest (apply max-key #(u/dist body (zipmap [:x :y :z] (:pos %)))
+                             (filter #(and (not= :match (:answer %)) (not (:companion %)) (not (contains? closed (:pos %))) (shut? %)) cells))
+              r (await (ctx/call c :tunnel 'jobs.access.tunnel {:target (:pos deepest) :through (:plan (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+          (cond
+            (= :continue r) :continue
+            (and (= :done (:kind r)) (= :already (:reason (:data r)))) nil
+            (= :done (:kind r)) (do (ctx/update-mem! c #(-> (update % :sightless disj (:pos deepest)) (update-in [:tunnels (:pos deepest)] (fnil inc 0)))) :again)
+            :else (do (ctx/update-mem! c walk-fail (:pos deepest) :unreachable (give-up) (u/self-pos c)) :again)))))))
 
 (defn ^:async walk-to-stand!
   "Walk to a stand cell beside cell (:continue while the walk waits, else :again); a cell that cannot be walked to, or is still out of reach (or unseen, as :unseen) on arrival, counts a failure."
@@ -320,7 +355,9 @@
         bad (set (:bad-stands (ctx/mem c)))
         facing (when-not (or (:click cell) (:dig? cell)) (facing-of (:want cell)))
         all (stands-for (:primitives c) (:pos cell) (js/Math.floor (:y body)) facing planned bad)
-        stands (or (seq (reaching c all (:pos cell))) all)
+        inner (when-not (plan/grounded-stands (:primitives c) (:pos cell) (js/Math.floor (:y body)) facing planned bad)
+                (seq (remove bad (plan/grounded (:primitives c) (plan/stand-cells (:pos cell) (second (:pos cell)) facing #{})))))
+        stands (or (seq (reaching c all (:pos cell))) inner all)
         stand (first (sort-by #(u/dist body (zipmap [:x :y :z] %)) stands))]
     (cond
       (not stand)
@@ -347,7 +384,8 @@
         facing (when-not (or (:click cell) (:dig? cell)) (facing-of (:want cell)))
         stands (plan/grounded-stands (:primitives c) (:pos cell) (js/Math.floor (:y body)) facing (set (map :pos cells)) (set (:bad-stands (ctx/mem c))))
         grounded (when-not (contains? (:needs-scaffold (ctx/mem c)) (:pos cell)) (reaching c stands (:pos cell)))]
-    (or (when-not (seq grounded) (await (scaffold/start! c cells cell (result-data c cells))))
+    (or (await (tunnel-to! c cells cell))
+        (when-not (seq grounded) (await (scaffold/start! c cells cell (result-data c cells))))
         (await (walk-to! c cells cell)))))
 
 (defn ^:async look-for-support!
@@ -379,8 +417,19 @@
         held (set (filter #(shuts-out? c % wanted) (in-reach c placeable-now)))
         todo (let [open (remove held placeable-now)] (if (seq open) open placeable-now))
         layer (layer-of todo)
-        near (cond->> (in-reach c layer)
-               (not= :up (scaffold/phase c)) (remove #(contains? (:needs-scaffold (ctx/mem c)) (:pos %))))
+        mouth (:mouth (ctx/mem c))
+        dists (when mouth (retreat-dists (:primitives c) mouth cells))
+        near (cond->> (remove #(shut-in? c %) (in-reach c layer))
+               (not= :up (scaffold/phase c)) (remove #(contains? (:needs-scaffold (ctx/mem c)) (:pos %)))
+               ;; filling a block cut into rock backs out toward the mouth: the deepest cell goes first
+               ;; and no cell nearer the mouth than the one the body stands in, which it leaves by
+               mouth ((fn [ns]
+                        (let [b (u/self-pos c)
+                              feet (mapv js/Math.floor [(:x b) (:y b) (:z b)])
+                              inside? (some #(= feet (:pos %)) wanted)]
+                          (->> ns
+                               (remove #(and inside? (<= (get dists (:pos %) 0) (get dists feet 0))))
+                               (sort-by #(- (get dists (:pos %) 0))))))))
         mine (body-cells (u/self-pos c))
         _ (ctx/update-mem! c update :stood (fnil into #{}) mine)
         feet (first (sort mine))
@@ -389,7 +438,7 @@
         ;; standing on a cell of the plan itself, the body has no ground to leave from until nothing else is left to place
         standing (let [cell (first (filter #(mine (:pos %)) wanted))]
                    (when (and cell (not= (:pos cell) (:stepped-off (ctx/mem c)))) cell))
-        dig-near (in-dig-reach c digs)
+        dig-near (remove #(shut-in? c %) (in-dig-reach c digs))
         nearest #(first (sort-by (fn [cell] (u/dist (u/self-pos c) (zipmap [:x :y :z] (:pos cell)))) %))]
     (cond
       (<= (settings/get settings ::budget-streak) (:budget-streak (ctx/mem c) 0))
@@ -401,8 +450,8 @@
       (:leave (ctx/mem c)) (do (trace! c :leave! (:leave (ctx/mem c))) (await (leave! c)))
       (and (< (:off-bed (ctx/mem c) 0) (settings/get settings ::off-bed-tries)) (off-low-floor c))
       (do (ctx/update-mem! c #(-> % (assoc :leave (off-low-floor c) :leave-range 0) (update :off-bed (fnil inc 0)))) :again)
-      (and underfoot (not= (:pos underfoot) (:stepped-off (ctx/mem c))))
-      (do (ctx/update-mem! c assoc :leave (exit-point cells (u/self-pos c)) :stepped-off (:pos underfoot))
+      (and underfoot (not= (:pos underfoot) (:stepped-off (ctx/mem c))) (or (not mouth) (and (empty? near) (empty? dig-near))))
+      (do (ctx/update-mem! c assoc :leave (exit-of c cells) :stepped-off (:pos underfoot))
           :again)
       (seq near) (do (await (watch/watch! c {}))
                      (warn-way-in! c cells near)
@@ -410,28 +459,24 @@
                        (if (seq left)
                          (if (do (trace! c :place-one! (:pos (first left))) (seals? c (:pos (first left))))
                            (do (ctx/update-mem! c #(-> (count-fail % (:pos (first left)) :unreachable (give-up))
-                                                       (assoc :leave (exit-point cells (u/self-pos c)))))
+                                                       (assoc :leave (exit-of c cells))))
                                :again)
-                           (if-let [t (await (tunnel-to! c cells (first left)))]
-                             t
-                             (if (= :continue (await (place-one! c (first left) (give-up))))
-                               :continue
-                               (recur (rest left)))))
+                           (if (= :continue (await (place-one! c (first left) (give-up))))
+                             :continue
+                             (recur (rest left))))
                          :again)))
       (seq dig-near) (loop [left dig-near]
                        (if (seq left)
-                         (if-let [t (await (tunnel-to! c cells (first left)))]
-                           t
-                           (if (= :continue (do (trace! c :dig-one! (:pos (first left))) (await (dig-one! c (first left) (give-up)))))
-                             :continue
-                             (recur (rest left))))
+                         (if (= :continue (do (trace! c :dig-one! (:pos (first left))) (await (dig-one! c (first left) (give-up)))))
+                           :continue
+                           (recur (rest left)))
                          :again))
       (= :up (scaffold/phase c)) (do (scaffold/finish-up! c cells (into todo (unseen cells given-up)) (nearest layer) (give-up)) :again)
       (seq todo) (await (reach-cell! c cells (nearest layer)))
       (seq digs) (await (walk-to! c cells (nearest digs)))
       (seq (support-looks c wanted)) (await (look-for-support! c cells (support-looks c wanted)))
       (seq (unseen cells given-up)) (await (reach-cell! c cells (nearest (unseen cells given-up))))
-      standing (do (ctx/update-mem! c assoc :leave (exit-point cells (u/self-pos c)) :stepped-off (:pos standing))
+      standing (do (ctx/update-mem! c assoc :leave (exit-of c cells) :stepped-off (:pos standing))
                    :again)
       :else (let [before (ctx/mem c)]
               (ctx/update-mem! c retry-walks (u/self-pos c) true)
