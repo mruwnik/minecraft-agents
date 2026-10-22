@@ -1,19 +1,19 @@
 ;; Card da621127: jobs.survival.shut-in under fire prices each way's seconds in the open (cost/exposure-price), and a pocket's
 ;; unsensed rock as a risk of laying it open. Body at [16.5 0 16.5] with a stone face behind it (x 10..15), open on the other
-;; sides, looking east. Hunger, then `damage` leaves 10 hp. Should-succeed: a skeleton (NoAI) 6 east in its line of fire: the
-;; walls; no skeleton: the pocket, the fewer seconds.
+;; sides, looking south-west so it sees both the wall and the skeleton. Hunger, then `damage` leaves 10 hp. Should-succeed: a
+;; skeleton (NoAI) 6 south in its line of fire: the walls; no skeleton: the pocket, the fewer seconds.
 {:defaults
  {:tags [:survival :cornered] :mobs :keep
   :time :any
   :plot {:height 8 :light :lit}
   :register []
   :blocks [[:fill [10 0 8] [15 4 24] "stone"]]
-  :body {:at [16.5 0 16.5] :yaw 270 :settle-s 2 :inventory [["iron_pickaxe" 1] ["dirt" 16]]}
+  :body {:at [16.5 0 16.5] :yaw 45 :settle-s 2 :inventory [["iron_pickaxe" 1] ["dirt" 16]]}
   :limit-s 90}
  :cases
  [{:name "hurt-body-in-a-skeletons-line-of-fire-walls-in"
-   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 10 minecraft:generic"]
-         [:summon "skeleton" [22.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+   :act [[:summon "skeleton" [16.5 0 22.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 10 minecraft:generic"]
          [:job (jobs.survival.shut-in {:ways #{:walls :pocket}})]]
    :expect [{:event {:source :job :kind :completed :data {:way :walls}} :within-s 60 :of-job true}]}
   {:name "hurt-body-with-no-danger-pockets-in"
