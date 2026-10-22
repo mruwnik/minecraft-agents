@@ -147,6 +147,17 @@
    :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore true :food false})]]
    :expect [{:event {:source :job :kind :kit.retry} :within-s 500 :of-job true}]
    :limit-s 520}
+  ;; card 1b97f7b8: shut in a closed lit stone pocket with raw iron, coal, cobblestone and planks but no furnace or table (8 planks: table 4 + sticks 2): the kit places its own and smelts and crafts, never "no source ... have 0"
+  {:name "raw-iron-in-a-closed-pocket-is-smelted-with-its-own-furnace"
+   :time :any
+   :plot {:height 12 :floor "grass_block"}
+   :blocks [[:fill [12 -16 12] [20 3 20] "stone"] [:fill [15 0 15] [17 2 17] "air"] [:set [16 3 16] "glowstone"]]
+   :body {:at [16.5 0 16.5] :inventory [["raw_iron" 11] ["coal" 4] ["cobblestone" 16] ["oak_planks" 8] ["stone_pickaxe" 1] ["cooked_beef" 3]] :effects [["resistance" 900 4]]}
+   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false :food false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 200 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :no-source}} :for-s 150 :of-job true :until {:source :job :kind :completed}}]
+   :after [[:item "iron_pickaxe" 1]]
+   :limit-s 230}
   ;; card ac825512: the nearer ore stands against water seen through glass; the kit takes the dry ore farther along the wall and finishes, never "stopped: flooded"
   {:name "flooded-ore-is-left-for-the-dry-ore"
    :time :any

@@ -336,6 +336,9 @@
                 r (await (run-bill! c (if (zero? round) :bill (keyword (str "bill" round))) (bill-of c)))]
             (cond (= :continue r) :continue
                   (retry? r tries (:explore a)) (retry! c r tries)
+                  (and r (not (:covered-done (ctx/mem c))) (seq (covered-of version todo (:carried (state c)))))
+                  (do (ctx/update-mem! c (fn [m] (-> m (dissoc :covered :bill) (update :bill-round (fnil inc 0)))))
+                      :again)
                   (some? r) (stop-after-wear! c (update r :item #(or % (first todo))))
                   :else (do (ctx/update-mem! c assoc :bill-done true)
                             (ctx/emit! c :kit.progress :info {:text (str "got " (str/join ", " todo))})
