@@ -447,6 +447,15 @@
           (is (= 1 (count (placed-at p2))))
           (is (not= {:x 1 :y 64 :z 0} (first (placed-at p2))) "the avoided cell is left free"))))))
 
+(deftest craft-steps-its-table-down-beside-a-body-on-a-stump
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pit (into {} (for [x [-1 0 1] z [-1 0 1] :when (not= [0 0] [x z]) [y n] [[62 "stone"] [63 "air"]]] [(str x "," y "," z) n]))
+              [result p] (await (craft {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}] :blocks pit} {:item "bread"}))]
+          (is (= 1 (:made result)) (pr-str result))
+          (is (= [63] (mapv :y (placed-at p)))))))))
+
 (deftest craft-puts-its-table-down-on-snow-layers-beside-the-body
   (async done
     (tu/run-async done
@@ -560,7 +569,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [around (vec (for [y [64 65] [dx dz] spot/table-offsets] [dx y dz]))
+        (let [around (vec (for [y [63 64 65] [dx dz] spot/table-offsets] [dx y dz]))
               [result] (await (craft {:inventory [{:name "wheat" :count 3} {:name "crafting_table" :count 1}] :blocks table-block :unreachable ["10,64,0"]}
                                      {:item "bread" :avoid around}))]
           (is (= :unreachable (:reason result)))

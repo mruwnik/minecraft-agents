@@ -45,7 +45,7 @@
 
 (defn spot-cells
   "The candidate table cells beside the body, outside its box (the server refuses a place the body touches), not in :avoid, not in a plan's cells, not inside a fence ring of any plan (even the one built for), not over a bed or beside a door (home-cell?) and not in a stair or tunnel this body cut (its way out): [pos floor-pos] for each offset at its level, then (a 1-wide stair has
-  no free cell at its level) each one level up. dig-spot-cells keeps to the level ones."
+  no free cell at its level) each one level up, then (a body on a stump or a pillar) each one level down. dig-spot-cells keeps to the level ones."
   [c]
   (let [{:keys [x y z]} (u/self-pos c)
         cols (access/body-columns x z)
@@ -53,7 +53,7 @@
         plan-cells (known/footprints c {:except (:for-plan (:args c))})
         all-cells (known/footprints c)
         [x y z] (mapv #(js/Math.floor %) [x y z])]
-    (for [dy [0 1]
+    (for [dy [0 1 -1]
           [dx dz] table-offsets
           :let [pos {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
           :when (and (not (cols [(:x pos) (:z pos)])) (not (avoid [(:x pos) (:y pos) (:z pos)]))

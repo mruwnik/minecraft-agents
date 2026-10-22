@@ -21,6 +21,7 @@
    :after [[:block [15 -1 15] "farmland"] [:block [17 -1 17] "farmland"] [:item "stone_hoe" 1]]}
   ;; an empty pack (after a death) and the only trees 28 blocks off, out of sight: it walks there, fells logs, crafts a wooden hoe
   {:name "empty-pack-fetches-a-hoe-from-trees-out-of-sight"
+   :time :any
    :plot {:length 80 :width 32 :height 10 :floor "grass_block"}
    :blocks [[:fill [56 0 12] [56 3 12] "oak_log"] [:fill [55 4 11] [57 4 13] "oak_leaves[persistent=true]"]
             [:fill [56 0 18] [56 3 18] "oak_log"] [:fill [55 4 17] [57 4 19] "oak_leaves[persistent=true]"]]
