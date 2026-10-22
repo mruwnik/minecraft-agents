@@ -969,7 +969,8 @@
   (with-lock-dir
     (fn [dir]
       (let [release (observe-lock/acquire! dir "obs")]
-        (is (= "EOBSERVERBUSY" (try (observe-lock/acquire! dir "obs") nil (catch :default e (.-code e)))))
+        (is (= ["EOBSERVERBUSY" (str "observer busy: held by pid " (.-pid js/process))]
+               (try (observe-lock/acquire! dir "obs") nil (catch :default e [(.-code e) (.-message e)]))))
         (release)))))
 
 (deftest acquire-ends-a-live-owner-that-recorded-its-start

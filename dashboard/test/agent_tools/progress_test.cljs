@@ -309,6 +309,16 @@
         (is (= [["iron_ingot" 24]] (:want cleared)) "clearing the goal keeps the want list"))
       (finally (.rmSync fs dir #js {:recursive true :force true})))))
 
+(deftest an-ended-goal-is-forgotten-so-the-next-wait-does-not-wake-on-it
+  (let [dir (.mkdtempSync fs (.join path (.tmpdir os) "progress-plan-"))]
+    (try
+      (let [r (progress/remember-plan! (request "Probe" "--world" "w" "--state" dir "--goal" "j14" "--want" "iron_ingot:24"))
+            _ (progress/forget-goal! r)
+            later (progress/remember-plan! (request "Probe" "--world" "w" "--state" dir))]
+        (is (nil? (:goal later)))
+        (is (= [["iron_ingot" 24]] (:want later))))
+      (finally (.rmSync fs dir #js {:recursive true :force true})))))
+
 (deftest a-hit-wakes-progress-and-the-reply-says-so-first
   (is (= {:wake :needs-you :text "hit: health 14"} (progress/wake-verdict {:wake :danger :health 14} nil)))
   (is (false? (:danger (request "Probe" "--world" "w" "--wait" "1m" "--no-danger"))))

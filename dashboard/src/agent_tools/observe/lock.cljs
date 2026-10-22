@@ -103,7 +103,9 @@
   [dir observer]
   (.mkdirSync fs dir #js {:recursive true :mode private-dir-mode})
   (let [lock (.join path dir (str observer ".lock"))
-        busy #(coded "EOBSERVERBUSY" "observer busy")]
+        busy #(coded "EOBSERVERBUSY"
+                     (str "observer busy" (when-let [pid (try (.readFileSync fs (.join path lock "pid") "utf8") (catch :default _ nil))]
+                                            (str ": held by pid " (str/trim pid)))))]
     (try (.mkdirSync fs lock #js {:mode private-dir-mode})
          (catch :default error
            (when-not (= "EEXIST" (code-of error)) (throw error))

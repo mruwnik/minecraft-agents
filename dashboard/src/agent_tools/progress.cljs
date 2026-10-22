@@ -4,7 +4,8 @@
   and what needs the agent. --wait blocks (observe's wait under the observer `progress`, so nothing between calls is
   missed) until the goal job ends, the body dies or the agent is needed, and prints that, the line and up to 3 items.
   Reflexes, notices, night, routine job ends and engine restarts do not end it. --goal and --want are kept in
-  worlds/<world>/observers/<agent>/progress-plan.edn for later calls (`none` clears one)."
+  worlds/<world>/observers/<agent>/progress-plan.edn for later calls (`none` clears one); a --wait that reports the goal's
+  ending drops the saved goal, so the next wait does not wake on it again."
   (:require [engine.bodies :as bodies]
             [agent-tools.http :as http]
             [agent-tools.inventory :as inventory]
@@ -110,6 +111,13 @@
       (.mkdirSync fs (.dirname path file) #js {:recursive true})
       (.writeFileSync fs file (str (data/write-edn plan) "\n")))
     (merge r plan)))
+
+(defn forget-goal!
+  "Drop the saved goal from the plan file: a goal's ending is reported once, not by every later wait."
+  [{:keys [plan-file]}]
+  (when (and plan-file (.existsSync fs plan-file))
+    (let [saved (data/read-edn (.readFileSync fs plan-file "utf8"))]
+      (.writeFileSync fs plan-file (str (data/write-edn (dissoc saved :goal)) "\n")))))
 
 ;; The line
 
@@ -376,6 +384,7 @@
                         (if (:wait-ms r)
                           (.then (vitals/around! (get-in r [:base :socket-path]) get! #(wait-progress! r get! (.-signal controller)))
                                  (fn [[wake report]]
+                                    (when (= :goal-ended (:wake wake)) (forget-goal! r))
                                     (.then (warn-snapshot/capture! (assoc (:base r) :workspace (:workspace r) :render render) wake)
                                            #(output (wake-text (assoc wake :vitals report :snapshot %))))))
                           (.then (read-view! get! r (.-signal controller)) #(output (str (progress-line %) "\n")))))))

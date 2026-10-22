@@ -387,6 +387,7 @@
 
 (defn failure-text [request error]
   (str "{:ok false :reason " (data/write-edn (get failure-reasons (code-of error) :transport-error))
+       (when (= "EOBSERVERBUSY" (code-of error)) (str " :detail " (data/write-edn (.-message error))))
        " :body " (js/JSON.stringify (:agent request)) "}\n"))
 
 (defn line [text] (if (str/ends-with? text "\n") text (str text "\n")))
