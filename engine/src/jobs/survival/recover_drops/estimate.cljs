@@ -133,7 +133,7 @@
         known-spots (mapv (fn [m] {:name (.-name m) :pos (danger-q/mob-pos p m)}) seen)
         known (concat seen (remembered-mobs c known-spots))
         here (u/self-pos c)
-        kind-at (reach/lookup p)
+        kind-at (reach/seen-lookup p reach/kind-of :ground)
         worth (cost/item-value inventory :overrides (:value-overrides (:args c)))
         route (when pos (conj (cost/straight-route kind-at here pos) pos)) ; the straight route keeps to the surface: a pile far below is its end all the same
         version (game/version-of p)
@@ -150,7 +150,8 @@
                :danger (max drown-hp (if (or (= "drowning" cause) (wet-pile? kind-at pos)) (cfg/wet-danger) 0))})
         quoted-s (let [mean (second (get-in quoted [:uses :job-time]))] (when (and (number? mean) (js/isFinite mean)) mean))
         threat (cond-> threat wet (-> (update :danger + (:danger wet)) (update :mobs #(vec (cons wet %)))))
-        fetch (cost/fetch-cost {:distance (when pos (max (u/dist here pos) (* (or quoted-s 0) (cost/walk-blocks-per-s)))) :danger (:danger threat) :elapsed-ms elapsed :cause cause})
+        straight-s (when route (+ (/ (u/dist here pos) (cost/walk-blocks-per-s)) (cost/unseen-route-s kind-at route)))
+        fetch (cost/fetch-cost {:distance (when pos (* (max straight-s (or quoted-s 0)) (cost/walk-blocks-per-s))) :danger (:danger threat) :elapsed-ms elapsed :cause cause})
         drowns (when-not (:reason fetch) (no-air-way p kind-at pos drown-hp))]
     (cond-> {:value (+ (:value worth) (cost/experience-cost experience))
              :cost (if drowns js/Infinity (:cost fetch))

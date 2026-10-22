@@ -18,7 +18,7 @@
              per-dark, dark-factor: the one price of a dark block, which go-to's planner costs; spawn-chance: the chance a mob spawns at a cell or
              over an area (a set or {:min :max} box of cells) per second, from the light the body knows (unseen counts as dark); exposure: the chance a walk meets and
              what lowers it ({:chance :lowered-by #{:light}}).
-    planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; air-profile, water-breathing-s, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; swim-profile: its swimH from Depth Strider on the boots; swim-factor: a swim block in walk blocks (a flight's water price); gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's prices of unseen cells (jobs.lib.cost.planner); unseen-route-hp: those prices of a route's unseen steps, in hp.
+    planner  planner-costs-problem, planner-costs, planner-names: go-to's :costs, the per-move prices it may override; landing-problem, planner-landing: go-to's :landing, fall damage by landing block; air-profile, water-breathing-s, air-used, air-costs: the planner's air drain and grace from the body's helmet, the air a dive has used; swim-profile: its swimH from Depth Strider on the boots; swim-factor: a swim block in walk blocks (a flight's water price); gait-problem, gait-costs: go-to's :gait; unknown-prices: the planner's prices of unseen cells (jobs.lib.cost.planner); unseen-route-s, unseen-route-hp: those prices of a route's unseen steps, in seconds or hp.
     tolls    farm-tolls, zone-tolls: go-to's :tolls for planted cells and zone cells to cross only as a last resort
              (jobs.lib.cost.tolls).
     death    experience-cost, death-cost, death-chance, route-death-cost: death as an ordinary cost, the walk back for the items plus the experience; a route pays its chance of dying x that; spawn-worth, search-reach: a respawn point's worth and how far a search for something may range; death-weight, terrain-danger: a remembered death's fade and the plan cost near a death by terrain (jobs.lib.cost.death).
@@ -116,16 +116,21 @@
 (def gait-costs planner/gait-costs)
 (def unknown-prices planner/unknown-prices)
 
-(defn unseen-route-hp
-  "hp the steps of route ([{:x :y :z}] cells) cost over cells kind-at reads :ground (a seen-lookup's unseen cell): the
+(defn unseen-route-s
+  "Seconds the steps of route ([{:x :y :z}] cells) add over cells kind-at reads :ground (a seen-lookup's unseen cell): the
   planner's unknown prices (walk-unknown-prices :cell per unseen feet or head cell, :floor per unseen floor) of a block's
-  seconds (per-block), at walk-hp-seconds an hp."
+  seconds (per-block)."
   [kind-at route]
   (let [{:keys [cell floor]} (planner/walk-unknown-prices)
-        unseen (fn [x y z price] (if (keyword-identical? :ground (kind-at x y z)) price 0))
-        s (reduce + 0 (for [{:keys [x y z]} route]
-                        (+ (unseen x y z cell) (unseen x (inc y) z cell) (unseen x (dec y) z floor))))]
-    (/ (* s (value/per-block)) (health/walk-hp-seconds))))
+        unseen (fn [x y z price] (if (keyword-identical? :ground (kind-at x y z)) price 0))]
+    (* (value/per-block)
+       (reduce + 0 (for [{:keys [x y z]} route]
+                     (+ (unseen x y z cell) (unseen x (inc y) z cell) (unseen x (dec y) z floor)))))))
+
+(defn unseen-route-hp
+  "unseen-route-s in hp, at walk-hp-seconds an hp."
+  [kind-at route]
+  (/ (unseen-route-s kind-at route) (health/walk-hp-seconds)))
 
 (def item-value value/item-value)
 (def fetch-cost value/fetch-cost)

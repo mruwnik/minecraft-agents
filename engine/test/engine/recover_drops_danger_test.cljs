@@ -191,6 +191,15 @@
     (is (< (get-in dry [:parts :walk] 0) (get-in wet [:parts :walk])) "the quoted seconds, not the straight line, price the walk")
     (is (< (:cost dry) (:cost wet)))))
 
+(deftest a-way-to-the-pile-the-body-has-not-seen-costs-the-unknown-prices
+  (let [death {:pos {:x 20 :y 64 :z 0} :inventory dt/death-pile-of-the-field-report}
+        walk (fn [hide?]
+               (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities []})
+                     sensed (.-sensedAt p)]
+                 (tu/set-sensed! p (fn [q] (if (and hide? (<= 5 (.-x q))) #js {:unknown true :pos q} (sensed q))))
+                 (get-in (estimate/estimate {:primitives p :args {} :view #(mem/view (:store eng))} death 5000) [:parts :walk])))]
+    (is (< (walk false) (walk true)) "the unseen half of the way is no free walk")))
+
 (deftest a-pile-the-body-cannot-dive-to-on-one-breath-is-skipped-unless-it-carries-a-block
   (let [wet (into {} (for [y (range 40 65)] [(str (:x dt/death-pos) "," y "," (:z dt/death-pos)) "water"]))
         death {:pos {:x (:x dt/death-pos) :y 40 :z (:z dt/death-pos)} :inventory dt/death-pile-of-the-field-report}
