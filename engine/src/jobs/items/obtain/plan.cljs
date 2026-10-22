@@ -82,6 +82,22 @@
                                      (update "log" (fnil + 0) (reduce + 0 (map #(get g %) (log-keys pl)))))))
       pl)))
 
+(defn below?
+  "Whether the seen block of need lies lower than the body's feet: reaching it means digging down."
+  [c need]
+  (let [b (seen-of c need)]
+    (and b (< (:y (:pos b)) (dec (js/Math.floor (:y (u/self-pos c))))))))
+
+(defn preferred
+  "The gather plan pl, or when it mines an ore seen below the feet and the same item is made another way from raw needs
+  all seen (charcoal from logs for torches: the way down to coal is dark and wants the torches it is wanted for), that plan."
+  [c version pl have name n opts]
+  (let [hard (some->> pl :gather (#(gather-needs % version)) (filter #(and (:ore? %) (below? c %))) (map :key) set not-empty)
+        alt (when hard (recipes/plan version have name n (assoc opts :ungathered hard)))]
+    (if (and alt (plan-allowed? c alt) (every? #(seen-of c %) (some-> alt :gather (gather-needs version))))
+      alt
+      pl)))
+
 (defn gather-plan
   "The craft chain for the first of names that has one once the raw items it lacks are gathered, with :gather
   {name n} when it lacks any, else nil. A sapling has no recipe: its plan is just :gather {name n}, when its leaves are seen (or its child is running).
@@ -107,7 +123,7 @@
                     (let [opts (merge (source-opts)
                                       {:table? (boolean (or (:table (ctx/mem c)) (crafting-table/nearest p (craft-radius))))
                                        :gather? true :materials materials})]
-                      (when-let [pl (recipes/plan version have name n opts)]
+                      (when-let [pl (preferred c version (recipes/plan version have name n opts) have name n opts)]
                         (when (plan-allowed? c pl)
                           (-> pl
                               (update :gather any-log version have name n opts)

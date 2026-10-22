@@ -147,6 +147,30 @@
    :expect [{:event {:source :job :kind :torch.stocked} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-torches}} :for-s 60 :of-job true}]
    :limit-s 100}
+  ;; card b4548eb1: the last stone pickaxe is worn, the only sticks are the kit's own and no wood is anywhere: the spare takes them (the kit cannot be mined without it)
+  {:name "worn-last-pickaxe-gets-a-spare-from-the-kits-sticks"
+   :time :any
+   :plot {:height 12 :floor "grass_block" :length 64 :width 32}
+   :blocks [[:fill [36 -1 14] [40 3 18] "stone"] [:set [36 0 16] "iron_ore"] [:set [36 1 16] "iron_ore"] [:set [36 2 16] "iron_ore"]]
+   :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1] ["stone_sword" 1] ["stick" 2] ["cooked_beef" 3] ["cobblestone" 8] ["coal" 4] ["crafting_table" 1]]}
+   :act [[:rcon "item replace entity $BODY container.0 with minecraft:stone_pickaxe[minecraft:damage=128]"]
+         [:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false :food false})]]
+   :expect [{:event {:source :job :kind :tool.spare} :within-s 120 :of-job true}]
+   :after [[:item "stone_pickaxe" 2]]
+   :limit-s 140}
+  ;; card 438fb8de: torches wanted, the body on a mound with coal seen far below it (the way down is dark in a mine) and logs standing, a furnace at hand: charcoal is smelted, the coal is not mined
+  {:name "torches-from-charcoal-when-the-coal-lies-far-below"
+   :time :any
+   :plot {:height 12 :floor "grass_block"}
+   :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]
+            [:fill [10 4 21] [12 5 23] "oak_leaves[persistent=true]"] [:fill [11 0 22] [11 4 22] "oak_log"]
+            [:fill [14 0 10] [19 2 15] "stone"] [:set [18 3 14] "furnace"] [:set [26 0 16] "coal_ore"]]
+   :body {:at [16.5 3 12.5] :inventory [["stone_pickaxe" 1] ["stick" 4] ["cooked_beef" 3]]}
+   :act [[:job (jobs.items.obtain {:item "torch" :count 4})]]
+   :expect [{:event {:source :job :kind :smelt.loaded} :within-s 200 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 220 :of-job true}]
+   :after [[:item "torch" 4]]
+   :limit-s 240}
   ;; card d3311e20: no iron in sight, a stone pickaxe and torches carried, under rock: the kit stairs down and tunnels for the ore, never "gathering ended :none-seen"
   {:name "unseen-iron-underground-is-dug-for-not-none-seen"
    :time :any

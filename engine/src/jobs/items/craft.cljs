@@ -135,10 +135,11 @@
       (apply contract/later :crafting (str "craft: " made " of " count " " item) data))))
 
 (defn chooser
-  "A craft under a torch stock (slot :torches) or a spare tool (slot :spare) asks the register as :craft-held: the kit's fuel and sticks stay out of it.
+  "A craft under a torch stock (slot :torches) or a spare tool (slot :spare) asks the register as :craft-held: the kit's fuel and sticks stay out of it,
+  until nothing else could be fetched for it (:held-ok in its memory): the kit cannot be made without the spare or the light.
   Other crafts, the kit's own and the mine's light-now torches, ask as :craft."
   [c]
-  (if (some #{"torches" "spare"} (str/split (str (:id c)) #"/")) :craft-held :craft))
+  (if (and (some #{"torches" "spare"} (str/split (str (:id c)) #"/")) (not (:held-ok (ctx/mem c)))) :craft-held :craft))
 
 (defn spendable
   "{name n} of the ingredients this call may use: carried less what the register holds, the item made counted whole.
@@ -347,6 +348,9 @@
         f f
         (and (seq (:wants (ctx/mem c))) (nil? (problem c)))
         (do (ctx/update-mem! c #(-> % (update :fetched (fnil conj #{}) [made short]) (dissoc :wants))) :again)
+
+        (and (= :craft-held (chooser c)) (seq (reserve/held c :craft-held)))
+        (do (ctx/update-mem! c #(-> % (assoc :held-ok true) (dissoc :wants))) :again)
 
         :else
         (do (ctx/update-mem! c dissoc :wants)

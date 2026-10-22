@@ -11,6 +11,7 @@
   :materials (the stone-materials that count as gatherable, default all; the cheapest recipe among them wins),
   :raw (more items that count as gathered: ore drops), :smelts ({product [input ..]}: a product is also made by a
   step {:op :smelt :item product :count n :input name}, one input per item; without it no smelt is planned).
+  :ungathered (items that count as crafted or carried even when gatherable: the plan then takes another way, e.g. charcoal for coal).
   The plan also has :uses {name n}, the carried units its crafts take.
   (lacking version have item n) says why a craft cannot start."
   (:require ["minecraft-data" :as minecraft-data]
@@ -128,7 +129,7 @@
 (defn gathered?
   "Whether item counts as gathered, not crafted, in plan state st."
   [st item]
-  (boolean (and (:gather? st) (or (facts/gatherable? item) (contains? (:materials st) item) (contains? (:raw st) item)))))
+  (boolean (and (:gather? st) (not (contains? (:ungathered st) item)) (or (facts/gatherable? item) (contains? (:materials st) item) (contains? (:raw st) item)))))
 
 (defn acquire
   "State st with n of item taken from what is carried, the rest crafted; nil when it cannot be had, or when item is
@@ -206,10 +207,10 @@
 
 (defn plan
   "See the ns doc. n is the amount still lacking: a gatherable item is planned as {:gather {item n}} whatever is carried."
-  [version have item n {:keys [table? max-depth gather? materials raw smelts] :or {max-depth 6}}]
+  [version have item n {:keys [table? max-depth gather? materials raw smelts ungathered] :or {max-depth 6}}]
   (let [rs (recipes-for version)
         st0 {:have have :steps [] :gather? gather? :materials (or materials (stone-materials version)) :ranks (material-ranks version)
-             :raw (set raw) :smelts smelts}
+             :raw (set raw) :smelts smelts :ungathered ungathered}
         with-gather (fn [pl st] (cond-> pl (seq (:gather st)) (assoc :gather (:gather st)) (seq (:used st)) (assoc :uses (:used st))))
         main (make rs st0 item n #{} max-depth)
         needs-table (and main (some :table? (:steps main)) (not table?))]

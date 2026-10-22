@@ -140,12 +140,20 @@
     (bill/reserve! c ["iron_pickaxe"])
     (is (= {"stick" 2 "crafting_table" 1} (reserve/held c :craft-held)))))
 
+(defn craft-c
+  "A craft child's ctx with mem as its memory."
+  [id mem]
+  {:id id :root "j1" :slots [] :view (fn [] {:data {:entries {(mem/job-kind "j1") [{:data mem}]}} :now 0})})
+
 (deftest only-stock-and-spare-crafts-respect-the-kit-holds
-  (are [id chooser] (= chooser (craft/chooser {:id id}))
+  (are [id chooser] (= chooser (craft/chooser (craft-c id {})))
     "j1/bill/gather-coal/torches/torch" :craft-held
     "j1/bill/iron_pickaxe/dig/spare/stone_pickaxe" :craft-held
     "j1/bill/gather-raw_iron/mine/torch-craft" :craft
     "j1/bill/iron_pickaxe" :craft))
+
+(deftest a-spare-craft-short-of-sticks-after-its-fetch-may-take-the-kits
+  (is (= :craft (craft/chooser (craft-c "j1/bill/iron_pickaxe/dig/spare/stone_pickaxe" {:held-ok true})))))
 
 (deftest a-bill-and-an-item-together-are-bad-args
   (are [args] (some? (base/args-error args))
