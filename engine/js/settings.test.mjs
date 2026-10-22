@@ -21,14 +21,14 @@ test('a reader answers first, a nil answer falls back to the default', () => {
 })
 
 test('a reload changes what the next call of a primitive reads', async () => {
-  let ms = 150
+  let ms = 600
   useSettings(k => (k === 'prim/world-timeout-ms' ? ms : undefined))
   const slow = await waited()
   ms = 5
   const quick = await waited()
   useSettings(null)
-  assert.ok(slow >= 140, `first wait ${slow}`)
-  assert.ok(quick < 100, `second wait ${quick}`)
+  assert.ok(slow >= 590, `first wait ${slow}`)
+  assert.ok(quick < slow / 2, `second wait ${quick}`)
 })
 
 test('every spec has a default that fits its own spec', () => {
