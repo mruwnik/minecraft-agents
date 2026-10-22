@@ -31,7 +31,7 @@
 
   Ends when the stretch is done: :done with data {:stop :tunnel-length} at :limit, or {:stop :watch} when a block of :watch-kinds with
   a seen air face is in view that was not when the call began, or a step dug one (the caller digs it, then calls again). Any other
-  stop ends the call with data {:stop reason :at :next :walk} (the stair's stops, :own-zone, :walk-failed, :breach-sealed,
+  stop ends the call with data {:stop reason :at :next-cell :walk} (the stair's stops, :own-zone, :walk-failed, :breach-sealed,
   :breach-open): condition-failed for facts, else nothing-possible. No torch to hang and none to craft ends condition-failed
   :no-torches. The data always carries :origin :heading :steps :hung :dug [{:cell :block}] :behind. Needs a pickaxe as the
   stair does (ways passed on).")
@@ -101,7 +101,7 @@
         {:keys [origin heading steps]} (or (:tunnel m) (select-keys (:args c) [:origin :heading :steps]))]
     (cond-> {:stop stop :origin origin :heading heading :steps steps :hung (:hung m) :dug (:dug m []) :behind (:behind m)}
       at (assoc :at (access/cell at))
-      next (assoc :next (access/cell next))
+      next (assoc :next-cell (access/cell next))
       walk (assoc :walk walk))))
 
 (defn finish!

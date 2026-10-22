@@ -84,7 +84,7 @@
 (defn tunnel-reason [stop] (case stop :tunnel-length :tunnel-length :no-tool :no-tool :tunnel-stopped))
 
 (defn tunnel-end!
-  "The tunnel is done (stop: :tunnel-length or why it stopped at cell at): then the mend; the ending carries :stop :length :at :next :walk :fluid :behind.
+  "The tunnel is done (stop: :tunnel-length or why it stopped at cell at): then the mend; the ending carries :stop :length :at :next-cell :walk :fluid :behind.
   walk: for :walk-failed, what stopped the walk (step-to!)."
   [c stop at & [next walk]]
   (let [{:keys [tunnel]} (ctx/mem c)
@@ -102,7 +102,7 @@
            (cond-> {:stop stop :length steps}
              at (assoc :at (access/cell at))
              fluid (assoc :fluid (keyword fluid))
-             next (assoc :next (access/cell next))
+             next (assoc :next-cell (access/cell next))
              (:behind (ctx/mem c)) (assoc :behind (:behind (ctx/mem c)))
              walk (assoc :walk walk)))))))
 
@@ -164,7 +164,7 @@
           (let [res (:data r)
                 stop (:stop res)
                 now (:steps res)
-                {:keys [origin at next walk]} res
+                {:keys [origin at walk] next :next-cell} res
                 cell (fn [v] (when v (zipmap [:x :y :z] v)))]
             (ctx/update-mem! c #(cond-> (-> % (dissoc :stepping) (assoc :tunnel (merge t (select-keys res [:origin :heading :steps])) :hung (:hung res))
                                             (cond-> (:behind res) (assoc :behind (:behind res))))

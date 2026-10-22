@@ -61,7 +61,7 @@
   4. No target: look round once per cell, then by a mineshaft (:descend-shaft, mine.descent) or a stair down (:descend-stair, :descend-limit, to the ore's :level) to
      find stone or the tunnel level; a stair that finds no stone ends :no-stone-found.
   5. Else the strip tunnel (mine.tunnel): 1-wide 2-high at the start level along :heading / :direction, :tunnel-length blocks, torches where the planner says (jobs.lib.torch-plan;
-     :torches); any stop ends the dig :tunnel-stopped with :stop :length :at :next :walk :fluid :behind.
+     :torches); any stop ends the dig :tunnel-stopped with :stop :length :at :next-cell :walk :fluid :behind.
   a level-keeping tunnel (no descending way; jobs.gather.mine-stay, mine.side) keeps the start height and seals a cut that opens into air; seen ore out of reach is
   :unreached in the result.
 

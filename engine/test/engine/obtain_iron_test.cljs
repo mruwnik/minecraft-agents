@@ -15,6 +15,7 @@
             [jobs.items.obtain.base :as base]
             [jobs.items.obtain.table :as table]
             [jobs.items.obtain.why :as why]
+            [jobs.lib.look :as look]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.items.recipes :as recipes]))
 
@@ -314,16 +315,21 @@
           (is (seq (f/events-of s :smelt.loaded)) "the logs went in the furnace"))))))
 
 (defn coal-below-world
-  "A coal ore 2 below the body, 9 south."
+  "A coal ore 2 below the body, 9 south, at the bottom of a cut in the floor so the body's sight reaches it."
   [inv]
-  (ore-world (merge f/tree-blocks {"1,64,2" "furnace" "1,62,9" "coal_ore"}) inv))
+  (ore-world (merge f/tree-blocks {"1,64,2" "furnace" "1,62,9" "coal_ore"}
+                    (into {} (for [x (range 0 3) z (range 5 10)] [(str x ",63," z) "air"])))
+             inv))
+
+(defn coal-seen? [s] (boolean (seq (look/seen-blocks (:p s) {:match #(= "coal_ore" %) :radius 32 :max 4}))))
 
 (defn ^:async torches-with-coal-below!
   "Obtain 4 torches with a coal ore below, after one sight pass so it is seen when the plan is made."
   [light inv]
   (let [s (f/start (coal-below-world inv) [f/own-zone])]
-    (swap! (fake/state (:p s)) assoc :light (into {} (for [x (range 0 3) y (range 60 67) z (range 8 11)] [[x y z] light])))
+    (swap! (fake/state (:p s)) assoc :light (into {} (for [x (range 0 3) y (range 60 67) z (range 6 11)] [[x y z] light])))
     (await (f/run-ticks s 2))
+    (let [seen (coal-seen? s)] (is seen "the coal below is seen before the plan is made"))
     (await (obtain! s {:item "torch" :count 4 :ways #{:craft :smelt :gather}} 60))
     s))
 

@@ -327,7 +327,7 @@
                                  (rock-world {"0,66,0" "air" "1,66,0" "air" "2,66,0" "lava"}) 80))]
           (is (every? #(< (first %) 2) (dug-cells s)) "no cut beside the lava the body knew of")
           (is (= :tunnel-stopped (:reason (done-event s))))
-          (is (= [{:reason :lava-adjacent :at [2 66 0] :next [2 64 0]}] (map #(select-keys % [:reason :at :next]) (tunnel-ends s)))
+          (is (= [{:reason :lava-adjacent :at [2 66 0] :next-cell [2 64 0]}] (map #(select-keys % [:reason :at :next-cell]) (tunnel-ends s)))
               "the stop names the lava")
           (is (= "lava" (block-at s 2 66 0))))))))
 
