@@ -320,3 +320,15 @@ test('the workspace guide points at the seen-blocks listing for workstations, ch
   const f = fixture(t)
   assert.match(fs.readFileSync(path.join(f.workspace, 'WORKSPACE.md'), 'utf8'), /`\.\/bin\/observe seen`/)
 })
+
+test('the generated AGENTS.md play recipe names only real jobs and default triggers, in at most 40 lines', t => {
+  const text = fs.readFileSync(path.join(fixture(t).workspace, 'AGENTS.md'), 'utf8')
+  const jobs = [...text.matchAll(/\(jobs\.([a-z-]+)\.([a-z-]+)/g)]
+  const triggers = new Set([...fs.readFileSync(path.join(repo, 'engine/scenarios/survival.edn'), 'utf8').matchAll(/:trigger :([a-z-]+)/g)].map(m => m[1]))
+  assert.ok(jobs.length > 5)
+  for (const [name, area, job] of jobs) assert.ok(fs.existsSync(path.join(repo, 'engine/src/jobs', area, `${job.replaceAll('-', '_')}.cljs`)), name)
+  for (const [, id] of text.matchAll(/--trigger ([a-z-]+)/g)) assert.ok(triggers.has(id), id)
+  assert.match(text, /\(repeat \(jobs\./)
+  assert.match(text, /\(seq \(jobs\./)
+  assert.ok(text.split('\n').length <= 40)
+})

@@ -116,6 +116,41 @@
        "  const cut = line => /^\\s*usage:/.test(line) ? cuts.reduce((t, [from, to]) => t.replace(new RegExp(from, 'g'), to), line) : line;\n"
        "  process.stdout.write('{:ok false :reason :tool-error :message ' + JSON.stringify(String(error.message).split('\\n').map(cut).join('\\n')) + '}\\n'); process.exitCode = 2;\n"
        "});\n"))
+(def agents-md
+  "# Agent workspace
+
+Read WORKSPACE.md for your body/world bindings and tool instructions, then briefing.md and relevant notes/ before acting. The repository AGENTS.md governs code changes.
+
+## Play: goal jobs first
+
+Submit goal jobs and let them run: each fetches what it needs and ends with a reason. Use a smaller job only to unblock a goal job that stopped, then submit the goal job again. `./bin/observe catalog job <name>` shows a job's args.
+
+A fresh start, in this order (skip a step already done). First site the base with `--wait`, then write plan P there with parts \"house\", \"field\" and \"pen\" (`./bin/plans --help`, `./bin/blueprints list`):
+
+    ./bin/jobs submit '(jobs.farm.find-spot {:w 16 :h 16})' --wait
+
+Then queue the rest at once, without `--wait`; each prints its job id:
+
+    ./bin/jobs submit '(jobs.items.obtain {:bill {\"stone_pickaxe\" 1 \"stone_sword\" 1 \"stone_axe\" 1}})'
+    ./bin/jobs submit '(seq (jobs.build.from-plan {:plan \"P\" :part \"house\"}) (jobs.survival.set-spawn) (jobs.memory.set-place {:name \"home\"}))'
+    ./bin/jobs submit '(jobs.survival.get-food)'
+    ./bin/jobs submit '(repeat (jobs.farm.maintain {:area {:plan \"P\" :part \"field\"}}))'
+    ./bin/jobs submit '(jobs.items.get-kit)'
+    ./bin/jobs submit '(jobs.build.pen {:plan \"P\" :part \"pen\"})'
+    ./bin/jobs submit '(repeat (jobs.animals.maintain {:plan \"P\" :part \"pen\"}))'
+
+`(seq a b ...)` runs its jobs one after another; `(repeat a)` keeps a standing job going. Then `./bin/progress --goal jN --wait 60m` on the job you are waiting for.
+
+## Reflexes (triggers)
+
+Default triggers start short jobs: danger (hostile-near, low-health, burning, suffocating, wedged, poisoned, died), needs (hungry, needs-bed, needs-weapon, inventory-nearly-full), time (night, dusk-home, dawn), tidying (door-left, scaffold-left, tidy-pending, replant-owed, pen-gate). `./bin/triggers list` shows them. Retune one rather than mute it; put replaces it under its id:
+
+    ./bin/triggers put night --trigger night --job '(jobs.survival.log-out)' --persistence cooldown --cooldown-s 10
+    ./bin/triggers put low-bread --when '(< (inventory \"bread\") 8)' --job '(jobs.survival.get-food)' --persistence cooldown --cooldown-s 300
+
+The first suits a body with no bed yet: it waits the night out offline. `./bin/triggers --help` lists the `--when` words.
+")
+
 (defn agents-text [{:keys [body world]}]
   (str "# Agent workspace\n\n"
        "You operate body `" body "` in world `" world "`. Read `context.edn`, `briefing.md`, and relevant `notes/` before acting. Keep private working notes and handoffs in `notes/`; publish lasting world discoveries through shared map/plans tools.\n\n"
@@ -175,7 +210,7 @@
       (.mkdirSync fs bin #js {:recursive true})
       (.mkdirSync fs (.join path dir "notes") #js {:recursive true})
       (when-not had-context? (.writeFileSync fs context-file (str (pr-str ctx) "\n") #js {:flag "wx"}))
-      (doseq [[file text] [[(.join path dir "AGENTS.md") "# Agent workspace\n\nRead WORKSPACE.md for your body/world bindings and tool instructions, then briefing.md and relevant notes/ before acting. The repository AGENTS.md governs code changes.\n"]
+      (doseq [[file text] [[(.join path dir "AGENTS.md") agents-md]
                          [(.join path dir "WORKSPACE.md") (agents-text ctx)]
                          [(.join path dir "briefing.md")
                           (if (file-exists? (.join path dir "BRIEFING.md"))
