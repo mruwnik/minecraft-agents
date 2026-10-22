@@ -64,7 +64,7 @@
 (defn max-closer [] (settings/get settings ::max-closer))
 (defn time-s [] (settings/get settings ::job-time-s))
 
-(def safe? (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))
+(def safe? (ready/safe-at-build (fn [c] (a/cell (:pos (:args c))))))
 
 (def fit? ready/fit?)
 
