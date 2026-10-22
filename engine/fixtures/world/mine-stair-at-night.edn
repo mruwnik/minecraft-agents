@@ -4,8 +4,8 @@
  {:tags [:mine :jobs :night]
   :time :night :time-why :night-light
   :plot {:height 31}
-  :blocks [[:fill [2 0 8] [30 28 24] "stone"] [:fill [5 28 16] [5 30 16] "air"] [:fill [6 27 16] [6 29 16] "air"] [:fill [7 26 16] [7 28 16] "air"]]
-  :body {:at [7.5 26 16.5] :effects [["resistance" 600 4]]}}
+  :blocks [[:fill [2 0 8] [30 28 24] "stone"] [:fill [5 28 16] [5 30 16] "air"] [:fill [6 27 16] [6 29 16] "air"] [:fill [7 26 16] [7 28 16] "air"] [:fill [7 29 16] [7 30 16] "stone"]]
+  :body {:at [7.5 26 16.5] :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1]]}}
  :cases
  [{:name "mine-cobblestone-down-a-stair-does-not-wait-for-light"
    :act [[:job (jobs.gather.mine {:item "cobblestone" :count 3 :here true :torches false})]]
