@@ -6,6 +6,7 @@
             [agent-tools.map :as map-tool]
             [agent-tools.observe :as observe]
             [agent-tools.observe.request :as observe-request]
+            [agent-tools.observe.status :as observe-status]
             [agent-tools.vitals :as vitals]
             [agent-tools.world-data :as data]
             [clojure.string :as str]
@@ -286,7 +287,8 @@
        (when (= :night reflex) " (night: about dawn)")))
 
 (defn away-hint [{:keys [by why back-at]}]
-  (str "queued: the body is logged out (" (some-> by name) (when why (str " " (name why))) (when back-at (str ", back about " back-at)) "); the job runs after it is back"))
+  (str "queued: the body is logged out (" (some-> by name) (when why (str " " (name why)))
+       (some->> (observe-status/back-text back-at (js/Date.now)) (str ", back about ")) "); the job runs after it is back"))
 
 (defn queued? [value]
   (or (= :queued (get-in value [:job :status]))

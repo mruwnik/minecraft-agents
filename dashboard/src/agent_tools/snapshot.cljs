@@ -6,6 +6,7 @@
   (:require [clojure.string :as str]
             [agent-tools.http :as http]
             [agent-tools.map :as map-tool]
+            [agent-tools.observe.status :as observe-status]
             [agent-tools.world-data :as data]
             [jobs.lib.cost.threat :as threat]
             ["node:fs" :as fs]
@@ -262,11 +263,12 @@
 
 (defn away-problem
   "A body-offline problem whose engine says it is only logged out (a stint it ends itself) says so, not 'start it'."
-  [problem {:keys [by why back-at] :as away}]
+  [problem {:keys [by why back-at] :as away} now]
   (cond-> problem
     (and away (= :body-offline (:reason problem)))
     (assoc :message (str "the body is logged out" (when by (str " by " (name by))) (when why (str " (" (name why) ")"))
-                         (when back-at (str ", back about " back-at)) "; it comes back by itself, ask again then"))))
+                         (some->> (observe-status/back-text back-at now) (str ", back about "))
+                         "; it comes back by itself, ask again then"))))
 
 (defn execute!
   "Renders and writes one snapshot; `render` is renderView of tools/view/render.mjs. `entities-fn` (default: ask the
@@ -287,7 +289,7 @@
   [{:keys [ctx body workspace width height max-dist prefix] :or {prefix "snap"} :as opts} render now pose {:keys [entities heard entities-error away]}]
   (let [pose (when pose (assoc pose :entities entities))
         expected (real-target (.join path workspace "snapshots"))]
-    (if-let [problem (or (some-> (pose-problem pose (:world ctx) now) (away-problem away)) (unsafe-dir-problem workspace expected))]
+    (if-let [problem (or (some-> (pose-problem pose (:world ctx) now) (away-problem away now)) (unsafe-dir-problem workspace expected))]
       (js/Promise.resolve (merge {:ok false :body body} problem))
       (let [cam (camera pose opts)]
         (-> (js/Promise.resolve

@@ -67,6 +67,14 @@
     (cond-> away
       (number? (:back-at away)) (assoc :back-in-s (max 0 (js/Math.round (/ (- (:back-at away) now) 1000)))))))
 
+(defn back-text
+  "When a logged-out body is due back, for a person: the local clock and the seconds left, e.g. \"06:31, in 25 s\"."
+  [back-at now]
+  (when (number? back-at)
+    (let [d (js/Date. back-at)
+          pad (fn [n] (if (< n 10) (str "0" n) (str n)))]
+      (str (pad (.getHours d)) ":" (pad (.getMinutes d)) ", in " (max 0 (js/Math.round (/ (- back-at now) 1000))) " s"))))
+
 (defn compact-status
   "Status without metadata or empty collections: positions rounded, queued jobs apart from the current one."
   ([s] (compact-status s (js/Date.now)))

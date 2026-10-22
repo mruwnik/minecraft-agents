@@ -90,12 +90,12 @@
 
 (deftest a-body-in-a-log-out-stint-is-not-told-to-start
   (let [offline (snap/pose-problem {:world "w" :status "offline"} "w" 5000)
-        msg (:message (snap/away-problem offline {:by :night :why :logged-out-for-sleeping-player :back-at "06:31"}))]
+        msg (:message (snap/away-problem offline {:by :night :why :logged-out-for-sleeping-player :back-at 30000} 5000))]
     (is (str/includes? msg "logged out by night") msg)
-    (is (str/includes? msg "back about 06:31") msg)
+    (is (re-find #"back about \d\d:\d\d, in 25 s" msg) msg)
     (is (not (str/includes? msg "start it")) msg)
-    (is (= offline (snap/away-problem offline nil)) "no stint reported: the old advice stays")
-    (is (= :no-pose (:reason (snap/away-problem {:reason :no-pose :message "x"} {:by :night}))) "only an offline pose is reworded")))
+    (is (= offline (snap/away-problem offline nil 5000)) "no stint reported: the old advice stays")
+    (is (= :no-pose (:reason (snap/away-problem {:reason :no-pose :message "x"} {:by :night} 5000))) "only an offline pose is reworded")))
 
 (deftest pose-problem-requires-a-fresh-online-pose-of-this-world
   (are [p reason] (= reason (:reason (snap/pose-problem p "w" 5000)))

@@ -582,3 +582,8 @@
           (.then (fn [{:keys [out]}]
                    (is (= :danger (get-in (data/read-edn out) [:wait :wake])) out)))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
+
+(deftest a-queued-job-behind-a-log-out-says-when-the-body-is-back
+  (let [back-at (+ (js/Date.now) 60000)
+        hint (:hint (jobs/with-hint {} {:job {:status :queued}} {:offline {:by :night :back-at back-at}}))]
+    (is (re-find #"back about \d\d:\d\d, in \d+ s" hint) hint)))
