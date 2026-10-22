@@ -217,6 +217,10 @@
                               1000)))
                + 0 cells)))
 
+(def route-searches
+  "The most route searches route-cells makes round cells may-dig? refuses."
+  3)
+
 (defn route-cells
   "[{:cell :block :guess}]: the cheapest cells to dig for a walk from feet cell from down or across into goal
   (jobs.lib.dig-route priced by jobs.lib.cost: a block's walk and dig-cost; at most the dig-route settings' digs and fall),
@@ -228,17 +232,26 @@
   ([p from goal may-dig? own? floors-unseen-ok?] (route-cells p from goal may-dig? own? floors-unseen-ok? false))
   ([p from goal may-dig? own? floors-unseen-ok? fetch?] (route-cells p from goal may-dig? own? floors-unseen-ok? fetch? nil))
   ([p from goal may-dig? own? floors-unseen-ok? fetch? route-opts]
-  (let [block-at (escape/block-at-of p)
+  (let [block-at (memoize (escape/block-at-of p))
+        unknown? (memoize #(dig-look/unknown? p %))
         seen-floor (fn [[x y z :as cell]]
-                     (when-not (and (not floors-unseen-ok?) (dig-look/unknown? p cell) (dig-route/open? (block-at [x (inc y) z]))
-                                    (not (dig-look/unknown? p [x (inc y) z])))
+                     (when-not (and (not floors-unseen-ok?) (unknown? cell) (dig-route/open? (block-at [x (inc y) z]))
+                                    (not (unknown? [x (inc y) z])))
                        (block-at cell)))
         ;; dig-cost merges the whole cost basis a call, and a search asks it of every cell
         dig-cost (memoize cost/dig-cost)
-        cells (:dig (dig-route/route seen-floor from goal (merge {:dig-s (fn [name cell] (when (escape/diggable? block-at may-dig? own? cell) (dig-cost name)))
-                                                                  :step-s (:cost (cost/walk-cost {:distance 1}))}
-                                                                 route-opts)))]
-    (when (and cells (every? #(escape/diggable? block-at may-dig? own? %) cells)
+        search (fn [refused]
+                 (:dig (dig-route/route seen-floor from goal (merge {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) own? cell)) (dig-cost name)))
+                                                                     :step-s (:cost (cost/walk-cost {:distance 1}))}
+                                                                    route-opts))))
+        ;; may-dig? (zones, claims, plans) is asked of a found route's cells only, not of every cell the search weighs: it was
+        ;; about half a search's time; a refused cell is searched round, at most route-searches times
+        cells (loop [refused #{} n 1]
+                (let [cells (search refused)
+                      bad (remove #(escape/diggable? block-at may-dig? own? %) cells)]
+                  (cond (empty? bad) cells
+                        (< n route-searches) (recur (into refused bad) (inc n)))))]
+    (when (and cells
                (<= (route-s p cells own? fetch?) (max-route-s)))
       (mapv (fn [cell] {:cell cell :block (block-at cell) :guess (dig-look/unknown? p cell)}) cells)))))
 

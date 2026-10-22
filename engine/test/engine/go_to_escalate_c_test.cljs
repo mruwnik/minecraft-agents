@@ -523,6 +523,15 @@
         cells (choose/route-cells p [0 64 0] [3 64 0] (constantly true) (constantly false))]
     (is (some #(= 1 (nth (:cell %) 2)) cells) "it digs round the seen-open cell whose floor is unseen")))
 
+(deftest a-dig-route-goes-round-cells-may-dig-refuses
+  (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air")
+        p (tu/fake {:blocks world :inventory [{:name "stone_pickaxe" :count 1}]})
+        straight (set (map :cell (choose/route-cells p [0 64 0] [4 64 0] (constantly true) (constantly false))))
+        round (choose/route-cells p [0 64 0] [4 64 0] #(not (contains? straight %)) (constantly false))]
+    (is (= #{[1 64 0] [1 65 0] [2 64 0] [2 65 0] [3 64 0] [3 65 0]} straight))
+    (is (seq round) "the refused tunnel is dug round")
+    (is (not-any? (comp straight :cell) round))))
+
 (deftest a-dig-route-that-takes-longer-than-the-body-would-dig-is-not-planned
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air")
         route (fn [inventory] (choose/route-cells (tu/fake {:blocks world :inventory inventory}) [0 64 0] [8 64 0] (constantly true) (constantly false)))]

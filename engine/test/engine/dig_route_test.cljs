@@ -23,7 +23,7 @@
 
 (deftest too-many-digs-is-no-route
   (let [deep (fn [c] (or ({[30 8 0] "air" [0 20 0] "air" [0 21 0] "air"} c) (if (< (c 1) 20) "stone" "air")))]
-    (is (= {:problem :no-route} (dr/route deep [0 20 0] [30 8 0] {:max-digs 5})))))
+    (is (= {:problem :no-route} (dr/route deep [0 20 0] [30 8 0] {:max-digs 5 :max-nodes 100000})))))
 
 (deftest a-step-down-does-not-dig-above-the-head
   (let [low (fn [c] (or ({[1 9 0] "air" [1 8 0] "air"} c) (if (or (< (c 1) 10) (>= (c 1) 12)) "stone" "air")))]
@@ -67,3 +67,10 @@
 (deftest a-walker-passes-a-gate-and-a-plant-but-not-a-fence-or-wall
   (is (every? dr/open? ["air" "oak_fence_gate" "oak_sapling" "poppy"]))
   (is (not-any? dr/open? ["oak_fence" "cobblestone_wall" "stone" nil])))
+
+(deftest a-far-search-stops-at-the-node-budget
+  (let [goal [76 52 96]
+        reads (atom #{})
+        w (fn [c] (swap! reads conj c) (cond (#{goal (update goal 1 inc)} c) "air" (< (c 1) 64) "stone" :else "air"))]
+    (is (= {:problem :budget} (dr/route w [0 64 0] goal {:dig-s (constantly 0.5) :step-s 0.2 :max-nodes 500})))
+    (is (< (count @reads) 6000) "cells read: about a dozen a node expanded, not the whole box between")))

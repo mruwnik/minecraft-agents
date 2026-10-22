@@ -1,0 +1,19 @@
+;; Card bc8615d0: a body shut in on a plateau it cannot step off (6 high), over a lit plain it sees, with a goal in a sealed
+;; pocket 70 blocks across and 9 down that no dig route under the dig-route limits reaches: escalation's dig-route search
+;; stops at its node budget and the call goes on to another way, the body connected (Hollin's search of every cell
+;; between, 30.8 s, timed the client out).
+;; Lit cell; stone mass x 0..99, z 0..63, y 0..4; plateau x 0..20, z 0..20, y 5..10 under the body at [10 11 10]; pocket [80 1 56] [80 2 56].
+;; Should-succeed: the goal-enclosed escalation comes, the body connected. Should-fail: none, or the body disconnects.
+{:defaults
+ {:tags [:movement :go-to]
+  :time :any
+  :plot {:height 16 :length 100 :width 64 :light :lit}
+  :blocks [[:fill [0 0 0] [99 4 63] "stone"] [:fill [0 5 0] [20 10 20] "stone"]
+           [:fill [80 1 56] [80 2 56] "air"]]
+  :body {:at [10.5 11 10.5] :settle-s 3 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1]]}
+  :limit-s 90}
+ :cases
+ [{:name "shut-in-body-far-from-a-sealed-pocket-escalates-connected"
+   :act [[:job (jobs.movement.go-to {:pos #at [80 1 56] :range 0 :unknown false})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:why :goal-enclosed}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :disconnected} :for-s 60 :until {:source :job :kind :go-to.escalated :data {:why :goal-enclosed}}}]}]}
