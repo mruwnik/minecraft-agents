@@ -8,6 +8,7 @@
             [jobs.items.recipes :as recipes]
             [jobs.items.smelt.plan :as smelt-plan]
             [jobs.lib.need :as need]
+            [jobs.lib.next-call :as next-call]
             [jobs.lib.pace :as pace]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.storage :as storage]
@@ -85,10 +86,11 @@
     (pos? (+ (get have mat 0) (get have (get smelt-plan/made-from mat) 0)))))
 
 (defn stop-data
-  "The data of the bill's stop at item for child ending e: its :why and :tried."
+  "The data of the bill's stop at item for child ending e: its :why, :tried and :next."
   [item e]
   (cond-> {:item item :got 0}
     (get-in e [:data :tried]) (assoc :tried (get-in e [:data :tried]))
+    (next-call/of e) (assoc :next (next-call/of e))
     (or (get-in e [:data :why]) (when (map? (:cause e)) (:why (:cause e))))
     (assoc :why (or (get-in e [:data :why]) (:why (:cause e))))))
 

@@ -35,6 +35,17 @@
             {:no-event {:source :job :kind :completed} :for-s 20 :of-job true :until {:source :job :kind :stopped}}]
    :after [[:item "stone_sword" 0] [:item "iron_pickaxe" 0]]
    :limit-s 80}
+  ;; card 9a979620: the no-source stop names its next calls: the mine for the unseen raw iron, then the kit again
+  {:name "no-source-names-the-mine-then-the-kit-again"
+   :time :any
+   :body {:inventory [["cooked_beef" 3] ["wooden_sword" 1]]}
+   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false :food false})]]
+   :expect [{:event {:source :job :kind :stopped
+                     :data {:reason :no-source
+                            :next [:has {:job "jobs.gather.mine" :args {:item "raw_iron"}}]}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :stopped :data {:next [:has {:job "jobs.items.get-kit" :again true}]}} :within-s 60 :of-job true}]
+   :after [[:item "iron_pickaxe" 0]]
+   :limit-s 80}
   {:name "partial-first-makes-the-stone-sword-then-stops-at-the-iron"
    :blocks [[:fill [8 4 21] [10 5 23] "oak_leaves[persistent=true]"] [:fill [9 0 22] [9 4 22] "oak_log"]
             [:fill [20 0 22] [22 1 23] "stone"]]

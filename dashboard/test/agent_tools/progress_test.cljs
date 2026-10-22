@@ -137,6 +137,13 @@
                        [{:wake :idle :jobs [{:job "j14" :name "obtain" :failed "boom"}]} :needs-you]]]
     (is (= kind (:wake (progress/wake-verdict wake "j14"))) (pr-str wake))))
 
+(deftest a-goal-end-and-a-wait-name-the-next-call
+  (is (= "j14 stopped no iron; next: resubmit (jobs.items.get-kit {})"
+         (:text (progress/wake-verdict {:wake :job-finished :job "j14" :result :stopped :message "no iron"
+                                        :next "resubmit (jobs.items.get-kit {})"} "j14"))))
+  (is (= "no-source iron_ingot, next: (jobs.gather.mine {:item \"raw_iron\"})"
+         (progress/wait-text {:reason :no-source :item "iron_ingot" :next [{:job "jobs.gather.mine" :args {:item "raw_iron"}}]}))))
+
 ;; The wait loop against a fake engine
 
 (defn ev [source kind & [data message]]

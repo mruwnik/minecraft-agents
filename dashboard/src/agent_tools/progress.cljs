@@ -8,6 +8,7 @@
   (:require [engine.bodies :as bodies]
             [agent-tools.http :as http]
             [agent-tools.inventory :as inventory]
+            [agent-tools.job-results :as job-results]
             [agent-tools.map :as map-tool]
             [agent-tools.observe :as observe]
             [agent-tools.observe.request :as observe-request]
@@ -123,7 +124,8 @@
       (and (map? waiting) (boolean (some #(= "light" (word %)) (:lowered-by waiting))))))
 
 (defn wait-text [waiting]
-  (str (word (reason-of waiting)) (when-let [item (and (map? waiting) (:item waiting))] (str " " item))))
+  (str (word (reason-of waiting)) (when-let [item (and (map? waiting) (:item waiting))] (str " " item))
+       (some->> (and (map? waiting) (:next waiting)) job-results/next-text (str ", next: "))))
 
 (defn job-rows [s] (cond->> (vec (get-in s [:jobs :items])) (:current s) (cons (:current s))))
 
@@ -272,10 +274,11 @@
     :danger {:wake :needs-you :text (str "hit: health " (:health wake))}
     :reconnect-failed {:wake :needs-you :text (str "body offline: " (:reason wake))}
     :idle (when-not (routine-idle? (:jobs wake)) {:wake :needs-you :text (str "body idle: " (idle-text (:jobs wake)))})
-    :job-finished (cond
-                    (= goal (:job wake)) {:wake :goal-ended :text (str goal " " (word (:result wake)) " " (clip (:message wake) 120))}
-                    (#{:completed :cancelled} (:result wake)) nil
-                    :else {:wake :gave-up :job (:job wake) :text (str (:job wake) " " (word (:result wake)) " " (clip (:message wake) 120))})
+    :job-finished (let [then (some->> (:next wake) (str "; next: "))]
+                    (cond
+                      (= goal (:job wake)) {:wake :goal-ended :text (str goal " " (word (:result wake)) " " (clip (:message wake) 120) then)}
+                      (#{:completed :cancelled} (:result wake)) nil
+                      :else {:wake :gave-up :job (:job wake) :text (str (:job wake) " " (word (:result wake)) " " (clip (:message wake) 120) then)}))
     nil))
 
 (defn item-text [{:keys [wake event job result message]}]

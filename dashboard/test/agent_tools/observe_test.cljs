@@ -327,6 +327,15 @@
   (is (= {:wake :notice :event :hostile.chased :job "j4" :message (apply str (repeat 240 "x"))}
          (observe-status/classify (notice "j4" :hostile.chased (apply str (repeat 400 "x"))) defaults "Probe"))))
 
+(deftest a-stopped-jobs-wake-names-its-next-calls
+  (let [e (assoc (event :job :stopped {:next [{:job "jobs.gather.mine" :args {:block "iron_ore" :item "raw_iron" :count 5}}
+                                              {:job "jobs.items.obtain" :args {:item "iron_helmet"}}
+                                              {:job "jobs.items.get-kit" :args {} :again true}]})
+                 :context {:job-id "j1"})]
+    (is (= (str "(jobs.gather.mine {:block \"iron_ore\", :item \"raw_iron\", :count 5}) or (jobs.items.obtain {:item \"iron_helmet\"}),"
+                " then resubmit (jobs.items.get-kit {})")
+           (:next (observe-status/classify e (assoc defaults :watch ["j1"]) "Probe"))))))
+
 (deftest a-repeating-notice-wakes-once-per-kind-and-job
   (let [a (notice "j1" :retreat "back")
         b (notice "j2" :retreat "back")

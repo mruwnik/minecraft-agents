@@ -7,6 +7,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.need :as need]
+            [jobs.lib.next-call :as next-call]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.waits :as waits]
             [jobs.lib.shelter.spawn :as sh-spawn]
@@ -77,7 +78,7 @@
   :want}] :refused [...] :fetch-failed {item {:failed :why}}}: done when nothing is missing (and no block came out wrong: nothing-possible :wrong-blocks) or the cells placed meet
   the call's :least (default :all); else with :text naming the missing count and what it left: nothing-possible
   :incomplete when cells were given up, condition-failed {:reason :no-items :needs} when items are short, condition-failed
-  :refused when the rules refuse the rest, nothing-possible :shut-in. For a block placed in the wrong state, :found names the state it came out in.
+  :refused when the rules refuse the rest, nothing-possible :shut-in; each with :next (jobs.lib.next-call: an obtain per short item, then the build again). For a block placed in the wrong state, :found names the state it came out in.
   Events: build.gap (a fence or wall placed over air; warns) and build.way-in (cells the body stood in, above the plan's floor, filled with no door there; warns). Event texts name
   the count and the first few cells. The whole list is in :cells of the event and in the result.
   Start facts: no zone list read (unless :ignore-zones?) is a
@@ -549,8 +550,8 @@
   never held with no act."
   [c0]
   (let [same (volatile! 0)
-        c (assoc c0 :trace (volatile! nil))]
-    (await (pace/steps! c (fn ^:async s []
+        c (assoc c0 :trace (volatile! nil))
+        e (await (pace/steps! c (fn ^:async s []
                             (let [before (ctx/mem c)
                                   r (await (step c))]
                               (cond
@@ -561,7 +562,9 @@
                                                       " steps in a row did nothing and booked nothing (last step " branch " at " (pr-str cell) ")")]
                                         (ctx/emit! c :build.stalled :warn {:plan (:plan (:args c)) :branch branch :cell cell :text text})
                                         (ctx/end c :nothing-possible :stalled
-                                                 (assoc (result-data c (:cells (planned c))) :branch branch :cell cell :text text))))))))))
+                                                 (assoc (result-data c (:cells (planned c))) :branch branch :cell cell :text text))))))))]
+    (apply next-call/on-ending c e 'jobs.build.from-plan args
+           (for [[item n] (get-in e [:data :short])] (next-call/call 'jobs.items.obtain {:item item :count n})))))
 
 
 (defn ^:async cleanup

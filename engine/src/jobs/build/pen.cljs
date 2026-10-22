@@ -9,6 +9,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.look :as look]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.next-call :as next-call]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.build.from-plan :as from-plan]
@@ -58,6 +59,7 @@
   - {:reason :no-zones}: no zone list has been read (unless :ignore-zones?).
   - {:reason :no-items}: the builder's own (jobs.build.from-plan): nothing to place is carried or fetchable; also the
     ending (condition-failed) when its look round finds that, with nothing placed.
+  Every ending but done carries :next (jobs.lib.next-call): the build's calls, then the pen again.
   A pen already sound with the body outside it is done at once with nothing placed. Nothing is rebuilt after a restart: the world is the memory.")
 
 (a/defargs args
@@ -433,4 +435,4 @@
 (defn ^:async round
   "The whole attempt: build, walk out, shut the gate, check the pen, in steps (pace/steps!); :continue only while a child waits."
   [c]
-  (await (pace/steps! c (fn ^:async s [] (await (step c))))))
+  (next-call/on-ending c (await (pace/steps! c (fn ^:async s [] (await (step c))))) 'jobs.build.pen args))

@@ -38,6 +38,16 @@
                       :else v))))]
       {:value (trim value 0) :truncated? @clipped})))
 
+(defn next-text
+  "The :next calls of a job's ending (jobs.lib.next-call: {:job :args}, the job itself again last with :again) as one
+  line of specs to submit, or nil without any."
+  [calls]
+  (let [spec #(str "(" (:job %) " " (pr-str (or (:args %) {})) ")")
+        {again true fixes false} (group-by (comp boolean :again) (filter map? calls))]
+    (when (seq calls)
+      (str/join ", then " (remove nil? [(when (seq fixes) (str/join " or " (map spec fixes)))
+                                        (when (seq again) (str "resubmit " (spec (first again))))])))))
+
 (defn never-issued?
   "True when id cannot be a job of this generation: ids are j<n> from a counter, next-id being the next to issue."
   [id next-id]

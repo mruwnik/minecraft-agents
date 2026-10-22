@@ -5,6 +5,7 @@
             [jobs.lib.animals :as animals]
             [jobs.lib.child :as child]
             [jobs.lib.need :as need]
+            [jobs.lib.next-call :as next-call]
             [jobs.lib.pace :as pace]
             [jobs.lib.pen-read :as pen-read]
             [jobs.lib.checks :as checks]
@@ -33,7 +34,8 @@
 
   Result: the child's. Both ways give {:end :animal :animal-at :at :reason :text}; :end is :tie (tied to the post), :free
   (let go at :pos; lead only), :led (lure only: the animal stands at the spot and still follows) or :short (lure with :box: it was led there but none of the kind stands in the box at the end; ends nothing-possible :animal-outside); lead adds :still-led
-  and :gathered, lure adds :near, :in-box and :distance. Done only with an :end.")
+  and :gathered, lure adds :near, :in-box and :distance. Done only with an :end. Every other ending adds :next
+  (jobs.lib.next-call): the child's calls, then the bring again.")
 
 (a/defargs args
   {:mob {:doc "the animal's name, such as \"cow\"" :spec a/name? :default nil}
@@ -154,4 +156,4 @@
                   (contract/with-because (ctx/end c (:kind e) (:cause e) data) e))))))))
 
 (defn ^:async round [c]
-  (await (pace/steps! c #(step c))))
+  (next-call/on-ending c (await (pace/steps! c #(step c))) 'jobs.animals.bring args))

@@ -7,6 +7,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.crops :as crops]
             [jobs.lib.need :as need]
+            [jobs.lib.next-call :as next-call]
             [jobs.lib.pace :as pace]
             [jobs.lib.patch :as patch]
             [jobs.lib.ready :as ready]
@@ -26,6 +27,7 @@
   Needs: a source of a hoe and seed (the fetch jobs say what lacks), a field spot in range, a zone list.
   Done once :count of the crop's item is carried. Ends nothing-possible with the failed child's cause: :no-spot (find-spot found none),
   :not-planted (three tends planted nothing), :no-light (the spot could not be lit), or a fetch's :need/:tool; limit-reached :timeout after :spend :job-time.
+  Every ending but done has :next (jobs.lib.next-call): the failed child's calls, then the grow again.
   Quote: the count as yield; time is the wait for ripening, a guess.")
 
 (a/defargs args
@@ -200,4 +202,4 @@
       :else (await (found-field! c)))))
 
 (defn ^:async round [c]
-  (await (pace/steps! c #(step c))))
+  (next-call/on-ending c (await (pace/steps! c #(step c))) 'jobs.farm.grow args))

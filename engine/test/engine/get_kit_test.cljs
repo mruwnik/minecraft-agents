@@ -147,7 +147,8 @@
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
                  (select-keys @(:out s) [:status :item :reason])))
           (is (re-find #"^kit stopped at iron_ingot: no-source" (str (:text @(:out s)))))
-          (is (re-find #"iron_ingot" (str (:why @(:out s))))))))))
+          (is (re-find #"iron_ingot" (str (:why @(:out s)))))
+          (is (= [["jobs.gather.mine" "raw_iron"]] (mapv (juxt :job (comp :item :args)) (:next @(:out s))))))))))
 
 (deftest carried-ingots-short-of-the-list-make-the-pieces-they-cover
   (async done
@@ -272,7 +273,8 @@
           (await (f/run-ticks s 80))
           (is (= 1 (count (f/events-of s :kit.no-food))) "asked once, not again")
           (is (= {:status :stopped :item "iron_pickaxe" :reason :no-food}
-                 (select-keys @(:out s) [:status :item :reason]))))))))
+                 (select-keys @(:out s) [:status :item :reason])))
+          (is (= ["jobs.survival.get-food" "jobs.items.get-kit"] (mapv :job (:next @(:out s))))))))))
 
 (deftest an-unarmed-body-makes-a-sword-before-the-mining
   (async done

@@ -13,8 +13,9 @@
             [jobs.items.obtain.gather :refer [finish-tree! gather-step!]]
             [jobs.items.obtain.need :refer [explorable? gather-held gather-viable?]]
             [jobs.items.obtain.plan :refer [craft-plan gather-plan]]
-            [jobs.items.obtain.why :refer [no-source-why tried-text]]
+            [jobs.items.obtain.why :refer [gather-fix no-source-why tried-text]]
             [jobs.lib.look :as look]
+            [jobs.lib.next-call :as next-call]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [clojure.string]))
@@ -33,7 +34,7 @@
   A bill runs one obtain child per item still missing (not carried or worn), in order, after the furnace material (iron_ingot ..) the missing items need together, which is got in one go and reserved against deposits; each child gets a :spend :job-time of the ::bill-item-s setting. The first child that fails ends the bill with its kind and cause, data {:item the one it stopped at :why}.
 
   Needs: valid :item or :any-of and :count, or a :bill (else impossible :bad-args); a source (else condition-failed :no-source with :why naming what each way lacks).
-  Returns :done {:got n :item name} only with the count carried (the call's :least, default :all, may name fewer) (a bill: {:have [items]}); nothing-possible :no-source, :table-unreachable or the gather's walk cause (:zone-exit ..) when every allowed way was tried, data {:got :tried :why}; limit-reached :timeout after :spend :job-time (default ::job-time-s).
+  Returns :done {:got n :item name} only with the count carried (the call's :least, default :all, may name fewer) (a bill: {:have [items]}); nothing-possible :no-source, :table-unreachable or the gather's walk cause (:zone-exit ..) when every allowed way was tried, data {:got :tried :why :next} (:next: jobs.lib.next-call, the gather for the first unseen raw need); limit-reached :timeout after :spend :job-time (default ::job-time-s).
   Quote: the count as yield, time a guess per step, no most for a gather; a bill two gathers' time per missing item.")
 
 (a/defargs args
@@ -81,7 +82,7 @@
 
 (defn source-cause
   "nil when a way would start (source-seen?, or a search for unseen needs). Else the cause: the gather child's own
-  decline, or {:reason :no-source :why ..}."
+  decline, or {:reason :no-source :why .. :next} (:next: the gather for the first unseen raw need, jobs.lib.next-call)."
   [c]
   (let [a (:args c)
         names (names-of a)
@@ -90,7 +91,8 @@
       (source-seen? c) nil
       (and (gathers? c) (explorable? c names n)) nil
       :else (or (when (gathers? c) (gather-held c names n))
-                (merge {:reason :no-source :why (no-source-why c names n)} (wanted-fields a))))))
+                (merge {:reason :no-source :why (no-source-why c names n)} (wanted-fields a)
+                       (when-let [fix (gather-fix c names n)] {:next [fix]}))))))
 
 (defn bad-args [c]
   (when-let [e (args-error (:args c))]
@@ -229,14 +231,16 @@
           (await (gather-step! c names have target))
           (= :table-unreachable (get-in m [:tried :craft]))
           (ctx/end c :nothing-possible :table-unreachable
-                   (assoc data :tried (:tried m)
-                          :why (str "the seen crafting table cannot be reached and no other way makes it: "
-                                    (no-source-why c names (shortfall c names)))))
+                   (next-call/with-next (assoc data :tried (:tried m)
+                                               :why (str "the seen crafting table cannot be reached and no other way makes it: "
+                                                         (no-source-why c names (shortfall c names))))
+                                        c 'jobs.items.obtain args nil))
           (walk-causes (get-in m [:tried :gather]))
           (let [k (get-in m [:tried :gather])
                 why (str "could not get to a source of " (clojure.string/join "/" names) ": gathering ended " (pr-str k)
                          (some->> (get-in m [:gather :why]) (str ": ")))]
-            (ctx/end c :nothing-possible (merge {:reason k :why why} (wanted-fields a)) (assoc data :tried (:tried m) :why why)))
+            (ctx/end c :nothing-possible (merge {:reason k :why why} (wanted-fields a))
+                     (next-call/with-next (assoc data :tried (:tried m) :why why) c 'jobs.items.obtain args nil)))
           :else
           (let [tried (tried-text (:tried m) (get-in m [:gather :why]) (get-in m [:craft :detail]))
                 why (str "no source for " (clojure.string/join "/" names) ": "
@@ -244,7 +248,8 @@
                          (no-source-why c names (shortfall c names))
                          (blocked-text (:blocked-chests m)))]
             (ctx/end c :nothing-possible (merge {:reason :no-source :why why} (wanted-fields a))
-                     (assoc data :tried (:tried m) :why why))))))))
+                     (next-call/with-next (assoc data :tried (:tried m) :why why) c 'jobs.items.obtain args nil
+                                          (gather-fix c names (shortfall c names))))))))))
 
 (defn ^:async round
   "The whole attempt in one call: step! again until the count is carried or it ends; :continue only while a child waits on the world."

@@ -13,6 +13,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.bait :as bait]
             [jobs.lib.need :as need]
+            [jobs.lib.next-call :as next-call]
             [jobs.lib.util :as u]))
 
 (def meta {:tags [:goal]})
@@ -46,6 +47,7 @@
     :refused (some refused, none ate) or :no-zones (the zone rules refused the adults).
   - :nothing-possible :food-out (the food ran out below :least fed), :unreachable (one was given up as unreachable)
     or :unpaired (an odd number fed), when no candidate is left. The same after three fruitless animals in a row.
+  - every ending but done carries :next (jobs.lib.next-call): a failed fetch's calls, then the breed again.
 
   With :box (or :plan and :part, the pen of a plan part as maintain reads it) the body knows a pen: when fewer than two adults
   stand near it first walks to the middle of the box (once), and when it ends inside the box, however it ends (the
@@ -408,4 +410,4 @@
   "The whole attempt: steps (a pace between; can-run? is asked between them) until the job ends."
   [c]
   (animals/reserve-bait! c (:mob (:args c)))
-  (await (pace/steps! c #(step c))))
+  (next-call/on-ending c (await (pace/steps! c #(step c))) 'jobs.animals.breed args))

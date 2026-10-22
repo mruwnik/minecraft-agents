@@ -237,6 +237,7 @@ require `engine.registry`.
   the scheduler skips it until `retry!` clears the mark. A reflex job that fails is dropped. A cut is never a failure.
 - A round works at its goal for as long as it can do useful work; `:continue` means yield (nothing useful to do now,
   e.g. waiting for crops or daylight), not "next step". An intentional pause is a `jobs.time.noop` child (`child/pause!`); it counts against the job's budget.
+- **next calls**: an ending other than done of `items.obtain`, `items.get-kit`, `build.from-plan`, `build.pen`, `farm.grow`, `animals.bring` and `animals.breed` carries `:next` (`jobs.lib.next-call`): up to 3 calls `{:job :args}` that would unblock it, then the job again (`:again true`, its non-default args); obtain's no-source check cause carries the unblocking call too. `observe --wait` and `progress --wait` print them as specs to submit.
 - **args**: `(a/defargs args {key {:doc :default :spec}})` (Args above); the engine merges the call's args over the defaults, which are the spec's under the settings overlay `:engine.settings/job-args` (below). Undeclared keys are refused.
 
 ### Job expressions

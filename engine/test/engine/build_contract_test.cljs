@@ -137,7 +137,10 @@
           (is (= :condition-failed (:kind e)) "all wanted, some placed, material short: not done")
           (is (= {"oak_fence" 3} (get-in e [:cause :needs])))
           (is (= 3 (count (get-in e [:data :missing]))))
-          (is (= 6 (get-in e [:data :placed]))))
+          (is (= 6 (get-in e [:data :placed])))
+          (is (= [{:job "jobs.items.obtain" :args {:item "oak_fence" :count 3}}
+                  {:job "jobs.build.from-plan" :args {:plan "pen"} :again true}]
+                 (get-in e [:data :next]))))
         (let [e (await (plan-ending {:inventory [{:name "oak_fence" :count 4} {:name "oak_fence_gate" :count 1} {:name "torch" :count 1}]}
                                     {"pen" (bfp/pen-plan)} {:plan "pen" :ways #{:carried} :least 2}))]
           (is (= :done (:kind e)) "a partial run meets its :least"))))))

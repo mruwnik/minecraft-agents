@@ -10,6 +10,7 @@
             [jobs.items.recipes :as recipes]
             [jobs.items.smelt.plan :as smelt-plan]
             [jobs.lib.look :as look]
+            [jobs.lib.next-call :as next-call]
             [jobs.lib.storage :as storage]
             [jobs.lib.trees :as trees]
             [jobs.lib.util :as u]
@@ -22,13 +23,27 @@
     (not-empty (filter #(seq (look/seen-blocks (:primitives c) {:names [%] :radius (seen-radius) :max 1}))
                        (remove #{key} trees/log-names)))))
 
+(defn raw-needs
+  "The raw needs of the chain that makes n of names (jobs.items.obtain.table/gather-needs)."
+  [c names n]
+  (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c)))))
+
+(defn unseen? [c need] (not (or (seen-of c need) (seq (seen-blocks-of c need true)))))
+
+(defn gather-fix
+  "The gather call (its own defaults for the fetches it needs) for the first raw need of the chain whose blocks are not seen, or nil."
+  [c names n]
+  (when (gathers? c)
+    (when-let [need (first (filter #(unseen? c %) (raw-needs c names n)))]
+      (next-call/call (:job need) (dissoc (:args need) :ways)))))
+
 (defn unseen-why
   "Text for the gather source: the raw needs of the chain whose blocks are not seen, those seen but not taken (a zone,
   claim or plan footprint refuses them), or the general text."
   [c names n]
-  (let [needs (some-> (gather-plan c names n) :gather (gather-needs (game/version-of (:primitives c))))
+  (let [needs (raw-needs c names n)
         seen (filter #(and (not (animal? %)) (not (seen-of c %)) (seq (seen-blocks-of c % true))) needs)
-        unseen (remove #(or (seen-of c %) (seq (seen-blocks-of c % true))) needs)
+        unseen (filter #(unseen? c %) needs)
         label (fn [{:keys [key seen sheep mob] :as need}]
                 (cond
                   sheep (str key " (from " sheep " sheep within " (animal-radius) " blocks)")

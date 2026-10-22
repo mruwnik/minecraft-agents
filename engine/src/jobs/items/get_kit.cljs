@@ -15,6 +15,7 @@
             [jobs.lib.cost.food :as food-cost]
             [jobs.lib.foods :as foods]
             [jobs.lib.need :as need]
+            [jobs.lib.next-call :as next-call]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]))
 
@@ -36,7 +37,7 @@
   A death since the job began (body memory :died) clears the children and the bill; the next round re-plans from
   what is carried. A death only keeps the job listed when it was submitted with :survive-death?.
   Needs (condition): :items, else impossible :bad-args. Ends done with {:have [..] :made [..]}. Every other ending has
-  :have, :made, the next :item, a :why and a :text:
+  :have, :made, the next :item, a :why, a :text and :next (jobs.lib.next-call: the obtain child's, a get-food for :no-food, then the kit again):
   - the obtain child's kind and cause (:no-source, a walk cause such as :zone-exit, :time ..; :item is then the one it stopped at);
   - nothing-possible {:reason :wear-failed}.
   Quote: a guess per missing item. done? is ok when every item is carried or worn.")
@@ -205,7 +206,8 @@
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) nil
-      :else (assoc (stop-of (:kind e) (:cause e) (why-of e)) :item (get-in e [:data :item]) :gathered (get-in e [:data :tried :gather])))))
+      :else (assoc (stop-of (:kind e) (:cause e) (why-of e)) :item (get-in e [:data :item]) :gathered (get-in e [:data :tried :gather])
+                   :next (get-in e [:data :next])))))
 
 (defn finish!
   "End the call: done when out is nil, else with the stop out; the data has what is had and made, and a text."
@@ -214,8 +216,11 @@
     (if-not out
       (ctx/end c :done nil data)
       (ctx/end c (:kind out) (:cause out)
-               (merge data (select-keys out [:item :why])
-                      {:text (str "kit stopped at " (:item out) ": " (name (:reason out)) (when (:why out) (str " (" (:why out) ")")))})))))
+               (next-call/with-next
+                 (merge data (select-keys out [:item :why :next])
+                        {:text (str "kit stopped at " (:item out) ": " (name (:reason out)) (when (:why out) (str " (" (:why out) ")")))})
+                 c 'jobs.items.get-kit args nil
+                 (when (= :no-food (:reason out)) (next-call/call 'jobs.survival.get-food nil)))))))
 
 (defn stop-after-wear!
   "Book the stop; the next step puts on the carried pieces first, then ends with it."
