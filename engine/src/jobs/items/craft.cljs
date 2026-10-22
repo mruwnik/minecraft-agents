@@ -19,6 +19,8 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
+            [jobs.lib.cost :as cost]
+            [jobs.movement.go-to.risk :as risk]
             [jobs.lib.spent :as spent]
             [jobs.lib.spot :as free-spot]
             [jobs.lib.storage :as storage]))
@@ -53,7 +55,15 @@
 (def target [:item])
 (def ways need/fetch-ways)
 
-(def safe? ready/safe-here-by-night)
+(defn stay-s
+  "Seconds the craft keeps the body where it is: the batches and the walk to a seen table beyond reach and back."
+  [c]
+  (let [p (:primitives c)
+        table (or (:table (:args c)) (crafting-table/nearest p (table-radius)))
+        away (if table (max 0 (- (u/dist (u/self-pos c) table) (reach))) 0)]
+    (+ (* (max 1 (or (:count (:args c)) 1)) (batch-s)) (/ (* 2 away) (cost/walk-blocks-per-s)))))
+
+(def safe? (risk/priced ready/safe-here-by-night stay-s))
 (def fit? ready/ok)
 
 (def defaults {:least :all :spend {:job-time ::job-time-s}})

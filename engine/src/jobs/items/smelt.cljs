@@ -16,6 +16,8 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.storage :as storage]
+            [jobs.lib.cost :as cost]
+            [jobs.movement.go-to.risk :as risk]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -420,7 +422,16 @@
 (def target [:item])
 (def ways need/fetch-ways)
 
-(def safe? (ready/safe-at-by-night furnace-to-reach))
+(defn stay-s
+  "Seconds the smelt keeps the body at the furnace: the cook of the count (a stack when nil) of each item and the walk there and back."
+  [c]
+  (let [{:keys [item count]} (:args c)
+        f (furnace-to-reach c)
+        n (* (or count 64) (if (coll? item) (clojure.core/count item) 1))]
+    (+ (/ (settings/ticks->ms (* n (sp/cook-ticks "furnace"))) 1000)
+       (if f (/ (* 2 (u/dist (u/self-pos c) f)) (cost/walk-blocks-per-s)) 0))))
+
+(def safe? (risk/priced (ready/safe-at-by-night furnace-to-reach) stay-s))
 (def fit? ready/ok)
 
 (defn default-time

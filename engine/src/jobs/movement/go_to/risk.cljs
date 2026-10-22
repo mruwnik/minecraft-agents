@@ -96,19 +96,47 @@
 
 (defn- round1 [x] (/ (js/Math.round (* 10 x)) 10))
 
-(defn status
-  "Ok while the estimated damage of the walk to `goal` is within ::risk-share of the body's health, else later :risky with the
-  risk and its parts. A body that can not heal by waiting (ready/cannot-heal?) may spend all but 1 hp: waiting never lowers the price."
-  [c goal]
-  (let [p (:primitives c)
-        {:keys [hp spawn-hp hostile-hp death-hp hide-hp dark-s hostiles]} (check-cache/cached c [::risk goal (sense/round-looked c)] #(estimate c goal))
-        self (.self p)
+(defn allowed
+  "The hp of expected damage the body may take on a risk now: ::risk-share of its health (cut while hungry), all but 1 hp while it
+  can not heal by waiting (ready/cannot-heal?: waiting never lowers the price)."
+  [c]
+  (let [self (.self (:primitives c))
         hungry? (some-> (.-food self) (<= (settings/get settings ::hungry-food)))
-        share (* (settings/get settings ::risk-share) (.-health self) (if hungry? (settings/get settings ::hungry-share) 1))
-        allowed (if (ready/cannot-heal? c) (max share (dec (.-health self))) share)]
+        share (* (settings/get settings ::risk-share) (.-health self) (if hungry? (settings/get settings ::hungry-share) 1))]
+    (if (ready/cannot-heal? c) (max share (dec (.-health self))) share)))
+
+(defn status
+  "Ok while the estimated damage of the walk to `goal` is within (allowed c), else later :risky with the
+  risk and its parts."
+  [c goal]
+  (let [{:keys [hp spawn-hp hostile-hp death-hp hide-hp dark-s hostiles]} (check-cache/cached c [::risk goal (sense/round-looked c)] #(estimate c goal))
+        allowed (allowed c)]
     (if (<= hp allowed)
       (contract/ok :acceptable (str "route risk " (round1 hp) " hp, within " (round1 allowed)))
       (contract/later :risky (str "route risk " (round1 hp) " hp over the " (round1 allowed) " the body can afford: "
                                   (round1 dark-s) " s on dark open ground costs " (round1 spawn-hp) " hp, "
                                   hostiles " hostile(s) near the way " (round1 hostile-hp) " hp, " (round1 death-hp) " hp for a recent death near it, " (round1 hide-hp) " hp for a recent hide near it")
                       :risk hp :allowed allowed :recheck-after-ms 10000))))
+
+(defn stay-hp
+  "Expected damage of staying `seconds` where mobs spawn at `chance` per second, each a zombie fight with the kit carried."
+  [c chance seconds]
+  (* chance seconds (cost/fight-damage (assoc (wworld/kit-of c) :mobs [{:name "zombie" :distance 0 :hits 0}]))))
+
+(defn priced
+  "The checker `safe` of a job that stays put, but ok where it fails only on exposure (:exposed with a :chance) while the hp that
+  (stay-s c) seconds there cost are within (allowed c): the same rule as a walk's, so a short act in the dark goes ahead (Q382)."
+  [safe stay-s]
+  (with-meta
+    (fn [c]
+      (let [s (safe c)
+            {:keys [reason chance]} (nth s 2 nil)]
+        (if (and (contains? #{:later :never} (first s)) (= :exposed reason) (number? chance))
+          (let [secs (stay-s c)
+                hp (stay-hp c chance secs)
+                ok-hp (allowed c)]
+            (if (<= hp ok-hp)
+              (contract/ok :priced (str "exposed, but " (round1 secs) " s there cost " (round1 hp) " hp, within " (round1 ok-hp)))
+              s))
+          s)))
+    (meta safe)))

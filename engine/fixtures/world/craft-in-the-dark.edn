@@ -1,0 +1,22 @@
+;; Q382: a job that stays put prices the dark by expected damage (go-to's acceptable-risk rule), not by waiting for light.
+;; Open grass at night, a table 4 off. Should-succeed: sticks and a wooden pickaxe crafted at once (about 2 s there).
+;; Should-fail: a stack of raw iron cooks for 640 s in the open, which costs more than the body can afford, so smelt waits :exposed.
+{:defaults
+ {:tags [:items :craft :smelt :night]
+  :time :night :time-why :night-light
+  :plot {:height 8 :floor "grass_block"}
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "sticks-and-a-pickaxe-are-crafted-in-the-dark-without-waiting"
+   :blocks [[:set [20 0 16] "crafting_table"]]
+   :body {:inventory [["oak_planks" 6]]}
+   :act [[:job (jobs.items.craft {:item "wooden_pickaxe"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}
+            {:no-event {:source :job :data {:reason :exposed}} :for-s 5 :of-job true}]
+   :after [[:item "wooden_pickaxe" 1]]}
+  {:name "a-stack-of-raw-iron-is-not-smelted-in-the-open-dark"
+   :body {:inventory [["raw_iron" 64] ["coal" 16] ["furnace" 1]]}
+   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 64})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 30 :of-job true}]
+   :after [[:item "raw_iron" 64]]}]}
