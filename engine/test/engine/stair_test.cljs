@@ -1,6 +1,7 @@
 (ns engine.stair-test
   "jobs.access.stair: step geometry, the stop rules, and whole stairs against the fake world."
-  (:require [engine.child-ends :as ce]
+  (:require [clojure.string :as str]
+            [engine.child-ends :as ce]
             [engine.constants :as constants]
             [engine.sky-perception :as sky]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -396,6 +397,7 @@
           (let [{:keys [out p]} (await (stair! {:blocks (assoc ground "1,65,0" block)} east (fn [_])))]
             (is (= :base-block (:reason @out)) block)
             (is (= [1 65 0] (:cell @out)) block)
+            (is (str/includes? (pr-str @out) (str "(" block ": a base block")) (pr-str @out))
             (is (= 0 (:steps @out)) block)
             (is (empty? (digs p)) block)
             (is (= block (block-at p [1 65 0])) block)))))))

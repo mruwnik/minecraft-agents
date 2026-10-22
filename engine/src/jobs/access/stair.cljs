@@ -69,7 +69,7 @@
   refusals but :not-loaded; a cell of a plan this body made refuses :footprint unless the spare-own-builds setting is false.
   :undercuts-way: a cut cell is the floor of an earlier stair of this body (memory :stair-way, written at every end), or a step floor of air at a step of one.
   :off-stair: off the line with max-returns walks back used up. :floor-unseen: the floor still unseen once the cut is open, looked at again after a lean.
-  Data {:steps n :at [x y z] :dug [{:cell :block}]} plus detail (:cell :hazards :zone :why ...; the walk child's ending is the :because of :step-failed).
+  :base-block names the block in its text; a table left by another job counts (the body does not record whose it is). Data {:steps n :at [x y z] :dug [{:cell :block}]} plus detail (:cell :hazards :zone :why ...; the walk child's ending is the :because of :step-failed).
 
   A dig whose every carried tool is down to jobs.lib.trip's ::spent-uses (3) uses (trip/spent-tool?) stops :tool-spent before the last tool
   breaks, after a spare was tried once; a way out digs on with the call's :settings {:jobs.lib.trip/spent-uses 0}. :need-drop false digs a block no carried tool clears bare-handed (go-to's last resort).")
@@ -240,6 +240,7 @@
                           :text (or (:text detail)
                                     (str "stair stopped after " steps " steps: " (name reason)
                                          (some->> (:cell detail) pr-str (str " at "))
+                                         (some->> (:block detail) (str " (") (#(str % ": a base block, whoever placed it; a stair never digs one)")))
                                          (some->> (:why detail) (str ": ")))))
                    data)))))
 
