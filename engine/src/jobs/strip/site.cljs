@@ -1,5 +1,6 @@
 (ns jobs.strip.site
   (:require [jobs.lib.ready :as ready]
+            [jobs.lib.waits :as waits]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -185,8 +186,8 @@
 (defn ^:async corridor! [c s t seg]
   (let [{:keys [entry]} (mouth s t seg)
         {:keys [take spawner ignore-zones?]} (:args c)
-        e (await (ctx/call c :corridor 'jobs.strip.corridor
-                           {:segment seg :entry entry :take take :spawner spawner :ignore-zones? ignore-zones?}))
+        e (waits/waiting-out c (await (ctx/call c :corridor 'jobs.strip.corridor
+                                                {:segment seg :entry entry :take take :spawner spawner :ignore-zones? ignore-zones?})))
         res (merge (:data e) (when (map? (:cause e)) (:cause e)))
         id (:id seg)
         why (when-not (= :done (:kind e)) (reason-of e))

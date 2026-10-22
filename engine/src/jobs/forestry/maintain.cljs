@@ -279,7 +279,7 @@
                   (leave! c pos :refused :why (second bad) :log (first bad))
                   :again)
           :else
-          (let [r (await (ctx/call c (fell-slot pos) 'jobs.forestry.fell-tree (fell-args c pos species)))]
+          (let [r (waits/waiting-out c (await (ctx/call c (fell-slot pos) 'jobs.forestry.fell-tree (fell-args c pos species))))]
             (when (not= :continue r) (finished-felling! c pos species r))
             (if (= :continue r) :continue :again))))
 
@@ -339,7 +339,7 @@
   (let [f (await (fetch-sapling! c species))
         e (cond (= :continue f) :continue
                 f f
-                :else (await (ctx/call c :plant 'jobs.forestry.plant-sapling (plant-args c pos species))))]
+                :else (waits/waiting-out c (await (ctx/call c :plant 'jobs.forestry.plant-sapling (plant-args c pos species)))))]
     (cond
       (= :continue e) :continue
       (= (forestry/sapling-of species) (u/seen-name (:primitives c) pos))
@@ -367,9 +367,9 @@
   "Once per call, when a cell cannot take a sapling: ready the ground with a jobs.forestry.prepare child. :again, :continue while it waits, or nil."
   [c classes]
   (when (and (not (:prepared (ctx/mem c))) (seq (unplantable-cells classes)))
-    (let [e (await (ctx/call c :prepare 'jobs.forestry.prepare
+    (let [e (waits/waiting-out c (await (ctx/call c :prepare 'jobs.forestry.prepare
                              {:plan (:plan (:args c)) :part (:part (:args c)) :accept (:accept (:args c))
-                              :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+                              :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
       (if (= :continue e)
         :continue
         (do (ctx/update-mem! c assoc :prepared true) :again)))))

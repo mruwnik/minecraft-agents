@@ -378,6 +378,14 @@
           (is (= [:condition-failed :child-failed] (ends blocked)))
           (is (= {:child "jobs.movement.go-to" :because :no-path} (select-keys blocked [:child :because]))))))))
 
+(deftest a-corridor-that-waits-on-a-danger-is-waited-out-and-never-skips-the-segment
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup :ending-jobs {'jobs.strip.corridor (ending-job 'jobs.strip.corridor :condition-failed {:reason :hostile-near})})
+              rounds (loop [n 0 acc []] (if (= n 5) acc (recur (inc n) (conj acc (await (start! env args))))))]
+          (is (every? #(= :not-done %) rounds) "yields every round: no stop is counted, so no segment reaches the stop limit and the run never ends"))))))
+
 (deftest a-call-without-site-or-at-for-a-new-site-is-impossible
   (async done
     (tu/run-async done

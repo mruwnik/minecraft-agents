@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [engine.args :as a]
             [jobs.lib.work-place :as work-place]
+            [jobs.lib.waits :as waits]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
@@ -264,7 +265,7 @@
   "One round of the dig-for child; its ending is kept. A stop for a pickaxe or torches that the trip may get again goes back to the
   equip, to dig on from where the dig stopped; any other ending goes to the mend or the end."
   [c]
-  (let [e (await (ctx/call c :dig 'jobs.gather.dig-for (dig-args c)))]
+  (let [e (waits/waiting-out c (await (ctx/call c :dig 'jobs.gather.dig-for (dig-args c))))]
     (if (= :continue e)
       :continue
       (let [reason (or (:reason (:data e)) (contract/cause-key e))]

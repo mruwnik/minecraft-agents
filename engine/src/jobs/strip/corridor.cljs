@@ -1,5 +1,6 @@
 (ns jobs.strip.corridor
   (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.waits :as waits]
             [jobs.lib.ready :as ready]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
@@ -130,7 +131,7 @@
       (stop! c :torch-failed {:child o :cell spot}))))
 
 (defn ^:async loot! [c id]
-  (let [e (await (ctx/call c :cart 'jobs.strip.loot-cart {:id id}))]
+  (let [e (waits/waiting-out c (await (ctx/call c :cart 'jobs.strip.loot-cart {:id id})))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) :again

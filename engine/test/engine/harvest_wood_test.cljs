@@ -216,6 +216,18 @@
           (is (= {:status :stopped :reason :tree-unreachable :got 0 :why :walk :columns [[3 0]]} (select-keys r [:status :reason :got :why :columns]))
               "a felling that reaches no tree ends the job with that ending, nothing collected or planted after it"))))))
 
+(deftest a-fell-that-waits-on-the-light-is-waited-out-not-ended
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (lt/setup {:blocks (lt/tree 3 0 "oak" 3) :inventory [{:name "oak_sapling" :count 1}]})
+              eng (assoc-in eng [:jobs 'jobs.forestry.fell-tree :round]
+                            (fn ^:async f [c] (ctx/end c :condition-failed {:reason :exposed} nil)))
+              id (core/submit! eng '(jobs.forestry.harvest-wood {:species "oak" :radius 10 :count 6}) {})]
+          (await (tu/run-until-empty eng 20))
+          (is (= [id] (:list (core/state eng))) "still queued, not ended condition-failed")
+          (is (some #(= :exposed (:reason %)) (filterv #(= :waiting (:kind %)) @seen))))))))
+
 (deftest count-ends-no-tree-when-the-trees-seen-are-felled
   (async done
     (tu/run-async done

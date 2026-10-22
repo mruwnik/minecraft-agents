@@ -1,6 +1,7 @@
 (ns jobs.gather.cast-obsidian
   (:require [jobs.lib.block-sets :as bs]
             [jobs.lib.ready :as ready]
+            [jobs.lib.waits :as waits]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -269,9 +270,9 @@
   (let [want (or (:mine-count (ctx/mem c))
                  (+ (carried c "obsidian") (min (- (:count (:args c)) got) (max 1 (count (seen-of c ["obsidian"]))))))
         _ (ctx/update-mem! c assoc :mine-count want)
-        e (await (ctx/call c :mine 'jobs.gather.mine
+        e (waits/waiting-out c (await (ctx/call c :mine 'jobs.gather.mine
                            {:block "obsidian" :item "obsidian" :count want :ways (into #{:carried} (filter mine-ways) (need/fetch-how c)) :mend false :radius (:radius (:args c))
-                            :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+                            :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
     (ctx/update-mem! c #(cond-> (assoc % :mining (= :continue e)) (not= :continue e) (dissoc :drained :made :mine-count)))
     (cond
       (= :continue e) :continue

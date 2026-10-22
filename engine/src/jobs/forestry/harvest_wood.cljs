@@ -1,5 +1,6 @@
 (ns jobs.forestry.harvest-wood
   (:require [jobs.lib.ready :as ready]
+            [jobs.lib.waits :as waits]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -73,7 +74,7 @@
 (defn ^:async fell!
   [c]
   (when-not (:logs-before (ctx/mem c)) (ctx/update-mem! c assoc :logs-before (logs-carried c)))
-  (let [e (await (ctx/call c :fell 'jobs.forestry.fell-tree (fell-args (:args c))))]
+  (let [e (waits/waiting-out c (await (ctx/call c :fell 'jobs.forestry.fell-tree (fell-args (:args c)))))]
     (cond
       (= :continue e) :continue
       (not= :done (:kind e)) (end-with c e)
