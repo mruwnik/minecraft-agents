@@ -45,7 +45,8 @@
    ::hide-s {:default 60 :doc "Seconds in its refuge after which a hidden body hands back, though a danger it keeps off stays, once no real danger is on it as it stands." :spec (a/num-in 0 nil)}
    ::hide-max-s {:default 300 :doc "Seconds after which a hidden body hands back though a melee hostile still waits at its foot." :spec (a/num-in 0 nil)}
    ::breaker-reach {:default 6 :doc "Blocks within which a creeper or a climber counts as breaching a hidden body's refuge." :spec (a/num-in 0 nil)}
-   ::leave-s {:default 3 :doc "Seconds a body leaving a refuge is in the open among the other hostiles about: the price of leaving it for a creeper, against the blast's price were it to stay." :spec (a/num-in 0 nil)}
+   ::opened-s {:default 1 :doc "Seconds a body in a plug or pit is exposed to the other hostiles about once a creeper's blast has opened the refuge, until it shuts it again: the price of staying for a creeper." :spec (a/num-in 0 nil)}
+   ::leave-s {:default 3 :doc "Seconds a body leaving a refuge is in the open among the other hostiles about: the price of leaving it for a creeper, against the price of staying (::opened-s)." :spec (a/num-in 0 nil)}
    ::reach-radius {:default 3 :doc "Blocks within which a hostile counts as the one that hurt a hidden body." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 900 :doc "Seconds a hide may take." :spec (a/num-in 0 nil)}})
 
@@ -120,15 +121,16 @@
 
 (defn stays-for-creeper?
   "Whether staying in the refuge is the cheaper of the two with a creeper at it (cost/exposure-price): a plug or pit shuts the blast off
-  the body (it only opens the walls), so it stays when leaving would meet other hostiles (::leave-s in the open among them); a pillar takes the blast and is left."
+  the body (it only opens the walls, leaving it ::opened-s exposed to the other hostiles near), so it stays when leaving costs more (::leave-s in the open among them); a pillar takes the blast and is left."
   [c]
   (let [p (:primitives c)
         self (.self p)
         body {:health (.-health self) :equipment (cost/equipment-of (.-equipment self))}
         others (remove combat/creeper? (flight/near-known p (dead c) (danger-q/hostile-radius) (danger-q/ranged-radius)))
         shielded? (contains? #{:plug :plug-dig :pit} (:kind (:args c)))
-        stay (if shielded? 0 (cost/exposure-price body ["creeper"]))
-        leave (* (settings/get settings ::leave-s) (cost/exposure-price body (map #(.-name %) others)))]
+        others-price (cost/exposure-price body (map #(.-name %) others))
+        stay (if shielded? (* (settings/get settings ::opened-s) others-price) (cost/exposure-price body ["creeper"]))
+        leave (* (settings/get settings ::leave-s) others-price)]
     (< stay leave)))
 
 (defn breaker

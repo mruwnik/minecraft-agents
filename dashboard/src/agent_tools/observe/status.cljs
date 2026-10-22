@@ -65,7 +65,7 @@
   [away now]
   (when away
     (cond-> away
-      (number? (:back-at away)) (assoc :back-in-s (max 0 (js/Math.round (/ (- (:back-at away) now) 1000)))))))
+      (number? (:back-at away)) (assoc :back-in-s (js/Math.max 0 (js/Math.round (/ (- (:back-at away) now) 1000)))))))
 
 (defn back-text
   "When a logged-out body is due back, for a person: the local clock and the seconds left, e.g. \"06:31, in 25 s\"."

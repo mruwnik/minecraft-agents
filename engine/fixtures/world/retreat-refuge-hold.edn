@@ -64,6 +64,16 @@
             {:event {:source :job :kind :completed} :within-s 170 :of-job true}]
    :after [[:not-block [24 0 24] "dirt"]]
    :limit-s 180}
+  {:name "creeper-at-a-sealed-plug-with-a-zombie-outside-body-stays"
+   :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [5 0 16] [29 1 16] "air"]
+            [:set [8 1 16] "torch"] [:set [14 1 16] "torch"]]
+   :body {:at [5.5 0 16.5] :inventory [["cobblestone" 20]]}
+   :act [[:summon "zombie" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:await {:source :job :kind :retreat_sealed} 40]
+         [:summon "creeper" [9.5 0 16.5] "{NoAI:1b}"]]
+   :expect [{:event {:source :job :kind :retreat_sealed} :within-s 40}
+            {:no-event {:source :job :kind :retreat.hide-breached} :for-s 30}]
+   :limit-s 80}
   {:name "dead-end-seal-is-taken-back-once-the-skeleton-is-gone"
    :register [{:trigger :hostile-near}
               {:trigger :scaffold-left :why "the body has no tool: fit? is waived so the hold under test is reached" :job (jobs.access.cleanup {:checks {:fit? (always)}})}]

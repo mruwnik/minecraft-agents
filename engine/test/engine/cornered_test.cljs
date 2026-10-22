@@ -1550,6 +1550,21 @@
           (is (< 5 @holds) "it held on while the creeper stood by")
           (is (empty? (filter #(= :retreat.hide-breached (:kind %)) @seen)) "the refuge was not left for it"))))))
 
+(deftest a-body-sealed-in-leaves-for-a-creeper-when-the-opened-refuge-costs-more-than-the-walk
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks dead-end :inventory [{:name "cobblestone" :count 20}] :entities [(zombie-at 4)]})
+              holds (atom 0)]
+          (.override (.-world p) "wait"
+                     (fn [token a impl]
+                       (when (and (hiding? seen) (= 1 (swap! holds inc)))
+                         (fake/add-entity! p (assoc (creeper 3 64 0) :visible true)))
+                       (impl token a)))
+          (core/submit! eng '(test.flight {:settings {:jobs.survival.hide-out/hide-s 100000 :jobs.survival.hide-out/opened-s 10}}) {})
+          (await (core/tick! eng))
+          (is (seq (filter #(= :retreat.hide-breached (:kind %)) @seen)) "the blast opens the wall onto the zombie: leaving is cheaper"))))))
+
 (deftest a-hidden-body-looks-round-all-four-ways-while-it-holds
   (async done
     (tu/run-async done

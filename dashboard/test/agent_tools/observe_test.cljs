@@ -894,6 +894,9 @@
                           (is (= (:out job) (:out result)))
                           (is (= search-found (get-in (data/read-edn (:out result)) [:events 0 :data :found])))))))))
 
+(deftest an-overdue-return-reads-plain-zero-seconds
+  (is (js/Object.is 0 (:back-in-s (observe-status/offline-view {:back-at 1000000} 1000300)))))
+
 (deftest compact-status-keeps-why-and-return-of-an-offline-body
   (is (= {:by :shelter :job "j563" :why :logged-out-for-night :back-at 1020000 :back-in-s 0}
          (:offline (observe-status/compact-status {:mode :offline :offline {:by :shelter :job "j563" :why :logged-out-for-night :back-at 1020000}} 1020000))))
