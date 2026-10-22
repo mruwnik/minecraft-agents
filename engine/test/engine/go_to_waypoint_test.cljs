@@ -46,13 +46,15 @@
     (is (not= 44 (:x (column/waypoint (kinds/seen-kind-at feet-hidden) 60 0 [0 64 0]))))))
 
 (deftest a-column-across-an-uncrossable-gap-gives-up-with-a-reason-after-a-few-walks
-  ;; flat ground to x 20, nothing at x 21..29 (a gap no walk crosses), the column x 60 on land at feet 84 beyond it
+  ;; flat ground to x 20, nothing at x 21..29 (a gap no walk crosses), the column x 60 on land at feet 84 beyond it;
+  ;; the learned-cell cap off, so the waypoint walks (not that cap) end the call
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [blocks (merge (box -2 63 -3 20 63 3 "stone") (box 30 63 -3 70 83 3 "stone"))
-              {:keys [out eng ticks]} (await (go! {:blocks blocks :light [15 0] :self {:pos {:x 0 :y 64 :z 0}}}
-                                                  {:pos [60 0] :range 0}))
+              {:keys [out eng ticks]} (await (settings/with-settings {:jobs.lib.walk.watch/max-learned 1000}
+                                                 #(go! {:blocks blocks :light [15 0] :self {:pos {:x 0 :y 64 :z 0}}}
+                                                       {:pos [60 0] :range 0})))
               moved (map :data (mem/entries (mem/view (:store eng)) :moved))
               at-edge (count (drop-while #(< (:x (:to %)) 19) moved))]
           (is (false? (:arrived @out)) (pr-str @out))
