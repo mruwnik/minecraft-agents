@@ -10,7 +10,7 @@
             ["node:path" :as path]
             [clojure.string :as str]
             ["node:timers/promises" :as timers]
-            [agent-tools.observe.status :refer [attention-changes classify old-event-ms code-of coded collect compact-status death-details death-jobs clear-reported with-death-details id-str instance-names note-notice recovered? repeat-notice? stale-notice? signature idle-before-watch? stale-death? stale-idle? stale-reconnect? summary-result track-deaths with-death-jobs]]
+            [agent-tools.observe.status :refer [attention-changes classify old-event-ms code-of coded collect compact-status death-details death-jobs clear-reported with-death-details id-str instance-names note-notice recovered? repeat-notice? stale-notice? signature idle-before-watch? idle-too-old? stale-death? stale-idle? stale-reconnect? summary-result track-deaths with-death-jobs]]
             [agent-tools.observe.missed :refer [missed!]]
             [agent-tools.observe.lock :refer [acquire! checkpoint! observer-count saved-checkpoint]]
             [agent-tools.observe.request :refer [legacy-notice request-for usage wait-options]]
@@ -175,6 +175,7 @@
                          (when-not (or (and failed? (stale-reconnect? event later))
                                        (and (= :idle (:kind event)) (= :body (:source event)) (stale-idle? event later))
                                        (idle-before-watch? event opts (:started-ms @st))
+                                       (idle-too-old? event (js/Date.now))
                                        (stale-death? event later (:started-ms @st))
                                        (repeat-notice? (:noticed @st) event)
                                        (stale-notice? event later))

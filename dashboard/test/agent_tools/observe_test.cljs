@@ -1281,6 +1281,12 @@
     (is (true? (observe-status/stale-idle? idle [(job :queued)])))
     (is (true? (observe-status/stale-idle? idle [(started "look") (started "moveTo")])) "the body walked")))
 
+(deftest a-body-idle-older-than-ten-minutes-is-too-old-to-wake
+  (let [idle (assoc (event :body :idle {:jobs [{:job "j73"}]} "body idle 10 s") :time-ms 1000000)]
+    (is (true? (observe-status/idle-too-old? idle (+ 1000000 (* 11 60 1000)))))
+    (is (false? (observe-status/idle-too-old? idle (+ 1000000 (* 9 60 1000)))))
+    (is (false? (observe-status/idle-too-old? (assoc idle :kind :chat) (+ 1000000 (* 99 60 1000)))))))
+
 (deftest a-read-the-busy-body-misses-does-not-end-the-wait-before-its-deadline
   (with-fixture ["300ms"]
     (fn [f]
