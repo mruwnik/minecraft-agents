@@ -137,7 +137,23 @@
     (is (false? (holds ro/replant-owed {} (conj debt [trees/stalled-kind {:pos {:x 6 :y 64 :z 0}}]) [sapling]))
         "plant-sapling failed there lately: no refire")
     (is (true? (holds ro/replant-owed {} (conj debt [trees/stalled-kind {:pos {:x 9 :y 64 :z 0}}]) [sapling]))
-        "another cell's note leaves the debt owed")))
+        "another cell's note leaves the debt owed")
+    (is (false? (holds ro/replant-owed (assoc (fm/ground [[6 0]]) (fm/k 6 64 0) "crafting_table") debt [sapling]))
+        "a block the body put on the stump cell: nothing to plant there")
+    (is (true? (holds ro/replant-owed (assoc (fm/ground [[6 0]]) (fm/k 6 64 0) "short_grass") debt [sapling])) "a plant there is replaced")
+    (is (false? (holds ro/replant-owed {} [[:forestry/replant {:pos {:x 9000 :y 64 :z 0} :species "oak"}]] [sapling]))
+        "a debt far from the body waits until the body is near")))
+
+(deftest plant-sapling-drops-a-debt-whose-cell-another-block-fills
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (lt/setup {:blocks (assoc (fm/ground [[6 0] [9 0]]) (fm/k 6 64 0) "furnace") :inventory [sapling]})]
+          (mem/write! (:store eng) :forestry/replant {:pos {:x 6 :y 64 :z 0} :species "oak"} {:cap 50 :ttl :forever})
+          (mem/write! (:store eng) :forestry/replant {:pos {:x 9 :y 64 :z 0} :species "oak"} {:cap 50 :ttl :forever})
+          (await (tu/child-outcome eng 'jobs.forestry.plant-sapling {:ways #{:carried}} 100))
+          (is (some #(= [9 64 0 "oak_sapling"] %) (fm/places p)))
+          (is (= [] (lt/debts eng)) "the filled cell's debt is gone, not retried"))))))
 
 (deftest the-replant-owed-trigger-leaves-the-dusk-to-the-walk-home
   (let [debt [:forestry/replant {:pos {:x 6 :y 64 :z 0} :species "oak"}]

@@ -102,6 +102,13 @@
    :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :replant-owed}} :within-s 90}]
    :after [[:block [16 0 16] "oak_sapling"]]
    :limit-s 100}
+  {:name "replant-owed-trigger-leaves-a-debt-cell-another-block-fills"
+   :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 60}]
+   :memory [{:kind :forestry/replant :data {:pos #xyz [16 0 16] :species "oak"}}]
+   :blocks [[:fill [16 0 16] [16 0 16] "furnace"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :replant-owed}} :for-s 30}]
+   :after [[:block [16 0 16] "furnace"]]
+   :limit-s 40}
   {:name "replant-owed-trigger-does-not-fetch-a-missing-sapling"
    :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 60}]
    :memory [{:kind :forestry/replant :data {:pos #xyz [16 0 16] :species "oak"}}]

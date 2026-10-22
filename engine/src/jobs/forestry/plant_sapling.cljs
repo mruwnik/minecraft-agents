@@ -13,13 +13,13 @@
             [jobs.lib.forestry :as lib]
             [jobs.lib.shelter :as sh]
             [jobs.forestry.prepare-rule :as rule]
-            [jobs.lib.trees :refer [debts forget-plot-debts! stalled-kind stalled-policy without-stalled target-of with-sapling sapling-for sapling-of sapling-name? log-name? replant-kind species]
+            [jobs.lib.trees :refer [debt-near-body? debts forget-plot-debts! stalled-kind stalled-policy without-stalled target-of with-sapling sapling-for sapling-of sapling-name? log-name? replant-kind species]
              :rename {species all-species}]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]))
 
 (def doc
-  "Plant a sapling at :at, or at the oldest replant debt (then at the next, until none is owed), and clear that debt. A debt on a planned crop plot is dropped, never planted.
+  "Plant a sapling at :at, or at the oldest replant debt (then at the next, until none is owed), and clear that debt. A debt on a planned crop plot, or on a cell another block fills, is dropped, never planted.
   With no :species a debt whose sapling is carried comes before older ones.
   With :near and :within only the debts within :within blocks of :near count; the others stay owed.
   A missing sapling is got with jobs.lib.need (a seen chest, or the leaves of its tree broken for the drop) unless the call's :ways are #{:carried}
@@ -79,7 +79,7 @@
   [c]
   (let [all (debts c)
         p (:primitives c)
-        reachable (filterv #(and (u/block-at p (:pos %)) (not (sh/home-due-at? p (ctx/view c) (:pos %)))) (without-stalled (ctx/view c) all))
+        reachable (filterv #(and (u/block-at p (:pos %)) (debt-near-body? p (:pos %)) (not (sh/home-due-at? p (ctx/view c) (:pos %)))) (without-stalled (ctx/view c) all))
         ds (if (seq reachable) reachable all)
         carried (when-not (:species (:args c)) (seq (with-sapling ds (u/inventory (:primitives c)))))]
     (target-of (or carried ds) (:args c))))
@@ -215,6 +215,7 @@
   noted in stalled-kind so the replant-owed trigger does not refire it at once."
   [c]
   (forget-plot-debts! c)
+  (ctx/forget-where! c replant-kind #(rule/cell-filled? (:primitives c) (:pos %)))
   (let [t (current-target c)
         sapling (when t (sapling-for (u/inventory (:primitives c)) (:species t)))
         refused #(refusal c (:pos t))

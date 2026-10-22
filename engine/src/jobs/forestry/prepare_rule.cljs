@@ -33,6 +33,12 @@
   [n]
   (boolean (or (bs/air n) (= "light" n) (str/ends-with? n "_leaves") (str/ends-with? n "_sapling") (tree-plants n))))
 
+(defn cell-filled?
+  "Whether the cell seen at pos holds a block growth cannot take the place of and that is no tree log: a debt there cannot be planted."
+  [p pos]
+  (let [n (u/seen-name p pos)]
+    (boolean (and n (not (tree-free? n)) (not (forestry/log-name? n))))))
+
 (def natural-names
   #{"stone" "cobblestone" "deepslate" "cobbled_deepslate" "andesite" "diorite" "granite" "tuff" "calcite" "sand"
     "red_sand" "gravel" "sandstone" "red_sandstone" "clay" "mud" "snow_block" "mycelium" "terracotta" "dirt_path"})

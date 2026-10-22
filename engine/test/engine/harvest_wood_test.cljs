@@ -147,7 +147,7 @@
           (is (= [] (filterv #(= :stopped (:kind %)) @seen)) "the logs are in the inventory: not stopped")
           (is (= 1 (count (lt/debts eng)))))))))
 
-(deftest a-foreign-block-on-the-planting-spot-fails-and-keeps-the-debt
+(deftest a-foreign-block-on-a-debt-cell-drops-the-debt
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -155,7 +155,16 @@
           (mem/write! (:store eng) :forestry/replant {:pos {:x 3 :y 64 :z 0} :species "oak"} {:cap 50 :ttl :forever})
           (core/submit! eng '(jobs.forestry.plant-sapling) {})
           (await (tu/run-until-empty eng 12))
-          (is (= 1 (count (lt/debts eng))) "the replant stays owed")
+          (is (= [] (lt/debts eng)) "nothing can be planted there, so nothing is owed")
+          (is (= [] (filterv #(= :stopped (:kind %)) @seen))))))))
+
+(deftest a-foreign-block-on-the-asked-planting-spot-fails
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (lt/setup {:blocks {"3,64,0" "stone" "3,63,0" "grass_block"} :inventory [{:name "oak_sapling" :count 1}]})]
+          (core/submit! eng '(jobs.forestry.plant-sapling {:at {:x 3 :y 64 :z 0}}) {})
+          (await (tu/run-until-empty eng 12))
           (is (= [:occupied] (mapv :reason (filterv #(= :stopped (:kind %)) @seen)))))))))
 
 (deftest the-same-sapling-already-on-the-planting-spot-counts-as-planted

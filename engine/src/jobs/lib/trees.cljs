@@ -15,6 +15,7 @@
   {::leaf-reach {:default 3.5 :doc "Blocks within which a leaf block counts as part of a tree." :spec (a/num-in 0 nil)}
    ::axe-saved-s {:default 1.5 :doc "Seconds an axe saves on one log over bare hands (3 s by hand, 1.5 s with a wooden axe)." :spec (a/num-in 0 nil)}
    ::axe-fetch-minutes {:default 1 :doc "The longest an axe is fetched for, in minutes (an axe is a speed-up: chests and crafting only)." :spec (a/num-in 0.1 nil)}
+   ::replant-reach {:default 96 :doc "Blocks (flat) from the body within which a replant debt is acted on; a farther one waits until the body is near." :spec (a/num-in 0 nil)}
    ::max-logs {:default 1024 :doc "The most logs one scan reads." :spec (a/int-in 1 nil)}})
 
 (def default-radius 16)
@@ -153,6 +154,11 @@
   (ctx/forget-where! c replant-kind #(on-crop-plot? c (:pos %))))
 
 ;; ------------------------------------------------------------ planting
+
+(defn debt-near-body?
+  "True when the debt's cell is within ::replant-reach of the body (flat distance)."
+  [p pos]
+  (<= (u/flat-dist (u/pos-of (.-pos (.self p))) pos) (settings/get settings ::replant-reach)))
 
 (defn near-debt?
   "True when the debt's cell is within radius blocks (flat distance) of near; always when near is nil."
