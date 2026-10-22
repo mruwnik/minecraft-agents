@@ -26,12 +26,12 @@
    :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :loose-items} :data {:outcome :done}} :within-s 30}]
    :after [[:item "oak_log" 2]]
    :limit-s 40}
-  ;; should stay: 8 blocks down and 4 out from the ledge, in sight from it (radius raised to 10 so it is in range); the
+  ;; should stay: 8 blocks down and 4 out from the ledge, in view from it (the body looks down: the cone is 70 degrees tall; radius raised to 10 so it is in range); the
   ;; climb back costs more than dirt is worth
   {:name "dirt-down-a-drop-left"
    :plot {:height 12}
    :blocks [[:fill [10 0 10] [22 7 22] "stone"]]
-   :body {:at [22.5 8 16.5]}
+   :body {:at [22.5 8 16.5] :yaw 270 :pitch 45}
    :settings {:jobs.lib.loose/radius 10}
    :act [[:summon "item" [26.5 0 16.5] "{Item:{id:\"minecraft:dirt\",count:1}}"]]
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :loose-items}} :for-s 30}]
@@ -41,7 +41,7 @@
   {:name "dirt-down-a-drop-on-always-is-tried"
    :plot {:height 12}
    :blocks [[:fill [10 0 10] [22 7 22] "stone"]]
-   :body {:at [22.5 8 16.5]}
+   :body {:at [22.5 8 16.5] :yaw 270 :pitch 45}
    :settings {:jobs.lib.loose/radius 10 :jobs.lib.loose/always ["dirt"]}
    :act [[:summon "item" [26.5 0 16.5] "{Item:{id:\"minecraft:dirt\",count:1}}"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :loose-items}} :within-s 30}]
