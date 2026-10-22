@@ -38,7 +38,7 @@
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:harvest {:cut 3 :replanted 3}}}} :within-s 80 :of-job true}]
    :after [[:block [10 0 20] "wheat[age=0]"] [:block [12 0 20] "wheat[age=0]"]]}
   {:name "find-spot-picks-the-spot-by-the-pond-behind-it"
-   :plot {:height 8 :floor "grass_block" :length 64 :width 64 :light :sky}
+   :plot {:height 8 :floor "grass_block" :length 64 :width 64 :light :lit}
    :blocks [[:fill [28 -2 44] [36 -2 48] "stone"] [:fill [28 -1 44] [36 -1 48] "water"]]
    :body {:at [32.5 0 32.5]}
    :act [[:job (jobs.farm.find-spot {:w 5 :h 5 :range 24 :settings {:jobs.farm.find-spot/depth 7}})]]
