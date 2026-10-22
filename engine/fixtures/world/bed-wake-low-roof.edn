@@ -1,0 +1,37 @@
+;; Waking in a bed under a 2-high ceiling must not hurt (card 312816ee: Oriel's house, 3 forced dawn wakes ended in 1 suffocation hit,
+;; at 1.3 hp nearly fatal). The body sleeps via the night reflex, then [:time-set 1000] wakes it as the day does.
+;; Night run owed: needs the clock (--allow-time --time-log <shared log>); not run when written (time freeze).
+;; Should-fail until the cause is fixed: "bed-under-a-2-high-roof"; should-succeed: "bed-under-a-3-high-roof" (control).
+;; Hut: stone walls x 8..16, z 8..16, a lit 7x7 room, bed [10 0 12] facing east, body at [10.5 0 13.5].
+{:defaults
+ {:tags [:night :survival :sleep]
+  :time :night-exclusive
+  :time-why :sleep
+  :plot {:light :sky}
+  :register [{:trigger :night}]
+  :body {:at [10.5 0 13.5] :settle-s 2}}
+ :cases
+ [{:name "bed-under-a-2-high-roof"
+   :blocks [[:fill [8 0 8] [16 2 16] "stone" :hollow] [:fill [9 0 9] [15 1 15] "air"]
+            [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
+            [:set [10 0 12] "red_bed[facing=east,part=foot]"] [:set [11 0 12] "red_bed[facing=east,part=head]"]]
+   :act [[:job (jobs.memory.set-place {:name :bed :pos #at [10 0 12]})]
+         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 90]
+         [:wait-s 3]
+         [:time-set 1000]
+         [:await {:source :body :kind :woke} 20]]
+   :expect [{:event {:source :body :kind :woke} :within-s 20}
+            {:no-event {:source :body :kind :hurt} :for-s 8}]
+   :limit-s 150}
+  {:name "bed-under-a-3-high-roof"
+   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+            [:set [9 1 9] "torch"] [:set [15 1 15] "torch"]
+            [:set [10 0 12] "red_bed[facing=east,part=foot]"] [:set [11 0 12] "red_bed[facing=east,part=head]"]]
+   :act [[:job (jobs.memory.set-place {:name :bed :pos #at [10 0 12]})]
+         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 90]
+         [:wait-s 3]
+         [:time-set 1000]
+         [:await {:source :body :kind :woke} 20]]
+   :expect [{:event {:source :body :kind :woke} :within-s 20}
+            {:no-event {:source :body :kind :hurt} :for-s 8}]
+   :limit-s 150}]}
