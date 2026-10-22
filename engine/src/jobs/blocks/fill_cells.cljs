@@ -35,7 +35,7 @@
   no fluid and drops no sand or gravel column; a block so borrowed is marked :borrowed in its ledger entry. With :purpose each placed block
   goes to the scaffold ledger under it (jobs.access.cleanup takes the plug purposes back). A cell the place refused or that had
   nothing to place against goes behind the others, and is given up after ::max-refusals failed steps. A mob standing in the next
-  cell is waited out a second at a time (::mob-waits) when seen (a hostile is not waited on: the call fails), and for jobs.lib.seal/mob-wait-ticks when only a refused place names it, not counted a failed step. A cell a
+  cell is waited out a second at a time (::mob-waits) when seen (a hostile is not waited on: the call ends :hostile-in-cell), and for jobs.lib.seal/mob-wait-ticks when only a refused place names it, not counted a failed step. A cell a
   place answers occupied for (a block that stays) is left alone, not owed. It yields :continue only when a child waits
   on the world.
 
@@ -47,9 +47,9 @@
   :status and :text after a failure. Done: every cell filled and the drops picked up (also at once, with
   0 mended, when none was owed), or :mended >= the call's :least (it stops there) (default :all: a partial fill is not done). Short of that:
   condition-failed :need when no block is carried any more, :refused (a zone, claim or plan; data :cell) or :blocked (a
-  container, :clear-loose only); nothing-possible :failed after the max-failures setting of failed steps in a
+  container, :clear-loose only); nothing-possible :failed-steps after the max-failures setting of failed steps in a
   row (a refused place, a walk that is blocked and a refused jump-place each count one, and only a place clears the
-  count).")
+  count), :hostile-in-cell {:cell} (a hostile stands in the next cell) or :mob-in-cell {:cell :mobs} (a mob stayed past the wait).")
 
 (a/defargs args
   {:cells {:doc "the cells to fill, each [x y z] or {:x :y :z}" :spec (a/coll-of a/position?) :default nil}
@@ -268,7 +268,7 @@
     (if (<= (- now since) (seal/mob-wait-ms))
       (do (ctx/update-mem! c assoc :mob-since since) :continue)
       (do (ctx/update-mem! c assoc :refusal {:status "failed" :text (refusal-text pos "failed" (str ", " (string/join ", " (:mobs (ctx/mem c))) " stays in the cell"))})
-          (finish! c :nothing-possible {:reason :failed})))))
+          (finish! c :nothing-possible {:reason :mob-in-cell :cell (u/cell-vec pos) :mobs (:mobs (ctx/mem c))})))))
 
 (defn ^:async step!
   "One cell: :again after it, :continue when a child waits, or the ending."
@@ -290,11 +290,11 @@
       (and (number? least) (pos? (or mended 0)) (>= mended least)) (finish! c nil nil)
       (empty? cells) (finish! c nil nil)
       container (finish! c :condition-failed {:reason :blocked :cell (first container)})
-      (or (>= (or failures 0) (settings/get settings ::max-failures)) (and (nil? pos) (some given-up? cells))) (finish! c :nothing-possible {:reason :failed})
+      (or (>= (or failures 0) (settings/get settings ::max-failures)) (and (nil? pos) (some given-up? cells))) (finish! c :nothing-possible {:reason :failed-steps})
       (and (nil? item) (seq (need/fetch-how c))) (await (fetch! c names (count cells)))
       (nil? item) (finish! c :condition-failed {:reason :need :any-of names})
       (and pos (not loose?) (hostile-in? c pos)) (do (ctx/update-mem! c assoc :refusal {:status "failed" :text (refusal-text pos "failed" ", a hostile stands in the cell")})
-                                                      (finish! c :nothing-possible {:reason :failed}))
+                                                      (finish! c :nothing-possible {:reason :hostile-in-cell :cell (u/cell-vec pos)}))
       (and pos (not loose?) (< (:mob-waits (ctx/mem c) 0) (settings/get settings ::mob-waits)) (mob-in c pos)) (await (wait-mob! c))
       :else
       (let [r (cond shut? (await (shut! c pos))

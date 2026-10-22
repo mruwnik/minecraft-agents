@@ -246,12 +246,12 @@
 
 (defn ^:async fill-gap!
   "Fill the doorway gap (jobs.blocks.fill-cells: a carried wooden door, else the call's blocks), the placed blocks entered in the
-  ledger as :doorway. Once it ends, the doorway is tried for tonight, filled or not. :again."
+  ledger as :doorway. Once it ends, the doorway is tried for tonight, filled or not, except after a hostile stood in it (the hostile reflex deals with that, the doorway is tried again). :again."
   [c cells]
   (let [door (room-lib/carried-door (:primitives c))
         blocks (if door [door] (blocks c))
         r (waits/waiting-out c (await (ctx/call c :shut-doorway 'jobs.blocks.fill-cells (cond-> {:cells (vec cells) :danger? true :ignore-zones? true :purpose :doorway} (seq blocks) (assoc :use {:blocks blocks})))))]
-    (when-not (= :continue r)
+    (when-not (or (= :continue r) (= :hostile-in-cell (get-in r [:cause :reason])))
       (ctx/remember! c :doorway-tried (first cells) room-lib/doorway-tried-policy))
     (if (= :continue r) :continue :again)))
 

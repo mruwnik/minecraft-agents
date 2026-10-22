@@ -1,0 +1,16 @@
+;; Card 91348d03: blocks.fill-cells ends nothing-possible :hostile-in-cell (naming the cell) when a hostile stands in the next cell, so a caller
+;; such as survival.enter-room can tell it from a spent step budget and not write the doorway off for the night. Lit plot, a stone wall at z 8
+;; with a 1-wide doorway at x 8, the body inside at z 6, an invulnerable no-AI zombie in the doorway.
+{:defaults
+ {:tags [:blocks :fill-cells :survival :hostile]
+  :time :any
+  :plot {:height 12 :light :lit}
+  :blocks [[:fill [0 0 8] [16 3 8] "stone"] [:fill [8 0 8] [8 1 8] "air"]]
+  :body {:at [8.5 0 6.5] :inventory [["cobblestone" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "hostile-in-the-doorway-ends-hostile-in-cell"
+   :act [[:summon "zombie" [8.5 0 8.5] "{NoAI:1b,Invulnerable:1b,PersistenceRequired:1b}"]
+         [:job (jobs.blocks.fill-cells {:cells [#at [8 0 8]] :use {:blocks ["cobblestone"]} :ignore-zones? true :checks {:safe? (always)}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :hostile-in-cell}} :within-s 40 :of-job true}]
+   :after [[:not-block [8 0 8] "cobblestone"]]}]}

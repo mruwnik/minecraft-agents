@@ -76,7 +76,7 @@
                                                 #(outcome [{:name "dirt" :count 9}] {:cells cells :use {:blocks ["dirt"]}}
                                                           (fn ^:async f [_ _ _] #js {:status "no-support"}))))]
           (is (= :nothing-possible (:kind e)))
-          (is (= :failed (get-in e [:cause :reason])))
+          (is (= :failed-steps (get-in e [:cause :reason])))
           (is (= {:mended 0 :left cells} (select-keys (:data e) [:mended :left])))
           (is (= 3 (count (bd/calls p "place")))))))))
 
@@ -177,6 +177,7 @@
               e (await (ending-of env {:cells [(first cells)] :use {:blocks ["dirt"]} :checks {:safe? '(always)}}))]
           (is (= :nothing-possible (:kind e)))
           (is (empty? (bd/calls (:p env) "wait")) "it did not wait while the enderman hit")
+          (is (= :hostile-in-cell (get-in e [:cause :reason])))
           (is (empty? (bd/calls (:p env) "place"))))))))
 
 (defn refuse-at
