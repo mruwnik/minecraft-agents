@@ -21,6 +21,16 @@
             {:no-event {:source :job :kind :stopped :data {:reason :bad-args}} :for-s 60 :until {:source :reflex :kind :ended}}
             {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 80}]
    :after [[:item "white_bed" [:>= 1]]]}
+  ;; e2a8cdfc: any colour of wool makes a bed (3 of one colour); no white wool is needed
+  {:name "lost-spawn-bed-red-wool-makes-a-red-bed"
+   :memory [{:kind :spawn-bed :data {:pos #xyz [8 0 16]} :age-s 60}
+            {:kind :spawn-reset :data {:pos #xyz [8 0 16]} :age-s 30}]
+   :blocks [[:set [20 0 16] "crafting_table"]]
+   :body {:inventory [["red_wool" 3] ["oak_planks" 3]]}
+   :act [[:time-set 9000]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :needs-bed}} :within-s 30}
+            {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 80}]
+   :after [[:item "red_bed" [:>= 1]] [:item "white_bed" 0]]}
   ;; d2a66a22: one wool, planks, no sheep and no shears: no bed can be made, so the run ends no-source (its text names the plain recipe's wool); needs the dusk window (time-set 9000)
   {:name "no-wool-source-ends-no-source"
    :memory [{:kind :spawn-bed :data {:pos #xyz [8 0 16]} :age-s 60}

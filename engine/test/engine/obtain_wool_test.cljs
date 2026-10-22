@@ -9,6 +9,7 @@
             [engine.test-util :as tu]
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.gather :as gather]
+            [jobs.lib.build.wood :as wood]
             [jobs.lib.stock :as stock]
             [jobs.lib.world-files :as ew]
             [engine.memory :as mem]))
@@ -18,6 +19,7 @@
    :drops [{:name (str color "_wool") :count 1}]})
 
 (def beds ["white_bed" "brown_bed" "black_bed"])
+(def all-beds wood/bed-names)
 
 (defn carried [& pairs] (mapv (fn [[n c]] {:name n :count c}) (partition 2 pairs)))
 
@@ -42,6 +44,25 @@
             (is (= :info (:level e)))
             (is (= "white_wool" (:item e)) "the walk names what it is for")
             (is (= 'jobs.combat.hunt (:via e)))))))))
+
+(deftest wool-of-one-other-colour-makes-a-bed-of-that-colour-without-sheep
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:any-of all-beds :count 1 :ways #{:craft :smelt :gather}}
+                                 {:inventory (carried "red_wool" 3 "oak_planks" 3 "crafting_table" 1)} 20))]
+          (is (= ["red_bed"] (distinct (map #(.-item (.-args %)) (h/calls (:p s) "craft")))))
+          (is (empty? (attacked s))))))))
+
+(deftest a-bed-need-with-no-wool-hunts-whatever-colour-of-sheep-is-in-range
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:any-of all-beds :count 1 :ways #{:craft :smelt :gather}}
+                                 {:inventory (into h/sword (carried "oak_planks" 3 "crafting_table" 1))
+                                  :entities [(sheep 1 3 "red") (sheep 2 6 "red") (sheep 3 8 "red") (sheep 4 10 "red") (sheep 5 11 "red")]} 40))]
+          (is (seq (attacked s)))
+          (is (every? #{1 2 3 4 5} (attacked s))))))))
 
 (deftest a-colour-with-no-sheep-in-range-falls-back-to-another-and-says-so
   (async done
