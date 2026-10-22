@@ -40,8 +40,8 @@
           (breath/columns radius))))
 
 (defn ^:async dig!
-  "Dig the bank cell of bank-cell (the best tool in hand), when it fits share of the air left. :again either way; a cell that
-  was not dug is not tried again."
+  "Dig the bank cell of bank-cell (the best tool in hand), when it fits share of the air left. :again either way; a dug cell
+  is kept as :dug-bank and the failed shores and land are forgotten, which lay in the notch's direction (the next pass climbs it, no second dig until a swim leg moved), one that was not dug is not tried again."
   [c {:keys [cell water]} share]
   (let [p (:primitives c)
         self (.self p)
@@ -56,6 +56,7 @@
             (await (ctx/act c :moveTo (clj->js {:pos water :range 1 :timeoutS 5}))))
           (access/trespass! c "breathe" (:trespass (access/choose c :dig [[cell]] identity)))
           (let [r (await (tidy/dig! c cell true {:timeoutS (/ allowed-ms 1000)}))]
-            (when-not (contains? #{"dug" "missing"} (air/status r))
+            (if (contains? #{"dug" "missing"} (air/status r))
+              (ctx/update-mem! c #(-> % (assoc :dug-bank cell) (dissoc :failed-shores :failed-land)))
               (ctx/update-mem! c update :failed-banks (fnil conj []) cell)))))
       :again)))

@@ -39,14 +39,14 @@
             {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 60}
             {:no-event {:source :body :kind :died} :for-s 60 :until {:source :reflex :kind :ended :data {:how :cleared}}}]
    :after [[:body-near [15.5 4 15.5] 6]]}
-  ;; the east bank stands 2 above the water (dirt), no block carried: it digs the bank's edge cell by hand and climbs out through the notch (it ends there: out of the water is the job's end)
+  ;; the east bank, a strip of dirt, stands 2 above the water, no block carried (the strip is the only open way, 5 blocks from the start): it digs the bank's edge cell by hand and climbs out through the notch (it ends there: out of the water is the job's end)
   {:name "high-bank-no-blocks-digs-step-out"
-   :blocks [[:fill [21 4 11] [26 4 20] "dirt"] [:fill [21 5 11] [26 5 20] "air"]]
+   :blocks [[:fill [21 4 14] [26 4 17] "dirt"] [:fill [21 5 14] [26 5 17] "air"]]
    :body {:at [18.5 2 15.5]}
    :expect [{:event {:source :reflex :kind :fired} :within-s 30}
             {:event {:source :reflex :kind :ended :data {:how :cleared}} :within-s 60}
             {:no-event {:source :body :kind :died} :for-s 60 :until {:source :reflex :kind :ended :data {:how :cleared}}}]
-   :after [[:body-near [22.5 5 15.5] 6]]}
+   :after [[:body-near [22.5 5 15.5] 2.5]]}
   {:name "ledge-east-lands-1"
    :blocks [[:fill [21 4 11] [21 5 20] "air"]]
    :body {:at [18.5 2 15.5]}

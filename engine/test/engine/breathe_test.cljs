@@ -667,7 +667,9 @@
           (.override (.-world p) "swim" (fn ^:async f [_ args impl] (if (.-toward args) #js {:status "timeout"} (await (impl _ args)))))
           (await (one-run! eng small-args))
           (is (<= (unreachable-count seen) 1) "at most one go-to failed before the dig")
-          (is (some #(= "dig" (.-name %)) (array-seq (.. p -world -calls))) "the bank edge cell was dug"))))))
+          (is (some #(= "dig" (.-name %)) (array-seq (.. p -world -calls))) "the bank edge cell was dug")
+          (is (= 1 (count (filter #{"dig"} (call-names p)))) "one dig, not one per bank cell")
+          (is (= "swim" (second (drop-while #(not= "dig" %) (call-names p)))) "the next act after the dig is the climb"))))))
 
 (deftest a-stop-after-a-failed-go-to-names-the-land-it-could-not-reach
   (async done

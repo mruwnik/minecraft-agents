@@ -199,7 +199,7 @@
   that did not fails its heading."
   [m heading moved?]
   (if moved?
-    (-> m (dissoc :failed-shores :failed-land :land-tries :failed-headings) (update :legs (fnil inc 0)))
+    (-> m (dissoc :failed-shores :failed-land :land-tries :failed-headings :dug-bank) (update :legs (fnil inc 0)))
     (update m :failed-headings (fnil conj #{}) heading)))
 
 (defn initial-search
@@ -322,7 +322,7 @@
                             (or (shore/nearest-land p pos (search-radius) (:failed-land m) shore-cell?)
                                 (shore/reachable-land p pos (search-radius) (:failed-land m) shore-cell?)))
                      stepcell (when (< (:steps m 0) (max-steps)) (step-cell p pos (shore-radius) (:failed-steps m)))
-                     bankcell (when (and (not carried?) (or (seq (:failed-land m)) (seq (:failed-shores m))))
+                     bankcell (when (and (not carried?) (not (:dug-bank m)) (or (seq (:failed-land m)) (seq (:failed-shores m))))
                                 (bank/bank-cell p pos (shore-radius) (:failed-banks m)))
                      legs (when (and in-budget? (< (:legs m 0) (max-legs)))
                             (some (fn [h] (when-let [t (leg-target p pos (:start m) h)] [h t]))
