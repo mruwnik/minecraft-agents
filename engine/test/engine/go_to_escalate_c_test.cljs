@@ -291,6 +291,21 @@
     (is (empty? (choose/drop-edges dark [[0 64 0]] [0 64 0])) "the cells beyond the edge never seen: not offered, not read through the true world")
     (is (= [0 64 0] (choose/nearest-stand dark [0 64 0])))))
 
+(deftest wall-spot-and-door-scan-flood-only-through-cells-the-body-has-seen
+  (let [yard (merge (box -3 63 -3 3 63 3 "stone") (box 3 64 -3 3 65 3 "stone"))
+        seen (tu/fake {:blocks yard :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        dark (tu/fake {:blocks yard :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        _ (dark-at dark [[2 64 0]])
+        hall (merge (box -3 63 -3 5 63 3 "stone") (box -3 66 -3 5 66 3 "stone") (box 3 64 -3 3 65 3 "stone") (box -3 64 -3 5 65 -3 "stone") (box -3 64 3 5 65 3 "stone") (box -3 64 -3 -3 65 3 "stone")
+                    {"3,64,0" "oak_door" "3,65,0" "oak_door"})
+        door-seen (tu/fake {:blocks hall :self {:pos {:x 0.5 :y 64 :z 0.5}} :states {"3,64,0" {:open false :half "lower" :facing "east"} "3,65,0" {:open false :half "upper" :facing "east"}}})
+        door-dark (tu/fake {:blocks hall :self {:pos {:x 0.5 :y 64 :z 0.5}} :states {"3,64,0" {:open false :half "lower" :facing "east"} "3,65,0" {:open false :half "upper" :facing "east"}}})
+        _ (dark-at door-dark [[2 64 0]])]
+    (is (= [2 64 0] (escape/wall-spot seen [0 64 0] [1 0])))
+    (is (not= [2 64 0] (escape/wall-spot dark [0 64 0] [1 0])) "the cell it would stand in never seen: not offered")
+    (is (true? (escape/open-door-beside? door-seen [0 64 0])))
+    (is (false? (escape/open-door-beside? door-dark [0 64 0])) "the only way to the door runs through a cell never seen")))
+
 (deftest go-to-fills-a-one-cell-gap-under-a-low-ceiling-with-a-carried-block
   (async done
     (tu/run-async done

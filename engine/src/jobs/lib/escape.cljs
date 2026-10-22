@@ -133,7 +133,7 @@
 
 (defn enclosed?
   "reach-room/enclosed?, with every shut door, gate and trapdoor a wall when doors is :never (the walk will not open them),
-  read from the planner's snapshot as the walk's plans are, seen or not."
+  read from the planner's snapshot as the walk's plans are, seen or not: the verdict must agree with the walk go-to plans."
   [p doors]
   (if (not= :never doors)
     (reach-room/enclosed? p)
@@ -143,7 +143,7 @@
   "Whether a door or gate the body can open borders a cell it can walk to from feet, with room behind it for the body
   (want-room? true) or without (false: a trunk over the cell behind a gate)."
   [p [fx fy fz] want-room?]
-  (let [kind-at (reach/lookup p reach-room/body-kind-of)
+  (let [kind-at (reach/seen-lookup p reach-room/body-kind-of)
         block-at (block-at-of p)
         room-at? (fn [x y z] (and (reach/passable? kind-at x y z) (reach/passable? kind-at x (inc y) z)))
         door? (fn [[x y z]] (some (fn [[dx dz]]
@@ -265,7 +265,7 @@
         [hx _ hz] feet
         near? (fn [[x _ z]] (and (<= (js/Math.abs (- x hx)) wall-search-radius)
                                  (<= (js/Math.abs (- z hz)) wall-search-radius)))
-        kind-at (reach/lookup p)
+        kind-at (reach/seen-lookup p)
         standable? (fn [[x y z]] (reach/standable-cell? p {:x x :y y :z z} kind-at))
         dirs (distinct (cond->> cardinals dir (cons dir)))]
     (loop [queue #queue [feet] seen #{feet} fallback nil]
@@ -313,7 +313,7 @@
         [hx _ hz] feet
         near? (fn [[x _ z]] (and (<= (js/Math.abs (- x hx)) wall-search-radius)
                                  (<= (js/Math.abs (- z hz)) wall-search-radius)))
-        kind-at (reach/lookup p)
+        kind-at (reach/seen-lookup p)
         standable? (fn [[x y z]] (reach/standable-cell? p {:x x :y y :z z} kind-at))
         unseen? (unseen-of p)
         ok? (fn [cell] (when-let [gap (door block-at unseen? cell dir (max-door))] (every? diggable (:cells gap))))]
@@ -329,7 +329,7 @@
   from, unless it is seen and not standable (an unseen cell is walked to and looked at) or already walked to (visited)."
   ([p cell] (door-back p cell #{}))
   ([p [x y z] visited]
-  (let [kind-at (reach/lookup p)]
+  (let [kind-at (reach/seen-lookup p)]
     (when-let [[dx dz] (reach-room/panel-step p kind-at {:x x :y y :z z})]
       (let [back [(- x dx) y (- z dz)]]
         (when (let [unseen? (unseen-of p)
@@ -353,7 +353,7 @@
   (let [[hx _ hz] feet
         near? (fn [[x _ z]] (and (<= (js/Math.abs (- x hx)) wall-search-radius)
                                  (<= (js/Math.abs (- z hz)) wall-search-radius)))
-        kind-at (reach/lookup p)
+        kind-at (reach/seen-lookup p)
         standable? (fn [[x y z]] (reach/standable-cell? p {:x x :y y :z z} kind-at))
         opts (update opts :skip (fnil conj #{}) :approach)
         way? (fn [cell] (#{:pillar :stair :clear-path} (:step (choose p cell goal may-dig? opts))))]
