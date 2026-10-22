@@ -74,3 +74,13 @@
     (doseq [cause ["fall" "lava" "drown" "starve" "a_new_cause" nil]]
       (is (zero? (:death-hp (risk/estimate (with-death c {:x 90 :y 64 :z 5} cause 60000) far-goal))) cause))
     (is (pos? (:death-hp (risk/estimate (with-death c {:x 90 :y 64 :z 5} "skeleton" 60000) far-goal))))))
+
+(deftest a-far-goal-is-judged-on-a-bounded-number-of-reads
+  (let [c (ready-test/ctx-of night-hut)
+        reads (atom 0)
+        counted (js/Proxy. (:primitives c)
+                           #js {:get (fn [t k] (let [v (aget t k)]
+                                                 (if (fn? v) (fn [& args] (swap! reads inc) (.apply v t (to-array args))) v)))})
+        est (risk/estimate (assoc c :primitives counted) {:x 1000000 :y 64 :z 3})]
+    (is (< @reads 20000))
+    (is (pos? (:dark-s est)))))

@@ -36,7 +36,9 @@
    ::hungry-share {:default 0.5 :spec (a/num-in 0 1)
                    :doc "Share of the affordable damage a body at ::hungry-food or under may risk."}
    ::step {:default 4 :spec (a/num-in 1 nil)
-           :doc "Blocks between the cells of the way whose light is judged."}})
+           :doc "Blocks between the cells of the way whose light is judged; a way longer than ::max-cells steps is judged at that many cells, spaced wider."}
+   ::max-cells {:default 256 :spec (a/int-in 1 nil)
+                :doc "Most cells of the way whose light is judged, so a far goal costs a bounded number of reads."}})
 
 (defn- cells-along
   "The cells {:x :y :z} every step blocks along the straight way from `from` to `to`, floored, the goal last."
@@ -72,7 +74,7 @@
         underground? (and (sh-sense/buried? p)
                           (or (sh-sense/buried-at? p goal) (ready/hidden-below? p goal)))
         leaves? (sh-inside/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) goal 1)
-        step (settings/get settings ::step)
+        step (max (settings/get settings ::step) (/ (u/dist feet goal) (settings/get settings ::max-cells)))
         dt (/ step (cost/walk-blocks-per-s))
         exit (if leaves? (settings/get settings ::exit-blocks) 0)
         exposed-s (+ (/ exit (cost/walk-blocks-per-s))
