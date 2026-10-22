@@ -29,7 +29,8 @@
    :limit-s 230}
   {:name "flees-to-an-overhang-and-walls-in"
    :blocks [[:fill [0 -6 0] [18 -2 31] "air"] [:fill [22 2 14] [25 2 18] "stone"] [:fill [25 0 14] [25 1 18] "stone"]]
-   :body {:at [2.5 0 16.5] :inventory [["dirt" 8]]}
+   ;; walling the 3-wide mouth takes 10 blocks: 6 side cells and the 4 diagonal cells a mob could stand in
+   :body {:at [2.5 0 16.5] :inventory [["dirt" 12]]}
    :act [[:job (jobs.survival.night {})]]
    :expect [{:event {:source :job :kind :shelter.fled :data {:target :cave}} :within-s 150}
             {:event {:source :job :kind :shut-in.sealed} :within-s 200}]
