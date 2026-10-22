@@ -62,7 +62,7 @@
   sees another block at that cell now, and a noted entity standing in a zone or plan of the body's own (its pens) never counts. The
   ending text lists the positions.
 
-  The ending's data: {:found [{:what :pos :id? :noted? :by?}] :coverage {:legs :scans
+  The ending's data: {:found [{:what :pos :id? (the uuid) :entity-id? (the number entities and combat.attack use) :noted? :by?}] :coverage {:legs :scans
   :failed [{:pos :reason}] :skipped :farthest} :why :text} and the ending:
   - :done: :count found.
   - :nothing-possible :distance (no leg left), :no-way-up (animals that live at the surface, the body under rock and no stair up), :legs (::max-legs walked) or :stuck (three failed walks in a row).
@@ -89,7 +89,7 @@
    :heading {:doc "a compass heading (:north, :north-east, :east ...), for :outward (default :north)" :spec (set (keys headings)) :default nil}
    :scan-radius {:doc "how far round the body each look reaches" :spec (a/num-in 0 nil) :default 24}
    :takeable {:doc "leave out blocks a zone, claim or plan footprint bars this body from taking" :spec boolean? :default false}
-   :skip-ids {:doc "entity ids that do not count as found (animals the caller cannot use, e.g. a baby)" :spec (a/coll-of (a/pred "an entity id" some?)) :default nil}
+   :skip-ids {:doc "entity ids (the numbers entities lists, or uuids) that do not count as found (animals the caller cannot use, e.g. a baby)" :spec (a/coll-of (a/pred "an entity id" some?)) :default nil}
    :avoid {:doc "columns [x z] whose blocks do not count as found" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
    :patch {:doc "look for a patch of ground instead of named things: {:w :h :range :depth :limit :max-step :plan :farmland?} as jobs.lib.patch scans (jobs.farm.find-spot builds it); the search ends at the first look round with one, and :found is then [{:what \"patch\" :pos :spots}]" :spec map? :default nil}
    :forage {:doc "whether the search is for food (the body hunts or picks it to eat); nil: every target is a food animal or food block. A search for wool or leather from a food animal says false" :spec boolean? :default nil}
@@ -260,7 +260,7 @@
                        (<= (xz-dist [((:pos %) 0) ((:pos %) 2)] [ox oz]) max-distance)
                        (not (outdated? p %))
                        (if stale (and (old? %) (not (visited (:id %)))) (not (old? %)))))
-         (map (fn [n] (cond-> {:what (:what n) :pos (:pos n) :noted true :by (:by n)} (:id n) (assoc :id (:id n))))))))
+         (map (fn [n] (cond-> {:what (:what n) :pos (:pos n) :noted true :by (:by n)} (:id n) (assoc :id (:id n)) (:entity-id n) (assoc :entity-id (:entity-id n))))))))
 
 ;; ------------------------------------------------------------------ the body
 
@@ -304,7 +304,7 @@
   [p names radius]
   (concat (map (fn [b] {:what (:name b) :pos (cell-of (:pos b))})
                (when (seq names) (look/seen-blocks p {:names names :radius radius :max (* 64 (count names)) :live? true})))
-          (map (fn [e] (cond-> {:what (:name e) :pos (cell-of (:pos e))} (:uuid e) (assoc :id (:uuid e))))
+          (map (fn [e] (cond-> {:what (:name e) :pos (cell-of (:pos e))} (:uuid e) (assoc :id (:uuid e)) (:id e) (assoc :entity-id (:id e))))
                (look/seen-entities p {:names names :radius radius :max 32}))))
 
 (defn remembered
@@ -374,7 +374,7 @@
         in (when takeable (access/rules-input c))
         own (access/rules-input c {:spare-own? true})]
     (cond->> found
-      (seq skip) (remove #(skip (:id %)))
+      (seq skip) (remove #(or (skip (:id %)) (skip (:entity-id %))))
       true (remove #(and (not (:id %)) (access/own-keep own (zipmap [:x :y :z] (:pos %)))))
       true (remove #(and (:noted %) (:id %) (access/in-own-area? c (zipmap [:x :y :z] (:pos %)))))
       (seq avoid) (remove #(and (not (:id %)) (avoid [((:pos %) 0) ((:pos %) 2)])))

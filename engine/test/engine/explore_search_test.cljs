@@ -252,8 +252,20 @@
       (fn ^:async t []
         (let [s (await (search! {:target ["cow" "pig"]}
                                 {:entities [{:id 3 :uuid "u3" :name "cow" :kind "passive" :pos {:x 30.5 :y 64 :z 0.5}}]}))]
-          (is (= [{:what "cow" :pos [30 64 0] :id "u3"}] (:found (found-of s))))
+          (is (= [{:what "cow" :pos [30 64 0] :id "u3" :entity-id 3}] (:found (found-of s))))
           (is (some #(= [:seen "cow" "u3"] ((juxt :kind :what :id) %)) (file-notes s))))))))
+
+(deftest skip-ids-match-the-numeric-entity-id-and-the-uuid
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spec {:entities [{:id 3 :uuid "u3" :name "cow" :kind "passive" :pos {:x 6.5 :y 64 :z 6.5}}]}
+              kept (await (search! {:target "cow" :skip-ids [4] :max-distance 20 :settings {:jobs.explore.search/max-legs 0}} spec))
+              by-number (await (search! {:target "cow" :skip-ids [3] :max-distance 20 :settings {:jobs.explore.search/max-legs 0}} spec))
+              by-uuid (await (search! {:target "cow" :skip-ids ["u3"] :max-distance 20 :settings {:jobs.explore.search/max-legs 0}} spec))]
+          (is (= 1 (count (:found (found-of kept)))))
+          (is (= :stopped (:kind (not-found-of by-number))))
+          (is (= :stopped (:kind (not-found-of by-uuid)))))))))
 
 (deftest a-cow-in-a-fenced-pen-of-another-is-found-only-without-takeable
   (async done
