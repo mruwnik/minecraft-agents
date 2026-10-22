@@ -98,7 +98,17 @@
 (defn max-returns [] (settings/get settings ::max-returns))
 (defn return-reach [] (settings/get settings ::return-reach))
 
-(def safe? (price/staying :work ready/safe-at-from-out))
+(declare dir-of)
+
+(def safe-down
+  "A stair down is how a player gets out of the dark: its first step already shelters, so only a hostile near holds it."
+  (with-meta ready/threatened {:jobs.lib.ready/exposure (fn [_] (contract/ok :dug-in "a stair down shelters from its first step"))}))
+
+(def safe?
+  (let [out (price/staying :work ready/safe-at-from-out)
+        down (price/staying :work safe-down)]
+    (with-meta (fn [c] (if (= :down (dir-of c)) (down c) (out c)))
+      {:jobs.lib.ready/exposure (fn [c] (if (= :down (dir-of c)) ((:jobs.lib.ready/exposure (meta down)) c) ((:jobs.lib.ready/exposure (meta out)) c)))})))
 
 (defn dir-of
   "The call's :dir, else the one the first round chose (job memory), else :up or :down toward :y from the feet, else :down."

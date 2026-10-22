@@ -1395,11 +1395,23 @@
           (is (= 3 (:steps @out)))
           (is (nil? (waiting s))))))))
 
-(deftest a-stair-from-open-ground-at-night-waits-exposed-and-digs-nothing
+(defn ^:async night-stair!
+  [args]
+  (await (stair! {:blocks ground :time 13000} args (fn [p] (tu/seeing-all p) (sky/with-sky p)))))
+
+(deftest a-stair-down-from-open-ground-at-night-digs-in
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p] :as s} (await (stair! {:blocks ground :time 18000} east (fn [p] (tu/seeing-all p) (sky/with-sky p) (swap! (fake/state p) assoc :light-default [0 0]))))]
+        (let [{:keys [p] :as s} (await (night-stair! east))]
+          (is (not= :exposed (:reason (waiting s))) "the first step shelters: no wait for light")
+          (is (seq (digs p))))))))
+
+(deftest a-stair-up-from-open-ground-at-night-waits-exposed-and-digs-nothing
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (night-stair! (assoc east :dir :up)))]
           (is (= [:stopped :exposed] ((juxt :status :reason) @out)) "a called stair ends at once with the reason")
           (is (empty? (digs p))))))))
 
