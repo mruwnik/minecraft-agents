@@ -92,6 +92,25 @@
                               (map #(let [pos (.-pos (.-args %))] [(.-x pos) (.-y pos) (.-z pos)]) (calls p "dig"))))
               "a dug block of its own leaves the ledger at once: a block built there later is not its own"))))))
 
+(deftest a-body-its-shelter-keeps-in-for-a-hostile-cuts-no-other-way-out
+  ;; Wicken #139: the take-back kept the night seal for a hostile, and clear-path cut the hut's dirt wall beside it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [seal [{:cell [3 64 1] :item "dirt" :before "air" :job "j0" :purpose :shelter :state :placed}
+                    {:cell [3 65 1] :item "dirt" :before "air" :job "j0" :purpose :shelter :state :placed}]
+              {:keys [eng p]} (setup {:self {:pos {:x 2.5 :y 64 :z 0.5}} :blocks room
+                                      :entities [{:id 1 :name "zombie" :kind "hostile" :pos {:x 11.5 :y 64 :z 5.5}}]})
+              out (atom :not-done)
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent
+                                          (recording-parent out 'jobs.movement.go-to {:pos [8 64 0] :range 1 :checks {:safe? '(always)}
+                                                                                       :settings {:jobs.lib.shelter.keep/at-night? false}})))]
+          (ledger/write! (:store eng) seal)
+          (core/submit! eng '(recording-parent) {})
+          (await (tick-out! eng 1000))
+          (is (= [false :seal-kept] ((juxt :arrived :why) @out)) (pr-str @out))
+          (is (empty? (calls p "dig")) "neither the seal nor the wall beside it is dug"))))))
+
 (deftest go-to-does-not-dig-a-wall-its-ledger-meant-another-block-for
   (async done
     (tu/run-async done

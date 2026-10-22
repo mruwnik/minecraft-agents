@@ -39,7 +39,7 @@
   - {:reason :no-tool :needs item :block name :hint}: no carried tool harvests the block (with :need-drop) and the call's :ways
     allow no fetch (otherwise the round gets one; a fetch that fails ends the same way, with :why).
 
-  A block not in sight, within twice the reach, with a seen terrain block (stone, dirt, sand ..: jobs.lib.blocks/through-natural) first in the line, is reached by digging that block first (picked up; zones, claims and hazards apply to it) before any walk, unless a seen open cell beside or above the block has safe ground to stand on (open-side?: the walk goes there first, and digs through only when that walk fails); a base block there (chest, door, planks ..) is never dug for it: the walk's give-up names it as :blocked-by.
+  A block not in sight, within twice the reach, with a seen terrain block (stone, dirt, sand ..: jobs.lib.blocks/through-natural) first in the line, is reached by digging that block first (picked up; zones, claims and hazards apply to it; never with :through false) before any walk, unless a seen open cell beside or above the block has safe ground to stand on (open-side?: the walk goes there first, and digs through only when that walk fails); a base block there (chest, door, planks ..) is never dug for it: the walk's give-up names it as :blocked-by.
   Out of reach, it walks within 3 cells (go-to child, which opens and shuts doors); a failed walk is tried once more,
   then, for a block 3 or more above the feet and within 3 cells sideways, it pillars up (jobs.access.pillar child, carried blocks, once per call, up to 3 blocks), and only then ends nothing-possible {:reason :unreachable :pos :why} (:no-walk, :out-of-reach, go-to's why).
   A block under the feet with no seen solid floor below it is not dug from on top: the body first steps off its
@@ -67,6 +67,7 @@
    :need-drop {:doc "wait :no-tool when no carried tool harvests the block; false digs anyway and the drop is lost (clearing)" :spec boolean? :default true}
    :accept {:doc "dig hazards of jobs.lib.access.rules taken (:fluid-adjacent water, :lava-adjacent seen lava, :falling-block; :under-feet digs a block under the feet from on top instead of from beside)" :spec (a/coll-of #{:fluid-adjacent :lava-adjacent :falling-block :under-feet}) :default #{}}
    :see {:doc "true: dig only from where the eye sees the block (jobs.lib.aim: nothing seen solid in the way, as a player aims), walking to such a stand first (go-to :see; none: :unreachable :out-of-sight); false: within reach is enough, the game lets a dig pass through blocks" :spec boolean? :default true}
+   :through {:doc "false: no block in the aim line is dug first; a block no stand sees ends :unreachable (a take-back digs nothing but its own blocks)" :spec boolean? :default true}
    :walk {:doc "false: a block out of reach (or out of sight with :see) ends :unreachable :no-walk at once, the body takes no step to it (a pick on the way)" :spec boolean? :default true}
    :on-lava {:doc ":seal: seen lava beside the dug cell is filled with a building block (jobs.lib.lava); :leave: the caller deals with it (stair, tunnel)" :spec #{:seal :leave} :default :seal}
    :on-fluid {:doc ":wait: a block beside a fluid that :accept does not take waits :hazard; :fail: the job ends at once, reason :fluid-adjacent, with a :hint" :spec #{:wait :fail} :default :wait}
@@ -390,7 +391,7 @@
 (defn ^:async dig-through!
   "pos is within reach but a block lies in the aim line: dig that first (terrain only, jobs.lib.blocks/through-natural; zones and hazards apply), as a player does. :again, :continue, or nil when there is no such block or the child could not dig it."
   [c pos]
-  (when-let [hit (b/through-cell c pos)]
+  (when-let [hit (when (:through (:args c)) (b/through-cell c pos))]
     (let [r (await (child/run!* c :through 'jobs.blocks.dig {:pos hit :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
       (cond
         (= :continue r) :continue

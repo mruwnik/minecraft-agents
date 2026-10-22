@@ -55,7 +55,8 @@
 
   Then one step, passes repeated (paced) until nothing is left to do:
   - Dig the highest (then nearest) cell within jobs.lib.ledger/reach of the eye that may be dug. The entry is marked
-    :removing before the dig, so a cut or restart is decided from the cell.
+    :removing before the dig, so a cut or restart is decided from the cell. No other block is dug to get at it
+    (jobs.blocks.dig :through false): a wall in the aim line is walked round.
   - Else walk to within 3 of the nearest (jobs.movement.go-to as a child, :ways #{:walk}: never digging a way), in legs of
     ::leg-s. Before each leg a known hostile within ::danger-radius of the cell, or a flight from one near it or the body,
     holds that cell :danger instead (the hostile reflex acts; the cell is offered again after the hold).
@@ -299,7 +300,7 @@
           (let [[x y z] cell
                 outcome (await (blocks/dig-cell! c {:x x :y y :z z} {:accept (into #{:fluid-adjacent :falling-block :under-feet}
                                                                            (filter #{:lava-adjacent}) (:accept (:args c)))
-                                                                     :ignore-zones? true}))]
+                                                                     :ignore-zones? true :through false}))]
             (when (and under? (not= :continue outcome)) (await (walk/settle! c)))
             (cond
               (= :continue outcome) :continue

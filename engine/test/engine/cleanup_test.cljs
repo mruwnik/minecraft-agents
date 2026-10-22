@@ -553,6 +553,20 @@
           (is (= [{:cell [0 64 0] :item "dirt" :found "stone"} {:cell [0 65 0] :item "dirt" :found "air"}] (:dropped @out)))
           (is (= [[0 64 0] [0 65 0]] (mapv :cell (of-kind seen :cleanup.dropped)))))))))
 
+(deftest a-block-of-its-own-behind-other-blocks-is-never-dug-through-to
+  ;; Wicken #139: a take-back reached its seal block through the hut's dirt wall
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pit-world (apply dissoc (tu/box -2 60 -3 12 64 3 "dirt") ["3,63,1" "3,64,1" "2,64,1"])
+              {:keys [eng p digs] :as s} (setup {:self {:x 3.5 :y 63 :z 1.5} :blocks pit-world :entries [(entry [5 62 0])]})]
+          (tu/seeing-all p)
+          (core/submit! eng '(recording-parent) {})
+          (await (ticks s eng 60))
+          (is (every? #{[5 62 0]} (map first @digs)) (pr-str @digs))
+          (is (= "dirt" (block p [4 63 1]) (block p [4 63 0]) (block p [4 64 1])) "the blocks in the line are not its own")
+          (is (= [[5 62 0]] (mapv :cell (the-ledger eng)))))))))
+
 (deftest dirt-that-turned-to-grass-is-still-ours-and-is-dug
   (async done
     (tu/run-async done
