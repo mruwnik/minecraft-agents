@@ -1,0 +1,16 @@
+;; go-to from inside a fenced pen whose only way out is its shut gate: it opens the gate, walks out and shuts it behind (no digging out).
+;; Pen: oak fence ring x 8..14, z 13..19, shut gate east at [14 0 16]; the body stands inside, the goal is 8 east of the gate.
+{:defaults
+ {:tags [:door :movement :pen]
+  :time :any
+  :plot {:floor "grass_block" :height 8}
+  :body {:at [11.5 0 16.5] :yaw 270 :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "leaves-its-fenced-pen-by-the-shut-gate"
+   :blocks [[:fill [8 0 13] [14 0 19] "oak_fence"] [:fill [9 0 14] [13 0 18] "air"]
+            [:set [14 0 16] "oak_fence_gate[facing=east,open=false]"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated} :for-s 5 :until {:source :job :kind :completed}}]
+   :after [[:block [14 0 16] "oak_fence_gate[open=false]"] [:body-near [22.5 0 16.5] 2]]}]}
