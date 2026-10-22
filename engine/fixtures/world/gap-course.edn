@@ -1,6 +1,10 @@
 ;; Card a3418585: gap jumps over 2 or 3 cells need a sprint (food > 6). One-wide stone strip along x at z 10, pit floor at y -10 (the air is dug explicitly: the terrain under the plot may be solid, which let a body walk down and up across a gap).
 ;; Food 20 arrives over a 3 or level 2 gap; food <= 6 (hunger effect, then cleared) walks round when a detour exists, else stops
 ;; without jumping (:gap-sprint / :abilities); the body may search the rim for a way round meanwhile, so the check is that it did not cross; a 1 gap is still jumped. gap2-food6-level (no detour): refused like a 3 gap.
+;; Card 829cf88e: a 3 gap one block down onto a landing row one cell deep over a 28-block pit (glowstone floor, so the body sees it) is not
+;; jumped: a sprint jump lands past a one-cell landing and the fall beyond kills; with a wall past the landing it is jumped. These two
+;; are sky plots (an underground cell at y -40 has no room above bedrock for a fall that kills at 20 hp), lit by a layer of light
+;; blocks so the body sees the cleared floor whatever the hour.
 {:defaults
  {:tags [:movement]
   :time :any
@@ -42,4 +46,17 @@
    :blocks [[:fill [3 -9 3] [26 -2 17] "air"] [:fill [3 -10 3] [26 -10 17] "stone"] [:fill [4 -1 10] [8 -1 10] "stone"] [:fill [10 -1 10] [14 -1 10] "stone"]]
    :act [[:rcon "effect give $BODY minecraft:hunger 8 255 true"] [:until-effect-gone "hunger" 30] [:rcon "effect clear $BODY"] [:job (jobs.movement.go-to {:pos #at [13 0 10] :range 0 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
-   :after [[:body-near [13.5 0 10.5] 1.5]]}]}
+   :after [[:body-near [13.5 0 10.5] 1.5]]}
+ {:name "gap3-down-onto-a-one-cell-ledge-over-a-deep-pit-is-not-jumped"
+   :blocks [[:fill [2 -29 2] [27 -1 18] "air"] [:fill [2 -30 2] [27 -30 18] "glowstone"] [:fill [2 3 2] [27 3 18] "light"] [:fill [4 -1 10] [8 -1 10] "stone"] [:fill [3 0 10] [3 1 10] "stone"] [:fill [12 -2 6] [12 -2 14] "stone"]]
+   :plot {:light :sky}
+   :act [[:job (jobs.movement.go-to {:pos #at [12 -1 14] :range 0 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 60 :until {:source :job :kind :stopped}}]
+   :after [[:body-far [12.5 -1 14.5] 3]]}
+ {:name "gap3-down-onto-a-one-cell-ledge-with-a-wall-past-it-is-jumped"
+   :blocks [[:fill [2 -29 2] [27 -1 18] "air"] [:fill [2 -30 2] [27 -30 18] "glowstone"] [:fill [2 3 2] [27 3 18] "light"] [:fill [4 -1 10] [8 -1 10] "stone"] [:fill [3 0 10] [3 1 10] "stone"] [:fill [12 -2 6] [12 -2 14] "stone"] [:fill [13 -1 6] [13 0 14] "stone"]]
+   :plot {:light :sky}
+   :act [[:job (jobs.movement.go-to {:pos #at [12 -1 14] :range 0 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [12.5 -1 14.5] 1.5]]}]}

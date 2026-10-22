@@ -150,9 +150,34 @@
           ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) x y z)) true
           :else (recur (inc y))))))
 
+  ;; the fall (1/16 blocks) from from16 down the column x z, from cell y, to the first block with a top; 0 into water;
+  ;; CLIMB-FALL-SCAN blocks past unloaded land or an unseen cell (the depth behind a ledge is hidden by the ledge itself:
+  ;; a fall into the unknown may kill) and past that many blocks of air
+  (missFall [s x y z from16]
+    (loop [y3 y]
+      (if (< y3 (- y CLIMB-FALL-SCAN))
+        (- from16 (* y3 16))
+        (let [id (.stateAt s x y3 z)]
+          (cond
+            (or (== id UNLOADED) (== id (.-unk-id s))) (* CLIMB-FALL-SCAN 16)
+            (== (aget (.-tbl-kind s) id) WATER) 0
+            (pos? (aget (.-tbl-top s) id)) (js/Math.max 0 (- from16 (+ (* y3 16) (aget (.-tbl-top s) id))))
+            :else (recur (dec y3)))))))
+
+  ;; a running jump over 2 or 3 cells along dx dz to lx ly lz (stand h1) lands up to a block past its aim with the run's
+  ;; speed, so a landing one cell deep is overshot: true when the column past it has no wall to stop the body and a fall
+  ;; there reaches options.health
+  (gapOvershootLethal [s dx dz lx ly lz h1]
+    (let [land16 (+ (* ly 16) h1)
+          ox (+ lx dx)
+          oz (+ lz dz)]
+      (and ^boolean (.clear s ox oz land16 (+ land16 BODY))
+           (>= (.dropDamage s 1 (.missFall s ox ly oz land16)) (.-lethal-hp s)))))
+
   ;; sprint across 1..3 empty cells in a cardinal line, landing level or one lower; across 1 or 2, also up to one block
   ;; higher. A jump over 3 above a pit (pitBelow) has GAP-PIT-RISK: one that falls short traps the body, so a short way round
-  ;; is taken instead
+  ;; is taken instead. A running jump (over 2 or 3) whose overshoot past its landing is lethal (gapOvershootLethal) is
+  ;; refused, as a lethal climb is.
   (expandGap [s i x y z c h0]
     (let [dx (aget (.-adx s) c)
           dz (aget (.-adz s) c)]
@@ -184,6 +209,7 @@
                   (when-not (or (neg? h1) ^boolean (.isTight s lx ly lz))
                     (let [delta (- (+ (* ly 16) h1) h0)]
                       (when-not (or (< delta -16) (> delta (if up WHOLE 0))
+                                    (and (> n 1) ^boolean (.gapOvershootLethal s dx dz lx ly lz h1))
                                     (and (some? ^js (.-limit-gap s))
                                          ;; (the goal flood expands cells nothing reached: i is -1, the takeoff a plain walk)
                                          (not (true? (^js (.-limit-gap s) x y z (- h0 (* y 16)) (if (neg? i) MOVE-WALK (aget (.-moves s) i)) lx ly lz h1)))

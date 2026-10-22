@@ -42,3 +42,15 @@
     [] [14 94 1] [2.5 2.9]
     [] [14 94 3] [2.5 2.1]
     [[10 95 1 11 95 1 "oak_leaves" {}] [10 95 3 11 95 3 "oak_leaves" {}]] [14 94 2] [2.5 2.5]))
+
+(defn ledge
+  "The takeoff path of course with n empty cells, then a landing row one cell deep at x 10+n, y ly (z -5..5), and extra."
+  [n ly extra]
+  (into [[0 63 0 9 63 0 "stone" {}] [(+ 10 n) ly -5 (+ 10 n) ly 5 "stone" {}]] extra))
+
+(deftest a-running-jump-onto-a-one-cell-ledge-is-made-only-where-an-overshoot-is-no-fall-to-death
+  (are [n ly beyond status] (= status (:status (:done (sp/walk (ledge n ly beyond) [2 64 0] [(+ 10 n) (inc ly) 4]))))
+    3 62 [] :no-plan
+    2 63 [] :no-plan
+    3 62 [[14 63 -5 14 64 5 "stone" {}]] :arrived
+    3 62 [[14 60 -5 14 60 5 "stone" {}]] :arrived))

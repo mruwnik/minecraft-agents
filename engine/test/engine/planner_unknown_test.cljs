@@ -222,7 +222,7 @@
       (is (found? r))
       (is (= [[0 64 2] [2 64 2]] (pf/cells r)))))
   (testing "two phantom cells: a gap of two"
-    (let [w (line [0 63 "stone"] [1 63 U] [2 63 U] [3 63 "stone"])
+    (let [w (line [0 63 "stone"] [1 63 U] [2 63 U] [3 63 "stone"] [4 55 "stone"])
           r (run w (pf/near 3 64 2) (unk {:missed (js/Set. [(planner/cell-key 1 63 2) (planner/cell-key 2 63 2)])}))]
       (is (found? r))
       (is (= [[0 64 2] [3 64 2]] (pf/cells r))))))
@@ -238,23 +238,29 @@
             r (run w (pf/near 3 64 2) (unk {}))]
         (is (not (found? r)) (str "head cell at x " x)))))
   (testing "an unseen floor under the arc is allowed"
-    (let [w (line [0 63 "stone"] [1 63 U] [2 63 U] [3 63 "stone"])
+    (let [w (line [0 63 "stone"] [1 63 U] [2 63 U] [3 63 "stone"] [4 55 "stone"])
           r (run w (pf/near 3 64 2) (unk {:missed (js/Set. [(planner/cell-key 1 63 2) (planner/cell-key 2 63 2)])}))]
       (is (found? r))
       (is (= (:gap pf/MOVE) (:move (last-step r)))))))
 
 (deftest a-gap-jump-under-an-unseen-cell-two-over-the-feet-is-not-planned
   (testing "a jump up over a 2-gap: its arc reaches y+2"
-    (let [seen (line [0 63 "stone"] [3 64 "stone"])
-          hidden (line [0 63 "stone"] [3 64 "stone"] [1 66 U])]
+    (let [seen (line [0 63 "stone"] [3 64 "stone"] [4 55 "stone"])
+          hidden (line [0 63 "stone"] [3 64 "stone"] [4 55 "stone"] [1 66 U])]
       (is (= (:gap pf/MOVE) (:move (last-step (run seen (pf/near 3 65 2) (unk {}))))))
       (is (not (found? (run hidden (pf/near 3 65 2) (unk {})))))))
   (testing "a level gap from a bottom slab (feet 0.5 up): its arc reaches y+2"
     (let [slab {:type "bottom"}
-          seen (line [0 64 "oak_slab" slab] [3 64 "oak_slab" slab])
-          hidden (line [0 64 "oak_slab" slab] [3 64 "oak_slab" slab] [2 66 U])]
+          seen (line [0 64 "oak_slab" slab] [3 64 "oak_slab" slab] [4 55 "stone"])
+          hidden (line [0 64 "oak_slab" slab] [3 64 "oak_slab" slab] [4 55 "stone"] [2 66 U])]
       (is (= (:gap pf/MOVE) (:move (last-step (run seen (pf/near 3 64 2) (unk {}))))))
       (is (not (found? (run hidden (pf/near 3 64 2) (unk {}))))))))
+
+(deftest a-running-jump-onto-a-one-cell-landing-with-unseen-depth-past-it-is-not-planned
+  (let [seen (line [0 63 "stone"] [3 63 "stone"] [4 55 "stone"])]
+    (is (= (:gap pf/MOVE) (:move (last-step (run seen (pf/near 3 64 2) (unk {}))))) "ground seen 8 below the overshoot")
+    (is (not (found? (run (line [0 63 "stone"] [3 63 "stone"] [4 62 U] [4 55 "stone"]) (pf/near 3 64 2) (unk {}))))
+        "an unseen cell under the overshoot hides how far it falls")))
 
 (deftest a-walk-through-a-closed-gate-onto-a-phantom-floor-is-checkable
   ;; (a gate or door is crossed by a walk that opens it; MOVE-OPEN is the climb through a shut trapdoor, never a takeoff)
