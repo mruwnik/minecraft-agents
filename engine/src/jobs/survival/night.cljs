@@ -9,7 +9,6 @@
             [jobs.lib.breath :as breath]
             [jobs.lib.child :as child]
             [jobs.lib.cost :as cost]
-            [jobs.lib.danger :as danger]
             [jobs.lib.price :as price]
             [jobs.lib.pace :as pace]
             [jobs.lib.dig-in-leave :as dig-leave]
@@ -31,7 +30,6 @@
             [jobs.lib.spent :as spent]
             [jobs.lib.util :as u]
             [jobs.lib.walk.world :as wworld]
-            [jobs.movement.go-to.risk :as risk]
             [jobs.survival.bed-down :as bed-down]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.room-plug :as room-plug]
@@ -434,11 +432,7 @@
         kit (wworld/kit-of c)
         secs (or (:seconds r) 0)
         dark-s (min secs (/ (or (:dark-seconds r) 0) (cost/dark-factor kit)))
-        radius (settings/get risk/settings ::risk/way-radius)
-        fight (fn [goal] (let [mobs (danger/hostiles-near-way p goal radius {})]
-                           (if (seq mobs)
-                             (cost/fight-damage (assoc kit :mobs (mapv (fn [e] {:name (.-name e) :distance (danger/mob-distance p e) :hits 0}) mobs)))
-                             0)))
+        fight #(price/way-fight-hp c %)
         here (if (or (sh-sense/buried? p) (pos? (or (sh-sense/block-light-at p (sh-sense/feet p)) 0))) 0 chance)]
     {:walk (+ (price/stay-hp c chance dark-s) (fight bed))
      :stay (+ (price/stay-hp c here (min secs (settings/get settings ::shelter-here-s))) (fight (u/self-pos c)))}))

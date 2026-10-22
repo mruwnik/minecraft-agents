@@ -9,6 +9,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
+            [jobs.lib.danger :as danger]
             [jobs.lib.foods :as foods]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.util :as u]
@@ -17,6 +18,8 @@
 (a/defargs settings
   {::risk-share {:default 0.5 :spec (a/num-in 0 nil)
                  :doc "Share of the health the body has that the expected damage of a walk (spawns met on its dark open stretches, hostiles near its way) or of a stay at an exposed place may take; above it the start check waits."}
+   ::way-radius {:default 16 :spec (a/num-in 0 nil)
+                 :doc "Blocks from a way or place within which a known hostile adds its fight to the price of walking or staying there."}
    ::hungry-food {:default 6 :spec (a/int-in 0 20)
                   :doc "Food at or under which the body cannot sprint away and does not heal: the damage it can afford is cut by ::hungry-share."}
    ::hungry-share {:default 0.5 :spec (a/num-in 0 1)
@@ -97,3 +100,12 @@
   [f act-s]
   (fn [c] (let [at (f c)]
             (+ act-s (if (and at (:y at)) (/ (* 2 (u/dist (u/self-pos c) at)) (cost/walk-blocks-per-s)) 0)))))
+
+(defn way-fight-hp
+  "hp of the fight with every hostile known within ::way-radius of `pos` ({:x :y :z}), with the kit carried."
+  [c pos]
+  (let [p (:primitives c)
+        mobs (danger/hostiles-near-way p pos (settings/get settings ::way-radius) {})]
+    (if (seq mobs)
+      (cost/fight-damage (assoc (wworld/kit-of c) :mobs (mapv (fn [e] {:name (.-name e) :distance (danger/mob-distance p e) :hits 0}) mobs)))
+      0)))
