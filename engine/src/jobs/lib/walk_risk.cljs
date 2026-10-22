@@ -3,7 +3,8 @@
   wait for dawn: a night walk is judged by the light the body perceives along the straight way (Q334), a walk underground
   by the hostiles it can reach and the dark halls it crosses (a roofed dark cell prices spawns only where dark floor beyond the spawn-free radius is reachable: ready/hall-at?, Q345).
   Risk = the mobs expected to spawn on the exposed stretches (jobs.lib.cost/spawn-chance per second of walking, each costed
-  as a zombie fight with the kit carried, jobs.lib.cost/fight-damage) plus, on a walk with such a stretch (in the light a hostile is seen and avoided; the reflexes meet it), the fight with every hostile known near the way.
+  as a zombie fight with the kit carried, jobs.lib.cost/fight-damage) plus the fight with every hostile known near the way, lit or dark, that catches the walk
+  (a ranged one, or a melee one ready/melee-catches?: one the walk leaves behind is no cost).
   A walk to a goal within the death-spot radius of a place a mob killed the body lately (jobs.lib.death-spot, fading with time) adds the fight with what killed it, weighted by how fresh the death is, underground too, only when the walk ends nearer the death than it starts (a body standing, or walking away from the spot, is no closer to it) and the spot is not seen lit since the death (fresh sight of a lit spot beats the record; a hostile seen there prices as a known hostile); not within ::pile-radius of the goal (a walk to the body's own drops: only a hostile known there counts).
   Seen lava within jobs.lib.lava-risk/radius of a cell the straight way steps into adds jobs.lib.lava-risk/hp, scaled by its closeness (a slip beside it is lethal); a body already at the goal, or a way clear of lava, adds none.
   Acceptable when it stays within jobs.lib.price/::risk-share of the health the body has now, or, when the caller says what the goal is worth (:worth), within the hp that worth buys (price/allowed)."
@@ -12,6 +13,7 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.check-cache :as check-cache]
+            [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.death-spot :as death-spot]
             [jobs.lib.hide-spot :as hide-spot]
@@ -105,8 +107,9 @@
         hide-hp (reduce + (for [{:keys [mobs]} (nearer-goal? (away-from-goal (hide-spot/near (hide-spot/recent c) goal)))] (hit (mapv (fn [n] {:name n :distance 0 :hits 0}) mobs))))
         lava (route-lava-hp p feet goal step)
         spawn-hp (* spawns (hit [{:name "zombie" :distance 0 :hits 0}]))
-        hostile-hp (if (pos? exposed-s) (hit (mapv (fn [e] {:name (.-name e) :distance (danger/mob-distance p e) :hits 0}) hostiles)) 0)]
-    {:hp (+ spawn-hp hostile-hp death-hp hide-hp lava) :lava-hp lava :hide-hp hide-hp :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :dark-s exposed-s :hostiles (count hostiles)}))
+        catchers (filterv #(or (combat/ranged? %) (ready/melee-catches? p % goal)) hostiles)
+        hostile-hp (hit (mapv (fn [e] {:name (.-name e) :distance (danger/mob-distance p e) :hits 0}) catchers))]
+    {:hp (+ spawn-hp hostile-hp death-hp hide-hp lava) :lava-hp lava :hide-hp hide-hp :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :dark-s exposed-s :hostiles (count catchers)}))
 
 (defn stay-estimate
   "hp the body expects to lose staying at its cell instead of walking `route-hp` to `goal`: the fight with every hostile known within ::price/way-radius
@@ -137,7 +140,7 @@
       (let [stay (check-cache/cached c [::stay goal (sense/round-looked c)] #(stay-estimate c goal hp))
             over (str "route risk " (price/round1 hp) " hp over the " (price/round1 allowed) " the body can afford: "
                       (price/round1 dark-s) " s on dark open ground costs " (price/round1 spawn-hp) " hp, "
-                      hostiles " hostile(s) near the way " (price/round1 hostile-hp) " hp, " (price/round1 death-hp) " hp for a recent death near it, " (price/round1 hide-hp) " hp for a recent hide near it, " (price/round1 lava-hp) " hp for seen lava near the way")]
+                      hostiles " hostile(s) by the way that catch it " (price/round1 hostile-hp) " hp, " (price/round1 death-hp) " hp for a recent death near it, " (price/round1 hide-hp) " hp for a recent hide near it, " (price/round1 lava-hp) " hp for seen lava near the way")]
         (cond
           (<= hp (:hp stay)) (contract/ok :cheaper-than-staying (str "route risk " (price/round1 hp) " hp, over the " (price/round1 allowed) " affordable but staying here costs " (price/round1 (:hp stay)) " hp (" (:hostiles stay) " hostile(s) near the body)"))
           (and (pos? (:hp stay)) (price/cannot-heal? c)) (contract/never :stranded (str over "; staying here costs " (price/round1 (:hp stay)) " hp and the body cannot heal, so waiting does not help: seal in or go to a nearer refuge") :risk hp :allowed allowed :stay-hp (:hp stay))

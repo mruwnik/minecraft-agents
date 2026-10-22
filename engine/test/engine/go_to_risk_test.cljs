@@ -1,8 +1,9 @@
 (ns engine.go-to-risk-test
   "go-to's start check judges the walk's risk (jobs.lib.walk-risk), not the clock: hostiles near a long dark way hold it
   with the figures in the reason; a way that goes mostly underground costs far less than the same distance over open ground."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [are deftest is async]]
             [engine.core :as core]
+            [engine.fake :as fake]
             [engine.hut-shelter-test :as hut]
             [engine.ready-test :as ready-test]
             [engine.shelter-support :as st]
@@ -16,7 +17,8 @@
             [jobs.lib.threats :as threats]
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.lib.walk-risk :as risk]))
+            [jobs.lib.walk-risk :as risk]
+            [jobs.movement.go-to.reprice :as reprice]))
 
 (def inside {:x 5 :y 64 :z 0})
 (def night-hut (merge (hut/hut-world inside {}) {:time st/night}))
@@ -68,6 +70,25 @@
             (is (re-find #"hp" (str (:text w))))))))))
 
 (def day-world (assoc night-hut :time st/noon))
+
+(deftest a-hostile-that-catches-a-lit-walk-is-priced-one-the-walk-leaves-behind-is-not
+  (are [zombie-pos priced?] (= priced? (pos? (:hostile-hp (risk/estimate (ready-test/ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0}}
+                                                                                            :entities [{:id 7 :name "zombie" :kind "hostile" :pos zombie-pos}]})
+                                                                         {:x 30 :y 64 :z 0}))))
+    {:x 15 :y 64 :z 3} true
+    {:x -10 :y 64 :z 0} false))
+
+(deftest a-hostile-seen-mid-walk-asks-go-to-s-check-again-for-the-rest-of-it
+  (let [c (ready-test/ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0}}})
+        goal {:x 30 :y 64 :z 0}
+        check (reprice/check c goal nil)
+        replaced (reprice/check (assoc c :quote-call {:checks {:safe? '(always)}}) goal nil)]
+    (is (= :ok (first (reprice/status c goal))) "the round start's check, cached")
+    (is (nil? (check {} false)) "no hostile known")
+    (fake/add-entity! (:primitives c) {:id 7 :name "zombie" :kind "hostile" :pos {:x 4 :y 64 :z 0}})
+    (is (nil? (check {} true)) "the round's first plan: the engine has just asked")
+    (is (= :later (first (:hostile (check {} false)))) "a zombie ahead on the way holds the rest of the walk")
+    (is (nil? (replaced {} false)) "a caller's :checks :safe? replaces go-to's")))
 (def far-goal {:x 95 :y 64 :z 0})
 
 (defn with-death
@@ -235,12 +256,12 @@
     (is (false? (lit-with {:unknown true})) "the light data of a cell never seen is no sight of it")))
 
 (deftest a-walk-over-the-allowance-goes-when-staying-costs-more
-  (let [zombies (for [i (range 3)] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x (+ 8 i) :y 64 :z 3}})
+  (let [zombies (for [i (range 3)] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x (- 2 i) :y 64 :z 3}})
         status-for (fn [entities]
                      (first (risk/status (-> (ready-test/ctx-of (assoc day-world :self {:pos inside :health 2.3 :food 5} :entities (vec entities)))
                                              (with-death {:x 80 :y 64 :z 5} "zombie" 6480000))
                                          far-goal)))]
-    (is (= :ok (status-for zombies)) "hostiles reach the body where it stands: the walk is the cheaper risk")
+    (is (= :ok (status-for zombies)) "hostiles reach the body where it stands, the walk leaves them behind: the walk is the cheaper risk")
     (is (= :later (status-for [])) "nothing near the body: waiting costs nothing, so it waits")))
 
 (deftest a-body-that-cannot-heal-and-is-no-safer-staying-ends-stranded-instead-of-waiting

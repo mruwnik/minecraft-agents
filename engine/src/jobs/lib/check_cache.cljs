@@ -18,14 +18,19 @@
     (or (.get engines key)
         (let [e (atom {})] (.set engines key e) e))))
 
+(defn fresh
+  "c whose cached reads read the world anew (and renew the entries): for a check asked again because the world changed."
+  [c]
+  (assoc c ::fresh true))
+
 (defn cached
-  "The value of (thunk) for key k of this job, reused while it is younger than ttl-ms."
+  "The value of (thunk) for key k of this job, reused while it is younger than ttl-ms (never under fresh)."
   [c k thunk]
   (let [entries (entries-of c)
         id [(:id c) (:slots c) k]
         now (ctx/now c)
         hit (get @entries id)]
-    (if (and hit (<= 0 (- now (:t hit)) (ttl-ms)))
+    (if (and hit (not (::fresh c)) (<= 0 (- now (:t hit)) (ttl-ms)))
       (:v hit)
       (let [v (thunk)]
         (swap! entries (fn [m] (assoc (into {} (remove (fn [[_ e]] (> (- now (:t e)) (* 10 (ttl-ms))))) m) id {:t now :v v})))

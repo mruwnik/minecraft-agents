@@ -36,8 +36,6 @@
                          :doc "Blocks under the feet from which an unseen place with a seen roof over it counts as underground: no look asks for it and waiting for dawn does not light it."}
    ::unseen-judged-here-within {:default 6 :spec (a/num-in 0 nil)
                                 :doc "Blocks: an unseen place this near the feet is judged where the body stands (no look shows a cell behind a wall)."}
-   ::catch-reach {:default 3 :spec (a/num-in 0 nil)
-                  :doc "Blocks within which a known hostile, or one whose blow hurt the body lately, keeps up with a walk and hits it on the way: no walk leads away from it (leads-away?)."}
    ::crowd-radius {:default 16 :spec (a/num-in 0 nil)
                    :doc "Blocks within which the real dangers the body knows of all count in the fight a long stay meets (outmatched): beyond the hostile-near radius they still come."}})
 
@@ -182,10 +180,18 @@
   [safe]
   (with-meta (fn [c] (contract/all [(safe c) (outmatched c)])) (meta safe)))
 
+(defn melee-catches?
+  "Whether known melee hostile e hits the body on its straight walk to goal before the walk is past it (cost/catches?: the
+  body's pace by its food, the mob where the body takes it to be). False for a ranged one: it shoots, it does not chase."
+  [p e goal]
+  (and (not (combat/ranged? e))
+       (cost/catches? {:chaser (cost/mob-kind e) :pos (danger/mob-pos p e) :from (u/pos-of (.-pos (.self p))) :to goal
+                       :food (or (.-food (.self p)) 20) :step 1})))
+
 (defn leads-away?
   "Whether the straight walk from the body to `goal` ({:x :y :z}) never takes it nearer to any hostile it knows within the
-  hostile-near radii, and there is one, and none is within ::catch-reach or has hurt the body lately (it keeps up and hits
-  all the way): a player walks away from a danger, and fights one at their heels."
+  hostile-near radii, and there is one, and none catches the walk (melee-catches?) or has hurt the body lately: a player
+  walks away from a danger, and fights one at their heels."
   [c goal]
   (let [p (:primitives c)
         args (trigger-args c)
@@ -195,7 +201,7 @@
         near (danger/known-hostiles p (danger/radius-in args) {:ranged-radius (danger/ranged-radius-in args)})]
     (and (seq near)
          (every? (fn [e] (and (>= (danger/way-distance body goal (danger/mob-pos p e)) (- (danger/mob-distance p e) 0.5))
-                              (>= (danger/mob-distance p e) (settings/get settings ::catch-reach))
+                              (not (melee-catches? p e goal))
                               (not (contains? hit (.-id e)))))
                  near))))
 

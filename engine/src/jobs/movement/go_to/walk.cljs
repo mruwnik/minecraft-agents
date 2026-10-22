@@ -45,6 +45,7 @@
             [jobs.movement.go-to.detour :as detour]
             [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.escalation :as esc]
+            [jobs.movement.go-to.reprice :as reprice]
             [jobs.movement.go-to.restore :as restore]
             [jobs.movement.go-to.faults :refer [note-fault! refused-hang shut-foreign]]
             [jobs.movement.go-to.health :as health]
@@ -400,7 +401,7 @@
             seen-goal? (and (see-cell c) (not (:edge-mode (ctx/mem c))) (not (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))))
             opts (cond-> (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
                    seen-goal? (assoc :explore false))
-            stair-check (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d)))
+            stair-check (reprice/check c pos (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d))))
             {walked :result status :status to :to} (await (near/walk-round! (assoc c :on-pose (approach-recorder c pos)) pos range (assoc opts :see-cell (see-cell c) :stair-check stair-check)))
             _ (ctx/hold-still! c (when (= "searching" status) :searching))
             fetched (when (= :no-torch (:status walked)) (await (fetch-torches! c)))
@@ -439,6 +440,9 @@
 
           (:learn-spent walked)
           (await (esc/give-up-or-escalate! c pos (max-blocked) status (cond-> {:status :no-path :reason :unseen-floors :cells (:cells walked)} (none-held? c) (assoc :torches :none))))
+
+          (and (= "stair" status) (:hostile (:why walked)))
+          (reprice/end c (:hostile (:why walked)))
 
           (and (= "stair" status) (= :dives (:why walked)))
           (esc/dive-refused! c pos)

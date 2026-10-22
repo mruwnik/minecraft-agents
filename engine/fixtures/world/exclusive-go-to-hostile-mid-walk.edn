@@ -1,0 +1,29 @@
+;; Card 063ae97b: an exclusive go-to (reflexes paused) prices a hostile seen after the walk starts, lit way or dark.
+;; Three NoAI zombies appear on the way about 5 blocks ahead (within the hostile-near radius) once the body is walking:
+;; the rest of the walk is checked again and the call stops short (old code: go-to checked only as a round started, so it walked round them to the goal).
+;; Should-fail twin: the same zombies behind the body are left behind and cost nothing; it arrives.
+;; Sealed stone box x 2..28, y 0..4, z 10..22, lit by a sea lantern floor.
+{:defaults
+ {:tags [:movement :hostile]
+  :time :any
+  :blocks [[:fill [1 -1 9] [29 5 23] "stone" :hollow] [:fill [2 -1 10] [28 -1 22] "sea_lantern"]]
+  :body {:at [4.5 0 16.5] :yaw 270}
+  :limit-s 60}
+ :cases
+ [{:name "zombies-seen-ahead-mid-walk-stop-the-walk"
+   :act [[:http :submit (jobs.movement.go-to {:pos #at [26.5 0 16.5]}) [:exclusive] {:ok true}]
+         [:until-pos {:x-min 7} 15]
+         [:summon "zombie" [13.5 0 16.5] "{NoAI:1b}"]
+         [:summon "zombie" [13.5 0 15.5] "{NoAI:1b}"]
+         [:summon "zombie" [13.5 0 17.5] "{NoAI:1b}"]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 30}
+            {:no-event {:source :job :kind :completed} :for-s 30}]
+   :after [[:body-far [26.5 0 16.5] 5]]}
+  {:name "zombies-seen-behind-mid-walk-are-left-behind"
+   :act [[:http :submit (jobs.movement.go-to {:pos #at [26.5 0 16.5]}) [:exclusive] {:ok true}]
+         [:until-pos {:x-min 9} 15]
+         [:summon "zombie" [3.5 0 16.5] "{NoAI:1b}"]
+         [:summon "zombie" [3.5 0 15.5] "{NoAI:1b}"]
+         [:summon "zombie" [3.5 0 17.5] "{NoAI:1b}"]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40}]
+   :after [[:body-near [26.5 0 16.5] 2]]}]}

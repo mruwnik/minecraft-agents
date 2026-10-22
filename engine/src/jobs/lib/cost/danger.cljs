@@ -43,7 +43,8 @@
    ::baby-chase-speed {:default 5.1 :doc "Blocks a second a baby zombie covers chasing (chase-speed of mob-kind \"baby\")." :spec (a/num-in 0.1 nil)}
    ::outrun-factor {:default 1.5 :doc "Times a mob's chase speed the body must run to get away from it on foot (outruns?): a flight goes in steps and round obstacles, the mob comes straight on." :spec (a/num-in 0 nil)}
    ::no-answer-scale {:default 60 :doc "How much dearer a mob's route danger is for each time over what the body can afford to lose in a fight with it (no-answer-factor)." :spec (a/num-in 0 nil)}
-   ::race-margin-s {:default 0.5 :doc "Seconds the body must win a race to a refuge by (reach-first?)." :spec (a/num-in 0 nil)}})
+   ::race-margin-s {:default 0.5 :doc "Seconds the body must win a race to a refuge by (reach-first?)." :spec (a/num-in 0 nil)}
+   ::melee-reach {:default 1.4 :doc "Blocks from the body within which a melee mob's blow lands, vanilla's for a zombie (catches?)." :spec (a/num-in 0 nil)}})
 
 
 ;; ---------------------------------------------------------------- reading inputs
@@ -280,3 +281,17 @@
   ::chase-speed)."
   [food degrees]
   (> (* (body-speed food) (js/Math.cos (* degrees (/ js/Math.PI 180)))) (settings/get settings ::chase-speed)))
+
+(defn catches?
+  "Whether a melee chaser (mob-name, chaser its mob-kind) at pos lands a blow on a body with food food walking the straight
+  way from `from` to `to` ({:x :y :z}) before it is past: at some point of the way, every step blocks from the start,
+  the mob gets within ::melee-reach no later than the body (reach-first? lost: the body's start counts
+  ::race-margin-s). A mob at the heels or ahead by the way catches; one the walk leaves behind does not."
+  [{:keys [chaser pos from to food step]}]
+  (let [len (u/dist from to)
+        n (js/Math.ceil (/ len step))
+        reach (settings/get settings ::melee-reach)]
+    (boolean (some (fn [i] (let [t (if (zero? n) 0 (/ i n))
+                                 pt (merge-with #(+ %1 (* t (- %2 %1))) (select-keys from [:x :y :z]) (select-keys to [:x :y :z]))]
+                             (not (reach-first? (* t len) [(max 0 (- (u/dist pos pt) reach))] food [chaser]))))
+                   (range (inc n))))))

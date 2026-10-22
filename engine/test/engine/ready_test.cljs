@@ -315,7 +315,8 @@
       {:x -8 :y 64 :z 0} :ok
       {:x 8 :y 64 :z 0} :later
       {:x 4 :y 64 :z 2} :later
-      {:x 0 :y 64 :z 6} :ok
+      {:x 0 :y 64 :z 6} :later
+      {:x -4 :y 64 :z 6} :ok
       nil :later)
     (is (= :later (first (walk (ctx-of (merge at-origin {:time st/noon :entities [zombie]}))))) "no goal: the plain threat")))
 
