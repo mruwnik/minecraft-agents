@@ -177,7 +177,7 @@
         zone-free (exit-dig-fn c feet)
         ;; the only way on is a drop the planner will not take (a loaded pit it cannot climb back out of): a shut-in body takes it, then digs out from the bottom
         drop-in (let [{:keys [kind at]} (when (= :one-way (some-> (:reason result) keyword)) (:one-way result))]
-                  (when (and (= :drop (some-> kind keyword)) at (not-any? (:skip opts) [:approach]) (not (contains? (:approached (ctx/mem c)) (vec at)))
+                  (when (and (= :drop (some-> kind keyword)) at (not= :closed (some-> (:one-way (:args c)) keyword)) (not-any? (:skip opts) [:approach]) (not (contains? (:approached (ctx/mem c)) (vec at)))
                              (not= :none (:step (escape/choose (:primitives c) (vec at) goal (may-dig-fn c) opts))))
                     (vec at)))
         spot (when (= :none (:step e)) (when-not (contains? (:skip opts) :approach) (escape/way-spot (:primitives c) feet goal (may-dig-fn c) opts (or (:approached (ctx/mem c)) #{}))))
