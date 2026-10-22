@@ -40,6 +40,7 @@
        "--allow-time lets a case that needs night or day set the time (each set appended to --time-log); without it\n"
        "such a case is skipped, and a case with no :time still gets day (logged to a default file in the temp dir). While a world sweep runs, a run outside it fails every case that needs a time lock at once (only :time :any cases run). A case that depends on the time of day (with --allow-time, every case) holds a time lock shared by phase (day cases together,\n"
        "night cases together; the other phase waits; the first holder sets the time) for its whole run; a manual `time set` takes it too: node tools/time-set.mjs <ticks|day|noon|night|midnight>. A failed case whose day time jumped meanwhile (a foreign `time set`) is INCONCLUSIVE. "
+       "The last holder out of the time lock puts the clock back to where it was before the first set (run on by the elapsed time; skipped quietly under /tmp/mc-time-freeze, and in a sweep). "
        "Exit code 0 when every run passed, 1 when one failed, 2 on a usage or setup error."))
 
 (defn parse-args [argv]
@@ -1176,12 +1177,59 @@
                       (.getMilliseconds d)]
                      (- (.getTimezoneOffset d)))))
 
+(def clock-record-file (path/join shared-dir "mc-time-restore.edn"))
+
+(def ticks-per-ms 0.02)
+
+(defn restore-ticks
+  "The time of day the world would show now had the runner not set it: the clock recorded before the first set, run on by the time since."
+  [{:keys [ticks ms]} now-ms]
+  (mod (+ ticks (js/Math.floor (* ticks-per-ms (- now-ms ms)))) 24000))
+
+(defn record-clock!
+  "Before a set: remembers the clock in clock-record-file unless an earlier set already did (the first record is the world's own); resolves to whether it wrote one."
+  []
+  (if (fs/existsSync clock-record-file)
+    (js/Promise.resolve false)
+    (.then (rcon! ["time query day"])
+           (fn [[reply]]
+             (when-let [t (daytime (or reply ""))]
+               (fs/writeFileSync clock-record-file (pr-str {:ticks t :ms (js/Date.now)}))
+               true)))))
+
+(defn claim-clock-record!
+  "The recorded clock, removed from disk, when no live process holds or waits for the time lock; else nil (the last holder restores)."
+  []
+  (when (fs/existsSync clock-record-file)
+    (let [{:keys [entries alive?]} (time-lock-dir-ops)]
+      (with-guard
+        (fn []
+          (when (and (fs/existsSync clock-record-file) (not-any? alive? (keys (entries))))
+            (let [rec (try (reader/read-string (fs/readFileSync clock-record-file "utf8")) (catch :default _ nil))]
+              (fs/unlinkSync clock-record-file)
+              rec)))))))
+
+(defn restore-clock!
+  "After a case released the time lock: the last holder out puts the clock back where the world had it. A refused set (the freeze file) is skipped quietly; a sweep sets day itself when it ends."
+  [opts]
+  (if-let [rec (when-not (.. js/process -env -WORLD_SWEEP_PID) (claim-clock-record!))]
+    (let [t (restore-ticks rec (js/Date.now))]
+      (-> (rcon! [(str "time set " t)])
+          (.then (fn [_]
+                   (when-let [file (:time-log opts)]
+                     (fs/appendFileSync file (str (local-now) " time set " t " by world-test " (:body opts) " (restores the clock)\n")))))
+          (.catch (fn [_] nil))))
+    (js/Promise.resolve nil)))
+
 (defn set-time!
   "Sets the time when allowed (and logs it); resolves to true, or false when not allowed."
   [opts ticks why]
   (if-not (:allow-time opts)
     (js/Promise.resolve false)
-    (.then (rcon! [(str "time set " ticks)])
+    (.then (.then (record-clock!)
+                  (fn [wrote?]
+                    (.catch (rcon! [(str "time set " ticks)])
+                            (fn [e] (when wrote? (fs/unlinkSync clock-record-file)) (throw e)))))
            (fn [_]
              (when-let [file (:time-log opts)]
                (fs/appendFileSync file (str (local-now) " time set " ticks " by world-test " (:body opts)
@@ -2039,7 +2087,7 @@
                                     #(when (f/writes-shared? c) (drop-shared! opts))
                                     #(run! (fn [f] (when (fs/existsSync f) (fs/unlinkSync f))) @plan-files)])
                      (.then (constantly r)))))
-        (.finally (fn [] (stop-monitor) (@stop-sweep) (release-time-lock!))))))
+        (.finally (fn [] (stop-monitor) (@stop-sweep) (release-time-lock!) (restore-clock! opts))))))
 
 ;; ------------------------------------------------------------------ reporting
 

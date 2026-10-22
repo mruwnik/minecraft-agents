@@ -1785,3 +1785,9 @@
 (deftest cpu-delta-subtracts-per-group-and-totals
   (is (= {:main 1.5 :v8 0.5 :total 2}
          (r/cpu-delta {:main 1 :v8 0.25} {:main 2.5 :v8 0.75}))))
+
+(deftest the-restored-clock-runs-on-from-the-recorded-time
+  (are [rec now want] (= want (r/restore-ticks rec now))
+    {:ticks 6000 :ms 0} 0 6000
+    {:ticks 6000 :ms 0} 50000 7000
+    {:ticks 23500 :ms 1000} 26000 0))
