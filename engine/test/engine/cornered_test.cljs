@@ -892,10 +892,14 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [p]} (await (hidden-round retreat {:self {:health 4}
-                                                        :inventory [{:name "iron_sword" :count 1} {:name "cobblestone" :count 20}]
-                                                        :blocks dead-end :entities [(zombie 3 64 0)]}
-                                               1000 (constantly nil)))]
+        (let [{:keys [eng p]} (setup {:self {:health 4}
+                                      :inventory [{:name "iron_sword" :count 1} {:name "cobblestone" :count 20}]
+                                      :blocks dead-end :entities [(zombie 3 64 0)]})
+              n (atom 0)]
+          (.override (.-world p) "place"
+                     (fn [token a impl] (-> (impl token a) (.then (fn [r] (when (= 2 (swap! n inc)) (swap! (fake/state p) assoc :entities [])) r)))))
+          (core/submit! eng retreat {})
+          (await (core/tick! eng))
           (is (zero? (count (calls p "attack"))) "4 health against a zombie: the sword is no answer")
           (is (= [[1 64 0] [1 65 0]] (placed-cells p))))))))
 
