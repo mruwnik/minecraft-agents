@@ -258,6 +258,26 @@
           (is (= "cobblestone" (bd/block-at p at)))
           (is (= "air" (bd/block-at p {:x 1 :y 65 :z 0}))))))))
 
+(deftest a-leaf-dig-refused-by-a-zone-falls-through-to-the-walk-for-a-stand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [zone {:name "canopy" :min [1 65 0] :max [1 65 0] :owner "Miles"}
+              {:keys [eng p]} (bd/setup {:self body :blocks {"1,65,0" "oak_leaves"} :inventory cobble :zones [zone]})
+              result (await (tu/child-outcome eng job {:pos [2 64 0] :item "cobblestone"} 30))]
+          (is (not= :clear-failed (:reason result)) (pr-str result))
+          (is (= "oak_leaves" (bd/block-at p {:x 1 :y 65 :z 0}))))))))
+
+(deftest a-leaf-the-plan-itself-wants-is-not-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "hut" :parts [{:id "w" :cells [[1 65 0] [2 64 0]] :want "oak_leaves"}]}
+              {:keys [eng p]} (bd/setup {:self body :blocks {"1,65,0" "oak_leaves"} :inventory cobble
+                                         :plans {"hut" (shape/with-author plan "Fake")}})]
+          (await (tu/child-outcome eng job {:pos [2 64 0] :item "cobblestone" :for-plan "hut"} 15))
+          (is (= "oak_leaves" (bd/block-at p {:x 1 :y 65 :z 0}))))))))
+
 (deftest a-floor-remembered-as-air-long-ago-is-looked-at-and-placed-against
   (async done
     (tu/run-async done

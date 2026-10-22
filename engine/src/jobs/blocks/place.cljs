@@ -22,6 +22,7 @@
             [jobs.lib.tidy :as tidy]
             [jobs.lib.trees :as trees]
             [jobs.lib.util :as u]
+            [jobs.lib.world :as world]
             [engine.game :as game]))
 
 (def doc
@@ -218,22 +219,24 @@
 
 (defn blocking-leaf
   "The leaves cell the eye's line to pos meets first, when pos is within reach but unseen for that leaf alone (a player
-  cuts it, a canopy over a roof cell); nil otherwise."
+  cuts it, a canopy over a roof cell); nil otherwise, and when :for-plan's own cells include that leaf (it is to be
+  placed, not cut)."
   [c pos]
   (when (and (:see (:args c)) (b/in-reach? c pos) (not (b/in-reach? c pos true)))
-    (let [at (aim/first-blocker (aim/seen-kind-at (:primitives c)) (aim/body-eye c) (u/cell-vec pos))]
-      (when (some-> at u/cell-pos (->> (u/seen-name (:primitives c))) trees/leaves-name?)
+    (let [at (aim/first-blocker (aim/seen-kind-at (:primitives c)) (aim/body-eye c) (u/cell-vec pos))
+          for-plan (:for-plan (:args c))]
+      (when (and (some-> at u/cell-pos (->> (u/seen-name (:primitives c))) trees/leaves-name?)
+                 (not (and for-plan (= for-plan (get (world/footprints c) (vec at))))))
         (u/cell-pos at)))))
 
 (defn ^:async dig-leaf!
-  "One jobs.blocks.dig call on the leaves cell in the way. Resolves to :continue, :again, or the ending (clear-failed)."
-  [c pos items leaf]
+  "One jobs.blocks.dig call on the leaves cell in the way. Resolves to :continue, :again, or nil when the dig was refused
+  or failed (the place then walks to a stand that sees the cell)."
+  [c leaf]
   (let [e (waits/waiting-out c (await (ctx/call c :leaf 'jobs.blocks.dig (clear-args c leaf))))]
     (cond
       (= :continue e) :continue
-      (= :done (:kind e)) :again
-      :else (stop! c :nothing-possible {:placed false :pos pos :item (first items) :reason :clear-failed
-                                        :block (get-in e [:data :block]) :why (contract/cause-key e)}))))
+      (= :done (:kind e)) :again)))
 
 (defn refusal-why
   "Why the primitive refused: its reason text, else one from its status."
@@ -319,7 +322,9 @@
         full (occupied-by c pos items)
         already (some #{block} items)
         lacking? (and (not full) (not already) (nil? (b/chosen c items)))
-        fetched (when (and lacking? (fetching? c)) (await (fetch! c items)))]
+        fetched (when (and lacking? (fetching? c)) (await (fetch! c items)))
+        leaf (when-not (or full already fetched (clears? c block)) (blocking-leaf c pos))
+        dug (when leaf (await (dig-leaf! c leaf)))]
     (cond
       full (stop! c :condition-failed {:placed false :pos pos :item (first items) :reason :occupied :block full})
       already (finish! c :done nil {:placed false :pos pos :item block :reason :already})
@@ -328,8 +333,7 @@
       (clears? c block)
       (let [w (await (clear! c pos items))]
         (if (= :cleared w) :again w))
-      (blocking-leaf c pos)
-      (await (dig-leaf! c pos items (blocking-leaf c pos)))
+      dug dug
       (not (b/in-reach? c pos (:see (:args c))))
       (let [w (await (b/walk-into-reach! c pos (:see (:args c))))]
         (if (:unreachable w) (unreachable c pos items (:unreachable w) (:text w)) w))
