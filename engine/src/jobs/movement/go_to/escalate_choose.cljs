@@ -200,15 +200,16 @@
 
 (defn leg-ends
   "The feet cells on the straight line from feet toward goal (cells [x y z]) leg-blocks and half that on, farthest
-  first; none when the goal is that near."
+  first; the goal alone when it is that near (the last leg), none at the goal."
   [feet goal]
   (let [d (js/Math.sqrt (reduce + (map #(* (- %2 %1) (- %2 %1)) feet goal)))]
-    (when (> d leg-blocks)
-      (distinct (for [i [leg-blocks (quot leg-blocks 2)]]
-                  (mapv #(js/Math.floor (+ %1 0.5 (* (/ i d) (- %2 %1)))) feet goal))))))
+    (cond
+      (> d leg-blocks) (distinct (for [i [leg-blocks (quot leg-blocks 2)]]
+                                   (mapv #(js/Math.floor (+ %1 0.5 (* (/ i d) (- %2 %1)))) feet goal)))
+      (pos? d) [goal])))
 
 (defn dig-leg
-  "A buried body's next leg of a dig toward a goal no one dig route reaches (dig-way refused it as too long): {:step
+  "A buried body's next leg of a dig toward a goal: {:step
   :dig-route :cells :leg-s} to the farthest of leg-ends that route-cells reaches, :leg-s its dig seconds; nil when none
   does; {:step :none :why :dig-budget} when the call's legs so far (memory :leg-dig-s) and this one would dig longer than
   the caller's :worth, else the call's job time left."

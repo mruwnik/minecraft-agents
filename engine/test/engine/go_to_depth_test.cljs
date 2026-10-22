@@ -555,3 +555,17 @@
                                                  {:pos [1 78 0]}))]
           (is (true? (:arrived @out)) (pr-str @out))
           (is (= :stair (:step (first (gt/events-of s :go-to.escalated)))) (pr-str (map #(select-keys % [:step :at]) (gt/events-of s :go-to.escalated)))))))))
+
+;; A chamber (x 0..2, feet 60, z 0) in a stone mass and a pocket (x 9..10, feet 57) the body has seen, the rock between
+;; never seen: the leg that ends short of the goal is followed by a last one into it.
+(def near-pocket (apply dissoc (box -4 50 -4 20 70 4 "stone") (for [[x y] [[0 60] [1 60] [2 60] [9 57] [10 57]] dy [0 1]] (str x "," (+ y dy) ",0"))))
+
+(deftest a-buried-body-digs-its-last-leg-into-the-goal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (climb! {:blocks near-pocket :self {:pos {:x 1.5 :y 60 :z 0.5}} :light [0 0]
+                                                  :seen [[-1 59 -1 3 62 1] [8 56 -1 11 59 1]] :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                 {:pos [9 57 0]}))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (= #{:dig-route} (set (map :step (gt/events-of s :go-to.escalated)))) (pr-str (map #(select-keys % [:step :at]) (gt/events-of s :go-to.escalated)))))))))
