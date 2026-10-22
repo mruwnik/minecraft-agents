@@ -55,6 +55,11 @@
 
 (defn calls [p name] (filterv #(= name (.-name %)) (.-calls (.-world p))))
 
+(defn first-of
+  "The first of the primitive calls named in names that the body made."
+  [p names]
+  (first (keep #(names (.-name %)) (.-calls (.-world p)))))
+
 (defn hiding? [seen] (some #(and (= :holding (:kind %)) (= "hiding" (some-> (:reason %) name))) @seen))
 
 (defn sleep [ms] (js/Promise. (fn [r] (js/setTimeout r ms))))
@@ -911,6 +916,26 @@
                                                        :blocks dead-end :entities [(zombie 1 64 0)]}))]
           (is (= 4 (count (calls p "attack"))) "full health and a sword against one zombie: fight it to the end"))))))
 
+(defn doorway-zombies
+  "The doorway world with an armed, unarmoured body carrying dirt and zombies at z 1..n in the doorway."
+  [n]
+  {:blocks doorway :inventory [{:name "wooden_axe" :count 1} {:name "dirt" :count 20}]
+   :entities (mapv #(assoc (zombie 0 64 %) :id (+ 20 %)) (range 1 (inc n)))})
+
+(deftest an-armed-body-pressed-by-zombies-it-cannot-beat-pillars-before-it-fights
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (hidden-round retreat (doorway-zombies 4) 1000 (constantly nil)))]
+          (is (= "jumpPlace" (first-of p #{"attack" "jumpPlace"})) "four zombies outfight an axe: a second of pillar costs fewer blows"))))))
+
+(deftest an-armed-body-pressed-by-one-zombie-it-beats-fights-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p]} (await (first-round retreat (doorway-zombies 1)))]
+          (is (= "attack" (first-of p #{"attack" "jumpPlace"})) "one zombie the axe beats is fought where it stands"))))))
+
 (defn edge-world
   "Floor (stone at y 63) for x <= edge on z 0 and air everywhere else."
   [edge]
@@ -1249,6 +1274,8 @@
   (is (= [:fight :plug :pillar :back-off :plug-dig] (choose/escape-order {:pressed? true}))
       "four dirt placed beside a zombie that keeps hitting cost three hits")
   (is (= [:fight :plug :pillar :plug-dig] (choose/escape-order {:pressed? true :faster? true})))
+  (is (= [:pillar :fight :plug :back-off :plug-dig] (choose/escape-order {:pressed? true :pillar-cheaper? true}))
+      "a lost fight whose blows a pillar undercuts: the pillar first, the fight when it does not fit")
   (is (= :back-off (first (choose/escape-order {:pressed? true :creeper? true}))) "a creeper is never fought first")
   (is (= :water (first (choose/escape-order {:pressed? true :enderman? true})))))
 
@@ -1323,13 +1350,13 @@
   (mem/write! (:store eng) :hurt {:amount 2 :health 6 :attacker {:name "zombie"}} {:cap 50 :ttl 60000}))
 
 ;; the hit lands during a flee step, so the step's own hit-on-the-run check (at its start) missed it
-(deftest an-armed-body-hit-during-a-step-that-got-nowhere-fights-before-it-builds
+(deftest an-armed-body-hit-during-a-step-that-got-nowhere-pillars-before-it-walls-or-fights
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p]} (await (beset-round [(zombie 6 64 0) (assoc (zombie 0 64 6) :id 8)] hit-and-closed-on!))]
           (is (zero? (count (calls p "place"))) "no seal beside the mobs that just hit it")
-          (is (= 1 (count (calls p "attack")))))))))
+          (is (= "jumpPlace" (first-of p #{"attack" "jumpPlace"})) "at 6 health two zombies outfight a sword: a second of pillar costs fewer blows"))))))
 
 (deftest a-hit-that-is-healed-before-the-next-step-still-corners-the-body
   (async done
@@ -1351,13 +1378,13 @@
           (is (pos? (count (calls p "place"))) "walled in after one healed hit, not walked on")
           (is (= 1 @steers) "no second flee step"))))))
 
-(deftest an-armed-body-with-a-melee-mob-at-its-side-fights-before-it-builds
+(deftest an-armed-body-with-a-melee-mob-at-its-side-pillars-before-it-walls-or-fights
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [p]} (await (beset-round [(zombie 1.5 64 0) (assoc (zombie 0 64 2.5) :id 8)] (constantly nil)))]
           (is (zero? (count (calls p "place"))) "no seal with a mob already in the cell beside it")
-          (is (= 1 (count (calls p "attack")))))))))
+          (is (= "jumpPlace" (first-of p #{"attack" "jumpPlace"})) "at 8 health two zombies outfight a sword: a second of pillar costs fewer blows"))))))
 
 (deftest an-unarmed-body-with-a-zombie-in-a-corner-cell-pillars-before-it-walls-or-fights
   (async done
