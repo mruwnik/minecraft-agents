@@ -10,11 +10,14 @@
   :body {:at [10.5 0 16.5]}
   :limit-s 50}
  :cases
+ ;; the body turns on the spot first: the planner takes cells it has not seen for open, so the whole wall must have been seen
  [{:name "quote-plans-through-a-door-and-opens-nothing"
-   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [22 0 16] :range 1}] {:ok true :quote {:route {:found true}}}] 30]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 0"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 0"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 1]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [22 0 16] :range 1}] {:ok true :quote {:route {:found true}}}] 30]]
    :expect [{:no-event {:level :error} :for-s 2}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=false]"] [:body-near [10.5 0 16.5] 1]]}
   {:name "quote-with-doors-never-finds-no-way-and-says-why"
-   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [22 0 16] :range 1 :doors :never}] {:ok true :quote {:route {:found false}}}] 30]]
+   :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 0"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 0"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 0"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 0"] [:wait-s 1]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [22 0 16] :range 1 :doors :never}] {:ok true :quote {:route {:found false}}}] 30]]
    :expect [{:no-event {:level :error} :for-s 2}]
    :after [[:block [16 0 16] "oak_door[half=lower,open=false]"] [:body-near [10.5 0 16.5] 1]]}]}

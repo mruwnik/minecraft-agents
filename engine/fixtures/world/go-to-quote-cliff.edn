@@ -10,6 +10,7 @@
   :limit-s 40}
  :cases
  [{:name "quote-finds-a-5-drop-with-feather-falling"
+   :body {:at [8.5 5 16.5] :yaw 270} ; facing the edge: the planner takes cells it has not seen for open, so it must see the drop
    :act [[:rcon "item replace entity $BODY armor.feet with minecraft:diamond_boots[enchantments={feather_falling:4}]"] [:until [:cli "observe" ["$body" "--world" "$world" "equipment" "--raw"] {:equipment {:feet {:name "diamond_boots"}}}] 10]
          [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [22 0 16] :range 1 :spend {:health 1.5}}] {:ok true :quote {:route {:found true}}}] 30]]
    :expect [{:no-event {:level :error} :for-s 2}]

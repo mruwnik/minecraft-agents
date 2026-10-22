@@ -11,8 +11,11 @@
   :body {:at [2.5 0 16.5]}
   :limit-s 120}
  :cases
- [{:name "plain-deck-is-goal-cut-off"
-   :blocks [[:fill [13 11 13] [19 11 19] "stone"]]
+
+ [;; a glass deck on the open surface: from below the body sees the deck's top, which it must to prove the goal cut off
+  {:name "plain-deck-is-goal-cut-off"
+   :plot {:light :sky}
+   :blocks [[:fill [13 11 13] [19 11 19] "glass"]]
    :act [[:job (jobs.movement.go-to {:pos #at [17 12 17] :range 1 :ways #{:walk :clear-seal} :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :goal-cut-off :at [:any] :near [:any]}} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:status :stopped :arrived false :text [:contains "cut off"]}} :within-s 60 :of-job true}
