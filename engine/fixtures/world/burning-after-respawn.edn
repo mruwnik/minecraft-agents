@@ -1,0 +1,17 @@
+;; Card 27447fef: a body that dies burning in lava respawns with that state cleared; the burning reflex does not fire
+;; again at the respawn point.
+{:defaults
+ {:tags [:survival :fire :death] :time :any
+  :plot {:height 6}
+  :register [{:trigger :burning :persistence :cooldown :cooldown-s 0 :job (jobs.survival.extinguish {:water-radius 6})}]
+  :blocks [[:fill [8 -2 14] [14 -2 20] "stone"] [:fill [8 -1 14] [14 -1 20] "lava"]]
+  :body {:at [11.5 -1 17.5] :settle-s 1 :spawnpoint [26 0 4] :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "no-extinguish-after-respawn"
+   :act [[:await {:source :reflex :kind :fired :context {:reflex-id :burning}} 20]
+         [:kill-body]
+         [:await {:source :body :kind :respawned} 30]
+         [:wait-s 20]]
+   :expect [{:event {:source :body :kind :respawned} :within-s 60}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :burning}} :for-s 15 :from-event {:source :body :kind :died}}]}]}

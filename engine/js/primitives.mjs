@@ -24,7 +24,7 @@ import { missingPatches, missingRequired } from './deps-check.mjs'
 import { wrapBlockAt } from './offset-shapes.mjs'
 import { say } from './chat.mjs'
 import vec3 from 'vec3'
-import { BODY_HALF_WIDTH, EYE_HEIGHT, sleepMs, waitForWorld, xyz, isNum, vec, cutError, badArgs, isCut, failed, need, attempt, learnHostile, sleepStatusOf, spawnSetMessage, droppedItem, itemCounts } from './prim-base.mjs'
+import { BODY_HALF_WIDTH, EYE_HEIGHT, sleepMs, waitForWorld, xyz, isNum, vec, cutError, badArgs, isCut, failed, need, attempt, learnHostile, clearDeathState, sleepStatusOf, spawnSetMessage, droppedItem, itemCounts } from './prim-base.mjs'
 import { createWalk } from './prim-walk.mjs'
 import { createSense } from './prim-sense.mjs'
 import { createMove } from './prim-move.mjs'
@@ -275,7 +275,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         ...killerNow(),
         ...causeNow()
       }) },
-      respawn: () => { stopWalking(target); respawning = true },
+      respawn: () => { stopWalking(target); clearDeathState(target); respawning = true },
       forcedMove: () => {
         const moved = target.entity.position.distanceTo(lastPos)
         lastPos = target.entity.position.clone()

@@ -58,6 +58,13 @@
 (deftest died-trigger-does-not-hold-without-a-death
   (is (false? (died-holds (memory-with 2000)))))
 
+(deftest burning-trigger-waits-while-the-body-is-dead
+  (let [burning (:when (:burning triggers/all))
+        world (tu/fake {:self {:inLava true :onFire true}})]
+    (is (true? (burning world (memory-with 2000) {})))
+    (is (false? (burning world (memory-with 2000 died-at) {})) "dead: the corpse lies in the lava until the respawn")
+    (is (true? (burning world (memory-with 2000 died-at respawned-at) {})))))
+
 (deftest died-trigger-does-not-hold-after-recovered
   (is (false? (died-holds (memory-with 2000 died-at respawned-at [:recovered 1500 {:decision :skip}]))))
   (is (true? (died-holds (memory-with 2000 [:recovered 500 {:decision :skip}] died-at respawned-at)))

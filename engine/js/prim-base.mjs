@@ -105,6 +105,15 @@ export const metaIndex = (bot, e, key, fallback) => {
 }
 export const metaValue = (bot, e, key, fallback) => e.metadata?.[metaIndex(bot, e, key, fallback)]
 export const burning = (bot, e) => ((metaValue(bot, e, 'shared_flags', 0) ?? 0) & FLAG_ON_FIRE) !== 0
+// Death does not reset what the body last sensed: the fire flag, the air and the physics lava/water flags stay as they
+// were until the next packet or physics tick (which waits for the new column), so a respawn clears them.
+export const clearDeathState = bot => {
+  const flags = bot.entity?.metadata
+  const at = metaIndex(bot, bot.entity, 'shared_flags', 0)
+  if (flags && typeof flags[at] === 'number') flags[at] &= ~FLAG_ON_FIRE
+  bot.oxygenLevel = 20
+  if (bot.entity) Object.assign(bot.entity, { isInLava: false, isInWater: false })
+}
 export const lyingDown = (bot, e) => metaValue(bot, e, 'pose', 6) === POSE_SLEEPING
 
 export const attempt = f => { try { return f() } catch { return null } }

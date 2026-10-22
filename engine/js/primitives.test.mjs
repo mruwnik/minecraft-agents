@@ -860,6 +860,18 @@ test('the respawned event waits for the spawn and carries the new position and d
   assert.deepEqual(seen.map(e => e.kind), ['spawned', 'respawned', 'spawned'])
 })
 
+test('a respawn clears the fire, lava, water and air state the body died with', () => {
+  const { bot, p } = rig(world)
+  bot.entity.name = 'player'
+  bot.entity.metadata = [3]
+  bot.oxygenLevel = 0
+  Object.assign(bot.entity, { isInLava: true, isInWater: true })
+  assert.deepEqual([p.self().onFire, p.self().inLava, p.self().inWater], [true, true, true])
+  bot.emit('respawn')
+  const s = p.self()
+  assert.deepEqual([s.onFire, s.inLava, s.inWater, s.oxygen, bot.entity.metadata[0]], [false, false, false, 20, 2])
+})
+
 // ---- offline ----
 
 const MIN = 60000

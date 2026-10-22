@@ -177,7 +177,7 @@ An unplanned disconnect (kick, socket end, restart) emits `disconnected` and rec
 each failure a `reconnect-failed` event and a wait of 1 s doubling up to 60 s, until `online` or `close()`. A bot `error`
 is emitted as a body event, never thrown. The engine turns an act's `offline` into a cut; the job stays listed.
 
-The pathfinder goal never outlives a walk, and death and respawn clear it. The pathfinder's movements (`js/movements.mjs`)
+The pathfinder goal never outlives a walk, and death and respawn clear it, and a respawn clears the fire, lava, water and air state the body died with. The pathfinder's movements (`js/movements.mjs`)
 never dig or build; hazards (powder snow, cobweb, magma, campfires) add cost, and fire and lava are avoided outright.
 
 ### Body events
