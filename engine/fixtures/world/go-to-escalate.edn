@@ -273,14 +273,15 @@
    :after [[:body-near [3.5 12 16.5] 2]]
    :limit-s 240}
   {:name "stair-top-one-way-without-stair-way-still-gives-up"
-   ;; same mine, :ways #{:walk}: the walk may not dig, so the one-way drop ends the call with :why :one-way and nothing is dug
+   ;; same mine, :ways #{:walk} and :one-way :closed: the walk may not dig and takes no drop it cannot climb back, so the 3 drop ends
+   ;; the call with :why :one-way and nothing is dug (the default :open takes a drop into land it has not seen, then ends shut in)
    :plot {:height 16}
    :blocks [[:fill [2 0 8] [30 11 24] "stone"]
             [:fill [3 0 16] [12 2 16] "air"] [:fill [12 3 16] [12 5 16] "air"]
             [:fill [13 3 16] [22 5 16] "air"]
             [:fill [23 4 16] [23 6 16] "air"] [:fill [24 5 16] [24 7 16] "air"] [:fill [25 6 16] [25 8 16] "air"] [:fill [26 7 16] [26 9 16] "air"]]
    :body {:at [26.5 7 16.5] :inventory [["iron_pickaxe" 1]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [3 12 16] :range 1 :ways #{:walk}})]]
+   :act [[:job (jobs.movement.go-to {:pos #at [3 12 16] :range 1 :ways #{:walk} :one-way :closed})]]
    :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false :why :one-way}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :go-to.escalated} :for-s 90 :until {:source :job :kind :stopped :data {:arrived false}}}]
    :after [[:block [26 10 16] "stone"] [:block [26 11 16] "stone"]]}
