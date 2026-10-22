@@ -154,10 +154,11 @@
        (sh-sleepers/log-out-for-sleepers? (:primitives c) (ctx/view c))))
 
 (defn ^:async log-out-step
-  "Someone sleeps: a log-out stint (jobs.survival.log-out). Ok or cut: :logged-out unless already sheltered, and the
+  "Someone sleeps: a bite if hungry (hold/eat-if-hungry!; a logged-out body cannot eat), then a log-out stint (jobs.survival.log-out). Ok or cut: :logged-out unless already sheltered, and the
   next pass looks again. Declined or failed (unsupported, closed): :log-out-failed, not tried again by this job."
   [c]
   (hold/busy! c)
+  (await (hold/eat-if-hungry! c))
   (let [l (await (ctx/call c :log-out 'jobs.survival.log-out {}))]
     (cond
       (= :continue l) :again

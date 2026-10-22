@@ -75,6 +75,7 @@
   (let [level (fn [world] ((:when (get triggers/all :hungry)) (tu/fake world) {} {}))]
     (is (true? (level {:self {:food 5}})) "hungry: its :comfort level")
     (is (= :urgent (level {:self {:food 2}})) "food 2")
+    (is (= :urgent (level {:self {:food 6} :inventory [{:name "bread" :count 1}]})) "hungry with food carried: one bite, no waiting for a section")
     (is (= :urgent (level {:self {:food 15 :health 5} :inventory [{:name "bread" :count 1}]})) "hurt, food carried")))
 
 (deftest hungry-in-the-dark-only-holds-with-food-to-eat

@@ -62,7 +62,7 @@
 
 (defn hungry
   "Holds when hungry? says so, top-up? does (a hurt body below 18 food carrying common food), or eat-now? does.
-  Holds at :urgent when eat-now? does (low health) or food is at most ::urgent-food (2), else at its :comfort level.
+  Holds at :urgent when eat-now? does (low health), food is at most ::urgent-food (2), or the body is hungry? with food carried (one bite, no search), else at its :comfort level.
   Args: :food, :health, :rest-s.
   In the dark it holds only with food carried to eat: a search in the dark walks into mobs, and starvation stops at half a heart.
   A fragile body (foods/fragile?) with no food carried holds in the dark too (only food heals it); get-food's risk check lets it walk only to known food within foods/::starving-walk-range.
@@ -72,7 +72,9 @@
   [world memory args]
   (let [self (.self world)
         reserved (reserve/spared memory self)
-        urgent? (or (foods/eat-now? self args reserved) (<= (.-food self) (settings/get settings ::urgent-food)))]
+        urgent? (or (foods/eat-now? self args reserved)
+                    (<= (.-food self) (settings/get settings ::urgent-food))
+                    (and (foods/hungry? (.-food self) (.-health self) args) (foods/carries-food? self reserved)))]
     (and (not (body/recovery-pending? memory :hungry))
          (foods/wants-meal? self reserved args)
          (not (resting? self memory args))

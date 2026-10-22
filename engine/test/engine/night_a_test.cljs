@@ -315,6 +315,18 @@
           (is (= [] (st/calls p "place")) "not dug in")
           (is (= [] (:list (core/state eng))) "ended at morning"))))))
 
+(deftest a-hungry-body-eats-before-each-log-out-stint
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (st/setup {:time night :self {:food 4} :inventory [{:name "bread" :count 2}] :blocks st/floor})]
+          (on-return! p clock (fn [_] (.setTime (.-world p) noon)))
+          (sleep-count! p 1 2)
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tu/run-until-empty eng 10))
+          (is (= 1 (count (st/calls p "offline"))))
+          (is (= ["bread"] (distinct (map #(aget (.-args %) "item") (st/calls p "eat")))) "a bite before the stint"))))))
+
 (deftest the-body-stays-out-while-someone-sleeps-and-the-news-is-unknown-until-morning
   (async done
     (tu/run-async done
