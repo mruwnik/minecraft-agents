@@ -1,0 +1,20 @@
+;; Card d8f63b90: a flight from a zombie and a skeleton to the west, a pond level with the ground straight east of the body and dry
+;; ground to its sides, ends on dry ground. Stone block x 0..31, z 0..31, y 0..2 (feet y 3); a pond x 17..27, z 11..21 carved one deep (water y 2).
+;; Should-succeed: a flight starts (retreat.target) and the body is not hurt by drowning and does not end in the pond.
+{:defaults
+ {:tags [:hostile :survival :flee :water]
+  :time :any
+  :mobs :keep
+  :register [{:trigger :hostile-near :args {:radius 12 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 12}})}]
+  :blocks [[:fill [0 0 0] [31 2 31] "stone"]
+           [:fill [17 2 11] [27 2 21] "water"]]
+  :body {:at [14.5 3 16.5] :yaw 270 :effects [["resistance" 600 4]]}
+  :limit-s 50}
+ :cases
+ [{:name "flight-from-zombie-and-skeleton-keeps-to-dry-ground"
+   :act [[:summon "zombie" [8.5 3 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:summon "skeleton" [6.5 3 14.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :retreat.target} :within-s 25}
+            {:no-event {:source :body :kind :hurt :data {:causes ["drown"]}} :for-s 40}]
+   :after [[:body-far [22 2 16] 4]]}]}

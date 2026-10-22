@@ -22,8 +22,8 @@
   (let [end (walk/choose-target pond-world from [threat] nil [] 6 {:swim-factor 2.2})]
     (is (not (walk/wet? pond-world end)) "dry ground beats swimming the pond")
     (is (< 2 (js/Math.abs (:z end))) "round the band, not through it"))
-  (is (= {:x 6 :y 63 :z 0} (walk/choose-target pond-world from [threat] nil [] 6 {:swim-factor 1}))
-      "with water as fast as ground the way straight away is kept"))
+  (is (not (walk/wet? pond-world (walk/choose-target pond-world from [threat] nil [] 6 {:swim-factor 1})))
+      "dry ground beats the pond even when water is as fast as ground"))
 
 (defn walled-pond-world
   "pond-world with the pond |z| <= 3 wide and stone walls two high at |z| = 4: dry ground sideways is only 3 blocks."
@@ -46,8 +46,8 @@
     (is (some? again) "another heading is open")
     (is (not= first-end again) "the refused end is left out")))
 
-(deftest a-flight-without-options-keeps-the-preferred-direction
-  (is (= {:x 6 :y 63 :z 0} (walk/choose-target pond-world from [threat] nil [] 6))))
+(deftest a-flight-without-options-still-goes-round-the-pond
+  (is (not (walk/wet? pond-world (walk/choose-target pond-world from [threat] nil [] 6)))))
 
 (deftest a-cell-is-wet-when-the-feet-or-the-floor-are-water
   (is (walk/wet? pond-world {:x 3 :y 63 :z 0}) "feet in water")
