@@ -416,18 +416,20 @@
               (is (= held? (boolean (:text (first (filter #(= :hostile.sealed-hold (:kind %)) @seen))))) (str why ": sealed-hold event with its reason"))
               (is (= held? (boolean (seq (filterv :mute-s @seen)))) (str why ": a held body with nothing to fight ends done, leaving the heard mob (not no-response)")))))))))
 
-(deftest a-roofed-body-hurt-lately-does-not-stay-for-a-mob-it-only-hears
+(deftest a-roofed-body-hit-lately-does-not-stay-for-a-mob-it-only-hears
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup-seeing (assoc {:time 14000 :blocks roofed-passage :entities [(zombie 7 0.5 -5.5)]} :self {:health 20} :inventory sword :pitch -80) nil 1000)]
-          (perception/pass! (aget p "perception"))
-          (swap! (fake/state p) assoc :pitch 0)
-          (mem/write! (:store eng) :hurt {:amount 3})
-          (core/submit! eng respond {})
-          (await (core/tick! eng))
-          (is (empty? (filter #(= :hostile.sealed-hold (:kind %)) @seen)) "hit lately: the roof is no reason to stay")
-          (is (not-any? #(= :no-response (:reason %)) @seen) "and the reflex does not end as if nothing could be done"))))))
+        (doseq [[hurt held? why] [[{:amount 3} false "hit by a mob lately: the roof is no reason to stay"]
+                                  [{:amount 1 :cause "starvation"} true "starving is no hit: it stays under the roof"]]]
+          (let [{:keys [eng p seen]} (setup-seeing (assoc {:time 14000 :blocks roofed-passage :entities [(zombie 7 0.5 -5.5)]} :self {:health 20} :inventory sword :pitch -80) nil 1000)]
+            (perception/pass! (aget p "perception"))
+            (swap! (fake/state p) assoc :pitch 0)
+            (mem/write! (:store eng) :hurt hurt)
+            (core/submit! eng respond {})
+            (await (core/tick! eng))
+            (is (= held? (boolean (seq (filter #(= :hostile.sealed-hold (:kind %)) @seen)))) why)
+            (is (not-any? #(= :no-response (:reason %)) @seen) "the reflex does not end as if nothing could be done")))))))
 
 (deftest a-body-looks-toward-a-heard-mob-before-leaving-it
   (async done

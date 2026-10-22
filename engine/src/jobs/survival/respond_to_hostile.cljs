@@ -91,9 +91,9 @@
                       (and (stay-inside?) (or (sh-sense/shut-in-room? p) (sh-inside/sheltered-in c))))))))
 
 (defn hurt-lately?
-  "Whether the body was hurt within hit-window-ms: an unseen mob may be the one hitting it."
+  "Whether a mob may have hurt the body within hit-window-ms (an unseen one may be hitting it); hunger, fire or a fall do not count."
   [c]
-  (boolean (seq (ctx/since c :hurt (- (ctx/now c) (hit-window-ms))))))
+  (body/mob-hit-since? (ctx/view c) (- (ctx/now c) (hit-window-ms))))
 
 (defn stay-under-roof?
   "Whether the body keeps its roof: ::stay-inside on, a roof over the feet, and every danger near either only heard
