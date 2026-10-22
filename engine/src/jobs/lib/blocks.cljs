@@ -171,6 +171,15 @@
   (and (<= (u/eye-dist (u/self-pos c) pos) forestry/dig-reach)
        (or (not see?) (aim/body-sees? c (if (vector? pos) pos (u/cell-vec pos))))))
 
+(defn through-cell
+  "The seen solid block a player would dig to get at pos, within twice the reach: the first one on the aim line when it is within reach and not tried before, else nil."
+  [c pos]
+  (let [p (:primitives c)
+        cell (cell pos)
+        hit (aim/first-blocker (aim/seen-kind-at p) (aim/body-eye c) cell)]
+    (when (and hit (not= hit cell) (not (contains? (:through (ctx/mem c)) hit)) (<= (u/eye-dist (u/self-pos c) pos) (* 2 u/eye-reach)) (in-reach? c (zipmap [:x :y :z] hit)))
+      hit)))
+
 (defn fresh-mem
   "Job memory m for target pos: m when it is about pos, else emptied (children too) and marked for pos. Gives a
   parent that reuses one slot a clean child per cell."

@@ -1,6 +1,7 @@
 ;; Card 82c4902e: a cell inside a closed cobble shell the body stands outside of, never seen from inside.
 ;; Shell x 14..18, z 14..18, y 0..4 (walls, roof), interior x 15..17, z 15..17, y 0..3, dirt at y 0; doorway at x 16, z 18, y 0..2.
 ;; Body at z 21 (3 blocks from the doorway wall). reach-into-room-by-doorway: the open 1x3 doorway leads in.
+;; place-through-wall: the same shell, shut; a stone placed on the dirt inside digs the wall block in the line first.
 ;; dig-through-wall: the doorway is cobble; the dig of a dirt cell behind the wall digs one wall block, then the cell (no unreachable give-up).
 {:defaults
  {:tags [:blocks :reach] :time :any
@@ -19,4 +20,10 @@
    :act [[:job (jobs.blocks.dig {:pos #at [16 0 17]})]]
    :expect [{:event {:source :job :kind :completed :data {:dug true :reason :dug}} :within-s 90 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :unreachable}} :for-s 90 :until {:source :job :kind :completed}}]
-   :after [[:block [16 0 17] "air"]]}]}
+   :after [[:block [16 0 17] "air"]]}
+  {:name "place-through-wall"
+   :body {:inventory [["iron_pickaxe" 1] ["stone" 4]]}
+   :act [[:job (jobs.blocks.place {:pos #at [16 1 17] :use {:blocks ["stone"]}})]]
+   :expect [{:event {:source :job :kind :completed :data {:placed true}} :within-s 90 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :unreachable}} :for-s 90 :until {:source :job :kind :completed}}]
+   :after [[:block [16 1 17] "stone"]]}]}

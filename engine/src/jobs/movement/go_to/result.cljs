@@ -3,6 +3,7 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.movement.go-to.headroom :as headroom]
+            [jobs.movement.go-to.tuning :as tuning]
             [jobs.lib.breath :as breath]
             [jobs.lib.reach :as reach]
             [jobs.lib.shelter.inside :as sh-inside]
@@ -76,7 +77,7 @@
               reason (assoc :detail (str reason)))
     (cond
       (or reason (= :no-path status)) (merge {:why (if reason (keyword reason) :no-path)}
-                                             (select-keys result [:kind :cells :near :one-way :dark-best :torches :heal :health :hp-cost :hp-budget :hungry-food :dip :rise]))
+                                             (select-keys result [:kind :cells :near :one-way :dark-best :torches :heal :health :hp-cost :hp-budget :hungry-food :dip :rise :goal-left]))
       :else {:why :no-progress}))
    (select-keys result [:waypoint-why])))
 
@@ -114,7 +115,7 @@
 
 (defn give-up-words
   "The give-up reason in words, for the :text of the result: no map dumps."
-  [pos {:keys [why kind detail escalation shut-in nearest-hostile nearest-hostile-at resets-spent mob mob-distance explored walks torches waypoint-why heal hp-cost hp-budget hungry-food low-passage dip rise route straight in-water]}]
+  [pos {:keys [why kind detail escalation shut-in nearest-hostile nearest-hostile-at resets-spent mob mob-distance explored walks torches waypoint-why heal hp-cost hp-budget hungry-food low-passage dip rise route straight in-water goal-left]}]
   (str "gave up walking to " (if (map? pos) (let [{:keys [x y z]} pos] [x y z]) pos) ": "
        (if (and escalation (not (#{:way-dives :detour} why)))
          (str (if (:into escalation) "the goal is walled in; " "shut in here; ") (escalation-words escalation))
@@ -140,7 +141,9 @@
            :needs-health (str "a way exists but costs " hp-cost " hp, more than the " hp-budget " hp the body may spend"
                            (when hungry-food (str " (hunger sets that: losing more would make it hungry at food " hungry-food ")"))
                            (if (= :full heal) " at full health (healing cannot help; only a :floor {:health 1} or less, or a lower :floor :health, lets it go)" ", and it cannot heal first"))
-           :budget "the search used up its node budget without reaching the goal, mostly over land the body has not seen (the unknown-max-nodes setting): walk nearer in stages to see more of it"
+           :budget (if (and goal-left (<= goal-left (tuning/budget-near)))
+                     (str "the search used up its node budget without reaching the goal " goal-left " blocks away: no way through the blocks seen round it was found, it is walled in, so a block must be dug or the way in looked at (the unknown-max-nodes setting bounds the search)")
+                     "the search used up its node budget without reaching the goal, mostly over land the body has not seen (the unknown-max-nodes setting): walk nearer in stages to see more of it")
            :air "every way there under water runs out of air"
            :air-lethal "every way there under water would drown the body to death"
            :one-way "the way back is one-way"

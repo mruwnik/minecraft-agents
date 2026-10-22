@@ -40,7 +40,7 @@
   - {:reason :not-loaded :pos}.
 
   A plant, flower or snow layer in the cell (jobs.lib.blocks/clearable) is dug first with a jobs.blocks.dig child (no tool
-  needed, the drop is not collected); so is a leaves block alone in the way of the eye to a cell within reach (:see). Out of reach, the round walks within 3 cells (go-to child). In reach it places
+  needed, the drop is not collected); so is a leaves block alone in the way of the eye to a cell within reach (:see). When the walk to a stand that sees the cell fails, the first seen solid block in the line within twice the reach (not :for-plan's own cell) is dug (a jobs.blocks.dig child), as a player does. Out of reach, the round walks within 3 cells (go-to child). In reach it places
   through jobs.lib.tidy/place!, so a block placed in another's zone with :ignore-zones? is recorded for
   jobs.survival.restore-broken.
 
@@ -238,6 +238,19 @@
       (= :continue e) :continue
       (= :done (:kind e)) :again)))
 
+(defn ^:async dig-through!
+  "A walk to a stand that sees pos failed and a seen solid block (not :for-plan's own cell) lies in the line within reach:
+  dig it, as a player does. :continue, :again, or nil when there is none or it could not be dug."
+  [c pos]
+  (let [hit (b/through-cell c pos)
+        for-plan (:for-plan (:args c))]
+    (when (and hit (not (and for-plan (= for-plan (get (world/footprints c) (vec hit))))))
+      (let [e (waits/waiting-out c (await (ctx/call c :through 'jobs.blocks.dig (clear-args c (u/cell-pos hit)))))]
+        (if (= :continue e)
+          :continue
+          (do (ctx/update-mem! c update :through (fnil conj #{}) hit)
+              (when (= :done (:kind e)) :again)))))))
+
 (defn refusal-why
   "Why the primitive refused: its reason text, else one from its status."
   [r]
@@ -336,7 +349,9 @@
       dug dug
       (not (b/in-reach? c pos (:see (:args c))))
       (let [w (await (b/walk-into-reach! c pos (:see (:args c))))]
-        (if (:unreachable w) (unreachable c pos items (:unreachable w) (:text w)) w))
+        (if (:unreachable w)
+          (or (await (dig-through! c pos)) (unreachable c pos items (:unreachable w) (:text w)))
+          w))
       (= :own-body (:reason (place-verdict c pos items)))
       (let [r (await (step-off/step-off-zoned! c pos {}))]
         (cond (= :continue r) :continue

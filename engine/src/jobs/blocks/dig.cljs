@@ -8,7 +8,6 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
-            [jobs.lib.aim :as aim]
             [jobs.lib.dig-look :as look]
             [jobs.lib.blocks :as b]
             [jobs.lib.checks :as checks]
@@ -369,20 +368,11 @@
                   :hazards (mapv :reason (:hazards (access/may-dig? (b/rules-in c) pos)))
                   :text (str "dig under the feet at " (pr-str [x y z]) ": " (name decision))}))))
 
-(defn through-cell
-  "The seen solid block a player would dig to get at pos, within twice the reach: the first one on the aim line when it is within reach and not tried before, else nil."
-  [c pos]
-  (let [p (:primitives c)
-        cell (b/cell pos)
-        hit (aim/first-blocker (aim/seen-kind-at p) (aim/body-eye c) cell)]
-    (when (and hit (not= hit cell) (not (contains? (:through (ctx/mem c)) hit)) (<= (u/eye-dist (u/self-pos c) pos) (* 2 u/eye-reach)) (b/in-reach? c (zipmap [:x :y :z] hit)))
-      hit)))
-
 (defn ^:async dig-through!
   "pos is within reach but a block lies in the aim line: dig that first, as a player does, before any walk round it (the
   block is not picked up). :again, :continue, or nil when there is no such block or the child could not dig it."
   [c pos]
-  (when-let [hit (through-cell c pos)]
+  (when-let [hit (b/through-cell c pos)]
     (let [r (await (child/run!* c :through 'jobs.blocks.dig {:pos hit :collect false :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
       (cond
         (= :continue r) :continue

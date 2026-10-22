@@ -878,6 +878,12 @@
     (is (not (str/includes? (end/give-up-words [10 64 0] {:why why}) "no path (")) (str why)))
   (is (str/includes? (end/give-up-words [10 64 0] {:why :air-lethal}) "drown")))
 
+(deftest a-budget-give-up-near-the-goal-says-walled-in-not-unseen-land
+  (are [left part not-part] (let [text (end/give-up-words [10 64 0] {:why :budget :goal-left left})]
+                              (and (str/includes? text part) (not (str/includes? text not-part))))
+    2 "walled in" "land the body has not seen"
+    40 "land the body has not seen" "walled in"))
+
 (deftest a-moved-while-searching-give-up-says-when-the-body-is-in-water
   (is (str/includes? (end/give-up-words [10 64 0] {:why :moved-while-searching :in-water true}) "in water"))
   (is (not (str/includes? (end/give-up-words [10 64 0] {:why :moved-while-searching}) "water"))))
