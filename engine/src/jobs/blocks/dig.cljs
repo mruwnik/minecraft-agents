@@ -39,7 +39,7 @@
   - {:reason :no-tool :needs item :block name :hint}: no carried tool harvests the block (with :need-drop) and the call's :ways
     allow no fetch (otherwise the round gets one; a fetch that fails ends the same way, with :why).
 
-  A block not in sight, within twice the reach, with a seen terrain block (stone, dirt, sand ..: jobs.lib.blocks/through-natural) first in the line, is reached by digging that block first (picked up; zones, claims and hazards apply to it) before any walk, unless a seen open cell beside or above the block has a stand on solid ground (open-side?: the walk finds that side); a base block there (chest, door, planks ..) is never dug for it: the walk's give-up names it as :blocked-by.
+  A block not in sight, within twice the reach, with a seen terrain block (stone, dirt, sand ..: jobs.lib.blocks/through-natural) first in the line, is reached by digging that block first (picked up; zones, claims and hazards apply to it) before any walk, unless a seen open cell beside or above the block has safe ground to stand on (open-side?: the walk goes there first, and digs through only when that walk fails); a base block there (chest, door, planks ..) is never dug for it: the walk's give-up names it as :blocked-by.
   Out of reach, it walks within 3 cells (go-to child, which opens and shuts doors); a failed walk is tried once more,
   then it ends nothing-possible {:reason :unreachable :pos :why} (:no-walk, :out-of-reach, go-to's why).
   A block under the feet with no seen solid floor below it is not dug from on top: the body first steps off its
@@ -372,12 +372,15 @@
                   :text (str "dig under the feet at " (pr-str [x y z]) ": " (name decision))}))))
 
 (defn open-side?
-  "Whether a player could stand at a seen open cell on or beside an open face of the block at pos, on seen solid ground other than that block, not the body's own cell: the walk finds that side, nothing needs digging through."
+  "Whether a seen open cell on or beside an open face of the block at pos has seen ground a body can stand on (not lava, water or any harmful block, not the block itself) and is not the body's own cell: a stand the walk may find, so nothing is dug through yet. It does not know whether that cell connects to the body: a failed walk falls back to the dig-through."
   [c pos]
   (let [[x y z] (b/cell pos)
         feet (b/feet-cell c)
+        name-at (fn [x y z] (some-> (u/seen-block (:primitives c) {:x x :y y :z z}) .-name))
         kind (fn [x y z] (some-> (u/seen-block (:primitives c) {:x x :y y :z z}) reach/kind-of))
-        stand? (fn [sx sy sz] (and (not= [sx sy sz] feet) (not= [sx (dec sy) sz] [x y z]) (= :open (kind sx sy sz)) (= :solid (kind sx (dec sy) sz))))]
+        ground? (fn [x y z] (let [n (name-at x y z)]
+                              (and n (= :solid (kind x y z)) (not (bs/fluids n)) (not (bs/harms-in-cell n)))))
+        stand? (fn [sx sy sz] (and (not= [sx sy sz] feet) (not= [sx (dec sy) sz] [x y z]) (= :open (kind sx sy sz)) (ground? sx (dec sy) sz)))]
     (some (fn [[dx dy dz]]
             (let [nx (+ x dx) ny (+ y dy) nz (+ z dz)]
               (and (= :open (kind nx ny nz))
@@ -385,9 +388,9 @@
           b/neighbours)))
 
 (defn ^:async dig-through!
-  "pos is within reach but a block lies in the aim line: dig that first (terrain only, jobs.lib.blocks/through-natural; zones and hazards apply), as a player does, before any walk round it. :again, :continue, or nil when there is no such block or the child could not dig it."
+  "pos is within reach but a block lies in the aim line: dig that first (terrain only, jobs.lib.blocks/through-natural; zones and hazards apply), as a player does. :again, :continue, or nil when there is no such block or the child could not dig it."
   [c pos]
-  (when-let [hit (and (not (open-side? c pos)) (b/through-cell c pos))]
+  (when-let [hit (b/through-cell c pos)]
     (let [r (await (child/run!* c :through 'jobs.blocks.dig {:pos hit :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
       (cond
         (= :continue r) :continue
@@ -437,9 +440,11 @@
       (and (not (:walk (:args c))) (not (b/in-reach? c pos (:see (:args c)))))
       (unreachable! c :no-walk)
       (not (b/in-reach? c pos (:see (:args c))))
-      (or (await (dig-through! c pos))
+      (or (when-not (open-side? c pos) (await (dig-through! c pos)))
           (let [w (await (b/walk-into-reach! c pos (:see (:args c))))]
-            (if (:unreachable w) (unreachable! c (:unreachable w)) w)))
+            (if (:unreachable w)
+              (or (await (dig-through! c pos)) (unreachable! c (:unreachable w)))
+              w)))
       ;; the look or walk of this step may show a hazard that can-run?, asked before it, did not know
       (problem c) (if (ctx/returns-on-later? c) (ctx/end c :condition-failed (problem c)) :continue)
       (and (access/under-feet? (access/may-dig? (b/rules-in c) pos)) (not (contains? (set (:accept (:args c))) :under-feet)))

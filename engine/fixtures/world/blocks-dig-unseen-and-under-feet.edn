@@ -46,4 +46,13 @@
    :expect [{:event {:source :job :kind :completed :data {:dug true :reason :dug}} :within-s 110 :of-job true}
             {:no-event {:source :job :kind :planned :data {:why "budget"}} :for-s 110 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:block [16 0 16] "air"]]
+   :limit-s 120}
+  {:name "dig-through-when-the-pocket-beside-it-is-unconnected"
+   ;; a closed air pocket beside the buried block has a stone floor, so a stand looks possible; no walk reaches it, so the walk fails and the stone in the line is dug.
+   :blocks [[:fill [12 0 12] [20 2 20] "stone"] [:set [17 1 16] "air"]]
+   :body {:at [16.5 3 16.5] :inventory [["iron_pickaxe" 1]]}
+   :act [[:job (jobs.blocks.dig {:pos #at [16 1 16]})]]
+   :expect [{:event {:source :job :kind :completed :data {:dug true :reason :dug}} :within-s 110 :of-job true}
+            {:no-event {:source :job :kind :planned :data {:why "budget"}} :for-s 110 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:block [16 1 16] "air"]]
    :limit-s 120}]}

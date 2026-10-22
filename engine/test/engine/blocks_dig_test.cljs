@@ -409,6 +409,26 @@
           (is (= {:dug true} (select-keys result [:dug])) (pr-str result))
           (is (< 1 (count (calls (:p env) "dig")))))))))
 
+(deftest a-block-with-an-unconnected-pocket-beside-it-is-dug-through-when-the-walk-fails
+  ;; the pocket (6 62 0) has a stone floor, so open-side? sends the body to walk first; no walk reaches it, so the stone in the line is dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (setup {:self in-pit :inventory [{:name "iron_pickaxe" :count 1}] :blocks (assoc pit-blocks "5,62,0" "dirt" "6,62,0" "air")})
+              _ (tu/seeing-all (:p env))
+              result (await (tu/child-outcome (:eng env) job {:pos [5 62 0]} 40))]
+          (is (= {:dug true} (select-keys result [:dug])) (pr-str result))
+          (is (< 1 (count (calls (:p env) "dig")))))))))
+
+(deftest open-side-wants-safe-ground-under-a-seen-open-cell-beside-the-block
+  (are [floor want] (let [env (setup {:self in-pit :blocks (assoc pit-blocks "5,62,0" "dirt" "6,62,0" "air" "6,61,0" floor)})
+                          _ (tu/seeing-all (:p env))]
+                      (= want (boolean (dig/open-side? {:primitives (:p env)} {:x 5 :y 62 :z 0}))))
+    "stone" true
+    "lava" false
+    "water" false
+    "magma_block" false))
+
 (deftest a-chest-in-the-line-is-not-dug-for-a-way-in-and-the-give-up-names-it
   (async done
     (tu/run-async done
