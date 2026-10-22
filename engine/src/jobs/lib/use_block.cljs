@@ -5,6 +5,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
             [jobs.lib.checks :as checks]
+            [jobs.lib.crops :as crops]
             [jobs.lib.pace :as pace]
             [jobs.lib.util :as u]
             [engine.args :as a]))
@@ -59,6 +60,14 @@
                                                 (when-not used (str ": " (name (:reason result)))))))]
     (ctx/end c kind (when-not used (select-keys result [:reason :why])) result)))
 
+(defn ripe-before?
+  "Whether the reply r says the block was a crop already at its ripe age before the click (bone meal does nothing to it)."
+  [r]
+  (let [before (.-before r)
+        ripe (some-> before .-name crops/ripe-age)
+        age (some-> before .-properties .-age)]
+    (boolean (and ripe age (>= age ripe)))))
+
 (defn ^:async click-block!
   "The click or bucket use at pos once in reach: the act's status keyword and its reply."
   [c {:keys [pos item face]}]
@@ -79,7 +88,8 @@
       :else
       (let [[status r] (await (click-block! c {:pos pos :item item :face face}))]
         (finish-block! c (cond (= :used status) :done (condition-reasons status) :condition-failed :else :nothing-possible)
-                       (cond-> {:used (= :used status) :pos pos :item item :face face :reason status :raw r}
+                       (cond-> {:used (= :used status) :pos pos :item item :face face :raw r
+                                :reason (if (and (= :unchanged status) (= "bone_meal" item) (ripe-before? r)) :ripe status)}
                          (.-spawnSet r) (assoc :spawn-set true)))))))
 
 

@@ -502,6 +502,18 @@
             (await (tu/run-until-empty eng 5))
             (is (= {:kind kind :cause cause} (update @out :cause identity)) status)))))))
 
+(deftest bone-meal-on-a-ripe-crop-says-ripe-not-unchanged
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[age reason] [[7 :ripe] [3 :unchanged]]]
+          (let [env (bd/setup {:self body :inventory [{:name "bone_meal" :count 3}]})
+                _ (.override (.-world (:p env)) "useOn"
+                             (fn ^:async f [_ _ _] #js {:status "unchanged" :before #js {:name "wheat" :properties #js {:age age}}}))
+                out (await (tu/child-outcome (:eng env) use-on {:on at :item "bone_meal"} 40))]
+            (is (= reason (:reason out)) (str "age " age))
+            (is (re-find (re-pattern (name reason)) (:text out)))))))))
+
 (deftest a-quote-of-place-and-use-on-grows-with-the-walk
   (async done
     (tu/run-async done
