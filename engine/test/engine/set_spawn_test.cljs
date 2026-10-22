@@ -47,7 +47,8 @@
         (let [{:keys [eng p seen]} (await (run-set-spawn bed-world {} #(know-bed! % bed)))]
           (is (= [bed] (mapv st/arg-pos (calls p "useOn"))))
           (is (= [{:pos bed}] (entries eng :spawn-bed)))
-          (is (= [nil] (mapv :why (emitted seen :completed)))))))))
+          (is (= [nil] (mapv :why (emitted seen :completed))))
+          (is (= ["the respawn point is set at the bed at 6 64 0"] (mapv :text (emitted seen :completed)))))))))
 
 (deftest a-bed-the-night-put-down-that-becomes-the-spawn-bed-is-not-listed-for-pick-up
   (async done

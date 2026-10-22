@@ -1,5 +1,6 @@
 (ns jobs.survival.set-spawn
-  (:require [jobs.lib.ready :as ready]
+  (:require [clojure.string :as string]
+            [jobs.lib.ready :as ready]
             [jobs.lib.price :as price]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -89,7 +90,8 @@
           (or (= :done (:kind e)) (= :unchanged (get-in e [:data :reason])))
           (do (sh-spawn/remember-spawn-bed! c bed)
               (places/offer! c :home bed)
-              (ctx/end c :done nil (cond-> {:spawn bed} (not= :done (:kind e)) (assoc :why :unchanged))))
+              (ctx/end c :done nil (cond-> {:spawn bed :text (str "the respawn point is set at the bed at " (string/join " " (u/cell-vec bed)))}
+                                     (not= :done (:kind e)) (assoc :why :unchanged))))
           :else (let [why (get-in e [:data :reason] (contract/cause-key e))]
                   (ctx/end c :nothing-possible :not-set
                            {:why why :pos bed :text (str "clicking the bed did not set the respawn point: " (name (or why :unknown)))})))))))
