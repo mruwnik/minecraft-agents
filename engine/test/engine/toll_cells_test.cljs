@@ -106,7 +106,7 @@
 
 (defn big-zone [owner] {:name "big" :min [10 60 -50] :max [70 70 50] :owner owner :allow #{}})
 
-(deftest a-zone-over-the-cap-keeps-the-cells-nearest-the-walk-and-warns-once
+(deftest a-zone-over-the-cap-keeps-the-cells-nearest-the-walk-and-says-so-at-debug
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -118,7 +118,7 @@
           (is (<= (count tolls) (tc/max-cells)))
           (is (contains? cells [38 64 38]) "the goal end of the line is tolled, not just the low x")
           (is (contains? cells [12 64 12]) "the start end too")
-          (is (= 1 (count warns))))))))
+          (is (= #{:debug} (set (map :level warns)))))))))
 
 (defn ^:async job-trail
   "The [x z] cells the body steered through running form with the fake world's extra keys, a foreign zone across x 19..21, z -6..6."

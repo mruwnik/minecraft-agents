@@ -83,7 +83,7 @@
 
 (defn zone-cells
   "The feet cells inside the window of a walk from a to b that lie in a zone owned by another body (none without a zone
-  list). Over max-cells the ones nearest the straight line from a to b are kept (a warn, once)."
+  list). Over max-cells the ones nearest the straight line from a to b are kept (a debug event)."
   [c a b]
   (let [self (ctx/self-name c)
         win (window a b)
@@ -92,7 +92,7 @@
                    (keep #(clip % win)))]
     (if (<= (reduce + (map volume boxes)) (max-cells))
       (vec (mapcat box-cells boxes))
-      (do (ctx/warn-once! c :zone-cells :toll-cells.capped
+      (do (ctx/emit! c :toll-cells.capped :debug
                           {:text (str "other bodies' zones cover more than " (max-cells) " cells near the walk; only the ones nearest the way are tolled")})
           (nearest-columns boxes a b)))))
 
