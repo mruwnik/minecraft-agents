@@ -182,10 +182,11 @@
   "The checker of a job that goes to the place (f c): while the place is dark safe-at it, by day or when body and place are both
   underground not threatened and not in a dark hall (hall-status; an unseen place's light is no reason to wait, and darkness underground does not end
   at dawn; a walk from a tunnel to open ground is exposed). A buried body's unseen place no higher than its feet with a seen solid block over it is
-  underground (Q345: a small dark cave counts only reachable hostiles, a hall its spawns); one above them, or with open sky over it (outside a hut), may be open ground. dug?: the job digs to the place, so no seen roof is needed (rock is what a player digs through)."
+  underground (Q345: a small dark cave counts only reachable hostiles, a hall its spawns); one above them, or with open sky over it (outside a hut), may be open ground. dug?: the job digs to the place, so no seen roof is needed (rock is what a player digs through). hall? false: a dark hall underground is no exposure (a job that leads out of it)."
   ([f] (safe-at-by-night f false))
   ([f walk?] (safe-at-by-night f walk? false))
-  ([f walk? dug?]
+  ([f walk? dug?] (safe-at-by-night f walk? dug? true))
+  ([f walk? dug? hall?]
   (let [at (safe-at f walk?)
         by-night? (fn [c]
                     (let [p (:primitives c)
@@ -197,8 +198,8 @@
                            (not (and to (sh-sense/buried? p)
                                      (or (sh-sense/buried-at? p to)
                                          (and (not (sh-sense/seen-cell? p to)) (<= (:y to) (:y feet)) (or dug? (roof-over? p to)))))))))]
-    (with-meta (fn [c] (if (by-night? c) (at c) (contract/all [(if walk? (threatened-walking c (f c)) (threatened c)) (hall-status c (f c))])))
-      {::exposure (fn [c] (if (by-night? c) ((::exposure (meta at)) c) (hall-status c (f c))))}))))
+    (with-meta (fn [c] (if (by-night? c) (at c) (contract/all (cond-> [(if walk? (threatened-walking c (f c)) (threatened c))] hall? (conj (hall-status c (f c)))))))
+      {::exposure (fn [c] (if (by-night? c) ((::exposure (meta at)) c) (if hall? (hall-status c (f c)) (contract/ok :day "a way out of the dark is no exposure"))))}))))
 
 (defn ok-when-near
   "safe, but ok while (near? c) holds: the job makes no walk there, so it meets no exposure the body is not already in (a wall closed beside a weak body at night is the safe act)."
@@ -233,6 +234,10 @@
 (def safe-at-from
   "safe-at-by-night for a job that works where the body stood at submit (:submitted-at), here with none or with :here."
   (safe-at-by-night (fn [c] (let [args (:args c)] (when-not (:here args) (a/cell (:submitted-at args)))))))
+
+(def safe-at-from-out
+  "safe-at-from for a job that leads out of the dark (a stair up): a dark hall underground is no exposure, only threats count."
+  (safe-at-by-night (fn [c] (let [args (:args c)] (when-not (:here args) (a/cell (:submitted-at args))))) false false false))
 
 (defn day-would-light?
   "Whether the day (weather aside) brings the feet cell enough light: false in a dim shaft or pit whose sky light never reaches

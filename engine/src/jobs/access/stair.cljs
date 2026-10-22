@@ -95,7 +95,7 @@
 (defn max-returns [] (settings/get settings ::max-returns))
 (defn return-reach [] (settings/get settings ::return-reach))
 
-(def safe? (price/staying :work ready/safe-at-from))
+(def safe? (price/staying :work ready/safe-at-from-out))
 
 (defn dir-of
   "The call's :dir, else the one the first round chose (job memory), else :up or :down toward :y from the feet, else :down."

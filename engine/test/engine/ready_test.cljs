@@ -323,6 +323,12 @@
     true [:never :exposed]
     false [:ok :sealed]))
 
+(deftest a-way-out-of-a-dark-hall-underground-is-no-exposure-but-other-work-there-is
+  (with-redefs [ready/hall-status (fn [_ _] [:never "hall" {:reason :exposed}])]
+    (are [check expected] (= expected (kind check (assoc tunnel :time st/noon)))
+      ready/safe-at-from-out :ok
+      ready/safe-at-from :never)))
+
 (deftest an-unseen-cell-asks-for-a-look-at-it
   (let [s ((ready/safe-at (constantly outside)) (ctx-of open-night))]
     (is (= :look (first s)))
