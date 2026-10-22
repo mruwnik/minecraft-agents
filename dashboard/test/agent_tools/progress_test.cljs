@@ -2,6 +2,7 @@
   (:require [cljs.test :refer [deftest is async]]
             [agent-tools.progress :as progress]
             [agent-tools.world-data :as data]
+            [agent-tools.http :as http]
             [clojure.string :as str]
             ["node:fs" :as fs]
             ["node:os" :as os]
@@ -236,6 +237,18 @@
       (swap! (:world f) assoc-in [:jobs "j14"] {:ok true :id "j14" :finished? true :status :stopped})
       (-> (wait! f)
           (.then (fn [result] (is (= :goal-ended (:wake result)))))))))
+
+(deftest an-engine-that-times-out-is-busy-not-gone-and-the-wait-goes-on
+  (let [failing (fn [code] (fn [_ _ _] (js/Promise.reject (http/coded-error code "down"))))
+        run (fn [code]
+              (progress/wait-progress! (assoc (request "Probe" "--world" "w" "--goal" "j14" "--wait" "10s") :wait-ms 400 :unreachable-ms 100)
+                                       (failing code) nil))]
+    (async done
+      (-> (js/Promise.all #js [(run "ETIMEDOUT") (run "ECONNREFUSED")])
+          (.then (fn [[timed-out refused]]
+                   (is (= :timeout (:wake timed-out)) "a slow engine ends at the deadline, not as a needs-you wake")
+                   (is (= :needs-you (:wake refused)) "a refused socket is a gone engine")))
+          (.then done)))))
 
 (deftest no-progress-for-the-stall-time-wakes-the-wait
   (with-fixture working-status {:wait-ms 2000 :stall-ms 150}

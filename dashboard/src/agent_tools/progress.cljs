@@ -336,7 +336,8 @@
                       (catch :default error
                         (when (fatal? error) (throw error))
                         (let [first-fail (or failing-since (now))]
-                          (if (>= (- (now) first-fail) unreachable-ms)
+                          (if (and (>= (- (now) first-fail) (or (:unreachable-ms r) unreachable-ms))
+                                   (not= :timeout (http/transport-reason error)))
                             {:done (finish {:wake :needs-you :text (str "engine unreachable: " (word (http/transport-reason error)))} last-view items)}
                             (do (await (observe/delay! (min 5000 (max 10 (- deadline (now)))) signal))
                                 (if (>= (now) deadline)
