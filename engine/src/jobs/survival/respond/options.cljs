@@ -11,6 +11,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.danger :as cost-danger]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.escape :as escape]
@@ -60,6 +61,7 @@
    ::cover-tries {:default 2 :doc "Cornered steps under fire in which cover (seal, back off) is tried before an armed body fights a melee mob pressing it: a mob standing in the cells to wall keeps every seal failing, and each back-off step makes the covers open again." :spec (a/int-in 1 nil)}
    ::beaten-hits {:default 2 :doc "Hits by a melee mob near (the damage names one within close-radius; not a creeper or an enderman) within hurt-window-s that show the flight is failing: the body fights it first, armed or not. 0: never." :spec (a/int-in 0 nil)}
    ::press-gap {:default 2 :doc "Blocks within which a melee mob (not a creeper or an enderman) makes a cornered armed body fight before it builds a seal or pillar, hit or not: the mob strikes before a block is placed and stands in the cells to fill." :spec (a/num-in 0 nil)}
+   ::arrival-s {:default 4 :doc "Seconds within which a melee mob (not a creeper or an enderman) reaches a cornered armed body: it fights before it builds, since a seal, pit or pillar takes longer than the mob needs and the mob hits the builder. 0: never." :spec (a/num-in 0 nil)}
    ::hold-cap {:default 60 :doc "Holds (one wait-ms each) a flight makes in water or under a roof against an angry enderman before it tries the next option (seal, pit, pocket, fight); 0: none." :spec (a/int-in 0 nil)}
    ::refuge-gap {:default 10 :doc "Blocks within which a lone melee hostile the body cannot outfight is pillared against (else sealed against) before any flee step, when blocks are carried; 0 never." :spec (a/num-in 0 nil)}
    ::flight-timeout-s {:default 5 :doc "Seconds bounding one step of the flight: the mob moves, so the next step aims again." :spec (a/num-in 0 nil)}
@@ -189,6 +191,14 @@
 (defn glance-reach [] (settings/get settings ::glance-reach))
 
 (defn glance-memory [] (settings/get settings ::glance-memory))
+
+(defn arriving
+  "Of hostiles, the melee ones (not a creeper or an enderman) that reach the body within ::arrival-s at their chase speed."
+  [c hostiles]
+  (let [s (settings/get settings ::arrival-s)]
+    (filterv #(and (not (combat/ranged? %)) (not (combat/creeper? %)) (not (combat/enderman? %))
+                   (<= (/ (danger-q/mob-distance (:primitives c) %) (cost-danger/chase-speed (cost/mob-kind %))) s))
+             hostiles)))
 
 (defn cover-gap [] (settings/get settings ::cover-gap))
 

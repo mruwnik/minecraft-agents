@@ -1757,3 +1757,8 @@
             (await (settings/with-settings {:jobs.survival.respond.options/hurt-window-s 600}
                      (fn ^:async tick [] (await (core/tick! eng)))))
             (is (= leg-s (first @legs)) (str "hurt? " hurt?))))))))
+
+(deftest no-pit-or-pocket-is-dug-beside-a-melee-mob-that-arrives-first
+  (is (= [:plug :pillar :back-off :fight] (choose/escape-order {:arriving? true})))
+  (is (= [:plug :pillar :back-off :plug-dig :fight] (choose/escape-order {})) "no mob close: the pit stays an option")
+  (is (= [:back-off :plug :pillar :plug-dig :fight] (choose/escape-order {:arriving? true :creeper? true})) "a creeper keeps its order"))
