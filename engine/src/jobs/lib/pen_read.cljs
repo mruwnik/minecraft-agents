@@ -11,6 +11,7 @@
             [jobs.lib.pen-world :as pen-world]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
+            [plan.surface :as surface]
             [jobs.lib.world :as known]))
 
 (defn block-at-fn
@@ -154,8 +155,18 @@
   [[[x1 y1 z1] [x2 y2 z2]]]
   {:min {:x (min x1 x2) :y (min y1 y2) :z (min z1 z2)} :max {:x (max x1 x2) :y (max y1 y2) :z (max z1 z2)}})
 
+(defn surfaced-box
+  "box with its y range moved as the plan's :surface true moves its cells: the floor layer of each column follows the seen ground."
+  [c box]
+  (let [floor (for [x (range (:x (:min box)) (inc (:x (:max box))))
+                    z (range (:z (:min box)) (inc (:z (:max box))))]
+                {:pos [x (:y (:min box)) z]})
+        shifts (map #(- (second (:pos %)) (:y (:min box)))
+                    (surface/follow floor (surface/top-fn (partial u/seen-name (:primitives c)))))]
+    (-> box (update-in [:min :y] + (apply min shifts)) (update-in [:max :y] + (apply max shifts)))))
+
 (defn pen-of
-  "With :plan, {:args {:box :mob :target}} of the pen part, else {:trouble text}; nil without :plan. The :box is {:min :max} over the part's own :box; plan-box reads the barrier cells instead."
+  "With :plan, {:args {:box :mob :target}} of the pen part, else {:trouble text}; nil without :plan. The :box is {:min :max} over the part's own :box, moved with the ground when the plan has :surface true; plan-box reads the barrier cells instead."
   [c]
   (when-let [id (:plan (:args c))]
     (let [{:keys [part]} (:args c)
@@ -166,4 +177,4 @@
         (:broken answer) {:trouble (str "the plan cannot be read: " (:broken answer)) :later? true}
         (not found) {:trouble (str "no part " (pr-str part))}
         (not (and (:box found) (:herd found))) {:trouble (str "part " part " has no :box and :herd")}
-        :else {:args (assoc (:herd found) :box (corner-box (:box found)))}))))
+        :else {:args (assoc (:herd found) :box (cond->> (corner-box (:box found)) (:surface (:plan answer)) (surfaced-box c)))}))))

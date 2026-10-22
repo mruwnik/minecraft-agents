@@ -374,6 +374,15 @@
           (is (= {:mob "cow" :target 4} (select-keys (done-event s) [:mob :target])))
           (is (true? (finished? s))))))))
 
+(deftest a-surface-plan-puts-the-pen-box-on-the-ground-like-its-fences
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan (assoc pen-plan :surface true :parts [{:id "cows" :box [[0 60 -5] [8 60 5]] :want "air" :herd {:mob "cow" :target 2}}])
+              s (await (plan-scenario (list 'jobs.animals.maintain {:plan "pen" :part "cows"}) {"pen" plan}
+                                      {:inventory [(wheat 4)] :entities [(cow 1 2) (cow 2 3)]} 12))]
+          (is (= [:nothing-to-do] (distinct (map :reason (events-of s :waiting)))) "the cows on the ground are in the box that rose to it"))))))
+
 (deftest a-missing-plan-starts-no-run-and-the-wait-says-so
   (async done
     (tu/run-async done

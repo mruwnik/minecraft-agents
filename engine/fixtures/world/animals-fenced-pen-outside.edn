@@ -1,6 +1,7 @@
 ;; Bodies outside a pen with a shut fence gate. Cards 6b8e84d0 (go-to into a fenced pen opens the gate instead of ending
 ;; :goal-enclosed, entities lists the animals in a fenced pen), 159e43f6 (animals.maintain started outside the pen walks to the box once
 ;; and counts again instead of :adults 0). Pen: oak fence ring x 18..24, z 13..19, inside 19..23 x 14..18, shut gate west at [18 0 16].
+;; Surface-plan pen: ground raised 2, fences on it, plan box one layer at y0 (maintain counts the 2 cows at y2 inside and is done; the unraised box would send it herding).
 ;; Walled pen (maintain case): stone ring of the same size, 4 high, gate in the west wall, nothing inside is visible from outside.
 ;; Should-succeed: go-to a cell inside the fenced pen arrives; entities lists the sheep inside; maintain from outside the walled pen counts
 ;; the 3 chickens inside. Should-fail: none (go-to never ends :goal-enclosed here).
@@ -31,4 +32,18 @@
    :act [[:summon "chicken" [20.5 0 15.5] "{NoAI:1b}"] [:summon "chicken" [21.5 0 16.5] "{NoAI:1b}"] [:summon "chicken" [22.5 0 17.5] "{NoAI:1b}"]
          [:job (jobs.animals.maintain {:mob "chicken" :target 3 :box {:min #xyz [19 0 14] :max #xyz [23 0 18]}})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :adults 3}} :within-s 100 :of-job true}]
-   :limit-s 140}]}
+   :limit-s 140}
+  {:name "maintain-counts-the-herd-in-a-surface-plan-pen-raised-onto-the-ground"
+   :plans [{:id "ring" :surface true :metadata {:by "$body"}
+            :parts [{:id "fence" :outline [#at [18 0 13] #at [24 0 19]] :want "oak_fence"}
+                    {:id "pen" :box [#at [19 0 14] #at [23 0 18]] :want "air" :herd {:mob "cow" :target 2}}]}]
+   :blocks [[:fill [0 0 0] [31 1 31] "dirt"]
+            [:fill [18 2 13] [24 2 19] "oak_fence"] [:fill [19 2 14] [23 2 18] "air"]
+            [:set [18 2 16] "oak_fence_gate[facing=east,open=false]"]]
+   :body {:at [15.5 2 16.5] :yaw 90 :settle-s 3}
+   :act [[:summon "cow" [20.5 2 15.5] "{NoAI:1b}"] [:summon "cow" [22.5 2 17.5] "{NoAI:1b}"]
+         [:until-seen {:entity "cow" :min 2} 30] [:wait-s 5]
+         [:job (jobs.animals.maintain {:plan "$plan:ring" :part "pen"})]]
+   :expect [{:event {:source :job :kind #{:completed :waiting} :data {:adults 2}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :stopped} :for-s 30}]
+   :limit-s 90}]}

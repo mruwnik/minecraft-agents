@@ -51,7 +51,7 @@
   summary}}. Summaries: mend {:closed? :reason}, herd {:reason :inside :brought}, breed {:fed n :reason}, cull {:killed :remaining :reason}, shear {:shorn n :reason
   :collected}, collect {:collected}, deposit {:gave-up :reason}.
 
-  With :plan and :part the pen is that part of the plan: its :box, and :mob and :target from its :herd
+  With :plan and :part the pen is that part of the plan: its :box (raised or lowered with the ground when the plan has :surface true), and :mob and :target from its :herd
   {:mob :target}; it waits :plan-trouble while the plan is missing or unreadable, and ends impossible :plan-trouble when the part or its :herd is missing.
 
   Limit: the box is the only pen there is. An animal inside it may be outside the fence. Breed, shear and
@@ -360,8 +360,11 @@
 (defn ^:async round
   "The whole pass: each step's child once, until the run ends; yields only while a child waits on the world. A plan that goes bad after can-run? is left to the next check (plan-trouble-round-test)."
   [c0]
-  (let [{:keys [trouble] :as pen} (pen-read/pen-of c0)
-        c (if pen (with-pen c0 pen) c0)]
+  (let [{:keys [trouble] :as pen} (pen-read/pen-of c0)]
     (if trouble
       :continue
-      (await (pace/steps! c (fn ^:async s [] (let [r (await (step c))] (if (= :yield r) :continue r))))))))
+      (await (pace/steps! (if pen (with-pen c0 pen) c0)
+                          (fn ^:async s []
+                            (let [fresh (pen-read/pen-of c0)
+                                  r (await (step (if fresh (with-pen c0 fresh) c0)))]
+                              (if (= :yield r) :continue r))))))))
