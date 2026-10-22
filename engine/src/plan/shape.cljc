@@ -444,12 +444,12 @@
 
 (defn judge-block
   "A block want (name or block with state) against a non-air block: :match, :wrong, or :unknown when the name
-  matches, the want names state and the world gave names only."
+  matches, the want names state and the world gave names only. The want `bed` is a bed of any colour."
   [want {:keys [name state]}]
   (let [{wanted :block :as want} (if (string? want) {:block want} want)
         wanted-state (apply dissoc want :block (server-decided-state (:block want)))]
     (cond
-      (not= wanted name) :wrong
+      (not (or (= wanted name) (and (= "bed" wanted) (str/ends-with? (str name) "_bed")))) :wrong
       (empty? wanted-state) :match
       (nil? state) :unknown
       (every? (fn [[k v]] (= (state-text v) (some-> (state-of state k) state-text))) wanted-state) :match

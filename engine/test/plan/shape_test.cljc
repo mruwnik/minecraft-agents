@@ -293,6 +293,14 @@
     "oak_fence" nil :unknown
     :clear nil :unknown))
 
+(deftest a-bed-want-matches-a-bed-of-any-colour
+  (are [want block answer] (= answer (shape/judge want block))
+    {:block "bed" :facing :east :part :head} {:name "white_bed" :state {:facing "east" :part "head"}} :match
+    {:block "bed" :facing :east :part :head} {:name "red_bed" :state {:facing "east" :part "foot"}} :wrong
+    {:block "bed" :facing :east :part :head} {:name "white_bed"} :unknown
+    "bed" {:name "black_bed"} :match
+    "bed" {:name "oak_planks"} :wrong))
+
 (deftest a-crop-matches-at-any-stage-and-the-ground-below-is-not-judged
   (are [want block answer] (= answer (shape/judge want block))
     {:crop "wheat"} {:name "wheat" :state {:age 0}} :match

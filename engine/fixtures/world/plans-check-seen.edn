@@ -3,6 +3,7 @@
 ;; The body faces east (:yaw 270): sight is a view cone, so a body left facing another way (a pool body keeps its last rotation) never sees the face.
 ;; seen-face-cell-matches: a plan cell on the west face, wanted stone, is seen and matches. hidden-cell-is-unseen-not-matching: a plan cell deep inside the mass counts :unseen/unknown, never matching.
 ;; built-cells-count-as-seen (card 335f6f3c): cells the body has just placed in plain view are seen at once, so the check reports them as matches, never :unknown.
+;; bed-want-matches-a-bed-of-any-colour (card 5a5f4d59): a plan `bed` want matches a standing white_bed.
 ;; check-without-body-refused: no --body, no answer from the world (:body-required).
 {:defaults
  {:tags [:build :tool :memory] :time :any
@@ -44,6 +45,15 @@
           {:evidence :seen-memory :score {:counts {:wrong 1} :wrong-total 1 :wrong-cells [{:part "face" :found "stone"}]}}] 30]]
    :expect [{:no-event {:level :error} :for-s 3}]
    :after [[:body-near [4.5 0 16.5] 4]]}
+  {:name "bed-want-matches-a-bed-of-any-colour"
+   :blocks [[:set [7 0 16] "white_bed[facing=east,part=foot]"] [:set [8 0 16] "white_bed[facing=east,part=head]"]]
+   :plans [{:id "bed" :metadata {:by "tester"}
+            :parts [{:id "foot" :cells [#at [7 0 16]] :want {:block "bed" :facing :east :part :foot}}
+                    {:id "head" :cells [#at [8 0 16]] :want {:block "bed" :facing :east :part :head}}]}]
+   :act [[:until [:cli "plans" ["--world" "$world" "check" "$plan:bed" "--body" "$body"]
+          {:evidence :seen-memory :score {:counts {:match 2} :wrong-total 0}}] 40]]
+   :expect [{:no-event {:level :error} :for-s 3}]
+   :after [[:block [8 0 16] "white_bed"]]}
   {:name "check-without-body-refused"
    :plans [{:id "face" :metadata {:by "tester"} :parts [{:id "face" :cells [#at [10 1 16]] :want [:any "stone"]}]}]
    :act [[:cli "plans" ["--world" "$world" "check" "$plan:face"] {:ok false :reason :body-required}]]
