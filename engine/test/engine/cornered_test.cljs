@@ -829,10 +829,10 @@
           (is (= -1 (:x (first-move eng)))))))))
 
 (deftest the-fight-is-reach-only-when-the-nearest-hostile-is-a-creeper-or-the-body-is-blind
-  (let [zombie #js {:name "zombie" :d 2}
-        creeper #js {:name "creeper" :d 6}
-        near-creeper #js {:name "creeper" :d 2}
-        far-zombie #js {:name "zombie" :d 6}
+  (let [zombie #js {:name "zombie" :d 2 :o #js [2 0]}
+        creeper #js {:name "creeper" :d 6 :o #js [-6 0]}
+        near-creeper #js {:name "creeper" :d 2 :o #js [-2 0]}
+        far-zombie #js {:name "zombie" :d 6 :o #js [6 0]}
         dist #(.-d %)
         offset #(.-o %)]
     (are [blind? hostiles expected] (= expected (pick/reach-only? blind? hostiles dist offset 5))
@@ -847,11 +847,13 @@
   (let [at (fn [name d o] #js {:name name :d d :o o})
         dist #(.-d %)
         offset #(.-o %)
-        ro? (fn [hostiles] (pick/reach-only? false hostiles dist offset 5))]
+        ro? (fn [hostiles & [keep]] (pick/reach-only? false hostiles dist offset (or keep 5)))]
     (is (true? (ro? [(at "zombie" 2 #js [2 0]) (at "creeper" 4 #js [4 0])])) "creeper on the zombie's side")
     (is (false? (ro? [(at "zombie" 2 #js [2 0]) (at "creeper" 4 #js [-4 0])])) "creeper behind: the step away from it is fine")
-    (is (false? (ro? [(at "zombie" 2 #js [2 0]) (at "creeper" 4 #js [0 4])])) "creeper at right angles: the step keeps its distance (first order)")
-    (is (false? (ro? [(at "zombie" 2 #js [2 0]) (at "creeper" 9 #js [9 0])])) "creeper beyond keep range")))
+    (is (false? (ro? [(at "zombie" 2 #js [2 0]) (at "creeper" 4 #js [0 4])] 3)) "creeper at right angles and 4.5 from the zombie, keep 3: the step keeps its distance")
+    (is (false? (ro? [(at "zombie" 2 #js [2 0]) (at "creeper" 9 #js [9 0])])) "creeper beyond keep range")
+    (is (true? (ro? [(at "skeleton" 9 #js [9 0]) (at "creeper" 14 #js [9 4])])) "creeper far from the body but 4 from the skeleton: the walk ends in the blast")
+    (is (false? (ro? [(at "skeleton" 9 #js [9 0]) (at "creeper" 14 #js [-9 4])])) "creeper far from the skeleton")))
 
 (deftest an-unarmed-body-at-a-dead-end-never-walks-to-a-creeper-to-punch-it
   (async done

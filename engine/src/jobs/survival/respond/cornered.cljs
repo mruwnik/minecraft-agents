@@ -42,15 +42,18 @@
 (defn reach-only?
   "Pure: whether the fight swings only at what is within reach and walks to nothing: blind? (a body that cannot see), the
   nearest of hostiles by dist is a creeper, or a creeper within creeper-keep lies on the same side as a hostile (offset: [dx dz] from the body):
-  a step toward that hostile would bring the body nearer the creeper."
+  a step toward that hostile would bring the body nearer the creeper; or a creeper stands within creeper-keep of a hostile (the walk
+  to that hostile ends in the blast, wherever the body is)."
   [blind? hostiles dist offset creeper-keep]
   (let [creepers (filter combat/creeper? hostiles)
-        dot (fn [[ax az] [bx bz]] (+ (* ax bx) (* az bz)))]
+        dot (fn [[ax az] [bx bz]] (+ (* ax bx) (* az bz)))
+        apart (fn [a b] (let [[ax az] (offset a) [bx bz] (offset b)] (js/Math.hypot (- ax bx) (- az bz))))]
     (boolean (or blind?
                  (some-> (seq hostiles) (->> (apply min-key dist)) combat/creeper?)
                  (some (fn [c] (and (<= (dist c) creeper-keep)
                                     (some #(and (not (combat/creeper? %)) (pos? (dot (offset %) (offset c)))) hostiles)))
-                       creepers)))))
+                       creepers)
+                 (some (fn [c] (some #(and (not (combat/creeper? %)) (<= (apart % c) creeper-keep)) hostiles)) creepers)))))
 
 (defn mob-offset
   "[dx dz] from the body to hostile e."
