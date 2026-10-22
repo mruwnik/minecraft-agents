@@ -19,6 +19,12 @@
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 70 :of-job true}
             {:no-event {:source :body :kind :hurt} :for-s 70 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [116.5 6 8.5] 3]]}
+  {:name "water-breathing-with-60-s-left-takes-the-tunnel"
+   :body {:effects [["water_breathing" 60 0]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [116 6 8] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 70 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 70 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-near [116.5 6 8.5] 3]]}
   {:name "plain-air-refuses-the-long-submerged-tunnel"
    :act [[:job (jobs.movement.go-to {:pos #at [116 6 8] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 60 :of-job true}
