@@ -4,9 +4,13 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
+            [engine.settings :as settings]
             [jobs.lib.checks :as checks]
             [jobs.lib.breath :as breath]
             [jobs.lib.child :as child]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.danger :as danger]
+            [jobs.lib.price :as price]
             [jobs.lib.pace :as pace]
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.look :as look]
@@ -26,6 +30,8 @@
             [jobs.lib.threats :as threats]
             [jobs.lib.spent :as spent]
             [jobs.lib.util :as u]
+            [jobs.lib.walk.world :as wworld]
+            [jobs.movement.go-to.risk :as risk]
             [jobs.survival.bed-down :as bed-down]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.room-plug :as room-plug]
@@ -51,7 +57,7 @@
   - sheltered (slept, dug in, shut in): log out for a stint while someone else sleeps, else end so the queue runs (no all-night hold: listed jobs run when their own start checks pass).
   - a roofed :roofed-places place within the night.sites ::home-radius setting (bed to use or carry), or farther while the walk fits the time left before the dark plus a margin (night.sites home-walk-*; bed or not), and the body not roofed: jobs.survival.enter-room walks in (one try tonight); a carried bed is not put down in the open while one is close (night.bed-kept).
   - an open door of the closed room the body stands in is shut; the room's doorway is filled before a carried bed goes down (ledger :doorway; one that cannot be filled for want of blocks, or was filled, is :doorway-tried, not tried again tonight).
-  - a bed to use (sh-beds/bed-to-use) whose walk is safe (bed-walk-safe?: a whole route whose dark go-to prices at most night.sites ::bed-walk-dark-s), or carried: jobs.survival.bed-down, called again until it ends; one that stops hostile-near ends the round nothing-possible :monsters-near (the trigger fires again after its cooldown).
+  - a bed to use (sh-beds/bed-to-use) whose walk is safe (bed-walk-safe?: a whole route priced no dearer than staying put), or carried: jobs.survival.bed-down, called again until it ends; one that stops hostile-near ends the round nothing-possible :monsters-near (the trigger fires again after its cooldown).
   - someone else asleep: jobs.survival.log-out, a 30 s stint, not retried tonight when not ok.
   - a roof over a room with a hole (shelter.room_open warn): walled in under the roof (:enclose).
   - roofed, buried or shut in a closed room: done {:night :roofed}.
@@ -406,20 +412,43 @@
     (when (sh-spawn/seen-not-bed? (:primitives c) pos)
       (places/retract-if-missing! c :bed pos "missing"))))
 
+(defn bed-walk-hp
+  "{:walk :stay}: the hp the walk to bed is expected to cost (spawns over its seconds in the dark, the planner's
+  :dark-seconds over jobs.lib.cost/dark-factor of the kit; the fight with the hostiles known near its way) against
+  staying put as long (spawns at the feet while dark there and not underground; the hostiles known near the body), both
+  priced by jobs.lib.price/stay-hp and jobs.lib.cost/fight-damage. r is go-to's quoted route."
+  [c bed r]
+  (let [p (:primitives c)
+        chance (cost/spawn-chance [0 0 0])
+        kit (wworld/kit-of c)
+        secs (or (:seconds r) 0)
+        dark-s (min secs (/ (or (:dark-seconds r) 0) (cost/dark-factor kit)))
+        radius (settings/get risk/settings ::risk/way-radius)
+        fight (fn [goal] (let [mobs (danger/hostiles-near-way p goal radius {})]
+                           (if (seq mobs)
+                             (cost/fight-damage (assoc kit :mobs (mapv (fn [e] {:name (.-name e) :distance (danger/mob-distance p e) :hits 0}) mobs)))
+                             0)))
+        here (if (or (sh-sense/buried? p) (not (look/dark-here? p))) 0 chance)]
+    {:walk (+ (price/stay-hp c chance dark-s) (fight bed))
+     :stay (+ (price/stay-hp c here secs) (fight (u/self-pos c)))}))
+
 (defn ^:async bed-walk-safe?
-  "Whether the night may walk to bed: within 2 blocks, or go-to's quote finds a whole route there whose dark cells the
-  planner prices at most the sites/bed-walk-dark-s setting. Else :bed-walk-unsafe {:pos bed} is remembered (sh-beds/bed-to-use
-  skips the bed meanwhile) with a night.bed-walk-unsafe info, and false."
+  "Whether the night may walk to bed: within 2 blocks, or go-to's quote finds a whole route there whose expected hp
+  (bed-walk-hp) is no more than staying put costs: a body on dark open ground walks, one underground stays unless the way
+  is lit. Else :bed-walk-unsafe {:pos bed} is remembered (sh-beds/bed-to-use skips the bed meanwhile) with a
+  night.bed-walk-unsafe info, and false."
   [c bed]
   (or (<= (u/dist (u/self-pos c) bed) 2)
       (let [r (:route (await (ctx/quote c 'jobs.movement.go-to {:pos bed :range 2})))
-            dark (or (:dark-seconds r) 0)]
-        (or (and (:found r) (<= dark (sites/bed-walk-dark-s)))
+            {:keys [walk stay]} (when (:found r) (bed-walk-hp c bed r))]
+        (or (and (:found r) (<= walk stay))
             (do (ctx/remember! c :bed-walk-unsafe {:pos bed} sh-beds/walk-unsafe-policy)
                 (ctx/emit! c :night.bed-walk-unsafe :info
-                           {:bed bed :found (boolean (:found r)) :dark-seconds dark
+                           {:bed bed :found (boolean (:found r)) :walk-hp walk :stay-hp stay
                             :text (str "not walking to the bed at " (pr-str bed) ": "
-                                       (if (:found r) (str "the way's dark is priced " dark " s") "no whole way to it is known")
+                                       (if (:found r)
+                                         (str "the walk is priced " (price/round1 walk) " hp, staying here " (price/round1 stay))
+                                         "no whole way to it is known")
                                        "; sheltering here tonight")})
                 false)))))
 

@@ -177,6 +177,23 @@
           (is (empty? (filter #(< 21 (:x (st/arg-pos %))) (st/calls raw "moveTo"))) "no walk out of the tunnel")
           (is (nil? (sh-beds/bed-to-use p (mem/view (:store eng)) 128 (constantly true))) "nor does the night trigger hold for the bed meanwhile"))))))
 
+(def on-open-ground
+  "The body on the open floor at night, the far bed 35 blocks off over the same dark ground, no hostile known (overdue: a bed in
+  the open is used)."
+  {:floor tu/walk-floor :self {:pos {:x 5 :y 64 :z 0}} :time st/night :offlineScale 0.0001 :sees-all true
+   :blocks {"40,64,0" "red_bed"} :light {}})
+
+(deftest a-body-on-dark-open-ground-walks-to-its-bed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng raw clock]} (setup on-open-ground)]
+          (swap! clock + (* 4 sh-clock/ms-per-day))
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (st/tick-n eng 12))
+          (is (empty? (st/entries eng :bed-walk-unsafe)) "staying out here costs as much as the walk")
+          (is (seq (st/calls raw "sleep")) "it walks to the bed and sleeps"))))))
+
 (def hut-light
   "A closed hut: torch light and no sky light in every cell of its room."
   (into {} (for [x (range 4 7) y [64 65] z (range -1 2)] [[x y z] [0 14]])))
