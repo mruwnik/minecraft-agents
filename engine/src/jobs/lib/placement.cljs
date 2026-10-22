@@ -18,6 +18,7 @@
             [jobs.lib.block-sets :as bs]
             [clojure.string :as str]
             [jobs.lib.util :as u]
+            [plan.shape :as shape]
             [shadow.resource :as rc]))
 
 (def pi js/Math.PI)
@@ -47,15 +48,10 @@
   "Thin blocks a floor torch still stands on: their top has a middle."
   #"_(fence|wall)$")
 
-(defn block-name
-  "The block name of a block string that may carry a state (\"oak_fence_gate[facing=north]\" is \"oak_fence_gate\")."
-  [block]
-  (first (str/split block #"\[" 2)))
-
 (defn item-of
   "The item that places block (a wall torch or wall sign is placed with the standing one; water and lava with their bucket)."
   [block]
-  (let [block (block-name block)]
+  (let [block (shape/block-name block)]
     (case block
       ("water" "lava") (str block "_bucket")
       (str/replace block #"(^|_)wall_(torch|sign|hanging_sign|banner)$" "$1$2"))))

@@ -91,6 +91,10 @@
                  [3 63 -1])
       "under a torch"))
 
+(deftest ground-is-under-a-lever-whose-want-carries-a-state
+  (let [cells (conj plan-cells {:pos [3 64 1] :want "lever[face=floor,facing=north]"})]
+    (is (contains? (rail/ground cells) [3 63 1]))))
+
 (deftest a-plan-that-is-no-line-is-not-judged
   (is (= {:ok? false :error :no-rails} (select-keys (judged sound-world [{:pos [0 63 0] :want "stone"}]) [:ok? :error]))))
 

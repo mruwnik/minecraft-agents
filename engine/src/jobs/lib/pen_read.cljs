@@ -11,6 +11,7 @@
             [jobs.lib.pen-world :as pen-world]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
+            [plan.shape :as shape]
             [plan.surface :as surface]
             [jobs.lib.world :as known]))
 
@@ -113,7 +114,7 @@
   "The block names a want can place, without any [state]: one for a block or a state map, the choices of an :any."
   [want]
   (cond
-    (string? want) [(first (str/split want #"\[" 2))]
+    (string? want) [(shape/block-name want)]
     (vector? want) (mapcat #(want-blocks (if (string? %) % (:block %))) (rest want))
     (and (map? want) (:block want)) (want-blocks (:block want))))
 

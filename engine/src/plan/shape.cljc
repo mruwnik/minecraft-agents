@@ -507,20 +507,25 @@
               (:block want)
               (str (:block want) "[" (str/join "," (for [[k v] (sort-by key state)] (str (name k) "=" (state-text v)))) "]")))))
 
+(defn block-name
+  "The block name of a block string that may carry a state (\"oak_fence_gate[facing=north]\" is \"oak_fence_gate\")."
+  [block]
+  (first (str/split block #"\[" 2)))
+
 (defn want-block
-  "The block a want is drawn as: its name, the first choice of an :any, the plant of a crop, the leaves of a tree;
-  nil for :clear."
+  "The block a want is drawn as, without any [state]: its name, the first choice of an :any, the plant of a crop, the
+  leaves of a tree; nil for :clear."
   [want]
   (cond
     (= :clear want) nil
-    (string? want) want
+    (string? want) (block-name want)
     (vector? want) (want-block (second want))
     (contains? want :crop) (first (remove #(str/starts-with? % "attached_") (crop-names (:crop want))))
     (contains? want :tree) (case (:tree want)
                              "crimson" "nether_wart_block"
                              "warped" "warped_wart_block"
                              (str (:tree want) "_leaves"))
-    :else (:block want)))
+    :else (block-name (:block want))))
 
 ;; ---------------------------------------------------------------- entrances
 (defn door-block? [want]

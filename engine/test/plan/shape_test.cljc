@@ -406,7 +406,14 @@
     {:crop "melon"} "melon_stem"
     {:tree "oak"} "oak_leaves"
     {:tree "crimson"} "nether_wart_block"
+    "lever[face=floor,facing=north]" "lever"
+    "oak_door[half=lower]" "oak_door"
+    {:block "oak_fence_gate[facing=north]"} "oak_fence_gate"
+    [:any "oak_fence_gate[facing=east]" "stone"] "oak_fence_gate"
     :clear nil))
+
+(deftest a-door-want-with-a-state-is-still-a-door
+  (is (shape/door-block? "oak_door[half=lower]")))
 
 ;; ---------------------------------------------------------------- who made a plan
 (deftest a-plans-maker-lives-in-metadata-by
