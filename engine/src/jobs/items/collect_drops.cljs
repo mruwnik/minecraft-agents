@@ -40,7 +40,7 @@
   blocks are tried. Underground a walk goes on at night; a search that go-to made wait :search-waits calls in a row ends with :reason :search-waited.
   While it runs it holds its work area (jobs.lib.loose :collecting), so the :loose-items reflex leaves those drops to it.
   With :ids, ids not in sight when none is left to try are booked as one :left {:reason :unseen :ids [...] :last {id [x y z]}}, the cell each was last seen in.
-  A drop more than a block above the feet that the act cannot reach (a column top) is walked up to with go-to's :pillar and :stair ways, then collected.
+  A drop more than a block above the feet that the act cannot reach (a column top) is walked up to with go-to's :pillar and :stair ways, then collected; one go-to cannot stand beside (a wall niche) is pillared to from the feet when it lies 2 to 6 above and within 1 cell sideways (carried blocks).
   With :dig, a drop go-to cannot reach, or one too deep in the dug hole, is dug to once: the fewest cells (jobs.lib.dig-route,
   over the blocks the body has seen, an unseen one taken for stone) that open a way to it, each a jobs.blocks.dig child (zones, claims, hazards
   are its rules), then the walk is tried again. A dig that ends :unseen (the dark hides the cell) sets a carried torch in the body's cell once per call, looks again and digs on. No such way leaves the drop :no-route, a dig that fails with that dig's outcome (:refused, :cannot, :unreachable ...).
@@ -241,6 +241,23 @@
       (= :continue r) :continue
       (and (= :done (:kind r)) (:arrived (:data r))) :arrived
       :else :unreachable))))
+
+(defn pillar-height
+  "How many blocks to pillar to bring the feet level with item: it lies above the feet by 2 to 6 and within 1 cell sideways (a drop is picked up from a block away); else nil."
+  [c item]
+  (let [[x y z] (item-cell item)
+        [fx fy fz] (u/cell-vec (u/self-pos c))
+        dy (- y fy)]
+    (when (and (<= 2 dy 6) (<= (max (abs (- x fx)) (abs (- z fz))) 1))
+      dy)))
+
+(defn ^:async pillar-to!
+  "A drop in a niche with nothing to stand on beside it (go-to answers :unreachable): the body stacks carried blocks under itself until its feet are level with it, as a player does. One pillar child (slot :pillar, carried blocks only). :arrived, :continue while it waits, else nil."
+  [c item]
+  (when-let [h (pillar-height c item)]
+    (let [r (await (child/run!* c :pillar 'jobs.access.pillar {:height h :ways #{:carried}}))]
+      (cond (= :continue r) :continue
+            (= :done (:kind r)) :arrived))))
 
 (defn open-above?
   "Whether the nearest seen cell above cell in its column (within 8) is open."
@@ -527,7 +544,8 @@
         r (when-not (or moving? (= :continue walk) (= :continue dug) why (= :unreachable walk)) (await (collect!)))
         stuck? (and r (= "unreachable" (.-status r)))
         up? (and stuck? (high? c item))
-        up (when up? (await (walk-down! c item #{:walk :pillar :stair :clear-seal})))
+        walked-up (when up? (await (walk-down! c item #{:walk :pillar :stair :clear-seal})))
+        up (if (= :unreachable walked-up) (or (await (pillar-to! c item)) walked-up) walked-up)
         dug2 (when (and stuck? (not up?) (:dig (:args c))) (await (dig-to! c item)))
         dig2-why (when-not (#{nil :dug :continue} dug2) dug2)
         walk2 (when (= :dug dug2) (await (walk-down! c item)))

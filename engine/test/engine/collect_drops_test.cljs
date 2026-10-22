@@ -415,6 +415,18 @@
             (is (some #(and (= :child_started (:kind %)) (= :walk (:slot %))) @seen) "go-to was asked to climb")
             (is (= 0 (:collected result)))))))))
 
+(deftest a-drop-in-a-niche-with-nothing-to-stand-on-beside-it-is-pillared-to-with-carried-blocks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wall (into {} (for [y (range 64 70) z [-1 0 1]] [(str "1," y "," z) "stone"]))
+              {:keys [eng p seen]} (bd/setup {:self body :inventory [{:name "cobblestone" :count 8}] :blocks (assoc wall "1,67,0" "air")})]
+          (drop! p [1 67 0] "raw_iron")
+          (seen-from-above! p)
+          (collect-unreachable-first! p 1)
+          (let [result (await (tu/child-outcome eng job {:radius 8} 60))]
+            (is (some #(and (= :child_started (:kind %)) (= :pillar (:slot %))) @seen) "the body pillared up to the niche")))))))
+
 (deftest a-drop-picked-up-while-the-collect-action-answers-unreachable-is-collected-not-left
   (async done
     (tu/run-async done

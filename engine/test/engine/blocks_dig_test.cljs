@@ -1121,9 +1121,10 @@
 
 (deftest pillar-height-wants-the-block-three-or-more-above-and-near
   (are [pos want] (= want (dig/pillar-height {:primitives (:p (setup {:self {:pos {:x 0.5 :y 63 :z 0.5}}}))} pos))
-    {:x 1 :y 66 :z 0} 2
-    {:x 1 :y 67 :z 0} 3
-    {:x 1 :y 70 :z 0} 3
+    {:x 1 :y 66 :z 0} 1
+    {:x 1 :y 67 :z 0} 1
+    {:x 1 :y 70 :z 0} 4
+    {:x 1 :y 80 :z 0} 6
     {:x 1 :y 65 :z 0} nil
     {:x 6 :y 67 :z 0} nil))
 

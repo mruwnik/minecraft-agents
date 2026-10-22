@@ -44,7 +44,7 @@
 
   A block not in sight, within twice the reach, with a seen terrain block (stone, dirt, sand ..: jobs.lib.blocks/through-natural) first in the line, is reached by digging that block first (picked up; zones, claims and hazards apply to it; never with :through false) before any walk, unless a seen open cell beside or above the block has safe ground to stand on (open-side?: the walk goes there first, and digs through only when that walk fails); a base block there (chest, door, planks ..) is never dug for it: the walk's give-up names it as :blocked-by.
   Out of reach, it walks within 3 cells (go-to child, which opens and shuts doors); a failed walk is tried once more,
-  then, for a block 3 or more above the feet and within 3 cells sideways, it pillars up (jobs.access.pillar child, carried blocks, once per call, up to 3 blocks), and only then ends nothing-possible {:reason :unreachable :pos :why} (:no-walk, :out-of-reach, go-to's why).
+  then, for a block 3 or more above the feet and within 3 cells sideways, it pillars up (jobs.access.pillar child, carried blocks, enough to leave the block 3 above the feet, at most 6, once per call), and only then ends nothing-possible {:reason :unreachable :pos :why} (:no-walk, :out-of-reach, go-to's why).
   A block under the feet with no seen solid floor below it is not dug from on top: the body first steps off its
   column to a cell beside it on a seen floor (a go-to child), then digs; with none to stand on it ends {:reason :hazard
   :hazards [:under-feet] :why :no-side-stand}. Only :accept :under-feet digs it from on top.
@@ -413,13 +413,13 @@
                   (when (= :done (:kind r)) :again))))))
 
 (defn pillar-height
-  "How many blocks to pillar up to reach pos from the feet: pos at least 3 above the feet cell and within 3 cells sideways, 1 to 3 blocks; else nil."
+  "How many blocks to pillar up to reach pos from the feet: pos at least 3 above the feet cell and within 3 cells sideways, as many blocks as leave it 3 above the feet (1 to 6; the blocks left are for climbing to its drop); else nil."
   [c pos]
   (let [[x y z] (b/cell pos)
         [fx fy fz] (b/feet-cell c)
         dy (- y fy)]
     (when (and (<= 3 dy) (<= (max (abs (- x fx)) (abs (- z fz))) 3))
-      (min 3 (dec dy)))))
+      (max 1 (min 6 (- dy 3))))))
 
 (defn ^:async pillar-up!
   "A block overhead that no walk reaches: a player stacks a block or two under the feet. One pillar child per call (carried blocks only); :again when it built, :continue while it waits, else nil."
@@ -476,7 +476,7 @@
       (or (when-not (open-side? c pos) (await (dig-through! c pos)))
           (let [w (await (b/walk-into-reach! c pos (:see (:args c))))]
             (if (:unreachable w)
-              (or (await (dig-through! c pos)) (await (pillar-up! c pos)) (unreachable! c (:unreachable w)))
+              (or (await (pillar-up! c pos)) (await (dig-through! c pos)) (unreachable! c (:unreachable w)))
               w)))
       ;; the look or walk of this step may show a hazard that can-run?, asked before it, did not know
       (problem c) (if (ctx/returns-on-later? c) (ctx/end c :condition-failed (problem c)) :continue)
