@@ -79,7 +79,9 @@
 (defn lookup
   "A function (kind-at x y z) giving block-kind (default kind-of) of the block there.
   Reads state ids from p.rawWorld when there is one (state-lookup), else blockAt once per cell: the planner's raw
-  snapshot, as go-to's plans read it.
+  snapshot, as go-to's plans read it. For questions about the world, not the body's walk: what a mob can walk or shoot
+  through (danger), prices of a far route, and agreeing with go-to's own plan; a walk or flood the body makes itself
+  reads seen-lookup.
   One lookup serves one query."
   ([p] (lookup p kind-of))
   ([p block-kind]
