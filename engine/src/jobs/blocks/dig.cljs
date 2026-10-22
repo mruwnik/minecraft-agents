@@ -38,7 +38,7 @@
   - {:reason :no-tool :needs item :block name :hint}: no carried tool harvests the block (with :need-drop) and the call's :ways
     allow no fetch (otherwise the round gets one; a fetch that fails ends the same way, with :why).
 
-  A block not in sight, within twice the reach, with a seen terrain block (stone, dirt, sand ..: jobs.lib.blocks/through-natural) first in the line, is reached by digging that block first (picked up; zones, claims and hazards apply to it) before any walk; a base block there (chest, door, planks ..) is never dug for it: the walk's give-up names it as :blocked-by.
+  A block not in sight, within twice the reach, with a seen terrain block (stone, dirt, sand ..: jobs.lib.blocks/through-natural) first in the line, is reached by digging that block when no walk finds a stand that sees it (picked up; zones, claims and hazards apply to it); a base block there (chest, door, planks ..) is never dug for it: the walk's give-up names it as :blocked-by.
   Out of reach, it walks within 3 cells (go-to child, which opens and shuts doors); a failed walk is tried once more,
   then it ends nothing-possible {:reason :unreachable :pos :why} (:no-walk, :out-of-reach, go-to's why).
   A block under the feet with no seen solid floor below it is not dug from on top: the body first steps off its
@@ -423,9 +423,10 @@
       (and (not (:walk (:args c))) (not (b/in-reach? c pos (:see (:args c)))))
       (unreachable! c :no-walk)
       (not (b/in-reach? c pos (:see (:args c))))
-      (or (await (dig-through! c pos))
-          (let [w (await (b/walk-into-reach! c pos (:see (:args c))))]
-            (if (:unreachable w) (unreachable! c (:unreachable w)) w)))
+      (let [w (await (b/walk-into-reach! c pos (:see (:args c))))]
+        (if (:unreachable w)
+          (or (await (dig-through! c pos)) (unreachable! c (:unreachable w)))
+          w))
       ;; the look or walk of this step may show a hazard that can-run?, asked before it, did not know
       (problem c) (if (ctx/returns-on-later? c) (ctx/end c :condition-failed (problem c)) :continue)
       (and (access/under-feet? (access/may-dig? (b/rules-in c) pos)) (not (contains? (set (:accept (:args c))) :under-feet)))

@@ -164,8 +164,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out eng p] :as s} (await (go! (assoc gap-up-world :self {:pos {:x 0 :y 64 :z 1}}) {:pos [10 65 1]}))]
-          (is (= {:status :stopped :arrived false :reason :unreachable :why :abilities :kind :gap-up} (dissoc @out :at :near :text)))
+        (let [{:keys [out eng p] :as s} (await (go! (assoc gap-up-world :self {:pos {:x 0 :y 64 :z 1}}) {:pos [10 65 1] :ways #{:walk}}))]
+          (is (= {:status :stopped :arrived false :reason :unreachable :why :abilities :kind :gap-up :shut-in true} (dissoc @out :at :near :text)))
           (is (re-find #"^gave up walking to \[10 65 1\]: .*step up" (:text @out)) "the reason in words")
           (is (not (re-find #"[{}]" (:text @out))) "no map dump")
           (is (= [0 64 1] (at p)) "the body did not move")
@@ -191,11 +191,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (setup (assoc gap-up-world :self {:pos {:x 0 :y 64 :z 1}}))
-              _ (core/submit! eng '(jobs.movement.go-to {:pos [10 65 1]}) {})
+              _ (core/submit! eng '(jobs.movement.go-to {:pos [10 65 1] :ways #{:walk}}) {})
               _ (await (tick-out! eng 30))
               ev (filter #(and (= :job (:source %)) (#{:stopped :completed} (:kind %))) @seen)]
           (is (= [:stopped] (mapv :kind ev)))
-          (is (re-find #"^gave up walking to \[10 65 1\]: it needs a step up" (:text (first ev)))))))))
+          (is (re-find #"^gave up walking to \[10 65 1\]: the body is shut in and needs a step up" (:text (first ev)))))))))
 
 (deftest go-to-reports-an-unreachable-fake-cell-as-unreachable
   (async done
@@ -243,9 +243,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        ;; the same plateau, but below the drop is a pit (x 11..14) in front of a wall too high to climb out over
+        ;; the same plateau, but below the drop is a pit (x 11..14) in front of a wall too high to climb out over.
+        ;; :ways #{:walk}: the small plateau counts as shut in, and a shut-in body may escalate by dropping in and digging out
         (let [pit (merge (floor -2 -3 10 3) (floor 60 11 -3 14 3) (box 15 60 -3 16 64 3 "stone"))
-              {:keys [p out]} (await (go! {:blocks pit} {:pos [120 64 0]}))]
+              {:keys [p out]} (await (go! {:blocks pit} {:pos [120 64 0] :ways #{:walk}}))]
           (is (= {:arrived false :reason :unreachable :why :one-way} (select-keys @out [:arrived :reason :why])))
           (is (= 64 (js/Math.floor (second (at p)))) "still on the plateau")
           (is (< (first (at p)) 11)))))))
