@@ -106,6 +106,8 @@
                                     {:job "j9" :name "pen"}]}
                 {:wake :idle :jobs [{:job "j9" :name "noop" :idle-ok true}
                                     {:job "j14" :name "smelt" :waiting :cooking}]}
+                {:wake :idle :jobs [{:job "j1060" :name "obtain" :waiting {:reason :reflex-holds :reflex :get-food :job "j1061"}}
+                                    {:job "j1061" :name "get-food"}]}
                 {:wake :idle :jobs [{:job "j1" :name "noop" :idle-ok true}
                                     {:job "j30" :name "go-to" :waiting {:reason :exposed :lowered-by #{:light}}}]}]]
     (is (nil? (progress/wake-verdict wake "j14")) (pr-str wake))))
@@ -241,7 +243,7 @@
 (deftest an-engine-that-times-out-is-busy-not-gone-and-the-wait-goes-on
   (let [failing (fn [code] (fn [_ _ _] (js/Promise.reject (http/coded-error code "down"))))
         run (fn [code]
-              (progress/wait-progress! (assoc (request "Probe" "--world" "w" "--goal" "j14" "--wait" "10s") :wait-ms 400 :unreachable-ms 100)
+              (progress/wait-progress! (assoc (request "Probe" "--world" "w" "--goal" "j14" "--wait" "10s") :wait-ms 400 :unreachable-ms 0)
                                        (failing code) nil))]
     (async done
       (-> (js/Promise.all #js [(run "ETIMEDOUT") (run "ECONNREFUSED")])

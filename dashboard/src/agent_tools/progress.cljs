@@ -30,7 +30,7 @@
   #{:night :night-safe :night-sheltered :not-night :day :dark :cooking :low-health :needs-health
     :chunks-loading :not-loaded :goal-unloaded :receding :walk-waiting :falling-block :not-ready :not-hungry
     :not-burning :not-underwater :not-wedged :not-mounted :no-hostile :no-ranged-danger :nothing-to-do
-    :nothing-to-restore :enough-room :already-sealed :already-sound :at-target})
+    :nothing-to-restore :reflex-holds :enough-room :already-sealed :already-sound :at-target})
 
 (def recent-death-s 600)
 (def default-stall-ms (* 10 60 1000))
