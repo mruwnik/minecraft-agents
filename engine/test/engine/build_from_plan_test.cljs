@@ -1563,6 +1563,7 @@
               result (await (child-outcome eng job {:plan "box"} 400))
               open? (fn [x y z] (not= "dirt" (block p [x y z])))]
           (is (= :incomplete (:reason result)))
+          (is (re-find #"unreachable" (str (:text result))) "the standing cell is given up unreachable, and the text says so")
           (is (some (fn [[x y z]] (open? x y z))
                     (concat (for [x (range 10 14) z (range 10 14)] [x 66 z])
                             (for [x (range 10 14) y [64 65] z [10 13]] [x y z])
