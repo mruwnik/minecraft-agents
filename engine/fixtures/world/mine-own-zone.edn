@@ -17,6 +17,16 @@
             {:event {:source :job :kind #{:completed :stopped}} :within-s 150 :of-job true}]
    :after [[:block [16 -1 16] "birch_planks"] [:block [13 -1 13] "birch_planks"]]
    :limit-s 170}
+  {:name "walks-out-by-the-open-side-when-the-nearest-is-walled-off"
+   ;; the body stands 1 block inside the west edge of its zone; bedrock closes the room on the west, north, south and roof, so the nearest exit cells cannot be reached: it walks east to the open end instead of trying them
+   :blocks [[:fill [4 0 10] [28 3 22] "air"] [:fill [13 -1 13] [19 -1 19] "birch_planks"]
+            [:fill [10 -1 9] [10 7 23] "bedrock"] [:fill [10 -1 9] [29 7 9] "bedrock"] [:fill [10 -1 23] [29 7 23] "bedrock"] [:fill [10 4 9] [29 4 23] "bedrock"]]
+   :body {:at [14.5 0 16.5]}
+   :zones [{:name "home" :min [13 -1 13] :max [19 3 19] :owner "$body"}]
+   :act [[:job (jobs.gather.mine {:torches false :block "iron_ore" :level false :count 1 :direction :east :tunnel-length 3 :radius 8})]]
+   :expect [{:event {:source :job :kind :mine.left-zone} :within-s 60 :of-job true}]
+   :after [[:block [16 -1 16] "birch_planks"] [:block [13 -1 13] "birch_planks"] [:block [10 0 16] "bedrock"]]
+   :limit-s 90}
   {:name "ignore-zones-digs-in-place"
    :blocks [[:fill [16 0 16] [16 1 16] "air"] [:set [20 0 16] "iron_ore"]]
    :zones [{:name "home" :min [14 -1 14] :max [18 3 18] :owner "$body"}]
