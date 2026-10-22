@@ -62,21 +62,29 @@
 
 (def defaults {:least :all :ways (set ways) :spend {:job-time ::job-time-s}})
 
+(defn source-seen?
+  "True when a way would start from what is seen or carried: a usable seen chest that might hold one of the names, a chain
+  made from what is carried, a loose item, or a gather of seen raw needs (not a search for unseen ones)."
+  [c]
+  (let [a (:args c)
+        names (names-of a)
+        n (shortfall c names)]
+    (boolean (or (:bill a)
+                 (zero? n)
+                 (and (way? c :chest) (seq (candidates c names)))
+                 (and (makes? c) (craft-plan c names n))
+                 (and (way? c :loose) (seq (loose-way/seen c names)))
+                 (and (gathers? c) (gather-viable? c names n))))))
+
 (defn source-cause
-  "nil when a way would start: a usable seen chest that might hold one of the names, a chain made from what is
-  carried, a gather of seen raw needs, or a search for unseen ones. Else the cause: the gather child's own decline,
-  or {:reason :no-source :why ..}."
+  "nil when a way would start (source-seen?, or a search for unseen needs). Else the cause: the gather child's own
+  decline, or {:reason :no-source :why ..}."
   [c]
   (let [a (:args c)
         names (names-of a)
         n (shortfall c names)]
     (cond
-      (:bill a) nil
-      (zero? n) nil
-      (and (way? c :chest) (seq (candidates c names))) nil
-      (and (makes? c) (craft-plan c names n)) nil
-      (and (way? c :loose) (seq (loose-way/seen c names))) nil
-      (and (gathers? c) (gather-viable? c names n)) nil
+      (source-seen? c) nil
       (and (gathers? c) (explorable? c names n)) nil
       :else (or (when (gathers? c) (gather-held c names n))
                 (merge {:reason :no-source :why (no-source-why c names n)} (wanted-fields a))))))
@@ -183,7 +191,7 @@
         have (carried-of inv names)]
     (cond
       (survey-first? c names)
-      (do (await (look/survey-until! c #(nil? (source-cause c))))
+      (do (await (look/survey-until! c #(source-seen? c)))
           (ctx/update-mem! c assoc :looked (look/cell-of (u/self-pos c)))
           (if-let [cause (source-cause c)]
             (ctx/end c :condition-failed cause (merge {:got 0} (wanted-fields a) (when (map? cause) (select-keys cause [:why]))))
