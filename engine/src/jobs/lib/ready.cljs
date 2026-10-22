@@ -201,9 +201,11 @@
   [f]
   (dark-near-ok f (safe-at-by-night f)))
 
+(defn chest-place "The cell of the chest of c's job (the :chest arg or the known :chest place), nil: none." [c] (storage/chest-of (ctx/view c) (:args c)))
+
 (def safe-at-chest
   "The checker of a job that goes to its chest (the :chest arg or the known :chest place)."
-  (safe-at-by-night #(storage/chest-of (ctx/view %) (:args %))))
+  (safe-at-by-night chest-place))
 
 (def safe-here-by-night "safe-at-by-night where the job stands." (safe-at-by-night (constantly nil)))
 

@@ -149,11 +149,14 @@
 
 (deftest a-job-that-goes-to-its-place-binds-safe-at-that-place
   (are [check args] (= :later (lit 0 15 #(first (check (assoc (ctx-of open-night) :args args)))))
-    deposit/safe? {:chest outside}
-    withdraw/safe? {:chest outside}
     smelt/safe? {:furnace outside}
     kitchen/safe? {:furnace outside}
-    pick-up-loose/safe? {}
+    pick-up-loose/safe? {}))
+
+(deftest a-short-visit-in-the-open-night-goes-ahead-priced-by-its-exposure
+  (are [check args] (= :ok (lit 0 15 #(first (check (assoc (ctx-of open-night) :args args)))))
+    deposit/safe? {:chest outside}
+    withdraw/safe? {:chest outside}
     set-spawn/safe? {:bed [15 64 0]}))
 
 (deftest a-smelt-puts-its-own-furnace-down-instead-of-walking-to-a-chosen-dark-one
@@ -557,3 +560,11 @@
   (are [args expected] (= expected (lit 0 15 #(bound (safe-of 'jobs.build.from-plan) open-night args)))
     {:at [15 64 0]} :ok
     {:at [40 64 0]} :later))
+
+(deftest a-dark-closed-room-is-no-wait-by-day-or-night-in-or-out
+  (are [t self] (= :ok (lit 0 0 #(kind (ready/safe-at (constantly {:x 5 :y 64 :z 0}))
+                                       (-> (hut/hut-world self {}) (dissoc :light) (assoc :time t)))))
+    st/noon {:x 5 :y 64 :z 5}
+    st/noon {:x 5 :y 64 :z 0}
+    st/night {:x 5 :y 64 :z 5}
+    st/night {:x 5 :y 64 :z 0}))

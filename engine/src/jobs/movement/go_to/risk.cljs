@@ -105,6 +105,14 @@
         share (* (settings/get settings ::risk-share) (.-health self) (if hungry? (settings/get settings ::hungry-share) 1))]
     (if (ready/cannot-heal? c) (max share (dec (.-health self))) share)))
 
+(def chest-act-s "Seconds a chest visit (deposit, withdraw) keeps the body at the chest." 3)
+
+(defn trip-s
+  "stay-s of a job that walks to the place (f c) (nil: here), acts act-s seconds there and walks back."
+  [f act-s]
+  (fn [c] (let [at (f c)]
+            (+ act-s (if (and at (:y at)) (/ (* 2 (u/dist (u/self-pos c) at)) (cost/walk-blocks-per-s)) 0)))))
+
 (defn status
   "Ok while the estimated damage of the walk to `goal` is within (allowed c), else later :risky with the
   risk and its parts."

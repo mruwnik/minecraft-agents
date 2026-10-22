@@ -1,5 +1,6 @@
 (ns jobs.storage.withdraw
   (:require [jobs.lib.ready :as ready]
+            [jobs.movement.go-to.risk :as risk]
             [clojure.string :as str]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -64,7 +65,9 @@
 
 (defn entity-form? [c] (some? (:entity (:args c))))
 
-(defn safe? [c] (if (entity-form? c) (ready/safe-here-by-night c) (ready/safe-at-chest c)))
+(def safe-here (risk/priced ready/safe-here-by-night (constantly risk/chest-act-s)))
+(def safe-chest (risk/priced ready/safe-at-chest (risk/trip-s ready/chest-place risk/chest-act-s)))
+(defn safe? [c] (if (entity-form? c) (safe-here c) (safe-chest c)))
 (def fit? ready/ok)
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 

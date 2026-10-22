@@ -3,6 +3,7 @@
             [jobs.lib.crops :as crops]
             [jobs.lib.waits :as waits]
             [jobs.lib.ready :as ready]
+            [jobs.movement.go-to.risk :as risk]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -81,7 +82,7 @@
 
 (def target [:chest])
 
-(def safe? ready/safe-at-chest)
+(def safe? (risk/priced ready/safe-at-chest (risk/trip-s ready/chest-place risk/chest-act-s)))
 (def fit? ready/ok)
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
