@@ -141,6 +141,8 @@ Then queue the rest at once, without `--wait`; each prints its job id:
 
 `(seq a b ...)` runs its jobs one after another; `(repeat a)` keeps a standing job going. Then `./bin/progress --goal jN --wait 60m` on the job you are waiting for.
 
+A stair or tunnel of yours that broke into a cave (a drop, water, deaths there): `./bin/jobs submit '(jobs.blocks.seal-opening)'` near it fills the openings and leaves the way back open.
+
 ## Reflexes (triggers)
 
 Default triggers start short jobs: danger (hostile-near, low-health, burning, suffocating, wedged, poisoned, died), needs (hungry, needs-bed, needs-weapon, inventory-nearly-full), time (night, dusk-home, dawn), tidying (door-left, scaffold-left, tidy-pending, replant-owed, pen-gate). `./bin/triggers list` shows them. Retune one rather than mute it; put replaces it under its id:

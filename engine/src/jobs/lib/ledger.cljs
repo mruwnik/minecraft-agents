@@ -297,6 +297,20 @@
                   [(+ x (* k dx)) (+ y dy) (+ z (* k dz))])]
     (set (concat stairs tunnels))))
 
+(defn way-ends
+  "The own cells (own-cells) the body leaves its passages by: those of the highest step of each stair and of the first
+  cell of each tunnel, as [x y z]."
+  [c]
+  (let [dim (.-dimension (.self (:primitives c)))
+        here? #(= dim (:dim (:data %)))
+        stairs (for [e (ctx/entries c :stair-way) :when (here? e)
+                     :let [top (last (sort-by second (:floors (:data e))))]
+                     :when top dy [1 2 3]]
+                 (update (vec top) 1 + dy))
+        tunnels (for [e (ctx/entries c :tunnel-way) :when (here? e) dy [0 1]]
+                  (update (vec (:origin (:data e))) 1 + dy))]
+    (set (concat stairs tunnels))))
+
 (defn near-of-args
   "The :near the entries are narrowed to, {:pos :radius}: the arg (its :pos the body's position when left out), else for :orphans the body's position and
   32, so a saved trigger register whose job spec has no :near stays bounded, else nil."

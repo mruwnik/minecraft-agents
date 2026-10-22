@@ -1,0 +1,29 @@
+;; Card fc083b19: jobs.blocks.seal-opening fills where the body's own stair broke into a cave and leaves its way back open.
+;; Rock x 2..30, z 6..26, y 0..9; a stair up east from [16 0 16] to the top stand [20 4 16] (3 cells a stand), a corridor
+;; on from the top (x 21..23: the way back), and a cave beside the lower steps (x 16..18, y 1..2, z 17..18), lit by
+;; glowstone in its far wall and in the stair's wall (a body sees only lit cells). record-stair makes the stair the body's own.
+;; Cells beside the stair that open into the cave: [16 1 17] [16 2 17] [17 1 17] [17 2 17] [18 2 17]; [18 1 17] lies beside
+;; the floor only and stays open.
+{:defaults
+ {:tags [:jobs :mine] :time :any
+  :plot {:height 14}
+  :blocks [[:fill [2 0 6] [30 9 26] "stone"]
+           [:fill [16 0 16] [16 2 16] "air"] [:fill [17 1 16] [17 3 16] "air"] [:fill [18 2 16] [18 4 16] "air"]
+           [:fill [19 3 16] [19 5 16] "air"] [:fill [20 4 16] [20 6 16] "air"]
+           [:fill [21 4 16] [23 5 16] "air"]
+           [:fill [16 1 17] [18 2 18] "air"]
+           [:set [17 2 19] "glowstone"] [:set [23 4 15] "glowstone"]
+           [:set [16 1 15] "glowstone"] [:set [17 2 15] "glowstone"] [:set [18 3 15] "glowstone"] [:set [19 4 15] "glowstone"] [:set [20 5 15] "glowstone"]]
+  :body {:at [20.5 4 16.5] :inventory [["stone_pickaxe" 1] ["cobblestone" 16]] :effects [["resistance" 600 4]]}
+  :limit-s 180}
+ :cases
+ [{:name "a-cave-the-stair-broke-into-is-sealed-and-the-way-back-kept"
+   :act [[:job (seq (jobs.access.record-stair {}) (jobs.blocks.seal-opening {:radius 8 :ways #{:carried}}))]]
+   :expect [{:event {:source :job :kind :completed :data {:sealed [:>= 5]}} :within-s 150 :of-job true}]
+   :after [[:block [16 1 17] "cobblestone"] [:block [16 2 17] "cobblestone"] [:block [17 1 17] "cobblestone"]
+           [:block [17 2 17] "cobblestone"] [:block [18 2 17] "cobblestone"]
+           [:not-block [21 4 16] "cobblestone"] [:not-block [21 5 16] "cobblestone"] [:not-block [18 1 17] "cobblestone"]]}
+  {:name "no-own-passage-near-is-impossible"
+   :act [[:job (jobs.blocks.seal-opening {:radius 8})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-own-cells}} :within-s 30 :of-job true}]
+   :after [[:not-block [17 1 17] "cobblestone"]]}]}
