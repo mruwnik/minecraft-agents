@@ -172,6 +172,18 @@
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
                  (select-keys @(:out s) [:status :item :reason]))))))))
 
+(deftest an-iron-item-first-with-no-iron-stops-before-a-later-stone-item-is-made
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [w (-> (world [{:name "wooden_sword" :count 1} {:name "cobblestone" :count 2} {:name "stick" :count 3}] {})
+                    (update :recipes assoc "stone_sword" {:count 1 :needs {"cobblestone" 2 "stick" 1} :table true}))
+              s (start w {:items ["iron_pickaxe" "stone_sword"] :explore false :food false})]
+          (await (f/run-ticks s 120))
+          (is (empty? (crafted s)))
+          (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
+                 (select-keys @(:out s) [:status :item :reason]))))))))
+
 (deftest a-worn-piece-is-skipped
   (async done
     (tu/run-async done

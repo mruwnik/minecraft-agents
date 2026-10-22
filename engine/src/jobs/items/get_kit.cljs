@@ -150,12 +150,13 @@
 
 (defn covered-of
   "The bill {item 1} of the items, in order, that the carried furnace material (ingots, or the raw input to smelt) already covers, each one's share
-  taken off what is left for the next; {} when none or all (then the one bill does it)."
+  taken off what is left for the next; {} when none or all (then the one bill does it). An item needing no furnace material is left to the
+  bill, so it keeps its place in the list."
   [version items carried*]
   (let [carried (with-raw carried*)
         covered (first (reduce (fn [[bill left] item]
                                  (let [need (bill/furnace-short version [item] {})]
-                                   (if (every? (fn [[k n]] (<= n (get left k 0))) need)
+                                   (if (and (seq need) (every? (fn [[k n]] (<= n (get left k 0))) need))
                                      [(assoc bill item 1) (merge-with - left need)]
                                      [bill left])))
                                [{} (select-keys carried (keys (bill/furnace-short version items {})))]

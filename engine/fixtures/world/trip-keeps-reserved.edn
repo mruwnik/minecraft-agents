@@ -15,5 +15,5 @@
    :body {:inventory [["iron_sword" 1] ["raw_iron" 5] ["coal" 3] ["dirt" 1] ["sand" 1] ["gravel" 1] ["andesite" 1] ["diorite" 1] ["granite" 1] ["cobblestone" 1] ["oak_log" 1] ["birch_log" 1] ["spruce_log" 1] ["oak_planks" 1] ["birch_planks" 1] ["spruce_planks" 1] ["stick" 1] ["flint" 1] ["feather" 1] ["string" 1] ["bone" 1] ["gunpowder" 1] ["clay_ball" 1] ["snowball" 1] ["poppy" 1] ["dandelion" 1] ["leather" 1] ["paper" 1] ["glass" 1] ["brick" 1] ["sugar" 1]]}
    :act [[:summon "cow" [20.5 0 14.5] "{NoAI:1b}"]
          [:job (jobs.combat.hunt {:item "beef" :count 1 :keep 0})]]
-   :expect [{:event {:source :job :kind :trip.deposited :data {:result {:moved [:any]}}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :trip.deposited :data {:result {:free [:>= 12]}}} :within-s 60 :of-job true}]
    :after [[:item "raw_iron" 5] [:item "iron_sword" 1]]}]}
