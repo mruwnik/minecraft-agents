@@ -319,27 +319,27 @@
           (await (run-ticks s 200))
           (is (= [[11 64 0]] (dug-cells s)) "the far block was walked to and dug; no stair was cut through the floor"))))))
 
-;; Sorrel j23: the crafting table the kit just placed stood in the first stair step of the faced heading.
-(deftest a-table-in-the-first-step-of-the-faced-heading-turns-the-stair-to-another
+;; Sorrel j23: a base block (a chest) stood in the first stair step of the faced heading.
+(deftest a-chest-in-the-first-step-of-the-faced-heading-turns-the-stair-to-another
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start {:world {:blocks (merge soil-all-round {"-1,64,0" "crafting_table"}) :drops cobble :yaw 90
+        (let [s (start {:world {:blocks (merge soil-all-round {"-1,64,0" "chest"}) :drops cobble :yaw 90
                                 :inventory [{:name "stone_pickaxe" :count 1}]}})]
           (core/submit! (:eng s) (spec {:block "stone" :count 2 :tunnel-length 4}) {})
           (await (run-ticks s 300))
           (is (finished? s))
           (is (seq (events-of s :mine.turned)) "it turned")
-          (is (= "crafting_table" (block-at s -1 64 0)) "the table stands")
+          (is (= "chest" (block-at s -1 64 0)) "the chest stands")
           (is (<= 2 (get (inv s) "cobblestone" 0)))
           (is (= :count (:reason (done-event s)))))))))
 
-(deftest a-table-on-every-side-moves-the-stair-to-another-spot-after-trying-each-heading
+(deftest a-chest-on-every-side-moves-the-stair-to-another-spot-after-trying-each-heading
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [tables {"-1,64,0" "crafting_table" "1,64,0" "crafting_table" "0,64,1" "crafting_table" "0,64,-1" "crafting_table"}
-              s (start {:world {:blocks (merge (cells "stone" (range -25 26) (range 55 60) (range -25 26)) (cells "dirt" (range -25 26) (range 60 64) (range -25 26)) tables) :drops cobble :yaw 90
+        (let [chests {"-1,64,0" "chest" "1,64,0" "chest" "0,64,1" "chest" "0,64,-1" "chest"}
+              s (start {:world {:blocks (merge (cells "stone" (range -25 26) (range 55 60) (range -25 26)) (cells "dirt" (range -25 26) (range 60 64) (range -25 26)) chests) :drops cobble :yaw 90
                                 :inventory [{:name "stone_pickaxe" :count 1}]}})]
           (core/submit! (:eng s) (spec {:block "stone" :count 2 :tunnel-length 4}) {})
           (await (run-ticks s 300))
@@ -354,8 +354,8 @@
       (fn ^:async t []
         (let [s (start {:world {:blocks (soil-over-stone 63 59) :drops cobble :yaw 90
                                 :inventory [{:name "stone_pickaxe" :count 1}]}})
-              tables {"-1,64,0" "crafting_table" "1,64,0" "crafting_table" "0,64,1" "crafting_table" "0,64,-1" "crafting_table"}]
-          (doseq [[k v] tables] (fake/set-block! (:p s) (mapv js/parseInt (clojure.string/split k #",")) v))
+              chests {"-1,64,0" "chest" "1,64,0" "chest" "0,64,1" "chest" "0,64,-1" "chest"}]
+          (doseq [[k v] chests] (fake/set-block! (:p s) (mapv js/parseInt (clojure.string/split k #",")) v))
           (core/submit! (:eng s) (spec {:block "stone" :count 2 :tunnel-length 4}) {})
           (await (settings/with-settings {::mine-descent/max-moves 0}
                    #(run-ticks s 300)))
@@ -366,7 +366,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start {:world {:blocks (merge (soil-over-stone 63 59) {"-1,64,0" "crafting_table"}) :drops cobble
+        (let [s (start {:world {:blocks (merge (soil-over-stone 63 59) {"-1,64,0" "chest"}) :drops cobble
                                 :inventory [{:name "stone_pickaxe" :count 1}]}})]
           (core/submit! (:eng s) (spec {:block "stone" :count 2 :heading "west" :tunnel-length 4}) {})
           (await (run-ticks s 300))
