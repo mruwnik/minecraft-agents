@@ -1,0 +1,19 @@
+;; Card 4c8f36e2: a drop 10 blocks off is walked to by a go-to child (slot :walk), not by the collect act's own pathfinder, so the walk is priced and
+;; goes round a trench the straight line crosses. Stone mass x 8..30, z 8..24, y 0..9 lit by glowstone; 3-deep trench x 19..21, z 12..20; body at x 16.5, drop at x 26.5.
+;; Should-succeed: a :walk child starts, the drop is collected, the body is unhurt. Fails on a collect that walks alone (no :walk child).
+{:defaults
+ {:tags [:collect-drops :movement]
+  :time :any
+  :plot {:height 20}
+  :blocks [[:fill [8 0 8] [30 9 24] "stone"] [:fill [19 7 12] [21 9 20] "air"]
+           [:set [12 11 12] "glowstone"] [:set [12 11 20] "glowstone"] [:set [24 11 12] "glowstone"] [:set [24 11 20] "glowstone"]]
+  :body {:at [16.5 10 16.5]}
+  :limit-s 120}
+ :cases
+ [{:name "far-drop-is-walked-to-by-go-to-round-a-trench"
+   :act [[:summon "item" [26.5 10.2 16.5] "{Item:{id:\"minecraft:cobblestone\",count:1}}"]
+         [:job (jobs.items.collect-drops {:radius 12})]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :walk}} :within-s 30 :of-job true}
+            {:event {:source :job :kind :completed :data {:status :completed}} :within-s 90 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 80 :until {:source :job :kind :completed}}]
+   :after [[:item "cobblestone" 1]]}]}

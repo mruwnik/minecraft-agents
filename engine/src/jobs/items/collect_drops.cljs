@@ -25,7 +25,7 @@
   does not move it, so drops far away, e.g. other bodies', are never chased).
   An item is tried once; one that is gone, cannot be reached or picked up is skipped. A drop that slid to another cell while the body
   walked or dug to it is judged again there (at most ::max-moves times).
-  An item more than a block lower than the feet is walked to first (a jobs.movement.go-to child, range 1, which prices
+  An item more than 2 blocks off (not above the feet), or more than a block lower than the feet, is walked to first (a jobs.movement.go-to child, range 1, which prices
   falls and dangers); one it cannot reach is left, with a debug collect-drops.left {:reason :unreachable}.
   A drop in water with a known hostile within the hostile radius of it is left, with {:reason :water-danger}.
   An item lower than the feet in a hole the caller dug (:holes) is walked to only when it lies one block down at most and
@@ -207,6 +207,11 @@
   (await (sense/decide! c :collect-drops.hole #(hole-problem c item) {:retry? some?})))
 
 (defn high? [c item] (boolean (and (.-pos item) (> (- (second (item-cell item)) (feet-y c)) 1))))
+
+(defn far?
+  "Whether item lies beyond the act's last step (over 2 blocks off) and not above the feet: its walk goes through go-to, which prices the route."
+  [c item]
+  (boolean (and (.-pos item) (not (high? c item)) (> (u/dist (sh-sense/feet (:primitives c)) (u/pos-of (.-pos item))) 2))))
 
 (defn ^:async walk-down!
   "Walk within a block of item, more than a block lower than the feet (or, with ways, higher: a column top is climbed by
@@ -478,7 +483,7 @@
         hole? (in-hole? c item)
         moving? (and (at-hole? c item) (nothing-under? c item) (settling? c item))
         why (when (and hole? (not moving?)) (await (hole-problem! c item)))
-        walk (when (and (not hole?) (deep? c item)) (await (walk-down! c item)))
+        walk (when (and (not hole?) (or (deep? c item) (far? c item))) (await (walk-down! c item)))
         dig? (and (:dig (:args c)) (or (= :unreachable walk) (= :too-deep why)))
         dug (when dig? (await (dig-to! c item)))
         dig-why (when-not (#{nil :dug :continue} dug) dug)

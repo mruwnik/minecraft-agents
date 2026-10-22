@@ -47,11 +47,12 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (bd/setup {:self body})]
+        (let [{:keys [eng p seen]} (bd/setup {:self body})]
           (drop! p [12 64 0] "porkchop")
           (drop! p [20 64 0] "porkchop")
           (let [result (await (tu/child-outcome eng job {:items ["porkchop"]} 30))]
             (is (= 1 (:collected result)) "the drop at 12 is inside the default 16, the one at 20 is not")
+            (is (some #(and (= :child_started (:kind %)) (= :walk (:slot %))) @seen) "a far drop is walked to by go-to, not by the collect act's own pathfinder")
             (is (= 1 (bd/carried p "porkchop")))))))))
 
 (deftest a-drop-in-the-dug-hole-is-picked-up-with-the-walk-capped-to-one-block

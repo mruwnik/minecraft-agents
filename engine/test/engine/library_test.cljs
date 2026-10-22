@@ -270,7 +270,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [item (fn [id x name] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name name :count 1}})
-              {:keys [eng p]} (setup {:entities [(item 1 2 "stick") (item 2 3 "dirt")] :unreachable ["2,64,0"]})]
+              {:keys [eng p]} (setup {:entities [(item 1 2 "stick") (item 2 -1 "dirt")] :unreachable ["2,64,0"]})]
           (core/submit! eng (list 'jobs.items.collect-drops {:radius 10}) {})
           (is (<= (await (run-until-empty eng 8)) 4) "an unreachable item does not loop forever")
           (is (= {"dirt" 1} (inv p))))))))
@@ -355,7 +355,7 @@
       (fn ^:async t []
         (let [item (fn [id x name] {:id id :name "item" :kind "item" :pos {:x x :y 64 :z 0} :item {:name name :count 1}})]
           (is (= {:status :done :collected 2 :left [{:pos {:x 2 :y 64 :z 0} :reason :unreachable}]}
-                 (await (child-outcome (:eng (setup {:entities [(item 1 2 "stick") (item 2 3 "dirt") (item 3 4 "dirt")]
+                 (await (child-outcome (:eng (setup {:entities [(item 1 2 "stick") (item 2 -1 "dirt") (item 3 -2 "dirt")]
                                                      :unreachable ["2,64,0"]}))
                                        'jobs.items.collect-drops {:radius 10} 8)))
               "the unreachable stick is not counted but booked left")
