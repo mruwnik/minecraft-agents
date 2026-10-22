@@ -89,12 +89,12 @@
                       :events (events/make {:body "Fake" :sinks [#(swap! raw conj %)] :now #(js/Date.now)})})
               danger (fake :suffocating :danger)
               comfort (fake :hungry :comfort)
-              t0 (js/Date.now)]
-          (js/setTimeout #(reset! (:running danger) nil) 300)
+              ended (atom false)]
+          (js/setTimeout #(do (reset! ended true) (reset! (:running danger) nil)) 300)
           (await (main/wait-out-danger! comfort))
-          (is (< (- (js/Date.now) t0) 100) "a comfort reflex is not waited for")
+          (is (false? @ended) "a comfort reflex is not waited for")
           (await (main/wait-out-danger! danger))
-          (is (>= (- (js/Date.now) t0) 300) "the stop waited until the danger reflex ended")
+          (is (true? @ended) "the stop waited until the danger reflex ended")
           (is (= [:stop-waiting] (mapv :kind @raw))))))))
 
 (deftest a-second-signal-does-not-stop-again
