@@ -59,6 +59,16 @@
    :expect [{:event {:source :job :kind :retreat_blocked} :within-s 20}
             {:no-event {:source :job :kind :holding :data {:reason "cornered"}} :for-s 10}]
    :limit-s 30}
+  ;; Card 306ae782: a body on a 3-high plateau wall to wall with a creeper walking at it from the west: the only way off is a jump down the
+  ;; east edge (costs no health), which the flight takes instead of standing cornered. Lit closed arena, stone plateau x 5..12.
+  {:name "flight-from-a-creeper-jumps-off-a-three-block-plateau"
+   :blocks [[:fill [4 0 4] [28 9 28] "stone" :hollow] [:fill [5 0 5] [27 8 27] "air"] [:fill [5 9 5] [27 9 27] "glowstone"]
+            [:fill [5 0 5] [12 2 27] "stone"]]
+   :body {:at [10.5 3 16.5] :yaw 90}
+   :act [[:summon "creeper" [6.5 3 16.5]]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "creeper" :decision :flee}} :within-s 8}
+            {:no-event {:source :body :kind :hurt} :for-s 10}]
+   :limit-s 25}
   ;; Card 4fcb4191: a plug (walls) takes longer than a creeper needs to cover the blocks past its swell range, so none is begun for one
   ;; 10 blocks off (the creeper is slowed, but still walks in: the walls come only once it is inside swell range); one 5 blocks off (inside swell range) is still walled off.
   {:name "dead-end-body-begins-no-plug-for-a-creeper-ten-blocks-off"

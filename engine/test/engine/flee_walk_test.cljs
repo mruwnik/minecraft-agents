@@ -221,3 +221,17 @@
         "even with water as fast as ground, the dry way round the pond")
     (is (nil? (walk/choose-target all-water from [threat] nil [] 6 {:swim-factor 1 :dry-only? true}))
         "only water to flee through: cornered, not a swim")))
+
+(def ledge-world
+  "Stone up to y 63 west of x 1; east of it stone only to y 60 (a three-block ledge), lava under a second ledge at z >= 4."
+  (fn [{:keys [x y z]}]
+    (cond
+      (<= y 60) "stone"
+      (< x 1) (if (<= y 63) "stone" "air")
+      (and (>= z 4) (= y 60)) "lava"
+      :else "air")))
+
+(deftest a-flight-jumps-down-a-three-block-ledge-it-sees-the-floor-of
+  (is (= 3 (walk/open-cells ledge-world {:x 0.5 :y 64 :z 0.5} [1 0] 3)) "dropped onto the stone three blocks down, not blocked at the lip")
+  (is (= {:x 6 :y 61 :z 0} (walk/choose-target ledge-world {:x 0.5 :y 64 :z 0.5} [{:x -5 :y 64 :z 0.5}] nil [] 6))
+      "a creeper behind on the plateau: the flight runs off the ledge"))

@@ -111,6 +111,17 @@
   [block-at x y z]
   (and (passable? (block-at {:x x :y y :z z})) (passable? (block-at {:x x :y (inc y) :z z}))))
 
+(defn drop-to
+  "The feet height of a jump down a ledge of two or three blocks from feet height y in column x z (it costs no health), or
+  nil: the first floor within three blocks must be a loaded solid block that does not harm."
+  [block-at x y z]
+  (some (fn [d] (let [floor (block-at {:x x :y (- y d 1) :z z})
+                      shaft (map #(block-at {:x x :y (- y %) :z z}) (range 1 (inc d)))]
+                  (when (and (some? floor) (not (passable? floor)) (not (contains? bs/bad-floor floor))
+                             (every? passable? shaft) (not-any? bs/harms-in-cell shaft))
+                    (- y d))))
+        [2 3]))
+
 (defn next-y
   "The feet height a walker at feet height y in column [px pz] reaches in the
   next column [x z], or nil when it cannot enter it: the same height, one
@@ -124,7 +135,7 @@
           below2 (block-at {:x x :y (- y 2) :z z})]
       (cond
         (and (passable? below) (not (passable? below2)) (not= "water" (block-at {:x x :y y :z z}))) (dec y)
-        (floorless? below) nil
+        (floorless? below) (drop-to block-at x y z)
         :else y))
     (and (free-at? block-at x (inc y) z) (passable? (block-at {:x px :y (+ y 2) :z pz}))) (inc y)
     :else nil))
