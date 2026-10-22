@@ -121,7 +121,7 @@
   [c & [raw?]]
   (let [item (:item (:args c))
         free (storage/carried-totals (reserve/free c :craft))]
-    (assoc (if raw? free (recipes/pooled (game/version-of (:primitives c)) free)) item (storage/usable-carried (u/inventory (:primitives c)) item))))
+    (assoc (if raw? free (recipes/pooled (game/version-of (:primitives c)) item free)) item (storage/usable-carried (u/inventory (:primitives c)) item))))
 
 (defn quote-of
   "P: the cheapest recipe for the rest of :count of :item from what is carried. It uses its ingredients (net of the item
@@ -375,7 +375,7 @@
             cap (if held? (makeable c) ##Inf)]
         (or (when (zero? cap) (await (short-of-ingredients! c 1)))
             (let [table (or (:table (ctx/mem c)) (:table (:args c)))]
-              {:r (await (ctx/act c :craft (clj->js {:item item :count (min cap (- target have)) :table table :standIns (recipes/interchange (game/version-of (:primitives c)))})))
+              {:r (await (ctx/act c :craft (clj->js {:item item :count (min cap (- target have)) :table table :standIns (recipes/interchange (game/version-of (:primitives c)) item)})))
                :table table :start start}))))))
 
 (defn ^:async settle!

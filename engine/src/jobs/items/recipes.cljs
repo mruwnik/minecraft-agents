@@ -56,8 +56,9 @@
 
 (defn interchange-classes
   "{name #{names}} for a version: items that stand in the same slot of recipes making the same result in the same layout
-  (every plank species in a chest). Vanilla takes any member of such a tag in each slot, so carried members add up."
-  [version]
+  (every plank species in a chest). Vanilla takes any member of such a tag in each slot, so carried members add up.
+  Planks (planks? true) take only their own species' log forms; other recipes (a campfire) take any log."
+  [version planks?]
   (let [md (minecraft-data version)
         name-of (fn [id] (some-> (aget (.-items md) id) .-name))
         groups (group-by (fn [r] [(id-of (.-result r)) (map #(= -1 %) (slots-of r))])
@@ -80,22 +81,26 @@
                                                                               (and (has-item? sl) (wood-of sl)) (conj (wood-of sl)))]
                         :when (> (count forms) 1)]
                     forms)
-        ;; a campfire takes any log, but planks take only their own species' forms: the broad class would let an oak log pass for a cherry one
-        pairs (concat (remove #(some plank-logs %) pairs) log-pairs)
+        pairs (if planks? (concat (remove #(some plank-logs %) pairs) log-pairs) pairs)
         merged (reduce (fn [classes names]
                          (let [hit (filter #(seq (clojure.set/intersection % names)) classes)]
                            (conj (remove (set hit) classes) (apply clojure.set/union names hit))))
                        [] pairs)]
     (into {} (for [cls merged n cls] [n cls]))))
 
-(def interchange (memoize interchange-classes))
+(def interchange-memo (memoize interchange-classes))
+
+(defn interchange
+  "The interchange classes that apply when making item."
+  [version item]
+  (interchange-memo version (boolean (some-> item (clojure.string/ends-with? "_planks")))))
 
 (defn pooled
   "have with every member of an interchange class counted at the class total (also a member none is carried of): a
   recipe asking one species of plank, or the log of a stripped log carried, is satisfied by a mix. Enough to judge
   whether a craft can start, not to plan several crafts from one stock."
-  [version have]
-  (let [classes (interchange version)
+  [version item have]
+  (let [classes (interchange version item)
         totals (into {} (keep (fn [[n cls]] (when (contains? have n) [cls (reduce + 0 (map #(get have % 0) cls))]))) classes)]
     (reduce (fn [acc [cls total]] (reduce #(assoc %1 %2 total) acc cls)) have totals)))
 

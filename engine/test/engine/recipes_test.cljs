@@ -104,12 +104,17 @@
   (is (= "crafting torch needs 3 stick, have 2" (recipes/lacking game/default-version {"charcoal" 15 "stick" 2} "torch" 12)) "charcoal carried: it is the fuel"))
 
 (deftest planks-of-any-wood_pool_for_a_recipe_that_names_one
-  (let [pooled (recipes/pooled game/default-version {"cherry_planks" 7 "oak_planks" 1 "cobblestone" 3})]
+  (let [pooled (recipes/pooled game/default-version "oak_planks" {"cherry_planks" 7 "oak_planks" 1 "cobblestone" 3})]
     (is (= 8 (get pooled "cherry_planks") (get pooled "oak_planks")))
     (is (= 3 (get pooled "cobblestone")))))
 
 (deftest planks-take-a-log-its-wood-and-their-stripped-forms
-  (let [pooled (recipes/pooled game/default-version {"stripped_cherry_log" 1 "cherry_wood" 1})]
+  (let [pooled (recipes/pooled game/default-version "cherry_planks" {"stripped_cherry_log" 1 "cherry_wood" 1})]
     (is (= 2 (get pooled "cherry_log")))
     (is (= 2 (get pooled "stripped_cherry_wood")))
     (is (nil? (get pooled "oak_log")) "another species stays apart")))
+
+(deftest a-campfire-takes-any-log-so-mixed-species-pool
+  (let [pooled (recipes/pooled game/default-version "campfire" {"oak_log" 1 "birch_log" 2})]
+    (is (= 3 (get pooled "oak_log") (get pooled "birch_log")))
+    (is (= 3 (get pooled "stripped_cherry_log")) "any log stands in")))
