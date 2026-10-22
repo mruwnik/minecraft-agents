@@ -29,4 +29,12 @@
    :expect [{:event {:source :job :kind :child_started :data {:slot :take-bed}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:kind :done}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :child_started :data {:slot :need}} :for-s 100 :of-job true :until {:source :job :kind :completed}}]
-   :after [[:block [17 0 19] "red_bed"] [:block [12 0 12] "air"]]}]}
+   :after [[:block [17 0 19] "red_bed"] [:block [12 0 12] "air"]]},
+  ;; Card 935747af: no bed, wool or sheep anywhere. The carried dirt goes in first; the search for the bed's wool says it is looking
+  ;; once per search (not every round) the bed is never placed.
+  {:name "no-bed-source-roof-goes-in-and-the-search-is-said-once"
+   :blocks [[:set [20 0 16] "stone"]]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:house" :explore true})]]
+   :expect [{:count-event {:source :job :kind :obtain.exploring} :for-s 140 :at-least 1 :at-most 3}
+            {:no-event {:source :system :kind :error} :for-s 140}]
+   :after [[:block [20 1 16] "dirt"] [:block [17 0 19] "air"]]}]}
