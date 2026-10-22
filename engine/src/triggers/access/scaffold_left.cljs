@@ -60,7 +60,7 @@
     (boolean (and (not (body/recovery-pending? memory :scaffold-left))
                   (some? (world/zones kn))
                   (or (settings/get settings ::with-hostile)
-                      (and (dawn/calm? p) (not (threats/fled-recently? p memory))))
+                      (and (not (dawn/hostile-known? p)) (not (threats/fled-recently? p memory))))
                   (some #(and (not (walk-blocked? p memory entries %))
                               (or dark-ok? (perched-on? feet %) (and (= :retreat-plug (:purpose %)) (not (plug-kept? %)))))
                         (ledger/offered memory (block-at-of p) nil

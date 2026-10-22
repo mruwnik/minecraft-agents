@@ -14,7 +14,7 @@
                                        time (assoc :time time)))
                    (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)})) {}))
 
-(deftest an-unarmed-body-needs-a-sword-at-any-hour-the-dawn-grace-allows
+(deftest an-unarmed-body-needs-a-sword-at-any-hour
   (are [world expected] (= expected (holds? world))
     {} true
     {:inv [{:name "iron_pickaxe" :count 1}]} true
@@ -24,15 +24,13 @@
 
 (def zombie {:id 7 :name "zombie" :kind "hostile" :pos {:x 8 :y 64 :z 0}})
 
-(deftest first-light-and-a-known-hostile-keep-an-unarmed-body-in
+(deftest a-known-hostile-keeps-an-unarmed-body-in-and-the-clock-does-not
   (are [world expected] (= expected (holds? world))
-    {:time 23500} false
-    {:time 400} false
-    {:time 1000} true
+    {:time 23500} true
+    {:time 400} true
     {:time 6000 :entities [zombie]} false
     {:time 6000 :entities [(assoc zombie :pos {:x 90 :y 64 :z 0})]} true)
-  (is (true? (settings/with-settings {::dawn/with-hostile true} #(holds? {:time 6000 :entities [zombie]}))))
-  (is (true? (settings/with-settings {::dawn/grace-ticks 0} #(holds? {:time 23500})))))
+  (is (true? (settings/with-settings {::dawn/with-hostile true} #(holds? {:time 6000 :entities [zombie]})))))
 
 (defn holds-with-memory? [memory]
   (nw/needs-weapon (tu/fake-on-floor {:floor [-10 -10 10 10] :inventory []}) memory {}))

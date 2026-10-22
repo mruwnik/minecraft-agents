@@ -297,10 +297,10 @@
     (is (= hostile (cleanup/cells-to-hold {:removed [{:cell [2 64 0]}]} hostile)))
     (is (= night (cleanup/cells-to-hold {:removed []} night)))))
 
-(deftest the-trigger-waits-out-the-first-light
+(deftest the-trigger-waits-for-no-hostile-not-the-clock
   (let [dirt (trigger-store [(entry [0 64 0])] [])
         at (fn [t] (tu/fake {:blocks {"0,64,0" "dirt"} :time t}))]
-    (is (false? (fires? (at 400) dirt [])) "dawn grace (jobs.lib.dawn)")
+    (is (true? (fires? (at 400) dirt [])) "no clock grace")
     (is (true? (fires? (at 1000) dirt [])))
     (is (false? (fires? (doto (at 1000) (fake/add-entity! {:id 9 :name "zombie" :kind "hostile" :pos {:x 30 :y 64 :z 0} :health 20})) dirt []))
         "a hostile within the dawn radius, past the 16 the old check looked at")))

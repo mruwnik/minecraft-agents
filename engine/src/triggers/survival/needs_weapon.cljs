@@ -23,7 +23,7 @@
   (boolean
    (and (not (body/dead? view))
         (not (sh-sense/sleeping? p))
-        (dawn/calm? p)
+        (not (dawn/hostile-known? p))
         (not (weapon-in-pile? view))
         (nil? (mem/latest view :weapon-stowed))
         (nil? (combat/best-weapon p combat/default-weapons)))))
