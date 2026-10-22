@@ -42,7 +42,7 @@
 
 (deftest hungry-does-not-search-for-food-with-a-hostile-near-even-when-fragile
   (let [zed {:id 1 :name "zombie" :kind "hostile" :pos {:x 3 :y 64 :z 0}}
-        at (fn [entities] (tu/fake-on-floor {:self {:food 3 :health 2.3} :entities entities}))
+        at (fn [entities] (tu/fake-on-floor {:self {:food 3 :health 6} :entities entities}))
         view {:data {} :now 0}]
     (is (hungry/hungry (at []) view {}) "hurt and hungry with nothing near: searches")
     (is (not (hungry/hungry (at [zed]) view {})) "a zombie near, no food carried: hides first")))
@@ -52,7 +52,7 @@
     (is (not (hungry/hungry (at 3 10) (gave-up 100000 50000) {})) "hungry, 50 s: resting")
     (is (= :urgent (hungry/hungry (at 0 10) (gave-up 120000 50000) {})) "food 0, 70 s after: fires again")
     (is (not (hungry/hungry (at 0 10) (gave-up 100000 50000) {})) "food 0, 50 s: still resting")
-    (is (hungry/hungry (at 3 5) (gave-up 120000 50000) {}) "losing health while hungry: 70 s is enough")
+    (is (hungry/hungry (at 3 6) (gave-up 120000 50000) {}) "losing health while hungry: 70 s is enough")
     (is (not (hungry/hungry (at 6 15) (gave-up 120000 50000) {})) "hungry but healthy, 70 s: still resting")))
 
 (deftest hungry-rests-after-twelve-ways-without-being-fed-too
@@ -65,8 +65,8 @@
 
 (deftest hungry-rests-after-get-food-refused-on-danger-only-while-fragile
   (let [at (fn [food health] (tu/fake {:self {:food food :health health}}))]
-    (is (not (hungry/hungry (at 3 5) (refused 100000 50000) {})) "fragile, 50 s after a refusal: resting")
-    (is (hungry/hungry (at 3 5) (refused 700000 50000) {}) "650 s after: fires again")
+    (is (not (hungry/hungry (at 3 6) (refused 100000 50000) {})) "fragile, 50 s after a refusal: resting")
+    (is (hungry/hungry (at 3 6) (refused 700000 50000) {}) "650 s after: fires again")
     (is (hungry/hungry (at 3 15) (refused 100000 50000) {}) "healed: the refusal no longer holds it")))
 
 (deftest a-layer-moves-the-accessors

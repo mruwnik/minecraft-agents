@@ -56,5 +56,22 @@
       (fn ^:async t []
         (let [{:keys [worked-at p eng]} (await (run! {:food 20} [] 0))]
           (is (= 4 worked-at) "the rest ended :not-healing and the listed job ran")
-          (is (not ((:when (get triggers/all :low-health)) p (mem/view (:store eng)) {}))
-              "the trigger lets a rest that could not heal be for its retry time"))))))
+          (let [holds-now? #(boolean ((:when (get triggers/all :low-health)) p (mem/view (:store eng)) {}))]
+            (is (not (holds-now?)) "the trigger lets a rest that could not heal be while its reason stands")
+            (swap! (fake/state p) assoc-in [:self :health] 3)
+            (is (holds-now?) "it fires again at once when health falls below what it was at the give-up")))))))
+
+(deftest a-rest-that-found-no-food-is-lifted-when-food-comes-to-hand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng]} (await (run! {:food 12} [] 0))
+              holds-now? #(boolean ((:when (get triggers/all :low-health)) p (mem/view (:store eng)) {}))]
+          (is (not (holds-now?)) "no food got: the trigger waits")
+          (swap! (fake/state p) assoc :inventory [{:name "bread" :count 2}])
+          (is (holds-now?) "bread carried lifts the wait"))))))
+
+(deftest hungry-leaves-a-hurt-body-to-low-health
+  (are [self expected] (= expected (boolean ((:when (get triggers/all :hungry)) (tu/fake {:self self :inventory [{:name "bread" :count 2}]}) {} {})))
+    {:health 4 :food 10} false
+    {:health 10 :food 10} true))

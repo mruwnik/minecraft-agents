@@ -76,7 +76,8 @@
     (is (true? (level {:self {:food 5}})) "hungry: its :comfort level")
     (is (= :urgent (level {:self {:food 2}})) "food 2")
     (is (= :urgent (level {:self {:food 6} :inventory [{:name "bread" :count 1}]})) "hungry with food carried: one bite, no waiting for a section")
-    (is (= :urgent (level {:self {:food 15 :health 5} :inventory [{:name "bread" :count 1}]})) "hurt, food carried")))
+    (is (= :urgent (level {:self {:food 15 :health 7} :inventory [{:name "bread" :count 1}]})) "hurt, food carried")
+    (is (not (level {:self {:food 15 :health 5} :inventory [{:name "bread" :count 1}]})) "below the risky health: the low-health rest's")))
 
 (deftest hungry-in-the-dark-only-holds-with-food-to-eat
   (let [level (fn [world] ((:when (get triggers/all :hungry)) (tu/with-light-data (tu/fake world)) {} {}))
@@ -85,15 +86,12 @@
     (is (not (level {:time night :self {:food 4}})) "in the dark nothing is searched for: the body waits sheltered")
     (is (level {:time night :self {:food 4} :inventory [{:name "bread" :count 1}]}) "carried food is eaten at night")))
 
-(deftest hungry-on-low-health-holds-day-and-night-and-leaves-the-walk-to-get-foods-risk-check
-  (let [level (fn [world] ((:when (get triggers/all :hungry)) (tu/with-light-data (tu/fake world)) {} {}))
-        creeper {:id 5 :name "creeper" :kind "hostile" :pos {:x 20.5 :y 64 :z 0.5} :health 20}]
-    (are [world] (level world)
+(deftest hungry-leaves-a-body-under-the-risky-health-to-the-low-health-rest
+  (let [level (fn [world] ((:when (get triggers/all :hungry)) (tu/with-light-data (tu/fake world)) {} {}))]
+    (are [world] (not (level world))
       {:time 23800 :self {:food 10 :health 2}}
-      {:time 15000 :self {:food 10 :health 2}}
-      {:time 6000 :self {:food 10 :health 2} :entities [creeper]}
-      {:time 6000 :self {:food 10 :health 2}})
-    (is (not (level {:time 15000 :self {:food 10 :health 20}})) "a healthy body waits in the dark")
+      {:time 6000 :self {:food 10 :health 2}}
+      {:time 15000 :self {:food 10 :health 20}})
     (is (level {:time 23800 :self {:food 4 :health 20}}) "a healthy body goes at first light")))
 
 ;; ------------------------------------------- the hungry reflex with nothing to eat

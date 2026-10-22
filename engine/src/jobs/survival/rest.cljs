@@ -1,6 +1,7 @@
 (ns jobs.survival.rest
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.body :as body]
             [jobs.lib.checks :as checks]
@@ -26,7 +27,7 @@
   stands. Done {:health} once health reaches ::rested-health. Nothing-possible :no-food {:health :text} when no food was
   got (the eat ending's text), :hurt-resting {:health} when health falls while resting, :not-healing when no hp came back in
   ::stall-holds holds in a row, :harmed while burning or poisoned (their reflexes heal that). Run by the low-health trigger,
-  which then waits its ::retry-s. Quote: job time up to ::job-time-s.")
+  which then waits until health falls or (:no-food) food comes to hand. Quote: job time up to ::job-time-s.")
 
 (a/defargs args {})
 
@@ -50,6 +51,14 @@
 (defn health [c] (.-health (.self (:primitives c))))
 
 (defn food [c] (.-food (.self (:primitives c))))
+
+(def gave-up-policy "The health of the last give-up, which the low-health trigger compares with." {:cap 2 :ttl :forever})
+
+(defn give-up!
+  "End nothing-possible with cause, and keep the health in body memory :rest-gave-up so the trigger waits only while it does not fall."
+  [c cause data]
+  (mem/write! (:store (:engine c)) :rest-gave-up {:health (:health data)} gave-up-policy)
+  (ctx/end c :nothing-possible cause data))
 
 (defn done? [c]
   (checks/goal (>= (health c) (settings/get settings ::rested-health)) [:rested "healed"] [:resting "resting to heal"]
@@ -100,7 +109,7 @@
       (= :continue e) :continue
       (>= (food c) foods/top-up-food) :again
       (and (not fetch?) (not (eat/carried-best c))) :again
-      :else (ctx/end c :nothing-possible :no-food {:health (health c) :text (str "no food to heal on: " (or (:text (:data e)) (some-> (:cause e) name)))}))))
+      :else (give-up! c :no-food {:health (health c) :text (str "no food to heal on: " (or (:text (:data e)) (some-> (:cause e) name)))}))))
 
 (defn ^:async feed!
   "Food under 18 and nothing carried: wait shut in for a calm moment (not at food 0), then eat what get-food brings."
@@ -121,10 +130,10 @@
         still (if (and last-health (> h last-health)) 0 (inc (or still -1)))]
     (cond
       (and last-health (< h last-health))
-      (ctx/end c :nothing-possible :hurt-resting {:health h :text (str "health fell to " (.toFixed h 1) " while resting")})
+      (give-up! c :hurt-resting {:health h :text (str "health fell to " (.toFixed h 1) " while resting")})
 
       (>= still (settings/get settings ::stall-holds))
-      (ctx/end c :nothing-possible :not-healing {:health h :text (str "no hp came back in " still " holds of rest")})
+      (give-up! c :not-healing {:health h :text (str "no hp came back in " still " holds of rest")})
 
       :else
       (do (ctx/update-mem! c assoc :last-health h :still still)
@@ -137,7 +146,7 @@
       (ctx/update-mem! c assoc :underground? (sh-sense/buried? p)))
     (cond
       (or (body/burning? p) (body/poisoned? p))
-      (ctx/end c :nothing-possible :harmed {:health (health c) :text "burning or poisoned: rest does not heal that"})
+      (give-up! c :harmed {:health (health c) :text "burning or poisoned: rest does not heal that"})
 
       (and (< (food c) foods/top-up-food) (eat/carried-best c)) (await (eat! c false))
 
