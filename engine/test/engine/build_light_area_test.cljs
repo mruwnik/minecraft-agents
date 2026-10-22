@@ -85,6 +85,15 @@
           (is (seq (torch-cells p corridor)) "the dark far end got a torch, not an instant done")
           (is (every? (fn [[x _ _]] (> x 30)) (torch-cells p corridor))))))))
 
+(deftest a-cell-looked-at-from-where-the-body-stands-is-not-looked-at-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [corridor (for [x (range 0 12)] [x 0])
+              [_ r] (await (tu/with-near-stub (fn [& _] (js/Promise.resolve :there))
+                              #(run corridor (fn [[x _ _]] (<= x 4)) {:boxes [[[0 64 0] [11 64 0]]]} torches)))]
+          (is (not= :not-done r) "the unseen cells are each looked at once, not for ever"))))))
+
 (deftest an-open-cell-with-its-head-or-floor-unseen-is-not-decided-yet
   (let [seen (fn [known] (fn [_ {:keys [y]}] (known y)))
         half? #(with-redefs [u/seen-name (seen %)] (light-area/half-seen? nil [0 64 0]))]

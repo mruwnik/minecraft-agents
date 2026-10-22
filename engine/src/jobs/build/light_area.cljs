@@ -116,7 +116,7 @@
   [c]
   (let [p (:primitives c)
         block-at (access/seen-at p)
-        looked (set (:looked (ctx/mem c)))
+        looked (set (:viewed (ctx/mem c)))
         here (u/self-pos c)
         open? #(let [n (block-at %)] (and n (not (solid/solid? n))))]
     (->> (area c)
@@ -135,7 +135,7 @@
     (if (= :partial r)
       :continue
       (do (await (look/look-around! c))
-          (ctx/update-mem! c update :looked (fnil conj []) cell)
+          (ctx/update-mem! c update :viewed (fnil conj []) cell)
           :again))))
 
 (defn ^:async step! [c]
