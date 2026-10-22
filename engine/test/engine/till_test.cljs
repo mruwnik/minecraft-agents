@@ -460,6 +460,16 @@
                  (fake/set-block! p [(:x pos) (:y pos) (:z pos)] after)
                  #js {:status "used" :before #js {:name before} :after #js {:name after} :consumed 0}))))
 
+(deftest till-with-only-for-plan-tills-the-ground-under-the-plans-crops
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "f" :parts [{:id "wheat" :cells [[1 64 1] [2 64 1] [1 64 2] [2 64 2]] :want {:crop "wheat"}}]}
+              {:keys [eng p]} (setup {:inventory hoe :blocks four} (ew/of-data {"f" plan} {} []))
+              result (await (child-outcome eng job {:for-plan "f"} 20))]
+          (is (= {:tilled 4 :skipped {}} result))
+          (is (= ["farmland"] (distinct (map #(block-at p %) (till/cells box))))))))))
+
 (deftest till-tills-coarse-and-rooted-dirt-with-two-hoe-uses
   (async done
     (tu/run-async done

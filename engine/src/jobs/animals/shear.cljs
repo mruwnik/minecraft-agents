@@ -50,7 +50,8 @@
    :ignore-zones? :shared})
 
 (a/defargs settings
-  {::job-time-s {:default 120 :doc "Seconds of working, fetching included, before shearing gives up." :spec (a/num-in 0 nil)}
+  {::min-health {:default 0 :spec (a/num-in 0 20) :doc "Health (of 20) below which the job waits to heal; 0 = never (its acts are short and harmless). Poison still holds."}
+   ::job-time-s {:default 120 :doc "Seconds of working, fetching included, before shearing gives up." :spec (a/num-in 0 nil)}
    ::max-in-row {:default 3 :doc "Fruitless animals in a row that end the run." :spec (a/int-in 0 nil)}})
 (defn max-in-row [] (settings/get settings ::max-in-row))
 
@@ -66,7 +67,7 @@
 
 (def safe? (ready/safe-at-or-roaming
             (fn [c] (work-place/nearest-mob c (remove nil? ["sheep"]) (or (:radius (:args c)) 16)))))
-(def fit? ready/fit?)
+(defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
 
 
 (def defaults {:spend {:job-time ::job-time-s}})

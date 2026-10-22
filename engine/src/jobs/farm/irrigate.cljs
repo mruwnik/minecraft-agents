@@ -17,6 +17,7 @@
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.ready :as ready]
+            [engine.settings :as settings]
             [jobs.lib.util :as u]
             [jobs.lib.world :as known]
             [jobs.lib.work-place :as work-place]))
@@ -47,18 +48,19 @@
 (def ways need/fetch-ways)
 
 (a/defargs settings
-  {::job-time-s {:default 180 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}})
+  {::min-health {:default 0 :spec (a/num-in 0 20) :doc "Health (of 20) below which the job waits to heal; 0 = never (its acts are short and harmless). Poison still holds."}
+   ::job-time-s {:default 180 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}})
 
 (def target [:area])
 (def defaults {:spend {:job-time ::job-time-s}})
-(def fit? ready/fit?)
+(defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
 
 
 (defn field-cells
   "The seen cells of the box that are farmland or ground a hoe tills (none for bad cell args, which can-start? refuses)."
   [c]
   (let [p (:primitives c)
-        cs (try (till/cells (:args c)) (catch :default _ []))]
+        cs (try (till/cells (till/area-args c)) (catch :default _ []))]
     (filterv #(bs/farmable-ground (u/seen-name p %)) cs)))
 
 ;; The first step only looks: with no field cell seen there is nothing to risk the dark for. Seen cells bring the exposure check back.

@@ -1,0 +1,23 @@
+;; Pen acts are short and harmless (a passive animal cannot hurt the body), so a hurt body (4 hp, hungry, nothing to eat) breeds and shears
+;; at once and does not wait for health. A hunger effect first drops food to 8 (no regeneration), then `damage` leaves 4 hp.
+;; Should-succeed: breed feeds a pair in a fenced pen and counts the calf; shear takes the wool of a free sheep.
+{:defaults
+ {:tags [:animals :jobs :breed :survival]
+  :time :any
+  :plot {:floor "grass_block" :height 8}
+  :body {:at [10.5 0 16.5] :yaw 270 :inventory [["wheat" 4] ["shears" 1]] :settle-s 2}
+  :limit-s 120}
+ :cases
+ [{:name "hurt-body-breeds-without-waiting-for-health"
+   :blocks [[:fill [14 0 14] [19 0 14] "oak_fence"] [:fill [14 0 19] [19 0 19] "oak_fence"]
+            [:fill [14 0 15] [14 0 18] "oak_fence"] [:fill [19 0 15] [19 0 18] "oak_fence"]]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 16 minecraft:generic"]
+         [:summon "cow" [16.5 0 16.5] "{PersistenceRequired:1b}"]
+         [:summon "cow" [17.5 0 17.5] "{PersistenceRequired:1b}"]
+         [:job (jobs.animals.breed {:mob "cow" :pairs 1 :radius 12 :ways #{:carried}})]]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done :babies 1}} :within-s 90 :of-job true}]}
+  {:name "hurt-body-shears-without-waiting-for-health"
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 16 minecraft:generic"]
+         [:summon "sheep" [14.5 0 16.5] "{NoAI:1b}"]
+         [:job (jobs.animals.shear {:count 1 :collect false})]]
+   :expect [{:event {:source :job :kind :completed :data {:reason :shorn}} :within-s 80 :of-job true}]}]}

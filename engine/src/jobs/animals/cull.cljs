@@ -1,5 +1,6 @@
 (ns jobs.animals.cull
   (:require [jobs.lib.ready :as ready]
+            [engine.settings :as settings]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.work-place :as work-place]
@@ -61,12 +62,13 @@
 (def target [:mob :box :center])
 
 (def safe? (ready/safe-at-by-night work-place/spot))
-(def fit? ready/fit?)
 
 
 (a/defargs settings
-  {::job-time-s {:default 300 :doc "Seconds a cull may take." :spec (a/num-in 0 nil)}})
+  {::min-health {:default 0 :spec (a/num-in 0 20) :doc "Health (of 20) below which the job waits to heal; 0 = never (its acts are short and harmless). Poison still holds."}
+   ::job-time-s {:default 300 :doc "Seconds a cull may take." :spec (a/num-in 0 nil)}})
 
+(defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
 (def defaults {:least 1 :spend {:job-time ::job-time-s} :use {:tools :attack}})
 
 (defn candidates

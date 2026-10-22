@@ -20,6 +20,8 @@
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.places :as places]
+            [jobs.lib.world :as known]
+            [jobs.farm.field :as fld]
             [jobs.lib.toll-cells :as tc]))
 
 (def doc
@@ -78,6 +80,17 @@
         (throw (ex-info (str "till covers " n " cells, at most " (max-cells)) {:cells n})))
       (vec (for [x (span (:x lo) (:x hi)) y (span (:y lo) (:y hi)) z (span (:z lo) (:z hi))] {:x x :y y :z z})))))
 
+(defn area-args
+  "The call's args; with only :for-plan, :area is the box round the ground cells under that plan's crop cells."
+  [c]
+  (let [args (:args c)
+        ground (when (and (nil? (:area args)) (:for-plan args))
+                 (map #(update % :y dec) (keys (fld/crop-cells (known/plan c (:for-plan args)) nil))))]
+    (if-not (seq ground)
+      args
+      (assoc args :area {:min {:x (apply min (map :x ground)) :y (apply min (map :y ground)) :z (apply min (map :z ground))}
+                         :max {:x (apply max (map :x ground)) :y (apply max (map :y ground)) :z (apply max (map :z ground))}}))))
+
 (def target [:area])
 (def defaults {:use {:tools :till} :spend {:job-time ::job-time-s}})
 (def safe? (ready/safe-at-by-night work-place/spot))
@@ -109,7 +122,7 @@
   "[[pos block-name-or-nil] ...] of the cells not skipped and not farmland."
   [c]
   (let [skipped (:skipped (ctx/mem c) {})]
-    (->> (cells (:args c))
+    (->> (cells (area-args c))
          (remove #(contains? skipped %))
          (map (fn [pos] [pos (u/seen-name (:primitives c) pos)]))
          (remove (fn [[_ n]] (= "farmland" n)))
@@ -143,7 +156,7 @@
 (defn bad-args
   "Never :bad-args unless the cells can be read from the args (a box or circle within the limit)."
   [c]
-  (let [cs (try (cells (:args c))
+  (let [cs (try (cells (area-args c))
                 (catch :default e (ex-message e)))]
     (if (string? cs)
       (contract/never :bad-args cs :why cs)
@@ -154,7 +167,7 @@
   refused by a zone, claim or plan, and cells to till with no hoe that may be fetched.
   Walks the cells lazily and stops at the first one that needs work, reading each cell at most once."
   [c]
-  (when-let [cs (try (cells (:args c)) (catch :default _ nil))]
+  (when-let [cs (try (cells (area-args c)) (catch :default _ nil))]
     (let [in (access/zone-input c {:except (:for-plan (:args c))})
           refuse (when-not (:ignore-zones? in)
                    (fn [pos] (let [v (rules/social-verdict :dig (assoc in :cell (access/cell pos)))]
@@ -173,7 +186,7 @@
   "Every cell is farmland (a skipped cell is not) and no child is under way; the cells tilled this call and the cells
   left to till."
   [c]
-  (let [cs (try (cells (:args c)) (catch :default _ nil))
+  (let [cs (try (cells (area-args c)) (catch :default _ nil))
         open (count (remove #(= "farmland" (u/seen-name (:primitives c) %)) cs))
         {:keys [tilled] :as result} (result-of c)
         data [:units :cells :done tilled :left (if cs (count (pending c)) 0) :result result]]
@@ -183,7 +196,7 @@
       :else (apply contract/ok :tilled (str "tilled " tilled ", every cell is farmland") data))))
 
 (defn quote-of [c]
-  (let [cs (try (cells (:args c)) (catch :default _ nil))
+  (let [cs (try (cells (area-args c)) (catch :default _ nil))
         p (:primitives c)
         names (remove #{"farmland"} (map #(u/seen-name p %) cs))
         n (count names)
@@ -309,7 +322,7 @@
       (cond
         (= :continue e) :continue
         (= :done (:kind e)) nil
-        (common/enough? c (count (:tilled (ctx/mem c))) (count (cells (:args c)))) (conclude! c)
+        (common/enough? c (count (:tilled (ctx/mem c))) (count (cells (area-args c)))) (conclude! c)
         :else (ctx/end c (:kind e) (:cause e) (result-of c))))))
 
 (defn ^:async round
