@@ -157,4 +157,6 @@
    ;; options.goalSeen (fn x y z; nil: every cell): a cell in the goal's area is reached only when it answers true
    ^js goal-seen
    ;; costs.descentS: seconds a block of descent adds to a move's cost
-   c-descent])
+   c-descent
+   ;; hp of risk a gap jump that falls short to its death adds: costs.gapMiss (the chance) times lethal-s, over riskWeight
+   gap-death])

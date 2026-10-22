@@ -346,11 +346,13 @@
   (let [w (line [0 63 "stone"] [1 63 "stone"] [2 62 U] [2 61 "lava"] [3 63 "stone"])
         goal (pf/near 3 64 2)
         off (run w goal {})
-        on (run w goal (unk {:seeDepth 0}))]
+        ;; (gapMiss 0: the unseen depth under the gap is also priced as a fall that may kill)
+        on (run w goal (assoc (unk {:seeDepth 0}) :costs {:gapMiss 0}))]
     (is (pos? (get-in off [:path :cost :risk])) "off: the gap's column falls into lava")
     (is (found? on))
     (is (= (:gap pf/MOVE) (:move (last-step on))))
-    (is (zero? (get-in on [:path :cost :risk])) "on: the look stops at the unseen cell")))
+    (is (zero? (get-in on [:path :cost :risk])) "on: the look stops at the unseen cell")
+    (is (> (get-in (run w goal (unk {:seeDepth 0})) [:path :cost :risk]) 1000) "the unseen depth is a miss that may kill")))
 
 (defn column-snapshot
   "A snapshot of one loaded column (0 0) reading (f y) at every y of -64..319."

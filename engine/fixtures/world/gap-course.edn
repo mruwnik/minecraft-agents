@@ -5,6 +5,8 @@
 ;; jumped: a sprint jump lands past a one-cell landing and the fall beyond kills; with a wall past the landing it is jumped. These two
 ;; are sky plots (an underground cell at y -40 has no room above bedrock for a fall that kills at 20 hp), lit by a layer of light
 ;; blocks so the body sees the cleared floor whatever the hour.
+;; Card 09d0b7bb: a 1 gap over that 28-block pit (a short jump kills) is walked round by a row out to z 16 (the body is seen
+;; at z >= 12, which the jump never reaches), and with no way round it is still jumped (go-to must arrive).
 {:defaults
  {:tags [:movement]
   :time :any
@@ -59,4 +61,18 @@
    :plot {:light :sky}
    :act [[:job (jobs.movement.go-to {:pos #at [12 -1 14] :range 0 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
-   :after [[:body-near [12.5 -1 14.5] 1.5]]}]}
+   :after [[:body-near [12.5 -1 14.5] 1.5]]}
+ {:name "gap1-over-a-deep-pit-walks-round"
+   :blocks [[:fill [2 -29 2] [27 -1 18] "air"] [:fill [2 -30 2] [27 -30 18] "glowstone"] [:fill [2 3 2] [27 3 18] "light"] [:fill [4 -1 10] [8 -1 10] "stone"] [:fill [10 -1 10] [14 -1 10] "stone"]
+            [:fill [8 -1 11] [8 -1 16] "stone"] [:set [9 -1 16] "stone"] [:fill [10 -1 11] [10 -1 16] "stone"]]
+   :plot {:light :sky}
+   :act [[:job (jobs.movement.go-to {:pos #at [13 0 10] :range 0 :ways #{:walk :clear-seal}})] [:until-pos {:z-min 12} 40]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-near [13.5 0 10.5] 1.5]]}
+ {:name "gap1-over-a-deep-pit-with-no-way-round-is-jumped"
+   :blocks [[:fill [2 -29 2] [27 -1 18] "air"] [:fill [2 -30 2] [27 -30 18] "glowstone"] [:fill [2 3 2] [27 3 18] "light"] [:fill [4 -1 10] [8 -1 10] "stone"] [:fill [10 -1 10] [14 -1 10] "stone"]]
+   :plot {:light :sky}
+   :act [[:job (jobs.movement.go-to {:pos #at [13 0 10] :range 0 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [13.5 0 10.5] 1.5]]}]}

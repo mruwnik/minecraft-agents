@@ -31,8 +31,9 @@
 (def bridge (box 5 63 9 6 63 10 "stone"))
 
 (def gap-up-only (merge near-floor (box 7 63 -8 12 64 10 "stone")))
-;; (the walk round is long, so that the sprinting gap jump is the cheaper way)
-(def long-bridge (box 5 63 39 6 63 40 "stone"))
+;; (the walk round is long, so that the sprinting gap jump is the cheaper way; the trench has a floor 8 down, so a jump that
+;; falls short hurts and does not kill: a jump over a deadly fall loses to any way round)
+(def long-bridge (merge (box 5 63 39 6 63 40 "stone") (box 5 55 -8 6 55 38 "stone")))
 (def gap-up-around (merge (box 0 63 -8 4 63 40 "stone") (box 7 63 -8 12 64 40 "stone") long-bridge))
 
 (def ceiling-only (merge near-floor (box 7 63 -8 12 63 10 "stone") (box 4 66 -8 6 66 10 "stone")))

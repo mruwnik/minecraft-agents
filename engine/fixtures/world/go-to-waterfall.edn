@@ -1,0 +1,21 @@
+;; Card 09d0b7bb (Wicken #151): a drop lands only in water that holds a fall. A sky plot (room for a 30-block fall, as gap-course), lit by a
+;; layer of light blocks, a pit 28 deep with a glowstone floor; the body on a stone strip along x at z 10. A source on a walled shelf at
+;; [10 -3 10] spills west into x 9 and falls down that column past the pit floor into a walled 1x1 sump (so it spreads nowhere). The goal on the
+;; pit floor is reached only down the waterfall: go-to does not drop into it (falling water, which an open waterfall carries the body out of) and
+;; stops unhurt. Should-succeed water drops: go-to-drop-budget/drop-into-water-takes-no-damage, go-to-drop-lip/drop-6-into-seen-pool-after-walking-around-pit-arrives.
+{:defaults
+ {:tags [:movement :water]
+  :time :any
+  :plot {:height 12 :floor "air" :light :sky}
+  :body {:at [6.5 0 10.5] :yaw 270}
+  :limit-s 90}
+ :cases
+ [{:name "waterfall-is-not-dropped-into"
+   :blocks [[:fill [2 -29 2] [27 -1 18] "air"] [:fill [2 -30 2] [27 -30 18] "glowstone"] [:fill [2 3 2] [27 3 18] "light"]
+            [:fill [7 -34 8] [11 -31 12] "stone"] [:fill [9 -33 10] [9 -30 10] "air"]
+            [:fill [4 -1 10] [8 -1 10] "stone"]
+            [:set [10 -4 10] "stone"] [:set [11 -3 10] "stone"] [:set [10 -3 9] "stone"] [:set [10 -3 11] "stone"] [:set [10 -3 10] "water"]]
+   :act [[:wait-s 10] [:job (jobs.movement.go-to {:pos #at [16 -29 14] :range 1 :ways #{:walk :clear-seal}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false}} :within-s 80 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 80 :until {:source :job :kind :stopped}}]
+   :after [[:body-far [16.5 -29 14.5] 6] [:block [9 -10 10] "water"]]}]}

@@ -178,12 +178,12 @@
   (let [id (fx/state-id "scaffolding")]
     (is (= {:top 0 :boxes [] :kind b/CLIMB} {:top (aget (.-top table) id) :boxes (boxes-of id) :kind (aget (.-kind table) id)}))))
 
-;; [block props flowing bubble]: currents push where the water is not a source; a bubble column lifts (drag=false) or drags (drag=true)
+;; [block props flowing bubble]: currents push where the water is not a source (2: falling); a bubble column lifts (drag=false) or drags (drag=true)
 (def fluid-cases
   [
   ["water" {:level 0} 0 0]
   ["water" {:level 1} 1 0]
-  ["water" {:level 8} 1 0]
+  ["water" {:level 8} 2 0]
   ["seagrass" {} 0 0]
   ["bubble_column" {:drag false} 0 1]
   ["bubble_column" {:drag true} 0 2]

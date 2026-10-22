@@ -186,7 +186,7 @@
     (set! (.-move-closed s) 0))
 
   (currentAt [s x y z]
-    (if (== (aget (.-tbl-flowing s) (.stateAt s x y z)) 1) (.-c-current s) 0))
+    (if (pos? (aget (.-tbl-flowing s) (.stateAt s x y z))) (.-c-current s) 0))
 
   ;; the water cell is 1 deep over a floor, with air over it: the body stands on the floor, it is not floating
   (standsInWater [s x y z]

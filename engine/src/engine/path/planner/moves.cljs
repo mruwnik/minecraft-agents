@@ -38,11 +38,19 @@
     (let [fall (- h0 (* y2 16))
           ;; water the body has not seen lately may be gone: it is landed in only as far as ground would be
           reach (if ^boolean (.landSeen s x2 y2 z2 false) (.-c-max-water-drop s) (js/Math.min (.-c-max-water-drop s) (.-max-drop s)))]
-      (when-not (or (< (.swimAt s x2 y2 z2) 0) (> fall (* reach 16)))
+      (when-not (or (< (.swimAt s x2 y2 z2) 0) (> fall (* reach 16)) (not ^boolean (.fallStops s x2 y2 z2)))
         (let [sec (+ (* (.-c-walk-s s) (+ 1 (* SLOW-EXTRA slow-from))) (* 0.25 (js/Math.sqrt (/ fall 16))))]
           (if (or tight-src ^boolean (.isTight s x2 y2 z2))
             (.tightMove s i x y z h region c x2 y2 z2 0 MOVE-DROP sec (.swimRisk s x2 y2 z2) 0 SNAP 0)
             (.edge s x2 y2 z2 0 MOVE-DROP i sec (.swimRisk s x2 y2 z2) 0 0 0))))))
+
+  ;; the water at x y z holds a body that falls into it: not falling water (a waterfall, which the body drops out of), and
+  ;; held up by a floor or by water that is not falling (unseen or unloaded below: a pool's bottom, taken as held)
+  (fallStops [s x y z]
+    (let [below (.stateAt s x (dec y) z)]
+      (and (not (== (aget (.-tbl-flowing s) (.stateAt s x y z)) 2))
+           (or (== below UNLOADED) (== below (.-unk-id s)) (pos? (aget (.-tbl-top s) below))
+               (and (== (aget (.-tbl-kind s) below) WATER) (not (== (aget (.-tbl-flowing s) below) 2)))))))
 
   ;; the hp a fall of fall16 (1/16 blocks) takes onto a block of landing factor f (landFactor): over FREE-FALL blocks, scaled
   ;; by f, the fall factor and the drop factor; a negative f is a bounce: no damage (see bounceS)
@@ -89,7 +97,7 @@
     (let [id (.stateAt s x y z)]
       (and (not (== id UNLOADED)) (>= (aget (.-tbl-top s) id) WHOLE) ^boolean (.landSeen s x y z true))))
 
-  ;; walk off an edge into the first standable cell below the neighbour column, or into water of any depth up to maxWaterDrop
+  ;; walk off an edge into the first standable cell below the neighbour column, or into water that holds a fall (fallStops) up to maxWaterDrop
   ;; (the fall is cancelled there). A tight cell at either end: the body falls straight down from the crossing point, which
   ;; the masks must leave free all the way (a climbable below is grabbed as it falls past, so it takes any position).
   ;; No fall goes into an unseen cell (options.unknown): it is the phantom floor of the landing above it.
@@ -150,9 +158,9 @@
           ^boolean (.isUnknown s (.stateAt ^js (.-snapshot s) x y z)) true
           :else (recur (inc y))))))
 
-  ;; the fall (1/16 blocks) from from16 down the column x z, from cell y, to the first block with a top; 0 into water;
-  ;; CLIMB-FALL-SCAN blocks past unloaded land or an unseen cell (the depth behind a ledge is hidden by the ledge itself:
-  ;; a fall into the unknown may kill) and past that many blocks of air
+  ;; the fall (1/16 blocks) from from16 down the column x z, from cell y, to the first block with a top; 0 into water that
+  ;; holds it (fallStops); CLIMB-FALL-SCAN blocks past unloaded land or an unseen cell (the depth behind a ledge is hidden
+  ;; by the ledge itself: a fall into the unknown may kill) and past that many blocks of air
   (missFall [s x y z from16]
     (loop [y3 y]
       (if (< y3 (- y CLIMB-FALL-SCAN))
@@ -160,7 +168,7 @@
         (let [id (.stateAt s x y3 z)]
           (cond
             (or (== id UNLOADED) (== id (.-unk-id s))) (* CLIMB-FALL-SCAN 16)
-            (== (aget (.-tbl-kind s) id) WATER) 0
+            (and (== (aget (.-tbl-kind s) id) WATER) ^boolean (.fallStops s x y3 z)) 0
             (pos? (aget (.-tbl-top s) id)) (js/Math.max 0 (- from16 (+ (* y3 16) (aget (.-tbl-top s) id))))
             :else (recur (dec y3)))))))
 
@@ -174,10 +182,16 @@
       (and ^boolean (.clear s ox oz land16 (+ land16 BODY))
            (>= (.dropDamage s 1 (.missFall s ox ly oz land16)) (.-lethal-hp s)))))
 
+  ;; a body that falls short of a gap jump from h0 into the gap cell x y z dies: the fall down it (missFall) reaches
+  ;; options.health. An unseen depth counts deep: the takeoff's own ledge hides the column under the gap.
+  (gapShortLethal [s x y z h0]
+    (>= (.dropDamage s 1 (.missFall s x y z h0)) (.-lethal-hp s)))
+
   ;; sprint across 1..3 empty cells in a cardinal line, landing level or one lower; across 1 or 2, also up to one block
   ;; higher. A jump over 3 above a pit (pitBelow) has GAP-PIT-RISK: one that falls short traps the body, so a short way round
-  ;; is taken instead. A running jump (over 2 or 3) whose overshoot past its landing is lethal (gapOvershootLethal) is
-  ;; refused, as a lethal climb is.
+  ;; is taken instead. One over a hole whose fall kills (gapShortLethal) adds gap-death, the chance of a miss times the price
+  ;; of a death: it is jumped only when no other way gets there. A running jump (over 2 or 3) whose overshoot past its
+  ;; landing is lethal (gapOvershootLethal) is refused, as a lethal climb is.
   (expandGap [s i x y z c h0]
     (let [dx (aget (.-adx s) c)
           dz (aget (.-adz s) c)]
@@ -185,6 +199,8 @@
              hole 0
              ;; some gap cell so far is over a pit (pitBelow): a jump over 3 then carries GAP-PIT-RISK
              pit false
+             ;; some gap cell so far falls to a death (gapShortLethal)
+             deadly false
              ;; a jump up needs the higher arc over the start and every gap cell
              up-arc (and ^boolean (.clear s x z h0 (+ h0 ARC-UP)) (not ^boolean (.unseenSpan s x z h0 (+ h0 ARC-UP))))]
         (when (<= n 3)
@@ -199,8 +215,9 @@
               (when ^boolean (.clear s gx gz h0 (+ h0 ARC))
                 (let [up-arc (and up-arc ^boolean (.clear s gx gz h0 (+ h0 ARC-UP)) (not ^boolean (.unseenSpan s gx gz h0 (+ h0 ARC-UP))))
                       hole (js/Math.max hole (.holeRisk s gx y gz))
+                      deadly (or deadly ^boolean (.gapShortLethal s gx y gz h0))
                       pit (or pit ^boolean (.pitBelow s gx y gz))
-                      risk (if (and (== n 3) pit) (js/Math.max hole GAP-PIT-RISK) hole)
+                      risk (+ (if (and (== n 3) pit) (js/Math.max hole GAP-PIT-RISK) hole) (if deadly (.-gap-death s) 0))
                       lx (+ gx dx)
                       lz (+ gz dz)
                       up (and (<= n 2) up-arc)
@@ -219,7 +236,7 @@
                                (+ (* (inc n) (.-c-sprint-s s)) GAP-S (if (pos? delta) GAP-UP-S 0) (.-enter-extra s))
                                (+ (.-enter-risk s) risk) (.-enter-slow s) 0 0)
                         (set! (.-move-dmg s) 0))))
-                  (recur (inc n) hole pit up-arc)))))))))
+                  (recur (inc n) hole pit deadly up-arc)))))))))
 
   ;; seconds a block of walking costs after node i: the executor sprints a run of three walk or diagonal steps, so a step
   ;; that follows two of them is priced at sprintS (the gait sets it equal to walkS when the body may not sprint)
@@ -262,7 +279,7 @@
           (let [risk (.swimRisk s x2 y z2)
                 tight (or tight-src ^boolean (.tightAt s x2 y z2))
                 base (.-c-swim-h s)
-                extra (if (== (aget (.-tbl-flowing s) (.stateAt ^js (.-snapshot s) x2 y z2)) 1) (.-c-current s) 0)
+                extra (if (pos? (aget (.-tbl-flowing s) (.stateAt ^js (.-snapshot s) x2 y z2))) (.-c-current s) 0)
                 sec (+ base extra)]
             (when ^boolean (.swimBegin s i true x2 y z2 base extra false)
               (if tight

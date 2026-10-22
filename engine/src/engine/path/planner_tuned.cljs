@@ -298,7 +298,11 @@
         dark-factor (if (some? dark) (or-else (.-factor dark) 1) 0)
         ^js unknown (.-unknown options)
         unk (some? unknown)
-        see-lit (when unk (.-seeLit unknown))]
+        see-lit (when unk (.-seeLit unknown))
+        rw (option options "riskWeight" 2)
+        lethal-s (lethal-seconds rw (option options "damageWeight" rw) (* risk-scale (option options "dangerCap" 4)) dark-factor
+                                 (when (some? tolls) (.-cells tolls)) (if (some? avoid) (or-else (.-factor avoid) 0) 0)
+                                 (unknown-factor unknown costs) (.-drownPrices options))]
     (->Search
      ;; the world
      snapshot table (.-space options)
@@ -397,11 +401,7 @@
      (js/Float64Array. cap) 0 (.-drownPrices options) (option options "health" 20) (.-airSeen options) (unchecked-get costs "drownSlack")
      (not (pos? (or-else (unchecked-get costs "lethalAir") 0))) false
      ;; drown-runs drown-closed move-run move-closed lethal-s
-     (js/Float64Array. cap) (js/Float64Array. cap) 0 0
-     (let [rw (option options "riskWeight" 2)]
-       (lethal-seconds rw (option options "damageWeight" rw) (* risk-scale (option options "dangerCap" 4)) dark-factor
-                       (when (some? tolls) (.-cells tolls)) (if (some? avoid) (or-else (.-factor avoid) 0) 0)
-                       (unknown-factor unknown costs) (.-drownPrices options)))
+     (js/Float64Array. cap) (js/Float64Array. cap) 0 0 lethal-s
      ;; unk-id unk-floor-id unk-cell unk-floor see-depth see-lit see-lit-depth light-depth peek-s aim-s light-cost light-ok torch-base missed no-light
      (if unk (or-else (.-id unknown) (first-id table "void_air")) -1)
      (if unk (or-else (.-floorId unknown) (first-id table "stone")) 0)
@@ -421,7 +421,8 @@
      (js/Int32Array. cap)
      ;; goal-seen
      (.-goalSeen options)
-     (unchecked-get costs "descentS"))))
+     (unchecked-get costs "descentS")
+     (if (pos? rw) (/ (* (unchecked-get costs "gapMiss") lethal-s) rw) 0))))
 
 ;; the body's box reaches this far from its centre in x and z: the client physics' width, which decides what holds it up
 (def HITBOX-HALF constants/body-half-width)

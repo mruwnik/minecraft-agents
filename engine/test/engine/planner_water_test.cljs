@@ -174,6 +174,15 @@
     40 2
     60 4))
 
+;; a sheet of water at x 5 beside a 20-high tower, over the floor: only water that holds a fall is landed in, not falling
+;; water (a waterfall, which the body drops out of) nor a layer held up by nothing
+(deftest drop-into-a-waterfall-or-a-floating-layer-is-refused
+  (are [y0 props found] (= found (found? (run (world [[0 64 0 4 83 4 "stone"] [5 y0 -2 5 83 40 "water" props]])
+                                              {:x 2 :y 84 :z 2} (near 12 64 2 1))))
+    64 {:level 0} true
+    64 {:level 8} false
+    83 {:level 0} false))
+
 (deftest drop-summary-says-it-lands-in-water
   (let [r (run (drop-world 8 2) {:x 2 :y 72 :z 2} (near 12 63 2 1))]
     (is (re-find #"drops 9 into water" (summary r)))))

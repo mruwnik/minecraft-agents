@@ -173,7 +173,7 @@
         facing (js/Uint8Array. size) ;; ladder and trapdoor facing: 1 east, 2 west, 3 south, 4 north
         special (js/Uint8Array. size) ;; partial collision or climbable: the states a search must look closer at near a cell
         floor (js/Uint8Array. size) ;; height a body can stand on, 1/16 of the cell: the top, but none for a ladder
-        flowing (js/Uint8Array. size) ;; water that is not a source: it pushes the body
+        flowing (js/Uint8Array. size) ;; water that is not a source: it pushes the body; 2: falling water (a waterfall), which stops no fall
         bubble (js/Uint8Array. size) ;; bubble column: 1 lifts (drag=false, over soul sand), 2 drags down (drag=true, over magma)
         wet (js/Uint8Array. size) ;; water in the cell: water itself or a waterlogged block (eyes in it drain air even when it has collision)
         magma (js/Uint8Array. size) ;; a magma block: a body must not end its route on it
@@ -226,7 +226,7 @@
         (when (or (= (aget activator id) ACT-BUTTON) (= (aget activator id) ACT-LEVER))
           (aset attach id (attach-of props)))
         (aset floor id (cond (= name "scaffolding") WHOLE (zero? (aget climb-name id)) (aget top id) :else 0))
-        (aset flowing id (if (and (= name "water") (not= (js/Number (prop props "level")) 0)) 1 0))
+        (aset flowing id (if (= name "water") (let [level (js/Number (prop props "level"))] (cond (zero? level) 0 (>= level 8) 2 :else 1)) 0))
         (aset bubble id (if (= name "bubble_column") (if (true? (prop props "drag")) 2 1) 0))
         (aset wet id (if (or (= (aget kind id) WATER) (true? (prop props "waterlogged"))) 1 0))
         (aset magma id (if (= name "magma_block") 1 0))

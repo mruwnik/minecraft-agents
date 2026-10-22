@@ -201,13 +201,21 @@
     (is (= {:risk 1 :maxDrop 4} {:risk (cost allowed :risk) :maxDrop (cost allowed :maxDrop)}))))
 
 (defn check-gap-jumped [gap]
-  (let [r (run (world {:fill [[5 60 -2 (+ 4 gap) 63 40 "air"]]}) (near (+ 5 gap 3) 64 2))]
+  (let [r (run (world {:fill [[5 60 -2 (+ 4 gap) 63 40 "air"] [5 55 -2 (+ 4 gap) 55 40 "stone"]]}) (near (+ 5 gap 3) 64 2))]
     (is (= "found" (:status r)))
     (is (= [1 1] [(cost r :jumps) (cost r :risk)]))
     (is (some #{(:gap MOVE)} (moves r)))))
 
 (deftest gap-of-1-2-or-3-cells-is-jumped
   (are [gap] (check-gap-jumped gap) 1 2 3))
+
+;; a trench x 5..6 through the floor over nothing, so a jump that falls short is a death: walked round where the trench
+;; ends short of z 40, jumped (at the price of the miss) only where it runs the floor's whole width
+(deftest gap-over-a-deadly-fall-is-jumped-only-with-no-way-round
+  (are [z1 jumps] (let [r (run (world {:fill [[5 60 -2 6 63 z1 "air"]]}) (near 10 64 2))]
+                    (and (= "found" (:status r)) (= jumps (cost r :jumps)) (= (pos? jumps) (> (cost r :risk) 1000))))
+    30 0
+    40 1))
 
 (deftest gap-of-4-is-not-jumped
   (let [wide (search (world {:fill [[5 60 -2 8 63 40 "air"]]}) (near 12 64 2))]
