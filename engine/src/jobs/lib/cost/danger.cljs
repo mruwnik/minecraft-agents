@@ -207,7 +207,7 @@
 
 (defn danger-list
   "The dangers ({:x :y :z :close :radius :rate :mob :block}; :block true: a known mob's cell is no way) of the sensed mobs [{:key :name :pos}] (nearest first) and the
-  remembered :threat entries' data [{:key :mob :pos}] (nearest the body first; one whose :key is sensed now is left out:
+  remembered :threat entries' data [{:key :mob :pos}, with a :weight 0-1 scaling the rate for a fading memory] (nearest the body first; one whose :key is sensed now is left out:
   the sensed place wins), at most max-dangers. body {:health :equipment :weapon :pos}. opts: danger-opts (default none)."
   ([body sensed remembered] (danger-list body sensed remembered nil))
   ([body sensed remembered opts]
@@ -217,7 +217,9 @@
                    (filter :pos)
                    (sort-by #(u/dist (:pos body) (:pos %))))]
     (vec (take max-dangers (concat (map #(danger-of body :sensed % opts) sensed)
-                                   (map #(danger-of body :remembered {:name (:mob %) :pos (:pos %)} opts) spots)))))))
+                                   (map #(cond-> (danger-of body :remembered {:name (:mob %) :pos (:pos %)} opts)
+                                             (:weight %) (update :rate * (:weight %)))
+                                        spots)))))))
 
 ;; ---------------------------------------------------------------- the race to a refuge
 

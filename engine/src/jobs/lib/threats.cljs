@@ -12,6 +12,7 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
+            [jobs.lib.death-spot :as death-spot]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -123,11 +124,16 @@
   ([p remembered] (known-dangers p remembered nil))
   ([p remembered opts] (cost/danger-list (body-of p) (sensed-mobs p {:way? false}) remembered opts)))
 
+(defn death-dangers
+  "The unseen recent deaths of c as remembered dangers [{:key :mob :pos :weight}]: the plan keeps away from where a mob killed the body lately."
+  [c]
+  (map-indexed (fn [i {:keys [pos cause weight]}] {:key (str "death-" i) :mob cause :pos pos :weight weight}) (death-spot/unseen c)))
+
 (defn planner-dangers
   "The planner's options.dangers for the body of c (JS array, nil for none): known-dangers with the :threat spots its
-  flights left."
+  flights left and the spots of its recent deaths."
   [c]
-  (let [ds (known-dangers (:primitives c) (remembered-spots c) (cost/danger-opts))]
+  (let [ds (known-dangers (:primitives c) (concat (remembered-spots c) (death-dangers c)) (cost/danger-opts))]
     (when (seq ds) (clj->js ds))))
 
 (defn danger-near-fn

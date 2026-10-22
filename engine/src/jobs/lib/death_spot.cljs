@@ -6,6 +6,7 @@
             [engine.game :as game]
             [engine.settings :as settings]
             [jobs.lib.cost.threat :as threat]
+            [jobs.lib.look :as look]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -32,3 +33,14 @@
   "The remembered deaths of `deaths` (from recent) within ::radius of cell `pos`."
   [deaths pos]
   (filterv #(<= (u/dist pos (:pos %)) (settings/get settings ::radius)) deaths))
+
+(defn seen-clear?
+  "Whether the body has looked at a death's spot since the death (fresh sight beats the record)."
+  [p {:keys [pos age-ms]}]
+  (let [b (look/seen-block p pos)]
+    (boolean (and b (not (:unknown b)) (< (:age-ms b) age-ms)))))
+
+(defn unseen
+  "The remembered deaths of c whose spot the body has not looked at since."
+  [c]
+  (remove #(seen-clear? (:primitives c) %) (recent c)))

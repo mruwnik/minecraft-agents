@@ -12,6 +12,7 @@
             [jobs.lib.lava-risk :as lava-risk]
             [jobs.lib.look :as look]
             [jobs.lib.price :as price]
+            [jobs.lib.threats :as threats]
             [jobs.movement.go-to.risk :as risk]))
 
 (def inside {:x 5 :y 64 :z 0})
@@ -77,6 +78,12 @@
     (is (zero? (:hp (risk/estimate c far-goal))))
     (is (pos? (:death-hp (estimate-unseen on-way far-goal))))
     (is (zero? (:death-hp (estimate-unseen off-way far-goal))))))
+
+(deftest the-planner-keeps-away-from-an-unseen-recent-death-wherever-the-goal-is
+  (let [c (with-death (ready-test/ctx-of day-world) {:x 80 :y 64 :z 5} "zombie" 60000)
+        spots #(mapv (juxt :x :mob) (js->clj (threats/planner-dangers c) :keywordize-keys true))]
+    (is (= [[80 "zombie"]] (with-redefs [look/seen-block (constantly {:unknown true})] (spots))))
+    (is (= [] (with-redefs [look/seen-block (constantly {:age-ms 1000})] (spots))) "a spot seen since the death is cleared")))
 
 (deftest a-recent-hide-near-the-goal-adds-the-fight-with-its-mobs-to-the-risk
   (let [c (ready-test/ctx-of day-world)
