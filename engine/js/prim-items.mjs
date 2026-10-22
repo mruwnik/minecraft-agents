@@ -230,7 +230,6 @@ export function createItems (env) {
       const away = dist(eye(), center(p))
       if (away > setting('prim/fish-reach')) return { status: 'unreachable', reason: `the cast cell is ${away.toFixed(1)} blocks from the eye, reach ${setting('prim/fish-reach')}` }
       const before = count()
-      const seen = new Set(liveEntities(env.bot).map(e => e.id))
       ctx.onAbort(() => env.bot.deactivateItem())
       await env.bot.equip(rod, 'hand')
       ctx.alive()
@@ -246,6 +245,10 @@ export function createItems (env) {
         return { status: 'timeout' }
       }
       if (outcome === 'failed') return { status: 'timeout' }
+      // Only what appears after the reel and lands by the bobber is the catch, not someone's toss near the pond.
+      const bobber = liveEntities(env.bot).find(e => e.name === 'fishing_bobber')
+      const spot = bobber ? { ...bobber.position } : center(p)
+      const seen = new Set(liveEntities(env.bot).map(e => e.id))
       const deadline = Date.now() + setting('prim/fish-pickup-ms') * timeScale
       const gained = () => Object.entries(count()).find(([name, n]) => name !== 'fishing_rod' && n > (before[name] ?? 0))
       while (!gained() && Date.now() < deadline) {
@@ -253,7 +256,7 @@ export function createItems (env) {
         ctx.alive()
       }
       // The catch is thrown toward the body and can sink short of the bank: go and get it.
-      const landed = () => liveEntities(env.bot).filter(e => entityKind(e) === 'item' && !seen.has(e.id) && dist(e.position, center(p)) <= setting('prim/fish-catch-radius'))
+      const landed = () => liveEntities(env.bot).filter(e => entityKind(e) === 'item' && !seen.has(e.id) && dist(e.position, spot) <= setting('prim/fish-catch-radius'))
       let lost = false
       for (const e of landed()) {
         if (gained()) break
