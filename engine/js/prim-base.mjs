@@ -129,6 +129,21 @@ export const sleepStatusOf = msg => {
   return Number.isFinite(sleeping) && Number.isFinite(needed) ? { sleeping, needed } : null
 }
 
+// The action bar line the server answers a refused bed use with (vanilla "block.minecraft.bed.*"): the sleep status it
+// means (undefined when none fits) and the key. null for any other line.
+const BED_REFUSALS = {
+  'block.minecraft.bed.not_safe': 'monsters-near',
+  'block.minecraft.bed.no_sleep': 'not-night',
+  'block.minecraft.bed.occupied': 'occupied',
+  'block.minecraft.bed.too_far_away': 'unreachable',
+  'block.minecraft.bed.obstructed': 'obstructed'
+}
+export const bedRefusalOf = msg => {
+  const key = msg?.translate
+  if (typeof key !== 'string' || !key.startsWith('block.minecraft.bed.')) return null
+  return { status: BED_REFUSALS[key], key }
+}
+
 // The chat line a player sees when a bed or anchor sets the respawn point ("Respawn point set"). The server
 // sends it only when the point changes.
 export const spawnSetMessage = msg => msg?.translate === 'block.minecraft.set_spawn'

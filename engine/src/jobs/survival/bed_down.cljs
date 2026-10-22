@@ -132,7 +132,7 @@
       (not (sh-sense/night? p)) (ctx/end c :condition-failed :not-night {:slept false})
       :else (do (ctx/remember! c :sleep-failed {:pos bed} sh-beds/sleep-failed-policy)
                 (ctx/end c :nothing-possible :sleep-failed {:slept false :pos bed
-                                                            :text "could not sleep in the bed; not trying again for a while"})))))
+                                                            :text (str "could not sleep in the bed" (some->> s :data :text (str ": ")) "; not trying again for a while")})))))
 
 (defn click-for
   "The place click that sets a bed on the foot cell facing from the stand cell toward it, so the head cell is the one

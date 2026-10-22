@@ -152,7 +152,7 @@ Statuses below are the common ones; `reason` and extra fields are in `js/primiti
 | `attack` | `{id}` (one swing) | `hit`, `killed`, `gone`, `out-of-reach` |
 | `interact` | `{id, item?}` use item on entity | `used`, `no-effect`, `gone`, `out-of-reach`, `no-item`, `full`, `cannot`, `failed` |
 | `trade` | `{villager uuid, op: offers/buy, offer?, times?}` | `ok`, `bought`, `gone`, `out-of-reach`, `no-item`, `full`, `cannot`, `failed`; `bought` ends `stopped: window-closed` if the window closed mid-run |
-| `sleep` | `{pos}` bed | `sleeping`, `not-night`, `occupied`, `monsters-near`, `missing`, `unreachable` |
+| `sleep` | `{pos}` bed | `sleeping`, `not-night`, `occupied`, `monsters-near`, `obstructed`, `missing`, `unreachable` (the three server refusals are read from its action bar line; a failure says when the server gave none) |
 | `look` / `wait` | `{pos}` or `{yaw, pitch}` / `{ms}` (max 10000) | `ok` |
 | `swim` | `{ms=3000, toward?, tread?}` | `surfaced`, `landed`, `timeout` |
 | `paddle` | `{ticks, turn?: 'left'/'right', forward?}` | one stroke of the boat the body is in (the boat is simulated client side, sent as `vehicle_move`; `ticks` at most 40): `ok`, `blocked` (the next forward tick leaves the water), `not-mounted`, `not-a-boat`; result `{pos, yaw, ticks, turnDeg, speed}` (the model: degrees and blocks a tick); ticks 0 reads the pose |

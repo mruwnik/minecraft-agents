@@ -180,6 +180,8 @@
       (ctx/update-mem! c dissoc :bed-down))
     (when (and (= :done (:kind d)) (:slept (:data d)))
       (hold/sheltered! c :slept))
+    (when (= :sleep-failed (contract/cause-key d))
+      (ctx/update-mem! c assoc :sleep-why (:text (:data d))))
     (if (= :hostile-near (:reason (:cause d)))
       (ctx/end c :nothing-possible :monsters-near {:text "monsters are near the bed; the hostile reflexes act, the night looks again after its cooldown"})
       :again)))

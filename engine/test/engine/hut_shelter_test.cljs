@@ -371,6 +371,20 @@
             (is (= [{:pos bed-cell}] (st/entries eng :sleep-failed)) "the normal failed-sleep memory")
             (is (= [] (st/entries eng :bed-unreachable)) "not a permanent skip")))))))
 
+(deftest an-obstructed-bed-is-not-retried-and-the-night-names-why-it-stays-awake
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (st/setup (merge (hut-world {:x 5 :y 64 :z 0} bed-block) {:time st/night}))
+              tries (atom 0)]
+          (st/know-bed! eng {:x 6 :y 64 :z 0})
+          (set! (.-sleep p) (fn [& _] (swap! tries inc) (js/Promise.resolve #js {:status "obstructed"})))
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (st/tick-n eng 12))
+          (is (= 1 @tries) "one try: a retry cannot change an obstructed bed")
+          (is (= 1 (count (st/ended-because seen :bed-obstructed))))
+          (is (re-find #"awake: .*obstructed" (pr-str @seen))))))))
+
 (deftest a-sleep-that-ends-without-sleeping-writes-a-short-sleep-failed-entry
   (async done
     (tu/run-async done

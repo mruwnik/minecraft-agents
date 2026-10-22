@@ -21,7 +21,10 @@
 (defn done-data
   "The data of a done night: how it sheltered, what it placed, the flees."
   [c how]
-  (cond-> (spent-fields c) how (assoc :night how) (fled c) (assoc :fled (fled c))))
+  (cond-> (spent-fields c)
+    how (assoc :night how)
+    (fled c) (assoc :fled (fled c))
+    (:sleep-why (ctx/mem c)) (update :text #(str (some-> % (str "; ")) "awake: " (:sleep-why (ctx/mem c))))))
 
 (defn forget-night!
   "The night's cleanup: tonight's failed sites (sites/forget-failed!) are forgotten unless the round ends exposed in the dark: those are kept so the next firing does not dig them again."

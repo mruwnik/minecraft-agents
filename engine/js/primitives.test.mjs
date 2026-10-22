@@ -241,6 +241,22 @@ test('sleep on a bed that stays half fails with the library reason after the wai
   assert.match(result.reason, /half bed/)
 })
 
+for (const [key, status] of [['block.minecraft.bed.obstructed', 'obstructed'], ['block.minecraft.bed.no_sleep', 'not-night'], ['block.minecraft.bed.not_safe', 'monsters-near'], ['block.minecraft.bed.too_far_away', 'unreachable']]) {
+  test(`sleep that times out after the server's ${key} line resolves ${status}`, async () => {
+    const { bot, p } = rig({ ...world, entities: {} })
+    bot.sleep = async () => { bot.emit('actionBar', { translate: key }); throw new Error('bot is not sleeping') }
+    assert.equal((await p.sleep('t1', { pos: at(2, 64, 1) })).status, status)
+  })
+}
+
+test('sleep that times out with no server line says so', async () => {
+  const { bot, p } = rig({ ...world, entities: {} })
+  bot.sleep = async () => { throw new Error('bot is not sleeping') }
+  const result = await p.sleep('t1', { pos: at(2, 64, 1) })
+  assert.equal(result.status, 'failed')
+  assert.match(result.reason, /said nothing/)
+})
+
 test('inspectContainer reports the size and the free slots', async () => {
   const { p } = rig(world)
   const result = await p.inspectContainer('t1', { pos: at(3, 64, 0) })

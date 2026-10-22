@@ -30,7 +30,7 @@
   :bed-open bed (with :open-bed false, once the body is beside it) too. A walk that did not
   arrive is retried three times, then warns bed_unreachable and ends nothing-possible :bed-unreachable (the bed goes into
   :bed-unreachable); a bed chunk not loaded (bed_unloaded) and a server refusal (bed_unusable \"cannot sleep: <status> (<reason>)\") the same, as
-  :bed-unloaded and :bed-unusable.
+  :bed-unloaded and :bed-unusable. A bed the server calls obstructed ends nothing-possible :bed-obstructed at once (a retry cannot change it). The server's reason is in the text (an overlay line it sends, else said-nothing with the time of day).
   A bed that is not there is not retried; if it was the remembered bed, :bed is overwritten with {:gone true :was pos}, so it no longer reads as a place.
   With a :bed argument the radius is ignored. After sleeping there it is recorded as :bed
   when none is recorded, the recorded one is gone, or it lies in the open and this bed in a closed roofed room. Another live recorded :bed is kept (one place.kept event). Every sleep also records :home there on the same terms.
@@ -176,6 +176,9 @@
                      (places/offer! c :home bed)
                      (ctx/end c :done nil {:pos bed}))
       "not-night" (ctx/end c :condition-failed :not-night)
+      "obstructed" (let [text "the bed is obstructed (the server refuses it: a block above or beside it)"]
+                     (u/fail! c :bed_unusable text)
+                     (ctx/end c :nothing-possible :bed-obstructed {:pos bed :text text}))
       "monsters-near" (await (hold! c {:reason :monsters-near :pos bed :text "monsters are near the bed; the server refuses sleep"}))
       "missing" (if (nil? (u/sensed (:primitives c) bed))
                   (let [text "bed chunk not loaded yet"]

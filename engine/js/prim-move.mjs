@@ -6,7 +6,7 @@ import { leaveBed } from './bed.mjs'
 import { mountVehicle, dismountVehicle, paddleBoat } from './vehicle.mjs'
 import vec3 from 'vec3'
 import pf from 'mineflayer-pathfinder'
-import { sleepMs, dist, center, isNum, isPos, cell, vec, cutError, failed, need } from './prim-base.mjs'
+import { sleepMs, bedRefusalOf, dist, center, isNum, isPos, cell, vec, cutError, failed, need } from './prim-base.mjs'
 import { setting } from './settings.mjs'
 
 const { Vec3 } = vec3
@@ -268,17 +268,31 @@ export function createMove (env) {
       ctx.alive()
       // the head half's block update can trail the place by a moment: the library calls that "half bed"
       const deadline = Date.now() + setting('prim/half-bed-wait-ms') * timeScale
-      let failure = await env.bot.sleep(block).then(() => null, err => err)
-      ctx.alive()
-      while (failure && /half bed/i.test(failure.message) && Date.now() < deadline) {
-        await sleepMs(setting('prim/poll-ms') * timeScale)
+      // the server says why it refused in the action bar; the library only times out ("bot is not sleeping")
+      let refusal = null
+      const onBar = msg => { refusal ??= bedRefusalOf(msg) }
+      env.bot.on('actionBar', onBar)
+      let failure
+      try {
+        failure = await env.bot.sleep(block).then(() => null, err => err)
         ctx.alive()
-        failure = await env.bot.sleep(env.bot.blockAt(vec(p))).then(() => null, err => err)
-        ctx.alive()
+        while (failure && /half bed/i.test(failure.message) && Date.now() < deadline) {
+          await sleepMs(setting('prim/poll-ms') * timeScale)
+          ctx.alive()
+          failure = await env.bot.sleep(env.bot.blockAt(vec(p))).then(() => null, err => err)
+          ctx.alive()
+        }
+      } finally {
+        env.bot.removeListener('actionBar', onBar)
       }
       if (failure && /occupied/i.test(failure.message)) return { status: 'occupied' }
       // the server refuses when a monster the body has not sensed yet is near: same outcome as the sensed case
       if (failure && /monsters nearby/i.test(failure.message)) return { status: 'monsters-near' }
+      if (failure && refusal?.status) return { status: refusal.status }
+      if (failure && refusal) throw new Error(`the server refused the bed (${refusal.key})`)
+      if (failure && /not sleeping/i.test(failure.message)) {
+        throw new Error(`the server did not put the body to bed within 3 s and said nothing (time of day ${env.bot.time?.timeOfDay})`)
+      }
       if (failure) throw failure
       return { status: 'sleeping' }
     })

@@ -34,6 +34,16 @@
             {:event {:source :job :kind :job.notify} :within-s 150}
             {:count-event {:source :job :kind :child_started :data {:slot :log-out}} :for-s 200 :at-least 2}]
    :limit-s 240}
+  {:name "obstructed-bed-is-named-and-tried-once"
+   :time :night
+   :time-why :sleep
+   :register [{:trigger :night}]
+   :body {:at [16.5 0 16.5] :yaw 90}
+   :blocks [[:set [13 0 16] "red_bed[facing=east,part=foot]"] [:set [14 0 16] "red_bed[facing=east,part=head]"] [:set [14 1 16] "stone"]]
+   :act [[:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0}})]]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "obstructed"}} :within-s 90}
+            {:event {:source :job :kind :child_ended :data {:slot :sleep :ending {:cause :bed-obstructed}}} :within-s 30}]
+   :limit-s 150}
   {:name "monster-near-ends-the-round-then-sleeps-once-the-zombie-is-killed"
    :time-why :sleep
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]]
