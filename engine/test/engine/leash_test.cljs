@@ -257,3 +257,16 @@
           (core/submit! (:eng s) (list 'jobs.animals.leash {:mob "cow"}) {})
           (await (run-ticks s 8 700))
           (is (= :leashed (:reason (done-event s)))))))))
+
+(deftest a-cow-in-view-only-during-an-early-look-of-the-round-is-leashed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory lead :entities [(cow 1 2)]})
+              p (:p s)
+              entities (.-entities p)
+              looks #(count (filter (fn [call] (= "look" (.-name call))) (.-calls (.-world p))))]
+          (aset p "entities" (fn [q] (if (= 2 (looks)) (.call entities p q) #js [])))
+          (core/submit! (:eng s) (list 'jobs.animals.leash {:mob "cow"}) {})
+          (await (run-ticks s 8 700))
+          (is (= :leashed (:reason (done-event s)))))))))

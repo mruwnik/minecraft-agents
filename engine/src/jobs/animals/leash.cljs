@@ -194,7 +194,9 @@
 (defn ^:async step [c]
   (let [cands (candidates c)]
     (cond
-      (and (empty? cands) (not (look/surveyed? c))) (await (look/survey! c)) ; animals count only while in view
+      (and (empty? cands) (not (look/surveyed? c))) (if (seq (await (look/survey-until! c #(seq (candidates c))))) ; animals count only while in view, so test between looks
+                                                      (await (step c))
+                                                      :continue)
       (not (animals/lead-carried? c)) (await (no-lead! c))
       (empty? cands) (finish! c (none-reason c) nil)
       :else (await (engage! c (animals/pick c cands))))))
