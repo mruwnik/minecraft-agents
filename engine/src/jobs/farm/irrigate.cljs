@@ -24,8 +24,8 @@
 
 (def doc
   "Give the farm cells of the :area, a box or a circle's square (the cells of jobs.farm.till), water: a cell of
-  the field the body has seen, farmland or ground a hoe would till, is dry when every block within 4 in x and z of it, at its height
-  and one above, is seen and none is water; a cell with an unseen block in reach and no water is unknown, never dry. For the spot
+  the field the body has seen, farmland or ground a hoe would till, is dry when no water is seen within 4 in x and z of it, at its height
+  and one above, and no unseen block there lies beside a seen open one (an unseen block inside a hill or under the ground is no water a player could see); a cell with such a block in reach and no water is unknown, never dry. With no cell dry it walks within 3 blocks of up to 3 unknown cells and looks round there. For the spot
   that wets the most dry cells (one of the field's own cells under open air whose four sides are seen solid and underside not seen open, nearest
   first) (with :for-plan, when the plan has a water cell, never one under its crop cells) it digs the cell (a jobs.blocks.dig child) and pours a water bucket in it (a jobs.items.use child), then
   looks again (a pour that fails, or a bucket gone before it, has the cell refilled with dirt (a jobs.blocks.place child); a cell that stays open is named in :holes and ends the call, a refilled one only drops that spot); one bucket wets one spot, so it ends when no cell is dry, no water bucket is left or no spot helps. A pour
@@ -81,12 +81,22 @@
           (map (fn [{:keys [x y z]}] [x y z]))
           (map :pos (look/seen-blocks (:primitives c) {:names ["water"] :radius reach :max 4096 :live? true})))))
 
+(def neighbours [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
+
 (defn reach-seen?
-  "Whether every block a water source could wet the cell from is seen."
+  "Whether the water reach of the cell is settled: every block a source could wet it from is seen, or buried (unseen with no seen
+  open block beside it, as a player cannot see into a hill). Only an unseen block next to a seen open one is worth a look."
   [p {:keys [x y z]}]
-  (let [r (farm/water-reach)]
-    (every? #(u/seen-name p %)
-            (for [dx (range (- r) (inc r)) dz (range (- r) (inc r)) dy [0 1]] {:x (+ x dx) :y (+ y dy) :z (+ z dz)}))))
+  (let [r (farm/water-reach)
+        memo (volatile! {})
+        seen (fn [pos] (let [m @memo]
+                         (if (contains? m pos)
+                           (m pos)
+                           (let [n (u/seen-name p {:x (pos 0) :y (pos 1) :z (pos 2)})] (vswap! memo assoc pos n) n))))
+        open? (fn [n] (and n (or (bs/air n) (bs/fluids n) (b/clearable n))))
+        reachable? (fn [[px py pz]] (some (fn [[dx dy dz]] (open? (seen [(+ px dx) (+ py dy) (+ pz dz)]))) neighbours))]
+    (every? (fn [pos] (or (seen pos) (not (reachable? pos))))
+            (for [dx (range (- r) (inc r)) dz (range (- r) (inc r)) dy [0 1]] [(+ x dx) (+ y dy) (+ z dz)]))))
 
 (defn readings
   "The field cells by state: :dry (reach seen, no water), :unknown (water absent, reach partly unseen), :wet."
@@ -216,7 +226,8 @@
         dry0 (:dry0 (ctx/mem c) (count dry))
         text (str "irrigated " (count poured) " spots, " (count dry) " cells dry"
                   (when (seq unknown) (str ", " (count unknown) " unseen"))
-                  (when (seq holes) (str ", " (count holes) " dug holes left open")))
+                  (when (seq holes) (str ", " (count holes) " dug holes left open"))
+                  (when (and (seq dry) (= :need reason)) ", no water bucket carried and none fetched"))
         data (assoc result :text text)]
     (cond
       (and (empty? (field-cells c)) (empty? poured)) (ctx/end c :nothing-possible :nothing-seen data)
@@ -258,6 +269,27 @@
       (and (= :done (:kind e)) (#{:dug :already-clear} (:reason (:data e)))) (do (ctx/update-mem! c assoc :hole hole) :again)
       :else (do (ctx/update-mem! c update :failed (fnil conj #{}) hole) :again))))
 
+(def max-reach-walks 3)
+
+(defn unseen-reach-target
+  "The nearest cell with a reading :unknown not yet walked to, while fewer than max-reach-walks cells were tried."
+  [c]
+  (let [tried (:reach-tried (ctx/mem c) #{})]
+    (when (< (count tried) max-reach-walks)
+      (->> (unknown-cells c)
+           (remove tried)
+           (sort-by #(u/dist (u/self-pos c) %))
+           first))))
+
+(defn ^:async look-toward!
+  "Walk within 3 blocks of the cell whose reach is partly unseen and look round there, as a player steps closer; each cell once."
+  [c cell]
+  (let [e (await (ctx/call c :walk 'jobs.movement.go-to {:pos (update cell :y inc) :range 3}))]
+    (if (= :continue e)
+      :continue
+      (do (ctx/update-mem! c update :reach-tried (fnil conj #{}) cell)
+          (if (= :continue (await (look/look-around! c (look/search-effort)))) :continue :again)))))
+
 (defn ^:async step
   "One step: pour a dug hole; else with dry cells left fetch a bucket if none is carried, and dig the best spot."
   [c]
@@ -269,6 +301,7 @@
     (cond
       restore (await (restore! c restore))
       hole (if (and (has-bucket? p) (solid-at? p (update hole :y dec))) (await (pour! c hole)) (do (unpour! c hole) :again))
+      (and (empty? dry) (unseen-reach-target c)) (await (look-toward! c (unseen-reach-target c)))
       (empty? dry) (conclude! c nil)
       (seq (:holes (ctx/mem c))) (conclude! c :no-spot)
       (not (has-bucket? p))

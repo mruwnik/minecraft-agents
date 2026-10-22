@@ -112,6 +112,36 @@
           (is (= 3 (count (:unknown r))))
           (is (= {:status :stopped :reason :unseen} (ending-of r))))))))
 
+(defn bank
+  "A stone bank east of the strip (x 3-9, y 62-64, z -6..6) whose y 63 blocks past its face (x 4-8, z -5..5) are not seen: it holds no water a player could see."
+  [p blocks]
+  (let [hidden? (fn [pos] (and (= 63 (.-y pos)) (<= 4 (.-x pos) 8) (<= -5 (.-z pos) 5)))]
+    (tu/set-sensed! p (fn [pos] (if (hidden? pos) #js {:unknown true} (.blockAt (tu/oracle p) pos))))
+    (aset p "seenBlockAt" (fn [pos] (if (hidden? pos)
+                                      #js {:unknown true :pos pos}
+                                      (let [b (.blockAt (tu/oracle p) pos)] #js {:name (.-name b) :properties (.-properties b) :pos pos :age-ms 0}))))
+    blocks))
+
+(deftest unseen-reach-buried-in-a-bank-does-not-make-a-cell-unknown
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [stone (into {} (for [x (range 3 10) z (range -6 7) y [62 63 64]] [(str x "," y "," z) "stone"]))
+              {:keys [eng p]} (setup {:inventory bucket :blocks (merge (strip 3) stone)})
+              _ (bank p nil)
+              r (await (tu/child-outcome eng job (args 3) 40))]
+          (is (= [] (:unknown r)))
+          (is (= [] (:dry r)))
+          (is (= 1 (count (:poured r)))))))))
+
+(deftest a-failed-bucket-fetch-names-the-bucket-in-the-text
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:blocks (strip 5)})
+              r (await (tu/child-outcome eng job (assoc (args 5) :ways #{:carried :chest}) 20))]
+          (is (re-find #"no water bucket" (str (:text r) (:text (:data (:ending r)))))))))))
+
 (deftest a-spot-whose-side-is-open-is-not-used
   (async done
     (tu/run-async done
