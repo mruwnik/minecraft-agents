@@ -166,12 +166,14 @@
           (is (in-room? (body p)) (str "inside the hut: " (body p)))
           (is (= ["cobblestone" "cobblestone"] (mapv #(hs/block-at p %) [[5 64 2] [5 65 2]])) "the doorway is filled behind it"))))))
 
-(deftest a-body-with-no-block-does-not-count-a-doorless-hut-as-a-room
+(deftest a-body-with-no-block-still-runs-into-its-doorless-hut-but-cannot-fill-the-doorway
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [seen]} (await (flee! (hut {:x 5.5 :y 64 :z 6.5} {} [(zombie 5.5 13.5 0.4)] no-door)))]
-          (is (not (ran-home? seen))))))))
+        (let [{:keys [p seen]} (await (flee! (hut {:x 5.5 :y 64 :z 6.5} {} [(zombie 5.5 13.5 0.4)] no-door)))]
+          (is (ran-home? seen) "the walls still cut the threat's angles")
+          (is (in-room? (body p)) (str "inside the hut: " (body p)))
+          (is (= ["air" "air"] (mapv #(hs/block-at p %) [[5 64 2] [5 65 2]])) "no block to fill the doorway with"))))))
 
 (deftest a-zombie-at-the-door-is-not-run-into
   (async done

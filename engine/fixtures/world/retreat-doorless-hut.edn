@@ -1,6 +1,6 @@
 ;; A body with a hostile in range, 7 blocks from its own planks hut that has no door, just a bare 1x2 doorway gap at [15 0..1 18].
 ;; The body starts inside (so it has seen the room), then is moved out. Hut: planks x 12..18, z 12..18, y 0..3 (hollow), room 13..17; home bed inside at [14 0 14]; body 3 south of the doorway; chasing zombie far south.
-;; Should-succeed: carrying cobblestone it runs in and plugs the gap (cobblestone at [15 0 18] and [15 1 18]), ends inside.
+;; Should-succeed: with no block it still runs in (the gap stays open); carrying cobblestone it runs in and plugs the gap (cobblestone at [15 0 18] and [15 1 18]), ends inside.
 {:defaults
  {:tags [:hostile :survival :retreat]
   :time :any
@@ -18,4 +18,8 @@
  :cases
  [{:name "body-with-blocks-runs-into-doorless-hut-and-plugs-the-doorway"
    :expect [{:no-event {:source :job :kind :retreat_sealed :message [:contains "pillared up"]} :for-s 30}]
-   :after [[:block [15 0 18] "cobblestone"] [:block [15 1 18] "cobblestone"] [:body-near [15.5 0 15.5] 3.5]]}]}
+   :after [[:block [15 0 18] "cobblestone"] [:block [15 1 18] "cobblestone"] [:body-near [15.5 0 15.5] 3.5]]}
+  {:name "body-without-blocks-still-runs-into-doorless-hut"
+   :body {:inventory []}
+   :expect [{:no-event {:source :job :kind :retreat_sealed :message [:contains "pillared up"]} :for-s 30}]
+   :after [[:not-block [15 0 18] "cobblestone"] [:body-near [15.5 0 15.5] 3.5]]}]}

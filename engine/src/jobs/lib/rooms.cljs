@@ -111,32 +111,38 @@
 (declare shut-by)
 
 (defn doorway-room
-  "The closed room a hut with a bare doorway gap makes at cell pos once the gap is filled (a body carrying a block shuts
-  itself in), as reach-room/room's answer plus :doors [{:cell gap-feet :inside}] and :gap [feet head]; nil when it is
-  none, no block is carried, or a cell of it is unseen."
+  "The closed room a hut with a bare doorway gap makes at cell pos once the gap is filled, as reach-room/room's answer plus
+  :doors [{:cell gap-feet :inside}], :gap [feet head] and :fill? (a block is carried to fill it; else the room stays open
+  to one mob at a time); nil when it is none or a cell of it is unseen. A cell with no doorway that shuts it is kept in body
+  memory :refuge-no-gap (open-policy) so a flight does not flood open ground again."
   [c pos]
-  (let [p (:primitives c)]
-    (when (seq (lb/carried c (vec (or (ctx/use c :blocks) (choose/filler-names c :build)))))
-      (when-let [e (:cell (reach-room/unroofed-cell p pos))]
-        (when-let [d (shut-by p pos e any?)]
+  (let [p (:primitives c)
+        k (cell-key pos)]
+    (when-not (some #(= k (:cell (:data %))) (mem/entries (ctx/view c) :refuge-no-gap))
+      (let [e (:cell (reach-room/unroofed-cell p pos))
+            d (when e (shut-by p pos e any?))]
+        (when-not d (mem/write! (:store (:engine c)) :refuge-no-gap {:cell k} open-policy))
+        (when d
           (let [head (update d :y inc)
                 plug? #{[(:x d) (:y d) (:z d)] [(:x head) (:y head) (:z head)]}
                 base (reach-room/shut-kind-at p)
-                kind-at (reach-room/room-kind-at p (reach-room/memo-kind-at (fn [x y z] (if (plug? [x y z]) :solid (base x y z)))))]
-            (when-let [room (reach-room/room-from p kind-at (:x pos) (:y pos) (:z pos))]
-              (when-let [inside (first (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
-                                             :let [cell [(+ (:x d) dx) (:y d) (+ (:z d) dz)]]
-                                             :when (contains? (:cells room) cell)]
-                                         (zipmap [:x :y :z] cell)))]
-                (assoc room :doors (conj (:doors room) {:cell d :inside inside}) :gap [d head])))))))))
+                kind-at (reach-room/room-kind-at p (reach-room/memo-kind-at (fn [x y z] (if (plug? [x y z]) :solid (base x y z)))))
+                room (reach-room/room-from p kind-at (:x pos) (:y pos) (:z pos))
+                inside (first (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+                                    :let [cell [(+ (:x d) dx) (:y d) (+ (:z d) dz)]]
+                                    :when (contains? (:cells room) cell)]
+                                (zipmap [:x :y :z] cell)))]
+            (when (and room inside)
+              (assoc room :doors (conj (:doors room) {:cell d :inside inside}) :gap [d head]
+                     :fill? (boolean (seq (lb/carried c (vec (or (ctx/use c :blocks) (choose/filler-names c :build))))))))))))))
 
 (defn survey
   "The closed rooms to flee to, {:rooms [...]} (jobs.lib.reach.room/room plus :start and :home?): the home's (home
   {:x :y :z} or nil) and those behind the doors the body has seen (starts), at most max-rooms, the home first then the
   nearest; and {:dropped [{:at [x y z] :own? :why}]}, the cells that are none: :run-failed (a run to it failed this
   flight), :not-closed, :unseen (a cell of the room not seen yet), or :unjudged (a door side not judged this flight beyond the fresh ones
-  it may flood now; the home is always judged). A home with a bare doorway gap counts as a room while a block is carried
-  to fill the gap (doorway-room: its :gap)."
+  it may flood now; the home is always judged). A home with a bare doorway gap counts as a room (doorway-room: its :gap; :fill? when a
+  block is carried to fill it)."
   ([c home] (survey c home js/Infinity))
   ([c home fresh]
    (let [p (:primitives c)

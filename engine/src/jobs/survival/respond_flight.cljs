@@ -134,7 +134,7 @@
   [c room way]
   (say-once! c room)
   (let [e (await (ctx/call c :room 'jobs.survival.shut-in {:ways #{:room} :at (:inside way) :flee? true}))]
-    (when-not (or (= :continue e) (= :done (:kind e))) (failed! c room))
+    (when-not (or (= :continue e) (= :done (:kind e)) (room-lib/inside? (:primitives c) room)) (failed! c room))
     :again))
 
 
@@ -160,7 +160,7 @@
         rooms (:rooms survey)
         verdicts (when survey (room-lib/verdicts p rooms threats (not (cover/exposed-low? c covered?))))
         {:keys [room way inside?]} (room-lib/pick verdicts)
-        gap-way (when (and inside? (:gap room)) (first (filter #(= (first (:gap room)) (:cell %)) (:doors room))))
+        gap-way (when (and inside? (:fill? room)) (first (filter #(= (first (:gap room)) (:cell %)) (:doors room))))
         _ (when (and glanced? room inside?) (say-once! c room))
         early (when (and threat (not hit?) (not door) (nil? room) (not inside?)) (await (step/early-refuge! c)))
         home-now? (fn [] (or inside? (and (nil? survey) (room-lib/in-home? c (cover/home-pos c)))))
