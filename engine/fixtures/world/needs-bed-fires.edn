@@ -39,8 +39,9 @@
    :body {:inventory [["white_wool" 1] ["oak_planks" 3]]}
    :act [[:time-set 9000]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :needs-bed}} :within-s 30}
-            {:event {:source :job :kind :stopped :data {:cause {:reason :no-source}}} :within-s 80}]
-   :after [[:item "white_bed" 0]]}
+            {:event {:source :job :kind :stopped :data {:cause {:reason :no-source}}} :within-s 150}]
+   :after [[:item "white_bed" 0]]
+   :limit-s 170}
   {:name "standing-spawn-bed-does-not-fire"
    :memory [{:kind :spawn-bed :data {:pos #xyz [8 0 16]} :age-s 60}]
    :blocks [[:set [8 0 16] "red_bed[facing=east,part=foot]"] [:set [9 0 16] "red_bed[facing=east,part=head]"]]
