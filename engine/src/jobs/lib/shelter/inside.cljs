@@ -1,6 +1,7 @@
 (ns jobs.lib.shelter.inside
   "Whether the body is shut in its shelter, safe from the night where it stands, and what a walk would leave."
   (:require [engine.ctx :as ctx]
+            [jobs.lib.breath :as breath]
             [jobs.lib.click :as click]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.util :as u]
@@ -99,10 +100,10 @@
              (dark-spawn-beyond? p room at))))
 
 (defn safe-from-night?
-  "Whether the body is safe from the night where it stands: safe-room-at? its feet, its head not inside a block. The one
-  test the night trigger, night-sheltered, walk-leaves-shelter?, the night job's end and the hold share."
+  "Whether the body is safe from the night where it stands: safe-room-at? its feet, its head not inside a block, not afloat
+  (a swimmer is in no shelter). The one test the night trigger, night-sheltered, walk-leaves-shelter?, the night job's end and the hold share."
   [p]
-  (boolean (and (not (sh-sense/head-in-block? p)) (safe-room-at? p (sh-sense/feet p)))))
+  (boolean (and (not (breath/in-water? p)) (not (sh-sense/head-in-block? p)) (safe-room-at? p (sh-sense/feet p)))))
 
 (defn night-sheltered
   "At night, awake and safe from it (safe-from-night?), the kind of shelter the body is in (:dug-in the one shelter says

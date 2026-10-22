@@ -7,6 +7,7 @@
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as look]
             [jobs.lib.reach.room :as reach-room]
+            [jobs.lib.shore :as shore]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
 
@@ -72,7 +73,7 @@
 
 (defn walkable-near
   "The cell {:x :y :z} of the closed region the body stands in (doors shut, as pending reads it) nearest cell [x y z], or nil.
-  Only cells with a seen roof, and not a doorway beside a cell without one: a player judging a room does not walk out through
+  Only dry stand cells with a seen roof, and not a doorway beside a cell without one: a player judging a room does not walk out through
   its doorway to look at the outside, nor stand in the doorway (the flood runs past an open one over seen cells), where the
   night could not fill it. Nil when that cell lies farther than max-edge-walk from the feet."
   [p [x y z]]
@@ -81,7 +82,7 @@
         roofed (set (filter (fn [[cx cy cz]] (sh-sense/roofed? p (sh-sense/room-roof-height) {:x cx :y cy :z cz})) flood))
         exit? (fn [[cx cy cz]] (and (sh-sense/doorway? p {:x cx :y cy :z cz})
                                     (some (fn [[dx dz]] (let [n [(+ cx dx) cy (+ cz dz)]] (and (flood n) (not (roofed n))))) [[1 0] [-1 0] [0 1] [0 -1]])))
-        best (first (sort-by (fn [[cx cy cz]] (+ (js/Math.abs (- cx x)) (js/Math.abs (- cy y)) (js/Math.abs (- cz z)))) (remove exit? roofed)))]
+        best (first (sort-by (fn [[cx cy cz]] (+ (js/Math.abs (- cx x)) (js/Math.abs (- cy y)) (js/Math.abs (- cz z)))) (remove exit? (filter #(shore/standable? p {:x (% 0) :y (% 1) :z (% 2)}) roofed))))]
     (when (and best (<= (u/dist feet {:x (best 0) :y (best 1) :z (best 2)}) max-edge-walk))
       {:x (best 0) :y (best 1) :z (best 2)})))
 

@@ -32,6 +32,11 @@
   (when-not (and (= :exposed (:sheltered (ctx/mem c))) (sh-sense/dark-outside? (:primitives c)))
     (sites/forget-failed! c)))
 
+(defn end-in-water!
+  "The body is afloat and sees no dry land to climb out to: end nothing-possible :in-water, so the trigger fires again."
+  [c]
+  (ctx/end c :nothing-possible :in-water {:text "afloat with no dry land seen within reach, so no shelter can be built"}))
+
 (defn end-exposed!
   "Nothing sheltered the body tonight: end nothing-possible :exposed {:sites}."
   [c]

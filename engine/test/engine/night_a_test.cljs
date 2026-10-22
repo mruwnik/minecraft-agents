@@ -61,7 +61,8 @@
 (deftest a-body-already-safe-at-night-does-not-hold
   (is (false? (holds? {:time night :blocks closed-hut} (fn [_]))) "shut in a high closed room, dark or not")
   (is (true? (holds? {:time night :blocks (dissoc closed-hut "0,70,0")} (fn [_]))) "a hole in the roof: not shut in")
-  (is (true? (holds? {:time night :blocks {}} (fn [_]))) "outside"))
+  (is (true? (holds? {:time night :blocks {}} (fn [_]))) "outside")
+  (is (true? (holds? {:time night :blocks (assoc closed-hut "0,64,0" "water" "0,65,0" "water")} (fn [_]))) "a water-filled room is no shelter"))
 
 (deftest night-holds-for-a-sleeper-the-action-bar-counts-tonight
   (let [world {:time night :blocks roof}]

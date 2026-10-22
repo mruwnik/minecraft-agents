@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [engine.memory :as mem]
             [jobs.lib.checks :as checks]
+            [jobs.lib.breath :as breath]
             [jobs.lib.child :as child]
             [jobs.lib.pace :as pace]
             [jobs.lib.dig-in-leave :as dig-leave]
@@ -14,6 +15,7 @@
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.rooms :as room-lib]
             [jobs.lib.sense :as sense]
+            [jobs.lib.surface-up :as surface]
             [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.clock :as sh-clock]
@@ -44,6 +46,7 @@
   Each pass chooses again from the world as it is, the first that applies:
   - day: a furnace the hold put down is dug up once more; then the night is over: done {:night :slept|:dug-in|:logged-out|:roofed :fled n}, or nothing-possible :exposed after a night with no shelter.
   - asleep: hold (:sleeping).
+  - afloat: swim to the nearest dry land first (surface-up/leave-water!); none seen: nothing-possible :in-water. A swimmer is never roofed or sheltered.
   - roofed or buried in a closed region with sides never seen: a look at the nearest, else a walk to it, 15 failed cells and 200 steps a night at most (an unseen side is open until seen: a lit tunnel with its walls seen is shelter, one with an unseen branch is not).
   - sheltered (slept, dug in, shut in): log out for a stint while someone else sleeps, else end so the queue runs (no all-night hold: listed jobs run when their own start checks pass).
   - a roofed :roofed-places place within the night.sites ::home-radius setting (bed to use or carry), or farther while the walk fits the time left before the dark plus a margin (night.sites home-walk-*; bed or not), and the body not roofed: jobs.survival.enter-room walks in (one try tonight); a carried bed is not put down in the open while one is close (night.bed-kept).
@@ -429,6 +432,10 @@
                                          (ending/end-exposed! c)
                                          (ctx/end c :done nil (ending/done-data c sheltered)))
       (sh-sense/sleeping? p) (do (when-not (= :slept sheltered) (hold/sheltered! c :slept)) (await (hold/hold! c :sleeping)))
+      (breath/in-water? p) (let [w (await (surface/leave-water! c))]
+                             (cond (not= :out w) w
+                                   (breath/in-water? p) (ending/end-in-water! c)
+                                   :else :again))
       (and (not sheltered) (seq @edge)) (do (hold/busy! c) (await (look-edge/look! c @edge)))
       (and roofed (or (#{:slept :dug-in} sheltered) (dig-leave/sheltered-in c)))
       (do (when-not sheltered (hold/sheltered! c :dug-in))

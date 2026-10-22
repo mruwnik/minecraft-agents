@@ -1,0 +1,18 @@
+;; Night job: a swimmer is in no shelter. The body floats in a 3x3 pond in the floor of a closed torch-lit 11x11 stone room (roofed, small, walled:
+;; safe once dry). It climbs out first and only then ends :roofed; it places nothing in the water.
+;; Needs night: run with --allow-time --time-log <the shared time log>.
+{:defaults
+ {:tags [:night :survival :water]
+  :time :night
+  :plot {:height 10 :length 32 :width 32}
+  :body {:effects [["resistance" 600 4]] :settle-s 3}}
+ :cases
+ [{:name "swimmer-climbs-out-before-the-night-ends-roofed"
+   :time-why :night-light
+   :body {:at [16.5 -1 16.5]}
+   :blocks [[:fill [10 -6 10] [22 5 22] "stone"] [:fill [11 0 11] [21 3 21] "air"] [:fill [15 -4 15] [17 -1 17] "water"] [:set [12 0 12] "torch"] [:set [20 0 12] "torch"] [:set [12 0 20] "torch"] [:set [20 0 20] "torch"]]
+   :act [[:job (jobs.survival.night)]]
+   :expect [{:no-event {:source :action :kind :started :data {:name "place"}} :for-s 20}
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 60 :of-job true}]
+   :after [[:body-far [16.5 -1 16.5] 2] [:body-near [16.5 0 16.5] 6]]
+   :limit-s 80}]}
