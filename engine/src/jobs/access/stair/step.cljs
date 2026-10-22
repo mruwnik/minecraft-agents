@@ -179,6 +179,16 @@
   (or (by-hand? c block)
       (blocks/room-for? (:primitives c) (blocks/item-name {:block block}))))
 
+(def worn-uses
+  "Uses left (together) under which the tool for a block counts as worn out for a dig: its spare is sought."
+  5)
+
+(defn worn-last-tool?
+  "The tools for block have fewer than worn-uses uses together, and the first is not merely dearer than a stone one: a fresh iron pickaxe digs a stair without a spare."
+  [c block]
+  (let [need (trip/spare-need c block worn-uses)]
+    (boolean (and need (not (:dear need))))))
+
 (defn ^:async dig!
   "Equip the best tool, check the cell again, write the intent and dig it (a blocks.dig child). :continue (dug, go on), :yield (the child waits on the world), or a stop map."
   [c in cell cut accept]
@@ -192,7 +202,7 @@
                                    (assoc :why "put back by something else, e.g. the night shelter closing an opened refuge again"))
       (rules/unbreakable block) {:reason :unbreakable :cell cell :block block}
       (and seen? (not (fetch-tool? c)) (lacks-tool? c block)) {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block) :why no-tool-hint}
-      (= :continue (await (trip/tool-ready! c block nil))) :yield
+      (and (worn-last-tool? c block) (= :continue (await (trip/tool-ready! c block nil)))) :yield
       (trip/spent-tool? p block) {:reason :tool-spent :cell cell :block block :tool (tools/needed-kind p block)}
       (and seen? (not (drop-room? c block))) {:reason :inventory-full :cell cell :block block}
       :else

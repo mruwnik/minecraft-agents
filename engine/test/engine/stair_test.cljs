@@ -1483,6 +1483,12 @@
           (is (= :done (:status @(:out s))))
           (is (= 1 (count (events-of s :tool.spare)))))))))
 
+(deftest only-a-nearly-spent-last-pickaxe-wants-a-spare-not-a-fresh-iron-one-with-cobblestone-carried
+  (are [inv worn?] (= worn? (sstep/worn-last-tool? {:primitives (tu/fake {:inventory inv}) :view (fn [] {:data mem/empty-data :now 1})} "stone"))
+    [{:name "iron_pickaxe" :count 1 :durability 250 :max-durability 250} {:name "cobblestone" :count 8}] false
+    [{:name "stone_pickaxe" :count 1 :durability 10 :max-durability 131}] false
+    [{:name "stone_pickaxe" :count 1 :durability 4 :max-durability 131}] true))
+
 (deftest a-stair-through-dirt-goes-on-with-only-a-worn-shovel
   (async done
     (tu/run-async done
