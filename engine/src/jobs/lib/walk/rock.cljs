@@ -20,6 +20,43 @@
   []
   @open-ids*)
 
+(def climb-ids*
+  (delay (let [^js t (blocks/default-state-table)
+               climb (.-climb t)
+               a (js/Uint8Array. (.-length climb))]
+           (dotimes [id (.-length climb)]
+             (when (== 1 (aget climb id)) (aset a id 1)))
+           a)))
+
+(def ^:const shaft-sections "Sections below one that a climbable's shaft goes on up through." 4)
+
+(defn- shaft!
+  "Out cells (a 4096-cell section array, 1 rock) of the section cx sy cz that lie straight above a remembered climbable (a
+  ladder, vines) through unseen cells only are set 0: a shaft goes on until seen otherwise. Returns out, or nil when no
+  climbable lies in it or within shaft-sections sections below."
+  [known ^js out cx sy cz]
+  (let [^js climb @climb-ids*
+        lower (keep (fn [d] (known cx (- sy d) cz)) (range shaft-sections -1 -1))
+        any-climb? (some (fn [^js ids] (some #(and (pos? %) (== 1 (aget climb (dec %)))) ids)) lower)]
+    (when any-climb?
+      (let [out (js/Uint8Array. out)]
+        (dotimes [lz 16]
+          (dotimes [lx 16]
+            (loop [secs (range shaft-sections -1 -1) in? false]
+              (when-let [d (first secs)]
+                (let [ids (known cx (- sy d) cz)]
+                  (recur (rest secs)
+                         (loop [ly 0 in? in?]
+                           (if (== ly 16)
+                             in?
+                             (let [cell (bit-or (bit-shift-left ly 8) (bit-shift-left lz 4) lx)
+                                   v (if ids (aget ids cell) 0)]
+                               (cond
+                                 (pos? v) (recur (inc ly) (== 1 (aget climb (dec v))))
+                                 (and in? (zero? d)) (do (aset out cell 0) (recur (inc ly) in?))
+                                 :else (recur (inc ly) in?)))))))))))
+        out))))
+
 (defn- dilate!
   "b: a dilated by k along one axis of the n^3 grid, s that axis' stride and o1 o2 the other two."
   [^js a ^js b n k s o1 o2]
@@ -68,7 +105,7 @@
       (aset seed (+ (* py nn) (* pz n) px) 1)
       (vreset! any? true))
     (if-not @any?
-      all-rock
+      (or (shaft! known all-rock cx sy cz) all-rock)
       (let [b (js/Uint8Array. (* n nn))
             out (js/Uint8Array. 4096)]
         (dilate! seed b n k 1 nn n)
@@ -80,7 +117,7 @@
                   cells (bit-or (bit-shift-left ly 8) (bit-shift-left lz 4))]
               (dotimes [lx 16]
                 (aset out (bit-or cells lx) (- 1 (aget b (+ row lx))))))))
-        out))))
+        (or (shaft! known out cx sy cz) out)))))
 
 (defn with-rock
   "snapshot read with every cell that reads mask (the unseen cells' id) and is guessed rock (rock-section, built once a

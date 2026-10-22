@@ -21,7 +21,7 @@
     (and (some? ^js (.-missed s)) (true? (.has ^js (.-missed s) (cell-key x y z)))))
 
   ;; does the node at x y z stand on a phantom floor: its floor is unseen and it stands on its floor (not in water, which
-  ;; holds the body up, not in a climbable, not on its own cell's low block, not in a door's lower half, whose floor a door
+  ;; holds the body up, not in a climbable or a shaft above one, not on its own cell's low block, not in a door's lower half, whose floor a door
   ;; implies)?
   (phantomAt [s x y z]
     (and (>= (.-unk-id s) 0)
@@ -32,6 +32,7 @@
            (and (not (== (aget (.-tbl-kind s) id) WATER))
                 (not (and (pos? t) (zero? (aget (.-tbl-base s) id)) (< t WHOLE)))
                 (not (and (not (zero? cl)) ^boolean (.climbCell s cl id x y z)))
+                (not ^boolean (.shaftAbove s x y z))
                 (not (== (aget (.-tbl-door-half s) id) 1))))))
 
   ;; the unseen cells among the feet and head cells at x y z

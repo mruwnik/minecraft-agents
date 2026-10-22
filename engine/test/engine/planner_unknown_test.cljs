@@ -384,3 +384,18 @@
       w {}
       masked {}
       masked (unk {:id void :seeDepth 4 :seeLit (fn [_ _ _] 1) :known (fn [_ _ _] nil)}))))
+
+;; ---- shafts ----
+
+(def seagrass-id (delay (first (blocks/state-ids @pf/table "seagrass"))))
+
+(deftest a-climb-is-planned-up-the-unseen-cells-above-a-seen-ladder
+  (are [mask props wet-start] (let [w (pf/snapshot {:fill (cond-> [[0 63 2 2 63 2 "stone"]
+                                                                   [1 64 2 1 67 2 "ladder" props]
+                                                                   [1 68 2 1 79 2 mask]
+                                                                   [2 80 2 2 80 2 mask]]
+                                                            wet-start (conj [0 64 2 0 65 2 "water"]))})
+                                    r (run w (pf/near 2 80 2 1) (unk (when (= mask "seagrass") {:id @seagrass-id})))]
+                                (= 79 (apply max (map second (pf/cells r)))))
+    U {:facing "west"} false
+    "seagrass" {:facing "west" :waterlogged "true"} true))

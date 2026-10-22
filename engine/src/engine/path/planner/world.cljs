@@ -6,6 +6,8 @@
 
 (set! *warn-on-infer* true)
 
+(def ^:const SHAFT-REACH 64) ; the most unseen cells a shaft is supposed to go on for above the climbable it was seen on
+
 (extend-type Search
   Object
 
@@ -29,12 +31,25 @@
       (let [below (.stateAt ^js (.-snapshot s) x (dec y) z)]
         (and (not (== below UNLOADED)) (== (aget (.-tbl-climb-name s) below) LADDER)))))
 
+  ;; An unseen cell (options.unknown) straight above a climbable, or above unseen cells that are above one: a shaft goes on
+  ;; until seen otherwise, as unseen land is walked on, so a climb is planned up it and the climb shows the way.
+  (shaftAbove [s x y z]
+    (and (>= (.-unk-id s) 0)
+         (loop [y2 y]
+           (let [id (.stateAt ^js (.-snapshot s) x y2 z)]
+             (cond
+               (== id (.-unk-id s)) (and (> y2 (- y SHAFT-REACH)) (recur (dec y2)))
+               (== id UNLOADED) false
+               :else (and (< y2 y) (let [cl (aget (.-tbl-climb s) id)]
+                                     (and (not (zero? cl)) (not (== cl CLIMB-TRAP-SHUT)) ^boolean (.climbCell s cl id x y2 z)))))))))
+
   (climbHere [s x y z]
     (let [id (.stateAt ^js (.-snapshot s) x y z)]
-      (if (== id UNLOADED)
-        false
-        (let [cl (aget (.-tbl-climb s) id)]
-          (and (not (zero? cl)) ^boolean (.climbCell s cl id x y z))))))
+      (cond
+        (== id UNLOADED) false
+        (== id (.-unk-id s)) ^boolean (.shaftAbove s x y z)
+        :else (let [cl (aget (.-tbl-climb s) id)]
+                (and (not (zero? cl)) ^boolean (.climbCell s cl id x y z))))))
 
   ;; a closed wooden trapdoor above a ladder: entering the cell costs an OPEN
   (shutAt [s x y z]
@@ -169,7 +184,7 @@
               (let [ct (aget (.-tbl-top s) cid)
                     kd (aget (.-tbl-kind s) cid)]
                 (cond
-                  (or (== kd WATER) ^boolean (.lavaIn s kd x k z) ^boolean (.avoids s cid x k z)) false
+                  (or (and (== kd WATER) (not (and (== cid (.-unk-id s)) ^boolean (.shaftAbove s x k z)))) ^boolean (.lavaIn s kd x k z) ^boolean (.avoids s cid x k z)) false
                   (and (zero? (aget (.-tbl-partial s) cid))
                        (or (and (pos? ct) (> (+ (* k 16) ct) lo) (< (+ (* k 16) (aget (.-tbl-base s) cid)) hi))
                            (== kd NARROW))) false
@@ -182,7 +197,8 @@
       (if (== raw UNLOADED)
         -1
         (let [cl (aget (.-tbl-climb s) raw)]
-          (if (and (not (zero? cl)) ^boolean (.climbCell s cl raw x y z))
+          (if (or (and (not (zero? cl)) ^boolean (.climbCell s cl raw x y z))
+                  (and (== raw (.-unk-id s)) ^boolean (.shaftAbove s x y z)))
             (.standClimb s x y z raw cl)
             (.standPlain s x y z raw))))))
 

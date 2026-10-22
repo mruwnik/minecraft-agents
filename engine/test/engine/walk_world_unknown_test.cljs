@@ -108,12 +108,12 @@
 (def air-id (delay (first (blocks/state-ids (blocks/default-state-table) "air"))))
 
 (defn memory-of
-  "(fn [cx sy cz]) a memory (ids + 1) holding the cells as air, nil for a section with none of them."
+  "(fn [cx sy cz]) a memory (ids + 1) holding the cells [x y z] as air (or [x y z id] as that state), nil for a section with none of them."
   [cells]
-  (let [m (reduce (fn [m [x y z]]
+  (let [m (reduce (fn [m [x y z id]]
                     (let [k [(bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4)]
                           ids (or (get m k) (js/Uint16Array. 4096))]
-                      (aset ids (bit-or (bit-shift-left (bit-and y 15) 8) (bit-shift-left (bit-and z 15) 4) (bit-and x 15)) (inc @air-id))
+                      (aset ids (bit-or (bit-shift-left (bit-and y 15) 8) (bit-shift-left (bit-and z 15) 4) (bit-and x 15)) (inc (or id @air-id)))
                       (assoc m k ids)))
                   {} cells)]
     (fn [cx sy cz] (get m [cx sy cz]))))
@@ -135,6 +135,20 @@
       [-14 70 5] true)
     (is (false? (rock? known [[40 60 -9]] [42 58 -11])) "2 from a seed")
     (is (identical? rock/all-rock (rock/rock-section (memory-of []) (rock/open-ids) 3 0 4 0 [])) "nothing seen near: all rock")))
+
+(def ladder-id (delay (first (blocks/state-ids (blocks/default-state-table) "ladder"))))
+(def stone-id (delay (first (blocks/state-ids (blocks/default-state-table) "stone"))))
+
+(deftest an-unseen-cell-straight-above-a-seen-ladder-is-not-rock-until-a-seen-block-ends-the-shaft
+  (let [ladder (for [y (range 66 70)] [5 y 5 @ladder-id])
+        shaft (memory-of ladder)
+        capped (memory-of (conj (vec ladder) [5 75 5 @stone-id]))]
+    (are [known cell rock] (= rock (rock? known [] cell))
+      shaft [5 90 5] false
+      shaft [6 90 5] true
+      shaft [5 50 5] true
+      capped [5 74 5] false
+      capped [5 76 5] true)))
 
 (def pocket-world
   "A body in a 1x2 pocket in a stone mass (x, z -8..8, y 62..67)."
