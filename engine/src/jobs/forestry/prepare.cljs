@@ -1,5 +1,6 @@
 (ns jobs.forestry.prepare
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.price :as price]
+            [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.contract :as contract]
             [jobs.lib.waits :as waits]
@@ -361,7 +362,7 @@
 
 (def meta {:category :phase :part-of '[jobs.forestry.maintain]})
 
-(def safe? (ready/safe-at-by-night (fn [c] (some-> (field/planned c) :trees keys first))))
+(def safe? (price/staying :work (ready/safe-at-by-night (fn [c] (some-> (field/planned c) :trees keys first)))))
 
 (defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
 

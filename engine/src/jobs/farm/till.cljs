@@ -14,6 +14,7 @@
             [jobs.lib.job-common :as common]
             [jobs.lib.gate :as gate]
             [jobs.lib.need :as need]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.work-place :as work-place]
             [jobs.lib.field-area :as fa]
@@ -93,7 +94,7 @@
 
 (def target [:area])
 (def defaults {:use {:tools :till} :spend {:job-time ::job-time-s}})
-(def safe? (ready/safe-at-by-night work-place/spot))
+(def safe? (price/staying :work (ready/safe-at-by-night work-place/spot)))
 
 (defn listed
   "The hoes the call names (:use {:tools [..]}) as a set, or nil when it names none (the engine's default list is not given)."

@@ -1,5 +1,6 @@
 (ns jobs.village.roll
   (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [engine.contract :as contract]
             [engine.settings :as settings]
@@ -66,7 +67,7 @@
 
 (def target [:villager :pos])
 
-(def safe? (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))
+(def safe? (price/staying :work (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c)))))))
 (def fit? ready/fit?)
 
 

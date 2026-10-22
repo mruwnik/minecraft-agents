@@ -1,5 +1,6 @@
 (ns jobs.apiary.guard
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.price :as price]
+            [jobs.lib.ready :as ready]
             [jobs.lib.work-place :as work-place]
             [engine.contract :as contract]
             [engine.settings :as settings]
@@ -279,7 +280,7 @@
 
 (def meta {:category :phase :part-of '[jobs.apiary.maintain]})
 
-(def safe? (ready/safe-at-by-night work-place/spot))
+(def safe? (price/staying :work (ready/safe-at-by-night work-place/spot)))
 (def fit? ready/fit?)
 
 

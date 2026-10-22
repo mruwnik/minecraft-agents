@@ -1,5 +1,6 @@
 (ns jobs.strip.seal
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.price :as price]
+            [jobs.lib.ready :as ready]
             [engine.contract :as contract]
             [engine.args :as a]
             [engine.ctx :as ctx]
@@ -46,7 +47,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s} :use {:blocks :seal}})
 
-(def safe? (ready/safe-at-by-night #(a/cell (:at (:args %)))))
+(def safe? (price/staying :long (ready/safe-at-by-night #(a/cell (:at (:args %))))))
 
 (def fit? ready/ok)
 

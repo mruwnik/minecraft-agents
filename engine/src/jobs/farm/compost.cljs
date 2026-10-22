@@ -10,6 +10,7 @@
             [jobs.lib.job-common :as common]
             [jobs.lib.gate :as gate]
             [jobs.lib.look :as look]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.work-place :as work-place]
@@ -89,7 +90,7 @@
 (def target [:at])
 
 (def defaults {:spend {:job-time ::job-time-s}})
-(def safe? (ready/safe-at-by-night work-place/spot))
+(def safe? (price/staying :work (ready/safe-at-by-night work-place/spot)))
 
 (defn done?
   "Ok once :times bone meal is taken; else later with the bone meal taken and the rest of :times."

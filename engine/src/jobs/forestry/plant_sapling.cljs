@@ -1,5 +1,6 @@
 (ns jobs.forestry.plant-sapling
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.price :as price]
+            [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -59,7 +60,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def safe? (ready/safe-at-by-night (fn [c] (a/cell (or (:at (:args c)) (:near (:args c)))))))
+(def safe? (price/staying :work (ready/safe-at-by-night (fn [c] (a/cell (or (:at (:args c)) (:near (:args c))))))))
 
 (defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
 

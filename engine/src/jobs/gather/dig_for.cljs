@@ -2,6 +2,7 @@
   (:require [jobs.lib.block-sets :as bs]
             [jobs.lib.need :as need]
             [jobs.lib.work-place :as work-place]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [clojure.string :as str]
             [engine.args :as a]
@@ -108,7 +109,7 @@
 
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
-(def safe? (ready/safe-at-or work-place/dig-spot ready/safe-if-lit true))
+(def safe? (price/staying :long (ready/safe-at-or work-place/dig-spot ready/safe-if-lit true)))
 
 (def fit? ready/fit?)
 

@@ -11,6 +11,7 @@
             [jobs.lib.near :as near]
             [jobs.lib.pace :as pace]
             [jobs.lib.shore :as shore]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]))
@@ -51,7 +52,7 @@
 (def ways need/fetch-ways)
 
 (def defaults {:spend {:job-time ::job-time-s}})
-(def safe? (ready/safe-at-or-if-lit #(when (:pos (:args %)) (work-place/spot %))))
+(def safe? (price/staying :work (ready/safe-at-or-if-lit #(when (:pos (:args %)) (work-place/spot %)))))
 (def fit? ready/fit-to-forage)
 
 (defn rod-carried? [c] (boolean (some #(= "fishing_rod" (:name %)) (u/inventory (:primitives c)))))

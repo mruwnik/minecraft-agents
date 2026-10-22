@@ -1,5 +1,6 @@
 (ns jobs.items.smelt
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.price :as price]
+            [jobs.lib.ready :as ready]
             [jobs.lib.waits :as waits]
             [jobs.lib.checks :as checks]
             [clojure.string :as str]
@@ -90,10 +91,17 @@
   (let [inv (carried c)]
     (or (pos? (storage/carried inv "furnace")) (>= (storage/carried inv "cobblestone") 8))))
 
+(defn cook-s
+  "Seconds the cook of the count (a stack when nil) of each item takes at the furnace."
+  [c]
+  (let [{:keys [item count]} (:args c)
+        n (* (or count 64) (if (coll? item) (clojure.core/count item) 1))]
+    (/ (settings/ticks->ms (* n (sp/cook-ticks "furnace"))) 1000)))
+
 (defn exposed-furnace?
-  "Whether a seen furnace at pos is one a player would not walk to: it lies in the dark (readiness :exposed) and the body can put one down where it stands."
+  "Whether a seen furnace at pos is one a player would not walk to: it lies in the dark (readiness :exposed, priced by the whole cook there) and the body can put one down where it stands."
   [c pos]
-  (and (can-put-own? c) (not= :ok (first (ready/exposed c pos)))))
+  (and (can-put-own? c) (not= :ok (first (ready/exposed (assoc c ::price/stay-s (cook-s c)) pos)))))
 
 (defn nearest-furnace
   "The nearest furnace, blast furnace or smoker the body has seen within seen-radius, still that block now, that
@@ -423,12 +431,10 @@
 (def ways need/fetch-ways)
 
 (defn stay-s
-  "Seconds the smelt keeps the body at the furnace: the cook of the count (a stack when nil) of each item and the walk there and back."
+  "Seconds the smelt keeps the body at the furnace: the cook and the walk there and back."
   [c]
-  (let [{:keys [item count]} (:args c)
-        f (furnace-to-reach c)
-        n (* (or count 64) (if (coll? item) (clojure.core/count item) 1))]
-    (+ (/ (settings/ticks->ms (* n (sp/cook-ticks "furnace"))) 1000)
+  (let [f (furnace-to-reach c)]
+    (+ (cook-s c)
        (if f (/ (* 2 (u/dist (u/self-pos c) f)) (cost/walk-blocks-per-s)) 0))))
 
 (def safe? (price/stays (ready/safe-at-by-night furnace-to-reach) stay-s))

@@ -3,6 +3,7 @@
             [engine.settings :as settings]
             [jobs.access.stair.limits :as limits]
             [engine.args :as a]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -55,7 +56,7 @@
 
 (def meta {:category :phase :part-of '[jobs.movement.go-to]})
 
-(def safe? ready/safe-here-by-night)
+(def safe? (price/staying :work ready/safe-here-by-night))
 
 (def fit? ready/fit?)
 

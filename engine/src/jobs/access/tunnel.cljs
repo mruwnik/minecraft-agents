@@ -2,6 +2,7 @@
   (:require [jobs.lib.block-sets :as bs]
             [engine.args :as a]
             [jobs.lib.waits :as waits]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -110,7 +111,7 @@
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop (jobs.access.stair)" :spec #{:seal :stop} :default :seal}
    :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of fetching a tool; unset: bare-handed when no tool can be fetched (jobs.access.stair)" :spec (a/or-of boolean? #{:auto}) :default :auto}})
 
-(def safe? (ready/safe-at-by-night (fn [c] (a/cell (:target (:args c)))) false true))
+(def safe? (price/staying :long (ready/safe-at-by-night (fn [c] (a/cell (:target (:args c)))) false true)))
 
 (def fit? ready/fit?)
 

@@ -12,6 +12,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.standing :as standing]
             [jobs.lib.steps :as steps]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
@@ -81,7 +82,7 @@
 (def target [:area])
 (def ways need/fetch-ways)
 (def defaults {:least 1 :spend {:job-time ::job-time-s}})
-(def safe? (ready/safe-at-by-night work-place/spot))
+(def safe? (price/staying :work (ready/safe-at-by-night work-place/spot)))
 
 (a/defargs settings
   {::min-health {:default 0 :spec (a/num-in 0 20)

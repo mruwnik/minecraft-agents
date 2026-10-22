@@ -1,6 +1,7 @@
 (ns jobs.storage.make-room
   (:require [jobs.lib.block-sets :as bs]
             [jobs.lib.storage :as storage]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.storage.make-room.order :as ord]
             [engine.contract :as contract]
@@ -324,7 +325,7 @@
 
 (def meta {:category :reflex})
 
-(def safe? ready/safe-here-by-night)
+(def safe? (price/staying :work ready/safe-here-by-night))
 (def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s}})

@@ -17,6 +17,7 @@
             [jobs.lib.need :as need]
             [jobs.lib.look :as look :refer [cell-of headings glance!]]
             [jobs.lib.pace :as pace]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.util :as u]
             [jobs.lib.watch :as watch]))
@@ -59,7 +60,7 @@
 
 (def target [:heading])
 
-(def safe? (ready/safe-at-or work-place/ahead ready/safe-if-lit true))
+(def safe? (price/staying :long (ready/safe-at-or work-place/ahead ready/safe-if-lit true)))
 
 (def fit? ready/fit?)
 

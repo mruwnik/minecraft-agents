@@ -1,5 +1,6 @@
 (ns jobs.animals.pen-check
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.price :as price]
+            [jobs.lib.ready :as ready]
             [jobs.lib.work-place :as work-place]
             [clojure.string :as str]
             [engine.args :as a]
@@ -67,7 +68,7 @@
 
 (def safe?
   "Not exposed at the pen: :at, else the middle of its :box or of the cells of :plan."
-  (ready/safe-at-by-night work-place/spot))
+  (price/staying :work (ready/safe-at-by-night work-place/spot)))
 (def fit? ready/ok)
 
 

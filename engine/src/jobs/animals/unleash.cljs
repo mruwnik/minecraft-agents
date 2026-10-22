@@ -1,5 +1,6 @@
 (ns jobs.animals.unleash
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.price :as price]
+            [jobs.lib.ready :as ready]
             [engine.settings :as settings]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -63,7 +64,7 @@
 
 (def target [:mob :animal])
 
-(def safe? ready/safe-here-by-night)
+(def safe? (price/staying :work ready/safe-here-by-night))
 (def fit? ready/ok)
 
 

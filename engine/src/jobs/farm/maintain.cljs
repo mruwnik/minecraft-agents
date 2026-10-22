@@ -11,6 +11,7 @@
             [jobs.lib.field-area :as fa]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.reserve :as rsv]
             [jobs.lib.steps :as steps]
@@ -57,7 +58,7 @@
 (def target [:area])
 (def ways need/fetch-ways)
 (def defaults {:spend {:job-time ::job-time-s}})
-(def safe? (ready/when-fed (ready/safe-at-by-night work-place/spot)))
+(def safe? (price/staying :work (ready/when-fed (ready/safe-at-by-night work-place/spot))))
 
 (def steps [:tidy :tend :compost :deposit])
 

@@ -16,6 +16,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [engine.settings :as settings]
             [jobs.lib.util :as u]
@@ -64,7 +65,7 @@
     (filterv #(bs/farmable-ground (u/seen-name p %)) cs)))
 
 ;; The first step only looks: with no field cell seen there is nothing to risk the dark for. Seen cells bring the exposure check back.
-(def safe-at-box (ready/safe-at-by-night work-place/spot))
+(def safe-at-box (price/staying :work (ready/safe-at-by-night work-place/spot)))
 (def safe?
   (with-meta
    (fn [c] (if (empty? (field-cells c))

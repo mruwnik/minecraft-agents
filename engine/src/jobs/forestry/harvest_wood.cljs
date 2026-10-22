@@ -1,5 +1,6 @@
 (ns jobs.forestry.harvest-wood
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.price :as price]
+            [jobs.lib.ready :as ready]
             [jobs.lib.waits :as waits]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -97,7 +98,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def safe? (ready/safe-at-or-roaming #(fell-tree/place (update % :args fell-args))))
+(def safe? (price/staying :work (ready/safe-at-or-roaming #(fell-tree/place (update % :args fell-args)))))
 
 (def fit? "ready/fit-to-forage: a body only food heals felling wood (a rod, a hoe) is not held for health." ready/fit-to-forage)
 

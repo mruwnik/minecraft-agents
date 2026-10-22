@@ -1,5 +1,6 @@
 (ns jobs.strip.all
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.price :as price]
+            [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -158,7 +159,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def safe? (ready/safe-at-by-night #(a/cell (or (:at (:args %)) (:at (site/site %))))))
+(def safe? (price/staying :long (ready/safe-at-by-night #(a/cell (or (:at (:args %)) (:at (site/site %)))))))
 
 (def fit? ready/fit?)
 

@@ -13,6 +13,7 @@
             [jobs.lib.vantage :as vantage]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.shelter.inside :as sh-inside]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.util :as u]
             [jobs.lib.near :as near]
@@ -82,7 +83,7 @@
   (when-not (or (hostile/hostiles? c) (:hold (:args c)))
     (some-> (first (present c)) .-pos u/pos-of (update-vals js/Math.floor))))
 
-(def safe? (ready/safe-at-or place ready/safe-if-lit))
+(def safe? (price/staying :work (ready/safe-at-or place ready/safe-if-lit)))
 
 (defn fit?
   "ready/fit?, but not for passive animals alone: they cannot hurt the body, and killing one is the way to the food that heals (survival mode only)."

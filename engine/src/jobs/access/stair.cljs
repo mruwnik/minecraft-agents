@@ -1,6 +1,7 @@
 (ns jobs.access.stair
   (:require [jobs.lib.block-sets :as bs]
             [engine.args :as a]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.spent :as spent]
             [engine.contract :as contract]
@@ -94,7 +95,7 @@
 (defn max-returns [] (settings/get settings ::max-returns))
 (defn return-reach [] (settings/get settings ::return-reach))
 
-(def safe? ready/safe-at-from)
+(def safe? (price/staying :work ready/safe-at-from))
 
 (defn dir-of
   "The call's :dir, else the one the first round chose (job memory), else :up or :down toward :y from the feet, else :down."

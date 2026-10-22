@@ -1,5 +1,6 @@
 (ns jobs.animals.breed
   (:require [jobs.lib.work-place :as work-place]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [engine.settings :as settings]
             [engine.args :as a]
@@ -84,8 +85,8 @@
 
 (def target [:mob])
 
-(def safe? (ready/safe-at-or-roaming
-            (fn [c] (work-place/nearest-mob c (remove nil? [(:mob (:args c))]) (or (:radius (:args c)) 16)))))
+(def safe? (price/staying :work (ready/safe-at-or-roaming
+            (fn [c] (work-place/nearest-mob c (remove nil? [(:mob (:args c))]) (or (:radius (:args c)) 16))))))
 (defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
 
 

@@ -1,6 +1,7 @@
 (ns jobs.village.breed
   (:require [clojure.string :as str]
             [jobs.lib.work-place :as work-place]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [engine.settings :as settings]
             [engine.args :as a] [jobs.lib.need :as need]
@@ -84,8 +85,8 @@
 
 (def target [:target])
 
-(def safe? (ready/safe-at-or-roaming
-            (fn [c] (work-place/nearest-mob c (remove nil? ["villager"]) (or (:radius (:args c)) 16)))))
+(def safe? (price/staying :work (ready/safe-at-or-roaming
+            (fn [c] (work-place/nearest-mob c (remove nil? ["villager"]) (or (:radius (:args c)) 16))))))
 (def fit? ready/fit?)
 
 

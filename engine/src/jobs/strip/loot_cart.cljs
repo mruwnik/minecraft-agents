@@ -1,5 +1,6 @@
 (ns jobs.strip.loot-cart
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.price :as price]
+            [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -39,7 +40,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def safe? (ready/safe-at-or-if-lit #(a/cell (:near (:args %)))))
+(def safe? (price/staying :long (ready/safe-at-or-if-lit #(a/cell (:near (:args %))))))
 
 (def fit? ready/fit?)
 

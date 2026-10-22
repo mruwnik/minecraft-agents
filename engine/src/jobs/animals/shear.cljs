@@ -2,6 +2,7 @@
   (:require [engine.game :as game]
             [jobs.lib.waits :as waits]
             [jobs.lib.work-place :as work-place]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [engine.settings :as settings]
             [engine.args :as a]
@@ -65,8 +66,8 @@
 
 (def target [:color])
 
-(def safe? (ready/safe-at-or-roaming
-            (fn [c] (work-place/nearest-mob c (remove nil? ["sheep"]) (or (:radius (:args c)) 16)))))
+(def safe? (price/staying :work (ready/safe-at-or-roaming
+            (fn [c] (work-place/nearest-mob c (remove nil? ["sheep"]) (or (:radius (:args c)) 16))))))
 (defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
 
 

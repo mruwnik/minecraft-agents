@@ -1,5 +1,6 @@
 (ns jobs.animals.maintain
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.price :as price]
+            [jobs.lib.ready :as ready]
             [jobs.lib.work-place :as work-place]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -231,7 +232,7 @@
 
 (def safe?
   "Not exposed at the middle of the pen: its :box, else the box of its plan part."
-  (ready/safe-at-by-night pen-spot))
+  (price/staying :work (ready/safe-at-by-night pen-spot)))
 (defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
 
 

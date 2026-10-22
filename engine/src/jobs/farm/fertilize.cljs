@@ -9,6 +9,7 @@
             [jobs.lib.job-common :as common]
             [jobs.lib.gate :as gate]
             [jobs.lib.need :as need]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.work-place :as work-place]
             [jobs.lib.util :as u]
@@ -74,7 +75,7 @@
 (def target [:area :grass])
 
 (def defaults {:spend {:job-time ::job-time-s}})
-(def safe? (ready/safe-at-by-night work-place/spot))
+(def safe? (price/staying :work (ready/safe-at-by-night work-place/spot)))
 
 (defn raw-targets
   "The positions to fertilize (unripe crops, or open grass with :grass), before the zone rules and the refused ones."

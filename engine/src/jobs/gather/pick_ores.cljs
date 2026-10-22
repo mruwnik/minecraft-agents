@@ -6,6 +6,7 @@
             [jobs.lib.blocks :as blocks]
             [jobs.lib.checks :as checks]
             [jobs.lib.ore-pick :as ore-pick]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]))
 
 (def doc
@@ -45,7 +46,7 @@
 (defn place "The nearest seen ore cell to pick, nil for none." [c]
   (some-> (ore-pick/candidates c (assoc (opts-of c) :skipped (:left (opts-of c)))) first :pos (update-vals js/Math.floor)))
 
-(def safe? (ready/safe-at-or-roaming place))
+(def safe? (price/staying :long (ready/safe-at-or-roaming place)))
 
 (defn can-start?
   [c]

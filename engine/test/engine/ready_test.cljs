@@ -144,6 +144,16 @@
     2 :ok
     1e6 :later))
 
+(deftest a-long-stay-in-the-dark-open-is-refused-where-a-click-is-accepted
+  (let [bare (fn [] (dissoc (ctx-of open-night) ::price/stay-s))
+        status (fn [category] (lit 0 15 #(first ((price/staying category (ready/safe-at (constantly outside))) (bare)))))]
+    (is (= [:ok :later :later] (mapv status [:click :work :long])))))
+
+(deftest a-dark-furnace-is-exposed-for-a-whole-stack-but-not-for-one-item
+  (let [world (assoc open-night :inventory [{:name "furnace" :count 1}])
+        exposed? (fn [n] (lit 0 15 #(smelt/exposed-furnace? (assoc (ctx-of world) :args {:item "raw_iron" :count n}) outside)))]
+    (is (= [false true] (mapv exposed? [1 64])))))
+
 (deftest safe-if-lit-waits-at-night-above-ground
   (are [world expected] (= expected (kind ready/safe-if-lit world))
     open-night :later

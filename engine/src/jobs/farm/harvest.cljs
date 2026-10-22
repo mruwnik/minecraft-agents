@@ -15,6 +15,7 @@
             [jobs.lib.crops :as crops]
             [jobs.lib.look :as look]
             [jobs.lib.reach.room :as reach-room]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.spent :as spent]
             [jobs.lib.work-place :as work-place]
@@ -230,7 +231,7 @@
 
 (def target [:area])
 (def defaults {:least 1 :spend {:job-time ::job-time-s}})
-(def safe? (ready/when-fed (ready/safe-at-by-night work-place/spot)))
+(def safe? (price/staying :work (ready/when-fed (ready/safe-at-by-night work-place/spot))))
 
 (defn problem
   "Why the call cannot start now, a cause map, or nil: no zone list read (unless :ignore-zones?), a plan that cannot be

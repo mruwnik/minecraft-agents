@@ -4,6 +4,7 @@
             [jobs.lib.need :as need]
             [engine.settings :as settings]
             [engine.args :as a]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.access.pillar :as pillar]
             [jobs.lib.pillar :as pl]
@@ -62,7 +63,7 @@
 (defn max-length [] (settings/get settings ::max-length))
 (defn time-s [] (settings/get settings ::job-time-s))
 
-(def safe? ready/safe-at-from)
+(def safe? (price/staying :work ready/safe-at-from))
 
 (def fit? ready/fit?)
 

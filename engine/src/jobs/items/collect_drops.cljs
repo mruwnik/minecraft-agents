@@ -1,6 +1,7 @@
 (ns jobs.items.collect-drops
   (:require [clojure.string :as str]
             [jobs.lib.block-sets :as bs]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [engine.args :as a]
             [engine.contract :as contract]
@@ -80,7 +81,7 @@
              first
              (#(update-vals % js/Math.floor)))))
 
-(def safe? (ready/safe-at-or-roaming place))
+(def safe? (price/staying :work (ready/safe-at-or-roaming place)))
 
 (def fit? ready/ok)
 

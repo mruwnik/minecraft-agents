@@ -19,6 +19,7 @@
             [jobs.lib.look :refer [cell-of heading-name]]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.torch :as torch]
             [jobs.lib.tools :as tools]
@@ -80,7 +81,7 @@
 
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
 
-(def safe? (ready/safe-at-or work-place/dig-spot ready/safe-if-lit true))
+(def safe? (price/staying :long (ready/safe-at-or work-place/dig-spot ready/safe-if-lit true)))
 
 (def fit? ready/fit?)
 

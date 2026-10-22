@@ -200,9 +200,9 @@
       (update (meta safe) ::exposure #(some-> % (lift (fn [_] (contract/ok :dark-near "dark, but within the radius no mob spawns in"))))))))
 
 (defn safe-at-build
-  "safe-at-by-night for a job that builds at the place (f c): dark-near-ok."
+  "safe-at-by-night for a job that builds at the place (f c): dark-near-ok, a long stay."
   [f]
-  (dark-near-ok f (safe-at-by-night f)))
+  (price/staying :long (dark-near-ok f (safe-at-by-night f))))
 
 (defn chest-place "The cell of the chest of c's job (the :chest arg or the known :chest place), nil: none." [c] (storage/chest-of (ctx/view c) (:args c)))
 

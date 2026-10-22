@@ -1,6 +1,7 @@
 (ns jobs.strip.corridor
   (:require [jobs.lib.block-sets :as bs]
             [jobs.lib.waits :as waits]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
@@ -354,7 +355,7 @@
           d (fn [v] (if entry (u/dist entry (cell v)) 0))]
       (cell (if (< (d to) (d from)) to from)))))
 
-(def safe? (ready/safe-at-by-night place))
+(def safe? (price/staying :long (ready/safe-at-by-night place)))
 
 (def fit? ready/fit?)
 

@@ -2,6 +2,7 @@
   (:require [jobs.lib.choose :as choose]
             [engine.settings :as settings]
             [engine.args :as a]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.access.rules :as rules]
@@ -81,7 +82,7 @@
 
 (def purpose :pillar)
 
-(def safe? ready/safe-here-by-night)
+(def safe? (price/staying :work ready/safe-here-by-night))
 
 (def fit? ready/fit?)
 

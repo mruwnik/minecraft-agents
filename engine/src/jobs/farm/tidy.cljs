@@ -7,6 +7,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.pace :as pace]
             [jobs.lib.plan-field :as pf]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [jobs.lib.strays :as strays]
             [jobs.lib.waits :as waits]
@@ -133,7 +134,7 @@
 (def target [:plan :part])
 
 (def defaults {:spend {:job-time ::job-time-s}})
-(def safe? (ready/safe-at-by-night work-place/spot))
+(def safe? (price/staying :work (ready/safe-at-by-night work-place/spot)))
 
 (def can-start? can-run?)
 

@@ -1,6 +1,7 @@
 (ns jobs.animals.lead-to
   (:require [jobs.lib.checks :as checks]
             [jobs.lib.work-place :as work-place]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
             [engine.settings :as settings]
             [engine.args :as a]
@@ -186,8 +187,8 @@
 
 (def target [:mob :pos :fence])
 
-(def safe? (ready/safe-at-or-roaming
-            (fn [c] (work-place/nearest-mob c (remove nil? [(:mob (:args c))]) (or (:radius (:args c)) 8)))))
+(def safe? (price/staying :work (ready/safe-at-or-roaming
+            (fn [c] (work-place/nearest-mob c (remove nil? [(:mob (:args c))]) (or (:radius (:args c)) 8))))))
 (def fit? "Survival mode only: a passive animal cannot hurt the body, so a weak body still brings one to food." checks/survival-mode)
 
 

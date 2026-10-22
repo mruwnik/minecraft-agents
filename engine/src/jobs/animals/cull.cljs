@@ -1,5 +1,6 @@
 (ns jobs.animals.cull
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.price :as price]
+            [jobs.lib.ready :as ready]
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
@@ -61,7 +62,7 @@
 
 (def target [:mob :box :center])
 
-(def safe? (ready/safe-at-by-night work-place/spot))
+(def safe? (price/staying :work (ready/safe-at-by-night work-place/spot)))
 
 
 (a/defargs settings

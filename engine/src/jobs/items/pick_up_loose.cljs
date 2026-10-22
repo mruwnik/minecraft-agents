@@ -1,5 +1,6 @@
 (ns jobs.items.pick-up-loose
-  (:require [jobs.lib.ready :as ready]
+  (:require [jobs.lib.price :as price]
+            [jobs.lib.ready :as ready]
             [clojure.string :as str]
             [jobs.lib.checks :as checks]
             [engine.args :as a]
@@ -33,7 +34,7 @@
           loose/item-pos
           (update-vals js/Math.floor)))
 
-(def safe? (ready/safe-at-or-roaming place))
+(def safe? (price/staying :work (ready/safe-at-or-roaming place)))
 (def fit? ready/ok)
 
 (def defaults {:least 1})
