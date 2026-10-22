@@ -5,12 +5,13 @@
   A trunk whose base cell a zone or claim of another player refuses is not a part-cut tree to finish: it does not hold
   the trigger, nor one whose column fell-tree lately gave up on (:tree-unreachable, 10 min). A finished chore, not a
   forest to clear: it does not hold while the body carries ::max-logs logs or more, nor for a trunk farther than
-  ::home-radius from the remembered home (else bed; with none known the distance is not judged). It does not hold at night: the
+  ::home-radius from the remembered home (else bed; with none known the distance is not judged). It does not hold in the dark (look/dark-here?): the
   night job walks the body in and a felling walk out again would undo it. The sight is read at most every ::recheck-s seconds: a scan of every seen log is too much for each tick."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.body :as body]
             [jobs.lib.access.zones :as zones]
+            [jobs.lib.look :as look]
             [jobs.lib.part-cut :as part-cut]
             [jobs.lib.shelter :as sh]
             [jobs.lib.trees :as trees :refer [default-radius recently-unreachable]]
@@ -60,10 +61,11 @@
         seen))))
 
 (defn part-cut-tree
-  "Holds alive, on the ground, when a part-cut trunk that no other player's zone or claim refuses is in sight."
+  "Holds alive, on the ground, not in the dark, when a part-cut trunk that no other player's zone or claim refuses is in sight."
   [p view _args kn _live]
   (boolean
    (and (not (body/recovery-pending? view :part-cut-tree))
         (not (false? (.-onGround (.self p))))
+        (not (look/dark-here? p))
         (not (stocked? p))
         (trunks-seen? p kn view))))

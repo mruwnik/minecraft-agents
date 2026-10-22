@@ -97,6 +97,12 @@
   (is (false? (holds pct/part-cut-tree (merge (fm/ground [[6 0]]) (lt/tree 6 0 "oak" 4)))))
   (is (false? (holds pct/part-cut-tree wall))))
 
+(deftest the-part-cut-tree-trigger-waits-out-the-dark
+  (let [blocks (merge (fm/ground [[6 0]]) (part-cut 6))
+        at (fn [time] (pct/part-cut-tree (tu/with-light-data (:p (lt/setup {:blocks blocks :time time}))) (view []) {} (ew/of-data {} {} []) nil))]
+    (is (true? (at 6000)))
+    (is (false? (at 14000)) "in the dark the felling walk would leave the night's shelter")))
+
 (deftest the-part-cut-tree-trigger-ignores-a-trunk-in-another-player-s-zone
   (let [blocks (merge (fm/ground [[6 0]]) (part-cut 6))
         zone (fn [owner] [{:name "apiary" :owner owner :min [5 60 -1] :max [7 80 1] :allow #{}}])
