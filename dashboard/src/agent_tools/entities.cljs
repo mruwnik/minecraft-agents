@@ -7,7 +7,7 @@
             ["node:fs" :as fs]
             ["node:path" :as path]))
 
-(def usage "entities.mjs BODY --world WORLD [--type TYPE] [--player NAME] [--dimension DIM] [--center X,Y,Z] [--radius N] [--limit N] [--offset N] [--raw] [--worlds DIR --state LEGACY_PARENT]\nLists entities the body has seen lately, hostile mobs first, then nearest first. :id is the numeric entity id (the one attack targets), :pos is [x y z] blocks, :age-ms how long ago it was seen; a villager row has :profession (unemployed, nitwit, farmer, ...); a :heard row has :direction and :band instead of :pos; :total counts all matches, --limit/--offset page.")
+(def usage "entities.mjs BODY --world WORLD [--type TYPE] [--player NAME] [--dimension DIM] [--center X,Y,Z] [--radius N] [--limit N] [--offset N] [--raw] [--worlds DIR --state LEGACY_PARENT]\nLists entities the body has seen lately, hostile mobs first, then nearest first. :id is the numeric entity id (the one attack targets), :pos is [x y z] blocks, :age-ms how long ago it was seen; a villager row has :profession (unemployed, nitwit, farmer, ...); a sheep row has :color (and :sheared true once sheared); a :heard row has :direction and :band instead of :pos; :total counts all matches, --limit/--offset page.")
 (def default-radius 64)
 (def default-limit 10)
 (def max-radius 512)
@@ -114,6 +114,8 @@
       (:username entity) (assoc :player (:username entity))
       (:baby entity) (assoc :baby true)
       (:profession entity) (assoc :profession (:profession entity))
+      (:color entity) (assoc :color (:color entity))
+      (:sheared entity) (assoc :sheared true)
       (:sense entity) (assoc :sense (:sense entity)))))
 
 (defn project

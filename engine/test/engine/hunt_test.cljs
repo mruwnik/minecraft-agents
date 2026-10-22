@@ -461,6 +461,22 @@
           (is (re-find #"no white sheep" (:text cause)))
           (is (not (finished? s))))))))
 
+(deftest a-colour-hunt-with-only-another-colour-behind-the-body-ends-no-color-not-keep
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory h/sword :entities [(sheep 1 8 "light_gray")]} 20)
+              p (:p s)
+              orig (.-entities p)]
+          (set! (.-entities p)
+                (fn [opts] (let [all (.call orig p opts)]
+                             (if (seq (h/calls p "look")) all (.filter all #(not= "passive" (.-kind %)))))))
+          (core/submit! (:eng s) (spec {:item "white_wool" :count 1 :keep 0 :radius 24}) {})
+          (await (run-ticks s 40 700))
+          (is (empty? (attacked s)))
+          (is (not= :keep (:reason (done-event s))))
+          (is (= [:no-color] (distinct (map #(:reason (or (:cause %) %)) (events-of s :waiting))))))))))
+
 (deftest a-colour-hunt-counts-only-its-colour-against-keep
   (async done
     (tu/run-async done

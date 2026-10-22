@@ -72,6 +72,15 @@
         result (entities/project {:body "ProbeMove" :radius 64 :limit 10 :raw? false} (snapshot now rows))]
     (is (= ["nitwit" nil] (mapv :profession (:items result))))))
 
+(deftest compact-rows-carry-a-sheeps-colour-and-shearing
+  (let [now 1700000000000
+        rows [(entity "self" "player" "overworld" {:x 0 :y 64 :z 0} now 100 119900 {:self? true :username "ProbeMove"})
+              (entity "s1" "sheep" "overworld" {:x 3 :y 64 :z 0} now 10 119990 {:color "light_gray" :sheared true})
+              (entity "s2" "sheep" "overworld" {:x 5 :y 64 :z 0} now 10 119990 {:color "white"})]
+        result (entities/project {:body "ProbeMove" :radius 64 :limit 10 :raw? false} (snapshot now rows))]
+    (is (= ["light_gray" "white"] (mapv :color (:items result))))
+    (is (= [true nil] (mapv :sheared (:items result))))))
+
 (deftest compact-query-centres-on-self-includes-players-and-uses-real-ages
   (let [now 1700000000000
         rows [(entity "self" "player" "overworld" {:x 0.45 :y 64 :z 0.52} now 100 119900 {:self? true :username "ProbeMove"})

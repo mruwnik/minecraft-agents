@@ -4,7 +4,7 @@
 ;; unsheared one and spares the sheared; obtain 2 white wool from 4 white sheep kills 2 and keeps 2; with only brown sheep it
 ;; takes brown (obtain.wool-colour); a pig 8 blocks off is hunted with keep 0.
 ;; d7dfbc02: wool is hunted when the only shears are in a chest the body may not take from; a bed is made from hunted wool.
-;; Should-fail: all white sheep sheared: the hunt stops :no-color; a pig 30 blocks off with radius 24 waits :too-few naming the
+;; Should-fail: all white sheep sheared: the hunt stops :no-color; the same with only a light-gray sheep behind the body (waits :no-color, not done :keep); a pig 30 blocks off with radius 24 waits :too-few naming the
 ;; nearest. A pig in an area 24 blocks off (:center, radius 8) is walked to and hunted.
 {:defaults
  {:tags [:animals :hunt :wool] :time :any
@@ -30,6 +30,12 @@
          [:job (jobs.combat.hunt {:item "white_wool" :count 1})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-color}} :within-s 40 :of-job true}]
    :after [[:entities "type=sheep,tag=wt" [[0 0 0] [31 3 31]] 3]]}
+  {:name "hunt-white-with-only-a-light-gray-sheep-behind-stops-no-color"
+   :body {:at [4.5 0 16.5] :yaw 90 :inventory [["iron_sword" 1]] :settle-s 2}
+   :act [[:summon "sheep" [14.5 0 16.5] "{NoAI:1b,Color:8b}"]
+         [:job (jobs.combat.hunt {:item "white_wool" :count 1 :keep 0})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-color}} :within-s 40 :of-job true}]
+   :after [[:entities "type=sheep,tag=wt" [[0 0 0] [31 3 31]] 1]]}
   {:name "obtain-white-wool-from-four-white-sheep-takes-two"
    :act [[:summon "sheep" [20.5 0 16.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [21.5 0 16.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [20.5 0 18.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [21.5 0 18.5] "{NoAI:1b,Color:0b}"]
          [:job (jobs.items.obtain {:item "white_wool" :count 2 :explore false})]]

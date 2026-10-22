@@ -322,6 +322,7 @@
         (>= (carried c) wanted) (finish! c :count)
         (heard-kind c) (let [r (await (vantage/step! c (heard-kind c) #(seq (present-any c))))]
                          (if (= :partial r) :yield :again))
+        (and (color-of c) (empty? (present c)) (zero? (:killed (ctx/mem c) 0))) (let [d (no-color c)] (ending-of c (:reason d) d))
         (<= (count (present c)) keep) (finish! c :keep)
         (and (nil? next-target) (seq (spare-rules c))) (finish! c :spared)
         (nil? next-target) (await (hunting/search! c #(finish! % :none)))
