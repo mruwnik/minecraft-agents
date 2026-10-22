@@ -51,6 +51,8 @@
            :doc "Any fetch: turning round, finding the pile, the risk of the place one died at, in seconds."}
    ::per-block {:default 0.3 :spec (a/num-in 0.01 nil)
                 :doc "One block walked, there and back about a second of a player's time per 3 blocks."}
+   ::own-place-blocks {:default 8 :spec (a/num-in 0 nil)
+                       :doc "Blocks of walk the placing of a furnace of one's own counts for, on top of making it (jobs.lib.cost/walk-beats-making)."}
    ::per-climb {:default 2 :spec (a/num-in 0 nil)
                 :doc "One block climbed past the first on a detour (stairs or a pillar back out of a drop, or up to a ledge), in seconds."}
    ::per-dark {:default 0 :spec (a/num-in 0 nil)
@@ -200,6 +202,13 @@
   [{:keys [distance danger]}]
   (let [parts {:walk (* (per-block) distance) :danger (* per-danger (or danger 0))}]
     {:cost (reduce + (vals parts)) :parts parts}))
+
+(defn walk-beats-making
+  "Whether walking `distance` blocks to something that exists costs no more than making one's own (cost `make`, in seconds)
+  and walking the own-place-blocks setting to put it down."
+  [{:keys [distance make]}]
+  (<= (:cost (walk-cost {:distance distance}))
+      (+ make (:cost (walk-cost {:distance (settings/get settings ::own-place-blocks)})))))
 
 (defn tour-cost
   "{:cost :parts {:walk :walks}} of a tour of frontiers (walks to the edge of loaded land): the blocks `explored` since

@@ -78,8 +78,6 @@
             (do (ctx/update-mem! c update :fetch-done (fnil conj #{}) stage)
                 (recur more))))))))
 
-(def own-place-blocks 8)
-
 (defn own-possible?
   "Whether the body carries a furnace or the 8 cobblestone to make one."
   [c]
@@ -101,23 +99,25 @@
       (+ (value "cobblestone" stone-short)
          (if (or table? (not wood-short?)) 0 (+ (value "crafting_table" 1) (:cost (cost/walk-cost {:distance surface-dy}))))))))
 
-(defn cheaper-than-own
-  "pos when walking to the seen furnace there costs no more than putting one's own down (a carried furnace, or one made of carried cobblestone, a few blocks' walk for the placing), else nil."
+(defn walk-beats-own?
+  "Whether walking to the furnace at pos costs no more than making one (make-cost) and putting it down here."
   [c pos]
-  (let [me (u/self-pos c)
-        own (+ (make-cost c (js/Math.abs (- (:y pos) (:y me)))) (:cost (cost/walk-cost {:distance own-place-blocks})))]
-    (when (or (not (own-possible? c)) (<= (:cost (cost/walk-cost {:distance (u/dist me pos)})) own))
-      pos)))
+  (cost/walk-beats-making {:distance (u/dist (u/self-pos c) pos)
+                           :make (make-cost c (js/Math.abs (- (:y pos) (:y (u/self-pos c)))))}))
+
+(defn cheaper-than-own
+  "pos when the seen furnace there is walked to rather than putting a carried furnace (or cobblestone for one) down here, else nil."
+  [c pos]
+  (when (or (not (own-possible? c)) (walk-beats-own? c pos))
+    pos))
 
 (defn home-furnace
   "The furnace the body remembers (the :furnace place), not one a walk found unreachable: with anywhere? any distance,
-  else only when walking there (jobs.lib.cost/walk-cost) costs less than making a furnace. nil otherwise."
+  else only when walk-beats-own?. nil otherwise."
   [c anywhere?]
-  (let [pos (mem/place (ctx/view c) :furnace)
-        me (u/self-pos c)]
+  (let [pos (mem/place (ctx/view c) :furnace)]
     (when (and pos (not (contains? (furnace/unreachable-furnaces c) pos))
-               (or anywhere?
-                   (< (:cost (cost/walk-cost {:distance (u/dist me pos)})) (make-cost c (js/Math.abs (- (:y pos) (:y me)))))))
+               (or anywhere? (walk-beats-own? c pos)))
       pos)))
 
 (defn ^:async furnace-fetch!

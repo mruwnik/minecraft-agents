@@ -1096,6 +1096,27 @@
           (is (= {:smelted 3 :wanted 3} (select-keys r [:smelted :wanted])) (pr-str r))
           (is (= 1 (count (furnaces-at p)))))))))
 
+(deftest a-far-remembered-furnace-gives-way-to-the-carried-one-put-down-here
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r p] (await (fetched-run {:blocks {"40,64,0" "furnace"} :floor [-5 -5 50 25]
+                                         :inventory (conj iron-and-coal {:name "furnace" :count 1})}
+                                        {:item "raw_iron" :count 3} {} #(mem/write! (:store %) :furnace {:pos {:x 40 :y 64 :z 0}} mem/place-policy)))]
+          (is (= {:smelted 3 :wanted 3} (select-keys r [:smelted :wanted])) (pr-str r))
+          (is (nil? (:input (get (furnaces-at p) (fake/parse-cell "40,64,0")))) "the far furnace is left alone")
+          (is (= 1 (count (remove #(= (fake/parse-cell "40,64,0") (key %)) (furnaces-at p)))) "its own stands beside the body"))))))
+
+(deftest a-near-remembered-furnace-is-walked-to-though-a-furnace-is-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r p] (await (fetched-run {:blocks {"6,64,0" "furnace"} :inventory (conj iron-and-coal {:name "furnace" :count 1})}
+                                        {:item "raw_iron" :count 3} {}
+                                        #(mem/write! (:store %) :furnace {:pos {:x 6 :y 64 :z 0}} mem/place-policy)))]
+          (is (= {:smelted 3 :wanted 3} (select-keys r [:smelted :wanted])) (pr-str r))
+          (is (= 1 (count (furnaces-at p))) "no second furnace was put down"))))))
+
 (deftest no-furnace-to-be-had-says-why-the-fetch-failed
   (async done
     (tu/run-async done
