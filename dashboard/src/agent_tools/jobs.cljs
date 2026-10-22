@@ -350,7 +350,9 @@
                {:confirmation :not-sent
                 :message "The body is not running (restarting?), so nothing was queued. Wait a little, then send the command again."}
                {:request-id request-id :confirmation :unknown
-                :message (str "The body may or may not have queued this. Repeat the same command with --request-id " request-id " (the body returns the first result if it already ran it); do not submit a new ID.")})))))
+                :message (str (when (= :timeout (http/transport-reason error))
+                                "The engine did not answer in time: it is busy computing or the body is losing its connection (check ./bin/observe; it answers :mode :offline when the body is offline). A request it received is queued once it answers. ")
+                              "The body may or may not have queued this. Repeat the same command with --request-id " request-id " (the body returns the first result if it already ran it); do not submit a new ID.")})))))
 
 (defn follow-command [id] (str "./bin/observe --wait --watch " id))
 

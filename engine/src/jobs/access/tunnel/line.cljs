@@ -128,15 +128,29 @@
   [plan feet]
   (and (zero? (:steps plan)) (= (:entry plan) feet)))
 
+(defn judged-lines
+  "[plan stop] for each line along heading with an entry n before the target, n in ns, in order."
+  [in target heading ns max-length accept feet]
+  (->> ns
+       (mapcat #(fits (or (:column-at in) (:block-at in)) (:floor-at in) target heading % max-length feet))
+       (map (fn [p] [p (line-stop in p accept)]))))
+
+(defn walk-in-ns
+  "The entry distances n whose entry column lies within walk-in-max of feet: the only lines far-entry? lets win by being near."
+  [target heading max-length [fx _ fz]]
+  (filter (fn [n] (let [[ex _ ez] (ahead target heading (- n))]
+                    (<= (+ (* (- ex fx) (- ex fx)) (* (- ez fz) (- ez fz))) (* walk-in-max walk-in-max))))
+          (range 1 (inc max-length))))
+
 (defn best-on-heading
   "{:plan p} for the shortest valid line along heading, else {:stop s} (the shortest fitting line's stop, or
-  :too-far when none fits)."
+  :too-far when none fits). The :near and :level lines are looked for among the entries the body can walk to only."
   [in target heading max-length accept feet]
-  (let [fitting (mapcat #(fits (or (:column-at in) (:block-at in)) (:floor-at in) target heading % max-length feet) (range 1 (inc max-length)))
-        judged (map (fn [p] [p (line-stop in p accept)]) fitting)]
+  (let [judged (judged-lines in target heading (range 1 (inc max-length)) max-length accept feet)]
     (if-let [[p] (first (filter (comp nil? second) judged))]
-      {:plan p :near (some (fn [[q stop]] (when (and (nil? stop) (not (far-entry? q feet))) q)) judged)
-       :level (some (fn [[q stop]] (when (and (nil? stop) (level-from? q feet)) q)) judged)}
+      (let [nearby (judged-lines in target heading (walk-in-ns target heading max-length feet) max-length accept feet)]
+        {:plan p :near (some (fn [[q stop]] (when (and (nil? stop) (not (far-entry? q feet))) q)) nearby)
+         :level (some (fn [[q stop]] (when (and (nil? stop) (level-from? q feet)) q)) nearby)})
       {:stop (or (second (first judged)) {:reason :too-far})})))
 
 (defn cuts-floor?

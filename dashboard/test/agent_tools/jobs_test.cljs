@@ -417,6 +417,12 @@
     (is (re-find #"--request-id abc-1" m) m)
     (is (re-find #"same command" m) m)))
 
+(deftest an-uncertain-timeout-says-the-engine-did-not-answer
+  (let [e (let [e (js/Error. "x")] (aset e "code" "ETIMEDOUT") e)
+        m (:message (jobs/failure-for {:mutating true :request {:request-id "abc-1"}} e))]
+    (is (re-find #"did not answer in time" m) m)
+    (is (re-find #"--request-id abc-1" m) m)))
+
 (defn listing-engine [items]
   (fn [{:keys [method path]}]
     {:text (cond (= "/snapshot" path) "{:generation-id \"generation\"}"

@@ -36,6 +36,13 @@
         [x y z] stand]
     [(+ x dx) y (+ z dz)]))
 
+(deftest a-long-approach-reads-the-world-for-the-near-entries-only
+  (let [reads (atom 0)
+        block-at (fn [cell] (swap! reads inc) ((world-fn {}) cell))
+        a (ln/approach {:block-at block-at :zones [] :footprints #{} :ledger #{}} [-3 37 0] [0 50 0] 96 #{})]
+    (is (= 29 (:length a)))
+    (is (< @reads 40000) @reads)))
+
 (deftest the-surface-of-a-column
   (are [named y] (= y (ln/surface (world-fn named) [3 5] 50 80))
     {} 65
