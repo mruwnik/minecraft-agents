@@ -928,7 +928,9 @@
 (deftest body-events-become-records
   (let [{:keys [eng p seen]} (setup)]
     (.emit (.-world p) #js {:kind "hurt" :health 5})
-    (is (= [{:health 5}] (mapv :data (mem/entries (mem/view (:store eng)) :hurt))))
+    (let [data (:data (first (mem/entries (mem/view (:store eng)) :hurt)))]
+      (is (= 5 (:health data)))
+      (is (every? number? (map (:pos data) [:x :y :z])) "the entry carries the body's position"))
     (hurt/flush! eng #(core/emit! eng %))
     (is (some #(= [:body :hurt] [(:source %) (:kind %)]) @seen) "the merged :hurt event follows its window")))
 

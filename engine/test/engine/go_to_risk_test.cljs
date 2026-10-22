@@ -81,6 +81,21 @@
   [c goal]
   (with-redefs [look/seen-block (constantly {:unknown true})] (risk/estimate c goal)))
 
+(defn with-hits
+  "ctx c remembering :hurt entries [[health pos]] a minute ago, newest last (clock at 10 hours)."
+  [c hits]
+  (let [now 36000000]
+    (assoc c :view (fn [] {:now now :data {:entries {:hurt (mapv (fn [[health pos]] {:t (- now 60000) :data {:health health :pos pos :attacker {:name "skeleton"}}}) hits)}}}))))
+
+(deftest a-hit-down-to-near-death-prices-its-spot-like-a-death-one-spot-for-a-fight
+  (let [c (ready-test/ctx-of day-world)
+        spot {:x 80 :y 64 :z 5}
+        hp-of #(:death-hp (estimate-unseen (with-hits c %) far-goal))]
+    (is (zero? (hp-of [[12 spot]])) "a hit that leaves 12 hp is no near-death")
+    (is (pos? (hp-of [[5 spot]])))
+    (is (= 1 (count (death-spot/recent (with-hits c (for [h (range 5 0 -1)] [h (update spot :x + h)]))))) "a fight's hits are one spot")
+    (is (= 2 (count (death-spot/recent (with-hits c [[5 spot] [5 (update spot :x + 30)]])))))))
+
 (deftest a-recent-death-near-the-goal-adds-its-fight-to-the-risk-even-by-day
   (let [c (ready-test/ctx-of day-world)
         on-way (with-death c {:x 80 :y 64 :z 5} "zombie_villager" 60000)

@@ -182,14 +182,16 @@
 (defn record-body-event!
   "A momentary body event becomes an entry of its kind (:hurt, :died, ...).
   A death also drops every job but the survivors (named in the event's :survived) and joins the :deaths list,
-  whatever runs."
+  whatever runs. A hurt entry carries the body's :pos, for jobs.lib.death-spot."
   [eng e]
   (let [m (js->clj e :keywordize-keys true)
         m (if (= "died" (:kind m))
             (do (hurt/flush! eng #(emit! eng %))
                 (let [kept (drop-jobs-on-death! eng)]
                   (cond-> m (seq kept) (assoc :survived kept))))
-            m)]
+            m)
+        pos (when (= "hurt" (:kind m)) (self-pos (:primitives eng)))
+        m (cond-> m pos (assoc :pos pos))]
     (let [entry (mem/write! (:store eng) (keyword (:kind m)) (dissoc m :kind :survived))]
       (when (= "died" (:kind m)) (record-death! eng entry)))
     (save-memory! eng)

@@ -86,6 +86,18 @@
           (is (= [-12 64 0] (first (dug-cells s))))
           (is (finished? s)))))))
 
+;; the sand east is nearer, but the body was hurt down to 4 hp beside it a minute ago
+(deftest a-target-by-a-near-death-is-dug-last
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks (merge floor {"14,64,4" "sand" "-12,64,0" "sand"})}})]
+          (mem/write! (:store (:eng s)) :hurt {:health 4 :amount 3 :attacker {:name "skeleton"} :pos {:x 14 :y 64 :z 4}})
+          (core/submit! (:eng s) (spec {:block "sand" :count 1 :ways #{:seen}}) {})
+          (await (run-ticks s 30))
+          (is (= [-12 64 0] (first (dug-cells s))))
+          (is (finished? s)))))))
+
 (deftest dirt-is-gathered-from-the-top-layer-only-never-a-pit
   (async done
     (tu/run-async done
