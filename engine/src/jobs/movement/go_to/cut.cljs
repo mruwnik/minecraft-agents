@@ -67,9 +67,20 @@
                           (-> (dissoc :escalation :escalation-from :planned :holes-before)
                               (assoc :restore-pending true))))))
 
-(def session-id
+(defn fresh-session-id [] (str (js/Date.now) "-" (rand-int 1000000000)))
+
+(defonce session (atom (fresh-session-id)))
+
+(defn session-id
   "Names this run of the engine: a call left open by an earlier run was not cut, so it counts for nothing."
-  (str (js/Date.now) "-" (rand-int 1000000000)))
+  []
+  @session)
+
+(defn new-session!
+  "A warm process starting its engine again: the job ids restart, so the earlier run's walk records and open calls must not match."
+  []
+  (reset! approaches {})
+  (reset! session (fresh-session-id)))
 
 (defn cut-state
   "The cut bookkeeping after a call restarts at dist from goal, from m, the call's memory: {:goal :closest :ref :cuts
@@ -78,7 +89,7 @@
   a cut adds one when it begins more than send-back-margin farther than :last-dist, where the cut found the body (a reflex
   sent it back; a meal, a breath, a fight in place or knockback do not, on a detour neither)."
   [m goal dist]
-  (let [cut? (and (= session-id (:open m)) (= goal (:goal m)))
+  (let [cut? (and (= (session-id) (:open m)) (= goal (:goal m)))
         closest (min dist (if cut? (:closest m dist) dist))
         ref (if cut? (:ref m closest) closest)
         improved? (>= (- ref closest) (cut-progress))
@@ -96,7 +107,7 @@
   (let [walked (get @approaches (:id c))
         state (cut-state (merge (ctx/mem c) walked) pos (u/dist (u/self-pos c) pos))]
     (swap! approaches dissoc (:id c))
-    (ctx/update-mem! c #(-> % (assoc :open session-id) (merge state)))
+    (ctx/update-mem! c #(-> % (assoc :open (session-id)) (merge state)))
     state))
 
 (defn way-hostiles

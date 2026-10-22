@@ -303,6 +303,8 @@
   "[dir what] -> {:msg :t} of the last call-guarded warn, so one broken predicate warns once, not every tick."
   (atom {}))
 
+(defn reset-guard-warned! [] (reset! guard-warned {}))
+
 (def guard-repeat-ms 60000)
 
 (defn call-guarded

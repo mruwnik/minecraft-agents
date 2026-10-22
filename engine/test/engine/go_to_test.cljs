@@ -747,7 +747,17 @@
 (defn cut-seed
   "Memory of an earlier call of this session left open at goal [10 64 0] after cuts, cut 3 blocks from it."
   [m]
-  (merge {:open gcut/session-id :goal {:x 10 :y 64 :z 0} :last-dist 3} m))
+  (merge {:open (gcut/session-id) :goal {:x 10 :y 64 :z 0} :last-dist 3} m))
+
+(deftest a-new-session-forgets-the-earlier-runs-walks-and-open-calls
+  (let [goal {:x 10 :y 64 :z 0}
+        m (cut-seed {:closest 3 :ref 3 :cuts 2})
+        before (gcut/session-id)]
+    (swap! gcut/approaches assoc 1 {:last-dist 5})
+    (gcut/new-session!)
+    (is (= {} @gcut/approaches))
+    (is (not= before (gcut/session-id)))
+    (is (zero? (:cuts (gcut/cut-state m goal 10))))))
 
 (deftest a-call-cut-again-sent-back-from-its-closest-approach-gives-up-after-three-cuts
   (async done
@@ -805,7 +815,7 @@
 
 (deftest cut-state-carries-the-reset-count-of-the-same-goal-only
   (let [goal {:x 10 :y 64 :z 0}
-        m {:open gcut/session-id :goal goal :closest 4 :ref 4 :cuts 1 :last-dist 4 :resets 2}]
+        m {:open (gcut/session-id) :goal goal :closest 4 :ref 4 :cuts 1 :last-dist 4 :resets 2}]
     (is (= 2 (:resets (gcut/cut-state m goal 4))))
     (is (= 0 (:resets (gcut/cut-state (assoc m :goal {:x 30 :y 64 :z 0}) goal 4))))
     (is (= 0 (:resets (gcut/cut-state (assoc m :open "old-run") goal 4))))))
@@ -842,7 +852,7 @@
 
 (deftest cut-state-counts-only-a-restart-sent-back-from-where-the-cut-found-the-body
   (let [goal {:x 10 :y 64 :z 0}
-        m {:open gcut/session-id :goal goal :closest 4 :ref 4 :cuts 1 :last-dist 4}]
+        m {:open (gcut/session-id) :goal goal :closest 4 :ref 4 :cuts 1 :last-dist 4}]
     (doseq [[why m dist cuts] [["in place (a meal, a breath, a fight)" m 4 1]
                                ["knockback of half a block" m 4.5 1]
                                ["in place on a detour, far from the closest" (assoc m :last-dist 12) 12.3 1]

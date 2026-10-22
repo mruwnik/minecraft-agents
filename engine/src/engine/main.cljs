@@ -3,6 +3,8 @@
   (:require [engine.args :as a]
             [engine.bodies :as bodies]
             [engine.core :as core]
+            [engine.core.base :as base]
+            [jobs.movement.go-to.cut :as go-to-cut]
             [engine.entity-observations :as entity-observations]
             [engine.fsutil :as fsu]
             [engine.event-api :as event-api]
@@ -286,6 +288,8 @@
   "Runs the body for argv args; resolves to its stop fn, or exits with the error."
   [args]
   (settings/set-clock! 20 false :assumed)
+  (base/reset-guard-warned!)
+  (go-to-cut/new-session!)
   (-> (run (parse-args args))
       (.then (fn [{:keys [error stop exit-code]}]
                (when error (fail! error (or exit-code 2)))

@@ -1,5 +1,5 @@
 ;; Card 6c9b3d05: the runner keeps one body process across cases (restarted in place), so a case must start as clean as on a new
-;; process. The first case leaves a body setting, a seeded memory entry, carried bread, a queued job and a register entry behind; the
+;; process. The first case leaves a body setting, a seeded memory entry, carried bread, a go-to walk record, a queued job and a register entry behind; the
 ;; second runs right after it in the same file (the runner's warm process) and sees none of them. Should-succeed: the second case
 ;; alone also passes (nothing to leak). Should-fail: a warm restart that keeps any of the state shows in the second case's checks.
 {:defaults
@@ -20,6 +20,7 @@
   {:name "next-case-starts-clean"
    :act [[:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}]
          [:cli "observe" ["$body" "--world" "$world" "settings"] {:settings {:engine.backoff/after {:layer :code}}}]
-         [:wait-s 5]]
-   :expect [{:no-event {:source :reflex :kind :fired} :for-s 5}]
-   :after [[:item "bread" 0] [:body-near [16.5 0 16.5] 3]]}]}
+         [:job (jobs.movement.go-to {:pos #at [16 0 30] :range 1})]]
+   :expect [{:no-event {:source :reflex :kind :fired} :for-s 5}
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}]
+   :after [[:item "bread" 0] [:body-near [16.5 0 30.5] 3]]}]}

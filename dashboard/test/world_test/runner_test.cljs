@@ -13,11 +13,11 @@
   (let [argv (vec (r/body-argv {:body "B" :world "w"} "/tmp/s.edn"))
         script (.indexOf argv "out/body-release.cjs")]
     (is (= ["--max-old-space-size=160" "--heap-growing-percent=100" "--max-semi-space-size=8"] (subvec argv 0 script)))
-    (is (= ["--agent" "B" "--world" "w" "--scenario" "/tmp/s.edn" "--fresh"]
+    (is (= ["--agent" "B" "--world" "w" "--scenario" "/tmp/s.edn" "--warm" "--fresh"]
            (vec (drop (inc script) argv))))))
 
-(deftest a-warm-launch-adds-warm
-  (is (some #{"--warm"} (r/body-argv {:body "B" :world "w" :warm-bodies true} "/tmp/s.edn"))))
+(deftest a-cold-launch-leaves-out-warm
+  (is (not-any? #{"--warm"} (r/body-argv {:body "B" :world "w" :cold-bodies true} "/tmp/s.edn"))))
 
 (deftest a-restoring-launch-keeps-engine-edn-by-leaving-out-fresh
   (is (not-any? #{"--fresh"} (r/body-argv {:body "B" :world "w"} "/tmp/s.edn" true))))
