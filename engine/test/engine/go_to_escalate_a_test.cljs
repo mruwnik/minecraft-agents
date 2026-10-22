@@ -50,6 +50,12 @@
          (escape/choose (tu/fake (assoc on-ledge :inventory [{:name "cobblestone" :count 8}])) [0 66 0] [8 70 0])))
   (is (= {:step :none :why :no-wall} (escape/choose (tu/fake on-ledge) [0 66 0] [8 70 0]))))
 
+(deftest escape-choose-ledge-stair-skips-a-heading-whose-first-floor-is-a-stand-of-the-bodys-own-stair
+  (let [p (tu/fake (assoc on-ledge :inventory [{:name "cobblestone" :count 8}]))
+        step (escape/choose p [0 66 0] [8 70 0] (constantly true) {:stands #{[1 66 0]}})]
+    (is (= :stair (:step step)))
+    (is (not= :east (:heading step)) "the stair job refuses :undercuts-way on that cell")))
+
 (deftest escape-choose-pillars-only-with-enough-blocks
   (is (= {:step :pillar :height 2 :item "dirt"}
          (escape/choose (tu/fake (merge in-pit {:blocks pit :inventory [{:name "dirt" :count 2}]})) [0 61 0] [10 64 0]))

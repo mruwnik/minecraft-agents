@@ -8,6 +8,7 @@
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.escape :as escape]
             [jobs.lib.escape.span :as span]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.places :as places]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
@@ -103,7 +104,7 @@
         block-at (escape/block-at-of p)
         may-dig? (holes/may-dig-fn c)
         own? (holes/own-placed-fn c)
-        opts {:own? own? :skip skip :fetch? (choose/fetch-tool? p (:doors (:walk (:args c)))) :pillar-item (escape/pillar-item c)}
+        opts {:own? own? :skip skip :fetch? (choose/fetch-tool? p (:doors (:walk (:args c)))) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c)}
         stair-from (fn [cell] (span/down-stair block-at cell goal may-dig? own? skip))
         stair (when (allowed? c :stair)
                 (let [here (stair-from feet)

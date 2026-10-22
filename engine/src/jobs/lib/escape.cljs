@@ -373,7 +373,7 @@
   "How a body at feet (a cell) that cannot walk to goal (a cell) can make a way, cheapest first. It only ever digs
   natural terrain (natural?) and blocks it placed itself (opts :own?, (own? cell block)) in cells (may-dig? cell)
   allows (go-to: no other owner's zone or claim); opts :pillar-item ({:item :count} or nil, escape/pillar-item) replaces the climb block read from the inventory. opts :skip is a set of steps that already failed (a stair heading
-  that failed: [:stair :east]): the next one is chosen; opts :approached, the cells an approach already walked to.
+  that failed: [:stair :east]): the next one is chosen; opts :approached, the cells an approach already walked to; opts :stands, the feet cells of the body's own stairs (a ledge stair's first floor never lands on one: the stair job refuses :undercuts-way).
   - {:step :pillar :height n :item}: in a pit d deep with room above the head and at least n pillar blocks carried: n
     the rim-pillar (d - 1, then a step onto the rim), d when no side has a rim to step onto. First only when the
     column over the pit is seen to be clear to the top; with an unseen or solid cell in it, after the dig ways.
@@ -395,7 +395,7 @@
     the block over the head; :no-dig: nothing natural and allowed to dig; :no-wall: no wall to walk to."
   ([p feet goal] (choose p feet goal (constantly true)))
   ([p feet goal may-dig?] (choose p feet goal may-dig? nil))
-  ([p feet goal may-dig? {:keys [own? skip approached] :or {own? (constantly false) skip #{} approached #{}} :as opts}]
+  ([p feet goal may-dig? {:keys [own? skip approached stands] :or {own? (constantly false) skip #{} approached #{} stands #{}} :as opts}]
    (let [approached (or approached #{})
          block-at (block-at-of p)
          dir (heading feet goal)
@@ -417,7 +417,7 @@
                         (some (fn [n] (some-> (stair-heading block-at feet stair-dirs n may-dig? own?) (vector n)))
                               (range (max-depth) 0 -1))))
          ledge (delay (when (and item (not (skip :stair)) (pos? rise) (not (walled-side? block-at feet)))
-                        (stair-heading block-at feet stair-dirs rise may-dig? own? true)))
+                        (stair-heading block-at feet (remove #(contains? stands (ahead feet % 1)) stair-dirs) rise may-dig? own? true)))
          gap (when (and dir (not (skip :clear-path))) (door block-at (unseen-of p) feet dir (max-door)))
          spot (delay (when (and dir (not (skip :approach)) (not (skip :clear-path)) (walled-side? block-at feet))
                        (door-spot p feet dir #(diggable? block-at may-dig? own? %) approached)))

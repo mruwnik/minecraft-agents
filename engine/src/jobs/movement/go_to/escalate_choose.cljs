@@ -334,7 +334,7 @@
     (let [p (:primitives c)
           feet (end/feet-cell c)
           goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
-          opts {:own? (own-placed-fn c) :skip (skips c) :fetch? (fetch-tool? c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c)}
+          opts {:own? (own-placed-fn c) :skip (skips c) :fetch? (fetch-tool? c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c)}
           may-dig? (may-dig-fn c)]
       (or (dig-way p feet goal may-dig? opts)
           (when (> (second goal) (second feet))
@@ -374,7 +374,7 @@
         back (:own-floor c)
         cheaper? (and (not (:stair-tried m)) (>= (- (second goal) (second feet)) stair-first-rise))
         retreats? (>= (second goal) (second feet))
-        chosen (delay (escape/choose (:primitives c) feet goal (may-dig-fn c) {:own? (own-placed-fn c) :skip (skips c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c)}))
+        chosen (delay (escape/choose (:primitives c) feet goal (may-dig-fn c) {:own? (own-placed-fn c) :skip (skips c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c)}))
         stair (delay (when (= :stair (:step @chosen)) @chosen))
         way (delay (not (#{:none :approach} (:step @chosen))))]
     (when (and (ways/way? c :stair) (not (sh-inside/sheltered-in c)) (or cave cheaper? back retreats?))

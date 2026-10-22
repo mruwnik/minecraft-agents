@@ -160,7 +160,7 @@
         n (:fruitless counted)
         _ (when (<= n (tuning/max-escalations)) (await (look-round! c feet)))
         goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
-        opts {:own? (own-placed-fn c) :skip (skips c) :fetch? (fetch-tool? c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c)}
+        opts {:own? (own-placed-fn c) :skip (skips c) :fetch? (fetch-tool? c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c)}
         into? (goal-walled? c result)
         ;; a goal over or ringed by lava is refused: no dig, in or out, makes it acceptable
         lava-goal? (and (= :goal-enclosed (some-> (:reason result) keyword)) (goal-lava? (:primitives c) goal))
@@ -339,7 +339,7 @@
              block-at (escape/block-at-of p)
              may-dig? (may-dig-fn c)]
          (not= :none (:step (escape/choose p (end/feet-cell c) goal #(and (may-dig? %) (not (tools/needs-tool-to-clear? p (block-at %))))
-                                           {:own? (own-placed-fn c) :skip (conj (skips c) (skip-key e)) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c)}))))))
+                                           {:own? (own-placed-fn c) :skip (conj (skips c) (skip-key e)) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c)}))))))
 
 (defn ^:async escalation-failed!
   "The child stopped or would wait: when it changed something, walk again (escalation-stopped!); when it had no tool
