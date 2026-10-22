@@ -109,11 +109,12 @@
     (contract/ok :no-hostile-near "no hostile near")))
 
 (defn unarmed-threatened
-  "Later :hostile-near while no weapon is carried and a hostile is known within jobs.lib.dawn's hostile radius (seen,
-  heard or remembered; jobs.lib.dawn/::with-hostile lifts it): a player with bare hands does not set out with one about."
+  "Later :hostile-near while no weapon is carried and a hostile with a way to the body is known within jobs.lib.dawn's
+  hostile radius (seen, heard or remembered; jobs.lib.dawn/::with-hostile lifts it): a player with bare hands does not
+  set out with one about, but one behind rock cannot reach the bench where the weapon is made."
   [c]
   (if (and (not (combat/best-weapon (:primitives c) combat/default-weapons))
-           (check-cache/cached c ::unarmed-threatened #(dawn/hostile-known? (:primitives c))))
+           (check-cache/cached c ::unarmed-threatened #(dawn/hostile-known? (:primitives c) {:way? true})))
     (contract/later :hostile-near "no weapon carried and a hostile is known near")
     (contract/ok :armed-or-clear "a weapon is carried or no hostile is known near")))
 

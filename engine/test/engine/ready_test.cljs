@@ -205,9 +205,15 @@
 
 (def far-husk {:id 9 :name "husk" :kind "hostile" :pos {:x 30 :y 64 :z 0}})
 
+(def walled-in-husk
+  (let [box (fn [x0 x1] (merge (tu/box x0 63 -2 x1 63 2 "stone") (tu/box x0 67 -2 x1 67 2 "stone") (tu/box x0 64 -2 x1 66 -2 "stone")
+                              (tu/box x0 64 2 x1 66 2 "stone") (tu/box x0 64 -2 x0 66 2 "stone") (tu/box x1 64 -2 x1 66 2 "stone")))]
+    {:entities [far-husk] :blocks (box 28 32)}))
+
 (deftest an-unarmed-body-waits-while-a-hostile-is-known-within-the-dawn-radius
   (are [world expected] (= expected (first (ready/unarmed-threatened (ctx-of (merge at-origin world)))))
     {:inventory [] :entities [far-husk]} :later
+    (assoc walled-in-husk :inventory []) :ok
     {:inventory sword :entities [far-husk]} :ok
     {:inventory []} :ok))
 

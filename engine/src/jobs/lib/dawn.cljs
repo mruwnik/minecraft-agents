@@ -18,16 +18,18 @@
 (defn known-dangers
   "The hostiles within ::hostile-radius the body has sensed, seen, heard or remembered (jobs.lib.danger/dangers; a melee
   one needs no way to the body, which waits behind walls: it stands where the body's walk out will land; a ranged one a
-  line of fire), nearest first; none while ::with-hostile is set."
-  [p]
-  (if (settings/get settings ::with-hostile)
-    []
-    (danger/dangers p (settings/get settings ::hostile-radius) {:ranged-radius (danger/ranged-radius)} {:way? false})))
+  line of fire), nearest first; none while ::with-hostile is set. (known-dangers p {:way? true}) keeps only the ones with
+  a way to the body, for a check of a job that walks out only as far as it needs."
+  ([p] (known-dangers p {:way? false}))
+  ([p danger-opts]
+   (if (settings/get settings ::with-hostile)
+     []
+     (danger/dangers p (settings/get settings ::hostile-radius) {:ranged-radius (danger/ranged-radius)} danger-opts))))
 
 (defn hostile-known?
-  "Whether a real danger is known within ::hostile-radius (known-dangers), unless ::with-hostile is set."
-  [p]
-  (boolean (seq (known-dangers p))))
+  "Whether a real danger is known within ::hostile-radius (known-dangers, same danger-opts), unless ::with-hostile is set."
+  ([p] (boolean (seq (known-dangers p))))
+  ([p danger-opts] (boolean (seq (known-dangers p danger-opts)))))
 
 (defn describe
   "{:kind :pos :distance :how} of hostile e: how is :seen, :heard or :remembered (with :age-s since it was last sensed)."
