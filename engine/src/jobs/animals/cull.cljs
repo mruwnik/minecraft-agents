@@ -164,10 +164,12 @@
     (cond
       target (await (hunting/attack! c (attack-opts c)))
       collecting (await (hunting/collect! c :yield))
-      (not (look/surveyed? c)) (let [r (await (look/survey! c))] ; cows count only while in view
+      (not (look/surveyed? c)) (let [keep (:keep (:args c))
+                                     r (await (look/survey-until! c #(> (count (:adults (census c))) keep)))] ; cows count only while in view, and only inside the cone of the look: test between looks
+                                 (when r (ctx/update-mem! c assoc :looked (look/cell-of (u/self-pos c))))
                                  (if (and (zero? (:killed (ctx/mem c) 0)) (= :ok (first (done? c))))
                                    (ctx/end c :done :already (result c :keep))
-                                   r))
+                                   :continue))
       :else
       (let [next-target (first (candidates c (:adults (census c))))]
         (cond

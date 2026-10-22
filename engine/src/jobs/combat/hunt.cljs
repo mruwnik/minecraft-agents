@@ -137,9 +137,16 @@
   [c]
   (let [{:keys [radius]} (:args c)
         mob (mob-name c)
-        nearest (first (adults-within c (max radius (settings/get settings ::sight-radius))))]
+        seen (some-> (first (adults-within c (max radius (settings/get settings ::sight-radius)))) .-distance)
+        nearest (if seen (min seen (:nearest-seen (ctx/mem c) ##Inf)) (:nearest-seen (ctx/mem c)))]
     (cond-> {:reason :too-few :mob mob :keep (keep-of c) :in-range (count (present c)) :radius radius}
-      nearest (assoc :nearest (js/Math.round (.-distance nearest))))))
+      nearest (assoc :nearest (js/Math.round nearest)))))
+
+(defn note-nearest!
+  "Remembers the nearest adult in view now: the survey's last look may face away from the one the wait names."
+  [c]
+  (when-let [d (some-> (first (adults-within c (max (:radius (:args c)) (settings/get settings ::sight-radius)))) .-distance)]
+    (ctx/update-mem! c update :nearest-seen #(min d (or % ##Inf)))))
 
 (defn armed?
   "Whether a carried item is one of the call's :use :tools (default jobs.lib.combat/default-weapons), each an item name or part of one."
@@ -291,7 +298,7 @@
   face the first one seen, so the next step sees it. :again, which runs can-run? (the start fact) before the next step: a hunt with
   nothing in sight then waits :too-few."
   [c]
-  (when-let [e (await (look/survey-until! c #(first (present-any c))))]
+  (when-let [e (await (look/survey-until! c #(do (note-nearest! c) (first (present-any c)))))]
     (ctx/update-mem! c assoc :looked (look/cell-of (u/self-pos c)))
     (await (ctx/act c :look (clj->js {:pos (.-pos e)}))))
   :again)

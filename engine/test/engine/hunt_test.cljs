@@ -359,6 +359,17 @@
                    (select-keys cause [:reason :mob :killed :keep :in-range :radius :nearest])) note)
             (is (= (pos? (:keep want)) (str/includes? (:text cause) "keeping")) note)))))))
 
+(deftest the-too-few-wait-names-the-nearest-seen-in-an-early-look-of-the-survey
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (h/setup {:inventory h/sword :entities [(animal 1 "pig" 36)]})
+              entities (.-entities p)
+              looks #(count (filter (fn [call] (= "look" (.-name call))) (.-calls (.-world p))))
+              _ (aset p "entities" (fn [q] (if (<= (looks) 4) (.call entities p q) #js [])))
+              cause (:cause (:ending (await (tu/child-outcome eng 'jobs.combat.hunt {:item "porkchop" :keep 0 :radius 24} 60))))]
+          (is (= 36 (:nearest cause)) "the pig was in the cone of an early look, not of the last"))))))
+
 ;; ------------------------------------------------------------------ heard, not seen
 
 (defn north-cow [id z] (animal id "cow" 0 {:pos {:x 0 :y 64 :z z} :drops cow-drops}))

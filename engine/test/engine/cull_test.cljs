@@ -317,5 +317,18 @@
           (is (= 2 (:killed (done-event s))) "the four cows were seen before the goal was judged")
           (is (= 2 (count (world-ids s)))))))))
 
+(deftest a-herd-seen-in-one-look-is-judged-before-the-survey-turns-away
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup {:inventory h/sword :entities [(cow 1 3)]} 50)
+              p (:p s)
+              entities (.-entities p)
+              looks #(count (filter (fn [call] (= "look" (.-name call))) (.-calls (.-world p))))]
+          (aset p "entities" (fn [q] (if (<= (looks) 4) (.call entities p q) #js [])))
+          (core/submit! (:eng s) (spec {:keep 0 :count 1}) {})
+          (await (tu/run-ticks (:eng s) (:clock s) 40 700))
+          (is (= #{1} (set (attacked s))) "the cow in the cone of an early look is culled, not lost to the last look"))))))
+
 (deftest a-cull-with-no-mob-is-bad-args
   (is (= :never (first (cull/bad-args {:args {:keep 0}})))))
