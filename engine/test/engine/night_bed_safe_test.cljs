@@ -194,6 +194,19 @@
           (is (empty? (st/entries eng :bed-walk-unsafe)) "staying out here costs as much as the walk")
           (is (seq (st/calls raw "sleep")) "it walks to the bed and sleeps"))))))
 
+(deftest a-body-on-dark-open-ground-does-not-walk-to-a-far-bed-it-could-shelter-from
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [bed {:x 120 :y 64 :z 0}
+              {:keys [eng raw clock]} (setup (assoc on-open-ground :floor [-10 -5 130 5] :blocks {"120,64,0" "red_bed"}))]
+          (st/know-bed! eng bed)
+          (swap! clock + (* 4 sh-clock/ms-per-day))
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (st/tick-n eng 12))
+          (is (= [bed] (map :pos (st/entries eng :bed-walk-unsafe))) "the walk's dark costs more than sheltering here")
+          (is (empty? (st/calls raw "sleep"))))))))
+
 (def dusk
   "Night by the clock (a bed takes a sleeper), the sky not dark yet."
   12550)

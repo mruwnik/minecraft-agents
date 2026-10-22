@@ -1,0 +1,19 @@
+;; Card e9c70623 (Wicken #147): the night walked the body 564 blocks over dark open ground to its spawn bed. night/bed-walk-hp
+;; prices staying put as at most ::shelter-here-s (20 s) exposed, the time to shelter where it stands, not the whole walk.
+;; Overdue (max-days-awake 0): the bed 114 blocks off is within the urgent bed radius.
+;; Should-succeed: night.bed-walk-unsafe, no sleep, the body shelters near its start. Should-fail: it walks to the bed and sleeps.
+;; Needs the night (bed use is decided by the clock).
+{:defaults
+ {:tags [:night :survival :bed]
+  :time :night :time-why :sleep
+  :plot {:light :sky :length 128 :width 16 :height 6}
+  :body {:at [6.5 0 6.5] :effects [["resistance" 600 4]] :settle-s 3 :inventory [["cobblestone" 32]]}
+  :limit-s 130}
+ :cases
+ [{:name "a-bed-114-blocks-over-dark-open-ground-is-not-walked-to"
+   :blocks [[:set [120 0 6] "red_bed[facing=east,part=foot]"] [:set [121 0 6] "red_bed[facing=east,part=head]"]]
+   :memory [{:kind :bed :data {:pos #xyz [120 0 6]} :policy {:cap 1 :ttl :forever}}]
+   :act [[:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0 :jobs.lib.shelter.beds/max-days-awake 0}})]]
+   :expect [{:event {:source :job :kind :night.bed-walk-unsafe} :within-s 40}
+            {:no-event {:source :action :kind :done :data {:name "sleep"}} :for-s 100}]
+   :after [[:body-near [6.5 0 6.5] 4]]}]}

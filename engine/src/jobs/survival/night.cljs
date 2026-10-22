@@ -75,7 +75,8 @@
 
 (a/defargs settings
   {::job-time-s {:default 2400 :doc "Seconds the night may take: a bound against a runaway night (the night itself ends it in about 10 minutes)." :spec (a/num-in 0 nil)}
-   ::wall-time-s {:default 3600 :doc "Seconds the night may last from its start, its yields to other jobs included." :spec (a/num-in 0 nil)}})
+   ::wall-time-s {:default 3600 :doc "Seconds the night may last from its start, its yields to other jobs included." :spec (a/num-in 0 nil)}
+   ::shelter-here-s {:default 20 :doc "Seconds a body takes to shelter where it stands (dig in, wall in): staying put instead of a walk to bed is exposed this long at most." :spec (a/num-in 0 nil)}})
 
 (def target [])
 
@@ -424,7 +425,8 @@
 (defn bed-walk-hp
   "{:walk :stay}: the hp the walk to bed is expected to cost (spawns over its seconds in the dark, the planner's
   :dark-seconds over jobs.lib.cost/dark-factor of the kit; the fight with the hostiles known near its way) against
-  staying put as long (spawns at the feet unless underground or lit by a block (the sky's light goes with the night); the hostiles known near the body), both
+  staying put (spawns at the feet unless underground or lit by a block (the sky's light goes with the night), over the walk's seconds but no longer than
+  ::shelter-here-s, the shelter here closing them out; the hostiles known near the body), both
   priced by jobs.lib.price/stay-hp and jobs.lib.cost/fight-damage. r is go-to's quoted route."
   [c bed r]
   (let [p (:primitives c)
@@ -439,7 +441,7 @@
                              0)))
         here (if (or (sh-sense/buried? p) (pos? (or (sh-sense/block-light-at p (sh-sense/feet p)) 0))) 0 chance)]
     {:walk (+ (price/stay-hp c chance dark-s) (fight bed))
-     :stay (+ (price/stay-hp c here secs) (fight (u/self-pos c)))}))
+     :stay (+ (price/stay-hp c here (min secs (settings/get settings ::shelter-here-s))) (fight (u/self-pos c)))}))
 
 (defn ^:async bed-walk-safe?
   "Whether the night may walk to bed: within 2 blocks, or go-to's quote finds a whole route there whose expected hp
