@@ -135,7 +135,7 @@
                                               :text (str "mine walked out of zone " (:name zn) " to " (str/join "," (access/cell here)) " before it digs")})
           (ctx/update-mem! c assoc :start here :resume-at here)
           :again)
-      :else (end-run c {:got 0 :reason :zone-exit :mended 0
+      :else (end-run c {:got 0 :reason :zone-exit :zone (:name zn) :cell (access/cell here) :mended 0
                         :text (str "mine could not get out of zone " (:name zn) " before it digs")}))))
 
 (defn ^:async back-to-resume!
@@ -150,7 +150,7 @@
       (= :continue r) :continue
       (= (access/cell cell) (access/cell (cell-of (u/self-pos c)))) :again
       (get-in r [:data :arrived]) (do (ctx/update-mem! c assoc :resume-at (cell-of (u/self-pos c))) :again)
-      :else (end-run c {:got 0 :reason :not-back :mended 0
+      :else (end-run c {:got 0 :reason :not-back :cell (access/cell cell) :mended 0
                         :text (str "mine could not get back to " (str/join "," (access/cell cell)) " after getting its tools")}))))
 
 (defn ^:async fetch-pickaxe!
