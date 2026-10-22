@@ -1,6 +1,6 @@
 ;; Cards e37f0b2c, c2dd1070, bf6983ae: a body buried in a pocket 18 below the surface goal, its only open way leading 12 down and round (a staircase
-;; east (3 high columns: the body must clear its head on each drop), a tunnel at y 0, a ladder shaft at x 60), does not plan the dive past :climb-dip (set to 8 here; default 24): with a pickaxe it cuts a stair
-;; up (go-to.escalated :stair :why :way-dives) and arrives; with :ways #{:walk} it gives up unarrived and digs nothing.
+;; east (3 high columns: the body must clear its head on each drop), a tunnel at y 0, a ladder shaft at x 60), does not plan the dive past :climb-dip (set to 8 here; default 24): in the dark it
+;; sees only the stair's top, reads the rock past it as rock and runs out of land, so with a pickaxe it cuts a stair up (go-to.escalated :stair :why :exhausted) and arrives; with :ways #{:walk} it gives up unarrived and digs nothing.
 ;; go-home (c2dd1070) from the same pocket with no pickaxe digs that stair by hand (go-to.by-hand) and the body never walks down.
 ;; Stone mass x 2..61, y 0..29 (surface feet y 30); pocket x 4..6, y 12..13, z 16; goal [6 30 16] straight above.
 {:defaults
@@ -20,7 +20,7 @@
  :cases
  [{:name "only-way-dives-so-a-stair-up-is-cut"
    :act [[:job (jobs.movement.go-to {:pos #at [6 30 16] :range 1})]]
-   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair :why :way-dives}} :within-s 90 :of-job true}
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair :why :exhausted}} :within-s 90 :of-job true}
             {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 300 :of-job true}
             {:no-event {:source :job :kind :go-to.restored} :for-s 300 :until {:source :job :kind :completed :data {:arrived true}}}]
    :after [[:body-near [6.5 30 16.5] 3]
@@ -36,7 +36,7 @@
    :body {:inventory []}
    :act [[:job (jobs.memory.set-place {:name :home :pos #at [6 30 16]}) [:now]]
          [:job (jobs.survival.go-home {})]]
-   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair :why :way-dives}} :within-s 60 :of-job true}
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair :why :exhausted}} :within-s 60 :of-job true}
             {:event {:source :job :kind :go-to.by-hand} :within-s 60 :of-job true}]
    :after [[:body-near [5.5 12 16.5] 6]]
    :limit-s 100}]}
