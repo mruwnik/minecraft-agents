@@ -1,0 +1,15 @@
+;; jobs.survival.shut-in :for :night: a one-cell well ringed four high under a roof is no shelter until the cell over the head is
+;; filled (a spider climbs in, a skeleton shoots down); the walls way roofs it. Dark plot, so the clock does not matter.
+{:defaults
+ {:tags [:survival :cornered]
+  :time :any
+  :plot {:height 20}
+  :register []
+  :body {:at [16.5 0 16.5] :inventory [["cobblestone" 8]]}}
+ :cases
+ [{:name "open-topped-well-gets-its-roof"
+   :blocks [[:fill [15 0 15] [17 3 17] "stone"] [:fill [16 0 16] [16 3 16] "air"] [:fill [8 6 8] [24 6 24] "stone"]]
+   :act [[:job (jobs.survival.shut-in {:ways #{:walls} :for :night})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:block [16 2 16] "cobblestone"]]
+   :limit-s 80}]}

@@ -64,6 +64,17 @@
         (let [{:keys [eng]} (await (plug! {:blocks (apply dissoc ct/dead-end (for [x (range 0 9) y [66 67]] (str x "," y ",0"))) :inventory cobble :time 18000} {:for :night} tu/seeing-all))]
           (is (= #{:shelter} (purposes eng))))))))
 
+(deftest a-night-well-open-at-the-top-is-roofed-before-it-is-called-enclosed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [well (into {} (concat (for [x (range -6 7) z (range -6 7)] [(str x ",63," z) "stone"])
+                                    (for [x (range -6 7) z (range -6 7)] [(str x ",70," z) "stone"])
+                                    (for [x [-1 0 1] z [-1 0 1] y [64 65 66 67] :when (not (and (zero? x) (zero? z)))] [(str x "," y "," z) "stone"])))
+              {:keys [out p]} (await (plug! {:blocks well :inventory cobble :time 18000} {:for :night :ways #{:walls}} tu/seeing-all))]
+          (is (= [:done :walls] [(:kind out) (:way (:data out))]))
+          (is (= [[0 66 0]] (cells-of p "place")) "the cell over the head"))))))
+
 (deftest walls-beside-an-open-iron-door-step-away-from-it-and-wall-the-cell-between
   (async done
     (tu/run-async done

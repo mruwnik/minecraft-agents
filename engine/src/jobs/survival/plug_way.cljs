@@ -7,6 +7,7 @@
             [jobs.lib.access :as access]
             [jobs.lib.checks :as checks]
             [jobs.lib.pace :as pace]
+            [jobs.lib.reach.room :as reach-room]
             [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -38,14 +39,22 @@
   [c cells]
   (if (refused? c cells) (settings/get settings ::trespass-s) 0))
 
+(defn pocket-open?
+  "Whether the body stands in a one-cell room with a fill cell still open (the roof over the head): a mob on the rim or a spider
+  reaches it though no walker's flood does."
+  [p]
+  (let [feet (sh-sense/feet p)]
+    (and (= 1 (count (:cells (reach-room/room p feet))))
+         (boolean (seq (dig-cells/open-cells p feet))))))
+
 (defn enclosed?
-  "Whether the world shows the body shut in: for :night safe from the night (sh-inside/safe-from-night?); else a roof within ::roof-height over no open cell round the feet, or, with the call's
+  "Whether the world shows the body shut in: for :night safe from the night (sh-inside/safe-from-night?) and, in a one-cell room, no open fill cell (pocket-open?); else a roof within ::roof-height over no open cell round the feet, or, with the call's
   :room way, a roof over a room that is not breached, with no open door."
   [c]
   (let [p (:primitives c)
         roof (sh-sense/roof-height)]
     (boolean (if (= :night (:for (:args c)))
-               (sh-inside/safe-from-night? p)
+               (and (sh-inside/safe-from-night? p) (not (pocket-open? p)))
                (and (not (sh-sense/head-in-block? p))
                     (or (dig-cells/sealed-in? p :walls roof)
                         (and (ctx/way? c :room) (sh-sense/roofed? p roof) (not (sh/breached-home? p (ctx/view c))) (empty? (sh/open-room-doors p)))))))))
