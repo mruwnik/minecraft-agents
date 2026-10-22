@@ -35,7 +35,9 @@
    ::hidden-below-depth {:default 2 :spec (a/num-in 0 nil)
                          :doc "Blocks under the feet from which an unseen place with a seen roof over it counts as underground: no look asks for it and waiting for dawn does not light it."}
    ::unseen-judged-here-within {:default 6 :spec (a/num-in 0 nil)
-                                :doc "Blocks: an unseen place this near the feet is judged where the body stands (no look shows a cell behind a wall)."}})
+                                :doc "Blocks: an unseen place this near the feet is judged where the body stands (no look shows a cell behind a wall)."}
+   ::crowd-radius {:default 16 :spec (a/num-in 0 nil)
+                   :doc "Blocks within which the real dangers the body knows of all count in the fight a long stay meets (outmatched): beyond the hostile-near radius they still come."}})
 
 (defn unforced
   "The :checks forms a child would be forced with, minus the keys c's own frame runs under a form for: a call key beats
@@ -136,6 +138,34 @@
            (check-cache/cached c ::unarmed-threatened #(dawn/hostile-known? (:primitives c) {:way? true})))
     (contract/later :hostile-near "no weapon carried and a hostile is known near")
     (contract/ok :armed-or-clear "a weapon is carried or no hostile is known near")))
+
+(defn outmatched
+  "Later :outmatched while the fight with every real danger known within ::crowd-radius (jobs.lib.danger/dangers with a way to
+  the body or a line of fire; heard mobs while muted and watched ones left out, as the hostile-near trigger does) would cost the
+  kit carried more than price/allowed (jobs.lib.cost/fight-damage, the hostile reflex's formula): a player with a wooden sword
+  does not dig on in a cave five mobs walk, one in iron does."
+  [c]
+  (let [p (:primitives c)
+        view (ctx/view c)
+        r (settings/get settings ::crowd-radius)
+        near (check-cache/cached c ::outmatched
+                                 #(danger/dangers p r {:ranged-radius r} {:ignore-heard? (body/heard-muted? view) :ignore-ids (body/watched-ids view)}))
+        hp (if (seq near)
+             (cost/fight-damage {:weapon (combat/best-weapon p combat/default-weapons)
+                                 :equipment (cost/equipment-of (.-equipment (.self p)))
+                                 :mobs (mapv (fn [e] {:name (.-name e) :distance (danger/mob-distance p e) :hits 0}) near)})
+             0)
+        ok-hp (price/allowed c)]
+    (if (<= hp ok-hp)
+      (contract/ok :matched "no fight known near that the kit cannot afford")
+      (contract/later :outmatched (str "a fight with the hostiles known near costs " (price/round1 hp) " hp, over the " (price/round1 ok-hp)
+                                       " the body can afford: " (dawn/hostile-text (map #(dawn/describe p %) near)))
+                      :hp hp :allowed ok-hp))))
+
+(defn unless-outmatched
+  "The checker safe of a long stay, :later too while outmatched; its ::exposure half is safe's."
+  [safe]
+  (with-meta (fn [c] (contract/all [(safe c) (outmatched c)])) (meta safe)))
 
 (defn leads-away?
   "Whether the straight walk from the body to `goal` ({:x :y :z}) never takes it nearer to any hostile it knows within the

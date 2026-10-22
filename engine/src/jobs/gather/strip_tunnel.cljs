@@ -60,7 +60,7 @@
 
 (def target [:heading])
 
-(def safe? (price/staying :long (ready/safe-at-or work-place/ahead ready/safe-if-lit true)))
+(def safe? (ready/unless-outmatched (price/staying :long (ready/safe-at-or work-place/ahead ready/safe-if-lit true))))
 
 (def fit? ready/fit?)
 

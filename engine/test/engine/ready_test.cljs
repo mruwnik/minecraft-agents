@@ -36,6 +36,9 @@
             [jobs.items.collect-drops :as collect-drops]
             [jobs.items.kitchen :as kitchen]
             [jobs.items.get-kit :as get-kit]
+            [jobs.gather.mine :as mine]
+            [jobs.gather.dig-for :as dig-for]
+            [jobs.gather.strip-tunnel :as strip-tunnel]
             [jobs.items.pick-up-loose :as pick-up-loose]
             [jobs.items.smelt :as smelt]
             [jobs.storage.deposit :as deposit]
@@ -222,6 +225,22 @@
     {:inventory sword} [:ok :healthy]
     {:inventory []} [:later :unarmed]
     {:inventory sword :self {:pos {:x 0 :y 64 :z 0} :health 3}} [:later :low-health]))
+
+(defn zombies-at [& xs] (vec (map-indexed (fn [i x] {:id (+ 20 i) :name "zombie" :kind "hostile" :pos {:x x :y 64 :z 0}}) xs)))
+(def iron-worn (into {} (for [[part item] {"head" "iron_helmet" "torso" "iron_chestplate" "legs" "iron_leggings" "feet" "iron_boots"}] [part {:name item :count 1}])))
+
+(deftest outmatched-waits-while-the-hostiles-known-past-the-trigger-radius-outfight-the-kit
+  (are [world expected] (= expected (let [s (ready/outmatched (ctx-of (merge at-origin world)))] [(first s) (:reason (nth s 2))]))
+    {:inventory [{:name "wooden_sword" :count 1}] :entities (zombies-at 10 11)} [:later :outmatched]
+    {:inventory sword :equipment iron-worn :entities (zombies-at 10 11)} [:ok :matched]
+    {:inventory [{:name "wooden_sword" :count 1}] :entities (zombies-at 10)} [:ok :matched]
+    {:inventory [{:name "wooden_sword" :count 1}] :entities (zombies-at 20 21)} [:ok :matched])
+  (is (= :ok (first (ready/threatened (ctx-of (merge at-origin {:entities (zombies-at 10 11)}))))) "past the hostile-near radius"))
+
+(deftest the-long-dig-jobs-wait-while-outmatched
+  (are [safe] (= [:later :ok] (for [kit [{:inventory [{:name "wooden_sword" :count 1}]} {:inventory sword :equipment iron-worn}]]
+                                (first (safe (ctx-of (merge at-origin kit {:entities (zombies-at 10 11)}))))))
+    mine/safe? dig-for/safe? strip-tunnel/safe?))
 
 (def far-husk {:id 9 :name "husk" :kind "hostile" :pos {:x 30 :y 64 :z 0}})
 
