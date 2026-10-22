@@ -38,7 +38,7 @@
   - {:reason :no-tool :needs item :block name :hint}: no carried tool harvests the block (with :need-drop) and the call's :ways
     allow no fetch (otherwise the round gets one; a fetch that fails ends the same way, with :why).
 
-  A block not in sight, within twice the reach, with a seen solid block in the line, is reached by digging that block first (not picked up; zones, claims and hazards apply to it) before any walk.
+  A block not in sight, within twice the reach, with a seen terrain block (stone, dirt, sand ..: jobs.lib.blocks/through-natural) first in the line, is reached by digging that block first (picked up; zones, claims and hazards apply to it) before any walk; a base block there (chest, door, planks ..) is never dug for it: the walk's give-up names it as :blocked-by.
   Out of reach, it walks within 3 cells (go-to child, which opens and shuts doors); a failed walk is tried once more,
   then it ends nothing-possible {:reason :unreachable :pos :why} (:no-walk, :out-of-reach, go-to's why).
   A block under the feet with no seen solid floor below it is not dug from on top: the body first steps off its
@@ -349,9 +349,11 @@
                    (not= :no-cell why) (assoc :walk why)))))))
 
 (defn unreachable!
-  "End the call nothing-possible {:reason :unreachable :pos :why}: the walk ran and found no way."
+  "End the call nothing-possible {:reason :unreachable :pos :why}: the walk ran and found no way; :blocked-by names a base
+  block in the line to the cell that the dig will not break for a way in."
   [c why]
-  (ctx/end c :nothing-possible {:reason :unreachable :pos (:pos (b/parse (:args c))) :why why}))
+  (ctx/end c :nothing-possible (cond-> {:reason :unreachable :pos (:pos (b/parse (:args c))) :why why}
+                                 (b/base-in-the-way c (:pos (b/parse (:args c)))) (assoc :blocked-by (b/base-in-the-way c (:pos (b/parse (:args c))))))))
 
 (defn note-under-feet!
   "Debug event blocks.dig.under-feet before the first dig of the cell under the feet: the floor below as seen and as
@@ -369,11 +371,10 @@
                   :text (str "dig under the feet at " (pr-str [x y z]) ": " (name decision))}))))
 
 (defn ^:async dig-through!
-  "pos is within reach but a block lies in the aim line: dig that first, as a player does, before any walk round it (the
-  block is not picked up). :again, :continue, or nil when there is no such block or the child could not dig it."
+  "pos is within reach but a block lies in the aim line: dig that first (terrain only, jobs.lib.blocks/through-natural; zones and hazards apply), as a player does, before any walk round it. :again, :continue, or nil when there is no such block or the child could not dig it."
   [c pos]
   (when-let [hit (b/through-cell c pos)]
-    (let [r (await (child/run!* c :through 'jobs.blocks.dig {:pos hit :collect false :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+    (let [r (await (child/run!* c :through 'jobs.blocks.dig {:pos hit :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
       (cond
         (= :continue r) :continue
         :else (do (ctx/update-mem! c update :through (fnil conj #{}) hit)

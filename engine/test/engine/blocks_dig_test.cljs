@@ -409,6 +409,18 @@
           (is (= {:dug true} (select-keys result [:dug])) (pr-str result))
           (is (< 1 (count (calls (:p env) "dig")))))))))
 
+(deftest a-chest-in-the-line-is-not-dug-for-a-way-in-and-the-give-up-names-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [chests (update-vals (assoc pit-blocks "5,62,0" "dirt") #(if (= "stone" %) "chest" %))
+              env (setup {:self in-pit :inventory [{:name "iron_pickaxe" :count 1}] :blocks chests})
+              _ (tu/seeing-all (:p env))
+              r (await (ending-cause (:eng env) job {:pos [5 62 0]} 20))]
+          (is (= :unreachable (:reason r)) (pr-str r))
+          (is (= "chest" (:blocked-by r)) (pr-str r))
+          (is (empty? (calls (:p env) "dig"))))))))
+
 (deftest a-dig-act-that-times-out-is-a-failed-attempt-not-the-time-budget
   (async done
     (tu/run-async done

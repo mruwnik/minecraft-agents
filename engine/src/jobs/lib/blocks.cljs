@@ -171,14 +171,32 @@
   (and (<= (u/eye-dist (u/self-pos c) pos) forestry/dig-reach)
        (or (not see?) (aim/body-sees? c (if (vector? pos) pos (u/cell-vec pos))))))
 
-(defn through-cell
-  "The seen solid block a player would dig to get at pos, within twice the reach: the first one on the aim line when it is within reach and not tried before, else nil."
+(def through-natural
+  "Blocks a player tunnels through to get at a cell: terrain and plain stone. Anything else in the line (chest, door, bed, fence, planks, glass) is a base's, never dug for a way in."
+  #"^(stone|cobblestone|deepslate|cobbled_deepslate|dirt|coarse_dirt|grass_block|podzol|mycelium|sand|red_sand|gravel|clay|sandstone|red_sandstone|andesite|diorite|granite|tuff|netherrack|snow|snow_block|terracotta|calcite|dripstone_block|mud)$")
+
+(defn line-blocker
+  "{:cell [x y z] :block name} of the first seen solid block on the aim line from the eye to pos, within twice the reach and
+  nowhere near the cell itself; nil when the line is clear or pos is farther."
   [c pos]
   (let [p (:primitives c)
-        cell (cell pos)
-        hit (aim/first-blocker (aim/seen-kind-at p) (aim/body-eye c) cell)]
-    (when (and hit (not= hit cell) (not (contains? (:through (ctx/mem c)) hit)) (<= (u/eye-dist (u/self-pos c) pos) (* 2 u/eye-reach)) (in-reach? c (zipmap [:x :y :z] hit)))
-      hit)))
+        target (cell pos)
+        hit (aim/first-blocker (aim/seen-kind-at p) (aim/body-eye c) target)]
+    (when (and hit (not= hit target) (<= (u/eye-dist (u/self-pos c) pos) (* 2 u/eye-reach)))
+      {:cell hit :block (some-> (u/seen-block p (zipmap [:x :y :z] hit)) .-name)})))
+
+(defn through-cell
+  "The block a player would dig to get at pos: line-blocker's cell when it is natural (through-natural), within reach and not tried before, else nil."
+  [c pos]
+  (let [{:keys [cell block]} (line-blocker c pos)]
+    (when (and cell block (re-find through-natural block) (not (contains? (:through (ctx/mem c)) cell)) (in-reach? c (zipmap [:x :y :z] cell)))
+      cell)))
+
+(defn base-in-the-way
+  "The name of the first block in the line to pos when it is no terrain (through-natural), else nil: what a give-up names."
+  [c pos]
+  (let [{:keys [block]} (line-blocker c pos)]
+    (when (and block (not (re-find through-natural block))) block)))
 
 (defn fresh-mem
   "Job memory m for target pos: m when it is about pos, else emptied (children too) and marked for pos. Gives a
