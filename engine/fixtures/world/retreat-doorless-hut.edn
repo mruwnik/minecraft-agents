@@ -1,0 +1,21 @@
+;; A body with a hostile in range, 7 blocks from its own planks hut that has no door, just a bare 1x2 doorway gap at [15 0..1 18].
+;; The body starts inside (so it has seen the room), then is moved out. Hut: planks x 12..18, z 12..18, y 0..3 (hollow), room 13..17; home bed inside at [14 0 14]; body 3 south of the doorway; chasing zombie far south.
+;; Should-succeed: carrying cobblestone it runs in and plugs the gap (cobblestone at [15 0 18] and [15 1 18]), ends inside.
+{:defaults
+ {:tags [:hostile :survival :retreat]
+  :time :any
+  :plot {:floor "grass_block" :length 48 :width 48 :height 16}
+  :blocks [[:fill [12 0 12] [18 3 18] "oak_planks" :hollow]
+           [:fill [13 0 13] [17 2 17] "air"]
+           [:fill [15 0 18] [15 1 18] "air"]
+           ]
+  :body {:at [15.5 0 15.5] :yaw 0 :settle-s 3 :inventory [["cobblestone" 16]]}
+  :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+              :job (jobs.survival.respond-to-hostile)}]
+  :memory [{:kind :home :data {:pos #xyz [14 0 14]} :policy {:cap 1 :ttl :forever}}]
+  :act [[:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 30"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 30"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 30"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 30"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 90 -50"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 180 -50"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 270 -50"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 -50"] [:wait-s 1] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~ 0 -80"] [:wait-s 2] [:rcon "execute as $BODY at @s run tp @s ~ ~ ~6 0 0"] [:wait-s 3] [:summon "zombie" [15.5 0 28.5]]]
+  :limit-s 90}
+ :cases
+ [{:name "body-with-blocks-runs-into-doorless-hut-and-plugs-the-doorway"
+   :expect [{:no-event {:source :job :kind :retreat_sealed :message [:contains "pillared up"]} :for-s 30}]
+   :after [[:block [15 0 18] "cobblestone"] [:block [15 1 18] "cobblestone"] [:body-near [15.5 0 15.5] 3.5]]}]}

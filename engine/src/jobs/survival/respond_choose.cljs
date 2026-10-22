@@ -5,8 +5,8 @@
 (defn choose
   "The option of a flight step, {:option kw :why str} (why: said to the cornered options; :cornered: where home is judged by the room the body stands in or near, :cornered-inside: by the room it is inside only), in the order the
   retreat doc lists them. facts: :threat :early (an early refuge's result) :no-gain? :angry-enderman? :hit? :flyer?
-  :door (to shut) :inside? :home-door :way (in) :outruns? (the body outruns the chasers) :shot-open? (no threat, but shot at from an unseen spot: :dodge). :walk when none applies."
-  [{:keys [threat early no-gain? angry-enderman? hit? flyer? door inside? home-door way outruns? shot-open?]}]
+  :door (to shut) :inside? :home-door :gap-way (inside a home whose doorway gap is open: the run in fills it) :way (in) :outruns? (the body outruns the chasers) :shot-open? (no threat, but shot at from an unseen spot: :dodge). :walk when none applies."
+  [{:keys [threat early no-gain? angry-enderman? hit? flyer? door inside? home-door gap-way way outruns? shot-open?]}]
   (cond
     (nil? threat) {:option (if shot-open? :dodge :end)}
     (some? early) {:option :early}
@@ -16,6 +16,7 @@
     flyer? {:option :cornered :why "a phantom cannot be outrun"}
     door {:option :shut-door}
     (and inside? home-door) {:option :shut-home-door}
+    (and inside? gap-way) {:option :run-home}
     inside? {:option :stuck :why "at home, the hostile still has a way in"}
     way {:option :run-home}
     (not outruns?) {:option :cornered-inside :why "the hostile outruns the body"}

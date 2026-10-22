@@ -12,6 +12,8 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.access :as access]
+            [jobs.lib.blocks :as lb]
+            [jobs.lib.choose :as choose]
             [jobs.lib.look :as look]
             [jobs.lib.pillar :as pillar]
             [jobs.lib.reach :as reach]
@@ -106,12 +108,35 @@
                     (when-not (or v (reach-room/room p pos)) (mem/write! (:store (:engine c)) :refuge-open {:cell k} open-policy))
                     v))))))
 
+(declare shut-by)
+
+(defn doorway-room
+  "The closed room a hut with a bare doorway gap makes at cell pos once the gap is filled (a body carrying a block shuts
+  itself in), as reach-room/room's answer plus :doors [{:cell gap-feet :inside}] and :gap [feet head]; nil when it is
+  none, no block is carried, or a cell of it is unseen."
+  [c pos]
+  (let [p (:primitives c)]
+    (when (seq (lb/carried c (vec (or (ctx/use c :blocks) (choose/filler-names c :build)))))
+      (when-let [e (:cell (reach-room/unroofed-cell p pos))]
+        (when-let [d (shut-by p pos e any?)]
+          (let [head (update d :y inc)
+                plug? #{[(:x d) (:y d) (:z d)] [(:x head) (:y head) (:z head)]}
+                base (reach-room/shut-kind-at p)
+                kind-at (reach-room/room-kind-at p (reach-room/memo-kind-at (fn [x y z] (if (plug? [x y z]) :solid (base x y z)))))]
+            (when-let [room (reach-room/room-from p kind-at (:x pos) (:y pos) (:z pos))]
+              (when-let [inside (first (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+                                             :let [cell [(+ (:x d) dx) (:y d) (+ (:z d) dz)]]
+                                             :when (contains? (:cells room) cell)]
+                                         (zipmap [:x :y :z] cell)))]
+                (assoc room :doors (conj (:doors room) {:cell d :inside inside}) :gap [d head])))))))))
+
 (defn survey
   "The closed rooms to flee to, {:rooms [...]} (jobs.lib.reach.room/room plus :start and :home?): the home's (home
   {:x :y :z} or nil) and those behind the doors the body has seen (starts), at most max-rooms, the home first then the
   nearest; and {:dropped [{:at [x y z] :own? :why}]}, the cells that are none: :run-failed (a run to it failed this
   flight), :not-closed, :unseen (a cell of the room not seen yet), or :unjudged (a door side not judged this flight beyond the fresh ones
-  it may flood now; the home is always judged)."
+  it may flood now; the home is always judged). A home with a bare doorway gap counts as a room while a block is carried
+  to fill the gap (doorway-room: its :gap)."
   ([c home] (survey c home js/Infinity))
   ([c home fresh]
    (let [p (:primitives c)
@@ -126,13 +151,16 @@
                                                  (case (closed? c pos) true nil :unseen :unseen :not-closed))
                      :else :unjudged)))
          judged (mapv (fn [{:keys [pos home?] :as s}]
-                        (assoc s :why (if (failed (cell-key pos)) :run-failed (judge pos home?))))
+                        (let [why (if (failed (cell-key pos)) :run-failed (judge pos home?))
+                              gap-room (when (and home? (#{:not-closed :unseen} why)) (doorway-room c pos))]
+                          (cond-> (assoc s :why (if gap-room nil why))
+                            gap-room (assoc :gap-room gap-room))))
                       (starts p home))]
      {:dropped (vec (for [{:keys [pos home? why]} judged :when why] {:at (mapv pos [:x :y :z]) :own? home? :why why}))
       :rooms (->> judged
                   (remove :why)
                   (sort-by (fn [{:keys [pos home?]}] [(if home? 0 1) (u/dist me (mid pos))]))
-                  (keep (fn [{:keys [pos home?]}] (some-> (reach-room/room p pos) (assoc :start pos :home? home?))))
+                  (keep (fn [{:keys [pos home? gap-room]}] (some-> (or gap-room (reach-room/room p pos)) (assoc :start pos :home? home?))))
                   (reduce (fn [acc r] (if (some #(contains? (:cells %) (mapv (:start r) [:x :y :z])) acc) acc (conj acc r))) [])
                   (take (max-rooms))
                   vec)})))

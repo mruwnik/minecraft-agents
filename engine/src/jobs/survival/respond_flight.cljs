@@ -160,6 +160,7 @@
         rooms (:rooms survey)
         verdicts (when survey (room-lib/verdicts p rooms threats (not (cover/exposed-low? c covered?))))
         {:keys [room way inside?]} (room-lib/pick verdicts)
+        gap-way (when (and inside? (:gap room)) (first (filter #(= (first (:gap room)) (:cell %)) (:doors room))))
         _ (when (and glanced? room inside?) (say-once! c room))
         early (when (and threat (not hit?) (not door) (nil? room) (not inside?)) (await (step/early-refuge! c)))
         home-now? (fn [] (or inside? (and (nil? survey) (room-lib/in-home? c (cover/home-pos c)))))
@@ -177,7 +178,7 @@
         (choose/choose {:threat threat :early early :no-gain? (flight/no-gain? (ctx/mem c) (flight/no-gain-steps))
                         :angry-enderman? (and threat (cornered/angry-enderman? c near)) :hit? hit?
                         :flyer? (some combat/flyer? near) :door door :inside? inside?
-                        :home-door (when inside? (respond.doors/home-door c room)) :way way
+                        :home-door (when inside? (respond.doors/home-door c room)) :gap-way gap-way :way way
                         :outruns? (or (nil? threat) (cornered/outrun? c near))
                         :shot-open? (and (nil? threat) (shot/open? p (ctx/view c)))})]
     (case option
@@ -192,7 +193,7 @@
       :cornered-inside (await (pick/cornered! c why inside?))
       :shut-door (await (respond.doors/shut-door! c door))
       :shut-home-door (await (respond.doors/shut-home-door! c (respond.doors/home-door c room)))
-      :run-home (await (run-home! c room way))
+      :run-home (await (run-home! c room (or gap-way way)))
       :walk (await (step/walk-away! c threats judged rooms covered? stuck)))))
 
 (defn clear?

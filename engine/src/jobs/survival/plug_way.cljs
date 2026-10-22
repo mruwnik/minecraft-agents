@@ -1,7 +1,8 @@
 (ns jobs.survival.plug-way
   "What the plug ways share (jobs.survival.wall-in, dig-pit, dig-pocket; picked between by jobs.survival.shut-in):
   the enclosed test, the goal, the quote and the stepping round."
-  (:require [engine.args :as a]
+  (:require [jobs.lib.rooms :as room-lib]
+            [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.access :as access]
@@ -57,7 +58,7 @@
                (and (sh-inside/safe-from-night? p) (not (pocket-open? p)))
                (and (not (sh-sense/head-in-block? p))
                     (or (dig-cells/sealed-in? p :walls roof)
-                        (and (ctx/way? c :room) (sh-sense/roofed? p roof) (not (sh/breached-home? p (ctx/view c))) (empty? (sh/open-room-doors p)))))))))
+                        (and (ctx/way? c :room) (sh-sense/roofed? p roof) (not (sh/breached-home? p (ctx/view c))) (empty? (sh/open-room-doors p)) (nil? (room-lib/gap c)))))))))
 
 (defn placed
   "The spent summary and the blocks placed so far ({:cell [x y z] :item name}), for an ending's data."

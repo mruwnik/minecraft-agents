@@ -153,6 +153,26 @@
           (is (= [-1] (distinct (map #(nth % 2) steps)))
               (str "the shut door does not end the flight: it steps to the far side of the room, " steps)))))))
 
+(def no-door {"5,64,2" "air" "5,65,2" "air"})
+
+(deftest a-body-with-a-block-runs-into-its-doorless-hut-and-fills-the-doorway
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (-> (hut {:x 5.5 :y 64 :z 6.5} {} [(zombie 5.5 13.5 0.4)] no-door)
+                        (assoc :inventory [{:name "cobblestone" :count 20}]))
+              {:keys [p seen]} (await (flee! world))]
+          (is (ran-home? seen) "the doorless hut is a run-to room")
+          (is (in-room? (body p)) (str "inside the hut: " (body p)))
+          (is (= ["cobblestone" "cobblestone"] (mapv #(hs/block-at p %) [[5 64 2] [5 65 2]])) "the doorway is filled behind it"))))))
+
+(deftest a-body-with-no-block-does-not-count-a-doorless-hut-as-a-room
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (flee! (hut {:x 5.5 :y 64 :z 6.5} {} [(zombie 5.5 13.5 0.4)] no-door)))]
+          (is (not (ran-home? seen))))))))
+
 (deftest a-zombie-at-the-door-is-not-run-into
   (async done
     (tu/run-async done
