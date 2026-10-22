@@ -147,7 +147,7 @@
 (defn commit-tree!
   "Commit the column, species and base of the tree t to fell."
   [c t]
-  (ctx/update-mem! c #(-> % (merge (select-keys t [:column :species :base])) (assoc :partials 0) (dissoc :logs-seen :relooked :drop-ids :collected :stand-avoid)))
+  (ctx/update-mem! c #(-> % (merge (select-keys t [:column :species :base])) (assoc :partials 0) (dissoc :logs-seen :relooked :drop-ids :cut-cells :collected :stand-avoid)))
   t)
 
 (defn mark-all-unreachable!

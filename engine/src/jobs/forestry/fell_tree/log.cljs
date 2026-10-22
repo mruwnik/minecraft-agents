@@ -244,7 +244,7 @@
         (let [wrote? (and (:replant? (:args c)) (trunk-cell? base pos) (record-debt! c pos species))
               e (await (ctx/call c :dig 'jobs.blocks.dig (log-dig-args c pos)))]
           (when (:dug (:data e))
-            (ctx/update-mem! c #(-> % (update :dug (fnil inc 0)) (update :drop-ids (fnil into []) (:ids (:data e))))))
+            (ctx/update-mem! c #(-> % (update :dug (fnil inc 0)) (update :drop-ids (fnil into []) (:ids (:data e))) (update :cut-cells (fnil conj []) (u/cell-vec pos)))))
           (when (and wrote? (some-> (u/seen-name (:primitives c) pos) log-name?))
             (ctx/forget-where! c replant-kind #(= wrote? (:pos %))))
           (outcome e))))))

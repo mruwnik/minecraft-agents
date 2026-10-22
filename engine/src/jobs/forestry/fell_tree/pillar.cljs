@@ -250,15 +250,21 @@
 
 
 (defn hidden-support
-  "The leaf or log under a log the body cut that lies in dig reach but out of its sight (on top of a leaf above the eye:
-  it was seen falling and did not come down), nil when there is none."
+  "The leaf or log a log the body cut rests on when it is out of sight (on a leaf above the eye) though one is known to lie
+  unseen near the pillar: found from the cells the body cut (a drop falls from there, at most a cell aside), the highest
+  seen leaf or log below one within dig reach. nil when none."
   [c]
-  (let [mine (set (:drop-ids (ctx/mem c)))
-        feet (u/self-pos c)]
-    (some (fn [e] (when (and (false? (.-visible e)) (contains? mine (.-id e)) (log-name? (some-> (.-item e) .-name))
-                             (<= (u/eye-dist feet (u/pos-of (.-pos e))) dig-reach))
-                    (let [pos (u/pos-of (.-pos e))] (drop-support c (u/cell-vec pos) pos))))
-          (array-seq (.entities (:primitives c) (clj->js {:kind "item" :radius (inc dig-reach) :max 100}))))))
+  (let [feet (u/self-pos c)
+        mine (set (:drop-ids (ctx/mem c)))
+        [sx _ sz] (u/cell-vec feet)]
+    (when (some (fn [e] (and (false? (.-visible e)) (contains? mine (.-id e)) (log-name? (some-> (.-item e) .-name))))
+                (array-seq (.entities (:primitives c) (clj->js {:kind "item" :radius (inc dig-reach) :max 100}))))
+      (->> (for [[x y z] (:cut-cells (ctx/mem c)) dy (range 1 4) dx [0 -1 1] dz [0 -1 1]] [(+ x dx) (- y dy) (+ z dz)])
+           (remove (fn [[x _ z]] (and (= x sx) (= z sz))))
+           (filter (fn [cell] (and (<= (u/eye-dist feet cell) dig-reach)
+                                   (let [n (u/seen-name (:primitives c) (u/cell-pos cell))] (and n (or (log-name? n) (trees/leaves-name? n)))))))
+           (sort-by (fn [[_ y]] (- y)))
+           first))))
 
 (defn ^:async settle-drops!
   "Wait until the logs lying in dig reach are seen and stop moving (a drop in the air is given up as unreachable, one
