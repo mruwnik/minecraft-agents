@@ -89,7 +89,7 @@
         hostiles (danger/hostiles-near-way p goal (settings/get settings ::way-radius) {})
         deaths (death-spot/near (death-spot/recent c) goal)
         death-hp (reduce + (for [{:keys [cause weight]} deaths] (* weight (hit [{:name cause :distance 0 :hits 0}]))))
-        hide-hp (reduce + (for [{:keys [mobs]} (hide-spot/near (hide-spot/recent c) goal)] (hit (mapv (fn [n] {:name n :distance 0 :hits 0}) mobs))))
+        hide-hp (reduce + (for [{:keys [mobs]} (filter #(< (u/dist goal (:pos %)) (u/dist feet (:pos %))) (hide-spot/near (hide-spot/recent c) goal))] (hit (mapv (fn [n] {:name n :distance 0 :hits 0}) mobs))))
         spawn-hp (* spawns (hit [{:name "zombie" :distance 0 :hits 0}]))
         hostile-hp (if (pos? exposed-s) (hit (mapv (fn [e] {:name (.-name e) :distance (danger/mob-distance p e) :hits 0}) hostiles)) 0)]
     {:hp (+ spawn-hp hostile-hp death-hp hide-hp) :hide-hp hide-hp :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :dark-s exposed-s :hostiles (count hostiles)}))
@@ -98,13 +98,14 @@
 
 (defn status
   "Ok while the estimated damage of the walk to `goal` is within ::risk-share of the body's health, else later :risky with the
-  risk and its parts."
+  risk and its parts. A body that can not heal by waiting (ready/cannot-heal?) may spend all but 1 hp: waiting never lowers the price."
   [c goal]
   (let [p (:primitives c)
         {:keys [hp spawn-hp hostile-hp death-hp hide-hp dark-s hostiles]} (check-cache/cached c [::risk goal (sense/round-looked c)] #(estimate c goal))
         self (.self p)
         hungry? (some-> (.-food self) (<= (settings/get settings ::hungry-food)))
-        allowed (* (settings/get settings ::risk-share) (.-health self) (if hungry? (settings/get settings ::hungry-share) 1))]
+        share (* (settings/get settings ::risk-share) (.-health self) (if hungry? (settings/get settings ::hungry-share) 1))
+        allowed (if (ready/cannot-heal? c) (max share (dec (.-health self))) share)]
     (if (<= hp allowed)
       (contract/ok :acceptable (str "route risk " (round1 hp) " hp, within " (round1 allowed)))
       (contract/later :risky (str "route risk " (round1 hp) " hp over the " (round1 allowed) " the body can afford: "

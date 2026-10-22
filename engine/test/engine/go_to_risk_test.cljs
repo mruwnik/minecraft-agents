@@ -60,7 +60,8 @@
         now 36000000
         with-hide (fn [pos] (assoc c :view (fn [] {:now now :data {:policies {:hid hide-spot/policy} :entries {:hid [{:t (- now 60000) :data {:pos pos :mobs ["zombie"]}}]}}})))]
     (is (pos? (:hide-hp (risk/estimate (with-hide {:x 90 :y 64 :z 5}) far-goal))))
-    (is (zero? (:hide-hp (risk/estimate (with-hide {:x 50 :y 64 :z 5}) far-goal))))))
+    (is (zero? (:hide-hp (risk/estimate (with-hide {:x 50 :y 64 :z 5}) far-goal))))
+    (is (zero? (:hide-hp (risk/estimate (with-hide inside) {:x 20 :y 64 :z 0}))) "the hide the body stands in is no threat on a walk away from it")))
 
 (deftest only-seen-mobs-count-towards-repeated-hides
   (let [c (ready-test/ctx-of day-world)
@@ -80,12 +81,14 @@
     (is (pos? (hp-at 3600000)))
     (is (zero? (hp-at 8000000)))))
 
-(deftest a-hungry-body-affords-less-risk-than-a-fed-one
-  (let [status-for (fn [food] (let [c (-> (ready-test/ctx-of (assoc day-world :self {:pos inside :health 20 :food food}))
-                                          (with-death {:x 90 :y 64 :z 5} "zombie" 6480000))]
-                                (first (risk/status c far-goal))))]
-    (is (= :ok (status-for 20)))
-    (is (= :later (status-for 5)))))
+(deftest a-hungry-body-affords-less-risk-than-a-fed-one-unless-it-cannot-heal
+  (let [status-for (fn [food inventory] (let [c (-> (ready-test/ctx-of (assoc day-world :self {:pos inside :health 20 :food food} :inventory inventory))
+                                                    (with-death {:x 90 :y 64 :z 5} "zombie" 6480000))]
+                                          (first (risk/status c far-goal))))
+        bread [{:name "bread" :count 3}]]
+    (is (= :ok (status-for 20 [])))
+    (is (= :later (status-for 5 bread)))
+    (is (= :ok (status-for 5 [])) "nothing to eat: waiting never lowers the risk, so the walk goes")))
 
 (deftest a-death-by-terrain-adds-no-risk
   (let [c (ready-test/ctx-of day-world)]

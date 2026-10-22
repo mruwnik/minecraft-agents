@@ -1,0 +1,19 @@
+;; Hurt body (3 hp), food under 18 and nothing to eat, in a sealed rock pocket with a :hid memory at its own feet (its hide from a zombie that is gone).
+;; Should-succeed: a walk to the lit end of the corridor starts and arrives: the body's own hide is no threat on a walk away from it, and waiting could not heal it.
+{:defaults
+ {:tags [:survival :movement :go-to]
+  :time :any
+  :plot {:height 12}
+  :blocks [[:fill [2 0 8] [30 9 24] "stone"]
+           [:fill [16 3 16] [26 4 16] "air"] [:set [26 3 16] "torch"]]
+  :body {:at [16.5 3 16.5] :effects [["hunger" 120 255]]}
+  :limit-s 90}
+ :cases
+ [{:name "own-hide-and-no-heal-do-not-hold-the-walk"
+   :memory [{:kind :hid :data {:pos #xyz [16 3 16] :mobs ["zombie"]} :policy {:cap 10 :ttl 600000}}]
+   :act [[:wait-s 12]
+         [:rcon "damage $BODY 17 minecraft:generic"]
+         [:job (jobs.movement.go-to {:pos #at [25 3 16] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :risky}} :for-s 15 :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :of-job true}]
+   :after [[:body-near [25.5 3 16.5] 2.5]]}]}
