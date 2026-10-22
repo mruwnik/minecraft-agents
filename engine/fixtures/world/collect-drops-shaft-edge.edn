@@ -1,0 +1,18 @@
+;; Card ffb3c94c: a drop hanging over an open shaft with lava at its foot (a drop that fell there is the same to the lean) is not chased: the collect primitive's lean (forward held toward a
+;; drop the walk could not get beside) only runs when the item's cell has a floor, so the body stays on the rim. Stone mass x 8..24, z 8..24,
+;; y 0..9; shaft [17..19 5..9 15..17] over lava [17..19 4 15..17]; the body stands on the rim at [16.5 10 16.5]. No resistance: any hurt is a failure.
+;; Should-fail (nothing to collect): the job stops none-collected and the body is unhurt on the rim. The item has no gravity so it stays over the shaft, 1.9 off the body: the walk finds no stand, the lean would walk off the rim.
+{:defaults
+ {:tags [:collect-drops :lava :survival]
+  :time :any
+  :plot {:height 20}
+  :blocks [[:fill [8 0 8] [24 9 24] "stone"] [:fill [17 5 15] [19 9 17] "air"] [:fill [17 4 15] [19 4 17] "lava"]]
+  :body {:at [16.5 10 16.5]}
+  :limit-s 90}
+ :cases
+ [{:name "drop-hanging-over-a-lava-shaft-is-not-followed"
+   :act [[:summon "item" [18.4 10.2 16.5] "{NoGravity:1b,Item:{id:\"minecraft:cobblestone\",count:1}}"]
+         [:job (jobs.items.collect-drops {:radius 6})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 50 :until {:source :job :kind :stopped}}]
+   :after [[:body-near [16.5 10 16.5] 1.5]]}]}

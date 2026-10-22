@@ -1127,8 +1127,8 @@ test('collect: a goto rejected with NoPath is unreachable', async () => {
 })
 
 // A dropped item is picked up from about 1.4 blocks horizontally; a walk to within one cell of it can stop 1.5 away.
-const dropRig = (itemAt, onGoto) => {
-  const { bot, p } = rig({ ...world, pos: [0.5, 64, 0.5], entities: { 7: { id: 7, name: 'item', type: 'object', position: new Vec3(...itemAt), getDroppedItem: () => ({ name: 'stick', count: 1 }) } } })
+const dropRig = (itemAt, onGoto, blocks = {}) => {
+  const { bot, p } = rig({ ...world, blocks: { ...world.blocks, ...blocks }, pos: [0.5, 64, 0.5], entities: { 7: { id: 7, name: 'item', type: 'object', position: new Vec3(...itemAt), getDroppedItem: () => ({ name: 'stick', count: 1 }) } } })
   const goals = []
   bot.pathfinder.goto = goal => { goals.push(goal); onGoto(bot, goal, goals.length); return Promise.resolve() }
   return { bot, p, goals }
@@ -1232,7 +1232,7 @@ test('collect: an item the body cannot get within reach of after the re-approach
 
 // A drop in a one-high hole: no walk enters its cell, the walk ends 1.3 off; the body leans in by hand and the pickup follows.
 test('collect: an item just out of pickup reach after a walk that could not get closer is leaned toward, not given up on', async () => {
-  const { bot, p, goals } = dropRig([1.8, 64, 0.5], () => {})
+  const { bot, p, goals } = dropRig([1.8, 64, 0.5], () => {}, { '1,63,0': 'stone' })
   bot.pathfinder.goto = goal => { goals.push(goal); return Promise.reject(Object.assign(new Error('NoPath'), { name: 'NoPath' })) }
   const setControlState = bot.setControlState
   bot.setControlState = (control, state) => {
@@ -1242,6 +1242,17 @@ test('collect: an item just out of pickup reach after a walk that could not get 
   const result = await p.collect('t1', { id: 7 })
   assert.equal(goals.length, 1)
   assert.equal(result.status, 'collected')
+})
+
+test('collect: a drop over an open shaft (no floor under its cell) is not leaned toward, the body stays on its edge', async () => {
+  const { bot, p } = dropRig([1.8, 64, 0.5], () => {})
+  bot.pathfinder.goto = () => Promise.reject(Object.assign(new Error('NoPath'), { name: 'NoPath' }))
+  const pressed = []
+  const setControlState = bot.setControlState
+  bot.setControlState = (control, state) => { pressed.push(control); setControlState(control, state) }
+  const result = await p.collect('t1', { id: 7 })
+  assert.equal(pressed.includes('forward'), false)
+  assert.equal(result.status, 'unreachable')
 })
 
 test('collect: an item that was still settling when the walk to it failed is followed to where it lands', async () => {

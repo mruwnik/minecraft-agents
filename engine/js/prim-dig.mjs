@@ -300,6 +300,9 @@ export function createDig (env) {
     if (!item) return false
     if (inPickupReach(item)) return true
     if (Math.hypot(item.position.x - here().x, item.position.z - here().z) > NUDGE_MAX_DIST) return false
+    // Held forward is blind: with no floor under the item's cell (a falling drop, a shaft) the body would walk off the edge after it.
+    const floor = env.bot.blockAt(vec({ x: Math.floor(item.position.x), y: Math.floor(here().y) - 1, z: Math.floor(item.position.z) }))
+    if (item.onGround === false || floor?.boundingBox !== 'block') return false
     ctx.onAbort(() => env.bot.setControlState('forward', false))
     await lookNow(() => env.bot.lookAt(vec({ x: item.position.x, y: here().y + 1.62, z: item.position.z }), true))
     env.bot.setControlState('forward', true)
