@@ -16,7 +16,8 @@
             [engine.triggers :as triggers]
             [jobs.items.smelt :as smelt]
             [jobs.items.smelt.plan :as smelt-plan]
-            [jobs.lib.fuel :as fuel]))
+            [jobs.lib.fuel :as fuel]
+            [jobs.lib.world-files :as ew]))
 
 ;; ------------------------------------------------------------------ tables
 
@@ -741,13 +742,14 @@
 ;; The fake body stands at 0,64,0 facing south (+z): what lies ahead is seen.
 
 (defn seeing-setup
-  "setup over primitives that see through the body's perception (no x-ray)."
+  "setup over primitives that see through the body's perception (no x-ray); the world's :zones are the zone list."
   [world]
   (let [clock (atom 1000000)
         [seen sink] (tu/legacy-capture-sink)
         raw (tu/fake-on-floor world)
         p (perception/wrap raw (perception/create (fake-raw/create raw) {:radius 20 :ray-deg 1}))
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now #(deref clock)
+                          :world (ew/of-data {} {} (:zones world []))
                           :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
     {:eng eng :p p :seen seen :clock clock}))
 
@@ -783,6 +785,17 @@
           (is (= {:x -1 :y 64 :z 4} (:furnace (first (of-kind seen :smelt.furnace))))
               "the chosen furnace is told")
           (is (= 1 (count (:list (core/state eng)))) "while it cooks the job yields, listed"))))))
+
+(deftest a-seen-furnace-another-player-has-claimed-is-not-chosen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (seeing-setup {:blocks {"-1,64,4" "furnace" "0,64,9" "furnace"} :inventory iron-and-coal
+                                                   :zones [{:name "kitchen" :min [-3 60 2] :max [1 70 6] :owner "Miles"}]})]
+          (core/submit! eng '(jobs.items.smelt {:item "raw_iron" :count 3}) {})
+          (await (seeing-ticks s 3))
+          (is (nil? (:input (get (:furnaces @(fake/state p)) [-1 64 4]))) "the nearer one lies in another's zone")
+          (is (= {:name "raw_iron" :count 3} (:input (get (:furnaces @(fake/state p)) [0 64 9])))))))))
 
 (deftest without-a-furnace-or-item-it-uses-the-nearest-one-that-cooks-what-is-carried
   (async done
@@ -938,6 +951,17 @@
   "A jobs.blocks.place that always refuses, naming the footprint of another plan."
   {:ways (:ways (get registry/jobs 'jobs.blocks.place))
    :round (fn ^:async refuse [c] (ctx/end c :nothing-possible {:reason :footprint :text "the cell is inside another plan's footprint"}))})
+
+(deftest a-far-seen-furnace-gives-way-to-the-carried-one-put-down-here
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [[r p] (await (fetched-run {:blocks {"0,64,19" "furnace"} :floor [-5 -5 25 25]
+                                         :inventory (conj iron-and-coal {:name "furnace" :count 1})}
+                                        {:item "raw_iron" :count 3}))]
+          (is (= {:smelted 3 :wanted 3} (select-keys r [:smelted :wanted])))
+          (is (nil? (:input (get (furnaces-at p) (fake/parse-cell "0,64,19")))) "the far furnace is left alone")
+          (is (= 1 (count (remove #(= (fake/parse-cell "0,64,19") (key %)) (furnaces-at p)))) "its own stands beside the body"))))))
 
 (deftest a-carried-furnace-that-cannot-be-put-down-names-the-refusal
   (async done

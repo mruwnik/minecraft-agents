@@ -10,6 +10,7 @@
             [engine.settings :as settings]
             [jobs.items.smelt.fetch :as sf]
             [jobs.items.smelt.plan :as sp]
+            [jobs.lib.access :as access]
             [jobs.lib.furnace :as furnace]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
@@ -86,12 +87,6 @@
 
 (defn carried [c] (u/inventory (:primitives c)))
 
-(defn can-put-own?
-  "Whether the body carries a furnace or the 8 cobblestone to make one."
-  [c]
-  (let [inv (carried c)]
-    (or (pos? (storage/carried inv "furnace")) (>= (storage/carried inv "cobblestone") 8))))
-
 (defn cook-s
   "Seconds the cook of the count (a stack when nil) of each item takes at the furnace."
   [c]
@@ -102,18 +97,19 @@
 (defn exposed-furnace?
   "Whether a seen furnace at pos is one a player would not walk to: it lies in the dark (readiness :exposed, priced by the whole cook there) and the body can put one down where it stands."
   [c pos]
-  (and (can-put-own? c) (not= :ok (first (ready/exposed (assoc c ::price/stay-s (cook-s c)) pos)))))
+  (and (sf/own-possible? c) (not= :ok (first (ready/exposed (assoc c ::price/stay-s (cook-s c)) pos)))))
 
 (defn nearest-furnace
   "The nearest furnace, blast furnace or smoker the body has seen within seen-radius, still that block now, that
-  cooks item (or, when item is nil, anything carried; any kind when nothing carried is smeltable) and that a walk has not
+  cooks item, that no zone or claim of another bars (or, when item is nil, anything carried; any kind when nothing carried is smeltable) and that a walk has not
   found unreachable (furnace/unreachable-furnaces); nil when none."
   [c item]
   (let [names (if item [item] (map :name (carried c)))
+        barred? (fn [pos] (some #(access/container-refusal c % pos) [:put :take]))
         kinds (filter (fn [kind] (some #(sp/smelts? kind %) names)) (keys sp/cook-ticks))
         ok? (if (or item (seq kinds)) (set kinds) furnace-block?)]
     (->> (look/seen-blocks (:primitives c) {:names furnace-block? :radius (seen-radius) :max 16 :live? true})
-         (some #(when (and (ok? (:name %)) (not (contains? (furnace/unreachable-furnaces c) (:pos %))) (not (exposed-furnace? c (:pos %)))) (:pos %))))))
+         (some #(when (and (ok? (:name %)) (not (contains? (furnace/unreachable-furnaces c) (:pos %))) (not (barred? (:pos %))) (not (exposed-furnace? c (:pos %)))) (:pos %))))))
 
 (defn needs-attention?
   "Whether the block at pos is loaded and is no longer a lit furnace: it is not lit (the fuel ran out, or the cook
@@ -378,7 +374,7 @@
   chosen (nil), else put a carried or fetched one down. nil once a furnace is chosen; :continue while that goes on; a
   stop when none can be had, after the remembered one at any distance."
   [c input]
-  (if-let [pos (or (nearest-furnace c input) (sf/home-furnace c false))]
+  (if-let [pos (or (some->> (nearest-furnace c input) (sf/cheaper-than-own c)) (sf/home-furnace c false))]
     (choose-furnace! c pos)
     (let [f (await (sf/furnace-fetch! c))]
       (case f

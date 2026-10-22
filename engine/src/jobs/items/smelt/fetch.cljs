@@ -78,6 +78,14 @@
             (do (ctx/update-mem! c update :fetch-done (fnil conj #{}) stage)
                 (recur more))))))))
 
+(def own-place-blocks 8)
+
+(defn own-possible?
+  "Whether the body carries a furnace or the 8 cobblestone to make one."
+  [c]
+  (let [inv (carried c)]
+    (or (pos? (storage/carried inv "furnace")) (>= (storage/carried inv "cobblestone") 8))))
+
 (defn make-cost
   "What a furnace of its own costs, counting only what is missing: 0 with one carried, else the cobblestone short of 8 and,
   with no table carried or seen within 64, the table with the logs it is made of, a trip up to `surface-dy` blocks off when none are carried."
@@ -92,6 +100,14 @@
       0
       (+ (value "cobblestone" stone-short)
          (if (or table? (not wood-short?)) 0 (+ (value "crafting_table" 1) (:cost (cost/walk-cost {:distance surface-dy}))))))))
+
+(defn cheaper-than-own
+  "pos when walking to the seen furnace there costs no more than putting one's own down (a carried furnace, or one made of carried cobblestone, a few blocks' walk for the placing), else nil."
+  [c pos]
+  (let [me (u/self-pos c)
+        own (+ (make-cost c (js/Math.abs (- (:y pos) (:y me)))) (:cost (cost/walk-cost {:distance own-place-blocks})))]
+    (when (or (not (own-possible? c)) (<= (:cost (cost/walk-cost {:distance (u/dist me pos)})) own))
+      pos)))
 
 (defn home-furnace
   "The furnace the body remembers (the :furnace place), not one a walk found unreachable: with anywhere? any distance,

@@ -58,6 +58,13 @@
    :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-furnace-seen}} :for-s 15 :of-job true :until {:source :job :kind :completed}}]
    :after [[:item "iron_ingot" 2]]}
+  {:name "carried-furnace-is-put-down-rather-than-walking-to-a-far-seen-one"
+   :plot {:height 8 :length 64 :width 32}
+   :blocks [[:set [46 0 16] "furnace[facing=west]"]]
+   :body {:inventory [["furnace" 1] ["raw_iron" 2] ["coal" 2]]}
+   :act [[:job (jobs.items.smelt {:item "raw_iron" :count 2})]]
+   :expect [{:event {:source :job :kind :completed :data {:smelted 2}} :within-s 140 :of-job true}]
+   :after [[:item "iron_ingot" 2] [:body-near [16.5 0 16.5] 8]]}
   {:name "furnace-still-cooking-copper-is-waited-for-then-iron-loaded"
    :blocks [[:set [20 0 14] "furnace[facing=west,lit=true]{BurnTime:1600s,CookTime:0s,CookTimeTotal:200s,Items:[{Slot:0b,id:\"minecraft:raw_copper\",count:3},{Slot:1b,id:\"minecraft:coal\",count:2}]}"]]
    :body {:inventory [["raw_iron" 2] ["coal" 2]]}
