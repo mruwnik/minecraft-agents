@@ -9,7 +9,7 @@
   :limit-s 120}
  :cases
  [{:name "hungry-before-died-waits-for-the-recovery"
-   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {})}
+   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:carry 0})}
               {:trigger :died :persistence :cooldown :cooldown-s 30 :args {}}]
    :act [[:kill-body]
          [:await {:source :body :kind :respawned} 30]

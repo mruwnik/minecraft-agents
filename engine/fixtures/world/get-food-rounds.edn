@@ -7,7 +7,7 @@
   :plot {:height 6}
   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
               :job (jobs.survival.respond-to-hostile)}
-             {:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {})}]
+             {:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:carry 0})}]
   :body {:at [4.5 0 16.5] :settle-s 2}
   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
         [:rcon "damage $BODY 5 minecraft:generic"]]

@@ -17,7 +17,7 @@
    :expect [{:event {:source :job :kind :limit_reached :data {:cause {:line :wall-time}}} :within-s 25 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 20 :until {:source :job :kind :limit_reached} :of-job true}]}
   {:name "hungry-reflex-cuts-the-pause-which-then-completes"
-   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {})}]
+   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:carry 0})}]
    :body {:inventory [["bread" 6]] :effects []}
    :act [[:job (jobs.time.noop {:seconds 30})]
          [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
