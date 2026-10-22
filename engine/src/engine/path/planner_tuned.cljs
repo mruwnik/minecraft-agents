@@ -445,7 +445,8 @@
   place to stand but from.px/pz is given, the first cell the body's box (HITBOX-HALF) overlaps (hitbox-cells) that stands with
   the feet at from.py (when given, within 1/16); failing that, a cell the box overlaps whose stand is up to half a block
   under the feet (the low half of a stairs block: the body steps down off it). A body whose feet are above the floored
-  cell's floor (a stair, whose stand the search puts in the cell above it) otherwise starts from the cell above when that stands. Unchanged when the floored
+  cell's floor (a stair, whose stand the search puts in the cell above it) otherwise starts from the cell above when that stands;
+  one whose feet are up to 1/16 over the stand of the cell below (a short floor) starts from the cell below. Unchanged when the floored
   cell stands or no cell does.
   search: a search of query, initialised."
   [^Search search ^js query]
@@ -464,12 +465,17 @@
                                           d (- py (+ fy (/ h WHOLE)))]
                                       (and (>= h 0) (<= (- (/ 1 WHOLE)) d 0.5))))
                                   (hitbox-cells fx fz px pz))))
-        above? (and (some? py) (> py (+ fy (/ 1 WHOLE))) (>= (.nodeH search fx (inc fy) fz) 0))]
+        above? (and (some? py) (> py (+ fy (/ 1 WHOLE))) (>= (.nodeH search fx (inc fy) fz) 0))
+        ;; feet a hair above a short floor (farmland, a path: 15/16) that a neighbouring full block level with the cell's
+        ;; floor held up, so the floored cell has nothing under it but the cell below stands
+        below? (and (some? py) (let [h (.nodeH search fx (dec fy) fz)]
+                                 (and (>= h 0) (<= 0 (- py (+ (dec fy) (/ h WHOLE))) (/ 1 WHOLE)))))]
     (cond
       (>= (.-start-h search) 0) query
       (some? edge) (js/Object.assign #js {} query #js {:from (js/Object.assign #js {} from #js {:x (first edge) :z (second edge)})})
       (some? step-off) (js/Object.assign #js {} query #js {:from (js/Object.assign #js {} from #js {:x (first step-off) :z (second step-off)})})
       above? (js/Object.assign #js {} query #js {:from (js/Object.assign #js {} from #js {:y (inc fy)})})
+      below? (js/Object.assign #js {} query #js {:from (js/Object.assign #js {} from #js {:y (dec fy)})})
       :else query)))
 
 (defn- with-start-air

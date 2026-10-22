@@ -95,3 +95,8 @@
   (are [from first-cell] (= ["found" nil first-cell] (status+first (run (world {:fill [stair]}) (near 8 64 4) {} from)))
     ;; the low half (x .2, the box reaches the cell to the west): the walk starts from that cell, not hovering over the stair
     {:x 2 :y 64 :z 4 :px 2.2 :py 64.5 :pz 4.5} [1 64 4]))
+
+(deftest start-a-hair-above-farmland-plans-from-the-farmland-cell
+  ;; feet 1/16 over the 15/16-tall floor (held up by a full block beside it, as at a field edge)
+  (is (= ["found" nil [2 63 4]]
+         (status+first (run (world {:fill [[2 63 4 2 63 4 "farmland"]]}) (near 8 64 8) {} {:x 2 :y 64 :z 4 :px 2.5 :py 64 :pz 4.5})))))
