@@ -107,6 +107,20 @@
 
 (defn dig-xs [p] (mapv #(.-x (.-pos (.-args %))) (calls p "dig")))
 
+(deftest fell-tree-leafless-takes-a-bare-log-pile-only-when-no-tree-has-leaves
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pile {"3,64,0" "oak_log" "3,65,0" "oak_log"}
+              {:keys [eng p]} (setup {:blocks pile})]
+          (core/submit! eng (list 'jobs.forestry.fell-tree {:radius 10 :leafless? true}) {})
+          (await (run-until-empty eng 10))
+          (is (seq (calls p "dig")) "the pile is felled with :leafless?"))
+        (let [{:keys [eng p]} (setup {:blocks (merge {"3,64,5" "oak_log" "3,65,5" "oak_log"} (tree 8 0 "oak" 3))})]
+          (core/submit! eng (list 'jobs.forestry.fell-tree {:radius 10 :leafless? true}) {})
+          (await (run-until-empty eng 10))
+          (is (= [8] (distinct (dig-xs p))) "a tree with leaves goes first even when the pile is nearer"))))))
+
 (deftest fell-tree-skips-a-blocked-tree-for-the-next-candidate
   (async done
     (tu/run-async done

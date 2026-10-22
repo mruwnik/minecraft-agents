@@ -66,6 +66,7 @@
    :accept {:doc "dig hazards (jobs.lib.access.rules) taken: a set of :fluid-adjacent :lava-adjacent :falling-block" :spec (a/set-of #{:fluid-adjacent :lava-adjacent :falling-block}) :default #{:fluid-adjacent :falling-block}}
    :avoid {:doc "columns [x z] of trees to leave alone (ones an earlier run found cut off)" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
    :replant? {:doc "write a :forestry/replant debt per trunk cell felled; false when the tree is only in the way (clearing a site: a player would not plant there)" :spec boolean? :default true}
+   :leafless? {:doc "when no tree with leaves is in range, fell leafless log columns (a stump, a log pile, a village's frame)" :spec boolean? :default false}
    :part-cut? {:doc "fell only part-cut trunks (jobs.lib.part-cut: the lowest log raised over air, not joined to a standing tree)" :spec boolean? :default false}
    :ignore-zones? :shared})
 
@@ -142,7 +143,7 @@
         (when-not (or (excluded [(:x at) (:z at)]) (not (log/log-allowed? c (:base t))) (not (wanted? t))) [t]))
       (let [in (access/rules-input c (log/gate-opts c))]
         (filter #(and (not (own-spared? in (:base %))) (log/log-allowed? c (:base %)) (wanted? %))
-                (trees-near p radius species excluded))))))
+                (trees-near p radius species excluded (:leafless? (:args c))))))))
 
 (defn commit-tree!
   "Commit the column, species and base of the tree t to fell."
@@ -271,7 +272,10 @@
 
 (defn no-tree-cause [c]
   (let [{:keys [radius species at]} (:args c)]
-    (cond-> {:reason :no-tree :radius radius} species (assoc :species species) at (assoc :at at))))
+    (let [logs (count (trees/scan-logs (:primitives c) radius species))]
+      (cond-> {:reason :no-tree :radius radius :logs-seen logs}
+        (pos? logs) (assoc :text (str logs " logs seen but no tree with leaves (not asked for: :leafless?)"))
+        species (assoc :species species) at (assoc :at at)))))
 
 (defn tree-result [c]
   (let [m (ctx/mem c)]
@@ -450,7 +454,7 @@
   logs are picked up: one log item per log of the tree."
   [c]
   (let [{:keys [species radius at]} (:args c)
-        t (if at (tree-at (:primitives c) at) (tree-near (:primitives c) radius species))
+        t (if at (tree-at (:primitives c) at) (tree-near (:primitives c) radius species #{} (:leafless? (:args c))))
         n (if t (count (log/tree-logs c radius t)) 0)
         [wl wm] (or (when t (get-in (await (ctx/quote c 'jobs.movement.go-to {:pos (walk-target (:primitives c) t) :range 2})) [:uses :job-time])) [0 0])
         least (+ 2 wl)

@@ -1,0 +1,26 @@
+;; Logs with no leaves (a stump, a log pile, a village's frame) are still logs: with no tree anywhere in range obtain fells them.
+;; Plot 64 x 64, open sky over a glowstone floor (lit at any hour); body at the west end, a leafless 4 x 2 x 2 oak_log block 12 blocks east, no tree.
+;; Should-succeed: obtain oak_log x4 in sight of the pile gets the logs.
+;; Should-fail: harvest-wood without :leafless? waits :no-tree naming the logs it saw (data :logs-seen), and digs none.
+{:defaults
+ {:tags [:items :obtain :forestry :jobs]
+  :time :any
+  :plot {:height 12 :length 64 :width 64 :floor "glowstone" :light :sky}
+  :body {:at [10.5 0 30.5] :yaw 270 :settle-s 2 :inventory [["iron_axe" 1]] :effects [["resistance" 600 4]]}
+  :blocks [[:fill [22 0 30] [25 1 31] "oak_log"]]
+  :limit-s 200}
+ :cases
+ [{:name "obtain-fells-a-leafless-log-pile"
+   :act [[:job (jobs.items.obtain {:item "oak_log" :count 4 :ways #{:gather}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 180 :of-job true}]
+   :after [[:item "oak_log" 4]]}
+  {:name "obtain-fells-a-bare-trunk"
+   :blocks [[:fill [22 0 40] [22 4 40] "oak_log"]]
+   :body {:at [10.5 0 40.5]}
+   :act [[:job (jobs.items.obtain {:item "oak_log" :count 5 :ways #{:gather}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 180 :of-job true}]
+   :after [[:item "oak_log" 5]]}
+  {:name "harvest-wood-without-leafless-names-the-logs-it-saw"
+   :act [[:job (jobs.forestry.harvest-wood {:radius 20})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :no-tree}} :within-s 60 :of-job true}]
+   :after [[:item "oak_log" 0]]}]}

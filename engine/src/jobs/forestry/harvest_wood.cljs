@@ -31,6 +31,7 @@
    :center {:doc "the centre of the area the job works, a cell [x y z] or {:x :y :z}; nil: where the body stands when the job first runs (jobs.lib.area)" :spec a/position? :default nil}
    :ignore-zones? :shared
    :avoid {:doc "columns [x z] of trees to leave alone (passed to fell-tree)" :spec (a/coll-of (a/pred "an [x z] column" vector?)) :default nil}
+   :leafless? {:doc "when no tree with leaves is in range, fell leafless log columns (passed to fell-tree)" :spec boolean? :default false}
    :count {:doc "logs to carry: another tree is felled while fewer of the species' logs (any log when no species) are carried; nil: one tree" :spec (a/int-in 1 nil) :default nil}})
 
 (def ways (conj need/fetch-ways :pillar))
@@ -38,8 +39,9 @@
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds a harvest may take: every tree's felling." :spec (a/num-in 0 nil)}})
 
-(defn fell-args [{:keys [species radius ignore-zones? ways avoid]}]
+(defn fell-args [{:keys [species radius ignore-zones? ways avoid leafless?]}]
   (cond-> {:species species :radius radius :ignore-zones? ignore-zones?}
+    leafless? (assoc :leafless? true)
     (some? ways) (assoc :ways ways)
     (seq avoid) (assoc :avoid avoid)))
 

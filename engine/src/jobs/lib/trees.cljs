@@ -56,33 +56,37 @@
 
 (defn find-trees
   "The log columns whose top log has leaves close by, nearest first (lazily), each as
-  {:column {:x :z} :base pos :species name}. logs and leaves are scan results; columns in excluded (a set of [x z])
-  are skipped."
-  [logs leaves excluded]
+  {:column {:x :z} :base pos :species name}. With leafless? and none such in logs, the leafless columns instead (a stump,
+  a log pile, a village's frame are still logs to cut). logs and leaves are scan results; columns in excluded (a set of
+  [x z]) are skipped."
+  [logs leaves excluded leafless?]
   (let [logs (remove (fn [{:keys [pos]}] (excluded [(:x pos) (:z pos)])) logs)
         columns (group-by (fn [{:keys [pos]}] [(:x pos) (:z pos)]) logs)
-        tree? (fn [col]
-                (let [top (apply max-key #(get-in % [:pos :y]) col)]
-                  (some #(<= (u/dist (:pos top) (:pos %)) (leaf-reach)) leaves)))]
-    (keep (fn [[x z :as k]]
-            (let [col (get columns k)]
-              (when (tree? col)
-                (let [base (apply min-key #(get-in % [:pos :y]) col)]
-                  {:column {:x x :z z}
-                   :base (:pos base)
-                   :species (species-of (:name base))}))))
-          (distinct (map (fn [{:keys [pos]}] [(:x pos) (:z pos)]) logs)))))
+        leafy? (fn [col]
+                 (let [top (apply max-key #(get-in % [:pos :y]) col)]
+                   (some #(<= (u/dist (:pos top) (:pos %)) (leaf-reach)) leaves)))
+        trees (fn [keep-col?]
+                (keep (fn [[x z :as k]]
+                        (let [col (get columns k)]
+                          (when (keep-col? col)
+                            (let [base (apply min-key #(get-in % [:pos :y]) col)]
+                              {:column {:x x :z z}
+                               :base (:pos base)
+                               :species (species-of (:name base))}))))
+                      (distinct (map (fn [{:keys [pos]}] [(:x pos) (:z pos)]) logs))))]
+    (or (seq (trees leafy?)) (when leafless? (trees (complement leafy?))))))
 
 (defn trees-near
   "The trees of species (any when nil) within radius, nearest first (find-trees)."
-  ([p radius species] (trees-near p radius species #{}))
-  ([p radius species excluded]
-   (find-trees (scan-logs p radius species) (scan p (+ radius 4) leaves-name? max-leaves) excluded)))
+  ([p radius species] (trees-near p radius species #{} false))
+  ([p radius species excluded] (trees-near p radius species excluded false))
+  ([p radius species excluded leafless?]
+   (find-trees (scan-logs p radius species) (scan p (+ radius 4) leaves-name? max-leaves) excluded leafless?)))
 
 (defn tree-near
-  ([p radius species] (tree-near p radius species #{}))
-  ([p radius species excluded]
-   (first (trees-near p radius species excluded))))
+  ([p radius species] (tree-near p radius species #{} false))
+  ([p radius species excluded leafless?]
+   (first (trees-near p radius species excluded leafless?))))
 
 (def max-column
   "How far up a column logs-at looks, in blocks."

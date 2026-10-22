@@ -122,9 +122,9 @@
           (for [[k n] gather :when (wool? k)]
             {:key k :count n :job 'jobs.combat.hunt :sheep (wool-color k) :max-runs 1
              :args {:item k :count n :radius (animal-radius)}})
-          (when (pos? logs) [{:key "log" :count logs :job 'jobs.forestry.harvest-wood :seen trees/log-name? :args {:ways log-ways}}])
+          (when (pos? logs) [{:key "log" :count logs :job 'jobs.forestry.harvest-wood :seen trees/log-name? :args {:ways log-ways :leafless? true}}])
           (for [[k n] gather :when (trees/log-name? k)]
-            {:key k :count n :job 'jobs.forestry.harvest-wood :seen #{k} :args {:species (trees/species-of k) :ways log-ways}})
+            {:key k :count n :job 'jobs.forestry.harvest-wood :seen #{k} :args {:species (trees/species-of k) :ways log-ways :leafless? true}})
           (for [[k n] gather :when (material-blocks version k)]
             (let [blocks (material-blocks version k)]
               {:key k :count n :job 'jobs.gather.mine :seen blocks :tunnel? true
