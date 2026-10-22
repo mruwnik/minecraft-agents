@@ -50,7 +50,7 @@
   A door is always shut.
   Condition at the start: the night trigger's (a listed night waits :not-night, :spawn with the respawn bed's state); sheltered with nothing for the night to do, it is done before its first round. Quote: the time left of the night.
   Each pass chooses again from the world as it is, the first that applies:
-  - day: a furnace the hold put down is dug up once more; then the night is over: done {:night :slept|:dug-in|:logged-out|:roofed :fled n}, or nothing-possible :exposed after a night with no shelter.
+  - light outside and no bed term of the trigger (over?): a furnace the hold put down is dug up once more; then the night is over: done {:night :slept|:dug-in|:logged-out|:roofed :fled n}, or nothing-possible :exposed after a night with no shelter.
   - asleep: hold (:sleeping).
   - afloat: swim to the nearest dry land first (surface-up/leave-water!); none seen: nothing-possible :in-water. A swimmer is never roofed or sheltered.
   - roofed or buried in a closed region with sides never seen: a look at the nearest, else a walk to it, 15 failed cells and 200 steps a night at most (an unseen side is open until seen: a lit tunnel with its walls seen is shelter, one with an unseen branch is not).
@@ -59,6 +59,7 @@
   - an open door of the closed room the body stands in is shut; the room's doorway is filled before a carried bed goes down (ledger :doorway; one that cannot be filled for want of blocks, or was filled, is :doorway-tried, not tried again tonight).
   - a bed to use (sh-beds/bed-to-use) whose walk is safe (bed-walk-safe?: a whole route priced no dearer than staying put), or carried: jobs.survival.bed-down, called again until it ends; one that stops hostile-near ends the round nothing-possible :monsters-near (the trigger fires again after its cooldown).
   - someone else asleep: jobs.survival.log-out, a 30 s stint, not retried tonight when not ok.
+  - the sky not dark yet (dusk, a bed term started it): done; the shelter ways below wait for the dark.
   - a roof over a room with a hole (shelter.room_open warn): walled in under the roof (:enclose).
   - roofed, buried or shut in a closed room: done {:night :roofed}.
   - in a sealed room only dark cells beyond the spawn-free radius spoil, with torches or coal held, once a night, when its quote (torches x place time, crafting short torches from coal) is no more than the cheapest wall, pit or pocket: jobs.build.light-area over the room's cells (night.light), then the pass chooses again.
@@ -88,11 +89,19 @@
 
 (def fit? ready/ok)
 
+(defn trigger-args [c] (assoc (:args c) :ways (:ways (ctx/frozen-call c))))
+
+(defn over?
+  "The sky is light and no bed term of the trigger holds (sh/bed-holds?: a bed takes a sleeper from dusk, before the dark)."
+  [c]
+  (let [p (:primitives c)]
+    (not (or (sh-sense/dark-outside? p) (sh/bed-holds? p (ctx/view c) (trigger-args c) (bed-down/bed-permit c))))))
+
 (defn quiet-night
   "While the night trigger's condition fails: {:shelter} with the shelter the body is in (nil when none), else nil."
   [c]
   (let [p (:primitives c)]
-    (when-not (sh/night-holds? p (ctx/view c) (assoc (:args c) :ways (:ways (ctx/frozen-call c))) (bed-down/bed-permit c))
+    (when-not (sh/night-holds? p (ctx/view c) (trigger-args c) (bed-down/bed-permit c))
       {:shelter (sh-inside/night-sheltered p (:data (ctx/latest c :shelter)))})))
 
 (defn can-start?
@@ -112,10 +121,10 @@
     (not= pos (:pos (:data (ctx/latest c :spawn-lost))))))
 
 (defn night-over?
-  "A started night is over: light outside, not an exposed night (the pass ends that nothing-possible), no furnace left to dig up, no lost respawn bed to note."
+  "A started night is over (over?: light outside, no bed term), not an exposed night (the pass ends that nothing-possible), no furnace left to dig up, no lost respawn bed to note."
   [c]
   (and (checks/running? c)
-       (not (sh-sense/dark-outside? (:primitives c)))
+       (over? c)
        (not= :exposed (:sheltered (ctx/mem c)))
        (or (:furnace-final (ctx/mem c)) (not (:placed-furnace (ctx/mem c))))
        (not (spawn-lost-unnoted? c))))
@@ -415,7 +424,7 @@
 (defn bed-walk-hp
   "{:walk :stay}: the hp the walk to bed is expected to cost (spawns over its seconds in the dark, the planner's
   :dark-seconds over jobs.lib.cost/dark-factor of the kit; the fight with the hostiles known near its way) against
-  staying put as long (spawns at the feet while dark there and not underground; the hostiles known near the body), both
+  staying put as long (spawns at the feet unless underground or lit by a block (the sky's light goes with the night); the hostiles known near the body), both
   priced by jobs.lib.price/stay-hp and jobs.lib.cost/fight-damage. r is go-to's quoted route."
   [c bed r]
   (let [p (:primitives c)
@@ -428,7 +437,7 @@
                            (if (seq mobs)
                              (cost/fight-damage (assoc kit :mobs (mapv (fn [e] {:name (.-name e) :distance (danger/mob-distance p e) :hits 0}) mobs)))
                              0)))
-        here (if (or (sh-sense/buried? p) (not (look/dark-here? p))) 0 chance)]
+        here (if (or (sh-sense/buried? p) (pos? (or (sh-sense/block-light-at p (sh-sense/feet p)) 0))) 0 chance)]
     {:walk (+ (price/stay-hp c chance dark-s) (fight bed))
      :stay (+ (price/stay-hp c here secs) (fight (u/self-pos c)))}))
 
@@ -470,11 +479,11 @@
           (await (look/look-around! c))
           (ctx/remember! c :night-looked {:cell (sh-sense/feet p)} sh/night-looked-policy)
           :again)
-      (and (not (sh-sense/dark-outside? p)) (:placed-furnace (ctx/mem c)) (not (:furnace-final (ctx/mem c))))
+      (and (over? c) (:placed-furnace (ctx/mem c)) (not (:furnace-final (ctx/mem c))))
       (do (hold/busy! c)
           (when-not (await (hold/pick-up-furnace! c)) (ctx/update-mem! c assoc :furnace-final true))
           :again)
-      (not (sh-sense/dark-outside? p)) (if (= :exposed sheltered)
+      (over? c) (if (= :exposed sheltered)
                                          (ending/end-exposed! c)
                                          (ctx/end c :done nil (ending/done-data c sheltered)))
       (sh-sense/sleeping? p) (do (when-not (= :slept sheltered) (hold/sheltered! c :slept)) (await (hold/hold! c :sleeping)))
@@ -509,6 +518,7 @@
           far-home (await (enter-room! c (:name far-home)))
           (or bed (and bed-wanted (not home-near))) (await (bed-down-step c bed))
           (and bed-way (log-out-wanted? c)) (await (log-out-step c))
+          (not (sh-sense/dark-outside? p)) (ctx/end c :done nil (assoc (ending/done-data c sheltered) :text "no bed to take and the sky is not dark yet"))
           (and (:enclose (ctx/mem c)) (not= :dug-in sheltered)) (await (enclose! c))
           (and (sh-inside/safe-from-night? p) (empty? (sh/open-room-doors p)))
           (do (ctx/end c :done nil (ending/done-data c (if (= :logged-out sheltered) :logged-out :roofed))))
