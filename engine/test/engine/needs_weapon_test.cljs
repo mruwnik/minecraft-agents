@@ -45,3 +45,7 @@
     (memory-with 2000 [:died 1000 {:inventory [{:name "cobblestone" :count 9}]}] respawned) true
     (memory-with 2000 [:died 1000 {:inventory [{:name "iron_sword" :count 1}]}] respawned [:recovered 1500 {:decision :abandoned :death-t 1000}]) true
     (memory-with 400000 [:died 1000 {:inventory [{:name "iron_sword" :count 1}]}] respawned) true))
+
+(deftest a-sword-put-away-by-name-keeps-the-reflex-quiet
+  (is (false? (holds-with-memory? (memory-with 2000 [:weapon-stowed 1000 {:item "stone_sword"}]))))
+  (is (true? (holds-with-memory? (memory-with 2000)))))

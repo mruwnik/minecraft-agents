@@ -34,6 +34,16 @@
           (is (= {} (wt/inv p)))
           (is (= :done (:kind result))))))))
 
+(deftest deposit-of-a-named-weapon-is-remembered-so-the-reflex-leaves-it-in
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (wt/setup {:inventory [{:name "stone_sword" :count 1} {:name "dirt" :count 5}] :containers {"10,64,0" []}})]
+          (await (wt/ending-of eng job {:chest chest :items ["dirt"]} 8))
+          (is (nil? (mem/latest (mem/view (:store eng)) :weapon-stowed)) "dirt is no weapon")
+          (await (wt/ending-of eng job {:chest chest :items ["stone_sword"]} 8))
+          (is (= "stone_sword" (:item (:data (mem/latest (mem/view (:store eng)) :weapon-stowed))))))))))
+
 (deftest deposit-gives-up-when-the-transfer-says-ok-but-moves-nothing
   (async done
     (tu/run-async done
