@@ -25,10 +25,10 @@
    :after [[:block [19 3 16] "air"] [:block [18 2 16] "air"]]}
   {:name "second-run-along-the-earlier-tunnel-goes-on"
    ;; the first run cuts 3 blocks east (remembered as the body's own tunnel); the second run's cut cells touch that air and
-   ;; still ends by its length, not as a breach
+   ;; still ends by its length, not as a breach; :here, as the stair has moved the body since this call was submitted
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]
          [:job (jobs.gather.mine {:torches false :block "iron_ore" :count 1 :direction :east :ways #{:seen :strip-tunnel} :tunnel-length 3 :mend false}) [:alongside]]
-         [:job (jobs.gather.mine {:torches false :block "iron_ore" :count 1 :direction :east :ways #{:seen :strip-tunnel} :tunnel-length 3 :mend false}) [:alongside]]]
+         [:job (jobs.gather.mine {:torches false :block "iron_ore" :count 1 :direction :east :ways #{:seen :strip-tunnel} :tunnel-length 3 :mend false :here true}) [:alongside]]]
    :expect [{:count-event {:source :job :kind #{:completed :stopped} :data {:name "jobs.gather.mine" :stop :tunnel-length}} :for-s 110 :at-least 2}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:stop #{:breach-sealed :breach-open}}} :for-s 110}]
    :limit-s 220}]}
