@@ -5,6 +5,7 @@
             [engine.cornered-test :as ct]
             [engine.ctx :as ctx]
             [engine.fake :as fake]
+            [engine.memory :as mem]
             [engine.registry :as registry]
             [engine.scenario :as scenario]
             [engine.test-util :as tu]
@@ -12,10 +13,10 @@
 
 (defn holds? [self] (boolean ((:when (get triggers/all :low-health)) (tu/fake {:self self}) {} {})))
 
-(deftest low-health-holds-only-for-a-hurt-body-that-heals-by-waiting
+(deftest low-health-holds-for-a-hurt-body-its-own-reflexes-do-not-heal
   (are [self expected] (= expected (holds? self))
     {:health 4 :food 18} true
-    {:health 4 :food 17} false
+    {:health 4 :food 3} true
     {:health 6 :food 20} false
     {:health 0 :food 20} false
     {:health 4 :food 20 :effects [{:name "poison" :amplifier 0 :duration 400}]} false
@@ -44,14 +45,16 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [worked-at p]} (await (run! {:food 19} [{:name "bread" :count 2}] 1))]
+        (let [{:keys [worked-at p]} (await (run! {:food 12} [{:name "bread" :count 4}] 1))]
           (is (<= 12 worked-at) "the listed job started only once the body had healed")
-          (is (seq (ct/calls p "eat")) "a bite keeps food at 20 so regeneration goes on")
+          (is (<= 2 (count (ct/calls p "eat"))) "food under 18 is eaten up before the rest; a bite keeps it at 20")
           (is (empty? (ct/calls p "place")) "already shut in: nothing placed"))))))
 
 (deftest a-rest-that-heals-nothing-gives-up
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [worked-at]} (await (run! {:food 20} [] 0))]
-          (is (= 4 worked-at) "the rest ended :not-healing and the listed job ran"))))))
+        (let [{:keys [worked-at p eng]} (await (run! {:food 20} [] 0))]
+          (is (= 4 worked-at) "the rest ended :not-healing and the listed job ran")
+          (is (not ((:when (get triggers/all :low-health)) p (mem/view (:store eng)) {}))
+              "the trigger lets a rest that could not heal be for its retry time"))))))

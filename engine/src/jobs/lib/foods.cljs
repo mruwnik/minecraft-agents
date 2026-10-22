@@ -82,6 +82,8 @@
   "Natural regeneration needs food of at least this much (of 20)."
   18)
 
+(def full-food "A full food bar: saturation heals fastest on it." 20)
+
 (defn hungry-line
   "The food below which a body of this health is hungry: :food (default 7) plus one per missing hp, at most top-up-food: a
   hurt body below 18 food does not heal, so the more hurt it is the sooner it looks for food."
