@@ -182,6 +182,13 @@
     (is (nil? (walk/way-target body [{:x 0.5 :y 63 :z 0.5}] floors 12))
         "no nearer the threat than the body, but 3 blocks from it")))
 
+(deftest the-way-up-is-not-taken-through-a-mob-standing-in-its-mouth
+  (let [body {:x 0.5 :y 41 :z 0.5}
+        floors [[-2 52 -6]]]
+    (is (nil? (walk/way-target body [{:x -0.5 :y 41 :z 0.5}] floors 20))
+        "the stair top is far in 3D, but the mob stands on the line to it")
+    (is (some? (walk/way-target body [{:x 1.5 :y 41 :z 3.5}] floors 20)) "a mob behind the body is not in the way")))
+
 (def flat-world (fn [{:keys [y]}] (if (<= y 63) "stone" "air")))
 
 (deftest a-flight-leaves-out-the-ends-it-is-asked-to-avoid-unless-nothing-else-is-open

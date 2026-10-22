@@ -250,12 +250,21 @@
 
 (defn way-target
   "The feet cell, a map, of the highest floor of floors ([x y z], the stairs this body cut) within reach blocks and
-  above the body whose centre is no nearer any threat than the body: the way back up. nil when none."
+  above the body whose centre is no nearer any threat than the body and whose way does not run past one (a stair's
+  height makes its top look far from a mob that stands in its mouth): the way back up. nil when none."
   [from threats floors reach]
   (let [near-threat (fn [pos] (apply min (map #(u/dist pos %) threats)))
         now (near-threat from)
+        blocked? (fn [centre]
+                   (let [dx (- (:x centre) (:x from)) dz (- (:z centre) (:z from))
+                         len2 (+ (* dx dx) (* dz dz))]
+                     (some (fn [t] (let [tx (- (:x t) (:x from)) tz (- (:z t) (:z from))
+                                         along (/ (+ (* tx dx) (* tz dz)) (max len2 1e-6))]
+                                     (and (pos? along)
+                                          (< (js/Math.hypot (- tx (* (min along 1) dx)) (- tz (* (min along 1) dz))) 1.5))))
+                           threats)))
         cells (for [[x y z] floors
                     :let [cell {:x x :y (inc y) :z z} centre {:x (+ x 0.5) :y (inc y) :z (+ z 0.5)}]
-                    :when (and (> (inc y) (+ (:y from) 0.5)) (<= (u/dist from centre) reach) (>= (near-threat centre) now) (not (too-close? threats centre)))]
+                    :when (and (> (inc y) (+ (:y from) 0.5)) (<= (u/dist from centre) reach) (>= (near-threat centre) now) (not (too-close? threats centre)) (not (blocked? centre)))]
                 [cell (u/dist from centre)])]
     (some->> (seq cells) (sort-by (juxt (comp - :y first) second)) ffirst)))
