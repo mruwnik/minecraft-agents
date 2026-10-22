@@ -368,6 +368,15 @@
           (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])))
           (is (empty? (calls p "dig"))))))))
 
+(deftest go-to-sealed-in-its-own-shelter-by-night-stops-digging-out-once-the-night-job-has-shut-it-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p seen]} (await (run-in-shelter! 14000 [8 64 0] 1 {:reseals 1}))]
+          (is (empty? (events-of seen :go-to.escalated)))
+          (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])))
+          (is (empty? (calls p "dig"))))))))
+
 (deftest go-to-sealed-in-its-own-shelter-by-day-leaves-it-and-walks-on
   (async done
     (tu/run-async done

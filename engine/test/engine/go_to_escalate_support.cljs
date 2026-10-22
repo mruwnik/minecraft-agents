@@ -150,13 +150,14 @@
 (defn run-in-shelter!
   "go-to goal (default [8 64 0]) from inside a dirt shelter at the origin (a :shelter entry), the world's time as given."
   ([time] (run-in-shelter! time [8 64 0] 1))
-  ([time goal range]
+  ([time goal range] (run-in-shelter! time goal range {}))
+  ([time goal range entry]
   (let [cell (merge (box -6 63 -6 12 63 6 "stone") (dissoc (box -1 64 -1 1 66 1 "dirt") "0,64,0" "0,65,0"))
         {:keys [eng p seen]} (setup {:self {:pos {:x 0 :y 64 :z 0}} :blocks cell :time time :inventory [{:name "dirt" :count 5}]})
         out (atom :not-done)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent
                                     (recording-parent out 'jobs.movement.go-to {:pos goal :range range})))]
-    (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built}
+    (mem/write! (:store eng) :shelter (merge {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built} entry)
                 {:cap 10 :ttl 86400000})
     (core/submit! eng '(recording-parent) {})
     (-> (tick-out! eng 300) (.then (fn [_] {:out out :p p :seen seen}))))))

@@ -83,15 +83,17 @@
 (defn shelter-exit?
   "Whether a give-up with result may leave the body's own shelter instead: the walk proved the way needs the world
   changed, the body is shut in its shelter (at any hour: the start check priced the way out) and, while the sky is dark,
-  the goal lies outside it: a goal beside the body is no walk the start check let out, and the night job would shut the hole again."
+  the goal lies outside it (a goal beside the body is no walk the start check let out) and the night job has not yet shut the hole again (:reseals of the shelter entry): it would only dig it again."
   [c result]
   (boolean (and (not (contains? (skips c) :leave-shelter))
                 (or (escalate-reason? result (some-> (:doors (:args c)) keyword)) (sprint-only? result))
                 (sh-inside/sheltered-in c)
                 (let [p (:primitives c)
-                      goal (:pos (places/parse-pos (:pos (:args c))))]
+                      goal (:pos (places/parse-pos (:pos (:args c))))
+                      shelter (:data (ctx/latest c :shelter))]
                   (or (not (sh-sense/dark-outside? p)) (nil? goal)
-                      (sh-inside/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) goal 1))))))
+                      (and (zero? (:reseals shelter 0))
+                           (sh-inside/walk-leaves-shelter? p shelter goal 1)))))))
 
 (defn fetch-tool?
   "Whether the escalation may fetch a pickaxe (the stair's and a :dig-route dig's ways): the body is free (a shut-in body
