@@ -165,7 +165,7 @@
             targets (load-plan stacks (:leave (:args c)) (dec free) inv)]
         (if (empty? targets)
           (do (ctx/update-mem! c update :empty (fnil conj []) cell) :again)
-          (do (ctx/update-mem! c assoc :intent {:chest cell :targets targets :before (storage/carried-totals inv) :taken (apply merge-with + (map (fn [{:keys [name count]}] {name count}) (load-stacks stacks (:keep (:args c)) (dec free))))}) :again))))))
+          (do (ctx/update-mem! c assoc :intent {:chest cell :targets targets :before (storage/carried-totals inv) :taken (apply merge-with + (map (fn [{:keys [name count]}] {name count}) (load-stacks stacks (:leave (:args c)) (dec free))))}) :again))))))
 
 (defn ^:async take!
   "Take the saved load; the intent goes once the take is done. A chest that lacks part of it (:chest-lacks) is not a stop:

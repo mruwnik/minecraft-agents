@@ -58,7 +58,7 @@
                   (< (wheat-carried self) (bake-wheat))
                   (not (and learned (> learned gave-up)))))))
 
-(def defaults {:food foods/default-food :health foods/default-health :carry 0})
+(def defaults {:food foods/default-food :health foods/default-health})
 
 (defn hungry
   "Holds when hungry? says so, top-up? does (a hurt body below 18 food carrying common food), or eat-now? does.

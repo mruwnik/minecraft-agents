@@ -21,7 +21,7 @@
 
 (defn keeps
   "{name count} kept carried: the sowing reserve, a backup stack of each seed type, the bait wheat, the units the reserve register
-  holds (held: jobs.lib.reserve/held) and the :keep entries, whichever is largest for a name."
+  holds (held: jobs.lib.reserve/held) and the :carry entries, whichever is largest for a name."
   [sow held keep]
   (merge-with max sow (zipmap crops/waste-seeds (repeat (seed-backup))) {"wheat" (bait-wheat)} held keep))
 

@@ -32,7 +32,7 @@
 (def doc
   "Walk to the chest (one go-to) and deposit every stack in one call: the named :items in the order named, or everything but tools
   and armour (saplings included) and the units the reserve register holds (jobs.lib.reserve/held: the 3-day food reserve, bait, entries) in inventory order.
-  :carry leaves at least that many of a name carried. With explicit item names the reserve is ignored; :items :farm-goods puts away the farm goods (seeds, crops, melon, pumpkin, hay, cocoa) above the reserve and :keep.
+  :carry leaves at least that many of a name carried. With explicit item names the reserve is ignored; :items :farm-goods puts away the farm goods (seeds, crops, melon, pumpkin, hay, cocoa) above the reserve and :carry.
   Needs (can-start? and can-run?): a chest, the :chest argument or the known :chest place, else waits :no-chest (a chest place lost mid-job waits, a reflex ends
   condition-failed); a chest of the pool that zones or claims of another do not refuse :put, else waits :refused {:zones :claims}. :ignore-zones? skips it.
   Ends done when nothing is left to put away (also at once when nothing is), or at any other ending when at least the

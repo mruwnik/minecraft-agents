@@ -85,6 +85,7 @@
         (let [{:keys [eng p]} (setup {:containers {"10,64,0" [{:name "a" :count 5} {:name "keepme" :count 7}] "20,64,0" []}})
               result (await (child-outcome eng 'jobs.storage.haul {:from [[10 64 0]] :leave ["keepme"]} 60))]
           (is (= :done (:status result)))
+          (is (= {"a" 5} (:moved result)))
           (is (= [{:name "keepme" :count 7}] (map #(select-keys % [:name :count]) (get (containers p) [10 64 0]))))
           (is (= ["a"] (map :name (get (containers p) [20 64 0])))))))))
 
