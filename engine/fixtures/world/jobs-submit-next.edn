@@ -7,7 +7,12 @@
   :body {:at [4.5 0 16.5]}
   :limit-s 80}
  :cases
- [{:name "next-jumps-ahead-of-an-earlier-plain-submit"
+ [{:name "second-same-name-submit-is-held"
+   :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 1})]
+         [:http :submit (jobs.movement.go-to {:pos #at [100 0 16] :range 1}) [] {:ok false :reason :job-clash :clashes [:has {:name "jobs.movement.go-to"}]}]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [100.5 0 16.5] 2]]}
+  {:name "next-jumps-ahead-of-an-earlier-plain-submit"
    :act [[:job (jobs.movement.go-to {:pos #at [100 0 16] :range 1})]
          [:http :submit (jobs.memory.set-place {:name :wt-b :pos #at [6 0 16]}) [] {:ok true}]
          [:http :submit (jobs.memory.forget-place {:name :wt-c}) [:next] {:ok true}]

@@ -13,9 +13,4 @@
          [:await {:source :job :kind :waiting} 30]
          [:http :submit (jobs.access.tunnel {:target #at [16 6 20] :max-length 12}) [] {:ok false :reason :job-clash :clashes [:has {:name "jobs.access.stair"}]}]
          [:http :submit (jobs.access.tunnel {:target #at [16 6 20] :max-length 12}) [:alongside] {:ok true}]]
-   :expect [{:event {:source :job :kind :waiting} :within-s 30 :of-job true}]}
-  {:name "second-same-name-submit-is-held"
-   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3 :ways #{:carried}})]
-         [:await {:source :job :kind :waiting} 30]
-         [:http :submit (jobs.access.stair {:dir :down :heading :east :steps 3 :ways #{:carried}}) [] {:ok false :reason :job-clash :clashes [:has {:name "jobs.access.stair"}]}]]
    :expect [{:event {:source :job :kind :waiting} :within-s 30 :of-job true}]}]}
