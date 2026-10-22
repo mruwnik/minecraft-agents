@@ -1,5 +1,6 @@
 (ns jobs.access.stair
   (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.bridge :as bridge]
             [engine.args :as a]
             [jobs.lib.price :as price]
             [jobs.lib.stair-time :as stair-time]
@@ -406,7 +407,7 @@
               (or (await (sstep/lava-step! c :stair.sealed (:block-at in) feet [])) :finished)
               (let [{:keys [next cut] :as step-cells} (-> (geo/step-cells feet dir heading)
                                                            (as-> cs (assoc cs :up? (not= :down dir)
-                                                                 :bridged? (contains? (:bridged (ctx/mem c)) (:floor cs))
+                                                                 :bridged? (bridge/bridged? c (:floor cs))
                                                                  :filler? (some? (choose/filler c :build)))))
                     _ (await (sstep/look-ahead! c feet next cut))
                     _ (when-not (= :stop (:on-lava (:args c))) (await (sstep/look-at-lava! c (:block-at in) feet cut)))

@@ -194,7 +194,7 @@
   [c reason]
   (let [k (:animal (ctx/mem c))]
     (ctx/emit! c :herd.lure-lost :info {:animal k :reason reason :text (str "herd gives up the " (if (lure? c) "lured " "led ") (:mob (:args c)) ": " (if (= :animal-stalled reason) "it stopped following" (name reason)))})
-    (ctx/update-mem! c #(-> % (assoc :led []) (update :given-up assoc k reason) (dissoc :unseen-since :progress :waiting :back-to :search-rounds)))
+    (ctx/update-mem! c #(-> % (assoc :led []) (update :given-up assoc k reason) (dissoc :unseen-since :progress ::escort/waiting :back-to :search-rounds)))
     (regather-or-lose! c)))
 
 (defn ^:async lure-approach!

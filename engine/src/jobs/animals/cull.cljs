@@ -176,7 +176,7 @@
         (cond
           (and (nil? next-target) (seq skipped)) (finish! c :unreachable)
           (nil? next-target) (await (hunting/search! c none!))
-          :else (do (ctx/update-mem! c assoc :target (.-id next-target) :misses 0)
+          :else (do (ctx/update-mem! c assoc :target (.-id next-target) ::hunting/misses 0)
                     (await (hunting/attack! c (attack-opts c)))))))))
 
 (defn ^:async round

@@ -1,6 +1,6 @@
 (ns jobs.lib.hunting
   "The kill-and-collect steps combat.hunt and animals.cull share: the drops table, the attack child call, the
-  drop collection and the search wait. Memory keys: :target, :killed, :skipped, :skips, :collecting, :misses."
+  drop collection and the search wait. Memory keys: :target, :killed, :skipped, :skips, :collecting, ::misses."
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.game :as game]
@@ -132,8 +132,8 @@
 (defn ^:async search!
   "Nothing to attack: wait and look once more, then end with (end! c)."
   [c end!]
-  (let [misses (inc (:misses (ctx/mem c) 0))]
-    (ctx/update-mem! c assoc :misses misses)
+  (let [misses (inc (::misses (ctx/mem c) 0))]
+    (ctx/update-mem! c assoc ::misses misses)
     (if (>= misses 2)
       (end! c)
       (do (await (ctx/act c :wait #js {:ms 1000}))

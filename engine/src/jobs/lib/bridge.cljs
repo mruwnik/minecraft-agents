@@ -83,9 +83,14 @@
           (if (= "no-support" (some-> r .-status))
             {:reason :no-support-floor :cell cell :item item :why (str "nothing to place " item " against at " (pr-str cell))}
             {:reason :place-failed :cell cell :item item})
-          (do (ctx/update-mem! c update :bridged (fnil conj #{}) cell)
+          (do (ctx/update-mem! c update ::bridged (fnil conj #{}) cell)
               (spent/note! c item cell)
               nil))))))
+
+(defn bridged?
+  "Whether the job bridged the floor cell itself (placed it for a step), so what is under it is not judged."
+  [c cell]
+  (contains? (::bridged (ctx/mem c)) cell))
 
 (defn ^:async place-all!
   "Place item at each of cells in order: nil when all stand, else the first stop map."

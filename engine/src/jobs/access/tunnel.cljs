@@ -1,5 +1,6 @@
 (ns jobs.access.tunnel
   (:require [jobs.lib.block-sets :as bs]
+            [jobs.lib.bridge :as bridge]
             [engine.args :as a]
             [jobs.lib.waits :as waits]
             [jobs.lib.price :as price]
@@ -200,7 +201,7 @@
         accept (set (:accept (:args c)))
         in (judge/rules-in c feet)
         base (geo/step-cells feet :level (:heading plan))
-        {:keys [next cut] :as cells} (assoc base :bridged? (contains? (:bridged (ctx/mem c)) (:floor base))
+        {:keys [next cut] :as cells} (assoc base :bridged? (bridge/bridged? c (:floor base))
                                                  :filler? (some? (choose/filler c :build)))]
     (await (sstep/look-ahead! c feet next cut))
     (or (when-let [r (await (sstep/clear-own-cell! c in feet accept))] (case r :continue :again :yield :continue r))

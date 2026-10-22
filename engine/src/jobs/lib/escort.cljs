@@ -176,8 +176,8 @@
 (defn note-wait!
   "The first look of a wait in a row emits escort.waiting with both positions and the distance."
   [c a me]
-  (when-not (:waiting (ctx/mem c))
-    (ctx/update-mem! c assoc :waiting true)
+  (when-not (::waiting (ctx/mem c))
+    (ctx/update-mem! c assoc ::waiting true)
     (let [d (waiting-detail c a me)]
       (ctx/emit! c :escort.waiting :info
                  (assoc d :text (str "waiting for the " (:mob (:args c)) (when-not (:seen d) " (out of sight)")
@@ -214,7 +214,7 @@
         (ctx/update-mem! c #(-> % (dissoc :unseen-since :unseen-round) (assoc :last-seen pos)))
         (cond
           (not following?) :lead-broke
-          (<= d gap) (do (ctx/update-mem! c dissoc :progress :waiting :back-to :no-turn) nil)
+          (<= d gap) (do (ctx/update-mem! c dissoc :progress ::waiting :back-to :no-turn) nil)
           :else (let [{:keys [best]} (:progress m)
                       prog (if (or (nil? best) (< d (- best (closing-blocks)))) {:best d :at now} (:progress m))
                       turn? (and (= :lure (:method m)) (not (:no-turn m)) (or (:back-to m) (> (- now (:at prog)) (turn-back-ms))))]
