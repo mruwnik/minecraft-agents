@@ -109,6 +109,16 @@
     (is (false? (holds pct/part-cut-tree blocks [[trees/unreachable-kind {:column [6 0]}]])) "no refire on the failed column")
     (is (true? (holds pct/part-cut-tree blocks [[trees/unreachable-kind {:column [9 9]}]])) "another column")))
 
+(deftest the-part-cut-tree-trigger-is-a-bounded-chore
+  (let [blocks (merge (fm/ground [[6 0]]) (part-cut 6))
+        home (fn [x] [[:home {:pos {:x x :y 64 :z 0}}]])
+        logs (fn [n] [{:name "dark_oak_log" :count n}])]
+    (is (true? (holds pct/part-cut-tree blocks (home 20))) "near home")
+    (is (false? (holds pct/part-cut-tree blocks (home 100))) "a trunk far from home is not the body's to finish")
+    (is (true? (holds pct/part-cut-tree blocks [] (logs 63))))
+    (is (false? (holds pct/part-cut-tree blocks [] (logs 64))) "a stack of logs is enough")
+    (is (false? (holds pct/part-cut-tree blocks [] [{:name "oak_log" :count 40} {:name "birch_log" :count 24}])) "all species count")))
+
 (deftest the-replant-owed-trigger-holds-while-a-debt-s-sapling-is-carried
   (let [debt [[:forestry/replant {:pos {:x 6 :y 64 :z 0} :species "oak"}]]]
     (is (true? (holds ro/replant-owed {} debt [sapling])))

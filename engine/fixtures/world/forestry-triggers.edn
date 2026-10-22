@@ -63,6 +63,23 @@
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :for-s 30}]
    :after [[:block [16 6 16] "oak_log"]]
    :limit-s 40}
+  ;; The trigger is a bounded chore: a trunk far from the remembered home, or a body already carrying a stack of logs, is left.
+  {:name "part-cut-tree-trigger-leaves-a-trunk-far-from-home"
+   :register [{:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}]
+   :memory [{:kind :home :data {:pos #xyz [300 0 16]}}]
+   :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
+            [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :for-s 30}]
+   :after [[:block [16 6 16] "oak_log"]]
+   :limit-s 40}
+  {:name "part-cut-tree-trigger-leaves-a-trunk-while-a-stack-of-logs-is-carried"
+   :register [{:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}]
+   :body {:inventory [["iron_axe" 1] ["oak_log" 64]]}
+   :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
+            [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :for-s 30}]
+   :after [[:block [16 6 16] "oak_log"]]
+   :limit-s 40}
   {:name "replant-owed-trigger-plants-the-carried-sapling"
    :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 60}]
    :memory [{:kind :forestry/replant :data {:pos #xyz [16 0 16] :species "oak"}}]
