@@ -2807,6 +2807,12 @@ test('a body that never wakes within the bound: the act proceeds and fails as th
   assert.deepEqual(r, { status: 'failed', reason: 'asleep' })
 })
 
+test('moveTo with a bad offset rejects with bad-args', async () => {
+  const { p } = rig()
+  const bad = [{ dx: 0.5, dz: 0 }, { dx: 0 }, { dx: 'a', dz: 0 }]
+  for (const offset of bad) await assert.rejects(p.moveTo('t1', { pos: at(1, 64, 0), offset }), err => err.code === 'bad-args', JSON.stringify(offset))
+})
+
 test('craft with bad args rejects with bad-args', async () => {
   const { p } = rig()
   const bad = [{}, { item: '' }, { item: 'stick', count: 0 }, { item: 'stick', count: 1.5 }, { item: 'stick', table: { x: 1 } }]

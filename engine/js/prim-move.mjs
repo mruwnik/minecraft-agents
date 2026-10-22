@@ -58,6 +58,7 @@ export function createMove (env) {
     if (!isOwner(token)) throw cutError()
     need(isPos(a.pos), 'moveTo needs pos {x, y, z}')
     const { range = 1, timeoutS = 20, maxDistance = 64, maxDropDown } = a
+    need(a.offset === undefined || (isNum(a.offset.dx) && isNum(a.offset.dz) && Math.abs(a.offset.dx) <= 0.2 && Math.abs(a.offset.dz) <= 0.2), 'moveTo offset needs {dx, dz} numbers within 0.2')
     need(isNum(range) && range >= 0 && [timeoutS, maxDistance].every(n => isNum(n) && n > 0), 'moveTo range must be a number from 0, timeoutS and maxDistance numbers above 0')
     const target = cell(a.pos)
     const start = here()
@@ -83,6 +84,8 @@ export function createMove (env) {
     }
     return act(token, { boundS: Math.min(timeoutS, 60), onTimeout: () => outcome({ reached: false, reason: 'timeout' }) }, async ctx => {
       const first = await walk(ctx, goal, { maxDropDown })
+      // offset {dx, dz}: end on that point of the arrival cell (make-room steps to the back edge of its cell, out of reach of the junk it threw)
+      if (a.offset && !capped && first.reached && satisfied()) await centreBody(ctx, env.bot, { ...standingCell(), dx: a.offset.dx, dz: a.offset.dz }, 0.05)
       // a hop that starts underground may have no surface to end on: head for the XZ point instead
       if (!capped || first.reason !== 'noPath' || goal.open(standingCell())) return outcome(first)
       hop = 'xz'

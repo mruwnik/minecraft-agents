@@ -134,7 +134,7 @@ Statuses below are the common ones; `reason` and extra fields are in `js/primiti
 
 | method | args | statuses |
 |---|---|---|
-| `moveTo` | `{pos, range=1, timeoutS=20, maxDistance=64, maxDropDown}` (maxDropDown caps the blocks a drop of the path falls, default 3; numbers, range from 0, the others above 0, else `bad-args`) | `arrived`, `partial`, `blocked` (reason `noPath`, `planTimeout`, `stalled`, `timeout`), `refused-mounted`. Uses the mineflayer pathfinder and treats doors as walls; jobs walk with `go-to` instead |
+| `moveTo` | `{pos, range=1, timeoutS=20, maxDistance=64, maxDropDown, offset}` (offset {dx, dz} within 0.2: end on that point of the arrival cell; maxDropDown caps the blocks a drop of the path falls, default 3; numbers, range from 0, the others above 0, else `bad-args`) | `arrived`, `partial`, `blocked` (reason `noPath`, `planTimeout`, `stalled`, `timeout`), `refused-mounted`. Uses the mineflayer pathfinder and treats doors as walls; jobs walk with `go-to` instead |
 | `dig` | `{pos, timeoutS?}` | `dug` (`drops`), `missing` (air, a fluid or unloaded), `unreachable` (over 4.5), `cannot` |
 | `place` | `{pos, item, click?}` | `placed`, `occupied`, `no-item`, `no-support`, `unreachable`, `failed` (server refused: reason names face, body spot and entities near the cell); buckets pour/scoop at `pos` |
 | `jumpPlace` | `{item, count=1}` (max 8) | `done`, `partial`, `failed` (`no-item`, `no-support`, `no-headroom`, `not-raised`) |

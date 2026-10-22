@@ -42,7 +42,7 @@
      of the four directions with two free cells ahead at eye level and tosses; with none (walled in, after one look around) nothing is
      thrown or swapped, since it would come straight back.
   After tossing, the cleanup export (however the call ends; it also notes the :make-room-rest memory the inventory trigger rests on) walks up to :away blocks from where the items were thrown (a go-to child; the farthest cell back
-  that is no seen obstacle, none: no walk), so it does not pick them up again.
+  that is no seen obstacle; none: a step to the back edge of the cell, out of the pickup reach of items stopped by a wall 1.5 ahead), so it does not pick them up again.
   Resume: a toss or swap writes its intent first; a run that finds one (after a cut or a restart) checks the
   inventory before acting again. What was tossed before a cut stays in the result when the job survives the cut (a
   child); the spot to walk away from is body memory, so a cut reflex's refire still walks away from it.
@@ -241,14 +241,21 @@
        (filter #(standable? p %))
        first))
 
+(def edge-back
+  "How far (blocks) the body steps to the back edge of its cell when it cannot walk away from its toss: a wall 1.5 ahead
+  stops the items 1.375 from the cell centre, inside the 1.425 pickup reach; 1.555 is out of it."
+  0.18)
+
 (defn ^:async walk-away!
   "Walk up to :away blocks back from spot, where the items were thrown (a go-to child), so they are not picked up
-  again; no walk when no cell behind it can be stood on. Best effort: a walk that does not arrive is not retried. The
-  walk is run to its end (child/run!*); the spot is forgotten whatever the result."
+  again; with no cell behind it to stand on, step to the back edge of the cell (edge-back). Best effort: a walk that
+  does not arrive is not retried. The walk is run to its end (child/run!*); the spot is forgotten whatever the result."
   [c {:keys [at dir]}]
   (let [goal (away-goal (:primitives c) at (:away (:args c)) dir)
-        r (when goal
-            (await (child/run!* c :away 'jobs.movement.go-to {:pos goal :range 1 :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))})))]
+        [dx dz] dir
+        r (if goal
+            (await (child/run!* c :away 'jobs.movement.go-to {:pos goal :range 1 :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))}))
+            (await (ctx/act c :moveTo (clj->js {:pos at :range 0 :offset {:dx (- (* edge-back dx)) :dz (- (* edge-back dz))}}))))]
     (ctx/forget-where! c :make-room-tossed (constantly true))
     r))
 

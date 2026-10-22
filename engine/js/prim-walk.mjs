@@ -27,7 +27,7 @@ export function createWalk (env) {
     const adjacent = Math.abs(to.x - from.x) + Math.abs(to.z - from.z) === 1
     return adjacent && to.y === from.y + 1 ? to : null
   }
-  const faceCentre = (body, c) => body.lookAt(new Vec3(c.x + 0.5, body.entity.position.y + (body.entity.eyeHeight ?? EYE_HEIGHT), c.z + 0.5), true)
+  const faceCentre = (body, c) => body.lookAt(new Vec3(c.x + 0.5 + (c.dx ?? 0), body.entity.position.y + (body.entity.eyeHeight ?? EYE_HEIGHT), c.z + 0.5 + (c.dz ?? 0)), true)
   // A forced look only sets the rotation locally; mineflayer writes it to the server in the physics tick that follows,
   // synchronously after emitting 'physicsTick'. So resolve on the next tick (bounded, physics may be off). Always
   // wait, even when the rotation did not change: another forced look (faceCentre, jumpPlace, swim) may have set it
@@ -47,7 +47,7 @@ export function createWalk (env) {
       ctx.alive()
     }
   }
-  // Sneaks to the middle of `centre` (a cell), forward held only while off-centre: sneaking is slow enough not to
+  // Sneaks to the middle of `centre` (a cell; dx, dz shift the point inside it), forward held only while off-centre: sneaking is slow enough not to
   // overshoot into the far wall. True when within `tolerance` and stopped (already or after), false after CENTRE_S;
   // always leaves sneak and forward released. Forward is released as soon as the body is within tolerance, and the
   // body is only done once it has coasted to a stop: it would otherwise drift ~0.1 further during a jump.
@@ -55,7 +55,7 @@ export function createWalk (env) {
   const centreBody = async (ctx, body, centre, tolerance = setting('prim/centre-tolerance')) => {
     // a server correction replaces the position object, so it is read fresh at every use
     const live = () => body.entity.position
-    const toCentre = () => Math.hypot(centre.x + 0.5 - live().x, centre.z + 0.5 - live().z)
+    const toCentre = () => Math.hypot(centre.x + 0.5 + (centre.dx ?? 0) - live().x, centre.z + 0.5 + (centre.dz ?? 0) - live().z)
     const speed = () => Math.hypot(body.entity.velocity?.x ?? 0, body.entity.velocity?.z ?? 0)
     const centred = () => toCentre() < tolerance && speed() < setting('prim/centre-speed')
     if (centred()) return true

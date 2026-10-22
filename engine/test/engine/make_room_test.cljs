@@ -511,6 +511,16 @@
           (is (= [{:x -3 :y 65.5 :z 0}] (mapv #(js->clj (arg-of "pos" %) :keywordize-keys true) (calls p "look")))
               "east is walled at eye level: west is the first free direction"))))))
 
+(deftest with-no-cell-behind-to-walk-to-the-body-steps-to-the-back-edge-of-its-cell
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:inventory (many "junk" 35)
+                                      :blocks (into {} (for [x (range 1 5) y [64 65]] [(str x "," y ",0") "stone"]))})]
+          (await (run-reflex eng {:free 2} {}))
+          (is (= [{:dx 0.18 :dz -0}] (mapv #(js->clj (arg-of "offset" %) :keywordize-keys true) (calls p "moveTo")))
+              "thrown west into a wall 1.5 ahead, it ends at the east edge of its cell, out of the junk's pickup reach"))))))
+
 (deftest a-caller-can-have-the-toss-go-away-from-the-way-it-goes-on
   (async done
     (tu/run-async done
