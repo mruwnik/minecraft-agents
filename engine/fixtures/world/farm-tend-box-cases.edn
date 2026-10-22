@@ -64,6 +64,13 @@
    :act [[:job (jobs.farm.harvest {:area {:min #xyz [10 0 16] :max #xyz [11 0 16]} :replant false})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:cut 2}} :within-s 80 :of-job true}]
    :after [[:block [10 0 16] "air"] [:block [11 0 16] "air"] [:block [12 0 16] "wheat[age=7]"] [:block [13 0 16] "wheat[age=7]"]]}
+  ;; The ground-layer box (as till and plant take it) holds the crops standing one above it.
+  {:name "harvest-ground-layer-box-cuts-the-crops-standing-on-it"
+   :blocks [[:fill [10 -1 16] [13 -1 16] "farmland[moisture=7]"] [:fill [10 -2 17] [13 -2 17] "stone"] [:fill [10 -1 17] [13 -1 17] "water"]
+            [:fill [10 0 16] [13 0 16] "wheat[age=7]"]]
+   :act [[:job (jobs.farm.harvest {:area {:min #xyz [10 -1 16] :max #xyz [11 -1 16]} :replant false})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:cut 2}} :within-s 80 :of-job true}]
+   :after [[:block [10 0 16] "air"] [:block [11 0 16] "air"] [:block [12 0 16] "wheat[age=7]"] [:block [13 0 16] "wheat[age=7]"]]}
   {:name "plant-box-sows-farmland-behind-the-body"
    :blocks [[:fill [10 -1 18] [13 -1 18] "farmland[moisture=7]"] [:fill [10 -2 19] [13 -2 19] "stone"] [:fill [10 -1 19] [13 -1 19] "water"]]
    :body {:at [11.5 0 14.5] :yaw 180 :inventory [["wheat_seeds" 10]]}

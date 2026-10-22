@@ -49,7 +49,7 @@
   sweep or given-up cell is left (and :least is met): a field with nothing ripe at the start ends :done :already.")
 
 (a/defargs args
-  {:area {:doc "the field: a box {:min :max} (corners inclusive; only crops inside it are cut), a circle {:pos :radius} (a sphere) or {:plan id :part name} (the plan's crop cells); nil: a circle of radius 12 round the body's position when the job first runs" :spec fa/spec :default nil}
+  {:area {:doc "the field: a box {:min :max} (corners inclusive, the ground layer is the lowest y and the crops one above it are inside; only crops inside it are cut), a circle {:pos :radius} (a sphere) or {:plan id :part name} (the plan's crop cells); nil: a circle of radius 12 round the body's position when the job first runs" :spec fa/spec :default nil}
    :replant {:doc "replant what was cut" :spec boolean? :default true}
    :replant-bare {:doc "with :plan, also sow the planned cells that stood bare before; false: only the cells this run cut" :spec boolean? :default true}
    :crops {:doc "crop block names to cut; all known crops when nil" :spec (a/coll-of a/name?) :default nil}

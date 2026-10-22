@@ -65,11 +65,11 @@
     nil))
 
 (defn contains-pos?
-  "Whether pos lies in a box, circle (within radius of the centre) or cells area."
+  "Whether a crop cell pos lies in a box (its ground layer is the lowest y, the crops stand one above: a one-layer box holds them too), circle (within radius of the centre) or cells area."
   [area pos]
   (case (kind area)
     :box (let [{lo :min hi :max} (box area)]
-           (and (<= (:x lo) (:x pos) (:x hi)) (<= (:y lo) (:y pos) (:y hi)) (<= (:z lo) (:z pos) (:z hi))))
+           (and (<= (:x lo) (:x pos) (:x hi)) (<= (:y lo) (:y pos) (max (:y hi) (inc (:y lo)))) (<= (:z lo) (:z pos) (:z hi))))
     :circle (<= (u/dist (a/cell (:pos area)) pos) (:radius area))
     :cells (let [p (a/cell pos)] (boolean (some #(= (a/cell %) p) (:cells area))))
     false))

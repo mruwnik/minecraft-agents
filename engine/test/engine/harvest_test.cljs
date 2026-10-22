@@ -607,3 +607,8 @@
           (is (zero? (count (calls p "dig"))) "the crop read ripe in memory, unripe in view: not cut")
           (is (zero? (:cut result)))
           (is (not= :no-crop-seen (:reason result)) "it was a target, then skipped"))))))
+
+(deftest a-ground-layer-box-holds-the-crops-standing-on-it
+  (let [p (tu/seeing-all (tu/fake {:blocks {"1,64,0" "wheat" "2,65,0" "wheat"} :ages {"1,64,0" 7 "2,65,0" 7}}))
+        area {:min {:x 0 :y 63 :z 0} :max {:x 2 :y 63 :z 0}}]
+    (is (= [1] (mapv :x (fld/ripe-crops p (assoc (plain-args {}) :radius 4 :area area) {:x 1 :y 63 :z 0} []))))))
