@@ -268,6 +268,7 @@
    ::swim-ms {:default planner/swim-sub-ms :doc "Milliseconds a swimmer takes per block, to price a swim to a pocket of air (the planner's price of a swim with the head under water)." :spec (a/num-in 0 nil)}})
 
 (defn swim-ms [] (settings/get settings ::swim-ms))
+(defn margin-s [] (settings/get settings ::margin-s))
 
 (defn effect? [self names]
   (boolean (some #(contains? names (.-name %)) (array-seq (.-effects self)))))

@@ -1,0 +1,21 @@
+;; Card 1c2d42f7: the pile lies at the bottom of a 1x1 water shaft 28 deep; the body respawns on its rim with no block. A dive down and up is 2 x 28 x 0.26 s = 14.6 s, more than the 12 s of air it may spend (15 s less the 3 s margin),
+;; and with no block it can make no air pocket or footing.
+;; Should-succeed: the run skips with the reason no-air-way and the body takes no drowning damage. Should-fail: it walks into the shaft (child go started) or is hurt.
+{:defaults
+ {:tags [:survival :death :jobs :water]
+  :time :any
+  :plot {:height 31 :light :lit}
+  :blocks [[:fill [0 0 0] [8 28 16] "stone"]
+           [:fill [4 1 8] [4 28 8] "water"]
+           [:fill [3 29 8] [3 30 8] "air"] [:fill [4 29 8] [4 30 8] "air"]]
+  :memory [{:kind :died :age-s 20
+            :data {:pos #xyz [4.5 1 8.5] :dimension "overworld" :cause "drowning" :inventory [{:name "raw_iron" :count 24 :slot 0}] :experience {:level 0 :points 0}}}
+           {:kind :respawned :age-s 18 :data {:pos #xyz [3.5 29 8.5]}}]
+  :body {:at [3.5 29 8.5] :settle-s 1}
+  :limit-s 100}
+ :cases
+ [{:name "pile-at-the-bottom-of-a-deep-shaft-is-skipped-for-the-air"
+   :act [[:job (jobs.survival.recover-drops)]]
+   :expect [{:event {:source :job :kind :stopped :data {:decision :skip :text [:contains "no-air-way"]}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :child_started :data {:slot :go}} :for-s 40 :until {:source :job :kind :stopped}}
+            {:no-event {:kind :hurt} :for-s 40 :until {:source :job :kind :stopped}}]}]}

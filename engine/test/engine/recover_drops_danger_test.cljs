@@ -166,7 +166,7 @@
            (mapv :name (:top-mobs (estimate/estimate {:primitives p :args {} :view #(mem/view (:store eng))} death 5000)))))))
 
 (deftest a-route-that-drowns-and-takes-long-is-priced-for-the-air-and-the-time
-  (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities []})
+  (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities [] :inventory [{:name "cobblestone" :count 8}]})
         death {:pos {:x 20 :y 64 :z 0} :inventory dt/death-pile-of-the-field-report}
         c {:primitives p :args {} :view #(mem/view (:store eng))}
         dry (estimate/estimate c death 5000)
@@ -174,6 +174,17 @@
     (is (= ["water"] (mapv :name (:top-mobs wet))))
     (is (< (get-in dry [:parts :walk] 0) (get-in wet [:parts :walk])) "the quoted seconds, not the straight line, price the walk")
     (is (< (:cost dry) (:cost wet)))))
+
+(deftest a-pile-the-body-cannot-dive-to-on-one-breath-is-skipped-unless-it-carries-a-block
+  (let [wet (into {} (for [y (range 40 65)] [(str (:x dt/death-pos) "," y "," (:z dt/death-pos)) "water"]))
+        death {:pos {:x (:x dt/death-pos) :y 40 :z (:z dt/death-pos)} :inventory dt/death-pile-of-the-field-report}
+        est (fn [inventory quoted]
+              (let [{:keys [eng p]} (setup {:floor tu/walk-floor :entities [] :blocks wet :inventory inventory})]
+                (estimate/estimate {:primitives p :args {} :view #(mem/view (:store eng))} death 5000 quoted)))
+        bare (est [] nil)]
+    (is (= [:infinite :no-air-way] ((juxt :cost :reason) (update bare :cost estimate/finite))) "25 cells down and up is more than the air, and no block")
+    (is (not= js/Infinity (:cost (est [{:name "cobblestone" :count 8}] nil))) "a carried block can make air")
+    (is (= :no-air-way (:reason (est [] {:uses {:job-time [5 5 5]} :route {:drown 4}}))) "a quoted route that drowns")))
 
 (deftest a-later-death-by-a-mob-near-an-older-pile-guards-that-pile-too
   (async done

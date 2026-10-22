@@ -6,6 +6,8 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.aim :as aim]
+            [jobs.lib.breath :as breath]
+            [jobs.lib.escape :as escape]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
@@ -33,7 +35,7 @@
 
 (defn decision-text [decision {:keys [reason items detail] :as decided} margin]
   (case decision
-    :skip (str "skip: " (why-text decided margin))
+    :skip (str "skip: " (why-text decided margin) (when detail (str ": " detail)))
     :fetch (str "fetch: " (why-text decided margin))
     :collected (str "collected " items " items")
     :partial (str "partial: " items " items back, left " (str/join ", " (map (fn [[k n]] (str n " " k)) (:left decided)))
@@ -56,6 +58,25 @@
   [kind-at pos]
   (let [[x y z] (map js/Math.floor [(:x pos) (:y pos) (:z pos)])]
     (boolean (and pos (or (= :water (kind-at x y z)) (= :water (kind-at x (inc y) z)))))))
+
+(defn dive-s
+  "Seconds to swim down from the surface of the water over the pile's cell and back up: twice the water cells over it."
+  [kind-at pos]
+  (let [[x y z] (map js/Math.floor [(:x pos) (:y pos) (:z pos)])
+        depth (count (take-while #(= :water (kind-at x % z)) (range y (+ y 48))))]
+    (/ (* 2 depth (breath/swim-ms)) 1000)))
+
+(defn no-air-way
+  "The text that names why a pile under water is not gone for, else nil: the trip there and back does not fit one breath (the quoted
+  route drowns, or the dive down the pile's column and up is longer than the air less ::breath/margin-s) and no block is carried to
+  make an air pocket or a footing with."
+  [p kind-at pos drown-hp]
+  (when (and pos (wet-pile? kind-at pos) (nil? (escape/carried-pillar-item p)))
+    (let [dive (dive-s kind-at pos)
+          air (- (breath/air-left-s (.self p)) (breath/margin-s))]
+      (cond
+        (pos? drown-hp) (str "the way there drowns the body (" drown-hp " hp) and it carries no block to make air with")
+        (> dive air) (str "a dive of " (js/Math.round dive) " s there and back, " (js/Math.round air) " s of air and no block to make air with")))))
 
 (defn later-killers
   "[{:name :pos :left-ms}] (:left-ms of its guard) of the killers of the body's other deaths inside ::killer-guard-ms, each assumed where it killed: a
@@ -126,16 +147,18 @@
                :danger (max drown-hp (if (or (= "drowning" cause) (wet-pile? kind-at pos)) (cfg/wet-danger) 0))})
         quoted-s (let [mean (second (get-in quoted [:uses :job-time]))] (when (and (number? mean) (js/isFinite mean)) mean))
         threat (cond-> threat wet (-> (update :danger + (:danger wet)) (update :mobs #(vec (cons wet %)))))
-        fetch (cost/fetch-cost {:distance (when pos (max (u/dist here pos) (* (or quoted-s 0) (cost/walk-blocks-per-s)))) :danger (:danger threat) :elapsed-ms elapsed :cause cause})]
+        fetch (cost/fetch-cost {:distance (when pos (max (u/dist here pos) (* (or quoted-s 0) (cost/walk-blocks-per-s)))) :danger (:danger threat) :elapsed-ms elapsed :cause cause})
+        drowns (when-not (:reason fetch) (no-air-way p kind-at pos drown-hp))]
     (cond-> {:value (+ (:value worth) (cost/experience-cost experience))
-             :cost (:cost fetch)
+             :cost (if drowns js/Infinity (:cost fetch))
              :hold-ms (if (and (seq (:mobs threat)) (every? guard-spots (map :pos (:mobs threat))))
                         (min (cfg/danger-memory-ms) (apply max 0 (map :left-ms guard)))
                         (cfg/danger-memory-ms))
              :flight-s (flight-s here (:mobs threat))
              :top-items (mapv #(select-keys % [:name :count :value]) (take (cfg/top-n) (:items worth)))}
-      (:parts fetch) (assoc :parts (:parts fetch))
-      (:reason fetch) (assoc :reason (:reason fetch))
+      drowns (assoc :reason :no-air-way :detail drowns)
+      (and (not drowns) (:parts fetch)) (assoc :parts (:parts fetch))
+      (and (not drowns) (:reason fetch)) (assoc :reason (:reason fetch))
       (seq (:mobs threat)) (assoc :seen-mobs (vec (for [m (:mobs threat) :when (and (:pos m) (not (guard-spots (:pos m))))] (select-keys m [:name :pos])))
                                   :top-mobs (mapv #(select-keys % [:name :danger]) (take (cfg/top-n) (:mobs threat))))))))
 
