@@ -1,6 +1,6 @@
 (ns engine.path.planner.moves
   "Search methods: the moves out of a node: walks, diagonals, jumps, drops, gap jumps and climbing."
-  (:require [engine.path.planner.base :refer [CLIMB-FALL-P CLIMB-FALL-SCAN FULL-HEALTH ARC ARC-UP BODY CLIMB-TRAP-SHUT CORNER-S GAP-PIT-RISK GAP-S GAP-UP-S GRID HAZARD-SLIDE-RISK JUMP-S JUMP-UP LAVA MOVE-CLIMB-DOWN MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-OPEN MOVE-SWIM MOVE-WALK SLOW-EXTRA SNAP SQRT2 STEP UNLOADED WATER WHOLE FREE-FALL BOUNCE-S pad-cells]]
+  (:require [engine.path.planner.base :refer [CLIMB-FALL-P CLIMB-FALL-SCAN FULL-HEALTH ARC ARC-UP BODY CLIMB-TRAP-SHUT CORNER-S GAP-PIT-RISK GAP-S GAP-UP-S GRID HAZARD-SLIDE-RISK JUMP-S JUMP-UP LAVA MOVE-CLIMB-DOWN MOVE-CLIMB-UP MOVE-CORNER MOVE-DIAGONAL MOVE-DROP MOVE-GAP MOVE-JUMP MOVE-JUMP-CLIMB MOVE-OPEN MOVE-SWIM MOVE-WALK SLOW-EXTRA SNAP SQRT2 STEP UNLOADED WATER WHOLE FREE-FALL STALAGMITE-FACTOR STALAGMITE-FREE-FALL BOUNCE-S pad-cells]]
             [engine.path.planner.search :refer [Search]]))
 
 (set! *warn-on-infer* true)
@@ -47,7 +47,7 @@
   ;; the hp a fall of fall16 (1/16 blocks) takes onto a block of landing factor f (landFactor): over FREE-FALL blocks, scaled
   ;; by f, the fall factor and the drop factor; a negative f is a bounce: no damage (see bounceS)
   (dropDamage [s f fall16]
-    (let [over (- (/ fall16 16) FREE-FALL)]
+    (let [over (- (/ fall16 16) (if (== f STALAGMITE-FACTOR) STALAGMITE-FREE-FALL FREE-FALL))]
       (if (or (<= over 0) (neg? f))
         0
         (* (.-c-drop-factor s) (.-fall-factor s) (js/Math.ceil (* over f))))))
@@ -64,6 +64,7 @@
   (landFactor [s sup x y z fall16]
     (let [land (if (some? (.-land-factors s)) (.get ^js (.-land-factors s) sup) nil)]
       (cond
+        (== (aget (.-tbl-farmland s) sup) 3) STALAGMITE-FACTOR
         (nil? land) 1
         (and (neg? land) (not ^boolean (.bouncePad s x (if (== (.stateAt s x y z) sup) y (dec y)) z fall16))) 1
         :else land)))

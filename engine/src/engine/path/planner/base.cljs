@@ -89,6 +89,9 @@
 ;; to about a minute's walk wins; still allowed, so a body in a pocket whose only way out is such a slide gets out.
 (def ^:const HAZARD-SLIDE-RISK 10)
 (def ^:const FREE-FALL 3)
+;; a stalagmite's landing damage: (fall + 2 - 3) * 2, so it is the landing factor 2 over a free fall of 1
+(def ^:const STALAGMITE-FACTOR 2)
+(def ^:const STALAGMITE-FREE-FALL 1)
 ;; a climb over the ground risks a fall of its height: the share of that fall's hp it prices, and the blocks of column scanned for the ground
 (def ^:const CLIMB-FALL-P 0.01)
 (def ^:const CLIMB-FALL-SCAN 64)

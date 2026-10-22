@@ -52,7 +52,8 @@
      options.fallFactor (1) scales a fall's damage (feather falling, protection); options.landing, a Map of state id to the
      factor of the fall damage onto that block (hay 0.2), a negative one: a bounce (no damage, BOUNCE-S settle seconds) when the
      8 blocks round the landing's are bouncing ones or a wall (else the full fall) and options.landingSeen (fn x y z, nil: all)
-     says the body sees each now. result.cost.damage is the path's damage, a step's damage its own.
+     says the body sees each now. A drop onto a stalagmite (pointed dripstone pointing up) takes (fall - 1) * 2 hp, so a
+     fall of over 1 block hurts. result.cost.damage is the path's damage, a step's damage its own.
    - A climb up prices the fall it risks, a climb cell's height over the solid ground below it (through free and climbable cells;
      none over water or unloaded land): CLIMB-FALL-P of that fall's hp as risk, and a cell whose fall would reach options.health is
      refused (not at options.health 20, the default: a body at full health climbs any shaft).

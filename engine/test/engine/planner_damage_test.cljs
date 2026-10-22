@@ -228,3 +228,16 @@
     (is (= "found" (:status tight)))
     (is (= 2 (cost tight :damage)) (pr-str (cells tight)))
     (is (some #{[10 64 20]} (cells tight)))))
+
+;; a 2-block ledge over a strip of floor: x 5..7 holds the given block in the floor's standing cells, the goal lies past it
+(defn ledge-over [block props budget]
+  (run (pf/world {:fill [[0 64 -2 4 65 40 "stone"] [5 64 -2 7 64 40 block props]]}) (near 9 64 2)
+       {:damageBudget budget :damageWeight 1} {:x 2 :y 66 :z 2}))
+
+(deftest a-drop-onto-a-stalagmite-hurts-from-a-fall-of-over-1
+  (testing "a 2-block drop onto stone is free"
+    (is (= 0 (cost (ledge-over "stone" {} 5) :damage))))
+  (testing "onto a stalagmite (its tip 11/16 high) the fall is 1.31 blocks: 1 hp"
+    (is (= 1 (cost (ledge-over "pointed_dripstone" {:vertical_direction "up" :thickness "tip" :waterlogged false} 5) :damage))))
+  (testing "a stalactite (points down) is no landing hazard"
+    (is (= 0 (cost (ledge-over "pointed_dripstone" {:vertical_direction "down" :thickness "tip" :waterlogged false} 5) :damage)))))

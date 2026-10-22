@@ -1,0 +1,16 @@
+;; Card 00b762c3: a drop of 2 onto a stalagmite hurts (landing damage (fall - 1) * 2 hp), though a plain 2 drop is free. A stone ledge y 0..1
+;; (x 1..15, the body on top at feet y 2) over a strip of stalagmites (x 16..18, z 1..27) with plain floor round it at z 28..30: the walk
+;; takes the plain floor.
+{:name "stalagmite-strip-is-walked-round"
+ :tags [:movement]
+ :time :any
+ :plot {:height 8}
+ :blocks [[:fill [0 0 0] [31 6 0] "stone"] [:fill [0 0 31] [31 6 31] "stone"] [:fill [0 0 0] [0 6 31] "stone"] [:fill [31 0 0] [31 6 31] "stone"]
+          [:fill [1 0 1] [15 1 30] "stone"]
+          [:fill [16 0 1] [18 0 27] "pointed_dripstone"]]
+ :body {:at [8.5 2 16.5]}
+ :act [[:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1 :ways #{:walk}})]]
+ :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
+          {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
+ :after [[:body-near [22.5 0 16.5] 2]]
+ :limit-s 90}
