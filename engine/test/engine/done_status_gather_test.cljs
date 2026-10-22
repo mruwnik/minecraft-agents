@@ -125,10 +125,10 @@
 
 (deftest corridor-is-done-when-nothing-is-left-to-take-and-the-far-end-was-looked-at
   (are [world m reason] (= reason (tu/kind-reason (done-of 'jobs.strip.corridor {:blocks (merge corridor-walls world)} {:segment corridor-seg} m)))
-    {} {:looked true} [:ok :stripped]
+    {} {:jobs.lib.look/looked true} [:ok :stripped]
     {} {} [:later :digging]
-    {"2,64,0" "rail"} {:looked true} [:later :digging])
-  (is (= [:later :digging] (tu/kind-reason (done-of 'jobs.strip.corridor {:blocks {}} {:segment corridor-seg} {:looked true})))
+    {"2,64,0" "rail"} {:jobs.lib.look/looked true} [:later :digging])
+  (is (= [:later :digging] (tu/kind-reason (done-of 'jobs.strip.corridor {:blocks {}} {:segment corridor-seg} {:jobs.lib.look/looked true})))
       "side walls never seen: a side corridor may hang there"))
 
 (deftest loot-cart-is-done-once-the-cart-is-broken-and-its-drops-collected
@@ -174,15 +174,15 @@
 (deftest plant-is-done-when-no-cell-is-bare-and-the-field-was-seen
   (are [blocks m reason] (= reason (tu/kind-reason (done-of 'jobs.farm.plant {:blocks blocks} {:area plant-box} m)))
     {"0,63,0" "farmland" "1,63,0" "farmland"} {} [:later :planting]
-    {"0,63,0" "farmland" "1,63,0" "farmland" "0,64,0" "wheat" "1,64,0" "wheat"} {:looked here} [:ok :planted]
+    {"0,63,0" "farmland" "1,63,0" "farmland" "0,64,0" "wheat" "1,64,0" "wheat"} {:jobs.lib.look/looked here} [:ok :planted]
     {"0,63,0" "farmland" "1,63,0" "farmland" "0,64,0" "wheat" "1,64,0" "wheat"} {:started true :planted 2} [:ok :planted]
     {"0,63,0" "farmland" "1,63,0" "farmland" "0,64,0" "wheat" "1,64,0" "wheat"} {} [:later :looking]
-    {"0,63,0" "farmland" "1,63,0" "dirt" "0,64,0" "wheat"} {:looked here} [:later :untilled]))
+    {"0,63,0" "farmland" "1,63,0" "dirt" "0,64,0" "wheat"} {:jobs.lib.look/looked here} [:later :untilled]))
 
 (deftest fertilize-is-also-done-when-a-look-found-nothing-to-fertilize
   (are [world m reason] (= reason (tu/kind-reason (done-of 'jobs.farm.fertilize world {:max 3} m)))
-    (field-of 7 [2]) {:looked here} [:ok :fertilized]
-    (field-of 3 [2]) {:looked here} [:later :fertilizing]
+    (field-of 7 [2]) {:jobs.lib.look/looked here} [:ok :fertilized]
+    (field-of 3 [2]) {:jobs.lib.look/looked here} [:later :fertilizing]
     (field-of 7 [2]) {} [:later :fertilizing]))
 
 (deftest find-spot-is-done-when-spots-are-found
@@ -196,9 +196,9 @@
 
 (deftest farm-tidy-is-done-when-no-stray-is-left
   (are [blocks m reason] (= reason (tu/kind-reason (done-in 'jobs.farm.tidy {:blocks blocks} {:plan "p"} m {"p" tidy-plan})))
-    {"0,65,0" "dirt"} {:looked here} [:later :tidying]
-    {} {:looked here} [:ok :tidied]
-    {} {:looked here :refused [{:pos {:x 0 :y 65 :z 0}}]} [:later :reporting]))
+    {"0,65,0" "dirt"} {:jobs.lib.look/looked here} [:later :tidying]
+    {} {:jobs.lib.look/looked here} [:ok :tidied]
+    {} {:jobs.lib.look/looked here :refused [{:pos {:x 0 :y 65 :z 0}}]} [:later :reporting]))
 
 (deftest farm-tend-is-done-when-every-part-is-in-order
   (let [box {:min {:x 0 :y 63 :z 0} :max {:x 1 :y 64 :z 0}}]
@@ -238,10 +238,10 @@
     {"3,63,0" "dirt"} [{:name "oak_sapling" :count 1}] {:begun true} [:later :planting]))
 
 (deftest collect-drops-is-done-when-no-wanted-drop-is-in-sight
-  (are [args m reason] (= reason (tu/kind-reason (done-of 'jobs.items.collect-drops {} args (merge {:looked {:x 0 :y 64 :z 0}} m))))
+  (are [args m reason] (= reason (tu/kind-reason (done-of 'jobs.items.collect-drops {} args (merge {:jobs.lib.look/looked {:x 0 :y 64 :z 0}} m))))
     {} {} [:ok :collected]
     {} {:collected 2} [:ok :collected]
-    {} {:looked nil} [:later :looking]
+    {} {:jobs.lib.look/looked nil} [:later :looking]
     {:search 4} {:collected 1} [:later :searching]
     {:search 4} {:collected 1 :wanted 1} [:ok :collected]
     {} {:collected 0 :skipped [7]} [:later :skipped]

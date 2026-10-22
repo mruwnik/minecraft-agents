@@ -154,7 +154,7 @@
      (when (or (seq new) surveyed)
        (let [[total-ms max-ms] (step-ms p)]
          (ctx/update-mem! c #(cond-> (assoc % ::looked {:at cell :cells looked})
-                               surveyed (assoc :looked cell)))
+                               surveyed (assoc ::look/looked cell)))
          (ctx/emit! c :sense.looked :debug
                     (cond-> {:decision k :looks (count new) :cells (vec new) :surveyed? (boolean surveyed)}
                       t0 (assoc :step-ms (- total-ms (first t0)) :step-ms-max max-ms)))))

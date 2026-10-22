@@ -308,7 +308,7 @@
   nothing in sight then waits :too-few."
   [c]
   (when-let [e (await (look/survey-until! c #(do (note-nearest! c) (first (present-any c)))))]
-    (ctx/update-mem! c assoc :looked (look/cell-of (u/self-pos c)))
+    (look/note-surveyed! c)
     (await (ctx/act c :look (clj->js {:pos (.-pos e)}))))
   :again)
 

@@ -250,7 +250,7 @@
 (defn mouth-of
   "The coordinate of a side opening of seg not yet looked into (nil when none), once the far end was looked at."
   [c seg]
-  (when (:looked (ctx/mem c))
+  (when (look/surveyed? c)
     (strip/mouth (access/seen-at (:primitives c)) seg (:mouthed (ctx/mem c)))))
 
 (defn ^:async look-mouth!
@@ -323,7 +323,7 @@
         work? (or target cart)]
     (when-let [seen (seq (spawners c seg))]
       (ctx/update-mem! c update :spawners #(vec (distinct (concat % seen)))))
-    (when (and target (:looked (ctx/mem c))) (ctx/update-mem! c dissoc :looked))
+    (when (and target (look/surveyed? c)) (look/forget-survey! c))
     (cond
       sealed-spawner (stop! c :spawner {:cell (u/cell-vec (:pos sealed-spawner))})
       (and work? (due-spot c seg feet)) (await (hang-torch! c (due-spot c seg feet) feet))
@@ -331,7 +331,7 @@
       dark (await (hang-torch! c (first (torch-spots (access/seen-at p) (:axis seg) dark)) dark))
       (and target (= :continue (await (trip/tool-ready! c (:name target))))) :continue
       target (await (dig! c target))
-      (not (:looked (ctx/mem c))) (await (look-end! c seg))
+      (not (look/surveyed? c)) (await (look-end! c seg))
       mouth (await (look-mouth! c seg mouth))
       torch (await (dig! c torch))
       :else (or (ctx/done c) :continue))))
@@ -374,7 +374,7 @@
   (let [seg (seg-of (:segment (:args c)))
         dug (count (:dug (ctx/mem c)))
         left (when seg (owed c seg))
-        stripped? (and seg (:looked (ctx/mem c)) (not-any? left [:target :cart :torch :dark :sealed-spawner :mouth]))]
+        stripped? (and seg (look/surveyed? c) (not-any? left [:target :cart :torch :dark :sealed-spawner :mouth]))]
     (if stripped?
       (contract/ok :stripped (str "corridor done: took " (pr-str (:taken (ctx/mem c) {}))) :units :cells :done dug :result (result-of c seg))
       (contract/later :digging (str "corridor: " dug " cells dug") :units :cells :done dug

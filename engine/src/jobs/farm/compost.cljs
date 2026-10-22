@@ -230,7 +230,7 @@
       (not (look/surveyed? c))
       (let [meal (await (look/survey-until! c :run #(some->> (composter-at c) (meal-near c)) (look/glance-effort) {:names #{"composter"} :radius (settings/get settings ::radius)}))]
         (when meal
-          (ctx/update-mem! c assoc :looked (look/cell-of (u/self-pos c))) ; the early stop skips look-around's own note: without it a meal that cannot be taken repeats this step for ever
+          (look/note-surveyed! c) ; the early stop skips look-around's own note: without it a meal that cannot be taken repeats this step for ever
           (await (take-meal! c meal)))
         :again)
 

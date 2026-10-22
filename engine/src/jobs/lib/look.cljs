@@ -128,10 +128,21 @@
   ([c dirs] (glance! c dirs (glance-effort)))
   ([c dirs effort] (await (glance-until! c dirs (constantly nil) effort)) nil))
 
+(defn note-surveyed!
+  "Book that the job has looked around from the cell the body stands in (what surveyed? reads)."
+  ([c] (note-surveyed! c (cell-of (u/self-pos c))))
+  ([c cell] (ctx/update-mem! c assoc ::looked cell) nil))
+
+(defn forget-survey!
+  "Drop the note that the job has looked around, so surveyed? is false again."
+  [c]
+  (ctx/update-mem! c dissoc ::looked)
+  nil)
+
 (defn ^:async look-around-until!
   "Look along every heading from here at effort (default glance-effort), level, down and, unless that ray is seen
   already, up. Test (f) after each look: stop at the first truthy one, returned (nil when none; the cell is noted in
-  job memory under :looked). Entities are sensed only inside the view cone, so what a job wants in view must be
+  job memory under ::looked). Entities are sensed only inside the view cone, so what a job wants in view must be
   checked between looks, not after the last. want: see!."
   ([c f] (look-around-until! c f (glance-effort)))
   ([c f effort] (look-around-until! c f effort nil))
@@ -146,7 +157,7 @@
                (see! c effort :look-around want)
                (or (f) (recur (rest steps))))
            (recur (rest steps)))
-         (do (ctx/update-mem! c assoc :looked (cell-of (u/self-pos c)))
+         (do (note-surveyed! c)
              nil))))))
 
 (defn ^:async look-around!
@@ -164,7 +175,7 @@
   from within near-blocks of it (:near)."
   ([c] (surveyed? c :run))
   ([c per]
-   (let [looked (:looked (ctx/mem c))]
+   (let [looked (::looked (ctx/mem c))]
      (case per
        :cell (= looked (cell-of (u/self-pos c)))
        :near (boolean (and looked (<= (u/dist looked (cell-of (u/self-pos c))) near-blocks)))
