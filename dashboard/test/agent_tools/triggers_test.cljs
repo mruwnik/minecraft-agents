@@ -2,7 +2,9 @@
   (:require [cljs.test :refer [deftest is async]]
             [agent-tools.fake-socket :as fake]
             [agent-tools.triggers :as triggers]
-            [agent-tools.world-data :as data]))
+            [agent-tools.world-data :as data]
+            [clojure.string :as str]
+            [jobs.lib.cond :as cond]))
 
 (defn request [& args] (triggers/request-for (into ["Probe" "--world" "test"] args)))
 
@@ -180,3 +182,9 @@
   (doseq [[code reason] [["ENOENT" :no-running-body] ["ETIMEDOUT" :timeout] ["ERESPONSETOOLARGE" :response-too-large]
                          ["EACCES" :socket-access-denied] ["EPIPE" :transport-error]]]
     (is (= reason (:reason (triggers/failure-for (let [e (js/Error. "x")] (aset e "code" code) e) false))) code)))
+
+(deftest the-help-names-every-condition-word-and-no-other
+  (let [lines (keep #(second (re-matches #"  (?:numbers|statuses|combine): (.*)" %)) (str/split-lines triggers/usage))
+        named (set (map symbol (mapcat #(re-seq #"(?<=\()[^\s()]+|(?<= |^)[<>=]+(?= )" %) lines)))]
+    (is (= 3 (count lines)))
+    (is (= (set (keys cond/library)) named))))
