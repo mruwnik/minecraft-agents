@@ -75,7 +75,7 @@
       (ctx/emit! c :retreat.choice :info
                  (assoc choice
                         :hostiles (mapv #(str (.-name %) " " (.-id %) " " (at (danger-q/mob-pos p %))) (flight/known-chasers p))
-                        :text (str "flee choice: leans to " (or lean "nothing")
+                        :text (str "flee choice: " (if lean (str "leans to " lean) "no refuge or home to run to, runs straight away from the hostiles")
                                    (when (:home-why choice) (str "; home " (at (cover/home-pos c)) " dropped (" (name (:home-why choice)) ")"))
                                    (when goal (str "; goal " goal (when (:why judged) (str " dropped (" (name (:why judged)) ")"))))
                                    (when (seq blast) (str "; no room is a refuge within blast reach of " (str/join ", " blast)))
