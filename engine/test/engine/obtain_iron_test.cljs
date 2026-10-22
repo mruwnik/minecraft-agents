@@ -4,6 +4,7 @@
             [engine.settings :as settings]
             [jobs.items.obtain.gather :as gather]
             [engine.core :as core]
+            [engine.ctx :as ctx]
             [engine.fake :as fake]
             [engine.fetch-test :as f]
             [engine.game :as game]
@@ -362,6 +363,21 @@
           (is (every? (set (map :at (filter (comp #{:obtain.gathering} :kind) @(:seen s))))
                       [{:x 1 :y 64 :z 4} {:x 3 :y 64 :z 5} {:x 0 :y 64 :z 6} {:x 4 :y 64 :z 3}])
               "each flooded ore is left for the next, none counted fruitless"))))))
+
+(deftest ore-in-a-dark-hall-the-mine-refuses-is-left-for-the-next-ore
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks {"1,64,4" "iron_ore" "3,64,5" "iron_ore" "0,64,6" "iron_ore"}
+              s (f/start (ore-world blocks [{:name "stone_pickaxe" :count 1}]) [])
+              eng (assoc-in (:eng s) [:jobs 'jobs.gather.mine :round]
+                            (fn ^:async f [c] (ctx/end c :impossible {:reason :exposed :text "dark hall"})))
+              s (assoc s :eng eng)]
+          (await (obtain! s {:item "raw_iron" :count 1} 200))
+          (is (every? (set (map :at (filter (comp #{:obtain.gathering} :kind) @(:seen s))))
+                      [{:x 1 :y 64 :z 4} {:x 3 :y 64 :z 5} {:x 0 :y 64 :z 6}])
+              "each refused ore is left for the next, none counted as nothing seen")
+          (is (not-any? #(= :none-seen (:reason %)) (f/events-of s :waiting))))))))
 
 (deftest a-body-standing-in-water-walks-to-dry-land-before-it-mines
   (async done
