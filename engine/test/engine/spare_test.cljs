@@ -182,3 +182,15 @@
               without (await (run [iron]))]
           (is (= ["stone_pickaxe"] (map :tool (st/events-of with :tool.spare))))
           (is (not-any? #{:tool.spare :tool.no-spare} (kinds without)) "no cobblestone to make one: the iron pickaxe digs"))))))
+
+(deftest a-fetch-off-stair-crafts-the-stone-spare-from-what-is-carried-instead-of-wearing-the-iron-pickaxe
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [iron {:name "iron_pickaxe" :count 1 :durability 240 :max-durability 250}
+              kit [iron {:name "cobblestone" :count 12} {:name "stick" :count 4} {:name "crafting_table" :count 1}]
+              run (fn [inv] (st/stair! (assoc spare-chest :inventory inv) (assoc east :ways #{:carried}) tu/seeing-all))
+              crafted (await (run kit))
+              bare (await (run [iron {:name "cobblestone" :count 12}]))]
+          (is (= ["stone_pickaxe"] (map :tool (st/events-of crafted :tool.spare))))
+          (is (not-any? #{:tool.no-spare} (kinds bare)) "nothing to craft from: the iron pickaxe digs, silently"))))))

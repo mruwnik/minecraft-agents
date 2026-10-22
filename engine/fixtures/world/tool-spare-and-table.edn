@@ -35,6 +35,12 @@
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 4})]]
    :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :data {:steps 4}} :within-s 200 :of-job true}]}
+  ;; card 36941f70: with fetching off the stone pickaxe is still made, from what is carried (cobblestone, sticks, a table)
+  {:name "whole-iron-pick-with-fetch-off-crafts-the-stone-spare-from-carried-cobble"
+   :body {:inventory [["iron_pickaxe" 1] ["stick" 4] ["crafting_table" 1] ["torch" 8] ["cobblestone" 8]]}
+   :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 3 :ways #{:carried}})]]
+   :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
+            {:event {:source :job :kind :completed :data {:steps 3}} :within-s 200 :of-job true}]}
   {:name "whole-iron-pick-with-no-cobble-digs-on-with-no-spare"
    :body {:inventory [["iron_pickaxe" 1] ["oak_log" 4] ["torch" 8]]}
    :act [[:job (jobs.access.stair {:dir :down :heading :east :steps 2})]]
