@@ -49,4 +49,24 @@
    :act [[:summon "creeper" [13.5 0 16.5]]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:mob "creeper"}} :within-s 30}
             {:no-event {:source :job :kind :hostile.decided :data {:decision :fight}} :for-s 10}]
-   :limit-s 30}]}
+   :limit-s 30}
+  ;; Card 4fcb4191: a plug (walls) takes longer than a creeper needs to cover the blocks past its swell range, so none is begun for one
+  ;; 10 blocks off (the creeper is slowed, but still walks in: the walls come only once it is inside swell range); one 5 blocks off (inside swell range) is still walled off.
+  {:name "dead-end-body-begins-no-plug-for-a-creeper-ten-blocks-off"
+   :register [{:trigger :hostile-near :args {:radius 16 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile)}]
+   :blocks [[:fill [8 0 15] [28 3 17] "stone"] [:fill [9 0 16] [27 1 16] "air"] [:fill [9 2 16] [27 2 16] "glowstone"]]
+   :body {:at [9.5 0 16.5] :yaw 270 :inventory [["cobblestone" 16]]}
+   :act [[:summon "creeper" [19.5 0 16.5] "{active_effects:[{id:\"minecraft:slowness\",amplifier:6b,duration:2400}]}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "creeper"}} :within-s 20}
+            {:event {:source :job :kind :retreat_blocked} :within-s 20}
+            {:no-event {:source :job :kind :child_started :data {:slot :plug}} :for-s 20 :until {:source :job :kind :retreat_blocked}}]
+   :limit-s 40}
+  {:name "dead-end-body-still-walls-off-a-creeper-five-blocks-off"
+   :register [{:trigger :hostile-near :args {:radius 16 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile)}]
+   :blocks [[:fill [8 0 15] [28 3 17] "stone"] [:fill [9 0 16] [27 1 16] "air"] [:fill [9 2 16] [27 2 16] "glowstone"]]
+   :body {:at [9.5 0 16.5] :yaw 270 :inventory [["cobblestone" 16]]}
+   :act [[:summon "creeper" [14.5 0 16.5] "{active_effects:[{id:\"minecraft:slowness\",amplifier:6b,duration:2400}]}"]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :plug}} :within-s 30}]
+   :limit-s 50}]}
