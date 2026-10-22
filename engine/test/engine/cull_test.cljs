@@ -8,6 +8,7 @@
             [engine.test-util :as tu]
             [jobs.animals.cull :as cull]
             [jobs.lib.hunting :as hunting]
+            [jobs.lib.xz :as xz]
             [jobs.lib.animals :as animals]
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]))
@@ -157,6 +158,14 @@
           (is (= #{1 5 6 4} (world-ids s)) "of 8, 10 and 12 (in the bound) the two nearest the body die")
           (is (= {:killed 2 :remaining 1 :reason :keep}
                  (select-keys (done-event s) [:killed :remaining :reason]))))))))
+
+(deftest a-centre-given-as-a-vector-bounds-the-herd-like-a-map
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:keep 1 :center [10 64 0] :radius 4}
+                                 {:inventory h/sword :entities [(cow 1 3) (cow 2 8) (cow 3 10) (cow 4 12) (cow 5 20) (cow 6 10 9)]} 120))]
+          (is (= #{1 5 6 4} (world-ids s))))))))
 
 (deftest the-body-radius-bounds-the-herd-without-a-centre
   (async done
@@ -332,3 +341,9 @@
 
 (deftest a-cull-with-no-mob-is-bad-args
   (is (= :never (first (cull/bad-args {:args {:keep 0}})))))
+
+(deftest xz-takes-every-position-form
+  (are [v] (= {:x 1 :z 3} (xz/xz v))
+    [1 2 3] [1 3] {:x 1 :y 2 :z 3} {:x 1 :z 3})
+  (are [v] (nil? (xz/xz v))
+    [1] "x" {:x 1} nil))

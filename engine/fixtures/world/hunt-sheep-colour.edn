@@ -94,6 +94,13 @@
          [:job (jobs.combat.hunt {:item "porkchop" :keep 0 :radius 8 :center #at [28 0 16]})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.combat.hunt"}} :within-s 80}]
    :after [[:item "porkchop" [:>= 1]]]}
+  ;; cull's :center takes [x y z] like every other job
+  {:name "cull-with-a-vector-centre-works-the-area"
+   :act [[:summon "sheep" [10.5 0 16.5] "{NoAI:1b,Color:0b}"]
+         [:job (jobs.animals.cull {:mob "sheep" :keep 0 :count 1 :radius 4 :center #at [10 0 16]})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.animals.cull"}} :within-s 80 :of-job true}
+            {:count-event {:source :job :kind :animal.killed :data {:rule :cull}} :for-s 80 :at-least 1}]
+   :after [[:entities "type=sheep,tag=wt" [[0 0 0] [31 3 31]] 0]]}
   {:name "hunt-pig-8-blocks-off-with-keep-0"
    :act [[:summon "pig" [12.5 0 16.5] "{NoAI:1b}"]
          [:job (jobs.combat.hunt {:item "porkchop" :keep 0 :radius 24})]]

@@ -1,5 +1,6 @@
 (ns jobs.animals.cull
   (:require [jobs.lib.price :as price]
+            [jobs.lib.xz :as xz]
             [jobs.lib.ready :as ready]
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
@@ -52,7 +53,7 @@
 (a/defargs args
   {:mob {:doc "mob type name of the animals to thin (required: a call without it is :bad-args)" :spec a/name? :default nil}
    :keep {:doc "adults of the kind to leave alive in the bound (babies do not count)" :spec (a/int-in 0 nil) :default 2}
-   :center {:doc "nil, or {:x :z}: the bound is :radius blocks (horizontal) around it" :spec (a/map-with {:x number? :z number?}) :default nil}
+   :center {:doc "nil, or a cell [x y z], [x z], {:x :y :z} or {:x :z}: the bound is :radius blocks (horizontal) around it" :spec xz/position? :default nil}
    :radius {:doc "animals within this many blocks of :center, or of the body when there is no :center, are the herd" :spec (a/num-in 0 nil) :default 16}
    :box {:doc "nil, or {:min {:x :y :z} :max {:x :y :z}}: inclusive bound that replaces :center and :radius" :spec pen-read/box-arg :default nil}
    :color {:doc "sheep only: kill only sheep of this wool colour (e.g. \"white\"); nil: any. :keep still counts every adult" :spec a/name? :default nil}

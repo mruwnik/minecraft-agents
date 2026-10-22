@@ -2,6 +2,7 @@
   "The kill-and-collect steps combat.hunt and animals.cull share: the drops table, the attack child call, the
   drop collection and the search wait. Memory keys: :target, :killed, :skipped, :skips, :collecting, :misses."
   (:require [engine.args :as a]
+            [jobs.lib.xz :as xz]
             [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.settings :as settings]
@@ -148,7 +149,8 @@
 (defn reach
   "How far from the body the entity query must look to cover the bound."
   [c]
-  (let [{:keys [center radius]} (:args c)
+  (let [{:keys [radius]} (:args c)
+        center (xz/xz (:center (:args c)))
         box (pen-read/arg-box c)
         here (u/self-pos c)]
     (cond
@@ -159,7 +161,8 @@
 (defn in-bound?
   "True when the position lies inside the bound (a box, else around the center, else around the body)."
   [c pos]
-  (let [{:keys [center radius]} (:args c)
+  (let [{:keys [radius]} (:args c)
+        center (xz/xz (:center (:args c)))
         box (pen-read/arg-box c)
         {:keys [x y z]} pos]
     (cond
