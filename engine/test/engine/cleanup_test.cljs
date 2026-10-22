@@ -472,6 +472,21 @@
           (is (= 1 (:collected @out)) "the torch drop, not a wall_torch, is what the collect looks for")
           (is (= [] (the-ledger eng))))))))
 
+(deftest a-sweep-that-finds-fewer-drops-than-cells-removed-sweeps-again-a-few-times
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cells [[0 64 0] [0 65 0]]
+              {:keys [eng out p] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (pillar-blocks cells)
+                                              :drops {"dirt" []}
+                                              :entries (mapv entry cells)})]
+          (core/submit! eng '(recording-parent) {})
+          (await (ticks s eng 60))
+          (is (= 0 (:collected @out)))
+          (is (= :done (:status @out)))
+          (is (= (cleanup/collect-rounds)
+                 (count (filter #(= "wait" (.-name %)) (.-calls (.-world p)))))))))))
+
 (deftest side-blocks-are-dug-from-the-ground-and-a-far-one-after-a-walk
   (async done
     (tu/run-async done

@@ -114,12 +114,14 @@
    ::walk-range {:default 3 :doc "How near a scaffold block the body walks before it digs it." :spec (a/int-in 0 nil)}
    ::max-collect-radius {:default 48 :doc "Blocks around the body in which dropped scaffold is collected, at most." :spec (a/int-in 0 nil)}
    ::danger-radius {:default 16 :doc "Blocks around a scaffold block within which a known hostile holds it (:danger) instead of a walk." :spec (a/num-in 0 nil)}
+   ::collect-rounds {:default 3 :doc "Times the drops are swept again when fewer items came in than cells were removed." :spec (a/int-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds a cleanup may take: the digs, the walks, the collecting." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
 
 (defn walk-range [] (settings/get settings ::walk-range))
 
 (defn max-collect-radius [] (settings/get settings ::max-collect-radius))
+(defn collect-rounds [] (settings/get settings ::collect-rounds))
 
 (defn leg-s [] (settings/get settings ::leg-s))
 
@@ -333,15 +335,21 @@
          (+ 4 (js/Math.ceil (apply max 0 (map #(distance [x y z] (centre (:cell %))) removed)))))))
 
 (defn ^:async collect!
-  "One collect-drops call. :continue means it waits on the world: asked again on the next pass; else the drops are
-  not asked for again."
+  "One collect-drops call. :continue means it waits on the world: asked again on the next pass. A sweep that gets back fewer
+  items than were removed waits a moment and sweeps again (a drop still falling or not yet seen), ::collect-rounds times."
   [c removed]
   (let [r (await (ctx/call c :collect 'jobs.items.collect-drops
                            {:radius (collect-radius c removed) :items (vec (distinct (map (comp placement/item-of :item) (remove #(= "water" (:item %)) removed))))
                             :holes (mapv :cell removed)}))]
     (when-not (= :continue r)
-      (ctx/update-mem! c #(-> % (dissoc :collect)
-                              (assoc :collected (if (= :done (:kind r)) (:collected (:data r) 0) 0)))))
+      (let [m (ctx/mem c)
+            total (+ (:collected m 0) (if (= :done (:kind r)) (:collected (:data r) 0) 0))
+            short? (and (= :done (:kind r)) (< total (count (remove #(= "water" (:item %)) removed)))
+                        (< (:collect-tries m 0) (collect-rounds)))]
+        (when short? (await (ctx/act c :wait #js {:ms 500})))
+        (ctx/update-mem! c #(-> % (assoc :collected total)
+                                (cond-> short? (update :collect-tries (fnil inc 0))
+                                        (not short?) (dissoc :collect :collect-tries))))))
     :again))
 
 (defn hold-open!

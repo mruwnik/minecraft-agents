@@ -61,7 +61,7 @@
    :body {:at [13.5 0 18.5] :yaw 0 :inventory [["stone" 4] ["dirt" 8]]}
    :act [[:job (jobs.build.from-plan {:plan "$plan:roof"})]]
    :expect [{:event {:source :job :kind :completed :data {:missing []}} :within-s 200 :of-job true}]
-   :after [[:block [17 5 22] "stone"] [:item "dirt" [:>= 6]]]
+   :after [[:block [17 5 22] "stone"] [:item "dirt" 8]]
    :limit-s 230}
   {:name "wall-on-an-island-from-a-bridge-row"
    :plans [{:id "wall" :metadata {:by "$body"}
