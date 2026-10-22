@@ -37,6 +37,18 @@
        (filter #(and (item? (:item %)) (<= (u/dist (u/self-pos c) (:pos %)) radius)))
        first))
 
+(def unreachable-kind :smelt/unreachable)
+
+(defn note-unreachable!
+  "Remember in body memory that the furnace at pos could not be reached: a get-kit round calls smelt afresh and would choose it again."
+  [c pos]
+  (ctx/remember! c unreachable-kind pos {:cap 5 :ttl (* 5 60 1000)}))
+
+(defn unreachable-furnaces
+  "The furnaces found unreachable: this call's (mem :unreachable-furnaces) and those body memory holds from earlier calls."
+  [c]
+  (into (:unreachable-furnaces (ctx/mem c) #{}) (map :data) (ctx/entries c unreachable-kind)))
+
 (defn ^:async place-furnace!
   "Put the carried furnace down beside the body (free-spot/place-beside!) and make it the furnace of this job. :again once
   it stands, :continue while a child waits, nil when it could not be put down (memory :furnace-refusal says why)."

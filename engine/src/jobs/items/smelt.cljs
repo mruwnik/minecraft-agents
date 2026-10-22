@@ -107,13 +107,13 @@
 (defn nearest-furnace
   "The nearest furnace, blast furnace or smoker the body has seen within seen-radius, still that block now, that
   cooks item (or, when item is nil, anything carried; any kind when nothing carried is smeltable) and that a walk has not
-  found unreachable (mem :unreachable-furnaces); nil when none."
+  found unreachable (furnace/unreachable-furnaces); nil when none."
   [c item]
   (let [names (if item [item] (map :name (carried c)))
         kinds (filter (fn [kind] (some #(sp/smelts? kind %) names)) (keys sp/cook-ticks))
         ok? (if (or item (seq kinds)) (set kinds) furnace-block?)]
     (->> (look/seen-blocks (:primitives c) {:names furnace-block? :radius (seen-radius) :max 16 :live? true})
-         (some #(when (and (ok? (:name %)) (not (contains? (:unreachable-furnaces (ctx/mem c)) (:pos %))) (not (exposed-furnace? c (:pos %)))) (:pos %))))))
+         (some #(when (and (ok? (:name %)) (not (contains? (furnace/unreachable-furnaces c) (:pos %))) (not (exposed-furnace? c (:pos %)))) (:pos %))))))
 
 (defn needs-attention?
   "Whether the block at pos is loaded and is no longer a lit furnace: it is not lit (the fuel ran out, or the cook
@@ -316,6 +316,7 @@
   (if (or (:furnace (:args c)) (furnace/loaded? (ctx/mem c)))
     (give-up! c "unreachable")
     (do (ctx/update-mem! c #(-> % (update :unreachable-furnaces (fnil conj #{}) pos) (dissoc :furnace)))
+        (furnace/note-unreachable! c pos)
         (ctx/emit! c :smelt.furnace-unreachable :info {:furnace pos :text (str "the furnace at " (:x pos) " " (:y pos) " " (:z pos) " cannot be reached: taking another")})
         :continue)))
 

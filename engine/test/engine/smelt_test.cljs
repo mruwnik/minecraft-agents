@@ -758,6 +758,17 @@
 
 (def iron-and-coal [{:name "raw_iron" :count 5} {:name "coal" :count 3}])
 
+(deftest a-furnace-found-unreachable-is-not-chosen-again-by-the-next-call
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen] :as s} (seeing-setup {:blocks {"20,64,0" "furnace"} :unreachable ["20,64,0"]
+                                                       :inventory [{:name "raw_iron" :count 3} {:name "coal" :count 2}]})]
+          (dotimes [_ 2]
+            (core/submit! eng '(jobs.items.smelt {:item "raw_iron" :count 3}) {})
+            (await (seeing-ticks s 6)))
+          (is (= 1 (count (of-kind seen :smelt.furnace))) "the second call does not walk to it again"))))))
+
 (deftest without-a-furnace-it-uses-the-nearest-seen-one-that-cooks-the-item
   (async done
     (tu/run-async done

@@ -99,7 +99,7 @@
   [c anywhere?]
   (let [pos (mem/place (ctx/view c) :furnace)
         me (u/self-pos c)]
-    (when (and pos (not (contains? (:unreachable-furnaces (ctx/mem c)) pos))
+    (when (and pos (not (contains? (furnace/unreachable-furnaces c) pos))
                (or anywhere?
                    (< (:cost (cost/walk-cost {:distance (u/dist me pos)})) (make-cost c (js/Math.abs (- (:y pos) (:y me)))))))
       pos)))
