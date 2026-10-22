@@ -187,3 +187,24 @@
         r (result-over {:blocks walkway-over-ground} [10 76 8] g
                        {:weight 1.2 :maxDrop 16 :knownCells known :knownEdges (js/Set. #js [(known-key [-5 64 8] g)])})]
     (is (= [0 76 8] (cell (:frontier r))) (str "frontier " (:frontier r)))))
+
+(defn seen-edge-result
+  "The planner's result over `field` where the body has seen only x < 24 (not a chunk side) at the levels hidden? hides, read
+  as live-snapshot.mjs's unknown.edge does: unseen cells UNLOADED, edge true, no loaded column."
+  [edge? hidden?]
+  (let [^js pw (.pathWorld (tu/fake field))
+        ^js snap (.-snapshot pw)
+        view (js/Object.create snap)]
+    (set! (.-stateAt view) (fn [x y z] (if (hidden? x y z) 0xFFFF (.stateAt snap x y z))))
+    (set! (.-edge view) edge?)
+    (set! (.-hasColumn view) (constantly (not edge?)))
+    (-> (planner/plan view
+                      #js {:from #js {:x 10 :y 64 :z 30} :goal #js {:kind "near" :x 200 :y 64 :z 30 :range 0}}
+                      #js {:table (.-table pw) :space (.-space pw)})
+        (js->clj :keywordize-keys true))))
+
+;; the seen edge is anywhere, not only on a chunk side; the floor beside a node unseen makes it an edge as well
+(deftest an-edge-snapshot-names-a-frontier-at-the-seen-border-wherever-it-is
+  (is (= 1 (first (cell (:frontier (seen-edge-result false (fn [x y _] (and (>= x 24) (= y 63)))))))) "an ordinary snapshot: an unseen floor beside a node is no edge, the frontier is the chunk side")
+  (is (contains? #{22 23} (first (cell (:frontier (seen-edge-result true (fn [x _ _] (>= x 24))))))) "unseen cells beyond")
+  (is (contains? #{22 23} (first (cell (:frontier (seen-edge-result true (fn [x y _] (and (>= x 24) (= y 63)))))))) "only the floor beyond unseen"))

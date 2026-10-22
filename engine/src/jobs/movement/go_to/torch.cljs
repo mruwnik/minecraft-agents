@@ -109,13 +109,16 @@
 
 (defn round-unknown
   "The mask spec of this round (c's :unknown): with :torches not :never and a torch carried or a fetch still open, torches on
-  (wworld/with-light), priced by jobs.lib.cost/light-cost."
+  (wworld/with-light), priced by jobs.lib.cost/light-cost. After a masked search ran out of nodes (mem :edge-mode) the mask
+  reads unseen cells as the loaded edge instead (:edge): the walk tours to the edge of what the body has seen."
   [c]
   (let [u (:unknown c)
         n (ltorch/torches-held (:primitives c))]
-    (if (and u (not= :never (:torches (:args c) :never)) (or (pos? n) (torch-fetch-open? c)))
+    (cond
+      (and u (:edge-mode (ctx/mem c))) (js/Object.assign #js {} u #js {:edge true})
+      (and u (not= :never (:torches (:args c) :never)) (or (pos? n) (torch-fetch-open? c)))
       (wworld/with-light u (:cost (cost/light-cost {:carried n})) (light-ok c))
-      u)))
+      :else u)))
 
 (defn ^:async fetch-torches!
   "A walk that reached a floor to light with no torch carried: fetch torches once a call (jobs.lib.need, a child),

@@ -273,12 +273,15 @@
   ;; Does the node stand within OPEN-REACH columns of unloaded land (at its feet height)? Then the land it is on runs on past what
   ;; is loaded; a node with loaded land all round it is a dead end as far as the world is known.
   (atLoadedEdge [s node]
-    (let [x (aget (.-xs s) node) y (aget (.-ys s) node) z (aget (.-zs s) node)]
+    (let [x (aget (.-xs s) node) y (aget (.-ys s) node) z (aget (.-zs s) node)
+          snap ^js (.-snapshot s)
+          ^boolean floor? (true? (.-edge snap))]
       (loop [dx (- OPEN-REACH) dz (- OPEN-REACH)]
         (cond
           (> dx OPEN-REACH) false
           (> dz OPEN-REACH) (recur (inc dx) (- OPEN-REACH))
-          (== (.stateAt ^js (.-snapshot s) (+ x dx) y (+ z dz)) UNLOADED) true
+          (or (== (.stateAt snap (+ x dx) y (+ z dz)) UNLOADED)
+              (and floor? (== (.stateAt snap (+ x dx) (dec y) (+ z dz)) UNLOADED))) true
           :else (recur dx (inc dz))))))
 
   ;; Does a one-way step to the node run on into land not known: atLoadedEdge, or unseen cells (options.unknown) at the
@@ -343,6 +346,10 @@
   ;; not at the edge that the search expanded (land this search knows to its end; a search that ended at its first edge
   ;; node, edgeStop, leaves the nodes it did not expand out, see noteOpen), and to edges-new the key of each unknown node
   ;; at the edge.
+  (inBand [s mx mz]
+    (or ^boolean (true? (.-edge ^js (.-snapshot s)))
+        (< mx OPEN-REACH) (>= mx (- 16 OPEN-REACH)) (< mz OPEN-REACH) (>= mz (- 16 OPEN-REACH))))
+
   (frontierNode [s]
     (let [lo OPEN-REACH
           hi (- 16 OPEN-REACH)
@@ -358,7 +365,7 @@
           (let [x (aget (.-xs s) i) y (aget (.-ys s) i) z (aget (.-zs s) i)
                 mx (bit-and x 15) mz (bit-and z 15)
                 expanded (== (aget (.-heap-pos s) i) -2)]
-            (if (and (or (< mx lo) (>= mx hi) (< mz lo) (>= mz hi))
+            (if (and ^boolean (.inBand s mx mz)
                      (<= (js/Math.max (js/Math.abs (- x (.-goal-x s))) (js/Math.abs (- z (.-goal-z s)))) (.-frontier-reach s))
                      (not ^boolean (.endsOnMagma s x y z (aget (.-hs s) i))))
               (let [k (when (some? ^js (.-known-cells s)) (.knownKey s x y z))
@@ -437,7 +444,7 @@
         (if (< i (.-n-nodes s))
           (let [x (aget (.-xs s) i) y (aget (.-ys s) i) z (aget (.-zs s) i)
                 mx (bit-and x 15) mz (bit-and z 15)]
-            (if (and (or (< mx lo) (>= mx hi) (< mz lo) (>= mz hi))
+            (if (and ^boolean (.inBand s mx mz)
                      (<= (js/Math.max (js/Math.abs (- x (.-goal-x s))) (js/Math.abs (- z (.-goal-z s)))) (.-frontier-reach s))
                      (not ^boolean (.endsOnMagma s x y z (aget (.-hs s) i)))
                      ^boolean (.atLoadedEdge s i))

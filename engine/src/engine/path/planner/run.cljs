@@ -199,7 +199,7 @@
     (let [x (aget (.-xs s) i) z (aget (.-zs s) i)
           mx (bit-and x 15) mz (bit-and z 15)]
       (and (pos? i)
-           (or (< mx OPEN-REACH) (>= mx (- 16 OPEN-REACH)) (< mz OPEN-REACH) (>= mz (- 16 OPEN-REACH)))
+           ^boolean (.inBand s mx mz)
            (<= (js/Math.max (js/Math.abs (- x (.-goal-x s))) (js/Math.abs (- z (.-goal-z s)))) (.-frontier-reach s))
            (not (and (some? ^js (.-known-cells s)) ^boolean (.has ^js (.-known-cells s) (.knownKey s x (aget (.-ys s) i) z))))
            ^boolean (.atLoadedEdge s i))))

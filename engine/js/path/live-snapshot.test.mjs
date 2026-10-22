@@ -168,3 +168,12 @@ test('the snapshot carries its unknown option; none without one', () => {
   assert.equal(snapshot.unknown, unknown)
   assert.equal(rig().snapshot.unknown, undefined)
 })
+
+test('with unknown.edge, an unseen cell reads UNLOADED and the snapshot is not masked', () => {
+  const { unknown, world } = memoryRig()
+  const edge = liveSnapshot(world, { ...SIZE, unknown: { ...unknown, id: UNLOADED, edge: true } })
+  assert.equal(edge.stateAt(5, 70, 4), UNLOADED)
+  assert.equal(edge.stateAt(3, 70, 4), id('stone'))
+  assert.equal(edge.unknown, undefined)
+  assert.equal(edge.hasColumn(0, 0), false)
+})

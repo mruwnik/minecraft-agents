@@ -75,6 +75,8 @@
   [p]
   (wsight/see-depth (or (look/near-of p) 0)))
 
+(def ^:private unloaded-id 0xFFFF)
+
 (defn path-world
   "The primitives' pathWorld sensing (a snapshot over the world) with the planner's block table and free-space module, nil when
   they have none or cannot sense now. With unknown (unknown-spec), over a body with a perception: cells the body never saw
@@ -87,7 +89,7 @@
            known (when unknown (memory-sections p))
            mask (when known
                   (js/Object.assign #js {} unknown
-                                    #js {:id (first (blocks/state-ids table (if (breath/head-under? p) "seagrass" "void_air"))) :blockedId (first (blocks/state-ids table "stone")) :known known
+                                    #js {:id (if (.-edge unknown) unloaded-id (first (blocks/state-ids table (if (breath/head-under? p) "seagrass" "void_air")))) :blockedId (first (blocks/state-ids table "stone")) :known known
                                          :seeDepth (see-depth-now p) :seeLit (look/see-lit-fn p)}))]
        (when-let [pw (if mask (.pathWorld p mask) (.pathWorld p))]
          (js/Object.assign #js {:table table :space space/space} pw))))))

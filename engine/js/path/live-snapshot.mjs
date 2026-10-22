@@ -6,7 +6,7 @@
 // remembered as tried (no re-read) and reads UNLOADED.
 // With unknown {id, known, ...}: a copied section is masked once, every cell the body never saw or felt reading unknown.id
 // (known(cx, sy, cz), sy the WORLD section y, is the body's memory of that section, ids + 1 and 0 for never seen, or null:
-// all unseen); a known cell reads its live id. unknown.blocked, a Set of "x,y,z" cells the body looked at and still could not see, reads unknown.blockedId while still unseen (stone: hidden behind other blocks, as rock is). The snapshot carries unknown (the planner's options.unknown).
+// all unseen); a known cell reads its live id. unknown.blocked, a Set of "x,y,z" cells the body looked at and still could not see, reads unknown.blockedId while still unseen (stone: hidden behind other blocks, as rock is). The snapshot carries unknown (the planner's options.unknown), except with unknown.edge: the unseen cells read UNLOADED (the planner's loaded edge, walked to as a frontier) and the planner is not masked.
 import { createSnapshot, sectionIds, UNLOADED } from './snapshot.mjs'
 
 const mask = (ids, memory, id) => {
@@ -54,7 +54,9 @@ export function liveSnapshot (world, { minY, height, unknown }) {
   return {
     minY,
     height,
-    unknown,
+    unknown: unknown?.edge ? undefined : unknown,
+    // the planner's frontier is any seen/unseen border, not only a chunk side (planner inBand)
+    edge: Boolean(unknown?.edge),
     stateAt: (x, y, z) => {
       if (!inRange(y)) return UNLOADED
       // fast path: a copied section answers directly; only an UNLOADED read pays the string key and tried lookup
@@ -72,7 +74,8 @@ export function liveSnapshot (world, { minY, height, unknown }) {
       ensure(cx, sy, cz)
       return inner.sectionHas(flagTable, cx, sy, cz)
     },
-    hasColumn: (cx, cz) => columnAt(cx, cz) !== null,
+    // with unknown.edge no column counts as loaded, so the goal flood leaks into its UNLOADED cells instead of walling on them
+    hasColumn: (cx, cz) => !unknown?.edge && columnAt(cx, cz) !== null,
     // a column loaded or unloaded since it was read: forget the copy, read it again when next asked (a snapshot kept
     // across plans)
     forgetColumn: (cx, cz) => {

@@ -379,7 +379,7 @@
 
       :else
       (let [_ (forget-known-land! c)
-            seen-goal? (and (see-cell c) (not (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))))
+            seen-goal? (and (see-cell c) (not (:edge-mode (ctx/mem c))) (not (wsearch/goal-unloaded? (.-snapshot pw) (mapv #(js/Math.floor (% pos)) [:x :y :z]))))
             opts (cond-> (assoc (walk-opts c doors) :progress (empty? (:frontier-best (ctx/mem c))))
                    seen-goal? (assoc :explore false))
             stair-check (lookout-check c pos (plan-check c pos (choose/stair-check c pos) (straight-from! c d)))
@@ -488,14 +488,18 @@
                          looped? (assoc :status :no-path :reason (if (escape/enclosed? (:primitives c) doors) :start-enclosed :no-progress))
                          (= :budget (some-> (:reason result) keyword)) (assoc :goal-left left))
                 progress? (and (not looped?) (or (< left (dec best)) explored? nearer? (learned-round? result)))
-                tries (cond looped? (max-blocked) progress? 0 :else (inc (:blocked (ctx/mem c) 0)))]
-            (when-not progress? (ctx/book-try! c 'jobs.movement.go-to (or (:reason result) :no-progress)))
+                edge-start? (and (not progress?) (:unknown c) (= :budget (some-> (:reason result) keyword)) (not (:edge-mode (ctx/mem c))))
+                tries (cond edge-start? 0 looped? (max-blocked) progress? 0 :else (inc (:blocked (ctx/mem c) 0)))]
+            (when-not edge-start? (when-not progress? (ctx/book-try! c 'jobs.movement.go-to (or (:reason result) :no-progress))))
             (ctx/update-mem! c assoc :blocked tries :starts starts :searching 0 :wet-fresh 0 :best (if (< left (dec best)) left best)
                              :closest (min left (:closest (ctx/mem c) left)) :last-dist left
                              :frontier-best (cond-> fbests frontier (assoc frontier (min fbest (u/dist to fcell))))
                              :target-best (cond-> tbests target (assoc target (min tdist (get tbests target js/Infinity)))))
             (when (and progress? (:restore-pending (ctx/mem c))) (restore/restore-next! c))
-            (if (or unstuck?
+            (when edge-start?
+              (ctx/update-mem! c assoc :edge-mode true)
+              (ctx/emit! c :go-to.edge-tour :info {:text "the search over unseen land ran out of nodes: touring to the edge of what the body has seen" :at (mapv #(js/Math.floor (% from)) [:x :y :z])}))
+            (if (or unstuck? edge-start?
                     (and (or progress? (and (< tries (max-blocked)) (< tries (ctx/own-tries c)) (pos? (ctx/tries-left c)))) (not (#{:goal-enclosed :goal-cut-off :goal-on-magma} (:reason result)))))
               (do (when (and (pos? tries) (not unstuck?)) (retrying! c result tries))
                   :again)
