@@ -138,10 +138,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [rock (box -30 0 -30 30 40 30 "stone")
+        (let [rock (box -30 0 -30 70 40 30 "stone") ; rock past the 4 stairs: one climbing out of the rock stands on air, where the escalation may take a path that depends on search timing
               mine (reduce dissoc rock (for [x (range -20 21) y (range 10 13) z (range -20 21)] (str x "," y "," z)))
               {:keys [out p seen]} (await (run-job! {:self {:pos {:x -19.5 :y 10 :z 0.5}} :blocks mine :inventory [{:name "stone_pickaxe" :count 1}]}
                                                     'jobs.movement.reach
-                                                    {:pos [0 41 0] :range 1}))]
+                                                    {:pos [40 41 0] :range 1}))]
           (is (true? (:arrived @out)) (pr-str @out (mapv (juxt :kind :text) @seen)))
           (is (<= 40 (second (feet p)))))))))
