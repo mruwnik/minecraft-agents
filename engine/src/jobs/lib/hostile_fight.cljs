@@ -177,15 +177,18 @@
 
 (defn walk-hp
   "hp the walk to the nearest of near costs: go-to's own route price (risk/estimate, its hostiles left out: they are in the
-  fight) plus the drops of the straight way there."
+  fight) plus the drops of the straight way there over the ground the body has seen, its unseen steps at the planner's
+  unknown prices (cost/unseen-route-hp)."
   [c near]
   (if-let [t (first near)]
     (let [p (:primitives c)
           goal (danger-q/mob-pos p t)
-          {:keys [hp hostile-hp]} (risk/estimate c goal)]
+          {:keys [hp hostile-hp]} (risk/estimate c goal)
+          kind-at (reach/seen-lookup p reach/kind-of :ground)
+          route (cost/straight-route kind-at (u/pos-of (.-pos (.self p))) goal)]
       (+ (- hp hostile-hp)
-         (cost/route-fall-damage (cost/equipment-of (.-equipment (.self p)))
-                                 (cost/straight-route (reach/lookup p) (u/pos-of (.-pos (.self p))) goal))))
+         (cost/route-fall-damage (cost/equipment-of (.-equipment (.self p))) route)
+         (cost/unseen-route-hp kind-at route)))
     0))
 
 (defn fight-price
