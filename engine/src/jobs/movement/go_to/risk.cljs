@@ -1,7 +1,7 @@
 (ns jobs.movement.go-to.risk
   "go-to's start check: the risk of the walk to the goal, in hit points, against what the body can afford. It replaces any
   wait for dawn: a night walk is judged by the light the body perceives along the straight way (Q334), a walk underground
-  only by the hostiles it can reach (Q279).
+  by the hostiles it can reach and the dark halls it crosses (a roofed dark cell prices spawns only where dark floor beyond the spawn-free radius is reachable: ready/hall-at?, Q345).
   Risk = the mobs expected to spawn on the exposed stretches (jobs.lib.cost/spawn-chance per second of walking, each costed
   as a zombie fight with the kit carried, jobs.lib.cost/fight-damage) plus, on a walk with such a stretch (in the light a hostile is seen and avoided; the reflexes meet it), the fight with every hostile known near the way.
   A walk to a goal within the death-spot radius of a place the body died lately (jobs.lib.death-spot, fading with time) adds the fight with what killed it, weighted by how fresh the death is, underground too, only when the walk ends nearer the death than it starts (a body standing, or walking away from the spot, is no closer to it) and the spot has not been seen since the death (fresh sight beats the record; a hostile seen there prices as a known hostile); not within ::pile-radius of the goal (a walk to the body's own drops: only a hostile known there counts).
@@ -52,7 +52,7 @@
       (update-vals (merge-with #(+ %1 (* t (- %2 %1))) from to) js/Math.floor))))
 
 (defn- chance-at
-  "The spawn chance per second at `cell` for a body at feet: a seen cell by its light (sky reaching it down its column only), an unseen one
+  "The spawn chance per second at `cell` for a body at feet: a seen cell by its light (sky reaching it down its column; a roofed cell is dark only in a dark hall), an unseen one
   by the open-sky guess when it lies within the surface band of `top`; underground-unseen cells carry none."
   [p cell top underground?]
   (let [night (not (look/lit-light? 0 15 (sh-sense/sky-subtract-now p)))
@@ -61,7 +61,7 @@
         block (when (or (sh-sense/seen-cell? p cell) (look/glimpse? p cell)) (sh-sense/block-light-at p cell))]
     (cond
       block (cost/spawn-chance [(:x cell) (:y cell) (:z cell)]
-                               {:light (constantly {:block block :sky (if (sh-sense/sky-reaches-from-above? p cell) sky 15)})})
+                               {:light (constantly {:block block :sky (cond (sh-sense/sky-reaches-from-above? p cell) sky (and (< block (look/dark-light)) (ready/hall-at? p cell)) 0 :else 15)})})
       (or underground? (< (:y cell) (- top (settings/get settings ::surface-band)))) 0
       :else (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky sky})}))))
 

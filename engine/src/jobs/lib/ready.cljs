@@ -1,7 +1,7 @@
 (ns jobs.lib.ready
   "The readiness checkers a job binds as its safe? and fit? exports: fns of the ctx giving a status (engine.contract).
   safe-at, safe-at-by-night and safe-if-lit are :later while the place is exposed and the stay there is not affordable (jobs.lib.price/priced; the estimate of jobs.lib.cost/exposure is
-  above ::risk-limit; :look while the light there is unseen and the body has not looked round, then :later; :never when light is further off than the job waits; darkness no sky light reaches is no exposure) or a danger is near
+  above ::risk-limit; :look while the light there is unseen and the body has not looked round, then :later; :never when light is further off than the job waits; a dark hall no sky light reaches is exposed by its spawn chance, :never lowered by a torch; a small dark place is no exposure) or a danger is near
   (threatened); fit? is :later below the risky health or while poisoned (fit-armed also while unarmed); ok never refuses."
   (:require [jobs.lib.cost.health :as cost-health]
             [clojure.string :as str]
@@ -63,9 +63,16 @@
   [c cells]
   (every? (sense/round-looked c) cells))
 
+(defn hall-at?
+  "Whether the dark place `to` is in a dark hall (sh-inside/dark-hall-at?), judged from the open cell the body would stand in (the feet when `to` is solid rock or unseen)."
+  [p to]
+  (let [to (update-vals to js/Math.floor)
+        at (if (or (nil? (:y to)) (sh-sense/solid-at? p to) (not (sh-sense/seen-cell? p to))) (sh-sense/feet p) to)]
+    (sh-inside/dark-hall-at? p at)))
+
 (defn at-status
   "The status of the exposure of the walk of c's body to `to`: ok while sheltered or the chance is within ::risk-limit,
-  else by what lowers it; darkness no sky light reaches (a cave: dawn never lifts it) is no exposure, only threats count; light further off than ::light-patience-s is not waited for."
+  else by what lowers it; darkness no sky light reaches (a cave: dawn never lifts it) is exposed only in a dark hall (hall-at?), :never, lowered by a torch, else no exposure; light further off than ::light-patience-s is not waited for."
   [c to]
   (let [p (:primitives c)
         shelter (:data (ctx/latest c :shelter))
@@ -88,7 +95,18 @@
       (contract/later :exposed (str "dark at " where " until light") :lowered-by lowered-by :chance chance :recheck-after-ms (* 1000 light-in))
       (contains? lowered-by :light)
       (contract/never :exposed (str "dark at " where ", light is " (js/Math.round light-in) " s away, over the " (js/Math.round patience) " s it waits") :chance chance)
-      :else (contract/ok :sealed (str "dark at " where ", no sky light reaches it: waiting never lights it, only threats count")))))
+      (hall-at? p to) (contract/never :exposed (str "dark at " where ", a hall of dark floor beyond " sh-inside/spawn-free-radius " blocks: mobs spawn in it, waiting never lights it, a torch does") :lowered-by #{:torch} :chance chance)
+      :else (contract/ok :sealed (str "dark at " where ", no dark floor reaches beyond " sh-inside/spawn-free-radius " blocks: nothing spawns near the body")))))
+
+(defn hall-status
+  "The exposure of `to` (nil: here) for a place no check waits for light at (underground): ok unless the body is buried and the place lies in a dark hall (hall-at?), then priced like any exposure."
+  [c to]
+  (let [p (:primitives c)
+        to (update-vals (or to (sh-sense/feet p)) js/Math.floor)]
+    (price/priced c (if (and (sh-sense/buried? p) (hall-at? p to))
+                      (contract/never :exposed (str "dark at " (place-text to) ", a hall of dark floor beyond " sh-inside/spawn-free-radius " blocks: mobs spawn in it, a torch lowers it")
+                                      :lowered-by #{:torch} :chance (:chance (cost/exposure p to (:data (ctx/latest c :shelter)))))
+                      (contract/ok :day "an unseen place's light is no reason to wait")))))
 
 (defn exposed
   "The status of the exposure of c's body at `to` ({:x :y :z}, nil: where it stands), cached."
@@ -162,9 +180,9 @@
 
 (defn safe-at-by-night
   "The checker of a job that goes to the place (f c): while the place is dark safe-at it, by day or when body and place are both
-  underground only not threatened (an unseen place's light is no reason to wait, and darkness underground does not end
+  underground not threatened and not in a dark hall (hall-status; an unseen place's light is no reason to wait, and darkness underground does not end
   at dawn; a walk from a tunnel to open ground is exposed). A buried body's unseen place no higher than its feet with a seen solid block over it is
-  underground (Q279: caves count only reachable hostiles); one above them, or with open sky over it (outside a hut), may be open ground. dug?: the job digs to the place, so no seen roof is needed (rock is what a player digs through)."
+  underground (Q345: a small dark cave counts only reachable hostiles, a hall its spawns); one above them, or with open sky over it (outside a hut), may be open ground. dug?: the job digs to the place, so no seen roof is needed (rock is what a player digs through)."
   ([f] (safe-at-by-night f false))
   ([f walk?] (safe-at-by-night f walk? false))
   ([f walk? dug?]
@@ -179,8 +197,8 @@
                            (not (and to (sh-sense/buried? p)
                                      (or (sh-sense/buried-at? p to)
                                          (and (not (sh-sense/seen-cell? p to)) (<= (:y to) (:y feet)) (or dug? (roof-over? p to)))))))))]
-    (with-meta (fn [c] (if (by-night? c) (at c) (if walk? (threatened-walking c (f c)) (threatened c))))
-      {::exposure (fn [c] (if (by-night? c) ((::exposure (meta at)) c) (contract/ok :day "an unseen place's light is no reason to wait")))}))))
+    (with-meta (fn [c] (if (by-night? c) (at c) (contract/all [(if walk? (threatened-walking c (f c)) (threatened c)) (hall-status c (f c))])))
+      {::exposure (fn [c] (if (by-night? c) ((::exposure (meta at)) c) (hall-status c (f c))))}))))
 
 (defn ok-when-near
   "safe, but ok while (near? c) holds: the job makes no walk there, so it meets no exposure the body is not already in (a wall closed beside a weak body at night is the safe act)."

@@ -395,6 +395,17 @@
                    (fn [c] (put! (str "wall|" budget "|" (aget c 0) "|" (aget c 1) "|" (aget c 2)) region))))
        region))))
 
+(defn reaches?
+  "Whether a walker from cell pos {:x :y :z} reaches, over the blocks the body has seen (doors shut, at most budget cells), a cell
+  that (far? [x y z]) holds for; the flood ends at the first one. Kept per body (kept)."
+  [p {:keys [x y z]} budget far?]
+  (kept p (str "reaches|" budget "|" x "|" y "|" z)
+        (fn [kind-at]
+          (let [hit (volatile! false)]
+            (flood-visit (partial forward kind-at) [x y z] budget
+                         (fn [c] (when (far? c) (vreset! hit true) true)))
+            @hit))))
+
 (defn walk-steps
   "The steps of a walk (search-steps) from cell from to a cell next to cell to ({:x :y :z} each) over the blocks the
   body has seen, wooden doors opened (body-kind-of); nil when none is found."

@@ -85,6 +85,16 @@
   (boolean (when-let [room (sealed-region p at)]
              (not (dark-spawn-beyond? p room at)))))
 
+(defn dark-hall-at?
+  "Whether a mob could spawn on a dark floor farther than spawn-free-radius from `at` ({:x :y :z}) and walk to it (owner Q345, Q388): `at` is dark and
+  the cells a walker reaches over what the body has seen, open ends included, hold such a floor. A small dark tunnel or room is no hall; a big cave is."
+  [p at]
+  (let [r2 (* spawn-free-radius spawn-free-radius)
+        dark-floor? (fn [[x y z]] (let [cell {:x x :y y :z z}] (and (sh-sense/spawnable? p cell) (not (sh-sense/lit-here? p cell)))))
+        far? (fn [[x y z :as c]] (and (> (+ (js/Math.pow (- x (:x at)) 2) (js/Math.pow (- y (:y at)) 2) (js/Math.pow (- z (:z at)) 2)) r2) (dark-floor? c)))]
+    (boolean (and (not (sh-sense/lit-here? p at))
+                  (reach-room/reaches? p at reach-room/wall-cells (fn [c] (far? [(aget c 0) (aget c 1) (aget c 2)])))))))
+
 (defn safe-room-at?
   "Whether a body at `at` would be safe from the night (owner Q345): walled-off-at? under a roof (sh-sense/room-roofed?).
   A dark 5x5 room is safe, a dark hall reaching 30 blocks is not, nor is a roof with open sides or a pit a walker on its

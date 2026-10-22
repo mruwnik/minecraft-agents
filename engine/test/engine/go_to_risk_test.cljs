@@ -13,6 +13,8 @@
             [jobs.lib.look :as look]
             [jobs.lib.price :as price]
             [jobs.lib.threats :as threats]
+            [jobs.lib.ready :as ready]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.movement.go-to.risk :as risk]))
 
 (def inside {:x 5 :y 64 :z 0})
@@ -43,6 +45,13 @@
 (deftest a-dark-way-by-day-is-not-exposed
   (let [c (ready-test/ctx-of (assoc night-hut :time st/noon))]
     (is (zero? (:hp (risk/estimate c {:x 95 :y 64 :z 0}))))))
+
+(deftest a-roofed-dark-way-prices-spawns-only-through-a-dark-hall
+  (let [c (ready-test/ctx-of (assoc night-hut :time st/noon))]
+    (with-redefs [sh-sense/sky-reaches-from-above? (constantly false)
+                  sh-sense/block-light-at (constantly 0)]
+      (is (zero? (:hp (with-redefs [ready/hall-at? (constantly false)] (risk/estimate c {:x 95 :y 64 :z 0})))) "a small dark tunnel is free")
+      (is (pos? (:hp (with-redefs [ready/hall-at? (constantly true)] (risk/estimate c {:x 95 :y 64 :z 0})))) "a dark hall costs spawns"))))
 
 (deftest hostiles-near-the-way-hold-a-walk-with-the-risk-in-the-reason
   (async done

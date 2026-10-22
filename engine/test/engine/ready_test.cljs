@@ -24,6 +24,7 @@
             [jobs.blocks.place :as place]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
+            [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.reserve :as reserve]
             [jobs.lib.world :as known]
             [jobs.strip.site :as strip-site]
@@ -305,14 +306,22 @@
 (deftest ok-is-always-ok
   (is (= :ok (kind ready/ok open-night))))
 
-(deftest an-exposure-over-the-limit-is-judged-by-what-lowers-it-and-cave-darkness-is-none
+(deftest an-exposure-over-the-limit-is-judged-by-what-lowers-it
   (are [block sky world expected] (= expected (with-redefs [sh-sense/block-light-at (fn [_ c] (if (= outside (select-keys c [:x :y :z])) block 0))
                                                             sh-sense/sky-light-at (constantly sky)]
                                               (kind (ready/safe-at (constantly outside)) world)))
     8 15 open-night :ok
-    0 15 open-night :later
-    0 0 (assoc open-night :time st/noon) :ok))
+    0 15 open-night :later))
 
+
+(deftest a-roofed-dark-cell-is-exposed-in-a-dark-hall-and-free-in-a-small-dark-place
+  (are [hall? expected] (= expected (with-redefs [sh-sense/block-light-at (constantly 0)
+                                                  sh-sense/sky-light-at (constantly 0)
+                                                  sh-inside/dark-hall-at? (constantly hall?)]
+                                      ((juxt first #(:reason (nth % 2)))
+                                       (ready/at-status (ctx-of (assoc open-night :time st/noon)) outside))))
+    true [:never :exposed]
+    false [:ok :sealed]))
 
 (deftest an-unseen-cell-asks-for-a-look-at-it
   (let [s ((ready/safe-at (constantly outside)) (ctx-of open-night))]

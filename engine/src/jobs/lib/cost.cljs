@@ -134,7 +134,7 @@
   what lowers it (with :light-in, the seconds until light, when :light does), data the readiness checks read (empty: nothing foreseeable does, so never). A place outside the shelter
   (sh-inside/walk-leaves-shelter?, with the body's latest :shelter entry data when given) that p has no light data of is guessed under open sky; any
   other the spawn-chance at `to` from the light p has seen; :light lowers a chance that darkness alone puts there and light-in says waiting lifts, but only
-  at a cell the sky reaches down its column (under leaves too): a roofed dark cell (a stair, a cave) is no exposure on its own, only threats count. A cell p
+  at a cell the sky reaches down its column (under leaves too): a roofed dark cell (a stair, a cave) lowers nothing; ready/at-status prices it only in a dark hall. A cell p
   has no light data of is guessed dark and lowered by #{:look}, with :look-at [[x y z]]. A solid `to` is judged by the first seen open cell over it (the air over a pile, not the unseen logs between), else the cell over it (a solid cell has no light that night changes). Lava and the like are not spawn
   chance. A dark cell has none when no dark spawnable cell beyond the spawn-free radius of it is reachable on foot (sh-inside/walled-off-at?: a closed seen region without a way in). A crude stub."
   ([p to] (exposure p to nil))

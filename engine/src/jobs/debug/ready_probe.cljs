@@ -1,6 +1,7 @@
 (ns jobs.debug.ready-probe
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]))
 
 (def doc
@@ -10,6 +11,7 @@
 
 (a/defargs args
   {:at {:doc "the place the job would go to, [x y z] or {:x :y :z}" :spec a/position? :default nil}
+   :stay-s {:doc "seconds the probe counts as staying at :at (price/stays); none: the place-stay default" :spec number? :default nil}
    :lit? {:doc "bind safe-if-lit (a roaming job) instead of safe-at" :spec boolean? :default false}})
 
 (def target [])
@@ -17,9 +19,10 @@
 (def defaults {})
 
 (defn checker [c]
-  (if (:lit? (:args c))
-    ready/safe-if-lit
-    (ready/safe-at (fn [c] (a/cell (:at (:args c)))))))
+  (let [{:keys [lit? stay-s]} (:args c)]
+    (cond lit? ready/safe-if-lit
+          stay-s (price/stays (ready/safe-at (fn [c] (a/cell (:at (:args c))))) (constantly stay-s))
+          :else (ready/safe-at (fn [c] (a/cell (:at (:args c))))))))
 
 (def safe?
   (with-meta (fn [c] ((checker c) c))
