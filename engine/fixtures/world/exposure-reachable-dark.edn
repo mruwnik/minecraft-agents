@@ -7,14 +7,14 @@
   :time-why :night-light
   :plot {:height 8}
   :blocks [[:fill [12 0 12] [20 5 20] "stone"] [:fill [13 0 13] [19 5 19] "air"]]
-  :body {:at [16.5 0 16.5] :inventory [["furnace" 1] ["porkchop" 2] ["coal" 2]] :effects [] :settle-s 2}
+  :body {:at [16.5 0 16.5] :inventory [["furnace" 1] ["porkchop" 4] ["coal" 2]] :effects [] :settle-s 2}
   :limit-s 170}
  :cases
  [{:name "cooks-in-a-walled-yard-open-to-the-night-sky"
    :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
          [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
-         [:job (jobs.survival.get-food {:explore false})]]
+         [:job (jobs.survival.get-food {:explore false :carry 8})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :cook}} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.get-food"}} :within-s 150}]
    :after [[:item "porkchop" 0]]}
@@ -22,11 +22,11 @@
   {:name "cooks-in-a-large-walled-yard-open-to-the-night-sky"
    :plot {:height 8 :length 40 :width 40}
    :blocks [[:fill [12 0 12] [33 5 33] "stone"] [:fill [13 0 13] [32 5 32] "air"]]
-   :body {:at [22.5 0 22.5] :inventory [["furnace" 1] ["porkchop" 2] ["coal" 2]] :effects [] :settle-s 2}
+   :body {:at [22.5 0 22.5] :inventory [["furnace" 1] ["porkchop" 4] ["coal" 2]] :effects [] :settle-s 2}
    :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
          [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 5 minecraft:generic"]
-         [:job (jobs.survival.get-food {:explore false})]]
+         [:job (jobs.survival.get-food {:explore false :carry 8})]]
    :expect [{:event {:source :job :kind :child_ended :data {:slot :cook}} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :data {:name "jobs.survival.get-food"}} :within-s 150}]
    :after [[:item "porkchop" 0]]}]}
