@@ -57,6 +57,46 @@
   (ctx/update-mem! c assoc :trip outcome)
   (ctx/emit! c (keyword (str "trip." (name outcome))) :info fields))
 
+(def junk-blocks
+  "Dug stone a dig keeps only a stack or so of."
+  #{"cobblestone" "cobbled_deepslate"})
+
+(a/defargs junk-settings
+  {::junk-cap {:default 128 :doc "Carried cobblestone (or cobbled deepslate) over this makes a mine throw the surplus away, down to jobs.storage.make-room's keep of a stack." :spec (a/int-in 0 nil)}})
+
+(defn surplus-slots
+  "The slots to free to throw the junk stone carried over ::junk-cap down to a stack each (make-room's keep), 0 when none is over."
+  [p]
+  (let [inv (u/inventory p)
+        totals (reduce (fn [m {:keys [name count]}] (cond-> m (junk-blocks name) (update name (fnil + 0) count))) {} inv)
+        cap (settings/get junk-settings ::junk-cap)
+        slots #(js/Math.ceil (/ % 64))]
+    (transduce (comp (filter #(> (val %) cap)) (map #(- (slots (val %)) 1))) + 0 totals)))
+
+(declare heading-steps)
+
+(defn ahead
+  "A point 3 blocks on from the feet along the way the job digs on (its :dug-heading, :heading or :direction, else the way the body faces)."
+  [c]
+  (let [heading (keyword (or (some-> (or (:dug-heading (ctx/mem c)) (:heading (:args c)) (:direction (:args c))) (#(when (or (string? %) (keyword? %)) (name %))))
+                             (look/facing (:primitives c))))
+        [dx dz] (heading-steps heading [0 0])
+        {:keys [x z]} (u/self-pos c)]
+    {:x (+ x (* 3 dx)) :z (+ z (* 3 dz))}))
+
+(defn ^:async shed!
+  "Throw away the junk stone over ::junk-cap: a jobs.storage.make-room child for the slots it frees. :continue while it
+  runs, else nil; a make-room that frees nothing is kept in the job's memory as :shed-failed."
+  [c]
+  (let [p (:primitives c)
+        n (surplus-slots p)]
+    (when (and (pos? n) (not (:shed-failed (ctx/mem c))))
+      (let [e (await (ctx/call c :shed 'jobs.storage.make-room {:free (min 36 (+ (u/free-slots p) n)) :toss-from (ahead c)}))]
+        (cond
+          (= :continue e) :continue
+          (pos? (surplus-slots p)) (do (ctx/update-mem! c assoc :shed-failed true) nil)
+          :else nil)))))
+
 (defn plan
   "What a trip start does: :roomy, :no-chest, :far or :deposit, with the chest and its walk cost."
   [c]

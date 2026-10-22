@@ -69,3 +69,28 @@
                                              "stone_pickaxe" 200
                                              {:move-to [0.5 64 1.5] :jobs {'jobs.movement.go-to arrived-only}}))]
           (is (not= :not-back (:reason (:data out))) (pr-str out)))))))
+
+(deftest a-trip-carrying-far-more-cobblestone-than-a-dig-needs-throws-the-rest-away-and-goes-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [s out]} (await (as-child {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 8 :trip true}
+                                               (-> ore-world
+                                                   (update :blocks #(apply dissoc % (for [x [-1 -2 -3] y [64 65]] (str x "," y ",0"))))
+                                                   (assoc :inventory (into sturdy-pickaxe (repeat 5 {:name "cobblestone" :count 64}))))
+                                               "stone_pickaxe" 400))]
+          (is (= [:done :count] [(:kind out) (:reason (:data out))]) (pr-str out))
+          (is (= 1 (get (inv s) "raw_iron")))
+          (is (<= (get (inv s) "cobblestone" 0) 64) "a stack is kept, the rest thrown"))))))
+
+(deftest cobblestone-the-dig-itself-brings-in-over-the-cap-is-thrown-away-between-digs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [s out]} (await (as-child {:block "iron_ore" :level false :count 1 :direction "east" :tunnel-length 8 :trip true}
+                                               (-> ore-world
+                                                   (update :blocks #(apply dissoc % (for [x [-1 -2 -3] y [64 65]] (str x "," y ",0"))))
+                                                   (assoc :inventory (into sturdy-pickaxe (repeat 2 {:name "cobblestone" :count 64}))))
+                                               "stone_pickaxe" 400))]
+          (is (= [:done :count] [(:kind out) (:reason (:data out))]) (pr-str out))
+          (is (<= (get (inv s) "cobblestone" 0) 128) "128 carried at the start, the digs' cobblestone over the cap went"))))))

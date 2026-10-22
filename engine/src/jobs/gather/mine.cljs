@@ -175,6 +175,7 @@
   "What the dig needs, in order: room in the bag, a pickaxe, a spare, torches. :continue while one waits on the world, else nil."
   [c]
   (or (await (trip/ready! c))
+      (await (trip/shed! c))
       (await (fetch-pickaxe! c))
       (await (trip/tool-ready! c (main-block (:args c)) (digs-left c)))
       (await (when (and (:torches (:args c)) (nil? (:tunnel (ctx/mem c))) (or (mw/tunnel? (:args c)) (descent-wanted? c)))
@@ -230,7 +231,8 @@
   (let [{:keys [dug-heading]} (ctx/mem c)]
     (cond-> (-> (:args c)
                 (dissoc :mend :submitted-at)
-                (assoc :track-ground (boolean (:mend (:args c))) :least (:least (ctx/frozen-call c) :all)))
+                (assoc :track-ground (boolean (:mend (:args c))) :least (:least (ctx/frozen-call c) :all)
+                       :shed (not (:shed-failed (ctx/mem c)))))
       (and dug-heading (nil? (:heading (:args c))) (nil? (:direction (:args c)))) (assoc :heading dug-heading))))
 
 (defn booked
@@ -253,6 +255,11 @@
          :no-torches (and (:stocked? (ctx/mem c)) (stock/fetch-allows? c))
          false)))
 
+(defn shed-again?
+  "Whether a dig that stopped for reason :surplus goes on after the pack is cleared (not after a clearing that freed nothing)."
+  [c reason]
+  (and (= :surplus reason) (not (:shed-failed (ctx/mem c)))))
+
 (defn ^:async dig-step!
   "One round of the dig-for child; its ending is kept. A stop for a pickaxe or torches that the trip may get again goes back to the
   equip, to dig on from where the dig stopped; any other ending goes to the mend or the end."
@@ -263,12 +270,16 @@
       (let [reason (or (:reason (:data e)) (contract/cause-key e))]
         (ctx/update-mem! c booked e)
         (ctx/update-mem! c assoc :dig-ending (dissoc e :report))
+        (if (shed-again? c reason)
+          (do (ctx/update-mem! c #(-> % (assoc :phase nil :resume-at (cell-of (u/self-pos c)) :wanted reason)
+                                      (dissoc :equipped?)))
+              :again)
         (if (gettable? c reason)
           (do (ctx/update-mem! c #(-> % (update :rounds (fnil inc 0))
                                       (assoc :phase nil :resume-at (cell-of (u/self-pos c)) :wanted reason)
                                       (dissoc :equipped? :torches-tried :tool-why :tool-ending)))
               :again)
-          (to-end! c reason nil))))))
+          (to-end! c reason nil)))))))
 
 (defn ^:async equip-step!
   "The phase before each dig: equip once, end on a stop the equip did not cure, walk back to where the dig goes on from, out of an own

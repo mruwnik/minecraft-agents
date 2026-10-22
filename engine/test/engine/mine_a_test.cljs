@@ -519,7 +519,7 @@
               pillars (into {} (for [[x z] stones]
                                  (into {(str x ",71," z) "stone"} (cells "bedrock" [x] (range 62 71) [z]))))
               s (await (scenario {:block "stone" :count 3 :radius 10 :ways #{:seen}}
-                                 {:blocks (merge floor pillars) :inventory pickaxe} 60))
+                                 {:blocks (merge floor pillars) :inventory pickaxe} 120 (constantly 0.5)))
               e (done-event s)]
           (is (= [:stopped 0] ((juxt :status :got) e)))
           (is (= (set (map (fn [[x z]] [x 71 z]) stones)) (set (:unreached e))))

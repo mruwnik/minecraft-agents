@@ -82,4 +82,12 @@
    :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 2 :ways #{:seen} :radius 6})]]
    :expect [{:event {:source :job :kind :tool.spare :data {:tool "stone_pickaxe"}} :within-s 120 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:got 2}} :within-s 190 :of-job true}]
-   :after [[:item "raw_iron" 2] [:body-near [10.5 10 16.5] 6]]}]}
+   :after [[:item "raw_iron" 2] [:body-near [10.5 10 16.5] 6]]}
+  ;; card 040fa149: a body does not haul 320 cobblestone on a dig: the mine throws whole stacks away down to one and goes on
+  {:name "mine-throws-away-cobblestone-it-does-not-need"
+   :blocks [[:set [12 9 16] "iron_ore"]]
+   :body {:inventory [["stone_pickaxe" 1] ["torch" 8] ["cobblestone" 320]]}
+   :act [[:job (jobs.gather.mine {:block "iron_ore" :level false :count 1 :ways #{:seen} :radius 6})]]
+   :expect [{:event {:source :job :kind :make-room.tossed :data {:item "cobblestone"}} :within-s 120 :of-job true}
+            {:event {:source :job :kind #{:completed :stopped} :data {:got 1}} :within-s 190 :of-job true}]
+   :after [[:item "raw_iron" 1] [:item "cobblestone" [:<= 128]]]}]}

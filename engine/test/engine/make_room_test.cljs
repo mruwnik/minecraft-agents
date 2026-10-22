@@ -511,6 +511,15 @@
           (is (= [{:x -3 :y 65.5 :z 0}] (mapv #(js->clj (arg-of "pos" %) :keywordize-keys true) (calls p "look")))
               "east is walled at eye level: west is the first free direction"))))))
 
+(deftest a-caller-can-have-the-toss-go-away-from-the-way-it-goes-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[from x] [[{:x 10 :z 0} -3] [{:x -10 :z 0} 3]]]
+          (let [{:keys [eng p]} (setup {:inventory (many "junk" 35)})]
+            (await (run-reflex eng {:free 2 :toss-from from} {}))
+            (is (= [{:x x :y 65.5 :z 0}] (mapv #(js->clj (arg-of "pos" %) :keywordize-keys true) (calls p "look"))))))))))
+
 (deftest a-body-walled-in-on-all-four-sides-tosses-nothing-since-the-items-would-come-straight-back
   (async done
     (tu/run-async done

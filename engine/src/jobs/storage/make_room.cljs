@@ -60,6 +60,7 @@
    :keep-blocks {:doc "cobblestone, dirt and each kind of planks kept carried, each up to this many" :spec (a/int-in 0 nil) :default 64}
    :keep-items {:doc "item names kept carried whole, never put away or thrown (a caller's own inputs)" :spec (a/coll-of a/name?) :default []}
    :keep-seeds {:doc "each kind of seeds kept carried up to this many (a farming body sows them)" :spec (a/int-in 0 nil) :default 16}
+   :toss-from {:doc "a position {:x :z}: toss away from it (a dig's caller gives a point ahead of the way it goes on, so it does not walk into what it threw)" :spec (a/pred "a position {:x :z}" #(and (map? %) (number? (:x %)) (number? (:z %)))) :default nil}
    :away {:doc "after tossing, walk this far away from where the items were thrown" :spec (a/num-in 0 nil) :default 4}
    :ignore-zones? :shared})
 
@@ -113,11 +114,11 @@
   looked at, as just after arriving, are not walls."
   [c run]
   (let [p (:primitives c)]
-    (or (direction p nil)
+    (or (direction p (:toss-from (:args c)))
         (when-not (:looked @run)
           (swap! run assoc :looked true)
           (await (look/glance! c (vals look/headings)))
-          (direction p nil)))))
+          (direction p (:toss-from (:args c)))))))
 
 (defn unusable?
   [c chest]
