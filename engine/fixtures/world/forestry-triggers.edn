@@ -65,20 +65,20 @@
    :limit-s 40}
   {:name "replant-owed-trigger-plants-the-carried-sapling"
    :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 60}]
-   :memory [{:kind :forestry/replant :data {:pos #at [16 0 16] :species "oak"}}]
+   :memory [{:kind :forestry/replant :data {:pos #xyz [16 0 16] :species "oak"}}]
    :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :replant-owed} :data {:kind :done}} :within-s 90}]
    :after [[:block [16 0 16] "oak_sapling"]]
    :limit-s 100}
   {:name "replant-owed-trigger-plants-the-loaded-debt-past-an-older-far-one"
    :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 60}]
-   :memory [{:kind :forestry/replant :data {:pos #at [1000 0 1000] :species "oak"}}
-            {:kind :forestry/replant :data {:pos #at [16 0 16] :species "oak"}}]
-   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :replant-owed} :data {:kind :done}} :within-s 90}]
+   :memory [{:kind :forestry/replant :data {:pos #xyz [1000 0 1000] :species "oak"}}
+            {:kind :forestry/replant :data {:pos #xyz [16 0 16] :species "oak"}}]
+   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :replant-owed}} :within-s 90}]
    :after [[:block [16 0 16] "oak_sapling"]]
    :limit-s 100}
   {:name "replant-owed-trigger-does-not-fetch-a-missing-sapling"
    :register [{:trigger :replant-owed :persistence :cooldown :cooldown-s 60}]
-   :memory [{:kind :forestry/replant :data {:pos #at [16 0 16] :species "oak"}}]
+   :memory [{:kind :forestry/replant :data {:pos #xyz [16 0 16] :species "oak"}}]
    :body {:inventory []}
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :replant-owed}} :for-s 30}]
    :after [[:not-block [16 0 16] "oak_sapling"]]
