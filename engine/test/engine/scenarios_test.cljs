@@ -83,7 +83,7 @@
               food #(:food (fake/self p))]
           (is (= [:suffocating :burning :wedged :died :hostile-near :poisoned :night :dawn :dusk-home :hungry :stuck-underground :part-cut-tree :replant-owed :needs-bed :needs-weapon :door-left
                   :inventory-nearly-full :scaffold-left :tidy-pending
-                  :pen-gate :mounted]
+                  :pen-gate :mounted :dark-work]
                  (mapv :id (:register (core/state eng)))))
           (await (run-ticks eng clock 3 1000))
           (is (= [] (fired seen)) "a healthy body in daylight fires nothing")

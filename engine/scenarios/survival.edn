@@ -39,5 +39,6 @@
             {:trigger :scaffold-left :persistence :stop}
             {:trigger :tidy-pending :persistence :cooldown :cooldown-s 10}
             {:trigger :pen-gate :persistence :cooldown :cooldown-s 5}
-            {:trigger :mounted :persistence :cooldown :cooldown-s 30}]
+            {:trigger :mounted :persistence :cooldown :cooldown-s 30}
+            {:trigger :dark-work :persistence :cooldown :cooldown-s 10}]
  :queue [(repeat (jobs.time.noop {:seconds 2 :why :idle}))]}
