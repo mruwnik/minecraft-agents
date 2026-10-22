@@ -514,6 +514,16 @@
           (await (run-ticks s 20))
           (is (empty? (events-of s :obtain.chest)) "no walk to the chest 4000 blocks away"))))))
 
+(deftest a-remembered-chest-beyond-far-chest-is-not-walked-to-for-a-craftable-tool-either
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (-> (world {}) (update :blocks dissoc chest-at)) [own-zone])]
+          (mem/write! (:store (:eng s)) stock/stock-kind {:pos [4000 64 3] :items {"stone_axe" 1}} stock/stock-policy)
+          (core/submit! (:eng s) (list 'jobs.items.obtain {:any-of ["stone_axe" "wooden_axe"] :ways #{:chest :craft :smelt} :explore false}) {})
+          (await (run-ticks s 20))
+          (is (empty? (events-of s :obtain.chest)) "an axe wanted by a fell is not worth a 4000 block walk"))))))
+
 (deftest obtain-any-of-takes-the-first-name-the-chest-holds
   (async done
     (tu/run-async done

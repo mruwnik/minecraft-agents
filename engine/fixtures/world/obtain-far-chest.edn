@@ -2,6 +2,7 @@
 ;; Plot 100 long, body at x 3, chest at x 93 booked in body memory as holding 3 iron ingots.
 ;; Should succeed: the body walks to the chest and carries the ingots.
 ;; The carried-materials case: 4 planks carried, the far chest holds sticks, the body crafts.
+;; The tree case (far-chest lowered to 20): empty pack, a tree 10 blocks off, a chest 90 blocks off remembered as holding a wooden sword: the body fells the tree and crafts, no chest is visited.
 ;; Should fail: the memory says the far chest holds only dirt, so nothing is walked to and the call ends without a source.
 {:defaults
  {:tags [:items :obtain :storage :jobs] :time :any
@@ -24,6 +25,15 @@
             {:no-event {:source :job :kind :obtain.chest} :for-s 60 :until {:source :job :kind :completed}}]
    :after [[:item "stick" 4] [:body-near [3 0 8] 10]]
    :limit-s 90}
+  {:name "a-tree-nearby-beats-a-far-remembered-chest-for-a-sword"
+   :blocks [[:fill [13 0 8] [13 3 8] "oak_log"] [:fill [12 4 7] [14 5 9] "oak_leaves"]
+            [:set [93 0 8] "chest{Items:[{Slot:0b,id:\"minecraft:wooden_sword\",count:1}]}"]]
+   :memory [{:kind :fetch/stock :data {:pos #at [93 0 8] :items {"wooden_sword" 1}} :policy {:cap 64 :ttl :forever}}]
+   :act [[:job (jobs.items.obtain {:item "wooden_sword" :ways #{:chest :craft :gather} :settings {:jobs.items.obtain.base/far-chest 20}})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 150 :of-job true}
+            {:no-event {:source :job :kind :obtain.chest} :for-s 150 :until {:source :job :kind :completed}}]
+   :after [[:item "wooden_sword" 1] [:body-near [13 0 8] 20]]
+   :limit-s 170}
   {:name "a-far-chest-remembered-without-the-item-is-not-walked-to"
    :blocks [[:set [93 0 8] "chest{Items:[{Slot:0b,id:\"minecraft:dirt\",count:3}]}"]]
    :memory [{:kind :fetch/stock :data {:pos #at [93 0 8] :items {"dirt" 3}} :policy {:cap 64 :ttl :forever}}]
