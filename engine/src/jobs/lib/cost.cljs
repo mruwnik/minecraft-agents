@@ -120,6 +120,7 @@
 (def walk-cost value/walk-cost)
 (defn walk-blocks-per-s [] (value/walk-blocks-per-s))
 (def dig-cost table/dig-cost)
+(def smelt-step "Seconds one smelt step takes beyond its input." (:smelt-step table/default-basis))
 (def detour-cost value/detour-cost)
 (def tour-cost value/tour-cost)
 (def tour-worth value/tour-worth)

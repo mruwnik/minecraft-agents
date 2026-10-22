@@ -7,8 +7,11 @@
             [jobs.items.obtain.seen :refer [seen-of sheep-in-range shears-source wool-keep]]
             [jobs.items.obtain.table :refer [gather-needs grass-seeds hand-dug leaves-of material-blocks need-way source-opts stalks wool-color wool?]]
             [jobs.items.recipes :as recipes]
+            [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.storage :as storage]
+            [jobs.lib.torch :as torch]
             [jobs.lib.trees :as trees]
             [jobs.lib.util :as u]))
 
@@ -88,13 +91,45 @@
   (let [b (seen-of c need)]
     (and b (< (:y (:pos b)) (dec (js/Math.floor (:y (u/self-pos c))))))))
 
+(defn unlit?
+  "Whether no seen open cell next to the block at pos is lit as the body perceives it: the way to it is dark."
+  [p {:keys [x y z]}]
+  (let [open? (fn [[x y z]] (let [cell {:x x :y y :z z}] (and (sh-sense/seen-cell? p cell) (not (sh-sense/solid-at? p cell)))))]
+    (->> [[(inc x) y z] [(dec x) y z] [x (inc y) z] [x (dec y) z] [x y (inc z)] [x y (dec z)]]
+         (filter open?)
+         (every? #(torch/perceived-dark? p %)))))
+
+(defn need-cost
+  "Seconds to gather a need whose nearest block is seen: the walk there, the digs, and for an ore seen below the feet a dark way
+  (walk at the dark price and a torch every few blocks) unless its cell is lit; Infinity when it is dark and no torch is carried:
+  the way down is lit by the torches it is wanted for."
+  [c need]
+  (let [p (:primitives c)
+        {:keys [pos name]} (seen-of c need)
+        d (u/dist (u/self-pos c) pos)
+        walk (:cost (cost/walk-cost {:distance d}))
+        dig (* (:count need) (or (cost/dig-cost name) 0))
+        torches (storage/carried (u/inventory p) "torch")
+        dark? (and (:ore? need) (below? c need) (unlit? p pos))]
+    (cond
+      (not dark?) (+ walk dig)
+      (not (pos? torches)) js/Infinity
+      :else (+ dig (* walk (inc (cost/dark-factor))) (* (js/Math.ceil (/ d 8)) (:cost (cost/light-cost {:carried torches})))))))
+
+(defn plan-cost
+  "Seconds to gather a plan's raw needs (need-cost) and smelt what it smelts; Infinity when a need has no block seen."
+  [c version pl]
+  (+ (reduce + 0 (map #(if (seen-of c %) (need-cost c %) js/Infinity) (some-> pl :gather (gather-needs version))))
+     (* cost/smelt-step (count (filter #(= :smelt (:op %)) (:steps pl))))))
+
 (defn preferred
   "The gather plan pl, or when it mines an ore seen below the feet and the same item is made another way from raw needs
-  all seen (charcoal from logs for torches: the way down to coal is dark and wants the torches it is wanted for), that plan."
+  all seen (charcoal from logs for torches) that costs less (plan-cost: the dark way down to coal, with no torch to light it, costs more than any walk to logs), that plan."
   [c version pl have name n opts]
   (let [hard (some->> pl :gather (#(gather-needs % version)) (filter #(and (:ore? %) (below? c %))) (map :key) set not-empty)
         alt (when hard (recipes/plan version have name n (assoc opts :ungathered hard)))]
-    (if (and alt (plan-allowed? c alt) (every? #(seen-of c %) (some-> alt :gather (gather-needs version))))
+    (if (and alt (plan-allowed? c alt) (every? #(seen-of c %) (some-> alt :gather (gather-needs version)))
+             (< (plan-cost c version alt) (plan-cost c version pl)))
       alt
       pl)))
 

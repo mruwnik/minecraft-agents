@@ -82,12 +82,13 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (setup {:containers {"10,64,0" [{:name "a" :count 5} {:name "keepme" :count 7}] "20,64,0" []}})
+        (let [{:keys [eng p]} (setup {:inventory (stacks "x" 33)
+                                      :containers {"10,64,0" [{:name "keepme" :count 7} {:name "a" :count 5} {:name "b" :count 5}] "20,64,0" []}})
               result (await (child-outcome eng 'jobs.storage.haul {:from [[10 64 0]] :leave ["keepme"]} 60))]
           (is (= :done (:status result)))
-          (is (= {"a" 5} (:moved result)))
+          (is (= {"a" 5 "b" 5} (:moved result)) "the kept stack first in the chest takes no slot of the two free")
           (is (= [{:name "keepme" :count 7}] (map #(select-keys % [:name :count]) (get (containers p) [10 64 0]))))
-          (is (= ["a"] (map :name (get (containers p) [20 64 0])))))))))
+          (is (= ["a" "b"] (map :name (get (containers p) [20 64 0])))))))))
 
 (def two-sources {"10,64,0" (stacks "a" 5) "10,64,4" (stacks "b" 5) "20,64,0" []})
 

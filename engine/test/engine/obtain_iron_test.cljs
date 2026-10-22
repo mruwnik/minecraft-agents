@@ -313,14 +313,35 @@
           (is (seq (f/calls s "dig")) "a log was felled for the charcoal")
           (is (seq (f/events-of s :smelt.loaded)) "the logs went in the furnace"))))))
 
-(deftest a-torch-with-coal-seen-below-is-made-from-charcoal-of-seen-logs
+(defn coal-below-world
+  "A coal ore 2 below the body, 9 south."
+  [inv]
+  (ore-world (merge f/tree-blocks {"1,64,2" "furnace" "1,62,9" "coal_ore"}) inv))
+
+(defn ^:async torches-with-coal-below!
+  "Obtain 4 torches with a coal ore below, after one sight pass so it is seen when the plan is made."
+  [light inv]
+  (let [s (f/start (coal-below-world inv) [f/own-zone])]
+    (swap! (fake/state (:p s)) assoc :light (into {} (for [x (range 0 3) y (range 60 67) z (range 8 11)] [[x y z] light])))
+    (await (f/run-ticks s 2))
+    (await (obtain! s {:item "torch" :count 4 :ways #{:craft :smelt :gather}} 60))
+    s))
+
+(deftest a-torch-with-dark-coal-seen-below-and-no-torch-is-made-from-charcoal-of-seen-logs
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (f/start (ore-world (merge f/tree-blocks {"1,64,2" "furnace" "3,58,2" "coal_ore"}) [{:name "stick" :count 2}]) [f/own-zone])]
-          (await (obtain! s {:item "torch" :count 4 :ways #{:craft :smelt :gather}} 60))
+        (let [s (await (torches-with-coal-below! [0 0] [{:name "stick" :count 2} {:name "wooden_pickaxe" :count 1}]))]
           (is (empty? (mine-events s)) "the dark way down to the coal is not taken")
           (is (seq (f/events-of s :smelt.loaded)) "the logs went in the furnace"))))))
+
+(deftest a-torch-with-lit-coal-seen-below-is-mined-not-made-from-charcoal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (torches-with-coal-below! [0 15] [{:name "stick" :count 2} {:name "wooden_pickaxe" :count 1}]))]
+          (is (seq (mine-events s)) "a coal seen in the light is mined")
+          (is (empty? (f/events-of s :smelt.loaded)) "no logs were smelted"))))))
 
 (deftest a-charcoal-smelt-burns-the-planks-kind-carried
   (async done

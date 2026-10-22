@@ -152,6 +152,9 @@
     "j1/bill/gather-raw_iron/mine/torch-craft" :craft
     "j1/bill/iron_pickaxe" :craft))
 
+(deftest a-torch-stock-craft-never-takes-the-kits-held-sticks
+  (is (= :craft-held (craft/chooser (craft-c "j1/bill/gather-coal/torches/torch" {:held-ok true})))))
+
 (deftest a-spare-craft-short-of-sticks-after-its-fetch-may-take-the-kits
   (is (= :craft (craft/chooser (craft-c "j1/bill/iron_pickaxe/dig/spare/stone_pickaxe" {:held-ok true})))))
 
