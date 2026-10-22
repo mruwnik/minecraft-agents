@@ -2,7 +2,8 @@
   "The pure step decision of jobs.access.cleanup: which ledger cell to dig, walk to, retreat from, or give up."
   (:require [jobs.lib.block-sets :as bs]
             [jobs.lib.access.rules :as rules]
-            [jobs.lib.ledger :refer [centre distance submerged?]]))
+            [jobs.lib.ledger :refer [centre distance submerged?]]
+            [jobs.lib.shelter.keep :refer [shelter-purposes]]))
 
 (defn hazard-reason
   "The :accept key of a dig hazard: lava beside is :lava-adjacent, kept apart from water."
@@ -60,8 +61,6 @@
     (and (not= cell [fx (dec fy) fz])
          (some? (row-exit in nil))
          (nil? (row-exit in cell)))))
-
-(def shelter-purposes #{:shelter :retreat-plug})
 
 (defn plan-cells
   "The cells of entries l that lie on the footprint of a plan this body made (own-plans), when spare-own-builds holds."

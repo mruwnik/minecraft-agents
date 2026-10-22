@@ -1,0 +1,25 @@
+;; Card 24c53a1a: a dig never opens the body's own night shelter while the night lasts (Teasel #50/#56: a queued place's dig-through and
+;; get-kit's mine stair dug the night's dirt seal again and again, until a skeleton shot down the open stair).
+;; Stone room x 14..18, z 14..18, roof y 2; its west wall at head height is a dirt block in the ledger as the body's :shelter block.
+;; Should-succeed: the listed blocks.dig of that block waits :dark while it is night and the dirt stays; after [:time-set 1000] it is dug.
+;; Should-fail: the dirt is dug at night. Needs the night: the seal is kept while the sky is dark (waiting the dark out).
+{:defaults
+ {:tags [:blocks :shelter :night]
+  :time :night :time-why :dawn-decision
+  :plot {:height 8 :floor "grass_block" :light :sky :length 32 :width 32}
+  :blocks [[:fill [14 0 14] [18 2 18] "stone"] [:fill [15 0 15] [17 1 17] "air"] [:set [14 1 16] "dirt"]]
+  :memory [{:kind :shelter :data {:pos #xyz [16 0 16] :roof #xyz [16 2 16] :state :built} :policy {:cap 10 :ttl 1200000}}
+           {:kind :scaffold :data {:entries [{:cell #at [14 1 16] :item "dirt" :before "air" :job "j1" :purpose :shelter :state :placed}]}
+            :policy {:cap 1 :ttl :forever}}]
+  :register []
+  :body {:at [16.5 0 16.5] :settle-s 2 :inventory [["stone_shovel" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "the-shelter-seal-waits-for-day"
+   :act [[:job (jobs.blocks.dig {:pos #at [14 1 16]})]
+         [:wait-s 30]
+         [:time-set 1000]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 20 :of-job true}
+            {:no-event {:source :action :kind :done :data {:name "dig"}} :for-s 30}
+            {:event {:source :job :kind :completed} :within-s 90 :of-job true}]
+   :after [[:block [14 1 16] "air"]]}]}

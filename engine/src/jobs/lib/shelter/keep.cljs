@@ -1,7 +1,8 @@
 (ns jobs.lib.shelter.keep
-  "Whether a shelter's block stays: a shelter or retreat-plug block opens onto a dark cell (cleanup keeps it, the scaffold-left trigger skips it)."
+  "Whether a shelter's block stays: a shelter or retreat-plug block opens onto a dark cell (cleanup keeps it, the scaffold-left trigger skips it, blocks.dig waits for the light)."
   (:require [engine.args :as a]
             [engine.settings :as settings]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.look :as look]
             [jobs.lib.shelter.sense :as sh-sense]))
 
@@ -9,6 +10,8 @@
   {::at-night? {:default true :doc "A shelter's block (:shelter, :retreat-plug) stays while it opens onto a dark cell; false takes it back anyway." :spec boolean?}})
 
 (defn at-night? [] (settings/get settings ::at-night?))
+
+(def shelter-purposes #{:shelter :retreat-plug})
 
 (defn opens-dark?
   "A fn of a cell: whether a neighbour of it is not solid and dark: a cell the body has seen by its light, one it has not
@@ -30,3 +33,11 @@
                        (let [n {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
                          (and (not (own? n)) (not (sh-sense/solid-at? p n)) (dark? n))))
                      [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [0 1 0] [0 -1 0]])))))
+
+(defn kept-tonight
+  "The body's open ledger entry of a shelter's block at cell [x y z] that no dig may take while the night lasts: the sky
+  dark outside, the body awake, the block opening onto a dark cell (opens-dark?). Else nil."
+  [p view cell]
+  (when (and (at-night?) (sh-sense/dark-outside? p) (not (sh-sense/sleeping? p)))
+    (when-let [e (first (filter #(and (= cell (:cell %)) (shelter-purposes (:purpose %))) (ledger/open-entries view)))]
+      (when ((opens-dark? p) cell) e))))

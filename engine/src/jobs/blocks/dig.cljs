@@ -20,6 +20,8 @@
             [jobs.lib.tidy :as tidy]
             [jobs.lib.tools :as tools]
             [jobs.lib.reach :as reach]
+            [jobs.lib.shelter.keep :as keep]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -35,6 +37,7 @@
     footprint refuse the dig (jobs.lib.access). :for-plan's own footprint does not. :ignore-zones? skips the rule.
   - {:reason :hazard :pos :hazards [kw ..]}: a dig hazard not in :accept (:fluid-adjacent water, :lava-adjacent seen
     lava, :falling-block). With :on-fluid :fail a fluid hazard ends the job :fluid-adjacent instead.
+  - {:reason :dark :pos}: before the start, while the sky is dark, the block is the body's own night shelter's and opens onto the dark (shelter-kept).
   - {:reason :inventory-full :pos}: with :collect, no free slot and no carried stack of the block's drop to grow.
   - {:reason :no-tool :needs item :block name :hint}: no carried tool harvests the block (with :need-drop) and the call's :ways
     allow no fetch (otherwise the round gets one; a fetch that fails ends the same way, with :why).
@@ -192,6 +195,17 @@
       (contract/look :unseen "the block to dig was not seen" :look-at [(b/cell pos)])
       (no-tool-refusal c))))
 
+(defn shelter-kept
+  "Later :dark while the cell is a block of the body's night shelter that opens onto the dark (keep/kept-tonight): a
+  dig there lets the night in."
+  [c]
+  (let [{:keys [pos error]} (b/parse (:args c))
+        p (:primitives c)]
+    (if (and (not error) (keep/kept-tonight p (ctx/view c) (b/cell pos)))
+      (contract/later :dark (str "the block at " (b/cell pos) " shuts the night shelter; it is dug by day")
+                      :pos pos :recheck-after-ms (* 1000 (sh-sense/sky-in p)))
+      (contract/ok :allowed "no night shelter block"))))
+
 (def safe? (ready/safe-at-build (fn [c] (a/cell (:pos (:args c))))))
 
 (def fit? ready/ok)
@@ -200,7 +214,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s} :least 1 :use {:tools :dig}})
 
-(def can-start? (cond/and bad-args not-loaded refused no-tool-unfetched))
+(def can-start? (cond/and bad-args not-loaded refused shelter-kept no-tool-unfetched))
 (def can-run? refused)
 
 (defn done?

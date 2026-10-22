@@ -18,6 +18,7 @@
             [jobs.lib.child :as child]
             [jobs.lib.blocks :as b]
             [jobs.lib.lava :as lava]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.world-files :as world]
             [plan.shape :as shape]))
 
@@ -352,6 +353,17 @@
           (is (= {:reason :hazard :pos at :hazards [:fluid-adjacent]} (wait-cause (await (waiting-after env (list job {:pos at}) 3))))))
         (let [{:keys [eng]} (setup {:self body :blocks {"2,64,0" "dirt" "3,64,0" "water"}})]
           (is (:dug (await (tu/child-outcome eng job {:pos at :accept #{:fluid-adjacent}} 5)))))))))
+
+(deftest a-block-of-the-night-shelter-opening-onto-the-dark-waits-for-light
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[time purpose waits?] [[14000 :shelter true] [14000 :retreat-plug true] [14000 :pillar false] [6000 :shelter false]]]
+          (let [{:keys [eng p] :as env} (setup {:self body :blocks {"2,64,0" "dirt"} :time time})]
+            (tu/with-light-data p)
+            (ledger/write! (:store eng) [{:cell [2 64 0] :item "dirt" :before "air" :job "j9" :purpose purpose :state :placed}])
+            (is (= waits? (= :dark (:reason (await (waiting-after env (list job {:pos at}) 3))))) [time purpose])
+            (is (= (not waits?) (= "air" (block-at p at))) [time purpose])))))))
 
 (deftest on-fluid-fail-ends-at-once-with-a-hint-instead-of-waiting
   (async done
