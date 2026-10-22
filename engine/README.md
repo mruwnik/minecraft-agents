@@ -848,7 +848,7 @@ node engine/tools/triggers.mjs Bob --world test list | show hungry | upgrade [id
 node engine/tools/triggers.mjs Bob --world test put near-home --when '(< (inventory "bread") 8)' --job '(jobs.movement.look-around)' --persistence cooldown --cooldown-s 30
 node engine/tools/say.mjs Bob --world test [--to Steve] "message"       # chat, shares the engine's rate limits
 node engine/tools/snapshot.mjs Bob --world test [--yaw 90 --pitch -20 --look-at X,Y,Z]   # PNG of its view: draws its seen entities, prints :heard and :light; a torch held in either hand lights it (14, less 1 per block)
-node engine/tools/time.mjs --world test clock | dawn --timeout 1200   # world time from a fresh observer pose (the workspace wrapper adds --body: that body first)
+node engine/tools/time.mjs --world test clock | dawn --timeout 1200   # world time from a fresh observer pose (the workspace wrapper adds --body: that body first; Probe* world-test bodies are read only by a Probe* asker)
 node engine/tools/goal.mjs Bob --world test ["fence the pen" [--by NAME] | --clear]   # the goal line the dashboard shows (agents/Bob/goal.edn)
 node engine/tools/progress.mjs Bob --world test [--goal j14] [--want iron_ingot:24,iron_pickaxe] [--wait 60m [--stall 10m]]   # one check-in line; --wait returns only on goal end, death, a give-up, needs-you (also a body idle with only idle-ok jobs left, or hp 4 or less) or a stall; those three wakes also print SNAPSHOT <path>: a picture of what the body saw (workspace snapshots/warn-*.png, drawn by the tool after touching the body's view watch marker; one per reason per 5 min)
 ```

@@ -45,6 +45,16 @@
       (.rmSync fs dir #js {:recursive true :force true})
       (is (= ["Zed" "Bob" "Zed"] bys)))))
 
+(deftest a-trial-body-never-reads-a-probe-bodys-clock
+  (let [dir (world-with-pose (assoc pose :timeOfDay 15190))
+        probe (.join path dir "agents" "Probe1" "view")]
+    (.mkdirSync fs probe #js {:recursive true})
+    (.writeFileSync fs (.join path probe "pose.json") (js/JSON.stringify (clj->js (assoc pose :t 1000900 :timeOfDay 17354))))
+    (let [ctx {:world "w" :world-dir dir}
+          bys (mapv #(:by (time/clock ctx 1001000 %)) ["Zed" "Probe1" nil])]
+      (.rmSync fs dir #js {:recursive true :force true})
+      (is (= ["Bob" "Probe1" "Probe1"] bys)))))
+
 (deftest dawn-waits-through-the-evening-and-the-last-ticks-before-the-wrap
   (is (= [false false false false true true] (map time/dawn-reached? [10437 11505 12455 23500 0 1000]))))
 
