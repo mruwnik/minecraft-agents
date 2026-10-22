@@ -112,6 +112,47 @@
     (when (and cell (or (:ignore-zones? (:args c)) (nil? (tidy/refusal c :place (zipmap [:x :y :z] cell)))))
       {:step :fill-gap :cell cell :item item})))
 
+(defn drop-edges
+  "The floor cells [x y z] a body would drop off by 2 or more (or into a pit with no floor) when it leaves the region it
+  can step back into (level, or one up or down) from the first of starts and that the body at feet can step onto once
+  filled, nearest to the [x _ z] target first; nil when the region is not closed within the room cells."
+  [p starts feet]
+  (let [kind-at (reach/lookup p reach-room/body-kind-of)
+        level (fn [x y z] (.filter (reach/forward kind-at x y z) (fn [n] (>= (aget n 1) (dec y)))))
+        {:keys [cells closed?]} (reach-room/flood-visit level (first starts) reach-room/room-cells)
+        open? (fn [x y z] (keyword-identical? :open (kind-at x y z)))
+        [tx _ tz] feet
+        mine (into #{} (map vec) (:cells (reach-room/flood-visit #(reach/forward kind-at %1 %2 %3) feet reach-room/room-cells)))
+        steps-on? (fn [nx y nz] (some (fn [[dx dz dy]] (contains? mine [(+ nx dx) (+ y dy) (+ nz dz)]))
+                                      (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] dy [-1 0 1]] [dx dz dy])))]
+    (when closed?
+      (->> (for [c cells
+                 :let [x (aget c 0) y (aget c 1) z (aget c 2)]
+                 [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+                 :let [nx (+ x dx) nz (+ z dz)]
+                 :when (and (open? nx y nz) (open? nx (inc y) nz) (open? nx (dec y) nz) (open? nx (- y 2) nz)
+                              (steps-on? nx y nz))]
+             [nx (dec y) nz])
+           distinct
+           (sort-by (fn [[x _ z]] (+ (js/Math.abs (- x tx)) (js/Math.abs (- z tz)))))))))
+
+(defn drop-fill
+  "{:step :fill-gap :cell :item} when result is :goal-cut-off or :goal-enclosed (the goal's region ends at a drop the body cannot climb back
+  from), a carried block can fill the floor of the cell beyond the drop edge nearest the body, and no zone refuses the
+  place: the bridge a player lays over the hole before a door; else nil."
+  [c result skip feet]
+  (when (and (contains? #{:goal-cut-off :goal-enclosed} (some-> (:reason result) keyword)) (not (skip :fill-gap)))
+    (let [p (:primitives c)
+          {:keys [item]} (escape/pillar-item c)
+          goal (some-> (places/parse-pos (:pos (:args c))) :pos)
+          kind-at (reach/lookup p reach-room/body-kind-of)
+          starts (when goal (filter (fn [[x y z]] (reach/standable-cell? p {:x x :y y :z z} kind-at))
+                                    (for [dy [0 1] [dx dz] [[0 0] [1 0] [-1 0] [0 1] [0 -1]]]
+                                      [(+ (:x goal) dx) (+ (:y goal) dy) (+ (:z goal) dz)])))
+          cell (when (and item (seq starts)) (first (drop-edges p starts feet)))]
+      (when (and cell (or (:ignore-zones? (:args c)) (nil? (tidy/refusal c :place (zipmap [:x :y :z] cell)))))
+        {:step :fill-gap :cell cell :item item}))))
+
 (defn own-stair
   "The body's own stair cut again (climb/recut) as the way out for a body standing on it under goal: what stands in its
   walk space (a cap the body put there) is cleared before any other way is cut, its floors are not. nil once it failed
@@ -340,6 +381,7 @@
        (or (shelter-exit? c result) (not (sh-inside/sheltered-in c)))
        (or (shelter-exit? c result)
            (some? (gap-fill c result (skips c)))
+           (some? (drop-fill c result (skips c) (end/feet-cell c)))
            (sprint-only? result)
            (dive? c result)
            (air-pocket? c result)

@@ -4,6 +4,7 @@
 
   Rules of go-to:
   - A goal that is lava, stands over lava or has lava on all four sides (escalate-choose/goal-lava?) is refused at once when the walk finds it walled in: no way is made, in or out; the dig rules below are for an acceptable goal that is walled in.
+  - A goal cut off by a drop (:goal-cut-off, or :goal-enclosed with a drop edge in its region) is bridged first: a carried block fills the floor beyond the drop edge nearest the body that it can step onto (escalate-choose/drop-fill, a go-to.escalated {:step :fill-gap}), then it walks again.
   - :dig-out: a body sealed in its own shelter (a :shelter entry) when the walk finds no way, leaves it first at any hour (dig-in-leave/leave!, a go-to.escalated {:step :leave-shelter}); the start check priced the way out. Not at a dark sky while the body is :dug-in (sh-inside/night-sheltered): it waits for light, as the readiness checks do.
   - With an escalating way: a body not in its own shelter whose search ran out of land (:exhausted, in any size of cave or mine), or that is shut in (jobs.lib.reach.room/enclosed?) and whose
     search ran out of land (:goal-enclosed or :goal-cut-off) or of nodes (:budget) within the budget-near setting of the goal, any body whose only way needs a sprint it lacks the food for (:abilities :corner-jump or :gap-sprint), or any body whose last 3 walks failed at the walker (stuck, off-plan, steer failed, no nearer; escalation/walker-fault?) with no door it can open beside its room (one with room for the body behind it; a trunk over that cell makes it no way out, and the dig route cuts the tree's logs: escape/tree-log?), makes a way instead of giving up, one child job
@@ -35,7 +36,7 @@
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.escalate-choose :refer [climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? gap-fill
-                                                         goal-way dig-leg dig-way goal-lava? leg-ends goal-walled? own-stair route-cells shelter-exit? skips sprint-only?]]
+                                                         goal-way dig-leg dig-way drop-fill goal-lava? leg-ends goal-walled? own-stair route-cells shelter-exit? skips sprint-only?]]
             [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag may-dig-fn note-holes! own-holes own-placed-fn planned-cells]]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.torch :as torch]
@@ -181,6 +182,7 @@
                      :else #(escape/choose (:primitives c) feet goal % opts))
         e (or (when (shelter-exit? c result) {:step :leave-shelter})
               (gap-fill c result (:skip opts))
+              (drop-fill c result (:skip opts) feet)
               (own-stair c feet goal)
               (choose (may-dig-fn c)))
         choosable? #(not= :none (:step (choose %)))
