@@ -2,7 +2,7 @@
 ;; mine's own tidy and mend do not refill them), e609bad0 (no usable shaft: the stair is suggested, :ways without :descend-stair refuses).
 ;; Soil 4 deep over stone (the plot walled in dirt so neighbours' stone is not walked to); body at [16.5 0 16.5] with a stone pickaxe.
 ;; A mineshaft plan "s" by the body: stair from [16 0 16] east down to y -4 (4 steps; the stone starts at y -5).
-;; Should-succeed: with the plan the run says "via shaft s", the stair cells stay air; without it the end text suggests plans.mjs mineshaft.
+;; Should-succeed: with the plan the run says "via shaft s", the stair cells stay air; without it the end text suggests plans mineshaft.
 ;; Cards 1b7f6a3e/5ee1bdc0: foreign-zone shaft unused (used with :ignore-zones?), unreachable top, a stair that stops is marked failed.
 ;; Should-fail: :ways #{:seen :descend-shaft :strip-tunnel} with no plan ends :no-shaft, got 0, nothing dug.
 {:defaults
@@ -23,7 +23,7 @@
            [:memory {:entries {:mine/shafts [{:data {"$plan:s" {:n [:>= 1]}}}]}}]]}
   {:name "no-shaft-stair-is-cut-and-declaring-it-is-suggested"
    :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8})]]
-   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4] :shaft-suggest {:to-y [:any]} :text [:contains "plans.mjs mineshaft"]}} :within-s 130 :of-job true}]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 4] :shaft-suggest {:to-y [:any]} :text [:contains "plans mineshaft"]}} :within-s 130 :of-job true}]
    :after [[:item "cobblestone" [:>= 4]]]}
   {:name "shaft-required-without-a-shaft-digs-nothing"
    :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 4 :direction :east :tunnel-length 8 :radius 8 :ways #{:seen :descend-shaft :strip-tunnel}})]]
