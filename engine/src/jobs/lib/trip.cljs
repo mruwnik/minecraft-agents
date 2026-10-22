@@ -102,6 +102,7 @@
   "The carried tool ({:item :uses-left :max}) that tool-ready! wants a spare for when digging block-name, or nil. With
   an amount (digs the job will make) the chooser (jobs.lib.choose/tools-for) must be short of it: the listed tools'
   uses together fall under amount. Without one, they must fall under ::spare-fraction of the first tool's durability.
+  Tools all down to ::spent-uses always want a spare (the dig would stop :spent).
   A tool with no known durability counts as whole. A first tool dearer than a stone pickaxe, with cobblestone to make one
   (dear-tool?), is wanted a spare too, marked :dear."
   ([c block-name] (spare-need c block-name nil))
@@ -109,9 +110,11 @@
    (let [{uses :list short :short} (choose/tools-for c [:dig block-name] (or amount 1))
          best (first uses)
          full (some #(when (= (:item best) (:name %)) (:max %)) (u/inventory (:primitives c)))
-         worn? (if amount
-                 (pos? short)
-                 (< (transduce (map :uses-left) + 0 uses) (inc (js/Math.floor (* (spare-fraction) (or full 0))))))]
+         spent? (every? #(<= (:uses-left %) (settings/get spare-settings ::spent-uses)) uses)
+         worn? (or spent?
+                   (if amount
+                     (pos? short)
+                     (< (transduce (map :uses-left) + 0 uses) (inc (js/Math.floor (* (spare-fraction) (or full 0)))))))]
      (when (and best full)
        (cond
          worn? (assoc best :max full)

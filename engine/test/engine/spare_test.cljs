@@ -101,6 +101,16 @@
               spare-depth (fn [e] (count (re-seq #"/spare" (str (:job e)))))]
           (is (<= (apply max 0 (map spare-depth @(:seen s))) 1) "a spare's own digging has no spare child"))))))
 
+(deftest a-pickaxe-with-fewer-uses-than-spent-gets-a-spare-though-the-dig-count-fits
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [corridor (-> (m/cells "air" (range 1 7) [64 65] [0]) (assoc "7,64,0" "chest"))
+              world (-> (m/rock-world corridor)
+                        (assoc :inventory [(assoc worn :durability 2)] :containers {"7,64,0" [{:name "stone_pickaxe" :count 1}]}))
+              s (await (m/scenario {:block "iron_ore" :level false :count 2 :ways #{:seen} :trip true} world 60))]
+          (is (contains? (kinds s) :tool.spare) "2 uses left covers 2 digs, yet the dig would stop :spent without a spare"))))))
+
 (deftest a-spare-fetched-from-afar-does-not-move-the-mines-start
   (async done
     (tu/run-async done
