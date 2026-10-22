@@ -309,12 +309,22 @@
   (let [feet (sh-sense/feet p)]
     (if (nil? (sh-sense/sky-light-at p feet)) (not (sh-sense/buried? p)) (sh-sense/sky-reaches-from-above? p feet))))
 
+(defn unseen-overhead
+  "The first cell [x y z] over the feet that the body has not sensed and no look round has asked for from here, nil when none: the roof it never looked at."
+  [c]
+  (let [p (:primitives c)
+        {:keys [x y z]} (sh-sense/feet p)
+        looked (sense/round-looked c)]
+    (first (for [dy (range 1 33) :let [cell [x (+ y dy) z]] :when (and (sense/unknown? p cell) (not (looked cell)))] cell))))
+
 (defn dark-sky
-  "Later :dark while the light at the feet is dark above ground (not sh-sense/lit-here?, open-to-sky?) and the day would lift it."
+  "Later :dark while the light at the feet is dark above ground (not sh-sense/lit-here?, open-to-sky?) and the day would lift it; an unseen cell over the feet is looked at first (:look), since a seen roof makes the cell underground."
   [c]
   (let [p (:primitives c)]
     (if (and (not (sh-sense/lit-here? p (sh-sense/feet p))) (open-to-sky? p) (day-would-light? p))
-      (contract/later :dark "dark sky above ground, waits for light")
+      (if-let [cell (unseen-overhead c)]
+        (contract/look :dark "dark sky above ground unless a roof is over the feet; looks up" :look-at [cell])
+        (contract/later :dark "dark sky above ground, waits for light"))
       (contract/ok :lit "lit or underground"))))
 
 (def safe-if-lit

@@ -103,6 +103,15 @@
                               (lit 0 sky #(kind ready/safe-if-lit open-night))))]
     (is (= [:later :later] [(look-down 14) (look-down 15)]))))
 
+(deftest safe-if-lit-looks-up-at-an-unseen-overhead-before-it-waits
+  (let [roof [0 65 0]
+        status (fn [unseen looked] (with-redefs [sense/unknown? (fn [_ cell] (contains? unseen cell))
+                                                 sense/round-looked (constantly looked)]
+                                     (lit 0 15 #(let [s (ready/safe-if-lit (ctx-of open-night))] [(first s) (:look-at (nth s 2))]))))]
+    (is (= [:look [roof]] (status #{roof} #{})) "the unseen roof is looked at")
+    (is (= [:later nil] (status #{roof} #{roof})) "a look that did not show it leaves the wait")
+    (is (= [:later nil] (status #{} #{})) "nothing unseen over the feet: the sky is open")))
+
 (deftest an-exposed-place-is-ok-while-the-stay-there-is-affordable
   (let [check (ready/safe-at (constantly outside))
         status (fn [stay-s] (lit 0 15 #(check (assoc (ctx-of open-night) ::price/stay-s stay-s))))]

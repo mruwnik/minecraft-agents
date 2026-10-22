@@ -13,7 +13,7 @@
   "Why the body is not calm now, as text naming the dark cell with its light level and/or the nearest known hostile, else nil."
   [p c]
   (let [feet (sh-sense/feet p)
-        dark (when (= :later (first (ready/dark-sky c)))
+        dark (when (#{:later :look} (first (ready/dark-sky c)))
                (str "dark above ground at " (pr-str [(:x feet) (:y feet) (:z feet)]) ", light "
                     (or (sh-sense/light-at p feet) "unknown")))
         ds (dawn/known-dangers p)
