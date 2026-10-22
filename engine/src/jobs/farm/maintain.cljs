@@ -9,6 +9,7 @@
             [jobs.farm.tend-plan :as tend-plan]
             [jobs.lib.crops :as crops]
             [jobs.lib.field-area :as fa]
+            [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.ready :as ready]
             [jobs.lib.reserve :as rsv]
@@ -39,7 +40,7 @@
 
 (a/defargs args
   {:area {:doc "the field, as for jobs.farm.tend: a box {:min :max} with a crop layer, or {:plan id} with :part or :parts; required" :spec fa/spec :default nil}
-   :till {:doc "hoe untilled dirt and grass in the ground layer when seed and a hoe are carried" :spec boolean? :default true}
+   :till {:doc "hoe untilled dirt and grass in the ground layer when seed is carried and a hoe is carried or fetchable" :spec boolean? :default true}
    :irrigate {:doc "wet dry farmland with water" :spec boolean? :default true}
    :fertilize {:doc "use bone meal on unripe crops" :spec boolean? :default false}
    :composter {:doc "composter position {:x :y :z} for seed above the keep; nil: do not compost" :spec ::a/pos :default nil}
@@ -54,6 +55,7 @@
 
 (defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
 (def target [:area])
+(def ways need/fetch-ways)
 (def defaults {:spend {:job-time ::job-time-s}})
 (def safe? (ready/when-fed (ready/safe-at-by-night work-place/spot)))
 
@@ -177,7 +179,7 @@
       (finish! c (:report p))
       (let [slot (:slot call)
             _ (ctx/update-mem! c assoc :call-args (:args call))
-            e (await (ctx/call c slot (jobs slot) (:args call)))]
+            e (await (ctx/call c slot (jobs slot) (cond-> (:args call) (= :tend slot) (assoc :ways (into #{:carried} (need/fetch-how c))))))]
         (if (= :continue e)
           :continue
           (do (ctx/update-mem! c booked slot (entry-of slot e)) :again))))))

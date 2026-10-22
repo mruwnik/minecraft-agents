@@ -102,7 +102,7 @@
           (is (= "wheat" (block-at s 2 64 2)))
           (is (= 2 (:cut (step s :harvest))))
           (is (= 2 (:replanted (step s :harvest))))
-          (is (= {:skipped :no-hoe} (step s :till)))
+          (is (= {:skipped :nothing-to-till} (step s :till)))
           (is (true? (finished? s))))))))
 
 (deftest a-box-with-vector-corners-works-the-same-field
@@ -200,11 +200,11 @@
           (is (= "carrots" (block-at s 2 64 2)))
           (is (= "air" (block-at s 3 64 2))))))))
 
-(deftest without-a-hoe-the-dirt-is-left-and-the-bare-farmland-still-planted
+(deftest without-a-hoe-and-carried-only-ways-the-dirt-is-left-and-the-bare-farmland-still-planted
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {} (world (ground "dirt" [[2 2]]) (ground "farmland" [[3 2]])
+        (let [s (await (scenario {:ways #{:carried}} (world (ground "dirt" [[2 2]]) (ground "farmland" [[3 2]])
                                            {:inventory [(item "wheat_seeds" 4)]}) 40))]
           (is (= {:skipped :no-hoe} (step s :till)))
           (is (= 1 (:planted (step s :plant))))
@@ -334,7 +334,9 @@
     :no-ripe :harvest {} {:ripe 0}
     nil :harvest {} {:ripe 1}
     :till-off :till {:till false} {:hoe true :untilled [{}] :bare 0 :seeds 3}
-    :no-hoe :till {:till true} {:hoe false :untilled [{}] :bare 0 :seeds 3}
+    :no-hoe :till {:till true :ways #{:carried}} {:hoe false :untilled [{}] :bare 0 :seeds 3}
+    nil :till {:till true :ways #{:carried :craft}} {:hoe false :untilled [{}] :bare 0 :seeds 3}
+    nil :till {:till true} {:hoe false :untilled [{}] :bare 0 :seeds 3}
     :nothing-to-till :till {:till true} {:hoe true :untilled [] :bare 0 :seeds 3}
     :no-seed :till {:till true} {:hoe true :untilled [{}] :bare 2 :seeds 2}
     nil :till {:till true} {:hoe true :untilled [{:x 1 :y 63 :z 1}] :bare 2 :seeds 3}

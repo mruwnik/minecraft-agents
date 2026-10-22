@@ -1,5 +1,6 @@
 (ns jobs.farm.tend
   (:require [engine.settings :as settings]
+            [jobs.lib.need :as need]
             [engine.args :as a]
             [engine.contract :as contract]
             [clojure.string :as str]
@@ -31,7 +32,7 @@
   - :irrigate (jobs.farm.irrigate over the ground layer, in plan mode over the plan's ground cells, per layer in pieces of at most till's max-cells, one piece per pass, :for-plan): :irrigate is true and a ground cell is seen
     dry (no water seen in reach, the whole reach seen: with :irrigate on, a run looks round and walks within 3 blocks of up to 3 ground cells whose reach is partly unseen first). The child fetches a water bucket when none is carried; a failed
     call is booked as its summary {:poured n} and the run goes on.
-  - :till (jobs.farm.till): :till is true, a hoe is carried, dirt or grass lies uncovered in the ground layer and
+  - :till (jobs.farm.till): :till is true, a hoe is carried or the call's :ways allow fetching one (till fetches it), dirt or grass lies uncovered in the ground layer and
     more seed is carried than there is bare farmland. It tills one cell at a time, nearest first.
   - :plant (jobs.farm.plant): bare farmland lies in the field and a seed is carried.
   - :fertilize (jobs.farm.fertilize, over the field's cells): :fertilize is true, bone meal (or bones, which the fertilize child crafts) is carried and an unripe crop lies in the field.
@@ -72,12 +73,13 @@
 
 (a/defargs args
   {:area {:doc "the field: a box {:min :max} (corners {:x :y :z} or [x y z], inclusive; y min is the farmland layer, max y at least min y + 1; at most 2048 cells) or {:plan id} whose crop cells are the field, each worked with the crop the plan wants there; :part limits the plan to one part, :parts works a list of parts one pass each; required" :spec fa/spec :default nil}
-   :till {:doc "hoe untilled dirt and grass in the ground layer when seed and a hoe are carried" :spec boolean? :default true}
+   :till {:doc "hoe untilled dirt and grass in the ground layer when seed is carried and a hoe is carried or fetchable" :spec boolean? :default true}
    :irrigate {:doc "wet dry farmland with water (jobs.farm.irrigate, a water bucket fetched when none is carried)" :spec boolean? :default true}
    :fertilize {:doc "use bone meal on unripe crops" :spec boolean? :default false}
    :ignore-zones? :shared})
 
 (def target [:area])
+(def ways need/fetch-ways)
 (def defaults {:least 1 :spend {:job-time ::job-time-s}})
 (def safe? (ready/safe-at-by-night work-place/spot))
 
@@ -100,11 +102,16 @@
 
 (defn census [c] (if (fa/plan c) (tend-plan/plan-census c) (box-census c)))
 
+(defn decide-args
+  "The args the steps decide over: the call's args plus :ways, the fetch ways its children may use (:carried alone: none)."
+  [c]
+  (assoc (:args c) :ways (into #{:carried} (need/fetch-how c))))
+
 (defn would-run?
   "Whether a run is under way, or some step would call a child over the facts f."
   [c f]
   (boolean (or (:todo (ctx/mem c))
-               (some #(:call (decide/decide % (:args c) f)) decide/steps))))
+               (some #(:call (decide/decide % (decide-args c) f)) decide/steps))))
 
 (defn field-cells
   "The cells the run decides from: the box's ground and crop layers, or the plan's crop cells and the ground under them."
@@ -387,7 +394,7 @@
   [c]
   (when-not (:todo (ctx/mem c))
     (ctx/update-mem! c assoc :todo decide/steps :report {} :till-tried #{} :tilled 0 :irrigate-tried #{} :irrigated 0))
-  (let [{:keys [call] :as p} (steps/next-plan decide/decide decide/jobs c facts)]
+  (let [{:keys [call] :as p} (steps/next-plan decide/decide decide/jobs (assoc c :args (decide-args c)) facts)]
     (ctx/update-mem! c assoc :todo (:todo p) :report (:report p))
     (if-not call
       (finish-part! c (:report p))

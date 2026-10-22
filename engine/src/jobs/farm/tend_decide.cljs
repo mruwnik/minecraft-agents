@@ -1,6 +1,7 @@
 (ns jobs.farm.tend-decide
   "The steps of jobs.farm.tend, the child job of each, and the decision per step over the facts: skip it with a
-  reason, or call its child.")
+  reason, or call its child. args carries the tend call's :ways, the fetch ways a child may use."
+  (:require [jobs.lib.need :as need]))
 
 (def steps [:harvest :irrigate :till :plant :fertilize])
 
@@ -29,15 +30,15 @@
                   :args (cond-> {:area {:min (:min ground-box) :max (:max ground-box)}} (:plan area) (assoc :for-plan (:plan area)))}}))
 
 (defn decide-till
-  [{:keys [till area]} {:keys [hoe untilled bare seeds till-short till-held]}]
+  [{:keys [till area ways]} {:keys [hoe untilled bare seeds till-short till-held]}]
   (cond
     (not till) {:skip :till-off}
-    (not hoe) {:skip :no-hoe}
+    (and (not hoe) (not (need/fetching? ways))) {:skip :no-hoe}
     (and (empty? untilled) till-held) {:skip :food-reserve :detail till-held}
     (empty? untilled) {:skip (if (pos? (or till-short 0)) :no-seed :nothing-to-till)}
     (and (not (:plan area)) (<= seeds bare)) {:skip :no-seed}
     :else {:call {:slot :till :job (jobs :till)
-                  :args (cond-> {:area {:min (first untilled) :max (first untilled)}} (:plan area) (assoc :for-plan (:plan area)))}}))
+                  :args (cond-> {:area {:min (first untilled) :max (first untilled)}} (:plan area) (assoc :for-plan (:plan area)) ways (assoc :ways ways))}}))
 
 (defn decide-plant
   [{:keys [area]} {:keys [bare seed]}]

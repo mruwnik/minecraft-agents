@@ -17,6 +17,13 @@
    :act [[:job (jobs.farm.tend {:area {:min #xyz [10 -1 16] :max #xyz [12 0 18]} :till true})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:till {:tilled [:>= 1]}}}} :within-s 90 :of-job true}]
    :after [[:block [10 -1 16] "farmland"] [:block [10 0 16] "wheat"]]}
+  {:name "no-hoe-carried-one-is-fetched-from-a-chest-and-the-box-is-sown"
+   :blocks [[:fill [10 -1 19] [12 -1 19] "water"] [:fill [10 -2 19] [12 -2 19] "stone"]
+            [:set [10 0 13] "chest{Items:[{Slot:0b,id:\"minecraft:stone_hoe\",count:1}]}"]]
+   :body {:inventory [["wheat_seeds" 9]]}
+   :act [[:job (jobs.farm.tend {:area {:min #xyz [10 -1 16] :max #xyz [12 0 18]} :till true})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:steps {:till {:tilled [:>= 1]}}}} :within-s 90 :of-job true}]
+   :after [[:block [10 -1 16] "farmland"] [:block [10 0 16] "wheat"] [:item "stone_hoe" 1]]}
   ;; the grass under the stone shows no face to the body: unseen cells are not counted as covered tillable ground
   {:name "stone-over-the-grass-waits-nothing-to-do-without-covered"
    :blocks [[:fill [10 0 16] [12 0 18] "stone"]]
