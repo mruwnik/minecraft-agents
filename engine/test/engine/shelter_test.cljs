@@ -99,6 +99,20 @@
     40 40 false [0 0] false
     5 5 true [0 14] false))
 
+(deftest a-sensed-hostile-or-fire-or-lava-in-or-beside-the-closed-room-makes-it-no-shelter
+  (let [safe? (fn [world blocks] (sh-inside/safe-from-night?
+                                  (let [raw-p (tu/fake (merge {:time night :blocks (merge (box 1 4 false) blocks)} world))
+                                        _ (swap! (fake/state raw-p) assoc :light-default [0 14])
+                                        per (perception/create (fake-raw/create raw-p) {:now (constantly 1000000)})]
+                                    (perception/pass! per)
+                                    (tu/seeing-all (perception/wrap raw-p per)))))
+        zombie {:id 9 :name "zombie" :kind "hostile" :visible true :pos {:x 0.5 :y 64 :z 3.5}}]
+    (is (true? (safe? {} {})))
+    (is (false? (safe? {:entities [zombie]} {})) "a zombie seen in the room's other cell")
+    (is (true? (safe? {:entities [(assoc zombie :pos {:x 0.5 :y 64 :z 6.5})]} {})) "one outside the walls is no inside danger")
+    (is (false? (safe? {} {"0,64,3" "fire"})))
+    (is (false? (safe? {} {"0,64,3" "lava"})))))
+
 (defn without-blocks [blocks cells] (apply dissoc blocks (map (fn [[x y z]] (str x "," y "," z)) cells)))
 
 (deftest a-two-wide-one-high-gap-in-a-wall-is-a-way-in-for-a-spider-but-a-one-wide-one-is-not

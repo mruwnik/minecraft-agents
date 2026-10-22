@@ -148,11 +148,14 @@
          (apply dissoc (box -3 64 -3 3 66 3 "stone") (for [x (range -2 3) z (range -2 3) y [64 65]] (str x "," y "," z)))))
 
 (defn run-in-shelter!
-  "go-to goal (default [8 64 0]) from inside a dirt shelter at the origin (a :shelter entry), the world's time as given."
+  "go-to goal (default [8 64 0]) from inside a dirt shelter at the origin (a :shelter entry), the world's time as given;
+  extra: world keys merged in (:blocks over the shelter's, :entities)."
   ([time] (run-in-shelter! time [8 64 0] 1))
-  ([time goal range]
+  ([time goal range] (run-in-shelter! time goal range nil))
+  ([time goal range extra]
   (let [cell (merge (box -6 63 -6 12 63 6 "stone") (dissoc (box -1 64 -1 1 66 1 "dirt") "0,64,0" "0,65,0"))
-        {:keys [eng p seen]} (setup {:self {:pos {:x 0 :y 64 :z 0}} :blocks cell :time time :inventory [{:name "dirt" :count 5}]})
+        {:keys [eng p seen]} (setup (merge {:self {:pos {:x 0 :y 64 :z 0}} :blocks (merge cell (:blocks extra)) :time time :inventory [{:name "dirt" :count 5}]}
+                                           (dissoc extra :blocks)))
         out (atom :not-done)
         eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent
                                     (recording-parent out 'jobs.movement.go-to {:pos goal :range range})))]

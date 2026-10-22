@@ -359,6 +359,28 @@
           (is (= {:arrived false :reason :unreachable} (select-keys @out [:arrived :reason])))
           (is (empty? (calls p "dig"))))))))
 
+(def stay-danger-night 14000)
+
+(def second-cell
+  "A second shelter cell at z 1, walled again at z 2."
+  (merge (box -1 64 2 1 66 2 "dirt") {"0,64,1" "air" "0,65,1" "air"}))
+
+(deftest go-to-leaves-a-night-shelter-with-fire-inside
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (run-in-shelter! stay-danger-night [8 64 0] 1
+                                                      {:blocks (assoc second-cell "0,64,1" "fire")}))]
+          (is (seq (events-of seen :go-to.escalated))))))))
+
+(deftest go-to-leaves-a-night-shelter-with-lava-beside
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [seen]} (await (run-in-shelter! stay-danger-night [8 64 0] 1
+                                                      {:blocks (assoc second-cell "0,64,1" "lava")}))]
+          (is (seq (events-of seen :go-to.escalated))))))))
+
 (deftest go-to-sealed-in-its-own-shelter-by-day-leaves-it-and-walks-on
   (async done
     (tu/run-async done

@@ -3,6 +3,7 @@
   (:require [engine.ctx :as ctx]
             [jobs.lib.breath :as breath]
             [jobs.lib.click :as click]
+            [jobs.lib.danger :as danger]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.util :as u]
@@ -123,12 +124,28 @@
                             (every? #(some? (u/seen-block p (zipmap [:x :y :z] %))) [s (update s 1 inc) (update s 1 dec)]))))
                    (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] dy [-1 0 1]] [dx dy dz])))))
 
+(def burning-blocks #{"fire" "soul_fire" "lava"})
+
+(defn danger-inside?
+  "Whether staying in the sealed-region round feet is itself the danger: a hostile the body senses stands in one of its
+  cells, or fire or lava it has seen is in or beside one."
+  [p feet]
+  (let [cells (:cells (sealed-region p feet))
+        in-cells? (set (map vec cells))
+        cell-of (fn [e] (let [{:keys [x y z]} (danger/mob-pos p e)] [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))]
+    (boolean (or (some #(in-cells? (cell-of %)) (danger/seen-hostiles p))
+                 (some (fn [[x y z]]
+                         (some (fn [[dx dy dz]] (burning-blocks (u/seen-name p {:x (+ x dx) :y (+ y dy) :z (+ z dz)})))
+                               [[0 0 0] [1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]))
+                       cells)))))
+
 (defn safe-from-night?
   "Whether the body is safe from the night where it stands: safe-room-at? its feet and not reached-from-outside?, its head not inside a block, not afloat
-  (a swimmer is in no shelter). The one test the night trigger, night-sheltered, walk-leaves-shelter?, the night job's end and the hold share."
+  (a swimmer is in no shelter), and not danger-inside?. The one test the night trigger, night-sheltered, walk-leaves-shelter?, the night job's end and the hold share."
   [p]
   (let [feet (sh-sense/feet p)]
-    (boolean (and (not (breath/in-water? p)) (not (sh-sense/head-in-block? p)) (safe-room-at? p feet) (not (reached-from-outside? p feet))))))
+    (boolean (and (not (breath/in-water? p)) (not (sh-sense/head-in-block? p)) (safe-room-at? p feet) (not (reached-from-outside? p feet))
+                  (not (danger-inside? p feet))))))
 
 (defn night-sheltered
   "At night, awake and safe from it (safe-from-night?), the kind of shelter the body is in (:dug-in the one shelter says
