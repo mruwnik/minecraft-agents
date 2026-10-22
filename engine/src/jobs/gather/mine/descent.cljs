@@ -11,7 +11,8 @@
             [jobs.lib.escape :as escape]
             [jobs.gather.shaft-descent :refer [pick-shaft xyz]]
             [jobs.lib.util :as u]
-            [jobs.lib.look :refer [cell-of]]
+            [jobs.lib.look :refer [cell-of headings]]
+            [jobs.lib.block-sets :as bs]
             [jobs.gather.mine.targets :refer [base-ore main-block step-cell within-keep-clear within-own-zone]]
             [jobs.gather.mine.end :refer [stop!]]
             [jobs.gather.mine.way-set :as ways]
@@ -26,7 +27,9 @@
    ::own-stair-reach {:default 32 :doc "Blocks from the body the top of a stair it cut earlier may lie for the descent to walk down that stair instead of cutting a new one." :spec (a/int-in 0 nil)}
    ::dig-here-reach {:default 8 :doc "Stone gathered on soil or sand: a seen stone block farther than this from the body is not walked to; the stair down is cut where the body stands, as a player digs down to stone." :spec (a/num-in 0 nil)}
    ::back-reach {:default 32 :doc "Blocks from the stair's last step the body may be for the descent to walk back onto it; farther, it starts a new stair where it stands." :spec (a/int-in 0 nil)}
-   ::max-restairs {:default 3 :doc "Times the descent starts a new stair where the body stands after the stair found it off its line (a reflex, a fall or a drop pick-up moved it) before the stop stands." :spec (a/int-in 0 nil)}})
+   ::max-restairs {:default 3 :doc "Times the descent starts a new stair where the body stands after the stair found it off its line (a reflex, a fall or a drop pick-up moved it) before the stop stands." :spec (a/int-in 0 nil)}
+   ::max-moves {:default 3 :doc "Times the stair down walks to another spot after all four headings were blocked at its start (water, a plug, a hazard) before the stop stands." :spec (a/int-in 0 nil)}
+   ::move-reach {:default 8 :doc "Blocks from the blocked start the stair's next spot lies; it grows by 4 each move." :spec (a/int-in 1 nil)}})
 
 (defn max-restairs [] (settings/get settings ::max-restairs))
 (defn level-slack [] (settings/get settings ::level-slack))
@@ -220,6 +223,56 @@
             (= cell (access/cell (cell-of (u/self-pos c)))) nil
             :else cell))))))
 
+(defn move-goal
+  "The next spot for a blocked stair start: a cell move-reach (+4 per earlier move) from the body along a heading, dry as far as seen,
+  not near an earlier blocked start (memory :descent :blocked). nil when none."
+  [c]
+  (let [m (ctx/mem c)
+        n (get-in m [:descent :moves] 0)
+        here (cell-of (u/self-pos c))
+        spent (get-in m [:descent :blocked] [])
+        d (+ (settings/get settings ::move-reach) (* 4 n))
+        seen #(u/seen-name (:primitives c) %)
+        wet? (fn [p] (or (bs/fluids (seen p)) (bs/fluids (seen (update p :y dec)))))
+        near? (fn [p] (some #(< (u/dist p (zipmap [:x :y :z] %)) 5) spent))
+        cands (for [h ["north" "east" "south" "west"]
+                    :let [[dx dz] (headings h)
+                          p (-> here (update :x + (* d dx)) (update :z + (* d dz)))]
+                    :when (not (near? p))]
+                p)]
+    (first (sort-by #(if (wet? %) 1 0) cands))))
+
+(defn ^:async move-stair!
+  "All four headings of the stair's start are blocked and it cut nothing: a go-to child (slot :move-n) to another spot, then the stair
+  starts again there with every heading open. :continue while it walks, :again once it did, nil when the moves are spent or there is no spot."
+  [c stop]
+  (let [m (ctx/mem c)
+        n (get-in m [:descent :moves] 0)
+        slot (keyword (str "move-" n))]
+    (when (and (not (get-in m [:descent :move])) (< n (settings/get settings ::max-moves)))
+      (when-let [to (move-goal c)]
+        (let [from (access/cell (cell-of (u/self-pos c)))]
+          (ctx/emit! c :mine.moved :info {:from from :to (access/cell to) :stop stop :move (inc n)
+                                          :text (str "mine's stair is blocked (" (name stop) ") on every heading at " (str/join "," from) "; it tries another spot near " (str/join "," (access/cell to)))})
+          (ctx/update-mem! c update :descent #(-> % (assoc :move to) (update :blocked (fnil conj []) from))))))
+    (when-let [to (get-in (ctx/mem c) [:descent :move])]
+      (let [r (await (child/call-walk* c slot {:pos {:x (+ (:x to) 0.5) :y (:y to) :z (+ (:z to) 0.5)} :range 2
+                                               :ignore-zones? (boolean (:ignore-zones? (:args c)))
+                                               :settings {:jobs.movement.go-to.tuning/y-slack 8}}))]
+        (if (= :continue r)
+          :continue
+          (do (ctx/update-mem! c #(-> % (dissoc :tried-headings)
+                                      (update :descent (fn [d] (-> d (dissoc :move :stop :top :at) (update :moves (fnil inc 0)))))))
+              :again))))))
+
+(defn blocked-start?
+  "Whether a stop that no heading cures leaves the stair worth a try at another spot: it cut nothing and no heading or direction was ordered."
+  [c stop]
+  (let [{:keys [heading direction]} (:args c)]
+    (and (heading-stops stop)
+         (zero? (get-in (ctx/mem c) [:descent :steps] 0))
+         (nil? direction) (or (nil? heading) (= :fluid-in-cut stop)))))
+
 (defn ^:async step-down!
   "One step of the stair down: the jobs.access.stair child and what its ending means for the descent. A stop that blocks only
   this heading (heading-stops) turns the stair, at any step (turn-heading!; a step taken clears the headings tried)."
@@ -242,17 +295,13 @@
           (ctx/update-mem! c #(-> % (update :children dissoc :stair) (update :descent (fn [d] (-> d (dissoc :top :at) (update :restairs (fnil inc 0)))))))
           :again)
       :else (let [stop (or (:reason res) :declined)]
-              (if (and (heading-stops stop) (turn-heading! c stop))
-                :again
-                (do (ctx/update-mem! c update :descent assoc :stop stop)
-                    (if level? (stair-stopped! c) (no-stone! c))))))))
+              (or (when (and (heading-stops stop) (turn-heading! c stop)) :again)
+                  (when (blocked-start? c stop) (await (move-stair! c stop)))
+                  (do (ctx/update-mem! c update :descent assoc :stop stop)
+                      (if level? (stair-stopped! c) (no-stone! c))))))))
 
-(defn ^:async descend-round!
-  "One step of the stair down (jobs.access.stair child, :steps 1) along the tunnel heading; the next round looks round and scans.
-  The body first walks back onto the stair (back-on-stair!); one that cannot ends the dig phase :not-back.
-  To the tunnel level: a torch first when one is due (stair-torch-due?), ways passed on; the stair stopping ends the descent there.
-  For stone: all fetch ways; at :descend-limit steps, or when the stair stops, ends :no-stone-found. Either way a heading-stop
-  turns the stair first (step-down!)."
+(defn ^:async cut-round!
+  "One cut of the stair (see descend-round!)."
   [c]
   (let [n (:steps (:descent (ctx/mem c)) 0)
         level? (to-level? c)
@@ -271,3 +320,14 @@
                                                                     :text (str "mine's stair stops at the edge of its own zone " (:name (stair-in-own-zone? c)))})
                                  (if level? (stair-stopped! c) (stop! c :own-zone)))
       :else (await (step-down! c level?)))))
+
+(defn ^:async descend-round!
+  "One step of the stair down (jobs.access.stair child, :steps 1) along the tunnel heading; the next round looks round and scans.
+  The body first walks back onto the stair (back-on-stair!); one that cannot ends the dig phase :not-back.
+  To the tunnel level: a torch first when one is due (stair-torch-due?), ways passed on; the stair stopping ends the descent there.
+  For stone: all fetch ways; at :descend-limit steps, or when the stair stops, ends :no-stone-found. Either way a heading-stop
+  turns the stair first (step-down!)."
+  [c]
+  (if (get-in (ctx/mem c) [:descent :move])
+    (await (move-stair! c nil))
+    (await (cut-round! c))))

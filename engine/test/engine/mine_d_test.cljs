@@ -334,17 +334,32 @@
           (is (<= 2 (get (inv s) "cobblestone" 0)))
           (is (= :count (:reason (done-event s)))))))))
 
-(deftest a-table-on-every-side-ends-no-stone-found-after-trying-each-heading
+(deftest a-table-on-every-side-moves-the-stair-to-another-spot-after-trying-each-heading
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [tables {"-1,64,0" "crafting_table" "1,64,0" "crafting_table" "0,64,1" "crafting_table" "0,64,-1" "crafting_table"}
-              s (start {:world {:blocks (merge (soil-over-stone 63 59) tables) :drops cobble :yaw 90
+              s (start {:world {:blocks (merge (cells "stone" (range -25 26) (range 55 60) (range -25 26)) (cells "dirt" (range -25 26) (range 60 64) (range -25 26)) tables) :drops cobble :yaw 90
                                 :inventory [{:name "stone_pickaxe" :count 1}]}})]
           (core/submit! (:eng s) (spec {:block "stone" :count 2 :tunnel-length 4}) {})
           (await (run-ticks s 300))
           (is (finished? s))
           (is (= 3 (count (events-of s :mine.turned))))
+          (is (= 1 (count (events-of s :mine.moved))))
+          (is (= :count (:reason (done-event s)))))))))
+
+(deftest a-stair-blocked-at-every-spot-ends-no-stone-found-after-its-moves
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start {:world {:blocks (soil-over-stone 63 59) :drops cobble :yaw 90
+                                :inventory [{:name "stone_pickaxe" :count 1}]}})
+              tables {"-1,64,0" "crafting_table" "1,64,0" "crafting_table" "0,64,1" "crafting_table" "0,64,-1" "crafting_table"}]
+          (doseq [[k v] tables] (fake/set-block! (:p s) (mapv js/parseInt (clojure.string/split k #",")) v))
+          (core/submit! (:eng s) (spec {:block "stone" :count 2 :tunnel-length 4}) {})
+          (await (settings/with-settings {::mine-descent/max-moves 0}
+                   #(run-ticks s 300)))
+          (is (empty? (events-of s :mine.moved)))
           (is (= :no-stone-found (:reason (done-event s)))))))))
 
 (deftest a-given-heading-is-not-turned

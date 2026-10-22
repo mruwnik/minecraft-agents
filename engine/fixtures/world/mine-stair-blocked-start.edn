@@ -1,0 +1,17 @@
+;; Stone x 4..28, z 4..28, y -1..1 under dirt y 2..4. The body stands at [16 5 16] on the surface; water fills the surface dirt cell
+;; on each of its four sides, so the first stair step of every heading is in water. A player walks a few blocks off and digs there.
+;; Should-succeed (the give-up when every spot is blocked is a unit test, mine-d-test): mine stairs down through the dirt to the stone elsewhere and gets 2 cobblestone.
+{:defaults
+ {:tags [:mine :jobs]
+  :time :any
+  :plot {:height 12}
+  :blocks [[:fill [4 -1 4] [28 1 28] "stone"] [:fill [4 2 4] [28 4 28] "dirt"]
+           [:set [15 4 16] "water"] [:set [17 4 16] "water"] [:set [16 4 15] "water"] [:set [16 4 17] "water"]]
+  :body {:at [16.5 5 16.5] :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 240}
+ :cases
+ [{:name "stair-blocked-by-water-on-four-sides-moves-and-mines"
+   :act [[:job (jobs.gather.mine {:torches false :block "stone" :item "cobblestone" :count 2 :ways #{:descend-stair} :radius 6})]]
+   :expect [{:event {:source :job :kind :mine.moved} :within-s 200 :of-job true}
+            {:event {:source :job :kind #{:completed :stopped} :data {:got [:>= 2]}} :within-s 220 :of-job true}]
+   :after [[:item "cobblestone" [:>= 2]]]}]}
