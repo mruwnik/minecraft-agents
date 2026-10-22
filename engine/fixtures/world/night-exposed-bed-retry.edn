@@ -45,6 +45,21 @@
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "obstructed"}} :within-s 90}
             {:event {:source :job :kind :child_ended :data {:slot :sleep :ending {:cause :bed-obstructed}}} :within-s 30}]
    :limit-s 150}
+  {:name "obstructed-bed-in-a-house-ends-with-the-body-inside-door-shut"
+   :time :night
+   :time-why :sleep
+   ;; the house is 2 high inside: a pocket over the stone is out of sight from the floor and keeps the room "unseen" (by design)
+   :plot {:height 10 :length 64 :width 32}
+   :body {:at [4.5 0 16.5] :yaw 270 :inventory [["cobblestone" 16]]}
+   :blocks [[:fill [18 0 14] [22 2 18] "stone" :hollow] [:fill [19 0 15] [21 1 17] "air"] [:fill [18 0 16] [18 1 16] "air"]
+            [:set [18 0 16] "oak_door[facing=west,half=lower,hinge=left,open=true]"] [:set [18 1 16] "oak_door[facing=west,half=upper,hinge=left,open=true]"]
+            [:set [19 0 15] "red_bed[facing=east,part=foot]"] [:set [20 0 15] "red_bed[facing=east,part=head]"] [:set [20 1 15] "stone"]]
+   :act [[:job (jobs.memory.set-place {:name :home :pos #at [20 0 16]}) [:now]]
+         [:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0}})]]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "obstructed"}} :within-s 120}
+            {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 150 :of-job true}]
+   :after [[:block [18 0 16] "oak_door[half=lower,open=false]"] [:body-near [20.5 0 16.5] 2.5]]
+   :limit-s 170}
   {:name "monster-near-ends-the-round-then-sleeps-once-the-zombie-is-killed"
    :time-why :sleep
    :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]]
