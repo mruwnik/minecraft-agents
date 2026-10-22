@@ -63,7 +63,7 @@
   "Done when the place is already recorded at the cell the call resolves to."
   [c]
   (let [p (:primitives c)
-        r (places/resolve-set (ctx/view c) #(u/block-name p %) (standing c) (:args c))
+        r (places/resolve-set (ctx/view c) #(u/seen-name p %) (standing c) (:args c))
         set? (and (not (:reason r)) (= (:pos r) (mem/place (ctx/view c) (:name r))))]
     (if set?
       (contract/ok :set (str "place " (:name r) " is at " (pr-str (:pos r))) :units :places :done 1 :left 0 :result {:name (:name r) :pos (:pos r)})
@@ -77,7 +77,7 @@
 
 (defn round [c]
   (let [p (:primitives c)
-        r (places/resolve-set (ctx/view c) #(u/block-name p %) (standing c) (:args c))]
+        r (places/resolve-set (ctx/view c) #(u/seen-name p %) (standing c) (:args c))]
     (if (:reason r)
       (ctx/end c :condition-failed {:reason (:reason r) :text (:message r)})
       (let [{place-name :name :keys [pos]} r]

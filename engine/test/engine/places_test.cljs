@@ -96,7 +96,7 @@
   ([world dir]
    (let [clock (atom 1000000)
          [seen sink] (tu/legacy-capture-sink)
-         p (tu/fake (merge {:floor tu/walk-floor} world))
+         p (cond-> (tu/fake (merge {:floor tu/walk-floor} (dissoc world :blind))) (:blind world) tu/blind)
          eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir dir :now #(deref clock)
                            :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})]
      {:eng eng :p p :seen seen :clock clock :dir dir})))
@@ -177,6 +177,12 @@
   (async done (run-world done {:blocks {"5,64,5" "red_bed"}} (fn ^:async t [{:keys [eng]}]
     (await (run-job eng (list set-place {:name :bed :pos [5 64 5] :block "bed"})))
     (is (= {:x 5 :y 64 :z 5} (place eng :bed)))))))
+
+(deftest set-place-does-not-answer-for-a-block-the-body-has-not-seen
+  (async done (run-world done {:blind true :blocks {"5,64,5" "white_bed"}} (fn ^:async t [{:keys [eng seen]}]
+    (await (run-job eng (list set-place {:name :bed :pos [5 64 5] :block "white_bed"})))
+    (is (nil? (place eng :bed)))
+    (is (empty? (events-of seen :place.set)))))))
 
 (deftest set-place-with-a-block-that-is-not-there-gives-up-and-records-nothing
   (async done (run-world done {:blocks {"5,64,5" "white_bed"}} (fn ^:async t [{:keys [eng seen]}]

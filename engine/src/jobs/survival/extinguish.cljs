@@ -214,7 +214,7 @@
   (remove (fn [{:keys [name pos]}]
             (and (= "lava" name)
                  (< (:y pos) (:y feet))
-                 (let [above (u/block-name p (offset pos 0 1 0))]
+                 (let [above (u/seen-name p (offset pos 0 1 0))]
                    (not (or (nil? above) (bs/passable-or-water? above) (= "lava" above))))))
           scanned))
 

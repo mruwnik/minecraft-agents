@@ -56,7 +56,7 @@
   "Whether lava touches the cell (beside or above it): digging would let it flow in. Water is not refused: a
   flooded cell is breathe's to swim out of, while a body left wedged is stuck for good."
   [p cell]
-  (some #(= "lava" (u/block-name p (merge-with + cell %)))
+  (some #(= "lava" (u/seen-name p (merge-with + cell %)))
         [{:x 1 :y 0 :z 0} {:x -1 :y 0 :z 0} {:x 0 :y 0 :z 1} {:x 0 :y 0 :z -1} {:x 0 :y 1 :z 0}]))
 
 (defn ^:async fail!

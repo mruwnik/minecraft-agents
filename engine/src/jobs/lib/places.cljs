@@ -187,7 +187,7 @@
     (cond
       (nil? offered) nil
       (= offered recorded) nil
-      (or (nil? recorded) (gone? kind (u/block-name (:primitives c) recorded))
+      (or (nil? recorded) (gone? kind (u/seen-name (:primitives c) recorded))
           (far-bed? kind recorded offered)
           (better-home? (:primitives c) kind recorded offered))
       (ctx/remember! c kind {:pos offered} mem/place-policy)
@@ -204,7 +204,7 @@
     (when (and (= "missing" status)
                (some? cell)
                (= cell (mem/place (ctx/view c) kind))
-               (some? (u/block-name (:primitives c) cell)))
+               (some? (u/seen-name (:primitives c) cell)))
       (ctx/remember! c kind {:gone true :was cell} mem/place-policy)
       (ctx/emit! c (keyword (str (name kind) "_missing")) :warn
                  {:pos cell :text (str "no " (name kind) " at the remembered place " (pr-str cell) "; forgot it")}))))

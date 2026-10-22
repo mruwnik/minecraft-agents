@@ -32,7 +32,7 @@
   [c]
   (let [p (:primitives c)
         pos (when-not (:bed (:args c)) (sh-beds/bed c (sh-beds/default-bed-radius)))]
-    (boolean (and pos (places/gone? :bed (u/block-name p pos))))))
+    (boolean (and pos (places/gone? :bed (u/seen-name p pos))))))
 
 (defn bed-of
   "The :bed arg, else the remembered bed unless it is gone, else a bed the body sees."
