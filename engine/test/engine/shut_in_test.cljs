@@ -211,8 +211,8 @@
           (is (= :nothing-possible (:kind out)))
           (is (= [:walls] (:tried d)))
           (is (= [:pit :pocket] (:dropped d)))
-          (is (some? (:walls (:why d))))
-          (is (re-find #"walls" (:text d))))))))
+          (is (= :hostile-in-cell (get-in d [:stops :walls :reason])) "the walls name why they stopped, not :failed")
+          (is (re-find #"hostile" (:text d))))))))
 
 (deftest a-place-refused-for-a-mob-yields-continue-to-the-caller
   (async done

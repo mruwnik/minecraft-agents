@@ -146,7 +146,7 @@
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) (do (ctx/update-mem! c update :placed (fnil into #{}) (map (comp u/cell-pos :cell) (get-in e [:data :placed]))) :ok)
-      :else (or (get-in e [:cause :reason]) :failed))))
+      :else (or (get-in e [:cause :reason]) :gap-not-filled))))
 
 (defn ^:async step
   "One cell: :again, or :continue while it fetches a block. With no line of fire left it gives :again, and the goal check ends the job."

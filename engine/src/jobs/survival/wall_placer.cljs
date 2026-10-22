@@ -81,8 +81,14 @@
           (= :blocked (get-in e [:cause :reason]))
           (do (ctx/update-mem! c update :seal-occupied (fnil conj #{}) (get-in e [:cause :cell]))
               :ok)
-          :else (do (ctx/update-mem! c assoc :seal-status (:status data) :seal-refusal (:text data))
+          :else (do (ctx/update-mem! c assoc :seal-status (:status data) :seal-refusal (:text data) :seal-reason (or (get-in e [:cause :reason]) :fill-refused))
                     :failed))))))
+
+(defn refuse!
+  "Job memory :stop for a :failed step, which plug-way's run! ends nothing-possible with."
+  [c reason text]
+  (ctx/update-mem! c assoc :stop {:reason reason :text text})
+  :failed)
 
 (defn max-places "Seal placements a step." [] (settings/get settings ::max-places))
 
@@ -188,25 +194,25 @@
         ]
     (cond
       (empty? open) :sealed
-      (empty? cells) :failed
-      (and (not= :night (:for (:args c))) (some (seal/hostile-cells p radius) cells)) :failed
+      (empty? cells) (refuse! c :cells-occupied "every cell to close is taken by a mob or another's block")
+      (and (not= :night (:for (:args c))) (some (seal/hostile-cells p radius) cells)) (refuse! c :hostile-in-cell "a hostile stands in a cell to close")
       (and (false? (:trespass? (:args c))) (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
       (do (ctx/update-mem! c assoc :stop {:reason :trespass :text "the walls need a cell of another's area"}) :failed)
       (own-plan-cell c cells)
       (do (ctx/update-mem! c assoc :stop {:reason :own-plan :text "the walls need a cell of the body's own plan"}) :failed)
-      (nil? (lb/pick c blocks)) :failed
+      (nil? (lb/pick c blocks)) (refuse! c :no-block "no block is carried to close the walls")
       :else
       (do (when (seal/off-centre? p) (await (seal/centre! c)))
           (access/trespass! c "shut-in" (some #(access/trespass-refusal (access/rules-input c) :place %) cells))
           (case (await (fill! c (remove #(and (not (some #{%} cells)) (access/trespass-refusal c :place %))
                                          (dig-cells/bottom-up p cells (sh-sense/feet p)))))
-            :failed :failed
+            :failed (refuse! c (or (:seal-reason (ctx/mem c)) :fill-refused) (or (:seal-refusal (ctx/mem c)) "the walls could not be placed"))
             :wait :again
             :hit :hit
             (let [left (dig-cells/open-cells p (sh-sense/feet p) threats)]
               (cond
                 (empty? left) :sealed
-                (every? #(occupied? c %) left) :failed
+                (every? #(occupied? c %) left) (refuse! c :cells-occupied "every cell left open is taken")
                 :else :again)))))))
 
 (defn ^:async seal!

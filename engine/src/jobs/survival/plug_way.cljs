@@ -110,7 +110,7 @@
                             :hit :continue
                             :again (if (:seal-wait (ctx/mem c)) :continue :again)
                             (let [{:keys [reason text needs]} (:stop (ctx/mem c))]
-                                     (ctx/end c :nothing-possible (or reason :failed)
+                                     (ctx/end c :nothing-possible (or reason :step-failed)
                                               (merge {:text (or text (:seal-refusal (ctx/mem c)) (str "the " (name way) " cannot enclose the body here")) :status (:seal-status (ctx/mem c))}
                                                      (when reason {:reason reason})
                                                      (when needs {:needs needs})

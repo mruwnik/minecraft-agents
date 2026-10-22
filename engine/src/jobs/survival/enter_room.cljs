@@ -36,7 +36,7 @@
   blocks for a gap or a hole carried (none fetched; in the room already it waits :no-blocks at the start), nothing for a walk or a door.
   Done {:pos :placed :roof} when the body is in a closed room (sh-sense/shut-in-room?) with no open door and no doorway gap, at once when it is.
   Nothing-possible: :no-room (no place known and the body not roofed), :no-walk (go-to did not arrive), :door-open, :no-blocks (a gap or hole
-  and none carried), :failed (a fill that did not hold), :open (the room cannot be closed).
+  and none carried), :roof-not-held (a mend that did not stay), :roof-not-placed (the block was not placed; or the fill's own reason), :open (the room cannot be closed).
   Quote (a flee entry skips the room and race checks: the flight judged them this step): go-to's route seconds (dark cells priced in; ##Inf with no route), or once in the room ::door-s for a door and ::fill-s for each fill; ##Inf when
   the place is not remembered, a creeper is near, or a melee hostile reaches a door of the room first (jobs.lib.rooms/race-won?).
   Picked by jobs.survival.shut-in as its :room way, and called by the night for a door, a doorway and the walk home to a bed.")
@@ -262,13 +262,13 @@
         mends (:mends (ctx/mem c) 0)]
     (ctx/update-mem! c update :mends (fnil inc 0))
     (if (>= mends (settings/get settings ::max-mends))
-      (ctx/end c :nothing-possible :failed {:text "cannot mend the roof: the block does not stay"})
+      (ctx/end c :nothing-possible :roof-not-held {:text "cannot mend the roof: the block does not stay" :cell (u/cell-vec plug)})
       (let [r (waits/waiting-out c (await (ctx/call c :mend 'jobs.blocks.fill-cells {:cells [plug] :danger? true :ignore-zones? true :use {:blocks [item]}})))
             at (u/cell-vec plug)]
         (cond
           (= :continue r) :continue
           (not= (u/seen-name (:primitives c) plug) item)
-          (ctx/end c :nothing-possible :failed {:text (str "cannot mend the roof at " (pr-str at) ": " (or (:text (:data r)) "the block was not placed"))})
+          (ctx/end c :nothing-possible (or (get-in r [:cause :reason]) :roof-not-placed) {:cell at :text (str "cannot mend the roof at " (pr-str at) ": " (or (:text (:data r)) "the block was not placed"))})
           :else (do (ctx/update-mem! c update :placed (fnil conj []) {:cell at :item item})
                     (spent/note! c item at)
                     (ctx/update-mem! c assoc :roof plug)

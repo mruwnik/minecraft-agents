@@ -156,7 +156,7 @@
               (case r
                 :hidden :done
                 :again :again
-                (way/stop! c {:stop :failed :text (str "the pit round ended with " (pr-str r) " at " (pr-str (sh-sense/feet (:primitives c))))}))))))))
+                (way/stop! c {:stop :pit-round-ended :text (str "the pit round ended with " (pr-str r) " at " (pr-str (sh-sense/feet (:primitives c))))}))))))))
 
 (defn can-start?
   "With :for :night: ground where a pit fits is in sight, and the pit does not cut into a plan the body made. Floors not yet seen are no fact here: the round looks first."
@@ -173,7 +173,7 @@
 (def fit? ready/ok)
 
 (defn fail! [c reason text]
-  (ctx/end c :nothing-possible :failed {:text text :reason reason}))
+  (ctx/end c :nothing-possible reason {:text text :reason reason}))
 
 (defn ^:async walk!
   "The night walk to ground where a pit fits, once: nil once there, :continue while a climb or walk waits, or the ending of one that fails."
