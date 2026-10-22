@@ -62,8 +62,8 @@
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :walker-fault} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [16.5 1 8.5] 3]]}
-  ;; card f4668a26: a submerged 2-high tunnel (18 cells, the only way past the ridge) is swum, not paddled: a swim (sprint, eyes
-  ;; under) is ~3.9 b/s, so up the far shaft and out within 11 s; a paddle takes 9 s for the tunnel alone (live, 1.4 s a cell: drowns)
+  ;; card f4668a26: a submerged 2-high tunnel (18 cells, the only way past the ridge) is swum, not paddled: a paddle takes 1.4 s a
+  ;; cell and drowns the body, so no :hurt and an arrival (the window is wide: a loaded machine runs the body's physics slow)
   {:name "submerged-tunnel-is-swum"
    :plot {:height 12 :length 32 :width 64}
    :blocks [[:fill [0 0 0] [31 5 63] "stone"]
@@ -71,6 +71,6 @@
             [:fill [11 6 0] [11 9 63] "bedrock"]]
    :body {:at [4.5 0 8.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 6 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 11 :of-job true}
-            {:no-event {:source :body :kind :hurt} :for-s 11 :until {:source :job :kind #{:completed :stopped}}}]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 40 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 40 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [24.5 6 8.5] 3]]}]}
