@@ -1,0 +1,20 @@
+;; Card ce5595dc: between back-to-back --exclusive calls a queued repeat job must not start and walk the body away (5 s grace after an exclusive run).
+;; Should-succeed: a repeat go-to listed between two exclusive looks; the body is still at its start after the last look.
+;; Should-fail (old code): the repeat go-to started in the first gap and the body was walking east.
+{:defaults
+ {:tags [:scheduler :primitives]
+  :time :any
+  :plot {:height 20}
+  :blocks [[:fill [8 0 8] [24 9 24] "stone"]]
+  :body {:at [16.5 10 16.5] :effects [["resistance" 600 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "queued-repeat-waits-between-exclusive-calls"
+   :act [[:http :submit (jobs.primitive.look {:pos #at [16.5 9 20.5]}) [:exclusive] {:ok true}]
+         [:await {:source :job :kind :completed} 20]
+         [:http :submit (repeat (jobs.movement.go-to {:pos #at [24 10 16]})) [] {:ok true}]
+         [:http :submit (jobs.primitive.look {:pos #at [16.5 9 20.5]}) [:exclusive] {:ok true}]
+         [:await {:source :job :kind :completed} 20]
+         [:http :submit (jobs.primitive.look {:pos #at [16.5 9 20.5]}) [:exclusive] {:ok true}]]
+   :expect [{:event {:source :job :kind :completed} :within-s 20 :of-job true}]
+   :after [[:body-near [16.5 10 16.5] 2]]}]}

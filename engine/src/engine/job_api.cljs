@@ -113,7 +113,7 @@
       (and (= op :exclusive) (core/settling? eng))
       (fail :settling "The body is settling after a start or respawn; retry in a moment.")
       (and (= op :exclusive) (core/exclusive-job eng))
-      (fail :exclusive-running (str "An exclusive run is in flight (" (core/exclusive-job eng) "); wait for it to end."))
+      (fail :exclusive-running (str "An exclusive run is in flight (" (core/exclusive-job eng) "); wait for it to end or cancel it (cancel " (core/exclusive-job eng) ")."))
       :else
       (do
         ;; The state watch saves this record before the job change below, so a crash leaves it :pending.

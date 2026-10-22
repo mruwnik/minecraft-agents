@@ -54,7 +54,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen]} (setup)]
+        (let [clock (atom t0)
+              {:keys [eng seen]} (make (tu/tmp-dir) clock)]
           (core/submit! eng '(nop) {})
           (let [r (exclusive eng '(nop))]
             (is (true? (:ok r)) (pr-str r))
@@ -65,7 +66,10 @@
           (is (nil? (core/exclusive-job eng)))
           (is (= ["j1"] (:list (core/state eng))))
           (await (core/tick! eng))
-          (is (= ["j2" "j1"] (ran seen)) "normal ticking resumes after the run"))))))
+          (is (= ["j2"] (ran seen)) "no listed job starts in the grace after the run")
+          (swap! clock + 6000)
+          (await (core/tick! eng))
+          (is (= ["j2" "j1"] (ran seen)) "normal ticking resumes after the grace"))))))
 
 (deftest a-yield-ends-the-run-stopped-yielded
   (async done
@@ -130,7 +134,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng seen world]} (setup)
+        (let [clock (atom t0)
+              {:keys [eng seen world]} (make (tu/tmp-dir) clock)
               release (.hold world "moveTo")]
           (core/submit! eng '(walk) {})
           (let [walking (core/tick! eng)]
@@ -141,6 +146,7 @@
           (is (= "j1" (:resume (core/state eng))))
           (await (core/tick! eng))
           (is (= ["j1" "j2"] (ran seen)) "the exclusive job ran at once")
+          (swap! clock + 6000)
           (await (core/tick! eng))
           (is (= ["j1" "j2" "j1"] (ran seen)) "then the cut job continues"))))))
 

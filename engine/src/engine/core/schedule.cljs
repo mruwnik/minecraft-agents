@@ -24,7 +24,9 @@
    ::comfort-wait-s {:default 90 :spec (a/num-in 0 nil)
                      :doc "Seconds a comfort reflex (hunger, a full bag, tidying, doors, loose items) waits for the running job's section (ctx/atomic) before it cuts it."}
    ::held-recheck-ms {:default 2000 :spec (a/num-in 0 nil)
-                      :doc "How long a held trigger's job checks are not asked again, in ms of body clock, unless the hold reason names its own :recheck-after-ms."}})
+                      :doc "How long a held trigger's job checks are not asked again, in ms of body clock, unless the hold reason names its own :recheck-after-ms."}
+   ::exclusive-grace-ms {:default 5000 :spec (a/num-in 0 nil)
+                         :doc "How long after an exclusive run ends the engine stays still, in ms of body clock, so an agent's next exclusive call finds the body where it left it."}})
 
 (defn note-waiting!
   "Listed job id's check declined with reason (or none): emit job.waiting when the reason is new for this wait, and
@@ -258,6 +260,12 @@
   (when (some #(= :reflex-holds (:reason %)) (vals @(:waiting eng)))
     (swap! (:waiting eng) #(into {} (remove (fn [[_ r]] (= :reflex-holds (:reason r)))) %))))
 
+(defn exclusive-grace?
+  "Whether an exclusive run ended less than exclusive-grace-ms ago: a run of calls is one stretch of attention, so no listed job starts and walks the body away between them. Reflexes still fire."
+  [eng]
+  (let [t (now eng)]
+    (boolean (some-> @(:exclusive-t eng) (> (- t (settings/get settings ::exclusive-grace-ms)))))))
+
 (defn tick-online!
   "One scheduling pass for a body that is on the server."
   [eng]
@@ -270,7 +278,7 @@
     (cond
       firing (fire! eng firing h)
       (running eng) (do (when (:reflex h) (recheck-waits! eng h)) (check-idle! eng))
-      :else (do (clear-held-waits! eng) (when-let [id (or (paused-reflex eng order) (choose-listed eng))] (start-round! eng id))))))
+      :else (do (clear-held-waits! eng) (when-let [id (or (paused-reflex eng order) (when-not (exclusive-grace? eng) (choose-listed eng)))] (start-round! eng id))))))
 
 (defn tick!
   "One scheduling pass. Synchronous; returns the promise of a round it
@@ -282,7 +290,9 @@
   (clear-asked! eng)
   (cond
     (paused? eng) (do (reset! (:was-paused eng) true) (restart-body-idle! eng) nil)
-    (exclusive-job eng) (do (reset! (:was-paused eng) true) (restart-body-idle! eng) (tick-exclusive! eng))
+    (exclusive-job eng) (do (reset! (:was-paused eng) true) (restart-body-idle! eng)
+                            (reset! (:exclusive-t eng) (now eng))
+                            (some-> (tick-exclusive! eng) (.finally #(reset! (:exclusive-t eng) (now eng)))))
     :else
     (do (when @(:was-paused eng)
           (reset! (:was-paused eng) false)

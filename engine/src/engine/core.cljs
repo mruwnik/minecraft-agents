@@ -249,6 +249,7 @@
              :running (atom nil)
              :tokens (atom 0)
              :exclusive (atom nil)
+             :exclusive-t (atom nil)
              :away (atom nil)
              :waiting (atom {})
              :activity (atom nil)
