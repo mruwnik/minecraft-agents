@@ -351,7 +351,9 @@
 (defn properties-of
   "A cell's block properties: the rail's, its state and its crop age, as perception gives them (whole numbers as strings)."
   [w pos]
-  (use-on/perceived (merge (rail-properties w pos) (get-in w [:states pos]) (when (contains? (:ages w) pos) {:age (get-in w [:ages pos])}))))
+  (if (and (empty? (get-in w [:states pos])) (not (contains? (:ages w) pos)) (not (rail/rail? (rail/name-at w pos))))
+    {} ; sensing reads every cell through here; most are plain blocks
+    (use-on/perceived (merge (rail-properties w pos) (get-in w [:states pos]) (when (contains? (:ages w) pos) {:age (get-in w [:ages pos])})))))
 
 ;; ---- the acts: (act w args) -> [world' result], args as cljs data
 
@@ -1047,8 +1049,12 @@
                   (if (:offline w)
                     #js []
                     (->> (:blocks w)
-                         (map (fn [[pos block]] {:name block :pos pos :distance (dist (body-pos w) pos)}))
-                         (filter #(and (<= (:distance %) radius) (ok? (:name %))))
+                         (keep (let [bp (body-pos w) [bx by bz] bp]
+                                 (fn [[pos block]]
+                                   (let [[x y z] pos] ; the box test first: most blocks of a big floor lie far out
+                                     (when (and (<= (js/Math.abs (- x bx)) radius) (<= (js/Math.abs (- z bz)) radius) (<= (js/Math.abs (- y by)) radius))
+                                       (let [d (dist bp pos)]
+                                         (when (and (<= d radius) (ok? block)) {:name block :pos pos :distance d})))))))
                          (sort-by (juxt :distance #(get (:rank w) (:pos %) js/Infinity) :pos))
                          (take max)
                          (map (fn [b]

@@ -46,12 +46,17 @@
   [ground-block ground-y inventory]
   {:inventory inventory :blocks (ground ground-block ground-y) :self {:pos {:x 0 :y (inc ground-y) :z 3}}})
 
+(defn ^:async build-in!
+  "Run the job as a child over the world spec and plans for at most n ticks: [result seen p]."
+  [n world-spec plans args & [zones]]
+  (let [{:keys [eng p seen]} (b/start world-spec plans (or zones []))
+        result (await (outcome eng job (merge {:plan "line"} args) n))]
+    [result seen p]))
+
 (defn ^:async build!
   "Run the job as a child over the world spec and plans: [result seen p]."
   [world-spec plans args & [zones]]
-  (let [{:keys [eng p seen]} (b/start world-spec plans (or zones []))
-        result (await (outcome eng job (merge {:plan "line"} args) 400))]
-    [result seen p]))
+  (await (build-in! 400 world-spec plans args zones)))
 
 (defn props [p [x y z]] (js->clj (.-properties (.blockAt p #js {:x x :y y :z z})) :keywordize-keys true))
 
@@ -596,7 +601,7 @@
       (fn ^:async t []
         (let [opts (atom [])
               [_ _ p] (await (tu/with-near-stub (fn ^:async f [_ _ _ o] (swap! opts conj o) :partial)
-            (fn ^:async b [] (await (build! (spec "stone" 63 (kit {})) {"line" (line-plan {})} {})))))]
+            (fn ^:async b [] (await (build-in! 30 (spec "stone" 63 (kit {})) {"line" (line-plan {})} {})))))]
           (is (seq @opts))
           (is (every? #(= #{:walk :clear-seal} (:ways %)) @opts) "a walk to a stand never digs through the line")
           (is (empty? (h/calls p "dig"))))))))

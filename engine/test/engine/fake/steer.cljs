@@ -305,12 +305,13 @@
   [^js snapshot ^js unknown pinned]
   (let [view (js/Object.create snapshot)
         id (.-id unknown)
+        pinned? (if (seq pinned) #(contains? pinned [%1 %2 %3]) (constantly false)) ; building a vector key per unknown cell was a hot cost
         known? (fn [x y z]
                  (when-let [^js mem (.known unknown (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4))]
                    (pos? (aget mem (bit-or (bit-shift-left (bit-and y 15) 8) (bit-shift-left (bit-and z 15) 4) (bit-and x 15))))))]
     (set! (.-stateAt view) (fn [x y z]
                              (let [s (.stateAt snapshot x y z)]
-                               (if (or (== s 0xFFFF) (known? x y z) (contains? pinned [x y z])) s id))))
+                               (if (or (== s 0xFFFF) (known? x y z) (pinned? x y z)) s id))))
     (set! (.-unknown view) unknown)
     view))
 
