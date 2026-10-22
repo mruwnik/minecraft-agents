@@ -502,11 +502,17 @@
     {:x 40 :y 64 :z 0} :ok
     {:x 40 :y 70 :z 0} :later))
 
-(deftest safe-at-by-night-waits-for-day-for-a-place-outside-the-night-shelter
-  (are [leaves expected] (= expected (with-redefs [sh-inside/walk-leaves-shelter? (constantly leaves)]
-                                       (kind (ready/safe-at-by-night (constantly {:x 4 :y 64 :z 0})) (dissoc tunnel :light))))
-    nil :ok
-    :dug-in :later))
+(defn kind-in-shelter [check world shelter]
+  (let [c (assoc (ctx-of world) :view (fn [] {:now 0 :data {:entries {:shelter [{:t 0 :data shelter}]}}}))]
+    (first (check c))))
+
+(def dug-in-entry {:pos {:x 0 :y 64 :z 0}})
+
+(deftest safe-at-by-night-waits-for-day-for-a-place-outside-the-night-shelter-at-any-distance
+  (are [shelter goal expected] (= expected (kind-in-shelter (ready/safe-at-by-night (constantly goal)) tunnel shelter))
+    dug-in-entry {:x 8 :y 64 :z 0} :later
+    dug-in-entry {:x 20 :y 64 :z 0} :later
+    dug-in-entry {:x 4 :y 64 :z 0} :ok))
 
 (deftest explore-search-underground-at-night-is-ok
   (is (= :ok (bound search/safe? tunnel {}))))
