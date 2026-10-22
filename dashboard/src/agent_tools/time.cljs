@@ -9,7 +9,7 @@
             ["node:path" :as path]
             ["node:timers/promises" :refer [setTimeout]]))
 
-(def usage "time.mjs --world WORLD clock|dawn [--worlds DIR --state LEGACY_PARENT --body BODY --timeout 1200 --poll-ms 1000]\nclock: :time-of-day in ticks (0-24000; 13000-23000 is night), :day? true by day, :age-ms how old the reading is, :note when it is over 5 s old or at night (why a bed may not skip). dawn: wakes the body's view dump (a body writes its pose only while watched) and waits until the morning (time of day 0-5999; in the evening it waits for the next dawn), then adds :missed (job ends, flights, fights, reflex ends, damage, deaths since that body's observer last looked).")
+(def usage "time.mjs --world WORLD clock|dawn [--worlds DIR --state LEGACY_PARENT --body BODY --timeout 1200 --poll-ms 1000]\nclock: :time-of-day in ticks (0-24000; 13000-23000 is night), :day? true by day, :age-ms how old the reading is (both commands wake an unwatched online body whose pose is stale), :note when it is over 5 s old or at night (why a bed may not skip). dawn: waits until the morning (time of day 0-5999; in the evening it waits for the next dawn), then adds :missed (job ends, flights, fights, reflex ends, damage, deaths since that body's observer last looked).")
 (def stale-ms 90000)
 
 (defn options [argv]
@@ -96,16 +96,17 @@
   [tick] (< tick 6000))
 
 (defn online-watchable
-  "The online bodies whose pose dawn relies on: the asker, else every body. A body writes pose.json only while its watching marker is fresh."
+  "The online bodies whose pose a time answer relies on: the asker, else every body. A body writes pose.json only while its watching marker is fresh."
   [ctx body]
   (filter #(= "online" (:status (read-pose ctx %))) (if body [body] (body-names ctx))))
 
-(defn ^:async wake-poses!
-  "Marks the bodies watched and waits for each to write a fresh pose, so a running body that nobody watches is not read as stale."
-  [ctx bodies]
-  (let [t (js/Date.now)]
-    (doseq [b bodies] (snap/touch-watch! ctx b t))
-    (doseq [b bodies]
+(defn ^:async wake-stale!
+  "Every command reads through this: online bodies whose pose is stale are marked watched and waited for, so a running body that nobody watches is not read as stale."
+  [ctx body]
+  (let [t (js/Date.now)
+        stale (filter #(= :stale (why-unusable ctx (read-pose ctx %) t)) (online-watchable ctx body))]
+    (doseq [b stale] (snap/touch-watch! ctx b t))
+    (doseq [b stale]
       (await (snap/wait-for-dump! ctx b t #(js/Promise. (fn [ok] (js/setTimeout ok %))) #(js/Date.now))))))
 
 (defn execute! [{:keys [ctx command timeout-ms poll-ms body]}]
@@ -120,9 +121,7 @@
                   (dawn-reached? (:time-of-day result)) (js/Promise.resolve (assoc result :wake :day :waited-ms (- now started)))
                   (>= now deadline) (js/Promise.resolve (assoc result :ok false :reason :timeout :waited-ms (- now started)))
                   :else (.then (setTimeout (min poll-ms (- deadline now))) (fn [_] (poll))))))]
-      (if (= command :dawn)
-        (.then (wake-poses! ctx (online-watchable ctx body)) (fn [_] (poll)))
-        (poll)))))
+      (.then (wake-stale! ctx body) (fn [_] (poll))))))
 
 (defn main! [argv]
   (-> (js/Promise.resolve nil)

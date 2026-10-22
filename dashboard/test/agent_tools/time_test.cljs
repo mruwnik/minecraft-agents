@@ -75,3 +75,16 @@
       (-> (time/execute! {:ctx {:world "w" :world-dir dir} :command :dawn :timeout-ms 20000 :poll-ms 100 :body "Bob"})
           (.then (fn [r] (is (= {:ok true :wake :day :time-of-day 3000} (select-keys r [:ok :wake :time-of-day])))))
           (.finally (fn [] (js/clearInterval bob) (.rmSync fs dir #js {:recursive true :force true}) (done)))))))
+
+(deftest clock-wakes-an-unwatched-body-instead-of-reading-its-stale-pose
+  (async done
+    (let [dir (world-with-pose (assoc pose :t 1))
+          view (.join path dir "agents" "Bob" "view")
+          bob (js/setInterval
+               (fn [] (when (.existsSync fs (.join path view "watching"))
+                        (.writeFileSync fs (.join path view "pose.json")
+                                        (js/JSON.stringify (clj->js (assoc pose :t (js/Date.now) :timeOfDay 15041))))))
+               50)]
+      (-> (time/execute! {:ctx {:world "w" :world-dir dir} :command :clock :timeout-ms 20000 :poll-ms 100 :body "Bob"})
+          (.then (fn [r] (is (= {:ok true :time-of-day 15041} (select-keys r [:ok :time-of-day])))))
+          (.finally (fn [] (js/clearInterval bob) (.rmSync fs dir #js {:recursive true :force true}) (done)))))))
