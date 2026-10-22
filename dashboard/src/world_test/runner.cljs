@@ -34,7 +34,7 @@
        "--check only loads and validates the fixtures (no body, no server): one result per case, exit 1 on a parse error or problem.\n"
        "A job case (no :register, no :wait-full true, only :event expectations pending) ends :idle-grace-s (default 3) s after every job it submitted has ended, failed or parked (\"no job active: ...\", :ended-early-s and :idle-grace-s in the result).\n"
        "Runs world fixtures (default dir engine/fixtures/world) by default in sealed underground cells (y -40), with :plot :light :sky on the surface plot grid x/z 20000..20640, y 150 (large plots: lanes south of it, to z 22240).\n"
-       "--cold-bodies starts a new body process for every case (default: one warm process per run, restarted in place between cases).\n"
+       "--warm-bodies keeps one body process per run, restarted in place between cases (default: a new process per case).\n"
        "--keep-body leaves the probe body's agent dir after the run (otherwise a passed run removes it; a failed one keeps it, like the temp dir).\n"
        "--view keeps the view dump always on for the probe body (default: only while a browser watches it).\n"
        "--allow-time lets a case that needs night or day set the time (each set appended to --time-log); without it\n"
@@ -83,7 +83,7 @@
       (= a "--trace-attempt") (recur more (assoc opts :trace-attempt (js/Number b)))
       (= a "--stop-on-fail") (recur (rest all) (assoc opts :stop-on-fail true))
       (= a "--allow-time") (recur (rest all) (assoc opts :allow-time true))
-      (= a "--cold-bodies") (recur (rest all) (assoc opts :cold-bodies true))
+      (= a "--warm-bodies") (recur (rest all) (assoc opts :warm-bodies true))
       (= a "--keep-body") (recur (rest all) (assoc opts :keep-body true))
       (= a "--view") (recur (rest all) (assoc opts :view true))
       (= a "--list") (recur (rest all) (assoc opts :list true))
@@ -537,7 +537,7 @@
   engine.edn (the queue and register), unless restore?."
   [opts scenario restore?]
   (concat ["--agent" (:body opts) "--world" (:world opts) "--scenario" scenario]
-          (when-not (:cold-bodies opts) ["--warm"])
+          (when (:warm-bodies opts) ["--warm"])
           (when-not restore? ["--fresh"])))
 
 (defn body-argv
@@ -667,7 +667,7 @@
   answer in 20 s, or is gone, is killed like stop-body! does."
   [opts]
   (let [child (get @bodies (:body opts))]
-    (if-not (and child (not (:cold-bodies opts)) (nil? (.-exitCode child)) (.-stdin child))
+    (if-not (and child (:warm-bodies opts) (nil? (.-exitCode child)) (.-stdin child))
       (stop-body! opts)
       (js/Promise. (fn [resolve]
                      (let [done (fn [] (resolve nil))
