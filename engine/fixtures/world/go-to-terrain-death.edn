@@ -1,0 +1,31 @@
+;; Card 91cb5af5: a death by terrain (a fall, drowning) costs go-to's plans near its spot, fading with age, and sight never clears it; a mob death seen lit is cleared.
+;; Open lit floor, the body at x 2.5 and the goal at x 28 on z 20 (about 26 straight); the death lies on the straight line, in the body's view (walls would leave
+;; unseen rock that plans cross as maybe-open). The quote reports the planned route's :length and walks nowhere.
+;; Should-succeed: a fall or drowning 60 s old bends the way round the spot (over 28). Should-fail (the cost is gone): a fall 2 h 10 min old, and a zombie death 60 s old seen lit, go straight.
+{:defaults
+ {:tags [:movement :planner :death]
+  :time :any
+  :plot {:light :lit :height 6}
+  :body {:at [2.5 0 20.5] :yaw 270 :settle-s 4 :inventory []}
+  :limit-s 40}
+ :cases
+ [{:name "no-death-goes-straight"
+   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 20] :range 1}] {:ok true :quote {:route {:found true :length [:< 27]}}}] 30]]
+   :after [[:body-near [2.5 0 20.5] 2]]}
+  {:name "recent-fall-death-in-sight-bends-round-it"
+   :memory [{:kind :deaths :age-s 60 :data {:pos #xyz [15.5 0 20.5] :cause "fall"}}]
+   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 20] :range 1}] {:ok true :quote {:route {:found true :length [:> 28]}}}] 30]]
+   :after [[:body-near [2.5 0 20.5] 2]]}
+  {:name "recent-drowning-in-sight-bends-round-it"
+   :memory [{:kind :deaths :age-s 60 :data {:pos #xyz [15.5 0 20.5] :cause "drown"}}]
+   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 20] :range 1}] {:ok true :quote {:route {:found true :length [:> 28]}}}] 30]]
+   :after [[:body-near [2.5 0 20.5] 2]]}
+  {:name "faded-fall-death-goes-straight"
+   :memory [{:kind :deaths :age-s 7800 :data {:pos #xyz [15.5 0 20.5] :cause "fall"}}]
+   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 20] :range 1}] {:ok true :quote {:route {:found true :length [:< 27]}}}] 30]]
+   :after [[:body-near [2.5 0 20.5] 2]]}
+  {:name "zombie-death-seen-lit-goes-straight"
+   :memory [{:kind :deaths :age-s 60 :data {:pos #xyz [15.5 0 20.5] :cause "zombie"}}]
+   :act [[:wait-s 3]
+         [:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [28 0 20] :range 1}] {:ok true :quote {:route {:found true :length [:< 27]}}}] 30]]
+   :after [[:body-near [2.5 0 20.5] 2]]}]}

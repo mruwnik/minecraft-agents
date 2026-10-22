@@ -88,11 +88,17 @@
     (is (pos? (:death-hp (estimate-unseen on-way far-goal))))
     (is (zero? (:death-hp (estimate-unseen off-way far-goal))))))
 
-(deftest the-planner-keeps-away-from-an-unseen-recent-death-wherever-the-goal-is
-  (let [c (with-death (ready-test/ctx-of day-world) {:x 80 :y 64 :z 5} "zombie" 60000)
-        spots #(mapv (juxt :x :mob) (js->clj (threats/planner-dangers c) :keywordize-keys true))]
-    (is (= [[80 "zombie"]] (with-redefs [look/seen-block (constantly {:unknown true})] (spots))))
-    (is (= [] (with-redefs [look/seen-block (constantly {:age-ms 1000})] (spots))) "a spot seen since the death is cleared")))
+(deftest the-planner-keeps-away-from-a-recent-death-until-a-mob-death-spot-is-seen-lit
+  (let [dark (assoc day-world :light {[80 64 5] [0 0]})
+        spots (fn [world cause seen]
+                (with-redefs [look/seen-block (constantly seen)]
+                  (mapv (juxt :x :mob) (js->clj (threats/planner-dangers (with-death (ready-test/ctx-of world) {:x 80 :y 64 :z 5} cause 60000)) :keywordize-keys true))))]
+    (doseq [[world cause seen want why] [[day-world "zombie" {:unknown true} [[80 "zombie"]] "never seen"]
+                                         [day-world "zombie" {:age-ms 1000} [] "seen lit since the death"]
+                                         [dark "zombie" {:age-ms 1000} [[80 "zombie"]] "seen since but dark: the killer spawns there again"]
+                                         [day-world "fall" {:age-ms 1000} [[80 "fall"]] "a fall death is not cleared by sight"]
+                                         [day-world "drown" {:age-ms 1000} [[80 "drown"]] "a drowning is not cleared by sight"]]]
+      (is (= want (spots world cause seen)) why))))
 
 (deftest a-recent-hide-near-the-goal-adds-the-fight-with-its-mobs-to-the-risk
   (let [c (ready-test/ctx-of day-world)
@@ -185,7 +191,10 @@
         hp-with (fn [seen] (with-redefs [look/seen-block (constantly seen)] (:death-hp (risk/estimate died far-goal))))]
     (is (pos? (hp-with {:unknown true})) "never seen")
     (is (pos? (hp-with {:name "air" :age-ms 120000})) "last seen before the death")
-    (is (zero? (hp-with {:name "air" :age-ms 30000})) "seen after the death")))
+    (is (zero? (hp-with {:name "air" :age-ms 30000})) "seen after the death")
+    (is (pos? (with-redefs [look/seen-block (constantly {:name "air" :age-ms 30000})]
+                (:death-hp (risk/estimate (with-death (ready-test/ctx-of (assoc day-world :light {[80 64 5] [0 0]})) {:x 80 :y 64 :z 5} "enderman" 60000) far-goal))))
+        "seen after the death but dark")))
 
 (deftest a-walk-over-the-allowance-goes-when-staying-costs-more
   (let [zombies (for [i (range 3)] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x (+ 8 i) :y 64 :z 3}})

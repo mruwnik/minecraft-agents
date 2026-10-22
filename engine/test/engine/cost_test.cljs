@@ -339,6 +339,13 @@
     (is (> (cost/death-cost (assoc body :level 10) far) (cost/death-cost body far)))
     (is (= (cost/experience-cost {:level 10}) (- (cost/death-cost (assoc body :level 10) far) (cost/death-cost body far))))))
 
+(deftest a-death-by-terrain-costs-plans-near-its-spot-fading-with-age
+  (let [at {:x 1 :y 64 :z 2}
+        danger #(cost/terrain-danger {:pos at :cause "fall" :weight (cost/death-weight %)})]
+    (is (= {:x 1 :y 64 :z 2 :close 1 :radius 4 :rate 4 :mob "fall" :block false} (danger 0)))
+    (is (= 2 (:rate (danger 3600000))))
+    (is (zero? (:rate (danger 8000000))))))
+
 (deftest a-route-with-a-death-chance-costs-more-than-the-same-route-without
   (let [body {:respawn {:x 0 :y 64 :z 0} :level 3}
         night (cost/route-death-cost body {:night? true} far)]

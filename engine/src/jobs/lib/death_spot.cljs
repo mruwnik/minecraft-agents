@@ -1,46 +1,56 @@
 (ns jobs.lib.death-spot
-  "Where the body died lately, from the :deaths memory (engine.core/record-death!): a place a player avoids or goes back to
-  prepared. A death weighs 1 when fresh and fades to 0 over ::memory-ms; it counts for cells within ::radius of its spot."
+  "Where the body died lately, by any cause, from the :deaths memory (engine.core/record-death!): a place a player avoids or goes back to
+  prepared. A death weighs 1 when fresh and fades to 0 (jobs.lib.cost/death-weight); it counts for cells within ::radius of its spot."
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.game :as game]
             [engine.settings :as settings]
+            [jobs.lib.cost :as cost]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::memory-ms {:default 7200000 :doc "Milliseconds over which the memory of a death fades from full weight to none." :spec (a/num-in 1 nil)}
-   ::radius {:default 24 :doc "Blocks around a death spot that the death still counts for." :spec (a/num-in 0 nil)}})
+  {::radius {:default 24 :doc "Blocks around a death spot that the death still counts for." :spec (a/num-in 0 nil)}})
 
 (defn mob-cause?
-  "Whether `cause` (the killer's name, else a damage type like fall or lava) is a mob the danger code knows; the cells that kill otherwise are access rules and the planner's."
+  "Whether `cause` (the killer's name, else a damage type like fall or lava) is a mob the danger code knows; any other is a death by terrain."
   [p cause]
   (boolean (and cause (or (contains? threat/mob-hit cause) (threat/hostile? (game/version-of p) {:name cause})))))
 
 (defn recent
-  "The deaths by a mob of c still remembered: [{:pos {:x :y :z} :cause :weight :age-ms}], weight falling from 1 to 0 with age."
+  "The deaths of c still remembered: [{:pos {:x :y :z} :cause :mob? :weight :age-ms}], weight falling from 1 to 0 with age, mob? by mob-cause?."
   [c]
-  (let [now (ctx/now c)
-        ttl (settings/get settings ::memory-ms)]
+  (let [now (ctx/now c)]
     (vec (for [{:keys [data]} (ctx/entries c :deaths)
-               :let [w (- 1 (/ (- now (:death-t data)) ttl))
+               :let [age (- now (:death-t data))
+                     w (cost/death-weight age)
                      {:keys [x y z]} (:pos data)]
-               :when (and (pos? w) x (mob-cause? (:primitives c) (:cause data)))]
-           {:pos {:x x :y y :z z} :cause (:cause data) :weight (min 1 w) :age-ms (- now (:death-t data))}))))
+               :when (and (pos? w) x)]
+           {:pos {:x x :y y :z z} :cause (:cause data) :mob? (mob-cause? (:primitives c) (:cause data)) :weight w :age-ms age}))))
 
 (defn near
   "The remembered deaths of `deaths` (from recent) within ::radius of cell `pos`."
   [deaths pos]
   (filterv #(<= (u/dist pos (:pos %)) (settings/get settings ::radius)) deaths))
 
-(defn seen-clear?
-  "Whether the body has looked at a death's spot since the death (fresh sight beats the record)."
-  [p {:keys [pos age-ms]}]
-  (let [b (look/seen-block p pos)]
-    (boolean (and b (not (:unknown b)) (< (:age-ms b) age-ms)))))
+(defn lit?
+  "Whether the cell at pos has light data and is lit enough that no mob spawns there (look/lit-light?)."
+  [p pos]
+  (let [{:keys [x y z]} (look/cell-of pos)
+        raw (look/raw-of p)]
+    (boolean (and raw (look/light-known? raw x y z)
+                  (let [l (.lightAt ^js raw x y z)]
+                    (look/lit-light? (bit-and l 15) (bit-shift-right l 4) (look/sky-subtract raw)))))))
 
-(defn unseen
-  "The remembered deaths of c whose spot the body has not looked at since."
+(defn seen-clear?
+  "Whether a mob death's spot is clear: looked at since the death (fresh sight beats the record) and lit, as a dark spot spawns the killer again.
+  A death by terrain never clears by sight: the place itself killed."
+  [p {:keys [pos age-ms mob?]}]
+  (let [b (look/seen-block p pos)]
+    (boolean (and mob? b (not (:unknown b)) (< (:age-ms b) age-ms) (lit? p pos)))))
+
+(defn uncleared
+  "The remembered deaths of c not seen-clear?."
   [c]
   (remove #(seen-clear? (:primitives c) %) (recent c)))

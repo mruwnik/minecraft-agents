@@ -3,7 +3,10 @@
   experience is worth. A route pays chance-of-dying x death-cost. All are stubs to expand; each takes the body, which
   today only experience-cost and death-cost read. Pure.
 
-  body: {:level experience levels, :respawn {:x :y :z} where it would wake}."
+  body: {:level experience levels, :respawn {:x :y :z} where it would wake}.
+
+  A remembered death fades: death-weight. One by terrain (a fall, water, lava, a wall) costs go-to's plans near its spot
+  as terrain-danger."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.cost.value :as value]))
@@ -16,7 +19,27 @@
    ::chance-surface-night {:default 0.005 :spec (a/num-in 0 1)
                            :doc "Chance of dying on a route over the surface at night."}
    ::chance-underground {:default 0.002 :spec (a/num-in 0 1)
-                         :doc "Chance of dying on a route underground."}})
+                         :doc "Chance of dying on a route underground."}
+   ::memory-ms {:default 7200000 :spec (a/num-in 1 nil)
+                :doc "Milliseconds over which the memory of a death fades from full weight to none."}
+   ::terrain-rate {:default 4 :spec (a/num-in 0 nil)
+                   :doc "hp a second a fresh death by terrain costs a plan within ::terrain-close of its spot (the planner's options.dangers rate)."}
+   ::terrain-close {:default 1 :spec (a/num-in 0 nil)
+                    :doc "Blocks round a death by terrain within which it costs its full rate."}
+   ::terrain-radius {:default 4 :spec (a/num-in 0 nil)
+                     :doc "Blocks round a death by terrain past which it costs nothing: the cells that killed are near the spot."}})
+
+(defn death-weight
+  "1 for a death just now, falling to 0 at ::memory-ms age."
+  [age-ms]
+  (max 0 (min 1 (- 1 (/ age-ms (settings/get settings ::memory-ms))))))
+
+(defn terrain-danger
+  "The planner danger {:x :y :z :close :radius :rate :mob :block} of a death by terrain `cause` at pos, its rate ::terrain-rate x weight
+  (death-weight): never a block, the body may cross the spot."
+  [{:keys [pos cause weight]}]
+  {:x (:x pos) :y (:y pos) :z (:z pos) :close (settings/get settings ::terrain-close) :radius (settings/get settings ::terrain-radius)
+   :rate (* weight (settings/get settings ::terrain-rate)) :mob cause :block false})
 
 (defn experience-cost
   "Seconds the experience levels of body are worth."
