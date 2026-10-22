@@ -218,11 +218,12 @@
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "the stone and the logs are seen")
           (is (some #(= :dark (:reason %)) (f/events-of s :waiting))))))))
 
-(deftest a-craft-the-dark-refuses-makes-the-obtain-wait-not-end-no-source
+(deftest a-craft-the-dark-prices-too-high-makes-the-obtain-wait-not-end-no-source
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [s (f/start (assoc (ore-world {} [{:name "oak_log" :count 6} {:name "cobblestone" :count 5}]) :time st/night) [f/own-zone])]
+          (swap! (fake/state (:p s)) assoc-in [:self :health] 1)
           (doseq [pitch [-80 80 0]]
             (swap! (fake/state (:p s)) assoc :pitch pitch)
             (perception/pass! (aget (:p s) "perception")))
