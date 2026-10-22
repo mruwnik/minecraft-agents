@@ -308,13 +308,13 @@
   "night-bed-world with another player lying in the bed (no state set)."
   (assoc night-bed-world :entities [{:id 9 :name "Miles" :kind "player" :pos [6 64 0] :sleeping true}]))
 
-(deftest night-uses-a-bed-in-any-zone-or-claim-but-not-an-occupied-one
+(deftest night-uses-a-free-bed-but-not-one-in-anothers-zone-nor-an-occupied-one
   (let [known (fn [eng] (st/know-bed! eng bed-cell))]
     (doseq [[label seed!] [["seen" (fn [_])] ["remembered" known]]]
       (is (true? (holds-with night-bed-world seed! :zones [])) (str label ": unclaimed"))
       (is (true? (holds-with night-bed-world seed! :zones [(bed-zone self-name)])) (str label ": own zone"))
       (is (true? (holds-with night-bed-world seed! :zones nil)) (str label ": no zone list read"))
-      (is (true? (holds-with night-bed-world seed! :zones [(bed-zone "Miles")])) (str label ": another owner's zone"))
+      (is (false? (holds-with night-bed-world seed! :zones [(bed-zone "Miles")])) (str label ": another owner's zone: their build"))
       (is (true? (holds-with night-bed-world seed! :claims [(bed-claim "Miles")])) (str label ": another owner's claim"))
       (is (false? (holds-with occupied-world seed! :zones [])) (str label ": occupied"))
       (is (false? (holds-with occupied-world seed! :zones [(bed-zone "Miles")])) (str label ": occupied, another's zone"))
@@ -334,12 +334,11 @@
     (swap! (:state w) assoc :area-claims {:value claims})
     {:eng eng :p p :seen seen :clock clock}))
 
-(deftest shelter-sleeps-in-any-free-bed-and-records-it
+(deftest shelter-sleeps-in-a-free-bed-and-records-it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[zones claims] [[[] []] [[(bed-zone self-name)] []] [[] [(bed-claim self-name)]]
-                                [[(bed-zone "Miles")] []] [[] [(bed-claim "Miles")]]]]
+        (doseq [[zones claims] [[[] []] [[(bed-zone self-name)] []] [[] [(bed-claim self-name)]] [[] [(bed-claim "Miles")]]]]
           (let [{:keys [eng p]} (zoned-setup night-bed-world zones claims)]
             (core/submit! eng '(jobs.survival.night) {})
             (await (st/tick-n eng 6))

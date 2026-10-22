@@ -66,14 +66,29 @@
   (let [me (.-username (.self p))]
     (boolean (some #(and (zones/in-box? [x y z] %) (zones/same-owner? (:owner %) me)) (when kn (world/zones kn))))))
 
+(defn others-bed?
+  "Whether the bed at pos is another's build: in another owner's zone, or on the footprint of a plan another body made. kn
+  is the engine world (nil: none known)."
+  [p kn {:keys [x y z]}]
+  (let [me (.-username (.self p))
+        cell [x y z]
+        by (get (world/plan-authors kn) (get (world/footprints kn nil) cell))]
+    (boolean (or (some #(and (zones/in-box? cell %) (zones/foreign-owner? (:owner %) me)) (world/zones kn))
+                 (and by (zones/foreign-owner? by me))))))
+
+(defn bed-free?
+  "Whether the bed at pos is free to sleep in: not occupied, or in a zone the body owns (the server refuses an occupied
+  one, which is a failed sleep)."
+  [p kn pos]
+  (or (in-own-zone? p kn pos) (not (bed-occupied? p pos))))
+
 (defn bed-permit
-  "A predicate (fn [pos]) for whether the body may use the bed at pos: any bed, in anyone's zone or claim (sleeping sets
-  only the sleeper's own spawn), unless it is occupied; a bed in a zone the body owns is always a candidate (the server
-  refuses an occupied one, which is a failed sleep). kn is the engine world (nil: no zone known)."
+  "A predicate (fn [pos]) for whether the body may use the bed at pos: bed-free? and not others-bed? (sleeping in it would
+  set the body's spawn in another's build). kn is the engine world (nil: no zone known)."
   [p kn]
   (fn [pos]
-    (or (in-own-zone? p kn pos)
-        (not (bed-occupied? p pos)))))
+    (and (bed-free? p kn pos)
+         (or (in-own-zone? p kn pos) (not (others-bed? p kn pos))))))
 
 (defn seen-bed
   "A bed block the body can see in its room: found by a flood fill from its feet over free cells at feet height, within

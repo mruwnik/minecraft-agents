@@ -23,7 +23,7 @@
   (an unexpired entry with the same position), else :bed-unreachable {:pos}; with :open-bed false and the body within 3 blocks of
   the bed, a roofed room, else :bed-open. A body already asleep is done.
   Holds (a :pause-s pause holding still with the reason, then :continue) until the call's :wall-time ends it (limit-reached): a bed
-  occupied by another player (sh-beds/bed-permit; also when it became so mid-round) :bed-occupied {:pos};; a server refusal for monsters near the bed :monsters-near {:pos}.
+  occupied by another player (sh-beds/bed-free?; also when it became so mid-round) :bed-occupied {:pos};; a server refusal for monsters near the bed :monsters-near {:pos}.
   Done {:pos bed} when asleep. A server refusal \"not night\" is condition-failed :not-night; a bed block gone is :bed-missing, and a
   :bed-open bed (with :open-bed false, once the body is beside it) too. A walk that did not
   arrive is retried three times, then warns bed_unreachable and ends nothing-possible :bed-unreachable (the bed goes into
@@ -189,7 +189,7 @@
 (defn ^:async round [c]
   (let [p (:primitives c)
         bed (bed-of c)
-        taken? #(not ((sh-beds/bed-permit p (:world (:engine c))) bed))
+        taken? #(not (sh-beds/bed-free? p (:world (:engine c)) bed))
         _ (await (sense/decide! c ::bed-taken #(not (taken?)) {:retry? still-permitted?}))
         walk (when-not (taken?) (await (child/call-walk* c :go {:pos bed :range 2})))]
     (cond

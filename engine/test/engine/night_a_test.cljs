@@ -4,6 +4,7 @@
   sleeping player in sight): logged out in short stints until morning, then roofed or buried: the queue runs, else
   dig in."
   (:require [cljs.test :refer [deftest is async]]
+            [jobs.lib.world-files :as ew]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -48,6 +49,17 @@
     (is (false? (bed-for world (fn [eng] (st/know-bed! eng {:x 20 :y 64 :z 0})
                                  (write! eng :bed-unreachable {:pos {:x 20 :y 64 :z 0}}))))
         "given up on")))
+
+(deftest another-bodys-bed-is-not-one-to-use
+  (let [p (tu/fake {:time night :blocks {"20,64,0" "red_bed"}})
+        bed {:x 20 :y 64 :z 0}
+        zone (fn [owner] [{:name "z" :owner owner :min [18 60 -2] :max [22 70 2]}])
+        plan {"hut" {:id "hut" :parts [{:id "bed" :cells [[20 64 0]] :want "red_bed"}] :metadata {:by "Other"}}}
+        permit? (fn [kn] ((sh-beds/bed-permit p kn) bed))]
+    (is (true? (permit? (ew/of-data {} {} []))) "a bed no one holds")
+    (is (false? (permit? (ew/of-data {} {} (zone "Other")))) "in another owner's zone")
+    (is (false? (permit? (ew/of-data plan {} []))) "on another body's plan")
+    (is (true? (permit? (ew/of-data plan {} (zone "Fake")))) "in the body's own zone")))
 
 (deftest the-live-spawn-bed-is-used-when-the-remembered-bed-is-far
   (let [world {:time night :floor tu/walk-floor :blocks {"20,64,0" "red_bed"}}

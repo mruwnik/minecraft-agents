@@ -1,0 +1,25 @@
+;; Card b9737e9d (Oriel #125): the night slept in another body's bed and set its spawn there. A bed in another owner's zone or
+;; on another body's plan is not one to use (sh-beds/others-bed?); one on the body's own plan is.
+;; Overdue (max-days-awake 0), so a bed in the open counts. Should-succeed: no sleep in the others' beds (the night shelters
+;; instead), sleep in the own-plan bed. Should-fail: a sleep call at the other's bed.
+;; Needs the night (bed use is decided by the clock).
+{:defaults
+ {:tags [:night :survival :bed :zones]
+  :time :night :time-why :sleep
+  :plot {:light :sky :length 24 :width 16 :height 6}
+  :blocks [[:set [12 0 8] "red_bed[facing=east,part=foot]"] [:set [13 0 8] "red_bed[facing=east,part=head]"]]
+  :body {:at [6.5 0 8.5] :yaw -90 :effects [["resistance" 600 4]] :settle-s 3 :inventory [["cobblestone" 32]]}
+  :act [[:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0 :jobs.lib.shelter.beds/max-days-awake 0}})]]
+  :limit-s 90}
+ :cases
+ [{:name "a-bed-on-anothers-plan-is-not-slept-in"
+   :plans [{:id "hut" :metadata {:by "Miles"} :parts [{:id "bed" :cells [#at [12 0 8] #at [13 0 8]] :want [:any "red_bed"]}]}]
+   :expect [{:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 60}]
+   :after [[:body-far [12.5 0 8.5] 2]]}
+  {:name "a-bed-in-anothers-zone-is-not-slept-in"
+   :zones [{:name "miles-hut" :min [10 0 6] :max [15 3 10] :owner "Miles"}]
+   :expect [{:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 60}]
+   :after [[:body-far [12.5 0 8.5] 2]]}
+  {:name "a-bed-on-the-bodys-own-plan-is-slept-in"
+   :plans [{:id "hut" :metadata {:by "$body"} :parts [{:id "bed" :cells [#at [12 0 8] #at [13 0 8]] :want [:any "red_bed"]}]}]
+   :expect [{:event {:source :action :kind :done :data {:name "sleep"}} :within-s 60}]}]}
