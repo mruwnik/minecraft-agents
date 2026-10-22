@@ -19,6 +19,7 @@
             [jobs.lib.dawn :as dawn]
             [jobs.lib.foods :as foods]
             [jobs.lib.look-edge :as look-edge]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -274,11 +275,11 @@
   (checks/low-health-min floor c))
 
 (defn cannot-heal?
-  "Whether the body of ctx c can not heal by waiting: food under foods/top-up-food and nothing a meal would eat carried."
+  "Whether the body of ctx c can not heal by waiting: food under foods/top-up-food and nothing a meal would eat carried (reserved food, which the hungry trigger and an unnamed meal leave alone, does not count)."
   [c]
   (let [self (.self (:primitives c))]
     (and (< (.-food self) foods/top-up-food)
-         (not (foods/carries-food? self)))))
+         (not (foods/carries-food? self (reserve/spared (ctx/view c) self))))))
 
 (defn fit-to-forage
   "The fit? of a job that looks for food: fit?, but a :low-health wait is lifted while the body can not heal (cannot-heal?), else it would never end."

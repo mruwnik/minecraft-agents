@@ -3,6 +3,7 @@
   (:require [cljs.test :refer [deftest is are]]
             [engine.hut-shelter-test :as hut]
             [engine.ctx :as ctx]
+            [engine.memory :as mem]
             [engine.core.ending :as ending]
             [engine.registry :as registry]
             [engine.shelter-support :as st]
@@ -23,6 +24,7 @@
             [jobs.blocks.fill-cells :as fill-cells]
             [jobs.blocks.place :as place]
             [jobs.lib.ready :as ready]
+            [jobs.lib.reserve :as reserve]
             [jobs.lib.world :as known]
             [jobs.strip.site :as strip-site]
             [jobs.movement.boat-drive :as boat-drive]
@@ -345,6 +347,18 @@
       8 [{:name "bread" :count 1}] ["cow"] :later
       20 [] ["cow"] :later
       8 [] ["cow" "iron_ore"] :later)))
+
+(deftest reserved-food-does-not-let-a-hurt-body-heal
+  (let [view (fn [entries] (let [d (reduce #(mem/add-entry %1 :reserve {:t 0 :data %2} reserve/policy) mem/empty-data entries)]
+                             (fn [] {:data d :now 1000})))
+        carrots [{:name "carrot" :count 3}]]
+    (are [food entries expected]
+         (= expected (ready/cannot-heal? (assoc (ctx-of {:self {:pos {:x 0 :y 64 :z 0} :health 5 :food food} :inventory carrots})
+                                                :view (view entries))))
+      12 [{:item "carrot"}] true
+      12 [] false
+      2 [{:item "carrot"}] false
+      20 [{:item "carrot"}] false)))
 
 (deftest a-hurt-foodless-body-does-not-roam-for-wool-or-wood
   (are [health food inventory args expected]
