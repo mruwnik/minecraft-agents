@@ -369,6 +369,15 @@
             (is (= bed-a (place eng :bed)) (pr-str recorded))
             (is (= [] (events-of seen :place.kept)))))))))
 
+(deftest sleeping-in-a-bed-replaces-a-recorded-bed-beyond-the-urgent-radius
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [far {:x 12639 :y 71 :z -28}
+              {:keys [eng seen]} (await (sleep-in {:recorded {:pos far}}))]
+          (is (= bed-a (place eng :bed)))
+          (is (= [] (events-of seen :place.kept))))))))
+
 (deftest a-bare-floor-patch-is-no-closed-room
   (is (nil? (reach-room/room (tu/fake {:floor [-5 -5 5 5]}) {:x 0 :y 64 :z 0}))
       "the ground goes on past the built floor, unseen: the flood leaks there"))

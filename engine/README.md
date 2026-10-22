@@ -373,7 +373,7 @@ One EDN store per body: `worlds/<world>/agents/<name>/engine/memory.edn`, `{:ent
 - **Named places** (`jobs.lib.places`): a place is a kind named after it (`:bed`, `:chest`, `:home`, `:food-source`, or a name
   of 1 to 32 lowercase letters, digits, dashes) with one `{:pos {:x :y :z}}` entry, cap 1, forever. `jobs.memory.set-place`
   records, moves or verifies one; `jobs.memory.forget-place` removes one. `jobs.survival.sleep` and `jobs.storage.deposit`
-  record the bed or chest they used when none is recorded; they never overwrite a live different one.
+  record the bed or chest they used when none is recorded; they never overwrite a live different one (a recorded `:bed` farther than the urgent bed radius is replaced).
   The memory layer (`engine.core.notices`, in the ctx's `remember!`/`forget-where!`) emits the info notice for every place or `:reserve` write, whoever made it: `place.set` (`:auto true` unless set-place wrote it), `place.forgotten`, `reserve.set`, `reserve.cleared`; `jobs.memory.remember` earns `memory.remembered`. The memory jobs emit nothing; their endings carry the result.
 - **Deaths**: engine core adds one `:deaths` entry `{:pos :dimension :cause :death-t}` per `:died` event, in any mode (cap 10, forever).
   Jobs read it with `(ctx/entries c :deaths)`; a death the body was offline for is not listed.

@@ -8,6 +8,7 @@
   retract-if-missing! drops a recorded place whose block a job found missing."
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]
             [engine.memory :as mem]))
@@ -170,9 +171,14 @@
        (not (sh-sense/shut-in-room? p recorded))
        (sh-sense/shut-in-room? p offered)))
 
+(defn far-bed?
+  "Whether the recorded :bed lies farther from the offered one than any bed is walked to (the urgent bed radius): the body moved on, and a bed it can never reach is no home."
+  [kind recorded offered]
+  (and (= :bed kind) (> (u/dist recorded offered) (sh-beds/urgent-bed-radius))))
+
 (defn offer!
   "A job found a place of kind at pos (anything parse-pos reads) by itself. Record it when none is recorded, the
-  recorded one is gone (its block is loaded and not of that kind), or (:bed, :home) it lies in the open and the offered one in a
+  recorded one is gone (its block is loaded and not of that kind), (:bed) it lies farther than the urgent bed radius, or (:bed, :home) it lies in the open and the offered one in a
   closed roofed room; the memory layer emits one place.set (:auto true). A different live recorded
   place is kept, and one place.kept event says which and why. The same place changes nothing."
   [c kind pos]
@@ -182,6 +188,7 @@
       (nil? offered) nil
       (= offered recorded) nil
       (or (nil? recorded) (gone? kind (u/block-name (:primitives c) recorded))
+          (far-bed? kind recorded offered)
           (better-home? (:primitives c) kind recorded offered))
       (ctx/remember! c kind {:pos offered} mem/place-policy)
       :else
