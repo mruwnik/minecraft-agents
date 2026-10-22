@@ -89,6 +89,13 @@
                                       :goal-job {:id "j14" :finished? true :status :completed}})]
     (is (str/includes? line "goal j14 completed") line)))
 
+(deftest an-ended-goal-beside-a-running-job-points-at-that-job
+  (let [status (assoc-in busy-status [:current :id] "j965")
+        ended {:id "j945" :finished? true :status :completed}
+        line (fn [status] (progress/progress-line {:status status :goal "j945" :goal-job ended}))]
+    (is (str/includes? (line status) "goal j945 completed (old goal; --goal j965") (line status))
+    (is (not (str/includes? (line (assoc-in status [:current :reflex] true)) "old goal")) "a reflex is not the new goal")))
+
 ;; Wake verdicts: nil goes on waiting
 
 (def night-idle {:wake :idle :jobs [{:job "j14" :name "obtain" :waiting {:reason :night-sheltered}}

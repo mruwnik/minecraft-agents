@@ -161,9 +161,12 @@
 (defn row-state [row] (if (:waiting row) (str "waits " (wait-text (:waiting row))) (word (:status row))))
 
 (defn goal-text [s goal goal-job]
-  (let [row (first (filter #(= goal (:id %)) (job-rows s)))]
+  (let [row (first (filter #(= goal (:id %)) (job-rows s)))
+        current (:current s)]
     (cond
       row (str "goal " goal " " (short-name (:name row)) " " (row-state row))
+      (and (:finished? goal-job) current (not (:reflex current)))
+      (str "goal " goal " " (word (:status goal-job)) " (old goal; --goal " (:id current) " follows the running job)")
       (:finished? goal-job) (str "goal " goal " " (word (:status goal-job)))
       :else (str "goal " goal " gone"))))
 
