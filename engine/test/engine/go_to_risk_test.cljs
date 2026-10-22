@@ -68,3 +68,9 @@
                                 (first (risk/status c far-goal))))]
     (is (= :ok (status-for 20)))
     (is (= :later (status-for 5)))))
+
+(deftest a-death-by-terrain-adds-no-risk
+  (let [c (ready-test/ctx-of day-world)]
+    (doseq [cause ["fall" "lava" "drown" "starve"]]
+      (is (zero? (:death-hp (risk/estimate (with-death c {:x 90 :y 64 :z 5} cause 60000) far-goal))) cause))
+    (is (pos? (:death-hp (risk/estimate (with-death c {:x 90 :y 64 :z 5} "skeleton" 60000) far-goal))))))
