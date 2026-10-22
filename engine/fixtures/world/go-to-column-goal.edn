@@ -1,7 +1,7 @@
 ;; jobs.movement.go-to column goals (#at [x z]: y left out), a y off the ground, and the :unknown re-aim of a goal seen in the ground.
 ;; Plot 90 long, stone floor at y -1; the plateau cases build a 12-high plateau reached by a 1-per-step ramp, so the ground at the
 ;; goal column is more than 8 above/below the feet (perception is 16 blocks, so the far column is unseen from the start).
-;; Should-succeed: column goal, y 3 off, far plateau column, valley column, y goal inside the far plateau, :unknown goal inside a mound,
+;; Should-succeed: column goal, :unknown far plateau/valley column, y 3 off, far plateau column, valley column, y goal inside the far plateau, :unknown goal inside a mound,
 ;; :unknown block goal with :range 1 (stands beside it). Should-fail: a column behind a bottomless gap ends :arrived false, bounded.
 {:defaults
  {:tags [:movement :go-to :column]
@@ -38,6 +38,28 @@
    :act [[:job (jobs.movement.go-to {:pos #at [60 16] :range 0})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:why :goal-not-standable}} :for-s 140 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-near [60.5 0 16.5] 2]]}
+  ;; 857a8e16: the unseen column's ground is a slope bumped into cell by cell; the walk looks and aims again, never gives up :unseen-floors
+  {:name "unknown-far-plateau-column-is-walked-up-to"
+   :blocks [[:fill [52 0 0] [80 11 31] "stone"]
+            [:fill [40 0 0] [40 0 31] "stone"] [:fill [41 0 0] [41 1 31] "stone"] [:fill [42 0 0] [42 2 31] "stone"]
+            [:fill [43 0 0] [43 3 31] "stone"] [:fill [44 0 0] [44 4 31] "stone"] [:fill [45 0 0] [45 5 31] "stone"]
+            [:fill [46 0 0] [46 6 31] "stone"] [:fill [47 0 0] [47 7 31] "stone"] [:fill [48 0 0] [48 8 31] "stone"]
+            [:fill [49 0 0] [49 9 31] "stone"] [:fill [50 0 0] [50 10 31] "stone"] [:fill [51 0 0] [51 11 31] "stone"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [60 16] :range 0 :unknown true})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind #{:completed :stopped} :data {:why :unseen-floors}} :for-s 140 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-near [60.5 12 16.5] 2]]}
+  {:name "unknown-far-valley-column-is-walked-down-to"
+   :blocks [[:fill [0 0 0] [30 11 31] "stone"]
+            [:fill [31 0 0] [31 10 31] "stone"] [:fill [32 0 0] [32 9 31] "stone"] [:fill [33 0 0] [33 8 31] "stone"]
+            [:fill [34 0 0] [34 7 31] "stone"] [:fill [35 0 0] [35 6 31] "stone"] [:fill [36 0 0] [36 5 31] "stone"]
+            [:fill [37 0 0] [37 4 31] "stone"] [:fill [38 0 0] [38 3 31] "stone"] [:fill [39 0 0] [39 2 31] "stone"]
+            [:fill [40 0 0] [40 1 31] "stone"] [:fill [41 0 0] [41 0 31] "stone"]]
+   :body {:at [2.5 12 16.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [60 16] :range 0 :unknown true})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind #{:completed :stopped} :data {:why :unseen-floors}} :for-s 140 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [60.5 0 16.5] 2]]}
   {:name "unknown-y-goal-inside-far-plateau-is-re-aimed-to-its-top"
    :blocks [[:fill [52 0 0] [80 11 31] "stone"]
