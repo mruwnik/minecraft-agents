@@ -8,6 +8,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
             [jobs.lib.access.rules :as rules]
+            [jobs.lib.aim :as aim]
             [jobs.lib.dig-look :as look]
             [jobs.lib.blocks :as b]
             [jobs.lib.checks :as checks]
@@ -38,6 +39,7 @@
   - {:reason :no-tool :needs item :block name :hint}: no carried tool harvests the block (with :need-drop) and the call's :ways
     allow no fetch (otherwise the round gets one; a fetch that fails ends the same way, with :why).
 
+  A block not in sight, within twice the reach, with a seen solid block in the line, is reached by digging that block first (not picked up; zones, claims and hazards apply to it) before any walk.
   Out of reach, it walks within 3 cells (go-to child, which opens and shuts doors); a failed walk is tried once more,
   then it ends nothing-possible {:reason :unreachable :pos :why} (:no-walk, :out-of-reach, go-to's why).
   A block under the feet with no seen solid floor below it is not dug from on top: the body first steps off its
@@ -367,6 +369,26 @@
                   :hazards (mapv :reason (:hazards (access/may-dig? (b/rules-in c) pos)))
                   :text (str "dig under the feet at " (pr-str [x y z]) ": " (name decision))}))))
 
+(defn through-cell
+  "The seen solid block a player would dig to get at pos, within twice the reach: the first one on the aim line when it is within reach and not tried before, else nil."
+  [c pos]
+  (let [p (:primitives c)
+        cell (b/cell pos)
+        hit (aim/first-blocker (aim/seen-kind-at p) (aim/body-eye c) cell)]
+    (when (and hit (not= hit cell) (not (contains? (:through (ctx/mem c)) hit)) (<= (u/eye-dist (u/self-pos c) pos) (* 2 u/eye-reach)) (b/in-reach? c (zipmap [:x :y :z] hit)))
+      hit)))
+
+(defn ^:async dig-through!
+  "pos is within reach but a block lies in the aim line: dig that first, as a player does, before any walk round it (the
+  block is not picked up). :again, :continue, or nil when there is no such block or the child could not dig it."
+  [c pos]
+  (when-let [hit (through-cell c pos)]
+    (let [r (await (child/run!* c :through 'jobs.blocks.dig {:pos hit :collect false :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+      (cond
+        (= :continue r) :continue
+        :else (do (ctx/update-mem! c update :through (fnil conj #{}) hit)
+                  (when (= :done (:kind r)) :again))))))
+
 (defn ^:async get-tool!
   "Get the tool the block needs (jobs.lib.need): :fetched, :continue while the fetch waits, or the ending when the
   fetch is off or fails (condition-failed :no-tool, :why the fetch's cause)."
@@ -410,8 +432,9 @@
       (and (not (:walk (:args c))) (not (b/in-reach? c pos (:see (:args c)))))
       (unreachable! c :no-walk)
       (not (b/in-reach? c pos (:see (:args c))))
-      (let [w (await (b/walk-into-reach! c pos (:see (:args c))))]
-        (if (:unreachable w) (unreachable! c (:unreachable w)) w))
+      (or (await (dig-through! c pos))
+          (let [w (await (b/walk-into-reach! c pos (:see (:args c))))]
+            (if (:unreachable w) (unreachable! c (:unreachable w)) w)))
       ;; the look or walk of this step may show a hazard that can-run?, asked before it, did not know
       (problem c) (if (ctx/returns-on-later? c) (ctx/end c :condition-failed (problem c)) :continue)
       (and (access/under-feet? (access/may-dig? (b/rules-in c) pos)) (not (contains? (set (:accept (:args c))) :under-feet)))

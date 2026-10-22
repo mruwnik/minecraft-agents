@@ -398,15 +398,16 @@
           (is (= {:dug true :collected 1} (select-keys result [:dug :collected])) (pr-str result))
           (is (>= y 64) (str "walked out of the pit first, feet y " y)))))))
 
-(deftest a-block-no-stand-sees-waits-unreachable-out-of-sight
-  ;; the dirt is buried under the surface: no stand within the walk's range sees it, so it is not dug through the stone
+(deftest a-block-no-stand-sees-is-dug-through-the-stone-in-the-line
+  ;; the dirt is buried under the surface: no stand within the walk's range sees it, so the seen stone in the line is dug first
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [env (setup {:self in-pit :blocks (assoc pit-blocks "5,62,0" "dirt")})
-              r (await (ending-cause (:eng env) job {:pos [5 62 0]} 15))]
-          (is (= {:reason :unreachable :why :out-of-sight} (select-keys r [:reason :why])) (pr-str r))
-          (is (empty? (calls (:p env) "dig"))))))))
+        (let [env (setup {:self in-pit :inventory [{:name "iron_pickaxe" :count 1}] :blocks (assoc pit-blocks "5,62,0" "dirt")})
+              _ (tu/seeing-all (:p env))
+              result (await (tu/child-outcome (:eng env) job {:pos [5 62 0]} 40))]
+          (is (= {:dug true} (select-keys result [:dug])) (pr-str result))
+          (is (< 1 (count (calls (:p env) "dig")))))))))
 
 (deftest a-dig-act-that-times-out-is-a-failed-attempt-not-the-time-budget
   (async done
