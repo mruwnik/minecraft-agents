@@ -1,0 +1,19 @@
+;; Card c98e9044: readiness (jobs.debug.ready-probe, safe-at) at night. An unseen target 2+ below the feet is underground only with a seen solid block over it
+;; (terrain hides it); a valley behind a ridge has none, is open surface where mobs spawn, and asks a look, then the dawn wait.
+;; Surface plot at real night; the body stands on a stone plateau (feet y 3, x 4..14); the target [30 0 16] is 3 below, 18 away.
+;; Should-succeed: the probe starts for a target in a cavity under a seen stone roof (a mass lower than the eye). Should-fail: for a target in the open valley behind a ridge it waits :exposed and never starts.
+{:defaults
+ {:tags [:readiness :night :light]
+  :time :night :time-why :night-light
+  :plot {:light :sky :floor "grass_block" :height 10 :length 48 :width 32}
+  :body {:at [12.5 3 16.5] :settle-s 2 :effects [["resistance" 900 4]]}
+  :act [[:job (jobs.debug.ready-probe {:at #at [30 0 16]})]]
+  :limit-s 70}
+ :cases
+ [{:name "valley-behind-a-ridge-the-probe-waits-exposed"
+   :blocks [[:fill [4 0 4] [14 2 28] "stone"] [:fill [20 0 4] [22 6 28] "stone"]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :job.ready-probe} :for-s 30 :of-job true}]}
+  {:name "cavity-under-a-seen-roof-the-probe-starts"
+   :blocks [[:fill [4 0 4] [14 2 28] "stone"] [:fill [26 0 12] [34 2 20] "stone"] [:set [30 0 16] "air"]]
+   :expect [{:event {:source :job :kind :job.ready-probe} :within-s 40 :of-job true}]}]}
