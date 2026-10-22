@@ -31,13 +31,15 @@
    :body {:at [28.5 4 16.5] :inventory [["cobblestone" 16]]}
    :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 40}]
    :after [[:body-near [28.5 4 16.5] 1.5]]}
-  {:name "deep-diagonal-stair-open-to-the-surface-shelters"
+  {:name "deep-diagonal-stair-open-to-the-surface-keeps-working"
    ;; a 1-wide stair of 12 steps down from the top of a 29-high mass (the shape jobs.access.stair cuts): the body at its
-   ;; bottom has sky light 0 but a mob can walk down the stair, so it is no shelter
+   ;; bottom has sky light 0, so it is buried: waiting changes nothing there and the trigger leaves a miner to work (the
+   ;; night job asked for by hand still shelters it)
    :plot {:height 31}
    :blocks [[:fill [2 0 8] [30 28 24] "stone"] [:fill [5 28 16] [5 30 16] "air"] [:fill [6 27 16] [6 29 16] "air"] [:fill [7 26 16] [7 28 16] "air"] [:fill [8 25 16] [8 27 16] "air"] [:fill [9 24 16] [9 26 16] "air"] [:fill [10 23 16] [10 25 16] "air"] [:fill [11 22 16] [11 24 16] "air"] [:fill [12 21 16] [12 23 16] "air"] [:fill [13 20 16] [13 22 16] "air"] [:fill [14 19 16] [14 21 16] "air"] [:fill [15 18 16] [15 20 16] "air"] [:fill [16 17 16] [16 19 16] "air"]]
    :body {:at [16.5 17 16.5] :inventory [["cobblestone" 16]]}
-   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :night}} :within-s 20}]}
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 20}]
+   :after [[:body-near [16.5 17 16.5] 1.5]]}
   {:name "surface-with-a-bed-shelters"
    :blocks [[:set [24 10 12] "red_bed[facing=east,part=foot]"] [:set [25 10 12] "red_bed[facing=east,part=head]"]]
    :memory [{:kind :bed :data {:pos #xyz [24 10 12]} :policy {:cap 1 :ttl :forever}}]

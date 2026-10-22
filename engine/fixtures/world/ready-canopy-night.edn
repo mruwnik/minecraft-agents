@@ -1,6 +1,6 @@
 ;; Card 6e2a51d1: readiness (jobs.debug.ready-probe, safe-at) at night. A target under a tree canopy is exposure (sky light under leaves reads 9-14,
 ;; but the sky reaches down the column and dawn lifts it); a target under a stone slab is not (no sky light reaches it: only threats count).
-;; Surface plot at real night; a persistent oak_leaves slab (2 layers) or a stone slab 4 up over x 18..28, z 12..20 (the target [22 0 16]; the body stands in the open at x 12.5), no light blocks.
+;; Surface plot at real night; a persistent oak_leaves slab (2 layers) or a stone slab 4 up over x 18..28, z 12..20 (the target [22 0 16]; the body stands in the open at x 12.5), no light blocks under the leaves, glowstone in the stone slab.
 ;; Should-succeed: the probe starts for a target under the stone slab. Should-fail: under the leaves slab it waits :exposed and never starts.
 {:defaults
  {:tags [:readiness :night :light]
@@ -15,5 +15,6 @@
    :expect [{:event {:source :job :kind :waiting :data {:reason :exposed}} :within-s 25 :of-job true}
             {:no-event {:source :job :kind :job.ready-probe} :for-s 30 :of-job true}]}
   {:name "under-stone-the-probe-starts"
-   :blocks [[:fill [18 4 12] [28 4 20] "stone"]]
+   ;; an open-sided slab shades the ground to light 0 (a mob could spawn there), so the slab carries glowstone: the cell is lit though no sky light reaches it
+   :blocks [[:fill [18 4 12] [28 4 20] "stone"] [:set [20 4 14] "glowstone"] [:set [24 4 14] "glowstone"] [:set [20 4 18] "glowstone"] [:set [24 4 18] "glowstone"] [:set [22 4 16] "glowstone"]]
    :expect [{:event {:source :job :kind :job.ready-probe} :within-s 40 :of-job true}]}]}
