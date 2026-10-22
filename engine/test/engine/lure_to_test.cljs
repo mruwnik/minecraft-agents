@@ -567,6 +567,28 @@
           (is (< (self-x p) (- @hid-at 3)) "the body went back toward the last sighting")
           (is (some? (get-in (done-event s) [:lost :last-seen]))))))))
 
+(deftest a-pause-while-the-animal-is-out-of-sight-does-not-count-as-time-unseen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng clock] :as s} (h/setup {:floor tu/walk-floor :inventory wheat :entities [(cow 1 3)]} 50)
+              herd (:entities @(fake/state p))
+              hidden (atom nil)]
+          (after-acts! p (fn [p act]
+                           (when (nil? @hidden) (set-cow-x! p 3.5))
+                           (when (and (nil? @hidden) (= "wait" act))
+                             (reset! hidden 0)
+                             (swap! (fake/state p) assoc :entities []))
+                           (when @hidden
+                             (swap! hidden inc)
+                             ;; a reflex held the body for longer than the unseen limit
+                             (when (= 2 @hidden) (swap! clock + 60000))
+                             (when (= 4 @hidden) (swap! (fake/state p) assoc :entities herd) (set-cow-x! p 3.5)))))
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
+          (await (run-until-done s 120))
+          (is (some? @hidden) "the cow went out of sight")
+          (is (= :arrived (:reason (done-event s)))))))))
+
 (deftest an-animal-lost-again-from-the-same-spot-after-walks-back-to-it-ends-lost
   (async done
     (tu/run-async done
