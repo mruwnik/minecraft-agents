@@ -39,7 +39,7 @@
 
   Under rock a step toward an unseen column is only taken to a seen open cell (a tunnel or cave), never at feet height into unseen rock: the search then ends :distance when no tunnel leads on.
 
-  For farm animals (cow, pig, sheep, chicken, rabbit) a body under rock first climbs out (jobs.lib.surface-up), and a leg whose stand is under rock (no sky light) is skipped (:underground): they live on the surface.
+  For farm animals (cow, pig, sheep, chicken, rabbit) a body under rock first climbs out (jobs.lib.surface-up), and a leg whose stand is under rock (no sky light) is skipped (:underground), as is one whose ground lies more than ::surface-dip (8) below the feet (a pit, ravine or cave mouth): they live on the open surface.
 
   Legs are ::spacing apart: :spiral points on rings round the origin, the one nearest the body first (so a body in a corridor walks on), or :outward ahead along :heading (a :heading alone means :outward), then the sides, and on further ahead once those are tried or searched. A
   leg is never tried twice and never goes beyond the max-distance setting (XZ) of the origin. It is skipped (:skipped)
@@ -108,6 +108,7 @@
    ::max-failed-in-row {:default 3 :doc "Failed attempts in a row before the search gives up." :spec (a/int-in 0 nil)}
    ::wait-ms {:default 2000 :doc "How long the search waits for the world to settle, in ms." :spec (a/int-in 0 nil)}
    ::descent {:default 40 :doc "How far below its feet a leg's ground is looked for, in blocks (go-to does the descent)." :spec (a/int-in 0 nil)}
+   ::surface-dip {:default 8 :doc "Farm animals live on open ground: a leg whose ground lies deeper than this below the feet (a pit, ravine or cave mouth) is skipped." :spec (a/int-in 0 nil)}
    ::rise {:default 12 :doc "How far above its feet a leg's ground is looked for, in blocks." :spec (a/int-in 0 nil)}
    ::spacing {:default 16 :doc "Blocks between legs." :spec (a/int-in 4 64)}
    ::held-angle {:default 60 :doc "A leg lies the way a failed leg went when the angle between them, seen from the body, is under this many degrees." :spec (a/num-in 0 180)}
@@ -483,7 +484,8 @@
         surface? (surface-only? names)
         buried? (sh-sense/buried? p)
         covering (if (false? (:use-notes (:args c))) (filter #(>= (:t %) (:t0 m 0)) ns) ns)
-        underground? (fn [sy pt] (and surface? sy (sh-sense/buried-at? p {:x (pt 0) :y sy :z (pt 1)})))]
+        underground? (fn [sy pt] (and surface? sy (or (< sy (- y (settings/get settings ::surface-dip)))
+                                                      (sh-sense/buried-at? p {:x (pt 0) :y sy :z (pt 1)}))))]
     (loop [[pt & more] (candidates c m) reads 0 acc {:tried [] :failed [] :skipped 0 :held 0 :unloaded (vec (:deferred m))}]
       (cond
         (nil? pt) acc

@@ -45,6 +45,17 @@
    :limit-s 80}
   ;; card c19b798f: a body in a tunnel under 20+ blocks of rock searching for a rail that is nowhere: the old search stepped toward unseen columns
   ;; at feet height, i.e. into rock, and go-to retried "no way found" for the whole job time. Now it ends at once: stopped, no limit_reached.
+  ;; card 0c0d6a91: a search for chickens (open ground only) must not walk into a sky-open pit 12 blocks below the feet (a ravine or cave
+  ;; mouth keeps sky light): a 12-high stone plateau, body on top, a pit carved east. Plots sit at y -40, so the plateau top is -28; should-succeed: ends with no walk below -34.
+  {:name "chicken-search-does-not-descend-into-a-pit"
+   :plot {:height 20}
+   :blocks [[:fill [0 0 0] [63 11 31] "stone"] [:fill [24 0 8] [44 11 24] "air"]]
+   :body {:at [8.5 12 16.5]}
+   :act [[:job (jobs.explore.search {:target "chicken" :pattern :outward :heading :east :scan-radius 8 :use-notes false
+                                     :settings {:jobs.explore.search/max-distance 40 :jobs.explore.search/spacing 8 :jobs.explore.search/max-legs 12} :spend {:job-time 100}})]]
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}
+            {:no-event {:source :job :kind :planned :data {:pos {:y [:< -34]}}} :of-job true :for-s 100 :until {:source :job :kind #{:completed :stopped}}}]
+   :limit-s 120}
   {:name "underground-search-with-no-target-ends-without-walking-into-rock"
    :time :any
    :plot {:height 24}

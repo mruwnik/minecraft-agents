@@ -774,6 +774,14 @@
     (is (every? #(= :underground (:reason %)) (:failed (choose ["cow" "pig"]))))
     (is (some? (:leg (choose ["diamond_block"]))))))
 
+(deftest a-leg-for-farm-animals-never-stands-in-a-pit-below-the-feet-but-one-for-ore-may
+  (let [p (tu/seeing-all (tu/fake {:blocks (tu/box -36 45 -36 36 45 36 "grass_block") :self {:pos {:x 0.5 :y 64 :z 0.5}}}))
+        choose (fn [names] (settings/with-settings {:jobs.explore.search/spacing 4 :jobs.explore.search/max-distance 8}
+                             #(search/choose-leg {:args {:pattern :spiral} :primitives p} {:origin [0 64 0]} names [])))]
+    (is (nil? (:leg (choose ["chicken"]))))
+    (is (every? #(= :underground (:reason %)) (:failed (choose ["chicken"]))))
+    (is (some? (:leg (choose ["diamond_block"]))))))
+
 (deftest a-note-of-a-block-the-body-now-sees-as-something-else-is-not-a-finding
   (async done
     (tu/run-async done
