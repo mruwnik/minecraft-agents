@@ -11,7 +11,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.forestry :as lib]
             [jobs.forestry.prepare-rule :as rule]
-            [jobs.lib.trees :refer [debts forget-plot-debts! stalled-kind stalled-policy target-of with-sapling sapling-for sapling-of sapling-name? log-name? replant-kind species]
+            [jobs.lib.trees :refer [debts forget-plot-debts! stalled-kind stalled-policy without-stalled target-of with-sapling sapling-for sapling-of sapling-name? log-name? replant-kind species]
              :rename {species all-species}]
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]))
@@ -69,9 +69,12 @@
 (def saplings (mapv sapling-of all-species))
 
 (defn current-target
-  "The spot to plant: :at, else the oldest debt; of the debts whose sapling is carried first when no species is asked."
+  "The spot to plant: :at, else the oldest debt; of the debts whose sapling is carried first when no species is asked.
+  Debts whose cell is unloaded or that failed lately come last: the replant-owed trigger holds for the others only."
   [c]
-  (let [ds (debts c)
+  (let [all (debts c)
+        reachable (filterv #(u/block-at (:primitives c) (:pos %)) (without-stalled (ctx/view c) all))
+        ds (if (seq reachable) reachable all)
         carried (when-not (:species (:args c)) (seq (with-sapling ds (u/inventory (:primitives c)))))]
     (target-of (or carried ds) (:args c))))
 

@@ -141,3 +141,13 @@
           (await (tu/child-outcome eng 'jobs.forestry.plant-sapling {:ways #{:carried}} 100))
           (is (some #(= [9 64 0 "birch_sapling"] %) (fm/places p)))
           (is (= [{:pos {:x 6 :y 64 :z 0} :species "oak"}] (lt/debts eng))))))))
+
+(deftest plant-sapling-takes-a-loaded-debt-before-an-older-unloaded-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (lt/setup {:blocks (fm/ground [[9 0]]) :inventory [sapling] :unloaded ["6,64,0"]})]
+          (mem/write! (:store eng) :forestry/replant {:pos {:x 6 :y 64 :z 0} :species "oak"} {:cap 50 :ttl :forever})
+          (mem/write! (:store eng) :forestry/replant {:pos {:x 9 :y 64 :z 0} :species "oak"} {:cap 50 :ttl :forever})
+          (await (tu/child-outcome eng 'jobs.forestry.plant-sapling {:ways #{:carried}} 100))
+          (is (some #(= [9 64 0 "oak_sapling"] %) (fm/places p)) "the trigger held for this one, so the job plants it, not the older unloaded debt"))))))
