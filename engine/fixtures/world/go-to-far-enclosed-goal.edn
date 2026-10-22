@@ -3,7 +3,7 @@
 ;; stops at its node budget and the call goes on to another way, the body connected (Hollin's search of every cell
 ;; between, 30.8 s, timed the client out).
 ;; Lit cell; stone mass x 0..99, z 0..63, y 0..4; plateau x 0..20, z 0..20, y 5..10 under the body at [10 11 10]; pocket [80 1 56] [80 2 56].
-;; Should-succeed: the goal-enclosed escalation comes, the body connected. Should-fail: none, or the body disconnects.
+;; Should-succeed: the goal-enclosed escalation comes, the body connected; the body reaches the pocket. Should-fail: the body disconnects, or gives up.
 {:defaults
  {:tags [:movement :go-to]
   :time :any
@@ -16,4 +16,12 @@
  [{:name "shut-in-body-far-from-a-sealed-pocket-escalates-connected"
    :act [[:job (jobs.movement.go-to {:pos #at [80 1 56] :range 0 :unknown false})]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:why :goal-enclosed}} :within-s 60 :of-job true}
-            {:no-event {:source :body :kind :disconnected} :for-s 60 :until {:source :job :kind :go-to.escalated :data {:why :goal-enclosed}}}]}]}
+            {:no-event {:source :body :kind :disconnected} :for-s 60 :until {:source :job :kind :go-to.escalated :data {:why :goal-enclosed}}}]}
+  ;; Card b110b7c2: a dig route search past its node budget goes on in the next rounds instead of refusing, and the
+  ;; approaches do not wander: the body gets off the plateau, over the plain and digs into the pocket.
+  {:name "shut-in-body-far-from-a-sealed-pocket-reaches-it"
+   :act [[:job (jobs.movement.go-to {:pos #at [80 1 56] :range 0 :unknown false})]]
+   :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 240 :of-job true}
+            {:no-event {:source :body :kind :disconnected} :for-s 240 :until {:source :job :kind :completed :data {:arrived true}}}]
+   :after [[:body-near [80.5 1 56.5] 1.5]]
+   :limit-s 270}]}

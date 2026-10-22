@@ -37,7 +37,8 @@
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.escalate-choose :refer [cheaper-fill climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? gap-fill
-                                                         goal-way dig-leg dig-way drop-fill goal-lava? leg-ends goal-walled? own-stair route-cells shelter-exit? skips sprint-only?]]
+                                                         goal-way dig-leg dig-way drop-fill goal-lava? leg-ends goal-walled? own-stair route-cells shelter-exit? skips sprint-only?
+                                                         route-slice routes-searching! searching? keep-routes! forget-routes!]]
             [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag may-dig-fn note-holes! own-holes own-placed-fn planned-cells]]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.torch :as torch]
@@ -146,12 +147,8 @@
            (let [h (access/foreign-holder c (zipmap [:x :y :z] cell))]
              (or (nil? h) (= h home)))))))
 
-(defn ^:async escalate!
-  "Start the next escalation for the give-up kept in memory (:give-up), or give up with it when there is none (or
-  with failed, the detail of the escalation that just failed, when there is none left after it; past max-escalations
-  with the last one that failed, if any). A climb begun because a walkable plan went down through caves (memory
-  :cave-climb) walks that plan after all instead of giving up (memory :cave-ok). A detour's escalation that failed
-  (detour-escalate!) gives the detour up at once."
+(defn ^:async choose-escalation!
+  "escalate!'s choice and start of the next way, or its give-up."
   [c pos failed]
   (let [{:keys [tries status result]} (:give-up (ctx/mem c))
         feet (end/feet-cell c)
@@ -161,8 +158,10 @@
         n (:fruitless counted)
         _ (when (<= n (tuning/max-escalations)) (await (look-round! c feet)))
         goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
-        opts {:own? (own-placed-fn c) :skip (skips c) :fetch? (fetch-tool? c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c)}
-        into? (goal-walled? c result)
+        slice (route-slice (:id c))
+        shut? (delay (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword)))
+        opts {:own? (own-placed-fn c) :skip (skips c) :fetch? (fetch-tool? (:primitives c) (:doors (:args c)) shut?) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c) :slice slice}
+        into? (goal-walled? c result shut?)
         ;; a goal over or ringed by lava is refused: no dig, in or out, makes it acceptable
         lava-goal? (and (= :goal-enclosed (some-> (:reason result) keyword)) (goal-lava? (:primitives c) goal))
         ;; a shut-in body (a pit, a plateau it cannot walk off) whose goal is walled in digs straight into it when it can
@@ -193,6 +192,7 @@
                   (when (and (= :drop (some-> kind keyword)) at (not= :closed (some-> (:one-way (:args c)) keyword)) (not-any? (:skip opts) [:approach]) (not (contains? (:approached (ctx/mem c)) (vec at)))
                              (not= :none (:step (escape/choose (:primitives c) (vec at) goal (may-dig-fn c) opts))))
                     (vec at)))
+        chosen e
         spot (when (= :none (:step e)) (when-not (contains? (:skip opts) :approach) (escape/way-spot (:primitives c) feet goal (may-dig-fn c) opts (or (:approached (ctx/mem c)) #{}))))
         e (cond
             (not= :none (:step e)) e
@@ -202,23 +202,38 @@
             {:step :none :why (if (choosable? (may-dig-fn c true false)) :own-pen :own-build)}
             (and (zone-exit? c feet) (choosable? zone-free)) (assoc (choose zone-free) :exit-zone true)
             (choosable? (constantly true)) {:step :none :why :zone}
-            :else e)]
+            :else e)
+        e (if (and (= :none (:step e)) (searching? slice)) {:step :searching} e)]
+    (if (= :searching (:step e)) (keep-routes! slice) (forget-routes! (:id c)))
     (cond
       lava-goal? (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation {:step :none :why :goal-lava}}))
       (and (:cave-climb (ctx/mem c)) (or (> n (tuning/max-escalations)) (= :none (:step e))))
       (do (ctx/update-mem! c #(-> % (dissoc :cave-climb :dive-climb :give-up) (assoc :cave-ok true)))
           :again)
       (and failed (= :detour status)) (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation failed}))
-      (> n (tuning/max-escalations)) (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation (cond-> (or failed (:last-failed (ctx/mem c)) {:step :spent :n (tuning/max-escalations)}) into? (assoc :into true))}))
+      (> n (tuning/max-escalations)) (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation (cond-> (or failed (:last-failed (ctx/mem c)) (when (= :none (:step chosen)) chosen) {:step :spent :n (tuning/max-escalations)}) into? (assoc :into true))}))
+      (= :searching (:step e)) (do (ctx/update-mem! c assoc :escalate-now true :escalate-failed failed) :again)
       (= :none (:step e)) (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation (cond-> (or failed e) into? (assoc :into true))}))
       :else
       (do (ctx/emit! c :go-to.escalated :info {:step (:step e) :why (if (:own e) :own-way-blocked (:why (end/give-up-fields result))) :n n :at feet
                                                :text (if (:own e) "its own stair up is blocked: cutting it again" (str "no way " (if (or into? (= :dig-route (:step e))) "in" "out") " on foot: " (name (:step e))))})
-          (ctx/update-mem! c #(-> (merge % counted)
+          (ctx/update-mem! c #(-> (merge (dissoc % :escalate-failed) counted)
                                   (cond-> (:leg-s e) (update :leg-dig-s (fnil + 0) (:leg-s e)))
                                   (assoc :escalations (inc (:escalations % 0)) :escalation e :escalation-from feet
                                          :planned (planned-cells (:primitives c) e feet) :holes-before (count (own-holes c)))))
           :again))))
+
+(defn ^:async escalate!
+  "Start the next escalation for the give-up kept in memory (:give-up), or give up with it when there is none (or
+  with failed, the detail of the escalation that just failed, when there is none left after it; past max-escalations
+  with the last one that failed, if any). A climb begun because a walkable plan went down through caves (memory
+  :cave-climb) walks that plan after all instead of giving up (memory :cave-ok). A detour's escalation that failed
+  (detour-escalate!) gives the detour up at once. A dig route search that has not ended within the call's slice
+  (route-slice) goes on in the next calls, each only that (routes-searching!), before the way is chosen with it."
+  [c pos failed]
+  (if (routes-searching! (:id c))
+    (do (ctx/update-mem! c assoc :escalate-now true) :again)
+    (await (choose-escalation! c pos (or failed (:escalate-failed (ctx/mem c)))))))
 
 (defn dive-refused!
   "A plan refused because it goes down through caves (stair-check :dives): climb as from a dive (memory :dive-climb,
@@ -250,12 +265,15 @@
   (ctx/update-mem! c #(-> % (dissoc :escalation :escalation-from :planned :holes-before) (assoc :own-way-done true)))
   :again)
 
-(defn ^:async give-up-or-escalate! [c pos tries status result]
+(defn ^:async give-up-or-escalate!
+  "Give up the walk with result, or escalate instead (escalate?): at the next step, so the walk's search and the
+  escalation's do not block the body in one."
+  [c pos tries status result]
   (if (escalate? c tries result)
-    (do (ctx/update-mem! c assoc :dive-climb (dive? c result)
+    (do (ctx/update-mem! c assoc :dive-climb (dive? c result) :escalate-now true
                          :give-up {:tries tries :status status
                                    :result (select-keys result [:status :reason :kind :cells :near :one-way :at :from :dip :rise :move :why :step :partial :goal-left])})
-        (await (escalate! c pos nil)))
+        :again)
     (end/give-up! c pos result
                   (when (and (not (sh-inside/sheltered-in c))
                              (or (escalate-reason? result (some-> (:doors (:args c)) keyword)) (sprint-only? result))
@@ -266,14 +284,17 @@
   "The child made a way (or part of one, done false): walk again from a fresh count, or escalate again at once after an
   approach, after a whole stair that left the body shut in under the goal (climb-on?), or after any stair that left it
   under ground on its climb away from a dive (dive-climb-on?). Its holes are put back once a walk round gets on past
-  it (restore-next!). An approach does not count toward max-escalations (its look may show a wall to dig or not), but
-  its cell is not walked to twice (memory :approached), so a chain of them ends."
+  it (restore-next!). An approach to a cell more than a block nearer the goal than it set out from does not count toward
+  max-escalations (its look may show a wall to dig or not); one no nearer does, so a chain of them ends; nor is a cell
+  walked to twice (memory :approached)."
   [c pos {:keys [step]} done?]
   (let [again? (or (= :approach step) (and (= :stair step) (or (and done? (climb-on? c pos)) (dive-climb-on? c pos))))
-        target (some-> (:escalation (ctx/mem c)) :pos vec)]
+        target (some-> (:escalation (ctx/mem c)) :pos vec)
+        to-goal #(u/dist (zipmap [:x :y :z] %) pos)
+        nearer? (and (= :approach step) target (some-> (:escalation-from (ctx/mem c)) to-goal dec (> (to-goal target))))]
     (ctx/update-mem! c #(cond-> (-> % (dissoc :escalation :escalation-from :planned :holes-before :best)
-                                    (cond-> (= :approach step) (-> (update :approached (fnil conj #{}) target)
-                                                                   (update :fruitless (fn [n] (max 0 (dec (or n 0)))))))
+                                    (cond-> (= :approach step) (update :approached (fnil conj #{}) target)
+                                            nearer? (update :fruitless (fn [n] (max 0 (dec (or n 0))))))
                                     (assoc :blocked 0 :searching 0 :frontier-best {} :target-best {}))
                           again? (assoc :escalate-now true)
                           (not (#{:approach :fill-gap} step)) (assoc :restore-pending true))))
@@ -405,7 +426,8 @@
         (bs/passable? n) :open
         (or (escape/protected? n) (not (escape/diggable? block-at (may-dig-fn c) (own-placed-fn c) cell))) :not-diggable
         :else
-        (let [args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :ways (ways-for (fetch-tool? c)) :need-drop (fetch-tool? c) :accept #{:lava-adjacent}}
+        (let [fetch? (fetch-tool? c)
+              args {:ignore-zones? (boolean (:ignore-zones? (:args c))) :ways (ways-for fetch?) :need-drop fetch? :accept #{:lava-adjacent}}
               pos (zipmap [:x :y :z] cell)
               e (await (b/dig-cell-ending! c pos args))
               boxed? (and (not= :continue e) (= :no-side-stand (:why (:cause e))))

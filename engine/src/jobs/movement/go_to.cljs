@@ -17,6 +17,7 @@
             [jobs.movement.go-to.aim :as aim :refer [args-refusal goal-danger goal-pos pre-aim!]]
             [jobs.movement.go-to.column :as column]
             [jobs.movement.go-to.cut :refer [approaches cut-loop? nearest-hostile note-restart! start-attempt! way-hostiles]]
+            [jobs.movement.go-to.escalate-choose :as choose]
             [jobs.movement.go-to.escalation :as esc]
             [jobs.movement.go-to.faults :as faults]
             [jobs.movement.go-to.health :as health]
@@ -242,5 +243,6 @@
   [c _]
   (when-not (:own (:escalation (ctx/mem c))) (note-holes! c (:planned (ctx/mem c))))
   (wsearch/release! c)
+  (choose/forget-routes! (:id c))
   (await (torch/return-torch! c))
   (ctx/end c :done nil {}))

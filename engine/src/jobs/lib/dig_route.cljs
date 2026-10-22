@@ -75,12 +75,9 @@
             (recur m)))))
     top))
 
-(defn route
-  "The cells to dig (head cell first within a step, in walking order) of the cheapest route from feet cell from to feet
-  cell goal, at most :max-digs of them, within :margin cells of both ends, falls of at most :max-fall; each step's floor must be a seen solid block.
-  A* with the walked steps' price as the lower bound. Priced :step-s a step and (:dig-s name cell) a cell dug (default 0 and 1: the fewest digs); a block :dig-s prices nil is
-  not dug; nor is a cell under sand or gravel (it would fall on the body walking in). {:dig [cell ..]}, {:problem :no-route},
-  or {:problem :budget} when :max-nodes cells were expanded first."
+(defn search
+  "route's search begun: a fn of n that runs it on for at most n more cells expanded, [answer expanded]: answer route's
+  once the search has ended (the same each run after), nil while it goes on; expanded the cells this run expanded."
   [block-at from goal {:keys [dig-s step-s] :or {dig-s (constantly 1) step-s 0} :as opts}]
   (let [[fx _ fz] from
         ;; one number a cell, for js Maps and Sets (a vector key is compared by identity there)
@@ -94,7 +91,6 @@
         cell-cost (by-name cell-cost)
         floor-ok? (by-name floor-ok?)
         max-digs (get opts :max-digs (settings/get settings ::max-digs))
-        max-nodes (get opts :max-nodes (settings/get settings ::max-nodes))
         margin (get opts :margin (settings/get settings ::margin))
         max-fall (get opts :max-fall (settings/get settings ::max-fall))
         lo (mapv #(- (min %1 %2) margin) from goal)
@@ -109,33 +105,50 @@
                                  price (when d (if (pos? d) (dig-s name cell) 0))]
                              (if price [(+ s price) (+ k d)] (reduced nil))))
                          [step-s 0] (step-cells m n))))
-        dist (js/Map.) digs (js/Map.) prev (js/Map.) done (js/Set.) queue #js []]
+        dist (js/Map.) digs (js/Map.) prev (js/Map.) done (js/Set.) queue #js []
+        tick (volatile! 1)
+        answer (volatile! nil)]
     (.set dist (key from) 0) (.set digs (key from) 0)
     (heap-push! queue #js [(heuristic from) 0 from])
-    (loop [tick 1]
-      (let [top (heap-pop! queue)
-            cur (some-> top (aget 2))
-            ck (some-> cur key)]
-        (cond
-          (nil? top) {:problem :no-route}
-          (.has done ck) (recur tick)
-          (= cur goal)
-          (let [path (reverse (take-while some? (iterate #(.get prev (key %)) goal)))]
-            {:dig (vec (distinct (for [[m n] (map vector path (rest path))
-                                       c (sort-by #(- (% 1)) (step-cells m n))
-                                       :when (pos? (cell-cost (block-at c)))]
-                                   c)))})
-          (>= (.-size done) max-nodes) {:problem :budget}
-          :else
-          (let [d (.get dist ck) k0 (.get digs ck)]
-            (.add done ck)
-            (recur (reduce (fn [tick n]
-                             (let [nk (key n)
-                                   [s k] (when (and (inside? n) (not (.has done nk))) (step cur n))
-                                   nd (when (and s (<= (+ k0 k) max-digs)) (+ d s))]
-                               (if (and nd (< nd (if (.has dist nk) (.get dist nk) js/Infinity)))
-                                 (do (.set dist nk nd) (.set digs nk (+ k0 k)) (.set prev nk cur)
-                                     (heap-push! queue #js [(+ nd (heuristic n)) tick n])
-                                     (inc tick))
-                                 tick)))
-                           tick (neighbours cur max-fall)))))))))
+    (fn [n]
+      (let [start (.-size done)
+            limit (+ start n)
+            a (or @answer
+                  (loop []
+                    (let [top (heap-pop! queue)
+                          cur (some-> top (aget 2))
+                          ck (some-> cur key)]
+                      (cond
+                        (nil? top) {:problem :no-route}
+                        (.has done ck) (recur)
+                        (= cur goal)
+                        (let [path (reverse (take-while some? (iterate #(.get prev (key %)) goal)))]
+                          {:dig (vec (distinct (for [[m n] (map vector path (rest path))
+                                                     c (sort-by #(- (% 1)) (step-cells m n))
+                                                     :when (pos? (cell-cost (block-at c)))]
+                                                 c)))})
+                        ;; the popped cell goes back: the next run expands it first
+                        (>= (.-size done) limit) (do (heap-push! queue top) nil)
+                        :else
+                        (let [d (.get dist ck) k0 (.get digs ck)]
+                          (.add done ck)
+                          (doseq [n (neighbours cur max-fall)]
+                            (let [nk (key n)
+                                  [s k] (when (and (inside? n) (not (.has done nk))) (step cur n))
+                                  nd (when (and s (<= (+ k0 k) max-digs)) (+ d s))]
+                              (when (and nd (< nd (if (.has dist nk) (.get dist nk) js/Infinity)))
+                                (.set dist nk nd) (.set digs nk (+ k0 k)) (.set prev nk cur)
+                                (heap-push! queue #js [(+ nd (heuristic n)) @tick n])
+                                (vswap! tick inc))))
+                          (recur))))))]
+        (vreset! answer a)
+        [a (- (.-size done) start)]))))
+
+(defn route
+  "The cells to dig (head cell first within a step, in walking order) of the cheapest route from feet cell from to feet
+  cell goal, at most :max-digs of them, within :margin cells of both ends, falls of at most :max-fall; each step's floor must be a seen solid block.
+  A* with the walked steps' price as the lower bound. Priced :step-s a step and (:dig-s name cell) a cell dug (default 0 and 1: the fewest digs); a block :dig-s prices nil is
+  not dug; nor is a cell under sand or gravel (it would fall on the body walking in). {:dig [cell ..]}, {:problem :no-route},
+  or {:problem :budget} when :max-nodes cells were expanded first (search goes on past it)."
+  [block-at from goal opts]
+  (or (first ((search block-at from goal opts) (get opts :max-nodes (settings/get settings ::max-nodes)))) {:problem :budget}))

@@ -11,6 +11,7 @@
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.cost.ways :as cw]
+            [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
             [jobs.lib.near :as near]
             [jobs.lib.ledger :as ledger]
@@ -550,6 +551,30 @@
         p (hiding-with-pickaxe world #(= [2 63 0] %))
         cells (choose/route-cells p [0 64 0] [3 64 0] (constantly true) (constantly false))]
     (is (some #(= 1 (nth (:cell %) 2)) cells) "it digs round the seen-open cell whose floor is unseen")))
+
+(deftest a-far-walled-in-goal-is-searched-for-a-slice-a-call-and-reached
+  ;; a body in a walled yard on a stone mass, the goal a sealed pocket 80 across and 12 down: each escalate! call's dig
+  ;; route searches expand at most the dig-route ::max-nodes setting, a search that needs more goes on in the next
+  ;; calls, and the approaches toward the goal do not wander round the yard
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (merge (box -10 50 -6 90 63 6 "stone") (box -4 64 -4 4 66 4 "stone") (box -3 64 -3 3 66 3 "air")
+                            {"80,52,0" "air" "80,53,0" "air"})
+              nodes (atom 0) per-call (atom [])
+              search dig-route/search escalate! esc/escalate!
+              {:keys [out p seen]}
+              (with-redefs [dig-route/search (fn [& args] (let [run (apply search args)] (fn [n] (let [[_ used :as r] (run n)] (swap! nodes + used) r))))
+                            esc/escalate! (fn [c pos failed]
+                                            (let [before @nodes]
+                                              (.then (escalate! c pos failed) (fn [r] (swap! per-call conj (- @nodes before)) r))))]
+                (await (run-job! {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]}
+                                 {:pos [80 52 0] :range 0})))]
+          (is (true? (:arrived @out)) (pr-str (select-keys @out [:why :text])))
+          (is (= [80 52 0] (feet p)))
+          (is (every? #(<= % (settings/get dig-route/settings ::dig-route/max-nodes)) @per-call) (pr-str @per-call))
+          (is (some #{(settings/get dig-route/settings ::dig-route/max-nodes)} @per-call) "a search spent a call's slice and went on")
+          (is (< (count (events-of seen :go-to.escalated)) 8) (pr-str (map (juxt :step :at) (events-of seen :go-to.escalated)))))))))
 
 (deftest a-dig-route-goes-round-cells-may-dig-refuses
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air")

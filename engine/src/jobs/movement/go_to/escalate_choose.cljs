@@ -3,6 +3,7 @@
   pillar, stair, clear-path, dig route or walk to the wall to take."
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
+            [engine.settings :as settings]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.ways :as cw]
             [jobs.lib.dig-look :as dig-look]
@@ -96,9 +97,10 @@
   "Whether the escalation may fetch a pickaxe (the stair's and a :dig-route dig's ways): the body is free (a shut-in body
   cannot walk to one; by-hand is its fallback) and carries one pickaxe or none, so the last one breaking is no stop."
   ([c] (fetch-tool? (:primitives c) (:doors (:args c))))
-  ([p doors]
-   (and (not (escape/enclosed? p (some-> doors keyword)))
-        (<= (count (filter #(str/ends-with? (str (:name %)) "_pickaxe") (u/inventory p))) 1))))
+  ([p doors] (fetch-tool? p doors (delay (escape/enclosed? p (some-> doors keyword)))))
+  ([p _ shut?]
+   (and (<= (count (filter #(str/ends-with? (str (:name %)) "_pickaxe") (u/inventory p))) 1)
+        (not @shut?))))
 
 
 (defn price
@@ -190,12 +192,13 @@
   "Whether a give-up with result is a free body's (not escape/enclosed?) whose goal the planner proved walled in, or whose
   search spent its node budget (:budget) with the body within budget-near of the goal (:goal-left): a goal that close
   with no whole way found is walled off, whatever the flood could not prove. The ways that change the world run toward
-  the goal (goal-way)."
-  [c result]
-  (boolean
-   (and (or (= :goal-enclosed (some-> (:reason result) keyword))
-           (and (= :budget (some-> (:reason result) keyword)) (some-> (:goal-left result) (<= (budget-near)))))
-       (not (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword))))))
+  the goal (goal-way). shut?: a delay of escape/enclosed?, when the caller has one."
+  ([c result] (goal-walled? c result (delay (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword)))))
+  ([c result shut?]
+   (boolean
+    (and (or (= :goal-enclosed (some-> (:reason result) keyword))
+             (and (= :budget (some-> (:reason result) keyword)) (some-> (:goal-left result) (<= (budget-near)))))
+         (not @shut?)))))
 
 (defn goal-lava?
   "Whether the goal cell [x y z] is refused outright, whatever is dug: it is lava, it stands over lava, or lava lies
@@ -221,18 +224,67 @@
   "The most route searches route-cells makes round cells may-dig? refuses."
   3)
 
+(defonce ^{:doc "Per go-to call (its ctx :id): {key search-fn} of the dig-route searches its last escalate! left unfinished
+  (jobs.lib.dig-route/search), gone on by later ones (route-slice)."}
+  kept-routes (atom {}))
+
+(defn route-slice
+  "A slice of route searching for one escalate! of the go-to call id: its searches together expand at most the dig-route
+  ::max-nodes setting, and searches kept unfinished from the last one (kept-routes) go on."
+  [id]
+  {:id id :left (volatile! (settings/get dig-route/settings :jobs.lib.dig-route/max-nodes)) :asked (volatile! {})})
+
+(defn sliced-answer
+  "The answer of the dig-route search under key k in slice (start begins it: a dig-route/search), run on with what the
+  slice has left; :searching while it has not ended."
+  [{:keys [id left asked]} k start]
+  (if-let [a (get @asked k)]
+    a
+    (let [run (or (get-in @kept-routes [id k]) (start))
+          [a used] (if (pos? @left) (run @left) [nil 0])]
+      (vswap! left - used)
+      (swap! kept-routes assoc-in [id k] run)
+      (vswap! asked assoc k (or a :searching))
+      (or a :searching))))
+
+(defn searching?
+  "Whether a search slice asked is still going on."
+  [slice]
+  (boolean (some #{:searching} (vals @(:asked slice)))))
+
+(defn keep-routes!
+  "Keep for the call's next escalate! only the searches slice asked that have not ended."
+  [{:keys [id asked]}]
+  (let [open (set (keep (fn [[k a]] (when (= :searching a) k)) @asked))]
+    (swap! kept-routes #(let [m (select-keys (get % id) open)] (if (seq m) (assoc % id m) (dissoc % id))))))
+
+(defn routes-searching!
+  "Go on with the call id's searches kept unfinished (kept-routes) within one slice: whether one still has not ended.
+  The ones that end stay kept, for the next escalate!'s choice."
+  [id]
+  (let [slice (route-slice id)]
+    (doseq [[k _] (get @kept-routes id)] (sliced-answer slice k nil))
+    (searching? slice)))
+
+(defn forget-routes!
+  "Drop the kept searches of go-to call id: it has ended."
+  [id]
+  (swap! kept-routes dissoc id))
+
 (defn route-cells
   "[{:cell :block :guess}]: the cheapest cells to dig for a walk from feet cell from down or across into goal
   (jobs.lib.dig-route priced by jobs.lib.cost: a block's walk and dig-cost; at most the dig-route settings' digs and fall),
   in walking order, every one escape/diggable?, :guess on a cell not seen (read as rock); [] when nothing is left to
   dig, nil when no such route or when its digging takes the body longer than max-route-s (blocks of the body's own, a scaffold it left, not counted), with what it carries, or with
   a wooden pickaxe when fetch? (the dig fetches one, fetch-tool?), else bare-handed (a player does not punch a tunnel through rock). A floor never seen under a cell seen open may be a void: dig-route reads it as no floor,
-  unless floors-unseen-ok? (a pocket's floor shows only from inside it)."
+  unless floors-unseen-ok? (a pocket's floor shows only from inside it). With route-opts :slice (route-slice) a search
+  that spends it goes on at the next call, :searching till then; without, it ends at the node budget as no route."
   ([p from goal may-dig? own?] (route-cells p from goal may-dig? own? false false))
   ([p from goal may-dig? own? floors-unseen-ok?] (route-cells p from goal may-dig? own? floors-unseen-ok? false))
   ([p from goal may-dig? own? floors-unseen-ok? fetch?] (route-cells p from goal may-dig? own? floors-unseen-ok? fetch? nil))
-  ([p from goal may-dig? own? floors-unseen-ok? fetch? route-opts]
-  (let [block-at (memoize (escape/block-at-of p))
+  ([p from goal may-dig? own? floors-unseen-ok? fetch? {:keys [slice] :as route-opts}]
+  (let [route-opts (dissoc route-opts :slice)
+        block-at (memoize (escape/block-at-of p))
         unknown? (memoize #(dig-look/unknown? p %))
         seen-floor (fn [[x y z :as cell]]
                      (when-not (and (not floors-unseen-ok?) (unknown? cell) (dig-route/open? (block-at [x (inc y) z]))
@@ -240,27 +292,35 @@
                        (block-at cell)))
         ;; dig-cost merges the whole cost basis a call, and a search asks it of every cell
         dig-cost (memoize cost/dig-cost)
+        opts (fn [refused] (merge {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) own? cell)) (dig-cost name)))
+                                   :step-s (:cost (cost/walk-cost {:distance 1}))}
+                                  route-opts))
+        ;; the search itself reads no may-dig?: escalate!'s choices with other zone rules share it
         search (fn [refused]
-                 (:dig (dig-route/route seen-floor from goal (merge {:dig-s (fn [name cell] (when (and (not (refused cell)) (escape/diggable? block-at (constantly true) own? cell)) (dig-cost name)))
-                                                                     :step-s (:cost (cost/walk-cost {:distance 1}))}
-                                                                    route-opts))))
+                 (let [a (if slice
+                           (sliced-answer slice [from goal floors-unseen-ok? route-opts refused] #(dig-route/search seen-floor from goal (opts refused)))
+                           (dig-route/route seen-floor from goal (opts refused)))]
+                   (if (= :searching a) a (:dig a))))
         ;; may-dig? (zones, claims, plans) is asked of a found route's cells only, not of every cell the search weighs: it was
         ;; about half a search's time; a refused cell is searched round, at most route-searches times
         cells (loop [refused #{} n 1]
                 (let [cells (search refused)
-                      bad (remove #(escape/diggable? block-at may-dig? own? %) cells)]
+                      bad (when-not (= :searching cells) (remove #(escape/diggable? block-at may-dig? own? %) cells))]
                   (cond (empty? bad) cells
                         (< n route-searches) (recur (into refused bad) (inc n)))))]
-    (when (and cells
-               (<= (route-s p cells own? fetch?) (max-route-s)))
+    (cond
+      (= :searching cells) cells
+      (and cells (<= (route-s p cells own? fetch?) (max-route-s)))
       (mapv (fn [cell] {:cell cell :block (block-at cell) :guess (dig-look/unknown? p cell)}) cells)))))
 
 (defn dig-way
-  "{:step :dig-route :cells (route-cells)} when there are cells to dig, else nil."
-  [p from goal may-dig? {:keys [own? skip fetch?]}]
+  "{:step :dig-route :cells (route-cells)} when there are cells to dig, {:step :searching} while opts :slice's search
+  goes on (route-cells), else nil."
+  [p from goal may-dig? {:keys [own? skip fetch? slice]}]
   (when-not (skip :dig-route)
-    (when-let [cells (seq (route-cells p from goal may-dig? own? false fetch?))]
-      {:step :dig-route :cells (vec cells)})))
+    (let [cells (route-cells p from goal may-dig? own? false fetch? (when slice {:slice slice}))]
+      (cond (= :searching cells) {:step :searching}
+            (seq cells) {:step :dig-route :cells (vec cells)}))))
 
 (def leg-blocks
   "The most blocks along the straight line to the goal one leg of a long dig (dig-leg) reaches: its route stays within
@@ -306,18 +366,22 @@
   ([p goal] (nearest-stand p goal 0))
   ([p goal slack]
    (let [kind-at (reach/seen-lookup p reach-room/body-kind-of)
-         to-goal #(u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] goal))
-         across #(u/flat-dist {:x (% 0) :z (% 2)} {:x (goal 0) :z (goal 2)})
-         cells (->> (:cells (reach-room/flood-visit #(reach/forward kind-at %1 %2 %3) (reach/standing-vec p) reach-room/room-cells))
-                    (map vec))
-         best (reduce (fn [a b] (if (< (to-goal b) (to-goal a)) b a)) cells)]
-     (first (filter #(and (<= (to-goal %) (+ (to-goal best) slack)) (<= (across %) (+ (across best) slack))) cells)))))
+         [gx gy gz] goal
+         ;; plain arithmetic: a flood is up to room-cells cells, each weighed twice
+         across #(js/Math.hypot (- (aget % 0) gx) (- (aget % 2) gz))
+         to-goal #(js/Math.hypot (- (aget % 0) gx) (- (aget % 1) gy) (- (aget % 2) gz))
+         ^js cells (:cells (reach-room/flood-visit #(reach/forward kind-at %1 %2 %3) (reach/standing-vec p) reach-room/room-cells))
+         best (.reduce cells (fn [a b] (if (< (to-goal b) (to-goal a)) b a)))
+         near (+ (to-goal best) slack)
+         flat (+ (across best) slack)]
+     (vec (.find cells #(and (<= (to-goal %) near) (<= (across %) flat)))))))
 
 (defn goal-way
   "A free body's way into a walled-in goal: escape/choose from where it stands, or, while the cell it can walk to
   nearest the goal (nearest-stand) is more than a block nearer, from there, as
   {:step :approach :pos cell} first. Only a door, or a stair or pillar up to a higher goal, leads in (a walk along
-  the wall too, from where it stands, to a goal not below it), else the fewest cells dug (dig-way); else {:step :none :why :no-dig}."
+  the wall too, from where it stands, to a goal not below it), else the fewest cells dug (dig-way, :searching while its
+  search goes on); else {:step :none :why :no-dig}."
   [c feet goal may-dig? opts]
   (let [p (:primitives c)
         to-goal #(u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] goal))
@@ -334,7 +398,7 @@
                 :else (or (dig-way p from goal may-dig? opts)
                           (if (= :none (:step e)) e {:step :none :why :no-dig})))]
     (cond
-      (= :none (:step e)) e
+      (#{:none :searching} (:step e)) e
       here? e
       :else {:step :approach :pos near})))
 
@@ -407,21 +471,23 @@
   land (:exhausted, after the walks that looked at every edge) in a mine or cave larger than a room. Never out of
   the body's own shelter: it is shut in on purpose."
   [c tries result]
-  (and (ways/escalating? c)
-       (or (shelter-exit? c result) (not (sh-inside/sheltered-in c)))
-       (or (shelter-exit? c result)
-           (some? (gap-fill c result (skips c)))
-           (some? (drop-fill c result (skips c) (end/feet-cell c)))
-           (sprint-only? result)
-           (dive? c result)
-           (air-pocket? c result)
-           (goal-walled? c result)
-           (let [doors (some-> (:doors (:args c)) keyword)]
-             (or (and (walker-fault? result) (>= tries (max-blocked))
-                      (not (escape/door-beside? (:primitives c) (end/feet-cell c) doors)))
-                 (and (escalate-reason? result doors)
-                      (or (= :exhausted (some-> (:reason result) keyword))
-                          (escape/enclosed? (:primitives c) doors))))))))
+  (let [doors (some-> (:doors (:args c)) keyword)
+        shut? (delay (escape/enclosed? (:primitives c) doors))]
+    (and (ways/escalating? c)
+         (or (shelter-exit? c result) (not (sh-inside/sheltered-in c)))
+         ;; the cheap checks first: drop-fill and air-pocket? flood the body's land
+         (or (shelter-exit? c result)
+             (some? (gap-fill c result (skips c)))
+             (sprint-only? result)
+             (dive? c result)
+             (goal-walled? c result shut?)
+             (some? (drop-fill c result (skips c) (end/feet-cell c)))
+             (air-pocket? c result)
+             (and (walker-fault? result) (>= tries (max-blocked))
+                  (not (escape/door-beside? (:primitives c) (end/feet-cell c) doors)))
+             (and (escalate-reason? result doors)
+                  (or (= :exhausted (some-> (:reason result) keyword))
+                      @shut?))))))
 
 (defn climb-on?
   "Whether a stair that is done leaves the body still shut in (escape/enclosed?) under the goal pos: a walk could only

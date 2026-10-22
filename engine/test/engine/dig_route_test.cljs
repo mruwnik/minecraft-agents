@@ -74,3 +74,13 @@
         w (fn [c] (swap! reads conj c) (cond (#{goal (update goal 1 inc)} c) "air" (< (c 1) 64) "stone" :else "air"))]
     (is (= {:problem :budget} (dr/route w [0 64 0] goal {:dig-s (constantly 0.5) :step-s 0.2 :max-nodes 500})))
     (is (< (count @reads) 6000) "cells read: about a dozen a node expanded, not the whole box between")))
+
+(deftest a-search-run-in-slices-ends-as-one-run-does
+  (let [w (world {[20 4 6] "air" [20 5 6] "air"})
+        opts {:dig-s (constantly 0.5) :step-s 0.2}
+        run (dr/search w [0 10 0] [20 4 6] opts)
+        slices (take-while #(nil? (first %)) (repeatedly #(run 40)))]
+    (is (every? #(= 40 (second %)) slices) "a slice expands no more than it is given")
+    (is (< 3 (count slices)) "the search spans slices")
+    (is (seq (:dig (first (run 40)))))
+    (is (= (dr/route w [0 10 0] [20 4 6] (assoc opts :max-nodes 100000)) (first (run 40))))))

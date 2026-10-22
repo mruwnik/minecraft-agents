@@ -237,7 +237,7 @@
         (let [slope (apply merge (floor 63 -2 -3 47 3)
                            (for [i (range 5)] (floor (- 62 i) -2 (+ 4 i) 47 (+ 4 i))))
               {:keys [eng]} (await (go! {:blocks slope} {:pos [60 64 40]}))]
-          (is (= 64 (:y (:to (last (moved eng))))) (pr-str (map (juxt :status :to) (moved eng)))))))))
+          (is (= 64 (:y (:to (first (moved eng))))) (pr-str (map (juxt :status :to) (moved eng)))))))))
 
 (deftest go-to-never-drops-into-a-closed-pit
   (async done
