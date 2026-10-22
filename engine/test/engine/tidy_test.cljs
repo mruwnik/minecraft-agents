@@ -814,8 +814,9 @@
         result (with-redefs [reach/search (fn [& xs] (swap! searches inc) (apply search xs))
                              reach/forward (fn [& xs] (swap! nodes inc) (apply forward xs))
                              reach/backward (fn [& xs] (swap! nodes inc) (apply backward xs))
-                             reach/seen-lookup (fn ([p] (swap! lookups inc) (lookup p reach/kind-of))
-                                                 ([p kind] (swap! lookups inc) (lookup p kind)))]
+                             reach/seen-lookup (fn ([p] (swap! lookups inc) (lookup p reach/kind-of :solid))
+                                                 ([p kind] (swap! lookups inc) (lookup p kind :solid))
+                                                 ([p kind unseen] (swap! lookups inc) (lookup p kind unseen)))]
                  (f))]
     {:result result :searches @searches :nodes @nodes :lookups @lookups}))
 

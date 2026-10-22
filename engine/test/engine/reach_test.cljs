@@ -20,13 +20,15 @@
 (def mobs [(zed 1 6 0) (zed 2 0 6) (zed 3 -6 0)])
 
 (defn counting
-  "[p' reads]: p' answers as primitives p does, reads an atom of {[x y z] times blockAt was asked for that cell}."
+  "[p' reads]: p' answers as primitives p does, reads an atom of {[x y z] times blockAt or sensedAt was asked for that cell}."
   [p]
   (let [reads (atom {})
-        q (js/Object.create p)]
-    (set! (.-blockAt q) (fn [pos]
+        q (js/Object.create p)
+        counted (fn [f] (fn [pos]
                           (swap! reads update [(.-x pos) (.-y pos) (.-z pos)] (fnil inc 0))
-                          (.blockAt p pos)))
+                          (f pos)))]
+    (set! (.-blockAt q) (counted #(.blockAt p %)))
+    (set! (.-sensedAt q) (counted #(.sensedAt p %)))
     [q reads]))
 
 (defn most-reads [reads] (apply max 0 (vals @reads)))
@@ -59,6 +61,21 @@
   (let [step {"3,64,0" "stone" "4,64,0" "stone" "4,65,0" "stone" "5,64,0" "stone" "5,65,0" "stone" "5,66,0" "stone"}
         p (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks step})]
     (is (true? (reach/walkable-way? p {:x 5.5 :y 67 :z 0.5} body)) "down a stair of one-block steps")))
+
+(defn hiding
+  "p whose body has not seen cells (a set of [x y z])."
+  [p cells]
+  (let [sensed (.-sensedAt p)]
+    (tu/set-sensed! p (fn [q] (if (contains? cells [(.-x q) (.-y q) (.-z q)]) #js {:unknown true :pos q} (sensed q))))
+    p))
+
+(deftest an-arrow-flies-through-a-wall-the-body-has-not-seen
+  (let [wall {"3,64,0" "stone" "3,65,0" "stone"}
+        skeleton {:x 6.5 :y 64 :z 0.5}
+        fire? #(reach/line-of-fire? (reach/arrow-lookup %) skeleton body)]
+    (is (false? (fire? (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks wall}))) "a wall seen stops it")
+    (is (true? (fire? (hiding (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks wall}) #{[3 64 0] [3 65 0]})))
+        "the wall never looked at: a line of fire until seen")))
 
 (deftest dangers-and-nearest-danger-of-mobs-that-can-reach
   (let [p (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :entities mobs})]

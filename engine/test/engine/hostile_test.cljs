@@ -455,6 +455,15 @@
           (is (seq (mem/entries (mem/view (:store eng)) :heard-mute)) "muted")
           (is (seq (calls p "look")) "after it turned to look"))))))
 
+(defn looked-round!
+  "One perception pass of p's body facing each of the four sides, up and down: the walls, roof and floor round it seen, as
+  a look-around leaves them."
+  [p]
+  (doseq [[yaw pitch] [[0 0] [90 0] [180 0] [270 0] [0 -80] [0 80]]]
+    (swap! (fake/state p) assoc :yaw yaw :pitch pitch)
+    (perception/pass! (aget p "perception")))
+  (swap! (fake/state p) assoc :yaw 0 :pitch 0))
+
 (def wide-room
   "A 7x7 room around the body (interior -3..3), walls to y 66, roof at y 67, floor at y 63: too wide for closed quarters."
   (into {} (for [x (range -4 5) z (range -4 5) y (range 63 68)
@@ -468,7 +477,7 @@
       (fn ^:async t []
         (doseq [time [1000 14000]]
           (let [{:keys [p]} (setup-seeing {:time time :blocks wide-room :self {:health 20} :entities [(zombie 8 0)]} nil 1000)]
-            (perception/pass! (aget p "perception"))
+            (looked-round! p)
             (is (not (danger-q/danger-near? p 8 16 {})) (str "heard through the wall at time " time))))))))
 
 (deftest a-roofed-body-stays-in-for-a-phantom-it-sees-but-not-for-a-seen-zombie
@@ -848,6 +857,16 @@
 (defn holds? [world args]
   (when-hostile-near (tu/fake-on-floor world) {:data mem/empty-data :now 0} args))
 
+(defn seeing-the-void
+  "p whose body also sees the void beyond its floor (no ground there), not only the floor: a wall across the whole floor
+  then leaves no unseen way round."
+  [p]
+  (tu/set-sensed! p #(.blockAt p %))
+  p)
+
+(defn holds-seeing-the-void? [world args]
+  (when-hostile-near (seeing-the-void (tu/fake-on-floor world)) {:data mem/empty-data :now 0} args))
+
 (deftest hostile-near-needs-a-hostile-mob-within-radius
   (is (holds? {:entities [(zombie 5 0)]} {:radius 8}))
   (is (not (holds? {:entities [(zombie 5 0)]} {:radius 4})) "beyond the radius")
@@ -881,7 +900,7 @@
     plugged? (merge (tu/box 6 64 0 6 65 0 "stone"))))
 
 (deftest hostile-near-counts-a-groan-in-the-open-and-looks-in-closed-quarters
-  (let [holds-seeing #(boolean (when-hostile-near (:p (setup-seeing (assoc % :self {:pos [0.5 64 0.5]}) nil))
+  (let [holds-seeing #(boolean (when-hostile-near (doto (:p (setup-seeing (assoc % :self {:pos [0.5 64 0.5]}) nil)) looked-round!)
                                                   {:data mem/empty-data :now 0} {}))]
     (is (true? (holds-seeing {:blocks thin-stone-box :entities [(zombie 7.5 0.5)]}))
         "in the open: a zombie heard in a box counts as seen (its rough spot has a way)")
@@ -1227,15 +1246,16 @@
 
 (deftest hostile-near-ignores-a-zombie-with-no-way-to-the-body
   (is (not (holds? {:blocks zombie-pen :entities [(visible-zombie 8 0)]} danger-args)) "walled into a pen")
-  (is (not (holds? {:blocks dividing-wall :entities [(visible-zombie 8 0)]} danger-args)) "behind a wall across the floor")
-  (is (not (holds? {:blocks trench :entities [(visible-zombie 8 0)]} danger-args)) "across a trench two deep: down is fine, up is not")
+  (is (not (holds-seeing-the-void? {:blocks dividing-wall :entities [(visible-zombie 8 0)]} danger-args)) "behind a wall across the floor")
+  (is (holds? {:blocks dividing-wall :entities [(visible-zombie 8 0)]} danger-args) "behind a wall whose ends the body has not seen past: a way round may be there")
+  (is (not (holds-seeing-the-void? {:blocks trench :entities [(visible-zombie 8 0)]} danger-args)) "across a trench two deep: down is fine, up is not")
   (is (not (holds? {:blocks (cells-of "stone" (for [x [-1 0 1] z [-1 0 1] y [64 65] :when (not (and (= x 0) (= z 0)))] [x y z]))
                     :entities [(visible-zombie 5 0)]}
                    danger-args))
       "with the body sealed in"))
 
 (deftest hostile-near-holds-for-a-mob-that-hit-the-body-lately-whatever-the-way-test-says
-  (let [holds-hit-at? (fn [t] (boolean (when-hostile-near (tu/fake-on-floor {:blocks dividing-wall :entities [(visible-zombie 8 0)]})
+  (let [holds-hit-at? (fn [t] (boolean (when-hostile-near (seeing-the-void (tu/fake-on-floor {:blocks dividing-wall :entities [(visible-zombie 8 0)]}))
                                                          {:data (mem/add-entry mem/empty-data :hurt {:t t :data {:attacker {:id 7 :name "zombie"}}} {:cap 50 :ttl 60000})
                                                           :now 6000}
                                                          danger-args)))]

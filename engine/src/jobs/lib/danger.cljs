@@ -5,7 +5,8 @@
   Candidates are the mobs the body knows of (known-hostiles): the perception's mob memory, seen or heard. A heard one
   is judged by its direction and band (mob-pos), never its exact place; in closed quarters (closed-quarters?) a heard melee
   mob counts only beside the body.
-  The mobs of one query share block reads (reach/lookup) and walk proofs (reach.proofs)."
+  The mobs of one query share block reads (reach/mob-lookup, reach/arrow-lookup: the cells the body has not seen are a way
+  for the mob) and walk proofs (reach.proofs)."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [engine.entity-observations :as obs]
@@ -187,7 +188,7 @@
 
 (defn danger-in?
   "danger? reading blocks through kind-at (shared by the mobs of one query) and, with pr, sharing walk proofs. opts
-  :arrow-at is the query's shared arrow lookup (reach/lookup p reach/arrow-kind-of); without it a ranged mob builds its own.
+  :arrow-at is the query's shared arrow lookup (reach/arrow-lookup p); without it a ranged mob builds its own.
   :ignore-heard? leaves out every mob the body has not seen (a muted heard mob, jobs.lib.body/heard-muted?).
   :watched ({id blocks-off-when-watched}) leaves out those mobs while they stay beyond answered-within.
   :way? false takes a melee mob without a way to the body (on a pillar or behind a door) as one: it stands where the body's walk will land.
@@ -209,7 +210,7 @@
      (combat/ranged? e)
      (and (or (not sight?) (seen-only? e) (<= (mob-distance p e) obs/near-band))
           (or (not sight?) (seen-only? e) (not (closed-quarters? kind-at (reach/cell-of (u/pos-of (.-pos (.self p)))))))
-          (reach/line-of-fire? (or arrow-at (reach/lookup p reach/arrow-kind-of)) (mob-pos p e) (u/pos-of (.-pos (.self p)))))
+          (reach/line-of-fire? (or arrow-at (reach/arrow-lookup p)) (mob-pos p e) (u/pos-of (.-pos (.self p)))))
      :else
      (and (or (seen-mob? e) (not sight?))
           (or (not way?)
@@ -228,7 +229,7 @@
   (unless :sight? is false). A melee mob needs a walkable way to the body and, unless :sight? is false, to
   have been sensed (heard only: see danger-in?)."
   ([p e] (danger? p e {}))
-  ([p e opts] (danger-in? p (reach/lookup p) e opts)))
+  ([p e opts] (danger-in? p (reach/mob-lookup p) e opts)))
 
 (defn query-proofs [p] (proofs/proofs (reach/cell-of (u/pos-of (.-pos (.self p))))))
 
@@ -236,9 +237,9 @@
   "The hostiles of known-hostiles (same opts) that are real dangers, nearest first."
   ([p radius opts] (dangers p radius opts {}))
   ([p radius opts danger-opts]
-   (let [kind-at (reach/lookup p)
+   (let [kind-at (reach/mob-lookup p)
          pr (query-proofs p)
-         danger-opts (assoc danger-opts :arrow-at (reach/lookup p reach/arrow-kind-of))]
+         danger-opts (assoc danger-opts :arrow-at (reach/arrow-lookup p))]
      (filterv #(danger-in? p kind-at pr % danger-opts) (known-hostiles p radius opts)))))
 
 (defn nearest-danger
@@ -246,9 +247,9 @@
   mob ids to leave out. Stops at the first danger."
   [p radius opts {:keys [skip] :as danger-opts}]
   (let [skip (set skip)
-        kind-at (reach/lookup p)
+        kind-at (reach/mob-lookup p)
         pr (delay (query-proofs p))
-        danger-opts (assoc (dissoc danger-opts :skip) :arrow-at (reach/lookup p reach/arrow-kind-of))]
+        danger-opts (assoc (dissoc danger-opts :skip) :arrow-at (reach/arrow-lookup p))]
     (some #(when (and (not (contains? skip (.-id %))) (danger-in? p kind-at @pr % danger-opts)) %)
           (known-hostiles p radius opts))))
 

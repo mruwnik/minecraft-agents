@@ -79,9 +79,8 @@
 (defn lookup
   "A function (kind-at x y z) giving block-kind (default kind-of) of the block there.
   Reads state ids from p.rawWorld when there is one (state-lookup), else blockAt once per cell: the planner's raw
-  snapshot, as go-to's plans read it. For questions about the world, not the body's walk: what a mob can walk or shoot
-  through (danger), prices of a far route, and agreeing with go-to's own plan; a walk or flood the body makes itself
-  reads seen-lookup.
+  snapshot, as go-to's plans read it. For questions about the world, not the body's walk: prices of a far route, and
+  agreeing with go-to's own plan; a walk or flood the body makes itself reads seen-lookup, a mob's way mob-lookup.
   One lookup serves one query."
   ([p] (lookup p kind-of))
   ([p block-kind]
@@ -100,10 +99,11 @@
                v))))))))
 
 (defn seen-lookup
-  "As lookup, over what the body sees or remembers (u/seen-block): a cell it has not seen reads :solid, so a flood or a
-  drop edge never goes through a cell it has not looked at. One lookup serves one query."
+  "As lookup, over what the body sees or remembers (u/seen-block): a cell it has not seen reads unseen, default :solid,
+  so a flood or a drop edge never goes through a cell it has not looked at. One lookup serves one query."
   ([p] (seen-lookup p kind-of))
-  ([p block-kind]
+  ([p block-kind] (seen-lookup p block-kind :solid))
+  ([p block-kind unseen]
    (let [cache (js/Map.)
          key (volatile! nil)]
      (fn [x y z]
@@ -113,7 +113,7 @@
          (if (some? hit)
            hit
            (let [b (u/seen-block p {:x x :y y :z z})
-                 v (if (nil? b) :solid (block-kind b))]
+                 v (if (nil? b) unseen (block-kind b))]
              (.set cache k v)
              v)))))))
 
@@ -354,6 +354,17 @@
       (re-find arrow-passes name) :open
       :else :solid)))
 
+
+(defn mob-lookup
+  "seen-lookup for a mob's way to the body: a cell the body has not seen is :ground, both open and a floor to a walker
+  (passable?, standable?), so a dark cave hides no way a mob may have."
+  [p]
+  (seen-lookup p kind-of :ground))
+
+(defn arrow-lookup
+  "seen-lookup of arrow-kind-of for a ranged mob's line of fire: a cell the body has not seen lets an arrow through."
+  [p]
+  (seen-lookup p arrow-kind-of :open))
 
 (defn ray-clear?
   "Whether the segment from a to b ([x y z] numbers) crosses no :solid cell of kind-at (start and end cells do not
