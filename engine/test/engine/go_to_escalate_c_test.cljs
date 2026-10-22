@@ -279,7 +279,10 @@
         _ (dark-at dark-wall [back])]
     (is (some? back))
     (is (nil? (escape/door-back seen-wall [0 64 0])) "a wall it sees")
-    (is (= back (escape/door-back dark-wall [0 64 0])) "a wall it has not seen: go and look, not an x-ray read")))
+    (is (= back (escape/door-back dark-wall [0 64 0])) "a wall it has not seen: go and look, not an x-ray read")
+    (let [dark-door (tu/fake door-cell)]
+      (dark-at dark-door [[0 64 0]])
+      (is (nil? (escape/door-back dark-door [0 64 0])) "a door cell it has not sensed is no known door: not read through"))))
 
 (deftest drop-edges-and-nearest-stand-read-only-cells-the-body-has-seen
   (let [slab (box -3 63 -3 3 63 3 "stone")

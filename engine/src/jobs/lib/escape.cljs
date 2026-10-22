@@ -326,7 +326,8 @@
 
 (defn door-back
   "For a body in the free part of a shut door's cell feet: the cell on the free side, to step back to and look round
-  from, unless it is seen and not standable (an unseen cell is walked to and looked at) or already walked to (visited)."
+  from, unless it is seen and not standable (an unseen cell is walked to and looked at) or already walked to (visited).
+  A door cell the body has not sensed is no known door (nil): the body's own cell is felt, so this is not met live."
   ([p cell] (door-back p cell #{}))
   ([p [x y z] visited]
   (let [kind-at (reach/seen-lookup p)]
