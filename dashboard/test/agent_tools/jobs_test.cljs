@@ -456,6 +456,14 @@
           (.then (fn [result] (is (posted? result) "a second one-cell dig is not held back")))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
 
+(deftest a-memory-job-queues-behind-another-of-its-name
+  (let [state (state-dir)]
+    (async done
+      (-> (js/Promise.resolve nil)
+          (.then (fn [_] (run-main! state ["submit" "(jobs.memory.forget-place {:name \"bed\"})"] (listing-engine [{:id "j5" :name "jobs.memory.forget-place" :status :queued}]))))
+          (.then (fn [result] (is (posted? result) "forgetting another place is not held back")))
+          (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
+
 (deftest a-submit-clashing-with-another-digging-job-is-held-back-and-names-it
   (let [state (state-dir)]
     (async done
