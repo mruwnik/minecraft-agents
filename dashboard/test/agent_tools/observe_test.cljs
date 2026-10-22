@@ -1281,6 +1281,18 @@
     (is (true? (observe-status/stale-idle? idle [(job :queued)])))
     (is (true? (observe-status/stale-idle? idle [(started "look") (started "moveTo")])) "the body walked")))
 
+(deftest a-read-the-busy-body-misses-does-not-end-the-wait-before-its-deadline
+  (with-fixture ["300ms"]
+    (fn [f]
+      (let [missed (atom #{})
+            get! (fn [socket endpoint options]
+                   (if (contains? @missed endpoint)
+                     ((:get! f) socket endpoint options)
+                     (do (swap! missed conj endpoint)
+                         (js/Promise.reject (doto (js/Error. "slow") (aset "code" "ETIMEDOUT"))))))]
+        (-> (observe/wait-observe (:req f) get! nil (fn [_] (js/Promise.resolve nil)))
+            (.then (fn [result] (is (= :timeout (:wake result)) (pr-str result)))))))))
+
 (deftest a-notice-of-an-ended-job-is-stale
   (let [a (notice "j1" :build.gave-up "x")]
     (is (observe-status/stale-notice? a [(notice "j1" :build.wrong "y") (assoc (event :job :stopped) :context {:job-id "j1"})]))

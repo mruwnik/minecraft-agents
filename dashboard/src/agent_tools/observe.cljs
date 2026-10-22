@@ -81,13 +81,19 @@
   (cond-> (array-map :wake :attention :requests (:changed changes))
     (:more changes) (assoc :more? true)))
 
-(declare step)
+(declare step aborted?)
 
 (defn- read!
   "GET `endpoint` from the body's events socket as EDN, within the wait's deadline."
-  [{:keys [request get! signal deadline]} endpoint]
-  (js-await [response (get! (:socket-path request) endpoint
-                            {:signal signal :timeout-ms (max 1 (min request-timeout-ms (- @deadline (js/Date.now))))})]
+  [{:keys [request get! signal deadline] :as w} endpoint]
+  (js-await [response (-> (get! (:socket-path request) endpoint
+                                {:signal signal :timeout-ms (max 1 (min request-timeout-ms (- @deadline (js/Date.now))))})
+                          ;; A busy body can miss one 3 s read; the wait only ends at its own deadline.
+                          (.catch (fn [error]
+                                    (if (and (= "ETIMEDOUT" (code-of error)) (< (js/Date.now) @deadline) (not (aborted? w)))
+                                      (get! (:socket-path request) endpoint
+                                            {:signal signal :timeout-ms (max 1 (min request-timeout-ms (- @deadline (js/Date.now))))})
+                                      (throw error)))))]
     (when-not (and (= 200 (:status response)) (http/edn-response? (:content-type response)))
       (throw (coded (if (= 404 (:status response)) "EOBSERVEUNAVAILABLE" "EBADRESPONSE") (:text response))))
     (data/read-edn (:text response))))
