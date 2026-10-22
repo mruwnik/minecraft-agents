@@ -281,11 +281,17 @@
         lvl (sh-sense/sky-light-at p (sh-sense/feet p))]
     (or (nil? sky) (nil? lvl) (some? (sh-sense/light-in-s lvl (:t sky) 0 0)))))
 
+(defn open-to-sky?
+  "Whether the feet cell is above ground: sky light reaches it straight down (a stair step lit round a corner is not), else, with no light data, not buried."
+  [p]
+  (let [feet (sh-sense/feet p)]
+    (if (nil? (sh-sense/sky-light-at p feet)) (not (sh-sense/buried? p)) (sh-sense/sky-reaches-from-above? p feet))))
+
 (defn dark-sky
-  "Later :dark while the light at the feet is dark above ground (not sh-sense/lit-here?) and the day would lift it."
+  "Later :dark while the light at the feet is dark above ground (not sh-sense/lit-here?, open-to-sky?) and the day would lift it."
   [c]
   (let [p (:primitives c)]
-    (if (and (not (sh-sense/lit-here? p (sh-sense/feet p))) (not (sh-sense/buried? p)) (day-would-light? p))
+    (if (and (not (sh-sense/lit-here? p (sh-sense/feet p))) (open-to-sky? p) (day-would-light? p))
       (contract/later :dark "dark sky above ground, waits for light")
       (contract/ok :lit "lit or underground"))))
 

@@ -92,6 +92,10 @@
     (is (re-find #"15 64 0" (second s)) "names the place")
     (is (re-find #"until light" (second s)) "and what helps")))
 
+(deftest safe-if-lit-ignores-a-stair-step-with-stone-over-it-though-sky-light-reaches-it
+  (let [roofed (assoc open-night :blocks (tu/box -1 65 -1 1 70 1 "stone"))]
+    (is (= [:later :ok] [(lit 0 11 #(kind ready/safe-if-lit open-night)) (lit 0 11 #(kind ready/safe-if-lit roofed))]))))
+
 (deftest an-exposed-place-is-ok-while-the-stay-there-is-affordable
   (let [check (ready/safe-at (constantly outside))
         status (fn [stay-s] (lit 0 15 #(check (assoc (ctx-of open-night) ::price/stay-s stay-s))))]
@@ -614,7 +618,7 @@
       night-hut (at 15) :ok)))
 
 (deftest roaming-jobs-wait-for-dawn-above-ground
-  (are [job args] (= :later (lit 0 15 #(bound (safe-of job) night-hut args)))
+  (are [job args] (= :later (lit 0 15 #(bound (safe-of job) open-night args)))
     'jobs.food.fish {}))
 
 (deftest a-find-spot-scan-needs-no-light
