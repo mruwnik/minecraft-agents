@@ -53,7 +53,7 @@
   (case step
     :pillar ['jobs.access.pillar (cond-> {:height (:height e) :ways #{:carried} :ignore-zones? ignore-zones? :checks {:safe? '(always) :fit? '(always)}} (:item e) (assoc :use {:blocks [(:item e)]}))]
     :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :checks {:fit? '(always)} :accept #{:falling-block} :ways (ways-for fetch?) :settings {:jobs.lib.trip/spent-uses 0} :ignore-zones? ignore-zones? :need-drop (not by-hand?)}]
-    :clear-path ['jobs.access.clear-path {:checks {:fit? '(always)} :heading (:heading e) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :ways #{:carried}}]
+    :clear-path ['jobs.access.clear-path {:checks {:fit? '(always)} :heading (:heading e) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :ways #{:carried :craft}}]
     :approach ['jobs.movement.go-to {:checks {:fit? '(always)} :pos (zipmap [:x :y :z] (:pos e)) :range 0 :ways #{:walk :clear-seal}}]
     :fill-gap ['jobs.blocks.place {:pos (zipmap [:x :y :z] (:cell e)) :use {:blocks [(:item e)]} :ways #{:carried} :ignore-zones? ignore-zones?}]))
 

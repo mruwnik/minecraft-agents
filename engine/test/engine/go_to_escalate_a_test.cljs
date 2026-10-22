@@ -282,6 +282,16 @@
           (is (= 1 (count (events-of seen :go-to.by-hand))))
           (is (seq (calls p "dig"))))))))
 
+(deftest go-to-with-the-goods-for-a-pickaxe-crafts-it-instead-of-digging-a-door-by-hand
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p seen]} (await (run-job! (merge in-room {:blocks stone-room :inventory [{:name "cobblestone" :count 6} {:name "stick" :count 2} {:name "crafting_table" :count 1}]})
+                                                    {:pos [8 64 0] :range 1}))]
+          (is (= {:arrived true} @out))
+          (is (empty? (events-of seen :go-to.by-hand)))
+          (is (seq (calls p "craft"))))))))
+
 (deftest go-to-on-open-ground-never-escalates
   (async done
     (tu/run-async done

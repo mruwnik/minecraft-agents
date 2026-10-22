@@ -66,6 +66,18 @@
    :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
    :after [[:body-near [18.5 0 16.5] 2]]
    :limit-s 150}
+  {:name "sealed-stone-room-crafts-its-pickaxe-from-carried-goods"
+   :time :any
+   :plot {:height 12 :light :lit}
+   ;; no pickaxe but cobblestone, two sticks and a table: the wall is cut with a crafted stone pickaxe, never by hand
+   :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
+            [:fill [12 0 12] [20 3 20] "stone" :hollow]]
+   :body {:at [16.5 1 16.5] :inventory [["cobblestone" 6] ["stick" 2] ["crafting_table" 1]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [24 1 16] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}
+            {:no-event {:source :job :kind :go-to.by-hand} :for-s 5 :until {:source :job :kind :completed :data {:arrived true}}}]
+   :after [[:body-near [24.5 1 16.5] 2]]
+   :limit-s 150}
   {:name "built-wall-room-is-never-dug"
    ;; the same room of oak planks: a build, never dug; go-to gives up with :escalation {:step :none :why :no-dig}
    :blocks [[:fill [10 0 10] [22 3 22] "air"] [:fill [8 0 8] [26 0 26] "stone"]
