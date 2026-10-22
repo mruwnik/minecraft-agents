@@ -57,7 +57,7 @@
 (def can-run? build/plan-problem)
 
 (def defaults {:spend {:job-time ::job-time-s}})
-(def safe? (ready/safe-at-by-night work-place/spot))
+(def safe? (ready/safe-at-build work-place/spot))
 (def fit? ready/fit?)
 
 (declare cells-of wrong-shapes)

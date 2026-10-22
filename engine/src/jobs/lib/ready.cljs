@@ -187,17 +187,19 @@
 
 (defn dark-near-ok
   "safe, but a wait for light (jobs.lib.cost/exposure lowered by :light, or light too far off) is lifted to the threat check alone while the place (f c) lies
-  within sh-inside/spawn-free-radius of the feet: no mob spawns that near the body, so working there in the dark is no danger a wait lifts (dark is a danger
-  only where it is large or hides a pit)."
+  within the radius no mob spawns in round the body (cost/near-body?): a build or light job works there in the dark, which only a large dark area or a hidden pit makes a danger."
   [f safe]
   (let [dark-wait? (fn [[kind _ data]] (and (#{:later :never} kind) (= :exposed (:reason data))
                                            (or (= :never kind) (contains? (:lowered-by data) :light))))
-        near? (fn [c] (let [feet (sh-sense/feet (:primitives c))
-                            at (f c)]
-                        (or (nil? at) (<= (u/dist feet (update at :y #(or % (:y feet)))) sh-inside/spawn-free-radius))))
+        near? (fn [c] (let [at (f c)] (or (nil? at) (cost/near-body? (:primitives c) at))))
         lift (fn [g lifted] (fn [c] (let [s (g c)] (if (and (dark-wait? s) (near? c)) (lifted c) s))))]
     (with-meta (lift safe threatened)
       (update (meta safe) ::exposure #(some-> % (lift (fn [_] (contract/ok :dark-near "dark, but within the radius no mob spawns in"))))))))
+
+(defn safe-at-build
+  "safe-at-by-night for a job that builds at the place (f c): dark-near-ok."
+  [f]
+  (dark-near-ok f (safe-at-by-night f)))
 
 (def safe-at-chest
   "The checker of a job that goes to its chest (the :chest arg or the known :chest place)."

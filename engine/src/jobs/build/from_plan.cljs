@@ -101,7 +101,7 @@
 
 (def target [:plan :part])
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
-(def safe? (light/lights-itself (ready/dark-near-ok work-place/spot (ready/safe-at-by-night work-place/spot))))
+(def safe? (light/lights-itself (ready/safe-at-build work-place/spot)))
 (def fit? ready/fit?)
 
 (a/defargs settings

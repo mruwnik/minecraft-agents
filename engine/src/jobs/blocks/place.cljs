@@ -10,6 +10,8 @@
             [jobs.lib.blocks :as b]
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.torch :as torch]
             [jobs.lib.choose :as choose]
             [jobs.lib.aim :as aim]
             [jobs.lib.dig-look :as look]
@@ -65,9 +67,11 @@
 (def ways need/fetch-ways)
 
 (def safe?
-  (ready/ok-when-near (fn [c] (let [{:keys [pos error]} (b/parse (:args c))] (and (not error) (b/in-reach? c pos (:see (:args c))))))
-                      (let [place (ready/near-unseen-here (fn [c] (a/cell (:pos (:args c)))))]
-                        (ready/dark-near-ok place (ready/safe-at-by-night place)))))
+  (ready/ok-when-near (fn [c] (let [{:keys [pos error]} (b/parse (:args c))]
+                                (and (not error)
+                                     (or (b/in-reach? c pos (:see (:args c)))
+                                         (and (torch/light-items (:item (:args c))) (cost/near-body? (:primitives c) pos))))))
+                      (ready/safe-at-build (ready/near-unseen-here (fn [c] (a/cell (:pos (:args c))))))))
 
 (def fit? ready/ok)
 

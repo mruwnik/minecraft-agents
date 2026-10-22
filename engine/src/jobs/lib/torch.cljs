@@ -7,6 +7,8 @@
 
 (def torch-blocks #{"torch" "wall_torch"})
 
+(def light-items #{"torch" "soul_torch" "lantern" "soul_lantern"})
+
 (defn torches-carried [p]
   (reduce + (map :count (filter #(= "torch" (:name %)) (u/inventory p)))))
 

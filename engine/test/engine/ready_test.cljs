@@ -439,7 +439,8 @@
     open-night {:safe? light-area/safe?} {:cells [[40 64 0]]} :later
     open-night {:safe? light-area/safe?} {:cells [[15 64 0]]} :ok
     night-hut {:safe? light-area/safe?} {:cells [[6 64 0]]} :ok
-    open-night {:safe? fill-cells/safe?} {:cells [[15 64 0]]} :later
+    open-night {:safe? fill-cells/safe?} {:cells [[40 64 0]]} :later
+    open-night {:safe? fill-cells/safe?} {:cells [[15 64 0]]} :ok
     night-hut {:safe? fill-cells/safe?} {:cells [[6 64 0]]} :ok
     open-night {:safe? stair/safe?} {:submitted-at {:x 0 :y 64 :z 0}} :later
     night-hut {:safe? stair/safe?} {} :ok))
@@ -495,7 +496,7 @@
 (deftest farm-and-build-jobs-bind-the-place-of-their-args
   (doseq [job (remove '#{jobs.build.light-area jobs.build.from-plan jobs.farm.irrigate} work-jobs)]
     (are [args world expected] (= expected (lit 0 15 #(bound (safe-of job) world args)))
-      {:at [15 64 0]} night-hut :later
+      {:at [40 64 0]} night-hut :later
       {:at [6 64 0]} night-hut :ok)))
 
 (deftest irrigate-binds-its-field-once-a-field-cell-is-seen
@@ -537,11 +538,17 @@
       20 ["cow"] {:leg-s 5}
       8 :hostiles {:leg-s 10})))
 
-(deftest dark-near-ok-lifts-the-wait-for-light-only-within-the-no-spawn-radius
-  (are [to expected] (= expected (lit 0 15 #(kind (ready/dark-near-ok (constantly to) (ready/safe-at-by-night (constantly to))) open-night)))
+(deftest a-dark-build-place-within-the-no-spawn-radius-is-no-wait-for-light
+  (are [to expected] (= expected (lit 0 15 #(kind (ready/safe-at-build (constantly to)) open-night)))
     {:x 15 :y 64 :z 0} :ok
     {:x 40 :y 64 :z 0} :later))
 
+(deftest a-light-block-around-the-body-is-placed-in-the-dark
+  (are [item pos expected] (= expected (lit 0 15 #(bound place/safe? open-night {:item item :pos pos})))
+    "torch" [15 64 0] :ok
+    "lantern" [15 64 0] :ok
+    "cobblestone" [40 64 0] :later
+    "torch" [40 64 0] :later))
 
 (deftest from-plan-does-not-wait-for-light-at-a-site-in-the-no-spawn-radius
   (are [args expected] (= expected (lit 0 15 #(bound (safe-of 'jobs.build.from-plan) open-night args)))

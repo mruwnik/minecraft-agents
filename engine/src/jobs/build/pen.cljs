@@ -179,7 +179,7 @@
 
 (def ways (into [:build :patch] need/fetch-ways))
 (def defaults {:spend {:job-time ::job-time-s}})
-(def safe? (ready/safe-at-by-night work-place/spot))
+(def safe? (ready/safe-at-build work-place/spot))
 (def fit? ready/fit?)
 
 (def can-start? (cond/and plan-problem uneven-problem from-plan/no-items))

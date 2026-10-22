@@ -63,7 +63,7 @@
 (def no-shovel {:reason :no-tool :kind "shovel"})
 (def target [:from :to :center :radius])
 (def defaults {:use {:tools :shovel} :spend {:job-time ::job-time-s}})
-(def safe? (ready/safe-at-by-night work-place/spot))
+(def safe? (ready/safe-at-build work-place/spot))
 (def fit? ready/fit?)
 
 (defn span [a b] (range (min a b) (inc (max a b))))

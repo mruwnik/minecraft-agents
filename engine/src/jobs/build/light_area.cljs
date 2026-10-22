@@ -156,9 +156,7 @@
 (defn ^:async round [c]
   (await (pace/steps! c #(step! c))))
 
-(def safe?
-  (let [place (fn [c] (some->> (area c) first (zipmap [:x :y :z])))]
-    (ready/dark-near-ok place (ready/safe-at-by-night place))))
+(def safe? (ready/safe-at-build (fn [c] (some->> (area c) first (zipmap [:x :y :z])))))
 
 (def fit? ready/ok)
 

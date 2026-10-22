@@ -123,7 +123,7 @@
                             open
                             (sort-by (juxt :y #(u/dist here %)) open))))))
 
-(def safe? (ready/safe-at-by-night (ready/near-unseen-here (fn [c] (or (next-cell c (owed c)) (a/cell (first (:cells (:args c)))))))))
+(def safe? (ready/safe-at-build (ready/near-unseen-here (fn [c] (or (next-cell c (owed c)) (a/cell (first (:cells (:args c)))))))))
 
 (defn soft-ok?
   "Whether soft-reserved blocks may go in cell pos: a call in danger, at a cell where the block can be taken out safely later."

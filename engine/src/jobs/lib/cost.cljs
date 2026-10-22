@@ -39,7 +39,8 @@
             [jobs.lib.cost.value :as value]
             [jobs.lib.look :as look]
             [jobs.lib.shelter.inside :as sh-inside]
-            [jobs.lib.shelter.sense :as sh-sense]))
+            [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.util :as u]))
 
 (def equipment-of armour/equipment-of)
 (def armour-stats armour/armour-stats)
@@ -120,6 +121,12 @@
 (def light-cost value/light-cost)
 (def per-danger value/per-danger)
 (def spawn-chance value/spawn-chance)
+
+(defn near-body?
+  "Whether the cell `to` lies within sh-inside/spawn-free-radius of the body's feet: no mob spawns that near a player, so dark there is no danger to go to or work at."
+  [p to]
+  (let [feet (sh-sense/feet p)]
+    (<= (u/dist feet (update to :y #(or % (:y feet)))) sh-inside/spawn-free-radius)))
 
 (defn exposure
   "{:chance :lowered-by} of the walk of p to `to` ({:x :y :z}, a column {:x :z} at the feet's height; floored): the mob spawn chance per second it meets and
