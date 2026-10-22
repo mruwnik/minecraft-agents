@@ -32,8 +32,8 @@
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :tunnel-length}} :within-s 100 :of-job true}
             {:no-event {:source :job :kind #{:completed :stopped} :data {:stop :no-floor}} :for-s 100 :until {:source :job :kind #{:completed :stopped} :data {:stop [:any]}}}]
    :after [[:block [18 -1 16] "cobblestone"] [:not-block [20 0 16] "stone"]]}
-  ;; the tunnel's own cells are glass (drops nothing): mined stone would drop cobblestone, which the tunnel bridges with
+  ;; the whole mass is glass (drops nothing): any mined stone would drop cobblestone, which the tunnel bridges with (a player digs it from the walls)
   {:name "floor-gap-with-no-block-ends-no-floor"
-   :blocks [[:fill [17 0 16] [21 1 16] "glass"] [:fill [18 -1 16] [19 -1 16] "air"]]
+   :blocks [[:fill [2 -6 8] [30 6 24] "glass"] [:fill [16 0 16] [16 1 16] "air"] [:fill [18 -1 16] [19 -1 16] "air"]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :no-floor}} :within-s 100 :of-job true}]
    :after [[:block [18 -1 16] "air"]]}]}
