@@ -48,6 +48,15 @@
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :night}} :for-s 60}]
    :after [[:body-near [14.5 0 22.5] 2.5] [:block [19 3 22] "oak_log"]]
    :limit-s 80}
+  ;; Card 24c53a1a: in the dark (here a dark cell, at any hour) the trigger does not hold: a felling walk would leave the night's shelter.
+  {:name "part-cut-tree-trigger-waits-in-the-dark"
+   :plot {:height 24 :floor "grass_block" :light :dark}
+   :register [{:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}]
+   :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
+            [:fill [16 1 16] [16 6 16] "oak_log"] [:fill [14 5 14] [18 7 18] "oak_leaves[persistent=true]"] [:fill [16 5 16] [16 6 16] "oak_log"]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :part-cut-tree}} :for-s 30}]
+   :after [[:block [16 6 16] "oak_log"]]
+   :limit-s 40}
   {:name "part-cut-tree-trigger-leaves-a-whole-tree"
    :register [{:trigger :part-cut-tree :persistence :cooldown :cooldown-s 60}]
    :blocks [[:fill [16 0 16] [16 9 16] "air"] [:fill [14 6 14] [18 10 18] "air"]
