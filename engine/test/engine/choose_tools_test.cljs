@@ -4,6 +4,7 @@
             [engine.memory :as mem]
             [engine.test-util :as tu]
             [jobs.lib.choose :as choose]
+            [jobs.lib.tools :as tools]
             [jobs.lib.trip :as trip]))
 
 (defn tool [name left max] {:name name :count 1 :durability left :max-durability max})
@@ -84,3 +85,8 @@
     (is (= ["iron_axe" "stone_sword"] (map :item (:list (choose/tools-for c [:attack] 1 {:fast true})))))
     (is (= ["stone_sword" "stone_axe"] (map :item (:list (choose/tools-for (body [(tool "stone_axe" 50 131) (tool "stone_sword" 50 131)]) [:attack] 1 {:fast true})))) "a sword before an axe of the same material")
     (is (= ["stone_sword" "stone_axe"] (map :item (:list (choose/tools-for (body [(tool "stone_axe" 50 131) (tool "stone_sword" 50 131)]) [:attack] 1)))))))
+
+(deftest a-chore-dig-takes-the-cheap-tool-that-breaks-the-block-quickly-else-the-best
+  (let [p (tu/fake {:inventory [(tool "stone_shovel" 100 131) (tool "iron_shovel" 200 250) (tool "stone_pickaxe" 100 131) (tool "iron_pickaxe" 200 250)]})]
+    (is (= "stone_shovel" (tools/chore-tool p "dirt" ["iron_shovel" "stone_shovel"])) "dirt goes fast with stone")
+    (is (= "iron_pickaxe" (tools/chore-tool p "obsidian" ["iron_pickaxe" "stone_pickaxe"])) "nothing breaks it quickly: the best")))

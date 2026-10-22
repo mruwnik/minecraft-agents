@@ -100,15 +100,27 @@
                              (dissoc m :tool-wear)
                              (assoc m :tool-wear (cond-> now (or ev (:low-seen prev)) (assoc :low-seen true)))))))))
 
+(defn chore-tool
+  "Of fits (tool names, best first), the cheapest that breaks block-name within quick-clear-ms, else the first: a chore dig
+  (a shelter wall, a seal) is not worth wearing the best tool, whose time saved is small."
+  [p block-name fits]
+  (or (->> fits
+           (filter #(<= (js/Number (.clearTime p block-name %)) (settings/get settings ::quick-clear-ms)))
+           (sort-by weapon/cheap-rank)
+           first)
+      (first fits)))
+
 (defn ^:async equip-tool!
   "Hold the tool for digging block-name: the first jobs.lib.choose/tools-for lists (cheapest that harvests, or with
-  {:fast true} the best carried; with {:only [names]} the first of those carried that fits). Emits :tool.low / :tool.broke / :tool.none for the tool held last time (note-wear!). Does nothing
+  {:fast true} the cheapest carried that breaks the block within quick-clear-ms, else the best carried; with {:only [names]} the first of those carried that fits). Emits :tool.low / :tool.broke / :tool.none for the tool held last time (note-wear!). Does nothing
   when none is carried or it is already held. Resolves to the equip result, or nil."
   [c block-name opts]
   (let [p (:primitives c)
          _ (await (note-wear! c))
          fits (when block-name (map :item (:list (choose/tools-for c [:dig block-name] 1 opts))))
-         tool (if-let [only (seq (:only opts))] (first (filter (set fits) only)) (first fits))
+         tool (cond (seq (:only opts)) (first (filter (set fits) (:only opts)))
+                    (and (:fast opts) block-name) (chore-tool p block-name fits)
+                    :else (first fits))
          item {:name tool}]
      (when tool
        (ctx/update-mem! c assoc :tool-wear

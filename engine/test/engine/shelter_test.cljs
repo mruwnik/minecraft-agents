@@ -600,19 +600,19 @@
   [p]
   (mapv #(.-name %) (filter #(#{"dig" "equip"} (.-name %)) (.-calls (.-world p)))))
 
-(deftest dig-in-holds-the-best-pickaxe-before-each-dig
+(deftest dig-in-holds-the-cheapest-quick-pickaxe-before-each-dig
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[inventory held names]
-                [[[{:name "stone_pickaxe" :count 1} {:name "iron_pickaxe" :count 1} {:name "dirt" :count 1}] "dirt" ["equip" "dig" "dig"]]
-                 [[{:name "iron_pickaxe" :count 1}] nil ["equip" "dig" "dig"]]
-                 [[{:name "iron_pickaxe" :count 1}] "iron_pickaxe" ["dig" "dig"]]]]
+        (doseq [[inventory held names tool]
+                [[[{:name "stone_pickaxe" :count 1} {:name "iron_pickaxe" :count 1} {:name "dirt" :count 1}] "dirt" ["equip" "dig" "dig"] "stone_pickaxe"]
+                 [[{:name "iron_pickaxe" :count 1}] nil ["equip" "dig" "dig"] "iron_pickaxe"]
+                 [[{:name "iron_pickaxe" :count 1}] "iron_pickaxe" ["dig" "dig"] "iron_pickaxe"]]]
           (let [{:keys [eng p]} (setup {:time night :blocks stone-pit :inventory inventory :self {:held held}})]
             (core/submit! eng '(jobs.survival.shut-in {:ways #{:room :walls :pit} :for :night}) {})
             (await (run-until-empty eng 8))
             (is (= names (act-names p)) (pr-str inventory held))
-            (is (= "iron_pickaxe" (.-held (.self p))) (pr-str inventory held))))))))
+            (is (= tool (.-held (.self p))) (pr-str inventory held))))))))
 
 (deftest dig-in-does-not-dig-a-pit-it-cannot-harvest-with-nothing-to-roof-it
   (async done
