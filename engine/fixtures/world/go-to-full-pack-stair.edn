@@ -1,7 +1,8 @@
-;; A body sealed in a 3x1 stone pocket 5 under a goal on top of the block, carrying a stone pickaxe and a pack full of rotten flesh (35 stacks): the stair's
-;; stone drop has no slot, so go-to throws a stack of junk (make-room) and then cuts the stair and arrives; it does not end "could not dig a stair out: no free slot".
+;; A body sealed in stone 5 under a goal on top of the block, carrying a stone pickaxe and a pack full of rotten flesh (35 stacks): the stair's
+;; stone drop has no slot, so go-to digs on and leaves the stone lying (as a player does) and arrives; it does not end "could not dig a stair out: no free slot".
+;; The 3x1 pocket has cells to toss into, the 1x1 pit has none.
 ;; Dark roofed plot, stone block x 10..24, y -4..2, z 14..18; pocket x 15..17 z 16, feet y -3; the goal is on the block top 6 east.
-;; Should-succeed: make-room.tossed, go-to.escalated (:stair) and arrival. Should-fail: the call ends with escalation reason :no-free-slot.
+;; Should-succeed: go-to.escalated (:stair) and arrival. Should-fail: the call ends with escalation reason :no-free-slot.
 {:defaults
  {:tags [:movement :go-to :storage]
   :time :any
@@ -11,10 +12,17 @@
   :body {:at [16.5 -3 16.5] :settle-s 3 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64]]}
   :limit-s 300}
  :cases
- [{:name "full-pack-tosses-junk-for-the-stair-drop"
+ [{:name "full-pack-stairs-out-leaving-the-drops"
    :act [[:job (jobs.movement.go-to {:pos #at [22 3 16] :range 1})]]
-   :expect [{:event {:source :job :kind :make-room.tossed} :within-s 60 :of-job true}
-            {:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 120 :of-job true}
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 120 :of-job true}
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 280 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:cause {:reason :no-free-slot}}} :for-s 280 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-near [22.5 3 16.5] 3]]}
+  {:name "sealed-pit-full-pack-stairs-out"
+   :blocks [[:fill [15 -3 16] [17 -2 16] "stone"]
+            [:fill [16 -3 16] [16 -2 16] "air"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [22 3 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 120 :of-job true}
             {:event {:source :job :kind :completed :data {:arrived true}} :within-s 280 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:cause {:reason :no-free-slot}}} :for-s 280 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [22.5 3 16.5] 3]]}]}

@@ -11,7 +11,7 @@
     each (jobs.lib.escape/choose, over the ways the call allows), at most 3 in a row that start no nearer the goal than one before (escalation/count-escalation): standing on a stair of its own under the goal, that stair cut again when something shuts it (escalation/own-stair: a cap it put in the stair is dug, :why :own-way-blocked); else jobs.access.pillar up out of a pit when it carries enough blocks; else
     jobs.access.clear-path through a wall up to 3 thick toward the goal (into a walled-in goal no door or stair reaches:
     the fewest cells dug down or across to it, escalation/dig-way, tried first for a shut-in body, none that takes over max-route-s seconds to dig with the pickaxe it carries or would fetch; a leg of it (escalate-choose/dig-leg) is tried first when the search of a body under ground ran out of land over rock it guessed (jobs.lib.walk.world/rock-guess?) and the goal is no higher than it is across); else jobs.access.stair up out of a pit or
-    (with no free slot, a stair or wall dig first runs jobs.storage.make-room for one slot, once) toward a higher goal (as far as the goal is above, at most 8; a stair that leaves the body shut in under the goal is
+    toward a higher goal (as far as the goal is above, at most 8; a stair that leaves the body shut in under the goal is
     followed by the next escalation at once); else a walk to the nearest wall first; when no way can be made where the body stands, a walk to the nearest cell it can stand on from which one can (escape/way-spot: a body in its hut beside the doorway, whose walls it spares). Each emits go-to.escalated {:step :why :n}. Once
     through, it puts back what clear-path or stair dug in another's zone, claim or plan (with :ignore-zones?;
     its own diggings elsewhere stay) (jobs.blocks.place, the dug block or its drop, when carried): info
@@ -55,7 +55,7 @@
   [{:keys [step] :as e} tag ignore-zones? by-hand? fetch?]
   (case step
     :pillar ['jobs.access.pillar (cond-> {:height (:height e) :ways #{:carried} :ignore-zones? ignore-zones? :checks {:safe? '(always) :fit? '(always)}} (:item e) (assoc :use {:blocks [(:item e)]}))]
-    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :checks {:fit? '(always)} :accept #{:falling-block} :ways (ways-for fetch?) :settings {:jobs.lib.trip/spent-uses 0} :ignore-zones? ignore-zones? :need-drop (not by-hand?)}]
+    :stair ['jobs.access.stair {:dir :up :heading (:heading e) :steps (:steps e) :note (when-not (:own e) tag) :checks {:fit? '(always)} :accept #{:falling-block} :ways (ways-for fetch?) :settings {:jobs.lib.trip/spent-uses 0} :ignore-zones? ignore-zones? :need-drop (not by-hand?) :leave-drops true}]
     :clear-path ['jobs.access.clear-path {:checks {:fit? '(always)} :heading (:heading e) :ignore-zones? ignore-zones? :need-drop (not by-hand?) :ways #{:carried :craft}}]
     :approach ['jobs.movement.go-to {:checks {:fit? '(always)} :pos (zipmap [:x :y :z] (:pos e)) :range 0 :ways #{:walk :clear-seal}}]
     :fill-gap ['jobs.blocks.place {:pos (zipmap [:x :y :z] (:cell e)) :use {:blocks [(:item e)]} :ways #{:carried} :ignore-zones? ignore-zones?}]))
@@ -371,20 +371,6 @@
                                 (escalated! c pos e true))
       :else (escalation-failed! c pos {:step :leave-shelter :reason (:reason r) :why (:why r)}))))
 
-(defn ^:async room-for-dig!
-  "A full pack cannot take what a dug stair or wall drops: once, a jobs.storage.make-room child tosses the cheapest
-  stack, away from the way the dig goes on. :continue while it waits, else nil (memory :room-failed when it freed nothing)."
-  [c {:keys [step heading]}]
-  (let [p (:primitives c)]
-    (when (and (#{:stair :clear-path} step) (zero? (u/free-slots p)) (not (:room-failed (ctx/mem c))))
-      (let [{:keys [x z]} (u/self-pos c)
-            [dx dz] (trip/heading-steps (some-> heading name keyword) nil)
-            r (await (ctx/call c :room 'jobs.storage.make-room
-                               (cond-> {:free 1} dx (assoc :toss-from {:x (+ x (* 3 dx)) :z (+ z (* 3 dz))}))))]
-        (cond
-          (= :continue r) :continue
-          (zero? (u/free-slots p)) (do (ctx/update-mem! c assoc :room-failed true) nil))))))
-
 (defn ^:async escalation-child-round!
   "One call of the escalation child (ctx/call): the whole pillar, stair or door. After it, every planned cell now dug
   is in the ledger (note-holes!). A child that ends other than done gives up, with its cause, unless it got part of
@@ -393,8 +379,7 @@
   (let [{:keys [step] :as e} (:escalation (ctx/mem c))
         [job args] (escalation-job e (hole-tag c) (boolean (or (:exit-zone e) (:ignore-zones? (:args c)) (zone-exit? c (end/feet-cell c)))) (boolean (:by-hand (ctx/mem c))) (fetch-tool? c))
         _ (await (torch/return-torch! c))
-        room (await (room-for-dig! c e))
-        r (if (= :continue room) :continue (await (ctx/call c :escalation job (cond-> (update args :checks #(some->> % (ready/unforced c))) (= :approach step) (->> (ready/forage-walk c))))))]
+        r (await (ctx/call c :escalation job (cond-> (update args :checks #(some->> % (ready/unforced c))) (= :approach step) (->> (ready/forage-walk c)))))]
     (let [dug (concat (:planned (ctx/mem c)) (when (not= :continue r) (:dug (:data r))))]
       (forget-dug-own! c dug)
       (when-not (:own e) (note-holes! c dug)))

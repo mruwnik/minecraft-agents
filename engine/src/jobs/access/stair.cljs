@@ -59,7 +59,7 @@
 
   Needs a pickaxe and room for the drops. A call starts only when the first step is not refused, the args give a length and the next
   dig lacks nothing this call cannot get (:refused, :no-tool, :no-free-slot). Quote: steps x cells of the step x the time of a cell.
-  - A pack without room waits :no-free-slot until it changes (the make-room reflex or the caller clears it).
+  - A pack without room waits :no-free-slot until it changes (the make-room reflex or the caller clears it); :leave-drops digs on and leaves the drops.
   - A missing pickaxe is got by the jobs.blocks.dig child (the call's :ways), then the body walks back onto the line and goes on; a fetch that fails ends :no-tool with its reason as :because. :ways #{:carried} end :no-tool.
   - A root stair marks itself for the :ore-seen trigger (jobs.lib.ore-pick): exposed ore within reach is dug.
 
@@ -88,6 +88,7 @@
    :note {:doc "a map (go-to's escalation): each cell dug in another's zone, claim or plan is written to the tidy ledger at once with it (jobs.lib.escape/note-hole!), each floor placed to the scaffold ledger (take-back-floor?)" :spec map? :default nil}
    :on-lava {:doc "exposed lava: :seal (fill it with a building block, then go on) or :stop" :spec #{:seal :stop} :default :seal}
    :need-drop {:doc "false: dig a block no carried tool clears bare-handed (slow, the drop is lost) instead of waiting :no-tool; true: never; unset: bare-handed only when no pickaxe can be fetched (the ways allow none, or the fetch failed)" :spec (a/or-of boolean? #{:auto}) :default :auto}
+   :leave-drops {:doc "true: dig on with a full pack and leave the stone lying, as a player escaping does (go-to); unset: wait :no-free-slot" :spec boolean? :default false}
    :through {:doc "the id of a plan the stair works for (a mineshaft it runs down, a rail line it tunnels): its footprint is no obstacle" :spec string? :default nil}})
 
 (a/defargs settings

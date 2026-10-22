@@ -174,9 +174,10 @@
   (and (not (by-hand? c block)) (tools/needs-tool-to-clear? (:primitives c) block)))
 
 (defn drop-room?
-  "Room for block's drop, or no drop to keep: a :need-drop false dig with no tool that harvests it loses it."
+  "Room for block's drop, or no drop to keep: a :leave-drops call or a :need-drop false dig with no tool that harvests it loses it."
   [c block]
-  (or (by-hand? c block)
+  (or (:leave-drops (:args c))
+      (by-hand? c block)
       (blocks/room-for? (:primitives c) (blocks/item-name {:block block}))))
 
 (def worn-uses
