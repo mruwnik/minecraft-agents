@@ -80,8 +80,8 @@
       :else
       (do (ctx/update-mem! c assoc-in [:craft :step] step)
           (let [before (carried-of (u/inventory (:primitives c)) [(:item step)])
-                e (await (ctx/call c :craft 'jobs.items.craft {:item (:item step) :count (need/carry-count c :craft [(:item step)] (:count step)) :ways #{:carried} :avoid (:avoid (:args c)) :for-plan (:for-plan (:args c))
-                                                                    :keep-table (nil? (:for-plan (:args c)))}))]
+                e (waits/waiting-out c (await (ctx/call c :craft 'jobs.items.craft {:item (:item step) :count (need/carry-count c :craft [(:item step)] (:count step)) :ways #{:carried} :avoid (:avoid (:args c)) :for-plan (:for-plan (:args c))
+                                                                    :keep-table (nil? (:for-plan (:args c)))})))]
             (if (= :continue e)
               :continue
               (do

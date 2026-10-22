@@ -5,6 +5,7 @@
 ;; Open plot, body at [16.5 0 12.5] looking south (yaw 0); the table stands at [16 0 18].
 ;; Should-succeed: stone sword and pickaxe made with no iron seen, then the job stops no-source for the iron; a pickaxe smelted from
 ;; carried raw iron; sword and shovel from 3 ingots without nuggets; the home chest and hut blocks untouched; helmet crafted and worn.
+;; A stone pickaxe is crafted from carried logs and cobblestone (planks, sticks, then the pickaxe).
 ;; A pickaxe with 1 use left does not count as had: a fresh one is crafted beside it.
 ;; Should-fail: iron first in the list with no iron seen stops no-source at once and makes no stone tool.
 {:defaults
@@ -51,6 +52,12 @@
    :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:item "iron_pickaxe" 2] [:item "iron_ingot" 0]]
+   :limit-s 120}
+  {:name "stone-pickaxe-from-carried-logs-chains-planks-and-sticks"
+   :body {:inventory [["oak_log" 6] ["cobblestone" 5] ["cooked_beef" 3]]}
+   :act [[:job (jobs.items.get-kit {:items ["stone_pickaxe"] :explore false :food false})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:item "stone_pickaxe" 1]]
    :limit-s 120}
   {:name "home-chest-and-hut-blocks-stay"
    :blocks [[:set [20 0 14] "chest[facing=west]{Items:[{Slot:0b,id:\"minecraft:wheat_seeds\",count:64},{Slot:1b,id:\"minecraft:poppy\",count:30},{Slot:2b,id:\"minecraft:dirt\",count:64}]}"]
