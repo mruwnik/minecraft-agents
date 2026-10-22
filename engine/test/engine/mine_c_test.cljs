@@ -353,7 +353,7 @@
         (let [theirs {:name "theirs" :min [-1 63 -1] :max [1 65 1] :owner "Miles"}
               plain (await (shafted via-shaft ore-east [theirs] 400))
               forced (await (shafted (assoc via-shaft :ignore-zones? true) ore-east [theirs] 400))]
-          (is (= [{:reason :zone}] (map #(select-keys % [:reason]) (events-of plain :mine.no-shaft))))
+          (is (= #{:zone} (set (map :reason (events-of plain :mine.no-shaft)))) "every restart of the stair asks the shaft again and is refused for the zone")
           (is (not (re-find #"via shaft" (str (:text (done-event plain))))))
           (is (re-find #"via shaft s" (:text (done-event forced)))))))))
 
