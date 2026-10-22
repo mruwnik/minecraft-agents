@@ -27,7 +27,11 @@
         ;; y 61 is a cell inside the ground under x 10 (stone 60..62 under the floor), as a block's position is
         (doseq [y [67 61]]
           (let [{:keys [out p] :as s} (await (go! {:blocks (merge flat (box 9 60 -1 11 62 1 "stone"))} {:pos [10 y 0]}))]
-            (is (= {:arrived true :resolved {:x 10 :y 64 :z 0} :why :explicit} @out) (str "y " y " " (pr-str @out)))
+            (is (= {:arrived true :resolved {:x 10 :y 64 :z 0} :why :explicit :re-aimed true :aimed-at [10 64 0]
+                    :text (str "arrived at [10 64 0], the ground of the column of [10 " y " 0]; the goal cell "
+                               "had nothing to stand on in range")}
+                   @out)
+                (str "y " y " " (pr-str @out)))
             (is (near-x10? p) (str "y " y " at " (at p)))
             (is (= [{:goal {:x 10 :y y :z 0} :to {:x 10 :y 64 :z 0} :why :explicit}]
                    (mapv #(select-keys % [:goal :to :why]) (events-of s :goal-resolved)))
@@ -67,7 +71,8 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [out eng]} (await (go! {:blocks flat} {:pos [10 67 0]}))]
-          (is (= {:arrived true :resolved {:x 10 :y 64 :z 0} :why :explicit} @out))
+          (is (= {:arrived true :resolved {:x 10 :y 64 :z 0} :why :explicit :re-aimed true :aimed-at [10 64 0]}
+                 (dissoc @out :text)))
           (is (= [{:x 10 :y 64 :z 0}] (mapv :target (gt/moved eng))) "one walk, to the re-aimed cell: no walk toward y 67"))))))
 
 ;; a sealed stone pocket under a pit: x 4..6, y 56..59, z -1..1, its one open cell (5,58,0); the pit over it (no floor
@@ -264,7 +269,7 @@
         (let [mound (merge flat (box 28 64 -3 32 64 3 "stone"))
               {:keys [out p] :as s} (await (go! {:blocks mound :light [15 0] :self {:pos {:x 22 :y 64 :z 0}}}
                                                 {:pos [30 64 0] :range 0 :unknown true}))]
-          (is (= {:arrived true :resolved {:x 30 :y 65 :z 0} :why :explicit} @out) (pr-str @out))
+          (is (= {:arrived true :resolved {:x 30 :y 65 :z 0} :why :explicit :re-aimed true :aimed-at [30 65 0]} (dissoc @out :text)) (pr-str @out))
           (is (= [30 65 0] (mapv #(js/Math.floor %) (at p))))
           (is (= [{:x 30 :y 65 :z 0}] (mapv :to (events-of s :goal-resolved)))))))))
 

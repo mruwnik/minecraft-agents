@@ -62,7 +62,8 @@
     body's feet cell and :near its blocks from the goal. A failed
     escalation adds :escalation {:step :reason ...}, the child's reason or wait.
   - Success is :done with data {:arrived true}, with :resolved the cell when go-to chose the y, plus :provisional true (a column's
-    estimated y) or :stand-in true (a column with no ground known: the feet y).
+    estimated y) or :stand-in true (a column with no ground known: the feet y). A y goal moved to the ground of its column (:why :explicit)
+    adds :re-aimed true, :aimed-at the cell reached and a :text saying the goal cell was not where the body stands: a caller that needs the exact cell checks :re-aimed.
   - Every walk writes a :moved memory entry {:from :to :status :target} (arrived, partial or blocked) for
     the stuck trigger.
   - :doors (jobs.lib.pass): :shut (default) opens a shut door, gate or trapdoor with an empty hand, passes and

@@ -60,7 +60,7 @@
 (defn succeeded? [{:keys [step]} e]
   (and (= :done (:kind e))
        (case step
-         :approach (true? (:arrived (:data e)))
+         :approach (and (true? (:arrived (:data e))) (not (:re-aimed (:data e))))
          :fill-gap (boolean (:placed (:data e)))
          true)))
 

@@ -183,7 +183,7 @@
       (if (map? r) (fail! c :trapped "could not climb out of the failed pit") :continue))
     (let [e (waits/waiting-out c (await (ctx/call c :walk 'jobs.movement.go-to {:pos cell :range 0})))]
       (cond (= :continue e) :continue
-            (not (:arrived (:data e))) (fail! c :walk-failed "could not walk to ground for a pit")
+            (or (not (:arrived (:data e))) (:re-aimed (:data e))) (fail! c :walk-failed "could not walk to ground for a pit")
             :else (do (ctx/update-mem! c dissoc :walk-to)
                       (ctx/emit! c :shut-in.relocated :info {:pos cell :sites (site/failed c) :text "the last site failed; moved to dig in elsewhere"})
                       nil)))))

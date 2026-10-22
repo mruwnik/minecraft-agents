@@ -40,7 +40,7 @@
             [jobs.lib.walk.world :as wworld]
             [jobs.lib.watch :as watch]
             [jobs.movement.go-to.air :as air]
-            [jobs.movement.go-to.aim :refer [aimed here? in-seen-ground? look-along! guess-waypoint look-at-column! look-at-goal-air! hidden-in-ground? lookout pre-aim! sight-end see-cell]]
+            [jobs.movement.go-to.aim :as aim :refer [aimed here? in-seen-ground? look-along! guess-waypoint look-at-column! look-at-goal-air! hidden-in-ground? lookout pre-aim! sight-end see-cell]]
             [jobs.movement.go-to.cut :refer [approach-recorder tour tour-spent?]]
             [jobs.movement.go-to.detour :as detour]
             [jobs.movement.go-to.escalate-choose :as choose]
@@ -59,12 +59,19 @@
 (defn ^:async arrived!
   "Look round once if the place is risky (jobs.lib.watch), then finish: the next job starts facing along the walk.
   A goal whose y go-to chose (goal-pos) adds :resolved, the cell it walked to, :why it (:surface, :nearest-level, :explicit), with :provisional true when that was a
-  column's estimated y, :stand-in true when no ground of it was known."
+  column's estimated y, :stand-in true when no ground of it was known. A y goal moved up or down its column
+  (:why :explicit) adds :re-aimed true, :aimed-at the cell reached and a :text saying so, with whether the goal cell was never seen."
   [c]
   (when (tuning/look-round)
     (await (watch/watch! c {})))
-  (let [{:keys [aimed aimed-why column-open]} (ctx/mem c)]
+  (let [{:keys [aimed aimed-why column-open]} (ctx/mem c)
+        asked (when (= :explicit aimed-why) (:pos (aim/target c)))
+        moved? (and asked aimed (not= (u/cell-vec asked) (u/cell-vec aimed)))
+        cell-str (fn [p] (pr-str (u/cell-vec p)))]
     (end/finish! c (cond-> {:arrived true}
+                     moved? (assoc :re-aimed true :aimed-at (u/cell-vec aimed)
+                                   :text (str "arrived at " (cell-str aimed) ", the ground of the column of " (cell-str asked) "; the goal cell "
+                                              (if (sense/unknown? (:primitives c) (u/cell-vec asked)) "was never seen" "had nothing to stand on in range")))
                      aimed (assoc :resolved aimed)
                      (and aimed aimed-why) (assoc :why aimed-why)
                      (= :guess column-open) (assoc :provisional true)
