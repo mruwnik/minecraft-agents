@@ -86,6 +86,9 @@
     {:blocks {"0,65,0" "tall_grass"}} false]
    ["head in air"
     {} false]
+   ["sealed dry pit: roof one cell above the head, full air"
+    {:blocks {"0,66,0" "stone" "1,64,0" "stone" "1,65,0" "stone" "-1,64,0" "stone" "-1,65,0" "stone"
+              "0,64,1" "stone" "0,65,1" "stone" "0,64,-1" "stone" "0,65,-1" "stone"}} false]
    ;; feet y is not an integer on farmland, slabs, paths: the eyes are 1.62 above the feet
    ["on farmland inside ripe wheat"
     {:self {:pos {:x 0 :y 64.9375 :z 0}} :blocks {"0,64,0" "farmland" "0,65,0" "wheat"}} false]
