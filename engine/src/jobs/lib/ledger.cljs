@@ -148,6 +148,13 @@
   (into [] (remove #(respawn-bed-entry? view %))
         (:entries (:data (mem/latest view kind)))))
 
+(defn without-cells
+  "The ledger of a body-memory view, the respawn bed too, less the entries at cells; nil when none is there."
+  [view cells]
+  (let [all (:entries (:data (mem/latest view kind)))]
+    (when (some #(contains? cells (:cell %)) all)
+      (filterv #(not (contains? cells (:cell %))) all))))
+
 (defn write!
   "Store l in body-memory store."
   [store l]

@@ -201,10 +201,17 @@
 
 ;; ------------------------------------------------------------------ steps
 
+(defn adopt-scaffold!
+  "A ledger block standing where the plan wants it is the plan's wall now: out of the ledger, so no cleanup digs it."
+  [c cells]
+  (when-let [l (ledger/without-cells (ctx/view c) (set (map :pos (filter #(= :match (:answer %)) cells))))]
+    (ledger/remember! c l)))
+
 (defn ^:async build-step!
   "One step of the build (:again, or :continue while a walk waits): place or dig what is in reach, else walk, else finish."
   [c cells]
-  (let [_ (ctx/update-mem! c retry-walks (u/self-pos c) false)
+  (let [_ (adopt-scaffold! c cells)
+        _ (ctx/update-mem! c retry-walks (u/self-pos c) false)
         _ (ctx/update-mem! c #(reduce (fn [m cell] (cond-> m (not (contains? (:given-up m) (:pos cell))) (assoc-in [:given-up (:pos cell)] :unreachable)))
                                       % (covered (:primitives c) cells (js/Math.floor (:y (u/self-pos c))) (set (:bad-stands (ctx/mem c))))))
         closed #(merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
