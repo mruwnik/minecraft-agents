@@ -161,6 +161,15 @@
           (is (= "dirt" (block p [1 63 0])))
           (is (= [[2 63 0]] (mapv :cell (:cells skipped))) "nothing left to put back the third"))))))
 
+(deftest go-to-tosses-junk-for-a-slot-when-the-pack-is-full-before-digging-its-door
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pack (into [{:name "stone_pickaxe" :count 1}] (repeat 35 {:name "rotten_flesh" :count 64}))
+              {:keys [out p]} (await (run-job! (merge in-room {:blocks stone-room :inventory pack}) {:pos [8 64 0] :range 1}))]
+          (is (= {:arrived true} @out) "a full pack does not stop the dig: a stack of junk is thrown for the drop")
+          (is (seq (calls p "toss"))))))))
+
 (def lake-pocket
   "A dry 3-deep pocket (feet y 60) in stone x -2..70, y 56..62; the only walk out is a 60-block water tunnel (y 60..61) east to a surface cell, longer than a breath."
   (merge (apply dissoc (box -2 56 -3 70 62 3 "stone") ["0,60,0" "0,61,0" "0,62,0"]) (box 1 60 0 60 61 0 "water") {"60,62,0" "water"}))

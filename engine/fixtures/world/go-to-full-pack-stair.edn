@@ -1,0 +1,20 @@
+;; A body sealed in a 3x1 stone pocket 5 under a goal on top of the block, carrying a stone pickaxe and a pack full of rotten flesh (35 stacks): the stair's
+;; stone drop has no slot, so go-to throws a stack of junk (make-room) and then cuts the stair and arrives; it does not end "could not dig a stair out: no free slot".
+;; Dark roofed plot, stone block x 10..24, y -4..2, z 14..18; pocket x 15..17 z 16, feet y -3; the goal is on the block top 6 east.
+;; Should-succeed: make-room.tossed, go-to.escalated (:stair) and arrival. Should-fail: the call ends with escalation reason :no-free-slot.
+{:defaults
+ {:tags [:movement :go-to :storage]
+  :time :any
+  :plot {:height 14 :length 40 :light :dark}
+  :blocks [[:fill [10 -4 14] [24 2 18] "stone"]
+           [:fill [15 -3 16] [17 -2 16] "air"]]
+  :body {:at [16.5 -3 16.5] :settle-s 3 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64] ["rotten_flesh" 64]]}
+  :limit-s 300}
+ :cases
+ [{:name "full-pack-tosses-junk-for-the-stair-drop"
+   :act [[:job (jobs.movement.go-to {:pos #at [22 3 16] :range 1})]]
+   :expect [{:event {:source :job :kind :make-room.tossed} :within-s 60 :of-job true}
+            {:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 120 :of-job true}
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 280 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:cause {:reason :no-free-slot}}} :for-s 280 :until {:source :job :kind #{:completed :stopped}}}]
+   :after [[:body-near [22.5 3 16.5] 3]]}]}
