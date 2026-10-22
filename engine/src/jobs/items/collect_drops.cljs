@@ -35,7 +35,7 @@
   the body has seen the floor under it solid and safe and the cells round it (no lava, fluid or cave opening, nothing
   hazardous beside it), the walk dropping one block at most; else it is left, with a debug collect-drops.left
   {:pos :reason :unseen-floor|:unseen-cell|:unsafe-floor|:too-deep}. A drop still falling is judged at rest.
-  With :search, when fewer than the call's :least (default 1) items (those named in :least-items, else any) were collected and no item is in sight (trunks or terrain hide drops), the body walks (a go-to child)
+  With :search, when fewer than the call's :least (default 1) items (those named in :least-items, else any; a gain of :least-items in the inventory since the start counts, so a drop that flew to the body ends the search) were collected and no item is in sight (trunks or terrain hide drops), the body walks (a go-to child)
   to standable cells round the anchor, nearest first (a cell whose floor is unseen counts when nothing seen forbids it: walking there is how it gets looked at; not behind a seen solid block on the way from the anchor, which is rock), and looks again at each, until an item is seen or the cells within :search
   blocks are tried. Underground a walk goes on at night; a search that go-to made wait :search-waits calls in a row ends with :reason :search-waited.
   While it runs it holds its work area (jobs.lib.loose :collecting), so the :loose-items reflex leaves those drops to it.
@@ -69,7 +69,7 @@
 
 (def defaults {:least 1})
 
-(declare radius-of)
+(declare radius-of held-count)
 
 (defn place
   "Where the job goes: the cell of the nearest seen item it is after, nil when none is in sight (a search for unseen ones roams)."
@@ -409,9 +409,12 @@
     (->> by-column (map first) (sort-by #(u/dist (u/self-pos c) %)))))
 
 (defn wanted-count
-  "How many of the :least-items came in."
+  "How many of the :least-items came in: what the acts booked, or more when the inventory gained more of them since the job
+  began (a drop that flies to the body while it searches)."
   [c]
-  (:wanted (ctx/mem c) 0))
+  (let [m (ctx/mem c)]
+    (max (:wanted m 0)
+         (reduce + 0 (for [[n start] (:start-held m)] (max 0 (- (held-count c n) start)))))))
 
 (defn least
   "The call's :least as a number (:all: no number is enough, the search tries every cell)."
@@ -487,8 +490,13 @@
   (loose/release! c)
   (ctx/end c :done nil))
 
+(defn collected-count
+  "Items that entered the inventory: booked by the acts, or the :least-items gained since the start when more (wanted-count)."
+  [c]
+  (max (:collected (ctx/mem c) 0) (wanted-count c)))
+
 (defn data-of [c]
-  (cond-> {:collected (:collected (ctx/mem c) 0)}
+  (cond-> {:collected (collected-count c)}
     (seq (:left (ctx/mem c))) (assoc :left (:left (ctx/mem c)))))
 
 (defn none-text
@@ -509,7 +517,7 @@
       (do (await (ctx/act c :wait #js {:ms (settings/get settings ::expect-wait-ms)}))
           (ctx/update-mem! c update :expect-tries (fnil inc 0))
           :again)
-      (and (zero? (:collected m 0)) (or (seq (:skipped m)) (pos? (:search (:args c))) (:near (:args c))))
+      (and (zero? (collected-count c)) (or (seq (:skipped m)) (pos? (:search (:args c))) (:near (:args c))))
       (ctx/end c :nothing-possible :none-collected (cond-> (data-of c) (:near (:args c)) (assoc :text (none-text c))))
       :else (ctx/end c :done nil (data-of c)))))
 
@@ -665,7 +673,7 @@
   [c]
   (let [anchor (or (:anchor (ctx/mem c))
                    (let [a (or (:near (:args c)) (u/self-pos c))]
-                     (ctx/update-mem! c assoc :anchor a)
+                     (ctx/update-mem! c assoc :anchor a :start-held (into {} (map (juxt identity #(held-count c %))) (:least-items (:args c))))
                      (loose/hold! c a (radius-of c))
                      a))]
     (await (pace/steps! c #(step! c anchor)))))

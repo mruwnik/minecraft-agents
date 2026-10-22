@@ -10,6 +10,7 @@
             [engine.fake :as fake]
             [engine.test-util :as tu]
             [jobs.items.collect-drops :as job-ns]
+            [jobs.lib.child :as child]
             [jobs.lib.loose :as loose]
             [jobs.lib.shelter.sense :as sh-sense]))
 
@@ -290,6 +291,23 @@
                                                          :near {:x 4 :y 64 :z 0} :search 3 :least 1} 80))]
             (is (= 2 (:collected result)))
             (is (= 1 (bd/carried p "oak_log")))))))))
+
+(deftest a-least-item-that-flies-to-the-body-while-it-searches-ends-the-search
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self body})
+              walks (atom 0)
+              walk-and-catch (let [f (fn [_ _ _ _]
+                                       (swap! walks inc)
+                                       (swap! (fake/state p) fake/give "oak_log" 1)
+                                       (js/Promise.resolve :continue))]
+                               (aset f "cljs$core$IFn$_invoke$arity$4" f)
+                               f)
+              result (with-redefs [child/run!* walk-and-catch]
+                       (await (tu/child-outcome eng job {:radius 6 :items ["oak_log"] :least-items ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3 :least 1} 60)))]
+          (is (= [:done 1] ((juxt :status :collected) result)))
+          (is (= 1 @walks) "no second search walk once the log came in"))))))
 
 (deftest ids-not-in-sight-are-left-unseen
   (async done

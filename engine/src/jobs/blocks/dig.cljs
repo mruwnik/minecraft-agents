@@ -294,9 +294,10 @@
 (defn ^:async collect!
   "Pick up the dug block's drops (jobs.items.collect-drops child); :continue while it waits, else the call's ending."
   [c pos]
-  (let [{:keys [block ids want]} (:dug (ctx/mem c))
+  (let [{:keys [block ids want names]} (:dug (ctx/mem c))
         r (await (child/run!* c :collect 'jobs.items.collect-drops (cond-> {:radius (collect-radius) :ids ids :holes [pos]}
-                                                                               (pos? want) (assoc :search search-blocks :least want))))]
+                                                                               (pos? want) (assoc :search search-blocks :least want)
+                                                                               (and (pos? want) (seq names)) (assoc :least-items names))))]
     (if (= :continue r)
       :continue
       (let [res (:data r)]
@@ -344,7 +345,8 @@
         status (.-status r)
         ids (vec (keep #(.-id %) (array-seq (or (.-drops r) #js []))))]
     (case status
-      "dug" (do (ctx/update-mem! c assoc :dug {:block block :ids ids :want (drops-wanted (.-drops r) before (u/inventory (:primitives c)))}) :collect)
+      "dug" (do (ctx/update-mem! c assoc :dug {:block block :ids ids :names (vec (distinct (keep #(.-name %) (array-seq (or (.-drops r) #js [])))))
+                                               :want (drops-wanted (.-drops r) before (u/inventory (:primitives c)))}) :collect)
       "missing" (finish! c {:dug false :pos pos :block block :reason :already-clear})
       "cannot" (finish! c {:dug false :pos pos :block block :reason :cannot})
       "unreachable" :unreachable
