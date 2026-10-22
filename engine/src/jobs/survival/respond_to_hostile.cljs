@@ -140,14 +140,16 @@
          (str " heard " (name band) ", " (name direction)))
        (changed-text prev entry)))
 
-(defn log-encounter! [c threat decision]
-  (when-not (:logged (ctx/mem c))
+(defn log-encounter!
+  "One :hostile entry and event for each change of decision in a run (a fight turned flight is said, with the health)."
+  [c threat decision]
+  (when-not (= decision (:logged (ctx/mem c)))
     (let [prev (:data (mem/latest (ctx/view c) :hostile))
           entry (assoc (threats/place-of (:primitives c) threat) :mob (.-name threat) :decision decision
                        :health (js/Math.round (.-health (.self (:primitives c)))))]
       (ctx/remember! c :hostile entry hostile-policy)
       (ctx/emit! c :hostile.decided :info (assoc (dissoc entry :from) :text (encounter-text entry prev))))
-    (ctx/update-mem! c assoc :logged true)))
+    (ctx/update-mem! c assoc :logged decision)))
 
 (defn fight-struck
   "What the fight counted per mob: the running child's (hostile/struck), else the last declined ending's."

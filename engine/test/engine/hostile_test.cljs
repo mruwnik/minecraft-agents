@@ -1586,3 +1586,15 @@
     {:damageType "minecraft:fall"} false
     {:damages [{:damageType "minecraft:magic"} {:damageType "minecraft:fall"}]} false
     {:damages [{:damageType "minecraft:magic"} {:attacker {:name "spider"}}]} true))
+
+(deftest a-fight-turned-flight-in-one-run-says-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:self {:health 20} :inventory sword :entities [(zombie 3 0)]})
+              eng (assoc-in eng [:jobs 'jobs.combat.attack]
+                            {:round (fn ^:async f [_c] (fake/swap-self! p assoc :health 6) :continue)})]
+          (core/submit! eng respond {})
+          (dotimes [_ 3] (await (core/tick! eng)))
+          (is (= [:fight :flee] (mapv :decision (decided seen))) "each change of decision is one event")
+          (is (re-find #"earlier fight at 20 hp, now 6 hp" (:text (last (filter #(= :hostile.decided (:kind %)) @seen))))))))))
