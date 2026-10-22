@@ -7,9 +7,9 @@ import { furnaceVisit } from './furnace.mjs'
 import { enchantVisit } from './enchant.mjs'
 import { craftItem } from './craft.mjs'
 import { tradeWith } from './trade.mjs'
-import { CONTAINER, DESTS, sleepMs, dist, center, isNum, isPos, cell, vec, cutError, need } from './prim-base.mjs'
+import { CONTAINER, DESTS, sleepMs, dist, center, isNum, isPos, cell, vec, cutError, need, entityKind } from './prim-base.mjs'
 import { setting } from './settings.mjs'
-import { noteToss } from './live-entities.mjs'
+import { noteToss, liveEntities } from './live-entities.mjs'
 
 export function createItems (env) {
   const { act, isOwner, eye, inventory, timeScale } = env
@@ -222,13 +222,15 @@ export function createItems (env) {
     const p = cell(a.pos)
     const waitS = a.timeoutS ?? setting('prim/fish-wait-s')
     const count = () => { const m = {}; for (const i of inventory()) m[i.name] = (m[i.name] ?? 0) + i.count; return m }
-    return act(token, { boundS: waitS + 5 }, async ctx => {
+    return act(token, { boundS: waitS + 15 }, async ctx => {
       const rod = inventory().find(i => i.name === 'fishing_rod')
       if (!rod) return { status: 'no-rod' }
       const there = env.bot.blockAt(vec(p))
       if (!there || there.name !== 'water') return { status: 'no-water' }
-      if (dist(eye(), center(p)) > setting('prim/fish-reach')) return { status: 'unreachable' }
+      const away = dist(eye(), center(p))
+      if (away > setting('prim/fish-reach')) return { status: 'unreachable', reason: `the cast cell is ${away.toFixed(1)} blocks from the eye, reach ${setting('prim/fish-reach')}` }
       const before = count()
+      const seen = new Set(liveEntities(env.bot).map(e => e.id))
       ctx.onAbort(() => env.bot.deactivateItem())
       await env.bot.equip(rod, 'hand')
       ctx.alive()
@@ -250,8 +252,16 @@ export function createItems (env) {
         await sleepMs(setting('prim/poll-ms') * timeScale)
         ctx.alive()
       }
+      // The catch is thrown toward the body and can sink short of the bank: go and get it.
+      const landed = () => liveEntities(env.bot).filter(e => entityKind(e) === 'item' && !seen.has(e.id) && dist(e.position, center(p)) <= setting('prim/fish-catch-radius'))
+      let lost = false
+      for (const e of landed()) {
+        if (gained()) break
+        lost = (await env.fetchDrop(ctx, e.id)) !== null || lost
+      }
       const got = gained()
-      return got ? { status: 'caught', item: got[0], count: got[1] - (before[got[0]] ?? 0) } : { status: 'nothing' }
+      if (got) return { status: 'caught', item: got[0], count: got[1] - (before[got[0]] ?? 0) }
+      return lost ? { status: 'lost', reason: 'the catch landed in the water and was not picked up' } : { status: 'nothing' }
     })
   }
 

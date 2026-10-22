@@ -319,6 +319,41 @@ export function createDig (env) {
     return !now || inPickupReach(now)
   }
 
+  // Walks to the dropped item `id` and waits for the pickup; returns null once the item is gone from the world (picked up), else the failing result.
+  const fetchDrop = async (ctx, id, maxDropDown) => {
+    const target = liveEntity(env.bot, id)
+    if (!target || entityKind(target) !== 'item') return { status: 'gone' }
+    let approaches = 0
+    let inReachSince = null
+    let settles = 0
+    while (liveEntity(env.bot, id)) {
+      const item = liveEntity(env.bot, id)
+      if (inPickupReach(item)) {
+        inReachSince ??= Date.now()
+        if (Date.now() - inReachSince > PICKUP_WAIT_S * 1000 * timeScale) return { status: 'unreachable', reason: 'not-picked-up' }
+        await sleepMs(setting('prim/poll-ms') * timeScale)
+        ctx.alive()
+        continue
+      }
+      inReachSince = null
+      if (approaches >= MAX_APPROACHES) return { status: 'unreachable', reason: 'out-of-reach' }
+      const p = { x: item.position.x, y: item.position.y, z: item.position.z }
+      // maxDropDown caps the walk's drops (a dug hole's drop: the walk plans on the raw world, a deeper drop lands on a floor never seen)
+      const { reached } = await walk(ctx, new goals.GoalNear(p.x, p.y, p.z, approaches === 0 ? 1 : 0), { stall: false, maxDropDown })
+      const now = liveEntity(env.bot, id)
+      // An item just dropped can still be popping out of a block or falling: a walk to where it was fails, a walk to where it lands does not.
+      if (!reached && now && settles < MAX_SETTLES && (dist(now.position, p) > 0.1 || now.onGround === false)) {
+        settles++
+        await sleepMs(setting('prim/poll-ms') * timeScale)
+        ctx.alive()
+        continue
+      }
+      approaches++
+      if (!reached && now && !(await nudgeToItem(ctx, id))) return { status: 'unreachable' }
+    }
+    return null
+  }
+
   const collect = async (token, a = {}) => {
     if (!isOwner(token)) throw cutError()
     need(isNum(a.id), 'collect needs an entity id')
@@ -326,39 +361,12 @@ export function createDig (env) {
     const before = countsNow()
     const result = (status, reason) => ({ status, ...(reason && { reason }), gained: gained(before, countsNow()) })
     return act(token, { boundS: Math.min(timeoutS, 20), onTimeout: () => result('timeout') }, async ctx => {
-      const target = liveEntity(env.bot, id)
-      if (!target || entityKind(target) !== 'item') return { status: 'gone' }
-      let approaches = 0
-      let inReachSince = null
-      let settles = 0
-      while (liveEntity(env.bot, id)) {
-        const item = liveEntity(env.bot, id)
-        if (inPickupReach(item)) {
-          inReachSince ??= Date.now()
-          if (Date.now() - inReachSince > PICKUP_WAIT_S * 1000 * timeScale) return result('unreachable', 'not-picked-up')
-          await sleepMs(setting('prim/poll-ms') * timeScale)
-          ctx.alive()
-          continue
-        }
-        inReachSince = null
-        if (approaches >= MAX_APPROACHES) return result('unreachable', 'out-of-reach')
-        const p = { x: item.position.x, y: item.position.y, z: item.position.z }
-        // maxDropDown caps the walk's drops (a dug hole's drop: the walk plans on the raw world, a deeper drop lands on a floor never seen)
-        const { reached } = await walk(ctx, new goals.GoalNear(p.x, p.y, p.z, approaches === 0 ? 1 : 0), { stall: false, maxDropDown })
-        const now = liveEntity(env.bot, id)
-        // An item just dropped can still be popping out of a block or falling: a walk to where it was fails, a walk to where it lands does not.
-        if (!reached && now && settles < MAX_SETTLES && (dist(now.position, p) > 0.1 || now.onGround === false)) {
-          settles++
-          await sleepMs(setting('prim/poll-ms') * timeScale)
-          ctx.alive()
-          continue
-        }
-        approaches++
-        if (!reached && now && !(await nudgeToItem(ctx, id))) return result('unreachable')
-      }
+      const end = await fetchDrop(ctx, id, maxDropDown)
+      if (end) return end.status === 'gone' ? end : result(end.status, end.reason)
       const got = gained(before, countsNow())
       return got.length ? { status: 'collected', gained: got } : { status: 'gone', gained: [] }
     })
   }
-  return { dig, place, collect, digTime, clearTime, harvestTools }
+
+  return { dig, place, collect, fetchDrop, digTime, clearTime, harvestTools }
 }

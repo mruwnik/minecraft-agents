@@ -15,6 +15,11 @@
             {:event {:source :job :kind :completed :data {:name "jobs.food.fish"}} :within-s 175 :of-job true}]
    :after [[:item "fishing_rod" 1]]
    :limit-s 185}
+  {:name "primitive-cast-from-three-blocks-back-reels-the-catch-into-the-pack"
+   :body {:at [9.5 0 16.5] :inventory [["fishing_rod" 1]]}
+   :act [[:job (jobs.primitive.fish {:pos #xyz [12 -1 16] :timeoutS 120})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.primitive.fish"}} :within-s 125 :of-job true}]
+   :limit-s 135}
   {:name "no-rod-and-no-fetch-waits-no-rod"
    :act [[:job (jobs.food.fish {:count 1 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :no-rod}} :within-s 30 :of-job true}
