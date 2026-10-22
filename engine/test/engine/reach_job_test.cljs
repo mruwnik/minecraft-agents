@@ -13,6 +13,13 @@
 
 (def edge-floor (box 0 63 -2 1 63 2 "stone"))
 
+(deftest stands-are-the-cells-of-a-walk-over-seen-ground
+  (let [p (tu/fake {:blocks edge-floor :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        sensed (.-sensedAt p)
+        _ (aset p "sensedAt" (fn [q] (if (= 1 (.-x q)) #js {:unknown true} (sensed q))))]
+    (is (some #{[0 64 0]} (reach/stands p)))
+    (is (not-any? #(= 1 (first %)) (reach/stands p)) "the column x 1 never seen: no stand there, not read off the true world")))
+
 (deftest gap-along-reads-the-floor-cells-ahead
   (let [blocks (merge edge-floor (box 5 63 -2 8 63 2 "stone"))
         at (block-at-of-map blocks)

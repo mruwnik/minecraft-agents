@@ -82,9 +82,9 @@
   (mapv #(js/Math.floor %) (let [{:keys [x y z]} (u/self-pos c)] [x y z])))
 
 (defn stands
-  "The cells [x y z] the body can walk to (a flood of at most reach-room/room-cells cells)."
+  "The cells [x y z] the body can walk to over cells it has seen (a flood of at most reach-room/room-cells cells)."
   [p]
-  (let [kind-at (reach/lookup p reach-room/body-kind-of)]
+  (let [kind-at (reach/seen-lookup p reach-room/body-kind-of)]
     (map vec (:cells (reach-room/flood-visit #(reach/forward kind-at %1 %2 %3) (reach/standing-vec p) reach-room/room-cells)))))
 
 (defn approach
