@@ -1,0 +1,15 @@
+;; Card 0796211e: an exclusive go-to (reflexes paused) with a zombie two blocks behind must not march off with it at the heels
+;; (the straight way leads away, but the zombie keeps up and hits all the way); it stops :hostile-near, naming the hostile.
+;; Should-succeed: the call stops :hostile-near and the body has not left its start. Should-fail (old code): the walk started west and went on.
+{:defaults
+ {:tags [:movement :hostile]
+  :time :any
+  :plot {:light :dark :height 6}
+  :body {:at [24.5 0 16.5]}
+  :limit-s 40}
+ :cases
+ [{:name "exclusive-go-to-stops-with-a-zombie-at-the-heels"
+   :act [[:summon "zombie" [26.5 0 16.5] "{NoAI:1b}"]
+         [:http :submit (jobs.movement.go-to {:pos #at [10.5 0 16.5]}) [:exclusive] {:ok true}]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :hostile-near}} :within-s 20}]
+   :after [[:body-near [24.5 0 16.5] 3]]}]}

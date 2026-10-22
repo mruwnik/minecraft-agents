@@ -36,6 +36,8 @@
                          :doc "Blocks under the feet from which an unseen place with a seen roof over it counts as underground: no look asks for it and waiting for dawn does not light it."}
    ::unseen-judged-here-within {:default 6 :spec (a/num-in 0 nil)
                                 :doc "Blocks: an unseen place this near the feet is judged where the body stands (no look shows a cell behind a wall)."}
+   ::catch-reach {:default 3 :spec (a/num-in 0 nil)
+                  :doc "Blocks within which a known hostile, or one whose blow hurt the body lately, keeps up with a walk and hits it on the way: no walk leads away from it (leads-away?)."}
    ::crowd-radius {:default 16 :spec (a/num-in 0 nil)
                    :doc "Blocks within which the real dangers the body knows of all count in the fight a long stay meets (outmatched): beyond the hostile-near radius they still come."}})
 
@@ -126,11 +128,20 @@
   [c]
   (or (some #(when (= :hostile-near (:trigger %)) (:args %)) (:register (some-> (:engine c) :state deref))) {}))
 
+(defn nearest-text
+  "\": <the nearest known hostile in words>\" for the hostile-near radii of c's trigger entry, \"\" when none is known."
+  [c]
+  (let [p (:primitives c)
+        args (trigger-args c)]
+    (if-let [e (first (danger/known-hostiles p (danger/radius-in args) {:ranged-radius (danger/ranged-radius-in args)}))]
+      (str ": " (dawn/hostile-text [(dawn/describe p e)]))
+      "")))
+
 (defn threatened
   "Later :hostile-near while the hostile-near trigger would hold (the radii and options of its register entry)."
   [c]
   (if (check-cache/cached c ::threatened #(danger/hostile-near? (:primitives c) (ctx/view c) (trigger-args c)))
-    (contract/later :hostile-near "a hostile is near")
+    (contract/later :hostile-near (str "a hostile is near" (nearest-text c) ": deal with it first (an exclusive run pauses the hostile reflex)"))
     (contract/ok :no-hostile-near "no hostile near")))
 
 (defn unarmed-threatened
@@ -173,15 +184,19 @@
 
 (defn leads-away?
   "Whether the straight walk from the body to `goal` ({:x :y :z}) never takes it nearer to any hostile it knows within the
-  hostile-near radii, and there is one: a player walks away from a danger."
+  hostile-near radii, and there is one, and none is within ::catch-reach or has hurt the body lately (it keeps up and hits
+  all the way): a player walks away from a danger, and fights one at their heels."
   [c goal]
   (let [p (:primitives c)
         args (trigger-args c)
+        hit (danger/hit-ids (ctx/view c))
         body (u/pos-of (.-pos (.self p)))
         goal (update goal :y #(or % (:y body)))
         near (danger/known-hostiles p (danger/radius-in args) {:ranged-radius (danger/ranged-radius-in args)})]
     (and (seq near)
-         (every? (fn [e] (>= (danger/way-distance body goal (danger/mob-pos p e)) (- (danger/mob-distance p e) 0.5)))
+         (every? (fn [e] (and (>= (danger/way-distance body goal (danger/mob-pos p e)) (- (danger/mob-distance p e) 0.5))
+                              (>= (danger/mob-distance p e) (settings/get settings ::catch-reach))
+                              (not (contains? hit (.-id e)))))
                  near))))
 
 (defn threatened-walking

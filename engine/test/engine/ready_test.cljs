@@ -319,6 +319,12 @@
       nil :later)
     (is (= :later (first (walk (ctx-of (merge at-origin {:time st/noon :entities [zombie]}))))) "no goal: the plain threat")))
 
+(deftest a-hostile-at-the-heels-is-no-walk-away
+  (let [close (assoc zombie :pos {:x 2 :y 64 :z 0})
+        [kind-of text] (ready/threatened-walking (ctx-of (merge at-origin {:entities [close]})) {:x -8 :y 64 :z 0})]
+    (is (= :later kind-of))
+    (is (re-find #"zombie seen, 2 blocks off" text) "the refusal names the hostile")))
+
 (deftest safe-at-adds-the-threat-to-the-exposure
   (is (= :later (kind (ready/safe-at (constantly {:x 1 :y 64 :z 0}))
                       {:time st/noon :self {:pos {:x 0 :y 64 :z 0}} :entities [zombie]}))))

@@ -46,7 +46,7 @@
     goal it cannot reach taken back, one jobs.access.cleanup child a call), :pillar (a pillar, a gap filled with a
     block), :clear-path (a door dug through a wall), :stair (a stair up, its own stair cut again) and :dig-out (out of
     its own shelter).
-  - Its safe? is: no hostile near (a walk leading away from every hostile near is not held) and the walk's risk acceptable (jobs.lib.walk-risk: the expected damage of mobs spawning on dark open stretches by the light seen, of hostiles near the way, and of a recent death by the goal, within a share of the health; else later :risky with the figures; no wait for dawn); always ok with the head under water (it swims up for air first). A caller's :checks (an escape job's
+  - Its safe? is: no hostile near (a walk leading away from every hostile near is not held, unless one is within ready/::catch-reach or has hurt the body lately: it keeps up and hits all the way) and the walk's risk acceptable (jobs.lib.walk-risk: the expected damage of mobs spawning on dark open stretches by the light seen, of hostiles near the way, and of a recent death by the goal, within a share of the health; else later :risky with the figures; no wait for dawn); always ok with the head under water (it swims up for air first). A caller's :checks (an escape job's
     defaults, an agent's own) replace it.
   - A body already within :range of a goal with a y (not in water or hanging; under :see seeing it) ends :done, cause :already, before any round: no plan, no arrival look (done?).
   - One call is one whole attempt: it plans and walks (jobs.lib.walk: slices of about 100 ms of search, walks of at
