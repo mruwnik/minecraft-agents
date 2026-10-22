@@ -34,6 +34,7 @@
        "--check only loads and validates the fixtures (no body, no server): one result per case, exit 1 on a parse error or problem.\n"
        "A job case (no :register, no :wait-full true, only :event expectations pending) ends :idle-grace-s (default 3) s after every job it submitted has ended, failed or parked (\"no job active: ...\", :ended-early-s and :idle-grace-s in the result).\n"
        "Runs world fixtures (default dir engine/fixtures/world) by default in sealed underground cells (y -40), with :plot :light :sky on the surface plot grid x/z 20000..20640, y 150 (large plots: lanes south of it, to z 22240).\n"
+       "--cold-bodies starts a new body process for every case (default: one warm process per run, restarted in place between cases).\n"
        "--keep-body leaves the probe body's agent dir after the run (otherwise a passed run removes it; a failed one keeps it, like the temp dir).\n"
        "--view keeps the view dump always on for the probe body (default: only while a browser watches it).\n"
        "--allow-time lets a case that needs night or day set the time (each set appended to --time-log); without it\n"
@@ -82,6 +83,7 @@
       (= a "--trace-attempt") (recur more (assoc opts :trace-attempt (js/Number b)))
       (= a "--stop-on-fail") (recur (rest all) (assoc opts :stop-on-fail true))
       (= a "--allow-time") (recur (rest all) (assoc opts :allow-time true))
+      (= a "--cold-bodies") (recur (rest all) (assoc opts :cold-bodies true))
       (= a "--keep-body") (recur (rest all) (assoc opts :keep-body true))
       (= a "--view") (recur (rest all) (assoc opts :view true))
       (= a "--list") (recur (rest all) (assoc opts :list true))
@@ -530,13 +532,20 @@
              (do (remove-body-dir! opts)
                  (fs/rmSync (run-dir opts) #js {:recursive true :force true}))))))
 
+(defn body-args
+  "The body's own argv (after the bundle). --warm keeps the process between cases (see park-body!). --fresh drops
+  engine.edn (the queue and register), unless restore?."
+  [opts scenario restore?]
+  (concat ["--agent" (:body opts) "--world" (:world opts) "--scenario" scenario]
+          (when-not (:cold-bodies opts) ["--warm"])
+          (when-not restore? ["--fresh"])))
+
 (defn body-argv
-  "node argv for a body: V8 flags must be on the command line (heap cap: RSS 335 -> ~255 MB). --fresh drops engine.edn
-  (the queue and register), unless restore?."
+  "node argv for a body: V8 flags must be on the command line (heap cap: RSS 335 -> ~255 MB)."
   ([opts scenario] (body-argv opts scenario false))
   ([opts scenario restore?]
-   (into-array (concat ["--max-old-space-size=160" "--heap-growing-percent=100" "--max-semi-space-size=8" "out/body-release.cjs" "--agent" (:body opts) "--world" (:world opts) "--scenario" scenario]
-                       (when-not restore? ["--fresh"])))))
+   (into-array (concat ["--max-old-space-size=160" "--heap-growing-percent=100" "--max-semi-space-size=8" "out/body-release.cjs"]
+                       (body-args opts scenario restore?)))))
 
 (defn await-online!
   "Polls the server's player list (every 250 ms, up to 10 s) until the body is on it (the start check polls the rest)."
@@ -583,6 +592,10 @@
                     #js {:BODY_VIEW (if (:view opts) "1" "demand")}
                     (when (:trace-dir opts) #js {:MC_STEP_TRACE (steps-file opts)})))
 
+(def parked-bodies
+  "Names of the bodies whose process is alive but has stopped its engine, waiting for a start command."
+  (atom #{}))
+
 (defn start-body!
   "Starts the body with a scenario holding register, --fresh; resolves once it logged :system :started. The body's own
   engine/memory.edn is deleted first unless keep-memory? (--fresh only drops engine.edn), then written from
@@ -607,11 +620,18 @@
         offset (log-cursor (events-file opts))]
     (fs/mkdirSync dir #js {:recursive true})
     (fs/writeFileSync scenario (pr-str {:register [] :queue []}))
-    (let [fd (fs/openSync out "a")
-          child (cp/spawn "node" (body-argv opts scenario restore?)
-                          #js {:cwd (repo-path "engine") :stdio #js ["ignore" fd fd]
-                               :env (body-env opts)})]
-      (swap! bodies assoc (:body opts) child)
+    (let [parked (get @bodies (:body opts))
+          child (if (and (contains? @parked-bodies (:body opts)) (nil? (.-exitCode parked)))
+                  (do (swap! parked-bodies disj (:body opts))
+                      (.write (.-stdin parked) (str (js/JSON.stringify (clj->js {:op "start" :args (body-args opts scenario restore?)})) "\n"))
+                      parked)
+                  (let [fd (fs/openSync out "a")
+                        child (cp/spawn "node" (body-argv opts scenario restore?)
+                                        #js {:cwd (repo-path "engine") :stdio #js ["pipe" fd fd "pipe"]
+                                             :env (body-env opts)})]
+                    (.on (.-stdin child) "error" (fn [_] nil))
+                    (swap! bodies assoc (:body opts) child)
+                    child))]
       (.then (await-event opts offset started-event since 90000 #{})
              (fn [ev]
                (when-not ev (throw (js/Error. (str "the body did not start within 90 s (see " out ")"))))
@@ -633,12 +653,30 @@
     (js/Promise. (fn [resolve]
                    (swap! retired-cpu update (:body opts) #(merge-with + % (process-cpu (.-pid child))))
                    (swap! bodies dissoc (:body opts))
+                   (swap! parked-bodies disj (:body opts))
                    (if (some? (.-exitCode child))
                      (resolve nil)
                      (let [timer (js/setTimeout #(do (.kill child "SIGKILL") (resolve nil)) 20000)]
                        (.once child "exit" (fn [] (js/clearTimeout timer) (resolve nil)))
                        (.kill child "SIGTERM")))))
     (js/Promise.resolve nil)))
+
+(defn park-body!
+  "Stops the body's engine and keeps its process for the next start-body! (module load, compiled readers and JIT state
+  are the costly part of a start). Resolves once the engine has stopped (memory saved); a process that does not
+  answer in 20 s, or is gone, is killed like stop-body! does."
+  [opts]
+  (let [child (get @bodies (:body opts))]
+    (if-not (and child (not (:cold-bodies opts)) (nil? (.-exitCode child)) (.-stdin child))
+      (stop-body! opts)
+      (js/Promise. (fn [resolve]
+                     (let [done (fn [] (resolve nil))
+                           timer (js/setTimeout (fn [] (.kill child "SIGKILL") (swap! bodies dissoc (:body opts)) (done)) 20000)]
+                       (.once (aget (.-stdio child) 3) "data" (fn [] (js/clearTimeout timer)
+                                                                (swap! parked-bodies conj (:body opts))
+                                                                (done)))
+                       (.once child "exit" (fn [] (js/clearTimeout timer) (swap! bodies dissoc (:body opts)) (done)))
+                       (.write (.-stdin child) "{\"op\":\"stop\"}\n")))))))
 
 (defn leave-and-stop!
   "Moves the body away from the plot grid (f/leave-commands; best effort, an offline body just gets an empty reply), then stops it."
@@ -647,7 +685,7 @@
     (-> (rcon! (f/leave-commands (:body opts)))
         (.then #(sleep 700))
         (.catch (fn [_] nil))
-        (.then #(stop-body! opts)))
+        (.then #(park-body! opts)))
     (stop-body! opts)))
 
 ;; ------------------------------------------------------------------ time
@@ -1378,7 +1416,7 @@
   "Stops this runner's body and starts it again keeping engine/memory.edn, seen.bin, the world position and the queue
   and register of engine.edn (a restart as a player's is)."
   [opts]
-  (-> (stop-body! opts)
+  (-> (park-body! opts)
       (.then #(start-body! opts nil true nil true))))
 
 (defn settling-reply?

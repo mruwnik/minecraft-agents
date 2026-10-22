@@ -1,0 +1,25 @@
+;; Card 6c9b3d05: the runner keeps one body process across cases (restarted in place), so a case must start as clean as on a new
+;; process. The first case leaves a body setting, a seeded memory entry, carried bread, a queued job and a register entry behind; the
+;; second runs right after it in the same file (the runner's warm process) and sees none of them. Should-succeed: the second case
+;; alone also passes (nothing to leak). Should-fail: a warm restart that keeps any of the state shows in the second case's checks.
+{:defaults
+ {:tags [:runner :settings :memory-seed]
+  :time :any
+  :plot {:height 6}
+  :body {:at [16.5 0 16.5] :settle-s 2}
+  :limit-s 60}
+ :cases
+ [{:name "leaves-state-behind"
+   :settings {:engine.backoff/after 5}
+   :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:carry 0})}]
+   :memory [{:kind :food-source :data {:pos #xyz [28 0 16] :kind :chest}}]
+   :body {:at [16.5 0 16.5] :settle-s 2 :inventory [["bread" 5]]}
+   :act [[:job (jobs.movement.go-to {:pos #at [16 0 30] :range 1})]
+         [:cli "observe" ["$body" "--world" "$world" "settings" "--changed"] {:settings {:engine.backoff/after {:value 5 :layer :body}}}]]
+   :after [[:item "bread" 5] [:memory {:entries {:food-source [{:data {:pos [:any]}}]}}]]}
+  {:name "next-case-starts-clean"
+   :act [[:cli "jobs" ["$body" "--world" "$world" "list"] {:total 0}]
+         [:cli "observe" ["$body" "--world" "$world" "settings"] {:settings {:engine.backoff/after {:layer :code}}}]
+         [:wait-s 5]]
+   :expect [{:no-event {:source :reflex :kind :fired} :for-s 5}]
+   :after [[:item "bread" 0] [:body-near [16.5 0 16.5] 3]]}]}

@@ -1,5 +1,5 @@
 (ns engine.main
-  "Entry point: npm run body -- --agent <name> --world <world> --scenario <file> [--fresh] [--upgrade] [--worlds <dir>] [--blueprints <dir>] [--state-dir <legacy-parent>]"
+  "Entry point: npm run body -- --agent <name> --world <world> --scenario <file> [--fresh] [--upgrade] [--warm] [--worlds <dir>] [--blueprints <dir>] [--state-dir <legacy-parent>]"
   (:require [engine.args :as a]
             [engine.bodies :as bodies]
             [engine.core :as core]
@@ -26,6 +26,7 @@
             ["fs" :as fs]
             ["path" :as path]
             ["module" :refer [createRequire]]
+            ["readline" :as readline]
             [engine.hooks :as hooks]))
 
 (a/defargs settings
@@ -281,11 +282,40 @@
    (.write js/process.stderr (str text "\n"))
    (js/process.exit code)))
 
-(defn main [& args]
+(defn start-from-args
+  "Runs the body for argv args; resolves to its stop fn, or exits with the error."
+  [args]
+  (settings/set-clock! 20 false :assumed)
   (-> (run (parse-args args))
       (.then (fn [{:keys [error stop exit-code]}]
                (when error (fail! error (or exit-code 2)))
-               (let [shutdown (shutdown-handler stop #(js/process.exit 0))]
+               stop))))
+
+(defn serve-commands!
+  "Warm mode: one JSON command per stdin line, run in order. {\"op\":\"stop\"} stops the body but keeps the process (module
+  load and JIT state), then answers \"stopped\" on fd 3; {\"op\":\"start\",\"args\":[...]} starts it again with the argv args.
+  Stdin closing (the runner died) shuts the process down."
+  [current shutdown]
+  (let [rl (readline/createInterface #js {:input js/process.stdin})
+        queue (atom (js/Promise.resolve))
+        enqueue! (fn [f] (swap! queue #(-> % (.then f) (.catch (fn [e] (fail! (str "engine: " (.-stack e))))))))
+        stop-current! (fn [] (let [stop @current] (reset! current nil) (when stop (stop))))]
+    (.on rl "line"
+         (fn [line]
+           (enqueue! (fn []
+                       (let [{:keys [op args]} (js->clj (js/JSON.parse line) :keywordize-keys true)]
+                         (case op
+                           "stop" (-> (js/Promise.resolve (stop-current!)) (.then #(fs/writeSync 3 "stopped\n")))
+                           "start" (-> (start-from-args args) (.then #(reset! current %)))))))))
+    (.on rl "close" (fn [] (enqueue! shutdown)))))
+
+(defn main [& args]
+  (let [current (atom nil)
+        shutdown (shutdown-handler (fn [] (let [stop @current] (reset! current nil) (when stop (stop)))) #(js/process.exit 0))]
+    (-> (start-from-args args)
+        (.then (fn [stop]
+                 (reset! current stop)
                  (.on js/process "SIGINT" shutdown)
-                 (.on js/process "SIGTERM" shutdown))))
-      (.catch (fn [e] (fail! (str "engine: " (.-stack e)))))))
+                 (.on js/process "SIGTERM" shutdown)
+                 (when (some #{"--warm"} args) (serve-commands! current shutdown))))
+        (.catch (fn [e] (fail! (str "engine: " (.-stack e))))))))
