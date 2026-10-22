@@ -11,12 +11,14 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cond :as cond]
             [jobs.lib.choose :as choose]
+            [jobs.lib.aim :as aim]
             [jobs.lib.dig-look :as look]
             [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.placement :as placement]
             [jobs.lib.step-off :as step-off]
             [jobs.lib.tidy :as tidy]
+            [jobs.lib.trees :as trees]
             [jobs.lib.util :as u]
             [engine.game :as game]))
 
@@ -35,7 +37,7 @@
   - {:reason :not-loaded :pos}.
 
   A plant, flower or snow layer in the cell (jobs.lib.blocks/clearable) is dug first with a jobs.blocks.dig child (no tool
-  needed, the drop is not collected). Out of reach, the round walks within 3 cells (go-to child). In reach it places
+  needed, the drop is not collected); so is a leaves block alone in the way of the eye to a cell within reach (:see). Out of reach, the round walks within 3 cells (go-to child). In reach it places
   through jobs.lib.tidy/place!, so a block placed in another's zone with :ignore-zones? is recorded for
   jobs.survival.restore-broken.
 
@@ -209,6 +211,25 @@
       :else (stop! c :nothing-possible {:placed false :pos pos :item (first items) :reason :clear-failed
                                         :block (get-in e [:data :block]) :why (contract/cause-key e)}))))
 
+(defn blocking-leaf
+  "The leaves cell the eye's line to pos meets first, when pos is within reach but unseen for that leaf alone (a player
+  cuts it, a canopy over a roof cell); nil otherwise."
+  [c pos]
+  (when (and (:see (:args c)) (b/in-reach? c pos) (not (b/in-reach? c pos true)))
+    (let [at (aim/first-blocker (aim/seen-kind-at (:primitives c)) (aim/body-eye c) (u/cell-vec pos))]
+      (when (some-> at u/cell-pos (->> (u/seen-name (:primitives c))) trees/leaves-name?)
+        (u/cell-pos at)))))
+
+(defn ^:async dig-leaf!
+  "One jobs.blocks.dig call on the leaves cell in the way. Resolves to :continue, :again, or the ending (clear-failed)."
+  [c pos items leaf]
+  (let [e (waits/waiting-out c (await (ctx/call c :leaf 'jobs.blocks.dig (clear-args c leaf))))]
+    (cond
+      (= :continue e) :continue
+      (= :done (:kind e)) :again
+      :else (stop! c :nothing-possible {:placed false :pos pos :item (first items) :reason :clear-failed
+                                        :block (get-in e [:data :block]) :why (contract/cause-key e)}))))
+
 (defn refusal-why
   "Why the primitive refused: its reason text, else one from its status."
   [r]
@@ -302,6 +323,8 @@
       (clears? c block)
       (let [w (await (clear! c pos items))]
         (if (= :cleared w) :again w))
+      (blocking-leaf c pos)
+      (await (dig-leaf! c pos items (blocking-leaf c pos)))
       (not (b/in-reach? c pos (:see (:args c))))
       (let [w (await (b/walk-into-reach! c pos (:see (:args c))))]
         (if (:unreachable w) (unreachable c pos items (:unreachable w) (:text w)) w))

@@ -63,6 +63,21 @@
    :expect [{:event {:source :job :kind :completed :data {:kind :done :placed 40}} :within-s 140 :of-job true}]
    :after [[:not-block [11 0 11] "dirt"] [:block [13 2 10] "dirt"]]
    :limit-s 170}
+  {:name "roof-cell-under-canopy-body-on-leaves"
+   ;; Box with two roof cells left on the north row, a leaf canopy over them and north of them, the body on top of the canopy: every
+   ;; ground stand beside the cells is leaves, the leaves over a cell are in the way of placing it from above. A player breaks the leaf
+   ;; or steps down to a free side and places; the build must finish. Sea lanterns light the open plot.
+   :plans [{:id "box" :metadata {:by "$body"}
+            :parts [{:id "roof" :box [#at [10 2 10] #at [13 2 13]] :want "dirt"}]}]
+   :blocks [[:fill [10 0 10] [13 1 13] "dirt"] [:fill [11 0 11] [12 1 12] "air"]
+            [:fill [10 2 10] [13 2 13] "dirt"] [:fill [11 2 10] [12 2 10] "air"]
+            [:fill [10 3 8] [13 3 10] "oak_leaves[persistent=true]"] [:fill [10 2 8] [13 2 9] "oak_leaves[persistent=true]"]
+            [:set [9 0 12] "sea_lantern"] [:set [14 0 11] "sea_lantern"]]
+   :body {:at [11.5 4 10.5]}
+   :act [[:job (jobs.build.from-plan {:plan "$plan:box"})]]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 140 :of-job true}]
+   :after [[:block [11 2 10] "dirt"] [:block [12 2 10] "dirt"]]
+   :limit-s 170}
   {:name "island-exit-unwalkable"
    ;; box on a 6x6 stone platform in the air (floor removed 3 deep around it): the flood sees a way out (a 3-block drop), the walk to the exit
    ;; point (2 outside the box) cannot get within range; a sealing cell must be given up :unreachable, never placed (which cell

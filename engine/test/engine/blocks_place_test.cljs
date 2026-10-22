@@ -248,6 +248,16 @@
             (is (= "cobblestone" (bd/block-at p {:x 6 :y 65 :z 0})) (pr-str result))
             (is (= see? (>= y 64)) (str ":see " see? ", feet y " y))))))))
 
+(deftest a-leaves-block-alone-in-the-way-of-the-eye-is-dug-then-the-cell-placed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self body :blocks {"1,65,0" "oak_leaves"} :inventory cobble})
+              result (await (tu/child-outcome eng job {:pos [2 64 0] :item "cobblestone"} 15))]
+          (is (= :placed (:reason result)) (pr-str result))
+          (is (= "cobblestone" (bd/block-at p at)))
+          (is (= "air" (bd/block-at p {:x 1 :y 65 :z 0}))))))))
+
 (deftest a-floor-remembered-as-air-long-ago-is-looked-at-and-placed-against
   (async done
     (tu/run-async done
