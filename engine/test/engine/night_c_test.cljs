@@ -354,9 +354,7 @@
               _ (st/refuse-cell! p [0 63 0])
               _ (st/dawn-after! p 4)
               _ (core/submit! eng '(jobs.survival.night) {})
-              log (await (with-child-log #(core/tick! eng)))
-              niche (first (filter #(= :niche (first %)) log))]
-          (is (not (:fetch-tool? (nth niche 2))) "the niche child is not told to fetch")
+              log (await (with-child-log #(core/tick! eng)))]
           (is (empty? (filter #(= 'jobs.items.get-tool (second %)) log)) "no tool fetched in the dark"))))))
 
 (deftest with-nothing-to-dig-the-night-flees-to-a-roofed-home-beyond-the-walk-radius-by-an-unlit-route

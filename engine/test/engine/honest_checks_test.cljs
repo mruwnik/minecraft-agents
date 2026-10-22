@@ -71,13 +71,6 @@
 (deftest log-out-says-why-it-declines
   (is (= :not-night (waiting-reason 'jobs.survival.log-out {}))))
 
-(deftest log-out-forbidden-by-its-args-is-impossible
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (is (= {:listed false :event :stopped :reason :offline-forbidden}
-               (await (ending 'jobs.survival.log-out {:offline-allowed false}))))))))
-
 (deftest a-goal-that-already-holds-is-done-not-a-wait
   (async done
     (tu/run-async done

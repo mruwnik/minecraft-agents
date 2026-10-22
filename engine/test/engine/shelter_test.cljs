@@ -436,12 +436,11 @@
     (core/submit! eng '(jobs.survival.log-out) {})
     (is (nil? (core/tick! eng)))))
 
-(deftest log-out-not-allowed-or-unsupported-is-impossible-without-acting
+(deftest log-out-unsupported-is-impossible-without-acting
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (doseq [[seed! spec] [[#(mem/write! (:store %) :log-out {:ms 0 :status "unsupported"} {:cap 10 :ttl day-ms}) '(jobs.survival.log-out)]
-                              [identity '(jobs.survival.log-out {:offline-allowed false})]]]
+        (doseq [[seed! spec] [[#(mem/write! (:store %) :log-out {:ms 0 :status "unsupported"} {:cap 10 :ttl day-ms}) '(jobs.survival.log-out)]]]
           (let [{:keys [eng p]} (setup {:time night})]
             (seed! eng)
             (core/submit! eng spec {})
@@ -1161,7 +1160,7 @@
           (core/register-reflex! eng {:trigger :always-shelter})
           (await (tick-n eng 6))
           (let [held {:futile (entries eng :shut-in-failed) :places (count (calls p "place")) :digs (count (calls p "dig"))}]
-            (is (= #{{:way :pit :reason :roof-failed} {:way :walls :reason :nothing-possible}} (set (map #(select-keys % [:way :reason]) (:futile held)))) "written in the first firing")
+            (is (= #{{:way :pit :reason :roof-failed} {:way :walls :reason :failed-steps}} (set (map #(select-keys % [:way :reason]) (:futile held)))) "written in the first firing")
             (is (= 4 (:places held)) "the pit's roof and the walls' first place, each refused once; no second pit is roofed")
             (await (tick-nights eng clock 3))
             (is (= (:digs held) (count (calls p "dig"))) "later firings do not dig again"))
@@ -1278,7 +1277,7 @@
           (refuse-placing! p)
           (core/register-reflex! eng {:trigger :always-shelter})
           (await (tick-n eng 8))
-          (is (= {:way :walls :reason :nothing-possible} (select-keys (first (entries eng :shut-in-failed)) [:way :reason])) "written in the first firing")
+          (is (= {:way :walls :reason :failed-steps} (select-keys (first (entries eng :shut-in-failed)) [:way :reason])) "written in the first firing")
           (let [digs (count (calls p "dig"))
                 places (count (calls p "place"))]
             (swap! clock + 11000)

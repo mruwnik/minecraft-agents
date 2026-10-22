@@ -77,7 +77,6 @@
                                                               :view (fn [] {:data mem/empty-data :now 0})})]
                    [kind reason]))]
     (is (= [:later :not-night] (status {:time noon} {})))
-    (is (= [:never :offline-forbidden] (status {:time night} {:offline-allowed false})))
     (is (= :ok (first (status {:time night} {}))))))
 
 (deftest a-log-out-quotes-the-stint-in-time

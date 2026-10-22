@@ -5,7 +5,6 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
-            [jobs.lib.need :as need]
             [jobs.lib.combat :as combat]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spent :as spent]
@@ -46,7 +45,6 @@
    :place {:doc "the :room way: the room to enter, a remembered place name (default the home)" :spec (a/or-of keyword? string?) :default nil}
    :at {:doc "the :room way: a cell inside the room to enter, instead of a place (a room the body saw)" :spec ::a/pos :default nil}
    :flee? {:doc "the :room way: walk in as a flee step (legs of run-away, no digging or pillaring, one leg a round), for a body running from a hostile" :spec boolean? :default false}
-   :fetch-tool? {:doc "dig-pocket: may get a missing tool (its ways are then all the fetch ways)" :spec boolean? :default false}
    :on-lava {:doc ":seal: lava a dig lays open is filled with a carried block; :stop: the pit or pocket is dropped and the lava left" :spec #{:seal :stop} :default :seal}})
 
 (a/defargs settings
@@ -78,7 +76,6 @@
 
 (defn child-args [c way]
   (merge (select-keys (:args c) (second (children way)))
-         (when (and (= :pocket way) (:fetch-tool? (:args c))) {:ways (set need/fetch-ways)})
          (when-let [blocks (night/blocks c)] {:use {:blocks blocks}})))
 
 (defn ^:async cost-of

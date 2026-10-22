@@ -13,7 +13,7 @@
 
 (def doc
   "Leave the server for a short stint, then come back: the night job's way to let another player's sleep skip the
-  night. Waits for night (:not-night); impossible with :offline-allowed false (:offline-forbidden) or once a log-out
+  night. Waits for night (:not-night); impossible once a log-out
   was unsupported (:log-out-unsupported).
   Stays away :offline-ms, at most until morning. Back while it is still night, it waits :news-ms for the server's sleep
   count (sent on a join while anyone sleeps) before it ends.
@@ -22,8 +22,7 @@
   Memory: writes :log-out {:ms :status} (cap 10, one in-game day).")
 
 (a/defargs args
-  {:offline-allowed {:doc "false forbids logging out" :spec boolean? :default true}
-   :offline-ms {:doc "how long to stay away at most; the stint ends at morning" :spec (a/num-in 0 nil) :default 30000}
+  {:offline-ms {:doc "how long to stay away at most; the stint ends at morning" :spec (a/num-in 0 nil) :default 30000}
    :news-ms {:doc "back at night, how long to wait for the sleep count" :spec (a/num-in 0 nil) :default 3000}})
 
 (def log-out-policy {:cap 10 :ttl sh-clock/ms-per-day})
@@ -41,17 +40,12 @@
       (when (and queued out (> (:t out) queued) (#{"ok" "cut"} (:status (:data out))))
         out))))
 
-(defn allowed [c]
-  (if (= false (:offline-allowed (:args c)))
-    (contract/never :offline-forbidden ":offline-allowed false forbids logging out")
-    (contract/ok :offline-allowed "logging out allowed")))
-
 (defn supported [c]
   (if (sh-sleepers/log-out-unsupported? (ctx/view c))
     (contract/never :log-out-unsupported "a log-out was unsupported")
     (contract/ok :log-out-supported "log-out not known unsupported")))
 
-(def can-start? (cond/and allowed (checks/night :not-night) supported))
+(def can-start? (cond/and (checks/night :not-night) supported))
 
 (a/defargs settings
   {::job-time-s {:default 900 :doc "Seconds a log-out stint and the wait for the sleep count may take (a stint lasts at most until morning)." :spec (a/num-in 0 nil)}})
