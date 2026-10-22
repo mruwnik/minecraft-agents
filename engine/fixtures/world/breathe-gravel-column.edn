@@ -16,4 +16,12 @@
          [:wait-s 3]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :suffocating}} :within-s 10}
             {:no-event {:source :body :kind :died} :for-s 30}]
+   :after [[:not-block [16 0 16] "gravel"] [:not-block [16 1 16] "gravel"]]},
+  {:name "restart-mid-escape-waits-for-the-reflex-and-lives"
+   :act [[:rcon "execute positioned $X $Y $Z run fill ~16 ~ ~16 ~16 ~4 ~16 gravel"]
+         [:await {:source :reflex :kind :fired :context {:reflex-id :suffocating}} 20]
+         [:restart-body]
+         [:wait-s 3]]
+   :expect [{:event {:source :system :kind :stop-waiting} :within-s 40}
+            {:no-event {:source :body :kind :died} :for-s 30}]
    :after [[:not-block [16 0 16] "gravel"] [:not-block [16 1 16] "gravel"]]}]}

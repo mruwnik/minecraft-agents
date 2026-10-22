@@ -77,6 +77,26 @@
           (await ((main/shutdown-handler failing-stop #(swap! log conj :exit-failed) 1000)))
           (is (= [:stopped :exit :exit-hung :exit-failed] @log)))))))
 
+(deftest a-stop-waits-for-a-running-danger-reflex-and-not-for-a-comfort-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [raw (atom [])
+              fake (fn [reflex level]
+                     {:running (atom {:reflex reflex})
+                      :state (atom {:register [{:id reflex :trigger reflex}]})
+                      :triggers {reflex {:level level}}
+                      :events (events/make {:body "Fake" :sinks [#(swap! raw conj %)] :now #(js/Date.now)})})
+              danger (fake :suffocating :danger)
+              comfort (fake :hungry :comfort)
+              t0 (js/Date.now)]
+          (js/setTimeout #(reset! (:running danger) nil) 300)
+          (await (main/wait-out-danger! comfort))
+          (is (< (- (js/Date.now) t0) 100) "a comfort reflex is not waited for")
+          (await (main/wait-out-danger! danger))
+          (is (>= (- (js/Date.now) t0) 300) "the stop waited until the danger reflex ended")
+          (is (= [:stop-waiting] (mapv :kind @raw))))))))
+
 (deftest a-second-signal-does-not-stop-again
   (async done
     (tu/run-async done

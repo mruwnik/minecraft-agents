@@ -505,7 +505,7 @@ the very next round, without cutting anything.
 **Persistence.** The list, register and changes are written to `engine.edn` on every change. On boot they are reloaded,
 reflex instances are dropped, the in-flight job resumes first, and a `:restart` entry is appended. A register entry whose
 saved args hold keys its job no longer declares is kept with those keys removed and raises a required attention request;
-an entry whose trigger or job is gone is dropped with a `system.dropped` warn. `core/shutdown!` (SIGINT/SIGTERM) rotates
+an entry whose trigger or job is gone is dropped with a `system.dropped` warn. A stop (SIGINT/SIGTERM or warm `stop`) first waits up to the `engine.main/danger-wait-ms` setting (15 s; `system.stop-waiting` logged) while a danger-level reflex runs; the signal handler exits after `shutdown-limit-ms` (20 s). `core/shutdown!` (SIGINT/SIGTERM) rotates
 the token so the in-flight round is never booked; the job stays listed.
 
 **Doing nothing.**

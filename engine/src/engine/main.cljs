@@ -31,8 +31,10 @@
             [engine.hooks :as hooks]))
 
 (a/defargs settings
-  {:engine.main/shutdown-limit-ms {:default 5000 :spec (a/int-in 1 nil)
-                                   :doc "The signal handler exits after this long even when the body has not stopped, ms."}
+  {:engine.main/shutdown-limit-ms {:default 20000 :spec (a/int-in 1 nil)
+                                   :doc "The signal handler exits after this long even when the body has not stopped, ms. Above danger-wait-ms; a launcher that kills sooner cuts the wait."}
+   :engine.main/danger-wait-ms {:default 15000 :spec (a/int-in 0 nil)
+                                :doc "A stop waits at most this long for a running danger reflex (breathe, unwedge, flee...) to end before it releases the body, ms."}
    :engine.main/blueprints-dir {:default "" :spec string?
                                 :doc "Folder of blueprint files; empty means the repo's blueprints folder beside the engine. The --blueprints flag wins. Read at body start."}
    :engine.game/follow-tick-rate {:default true :spec boolean?
@@ -162,6 +164,26 @@
                                           :kind :reflex-dropped :data {:reflex id :error message} :message text})))
         (trigger-api/resume-scenario! eng plan upgrade?))))
 
+(defn danger-reflex-running?
+  "Whether the running round is a reflex whose entry fires at the :danger level."
+  [eng]
+  (let [rid (:reflex (core/holder eng))
+        entry (some #(when (= rid (:id %)) %) (:register (core/state eng)))]
+    (boolean (and rid entry (= :danger (or (:level entry) (:level (base/trigger-def eng (:trigger entry))) :danger))))))
+
+(defn ^:async wait-out-danger!
+  "Before a stop, give a running danger reflex up to danger-wait-ms to end (a body stopped mid-escape suffocates while the
+  engine is down). Logs what it waited for."
+  [eng]
+  (let [limit (settings/get settings :engine.main/danger-wait-ms)
+        start (js/Date.now)]
+    (when (danger-reflex-running? eng)
+      (core/emit! eng {:source :system :kind :stop-waiting :level :info :reflex (:reflex (core/holder eng)) :limit-ms limit})
+      (loop []
+        (when (and (danger-reflex-running? eng) (< (- (js/Date.now) start) limit))
+          (await (js/Promise. (fn [resolve _] (js/setTimeout resolve 100))))
+          (recur))))))
+
 (defn ^:async start
   "Open the body's files, log in and run, once the one-process guard is held (release frees it).
   Resolves to {:engine eng :stop f}."
@@ -225,6 +247,7 @@
         (let [control (await (start-control! root eng cfg))
               stop-ticks (core/start! eng {:tick-ms 250 :before-tick #(trigger-api/tick! eng)})]
           {:engine eng :stop (fn ^:async stop []
+                               (await (wait-out-danger! eng))
                                ((:stop seen))
                                (stop-heap)
                                (let [saved (stop-perception)]
