@@ -80,6 +80,21 @@
   [eng id e]
   (merge (tally/end-root! eng id true e) (:report e)))
 
+(defn rebase-queued!
+  "Queued calls that have not started stand where the body stands now: a job ahead of them (a stair, a go-to) moved the body on purpose,
+  so their :submitted-at (engine.contract/moved-cause) is this cell, not the submit's."
+  [eng]
+  (when-let [pos (some-> (:primitives eng) .self .-pos)]
+    (let [here {:x (js/Math.floor (.-x pos)) :y (js/Math.floor (.-y pos)) :z (js/Math.floor (.-z pos))}
+          fresh? #(nil? (get-in (mem/job-mem (mem/view (:store eng)) % []) [:contract :call]))]
+      (swap! (:state eng)
+             (fn [st]
+               (reduce (fn [st id]
+                         (if (and (get-in st [:instances id :spec :args :submitted-at]) (not (get-in st [:instances id :reflex])) (fresh? id))
+                           (assoc-in st [:instances id :spec :args :submitted-at] here)
+                           st))
+                       st (:list st)))))))
+
 (defn settle-listed-job! [eng {:keys [id]} {:keys [status error result child-wait ending]}]
   (note-child-wait! eng id status child-wait)
   (let [idx (.indexOf (:list (state eng)) id)
@@ -94,6 +109,7 @@
                                 #(assoc (remove-listed % id) :cursor (max idx 0)))
         (swap! (:fruitless eng) dissoc id)
         (delete-root! eng id :ended)
+        (rebase-queued! eng)
         (emit! eng (if (= :done (:kind ending))
                      (merge fields {:source :job :kind :completed :level :info :attention :notice
                                     :data data :report report}
@@ -107,6 +123,7 @@
                                 #(assoc (remove-listed % id) :cursor (max idx 0)))
         (swap! (:fruitless eng) dissoc id)
         (delete-root! eng id :ended)
+        (rebase-queued! eng)
         (emit! eng (if (stopped-result? result)
                      (merge fields {:source :job :kind :stopped :level :warn :attention :notice
                                     :data (dissoc result :dug)

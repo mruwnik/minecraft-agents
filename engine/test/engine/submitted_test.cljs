@@ -22,3 +22,16 @@
                 id (core/submit! eng spec {})]
             (await (tu/run-ticks eng clock 3 500))
             (is (= :moved-since-submit (:reason (:waiting (job-api/summary eng id)))) (pr-str spec))))))))
+
+(deftest a-call-queued-behind-a-job-starts-from-where-that-job-left-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              p (tu/fake {:self {:pos {:x 0 :y 65 :z 0}} :inventory [{:name "iron_pickaxe" :count 1}]})
+              eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir)
+                                :now #(deref clock) :world (world/of-data {} {} [])})
+              _ (core/submit! eng '(jobs.debug.notify {:text "first"}) {})
+              id (core/submit! eng '(jobs.gather.mine {:block "coal_ore" :submitted-at {:x 80 :y 65 :z 0}}) {})]
+          (await (tu/run-ticks eng clock 6 500))
+          (is (not= :moved-since-submit (:reason (:waiting (job-api/summary eng id))))))))))
