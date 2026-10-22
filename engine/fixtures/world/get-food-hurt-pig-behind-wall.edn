@@ -3,7 +3,7 @@
 ;; walked up to, not given up on ("1 found, 0 legs; no food source is known").
 ;; A stone wall x 10, z 10..22, y 0..2 stands between the body (x 4) and the pig (x 14); the body walks round its end.
 ;; Should-succeed: the pig is hunted and eaten; a fragile body walks out only past the dawn grace, so the call starts at noon, with no :low-health wait.
-;; Night case (Q334: night is no refusal of its own): open ground at night, a pig 10 blocks off, no hostile: a hurt body that cannot heal walks to it and eats.
+;; Dark case (Q334: darkness is no refusal of its own): a dark cell, a pig 10 blocks off, no hostile: a hurt body that cannot heal walks to it and eats.
 ;; Should-fail: none (a negative needs a world with no animals; the search walks off the plot).
 {:defaults
  {:tags [:survival :get-food :hurt]
@@ -20,8 +20,8 @@
          [:job (jobs.survival.get-food {})]]
    :expect [{:event {:source :job :kind :food.killed} :within-s 100}
             {:no-event {:source :job :kind :waiting :data {:reason :low-health}} :for-s 20 :until {:source :job :kind :food.killed}}]}
-  {:name "hurt-starving-body-hunts-a-near-pig-at-night"
-   :time :night
+  {:name "hurt-starving-body-hunts-a-near-pig-in-the-dark"
+   :time :any :plot {:light :dark}
    :act [[:summon "pig" [14.5 0 16.5] "{NoAI:1b}"]
          [:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 18 minecraft:generic"]

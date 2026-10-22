@@ -51,9 +51,7 @@
    :after [[:block [6 0 8] "dirt"]]}
   {:name "plug-opening-onto-lit-cells-is-taken-back"
    :memory [{:kind :scaffold :data {:entries [{:cell #at [6 0 8] :item "dirt" :before "air" :purpose :retreat-plug :state :placed}]}}]
-   :plot {:height 12 :light :sky}
-   :time :day
-   :time-why :night-light
+   :plot {:height 12 :light :lit}
    :blocks [[:set [6 0 8] "dirt"]]
    :act [[:job (jobs.access.cleanup {:of :all :ignore-zones? true :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :completed :data {:removed [[:any]]}} :within-s 60 :of-job true}]

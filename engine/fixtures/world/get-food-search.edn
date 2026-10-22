@@ -71,8 +71,8 @@
          [:job (jobs.survival.get-food {:explore true})]]
    :expect [{:event {:source :job :kind :food.killed} :within-s 150}]
    :limit-s 180}
-  {:name "night-starving-body-explores-calm"
-   :time :night
+  {:name "dark-starving-body-explores-calm"
+   :time :any :plot {:light :dark}
    :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
          [:rcon "damage $BODY 8 minecraft:generic"]
          [:job (jobs.survival.get-food {:explore {:max-distance 64 :max-legs 3 :spend {:job-time 30}}})]]

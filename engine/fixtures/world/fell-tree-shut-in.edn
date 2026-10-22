@@ -20,6 +20,7 @@
             {:no-event {:source :job :kind :stopped} :for-s 40}]
    :after [[:block [26 0 16] "oak_log"] [:body-near [16.5 0 16.5] 2]]}
   {:name "fenced-in-body-ends-with-a-reason-not-a-bare-no-reachable-tree"
+   :time :any :time-why nil :plot {:light :lit}
    :blocks [[:fill [12 0 12] [20 1 12] "oak_fence"] [:fill [12 0 20] [20 1 20] "oak_fence"]
             [:fill [12 0 13] [12 1 19] "oak_fence"] [:fill [20 0 13] [20 1 19] "oak_fence"]]
    :act [[:job (jobs.forestry.fell-tree {:radius 24})]]
