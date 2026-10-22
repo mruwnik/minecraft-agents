@@ -121,9 +121,9 @@
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
    :after [[:item "stone_pickaxe" 1]]
    :limit-s 120}
-  ;; card 5dd014bb: a full bag in a dead-end stub, a table beside the body: make-room's tosses land in the stub, the craft still has room
+  ;; card 5dd014bb: a full bag in a dead-end stub, a table beside the body: the stub has one free cell ahead, so the tossed junk lands in reach and is picked up again; the craft must still have room
   {:name "full-bag-in-a-dead-end-stub-is-made-room-in-and-the-pickaxe-crafted"
-   :blocks [[:fill [8 -1 8] [24 5 24] "stone"] [:fill [18 0 14] [18 1 16] "air"] [:set [19 0 16] "crafting_table"]]
+   :blocks [[:fill [8 -1 8] [24 5 24] "stone"] [:fill [18 0 15] [18 1 16] "air"] [:set [19 0 16] "crafting_table"]]
    :body {:at [18.5 0 16.5] :yaw 180 :inventory [["oak_planks" 11] ["cobblestone" 8] ["stick" 2] ["torch" 6] ["andesite" 320] ["granite" 440] ["gravel" 200] ["diorite" 960]]}
    :act [[:job (jobs.items.craft {:item "stone_pickaxe"})]]
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
