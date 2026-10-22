@@ -101,17 +101,23 @@
      (perception/pass! per {:effort effort :reuse? true})
      (when (fn? (.-knownMobs (:primitives c))) (.knownMobs (:primitives c))))))
 
-(defn ^:async glance!
-  "Look along each of dirs ([dx dz]), level and down (look-around! adds the look up), a sight pass at effort (default glance-effort) after each look."
-  ([c dirs] (glance! c dirs (glance-effort)))
-  ([c dirs effort]
+(defn ^:async glance-until!
+  "glance!, testing (f) after each look and stopping at the first truthy one, returned (nil when none): entities are
+  sensed only inside the view cone, and the last look of a heading points down."
+  ([c dirs f] (glance-until! c dirs f (glance-effort)))
+  ([c dirs f effort]
    (let [{:keys [x y z]} (cell-of (u/self-pos c))
          eye {:x (+ x 0.5) :y (+ y game/eye-height) :z (+ z 0.5)}]
      (loop [points (mapcat #(glances eye %) dirs)]
        (when-let [pt (first points)]
          (await (ctx/act c :look (clj->js {:pos pt})))
          (see! c effort)
-         (recur (rest points)))))))
+         (or (f) (recur (rest points))))))))
+
+(defn ^:async glance!
+  "Look along each of dirs ([dx dz]), level and down (look-around! adds the look up), a sight pass at effort (default glance-effort) after each look."
+  ([c dirs] (glance! c dirs (glance-effort)))
+  ([c dirs effort] (await (glance-until! c dirs (constantly nil) effort)) nil))
 
 (defn ^:async look-around-until!
   "Look along every heading from here at effort (default glance-effort), level, down and, unless that ray is seen

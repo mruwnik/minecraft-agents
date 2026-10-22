@@ -91,6 +91,16 @@
           (await (look/glance! (stub-ctx p) [[0 1]]))
           (is (= 2 (- (count (.-calls (.-world p))) n))))))))
 
+(deftest a-glance-until-tests-after-the-level-look-before-the-look-down
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (seeing {})
+              n (count (.-calls (.-world p)))
+              r (await (look/glance-until! (stub-ctx p) [[0 1] [1 0]] (constantly :found)))]
+          (is (= :found r))
+          (is (= 1 (- (count (.-calls (.-world p))) n)) "stops after the first look, which is level"))))))
+
 (deftest a-look-around-under-a-seen-ceiling-adds-no-look-up
   (async done
     (tu/run-async done

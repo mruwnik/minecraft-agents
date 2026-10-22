@@ -99,13 +99,10 @@
       :else (end/finish! c :partial (assoc decided :items items :left left :reason (if (seq ids) :unreachable :not-visible))))))
 
 (defn ^:async find-ids!
-  "Ids of the pile's items in sight; when none, turn to each heading and check after every look (an item is seen only inside the view cone, and a walk ends facing wherever)."
+  "Ids of the pile's items in sight; when none, turn to each heading and check after every look (an item is seen only inside the view cone, and the last look of a heading points down)."
   [c pos names radius]
   (or (seq (pl/pile-ids c pos names radius))
-      (loop [dirs (vals look/headings)]
-        (when-let [d (first dirs)]
-          (await (look/glance! c [d]))
-          (or (seq (pl/pile-ids c pos names radius)) (recur (rest dirs)))))))
+      (await (look/glance-until! c (vals look/headings) #(seq (pl/pile-ids c pos names radius))))))
 
 (defn ^:async look-round!
   "Drops of the pile went out of sight (down a shaft): once, walk to the cell the first was last seen in (go-to, range 1)
