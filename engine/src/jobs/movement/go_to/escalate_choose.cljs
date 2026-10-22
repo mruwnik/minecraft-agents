@@ -134,7 +134,7 @@
   can step back into (level, or one up or down) from the first of starts and that the body at feet can step onto once
   filled, nearest to the [x _ z] target first; nil when the region is not closed within the room cells."
   [p starts feet]
-  (let [kind-at (reach/lookup p reach-room/body-kind-of)
+  (let [kind-at (reach/seen-lookup p reach-room/body-kind-of)
         level (fn [x y z] (.filter (reach/forward kind-at x y z) (fn [n] (>= (aget n 1) (dec y)))))
         {:keys [cells closed?]} (reach-room/flood-visit level (first starts) reach-room/room-cells)
         open? (fn [x y z] (keyword-identical? :open (kind-at x y z)))
@@ -162,7 +162,7 @@
     (let [p (:primitives c)
           {:keys [item] carried :count} (escape/pillar-item c)
           goal (some-> (places/parse-pos (:pos (:args c))) :pos)
-          kind-at (reach/lookup p reach-room/body-kind-of)
+          kind-at (reach/seen-lookup p reach-room/body-kind-of)
           starts (when goal (filter (fn [[x y z]] (reach/standable-cell? p {:x x :y y :z z} kind-at))
                                     (for [dy [0 1] [dx dz] [[0 0] [1 0] [-1 0] [0 1] [0 -1]]]
                                       [(+ (:x goal) dx) (+ (:y goal) dy) (+ (:z goal) dz)])))
@@ -305,7 +305,7 @@
   flood reaches (the shortest walk)."
   ([p goal] (nearest-stand p goal 0))
   ([p goal slack]
-   (let [kind-at (reach/lookup p reach-room/body-kind-of)
+   (let [kind-at (reach/seen-lookup p reach-room/body-kind-of)
          to-goal #(u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] goal))
          across #(u/flat-dist {:x (% 0) :z (% 2)} {:x (goal 0) :z (goal 2)})
          cells (->> (:cells (reach-room/flood-visit #(reach/forward kind-at %1 %2 %3) (reach/standing-vec p) reach-room/room-cells))

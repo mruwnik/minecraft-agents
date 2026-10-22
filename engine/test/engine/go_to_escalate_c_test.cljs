@@ -281,6 +281,16 @@
     (is (nil? (escape/door-back seen-wall [0 64 0])) "a wall it sees")
     (is (= back (escape/door-back dark-wall [0 64 0])) "a wall it has not seen: go and look, not an x-ray read")))
 
+(deftest drop-edges-and-nearest-stand-read-only-cells-the-body-has-seen
+  (let [slab (box -3 63 -3 3 63 3 "stone")
+        outside (for [x (range -6 7) z (range -6 7) y (range 58 68) :when (or (> (js/Math.abs x) 3) (> (js/Math.abs z) 3))] [x y z])
+        seen (tu/fake {:blocks slab})
+        dark (tu/fake {:blocks slab})
+        _ (dark-at dark outside)]
+    (is (seq (choose/drop-edges seen [[0 64 0]] [0 64 0])) "every edge cell seen: a floor cell to fill is offered")
+    (is (empty? (choose/drop-edges dark [[0 64 0]] [0 64 0])) "the cells beyond the edge never seen: not offered, not read through the true world")
+    (is (= [0 64 0] (choose/nearest-stand dark [0 64 0])))))
+
 (deftest go-to-fills-a-one-cell-gap-under-a-low-ceiling-with-a-carried-block
   (async done
     (tu/run-async done

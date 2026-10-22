@@ -97,6 +97,24 @@
                (.set cache k v)
                v))))))))
 
+(defn seen-lookup
+  "As lookup, over what the body sees or remembers (u/seen-block): a cell it has not seen reads :solid, so a flood or a
+  drop edge never goes through a cell it has not looked at. One lookup serves one query."
+  ([p] (seen-lookup p kind-of))
+  ([p block-kind]
+   (let [cache (js/Map.)
+         key (volatile! nil)]
+     (fn [x y z]
+       (let [key-of (or @key (vreset! key (keyer x z)))
+             k (key-of x y z)
+             hit (.get cache k)]
+         (if (some? hit)
+           hit
+           (let [b (u/seen-block p {:x x :y y :z z})
+                 v (if (nil? b) :solid (block-kind b))]
+             (.set cache k v)
+             v)))))))
+
 (defn passable? [kind-at x y z]
   (let [k (kind-at x y z)]
     (not (or (keyword-identical? :solid k) (keyword-identical? :tall k)))))
