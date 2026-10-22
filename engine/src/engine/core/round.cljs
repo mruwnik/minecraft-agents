@@ -1,7 +1,7 @@
 (ns engine.core.round
   "One round: the ctx a round or check receives, the act wrapper (token check, memory saves, action
   events) and ctx/call."
-  (:require [engine.core.base :refer [cut-error cut? cut-off! cut-off-dropped! distance emit! job-of exclusive-job normalize-result now offline-cut-error owner? save-memory-soon! self-pos]]
+  (:require [engine.core.base :refer [cut-error cut? cut-off! cut-off-dropped! distance emit! job-of exclusive-job normalize-result now offline-cut-error offline? owner? save-memory-soon! self-pos]]
             [engine.core.attention :refer [request-attention! resolve-attention!]]
             [engine.core.fruitless :refer [record-act!]]
             [engine.core.activity :refer [act-ended! act-started! body-act! close-section! hold-still! log-out-record open-section! useful-act?]]
@@ -330,7 +330,7 @@
         (assoc (normalize-result r) :child-wait @child-wait))
       (catch :default e
         (cond
-          (cut? e) {:status :cut :error e}
+          (or (cut? e) (offline? eng)) {:status :cut :error e}
           (and (not (contract/passes-through? e)) (owner? eng (:token run)))
           (do (await (close-after-throw eng def c e)) {:status :error :error e})
           :else {:status :error :error e}))

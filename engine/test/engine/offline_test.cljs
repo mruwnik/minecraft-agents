@@ -5,6 +5,7 @@
             [engine.core :as core]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.fake :as fake]
             [jobs.lib.shelter.sleepers :as sh-sleepers]
             [engine.registry :as registry]
             [engine.test-util :as tu]
@@ -135,3 +136,22 @@
           (.override world "eat" nil)
           (await (core/tick! eng))
           (is (= 1 (count (kinds-of seen :completed))) "the next round runs it to the end"))))))
+
+(deftest an-error-thrown-as-the-connection-drops-cuts-the-round-instead-of-failing-the-job
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {})
+              world (.-world p)]
+          (.override world "eat" (fn [_ _ _]
+                                   (swap! (fake/state p) assoc :offline true)
+                                   (js/Promise.reject (js/TypeError. "Cannot read properties of undefined (reading 'x')"))))
+          (core/submit! eng '(eat) {})
+          (await (core/tick! eng))
+          (is (= 1 (count (kinds-of seen :cut))) "cut, not failed")
+          (is (= {} (:failed (core/state eng))))
+          (is (= 1 (count (:list (core/state eng)))) "the job stays listed")
+          (.override world "eat" nil)
+          (swap! (fake/state p) assoc :offline false)
+          (await (core/tick! eng))
+          (is (= 1 (count (kinds-of seen :completed)))))))))

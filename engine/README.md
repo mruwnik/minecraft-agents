@@ -168,7 +168,7 @@ Acting while asleep first leaves the bed.
 **Offline is body state.** `offline` quits the bot, emits `offline`, waits `ms`, reconnects with the same params (3 tries),
 rebinds the library bot, emits `online`. While offline: `self()` is `{status: 'offline'}`, `entities` returns `[]`,
 `blockAt` returns `null`, `isOffline()` is true, the register and list are paused (no trigger evaluated, no round
-started), and acting calls resolve `{status: 'offline'}`. A cut ends the wait early but the body reconnects first. `close()`
+started), and acting calls resolve `{status: 'offline'}`. A cut ends the wait early but the body reconnects first. A round that throws while the body is offline is cut, not failed (the job stays listed). `close()`
 cancels it. Only `createPrimitives` supports it. The engine records why in its `:away` atom (`engine.core/away`); a
 log-out (`jobs.survival.log-out`) gives `:why`, otherwise it is `:connection-lost`. `lastKnown()` is the position, health, food, inventory and equipment `self()` read just
 before the body left (null online); offline status and inventory show it marked `:last-known`.
