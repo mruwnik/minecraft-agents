@@ -189,7 +189,7 @@
       (contract/look :unseen "the block to dig was not seen" :look-at [(b/cell pos)])
       (no-tool-refusal c))))
 
-(def safe? (ready/safe-at-by-night (fn [c] (a/cell (:pos (:args c))))))
+(def safe? (ready/safe-at-build (fn [c] (a/cell (:pos (:args c))))))
 
 (def fit? ready/ok)
 

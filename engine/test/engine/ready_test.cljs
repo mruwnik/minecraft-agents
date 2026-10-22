@@ -19,6 +19,7 @@
             [jobs.access.stair :as stair]
             [jobs.build.light-area :as light-area]
             [jobs.access.toggle :as toggle]
+            [jobs.blocks.dig :as dig]
             [jobs.blocks.fill-cells :as fill-cells]
             [jobs.blocks.place :as place]
             [jobs.lib.ready :as ready]
@@ -447,6 +448,8 @@
     open-night {:safe? fill-cells/safe?} {:cells [[15 64 0]]} :ok
     open-night {:safe? toggle/safe?} {:pos [15 64 0]} :ok
     open-night {:safe? toggle/safe?} {:pos [40 64 0]} :later
+    open-night {:safe? dig/safe?} {:pos [15 64 0]} :ok
+    open-night {:safe? dig/safe?} {:pos [40 64 0]} :later
     night-hut {:safe? fill-cells/safe?} {:cells [[6 64 0]]} :ok
     open-night {:safe? stair/safe?} {:submitted-at {:x 0 :y 64 :z 0}} :later
     night-hut {:safe? stair/safe?} {} :ok))
