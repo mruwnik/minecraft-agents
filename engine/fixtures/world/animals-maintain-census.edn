@@ -22,4 +22,10 @@
    :body {:at [7.5 0 12.5] :inventory [["oak_fence" 4]] :yaw 270 :effects [["resistance" 600 4]]}
    :act [[:job (jobs.animals.maintain {:plan "$plan:pen" :part "cows"})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 90 :of-job true}]
-   :after [[:block [9 0 12] "oak_fence"]]}]}
+   :after [[:block [9 0 12] "oak_fence"]]}
+  ;; a ring with no gate: herd refuses :no-gate, and maintain ends with that cause instead of "done: 0 adults".
+  {:name "herd-no-gate-ends-with-the-herd-cause"
+   :act [[:summon "cow" [5.5 0 12.5] "{NoAI:1b}"]
+         [:job (jobs.animals.maintain {:mob "cow" :target 2 :box {:min #xyz [10 0 10] :max #xyz [14 0 14]}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:cause :no-gate}} :within-s 50 :of-job true}
+            {:no-event {:source :job :kind :completed :data {:kind :done}} :for-s 5 :until {:source :job :kind :stopped}}]}]}
