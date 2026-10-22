@@ -5,7 +5,8 @@
 ;; level and the body cuts a second stair from its top (card 2da70080).
 ;; Foreign zones over the tunnel and the return corridor toll them (the zone-tolls setting, on by default): a walk of about 105 cells against a stair.
 ;; Should-succeed: the stair is dug (go-to.escalated :stair) and the body arrives. Should-fail (control): :escalate false walks the long way, nothing is dug;
-;; the detour floor is raised because most of that way is unseen.
+;; the detour floor is raised because most of that way is unseen. The stair case first walks the long way there and back (the control's job) so the
+;; body has seen the route: over unseen land the first plan is a :budget partial and stair-first judges whole plans only.
 {:defaults
  {:tags [:movement :go-to :planner]
   :time :any
@@ -17,13 +18,17 @@
   :zones [{:name "tunnel" :min [3 0 16] :max [44 0 16] :owner "SomeoneElse"}
           {:name "top" :min [16 10 16] :max [54 10 16] :owner "SomeoneElse"}]
   :body {:at [4.5 0 16.5] :yaw 270 :settle-s 2 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1]]}
-  :limit-s 200}
+  :limit-s 360}
  :cases
  [{:name "stair-up-instead-of-the-long-tolled-walk"
    :blocks [[:fill [45 1 16] [45 3 16] "air"] [:fill [46 2 16] [46 4 16] "air"] [:fill [47 3 16] [47 5 16] "air"] [:fill [48 4 16] [48 6 16] "air"] [:fill [49 5 16] [49 7 16] "air"] [:fill [50 6 16] [50 8 16] "air"] [:fill [51 7 16] [51 9 16] "air"] [:fill [52 8 16] [52 10 16] "air"] [:fill [53 9 16] [53 11 16] "air"] [:fill [54 10 16] [54 11 18] "air"] [:fill [44 10 18] [54 11 18] "air"] [:fill [14 10 16] [44 11 16] "air"] [:fill [44 10 17] [44 11 17] "air"]]
-   :act [[:job (jobs.movement.go-to {:pos #at [14 10 16] :range 1})]]
-   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 90 :of-job true}
-            {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 180 :of-job true}]
+   :act [[:job (jobs.movement.go-to {:pos #at [14 10 16] :range 1 :ways #{:walk :clear-seal} :settings {:jobs.movement.go-to.detour/floor 200}})]
+         [:await {:source :job :kind :completed :data {:arrived true}} 120]
+         [:job (jobs.movement.go-to {:pos #at [4 0 16] :range 1 :ways #{:walk :clear-seal} :settings {:jobs.movement.go-to.detour/floor 200}})]
+         [:await {:source :job :kind :completed :data {:arrived true} :after-previous true} 120]
+         [:job (jobs.movement.go-to {:pos #at [14 10 16] :range 1 :settings {:jobs.lib.toll-cells/margin 40}})]
+         [:await {:source :job :kind :completed :data {:arrived true} :after-previous true} 200]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 200 :of-job true}]
    :after [[:body-near [14.5 10 16.5] 2.5]]}
   {:name "escalate-false-walks-the-long-way"
    :blocks [[:fill [45 1 16] [45 3 16] "air"] [:fill [46 2 16] [46 4 16] "air"] [:fill [47 3 16] [47 5 16] "air"] [:fill [48 4 16] [48 6 16] "air"] [:fill [49 5 16] [49 7 16] "air"] [:fill [50 6 16] [50 8 16] "air"] [:fill [51 7 16] [51 9 16] "air"] [:fill [52 8 16] [52 10 16] "air"] [:fill [53 9 16] [53 11 16] "air"] [:fill [54 10 16] [54 11 18] "air"] [:fill [44 10 18] [54 11 18] "air"] [:fill [14 10 16] [44 11 16] "air"] [:fill [44 10 17] [44 11 17] "air"]]
