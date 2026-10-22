@@ -400,6 +400,13 @@
             (is (= runs (min 5 @calls)) why))
           (when more (recur more)))))))
 
+(deftest the-dug-count-follows-the-site-not-the-ore
+  (let [at {:x 0 :y 16 :z 32}
+        mem {:gather {:dug {"iron_ore" {:n0 200 :at at}}}}]
+    (is (= 232 (gather/dug-total mem "iron_ore" {:x 0 :y 16 :z 60} 32)) "the run went on from where the last ended")
+    (is (= 32 (gather/dug-total mem "iron_ore" {:x 300 :y 16 :z 0} 32)) "site B, far from where A's count ended, starts at its own run")
+    (is (= 32 (gather/dug-total {} "iron_ore" at 32)))))
+
 (deftest the-blocks-dug-without-a-find-do-not-outlive-the-gather
   (async done
     (tu/run-async done

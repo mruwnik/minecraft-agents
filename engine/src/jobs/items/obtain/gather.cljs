@@ -291,13 +291,21 @@
   (let [d (cost/expected-density (ore-resource need) (update (u/self-pos c) :y js/Math.floor) nil)]
     (or (not (pos? d)) (>= (* n faces-per-block d) (barren-ore)))))
 
+(defn dug-total
+  "Blocks cut in a row without a find, counting this run's n: the count of the ore key in mem's [:gather :dug] ({:n :at},
+  where the last run ended) while pos is within n blocks of that end (the run went on from there), else n (a new site)."
+  [mem key pos n]
+  (let [{:keys [n0 at]} (get-in mem [:gather :dug key])]
+    (if (and at (<= (u/dist at pos) n)) (+ n n0) n)))
+
 (defn strip-on!
   "A mine for an ore not seen that cut n blocks of new ground and found none looked at new rock: the next run mines on
   from where it stands, not counted fruitless, until the blocks cut in a row without a find make the ground barren?; info obtain.strip-on. :again."
   [c need n]
-  (let [total (+ n (get-in (ctx/mem c) [:gather :dug (:key need)] 0))
-        y (js/Math.floor (:y (u/self-pos c)))]
-    (ctx/update-mem! c assoc-in [:gather :dug (:key need)] total)
+  (let [pos (u/self-pos c)
+        total (dug-total (ctx/mem c) (:key need) pos n)
+        y (js/Math.floor (:y pos))]
+    (ctx/update-mem! c assoc-in [:gather :dug (:key need)] {:n0 total :at pos})
     (if (barren? c need total)
       (do (ctx/update-mem! c assoc-in [:gather :why] (str "cut " total " blocks down to y " y " and saw no " (:key need) ": too little there to mine on"))
           false)
