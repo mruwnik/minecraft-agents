@@ -1,6 +1,6 @@
 (ns jobs.survival.set-spawn
   (:require [jobs.lib.ready :as ready]
-            [jobs.movement.go-to.risk :as risk]
+            [jobs.lib.price :as price]
             [engine.args :as a]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
@@ -54,7 +54,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s}})
 
-(def safe? (risk/priced (ready/safe-at-by-night bed-of) (risk/trip-s bed-of 3)))
+(def safe? (price/stays (ready/safe-at-by-night bed-of) (price/trip-s bed-of 3)))
 
 (def fit? ready/ok)
 

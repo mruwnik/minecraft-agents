@@ -10,6 +10,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.foods :as foods]
             [jobs.lib.reserve :as reserve]
+            [jobs.lib.util :as u]
             [jobs.lib.walk.world :as wworld]))
 
 (a/defargs settings
@@ -20,7 +21,7 @@
    ::hungry-share {:default 0.5 :spec (a/num-in 0 1)
                    :doc "Share of the affordable damage a body at ::hungry-food or under may risk."}
    ::place-stay-s {:default 10 :spec (a/num-in 0 nil)
-                   :doc "Seconds a job is taken to stay at an exposed place when it does not say (a job's own safe? wraps go-to.risk/priced with its figure)."}})
+                   :doc "Seconds a job is taken to stay at an exposed place when it does not say (a job's own safe? wraps price/stays with its figure)."}})
 
 (defn cannot-heal?
   "Whether the body of ctx c can not heal by waiting: food under foods/top-up-food and nothing a meal would eat carried (reserved food, which the hungry trigger and an unnamed meal leave alone, does not count)."
@@ -64,3 +65,17 @@
         (if (<= hp ok-hp)
           (contract/ok :priced (str "exposed, but " (round1 secs) " s there cost " (round1 hp) " hp, within " (round1 ok-hp)))
           s)))))
+
+(defn stays
+  "The checker `safe` of a job that stays put or visits a place, run with (stay-s c) seconds as its stay there: `priced` prices an
+  exposed place by it, so a short act in the dark goes ahead (Q382) and a long one waits."
+  [safe stay-s]
+  (with-meta (fn [c] (safe (assoc c ::stay-s (stay-s c)))) (meta safe)))
+
+(def chest-act-s "Seconds a chest visit (deposit, withdraw) keeps the body at the chest." 3)
+
+(defn trip-s
+  "stay-s of a job that walks to the place (f c) (nil: here), acts act-s seconds there and walks back."
+  [f act-s]
+  (fn [c] (let [at (f c)]
+            (+ act-s (if (and at (:y at)) (/ (* 2 (u/dist (u/self-pos c) at)) (cost/walk-blocks-per-s)) 0)))))

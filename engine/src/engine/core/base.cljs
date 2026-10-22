@@ -303,7 +303,18 @@
   "[dir what] -> {:msg :t} of the last call-guarded warn, so one broken predicate warns once, not every tick."
   (atom {}))
 
-(defn reset-guard-warned! [] (reset! guard-warned {}))
+(defonce warm-start-hooks (atom {}))
+
+(defn on-warm-start!
+  "Registers f to run when a warm process starts its engine again (state that must not outlive a run); k replaces an earlier f."
+  [k f]
+  (swap! warm-start-hooks assoc k f))
+
+(defn warm-start!
+  "Resets what a run must not inherit from the process's earlier one: the call-guard warn cache and every registered hook."
+  []
+  (reset! guard-warned {})
+  (run! #(%) (vals @warm-start-hooks)))
 
 (def guard-repeat-ms 60000)
 

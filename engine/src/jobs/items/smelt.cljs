@@ -17,7 +17,7 @@
             [jobs.lib.reserve :as reserve]
             [jobs.lib.storage :as storage]
             [jobs.lib.cost :as cost]
-            [jobs.movement.go-to.risk :as risk]
+            [jobs.lib.price :as price]
             [jobs.lib.util :as u]))
 
 (def doc
@@ -431,7 +431,7 @@
     (+ (/ (settings/ticks->ms (* n (sp/cook-ticks "furnace"))) 1000)
        (if f (/ (* 2 (u/dist (u/self-pos c) f)) (cost/walk-blocks-per-s)) 0))))
 
-(def safe? (risk/priced (ready/safe-at-by-night furnace-to-reach) stay-s))
+(def safe? (price/stays (ready/safe-at-by-night furnace-to-reach) stay-s))
 (def fit? ready/ok)
 
 (defn default-time

@@ -5,7 +5,7 @@
   Risk = the mobs expected to spawn on the exposed stretches (jobs.lib.cost/spawn-chance per second of walking, each costed
   as a zombie fight with the kit carried, jobs.lib.cost/fight-damage) plus, on a walk with such a stretch (in the light a hostile is seen and avoided; the reflexes meet it), the fight with every hostile known near the way.
   A walk to a goal within the death-spot radius of a place the body died lately (jobs.lib.death-spot, fading with time) adds the fight with what killed it, weighted by how fresh the death is, underground too, only when the walk ends nearer the death than it starts (a body standing, or walking away from the spot, is no closer to it) and the spot has not been seen since the death (fresh sight beats the record; a hostile seen there prices as a known hostile); not within ::pile-radius of the goal (a walk to the body's own drops: only a hostile known there counts).
-  Seen lava within ::lava-radius of a cell the straight way steps into adds ::lava-hp, scaled by its closeness (a slip beside it is lethal); a body already at the goal, or a way clear of lava, adds none.
+  Seen lava within jobs.lib.lava-risk/radius of a cell the straight way steps into adds jobs.lib.lava-risk/hp, scaled by its closeness (a slip beside it is lethal); a body already at the goal, or a way clear of lava, adds none.
   Acceptable when it stays within jobs.lib.price/::risk-share of the health the body has now, or, when the caller says what the goal is worth (:worth), within the hp that worth buys (price/allowed)."
   (:require [engine.args :as a]
             [engine.contract :as contract]
@@ -16,6 +16,7 @@
             [jobs.lib.death-spot :as death-spot]
             [jobs.lib.hide-spot :as hide-spot]
             [jobs.lib.danger :as danger]
+            [jobs.lib.lava-risk :as lava-risk]
             [jobs.lib.look :as look]
             [jobs.lib.price :as price]
             [jobs.lib.ready :as ready]
@@ -34,10 +35,6 @@
                   :doc "Blocks around the goal within which a remembered death or hide adds no risk: the body walking to the spot goes for its own things, and only a hostile known there counts."}
    ::way-radius {:default 16 :spec (a/num-in 0 nil)
                  :doc "Blocks from the straight way within which a known hostile adds its fight to the risk of the walk."}
-   ::lava-radius {:default 3 :spec (a/int-in 0 nil)
-                  :doc "Blocks around a cell of the walk within which seen lava is a risk."}
-   ::lava-hp {:default 6 :spec (a/num-in 0 nil)
-              :doc "hp of risk for a step right beside seen lava (less the farther it is, down to a quarter at ::lava-radius): a slip there is lethal, so a small chance of it costs this much."}
    ::step {:default 4 :spec (a/num-in 1 nil)
            :doc "Blocks between the cells of the way whose light is judged; a way longer than ::max-cells steps is judged at that many cells, spaced wider."}
    ::max-cells {:default 256 :spec (a/int-in 1 nil)
@@ -66,30 +63,6 @@
       (or underground? (< (:y cell) (- top (settings/get settings ::surface-band)))) 0
       :else (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky sky})}))))
 
-(defn- lava-hp-from
-  "::lava-hp scaled by the closeness of the nearest of `lavas` ([x y z] vectors) to the cell [x y z]: full beside it, a quarter at ::lava-radius, 0 beyond."
-  [lavas [x y z]]
-  (let [r (settings/get settings ::lava-radius)
-        near (for [[lx ly lz] lavas
-                   :let [d (max (js/Math.abs (- lx x)) (js/Math.abs (- lz z)))]
-                   :when (and (<= d r) (<= -3 (- ly y) 2))]
-               d)]
-    (if (seq near)
-      (* (settings/get settings ::lava-hp) (/ (- (inc r) (max 1 (apply min near))) r))
-      0)))
-
-(defn lava-hp
-  "The hp of risk of standing at cell (a map or [x y z]) with seen lava near: ::lava-hp scaled by how close the nearest seen lava is, else 0."
-  [p cell]
-  (let [[x y z] (if (map? cell) [(:x cell) (:y cell) (:z cell)] cell)
-        r (settings/get settings ::lava-radius)]
-    (if-not y
-      0
-      (lava-hp-from (for [dx (range (- r) (inc r)) dz (range (- r) (inc r)) dy (range -3 3)
-                          :when (= "lava" (u/seen-name p {:x (+ x dx) :y (+ y dy) :z (+ z dz)}))]
-                      [(+ x dx) (+ y dy) (+ z dz)])
-                    [x y z]))))
-
 (def lava-scan-radius 128)
 
 (defn route-lava-hp
@@ -99,8 +72,8 @@
         cells (remove #(= % start) (cells-along feet goal step))
         lavas (when (seq cells)
                 (mapv (comp (juxt :x :y :z) :pos)
-                      (look/seen-blocks p {:names ["lava"] :radius (min lava-scan-radius (+ (u/dist feet goal) (settings/get settings ::lava-radius))) :max 256})))]
-    (reduce max 0 (for [cell cells] (lava-hp-from lavas [(:x cell) (:y cell) (:z cell)])))))
+                      (look/seen-blocks p {:names ["lava"] :radius (min lava-scan-radius (+ (u/dist feet goal) (lava-risk/radius))) :max 256})))]
+    (reduce max 0 (for [cell cells] (lava-risk/hp-from lavas [(:x cell) (:y cell) (:z cell)])))))
 
 (defn estimate
   "{:hp :spawn-hp :hostile-hp :dark-s :hostiles} of the walk of c's body to `goal` ({:x :y :z}): hp the expected damage, dark-s
@@ -136,14 +109,6 @@
         hostile-hp (if (pos? exposed-s) (hit (mapv (fn [e] {:name (.-name e) :distance (danger/mob-distance p e) :hits 0}) hostiles)) 0)]
     {:hp (+ spawn-hp hostile-hp death-hp hide-hp lava) :lava-hp lava :hide-hp hide-hp :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :dark-s exposed-s :hostiles (count hostiles)}))
 
-(def chest-act-s "Seconds a chest visit (deposit, withdraw) keeps the body at the chest." 3)
-
-(defn trip-s
-  "stay-s of a job that walks to the place (f c) (nil: here), acts act-s seconds there and walks back."
-  [f act-s]
-  (fn [c] (let [at (f c)]
-            (+ act-s (if (and at (:y at)) (/ (* 2 (u/dist (u/self-pos c) at)) (cost/walk-blocks-per-s)) 0)))))
-
 (defn status
   "Ok while the estimated damage of the walk to `goal` is within (price/allowed c), else later :risky with the
   risk and its parts."
@@ -156,9 +121,3 @@
                                   (price/round1 dark-s) " s on dark open ground costs " (price/round1 spawn-hp) " hp, "
                                   hostiles " hostile(s) near the way " (price/round1 hostile-hp) " hp, " (price/round1 death-hp) " hp for a recent death near it, " (price/round1 hide-hp) " hp for a recent hide near it, " (price/round1 lava-hp) " hp for seen lava near the way")
                       :risk hp :allowed allowed :recheck-after-ms 10000))))
-
-(defn priced
-  "The checker `safe` of a job that stays put or visits a place, run with (stay-s c) seconds as its stay there: jobs.lib.price prices an
-  exposed place by it, so a short act in the dark goes ahead (Q382) and a long one waits."
-  [safe stay-s]
-  (with-meta (fn [c] (safe (assoc c ::price/stay-s (stay-s c)))) (meta safe)))

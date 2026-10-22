@@ -20,7 +20,7 @@
             [jobs.lib.util :as u]
             [jobs.lib.pace :as pace]
             [jobs.lib.cost :as cost]
-            [jobs.movement.go-to.risk :as risk]
+            [jobs.lib.price :as price]
             [jobs.lib.spent :as spent]
             [jobs.lib.spot :as free-spot]
             [jobs.lib.storage :as storage]))
@@ -63,7 +63,7 @@
         away (if table (max 0 (- (u/dist (u/self-pos c) table) (reach))) 0)]
     (+ (* (max 1 (or (:count (:args c)) 1)) (batch-s)) (/ (* 2 away) (cost/walk-blocks-per-s)))))
 
-(def safe? (risk/priced ready/safe-here-by-night stay-s))
+(def safe? (price/stays ready/safe-here-by-night stay-s))
 (def fit? ready/ok)
 
 (def defaults {:least :all :spend {:job-time ::job-time-s}})

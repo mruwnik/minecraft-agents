@@ -10,7 +10,6 @@
             [engine.sky-perception :as sky]
             [engine.test-util :as tu]
             [jobs.lib.sense :as sense]
-            [jobs.movement.go-to.risk :as risk]
             [jobs.lib.util :as u]
             [jobs.explore.look :as look]
             [jobs.explore.search :as search]
@@ -141,7 +140,7 @@
   (is (= :later (lit 0 15 #(kind ready/safe-here-by-night open-night)))))
 
 (deftest priced-stay-goes-ahead-when-its-expected-damage-is-affordable
-  (are [stay-s expected] (= expected (lit 0 15 #(kind (risk/priced ready/safe-here-by-night (constantly stay-s)) open-night)))
+  (are [stay-s expected] (= expected (lit 0 15 #(kind (price/stays ready/safe-here-by-night (constantly stay-s)) open-night)))
     2 :ok
     1e6 :later))
 

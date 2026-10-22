@@ -1,7 +1,7 @@
 (ns jobs.items.kitchen
   (:require [jobs.lib.foods :as foods]
             [jobs.lib.ready :as ready]
-            [jobs.movement.go-to.risk :as risk]
+            [jobs.lib.price :as price]
             [clojure.string :as str]
             [jobs.lib.checks :as checks]
             [engine.args :as a]
@@ -62,7 +62,7 @@
 (def target [:stock])
 (def ways need/fetch-ways)
 
-(def safe? (risk/priced (ready/safe-at-by-night #(:furnace (:args %))) (risk/trip-s #(:furnace (:args %)) 30)))
+(def safe? (price/stays (ready/safe-at-by-night #(:furnace (:args %))) (price/trip-s #(:furnace (:args %)) 30)))
 (def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s}})

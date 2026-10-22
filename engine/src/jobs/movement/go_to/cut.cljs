@@ -1,7 +1,8 @@
 (ns jobs.movement.go-to.cut
   "A go-to call's record across restarts: the walk so far (approaches), the cut count that gives up :cut-again, the start
   of a call from the world, and the hostile a cut is guessed to come from."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.core.base :as base]
+            [engine.ctx :as ctx]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
@@ -81,6 +82,8 @@
   []
   (reset! approaches {})
   (reset! session (fresh-session-id)))
+
+(base/on-warm-start! ::session new-session!)
 
 (defn cut-state
   "The cut bookkeeping after a call restarts at dist from goal, from m, the call's memory: {:goal :closest :ref :cuts
