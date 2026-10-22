@@ -1,5 +1,8 @@
 (ns dashboard.rcon-test
-  (:require ["net" :as net]
+  (:require ["fs" :as fs]
+            ["net" :as net]
+            ["os" :as os]
+            ["path" :as path]
             [cljs.test :refer [deftest is async]]
             [dashboard.rcon :as rcon]))
 
@@ -113,3 +116,12 @@
                       {} ["list"]
                       #(is (= {:error "RCON refused the password"} %))
                       done)))
+
+(deftest a-time-set-is-refused-only-while-the-freeze-file-exists
+  (let [file (path/join (os/tmpdir) (str "mc-time-freeze-test-" (.-pid js/process)))]
+    (is (nil? (rcon/freeze-refusal file ["time set 1000"])))
+    (fs/writeFileSync file "")
+    (try
+      (is (re-find #"refused: `time set`" (rcon/freeze-refusal file ["list" "/time set day"])))
+      (is (nil? (rcon/freeze-refusal file ["time query daytime" "weather clear"])))
+      (finally (fs/unlinkSync file)))))

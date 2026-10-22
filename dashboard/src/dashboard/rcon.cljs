@@ -83,6 +83,17 @@
        (.once socket "error" (fn [e] (js/clearTimeout timer) (reject e)))
        (.once socket "connect" (fn [] (js/clearTimeout timer) (resolve socket)))))))
 
+(def freeze-file "/tmp/mc-time-freeze")
+
+(defn time-set-command? [command]
+  (boolean (re-find #"^\s*/?time\s+set\b" (str command))))
+
+(defn freeze-refusal
+  "The refusal text when `commands` set the clock while the freeze file exists (trial bodies are living through their days and nights), else nil."
+  [file commands]
+  (when (and (some time-set-command? commands) (.existsSync fs file))
+    (str "refused: `time set` would change the world clock, and " file " exists (a freeze while trial bodies run). Remove the file to allow it.")))
+
 (defn send-commands!
   "Connects, authenticates, sends each command in order on one connection (ids 2, 3, ...), resolves to the vector of
   reply bodies. opts: :port (default 25575), :password (default: the password file), :timeout-ms (default 10000,
@@ -90,6 +101,7 @@
   [{:keys [port password timeout-ms] :or {port default-port timeout-ms default-timeout-ms}} commands]
   (-> (js/Promise.resolve nil)
       (.then (fn [_]
+               (when-let [why (freeze-refusal freeze-file commands)] (throw (js/Error. why)))
                (let [secret (or password (.trim (.readFileSync fs (password-file) "utf8")))
                      buffer (atom (js/Buffer.alloc 0))]
                  (-> (connect! port timeout-ms)
