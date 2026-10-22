@@ -399,7 +399,7 @@
                       (cond
                         (torch-due c (:cause e)) (book-light! c (torch-due c (:cause e)))
                         (light-settling? c (:cause e)) :again
-                        (and (#{:flooded :wet :exposed} (contract/cause-key e)) at)
+                        (and (#{:flooded :wet :exposed :hazard} (contract/cause-key e)) at)
                         (do (ctx/update-mem! c update :cut-off (fnil conj #{}) at) :again)
                         (and (:tunnel? need) (not at) (pos? (dug-blocks res)) (strip-on! c need (dug-blocks res))) :again
                         :else (do (when-not (and (:tunnel? need) (not at) (pos? (dug-blocks res))) ; else the barren verdict stands

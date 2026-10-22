@@ -53,13 +53,12 @@
   from the :stair-way memory; a fluid in a cut; a fluid beside a cut or a falling block over one, taken
   only when named in :accept, default #{}; the next floor solid; the cell under it neither air nor fluid). The
   target's own column counts as a last run step; when that step is refused, no line is judged and its reason is the
-  heading's. A heading reads at most jobs.access.tunnel.line/heading-reads cells: longer lines past them count as not
-  fitting. The shortest valid line wins, among those whose entry is within 24 blocks of the body if any (the body does not walk to a far surface entry when it stands in a line underground). Among equals one that leaves the
+  heading's. A heading reads at most ::heading-reads cells: longer lines past them are not judged (:read-bound if none else fits). The shortest valid line wins, among those whose entry is within 24 blocks of the body if any (the body does not walk to a far surface entry when it stands in a line underground). Among equals one that leaves the
   floor under the body's start uncut wins, then the entry nearest the body.
 
   Every line refused by a zone, claim or plan waits (:refused) while all are refused. Else no
   valid line ends before any walk or dig with the reason all judged lines share (:hazard
-  :cave-below :no-floor :fluid-in-cut :undercuts-way :not-loaded). :too-far: no line fits within :max-length.
+  :cave-below :no-floor :fluid-in-cut :undercuts-way :not-loaded). :too-far: no line fits within :max-length. :read-bound: none was found within the reads allowed.
   :no-approach: the headings differ, with :headings giving each one's reason.
 
   Then the body walks to the entry (a go-to child planning no deeper than 16 below the lower of body and entry; failing: :walk-in-failed, nothing possible) and the stair child cuts
@@ -101,7 +100,8 @@
   (the stair's and the run's own), then the body walks back and goes on; a fetch that fails or cures nothing, or no fetch allowed, digs the block bare-handed (slow, no drop) unless :need-drop is true (then it ends :no-tool with its reason as :because); :need-drop false digs bare-handed without fetching.")
 
 (a/defargs settings
-  {::job-time-s {:default 1800 :doc "Seconds a tunnel may take." :spec (a/num-in 0 nil)}})
+  {::job-time-s {:default 1800 :doc "Seconds a tunnel may take." :spec (a/num-in 0 nil)}
+   ::heading-reads {:default 6000 :doc "Cells one heading's lines may read when a line is chosen (each once): longer lines past it are not judged. Bounds the sync approach near the search budget (~100 ms) however much rock lies unseen around the target." :spec (a/int-in 1 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
 
 (a/defargs args
@@ -130,7 +130,7 @@
   (let [{:keys [max-length accept]} (:args c)
         target (target-of c)
         a (when-not (or (:plan (ctx/mem c)) (bad-target? target))
-            (ln/approach (dissoc (judge/rules-in c (reach/standing-vec (:primitives c))) :feet) target (reach/standing-vec (:primitives c)) max-length (set accept) (:heading (:args c))))]
+            (ln/approach (assoc (dissoc (judge/rules-in c (reach/standing-vec (:primitives c))) :feet) :heading-reads (settings/get settings ::heading-reads)) target (reach/standing-vec (:primitives c)) max-length (set accept) (:heading (:args c))))]
     (when (contains? #{:zone :footprint :claim} (:reason a)) a)))
 
 (defn not-refused
@@ -154,7 +154,7 @@
 
 (def facts
   "The stops that name a fact barring the way (condition-failed); the others are attempts that failed."
-  (into stair/facts #{:too-far :no-approach}))
+  (into stair/facts #{:too-far :read-bound :no-approach}))
 
 (defn record-run!
   "Remember the level run walked (memory :tunnel-way, as the strip mine does), so go-to's own way up links the tunnel."
@@ -335,10 +335,10 @@
         feet (reach/standing-vec (:primitives c))]
     (if (bad-target? target)
       (finish! c :bad-args {:why "target must be [x y z] of integers"})
-      (let [a (await (sense/decide! c ::approach #(ln/approach (assoc (dissoc (judge/rules-in c feet) :feet) :filler? (some? (choose/filler c :build))) target feet max-length (set accept) (:heading (:args c)))
+      (let [a (await (sense/decide! c ::approach #(ln/approach (assoc (dissoc (judge/rules-in c feet) :feet) :heading-reads (settings/get settings ::heading-reads) :filler? (some? (choose/filler c :build))) target feet max-length (set accept) (:heading (:args c)))
                                     {:retry? #(not (:entry %))}))]
         (if-let [w (when (or (not (:entry a)) (ln/far-entry? a feet))
-                     (when (or (:entry a) (#{:too-far :no-approach} (:reason a)))
+                     (when (or (:entry a) (#{:too-far :read-bound :no-approach} (:reason a)))
                        (ln/leg-target (:block-at (judge/rules-in c feet)) feet target max-length (:leg-swap (ctx/mem c)))))]
           (do (ctx/update-mem! c assoc :leg w) :again)
           (if (:entry a)

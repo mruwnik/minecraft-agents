@@ -27,8 +27,10 @@
     (let [n (get named cell (if (< y 65) "stone" "air"))]
       (when-not (= :unloaded n) n))))
 
+(def reads-per-heading 6000)
+
 (defn approach [named target & {:keys [zones footprints max-length accept ways feet] :or {zones [] footprints #{} max-length 24 accept #{} feet [0 65 0]}}]
-  (ln/approach {:block-at (world-fn named) :zones zones :footprints footprints :ledger #{} :ways ways}
+  (ln/approach {:heading-reads reads-per-heading :block-at (world-fn named) :zones zones :footprints footprints :ledger #{} :ways ways}
                    target feet max-length accept))
 
 (defn stair-target [{:keys [stand heading]}]
@@ -39,7 +41,7 @@
 (deftest a-long-approach-reads-the-world-for-the-near-entries-only
   (let [reads (atom 0)
         block-at (fn [cell] (swap! reads inc) ((world-fn {}) cell))
-        a (ln/approach {:block-at block-at :zones [] :footprints #{} :ledger #{}} [-3 37 0] [0 50 0] 96 #{})]
+        a (ln/approach {:heading-reads reads-per-heading :block-at block-at :zones [] :footprints #{} :ledger #{}} [-3 37 0] [0 50 0] 96 #{})]
     (is (= 29 (:length a)))
     (is (< @reads 40000) @reads)))
 
@@ -56,11 +58,17 @@
                ICounted (-count [_] (count floors))
                IWithMeta (-with-meta [this _] this))
         layer (fn [[_ y _]] (cond (= y 50) "water" (< y 65) "stone" :else "air"))
-        a (ln/approach {:block-at (fn [cell] (swap! reads inc) (layer cell)) :zones [] :footprints #{} :ledger #{} :ways ways}
+        a (ln/approach {:heading-reads reads-per-heading :block-at (fn [cell] (swap! reads inc) (layer cell)) :zones [] :footprints #{} :ledger #{} :ways ways}
                        [-3 37 0] [0 65 0] 96 #{})]
     (is (= :cave-below (:reason a)))
-    (is (<= @reads (* 4 (+ ln/heading-reads 500))) @reads)
+    (is (<= @reads (* 4 (+ reads-per-heading 500))) @reads)
     (is (zero? @walks))))
+
+(deftest a-line-search-past-the-read-bound-is-read-bound-not-too-far
+  (let [a (ln/approach {:heading-reads 50 :block-at (world-fn {}) :zones [] :footprints #{} :ledger #{}} [-3 37 0] [0 50 0] 96 #{})
+        b (ln/approach {:heading-reads reads-per-heading :block-at (world-fn {}) :zones [] :footprints #{} :ledger #{}} [-3 37 0] [0 50 0] 8 #{})]
+    (is (= :read-bound (:reason a)) "reads ran out before a line fit")
+    (is (= :too-far (:reason b)) "no line fits within max-length, reads left")))
 
 (deftest the-surface-of-a-column
   (are [named y] (= y (ln/surface (world-fn named) [3 5] 50 80))
@@ -85,7 +93,7 @@
         in {:block-at (world-fn cave-room) :floor-at #(when (seen %) ((world-fn cave-room) %))
             :column-at #(if (seen %) ((world-fn cave-room) %) "air")
             :zones [] :footprints #{} :ledger #{} :ways nil}
-        a (ln/approach in [4 57 0] [0 60 0] 24 #{})]
+        a (ln/approach (assoc in :heading-reads reads-per-heading) [4 57 0] [0 60 0] 24 #{})]
     (is (= [0 60 0] (:entry a)) (pr-str a))))
 
 (deftest a-shorter-surface-entry-beats-the-body-underground
@@ -630,7 +638,7 @@
     (is (nil? (leg [26 -20 26] [26 -40 26])) "already above the target: no leg")))
 
 (deftest a-given-heading-limits-the-lines-to-it
-  (let [a (ln/approach {:block-at (world-fn {}) :zones [] :footprints #{} :ledger #{}} [6 57 0] [0 65 0] 24 #{} :north)]
+  (let [a (ln/approach {:heading-reads reads-per-heading :block-at (world-fn {}) :zones [] :footprints #{} :ledger #{}} [6 57 0] [0 65 0] 24 #{} :north)]
     (is (= :north (:heading a)))))
 
 (deftest a-straight-target-beyond-max-length-underground-is-reached-in-legs-from-the-bodys-own-cell
@@ -732,7 +740,7 @@
 (deftest the-widest-line-reads-few-blocks-over-open-air
   (let [reads (atom 0)
         air (fn [_] (swap! reads inc) "air")]
-    (ln/approach {:block-at air :zones [] :footprints #{} :ledger #{} :ways nil :ignore-zones? true}
+    (ln/approach {:heading-reads reads-per-heading :block-at air :zones [] :footprints #{} :ledger #{} :ways nil :ignore-zones? true}
                      [4 64 4] [0 65 0] 64 #{})
     (is (< @reads 40000))))
 

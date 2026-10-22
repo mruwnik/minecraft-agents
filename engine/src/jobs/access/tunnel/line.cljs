@@ -162,11 +162,6 @@
                     (<= (+ (* (- ex fx) (- ex fx)) (* (- ez fz) (- ez fz))) (* walk-in-max walk-in-max))))
           (take max-length (iterate inc 1))))
 
-(def heading-reads
-  "Cells one heading's lines may read (each once): longer lines past it are not judged, as if none fitted. Bounds a
-  sync approach near the search budget (~100 ms) however much rock lies unseen around the target."
-  6000)
-
 (defn best-on-heading
   "{:plan p} for the shortest valid line along heading, else {:stop s}: the stop of the last step, on the cell before
   the target, which every line shares (no line is read then), else the shortest fitting line's stop, or :too-far when
@@ -182,7 +177,7 @@
           (let [nearby (filter #(line-clear? stop-at %) (lines (walk-in-ns target heading max-length feet)))]
             {:plan p :near (first (remove #(far-entry? % feet) nearby))
              :level (first (filter #(level-from? % feet) nearby))})
-          {:stop (if-let [q (first fitting)] (line-stop stop-at q) {:reason :too-far})})))))
+          {:stop (if-let [q (first fitting)] (line-stop stop-at q) {:reason (if (more?) :too-far :read-bound)})})))))
 
 (defn cuts-floor?
   "Whether the line of plan cuts the floor under feet (the body would come back to a hole where it stood)."
@@ -215,17 +210,17 @@
           in (cond-> in (:block-at in) (update :block-at cached) (:column-at in) (update :column-at cached)
                      (:floor-at in) (update :floor-at cached))
           stop-at (memoize (fn [feet cells] (step-stop in feet cells accept)))
-          judge (fn [h] (let [limit (+ @reads heading-reads)]
+          judge (fn [h] (let [limit (+ @reads (:heading-reads in))]
                           (best-on-heading in stop-at #(< @reads limit) target h max-length feet)))
           per (into {} (map (fn [h] [h (judge h)])) (if only [only] heading-order))
           plans (distinct (mapcat (fn [h] (keep identity [(:plan (per h)) (:near (per h)) (:level (per h))])) (keys per)))]
       (if (seq plans)
         (first (sort-by (juxt #(not (level-from? % feet)) #(far-entry? % feet) :length #(cuts-floor? % feet) #(dist2 feet (:entry %))) plans))
         (let [stops (into {} (map (fn [[h r]] [h (:stop r)])) per)
-              real (remove #(= :too-far (:reason %)) (vals stops))
+              real (remove #(#{:too-far :read-bound} (:reason %)) (vals stops))
               reasons (set (map :reason real))]
           (cond
-            (empty? real) {:reason :too-far}
+            (empty? real) {:reason (if (some #(= :read-bound (:reason %)) (vals stops)) :read-bound :too-far)}
             (= 1 (count reasons)) (first real)
             :else {:reason :no-approach :headings (into {} (map (fn [[h s]] [h (:reason s)])) stops)})))))))
 

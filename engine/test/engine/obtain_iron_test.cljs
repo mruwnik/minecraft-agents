@@ -416,6 +416,21 @@
               "each refused ore is left for the next, none counted as nothing seen")
           (is (not-any? #(= :none-seen (:reason %)) (f/events-of s :waiting))))))))
 
+(deftest ore-the-mine-refuses-as-a-hazard-is-left-for-the-next-ore
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks {"1,64,4" "iron_ore" "3,64,5" "iron_ore" "0,64,6" "iron_ore"}
+              s (f/start (ore-world blocks [{:name "stone_pickaxe" :count 1}]) [])
+              eng (assoc-in (:eng s) [:jobs 'jobs.gather.mine :round]
+                            (fn ^:async f [c] (ctx/end c :impossible {:reason :hazard :text "water beside the target"})))
+              s (assoc s :eng eng)]
+          (await (obtain! s {:item "raw_iron" :count 1} 200))
+          (is (every? (set (map :at (filter (comp #{:obtain.gathering} :kind) @(:seen s))))
+                      [{:x 1 :y 64 :z 4} {:x 3 :y 64 :z 5} {:x 0 :y 64 :z 6}])
+              "each refused ore is left for the next, none counted as nothing seen")
+          (is (not-any? #(= :none-seen (:reason %)) (f/events-of s :waiting))))))))
+
 (deftest an-unseen-ore-is-mined-on-while-each-run-cuts-new-ground
   (async done
     (tu/run-async done
