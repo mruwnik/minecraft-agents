@@ -71,6 +71,6 @@
 
 (deftest a-death-by-terrain-adds-no-risk
   (let [c (ready-test/ctx-of day-world)]
-    (doseq [cause ["fall" "lava" "drown" "starve"]]
+    (doseq [cause ["fall" "lava" "drown" "starve" "a_new_cause" nil]]
       (is (zero? (:death-hp (risk/estimate (with-death c {:x 90 :y 64 :z 5} cause 60000) far-goal))) cause))
     (is (pos? (:death-hp (risk/estimate (with-death c {:x 90 :y 64 :z 5} "skeleton" 60000) far-goal))))))
