@@ -37,6 +37,12 @@
       (fn ^:async t []
         (is (= "stopped: unreachable" (await (stopped-text {:status :stopped :reason :unreachable}))))))))
 
+(deftest stopped-event-without-text-says-the-why
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= "no seen chest" (await (stopped-text {:status :stopped :reason :no-source :why "no seen chest"}))))))))
+
 (deftest stopped-event-text-is-whole
   (async done
     (tu/run-async done

@@ -15,10 +15,10 @@
             [engine.memory :as mem]))
 
 (defn stopped-text
-  "The words of a :stopped event: the result's own :text, else its cause's (a status's text),
+  "The words of a :stopped event: the result's own :text, else its cause's (a status's text), else their :why,
   else \"stopped: <reason>\"."
   [{:keys [reason cell cause] :as data}]
-  (let [text (or (:text data) (when (map? cause) (:text cause)))]
+  (let [text (or (:text data) (when (map? cause) (:text cause)) (:why data) (when (map? cause) (:why cause)))]
     (cond
       (and (string? text) (seq text)) text
       :else (str "stopped: " (some-> reason name) (some->> cell pr-str (str " at "))))))
