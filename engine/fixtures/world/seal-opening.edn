@@ -18,7 +18,8 @@
   :limit-s 180}
  :cases
  [{:name "a-cave-the-stair-broke-into-is-sealed-and-the-way-back-kept"
-   :act [[:job (seq (jobs.access.record-stair {}) (jobs.blocks.seal-opening {:radius 8 :ways #{:carried}}))]]
+   :act [[:job (jobs.access.record-stair {})]
+         [:job (jobs.blocks.seal-opening {:radius 8 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed :data {:sealed [:>= 5]}} :within-s 150 :of-job true}]
    :after [[:block [16 1 17] "cobblestone"] [:block [16 2 17] "cobblestone"] [:block [17 1 17] "cobblestone"]
            [:block [17 2 17] "cobblestone"] [:block [18 2 17] "cobblestone"]
