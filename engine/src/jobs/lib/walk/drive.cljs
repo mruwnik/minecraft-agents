@@ -151,7 +151,7 @@
                 _ (when (and (:learned done) (= :changed (:why done)) (not (:felt done)))
                     (await (look-over-edge! c (first (:cells done)))))
                 t (js/performance.now)
-                fresh (await (plan-fn (or (:walls done) [])))
+                fresh (await (plan-fn []))
                 plan-ms (- (js/performance.now) t)
                 fresh (assoc fresh :ms plan-ms)]
             (if (= :refresh (:why done))

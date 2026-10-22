@@ -22,12 +22,20 @@
     (is (pos? (:dark-s flat)))
     (is (< (:dark-s down) (/ (:dark-s flat) 2)))))
 
-(deftest seen-lava-near-the-goal-adds-hp-to-the-risk-and-lava-far-from-it-adds-none
+(deftest seen-lava-by-the-way-adds-hp-scaled-by-closeness-and-lava-far-from-it-adds-none
   (let [c (ready-test/ctx-of (assoc night-hut :time st/noon :blocks {"22,64,20" "lava"}))
-        hp #(:lava-hp (risk/estimate c %))]
+        hp #(:lava-hp (risk/estimate c %))
+        p (:primitives c)]
     (is (pos? (hp {:x 20 :y 64 :z 20})))
     (is (zero? (hp {:x 10 :y 64 :z 20})))
-    (is (= (hp {:x 20 :y 64 :z 20}) (risk/lava-hp (:primitives c) [20 64 20])))))
+    (is (> (risk/lava-hp p [21 64 20]) (risk/lava-hp p [19 64 20]) 0))
+    (is (= (hp {:x 20 :y 64 :z 20}) (risk/lava-hp p [20 64 20])) "the goal is the nearest cell to the lava")))
+
+(deftest a-body-already-at-a-goal-beside-seen-lava-owes-no-lava-risk
+  (let [c (ready-test/ctx-of (assoc night-hut :time st/noon :blocks {"22,64,20" "lava"}))
+        here {:x 21 :y 64 :z 20}]
+    (is (pos? (risk/lava-hp (:primitives c) [21 64 20])))
+    (is (zero? (risk/route-lava-hp (:primitives c) here here 1)))))
 
 (deftest a-dark-way-by-day-is-not-exposed
   (let [c (ready-test/ctx-of (assoc night-hut :time st/noon))]
