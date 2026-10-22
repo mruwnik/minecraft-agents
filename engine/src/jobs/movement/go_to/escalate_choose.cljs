@@ -165,14 +165,16 @@
   unless floors-unseen-ok? (a pocket's floor shows only from inside it)."
   ([p from goal may-dig? own?] (route-cells p from goal may-dig? own? false false))
   ([p from goal may-dig? own? floors-unseen-ok?] (route-cells p from goal may-dig? own? floors-unseen-ok? false))
-  ([p from goal may-dig? own? floors-unseen-ok? fetch?]
+  ([p from goal may-dig? own? floors-unseen-ok? fetch?] (route-cells p from goal may-dig? own? floors-unseen-ok? fetch? nil))
+  ([p from goal may-dig? own? floors-unseen-ok? fetch? route-opts]
   (let [block-at (escape/block-at-of p)
         seen-floor (fn [[x y z :as cell]]
                      (when-not (and (not floors-unseen-ok?) (dig-look/unknown? p cell) (dig-route/open? (block-at [x (inc y) z]))
                                     (not (dig-look/unknown? p [x (inc y) z])))
                        (block-at cell)))
-        cells (:dig (dig-route/route seen-floor from goal {:dig-s (fn [name cell] (when (escape/diggable? block-at may-dig? own? cell) (cost/dig-cost name)))
-                                                         :step-s (:cost (cost/walk-cost {:distance 1}))}))]
+        cells (:dig (dig-route/route seen-floor from goal (merge {:dig-s (fn [name cell] (when (escape/diggable? block-at may-dig? own? cell) (cost/dig-cost name)))
+                                                                  :step-s (:cost (cost/walk-cost {:distance 1}))}
+                                                                 route-opts)))]
     (when (and cells (every? #(escape/diggable? block-at may-dig? own? %) cells)
                (<= (route-s p cells own? fetch?) (max-route-s)))
       (mapv (fn [cell] {:cell cell :block (block-at cell) :guess (dig-look/unknown? p cell)}) cells)))))
@@ -189,13 +191,18 @@
   the dig-route settings' digs."
   6)
 
+(def leg-margin
+  "Blocks round its two ends a leg's route (dig-leg) may stray: a leg runs along the line, and every cell the route
+  search weighs is a zone and tool check."
+  1)
+
 (defn leg-ends
-  "The feet cells on the straight line from feet toward goal (cells [x y z]) at 1 to leg-blocks blocks on, farthest
+  "The feet cells on the straight line from feet toward goal (cells [x y z]) leg-blocks and half that on, farthest
   first; none when the goal is that near."
   [feet goal]
   (let [d (js/Math.sqrt (reduce + (map #(* (- %2 %1) (- %2 %1)) feet goal)))]
     (when (> d leg-blocks)
-      (distinct (for [i (range leg-blocks 0 -1)]
+      (distinct (for [i [leg-blocks (quot leg-blocks 2)]]
                   (mapv #(js/Math.floor (+ %1 0.5 (* (/ i d) (- %2 %1)))) feet goal))))))
 
 (defn dig-leg
@@ -208,7 +215,7 @@
     (let [p (:primitives c)
           budget (or (:worth (:args c)) (get-in (ctx/left c) [:spend :job-time] ##Inf))]
       (when-let [[cells s] (some (fn [end]
-                                   (when-let [cells (seq (route-cells p from end may-dig? own? false fetch?))]
+                                   (when-let [cells (seq (route-cells p from end may-dig? own? false fetch? {:margin leg-margin}))]
                                      [(vec cells) (route-s p (map :cell cells) own? fetch?)]))
                                  (leg-ends from goal))]
         (if (<= (+ (:leg-dig-s (ctx/mem c) 0) s) budget)

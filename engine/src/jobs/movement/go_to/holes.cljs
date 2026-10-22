@@ -28,11 +28,13 @@
   ([c spare?] (may-dig-fn c spare? spare?))
   ([c spare? pens?]
    (let [own-plan (own-plan-fn c)
-         pen-wall? (if pens? (own-pen/wall? c (end/feet-cell c)) (constantly false))]
+         pen-wall? (if pens? (own-pen/wall? c (end/feet-cell c)) (constantly false))
+         ;; tidy/refusal's input read once: a route search asks of hundreds of cells
+         rules (delay (access/rules-input c {:ignore-zones? false}))]
      (fn [cell]
        (and (or (not spare?) (nil? (own-plan cell)))
             (not (pen-wall? cell))
-            (or (boolean (:ignore-zones? (:args c))) (nil? (tidy/refusal c :dig (zipmap [:x :y :z] cell)))))))))
+            (or (boolean (:ignore-zones? (:args c))) (nil? (access/trespass-refusal @rules :dig (zipmap [:x :y :z] cell)))))))))
 
 (def placed-policy
   "Body memory policy of :escalation-placed, the cells go-to put a block back in: later escalations may dig them."
