@@ -18,6 +18,7 @@
     :ignore-zones?  true skips the zone, claim, footprint and no-zone-list checks (a job's opt-out). The
                  physical rules still apply.
     :ledger      set of [x y z] cells holding this body's own scaffold blocks (may be empty)
+    :dig-tables? true lets a keep-base? job dig a crafting table (cheap, comes back as an item; zones and claims still guard another's)
     :keep-base?  true refuses a dig of a base block (base-block?), whoever's: a job cutting its own way (stair,
                  tunnel) never breaks a chest, bed or furnace it meets, nor the block a door stands on
   The social part (zones, claims, footprints, no zone list) is jobs.lib.access.zones/verdict.
@@ -127,9 +128,9 @@
     (cond-> v
       (set? footprints) (dissoc :plan))))
 
-(defn common-checks [action {:keys [block-at cell ignore-zones? keep-base?] :as in}]
+(defn common-checks [action {:keys [block-at cell ignore-zones? keep-base? dig-tables?] :as in}]
   [#(when (nil? (block-at cell)) (refuse :not-loaded))
-   #(when (and keep-base? (= :dig action) (base-block? (block-at cell))) (refuse :base-block :block (block-at cell)))
+   #(when (and keep-base? (= :dig action) (base-block? (block-at cell)) (not (and dig-tables? (= "crafting_table" (block-at cell))))) (refuse :base-block :block (block-at cell)))
    #(when (and keep-base? (= :dig action))
       (let [over (block-at [(cell 0) (inc (cell 1)) (cell 2)])]
         (when (and over (re-find door-block over)) (refuse :base-block :block over))))

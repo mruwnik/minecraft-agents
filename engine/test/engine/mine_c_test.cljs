@@ -250,13 +250,13 @@
           (is (= 58 (second (:origin (:tunnel (done-event s)))))))))))
 
 ;; Sorrel j3047/j3050: a stair step that stopped mid-descent (:floor-unseen) ended the descent, and the tunnel ran 30+
-;; blocks above :level. A table in the third step stands in for the stop.
+;; blocks above :level. A chest in the third step stands in for the stop.
 (deftest a-step-blocked-mid-descent-turns-the-stair-and-goes-on-down-to-the-level
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [world {:blocks (merge (dissoc (cells "stone" (range -12 13) (range 50 68) (range -4 13)) "0,64,0" "0,65,0")
-                                    {"0,61,3" "crafting_table"})
+                                    {"0,61,3" "chest"})
                      :drops {"stone" "cobblestone"}
                      :inventory (into pickaxe [{:name "torch" :count 8}])}
               s (start {:world world})]
@@ -264,7 +264,7 @@
           (await (run-ticks s 600))
           (is (= "south" (:from (first (events-of s :mine.turned)))) (pr-str (map :text (events-of s :mine.turned))))
           (is (empty? (events-of s :mine.descent-stopped)) (pr-str (map :text (events-of s :mine.descent-stopped))))
-          (is (= "crafting_table" (block-at s 0 61 3)))
+          (is (= "chest" (block-at s 0 61 3)))
           (is (= 58 (second (:origin (:tunnel (done-event s)))))))))))
 
 (deftest a-shaft-in-reach-is-stairred-down-and-a-branch-mined

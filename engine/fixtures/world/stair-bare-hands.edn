@@ -23,4 +23,11 @@
    :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]]
    :expect [{:event {:source :job :kind :stopped} :within-s 210 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 30 :of-job true}]
-   :after [[:block [11 6 16] "bedrock"] [:body-near [10.5 6 16.5] 2]]}]}
+   :after [[:block [11 6 16] "bedrock"] [:body-near [10.5 6 16.5] 2]]}
+  {:name "a-crafting-table-in-the-cut-is-dug-and-the-stair-goes-on"
+   :body {:at [10.5 6 16.5] :yaw 270 :inventory [["iron_pickaxe" 1]] :effects [["resistance" 600 4]]}
+   :blocks [[:set [11 7 16] "crafting_table"]]
+   :act [[:job (jobs.access.stair {:dir :up :heading :east :steps 4})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 210 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:reason :base-block}} :for-s 200 :until {:source :job :kind :completed}}]
+   :after [[:not-block [11 7 16] "crafting_table"] [:body-near [14.5 10 16.5] 3]]}]}

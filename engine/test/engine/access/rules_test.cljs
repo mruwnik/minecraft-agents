@@ -103,6 +103,7 @@
     "smithing_table" "oak_door" "oak_sign" "brewing_stand" "composter")
   (are [n] (= {:ok true} (dig (world [5 64 5] n) [5 64 5] :keep-base? true))
     "stone" "dirt" "birch_planks" "oak_log" "iron_ore")
+  (is (= {:ok true} (dig (world [5 64 5] "crafting_table") [5 64 5] :keep-base? true :dig-tables? true)) "a stair digs a table")
   (is (= {:ok true} (dig (world [5 64 5] "chest") [5 64 5])) "only a job that asks keeps them"))
 
 (deftest every-fluid-neighbour-is-a-hazard
