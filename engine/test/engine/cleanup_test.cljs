@@ -23,6 +23,7 @@
             [engine.dig-to-see-test :as d]
             [jobs.lib.dig-look :as look]
             [jobs.access.cleanup :as cleanup]
+            [jobs.items.collect-drops :as cd]
             [jobs.lib.shelter.keep :as keep]
             [jobs.access.cleanup.step :as cleanup-step]
             [jobs.lib.result :as result]
@@ -508,7 +509,7 @@
           (await (ticks s eng 60))
           (is (= 0 (:collected @out)))
           (is (= :done (:status @out)))
-          (is (= (cleanup/collect-rounds)
+          (is (= (settings/get cd/settings :jobs.items.collect-drops/expect-rounds)
                  (count (filter #(= "wait" (.-name %)) (.-calls (.-world p)))))))))))
 
 (deftest side-blocks-are-dug-from-the-ground-and-a-far-one-after-a-walk

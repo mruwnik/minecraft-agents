@@ -5,6 +5,7 @@
             [engine.blocks-dig-test :as bd]
             [engine.core :as core]
             [engine.memory :as mem]
+            [engine.settings :as settings]
             [engine.event-api :as event-api]
             [engine.fake :as fake]
             [engine.test-util :as tu]
@@ -42,6 +43,18 @@
             (is (empty? (bd/left-drops seen)))
             (is (some #(and (= :child_started (:kind %)) (= :walk (:slot %))) @seen) "a go-to walk took it down the slope")
             (is (every? #(nil? (:maxDropDown %)) (collect-args p)) "no drop cap off a dug hole")))))))
+
+(deftest a-sweep-that-takes-fewer-than-expected-sweeps-again-a-few-times
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self body})]
+          (drop! p [2 64 0] "porkchop")
+          (let [result (await (tu/child-outcome eng job {:radius 6 :items ["porkchop"] :expect 2} 60))]
+            (is (= 1 (:collected result)))
+            (is (= :done (:status result)))
+            (is (= (settings/get job-ns/settings ::job-ns/expect-rounds)
+                   (count (filter #(= "wait" (.-name %)) (.-calls (.-world p))))))))))))
 
 (deftest a-call-without-a-radius-uses-the-radius-setting
   (async done

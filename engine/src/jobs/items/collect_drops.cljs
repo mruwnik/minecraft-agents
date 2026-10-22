@@ -45,6 +45,7 @@
   over the blocks the body has seen, an unseen one taken for stone) that open a way to it, each a jobs.blocks.dig child (zones, claims, hazards
   are its rules), then the walk is tried again. A dig that ends :unseen (the dark hides the cell) sets a carried torch in the body's cell once per call, looks again and digs on. No such way leaves the drop :no-route, a dig that fails with that dig's outcome (:refused, :cannot, :unreachable ...).
   With :near, a sweep that sees no drop first looks at that spot, and climbs to it (go-to :pillar/:stair) when it lies over a block above the feet. A sweep without :ids that sees no drop turns round once from each cell it ends in (entities are sensed only in the view cone) before it ends; a dig's :ids sweep does not (the dig looked already, and a danger's time is short).
+  With :expect n, a sweep that took fewer than n waits ::expect-wait-ms and sweeps again, at most ::expect-rounds times (a drop still falling or not yet seen); the call is not done while it waits.
   Needs nothing; the sweep is the whole job. Ends :done with data {:collected n}, the number of items that entered the
   inventory, with :left [{:pos :reason}] for those (also in :loose-left, so the :loose-items reflex leaves them); none in
   sight at all is :done with 0 (an open sweep, without :near). Drops tried, a :search that found none, or a named :near place with nothing in it, and none collected: :nothing-possible :none-collected, same data;
@@ -59,6 +60,7 @@
    :least-items {:doc "item names that count towards the call's :least; every collected item when nil" :spec (a/coll-of a/item?) :default nil}
    :ids {:doc "entity ids to collect (only those); any item when nil" :spec (a/coll-of number?) :default nil}
    :dig {:doc "dig a way to a drop that cannot be walked to (the cells are left for the caller's tidy)" :spec boolean? :default false}
+   :expect {:doc "items the caller knows lie within :radius (cells it just cleared): a sweep that took fewer waits ::expect-wait-ms and sweeps again, at most ::expect-rounds times (a drop still falling or not yet seen)" :spec (a/int-in 0 nil) :default 0}
    :look-holes? {:doc "look at each of :holes (and down its column) once before the round turns round" :spec boolean? :default false}
    :holes {:doc "cells the caller dug: an item lower than the feet at or under one of them, or one column beside, is in that hole"
            :spec (a/coll-of a/position?) :default nil}})
@@ -94,6 +96,8 @@
    ::dig-max-fall {:default 3 :doc "The longest fall, in blocks, the dig route plans." :spec (a/int-in 0 nil)}
    ::pile-reach {:default 10 :doc "How far from the place of an open death a :near spot still counts as its pile, in blocks." :spec (a/num-in 0 nil)}
    ::radius {:default 16 :doc "How far from the work area a drop is looked for when the call gives no :radius, in blocks." :spec (a/num-in 0 nil)}
+   ::expect-rounds {:default 3 :doc "How often a sweep that took fewer items than the call's :expect is made again." :spec (a/int-in 0 nil)}
+   ::expect-wait-ms {:default 500 :doc "How long the body waits before a sweep is made again for the call's :expect, in ms." :spec (a/int-in 0 nil)}
    ::max-moves {:default 2 :doc "How often a drop that slid to another cell while the body went to it is tried again, after a walk or dig that did not reach it." :spec (a/int-in 0 nil)}
    ::search-waits {:default 5 :doc "How many calls in a row a :search walk may wait on go-to (the night, a danger) before the search is given up." :spec (a/int-in 1 nil)}})
 
@@ -438,6 +442,12 @@
           (do (ctx/update-mem! c #(-> % (update :search-queue (comp vec rest)) (dissoc :search-waited)))
               :walked))))))
 
+(defn expecting?
+  "Whether the call's :expect is not met and sweeps are left to wait for the rest."
+  [c]
+  (let [m (ctx/mem c)]
+    (and (< (:collected m 0) (:expect (:args c))) (< (:expect-tries m 0) (settings/get settings ::expect-rounds)))))
+
 (defn done?
   "Ok once no wanted item lies in sight within :radius of the anchor and none was left unseen, the :search (when one is
   owed) is over and the sweep took something or skipped nothing; else later."
@@ -451,6 +461,7 @@
                   (seq (:left m)) :left
                   (seq (remove (set (:skipped m)) (:ids (:args c)))) :ids-unseen
                   (and (pos? (:search (:args c))) (< (wanted-count c) (least c))) :searching
+                  (expecting? c) :expecting
                   (and (zero? n) (or (seq (:skipped m)) (pos? (:search (:args c))) (:near (:args c)))) :skipped
                   (and (nil? (:ids (:args c))) (not (look/surveyed? c :cell))) :looking)]
     (if waiting
@@ -489,12 +500,18 @@
            "items were there but out of reach"
            "no items in sight there (taken or despawned)"))))
 
-(defn swept!
-  "The ending of a sweep with nothing left to try: done, or nothing-possible when nothing came in after items were skipped, a search ran or a :near place was named."
+(defn ^:async swept!
+  "The ending of a sweep with nothing left to try: done, or nothing-possible when nothing came in after items were skipped, a search ran or a :near place was named. Fewer collected than :expect waits and sweeps again (:again)."
   [c]
-  (if (and (zero? (:collected (ctx/mem c) 0)) (or (seq (:skipped (ctx/mem c))) (pos? (:search (:args c))) (:near (:args c))))
-    (ctx/end c :nothing-possible :none-collected (cond-> (data-of c) (:near (:args c)) (assoc :text (none-text c))))
-    (ctx/end c :done nil (data-of c))))
+  (let [m (ctx/mem c)]
+    (cond
+      (expecting? c)
+      (do (await (ctx/act c :wait #js {:ms (settings/get settings ::expect-wait-ms)}))
+          (ctx/update-mem! c update :expect-tries (fnil inc 0))
+          :again)
+      (and (zero? (:collected m 0)) (or (seq (:skipped m)) (pos? (:search (:args c))) (:near (:args c))))
+      (ctx/end c :nothing-possible :none-collected (cond-> (data-of c) (:near (:args c)) (assoc :text (none-text c))))
+      :else (ctx/end c :done nil (data-of c)))))
 
 (defn ^:async search-or-end!
   "No drop in sight: one search step (:continue while go-to waits, :again after a cell), else the end of the sweep."
@@ -504,7 +521,7 @@
       (= :continue r) :continue
       (and r (not= :waited r)) :again
       (= :waited r) (ctx/end c :nothing-possible :search-waited (data-of c))
-      :else (swept! c))))
+      :else (await (swept! c)))))
 
 (defn held-count [c item-name]
   (transduce (comp (filter #(= item-name (:name %))) (map :count)) + 0 (u/inventory (:primitives c))))
@@ -638,7 +655,7 @@
         item (await (collect-item! c item))
         (and (pos? (:search (:args c))) (< (wanted-count c) (least c)) (empty? (:left (ctx/mem c))))
         (await (search-or-end! c anchor))
-        :else (do (leave-unseen! c) (swept! c))))))
+        :else (do (leave-unseen! c) (await (swept! c)))))))
 
 (defn ^:async round
   "One whole attempt: collects the nearest matching dropped item again and again until none is left in radius.
