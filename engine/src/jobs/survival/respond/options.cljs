@@ -7,6 +7,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.hurt :as hurt]
+            [jobs.lib.body :as body]
             [jobs.lib.child :as child]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
@@ -126,7 +127,7 @@
   while one is known within follow range (the client's flag does not hold, and the enderman may teleport out of the near radius: the body must not leave the water it stepped into)."
   [c hostiles]
   (let [p (:primitives c)
-        hurt? (< (.-health (.self p)) (:flight-health (ctx/mem c) 0))
+        hurt? (boolean (some-> (:flight-start (ctx/mem c)) (->> (body/mob-hit-since? (ctx/view c)))))
         angry? (boolean (or (and (:angry-enderman (ctx/mem c)) (some combat/enderman? (concat hostiles (flight/known-chasers p))))
                             (some #(and (combat/enderman? %) (or hurt? (true? (.-angry %)) (<= (danger-q/mob-distance p %) (enderman-close)))) hostiles)))]
     (when angry? (ctx/update-mem! c assoc :angry-enderman true))
@@ -162,7 +163,9 @@
                    (map #(.-name %))
                    set)
         named? (and step-at (some #(some names (hurt-by %)) (ctx/since c :hurt step-at)))
-        hit? (boolean (or (and step-health (< health step-health) (seq (hitters c near))) named?))]
+        entries (when step-at (ctx/since c :hurt step-at))
+        mob-or-unlogged? (or (empty? entries) (some #(hurt/mob-hit? (:data %)) entries))
+        hit? (boolean (or (and step-health (< health step-health) (seq (hitters c near)) mob-or-unlogged?) named?))]
     (ctx/update-mem! c assoc :step-health health :step-at now :hit-on-the-run hit?)
     hit?))
 

@@ -218,7 +218,7 @@
   [c]
   (when-not (:flight-start (ctx/mem c)) (ctx/update-mem! c #(assoc % :pre-flight (set (keys %)))))
   (ctx/update-mem! c flight/resume-flight (ctx/now c))
-  (when-not (:flight-start (ctx/mem c)) (ctx/update-mem! c assoc :flight-start (ctx/now c) :flight-from (u/self-pos c) :flight-health (.-health (.self (:primitives c)))))
+  (when-not (:flight-start (ctx/mem c)) (ctx/update-mem! c assoc :flight-start (ctx/now c) :flight-from (u/self-pos c)))
   (let [r (loop []
             (ctx/update-mem! c assoc :last-step (ctx/now c))
             (let [r (await (if (:refuge (ctx/mem c)) (refuge/refuge-round! c) (flight-step! c)))

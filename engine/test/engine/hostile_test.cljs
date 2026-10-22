@@ -5,6 +5,7 @@
             [engine.registry :as registry]
             [engine.flight-job :as fj]
             [engine.settings :as settings]
+            [engine.hurt :as hurt]
             [engine.core :as core]
             [engine.ctx :as ctx]
             [jobs.lib.body :as body]
@@ -1545,3 +1546,15 @@
     (are [held fires?] (= fires? (boolean (holds? {:blocks pond :entities [(drowned held)]} {:radius 2 :ranged-radius 16})))
       "trident" true
       nil false)))
+
+(deftest only-a-possible-mob-blow-counts-as-a-hit
+  (are [m expected] (= expected (hurt/mob-hit? m))
+    {:attacker {:name "zombie"} :damageType "minecraft:mob_attack"} true
+    {:damageType "minecraft:arrow"} true
+    {} true
+    {:damageType "minecraft:magic"} false
+    {:damageType "minecraft:starve"} false
+    {:cause "fire"} false
+    {:damageType "minecraft:fall"} false
+    {:damages [{:damageType "minecraft:magic"} {:damageType "minecraft:fall"}]} false
+    {:damages [{:damageType "minecraft:magic"} {:attacker {:name "spider"}}]} true))

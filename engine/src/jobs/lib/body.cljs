@@ -4,6 +4,7 @@
   jobs.survival.recover-drops."
   (:require [engine.args :as a]
             [engine.game :as game]
+            [engine.hurt :as hurt]
             [engine.memory :as mem]
             [engine.settings :as settings]
             [jobs.lib.cost.health :as cost-health]
@@ -78,6 +79,12 @@
   (boolean (when-let [m (mem/latest view :heard-mute)]
              (and (> (:until (:data m)) (:now view))
                   (empty? (mem/since view :hurt (:t m)))))))
+
+;; a loss is judged by its :hurt entry, not by the bare health drop: poison and hunger cost health too
+(defn mob-hit-since?
+  "Whether the view has a :hurt entry since t (ms) that may be a mob's blow (engine.hurt/mob-hit?)."
+  [view t]
+  (boolean (some #(hurt/mob-hit? (:data %)) (mem/since view :hurt t))))
 
 (defn next-mute-ms
   "How long the next mute of kind (:heard-mute by default) lasts: mute-base-ms, doubled for each mute of that kind within the last hour, up to mute-max-ms."

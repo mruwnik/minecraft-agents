@@ -1,5 +1,6 @@
 (ns jobs.survival.respond-to-hostile
-  (:require [jobs.lib.ready :as ready]
+  (:require [engine.hurt :as hurt]
+            [jobs.lib.ready :as ready]
             [jobs.survival.block-arrow-gap :as gap]
             [jobs.survival.respond-flight :as flight]
             [engine.args :as a]
@@ -248,8 +249,11 @@
         p (:primitives c)
         self (.self p)
         m (ctx/mem c)
-        hits (note-hits (when (= :flee (:decision m)) (:hits m)) (ctx/now c) (:last-health m (.-health self)) (.-health self) (hit-window-ms))
-        _ (ctx/update-mem! c assoc :hits hits :last-health (.-health self))
+        before (:last-health m (.-health self))
+        entries (when-let [t (:last-at m)] (ctx/since c :hurt t))
+        after (if (or (empty? entries) (some #(hurt/mob-hit? (:data %)) entries)) (.-health self) before)
+        hits (note-hits (when (= :flee (:decision m)) (:hits m)) (ctx/now c) before after (hit-window-ms))
+        _ (ctx/update-mem! c assoc :hits hits :last-health (.-health self) :last-at (ctx/now c))
         chosen (cond
                  (some combat/enderman? near) :flee
                  (hostile/committed? c near) :fight

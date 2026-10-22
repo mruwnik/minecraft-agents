@@ -39,6 +39,17 @@
     (vec (distinct (keep #(cause (merge (select-keys m [:cause]) %)) ds)))
     (some-> (cause m) vector)))
 
+;; Damage that is no mob's blow: poison and wither and hunger keep ticking on a body that is safe.
+(def non-attack-causes
+  #{"fall" "fire" "lava" "drowning" "suffocation" "cramming" "starvation" "void" "cactus" "berry bush" "freezing" "lightning" "magic" "wither" "world border"})
+
+(defn mob-hit?
+  "Whether raw hurt event m may be a mob's blow: a packet with an attacker, or whose cause is unknown or an attack (an arrow, a blast)."
+  [m]
+  (let [ds (or (seq (:damages m)) [m])
+        ds (map #(merge (select-keys m [:cause]) %) ds)]
+    (boolean (some #(or (:attacker %) (not (non-attack-causes (cause %)))) ds))))
+
 (defn new-state [] (atom {:window-ms (settings/get settings :engine.hurt/window-ms) :pending nil}))
 
 (defn set-window!

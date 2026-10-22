@@ -2,6 +2,7 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.body :as body]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.combat :as combat]
@@ -138,12 +139,11 @@
   (await (glance-round! c))
   (let [p (:primitives c)
         now (ctx/now c)
-        health (.-health (.self p))
-        {:keys [quiet-from hidden-since hold-health]} (ctx/mem c)
+        {:keys [quiet-from hidden-since hold-at]} (ctx/mem c)
         quiet-from (if (refuge-danger? c) now (or quiet-from now))
         hidden-since (or hidden-since now)
-        hurt? (< health (or hold-health health))
-        _ (ctx/update-mem! c assoc :quiet-from quiet-from :hidden-since hidden-since :hold-health health)
+        hurt? (boolean (and hold-at (body/mob-hit-since? (ctx/view c) hold-at)))
+        _ (ctx/update-mem! c assoc :quiet-from quiet-from :hidden-since hidden-since :hold-at now)
         radius (danger-q/hostile-radius)
         ranged-radius (danger-q/ranged-radius)
         danger-on-body? (fn [] (danger-q/danger-near? p radius ranged-radius))

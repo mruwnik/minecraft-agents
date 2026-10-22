@@ -1,0 +1,18 @@
+;; Card fbc06a29: health lost to poison is no mob's blow. The cornered-retreat tunnel (1x2 along z 16 from x 5, closed end)
+;; with cobblestone: a NoAI helmeted zombie in the tunnel gets the body sealed in; poison I then ticks the body's health
+;; down while the zombie waits outside the seal. The hide must hold (no retreat.hide-hurt), not walk out to the zombie.
+{:defaults
+ {:tags [:hostile :survival :cornered]
+  :time :any
+  :blocks [[:fill [2 0 10] [30 4 22] "stone"] [:fill [5 0 16] [29 1 16] "air"]
+           [:set [8 1 16] "torch"] [:set [14 1 16] "torch"]]
+  :body {:at [5.5 0 16.5] :inventory [["cobblestone" 20]]}
+  :act [[:summon "zombie" [10.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+        [:await {:source :job :kind :retreat_sealed} 40]
+        [:rcon "effect give $BODY minecraft:poison 12 0"]]}
+ :cases
+ [{:name "poison-while-sealed-keeps-the-hide"
+   :register [{:trigger :hostile-near :args {:radius 8 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 8 :jobs.lib.danger/ranged-radius 16}})}]
+   :expect [{:no-event {:kind :retreat.hide-hurt} :from-event {:source :job :kind :retreat_sealed} :for-s 20}]
+   :limit-s 80}]}

@@ -1447,13 +1447,19 @@
           (is (= :dry (:slot (first (filter #(= :retreat.step-speed (:kind %)) @seen)))) "the walk is the swim-out step")
           (is (= -5 (:x (first-move eng))) "the first walk is to the nearest dry land, west of the pool"))))))
 
+(defn lose-health!
+  "The body loses 2 health and the :hurt entry the adapter's event would make (damage: its :attacker or :damageType)."
+  [eng p damage]
+  (swap! (fake/state p) update-in [:self :health] - 2)
+  (mem/write! (:store eng) :hurt (merge {:amount 2} damage) {:cap 50 :ttl 60000}))
+
 (deftest a-sealed-body-that-keeps-taking-hits-leaves-the-seal-and-fights
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p seen]} (setup {:blocks dead-end :inventory [{:name "cobblestone" :count 20}]
                                            :entities [(assoc (zombie 3 64 0) :visible true)]})
-              hurt! #(swap! (fake/state p) update-in [:self :health] - 2)]
+              hurt! #(lose-health! eng p {:attacker {:name "zombie"}})]
           (.override (.-world p) "wait" (fn [token a impl] (when (hiding? seen) (hurt!)) (impl token a)))
           (core/submit! eng '(test.flight {:settings {:jobs.survival.hide-out/hide-s 100000}}) {})
           (await (core/tick! eng))
@@ -1558,7 +1564,7 @@
                      (fn [token a impl]
                        (when (and (hiding? seen) (not @hurt))
                          (reset! hurt true)
-                         (swap! (fake/state p) update-in [:self :health] - 2))
+                         (lose-health! eng p {:attacker {:name "zombie"}}))
                        (when (>= (count (calls p "jumpPlace")) 5) (swap! (fake/state p) assoc :entities []))
                        (impl token a)))
           (core/submit! eng hiding-retreat {})
@@ -1569,6 +1575,25 @@
           (let [hostiles (:hostiles (first (filter #(= :retreat.hide-hurt (:kind %)) @seen)))]
             (is (= ["zombie"] (map :name hostiles)) "the hit names who was near")
             (is (every? number? (:pos (first hostiles))) "and where")))))))
+
+(deftest a-pillared-body-losing-health-to-poison-keeps-its-refuge
+  (let [damage {:damageType "minecraft:magic"}]
+    (async done
+      (tu/run-async done
+        (fn ^:async t []
+          (let [{:keys [eng p seen]} (setup {:blocks doorway :inventory [{:name "dirt" :count 20}] :entities [(zombie 0 64 1)]})
+                hurt (atom false)]
+            (.override (.-world p) "wait"
+                       (fn [token a impl]
+                         (when (and (hiding? seen) (not @hurt))
+                           (reset! hurt true)
+                           (lose-health! eng p damage))
+                         (when (and @hurt (> (count (calls p "wait")) 3)) (swap! (fake/state p) assoc :entities []))
+                         (impl token a)))
+            (core/submit! eng hiding-retreat {})
+            (await (core/tick! eng))
+            (is (empty? (filter #(= :retreat.hide-hurt (:kind %)) @seen)) (pr-str damage))
+            (is (= 3 (count (calls p "jumpPlace"))) "no raise: the loss was no blow")))))))
 
 (deftest a-pillared-body-hit-again-after-a-raise-raises-it-again
   (async done
@@ -1583,7 +1608,7 @@
                          (when (and (hiding? seen) (< @hits 2) (> n @placed-at-hit) (>= n (+ 3 (* 2 @hits))))
                            (reset! placed-at-hit n)
                            (swap! hits inc)
-                           (swap! (fake/state p) update-in [:self :health] - 2))
+                           (lose-health! eng p {:attacker {:name "zombie"}}))
                          (when (>= n 7) (swap! (fake/state p) assoc :entities [])))
                        (impl token a)))
           (core/submit! eng hiding-retreat {})
