@@ -436,7 +436,7 @@
             (cond
               (nil? (situation-of c)) :again
               (and drowning? ok) :again
-              (= :dug ok) (do (ctx/update-mem! c dissoc :failures) :again)
+              (= :dug ok) (do (u/progress! c) :again)
               drowning? (fail-air! c)
               :else (fail! c :no-way-out "could not dig out of the block"))))))))
 

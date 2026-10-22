@@ -26,7 +26,7 @@
                                 (u/progress! c)
                                 (u/fail! c :x "a") (u/fail! c :x "a")]))]
     (is (= [:continue :continue nil :continue :continue] rs))
-    (is (= 2 (:failures m)))
+    (is (= 2 (:jobs.lib.util/failures m)))
     (is (empty? out))))
 
 (deftest count-fail-says-when-the-row-is-full

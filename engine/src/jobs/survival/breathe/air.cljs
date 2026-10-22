@@ -268,7 +268,7 @@
   after a failed try, the pocket's and the cap's reasons kept for the stop."
   [c]
   (let [target (await (breath/find-air! c (u/self-pos c) (radius) (swim/reach)))
-        site (when (or (nil? target) (pos? (:failures (ctx/mem c) 0))) (await (pocket/site! c)))
+        site (when (or (nil? target) (pos? (u/failures c))) (await (pocket/site! c)))
         _ (when (:why site) (ctx/update-mem! c assoc :pocket (:why site)))
         ;; with no air seen near, a swim up the own column is blind: seen air further out is the known way back
         far? (or (:cells site) (and (nil? target) (some? (seen-surface (:primitives c) (u/self-pos c) (:failed-air (ctx/mem c))))))

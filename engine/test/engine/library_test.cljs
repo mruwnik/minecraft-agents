@@ -690,7 +690,7 @@
                      (core/submit! eng (list 'jobs.forestry.fell-tree {:species "oak" :radius 40}) {})
                      (await (core/tick! eng))
                      (is (= [] (calls p "dig")) "a partial walk is not in reach, so nothing is dug")
-                     (is (nil? (:failures (job-mem eng "j1" []))) "a partial walk is progress, not a failure")
+                     (is (nil? (:jobs.lib.util/failures (job-mem eng "j1" []))) "a partial walk is progress, not a failure")
                      (is (pos? (await (run-until-empty eng 10)))))))
           (is (= [] (:list (core/state eng))))
           (is (= 3 (count (calls p "dig")))))))))

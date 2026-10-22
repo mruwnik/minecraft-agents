@@ -33,15 +33,6 @@
 
 (defn cell-pos [[x y z]] {:x x :y y :z z})
 
-(defn ^:async untimed!
-  "Await (thunk), then move mem :started (the job's :timeout-s start) on by the time it took: :timeout-s bounds the
-  work the job does, not a fetch inside it. Returns the thunk's result."
-  [c thunk]
-  (let [t0 (ctx/now c)
-        r (await (thunk))]
-    (ctx/update-mem! c update :started #(when % (+ % (- (ctx/now c) t0))))
-    r))
-
 (defn block-at
   "The block at cell pos (a cljs or JS {x y z}) as the body senses it (felt, in view or remembered; an unknown cell has no
   :name), or nil when the chunk is not loaded. With perception p.blockAt is p.sensedAt: no job reads the world raw."
@@ -206,14 +197,19 @@
 (defn progress!
   "The act the failures counted against succeeded: the failures in a row start again from none."
   [c]
-  (ctx/update-mem! c dissoc :failures)
+  (ctx/update-mem! c dissoc ::failures)
   nil)
+
+(defn failures
+  "The failures in a row counted so far."
+  [c]
+  (::failures (ctx/mem c) 0))
 
 (defn count-fail!
   "Count one more failure in a row in job memory. True when that makes max-failures."
   [c]
-  (let [tries (inc (:failures (ctx/mem c) 0))]
-    (ctx/update-mem! c assoc :failures tries)
+  (let [tries (inc (failures c))]
+    (ctx/update-mem! c assoc ::failures tries)
     (>= tries (max-failures))))
 
 (defn fail!
