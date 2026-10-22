@@ -51,6 +51,14 @@
           (is (= 9 (get (ft/inv s) "wheat_seeds")) "no seed was sown")
           (is (empty? (ft/calls s "dig"))))))))
 
+(deftest a-growing-wait-ends-the-round-so-a-queued-job-takes-its-turn
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:count 2} (ft/world (ft/farm "wheat" 2 [[2 2]] [[2 2]]) ft/wheat-drops {:inventory kit}) 40))]
+          (is (< 2 (apply max (keep #(when (= "jobs.farm.grow" (:name %)) (:round %)) @(:seen s))))
+              "grow yields after each wait: one endless round would hold the turn from a queued job"))))))
+
 (deftest with-no-crop-in-sight-a-field-is-made-on-flat-ground
   (async done
     (tu/run-async done

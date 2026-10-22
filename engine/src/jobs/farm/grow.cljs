@@ -196,8 +196,8 @@
 
       (seq seen)
       (do (ctx/update-mem! c dissoc :fruitless)
-          (let [e (await (child/pause! c (settings/get settings ::wait-s) :growing))]
-            (if (= :continue e) :continue :again)))
+          (await (child/pause! c (settings/get settings ::wait-s) :growing))
+          :continue)
 
       :else (await (found-field! c)))))
 
