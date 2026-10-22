@@ -222,6 +222,35 @@
               result (await (child-outcome eng job {:plan "far"} 200))]
           (is (= {[40 64 0] :unreachable} (:given-up result)) "not :refused after three tries"))))))
 
+(defn rock-start
+  "A dirt cell [3 64 2] inside a solid block of stone with no air beside it, the body outside; kit carried."
+  [kit tunnel]
+  (let [plan {:id "ring" :parts [{:id "p" :cells [[3 64 2]] :want "dirt"}]}
+        rock (into {} (for [x (range -2 9) z (range -4 9) y [62 63 64 65 66]] [(str x "," y "," z) "stone"]))]
+    (start {:inventory kit :blocks rock :self {:pos {:x 12.5 :y 64 :z 2.5}}} {"ring" plan} [] {'jobs.access.tunnel tunnel})))
+
+(deftest a-cell-in-rock-with-no-stand-is-tunnelled-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [targets (atom [])
+              tunnel {:round (fn ^:async w [c] (swap! targets conj (:target (:args c)) (:through (:args c))) (ctx/end c :nothing-possible :dig-failed {}))}
+              {:keys [eng]} (rock-start [{:name "stone_pickaxe" :count 1} {:name "dirt" :count 4}] tunnel)
+              result (await (child-outcome eng job {:plan "ring"} 200))]
+          (is (= [[3 64 2] "ring"] (distinct @targets)) "the target, and the plan whose footprint the tunnel may cut")
+          (is (= {[3 64 2] :unreachable} (:given-up result)) "a tunnel that fails gives the cell up"))))))
+
+(deftest a-dig-in-rock-with-no-pickaxe-is-given-up-no-tool-without-a-tunnel
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [targets (atom [])
+              tunnel {:round (fn ^:async w [c] (swap! targets conj (:target (:args c))) (ctx/end c :nothing-possible :dig-failed {}))}
+              {:keys [eng]} (rock-start [{:name "dirt" :count 4}] tunnel)
+              result (await (child-outcome eng job {:plan "ring"} 200))]
+          (is (empty? @targets))
+          (is (= {[3 64 2] :no-tool} (:given-up result))))))))
+
 (deftest a-wall-waits-for-the-dirt-floor-under-it-though-the-floor-item-is-not-carried
   (async done
     (tu/run-async done

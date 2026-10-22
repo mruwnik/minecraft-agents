@@ -27,7 +27,8 @@
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.build.plan :as plan :refer [retry-distance max-retries facing-of facing-ok? body-cells count-fail stands-for plan-trouble owed need-of shortage hazards decide rules-input refuse permitted judged no-zones planned how placeable misplaced missing covered digging unseen buildable problem]]
             [jobs.lib.build.scaffold :as scaffold]
-            [jobs.build.from-plan.cells :refer [diggable in-reach in-dig-reach seals? shuts-out? exit-point off-low-floor buried? reaching support-looks]]
+            [jobs.lib.tools :as tools]
+            [jobs.build.from-plan.cells :refer [diggable in-reach in-dig-reach seals? shuts-out? exit-point off-low-floor buried? reaching support-looks rock-bound?]]
             [jobs.build.from-plan.book :refer [walk-fail retry-walks warn-way-in! place-one! settle-placing! dig-one! result-data finish! book-failed!]]
             [jobs.build.from-plan.light :as light]
             [jobs.lib.build.text :refer [summary stopped-text assoc-fetch-failed]]))
@@ -58,6 +59,7 @@
   A cell whose state no neighbour gives, or with no block to click beside it yet, waits for one. If still missing at
   the end it is given up with jobs.lib.placement's reason (:no-support, after a look at any floor or neighbour never seen; :no-room, :opened, :double-slab). A cell whose place is refused, or whose stand cell
   cannot be reached, :give-up times is given up (:refused, :occupied, :no-item, :unreachable or :unseen).
+  A cell shut in by rock (and other plan cells) on every side is tunnelled to (jobs.access.tunnel).
   Zones: every place is checked against zones and the footprints of the other active plans, when the cell is
   chosen and again before the place. A cell in a zone that does not allow :place, or in another plan's footprint,
   is refused for good (not counted as given up). It is listed in :refused [{:pos :reason :zone|:claim|:footprint|:hazard}].
@@ -290,9 +292,22 @@
   [c]
   (boolean (:shut-in (:data (near/last-walk c)))))
 
-(defn ^:async walk-to!
-  "Walk to a stand cell beside cell (:continue while the walk waits, else :again); a cell that cannot be walked to, or is still out of reach (or unseen, as
-  :unseen) on arrival, counts a failure."
+(defn ^:async tunnel-to!
+  "A cell shut in by rock: cut a way to a stand beside it (jobs.access.tunnel) as a player with a
+  pickaxe would. :continue while that waits, :again once it is cut or failed (a failure counts against the cell), nil
+  when the cell is open to air, no pickaxe is carried, or the body already stands beside it."
+  [c cells cell]
+  (let [pos (:pos cell)]
+    (when (and (tools/can-harvest? (:primitives c) "stone") (rock-bound? (:primitives c) cell (set (map :pos cells))))
+      (let [r (await (ctx/call c :tunnel 'jobs.access.tunnel {:target pos :through (:plan (:args c)) :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
+        (cond
+          (= :continue r) :continue
+          (and (= :done (:kind r)) (= :already (:reason (:data r)))) nil
+          (= :done (:kind r)) :again
+          :else (do (ctx/update-mem! c walk-fail pos :unreachable (give-up) (u/self-pos c)) :again))))))
+
+(defn ^:async walk-to-stand!
+  "Walk to a stand cell beside cell (:continue while the walk waits, else :again); a cell that cannot be walked to, or is still out of reach (or unseen, as :unseen) on arrival, counts a failure."
   [c cells cell]
   (trace! c :walk-to! (:pos cell))
   (let [body (u/self-pos c)
@@ -302,9 +317,11 @@
         all (stands-for (:primitives c) (:pos cell) (js/Math.floor (:y body)) facing planned bad)
         stands (or (seq (reaching c all (:pos cell))) all)
         stand (first (sort-by #(u/dist body (zipmap [:x :y :z] %)) stands))]
-    (if-not stand
+    (cond
+      (not stand)
       (do (ctx/update-mem! c walk-fail (:pos cell) :unreachable (give-up) (u/self-pos c))
           :again)
+      :else
       (let [shut? (or (in-hole? c) (shut-in-walk? c))
             w (await (walk-stand! c cell stand (cond-> {} (not shut?) (assoc :ways (cond-> #{:walk :clear-seal} (sh-inside/sheltered-in c) (into [:stair :dig-out]))))))]
         (if (and (= :blocked w) (or shut? (shut-in-walk? c)) (not= :budget (:why (:data (near/last-walk c)))))
@@ -312,6 +329,11 @@
           (do (ctx/update-mem! c dissoc :hole-blocked)
               (if (= :partial w) :continue :again)))))))
 
+
+(defn ^:async walk-to!
+  "Tunnel toward a cell with rock between it and every stand, else walk-to-stand!."
+  [c cells cell]
+  (or (await (tunnel-to! c cells cell)) (await (walk-to-stand! c cells cell))))
 
 (defn ^:async reach-cell!
   "Walk to a stand for the buildable cell; where no ground stand within :reach of it exists, raise a temporary one (jobs.lib.build.scaffold)."
@@ -385,15 +407,19 @@
                            (do (ctx/update-mem! c #(-> (count-fail % (:pos (first left)) :unreachable (give-up))
                                                        (assoc :leave (exit-point cells (u/self-pos c)))))
                                :again)
-                           (if (= :continue (await (place-one! c (first left) (give-up))))
-                             :continue
-                             (recur (rest left))))
+                           (if-let [t (await (tunnel-to! c cells (first left)))]
+                             t
+                             (if (= :continue (await (place-one! c (first left) (give-up))))
+                               :continue
+                               (recur (rest left)))))
                          :again)))
       (seq dig-near) (loop [left dig-near]
                        (if (seq left)
-                         (if (= :continue (do (trace! c :dig-one! (:pos (first left))) (await (dig-one! c (first left) (give-up)))))
-                           :continue
-                           (recur (rest left)))
+                         (if-let [t (await (tunnel-to! c cells (first left)))]
+                           t
+                           (if (= :continue (do (trace! c :dig-one! (:pos (first left))) (await (dig-one! c (first left) (give-up)))))
+                             :continue
+                             (recur (rest left))))
                          :again))
       (= :up (scaffold/phase c)) (do (scaffold/finish-up! c cells (into todo (unseen cells given-up)) (nearest layer) (give-up)) :again)
       (seq todo) (await (reach-cell! c cells (nearest layer)))

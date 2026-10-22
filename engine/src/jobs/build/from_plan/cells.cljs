@@ -2,6 +2,7 @@
   "Where the body can reach, stand and dig for jobs.build.from-plan: the cells of a plan read against the body's spot."
   (:require [engine.ctx :as ctx]
             [jobs.lib.tools :as tools]
+            [jobs.lib.block-sets :as bs]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.util :as u]
@@ -117,3 +118,13 @@
     (vec (for [cell cells :when (refused (:pos cell))
                n (plan/unseen-support c (:pos cell)) :when (not (done n))]
            [cell n]))))
+
+(defn rock-bound?
+  "Whether rock holds cell in on every side that is not another cell of the plan: no air beside it to stand in or see it
+  from (a face not loaded yet counts as open: it will load)."
+  [p cell planned]
+  (let [[x y z] (:pos cell)
+        solid? (fn [n] (let [b (u/sensed p (pos-map n))]
+                         (and (some? b) (or (true? (.-unknown b)) (not (or (bs/passable? (.-name b)) (bs/fluids (.-name b))))))))]
+    (every? #(or (planned %) (solid? %))
+            [[(inc x) y z] [(dec x) y z] [x (inc y) z] [x (dec y) z] [x y (inc z)] [x y (dec z)]])))
