@@ -549,6 +549,17 @@
           (await (one-round! eng {}))
           (is (some #(= :noted-walk (:slot %)) (events-of seen :child_ended)) "the search ended on the note with no animal in sight: the body walks toward it"))))))
 
+(deftest a-noted-animal-the-walk-cannot-reach-is-named-in-the-no-food-text
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [note [{:kind :seen :what "cow" :id "u1" :pos [40 64 0] :by "Other" :t 1 :until 9e15}]
+              {:keys [eng seen]} (setup {:time 6000 :self {:food 8 :health 10} :blocks (tu/box 20 60 -30 20 80 30 "bedrock")} :step-ms 5 :other-notes note)]
+          (await (one-round! eng {}))
+          (let [text (str (:text (first (none-endings seen))))]
+            (is (re-find #"animal noted at \[40 64 0\] was not reached" text))
+            (is (not (re-find #"no food source is known" text)))))))))
+
 (deftest a-noted-animal-within-range-but-out-of-sight-is-walked-up-to
   (async done
     (tu/run-async done

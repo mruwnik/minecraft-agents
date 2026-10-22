@@ -56,7 +56,9 @@
                                          (when (:pos a) (str " at " (pr-str (:pos a)))))) passed)) ")"))
          (when (and (empty? passed) (seq around))
            (str "; nothing hunted; in range: " (str/join ", " (map (fn [a] (str (:name a) " (" (:kind a) ")" (when (:pos a) (str " at " (pr-str (:pos a)))))) around))))
+         (when-let [{:keys [pos why]} (:noted-lost (ctx/mem c))]
+           (str "; an animal noted at " (pr-str pos) " was not reached: " why))
          (if near
            (str "; nearest known source is a " (name (:kind near)) " at " (pr-str (:pos near))
                 ", " (js/Math.round (u/dist (u/self-pos c) (:pos near))) " blocks away")
-           "; no food source is known"))))
+           (when-not (:noted-lost (ctx/mem c)) "; no food source is known")))))

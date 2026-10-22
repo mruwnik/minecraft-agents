@@ -361,12 +361,14 @@
   "The walk toward an animal the search found only in a note (nothing is in sight to hunt): :continue while it goes, :again once it ends."
   [c]
   (let [pos (:walk-to (ctx/mem c))
-        e (await (child/run!* c :noted-walk 'jobs.movement.go-to (ready/forage-walk c {:pos (zipmap [:x :y :z] pos) :range (if (:noted-near (ctx/mem c)) noted-near-range noted-range) :ways #{:walk}})))]
+        e (await (child/run!* c :noted-walk 'jobs.movement.go-to (ready/forage-walk c {:pos (zipmap [:x :y :z] pos) :range (if (:noted-near (ctx/mem c)) noted-near-range noted-range) :ways #{:walk} :torches :fetch})))]
     (cond
       (= :continue e) :continue
       (and (not (:noted-near (ctx/mem c))) (nil? (animals/nearest c (animal-opts c false))))
       (do (ctx/update-mem! c assoc :noted-near true) :again)
-      :else (do (ctx/update-mem! c dissoc :walk-to :noted-near) :again))))
+      :else (do (ctx/update-mem! c #(cond-> (dissoc % :walk-to :noted-near)
+                                      (not= :done (:kind e)) (assoc :noted-lost {:pos pos :why (get-in e [:data :text] "the walk ended")})))
+                :again))))
 
 (defn spared-uuids
   "The uuids of the animals passed over (a baby, a pen's, the last adults): the search must not end on one the hunt cannot use."
