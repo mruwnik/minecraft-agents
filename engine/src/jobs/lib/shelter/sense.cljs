@@ -249,7 +249,11 @@
   (boolean (some #(some-> (u/seen-name p (update goal :y + %)) solid/solid? not) (range 1 (inc (roof-height))))))
 
 (defn sky-reaches-from-above?
-  "Whether sky light reaches the cell straight down its own column: some sky light there and no solid block seen over it within 32 cells (leaves let it through dimmed; a stair step lit round a corner has stone over it)."
+  "Whether sky light reaches the cell straight down its own column: some sky light there and no solid block seen over it within 32 cells (leaves let it through dimmed; a stair step lit round a corner has stone over it). Light under 15 with
+  part of the column unseen is spread in from the side or filtered: not straight down (a body at the foot of a stair has not looked up)."
   [p cell]
-  (and (pos? (or (sky-light-at p cell) 0))
-       (not-any? #(solid-at? p (update cell :y + %)) (range 1 33))))
+  (let [light (or (sky-light-at p cell) 0)
+        column (map #(update cell :y + %) (range 1 33))]
+    (and (pos? light)
+         (not-any? #(solid-at? p %) column)
+         (or (= 15 light) (every? #(u/seen-name p %) column)))))

@@ -97,6 +97,12 @@
   (let [roofed (assoc open-night :blocks (tu/box -1 65 -1 1 70 1 "stone"))]
     (is (= [:later :ok] [(lit 0 11 #(kind ready/safe-if-lit open-night)) (lit 0 11 #(kind ready/safe-if-lit roofed))]))))
 
+(deftest safe-if-lit-ignores-sky-light-spread-in-under-an-unseen-ceiling
+  (let [seen-name u/seen-name
+        look-down (fn [sky] (with-redefs [u/seen-name (fn [p pos] (when (<= (:y pos) 66) (seen-name p pos)))]
+                              (lit 0 sky #(kind ready/safe-if-lit open-night))))]
+    (is (= [:ok :later] [(look-down 11) (look-down 15)]))))
+
 (deftest an-exposed-place-is-ok-while-the-stay-there-is-affordable
   (let [check (ready/safe-at (constantly outside))
         status (fn [stay-s] (lit 0 15 #(check (assoc (ctx-of open-night) ::price/stay-s stay-s))))]
