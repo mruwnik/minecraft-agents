@@ -80,6 +80,31 @@
           (is (= {:kind :condition-failed :reason :danger} (end-of seen)))
           (is (nil? (recovered eng)) "the death stays open"))))))
 
+(defn next-of [seen]
+  (let [e (first (filter #(#{:completed :stopped} (:kind %)) @seen))]
+    (mapv #(select-keys % [:job :args]) (get-in e [:data :next]))))
+
+(deftest a-danger-ending-names-the-retry-and-every-other-ending-the-call-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen clock]} (dear-zombie-run {})
+              timer (js/setInterval #(swap! clock + 500) 5)]
+          (await (run-until-empty eng 12))
+          (js/clearInterval timer)
+          (is (nil? (seq (next-of seen))) "the wait is no ending"))
+        (let [{:keys [eng seen clock]} (dear-zombie-run {:retry true})
+              timer (js/setInterval #(swap! clock + 500) 5)]
+          (await (run-until-empty eng 12))
+          (js/clearInterval timer)
+          (is (= [{:job "jobs.survival.recover-drops" :args {:danger-overrides {"zombie" 1000} :retry true}}] (next-of seen))
+              "retry is given already: the call again is the retry"))
+        (let [{:keys [eng seen]} (setup {:floor tu/walk-floor :entities dt/drops})]
+          (die! eng {:pos dt/death-pos :inventory dt/junk})
+          (core/submit! eng job {})
+          (await (run-until-empty eng 5))
+          (is (= [{:job "jobs.survival.recover-drops" :args {}}] (next-of seen))))))))
+
 (deftest a-walk-that-does-not-arrive-ends-nothing-possible-unreachable
   (async done
     (tu/run-async done

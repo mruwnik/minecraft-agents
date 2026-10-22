@@ -10,6 +10,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.need :as need]
+            [jobs.lib.next-call :as next-call]
             [jobs.lib.pace :as pace]
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.spawn :as sh-spawn]
@@ -31,7 +32,7 @@
   Danger: a real danger (jobs.lib.danger/nearest-danger) is weighed once per mob; a skip for danger alone is remembered (:recover-danger, ::danger-memory-ms, the mobs priced where they stood until their place is seen empty (in range, clear line)), after which can-run? is :later :danger and the died trigger rests; :retry weighs now and ends at once. The walk is priced from go-to's quote (its seconds, the air the route spends); a hold that would leave under ::hold-slack times the walk of the despawn window, or under ::min-hold-s, is no wait: the pile is fetched under the danger.
   Kit: a pile worth it were the route safe, and no weapon or armour: fetch the best piece a known chest holds (the call's ways, jobs.lib.need) and wear it.
   Fetch: legs of ::leg-s (weighed again after each), then up to 3 collect passes (jobs.items.collect-drops), a look and a walk round the pile; own seal blocks near it are taken back (jobs.access.cleanup), a deep pile is reached by a stair (jobs.access.tunnel).
-  Ends: :collected done; :skip condition-failed :not-worth; :partial nothing-possible :unreachable or :not-visible; :abandoned by reason (:window-closed condition-failed :gone, :danger, :nothing-found condition-failed, :unreachable nothing-possible). Data :decision :text :pos :value :items :left. A walk that did not arrive leaves the death open.
+  Ends: :collected done; :skip condition-failed :not-worth; :partial nothing-possible :unreachable or :not-visible; :abandoned by reason (:window-closed condition-failed :gone, :danger, :nothing-found condition-failed, :unreachable nothing-possible). Data :decision :text :pos :value :items :left; every ending but done carries :next (jobs.lib.next-call): for :danger the call with :retry true, last the call again. A walk that did not arrive leaves the death open.
   Events: recover-drops.kit-dropped (a failed kit fetch); warn respawn_away_from_bed once per death when the respawn is over ::bed-away-blocks from the respawn bed.
   Memory: reads :died :respawned :bed :slept :recover-trip :recover-danger, the scaffold ledger; writes :recovered :recover-trip :recover-danger.")
 
@@ -249,7 +250,7 @@
         (ctx/emit! c :respawn_away_from_bed :warn
                    {:bed bed :pos at :text "respawned away from its bed: the respawn point was not set there"})))))
 
-(defn ^:async round
+(defn ^:async run
   "One whole run: wait for the respawn and its settling (declared holds), decide, walk, collect, write :recovered, and end
   with the ending of the trip (see the doc). A danger priced into a skip leaves can-run? :later :danger, a walk that did not arrive nothing-possible :unreachable, the death staying open."
   [c]
@@ -269,3 +270,11 @@
                                       (let [entry (dth/current-death c)
                                             r (if entry (await (step! c entry)) (ctx/end c :condition-failed :no-drops))]
                                         (if (= :next r) :again r)))))))))))
+
+(defn ^:async round
+  "run, its ending carrying :next (jobs.lib.next-call): for a danger a retry that weighs the pile now, then the call again."
+  [c]
+  (let [e (await (run c))]
+    (next-call/on-ending c e 'jobs.survival.recover-drops args
+                         (when (and (contract/ending? e) (= :danger (contract/cause-key e)) (not (:retry (:args c))))
+                           (next-call/call 'jobs.survival.recover-drops {:retry true})))))
