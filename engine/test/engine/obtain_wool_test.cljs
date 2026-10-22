@@ -160,6 +160,14 @@
                                  {:inventory h/sword :entities [(sheep 1 3 "white") (sheep 2 6 "white")]} 40))]
           (is (empty? (attacked s)) "the last two adults live"))))))
 
+(deftest a-lone-sheep-is-killed-for-wool-when-shearing-is-impossible
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:item "white_wool" :count 1}
+                                 {:inventory h/sword :entities [(sheep 1 3 "white")]} 40))]
+          (is (= [1] (distinct (attacked s))) "one sheep is no pair to keep"))))))
+
 (deftest wool-is-never-taken-from-penned-or-off-limits-sheep
   (async done
     (tu/run-async done

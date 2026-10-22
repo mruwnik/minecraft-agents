@@ -43,7 +43,7 @@
       (furnace-free plans)
       (let [sorted (sort-by #(reduce + 0 (vals (wool-of %))) plans)
             keep-n (if (shears-source c) 0 wool-keep)
-            colors (set (keep (fn [[k n]] (when (> n keep-n) k)) (frequencies (keep #(.-color %) (sheep-in-range c)))))
+            colors (set (keep (fn [[k n]] (when (or (= 1 n) (> n keep-n)) k)) (frequencies (keep #(.-color %) (sheep-in-range c)))))
             colors-of (fn [pl] (map wool-color (keys (wool-of pl))))
             ok? (fn [pl] (every? colors (colors-of pl)))
             chosen (or (first (filter ok? sorted)) (first sorted))

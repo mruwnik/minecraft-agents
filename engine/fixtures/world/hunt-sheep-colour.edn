@@ -111,4 +111,12 @@
    :act [[:summon "pig" [34.5 0 16.5] "{NoAI:1b}"]
          [:job (jobs.combat.hunt {:item "porkchop" :keep 0 :radius 24}) [:now]]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :too-few :in-range 0 :nearest [:>= 25]}} :within-s 40 :of-job true}]
-   :after [[:entities "type=pig,tag=wt" [[0 0 0] [63 3 31]] 1]]}]}
+   :after [[:entities "type=pig,tag=wt" [[0 0 0] [63 3 31]] 1]]}
+  ;; a lone sheep is no pair to keep: without shears it is hunted for the wool (rule :lone)
+  {:name "obtain-white-wool-from-a-lone-sheep-takes-it"
+   :act [[:summon "sheep" [20.5 0 16.5] "{NoAI:1b,Color:0b}"]
+         [:job (jobs.items.obtain {:item "white_wool" :count 1 :explore false})]]
+   :expect [{:event {:source :job :kind :animal.killed :data {:animal "sheep" :rule :lone}} :within-s 60}
+            {:event {:source :job :kind :completed :data {:name "jobs.items.obtain"}} :within-s 100 :of-job true}]
+   :after [[:item "white_wool" [:>= 1]] [:entities "type=sheep,tag=wt" [[0 0 0] [31 3 31]] 0]]}
+]}

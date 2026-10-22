@@ -29,7 +29,7 @@
   within :radius of :center (the body's place at the first run),
   collecting the drops until :count of it are carried, in one call that yields only while a child waits on the world. The mobs come from the drops table
   (jobs.lib.hunting/raw-drops); an item no mob drops is impossible (:bad-args). A wool item hunts only sheep of that colour.
-  Never takes the last :keep adults of the kind (nil: 2 for animals, 0 for hostile mobs); babies are never targets. Animals the body
+  Never takes the last :keep adults of the kind (nil: 2 for animals, 0 for hostile mobs; with :keep nil a lone adult is taken, it is no pair); babies are never targets. Animals the body
   spares (jobs.lib.animal-spare: kinds in ::off-limits, animals in a zone or plan of its own or a closed enclosure unless ::spare-pens
   is false) are never targets either. Weapons: the call's :use :tools (default the best carried); a hostile kind with none gets a sword
   first (jobs.lib.need; a failed fetch ends the job with its cause).
@@ -205,6 +205,14 @@
   (when (and (hostile? c) (not (armed? c)) (not (fetch-opts c)))
     {:reason :unarmed :killed 0 :mob (mob-name c) :text (str "hunt stopped: no weapon carried for a hostile " (mob-name c))}))
 
+(defn kept-back?
+  "Whether the present adults are all held back by the keep rule: at most `keep` of them, but a lone adult is no pair and
+  is taken when :keep was not given (jobs.lib.animal-spare/allowed-by :lone)."
+  [c keep]
+  (let [n (count (present c))]
+    (and (<= n keep)
+         (not (and (= 1 n) (nil? (:keep (:args c))))))))
+
 (def start-fact
   "Later with the cause that bars a hunt's first step: no weapon for a hostile kind (ways #{:carried}), nothing of the :color in range, or :keep or fewer adults.
   Ok while the kind is heard and not in sight: the first steps look for it, and while the job has not looked round (see survey)."
@@ -216,7 +224,7 @@
          (unarmed-cause c) (unarmed-cause c)
          (and (not (look/surveyed? c)) (empty? (present-any c))) nil
          (and (color-of c) (empty? (present c))) (no-color c)
-         (<= (count (present c)) (keep-of c)) (too-few-cause c))))))
+         (kept-back? c (keep-of c)) (too-few-cause c))))))
 
 (defn bad-args
   "Never :bad-args unless a mob drops the call's :item."
@@ -323,7 +331,7 @@
         (heard-kind c) (let [r (await (vantage/step! c (heard-kind c) #(seq (present-any c))))]
                          (if (= :partial r) :yield :again))
         (and (color-of c) (empty? (present c)) (zero? (:killed (ctx/mem c) 0))) (let [d (no-color c)] (ending-of c (:reason d) d))
-        (<= (count (present c)) keep) (finish! c :keep)
+        (kept-back? c keep) (finish! c :keep)
         (and (nil? next-target) (seq (spare-rules c))) (finish! c :spared)
         (nil? next-target) (await (hunting/search! c #(finish! % :none)))
         :else (do (ctx/update-mem! c assoc :target (.-id next-target) :misses 0)

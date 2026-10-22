@@ -113,6 +113,14 @@
           (is (= 2 (get (inv s) "porkchop")))
           (is (finished? s)))))))
 
+(deftest a-lone-adult-is-taken-when-keep-was-not-given
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:item "porkchop" :count 1} {:inventory h/sword :entities [(animal 1 "pig" 3 {:drops [{:name "porkchop" :count 1}]})]} 40))]
+          (is (= 1 (get (inv s) "porkchop")) "one pig is no pair: it is taken")
+          (is (empty? (world-ids s))))))))
+
 (deftest at-most-keep-of-the-kind-waits-without-attacking
   (async done
     (tu/run-async done
