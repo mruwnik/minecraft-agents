@@ -158,4 +158,17 @@
             {:event {:source :job :kind :retreat_sealed} :within-s 40}
             {:no-event {:source :job :kind :retreat.target} :for-s 40 :until {:source :job :kind :retreat_sealed}}]
    :after [[:body-near [16.5 0 16.5] 1.5]]
-   :limit-s 50}]}
+   :limit-s 50}
+  ;; Card 3d042f6b: a fight begun with a phantom is not held at 3 hp (it outflies the body, but a roof stops it): flee, seal in.
+  ;; The phantom has 100 hp so the fight outlasts the damage; hunger stops regeneration first.
+  {:name "phantom-begun-fight-at-low-health-seals"
+   :body {:inventory [["stone_sword" 1] ["cobblestone" 20]]}
+   :act [[:summon "phantom" [20.5 0 16.5] "{NoAI:1b,Health:100f,attributes:[{id:\"minecraft:max_health\",base:100}],active_effects:[{id:\"minecraft:fire_resistance\",duration:99999}]}"]
+         [:await {:source :job :kind :child_started :data {:slot :fight}} 20]
+         [:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 17 minecraft:generic"]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :fight}} :within-s 20}
+            {:event {:source :job :kind :hostile.decided :data {:mob "phantom" :decision :flee}} :within-s 45}
+            {:event {:source :job :kind :retreat_sealed} :within-s 60}
+            {:no-event {:source :body :kind :died} :for-s 60}]
+   :limit-s 75}]}

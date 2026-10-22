@@ -714,6 +714,22 @@
           (dotimes [_ 2] (await (core/tick! eng)))
           (is (= 2 @fights) "an iron sword against one zombie at health 10, the fight begun a moment ago: no run home"))))))
 
+(deftest a-refired-reflex-at-low-health-leaves-a-begun-fight-with-a-phantom
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [phantom {:id 9 :name "phantom" :kind "hostile" :pos {:x 3 :y 64 :z 0}}
+              {:keys [eng p]} (setup {:self {:health 20} :inventory sword :entities [phantom]})
+              eng (assoc-in eng [:jobs 'jobs.combat.attack] {:round (fn ^:async f [_c] (swap! (fake/state p) assoc :entities []) :continue)})]
+          (core/submit! eng respond {})
+          (dotimes [_ 2] (await (core/tick! eng)))
+          (fake/swap-self! p assoc :health 3)
+          (fake/add-entity! p phantom)
+          (core/submit! eng respond {})
+          (await (core/tick! eng))
+          (is (= :flee (get-in (mem/latest (mem/view (:store eng)) :hostile) [:data :decision]))
+              "a phantom outflies the body, but a roof stops it: at health 3 the begun fight is not held"))))))
+
 ;; ----------------------------------------------------------------- retreat
 
 (def retreat '(test.flight))
@@ -1176,6 +1192,14 @@
                     :entities [(visible-zombie 5 0)]}
                    danger-args))
       "with the body sealed in"))
+
+(deftest hostile-near-holds-for-a-mob-that-hit-the-body-lately-whatever-the-way-test-says
+  (let [holds-hit-at? (fn [t] (boolean (when-hostile-near (tu/fake-on-floor {:blocks dividing-wall :entities [(visible-zombie 8 0)]})
+                                                         {:data (mem/add-entry mem/empty-data :hurt {:t t :data {:attacker {:id 7 :name "zombie"}}} {:cap 50 :ttl 60000})
+                                                          :now 6000}
+                                                         danger-args)))]
+    (is (holds-hit-at? 2000) "its blow 4 s ago shows it reaches the body")
+    (is (not (holds-hit-at? 500)) "a blow older than danger/::hit-s")))
 
 (deftest hostile-near-fires-for-a-zombie-that-can-walk-to-the-body
   (is (holds? {:entities [(visible-zombie 5 0)]} danger-args) "open ground")

@@ -21,6 +21,7 @@
    ::fight-reserve {:default 4 :doc "Health a fight must be expected to leave for the hostile reflexes to take it (respond-to-hostile and retreat)." :spec (a/num-in 0 20)}
    ::known-scan {:default 64 :doc "Blocks out to which the mobs a distance filter weighs are fetched." :spec (a/int-in 1 nil)}
    ::close-hearing {:default 2 :doc "Blocks within which a heard mob is loud enough to be beside the body (heard-close?)." :spec (a/num-in 0 nil)}
+   ::hit-s {:default 5 :doc "Seconds a melee mob whose blow hurt the body counts as a real danger whatever the way test says (hit-ids): it reached the body." :spec (a/num-in 0 nil)}
    ::quarters-reach {:default 3 :doc "Blocks within which a roof and walls every way make the body's place closed quarters (closed-quarters?)." :spec (a/int-in 1 nil)}})
 
 (defn seen-mob?
@@ -38,6 +39,11 @@
     (if (some? s) (true? s) (true? (.-visible e)))))
 
 (defn quarters-reach [] (settings/get settings ::quarters-reach))
+
+(defn hit-ids
+  "Ids of the mobs whose blows hurt the body within ::hit-s of the view's now (the damage packet names the attacker, as a player feels the hit)."
+  [view]
+  (body/attacker-ids view (- (:now view) (* 1000 (settings/get settings ::hit-s)))))
 
 (defn closed-quarters?
   "Whether the body's cell [x y z] is in closed quarters by kind-at, where a sound alone does not show a mob is near: a
@@ -185,13 +191,15 @@
   :ignore-heard? leaves out every mob the body has not seen (a muted heard mob, jobs.lib.body/heard-muted?).
   :watched ({id blocks-off-when-watched}) leaves out those mobs while they stay beyond answered-within.
   :way? false takes a melee mob without a way to the body (on a pillar or behind a door) as one: it stands where the body's walk will land.
+  :hit-ids (hit-ids) are melee mobs that hurt the body lately: each known one is a danger, seen or not, whatever the way test says.
   A melee mob heard but not seen counts as seen (by its rough spot) outside or in a large cave; in closed quarters
   (closed-quarters?) it is one only when heard close (heard-close?) and it could stand beside the body that way
   (beside-toward?): a heard mob in clear, lit sight is already seen (engine.perception), so a look would find nothing.
   A fusing creeper (hissing, seen or heard) within swell-range is always one; beyond it the usual tests apply."
   ([p kind-at e opts] (danger-in? p kind-at nil e opts))
-  ([p kind-at pr e {:keys [sight? arrow-at ignore-heard? watched way?] :or {sight? true way? true}}]
+  ([p kind-at pr e {:keys [sight? arrow-at ignore-heard? watched way? hit-ids] :or {sight? true way? true}}]
    (cond
+     (and (contains? hit-ids (.-id e)) (not (combat/ranged? e))) true
      (and (contains? watched (.-id e)) (> (mob-distance p e) (answered-within (get watched (.-id e))))) false
      (calm-enderman? e) false
      ;; it swells only while it has a line of sight to the body within 7 blocks, so its blast reaches; heard only, its
@@ -266,4 +274,4 @@
   [world memory args]
   (boolean (and (not (body/dead? memory))
                 (danger-near? world (:radius args (hostile-radius)) (:ranged-radius args (ranged-radius))
-                              {:sight? (:visible-only args true) :ignore-heard? (body/heard-muted? memory) :watched (body/watched memory)}))))
+                              {:sight? (:visible-only args true) :ignore-heard? (body/heard-muted? memory) :watched (body/watched memory) :hit-ids (hit-ids memory)}))))

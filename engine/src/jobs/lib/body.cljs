@@ -86,6 +86,11 @@
              (and (> (:until (:data m)) (:now view))
                   (empty? (mem/since view :hurt (:t m)))))))
 
+(defn attacker-ids
+  "The ids of the attackers the view's :hurt entries since t (ms) name."
+  [view t]
+  (into #{} (keep #(get-in % [:data :attacker :id])) (mem/since view :hurt t)))
+
 ;; a loss is judged by its :hurt entry, not by the bare health drop: poison and hunger cost health too
 (defn mob-hit-since?
   "Whether the view has a :hurt entry since t (ms) that may be a mob's blow (engine.hurt/mob-hit?)."

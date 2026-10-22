@@ -73,10 +73,10 @@
 (defn near
   "The hostiles that count: ones the body has seen (jobs.lib.danger/known-hostiles), melee within :radius and ranged
   within :ranged-radius. One behind a wall cannot reach or shoot the body, so
-  it is left alone, as is one with no walkable way to the body (jobs.lib.danger),
+  it is left alone, as is one with no walkable way to the body (jobs.lib.danger) unless it hit the body lately (danger/hit-ids),
   as the hostile-near trigger does."
   [c]
-  (danger-q/dangers (:primitives c) (danger-q/hostile-radius) {:ranged-radius (danger-q/ranged-radius)} {}))
+  (danger-q/dangers (:primitives c) (danger-q/hostile-radius) {:ranged-radius (danger-q/ranged-radius)} {:hit-ids (danger-q/hit-ids (ctx/view c))}))
 
 
 (def other {:fight :flee :flee :fight})
@@ -287,12 +287,12 @@
                    (cost/decide {:health (.-health self)
                                :fighting? (fight-begun? c m near)
                                :few? (few-engaged? p near)
-                               :cannot-outrun? (not (cost/outruns? (or (.-food self) 20) (map cost/mob-kind (remove combat/ranged? near))))
+                               :cannot-outrun? (not (cost/outruns? (or (.-food self) 20) (map cost/mob-kind (remove #(or (combat/ranged? %) (combat/flyer? %)) near))))
                                :creeper? (boolean (or (seq beside) (and (some combat/creeper? near) (not (hostile/hit-and-back? c near)))))
                                :reserve reserve
                                :damage (hostile/damage c near #(struck-of c %))}))
         stay? (and (not (hurt-lately? c)) (stay-under-roof? c near))
-        decision (if (and (= :flee chosen) (>= (count hits) 2) (empty? beside) (not-any? combat/creeper? near) (not-any? combat/enderman? near))
+        decision (if (and (= :flee chosen) (>= (count hits) 2) (empty? beside) (not-any? #(or (combat/creeper? %) (combat/enderman? %) (combat/flyer? %)) near))
                    :fight
                    chosen)
         decision (if stay? :fight decision)]

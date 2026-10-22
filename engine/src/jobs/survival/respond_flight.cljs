@@ -202,7 +202,7 @@
   [c]
   (let [{:keys [fled chasers refuge]} (ctx/mem c)]
     (not (or (seq fled) (seq chasers) refuge (shot/open? (:primitives c) (ctx/view c))
-             (seq (danger-q/dangers (:primitives c) (danger-q/hostile-radius) {:ranged-radius (danger-q/ranged-radius)} {:sight? false}))))))
+             (seq (danger-q/dangers (:primitives c) (danger-q/hostile-radius) {:ranged-radius (danger-q/ranged-radius)} {:sight? false :hit-ids (danger-q/hit-ids (ctx/view c))}))))))
 
 (def kept-keys
   "Memory the response owns beyond a flight: the child calls, the fight's counts and the last flight's ending."
