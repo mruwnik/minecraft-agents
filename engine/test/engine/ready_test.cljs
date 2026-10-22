@@ -378,8 +378,12 @@
 
 (deftest a-hurt-body-waits-to-start-the-access-and-boat-jobs
   (doseq [j '[jobs.access.tunnel jobs.access.stair jobs.access.pillar jobs.access.clear-path jobs.access.bridge jobs.access.toggle
-              jobs.movement.boat-launch jobs.movement.boat-land jobs.movement.boat-recover jobs.movement.boat-drive jobs.movement.mount]]
+              jobs.movement.boat-launch jobs.movement.boat-recover jobs.movement.mount]]
     (is (= :later (kind (:fit? (get registry/jobs j)) {:self {:pos {:x 0 :y 64 :z 0} :health 5}})) (str j))))
+
+(deftest a-hurt-body-afloat-still-lands-and-drives
+  (doseq [j '[jobs.movement.boat-land jobs.movement.boat-drive]]
+    (is (= :ok (kind (:fit? (get registry/jobs j)) {:self {:pos {:x 0 :y 64 :z 0} :health 5}})) (str j))))
 
 (deftest the-field-jobs-work-at-low-health-where-risky-jobs-wait
   (doseq [j '[jobs.farm.fertilize jobs.farm.plant jobs.farm.harvest jobs.farm.till jobs.farm.tend jobs.farm.compost jobs.farm.tidy jobs.farm.maintain]]
