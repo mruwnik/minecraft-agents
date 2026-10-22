@@ -62,7 +62,7 @@
   are searched, over one block lookup), or nil."
   [c {:keys [cell]} waiting]
   (let [p (:primitives c)
-        kind-at (reach/lookup p)
+        kind-at (reach/seen-lookup p)
         here (u/self-pos c)
         floor (fn [k] (js/Math.floor (k here)))
         [x y z] [(floor :x) (floor :y) (floor :z)]
@@ -89,7 +89,7 @@
   at most once), each cell's seal answer, and max-search-cells cells for all its walk searches."
   [c]
   (let [p (:primitives c)]
-    {:kind-at (reach/lookup p)
+    {:kind-at (reach/seen-lookup p)
      :enclosed (delay (reach-room/enclosed? p))
      :reaches (volatile! {})
      :seals (volatile! {})
@@ -158,7 +158,7 @@
   (and (= :dig action)
        (let [p (:primitives c)]
          (and (not @(:enclosed pr))
-              (reach-room/enclosed? p #{(vec cell)} (reach/lookup p reach-room/body-kind-of) reach-room/shut-room-cells)))))
+              (reach-room/enclosed? p #{(vec cell)} (reach/seen-lookup p reach-room/body-kind-of :open) reach-room/shut-room-cells)))))
 
 (def target [])
 

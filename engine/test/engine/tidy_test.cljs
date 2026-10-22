@@ -808,14 +808,15 @@
         nodes (atom 0)
         lookups (atom 0)
         search reach/search
-        lookup reach/lookup
+        lookup reach/seen-lookup
         forward reach/forward
         backward reach/backward
         result (with-redefs [reach/search (fn [& xs] (swap! searches inc) (apply search xs))
                              reach/forward (fn [& xs] (swap! nodes inc) (apply forward xs))
                              reach/backward (fn [& xs] (swap! nodes inc) (apply backward xs))
-                             reach/lookup (fn ([p] (swap! lookups inc) (lookup p reach/kind-of))
-                                            ([p kind] (swap! lookups inc) (lookup p kind)))]
+                             reach/seen-lookup (fn ([p] (swap! lookups inc) (lookup p reach/kind-of :solid))
+                                                 ([p kind] (swap! lookups inc) (lookup p kind :solid))
+                                                 ([p kind unseen] (swap! lookups inc) (lookup p kind unseen)))]
                  (f))]
     {:result result :searches @searches :nodes @nodes :lookups @lookups}))
 
@@ -833,6 +834,24 @@
     (is (nil? result) "no clear cell: the tunnel is reserved and the pockets are sealed")
     (is (<= searches 6) (str searches " walk searches"))
     (is (= 1 lookups) "one block lookup")))
+
+(deftest a-step-clear-cell-is-never-one-the-body-has-not-seen
+  (let [p (tu/fake (assoc with-hitbox :self {:pos [0 64 0]}))
+        sensed (.-sensedAt p)
+        _ (aset p "sensedAt" (fn [q] (if (neg? (.-x q)) #js {:unknown true} (sensed q))))
+        stand (restore-broken/clear-cell {:primitives p} (dug-cell [0 64 0]) [])]
+    (is (some? stand))
+    (is (not (neg? (:x stand))) "the west half never seen: the nearest stand there is not read off the true world")))
+
+(deftest filling-a-doorway-shuts-the-body-in-only-over-walls-it-has-seen
+  (let [shell (merge (tu/box -1 64 -1 3 66 1 "stone"))
+        room (apply dissoc shell (concat (for [x (range 0 3) y [64 65]] (str x "," y ",0")) ["3,64,0" "3,65,0"]))
+        p (tu/fake {:blocks room :floor [-30 -30 30 30] :self {:pos [1 64 0]}})
+        sensed (.-sensedAt p)
+        seals? #(restore-broken/seals-body? {:primitives p} {:cell [3 64 0] :action :dig} (restore-broken/probe {:primitives p}))]
+    (is (true? (seals?)) "every wall seen: the doorway is the only way out")
+    (aset p "sensedAt" (fn [q] (if (#{[1 64 1] [1 65 1]} [(.-x q) (.-y q) (.-z q)]) #js {:unknown true} (sensed q))))
+    (is (false? (seals?)) "a wall cell never looked at may be a gap: not shut in")))
 
 (def stair-cells-plan
   {:id "hut" :parts [{:id "stair" :cells [[0 65 0] [0 66 0]] :want :clear}]})
