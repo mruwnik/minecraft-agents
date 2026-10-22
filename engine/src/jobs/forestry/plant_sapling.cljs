@@ -49,7 +49,9 @@
 (def ways need/fetch-ways)
 
 (a/defargs settings
-  {::min-light {:default 9 :doc "The light (the better of sky and block light, the clock left out) a planted sapling's cell needs to grow." :spec (a/int-in 0 15)}
+  {::min-health {:default 0 :spec (a/num-in 0 20)
+                 :doc "Health (of 20) below which the job waits to heal; 0 = never (placing a sapling is short and safe). Poison still holds."}
+   ::min-light {:default 9 :doc "The light (the better of sky and block light, the clock left out) a planted sapling's cell needs to grow." :spec (a/int-in 0 15)}
    ::job-time-s {:default 180 :doc "Seconds a planting may take: the walk, a fetch." :spec (a/num-in 0 nil)}})
 (defn time-s [] (settings/get settings ::job-time-s))
 
@@ -59,7 +61,7 @@
 
 (def safe? (ready/safe-at-by-night (fn [c] (a/cell (or (:at (:args c)) (:near (:args c)))))))
 
-(def fit? ready/fit?)
+(defn fit? [c] (ready/fit-min (settings/get settings ::min-health) c))
 
 (defn sapling-at?
   "True when the block at pos is a sapling, mangrove propagule or fungus."

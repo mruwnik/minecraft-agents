@@ -23,6 +23,21 @@
    :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 20 :of-job true}
             {:event {:source :job :kind :child_ended :data {:slot :need}} :within-s 160 :of-job true}
             {:no-event {:source :job :kind :failed} :for-s 20}]}
+  {:name "hurt-body-plants-a-carried-sapling"
+   ;; card 06e0bb68 (Q373): placing a sapling in lit open ground is safe, so low health does not hold it
+   :body {:inventory [["oak_sapling" 1]] :effects []}
+   :act [[:rcon "damage $BODY 15 minecraft:generic"]
+         [:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak"})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 50 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :low-health}} :for-s 10 :until {:source :job :kind :completed}}]
+   :after [[:block [20 0 14] "oak_sapling"]]}
+  {:name "hurt-body-waits-when-the-min-health-setting-is-raised"
+   ;; card 06e0bb68 should-fail: the floor is a setting; hp under it holds the planting
+   :body {:inventory [["oak_sapling" 1]] :effects []}
+   :act [[:rcon "damage $BODY 15 minecraft:generic"]
+         [:job (jobs.forestry.plant-sapling {:at #at [20 0 14] :species "oak" :settings {:jobs.forestry.plant-sapling/min-health 12}})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :low-health}} :within-s 20 :of-job true}]
+   :after [[:not-block [20 0 14] "oak_sapling"]]}
   {:name "already-planted-spot-clears-debt"
    ;; card f3248d31: the same sapling already on the spot counts as planted (place says :already) and the debt is forgotten
    :blocks [[:set [20 0 14] "oak_sapling"]]

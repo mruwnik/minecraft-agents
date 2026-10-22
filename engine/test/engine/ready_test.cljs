@@ -419,7 +419,8 @@
     (is (= :ok (kind (:fit? (get registry/jobs j)) {:self {:pos {:x 0 :y 64 :z 0} :health 5}})) (str j))))
 
 (deftest the-field-jobs-work-at-low-health-where-risky-jobs-wait
-  (doseq [j '[jobs.farm.fertilize jobs.farm.plant jobs.farm.harvest jobs.farm.till jobs.farm.tend jobs.farm.compost jobs.farm.tidy jobs.farm.maintain]]
+  (doseq [j '[jobs.farm.fertilize jobs.farm.plant jobs.farm.harvest jobs.farm.till jobs.farm.tend jobs.farm.compost jobs.farm.tidy jobs.farm.maintain
+             jobs.forestry.plant-sapling jobs.forestry.prepare]]
     (is (= :ok (kind (:fit? (get registry/jobs j)) {:self {:pos {:x 0 :y 64 :z 0} :health 2}})) (str j))))
 
 (deftest safe-at-by-night-waits-for-an-unseen-place-only-at-night
