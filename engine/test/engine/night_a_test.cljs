@@ -55,11 +55,17 @@
         bed {:x 20 :y 64 :z 0}
         zone (fn [owner] [{:name "z" :owner owner :min [18 60 -2] :max [22 70 2]}])
         plan {"hut" {:id "hut" :parts [{:id "bed" :cells [[20 64 0]] :want "red_bed"}] :metadata {:by "Other"}}}
-        permit? (fn [kn] ((sh-beds/bed-permit p kn) bed))]
+        permit? (fn [kn] ((sh-beds/bed-permit p kn) bed))
+        claimed (fn [owner] (let [w (ew/of-data {} {} [])]
+                              (swap! (:state w) assoc :area-claims
+                                     {:value [{:id "c" :owner owner :status "active" :until js/Number.MAX_SAFE_INTEGER :min [18 60 -2] :max [22 70 2]}]})
+                              w))]
     (is (true? (permit? (ew/of-data {} {} []))) "a bed no one holds")
     (is (false? (permit? (ew/of-data {} {} (zone "Other")))) "in another owner's zone")
     (is (false? (permit? (ew/of-data plan {} []))) "on another body's plan")
-    (is (true? (permit? (ew/of-data plan {} (zone "Fake")))) "in the body's own zone")))
+    (is (true? (permit? (ew/of-data plan {} (zone "Fake")))) "in the body's own zone")
+    (is (false? (permit? (claimed "Other"))) "in another owner's claim")
+    (is (true? (permit? (claimed "Fake"))) "in the body's own claim")))
 
 (deftest the-live-spawn-bed-is-used-when-the-remembered-bed-is-far
   (let [world {:time night :floor tu/walk-floor :blocks {"20,64,0" "red_bed"}}

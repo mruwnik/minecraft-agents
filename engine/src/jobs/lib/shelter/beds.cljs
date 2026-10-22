@@ -67,13 +67,14 @@
     (boolean (some #(and (zones/in-box? [x y z] %) (zones/same-owner? (:owner %) me)) (when kn (world/zones kn))))))
 
 (defn others-bed?
-  "Whether the bed at pos is another's build: in another owner's zone, or on the footprint of a plan another body made. kn
+  "Whether the bed at pos is another's build: in another owner's zone or live claim, or on the footprint of a plan another body made. kn
   is the engine world (nil: none known)."
   [p kn {:keys [x y z]}]
   (let [me (.-username (.self p))
         cell [x y z]
         by (get (world/plan-authors kn) (get (world/footprints kn nil) cell))]
-    (boolean (or (some #(and (zones/in-box? cell %) (zones/foreign-owner? (:owner %) me)) (world/zones kn))
+    (boolean (or (some #(and (zones/in-box? cell %) (zones/foreign-owner? (:owner %) me))
+                       (concat (world/zones kn) (world/live-claims (world/area-claims kn) (.now js/Date))))
                  (and by (zones/foreign-owner? by me))))))
 
 (defn bed-free?
