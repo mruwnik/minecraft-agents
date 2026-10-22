@@ -180,7 +180,7 @@
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) nil
-      :else (assoc (stop-of (:kind e) (:cause e) (why-of e)) :item (get-in e [:data :item])))))
+      :else (assoc (stop-of (:kind e) (:cause e) (why-of e)) :item (get-in e [:data :item]) :gathered (get-in e [:data :tried :gather])))))
 
 (defn finish!
   "End the call: done when out is nil, else with the stop out; the data has what is had and made, and a text."
@@ -231,12 +231,12 @@
   3)
 
 (defn retry?
-  "Whether the bill's stop r is a gathering try that ended (a mine that stopped, no way up ..) and the kit may run the bill again: it was searching (:explore), and fewer than max-bill-tries fruitless rounds passed."
+  "Whether the bill's stop r is a gathering try that ended (r's :gathered, obtain's data :tried :gather: a mine that stopped, no way up ..) and the kit may run the bill again: it was searching (:explore), and fewer than max-bill-tries fruitless rounds passed."
   [r tries explore]
   (boolean (and r explore (< (inc tries) max-bill-tries)
                 (= :no-source (:reason r))
-                (re-find #"gathering was tried and ended" (str (:why r)))
-                (not (re-find #"gathering was tried and ended :none-seen" (str (:why r)))))))
+                (some? (:gathered r))
+                (not= :none-seen (:gathered r)))))
 
 (defn material-of
   "The furnace material (ingots, counting raw ore) carried, to tell whether a bill round gained any."

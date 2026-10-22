@@ -70,9 +70,10 @@
     (pos? (+ (get have mat 0) (get have (get smelt-plan/made-from mat) 0)))))
 
 (defn stop-data
-  "The data of the bill's stop at item for child ending e."
+  "The data of the bill's stop at item for child ending e: its :why and :tried."
   [item e]
   (cond-> {:item item :got 0}
+    (get-in e [:data :tried]) (assoc :tried (get-in e [:data :tried]))
     (or (get-in e [:data :why]) (when (map? (:cause e)) (:why (:cause e))))
     (assoc :why (or (get-in e [:data :why]) (:why (:cause e))))))
 
