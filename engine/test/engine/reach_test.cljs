@@ -77,6 +77,10 @@
     (is (true? (fire? (hiding (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks wall}) #{[3 64 0] [3 65 0]})))
         "the wall never looked at: a line of fire until seen")))
 
+(deftest a-wall-the-body-has-not-seen-may-be-a-mob-s-way-in
+  (let [p (hiding (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :blocks walls}) #{[0 64 1] [0 65 1]})]
+    (is (true? (reach/walkable-way? p {:x 0.5 :y 64 :z 6.5} body)))))
+
 (deftest dangers-and-nearest-danger-of-mobs-that-can-reach
   (let [p (tu/fake {:self {:pos body} :floor [-20 -20 20 20] :entities mobs})]
     (is (= [1 2 3] (sort (map #(.-id %) (danger-q/dangers p 8 {} {:sight? false})))))

@@ -117,6 +117,12 @@
              (.set cache k v)
              v)))))))
 
+(defn mob-lookup
+  "seen-lookup for a mob's way to the body: a cell the body has not seen is :ground, both open and a floor to a walker
+  (passable?, standable?), so a dark cave hides no way a mob may have."
+  [p]
+  (seen-lookup p kind-of :ground))
+
 (defn passable? [kind-at x y z]
   (let [k (kind-at x y z)]
     (not (or (keyword-identical? :solid k) (keyword-identical? :tall k)))))
@@ -326,12 +332,12 @@
 
 (defn walkable-way?
   "Whether a walker at the mob's cell can reach the body's. Searches from the mob; on budget, from the body (which
-  settles a sealed body or a small island). Unknown counts as a way.
+  settles a sealed body or a small island). Unknown counts as a way, and so does a cell the body has not seen (mob-lookup).
   solid: a set of cells treated as solid blocks. open: a set treated as air."
   ([p mob-pos body-pos] (walkable-way? p mob-pos body-pos #{}))
   ([p mob-pos body-pos solid] (walkable-way? p mob-pos body-pos solid #{}))
   ([p mob-pos body-pos solid open]
-   (let [base (lookup p)
+   (let [base (mob-lookup p)
          kind-at (if (and (empty? solid) (empty? open))
                    base
                    (fn [x y z]
@@ -354,12 +360,6 @@
       (re-find arrow-passes name) :open
       :else :solid)))
 
-
-(defn mob-lookup
-  "seen-lookup for a mob's way to the body: a cell the body has not seen is :ground, both open and a floor to a walker
-  (passable?, standable?), so a dark cave hides no way a mob may have."
-  [p]
-  (seen-lookup p kind-of :ground))
 
 (defn arrow-lookup
   "seen-lookup of arrow-kind-of for a ranged mob's line of fire: a cell the body has not seen lets an arrow through."
