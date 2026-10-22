@@ -615,6 +615,9 @@
     {:at [15 64 0]} :ok
     {:at [40 64 0]} :later))
 
+(deftest cleanup-takes-scaffold-back-from-a-dark-cell-near-the-body
+  (is (= :ok (lit 0 15 #(bound (safe-of 'jobs.access.cleanup) open-night {})))))
+
 (deftest a-dark-closed-room-is-no-wait-by-day-or-night-in-or-out
   (are [t self] (= :ok (lit 0 0 #(kind (ready/safe-at (constantly {:x 5 :y 64 :z 0}))
                                        (-> (hut/hut-world self {}) (dissoc :light) (assoc :time t)))))

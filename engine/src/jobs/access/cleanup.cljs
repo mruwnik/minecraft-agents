@@ -76,7 +76,7 @@
   A block on the footprint of a plan this body made is the plan's: its entry is dropped (cleanup.plan-cell) and the cell
   never dug, unless the spare-own-builds setting is false.
 
-  Ready: safe? is jobs.lib.ready/safe-if-lit (:hostile-near, :dark); fit? is jobs.lib.ready/fit-armed (:low-health, :poisoned,
+  Ready: safe? is jobs.lib.ready/safe-at-build here (:hostile-near; a dark cell within the spawn-free radius is no wait); fit? is jobs.lib.ready/fit-armed (:low-health, :poisoned,
   :unarmed: no weapon carried). Both are the :checks defaults, so a caller or trigger overrides them (:checks {:fit? '(always)}).
   Which scaffold is worth a walk (far below, near a death, roofed) is the scaffold-left trigger's call, not this job's. A walk leg also stops while a mob the body fled from within
   jobs.lib.threats/fled-memory-ms was last known within jobs.lib.threats/fled-radius of the cell or the body (:danger).
@@ -208,13 +208,13 @@
 
 (def meta {:category :phase :part-of '[jobs.movement.go-to jobs.access.stair]})
 
-(def safe? ready/safe-if-lit)
+(def safe? (ready/safe-at-build (constantly nil)))
 
 (def fit? ready/fit-armed)
 
 (def target [:of :near])
 
-(def defaults {:checks {:safe? '(and (not (threatened)) (not (exposed))) :fit? '(and (healthy) (armed))} :spend {:job-time ::job-time-s}})
+(def defaults {:checks {:fit? '(and (healthy) (armed))} :spend {:job-time ::job-time-s}})
 
 (defn picked-entries [c]
   (let [view (ctx/view c)]
