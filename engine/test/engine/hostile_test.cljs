@@ -1497,14 +1497,14 @@
             (is (= [] (:list (core/state eng))) "done, so the reflex does not fire again for it")
             (is (not (danger-q/hostile-near? p view {})) "and the trigger stays quiet while it stays out there")))))))
 
-(deftest a-shooter-near-is-never-watched-with-a-held-mob
-  (async done
-    (tu/run-async done
-      (fn ^:async t []
-        (let [{:keys [eng]} (setup-seeing {:inventory sword :time 14000 :radius 6 :entities [(zombie 5 0) (skeleton 9 -4 0)]} [0 4] 1000)]
-          (core/submit! eng respond {})
-          (await (core/tick! eng))
-          (is (empty? (body/watched-ids (mem/view (:store eng))))))))))
+(deftest only-seen-melee-mobs-may-be-watched
+  (let [p (tu/fake-on-floor {:floor flight-floor :entities [(zombie 5 0) (skeleton 9 -4 0)
+                                                           {:id 10 :name "creeper" :kind "hostile" :pos {:x 4 :y 64 :z 0}}]})
+        sensed (fn [ids] (mapv #(first (filter (fn [e] (= % (.-id e))) (danger-q/known-hostiles p 16 {}))) ids))]
+    (are [ids ok?] (= ok? (respond-to-hostile/watchable? (sensed ids)))
+      [7] true
+      [7 9] false
+      [10] false)))
 
 (deftest a-flight-from-a-seen-mob-that-ends-blocked-mutes-nothing
   (async done

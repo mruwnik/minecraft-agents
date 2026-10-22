@@ -192,13 +192,18 @@
                              " is not in sight and the body can afford the fight: no flight; heard mobs are left alone for "
                              mute-s " s, one that comes into sight is fought")}}))
 
+(defn watchable?
+  "Pure: whether the dangers hs may be watched instead of answered: every one seen, none a creeper, shooter or fusing mob."
+  [hs]
+  (and (every? danger-q/seen-only? hs)
+       (not-any? #(or (combat/creeper? %) (combat/ranged? %) (true? (.-fusing %))) hs)))
+
 (defn leave-watched?
   "Whether a fight that held for a mob to come and gave up (:hold-timeout) leaves the dangers hs watched instead of fleeing:
-  every one seen, none a creeper, shooter or fusing mob, the fight landed no hit and the body was not hurt within hit-window-ms."
+  watchable?, the fight landed no hit and the body was not hurt within hit-window-ms."
   [c hs]
   (and (= :hold-timeout (:declined (ctx/mem c)))
-       (every? danger-q/seen-only? hs)
-       (not-any? #(or (combat/creeper? %) (combat/ranged? %) (true? (.-fusing %))) hs)
+       (watchable? hs)
        (empty? (:hits (ctx/mem c)))
        (empty? (ctx/since c :hurt (- (ctx/now c) (hit-window-ms))))))
 
