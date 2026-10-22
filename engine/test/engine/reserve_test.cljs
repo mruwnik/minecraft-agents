@@ -14,7 +14,7 @@
   (let [add (fn [d kind data policy] (mem/add-entry d kind {:t 0 :data data} policy))
         data (as-> mem/empty-data d
                (reduce #(add %1 :reserve %2 reserve/policy) d entries)
-               (reduce #(add %1 (mem/job-kind %2) {} mem/job-policy) d jobs)
+               (reduce #(add %1 (mem/job-kind (first %2)) (second %2) mem/job-policy) d (map #(if (string? %) [% {}] %) jobs))
                (reduce #(add %1 :choose/override %2 {:cap 20 :ttl :forever}) d overrides)
                (cond-> d home-bed (add :bed {:pos home-bed} mem/place-policy)))]
     {:primitives (tu/fake {:inventory items}) :view (fn [] {:data data :now 1000})}))
@@ -47,7 +47,10 @@
     {:until 1000} [] false
     {:by "agent"} [] true
     {:by "j1"} ["j1"] true
-    {:by "j1/bill"} ["j1"] true
+    {:by "j1/bill"} [["j1" {:children {:bill {:args {}}}}]] true
+    {:by "j1/bill"} [["j1" {:children {}}]] false
+    {:by "j1/bill"} ["j1"] false
+    {:by "j1/a/b"} [["j1" {:children {:a {:children {:b {}}}}}]] true
     {:by "j1"} [] false))
 
 (deftest the-built-in-rules-hold-through-the-same-answer

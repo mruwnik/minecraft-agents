@@ -106,7 +106,7 @@
   (let [store (atom [])
         writes (atom 0)
         c {:id "j1/bill" :primitives (tu/fake {}) :args {:bill {"iron_pickaxe" 1}}
-           :view (fn [] {:data {:entries {:reserve @store (mem/job-kind "j1") [{:data {}}]}} :now 0})
+           :view (fn [] {:data {:entries {:reserve @store (mem/job-kind "j1") [{:data {:children {:bill {:args {}}}}}]}} :now 0})
            :remember (fn [_ data _] (swap! writes inc) (swap! store conj {:data data}))
            :forget (fn [_ pred] (swap! store #(vec (remove (comp pred :data) %))))}]
     (bill/reserve! c ["iron_pickaxe"])

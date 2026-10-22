@@ -1,0 +1,27 @@
+;; A child's reserve entries lapse when the child ends, not when the root does: from-plan holds the carried bed for a plan bed it
+;; cannot place (the cells are bedrock), ends refused, and the same (any ...) root then puts the bed down for the night.
+;; Hut as in sleep-bed-in-house: planks x 12..18, z 12..18, room 13..17, shut door at [15 0..1 18]; :home inside at [15 0 15].
+;; Should-succeed: bed-down puts the carried bed down (night.bed-placed); with the hold kept it kept the bed in the bag.
+{:defaults
+ {:tags [:night :survival :reserve]
+  :time :night :time-why :sleep
+  :blocks [[:fill [12 0 12] [18 3 18] "oak_planks" :hollow]
+           [:fill [13 0 13] [17 2 17] "air"]
+           [:set [15 2 13] "glowstone"]
+           [:set [13 1 18] "glass"] [:set [14 1 18] "glass"] [:set [16 1 18] "glass"] [:set [17 1 18] "glass"]
+           [:fill [15 0 18] [15 1 18] "air"]
+           [:set [15 0 18] "oak_door[facing=south,half=lower,hinge=left,open=false]"]
+           [:set [15 1 18] "oak_door[facing=south,half=upper,hinge=left,open=false]"]
+           [:set [13 0 13] "bedrock"] [:set [13 0 14] "bedrock"]]
+  :plans [{:id "bedroom" :metadata {:by "$body"}
+           :parts [{:id "bed-foot" :cells [#at [13 0 13]] :want {:block "bed" :facing :south :part :foot}}
+                   {:id "bed-head" :cells [#at [13 0 14]] :want {:block "bed" :facing :south :part :head}}]}]
+  :body {:at [12.5 0 20.5] :yaw 180 :effects [["resistance" 600 4]] :settle-s 3 :inventory [["red_bed" 1]]}
+  :limit-s 150}
+ :cases
+ [{:name "plan-bed-hold-ends-with-from-plan-so-bed-down-places-the-bed"
+   :memory [{:kind :home :data {:pos #xyz [15 0 15]} :policy {:cap 1 :ttl :forever}}]
+   :act [[:rcon "clear $BODY red_bed"] [:rcon "give $BODY red_bed 1"]
+         [:job (any (jobs.build.from-plan {:plan "$plan:bedroom"}) (jobs.survival.bed-down {}))]
+         [:await {:source :job :kind :night.bed-placed} 120]]
+   :expect [{:event {:source :job :kind :night.bed-placed} :within-s 120}]}]}
