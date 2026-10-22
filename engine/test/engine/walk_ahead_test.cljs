@@ -24,6 +24,12 @@
 
 ;; ---------------------------------------------------------------- pure
 
+(deftest a-look-over-an-edge-aims-only-at-ground-not-yet-seen
+  (let [at (fn [seen] (set (map (juxt :x :z) (drive/edge-points {:x 0.5 :z 0.5} 63 (fn [[x _ z]] (not (contains? seen [x z])))))))]
+    (is (= 16 (count (at #{}))) "unseen ground all round: 8 directions at 3 and at 7 blocks")
+    (is (= (disj (at #{}) [3.5 0.5]) (at #{[3 0]})) "the one cell seen is left out")
+    (is (empty? (at (set (for [x (range -8 9) z (range -8 9)] [x z])))) "all seen: no look")))
+
 (defn step [x y z move] {:x x :y y :z z :h 0 :move move :px (+ x 0.5) :pz (+ z 0.5)})
 
 (deftest the-cells-of-a-straight-step-are-its-two-columns-from-the-floor-to-over-the-head

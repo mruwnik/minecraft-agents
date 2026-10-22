@@ -3,6 +3,7 @@
   loop: settle, plan, follow, plan again when off the plan) and way-back."
   (:require [engine.ctx :as ctx]
             [engine.path.executor :as executor]
+            [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
             [jobs.lib.walk :as walk]
@@ -56,17 +57,24 @@
   "Learned replans a follow! does not count: a void edge teaches a column per replan, each a search."
   6)
 
+(defn edge-points
+  "The points a look over an edge aims at: the ground round self ({:x :z}) at 3 and 7 blocks in eight directions at height y,
+  those whose cell is still unknown (unknown? takes [x y z]); ground already seen is not looked at again."
+  [{:keys [x z]} y unknown?]
+  (for [d [3 7] [dx dz] [[1 0] [1 1] [0 1] [-1 1] [-1 0] [-1 -1] [0 -1] [1 -1]]
+        :let [pt {:x (+ x (* d dx)) :y (+ y 0.5) :z (+ z (* d dz))}]
+        :when (unknown? (mapv #(js/Math.floor (% pt)) [:x :y :z]))]
+    pt))
+
 (defn ^:async look-over-edge!
-  "A floor the body learned is not there (a drop at the takeoff's edge): look at the ground round the body at several
+  "A floor the body learned is not there (a drop at the takeoff's edge): look at the unseen ground round the body at several
   distances, as a player looks over an edge once, so the next plan does not drop at the next unseen column."
   [c [_ y _]]
-  (let [{:keys [x z]} (u/self-pos c)]
-    (loop [points (for [d [3 7] [dx dz] [[1 0] [1 1] [0 1] [-1 1] [-1 0] [-1 -1] [0 -1] [1 -1]]]
-                    {:x (+ x (* d dx)) :y (+ y 0.5) :z (+ z (* d dz))})]
-      (when-let [pt (first points)]
-        (await (ctx/act c :look (clj->js {:pos pt})))
-        (look/see! c)
-        (recur (rest points))))))
+  (loop [points (edge-points (u/self-pos c) y #(dig-look/unknown? (:primitives c) %))]
+    (when-let [pt (first points)]
+      (await (ctx/act c :look (clj->js {:pos pt})))
+      (look/see! c)
+      (recur (rest points)))))
 
 (defn ^:async follow!
   "Walk plan (a plan-walk! result) and plan again from the body's cell, in the same call, whenever the walk stops for it:
