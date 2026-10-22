@@ -1,12 +1,12 @@
 ;; A closed hut on a floor one block above the ground whose only door (south wall) opens over a hole dug in the ground in front of it:
 ;; the planner proves the bed cut off by a drop. go-to lays a carried block over the hole as the door's step and walks in.
-;; Hut x 10..14, z 10..14 (planks floor y 0, cobblestone walls y 1..2 and roof y 3, bed at y 1), door [12 1..2 14], hole [12 -1 15] over stone.
+;; The hut is glass so the room is seen (an unseen goal ends :exhausted, not cut off). Hut x 10..14, z 10..14 (planks floor y 0, glass walls y 1..2 and roof y 3, bed at y 1), door [12 1..2 14], hole [12 -1 15] over stone.
 ;; Should-succeed: dirt carried: fill-gap, arrived within 2 of the bed, the hole holds dirt. Should-fail: nothing carried: stopped, the hole stays open.
 {:defaults
  {:tags [:movement :access]
   :time :any
   :plot {:height 8}
-  :blocks [[:fill [0 -3 0] [24 -1 24] "stone"] [:fill [10 0 10] [14 0 14] "oak_planks"] [:fill [10 1 10] [14 3 14] "cobblestone"]
+  :blocks [[:fill [0 -3 0] [24 -1 24] "stone"] [:fill [10 0 10] [14 0 14] "oak_planks"] [:fill [10 1 10] [14 3 14] "glass"]
            [:fill [11 1 11] [13 2 13] "air"]
            [:set [11 1 11] "red_bed[facing=east,part=foot]"] [:set [12 1 11] "red_bed[facing=east,part=head]"]
            [:set [12 1 14] "oak_door[facing=south,half=lower,open=false]"] [:set [12 2 14] "oak_door[facing=south,half=upper,open=false]"]
