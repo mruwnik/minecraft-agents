@@ -285,6 +285,17 @@
           (is (= [] (:list (core/state eng))))
           (is (= [[:completed nil]] (ended seen))))))))
 
+(deftest enclosed-run-digs-the-head-with-the-best-carried-tool
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup {:blocks {"0,65,0" "gravel"}
+                                      :inventory [{:name "stone_pickaxe" :count 1} {:name "iron_shovel" :count 1}]
+                                      :self {:held "stone_pickaxe"}})]
+          (await (one-run! eng defaults))
+          (is (= "air" (.-name (.blockAt p (tu/pos 0 65 0)))))
+          (is (= "iron_shovel" (.-held (.self p))) "gravel is dug with the shovel, not the held pickaxe"))))))
+
 (deftest enclosed-run-frees-the-feet-cell-too-when-the-step-up-fails
   (async done
     (tu/run-async done

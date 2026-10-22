@@ -1,0 +1,19 @@
+;; A body under a column of gravel (the head cell fills again as each block is dug) digs out with the shovel, fast
+;; enough to live without damage protection: the best carried tool, not the held pickaxe, takes the head block.
+;; A 1x1 shaft in solid stone, 5 high, filled with gravel from the feet up; no resistance effect.
+{:defaults
+ {:tags [:survival] :time :any
+  :plot {:height 10}
+  :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 0 :backoff false :job (jobs.survival.breathe)}
+             {:trigger :wedged :persistence :cooldown :cooldown-s 0 :job (jobs.survival.unwedge)}]
+  :blocks [[:fill [12 -1 12] [20 6 20] "stone"] [:fill [16 0 16] [16 4 16] "air"]]
+  :body {:at [16.5 0 16.5] :settle-s 1 :inventory [["stone_pickaxe" 1] ["iron_shovel" 1]]}
+  :limit-s 60}
+ :cases
+ [{:name "gravel-column-over-the-head-is-dug-out-alive"
+   :act [[:rcon "execute positioned $X $Y $Z run fill ~16 ~ ~16 ~16 ~4 ~16 gravel"]
+         [:await {:source :reflex :kind :ended :context {:reflex-id :suffocating}} 40]
+         [:wait-s 3]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :suffocating}} :within-s 10}
+            {:no-event {:source :body :kind :died} :for-s 30}]
+   :after [[:not-block [16 0 16] "gravel"] [:not-block [16 1 16] "gravel"]]}]}

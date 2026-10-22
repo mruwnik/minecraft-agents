@@ -50,10 +50,12 @@
         head (breath/eye-cell (.self p))
         above (update head :y inc)
         _ (access/trespass! c "breathe" (:trespass (access/choose c :dig [(cond-> [head] (solid-at? p above) (conj above))] identity)))
+        _ (await (tools/equip-tool! c (u/feel-name p head) {:fast true}))
         dug (status (await (tidy/dig! c head true)))]
     (if-not (contains? #{"dug" "missing"} dug)
       false
       (do (when (solid-at? p above)
+            (await (tools/equip-tool! c (u/feel-name p above) {:fast true}))
             (await (tidy/dig! c above true)))
           ;; raw moveTo kept: an emergency step to air or out of water (range 0), where the planner may have no standable cell; no time for a plan.
           (if (= "arrived" (status (await (ctx/act c :moveTo (clj->js {:pos head :range 0})))))

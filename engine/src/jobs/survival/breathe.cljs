@@ -41,7 +41,7 @@
     up it at once; only a seen block over the own column sends the looks to the neighbour columns.
     A column seen open whose swim rose no higher is skipped by the next air search (the body steps to the next column).
   - Enclosed (head cell holds a suffocating block, see jobs.lib.breath): step to a side cell with room
-    to stand, once; then dig the head block, the block above it if solid, and step up. When a full block still fills the
+    to stand, once; then dig the head block, the block above it if solid (each with the best carried tool), and step up. When a full block still fills the
     feet cell after that, the run calls jobs.survival.unwedge (up to 3 times) before it ends, so no second reflex
     takes over between two falling blocks.
   - Surfaced and still in water: the ways out are read from what is seen; when none shows, the unseen cells that read touched are looked at (jobs.lib.sense/decide!, bounded) before the run gives up. Each pass takes the first way left: swim to the nearest shore cell (land with its
