@@ -862,16 +862,29 @@
 
 (defn events-of [seen kind] (filterv #(= kind (:kind %)) @seen))
 
+(def seen-stair
+  "Two stair floors west of the body with a stone wall behind them, so rays end there and the open cells over the floors are seen."
+  (into {(key-of -4 64 0) "stone" (key-of -5 65 0) "stone"}
+        (for [y (range 63 72) z (range -3 4)] [(key-of -9 y z) "stone"])))
+
 (deftest a-buried-flight-takes-its-own-stair-before-a-goal-far-above
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [calls (atom [])
-              s (setup-sensed {:entities [(zombie 7 5 {})]})
-              _ (swap! (fake/state (:raw s)) assoc :light-default [0 0])
+              s (setup-sensed {:entities [(zombie 7 5 {})] :yaw 90 :pitch -25 :blocks seen-stair})
+              _ (swap! (fake/state (:raw s)) assoc :light-default [0 14])
               _ (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors [[-4 64 0] [-5 65 0]]})
+              _ (perception/pass! (aget (:p s) "perception") {:effort 1 :reuse? true})
               {:keys [seen]} (await (run-job! (stub-go-to s calls identity) 'test.flight {:goal {:x -40 :y 114 :z 0}}))]
           (is (= [-5 66 0] (first-target seen)) "the stair it cut, not a leg to a goal 50 blocks above through the caves"))))))
+
+(deftest a-stand-behind-a-wall-is-not-seen-so-no-way-up-leads-to-it
+  (let [wall (into {} (for [y (range 62 68) z (range -3 4)] [(key-of 5 y z) "stone"]))
+        {:keys [p]} (setup-sensed {:blocks wall})]
+    (perception/pass! (aget p "perception") {:effort 1 :reuse? true})
+    (is (cover/seen-stand? p [3 63 0]) "open ground in front of the wall")
+    (is (not (cover/seen-stand? p [7 63 0])) "the same stand behind it was never in view")))
 
 (deftest a-goal-leg-that-takes-the-body-away-from-the-goals-height-ends-the-goal-walk
   (async done
@@ -1115,9 +1128,10 @@
     (tu/run-async done
       (fn ^:async t []
         (let [out (atom nil)
-              s (setup-sensed {:entities [(zombie 7 5 {})]})
-              _ (swap! (fake/state (:raw s)) assoc :light-default [0 0])
+              s (setup-sensed {:entities [(zombie 7 5 {})] :yaw 90 :pitch -25 :blocks seen-stair})
+              _ (swap! (fake/state (:raw s)) assoc :light-default [0 14])
               _ (mem/write! (:store (:eng s)) :stair-way {:dim "overworld" :floors [[-4 64 0] [-5 65 0]]})
+              _ (perception/pass! (aget (:p s) "perception") {:effort 1 :reuse? true})
               s (assoc-in s [:eng :jobs 'targeter] (targeter out))]
           (await (run-job! s 'targeter {:step 6}))
           (is (= {:x -5 :y 66 :z 0} @out) "the highest stair cell, away from the zombie, not a 6 block hop"))))))

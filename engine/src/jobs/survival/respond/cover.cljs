@@ -125,13 +125,21 @@
              :when from]
          [(js/Math.floor (:x from)) (dec (js/Math.floor (:y from))) (js/Math.floor (:z from))])))
 
+(defn seen-stand?
+  "Whether the floor [x y z] and the two cells over it are seen: a leg to a stand the body has not seen makes go-to search
+  unseen ground until its node budget is gone."
+  [p [x y z]]
+  (every? #(u/seen-block p {:x x :y % :z z}) [y (inc y) (+ y 2)]))
+
 (defn way-up
-  "Underground, the feet cell on a stair this body cut (ledger/ways-of) or where a recent walk of its began (trail-floors)
-  that leads up and away from threats (walk/way-target), else nil."
+  "Underground, the feet cell on a stair this body cut (ledger/ways-of) or where a recent walk of its began (trail-floors),
+  that leads up and away from threats (walk/way-target), else nil. Only stands the body has seen count."
   [c threats]
-  (let [p (:primitives c)]
+  (let [p (:primitives c)
+        floors (into (ledger/ways-of c) (trail-floors c))]
     (when (and (seq threats) (sh-sense/buried? p))
-      (walk/way-target (u/self-pos c) (mapv #(danger-q/mob-pos p %) threats) (into (ledger/ways-of c) (trail-floors c)) (way-reach)))))
+      (walk/way-target (u/self-pos c) (mapv #(danger-q/mob-pos p %) threats)
+                       (filter #(seen-stand? p %) floors) (way-reach)))))
 
 (defn bystander-spots
   "The places of the hostiles the body knows within threats/sensed-radius that are not chasing it (not in chasing, not killed): a flight step does not end nearer to one of them, so the body does not run from one mob into another."
