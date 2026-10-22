@@ -10,6 +10,7 @@
             [agent-tools.world-data :as data]
             [engine.expr :as expr]
             [clojure.string :as str]
+            ["node:child_process" :as child-process]
             ["node:fs" :as fs]
             ["node:os" :as os]
             ["node:path" :as path]))
@@ -951,6 +952,18 @@
       (let [release (observe-lock/acquire! dir "obs")]
         (is (= "EOBSERVERBUSY" (try (observe-lock/acquire! dir "obs") nil (catch :default e (.-code e)))))
         (release)))))
+
+(deftest acquire-ends-a-live-owner-that-recorded-its-start
+  (with-lock-dir
+    (fn [dir]
+      (let [lock (.join path dir "obs.lock")
+            pid (js/Number (str/trim (child-process/execSync "sleep 60 >/dev/null 2>&1 & echo $!" #js {:encoding "utf8"})))]
+        (.mkdirSync fs lock)
+        (.writeFileSync fs (.join path lock "pid") (str pid))
+        (.writeFileSync fs (.join path lock "start") (observe-lock/process-start-time pid))
+        (let [release (observe-lock/acquire! dir "obs")]
+          (is (= (str (.-pid js/process)) (.readFileSync fs (.join path lock "pid") "utf8")) "the newest waiter holds the lock")
+          (release))))))
 
 (defn kill-failing [code] (fn [_] (throw (doto (js/Error. "kill") (aset "code" code)))))
 

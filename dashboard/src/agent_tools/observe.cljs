@@ -1,5 +1,5 @@
 (ns agent-tools.observe
-  "observe.mjs <agent> --world <world>: compact status, inventory, jobs and catalogs read from a body's events socket, and the --wait mode that blocks until something worth an agent's attention happens. The wait keeps a per-observer cursor and attention state in worlds/<world>/observers/<agent>/<observer>.edn (the checkpoint) and a lock directory beside it, so concurrent observers of one name are refused."
+  "observe.mjs <agent> --world <world>: compact status, inventory, jobs and catalogs read from a body's events socket, and the --wait mode that blocks until something worth an agent's attention happens. The wait keeps a per-observer cursor and attention state in worlds/<world>/observers/<agent>/<observer>.edn (the checkpoint) and a lock directory beside it, so a new wait under a name ends the older one."
   (:require [engine.bodies :as bodies]
             [agent-tools.world-data :as data]
             [agent-tools.http :as http]

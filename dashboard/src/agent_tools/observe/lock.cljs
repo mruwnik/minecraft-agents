@@ -77,8 +77,29 @@
        (.mkdirSync fs lock #js {:mode private-dir-mode})
        (finally (.rmSync fs mutex #js {:recursive true :force true}))))))
 
+(def takeover-wait-ms 3000)
+
+(defn pause! [ms]
+  (.wait js/Atomics (js/Int32Array. (js/SharedArrayBuffer. 4)) 0 0 ms))
+
+(defn take-over-owner!
+  "Newest waiter wins: end the live process that holds the lock (a forgotten backgrounded wait) with SIGTERM and wait
+  for it to go. Only a process that recorded its start time is signalled (a reused pid is not ours to kill), and never
+  this one. True when the lock is free afterwards."
+  [lock]
+  (let [pid (try (js/Number (.readFileSync fs (.join path lock "pid") "utf8")) (catch :default _ nil))
+        recorded (try (.readFileSync fs (.join path lock "start") "utf8") (catch :default _ nil))]
+    (when (and pid (js/Number.isInteger pid) (pos? pid) (not= pid (.-pid js/process))
+               recorded (= recorded (process-start-time pid)))
+      (try (.kill js/process pid "SIGTERM") (catch :default _ nil))
+      (loop [waited 0]
+        (cond (lock-owner-gone? lock) true
+              (>= waited takeover-wait-ms) false
+              :else (do (pause! 25) (recur (+ waited 25))))))))
+
 (defn acquire!
-  "Take the observer's lock directory; the function that gives it back. Throws EOBSERVERBUSY while a live process holds it."
+  "Take the observer's lock directory; the function that gives it back. A live process holding it is ended first
+  (take-over-owner!); throws EOBSERVERBUSY when that is not possible."
   [dir observer]
   (.mkdirSync fs dir #js {:recursive true :mode private-dir-mode})
   (let [lock (.join path dir (str observer ".lock"))
@@ -86,7 +107,7 @@
     (try (.mkdirSync fs lock #js {:mode private-dir-mode})
          (catch :default error
            (when-not (= "EEXIST" (code-of error)) (throw error))
-           (when-not (lock-owner-gone? lock) (throw (busy)))
+           (when-not (or (lock-owner-gone? lock) (take-over-owner! lock)) (throw (busy)))
            (try (reclaim-stale-lock! lock)
                 (catch :default e
                   (throw (if (= "EEXIST" (code-of e)) (busy) e))))))
