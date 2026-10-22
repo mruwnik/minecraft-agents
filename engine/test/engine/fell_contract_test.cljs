@@ -146,6 +146,15 @@
               {:keys [end]} (await (fm/with-zones zones #(fell-ending ft/tall 'jobs.forestry.fell-tree {:radius 10} 120)))]
           (is (= {:kind :nothing-possible :cause :tree-unreachable} (kc end)) "a refused pillar leaves the tree"))))))
 
+(deftest a-pillar-held-for-health-only-food-gives-leaves-the-tree-instead-of-waiting
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [end eng]} (await (fell-ending (assoc ft/tall :self {:pos {:x 0.5 :y 64 :z 0.5} :health 5 :food 4})
+                                                    'jobs.forestry.fell-tree {:radius 10} 200))]
+          (is (= {:kind :nothing-possible :cause :tree-unreachable} (kc end)))
+          (is (= [] (ledger/open-entries (mem/view (:store eng))))))))))
+
 (deftest a-pillar-with-no-log-in-reach-is-taken-back-and-the-tree-left
   (async done
     (tu/run-async done
