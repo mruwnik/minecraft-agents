@@ -22,7 +22,9 @@
             {:event {:source :job :kind :go-to.wall-walk} :within-s 30 :of-job true}]
    :after [[:body-near [17.5 0 17.5] 2.5]]}
   {:name "deck-with-pool-is-goal-cut-off"
-   :blocks [[:fill [13 11 13] [19 11 19] "stone"] [:fill [14 10 14] [15 10 15] "stone"] [:fill [14 11 14] [15 11 15] "water"]]
+   :plot {:light :sky}
+   :body {:at [10.5 0 16.5]}
+   :blocks [[:fill [13 11 13] [19 11 19] "glass"] [:fill [14 10 14] [15 10 15] "glass"] [:fill [14 11 14] [15 11 15] "water"]]
    :act [[:job (jobs.movement.go-to {:pos #at [17 12 17] :range 1 :ways #{:walk :clear-seal} :checks {:safe? (not (threatened))}})]]
    :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :goal-cut-off :at [:any] :near [:any]}} :within-s 60 :of-job true}
             {:event {:source :job :kind :stopped :data {:status :stopped :arrived false :text [:contains "cut off"]}} :within-s 60 :of-job true}

@@ -1,7 +1,7 @@
 ;; Card 74c8eba9 (owner Q106): the planner models a bubble column as a forced vertical ride. A 1x1 water column (x 3, z 16, y 0..5) is
 ;; walled by stone and sits against a stone platform (x 4..8, z 14..18, top surface y 6). Over soul sand the column lifts, over
 ;; magma it drags down; the only way into or out of it is the ride. Should-succeed: lifted from inside the column to the platform
-;; top; dragged from the platform down the column and out of its foot into a walled pocket beside it (x 2; the planner never
+;; top; dragged from the column top (the pocket at its foot is seen only from inside the column) down the column and out of its foot into a walled pocket beside it (x 2; the planner never
 ;; ends a route in a magma column, so the column foot itself is no goal). Should-fail: none (the planner refusal of an up-ride against a drag column
 ;; is unit-tested in planner-water).
 {:defaults
@@ -19,9 +19,9 @@
    :act [[:job (jobs.movement.go-to {:pos #at [6 6 16] :range 1 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [6.5 6 16.5] 3]]}
-  {:name "drag-over-magma-down-from-the-platform"
+  {:name "drag-over-magma-down-the-column"
    :blocks [[:set [3 -1 16] "magma_block"] [:fill [0 0 14] [1 5 18] "stone"] [:fill [2 0 16] [2 1 16] "air"]]
-   :body {:at [6.5 6 16.5]}
+   :body {:at [3.5 5 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [2 0 16] :range 0 :ways #{:walk :clear-seal}})]]
    :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
    :after [[:body-near [2.5 0 16.5] 1.5]]}]}

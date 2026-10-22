@@ -118,5 +118,6 @@
             [:fill [5 2 8] [52 2 8] "sea_lantern"]]
    :act [[:rcon "effect give $BODY minecraft:saturation 2 10 true"] [:rcon "item replace entity $BODY armor.head with minecraft:air"] [:rcon "item replace entity $BODY armor.feet with minecraft:air"]
          [:job (jobs.movement.go-to {:pos #at [53 1 8] :range 1 :ways #{:walk :clear-seal}})]]
-   :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :air}} :within-s 60 :of-job true}
+            {:no-event {:source :body :kind :hurt} :for-s 60 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:body-near [4.5 1 8.5] 14]]}]}
