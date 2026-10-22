@@ -176,6 +176,36 @@
           (is (= inside (st/pos-of p)) "stayed in the hut")
           (is (empty? (st/emitted seen :stopped)) (pr-str (map :reason (st/emitted seen :stopped)))))))))
 
+;; ------------------------------------------------------------------ the night trigger and a queued walk (card 4252e02e)
+
+(def no-risk "A risk share of 0: every walk with a dark open stretch is too risky." {:jobs.movement.go-to.risk/risk-share 0})
+
+(deftest a-queued-walk-too-risky-does-not-lead-the-body-out-of-its-mended-room-at-night
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (settings/with-settings no-risk
+                 (fn ^:async t2 []
+                   (let [{:keys [eng p]} (setup (merge (night-hut {"5,67,0" "air"}) {:inventory st/dirt-stack}))
+                         id (core/submit! eng '(jobs.movement.go-to {:pos [15 64 0]}) {})]
+                     (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+                     (await (ticks eng 20))
+                     (is (= inside (st/pos-of p)) "the body stays in its room all night")
+                     (is (= [{:x 5 :y 67 :z 0}] (mapv st/arg-pos (st/calls p "place"))) "one block mends the roof, no dig-in after")
+                     (is (= :risky (:reason (waiting-of eng id))))
+                     (is (= 1 (count (st/calls p "place"))))))))))))
+
+(deftest a-queued-walk-with-an-acceptable-risk-goes-out-at-night-without-digging-in-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (merge (night-hut {"5,67,0" "air"}) {:inventory st/dirt-stack}))]
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+          (core/submit! eng '(jobs.movement.go-to {:pos [15 64 0]}) {})
+          (await (tu/run-until-empty eng 60))
+          (is (> 2 (js/Math.abs (- 15 (:x (st/pos-of p))))) "the walk runs at night")
+          (is (<= (count (st/calls p "place")) 1) "no dig-in on the way"))))))
+
 ;; ------------------------------------------------------------------ in-place jobs still run
 
 (deftest a-listed-get-food-eats-carried-bread-in-the-hut-at-night
@@ -201,6 +231,30 @@
             (core/submit! eng (list 'jobs.survival.sleep {:bed bed}) {})
             (await (ticks eng 4))
             (is (= expect-wait? (some? (some #{:night-sheltered} (map :reason (st/emitted seen :holding))))) (pr-str bed))))))))
+
+(deftest a-queued-craft-whose-walk-is-too-risky-stays-in-the-hut-at-night
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (await (settings/with-settings no-risk
+                 (fn ^:async t2 []
+                   (let [{:keys [eng p]} (setup (-> (night-hut {}) (update :blocks assoc "10,64,0" "crafting_table")
+                                                       (assoc :inventory [{:name "wheat" :count 3}])))]
+                     (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+                     (core/submit! eng '(jobs.items.craft {:item "bread" :table {:x 10 :y 64 :z 0}}) {})
+                     (await (ticks eng 20))
+                     (is (= inside (st/pos-of p)) "the body stays in the hut")))))))))
+
+(deftest a-queued-craft-with-an-acceptable-walk-risk-goes-to-the-table-at-night
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup (-> (night-hut {}) (update :blocks assoc "10,64,0" "crafting_table")
+                                            (assoc :inventory [{:name "wheat" :count 3}])))]
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :night}]}"))
+          (core/submit! eng '(jobs.items.craft {:item "bread" :table {:x 10 :y 64 :z 0}}) {})
+          (await (tu/run-until-empty eng 60))
+          (is (> 4 (js/Math.abs (- 10 (:x (st/pos-of p))))) "it walks to the table"))))))
 
 (deftest a-use-on-submitted-from-a-night-shelter-waits-with-the-walks-reason
   (async done

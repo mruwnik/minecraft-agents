@@ -189,6 +189,28 @@
             {:no-event {:source :job :kind :waiting :data {:reason :exposed}} :for-s 60 :until {:source :job :kind :completed :data {:name "jobs.movement.go-to"}}}]
    :after [[:body-near [17.5 0 16.5] 2.5]]
    :limit-s 70}
+  ;; 33e6bf20, Q380: the same buried body asked to walk up to open ground is held when the walk's risk is too high (here a risk share of 0), with the reason
+  {:name "buried-walk-up-to-open-ground-is-held-when-too-risky"
+   :time-why :dawn-decision
+   :settings {:jobs.movement.go-to.risk/risk-share 0}
+   :blocks [[:fill [6 -1 12] [26 8 20] "stone"] [:fill [14 0 16] [15 1 16] "air"]]
+   :plot {:height 14}
+   :body {:at [14.5 0 16.5]}
+   :act [[:job (jobs.movement.go-to {:pos #xyz [20 9 16] :range 1})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :completed :data {:name "jobs.movement.go-to"}} :for-s 30 :until {:source :job :kind :waiting :data {:reason :risky}}}]
+   :after [[:body-near [14.5 0 16.5] 1.5]]
+   :limit-s 40}
+  ;; Q380: with the default risk the same walk is not held for day: the start check passes it and the walk goes on to dig its stair out
+  {:name "buried-walk-up-to-open-ground-is-not-held-when-the-risk-is-acceptable"
+   :time-why :dawn-decision
+   :blocks [[:fill [6 -1 12] [26 8 20] "stone"] [:fill [14 0 16] [15 1 16] "air"]]
+   :plot {:height 14}
+   :body {:at [14.5 0 16.5]}
+   :act [[:job (jobs.movement.go-to {:pos #xyz [20 9 16] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason #{:risky :exposed}}} :for-s 20 :of-job true}]
+   :limit-s 50}
   ;; 122e3c60: a parent job whose walk waits for day in a shelter waits with the walk's reason (job.waiting :exposed), not an unexplained idle
   {:name "buried-from-plan-walk-holds-with-the-night-reason"
    :blocks [[:fill [6 -1 12] [26 8 20] "stone"] [:fill [14 0 16] [15 1 16] "air"]]
