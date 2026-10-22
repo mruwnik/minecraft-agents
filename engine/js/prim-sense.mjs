@@ -121,6 +121,7 @@ export function createSense (env) {
         ...(k !== 'item' && k !== 'player' && mobFields(env.bot, e)),
         ...(k !== 'item' && k !== 'player' && leashFields(env.bot, e)),
         ...(k !== 'item' && vehicleFields(env.bot, e)),
+        ...(e.onGround === false && { onGround: false }),
         ...(e.height !== undefined && { height: e.height }),
         ...(e.width !== undefined && { width: e.width }),
         ...(k === 'item' && { item: droppedItem(env.bot, e) }),

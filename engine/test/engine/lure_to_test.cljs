@@ -306,6 +306,22 @@
           (is (re-find #"outside" (:text (first (stopped s)))))
           (is (not (in-pen-box? (cow-of s 1)))))))))
 
+(deftest a-cow-falling-in-the-box-has-not-arrived
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [p eng clock] :as s} (h/setup {:floor tu/walk-floor :self {:pos {:x 22 :y 64 :z 0}} :inventory wheat :entities [(cow 1 20)]} 50)
+              drop! (fn [token a impl]
+                      (.then (impl token a)
+                             (fn [r]
+                               (when (>= (.. p self -pos -x) 24)
+                                 (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :pos [26 64 0] :onGround false) es))))
+                               r)))]
+          (doseq [act ["steer" "wait"]] (.override (.-world p) act drop!))
+          (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal :box pen-box}) {})
+          (loop [i 0] (when (and (< i 150) (not (finished? s))) (swap! clock + 700) (await (core/tick! eng)) (recur (inc i))))
+          (is (= :animal-outside (:reason (done-event s))) (pr-str (done-event s))))))))
+
 (deftest a-body-stopping-short-of-the-box-leads-on-until-the-animal-is-in-it
   (async done
     (tu/run-async done

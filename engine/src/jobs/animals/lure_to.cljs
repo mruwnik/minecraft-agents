@@ -229,6 +229,8 @@
         result {:reason reason :animal (:animal m) :at (u/self-pos c) :end (escort/end-of reason)
                 :animal-at (some-> a .-pos u/pos-of)
                 :in-box (when-let [box (pen-read/arg-box c)] (boolean (and a (animals/in-box? box (u/pos-of (.-pos a))))))
+                :inside (when-let [box (pen-read/arg-box c)]
+                          (count (filter #(animals/in-box? box (u/pos-of (.-pos %))) (animals/herd (:primitives c) (:mob (:args c)) (escort/watch-radius)))))
                 :distance (some-> (or (some-> a .-pos u/pos-of) (:last-seen m)) (u/flat-dist (:pos (:args c))))
                 :near (boolean (and a (<= (u/flat-dist (u/pos-of (.-pos a)) (:pos (:args c))) (near-spot))))}]
     (let [result (cond-> result
@@ -263,14 +265,14 @@
     (if (contains? m :dest-cells) (:dest-cells m) (read-destination c))))
 
 (defn at-destination?
-  "True when the animal stands in :box, else within arrive-range plus arrive-slack of :pos (and in the fenced enclosure :pos is in, when it is in one), and not in a gate's cell."
+  "True when the animal stands in :box and not falling (a chicken over a dug-out floor is not yet inside), else within arrive-range plus arrive-slack of :pos (and in the fenced enclosure :pos is in, when it is in one), and not in a gate's cell."
   [c a]
   (let [{:keys [pos]} (:args c)
         box (pen-read/arg-box c)
         there (u/pos-of (.-pos a))]
     (and (not (in-doorway? c there))
          (if box
-           (animals/in-box? box there)
+           (and (animals/in-box? box there) (not (false? (.-onGround a))))
            (and (<= (u/flat-dist there pos) (+ (arrive-range) (arrive-slack)))
                 (if-let [pen (destination-cells c)] (contains? pen (animal-cell a)) true))))))
 

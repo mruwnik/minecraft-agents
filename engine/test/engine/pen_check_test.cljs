@@ -138,6 +138,7 @@
                   {:id 10 :name "zombie" :kind "hostile" :pos [1.5 64 1.5]}]
               {:keys [event]} (await (run-job {:at [2 64 2] :checks {:safe? (quote (always))}} (assoc (world {}) :entities es)))]
           (is (= 2 (:animals-in event)))
+          (is (= {"cow" 1 "sheep" 1} (:inside event)))
           (is (= [{:kind "cow" :id 7 :pos [2.5 64 2.5]} {:kind "sheep" :id 8 :pos [3.5 64 1.5]}]
                  (sort-by :id (:animals event)))))))))
 

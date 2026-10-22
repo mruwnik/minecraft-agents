@@ -47,7 +47,7 @@
     :remembered-total when more).
   - :gate-drops (only when found) lists {:gate :from :to :drop}: a gate whose side of the pen is cut off by a drop of more than 1 block (animals will not step down 2).
   - :gates lists every fence gate in or beside those cells with :open?.
-  - :animals lists the livestock on those cells (or up to 3 above one: a ledge inside the fence) as {:kind :id :pos [x y z]}, :animals-in counts them, so a loss can be dated from the log. Only animals in view are listed: :unseen-cells counts the inside cells known from memory only, :animals-complete? is false while any.")
+  - :animals lists the livestock on those cells (or up to 3 above one: a ledge inside the fence) as {:kind :id :pos [x y z]}, :animals-in counts them and :inside counts them by kind (a map of kind to count), so a loss can be dated from the log. Only animals in view are listed: :unseen-cells counts the inside cells known from memory only, :animals-complete? is false while any.")
 
 (a/defargs args
   {:at {:doc "feet cell [x y z] or {:x :y :z} of a spot inside the pen (the floor's top, where the animal's feet are)" :spec ::a/pos :default nil}
@@ -251,7 +251,7 @@
             ;; a seen leak is the answer: the unseen ground beyond it is no extra finding
             checked (cond-> checked (= :leak (:reason checked)) (update :leaks #(vec (remove (comp #{:unloaded} :why) %))))
             rows (animals/in-pen-rows p checked (settings/get settings ::animal-radius))
-            result (merge (pen/summary checked) (pen-read/listed checked (u/self-pos c)) {:animals rows :animals-in (count rows)} (animal-coverage checked)
+            result (merge (pen/summary checked) (pen-read/listed checked (u/self-pos c)) {:animals rows :animals-in (count rows) :inside (frequencies (map :kind rows))} (animal-coverage checked)
                           (when (herd-note c checked) {:herdable? false}))
             result (assoc result :text (if (:closed? result)
                                          (str "pen closed, " (:cells result) " cells" (pen-patch/gate-drop-text result)
