@@ -265,6 +265,13 @@
     (is (= {:chance 0.0 :lowered-by #{}} (exposure true {:x 3 :y 64 :z 0})) "a lit cell in clear line is made out")
     (is (pos? (:chance (exposure false {:x 3 :y 64 :z 0}))) "a lit cell behind a wall stays unknown, so dark")))
 
+(deftest exposure-of-a-seen-log-under-unseen-ones-is-judged-by-the-seen-air-over-the-pile
+  (let [p (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}}}))]
+    (is (= [[3 67 0]] (with-redefs [sh-sense/solid-at? (fn [_ c] (= 64 (:y c)))
+                                    sh-sense/seen-cell? (fn [_ c] (or (= 64 (:y c)) (= 67 (:y c))))
+                                    look/glimpse? (constantly false)]
+                        (:look-at (cost/exposure p {:x 3 :y 64 :z 0})))))))
+
 (deftest exposure-of-a-walk-in-the-open-is-the-spawn-chance-at-its-end
   (let [night (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/night :self {:pos {:x 0 :y 64 :z 0}}}))
         day (sky/with-sky (tu/fake {:floor tu/walk-floor :time st/noon :self {:pos {:x 0 :y 64 :z 0}}}))

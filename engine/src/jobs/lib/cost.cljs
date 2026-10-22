@@ -135,12 +135,15 @@
   (sh-inside/walk-leaves-shelter?, with the body's latest :shelter entry data when given) that p has no light data of is guessed under open sky; any
   other the spawn-chance at `to` from the light p has seen; :light lowers a chance that darkness alone puts there and light-in says waiting lifts, but only
   at a cell the sky reaches down its column (under leaves too): a roofed dark cell (a stair, a cave) is no exposure on its own, only threats count. A cell p
-  has no light data of is guessed dark and lowered by #{:look}, with :look-at [[x y z]]. A solid seen `to` is judged by the air cell over it (a solid cell has no light that night changes). Lava and the like are not spawn
+  has no light data of is guessed dark and lowered by #{:look}, with :look-at [[x y z]]. A solid `to` is judged by the first seen open cell over it (the air over a pile, not the unseen logs between), else the cell over it (a solid cell has no light that night changes). Lava and the like are not spawn
   chance. A dark cell has none when no dark spawnable cell beyond the spawn-free radius of it is reachable on foot (sh-inside/walled-off-at?: a closed seen region without a way in). A crude stub."
   ([p to] (exposure p to nil))
   ([p to shelter]
    (let [to (update-vals (assoc to :y (or (:y to) (:y (sh-sense/feet p)))) js/Math.floor)
-         cell [(:x to) (if (sh-sense/solid-at? p to) (inc (:y to)) (:y to)) (:z to)]
+         solid? (sh-sense/solid-at? p to)
+         over (fn [y] (assoc to :y y))
+         open-over (when solid? (first (filter #(and (sh-sense/seen-cell? p (over %)) (not (sh-sense/solid-at? p (over %)))) (range (inc (:y to)) (+ (:y to) 32)))))
+         cell [(:x to) (or open-over (if solid? (inc (:y to)) (:y to))) (:z to)]
          dark (look/dark-light)
          made-out? (fn [at] (or (sh-sense/seen-cell? p at) (look/glimpse? p at)))
          block-of (fn [c] (let [[x y z] c

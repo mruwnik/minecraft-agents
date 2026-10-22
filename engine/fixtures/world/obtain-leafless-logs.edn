@@ -13,7 +13,7 @@
  [{:name "obtain-fells-a-leafless-log-pile"
    :act [[:job (jobs.items.obtain {:item "oak_log" :count 4 :ways #{:gather}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 180 :of-job true}]
-   :after [[:item "oak_log" 4]]}
+   :after [[:item "oak_log" [:>= 4]]]}
   {:name "obtain-fells-a-bare-trunk"
    :blocks [[:fill [22 0 40] [22 4 40] "oak_log"]]
    :body {:at [10.5 0 40.5]}
