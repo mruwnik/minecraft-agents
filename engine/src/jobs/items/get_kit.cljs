@@ -254,7 +254,7 @@
     (ctx/update-mem! c (fn [m] (-> m (dissoc :covered :covered-done :bill)
                                    (assoc :bill-tries tries' :bill-material (material-of (state c)))
                                    (update :bill-round (fnil inc 0)))))
-    :again))
+    :continue))
 
 (defn ^:async round [c]
   (let [a (:args c)
