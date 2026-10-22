@@ -311,6 +311,12 @@
     {:time noon :blocks {"6,64,0" "red_bed"}} {:x 6 :y 64 :z 0}
     {:time night :blocks {"60,64,0" "red_bed"}} {:x 60 :y 64 :z 0}))
 
+(deftest sleep-takes-the-spawn-bed-at-any-distance
+  (let [{:keys [eng]} (setup {:time night :blocks {"60,64,0" "red_bed"}})]
+    (mem/write! (:store eng) :spawn-bed {:pos {:x 60 :y 64 :z 0}} {:cap 1 :ttl :forever})
+    (core/submit! eng '(jobs.survival.sleep) {})
+    (is (some? (core/tick! eng)))))
+
 (deftest sleep-retracts-a-bed-that-is-gone
   (async done
     (tu/run-async done

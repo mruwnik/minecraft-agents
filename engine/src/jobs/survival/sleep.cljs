@@ -18,7 +18,7 @@
             [jobs.lib.places :as places]))
 
 (def doc
-  "Walk to a bed and sleep in it: the :bed argument, else the remembered :bed within the default-bed-radius setting, else the live :spawn-bed within it.
+  "Walk to a bed and sleep in it: the :bed argument, else the remembered :bed within the default-bed-radius setting, else the live :spawn-bed at any distance (go-to prices the walk).
   Conditions: night and a bed, also before every round (day came or the bed gone: a listed call waits, a called one ends condition-failed); at the start only: the bed not in :bed-unreachable
   (an unexpired entry with the same position), else :bed-unreachable {:pos}; with :open-bed false and the body within 3 blocks of
   the bed, a roofed room, else :bed-open. A body already asleep is done.
@@ -62,7 +62,7 @@
   (if-let [given (:bed (:args c))]
     (:pos (places/parse-pos given))
     (or (sh-beds/bed c (sh-beds/default-bed-radius))
-        (sh-spawn/standing-bed (:primitives c) (ctx/view c) (sh-beds/default-bed-radius)))))
+        (sh-spawn/spawn-bed-pos (:primitives c) (ctx/view c)))))
 
 (a/defargs settings
   {::pause-s {:default 5 :doc "Seconds one hold pauses (jobs.time.noop) before the call looks again." :spec (a/num-in 0 nil)}

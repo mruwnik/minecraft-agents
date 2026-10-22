@@ -1,0 +1,15 @@
+;; A body walks to its own respawn bed beyond the 48-block bed radius (go-to prices the walk); no sleep refusal :no-bed.
+;; Should-succeed: sleep ends done asleep at the bed 60 blocks away. Should-fail: ends later/condition-failed :no-bed.
+{:defaults
+ {:tags [:night :survival :bed]
+  :time :night :time-why :sleep
+  :plot {:length 80 :width 16 :height 8}
+  :blocks [[:set [70 0 8] "red_bed[facing=east,part=foot]"] [:set [71 0 8] "red_bed[facing=east,part=head]"]
+           [:set [70 3 8] "glowstone"]]
+  :body {:at [8.5 0 8.5] :effects [["resistance" 600 4]] :settle-s 3}
+  :limit-s 150}
+ :cases
+ [{:name "sleep-walks-to-the-spawn-bed-60-blocks-away"
+   :memory [{:kind :spawn-bed :data {:pos #xyz [70 0 8]} :policy {:cap 1 :ttl :forever}}]
+   :act [[:job (jobs.survival.sleep {})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.survival.sleep"}} :within-s 140 :of-job true}]}]}

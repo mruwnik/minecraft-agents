@@ -80,7 +80,7 @@
     (when (and (pos? flee-radius) (< (or (:flees m) 0) (sites/max-flees)))
       (let [here (sh-sense/feet p)
             bed (when-let [pos (sh-beds/bed-to-use p (ctx/view c) flee-radius (bed-down/bed-permit c))]
-                  (when (> (u/dist here pos) (bed-down/radius c)) [{:kind :bed :pos pos}]))
+                  (when (< (bed-down/radius c) (u/dist here pos) (inc flee-radius)) [{:kind :bed :pos pos}]))
             places (map #(assoc % :kind :roofed-place) (room-lib/roofed-places-in c (:args c) flee-radius))
             cands (->> (concat bed places (cave-sites c flee-radius) (ground-sites c flee-radius))
                        (remove #(contains? tried (:pos %)))

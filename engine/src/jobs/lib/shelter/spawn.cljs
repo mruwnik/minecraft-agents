@@ -67,6 +67,12 @@
          distinct
          (sort-by #(u/dist me %)))))
 
+(defn spawn-bed-pos
+  "The live :spawn-bed position at any distance (the bed the body set its respawn at), unless its block is seen not a bed; else nil."
+  [p view]
+  (let [pos (:pos (:data (spawn-bed-live view)))]
+    (when (and pos (not (seen-not-bed? p pos))) pos)))
+
 (defn standing-beds
   "The known-beds within radius, nearest first (the :bed place's job retracts it on finding it gone; the live
   :spawn-bed is set to a bed the body slept in or set the spawn at, whichever half the place key holds)."

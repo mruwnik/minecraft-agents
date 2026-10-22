@@ -154,8 +154,8 @@
   (map :pos (look/seen-blocks p {:names wood/bed-names :radius (min 16 radius) :live? true :max 8})))
 
 (defn bed-to-use
-  "The bed a body awake at night sleeps in: one it sees (seen-bed), else the remembered :bed within radius, under any
-  roof or none. Never one permit? refuses (occupied), one in an unexpired :bed-unreachable entry, or one whose walk
+  "The bed a body awake at night sleeps in: one it sees (seen-bed), else the remembered :bed within radius or the live
+  :spawn-bed at any distance (go-to prices the walk), under any roof or none. Never one permit? refuses (occupied), one in an unexpired :bed-unreachable entry, or one whose walk
   would take the body out of a kept-shelters shelter (unless overdue: max-days-awake days since :slept, phantoms, or a
   courtesy-walk?: another player sleeps and the bed is near);
   none after a sleep tonight (:slept within half an in-game day) while the body is safe from the night (a body woken
@@ -171,7 +171,7 @@
                              (not-any? #(= pos (:pos (:data %))) (mem/entries view :bed-open))
                              (or overdue? (not (kept-shelters (sh-inside/walk-leaves-shelter? p shelter pos 1))) (courtesy-walk? p view pos))))]
       (or (seen-bed p ok?)
-          (->> (concat (sh-spawn/standing-beds p view radius) (seen-bed-places p radius))
+          (->> (concat (sh-spawn/standing-beds p view radius) (seen-bed-places p radius) (some-> (sh-spawn/spawn-bed-pos p view) vector))
                distinct
                (sort-by #(u/dist (u/self-pos {:primitives p}) %))
                (filter ok?)
