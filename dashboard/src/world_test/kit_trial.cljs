@@ -213,15 +213,16 @@
   "Run one step of `steps`. Not run by the tests: a live server and a built body are needed."
   [[kind & a]]
   (case kind
-    :whitelist (run-node! "tools/rcon.mjs" ["whitelist" (first a)])
+    :whitelist (run-node! "tools/rcon.mjs" [(first a)])
     :file (let [[f text] a, p (path/join (repo) f)]
             (fs/mkdirSync (path/dirname p) #js {:recursive true})
             (fs/writeFileSync p text))
     :workspace (let [[body world] a]
                  (run-node! "engine/tools/workspace.mjs" [(path/join "worlds" world "agents" body) "--body" body "--world" world "--adopt-existing"]))
     :body-start (let [[body {:keys [world build]}] a
-                      child (cp/spawn (path/join (repo) "tools/res-slot")
-                                      #js ["body" "--" js/process.execPath "--max-old-space-size=192" "--heap-growing-percent=100" "out/body-release.cjs" "--agent" body "--world" world
+                      child (cp/spawn "sh"
+                                      #js ["-c" "while :; do \"$@\"; [ $? -eq 75 ] || break; sleep 20; done" "sh" (path/join (repo) "tools/res-slot")
+                                           "body" "--" js/process.execPath "--max-old-space-size=192" "--heap-growing-percent=100" "out/body-release.cjs" "--agent" body "--world" world
                                            "--scenario" (path/join build "engine/scenarios/survival.edn")
                                            "--worlds" (path/join (repo) "worlds") "--blueprints" (path/join (repo) "blueprints") "--fresh"]
                                       #js {:cwd (path/join build "engine") :detached true :stdio "ignore"
