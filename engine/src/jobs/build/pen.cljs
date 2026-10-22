@@ -34,7 +34,7 @@
   leads over the fence; trees not seen yet are left to the check.
   Then a jobs.access.cleanup child takes up the body's own scaffold-ledger blocks in and around the box (a night shelter's cheap blocks stay after dawn; an animal steps from one onto a fence).
   Phase 1 runs jobs.build.from-plan on the plan. Its arg :accept passes through, and its rules
-  (zones, other plans' footprints, materials, cuts) apply. Phase 2: a body still inside the box walks out through the
+  (zones, other plans' footprints, materials, cuts) apply. Phase 2: a fence stacked on a gate is dug off, then a body still inside the box walks out through the
   gate (a jobs.movement.go-to child to the cell outside it) and jobs.maintenance.shut shuts it. Phase 3 checks the pen
   over that box with jobs.lib.pen (see jobs.animals.pen-check): a step out of the box is a leak.
   A leak left after the build (a hole in the plan, or a cell the build refused, gave up on or lacked material for) is
@@ -365,21 +365,44 @@
                :when (not (inside? box {:x nx :y y :z nz}))]
            {:x nx :z nz})))
 
+(defn roofing-fence
+  "The first seen fence or wall in the cell above a gate of cells that the plan does not ask for (an open gate there is a doorway one block high), not yet in unroofed, as [x y z]."
+  [c cells unroofed]
+  (let [wanted (set (map :pos cells))]
+    (first (for [{[x y z] :pos :keys [want]} cells
+                 :when (gate? want)
+                 :let [above [x (inc y) z]]
+                 :when (and (not (wanted above)) (not (unroofed above))
+                            (some-> (u/seen-name (:primitives c) {:x x :y (inc y) :z z}) (as-> n (or (str/ends-with? n "_fence") (str/ends-with? n "_wall")))))]
+             above))))
+
+(defn ^:async unroof-step!
+  "Take up a fence stacked on a gate of the plan with a jobs.blocks.dig child, so the gate has its doorway; each cell is tried once. :continue while the child waits, :again after it ended, nil when no gate is roofed."
+  [c cells]
+  (when-let [[x y z :as above] (roofing-fence c cells (set (:unroofed (ctx/mem c))))]
+    (let [r (await (ctx/call c :unroof 'jobs.blocks.dig (assoc (select-keys (:args c) [:ignore-zones?])
+                                                               :pos {:x x :y y :z z} :ways #{:carried} :for-plan (:plan (:args c)))))]
+      (when-not (= :continue r)
+        (ctx/update-mem! c update :unroofed (fnil conj []) above))
+      (if (= :continue r) :continue :again))))
+
 (defn ^:async exit-step!
-  "While the body is inside the box: walk out beside the gate. Then on to shutting the gate, or the check if the body
+  "While the body is inside the box: walk out beside the gate (a fence stacked on the gate is dug off first). Then on to shutting the gate, or the check if the body
   was never inside. Nothing-possible :inside when it cannot get out."
   [c cells]
-  (let [box (pen-read/barrier-box cells)]
-    (if-not (inside? box (u/self-pos c))
-      (do (ctx/update-mem! c assoc :phase (if (:exited (ctx/mem c)) :shut :check))
-          :again)
-      (if-let [out (exit-cell box cells)]
-        (let [r (await (child/call-walk* c :exit {:pos out :range 0 :ways #{:walk :clear-seal}}))]
-          (cond
-            (= :continue r) :continue
-            (= :done (:kind r)) (do (ctx/update-mem! c assoc :exited true) :again)
-            :else (ctx/end c :nothing-possible {:reason :inside :why "the walk out of the pen failed"} {:built (:built (ctx/mem c))})))
-        (ctx/end c :nothing-possible {:reason :inside :why "the pen has no gate to leave by"} {:built (:built (ctx/mem c))})))))
+  (or
+   (await (unroof-step! c cells))
+   (let [box (pen-read/barrier-box cells)]
+     (if-not (inside? box (u/self-pos c))
+       (do (ctx/update-mem! c assoc :phase (if (:exited (ctx/mem c)) :shut :check))
+           :again)
+       (if-let [out (exit-cell box cells)]
+         (let [r (await (child/call-walk* c :exit {:pos out :range 0 :ways #{:walk :clear-seal}}))]
+           (cond
+             (= :continue r) :continue
+             (= :done (:kind r)) (do (ctx/update-mem! c assoc :exited true) :again)
+             :else (ctx/end c :nothing-possible {:reason :inside :why "the walk out of the pen failed"} {:built (:built (ctx/mem c))})))
+         (ctx/end c :nothing-possible {:reason :inside :why "the pen has no gate to leave by"} {:built (:built (ctx/mem c))}))))))
 
 (defn ^:async shut-step!
   "Shut the plan's gates the walk out left open, then on to the check."

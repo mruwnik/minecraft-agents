@@ -116,6 +116,19 @@
             (is (= "oak_fence_gate" (h/block-at p 3 64 2)))
             (is (true? (get-in e [:data :closed?])) "the gate is shut: an open gate is a leak")))))))
 
+;; a fence stacked on the gate is a doorway one block high: it is dug off
+(deftest a-body-inside-a-pen-whose-gate-is-roofed-digs-the-roof-off-and-leaves
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world (assoc (spec kit (assoc built-pen "3,65,2" "oak_fence")) :self {:pos [3.5 64 3.5]})
+              {:keys [p] :as w} (b/start world {"pen" (ring-plan)} [])
+              e (await (ending-of w job {:plan "pen"} 300))
+              [x _ z] (body-cell p)]
+          (is (= :done (:kind e)) (pr-str (kc e)))
+          (is (= "air" (h/block-at p 3 65 2)) "the fence over the gate is gone")
+          (is (not (and (<= 2 x 4) (<= 2 z 4))) (str "body at " (body-cell p))))))))
+
 ;; ---------------------------------------------------------------- leaks
 
 (deftest a-fence-with-a-gap-builds-fails-the-check-and-names-the-leak

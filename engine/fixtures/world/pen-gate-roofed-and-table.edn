@@ -1,0 +1,34 @@
+;; Card a459c202: a pen's jobs never damage the pen. A fence stacked on the gate leaves a one-block doorway when the gate opens:
+;; build.pen digs it off before the body inside walks out; items.craft never puts its table inside a fence ring.
+;; Ring x/z 10..14 at the ground, gate at [14 0 12] (east), body in the middle at [12 0 12].
+;; Should-succeed: build.pen ends done with the roof dug off. Should-fail: craft inside the ring (no table stands there).
+{:defaults
+ {:tags [:build :pen :craft] :time :any
+  :plot {:height 8 :floor "stone"}
+  :blocks [[:fill [10 0 10] [14 0 14] "oak_fence"] [:fill [11 0 11] [13 0 13] "air"]
+           [:set [14 0 12] "oak_fence_gate[facing=east,open=false]"]
+           [:set [16 2 12] "stone"] [:set [19 1 12] "glowstone"] [:set [15 2 8] "glowstone"] [:set [15 2 16] "glowstone"] [:set [19 1 8] "glowstone"] [:set [19 1 16] "glowstone"]]
+  :plans [{:id "ring" :metadata {:by "$body"}
+           :parts [{:id "n" :box [#at [10 0 10] #at [14 0 10]] :want "oak_fence"}
+                   {:id "s" :box [#at [10 0 14] #at [14 0 14]] :want "oak_fence"}
+                   {:id "w" :box [#at [10 0 11] #at [10 0 13]] :want "oak_fence"}
+                   {:id "e1" :box [#at [14 0 11] #at [14 0 11]] :want "oak_fence"}
+                   {:id "g" :box [#at [14 0 12] #at [14 0 12]] :want "oak_fence_gate"}
+                   {:id "e2" :box [#at [14 0 13] #at [14 0 13]] :want "oak_fence"}]}]
+  :body {:at [12.5 0 12.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "build-pen-digs-the-fence-off-its-gate-and-walks-out"
+   :blocks [[:set [14 1 12] "oak_fence"]]
+   :body {:at [12.5 0 12.5] :settle-s 2 :inventory [["oak_fence" 4] ["oak_fence_gate" 1]] :effects [["resistance" 600 4]]}
+   :act [[:job (jobs.build.pen {:plan "$plan:ring" :ways #{:carried} :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.build.pen"}} :within-s 100 :of-job true}]
+   :after [[:not-block [14 1 12] "oak_fence"]]}
+  {:name "craft-never-puts-its-table-inside-the-fence-ring"
+   :body {:at [12.5 0 12.5] :settle-s 2 :inventory [["oak_planks" 7] ["stick" 2]] :effects [["resistance" 600 4]]}
+   :act [[:job (jobs.items.craft {:item "wooden_pickaxe" :for-plan "ring"})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 80 :of-job true}]
+   :after [[:not-block [11 0 11] "crafting_table"] [:not-block [12 0 11] "crafting_table"] [:not-block [13 0 11] "crafting_table"]
+           [:not-block [11 0 12] "crafting_table"] [:not-block [13 0 12] "crafting_table"]
+           [:not-block [11 0 13] "crafting_table"] [:not-block [12 0 13] "crafting_table"] [:not-block [13 0 13] "crafting_table"]]
+   :limit-s 90}]}

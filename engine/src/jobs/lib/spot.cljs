@@ -30,20 +30,35 @@
         (some (fn [[dx dz]] (some #(ends? (name-at {:x (+ x dx) :y (+ y %) :z (+ z dz)}) "_door") [0 1]))
               [[1 0] [-1 0] [0 1] [0 -1]]))))
 
+(def ring-reach "How far a fence is looked for in each direction when judging a cell to lie inside a pen." 16)
+
+(defn penned?
+  "Whether pos lies inside a fence ring: in each of the four directions a plan footprint cell (within a block of its height) holds a seen fence, gate or wall."
+  [name-at footprints {:keys [x y z]}]
+  (let [barrier? (fn [n] (and n (or (str/ends-with? n "_fence") (str/ends-with? n "_fence_gate") (str/ends-with? n "_wall"))))
+        hit? (fn [[dx dz]]
+               (some (fn [k] (some (fn [dy] (let [cell [(+ x (* k dx)) (+ y dy) (+ z (* k dz))]]
+                                             (and (contains? footprints cell) (barrier? (name-at {:x (cell 0) :y (cell 1) :z (cell 2)})))))
+                                  [0 1 -1]))
+                     (range 1 (inc ring-reach))))]
+    (every? hit? [[1 0] [-1 0] [0 1] [0 -1]])))
+
 (defn spot-cells
-  "The candidate table cells beside the body, outside its box (the server refuses a place the body touches), not in :avoid, not in a plan's cells, not over a bed or beside a door (home-cell?) and not in a stair or tunnel this body cut (its way out): [pos floor-pos] for each offset at its level, then (a 1-wide stair has
+  "The candidate table cells beside the body, outside its box (the server refuses a place the body touches), not in :avoid, not in a plan's cells, not inside a fence ring of any plan (even the one built for), not over a bed or beside a door (home-cell?) and not in a stair or tunnel this body cut (its way out): [pos floor-pos] for each offset at its level, then (a 1-wide stair has
   no free cell at its level) each one level up. dig-spot-cells keeps to the level ones."
   [c]
   (let [{:keys [x y z]} (u/self-pos c)
         cols (access/body-columns x z)
         avoid (into (ledger/own-cells c) (map (comp (juxt :x :y :z) a/cell)) (:avoid (:args c)))
         plan-cells (known/footprints c {:except (:for-plan (:args c))})
+        all-cells (known/footprints c)
         [x y z] (mapv #(js/Math.floor %) [x y z])]
     (for [dy [0 1]
           [dx dz] table-offsets
           :let [pos {:x (+ x dx) :y (+ y dy) :z (+ z dz)}]
           :when (and (not (cols [(:x pos) (:z pos)])) (not (avoid [(:x pos) (:y pos) (:z pos)]))
                      (not (contains? plan-cells [(:x pos) (:y pos) (:z pos)]))
+                     (not (penned? #(u/seen-name (:primitives c) %) all-cells pos))
                      (not (home-cell? (:primitives c) pos)))]
       [pos (update pos :y dec)])))
 
