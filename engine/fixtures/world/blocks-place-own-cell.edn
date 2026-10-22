@@ -1,5 +1,5 @@
 ;; Card b53746ef: jobs.blocks.place of a seed into the cell the body stands in (a crop does not stop a player standing there) is placed at the feet;
-;; a solid block into that cell still waits :own-body. Farmland at [16 -1 16], the body standing on it.
+;; a solid block into that cell: the body steps off it first, then places. Farmland at [16 -1 16], the body standing on it.
 {:defaults
  {:tags [:blocks :farm :jobs]
   :time :any
@@ -13,7 +13,8 @@
    :expect [{:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 30 :of-job true}
             {:no-event {:source :job :data {:reason :own-body}} :for-s 5 :of-job true}]
    :after [[:block [16 0 16] "wheat[age=0]"]]}
-  {:name "stone-into-the-cell-under-the-feet-waits-own-body"
+  {:name "stone-into-the-cell-under-the-feet-steps-off-and-places"
    :act [[:job (jobs.blocks.place {:pos #at [16 0 16] :item "cobblestone"})]]
-   :expect [{:event {:source :job :kind #{:waiting :stopped} :data {:reason :own-body}} :within-s 20 :of-job true}]
-   :after [[:not-block [16 0 16] "cobblestone"] [:item "cobblestone" 4]]}]}
+   :expect [{:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 30 :of-job true}
+            {:no-event {:source :job :data {:reason :own-body}} :for-s 5 :of-job true}]
+   :after [[:block [16 0 16] "cobblestone"] [:item "cobblestone" 3]]}]}

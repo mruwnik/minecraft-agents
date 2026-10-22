@@ -114,11 +114,22 @@
     (when (seq seen)
       (ctx/update-mem! c update :spared-seen #(merge % (into {} (map (juxt :id identity)) seen))))))
 
+(defn ^:async look-for-animals!
+  "The nearest food animal after one look around from this cell for animals: another job's look (collect's) is no such look, since entities
+  count only while in the view cone and its last heading points away."
+  [c opts]
+  (let [cell (cell-of (u/self-pos c))]
+    (when (not= cell (:animals-looked (ctx/mem c)))
+      (ctx/update-mem! c dissoc :looked))
+    (let [found (await (look/survey-until! c :cell (fn [] (note-spared! c opts) (nearest c opts))))]
+      (ctx/update-mem! c assoc :animals-looked cell)
+      found)))
+
 (defn ^:async nearest-or-look
   "The nearest food animal in sight (an in-sight entry), its surroundings looked at first when they may be a pen (see pen-looked); with none, the body looks around once from where it stands and tries again, remembering what it spared on the way."
   [c opts]
   (note-seen! c opts)
-  (when-let [target (or (nearest c opts) (await (look/survey-until! c :cell (fn [] (note-spared! c opts) (nearest c opts)))))]
+  (when-let [target (or (nearest c opts) (await (look-for-animals! c opts)))]
     (if (= :own-pen (:rule target)) target (await (pen-looked c opts target)))))
 
 (defn note-kill!

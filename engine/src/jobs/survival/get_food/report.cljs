@@ -37,6 +37,18 @@
          ", " (get-in res [:coverage :legs] 0) " legs"
          (when (:why res) (str ", " (name (:why res)))))))
 
+(defn animals-text
+  "The animals passed over (and why), or with none the mobs in range (around), as a text starting \"; \"; nil when neither."
+  [passed around]
+  (cond
+    (seq passed)
+    (str "; passed over " (count passed) " animal" (when (> (count passed) 1) "s") " ("
+         (str/join ", " (map (fn [a] (str (:name a) ": " (if (= :kept (:why a)) "kept for breeding" (name (:why a)))
+                                          (when (:by a) (str " (" (:by a) ")"))
+                                          (when (:pos a) (str " at " (pr-str (:pos a)))))) passed)) ")")
+    (seq around)
+    (str "; nothing hunted; in range: " (str/join ", " (map (fn [a] (str (:name a) " (" (:kind a) ")" (when (:pos a) (str " at " (pr-str (:pos a)))))) around)))))
+
 (defn none-text
   "Why nothing was found: what was searched within radius, the animals passed over, the mobs in range when none
   qualified (around) and the nearest known source."
@@ -50,13 +62,7 @@
            (str "; carrying " wheat " wheat but cannot bake (" reason ")"))
          (when-let [f (seq (vals (:foreign-food (ctx/mem c))))]
            (str "; left alone food in another's area (only a caller's :ignore-zones? takes it): " (str/join ", " f)))
-         (when (seq passed)
-           (str "; passed over " (count passed) " animal" (when (> (count passed) 1) "s") " ("
-                (str/join ", " (map (fn [a] (str (:name a) ": " (if (= :kept (:why a)) "kept for breeding" (name (:why a)))
-                                         (when (:by a) (str " (" (:by a) ")"))
-                                         (when (:pos a) (str " at " (pr-str (:pos a)))))) passed)) ")"))
-         (when (and (empty? passed) (seq around))
-           (str "; nothing hunted; in range: " (str/join ", " (map (fn [a] (str (:name a) " (" (:kind a) ")" (when (:pos a) (str " at " (pr-str (:pos a)))))) around))))
+         (animals-text passed around)
          (when-let [{:keys [pos why]} (:noted-lost (ctx/mem c))]
            (str "; an animal noted at " (pr-str pos) " was not reached: " why))
          (if near

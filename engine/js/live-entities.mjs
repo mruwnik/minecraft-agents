@@ -40,7 +40,8 @@ export function trackLiveEntities (bot) {
     const stack = bot.entities?.[collectedEntityId]?.getDroppedItem?.()
     if (stack && pickupItemCount >= (stack.count ?? Infinity)) ids.add(collectedEntityId)
   })
-  bot._client.on('entity_status', ({ entityId, entityStatus }) => { if (entityStatus === 3) ids.add(entityId) }) // 3: death
+  // 3: death; the body's own entity outlives its death (respawn reuses it), so it stays listed
+  bot._client.on('entity_status', ({ entityId, entityStatus }) => { if (entityStatus === 3 && entityId !== bot.entity?.id) ids.add(entityId) })
   // ids are reused later, so forget one as soon as its entity is removed
   bot.on('entityGone', e => { ids.delete(e.id); born.delete(e.id) })
 }

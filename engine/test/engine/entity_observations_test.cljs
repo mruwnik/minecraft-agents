@@ -220,6 +220,14 @@
     (seen/observe! c (sample bot [(entity 99 "cow" "cow" 1)]) 2)
     (is (= 1 (:count (seen/snapshot c 2))))))
 
+(deftest the-bodys-own-row-comes-back-after-its-death
+  (let [c (cache) me #js {:id 1 :type "player" :username "Probe" :uuid "me" :position #js {:x 0 :y 64 :z 0}}
+        bot #js {:entity me}]
+    (seen/observe! c (sample bot [me]) 0)
+    (seen/dead! c #js {:source bot :entity me :dimension "overworld"})
+    (seen/observe! c (sample bot [me]) 1)
+    (is (= [true] (mapv :self? (:entities (seen/snapshot c 1)))))))
+
 (deftest item-removal-forgets-collected-drops-but-not-other-or-far-entities
   (let [c (cache) bot (js-obj) drop (entity 1 "item" "i1" 0) far (entity 2 "item" "i2" 40) cow (entity 3 "cow" "c1" 1)
         remove! #(seen/dead! c #js {:source bot :entity % :dimension "overworld" :removal "gone"})]

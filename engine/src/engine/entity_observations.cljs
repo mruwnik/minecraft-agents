@@ -211,14 +211,15 @@
 (defn dead!
   "Forget an entity early. An entityDead sample also keeps it from being resampled.
   A :removal sample (entityGone or a pickup) forgets only dropped items and does not block a resample, so a
-  partly collected stack that is still loaded comes back. Any other unload keeps the last observation."
+  partly collected stack that is still loaded comes back. Any other unload keeps the last observation.
+  The body's own entity is never kept from a resample: it outlives its death, and without its row entities has no centre."
   [store sample]
   (let [e (.-entity sample) source (.-source sample)
         dim (dimension (.-dimension sample))
         removal? (some? (.-removal sample))
         known? (when e (or (entity-uuid source e) (.get (:objects store) e)))]
     (when (and e source dim (or (not removal?) (= "item" (entity-type e))))
-      (when-not removal? (.add (:dead store) e))
+      (when-not (or removal? (identical? e (.-entity source))) (.add (:dead store) e))
       (when known?
         (let [key (:key (entity-identity store source e))]
           (when (= dim (get-in @(:state store) [:entities key :dimension]))

@@ -44,6 +44,14 @@ test('a mob that died is not listed during its death animation', () => {
   assert.deepEqual(ids(bot), [2])
 })
 
+test('the body\'s own entity stays listed after its death (respawn reuses it)', () => {
+  const bot = botWith({ 1: { id: 1, name: 'player', type: 'player', username: 'Me', position: { x: 0, y: 0, z: 0 } } })
+  bot.entity = bot.entities[1]
+  trackLiveEntities(bot)
+  bot._client.emit('entity_status', { entityId: 1, entityStatus: 3 })
+  assert.deepEqual(ids(bot), [1])
+})
+
 test('a reused id is listed again once the dead mob is gone', () => {
   const bot = botWith({ 1: { id: 1, name: 'skeleton', position: { x: 0, y: 0, z: 0 } } })
   trackLiveEntities(bot)

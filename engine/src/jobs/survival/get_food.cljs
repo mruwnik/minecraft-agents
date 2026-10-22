@@ -491,7 +491,8 @@
   (let [have (foods/stock-points (u/inventory (:primitives c)))]
     (stop! c :no-carry (str "not hungry (food " (food-level c) ", nothing eaten) but carries " have " of " (:carry (:args c))
                             " food points and found no more within " (js/Math.round (hunt-radius c)) " blocks"
-                            (when-let [x (:explored (ctx/mem c))] (str ", explored: " x)))
+                            (when-let [x (:explored (ctx/mem c))] (str ", explored: " x))
+                            (report/animals-text (animals/passed-over c (animal-opts c false)) (animals/nearby c (hunt-radius c))))
            :food (food-level c) :carry (:carry (:args c)) :have have)))
 
 (defn ^:async round
