@@ -1,0 +1,22 @@
+;; Card 13e1ab00: a plan cell that wants a block state ("oak_fence_gate[facing=north]") needs the item of that block (the
+;; gate), not a state string, and is placed as a gate. Ring x/z 10..14, gate at [12 0 10]; the body carries what it needs.
+;; Should-succeed: build.pen ends done with the gate in the gate cell and fences elsewhere.
+{:defaults
+ {:tags [:build :pen] :time :any
+  :plot {:height 8 :floor "stone"}
+  :blocks [[:set [16 2 12] "stone"] [:set [19 1 12] "glowstone"] [:set [15 2 8] "glowstone"] [:set [15 2 16] "glowstone"] [:set [19 1 8] "glowstone"] [:set [19 1 16] "glowstone"]]
+  :plans [{:id "ring" :metadata {:by "$body"}
+           :parts [{:id "n1" :box [#at [10 0 10] #at [11 0 10]] :want "oak_fence"}
+                   {:id "g" :box [#at [12 0 10] #at [12 0 10]] :want "oak_fence_gate[facing=north]"}
+                   {:id "n2" :box [#at [13 0 10] #at [14 0 10]] :want "oak_fence"}
+                   {:id "s" :box [#at [10 0 14] #at [14 0 14]] :want "oak_fence"}
+                   {:id "w" :box [#at [10 0 11] #at [10 0 13]] :want "oak_fence"}
+                   {:id "e" :box [#at [14 0 11] #at [14 0 13]] :want "oak_fence"}]}]
+  :body {:at [12.5 0 12.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "build-pen-places-the-gate-for-a-state-want"
+   :body {:at [12.5 0 12.5] :settle-s 2 :inventory [["oak_fence" 16] ["oak_fence_gate" 1]] :effects [["resistance" 600 4]]}
+   :act [[:job (jobs.build.pen {:plan "$plan:ring" :ways #{:carried} :ignore-zones? true})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.build.pen"}} :within-s 130 :of-job true}]
+   :after [[:block [12 0 10] "oak_fence_gate"] [:block [11 0 10] "oak_fence"]]}]}

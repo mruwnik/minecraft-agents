@@ -1,6 +1,7 @@
 (ns engine.placement-test
   "jobs.lib.placement: from a wanted block state to the click that makes it (or a refusal), one table per family."
   (:require [cljs.test :refer [deftest is are async]]
+            [jobs.lib.pen-read :as pen-read]
             [jobs.lib.placement :as placement]
             [engine.test-util :as tu]
             [plan.shape :as shape]))
@@ -190,7 +191,13 @@
     "soul_wall_torch" "soul_torch"
     "redstone_wall_torch" "redstone_torch"
     "oak_wall_sign" "oak_sign"
-    "oak_stairs" "oak_stairs"))
+    "oak_stairs" "oak_stairs"
+    "oak_fence_gate[facing=north]" "oak_fence_gate"
+    "oak_wall_sign[facing=east]" "oak_sign"))
+
+(deftest a-block-string-with-state-is-still-a-barrier-of-its-name
+  (is (= ["oak_fence_gate"] (pen-read/want-blocks "oak_fence_gate[facing=north]")))
+  (is (pen-read/barrier? "oak_fence_gate[facing=north]")))
 
 ;; ---------------------------------------------------------------- the click against the fake's forward rule
 

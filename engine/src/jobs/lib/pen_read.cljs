@@ -110,12 +110,12 @@
   (some-> (:box (:args c)) norm-box))
 
 (defn want-blocks
-  "The block names a want can place: one for a block or a state map, the choices of an :any."
+  "The block names a want can place, without any [state]: one for a block or a state map, the choices of an :any."
   [want]
   (cond
-    (string? want) [want]
+    (string? want) [(first (str/split want #"\[" 2))]
     (vector? want) (mapcat #(want-blocks (if (string? %) % (:block %))) (rest want))
-    (and (map? want) (:block want)) [(:block want)]))
+    (and (map? want) (:block want)) (want-blocks (:block want))))
 
 (defn barrier?
   "True when a want places a fence, a fence gate or a wall."
