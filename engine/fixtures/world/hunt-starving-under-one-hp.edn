@@ -1,6 +1,7 @@
 ;; Card 6c040ecc: a starving body that cannot heal walks to food even when its health is under 1 hp (a call floor of 1 failed it at once as
 ;; :condition-failed {:floor :health}, reported as unreachable) and over a route that costs 1 hp.
-;; Should-succeed: at 0.5 hp the body hunts a cow 8 blocks off on flat ground; at 3 hp it hunts a cow below a 4-block drop (1 hp).
+;; The hunger is short (food stays over 0): at 0 food hard-mode starvation would kill a body under 1 hp.
+;; Should-succeed: under 1 hp the body hunts a cow 8 blocks off on flat ground; at 3 hp it hunts a cow below a 4-block drop (1 hp).
 {:defaults
  {:tags [:animals :hunt :movement :readiness]
   :time :any
@@ -8,10 +9,10 @@
   :body {:at [6.5 0 16.5] :yaw 270 :inventory [["iron_sword" 1]] :effects [] :settle-s 2}
   :limit-s 90}
  :cases
- [{:name "starving-body-at-half-hp-hunts-a-cow-on-flat-ground"
+ [{:name "starving-body-under-one-hp-hunts-a-cow-on-flat-ground"
    :act [[:summon "cow" [14.5 0 16.5] "{NoAI:1b}"]
-         [:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
-         [:rcon "damage $BODY 19.5 minecraft:generic"]
+         [:rcon "effect give $BODY minecraft:hunger 1 255 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 19.3 minecraft:generic"]
          [:job (jobs.combat.hunt {:item "beef" :keep 0 :radius 24})]]
    :expect [{:event {:source :job :kind :completed :data {:name "jobs.combat.hunt"}} :within-s 75 :of-job true}]
    :after [[:item "beef" [:>= 1]]]
