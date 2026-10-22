@@ -1,0 +1,24 @@
+;; Hollin's hut: the body stands inside its own stone hut beside the doorway, the doorway sill is dug out one block, and the slope outside is
+;; 3 above the floor. The walls are its own plan, so nothing may be cut through them: it walks to the dug doorway, cuts a stair into the slope there
+;; and arrives. Plot: floor stone y -3..-1; hut x 11..15, z 15..19 (interior x 12..14, z 16..18), doorway x 13 z 19, sill hole at [13 -1 19];
+;; slope solid y 0..2 from z 20 on. Should-succeed: go-to goes out to [13 3 24]; the search case finds a cow on the slope top.
+;; Should-fail (old code): the walk ends "shut in here; no way out: the only way out cuts a plan this body made".
+{:defaults
+ {:tags [:movement :access :explore]
+  :time :any
+  :plot {:height 8}
+  :blocks [[:fill [0 -3 0] [31 -1 31] "stone"] [:fill [0 0 20] [31 2 31] "stone"]
+           [:fill [11 0 15] [15 2 19] "stone"] [:fill [12 0 16] [14 1 18] "air"] [:fill [13 0 19] [13 1 19] "air"] [:fill [13 -1 19] [13 -1 19] "air"]]
+  :plans [{:id "hut" :metadata {:by "$body"}
+           :parts [{:id "wall" :box [#at [11 -1 15] #at [15 2 19]] :want [:any "stone"]}]}]
+  :body {:at [14.5 0 17.5] :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "go-to-leaves-through-the-dug-doorway"
+   :act [[:job (jobs.movement.go-to {:pos #at [13 3 24] :range 0})]]
+   :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 120 :of-job true}]
+   :after [[:body-near [13.5 3 24.5] 2] [:block [12 1 17] "air"] [:block [15 1 17] "stone"] [:block [14 0 19] "stone"]]}
+  {:name "search-starting-in-the-hut-finds-a-cow-outside"
+   :act [[:summon "cow" [13.5 3 25.5]]
+         [:job (jobs.explore.search {:target "cow" :scan-radius 24})]]
+   :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]}} :within-s 120 :of-job true}]}]}

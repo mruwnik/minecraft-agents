@@ -305,6 +305,26 @@
           (is (= [:fill-gap] (mapv :step (events-of seen :go-to.escalated))))
           (is (= "dirt" (block p [5 63 1])) "the block went into the hole at the takeoff's floor height"))))))
 
+(def hut-on-slope
+  "A stone hut (interior x -2..2, z -2..2, feet y 64) open at a doorway x 0, z 3 (y 64..65) whose sill (y 63) is dug out to
+  y 62, on a stone floor; the slope outside is solid to y 66 from z 4 on, 3 up from the doorway."
+  (apply dissoc
+         (merge (box -6 62 -6 12 63 12 "stone") (box -3 64 -3 3 66 3 "stone") (box -6 64 4 12 66 12 "stone"))
+         "0,63,3" (concat (for [x (range -2 3) z (range -2 3) y [64 65]] (str x "," y "," z)) ["0,64,3" "0,65,3"])))
+
+(def hut-plan
+  (shape/with-author {:id "hut" :parts [{:id "w" :cells (vec (for [x (range -3 4) y (range 63 68) z (range -3 4)] [x y z])) :want "stone"}]} "Fake"))
+
+(deftest go-to-walks-to-the-dug-doorway-to-cut-a-way-out-when-the-wall-beside-it-is-its-own-build
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out seen]} (await (run-job! {:self {:pos {:x 1.5 :y 64 :z 1.5}} :blocks hut-on-slope}
+                                                  'jobs.movement.go-to {:pos [0 67 8] :range 0} {:plans {"hut" hut-plan}}))]
+          (is (= {:arrived true} @out))
+          (is (= [:approach :stair] (distinct (mapv :step (events-of seen :go-to.escalated))))
+              "a stair cut from the doorway, not through the hut wall"))))))
+
 (deftest go-to-gives-up-at-a-gap-under-a-low-ceiling-with-nothing-to-fill-it
   (async done
     (tu/run-async done

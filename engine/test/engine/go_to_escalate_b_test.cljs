@@ -131,17 +131,16 @@
           (is (empty? dug-in-outer) "the way out ignores the vault, not the zone round it")
           (is (= {:step :none :why :zone} (:escalation @out))))))))
 
-(deftest go-to-never-digs-in-another-s-zone
+(deftest go-to-never-digs-in-another-s-zone-and-leaves-by-a-wall-that-is-free
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [zones [{:name "vault" :owner "Miles" :min [3 60 -3] :max [3 70 3]}]
-              {:keys [out p seen]} (await (run-job! (merge in-room {:blocks room}) 'jobs.movement.go-to
-                                                {:pos [8 64 0] :range 1} zones))]
-          (is (= false (:arrived @out)))
-          (is (= {:step :none :why :zone} (:escalation @out)) "the wall is another owner's")
-          (is (empty? (events-of seen :go-to.escalated)))
-          (is (empty? (calls p "dig"))))))))
+              {:keys [out p]} (await (run-job! (merge in-room {:blocks room}) 'jobs.movement.go-to
+                                               {:pos [8 64 0] :range 1} zones))]
+          (is (true? (:arrived @out)) "the east wall is another owner's; the south wall is free")
+          (is (seq (dug-cells p)))
+          (is (not-any? #(= 3 (first %)) (dug-cells p))))))))
 
 (deftest go-to-never-digs-the-bodys-own-building
   (async done

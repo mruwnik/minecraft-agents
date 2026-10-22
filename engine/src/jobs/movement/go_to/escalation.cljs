@@ -11,7 +11,7 @@
     jobs.access.clear-path through a wall up to 3 thick toward the goal (into a walled-in goal no door or stair reaches:
     the fewest cells dug down or across to it, escalation/dig-way, tried first for a shut-in body, none that takes over max-route-s seconds to dig with the pickaxe it carries or would fetch); else jobs.access.stair up out of a pit or
     toward a higher goal (as far as the goal is above, at most 8; a stair that leaves the body shut in under the goal is
-    followed by the next escalation at once); else a walk to the nearest wall first. Each emits go-to.escalated {:step :why :n}. Once
+    followed by the next escalation at once); else a walk to the nearest wall first; when no way can be made where the body stands, a walk to the nearest cell it can stand on from which one can (escape/way-spot: a body in its hut beside the doorway, whose walls it spares). Each emits go-to.escalated {:step :why :n}. Once
     through, it puts back what clear-path or stair dug in another's zone, claim or plan (with :ignore-zones?;
     its own diggings elsewhere stay) (jobs.blocks.place, the dug block or its drop, when carried): info
     go-to.restored, warn go-to.restore-skipped for cells it could not. Pillar blocks and a stair's placed floors are
@@ -175,8 +175,10 @@
               (choose (may-dig-fn c)))
         choosable? #(not= :none (:step (choose %)))
         zone-free (exit-dig-fn c feet)
+        spot (when (= :none (:step e)) (when-not (contains? (:skip opts) :approach) (escape/way-spot (:primitives c) feet goal (may-dig-fn c) opts (or (:approached (ctx/mem c)) #{}))))
         e (cond
             (not= :none (:step e)) e
+            spot {:step :approach :pos spot}
             (and (access/spare-own-builds) (choosable? (may-dig-fn c false)))
             {:step :none :why (if (choosable? (may-dig-fn c true false)) :own-pen :own-build)}
             (and (zone-exit? c feet) (choosable? zone-free)) (assoc (choose zone-free) :exit-zone true)

@@ -338,6 +338,35 @@
                      (ok? (up back -1) #(keyword-identical? :solid (%1 %2 %3 %4)))))
           back))))))
 
+(declare choose)
+
+(def way-spot-cap
+  "Standable cells way-spot tries choose from at most."
+  12)
+
+(defn way-spot
+  "The nearest cell (breadth-first through standable cells a step up or down included, within wall-search-radius, at most way-spot-cap tried) other
+  than feet and the visited ones from which choose makes a way (a pillar, stair or clear-path) toward goal: where to walk
+  when no way can be made from feet itself, e.g. a body inside its hut beside the doorway it cannot cut through the wall to.
+  nil when none."
+  [p feet goal may-dig? opts visited]
+  (let [[hx _ hz] feet
+        near? (fn [[x _ z]] (and (<= (js/Math.abs (- x hx)) wall-search-radius)
+                                 (<= (js/Math.abs (- z hz)) wall-search-radius)))
+        kind-at (reach/lookup p)
+        standable? (fn [[x y z]] (reach/standable-cell? p {:x x :y y :z z} kind-at))
+        opts (update opts :skip (fnil conj #{}) :approach)
+        way? (fn [cell] (#{:pillar :stair :clear-path} (:step (choose p cell goal may-dig? opts))))]
+    (loop [queue #queue [feet] seen #{feet} tried 0]
+      (when-let [cell (peek queue)]
+        (let [try? (and (not= cell feet) (not (visited cell)))]
+          (cond
+            (and try? (way? cell)) cell
+            (>= tried way-spot-cap) nil
+            :else (let [nbrs (->> cardinals (mapcat (fn [d] (map #(up (ahead cell d 1) %) [0 -1 1])))
+                                  (filter #(and (not (seen %)) (near? %) (standable? %))))]
+                    (recur (into (pop queue) nbrs) (into seen nbrs) (cond-> tried try? inc)))))))))
+
 (def heading-dirs (into {} (map (fn [[k v]] [v k])) heading-names))
 
 (defn choose
