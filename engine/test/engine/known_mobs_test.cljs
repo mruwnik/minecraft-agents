@@ -12,6 +12,7 @@
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.reach.proofs :as proofs]
             [engine.perception :as perception]
+            [engine.perception.mobs :as mobs]
             [engine.memory :as mem]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
@@ -66,18 +67,13 @@
     (swap! (fake/state p) assoc :yaw 0)
     (is (= [1] (danger-ids p)))))
 
-(deftest a-glance-behind-remembers-a-silent-creeper-without-turning-the-head
-  (let [{:keys [p]} (rig {:entities [(mob 1 "creeper" 0 -2)]})
-        yaw #(:yaw @(fake/state p))
-        before (yaw)]
-    (.glanceMobs p js/Math.PI)
-    (is (= before (yaw)) "the real head stays")
-    (is (= [1] (danger-ids p)))))
-
-(deftest a-glance-to-the-side-does-not-see-a-creeper-behind
-  (let [{:keys [p]} (rig {:entities [(mob 1 "creeper" 0 -8)]})]
-    (.glanceMobs p (/ js/Math.PI 2))
-    (is (= [] (danger-ids p)))))
+(deftest a-glance-is-skipped-where-a-known-enderman-stands
+  (let [{:keys [p per]} (rig {:entities [(mob 1 "enderman" 0 -6)]})]
+    (swap! (fake/state p) assoc :yaw 180)
+    (look/see! {:primitives p})
+    (swap! (fake/state p) assoc :yaw 0)
+    (is (true? (mobs/enderman-at-yaw? per 0)) "north, where it was seen")
+    (is (false? (mobs/enderman-at-yaw? per js/Math.PI)) "south")))
 
 (deftest the-raw-primitives-still-count-every-mob
   (let [{:keys [raw]} (rig {:entities [(mob 1 "creeper" 0 -2)]})]

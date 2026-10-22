@@ -9,6 +9,7 @@
             [engine.path.blocks :as blocks]
             [engine.path.executor :as executor]
             [jobs.lib.breath :as breath]
+            [engine.perception.mobs :as mobs]
             [jobs.lib.look :as look]
             [jobs.lib.sense :as sense]
             [jobs.lib.util :as u]
@@ -29,6 +30,18 @@
    ::light-wait-ms {:default 1500 :doc "How long a walk that placed a torch looks for the floor it lights before it gives the floor up, in ms." :spec (a/int-in 0 nil)}})
 
 (def glance-turns "Head turns of a walk's glances, in radians from the heading: behind, left, behind, right." [js/Math.PI (/ js/Math.PI 2) js/Math.PI (/ js/Math.PI -2)])
+
+(def key-ring "Movement keys in the order a head turn of a quarter turn left moves each one to." [:forward :right :back :left])
+
+(defn turn-controls
+  "controls as the same movement needs them with the head turned by turn radians (a multiple of a quarter turn, left
+  positive): each movement key becomes the one that moves the body the same way. Sprint stays only with forward."
+  [controls turn]
+  (let [k (mod (js/Math.round (/ turn (/ js/Math.PI 2))) 4)
+        moved (reduce (fn [m [i key]] (cond-> m (get controls key) (assoc (nth key-ring (mod (+ i k) 4)) true)))
+                      {} (map-indexed vector key-ring))
+        out (merge (dissoc controls :forward :back :left :right) moved)]
+    (cond-> out (not (:forward out)) (assoc :sprint false))))
 
 (defn glance-ticks [] (settings/get settings ::glance-ticks))
 (defn max-timeout-s [] (settings/get settings ::max-timeout-s))
@@ -258,13 +271,24 @@
         p (:primitives c)
         every (glance-ticks)
         ticks (volatile! 0)
-        glance! (fn []
-                  (let [n (vswap! ticks inc)]
-                    (when (and (pos? every) (zero? (mod n every)) (fn? (.-glanceMobs p)))
-                      (.glanceMobs p (nth glance-turns (mod (dec (quot n every)) (count glance-turns)))))))
+        turned (volatile! false)
+        ;; a head turn lasts one tick: the sample comes on the next, with the head still turned, and the head goes back
+        sample! (fn []
+                  (when @turned
+                    (vreset! turned false)
+                    (when (fn? (.-knownMobs p)) (.knownMobs p))))
+        glance (fn [pose {:keys [controls yaw pitch] :as out}]
+                 (let [n (vswap! ticks inc)
+                       turn (nth glance-turns (mod (dec (quot n every)) (count glance-turns)))]
+                   (if (and (pos? every) (zero? (mod n every)) (number? yaw) (:on-ground pose) (not (:in-water pose))
+                            (not (:on-climbable pose)) (not (:jump controls)) (not (:sneak controls))
+                            (not (mobs/enderman-at-yaw? (aget p "perception") (+ yaw turn))))
+                     (do (vreset! turned true)
+                         (assoc out :controls (turn-controls controls turn) :yaw (+ yaw turn)))
+                     out)))
         decide (fn [js-pose]
                  (let [pose (pose-of js-pose)
-                       _ (glance!)
+                       _ (sample!)
                        _ (when-let [on-pose (:on-pose c)] (on-pose pose))
                        [state' {:keys [done controls yaw pitch warn]}] (decide-tick env @state pose)]
                    (vreset! state state')
@@ -273,7 +297,8 @@
                    (when warn (ctx/emit! c :gate-breach :warn warn))
                    (if done
                      (do (vreset! last-done done) #js {:done (clj->js done)})
-                     #js {:controls (clj->js controls) :yaw yaw :pitch pitch})))
+                     (let [out (glance pose {:controls controls :yaw yaw :pitch pitch})]
+                       #js {:controls (clj->js (:controls out)) :yaw (:yaw out) :pitch (:pitch out)}))))
         t (js/Date.now)
         r (await (ctx/act c :steer (steer-args (steer-s c timeout-s) decide)))
         ms (- (js/Date.now) t)]

@@ -4,6 +4,7 @@
             [engine.registry :as registry]
             [engine.path.executor :as executor]
             [engine.core :as core]
+            [engine.fake :as fake]
             [engine.ctx :as ctx]
             [engine.events :as events]
             [engine.path.planner-tuned :as planner]
@@ -64,17 +65,26 @@
           (is (= [:plan] announced))
           (is (> (first at) 9)))))))
 
-(deftest a-walk-glances-round-for-a-creeper-behind-it-every-few-ticks
+(deftest a-walk-turns-its-head-for-a-tick-and-samples-mobs-with-it-turned
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [turns (atom [])
-              [{:keys [result]}] (await (walk-to (floor (range 14)) [12 64 1] start
-                                                 #(set! (.-glanceMobs ^js %) (fn [yaw] (swap! turns conj yaw)))))]
+        (let [samples (atom [])
+              [{:keys [result]} _ at] (await (walk-to (floor (range 14)) [12 64 1] start
+                                                      (fn [p]
+                                                        (set! (.-knownMobs ^js p) (fn [] (swap! samples conj (:yaw @(fake/state p))) #js [])))))]
           (is (= :arrived (:status result)))
-          (is (<= 3 (count @turns)) "a 12-block walk glances several times")
-          (is (= js/Math.PI (first @turns)) "the first glance is straight behind")
-          (is (every? (set walk/glance-turns) @turns)))))))
+          (is (> (first at) 11) "the glances did not turn the walk aside")
+          (is (<= 2 (count @samples)) "a 12-block walk glances several times")
+          (is (every? (set @samples) [90 180]) "sampled with the head turned behind (90) and to the side (180) of the heading (270)"))))))
+
+(deftest a-head-turn-keeps-the-body-moving-the-same-way
+  (are [turn controls expected] (= expected (walk/turn-controls controls turn))
+    js/Math.PI {:forward true :sprint true} {:back true :sprint false}
+    js/Math.PI {:forward true :left true} {:back true :right true :sprint false}
+    (/ js/Math.PI 2) {:forward true :sprint true} {:right true :sprint false}
+    (/ js/Math.PI -2) {:forward true} {:left true :sprint false}
+    (/ js/Math.PI 2) {:right true} {:back true :sprint false}))
 
 (deftest a-step-up-arrives
   (async done

@@ -310,7 +310,7 @@
   "The primitives object p with every primitive as it is (blocks and entities stay raw; blockAt is sensedAt; dig, place, jumpPlace and useOn also let memory
   take the true state of their cell, see touching; look glances where it turned, see looking), plus
   seenBlockAt({x,y,z}) and seenBlocks({radius, names, max}) over memory, knownMobs() (known-mobs: the hostiles the body
-  has seen or heard, sampled from p's entities), glanceMobs(yawOffset) (a mob sample with the eye turned that much, for an instant), sensedAt, feel and glance ({x,y,z}: answer-js of sensed, feel!,
+  has seen or heard, sampled from p's entities), sensedAt, feel and glance ({x,y,z}: answer-js of sensed, feel!,
   glance!), and the perception itself."
   [p per]
   (let [out (js/Object.assign #js {} p)
@@ -319,7 +319,6 @@
     (when-not (.-rawWorld out) (aset out "rawWorld" (:raw per)))
     (set! (.-mobSource ^js (:st per)) p)
     (aset out "knownMobs" (fn [] (mobs/known-mobs per p)))
-    (aset out "glanceMobs" (fn [yaw-offset] (mobs/glance-mobs! per p yaw-offset) nil))
     (run! #(when-let [f (aget p %)] (aset out % (rays/touching per p f))) touching-primitives)
     (when-let [f (aget p "look")] (aset out "look" (looking per p f)))
     (aset out "seenBlockAt" (fn [^js a]
