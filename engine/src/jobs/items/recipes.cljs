@@ -67,6 +67,21 @@
                     :let [names (set (keep name-of (remove #{-1} slot)))]
                     :when (> (count names) 1)]
                 names)
+        all (mapcat (comp array-seq second) (js/Object.entries (.-recipes md)))
+        plank-logs (set (for [r all :let [out (name-of (id-of (.-result r)))]
+                              :when (and out (clojure.string/ends-with? out "_planks") (= 1 (count (slots-of r))))]
+                          (name-of (first (slots-of r)))))
+        wood-of (into {} (for [r all :when (and (.-inShape r) (= 4 (count (slots-of r))) (apply = (slots-of r)))]
+                           [(name-of (first (slots-of r))) (name-of (id-of (.-result r)))]))
+        has-item? #(some? (aget (.-itemsByName md) %))
+        ;; the planks tag takes a log, its wood and the stripped forms of both
+        log-pairs (for [l plank-logs :let [sl (str "stripped_" l) forms (cond-> #{l} (wood-of l) (conj (wood-of l))
+                                                                              (has-item? sl) (conj sl)
+                                                                              (and (has-item? sl) (wood-of sl)) (conj (wood-of sl)))]
+                        :when (> (count forms) 1)]
+                    forms)
+        ;; a campfire takes any log, but planks take only their own species' forms: the broad class would let an oak log pass for a cherry one
+        pairs (concat (remove #(some plank-logs %) pairs) log-pairs)
         merged (reduce (fn [classes names]
                          (let [hit (filter #(seq (clojure.set/intersection % names)) classes)]
                            (conj (remove (set hit) classes) (apply clojure.set/union names hit))))
@@ -76,12 +91,13 @@
 (def interchange (memoize interchange-classes))
 
 (defn pooled
-  "have with every member of an interchange class counted at the class total: a recipe asking one species of plank is
-  satisfied by a mix. Enough to judge whether a craft can start, not to plan several crafts from one stock."
+  "have with every member of an interchange class counted at the class total (also a member none is carried of): a
+  recipe asking one species of plank, or the log of a stripped log carried, is satisfied by a mix. Enough to judge
+  whether a craft can start, not to plan several crafts from one stock."
   [version have]
-  (let [classes (interchange version)]
-    (reduce (fn [acc [n cls]] (if-let [c (get classes n)] (assoc acc n (reduce + 0 (map #(get have % 0) c))) acc))
-            have have)))
+  (let [classes (interchange version)
+        totals (into {} (keep (fn [[n cls]] (when (contains? have n) [cls (reduce + 0 (map #(get have % 0) cls))]))) classes)]
+    (reduce (fn [acc [cls total]] (reduce #(assoc %1 %2 total) acc cls)) have totals)))
 
 (def recipes-for (memoize recipes-of))
 

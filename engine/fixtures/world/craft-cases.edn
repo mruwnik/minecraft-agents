@@ -38,6 +38,17 @@
    :act [[:job (jobs.items.craft {:item "chest" :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :completed} :within-s 80 :of-job true}]
    :after [[:item "chest" 1]]}
+  ;; card c1f63e7f: planks take a stripped log of their own species; a log of another species does not stand in
+  {:name "cherry-planks-from-a-stripped-cherry-log"
+   :body {:inventory [["stripped_cherry_log" 1]]}
+   :act [[:job (jobs.items.craft {:item "cherry_planks" :count 4})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:item "cherry_planks" 4] [:item "stripped_cherry_log" 0]]}
+  {:name "cherry-planks-from-an-oak-log-are-not-crafted"
+   :body {:inventory [["oak_log" 1]]}
+   :act [[:job (jobs.items.craft {:item "cherry_planks" :count 4 :ways #{:carried}})]]
+   :expect [{:event {:source :job :kind :stopped} :within-s 60 :of-job true}]
+   :after [[:item "cherry_planks" 0] [:item "oak_planks" 0] [:item "oak_log" 1]]}
   {:name "white-bed-short-of-planks-and-no-table-is-not-crafted"
    :body {:inventory [["white_wool" 3] ["oak_planks" 1]]}
    :act [[:job (jobs.items.craft {:item "white_bed" :ways #{:carried}})]]
