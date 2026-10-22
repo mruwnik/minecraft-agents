@@ -35,6 +35,16 @@
    :expect [{:event {:source :job :kind :stopped} :within-s 40 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 10 :until {:source :job :kind :stopped}}]
    :after [[:not-block [16 -1 16] "water"] [:item "water_bucket" 1]]}
+  {:name "hurt-body-irrigates-without-waiting-for-health"
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 16 minecraft:generic"]
+         [:job (jobs.farm.irrigate {:area {:min #xyz [12 -1 16] :max #xyz [20 -1 16]}})]]
+   :expect [{:event {:source :job :kind :completed :data {:dry []}} :within-s 70 :of-job true}]
+   :after [[:block [16 -1 16] "water"] [:item "water_bucket" 0]]}
+  {:name "for-plan-alone-irrigates-the-plans-field"
+   :plans [{:id "field" :metadata {:by "$body"} :parts [{:id "row" :box [#at [12 0 16] #at [20 0 16]] :want {:crop "wheat"}}]}]
+   :act [[:job (jobs.farm.irrigate {:for-plan "$plan:field"})]]
+   :expect [{:event {:source :job :kind :completed :data {:dry []}} :within-s 70 :of-job true}]
+   :after [[:block [16 -1 16] "water"] [:item "water_bucket" 0]]}
   {:name "box-over-air-sees-no-field-and-stops"
    :act [[:job (jobs.farm.irrigate {:area {:min #xyz [12 4 16] :max #xyz [20 4 16]}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :nothing-seen}} :within-s 30 :of-job true}
