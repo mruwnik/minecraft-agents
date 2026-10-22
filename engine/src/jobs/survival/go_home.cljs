@@ -7,6 +7,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.cost :as cost]
             [jobs.lib.child :as child]
+            [jobs.lib.next-call :as next-call]
             [jobs.lib.places :as places]
             [jobs.lib.shelter :as sh]
             [jobs.lib.shelter.clock :as sh-clock]
@@ -22,7 +23,7 @@
   no longer covers the walk; a work job it cuts is resumed by the scheduler afterwards.
   With :commute? (the :dusk-home trigger's) a body in the ground (jobs.lib.shelter/in-ground?: its work goes on through the
   night) whose walk there and back, by go-to's quote, costs more than sheltering where it stands (jobs.lib.cost/commute-s)
-  stays: nothing-possible {:reason :shelter-cheaper}.
+  stays: nothing-possible {:reason :shelter-cheaper}, :next the night job (the :night trigger's). Other endings carry :next too (jobs.lib.next-call): what a failed walk names, then the call again.
   Quote: time by the straight distance at :speed blocks a second; done 1 visit.")
 
 (a/defargs args
@@ -95,5 +96,6 @@
       (nil? pos) (ctx/end c :condition-failed :no-home)
       (await (commute-dearer? c pos))
       (ctx/end c :nothing-possible {:reason :shelter-cheaper}
-               {:text "in the ground, the walk home and back costs more than sheltering here; its work goes on"})
-      :else (await (walk! c pos)))))
+               {:text "in the ground, the walk home and back costs more than sheltering here; its work goes on"
+                :next [(next-call/call 'jobs.survival.night {})]})
+      :else (next-call/on-ending c (await (walk! c pos)) 'jobs.survival.go-home args))))

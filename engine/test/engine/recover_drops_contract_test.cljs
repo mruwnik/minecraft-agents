@@ -84,7 +84,7 @@
   (let [e (first (filter #(#{:completed :stopped} (:kind %)) @seen))]
     (mapv #(select-keys % [:job :args]) (get-in e [:data :next]))))
 
-(deftest a-danger-ending-names-the-retry-and-every-other-ending-the-call-again
+(deftest a-danger-ending-names-the-retry-and-a-not-worth-ending-no-call
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -103,7 +103,8 @@
           (die! eng {:pos dt/death-pos :inventory dt/junk})
           (core/submit! eng job {})
           (await (run-until-empty eng 5))
-          (is (= [{:job "jobs.survival.recover-drops" :args {}}] (next-of seen))))))))
+          (is (= {:kind :condition-failed :reason :not-worth} (end-of seen)))
+          (is (empty? (next-of seen)) "calling again cannot make a junk pile worth the trip"))))))
 
 (deftest a-walk-that-does-not-arrive-ends-nothing-possible-unreachable
   (async done
@@ -113,7 +114,8 @@
           (die! eng {:pos dt/death-pos :inventory dt/diamonds})
           (core/submit! eng job {})
           (await (run-until-empty eng 6))
-          (is (= {:kind :nothing-possible :reason :unreachable} (end-of seen))))))))
+          (is (= {:kind :nothing-possible :reason :unreachable} (end-of seen)))
+          (is (empty? (next-of seen)) "no unblocking call is named, and calling again would walk the same way"))))))
 
 (deftest a-pile-not-worth-the-trip-ends-condition-failed-not-worth
   (async done
@@ -159,7 +161,8 @@
           (swap! clock + 300000)
           (core/submit! eng job {})
           (await (run-until-empty eng 5))
-          (is (= {:kind :condition-failed :reason :gone} (end-of seen))))))))
+          (is (= {:kind :condition-failed :reason :gone} (end-of seen)))
+          (is (empty? (next-of seen)) "a despawned pile has nothing to recover"))))))
 
 (deftest nothing-left-at-the-death-point-ends-condition-failed-nothing-found
   (async done

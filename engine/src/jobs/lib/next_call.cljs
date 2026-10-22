@@ -42,14 +42,18 @@
    (when (and (contract/ending? e) (contains? causes (contract/cause-key e)) (pred (:cause e)))
     (call 'jobs.blocks.seal-opening {:at at}))))
 
+(defn unblocking
+  "The calls that would unblock ending e: those a child passed up (in data, else named by e; a resubmit becomes a plain
+  call), else the fetch e's chain names (e may be nil), then fixes; at most max-fixes."
+  [data e & fixes]
+  (let [passed (map #(dissoc % :again) (or (:next data) (of e)))]
+    (vec (take max-fixes (distinct (concat (if (seq passed) passed (some-> e chain-fix vector)) (keep identity fixes)))))))
+
 (defn with-next
-  "data with :next: the calls a child passed up (in data, else named by its ending e; its resubmit becomes a plain call),
-  else the fetch e's chain names (e may be nil), then fixes, then job again with the args of c's call that differ from
-  defs' defaults."
+  "data with :next: the unblocking calls, then job again with the args of c's call that differ from defs' defaults."
   [data c job defs e & fixes]
-  (let [passed (map #(dissoc % :again) (or (:next data) (of e)))
-        unblock (concat (if (seq passed) passed (some-> e chain-fix vector)) (keep identity fixes))]
-    (assoc data :next (conj (vec (take max-fixes (distinct unblock)))
+  (let [unblock (apply unblocking data e fixes)]
+    (assoc data :next (conj unblock
                             (assoc (call job (given defs (:args c))) :again true)))))
 
 (defn on-ending

@@ -52,13 +52,14 @@
    :blocks (into {"0,67,0" "stone"} (for [k (range 1 7)] [(str (+ 54 k) "," (+ 63 k) ",0") "stone"]))})
 
 (defn ^:async go-home-from-the-ground
-  "[blocks the body ends from the home at x, why go-home gave up] with the home at x y."
+  "[blocks the body ends from the home at x, why go-home gave up, the jobs its :next names] with the home at x y."
   [x y args]
   (let [{:keys [eng p seen]} (st/setup stair-home-world)]
     (mem/write! (:store eng) :home {:pos {:x x :y y :z 0}} mem/place-policy)
     (core/submit! eng (list 'jobs.survival.go-home args) {})
     (await (tu/run-until-empty eng 30))
-    [(js/Math.abs (- x (.-x (.-pos (.self p))))) (some #(when (#{:completed :stopped} (:kind %)) (:reason %)) @seen)]))
+    [(js/Math.abs (- x (.-x (.-pos (.self p))))) (some #(when (#{:completed :stopped} (:kind %)) (:reason %)) @seen)
+     (some #(when (#{:completed :stopped} (:kind %)) (mapv :job (:next %))) @seen)]))
 
 (deftest go-home-in-the-ground-stays-when-the-quoted-walk-there-and-back-costs-more-than-sheltering-here
   ;; the trigger fires for a buried body too; go-home, called with :commute?, prices go-to's own quote
@@ -71,6 +72,7 @@
               plain (await (go-home-from-the-ground 60 70 {}))]
           (is (> (first far) 50) "the far home is not walked to")
           (is (= :shelter-cheaper (second far)))
+          (is (= ["jobs.survival.night"] (nth far 2)) "the night job the reflex runs, not go-home again")
           (is (< (first near) 3) "a close home is walked to")
           (is (< (first plain) 3) "without :commute? the call walks home"))))))
 
