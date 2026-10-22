@@ -523,8 +523,7 @@
           (core/submit! eng '(mining-parent) {})
           (await (tu/run-ticks eng clock 10 700))
           (is (= {:status :stopped :got 0 :reason :no-tool :tool "pickaxe"} (select-keys @out [:status :got :reason :tool]))))))))
-;; stones on 8-high pillars: seen from the floor, no stand beside them. The radius is wide because go-to's walk to a pillar's foot
-;; takes the body off the spot, and the stones left must still count.
+;; stones on 8-high pillars: seen from the floor, no stand beside them.
 (deftest seen-ore-with-no-way-to-stand-beside-it-is-listed-unreached
   (async done
     (tu/run-async done
@@ -532,12 +531,13 @@
         (let [stones [[-3 0] [3 0] [0 -3] [0 3]]
               pillars (into {} (for [[x z] stones]
                                  (into {(str x ",71," z) "stone"} (cells "bedrock" [x] (range 62 71) [z]))))
-              s (await (scenario {:block "stone" :count 3 :radius 30 :ways #{:seen}}
+              s (await (scenario {:block "stone" :count 3 :radius 10 :ways #{:seen}}
                                  {:blocks (merge floor pillars) :inventory pickaxe} 120 (constantly 0.5)))
               e (done-event s)]
           (is (= [:stopped 0] ((juxt :status :got) e)))
           (is (= (set (map (fn [[x z]] [x 71 z]) stones)) (set (:unreached e))))
-          (is (re-find #"seen ore out of reach" (:text e))))))))
+          (is (re-find #"seen ore out of reach" (:text e)))
+          (is (<= (js/Math.hypot (first (feet s)) (nth (feet s) 2)) 4) "the walled-in ore was judged from where the body stood"))))))
 
 ;; walled?: the pit has a wall round it, so no way round through unseen ground competes with the drop; open: the platform's other sides
 ;; lead off over unseen floor. The ore and the floor under the drop were seen from over the floor first (the platform's wall hides its foot from the rim, and go-to drops no deeper than 5 onto a floor it has not seen), so only go-to's health floor decides the drop.
@@ -584,3 +584,4 @@
         (let [s (await (drop-to-ore 69 true))]
           (is (= 1 (:got (done-event s))))
           (is (empty? (filter #(re-find #"stuck on drop" %) (walk-texts s)))))))))
+
