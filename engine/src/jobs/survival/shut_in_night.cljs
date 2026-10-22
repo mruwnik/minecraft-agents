@@ -16,6 +16,7 @@
 (a/defargs settings
   {::take-back-value {:default 0.5 :doc "A placed block worth more than this each (jobs.lib.cost/item-value; dirt 0.35, cobblestone 0.85) is dug again and collected when the shelter is left by day." :spec (a/num-in 0 nil)}
    ::futile-radius {:default 8 :doc "Blocks around a site where a way failed that count as the same site." :spec (a/int-in 0 nil)}
+   ::max-reseals {:default 3 :doc "Times a night shelter is sealed again at the cell it stands in before that site counts as failed: a seal that is gone again moments after it was placed is not sealed again for ever." :spec (a/int-in 1 nil)}
    ::take-back-gate-range {:default 2 :doc "A cheap seal block this near a door or fence gate some plan wants is taken back with the dear ones: it would box the gate in." :spec (a/int-in 0 nil)}})
 
 (defn futile-radius [] (settings/get settings ::futile-radius))
@@ -66,6 +67,7 @@
         cells (set (map (comp u/cell-pos :cell) placed))
         prev (:data (ctx/latest c :shelter))
         resealed (= feet (:pos prev))
+        reseals (if resealed (+ (:reseals prev 0) (if (seq placed) 1 0)) 0)
         roof (case way :walls (update feet :y + 2) :room (when-let [r (first cells)] r) roof)
         door (case way
                :walls (dig-cells/door cells feet)
@@ -96,8 +98,11 @@
     (ctx/remember! c :shelter (cond-> {:pos feet :state :built}
                                 (not sealed?) (assoc :sealed false)
                                 (contains? cells roof) (assoc :roof roof)
+                                (pos? reseals) (assoc :reseals reseals)
                                 door (assoc :door door)
                                 start (assoc :start start)
                                 (seq take-back) (assoc :take-back take-back)
                                 (= :room way) (assoc :room true))
-                   sh/shelter-policy)))
+                   sh/shelter-policy)
+    (when (>= reseals (settings/get settings ::max-reseals))
+      (fail! c way :seal-lost start))))

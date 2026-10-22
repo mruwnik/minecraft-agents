@@ -255,6 +255,22 @@
           (is (= :out (:reason @out)))
           (is (= 64 (second (feet p))) "out by day"))))))
 
+(deftest a-roof-that-is-gone-again-after-every-seal-fails-the-site-instead-of-sealing-for-ever
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p] :as s} (setup {:inventory [{:name "iron_pickaxe" :count 1} {:name "cobblestone" :count 20}]})
+              walls (assoc s :ways #{:walls})]
+          (await (dig-in! s))
+          (dotimes [_ 3]
+            (fake/remove-block! p [0 63 0])
+            (await (dig-in! walls)))
+          (is (= [:walls] (mapv :way (entries eng :shut-in-failed))) "the third reseal marks the site failed")
+          (is (= [:seal-lost] (mapv :reason (entries eng :shut-in-failed))))
+          (fake/remove-block! p [0 63 0])
+          (await (dig-in! walls))
+          (is (air? p [0 63 0]) "the next call does not seal the barred site again"))))))
+
 (deftest dig-in-at-the-bottom-of-a-shaft-records-its-top-as-the-start
   (async done
     (tu/run-async done
