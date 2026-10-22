@@ -35,4 +35,12 @@
    :expect [{:event {:source :job :kind :completed} :within-s 40 :of-job true}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :for-s 30}]
    :after [[:item "stone_sword" 0]]
-   :limit-s 100}]}
+   :limit-s 100}
+  ;; Card c65b7965: a bad spec submitted --now --wait behind the running reflex is still answered :bad-spec.
+  {:name "bad-spec-now-wait-behind-the-reflex-is-answered"
+   :time :any
+   :act [[:wait-s 8]
+         [:cli "jobs" ["$body" "--world" "$world" "submit" "(jobs.items.collect-drops {:center [1 2 3]})" "--now" "--wait" "--timeout" "20s"]
+          {:ok false :reason :bad-spec}]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :within-s 30}]
+   :limit-s 90}]}
