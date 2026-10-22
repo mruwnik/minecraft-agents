@@ -166,6 +166,23 @@
           (is (= 0 (:got (done-event s))))
           (is (finished? s)))))))
 
+(deftest a-hurt-body-with-nothing-to-eat-digs-nothing-and-says-cannot-heal
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [hurt {:blocks (merge floor sand-patch) :self {:health 8 :food 12}}
+              s (await (scenario {:block "sand" :count 6} hurt 40))]
+          (is (zero? (dig-count s)))
+          (is (= :cannot-heal (:reason (done-event s)))))))))
+
+(deftest a-hurt-body-carrying-bread-digs-on
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [hurt {:blocks (merge floor sand-patch) :self {:health 8 :food 12} :inventory [{:name "bread" :count 3}]}
+              s (await (scenario {:block "sand" :count 6} hurt 40))]
+          (is (pos? (dig-count s))))))))
+
 (deftest water-pouring-in-after-a-dig-stops-the-digging
   (async done
     (tu/run-async done

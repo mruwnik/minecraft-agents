@@ -282,6 +282,11 @@
     (and (< (.-food self) foods/top-up-food)
          (not (foods/carries-food? self (reserve/spared (ctx/view c) self))))))
 
+(defn hurt-cannot-heal?
+  "Health under foods/::low-health with only food able to heal it (cannot-heal?): work that risks the body should wait for food."
+  [c]
+  (and (< (.-health (.self (:primitives c))) (foods/low-health)) (cannot-heal? c)))
+
 (defn fit-to-forage
   "The fit? of a job that looks for food: fit?, but a :low-health wait is lifted while the body can not heal (cannot-heal?), else it would never end."
   [c]

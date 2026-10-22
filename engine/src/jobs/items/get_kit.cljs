@@ -204,12 +204,10 @@
   [c]
   {:explore (:explore (:args c))})
 
-(defn cannot-heal-hurt?
+(defn food-first?
   "Food 0, or hurt with only food able to heal it: more mining would not end well."
   [c]
-  (let [self (.self (:primitives c))]
-    (or (zero? (.-food self))
-        (and (< (.-health self) (foods/low-health)) (ready/cannot-heal? c)))))
+  (or (ready/hurt-cannot-heal? c) (zero? (.-food (.self (:primitives c))))))
 
 (defn ^:async run-food!
   "One get-food child round: :continue, nil when the body is fed or not hungry, or {:cause :why} when it could not be fed."
@@ -299,10 +297,10 @@
 
           (empty? todo) (finish! c items have nil)
 
-          (and (:food a) (not (:hurt-fed (ctx/mem c))) (cannot-heal-hurt? c))
+          (and (:food a) (not (:hurt-fed (ctx/mem c))) (food-first? c))
           (let [r (await (run-food! c))]
             (cond (= :continue r) :continue
-                  (nil? r) (do (when (cannot-heal-hurt? c) (ctx/update-mem! c assoc :hurt-fed true)) :again)
+                  (nil? r) (do (when (food-first? c) (ctx/update-mem! c assoc :hurt-fed true)) :again)
                   :else (do (ctx/emit! c :kit.no-food :warn {:cause (:cause r) :why (:why r) :food fp
                                              :text (str "no food found (" (name (:cause r)) ")")})
                             (finish! c items have (assoc (stop-of :nothing-possible {:reason :no-food} (str "hurt with no food to heal on, and none found (" (name (:cause r)) "); mining on would risk death"))
