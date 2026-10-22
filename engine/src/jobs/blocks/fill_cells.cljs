@@ -215,7 +215,7 @@
   [c]
   (let [left (owed c)
         mended (:mended (ctx/mem c) 0)]
-    (checks/goal (and (empty? left) (not (:collect (ctx/mem c)))) [:filled "no cell is owed"] [:owed (str (count left) " cells are owed")]
+    (checks/goal (and (empty? left) (not (:collect (ctx/mem c)))) [:filled (if (pos? mended) (str "filled " mended " cells") "no cell is owed")] [:owed (str (count left) " cells are owed")]
                  {:units :cells :done mended :left (count left) :result {:mended mended :left left :placed (:placed (ctx/mem c) [])}})))
 
 (defn quote-of

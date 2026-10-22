@@ -37,6 +37,7 @@
         (let [[{:keys [p]} e] (await (outcome [{:name "dirt" :count 5}] {:cells cells :use {:blocks ["cobblestone" "dirt"]}}))]
           (is (= :done (:kind e)))
           (is (= {:mended 2 :left []} (select-keys (:data e) [:mended :left])))
+          (is (= "filled 2 cells" (:text (:data e))))
           (is (= ["dirt" "dirt"] (map #(bd/block-at p %) cells))))))))
 
 (deftest cells-already-filled-are-done-with-nothing-placed
