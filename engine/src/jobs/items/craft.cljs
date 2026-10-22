@@ -35,7 +35,7 @@
 
 (a/defargs args
   {:item {:doc "item name to craft" :spec a/item? :default nil}
-   :count {:doc "how many to carry at least" :spec (a/int-in 0 nil) :default 1}
+   :count {:doc "how many to carry at least, counted when the call starts: done once those carried then plus those this call crafted reach it (items eaten or put away meanwhile are not made again)" :spec (a/int-in 0 nil) :default 1}
    :table {:doc "crafting table position; the nearest seen within the table-radius setting when nil and the recipe needs one" :spec ::a/pos :default nil}
    :keep-table {:doc "leave a table this call put down standing; false: it is dug up again when the call ends" :spec boolean? :default false}
    :avoid {:doc "cells [x y z] a table is never put in or dug for: the dig line of a job that crafts as its child" :spec (a/coll-of a/position?) :default nil}
@@ -111,15 +111,24 @@
                (:ok (access/may? (access/rules-input c {:except (:for-plan (:args c))}) :dig spot)))
       spot)))
 
+(defn crafted
+  "How many of the item this call crafted, whatever became of them since."
+  [c]
+  (:crafted (ctx/mem c) 0))
+
+(defn left
+  "How many more to craft: :count less the more of what is carried (have) and what was carried at the start plus crafted."
+  [c have]
+  (max 0 (- (:count (:args c)) (max have (+ (:start (ctx/mem c) have) (crafted c))))))
+
 (defn done?
-  "Done once :count of :item are carried; else progress."
+  "Done once :count of :item are carried, or were carried at the start plus crafted since; else progress."
   [c]
   (let [{:keys [item count]} (:args c)
         have (storage/usable-carried (u/inventory (:primitives c)) item)
-        start (:start (ctx/mem c) have)
-        made (max 0 (- have start))
-        data [:units :items :done made :left (max 0 (- count have)) :result {:made made}]]
-    (if (>= have count)
+        made (crafted c)
+        data [:units :items :done made :left (left c have) :result {:made made}]]
+    (if (zero? (left c have))
       (if (and (zero? made) (pos? have))
         (apply contract/ok :crafted (str "already carried " have " " item "; pass :count N for more") data)
         (apply contract/ok :crafted (str "crafted " made " " item) data))
@@ -358,15 +367,14 @@
   them or end :need), else nil. A table is the last step. With n, the shortage is for n more of the item."
   [c & [n]]
   (let [p (:primitives c)
-        {:keys [item count]} (:args c)
+        {:keys [item]} (:args c)
         have (spendable c)
-        start (:start (ctx/mem c) (get have item 0))
-        todo (or n (max 1 (- count (get have item 0))))
+        todo (or n (max 1 (left c (get have item 0))))
         rs (get (recipes/recipes-for (game/version-of p)) item)
         needs (for [r rs :let [b (recipes/ceil-div todo (:count r))]]
                 (into {} (map (fn [[k v]] [k (* v b)])) (dissoc (:needs r) item)))]
     (when (and (seq needs) (every? #(seq (craft/missing-for % have)) needs))
-      (await (short! c item (craft/no-item needs have) (spendable c true) (- (get have item 0) start))))))
+      (await (short! c item (craft/no-item needs have) (spendable c true) (crafted c))))))
 
 (defn ^:async short-from!
   "short! for a craft call that answered no-item."
@@ -375,24 +383,23 @@
     (await (short! c item (craft/no-item (js->clj (.-recipes r)) have) have made))))
 
 (defn ^:async craft-act!
-  "The craft call alone (no follow-up): the target is carried already -> finish!'s result, else {:r the primitive's
-  result :table table :start start} for settle!."
+  "The craft call alone (no follow-up): nothing left to craft -> finish!'s result, else {:r the primitive's
+  result :table table :before carried} for settle!."
   [c]
   (let [p (:primitives c)
-        {:keys [item count]} (:args c)
+        {:keys [item]} (:args c)
         _ (when-not (contains? (ctx/mem c) :start)
             (ctx/update-mem! c assoc :start (storage/usable-carried (u/inventory p) item)))
-        start (:start (ctx/mem c))
-        target count
-        have (storage/usable-carried (u/inventory p) item)]
-    (if (>= have target)
-      (finish! c (- have start) {})
+        have (storage/usable-carried (u/inventory p) item)
+        todo (left c have)]
+    (if (zero? todo)
+      (finish! c (crafted c) {})
       (let [held? (seq (reserve/held c (chooser c)))
             cap (if held? (makeable c) ##Inf)]
         (or (when (zero? cap) (await (short-of-ingredients! c 1)))
             (let [table (or (:table (ctx/mem c)) (:table (:args c)))]
-              {:r (await (ctx/act c :craft (clj->js {:item item :count (min cap (- target have)) :table table :standIns (recipes/interchange (game/version-of (:primitives c)) item)})))
-               :table table :start start}))))))
+              {:r (await (ctx/act c :craft (clj->js {:item item :count (min cap todo) :table table :standIns (recipes/interchange (game/version-of (:primitives c)) item)})))
+               :table table :before have}))))))
 
 (defn ^:async settle!
   "Act on the craft call's status (a craft-act! map): :again, :continue (go-to waits) or :done. Anything else is
@@ -402,12 +409,14 @@
     act
     (let [p (:primitives c)
           {:keys [item]} (:args c)
-          {:keys [r table start]} act
+          {:keys [r table before]} act
           status (.-status r)
-          made (- (storage/usable-carried (u/inventory p) item) start)]
+          have (storage/usable-carried (u/inventory p) item)
+          _ (ctx/update-mem! c update :crafted (fnil + 0) (max 0 (- have before)))
+          made (crafted c)]
       (when table (ctx/update-mem! c assoc :table table))
       (case status
-        "crafted" (if (< (storage/usable-carried (u/inventory p) item) (:count (:args c)))
+        "crafted" (if (pos? (left c have))
                     (do (u/progress! c) :again)
                     (finish! c made {:text (str "crafted " made " " item)}))
         "no-item" (await (short-from! c item r made))
@@ -455,8 +464,7 @@
   [c]
   (let [table (:table (ctx/mem c))]
     (if (and table (not (u/within? (u/self-pos c) table (reach))))
-      (let [have (storage/carried (u/inventory (:primitives c)) (:item (:args c)))]
-        (await (reach-table! c (- have (:start (ctx/mem c) have)))))
+      (await (reach-table! c (crafted c)))
       (await (settle! c (await (craft-act! c)))))))
 
 (defn ^:async round

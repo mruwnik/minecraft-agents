@@ -33,7 +33,7 @@
 (deftest craft-already-carried-says-so-not-crafted-0
   (let [text (fn [m] (nth (done-of 'jobs.items.craft {:inventory (stack 2)} {:item "stick" :count 2} m) 1))]
     (is (= "already carried 2 stick; pass :count N for more" (text {:start 2})))
-    (is (= "crafted 2 stick" (text {:start 0})))))
+    (is (= "crafted 2 stick" (text {:start 0 :crafted 2})))))
 
 (def load3 {:item "raw_iron" :count 3 :base 0})
 
