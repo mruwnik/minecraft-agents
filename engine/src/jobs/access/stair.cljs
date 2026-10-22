@@ -73,7 +73,7 @@
   :off-stair: off the line with max-returns walks back used up. :floor-unseen: the floor still unseen once the cut is open, looked at again after a lean.
   :base-block names the block in its text; a crafting table is dug (zones and claims guard another's). Data {:steps n :at [x y z] :dug [{:cell :block}]} plus detail (:cell :hazards :zone :why ...; the walk child's ending is the :because of :step-failed).
 
-  A dig whose every carried tool is down to jobs.lib.trip's ::spent-uses (3) uses (trip/spent-tool?) stops :tool-spent before the last tool
+  A dig with a worn last tool first tries a spare once (trip/tool-ready!), whatever the :settings. A dig whose every carried tool is down to jobs.lib.trip's ::spent-uses (3) uses (trip/spent-tool?) stops :tool-spent before the last tool
   breaks, after a spare was tried once; a way out digs on with the call's :settings {:jobs.lib.trip/spent-uses 0}. :need-drop false digs a block no carried tool clears bare-handed (go-to's last resort).")
 
 (a/defargs args

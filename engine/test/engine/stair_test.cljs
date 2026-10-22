@@ -1443,6 +1443,16 @@
             (is (= dug? (boolean (seq (digs p)))) (pr-str uses args))
             (is (= [status reason] [(:status @out) (:reason @out)]) (pr-str uses args))))))))
 
+(deftest a-way-out-stair-with-a-worn-last-pickaxe-gets-a-spare-first-though-it-may-use-the-last-up
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (stair! {:blocks (assoc ground "-2,64,0" "chest") :containers {"-2,64,0" [{:name "stone_pickaxe" :count 1}]}
+                                :inventory [{:name "stone_pickaxe" :count 1 :durability 4 :max-durability 131}]}
+                               (assoc east :settings {:jobs.lib.trip/spent-uses 0}) tu/seeing-all))]
+          (is (= :done (:status @(:out s))))
+          (is (= 1 (count (events-of s :tool.spare)))))))))
+
 (deftest a-stair-through-dirt-goes-on-with-only-a-worn-shovel
   (async done
     (tu/run-async done

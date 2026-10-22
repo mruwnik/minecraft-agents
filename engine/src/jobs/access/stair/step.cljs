@@ -192,12 +192,8 @@
                                    (assoc :why "put back by something else, e.g. the night shelter closing an opened refuge again"))
       (rules/unbreakable block) {:reason :unbreakable :cell cell :block block}
       (and seen? (not (fetch-tool? c)) (lacks-tool? c block)) {:reason :no-tool :cell cell :block block :tool (tools/needed-kind p block) :why no-tool-hint}
-      (trip/spent-tool? p block)
-      (if (= :continue (await (trip/tool-ready! c block nil)))
-        :yield
-        (if (trip/spent-tool? p block)
-          {:reason :tool-spent :cell cell :block block :tool (tools/needed-kind p block)}
-          :continue))
+      (= :continue (await (trip/tool-ready! c block nil))) :yield
+      (trip/spent-tool? p block) {:reason :tool-spent :cell cell :block block :tool (tools/needed-kind p block)}
       (and seen? (not (drop-room? c block))) {:reason :inventory-full :cell cell :block block}
       :else
       (do
