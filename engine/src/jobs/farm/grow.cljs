@@ -21,7 +21,7 @@
   again):
   1. A crop of :crop seen and ripe (a zone or claim of another owner leaves it): cut it with jobs.farm.harvest, which replants.
   2. A crop seen, none ripe: wait (a jobs.time.noop pause of ::wait-s, holding still, then look again). A field growing is never replaced.
-  3. No crop seen: get a hoe (jobs.items.get-tool) and one seed per cell of a :w x :h field (jobs.items.obtain; wheat seeds are
+  3. No crop seen: get a hoe (jobs.items.get-tool) and one seed per cell of a :w x :h field (jobs.items.obtain; a failed seed fetch with :count seeds carried sows what is carried; wheat seeds are
      broken out of grass), pick the spot (jobs.farm.find-spot, nearest to the body) and work it with jobs.farm.tend (till,
      irrigate, plant, bone meal when carried), once per round; a spot that is dark is lit first (jobs.build.light-area to crop light, torches hung beside the field). Three tends that leave no crop standing end the run (a tend refused before it started, e.g. :away, is not one: the run yields). A planted field is judged from its remembered cells at any distance.
   Needs: a source of a hoe and seed (the fetch jobs say what lacks), a field spot in range, a zone list.
@@ -112,9 +112,9 @@
   (ctx/end c (:kind e) (:cause e) (:data e)))
 
 (defn ^:async fetch-step!
-  "What the field needs carried, one fetch at a time: nil when all is carried, :continue while a fetch waits, else the failed ending."
+  "What the field needs carried, one fetch at a time: nil when all is carried (or the seed fetch failed with :count seeds carried, enough to sow a part of the field), :continue while a fetch waits, else the failed ending."
   [c]
-  (let [{:keys [crop w h]} (:args c)
+  (let [{:keys [crop w h count]} (:args c)
         seed (get-in crops/field-items [crop :seed])
         cells (* w h)
         opts {:explore true :slot :need :minutes 10}
@@ -125,6 +125,7 @@
       (nil? e) nil
       (= :continue e) :continue
       (= :done (:kind e)) :again
+      (and (hoe? c) (>= (carried-count c seed) count)) nil
       :else (failed c e))))
 
 (defn ^:async spot-step!

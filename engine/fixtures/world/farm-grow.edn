@@ -6,6 +6,7 @@
 ;; A dark cave floor (underground, no sky) with torches carried is lit with torches beside the field, then sown and cut.
 ;; A ripe crop walled in by bedrock (nobody reaches it) is given up, not retried: the field is made and cut instead.
 ;; A planted field the body is taken away from (another job listed, so tend waits :away) is waited for, not given up as not planted.
+;; Fewer beetroot seeds than the field has cells (5 for 3 x 2, count 4 carried-enough) sows what is carried, no :need refusal.
 ;; Should-fail: a young crop already standing keeps the job waiting; it sows nothing and makes no second field.
 {:defaults
  {:tags [:farm :grow :jobs]
@@ -68,4 +69,10 @@
    :act [[:job (jobs.farm.grow {:count 1 :w 2 :h 2})]]
    :expect [{:event {:source :job :kind :completed :data {:got [:>= 1] :item "wheat"}} :within-s 380 :of-job true}]
    :after [[:block [2 0 16] "wheat"] [:item "wheat" [:>= 1]]]
-   :limit-s 420}]}
+   :limit-s 420}
+  {:name "fewer-seeds-than-cells-still-sow-the-field"
+   :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]] :inventory [["wooden_hoe" 1] ["beetroot_seeds" 5] ["water_bucket" 1]]}
+   :act [[:job (jobs.farm.grow {:crop "beetroots" :count 4 :w 3 :h 2})]]
+   :expect [{:no-event {:source :job :kind :nothing-possible} :for-s 90}]
+   :after [[:item "beetroot_seeds" [:<= 4]]]
+   :limit-s 110}]}

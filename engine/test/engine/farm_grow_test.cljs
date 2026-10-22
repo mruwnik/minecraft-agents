@@ -99,3 +99,14 @@
                                  (ft/world (ft/farm "wheat" 7 [[12 4]] [[12 4]]) (ft/ground "dirt" cells)
                                            {:unreachable [(ft/k 12 64 4)]} ft/wheat-drops {:inventory kit}) 200))]
           (is (some #(= "wheat" (apply ft/block-at s %)) (for [[x z] cells] [x 64 z])) "seeds were sown elsewhere"))))))
+
+(deftest a-field-is-sown-with-fewer-seeds-than-cells-when-the-count-is-carried
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[crop seed] [["wheat" "wheat_seeds"] ["beetroots" "beetroot_seeds"]]]
+          (let [s (await (scenario {:crop crop :count 4 :w 3 :h 2 :spend {:job-time 600}}
+                                   (ft/world (ft/ground "dirt" (for [x (range -2 8) z (range -2 8)] [x z]))
+                                             {:inventory [(ft/item "iron_hoe" 1) (ft/item seed 5)]}) 120))]
+            (is (not-any? #(= :nothing-possible (:kind %)) @(:seen s)) (str crop ": not refused for the missing sixth seed"))
+            (is (> 5 (get (ft/inv s) seed 0)) (str crop ": seeds were sown"))))))))
