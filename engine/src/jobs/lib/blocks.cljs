@@ -20,6 +20,7 @@
             [jobs.lib.pen-entry :as pen-entry]
             [jobs.lib.dig-look :as look]
             [jobs.lib.trees :as forestry]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.util :as u]
             [jobs.lib.places :as places]
             [engine.game :as game]))
@@ -256,17 +257,21 @@
                :when (u/low-floor? (u/seen-block p cell))]
            cell))))
 
-(def walk-ways
-  "The ways of a block job's walk: its own seal and shelter opened and a pillar out of a shaft of its own, no door dug through a wall."
-  #{:walk :clear-seal :dig-out :pillar})
+(def seal-radius "Blocks from the feet within which an own ledger block counts as the body's seal." 3)
+
+(defn walk-ways
+  "The ways of a block job's walk: :walk and :clear-seal; with own ledger blocks round the feet (a dig-in's seal) also :dig-out and :pillar, to leave the shaft they shut."
+  [c]
+  (cond-> #{:walk :clear-seal}
+    (seq (ledger/near-of (ledger/open-entries (ctx/view c)) {:pos (u/self-pos c) :radius seal-radius})) (into [:dig-out :pillar])))
 
 (defn ^:async walk-request
-  "[pens go-to-args] of the walk to pos: range (default 3), the walk-ways, and (unless the :enter-pens setting) keeping out of the
+  "[pens go-to-args] of the walk to pos: range (default 3), its walk-ways, and (unless the :enter-pens setting) keeping out of the
   gates of the pens holding animals, after a look at the cells of those not yet seen."
   [c pos see? & [range]]
   (let [pens (when-not (settings/get settings ::enter-pens) (await (pen-entry/pens! c)))
         keep-out (mapv #(assoc % :factor ##Inf) (into (vec (mapcat :gates pens)) (when (:for-plan (:args c)) (low-floor-cells c pos))))]
-    [pens (cond-> {:pos pos :range (or range 3) :see (boolean see?) :ways walk-ways :ignore-zones? (boolean (:ignore-zones? (:args c)))}
+    [pens (cond-> {:pos pos :range (or range 3) :see (boolean see?) :ways (walk-ways c) :ignore-zones? (boolean (:ignore-zones? (:args c)))}
             (seq keep-out) (assoc :tolls keep-out))]))
 
 (defn warn-kept-out! [c pens]
