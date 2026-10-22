@@ -13,6 +13,7 @@
             [jobs.lib.foods :as foods]
             [jobs.lib.reach :as reach]
             [jobs.lib.ready :as ready]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
 
 (defn walk-danger
@@ -25,10 +26,22 @@
                        mobs (.-equipment self)
                        :weapon (combat/best-weapon p combat/default-weapons) :health (.-health self))))
 
+(defn uncalm
+  "Why the body is not calm now, as text naming the dark cell with its light level and/or the nearest known hostile, else nil."
+  [p c]
+  (let [feet (sh-sense/feet p)
+        dark (when (= :later (first (ready/dark-sky c)))
+               (str "dark above ground at " (pr-str [(:x feet) (:y feet) (:z feet)]) ", light "
+                    (or (sh-sense/light-at p feet) "unknown")))
+        ds (dawn/known-dangers p)
+        hostile (when (seq ds) (dawn/hostile-text (mapv #(dawn/describe p %) ds)))]
+    (when (or dark hostile)
+      (str/join "; " (remove nil? [dark hostile])))))
+
 (defn calm-now?
   "Whether the sky is not dark above ground and no hostile is known near."
   [p c]
-  (and (not= :later (first (ready/dark-sky c))) (not (dawn/hostile-known? p))))
+  (nil? (uncalm p c)))
 
 (defn refusal
   "Why a fragile body does not walk to pos (nil pos: a search of unknown ground) now, as text, else nil."
@@ -40,9 +53,9 @@
     (cond
       (not (foods/fragile? self)) nil
       (and (nil? pos) (not (calm-now? p c)))
-      (str at ": will not search unknown ground in the dark or with a hostile known near")
+      (str at ": will not search unknown ground (" (uncalm p c) ")")
       (and pos (not (calm-now? p c)) (> (u/dist (u/pos-of (.-pos self)) pos) (foods/starving-walk-range)))
-      (str at ": food at " (pr-str (mapv js/Math.floor [(:x pos) (:y pos) (:z pos)])) " is out of the walk a body that cannot heal risks in the dark or with a hostile known near")
+      (str at ": food at " (pr-str (mapv js/Math.floor [(:x pos) (:y pos) (:z pos)])) " is out of the walk a body that cannot heal risks (" (uncalm p c) ")")
       (nil? pos) nil
       :else (let [{:keys [danger mobs]} (walk-danger p pos)]
               (when (>= danger health)

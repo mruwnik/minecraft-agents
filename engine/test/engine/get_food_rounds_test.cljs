@@ -774,6 +774,23 @@
           (await (tu/run-until-empty eng 60))
           (is (= ["bread"] (call-args p "transfer" "item"))))))))
 
+(deftest a-refused-search-names-the-dark-cell-or-the-hostile-known
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:food 10 :health 2} :time 15000} :step-ms 5)]
+          (await (one-round! eng {}))
+          (is (re-find #"will not search unknown ground \(dark above ground at \[.*\], light " (stop-text seen))))))))
+
+(deftest a-refused-search-names-the-hostile-kind-and-place
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng seen]} (setup {:self {:food 10 :health 2} :time 6000
+                                         :entities [(assoc creeper :pos {:x 30.5 :y 64 :z 0.5})]} :step-ms 5)]
+          (await (one-round! eng {}))
+          (is (re-find #"will not search unknown ground \(creeper .* near \[30.5 64 0.5\]" (stop-text seen))))))))
+
 (deftest a-body-on-low-health-searches-on-a-calm-day
   (async done
     (tu/run-async done
