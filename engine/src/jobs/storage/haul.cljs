@@ -165,18 +165,22 @@
             targets (load-plan stacks (:keep (:args c)) (dec free) inv)]
         (if (empty? targets)
           (do (ctx/update-mem! c update :empty (fnil conj []) cell) :again)
-          (do (ctx/update-mem! c assoc :intent {:chest cell :targets targets :taken (apply merge-with + (map (fn [{:keys [name count]}] {name count}) (load-stacks stacks (:keep (:args c)) (dec free))))}) :again))))))
+          (do (ctx/update-mem! c assoc :intent {:chest cell :targets targets :before (storage/carried-totals inv) :taken (apply merge-with + (map (fn [{:keys [name count]}] {name count}) (load-stacks stacks (:keep (:args c)) (dec free))))}) :again))))))
 
 (defn ^:async take!
   "Take the saved load; the intent goes once the take is done. A chest that lacks part of it (:chest-lacks) is not a stop:
-  the load is what the chest still held."
-  [c {:keys [chest taken] :as intent}]
+  the load is what the chest still held: the hauled goods are what the bag gained since the look, up to the plan."
+  [c {:keys [chest taken before] :as intent}]
   (let [e (await (ctx/call c :take 'jobs.storage.withdraw
                            {:chest (chests/cell-pos chest) :items (:targets intent) :ignore-zones? (:ignore-zones? (:args c))}))]
     (cond
       (= :continue e) :continue
       (not (or (= :done (:kind e)) (false? (get-in e [:data :gave-up])))) (child-stop! c e)
-      :else (do (ctx/update-mem! c (fn [m] (-> m (dissoc :intent) (update :hauled (partial merge-with +) taken)))) (u/progress! c) :again))))
+      :else (let [now (storage/carried-totals (u/inventory (:primitives c)))
+                  got (into {} (keep (fn [[n k]] (let [d (min k (- (get now n 0) (get before n 0)))] (when (pos? d) [n d])))) taken)]
+              (ctx/update-mem! c (fn [m] (-> m (dissoc :intent) (update :hauled (partial merge-with +) got))))
+              (u/progress! c)
+              :again))))
 
 (defn ^:async step!
   "One move: the saved take, a deposit, the end, or the next look: :again, :continue or :done."
@@ -195,7 +199,9 @@
 
 (defn ^:async round
   "The whole haul in one call; :continue only while a child waits on the world. Chests seen empty are looked at again
-  on every start: they may have been refilled."
+  on every start (they may have been refilled) but not on a resume after that wait."
   [c]
-  (ctx/update-mem! c dissoc :empty)
-  (await (pace/steps! c (fn ^:async haul-step [] (await (step! c))))))
+  (ctx/update-mem! c (fn [m] (if (:waiting m) (dissoc m :waiting) (dissoc m :empty))))
+  (let [r (await (pace/steps! c (fn ^:async haul-step [] (await (step! c)))))]
+    (when (= :continue r) (ctx/update-mem! c assoc :waiting true))
+    r))

@@ -3,6 +3,7 @@
 ;; Seal: stone mass x 2..30, y 0..4, z 10..22 with a 3x3 corridor along x 6..26 (y 0..2, z 15..17); the body stands in it at x 12.5
 ;; (the :from side). The section is x 16: a rail at [16 0 16] and a cobweb at [16 1 15] are in it.
 ;; Haul: two source chests (iron ingots, coal) and an empty main chest (:to), no storage group needed.
+;; Haul also: a body carrying 20 cobblestone hauls one empty and one dirt chest; the cobblestone stays in the bag.
 ;; Should-succeed: the 9 cells are cobblestone, rail and cobweb gone; both source chests are emptied into the bag-free main chest.
 ;; Should-fail: no blocks carried and none fetchable (empty bag, bare hands, no tree or chest in the plot) ends :no-blocks with the failed fetch as its cause; no blocks carried stops with a :short count and leaves the rail; a chest in the section stops :blocked, chest kept.
 {:defaults
@@ -43,4 +44,13 @@
    :body {:at [16.5 0 16.5] :yaw 0 :inventory []}
    :act [[:job (jobs.storage.haul {:from [#at [12 0 20] #at [14 0 20]] :to #at [20 0 12]})]]
    :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
-   :after [[:item "iron_ingot" 0] [:item "coal" 0]]}]}
+   :after [[:item "iron_ingot" 0] [:item "coal" 0]]}
+  {:name "haul-puts-away-only-what-it-took-not-the-goods-carried"
+   :plot {:floor "grass_block"}
+   :blocks [[:set [12 0 20] "chest"]
+            [:set [14 0 20] "chest{Items:[{Slot:0b,id:\"minecraft:dirt\",count:10}]}"]
+            [:set [20 0 12] "chest"]]
+   :body {:at [16.5 0 16.5] :yaw 0 :inventory [["cobblestone" 20]]}
+   :act [[:job (jobs.storage.haul {:from [#at [12 0 20] #at [14 0 20]] :to #at [20 0 12]})]]
+   :expect [{:event {:source :job :kind :completed} :within-s 100 :of-job true}]
+   :after [[:item "dirt" 0] [:item "cobblestone" 20]]}]}

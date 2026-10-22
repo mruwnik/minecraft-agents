@@ -129,6 +129,42 @@
           (is (empty? (get (containers p) [10 64 0])))
           (is (= 8 (count (get (containers p) [20 64 0])))))))))
 
+(deftest haul-books-what-the-take-got-when-the-chest-lost-goods-meanwhile
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [first-run (setup {:inventory [{:name "a0" :count 20}]
+                                :containers {"10,64,0" [{:name "a0" :count 5}] "20,64,0" []}})
+              {:keys [eng p dir]} first-run]
+          (tu/shutdown-at! first-run "transfer" 1)
+          (core/submit! eng (list 'jobs.storage.haul {:from [[10 64 0]]}) {})
+          (await (core/tick! eng))
+          (swap! (fake/state p) assoc-in [:containers [10 64 0]] [{:name "a0" :count 2}])
+          (await (run-until-empty (:eng (start dir p nil)) 30))
+          (is (= 2 (reduce + (map :count (get (containers p) [20 64 0])))))
+          (is (= 20 (get (storage/carried-totals (u/inventory p)) "a0"))))))))
+
+(defn inspects-of [p x z]
+  (count (filter #(and (= "inspectContainer" (.-name %)) (= [x z] [(.-x (.-pos (.-args %))) (.-z (.-pos (.-args %)))]))
+                 (.-calls (.-world p)))))
+
+(deftest haul-resumed-after-a-wait-does-not-look-again-at-emptied-chests
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [first-run (setup {:containers {"10,64,0" [] "10,64,4" (stacks "b" 2) "20,64,0" []}})
+              {:keys [eng p dir]} first-run
+              args {:from [[10 64 0] [10 64 4]]}]
+          (tu/shutdown-at! first-run "transfer" 1)
+          (core/submit! eng (list 'jobs.storage.haul args) {})
+          (await (core/tick! eng))
+          (let [id (first (:list (core/state eng)))
+                before (inspects-of p 10 0)]
+            (mem/write! (:store eng) (mem/job-kind id) (assoc (mem/job-mem (mem/view (:store eng)) id []) :waiting true))
+            (core/save-memory! eng)
+            (await (run-until-empty (:eng (start dir p nil)) 30))
+            (is (= before (inspects-of p 10 0)))))))))
+
 (deftest haul-stops-to-full-when-the-main-chest-takes-nothing-and-making-is-off
   (async done
     (tu/run-async done
