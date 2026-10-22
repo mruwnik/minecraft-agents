@@ -1,6 +1,6 @@
 ;; jobs.movement.go-to when the way is shut: sealed by a hand-diggable block, a soft seal over an own stair mouth, a 1-wide dirt tunnel,
 ;; a goal walled in while the body is free, bare hands. Bedrock is never dug and ends with a reason. Escalation is the default.
-;; Should-succeed: moss room + pickaxe; dirt-sealed stair; open and plugged 1-wide dirt tunnel; stone room with bare hands; free body, goal in a stone room + pickaxe.
+;; Should-succeed: dirt room with its door onto a 3-deep trench + bare hands; moss room + pickaxe; dirt-sealed stair; open and plugged 1-wide dirt tunnel; stone room with bare hands; free body, goal in a stone room + pickaxe.
 ;; Should-fail: bedrock room (with and without a pickaxe), goal in a bedrock room: :arrived false, no bedrock dug (the unseen floor reads as rock, so a stone of the ground may be tried).
 {:defaults
  {:tags [:movement :access :go-to]
@@ -78,4 +78,11 @@
    :body {:at [4.5 0 16.5]}
    :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 0})]]
    :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false}} :within-s 120 :of-job true}]
-   :after [[:block [22 1 16] "bedrock"]]}]}
+   :after [[:block [22 1 16] "bedrock"]]}
+  {:name "door-onto-a-3-deep-trench-bare-hands-drops-in-and-digs-out"
+   ;; dirt room (inside x 15..17, lintel over the door at x 18), a trench 3 deep across the yard right outside the door: the far wall is 3 high, nothing to place
+   :blocks [[:fill [14 -1 14] [18 2 18] "dirt" :hollow] [:fill [18 0 16] [18 1 16] "air"]
+            [:fill [19 -5 4] [26 -1 28] "dirt"] [:fill [19 -3 4] [19 -1 28] "air"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [24 0 16] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 140 :of-job true}]
+   :after [[:body-near [24.5 0 16.5] 2]]}]}

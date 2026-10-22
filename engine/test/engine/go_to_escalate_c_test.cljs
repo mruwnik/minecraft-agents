@@ -628,3 +628,16 @@
     (is (true? (walled? {:status :no-path :reason :budget :goal-left 3})) "three blocks off")
     (is (false? (walled? {:status :no-path :reason :budget :goal-left 40})) "far off: the unseen land is the problem")
     (is (false? (walled? {:status :no-path :reason :budget})) "no distance known")))
+
+(def trench-room
+  "The sealed room opened at its east door (x 3, z 0) onto a 3-deep trench across the whole dirt yard (x 4, z -6..6, feet y 61); the yard beyond is level with the room floor."
+  (let [trench (for [z (range -6 7) y [61 62 63]] (str "4," y "," z))]
+    (apply dissoc (merge room (box 4 60 -6 14 63 6 "dirt")) "3,64,0" "3,65,0" trench)))
+
+(deftest go-to-shut-in-by-a-trench-it-cannot-climb-digs-out-with-bare-hands
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (run-job! (merge in-room {:blocks trench-room}) {:pos [8 64 0] :range 1}))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (<= 6 (first (feet p)))))))))
