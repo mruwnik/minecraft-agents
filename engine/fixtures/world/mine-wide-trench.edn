@@ -17,8 +17,8 @@
             {:no-event {:source :job :kind :mine.left-behind} :for-s 100 :until {:source :job :kind #{:completed :stopped}} :of-job true}]
    :after [[:not-block [22 0 16] "iron_ore"] [:item "raw_iron" [:>= 1]]]}
   {:name "dark-ore-7-blocks-from-the-cut-end-not-seen-tunnel-stops-at-trench"
-   :blocks [[:set [22 0 16] "stone"] [:fill [20 -4 16] [25 1 16] "air"] [:set [26 0 16] "iron_ore"]]
-   ;; no building block: with cobblestone the stair bridges the trench and the tunnel goes on across it
+   ;; no building block and none to get: the mass is obsidian (a stone pickaxe cannot break it), since mined stone would give cobblestone to bridge the trench with
+   :blocks [[:fill [2 -6 8] [30 6 24] "obsidian"] [:fill [16 0 16] [19 1 16] "air"] [:fill [20 -4 16] [25 1 16] "air"] [:set [26 0 16] "iron_ore"]]
    :body {:at [16.5 0 16.5] :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :no-floor}} :within-s 60 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:got 0}} :within-s 90 :of-job true}]

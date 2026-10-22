@@ -34,6 +34,11 @@
    :after [[:block [18 -1 16] "cobblestone"] [:not-block [20 0 16] "stone"]]}
   ;; card d0cd3855: the whole mass is glass (drops nothing), so the fetch for the gap's block digs a stair down through it and finds none
   ;; (or digs on to the rock beyond and bridges): it climbs back up its own open stair, and the run ends
+  ;; the mass is obsidian (a stone pickaxe cannot break it) with an air tunnel cut through it: no block can be got anywhere, so :no-floor is the honest end
+  {:name "floor-gap-with-no-block-ends-no-floor"
+   :blocks [[:fill [2 -6 8] [30 6 24] "obsidian"] [:fill [16 0 16] [21 1 16] "air"] [:fill [18 -1 16] [19 -1 16] "air"]]
+   :expect [{:event {:source :job :kind #{:completed :stopped} :data {:stop :no-floor}} :within-s 100 :of-job true}]
+   :after [[:block [18 -1 16] "air"]]}
   {:name "glass-mass-fetch-ends-and-does-not-loop-on-its-stair"
    :blocks [[:fill [2 -6 8] [30 6 24] "glass"] [:fill [16 0 16] [16 1 16] "air"] [:fill [18 -1 16] [19 -1 16] "air"]]
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 100 :of-job true}]}]}
