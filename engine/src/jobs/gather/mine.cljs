@@ -26,6 +26,7 @@
             [jobs.lib.tools :as tools]
             [jobs.lib.torch-stock :as stock]
             [jobs.lib.trip :as trip]
+            [jobs.lib.next-call :as next-call]
             [jobs.lib.util :as u]
             [jobs.lib.access.zones :as zones]))
 
@@ -351,7 +352,9 @@
   (when-not (:start (ctx/mem c))
     (let [start (cell-of (u/self-pos c))]
       (ctx/update-mem! c assoc :start start :resume-at start)))
-  (await (pace/steps! c #(step c))))
+  (let [e (await (pace/steps! c #(step c)))]
+    (next-call/on-ending c e 'jobs.gather.mine args
+                         (next-call/seal-fix e #{:flooded :wet} (u/cell-vec (u/self-pos c))))))
 
 (defn ^:async cleanup
   "A run cut by the limit, a cancel or a parent's end stays where it is."

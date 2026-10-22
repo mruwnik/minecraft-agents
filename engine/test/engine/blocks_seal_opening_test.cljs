@@ -75,3 +75,16 @@
           (is (= :impossible (:kind (:ending e))))
           (is (= :no-own-cells (:reason e)))
           (is (empty? (bd/calls p "place"))))))))
+
+(deftest with-no-blocks-it-ends-need-with-the-openings-left-and-the-call-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [env (bd/setup {:self {:pos {:x 3.5 :y 61 :z 0.5}} :inventory [] :blocks world-blocks})
+              _ (mem/write! (:store (:eng env)) :stair-way {:dim "overworld" :floors floors})
+              e (await (tu/child-outcome (:eng env) job {:use {:blocks ["dirt"]} :ways #{:carried}} 40))]
+          (is (= :condition-failed (:kind (:ending e))))
+          (is (= :need (:reason e)))
+          (is (= 0 (:sealed e)))
+          (is (= 2 (count (:left e))))
+          (is (:again (last (:next e)))))))))

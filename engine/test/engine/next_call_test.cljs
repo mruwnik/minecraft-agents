@@ -24,3 +24,9 @@
 
 (deftest done-carries-no-next
   (is (nil? (:next (:data (next-call/on-ending {:args {}} (contract/ending :done nil {:got 1}) 'jobs.farm.grow defs))))))
+
+(deftest a-seal-is-offered-only-for-a-cause-of-a-breach
+  (let [e #(contract/ending :condition-failed % {})]
+    (is (= {:job "jobs.blocks.seal-opening" :args {:at [1 2 3]}} (next-call/seal-fix (e :flooded) #{:flooded :wet} [1 2 3])))
+    (is (nil? (next-call/seal-fix (e :no-tool) #{:flooded :wet} [1 2 3])))
+    (is (nil? (next-call/seal-fix {:status :continue} #{:flooded} [1 2 3])))))

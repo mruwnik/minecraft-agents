@@ -27,6 +27,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.tools :as tools]
+            [jobs.lib.next-call :as next-call]
             [jobs.lib.util :as u]
             [jobs.lib.trip :as trip]
             [jobs.lib.walk.drive :as drive]
@@ -481,6 +482,8 @@
   (let [c (with-heading c0)]
     (when-not (:heading (:args c0)) (ctx/update-mem! c assoc :heading (name (:heading (:args c)))))
     (when-not (:dir (:args c0)) (ctx/update-mem! c assoc :dir (name (:dir (:args c)))))
-    (await (pace/steps! c #(next! c)))))
+    (let [e (await (pace/steps! c #(next! c)))]
+      (next-call/on-ending c e 'jobs.access.stair args
+                           (next-call/seal-fix e #{:hazard :water-unplugged :lava-exposed} (u/cell-vec (u/self-pos c)))))))
 
 (def meta {:tags [:mine :dig] :position-bound? true})
