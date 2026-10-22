@@ -7,7 +7,7 @@
 {:defaults
  {:tags [:survival :hungry]
   :plot {:height 6}
-  :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {})}]
+  :register [{:trigger :hungry :persistence :cooldown :cooldown-s 30 :job (jobs.survival.get-food {:carry 0})}]
   :blocks [[:set [8 0 16] "red_bed[facing=east,part=foot]"] [:set [9 0 16] "red_bed[facing=east,part=head]"]]
   :body {:at [16.5 0 16.5] :settle-s 2}
   :limit-s 60}
@@ -82,6 +82,13 @@
    :after [[:body-near [28.5 0 16.5] 2]]}
   ;; 988e909e: food 6 is the no-sprint floor, so a full-health idle body eats carried bread at 6 and not at 7. Food is driven down by hunger
   ;; and read back by foodLevel (the drain takes about a minute, and :within-s counts from the act's start, so the deadlines allow for it).
+  {:name "hp20-food6-nothing-carried-get-food-cuts-the-queued-job"
+   :act [[:job (jobs.time.noop {:seconds 90})]
+         [:rcon "effect give $BODY minecraft:hunger 100 29 true"] [:until-rcon "data get entity $BODY foodLevel" "data: [0-6]\\b" 90]
+         [:rcon "effect clear $BODY minecraft:hunger"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 120}
+            {:no-event {:source :job :kind :completed :data {:name "jobs.time.noop"}} :for-s 110 :until {:source :reflex :kind :fired :context {:reflex-id :hungry}}}]
+   :limit-s 150}
   {:name "hp20-food6-bread-eats-in-place"
    :body {:inventory [["bread" 6]]}
    :act [[:rcon "effect give $BODY minecraft:hunger 100 29 true"] [:until-rcon "data get entity $BODY foodLevel" "data: 9\\b" 60]
