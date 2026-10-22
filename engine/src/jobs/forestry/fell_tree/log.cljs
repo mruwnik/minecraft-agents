@@ -193,7 +193,7 @@
   ground, the dig hazards of :accept taken."
   [c pos]
   (merge (select-keys (:args c) [:for-plan :ignore-zones? :accept])
-         {:pos pos :collect false :need-drop false}))
+         {:pos pos :collect false :need-drop false :pillar (ctx/way? c :pillar)}))
 
 (defn outcome
   "What one round of the dig child (its return e: :continue or its ending) means for the tree: :ok (dug, gone, or still
