@@ -294,6 +294,15 @@
           (is (= [[:stair :own-way-blocked]] (map (juxt :step :why) (gt/events-of s :go-to.escalated))))
           (is (= "air" (get-in @(fake/state (:p s)) [:blocks [-14 49 0]] "air")) "the stair is left open"))))))
 
+;; The body at the foot of its open stair, a goal walled in dirt above: nothing blocks the stair, so it is not cut again.
+(deftest an-open-stair-of-its-own-is-not-cut-again-for-a-goal-it-does-not-lead-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (climb! (assoc in-forked :self {:pos {:x -5.5 :y 40 :z 0.5}} :inventory [{:name "stone_pickaxe" :count 1}])
+                                                 {:pos [10 50 0] :range 0}))]
+          (is (not-any? #(= :own-way-blocked (:why %)) (gt/events-of s :go-to.escalated))))))))
+
 ;; The forked mass with the block of the stair's top floor gone: its feet cell [-26 60 0] has a hole under it.
 (def topless (dissoc forked "-26,59,0"))
 

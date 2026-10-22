@@ -10,6 +10,7 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.breath :as breath]
+            [jobs.lib.column-kinds :as kinds]
             [jobs.lib.look :as look]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
@@ -110,10 +111,18 @@
 (defn own-stair
   "The body's own stair cut again (climb/recut) as the way out for a body standing on it under goal: what stands in its
   walk space (a cap the body put there) is cleared before any other way is cut, its floors are not. nil once it failed
-  this call (memory :own-way-done) and on a climb away from a dive (climb/own-route chose the way there)."
+  this call (memory :own-way-done) and on a climb away from a dive (climb/own-route chose the way there), and nil
+  while the stair stands open: cutting it again then gets the body nowhere nearer a goal the walk could not reach."
   [c feet goal]
   (when (and (> (second goal) (second feet)) (ways/way? c :stair) (not-any? (ctx/mem c) [:own-way-done :dive-climb]))
-    (climb/recut feet (ledger/ways-of c))))
+    (when-let [e (climb/recut feet (ledger/ways-of c))]
+      (let [[fx fy fz] feet
+            [dx dz] (some #(when (= (:heading e) (escape/heading-names %)) %) escape/cardinals)
+            kind-at (kinds/seen-kind-at (:primitives c))
+            shut? (fn [i] (let [x (+ fx (* i dx)) y (+ fy i) z (+ fz (* i dz))]
+                            (some #(keyword-identical? :solid (kind-at x % z)) [y (inc y)])))]
+        (when (some shut? (range 1 (inc (:steps e))))
+          e)))))
 
 (defn goal-walled?
   "Whether a give-up with result is a free body's (not escape/enclosed?) whose goal the planner proved walled in, or whose
