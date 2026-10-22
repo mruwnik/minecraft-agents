@@ -190,3 +190,18 @@
               (is (false? (:arrived @out)) (pr-str @out))
               (is (= :search-spent (:why @out)) (pr-str @out))
               (is (<= @rounds 6) "it gave up within a few slices"))))))))
+
+;; a walk whose steer was cut short by the call's own seconds (:out-of-time) is a leg's end, not a stuck body that gives the walk up
+(deftest a-steer-cut-by-the-calls-seconds-ends-a-leg-not-a-stuck-giveup
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)]
+          (with-redefs [near/walk-round! (fn [c _ _ _]
+                                           (swap! clock + 1000)
+                                           (js/Promise.resolve {:result {:status :stuck :why "walk timed out after 2 s" :at [0 64 0] :out-of-time true}
+                                                                :status "failed" :from (:pos c) :to (:pos c)}))]
+            (let [{:keys [out]} (await (gt/go! {:self {:pos [0.5 64 0.5]} :blocks floor-blocks :clock clock}
+                                               {:pos [30 64 0] :range 1 :ways #{:walk :clear-seal} :spend {:job-time 3 :tries 1}}))]
+              (is (false? (:arrived @out)) (pr-str @out))
+              (is (= :search-spent (:why @out)) (pr-str @out)))))))))

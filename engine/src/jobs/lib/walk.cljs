@@ -313,12 +313,14 @@
                      (let [out (glance pose {:controls controls :yaw yaw :pitch pitch})]
                        #js {:controls (clj->js (:controls out)) :yaw (:yaw out) :pitch (:pitch out)}))))
         t (js/Date.now)
-        r (await (ctx/act c :steer (steer-args (steer-s c timeout-s) decide)))
+        steer-for (steer-s c timeout-s)
+        r (await (ctx/act c :steer (steer-args steer-for decide)))
         ms (- (js/Date.now) t)]
     [(case (.-status r)
        "done" @last-done
-       "timeout" {:status :stuck :why (str "walk timed out after " timeout-s " s")
-                  :at (let [p (.-pose r)] [(.-x p) (.-y p) (.-z p)])}
+       "timeout" (cond-> {:status :stuck :why (str "walk timed out after " timeout-s " s")
+                          :at (let [p (.-pose r)] [(.-x p) (.-y p) (.-z p)])}
+                   (< steer-for timeout-s) (assoc :out-of-time true))
        {:status :failed :reason (.-reason r)})
      ms]))
 

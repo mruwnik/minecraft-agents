@@ -135,6 +135,11 @@
           (if (= :continue e) :continue :again)))
     :again))
 
+(defn none-held?
+  "Whether the body carries no torch."
+  [c]
+  (zero? (ltorch/torches-held (:primitives c))))
+
 (defn dark-end
   "A fruitless round's result as go-to gives it up when a dark way was the better way (:dark-best, jobs.lib.near/dark-best):
   :no-path :unseen-floor-dark with that cell (and :torches :none or :fetch-failed when :torches had no torch), unless the

@@ -154,7 +154,8 @@
                            ", or set the walk.world y-margin setting to walk the deep way")
            :detour (str "the only way found is " route " blocks long for a goal that was " straight " blocks away, mostly over cells the body has never seen under ground: dig toward the goal, or raise the settings jobs.movement.go-to.detour/floor and /ratio to walk it")
            :door-stuck "a door in the way will not open"
-           :unseen-floors "the floor ahead keeps turning out not to be there in the dark: a cliff or gap it cannot see across; light the way (torches) or go round"
+           :unseen-floors (str "the floor ahead keeps turning out not to be there in the dark: a cliff or gap it cannot see across; "
+                                (if (= :none torches) "it carries no torch to light the way: go round or fetch torches first" "light the way (torches) or go round"))
            :unseen-floor-dark (str "the way goes down onto floors it cannot see in the dark: carry a torch (held in the off hand it sees deeper), light the way, or pass :torches :fetch (go-to lights them)"
                                    (case torches
                                      :none "; it has no torch to light them and fetches none"

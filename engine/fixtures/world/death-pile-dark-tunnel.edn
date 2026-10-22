@@ -1,0 +1,18 @@
+;; Card 24c4ea3a: a pile 22 blocks away down an unlit stone tunnel with an empty pack (no torch) is walked to and collected: the walk is not given up as
+;; "light the way", and a leg whose seconds run out is a leg, not a stuck body.
+;; Stone mass x 2..30, z 10..22, y 0..6; a dark 1x2 tunnel along z 16 from x 4 to 28; the body dies at its east end [26 0 16] and respawns at its west end [4 0 16].
+;; Should-succeed: the pile is collected.
+{:defaults
+ {:tags [:survival :death :jobs]
+  :time :any
+  :plot {:height 10}
+  :register [{:trigger :died :persistence :cooldown :cooldown-s 30 :args {}}]
+  :blocks [[:fill [2 0 10] [30 6 22] "stone"] [:fill [4 0 16] [28 1 16] "air"]]
+  :body {:at [26.5 0 16.5] :spawnpoint [4 0 16] :effects [["resistance" 600 4]]
+         :inventory [["raw_iron" 24] ["cobblestone" 64] ["cobblestone" 36]]}
+  :act [[:kill-body]]
+  :limit-s 220}
+ :cases
+ [{:name "dark-tunnel-pile-is-fetched-without-torches"
+   :expect [{:event {:source :reflex :kind :ended :data {:decision :collected}} :within-s 200}]
+   :after [[:item "raw_iron" 24]]}]}

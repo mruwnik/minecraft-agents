@@ -18,6 +18,7 @@
             [jobs.lib.walk.sight :as ws]
             [jobs.lib.walk.world :as wworld]
             [jobs.movement.go-to :as go-to]
+            [jobs.movement.go-to.result :as gresult]
             [jobs.movement.go-to.torch :as gtorch]
             [jobs.movement.go-to.cut :as gcut]))
 
@@ -320,3 +321,9 @@
           (is (= 3 (torches-held p)) "4 torches taken from the chest, one placed")
           (is (= 4 (get-in @(fake/state p) [:containers [-2 64 0] 0 :count])) "the other four stay in the chest")
           (is (= 1 (count (filter #(= :walk.torch-placed (:kind %)) seen)))))))))
+
+(deftest unseen-floors-give-up-advises-torches-only-when-some-are-carried
+  (is (re-find #"light the way" (gresult/give-up-words [0 0 0] {:why :unseen-floors})))
+  (let [none (gresult/give-up-words [0 0 0] {:why :unseen-floors :torches :none})]
+    (is (re-find #"no torch" none))
+    (is (not (re-find #"light the way \(" none)))))

@@ -51,7 +51,7 @@
             [jobs.movement.go-to.own-way :refer [dive-end dive-floor! own-way own-way-left! plan-check straight-from! walk-own-way!]]
             [jobs.movement.go-to.result :as end :refer [known-frontier-result unloaded-end]]
             [jobs.movement.go-to.tuning :as tuning :refer [surface-descent-s dry-walk-rounds climb-dip climb-stair surface-air wet-restarts waypoint-gain dry-radius leave-water max-blocked max-searching]]
-            [jobs.movement.go-to.torch :as torch :refer [dark-end fetch-torches! round-unknown]]
+            [jobs.movement.go-to.torch :as torch :refer [dark-end fetch-torches! none-held? round-unknown]]
             [jobs.movement.go-to.unstick :as unstick]
             [jobs.movement.go-to.way-steps :as ways]
             [jobs.movement.go-to.climb :as climb]))
@@ -427,11 +427,14 @@
           (= "arrived" status)
           (await (arrive! c pos))
 
+          (:out-of-time walked)
+          (if (search-spent? c) (end/give-up! c pos {:status :no-path :reason :search-spent}) :again)
+
           (and (:learn-spent walked) (await (look-or-re-aim-column! c pos)))
           :again
 
           (:learn-spent walked)
-          (await (esc/give-up-or-escalate! c pos (max-blocked) status {:status :no-path :reason :unseen-floors :cells (:cells walked)}))
+          (await (esc/give-up-or-escalate! c pos (max-blocked) status (cond-> {:status :no-path :reason :unseen-floors :cells (:cells walked)} (none-held? c) (assoc :torches :none))))
 
           (and (= "stair" status) (= :dives (:why walked)))
           (esc/dive-refused! c pos)
