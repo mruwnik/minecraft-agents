@@ -94,6 +94,20 @@
             {:event {:source :job :kind :holding :data {:reason "under a roof, out of the enderman's reach"}} :within-s 30}
             {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30}]
    :limit-s 40}
+  ;; card c0e1f21d: the roof gap beside the enderman is no place to run to; the hut 12 blocks the other way is
+  {:name "provoked-enderman-far-roof-hut-body-runs-past-the-near-gap"
+   :register [{:trigger :hostile-near :args {:radius 16 :ranged-radius 16}
+               :job (jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 16 :jobs.lib.danger/ranged-radius 16}})}]
+   :blocks [[:fill [22 0 14] [22 1 14] "stone"] [:fill [26 0 18] [26 1 18] "stone"] [:fill [22 2 14] [26 2 18] "stone"]
+            [:fill [3 0 14] [3 1 14] "stone"] [:fill [7 0 18] [7 1 18] "stone"] [:fill [3 2 14] [7 2 18] "stone"]]
+   :body {:inventory [["dirt" 20]] :effects [["resistance" 900 4]]}
+   :act [[:summon "enderman" [20.5 0 16.5] "{attributes:[{id:\"minecraft:movement_speed\",base:0}]}"]
+         [:until-seen {:entity "enderman"} 10]
+         [:rcon "damage @e[type=enderman,tag=wt,$BOX,limit=1] 1 minecraft:player_attack by $BODY"]]
+   :expect [{:event {:source :job :kind :holding :data {:reason "under a roof, out of the enderman's reach"}} :within-s 35}
+            {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 30}]
+   :after [[:body-near [5.5 0 16.5] 2.5]]
+   :limit-s 45}
   ;; card 4e2615d0: an angry enderman that never leaves (speed 0) must not hold the body in water for ever: after hold-cap holds the flight moves on to the next options (roof, seal, or none left)
   {:name "staying-enderman-ends-the-water-hold-and-the-flight-ends"
    :settings {:jobs.survival.respond.options/hold-cap 2}

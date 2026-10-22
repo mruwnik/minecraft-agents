@@ -1135,7 +1135,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}]
                                       :blocks {(key-of 3 66 0) "stone" (key-of 3 63 0) "stone"}
-                                      :entities [(enderman 2.5 64 0.5)]})]
+                                      :entities [(enderman -1.5 64 0.5)]})]
           (.override (.-world p) "steer"
                      (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))
           (core/submit! eng retreat {})
@@ -1149,7 +1149,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}]
                                       :blocks {(key-of 3 66 0) "stone" (key-of 3 63 0) "stone"}
-                                      :entities [(enderman 2.5 64 0.5)]})
+                                      :entities [(enderman -1.5 64 0.5)]})
               sensed (.-sensedAt p)
               looked-east? #(some (fn [l] (> (.. l -args -pos -x) 3.5)) (calls p "look"))]
           (aset p "sensedAt" (fn [pos] (if (and (== 66 (.-y pos)) (not (looked-east?))) #js {:unknown true} (sensed pos))))
@@ -1726,7 +1726,7 @@
                             (fn [m] (update m :round (fn [round] (fn ^:async spied [c] (swap! legs conj (:leg-s (:args c))) (await (round c)))))))
                 {:keys [eng p]} (setup {:inventory [{:name "dirt" :count 16}]
                                         :blocks {(key-of 3 66 0) "stone" (key-of 3 63 0) "stone"}
-                                        :entities [(enderman 2.5 64 0.5)]} spy)]
+                                        :entities [(enderman -1.5 64 0.5)]} spy)]
             (when hurt? (mem/write! (:store eng) :hurt {:amount 2 :attacker {:name "zombie"}} {:cap 50 :ttl 60000}))
             (.override (.-world p) "steer"
                        (fn [token a impl] (-> (impl token a) (.then (fn [r] (swap! (fake/state p) assoc :entities []) r)))))

@@ -5,6 +5,8 @@
             [jobs.lib.access :as access]
             [jobs.lib.block-sets :as bs]
             [jobs.lib.checks :as checks]
+            [jobs.lib.combat :as combat]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.escape :as escape]
             [jobs.lib.look :as look]
             [jobs.lib.ready :as ready]
@@ -30,7 +32,8 @@
 
 (a/defargs settings
   {::water-reach {:default 6 :doc "Blocks within which a body hunted by an enderman looks for water to stand in." :spec (a/num-in 0 nil)}
-   ::roof-reach {:default 8 :doc "Blocks within which a body hunted by an enderman looks for a 2-high gap under a roof." :spec (a/num-in 0 nil)}
+   ::roof-reach {:default 16 :doc "Blocks within which a body hunted by an enderman looks for a 2-high gap under a roof (its own hut counts)." :spec (a/num-in 0 nil)}
+   ::enderman-gap {:default 4 :doc "Blocks from a known enderman within which a roof gap is no place to run to: the walk would end beside it." :spec (a/num-in 0 nil)}
    ::dry-reach {:default 16 :doc "Blocks within which a body in water looks for dry land to swim out to." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 60 :doc "Seconds a stand may take." :spec (a/num-in 0 nil)}})
 
@@ -73,8 +76,10 @@
 (defn roof-cell
   "The nearest cell within reach (blocks, horizontally and 1 vertically) of from that block-at reads as a 2-high gap
   on a solid floor under a solid roof, which a 3-tall enderman cannot enter, or nil. A cell with no cell an enderman
-  could stand in (3 clear above a solid floor) within 2 blocks comes first: it cannot reach one at the roof's edge."
-  [block-at from reach]
+  could stand in (3 clear above a solid floor) within 2 blocks comes first: it cannot reach one at the roof's edge.
+  A gap within enderman-gap of one of avoid (positions) is left out."
+  ([block-at from reach] (roof-cell block-at from reach []))
+  ([block-at from reach avoid]
   (let [[fx fy fz] (mapv #(js/Math.floor %) [(:x from) (:y from) (:z from)])
         at (fn [cell dy] (block-at (update cell :y + dy)))
         gap? (fn [cell] (and (escape/solid? (at cell -1)) (bs/passable? (at cell 0))
@@ -86,10 +91,11 @@
     (->> (for [dx (range (- reach) (inc reach)) dy (range -1 2) dz (range (- reach) (inc reach))
                :when (<= (+ (* dx dx) (* dz dz)) (* reach reach))
                :let [cell {:x (+ fx dx) :y (+ fy dy) :z (+ fz dz)}]
-               :when (gap? cell)]
+               :when (gap? cell)
+               :when (every? #(> (u/dist % {:x (+ 0.5 (:x cell)) :y (:y cell) :z (+ 0.5 (:z cell))}) (settings/get settings ::enderman-gap)) avoid)]
            cell)
          (sort-by (juxt (complement deep?) #(u/dist from {:x (+ 0.5 (:x %)) :y (:y %) :z (+ 0.5 (:z %))})))
-         first)))
+         first))))
 
 (defn dry-cell
   "The nearest seen dry standing cell within reach of the feet cell (jobs.lib.step-off/candidates), or nil."
@@ -104,7 +110,8 @@
         reach (reach-of c)]
     (case (:where (:args c))
       :water (water-cell block-at (u/self-pos c) reach)
-      :roof (roof-cell block-at (u/self-pos c) reach)
+      :roof (roof-cell block-at (u/self-pos c) reach
+                     (mapv #(danger-q/mob-pos p %) (filter combat/enderman? (danger-q/known-hostiles p reach {}))))
       :dry (dry-cell p block-at (feet-cell c) reach))))
 
 (defn here?

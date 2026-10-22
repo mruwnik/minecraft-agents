@@ -64,3 +64,12 @@
           (await (tu/run-until-empty eng 10))
           (is (zero? (count (tu/walked-to eng))) "no walk")
           (is (seq (st/ended-because seen :no-place)) "ends no-place"))))))
+
+(deftest roof-cell-reaches-a-hut-far-off-and-skips-a-gap-beside-an-enderman
+  (let [gap (fn [x] [[x 63 0] [x 66 0]])
+        solid (set (concat (gap 2) (gap 12)))
+        at (fn [{:keys [x y z]}] (if (solid [x y z]) "stone" "air"))
+        body {:x 0.5 :y 64 :z 0.5}
+        enderman {:x 2.5 :y 64 :z 0.5}]
+    (is (= {:x 12 :y 64 :z 0} (stand-in/roof-cell at body 16 [enderman])) "the near gap sits beside the enderman, the far one is a hut 12 blocks off")
+    (is (= {:x 2 :y 64 :z 0} (stand-in/roof-cell at body 16 [])))))
