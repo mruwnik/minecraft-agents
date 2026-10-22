@@ -217,6 +217,11 @@
          (and (fld/unwatched? (:primitives c) cells) (empty? (ripe-raw c nil)))
          (not (crop-seen? c)))))
 
+(defn away-start?
+  "A body farther than the radius from the field that has cut nothing: it walks there (home!) before it can tell what the field holds, whatever a look round from here showed."
+  [c m]
+  (and (cutting? c) (zero? (:cut m 0)) (> (u/dist (u/self-pos c) (center-of c)) (radius-of c))))
+
 (defn shut-in-start?
   "A body shut in (a pit) that has neither cut nor left it: it must walk out before it can tell whether there is a crop.
   :in-pit keeps it so while the walk digs the pit open."
@@ -243,6 +248,7 @@
               (:collect m)
               (and (cutting? c) (seq (ripe-of c (:skipped m))))
               (blind? c)
+              (away-start? c m)
               (shut-in-start? c m)) nil
           (and (cutting? c) (seq (ripe-raw c (:skipped m))))
           (assoc (access/refusal-fields (:refusals (gate/look c (cut-action c) (ripe-raw c (:skipped m)) {:except (fa/plan c) :own-plans-ok? true})))

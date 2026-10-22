@@ -1,6 +1,6 @@
-;; Card ec7d219e: farm.harvest with a :center it cannot walk to ends nothing-possible :unreachable (data :center), not :nothing-to-do / :no-crop-seen:
-;; a caller must not read it as an empty field. The ripe wheat [80..82 0 16] stands in a closed bedrock box (nothing a player could dig through), the body 76 blocks west.
-;; Should-fail (ends :unreachable, nothing in the bag (the far chunk is not loaded for a block check)). Control: the same field without the box is cut (harvest-far-centre.edn).
+;; Card ec7d219e: farm.harvest ends by what the body knows of the field (a player's view).
+;; Sealed in bedrock the crops are never seen, so the end is :no-crop-seen (sealed-in-bedrock). Seen through glass but out of reach (the body stops at the glass wall,
+;; inside the :radius) the crops are skipped one by one and the end is nothing-possible :gave-up with them in :skipped (behind-glass). :unreachable is for a centre the body cannot walk toward at all. Neither takes anything.
 {:defaults
  {:tags [:farm :harvest :jobs]
   :time :any
@@ -8,9 +8,15 @@
   :body {:at [4.5 0 16.5] :effects [["resistance" 600 4]]}
   :limit-s 200}
  :cases
- [{:name "harvest-centre-sealed-in-bedrock-ends-unreachable"
+ [{:name "harvest-centre-sealed-in-bedrock-ends-no-crop-seen"
    :blocks [[:fill [78 -3 14] [84 3 18] "bedrock"] [:fill [79 -1 15] [83 2 17] "air"]
             [:fill [79 -1 15] [83 -1 17] "farmland[moisture=7]"] [:fill [80 0 16] [82 0 16] "wheat[age=7]"]]
    :act [[:job (jobs.farm.harvest {:area {:pos #xyz [81 0 16] :radius 6} :replant false})]]
-   :expect [{:event {:source :job :kind :stopped :data {:reason :unreachable}} :within-s 160 :of-job true}]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-crop-seen}} :within-s 160 :of-job true}]
+   :after [[:item "wheat" 0]]}
+  {:name "harvest-crops-seen-behind-glass-are-given-up"
+   :blocks [[:fill [70 -2 12] [92 3 20] "glass"] [:fill [71 -1 13] [91 2 19] "air"]
+            [:fill [79 -1 15] [83 -1 17] "farmland[moisture=7]"] [:fill [80 0 16] [82 0 16] "wheat[age=7]"]]
+   :act [[:job (jobs.farm.harvest {:area {:pos #xyz [81 0 16] :radius 6} :replant false})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :gave-up}} :within-s 160 :of-job true}]
    :after [[:item "wheat" 0]]}]}
