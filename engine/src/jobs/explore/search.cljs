@@ -51,7 +51,7 @@
   in the same round. A loaded column not yet seen (:unseen) is walked toward in steps of up to 12 blocks (not
   counted in max-legs) and looked at again (over water the step swims, glancing ahead as it goes, so a far shore comes into sight; a step ending in water is progress, not a failure); within 3 blocks of it, it is recorded failed. An unloaded column is not tried but looked at again later. When only unloaded ones are
   left the round pauses 2 s (jobs.time.noop, holding :chunks-loading) and yields, until they load or the call's time is spent (a body just logged in has no chunks
-  yet). Unloaded ones farther than ::load-reach (64) from the body (a far :center) are walked toward instead. A walk go-to gives up on is recorded :unreachable. Three of those in
+  yet). Unloaded ones farther than ::load-reach (64) from the body (a far :center) are walked toward instead, once the ground under it is loaded. A walk go-to gives up on is recorded :unreachable. Three of those in
   a row end the search (:stuck); until a leg arrives, a leg within 60 degrees of the way one failed from where the
   body stands waits (the same obstacle likely blocks it), and the search ends :stuck when only such legs are left.
   A leg whose goal lies by a mob the body would flee is not walked (go-to :goal-danger
@@ -580,16 +580,18 @@
            first))))
 
 (defn far-unloaded
-  "The cell at the body's height under the nearest unloaded column [{:pos [x y z]}] farther than ::load-reach from the body, nil when none."
+  "The cell at the body's height under the nearest unloaded column [{:pos [x y z]}] farther than ::load-reach from the body, nil when none
+  or while the ground under the body is itself unloaded (a body just logged in: its own chunks come first)."
   [c unloaded]
   (let [[bx y bz] (here c)
         reach (settings/get settings ::load-reach)]
-    (some->> unloaded
-             (map (fn [{[x _ z] :pos}] [(xz-dist [bx bz] [x z]) x z]))
-             (filter #(> (first %) reach))
-             (sort-by first)
-             first
-             (#(vector (% 1) y (% 2))))))
+    (when (u/sensed (:primitives c) {:x (js/Math.floor bx) :y (dec (js/Math.floor y)) :z (js/Math.floor bz)})
+      (some->> unloaded
+               (map (fn [{[x _ z] :pos}] [(xz-dist [bx bz] [x z]) x z]))
+               (filter #(> (first %) reach))
+               (sort-by first)
+               first
+               (#(vector (% 1) y (% 2)))))))
 
 (defn ^:async advance!
   "Start the next leg, or end the search for want of one."

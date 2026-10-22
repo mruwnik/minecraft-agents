@@ -466,6 +466,17 @@
           (is (seq (walks s)) "a walk started")
           (is (every? #(> (:x %) 200) (walks s)) "toward the centre"))))))
 
+(deftest a-body-whose-own-ground-is-unloaded-waits-instead-of-walking-toward-far-columns
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cells (into ["0,63,0"] (map (fn [[x z]] (str x ",63," z))) (search/spiral-points [0 0] 16 100))
+              s (setup {:unloaded cells} 28)]
+          (core/submit! (:eng s) '(jobs.explore.search {:target "diamond_block" :settings {:jobs.explore.search/max-distance 100}}) {})
+          (await (tu/run-ticks (:eng s) (:clock s) 8 700))
+          (is (not (finished? s)) "still waiting for its own chunks")
+          (is (= [] (walks s))))))))
+
 (deftest ground-that-never-loads-waits-until-the-call-time-is-spent
   (async done
     (tu/run-async done
