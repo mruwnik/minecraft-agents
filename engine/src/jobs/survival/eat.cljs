@@ -50,9 +50,10 @@
 
 (defn eaten?
   "Is item eaten for these args: the :item when named (precious and named-only foods included), else by the
-  unnamed rules: not harmful unless allow-bad, and precious only at low health."
+  unnamed rules: not harmful unless allow-bad, and precious only at low health. Poisoning food is never eaten when the poison would leave the body fragile."
   [allow-bad item health name]
   (and (foods/food? name)
+       (foods/poison-safe? health name)
        (or (and item (= item name) (or allow-bad (not (contains? foods/harmful name))))
            (and (nil? item)
                 (not (contains? foods/named-only name))
@@ -103,6 +104,8 @@
     (cond
       (nil? item) nil
       (not (foods/food? item)) {:reason :not-food :item item :text (str item " is not food")}
+      (not (foods/poison-safe? (.-health (.self (:primitives c))) item))
+      {:reason :poison :item item :text (str item " would poison the body down to a fragile health")}
       (and (not allow-bad) (contains? foods/harmful item))
       {:reason :bad-food :item item :text (str item " is harmful food: pass :allow-bad true to eat it")})))
 

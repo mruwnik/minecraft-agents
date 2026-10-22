@@ -1,0 +1,22 @@
+;; survival.get-food last resort (food at or below the eat-bad line) in a sealed dark room, body hurt to hp 6.
+;; Should-succeed: rotten flesh is eaten, the spider eyes are not (poison would take hp 6 to 2); no magic damage after.
+;; Should-fail: none; a body with only spider eyes eats nothing and the call ends without a bite.
+{:defaults
+ {:tags [:survival :get-food :eat]
+  :time :any
+  :plot {:height 6}
+  :blocks [[:fill [0 -1 0] [8 5 8] "stone"] [:fill [1 0 1] [7 3 7] "air"]]
+  :body {:at [4.5 0 4.5] :settle-s 2}
+  :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY foodLevel" "data: ([0-9]|1[01])$" 20]
+        [:rcon "damage $BODY 14 minecraft:generic"]
+        [:job (jobs.survival.get-food {:carry 0 :explore false :settings {:jobs.survival.get-food/hunt-radius 4 :jobs.survival.get-food/eat-bad-food 12}})]]
+  :limit-s 90}
+ :cases
+ [{:name "spider-eyes-are-left-when-poison-would-leave-the-body-fragile"
+   :body {:inventory [["rotten_flesh" 2] ["spider_eye" 2]]}
+   :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 70 :of-job true}]
+   :after [[:item "spider_eye" 2] [:item "rotten_flesh" [:<= 1]]]}
+  {:name "only-spider-eyes-are-not-eaten-at-low-health"
+   :body {:inventory [["spider_eye" 2]]}
+   :expect [{:event {:source :job :kind :stopped} :within-s 70 :of-job true}]
+   :after [[:item "spider_eye" 2]]}]}

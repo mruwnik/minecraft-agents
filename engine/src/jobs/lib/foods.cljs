@@ -39,6 +39,16 @@
   "Foods that hurt or only half feed (hunger, poison, a rotten stomach): eaten only with :allow-bad, last."
   #{"rotten_flesh" "spider_eye" "pufferfish" "poisonous_potato" "chicken"})
 
+(def poison-damage
+  "Health a poisoning food costs (a spider eye's 4 s of poison; a pufferfish's minute is worth more than any health)."
+  {"spider_eye" 4 "poisonous_potato" 3 "pufferfish" 20})
+
+(defn poison-safe?
+  "Whether eating item at health leaves the body above ::fragile-health once its poison has run (rotten flesh and chicken only cost hunger)."
+  [health item]
+  (let [d (get poison-damage item)]
+    (or (nil? d) (> (- health d) (settings/get settings ::fragile-health)))))
+
 (def precious
   "Foods kept for an emergency: eaten only when named or when health is low."
   #{"golden_apple" "enchanted_golden_apple"})

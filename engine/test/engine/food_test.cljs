@@ -944,3 +944,10 @@
   (is (= ["cooked_beef" "cooked_porkchop" "cooked_chicken" "cooked_mutton" "cooked_rabbit" "cooked_cod" "cooked_salmon" "baked_potato"]
          foods/cooked-meals))
   (is (every? (set (keys foods/cooked-of)) (keys game/meat-animal))))
+
+(deftest eat-bad-never-eats-poison-that-leaves-the-body-fragile
+  (let [inv [{:name "spider_eye"} {:name "pufferfish"} {:name "rotten_flesh"}]]
+    (is (= "rotten_flesh" (eat/best-food inv true nil 6.5 #{})) "rotten flesh only costs hunger")
+    (is (= "spider_eye" (eat/best-food (take 2 inv) true nil 14 #{})) "healthy enough for 4 hp of poison")
+    (is (nil? (eat/best-food (take 2 inv) true nil 6.5 #{})))
+    (is (nil? (eat/best-food (take 1 inv) true "spider_eye" 9 #{})) "a named one too")))
