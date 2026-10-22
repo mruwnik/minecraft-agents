@@ -103,10 +103,10 @@
 
 (defn shut-in-walk?
   "Whether the last walk ended because the body is shut in (go-to refuses to dig or build out of a restricted walk) and the
-  room it can walk in is a pocket of at most ::pocket-cells: a larger closed hall still has room to bridge or pillar in."
+  room it can walk in is a pocket of at most ::pocket-cells: a larger closed hall still has room to bridge or pillar in. Read from the true world as go-to's plan is: it confirms go-to's shut-in verdict, and in the dark the walls of a pocket are not seen."
   [c]
   (boolean (and (:shut-in (:data (near/last-walk c)))
-                (reach-room/enclosed? (:primitives c) #{} (reach/seen-lookup (:primitives c) reach-room/body-kind-of :open) (settings/get settings ::pocket-cells)))))
+                (reach-room/enclosed? (:primitives c) #{} (reach/lookup (:primitives c) reach-room/body-kind-of) (settings/get settings ::pocket-cells)))))
 
 (defn exit-of
   "Where the body leaves a cell it stands in: in a block it cut into rock, one step back toward the tunnel mouth (the cell

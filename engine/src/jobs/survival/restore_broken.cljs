@@ -158,7 +158,7 @@
   (and (= :dig action)
        (let [p (:primitives c)]
          (and (not @(:enclosed pr))
-              (reach-room/enclosed? p #{(vec cell)} (reach/seen-lookup p reach-room/body-kind-of :open) reach-room/shut-room-cells)))))
+              (reach-room/enclosed? p #{(vec cell)} (reach/lookup p reach-room/body-kind-of) reach-room/shut-room-cells)))))
 
 (def target [])
 

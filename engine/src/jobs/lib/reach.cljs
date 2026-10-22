@@ -100,13 +100,10 @@
                v))))))))
 
 (defn seen-lookup
-  "As lookup, over what the body sees or remembers (u/seen-block). A cell it has not seen reads as `unseen`, default
-  :solid, so a flood or a drop edge never goes through a cell it has not looked at; :open for a question of whether
-  something could get through (a mob, an arrow, a gap in a room), where an unseen cell is a way until looked at.
-  One lookup serves one query."
+  "As lookup, over what the body sees or remembers (u/seen-block): a cell it has not seen reads :solid, so a flood or a
+  drop edge never goes through a cell it has not looked at. One lookup serves one query."
   ([p] (seen-lookup p kind-of))
-  ([p block-kind] (seen-lookup p block-kind :solid))
-  ([p block-kind unseen]
+  ([p block-kind]
    (let [cache (js/Map.)
          key (volatile! nil)]
      (fn [x y z]
@@ -116,7 +113,7 @@
          (if (some? hit)
            hit
            (let [b (u/seen-block p {:x x :y y :z z})
-                 v (if (nil? b) unseen (block-kind b))]
+                 v (if (nil? b) :solid (block-kind b))]
              (.set cache k v)
              v)))))))
 
