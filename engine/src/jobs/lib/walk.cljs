@@ -82,15 +82,19 @@
 (def room-margin-s "Seconds a steer leaves of the time left, for the time between asking and the act's check." 0.05)
 (def min-steer-s "The shortest steer a walk holds to the time left; with less left the act's refusal ends the call." 0.5)
 
-(defn steer-s
-  "timeout-s held to what c's call chain has left (ctx/left: time and deadline) less room-margin-s, since a longer
-  steer is refused; with less than min-steer-s left, timeout-s as it is."
-  [c timeout-s]
+(defn room-s
+  "Seconds c's call chain has left (ctx/left: time and deadline) less room-margin-s, or nil when it has no limit."
+  [c]
   (let [{:keys [spend deadline]} (ctx/left c)
         rooms (cond-> []
                 (:job-time spend) (conj (:job-time spend))
-                deadline (conj (/ (- deadline (ctx/now c)) 1000)))
-        room (when (seq rooms) (- (apply min rooms) room-margin-s))]
+                deadline (conj (/ (- deadline (ctx/now c)) 1000)))]
+    (when (seq rooms) (- (apply min rooms) room-margin-s))))
+
+(defn steer-s
+  "timeout-s held to room-s, since a longer steer is refused; with less than min-steer-s left, timeout-s as it is."
+  [c timeout-s]
+  (let [room (room-s c)]
     (if (and room (>= room min-steer-s)) (min timeout-s room) timeout-s)))
 
 (defn steer-args
@@ -320,7 +324,8 @@
        "done" @last-done
        "timeout" (cond-> {:status :stuck :why (str "walk timed out after " timeout-s " s")
                           :at (let [p (.-pose r)] [(.-x p) (.-y p) (.-z p)])}
-                   (< steer-for timeout-s) (assoc :out-of-time true))
+                   ;; a steer that timed out early (refused, stalled) leaves room: it is stuck, else its caller re-walks for ever
+                   (and (< steer-for timeout-s) (< (or (room-s c) 0) min-steer-s)) (assoc :out-of-time true))
        {:status :failed :reason (.-reason r)})
      ms]))
 

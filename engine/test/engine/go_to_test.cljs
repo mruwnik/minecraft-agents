@@ -431,6 +431,15 @@
           (is (re-find #"^no progress on step \d+" (:detail result)))
           (is (= ["blocked" "blocked" "blocked"] (mapv :status (moved eng)))))))))
 
+;; a steer held to the call's seconds that times out with most of them left is stuck, not out of time (that re-walked for ever)
+(deftest go-to-whose-steer-times-out-at-once-gives-up-stuck
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (go-prepped! {:blocks flat} {:pos [10 64 0] :range 0 :spend {:job-time 20}}
+                                                #(override-steer! % (fn [_ _ _] (js/Promise.resolve #js {:status "timeout" :pose (pose 0.5 0.5)})))))]
+          (is (= {:arrived false :why :stuck} (select-keys @out [:arrived :why])) (pr-str @out)))))))
+
 (deftest go-to-says-off-plan-when-the-walk-ends-off-its-plan
   (async done
     (tu/run-async done
