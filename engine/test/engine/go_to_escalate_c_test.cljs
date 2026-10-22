@@ -10,6 +10,7 @@
             [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.settings :as settings]
+            [jobs.lib.cost.ways :as cw]
             [jobs.lib.escape :as escape]
             [jobs.lib.near :as near]
             [jobs.lib.ledger :as ledger]
@@ -290,6 +291,20 @@
           (is (= [:fill-gap] (mapv :step (events-of seen :go-to.escalated))))
           (is (= "dirt" (block p [5 63 0])) "the block went into the gap")
           (is (empty? (calls p "dig"))))))))
+
+(deftest a-fill-competes-by-price-with-the-stair-and-the-pillar
+  (let [fill #(hash-map :step :fill-gap :cell [5 63 0] :item "dirt" :count %)
+        stair #(hash-map :step :stair :heading :east :steps %)]
+    (are [way carried expected] (= expected (:step (choose/cheaper-fill nil [0 64 0] way (fill carried))))
+      (stair 1) 9 :fill-gap
+      (stair 1) 2 :stair
+      (stair 2) 2 :fill-gap
+      (stair 4) 9 :fill-gap
+      {:step :pillar :height 1} 9 :pillar
+      {:step :pillar :height 2} 9 :fill-gap
+      {:step :none :why :no-dig} 9 :fill-gap
+      {:step :leave-shelter} 9 :fill-gap)
+    (is (< (cw/fill-cost 9) (cw/fill-cost 2)) "the last blocks of the pack cost a fetch")))
 
 (def doorway-hole
   "Floor y 63 with a 1-cell hole at x 5 (floor under it at y 62), and a floor 1 higher from x 6: the doorway of a hut whose sill was dug."

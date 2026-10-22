@@ -4,6 +4,7 @@
   (:require [clojure.string :as str]
             [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
+            [jobs.lib.cost.ways :as cw]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.escape :as escape]
@@ -100,18 +101,33 @@
         (<= (count (filter #(str/ends-with? (str (:name %)) "_pickaxe") (u/inventory p))) 1))))
 
 
+(defn price
+  "Seconds way e from feet is reckoned to take (jobs.lib.cost): a stair, a pillar, a bridge or a fill by its blocks, a dug door or
+  route by what its cells take to dig with the tool carried, plus a step a cell; 0 for a step that is no span."
+  [p feet {:keys [step] :as e}]
+  (let [block-at (delay (escape/block-at-of p))
+        dig-s (fn [cells] (transduce (map #(+ (/ (tools/clear-ms p (@block-at %)) 1000) (:cost (cost/walk-cost {:distance 1})))) + 0 cells))]
+    (case step
+      :stair (+ (cw/stair-cost (:steps e)) (* (:aside e 0) (or (cost/dig-cost "stone") 1)))
+      :pillar (cw/pillar-cost (:height e))
+      :bridge (cw/bridge-cost (:length e) (:short e 0))
+      :fill-gap (cw/fill-cost (:count e 1))
+      :dig-route (dig-s (map :cell (:cells e)))
+      :clear-path (dig-s (:cells (escape/door @block-at (escape/unseen-of p) feet (escape/heading-dirs (:heading e)) (escape/max-door))))
+      0)))
+
 (defn gap-fill
   "{:step :fill-gap :cell :item} when result (a planner no-path) is a gap jump refused for a low ceiling or a gap jump
   up, a carried pillar block can fill the gap's floor (at the takeoff's height: a step up is then walkable), and no zone
   refuses the place; else nil."
   [c result skip]
   (let [p (:primitives c)
-        {:keys [item]} (escape/pillar-item c)
+        {:keys [item] carried :count} (escape/pillar-item c)
         cell (when (and (= :abilities (some-> (:reason result) keyword)) (#{:gap-low-ceiling :gap-up} (some-> (:kind result) keyword))
                         (not (skip :fill-gap)) item (:at result) (:from result))
                (escape/gap-floor (assoc (vec (:at result)) 1 (second (:from result))) (:from result)))]
     (when (and cell (or (:ignore-zones? (:args c)) (nil? (tidy/refusal c :place (zipmap [:x :y :z] cell)))))
-      {:step :fill-gap :cell cell :item item})))
+      {:step :fill-gap :cell cell :item item :count carried})))
 
 (defn drop-edges
   "The floor cells [x y z] a body would drop off by 2 or more (or into a pit with no floor) when it leaves the region it
@@ -144,7 +160,7 @@
   [c result skip feet]
   (when (and (contains? #{:goal-cut-off :goal-enclosed} (some-> (:reason result) keyword)) (not (skip :fill-gap)))
     (let [p (:primitives c)
-          {:keys [item]} (escape/pillar-item c)
+          {:keys [item] carried :count} (escape/pillar-item c)
           goal (some-> (places/parse-pos (:pos (:args c))) :pos)
           kind-at (reach/lookup p reach-room/body-kind-of)
           starts (when goal (filter (fn [[x y z]] (reach/standable-cell? p {:x x :y y :z z} kind-at))
@@ -152,7 +168,7 @@
                                       [(+ (:x goal) dx) (+ (:y goal) dy) (+ (:z goal) dz)])))
           cell (when (and item (seq starts)) (first (drop-edges p starts feet)))]
       (when (and cell (or (:ignore-zones? (:args c)) (nil? (tidy/refusal c :place (zipmap [:x :y :z] cell)))))
-        {:step :fill-gap :cell cell :item item}))))
+        {:step :fill-gap :cell cell :item item :count carried}))))
 
 (defn own-stair
   "The body's own stair cut again (climb/recut) as the way out for a body standing on it under goal: what stands in its
@@ -409,3 +425,12 @@
   (boolean (and (:dive-climb (ctx/mem c))
                 (< (second (end/feet-cell c)) (js/Math.floor (:y pos)))
                 (sh-sense/buried? (:primitives c)))))
+
+(defn cheaper-fill
+  "The first of fills (gap-fill, drop-fill steps; nils skipped) when its price is no more than way's (own-stair or the
+  chosen escape); way when it is no priced span (a leave-shelter, an approach, none) or dearer."
+  [p feet way & fills]
+  (let [fill (first (remove nil? fills))]
+    (if (and fill (or (not (#{:stair :pillar :clear-path :dig-route :bridge} (:step way))) (<= (price p feet fill) (price p feet way))))
+      fill
+      way)))

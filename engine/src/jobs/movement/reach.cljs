@@ -5,15 +5,12 @@
             [engine.settings :as settings]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
-            [jobs.lib.cost :as cost]
-            [jobs.lib.cost.ways :as cw]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.escape :as escape]
             [jobs.lib.escape.span :as span]
             [jobs.lib.places :as places]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
-            [jobs.lib.tools :as tools]
             [jobs.lib.util :as u]
             [jobs.lib.waits :as waits]
             [jobs.movement.go-to.column :as column]
@@ -78,19 +75,7 @@
   [c k]
   (way-steps/way? c k))
 
-(defn price
-  "Seconds way e from feet is reckoned to take (jobs.lib.cost): a stair, a pillar or a bridge by its blocks, a dug door or
-  route by what its cells take to dig with the tool carried, plus a step a cell."
-  [p feet {:keys [step] :as e}]
-  (let [block-at (escape/block-at-of p)
-        dig-s (fn [cells] (transduce (map #(+ (/ (tools/clear-ms p (block-at %)) 1000) (:cost (cost/walk-cost {:distance 1})))) + 0 cells))]
-    (case step
-      :stair (+ (cw/stair-cost (:steps e)) (* (:aside e 0) (or (cost/dig-cost "stone") 1)))
-      :pillar (cw/pillar-cost (:height e))
-      :bridge (cw/bridge-cost (:length e) (:short e 0))
-      :dig-route (dig-s (map :cell (:cells e)))
-      :clear-path (dig-s (:cells (escape/door block-at (escape/unseen-of p) feet (escape/heading-dirs (:heading e)) (escape/max-door))))
-      0)))
+(def price choose/price)
 
 (defn feet-of [c]
   (mapv #(js/Math.floor %) (let [{:keys [x y z]} (u/self-pos c)] [x y z])))
