@@ -159,3 +159,19 @@
     (is (pos? (hp-with {:unknown true})) "never seen")
     (is (pos? (hp-with {:name "air" :age-ms 120000})) "last seen before the death")
     (is (zero? (hp-with {:name "air" :age-ms 30000})) "seen after the death")))
+
+(deftest a-walk-over-the-allowance-goes-when-staying-costs-more
+  (let [zombies (for [i (range 3)] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x (+ 8 i) :y 64 :z 3}})
+        status-for (fn [entities]
+                     (first (risk/status (-> (ready-test/ctx-of (assoc day-world :self {:pos inside :health 2.3 :food 5} :entities (vec entities)))
+                                             (with-death {:x 80 :y 64 :z 5} "zombie" 6480000))
+                                         far-goal)))]
+    (is (= :ok (status-for zombies)) "hostiles reach the body where it stands: the walk is the cheaper risk")
+    (is (= :later (status-for [])) "nothing near the body: waiting costs nothing, so it waits")))
+
+(deftest a-body-that-cannot-heal-and-is-no-safer-staying-ends-stranded-instead-of-waiting
+  (let [zombies (for [i (range 3)] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x (+ 8 i) :y 64 :z 3}})
+        c (ready-test/ctx-of (assoc night-hut :self {:pos inside :health 2.3 :food 5} :entities (vec zombies)))
+        s (risk/status c far-goal)]
+    (is (= :never (first s)))
+    (is (= :stranded (:reason (nth s 2))))))

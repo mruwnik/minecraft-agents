@@ -109,15 +109,35 @@
         hostile-hp (if (pos? exposed-s) (hit (mapv (fn [e] {:name (.-name e) :distance (danger/mob-distance p e) :hits 0}) hostiles)) 0)]
     {:hp (+ spawn-hp hostile-hp death-hp hide-hp lava) :lava-hp lava :hide-hp hide-hp :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :dark-s exposed-s :hostiles (count hostiles)}))
 
+(defn stay-estimate
+  "hp the body expects to lose staying at its cell for the time the walk to `goal` takes (the wait that walking would end): the fight
+  with every hostile known within ::way-radius of it (they reach it where it stands) plus the spawns met at its cell by the light seen
+  there (price/stay-hp)."
+  [c goal]
+  (let [p (:primitives c)
+        feet (sh-sense/feet p)
+        secs (/ (u/dist feet goal) (cost/walk-blocks-per-s))
+        hostiles (danger/hostiles-near-way p feet (settings/get settings ::way-radius) {})
+        hit (fn [mobs] (if (seq mobs) (cost/fight-damage (assoc (wworld/kit-of c) :mobs mobs)) 0))
+        chance (chance-at p (update-vals feet js/Math.floor) (:y feet) false)]
+    {:hp (+ (hit (mapv (fn [e] {:name (.-name e) :distance (danger/mob-distance p e) :hits 0}) hostiles))
+            (price/stay-hp c chance secs))
+     :hostiles (count hostiles)}))
+
 (defn status
-  "Ok while the estimated damage of the walk to `goal` is within (price/allowed c), else later :risky with the
-  risk and its parts."
+  "Ok while the estimated damage of the walk to `goal` is within (price/allowed c) or within what staying put would cost (a risk
+  staying does not avoid is no reason to wait). Over both: later :risky with the risk and its parts, or never :stranded when the body
+  cannot heal, so waiting only repeats the same exposure and the caller must seal in or go to a nearer refuge."
   [c goal]
   (let [{:keys [hp spawn-hp hostile-hp death-hp hide-hp lava-hp dark-s hostiles]} (check-cache/cached c [::risk goal (sense/round-looked c)] #(estimate c goal))
         allowed (price/allowed c)]
     (if (<= hp allowed)
       (contract/ok :acceptable (str "route risk " (price/round1 hp) " hp, within " (price/round1 allowed)))
-      (contract/later :risky (str "route risk " (price/round1 hp) " hp over the " (price/round1 allowed) " the body can afford: "
-                                  (price/round1 dark-s) " s on dark open ground costs " (price/round1 spawn-hp) " hp, "
-                                  hostiles " hostile(s) near the way " (price/round1 hostile-hp) " hp, " (price/round1 death-hp) " hp for a recent death near it, " (price/round1 hide-hp) " hp for a recent hide near it, " (price/round1 lava-hp) " hp for seen lava near the way")
-                      :risk hp :allowed allowed :recheck-after-ms 10000))))
+      (let [stay (check-cache/cached c [::stay goal (sense/round-looked c)] #(stay-estimate c goal))
+            over (str "route risk " (price/round1 hp) " hp over the " (price/round1 allowed) " the body can afford: "
+                      (price/round1 dark-s) " s on dark open ground costs " (price/round1 spawn-hp) " hp, "
+                      hostiles " hostile(s) near the way " (price/round1 hostile-hp) " hp, " (price/round1 death-hp) " hp for a recent death near it, " (price/round1 hide-hp) " hp for a recent hide near it, " (price/round1 lava-hp) " hp for seen lava near the way")]
+        (cond
+          (<= hp (:hp stay)) (contract/ok :cheaper-than-staying (str "route risk " (price/round1 hp) " hp, over the " (price/round1 allowed) " affordable but staying here costs " (price/round1 (:hp stay)) " hp (" (:hostiles stay) " hostile(s) near the body)"))
+          (and (pos? (:hp stay)) (price/cannot-heal? c)) (contract/never :stranded (str over "; staying here costs " (price/round1 (:hp stay)) " hp and the body cannot heal, so waiting does not help: seal in or go to a nearer refuge") :risk hp :allowed allowed :stay-hp (:hp stay))
+          :else (contract/later :risky over :risk hp :allowed allowed :recheck-after-ms 10000))))))
