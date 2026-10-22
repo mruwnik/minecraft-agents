@@ -13,15 +13,23 @@
   "Args beside the table's target that the act cannot go without."
   {:place [:item] :steer [:decide] :jumpPlace [:item] :trade [:id :op]})
 
+(defn bucket? [item] (boolean (and (string? item) (re-find #"(^|_)bucket$" item))))
+
 (defn missing-args
   "The can-start? of primitive k: :ok when the args hold what the act needs, else :never :bad-args naming what is
   missing."
   [k]
   (let [need (distinct (concat (get-in primitive/table [k :target]) (also-required k)))]
     (fn [c]
-      (if-let [missing (seq (remove #(some? (get (:args c) %)) need))]
-        (contract/never :bad-args (str "missing " (str/join ", " (map name missing))) :missing (vec missing))
-        (contract/ok :args "args given")))))
+      (cond
+        (seq (remove #(some? (get (:args c) %)) need))
+        (let [missing (vec (remove #(some? (get (:args c) %)) need))]
+          (contract/never :bad-args (str "missing " (str/join ", " (map name missing))) :missing missing))
+
+        (and (= :useOn k) (bucket? (:item (:args c))))
+        (contract/never :bad-args "a bucket fills or pours a cell, not a block click: use jobs.items.use (or jobs.primitive.place)" :item (:item (:args c)))
+
+        :else (contract/ok :args "args given")))))
 
 (a/defargs settings
   {::job-time-s {:default 300 :doc "Seconds one primitive act may take before it gives up (:limit-reached); an offline act is the longest." :spec (a/num-in 0 nil)}})

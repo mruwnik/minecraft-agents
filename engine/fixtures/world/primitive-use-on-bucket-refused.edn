@@ -1,0 +1,13 @@
+;; jobs.primitive.use-on with a bucket is refused at once, :bad-args naming jobs.items.use; the bucket stays empty.
+{:defaults
+ {:tags [:primitives :jobs]
+  :time :any
+  :plot {:height 12}
+  :body {:at [16.5 0 16.5] :inventory [["bucket" 1]] :settle-s 3}
+  :limit-s 40}
+ :cases
+ [{:name "empty-bucket-on-water-refused"
+   :blocks [[:set [18 -1 16] "water"]]
+   :act [[:job (jobs.primitive.use-on {:pos #at [18 -1 16] :item "bucket" :face "up"})]]
+   :expect [{:event {:source :job :kind :stopped :data {:kind :impossible :reason :bad-args}} :within-s 15 :of-job true}]
+   :after [[:item "bucket" 1]]}]}

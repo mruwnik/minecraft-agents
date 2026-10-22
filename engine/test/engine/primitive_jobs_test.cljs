@@ -237,6 +237,13 @@
     (is (= [:never {:reason :bad-args :missing [:pos :item]}] ((juxt first #(dissoc (nth % 2) :text)) (can-start? {:args {:pos nil}}))))
     (is (= :ok (first (can-start? {:args {:pos {:x 0 :y 64 :z 0} :item "dirt"}}))))))
 
+(deftest use-on-with-a-bucket-is-refused-pointing-at-items-use
+  (let [can-start? (:can-start? (primitive-job/job :useOn 'jobs.primitive.use-on))
+        [kind text data] (can-start? {:args {:pos [0 64 0] :item "bucket"}})]
+    (is (= [:never :bad-args] [kind (:reason data)]))
+    (is (re-find #"jobs.items.use" text))
+    (is (= :ok (first (can-start? {:args {:pos [0 64 0] :item "shears"}}))))))
+
 (deftest a-primitive-job-with-a-wrong-valued-pos-is-refused-before-it-starts
   (is (re-find #"jobs.primitive.place :pos must be" (expr/problem registry/jobs '(jobs.primitive.place {:pos "x" :item "dirt"}))))
   (is (nil? (expr/problem registry/jobs '(jobs.primitive.place {:pos [0 64 0] :item "dirt"})))))
