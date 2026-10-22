@@ -37,6 +37,14 @@
     (is (< (cost/fight-damage {:weapon "iron_sword" :equipment diamond-8 :mobs [{:name "zombie" :distance 0}]})
            (cost/fight-damage {:weapon "iron_sword" :equipment iron-8 :mobs [{:name "zombie" :distance 0}]})))))
 
+(deftest exposure-is-the-hurt-a-second-at-the-hp-price-of-the-health-left
+  (let [price #(cost/exposure-price {:health %1 :equipment %2} %3)]
+    (is (zero? (price 9.7 {} [])) "no danger, no price")
+    (is (= (round2 (* (cost/hurt-rate {} "skeleton") (cost/hp-price 9.7))) (round2 (price 9.7 {} ["skeleton"]))))
+    (is (< (price 20 {} ["skeleton"]) (price 9.7 {} ["skeleton"])) "an hp is dearer at low health")
+    (is (< (price 9.7 iron-set ["skeleton"]) (price 9.7 {} ["skeleton"])) "armour")
+    (is (< (price 9.7 {} ["skeleton"]) (price 9.7 {} ["skeleton" "zombie"])) "each danger adds its own")))
+
 (deftest a-creeper-uses-blast-damage
   (let [plain (cost/armour-stats iron-set)
         blast (cost/armour-stats (enchanted iron-set "blast_protection"))]

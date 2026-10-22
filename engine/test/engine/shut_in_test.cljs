@@ -147,6 +147,34 @@
           (is (<= 3 (max (js/Math.abs x) (js/Math.abs z))) "a pocket in a wall 3 blocks from the room's centre")
           (is (= 4 (count (cells-of p "dig")))))))))
 
+(def cave-side
+  "Stone round an open cave x 0..8, z -2..2, y 64..66: the body at [0 64 0] has the rock wall at x -1 behind it, open sides round it."
+  (into {} (for [x (range -6 11) y (range 60 70) z (range -6 7)
+                 :when (not (and (<= 0 x 8) (<= -2 z 2) (<= 64 y 66)))]
+             [(ct/key-of x y z) "stone"])))
+
+(defn unsensed-behind-the-wall!
+  "The body never sensed the rock beyond the wall's first cell (x -2 and further) until a dig opens air beside it."
+  [p]
+  (let [sensed (tu/sensed-by p)
+        air? (fn [x y z] (= "air" (some-> (sensed #js {:x x :y y :z z}) .-name)))]
+    (tu/set-sensed! p (fn [pos]
+                        (let [[x y z] (map #(js/Math.floor (aget pos %)) ["x" "y" "z"])]
+                          (if (and (<= x -2) (not-any? (fn [[dx dy dz]] (air? (+ x dx) (+ y dy) (+ z dz))) [[0 0 0] [1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]))
+                            #js {:unknown true :pos pos}
+                            (sensed pos)))))))
+
+(deftest under-fire-at-low-health-walls-beat-a-pocket-into-unsensed-rock
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [way (fn ^:async way-of [health entities]
+                    (:way (:data (:out (await (plug! {:blocks cave-side :self {:health health} :entities entities
+                                                      :inventory (into pick [{:name "dirt" :count 16}])}
+                                                     {:ways #{:walls :pocket}} unsensed-behind-the-wall!))))))]
+          (is (= :walls (await (way 9.7 [(ct/skeleton 8 64 0)]))) "a pocket that may lay open is time in the skeleton's line of fire")
+          (is (= :pocket (await (way 20 []))) "no danger: the pocket is the fewer seconds"))))))
+
 (deftest a-body-already-enclosed-is-done-before-anything-is-placed
   (async done
     (tu/run-async done

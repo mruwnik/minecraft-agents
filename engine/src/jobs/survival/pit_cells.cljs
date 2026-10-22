@@ -255,6 +255,15 @@
                :when (and (not (keep n)) (some-> (u/seen-name p n) (as-> nm (not (solid/solid? nm)))))]
            n)))
 
+(defn unsensed-shell
+  "How many cells beside, over or under cells, outside keep, the body never sensed: each may lay the dig open."
+  [p cells keep]
+  (count (set (for [cell cells
+                    [dx dy dz] rules/neighbour-deltas
+                    :let [n (assoc cell :x (+ (:x cell) dx) :y (+ (:y cell) dy) :z (+ (:z cell) dz))]
+                    :when (and (not (keep n)) (some-> (u/sensed p n) .-unknown))]
+                n))))
+
 (defn ^:async lays-open?
   "After a dig of the last of cells (those dug so far): why what the digs laid open rules the refuge out, :fluid-adjacent
   for fluid or :lays-open for a seen open cell outside keep, else nil. Lava is first filled with a carried block (:on-lava :seal, the default); any fluid still

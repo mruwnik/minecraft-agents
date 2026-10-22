@@ -139,6 +139,19 @@
                          (if plan (way/zone-penalty c {:dig (concat (:prep plan) (mapcat :dig (:steps plan))) :plug (conj (:plugs plan) (:roof plan))}) 0)))
                   (settings/get settings ::job-time-s)))))
 
+(defn exposed-s
+  "Seconds the body stays open to a shooter before the pit shuts it in: the dig, and plug-way's ::unsensed-s for each cell
+  round it the body never sensed (a gap there fails the pit); the guessed ::pit-s with no plan yet, ##Inf when it cannot be done."
+  [c]
+  (let [{:keys [plan stop]} (assess c)
+        feet (sh-sense/feet (:primitives c))]
+    (cond
+      stop ##Inf
+      (nil? plan) (settings/get settings ::pit-s)
+      :else (let [cells (concat (:prep plan) (mapcat :dig (:steps plan)))]
+              (+ (dig-seconds c plan)
+                 (* (way/unsensed-s) (pit/unsensed-shell (:primitives c) cells (set (into cells [feet (update feet :y inc)])))))))))
+
 (defn ^:async step!
   "One step of the pit: its plan is made once and kept in job memory, made again when the body has left its column. :done,
   :again, or nil with no pit that fits or one that failed (the stop in memory)."

@@ -105,21 +105,37 @@
         (when (sink-site? c) {:sink? true})
         {})))
 
-(defn quote-of
-  "Walk to the standing cell, the dig of the pocket's two cells by the best carried tool (the hand when a tool is to be fetched), one block to seal the way in."
+(defn plan
+  "{:feet :stand :cells (the pocket's dug cells, nil with no site) :sink? :open-s (the walk, the dig and a tool fetch: seconds before the way in can be shut)}."
   [c]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
         {:keys [stand fetch? sink?]} (site c)
-        cells (when stand (pit/pocket-site c stand (boolean fetch?)))
-        seconds (if (and stand cells)
-                  (+ (* (u/dist feet stand) (settings/get settings ::walk-s-per-block))
-                     (/ (reduce + (map #(tools/clear-ms p (pit-quote/priced-name p %)) cells)) 1000)
-                     (way/place-s c)
-                     (way/zone-penalty c {:dig cells :plug [feet]})
-                     (if fetch? (settings/get settings ::fetch-s) 0))
+        cells (when stand (pit/pocket-site c stand (boolean fetch?)))]
+    {:feet feet :stand stand :cells cells :sink? sink?
+     :open-s (when cells
+               (+ (* (u/dist feet stand) (settings/get settings ::walk-s-per-block))
+                  (/ (reduce + (map #(tools/clear-ms p (pit-quote/priced-name p %)) cells)) 1000)
+                  (if fetch? (settings/get settings ::fetch-s) 0)))}))
+
+(defn quote-of
+  "Walk to the standing cell, the dig of the pocket's two cells by the best carried tool (the hand when a tool is to be fetched), one block to seal the way in."
+  [c]
+  (let [{:keys [feet cells sink? open-s]} (plan c)
+        seconds (if cells
+                  (+ open-s (way/place-s c) (way/zone-penalty c {:dig cells :plug [feet]}))
                   (if sink? (+ (settings/get settings ::sink-s) (way/place-s c)) ##Inf))]
     (way/quote-of c seconds (settings/get settings ::job-time-s))))
+
+(defn exposed-s
+  "Seconds the body stays open to a shooter before the pocket shuts it in: the walk and the dig, and plug-way's ::unsensed-s
+  for each cell round the pocket it never sensed (a gap there fails the pocket). ##Inf with no site."
+  [c]
+  (let [{:keys [stand cells sink? open-s]} (plan c)]
+    (cond
+      cells (+ open-s (* (way/unsensed-s) (pit/unsensed-shell (:primitives c) cells (set (into cells [stand (update stand :y inc)])))))
+      sink? (settings/get settings ::sink-s)
+      :else ##Inf)))
 
 (defn ^:async step!
   "A pocket dug once (pit-cells/pocket!: it steps in), then walls on its way in: :done, :again, or nil with none that fits

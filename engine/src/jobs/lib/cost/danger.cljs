@@ -8,6 +8,8 @@
   weight 1 within 2 blocks of the route, falling to 0 at :radius; counts only if a melee mob can walk to
   the route or a ranged mob has a line of fire to it. Overrides {mob-name number-or-{:times n}}: threat before armour.
 
+  exposure-price: the seconds a second exposed to mobs that reach the body costs (hurt-rate, the hp a second, at the hp price).
+
   danger-rate: mob-hurt over 1 s x stance factor (:flee x4, :fight x0.1), at most max-rate: hp a second (the factors, the cap and
   shape are settings, danger-opts), which the planner prices at go-to's hp price (:hp-seconds x health-scale) like a drop's damage."
   (:require [engine.args :as a]
@@ -15,6 +17,7 @@
             [engine.settings :as settings]
             [jobs.lib.cost.armour :as armour]
             [jobs.lib.cost.fight :as fight]
+            [jobs.lib.cost.health :as health]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]))
@@ -192,13 +195,24 @@
   (fight/decide {:health health :reserve fight/default-reserve :creeper? (= "creeper" mob-name)
                  :damage (fight/fight-damage {:weapon weapon :equipment equipment :mobs [{:name mob-name :distance 0}]})}))
 
+(defn hurt-rate
+  "hp a second mob-name takes off a body wearing equipment while it can reach it."
+  [equipment mob-name]
+  (threat/mob-hurt (armour/armour-stats equipment) mob-name 1))
+
 (defn danger-rate
   "hp a second near mob-name costs body {:health :equipment :weapon} (see the ns doc). opts: danger-opts (default none)."
   ([body mob-name] (danger-rate body mob-name nil))
   ([{:keys [equipment] :as body} mob-name opts]
    (min (get opts :max-rate max-rate)
-        (* (threat/mob-hurt (armour/armour-stats equipment) mob-name 1)
+        (* (hurt-rate equipment mob-name)
            (get (merge stances (:stances opts)) (stance body mob-name))))))
+
+(defn exposure-price
+  "Seconds each second spent exposed costs body {:health :equipment} to mob-names that can reach it: their hurt-rates
+  summed, at health/hp-price. 0 with none."
+  [{:keys [health equipment]} mob-names]
+  (* (reduce + 0 (map #(hurt-rate equipment %) mob-names)) (health/hp-price (if (number? health) health 20))))
 
 (defn danger-of [body kind {:keys [name pos]} {:keys [shape] :as opts}]
   (let [k (if (= "creeper" name) :creeper kind)]

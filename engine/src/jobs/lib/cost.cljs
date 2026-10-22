@@ -9,9 +9,9 @@
     weapon   attack-gap-ms, weapon-damage, remaining-health, mob-max-health, ranged-mobs: the fight inputs; the one tool-material table
              (tool-tier, weapon-rank, cheapness) (jobs.lib.cost.weapon).
     fight    fight-damage, decide: the damage of a fight with the current kit, :fight or :flee (jobs.lib.cost.fight).
-    danger   route-danger, straight-route: the danger of a walk past mobs; stance, danger-rate, danger-list: go-to's
+    danger   route-danger, straight-route: the danger of a walk past mobs; hurt-rate, exposure-price: what standing exposed to them costs; stance, danger-rate, danger-list: go-to's
              planner dangers; reach-first?, outruns-at?: a body's race to a refuge against its chasers (jobs.lib.cost.danger).
-    health   hp-seconds, health-scale, drown-prices, damage-budget, survivable-budget: what an hp costs and how many a walk may spend (jobs.lib.cost.health).
+    health   hp-seconds, health-scale, hp-price, drown-prices, damage-budget, survivable-budget: what an hp costs and how many a walk may spend (jobs.lib.cost.health).
     food     food-reserve: the food a body keeps carried, 3 days of it; cook-worth?, cook-gain: whether cooking raw food beats eating it now; meat-factor, meat-animal: raw meat's replacement cost, dear for hunted, 1 with a working pen (jobs.lib.cost.food).
     value    item-value, reserve-cost (using a reserved unit: value x s/(1-s)), fetch-cost, walk-cost, detour-cost: what items are worth, what fetching them, walking or a pick-up detour costs; tour-cost, tour-worth, food-worth: a tour of
              frontiers against what its goal is worth; light-cost: a torch go-to places; dig-cost: the seconds a block takes to dig (jobs.lib.cost.value);
@@ -68,6 +68,8 @@
 (def straight-route danger/straight-route)
 (def stance danger/stance)
 (def danger-rate danger/danger-rate)
+(def hurt-rate danger/hurt-rate)
+(def exposure-price danger/exposure-price)
 (def danger-opts danger/danger-opts)
 (def danger-shape-problem danger/danger-shape-problem)
 (def danger-list danger/danger-list)
@@ -84,6 +86,7 @@
 (def hp-seconds health/hp-seconds)
 (def walk-hp-seconds health/walk-hp-seconds)
 (def health-scale health/health-scale)
+(def hp-price health/hp-price)
 (def drown-prices health/drown-prices)
 (def damage-budget health/damage-budget)
 (def survivable-budget health/survivable-budget)

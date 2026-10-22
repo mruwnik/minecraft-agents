@@ -19,6 +19,7 @@
 (a/defargs settings
   {::place-s {:default 3 :doc "Seconds a placement is guessed to take, for a way's quote." :spec (a/num-in 0 nil)}
    ::night-place-s {:default 1 :doc "Seconds a placement (aim, place, settle) takes for a night's shelter; the dig back at dawn is daylight work, so only placing is priced." :spec (a/num-in 0 nil)}
+   ::unsensed-s {:default 2 :doc "Seconds of exposure a pit or pocket adds under fire for each cell round its dig the body never sensed: the dig may lay it open and fail with the body still in the open." :spec (a/num-in 0 nil)}
    ::trespass-s {:default 1000 :doc "Seconds a way's quote adds when a cell it digs or fills is another's (zone, claim or plan): a last resort, after every way that keeps off." :spec (a/num-in 0 nil)}})
 
 
@@ -34,6 +35,8 @@
   "Seconds a placement is priced at in a way's quote: only the placing for a night's shelter."
   [c]
   (settings/get settings (if (= :night (:for (:args c))) ::night-place-s ::place-s)))
+
+(defn unsensed-s [] (settings/get settings ::unsensed-s))
 
 (defn zone-penalty
   "Seconds to add to a way's quote for the cells in {:dig :place :plug} that the zone rules refuse, 0 when none."

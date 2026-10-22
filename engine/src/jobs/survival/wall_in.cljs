@@ -78,6 +78,11 @@
     (way/quote-of c (if (why-not c) ##Inf (+ (* open (cell-seconds c open)) (way/zone-penalty c {:place cells}) (short-penalty c open)))
                   (settings/get settings ::job-time-s))))
 
+(defn exposed-s
+  "Seconds the body stays open to a shooter: the placements of the first side (feet and head), which go up first (wall-placer/facing-first)."
+  [c]
+  (* (way/place-s c) (min 2 (count (dig-cells/open-cells (:primitives c) (sh-sense/feet (:primitives c)))))))
+
 (def safe? ready/ok)
 (def fit? ready/ok)
 

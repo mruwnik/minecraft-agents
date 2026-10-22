@@ -6,11 +6,14 @@
             [engine.ctx :as ctx]
             [engine.settings :as settings]
             [jobs.lib.combat :as combat]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.spent :as spent]
             [jobs.lib.util :as u]
             [jobs.survival.dig-in-cells :as dig-cells]
             [jobs.survival.dig-pit :as dig-pit]
+            [jobs.survival.dig-pocket :as dig-pocket]
             [jobs.survival.plug-way :as way]
             [jobs.survival.shut-in-night :as night]
             [jobs.survival.wall-in :as wall-in]))
@@ -22,7 +25,8 @@
   Ways (:ways) are child jobs: jobs.survival.wall-in (the open sides, a roof support and the roof with carried blocks),
   dig-pit (dig down under a solid side and plug the hole), dig-pocket (dig a pocket beside the body, step in, wall the way in), and :room
   (jobs.survival.enter-room: walk into the :place, else the home or the closed room the body is in, shut its doors, fill a doorway or a hole in its roof; walks, which the others do not).
-  It quotes the ways the call allows, starts the cheapest (ties in the order room, walls, pit, pocket) and, when that one ends other than
+  It quotes the ways the call allows, starts the cheapest (ties in the order room, walls, pit, pocket; under fire each way's seconds in the open
+  are priced too, see price) and, when that one ends other than
   :done, the next cheapest (after a :continue step when a hostile is within 2 blocks); a way that cannot be done here (quote ##Inf) is dropped. Blocks are the call's :use :blocks, else every
   :build filler (for :night the shelter fillers), carried or dug. None left is nothing-possible :no-way {:text :tried [ways that failed] :dropped [ways that cannot be done]
   :why {way the child's cause} :stops {way {:reason :needs}} (dig-pit's stop reason)}.
@@ -84,18 +88,39 @@
   (let [q (await (ctx/quote c (first (children way)) (child-args c way)))]
     (if (contract/ending? q) ##Inf (get-in q [:uses :job-time 1] ##Inf))))
 
+(defn exposure
+  "Seconds each second in the open costs the body now: cost/exposure-price over the real dangers (jobs.lib.danger/dangers); 0 with none."
+  [c]
+  (let [p (:primitives c)
+        self (.self p)
+        names (map #(.-name %) (danger-q/dangers p (danger-q/hostile-radius) {:ranged-radius (danger-q/ranged-radius)}))]
+    (cost/exposure-price {:health (.-health self) :equipment (cost/equipment-of (.-equipment self))} names)))
+
+(def exposed-s
+  "Each way's seconds in the open before it covers the body (the :room walk: its whole quote)."
+  {:walls wall-in/exposed-s :pit dig-pit/exposed-s :pocket dig-pocket/exposed-s})
+
+(defn price
+  "A way's quoted seconds plus, under fire (exposure f), f x its seconds in the open."
+  [c f way seconds]
+  (if (or (zero? f) (infinite? seconds))
+    seconds
+    (+ seconds (* f (if-let [e (exposed-s way)] (e (update c :args merge (child-args c way))) seconds)))))
+
 (defn ^:async choose
-  "{:way the cheapest allowed way not failed (nil when none) :dropped [ways that cannot be done]}."
+  "{:way the cheapest allowed way not failed (nil when none) :dropped [ways that cannot be done]}: quoted seconds, under
+  fire plus what each way's seconds in the open cost (price)."
   [c]
   (let [failed (set (:failed-ways (ctx/mem c)))
         allowed (remove failed (filter #(ctx/way? c %) ways))
         barred (if (night/night? c) (filter #(and (not= :pit %) (night/failed-near c %)) allowed) [])
         left (remove (set barred) allowed)
+        f (exposure c)
         costs (loop [[w & more] left acc []]
-                (if (nil? w) acc (recur more (conj acc [w (await (cost-of c w))]))))
+                (if (nil? w) acc (recur more (conj acc [w (price c f w (await (cost-of c w)))]))))
         able (remove (comp infinite? second) costs)]
     (let [shown (into {} (map (fn [[w s]] [w (if (infinite? s) :inf (/ (js/Math.round (* 10 s)) 10))]) costs))]
-      (ctx/emit! c :shut-in.quotes :debug {:costs shown :text (str "ways quoted (seconds): " (pr-str shown))}))
+      (ctx/emit! c :shut-in.quotes :debug {:costs shown :exposure f :text (str "ways quoted (seconds): " (pr-str shown))}))
     {:way (first (first (sort-by second able)))
      :barred (vec barred)
      :dropped (into (vec barred) (map first (filter (comp infinite? second) costs)))}))
