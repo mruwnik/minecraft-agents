@@ -126,6 +126,15 @@
            (and (= :budget (some-> (:reason result) keyword)) (some-> (:goal-left result) (<= (budget-near)))))
        (not (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword))))))
 
+(defn goal-lava?
+  "Whether the goal cell [x y z] is refused outright, whatever is dug: it is lava, it stands over lava, or lava lies
+  beside it on all four sides (at its level or the floor's). Cells never seen read as not lava."
+  [p [x y z]]
+  (let [lava? (fn [dx dy dz] (some-> (u/seen-block p {:x (+ x dx) :y (+ y dy) :z (+ z dz)}) .-name (= "lava")))]
+    (boolean
+     (or (lava? 0 0 0) (lava? 0 -1 0)
+         (every? (fn [[dx dz]] (or (lava? dx 0 dz) (lava? dx -1 dz))) [[1 0] [-1 0] [0 1] [0 -1]])))))
+
 (defn route-cells
   "[{:cell :block :guess}]: the cheapest cells to dig for a walk from feet cell from down or across into goal
   (jobs.lib.dig-route priced by jobs.lib.cost: a block's walk and dig-cost; at most the dig-route settings' digs and fall),

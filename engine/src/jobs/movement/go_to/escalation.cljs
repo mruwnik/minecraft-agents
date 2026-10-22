@@ -3,6 +3,7 @@
   clear-path, dig route or a walk to the wall), note the holes it dug, put them back once the walk is on past them.
 
   Rules of go-to:
+  - A goal that is lava, stands over lava or has lava on all four sides (escalate-choose/goal-lava?) is refused at once when the walk finds it walled in: no way is made, in or out; the dig rules below are for an acceptable goal that is walled in.
   - :dig-out: a body sealed in its own shelter (a :shelter entry) by day, when the walk finds no way, leaves it first (dig-in-leave/leave!, a go-to.escalated {:step :leave-shelter}); never at night.
   - With an escalating way: a body not in its own shelter whose search ran out of land (:exhausted, in any size of cave or mine), or that is shut in (jobs.lib.reach.room/enclosed?) and whose
     search ran out of land (:goal-enclosed or :goal-cut-off) or of nodes (:budget) within the budget-near setting of the goal, any body whose only way needs a sprint it lacks the food for (:abilities :corner-jump or :gap-sprint), or any body whose last 3 walks failed at the walker (stuck, off-plan, steer failed, no nearer; escalation/walker-fault?) with no door it can open beside its room (one with room for the body behind it; a trunk over that cell makes it no way out, and the dig route cuts the tree's logs: escape/tree-log?), makes a way instead of giving up, one child job
@@ -33,7 +34,7 @@
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.movement.go-to.climb :as climb]
             [jobs.movement.go-to.escalate-choose :refer [climb-on? dive-climb-on? dive? escalate-reason? escalate? fetch-tool? gap-fill
-                                                         goal-way dig-way goal-walled? own-stair route-cells shelter-exit? skips sprint-only?]]
+                                                         goal-way dig-way goal-lava? goal-walled? own-stair route-cells shelter-exit? skips sprint-only?]]
             [jobs.movement.go-to.holes :refer [forget-dug-own! hole-tag may-dig-fn note-holes! own-holes own-placed-fn planned-cells]]
             [jobs.movement.go-to.result :as end]
             [jobs.movement.go-to.torch :as torch]
@@ -159,6 +160,8 @@
         goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
         opts {:own? (own-placed-fn c) :skip (skips c) :fetch? (fetch-tool? c) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c)}
         into? (goal-walled? c result)
+        ;; a goal over or ringed by lava is refused: no dig, in or out, makes it acceptable
+        lava-goal? (and (= :goal-enclosed (some-> (:reason result) keyword)) (goal-lava? (:primitives c) goal))
         ;; a shut-in body (a pit, a plateau it cannot walk off) whose goal is walled in digs straight into it when it can
         dig-in? (and (not into?) (= :goal-enclosed (some-> (:reason result) keyword)))
         choose (cond into? #(goal-way c feet goal % opts)
@@ -180,6 +183,7 @@
             (choosable? (constantly true)) {:step :none :why :zone}
             :else e)]
     (cond
+      lava-goal? (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation {:step :none :why :goal-lava}}))
       (and (:cave-climb (ctx/mem c)) (or (> n (tuning/max-escalations)) (= :none (:step e))))
       (do (ctx/update-mem! c #(-> % (dissoc :cave-climb :dive-climb :give-up) (assoc :cave-ok true)))
           :again)

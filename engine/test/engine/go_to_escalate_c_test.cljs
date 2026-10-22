@@ -249,6 +249,17 @@
           (is (empty? (calls (:p lava) "dig")) "lava: nothing dug")
           (is (true? (:arrived @(:out water))) (pr-str (select-keys @(:out water) [:why :text]))))))))
 
+(deftest a-goal-in-or-over-or-ringed-by-lava-is-refused-whatever-is-dug
+  (let [p (tu/fake {:self {:pos {:x 0 :y 64 :z 0}}
+                    :blocks (merge (box -6 63 -6 6 63 6 "stone")
+                                   {"3,63,3" "lava" "5,64,0" "lava"}
+                                   {"-1,63,-4" "lava" "1,63,-4" "lava" "0,63,-5" "lava" "0,63,-3" "lava"})})
+        lava? #(choose/goal-lava? p %)]
+    (is (true? (lava? [3 64 3])) "over lava")
+    (is (true? (lava? [5 64 0])) "in lava")
+    (is (true? (lava? [0 64 -4])) "lava on all four sides of the floor cell")
+    (is (false? (lava? [1 64 1])) "on stone")))
+
 (deftest go-to-the-cut-off-deck-with-the-default-budget-is-still-cut-off
   (async done
     (tu/run-async done
