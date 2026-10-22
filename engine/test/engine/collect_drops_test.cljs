@@ -360,6 +360,23 @@
             (is (= 1 (bd/carried p "dirt")))
             (is (empty? (:left result)))))))))
 
+(deftest a-dug-cell-the-dark-hides-is-lit-with-a-carried-torch-and-looked-at-again
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [pocket (into {} (for [x (range -1 9) y (range 56 64) z [-2 -1 0 1 2]
+                                    :when (not= [5 58 0] [x y z])]
+                                [(str x "," y "," z) "stone"]))
+              {:keys [eng p]} (bd/setup {:self body :inventory [{:name "wooden_pickaxe" :count 1} {:name "torch" :count 2}] :blocks pocket})
+              dark-cell? (fn [pos] (= [5 59 0] [(.-x pos) (.-y pos) (.-z pos)]))]
+          (aset p "sensedAt" (fn [pos] (if (and (dark-cell? pos) (empty? (bd/calls p "place"))) #js {:unknown true} (.blockAt p pos))))
+          (drop! p [5 58 0] "dirt")
+          (seen-from-above! p)
+          (let [result (await (tu/child-outcome eng job {:radius 8 :dig true} 80))]
+            (is (= 1 (count (bd/calls p "place"))) "a torch was set down, once")
+            (is (= "torch" (:item (js->clj (.-args (first (bd/calls p "place"))) :keywordize-keys true))))
+            (is (pos? (:collected result)))))))))
+
 (defn collect-unreachable-first!
   "Make the first n collect calls answer unreachable without moving; later ones run for real."
   [p n]

@@ -16,6 +16,7 @@
             [jobs.lib.pace :as pace]
             [jobs.lib.reach :as reach]
             [jobs.lib.sense :as sense]
+            [jobs.lib.torch :as torch]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.util :as u]))
 
@@ -38,7 +39,7 @@
   With :ids, ids not in sight when none is left to try are booked as one :left {:reason :unseen :ids [...] :last {id [x y z]}}, the cell each was last seen in.
   With :dig, a drop go-to cannot reach, or one too deep in the dug hole, is dug to once: the fewest cells (jobs.lib.dig-route,
   over the blocks the body has seen, an unseen one taken for stone) that open a way to it, each a jobs.blocks.dig child (zones, claims, hazards
-  are its rules), then the walk is tried again. No such way leaves the drop :no-route, a dig that fails with that dig's outcome (:refused, :cannot, :unreachable ...).
+  are its rules), then the walk is tried again. A dig that ends :unseen (the dark hides the cell) sets a carried torch in the body's cell once per call, looks again and digs on. No such way leaves the drop :no-route, a dig that fails with that dig's outcome (:refused, :cannot, :unreachable ...).
   A sweep without :ids that sees no drop turns round once from each cell it ends in (entities are sensed only in the view cone) before it ends; a dig's :ids sweep does not (the dig looked already, and a danger's time is short).
   Needs nothing; the sweep is the whole job. Ends :done with data {:collected n}, the number of items that entered the
   inventory, with :left [{:pos :reason}] for those (also in :loose-left, so the :loose-items reflex leaves them); none in
@@ -243,16 +244,28 @@
 
 (defn replans [] (settings/get settings ::replans))
 
+(defn cause-reason [e] (when (map? e) (:reason (:cause e))))
+
 (defn ^:async dig-cells!
   "One dig child per cell of cells, in order: :dug when all are open, else {:out outcome :cell cell :n cells dug before it}."
   [c cells]
   (loop [cells cells n 0]
     (if-let [cell (first cells)]
-      (let [o (await (blocks/dig-cell! c cell {:need-drop true}))]
+      (let [e (await (blocks/dig-cell-ending! c cell {:need-drop true}))
+            o (if (= :unseen (cause-reason e)) :unseen (blocks/dig-outcome e))]
         (if (#{:dug :missing} o)
           (recur (rest cells) (inc n))
           {:out o :cell cell :n n}))
       :dug)))
+
+(defn ^:async light-here!
+  "A dig stopped on a cell it could not see: a body carrying torches sets one in its own cell, once per call (a player lights the
+  dark before looking down it), so the cell can be looked at. :continue while the place child waits, :lit after it ended, nil when not due."
+  [c]
+  (when (and (not (:lit (ctx/mem c))) (pos? (torch/torches-held (:primitives c))))
+    (let [o (await (blocks/place-cell! c (zipmap [:x :y :z] (u/cell-vec (u/self-pos c))) "torch" {}))]
+      (when-not (= :continue o) (ctx/update-mem! c assoc :lit true))
+      (if (= :continue o) :continue :lit))))
 
 (defn ^:async dig-to!
   "Dig the route to item (jobs.lib.dig-route). A dig that fails after others of its route were dug (a cell beyond the light was
@@ -271,6 +284,11 @@
               (= :dug d) :dug
               (and (pos? (:n d)) (< pass (replans)) (not= :continue (:out d)))
               (do (await (dig-look/look-at! c (:cell d))) (recur (inc pass)))
+              (= :unseen (:out d))
+              (let [l (await (light-here! c))]
+                (if l
+                  (if (= :continue l) :continue (do (await (look-pit! c from (item-cell item))) (recur pass)))
+                  :unseen))
               :else (:out d))))))))
 
 (defn moved-item
