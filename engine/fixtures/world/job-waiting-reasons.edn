@@ -27,7 +27,7 @@
    :act [[:job (jobs.survival.extinguish {})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 20 :of-job true}]}
   {:name "get-food-not-hungry-is-done-already"
-   :act [[:job (jobs.survival.get-food {})]]
+   :act [[:job (jobs.survival.get-food {:carry 0})]]
    :expect [{:event {:source :job :kind :completed :data {:kind :done :cause :already}} :within-s 20 :of-job true}]}
   {:name "night-waits-not-night"
    :time :day :time-why :dawn-decision
