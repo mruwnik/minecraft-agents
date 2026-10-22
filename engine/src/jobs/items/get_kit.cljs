@@ -332,7 +332,7 @@
                   (nil? r) (do (when (food-first? c) (ctx/update-mem! c assoc :hurt-fed true)) :again)
                   :else (do (ctx/emit! c :kit.no-food :warn {:cause (:cause r) :why (:why r) :food fp
                                              :text (str "no food found (" (name (:cause r)) ")")})
-                            (finish! c items have (assoc (stop-of :nothing-possible {:reason :no-food} (str "hurt with no food to heal on, and none found (" (name (:cause r)) "); mining on would risk death"))
+                            (finish! c items have (assoc (stop-of :nothing-possible {:reason :no-food} (str "hurt with no food to heal on, and none found (" (or (:why r) (name (:cause r))) "); mining on would risk death"))
                                                          :item (first todo))))))
 
           (and (not (:covered-done (ctx/mem c))) (seq (or (:covered (ctx/mem c)) (covered-of version (:partial-first a) todo (:carried st)))))
@@ -364,7 +364,7 @@
                     (ctx/emit! c :kit.no-food :warn {:cause (:cause r) :why (:why r) :food fp
                                                      :text (str "no food found (" (name (:cause r)) ")")}))
                   (if (and r (zero? (foods/stock-points (:inv (state c)))) (< (.-food (.self (:primitives c))) min-food-to-dig))
-                    (finish! c items have (assoc (stop-of :nothing-possible {:reason :no-food} (str "no food carried and none found (" (name (:cause r)) "); mining ahead needs some"))
+                    (finish! c items have (assoc (stop-of :nothing-possible {:reason :no-food} (str "no food carried and none found (" (or (:why r) (name (:cause r))) "); mining ahead needs some"))
                                                  :item (first todo)))
                     :again))))
 

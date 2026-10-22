@@ -1,6 +1,7 @@
 (ns engine.get-kit-test
   "jobs.items.get-kit: a list of items got in order and the armour worn, against the fake world."
   (:require [cljs.test :refer [deftest is async]]
+            [clojure.string :as str]
             [engine.contract :as contract]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -373,7 +374,8 @@
         (let [s (start (assoc-in (hungry-world [] 16) [:self :health] 6) {:items ["iron_pickaxe"] :explore false})]
           (await (f/run-ticks s 80))
           (is (= {:status :stopped :item "iron_pickaxe" :reason :no-food}
-                 (select-keys @(:out s) [:status :item :reason]))))))))
+                 (select-keys @(:out s) [:status :item :reason])))
+          (is (str/includes? (:why @(:out s)) (:why (first (f/events-of s :kit.no-food)))) "the stop says what the food search found"))))))
 
 (defn raw-world
   "Nothing carried; a furnace at the camp (the crafting table is made), three oak trees on grass, then stone, coal and iron ore beyond the own zone, on an andesite floor."
