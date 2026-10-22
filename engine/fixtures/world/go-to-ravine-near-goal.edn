@@ -3,8 +3,8 @@
 ;; the caller's :worth pays for the tour, so it does not give up after the first frontier walk. The fail case removes the
 ;; bridge: no way, the body ends not arrived.
 {:defaults
- {:tags [:movement :planner :large]
-  :plot {:height 16 :length 360 :width 32}
+ {:tags [:movement :planner :large] :time :any
+  :plot {:height 16 :length 360 :width 32 :light :lit}
   :limit-s 300
   :blocks
   [[:fill [20 10 8] [330 10 11] "stone"]
