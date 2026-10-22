@@ -130,6 +130,15 @@ test('with unknown, a cell in the blocked set reads the blocked id, others stay 
   assert.equal(masked.stateAt(6, 70, 4), id('void_air'))
 })
 
+test('with unknown, a blocked cell the body has seen since reads as it is', () => {
+  const { unknown, world } = memoryRig()
+  unknown.blockedId = id('stone')
+  unknown.blocked = new Set(['4,70,4', '5,70,4'])
+  const masked = liveSnapshot(world, { ...SIZE, unknown })
+  assert.equal(masked.stateAt(4, 70, 4), id('dirt'))
+  assert.equal(masked.stateAt(5, 70, 4), id('stone'))
+})
+
 test('with unknown, the memory is asked by world section y (minY offset), not the snapshot section index', () => {
   const { snapshot, asked } = memoryRig()
   snapshot.stateAt(3, 70, 4)
