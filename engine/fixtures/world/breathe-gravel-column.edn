@@ -24,4 +24,15 @@
          [:wait-s 3]]
    :expect [{:event {:source :system :kind :stop-waiting} :within-s 40}
             {:no-event {:source :body :kind :died} :for-s 30}]
-   :after [[:not-block [16 0 16] "gravel"] [:not-block [16 1 16] "gravel"]]}]}
+   :after [[:not-block [16 0 16] "gravel"] [:not-block [16 1 16] "gravel"]]}
+  ;; Card a1fdbbfa (Bramble #40): on a stair up the gravel falls into the column; the body steps back down to the step it came
+  ;; from (x 17, one lower, its head cell open) instead of digging gravel that keeps falling. No shovel: a hand dig is slow.
+  {:name "gravel-column-on-a-stair-step-is-left-by-stepping-down"
+   :blocks [[:fill [17 -1 16] [17 1 16] "air"] [:set [17 -2 16] "stone"]]
+   :body {:at [16.5 0 16.5] :yaw 270 :settle-s 2 :inventory [["stone_pickaxe" 1]]}
+   :act [[:rcon "execute positioned $X $Y $Z run fill ~16 ~ ~16 ~16 ~4 ~16 gravel"]
+         [:await {:source :reflex :kind :ended :context {:reflex-id :suffocating}} 40]
+         [:wait-s 3]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :suffocating}} :within-s 10}
+            {:no-event {:source :body :kind :died} :for-s 30}]
+   :after [[:body-near [17.5 -1 16.5] 1] [:block [16 1 16] "gravel"]]}]}

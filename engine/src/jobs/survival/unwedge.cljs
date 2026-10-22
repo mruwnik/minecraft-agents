@@ -15,7 +15,7 @@
 (def doc
   "Get out of a block that fills the feet cell (jobs.lib.breath), e.g. sand that fell on the body.
   One run, paced between tries, until the feet cell is no longer a full block (then :done):
-  - Once, step to a free side cell (looking around first for the sides it has not seen; feet and head cells passable, something to stand on).
+  - Once, step to a free side cell, or one down a step (jobs.lib.breath/side-cell; looking around first for the sides it has not seen).
   - Else dig the feet block with the best carried tool (a last resort, tidied up like breathe's digs).
     A block the dig reports :cannot (bedrock) is final; other failed digs (or a dig refused because lava touches
     the cell) count, three in a row are final.

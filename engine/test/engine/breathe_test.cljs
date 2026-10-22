@@ -580,6 +580,17 @@
           (is (= ["moveTo"] (call-names p)) "no dig")
           (is (= [[:completed nil]] (ended seen))))))))
 
+(deftest enclosed-on-a-stair-up-steps-back-down-the-stair-without-digging
+  ;; Bramble #40: gravel fell into the head cell of a stair step; digging it out let the next gravel fall, 12.8 -> 0 hp
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks {"0,65,0" "gravel" "0,66,0" "gravel" "0,63,0" "stone" "1,62,0" "stone"}})]
+          (await (one-run! eng defaults))
+          (is (= {:x 1 :y 63 :z 0} (core/self-pos p)) "stepped down to the step the stair came from")
+          (is (= ["moveTo"] (call-names p)) "no dig under the gravel")
+          (is (= [[:completed nil]] (ended seen))))))))
+
 (deftest enclosed-with-a-failed-side-step-digs-in-the-same-run
   (async done
     (tu/run-async done

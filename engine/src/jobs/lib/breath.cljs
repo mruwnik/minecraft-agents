@@ -441,21 +441,24 @@
 (defn side-cell
   "A horizontal neighbour of the feet cell where the body fits (feet and head
   cells passable and not harmful: lava, fire, cactus...) and can stand (the cell below is neither air, water, a water
-  plant, a bubble column, lava nor magma); nil if none. Unloaded cells do not count."
+  plant, a bubble column, lava nor magma), else the cell one below a neighbour the body can step off into (that
+  neighbour and the cell over it fit as feet and head, and the lower cell fits to stand in: the step a stair up came
+  from, out of the column a falling block keeps filling); nil if none. Unloaded cells do not count."
   [p self]
   (let [fx (js/Math.floor (.. self -pos -x))
         fy (js/Math.floor (.. self -pos -y))
         fz (js/Math.floor (.. self -pos -z))
-        fits? (fn [cell]
-                (let [feet (seen-water-name p cell)
-                      head (seen-water-name p (update cell :y inc))
-                      below (seen-water-name p (update cell :y dec))]
-                  (and feet head below
-                       (not (suffocates? p cell)) (not (suffocates? p (update cell :y inc)))
-                       (not (contains? bs/harms-in-cell feet)) (not (contains? bs/harms-in-cell head))
-                       (not (air? below)) (not (contains? swimmable below)) (not (contains? #{"lava" "magma_block"} below))
-                       (not-any? #{"bubble_column_down"} [feet head below]))))]
-    (->> [[1 0] [-1 0] [0 1] [0 -1]]
-         (map (fn [[dx dz]] {:x (+ fx dx) :y fy :z (+ fz dz)}))
-         (filter fits?)
-         first)))
+        room? (fn [cell]
+                (let [n (seen-water-name p cell)]
+                  (and n (not (suffocates? p cell)) (not (contains? bs/harms-in-cell n)) (not= "bubble_column_down" n))))
+        floor? (fn [cell]
+                 (let [below (seen-water-name p cell)]
+                   (and below (not (air? below)) (not (contains? swimmable below)) (not (contains? #{"lava" "magma_block"} below))
+                        (not= "bubble_column_down" below))))
+        up #(update % :y inc)
+        down #(update % :y dec)
+        level? (fn [cell] (and (room? cell) (room? (up cell)) (floor? (down cell))))
+        step-down? (fn [cell] (and (level? cell) (room? (up (up cell)))))
+        sides (map (fn [[dx dz]] {:x (+ fx dx) :y fy :z (+ fz dz)}) [[1 0] [-1 0] [0 1] [0 -1]])]
+    (or (first (filter level? sides))
+        (first (filter step-down? (map down sides))))))
