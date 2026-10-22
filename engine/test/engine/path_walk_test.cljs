@@ -356,6 +356,21 @@
           (is (= 2 (await (searches-of #(.then (plan-within-of gap-up-only [10 65 1] {:x 0.5 :y 64 :z 1.5}) (fn [w] (reset! within w)))))))
           (is (= :gap-up (:kind (:beyond @within)))))))))
 
+(deftest with-beyond-reads-the-refusal-off-a-partial-path-of-a-search-that-ran-out-of-land
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake {:blocks gap-up-only :self {:pos {:x 0.5 :y 64 :z 1.5}}})
+              pw (.pathWorld p)
+              c {:primitives p}
+              policy (wworld/body-policy c)
+              wide (await (wplan/plan-from! c pw [10 65 1] 0 (walk/default-weight) nil policy))
+              ended (fn [reason] (doto (js/Object.assign #js {} wide) (aset "status" "partial") (aset "reason" reason)))
+              kind (fn [w] (:kind (:beyond (wplan/with-beyond {} pw policy w))))]
+          (is (= :gap-up (kind wide)))
+          (is (= :gap-up (kind (ended "exhausted"))) "the search ran out of land past the gap: its path to there holds it")
+          (is (nil? (kind (ended "budget"))) "a search cut by its budget proves nothing"))))))
+
 (defn ^:async budgeted-calls
   "plan-walk! with budget (chunk-expansions 16) called from pos toward goal until a call answers with more than
   \"searching\": [that plan, the calls]."

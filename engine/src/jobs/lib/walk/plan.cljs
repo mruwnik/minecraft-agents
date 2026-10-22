@@ -171,9 +171,12 @@
 (defn within-of [pw r] {:r r :steps (when (.-path r) (plan-steps pw r))})
 
 (defn with-beyond
-  "within with :beyond, the policy's refusal of the path a search without the limits found (wide), when it found one."
+  "within with :beyond, the policy's refusal of the path a search without the limits found (wide), when it found one. A search
+  that ran out of land short of the goal (unseen floors on, a drop it did not take) counts by the partial path to its
+  nearest node: the refused step lies on the way there."
   [within pw policy wide]
-  (let [steps (when (= "found" (.-status wide)) (plan-steps pw wide))
+  (let [steps (when (or (= "found" (.-status wide)) (and (= "partial" (.-status wide)) (= "exhausted" (.-reason wide))))
+                (plan-steps pw wide))
         refusal (some->> steps (executor/refusal policy))
         from (when refusal (some (fn [[prev s]] (when (= (:at refusal) [(:x s) (:y s) (:z s)]) prev)) (map vector steps (rest steps))))]
     (cond-> within
