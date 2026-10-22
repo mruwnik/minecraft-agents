@@ -126,7 +126,7 @@
 (defn descent [] (settings/get settings ::descent))
 (def target [:target :center])
 
-(def safe? ready/safe-roaming)
+(def safe? ready/threatened)
 (def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 
 

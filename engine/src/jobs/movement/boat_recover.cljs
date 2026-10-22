@@ -27,7 +27,7 @@
 
 (def target [:id])
 
-(def safe? ready/safe-here-by-night)
+(def safe? ready/threatened)
 (def fit? ready/fit?)
 
 (def defaults {:spend {:job-time ::job-time-s}})

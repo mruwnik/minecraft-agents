@@ -118,7 +118,7 @@
       (>= (count (.-passengers e)) seats) (contract/later :occupied "every seat of the vehicle is taken")
       :else (contract/ok :vehicle "a seat is free"))))
 
-(def safe? ready/safe-here-by-night)
+(def safe? ready/threatened)
 (def fit? ready/fit?)
 
 (def defaults {:spend {:job-time ::job-time-s}})

@@ -565,7 +565,7 @@
   (merge (into {} (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] y [64 65]] [(str dx "," y "," dz) "dirt"]))
          {"0,66,0" "dirt"}))
 
-(deftest a-body-sealed-in-its-night-shelter-holds-instead-of-failing-legs
+(deftest a-body-sealed-in-its-night-shelter-walks-legs-and-lets-go-to-price-them
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -573,9 +573,7 @@
                                 {:time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks night-pit}
                                 40
                                 #(mem/write! (:store (:eng %)) :shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built} {:cap 10 :ttl st/day-ms})))]
-          (is (not (finished? s)) "still waiting for the shelter to be left, not ended :stuck")
-          (is (empty? (walks s)) "safe-roaming waits :later :dark: no leg is walked")
-          (is (nil? (event-of s :fruitless))))))))
+          (is (seq (walks s)) "no flat dark hold: each leg's go-to prices its own route"))))))
 
 ;; live (Juniper, card e51d1fe9): three legs east all failed at the same rim and the search ended stuck; a leg that lies
 ;; the way a leg just failed from here waits until a leg arrives, so the next leg goes another way

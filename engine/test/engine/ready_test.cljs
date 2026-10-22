@@ -30,6 +30,8 @@
             [jobs.movement.boat-drive :as boat-drive]
             [jobs.movement.stay-near :as stay-near]
             [jobs.movement.mount :as mount]
+            [jobs.movement.leave-vehicle :as leave-vehicle]
+            [jobs.movement.boat-recover :as boat-recover]
             [jobs.items.kitchen :as kitchen]
             [jobs.items.get-kit :as get-kit]
             [jobs.items.pick-up-loose :as pick-up-loose]
@@ -357,13 +359,14 @@
 
 (deftest sweep-c-jobs-bind-the-checker-their-audit-row-names
   (are [checker world args expected] (= expected (lit 0 15 #(bound checker world args)))
-    search/safe? open-night {} :later
-    stay-near/safe? open-night {:player "Steve"} :later
+    search/safe? open-night {} :ok
+    stay-near/safe? open-night {:player "Steve"} :ok
     boat-drive/safe? open-night {:pos [15 64 0]} :later
     boat-drive/safe? (assoc open-night :time st/noon) {:pos [15 64 0]} :ok
     stay-near/safe? open-night {:pos [15 64 0]} :later
-    mount/safe? open-night {} :later
-    mount/safe? (assoc open-night :time st/noon) {} :ok
+    mount/safe? open-night {} :ok
+    leave-vehicle/safe? open-night {} :ok
+    boat-recover/safe? open-night {} :ok
     search/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 5}} {} :later
     stay-near/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 5}} {:player "Steve"} :later
     mount/fit? {:self {:pos {:x 0 :y 64 :z 0} :health 5}} {} :later))

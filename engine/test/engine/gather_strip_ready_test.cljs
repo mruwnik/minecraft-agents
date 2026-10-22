@@ -6,7 +6,6 @@
             [engine.shelter-support :as st]
             [jobs.animals.shear :as shear]
             [jobs.combat.hunt :as hunt]
-            [jobs.explore.search :as search]
             [jobs.gather.strip-tunnel :as strip-tunnel]
             [jobs.items.collect-drops :as collect-drops]
             [jobs.forestry.fell-tree :as fell-tree]
@@ -33,7 +32,6 @@
 
 (deftest roaming-jobs-do-not-leave-a-room-under-a-dark-sky
   (are [check args] (= [:later :ok] [(kind check rt/night-hut args) (kind check rt/tunnel args)])
-    search/safe? {}
     harvest-wood/safe? {:radius 16 :ignore-zones? true}
     hunt/safe? {:radius 24}
     shear/safe? {:radius 16}))

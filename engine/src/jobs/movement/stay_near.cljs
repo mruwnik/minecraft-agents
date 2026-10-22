@@ -66,7 +66,7 @@
 
 (def defaults {:spend {:job-time ::job-time-s :wall-time ::wall-time-s}})
 
-(def safe? (ready/safe-at-or-if-lit (fn [c] (some-> (:pos (:args c)) a/cell))))
+(def safe? (ready/safe-at-or (fn [c] (some-> (:pos (:args c)) a/cell)) ready/threatened))
 (def fit? ready/fit?)
 
 (defn find-player

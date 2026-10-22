@@ -36,7 +36,7 @@
 
 (def meta {:category :reflex})
 
-(def safe? ready/safe-here-by-night)
+(def safe? ready/threatened)
 (def fit? ready/ok)
 
 (def defaults {:spend {:job-time ::job-time-s}})
