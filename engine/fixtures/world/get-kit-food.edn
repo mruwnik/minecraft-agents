@@ -1,11 +1,12 @@
 ;; items.get-kit and food (cards b6cb0a1a, d73dfc80, b3381afe, 3bd5a3eb). `(get-kit {:items ["iron_pickaxe"] :explore false})`
 ;; with no iron near: mining/smelting is ahead, so a get-food child with :carry stocks the pack first.
 ;; Should-succeed: 3 cows near, a sword: a cow is hunted before any mining (food.killed); no sword but cobblestone, sticks and a table:
-;; a stone sword is made first; fed (food 20) with no animals anywhere: kit.no-food warns and the kit goes on (no :no-food stop).
-;; A hurt body (8 hp) with a fair bar and nothing to eat stops :no-food too.
+;; a stone sword is made first; fed (food 20) with bread carried and no animals anywhere: kit.no-food warns and the kit goes on (no :no-food stop).
+;; A thin stomach (bar plus carried food under 24) with no animals stops :no-food too. A hurt body (8 hp) with a fair bar and nothing to eat stops :no-food too.
 ;; Should-fail: a starving body (food 0) with no food anywhere stops :no-food before any mining; :food false runs no food child; no stop :needs-food.
 {:defaults
- {:tags [:items :get-kit :food]
+ {:time :any
+  :tags [:items :get-kit :food]
   :plot {:height 6}
   :body {:at [4.5 0 16.5] :inventory [["iron_sword" 1]] :settle-s 2}
   :limit-s 120}
@@ -15,9 +16,16 @@
          [:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
    :expect [{:event {:source :job :kind :food.killed} :within-s 100}]}
   {:name "fed-with-no-animals-warns-and-goes-on"
+   :body {:inventory [["iron_sword" 1] ["bread" 2]]}
    :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
    :expect [{:event {:source :job :kind :kit.no-food :level :warn} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :stopped :data {:reason :no-food}} :for-s 40 :until {:source :job :kind :kit.no-food}}]}
+  {:name "thin-stomach-with-a-little-bread-and-no-animals-stops-before-mining"
+   :body {:inventory [["iron_sword" 1] ["bread" 1]]}
+   :act [[:rcon "effect give $BODY minecraft:hunger 4 255 true"] [:until-effect-gone "hunger" 30]
+         [:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
+   :expect [{:event {:source :job :kind :kit.no-food :level :warn} :within-s 100 :of-job true}
+            {:event {:source :job :kind :stopped :data {:reason :no-food}} :within-s 30 :of-job true}]}
   {:name "starving-with-no-food-warns-and-stops-before-mining"
    :act [[:rcon "effect give $BODY minecraft:hunger 12 255 true"] [:until-effect-gone "hunger" 30]
          [:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]

@@ -29,7 +29,7 @@
   one piece after the other), with a :spend :job-time of ::job-time-s; the pieces are worn when it is done.
   While furnace material is still short (mining or smelting ahead; pure crafting needs no food) and fewer than
   the 3-day food reserve (60 points) are carried (harmful food does not count), one jobs.survival.get-food child (with :explore;
-  it fills the pack to its :carry default, the reserve) runs before the bill (:food false: none). A child that stops warns kit.no-food; with no food carried and a food bar below ::min-food-to-dig the kit stops {:reason :no-food} (no mining on an empty stomach); a fuller bar goes on. A body that cannot heal (food 0, or health under foods/::low-health with no food carried and the bar under 18) asks get-food before more work (once more if it is still so after a fed answer), and stops {:reason :no-food} when it finds none.
+  it fills the pack to its :carry default, the reserve) runs before the bill (:food false: none). A child that stops warns kit.no-food; with the food bar plus the carried food points under ::min-food-to-dig (24) the kit stops {:reason :no-food} (no mining on a thin stomach); more goes on. A body that cannot heal (food 0, or health under foods/::low-health with no food carried and the bar under 18) asks get-food before more work (once more if it is still so after a fed answer), and stops {:reason :no-food} when it finds none.
   With furnace material short and no weapon carried, one jobs.items.obtain child first makes a sword (iron, stone or wooden); if it cannot, kit.unarmed warns and the work goes on.
   Items that need no furnace material, and those the carried material covers, are made first (:partial-first, the default) so the job stops naming only the shortfall; with :partial-first false the list order rules and the job stops at the first item that cannot be made.
   With :explore, a bill that stops because a gathering ended (a mine that stopped, no way up) runs again (kit.retry, the pieces newly covered made first), up to 3 rounds without new furnace material.
@@ -249,8 +249,8 @@
       :else {:cause cause :why (why-of e)})))
 
 (def min-food-to-dig
-  "With nothing carried, a bar below this would starve the body during the dig."
-  12)
+  "Food bar plus carried food points below this, after get-food found none, would starve the body during the dig."
+  24)
 
 (defn ^:async run-arm!
   "One obtain child round for a sword (the best it can make): :continue, nil when armed, or {:cause :why} when it could not."
@@ -363,8 +363,8 @@
                   (when r
                     (ctx/emit! c :kit.no-food :warn {:cause (:cause r) :why (:why r) :food fp
                                                      :text (str "no food found (" (name (:cause r)) ")")}))
-                  (if (and r (zero? (foods/stock-points (:inv (state c)))) (< (.-food (.self (:primitives c))) min-food-to-dig))
-                    (finish! c items have (assoc (stop-of :nothing-possible {:reason :no-food} (str "no food carried and none found (" (or (:why r) (name (:cause r))) "); mining ahead needs some"))
+                  (if (and r (< (+ (foods/stock-points (:inv (state c))) (.-food (.self (:primitives c)))) min-food-to-dig))
+                    (finish! c items have (assoc (stop-of :nothing-possible {:reason :no-food} (str "too little food carried and none found (" (or (:why r) (name (:cause r))) "); mining ahead needs some"))
                                                  :item (first todo)))
                     :again))))
 

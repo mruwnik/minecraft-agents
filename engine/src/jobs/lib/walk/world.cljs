@@ -340,7 +340,7 @@
                    (cost/air-profile (.-equipment self) (array-seq (.-effects self)))
                    (cost/swim-profile (.-equipment self))
                    {:damage-budget (damage-budget c)
-                    :damage-weight (* (cost/walk-hp-seconds) (cost/health-scale (.-health self)))
+                    :damage-weight (cost/hp-price (.-health self))
                     :danger-cap (max cost/danger-cap (:max-rate (cost/danger-opts)))}
                    (when-some [landing (cost/walk-landing)] {:landing landing})
                    {:drop-cost (cost/walk-drop-cost)}

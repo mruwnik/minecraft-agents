@@ -336,7 +336,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (assoc (hungry-world [] 20) :entities (for [[id x] [[7 5] [8 6] [9 7]]]
+        (let [s (start (assoc (hungry-world [{:name "bread" :count 1}] 20) :entities (for [[id x] [[7 5] [8 6] [9 7]]]
                                                                  {:id id :name "cow" :kind "passive" :pos {:x x :y 64 :z 0} :health 20
                                                                   :drops [{:name "beef" :count 1}]}))
                        {:items ["iron_pickaxe"] :explore false})]
@@ -347,21 +347,21 @@
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
                  (select-keys @(:out s) [:status :item :reason]))))))))
 
-(deftest a-near-full-bar-with-no-food-source-warns-and-goes-on
+(deftest a-full-bar-and-some-carried-food-with-no-food-source-warns-and-goes-on
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (hungry-world [] 16) {:items ["iron_pickaxe"] :explore false})]
+        (let [s (start (hungry-world [{:name "bread" :count 2}] 16) {:items ["iron_pickaxe"] :explore false})]
           (await (f/run-ticks s 80))
           (is (= [:no-carry] (mapv :cause (f/events-of s :kit.no-food))))
           (is (= {:status :stopped :item "iron_ingot" :reason :no-source}
                  (select-keys @(:out s) [:status :item :reason]))))))))
 
-(deftest a-low-bar-with-no-food-source-stops-naming-no-carry
+(deftest a-thin-stomach-with-a-little-carried-food-and-no-source-stops-naming-no-carry
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (start (hungry-world [] 8) {:items ["iron_pickaxe"] :explore false})]
+        (let [s (start (hungry-world [{:name "bread" :count 2}] 12) {:items ["iron_pickaxe"] :explore false})]
           (await (f/run-ticks s 80))
           (is (= [:no-carry] (mapv :cause (f/events-of s :kit.no-food))))
           (is (= {:status :stopped :item "iron_pickaxe" :reason :no-food}

@@ -45,7 +45,7 @@
    (let [self (.self (:primitives c))
          health (.-health self)]
      (if (and (number? worth) (pos? worth))
-       (min (dec health) (/ worth (* (cost/walk-hp-seconds) (cost/health-scale health))))
+       (min (dec health) (/ worth (cost/hp-price health)))
        (let [hungry? (some-> (.-food self) (<= (settings/get settings ::hungry-food)))
              share (* (settings/get settings ::risk-share) health (if hungry? (settings/get settings ::hungry-share) 1))]
          (if (cannot-heal? c) (max share (dec health)) share))))))
