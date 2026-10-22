@@ -9,6 +9,7 @@
             [engine.entity-observations :as obs]
             [engine.events :as events]
             [engine.expr :as expr]
+            [engine.shelter-support :as st]
             [engine.memory :as mem]
             [engine.notes :as notes]
             [engine.registry :as registry]
@@ -544,6 +545,23 @@
           (is (= :stuck (:why e)))
           (is (= [[0 64 -16] [16 64 0] [0 64 16]] (mapv :pos (get-in e [:coverage :failed])))
               "each next leg lies another way: one within 60 degrees of a failed leg's way is held back"))))))
+
+;; live (Tamsin #68): the night reflex sealed the body in a pit; every leg's walk was blocked and three failed legs ended the search
+(def night-pit
+  (merge (into {} (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] y [64 65]] [(str dx "," y "," dz) "dirt"]))
+         {"0,66,0" "dirt"}))
+
+(deftest a-body-sealed-in-its-night-shelter-holds-instead-of-failing-legs
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (search! {:target "diamond_block" :max-distance 23}
+                                {:time st/night :self {:pos {:x 0 :y 64 :z 0}} :blocks night-pit}
+                                40
+                                #(mem/write! (:store (:eng %)) :shelter {:pos {:x 0 :y 64 :z 0} :roof {:x 0 :y 66 :z 0} :state :built} {:cap 10 :ttl st/day-ms})))]
+          (is (not (finished? s)) "still waiting for the shelter to be left, not ended :stuck")
+          (is (some #(and (= :holding (:kind %)) (= :night-shelter (:reason %))) @(:seen s)))
+          (is (nil? (event-of s :fruitless))))))))
 
 ;; live (Juniper, card e51d1fe9): three legs east all failed at the same rim and the search ended stuck; a leg that lies
 ;; the way a leg just failed from here waits until a leg arrives, so the next leg goes another way

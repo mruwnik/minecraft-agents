@@ -16,6 +16,8 @@
             [jobs.lib.child :as child]
             [jobs.lib.food-animals :as food-animals]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.shelter.inside :as sh-inside]
+            [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.surface-up :as surface-up]
             [jobs.lib.look :as look]
             [jobs.lib.patch :as patch]
@@ -51,7 +53,7 @@
   in the same round. A loaded column not yet seen (:unseen) is walked toward in steps of up to 12 blocks (not
   counted in max-legs) and looked at again (over water the step swims, glancing ahead as it goes, so a far shore comes into sight; a step ending in water is progress, not a failure); within 3 blocks of it, it is recorded failed. An unloaded column is not tried but looked at again later. When only unloaded ones are
   left the round pauses 2 s (jobs.time.noop, holding :chunks-loading) and yields, until they load or the call's time is spent (a body just logged in has no chunks
-  yet). A walk go-to gives up on is recorded :unreachable. Three of those in
+  yet). A body shut in its own night shelter (not yet day) does not walk: it pauses the same way (holding :night-shelter), no failed leg. A walk go-to gives up on is recorded :unreachable. Three of those in
   a row end the search (:stuck); until a leg arrives, a leg within 60 degrees of the way one failed from where the
   body stands waits (the same obstacle likely blocks it), and the search ends :stuck when only such legs are left.
   A leg whose goal lies by a mob the body would flee is not walked (go-to :goal-danger
@@ -498,9 +500,19 @@
         n (inc (leg-tries (notes/notes c) names [x z]))]
     (notes/note! c [{:kind :leg-tried :what (vec names) :pos [x y z] :n n :ttl-ms (* 1000 (settings/get settings ::leg-tried-ttl-s))}])))
 
+(declare walk-leg!)
+
 (defn ^:async walk!
   "One go-to call toward the leg (the last one before the failed legs in a row end the search may dig out); on its end book the leg arrived or failed. :continue when go-to yields, else :again
   (or the ending when the failed legs in a row end the search)."
+  [c]
+  (if (and (sh-inside/sheltered-in c) (dig-leave/leave-unsafe (:primitives c)))
+    (do (await (child/pause! c (/ (wait-ms) 1000) :night-shelter))
+        :continue)
+    (await (walk-leg! c))))
+
+(defn ^:async walk-leg!
+  "The go-to call of walk!."
   [c]
   (let [[x y z] (:leg (ctx/mem c))
         r (await (child/call-walk* c :leg (cond-> {:pos {:x x :y y :z z} :range 2 :settings {:jobs.movement.go-to.tuning/goal-danger :end}}

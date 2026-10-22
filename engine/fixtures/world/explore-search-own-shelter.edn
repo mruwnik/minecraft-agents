@@ -1,0 +1,26 @@
+;; Card 4c6a91f3: a body shut in its own night shelter does not fail search legs against its own walls (three blocked walks ended the search :stuck).
+;; The search holds (:night-shelter) while the night lasts; at dawn go-to lets the body out and the search walks on and finds the target.
+;; Sky plot at night (the real clock decides when the shelter opens). Stone room x 14..18, z 14..18, roof y 2, :shelter memory at the body's cell,
+;; a glass east wall and torch pairs along the way (legs need lit ground to be seen at night); a pickaxe carried for the way out; an emerald block 24 east, beyond the scan radius.
+;; Should-succeed: no stop before dawn; after [:time-set 1000] the job completes :found. Should-fail: the job stops :stuck while the night lasts.
+{:defaults
+ {:tags [:explore :search :shelter :night]
+  :time :night :time-why :dawn-decision
+  :plot {:height 8 :floor "grass_block" :light :sky :length 48}
+  :blocks [[:set [40 0 16] "emerald_block"]
+           [:fill [14 0 14] [18 2 18] "stone"] [:fill [15 0 15] [17 1 17] "air"] [:fill [18 0 15] [18 1 17] "glass"]
+           [:set [24 0 15] "torch"] [:set [24 0 17] "torch"] [:set [32 0 15] "torch"] [:set [32 0 17] "torch"] [:set [40 0 15] "torch"] [:set [40 0 17] "torch"]]
+  :memory [{:kind :shelter :data {:pos #xyz [16 0 16] :roof #xyz [16 2 16] :state :built}
+            :policy {:cap 10 :ttl 1200000}}]
+  :register []
+  :body {:at [16.5 0 16.5] :settle-s 2 :inventory [["stone_pickaxe" 1] ["dirt" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 200}
+ :cases
+ [{:name "sealed-in-its-night-shelter-holds-then-finds-at-dawn"
+   :act [[:job (jobs.explore.search {:target "emerald_block" :pattern :outward :heading :east :scan-radius 8 :use-notes false
+                                     :settings {:jobs.explore.search/max-distance 60 :jobs.explore.search/spacing 8 :jobs.explore.search/max-legs 16}})]
+         [:wait-s 40]
+         [:time-set 1000]]
+   :expect [{:no-event {:source :job :kind #{:stopped :fruitless}} :for-s 40 :of-job true}
+            {:event {:source :job :kind :completed :data {:reason :found}} :within-s 150 :of-job true}]
+   :limit-s 190}]}
