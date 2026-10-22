@@ -89,13 +89,26 @@
                   (ctx/update-mem! c assoc :zone-dig true))
                 nil))))
 
+(defn hurt-or-unarmed?
+  "Whether the body is at or under flight/::hide-health or carries no weapon: it cannot fight its way out, so the seal stays."
+  [c]
+  (let [p (:primitives c)]
+    (or (<= (.-health (.self p)) (flight/hide-health))
+        (nil? (combat/best-weapon p combat/default-weapons)))))
+
+(defn seen-hostiles
+  "hostiles-known, the ones the body has seen (not merely heard)."
+  [c]
+  (filterv :seen (hostiles-known c)))
+
 (defn ^:async plug!
   "Shut the body in with jobs.survival.shut-in by ways and hide there (a :plug refuge): :again while it works or once shut
   in, nil when no way shuts it, or when the body already hid from this kind of mob here lately (jobs.lib.hide-spot/repeated?:
   hiding does not end a stream of them; the flight fights or leaves). :plugging marks the option, ways and cell a plug is under way at (plugging-here?)."
   [c option ways]
   (when-not (and (not (:plugging (ctx/mem c)))
-                 (hide-spot/repeated? c (u/self-pos c) (map :name (hostiles-known c))))
+                 (not (hurt-or-unarmed? c))
+                 (hide-spot/repeated? c (u/self-pos c) (map :name (seen-hostiles c))))
     (await (plug-in! c option ways))))
 
 (defn creeper-coming?
@@ -144,7 +157,7 @@
       (= :continue e) :again
       (= :done (:kind e)) (flight/end-flight! c :hidden (select-keys (:data e) [:hold :dug-out]))
       (= :hurt (:cause e)) (do (ctx/update-mem! c update :reached (fnil into #{}) (:ids (:data e)))
-                               (ctx/emit! c :retreat.hide-hurt :warn {:text (:text (:data e)) :pos (sh-sense/feet (:primitives c)) :hostiles (hostiles-known c)})
+                               (ctx/emit! c :retreat.hide-hurt :warn {:text (:text (:data e)) :pos (sh-sense/feet (:primitives c)) :hostiles (mapv #(dissoc % :seen) (hostiles-known c))})
                                (if (= :again (await (pillar/raise! c))) :again (await (abandon-refuge! c))))
       :else (do (ctx/update-mem! c update :reached (fnil conj #{}) (:id (:data e)))
                 (ctx/emit! c :retreat.hide-breached :warn {:text (:text (:data e)) :mob (:name (:data e)) :pos (sh-sense/feet (:primitives c))})
@@ -157,16 +170,17 @@
     (->> (flight/near-known p (set (flight/dead-ids c)) threats/max-follow-range (danger-q/ranged-radius))
          (reduce (fn [[seen out] e] (if (contains? seen (.-id e)) [seen out] [(conj seen (.-id e)) (conj out e)])) [#{} []])
          second
-         (mapv (fn [e] {:name (.-name e) :pos (mapv #(js/Math.floor (% (danger-q/mob-pos p e))) [:x :y :z])})))))
+         (mapv (fn [e] {:name (.-name e) :seen (danger-q/seen-only? e) :pos (mapv #(js/Math.floor (% (danger-q/mob-pos p e))) [:x :y :z])})))))
 
 (defn hide-now! [c refuge text]
   (ctx/update-mem! c assoc :refuge (assoc refuge :hidden true))
   (let [placed (spent/log c)
-        hostiles (hostiles-known c)
+        all (hostiles-known c)
+        hostiles (mapv #(dissoc % :seen) all)
         from (if (seq hostiles)
                (str/join ", " (map (fn [[{:keys [name pos]} n]] (str name (when (< 1 n) (str " x" n)) " at " (pr-str pos))) (frequencies hostiles)))
                "a hostile heard, not seen")]
-    (hide-spot/remember! c (u/self-pos c) (map :name hostiles))
+    (hide-spot/remember! c (u/self-pos c) (map :name (filter :seen all)))
     (ctx/emit! c :retreat_sealed :warn (merge {:text (str text "; hiding from " from (some->> (spent/text placed "refuge") (str "; "))) :pos (sh-sense/feet (:primitives c)) :hostiles hostiles}
                                               (when (seq placed) (spent/summary placed)))))
   :again)

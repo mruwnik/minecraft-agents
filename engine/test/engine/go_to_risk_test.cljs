@@ -62,6 +62,16 @@
     (is (pos? (:hide-hp (risk/estimate (with-hide {:x 90 :y 64 :z 5}) far-goal))))
     (is (zero? (:hide-hp (risk/estimate (with-hide {:x 50 :y 64 :z 5}) far-goal))))))
 
+(deftest only-seen-mobs-count-towards-repeated-hides
+  (let [c (ready-test/ctx-of day-world)
+        now 36000000
+        with-hides (fn [n] (assoc c :view (fn [] {:now now :data {:policies {:hid hide-spot/policy} :entries {:hid (vec (repeat n {:t (- now 60000) :data {:pos {:x 0 :y 0 :z 0} :mobs ["zombie"]}}))}}})))
+        at {:x 1 :y 0 :z 1}]
+    (is (hide-spot/repeated? (with-hides 3) at ["zombie"]))
+    (is (not (hide-spot/repeated? (with-hides 2) at ["zombie"])))
+    (is (not (hide-spot/repeated? (with-hides 3) at ["spider"])))
+    (is (not (hide-spot/repeated? (with-hides 3) at [])) "a heard mob has no name to count")))
+
 (deftest a-death-fades-with-time
   (let [c (ready-test/ctx-of day-world)
         at {:x 90 :y 64 :z 5}

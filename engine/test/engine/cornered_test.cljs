@@ -498,17 +498,18 @@
           (is (= 4 (count (calls p "attack"))) "it hits the skeleton with its fist until it dies")
           (is (not-any? #(= :retreat_sealed (:kind %)) @seen)))))))
 
-(deftest a-body-that-hid-from-this-mob-here-lately-fights-instead-of-sealing-in-again
+(deftest a-hurt-or-unarmed-body-still-seals-in-after-repeated-hides
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (setup {:blocks dead-end :inventory [{:name "cobblestone" :count 20}] :entities [(skeleton 4 64 0)]})]
-          (mem/write! (:store eng) :hid {:pos {:x 0 :y 64 :z 0} :mobs ["skeleton"]} hide-spot/policy)
-          (core/submit! eng retreat {})
-          (await (core/tick! eng))
-          (is (empty? (placed-cells p)) "no walls again")
-          (is (not-any? #(= :retreat_sealed (:kind %)) @seen))
-          (is (seq (calls p "attack")) "it fights the skeleton"))))))
+        (doseq [[hides sword? health visible? sealed?] [[3 true 8 true true] [3 false 20 true true]]]
+          (let [{:keys [eng p seen]} (setup {:blocks dead-end :self {:pos [0.5 64 0.5] :health health}
+                                             :inventory (cond-> [{:name "cobblestone" :count 20}] sword? (conj {:name "iron_sword" :count 1}))
+                                             :entities [(assoc (skeleton 4 64 0) :visible visible?)]})]
+            (dotimes [_ hides] (mem/write! (:store eng) :hid {:pos {:x 0 :y 64 :z 0} :mobs ["skeleton"]} hide-spot/policy))
+            (core/submit! eng retreat {})
+            (await (core/tick! eng))
+            (is (= sealed? (boolean (seq (placed-cells p)))) (pr-str [hides sword? health visible?]))))))))
 
 (deftest a-seal-notice-names-each-mob-once
   (async done

@@ -10,7 +10,7 @@
 (a/defargs settings
   {::memory-ms {:default 600000 :doc "Milliseconds a hide is remembered as a spot to stay away from." :spec (a/num-in 1 nil)}
    ::radius {:default 40 :doc "Blocks around a remembered hide that count as the same place." :spec (a/num-in 0 nil)}
-   ::repeat-hides {:default 1 :doc "Hides from one kind of mob in one place within ::memory-ms after which the flight no longer hides from it there (it fights or leaves)." :spec (a/int-in 1 nil)}})
+   ::repeat-hides {:default 3 :doc "Hides from one kind of mob in one place within ::memory-ms after which the flight no longer hides from it there (it fights or leaves)." :spec (a/int-in 1 nil)}})
 
 (def policy {:cap 10 :ttl (* 10 60 1000)})
 
@@ -31,8 +31,9 @@
   (filterv #(<= (u/dist pos (:pos %)) (settings/get settings ::radius)) hs))
 
 (defn repeated?
-  "Whether the body hid from one of mobs (names; none known: any mob) within ::radius of pos at least ::repeat-hides times lately."
+  "Whether the body hid from one of mobs (names of mobs seen; a heard one counts for nothing) within ::radius of pos at least ::repeat-hides times lately."
   [c pos mobs]
   (let [ms (set mobs)]
-    (<= (settings/get settings ::repeat-hides)
-        (count (filter #(or (empty? ms) (empty? (:mobs %)) (some ms (:mobs %))) (near (recent c) pos))))))
+    (and (seq ms)
+         (<= (settings/get settings ::repeat-hides)
+             (count (filter #(some ms (:mobs %)) (near (recent c) pos)))))))
