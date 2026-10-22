@@ -36,7 +36,7 @@ npm run body -- --agent <name> --world <world> [--scenario <file.edn>]   # node 
 
 Run one namespace with `node --max-old-space-size=4096 out/test.cjs --test=engine.<ns>-test`.
 
-Builds (in `dashboard/shadow-cljs.edn`, which holds the engine and dashboard builds; engine outputs go to `engine/out/`): `:test` (`:node-test`, the `engine|jobs|plan` namespaces ending in `-test`, to `out/test.cjs`) and `:body`
+Builds (in `dashboard/shadow-cljs.edn`, which holds the engine and dashboard builds; engine outputs go to `engine/out/`): `:test` (`:node-test`, the `engine|jobs|plan` namespaces ending in `-test`, to `out/test.cjs`, compiled with `:static-fns` and `:fn-invoke-direct` for speed) and `:body`
 (`:node-script`, `out/body.cjs`, `engine.main/main`) and `:body-release` (the same under `:simple`, `out/body-release.cjs`, with every character above U+00FF escaped (one makes V8 hold the whole source two-byte on the heap: +10 MB), built to a temp file, checked by tools/bundle-jobs-check for every jobs/ file and then renamed: what bodies run, from `npm run body` and the world-test runner; `:advanced` breaks the JS interop). The compile JVM is capped at 1 GB.
 
 **Compiling: `tools/compile <engine|dashboard> <build>... [--priority] [--release]`** (repo root). Every cljs compile goes
