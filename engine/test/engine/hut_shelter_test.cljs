@@ -92,7 +92,8 @@
     "a shut door in the wall" {} [] {:x 5 :y 67 :z 0}
     "a trapdoor in the wall is no door" {"5,64,2" "oak_trapdoor" "5,65,2" "cobblestone"} [] nil
     "a door in the ceiling is no way out" {"5,64,2" "cobblestone" "5,65,2" "cobblestone" "4,67,0" "oak_door"} [] nil
-    "a wall cell never seen leaves the room unknown" {} ["3,65,0"] nil))
+    "a wall cell never seen leaves the room unknown" {} ["3,64,0"] nil
+    "a head-height wall pocket between seen solids leads nowhere" {} ["3,65,0"] {:x 5 :y 67 :z 0}))
 
 (defn big-hut-world
   "A 10x10 room (x 1..10, z 1..10, y 64..66: 300 cells, over the old 256 cap), roof y 67 with a hole over the body at 2,64,2, a shut door in the south wall."
