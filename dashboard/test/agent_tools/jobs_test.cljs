@@ -448,6 +448,14 @@
           (.then (fn [{:keys [out]}] (is (= :job-clash (:reason (data/read-edn out))) "--now and --wait do not skip the guard")))
           (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
 
+(deftest a-single-cell-dig-queues-behind-another-dig
+  (let [state (state-dir)]
+    (async done
+      (-> (js/Promise.resolve nil)
+          (.then (fn [_] (run-main! state ["submit" "(jobs.blocks.dig {:pos [1 64 2]})"] (listing-engine [{:id "j5" :name "jobs.blocks.dig" :status :queued}]))))
+          (.then (fn [result] (is (posted? result) "a second one-cell dig is not held back")))
+          (.then (fn [_] (.rmSync fs state #js {:recursive true :force true}) (done)))))))
+
 (deftest a-submit-clashing-with-another-digging-job-is-held-back-and-names-it
   (let [state (state-dir)]
     (async done

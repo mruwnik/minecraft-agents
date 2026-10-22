@@ -25,7 +25,7 @@
        "  --now    cut the current job and run this one at once (a normal job); the cut job keeps its memory and\n"
        "           continues right after this one yields or ends. Reflexes still come first: --now queues behind a running reflex (night, hostile) and the answer's :hint names it. --now and --next cannot be combined (refused).\n"
        "  --exclusive  run this job alone, at once: the whole engine is paused (no triggers, no other job) until it ends; any ending, a yield (:continue) included, returns to you and normal work resumes after a 5 s pause in which no listed job starts. Cuts what runs now (a listed job continues after). One run at a time; refused offline or settling; takes no --next, --now or --survive-death; a restart or death ends it.\n"
-       "  --alongside  submit even when a job of the same job name, or another digging job (mine, stair, tunnel, strip.*), is running or queued on this body: without it such a submit is held back and the answer names the clashing job; two of one job can undo each other's work. A (repeat ...) submit is never held\n"
+       "  --alongside  submit even when a job of the same job name (one-cell blocks.dig and blocks.place never clash), or another digging job (mine, stair, tunnel, strip.*), is running or queued on this body: without it such a submit is held back and the answer names the clashing job; two of one job can undo each other's work. A (repeat ...) submit is never held\n"
        "  --wait   block until the job ends, or until anything that ends observe --wait (addressed chat, attention, an\n"
        "           engine restart, the --timeout), and print {:job {:id ..} :wait <the wake>} (the submit-time status is dropped: it would read :queued after the job ended): the job's last events and a\n"
        "           bounded summary of what else happened meanwhile (reflexes fired, pickups, hurt, other jobs ended,\n"
@@ -55,11 +55,15 @@
   [text]
   (= 'repeat (first (spec-for text))))
 
+(def single-cell-jobs
+  "One cell per call: two of them cannot undo each other's work, so they queue like any job."
+  #{"jobs.blocks.dig" "jobs.blocks.place"})
+
 (defn clash-name
-  "The job name a submit would clash on: a plain job call's name; nil for a (repeat ...) or other combinator."
+  "The job name a submit would clash on: a plain job call's name; nil for a (repeat ...), another combinator or a single-cell job."
   [text]
   (let [head (str (first (spec-for text)))]
-    (when (str/starts-with? head "jobs.") head)))
+    (when (and (str/starts-with? head "jobs.") (not (contains? single-cell-jobs head))) head)))
 
 (def digging-jobs #{"jobs.gather.mine" "jobs.gather.dig-for" "jobs.gather.shaft-descent" "jobs.gather.strip-tunnel" "jobs.access.stair" "jobs.access.tunnel"})
 
