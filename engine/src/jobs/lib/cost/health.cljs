@@ -68,6 +68,13 @@
       (cond-> (min room (or max-damage js/Infinity))
         cap (min cap)))))
 
+(defn food-limited?
+  "Whether the hunger cap (food-cap), not the health floor or :max-damage, sets damage-budget for this body and settings."
+  [{:keys [health absorption food]} {:keys [min-health max-damage]}]
+  (let [cap (when food (food-cap food health))
+        room (max 0 (- (+ health (or absorption 0)) (or min-health (default-min-health)) (margin)))]
+    (boolean (and cap (< cap room) (< cap (or max-damage js/Infinity))))))
+
 (defn survivable-budget
   "The hp a walk may spend and leave the body 1: see the ns doc. Same arguments as damage-budget."
   [{:keys [health absorption on-fire effects] :as body} {:keys [min-health max-damage] :as settings}]

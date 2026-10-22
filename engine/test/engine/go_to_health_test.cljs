@@ -77,7 +77,16 @@
           (is (= 64 (y-of p)) "still on the plateau")
           (is (empty? (g/events-of r :go-to.over-budget)))
           (is (= {:arrived false :reason :unreachable :why :needs-health :hp-cost 1 :hp-budget 0} (select-keys @out [:arrived :reason :why :hp-cost :hp-budget])))
-          (is (re-find #"a way exists but costs 1 hp, more than the 0 hp" (:text @out))))))))
+          (is (re-find #"a way exists but costs 1 hp, more than the 0 hp" (:text @out))
+          (is (not (re-find #"hunger" (:text @out))) "the health floor sets this budget")))))))
+
+(deftest a-hunger-capped-budget-says-hunger-sets-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out]} (await (go-heal! (world {:health 17 :food 11}) (dissoc args :floor) false))]
+          (is (= {:why :needs-health :hp-budget 0 :hungry-food 11} (select-keys @out [:why :hp-budget :hungry-food])))
+          (is (re-find #"hunger sets that: losing more would make it hungry at food 11" (:text @out))))))))
 
 (def cliff11 (merge (floor -2 -3 10 3) (floor 52 11 -3 47 3)))
 

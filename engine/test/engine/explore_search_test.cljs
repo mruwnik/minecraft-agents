@@ -546,6 +546,18 @@
           (is (= [[0 64 -16] [16 64 0] [0 64 16]] (mapv :pos (get-in e [:coverage :failed])))
               "each next leg lies another way: one within 60 degrees of a failed leg's way is held back"))))))
 
+(deftest legs-refused-by-the-calls-floor-end-stuck-saying-so
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [refused {:kind :condition-failed :cause {:floor :health :min 10} :data {}}
+              s (with-redefs [child/call-walk* (fn [_ _ _] (js/Promise.resolve refused))]
+                  (await (search! {:target "diamond_block" :max-distance 23} {:self {:pos {:x 0 :y 64 :z 0} :health 8}})))
+              e (not-found-of s)]
+          (is (= :stuck (:why e)))
+          (is (re-find #"every walk was refused: the body's health 8 is under the call's floor 10" (:text e)))
+          (is (not (re-find #"skipped" (:text e)))))))))
+
 ;; live (Tamsin #68): the night reflex sealed the body in a pit; every leg's walk was blocked and three failed legs ended the search
 (def night-pit
   (merge (into {} (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] y [64 65]] [(str dx "," y "," dz) "dirt"]))

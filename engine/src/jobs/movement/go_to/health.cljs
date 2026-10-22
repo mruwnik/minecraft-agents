@@ -164,7 +164,7 @@
 (defn ^:async heal-or-drop!
   "A walk whose search found no way and met the damage budget (:damage-refused): nil when a way with all but 1 hp spent
   does not exist either, or costs no more than the budget (the budget is not why); else :again after going over the budget (only a call with a :floor :health
-  of 1 or less), or {:needs-health true :heal :health :hp-cost :hp-budget}: healing is the caller's or the reflexes'."
+  of 1 or less), or {:needs-health true :heal :health :hp-cost :hp-budget :hungry-food?}: healing is the caller's or the reflexes'."
   [c pos range]
   (let [planned (await (probe! c pos range))]
     (cond
@@ -174,7 +174,8 @@
       (let [{:keys [min-health]} (wworld/walk-settings c)
             body (body-of c)]
         (if (or (:over-budget (ctx/mem c)) min-health (not (:allow-over-budget (:args c))))
-          {:needs-health true :heal (heal-way body) :health (:health body) :hp-cost planned :hp-budget (wworld/damage-budget c)}
+          (cond-> {:needs-health true :heal (heal-way body) :health (:health body) :hp-cost planned :hp-budget (wworld/damage-budget c)}
+            (health/food-limited? (wworld/damage-body c) (wworld/walk-settings c)) (assoc :hungry-food (:food body)))
           (do (ctx/update-mem! c assoc :over-budget true)
               (ctx/emit! c :go-to.over-budget :info {:health (:health body) :planned planned
                                                      :text (str "no way within the damage budget: going over it at " (:health body) " hp for " planned " hp")})

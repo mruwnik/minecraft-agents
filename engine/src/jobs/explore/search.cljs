@@ -325,6 +325,16 @@
 (defn finding-text [{:keys [pos ago-s]}]
   (str (str/join "," pos) (when ago-s (str " (last seen " (max 1 (js/Math.round (/ ago-s 60))) " min ago)"))))
 
+(defn refused-text
+  "When the legs that ended a :stuck search were all refused by the call's own floor, the sentence saying so, else nil."
+  [c m]
+  (let [row (take-last (:failed-in-row m 0) (:failed m))
+        floor (:floor (first row))]
+    (when (and floor (seq row) (every? #(= floor (:floor %)) row))
+      (let [line (name (:floor floor))]
+        (str "every walk was refused: the body's " line " " (js/Math.round (aget (.self (:primitives c)) line))
+             " is under the call's floor " (:min floor) " (its :floor " line ")")))))
+
 (defn finish!
   "End the call: done when found (or nothing was left to find), else the ending of why; the text and findings are the ending's data."
   [c reason why]
@@ -336,7 +346,9 @@
                                 (str "found " (count found) " " what " at " (str/join ", " (map finding-text found)))
                                 (str "no " what " found (" (name why) ") after " (:legs m 0) " legs, "
                                      (:scans m 0) " looks of " (:scan-radius (:args c)) " blocks round, " (:farthest m 0) " blocks out"
-                                     (when (pos? (:skipped m 0)) (str ", " (:skipped m) " legs skipped as already searched"))))}
+                                     (if-let [t (and (= :stuck why) (refused-text c m))]
+                                       (str ", " t)
+                                       (when (pos? (:skipped m 0)) (str ", " (:skipped m) " legs skipped as already searched")))))}
                  why (assoc :why why))]
     (case why
       nil (ctx/end c :done nil result)
@@ -513,6 +525,7 @@
       :continue
       (let [{:keys [in-water why] :as data} (:data r)
             cause (contract/cause-key r)
+            floor (when (and (map? (:cause r)) (:floor (:cause r))) (select-keys (:cause r) [:floor :min]))
             res (assoc data :reason cause)
             step? (some? (:leg-column (ctx/mem c)))
             arrived (and (:arrived data) (or step? (not in-water)))
@@ -523,7 +536,8 @@
                                      arrived (dissoc :blocked)
                                      (and arrived (:leg-column m)) (update-in [:stepped (:leg-column m)] (fnil min ##Inf) (xz-dist [hx hz] (:leg-column m)))
                                      (not (or arrived dangerous?)) (update :blocked (fnil conj []) {:at [hx hz] :leg [x z]})
-                                     (not arrived) (update :failed (fnil conj []) {:pos [x y z] :reason (cond dangerous? :goal-dangerous in-water :wet :else :unreachable)})
+                                     (not arrived) (update :failed (fnil conj []) (cond-> {:pos [x y z] :reason (cond dangerous? :goal-dangerous in-water :wet :else :unreachable)}
+                                                                                    floor (assoc :floor floor)))
                                      (and (not arrived) (not (interrupted? res)) (:leg-column m)) (-> (update :tried (fnil conj []) (:leg-column m))
                                                                               (cond-> (not dangerous?) (update :legs (fnil inc 0)))))))
         (if (>= in-row (max-failed-in-row)) (finish! c :not-found :stuck) :again)))))
