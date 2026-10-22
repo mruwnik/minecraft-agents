@@ -41,7 +41,9 @@
     up it at once; only a seen block over the own column sends the looks to the neighbour columns.
     A column seen open whose swim rose no higher is skipped by the next air search (the body steps to the next column).
   - Enclosed (head cell holds a suffocating block, see jobs.lib.breath): step to a side cell with room
-    to stand, once; then dig the head block, the block above it if solid, and step up.
+    to stand, once; then dig the head block, the block above it if solid, and step up. When a full block still fills the
+    feet cell after that, the run calls jobs.survival.unwedge (up to 3 times) before it ends, so no second reflex
+    takes over between two falling blocks.
   - Surfaced and still in water: the ways out are read from what is seen; when none shows, the unseen cells that read touched are looked at (jobs.lib.sense/decide!, bounded) before the run gives up. Each pass takes the first way left: swim to the nearest shore cell (land with its
     rim at most one block above the water) within the shore-radius setting (6), another direction after each failed swim; a go-to
     child onto a climbable shore cell (as for the shore swim) within the search-radius setting (48) (at most 3 targets per spot, a failed target excludes its direction),
@@ -355,7 +357,7 @@
   (when-not (:noted (ctx/mem c))
     (let [self (.self (:primitives c))]
       (ctx/remember! c :breathe {:why why :pos (u/pos-of (.-pos self)) :oxygen (.-oxygen self)} breathe-policy)
-      (ctx/update-mem! c assoc :noted true))))
+      (ctx/update-mem! c assoc :noted true :why why))))
 
 (defn fail!
   "One failed try in this run: :again until u/max-failures, then nothing possible with cause cause."
@@ -379,6 +381,23 @@
                     "; cap: " (name (:cap fields)) ")")]
       (ctx/end c :nothing-possible :no-air (assoc fields :tries (u/max-failures) :text text)))))
 
+(def max-unwedges "Times one run frees its feet cell after a dig-out: a block that keeps falling in must not hold the run for ever." 3)
+
+(defn unwedge-owed?
+  "Whether this run dug out of a block (an :enclosed pass) and a full block still fills the feet cell: the wedged reflex
+  would take over at once and be cut again by the next block falling on the head, so the run frees the feet itself."
+  [c]
+  (and (some? (breath/wedged-cell (:primitives c)))
+       (let [m (ctx/mem c)]
+         (and (:noted m) (= :enclosed (:why m)) (< (:unwedges m 0) max-unwedges)))))
+
+(defn ^:async unwedge!
+  "Child jobs.survival.unwedge, then another pass."
+  [c]
+  (ctx/update-mem! c update :unwedges (fnil inc 0))
+  (await (ctx/call c :unwedge 'jobs.survival.unwedge {}))
+  :again)
+
 (defn ^:async pass!
   "One look at the world and one try. :again or :held for another pass, else :done (perhaps stopped)."
   [c]
@@ -386,6 +405,7 @@
         why (situation-of c)]
     (cond
       (and (nil? why) (surfaced-in-water? c)) (await (if (fight/attacked? c) (fight/fight! c) (head-for-land! c)))
+      (and (nil? why) (unwedge-owed? c)) (await (unwedge! c))
       (nil? why) :done
 
       (and (= :drowning why) (fight/stalled? c) (fight/attacked? c)) (await (fight/fight! c))

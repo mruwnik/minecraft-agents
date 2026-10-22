@@ -285,6 +285,17 @@
           (is (= [] (:list (core/state eng))))
           (is (= [[:completed nil]] (ended seen))))))))
 
+(deftest enclosed-run-frees-the-feet-cell-too-when-the-step-up-fails
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup {:blocks {"0,64,0" "gravel" "0,65,0" "gravel"}})]
+          (.override (.-world p) "moveTo" (fn ^:async f [_ _ _] #js {:status "blocked"}))
+          (await (one-run! eng defaults))
+          (is (= "air" (.-name (.blockAt p (tu/pos 0 65 0)))) "head block dug")
+          (is (= "air" (.-name (.blockAt p (tu/pos 0 64 0)))) "feet block dug by the same run, not left to the wedged reflex")
+          (is (= [[:completed nil]] (ended seen))))))))
+
 (deftest enclosed-with-a-dig-that-times-out-is-stopped-without-moving
   (async done
     (tu/run-async done

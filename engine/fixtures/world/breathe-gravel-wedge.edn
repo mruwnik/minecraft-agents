@@ -1,0 +1,21 @@
+;; Breathe owns the whole escape when gravel fills both the feet and the head cell: it digs out of the block and frees the
+;; feet cell too, so the wedged reflex never takes over between two hits (it was cut again by the next gravel each time).
+;; A 1x1 shaft in solid stone with no side cell; gravel set in the feet and head cells. Resistance keeps the body alive.
+{:defaults
+ {:tags [:survival :unwedge] :time :any
+  :plot {:height 8}
+  :register [{:trigger :suffocating :persistence :cooldown :cooldown-s 0 :backoff false :job (jobs.survival.breathe)}
+             {:trigger :wedged :persistence :cooldown :cooldown-s 0 :job (jobs.survival.unwedge)}]
+  :blocks [[:fill [12 -1 12] [20 3 20] "stone"] [:fill [16 0 16] [16 1 16] "air"]]
+  :body {:at [16.5 0 16.5] :settle-s 1 :inventory [["iron_shovel" 1]] :effects [["resistance" 600 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "gravel-in-feet-and-head-is-dug-out-by-breathe-alone"
+   :act [[:rcon "execute positioned $X $Y $Z run setblock ~16 ~ ~16 gravel"]
+         [:rcon "execute positioned $X $Y $Z run setblock ~16 ~1 ~16 gravel"]
+         [:await {:source :reflex :kind :ended} 40]
+         [:wait-s 5]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :suffocating}} :within-s 10}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :suffocating} :data {:outcome :done}} :within-s 40}
+            {:no-event {:source :reflex :kind :fired :context {:reflex-id :wedged}} :for-s 40 :until {:source :reflex :kind :ended}}]
+   :after [[:not-block [16 0 16] "gravel"] [:not-block [16 1 16] "gravel"]]}]}
