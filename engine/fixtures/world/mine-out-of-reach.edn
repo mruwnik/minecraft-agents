@@ -1,7 +1,7 @@
 ;; jobs.gather.mine and stone it cannot walk to (card 83f5ea6c: a seen target the walk cannot reach is skipped,
 ;; no failure counted, so it never gives up after 3).
 ;; Dirt floor, so the only stone is the case's own; body with a stone pickaxe.
-;; Case 1: four stones on 7-high bedrock pillars 3 off (inside :radius 10: a stone 8 up and 3 off is 8.1 from the body), no blocks carried: none is taken, mine ends got 0 reporting the ones it saw from where it stands as seen ore out of reach (:unreached), without giving up.
+;; Case 1: four stones on 7-high bedrock pillars 3 off (inside :radius 10: a stone 8 up and 3 off is 8.1 from the body), no blocks carried: none is taken, mine ends got 0 reporting the ones it saw from where it stands as seen ore out of reach (:unreached), without giving up and without walking off exploring: the body ends within 4 blocks of its start.
 {:defaults
  {:tags [:mine :jobs] :time :any
   :plot {:height 12 :floor "dirt"}
@@ -17,4 +17,4 @@
    :act [[:job (jobs.gather.mine {:torches false :block "stone" :count 3 :radius 10 :ways #{:seen}})]]
    :expect [{:event {:source :job :kind #{:completed :stopped} :data {:got 0 :text [:contains "seen ore out of reach"]}} :within-s 130 :of-job true}
             {:event {:source :job :kind #{:completed :stopped} :data {:unreached [:any]}} :within-s 130 :of-job true}]
-   :after [[:block [13 7 16] "stone"] [:block [16 7 19] "stone"]]}]}
+   :after [[:block [13 7 16] "stone"] [:block [16 7 19] "stone"] [:body-near [16.5 0 16.5] 4]]}]}
