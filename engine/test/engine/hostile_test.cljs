@@ -196,10 +196,12 @@
     {:fighting? true :few? true :health 5} :flee
     {:cannot-outrun? true :fighting? true :creeper? true} :flee))
 
-(deftest the-health-a-begun-fight-is-held-above-is-a-setting
-  (is (= :flee (cost/decide {:reserve 4 :damage 16 :health 8 :fighting? true :few? true})))
-  (is (= :fight (settings/with-settings {:jobs.lib.cost.fight/hysteresis-health 7}
-                  #(cost/decide {:reserve 4 :damage 16 :health 8 :fighting? true :few? true})))))
+(deftest a-begun-fight-goes-on-while-it-is-expected-to-leave-more-than-the-hardest-recent-hit
+  (are [world expected] (= expected (cost/decide (merge {:reserve 4 :fighting? true :few? true} world)))
+    {:health 8.2 :damage 6 :margin 5} :flee
+    {:health 8.2 :damage 6 :margin 2} :fight
+    {:health 8.2 :damage 6} :fight
+    {:health 8.2 :damage 6 :fighting? false} :flee))
 
 (defn fist-stance
   "What decide makes of a body at full health with weapon against one mob (health: what is left of it, nil full)."
@@ -931,6 +933,35 @@
 
 (defn skeleton [id x z] {:id id :name "skeleton" :kind "hostile" :pos {:x x :y 64 :z z}})
 
+(def wood-sword [{:name "wooden_sword" :count 1}])
+
+;; Wicken j3766: at 13 hp with a wooden sword the fight walked to a seen skeleton, beside a zombie heard further on
+(deftest a-fight-counts-the-mobs-heard-by-the-way-to-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [wall (tu/box -3 64 8 3 66 9 "stone")]
+          (doseq [[entities decision why]
+                  [[[(skeleton 1 0.5 4.5)] :fight "a lone skeleton is fought"]
+                   [[(skeleton 1 0.5 4.5) (zombie 7 0.5 12.5)] :flee "a zombie heard behind the wall past it joins that fight: too dear at 13 hp"]]]
+            (let [{:keys [eng seen]} (setup-seeing {:self {:health 13} :inventory wood-sword :blocks wall :entities entities} [15 15] 1000)]
+              (core/submit! eng respond {})
+              (await (core/tick! eng))
+              (is (= [decision] (mapv :decision (decided seen))) why))))))))
+
+(deftest blows-felt-lately-price-the-fight-at-their-rate
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[hurts decision why]
+                [[[] :fight "unhurt at 9 hp: a lone skeleton leaves the reserve"]
+                 [[{:amount 2.5 :damageType "arrow"} {:amount 2.5 :damageType "arrow"}] :flee "5 hp felt within a second: the fight's 3 s would cost more than 9 hp"]]]
+          (let [{:keys [eng seen]} (setup-flight {:self {:health 9} :inventory wood-sword :entities [(skeleton 1 0.5 4.5)]})]
+            (doseq [h hurts] (mem/write! (:store eng) :hurt h))
+            (core/submit! eng respond {})
+            (await (core/tick! eng))
+            (is (= [decision] (mapv :decision (decided seen))) why)))))))
+
 ;; Bramble #39: the fight walked to a skeleton with a creeper standing by it, beyond the trigger's melee radius; one blast did 17
 (deftest a-creeper-standing-by-the-mob-the-fight-would-walk-to-makes-it-a-flight
   (async done
@@ -1127,7 +1158,7 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup-flight {:inventory sword :entities [(assoc (zombie 100 3 0) :health 20)]})]
           (.override (.-world p) "attack"
-                     (fn [token a impl] (-> (impl token a) (.then (fn [r] (fake/swap-self! p assoc :health 6) r)))))
+                     (fn [token a impl] (-> (impl token a) (.then (fn [r] (fake/swap-self! p assoc :health 6) (mem/write! (:store eng) :hurt {:amount 14 :attacker {:id 100 :name "zombie"}}) r)))))
           (core/submit! eng respond {})
           (await (core/tick! eng))
           (is (= 1 (count (calls p "attack"))) "15 left is not nearly dead")
@@ -1385,7 +1416,7 @@
           (let [{:keys [eng seen clock]} (setup {:inventory sword
                                                  :entities [(assoc (zombie 1 3 0) :health 5 :visible true)
                                                             (assoc (zombie 2 0 7) :visible true)]})]
-            (core/register-reflex! eng (assoc entry :job '(jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 4}})))
+            (core/register-reflex! eng (assoc entry :job '(jobs.survival.respond-to-hostile {:settings {:jobs.lib.danger/hostile-radius 4 :jobs.lib.price/way-radius 4}})))
             (await (core/tick! eng))
             (is (= [:done] (mapv :outcome (reflex-ended seen))) (str why ": the near zombie killed, the one at 7 is beyond the job's 4"))
             (swap! clock + 1000)

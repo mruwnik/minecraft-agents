@@ -1,5 +1,5 @@
-;; Card dd0f2aad: a fight begun at full health goes on against one zombie when the body drops to 10 hp (hysteresis health is
-;; 8; the Linden trial fled at 10 hp and died on the run). A fresh fight at 10 hp is judged by cost and may flee. Hunger stops
+;; Card dd0f2aad: a fight begun at full health goes on against one zombie when the body drops to 10 hp (a zombie cannot be
+;; outrun; the Linden trial fled at 10 hp and died on the run). A fresh fight at 10 hp is judged by cost and may flee. Hunger stops
 ;; regeneration, then `damage` leaves 10 hp. The zombie is NoAI, helmeted, with 100 hp so the fight outlasts the damage. The zombie may or may not die in the window, so no :after count.
 {:defaults
  {:tags [:hostile :combat]

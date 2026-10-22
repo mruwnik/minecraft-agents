@@ -41,7 +41,7 @@
    ::hold-radius {:default 16 :doc "Hostiles known within this many blocks count for holding position in the dark." :spec (a/num-in 0 nil)}
    ::hit-window-s {:default 5 :doc "A flight hit twice within this long is failing: the body fights. Also how recent a hurt keeps a fight from leaving heard mobs, and makes a round look once more." :spec (a/num-in 0 nil)}
    ::engage-radius {:default 8 :doc "Blocks within which a hostile is in the fight at hand; a begun fight goes on while at most ::engaged-cap of them are (farther ones are not yet in it)." :spec (a/num-in 0 nil)}
-   ::engaged-cap {:default 2 :doc "Hostiles within ::engage-radius up to which an armed body above the hysteresis health goes on with a begun fight instead of turning its back." :spec (a/int-in 1 nil)}
+   ::engaged-cap {:default 2 :doc "Hostiles within ::engage-radius up to which an armed body goes on with a begun fight instead of turning its back." :spec (a/int-in 1 nil)}
    ::max-unchanged {:default 3 :doc "Calls of a child in a row that leave the body and the dangers as they were before the reflex stops :no-response." :spec (a/int-in 1 nil)}
    ::struck-s {:default 30 :doc "Seconds the hits the fight landed outlive the round (:struck-hits), so a refired reflex still counts them." :spec (a/num-in 0 nil)}
    ::struck-cap {:default 8 :doc "How many :struck-hits entries memory keeps." :spec (a/int-in 1 nil)}
@@ -284,13 +284,13 @@
                  (some combat/enderman? near) :flee
                  (hostile/committed? c near) :fight
                  :else
-                   (cost/decide {:health (.-health self)
-                               :fighting? (fight-begun? c m near)
-                               :few? (few-engaged? p near)
-                               :cannot-outrun? (not (cost/outruns? (or (.-food self) 20) (map cost/mob-kind (remove #(or (combat/ranged? %) (combat/flyer? %)) near))))
-                               :creeper? (boolean (or (seq beside) (and (some combat/creeper? near) (not (hostile/hit-and-back? c near)))))
-                               :reserve reserve
-                               :damage (hostile/damage c near #(struck-of c %))}))
+                 (cost/decide (merge (hostile/fight-price c near #(struck-of c %))
+                                     {:health (.-health self)
+                                      :fighting? (fight-begun? c m near)
+                                      :few? (few-engaged? p near)
+                                      :cannot-outrun? (not (cost/outruns? (or (.-food self) 20) (map cost/mob-kind (remove #(or (combat/ranged? %) (combat/flyer? %)) near))))
+                                      :creeper? (boolean (or (seq beside) (and (some combat/creeper? near) (not (hostile/hit-and-back? c near)))))
+                                      :reserve reserve})))
         stay? (and (not (hurt-lately? c)) (stay-under-roof? c near))
         decision (if (and (= :flee chosen) (>= (count hits) 2) (empty? beside) (not-any? #(or (combat/creeper? %) (combat/enderman? %) (combat/flyer? %)) near))
                    :fight

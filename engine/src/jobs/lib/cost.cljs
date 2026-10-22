@@ -3,12 +3,12 @@
   never read the world themselves. They compose: armour under mob threat, mob threat under fight cost, route danger and
   the planner's rate; route danger under fetch cost.
 
-    armour   armour-stats, after-armour, equipment-of: vanilla's per-hit formula, the only one; fall-damage, fall-profile: a fall's hp and the drops a body takes
+    armour   armour-stats, after-armour, equipment-of: vanilla's per-hit formula, the only one; fall-damage, route-fall-damage, fall-profile: a fall's (a route's drops') hp and the drops a body takes
              (jobs.lib.cost.armour).
     threat   hostile?, mob-hurt: what one mob does over some seconds, after armour (jobs.lib.cost.threat).
     weapon   attack-gap-ms, weapon-damage, remaining-health, mob-max-health, ranged-mobs: the fight inputs; the one tool-material table
              (tool-tier, weapon-rank, cheapness) (jobs.lib.cost.weapon).
-    fight    fight-damage, decide: the damage of a fight with the current kit, :fight or :flee (jobs.lib.cost.fight).
+    fight    fight-damage, fight-seconds, decide: the damage (and length) of a fight with the current kit, :fight or :flee (jobs.lib.cost.fight).
     danger   route-danger, straight-route: the danger of a walk past mobs; hurt-rate, exposure-price: what standing exposed to them costs; stance, danger-rate, danger-list: go-to's
              planner dangers; reach-first?, outruns-at?: a body's race to a refuge against its chasers (jobs.lib.cost.danger).
     health   hp-seconds, health-scale, hp-price, commute-s (a walk there and back against sheltering here), drown-prices, damage-budget, survivable-budget: what an hp costs and how many a walk may spend (jobs.lib.cost.health).
@@ -47,6 +47,7 @@
 (def after-armour armour/after-armour)
 (def fall-damage armour/fall-damage)
 (def fall-profile armour/fall-profile)
+(def route-fall-damage armour/route-fall-damage)
 
 (def hostile? threat/hostile?)
 (def mob-hurt threat/mob-hurt)
@@ -62,6 +63,7 @@
 (def default-reserve fight/default-reserve)
 (def fight-damage fight/fight-damage)
 (def decide fight/decide)
+(def fight-seconds fight/fight-seconds)
 (def leaves-reserve? fight/leaves-reserve?)
 
 (def route-danger danger/route-danger)

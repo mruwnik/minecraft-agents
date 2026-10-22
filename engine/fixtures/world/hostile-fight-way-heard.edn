@@ -1,0 +1,27 @@
+;; Card b56a866b (Wicken j3766): at 13 hp with a wooden sword the reflex fought a seen skeleton and walked into a zombie
+;; it had only heard; the fight's price now counts mobs heard near the way to it. The zombie stands behind a stone wall
+;; (heard, not seen; the wall's ends leave a way round). Hunger stops regeneration, then `damage` leaves 13 hp (starving
+;; on easy stops at 10). Both mobs are NoAI (no shots), the skeleton helmeted.
+;; Sealed stone box x 2..28, y 0..4, z 10..22, lit by a sea lantern floor.
+{:defaults
+ {:tags [:hostile :survival :combat]
+  :time :any
+  :register [{:trigger :hostile-near}]
+  :blocks [[:fill [1 -1 9] [29 5 23] "stone" :hollow] [:fill [2 -1 10] [28 -1 22] "sea_lantern"]
+           [:fill [13 0 13] [13 3 20] "stone"]]
+  :body {:at [5.5 0 16.5] :yaw 270 :inventory [["wooden_sword" 1]]}}
+ :cases
+ [{:name "a-skeleton-with-a-zombie-heard-past-it-is-fled-at-13-hp"
+   :act [[:summon "zombie" [18.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]
+         [:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 7 minecraft:generic"]
+         [:summon "skeleton" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:decision :flee}} :within-s 20}
+            {:no-event {:source :job :kind :hostile.decided :data {:decision :fight}} :for-s 20}]
+   :limit-s 60}
+  {:name "a-lone-skeleton-is-fought-at-13-hp"
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 7 minecraft:generic"]
+         [:summon "skeleton" [9.5 0 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:decision :fight :mob "skeleton"}} :within-s 20}]
+   :limit-s 60}]}

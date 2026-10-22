@@ -97,6 +97,11 @@
   [view t]
   (boolean (some #(hurt/mob-hit? (:data %)) (mem/since view :hurt t))))
 
+(defn mob-hits-since
+  "The :hurt entries of the view since t (ms) that may be a mob's blow, as [{:t :amount}], oldest first."
+  [view t]
+  (vec (keep #(when (hurt/mob-hit? (:data %)) {:t (:t %) :amount (or (:amount (:data %)) 0)}) (mem/since view :hurt t))))
+
 (defn next-mute-ms
   "How long the next mute of kind (:heard-mute by default) lasts: mute-base-ms, doubled for each mute of that kind within the last hour, up to mute-max-ms."
   ([view] (next-mute-ms view :heard-mute))

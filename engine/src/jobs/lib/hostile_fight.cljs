@@ -11,6 +11,10 @@
             [jobs.lib.look :as look]
             [jobs.lib.flee-walk :as walk]
             [jobs.lib.cost.weapon :as weapon]
+            [jobs.lib.body :as body]
+            [jobs.lib.price :as price]
+            [jobs.lib.reach :as reach]
+            [jobs.movement.go-to.risk :as risk]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -26,6 +30,7 @@
    ::ranged-return-s {:default 600 :doc "Seconds a flight from a ranged mob counts toward ::ranged-returns." :spec (a/num-in 0 nil)}
    ::commit-health {:default 10 :doc "Health below which the body does not commit to a fight with ranged mobs it has fled before (::ranged-returns)." :spec (a/num-in 0 nil)}
    ::back-step {:default 6 :doc "Blocks the body backs off from a creeper after each hit: its fuse runs on, so it ends out of the blast's reach (about 6)." :spec (a/num-in 1 nil)}
+   ::felt-s {:default 3 :doc "Seconds back the mob blows the body felt set the rate a fight is priced at (fight-price)." :spec (a/num-in 0 nil)}
    ::leash {:default 20 :doc "Blocks from where a hostile fight started beyond which a hostile is not chased." :spec (a/num-in 0 nil)}})
 
 (defn hostiles? [c] (= :hostiles (:targets (:args c))))
@@ -142,15 +147,56 @@
   (cond-> {:name (.-name e) :distance (danger-q/mob-distance p e) :hits (:hits struck 0)}
     (number? (:health struck)) (assoc :health (:health struck))))
 
-(defn damage
-  "The damage fighting hostiles with the best weapon carried is expected to cost (jobs.lib.cost/fight-damage); struck-of
-  maps a mob id to what the attack counted on it (nil: none)."
+(defn fight-of
+  "The fight with hostiles and the best weapon carried, as jobs.lib.cost/fight-damage takes it; struck-of maps a mob id
+  to what the attack counted on it (nil: none)."
   [c hostiles struck-of]
-  (let [p (:primitives c)
-        self (.self p)]
-    (cost/fight-damage {:weapon (combat/best-weapon p (combat/weapons c))
-                        :equipment (cost/equipment-of (.-equipment self))
-                        :mobs (map #(mob-of p (struck-of (.-id %)) %) hostiles)})))
+  (let [p (:primitives c)]
+    {:weapon (combat/best-weapon p (combat/weapons c))
+     :equipment (cost/equipment-of (.-equipment (.self p)))
+     :mobs (mapv #(mob-of p (struck-of (.-id %)) %) hostiles)}))
+
+(defn incoming
+  "{:rate hp a second, :hardest hp} of the mob blows the body felt within ::felt-s (its hurt memory): their sum over the
+  time since the first (at least a second), and the largest one; zeros without any."
+  [c]
+  (let [now (ctx/now c)
+        hits (body/mob-hits-since (ctx/view c) (- now (* 1000 (settings/get settings ::felt-s))))
+        amounts (map :amount hits)]
+    {:rate (if (seq hits) (/ (reduce + amounts) (max 1 (/ (- now (:t (first hits))) 1000))) 0)
+     :hardest (reduce max 0 amounts)}))
+
+(defn way-mobs
+  "The hostiles known (seen, or heard at their rough spot) within price ::way-radius of the way to the nearest of near,
+  not in near: a fight walked into there meets them too."
+  [p near]
+  (when-let [t (first near)]
+    (let [ids (set (map #(.-id %) near))]
+      (remove #(ids (.-id %)) (danger-q/hostiles-near-way p (danger-q/mob-pos p t) (settings/get price/settings ::price/way-radius) {})))))
+
+(defn walk-hp
+  "hp the walk to the nearest of near costs: go-to's own route price (risk/estimate, its hostiles left out: they are in the
+  fight) plus the drops of the straight way there."
+  [c near]
+  (if-let [t (first near)]
+    (let [p (:primitives c)
+          goal (danger-q/mob-pos p t)
+          {:keys [hp hostile-hp]} (risk/estimate c goal)]
+      (+ (- hp hostile-hp)
+         (cost/route-fall-damage (cost/equipment-of (.-equipment (.self p)))
+                                 (cost/straight-route (reach/lookup p) (u/pos-of (.-pos (.self p))) goal))))
+    0))
+
+(defn fight-price
+  "{:damage :margin} of fighting near for decide: the walk there (walk-hp) plus the fight with near and the mobs by its
+  way (way-mobs), at least the mob blows felt lately (incoming :rate) over the fight's length; margin the hardest blow,
+  felt lately or one of the fight's mobs would deal through the armour worn (a creeper's is priced per swing instead)."
+  [c near struck-of]
+  (let [fight (fight-of c (concat near (way-mobs (:primitives c) near)) struck-of)
+        stats (cost/armour-stats (:equipment fight))
+        {:keys [rate hardest]} (incoming c)]
+    {:damage (+ (walk-hp c near) (max (cost/fight-damage fight) (* rate (cost/fight-seconds fight))))
+     :margin (reduce max hardest (map #(cost/mob-hurt stats (:name %) 1 identity 1) (remove #(= "creeper" (:name %)) (:mobs fight))))}))
 
 (defn creeper-fled-from
   "How many times the body fled a creeper within ::creeper-return-s, by the :hostile entries (c is a ctx)."
@@ -229,4 +275,4 @@
                  (not-any? combat/creeper? hostiles)
                  (not-any? combat/enderman? hostiles)
                  (cost/leaves-reserve? {:health (.-health (.self (:primitives c))) :reserve (danger-q/fight-reserve)
-                                        :damage (damage c hostiles struck-of)})))))
+                                        :damage (:damage (fight-price c hostiles struck-of))})))))
