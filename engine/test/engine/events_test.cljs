@@ -551,3 +551,14 @@
     (emit-n! stream 3000)
     (is (< (meta-seq) 3005) "only rotations rewrite it")
     (is (= 3005 (:seq (events/cursor (events/make {:file file :generation-id "g2"})))))))
+
+(deftest stdout-carries-no-debug-events
+  (let [written (atom [])
+        write (.-write js/process.stdout)
+        stream (events/make {:generation-id "g" :stdout? true})]
+    (set! (.-write js/process.stdout) (fn [s] (swap! written conj s) true))
+    (try
+      (events/emit! stream {:source :job :kind :glance :level :debug})
+      (events/emit! stream {:source :job :kind :done :level :info})
+      (finally (set! (.-write js/process.stdout) write)))
+    (is (= [:done] (mapv #(:kind (reader/read-string %)) @written)))))

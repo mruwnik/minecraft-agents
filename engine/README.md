@@ -545,7 +545,7 @@ Listed jobs are never backed off.
 
 ## Events and the local API
 
-The engine writes one EDN map per line to stdout and `worlds/<world>/agents/<name>/engine/events.edn`. The contract is in
+The engine writes one EDN map per line (`:debug` events not on stdout) to stdout and `worlds/<world>/agents/<name>/engine/events.edn`. The contract is in
 `docs/event-stream.md`. Fields: `:seq`, `:generation-id`, `:time-ms`, `:source`, `:kind`, `:context` (job id, child chain,
 round, reflex id, action-call id), `:data`, `:message`, `:attention` (omitted/`:none`, `:notice`, `:required`),
 `:request-id`. Required attention requests stay in saved state until explicitly resolved. The log keeps 64 MiB across

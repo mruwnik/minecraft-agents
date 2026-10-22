@@ -512,7 +512,7 @@
         debug-segments (if file (enforce-chain! dfile scanned-debug debug-max-bytes) [])
         run-id (random-id)
         sinks (cond-> (vec sinks)
-                stdout? (conj #(.write js/process.stdout (str (pr-str %) "\n"))))]
+                stdout? (conj #(when-not (= :debug (:level %)) (.write js/process.stdout (str (pr-str %) "\n")))))]
     (atom {:file file :metadata-file (when file (metadata-file file))
            :stream-id sid :generation-id (or generation-id (random-id))
            :run-id run-id :max-bytes max-bytes :last-seq last-seq
