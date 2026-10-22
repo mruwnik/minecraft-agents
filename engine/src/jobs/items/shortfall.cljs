@@ -19,17 +19,28 @@
 
 (defn total [counts] (reduce + (vals counts)))
 
+(defn with-log-planks
+  "have with the planks each carried log would give (4 per X_log, as X_planks) added: the recipe a craft can reach
+  is the one whose planks species is carried as logs, not the commonest species."
+  [have]
+  (reduce-kv (fn [h k n]
+               (if (clojure.string/ends-with? k "_log")
+                 (update h (str (subs k 0 (- (count k) 4)) "_planks") (fnil + 0) (* 4 n))
+                 h))
+             have have))
+
 (defn closer?
-  "Whether candidate a (with :missing) beats b: fewer items missing, then the more common base item."
+  "Whether candidate a (with :reachable, what it misses once carried logs count as planks) beats b: fewer items
+  reachable-missing, then the more common base item."
   [a b]
-  (let [ta (total (:missing a)) tb (total (:missing b))]
+  (let [ta (total (:reachable a)) tb (total (:reachable b))]
     (or (< ta tb) (and (= ta tb) (< (rank-of (:missing a)) (rank-of (:missing b)))))))
 
 (defn closest
   "{:recipe r :missing m} for the recipe closest to being satisfied by have, nil without recipes."
   [recipes have]
   (->> recipes
-       (map (fn [recipe] {:recipe recipe :missing (missing-for recipe have)}))
+       (map (fn [recipe] {:recipe recipe :missing (missing-for recipe have) :reachable (missing-for recipe (with-log-planks have))}))
        (reduce (fn [best c] (if (or (nil? best) (closer? c best)) c best)) nil)))
 
 (defn shortfall

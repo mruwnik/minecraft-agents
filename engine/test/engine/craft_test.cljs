@@ -31,3 +31,12 @@
     [{"wheat" 3}] {"wheat" 1} {:short {"wheat" 2}}
     [{"oak_planks" 2} {"cherry_planks" 2}] {"oak_planks" 1}
     {:short {"oak_planks" 1} :alternatives {"oak_planks" ["cherry_planks"]}}))
+
+(def pickaxes [{"oak_planks" 3 "stick" 2} {"jungle_planks" 3 "stick" 2}])
+
+(deftest the-recipe-of-the-carried-logs-species-is-the-one-reported
+  (are [have want] (= want (craft/shortfall pickaxes have))
+    {"jungle_log" 10 "stick" 2} {"jungle_planks" 3}
+    {"oak_log" 10 "stick" 2} {"oak_planks" 3}
+    {"jungle_log" 10 "oak_planks" 1 "stick" 2} {"jungle_planks" 3}
+    {"stick" 2} {"oak_planks" 3}))
