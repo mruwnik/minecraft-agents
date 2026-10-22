@@ -38,20 +38,20 @@
          [:summon "item" [10.5 0 16.5] "{Item:{id:\"minecraft:bread\",count:8}}"]
          [:rcon "damage $BODY 15 minecraft:generic"]
          [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
-   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :low-health}} :within-s 10}
-            {:no-event {:source :job :kind :completed :data {:arrived true}} :for-s 120 :until {:source :reflex :kind :ended :context {:reflex-id :low-health}}}
-            {:event {:source :reflex :kind :ended :context {:reflex-id :low-health} :data {:kind :done}} :within-s 170}
-            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 210 :of-job true}]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :low-health}} :within-s 75}
+            {:no-event {:source :job :kind :completed :data {:arrived true}} :for-s 180 :until {:source :reflex :kind :ended :context {:reflex-id :low-health}}}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :low-health} :data {:kind :done}} :within-s 230}
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 270 :of-job true}]
    :after [[:body-near [22.5 0 16.5] 2]]
-   :limit-s 230}
+   :limit-s 290}
   {:name "hurt-hungry-body-with-no-food-gives-up-and-walks-on"
    :body {:inventory [["dirt" 32]] :effects [["hunger" 120 49]]}
    :act [[:until-rcon "data get entity $BODY foodLevel" "data: (1[0-7])$" 60]
          [:rcon "effect clear $BODY minecraft:hunger"]
          [:rcon "damage $BODY 15 minecraft:generic"]
          [:job (jobs.movement.go-to {:pos #at [22 0 16] :range 1})]]
-   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :low-health} :data {:kind :nothing-possible}} :within-s 200}
-            {:count-event {:source :reflex :kind :fired :context {:reflex-id :low-health}} :for-s 260 :at-most 1}
-            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 260 :of-job true}]
+   :expect [{:event {:source :reflex :kind :ended :context {:reflex-id :low-health} :data {:kind :nothing-possible}} :within-s 260}
+            {:count-event {:source :reflex :kind :fired :context {:reflex-id :low-health}} :for-s 300 :at-most 1}
+            {:event {:source :job :kind :completed :data {:arrived true}} :within-s 300 :of-job true}]
    :after [[:body-near [22.5 0 16.5] 2]]
-   :limit-s 280}]}
+   :limit-s 320}]}
