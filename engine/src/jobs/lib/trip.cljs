@@ -181,9 +181,13 @@
     (or (tools/cheapest-tool (seq lasting)) (tools/cheapest-tool harvest) (when (and kind (not= kind "shears")) (str "stone_" kind)) (:item need))))
 
 (defn in-spare?
-  "Whether this job runs under a spare fetch (a /spare slot in its chain): the digging that fetch needs makes no spare of its own."
-  [c]
-  (boolean (some #(str/ends-with? % "/spare") (:chain c))))
+  "Whether this job runs under a fetch of the tool it would dig for (a /spare slot in its chain, or an obtain slot named
+  for the spare tool of block-name): the digging that fetch needs makes no spare of its own."
+  ([c] (in-spare? c nil nil))
+  ([c block-name] (in-spare? c block-name nil))
+  ([c block-name need]
+   (let [tool (when block-name (spare-name (:primitives c) block-name need))]
+     (boolean (some #(or (str/ends-with? % "/spare") (and tool (str/ends-with? % (str "/" tool)))) (:chain c))))))
 
 (def heading-steps {:north [0 -1] :east [1 0] :south [0 1] :west [-1 0]})
 
@@ -210,7 +214,7 @@
   ([c block-name] (tool-ready! c block-name nil))
   ([c block-name amount]
    (let [p (:primitives c)
-         worn (when (and block-name (not (in-spare? c)))
+         worn (when (and block-name (not (in-spare? c block-name)))
                 (spare-need c block-name amount))
          tool-name (when worn (spare-name p block-name worn))
          told? #(some (fn [x] (= tool-name (:name (:data x)))) (ctx/entries c tools/no-spare-told-kind))

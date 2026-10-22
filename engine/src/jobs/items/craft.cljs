@@ -375,7 +375,7 @@
             cap (if held? (makeable c) ##Inf)]
         (or (when (zero? cap) (await (short-of-ingredients! c 1)))
             (let [table (or (:table (ctx/mem c)) (:table (:args c)))]
-              {:r (await (ctx/act c :craft (clj->js {:item item :count (min cap (- target have)) :table table :standIns (recipes/interchange (game/version-of (:primitives c)))})))
+              {:r (await (ctx/act c :craft (clj->js {:item item :count (min cap (- target have)) :table table :quick (boolean (:room-tried (ctx/mem c))) :standIns (recipes/interchange (game/version-of (:primitives c)))})))
                :table table :start start}))))))
 
 (defn ^:async settle!

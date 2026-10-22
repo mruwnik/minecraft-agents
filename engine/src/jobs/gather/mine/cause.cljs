@@ -18,5 +18,5 @@
       (and (:shed (:args c)) (pos? (trip/surplus-slots p))) {:reason :surplus :text "dig-for stopped: the pack holds more cobblestone than a dig needs; jobs.gather.mine throws it away"}
       (not (tools/can-harvest? p block))
       {:reason :no-tool :tool kind :why :missing :text (str "dig-for stopped: no " kind " that harvests " block " is carried; jobs.gather.mine fetches one before it digs")}
-      (and (trip/spent-tool? p block) (not (trip/in-spare? c)))
+      (and (trip/spent-tool? p block) (not (trip/in-spare? c block)))
       {:reason :no-tool :tool kind :why :spent :text (str "dig-for stopped: every " kind " carried is nearly spent; jobs.gather.mine gets a spare before it digs")})))

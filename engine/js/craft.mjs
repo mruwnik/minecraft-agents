@@ -218,7 +218,8 @@ export async function craftItem (bot, ctx, a, { timeScale = 1, reach = constants
   if (bot.inventory.selectedItem || (bot.currentWindow && bot.currentWindow !== bot.inventory)) {
     if (bot.currentWindow) bot.closeWindow(bot.currentWindow)
   }
-  await resync(bot, ctx, timeScale)
+  // a:quick (right after a make-room toss) skips the entry resync: it takes seconds under load, and the tossed junk lying in reach is picked up again meanwhile
+  if (!a.quick) await resync(bot, ctx, timeScale)
 
   const before = carriedCounts(bot)
   const start = before[item] ?? 0

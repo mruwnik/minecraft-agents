@@ -349,6 +349,19 @@ test('craftItem: resyncs the inventory window at entry', async () => {
   assert.ok(state.syncs >= 1)
 })
 
+test('craftItem: quick skips the entry resync', async () => {
+  const syncsAtFirstCraft = async quick => {
+    const { bot, state } = setup({ items: inv(['wheat', 3]), blocks: tableBlocks })
+    const craft = bot.craft
+    let at = null
+    bot.craft = async (...args) => { at ??= state.syncs; return craft(...args) }
+    await craftItem(bot, ctx, { item: 'bread', table, quick }, opts)
+    return at
+  }
+  assert.equal(await syncsAtFirstCraft(true), 0)
+  assert.ok(await syncsAtFirstCraft(false) >= 1)
+})
+
 test('craftItem: a stale local view is fixed by the entry resync', async () => {
   const { bot, items } = setup({ items: [], blocks: tableBlocks })
   bot._syncWindow = async () => { if (!items.some(i => i.name === 'wheat')) items.push({ name: 'wheat', count: 6, type: ID.wheat, slot: 36 }) }
