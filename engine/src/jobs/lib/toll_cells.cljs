@@ -14,12 +14,15 @@
             [jobs.lib.world :as world]))
 
 (a/defargs settings
-  {::margin {:default 8 :doc "Blocks round the walk's ends and between them that get tolls." :spec (a/int-in 0 nil)}
+  {::margin {:default 8 :doc "Blocks round the walk's ends and between them that farm cells get tolls." :spec (a/int-in 0 nil)}
+   ::zone-margin {:default 64 :doc "Blocks round the walk's ends and between them that zone cells get tolls: wide, since a detour round a zone can run far from the straight way (past max-cells the cells nearest the way are kept)." :spec (a/int-in 0 nil)}
    ::max-cells {:default 8000 :doc "The most cells one toll list holds (the farm and the zone list each)." :spec (a/int-in 1 nil)}})
 
 (def farm-names (conj (vec (keys crops/ripe-age)) "farmland"))
 
 (defn margin [] (settings/get settings ::margin))
+
+(defn zone-margin [] (settings/get settings ::zone-margin))
 
 (defn max-cells [] (settings/get settings ::max-cells))
 
@@ -35,12 +38,12 @@
        vec))
 
 (defn window
-  "{:min [x y z] :max [x y z]} of the feet cells a walk from a to b ({:x :y :z}) may touch."
+  "{:min [x y z] :max [x y z]} of the feet cells a walk from a to b ({:x :y :z}) may touch (zone cells: zone-margin round the ends)."
   [a b]
   (let [lo (fn [k] (js/Math.floor (min (k a) (k b))))
         hi (fn [k] (js/Math.floor (max (k a) (k b))))]
-    {:min [(- (lo :x) (margin)) (- (lo :y) 2) (- (lo :z) (margin))]
-     :max [(+ (hi :x) (margin)) (+ (hi :y) 3) (+ (hi :z) (margin))]}))
+    {:min [(- (lo :x) (zone-margin)) (- (lo :y) 2) (- (lo :z) (zone-margin))]
+     :max [(+ (hi :x) (zone-margin)) (+ (hi :y) 3) (+ (hi :z) (zone-margin))]}))
 
 (defn clip
   "{:min [x y z] :max [x y z]} of zone (a box) inside the window, nil when they do not meet."

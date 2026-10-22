@@ -96,6 +96,14 @@
           (is (seq trail))
           (is (on-strip? trail -6 6)))))))
 
+(deftest a-zone-off-the-line-of-the-walk-is-tolled-for-a-detour-to-cross
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [off {:name "off" :min [20 64 40] :max [22 64 40] :owner "Other" :allow #{}}
+              tolls (await (in-round (setup {} [off]) #(tc/walk-tolls % {:x 40 :y 64 :z 0})))]
+          (is (contains? (set (map (juxt :x :y :z) tolls)) [21 64 40])))))))
+
 (defn big-zone [owner] {:name "big" :min [10 60 -50] :max [70 70 50] :owner owner :allow #{}})
 
 (deftest a-zone-over-the-cap-keeps-the-cells-nearest-the-walk-and-warns-once

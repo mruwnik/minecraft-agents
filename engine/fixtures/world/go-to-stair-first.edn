@@ -26,7 +26,7 @@
          [:await {:source :job :kind :completed :data {:arrived true}} 120]
          [:job (jobs.movement.go-to {:pos #at [4 0 16] :range 1 :ways #{:walk :clear-seal} :settings {:jobs.movement.go-to.detour/floor 200}})]
          [:await {:source :job :kind :completed :data {:arrived true} :after-previous true} 120]
-         [:job (jobs.movement.go-to {:pos #at [14 10 16] :range 1 :settings {:jobs.lib.toll-cells/margin 40}})]
+         [:job (jobs.movement.go-to {:pos #at [14 10 16] :range 1})]
          [:await {:source :job :kind :completed :data {:arrived true} :after-previous true} 200]]
    :expect [{:event {:source :job :kind :go-to.escalated :data {:step :stair}} :within-s 200 :of-job true}]
    :after [[:body-near [14.5 10 16.5] 2.5]]}
