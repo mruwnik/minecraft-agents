@@ -397,7 +397,7 @@
       20 [] :later walk)))
 
 (deftest a-hurt-body-waits-to-start-the-access-and-boat-jobs
-  (doseq [j '[jobs.access.tunnel jobs.access.stair jobs.access.pillar jobs.access.clear-path jobs.access.bridge
+  (doseq [j '[jobs.access.tunnel jobs.access.stair jobs.access.pillar jobs.access.clear-path jobs.access.bridge jobs.blocks.clear-cells jobs.build.path
               jobs.movement.boat-launch jobs.movement.boat-recover jobs.movement.mount]]
     (is (= :later (kind (:fit? (get registry/jobs j)) {:self {:pos {:x 0 :y 64 :z 0} :health 5}})) (str j))))
 
