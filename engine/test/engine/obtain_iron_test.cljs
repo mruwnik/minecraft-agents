@@ -400,6 +400,22 @@
             (is (= runs (min 5 @calls)) why))
           (when more (recur more)))))))
 
+(deftest the-blocks-dug-without-a-find-do-not-outlive-the-gather
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (f/start (-> (ore-world {} [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]) (assoc :floor [-30 -30 40 30])) [f/own-zone])
+              runs (atom 0)
+              eng (assoc-in (:eng s) [:jobs 'jobs.gather.mine :round]
+                            (fn ^:async f [c]
+                              (if-not (:dug (ctx/mem c))
+                                (do (ctx/update-mem! c assoc :dug true) :continue)
+                                (ctx/end c :nothing-possible {:reason :tunnel-length}
+                                         (merge {:got 0 :reason :tunnel-length} (when (= 1 (swap! runs inc)) {:tunnel {:steps 32}}))))))]
+          (await (obtain! (assoc s :eng eng) {:item "raw_iron" :ways #{:craft :smelt :gather} :explore true} 60))
+          (is (map? (core/job-memory (:eng s) "j1")) "the job memory is read")
+          (is (nil? (get-in (core/job-memory (:eng s) "j1") [:gather :dug])) "the count of a gather that ended fruitless is gone"))))))
+
 (defn ^:async hall-refusal-run
   "Obtain one raw_iron from a seen ore while the mine refuses a dark hall at cell until light-area has run, the refusal
   given by refuse (the mine def, lit atom -> def); [the light-area cells asked, the raw_iron carried]."

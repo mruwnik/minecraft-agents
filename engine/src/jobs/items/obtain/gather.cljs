@@ -288,7 +288,7 @@
   "Whether n blocks cut in a row with no find of need's ore would, at the body's height, have laid bare ::barren-ore of it
   (cost/expected-density over faces-per-block faces a block): the ground there is too poor to mine on. Always for a block with no ore placement."
   [c need n]
-  (let [d (cost/expected-density (ore-resource need) (u/self-pos c) nil)]
+  (let [d (cost/expected-density (ore-resource need) (update (u/self-pos c) :y js/Math.floor) nil)]
     (or (not (pos? d)) (>= (* n faces-per-block d) (barren-ore)))))
 
 (defn strip-on!
@@ -394,7 +394,9 @@
                         (and (#{:flooded :wet :exposed} (contract/cause-key e)) at)
                         (do (ctx/update-mem! c update :cut-off (fnil conj #{}) at) :again)
                         (and (:tunnel? need) (not at) (pos? (dug-blocks res)) (strip-on! c need (dug-blocks res))) :again
-                        :else (gather-failed! c names need (if (= :done (:kind e)) :nothing-gathered (contract/cause-key e)) e)))))))))))
+                        :else (do (when-not (and (:tunnel? need) (not at) (pos? (dug-blocks res))) ; else the barren verdict stands
+                                    (ctx/update-mem! c update :gather dissoc :dug))
+                                  (gather-failed! c names need (if (= :done (:kind e)) :nothing-gathered (contract/cause-key e)) e))))))))))))
 
 (defn ^:async finish-tree!
   "The log child of an earlier round was cut before it ended: runs it to its end even when the logs carried are enough
