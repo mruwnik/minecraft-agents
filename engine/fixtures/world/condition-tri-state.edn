@@ -22,7 +22,7 @@
             {:no-event {:source :job :kind :stopped} :for-s 15 :of-job true}]}
   {:name "wait-for-light-in-a-dark-cell-waits"
    :time :any
-   :blocks [[:fill [14 0 14] [18 3 18] "stone"] [:fill [15 0 15] [17 2 17] "air"]]
+   :plot {:height 8 :floor "stone" :light :dark}
    :act [[:job (jobs.time.wait-for-light)]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 20 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 15 :of-job true}]}
