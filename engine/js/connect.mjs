@@ -47,8 +47,11 @@ export function connectBot (params, { timeoutMs = SPAWN_TIMEOUT_MS, create = min
     const onError = err => fail(err)
     const onKicked = reason => fail(new Error(`kicked before spawn: ${JSON.stringify(reason)}`))
     const onEnd = reason => fail(new Error(`connection ended before spawn: ${reason}`))
+    // A player killed while its client was gone logs in dead; mineflayer reads the death and respawns before 'spawn'.
+    const onDeath = () => { bot.diedAtJoin = { pos: bot.entity?.position?.clone() } }
     const settle = () => {
       clearTimeout(timer)
+      bot.removeListener('death', onDeath)
       bot.removeListener('error', onError)
       bot.removeListener('kicked', onKicked)
       bot.removeListener('end', onEnd)
@@ -62,6 +65,7 @@ export function connectBot (params, { timeoutMs = SPAWN_TIMEOUT_MS, create = min
     bot.on('error', onError)
     bot.on('kicked', onKicked)
     bot.on('end', onEnd)
+    bot.once('death', onDeath)
     bot.once('spawn', () => {
       settle()
       fixDigMaterials(bot.registry)

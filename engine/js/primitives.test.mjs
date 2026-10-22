@@ -1605,6 +1605,21 @@ for (const [event, reason] of [['end', 'socket closed'], ['kicked', 'bye']]) {
   })
 }
 
+test('a body killed while its client hung reports the death the fresh bot logged in with: the old pack at the death spot, then the respawn', async () => {
+  const bots = []
+  const connect = async () => {
+    const b = bots.length === 0 ? stubBot({ ...world, items: [{ name: 'iron_sword', count: 1, slot: 36 }] }) : Object.assign(stubBot(world), { diedAtJoin: { pos: new Vec3(-9439.5, 77, 15728.6) } })
+    bots.push(b)
+    return b
+  }
+  const { seen } = await online({ connect })
+  bots[0].emit('end', 'socketClosed')
+  await untilSeen(seen, 'respawned')
+  assert.deepEqual(seen.map(e => e.kind), ['disconnected', 'online', 'died', 'respawned'])
+  const died = seen.find(e => e.kind === 'died')
+  assert.deepEqual([died.pos, died.inventory], [{ x: -9439.5, y: 77, z: 15728.6 }, [{ name: 'iron_sword', count: 1, slot: 36 }]])
+})
+
 test('the reconnect backs off, doubling up to a minute, and keeps trying until it gets back', async () => {
   const bots = []
   const { p, seen } = await online({ connect: failing(bots, { n: 8 }) })

@@ -184,6 +184,11 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   const relayDead = entity => relayEntityDeath(entity)
   const removalEvents = [['entityDead', relayDead], ['entityGone', relayEntityGone], ['playerCollect', relayCollected]]
 
+  // The server clears the slots of an instant death (/kill, void, damage) before the death event is read, so the
+  // died record is built from the last snapshot of a living body: taken on every health event above zero and about
+  // once a second of physics ticks. Lava and suffocation deaths keep their slots, the live inventory is used then.
+  // Kept across a reconnect for a death the old bot never read (diedAtJoin).
+  let snapshot = []
   // Wires one bot's events to the listeners; returns the function that unwires them.
   let lastTick = Date.now() // of the current bot's physics; the watchdog below reads it
   let stalled = false
@@ -198,10 +203,7 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     let lastPos = target.entity.position.clone()
     let lastHealth = target.health
     let respawning = false
-    // The server clears the slots of an instant death (/kill, void, damage) before the death event is read, so the
-    // died record is built from the last snapshot of a living body: taken on every health event above zero and about
-    // once a second of physics ticks. Lava and suffocation deaths keep their slots, the live inventory is used then.
-    let snapshot = inventoryNow()
+    snapshot = inventoryNow()
     let ticks = 0
     // What the body stands in, as jobs.lib.cost.value/lethal-cause? names it. The death message of the server is not used:
     // it arrives in a later packet than the death event; the lethal hit's damage packet names the rest (killerNow).
@@ -414,6 +416,8 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   }
 
   const adopt = fresh => {
+    const lost = snapshot
+    const diedAt = fresh.diedAtJoin && (fresh.diedAtJoin.pos ?? lastKnown()?.pos)
     unbind()
     bot = fresh
     trackLeashes(bot)
@@ -423,6 +427,11 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
     view?.attach(bot)
     down = false
     emit({ kind: 'online', pos: here() })
+    // killed while the old client hung or was dropping: the fresh bot logged in dead and respawned before it was bound
+    if (diedAt) {
+      emit({ kind: 'died', pos: xyz(diedAt), dimension: bot.game?.dimension, inventory: lost, experience: { level: 0, points: 0 }, atJoin: true })
+      emit({ kind: 'respawned', pos: here(), dimension: bot.game?.dimension })
+    }
     if (fresh.sleepStatusAtJoin) emit({ kind: 'sleep-status', ...fresh.sleepStatusAtJoin })
   }
 
