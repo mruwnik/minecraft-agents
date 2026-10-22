@@ -385,3 +385,12 @@
     (let [snap (seen/snapshot c 10000000)]
       (is (empty? (:entities snap)) "the self row expired")
       (is (= {:pos {:x 9.5 :y 64 :z 2.5} :dimension "overworld"} (:self snap))))))
+
+(deftest a-sheep-row-carries-its-colour-and-shearing
+  (let [c (cache) bot (js-obj)
+        s (sample bot [(entity 1 "sheep" "s-1" 1) (entity 2 "sheep" "s-2" 2)])]
+    (set! (.-fields s) (fn [e] (if (= 1 (.-id e)) #js {:color "light_gray" :sheared true} #js {:color "white" :sheared false})))
+    (seen/observe! c s 1000)
+    (let [rows (:entities (seen/snapshot c 1000))]
+      (is (= {"s-1" "light_gray" "s-2" "white"} (into {} (map (juxt :uuid :color)) rows)))
+      (is (= {"s-1" true "s-2" nil} (into {} (map (juxt :uuid :sheared)) rows))))))
