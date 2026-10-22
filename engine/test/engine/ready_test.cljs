@@ -537,7 +537,8 @@
     open-night {:safe? dig/safe?} {:pos [15 64 0]} :ok
     open-night {:safe? dig/safe?} {:pos [40 64 0]} :later
     night-hut {:safe? fill-cells/safe?} {:cells [[6 64 0]]} :ok
-    open-night {:safe? stair/safe?} {:submitted-at {:x 0 :y 64 :z 0}} :later
+    open-night {:safe? stair/safe?} {:dir :up :submitted-at {:x 0 :y 64 :z 0}} :later
+    open-night {:safe? stair/safe?} {:dir :down :submitted-at {:x 0 :y 64 :z 0}} :ok
     night-hut {:safe? stair/safe?} {} :ok))
 
 (deftest collect-drops-at-an-open-death-pile-does-not-wait-for-light
