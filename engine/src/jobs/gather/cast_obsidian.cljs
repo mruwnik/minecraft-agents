@@ -266,10 +266,13 @@
 (defn ^:async mine-seen-now!
   "The seen obsidian mined with a mine child, which is kept under way (memory :mining) until it ends: the dug block is no longer seen while the child picks it up. :again, :continue while it works, or its ending when it got none."
   [c got]
-  (let [e (await (ctx/call c :mine 'jobs.gather.mine
-                           {:block "obsidian" :item "obsidian" :count (+ (carried c "obsidian") (- (:count (:args c)) got)) :ways (into #{:carried} (filter mine-ways) (need/fetch-how c)) :mend false :radius (:radius (:args c))
+  (let [want (or (:mine-count (ctx/mem c))
+                 (+ (carried c "obsidian") (min (- (:count (:args c)) got) (max 1 (count (seen-of c ["obsidian"]))))))
+        _ (ctx/update-mem! c assoc :mine-count want)
+        e (await (ctx/call c :mine 'jobs.gather.mine
+                           {:block "obsidian" :item "obsidian" :count want :ways (into #{:carried} (filter mine-ways) (need/fetch-how c)) :mend false :radius (:radius (:args c))
                             :ignore-zones? (boolean (:ignore-zones? (:args c)))}))]
-    (ctx/update-mem! c #(cond-> (assoc % :mining (= :continue e)) (not= :continue e) (dissoc :drained :made)))
+    (ctx/update-mem! c #(cond-> (assoc % :mining (= :continue e)) (not= :continue e) (dissoc :drained :made :mine-count)))
     (cond
       (= :continue e) :continue
       (> (gained c) got) :again
@@ -285,6 +288,15 @@
     (let [e (await (child/pause! c 0.5 :waiting-for-water-to-drain))]
       (if (= :continue e) :continue (do (ctx/update-mem! c update :drained (fnil inc 0)) :again)))
     (await (mine-seen-now! c got))))
+
+(defn first-unglanced-above
+  "The cell above a seen lava whose block the body has not seen (perception forgets cells it looked away from), not yet looked at: a glance may show it is air."
+  [c]
+  (let [p (:primitives c) glanced (set (:glanced (ctx/mem c)))]
+    (->> (seen-of c ["lava"])
+         (map #(update (:pos %) :y inc))
+         (filter #(and (nil? (u/seen-name p %)) (not (glanced %))))
+         first)))
 
 (defn ^:async step [c]
   (let [{:keys [count]} (:args c)
@@ -315,9 +327,13 @@
                      (do (ctx/update-mem! c #(-> % (update :tried (fnil conj []) (:lava site)) (update :failed (fnil inc 0))))
                          :again))
             (end c :nothing-possible :unreachable (str "could not walk to the stand at " (pr-str (:stand site))))))
-        (if-let [entry (first (breach-lava c))]
-          (await (visit-breach! c entry))
-          (end c :condition-failed :no-lava "no seen lava with open air above and a safe stand beside it"))))))
+        (if-let [above (first-unglanced-above c)]
+          (do (ctx/update-mem! c update :glanced (fnil conj []) above)
+              (await (dig-look/look-at! c [(:x above) (:y above) (:z above)]))
+              :again)
+          (if-let [entry (first (breach-lava c))]
+            (await (visit-breach! c entry))
+            (end c :condition-failed :no-lava "no seen lava with open air above and a safe stand beside it")))))))
 
 (defn ^:async round [c]
   (ctx/update-mem! c update :base #(or % (carried c "obsidian")))

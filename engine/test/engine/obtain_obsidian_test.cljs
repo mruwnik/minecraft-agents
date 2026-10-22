@@ -215,8 +215,10 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (lt/setup (world (assoc lava-lake "7,63,0" "lava") [pick {:name "water_bucket" :count 1}]))
               mined (atom 0)
+              wanted (atom [])
               stub {:ways [:carried :chest :craft :gather] :round (fn ^:async mine-round [c]
                              (swap! mined inc)
+                             (swap! wanted conj (:count (:args c)))
                              (fake/add-item! p "obsidian" 1)
                              (ctx/end c :done nil))}
               pauses (atom 0)
@@ -225,4 +227,5 @@
           (fake/swap-self! p assoc :inWater true)
           (await (tu/child-outcome eng 'jobs.gather.cast-obsidian {:count 2} 100))
           (is (= 2 @mined))
+          (is (= [1 2] @wanted) "each mine child is asked for the one obsidian made, not for the whole count")
           (is (= 12 @pauses) "six half-second looks before each mine child, not only before the first"))))))
