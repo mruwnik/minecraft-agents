@@ -260,6 +260,15 @@
                     (ctx/now c)
                     (* 1000 (settings/get settings ::struck-s)))))
 
+(defn creepers-beside
+  "The creepers known within danger/swell-range of a mob in hs and not in hs themselves: a fight walks up to that mob and
+  into the blast of one standing by it beyond the trigger's radius."
+  [p hs]
+  (let [ids (set (map #(.-id %) hs))]
+    (filterv (fn [cr] (and (not (ids (.-id cr)))
+                           (some #(<= (u/dist (danger-q/mob-pos p cr) (danger-q/mob-pos p %)) danger-q/swell-range) hs)))
+             (filter combat/creeper? (danger-q/known-hostiles p 64 {})))))
+
 (defn ^:async respond [c near]
   (let [reserve (danger-q/fight-reserve)
         p (:primitives c)
@@ -269,6 +278,7 @@
         entries (when-let [t (:last-at m)] (ctx/since c :hurt t))
         after (if (or (empty? entries) (some #(hurt/mob-hit? (:data %)) entries)) (.-health self) before)
         hits (note-hits (when (= :flee (:decision m)) (:hits m)) (ctx/now c) before after (hit-window-ms))
+        beside (creepers-beside p near)
         _ (ctx/update-mem! c assoc :hits hits :last-health (.-health self) :last-at (ctx/now c))
         chosen (cond
                  (some combat/enderman? near) :flee
@@ -278,15 +288,15 @@
                                :fighting? (fight-begun? c m near)
                                :few? (few-engaged? p near)
                                :cannot-outrun? (not (cost/outruns? (or (.-food self) 20) (map cost/mob-kind (remove combat/ranged? near))))
-                               :creeper? (boolean (and (some combat/creeper? near) (not (hostile/hit-and-back? c near))))
+                               :creeper? (boolean (or (seq beside) (and (some combat/creeper? near) (not (hostile/hit-and-back? c near)))))
                                :reserve reserve
                                :damage (hostile/damage c near #(struck-of c %))}))
         stay? (and (not (hurt-lately? c)) (stay-under-roof? c near))
-        decision (if (and (= :flee chosen) (>= (count hits) 2) (not-any? combat/creeper? near) (not-any? combat/enderman? near))
+        decision (if (and (= :flee chosen) (>= (count hits) 2) (empty? beside) (not-any? combat/creeper? near) (not-any? combat/enderman? near))
                    :fight
                    chosen)
         decision (if stay? :fight decision)]
-    (log-encounter! c (first near) decision)
+    (log-encounter! c (if (and (= :flee decision) (seq beside)) (first beside) (first near)) decision)
     (when (and stay? (not (:stay-noted (ctx/mem c))))
       (ctx/update-mem! c assoc :stay-noted true)
       (ctx/emit! c :hostile.sealed-hold :info {:text "under a roof: the mobs near are heard only or flyers, so the body stays in" :mobs (mapv #(.-name %) near)}))

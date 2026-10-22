@@ -915,6 +915,21 @@
 
 (defn skeleton [id x z] {:id id :name "skeleton" :kind "hostile" :pos {:x x :y 64 :z z}})
 
+;; Bramble #39: the fight walked to a skeleton with a creeper standing by it, beyond the trigger's melee radius; one blast did 17
+(deftest a-creeper-standing-by-the-mob-the-fight-would-walk-to-makes-it-a-flight
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [skel (skeleton 1 0.5 10)
+              creeper {:id 20 :name "creeper" :kind "hostile" :pos {:x 2 :y 64 :z 10.5}}
+              decisions (fn ^:async f [es] (mapv (juxt :mob :decision) (decided (:seen (await (flight-round respond {:inventory sword :entities es}))))))]
+          (is (= [["skeleton" :fight]] (await (decisions [skel]))) "a lone skeleton is fought")
+          (is (= [["creeper" :flee]] (await (decisions [skel creeper]))) "with a creeper beside it the body flees and says why")
+          (let [{:keys [eng seen]} (setup-seeing {:inventory sword :entities [skel creeper]} [15 15] 1000)]
+            (core/submit! eng respond {})
+            (await (core/tick! eng))
+            (is (= [["creeper" :flee]] (mapv (juxt :mob :decision) (decided seen))) "seen through perception (both in view, south) too")))))))
+
 (deftest a-body-that-fled-ranged-mobs-twice-fights-them-to-the-end-however-far
   (async done
     (tu/run-async done
