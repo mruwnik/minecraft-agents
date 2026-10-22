@@ -641,3 +641,22 @@
         (let [{:keys [out p]} (await (run-job! (merge in-room {:blocks trench-room}) {:pos [8 64 0] :range 1}))]
           (is (true? (:arrived @out)) (pr-str @out))
           (is (<= 6 (first (feet p)))))))))
+
+(def oriel-house
+  "Oriel's house (planks floor y 68, cobble walls y 69-70 x 58..64 z 6..10, door gap x 61, planks roof y 71) beside a farm field with a pit 3 deep outside the door."
+  (let [ground (box 40 60 0 80 67 30 "dirt")
+        floor (box 58 68 6 64 68 10 "oak_planks")
+        walls (apply dissoc (box 58 69 6 64 70 10 "cobblestone")
+                     (for [x (range 59 64) z (range 7 10) y [69 70]] (str x "," y "," z)))
+        door ["61,69,10" "61,70,10"]
+        roof (box 58 71 6 64 71 10 "oak_planks")
+        field (merge (box 58 68 12 64 68 18 "farmland") (box 58 69 12 64 69 18 "wheat"))
+        pit (for [y [66 67 68]] (str "61," y ",11"))]
+    (apply dissoc (merge ground floor walls roof field) (concat door pit))))
+
+(deftest go-to-a-house-whose-planks-and-cobble-cannot-be-dug-drops-into-the-pit-outside-its-door-and-digs-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (run-job! {:self {:pos {:x 61.5 :y 69 :z 9.5}} :blocks oriel-house :light [0 0]} {:pos [63 69 12] :range 1}))]
+          (is (true? (:arrived @out)) (pr-str @out)))))))

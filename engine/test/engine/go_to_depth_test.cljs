@@ -477,10 +477,10 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (true? (:arrived @(:out (await (settings/with-settings {:jobs.movement.go-to.detour/floor 1000} #(gt/go! in-loop {:pos across})))))))
-        (is (true? (:arrived @(:out (await (gt/go! (assoc in-loop :light [15 0]) {:pos across}))))) "sky light on the body")
+        (is (true? (:arrived @(:out (await (settings/with-settings {:jobs.movement.go-to.detour/floor 1000} #(gt/go! in-loop {:pos across :unknown false})))))))
+        (is (true? (:arrived @(:out (await (gt/go! (assoc in-loop :light [15 0]) {:pos across :unknown false}))))) "sky light on the body")
         (is (true? (:arrived @(:out (await (settings/with-settings {:jobs.movement.go-to.detour/floor 100}
-                                             #(gt/go! in-loop {:pos across}))))))
+                                             #(gt/go! in-loop {:pos across :unknown false}))))))
             "setting ::detour/floor")))))
 
 (def line-20 (mapv (fn [x] {:x x :y 64 :z 0}) (range 21)))

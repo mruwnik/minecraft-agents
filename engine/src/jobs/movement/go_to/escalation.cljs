@@ -175,10 +175,15 @@
               (choose (may-dig-fn c)))
         choosable? #(not= :none (:step (choose %)))
         zone-free (exit-dig-fn c feet)
+        ;; the only way on is a drop the planner will not take (a loaded pit it cannot climb back out of): a shut-in body takes it, then digs out from the bottom
+        drop-in (let [{:keys [kind at]} (when (= :one-way (some-> (:reason result) keyword)) (:one-way result))]
+                  (when (and (= :drop (some-> kind keyword)) at (not-any? (:skip opts) [:approach]) (not (contains? (:approached (ctx/mem c)) (vec at))))
+                    (vec at)))
         spot (when (= :none (:step e)) (when-not (contains? (:skip opts) :approach) (escape/way-spot (:primitives c) feet goal (may-dig-fn c) opts (or (:approached (ctx/mem c)) #{}))))
         e (cond
             (not= :none (:step e)) e
             spot {:step :approach :pos spot}
+            drop-in {:step :approach :pos drop-in}
             (and (access/spare-own-builds) (choosable? (may-dig-fn c false)))
             {:step :none :why (if (choosable? (may-dig-fn c true false)) :own-pen :own-build)}
             (and (zone-exit? c feet) (choosable? zone-free)) (assoc (choose zone-free) :exit-zone true)
