@@ -38,8 +38,9 @@
    :time :night
    :time-why :sleep
    :register [{:trigger :night}]
-   :body {:at [16.5 0 16.5] :yaw 90}
-   :blocks [[:set [13 0 16] "red_bed[facing=east,part=foot]"] [:set [14 0 16] "red_bed[facing=east,part=head]"] [:set [14 1 16] "stone"]]
+   :body {:at [13.5 0 13.5] :yaw 90}
+   :blocks [[:fill [8 0 8] [16 3 16] "stone" :hollow] [:fill [9 0 9] [15 2 15] "air"]
+            [:set [10 0 13] "red_bed[facing=east,part=foot]"] [:set [11 0 13] "red_bed[facing=east,part=head]"] [:set [11 1 13] "stone"]]
    :act [[:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0}})]]
    :expect [{:event {:source :action :kind :done :data {:name "sleep" :status "obstructed"}} :within-s 90}
             {:event {:source :job :kind :child_ended :data {:slot :sleep :ending {:cause :bed-obstructed}}} :within-s 30}]
