@@ -86,4 +86,6 @@
               eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now (tu/act-clock clock p 1000)})
               r (await (tu/child-outcome eng 'jobs.survival.rest {} 200))]
           (is (= :no-food (:reason r)) "no food anywhere: the rest ends instead of waiting in the open for the zombie to leave")
-          (is (re-find #"zombie" (str (:text r))) "the ending names what kept get-food from searching"))))))
+          (is (re-find #"zombie" (str (:text r))) "the ending names what kept get-food from searching")
+          (is (= ["jobs.survival.get-food" "jobs.survival.rest"] (map :job (:next r))) "it names a get-food that searches, then the rest again")
+          (is (true? (:explore (:args (first (:next r)))))))))))

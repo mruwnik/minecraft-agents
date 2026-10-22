@@ -7,6 +7,7 @@
             [jobs.lib.body :as body]
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
+            [jobs.lib.next-call :as next-call]
             [jobs.lib.pace :as pace]
             [jobs.lib.ready :as ready]
             [jobs.lib.blocks :as lb]
@@ -28,7 +29,7 @@
   stands. Done {:health} once health reaches ::rested-health. Nothing-possible :no-food {:health :text} when no food was
   got (the eat ending's text), :hurt-resting {:health} when health falls while resting, :not-healing when no hp came back in
   ::stall-holds holds in a row, :harmed while burning or poisoned (their reflexes heal that). Run by the low-health trigger,
-  which then waits until health falls or (:no-food) food comes to hand. Quote: job time up to ::job-time-s.")
+  which then waits until health falls or (:no-food) food comes to hand. Every ending but done carries :next (jobs.lib.next-call): for :no-food a get-food that searches, then the rest again. Quote: job time up to ::job-time-s.")
 
 (a/defargs args {})
 
@@ -166,4 +167,6 @@
 (defn ^:async round
   "The whole rest in one round: food, shelter, then holds until done? holds."
   [c]
-  (await (pace/steps! c #(step! c))))
+  (let [e (await (pace/steps! c #(step! c)))]
+    (next-call/on-ending c e 'jobs.survival.rest args
+                         (when (and (contract/ending? e) (= :no-food (contract/cause-key e))) (next-call/call 'jobs.survival.get-food {:explore true})))))
