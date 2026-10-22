@@ -392,7 +392,7 @@
                                                                 (test-fn)
                                                                 (swap! (fake/state p) assoc :entities []))
                                                               nil)
-                                             ([c per test-fn _] (await (f c per test-fn))))]
+                                             ([c per test-fn _ _] (await (f c per test-fn))))]
             (await (one-round! eng {})))
           (let [none (first (none-endings seen))]
             (is (= [7 8] (sort (map :id (:animals none)))))
