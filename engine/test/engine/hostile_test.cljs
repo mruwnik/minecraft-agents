@@ -1202,7 +1202,7 @@
   (let [z {:name "zombie" :distance 3}]
     (is (= 3.75 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [z]})) "4 swings, 2.5 s at 0.6 hits/s of 2.5 (a zombie hit on easy)")
     (is (= 65 (cost/fight-damage {:weapon nil :equipment nil :mobs [z]})) "the fist: 20 hits, one landed every 1.3 s, the zombie hitting once a second (the measured rate is for swords)")
-    (is (= 11.25 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [z z]})) "the second hits until it dies too")
+    (is (= 18.75 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [z z]})) "the second hits until it dies too; a group is hit once a second per mob, not at the lone-mob rate")
     (is (= 1.69 (/ (js/Math.round (* 100 (cost/fight-damage {:weapon "iron_sword" :equipment iron-armour :mobs [z]}))) 100))
         "iron armour: vanilla's 13.5 effective points against 2.5 hp hits")
     (is (= 1.875 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [(assoc z :hits 2)]})) "a struck mob has less left")
@@ -1228,7 +1228,7 @@
                                  ["no weapon vs a creeper" {:entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} :flee]
                                  ["sword vs a skeleton at range" {:inventory sword :entities [(assoc (skeleton 7 12 0) :visible true)]} :fight]
                                  ["no weapon vs a skeleton at range" {:entities [(assoc (skeleton 7 12 0) :visible true)]} :flee]
-                                 ["sword vs three zombies, no armour" {:inventory sword :entities [(zombie 7 3 0) (zombie 8 3 1) (zombie 9 3 -1)]} :flee]
+                                 ["sword vs two zombies, no armour" {:inventory sword :entities [(zombie 7 3 0) (zombie 8 3 1)]} :flee]
                                  ["sword vs two zombies in iron armour" {:inventory sword :equipment iron-armour
                                                                          :entities [(zombie 7 3 0) (zombie 8 3 1)]} :fight]]]
           (let [s (await (flight-round respond spec))
@@ -1495,7 +1495,7 @@
   (let [near {:name "skeleton" :distance 4}
         cost-of #(cost/fight-damage {:weapon "iron_sword" :equipment iron-armour :mobs %})
         round2 #(/ (js/Math.round (* 100 %)) 100)]
-    (is (= [1.45 4.36] (mapv (comp round2 cost-of) [[near] [near near]])) "of the 16 a body at 20 may spend")
+    (is (= [1.45 7.26] (mapv (comp round2 cost-of) [[near] [near near]])) "of the 16 a body at 20 may spend")
     (is (= :fight (cost/decide {:health 20 :reserve 4 :damage (cost-of [near near])})))))
 
 (deftest a-body-that-would-fight-does-not-flee-mobs-it-only-hears
