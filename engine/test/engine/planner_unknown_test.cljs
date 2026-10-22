@@ -328,11 +328,13 @@
   "A floor, and a closed room of stone (x 10..12, z 0..1, two high) under a roof."
   [[-2 60 -2 30 63 4 "stone"] [9 64 -1 13 65 2 "stone"] [10 66 0 12 66 1 "stone"] [10 64 0 12 65 1 "air"]])
 
+;; the floor under a wall (its head cell is the wall) and a wall corner (both cells beside the diagonal are walls) hold
+;; no body, as the inside of a hut a body has seen leaves them
 (deftest a-room-walled-in-by-seen-blocks-is-proved-whatever-lies-unseen-behind-them
-  (doseq [cell [[10 62 0] [8 64 0] [8 63 0] [10 66 -1] [10 67 0] [10 68 0]]
-          :let [w (pf/snapshot {:fill stone-room-fill :blocks [(conj cell U)]})
+  (doseq [cells [[[10 62 0]] [[8 64 0]] [[8 63 0]] [[10 66 -1]] [[10 67 0]] [[10 68 0]] [[9 63 0]] [[9 64 -1] [9 65 -1]]]
+          :let [w (pf/snapshot {:fill stone-room-fill :blocks (mapv #(conj % U) cells)})
                 r (run w (pf/near 10 64 0) (unk {}) {:x 0 :y 64 :z 0})]]
-    (is (= "goal-enclosed" (:reason r)) (str "unseen cell " cell))))
+    (is (= "goal-enclosed" (:reason r)) (str "unseen cells " cells))))
 
 (deftest a-start-ringed-by-dark-floors-is-not-start-enclosed
   (let [w (pf/snapshot {:blocks [[0 63 2 "stone"] [1 62 2 U] [-1 62 2 U] [0 62 3 U] [0 62 1 U]]})

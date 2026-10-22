@@ -135,17 +135,26 @@
   ;; the start. A cell the flood cannot see is a way in it does not know, so it marks the flood leaked. That counts
   ;; for a cell beside the current one (jump -1), and for a gap jump's takeoff in direction jump only when the jump
   ;; can come over the column between.
-  ;; a whole block the body has seen fills its cell: nothing stands there whatever lies under it or over it, so the cells
-  ;; round it that it has not seen (the underside of a floor, the top of a roof) do not leak the flood
+  ;; a whole block the body has seen fills its cell: nothing stands there whatever lies under it or over it, nor in the
+  ;; cell under it (the head would be in the block), so the cells round it that it has not seen (the underside of a
+  ;; floor, the top of a roof, the floor under a wall) do not leak the flood
   (solidSeen [s x y z]
     (let [id (.stateAt ^js (.-snapshot s) x y z)]
       (and (not (== id UNLOADED)) (not ^boolean (.isUnknown s id)) (>= (aget (.-tbl-top s) id) WHOLE) (zero? (aget (.-tbl-base s) id)))))
 
+  ;; is the move between the flood's current cell and the diagonal cell x y z shut: both cells beside the corner hold a
+  ;; seen whole block at the body's height on the way (the higher of the two levels or one over it)?
+  (cornerShut [s x y z]
+    (let [fx (.-fx s) fz (.-fz s) ly (js/Math.max y (.-fy s))
+          walled (fn [cx cz] (or ^boolean (.solidSeen s cx ly cz) ^boolean (.solidSeen s cx (inc ly) cz)))]
+      (and (not (== x fx)) (not (== z fz)) ^boolean (walled x fz) ^boolean (walled fx z))))
+
   (floodVisit [s ^js seen ^js queue start-key x y z jump]
     (if (and ^boolean (.unseen s x y z) (not ^boolean (.solidSeen s x y z)))
-      (do (when (if (neg? jump)
-                    (or (<= y (.-fy s)) ^boolean (.dropOver s y))
-                    ^boolean (.jumpOver s jump (- y (.-fy s)) x z))
+      (do (when (and (not ^boolean (.solidSeen s x (inc y) z))
+                     (if (neg? jump)
+                       (and (or (<= y (.-fy s)) ^boolean (.dropOver s y)) (not ^boolean (.cornerShut s x y z)))
+                       ^boolean (.jumpOver s jump (- y (.-fy s)) x z)))
             (set! (.-leaked s) true))
           false)
       (let [h (.floodH s x y z)]

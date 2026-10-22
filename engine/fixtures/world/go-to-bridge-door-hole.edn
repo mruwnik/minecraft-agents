@@ -1,27 +1,31 @@
 ;; A closed hut on a floor one block above the ground whose only door (south wall) opens over a hole dug in the ground in front of it:
 ;; the planner proves the bed cut off by a drop. go-to lays a carried block over the hole as the door's step and walks in.
-;; The hut is glass so the room is seen (an unseen goal ends :exhausted, not cut off). Hut x 10..14, z 10..14 (planks floor y 0, glass walls y 1..2 and roof y 3, bed at y 1), door [12 1..2 14], hole [12 -1 15] over stone.
+;; Hut x 10..14, z 10..14 (planks floor y 0, cobblestone walls y 1..2 and roof y 3, bed at y 1, a torch at [13 1 13]), door [12 1..2 14], hole [12 -1 15] over stone.
+;; The body knows its hut as one that placed its bed does: it looks round the room from inside (look-around), then is moved out to [12 0 20].
 ;; Should-succeed: dirt carried: fill-gap, arrived within 2 of the bed, the hole holds dirt. Should-fail: nothing carried: stopped, the hole stays open.
 {:defaults
  {:tags [:movement :access]
   :time :any
   :plot {:height 8}
-  :blocks [[:fill [0 -3 0] [24 -1 24] "stone"] [:fill [10 0 10] [14 0 14] "oak_planks"] [:fill [10 1 10] [14 3 14] "glass"]
-           [:fill [11 1 11] [13 2 13] "air"]
+  :blocks [[:fill [0 -3 0] [24 -1 24] "stone"] [:fill [10 0 10] [14 0 14] "oak_planks"] [:fill [10 1 10] [14 3 14] "cobblestone"]
+           [:fill [11 1 11] [13 2 13] "air"] [:set [13 1 13] "torch"]
            [:set [11 1 11] "red_bed[facing=east,part=foot]"] [:set [12 1 11] "red_bed[facing=east,part=head]"]
            [:set [12 1 14] "oak_door[facing=south,half=lower,open=false]"] [:set [12 2 14] "oak_door[facing=south,half=upper,open=false]"]
            [:set [12 -1 15] "air"]]
-  :body {:at [12.5 0 20.5] :effects [["resistance" 600 4]]}
-  :limit-s 120}
+  :body {:at [12.5 1 12.5] :effects [["resistance" 600 4]]}
+  :limit-s 150}
  :cases
  [{:name "dirt-carried-bridges-the-hole-before-the-door"
    :body {:inventory [["dirt" 5]]}
-   :act [[:job (jobs.movement.go-to {:pos #at [11 1 11] :range 2})]]
-   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :fill-gap}} :within-s 60 :of-job true}
-            {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 100 :of-job true}]
+   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~12 ~ ~20 180 0"] [:until-pos {:x-min 11 :x-max 14 :z-min 19 :z-max 22} 10]
+         [:job (jobs.movement.go-to {:pos #at [11 1 11] :range 2})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :fill-gap}} :within-s 90 :of-job true}
+            {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 130 :of-job true}]
    :after [[:block [12 0 15] "dirt"]]}
   {:name "nothing-to-bridge-with-stops"
-   :act [[:job (jobs.movement.go-to {:pos #at [11 1 11] :range 2})]]
-   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]}} :within-s 90 :of-job true}]
-   :after [[:not-block [12 0 15] "dirt"]]
-   :limit-s 100}]}
+   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30]
+         [:rcon "execute positioned $X $Y $Z run tp $BODY ~12 ~ ~20 180 0"] [:until-pos {:x-min 11 :x-max 14 :z-min 19 :z-max 22} 10]
+         [:job (jobs.movement.go-to {:pos #at [11 1 11] :range 2})]]
+   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]}} :within-s 110 :of-job true}]
+   :after [[:not-block [12 0 15] "dirt"]]}]}
