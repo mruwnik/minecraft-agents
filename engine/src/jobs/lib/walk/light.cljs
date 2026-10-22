@@ -16,7 +16,7 @@
   [c see wait-ms [x y z :as cell]]
   (await (ctx/act c :look (clj->js {:pos {:x (+ x 0.5) :y (+ y 0.5) :z (+ z 0.5)}})))
   (loop [waited 0]
-    (look/see! c (look/search-effort))
+    (look/see! c (look/search-effort) :lit)
     (cond
       (some? (see cell)) true
       (>= waited wait-ms) false

@@ -96,9 +96,10 @@
   A mob sample too (knownMobs): a silent creeper is sensed only inside the view cone, and the next look may turn away
   before the timer's sample."
   ([c] (see! c (glance-effort)))
-  ([c effort]
+  ([c effort] (see! c effort :forced))
+  ([c effort why]
    (when-let [per (aget (:primitives c) "perception")]
-     (perception/pass! per {:effort effort :reuse? true})
+     (perception/pass! per {:effort effort :reuse? true :why why})
      (when (fn? (.-knownMobs (:primitives c))) (.knownMobs (:primitives c))))))
 
 (defn ^:async glance-until!
@@ -111,7 +112,7 @@
      (loop [points (mapcat #(glances eye %) dirs)]
        (when-let [pt (first points)]
          (await (ctx/act c :look (clj->js {:pos pt})))
-         (see! c effort)
+         (see! c effort :look-around)
          (or (f) (recur (rest points))))))))
 
 (defn ^:async glance!
@@ -133,7 +134,7 @@
        (if-let [[pt d] (first steps)]
          (if-let [pt (or pt (up-glance p eye d))]
            (do (await (ctx/act c :look (clj->js {:pos pt})))
-               (see! c effort)
+               (see! c effort :look-around)
                (or (f) (recur (rest steps))))
            (recur (rest steps)))
          (do (ctx/update-mem! c assoc :looked (cell-of (u/self-pos c)))

@@ -61,7 +61,7 @@
     (await (ctx/act c :look (clj->js {:pos {:x ax :y ay :z az}})))
     (loop [n 0]
       (when (< n (passes))
-        (look/see! c (look/search-effort))
+        (look/see! c (look/search-effort) :look-at)
         (when (unknown? (:primitives c) cell) (recur (inc n)))))))
 
 (defn ^:async look-at-unknown!

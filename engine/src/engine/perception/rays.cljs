@@ -186,7 +186,7 @@
   "The reason a pass starts now, or nil when none is due."
   [per ^js last ^js eye now force?]
   (cond
-    force? :forced
+    force? (if (keyword? force?) force? :forced)
     (nil? last) :first
     :else (or (moved-why per (.-eye last) eye) (idle-why per last now))))
 
@@ -361,16 +361,16 @@
 
 (defn pass!
   "A whole sight pass from the eye as it is now (tests, and a forced look), at {:effort} (0-1, default the opts' :effort).
-  A pass in flight is dropped, not finished: this one covers the whole cone. With {:reuse? true} a pass that would see
+  A pass in flight is dropped, not finished: this one covers the whole cone. {:why kw} names the caller in the per-reason counts. With {:reuse? true} a pass that would see
   what the last finished one did (repeat-pass?) is not cast; returns true then."
   ([per] (pass! per nil))
-  ([{:keys [st] :as per} {:keys [effort reuse?]}]
+  ([{:keys [st] :as per} {:keys [effort reuse? why]}]
    (let [^js st st ^js eye (.eye ^js (:raw per))]
      (set! (.-pass st) nil)
      (cond
        (not eye) nil
        (and reuse? (repeat-pass? per (.-lastStart st) eye ((:now (:opts per))) effort)) (do (count-why! st :repeated :passes 1) true)
-       :else (do (step! per true effort)
+       :else (do (step! per (or why true) effort)
                  (while (.-pass st) (step! per)))))))
 
 ;; ---- block changes and touch

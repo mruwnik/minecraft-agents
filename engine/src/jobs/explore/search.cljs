@@ -405,8 +405,8 @@
         looking? (short-by? first-look)
         _ (when looking?
             (if (breath/in-water? (:primitives c))
-              (look/see! c (look/search-effort))
-              (when-not (await (look/survey! c :near (look/search-effort))) (look/see! c (look/search-effort)))))
+              (look/see! c (look/search-effort) :search)
+              (when-not (await (look/survey! c :near (look/search-effort))) (look/see! c (look/search-effort) :search))))
         _ (do (ctx/update-mem! c dissoc :vantage) (when looking? (await (hear-lead! c names short?))))
         sighted (if looking? (seen) first-look)
         [x y z] (here c)

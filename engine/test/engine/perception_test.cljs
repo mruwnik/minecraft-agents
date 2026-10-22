@@ -571,7 +571,8 @@
     (reset! clock 40000)
     (run!)
     (perception/pass! per)
-    (is (= {:first 1 :turned 1 :changed 1 :still 1 :forced 1} (update-vals (why) :passes)))
+    (perception/pass! per {:why :look-at})
+    (is (= {:first 1 :turned 1 :changed 1 :still 1 :forced 1 :look-at 1} (update-vals (why) :passes)))
     (is (= (:rays (perception/stats per)) (reduce + (map :rays (vals (why))))))))
 
 (deftest a-pass-jitters-its-rays-by-the-rand-opt
