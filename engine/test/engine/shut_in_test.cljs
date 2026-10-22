@@ -64,16 +64,31 @@
         (let [{:keys [eng]} (await (plug! {:blocks (apply dissoc ct/dead-end (for [x (range 0 9) y [66 67]] (str x "," y ",0"))) :inventory cobble :time 18000} {:for :night} tu/seeing-all))]
           (is (= #{:shelter} (purposes eng))))))))
 
+(defn ^:async well-run!
+  "Night walls shut-in in a stone ring four high round the pit cells [[x z]..], a roof 7 over: {:out :p}."
+  [pit]
+  (let [xs (map first pit) zs (map second pit)
+        ring (for [x (range (dec (apply min xs)) (+ 2 (apply max xs))) z (range (dec (apply min zs)) (+ 2 (apply max zs))) y [64 65 66 67] :when (not (some #{[x z]} pit))] [(str x "," y "," z) "stone"])
+        well (into {} (concat (for [x (range -6 8) z (range -6 7)] [(str x ",63," z) "stone"])
+                              (for [x (range -6 8) z (range -6 7)] [(str x ",70," z) "stone"])
+                              ring))]
+    (plug! {:blocks well :inventory cobble :time 18000} {:for :night :ways #{:walls}} tu/seeing-all)))
+
 (deftest a-night-well-open-at-the-top-is-roofed-before-it-is-called-enclosed
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [well (into {} (concat (for [x (range -6 7) z (range -6 7)] [(str x ",63," z) "stone"])
-                                    (for [x (range -6 7) z (range -6 7)] [(str x ",70," z) "stone"])
-                                    (for [x [-1 0 1] z [-1 0 1] y [64 65 66 67] :when (not (and (zero? x) (zero? z)))] [(str x "," y "," z) "stone"])))
-              {:keys [out p]} (await (plug! {:blocks well :inventory cobble :time 18000} {:for :night :ways #{:walls}} tu/seeing-all))]
+        (let [{:keys [out p]} (await (well-run! [[0 0]]))]
           (is (= [:done :walls] [(:kind out) (:way (:data out))]))
           (is (= [[0 66 0]] (cells-of p "place")) "the cell over the head"))))))
+
+(deftest a-two-cell-night-well-is-cut-to-one-cell-and-roofed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p]} (await (well-run! [[0 0] [1 0]]))]
+          (is (= [:done :walls] [(:kind out) (:way (:data out))]))
+          (is (= #{[1 64 0] [1 65 0] [0 66 0]} (set (cells-of p "place"))) "the other pit cell filled, the cell over the head"))))))
 
 (deftest walls-beside-an-open-iron-door-step-away-from-it-and-wall-the-cell-between
   (async done
