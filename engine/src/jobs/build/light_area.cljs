@@ -32,6 +32,7 @@
 (a/defargs args
   {:cells {:doc "cells of the area, each [x y z] or {:x :y :z}" :spec (a/coll-of a/position?) :default []}
    :boxes {:doc "boxes of the area, each two opposite corners [[x y z] [x y z]]; their cells come first, x then y then z" :spec (a/coll-of (a/coll-of a/position?)) :default []}
+   :near {:doc "also the cells within this many blocks of the body (its square round the feet, one below to two above), read where the body stands now" :spec (a/int-in 0 16) :default 0}
    :level {:doc "the block light every area cell must reach, 1 to 14 (1: no spawn ground stays dark; a crop needs 9); a torch lights 14 less its steps" :spec (a/int-in 1 14) :default 1}
    :beside? {:doc "hang torches only in the cells round the area, not in it (a field keeps its cells for crops)" :spec boolean? :default false}
    :ignore-zones? :shared})
@@ -47,16 +48,24 @@
         span (fn [i] (range (min (lo i) (hi i)) (inc (max (lo i) (hi i)))))]
     (for [x (span 0) y (span 1) z (span 2)] [x y z])))
 
+(defn near-cells
+  "The cells [x y z] within :near blocks of the body, none with :near 0."
+  [c]
+  (let [n (:near (:args c))
+        {:keys [x y z]} (look/cell-of (u/self-pos c))]
+    (when (pos? n)
+      (for [dx (range (- n) (inc n)) dz (range (- n) (inc n)) dy [-1 0 1 2]] [(+ x dx) (+ y dy) (+ z dz)]))))
+
 (defn area
-  "The area's cells as [x y z]: the boxes', then :cells, no repeats."
+  "The area's cells as [x y z]: the boxes', then :cells, then the cells :near the body, no repeats."
   [c]
   (let [{:keys [cells boxes]} (:args c)]
-    (vec (distinct (concat (mapcat box-cells boxes) (map (comp (juxt :x :y :z) a/cell) cells))))))
+    (vec (distinct (concat (mapcat box-cells boxes) (map (comp (juxt :x :y :z) a/cell) cells) (near-cells c))))))
 
 (defn bad-args [c]
   (cond
     (not-every? #(= 2 (count %)) (:boxes (:args c))) (contract/never :bad-args "light-area :boxes take two corners each")
-    (empty? (area c)) (contract/never :bad-args "light-area needs :cells or :boxes")
+    (empty? (area c)) (contract/never :bad-args "light-area needs :cells, :boxes or :near")
     :else (contract/ok :args "an area to light")))
 
 (def can-start? bad-args)

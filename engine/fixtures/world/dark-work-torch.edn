@@ -1,0 +1,19 @@
+;; Card f95bf5ed (Wicken #123): the body digs an ore at the far end of a dark hall (x 4..50, past the 24-block spawn-free radius, sealed but for being
+;; dark) with torches carried and a job live: the :dark-work trigger lights the cave round it before the dig gets there. Stone mass x 2..60, z 2..30, y 0..6.
+;; Should-succeed: :dark-work fires, a torch is placed, the ore is dug. Should-fail: no torch carried, the trigger never fires.
+{:defaults
+ {:tags [:torch :survival :jobs] :time :any :register [{:trigger :dark-work}]
+  :plot {:light :dark :height 12 :length 64 :width 34}
+  :blocks [[:fill [2 0 2] [60 6 30] "stone"] [:fill [4 0 16] [50 1 16] "air"] [:set [51 0 16] "iron_ore"]]
+  :body {:at [4.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1] ["torch" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "dig-at-the-end-of-a-dark-hall-hangs-a-torch"
+   :act [[:job (jobs.blocks.dig {:pos #at [51 0 16]})]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :dark-work}} :within-s 60}
+            {:count-event {:source :action :kind :done :data {:name "place" :status "placed"}} :for-s 100 :at-least 1}]}
+  {:name "dig-in-a-dark-hall-without-torches-fires-no-dark-work"
+   :body {:at [4.5 0 16.5] :yaw 270 :inventory [["stone_pickaxe" 1]] :effects [["resistance" 600 4]]}
+   :act [[:job (jobs.blocks.dig {:pos #at [51 0 16]})]]
+   :expect [{:count-event {:source :reflex :kind :fired :context {:reflex-id :dark-work}} :for-s 40 :at-most 0}]
+   :after [[:item "raw_iron" [:>= 1]]]}]}

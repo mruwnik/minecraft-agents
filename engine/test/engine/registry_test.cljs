@@ -97,7 +97,7 @@
 
 (deftest the-trigger-registry-holds-the-default-trigger-set
   (is (= #{:suffocating :burning :wedged :hostile-near :poisoned :hungry :stuck-underground :needs-bed :needs-weapon :night :dawn :dusk-home :died :pen-gate :door-left
-           :inventory-nearly-full :scaffold-left :tidy-pending :mounted :loose-items :part-cut-tree :replant-owed :ore-seen}
+           :inventory-nearly-full :scaffold-left :tidy-pending :mounted :loose-items :part-cut-tree :replant-owed :ore-seen :dark-work}
          (set (keys triggers/all))))
   (doseq [[id t] triggers/all]
     (is (= id (:name t)))

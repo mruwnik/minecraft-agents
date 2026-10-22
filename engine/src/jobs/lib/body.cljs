@@ -13,7 +13,7 @@
 (a/defargs settings
   {::risky-min-health {:default 6 :spec (a/num-in 0 20)
                        :doc "Below this health (of 20) a risky job (mining) waits to heal before it starts or goes on."}
-   ::recovery-holds {:default #{:hungry :stuck-underground :door-left :inventory-nearly-full :scaffold-left :tidy-pending :pen-gate :loose-items :ore-seen}
+   ::recovery-holds {:default #{:hungry :stuck-underground :door-left :inventory-nearly-full :scaffold-left :tidy-pending :pen-gate :loose-items :ore-seen :dark-work}
                      :spec (a/set-of keyword?)
                      :doc "Trigger ids that do not hold while an unrecovered death is inside ::recovery-hold-s of its time, so a saved register listing one ahead of :died cannot run it on the pile's errand. The sheltering reflexes (:night :dusk-home :needs-bed) are left out on purpose; every covered id also waits while the body is dead."}
    ::recovery-hold-s {:default 180 :spec (a/num-in 0 nil)
