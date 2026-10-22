@@ -209,3 +209,15 @@
   (is (false? (rays/touches? 0.5 70.9 0.5 [0 69 0] 1)) "a falling body: the block far below")
   (is (false? (rays/touches? 0.5 64 0.5 [1 64 0] 1)) "beside the hitbox margin")
   (is (true? (rays/touches? 0.5 64 0.5 [0 65 0] 0)) "the head cell"))
+
+(deftest seeing-an-aged-out-door-again-counts-as-a-memory-write-but-a-fresh-one-does-not
+  (let [{:keys [per clock]} (rig {"0,65,4" "oak_door"})
+        ^js st (:st per)
+        id (:state-id (perception/glance! per [0 65 4]))
+        store (store/store-of st "overworld")
+        writes #(.-writes st)
+        again! #(let [w (writes)] (store/record! st store 0 65 4 id @clock) (- (writes) w))]
+    (swap! clock + 1000)
+    (is (zero? (again!)) "seen again soon: the answer was known all along")
+    (swap! clock + 20000)
+    (is (= 1 (again!)) "seen again after it read unknown: kept room answers are judged again")))

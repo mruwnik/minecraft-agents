@@ -113,18 +113,25 @@
 
 (def neighbour-offsets [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
 
+(def rerecord-bump-ms
+  "Seeing a mutable state again after this long counts as a memory write: it may have read unknown meanwhile (:mutable-max-ms, 10 s by default), so kept room answers must be judged again."
+  5000)
+
 (defn record! [^js st store x y z id now]
   (let [cx (bit-shift-right x 4) sy (bit-shift-right y 4) cz (bit-shift-right z 4)
         key (section-key cx sy cz)
         ^js sec (if (== key (.-lastKey st)) (.-lastSec st) (section-for! st store key cx sy cz now))
         i (bit-or (bit-shift-left (bit-and y 15) 8) (bit-shift-left (bit-and z 15) 4) (bit-and x 15))
         ^js ids (.-ids sec)
-        v (inc id)]
-    (when-not (== (aget ids i) v) (set! (.-writes st) (inc (.-writes st))))
+        v (inc id)
+        mutable? (let [k (if-let [^js ks (.-kinds st)] (if (< id (.-length ks)) (aget ks id) 0) 0)]
+                   (if (zero? k) (mutable-id? st id) (== k 1)))
+        ;; a remembered door that aged out reads unknown; seeing it again answers differently with the same id
+        aged? (and mutable? (== (aget ids i) v) (> (- now (cell-seen sec i)) rerecord-bump-ms))]
+    (when (or aged? (not (== (aget ids i) v))) (set! (.-writes st) (inc (.-writes st))))
     (aset ids i v)
     (aset (.-times sec) i (if (and (identical? sec (.-minSec st)) (== now (.-minNow st))) (.-minVal st) (minute-of! st sec now)))
-    (if (let [k (if-let [^js ks (.-kinds st)] (if (< id (.-length ks)) (aget ks id) 0) 0)]
-          (if (zero? k) (mutable-id? st id) (== k 1)))
+    (if mutable?
       (aset (fine-times sec) i (- now (.-base sec)))
       (when-let [^js fine (.-fine sec)] (aset fine i js/NaN)))))
 
