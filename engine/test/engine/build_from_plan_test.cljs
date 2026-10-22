@@ -12,6 +12,7 @@
             [engine.harvest-test :as h]
             [engine.registry :as registry]
             [engine.test-util :as tu]
+            [jobs.lib.util :as u]
             [engine.triggers :as triggers]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.world-files :as world]
@@ -239,6 +240,21 @@
               result (await (child-outcome eng job {:plan "ring"} 200))]
           (is (= [[3 64 2] "ring"] (distinct @targets)) "the target, and the plan whose footprint the tunnel may cut")
           (is (= {[3 64 2] :unreachable} (:given-up result)) "a tunnel that fails gives the cell up"))))))
+
+(deftest a-body-shut-in-a-pocket-digs-out-before-any-tunnel-for-a-cell-in-rock
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [targets (atom [])
+              tunnel {:round (fn ^:async w [c] (swap! targets conj (js/Math.floor (:x (u/self-pos c)))) (ctx/end c :nothing-possible :dig-failed {}))}
+              plan {:id "ring" :parts [{:id "p" :cells [[3 64 2]] :want "dirt"}]}
+              rock (into {} (for [x (range -2 15) z (range -4 9) y [62 63 64 65 66]] [(str x "," y "," z) "stone"]))
+              {:keys [eng]} (start {:inventory [{:name "stone_pickaxe" :count 1} {:name "dirt" :count 4}]
+                                    :blocks (assoc rock "12,64,2" "air" "12,65,2" "air")
+                                    :self {:pos {:x 12.5 :y 64 :z 2.5}}}
+                                   {"ring" plan} [] {'jobs.access.tunnel tunnel})]
+          (await (child-outcome eng job {:plan "ring"} 200))
+          (is (not-any? #{12} @targets) "no tunnel is begun from the pocket; go-to digs the body out first"))))))
 
 (deftest a-dig-in-rock-with-no-pickaxe-is-given-up-no-tool-without-a-tunnel
   (async done

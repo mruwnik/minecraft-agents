@@ -56,7 +56,7 @@
   A cell whose state no neighbour gives, or with no block to click beside it yet, waits for one. If still missing at
   the end it is given up with jobs.lib.placement's reason (:no-support, after a look at any floor or neighbour never seen; :no-room, :opened, :double-slab). A cell whose place is refused, or whose stand cell
   cannot be reached, :give-up times is given up (:refused, :occupied, :no-item, :unreachable or :unseen).
-  A cell shut in by rock (and other plan cells) on every side is tunnelled to (jobs.access.tunnel).
+  A cell shut in by rock (and other plan cells) on every side is tunnelled to (jobs.access.tunnel), unless the body is in a closed pocket: it digs out first.
   Zones: every place is checked against zones and the footprints of the other active plans, when the cell is
   chosen and again before the place. A cell in a zone that does not allow :place, or in another plan's footprint,
   is refused for good (not counted as given up). It is listed in :refused [{:pos :reason :zone|:claim|:footprint|:hazard}].

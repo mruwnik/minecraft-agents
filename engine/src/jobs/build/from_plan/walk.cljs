@@ -101,12 +101,16 @@
       (and (= :there w) (nil? (:found cell)) (chunk-pending? (:primitives c) (:pos cell))) :partial
       :else w)))
 
+(defn in-pocket?
+  "Whether the body stands in a closed room of at most ::pocket-cells walkable cells (read from the true world, as shut-in-walk? does)."
+  [c]
+  (reach-room/enclosed? (:primitives c) #{} (reach/lookup (:primitives c) reach-room/body-kind-of) (settings/get settings ::pocket-cells)))
+
 (defn shut-in-walk?
   "Whether the last walk ended because the body is shut in (go-to refuses to dig or build out of a restricted walk) and the
   room it can walk in is a pocket of at most ::pocket-cells: a larger closed hall still has room to bridge or pillar in. Read from the true world as go-to's plan is: it confirms go-to's shut-in verdict, and in the dark the walls of a pocket are not seen."
   [c]
-  (boolean (and (:shut-in (:data (near/last-walk c)))
-                (reach-room/enclosed? (:primitives c) #{} (reach/lookup (:primitives c) reach-room/body-kind-of) (settings/get settings ::pocket-cells)))))
+  (boolean (and (:shut-in (:data (near/last-walk c))) (in-pocket? c))))
 
 (defn exit-of
   "Where the body leaves a cell it stands in: in a block it cut into rock, one step back toward the tunnel mouth (the cell
@@ -127,12 +131,13 @@
   "A cell shut in by rock: with a pickaxe, cut a way (jobs.access.tunnel) to the deepest such cell, so the body stands in the
   plan's cells and fills them while backing out; without one the cell is given up :no-tool at once. :continue while the
   tunnel waits, :again once it is cut or failed (a failure counts against the cell), nil when the cell is open to air or
-  the body already stands at the end of the way."
+  the body already stands at the end of the way. Not from a shut-in pocket: unseen faces read as rock there, and go-to's
+  escalation digs the body out first."
   [c cells cell]
   (let [p (:primitives c)
         closed (merge (:given-up (ctx/mem c)) (:refused (ctx/mem c)))
         shut? #(shut-in? c %)]
-    (when (shut? cell)
+    (when (and (shut? cell) (not (in-pocket? c)))
       (if (needs-tool? p cell)
         (let [pos (:pos cell)
               near? (<= (u/eye-dist (u/self-pos c) pos) (plan/reach))
