@@ -1011,6 +1011,19 @@
           (is (= 3 (js/Math.floor (.-x (.-pos (.self p))))) "the body stayed where it was")
           (is (= [:danger] (mapv :reason (:open @out)))))))))
 
+(deftest a-far-scaffold-block-beside-seen-lava-is-not-walked-to
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [cells [[10 64 0]]
+              {:keys [eng p out digs] :as s} (setup {:self {:x 3.5 :y 64 :z 0.5} :blocks (assoc (pillar-blocks cells) "12,64,0" "lava")
+                                                     :entries (mapv entry cells)})]
+          (core/submit! eng '(recording-parent) {})
+          (await (ticks s eng 60))
+          (is (= [] @digs))
+          (is (= 3 (js/Math.floor (.-x (.-pos (.self p))))) "the body stayed where it was")
+          (is (= [:lava-near] (mapv :reason (:open @out)))))))))
+
 (deftest as-a-reflex-it-works-after-its-look-around-instead-of-declining
   (async done
     (tu/run-async done

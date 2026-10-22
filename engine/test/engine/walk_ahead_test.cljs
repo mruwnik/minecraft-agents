@@ -52,6 +52,13 @@
   (is (= #{[0 0] [1 0] [0 1] [1 1]}
          (set (map (fn [[x _ z]] [x z]) (wwatch/step-cells (step 0 64 0 :walk) (step 1 64 1 :diagonal)))))))
 
+(deftest a-drop-whose-landing-has-seen-lava-orthogonally-beside-it-is-found-lava-only-diagonal-is-not
+  (let [steps [(step 0 64 0 :walk) (step 3 61 0 :drop)]
+        p-with (fn [blocks] (tu/seeing-all (tu/fake {:floor tu/walk-floor :blocks blocks})))]
+    (is (= 1 (walk/first-lava-landing (p-with {"4,61,0" "lava"}) steps)))
+    (is (nil? (walk/first-lava-landing (p-with {"4,61,1" "lava"}) steps)) "diagonal")
+    (is (nil? (walk/first-lava-landing (p-with {}) steps)))))
+
 (deftest the-cells-of-a-step-down-span-both-heights
   (is (= [62 67] ((juxt first last) (sort (distinct (map second (wwatch/step-cells (step 0 65 0 :walk) (step 1 63 0 :drop)))))))))
 

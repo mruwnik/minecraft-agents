@@ -386,17 +386,23 @@
   (first (filter #(some (fn [cell] (and (not (contains? looked cell)) (sense/unknown? p cell))) (landing-cells steps %))
                  (range 1 (count steps)))))
 
+(defn first-lava-landing
+  "The index of the first step from 1 on that is a drop (landing-cells) whose landing or an orthogonal neighbour is seen lava, nil when there is none."
+  [p steps]
+  (first (filter #(some (fn [[x y z]] (= "lava" (u/seen-name p {:x x :y y :z z}))) (orthogonal-landing-cells steps %))
+                 (range 1 (count steps)))))
+
 (defn ^:async look-landing!
   "Look at the unseen cells of step 1's landing, as a player looks into a hole before jumping down. Lava in or beside the
   landing (its cell or one orthogonally beside) ends the walk {:status :replan :why :changed}, the planner then prices the
-  landing from the lava now seen and may still take it as the only way; lava only diagonal is no danger: {:looked cells}."
+  landing from the lava now seen, and the landing cells read as walls then (a drop beside lava is not taken); lava only diagonal is no danger: {:looked cells}."
   [c steps]
   (let [p (:primitives c)
         cells (landing-cells steps 1)]
     (await (sense/look-at-unknown! c (u/nearest-first (u/self-pos c) identity (filter #(sense/unknown? p %) cells)) 2))
     (if (some #(= "lava" (u/seen-name p (zipmap [:x :y :z] %))) (orthogonal-landing-cells steps 1))
       (let [{:keys [x y z]} (nth steps 1) {sx :x sy :y sz :z} (u/self-pos c)]
-        {:end {:status :replan :why :changed :learned true :cells [[x y z] [x (inc y) z]] :at [sx sy sz] :step 1}})
+        {:end {:status :replan :why :changed :learned true :cells [[x y z] [x (inc y) z]] :walls [{:x x :y y :z z} {:x x :y (inc y) :z z}] :at [sx sy sz] :step 1}})
       {:looked cells})))
 
 (defn ^:async look-ahead!
@@ -448,6 +454,7 @@
            u (when (:unknown c) (first-unseen-step p steps looked))
            o (first-unseen-overhead p steps looked)
            d (first-unseen-landing p steps looked)
+           d (let [ds (remove nil? [d (first-lava-landing p steps)])] (when (seq ds) (apply min ds)))
            j (let [js (remove nil? [u o d])] (when (seq js) (apply min js)))
            rebase (fn [d] (cond-> d (:step d) (update :step + base)))]
        (cond

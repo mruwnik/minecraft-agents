@@ -5,6 +5,7 @@
   Risk = the mobs expected to spawn on the exposed stretches (jobs.lib.cost/spawn-chance per second of walking, each costed
   as a zombie fight with the kit carried, jobs.lib.cost/fight-damage) plus, on a walk with such a stretch (in the light a hostile is seen and avoided; the reflexes meet it), the fight with every hostile known near the way.
   A walk to a goal within the death-spot radius of a place the body died lately (jobs.lib.death-spot, fading with time) adds the fight with what killed it, weighted by how fresh the death is, underground too, only when the walk ends nearer the death than it starts (a body standing, or walking away from the spot, is no closer to it); not within ::pile-radius of the goal (a walk to the body's own drops: only a hostile known there counts).
+  Seen lava within ::lava-radius of the goal adds ::lava-hp (a slip beside it is lethal).
   Acceptable when it stays within ::risk-share of the health the body has now."
   (:require [engine.args :as a]
             [engine.contract :as contract]
@@ -38,6 +39,10 @@
                   :doc "Food at or under which the body cannot sprint away and does not heal: the damage it can afford is cut by ::hungry-share."}
    ::hungry-share {:default 0.5 :spec (a/num-in 0 1)
                    :doc "Share of the affordable damage a body at ::hungry-food or under may risk."}
+   ::lava-radius {:default 3 :spec (a/int-in 0 nil)
+                  :doc "Blocks around the goal within which seen lava makes the walk's end a risk."}
+   ::lava-hp {:default 6 :spec (a/num-in 0 nil)
+              :doc "hp of risk added when seen lava lies within ::lava-radius of the goal: a slip there is lethal, so a small chance of it costs this much."}
    ::step {:default 4 :spec (a/num-in 1 nil)
            :doc "Blocks between the cells of the way whose light is judged; a way longer than ::max-cells steps is judged at that many cells, spaced wider."}
    ::max-cells {:default 256 :spec (a/int-in 1 nil)
@@ -65,6 +70,16 @@
                                {:light (constantly {:block block :sky (if (sh-sense/sky-reaches-from-above? p cell) sky 15)})})
       (or underground? (< (:y cell) (- top (settings/get settings ::surface-band)))) 0
       :else (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky sky})}))))
+
+(defn lava-hp
+  "The hp of risk of ending a walk at cell (a map or [x y z]) with seen lava near: ::lava-hp, else 0."
+  [p cell]
+  (let [[x y z] (if (map? cell) [(:x cell) (:y cell) (:z cell)] cell)
+        r (settings/get settings ::lava-radius)]
+    (if (and y (some #(= "lava" (u/seen-name p %))
+                     (for [dx (range (- r) (inc r)) dz (range (- r) (inc r)) dy (range -3 3)] {:x (+ x dx) :y (+ y dy) :z (+ z dz)})))
+      (settings/get settings ::lava-hp)
+      0)))
 
 (defn estimate
   "{:hp :spawn-hp :hostile-hp :dark-s :hostiles} of the walk of c's body to `goal` ({:x :y :z}): hp the expected damage, dark-s
@@ -94,9 +109,10 @@
         deaths (nearer-goal? (away-from-goal (death-spot/near (death-spot/recent c) goal)))
         death-hp (reduce + (for [{:keys [cause weight]} deaths] (* weight (hit [{:name cause :distance 0 :hits 0}]))))
         hide-hp (reduce + (for [{:keys [mobs]} (nearer-goal? (away-from-goal (hide-spot/near (hide-spot/recent c) goal)))] (hit (mapv (fn [n] {:name n :distance 0 :hits 0}) mobs))))
+        lava (lava-hp p goal)
         spawn-hp (* spawns (hit [{:name "zombie" :distance 0 :hits 0}]))
         hostile-hp (if (pos? exposed-s) (hit (mapv (fn [e] {:name (.-name e) :distance (danger/mob-distance p e) :hits 0}) hostiles)) 0)]
-    {:hp (+ spawn-hp hostile-hp death-hp hide-hp) :hide-hp hide-hp :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :dark-s exposed-s :hostiles (count hostiles)}))
+    {:hp (+ spawn-hp hostile-hp death-hp hide-hp lava) :lava-hp lava :hide-hp hide-hp :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :dark-s exposed-s :hostiles (count hostiles)}))
 
 (defn- round1 [x] (/ (js/Math.round (* 10 x)) 10))
 
@@ -121,13 +137,13 @@
   "Ok while the estimated damage of the walk to `goal` is within (allowed c), else later :risky with the
   risk and its parts."
   [c goal]
-  (let [{:keys [hp spawn-hp hostile-hp death-hp hide-hp dark-s hostiles]} (check-cache/cached c [::risk goal (sense/round-looked c)] #(estimate c goal))
+  (let [{:keys [hp spawn-hp hostile-hp death-hp hide-hp lava-hp dark-s hostiles]} (check-cache/cached c [::risk goal (sense/round-looked c)] #(estimate c goal))
         allowed (allowed c)]
     (if (<= hp allowed)
       (contract/ok :acceptable (str "route risk " (round1 hp) " hp, within " (round1 allowed)))
       (contract/later :risky (str "route risk " (round1 hp) " hp over the " (round1 allowed) " the body can afford: "
                                   (round1 dark-s) " s on dark open ground costs " (round1 spawn-hp) " hp, "
-                                  hostiles " hostile(s) near the way " (round1 hostile-hp) " hp, " (round1 death-hp) " hp for a recent death near it, " (round1 hide-hp) " hp for a recent hide near it")
+                                  hostiles " hostile(s) near the way " (round1 hostile-hp) " hp, " (round1 death-hp) " hp for a recent death near it, " (round1 hide-hp) " hp for a recent hide near it, " (round1 lava-hp) " hp for seen lava near the goal")
                       :risk hp :allowed allowed :recheck-after-ms 10000))))
 
 (defn stay-hp

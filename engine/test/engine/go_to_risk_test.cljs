@@ -21,6 +21,13 @@
     (is (pos? (:dark-s flat)))
     (is (< (:dark-s down) (/ (:dark-s flat) 2)))))
 
+(deftest seen-lava-near-the-goal-adds-hp-to-the-risk-and-lava-far-from-it-adds-none
+  (let [c (ready-test/ctx-of (assoc night-hut :time st/noon :blocks {"22,64,20" "lava"}))
+        hp #(:lava-hp (risk/estimate c %))]
+    (is (pos? (hp {:x 20 :y 64 :z 20})))
+    (is (zero? (hp {:x 10 :y 64 :z 20})))
+    (is (= (hp {:x 20 :y 64 :z 20}) (risk/lava-hp (:primitives c) [20 64 20])))))
+
 (deftest a-dark-way-by-day-is-not-exposed
   (let [c (ready-test/ctx-of (assoc night-hut :time st/noon))]
     (is (zero? (:hp (risk/estimate c {:x 95 :y 64 :z 0}))))))

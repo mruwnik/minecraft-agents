@@ -75,7 +75,7 @@
   :accept :floor-at (block-at over what was seen, no guess: the cell under the body's floor must be seen solid) :can-clear? (block name -> whether the body can clear it now, by hand or a carried tool; absent: always)
   :hostile-near? (a known hostile near) :opens-dark? (fn of a cell: it opens onto a dark cell, so a shelter's block stays)
   :bucket? (an empty bucket is carried: a poured water source is scooped, not dug)
-  :lava-near? (fn of a cell: seen lava lies near it; such a block is left unless :lava-adjacent is accepted)}."
+  :lava-near? (fn of a cell: the risk of going there, for seen lava near it, is over the block's worth; such a block is left unless :lava-adjacent is accepted)}."
   [{:keys [feet block-at floor-at accept can-clear? hostile-near? opens-dark? keep-at-night? bucket? lava-near?] :as in} {:keys [cell purpose item]}]
   (let [[fx fy fz] feet
         [x y z] cell
