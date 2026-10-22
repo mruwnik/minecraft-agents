@@ -37,6 +37,7 @@
   blocks are tried. Underground a walk goes on at night; a search that go-to made wait :search-waits calls in a row ends with :reason :search-waited.
   While it runs it holds its work area (jobs.lib.loose :collecting), so the :loose-items reflex leaves those drops to it.
   With :ids, ids not in sight when none is left to try are booked as one :left {:reason :unseen :ids [...] :last {id [x y z]}}, the cell each was last seen in.
+  A drop more than a block above the feet that the act cannot reach (a column top) is walked up to with go-to's :pillar and :stair ways, then collected.
   With :dig, a drop go-to cannot reach, or one too deep in the dug hole, is dug to once: the fewest cells (jobs.lib.dig-route,
   over the blocks the body has seen, an unseen one taken for stone) that open a way to it, each a jobs.blocks.dig child (zones, claims, hazards
   are its rules), then the walk is tried again. A dig that ends :unseen (the dark hides the cell) sets a carried torch in the body's cell once per call, looks again and digs on. No such way leaves the drop :no-route, a dig that fails with that dig's outcome (:refused, :cannot, :unreachable ...).
@@ -205,15 +206,18 @@
   [c item]
   (await (sense/decide! c :collect-drops.hole #(hole-problem c item) {:retry? some?})))
 
+(defn high? [c item] (boolean (and (.-pos item) (> (- (second (item-cell item)) (feet-y c)) 1))))
+
 (defn ^:async walk-down!
-  "Walk within a block of item, more than a block lower than the feet: one go-to call (child/run!*, slot :walk).
-  :arrived, :continue (go-to waits on the world) or :unreachable."
-  [c item]
-  (let [r (await (child/run!* c :walk 'jobs.movement.go-to (walk-args c {:pos (item-cell item) :range 1 :ways #{:walk :clear-seal}})))]
+  "Walk within a block of item, more than a block lower than the feet (or, with ways, higher: a column top is climbed by
+  go-to's pillar or stair): one go-to call (child/run!*, slot :walk). :arrived, :continue (go-to waits on the world) or :unreachable."
+  ([c item] (walk-down! c item #{:walk :clear-seal}))
+  ([c item ways]
+  (let [r (await (child/run!* c :walk 'jobs.movement.go-to (walk-args c {:pos (item-cell item) :range 1 :ways ways})))]
     (cond
       (= :continue r) :continue
       (and (= :done (:kind r)) (:arrived (:data r))) :arrived
-      :else :unreachable)))
+      :else :unreachable))))
 
 (defn open-above?
   "Whether the nearest seen cell above cell in its column (within 8) is open."
@@ -490,12 +494,14 @@
                        r)))
         r (when-not (or moving? (= :continue walk) (= :continue dug) why (= :unreachable walk)) (await (collect!)))
         stuck? (and r (= "unreachable" (.-status r)))
-        dug2 (when (and stuck? (:dig (:args c))) (await (dig-to! c item)))
+        up? (and stuck? (high? c item))
+        up (when up? (await (walk-down! c item #{:walk :pillar :stair :clear-seal})))
+        dug2 (when (and stuck? (not up?) (:dig (:args c))) (await (dig-to! c item)))
         dig2-why (when-not (#{nil :dug :continue} dug2) dug2)
         walk2 (when (= :dug dug2) (await (walk-down! c item)))
-        r2 (when (and (= :dug dug2) (not= :continue walk2)) (await (collect!)))
+        r2 (when (or (= :arrived up) (and (= :dug dug2) (not= :continue walk2))) (await (collect!)))
         r2-stuck? (and r2 (= "unreachable" (.-status r2)))]
-    (if (or moving? (= :continue walk) (= :continue dug) (= :continue dug2) (= :continue walk2))
+    (if (or moving? (= :continue walk) (= :continue dug) (= :continue dug2) (= :continue walk2) (= :continue up))
       {:wait true}
       {:acts (remove nil? [r r2])
        :left (cond
@@ -503,7 +509,7 @@
                why why
                (= :unreachable walk) :unreachable
                dig2-why dig2-why
-               (and stuck? (not= :dug dug2)) :unreachable
+               (and stuck? (not= :dug dug2) (not= :arrived up)) :unreachable
                r2-stuck? :unreachable)
        :retry? (and (not why) (< (get-in (ctx/mem c) [:moves (.-id item)] 0) (max-moves))
                     (or dig-why (= :unreachable walk) dig2-why stuck? r2-stuck?)

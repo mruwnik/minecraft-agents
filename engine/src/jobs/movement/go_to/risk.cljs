@@ -4,7 +4,7 @@
   only by the hostiles it can reach (Q279).
   Risk = the mobs expected to spawn on the exposed stretches (jobs.lib.cost/spawn-chance per second of walking, each costed
   as a zombie fight with the kit carried, jobs.lib.cost/fight-damage) plus, on a walk with such a stretch (in the light a hostile is seen and avoided; the reflexes meet it), the fight with every hostile known near the way.
-  A walk to a goal within the death-spot radius of a place the body died lately (jobs.lib.death-spot, fading with time) adds the fight with what killed it, weighted by how fresh the death is, underground too.
+  A walk to a goal within the death-spot radius of a place the body died lately (jobs.lib.death-spot, fading with time) adds the fight with what killed it, weighted by how fresh the death is, underground too; not within ::pile-radius of the goal (a walk to the body's own drops: only a hostile known there counts).
   Acceptable when it stays within ::risk-share of the health the body has now."
   (:require [engine.args :as a]
             [engine.contract :as contract]
@@ -30,6 +30,8 @@
                    :doc "Blocks below the higher end of a walk that unseen ground still counts as open surface; deeper is underground, where only hostiles count."}
    ::exit-blocks {:default 8 :spec (a/num-in 0 nil)
                   :doc "Blocks of open ground a walk out of a night shelter crosses before it can go under, even to a goal underground."}
+   ::pile-radius {:default 6 :spec (a/num-in 0 nil)
+                  :doc "Blocks around the goal within which a remembered death or hide adds no risk: the body walking to the spot goes for its own things, and only a hostile known there counts."}
    ::way-radius {:default 16 :spec (a/num-in 0 nil)
                  :doc "Blocks from the straight way within which a known hostile adds its fight to the risk of the walk."}
    ::hungry-food {:default 6 :spec (a/int-in 0 20)
@@ -87,9 +89,10 @@
         kit (wworld/kit-of c)
         hit (fn [mobs] (if (seq mobs) (cost/fight-damage (assoc kit :mobs mobs)) 0))
         hostiles (danger/hostiles-near-way p goal (settings/get settings ::way-radius) {})
-        deaths (death-spot/near (death-spot/recent c) goal)
+        away-from-goal (fn [records] (filterv #(> (u/dist goal (:pos %)) (settings/get settings ::pile-radius)) records))
+        deaths (away-from-goal (death-spot/near (death-spot/recent c) goal))
         death-hp (reduce + (for [{:keys [cause weight]} deaths] (* weight (hit [{:name cause :distance 0 :hits 0}]))))
-        hide-hp (reduce + (for [{:keys [mobs]} (filter #(< (u/dist goal (:pos %)) (u/dist feet (:pos %))) (hide-spot/near (hide-spot/recent c) goal))] (hit (mapv (fn [n] {:name n :distance 0 :hits 0}) mobs))))
+        hide-hp (reduce + (for [{:keys [mobs]} (filter #(< (u/dist goal (:pos %)) (u/dist feet (:pos %))) (away-from-goal (hide-spot/near (hide-spot/recent c) goal)))] (hit (mapv (fn [n] {:name n :distance 0 :hits 0}) mobs))))
         spawn-hp (* spawns (hit [{:name "zombie" :distance 0 :hits 0}]))
         hostile-hp (if (pos? exposed-s) (hit (mapv (fn [e] {:name (.-name e) :distance (danger/mob-distance p e) :hits 0}) hostiles)) 0)]
     {:hp (+ spawn-hp hostile-hp death-hp hide-hp) :hide-hp hide-hp :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :dark-s exposed-s :hostiles (count hostiles)}))

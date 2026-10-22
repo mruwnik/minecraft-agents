@@ -399,6 +399,19 @@
             (is (= [:unreachable] (mapv :reason (:left result))))
             (is (= [:unreachable] (mapv :reason (bd/left-drops seen))))))))))
 
+(deftest a-drop-on-a-column-top-the-collect-action-cannot-reach-is-walked-up-to-by-pillar
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [column (into {} (for [y (range 64 70)] [(str "3," y ",0") "cobblestone"]))
+              {:keys [eng p seen]} (bd/setup {:self body :blocks column})]
+          (drop! p [3 70 0] "dirt")
+          (seen-from-above! p)
+          (collect-unreachable-first! p 1)
+          (let [result (await (tu/child-outcome eng job {:radius 8} 40))]
+            (is (some #(and (= :child_started (:kind %)) (= :walk (:slot %))) @seen) "go-to was asked to climb")
+            (is (= 0 (:collected result)))))))))
+
 (deftest a-drop-picked-up-while-the-collect-action-answers-unreachable-is-collected-not-left
   (async done
     (tu/run-async done
