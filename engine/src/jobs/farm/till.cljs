@@ -28,7 +28,7 @@
   "Hoe dirt, grass_block, dirt_path, coarse_dirt or rooted_dirt (two uses: dirt first) into farmland over a set of ground cells, given as the :area: a box {:min :max} or the
   square of a circle {:pos :radius} at its y (at most 256 cells). Water nearby is not its concern.
   Needs a hoe: the call's :use {:tools [..]} names the ones it may use (default every carried hoe); with none carried it
-  fetches one (jobs.lib.need, from the call's :ways; a failed fetch ends the call with its ending as the :because, tilled and skipped
+  fetches one (jobs.lib.need, from the call's :ways, walking to look for logs not in sight; a failed fetch ends the call with its ending as the :because, tilled and skipped
   in the data), with :ways #{:carried} the call is refused {:reason :no-tool :kind \"hoe\"}. Ground cover over a cell (grass,
   ferns, flowers, snow layer) is dug first with a jobs.blocks.dig child; a cover dig that does not clear it counts a try.
   Cells are skipped with a reason: :not-tillable, :covered (something else above), :not-permitted (zone rules),
@@ -318,7 +318,7 @@
   on the world, else the ending of the call: done when enough is tilled already, else the fetch's kind and cause."
   [c]
   (when (and (nil? (hoe c)) (seq (pending c)) (fetch-opts c))
-    (let [e (await (need/tool! c (hoe-wanted c) (fetch-opts c)))]
+    (let [e (await (need/tool! c (hoe-wanted c) (assoc (fetch-opts c) :explore true)))]
       (cond
         (= :continue e) :continue
         (= :done (:kind e)) nil

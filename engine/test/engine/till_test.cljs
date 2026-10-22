@@ -422,6 +422,16 @@
           (is (= 1 (count started)))
           (is (= [:done] (mapv #(get-in % [:ending :kind]) ended))))))))
 
+(deftest a-hoe-fetch-with-no-log-in-sight-goes-looking-for-trees
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (h/setup-seeing {:blocks four} nil)
+              _ (perception/pass! (aget (:p s) "perception"))
+              _ (core/submit! (:eng s) (list job (merge box {:ignore-zones? true})) {})
+              _ (await (tu/run-ticks (:eng s) (:clock s) 25 700))]
+          (is (some #(= :explore (:slot %)) (kinds (:seen s) :child_started))))))))
+
 (deftest till-fetch-false-waits-no-tool-and-leaves-the-chest
   (async done
     (tu/run-async done
