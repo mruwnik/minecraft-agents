@@ -207,6 +207,24 @@
           (is (some #{[2 64 0] [2 65 0]} (take 2 (fm/digs (:p s)))) "a leaf in the line is the first dig")
           (is (empty? (lt/calls (:p s) "walk")) "no walk round the tree to a sight of the log"))))))
 
+(deftest a-cut-log-hidden-above-the-eye-is-lowered-by-digging-the-support-found-for-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (fm/start ft/tall {})
+              eng (:eng s)
+              lowered (atom [])
+              hidden (atom [[8 70 2]])
+              call! ctx/call]
+          (ft/eye-reach! (:p s) (:lose-logs? ft/tall))
+          (with-redefs [pillar/hidden-support (fn [_] (let [cell (first @hidden)] (swap! hidden rest) cell))
+                        ctx/call (fn [c k job & [args :as more]]
+                                   (when (= :lower0 k) (swap! lowered conj (:pos args)))
+                                   (apply call! c k job more))]
+            (core/submit! eng '(jobs.forestry.fell-tree {:radius 10}) {})
+            (await (tu/run-until-empty eng 200)))
+          (is (= [{:x 8 :y 70 :z 2}] (distinct @lowered)) "no drop in sight, yet the support found for the hidden cut log was dug"))))))
+
 (deftest a-drop-resting-on-a-leaf-out-of-reach-is-lowered-by-digging-the-leaf
   (async done
     (tu/run-async done

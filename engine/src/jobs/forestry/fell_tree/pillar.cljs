@@ -249,6 +249,17 @@
   (into [] (comp (filter #(= :unreachable (:reason %))) (map #(u/cell-vec (:pos %)))) (get-in e [:data :left])))
 
 
+(defn hidden-support
+  "The leaf or log under a log the body cut that lies in dig reach but out of its sight (on top of a leaf above the eye:
+  it was seen falling and did not come down), nil when there is none."
+  [c]
+  (let [mine (set (:drop-ids (ctx/mem c)))
+        feet (u/self-pos c)]
+    (some (fn [e] (when (and (false? (.-visible e)) (contains? mine (.-id e)) (log-name? (some-> (.-item e) .-name))
+                             (<= (u/eye-dist feet (u/pos-of (.-pos e))) dig-reach))
+                    (let [pos (u/pos-of (.-pos e))] (drop-support c (u/cell-vec pos) pos))))
+          (array-seq (.entities (:primitives c) (clj->js {:kind "item" :radius (inc dig-reach) :max 100}))))))
+
 (defn ^:async settle-drops!
   "Wait until the logs lying in dig reach are seen and stop moving (a drop in the air is given up as unreachable, one
   not yet seen is not tried): at least ::settle-min looks, at most ::settle-looks. :continue when a pause was cut."
@@ -279,7 +290,7 @@
                                   (log/collect-args c {:radius dig-reach :ids ids :near (u/self-pos c) :search 0})))
               :done)
           at (into {} (map (juxt #(u/cell-vec (u/pos-of (.-pos %))) #(u/pos-of (.-pos %)))) ents)
-          cell (when (and (map? e) (< n (settings/get settings ::max-lowered))) (some #(drop-support c % (at %)) (left-cells e)))]
+          cell (when (and (not= :continue e) (< n (settings/get settings ::max-lowered))) (or (some #(drop-support c % (at %)) (left-cells e)) (hidden-support c)))]
       (cond
         (or (= :continue settle) (= :continue e)) :continue
         (not cell) (do (ctx/update-mem! c assoc-in [:pillar :topped] true) nil)
