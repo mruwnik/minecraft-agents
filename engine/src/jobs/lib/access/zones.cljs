@@ -94,10 +94,10 @@
                {:kind :claim :id (:id %) :owner (:owner %)})
             claims)))
 
-(defn exit-goal
-  "The cell outside zone zn's box by margin m + 2 on its nearest side, at the level of here."
+(defn exit-goals
+  "The cells outside zone zn's box by margin m + 2, one per side, at the level of here, nearest side first."
   [{:keys [x y z]} zn m]
   (let [[x0 _ z0] (:min zn) [x1 _ z1] (:max zn)
         out (+ m 2)
         sides [[(- x x0) {:x (- x0 out) :z z}] [(- x1 x) {:x (+ x1 out) :z z}] [(- z z0) {:x x :z (- z0 out)}] [(- z1 z) {:x x :z (+ z1 out)}]]]
-    (assoc (second (apply min-key first sides)) :y y)))
+    (mapv #(assoc (second %) :y y) (sort-by first (rseq sides)))))

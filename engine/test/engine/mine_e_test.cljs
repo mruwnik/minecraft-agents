@@ -272,17 +272,21 @@
           (is (every? (fn [[_ _ z]] (> z 9)) (dug-cells s)))
           (is (some? first-dig)))))))
 
-(deftest a-walk-out-of-the-zone-that-fails-ends-zone-exit-naming-the-zone-and-cell
+(deftest a-walk-out-of-the-zone-that-fails-on-every-side-ends-zone-exit-naming-the-zone-and-cell
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [stub {:round (fn [c] (ctx/end c :nothing-possible {:reason :unreachable :why :off-plan} {:arrived false}))}
+        (let [goals (atom [])
+              stub {:round (fn [c] (swap! goals conj (select-keys (:pos (:args c)) [:x :z]))
+                             (ctx/end c :nothing-possible {:reason :unreachable :why :off-plan} {:arrived false}))}
               s (start {:world {:floor [-30 -30 40 30] :blocks {"6,64,11" "sand"}} :shared (ew/of-data {} {} [home-zone])
                         :jobs (assoc registry/jobs 'jobs.movement.go-to stub)})]
           (core/submit! (:eng s) (spec {:block "sand" :count 1 :ways #{:seen} :trip true}) {})
           (await (run-ticks s 60))
           (is (= [:zone-exit "home" [0 64 0]] [(:reason (:cause (done-event s))) (:zone (:cause (done-event s))) (:cell (:cause (done-event s)))])
-              (pr-str (done-event s))))))))
+              (pr-str (done-event s)))
+          (is (= 4 (count (distinct @goals))) "each side of the zone was tried once")
+          (is (re-find #"zone home at 0,64,0" (:why (:cause (done-event s)))) (pr-str (done-event s))))))))
 
 (deftest a-stair-is-not-started-beside-a-building
   (async done

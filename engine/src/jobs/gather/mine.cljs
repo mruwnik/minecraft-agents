@@ -120,10 +120,12 @@
 
 (defn ^:async leave-zone!
   "Before the first dig: a go-to child to a cell zone-margin outside the own zone (or, for a stair, building) zn the body stands near (the start moves with it).
-  :continue while it walks, :again once out, else the trip ends :zone-exit."
+  :continue while it walks, :again once out; a walk that fails is tried toward the next side of the zone, and the trip ends :zone-exit when every side failed."
   [c zn]
   (let [m (zone-margin)
-        goal (zones/exit-goal (cell-of (u/self-pos c)) zn m)
+        goals (zones/exit-goals (cell-of (u/self-pos c)) zn m)
+        side (:leave-side (ctx/mem c) 0)
+        goal (goals side)
         from (:start (ctx/mem c))
         r (await (child/call-walk* c :leave
                                    {:pos {:x (+ (:x goal) 0.5) :y (:y goal) :z (+ (:z goal) 0.5)} :range 2 :settings {:jobs.movement.go-to.tuning/y-slack 8}}))
@@ -133,10 +135,11 @@
       (not (within-keep-clear c (dec m) (access/cell here) (stair-start? c)))
       (do (ctx/emit! c :mine.left-zone :info {:zone (:name zn) :from (access/cell from) :to (access/cell here)
                                               :text (str "mine walked out of zone " (:name zn) " to " (str/join "," (access/cell here)) " before it digs")})
-          (ctx/update-mem! c assoc :start here :resume-at here)
+          (ctx/update-mem! c assoc :start here :resume-at here :leave-side 0)
           :again)
-      :else (end-run c {:got 0 :reason :zone-exit :zone (:name zn) :cell (access/cell here) :mended 0
-                        :text (str "mine could not get out of zone " (:name zn) " before it digs")}))))
+      (< (inc side) (count goals)) (do (ctx/update-mem! c assoc :leave-side (inc side)) :again)
+      :else (let [text (str "mine could not get out of zone " (:name zn) " at " (str/join "," (access/cell here)) " before it digs")]
+              (end-run c {:got 0 :reason :zone-exit :zone (:name zn) :cell (access/cell here) :mended 0 :why text :text text})))))
 
 (defn ^:async back-to-resume!
   "After a fetch walked the body off: a go-to child back to the cell the dig goes on from (mem :resume-at). :continue while it walks,
