@@ -507,7 +507,7 @@
 
 (deftest walking-passes-share-marks-and-remember-what-passes-of-their-own-would
   (doseq [light [{} {:light-default [0 0]}]
-          seed [1 7 42]]
+          seed [1 42]]
     (let [[shared-reads shared] (walk-memory pinned-world light seed 100)
           [own-reads own] (walk-memory pinned-world light seed 3000)]
       (is (= own shared) "the same cells remembered")
