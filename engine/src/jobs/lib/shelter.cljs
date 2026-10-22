@@ -18,7 +18,9 @@
   {::breach-near {:default 8 :spec (a/int-in 0 nil)
                   :doc "Blocks within which a fresh :bed-open entry makes a roofed body's room count as breached when it is not shut in."}
    ::door-failed-ms {:default 600000 :spec (a/int-in 0 nil)
-                     :doc "How long (ms) a room door the night could not shut is left alone from the cell it was tried at."}})
+                     :doc "How long (ms) a room door the night could not shut is left alone from the cell it was tried at."}
+   ::home-due {:default {:margin-s 60 :speed 4.3 :slack 1.4 :arrive 4} :spec (a/map-of keyword? number?)
+               :doc "When to head home before night, read by dusk-home, replant-owed and plant-sapling: seconds of margin, walking speed (blocks a second), slack factor on the straight line, and blocks within which the body counts as home."}})
 
 (defn breach-near [] (settings/get settings ::breach-near))
 
@@ -160,19 +162,17 @@
   [view]
   (or (mem/place view :home) (mem/place view :bed)))
 
-(def home-due-defaults "The dusk-home trigger's timing (triggers.survival.dusk-home)." {:margin-s 60 :speed 4.3 :slack 1.4 :arrive 4})
-
 (defn home-due-at?
-  "Whether a body standing at pos would be due home before night: its home-target within :limit and farther than
-  :arrive, and the day left no longer covering the walk (:slack times the straight line at :speed blocks a second) plus
-  :margin-s. args are merged over home-due-defaults and sh-clock/home-limit."
-  [p view pos args]
-  (let [{:keys [limit margin-s speed slack arrive]} (merge home-due-defaults {:limit sh-clock/home-limit} args)
+  "Whether a body standing at pos would be due home before night: its home-target within sh-clock/home-limit and farther
+  than :arrive, and the day left no longer covering the walk (:slack times the straight line at :speed blocks a second)
+  plus :margin-s. The timing is setting ::home-due."
+  [p view pos]
+  (let [{:keys [margin-s speed slack arrive]} (settings/get settings ::home-due)
         left-s (/ (- sh-clock/dusk-tick (.-timeOfDay (.self p))) 20)
         home (home-target view)]
     (boolean
      (and home (pos? left-s)
           (let [d (u/dist pos home)]
-            (and (< arrive d) (<= d limit) (<= left-s (+ margin-s (/ (* slack d) speed)))))))))
+            (and (< arrive d) (<= d sh-clock/home-limit) (<= left-s (+ margin-s (/ (* slack d) speed)))))))))
 
 (def shelter-policy {:cap 10 :ttl sh-clock/ms-per-day})

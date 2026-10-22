@@ -79,7 +79,7 @@
   [c]
   (let [all (debts c)
         p (:primitives c)
-        reachable (filterv #(and (u/block-at p (:pos %)) (not (sh/home-due-at? p (ctx/view c) (:pos %) {}))) (without-stalled (ctx/view c) all))
+        reachable (filterv #(and (u/block-at p (:pos %)) (not (sh/home-due-at? p (ctx/view c) (:pos %)))) (without-stalled (ctx/view c) all))
         ds (if (seq reachable) reachable all)
         carried (when-not (:species (:args c)) (seq (with-sapling ds (u/inventory (:primitives c)))))]
     (target-of (or carried ds) (:args c))))

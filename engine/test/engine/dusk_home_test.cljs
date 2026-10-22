@@ -5,17 +5,18 @@
             [engine.job-api :as job-api]
             [engine.shelter-support :as st]
             [engine.memory :as mem]
+            [engine.settings :as settings]
             [engine.test-util :as tu]
             [triggers.survival.dusk-home :as dh]))
 
 (defn holds?
-  "The trigger over a fake body at (0 64 0) at time-of-day t, with places [[kind x z] ..] remembered; args default to dh/defaults."
-  [t places & [over args]]
+  "The trigger over a fake body at (0 64 0) at time-of-day t, with places [[kind x z] ..] remembered."
+  [t places & [over]]
   (let [store (mem/open (tu/tmp-dir) {:now (constantly 1000)})]
     (doseq [[kind x z] places]
       (mem/write! store kind {:pos {:x x :y 64 :z z}} mem/place-policy))
     (dh/dusk-home (tu/seeing-all (tu/fake-on-floor (merge {:floor [-4 -4 4 4] :time t :self {:pos {:x 0.5 :y 64 :z 0.5}}} over)))
-                  (mem/view store) (or args dh/defaults))))
+                  (mem/view store) {})))
 
 (deftest leaves-when-the-walk-takes-as-long-as-the-day-has-left
   (are [t places expected] (= expected (holds? t places))
@@ -83,6 +84,7 @@
           (await (tu/run-until-empty eng 30))
           (is (= {:x 12 :y 64 :z 0} (mem/place (mem/view (:store eng)) :home))))))))
 
-(deftest a-stored-entry-with-the-old-limit-args-still-fires
-  (is (true? (holds? 11000 [[:home 150 0]] nil {:limit 160 :margin-s 60 :speed 4.3 :slack 1.4 :arrive 4}))
-      "a key the stored args lack falls back to the trigger's default"))
+(deftest the-home-due-setting-retunes-the-trigger
+  (is (true? (holds? 11000 [[:home 150 0]])))
+  (settings/with-settings {:jobs.lib.shelter/home-due {:margin-s 0 :speed 4.3 :slack 0 :arrive 4}}
+    #(is (false? (holds? 11000 [[:home 150 0]])))))
