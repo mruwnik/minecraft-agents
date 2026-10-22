@@ -10,6 +10,7 @@
             [engine.registry :as registry]
             [engine.test-util :as tu]
             [engine.triggers :as triggers]
+            [jobs.lib.util :as u]
             [jobs.lib.world-files :as world-files]
             [jobs.lib.ledger :as ledger]
             [jobs.survival.plug-way :as way]))
@@ -89,6 +90,16 @@
         (let [{:keys [out p]} (await (well-run! [[0 0] [1 0]]))]
           (is (= [:done :walls] [(:kind out) (:way (:data out))]))
           (is (= #{[1 64 0] [1 65 0] [0 66 0]} (set (cells-of p "place"))) "the other pit cell filled, the cell over the head"))))))
+
+(deftest a-rim-cell-never-seen-counts-as-open-over-a-two-cell-pit
+  (let [shaft (into {} (for [x [0 1] y (range 64 80)] [(str x "," y ",0") "air"]))
+        p (tu/seeing-all (tu/fake-on-floor {:blocks (merge (tu/box -1 64 -1 2 80 1 "stone") shaft) :self {:pos {:x 0.5 :y 64 :z 0.5}}}))
+        cells [[0 64 0] [1 64 0]]
+        sensed u/sensed
+        rim-open (fn [unseen] (with-redefs [u/sensed (fn [p pos] (if (= unseen [(:x pos) (:y pos) (:z pos)]) #js {:unknown true} (sensed p pos)))]
+                                (way/rim-open? p cells)))]
+    (is (false? (rim-open nil)) "walled to the roof, every rim cell seen")
+    (is (true? (rim-open [2 66 0])) "a rim cell not seen yet may be open: a mob there drops in")))
 
 (deftest walls-beside-an-open-iron-door-step-away-from-it-and-wall-the-cell-between
   (async done
