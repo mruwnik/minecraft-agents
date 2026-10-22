@@ -1,0 +1,24 @@
+;; Card e28d81c0: jobs.blocks.place from a pit the body's own dig-in shut (two dirt in the scaffold ledger over a 1x2 pit in a block of terrain) opens that seal and places
+;; the cell 8 blocks off, as go-to does for any walk; a pit shut by bedrock (nothing of its own) ends :unreachable, the body shut in.
+;; Mass x 14..18, z 14..18, y -1..3; pit [16 0..1 16]; roof dirt [16 2 16] and [16 3 16] (the ledger's two blocks); target [24 0 16] on open floor.
+;; Should-succeed: own-seal-opened-then-placed (the body pillars out of the 4-deep shaft with the cobblestone it carries, so it carries 8). Should-fail: bedrock-pit-unreachable.
+{:defaults
+ {:tags [:blocks :place :access]
+  :time :any
+  :plot {:height 12}
+  :body {:at [16.5 0 16.5] :settle-s 2 :inventory [["cobblestone" 8]] :effects [["resistance" 600 4]]}
+  :limit-s 150}
+ :cases
+ [{:name "own-seal-opened-then-placed"
+   :blocks [[:fill [14 -1 14] [18 3 18] "dirt"] [:fill [16 0 16] [16 1 16] "air"]]
+   :memory [{:kind :scaffold :policy {:cap 1 :ttl :forever}
+             :data {:entries [{:cell #at [16 2 16] :item "dirt" :before "air" :job "j1" :purpose :retreat :state :placed}
+                              {:cell #at [16 3 16] :item "dirt" :before "air" :job "j1" :purpose :retreat :state :placed}]}}]
+   :act [[:job (jobs.blocks.place {:pos #at [24 0 16] :item "cobblestone"})]]
+   :expect [{:event {:source :job :kind :completed :data {:placed true :reason :placed}} :within-s 140 :of-job true}]
+   :after [[:block [24 0 16] "cobblestone"]]}
+  {:name "bedrock-pit-unreachable"
+   :blocks [[:fill [14 -1 14] [18 3 18] "bedrock"] [:fill [16 0 16] [16 1 16] "air"]]
+   :act [[:job (jobs.blocks.place {:pos #at [24 0 16] :item "cobblestone"})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :unreachable}} :within-s 140 :of-job true}]
+   :after [[:not-block [24 0 16] "cobblestone"]]}]}

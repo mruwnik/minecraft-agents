@@ -256,13 +256,17 @@
                :when (u/low-floor? (u/seen-block p cell))]
            cell))))
 
+(def walk-ways
+  "The ways of a block job's walk: its own seal and shelter opened and a pillar out of a shaft of its own, no door dug through a wall."
+  #{:walk :clear-seal :dig-out :pillar})
+
 (defn ^:async walk-request
-  "[pens go-to-args] of the walk to pos: range (default 3), no escalation, and (unless the :enter-pens setting) keeping out of the
+  "[pens go-to-args] of the walk to pos: range (default 3), the walk-ways, and (unless the :enter-pens setting) keeping out of the
   gates of the pens holding animals, after a look at the cells of those not yet seen."
   [c pos see? & [range]]
   (let [pens (when-not (settings/get settings ::enter-pens) (await (pen-entry/pens! c)))
         keep-out (mapv #(assoc % :factor ##Inf) (into (vec (mapcat :gates pens)) (when (:for-plan (:args c)) (low-floor-cells c pos))))]
-    [pens (cond-> {:pos pos :range (or range 3) :see (boolean see?) :ways #{:walk :clear-seal} :ignore-zones? (boolean (:ignore-zones? (:args c)))}
+    [pens (cond-> {:pos pos :range (or range 3) :see (boolean see?) :ways walk-ways :ignore-zones? (boolean (:ignore-zones? (:args c)))}
             (seq keep-out) (assoc :tolls keep-out))]))
 
 (defn warn-kept-out! [c pens]
