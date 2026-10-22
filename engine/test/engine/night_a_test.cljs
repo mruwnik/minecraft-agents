@@ -252,7 +252,7 @@
 
 (defn u-cell [{:keys [x y z]}] [x y z])
 
-(deftest the-night-puts-a-carried-bed-down-in-the-open-sleeps-and-picks-it-up-by-day
+(deftest the-night-puts-a-carried-bed-down-in-the-open-sleeps-and-leaves-it-as-its-respawn-bed
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -273,10 +273,9 @@
             (is (= [{:pos foot :own-zone false}] (mapv #(select-keys % [:pos :own-zone]) (st/emitted seen :night.bed-placed)))
                 "says where the bed went")
             (is (= [(u-cell foot)] (:placed @mid)) "outside any own zone: entered in the ledger for the morning")
-            (is (= [foot] (mapv st/arg-pos (st/calls p "dig"))) "picked up by day by leave-shelter")
-            (is (= [] (ledger/open-entries (mem/view (:store eng)))) "taken back")
-            (is (= 1 (count (st/emitted seen :spawn_lost))) "the respawn bed it took is noted lost")
-            (is (empty? (st/calls p "moveTo")) "the drop is picked up without a direct move")
+            (is (empty? (st/calls p "dig")) "the bed it slept in is its respawn bed: leave-shelter leaves it")
+            (is (= [] (ledger/open-entries (mem/view (:store eng)))) "not scaffold any more")
+            (is (empty? (st/emitted seen :spawn_lost)))
             (is (= [] (:list (core/state eng))))))))))
 
 (deftest the-night-keeps-a-carried-bed-the-reserve-register-holds-in-the-bag

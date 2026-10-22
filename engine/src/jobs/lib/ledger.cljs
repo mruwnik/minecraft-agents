@@ -36,6 +36,7 @@
             [jobs.lib.access.rules :as rules]
             [engine.ctx :as ctx]
             [engine.memory :as mem]
+            [jobs.lib.shelter.spawn :as sh-spawn]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -126,10 +127,18 @@
 
 (defn of-job [l job purpose] (filterv #(and (= job (:job %)) (= purpose (:purpose %))) l))
 
+(defn respawn-bed-entry?
+  "Whether e is a bed at the live respawn bed of view (either half): it is the body's spawn, not scaffold."
+  [view {:keys [cell item]}]
+  (boolean (and (.endsWith (str item) "_bed")
+                (sh-spawn/spawn-bed-at? view (u/cell-pos cell)))))
+
 (defn open-entries
-  "The ledger in a body-memory view {:data :now} (ctx/view in a job): every entry not yet cleaned up, oldest first."
+  "The ledger in a body-memory view {:data :now} (ctx/view in a job): every entry not yet cleaned up, oldest first.
+  The live respawn bed is never listed, so no cleanup or take-back digs it."
   [view]
-  (vec (:entries (:data (mem/latest view kind)))))
+  (into [] (remove #(respawn-bed-entry? view %))
+        (:entries (:data (mem/latest view kind)))))
 
 (defn write!
   "Store l in body-memory store."

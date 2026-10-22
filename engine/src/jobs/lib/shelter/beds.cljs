@@ -215,7 +215,7 @@
                (ledger/open-entries view)))))
 
 (defn bed-to-collect
-  "By day: the foot cell [x y z] of the bed the night put down outside the body's own zones (ledger purpose :bed, the respawn bed too) while it still stands, else nil."
+  "By day: the foot cell [x y z] of the bed the night put down outside the body's own zones (ledger purpose :bed; never the live respawn bed, which the ledger does not list) while it still stands, else nil."
   [p view]
   (:cell (first (standing-entries p view :bed))))
 

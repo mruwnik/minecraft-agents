@@ -1017,3 +1017,17 @@
         s (step :feet [0 71 0] :entries (mapv entry cells)
                 :block-at #(if (leaves %) "oak_leaves" (world %)))]
     (is (= [:dig [0 70 0]] ((juxt :step :cell) s)) "leaves are dug through, not a wall")))
+
+(deftest the-live-respawn-bed-is-never-listed-or-dug
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (d/sensing {:inventory [{:name "iron_sword" :count 1}] :self {:pos {:x 3.5 :y 65 :z 0.5}} :blocks (assoc d/ground "0,65,0" "white_bed" "2,65,0" "dirt")})
+              s (d/setup p 'jobs.access.cleanup {:ignore-zones? true :of :all})
+              store (:store (:eng s))]
+          (ledger/write! store [(entry [0 65 0] :item "white_bed" :purpose :bed) (entry [2 65 0])])
+          (mem/write! store :spawn-bed {:pos {:x 1 :y 65 :z 0}} {:cap 1 :ttl :forever})
+          (is (= [[2 65 0]] (mapv :cell (ledger/open-entries (mem/view store)))) "the bed's other half is at the spawn: the bed is not scaffold")
+          (await (d/tick-out! s))
+          (is (= [[2 65 0]] (mapv (juxt :x :y :z) (d/digs p))) "only the dirt is dug")
+          (is (= "white_bed" (d/block-at p [0 65 0]))))))))
