@@ -74,7 +74,7 @@
   plan is walked only when take-refresh? says it is clearly better, else the rest of the old one), or the body is stuck with
   a mob in its way (:mob: wait, plan round it). A replan that proves the goal cut off or enclosed ends the call with that
   no-walk; so does one the caller refused (plan-fn's {:refused true}, with its :stop) for any why but :refresh, whose old
-  plan nothing speaks against. At most max-watch-replans; past that the plan is walked unwatched (a kept plan counts as a replan, and is watched). A replan with :learned (a gate or the look-ahead gave an unseen cell up or found it solid) is not counted against it, up to free-learned of them: a void edge teaches one column per replan.
+  plan nothing speaks against. At most max-watch-replans; past that the plan is walked unwatched (a kept plan counts as a replan, and is watched). A replan with :learned (a gate or the look-ahead gave an unseen cell up or found it solid) is not counted against it, up to free-learned of them: a void edge teaches one column per replan. The max-learned-th learned replan, or one past the replan cap, ends the call instead: the done map with :learn-spent and the cells learned.
   opts: :plan-fn (fn [walls]) -> a plan-walk! result (or a promise of one: plan-walk!) from where the body stands now, the
   cells {:x :y :z} read as walls;
   :walk-fn (fn [steps watch]) -> [done ms] (walk! or jobs.lib.pass/walk!); :to the goal cell; :policy for no-walk;
@@ -144,6 +144,9 @@
               ;; an unfinished search: the old plan runs past the danger, so the caller searches on from here
               (or (proved-none? fresh) (searching? fresh) (:refused fresh)) (finish (wplan/no-walk fresh 0 policy) fresh walked')
               :else (recur (assoc plan :ms plan-ms) (subvec steps (max 0 (dec k))) (inc n) ms walked' kept-damage)))
+
+          (and (= :replan (:status done)) (:learned done) (or (>= (inc (count @learned)) (wwatch/max-learned)) (>= spent wwatch/max-watch-replans)))
+          (finish (assoc done :learn-spent true :cells (vec (take 6 (concat (:cells done) (mapcat first @learned))))) plan walked')
 
           (and (= :replan (:status done)) (< spent wwatch/max-watch-replans))
           (let [_ (wsight/note-missed! (:pw plan) done)

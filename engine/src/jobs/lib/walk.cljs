@@ -273,6 +273,8 @@
         watch (cond-> watch (and watch gate) (update :skip (fnil into #{}) (wsight/floor-cells steps)))
         env {:policy (wworld/body-policy c) :steps steps :gate gate :felt? (boolean (:unknown c)) :air-c c
              :watch-stop (when watch (fn [i exec' pose] (wwatch/watch-stop watch steps i exec' pose)))}
+        _ (when gate
+            (ctx/emit! c :walk.gates :debug {:steps (into [] (comp (take 60) (map (juxt :x :y :z :move #(boolean (:unseen-floor %))))) steps)}))
         state (volatile! (start-state steps (let [pos (.-pos (.self (:primitives c)))] {:x (.-x pos) :z (.-z pos)})))
         last-done (volatile! nil)
         p (:primitives c)
@@ -298,6 +300,10 @@
                        _ (sample!)
                        _ (when-let [on-pose (:on-pose c)] (on-pose pose))
                        [state' {:keys [done controls yaw pitch warn]}] (decide-tick env @state pose)]
+                   (when gate
+                     (doseq [k (remove (get-in @state [:gate :resolved] #{}) (get-in state' [:gate :resolved] #{}))]
+                       (let [cell (wsight/floor-cell (nth steps k))]
+                         (ctx/emit! c :walk.gate-resolved :debug {:step k :cell cell :block ((:floors gate) cell)}))))
                    (vreset! state state')
                    (when-let [[x y z] (and (:unknown c) (:felt done) (first (:cells done)))]
                      (.add ^js (.-blocked ^js (:unknown c)) (str x "," y "," z)))

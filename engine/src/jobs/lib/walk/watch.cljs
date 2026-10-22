@@ -37,8 +37,10 @@
   #{:gap :climb-up :climb-down :jump-climb :open :swim :swim-up :swim-down :exit})
 
 (a/defargs settings
-  {::fall-margin {:default 1 :doc "Hp a walk's falls may cost over the plan before an info damage-mismatch (rounding of the fall)." :spec (a/num-in 0 nil)}})
+  {::fall-margin {:default 1 :doc "Hp a walk's falls may cost over the plan before an info damage-mismatch (rounding of the fall)." :spec (a/num-in 0 nil)}
+   ::max-learned {:default 8 :doc "Unseen cells a walk may learn are not there (floors that turn out missing, cells that turn out solid), one replan each, before it gives the stretch up as :unseen-floors: a player who has felt along a dark edge eight times knows it is a cliff." :spec (a/int-in 1 nil)}})
 (defn fall-margin [] (settings/get settings ::fall-margin))
+(defn max-learned [] (settings/get settings ::max-learned))
 
 (defn step-cells-of
   "The cells [x y z] the body passes going from prev to step: the columns its footprint (the hitbox half-width either side) touches

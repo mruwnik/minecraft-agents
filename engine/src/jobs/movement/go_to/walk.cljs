@@ -413,6 +413,9 @@
           (= "arrived" status)
           (await (arrive! c pos))
 
+          (:learn-spent walked)
+          (await (esc/give-up-or-escalate! c pos (max-blocked) status {:status :no-path :reason :unseen-floors :cells (:cells walked)}))
+
           (and (= "stair" status) (= :dives (:why walked)))
           (esc/dive-refused! c pos)
 

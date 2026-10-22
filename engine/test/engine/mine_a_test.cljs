@@ -569,13 +569,13 @@
           (is (empty? (filter #(re-find #"stuck on drop" %) (walk-texts s))))
           (is (= "iron_ore" (block-at s 6 63 0))))))))
 
-(deftest an-open-platform-over-unseen-floor-still-ends-on-the-refused-drop
+(deftest an-open-platform-over-unseen-floor-ends-on-the-floors-it-learned-are-not-there
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [e (done-event (await (drop-to-ore 77 false)))]
           (is (= [:stopped 0] ((juxt :status :got) e)))
-          (is (= :needs-health (get-in e [:because :cause :why]))))))))
+          (is (= :unseen-floors (get-in e [:because :cause :why]))))))))
 
 (deftest a-drop-of-five-blocks-to-a-seen-ore-is-taken
   (async done

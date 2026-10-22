@@ -460,8 +460,10 @@
               r (await (drive/follow! c {:status "found" :r #js {} :steps (line 10) :ms 5}
                                       {:plan-fn (fn [_] (js/Promise.resolve {:status "found" :r #js {} :steps (line 10) :ms 5}))
                                        :walk-fn walk-fn :to [9 64 0] :policy executor/policy}))]
-          (is (<= @walks 30) "the replans stop")
-          (is (= :replan (:status (:done r)))))))))
+          (is (= (wwatch/max-learned) @walks) "the walk stops at the learned-cell cap, not the replan cap")
+          (is (= :replan (:status (:done r))))
+          (is (true? (:learn-spent (:done r))))
+          (is (seq (:cells (:done r)))))))))
 
 ;; a re-plan the caller refused (near/walk-once!'s stair-check): {:refused true} with its :stop
 (def refused {:status "found" :r #js {} :steps [] :stop {:status :stair-cheaper :why :dives} :refused true :ms 5})

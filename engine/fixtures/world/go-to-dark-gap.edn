@@ -1,0 +1,24 @@
+;; Cards 2ab07550, cd3e838f: in the dark a go-to over a gap whose floor it cannot see must end with a named reason in
+;; seconds, not pace the gap's edge for minutes replanning. A 5-wide, 22-deep gap cuts the dark deck from side to side (no way
+;; round, too wide to jump), the goal lies beyond it, the body has 11.5 hp (a 22-block fall is lethal) and no torch.
+;; Should-fail (not arrived, a named reason): the walk to the far side. Should-succeed: a 1-wide ledge over the same drop (a slip is a lethal fall).
+{:defaults
+ {:tags [:movement :go-to :unknown :dark]
+  :time :any
+  :plot {:light :dark :height 12 :length 48 :width 32}
+  :blocks [[:fill [20 -22 0] [24 -1 31] "air"]]
+  :body {:at [2.5 0 16.5] :yaw 270 :settle-s 3}
+  :limit-s 90}
+ :cases
+ [{:name "dark-rim-ledge-is-walked-without-a-fall"
+   ;; cd3e838f: a 1-wide ledge with a 22-deep drop on both sides, dark, 11.5 hp: any slip is a lethal fall
+   :blocks [[:fill [6 -22 0] [44 -1 31] "air"] [:fill [6 -1 16] [44 -1 16] "stone"] [:fill [6 -1 17] [10 -1 17] "stone"]]
+   :act [[:rcon "damage $BODY 8.5 minecraft:generic"]
+         [:job (jobs.movement.go-to {:pos #at [40 0 16] :range 1 :ways #{:walk}})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [40.5 0 16.5] 2]]}
+  {:name "dark-gap-ends-not-arrived-with-a-reason"
+   :act [[:rcon "damage $BODY 8.5 minecraft:generic"]
+         [:job (jobs.movement.go-to {:pos #at [40 0 16] :range 1 :ways #{:walk}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:arrived false :reason :unreachable :why :unseen-floors :cells [:any]}} :within-s 40 :of-job true}]
+   :after [[:body-near [10.5 0 16.5] 16]]}]}
