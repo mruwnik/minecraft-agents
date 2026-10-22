@@ -30,4 +30,14 @@
   {:name "food-false-runs-no-food-child"
    :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false :food false})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 60 :of-job true}
-            {:no-event {:source :job :kind :kit.no-food} :for-s 30 :until {:source :job :kind :stopped}}]}]}
+            {:no-event {:source :job :kind :kit.no-food} :for-s 30 :until {:source :job :kind :stopped}}]}
+  {:name "hurt-foodless-body-underground-is-not-held-for-health"
+   ;; 3 hp, food under 18, nothing to eat, in a sealed dark rock pocket: no heal can come, so no :low-health wait; the kit looks for food / stops.
+   :plot {:height 12}
+   :blocks [[:fill [2 0 8] [30 9 24] "stone"] [:fill [14 3 16] [18 4 16] "air"]]
+   :body {:at [16.5 3 16.5] :inventory [["iron_sword" 1]] :effects [["hunger" 120 255]]}
+   :act [[:wait-s 6]
+         [:rcon "damage $BODY 17 minecraft:generic"]
+         [:job (jobs.items.get-kit {:items ["iron_pickaxe"] :explore false})]]
+   :expect [{:event {:source :job :kind :kit.no-food :level :warn} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :waiting :data {:reason :low-health}} :for-s 40 :of-job true :from-event {:source :job :kind :kit.no-food}}]}]}
