@@ -158,3 +158,20 @@
     {:kind :done :data {:fed {"wheat_seeds" 6} :bone-meal 1}} {:fed {"wheat_seeds" 6} :bone-meal 1}
     {:kind :condition-failed :cause {:reason :no-zones}} {:skipped :declined :reason :no-zones}
     {:kind :nothing-possible :cause :gave-up :data {:fed {}}} {:fed {} :reason :gave-up :stopped :nothing-possible}))
+
+(def field-60 {:min {:x 62 :y 63 :z 2} :max {:x 64 :y 64 :z 4}})
+
+(deftest a-maintain-far-from-its-field-walks-there-and-tends-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (ft/setup (ft/world {:floor [-30 -10 80 10]}
+                                    {:blocks (into {} (map (fn [[x z]] [(ft/k (+ x 60) 63 z) "farmland"])) ft/all-cells)}
+                                    {:blocks (into {} (map (fn [[x z]] [(ft/k (+ x 60) 64 z) "wheat"])) ft/all-cells)
+                                     :ages (into {} (map (fn [[x z]] [(ft/k (+ x 60) 64 z) 7])) ft/all-cells)}
+                                    ft/wheat-drops))
+              _ (core/submit! (:eng s) (list 'jobs.farm.maintain {:area field-60}) {})
+              _ (await (tu/run-ticks (:eng s) (:clock s) 60 700))]
+          (is (pos? (get (ft/inv s) "wheat" 0)) "the ripe wheat 60 blocks off was cut")
+          (is (some #(re-find #"^[^/]+/walk$" (str (:job %))) @(:seen s)) "maintain's own go-to child walked first")
+          (is (true? (ft/finished? s))))))))
