@@ -717,6 +717,13 @@ test('entities does not put lyingDown or username on mobs, and gives no sight fi
   assert.deepEqual(Object.keys(zombie).sort(), ['distance', 'height', 'id', 'kind', 'name', 'pos'])
 })
 
+test('a hostile mob reports the item in its main hand as held', () => {
+  const p = withBot(bot => {
+    bot.entities = { 1: { id: 1, type: 'hostile', name: 'drowned', position: at(1, 64, 0), heldItem: { name: 'trident' } } }
+  })
+  assert.equal(p.entities({ kind: 'hostile' })[0].held, 'trident')
+})
+
 const mobCases = [
   ['a creeper typed hostile', { name: 'creeper', type: 'hostile' }, 'hostile', true],
   ['a zombie typed hostile', { name: 'zombie', type: 'hostile' }, 'hostile', false],

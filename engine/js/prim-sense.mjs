@@ -100,6 +100,9 @@ export function createSense (env) {
     }
   }
 
+  // what a mob holds in its main hand, as a player sees it (a drowned's trident)
+  const heldName = e => (e.heldItem ?? e.equipment?.[0])?.name
+
   const entities = ({ radius = DEFAULT_RADIUS, kind, names, ids, max = 32 } = {}) => {
     if (isOffline()) return []
     const me = here()
@@ -123,7 +126,8 @@ export function createSense (env) {
         ...(k === 'item' && { item: droppedItem(env.bot, e) }),
         ...(k === 'item' && itemSpawn(env.bot, e.id) && { spawn: itemSpawn(env.bot, e.id) }),
         ...(k === 'player' && { username: e.username, lyingDown: lyingDown(env.bot, e) }),
-        ...(e.name === 'creeper' && { creeper: true })
+        ...(e.name === 'creeper' && { creeper: true }),
+        ...(k === 'hostile' && heldName(e) && { held: heldName(e) })
       }))
   }
 

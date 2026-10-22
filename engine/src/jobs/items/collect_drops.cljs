@@ -9,6 +9,7 @@
             [jobs.lib.blocks :as blocks]
             [jobs.lib.child :as child]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.danger :as danger-q]
             [jobs.lib.dig-route :as dig-route]
             [jobs.lib.look :as look]
             [jobs.lib.loose :as loose]
@@ -25,6 +26,7 @@
   walked or dug to it is judged again there (at most ::max-moves times).
   An item more than a block lower than the feet is walked to first (a jobs.movement.go-to child, range 1, which prices
   falls and dangers); one it cannot reach is left, with a debug collect-drops.left {:reason :unreachable}.
+  A drop in water with a known hostile within the hostile radius of it is left, with {:reason :water-danger}.
   An item lower than the feet in a hole the caller dug (:holes) is walked to only when it lies one block down at most and
   the body has seen the floor under it solid and safe and the cells round it (no lava, fluid or cave opening, nothing
   hazardous beside it), the walk dropping one block at most; else it is left, with a debug collect-drops.left
@@ -436,6 +438,16 @@
 (defn held-count [c item-name]
   (transduce (comp (filter #(= item-name (:name %))) (map :count)) + 0 (u/inventory (:primitives c))))
 
+(defn water-danger?
+  "Whether item lies in water with a known hostile (jobs.lib.danger/known-hostiles) within the hostile radius of it: a player does not swim to it."
+  [c item]
+  (let [p (:primitives c)
+        [x y z] (item-cell item)
+        spot (u/pos-of (.-pos item))]
+    (and (= "water" (u/seen-name p {:x x :y y :z z}))
+         (boolean (some #(<= (u/dist spot (danger-q/mob-pos p %)) (danger-q/hostile-radius))
+                        (danger-q/known-hostiles p (+ (danger-q/ranged-radius) (danger-q/hostile-radius)) {}))))))
+
 (defn ^:async try-take!
   "One try at a drop: walk, dig or collect as its place asks (a stuck collect digs and tries once more). {:wait true} while a child
   waits on the world, else {:acts [act results] :left why-or-nil :retry? bool}."
@@ -501,7 +513,7 @@
   "One drop: try to take it, then book what came in and skip it; :continue while a child waits on the world, else :again."
   [c item]
   (let [start-held (held-count c (some-> (.-item item) .-name))
-        t (await (try-take! c item))]
+        t (if (water-danger? c item) {:left :water-danger} (await (try-take! c item)))]
     (if (:wait t)
       :continue
       (do (book! c item start-held t) :again))))

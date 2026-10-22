@@ -500,3 +500,15 @@
             (is (= 1 (:collected result)))
             (is (= 1 (bd/carried p "iron_ingot")))
             (is (empty? (:left result)))))))))
+
+(deftest a-drop-in-water-with-a-hostile-beside-it-is-left
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (bd/setup {:self body :blocks {"12,64,0" "water"}
+                                         :entities [{:id 9 :name "drowned" :kind "hostile" :visible true :pos {:x 13.5 :y 64 :z 0.5}}]})]
+          (drop! p [12 64 0] "porkchop")
+          (seen-from-above! p)
+          (let [result (await (tu/child-outcome eng job {:radius 16 :items ["porkchop"]} 30))]
+            (is (= [:water-danger] (mapv :reason (:left result))))
+            (is (empty? (collect-args p)) "no walk into the water")))))))

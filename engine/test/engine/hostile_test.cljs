@@ -1530,3 +1530,9 @@
 (deftest a-drowned-swimming-in-a-pond-beside-the-body-is-a-danger-at-any-depth
   (are [y] (holds? {:blocks pond :entities [{:id 9 :name "drowned" :kind "hostile" :pos {:x 3.5 :y y :z 0.5}}]} {:radius 8})
     63 62))
+
+(deftest a-drowned-holding-a-trident-counts-as-ranged
+  (let [drowned (fn [held] {:id 9 :name "drowned" :kind "hostile" :held held :pos {:x 3.5 :y 63 :z 0.5}})]
+    (are [held fires?] (= fires? (boolean (holds? {:blocks pond :entities [(drowned held)]} {:radius 2 :ranged-radius 16})))
+      "trident" true
+      nil false)))

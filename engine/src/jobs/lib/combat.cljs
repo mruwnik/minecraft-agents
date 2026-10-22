@@ -14,7 +14,11 @@
   "Item name substrings that count as weapons; _axe does not match pickaxes."
   ["_sword" "_axe"])
 
-(defn ranged? [e] (contains? weapon/ranged-mobs (.-name e)))
+(defn ranged?
+  "Whether e shoots or throws: a ranged mob, or a drowned holding a trident."
+  [e]
+  (or (contains? weapon/ranged-mobs (.-name e))
+      (and (= "drowned" (.-name e)) (= "trident" (.-held e)))))
 
 (defn known-or-raw
   "Hostiles within radius as JS entities: the perception's known mobs (seen or heard) when p has them, else the raw

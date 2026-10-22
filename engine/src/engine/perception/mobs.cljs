@@ -84,7 +84,7 @@
                   ^js pos (.-pos e)]
               (.set sensed (.-id e) e)
               (.set mobs (.-id e)
-                    #js {:id (.-id e) :name (.-name e) :kind (.-kind e)
+                    #js {:id (.-id e) :name (.-name e) :kind (.-kind e) :held (.-held e)
                          :pos #js {:x (.-x pos) :y (.-y pos) :z (.-z pos)}
                          :at now
                          :seenAt (if (keyword-identical? how :seen) now (some-> old .-seenAt))
@@ -122,7 +122,7 @@
                          ^js pos (.-pos m)
                          base (if live
                                 (js/Object.assign #js {} live)
-                                #js {:id (.-id m) :name (.-name m) :kind (.-kind m) :pos pos
+                                #js {:id (.-id m) :name (.-name m) :kind (.-kind m) :held (.-held m) :pos pos
                                      :distance (js/Math.hypot (- (.-x pos) fx) (- (.-y pos) fy) (- (.-z pos) fz))
                                      :visible false})]
                      (when (= "creeper" (.-name m)) (aset base "creeper" true))
