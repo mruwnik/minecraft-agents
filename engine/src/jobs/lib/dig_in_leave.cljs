@@ -217,7 +217,7 @@
 
 (defn ^:async climb!
   "One stair attempt out of a pit (jobs.access.stair :up, a child of the caller): to the :start height, or with no
-  :start one step at a time until nothing solid is within sh-sense/default-roof-height above, at most max-climb steps. A
+  :start one step at a time until nothing solid is within sh-sense/roof-height above, at most max-climb steps. A
   stopped stair books its reason and the next heading is tried; so does one that cannot start (it lacks a slot), and it digs on with a worn last pickaxe (a way out),
   instead of waiting, because the caller (jobs.survival.night) must end failed, not wait, when trapped."
   [c {:keys [start]} toward]

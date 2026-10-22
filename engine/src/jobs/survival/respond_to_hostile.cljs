@@ -102,7 +102,7 @@
   (let [p (:primitives c)]
     (boolean (and (stay-inside?)
                   (seq hs)
-                  (sh-sense/roofed? p sh-sense/default-roof-height)
+                  (sh-sense/roofed? p (sh-sense/roof-height))
                   (every? #(or (combat/flyer? %) (not (danger-q/seen-only? %))) hs)
                   (not-any? #(or (combat/creeper? %) (combat/enderman? %)) hs)))))
 
@@ -320,7 +320,7 @@
   [p]
   (let [{:keys [x y z]} (sh-sense/feet p)
         walled? (fn [[dx dz]] (every? #(sh-sense/solid-at? p {:x (+ x dx) :y (+ y %) :z (+ z dz)}) [0 1]))]
-    (and (sh-sense/roofed? p sh-sense/default-roof-height)
+    (and (sh-sense/roofed? p (sh-sense/roof-height))
          (<= cover-sides (count (filter walled? [[1 0] [-1 0] [0 1] [0 -1]]))))))
 
 (defn gap-possible?

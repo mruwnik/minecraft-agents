@@ -13,13 +13,13 @@
   "Whether the body is still shut in by its shelter entry. Never for a mended :room (its door is the way out) or an entry
   that ended :sealed false. With a
   pit :start, when below that height and walled in (a pit left by a stair is open). With a :door, when a door cell is solid. With neither, when under a solid
-  block within default-roof-height."
+  block within roof-height."
   [p {:keys [start door room sealed]}]
   (cond
     (or room (false? sealed)) false
     start (and (< (:y (sh-sense/feet p)) (:y start)) (reach-room/enclosed? p))
     door (boolean (some #(sh-sense/solid-at? p %) door))
-    :else (sh-sense/roofed? p sh-sense/default-roof-height)))
+    :else (sh-sense/roofed? p (sh-sense/roof-height))))
 
 (defn in-own-shelter
   "The shelter entry data when the body stands in its :pos and is shut in it, else nil."

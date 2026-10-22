@@ -98,8 +98,6 @@
 
 (defn sleeping? [p] (boolean (.-isSleeping (.self p))))
 
-(def default-roof-height 4)
-
 (defn roof-height [] (settings/get settings ::roof-height))
 
 (defn room-roof-height [] (settings/get settings ::room-roof-height))
@@ -246,9 +244,9 @@
   (every? #(let [n (u/seen-name p (update goal :y + %))] (and n (not (solid/solid? n)))) (range 1 (inc (- y (:y goal))))))
 
 (defn seen-open-over?
-  "Whether some cell within default-roof-height over goal is seen and not solid: rock shows no cell beyond its face."
+  "Whether some cell within roof-height over goal is seen and not solid: rock shows no cell beyond its face."
   [p goal]
-  (boolean (some #(some-> (u/seen-name p (update goal :y + %)) solid/solid? not) (range 1 (inc default-roof-height)))))
+  (boolean (some #(some-> (u/seen-name p (update goal :y + %)) solid/solid? not) (range 1 (inc (roof-height))))))
 
 (defn sky-reaches-from-above?
   "Whether sky light reaches the cell straight down its own column: some sky light there and no solid block seen over it within 32 cells (leaves let it through dimmed; a stair step lit round a corner has stone over it)."

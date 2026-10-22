@@ -125,7 +125,7 @@
   [c option ways]
   (when-not (or (flight/tried? c option)
                 (and (not (:plugging (ctx/mem c))) (creeper-coming? c))
-                (and (#{:plug-dig :plug-dig-zone} option) (dig-cells/sealed-in? (:primitives c) :walls sh-sense/default-roof-height)))
+                (and (#{:plug-dig :plug-dig-zone} option) (dig-cells/sealed-in? (:primitives c) :walls (sh-sense/roof-height))))
     (or (await (plug! c option ways)) (do (flight/tried! c option) nil))))
 
 (defn plugging-here?
