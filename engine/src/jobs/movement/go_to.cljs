@@ -91,6 +91,7 @@
   [c0 pos]
   (let [c (health/with-body-food c0)
         m (ctx/mem c)]
+    (when (and (:unknown c) (:y pos)) (wworld/with-goal (:unknown c) (mapv #(js/Math.floor (% pos)) [:x :y :z])))
     (cond
       (:restore-now m) (await (restore/restore-round! c))
       (:escalation m) (await (esc/escalation-round! c pos))

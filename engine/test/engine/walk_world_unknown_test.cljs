@@ -1,8 +1,9 @@
 (ns engine.walk-world-unknown-test
   "The unseen mask of the walks' pathWorld (jobs.lib.walk.world/path-world with an unknown spec): cells the body never saw
   or felt read as void_air, known ones as they are now; the mask and its options ride on the snapshot through every with-*,
-  into the planner's options.unknown and the kept searches' keys. Without the spec: as before."
-  (:require [cljs.test :refer [deftest is]]
+  into the planner's options.unknown and the kept searches' keys. Without the spec: as before. Under ground the cells
+  far from all it saw open read as rock (jobs.lib.walk.rock)."
+  (:require [cljs.test :refer [deftest is are]]
             [engine.fake :as fake]
             [engine.fake.raw-world :as fake-raw]
             [engine.path.blocks :as blocks]
@@ -12,6 +13,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.walk.plan :as wplan]
+            [jobs.lib.walk.rock :as rock]
             [jobs.lib.walk.world :as wworld]))
 
 (defn sensed
@@ -102,3 +104,56 @@
     (swap! (fake/state p) assoc :time 18000)
     (is (= 1 ((:at (look/dark-fn w)) 3 64 0)) "unmasked: an unseen cell is dark at night")
     (is (= 0 ((:at (look/dark-fn w {:unseen-dark? false})) 3 64 0)) "masked: the mask prices it")))
+
+(def air-id (delay (first (blocks/state-ids (blocks/default-state-table) "air"))))
+
+(defn memory-of
+  "(fn [cx sy cz]) a memory (ids + 1) holding the cells as air, nil for a section with none of them."
+  [cells]
+  (let [m (reduce (fn [m [x y z]]
+                    (let [k [(bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4)]
+                          ids (or (get m k) (js/Uint16Array. 4096))]
+                      (aset ids (bit-or (bit-shift-left (bit-and y 15) 8) (bit-shift-left (bit-and z 15) 4) (bit-and x 15)) (inc @air-id))
+                      (assoc m k ids)))
+                  {} cells)]
+    (fn [cx sy cz] (get m [cx sy cz]))))
+
+(defn rock? [known seeds [x y z]]
+  (== 1 (aget (rock/rock-section known (rock/open-ids) 3 (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4) seeds)
+              (bit-or (bit-shift-left (bit-and y 15) 8) (bit-shift-left (bit-and z 15) 4) (bit-and x 15)))))
+
+(deftest an-unseen-cell-is-rock-past-3-blocks-of-every-seen-open-cell-and-seed
+  (let [known (memory-of [[5 70 5] [15 66 5]])]
+    (are [cell rock] (= rock (rock? known [] cell))
+      [8 70 5] false
+      [9 70 5] true
+      [8 73 8] false
+      [2 67 2] false
+      [1 70 5] true
+      [18 66 5] false
+      [19 66 5] true
+      [-14 70 5] true)
+    (is (false? (rock? known [[40 60 -9]] [42 58 -11])) "2 from a seed")
+    (is (identical? rock/all-rock (rock/rock-section (memory-of []) (rock/open-ids) 3 0 4 0 [])) "nothing seen near: all rock")))
+
+(def pocket-world
+  "A body in a 1x2 pocket in a stone mass (x, z -8..8, y 62..67)."
+  {:self {:pos {:x 0.5 :y 64 :z 0.5}}
+   :blocks (dissoc (box -8 62 -8 8 67 8 "stone") "0,64,0" "0,65,0")})
+
+(defn pocket
+  "pocket-world's pathWorld with spec, in sky light sky."
+  [sky spec]
+  (let [{:keys [p w]} (sensed pocket-world)]
+    (swap! (fake/state p) assoc :light-default [sky 0])
+    (wworld/path-world w spec)))
+
+(deftest under-ground-the-unseen-cells-far-from-all-seen-open-read-stone
+  (let [buried (pocket 0 (wworld/unknown-spec))
+        sky (pocket 15 (wworld/unknown-spec))
+        off (settings/with-settings {:jobs.lib.walk.world/rock-beyond false} #(pocket 0 (wworld/unknown-spec)))
+        goal (pocket 0 (wworld/with-goal (wworld/unknown-spec) [7 64 0]))]
+    (is (= [@void @stone @void] (map #(state buried % 64 0) [3 4 -3])) "3 from the feet unseen, 4 rock")
+    (is (= [@void @void] (map #(state % 4 64 0) [sky off])) "under the sky, or the setting off: unseen")
+    (is (= @void (state goal 4 64 0)) "3 from the goal")
+    (is (not= (wworld/unknown-key buried) (wworld/unknown-key sky)) "the guess is in a kept search's key")))

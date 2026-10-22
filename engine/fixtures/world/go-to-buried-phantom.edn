@@ -1,0 +1,53 @@
+;; Card b318b7fa: a body under ground reads rock it never saw as rock (jobs.lib.walk.rock), so a cave mouth it sees is no portal to a
+;; cheap way through the unseen rock round it (Oriel dived 20 below a pile it could have dug to). Sealed dark stone mass x 2..50,
+;; y 0..30, z 8..22; a chamber x 13..15, feet y 28, z 14..16 (the body at [14.5 28 15.5]); a side cave from its west wall dropping 2
+;; a column west and away from the goal to feet 8 at x 3; the goal [39 16 15], 12 down and 25 east, tops a stair down east to a lower
+;; cave (x 46..49, feet 10). Should-succeed: it digs toward the goal leg by leg and arrives, never planning from below feet 13. Should-fail:
+;; with :ways #{:walk} it gives up unarrived without walking down the cave. A long dark hall seen only in part is walked, nothing dug.
+{:defaults
+ {:tags [:movement :go-to]
+  :time :any
+  :plot {:height 31 :length 56 :light :dark}
+  :blocks [[:fill [2 0 8] [50 30 22] "stone"]
+           [:fill [13 28 14] [15 29 16] "air"]
+           [:fill [12 26 15] [12 29 15] "air"]
+           [:fill [11 24 15] [11 27 15] "air"]
+           [:fill [10 22 15] [10 25 15] "air"]
+           [:fill [9 20 15] [9 23 15] "air"]
+           [:fill [8 18 15] [8 21 15] "air"]
+           [:fill [7 16 15] [7 19 15] "air"]
+           [:fill [6 14 15] [6 17 15] "air"]
+           [:fill [5 12 15] [5 15 15] "air"]
+           [:fill [4 10 15] [4 13 15] "air"]
+           [:fill [3 8 15] [3 11 15] "air"]
+           [:fill [39 16 15] [39 18 15] "air"]
+           [:fill [40 15 15] [40 17 15] "air"]
+           [:fill [41 14 15] [41 16 15] "air"]
+           [:fill [42 13 15] [42 15 15] "air"]
+           [:fill [43 12 15] [43 14 15] "air"]
+           [:fill [44 11 15] [44 13 15] "air"]
+           [:fill [45 10 15] [45 12 15] "air"]
+           [:fill [46 10 12] [49 12 18] "air"]]
+  :body {:at [14.5 28 15.5] :settle-s 3 :effects [["resistance" 600 4]] :inventory [["stone_pickaxe" 1]]}
+  :limit-s 300}
+ :cases
+ [{:name "buried-body-digs-to-the-goal-not-down-the-cave"
+   :act [[:job (jobs.movement.go-to {:pos #at [39 16 15] :range 1})]]
+   :expect [{:event {:source :job :kind :go-to.escalated :data {:step :dig-route}} :within-s 120 :of-job true}
+            {:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 290 :of-job true}
+            {:no-event {:source :job :kind :planned :data {:pos {:y [:< 13]}}} :for-s 290 :until {:source :job :kind :completed :data {:arrived true}}}]
+   :after [[:body-near [39.5 16 15.5] 2]]}
+  {:name "walk-only-gives-up-without-walking-down-the-cave"
+   :act [[:job (jobs.movement.go-to {:pos #at [39 16 15] :range 1 :ways #{:walk}})]]
+   :expect [{:event {:source :job :kind :stopped :context {:chain [[:any]]} :data {:arrived false}} :within-s 150 :of-job true}
+            {:no-event {:source :job :kind :planned :data {:pos {:y [:< 20]}}} :for-s 150 :until {:source :job :kind :stopped :data {:arrived false}}}]
+   :after [[:body-near [14.5 28 15.5] 4]]
+   :limit-s 160}
+  {:name "dark-hall-seen-in-part-is-walked-to-its-far-end"
+   :blocks [[:fill [2 0 8] [50 30 22] "stone"] [:fill [4 20 12] [46 22 18] "air"]]
+   :body {:at [5.5 20 15.5]}
+   :act [[:job (jobs.movement.go-to {:pos #at [44 20 15] :range 1})]]
+   :expect [{:event {:source :job :kind :completed :context {:chain [[:any]]} :data {:arrived true}} :within-s 150 :of-job true}
+            {:no-event {:source :job :kind :go-to.escalated} :for-s 150 :until {:source :job :kind :completed :data {:arrived true}}}]
+   :after [[:body-near [44.5 20 15.5] 2]]
+   :limit-s 160}]}

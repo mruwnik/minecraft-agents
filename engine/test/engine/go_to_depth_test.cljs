@@ -417,6 +417,14 @@
           (is (> 21 (farthest-east s)) "never back down and out of the tunnel's east end")
           (is (= [:stair] (map :step (gt/events-of s :go-to.escalated)))))))))
 
+(deftest the-rock-between-the-feet-and-a-stand-of-its-own-is-what-a-straight-walk-digs
+  (let [kind-at (fn [open] (fn [x y z] (if (contains? open [x y z]) :open :solid)))
+        ends (set (for [x [0 3] y [64 65]] [x y 0]))]
+    (are [open n] (= n (climb/rock-between (kind-at open) [0 64 0] [3 64 0]))
+      (into ends (for [x [1 2] y [64 65]] [x y 0])) 0
+      (into ends (for [y [64 65]] [1 y 0])) 2
+      ends 4)))
+
 (deftest a-walk-up-its-own-way-slower-than-a-new-stair-is-not-taken
   (is (= [true false] (map #(:take (climb/weigh (vec (range %)) 16 3)) [193 200]))))
 
@@ -493,3 +501,43 @@
     (mapv #(update % :x * 3) line-20) 6 (fn [x _ _] (> x 30)) nil
     (mapv #(update % :x * 3) line-20) 15 (constantly true) nil
     line-20 2 (constantly true) nil))
+
+;; A body under ground reads rock it never saw as rock (jobs.lib.walk.rock): a cave mouth it saw is no portal to a cheap
+;; way through unseen rock. A chamber (x 0..2, feet 60, z -1..1) in a stone mass, a side cave from its west wall stepping
+;; down west away from the goal to feet 38, the goal 12 down and 25 east at the top of a stair down to a lower cave (feet
+;; 41). The body has seen the chamber with the cave's mouth, and the goal's end; the rock between it never saw. No sky light.
+(def phantom
+  (let [cave (for [i (range 1 23) dy [0 1]] (str (- i) "," (+ (- 60 i) dy) ",0"))
+        stair (for [i (range 8) dy [0 1]] (str (+ 26 i) "," (+ (- 48 i) dy) ",0"))
+        lower (for [x (range 34 40) y [41 42] z [-1 0 1]] (str x "," y "," z))
+        chamber (for [x (range 3) y [60 61] z [-1 0 1]] (str x "," y "," z))]
+    (apply dissoc (box -24 36 -4 40 66 4 "stone") (concat cave stair lower chamber))))
+
+(def in-phantom {:blocks phantom :self {:pos {:x 1.5 :y 60 :z 0.5}} :light [0 0] :seen [[-1 59 -2 3 62 2] [24 46 -2 28 50 2]]
+                 :inventory [{:name "stone_pickaxe" :count 1}]})
+
+(deftest a-buried-body-digs-toward-a-goal-past-unseen-rock-not-down-a-cave-mouth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out p] :as s} (await (climb! in-phantom {:pos [26 48 0]}))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (<= 45 (lowest-walk s)) "never more than 3 below the goal: the cave is not walked")
+          (is (< 1 (count (filter #(= :dig-route (:step %)) (gt/events-of s :go-to.escalated)))) "the dig goes leg by leg")
+          (is (<= 25 (first (gt/at p)))))
+        (let [{:keys [out]} (await (climb! in-phantom {:pos [26 48 0] :worth 1}))]
+          (is (= [false :dig-budget] [(:arrived @out) (:why (:escalation @out))]) "the dig is held to what the goal is worth"))))))
+
+;; A long dark hall (x 0..34, feet 60..62, z -3..3) in rock, seen only round the body (x 0..6): the goal at its far end is
+;; reached by walking along it as it shows, nothing dug.
+(def hall (apply dissoc (box -2 58 -5 36 64 5 "stone") (for [x (range 35) y [60 61 62] z (range -3 4)] (str x "," y "," z))))
+
+(deftest a-buried-body-walks-a-dark-hall-it-sees-only-in-part-to-a-goal-along-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [out] :as s} (await (climb! {:blocks hall :self {:pos {:x 1.5 :y 60 :z 0.5}} :light [0 0] :seen [[-2 59 -5 6 64 5]]
+                                                  :inventory [{:name "stone_pickaxe" :count 1}]}
+                                                 {:pos [32 60 0]}))]
+          (is (true? (:arrived @out)) (pr-str @out))
+          (is (empty? (gt/events-of s :go-to.escalated)) "nothing dug"))))))

@@ -104,7 +104,7 @@
       (let [doors (or doors :shut)
             policy (cond-> (wworld/body-policy c)
                      (not= :never doors) (update :moves conj :open))
-            spec (when unknown (wworld/unknown-spec))
+            spec (when unknown (wworld/with-goal (wworld/unknown-spec) [(:x pos) (:y pos) (:z pos)]))
             plan (try (await (near/plan! (with-deadline c) [(:x pos) (:y pos) (:z pos)] (or range 1) doors policy [] false
                                          (when-not (= :closed one-way) :open) nil true
                                          (wworld/dangers?) nil (wworld/dark?) tolls spec))

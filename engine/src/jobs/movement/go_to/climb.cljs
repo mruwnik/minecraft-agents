@@ -13,11 +13,13 @@
   {::cave-dip {:default 3 :doc "Blocks below where it began that a go-to of a body under ground to a goal far above (jobs.movement.go-to.tuning/climb-rise) walks over cells that are no stair of its own: a plan that goes deeper is not walked while a stair up can be cut instead." :spec (a/num-in 0 nil)}
    ::own-way {:default true :doc "Whether a go-to of a body under ground to a goal far above (jobs.movement.go-to.tuning/climb-rise) first climbs the stairs the body cut itself, and cuts a blocked one again." :spec boolean?}
    ::own-way-reach {:default 14 :doc "Blocks of its own way up (::own-way) a go-to walks in one hop." :spec (a/num-in 1 nil)}
+   ::own-way-digs {:default 2 :doc "Cells not seen open (rock, or never seen) on the straight line to a stand of its own stair within ::own-way-reach past which a go-to does not take that stand as the start of its own way." :spec (a/int-in 0 nil)}
    ::own-way-search {:default 4000 :doc "Cells a go-to looks over for a way up its own stairs (::own-way): its stairs and tunnels and the standable cells it has seen." :spec (a/int-in 1 nil)}})
 (defn cave-dip [] (settings/get settings ::cave-dip))
 (defn own-way [] (settings/get settings ::own-way))
 (defn own-way-reach [] (settings/get settings ::own-way-reach))
 (defn own-way-search [] (settings/get settings ::own-way-search))
+(defn own-way-digs [] (settings/get settings ::own-way-digs))
 
 (def walk-speed "Blocks a second a walk along the body's own way is reckoned at, against the seconds of a new stair." 4)
 
@@ -55,10 +57,22 @@
                       n)]
           (recur (into (pop queue) nexts) (into from (map #(vector % cell)) nexts)))))))
 
+(defn rock-between
+  "The cells on the straight line from feet cell a to feet cell b (the feet and head cell at each half block) that
+  kind-at does not read free (kinds/free?): rock, or never seen, a walk straight there digs."
+  [kind-at [ax ay az] [bx by bz]]
+  (let [n (* 2 (max (abs (- bx ax)) (abs (- by ay)) (abs (- bz az))))
+        at (fn [a b i] (js/Math.floor (+ a 0.5 (* (/ i (max n 1)) (- b a)))))]
+    (count (into #{} (comp (mapcat (fn [i] (let [x (at ax bx i) y (js/Math.floor (+ ay (* (/ i (max n 1)) (- by ay)))) z (at az bz i)]
+                                             [[x y z] [x (inc y) z]])))
+                           (remove (fn [[x y z]] (kinds/free? (kind-at x y z)))))
+                 (range (inc n))))))
+
 (defn own-route
   "The walk (route) from the body's feet up its own ways to goal height top, or nil: over the stands of its stairs and
   tunnels (jobs.lib.ledger; open or not, a blocked stair is cut again) and the standable cells it has seen no deeper than
-  ::cave-dip below the feet, or straight to a stand of a stair of its own within ::own-way-reach, to the nearest stand of a stair of its own at top (or one under it), or under the open sky where
+  ::cave-dip below the feet, or straight to a stand of a stair of its own within ::own-way-reach with no more than
+  ::own-way-digs cells not seen open on the line there (rock-between), to the nearest stand of a stair of its own at top (or one under it), or under the open sky where
   its stair goes no higher (a step part way up one is no end: what shuts the steps above it is on the way). A stair that
   ends in rock below that is no way up."
   [c feet top]
@@ -71,7 +85,9 @@
         goes-on? (fn [[x y z]] (some (fn [[dx dz]] (contains? stairs [(+ x dx) (inc y) (+ z dz)])) escape/cardinals))]
     (when (seq stairs)
       (route feet
-             (filter (fn [[x y z]] (<= (u/dist (u/self-pos c) {:x (+ x 0.5) :y y :z (+ z 0.5)}) (own-way-reach))) stairs)
+             (filter (fn [[x y z :as cell]] (and (<= (u/dist (u/self-pos c) {:x (+ x 0.5) :y y :z (+ z 0.5)}) (own-way-reach))
+                                                 (<= (rock-between kind-at feet cell) (own-way-digs))))
+                     stairs)
              (fn [[x y z :as cell]] (or (contains? own cell) (and (>= y low) (column/stands? kind-at x y z))))
              (fn [[x y z :as cell]]
                (and (contains? stairs cell)

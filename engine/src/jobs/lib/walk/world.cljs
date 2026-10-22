@@ -14,8 +14,10 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.placement :as placement]
+            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
+            [jobs.lib.walk.rock :as rock]
             [jobs.lib.walk.sight :as wsight]
             [engine.perception.store :as store]))
 
@@ -27,6 +29,7 @@
    ::zone-tolls {:default true :doc "Whether walks also toll the cells of other bodies' zones near each walk (jobs.lib.toll-cells/zone-walk-tolls), so a way round a neighbour's field is taken; none under the call's :ignore-zones?." :spec boolean?}
    ::dark {:default true :doc "Whether walks cost a dark cell (seen dark, or unseen at night) twice a lit one; false plans dark cells like lit ones." :spec boolean?}
    ::y-margin {:default false :doc "Blocks a walk's search may reach above the higher and below the lower of body and goal (a route dipping deeper, such as through deep caves, is not planned); false: 96, and a buried body's dive floor applies." :spec (a/or-of false? (a/int-in 0 nil))}
+   ::rock-beyond {:default 3 :doc "Under ground (no sky light at the feet; head not under water), the blocks beyond every seen open cell, the feet and the goal past which a walk over what the body has seen (go-to :unknown) reads a cell it never saw as rock, not air (jobs.lib.walk.rock); false: every unseen cell reads air." :spec (a/or-of false? (a/int-in 1 15))}
    ::unknown-max-nodes {:default 12000 :doc "The most nodes a walk's search over what the body has seen only (go-to :unknown) holds before it ends :budget: a goal no seen route reaches floods unseen cells otherwise to the planner's limit (200000)." :spec (a/int-in 1000 nil)}
    ::dive-pause-s {:default 120 :doc "Seconds after a breathe reflex fired in which walks near the spot (::dive-pause-near) plan no dive (head under water) except to air: the walk that was cut would plan the same dive again." :spec (a/num-in 0 nil)}
    ::dive {:default true :doc "Whether walks may plan a dive (head under water); false plans none except to air, as after a breathe reflex (a walk to a block to dig has no business under a lake)." :spec boolean?}
@@ -77,22 +80,45 @@
 
 (def ^:private unloaded-id 0xFFFF)
 
+(defn rock-beyond "The setting ::rock-beyond, nil when off." [] (or (settings/get settings ::rock-beyond) nil))
+
+(defn rock-guess?
+  "Whether a walk over mask spec unknown (nil: none) reads far unseen cells as rock (path-world): ::rock-beyond is on, the
+  body is under ground (sh-sense/buried?) with its head out of water, and the mask is not :edge."
+  [p ^js unknown]
+  (boolean (and unknown (not (.-edge unknown)) (rock-beyond) (not (breath/head-under? p)) (sh-sense/buried? p))))
+
+(defn with-goal
+  "The mask spec unknown with goal ([x y z]) as the goal its rock guess spares (path-world); the spec is per call, the goal per round."
+  [^js unknown goal]
+  (doto unknown (unchecked-set "goal" goal)))
+
 (defn path-world
   "The primitives' pathWorld sensing (a snapshot over the world) with the planner's block table and free-space module, nil when
   they have none or cannot sense now. With unknown (unknown-spec), over a body with a perception: cells the body never saw
   or felt read void_air (its known cells read as they are now), and the snapshot carries the planner's options.unknown:
-  the spec with the mask's id, seeDepth (from what the body holds now) and seeLit (look/see-lit-fn)."
+  the spec with the mask's id, seeDepth (from what the body holds now) and seeLit (look/see-lit-fn). Under ground
+  (sh-sense/buried?, head not under water, not :edge), an unseen cell past ::rock-beyond of every seen open cell, the
+  feet and the spec's goal (with-goal) reads stone (jobs.lib.walk.rock); the mask's rockBeyond says so (0: none)."
   ([p] (path-world p nil))
   ([p unknown]
    (when (fn? (.-pathWorld p))
      (let [table (blocks/default-state-table)
            known (when unknown (memory-sections p))
+           under? (when known (breath/head-under? p))
+           stone (first (blocks/state-ids table "stone"))
+           k (when (and known (rock-guess? p unknown)) (rock-beyond))
            mask (when known
                   (js/Object.assign #js {} unknown
-                                    #js {:id (if (.-edge unknown) unloaded-id (first (blocks/state-ids table (if (breath/head-under? p) "seagrass" "void_air")))) :blockedId (first (blocks/state-ids table "stone")) :known known
-                                         :seeDepth (see-depth-now p) :seeLit (look/see-lit-fn p)}))]
+                                    #js {:id (if (.-edge unknown) unloaded-id (first (blocks/state-ids table (if under? "seagrass" "void_air")))) :blockedId stone :known known
+                                         :seeDepth (see-depth-now p) :seeLit (look/see-lit-fn p) :rockBeyond (or k 0)}))]
        (when-let [pw (if mask (.pathWorld p mask) (.pathWorld p))]
-         (js/Object.assign #js {:table table :space space/space} pw))))))
+         (let [pw (js/Object.assign #js {:table table :space space/space} pw)
+               {:keys [x y z]} (sh-sense/feet p)]
+           (when k
+             (set! (.-snapshot pw) (rock/with-rock (.-snapshot pw) {:mask (.-id mask) :stone stone :k k :known known
+                                                                    :seeds (cond-> [[x y z]] (.-goal unknown) (conj (.-goal unknown)))})))
+           pw))))))
 
 (defn unknown-of
   "The mask's options (the planner's options.unknown) pw's snapshot carries, nil when it is not masked."
@@ -101,10 +127,10 @@
 
 (defn unknown-key
   "What a kept search's key holds of pw's mask: nil unmasked, else the floors missed so far, the see depth, the takeoffs
-  where a torch failed and the torch price."
+  where a torch failed, the torch price and the rock guess."
   [pw]
   (when-let [^js u (unknown-of pw)]
-    [(.-size ^js (.-missed u)) (.-size ^js (.-blocked u)) (.-seeDepth u) (some-> ^js (.-noLight u) .-size) (.-lightCost u)]))
+    [(.-size ^js (.-missed u)) (.-size ^js (.-blocked u)) (.-seeDepth u) (some-> ^js (.-noLight u) .-size) (.-lightCost u) (.-rockBeyond u)]))
 
 (defn wall-id
   "A state id of a full block with no collision tricks (stone, the first state that is one), of a state table."

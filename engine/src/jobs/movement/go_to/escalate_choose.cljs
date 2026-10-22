@@ -145,6 +145,17 @@
      (or (lava? 0 0 0) (lava? 0 -1 0)
          (every? (fn [[dx dz]] (or (lava? dx 0 dz) (lava? dx -1 dz))) [[1 0] [-1 0] [0 1] [0 -1]])))))
 
+(defn route-s
+  "Seconds digging cells ([x y z]) takes with the quickest tool carried (with a wooden pickaxe too when fetch?), blocks
+  own? calls the body's own not counted."
+  [p cells own? fetch?]
+  (let [block-at (escape/block-at-of p)]
+    (transduce (comp (remove #(and own? (own? % (block-at %))))
+                     (map #(/ (cond-> (tools/clear-ms p (block-at %))
+                                fetch? (min (js/Number (.clearTime p (block-at %) "wooden_pickaxe"))))
+                              1000)))
+               + 0 cells)))
+
 (defn route-cells
   "[{:cell :block :guess}]: the cheapest cells to dig for a walk from feet cell from down or across into goal
   (jobs.lib.dig-route priced by jobs.lib.cost: a block's walk and dig-cost; at most the dig-route settings' digs and fall),
@@ -163,12 +174,7 @@
         cells (:dig (dig-route/route seen-floor from goal {:dig-s (fn [name cell] (when (escape/diggable? block-at may-dig? own? cell) (cost/dig-cost name)))
                                                          :step-s (:cost (cost/walk-cost {:distance 1}))}))]
     (when (and cells (every? #(escape/diggable? block-at may-dig? own? %) cells)
-               (<= (transduce (comp (remove #(and own? (own? % (block-at %))))
-                                    (map #(/ (cond-> (tools/clear-ms p (block-at %))
-                                                 fetch? (min (js/Number (.clearTime p (block-at %) "wooden_pickaxe"))))
-                                               1000)))
-                              + 0 cells)
-                   (max-route-s)))
+               (<= (route-s p cells own? fetch?) (max-route-s)))
       (mapv (fn [cell] {:cell cell :block (block-at cell) :guess (dig-look/unknown? p cell)}) cells)))))
 
 (defn dig-way
@@ -177,6 +183,37 @@
   (when-not (skip :dig-route)
     (when-let [cells (seq (route-cells p from goal may-dig? own? false fetch?))]
       {:step :dig-route :cells (vec cells)})))
+
+(def leg-blocks
+  "The most blocks along the straight line to the goal one leg of a long dig (dig-leg) reaches: its route stays within
+  the dig-route settings' digs."
+  6)
+
+(defn leg-ends
+  "The feet cells on the straight line from feet toward goal (cells [x y z]) at 1 to leg-blocks blocks on, farthest
+  first; none when the goal is that near."
+  [feet goal]
+  (let [d (js/Math.sqrt (reduce + (map #(* (- %2 %1) (- %2 %1)) feet goal)))]
+    (when (> d leg-blocks)
+      (distinct (for [i (range leg-blocks 0 -1)]
+                  (mapv #(js/Math.floor (+ %1 0.5 (* (/ i d) (- %2 %1)))) feet goal))))))
+
+(defn dig-leg
+  "A buried body's next leg of a dig toward a goal no one dig route reaches (dig-way refused it as too long): {:step
+  :dig-route :cells :leg-s} to the farthest of leg-ends that route-cells reaches, :leg-s its dig seconds; nil when none
+  does; {:step :none :why :dig-budget} when the call's legs so far (memory :leg-dig-s) and this one would dig longer than
+  the caller's :worth, else the call's job time left."
+  [c from goal may-dig? {:keys [own? skip fetch?]}]
+  (when-not (skip :dig-route)
+    (let [p (:primitives c)
+          budget (or (:worth (:args c)) (get-in (ctx/left c) [:spend :job-time] ##Inf))]
+      (when-let [[cells s] (some (fn [end]
+                                   (when-let [cells (seq (route-cells p from end may-dig? own? false fetch?))]
+                                     [(vec cells) (route-s p (map :cell cells) own? fetch?)]))
+                                 (leg-ends from goal))]
+        (if (<= (+ (:leg-dig-s (ctx/mem c) 0) s) budget)
+          {:step :dig-route :cells cells :leg-s s}
+          {:step :none :why :dig-budget :dug-s (:leg-dig-s (ctx/mem c) 0) :budget-s budget})))))
 
 (defn nearest-stand
   "A cell [x y z] the body can walk to (a flood of at most reach-room/room-cells cells) nearest goal: of the cells no farther
