@@ -13,9 +13,6 @@
   {::region {:default 128 :spec (a/num-in 1 nil)
              :doc "Blocks round a spot whose searched ground tells the chance of a find there: the game sets animals by biome, and a biome spans a few hundred blocks."}
    ::leg-spacing {:default 16 :doc "Blocks between a search's legs (jobs.explore.search)." :spec (a/int-in 4 64)}
-   ::ore-levels {:default {"iron_ore" 16 "copper_ore" 48 "gold_ore" -16 "lapis_ore" 0 "redstone_ore" -54 "diamond_ore" -54}
-                 :doc "The feet height a strip tunnel for an ore runs at, by the ore's stone kind (jobs.gather.mine's, and the height its tunnel is priced at); an ore not listed tunnels where the body stands."
-                 :spec (a/map-of string? (a/int-in nil nil))}
    ::vein-seen {:default 4.16 :doc "Ore blocks a look sees of each vein it sees (the game places a vein as one clump): 104 blocks in 25 groups seen together in the look tool's lists of the trial logs (all 7 lists cut short at their nearest blocks, so far groups may be undercounted), coal and iron pooled. Recount: node tools/event-counts.mjs vein-seen." :spec (a/num-in 1 nil)}})
 
 (defn leg-spacing [] (settings/get settings ::leg-spacing))
@@ -105,7 +102,11 @@
   [resource pos n]
   (* n tunnel-faces (base-rates/expected-density resource pos nil)))
 
-(defn ore-level "The ::ore-levels height of an ore's stone kind (\"iron_ore\"), nil when it has none." [block] (get (settings/get settings ::ore-levels) block))
+(defn ore-level
+  "The feet height a strip tunnel for an ore block (\"iron_ore\") runs at, jobs.gather.mine's and the height its tunnel is
+  priced at: base-rates/best-level of its resource; nil (where the body stands) for one with none."
+  [block]
+  (some-> (ore-of [block]) base-rates/best-level))
 
 (defn tunnel-chance
   "leg-chance of a strip tunnel for resource at height y, n blocks a leg: ore-chance of tunnel-ore over each leg's cut,

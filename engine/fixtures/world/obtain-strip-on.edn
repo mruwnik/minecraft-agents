@@ -1,8 +1,8 @@
 ;; Card e8eb3a11 (get-kit stopped "no source for iron_ingot: gathering ended :none-seen" with no ore in sight): obtain's mine for an unseen
 ;; ore strip-tunnels, and a run that cut new rock and saw none is no fruitless run, so the next mines on until the ground counts as barren.
 ;; Stone mass x 0..46, y -1..3, z 3..9, the body in a 1x2 cell at its west end facing east; one iron ore in the tunnel line 38 blocks east,
-;; past the first run's 32-block tunnel. child/max-fruitless 1 makes one empty run end the gather unless it mines on; ore-levels {} keeps the
-;; tunnel at the body's height; no :chest way, so no look round turns the body off its east heading before the mine starts. Should-succeed: the second run reaches the ore. Should-fail: barren-ore 0 counts the first run fruitless, no source.
+;; past the first run's 32-block tunnel. child/max-fruitless 1 makes one empty run end the gather unless it mines on; the plot lies below iron's
+;; tunnel level, so the tunnel keeps the body's height; no :chest way, so no look round turns the body off its east heading before the mine starts. Should-succeed: the second run reaches the ore. Should-fail: barren-ore 0 counts the first run fruitless, no source.
 {:defaults
  {:tags [:obtain :mine :jobs] :time :any
   :plot {:light :lit :height 10 :length 50 :width 16}
@@ -12,13 +12,13 @@
  :cases
  [{:name "unseen-ore-mined-on-past-an-empty-tunnel"
    :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :ways #{:craft :smelt :gather}
-                                   :settings {:jobs.lib.child/max-fruitless 1 :jobs.lib.cost.find/ore-levels {}}})]]
+                                   :settings {:jobs.lib.child/max-fruitless 1}})]]
    :expect [{:event {:source :job :kind :obtain.strip-on} :within-s 300 :of-job true}
             {:event {:source :job :kind :completed} :within-s 390 :of-job true}]
    :after [[:item "raw_iron" [:>= 1]]]}
   {:name "barren-ground-ends-after-the-empty-tunnel"
    :act [[:job (jobs.items.obtain {:item "raw_iron" :count 1 :ways #{:craft :smelt :gather}
-                                   :settings {:jobs.lib.child/max-fruitless 1 :jobs.lib.cost.find/ore-levels {} :jobs.items.obtain.base/barren-ore 0}})]]
+                                   :settings {:jobs.lib.child/max-fruitless 1 :jobs.items.obtain.base/barren-ore 0}})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 300 :of-job true}
             {:no-event {:source :job :kind :obtain.strip-on} :for-s 300 :until {:source :job :kind :stopped}}]
    :after [[:item "raw_iron" [:= 0]]]}]}

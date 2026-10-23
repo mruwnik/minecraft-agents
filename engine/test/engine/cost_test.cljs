@@ -274,6 +274,14 @@
     (is (< (js/Math.abs (- 1 unarmed)) 1e-9) "an unarmed body pays a dark cell 2x a lit one")
     (is (> unarmed sword armed-armoured floor) "a bare body pays most, armour and a sword less, never below the floor")))
 
+(deftest a-dark-way-pays-its-own-seconds-once-and-the-cheaper-of-its-torches-and-the-dark
+  (let [bare {:weapon nil :equipment nil}
+        armed {:weapon "iron_sword" :equipment iron-set}
+        way (fn [s kit] (settings/with-settings {:jobs.lib.cost.value/per-dark 0.3} #(cost/dark-way-s s cost/torch-gap 4 kit)))]
+    (is (= 100 (- (way 100 bare) (way 0 bare))) "the seconds a way takes to dig bear no dark price")
+    (is (<= (way 0 bare) (:cost (cost/light-cost {:carried 4}))) "never dearer than a torch to light it")
+    (is (< (way 0 armed) (way 0 bare)) "an armed, armoured body walks it dark for less than a bare one lights it")))
+
 (deftest an-unseen-way-is-priced-by-how-often-the-seen-ways-near-it-go-on
   (let [kit {:weapon nil :equipment nil}
         open {:k 98 :n 100}

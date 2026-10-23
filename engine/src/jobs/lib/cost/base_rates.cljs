@@ -90,6 +90,21 @@
     (let [placements (get (:ores data) (keyword resource))]
       (reduce max 0 (map #(unseen-density placements %) (range -64 65))))))
 
+(def lava-level
+  "The lowest feet height whose cave air the game leaves dry: its aquifers fill open cells below y -54 with lava (the
+  overworld's fluid picker in NoiseBasedChunkGenerator, a constant of the game's code, not of the worldgen data)."
+  -54)
+
+(defn best-level
+  "The height from lava-level to 64 where a body that has seen no biome expects the most of resource (the lowest of
+  ties), where a tunnel for it pays best; nil when it has no placement or its most lies at 64 or above (coal, emerald):
+  no tunnel height beats where the body stands."
+  [resource]
+  (let [placements (get (:ores data) (keyword resource))
+        ys (range lava-level 65)
+        best (reduce (fn [a y] (if (> (unseen-density placements y) (unseen-density placements a)) y a)) ys)]
+    (when (and (seq placements) (pos? (unseen-density placements best)) (< best 64)) best)))
+
 (def animal-pack-density
   "Expected packs (of 4 adults) of a farm animal per block of ground where its kind spawns, from the game's
   chunk-generation spawns in plains: a creature pack in about 0.11 of chunks (a 0.1 chance, drawn again while it holds),

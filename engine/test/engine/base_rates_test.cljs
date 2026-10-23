@@ -41,3 +41,8 @@
     (is (close? (apply max 0 (for [y (range -64 65)] (rates/expected-density r {:y y} nil)))
                 (rates/peak-density r nil))
         r)))
+
+(deftest an-ore-tunnels-at-its-densest-layer-above-the-lava
+  (is (= {"iron" 16 "copper" 48 "gold" -16 "lapis" 0 "redstone" -54 "diamond" -54 "coal" nil "emerald" nil "cheese" nil}
+         (into {} (map (juxt identity rates/best-level)) ["iron" "copper" "gold" "lapis" "redstone" "diamond" "coal" "emerald" "cheese"]))
+      "the placements' peaks; redstone and diamond grow denser down to the lava; coal and emerald are densest above 64"))

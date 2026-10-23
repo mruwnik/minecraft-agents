@@ -113,7 +113,7 @@
   "Seconds to gather a need whose nearest block is seen: the walk there with the death it risks (threats/route-death-cost),
   the digs, a hostile mob's kills (cost/kill-price, as many as cost/kill-drops says the count takes; Infinity when its
   loot holds none), and for an ore seen
-  below the feet a dark way (walk at the dark price and a torch every few blocks) unless its cell is lit; Infinity when it
+  below the feet a dark way (cost/dark-way-s) unless its cell is lit; Infinity when it
   is dark and no torch is carried: the way down is lit by the torches it is wanted for."
   [c need]
   (let [p (:primitives c)
@@ -134,7 +134,7 @@
     (cond
       (not dark?) (+ walk risk dig)
       (not (pos? torches)) js/Infinity
-      :else (+ dig risk (cost/dark-way-s walk d torches)))))
+      :else (+ dig risk (cost/dark-way-s walk d torches (threats/body-of p))))))
 
 (defn look-cost
   "Seconds per find of a search for an unseen need (cost/search-s): legs of the search's spacing, each the walk and the
@@ -168,11 +168,13 @@
             feet (js/Math.floor (:y self))
             y (min feet (or level feet))
             at (assoc self :y y)
-            torches (storage/carried (u/inventory (:primitives c)) "torch")
+            p (:primitives c)
+            torches (storage/carried (u/inventory p) "torch")
+            kit (threats/body-of p)
             risk (threats/route-death-cost c {:underground? true :night? false} at)
             n cost/torch-gap
-            leg (+ risk (cost/dark-way-s (stair-time/steps-s :level n) n torches))
-            down (+ risk (cost/dark-way-s (stair-time/steps-s :down (- feet y)) (- feet y) torches))]
+            leg (+ risk (cost/dark-way-s (stair-time/steps-s :level n) n torches kit))
+            down (+ risk (cost/dark-way-s (stair-time/steps-s :down (- feet y)) (- feet y) torches kit))]
         {:way :tunnel :y y
          :cost (+ down (cost/search-s (cost/tunnel-chance ore y n) leg (search-worth c)))}))))
 

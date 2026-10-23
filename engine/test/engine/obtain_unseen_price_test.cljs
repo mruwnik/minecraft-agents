@@ -9,7 +9,9 @@
             [engine.test-util :as tu]
             [jobs.items.obtain.plan :as plan]
             [jobs.items.obtain.table :as table]
-            [jobs.items.recipes :as recipes]))
+            [jobs.items.recipes :as recipes]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.makers :as makers]))
 
 (defn spider [x] {:id 1 :name "spider" :kind "hostile" :pos {:x x :y 64 :z 0} :drops [{:name "string" :count 1}]})
 
@@ -94,15 +96,16 @@
     (is (infinite? (plan/need-cost c {:key "bone" :count 1 :mob "spider" :job 'jobs.combat.hunt})) "a spider drops no bone")))
 
 (defn iron-way
-  "search-way of 3 unseen raw iron for a body on a floor of block at y (every block in sight seen), torches carried, and
-  the price of the plan that gathers them."
-  [block y]
+  "search-way of 3 unseen raw iron (worth the call's :search-worth, given) for a body on a floor of block at y (every block
+  in sight seen), torches carried, and the price of the plan that gathers them."
+  [block y & {:keys [worth]}]
   (let [p (tu/seeing-all (tu/fake-on-floor {:floor [y -50 -45 50 45] :floor-block block :time 6000
                                             :self {:pos [0.5 (inc y) 0.5]}
                                             :inventory [{:name "stone_pickaxe" :count 1} {:name "torch" :count 16}]}))
         view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
         c {:primitives p :view (constantly view)
-           :args {:item "raw_iron" :count 3 :ways #{:craft :smelt :gather :search} :explore true :ignore-zones? true}}
+           :args (cond-> {:item "raw_iron" :count 3 :ways #{:craft :smelt :gather :search} :explore true :ignore-zones? true}
+                   worth (assoc :search-worth worth))}
         v (game/version-of p)
         need (first (table/gather-needs {"raw_iron" 3} v))]
     (assoc (plan/search-way c need)
@@ -115,4 +118,7 @@
     (is (= [:tunnel 16] ((juxt :way :y) grass)) "no rock in sight from y 70: a stair down to y 16 and a strip tunnel there")
     (is (< (:plan grass) js/Infinity) "the get-kit plan for iron has a price")
     (is (= :look (:way cave)) "a cave floor of stone seen at y 40 shows iron more cheaply than a stair and a tunnel")
-    (is (< (:cost cave) (:tunnel cave) js/Infinity))))
+    (is (< (:cost cave) (:tunnel cave) js/Infinity))
+    (is (< (:tunnel (iron-way "dirt" -42 :worth (cost/items-find-worth (zipmap makers/iron-kit (repeat 1)))))
+           js/Infinity)
+        "deep below iron's level, where only its small placement reaches, the iron kit's bill (get-kit's search worth) still pays a tunnel at the feet")))
