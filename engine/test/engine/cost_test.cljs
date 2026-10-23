@@ -275,7 +275,10 @@
     (is (= 1 (cost/flight-caught-chance {:ways 12 :caught 12})) "every way cut: caught")
     (is (= 1 (cost/flight-caught-chance {:ways 0 :caught 0})) "no way planned: caught")
     (is (< 0 clear half prior) "a clear field lowers the prior, never to 0")
-    (is (< clear (cost/flight-caught-chance {:ways 12 :caught 0 :unseen? true})) "a way through the unseen may end there")))
+    (is (< clear (cost/flight-caught-chance {:ways 12 :caught 10 :unseen 2})) "both ways left run unseen: each may end there")
+    (is (= clear (cost/flight-caught-chance {:ways 12 :caught 0 :unseen 11})) "one way left in sight: no dead end")
+    (is (> (cost/flight-caught-chance {:ways 12 :caught 11 :unseen 1}) (cost/flight-caught-chance {:ways 12 :caught 10 :unseen 2}))
+        "one unseen way is a dead end likelier than two")))
 
 (deftest spawn-chance-is-zero-where-a-mob-cannot-spawn
   (let [lit (fn [block sky] (fn [_] {:block block :sky sky}))

@@ -181,15 +181,16 @@
 
 (defn flight-caught-chance
   "The chance a flight is caught (flee-answer :caught) by what its search found: ways, the ring routes it planned;
-  caught, those a chaser cuts; unseen?, whether the best one left runs through cells the body has not seen. 1 when
-  every way is cut or none was planned; else the measured prior (answer ::caught-chance) times (caught + 1)/(ways + 1),
-  the share cut counted with one more of each (a clear field lowers it, never to 0), and an unseen way also caught
-  when it ends unseen (planner ::dead-end-chance, under ground when underground?)."
-  [{:keys [ways caught unseen? underground?]}]
+  caught, those a chaser cuts; unseen, how many of the rest run through cells the body has not seen. 1 when every way
+  is cut or none was planned; else the measured prior (answer ::caught-chance) times (caught + 1)/(ways + 1), the
+  share cut counted with one more of each (a clear field lowers it, never to 0), and, when every way left runs
+  unseen, the chance each ends there (planner ::dead-end-chance, under ground when underground?)."
+  [{:keys [ways caught unseen underground?]}]
   (if (>= caught ways)
     1
-    (let [cut (* (settings/get answer/settings ::answer/caught-chance) (/ (inc caught) (inc ways)))]
-      (- 1 (* (- 1 cut) (- 1 (if unseen? (planner/dead-end-chance underground?) 0)))))))
+    (let [cut (* (settings/get answer/settings ::answer/caught-chance) (/ (inc caught) (inc ways)))
+          dead (if (= (or unseen 0) (- ways caught)) (js/Math.pow (planner/dead-end-chance underground?) unseen) 0)]
+      (- 1 (* (- 1 cut) (- 1 dead))))))
 
 (defn unseen-route-hp
   "unseen-route-s in hp, at walk-hp-seconds an hp."

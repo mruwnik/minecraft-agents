@@ -343,13 +343,13 @@
 (defn caught-chance
   "The chance a flight from where search ends (search!) ran is caught (cost/flight-caught-chance): its ring routes the
   ways (a pocket is none: the chaser follows it in), those a chaser catches or that gain nothing on the chasers cut,
-  and the best of the rest by :score unseen or not; underground? whether the body is under ground."
+  and how many of the rest run unseen; underground? whether the body is under ground."
   [ends underground?]
   (let [ways (filter #(and (:open? %) (not (:cover? %)) (nil? (:pos (:target %)))) ends)
         cut? #(or (:caught? %) (not (pos? (:gain %))))
         left (remove cut? ways)]
     (cost/flight-caught-chance {:ways (count ways) :caught (count (filter cut? ways))
-                                :unseen? (boolean (some->> (seq left) (apply max-key :score) :unseen))
+                                :unseen (count (filter :unseen left))
                                 :underground? underground?})))
 
 (defn named
