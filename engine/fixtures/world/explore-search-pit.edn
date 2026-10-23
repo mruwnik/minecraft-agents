@@ -1,20 +1,24 @@
-;; Card cd3e838f: a hurt body (11.5 hp) that cannot heal searches for sheep with go-to's spend-down floor (all but 1 hp
-;; may be spent); a 20-block drop (17 hp) is still beyond that. A pit 20 deep cuts the lit plot from side to side
-;; with no sheep anywhere: the search roams but never steps off the rim.
-;; Should-succeed: no fall hurt while the search roams.
+;; Card cd3e838f, 7443f02b: a hurt body (11.5 hp) that cannot heal searches for an emerald block with go-to's spend-down floor (all but 1 hp
+;; may be spent); a 20-block drop (17 hp) is still beyond that. A pit 20 deep covers x 14..33 for z 0..23 and the only emerald
+;; lies beyond it, so the way there runs along its rim (the body ends past the pit) and must never step off.
+;; Light: the plot's light blocks sit at y 2 and the top, so a column under them is lit about 14 rows down: the plain pit's floor
+;; is dark (landing unseen, the worse case), the lit-pit case fills the pit with light blocks so the floor is in sight.
+;; Should-succeed: emerald found, no fall hurt.
 {:defaults
  {:tags [:explore :search :movement]
   :time :any
-  :plot {:light :lit :height 6 :length 48 :width 32}
-  :blocks [[:fill [14 -20 0] [33 -1 31] "air"]]
-  :body {:at [6.5 0 16.5] :settle-s 2}
+  :plot {:light :lit :height 6 :length 100 :width 32}
+  :blocks [[:fill [14 -20 0] [33 -1 23] "air"] [:set [90 0 10] "emerald_block"]]
+  :body {:at [6.5 0 16.5] :settle-s 2 :effects [["hunger" 120 255]]}
+  :act [[:wait-s 3]
+        [:rcon "damage $BODY 8.5 minecraft:generic"]
+        [:job (jobs.explore.search {:target "emerald_block" :scan-radius 100 :use-notes false :settings {:jobs.explore.search/max-legs 6}})]]
+  :expect [{:event {:source :job :kind :planned} :within-s 30 :of-job true}
+           {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 40 :until {:source :job :kind #{:completed :stopped}}}
+           {:event {:source :job :kind :completed :data {:reason :found}} :within-s 50 :of-job true}]
+  :after [[:body-near [90.5 0 10.5] 55]]
   :limit-s 60}
  :cases
- [{:name "hurt-hungry-search-does-not-walk-off-a-pit"
-   :body {:at [6.5 0 16.5] :effects [["hunger" 120 255]]}
-   :act [[:wait-s 3]
-         [:rcon "damage $BODY 8.5 minecraft:generic"]
-         [:job (jobs.explore.search {:target ["sheep"] :count 1 :settings {:jobs.explore.search/max-legs 6}})]]
-   :expect [{:event {:source :job :kind :planned} :within-s 30 :of-job true}
-            {:no-event {:source :body :kind :hurt :data {:causes ["fall"]}} :for-s 40 :until {:source :job :kind #{:completed :stopped}}}]
-}]}
+ [{:name "hurt-hungry-search-does-not-walk-off-an-unseen-floor-pit"}
+  {:name "hurt-hungry-search-does-not-walk-off-a-lit-pit"
+   :blocks [[:fill [14 -20 0] [33 -1 23] "light"] [:set [90 0 10] "emerald_block"]]}]}
