@@ -193,7 +193,7 @@
                              (not= :none (:step (escape/choose (:primitives c) (vec at) goal (may-dig-fn c) opts))))
                     (vec at)))
         chosen e
-        spot (when (= :none (:step e)) (when-not (contains? (:skip opts) :approach) (escape/way-spot (:primitives c) feet goal (may-dig-fn c) opts (or (:approached (ctx/mem c)) #{}))))
+        spot (when (= :none (:step e)) (when-not (or (contains? (:skip opts) :approach) (searching? slice)) (escape/way-spot (:primitives c) feet goal (may-dig-fn c) opts (or (:approached (ctx/mem c)) #{}))))
         e (cond
             (not= :none (:step e)) e
             spot {:step :approach :pos spot}
@@ -208,7 +208,7 @@
     (cond
       lava-goal? (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation {:step :none :why :goal-lava}}))
       (and (:cave-climb (ctx/mem c)) (or (> n (tuning/max-escalations)) (= :none (:step e))))
-      (do (ctx/update-mem! c #(-> % (dissoc :cave-climb :dive-climb :give-up) (assoc :cave-ok true)))
+      (do (ctx/update-mem! c #(-> % (dissoc :cave-climb :dive-climb :give-up :escalate-failed) (assoc :cave-ok true)))
           :again)
       (and failed (= :detour status)) (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation failed}))
       (> n (tuning/max-escalations)) (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation (cond-> (or failed (:last-failed (ctx/mem c)) (when (= :none (:step chosen)) chosen) {:step :spent :n (tuning/max-escalations)}) into? (assoc :into true))}))
@@ -444,21 +444,27 @@
   the walk on (escalated!) when nothing is left to dig or the only thing missing is a pocket's floor (it shows once the
   body walks in, and the walk keeps off a floor it then sees to be a void), or the escalation fails :no-route when no
   route is left or it planned tuning/max-route-replans times. The walk on counts as a replan, so a walk that keeps
-  failing ends :no-route. A loosened route's cells are dropped: the cells it still guesses stay unseen from here and
+  failing ends :no-route. A search that spends its slice (route-slice) goes on next round: :continue. A loosened route's cells are dropped: the cells it still guesses stay unseen from here and
   digging one that is open fails :cannot, and the walk meets any real rock and escalates again."
   [c pos cell]
   (let [m (ctx/mem c)
         n (inc (:route-replans m 0))
+        slice (route-slice (route-owner c))
         plan (fn [floors-unseen-ok?]
-               (route-cells (:primitives c) (end/feet-cell c) (mapv #(js/Math.floor (% pos)) [:x :y :z]) (may-dig-fn c) (own-placed-fn c) floors-unseen-ok? (fetch-tool? c)))
+               (route-cells (:primitives c) (end/feet-cell c) (mapv #(js/Math.floor (% pos)) [:x :y :z]) (may-dig-fn c) (own-placed-fn c) floors-unseen-ok? (fetch-tool? c) {:slice slice}))
         in-range? (<= n (tuning/max-route-replans))
         cells (when in-range? (plan false))
+        loosened (when (and in-range? (nil? cells)) (plan true))
         walk-on! (fn [] (ctx/update-mem! c assoc :route-replans n) (escalated! c pos (:escalation m) true))]
-    (cond
-      (and in-range? (nil? cells) (some? (plan true))) (walk-on!)
-      (nil? cells) (await (escalation-failed! c pos {:step :dig-route :reason :no-route :cell cell}))
-      (empty? cells) (walk-on!)
-      :else (do (ctx/update-mem! c #(-> % (assoc-in [:escalation :cells] cells) (assoc :route-replans n))) :again))))
+    ;; an answered replan must not be answered again from the kept search when the world has changed since
+    (if (searching? slice)
+      (do (keep-routes! slice) :continue)
+      (do (forget-routes! (route-owner c))
+          (cond
+            (some? loosened) (walk-on!)
+            (nil? cells) (await (escalation-failed! c pos {:step :dig-route :reason :no-route :cell cell}))
+            (empty? cells) (walk-on!)
+            :else (do (ctx/update-mem! c #(-> % (assoc-in [:escalation :cells] cells) (assoc :route-replans n))) :again))))))
 
 (defn ^:async dig-route-round!
   "One round of digging a :dig-route escalation's cells in walking order (route-cell!); a cell already open is passed,

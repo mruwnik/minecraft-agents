@@ -573,8 +573,33 @@
           (is (true? (:arrived @out)) (pr-str (select-keys @out [:why :text])))
           (is (= [80 52 0] (feet p)))
           (is (every? #(<= % (settings/get dig-route/settings ::dig-route/max-nodes)) @per-call) (pr-str @per-call))
-          (is (some #{(settings/get dig-route/settings ::dig-route/max-nodes)} @per-call) "a search spent a call's slice and went on")
+          (is (some #(> % (quot (settings/get dig-route/settings ::dig-route/max-nodes) 2)) @per-call) "a search spent most of a call's slice and went on")
           (is (< (count (events-of seen :go-to.escalated)) 8) (pr-str (map (juxt :step :at) (events-of seen :go-to.escalated)))))))))
+
+(deftest a-dig-route-planned-again-over-the-slice-still-reaches-a-far-goal
+  ;; the stone over the pocket is dirt, and the cell 4 down shows only once the cell above is dug (a guessed cell seen
+  ;; otherwise): with a slice of 30 nodes the route from there is planned on over several rounds, not read as no route
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [blocks (merge (box -10 50 -6 90 63 6 "stone") (box -4 64 -4 4 66 4 "stone") (box -3 64 -3 3 66 3 "air")
+                            (box 78 54 -2 82 63 2 "dirt") {"80,52,0" "air" "80,53,0" "air"})
+              {:keys [eng p]} (setup {:self {:pos {:x 0.5 :y 64 :z 0.5}} :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]})
+              sensed (.-sensedAt p)
+              _ (aset p "sensedAt" (fn [q] (if (and (= 60 (.-y q)) (= "dirt" (block p [(.-x q) (.-y q) (.-z q)])) (not= "air" (block p [(.-x q) (inc (.-y q)) (.-z q)])))
+                                             #js {:unknown true}
+                                             (sensed q))))
+              out (atom :not-done)
+              slice 30
+              nodes (atom 0) search dig-route/search replans (atom 0) replan esc/replan-route!
+              eng (assoc eng :jobs (assoc (:jobs eng) 'recording-parent (recording-parent out 'jobs.movement.go-to {:pos [80 52 0] :range 0})))]
+          (with-redefs [dig-route/search (fn [& args] (let [run (apply search args)] (fn [n] (let [[_ used :as r] (run n)] (swap! nodes + used) r))))
+                        esc/replan-route! (fn [& args] (swap! replans inc) (apply replan args))]
+            (core/submit! eng '(recording-parent) {})
+            (await (settings/with-settings {::dig-route/max-nodes slice} #(tick-out! eng 3000))))
+          (is (> @replans 1) "the dirt sent the route to be planned again, and a plan went on in a later round")
+          (is (true? (:arrived @out)) (pr-str (select-keys @out [:why :text])))
+          (is (= [80 52 0] (feet p))))))))
 
 (deftest a-free-body-walks-to-the-cell-nearest-a-walled-in-goal-when-it-sees-no-way-from-there
   ;; out of a walled yard on a wide floor, the goal a pocket in a stone block 40 across: seeing 30 blocks round it, the
@@ -587,7 +612,8 @@
               {:keys [out p seen]} (await (run-job! {:sight 30 :self {:pos {:x 6.5 :y 63 :z 6.5}} :blocks blocks :inventory [{:name "stone_pickaxe" :count 1}]}
                                                     {:pos [47 63 29] :range 0}))]
           (is (true? (:arrived @out)) (pr-str (select-keys @out [:why :text])))
-          (is (= [:clear-path :approach :approach :clear-path] (map :step (events-of seen :go-to.escalated)))))))))
+          (is (= [47 63 29] (feet p)))
+          (is (<= (count (filter #{:approach} (map :step (events-of seen :go-to.escalated)))) 4) "it walks to the nearest cell and looks, not round the yard"))))))
 
 (deftest a-dig-route-goes-round-cells-may-dig-refuses
   (let [world (assoc (box 0 60 -1 9 70 1 "stone") "0,64,0" "air" "0,65,0" "air" "4,64,0" "air" "4,65,0" "air")

@@ -237,9 +237,10 @@
 
 (defn route-slice
   "A slice of route searching for one escalate! of the go-to call id: its searches together expand at most the dig-route
-  ::max-nodes setting, and searches kept unfinished from the last one (kept-routes) go on."
+  ::max-nodes setting less the floods the call made (charge!), and searches kept unfinished from the last one (kept-routes) go on."
   [id]
-  {:id id :left (volatile! (settings/get dig-route/settings :jobs.lib.dig-route/max-nodes)) :asked (volatile! {})})
+  (let [nodes (settings/get dig-route/settings :jobs.lib.dig-route/max-nodes)]
+    {:id id :left (volatile! nodes) :floor (quot nodes 2) :asked (volatile! {})}))
 
 (defn sliced-answer
   "The answer of the dig-route search under key k in slice (start begins it: a dig-route/search), run on with what the
@@ -253,6 +254,16 @@
       (swap! kept-routes assoc-in [id k] run)
       (vswap! asked assoc k (or a :searching))
       (or a :searching))))
+
+(def flood-cells-per-node
+  "Flood cells that cost a slice as much as one search node expanded (measured in the fake world: a node about 0.2 ms, a flood cell 0.02 ms)."
+  8)
+
+(defn charge!
+  "Charge slice n floods' cells at per cells a node: its searches get that much less of the call, never under half of it
+  (a slice a flood eats up would never let a search end)."
+  [{:keys [left floor]} n per]
+  (vswap! left (fn [l] (max (min l floor) (- l (/ n per))))))
 
 (defn searching?
   "Whether a search slice asked is still going on."
@@ -374,9 +385,10 @@
 (defn nearest-stand
   "A cell [x y z] the body can walk to (a flood of at most reach-room/room-cells cells) nearest goal: of the cells no farther
   than slack (default 0) beyond the nearest, in the whole distance and in the distance along the ground, the first the
-  flood reaches (the shortest walk)."
-  ([p goal] (nearest-stand p goal 0))
-  ([p goal slack]
+  flood reaches (the shortest walk). A route slice given is charged the flood's cells."
+  ([p goal] (nearest-stand p goal 0 nil))
+  ([p goal slack] (nearest-stand p goal slack nil))
+  ([p goal slack slice]
    (let [kind-at (reach/seen-lookup p reach-room/body-kind-of)
          [gx gy gz] goal
          ;; plain arithmetic: a flood is up to room-cells cells, each weighed twice
@@ -386,6 +398,7 @@
          best (.reduce cells (fn [a b] (if (< (to-goal b) (to-goal a)) b a)))
          near (+ (to-goal best) slack)
          flat (+ (across best) slack)]
+     (some-> slice (charge! (.-length cells) flood-cells-per-node))
      (vec (.find cells #(and (<= (to-goal %) near) (<= (across %) flat)))))))
 
 (defn goal-way
@@ -397,7 +410,7 @@
   [c feet goal may-dig? opts]
   (let [p (:primitives c)
         to-goal #(u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] goal))
-        near (nearest-stand p goal)
+        near (nearest-stand p goal 0 (:slice opts))
         here? (or ((:skip opts) :approach) (>= (to-goal near) (dec (to-goal feet))))
         from (if here? feet near)
         e (escape/choose p from goal may-dig? opts)
