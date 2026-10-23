@@ -277,6 +277,16 @@
                       (remove #(= part (:part %))))]
     (distinct (concat mine supports))))
 
+(defn nothing-to-place-text
+  "When part of the plan has only :clear cells (nothing to place), a text saying so and where its :herd is read, else nil."
+  [c cells]
+  (let [{:keys [plan part]} (:args c)
+        mine (filter #(= part (:part %)) cells)]
+    (when (and part (seq mine) (every? #(= :clear (:want %)) mine))
+      (let [herd? (some #(when (= part (:id %)) (:herd %)) (:parts (:plan (known/plan c plan))))]
+        (str "nothing to place in part " part " (its cells only keep clear)"
+             (when herd? "; its :herd is read by animals.maintain, not by a build"))))))
+
 (defn judged
   "The plan's cells (of part, and the cells of other parts they stand on) judged against the world, each with the :item to place it with. A generic wood want
   (jobs.lib.build.wood) is wanted in species sp first, any other counts where it stands."

@@ -1,0 +1,12 @@
+;; build.from-plan on a part that only wants air and holds a :herd: nothing to place, so it ends done placed 0 (the herd is animals.maintain's).
+{:defaults
+ {:tags [:build] :time :any
+  :plot {:height 14}
+  :limit-s 60
+  :body {:at [11.5 0 11.5] :settle-s 4}}
+ :cases
+ [{:name "herd-only-part-places-nothing"
+   :plans [{:id "farm" :metadata {:by "$body"}
+            :parts [{:id "pen" :box [#at [10 0 10] #at [14 0 16]] :want "air" :herd {:mob "sheep" :target 2}}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:farm" :part "pen"})]]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done :placed 0}} :within-s 40 :of-job true}]}]}

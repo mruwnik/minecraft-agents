@@ -80,7 +80,8 @@
   look at, a failed condition {:reason :no-items :needs {item n}}.
   Wood: a generic wood want (jobs.lib.build.wood: planks, logs, wooden_stairs, wooden_slabs, wooden_doors, wooden_fences,
   fence_gates, wooden_trapdoors ...) is built in one species chosen for the plan (carried most, else the nearest log seen,
-  else oak), booked, fetched by that species, and named in the result (:wood \"birch\"); a species name (oak_planks) stays exact.
+  else oak), booked, fetched by that species, and named in the result (:wood \"birch\"); a species name (oak_planks) stays exact: when its fetch ends no-source while other wood is carried, the ending names that wood and says the blueprint can use the generic name.
+  A :part whose cells only want air ends done placed 0 with a text saying so (and that its :herd is read by animals.maintain).
   When cells are missing but none of their blocks is carried and none can be fetched, the call ends condition-failed :no-items with :needs.
   Material: while cells wait for an item not carried (and not given up or refused), each round fetches it, once no cell can be placed from what is carried (a missing bed never holds up the cells above it, and a bed the body put down itself within ::own-bed-radius is broken and taken up (jobs.access.cleanup, :purpose :bed) before one is fetched; when the ways allow it,
   jobs.lib.need with :explore on: a jobs.items.obtain child for the missing count, walking off to look for what is unseen; an item whose fetch failed is not asked again in the call); a pickaxe block to dig without a pickaxe fetches the tool the same way
@@ -184,7 +185,7 @@
       trouble (apply contract/later :plan-trouble (str "plan " plan ": " trouble) data)
       (pos? left) (apply contract/later :owed (str "build of " plan ": " left " cells owed") data)
       (seq (:wrong result)) (apply contract/later :wrong (str "build of " plan ": " (count (:wrong result)) " blocks wrong") data)
-      :else (apply contract/ok :built (str "build of " plan " done: placed " placed) data))))
+      :else (apply contract/ok :built (str "build of " plan " done: placed " placed (some->> (when (zero? placed) (plan/nothing-to-place-text c cells)) (str ", "))) data))))
 
 (defn quote-of [c]
   (let [{:keys [cells trouble]} (judged-plan c)

@@ -23,6 +23,7 @@
             [jobs.build.from-plan.walk :as fp-walk]
             [jobs.lib.near :as near]
             [jobs.lib.build.plan :as plan]
+            [jobs.lib.build.text :as text]
             [plan.surface :as surface]))
 
 (def job 'jobs.build.from-plan)
@@ -394,6 +395,21 @@
               result (await (child-outcome eng job {:plan "hut" :part "torch"} 200))]
           (is (= 2 (:placed result)) "the table under the torch is placed first")
           (is (empty? (:given-up result))))))))
+
+(deftest a-herd-only-part-ends-done-saying-nothing-was-to-place
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [plan {:id "farm" :parts [{:id "pen" :box [[2 64 2] [3 64 3]] :want "air" :herd {:mob "sheep" :target 2}}]}
+              {:keys [eng]} (start {:inventory [] :blocks {}} {"farm" plan})
+              result (await (child-outcome eng job {:plan "farm" :part "pen"} 200))]
+          (is (= 0 (:placed result)))
+          (is (re-find #"nothing to place in part pen.*animals\.maintain" (:text result)) (pr-str result)))))))
+
+(deftest wood-hint-names-carried-other-wood-and-the-generic-name
+  (is (= "carries oak_log 16; the blueprint can use generic planks" (text/wood-hint "spruce_planks" {"oak_log" 16 "spruce_log" 1 "stone" 3})))
+  (is (nil? (text/wood-hint "spruce_planks" {"spruce_log" 4})))
+  (is (nil? (text/wood-hint "stone" {"oak_log" 16}))))
 
 (deftest a-floor-cell-under-a-built-wall-is-placed-from-beside-it
   (async done

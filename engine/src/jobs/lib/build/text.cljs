@@ -4,6 +4,7 @@
             [plan.shape :as shape]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]
+            [jobs.lib.build.wood :as wood]
             [jobs.lib.build.plan :refer [owed kept-ground shortage left-text shortage-text]]))
 
 (defn summary
@@ -27,9 +28,19 @@
 (defn fetch-failed-text
   "The booked failed fetches of the short items, in words: 'could not fetch birch_log: no-source (why)'."
   [fails]
-  (str/join "; " (map (fn [[item {:keys [failed why]}]]
-                        (str "could not fetch " item ": " (name (or failed :failed)) (when why (str " (" why ")"))))
+  (str/join "; " (map (fn [[item {:keys [failed why hint]}]]
+                        (str "could not fetch " item ": " (name (or failed :failed)) (when why (str " (" why ")")) (when hint (str " - " hint))))
                       fails)))
+
+(defn wood-hint
+  "For an exact wood item that no source gave while other wood is carried: the carried wood and the generic name the blueprint can use."
+  [item carried]
+  (let [sp (wood/species-of item)
+        kind (some-> sp (as-> s (str/replace item (re-pattern (str "^(stripped_)?" s "_")) "")))
+        others (when sp (sort (filter #(some-> (wood/species-of %) (not= sp)) (keys carried))))
+        generic (some (fn [[g k]] (when (= k kind) g)) wood/generic)]
+    (when (and (seq others) generic)
+      (str "carries " (str/join ", " (map #(str % " " (carried %)) others)) "; the blueprint can use generic " generic))))
 
 (defn stopped-text
   "Why a build that left cells ended stopped: the plan, how many were placed and are missing, and what it left."
@@ -42,5 +53,7 @@
   "result with :fetch-failed {item {:failed :why}} for each short item whose fetch failed in this call."
   [c result]
   (let [booked (:fetch-failed (ctx/mem c))
-        fails (into (sorted-map) (keep (fn [item] (when-let [f (get booked item)] [item f]))) (keys (:short result)))]
+        carried (storage/carried-totals (u/inventory (:primitives c)))
+        hinted (fn [item f] (if-let [hint (and (= :no-source (:failed f)) (wood-hint item carried))] (assoc f :hint hint) f))
+        fails (into (sorted-map) (keep (fn [item] (when-let [f (get booked item)] [item (hinted item f)]))) (keys (:short result)))]
     (cond-> result (seq fails) (assoc :fetch-failed fails))))
