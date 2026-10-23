@@ -12,8 +12,8 @@
 
 (a/defargs settings
   {::fist-gap-ms {:default 1300 :doc "Milliseconds between the hits a body with no sword or axe lands: the mob is knocked back and hops, so most of the time goes on walking up to it again." :spec (a/int-in 1 nil)}
-   ::drowned-wet-hits-per-swing {:default 0.67 :spec (a/num-in 0 nil)
-                                 :doc "Blows a drowned lands on a body that fights it in water, per swing the kill needs (swings): a swimming body reaches it seldom, so the fight drags on. (k + 0.5) / n over the trial bodies' sword fights in water on 2026-10-23, k=25 blows for n=38 swings (tools/event-counts.mjs drowned-meets :wet-fight); a land fight's is ::hit-rate x the swing gap, about 0.38."}})
+   ::drowned-wet-hits-per-swing {:default 1.51 :spec (a/num-in 0 nil)
+                                 :doc "Blows a drowned lands on a body that swims fighting it, per swing the kill needs (swings): the body's swings seldom reach it and knock it off, so the fight drags on. Fitted on 2026-10-23 to the trial bodies' first meets swum in and fought with a sword: the value under which their fights' death chances are likeliest to give the 3 deaths the drowned dealt of n=5 (tools/event-counts.mjs drowned-meets :wet-fight); a land fight's is ::hit-rate x the swing gap, about 0.38."}})
 
 (defn swing-gap-ms
   "Milliseconds between the hits weapon lands: its attack gap, ::fist-gap-ms for anything that is no sword or axe."
@@ -42,7 +42,7 @@
 
 (defn fight-damage
   "The damage a body expects to take fighting mobs [{:name :distance :hits :health}] (nearest first) with weapon (item
-  name, nil a fist) wearing equipment (jobs.lib.cost.armour), in water when wet?: a drowned there lands
+  name, nil a fist) wearing equipment (jobs.lib.cost.armour), swimming when wet?: a drowned there lands
   ::drowned-wet-hits-per-swing blows per swing its kill needs.
   The mobs die one at a time, each after ceil(health left / weapon damage) hits swing-gap-ms apart. Every
   mob hurts the body (jobs.lib.cost.threat/mob-hurt, after armour) until it dies. A ranged mob also shoots while the

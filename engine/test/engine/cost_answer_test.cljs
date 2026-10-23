@@ -227,13 +227,17 @@
   (let [kit (assoc (body 20) :weapon "stone_sword")
         wet (:fight (answer/threat-answers (assoc kit :swim ##Inf) "drowned" nil))
         dry (:fight (answer/threat-answers kit "drowned" nil))
-        blows (* 4 0.67)]
+        blows (* 4 1.51)]
     (is (< (js/Math.abs (- (:damage wet) (threat/mob-hurt (cost/armour-stats nil) "drowned" blows identity 1))) 1e-9) "4 stone sword swings kill it")
     (is (> (:damage wet) (* 1.5 (:damage dry))) "a land fight lands its swings")))
 
-(deftest a-drowned-met-in-water-kills-at-its-measured-share-whatever-the-answer
-  (let [kit (assoc (body 20) :weapon "iron_sword")
-        wet (answer/threat-answers (assoc kit :swim 5) "drowned" nil)
-        dry (answer/threat-answers kit "drowned" nil)]
-    (is (every? #(<= 0.73 (answer/answer-death-chance kit (get wet %) nil)) [:fight :flee]))
-    (is (< (answer/answer-death-chance kit (:fight dry) nil) 0.05) "on land an iron sword wins")))
+(deftest a-drowned-met-swimming-kills-by-the-answer-taken-its-weapon-and-the-shore
+  (let [chance #(answer/threat-chance %1 "drowned" nil here)
+        iron (assoc (body 20) :weapon "iron_sword")
+        fist (body 20)]
+    (is (< (chance iron) 0.01) "standing, as in a wade, an iron sword wins")
+    (is (> (chance (assoc fist :swim ##Inf)) 0.1) "a bare body far from shore dies often whatever it answers")
+    (let [answers (answer/threat-answers (assoc fist :swim 1) "drowned" nil)]
+      (is (= :flee (:answer (cost/decide fist answers here))) "a bare body a block from shore swims out")
+      (is (< (* 2 (answer/answer-death-chance fist (:flee answers) here)) (answer/answer-death-chance fist (:fight answers) here))
+          "and that swim risks far less than a fight with it"))))

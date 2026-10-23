@@ -8,11 +8,12 @@
   over water (jobs.lib.look/water-fn's class 2). Light and biome are those of the recorded chunks when the rows are
   folded (at: the JS adapter's (fn [x y z]) -> {:name :block :sky :biome} or nil for a column never recorded).
   A meet's outcome: the drowned's hp and hits in the run (to its end plus tail-ms) and within window-ms, a death within
-  window-ms ([cause t]), the swings tried and landed (debug log), the weapon it fought with.
-  check: each meet in water priced by cost.answer for its first decision (threat-answers in water, no shore known)
-  against what it cost.
+  window-ms ([cause t]: cause \"drowned\" is the drowned's kill, \"drown\" the breath's), the swings tried and landed
+  (debug log), the weapon it fought with, the blocks from the body's cell to the drowned.
+  Each meet in water is priced by cost.answer for its first decision (priced) against what it cost.
   Pure parts: class-of, exposure, meets, prior, report."
   (:require [clojure.string :as str]
+            [engine.settings :as settings]
             [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.fight :as fight]))
 
@@ -54,7 +55,7 @@
        vals))
 
 (defn meets
-  "Rows [{:id [gen job] :t :again? :class :health :decisions :seconds :hp :hits :hp-window :died :tried :landed :weapon}] of the respond
+  "Rows [{:id [gen job] :t :again? :class :health :distance :decisions :seconds :hp :hits :hp-window :died :tried :landed :weapon}] of the respond
   runs whose first decision is about a drowned, in records (sorted by :t)."
   [at records]
   (let [by-gen (group-by :gen records)]
@@ -68,11 +69,14 @@
                 in-run (filter #(<= (:t %) run-end) within)
                 drowned-hurt (fn [xs] (filter #(and (= :hurt (:k %)) (contains? (:causes %) "drowned")) xs))
                 own (fn [k] (filter #(and (= k (:k %)) (= job (:job %))) in-run))
-                swings (concat (own :hit) (own :miss))]]
+                swings (concat (own :hit) (own :miss))
+                here (last (filter #(< (- t gap-ms) (:t %) (inc t)) (positions rs)))
+                {mx :x my :y mz :z} (:at first-d)]]
       {:id [gen job] :t t
        :again? (boolean (some #(and (= :decided (:k %)) (= "drowned" (:mob %)) (not= job (:job %)) (< (- t window-ms) (:t %) t)) rs))
-       :class (some->> (last (filter #(< (- t gap-ms) (:t %) (inc t)) (positions rs))) (class-of at))
+       :class (some->> here (class-of at))
        :health (:health first-d)
+       :distance (when (and here mx) (js/Math.hypot (- mx (:x here)) (- my (:y here)) (- mz (:z here))))
        :decisions (mapv :decision ds)
        :seconds (when end (/ (- end t) 1000))
        :hp (reduce + 0 (map :amount (drowned-hurt in-run)))
@@ -98,10 +102,11 @@
     {:deep (pooled deep?) :other (pooled (complement deep?)) :rows rows}))
 
 (defn priced
-  "{:answer :hp :death} cost.answer gives the first decision of meet row (its health and weapon, no armour, in water with no
-  shore known): the answer decide takes, and the expected hp and death chance of the answer the body took."
-  [{:keys [health weapon decisions]}]
-  (let [body {:health health :food 20 :weapon weapon :swim ##Inf}
+  "{:answer :hp :death} cost.answer gives the first decision of meet row (its health, weapon and distance, no armour;
+  swimming with no shore known in a deep? class, else standing): the answer decide takes, and the expected hp and death
+  chance of the answer the body took."
+  [{:keys [health weapon decisions distance class]}]
+  (let [body (cond-> {:health health :food 20 :weapon weapon :distance (or distance 0)} (deep? class) (assoc :swim ##Inf))
         answers (answer/threat-answers body "drowned" nil)
         a (get answers (first decisions))]
     {:answer (:answer (answer/decide body answers nil))
@@ -130,26 +135,35 @@
      :priced {:hp (r2 (/ (reduce + 0 (keep :hp p)) (max n 1))) :deaths (r2 (reduce + 0 (keep :death p)))
               :answers (frequencies (map :answer p))}}))
 
+(defn killed? "Whether the drowned dealt the death of meet row." [{:keys [died]}] (= "drowned" (first died)))
+
+(defn first-wet [rows] (filter #(and (:class %) (not (:again? %))) rows))
+
 (defn wet-fight
-  "{:k :n :per-swing} of the meets in rows first fought in water with a sword or axe: k the drowned's blows in the runs,
-  n the swings their kills need (fight/swings), per-swing (k + 0.5) / n (fight ::drowned-wet-hits-per-swing)."
+  "{:meets :deaths :per-swing} of the first meets in rows swum in (deep? class) and first fought with a sword or axe:
+  per-swing the fight ::drowned-wet-hits-per-swing (0.01 to 5) under which priced's death chances of their fights are
+  likeliest to give the deaths the drowned dealt (killed?) and the lives it left. A death ends the count of the blows,
+  so the blows themselves understate what a whole fight takes."
   [rows]
-  (let [rs (filter #(and (:class %) (= :fight (first (:decisions %))) (some->> (:weapon %) (re-find #"_(sword|axe)$"))) rows)
-        k (reduce + 0 (map :hits rs))
-        n (reduce + 0 (map #(fight/swings (:weapon %) {:name "drowned"}) rs))]
-    {:runs (count rs) :k k :n n :per-swing (when (pos? n) (/ (js/Math.round (* 100 (/ (+ k 0.5) n))) 100))}))
+  (let [rs (filter #(and (deep? (:class %)) (= :fight (first (:decisions %))) (some->> (:weapon %) (re-find #"_(sword|axe)$"))) (first-wet rows))
+        fit (fn [r] (settings/with-settings {::fight/drowned-wet-hits-per-swing r}
+                      #(reduce + 0 (map (fn [row] (let [p (:death (priced row))]
+                                                    (js/Math.log (max 1e-12 (if (killed? row) p (- 1 p))))))
+                                        rs))))]
+    {:meets (count rs) :deaths (count (filter killed? rs))
+     :per-swing (when (seq rs) (apply max-key fit (map #(/ % 100) (range 1 501))))}))
 
 (defn wet-death
-  "{:k :n :chance} of the first meets in water in rows (not again?): k followed by a death within window-ms, chance
-  (k + 0.5) / (n + 1) (answer ::drowned-wet-death)."
+  "{:k :n :priced :rows} of the first meets in water in rows: k the deaths the drowned dealt (killed?) of n, priced the sum
+  of priced's death chances of the answers taken, rows each meet's [health weapon distance decision death-chance died?]."
   [rows]
-  (let [rs (filter #(and (:class %) (not (:again? %))) rows)
-        k (count (filter :died rs))
-        n (count rs)]
-    {:k k :n n :chance (/ (js/Math.round (* 100 (/ (+ k 0.5) (inc n)))) 100)}))
+  (let [rs (sort-by :t (first-wet rows))
+        p (map priced rs)]
+    {:k (count (filter killed? rs)) :n (count rs) :priced (r2 (reduce + 0 (keep :death p)))
+     :rows (mapv (fn [row {:keys [death]}] [(:health row) (:weapon row) (r2 (:distance row)) (first (:decisions row)) (r2 death) (killed? row)]) rs p)}))
 
 (defn report
-  "The prior, the in-water fight's blows per swing (wet-fight), the death share of a meet in water (wet-death), and the outcomes of the meets in water (a class) by first decision, and by it and the weapon (unknown: none in the logs; priced as a fist)."
+  "The prior, the in-water fight's blows per swing (wet-fight), the deaths of the meets in water against their price (wet-death), and the outcomes of the meets in water (a class) by first decision, and by it and the weapon (unknown: none in the logs; priced as a fist)."
   [exposure-rows meet-rows]
   (let [wet (filter :class meet-rows)]
     {:prior (prior exposure-rows meet-rows)
@@ -161,13 +175,14 @@
 
 (defn better-meet
   "Of two rows of one meet, the one with a class (its chunk recorded), then the one that saw more of it (a rotation may
-  have cut the older read short), then the older."
+  have cut the older read short), then the older; keys it lacks taken from the other."
   [a b]
-  (let [seen #(+ (or (:tried %) 0) (:hits %))]
-    (cond (and (nil? (:class a)) (:class b)) b
-          (and (:class a) (nil? (:class b))) a
-          (> (seen b) (seen a)) b
-          :else a)))
+  (let [seen #(+ (or (:tried %) 0) (:hits %))
+        [pick other] (cond (and (nil? (:class a)) (:class b)) [b a]
+                           (and (:class a) (nil? (:class b))) [a b]
+                           (> (seen b) (seen a)) [b a]
+                           :else [a b])]
+    (merge other (into {} (filter (comp some? val)) pick))))
 
 (defn better-exposure "Of two rows of one minute, the one with more seconds." [a b]
   (if (> (reduce + (vals (:seconds b))) (reduce + (vals (:seconds a)))) b a))

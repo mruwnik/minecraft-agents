@@ -64,7 +64,19 @@
   (is (= {:k :at :t 5 :gen "g" :x 1 :y 62.5 :z -3}
          (c/scan-line "{:generation-id \"g\", :source :job, :kind :waiting, :time-ms 5, :data {:pos {:x 1, :y 62.5, :z -3}}}"))))
 
-(deftest the-wet-death-share-counts-first-meets-in-water
-  (is (= {:k 1 :n 2 :chance 0.5}
-         (d/wet-death [{:class "other/lit/deep" :died ["drowned" 1]} {:class "other/lit/deep"} {:class "other/lit/deep" :again? true :died ["drowned" 1]}
-                       {:class nil :died ["drowned" 2]}]))))
+(deftest the-wet-deaths-count-first-meets-in-water-the-drowned-dealt-and-their-price
+  (let [{:keys [k n rows priced]} (d/wet-death [{:class "other/lit/deep" :health 20 :decisions [:fight] :died ["drowned" 1]}
+                                                {:class "other/lit/deep" :health 20 :decisions [:fight] :died ["drown" 1]}
+                                                {:class "other/lit/deep" :again? true :died ["drowned" 1]}
+                                                {:class nil :died ["drowned" 2]}])]
+    (is (= [1 2] [k n]) "a breath death is not the drowned's")
+    (is (= [true false] (map last rows)))
+    (is (< 1.9 priced 2.01) "bare-handed and swimming, each fight priced near a death")))
+
+(deftest the-in-water-fight-is-fitted-to-the-deaths-its-sword-fights-gave
+  (let [fight (fn [health died] {:class "river-ocean/dark-at-night/deep" :health health :weapon "stone_sword" :decisions [:fight] :died (when died ["drowned" 1])})
+        rate #(:per-swing (d/wet-fight %))]
+    (is (< (rate [(fight 20 false) (fight 20 false) (fight 20 false) (fight 20 true)])
+           (rate [(fight 20 true) (fight 20 true) (fight 20 true) (fight 20 false)]))
+        "more deaths: more blows a swing")
+    (is (nil? (rate [(assoc (fight 20 true) :class "other/lit/shallow")])) "a wade is no swim")))

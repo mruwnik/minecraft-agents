@@ -73,6 +73,14 @@
   (let [self (.self p)]
     (boolean (or (.-inWater self) (= "water" (u/feel-name p (feet-cell self)))))))
 
+(declare swimmable)
+
+(defn swimming?
+  "Whether the body in water swims: its head is under or the cell under its feet is water too (a wade stands on its floor)."
+  [p]
+  (boolean (and (in-water? p)
+                (or (head-under? p) (contains? swimmable (u/feel-name p (update (feet-cell (.self p)) :y dec)))))))
+
 (defn wedged-cell
   "The feet cell when its block fills the cell, else nil."
   [p]

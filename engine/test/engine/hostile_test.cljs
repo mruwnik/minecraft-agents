@@ -12,6 +12,7 @@
             [jobs.lib.combat :as combat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.hostile-fight :as hostile-fight]
+            [jobs.lib.breath :as breath]
             [jobs.combat.attack :as attack]
             [jobs.lib.util :as u]
             [jobs.survival.recover-drops :as recover-drops]
@@ -1762,6 +1763,24 @@
             (drowned-at -0.5 60 0.5) true)
           (let [{:keys [seen]} (await (flight-round respond (assoc world :entities [(drowned-at 2.5 57 0.5)])))]
             (is (= [:flee] (mapv :decision (decided seen))) "13 hp, the drowned 3 blocks off and 6 down, the shore 4 blocks off")))))))
+
+(def wade
+  "A wade one deep sunk in the flight floor: water at x -4..4, y 63, z -4..4 over stone."
+  (into {} (for [x (range -4 5) z (range -4 5) y [62 63]] [(str x "," y "," z) (if (= y 62) "stone" "water")])))
+
+(deftest a-body-wading-fights-a-drowned-as-on-land-and-one-swimming-a-block-from-shore-swims-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:blocks wade :self {:pos [-0.5 63 0.5] :health 20} :inventory [{:name "iron_sword" :count 1}]
+                     :entities [(drowned-at 1.5 63 0.5)]}
+              {:keys [seen]} (await (flight-round respond world))]
+          (is (not (breath/swimming? (tu/fake-on-floor (merge {:floor flight-floor} world)))) "it stands on the wade's floor")
+          (is (= [:fight] (mapv :decision (decided seen))) "an iron sword two blocks off: fought as on land"))
+        (let [{:keys [seen]} (await (flight-round respond {:blocks lake :self {:pos [3.5 63 0.5] :health 20}
+                                                            :entities [(drowned-at -0.5 63 0.5)]}))]
+          (is (breath/swimming? (tu/fake-on-floor {:floor flight-floor :blocks lake :self {:pos [3.5 63 0.5]}})))
+          (is (= [:flee] (mapv :decision (decided seen))) "bare-handed, afloat a block off the lake's east shore"))))))
 
 (deftest only-a-possible-mob-blow-counts-as-a-hit
   (are [m expected] (= expected (hurt/mob-hit? m))
