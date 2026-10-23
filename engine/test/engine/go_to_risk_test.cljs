@@ -10,12 +10,14 @@
             [engine.shelter-support :as st]
             [engine.sky-perception :as sky]
             [engine.test-util :as tu]
+            [jobs.lib.cost :as cost]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.death-spot :as death-spot]
             [jobs.lib.hide-spot :as hide-spot]
             [jobs.lib.lava-risk :as lava-risk]
             [jobs.lib.look :as look]
             [jobs.lib.price :as price]
+            [jobs.lib.reach :as reach]
             [jobs.lib.threats :as threats]
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -80,6 +82,18 @@
                                                                          {:x 30 :y 64 :z 0}))))
     {:x 15 :y 64 :z 3} true
     {:x -10 :y 64 :z 0} false))
+
+(deftest a-hostile-beside-the-straight-line-is-priced-on-the-planned-way-round-its-field
+  (let [c (ready-test/ctx-of {:time st/noon :floor [0 -24 80 24] :self {:pos {:x 2.5 :y 64 :z 0.5}}
+                              :entities [{:id 7 :name "zombie" :kind "hostile" :pos {:x 36.5 :y 64 :z 2.5}}]})
+        goal {:x 70 :y 64 :z 0}
+        straight (cost/route-hurt (threats/death-body c)
+                                  {:cells (cost/straight-route (reach/mob-lookup (:primitives c)) {:x 2.5 :y 64 :z 0.5} goal)
+                                   :threats (threats/threats-of c)})
+        {:keys [hostile-hp hostiles]} (risk/estimate c goal)]
+    (is (= 1 hostiles))
+    (is (< hostile-hp (/ straight 4)) "the planned way bends round the field")
+    (is (= :ok (first (risk/status c goal))))))
 
 (deftest a-hostile-seen-mid-walk-asks-go-to-s-check-again-for-the-rest-of-it
   (let [c (ready-test/ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0}}})

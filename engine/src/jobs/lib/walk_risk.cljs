@@ -4,7 +4,8 @@
   by the hostiles it can reach and the dark halls it crosses (a roofed dark cell prices spawns only where dark floor beyond the spawn-free radius is reachable: ready/hall-at?, Q345).
   Risk = the mobs expected to spawn on the exposed stretches (jobs.lib.cost/spawn-chance per second of walking, each costed
   as a zombie fight with the kit carried, jobs.lib.cost/fight-damage) plus what the known threats take off the body over
-  the straight way (jobs.lib.cost/route-hurt, each over its field, jobs.lib.threats): every mob sensed now that catches
+  the way go-to's planner finds round their fields (jobs.lib.targets/route; the straight way when it finds none within a
+  round's search) (jobs.lib.cost/route-hurt, each over its field, jobs.lib.threats): every mob sensed now that catches
   the walk (live-catchers), and every death, near-death or hide spot the walk goes for (remembered-near-way), each
   by the chance its mob or a like one is there now (death-spot/present-share: one a sun-burning mob left seen sky-lit by day, or one
   the body went far from, is near free).
@@ -25,6 +26,7 @@
             [jobs.lib.sense :as sense]
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.targets :as targets]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.lib.walk.world :as wworld]))
@@ -121,7 +123,8 @@
                                  dt)))
         spawns (* exposed-s (cost/spawn-chance [0 0 0]))
         body (threats/death-body c)
-        route (delay (cost/straight-route (reach/mob-lookup p) feet goal))
+        route (delay (or (targets/route c (mapv #(js/Math.floor (% goal)) [:x :y :z]) 1)
+                         (cost/straight-route (reach/mob-lookup p) feet goal)))
         threat-hp (fn [ts] (if (seq ts) (cost/route-hurt body {:cells @route :threats (threats/with-reach c ts)}) 0))
         known (threats/known-threats c)
         catchers (if catchers? (live-catchers c known feet goal) [])
