@@ -1,0 +1,50 @@
+;; Card 9f4392d4 (Oriel #11, Teasel #7): a critically hurt body that cannot heal (food under 18, none carried) stays shut
+;; in. The rest waits out the night in its sealed room instead of walking out for food; by day a fragile body's
+;; leave-shelter keeps its seal while a zombie could walk in through it, and leaves once nothing could.
+;; Food 8 (hunger 5 s amp 255, no regeneration), hp 3 (fragile). Clock cases: the rest's wait is for the night outside,
+;; and leave-shelter starts only by day.
+{:defaults
+ {:tags [:survival :shelter :hostile]
+  :plot {:height 8 :light :sky}
+  :body {:at [16.5 1 16.5] :settle-s 2}
+  :limit-s 120}
+ :cases
+ [{:name "hurt-hungry-body-waits-out-the-night-shut-in"
+   :time :night :time-why :dawn-decision
+   :register [{:trigger :low-health}]
+   :blocks [[:fill [14 0 14] [18 4 18] "stone" :hollow]]
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 17 minecraft:generic"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :low-health}} :within-s 30}
+            {:event {:source :job :kind :holding :context {:reflex-id :low-health}} :within-s 40}
+            {:no-event {:source :action :kind :started :data {:name "steer"}} :for-s 60 :until {:source :reflex :kind :fired :context {:reflex-id :low-health}}}]
+   :after [[:body-near [16.5 1 16.5] 2]]}
+  {:name "fragile-body-keeps-its-seal-by-day-while-a-zombie-could-walk-in"
+   ;; a stone pocket [16 1 16] (two cells) sealed east by its own glass :shelter blocks; a roofed stone room east
+   ;; (x 18..22) holds a NoAI zombie it sees through the glass: the seal stays past the dawn grace
+   :time :day :time-why :dawn-decision
+   :blocks [[:fill [15 0 15] [23 4 17] "stone"] [:fill [16 1 16] [16 2 16] "air"] [:fill [18 1 16] [22 2 16] "air"]
+            [:set [17 1 16] "glass"] [:set [17 2 16] "glass"] [:set [20 3 16] "glowstone"]]
+   :memory [{:kind :scaffold :data {:entries [{:cell #at [17 1 16] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}
+                                              {:cell #at [17 2 16] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}]}}]
+   :body {:inventory [["iron_sword" 1]]}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 17 minecraft:generic"]
+         [:summon "zombie" [21.5 1 16.5] "{NoAI:1b,PersistenceRequired:1b}"]
+         [:wait-s 3]
+         [:job (jobs.survival.leave-shelter)]]
+   :expect [{:event {:source :job :kind :night.dawn-hold} :within-s 20}
+            {:no-event {:source :job :kind #{:completed :stopped}} :of-job true :for-s 90}]
+   :after [[:block [17 1 16] "glass"] [:block [17 2 16] "glass"] [:body-near [16.5 1 16.5] 1]]}
+  {:name "fragile-body-leaves-its-seal-by-day-with-nothing-near"
+   :time :day :time-why :dawn-decision
+   :blocks [[:fill [15 0 15] [23 4 17] "stone"] [:fill [16 1 16] [16 2 16] "air"] [:fill [18 1 16] [22 2 16] "air"]
+            [:set [17 1 16] "glass"] [:set [17 2 16] "glass"] [:set [20 3 16] "glowstone"]]
+   :memory [{:kind :scaffold :data {:entries [{:cell #at [17 1 16] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}
+                                              {:cell #at [17 2 16] :item "glass" :before "air" :job "j1" :purpose :shelter :state :placed}]}}]
+   :body {:inventory [["iron_sword" 1]]}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 255 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 17 minecraft:generic"]
+         [:job (jobs.survival.leave-shelter)]]
+   :expect [{:event {:source :job :kind :completed} :within-s 60 :of-job true}]
+   :after [[:not-block [17 1 16] "glass"] [:not-block [17 2 16] "glass"]]}]}

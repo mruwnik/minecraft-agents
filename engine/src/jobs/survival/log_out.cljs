@@ -7,6 +7,7 @@
             [jobs.lib.checks :as checks]
             [jobs.lib.child :as child]
             [jobs.lib.cond :as cond]
+            [jobs.lib.foods :as foods]
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.sleepers :as sh-sleepers]))
@@ -15,7 +16,7 @@
   "Leave the server for a short stint, then come back: the night job's way to let another player's sleep skip the
   night. Waits for night (:not-night); impossible once a log-out
   was unsupported (:log-out-unsupported).
-  Stays away :offline-ms, at most until morning. Back while it is still night, it waits :news-ms for the server's sleep
+  Stays away :offline-ms, at most until morning; until morning when hurt-past-healing? (it would come back to a dark it cannot heal in). Back while it is still night, it waits :news-ms for the server's sleep
   count (sent on a join while anyone sleeps) before it ends.
   A listed job that finds another job logged the body out since it was queued is done at once without acting.
   Ends with the result {:ms :how}. How is ok, cut, unsupported or closed.
@@ -64,9 +65,18 @@
   (let [out (logged-out-meanwhile c)]
     (checks/goal (some? out) [:logged-out "logged out meanwhile"] [:online "not logged out meanwhile"] {:result (when out {:ms (:ms (:data out)) :how (:status (:data out))})})))
 
+(defn hurt-past-healing?
+  "One hit may kill (foods/fragile?) and food is under foods/top-up-food: back online in the dark the body neither heals
+  nor is safe."
+  [self]
+  (and (foods/fragile? self) (< (.-food self) foods/top-up-food)))
+
 (defn away-ms [c]
-  (let [until-morning (sh-clock/ms-until-morning (.-timeOfDay (.self (:primitives c))))]
-    (min (:offline-ms (:args c)) (if (pos? until-morning) until-morning js/Infinity))))
+  (let [self (.self (:primitives c))
+        until-morning (sh-clock/ms-until-morning (.-timeOfDay self))]
+    (cond (not (pos? until-morning)) (:offline-ms (:args c))
+          (hurt-past-healing? self) until-morning
+          :else (min (:offline-ms (:args c)) until-morning))))
 
 (defn ^:async quote-of [c]
   (let [s (/ (+ (away-ms c) (:news-ms (:args c))) 1000)]

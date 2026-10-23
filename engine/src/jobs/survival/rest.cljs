@@ -20,8 +20,8 @@
 
 (def doc
   "Rest a hurt body until it has healed, as a player would before going on. Food first: under foods/full-food it eats what it
-  carries (jobs.survival.eat); under 18 with nothing carried it waits for a calm moment (no hostile known near, and above ground
-  no dark sky; jobs.survival.get-food.risk) shut in, then gets food the safe way (jobs.survival.eat, which fetches through
+  carries (jobs.survival.eat); under 18 with nothing carried it waits for a calm moment (no hostile known near, no dark sky above ground, and
+  no night outside, from a cave too; jobs.survival.get-food.risk) shut in, saying why, then gets food the safe way (jobs.survival.eat, which fetches through
   get-food under get-food's own risk rules; at food 0, or when the shut-in failed, it does not wait). Then it shuts in where it stands (jobs.survival.shut-in, ways :room, :walls, :pit, :pocket; its
   blocks go to the scaffold ledger and jobs.access.cleanup takes them back; walls that ran out of blocks get more with
   jobs.items.obtain, :explore false, once a stay when calm, and are tried again) and holds still (:healing) while natural regeneration works, a bite of carried food
@@ -69,12 +69,12 @@
 (defn quote-of [_] {:uses {:job-time [0 60 (settings/get settings ::job-time-s)]}})
 
 (defn uncalm
-  "Why a walk out for food or blocks waits, as text, else nil: get-food.risk's reasons, and above ground (as the rest
-  found the body: a shelter it built roofs it over) the night."
+  "Why a walk out for food or blocks waits, as text, else nil: get-food.risk's reasons, and the night outside, from a
+  cave too: food is mostly fetched from above ground."
   [c]
   (let [p (:primitives c)]
     (or (risk/uncalm p c)
-        (when (and (not (:underground? (ctx/mem c))) (sh-sense/dark-outside? p)) "night outside"))))
+        (when (sh-sense/dark-outside? p) "night outside"))))
 
 (defn ^:async more-blocks!
   "Walls that ran out of blocks: when calm and not yet tried this stay, get the open cells' worth more (at least
@@ -112,7 +112,7 @@
   the carried food is eaten up, else the :no-food ending."
   [c fetch?]
   (let [e (await (child/run!* c :eat 'jobs.survival.eat {:until foods/full-food :get-food? fetch?}))]
-    (when fetch? (ctx/update-mem! c dissoc :sheltered :underground? :last-health :still))
+    (when fetch? (ctx/update-mem! c dissoc :sheltered :last-health :still))
     (cond
       (= :continue e) :continue
       (>= (food c) foods/top-up-food) :again
@@ -126,7 +126,8 @@
   (let [sheltered (:sheltered (ctx/mem c))]
     (cond
       (or (zero? (food c)) (not (uncalm c)) (false? sheltered)) (await (eat! c true))
-      sheltered (let [r (await (child/pause! c (settings/get settings ::pause-s) :calm))]
+      sheltered (let [r (await (child/pause! c (settings/get settings ::pause-s)
+                                             (str "food " (food c) " of " foods/top-up-food " heals nothing and none is carried; shut in until calm (" (uncalm c) ")")))]
                   (if (= :continue r) :continue :again))
       :else (await (shelter! c)))))
 
@@ -152,8 +153,6 @@
 
 (defn ^:async step! [c]
   (let [p (:primitives c)]
-    (when-not (contains? (ctx/mem c) :underground?)
-      (ctx/update-mem! c assoc :underground? (sh-sense/buried? p)))
     (cond
       (or (body/burning? p) (body/poisoned? p))
       (give-up! c :harmed {:health (health c) :text "burning or poisoned: rest does not heal that"})

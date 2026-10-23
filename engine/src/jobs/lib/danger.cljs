@@ -256,16 +256,21 @@
   ([p e] (danger? p e {}))
   ([p e opts] (danger-in? p (reach/mob-lookup p) e opts)))
 
-(defn danger-opened?
-  "Whether a known hostile within radius (ranged ones within ranged-radius) would be a real danger (danger-in?) to the
-  body were the cells ([x y z]) open: a way through them to the body, or a line of fire through them. A heard mob is
-  placed by what the body sees now (open-cell-from): it is not in a cell the cells' opening would show."
+(defn dangers-opened
+  "The known hostiles within radius (ranged ones within ranged-radius) that would be a real danger (danger-in?) to the
+  body were the cells ([x y z]) open: a way through them to the body, or a line of fire through them, nearest first. A
+  heard mob is placed by what the body sees now (open-cell-from): it is not in a cell the cells' opening would show."
   [p radius ranged-radius cells]
   (let [open (set cells)
         over (fn [look] (fn [x y z] (if (contains? open [x y z]) :open (look x y z))))
         kind-at (over (reach/mob-lookup p))
         opts {:arrow-at (over (reach/arrow-lookup p)) :sight-at (sight-lookup p)}]
-    (boolean (some #(danger-in? p kind-at % opts) (known-hostiles p radius {:ranged-radius ranged-radius})))))
+    (filter #(danger-in? p kind-at % opts) (known-hostiles p radius {:ranged-radius ranged-radius}))))
+
+(defn danger-opened?
+  "Whether any of dangers-opened is."
+  [p radius ranged-radius cells]
+  (boolean (seq (dangers-opened p radius ranged-radius cells))))
 
 (defn query-proofs [p] (proofs/proofs (reach/cell-of (u/pos-of (.-pos (.self p))))))
 

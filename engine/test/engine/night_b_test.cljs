@@ -52,15 +52,21 @@
           (await (tu/run-until-empty eng 3))
           (is (= 1 (count (st/calls p "offline")))))))))
 
-(deftest a-log-out-stint-ends-at-morning
+(deftest a-log-out-stint-ends-at-morning-and-lasts-till-then-for-a-body-hurt-past-healing
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (st/setup {:time 23000})]
-          (sleep-count! p 1 2)
-          (core/submit! eng '(jobs.survival.log-out) {})
-          (await (tu/run-until-empty eng 3))
-          (is (= [25050] (st/ms-of-offline p))))))))
+        (await (tu/each-async
+                [[23000 {} 25050 "a stint shorter than :offline-ms ends at morning"]
+                 [20000 {} 30000 "else it lasts :offline-ms"]
+                 [20000 {:health 3 :food 20} 30000 "fragile but healing on full food"]
+                 [20000 {:health 3 :food 12} 175050 "fragile, food under 18: away until morning, not back to the dark"]]
+                (fn ^:async one [[time self ms why]]
+                  (let [{:keys [eng p]} (st/setup {:time time :self self})]
+                    (sleep-count! p 1 2)
+                    (core/submit! eng '(jobs.survival.log-out) {})
+                    (await (tu/run-until-empty eng 3))
+                    (is (= [ms] (st/ms-of-offline p)) why)))))))))
 
 (deftest a-log-out-ends-done-with-how-it-went
   (async done

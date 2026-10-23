@@ -154,23 +154,28 @@
 (def far-zombie {:id 7 :name "zombie" :kind "hostile" :visible true :pos {:x 8 :y 64 :z 2}})
 
 (defn ^:async held-in-then-out
-  "A dug-in body at first light with the given mobs near, the dawn trigger registered, the dawn grace over at the
-  fourth hold: [whether the body was still sealed in at the third hold (nil: no hold made), whether it ended outside]."
-  [entities]
-  (let [{:keys [eng p]} (await (dug-in-world {:entities entities}))
+  "A dug-in body of health with the given mobs near at first light, the dawn trigger registered, the dawn grace over at
+  the fourth hold and the mobs gone at the sixth: [whether the body was still sealed in at the third hold and at the
+  fifth (nil: no such hold made), whether it ended outside]."
+  [entities health]
+  (let [{:keys [eng p]} (await (dug-in-world {:entities entities :self {:health health}}))
         sealed {:x 0.5 :y 64 :z 0.5}
-        third (atom nil)]
+        in-at (atom {})]
     (st/on-wait! p (fn [n]
-                     (when (= n 3) (reset! third (= sealed (st/pos-of p))))
-                     (when (= n 4) (.setTime (.-world p) grace-passed))))
+                     (when (#{3 5} n) (swap! in-at assoc n (= sealed (st/pos-of p))))
+                     (when (= n 4) (.setTime (.-world p) grace-passed))
+                     (when (= n 6) (swap! (fake/state p) assoc :entities []))))
     (.setTime (.-world p) first-light)
     (core/load-scenario! eng (scenario/parse (str "{:register [{:trigger " shut-in-trigger "}]}")))
     (await (st/tick-n eng 12))
-    [@third (not= sealed (st/pos-of p))]))
+    [(@in-at 3) (@in-at 5) (not= sealed (st/pos-of p))]))
 
-(deftest a-dug-in-body-waits-at-first-light-for-a-known-hostile-near-until-the-grace-is-over
+(deftest a-dug-in-body-waits-for-a-known-hostile-near-through-the-dawn-grace-and-after-it-while-fragile
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (is (= [nil true] (await (held-in-then-out []))) "nobody near: out at first light, no hold")
-        (is (= [true true] (await (held-in-then-out [far-zombie]))) "a zombie near: held in, out once the grace is over")))))
+        (is (= [nil nil true] (await (held-in-then-out [] 20))) "nobody near: out at first light, no hold")
+        (is (= [true nil true] (await (held-in-then-out [far-zombie] 20))) "a zombie near: held in, out once the grace is over")
+        (is (= [nil nil true] (await (held-in-then-out [] 3))) "fragile, nobody near: out at first light")
+        (is (= [true true true] (await (held-in-then-out [far-zombie] 3)))
+            "fragile, a zombie that could walk in were it open: still in after the grace, out once it is gone")))))

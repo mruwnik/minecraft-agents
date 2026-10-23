@@ -4,6 +4,7 @@
             [engine.core :as core]
             [engine.cornered-test :as ct]
             [engine.ctx :as ctx]
+            [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
             [engine.registry :as registry]
@@ -89,3 +90,17 @@
           (is (re-find #"zombie" (str (:text r))) "the ending names what kept get-food from searching")
           (is (= ["jobs.survival.get-food" "jobs.survival.rest"] (map :job (:next r))) "it names a get-food that searches, then the rest again")
           (is (true? (:explore (:args (first (:next r)))))))))))
+
+(deftest a-hurt-body-in-a-cave-with-no-food-waits-out-the-night-shut-in-and-says-why
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [clock (atom 1000000)
+              [seen sink] (tu/legacy-capture-sink)
+              p (tu/seeing-all (tu/fake {:self {:health 4 :food 12} :blocks pocket :time 18000}))
+              eng (core/create {:primitives p :jobs registry/jobs :triggers {} :dir (tu/tmp-dir) :now (tu/act-clock clock p 1000)
+                                :events (events/make {:body "Fake" :sinks [sink] :now #(deref clock)})})
+              r (await (tu/child-outcome eng 'jobs.survival.rest {} 8))]
+          (is (= :job-time (:reason r)) "no walk out for food by night, from a cave too: shut in to the end of its time")
+          (is (some #(re-find #"food 12 of 18 .*night outside" (str (:reason %))) (filter #(= :holding (:kind %)) @seen))
+              "the hold says it cannot heal on this food and waits for the night to pass"))))))

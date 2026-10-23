@@ -4,9 +4,11 @@
             [engine.ctx :as ctx]
             [jobs.lib.checks :as checks]
             [jobs.lib.combat :as combat]
+            [jobs.lib.danger :as danger]
             [jobs.lib.dawn :as dawn]
             [jobs.lib.dig-in-leave :as dig-leave]
             [jobs.lib.escape :as escape]
+            [jobs.lib.foods :as foods]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.waits :as waits]
             [jobs.lib.shelter.clock :as sh-clock]
@@ -16,6 +18,7 @@
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.shelter.spawn :as sh-spawn]
+            [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.survival.night.hold :as hold]))
 
@@ -26,7 +29,7 @@
   dug, a pit climbed, the shelter's valuable blocks taken back), no doorway the night filled (still holding a block it
   put there) to dig again, no bed it put down outside its own zones (never the live respawn bed: it stays) to pick up, no drop to walk
   over. A shelter with no way out ends nothing-possible :no-way-out (the cell is remembered as :shelter-trapped, so the
-  trigger lets go). A shelter it left is remembered the same way, so a walk back through its cell is no new dawn. A body shut in stays while a known hostile is near and the dawn grace lasts (night.dawn-hold; longer with no weapon carried).
+  trigger lets go). A shelter it left is remembered the same way, so a walk back through its cell is no new dawn. A body shut in stays while a known hostile is near and the dawn grace lasts (night.dawn-hold; longer with no weapon carried), and a fragile one (jobs.lib.foods/fragile?) after it too while a hostile could reach or shoot it were the shelter open (fragile-hold).
   A doorway cell it could not open is warned night.doorway-stuck once and tried again quietly.
   The doorway blocks and the bed are scaffold-ledger entries (purposes :doorway, :bed); one jobs.access.cleanup call takes them back.
   Memory: job memory :dig-out, :take-back; body memory :shelter-trapped, :doorway-stuck-warned.")
@@ -89,6 +92,25 @@
         (seq (remove (some-fn (comp held :cell) (complement (comp seal-purposes :purpose)))
                      (ledger/near-of (ledger/open-entries (ctx/view c)) {:pos {:x x :y y :z z} :radius ledger/seal-clear-radius})))))))
 
+(defn opened-cells
+  "The cells a way out may open: the shelter's own blocks near the feet (seal-purposes) and every side and the top of
+  the body's two cells, as [x y z]."
+  [c]
+  (let [{:keys [x y z]} (sh-sense/feet (:primitives c))
+        own (keep #(when (seal-purposes (:purpose %)) (:cell %))
+                  (ledger/near-of (ledger/open-entries (ctx/view c)) {:pos {:x x :y y :z z} :radius ledger/seal-clear-radius}))]
+    (concat (map vec own)
+            [[x (+ y 2) z]]
+            (for [dy [0 1] [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]] [(+ x dx) (+ y dy) (+ z dz)]))))
+
+(defn fragile-hold
+  "The hostiles a fragile body (foods/fragile?: one hit may kill) stays shut in for after the dawn grace: those that
+  could reach or shoot it were opened-cells open (jobs.lib.danger/dangers-opened, as cleanup keeps a seal)."
+  [c]
+  (let [p (:primitives c)]
+    (when (foods/fragile? (.self p))
+      (seq (danger/dangers-opened p threats/max-follow-range (danger/ranged-radius) (opened-cells c))))))
+
 (defn pending?
   "Whether the morning still has work (by night too, so a run then is no \"nothing left\"): a dig-out, a shelter to leave, a doorway the night filled to open, a
   bed put down to collect."
@@ -119,15 +141,19 @@
         doorway (sh-beds/doorway-to-open p (ctx/view c))
         sealed (seals c)
         shelter (or doorway (dig-leave/sheltered-in c) sealed)
-        ds (when shelter (mapv #(dawn/describe p %) (dawn/hostile-hold p (boolean (combat/best-weapon p (combat/weapons c))))))]
+        grace (when shelter (seq (dawn/hostile-hold p (boolean (combat/best-weapon p (combat/weapons c))))))
+        ds (when shelter (mapv #(dawn/describe p %) (or grace (fragile-hold c))))]
     (cond
       (seq ds)
-      (let [what (dawn/hostile-text ds)]
+      (let [what (dawn/hostile-text ds)
+            hp (.toFixed (.-health (.self p)) 1)]
         (when-not (:dawn-noted (ctx/mem c))
           (ctx/update-mem! c assoc :dawn-noted true)
-          (ctx/emit! c :night.dawn-hold :info {:text (str "first light, but a hostile is known near the shelter (" what "); staying in until it is gone or the grace is over")
+          (ctx/emit! c :night.dawn-hold :info {:text (if grace
+                                                       (str "first light, but a hostile is known near the shelter (" what "); staying in until it is gone or the grace is over")
+                                                       (str "health " hp ": a hostile could reach or shoot the body were the shelter open (" what "); staying in until it cannot"))
                                                :hostiles ds}))
-        (await (hold/hold! c (str "first light: " what))))
+        (await (hold/hold! c (if grace (str "first light: " what) (str "health " hp ", " what)))))
       doorway (await (take-back! c))
       (and sealed (not (:dig-out (ctx/mem c))) (not (dig-leave/sheltered-in c)))
       (let [r (await (ctx/call c :seal-cleanup 'jobs.access.cleanup
