@@ -231,7 +231,7 @@
 (defn surface-only?
   "Whether every name is an animal that spawns on lit grass at the surface: nothing is looked for underground."
   [names]
-  (every? food-animals/food-animals names))
+  (boolean (and (seq names) (every? food-animals/food-animals names))))
 
 (defn finding-key [{:keys [what id pos]}] [what (or id pos)])
 

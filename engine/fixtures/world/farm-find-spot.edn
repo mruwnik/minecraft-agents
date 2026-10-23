@@ -1,7 +1,7 @@
 ;; Card 8d734336: jobs.farm.find-spot stops its scan after 30000 reads per attempt and settles for the best spots so far (open-air
 ;; range 48 once read 1.7M blocks in one call). A 128 x 64 grass plot, body in the middle, :range 48.
 ;; Should-succeed: the job completes with spots within 60 s, no error event. Should-fail: a plot floored with water but for a
-;; 3x3 stone platform (smaller than the 5x5 patch) has no spot: the job stops nothing-possible :none.
+;; 3x3 stone platform (smaller than the 5x5 patch) has no spot: the job keeps exploring (land lies beyond the plot) until its 12 s budget stops it (limit-reached or nothing-possible :none, whichever the budget reaches first), never completes with a spot.
 {:defaults
  {:tags [:farm :find-spot :jobs] :time :any
   :plot {:light :sky :height 8 :floor "grass_block" :length 128 :width 64}
@@ -15,20 +15,20 @@
   {:name "water-all-round-finds-no-spot"
    :plot {:floor "water"}
    :blocks [[:fill [0 -2 0] [127 -2 63] "stone"] [:fill [63 -1 31] [65 -1 33] "stone"]]
-   :act [[:job (jobs.farm.find-spot {:range 12 :settings {:jobs.farm.find-spot/depth 7}})]]
-   :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :none}} :within-s 60 :of-job true}
+   :act [[:job (jobs.farm.find-spot {:range 12 :settings {:jobs.farm.find-spot/depth 7 :jobs.farm.find-spot/job-time-s 12}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:report {:units :spots :done 0}}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :stopped}}]}
   ;; Card e3e88fbd: the ending lists every spot with its score and level, not only the best.
   {:name "ending-lists-every-spot-with-score-and-level"
    :act [[:job (jobs.farm.find-spot {:range 20 :settings {:jobs.farm.find-spot/depth 7 :jobs.farm.find-spot/limit 3}})]]
    :expect [{:event {:source :job :kind :completed :data {:spots [:has {:level [:>= 0] :score [:any]}]}} :within-s 60 :of-job true}]}
-  ;; Card b019a678: crops need light 9+, so a dark cave floor is no field (the job keeps exploring, never completes) and a lit one is.
+  ;; Card b019a678: crops need light 9+, so a dark cave floor is no field (the body sees no ground to walk to in the dark and has no light: the job stops nothing-possible, never completes) and a lit one is.
   {:name "dark-cave-floor-is-no-spot"
    :plot {:light :dark :height 6 :floor "grass_block"}
    :body {:at [64.5 0 32.5] :settle-s 2}
    :act [[:job (jobs.farm.find-spot {:range 12})]]
-   :expect [{:event {:source :job :kind :planned} :within-s 40}
-            {:no-event {:source :job :kind :completed} :for-s 40}]}
+   :expect [{:event {:source :job :kind :stopped :data {:kind :nothing-possible :reason :none}} :within-s 40 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 40 :until {:source :job :kind :stopped}}]}
   {:name "lit-cave-floor-is-a-spot"
    :plot {:light :lit :height 6 :floor "grass_block"}
    :body {:at [64.5 0 32.5] :settle-s 2}

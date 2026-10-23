@@ -20,7 +20,7 @@
    :expect [{:event {:source :job :kind :child_ended :data {:slot :pillar :status :done}} :within-s 60}]
    :after [[:body-near [16.5 3 16.5] 2]]}
   {:name "climbable-ledge-beside-builds-no-pillar"
-   :blocks [[:set [17 0 15] "stone"] [:fill [17 0 16] [17 1 16] "stone"]]
+   :blocks [[:fill [14 3 14] [18 4 18] "stone" :hollow] [:set [17 0 15] "stone"] [:fill [17 0 16] [17 1 16] "stone"]]
    :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 15}
             {:no-event {:source :job :kind :child_ended :data {:slot :pillar :status :done}} :for-s 50}]
    :after [[:not-block [16 0 16] "dirt"]]}]}
