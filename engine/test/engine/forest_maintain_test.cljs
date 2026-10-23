@@ -465,7 +465,7 @@
         (let [plan (forest-plan ["a" [[3 64 0]] "oak"] ["b" [[9 64 0]] "birch"])
               {:keys [p eng w]} (start (update oak-world :blocks assoc "9,64,0" "birch_sapling") {"forest" plan})
               dropped (atom false)]
-          (with-redefs [pace/pace! (fn []
+          (with-redefs [pace/timer (fn []
                                      (when-not @dropped
                                        (reset! dropped true)
                                        (world/set-data! w {"forest" (forest-plan ["b" [[9 64 0]] "birch"])} {}))

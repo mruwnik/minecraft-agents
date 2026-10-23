@@ -322,7 +322,7 @@ called child ends `:condition-failed`; from `can-run?`, `safe?` or `fit?` a list
 than 1 above the quote's most `:done` ends `:nothing-possible` `{:reason :least}`. `ctx/next-way` drops a way whose
 least crosses a remainder.
 
-**Limits (engine.core.limits).** A child's limits are clamped to its caller's; acts and call boundaries check the chain.
+**Limits (engine.core.limits).** A child's limits are clamped to its caller's; acts, call boundaries and each step's pace (`jobs.lib.pace/pace!`) check the chain.
 The outermost crossed frame ends `:limit-reached`, and `job.limit_reached` tells its line, amount (`:used`, `:health`,
 `:food`, `:now`, or an act's `:most`/`:left`), call and report; catch-alls rethrow on `contract/passes-through?`.
 Before an act, its most (`engine.primitive` table: args, target, quote-of, ending per primitive) is checked against what each frame

@@ -547,7 +547,7 @@
           (core/submit! eng (list 'jobs.animals.lure-to {:mob "cow" :pos goal}) {})
           (await (run-until-done s 60))
           (is (some? @cow-x) "the cow fell behind")
-          (is (< 50 @waits) "the body waited for it")
+          (is (< 30 @waits) "the body waited for it")
           (is (= :arrived (:reason (done-event s))) "a third of a block in 10 s is still closing in"))))))
 
 (deftest a-cow-out-of-sight-is-walked-back-toward-where-it-was-last-seen

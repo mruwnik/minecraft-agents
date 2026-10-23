@@ -11,7 +11,7 @@
             [engine.fake :as fake-world]
             [engine.fake.node :as node]
             [engine.fake.raw-world :as fake-raw]
-            [engine.fast-pace]
+            [engine.fast-pace :as fast-pace]
             [engine.fsutil :as fsu]
             [engine.memory :as mem]
             [jobs.lib.waits :as waits]
@@ -151,10 +151,12 @@
     (fake (-> spec (dissoc :floor :floor-block) (assoc :floor-rect rect :blocks (merge ground (:blocks spec)))))))
 
 (defn act-clock
-  "A now fn for an engine over fake p: the clock atom's ms plus ms for every primitive call p has recorded, so time
-  moves with the body's acts (a whole flight ends by time: out of line, its bound)."
+  "A now fn for an engine over fake p: the clock atom's ms plus ms for every primitive call p has recorded and the
+  pace timers' ms since, so time moves with the body's acts and a job's steps (a whole flight ends by time: out of
+  line, its bound; a loop of steps with no act ends on its budget)."
   [clock p ms]
-  #(+ @clock (* ms (.-length (.-calls (.-world p))))))
+  (let [paced @fast-pace/paced-ms]
+    #(+ @clock (* ms (.-length (.-calls (.-world p)))) (- @fast-pace/paced-ms paced))))
 
 (defn seeing-all
   "p with seenBlocks answering every block in range as seen (stands in for perception's memory); leave it off to

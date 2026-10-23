@@ -18,6 +18,7 @@
             [jobs.survival.recover-drops.danger :as recover-drops-danger]
             [jobs.survival.respond-to-hostile :as respond-to-hostile]
             [jobs.lib.cost :as cost]
+            [jobs.lib.pace :as pace]
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
@@ -297,8 +298,8 @@
     (is (nil? (respond-to-hostile/changed-text nil now)))))
 
 (defn waited-between-swings
-  "The first ms waited (act :wait) after each swing but the last: what is left of the gap (the fake clock moves with calls,
-  not with waits)."
+  "The first ms waited (act :wait) after each swing but the last: what is left of the gap (the fake clock moves with calls
+  and paces, not with waits)."
   [p]
   (let [calls (vec (.-calls (.-world p)))
         idx (vec (keep-indexed (fn [i c] (when (= "attack" (.-name c)) i)) calls))]
@@ -334,7 +335,7 @@
       (fn ^:async t []
         (let [{:keys [p]} (await (first-round-ms fight {:inventory [{:name "iron_axe" :count 1}] :entities [(zombie 7 3 0)]} 10))]
           (is (seq (waited-between-swings p)))
-          (is (every? #(<= 1072 % 1112) (waited-between-swings p)) "the iron axe's 1112 ms, so every hit lands at full strength"))))))
+          (is (every? #(<= (- 1072 pace/pace-ms) % 1112) (waited-between-swings p)) "the iron axe's 1112 ms, so every hit lands at full strength"))))))
 
 (deftest hostile-attack-looks-round-while-the-cooldown-runs
   (async done

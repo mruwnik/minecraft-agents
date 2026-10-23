@@ -101,4 +101,4 @@
             (not= :continue r) (recur)
             (not (ctx/alive? c)) :continue
             (dth/window-closed? c entry) (do (ctx/hold-still! c nil) nil)
-            :else (do (await (child/pause! c (cfg/pause-s) :fetching-kit)) (await (pace/pace!)) (recur))))))))
+            :else (do (await (child/pause! c (cfg/pause-s) :fetching-kit)) (await (pace/pace! c)) (recur))))))))

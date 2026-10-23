@@ -15,7 +15,8 @@
             [engine.events :as events]
             [engine.triggers :as triggers]
             [engine.test-util :as tu]
-            [jobs.combat.attack :as attack]))
+            [jobs.combat.attack :as attack]
+            [jobs.lib.pace :as pace]))
 
 (defn spec [args] (list 'jobs.combat.attack args))
 
@@ -323,7 +324,7 @@
       (fn ^:async t []
         (let [{:keys [p] :as s} (await (h/first-round-ms (spec {:targets [7]}) {:inventory h/sword :entities [(zed 7 2)]} 10))]
           (is (= 4 (count (attacked s))))
-          (is (every? #(<= 585 % 625) (h/waited-between-swings p)) "the rest of the sword's 625 ms is waited out between swings"))))))
+          (is (every? #(<= (- 585 pace/pace-ms) % 625) (h/waited-between-swings p)) "the rest of the sword's 625 ms is waited out between swings"))))))
 
 (deftest a-vehicle-is-hit-faster-than-its-damage-drains
   (async done
@@ -339,7 +340,7 @@
       (fn ^:async t []
         (let [{:keys [p] :as s} (await (h/first-round-ms (spec {:targets [7] :settings {:jobs.lib.combat/attack-gap-ms 100}}) {:inventory h/sword :entities [(zed 7 2)]} 10))]
           (is (= 4 (count (attacked s))))
-          (is (every? #(<= 80 % 100) (h/waited-between-swings p)) "100 ms, not the sword's 625 nor the 500 floor"))))))
+          (is (every? #(<= (- 80 pace/pace-ms) % 100) (h/waited-between-swings p)) "100 ms, not the sword's 625 nor the 500 floor"))))))
 
 (deftest a-target-that-leaves-unkilled-is-looked-for-then-lost
   (async done

@@ -306,13 +306,13 @@
 ;; The forked mass with the block of the stair's top floor gone: its feet cell [-26 60 0] has a hole under it.
 (def topless (dissoc forked "-26,59,0"))
 
-;; f's call may take n steps of go-to's loop (its pace! between them); the step after fails the job.
+;; f's call may take n steps of go-to's loop (its pace timer between them); the step after fails the job.
 (defn ^:async within-steps [n f]
-  (let [pace pace/pace!
+  (let [pace pace/timer
         left (atom n)]
-    (set! pace/pace! #(if (neg? (swap! left dec)) (js/Promise.reject (js/Error. "step budget spent")) (pace)))
+    (set! pace/timer #(if (neg? (swap! left dec)) (js/Promise.reject (js/Error. "step budget spent")) (pace)))
     (try (await (f))
-         (finally (set! pace/pace! pace)))))
+         (finally (set! pace/timer pace)))))
 
 (deftest an-own-stair-whose-top-floor-is-gone-does-not-hold-the-call-for-ever
   (async done

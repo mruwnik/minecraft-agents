@@ -91,7 +91,7 @@
                                      {:ways #{:pocket}
                                       :settings {:jobs.survival.dig-pocket/walk-radius 0}}))]
               (if (and (= :continue e) (ctx/alive? c))
-                (do (await (pace/pace!)) (recur))
+                (do (await (pace/pace! c)) (recur))
                 e)))
         outcome (if (= :done (:kind e)) :made :dig-failed)]
     (ctx/update-mem! c assoc :pocket outcome)
@@ -99,7 +99,7 @@
       (ctx/remember! c :breathe-pocket {:pos (nth cells 2)} made-policy)
       (loop [n (js/Math.ceil (/ (settings/ticks->ms (settings/get settings ::drain-ticks)) pace/pace-ms))]
         (when (and (pos? n) (ctx/alive? c) (breath/situation p))
-          (await (pace/pace!))
+          (await (pace/pace! c))
           (recur (dec n))))
       true)))
 

@@ -171,7 +171,7 @@
     (loop [i 1]
       (let [{:keys [status]} (await (near/walk-round! c dry 0 opts))]
         (if (and (#{"searching" "partial"} status) (< i (dry-walk-rounds)))
-          (do (await (pace/pace!)) (recur (inc i)))
+          (do (await (pace/pace! c)) (recur (inc i)))
           status)))))
 
 (defn ^:async leave-hang!

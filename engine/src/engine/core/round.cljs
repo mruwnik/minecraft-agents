@@ -187,6 +187,7 @@
                           (check!)
                           (resolve-attention! eng request-id reason))
      :alive? #(do (spin-guard! root slots) (or (nil? token) (owner? eng token)))
+     :check-limits #(when (and token (owner? eng token)) (limits/check! eng base))
      :hold-still (fn [reason] (check!) (hold-still! eng token root reason))
      :open-section (fn [section level]
                      (check!)

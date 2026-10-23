@@ -1,5 +1,5 @@
 (ns engine.contract-limits-test
-  "A call's limits (engine.contract, engine.core.limits): clamped to the caller's, checked at acts and call boundaries,
+  "A call's limits (engine.contract, engine.core.limits): clamped to the caller's, checked at acts, call boundaries and paces,
   the outermost crossed frame ends :limit-reached and job.limit_reached tells the line, its amount and the report."
   (:require [cljs.test :refer [deftest is async]]
             [engine.contract :as contract]
@@ -8,7 +8,8 @@
             [engine.events :as events]
             [engine.fake :as fake]
             [engine.memory :as mem]
-            [engine.test-util :as tu]))
+            [engine.test-util :as tu]
+            [jobs.lib.pace :as pace]))
 
 (def world (atom {}))
 (def clock (atom 0))
@@ -45,6 +46,25 @@
           (await (core/tick! eng))
           (is (= 1 (:slow-rounds @world)) "the round after the crossing does not run")
           (is (= {:kind :limit-reached :cause {:line :job-time :spend 5}} (stopped seen))))))))
+
+(def spins
+  {:defaults {:spend {:job-time 5}}
+   :round (fn [c] (pace/steps! c (fn [] (swap! world update :steps (fnil inc 0)) :again)))})
+
+(deftest a-loop-of-steps-with-no-act-ends-on-its-budget-under-the-test-clock
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (reset! world {})
+        (let [[seen sink] (tu/capture-sink)
+              p (tu/fake {})
+              now (tu/act-clock (atom 1000000) p 20)
+              eng (core/create {:primitives p :dir (tu/tmp-dir) :now now :jobs {'spins spins} :triggers {}
+                                :events (events/make {:body "Fake" :sinks [sink] :now now})})]
+          (core/submit! eng '(spins) {})
+          (await (core/tick! eng))
+          (is (= {:kind :limit-reached :cause {:line :job-time :spend 5}} (stopped seen)))
+          (is (<= 100 (:steps @world) 102) "it ends once its paces (pace-ms each on the test clock) spent the 5 s"))))))
 
 (def waits
   {:round (fn [_] (swap! world update :wait-rounds (fnil inc 0)) :continue)})

@@ -193,7 +193,7 @@
       (loop [n 0]
         (let [t (await (choose-tree! c radius species))]
           (cond
-            (and (= :searching t) (< n 20)) (do (await (pace/pace!)) (recur (inc n)))
+            (and (= :searching t) (< n 20)) (do (await (pace/pace! c)) (recur (inc n)))
             (not (map? t)) false
             (= (:column t) (:column before)) (do (ctx/update-mem! c assoc :partials (:partials before 0)) false)
             :else true))))))

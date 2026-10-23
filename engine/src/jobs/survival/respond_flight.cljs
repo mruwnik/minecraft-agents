@@ -231,6 +231,6 @@
                 (not (ctx/alive? c)) :continue
                 clear? (ctx/end c :done nil {:fled [] :ended :none})
                 (not= :ok (first (ctx/can-run c))) :continue
-                :else (do (await (pace/pace!)) (recur)))))]
+                :else (do (await (pace/pace! c)) (recur)))))]
     (when (contract/ending? r) (forget-flight! c))
     r))

@@ -256,7 +256,7 @@
                                                       (loop []
                                                         (let [r (await (ctx/call c :kid gated {}))]
                                                           (if (= :continue r)
-                                                            (do (await (pace/pace!)) (recur))
+                                                            (do (await (pace/pace! c)) (recur))
                                                             (do (swap! world assoc :child r) (ctx/end c :done nil))))))}}
                                    {:wait {:name :wait :job '(parent) :persistence :retry :when (constantly true)}})]
           (swap! world assoc :start true :run false)

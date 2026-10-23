@@ -673,13 +673,13 @@
   "Run (f) with a search budget of 32 expansions a slice and go-to's pace! counted in paces; restores both."
   [paces f]
   (let [budget wsearch/round-budget
-        pace pace/pace!]
+        pace pace/timer]
     (reset! wsearch/searches {})
     (set! wsearch/round-budget 32)
-    (set! pace/pace! (fn [] (swap! paces inc) (pace)))
+    (set! pace/timer (fn [] (swap! paces inc) (pace)))
     (try (await (tu/with-expansion-budget 16 f))
          (finally (set! wsearch/round-budget budget)
-                  (set! pace/pace! pace)))))
+                  (set! pace/timer pace)))))
 
 (deftest one-go-to-call-searches-on-paced-until-its-search-ends
   (async done

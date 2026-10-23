@@ -97,7 +97,7 @@
   (loop [n 1]
     (let [r (waits/waiting-out c (await (call c slot job args)))]
       (if (and (= :continue r) (nil? (some-> (:child-wait c) deref)) (< n max-calls) (ctx/alive? c))
-        (do (await (pace/pace!)) (recur (inc n)))
+        (do (await (pace/pace! c)) (recur (inc n)))
         r))))
 
 (defn run!*

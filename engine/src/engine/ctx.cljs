@@ -195,6 +195,12 @@
   [ctx]
   (when-let [f (:done ctx)] (f)))
 
+(defn check-limits!
+  "Check the call's limits and its callers' between steps (jobs.lib.pace/pace!), as an act does: a crossed line
+  throws the limit error that ends its frame, so a loop with no act or call still ends on its budget."
+  [ctx]
+  (when-let [f (:check-limits ctx)] (f)))
+
 (defn submit!
   "Put a job spec (an expression, see engine.expr) at the end of the list;
   returns its instance id."

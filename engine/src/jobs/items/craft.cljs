@@ -236,7 +236,7 @@
         (cond
           (= :continue e) :continue
           (not= :done (:kind e)) nil
-          (ctx/alive? c) (do (await (pace/pace!)) (recur))
+          (ctx/alive? c) (do (await (pace/pace! c)) (recur))
           :else :continue)))))
 
 (defn table-why! [c why] (ctx/update-mem! c assoc :table-why why) nil)

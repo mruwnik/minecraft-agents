@@ -294,7 +294,7 @@
       (ctx/update-mem! c assoc :acted true))
     (when (not= :continue e)
       (swap! run assoc :chest-done true))
-    (await (pace/pace!))))
+    (await (pace/pace! c))))
 
 (defn swap-target
   "{:item ground-item :stack stack-to-throw} for the nearest ground item worth

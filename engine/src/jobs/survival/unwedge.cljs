@@ -116,5 +116,5 @@
           (<= (max-passes) i) (ctx/end c :nothing-possible :still-wedged {:tries i})
           :else (let [r (await (pass! c cell))]
                   (if (= :again r)
-                    (do (await (pace/pace!)) (recur (inc i)))
+                    (do (await (pace/pace! c)) (recur (inc i)))
                     r)))))))

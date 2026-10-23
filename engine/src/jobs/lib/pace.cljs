@@ -6,10 +6,17 @@
 
 (def pace-ms "The timer awaited between two steps, so a loop with no act never starves the event loop." 50)
 
-(defn pace!
+(defn timer
   "A promise that resolves after pace-ms (a timer, never a microtask)."
   []
   (js/Promise. (fn [resolve] (js/setTimeout resolve pace-ms))))
+
+(defn pace!
+  "The pause between two steps of c's loop: its limits are checked (ctx/check-limits!: a loop of steps with no act
+  ends on its budget), then the timer."
+  [c]
+  (ctx/check-limits! c)
+  (timer))
 
 (defn ^:async steps!
   "A whole attempt made of steps: call (step) again, a pace! between, while it resolves to :again, the job's goal does
@@ -28,6 +35,6 @@
           e
           (let [s (ctx/can-run c)]
             (case (first s)
-              :ok (do (await (pace!)) (recur))
+              :ok (do (await (pace! c)) (recur))
               :never (ctx/end c :impossible (contract/status-cause s))
               (if (ctx/returns-on-later? c) (ctx/end c :condition-failed (contract/status-cause s)) :continue))))))))

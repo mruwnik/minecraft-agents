@@ -365,20 +365,20 @@
       (fn ^:async t []
         (let [{:keys [eng p]} (setup {:inventory [{:name "wheat" :count 6}] :blocks {"2,64,0" "crafting_table"}})
               n (atom 0)
-              orig pace/pace!]
+              orig pace/timer]
           (.override (.-world p) "craft"
                      (fn ^:async f [token args impl]
                        (if (= 1 (swap! n inc))
                          (do (await (impl token (clj->js (assoc (js->clj args) "count" 1))))
                              #js {:status "partial" :reason "interrupted" :made 1})
                          (await (impl token args)))))
-          (set! pace/pace! (fn [] (swap! (engine.fake/state p) engine.fake/take-one "bread") (orig)))
+          (set! pace/timer (fn [] (swap! (engine.fake/state p) engine.fake/take-one "bread") (orig)))
           (try
             (let [result (await (child-outcome eng job {:item "bread" :count 2 :table {:x 2 :y 64 :z 0} :ways #{:carried}} 1))]
               (is (= {:item "bread" :made 2 :status :done} (dissoc result :text)))
               (is (= {"bread" 1} (inv p)) "two baked, one eaten, no wheat left over")
               (is (= 2 (count (calls p "craft")))))
-            (finally (set! pace/pace! orig))))))))
+            (finally (set! pace/timer orig))))))))
 
 (deftest craft-that-stops-short-ends-stopped
   (async done

@@ -110,7 +110,7 @@
       (not (pending?)) (do (ctx/hold-still! c nil) nil)
       (not (ctx/alive? c)) :continue
       (dth/window-closed? c entry) (do (ctx/hold-still! c nil) :closed)
-      :else (do (await (child/pause! c (cfg/pause-s) reason)) (await (pace/pace!)) (recur)))))
+      :else (do (await (child/pause! c (cfg/pause-s) reason)) (await (pace/pace! c)) (recur)))))
 
 (defn ^:async decide!
   "The decision of this trip: the saved one, else the estimate, save it. A resumed trip estimates again once (from
@@ -184,7 +184,7 @@
               danger (dg/meet-danger! c danger)
               (= :done (:kind r)) :next
               (not (ctx/alive? c)) :continue
-              (and (= :continue r) (< n (child/default-max-calls))) (do (await (pace/pace!)) (recur (inc n)))
+              (and (= :continue r) (< n (child/default-max-calls))) (do (await (pace/pace! c)) (recur (inc n)))
               (= :continue r) (dg/decline! c :unreachable "the stair down to the pile is waiting on the world" {:pos pos})
               :else (give-up! :unreachable (str "no stair down to the pile: " (pr-str (contract/cause-key r))
                                                     (when (get-in r [:cause :because]) " (no pickaxe could be got)")

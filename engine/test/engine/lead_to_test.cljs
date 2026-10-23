@@ -110,8 +110,8 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [clock seen p] :as s} (setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 9})]})
-              now #(+ @clock (* call-ms (.-length (.-calls (.-world p)))))
+        (let [{:keys [seen] :as s} (setup {:floor tu/walk-floor :inventory lead :entities [(cow 1 3 {:trail 9})]})
+              now (:now (:eng s))
               t0 (now)
               _ (await (submit s {} 1))
               holds (filterv #(and (= :holding (:kind %)) (= "waiting-for-animal" (some-> (:reason %) name))) @seen)

@@ -333,7 +333,7 @@
         (let [s (setup {:entities [(zombie 7 5 {})]})
               paces (atom 0)]
           (mem/write! (:store (:eng s)) :hurt {:amount 5 :health 10 :attacker {:name "zombie"}} {:cap 50 :ttl 60000})
-          (with-redefs [pace/pace! (fn [] (swap! paces inc) (js/Promise.resolve nil))
+          (with-redefs [pace/timer (fn [] (swap! paces inc) (js/Promise.resolve nil))
                         respond/respond (fn [_ _] (swap! (fake/state (:p s)) assoc :entities []) (js/Promise.resolve nil))]
             (await (run-job! s 'jobs.survival.respond-to-hostile {})))
           (is (>= @paces 2) "a hit within the hit window keeps the response looking, not one blink look"))))))

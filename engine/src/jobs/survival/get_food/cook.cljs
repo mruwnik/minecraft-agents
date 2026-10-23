@@ -185,7 +185,7 @@
           (not (ctx/alive? c)) :continue
           wait (do (ctx/update-mem! c #(-> % (dissoc :cooking) (assoc :no-cook (str "waits: " (name (:reason wait))))))
                    nil)
-          (and (= :continue e) (not loaded?) (< n (child/default-max-calls))) (do (await (pace/pace!)) (recur (inc n)))
+          (and (= :continue e) (not loaded?) (< n (child/default-max-calls))) (do (await (pace/pace! c)) (recur (inc n)))
           (= :continue e) :continue
           :else (do (ctx/update-mem! c dissoc :cooking)
                     (if (pos? (:smelted (:data e) 0))

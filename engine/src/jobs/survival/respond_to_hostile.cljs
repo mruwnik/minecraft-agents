@@ -416,10 +416,10 @@
           (:left-heard outcome) (ctx/end c :done nil (:left-heard outcome))
           (:left-watched outcome) (ctx/end c :done nil (:left-watched outcome))
           (and (empty? after) (not (hiding? c)) (not (and (< looks (max-unchanged)) (fight-unsettled? c outcome)))) (ctx/end c :done nil (:flight-end (ctx/mem c)))
-          (and (empty? after) (not (hiding? c))) (do (await (pace/pace!)) (recur unchanged (inc looks)))
+          (and (empty? after) (not (hiding? c))) (do (await (pace/pace! c)) (recur unchanged (inc looks)))
           :else
           (let [n (if (= before (signature c after)) (inc unchanged) 0)]
             (if (>= n (max-unchanged))
               (do (mute-heard! c hs)
                   (ctx/end c :nothing-possible :no-response {:text (str "a hostile is still near and " n " tries changed nothing")}))
-              (do (await (pace/pace!)) (recur n 0)))))))))
+              (do (await (pace/pace! c)) (recur n 0)))))))))

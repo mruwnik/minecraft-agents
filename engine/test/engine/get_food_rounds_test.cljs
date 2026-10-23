@@ -493,11 +493,11 @@
     (tu/run-async done
       (fn ^:async t []
         (let [paces (atom 0)
-              pace pace/pace!
+              pace pace/timer
               n (atom 0)]
-          (set! pace/pace! (fn [] (swap! paces inc) (pace)))
+          (set! pace/timer (fn [] (swap! paces inc) (pace)))
           (let [{:keys [out]} (await (run-parent! (counting-child 3 n) {} {}))]
-            (set! pace/pace! pace)
+            (set! pace/timer pace)
             (is (= [[:done nil]] @out) "one call of run! ran it to :done, its memory cleared")
             (is (= 4 @n))
             (is (= 3 @paces) "a timer between calls, never a microtask")))))))

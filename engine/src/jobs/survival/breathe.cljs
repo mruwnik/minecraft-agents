@@ -448,6 +448,6 @@
       :else (let [r (await (pass! c))]
               (case r
                 :held (recur (inc i))
-                :again (do (await (pace/pace!)) (recur (inc i)))
+                :again (do (await (pace/pace! c)) (recur (inc i)))
                 :done (ctx/end c :done nil)
                 r)))))

@@ -503,7 +503,7 @@
       (cond
         (not (ctx/alive? c)) :continue
         (= :again cooked) (recur n)
-        (or (= :continue eaten) (= :continue way)) (if (:reflex c) (or (waits/reflex-wait-end c) (do (await (pace/pace!)) (recur n))) :continue)
+        (or (= :continue eaten) (= :continue way)) (if (:reflex c) (or (waits/reflex-wait-end c) (do (await (pace/pace! c)) (recur n))) :continue)
         (= ::fed way) (ctx/end c :done nil (cond-> {:food (food-level c)} (seq (:killed (ctx/mem c))) (assoc :killed (:killed (ctx/mem c)))))
         (= ::enough way) (stop! c :still-hungry (str "still hungry (food " (food-level c) ") after " n " ways")
                                 :food (food-level c))
@@ -512,7 +512,7 @@
                     more (cond fished fished (not (:explore (:args c))) nil :else (await (explore! c)))
                     bad (when-not more (await (eat-bad! c)))]
                 (cond
-                  (or (= :continue more) (= :continue bad)) (if (:reflex c) (or (waits/reflex-wait-end c) (do (await (pace/pace!)) (recur n))) :continue)
+                  (or (= :continue more) (= :continue bad)) (if (:reflex c) (or (waits/reflex-wait-end c) (do (await (pace/pace! c)) (recur n))) :continue)
                   (or more bad) (recur (inc n))
                   (not (hungry-now? c)) (carry-stop! c)
                   (:too-dangerous (ctx/mem c))

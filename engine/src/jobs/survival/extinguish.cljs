@@ -513,7 +513,7 @@
       (<= (max-passes) i) (still-burning c "still burning after many tries")
       :else (let [r (await (pass! c))]
               (case r
-                :again (do (await (pace/pace!)) (recur (inc i)))
+                :again (do (await (pace/pace! c)) (recur (inc i)))
                 :done (let [failed (:scoop-failed (ctx/mem c))]
                         (ctx/end c :done nil (when (seq failed) {:scoop-failed failed :text (str/join "; " (map :text failed))})))
                 r)))))
