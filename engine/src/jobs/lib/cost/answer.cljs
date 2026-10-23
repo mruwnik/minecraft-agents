@@ -10,8 +10,8 @@
   blast of a late step back: its :hit is the blast at the creeper's swell start.
   flee-answer: a walk away from the mobs, nil when one of them keeps up (outruns?: the flight's speed is body-speed over
   ::outrun-factor). A melee mob hits while within its reach, a ranged one while the body is within its bow's range (both
-  follow at their chase speed), a
-  creeper within its swell start blows at the distance the body reached when its fuse ends. The mob is left alive:
+  follow at their chase speed), a creeper that reaches its swell start before the body gets going
+  (danger/flight-start-s) blows at the distance the body reached when its fuse ends. The mob is left alive:
   :then the fight with it, or the same walk once more. A stub until the priced flee search (card ee045b60).
   build-answer: building a refuge (seal or pillar) for some seconds: the blows of the melee mobs that arrive meanwhile.
 
@@ -80,7 +80,10 @@
 
 (defn flee-mob
   "{:damage :hit :seconds} of a walk away from mob {:name :distance :follow (blocks it keeps chasing out to) :speed (its
-  chase speed, default danger/chase-speed of the name)} at speed v through the armour stats, nil when it keeps up."
+  chase speed, default danger/chase-speed of the name)} at speed v through the armour stats, nil when it keeps up. A
+  creeper that reaches its swell start within danger/flight-start-s (the body gains nothing yet) blows at the distance
+  the body reached when its fuse ends: a blast is not felt before it lands, as other mobs' blows are (respond's felt
+  rate)."
   [stats v {:keys [name distance follow speed]}]
   (let [d (or distance 0)
         chase (or speed (danger/chase-speed name))
@@ -89,14 +92,16 @@
     (cond
       (nil? escape) nil
       (= "creeper" name)
-      (let [hurt (if (<= d swell-start) (blast-hurt stats (+ d (* v fuse-s))) 0)]
-        {:damage hurt :hit hurt :seconds escape})
-      (contains? weapon/ranged-mobs name)
-      {:damage (threat/mob-hurt stats name (/ (max 0 (- bow-range d)) gain) identity (threat/lone-hit-rate name))
-       :hit (blow stats name) :seconds escape}
+      (let [start (danger/flight-start-s)
+            swell (/ (max 0 (- d swell-start)) chase)
+            hurt (if (< swell start)
+                   (blast-hurt stats (+ (min d swell-start) (* v (max 0 (- fuse-s (- start swell))))))
+                   0)]
+        {:damage hurt :hit hurt :seconds (+ start escape)})
       :else
-      {:damage (threat/mob-hurt stats name (/ (max 0 (- (danger/melee-reach) d)) gain) identity (threat/lone-hit-rate name))
-       :hit (blow stats name) :seconds escape})))
+      (let [r (if (contains? weapon/ranged-mobs name) bow-range (danger/melee-reach))]
+        {:damage (threat/mob-hurt stats name (/ (max 0 (- r d)) gain) identity (threat/lone-hit-rate name))
+         :hit (blow stats name) :seconds escape}))))
 
 (defn flee-answer
   "The answer of a walk away from mobs [flee-mob's] by a body with food wearing equipment, the walk there and back (it

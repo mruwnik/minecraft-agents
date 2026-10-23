@@ -33,6 +33,7 @@
    ::sprint-food {:default 6 :doc "Food at or under which a body cannot sprint (reach-first?)." :spec (a/int-in 0 20)}
    ::chase-speed {:default 3 :doc "Blocks a second a chasing melee mob covers, a little over a zombie's (reach-first?)." :spec (a/num-in 0.1 nil)}
    ::baby-chase-speed {:default 5.1 :doc "Blocks a second a baby zombie covers chasing (chase-speed of mob-kind \"baby\")." :spec (a/num-in 0.1 nil)}
+   ::flight-start-s {:default 1.6 :doc "Seconds a flight stands, turns and gets going before it gains on its chasers (flight-start-s): trial flee steps of 6 blocks averaged 2.2 blocks a second, 2.7 s against 1.1 s sprinting." :spec (a/num-in 0 nil)}
    ::outrun-factor {:default 1.5 :doc "Times a mob's chase speed the body must run to get away from it on foot (outruns?): a flight goes in steps and round obstacles, the mob comes straight on." :spec (a/num-in 0 nil)}
    ::no-answer-scale {:default 60 :doc "How much dearer a mob's route danger is for each time over what the body can afford to lose in a fight with it (no-answer-factor)." :spec (a/num-in 0 nil)}
    ::race-margin-s {:default 0.5 :doc "Seconds the body must win a race to a refuge by (reach-first?)." :spec (a/num-in 0 nil)}
@@ -214,6 +215,7 @@
   (/ (body-speed food) (settings/get settings ::outrun-factor)))
 
 (defn melee-reach [] (settings/get settings ::melee-reach))
+(defn flight-start-s [] (settings/get settings ::flight-start-s))
 
 (defn outruns?
   "Whether a body with food food gets away from every one of mob-names on foot: its flight-speed is at least each one's

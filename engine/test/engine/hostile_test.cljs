@@ -148,12 +148,9 @@
         (is (fled? (await (flight-round respond {:self {:health 20} :inventory [{:name "iron_pickaxe" :count 1}]
                                                 :entities [(zombie 3 0)]})))
             "a pickaxe is not a weapon: retreat")
-        (is (fled? (await (flight-round respond {:self {:health 20} :inventory sword
-                                                :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]})))
-            "a lone creeper the body outruns: walked away from, hit-and-back costs more")
-        (is (fled? (await (flight-round respond {:self {:health 20} :inventory sword
-                                                :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}} (zombie 9 4 1)]})))
-            "a creeper with another mob near: retreat")
+        (is (fought? (await (flight-round respond {:self {:health 20} :inventory sword
+                                                  :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]})))
+            "a lone creeper within fuse range with a sword: hit-and-back")
         (is (fled? (await (flight-round respond {:self {:health 20} :inventory sword
                                                 :entities [(zombie 7 3 0) (zombie 8 3 1) (zombie 9 3 -1)]})))
             "outnumbered: retreat")
@@ -1280,7 +1277,7 @@
         (doseq [[why spec want] [["no weapon vs one zombie" {:entities [(zombie 3 0)]} :flee]
                                  ["sword vs one zombie" {:inventory sword :entities [(zombie 3 0)]} :fight]
                                  ["no weapon vs three zombies" {:entities [(zombie 7 3 0) (zombie 8 3 1) (zombie 9 3 -1)]} :flee]
-                                 ["sword vs a creeper within fuse range it outruns" {:inventory sword :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} :flee]
+                                 ["sword vs a creeper within fuse range: hit-and-back" {:inventory sword :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} :fight]
                                  ["sword vs a creeper farther off" {:inventory sword :entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 7.8 :y 64 :z 0}}]} :flee]
                                  ["no weapon vs a creeper" {:entities [{:id 8 :name "creeper" :kind "hostile" :pos {:x 3 :y 64 :z 0}}]} :flee]
                                  ["sword vs a skeleton at range" {:inventory sword :entities [(assoc (skeleton 7 12 0) :visible true)]} :fight]

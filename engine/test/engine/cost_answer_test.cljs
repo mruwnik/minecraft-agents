@@ -55,20 +55,21 @@
 
 (deftest a-walk-from-a-mob-that-keeps-up-is-no-answer
   (is (nil? (cost/flee-answer {:food 20 :mobs [(mob "spider" 4)]})) "a spider outruns the body")
-  (is (some? (cost/flee-answer {:food 20 :mobs [(mob "zombie" 4 35)]}))))
+  (is (some? (cost/flee-answer {:food 20 :mobs [(mob "zombie" 4 35)]})))
+  (is (pos? (:damage (cost/flee-answer {:food 20 :mobs [(mob "creeper" 5)]}))) "a creeper 5 off swells before the walk gets going")
+  (is (zero? (:damage (cost/flee-answer {:food 20 :mobs [(mob "creeper" 9)]})))))
 
 (deftest a-mob-that-came-back-before-makes-a-walk-dearer
   (let [walk #(cost/answer-price (body 20) (cost/flee-answer {:food 20 :mobs [(mob "skeleton" 10)] :returns %}) here)]
-    (is (> (walk 2) (walk 1) (walk 0))))
-  (is (= :flee (choice 14 sword [(mob "skeleton" 10) (mob "skeleton" 11)] 0)))
-  (is (= :fight (choice 14 sword [(mob "skeleton" 10) (mob "skeleton" 11)] 2)) "ranged mobs fled twice lately: the walk only comes again"))
+    (is (> (walk 2) (walk 1) (walk 0)))))
 
-(deftest a-creeper-fought-hit-and-back-risks-its-blast-the-more-the-lower-the-health
+(deftest a-creeper-near-enough-to-swell-before-the-walk-gets-going-or-that-keeps-coming-back-is-fought-hit-and-back
   (let [price #(cost/answer-price (body %) (cost/fight-answer (fight sword (mob "creeper" 3))) here)]
     (is (> (price 10) (* 2 (price 20)))))
-  (is (= :flee (choice 20 sword [(mob "creeper" 5)])) "a creeper the body outruns is walked away from")
-  (is (= :fight (choice 20 sword [(mob "creeper" 5)] 3)) "one that keeps coming back is fought")
-  (is (= :flee (choice 10 sword [(mob "creeper" 5)] 3)) "not at low health"))
+  (are [health weapon distance returns expected] (= expected (choice health weapon [(mob "creeper" distance)] returns))
+    20 "stone_sword" 4 0 :fight
+    20 "stone_sword" 9 0 :flee
+    20 "stone_sword" 9 3 :fight))
 
 (deftest a-creepers-blast-falls-off-to-nothing-at-twice-its-power
   (let [bare (cost/armour-stats nil)]
@@ -81,5 +82,6 @@
     (is (> (build 1) (build 4) (build 8)))
     (is (zero? (build 8)) "a zombie 8 off is not there within 2 s"))
   (is (zero? (:damage (cost/build-answer {:mobs [(mob "skeleton" 1)] :seconds 2}))) "a shooter is no melee blow"))
+
 
 
