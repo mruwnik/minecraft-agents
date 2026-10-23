@@ -2,7 +2,7 @@
   "The texts of a source that has nothing: why no source, what a failed try adds."
   (:require [engine.ctx :as ctx]
             [engine.game :as game]
-            [jobs.items.obtain.base :refer [animal-radius gathers? makes? seen-radius way?]]
+            [jobs.items.obtain.base :refer [gathers? makes? seen-radius way?]]
             [jobs.items.obtain.need :refer [explore-opts]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [seen-blocks-of seen-of]]
@@ -47,8 +47,8 @@
         takeable (remove #(or (animal? %) (nil? (seen-of c %))) needs)
         label (fn [{:keys [key seen sheep mob] :as need}]
                 (cond
-                  sheep (str key " (from " sheep " sheep within " (animal-radius) " blocks)")
-                  mob (str key " (from a " mob " within " (animal-radius) " blocks)")
+                  sheep (str key " (from " sheep " sheep in sight)")
+                  mob (str key " (from a " mob " in sight)")
                   (and (set? seen) (not= #{key} seen)) (str key " (from " (clojure.string/join "/" (sort seen)) ")")
                   :else (str key (when-let [o (other-logs-seen c need)]
                                    (str " (only " (clojure.string/join "/" o) " seen: another species)")))))]

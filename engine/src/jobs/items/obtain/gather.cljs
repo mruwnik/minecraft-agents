@@ -4,7 +4,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
-            [jobs.items.obtain.base :refer [animal-radius barren-ore search-scan-radius site-radius tried! ways-of]]
+            [jobs.items.obtain.base :refer [barren-ore search-scan-radius site-radius tried! ways-of]]
             [jobs.items.obtain.need :refer [explore-opts gather-viable? own-worth pickaxe-first? light-settling? search-names search-worth tools-wanted torch-due trees-unreachable?]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
@@ -362,7 +362,7 @@
                             :how (or how :kill)})))
             (when-let [{:keys [wanted taking]} (:wool-fallback pl)]
               (ctx/emit! c :obtain.wool-colour :info
-                         {:message (str "no " wanted " sheep within " (animal-radius) " blocks; taking " taking " wool instead")
+                         {:message (str "no " wanted " sheep worth the walk; taking " taking " wool instead")
                           :wanted wanted :taking taking})))
           (let [e (waits/waiting-out c (await (ctx/call c (gather-slot need) (:job need) (:args need))))]
             (if (= :continue e)

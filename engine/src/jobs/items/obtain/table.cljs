@@ -1,7 +1,7 @@
 (ns jobs.items.obtain.table
   "Which job gathers which raw item (gather-needs), the item families it knows, and the recipe options of the sources."
   (:require [engine.game :as game]
-            [jobs.items.obtain.base :refer [animal-radius sapling-leaf-limit seen-radius]]
+            [jobs.items.obtain.base :refer [sapling-leaf-limit seen-radius]]
             [jobs.items.recipes :as recipes]
             [jobs.items.smelt.plan :as smelt-plan]
             [jobs.lib.blocks :as b]
@@ -115,13 +115,13 @@
             [{:key "water_bucket" :count n :job 'jobs.items.use :seen #{"water"} :args {:item "bucket"}}])
           (for [[k n] gather :when (mob-drops k)]
             {:key k :count n :job 'jobs.combat.hunt :mob (mob-drops k) :max-runs 1
-             :args {:item k :count n :radius (animal-radius)}})
+             :args {:item k :count n :radius (seen-radius)}})
           (for [[k n] gather :when (crop-blocks k)]
             {:key k :count n :job 'jobs.farm.harvest :crop (crop-blocks k) :seen #{(crop-blocks k)} :max-runs 1
              :args {:crops [(crop-blocks k)]}})
           (for [[k n] gather :when (wool? k)]
             {:key k :count n :job 'jobs.combat.hunt :sheep (wool-color k) :max-runs 1
-             :args {:item k :count n :radius (animal-radius)}})
+             :args {:item k :count n :radius (seen-radius)}})
           (when (pos? logs) [{:key "log" :count logs :job 'jobs.forestry.harvest-wood :seen trees/log-name? :args {:ways log-ways :leafless? true}}])
           (for [[k n] gather :when (trees/log-name? k)]
             {:key k :count n :job 'jobs.forestry.harvest-wood :seen #{k} :args {:species (trees/species-of k) :ways log-ways :leafless? true}})

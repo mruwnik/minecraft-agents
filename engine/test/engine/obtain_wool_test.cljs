@@ -204,21 +204,20 @@
                                  {:inventory h/sword :entities [(cow 1 3) (cow 2 6) (cow 3 8)]} 40))]
           (is (seq (attacked s)) "a cow was attacked"))))))
 
-(deftest a-cow-beyond-the-animal-radius-is-walked-to-and-hunted-with-explore
+(deftest a-cow-30-blocks-off-is-hunted-when-the-trip-pays
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (await (scenario {:item "leather" :count 1 :explore true :worth 500}
+        (let [s (await (scenario {:item "leather" :count 1 :worth 500}
                                  {:inventory h/sword :entities [(cow 1 30) (cow 2 31) (cow 3 32)]} 150))]
-          (is (seq (filter #(= :obtain.exploring (:kind %)) @(:seen s))) "a search for the cow began")
-          (is (seq (attacked s)) "the cow found was attacked"))))))
+          (is (seq (attacked s)) "the cow was attacked"))))))
 
 (deftest string-and-bone-are-hunted-from-a-seen-spider-and-skeleton
   (async done
     (tu/run-async done
       (fn ^:async t []
         (doseq [[item mob] [["string" "spider"] ["bone" "skeleton"]]]
-          (let [s (await (scenario {:item item :count 1}
+          (let [s (await (scenario {:item item :count 1 :worth 500}
                                    {:inventory h/sword :entities [{:id 1 :name mob :kind "hostile" :pos {:x 20 :y 64 :z 0} :drops [{:name item :count 1}]}]} 40))]
             (is (seq (attacked s)) item)))))))
 

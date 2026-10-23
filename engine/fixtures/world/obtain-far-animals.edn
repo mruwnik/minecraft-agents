@@ -1,5 +1,5 @@
-;; Card 679e25cd: obtain with :explore walks to look for animals beyond the 24-block animal radius.
-;; Should-succeed: beef from three cows 26 blocks off ; wool from three white sheep 26 blocks off.
+;; Animals in sight are a source when the walk to them is worth the item (no fixed radius; card 715a21e6).
+;; Should-succeed: beef from three cows 26 blocks off ; wool from three white sheep 26 blocks off (the call's :worth pays the walk).
 {:defaults
  {:tags [:animals :obtain :explore :large]
   :time :any
@@ -9,13 +9,11 @@
  :cases
  [{:name "beef-from-cows-26-blocks-off"
    :act [[:summon "cow" [58.5 0 14.5] "{NoAI:1b}"] [:summon "cow" [59.5 0 14.5] "{NoAI:1b}"] [:summon "cow" [58.5 0 18.5] "{NoAI:1b}"]
-         [:job (jobs.items.obtain {:item "beef" :count 1 :explore true :ways #{:gather}})]]
-   :expect [{:event {:source :job :kind :obtain.exploring} :within-s 30}
-            {:event {:source :job :kind :completed :data {:name "jobs.items.obtain"}} :within-s 220 :of-job true}]
+         [:job (jobs.items.obtain {:item "beef" :count 1 :worth 500 :ways #{:gather}})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.items.obtain"}} :within-s 220 :of-job true}]
    :after [[:item "beef" [:>= 1]]]}
   {:name "white-wool-from-sheep-26-blocks-off"
    :act [[:summon "sheep" [58.5 0 14.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [59.5 0 14.5] "{NoAI:1b,Color:0b}"] [:summon "sheep" [58.5 0 18.5] "{NoAI:1b,Color:0b}"]
-         [:job (jobs.items.obtain {:item "white_wool" :count 1 :explore true :ways #{:gather}})]]
-   :expect [{:event {:source :job :kind :obtain.exploring} :within-s 30}
-            {:event {:source :job :kind :completed :data {:name "jobs.items.obtain"}} :within-s 220 :of-job true}]
+         [:job (jobs.items.obtain {:item "white_wool" :count 1 :worth 500 :ways #{:gather}})]]
+   :expect [{:event {:source :job :kind :completed :data {:name "jobs.items.obtain"}} :within-s 220 :of-job true}]
    :after [[:item "white_wool" [:>= 1]]]}]}
