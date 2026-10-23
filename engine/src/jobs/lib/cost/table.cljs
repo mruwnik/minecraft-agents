@@ -21,7 +21,7 @@
    :farm-s 4
    :min-drop-chance 0.05
    :drop-chance {"apple" 0.005 "wheat_seeds" 0.125}
-   :dig {:hardness-s 1.5 :max-hardness 5 :min-s 0.25 :default-tier 2 :speed {1 2 2 4 3 6 4 8}}
+   :dig {:hardness-s 1.5 :max-hardness 5 :min-s 0.25 :default-tier 2 :speed {0 1 1 2 2 4 3 6 4 8}}
    :find {:terrain 0.1
           :wood 12 ;; a log, stem, hyphae, wood or bamboo block: the walk to a tree
           :block {"gilded_blackstone" 300}

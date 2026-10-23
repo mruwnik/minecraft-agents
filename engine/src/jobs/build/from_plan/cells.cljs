@@ -54,13 +54,13 @@
                   (reach-room/closes-in? p :fill cell)))))
 
 (defn dig-seconds
-  "Seconds the body takes to dig block n with the best carried tool of its kind (the table's default tier with none)."
+  "Seconds the body takes to dig block n with the best carried tool of its kind (bare hands with none)."
   [p n]
   (let [tier (->> (u/inventory p)
                   (filter #(kind/of-kind? (:name %) (kind/tool-kind n)))
                   (map #(cost/tool-tier (:name %)))
                   (reduce max nil))]
-    (cost/dig-cost n :basis (when tier {:dig {:default-tier tier}}))))
+    (cost/dig-cost n :basis {:dig {:default-tier (or tier 0)}})))
 
 (defn seal-price
   "Nil when placing at cell does not shut the body in. Else the dig-out through the cheapest wall outside the plan that

@@ -1,0 +1,18 @@
+;; Card 3ab57fce: the fresh-start base path. build.from-plan builds starter-hut (5x5, walls, glass, a door in the south wall) at [10 -1 10]
+;; while the body stands inside it; placing the last wall cell would seal the body in, so the build prices the dig-out and leaves.
+;; Should-succeed: the hut is finished (walls, door, roof) and the body is outside its footprint or free to go.
+;; Glowstone lights the plot; the case needs no clock.
+{:defaults
+ {:tags [:build :survival] :time :any
+  :plot {:height 8}
+  :blocks [[:set [16 0 8] "glowstone"]]
+  :plans [{:id "hut" :metadata {:by "$body"} :parts [{:id "hut" :blueprint "starter-hut" :at #at [10 -1 10]}]}]
+  :body {:at [12.5 0 13.5] :settle-s 2 :effects [["resistance" 600 4]]
+         :inventory [["stone_pickaxe" 1] ["torch" 4] ["cobblestone" 64] ["oak_planks" 64] ["oak_log" 16] ["glass_pane" 8]
+                     ["crafting_table" 1] ["oak_stairs" 2] ["chest" 1] ["white_bed" 1] ["oak_door" 1]]}
+  :limit-s 400}
+ :cases
+ [{:name "hut-built-around-the-body-is-finished-and-left"
+   :act [[:job (jobs.build.from-plan {:plan "$plan:hut"})]]
+   :expect [{:event {:source :job :kind :completed :data {:kind :done}} :within-s 300 :of-job true}]
+   :after [[:block [12 0 14] "oak_door"] [:block [10 0 10] "oak_log"] [:block [12 3 12] "oak_planks"] [:block [10 1 12] "glass_pane"] [:body-far [12.5 0 12.5] 1.2]]}]}

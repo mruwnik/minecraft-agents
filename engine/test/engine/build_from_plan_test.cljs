@@ -314,6 +314,19 @@
           (is (not= "oak_planks" (block p [5 64 4])))
           (is (= :unreachable (get (:given-up result) [5 64 4]))))))))
 
+(deftest a-seal-that-places-nothing-does-not-dig-the-body-out
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (gap-room [pick])]
+          (await (child-outcome eng job {:plan "gap"} 300))
+          (is (not= "oak_planks" (block p [5 64 4])))
+          (is (= "stone" (block p [3 64 4])) "no seal placed, so no dig-out"))))))
+
+(deftest bare-hands-price-a-dig-above-any-tool
+  (let [dirt-with (fn [kit] (fp-cells/dig-seconds (:p (gap-room kit)) "dirt"))]
+    (is (> (dirt-with []) (dirt-with [{:name "wooden_shovel" :count 1}])))))
+
 (deftest a-dig-in-rock-with-no-pickaxe-is-given-up-no-tool-without-a-tunnel
   (async done
     (tu/run-async done

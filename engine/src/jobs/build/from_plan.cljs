@@ -263,7 +263,8 @@
                      (loop [left near]
                        (if (seq left)
                          (let [_ (trace! c :place-one! (:pos (first left)))
-                               seal (seal-price c cells (:pos (first left)))]
+                               seal (seal-price c cells (:pos (first left)))
+                               placed-before (:placed (ctx/mem c) 0)]
                            (cond
                              (and seal (nil? (:cost seal)))
                              (do (trace! c :seals-in (:pos (first left)))
@@ -271,7 +272,8 @@
                                                          (assoc :leave (exit-of c cells))))
                                  :again)
                              (= :continue (await (place-one! c (first left) (give-up)))) :continue
-                             seal (do (ctx/update-mem! c assoc :leave (or (:exit seal) (exit-of c cells)) :sealed true) :again)
+                             (and seal (> (:placed (ctx/mem c) 0) placed-before))
+                             (do (ctx/update-mem! c assoc :leave (or (:exit seal) (exit-of c cells)) :sealed true) :again)
                              :else (recur (rest left))))
                          :again)))
       (seq dig-near) (loop [left dig-near]
