@@ -53,7 +53,7 @@
 
 (defn- chance-at
   "The spawn chance per second at `cell` for a body at feet: a seen cell by its light (sky reaching it down its column; a roofed cell is dark only in a dark hall), an unseen one
-  by the open-sky guess when it lies within the surface band of `top`; underground-unseen cells carry none."
+  at the worse case (Q16): by the open-sky guess when it lies within the surface band of `top`, else as a dark cave."
   [p cell top underground?]
   (let [night (not (look/lit-light? 0 15 (sh-sense/sky-subtract-now p)))
         sky (if night 0 15)
@@ -62,7 +62,7 @@
     (cond
       block (cost/spawn-chance [(:x cell) (:y cell) (:z cell)]
                                {:light (constantly {:block block :sky (cond (sh-sense/sky-reaches-from-above? p cell) sky (and (< block (look/dark-light)) (ready/hall-at? p cell)) 0 :else 15)})})
-      (or underground? (< (:y cell) (- top (settings/get settings ::surface-band)))) 0
+      (or underground? (< (:y cell) (- top (settings/get settings ::surface-band)))) (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky 0})})
       :else (cost/spawn-chance [(:x cell) (:y cell) (:z cell)] {:light (constantly {:block 0 :sky sky})}))))
 
 (def lava-scan-radius 128)
@@ -159,20 +159,23 @@
     {:hp (+ spawn-hp hostile-hp death-hp lethal lava) :lava-hp lava :spawn-hp spawn-hp :hostile-hp hostile-hp :death-hp death-hp :lethal-hp lethal
      :dark-s exposed-s :hostiles (count catchers)}))
 
-(def recheck-ms "How long a walk held :risky waits before status prices it again, and how long the plan it held on is kept (planned)." 10000)
+(def recheck-ms "How long a walk held :risky waits before status prices it again." 10000)
 
 (defn note-plan!
   "Keep plan ({:status :steps}), the one go-to's round held its walk to goal on, for status to price while the body
-  stands where it planned from, for recheck-ms."
+  stands where it planned from and knows the world as it did (sense/known-writes)."
   [c goal plan]
-  (ctx/update-mem! c assoc ::plan {:from (floor-cell (sh-sense/feet (:primitives c))) :goal goal :t (ctx/now c)
-                                   :status (:status plan) :steps (mapv floor-cell (:steps plan))}))
+  (let [p (:primitives c)]
+    (ctx/update-mem! c assoc ::plan {:from (floor-cell (sh-sense/feet p)) :goal goal :writes (sense/known-writes p)
+                                     :status (:status plan) :steps (mapv floor-cell (:steps plan))})))
 
 (defn planned
-  "The plan note-plan! kept, with its :goal, nil once the body moved from where it planned from or after recheck-ms."
+  "The plan note-plan! kept, with its :goal, nil once the body moved from where it planned from or a block it knows
+  changed (a plan made now might differ)."
   [c]
-  (let [{:keys [from t] :as kept} (::plan (ctx/mem c))]
-    (when (and kept (= from (floor-cell (sh-sense/feet (:primitives c)))) (<= 0 (- (ctx/now c) t) recheck-ms))
+  (let [p (:primitives c)
+        {:keys [from writes] :as kept} (::plan (ctx/mem c))]
+    (when (and kept (= from (floor-cell (sh-sense/feet p))) (= writes (sense/known-writes p)))
       kept)))
 
 (defn stay-estimate

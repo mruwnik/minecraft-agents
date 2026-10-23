@@ -1,6 +1,6 @@
 (ns engine.go-to-risk-test
   "go-to's start check judges the walk's risk (jobs.lib.walk-risk), not the clock: hostiles near a long dark way hold it
-  with the figures in the reason; a way that goes mostly underground costs far less than the same distance over open ground."
+  with the figures in the reason; unseen ground is priced at the worse case (Q16)."
   (:require [cljs.test :refer [are deftest is async]]
             [engine.core :as core]
             [engine.ctx :as ctx]
@@ -23,6 +23,7 @@
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.lib.ready :as ready]
+            [jobs.lib.sense :as sense]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.walk-risk :as risk]
             [jobs.lib.walk.drive :as drive]
@@ -37,13 +38,6 @@
   (plan-of (rest (cost/straight-route (reach/mob-lookup (:primitives c)) (sh-sense/feet (:primitives c)) goal))))
 
 (defn planned-status "risk/status of the walk to goal planned straight." [c goal] (risk/status c goal (straight-plan c goal)))
-
-(deftest a-way-down-from-the-hut-is-less-exposed-than-the-same-way-over-open-ground
-  (let [c (ready-test/ctx-of night-hut)
-        flat (risk/estimate c {:x 95 :y 64 :z 0})
-        down (risk/estimate c {:x 5 :y 20 :z 90})]
-    (is (pos? (:dark-s flat)))
-    (is (< (:dark-s down) (/ (:dark-s flat) 2)))))
 
 (deftest seen-lava-by-the-way-adds-hp-scaled-by-closeness-and-lava-far-from-it-adds-none
   (let [c (ready-test/ctx-of (assoc night-hut :time st/noon :blocks {"22,64,20" "lava"}))
@@ -119,6 +113,28 @@
         hurt #(:hostile-hp (risk/estimate c goal {:plan %}))]
     (is (> (hurt {:status "partial" :steps (take 8 line)}) (* 4 (hurt (plan-of round)))) "the rest past x 10 runs by the zombie; the found way keeps 22 blocks off")
     (is (= (hurt {:status "partial" :steps (take 8 line)}) (hurt (plan-of line))) "the rest is the line")))
+
+(deftest unseen-ground-below-the-surface-band-is-priced-as-a-dark-cave
+  (let [c (ready-test/ctx-of day-world)]
+    (with-redefs [sh-sense/seen-cell? (constantly false) look/glimpse? (constantly false)]
+      (is (zero? (:dark-s (risk/estimate c {:x 95 :y 64 :z 0}))) "unseen open ground by day is lit by the sky")
+      (is (pos? (:dark-s (risk/estimate c {:x 5 :y 20 :z 90}))) "unseen ground far below may be a cave"))))
+
+(deftest a-held-plan-is-kept-until-the-body-moves-or-a-block-it-knows-changes
+  (let [m (atom {})
+        writes (atom 3)
+        clock (atom 0)
+        c (assoc (ready-test/ctx-of {:time st/noon :self {:pos {:x 0 :y 64 :z 0}}}) :update-mem (fn [f args] (apply swap! m f args)))
+        goal {:x 30 :y 64 :z 0}]
+    (with-redefs [ctx/mem (fn [_] @m) ctx/now (fn [_] @clock) sense/known-writes (fn [_] @writes)]
+      (risk/note-plan! c goal (plan-of straight-cells))
+      (reset! clock 600000)
+      (is (= goal (:goal (risk/planned c))) "kept while nothing changed, however long")
+      (swap! writes inc)
+      (is (nil? (risk/planned c)) "a block the body knows changed: a plan made now might differ")
+      (risk/note-plan! c goal (plan-of straight-cells))
+      (swap! (fake/state (:primitives c)) assoc-in [:self :pos] [3.5 64 0.5])
+      (is (nil? (risk/planned c)) "the body moved from where it planned"))))
 
 (deftest a-hostile-beside-the-straight-line-is-priced-on-go-to-s-plan-round-its-field-the-cells-it-walks
   (async done
