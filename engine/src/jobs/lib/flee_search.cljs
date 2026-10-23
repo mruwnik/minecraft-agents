@@ -8,7 +8,8 @@
   routes plan through unseen cells as through seen ones (no rock guess), a flee step walks only the seen part.
   Each end is priced (the planner's price plus the death the route risks past the known threats, a death about where
   the body stands: cost/route-death-cost, plus its unseen part at the worse case: unseen-price) and scored against
-  the chasers: :arrive, the seconds the first of them takes to reach it (cost/arrival-s); :caught?, whether one lands
+  the chasers: :arrive, the seconds the first of them takes to reach it (cost/arrival-s over its way, its threat
+  field's; the body timed at cost/flee-walk-speed, cost/flee-stop-s between steps); :caught?, whether one lands
   a blow on the route (cost/caught-on?); :score, arrive less price. pick chooses a flee step's end."
   (:require [engine.args :as a]
             [engine.path.executor :as executor]
@@ -17,6 +18,7 @@
             [engine.settings :as settings]
             [jobs.lib.cost :as cost]
             [jobs.lib.shelter.sense :as sh-sense]
+            [jobs.lib.threat-field :as field]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.lib.walk :as walk]
@@ -25,18 +27,20 @@
 
 (a/defargs settings
   {::bearings {:default 12 :doc "Headings round the body a flee search plans a ring end at." :spec (a/int-in 1 64)}
-   ::horizon-s {:default 4 :doc "Seconds of running (jobs.lib.cost/body-speed) whose distance is the ring a flee search plans its ends on: a way that leads that far is open, one that stops short a pocket." :spec (a/num-in 0.5 nil)}
+   ::horizon-s {:default 4 :doc "Seconds of a flight (reach) whose distance is the ring a flee search plans its ends on: a way that leads that far is open, one that stops short a pocket." :spec (a/num-in 0.5 nil)}
    ::max-nodes {:default 600 :doc "Planner nodes one ring end's search may expand: past it the end is its partial route's." :spec (a/int-in 50 nil)}
    ::target-max-nodes {:default 2400 :doc "Planner nodes the search of a named target (a goal, a home) may expand." :spec (a/int-in 50 nil)}
    ::open-share {:default 0.5 :doc "Share of the reach a ring end's partial route must cover to count as a way on (a lake, a tree or a wall at the ring); one that stops shorter is a pocket." :spec (a/num-in 0 1)}
-   ::step-s {:default 1 :doc "Seconds of the chosen route a flee step walks before the flight chooses again (the cell of the route that far in; a cover end is walked to whole)." :spec (a/num-in 0.1 nil)}
+   ::step-s {:default 1 :doc "Seconds a flee step walks of the chosen route before the flight stops to choose again (the cell of the route that far in; a cover end is walked to whole)." :spec (a/num-in 0.1 nil)}
    ::budget-ms {:default 100 :doc "Milliseconds one flee search may plan; the ring headings not planned by then are left out (the ones most away from the chasers are planned first)." :spec (a/num-in 1 nil)}
    ::hazard-clearance {:default 2.5 :doc "Blocks a flee route keeps from a remembered hazard: a route with a cell nearer is not taken." :spec (a/num-in 0 nil)}})
 
 (defn reach
-  "Blocks to the ring of a flee search for a body with food food: body-speed x ::horizon-s."
+  "Blocks to the ring of a flee search for a body with food food: what a flight covers in ::horizon-s, its steps of
+  ::step-s at cost/flee-walk-speed with cost/flee-stop-s between them."
   [food]
-  (* (cost/body-speed food) (settings/get settings ::horizon-s)))
+  (let [step (settings/get settings ::step-s)]
+    (* (cost/flee-walk-speed food) (settings/get settings ::horizon-s) (/ step (+ step (cost/flee-stop-s))))))
 
 (defn away
   "The unit [ux uz] from `from` away from the chasers ({:pos}), each weighing 1/distance; [1 0] when they cancel out."
@@ -64,19 +68,24 @@
          vec)))
 
 (defn timed-cells
-  "The cells {:x :y :z :t} of planner steps, :t the seconds into the route (its seconds spread over its length)."
+  "The cells {:x :y :z :t} of planner steps, :t the seconds into the route: its seconds spread over its length, plus
+  cost/flee-stop-s for each ::step-s walked before (a flight stops to choose its next step)."
   [steps seconds]
   (let [cells (mapv (fn [^js s] {:x (.-x s) :y (.-y s) :z (.-z s)}) steps)
         legs (map u/dist cells (rest cells))
         total (reduce + 0 legs)
-        at (reductions + 0 legs)]
-    (mapv (fn [cell d] (assoc cell :t (if (pos? total) (* seconds (/ d total)) 0))) cells at)))
+        at (reductions + 0 legs)
+        step (settings/get settings ::step-s)
+        stop (cost/flee-stop-s)]
+    (mapv (fn [cell d] (let [walk (if (pos? total) (* seconds (/ d total)) 0)]
+                         (assoc cell :t (+ walk (* stop (js/Math.floor (/ walk step)))))))
+          cells at)))
 
 (defn pace
-  "How much longer than the planner's seconds a body with food food takes on a route: the planner times a sprint, a
-  body at cost's sprint-food or under walks (cost/body-speed)."
+  "How much longer than the planner's seconds a flight's steps by a body with food food take on a route: the planner
+  times a sprint, a flight's steps go at cost/flee-walk-speed."
   [food]
-  (/ (cost/body-speed 20) (cost/body-speed food)))
+  (/ (cost/body-speed 20) (cost/flee-walk-speed food)))
 
 (defn dwelt
   "Timed cells (timed-cells) with :s, the seconds the body spends in each (what death-chance reads)."
@@ -190,23 +199,43 @@
                           out)
                    (or t0 (when (nil? (:pos t)) (js/performance.now))))))))))
 
+(defn way-at
+  "The blocks of chaser's way ({:way}: field/way-fn) to pos, nil when not known."
+  [{:keys [way]} {:keys [x y z]}]
+  (when way (way (js/Math.floor x) (js/Math.floor y) (js/Math.floor z))))
+
 (defn arrive-at
-  "Seconds the first of chasers ({:name :pos}) takes to reach pos (cost/arrival-s), ##Inf with none."
+  "Seconds the first of chasers ({:name :pos :way}) takes to reach pos (cost/arrival-s over its way, way-at), ##Inf
+  with none."
   [chasers pos]
-  (reduce min ##Inf (map #(cost/arrival-s (:name %) (:pos %) pos) chasers)))
+  (reduce min ##Inf (map #(cost/arrival-s (:name %) (:pos %) pos (way-at % pos)) chasers)))
+
+(defn with-ways
+  "chasers each with :way, the field/way-fn of its threat field to within cost/melee-reach, when it has a :mob name
+  (a shot spot has none) other than a creeper (its blast passes walls: the straight line stands)."
+  [c chasers]
+  (mapv (fn [{:keys [mob pos] :as ch}]
+          (cond-> ch (and mob (not= "creeper" mob))
+            (assoc :way (field/way-fn (field/field-of c {:mob mob :pos pos}) (floor-cell pos) (cost/melee-reach)))))
+        chasers))
+
+(def unreached-s
+  "The arrival a :score counts for an end no chaser can get to: past any real one, so such ends rank first and among
+  themselves by price."
+  1e6)
 
 (defn scored
   "priced (price!) scored against chasers [{:name (mob-kind) :pos}] from where the body stands (from): :arrive (the
   seconds the first chaser takes to the end, ##Inf with none), :gain (arrive less the chasers' arrival at from: what
-  the walk buys over standing still), :caught? (on the route past where the body stands, with no race margin: a margin is for a
+  the walk buys over standing still; 0 where no chaser can get to the body already), :caught? (by a chaser not :calm?, on the route past where the body stands, with no race margin: a margin is for a
   race to one place, and a chaser a few blocks off would cut every first step) and :score (see the ns doc)."
   [chasers from priced]
   (let [here (arrive-at chasers from)]
     (mapv (fn [{:keys [end cells price] :as e}]
           (let [arrive (arrive-at chasers end)]
-            (assoc e :arrive arrive :gain (- arrive here)
-                     :caught? (boolean (some #(cost/caught-on? {:chaser (:name %) :pos (:pos %) :route (rest cells) :margin-s 0}) chasers))
-                     :score (- arrive price))))
+            (assoc e :arrive arrive :gain (if (js/isFinite here) (- arrive here) 0)
+                     :caught? (boolean (some (fn [ch] (cost/caught-on? {:chaser (:name ch) :pos (:pos ch) :route (rest cells) :margin-s 0 :way #(way-at ch %)})) (remove :calm? chasers)))
+                     :score (- (min arrive unreached-s) price))))
         priced)))
 
 (defn covers
@@ -291,6 +320,7 @@
   [c chasers targets {:keys [covered?] :as opts}]
   (let [self (.self (:primitives c))
         from (u/self-pos c)
+        chasers (with-ways c chasers)
         r (or (:reach opts) (reach (.-food self)))
         ends (scored chasers from (await (price! c (into (vec targets) (ring from chasers r (settings/get settings ::bearings))) (assoc opts :reach r :chasers chasers))))]
     (cond-> ends covered? (into (covers chasers from covered? ends)))))

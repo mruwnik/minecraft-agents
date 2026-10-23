@@ -43,7 +43,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [ends (await (ends-of junction {:x 0.5 :y 64 :z 0.5} [{:name "zombie" :pos {:x -4.5 :y 64 :z 0.5}}] [] nil))
+        (let [ends (await (ends-of junction {:x 0.5 :y 64 :z 0.5} [{:name "zombie" :mob "zombie" :pos {:x -4.5 :y 64 :z 0.5}}] [] nil))
               end (search/pick ends {})]
           (is (some #(and (not (:found? %)) (= 0 (:z (:end %)))) ends) "east is planned only part way: a pocket")
           (is (= 2 (:x end)) (str "the step turns into the branch north: " (pr-str end)))
@@ -61,7 +61,7 @@
               _ (perception/pass! (aget p "perception") {:effort 1 :reuse? true})
               c {:primitives p :view (fn [] {:data mem/empty-data :now 0})}
               ends (await (settings/with-settings {::search/budget-ms 10000}
-                            (fn ^:async run [] (await (search/search! c [{:name "zombie" :pos {:x -4.5 :y 64 :z 0.5}}] [] {})))))
+                            (fn ^:async run [] (await (search/search! c [{:name "zombie" :mob "zombie" :pos {:x -4.5 :y 64 :z 0.5}}] [] {})))))
               dark (filter :unseen ends)
               e (search/choose ends {})]
           (is (some #(and (:open? %) (:unseen %)) ends) "a way on through the dark is planned to the ring")
@@ -72,21 +72,36 @@
 
 (def field (box -32 63 -32 32 63 32 "stone"))
 
-(deftest a-chaser-faster-than-the-body-catches-every-way-away
-  ;; the old rays ignored the chaser's speed: a baby zombie 3 blocks behind a hungry body still got a step east
+(deftest a-chaser-faster-than-the-flight-catches-every-way-away
+  ;; the old search timed the body at a sprint (5.6 blocks a second): a spider 4 blocks behind was left behind on open
+  ;; ground; a flight goes at the measured flee pace (steps at 3.62 with a 0.29 s stop between)
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [from {:x 0.5 :y 64 :z 0.5}
-              mob-pos {:x -2.5 :y 64 :z 0.5}
-              baby (await (ends-of field from [{:name "baby" :pos mob-pos}] [] {:food 6}))
-              zombie (await (ends-of field from [{:name "zombie" :pos mob-pos}] [] {:food 6}))]
+              behind (fn [d] {:x (- 0.5 d) :y 64 :z 0.5})
+              baby (await (ends-of field from [{:name "baby" :pos (behind 3)}] [] {:food 6}))
+              spider (await (ends-of field from [{:name "spider" :mob "spider" :pos (behind 4)}] [] {:food 20}))
+              far (await (ends-of field from [{:name "zombie" :mob "zombie" :pos (behind 7)}] [] {:food 6}))]
           (is (seq baby) "the ways are planned")
           (is (every? :caught? baby) "a baby zombie runs faster than a body too hungry to sprint")
           (is (nil? (search/pick baby {})) "no flee step: the body is cornered")
           (is (= 1 (search/caught-chance baby false)) "the fight-or-flee weighing prices the flight caught")
-          (is (some? (search/pick zombie {})) "a grown zombie is left behind")
-          (is (< (search/caught-chance zombie false) 0.15) "a clear way lowers the prior"))))))
+          (is (every? :caught? spider) "a spider 4 behind catches a flight")
+          (is (some? (search/pick far {})) "one 7 behind is left behind over the ring")
+          (is (< (search/caught-chance far false) 0.15) "a clear way lowers the prior"))))))
+
+(deftest a-chaser-behind-a-wall-is-timed-along-its-way-round-it
+  ;; the old arrival ran a straight line through the wall: every way was caught
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [from {:x 0.5 :y 64 :z 0.5}
+              zombie [{:name "baby" :mob "zombie" :pos {:x -2.5 :y 64 :z 0.5}}]
+              open (await (ends-of field from zombie [] nil))
+              walled (await (ends-of (merge field (box -2 64 -6 -2 65 6 "stone")) from zombie [] nil))]
+          (is (every? :caught? open) "in the open a baby zombie keeps up")
+          (is (some? (search/pick walled {})) "round a wall it falls behind"))))))
 
 (def cliff
   "A plateau (feet y 64) for x <= 0 over a lowland (feet y 54) east of it, a stair one block wide down the cliff along
@@ -100,7 +115,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [goal {:x 6 :y 54 :z 6}
-              ends (await (ends-of cliff {:x 0.5 :y 64 :z 0.5} [{:name "zombie" :pos {:x -20.5 :y 64 :z 0.5}}] [{:pos goal :kind :goal}] nil))
+              ends (await (ends-of cliff {:x 0.5 :y 64 :z 0.5} [{:name "zombie" :mob "zombie" :pos {:x -30.5 :y 64 :z 0.5}}] [{:pos goal :kind :goal}] nil))
               e (search/named ends goal)]
           (is (:found? e) "the planner walks the stair down")
           (is (nil? (respond.goal/verdict goal e {})) (pr-str (dissoc e :cells))))))))
@@ -115,15 +130,15 @@
     (merge {:open? (:found? e)} e)))
 
 (deftest a-flee-step-walks-the-first-part-of-the-route-to-the-end
-  (is (= {:x 5 :y 64 :z 0} (search/step-of {:end {:x 9 :y 64 :z 0} :cells [{:x 0 :y 64 :z 0 :t 0} {:x 5 :y 64 :z 0 :t 1.3} {:x 9 :y 64 :z 0 :t 2}]})))
-  (is (= {:x 9 :y 64 :z 0} (search/step-of {:end {:x 9 :y 64 :z 0} :cover? true :cells [{:x 0 :y 64 :z 0 :t 0} {:x 5 :y 64 :z 0 :t 1.3} {:x 9 :y 64 :z 0 :t 2}]}))
+  (is (= {:x 5 :y 64 :z 0} (search/step-of {:end {:x 9 :y 64 :z 0} :cells [{:x 0 :y 64 :z 0 :t 0} {:x 5 :y 64 :z 0 :t 3} {:x 9 :y 64 :z 0 :t 5}]})))
+  (is (= {:x 9 :y 64 :z 0} (search/step-of {:end {:x 9 :y 64 :z 0} :cover? true :cells [{:x 0 :y 64 :z 0 :t 0} {:x 5 :y 64 :z 0 :t 3} {:x 9 :y 64 :z 0 :t 5}]}))
       "a cover end is walked to whole")
-  (is (= {:x 9 :y 64 :z 0} (search/step-of {:end {:x 9 :y 64 :z 0} :cells [{:x 0 :y 64 :z 0 :t 0} {:x 5 :y 64 :z 0 :t 1.3} {:x 9 :y 64 :z 0 :t 2}]} #{[5 64 0]}))
+  (is (= {:x 9 :y 64 :z 0} (search/step-of {:end {:x 9 :y 64 :z 0} :cells [{:x 0 :y 64 :z 0 :t 0} {:x 5 :y 64 :z 0 :t 3} {:x 9 :y 64 :z 0 :t 5}]} #{[5 64 0]}))
       "a cell go-to refused is walked past on the route")
-  (is (nil? (search/step-of {:end {:x 5 :y 64 :z 0} :cells [{:x 0 :y 64 :z 0 :t 0} {:x 5 :y 64 :z 0 :t 1.3}]} #{[5 64 0]})))
-  (is (= {:x 1 :y 64 :z 0} (search/step-of {:end {:x 9 :y 64 :z 0} :seen-n 2 :cells [{:x 0 :y 64 :z 0 :t 0} {:x 1 :y 64 :z 0 :t 0.4} {:x 5 :y 64 :z 0 :t 1.3} {:x 9 :y 64 :z 0 :t 2}]}))
+  (is (nil? (search/step-of {:end {:x 5 :y 64 :z 0} :cells [{:x 0 :y 64 :z 0 :t 0} {:x 5 :y 64 :z 0 :t 3}]} #{[5 64 0]})))
+  (is (= {:x 1 :y 64 :z 0} (search/step-of {:end {:x 9 :y 64 :z 0} :seen-n 2 :cells [{:x 0 :y 64 :z 0 :t 0} {:x 1 :y 64 :z 0 :t 0.4} {:x 5 :y 64 :z 0 :t 3} {:x 9 :y 64 :z 0 :t 5}]}))
       "only the seen part of the route is walked")
-  (is (= {:x 1 :y 64 :z 0} (search/step-of {:end {:x 9 :y 64 :z 0} :seen-n 1 :cells [{:x 0 :y 64 :z 0 :t 0} {:x 1 :y 64 :z 0 :t 0.4} {:x 5 :y 64 :z 0 :t 1.3} {:x 9 :y 64 :z 0 :t 2}]}))
+  (is (= {:x 1 :y 64 :z 0} (search/step-of {:end {:x 9 :y 64 :z 0} :seen-n 1 :cells [{:x 0 :y 64 :z 0 :t 0} {:x 1 :y 64 :z 0 :t 0.4} {:x 5 :y 64 :z 0 :t 3} {:x 9 :y 64 :z 0 :t 5}]}))
       "seen no further than where it stands: one cell into the dark")
   (is (nil? (search/step-of {:end {:x 0 :y 64 :z 0} :cover? true :cells [{:x 0 :y 64 :z 0 :t 0} {:x 1 :y 64 :z 0 :t 0.2} {:x 0 :y 64 :z 0 :t 0.4}]}))
       "an end where the route starts is no step"))

@@ -4,6 +4,7 @@
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -45,7 +46,8 @@
   (boolean (some #(= (cell goal) (:goal (:data %))) (ctx/entries c :goal-off))))
 
 (defn chasers
-  "The chasers a flight's search runs from, {:name (cost/mob-kind) :pos}: the hostiles the body senses or remembers
+  "The chasers a flight's search runs from, {:name (cost/mob-kind) :mob (its name) :pos :calm? (an enderman the client does
+  not flag angry: it walks about, a flight from it is no race; an angry one is the cornered options')}: the hostiles the body senses or remembers
   within the longest follow range (this flight's dead skipped), the last known places of the mobs fled within
   threats/fled-memory-ms that it does not know now, and where shots came from (flight/fire-spots)."
   [c]
@@ -53,9 +55,10 @@
         dead (set (flight/dead-ids c))
         known (remove #(dead (.-id %)) (flight/known-chasers p))
         ids (set (map #(.-id %) known))]
-    (-> (mapv (fn [e] {:name (cost/mob-kind e) :pos (danger-q/mob-pos p e)}) known)
+    (-> (mapv (fn [e] (cond-> {:name (cost/mob-kind e) :mob (.-name e) :pos (danger-q/mob-pos p e)}
+                         (and (combat/enderman? e) (not (true? (.-angry e)))) (assoc :calm? true))) known)
         (into (comp (map :data) (remove #(ids (:id %)))
-                    (keep #(when-let [pos (or (:pos %) (danger-q/rough-pos %))] {:name (:mob %) :pos pos})))
+                    (keep #(when-let [pos (or (:pos %) (danger-q/rough-pos %))] {:name (:mob %) :mob (:mob %) :pos pos})))
               (threats/listed-threats p (threats/fresh-threats (ctx/view c))))
         (into (map (fn [pos] {:name nil :pos pos})) (flight/fire-spots c)))))
 
@@ -105,7 +108,7 @@
               (under-floor? c goal) :under-floor
               :else (verdict goal (search/named ends goal)
                              {:home home :died (flight/died-spots c)
-                              :beaten? (search/beaten-to? chs (u/self-pos c) (.-food (.self (:primitives c))) goal)})))}))
+                              :beaten? (search/beaten-to? (search/with-ways c chs) (u/self-pos c) (.-food (.self (:primitives c))) goal)})))}))
 
 (defn ^:async caught-chance!
   "The chance a flight from where the body stands is caught (flee-search/caught-chance of a search from its chasers),

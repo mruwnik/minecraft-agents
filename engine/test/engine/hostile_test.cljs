@@ -744,7 +744,7 @@
           (remember! eng :home {:pos {:x 0 :y 64 :z 20}})
           (core/submit! eng retreat {})
           (await (core/tick! eng))
-          (is (= {:x 0 :z -6} (first-move eng)) "a home beyond the hostile is ignored"))))))
+          (is (= {:x 0 :z -4} (first-move eng)) "a home beyond the hostile is ignored"))))))
 
 (deftest retreat-flees-from-the-weighted-set-of-threats-not-the-nearest
   (async done
@@ -763,7 +763,7 @@
           (remember! eng :home {:pos {:x -2100 :y 64 :z -2000}})
           (core/submit! eng retreat {})
           (await (core/tick! eng))
-          (is (= {:x 0 :z -6} (first-move eng)) "a home 2000 blocks away does not bend the flight"))))))
+          (is (= {:x 0 :z -4} (first-move eng)) "a home 2000 blocks away does not bend the flight"))))))
 
 (deftest retreat-avoids-hazard-entries
   (async done
@@ -1458,7 +1458,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng]} (await (flight-round retreat {:entities [(zombie 5 0)]}))]
-          (is (= {:x -6 :z 0} (first-move eng)) "a step of 6 directly away")
+          (is (= {:x -4 :z 0} (first-move eng)) "a step of a second's flight at the flee pace, directly away")
           (is (= [] (:list (core/state eng))) "one round: done once the zombie is beyond its follow range"))))))
 
 (deftest a-blocked-retreat-with-the-danger-present-neither-ends-nor-backs-off

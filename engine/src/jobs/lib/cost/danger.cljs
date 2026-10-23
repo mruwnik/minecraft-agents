@@ -34,6 +34,8 @@
    ::chase-speed {:default 3 :doc "Blocks a second a chasing melee mob covers, a little over a zombie's (reach-first?)." :spec (a/num-in 0.1 nil)}
    ::baby-chase-speed {:default 5.1 :doc "Blocks a second a baby zombie covers chasing (chase-speed of mob-kind \"baby\")." :spec (a/num-in 0.1 nil)}
    ::flight-starts {:default [0 0 0 0.05 0.37 0.5 0.75 1.08 1.91 4.14] :doc "Seconds from a flight's decision until it gets going, its deciles (flight-starts): the first flee decision from a creeper of each trial run, as the time to 1 block off less that block at sprint speed; n=80 (mean 0.87), 45 of them seen only across a position gap over 1 s and told at the middle of the gap; 71 decisions with no position in the 2 s before and 2 that never moved are left out (where the body stood is unknown). Recount: node tools/event-counts.mjs flight-starts. A blast on the walk is priced over each (cost.answer/flee-mob)." :spec (a/coll-of number?)}
+   ::flee-walk-speed {:default 3.62 :doc "Blocks a second a flight's steps cover (flee-walk-speed): measured over the trial logs of 2026-10-22/23, 709 blocks in 196 s of 238 steps of 34 flights of two steps or more (retreat.step-speed), at food over ::sprint-food; one too hungry to sprint covers body-speed's share of it." :spec (a/num-in 0.1 nil)}
+   ::flee-stop-s {:default 0.29 :doc "Seconds a flight stands between two of its steps, choosing the next: measured over the same flights, 60 s over 204 gaps (wall time less the steps' own)." :spec (a/num-in 0 nil)}
    ::outrun-factor {:default 1.5 :doc "Times a mob's chase speed the body must run to get away from it on foot (outruns?): a flight goes in steps and round obstacles, the mob comes straight on." :spec (a/num-in 0 nil)}
    ::no-answer-scale {:default 60 :doc "How much dearer a mob's route danger is for each time over what the body can afford to lose in a fight with it (no-answer-factor)." :spec (a/num-in 0 nil)}
    ::race-margin-s {:default 0.5 :doc "Seconds the body must win a race to a refuge by (reach-first?)." :spec (a/num-in 0 nil)}
@@ -188,6 +190,14 @@
   [food]
   (settings/get settings (if (> food (settings/get settings ::sprint-food)) ::sprint-speed ::walk-speed)))
 
+(defn flee-walk-speed
+  "Blocks a second a flight's steps by a body with food food cover: ::flee-walk-speed, times body-speed's share of
+  ::sprint-speed."
+  [food]
+  (* (settings/get settings ::flee-walk-speed) (/ (body-speed food) (settings/get settings ::sprint-speed))))
+
+(defn flee-stop-s [] (settings/get settings ::flee-stop-s))
+
 (defn chase-speed
   "Blocks a second mob-name covers chasing the body: engine.constants/mob-speeds, ::baby-chase-speed for \"baby\" (mob-kind), ::chase-speed for a mob not listed there."
   [mob-name]
@@ -244,18 +254,23 @@
 
 (defn arrival-s
   "Seconds a chaser (mob-kind name) at pos takes to come within ::melee-reach of `at` ({:x :y :z}) at its chase-speed
-  (at least ::chase-speed)."
-  [chaser pos at]
-  (/ (max 0 (- (u/dist pos at) (melee-reach)))
-     (max (settings/get settings ::chase-speed) (chase-speed chaser))))
+  (the game's; ::chase-speed for a mob it does not list), or way blocks, its way to within its blow of `at` (default:
+  the straight line less ::melee-reach): the race is against a flight at its measured pace (flee-walk-speed, flee-stop-s), so no margin
+  over the game's speed."
+  ([chaser pos at] (arrival-s chaser pos at nil))
+  ([chaser pos at way]
+   (/ (or way (max 0 (- (u/dist pos at) (melee-reach))))
+      (chase-speed chaser))))
 
 (defn caught-on?
   "Whether a melee chaser (mob-kind name) at pos lands a blow on a body walking route ([{:x :y :z :t}], :t the seconds
   from the start the body is there): at some point of it the chaser arrives (arrival-s) before the body wins the race
-  there (wins-race?, by margin-s: default ::race-margin-s)."
-  [{:keys [chaser pos route margin-s]}]
-  (let [margin (or margin-s (settings/get settings ::race-margin-s))]
-    (boolean (some #(not (wins-race? (:t %) (arrival-s chaser pos %) margin)) route))))
+  there (wins-race?, by margin-s: default ::race-margin-s); way, a fn of a route point to the chaser's blocks there
+  (nil: the straight line)."
+  [{:keys [chaser pos route margin-s way]}]
+  (let [margin (or margin-s (settings/get settings ::race-margin-s))
+        way (or way (constantly nil))]
+    (boolean (some #(not (wins-race? (:t %) (arrival-s chaser pos % (way %)) margin)) route))))
 
 (defn catches?
   "Whether a melee chaser (mob-name, chaser its mob-kind) at pos lands a blow on a body with food food walking the straight

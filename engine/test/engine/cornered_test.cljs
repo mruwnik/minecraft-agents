@@ -160,7 +160,7 @@
         (let [{:keys [eng]} (await (first-round retreat {:self {:pos [0.5 64 0.5]}
                                                          :blocks (rock [-9 9] [62 67] tunnel-cells)
                                                          :entities [(assoc (skeleton 5.5 64 0.5) :visible true)]}))]
-          (is (= {:x -6 :y 64 :z 0} (first-move eng)) "x 0.5 is column 0, the tunnel, not column 1"))))))
+          (is (= {:x -4 :y 64 :z 0} (first-move eng)) "x 0.5 is column 0, the tunnel, not column 1"))))))
 
 (def dead-end-cells
   "A 1-wide tunnel along x on z 0 closed at x -1 behind the body: x 0..8."
@@ -987,8 +987,9 @@
                   (await (first-act-round retreat {:self {:pos [0.5 64 0.5] :health 8}
                                                    :inventory [{:name "cobblestone" :count 20}]
                                                    :entities [(assoc (skeleton 6.5 64 0.5) :visible true) close]}))]
-              (is (not-any? #(> (first %) -3) (placed-cells p)) (str what ": no seal beside it " (placed-cells p)))
-              (is (< (:x (first-move eng)) 0) (str what ": it walks away first")))
+              (is (not-any? #(>= (first %) 0) (placed-cells p)) (str what ": no seal beside it, only past where it walked off " (placed-cells p)))
+              (is (every? #(> (fake/dist (mapv (first-move eng) [:x :y :z]) %) (fake/dist [0.5 64 0.5] %)) [[6.5 64 0.5] (mapv (:pos close) [:x :y :z])])
+                  (str what ": it walks away from both first " (first-move eng))))
             (recur more)))))))
 
 (def standing-go-to

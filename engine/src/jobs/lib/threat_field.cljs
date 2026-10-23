@@ -54,8 +54,8 @@
 ;; ---------------------------------------------------------------- walkers
 
 (defn walk-field
-  "The cells #js [x y z w] a walker at start [x y z] steps to over kind-at within range steps (forward), at most n,
-  nearest first: w threat/way-weight of its steps (close the field-close steps), none from range on."
+  "The cells #js [x y z w steps] a walker at start [x y z] steps to over kind-at within range steps (forward), at most
+  n, nearest first: w threat/way-weight of its steps (close the field-close steps), none from range on."
   [kind-at [sx sy sz :as start] range close n]
   (let [kind-at (boxed kind-at start range 16)
         key (reach/keyer sx sz)
@@ -67,7 +67,7 @@
         out
         (let [c (aget queue head)
               x (aget c 0) y (aget c 1) z (aget c 2) steps (aget c 3)]
-          (.push out #js [x y z (threat/way-weight close steps)])
+          (.push out #js [x y z (threat/way-weight close steps) steps])
           (when (< (inc steps) range)
             (let [nexts (reach/forward kind-at x y z)]
               (dotimes [i (.-length nexts)]
@@ -151,7 +151,9 @@
 
 (defn field
   "The field of mob {:mob :pos} known to the body of primitives p (see the ns doc): {:cells #js [#js [x y z w] ...]
-  :weights (a Map of base/cell-key to w)}; a water mob met where no water is seen, and a mob of no name or place, has none.
+  :weights (a Map of base/cell-key to w) :steps (a walker's: a Map of base/cell-key to the steps of its way there)
+  :whole? (its way shut in: ended short of its follow range and of ::max-cells, from a cell it stands on)}; a water mob met
+  where no water is seen, and a mob of no name or place, has none.
   lookups {:kind-at :arrow-at}: reach/mob-lookup and reach/arrow-lookup of p, shared by the fields of one window."
   ([p threat] (field p threat {:kind-at (reach/mob-lookup p) :arrow-at (reach/arrow-lookup p)}))
   ([p {:keys [mob pos]} {:keys [kind-at arrow-at]}]
@@ -166,11 +168,16 @@
                    (if (= :projectile (threat/damage-type mob))
                      (.concat walk (fire-cells kind-at arrow-at (update pos :y js/Math.floor) (danger-q/ranged-radius) (max-cells)))
                      walk)))
-         weights (js/Map.)]
+         weights (js/Map.)
+         steps (js/Map.)]
      (doseq [^js c cells]
        (let [k (base/cell-key (aget c 0) (aget c 1) (aget c 2))]
-         (.set weights k (max (aget c 3) (or (.get weights k) 0)))))
-     {:cells cells :weights weights})))
+         (.set weights k (max (aget c 3) (or (.get weights k) 0)))
+         (when-let [n (aget c 4)] (when-not (.has steps k) (.set steps k n)))))
+     {:cells cells :weights weights :steps steps
+      :whole? (and (string? mob)
+                   (< 1 (.-size steps) (max-cells))
+                   (< (reduce max 0 (es6-iterator-seq (.values steps))) (dec (threat/follow-range mob))))})))
 
 (defn field-key
   "What one field is kept under: the mob and its place to 2 blocks across (a mob stepping about keeps its field, and the
@@ -356,6 +363,43 @@
   "A fn of a cell x y z: its weight in field (0-1), nil outside it."
   [{:keys [weights]}]
   (fn [x y z] (.get weights (base/cell-key x y z))))
+
+(defn line-walked?
+  "Whether the straight line from cell [sx sy sz] to x y z runs over cells of steps (a Map of base/cell-key, at each
+  point the cell's height or one off): a walker goes straight there."
+  [^js steps [sx sy sz] x y z]
+  (let [n (js/Math.ceil (js/Math.hypot (- x sx) (- z sz)))]
+    (every? (fn [i]
+              (let [t (/ i n)
+                    px (js/Math.floor (+ sx 0.5 (* t (- x sx))))
+                    pz (js/Math.floor (+ sz 0.5 (* t (- z sz))))
+                    py (js/Math.round (+ sy (* t (- y sy))))]
+                (some #(.has steps (base/cell-key px % pz)) [py (dec py) (inc py)])))
+            (range 1 n))))
+
+(def cells-within
+  "The offsets [dx dy dz d] of the cells within r blocks of a cell (d its distance), the cell itself first."
+  (memoize (fn [r]
+             (let [k (js/Math.floor r)]
+               (->> (for [dx (range (- k) (inc k)) dy (range (- k) (inc k)) dz (range (- k) (inc k))
+                          :let [d (js/Math.hypot dx dy dz)] :when (<= d r)]
+                      [dx dy dz d])
+                    (sort-by peek)
+                    vec)))))
+
+(defn way-fn
+  "A fn of a cell x y z: the blocks the walker of field walks from its cell start to within reach blocks of it (its
+  blow): to the cell itself on a straight line that runs over its way (line-walked?), less reach; else the fewest
+  steps to a cell of its way within reach; ##Inf with none and the field :whole? (the walker cannot get
+  there), nil when that is not known (the straight line stands)."
+  [{:keys [steps whole?]} [sx sy sz :as start] reach]
+  (fn [x y z]
+    (if (and (.has steps (base/cell-key x y z)) (line-walked? steps start x y z))
+      (max 0 (- (js/Math.hypot (- x sx) (- y sy) (- z sz)) reach))
+      (let [near (keep (fn [[dx dy dz]] (.get steps (base/cell-key (+ x dx) (+ y dy) (+ z dz)))) (cells-within reach))]
+        (cond
+          (seq near) (reduce min near)
+          whole? ##Inf)))))
 
 (defn reaches?
   "Whether the field of threat {:mob :pos} (field-of c) holds the cell of pos {:x :y :z}."

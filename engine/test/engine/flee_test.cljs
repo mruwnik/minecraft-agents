@@ -816,16 +816,16 @@
 
 (defn first-target [seen] (:target (first (filterv #(= :retreat.target (:kind %)) @seen))))
 
-(deftest a-flight-with-a-goal-behind-the-chaser-goes-round-it
-  ;; the old cone leaned the step toward the goal; now the goal's planned route, round the zombie, is walked when no
-  ;; chaser catches it
+(deftest a-flight-takes-a-goal-to-the-side-its-chaser-cannot-cut-off
+  ;; the goal's planned route is walked when no chaser catches it: the zombie, slower than the body's flee pace, is
+  ;; farther from the goal than the body's walk there takes it
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [seen]} (await (run-job! (setup {:floor [-60 -40 60 40] :entities [(zombie 7 8 {:chase {:speed 0.7}})]})
-                                              'test.flight {:goal {:x 30 :y 64 :z 30}}))
+                                              'test.flight {:goal {:x 0 :y 64 :z 30}}))
               [_ _ z :as target] (first-target seen)]
-          (is (pos? z) (str "the goal lies past the zombie on the +z side: the flight turns that way " (pr-str target))))))))
+          (is (pos? z) (str "the goal lies to the +z side: the flight turns that way " (pr-str target))))))))
 
 (deftest a-flight-never-walks-to-a-goal-past-its-chaser
   (async done
@@ -1128,8 +1128,7 @@
 (def tunnel-cells (set (for [x (range 0 9) y [64 65]] [x y 0])))
 
 (deftest a-flight-target-never-crosses-seen-rock-to-the-cave-behind-it
-  ;; the tunnel's sides stay unseen after the looks: priced, not read as rock (card 16f510ad), the step stays on the
-  ;; tunnel cells the body saw
+  ;; the tunnel's sides stay unseen after the looks: priced, not read as rock; its one way on runs past the zombie
   (async done
     (tu/run-async done
       (fn ^:async t []
@@ -1140,7 +1139,7 @@
               s (setup-sensed {:blocks rock :entities [(zombie 7 5 {})]})
               s (assoc-in s [:eng :jobs 'targeter] (targeter out))]
           (await (run-job! s 'targeter {:step 6}))
-          (is (= {:x 1 :y 64 :z 0} @out) (str "the cave behind its rock wall is no way: " (pr-str @out))))))))
+          (is (nil? @out) (str "the cave behind its rock wall is no way, nor the tunnel past the zombie: " (pr-str @out))))))))
 
 (deftest a-buried-flight-takes-the-stair-the-body-cut-instead-of-a-hop-across-the-cave
   (async done
@@ -1271,17 +1270,17 @@
       (fn ^:async t []
         (let [s (setup {:entities [(zombie 7 4 {:chase {:speed 0.7 :follow 6}})]})
               fled (fn [r] (filterv #(= :hostile.fled (:kind %)) @(:seen r)))
-              r1 (await (settings/with-settings {:jobs.survival.respond.state/far-flight 40}
+              r1 (await (settings/with-settings {:jobs.survival.respond.state/far-flight 25}
                           #(run-job! s 'test.flight {})))
               n1 (count (fled r1))
               bp (body-pos (:p s))
               _ (swap! (fake/state (:p s)) update :entities (fn [es] (filterv #(not= 7 (:id %)) es)))
               _ (fake/add-entity! (:p s) (zombie 7 (+ (first bp) 4) {:chase {:speed 0.7 :follow 6} :pos {:x (+ (first bp) 4) :y 64 :z (nth bp 2)}}))
-              r2 (await (settings/with-settings {:jobs.survival.respond.state/far-flight 40}
+              r2 (await (settings/with-settings {:jobs.survival.respond.state/far-flight 25}
                           #(run-job! r1 'test.flight {})))]
           (is (= 0 n1) "the first flight alone is under far-flight")
           (is (= 1 (count (fled r2))) "the second adds up past it, measured from the chain's start")
-          (is (> (:distance (first (fled r2))) 40))
+          (is (> (:distance (first (fled r2))) 25))
           (is (seq (mem/entries (mem/view (:store (:eng r2))) :displaced)) "the night job is told the body was driven off"))))))
 
 (deftest a-far-flight-tells-the-agent-where-the-body-went-and-why
