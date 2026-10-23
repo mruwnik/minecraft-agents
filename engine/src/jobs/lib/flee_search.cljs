@@ -18,6 +18,7 @@
             [engine.path.planner.base :as base]
             [engine.path.planner-tuned :as planner]
             [engine.settings :as settings]
+            [jobs.lib.breath :as breath]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -118,6 +119,13 @@
 
 (defn cell-of [{:keys [x y z]}] [x y z])
 
+(defn swum
+  "Cells (routed's) each with :wet?, whether the body swims there as the body knows it (its feet and the cell under in
+  breath/swimmable, as breath/swimming?): the race there is against a swimmer (cost/reach-s)."
+  [p cells]
+  (let [wet? #(contains? breath/swimmable (u/seen-name p %))]
+    (mapv #(assoc % :wet? (and (wet? %) (wet? (update % :y dec)))) cells)))
+
 (defn seen-split
   "Route r (routed) with :seen-n, how many of its cells from the start the body has seen (feet and head), and :unseen,
   the first cell past them it has not ([x y z], nil when it saw them all): a flee step walks only the seen part
@@ -199,7 +207,7 @@
                 ^js res (await (plan-to! c pw policy (query c t)
                                          (if (:pos t) (settings/get settings ::target-max-nodes) (min ring-left (settings/get settings ::max-nodes)))))
                 spent (or (.-expanded res) 0)
-                r (some->> (routed res slow) (seen-split p))]
+                r (some->> (routed res slow) (seen-split p) (#(update % :cells (partial swum p))))]
             (recur more (if r
                           (conj out (assoc r :target t
                                              :open? (or (:found? r) (and (nil? (:pos t)) (given-up? chasers (:end r))))

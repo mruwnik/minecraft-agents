@@ -253,6 +253,11 @@
   [food mob-names]
   (every? #(>= (flight-speed food) (chase-speed %)) mob-names))
 
+(defn way-blocks
+  "Blocks a chaser at pos covers to within ::melee-reach of `at`: way when known, else the straight line less the reach."
+  [pos at way]
+  (or way (max 0 (- (u/dist pos at) (melee-reach)))))
+
 (defn arrival-s
   "Seconds a chaser (mob-kind name) at pos takes to come within ::melee-reach of `at` ({:x :y :z}) at its chase-speed
   (the game's; ::chase-speed for a mob it does not list), or way blocks, its way to within its blow of `at` (default:
@@ -260,8 +265,7 @@
   over the game's speed."
   ([chaser pos at] (arrival-s chaser pos at nil))
   ([chaser pos at way]
-   (/ (or way (max 0 (- (u/dist pos at) (melee-reach))))
-      (chase-speed chaser))))
+   (/ (way-blocks pos at way) (chase-speed chaser))))
 
 (defn caught-on?
   "Whether a melee chaser (mob-kind name) at pos lands a blow on a body walking route ([{:x :y :z :t}], :t the seconds
@@ -273,14 +277,29 @@
         way (or way (constantly nil))]
     (boolean (some #(not (wins-race? (:t %) (arrival-s chaser pos % (way %)) margin)) route))))
 
+(defn swim-arrivals
+  "Seconds a melee chaser (mob-kind name) at pos takes to within its blow of each point of route ([{:x :y :z :wet?}],
+  :wet? where the body swims), way as caught-on?'s: as the body swims, at its swim-chase-speed; on land at its
+  chase-speed, from where it came out of the water after the last point swum."
+  [chaser pos route way]
+  (let [swim (swim-chase-speed chaser)
+        walk (chase-speed chaser)]
+    (first (reduce (fn [[out shore] p]
+                     (let [blocks (way-blocks pos p (way p))]
+                       (cond
+                         (:wet? p) (let [a (/ blocks swim)] [(conj out a) [blocks a]])
+                         shore (let [[b0 a0] shore] [(conj out (+ a0 (/ (max 0 (- blocks b0)) walk))) shore])
+                         :else [(conj out (/ blocks walk)) shore])))
+                   [[] nil] route))))
+
 (defn reach-s
-  "Seconds a melee chaser (caught-on?'s) is within its blow of a body walking route ([{:x :y :z :t}] from where it
-  starts): at each point the chaser gets to (arrival-s) before the body, from its arrival to the body's, at most the
-  body's walk there from the point before."
+  "Seconds a melee chaser (caught-on?'s) is within its blow of a body walking route ([{:x :y :z :t :wet?}] from where
+  it starts): at each point the chaser gets to (swim-arrivals) before the body, from its arrival to the body's, at most
+  the body's walk there from the point before."
   [{:keys [chaser pos route way]}]
-  (let [way (or way (constantly nil))]
-    (reduce + 0 (map (fn [prev p] (min (max 0 (- (:t p) (arrival-s chaser pos p (way p)))) (- (:t p) (:t prev))))
-                     route (rest route)))))
+  (let [arrivals (swim-arrivals chaser pos route (or way (constantly nil)))]
+    (reduce + 0 (map (fn [prev p a] (min (max 0 (- (:t p) a)) (- (:t p) (:t prev))))
+                     route (rest route) (rest arrivals)))))
 
 (defn catches?
   "Whether a melee chaser (mob-name, chaser its mob-kind) at pos lands a blow on a body with food food walking the straight

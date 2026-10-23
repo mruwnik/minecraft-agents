@@ -214,7 +214,10 @@
         reach #(cost/reach-s {:chaser "zombie" :pos {:x % :y 64 :z 0} :route route})]
     (is (< 0 (reach -0.5) 1) "beside the start: its blows until the body pulls away, not the whole flight")
     (is (zero? (reach -4)) "left behind")
-    (is (> (reach 11) 1) "ahead on the way: the body walks into it")))
+    (is (> (reach 11) 1) "ahead on the way: the body walks into it")
+    (let [swum (mapv #(assoc % :t (* 2 (:t %)) :wet? true) route)
+          drowned #(cost/reach-s {:chaser "drowned" :pos {:x -0.5 :y 64 :z 0} :route %})]
+      (is (< (drowned swum) (drowned (mapv #(dissoc % :wet?) swum))) "a drowned swims after a swimmer at its swim speed, not its walk"))))
 
 (deftest a-baby-zombie-is-priced-as-a-baby-not-as-an-adult
   (are [e kind] (= kind (cost/mob-kind e))
