@@ -135,15 +135,26 @@
 
 (defn ^:async judge!
   "The flight's goal, homes and flee search (respond.goal/judge!) after a glance along the way away (glance-away!):
-  homes the first of rooms (refuges) and home-pos, none with a creeper within blast reach (blast?)."
+  homes the first of rooms (refuges) and home-pos, none with a creeper within blast reach (blast?), kept as :homes."
   [c covered? rooms blast?]
   (await (glance-away! c (search/away (u/self-pos c) (respond.goal/chasers c))))
-  (await (respond.goal/judge! c (if blast? [] (remove nil? [(:start (first rooms)) (home-pos c)])) covered?)))
+  (let [homes (if blast? [] (remove nil? [(:start (first rooms)) (home-pos c)]))]
+    (assoc (await (respond.goal/judge! c homes covered?)) :homes homes)))
+
+(defn ^:async look-ahead!
+  "judged again (respond.goal/judge! over its :homes) after a look at the unseen cells its routes stopped before
+  (flee-search/unseen-ahead; each once a flight, as glances are); nil when there is none to look at."
+  [c covered? judged]
+  (when-let [cells (seq (remove (set (:glanced (ctx/mem c))) (search/unseen-ahead (:ends judged))))]
+    (ctx/update-mem! c update :glanced #(vec (take-last (cornered/glance-memory) (into (vec %) cells))))
+    (await (dig-look/look-unknown! c cells))
+    (assoc (await (respond.goal/judge! c (:homes judged) covered?)) :homes (:homes judged))))
 
 (defn ^:async flight-target!
   "The walk target away from threats: the stairs up (way-up), else the step to the end flee-search/choose takes of
   judged's search (judge!; a :retreat.search debug event lists them): out of a ranged chaser's line of fire first, then a safe home (judged's :home), then an open end by
-  score, a pocket only in a closed cave; nil when cornered. Left out: ends under rock below the flight's floor
+  score, a pocket only in a closed cave; with none, after a look at the unseen cells the routes stopped before
+  (look-ahead!), the same over the search run again; nil when cornered. Left out: ends under rock below the flight's floor
   (flight/floor; not out of the line of fire, nor on stairs the body cut), ends go-to refused, routes near a :hazard,
   wet ends while a dry one is left (none with a drowned among threats); then ends toward a hostile not chasing
   (bystander-spots) and flight/avoid-ends, each while another end is left. judged and covered? given so the caller
@@ -159,23 +170,24 @@
            bystanders (bystander-spots c threats)
            floor (flight/floor c)
            known (ledger/ways-of c)
-           home (:home judged)
-           e (search/choose (:ends judged)
-                            {:refused (:refused (ctx/mem c))
-                             :never? (fn [end] (and (< (:y end) floor) (walk/roofed? block-at end)
-                                                    (not (and covered? (covered? end)))
-                                                    (not (contains? known [(:x end) (dec (:y end)) (:z end)]))))
-                             :hazards (keep (comp :pos :data) (ctx/entries c :hazard))
-                             :wet? #(walk/wet? block-at (fn [cell] (:waterlogged? (u/seen-facts p cell))) %)
-                             :dry-only? (boolean (some #(= "drowned" (.-name %)) threats))
-                             :avoid (cons (fn [end] (some #(< (u/dist end %) (u/dist from %)) bystanders)) (flight/avoid-ends c))
-                             :prefer? (when home #(= home (:pos (:target %))))})
+           opts {:refused (:refused (ctx/mem c))
+                 :never? (fn [end] (and (< (:y end) floor) (walk/roofed? block-at end)
+                                        (not (and covered? (covered? end)))
+                                        (not (contains? known [(:x end) (dec (:y end)) (:z end)]))))
+                 :hazards (keep (comp :pos :data) (ctx/entries c :hazard))
+                 :wet? #(walk/wet? block-at (fn [cell] (:waterlogged? (u/seen-facts p cell))) %)
+                 :dry-only? (boolean (some #(= "drowned" (.-name %)) threats))
+                 :avoid (cons (fn [end] (some #(< (u/dist end %) (u/dist from %)) bystanders)) (flight/avoid-ends c))
+                 :prefer? (when-let [home (:home judged)] #(= home (:pos (:target %))))}
+           e (or (search/choose (:ends judged) opts)
+                 (when-let [again (await (look-ahead! c covered? judged))]
+                   (search/choose (:ends again) (assoc opts :prefer? (when-let [home (:home again)] #(= home (:pos (:target %))))))))
            round1 #(/ (js/Math.round (* 10 %)) 10)]
        (ctx/emit! c :retreat.search :debug
                   {:chasers (mapv (fn [{:keys [name pos]}] [name (mapv #(js/Math.round (% pos)) [:x :y :z])]) (respond.goal/chasers c))
                    :from (mapv js/Math.floor (search/cell-of from))
                    :picked (some-> e :end search/cell-of)
-                   :ends (mapv (fn [e] (cond-> (select-keys e [:open? :caught? :cover?])
+                   :ends (mapv (fn [e] (cond-> (select-keys e [:open? :caught? :cover? :unseen])
                                          true (assoc :at (search/cell-of (:end e)) :score (round1 (:score e)) :s (round1 (:s e))
                                                      :arrive (round1 (:arrive e)))
                                          (:pos (:target e)) (assoc :kind (:kind (:target e)))))

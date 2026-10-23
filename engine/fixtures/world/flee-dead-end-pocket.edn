@@ -1,17 +1,22 @@
 ;; Card ee045b60: the flee search plans its ends with the go-to planner, so a corridor that runs straight away from the chaser into a dead
 ;; end is a pocket, and the way out that turns off it is taken. Stone x 0..40, z 0..31, y 0..5 (feet y 3, walls three high, open to the sky);
 ;; a corridor along z 16 from x 4 to a dead end at x 30, at x 18 a branch north to a field x 12..28, z 0..5. The body stands in the corridor
-;; at x 12, a zombie (NoAI, helmeted) 6 west of it: straight away is the dead end. Should-succeed: the flight starts and the body ends in the
+;; at x 12, a zombie (NoAI, helmeted) 6 west of it: straight away is the dead end. Sea lantern floors light the ways (a dark flight
+;; is another case). Should-succeed: the flight starts and the body ends in the
 ;; branch or the field, not in the corridor.
 {:defaults
  {:tags [:hostile :survival :flee]
   :time :any
   :mobs :keep
+  :register [{:trigger :hostile-near}]
   :plot {:length 41 :width 32 :height 8}
   :blocks [[:fill [0 0 0] [40 5 31] "stone"]
            [:fill [4 3 16] [30 5 16] "air"]
            [:fill [18 3 6] [18 5 16] "air"]
-           [:fill [12 3 0] [28 5 5] "air"]]
+           [:fill [12 3 0] [28 5 5] "air"]
+           [:fill [4 2 16] [30 2 16] "sea_lantern"]
+           [:fill [18 2 6] [18 2 15] "sea_lantern"]
+           [:fill [12 2 0] [28 2 5] "sea_lantern"]]
   :body {:at [12.5 3 16.5] :yaw 90 :effects [["resistance" 600 4]]}
   :limit-s 60}
  :cases

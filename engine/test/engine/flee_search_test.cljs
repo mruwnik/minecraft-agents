@@ -110,7 +110,9 @@
     (is (nil? (search/pick [(end-of 0 6 5 :gain 0) (end-of 3 3 8 :found? false :gain -1)] {}))
         "no end gains on the chasers over standing still: no step")
     (is (nil? (search/pick [(end-of 3 3 8 :found? false :gain 0.2 :s 0.3)] {}))
-        "a pocket that buys less time than its walk takes is no step")))
+        "a pocket that buys less time than its walk takes is no step")
+    (is (= {:x 3 :y 64 :z 3} (search/pick [(end-of 3 3 8 :found? false :gain 0.2 :s 0.3 :unseen [4 64 3])] {}))
+        "unless it stops before a cell the body has not seen: a step round the corner to look")))
 
 (deftest pick-orders-cover-then-a-safe-home-then-the-score
   (let [home (assoc (end-of 0 9 1) :target {:pos {:x 0 :y 64 :z 9} :kind :home})
@@ -129,3 +131,8 @@
     (is (= {:x -6 :y 64 :z 0} (search/pick ends {:never? wet?})))
     (is (nil? (search/pick [(end-of 6 0 9)] {:never? wet?})) "never? leaves none: cornered")
     (is (= {:x -6 :y 64 :z 0} (search/pick ends {:hazards [{:x 6 :y 64 :z 1}]})) "a route past a hazard is left out")))
+
+(deftest the-unseen-cells-the-routes-stopped-before-are-where-to-look-nearest-first
+  (is (= [[2 64 -1] [5 64 0]] (search/unseen-ahead [(end-of 4 0 1 :found? false :s 0.8 :unseen [5 64 0])
+                                                    (end-of 2 0 1 :found? false :s 0.4 :unseen [2 64 -1])
+                                                    (end-of 0 2 1 :found? false :s 0.4)]))))
