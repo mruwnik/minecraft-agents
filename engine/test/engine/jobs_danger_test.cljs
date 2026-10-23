@@ -30,7 +30,9 @@
 
 (defn reach-of [p] (fn [m] (field/reach-fn (field/field p {:mob (:name m) :pos (:pos m)}))))
 
-(defn route-danger [p route mobs equipment & opts] (apply d/route-danger game/default-version (reach-of p) route mobs equipment opts))
+(def death-s "Seconds one death costs: a few minutes of walking back." 300)
+
+(defn route-danger [p route mobs equipment & opts] (apply d/route-danger game/default-version (reach-of p) route mobs equipment :death-s death-s :health 1000 opts))
 
 (defn danger [p mobs & opts] (:danger (apply route-danger p route mobs naked opts)))
 
@@ -77,7 +79,7 @@
   (let [p (world)]
     (is (= 0 (danger p [(mob 1 "zombie" 15 2)] :overrides {"zombie" 0})))
     (is (> (danger p [(mob 1 "zombie" 15 2)] :overrides {"zombie" 100}) (danger p [(mob 1 "zombie" 15 2)])))
-    (is (= (* 2 (danger p [(mob 1 "zombie" 15 2)])) (danger p [(mob 1 "zombie" 15 2)] :overrides {"zombie" {:times 2}})))))
+    (is (< (js/Math.abs (- (* 2 (danger p [(mob 1 "zombie" 15 2)])) (danger p [(mob 1 "zombie" 15 2)] :overrides {"zombie" {:times 2}}))) 1e-6))))
 
 (deftest armour-lowers-the-danger
   (let [p (world)]
@@ -127,19 +129,29 @@
         armed (armed-danger skeleton "iron_sword" 20 iron-armour)
         bare (armed-danger skeleton nil 20)]
     (is (pos? armed))
-    (is (> bare 90))
-    (is (> bare (* 10 armed)))))
+    (is (> bare (* 2 armed)))))
+
+(deftest a-danger-is-at-most-the-hurt-and-one-death
+  (let [spider (mob 1 "spider" 15 0)
+        hp-death (/ death-s 10)]
+    (is (<= (armed-danger spider nil 20) (+ 20 hp-death)) "a fist fight with a spider costs the health and a death, not a multiple of it")
+    (is (<= (armed-danger spider nil 6) (+ 6 hp-death)))))
+
+(deftest an-unarmed-body-beside-its-bed-prices-a-spider-far-below-the-pile-it-guards
+  (let [r (route-danger (world) route [(mob 1 "spider" 15 0)] naked :weapon nil :health 20 :death-s 13)]
+    (is (< (* 10 (:danger r)) 222.7) "a spider at 582 hp (5820 s) priced the death of a body that wakes 3 blocks from its pile")
+    (is (pos? (:danger r)))))
 
 (deftest a-body-that-would-win-the-fight-is-priced-alike-whatever-it-wins-with
   (let [zombie (mob 1 "zombie" 15 2)
         armed (armed-danger zombie "iron_sword" 20 iron-armour)]
-    (is (= armed (armed-danger zombie "wooden_sword" 20 iron-armour)))
-    (is (> (:danger (route-danger (world) route [zombie] iron-armour)) armed)
+    (is (< (js/Math.abs (- armed (armed-danger zombie "wooden_sword" 20 iron-armour))) 1e-6))
+    (is (> (armed-danger zombie nil 20 iron-armour) armed)
         "bare hands lose to a zombie even in iron armour")))
 
 (deftest the-weaker-the-body-the-dearer-the-danger
   (let [zombie (mob 1 "zombie" 15 2)]
-    (is (> (armed-danger zombie nil 6) (armed-danger zombie nil 20)))))
+    (is (> (armed-danger zombie "iron_sword" 6 iron-armour) (armed-danger zombie "iron_sword" 20 iron-armour)))))
 
 (deftest an-unreachable-or-passive-mob-stays-free-however-weak-the-body
   (is (= 0 (:danger (route-danger (world :blocks skeleton-wall) route [(mob 1 "skeleton" 15 8)] naked :weapon nil :health 4))))
@@ -148,5 +160,5 @@
 (deftest an-enderman-is-not-priced-as-a-fight-the-body-cannot-win
   (let [p (world)
         ender (mob 1 "enderman" 15 2)]
-    (is (< 0 (danger p [ender] :health 20) 20) "provoked-only share, no no-answer multiplier")
+    (is (< 0 (danger p [ender] :health 20) 20) "provoked-only share, no death")
     (is (= 0 (danger p [(assoc ender :angry false)])) "a calm enderman adds nothing")))

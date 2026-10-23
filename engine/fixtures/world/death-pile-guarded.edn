@@ -1,3 +1,4 @@
+;; The pile is small enough (a few hundred seconds) that a death 5000 blocks from any bed outweighs it; with the bed beside the pile (card d86ea098) the same skeleton is no reason to skip.
 ;; Cards e77e2cf7, 23ce16b8, 6a5f090e, dd69d2c4, 7a063610, 83546641, 51196f7d: an unarmed respawned body weighs a pile a skeleton guards.
 ;; The body dies at [22 0 22] (RCON kill), respawns at [4 0 4]; a NoAI skeleton (fire resistant) stands at [18 0 18], in sight of the body, unarmed.
 ;; The pile sits 9 blocks from the island edge: drops roll 6-8 out and a stack that rolls off the edge falls out of the world (card 6a301f4e).
@@ -7,7 +8,7 @@
 {:defaults
  {:tags [:survival :death :jobs]
   :body {:at [22.5 0 22.5] :spawnpoint [4 0 4] :effects [["resistance" 600 4]]
-         :inventory [["raw_iron" 24] ["cobblestone" 64] ["cobblestone" 36]]}
+         :inventory [["raw_iron" 6] ["cobblestone" 64] ["cobblestone" 36]]}
   :mobs :keep
   :act [[:kill-body]
         [:await {:source :body :kind :respawned} 30]
@@ -26,7 +27,7 @@
    :expect [{:event {:source :job :kind :waiting :data {:reason :danger}} :within-s 60}
             {:no-event {:source :job :kind :child_started :data {:slot :go}} :for-s 60 :until {:source :job :kind :waiting :data {:reason :danger}}}
             {:event {:source :job :kind :completed :data {:decision :collected}} :within-s 190}]
-   :after [[:item "raw_iron" 24]]}
+   :after [[:item "raw_iron" 6]]}
   {:name "known-chest-kit-fetched-before-the-guarded-trip"
    :blocks [[:set [6 0 6] "chest{Items:[{Slot:0b,id:\"minecraft:iron_sword\",count:1},{Slot:1b,id:\"minecraft:iron_helmet\",count:1}]}"]]
    :memory [{:kind :fetch/stock :data {:pos #at [6 0 6] :items {"iron_sword" 1 "iron_helmet" 1}}}]
@@ -34,7 +35,15 @@
    :expect [{:event {:source :job :kind :child_started :data {:slot :go}} :within-s 120}
             {:no-event {:source :job :kind :recover-drops.kit-dropped} :for-s 120 :until {:source :job :kind :child_started :data {:slot :go}}}
             {:event {:source :job :kind :completed :data {:decision :collected}} :within-s 190}]
-   :after [[:item "iron_sword" 1] [:item "raw_iron" 24]]}
+   :after [[:item "iron_sword" 1] [:item "raw_iron" 6]]}
+  {:name "unarmed-body-with-its-bed-beside-the-pile-fetches-past-the-skeleton"
+   :body {:spawnpoint [20 0 22]}
+   :blocks [[:set [20 0 22] "white_bed[part=foot,facing=east]"] [:set [21 0 22] "white_bed[part=head,facing=east]"]]
+   :memory [{:kind :spawn-bed :data {:pos #xyz [20 0 22]} :age-s 60}]
+   :act [[:job (jobs.survival.recover-drops)]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :go}} :within-s 120}
+            {:event {:source :job :kind :completed :data {:decision :collected}} :within-s 190}]
+   :after [[:item "raw_iron" 6]]}
   {:name "junk-pile-skipped-on-value-without-a-chest-trip"
    :body {:inventory [["dirt" 3]]}
    :blocks [[:set [6 0 6] "chest{Items:[{Slot:0b,id:\"minecraft:iron_sword\",count:1},{Slot:1b,id:\"minecraft:iron_helmet\",count:1}]}"]]

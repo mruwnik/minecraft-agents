@@ -24,6 +24,13 @@
 
 ;; The value and cost functions are jobs.lib.cost (jobs_value_test, cost_test); route danger jobs_danger_test.
 
+(def far-from-a-bed
+  "A :once fixture: a respawn ten times the default walk from the pile, so a death costs what a fresh body's dearly does and a danger that can kill it outweighs a pile worth hours."
+  (let [saved (atom nil)]
+    {:before #(do (reset! saved @settings/state)
+                  (reset! settings/state {:body nil :specs {} :values {:jobs.lib.cost.death/spawn-walk-blocks 50000} :layers {:jobs.lib.cost.death/spawn-walk-blocks :test}}))
+     :after #(reset! settings/state @saved)}))
+
 (def sword "The body carries a weapon, so a zombie on the way is a fight it can afford." [{:name "iron_sword" :count 1}])
 
 (def junk
@@ -748,6 +755,20 @@
   (map-indexed (fn [i {:keys [name count]}] {:id (+ 100 i) :name "item" :kind "item" :pos {:x 20 :y 64 :z 0}
                                              :item {:name name :count count}})
                items))
+
+(deftest recover-drops-ends-partial-unreachable-when-the-pile-is-in-sight-and-none-comes-back
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [iron [{:name "raw_iron" :count 20 :slot 0}]
+              {:keys [eng p]} (setup {:floor tu/walk-floor :entities (vec (pile-drops iron))})]
+          (swap! (fake/state p) update :entities (fn [es] (mapv #(assoc % :visible true) es)))
+          (.override (.-world p) "collect" (fn [_ _ _] (clj->js {:status "unreachable"})))
+          (die! eng {:pos death-pos :inventory iron})
+          (core/submit! eng job {})
+          (is (< (await (run-until-empty eng 30)) 30))
+          (is (= {:decision :partial :items 0 :reason :unreachable}
+                 (select-keys (recovered eng) [:decision :items :reason]))))))))
 
 (deftest recover-drops-fetches-the-field-report-pile-past-a-zombie
   (async done

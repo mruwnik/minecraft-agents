@@ -1,7 +1,7 @@
 (ns engine.recover-drops-danger-test
   "recover-drops against the mobs that killed the body: the killer is priced at the pile, and a trip cut by hostiles
   over and over is given up."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [use-fixtures deftest is async]]
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.death-test :as dt :refer [die! job recovered recovered-trip pile-drops]]
@@ -16,6 +16,8 @@
             [jobs.survival.recover-drops.fetch :as fetch]
             [engine.test-util :as tu :refer [run-until-empty]]
             [triggers.survival.died :as died]))
+
+(use-fixtures :once dt/far-from-a-bed)
 
 (defn fetch-run
   "Die with the field-report pile and cause, run the job to its decision."

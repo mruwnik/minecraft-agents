@@ -1,6 +1,6 @@
 (ns engine.recover-drops-armed-test
   "recover-drops against a killer mob with an unarmed body: a weapon and armour a known chest holds are fetched first."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [use-fixtures deftest is async]]
             [engine.core :as core]
             [engine.death-test :as dt :refer [die! job recovered pile-drops]]
             [engine.library-test :refer [setup inv]]
@@ -10,6 +10,8 @@
             [jobs.lib.stock :as stock]
             [jobs.lib.need :as need]
             [engine.memory :as mem]))
+
+(use-fixtures :once dt/far-from-a-bed)
 
 (def chest-cell [-2 64 3])
 

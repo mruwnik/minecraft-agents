@@ -33,7 +33,7 @@
        ", cost " (if (= :infinite cost) (str "infinite (" (name (or reason :unknown)) ")") (round1 cost))
        (when (seq parts)
          (str " (" (str/join ", " (map (fn [[k n]] (str (name k) " " (round1 n))) parts))
-              (when (seq top-mobs) (str ": " (str/join ", " (map (fn [{:keys [name danger]}] (str name " " (round1 danger))) top-mobs))))
+              (when (seq top-mobs) (str ": " (str/join ", " (map (fn [{:keys [name danger]}] (str name " " (round1 (* danger cost/per-danger)))) top-mobs))))
               ")"))
        (when (and (number? margin) (not (zero? margin))) (str " + margin " margin))))
 
@@ -152,7 +152,8 @@
         guard-spots (set (map :pos guard))
         threat (if route
                  (cost/route-danger version #(field/reach-fn (field/field-of c {:mob (:name %) :pos (:pos %)})) route (concat known guard) (.-equipment (.self p))
-                                    :overrides (:danger-overrides (:args c)) :weapon (combat/best-weapon p combat/default-weapons) :health (.-health (.self p)))
+                                    :overrides (:danger-overrides (:args c)) :weapon (combat/best-weapon p combat/default-weapons) :health (.-health (.self p))
+                                    :death-s (cost/death-cost (cost/death-body p (ctx/view c)) pos))
                  {:danger 0 :mobs []})
         drown-hp (get-in quoted [:route :drown] 0)
         wet (when (or (= "drowning" cause) (wet-pile? wet-at pos) (pos? drown-hp))
