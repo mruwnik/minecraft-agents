@@ -606,7 +606,7 @@
         why (if (= :dug dug) nil why)
         collect! (fn ^:async collect* []
                    (let [before (held-count c item-name)
-                         r (await (ctx/act c :collect (clj->js (cond-> {:id (.-id item)} hole? (assoc :maxDropDown 1)))))
+                         r (await (ctx/act c :collect (clj->js {:id (.-id item) :maxDropDown 1})))
                          got (- (held-count c item-name) before)]
                      ;; the act can answer unreachable for a drop that flew to the body meanwhile
                      (if (and (= "unreachable" (.-status r)) (pos? got))
