@@ -44,7 +44,9 @@
 
 (def top [88 60 0])
 
-(def buried {:blocks dive :seen :all :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0]})
+;; lit by block light: a 100-block walk in the dark is priced over the body's risk allowance (go-to stops :risky), and these
+;; cases are about the depth bounds, not the risk
+(def buried {:blocks dive :seen :all :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 15]})
 
 (deftest a-buried-body-does-not-dive-to-reach-a-goal-far-above
   (async done
@@ -82,7 +84,7 @@
 
 (def on-top [20 60 0])
 
-(def in-mine {:blocks mine :seen :all :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0]})
+(def in-mine {:blocks mine :seen :all :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 15]})
 
 (defn ^:async climb!
   "go! with ticks enough for a stair, a second of fake time each (the stair waits out a lava delay): {:out :p :seen
@@ -158,7 +160,7 @@
            (floor 32 21 -17 53 17)
            (into {} ramp))))
 
-(def in-shallow {:blocks shallow :seen :all :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0]})
+(def in-shallow {:blocks shallow :seen :all :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 15]})
 
 (def mass-top [10 60 0])
 
@@ -239,7 +241,7 @@
            (floor 39 21 -17 46 17)
            (into {} ramp))))
 
-(def in-forked {:blocks forked :seen :all :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0] :stair-way stair-floors})
+(def in-forked {:blocks forked :seen :all :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 15] :stair-way stair-floors})
 
 (def fork-top [18 60 0])
 
@@ -343,7 +345,7 @@
         stairs (for [[x y _] (concat far-floors stub-floors) dy [1 2 3]] (str x "," (+ y dy) ",0"))]
     (apply dissoc (box -90 29 -1 10 59 1 "dirt") (concat tunnel stairs))))
 
-(def in-branched {:blocks branched :seen :all :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0]
+(def in-branched {:blocks branched :seen :all :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 15]
                   :own-ways [[:stair-way {:floors far-floors}] [:stair-way {:floors stub-floors}]
                              [:tunnel-way {:origin [0 40 0] :delta [-1 0] :steps 60}]]})
 
@@ -372,7 +374,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out p] :as s} (await (climb! {:blocks capped :seen :all :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 0] :stair-way short-floors
+        (let [{:keys [out p] :as s} (await (climb! {:blocks capped :seen :all :self {:pos {:x 0.5 :y 40 :z 0.5}} :light [0 15] :stair-way short-floors
                                                     :inventory [{:name "stone_pickaxe" :count 1}]}
                                                    {:pos [-6 46 0]}))
               blocks (:blocks @(fake/state p))]
@@ -435,7 +437,7 @@
 
 (def across [0 64 6])
 
-(def in-loop {:blocks loop-way :self {:pos {:x 0.5 :y 64 :z 0.5}} :light [0 0]})
+(def in-loop {:blocks loop-way :self {:pos {:x 0.5 :y 64 :z 0.5}} :light [0 15]})
 
 (deftest a-buried-body-does-not-walk-a-long-unseen-way-to-a-near-goal
   (async done
@@ -513,7 +515,7 @@
         chamber (for [x (range 3) y [60 61] z [-1 0 1]] (str x "," y "," z))]
     (apply dissoc (box -24 36 -4 40 66 4 "stone") (concat cave stair lower chamber))))
 
-(def in-phantom {:blocks phantom :self {:pos {:x 1.5 :y 60 :z 0.5}} :light [0 0] :seen [[-1 59 -2 3 62 2] [24 46 -2 28 50 2]]
+(def in-phantom {:blocks phantom :self {:pos {:x 1.5 :y 60 :z 0.5}} :light [0 15] :seen [[-1 59 -2 3 62 2] [24 46 -2 28 50 2]]
                  :inventory [{:name "stone_pickaxe" :count 1}]})
 
 (deftest a-buried-body-digs-toward-a-goal-past-unseen-rock-not-down-a-cave-mouth
@@ -536,7 +538,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out] :as s} (await (climb! {:blocks hall :self {:pos {:x 1.5 :y 60 :z 0.5}} :light [0 0] :seen [[-2 59 -5 6 64 5]]
+        (let [{:keys [out] :as s} (await (climb! {:blocks hall :self {:pos {:x 1.5 :y 60 :z 0.5}} :light [0 15] :seen [[-2 59 -5 6 64 5]]
                                                   :inventory [{:name "stone_pickaxe" :count 1}]}
                                                  {:pos [32 60 0]}))]
           (is (true? (:arrived @out)) (pr-str @out))
@@ -564,7 +566,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [out] :as s} (await (climb! {:blocks near-pocket :self {:pos {:x 1.5 :y 60 :z 0.5}} :light [0 0]
+        (let [{:keys [out] :as s} (await (climb! {:blocks near-pocket :self {:pos {:x 1.5 :y 60 :z 0.5}} :light [0 15]
                                                   :seen [[-1 59 -1 3 62 1] [8 56 -1 11 59 1]] :inventory [{:name "stone_pickaxe" :count 1}]}
                                                  {:pos [9 57 0]}))]
           (is (true? (:arrived @out)) (pr-str @out))

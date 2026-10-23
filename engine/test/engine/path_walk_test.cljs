@@ -480,12 +480,13 @@
           (is (= :drop (:kind (:one-way-taken dear-dark))))
           (is (= :drop (:kind (:one-way-taken cheap-lit)))))))))
 
-;; a drop whose landing is walled by what cannot be dug is a certain trap: no goal is worth it
+;; a drop whose landing is walled by what cannot be dug is a certain trap: no goal is worth it (the wall runs the whole floor: a
+;; short one leaves its top walkable and open ground beside it, a drop onto which is no trap)
 (deftest a-landing-with-nothing-to-dig-out-of-is-refused-whatever-the-goal-is-worth
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [walled-landing (merge ledge-to-unloaded (box 3 61 30 3 63 34 "bedrock") (box 1 61 30 1 62 34 "bedrock") (box 2 61 30 2 63 30 "bedrock") (box 2 61 34 2 63 34 "bedrock"))
+        (let [walled-landing (merge ledge-to-unloaded (box 3 61 0 47 65 63 "bedrock") (box 1 61 0 1 62 63 "bedrock") (box 2 61 -1 2 65 -1 "bedrock") (box 2 61 64 2 65 64 "bedrock"))
               plan (await (one-budgeted-call walled-landing {:x 1.5 :y 64 :z 32.5} [120 61 32] 600 {:one-way :open :worth 100000 :world landing-seen}))]
           (is (nil? (:one-way-taken plan))))))))
 
