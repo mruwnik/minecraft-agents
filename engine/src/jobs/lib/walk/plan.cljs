@@ -93,7 +93,7 @@
   ([options policy] (with-drops options policy nil))
   ([^js options policy seen]
   (let [k (:drop-cost policy)
-        gait (or (:gait policy) (when (false? (:sprint policy)) :walk))]
+        gait (cost/policy-gait policy)]
     (doseq [[opt key] [["maxDrop" :max-drop] ["fallFactor" :fall-factor] ["damageBudget" :damage-budget] ["damageWeight" :damage-weight] ["dangerCap" :danger-cap]
                        ["health" :health]]]
       (when-some [v (get policy key)] (unchecked-set options opt v)))

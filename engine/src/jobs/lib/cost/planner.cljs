@@ -187,8 +187,8 @@
    ::lethal-air {:default false :doc "true lets a plan drown the body when no other way to air exists (breathe's); false: such a plan is refused (:why :air-lethal)." :spec boolean?}
    ::landing {:default false :doc "Map of block name to the share of a fall's damage a landing on it takes (0.2: 80% off), negative: a bounce, no damage but settle time (only onto a pad in view, bouncing blocks or a wall all round, not under :gait :sneak); entries override the defaults hay_block 0.2, honey_block 0.2, every bed 0.5 and slime_block -1."
               :spec (a/or-of false? (a/valid-by "a map of block name to a number" #(landing-problem %)))}
-   ::wet-pace {:default {:swim 2.5 :swim-up 2.5 :swim-down 2.5 :climb-up 2.5 :climb-down 2.5}
-               :doc "Map of move kind (:swim :swim-up :swim-down :climb-up :climb-down) to how many times its planner price a step of it really takes under water in a walk over unseen cells, which stops to look and replan (wet-move-s); measured live."
+   ::wet-pace {:default {:swim 1.5 :swim-up 2.5 :swim-down 2.5 :climb-up 2.6 :climb-down 2.5}
+               :doc "Map of move kind (:swim :swim-up :swim-down :climb-up :climb-down) to how many times its planner price a step of it really takes under water in a walk over unseen cells, which stops to look and replan (wet-move-s); :swim and :climb-up measured live, the others left at the safer 2.5 until measured."
                :spec (a/pred "a map of :swim :swim-up :swim-down :climb-up :climb-down to numbers > 0" #(and (map? %) (= #{:swim :swim-up :swim-down :climb-up :climb-down} (set (keys %))) (every? (fn [v] (and (number? v) (pos? v))) (vals %))))}
    ::wet-margin-s {:default 2 :doc "Seconds of air a walk over unseen water keeps for when it is back at its last breath (wet-ok?)." :spec (a/num-in 0 nil)}
    ::unknown-prices {:default false :doc "Map of :cell :floor :peek-s :aim-s :see-lit-depth :light-depth to numbers overriding the prices of cells a walk over :unknown has not seen (unknown-prices); a go-to :unknown map wins over it." :spec (a/or-of false? (a/valid-by "a map of unknown-price name to a number >= 0" (fn [m] (when-not (or (nil? m) (and (map? m) (every? #(and (contains? unknown-prices (key %)) (number? (val %)) (>= (val %) 0)) m))) "not a map of unknown-price names to numbers >= 0"))))}})
@@ -201,13 +201,20 @@
    :exit ["exit" :swim :swim] :climb-up ["climbUp" :climb-up :climb-down] :climb-down ["climbDown" :climb-down :climb-up]
    :jump-climb ["jumpClimb" :climb-up :climb-down]})
 
+(defn policy-gait "The gait a walk under policy has: its :gait, :walk when it does not sprint." [policy]
+  (or (:gait policy) (when (false? (:sprint policy)) :walk)))
+
+(defn policy-costs
+  "The planner's options.costs (a JS object) a walk under policy gets: the defaults, the gait's, the body's air and swim, then the policy's :costs."
+  [policy]
+  (js/Object.assign #js {} base/DEFAULT-COSTS (gait-costs (policy-gait policy)) (air-costs policy) (planner-costs (:costs policy))))
+
 (defn wet-move-s
-  "Real seconds a body takes for one step of move under water: its planner price (the policy's :swim-sub-h for a level
-  swim) times the setting ::wet-pace of its kind; a move without a price (the start) takes none."
+  "Real seconds a body takes for one step of move under water: the price the planner has for it under policy (policy-costs)
+  times the setting ::wet-pace of its kind; a move without a price (the start) takes none."
   [policy move]
   (if-let [[price kind] (get wet-prices move)]
-    (* (or (when (= "swimSubH" price) (:swim-sub-h policy)) (unchecked-get base/DEFAULT-COSTS price))
-       (get (settings/get settings ::wet-pace) kind))
+    (* (unchecked-get (policy-costs policy) price) (get (settings/get settings ::wet-pace) kind))
     0))
 
 (defn air-left-s

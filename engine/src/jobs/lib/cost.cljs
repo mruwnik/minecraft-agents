@@ -107,6 +107,7 @@
 (def air-costs planner/air-costs)
 (def air-left-s planner/air-left-s)
 (def wet-move-s planner/wet-move-s)
+(def policy-gait planner/policy-gait)
 (def wet-way-s planner/wet-way-s)
 (def wet-spare-s planner/wet-spare-s)
 (def wet-ok? planner/wet-ok?)

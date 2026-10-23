@@ -252,12 +252,13 @@
     (dec (count (first (wplan/masked-cut steps ok))))))
 
 (deftest masked-wet-ok-keeps-a-swim-while-the-way-back-leaves-the-air-margin
-  ;; 15 s of air, 1.5 s margin; a step out and back at 2.5 times its price: a level swim 2 x 0.65 s, a climb down 0.83 + 1.08 s back up
-  (are [oxygen move kept] (= kept (settings/with-settings {:jobs.lib.cost.planner/wet-margin-s 1.5} #(masked-kept oxygen move)))
-    20 :swim 10
-    20 :climb-down 7
-    17 :swim 6
-    11 :swim 0))
+  ;; 15 s of air, 1.5 s margin; a step out and back at each kind's pace: a level swim 2 x 0.39 s, a climb down 0.83 s out and 1.12 s back up
+  (are [costs oxygen move kept] (= kept (settings/with-settings {:jobs.lib.cost.planner/wet-margin-s 1.5 :jobs.lib.cost.planner/costs costs} #(masked-kept oxygen move)))
+    false 20 :swim 17
+    false 20 :climb-down 6
+    false 17 :swim 10
+    false 11 :swim 0
+    {:swim-sub-h 0.52} 20 :swim 8))
 
 (deftest stop-short-ends-a-partial-plan-out-of-reach-of-a-blocking-mob
   (let [steps (mapv (fn [x] {:x x :y 12 :z 16}) (range 0 12))
