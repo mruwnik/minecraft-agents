@@ -274,35 +274,44 @@
                         [(h/cell-key x y z) "stone"]))
         gap (dissoc room (h/cell-key 5 64 4) (h/cell-key 5 65 4))]
     (start {:blocks gap :floor [-30 -30 30 30] :self {:pos {:x 4.5 :y 64 :z 4.5}} :inventory kit}
-           {"gap" {:id "gap" :parts [{:id "p" :cells [[5 64 4] [5 65 4]] :want "dirt"}]}})))
+           {"gap" {:id "gap" :parts [{:id "p" :cells [[5 64 4] [5 65 4]] :want "oak_planks"}]}})))
 
-(def dirt {:name "dirt" :count 4})
-(def gap-cells [{:pos [5 64 4]} {:pos [5 65 4]}])
+(def planks {:name "oak_planks" :count 4})
+(def pick {:name "stone_pickaxe" :count 1})
+(def gap-cells [{:pos [5 64 4] :part "p" :answer :missing :item "oak_planks"} {:pos [5 65 4] :part "p" :answer :missing :item "oak_planks"}])
 
 (deftest a-seal-is-priced-as-the-dig-out-with-a-pickaxe-and-a-trap-without
-  (let [priced (:cost (fp-cells/seal-price {:primitives (:p (gap-room [dirt {:name "stone_pickaxe" :count 1}]))} gap-cells [5 64 4]))
-        trap (fp-cells/seal-price {:primitives (:p (gap-room [dirt]))} gap-cells [5 64 4])]
+  (let [priced (:cost (fp-cells/seal-price {:primitives (:p (gap-room [planks pick]))} gap-cells [5 64 4]))
+        trap (fp-cells/seal-price {:primitives (:p (gap-room [planks]))} gap-cells [5 64 4])]
     (is (pos? priced))
+    (is (< priced (:worth (fp-cells/seal-price {:primitives (:p (gap-room [planks pick]))} gap-cells [5 64 4]))) "the part is worth more than the dig-out")
     (is (nil? (:cost trap)))
     (is (string? (:why trap)))
-    (is (nil? (fp-cells/seal-price {:primitives (:p (gap-room [dirt]))} gap-cells [5 66 4])) "a cell that does not seal has no price")))
+    (is (nil? (fp-cells/seal-price {:primitives (:p (gap-room [planks]))} gap-cells [5 66 4])) "a cell that does not seal has no price")))
+
+(deftest a-seal-in-a-part-worth-less-than-the-dig-out-is-refused-with-a-reason
+  (let [cheap (mapv #(assoc % :item "dirt") gap-cells)
+        price (fp-cells/seal-price {:primitives (:p (gap-room [planks pick]))} cheap [5 64 4])]
+    (is (nil? (:cost price)))
+    (is (re-find #"more than the part is worth" (:why price)))))
 
 (deftest a-body-with-a-pickaxe-places-the-cell-that-seals-it-in
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (gap-room [dirt {:name "stone_pickaxe" :count 1}])
+        (let [{:keys [eng p]} (gap-room [planks pick])
               result (await (child-outcome eng job {:plan "gap"} 300))]
-          (is (= "dirt" (block p [5 64 4])) "placed although it closes the room")
-          (is (empty? (:given-up result))))))))
+          (is (= "oak_planks" (block p [5 64 4])) "placed although it closes the room")
+          (is (empty? (:given-up result)))
+          (is (= "air" (block p [3 64 4])) "dug out through the wall afterwards"))))))
 
 (deftest a-body-with-no-tool-to-dig-out-refuses-the-cell-that-seals-it-in
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (gap-room [dirt])
+        (let [{:keys [eng p]} (gap-room [planks])
               result (await (child-outcome eng job {:plan "gap"} 300))]
-          (is (not= "dirt" (block p [5 64 4])))
+          (is (not= "oak_planks" (block p [5 64 4])))
           (is (= :unreachable (get (:given-up result) [5 64 4]))))))))
 
 (deftest a-dig-in-rock-with-no-pickaxe-is-given-up-no-tool-without-a-tunnel

@@ -262,13 +262,17 @@
                      (warn-way-in! c cells near)
                      (loop [left near]
                        (if (seq left)
-                         (if (do (trace! c :place-one! (:pos (first left))) (let [seal (seal-price c cells (:pos (first left)))] (when (and seal (nil? (:cost seal))) (trace! c :seals-in (:pos (first left))) true)))
-                           (do (ctx/update-mem! c #(-> (count-fail % (:pos (first left)) :unreachable (give-up))
-                                                       (assoc :leave (exit-of c cells))))
-                               :again)
-                           (if (= :continue (await (place-one! c (first left) (give-up))))
-                             :continue
-                             (recur (rest left))))
+                         (let [_ (trace! c :place-one! (:pos (first left)))
+                               seal (seal-price c cells (:pos (first left)))]
+                           (cond
+                             (and seal (nil? (:cost seal)))
+                             (do (trace! c :seals-in (:pos (first left)))
+                                 (ctx/update-mem! c #(-> (count-fail % (:pos (first left)) :unreachable (give-up))
+                                                         (assoc :leave (exit-of c cells))))
+                                 :again)
+                             (= :continue (await (place-one! c (first left) (give-up)))) :continue
+                             seal (do (ctx/update-mem! c assoc :leave (or (:exit seal) (exit-of c cells)) :sealed true) :again)
+                             :else (recur (rest left))))
                          :again)))
       (seq dig-near) (loop [left dig-near]
                        (if (seq left)
