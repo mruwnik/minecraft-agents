@@ -520,18 +520,28 @@
     (is (= 1 (cost/kill-drops "spider" "string")) "0 to 2 string")
     (is (nil? (cost/kill-drops "spider" "bone")))))
 
-(deftest a-mob-outlives-the-body-going-far-only-when-it-could-pick-up-a-drop-it-equips
+(deftest a-mob-outlives-the-body-going-far-only-when-it-could-pick-up-a-drop-it-equips-or-is-kept-by-its-state
+  ;; a zombie is a chicken jockey 0.0049 of the time, a skeleton a spider's rider 0.0099
   (game/select! (fake/create {:server {:difficulty "hard" :simulationDistance 10}}))
   (are [mob drops clock kept] (= (js/Math.round (* 1000 kept)) (js/Math.round (* 1000 (threat/left-alive mob 200 0 drops clock))))
-    "zombie" ["dirt"] nil 0.55
-    "zombie" :unknown nil 0.55
-    "skeleton" ["dirt" "stick"] nil 0
-    "skeleton" ["iron_helmet"] nil 0.55
-    "skeleton" ["stone_sword"] nil 0.55
-    "zombie" [] nil 0
-    "zombie" nil nil 0
+    "zombie" ["dirt"] nil 0.5522
+    "zombie" :unknown nil 0.5522
+    "skeleton" ["dirt" "stick"] nil 0.0099
+    "skeleton" ["iron_helmet"] nil 0.5544
+    "skeleton" ["shield"] nil 0.5544
+    "skeleton" ["carved_pumpkin"] nil 0.5544
+    "skeleton" ["zombie_head"] nil 0.5544
+    "skeleton" ["bow"] nil 0.5544
+    "skeleton" ["stone_sword" "iron_pickaxe"] nil 0.0099
+    "wither_skeleton" ["iron_sword"] nil 0.55
+    "wither_skeleton" ["wooden_sword" "bow"] nil 0
+    "zombified_piglin" ["iron_axe"] nil 0.5522
+    "zombified_piglin" ["bow" "dirt"] nil 0.0049
+    "zombie" [] nil 0.0049
+    "zombie" nil nil 0.0049
     "creeper" :unknown nil 0
-    "zombie" ["dirt"] {:day-time 0 :moon-phase 4 :world-age 0} (* 0.55 0.125)))
+    "enderman" nil nil 1
+    "zombie" ["dirt"] {:day-time 0 :moon-phase 4 :world-age 0} (- 1 (* (- 1 (* 0.55 0.125)) (- 1 0.0049)))))
 
 (deftest costs-follow-the-difficulty-and-simulation-distance-the-server-announced
   (let [zombie-s #(cost/mob-hurt (cost/armour-stats nil) "zombie" 10)]

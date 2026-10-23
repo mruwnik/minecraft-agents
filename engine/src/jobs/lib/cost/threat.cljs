@@ -3,8 +3,7 @@
   deals over some seconds of exposure after the body's armour (jobs.lib.cost.armour).
   A witch's potions (poison, harming) bypass armour. A creeper is one blast of 43 at normal difficulty (:explosion) however long the exposure; a ranged mob shoots (:projectile); any other
   hits for its mob-hit (3 if unknown, scaled by the server difficulty) one a second (:melee). Endermen and zombified piglins only fight when provoked."
-  (:require [clojure.string :as str]
-            [engine.args :as a]
+  (:require [engine.args :as a]
             [engine.game :as game]
             [engine.settings :as settings]
             ["minecraft-data" :as minecraft-data]
@@ -140,21 +139,64 @@
 
 (def loot-share "The most of loot-pickers that spawn able to pick up loot (vanilla 0.55, at a special multiplier of 1)." 0.55)
 
-(def armed-pickers "Loot-pickers that spawn holding a bow or a sword (vanilla)." #{"skeleton" "stray" "bogged" "parched" "wither_skeleton" "zombified_piglin"})
+(def spawn-weights
+  "The weights the overworld's common monster spawns are drawn by (vanilla, most biomes); slimes, kept to slime chunks and
+  swamps, left out."
+  {"spider" 100 "zombie" 95 "zombie_villager" 5 "skeleton" 100 "creeper" 100 "enderman" 10 "witch" 5})
+
+(def bow-holders
+  "Loot-pickers that spawn holding a bow, their preferred weapon (vanilla SKELETON_PREFERRED_WEAPONS): no other weapon
+  replaces it, a bow only as an equal item (more enchantments or less wear)."
+  #{"skeleton" "stray" "bogged" "parched"})
+
+(def spawn-swords "The sword a loot-picker spawns holding, if any, and not a bow (vanilla)." {"wither_skeleton" "stone_sword" "zombified_piglin" "golden_sword"})
+
+(def own-slot
+  "Items a mob equips in a slot of their own, not the main hand (vanilla equippable: armour, a carved pumpkin or a head,
+  a shield in the off hand); a spawned mob's is empty or worn with a piece the body's may beat."
+  #"_(helmet|chestplate|leggings|boots|head|skull)$|^(shield|carved_pumpkin|elytra)$")
+
+(def weapon-like "Main-hand items with an attack bonus (vanilla attribute modifiers)." #"_(sword|axe|pickaxe|shovel|spear)$|^(trident|mace)$")
 
 (defn takes?
-  "Whether loot-picker mob, as it spawned, equips the item called item-name (vanilla Mob.canReplaceCurrentItem): an
-  empty-handed one anything, one in armed-pickers only armour or a sword."
+  "Whether loot-picker mob, as it spawned, equips the item called item-name (vanilla Mob.equipItemIfPossible and
+  canReplaceCurrentItem): an own-slot item always (the body's piece may be the better one), else into an empty main
+  hand anything; a bow-holder only a bow (its wear and enchantments are not known); a sword-holder a weapon-like item
+  that may hit harder than its sword (weapon/weapon-damage, unknown counted as harder)."
   [mob item-name]
-  (boolean (or (not (contains? armed-pickers mob)) (pos? (armour/piece-points item-name)) (str/ends-with? (or item-name "") "_sword"))))
+  (let [n (or item-name "")
+        sword (spawn-swords mob)]
+    (boolean (cond
+               (re-find own-slot n) true
+               (contains? bow-holders mob) (= "bow" n)
+               sword (and (re-find weapon-like n)
+                          (or (not (contains? weapon/weapon-damage-by-name n)) (>= (weapon/weapon-damage n) (weapon/weapon-damage sword))))
+               :else true))))
+
+(def jockey-share
+  "Of the mobs of a kind, the share that spawned riding another, which never despawns (vanilla Mob.requiresCustomPersistence:
+  a passenger): a skeleton on 1 in 100 spiders (over spawn-weights), a baby zombie (0.05) on a chicken (0.05, and 0.05
+  of the rest when one is near)."
+  (let [spiders (* (get spawn-weights "spider") 0.01)
+        chicks (* 0.05 (- 1 (* 0.95 0.95)))]
+    (merge {"skeleton" (/ spiders (+ spiders (get spawn-weights "skeleton")))}
+           (zipmap ["zombie" "husk" "drowned" "zombie_villager" "zombified_piglin"] (repeat chicks)))))
+
+(defn custom-kept
+  "The chance mob never despawns by its own state (vanilla requiresCustomPersistence): an enderman may carry a block
+  (not known: counted as carrying), a rider its jockey-share."
+  [mob]
+  (if (= "enderman" mob) 1 (get jockey-share mob 0)))
 
 (defn left-alive
-  "The chance the hostile mob is not despawned (vanilla): 0 once a player was more than despawn-blocks from it (farthest;
-  only where the server's simulation distance still ticks its chunk that far), else 1 in 800 a tick after idle-despawn-s of
-  away-s with none within idle-despawn-blocks; unless it picked up one of drops, the names of the items the body left
-  there (:unknown: any), that it takes?: a loot-picker spawned able to, loot-share x clock-special under clock."
+  "The chance the hostile mob is not despawned (vanilla): 0 once the nearest player was more than despawn-blocks from it
+  (farthest; only where the server's simulation distance still ticks its chunk that far), else 1 in 800 a tick after
+  idle-despawn-s of away-s with none within idle-despawn-blocks; unless it is kept: custom-kept, or it picked up one of
+  drops, the names of the items the body left there (:unknown: any), that it takes?: a loot-picker spawned able to,
+  loot-share x clock-special under clock."
   [mob farthest away-s drops clock]
-  (let [kept (if (and (contains? loot-pickers mob) (or (= :unknown drops) (some #(takes? mob %) drops))) (* loot-share (clock-special clock)) 0)
+  (let [looted (if (and (contains? loot-pickers mob) (or (= :unknown drops) (some #(takes? mob %) drops))) (* loot-share (clock-special clock)) 0)
+        kept (- 1 (* (- 1 looted) (- 1 (custom-kept mob))))
         despawned (if (and (> farthest despawn-blocks) (some-> (simulation-distance) (* 16) (> despawn-blocks))) 1 (- 1 (js/Math.exp (- (* idle-despawn-per-s (max 0 (- away-s idle-despawn-s)))))))]
     (- 1 (* (- 1 kept) despawned))))
 
@@ -169,11 +211,6 @@
         idle (min seconds idle-despawn-s)
         life (+ idle (/ (- 1 (js/Math.exp (- (* idle-despawn-per-s (max 0 (- seconds idle-despawn-s)))))) idle-despawn-per-s))]
     (- 1 (js/Math.pow (- 1 held) (* share (/ life (+ idle-despawn-s (/ 1 idle-despawn-per-s))))))))
-
-(def spawn-weights
-  "The weights the overworld's common monster spawns are drawn by (vanilla, most biomes); slimes, kept to slime chunks and
-  swamps, left out."
-  {"spider" 100 "zombie" 95 "zombie_villager" 5 "skeleton" 100 "creeper" 100 "enderman" 10 "witch" 5})
 
 (defn creeper-blast [] (settings/get settings ::creeper-blast))
 (defn creeper-exchange

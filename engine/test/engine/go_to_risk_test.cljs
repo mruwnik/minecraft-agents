@@ -384,6 +384,8 @@
     (is (zero? (hp day-world "zombie" {})) "a zombie burns under the day sky")
     (is (pos? (hp day-world "creeper" {})))
     (is (zero? (hp day-world "creeper" respawned-far)) "the body went 128 blocks off: it despawned")
+    (is (pos? (hp (assoc day-world :entities [{:id 50 :name "Other" :kind "player" :pos {:x 82 :y 64 :z 5}}]) "creeper" respawned-far))
+        "another player stands by the spot: the nearest player never went far")
     (is (zero? (with-redefs [look/seen-block (constantly {:name "air" :age-ms 120000})]
                  (:hp (risk/estimate (with-death (ready-test/ctx-of day-world) {:x 80 :y 64 :z 5} "creeper" 60000 respawned-far) far-goal))))
         "nor any death it risks")))
@@ -401,7 +403,8 @@
         share (fn [more] (let [c (with-death (ready-test/ctx-of day-world) at "drowned" 10800000 more)]
                            (mapv #(death-spot/present-share c (assoc % :mob (:cause %))) (death-spot/recent c))))]
     (is (= [1] (share {})))
-    (is (= [0] (share {:respawned [{:t (- 36000000 60000) :data {:pos {:x 300 :y 64 :z 5}}}]})))))
+    (is (= [5] (mapv #(js/Math.round (* 1000 %)) (share {:respawned [{:t (- 36000000 60000) :data {:pos {:x 300 :y 64 :z 5}}}]})))
+        "only a chicken jockey's rider stays")))
 
 (defn dark-share
   "present-share of each death or near-death spot by a mob in dark-spot-world (simulation distance 10), at difficulty (1 easy, 2 normal), its records `entries`;
@@ -436,13 +439,13 @@
   (let [spawned (threat/spawned-there 1 50)]
     (are [difficulty entries kept] (= (pct (- 1 (* (- 1 kept) (- 1 spawned))))
                                       (pct (first (dark-share difficulty (merge entries respawned-far) :unfaded))))
-      2 (died "zombie" 60000) 0.55
-      2 (died-with "zombie" 60000 ["dirt"]) 0.55
-      2 (died-with "skeleton" 60000 ["dirt" "oak_planks"]) 0
-      2 (died-with "skeleton" 60000 ["iron_boots"]) 0.55
-      1 (died "zombie" 60000) 0
+      2 (died "zombie" 60000) 0.5522
+      2 (died-with "zombie" 60000 ["dirt"]) 0.5522
+      2 (died-with "skeleton" 60000 ["dirt" "oak_planks"]) 0.0099
+      2 (died-with "skeleton" 60000 ["iron_boots"]) 0.5544
+      1 (died "zombie" 60000) 0.0049
       2 (died "creeper" 60000) 0
-      2 {:hurt [{:t (- 36000000 60000) :data {:health 3 :pos {:x 80 :y 64 :z 5} :attacker {:name "zombie"}}}]} 0)))
+      2 {:hurt [{:t (- 36000000 60000) :data {:health 3 :pos {:x 80 :y 64 :z 5} :attacker {:name "zombie"}}}]} 0.0049)))
 
 (deftest a-death-spot-counts-as-lit-only-when-seen
   (let [p (:primitives (ready-test/ctx-of day-world))

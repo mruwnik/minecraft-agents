@@ -108,22 +108,35 @@
     (boolean (and (contains? threat/burns-in-sun mob) rain (zero? rain) (< (sh-sense/sky-subtract-now p) 4)
                   (lit? p cell) (sh-sense/sky-reaches-from-above? p cell)))))
 
+(defn other-players
+  "Positions of the players other than the body that it senses within threat/despawn-blocks of pos."
+  [p pos]
+  (let [me (.-username (.self p))
+        radius (+ threat/despawn-blocks (u/dist pos (sh-sense/feet p)))]
+    (->> (array-seq (.entities p #js {:radius radius :kind "player" :max 32}))
+         (keep #(when (not= me (.-username %)) (u/pos-of (.-pos %))))
+         (filter #(<= (u/dist pos %) threat/despawn-blocks)))))
+
 (defn present-share
   "The chance the mob that killed or hunted c's body at pos age-ms ago, or a like one, is there now, times the spot's weight
   (its fade): 1 - (1 - old)(1 - new). old, the mob itself: threat/left-alive by the farthest the body has been from the spot
   since, the seconds since it was last within threat/idle-despawn-blocks (whereabouts) and the drops it may have
   picked up, none while it burns there (burning?). new, one spawned since: threat/spawned-there over the cells its field
   weighs 1 (cost/spawn-share; lit? ones spawn none) for the seconds since the body was last more than threat/despawn-blocks
-  off (none spawns, and any there despawns, while it is). A water mob's is old alone: it keeps to its water, where it never burns."
+  off (none spawns, and any there despawns, while it is). Despawning goes by the nearest player: another player sensed
+  within despawn-blocks of the spot now (where it was before is not known) counts as having been there all along (never far, near
+  now when within idle-despawn-blocks). A water mob's is old alone: it keeps to its water, where it never burns."
   [c {:keys [mob pos weight age-ms drops]}]
   (let [p (:primitives c)
         now (ctx/now c)
         since (- now age-ms)
         seen (whereabouts c since)
         off #(u/dist pos %)
-        farthest (reduce max 0 (map (comp off second) seen))
-        last-near (reduce max since (keep (fn [[t at]] (when (<= (off at) threat/idle-despawn-blocks) t)) seen))
-        last-far (reduce max since (keep (fn [[t at]] (when (> (off at) threat/despawn-blocks) t)) seen))
+        others (other-players p pos)
+        kept-near (seq others)
+        farthest (if kept-near 0 (reduce max 0 (map (comp off second) seen)))
+        last-near (reduce max since (keep (fn [[t at]] (when (<= (off at) threat/idle-despawn-blocks) t)) (concat seen (map #(vector now %) others))))
+        last-far (if kept-near since (reduce max since (keep (fn [[t at]] (when (> (off at) threat/despawn-blocks) t)) seen)))
         old (if (burning? p mob pos) 0 (threat/left-alive mob farthest (/ (- now last-near) 1000) drops (some-> p .self threat/clock-of)))]
     (* weight
        (if (contains? field/water-mobs mob)
