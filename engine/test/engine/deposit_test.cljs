@@ -89,7 +89,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng seen]} (wt/setup {:inventory [{:name "dirt" :count 5}]})]
-          (core/submit! eng (list job {:items ["dirt"]}) {})
+          (core/submit! eng (list job {:items ["dirt"] :make-chests? false}) {})
           (core/tick! eng)
           (is (some #(and (= :waiting (:kind %)) (= :no-chest (:reason %))) @seen)))))))
 
@@ -163,6 +163,16 @@
 
 (defn chests-in [p]
   (set (keep (fn [[k v]] (when (= "chest" v) k)) (:blocks @(fake/state p)))))
+
+(deftest deposit-with-no-chest-known-puts-the-first-one-down-beside-the-body
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (setup-far {:inventory [{:name "dirt" :count 5} {:name "chest" :count 1}] :containers {"1,64,0" []}})
+              result (await (wt/ending-of eng job {:items ["dirt"]} 30))]
+          (is (= :done (:kind result)))
+          (is (= 1 (count (chests-in p))) "a chest stands now")
+          (is (= {} (wt/inv p)) "and holds the dirt"))))))
 
 (deftest deposit-places-a-new-chest-beside-a-full-one
   (async done

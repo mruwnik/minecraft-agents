@@ -2,7 +2,7 @@
   "jobs.items.craft against the fake world."
   (:require [cljs.test :refer [deftest is are async]]
             [clojure.string :as str]
-            [engine.fake]
+            [engine.fake :as fake]
             [engine.registry :as registry]
             [engine.settings :as settings]
             [engine.core :as core]
@@ -243,6 +243,28 @@
               [result p] (await (craft {:inventory (conj filler {:name "oak_log" :count 1})} {:item "oak_planks"}))]
           (is (= {:item "oak_planks" :made 4 :status :done} (dissoc result :text)))
           (is (= 4 (get (inv p) "oak_planks"))))))))
+
+(deftest craft-with-a-full-inventory-of-cheap-ore-bits-tosses-them-for-the-slot
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [filler (mapv (fn [_] {:name "iron_nugget" :count 1}) (range 35))
+              [result p] (await (craft {:inventory (conj filler {:name "oak_log" :count 1})} {:item "oak_planks"}))]
+          (is (= {:item "oak_planks" :made 4 :status :done} (dissoc result :text))
+              "a lone nugget is worth less than a chest, so a stuck craft tosses it (the per-item toss-below line alone keeps it)")
+          (is (= 4 (get (inv p) "oak_planks"))))))))
+
+(deftest craft-with-a-full-inventory-of-dear-stacks-puts-a-chest-down-and-fills-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [filler (mapv (fn [_] {:name "raw_iron" :count 1}) (range 34))
+              [result p] (await (craft {:inventory (conj filler {:name "oak_log" :count 1} {:name "chest" :count 1})
+                                        :containers {"1,64,0" []}}
+                                       {:item "oak_planks"}))]
+          (is (= {:item "oak_planks" :made 4 :status :done} (dissoc result :text)))
+          (is (= 4 (reduce + (map :count (get-in @(fake/state p) [:containers [1 64 0]])))) "the raw iron went into the new chest")
+          (is (zero? (count (calls p "toss"))) "and none was tossed, nor the chest"))))))
 
 (deftest craft-with-a-full-inventory-never-tosses-the-recipes-inputs-to-make-room
   (async done

@@ -224,7 +224,7 @@
   it ran, nil when it was tried before or there is room."
   [c offer]
   (when (and (not (:room-tried (ctx/mem c))) (no-room? c (:buy (:args c))))
-    (let [r (await (ctx/call c :room 'jobs.storage.make-room {:carry-items (mapv :item (:cost offer))}))]
+    (let [r (await (ctx/call c :room 'jobs.storage.make-room {:carry-items (mapv :item (:cost offer)) :stuck? true}))]
       (if (= :continue r)
         :continue
         (do (ctx/update-mem! c assoc :room-tried true)

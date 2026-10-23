@@ -44,7 +44,7 @@
   Memory: a :chest argument that took at least one item and finished clean, not in another body's zone or claim, joins the storage group (so a later call without :chest tries it) and is offered to the :chest place. It is
   recorded when none is recorded or the recorded one is gone, never over a different live one (place.kept
   event; jobs.memory.set-place moves it).
-  Storage group: with no :chest, or a :chest that is the :chest place or one of the group (memory :storage/chests,
+  With no chest known at all and :make-chests? true, the first one goes down beside the body (the same place child). Storage group: with no :chest, or a :chest that is the :chest place or one of the group (memory :storage/chests,
   jobs.lib.storage/group, or a chest of a plan this body made), chests are tried in turn; one that answers full or takes nothing is skipped. When all are
   full and :make-chests? is true, a chest (jobs.blocks.place child, fetched or crafted by the call's :ways; #{:carried} only a carried one) goes down
   beside a full one and joins the group. A place that ends for a reason of the cell (a zone, the body in it, nothing to place against,
@@ -158,7 +158,7 @@
   [c cause]
   (if (u/count-fail! c) (status-stop! c (name cause)) :again))
 
-(def can-start? (fn [c] (contract/all [(checks/chest-known c) ((checks/container-refused every? :put (pool-positions :put)) c)])))
+(def can-start? (fn [c] (contract/all [(if (:make-chests? (:args c)) (contract/ok :chest "a chest is known or put down") (checks/chest-known c)) ((checks/container-refused every? :put (pool-positions :put)) c)])))
 (def can-run? can-start?)
 
 (defn chest-spots
@@ -249,7 +249,8 @@
                         (storage/add-to-group! c (storage/chest-of (ctx/view c) (:args c)))
                         (ctx/update-mem! c assoc :offered true))
                       (ctx/end c :done nil))
-      (empty? pool) (stop! c :condition-failed :no-chest)
+      (and (empty? pool) (not (:make-chests? (:args c)))) (stop! c :condition-failed :no-chest)
+      (empty? pool) (await (make-chest! c [(storage/cell-of (u/self-pos c))]))
       (nil? chest) (await (make-chest! c pool))
       :else
       (let [w (await (walk! c chest))]

@@ -464,7 +464,7 @@
     (tu/run-async done
       (fn ^:async t []
         (let [{:keys [eng p]} (setup chest-world)]
-          (core/submit! eng (list 'jobs.storage.deposit {:items ["bread"]}) {})
+          (core/submit! eng (list 'jobs.storage.deposit {:items ["bread"] :make-chests? false}) {})
           (is (nil? (core/tick! eng)) "no chest known: blocked")
           (know-place! eng :chest {:x 10 :y 64 :z 0})
           (await (run-until-empty eng 6))

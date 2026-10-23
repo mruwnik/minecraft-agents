@@ -2,6 +2,7 @@
   (:require [jobs.lib.block-sets :as bs]
             [jobs.lib.storage :as storage]
             [jobs.lib.price :as price]
+            [jobs.lib.cost :as cost]
             [jobs.lib.ready :as ready]
             [jobs.storage.make-room.order :as ord]
             [engine.contract :as contract]
@@ -38,10 +39,11 @@
   2. With no slot free and an item lying within the swap-radius setting (8) that is worth more than the cheapest throwable
      stack, that stack is thrown away from the item and the item is collected.
   3. Without a usable chest, the stack of least worth is thrown. A stack qualifies when item-worth is
-     below the toss-below setting (3.2), and it is thrown whole and only while the name's floor stays carried. Cheapest first,
+     below the toss-below setting (3.2) (with :stuck?, when its whole worth is below the cost of a chest, which it keeps to put down), and it is thrown whole and only while the name's floor stays carried. Cheapest first,
      then the one picked up longest ago (:picked-up entries), then the smaller stack. The body turns to the first
      of the four directions with two free cells ahead at eye level and tosses; with none (walled in, after one look around) nothing is
      thrown or swapped, since it would come straight back.
+  With :stuck? and nothing cheaper than a chest to toss, the dearer stacks go into a chest put down beside the body (deposit makes it, by its own ways).
   After tossing, the cleanup export (however the call ends; it also notes the :make-room-rest memory the inventory trigger rests on) walks up to :away blocks from where the items were thrown (a go-to child; the farthest cell back
   that is no seen obstacle; none: a step to the back edge of the cell, out of the pickup reach of items stopped by a wall 1.5 ahead), so it does not pick them up again.
   Resume: a toss or swap writes its intent first; a run that finds one (after a cut or a restart) checks the
@@ -63,6 +65,7 @@
    :carry-seeds {:doc "each kind of seeds kept carried up to this many (a farming body sows them)" :spec (a/int-in 0 nil) :default 16}
    :toss-from {:doc "a position {:x :z}: toss away from it (a dig's caller gives a point ahead of the way it goes on, so it does not walk into what it threw)" :spec (a/pred "a position {:x :z}" #(and (map? %) (number? (:x %)) (number? (:z %)))) :default nil}
    :away {:doc "after tossing, walk this far away from where the items were thrown" :spec (a/num-in 0 nil) :default 4}
+   :stuck? {:doc "a job cannot go on without a slot: a stack goes when its whole worth is below what a chest costs (the chest and walking to put it down), not by the toss-below line per item" :spec boolean? :default false}
    :ignore-zones? :shared})
 
 (a/defargs settings
@@ -74,6 +77,11 @@
    ::swap-radius {:default 8 :doc "When no slot is free, a dropped item worth more than some carried stack within this radius is swapped in." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 120 :doc "Seconds the call may take (a guess until measured)." :spec (a/num-in 0 nil)}
    ::step-s {:default 3 :doc "Seconds a quote counts for one deposit call, swap or toss." :spec (a/num-in 0 nil)}})
+(defn chest-cost
+  "Seconds the other way out costs when no chest is usable: a chest and the walk to put it down (the stuck? line)."
+  []
+  (+ (:value (cost/item-value [{:name "chest" :count 1}]))
+     (:cost (cost/walk-cost {:distance (cost/own-place-blocks)}))))
 (defn chest-range [] (settings/get settings ::chest-range))
 (defn swap-radius [] (settings/get settings ::swap-radius))
 
@@ -126,9 +134,10 @@
   (boolean (some #(= chest (:pos (:data %))) (ctx/entries c :chest-unusable))))
 
 (defn usable-chest
-  "The known chest when within range and not marked unusable, else nil."
+  "The known chest (the :chest place, else a storage group one) when within range and not marked unusable, else nil."
   [c]
-  (let [chest (mem/place (ctx/view c) :chest)]
+  (let [view (ctx/view c)
+        chest (or (mem/place view :chest) (some->> (first (storage/group view)) (zipmap [:x :y :z])))]
     (when (and chest
                (<= (u/dist (u/self-pos c) chest) (chest-range))
                (not (unusable? c chest)))
@@ -139,7 +148,7 @@
   [c]
   (let [inventory (u/inventory (:primitives c))]
     {:inventory inventory
-     :keep (ord/keep-counts inventory (:args c) (reserve/held c :make-room))
+     :keep (ord/keep-counts inventory (cond-> (:args c) (:stuck? (:args c)) (update :carry-items conj "chest")) (reserve/held c :make-room))
      :recency (ord/recency (ctx/view c))}))
 
 (defn ground-items
@@ -287,8 +296,9 @@
   (let [before (u/free-slots (:primitives c))
         room (room-limit (u/inventory (:primitives c)) names keep (slots-short c))
         e (await (ctx/call c :deposit 'jobs.storage.deposit
-                           (merge (select-keys (:args c) [:ignore-zones?]) {:chest chest :items (:names room) :carry (:keep room) :make-chests? true :ways #{:carried}})))]
-    (when (get-in e [:data :gave-up])
+                           (cond-> (merge (select-keys (:args c) [:ignore-zones?]) {:items (:names room) :carry (:keep room) :make-chests? true})
+                                  chest (assoc :chest chest :ways #{:carried}))))]
+    (when (and chest (get-in e [:data :gave-up]))
       (ctx/remember! c :chest-unusable {:pos chest :reason (contract/cause-key e)} (unusable-policy)))
     (when (> (u/free-slots (:primitives c)) before)
       (ctx/update-mem! c assoc :acted true))
@@ -415,11 +425,15 @@
         names (ord/deposit-names inventory keep recency)
         dir (await (direction! c run))
         swap (when (and dir (zero? free-now)) (or (swap-target c st) (await (seek-swap! c run st))))
-        order (when dir (ord/toss-order inventory keep recency toss-below))]
+        order (when dir (if (:stuck? (:args c))
+                          (ord/toss-order inventory keep recency (chest-cost) true)
+                          (ord/toss-order inventory keep recency toss-below)))]
     (cond
       (>= free-now free) (await (finish-end! c nil))
       (>= (:toss-fails m 0) (settings/get settings ::toss-fails)) (await (finish-end! c :toss-failed))
       (and chest (seq names)) (do (await (put-away! c run chest names keep)) :again)
+      (and (:stuck? (:args c)) (not (:chest-done @run)) (seq names) (empty? order))
+      (do (await (put-away! c run nil names keep)) :again)
       swap (do (await (swap-in! c swap)) :again)
       (seq order) (do (await (toss! c (first order) dir {})) :again)
       :else (await (finish-end! c (if (:acted m) :short :nothing-to-go))))))

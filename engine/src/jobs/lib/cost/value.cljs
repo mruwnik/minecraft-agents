@@ -189,6 +189,7 @@
    (let [hurt (min (settings/get settings ::dark-hurt-cap) (fight/fight-damage (assoc kit :mobs [{:name "zombie" :distance 0 :hits 0}])))]
      (+ (dark-factor) (* hurt (spawn-chance [0 0 0]) health/hp-seconds)))))
 (def per-danger "One expected point of damage (jobs.lib.cost/route-danger): what an hp costs (jobs.lib.cost.health)." health/hp-seconds)
+(defn own-place-blocks [] (settings/get settings ::own-place-blocks))
 (defn walk-blocks-per-s [] (settings/get settings ::walk-blocks-per-s))
 (def lethal-causes ["lava" "fire" "burn" "void" "out_of_world"])
 

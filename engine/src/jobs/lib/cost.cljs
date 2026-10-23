@@ -162,6 +162,7 @@
 (def fetch-cost value/fetch-cost)
 (def reserve-cost value/reserve-cost)
 (def walk-cost value/walk-cost)
+(def own-place-blocks value/own-place-blocks)
 (def walk-beats-making value/walk-beats-making)
 (defn walk-blocks-per-s [] (value/walk-blocks-per-s))
 (defn per-block [] (value/per-block))

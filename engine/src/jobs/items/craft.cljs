@@ -268,7 +268,7 @@
   while it waits, :again when it ran, nil when it was tried before."
   [c]
   (when-not (:room-tried (ctx/mem c))
-    (let [r (await (ctx/call c :room 'jobs.storage.make-room {:carry-items (carry-items c)}))]
+    (let [r (await (ctx/call c :room 'jobs.storage.make-room {:carry-items (carry-items c) :stuck? true}))]
       (if (= :continue r)
         :continue
         (do (ctx/update-mem! c assoc :room-tried true)

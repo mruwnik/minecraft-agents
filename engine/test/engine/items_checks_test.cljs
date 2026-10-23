@@ -55,7 +55,7 @@
 
 (deftest a-missing-chest-or-item-is-later-at-the-start
   (are [sym world args reason] (= [:later reason] (kind+reason (verdict-of :can-start? sym world args)))
-    'jobs.storage.deposit {} {} :no-chest
+    'jobs.storage.deposit {} {:make-chests? false} :no-chest
     'jobs.storage.withdraw {} {} :no-chest
     'jobs.storage.haul {} {:from [[1 64 0]]} :no-chest
     'jobs.items.equip {:inventory [{:name "dirt" :count 1}]} {:item "iron_pickaxe" :hand "main" :ways #{:carried}} :no-item
@@ -64,8 +64,11 @@
 (deftest a-started-withdraw-waits-when-its-chest-is-gone
   (is (= [:later :no-chest] (kind+reason (verdict-of :can-run? 'jobs.storage.withdraw {} {:items {"bread" 1}})))))
 
+(deftest a-deposit-that-may-make-chests-starts-without-a-known-chest
+  (is (= [:ok :chest] (kind+reason (verdict-of :can-start? 'jobs.storage.deposit {} {:make-chests? true})))))
+
 (deftest a-started-deposit-waits-when-its-chest-is-gone
-  (is (= [:later :no-chest] (kind+reason (verdict-of :can-run? 'jobs.storage.deposit {} {})))))
+  (is (= [:later :no-chest] (kind+reason (verdict-of :can-run? 'jobs.storage.deposit {} {:make-chests? false})))))
 
 (deftest a-known-chest-passes
   (is (= :ok (first (verdict-of :can-start? 'jobs.storage.deposit {} {:chest {:x 3 :y 64 :z 0}})))))

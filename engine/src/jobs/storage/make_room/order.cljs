@@ -82,14 +82,16 @@
   last picked up (never is 0, oldest), then count, then slot. A stack qualifies when its name is not
   protected or food, its worth is below max-worth, and its whole count fits in
   what the name carries above its keep, after the stacks of the name that come
-  before it in the order: a toss frees a whole slot and never cuts into a floor."
-  [inventory keep recency max-worth]
+  before it in the order: a toss frees a whole slot and never cuts into a floor. With total? the whole stack's worth is
+  compared with max-worth, not the worth of one item."
+  ([inventory keep recency max-worth] (toss-order inventory keep recency max-worth false))
+  ([inventory keep recency max-worth total?]
   (let [totals (storage/carried-totals inventory)
         budgets (into {} (map (fn [[n total]] [n (- total (get keep n 0))])) totals)
         candidates (->> inventory
                         (map #(assoc (select-keys % [:name :count :slot]) :worth (stack-worth %) :junk (contains? junk-blocks (:name %))))
                         (remove #(or (protected? (:name %)) (foods/edible? (:name %))))
-                        (filter #(< (:worth %) max-worth))
+                        (filter #(< (if total? (* (:worth %) (:count %)) (:worth %)) max-worth))
                         (sort-by (fn [s] (let [kept (if (pos? (get keep (:name s) 0)) 1 0)]
                                            (if (:junk s)
                                              [kept 0 0 0 0 (- (:count s)) (:slot s)]
@@ -99,7 +101,7 @@
                        [(conj chosen s) (update left (:name s) - (:count s))]
                        [chosen left]))
                    [[] budgets]
-                   candidates))))
+                   candidates)))))
 
 (defn deposit-names
   "Distinct carried names, not protected, whose total exceeds their keep, in

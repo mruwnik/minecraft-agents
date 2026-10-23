@@ -9,4 +9,4 @@
             {:trigger :night}
             {:trigger :hungry}]
  :queue [(jobs.forestry.harvest-wood {:species "oak" :radius 16})
-         (jobs.storage.deposit)]}
+         (jobs.storage.deposit {:make-chests? false})]}
