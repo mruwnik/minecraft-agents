@@ -37,6 +37,7 @@
             [jobs.items.collect-drops :as collect-drops]
             [jobs.items.kitchen :as kitchen]
             [jobs.items.get-kit :as get-kit]
+            [jobs.items.obtain :as obtain]
             [jobs.gather.mine :as mine]
             [jobs.gather.dig-for :as dig-for]
             [jobs.gather.strip-tunnel :as strip-tunnel]
@@ -61,7 +62,7 @@
   "A job's ctx over a fake body built from world (a fresh job id: the check cache is per job), staying at its place long enough that no exposure is affordable (jobs.lib.price)."
   [world]
   (let [p (cond-> (tu/seeing-all (tu/fake (merge {:floor tu/walk-floor} world))) (not (:light world)) sky/with-sky)]
-    {::price/stay-s 1e6 :id (str (random-uuid)) :slots [] :engine {:warned (atom #{})} :primitives p :view (fn [] {:now 0 :data {}})}))
+    {::price/stay-s 1e6 :id (str (random-uuid)) :slots [] :engine {:warned (atom #{}) :jobs registry/jobs} :primitives p :view (fn [] {:now 0 :data {}})}))
 
 (def inside {:x 5 :y 64 :z 0})
 (def outside {:x 15 :y 64 :z 0})
