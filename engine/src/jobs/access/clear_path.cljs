@@ -11,6 +11,7 @@
             [jobs.lib.cond :as cond]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as b]
+            [jobs.lib.access.rules :as rules]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.reach :as reach]
             [jobs.lib.child :as child]
@@ -196,6 +197,46 @@
       (and (:arrived (:data r)) (= through (reach/standing-vec (:primitives c)))) (finish! c :done {})
       :else (finish! c :step-failed {:cell through}))))
 
+(defn side-cells
+  "Cells beside the dug cells (not dug themselves), the deepest dug cell first."
+  [dir dug]
+  (let [dug-set (set dug)
+        [dx dz] dir]
+    (for [cell (reverse dug)
+          d [[dz dx] [(- dz) (- dx)]]
+          :let [side (escape/ahead cell d 1)]
+          :when (not (dug-set side))]
+      side)))
+
+(defn ^:async side-door!
+  "The wall ahead goes on but a dug cell may open into air beside it that the body could not see from outside: stand in
+  the deepest dug cell (once), look at the cells beside the dug ones, and take a seen-open one with a floor for the far
+  side. :again, :continue (the walk waits) or nil."
+  [c dir]
+  (let [p (:primitives c)
+        block-at (escape/block-at-of p)
+        unseen? (escape/unseen-of p)
+        dug (mapv :cell (:dug (ctx/mem c)))
+        deepest (peek dug)
+        below (some-> deepest (escape/up -1))
+        feet (when deepest (if (and (bs/passable? (block-at below)) (rules/solid-floor? block-at (escape/up below -1))) below deepest))
+        step-in (when (and feet (not (:stepped-in (ctx/mem c))) (not= feet (reach/standing-vec p)))
+                  (await (child/walk-into!* c :walk feet)))]
+    (if (= :continue step-in)
+      :continue
+      (do (ctx/update-mem! c assoc :stepped-in true)
+          (loop [cells (side-cells dir dug)]
+            (when-let [cell (first cells)]
+              (when (dig-look/unknown? p cell) (await (dig-look/look-at! c cell)))
+              (recur (rest cells))))
+          (when-let [side (->> (side-cells dir dug)
+                               (filter #(and (not (unseen? %)) (not (unseen? (escape/up % 1)))
+                                             (bs/passable? (block-at %)) (bs/passable? (block-at (escape/up % 1)))
+                                             (rules/solid-floor? block-at (escape/up % -1))))
+                               first)]
+            (ctx/update-mem! c #(-> % (assoc :through side) (dissoc :unseen)))
+            :again)))))
+
 (defn ^:async replan!
   "The far side was a guess (:unseen) and the cells before it are dug: look at that row's unseen cells (memory
   :looked-at), then plan on from it with what the body sees (escape/door-from); a row still unseen is taken as
@@ -214,8 +255,9 @@
           :again)
       (let [gap (escape/door-from (escape/block-at-of p) (escape/unseen-of p) from dir (max-thick) k)]
         (cond
-          (nil? gap) (finish! c :no-door {:why (str "the wall goes on past " (pr-str through) ": thicker than "
-                                                     (max-thick) " or no floor beyond")})
+          (nil? gap) (or (await (side-door! c dir))
+                         (finish! c :no-door {:why (str "the wall goes on past " (pr-str through) ": thicker than "
+                                                        (max-thick) " or no floor beyond")}))
           (= through (:through gap)) (do (ctx/update-mem! c dissoc :unseen) :again)
           :else (do (ctx/update-mem! c assoc :cells (:cells gap) :through (:through gap) :unseen (:unseen gap))
                     :again))))))

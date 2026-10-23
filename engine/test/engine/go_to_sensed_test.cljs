@@ -121,6 +121,16 @@
           (is (= [:done [3 64 0]] [(:status r) (:through r)]) (pr-str r))
           (is (= 4 (count (:dug r))) "both rows"))))))
 
+(deftest clear-path-takes-an-opening-beside-a-dug-cell-for-the-far-side
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spec (-> (wall-east 3 (box 4 64 -1 4 65 1 "stone"))
+                       (assoc :inventory [{:name "wooden_pickaxe" :count 1}])
+                       (update :blocks dissoc "1,64,1" "1,65,1"))
+              r (await (run-clear-path spec))]
+          (is (= [:done [1 64 1]] [(:status r) (:through r)]) (pr-str r)))))))
+
 (deftest clear-path-in-solid-rock-gives-up-with-a-reason
   (async done
     (tu/run-async done
