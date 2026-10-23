@@ -273,6 +273,14 @@
     (is (pos? (hp day-world "creeper" {})))
     (is (zero? (hp day-world "creeper" respawned-far)) "the body went 128 blocks off: it despawned")))
 
+(deftest a-drowned-death-spot-holds-while-the-body-stays-near-its-water-and-goes-once-it-went-far
+  ;; 3 h old, past the 2 h fade of a walker's spot; 25 blocks from the body
+  (let [at {:x 30 :y 64 :z 2}
+        share (fn [more] (let [c (with-death (ready-test/ctx-of day-world) at "drowned" 10800000 more)]
+                           (mapv #(death-spot/present-share c (assoc % :mob (:cause %))) (death-spot/recent c))))]
+    (is (= [1] (share {})))
+    (is (= [0] (share {:respawned [{:t (- 36000000 60000) :data {:pos {:x 300 :y 64 :z 5}}}]})))))
+
 (deftest a-death-spot-counts-as-lit-only-when-seen
   (let [p (:primitives (ready-test/ctx-of day-world))
         at {:x 80 :y 64 :z 5}
