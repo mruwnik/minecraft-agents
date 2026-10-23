@@ -268,16 +268,17 @@
                :when m]
            [(js/parseInt (nth m 1)) (js/parseInt (nth m 2))]))))
 
-(defn- today [] (.slice (.toISOString (js/Date.)) 0 10))
-
 (defn reset-workspace!
-  "Makes the body's workspace a working one on this repo: the old notes/ move aside to notes.old-<date> and the stale context.edn
-  goes, so the rebind and the wrapper refresh below are accepted."
-  [dir]
+  "Makes the body's workspace a working one on this repo: the old notes/ move aside to notes.old-<date>-<ms> (unique per call, so a
+  second drop never leaves old notes in place) and the stale context.edn goes, so the rebind and the wrapper refresh below are accepted."
+  [dir now-ms]
   (let [notes (path/join dir "notes")
-        aside (str notes ".old-" (today))]
-    (when (and (fs/existsSync notes) (not (fs/existsSync aside))) (fs/renameSync notes aside))
+        aside (str notes ".old-" (.slice (.toISOString (js/Date. now-ms)) 0 10) "-" now-ms)]
+    (when (fs/existsSync notes) (fs/renameSync notes aside))
     (fs/rmSync (path/join dir "context.edn") #js {:force true})))
+
+(defn- body-online? [body]
+  (str/includes? (str (.-stdout (cp/spawnSync js/process.execPath #js [(path/join (repo) "tools/rcon-raw.mjs") "list"] #js {:cwd (repo) :encoding "utf8"}))) body))
 
 (defn- run-node! [script args]
   (cp/spawnSync js/process.execPath (clj->js (into [(path/join (repo) script)] args)) #js {:stdio "inherit" :cwd (repo)}))
@@ -294,7 +295,9 @@
             (fs/writeFileSync p text))
     :workspace (let [[body world] a
                      worlds (fs/realpathSync (path/join (repo) "worlds"))]
-                 (reset-workspace! (path/join worlds world "agents" body))
+                 (when (body-online? body)
+                   (throw (js/Error. (str body " is online; stop it before its workspace is reset"))))
+                 (reset-workspace! (path/join worlds world "agents" body) (js/Date.now))
                  (run-node! "engine/tools/workspace.mjs" [(path/join worlds world "agents" body) "--body" body "--world" world "--worlds" worlds "--adopt-existing" "--update-tools"]))
     :body-start (let [[body {:keys [world build]}] a
                       child (cp/spawn "sh"
@@ -305,10 +308,9 @@
                                       #js {:cwd (path/join build "engine") :detached true :stdio "ignore"
                                            :env (js/Object.assign #js {} js/process.env #js {:NODE_COMPILE_CACHE (path/join (repo) "engine/out/compile-cache")})})]
                   (.unref child))
-    :wait-online (let [body (first a)
-                       online? #(str/includes? (str (.-stdout (cp/spawnSync js/process.execPath #js [(path/join (repo) "tools/rcon-raw.mjs") "list"] #js {:cwd (repo) :encoding "utf8"}))) body)]
+    :wait-online (let [body (first a)]
                    (loop [n 0]
-                     (when-not (or (online?) (>= n 300))
+                     (when-not (or (body-online? body) (>= n 300))
                        (cp/spawnSync "sleep" #js ["2"])
                        (recur (inc n)))))
     :place (let [[bodies spots] a

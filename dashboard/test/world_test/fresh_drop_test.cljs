@@ -1,5 +1,8 @@
 (ns world-test.fresh-drop-test
   (:require [cljs.test :refer [deftest is]]
+            ["fs" :as fs]
+            ["os" :as os]
+            ["path" :as path]
             [world-test.fresh-drop :as d]))
 
 (def t0 1000000)
@@ -119,3 +122,16 @@
   (is (not (d/placed-ok? "Incorrect argument for command at ...lse Oriel Bramble Teasel<--[HERE]")))
   (is (not (d/placed-ok? "Could not spread 1 entity/entities around 14103.5, -1291.5 (too many entities for space - try using spread of at most 4)")))
   (is (not (d/placed-ok? ""))))
+
+(deftest reset-workspace-moves-notes-aside-every-time
+  (let [dir (fs/mkdtempSync (path/join (os/tmpdir) "fresh-drop-"))
+        mk (fn [] (fs/mkdirSync (path/join dir "notes")) (fs/writeFileSync (path/join dir "context.edn") "{}"))]
+    (try
+      (mk)
+      (d/reset-workspace! dir 1000)
+      (mk)
+      (d/reset-workspace! dir 2000)
+      (is (not (fs/existsSync (path/join dir "notes"))))
+      (is (not (fs/existsSync (path/join dir "context.edn"))))
+      (is (= 2 (count (filter #(.startsWith % "notes.old-1970-01-01-") (array-seq (fs/readdirSync dir))))))
+      (finally (fs/rmSync dir #js {:recursive true :force true})))))
