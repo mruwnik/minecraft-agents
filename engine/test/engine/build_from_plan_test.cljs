@@ -2122,3 +2122,15 @@
     (lit-check (dark-wait 300) false true not-worth {} worths)
     (lit-check no-light false true not-worth {} worths)
     (is (= [["torch" 2 (cost/light-wait-worth 300 2)] ["torch" 2 nil]] @worths) "the wait less the placing; a wait that never ends, any price")))
+
+(deftest a-torchless-build-plans-its-torches-only-when-it-could-fetch-them
+  (let [planned (atom 0)
+        check (fn [fetch? mem]
+                (with-redefs [torch/torches-held (constantly 0) need/fetch-opts (constantly (when fetch? {:how #{:gather}})) ctx/mem (constantly mem)
+                              fp-light/torches-owed (fn [_ _] (swap! planned inc) 2)
+                              need/item-status (constantly (contract/ok :ready "ready"))]
+                  (first ((fp-light/lights-itself (constantly (dark-wait 3000)) (constantly [])) {:primitives nil}))))]
+    (is (= [:later :later] [(check false {}) (check true {:torches-tried true})]))
+    (is (zero? @planned) "no fetch allowed or one tried already: the lighting is not planned")
+    (is (= :ok (check true {})))
+    (is (= 1 @planned))))

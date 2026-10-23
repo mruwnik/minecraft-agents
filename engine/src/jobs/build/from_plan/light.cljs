@@ -36,14 +36,16 @@
   (max 0 (- (torches-owed c owed) (torch/torches-held (:primitives c)))))
 
 (defn fetch-due?
-  "Whether n torches are worth getting (crafted from what is carried, or fetched) to light the site instead of waiting wait-s seconds for the
+  "Whether the torches short over the owed cells (torches-short) are worth getting (crafted from what is carried, or fetched) to light the site instead of waiting wait-s seconds for the
   sky's light (nil: it never comes, a cell under a canopy or in a cave): some short, none got yet this call, and the call's ways allow a torch
-  obtain whose start check takes its price (the cheapest way, the death its walk risks) for no more than the wait saves (jobs.lib.cost/light-wait-worth)."
-  [c wait-s n]
-  (and (pos? n)
-       (not (:torches-tried (ctx/mem c)))
+  obtain whose start check takes its price (the cheapest way, the death its walk risks) for no more than the wait saves (jobs.lib.cost/light-wait-worth).
+  The torches are counted last: that plans the lighting."
+  [c wait-s owed]
+  (and (not (:torches-tried (ctx/mem c)))
        (some? (need/fetch-opts c))
-       (composite/ok? (need/item-status c "torch" n (need/fetch-opts c) (some-> wait-s (cost/light-wait-worth n))))))
+       (let [n (torches-short c owed)]
+         (and (pos? n)
+              (composite/ok? (need/item-status c "torch" n (need/fetch-opts c) (some-> wait-s (cost/light-wait-worth n))))))))
 
 (defn lights-itself
   "safe, but ok where it only waits for light (:exposed, lowered by :light) or no light comes (:exposed, a torch lowers it) and the body can hang torches
@@ -55,7 +57,7 @@
         wait-s (fn [[_ _ data]] (some-> (:recheck-after-ms data) (/ 1000)))
         lit (fn [f] (fn [c] (let [s (f c)]
                               (if (and (or (wait-for-light? s) (no-light? s))
-                                       (or (can-light? c) (fetch-due? c (when (wait-for-light? s) (wait-s s)) (torches-short c (plan/owed (cells-of c))))))
+                                       (or (can-light? c) (fetch-due? c (when (wait-for-light? s) (wait-s s)) (plan/owed (cells-of c)))))
                                 (contract/ok :torches "dark: the body hangs torches to build by")
                                 s))))]
     (with-meta (lit safe) (update (meta safe) :jobs.lib.ready/exposure #(some-> % lit)))))
@@ -97,7 +99,7 @@
   (let [owed (plan/owed cells)]
     (cond
       (or (empty? owed) (not (dark-site? c owed))) nil
-      (and (not (:light-tried (ctx/mem c))) (fetch-due? c (site-wait c owed) (torches-short c owed))) (await (fetch-torches! c (torches-short c owed)))
+      (and (not (:light-tried (ctx/mem c))) (fetch-due? c (site-wait c owed) owed)) (await (fetch-torches! c (torches-short c owed)))
       (can-light? c) (let [d (await (ctx/call c :light 'jobs.build.light-area (assoc (light-args owed) :ways #{:carried})))]
                        (when-not (= :continue d)
                          (ctx/update-mem! c assoc :light-tried true))

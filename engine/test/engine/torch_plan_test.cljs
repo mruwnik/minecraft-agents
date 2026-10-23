@@ -67,3 +67,10 @@
         spots (fn [spread] (count (:spots (tp/plan {:cells cells :dark? (constantly true) :open? (open-in cells) :spots cells :spread spread}))))]
     (is (= 3 (spots 4)) "a torch lights 4 cells each way: 9 cells")
     (is (= 1 (spots 13)))))
+
+(deftest light-spreads-over-and-round-a-wall-through-open-air
+  (let [open? (fn [[x y z]] (and (<= 0 y 20) (not (and (= x 4) (<= y 3) (not= z 8)))))
+        cells (filterv open? (for [x (range 12) z (range 12)] [x 0 z]))
+        r (tp/plan {:cells cells :dark? (constantly true) :open? open? :spots cells :spread 6})]
+    (is (= {:spots [[1 0 5] [3 0 8] [0 0 0] [8 0 3] [7 0 9]] :uncovered []} r))
+    (is (every? (into #{} (mapcat #(tp/lit-by open? % 6)) (:spots r)) cells))))
