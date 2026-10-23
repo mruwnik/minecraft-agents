@@ -34,6 +34,7 @@
             [jobs.movement.go-to.restore :as restore]
             [jobs.movement.go-to.torch :as torch]
             [jobs.movement.go-to.walk :as gwalk]
+            [jobs.movement.reach :as reach-job]
             [jobs.survival.respond.options :as cornered]
             [jobs.lib.flee-walk :as walk]))
 
@@ -892,3 +893,19 @@
     (is (true? (shut? (wworld/unknown-spec))) "buried: the unseen rock is rock")
     (is (false? (no-guess #(shut? (wworld/unknown-spec)))) "no rock guess: unseen cells are open, as the plans read them")
     (is (true? (no-guess #(shut? looked))) "walls looked at and not seen read stone, as the plans read them")))
+
+(deftest a-walk-spec-spares-the-cells-round-the-goal-from-the-rock-guess
+  (let [{:keys [w]} (sensed-only {:self {:pos {:x 0.5 :y 55 :z 0.5}} :blocks (dissoc (box -8 50 -8 8 60 8 "stone") "0,55,0" "0,56,0")})
+        c {:primitives w :view (constantly {:data {} :now 0})}
+        kind-at-goal (fn [goal] ((wworld/unseen-kind w (escape/walk-spec c goal)) 6 55 0))]
+    (swap! (fake/state w) assoc :light-default [0 0])
+    (is (= [:solid :ground] [(kind-at-goal nil) (kind-at-goal [6 55 0])]))))
+
+(deftest the-reach-job-asks-the-shut-in-verdict-over-a-spec-seeded-with-its-goal
+  (let [{:keys [w]} (sensed-only {:self {:pos {:x 0.5 :y 55 :z 0.5}} :blocks (box -8 50 -8 8 60 8 "stone")})
+        goals (atom [])
+        walk-spec escape/walk-spec
+        c {:primitives w :args {:pos {:x 6 :y 55 :z 0} :walk {:doors :never}} :view (constantly {:data {} :now 0})}]
+    (with-redefs [escape/walk-spec (fn [c goal] (swap! goals conj goal) (walk-spec c goal))]
+      (reach-job/fetch-tool? c))
+    (is (= [[6 55 0]] @goals))))

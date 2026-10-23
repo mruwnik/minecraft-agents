@@ -61,6 +61,12 @@
   [c]
   (some-> (:pos (:args c)) places/parse-pos :pos))
 
+(defn fetch-tool?
+  "choose/fetch-tool? with the shut-in verdict of the walk this job makes toward its goal."
+  [c]
+  (let [{:keys [x y z]} (goal-of c)]
+    (choose/fetch-tool? (:primitives c) nil (delay (escape/walk-enclosed? (:primitives c) (:walk (:args c)) (escape/walk-spec c (when y (mapv #(js/Math.floor %) [x y z]))))))))
+
 (defn done?
   [c]
   (let [cell (goal-of c)
@@ -104,7 +110,7 @@
         block-at (escape/block-at-of p)
         may-dig? (holes/may-dig-fn c)
         own? (holes/own-placed-fn c)
-        opts {:own? own? :skip skip :fetch? (choose/fetch-tool? p (:walk (:args c))) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c)}
+        opts {:own? own? :skip skip :fetch? (fetch-tool? c) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c)}
         stair-from (fn [cell] (span/down-stair block-at cell goal may-dig? own? skip))
         stair (when (allowed? c :stair)
                 (let [here (stair-from feet)
@@ -208,7 +214,7 @@
   (a walk would take the body back to the nearest point)."
   [c]
   (let [{:keys [span from built]} (ctx/mem c)
-        [job args] (span-job span (boolean (:ignore-zones? (:args c))) (choose/fetch-tool? (:primitives c) (:walk (:args c))))
+        [job args] (span-job span (boolean (:ignore-zones? (:args c))) (fetch-tool? c))
         r (waits/waiting-out c (await (ctx/call c (keyword (str "span-" (or built 0))) job args)))
         moved? (not= from (feet-of c))]
     (when-not (= :continue r)

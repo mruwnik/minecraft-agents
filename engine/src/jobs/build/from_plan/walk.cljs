@@ -103,11 +103,11 @@
       :else w)))
 
 (defn in-pocket?
-  "Whether the body stands in a closed room of at most ::pocket-cells walkable cells, over the world go-to's plans read
-  (wworld/unseen-kind): it confirms go-to's shut-in verdict."
+  "Whether the body stands in a closed room of at most ::pocket-cells walkable cells, over the world go-to's plans read toward
+  the last walk's goal (wworld/unseen-kind of escape/walk-spec): it confirms go-to's shut-in verdict."
   [c]
   (let [p (:primitives c)]
-    (reach-room/enclosed? p (wworld/unseen-kind p #js {}) #{} (settings/get settings ::pocket-cells))))
+    (reach-room/enclosed? p (wworld/unseen-kind p (escape/walk-spec c (near/last-goal c))) #{} (settings/get settings ::pocket-cells))))
 
 (defn shut-in-walk?
   "Whether the last walk ended because the body is shut in (go-to refuses to dig or build out of a restricted walk) and the

@@ -18,6 +18,7 @@
             [jobs.lib.block-sets :as bs]
             [jobs.lib.blocks :as b]
             [jobs.lib.dig-look :as dig-look]
+            [jobs.lib.ledger :as ledger]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             
@@ -146,6 +147,13 @@
   ([c] (walk-enclosed? (:primitives c) (:args c) (:unknown c)))
   ([p args spec]
    (enclosed? p (some-> (:doors args) keyword) (wworld/unseen-kind p (when-not (false? (:unknown args)) (or spec #js {}))))))
+
+(defn walk-spec
+  "A fresh mask spec for a walk of job c's child go-to toward goal ([x y z], or nil), seeded as go-to seeds its own (goal, the
+  stairs and tunnels the body cut), so the rock guess spares what its plans spare. The cells the walk looked at and could not
+  see (its blocked set) are not known to c."
+  [c goal]
+  (wworld/with-seeds (wworld/unknown-spec) goal (into (ledger/stair-stands c) (ledger/tunnel-stands c))))
 
 (defn scan-doors
   "Whether a door or gate the body can open borders a cell it can walk to from feet, with room behind it for the body

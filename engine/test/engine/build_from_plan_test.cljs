@@ -14,6 +14,7 @@
             [engine.test-util :as tu]
             [jobs.lib.util :as u]
             [engine.triggers :as triggers]
+            [jobs.lib.escape :as escape]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.world-files :as world]
             [jobs.build.from-plan :as build]
@@ -1509,7 +1510,8 @@
   (let [p (tu/fake {:blocks (apply dissoc (tu/box -1 64 -1 3 66 1 "stone") (for [x (range 0 3) y [64 65]] (str x "," y ",0")))
                     :floor [-30 -30 30 30] :self {:pos [1 64 0]}})
         sensed (.-sensedAt p)
-        shut-in? #(with-redefs [near/last-walk (constantly {:data {:shut-in true}})] (fp-walk/shut-in-walk? {:primitives p}))]
+        c {:primitives p :view (constantly {:data {} :now 0})}
+        shut-in? #(with-redefs [near/last-walk (constantly {:data {:shut-in true}}) near/last-goal (constantly nil)] (fp-walk/shut-in-walk? c))]
     (is (true? (shut-in?)) "walls all seen: a pocket")
     (aset p "sensedAt" (fn [q] (if (#{[1 64 1] [1 65 1]} [(.-x q) (.-y q) (.-z q)]) #js {:unknown true} (sensed q))))
     (is (false? (shut-in?)) "a wall never looked at may be a gap: not a pocket")))
@@ -2005,3 +2007,12 @@
               torches (for [x (range 0 7) y [64 65] z (range 0 7) :when (= "torch" (block p [x y z]))] [x y z])]
           (is (seq torches) "a torch hung at the dark site")
           (is (= [] (:missing result)) (pr-str result)))))))
+
+(deftest a-pocket-is-judged-over-the-world-the-last-walk-planned-toward-its-goal
+  (let [p (tu/fake {:blocks (tu/box -8 50 -8 8 60 8 "stone") :floor [-30 -30 30 30] :self {:pos [0 55 0]}})
+        c {:primitives p :view (constantly {:data {} :now 0})}
+        goals (atom [])]
+    (with-redefs [near/last-goal (constantly [6 55 0])
+                  escape/walk-spec (fn [_ goal] (swap! goals conj goal) nil)]
+      (fp-walk/in-pocket? c))
+    (is (= [[6 55 0]] @goals))))

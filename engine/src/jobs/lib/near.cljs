@@ -227,6 +227,11 @@
   [c]
   (:near-walk (ctx/mem c)))
 
+(defn last-goal
+  "The cell [x y z] the last go-near! walk that ended went to, nil before any."
+  [c]
+  (:near-goal (ctx/mem c)))
+
 (defn ^:async go-near!
   "Walk until the body's cell is within range cells of pos's cell (u/within?), as a jobs.movement.go-to child in slot :walk,
   so a body shut in escalates (pillar, stair, dig a way out and put back). Resolves to :there, :partial (the child waits on the world: yield and call
@@ -258,7 +263,7 @@
                               (child/call-walk* c :walk walk)))]
                (if (= :continue e)
                  :partial
-                 (do (ctx/update-mem! c assoc :near-walk e)
+                 (do (ctx/update-mem! c assoc :near-walk e :near-goal (mapv #(js/Math.floor (% cell)) [:x :y :z]))
                      (cond (:arrived (:data e)) :there
                            (:nearer (:data e)) :partial
                            :else :blocked))))))))
