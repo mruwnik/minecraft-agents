@@ -1,7 +1,7 @@
 (ns jobs.items.obtain.seen
   "A gather need against the body: the blocks and sheep seen for it, and the need made ready to run."
   (:require [engine.ctx :as ctx]
-            [jobs.items.obtain.base :refer [seen-radius]]
+            [jobs.items.obtain.base :refer [given-worth search-worth seen-radius]]
             [jobs.lib.access :as access]
             [jobs.lib.animal-spare :as spare]
             [jobs.items.obtain.chest :as chest]
@@ -17,26 +17,17 @@
             [jobs.lib.trees :as trees]
             [jobs.lib.util :as u]))
 
-(defn hunt-worth
-  "Seconds the animals of a mob need are worth: the call's :search-worth or :worth, else what the wanted items (or the
-  animal's meat) are worth."
-  [c need mob]
-  (let [{:keys [search-worth worth]} (:args c)]
-    (or search-worth worth
-        (max (cost/animal-worth mob)
-             (if (:key need) (* (:count need 1) (:value (cost/item-value [{:name (:key need) :count 1}]))) 0)))))
-
 (defn animals-worth-hunting
-  "The adult animals of the need's mob in sight (colour-matching when given), nearest first, whose trip pays: the need's
-  worth (hunt-worth) against fetch-cost of the walk to the animal with the route-hurt of the threats other than the
-  prey's own kind along the straight way."
-  [c need mob pred]
+  "The adult animals of the need's mob in sight (colour-matching when given), nearest first, whose trip pays: the call's
+  given-worth, else the larger of the animal's meat and the call's search-worth, against fetch-cost of the walk to the
+  animal with the route-hurt of the threats other than the prey's own kind along the straight way."
+  [c mob pred]
   (let [p (:primitives c)
         self (u/self-pos c)
         kind-at (reach/mob-lookup p)
         body (threats/death-body c)
         others (delay (threats/threats-of c))
-        worth (hunt-worth c need mob)]
+        worth (or (given-worth c) (max (cost/animal-worth mob) (search-worth c)))]
     (filter (fn [e]
               (let [at (u/pos-of (.-pos e))
                     hurt (cost/route-hurt body {:cells (cost/straight-route kind-at self at)
@@ -46,8 +37,8 @@
 
 (defn sheep-in-range
   "The adult unsheared sheep in sight whose trip pays, as JS entities."
-  [c need]
-  (animals-worth-hunting c need "sheep" #(not (or (true? (.-baby %)) (true? (.-sheared %))))))
+  [c]
+  (animals-worth-hunting c "sheep" #(not (or (true? (.-baby %)) (true? (.-sheared %))))))
 
 (defn shears-source
   "How the body gets shears for wool: :carried, :craft (2 iron ingots carried), :chest (shears or 2 iron ingots in a
@@ -103,8 +94,8 @@
   [c need]
   (cond
     (growable? need) (or (first (seen-blocks-of c need false)) {:grow true})
-    (:sheep need) (first (filter #(= (:sheep need) (.-color %)) (sheep-in-range c need)))
-    (:mob need) (first (animals-worth-hunting c need (:mob need) #(not (true? (.-baby %)))))
+    (:sheep need) (first (filter #(= (:sheep need) (.-color %)) (sheep-in-range c)))
+    (:mob need) (first (animals-worth-hunting c (:mob need) #(not (true? (.-baby %)))))
     :else (first (seen-blocks-of c need false))))
 
 (defn with-block

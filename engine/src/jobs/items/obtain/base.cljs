@@ -3,6 +3,7 @@
   (:require [engine.settings :as settings]
             [engine.args :as a]
             [engine.ctx :as ctx]
+            [jobs.lib.cost :as cost]
             [jobs.lib.storage :as storage]
             [jobs.lib.util :as u]))
 
@@ -38,6 +39,24 @@
 
 (defn names-of [{:keys [item any-of]}]
   (vec (if item [item] any-of)))
+
+(defn own-worth
+  "What n of names is worth to the body here, less a trip (jobs.lib.cost/find-worth)."
+  [c names n]
+  (cost/find-worth (cost/death-body (:primitives c) (ctx/view c)) names (u/self-pos c) n))
+
+(defn given-worth
+  "Seconds the caller says the call's need is worth: :search-worth (the goal of the caller, or of the obtain whose need
+  asked for this one), else :worth, else for a bill all of it (jobs.lib.cost/items-find-worth), else nil."
+  [c]
+  (let [{:keys [search-worth worth bill]} (:args c)]
+    (or search-worth worth (when bill (cost/items-find-worth bill)))))
+
+(defn search-worth
+  "Seconds a search for the call's need is worth: given-worth, else own-worth of :count."
+  [c]
+  (or (given-worth c)
+      (let [a (:args c)] (own-worth c (names-of a) (:count a 1)))))
 
 (defn wanted-fields
   "{:item name} or {:any-of [..]} of the args, for reasons and results."

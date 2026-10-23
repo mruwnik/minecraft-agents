@@ -212,6 +212,17 @@
                                  {:inventory h/sword :entities [(cow 1 30) (cow 2 31) (cow 3 32)]} 150))]
           (is (seq (attacked s)) "the cow was attacked"))))))
 
+(deftest a-spider-20-blocks-off-is-hunted-for-the-string-of-a-rod-only-when-the-rod-is-given-a-search-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[args hunted?] [[{:item "fishing_rod" :count 1 :search-worth 500 :ways #{:craft :smelt :gather}} true]
+                                [{:item "fishing_rod" :count 1 :ways #{:craft :smelt :gather}} false]]]
+          (let [s (await (scenario args
+                                   {:inventory (into h/sword (carried "stick" 3 "crafting_table" 1))
+                                    :entities [{:id 1 :name "spider" :kind "hostile" :pos {:x 20 :y 64 :z 0} :drops [{:name "string" :count 1}]}]} 40))]
+            (is (= hunted? (boolean (seq (attacked s)))) (pr-str args))))))))
+
 (deftest string-and-bone-are-hunted-from-a-seen-spider-and-skeleton
   (async done
     (tu/run-async done

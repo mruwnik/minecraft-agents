@@ -3,8 +3,7 @@
   (:require [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.game :as game]
-            [jobs.items.obtain.base :refer [bill-item-s bill-of carried-of]]
-            [jobs.items.obtain.need :as obtain-need]
+            [jobs.items.obtain.base :refer [bill-item-s bill-of carried-of search-worth]]
             [jobs.lib.armour :as armour]
             [jobs.items.recipes :as recipes]
             [jobs.items.smelt.plan :as smelt-plan]
@@ -61,10 +60,10 @@
                        :why "fuel and sticks for the bill" :not not}))))))
 
 (defn child-args
-  "The obtain child's args for item, carrying total in all: its search is worth the whole bill's (need/search-worth)."
+  "The obtain child's args for item, carrying total in all: its search is worth the whole bill's (base/search-worth)."
   [c item total]
   (let [a (:args c)]
-    (into {:item item :count total :spend {:job-time (bill-item-s)} :search-worth (obtain-need/search-worth c)}
+    (into {:item item :count total :spend {:job-time (bill-item-s)} :search-worth (search-worth c)}
           (remove (comp nil? val))
           (select-keys a [:ways :explore :for-plan :avoid]))))
 

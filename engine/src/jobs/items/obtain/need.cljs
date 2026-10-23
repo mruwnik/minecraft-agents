@@ -5,7 +5,7 @@
             [engine.ctx :as ctx]
             [engine.game :as game]
             [jobs.items.get-tool :as get-tool]
-            [jobs.items.obtain.base :refer [gathers? makes? names-of way?]]
+            [jobs.items.obtain.base :refer [gathers? makes? names-of search-worth way?]]
             [jobs.items.obtain.chest :refer [candidates]]
             [jobs.items.obtain.plan :refer [craft-plan gather-plan]]
             [jobs.items.obtain.seen :refer [gather-slot seen-of with-block]]
@@ -63,20 +63,6 @@
                       (tool-viable? c names need)
                       (let [s (ctx/child-status c (gather-slot need) (:job need) (:args need))]
                         (or (composite/startable? s) (lights-itself? c (contract/status-cause s))))))))))
-
-(defn own-worth
-  "What n of names is worth to the body here, less a trip (jobs.lib.cost/find-worth)."
-  [c names n]
-  (cost/find-worth (cost/death-body (:primitives c) (ctx/view c)) names (u/self-pos c) n))
-
-(defn search-worth
-  "Seconds a search for the call's need is worth: :search-worth (the goal of the caller, or of the obtain whose need asked
-  for this one), else :worth, else for a bill all of it (jobs.lib.cost/items-find-worth), else own-worth of :count."
-  [c]
-  (let [{:keys [search-worth worth bill] :as a} (:args c)]
-    (or search-worth worth
-        (when bill (cost/items-find-worth bill))
-        (own-worth c (names-of a) (:count a 1)))))
 
 (defn priced-search
   "The search options: search-worth as the search's :worth, which prices each walk, and that many seconds to spend. A
