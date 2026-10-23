@@ -86,6 +86,23 @@
     (is (< (.indexOf ss [:place ["ProbeX"] [[1200 -3400] [5 6]]]) (.indexOf ss [:rcon "effect give ProbeX minecraft:slow_falling 60 0 true"])) "a body placed in the air while chunks load survives the fall")
     (is (= [:record "worlds/test/fresh-drops/ProbeX-5.edn" {:body "ProbeX" :world "test" :spots [[1200 -3400] [5 6]] :build "/b" :started-ms 5}] (last ss)))))
 
+(deftest the-old-body-is-stopped-before-its-workspace-and-start-and-its-build-checked-after
+  (let [ss (d/steps {:bodies ["A"] :world "test" :build "/b" :spots [[1 2]] :now 5})
+        i #(.indexOf ss %)]
+    (is (< (i [:body-stop "A" "test"]) (i [:workspace "A" "test"]) (i [:body-start "A" {:world "test" :build "/b"}])))
+    (is (< (i [:wait-online "A"]) (i [:check-build "A" "test" "/b"]) (i [:place ["A"] [[1 2]]])))))
+
+(deftest only-the-engine-node-process-of-that-body-is-a-body-process
+  (let [argv ["node" "--max-old-space-size=192" "out/body-release.cjs" "--agent" "Oriel" "--world" "test" "--fresh"]]
+    (is (d/body-process? argv "Oriel" "test"))
+    (is (not (d/body-process? argv "Ori" "test")) "a name that is only a prefix of the body's")
+    (is (not (d/body-process? argv "Bramble" "test")))
+    (is (not (d/body-process? ["sh" "-c" "while :; do \"$@\"; done" "sh" "tools/res-slot" "body" "--" "node" "out/body-release.cjs" "--agent" "Oriel" "--world" "test"] "Oriel" "test")) "the restart wrapper")))
+
+(deftest the-build-commit-is-read-from-the-status-answer
+  (is (= "4ea21a6d4" (d/status-commit "{:mode :scheduled :build {:commit \"4ea21a6d4\" :started-at 1792748846902} :pos [1 2 3]}")))
+  (is (nil? (d/status-commit "{:ok false :reason :tool-error}"))))
+
 (deftest together-places-all-bodies-once-and-sets-each-spawn
   (let [ss (d/steps {:bodies ["A" "B" "C"] :world "test" :build "/b" :spots [[1 2]] :now 5})
         rcons (set (map second (filter #(= :rcon (first %)) ss)))]

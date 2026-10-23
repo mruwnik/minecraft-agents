@@ -67,8 +67,8 @@
   (boolean (re-find #"Spread \d+ entit" (str out))))
 
 (defn steps
-  "The drop as data, in order: per body [:whitelist b] [:file path text] [:workspace b world] [:body-start b {:world :build}], then
-  [:wait-online b] and the wipe for each, one [:place bodies spots], per body the spawn point and [:record path m].
+  "The drop as data, in order: per body [:whitelist b] [:file path text] [:body-stop b world] [:workspace b world] [:body-start b {:world :build}], then
+  [:wait-online b], [:check-build b world build] and the wipe for each, one [:place bodies spots], per body the spawn point and [:record path m].
   The --fresh start wipes engine state and memory; [:place bodies spots] puts all bodies on the surface within a few blocks of each other at the
   first of the candidate spots that has dry ground (the rest are for oceans); slow falling then covers a placement in the air while the spot's chunks load."
   [{:keys [bodies world build spots now] :or {world "test"}}]
@@ -79,9 +79,11 @@
               [[:whitelist body]
                [:file (str "worlds/" world "/agents/" body "/config.json")
                 (js/JSON.stringify (clj->js {:username body :character {:name body :note "fresh-drop soak body"}}) nil 2)]
+               [:body-stop body world]
                [:workspace body world]
                [:body-start body {:world world :build build}]]))
       (each (fn [body] [[:wait-online body]
+                        [:check-build body world build]
                         [:rcon (str "gamemode survival " body)]
                         [:rcon (str "clear " body)]]))
       [[:place bodies spots]]
@@ -277,8 +279,60 @@
     (when (fs/existsSync notes) (fs/renameSync notes aside))
     (fs/rmSync (path/join dir "context.edn") #js {:force true})))
 
+(defn body-process?
+  "True for the argv (a vector) of the node process running body's engine: not the res-slot shell that restarts it, not a pgrep."
+  [argv body world]
+  (let [s (str/join " " argv)]
+    (and (not (re-find #"(^| )(sh|pgrep)( |$)" (first argv)))
+         (str/includes? s "body-release.cjs")
+         (str/includes? s (str "--agent " body " --world " world)))))
+
+(defn status-commit
+  "The build commit in an `observe status` answer (EDN text), or nil."
+  [out]
+  (second (re-find #":build \{[^}]*:commit \"([^\"]+)\"" (str out))))
+
+(defn build-commit
+  "The commit tools/compile wrote beside the build's engine bundle, or nil."
+  [build]
+  (let [f (path/join build "engine/out/build-id.edn")]
+    (when (fs/existsSync f) (:commit (reader/read-string (fs/readFileSync f "utf8"))))))
+
+(defn- sleep! [s] (cp/spawnSync "sleep" #js [(str s)]))
+
+(defn- body-pids [body world]
+  (let [out (str (.-stdout (cp/spawnSync "pgrep" #js ["-f" "--" (str "--agent " body " --world " world)] #js {:encoding "utf8"})))]
+    (filterv (fn [pid]
+               (try (let [argv (vec (remove empty? (str/split (fs/readFileSync (str "/proc/" pid "/cmdline") "utf8") "\u0000")))]
+                      (body-process? argv body world))
+                    (catch :default _ false)))
+             (remove empty? (str/split-lines out)))))
+
 (defn- body-online? [body]
   (str/includes? (str (.-stdout (cp/spawnSync js/process.execPath #js [(path/join (repo) "tools/rcon-raw.mjs") "list"] #js {:cwd (repo) :encoding "utf8"}))) body))
+
+(defn- stop-body!
+  "Ends the running engine for body (a second one for the same name exits on the duplicate login and --fresh never takes);
+  throws when it is still there after 30 s."
+  [body world]
+  (doseq [pid (body-pids body world)] (js/process.kill (js/parseInt pid) "SIGTERM"))
+  (loop [n 0]
+    (when (or (seq (body-pids body world)) (body-online? body))
+      (when (>= n 30) (throw (js/Error. (str body " is still running or online 30 s after it was told to stop"))))
+      (sleep! 1)
+      (recur (inc n)))))
+
+(defn- check-build!
+  "Waits for the body's status to report the drop's build commit; throws when it never does."
+  [body world build]
+  (let [want (build-commit build)
+        status #(str (.-stdout (cp/spawnSync js/process.execPath #js [(path/join (repo) "worlds" world "agents" body "bin/observe") "status"] #js {:encoding "utf8"})))]
+    (loop [n 0]
+      (let [got (status-commit (status))]
+        (cond
+          (and want (= want got)) nil
+          (>= n 60) (throw (js/Error. (str body " reports build " (pr-str got) ", the drop's build is " (pr-str want))))
+          :else (do (sleep! 2) (recur (inc n))))))))
 
 (defn- run-node! [script args]
   (cp/spawnSync js/process.execPath (clj->js (into [(path/join (repo) script)] args)) #js {:stdio "inherit" :cwd (repo)}))
@@ -293,6 +347,8 @@
     :file (let [[f text] a, p (path/join (repo) f)]
             (fs/mkdirSync (path/dirname p) #js {:recursive true})
             (fs/writeFileSync p text))
+    :body-stop (stop-body! (first a) (second a))
+    :check-build (check-build! (first a) (second a) (nth a 2))
     :workspace (let [[body world] a
                      worlds (fs/realpathSync (path/join (repo) "worlds"))]
                  (when (body-online? body)
