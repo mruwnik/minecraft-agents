@@ -171,7 +171,7 @@
   "Seconds to gather a need whose nearest block is seen: the walk there with the death it risks (threats/route-death-cost),
   the digs, a hostile mob's kills (cost/kill-price, as many as cost/kill-drops says the count takes; Infinity when its
   loot holds none), and for an ore seen below the feet whose cell is unlit, go-to's walk there dark (cost/dark-way-s of
-  the body's kit); Infinity when it is dark and no torch is carried."
+  the body's kit)."
   [c need]
   (let [p (:primitives c)
         src (seen-of c need)
@@ -185,12 +185,10 @@
                 (if-let [drops (cost/kill-drops mob (:key need) :version (game/version-of p))]
                   (* (js/Math.ceil (/ (:count need) drops)) (cost/kill-price (threats/death-body c) mob self))
                   js/Infinity))
-        dig (+ (or kills 0) (* (:count need) (or (cost/dig-cost name) 0)))
-        dark? (and (:ore? need) (below? c need) (unlit? p pos))]
-    (cond
-      (not dark?) (+ walk risk dig)
-      (not (pos? (storage/carried (u/inventory p) "torch"))) js/Infinity
-      :else (+ dig risk (cost/dark-way-s walk d (threats/body-of p))))))
+        dig (+ (or kills 0) (* (:count need) (or (cost/dig-cost name) 0)))]
+    (if (and (:ore? need) (below? c need) (unlit? p pos))
+      (+ dig risk (cost/dark-way-s walk d (threats/body-of p)))
+      (+ walk risk dig))))
 
 (defn look-cost
   "Seconds per find of a search for an unseen need (cost/search-s): legs of the search's spacing, each the walk and the
@@ -256,8 +254,8 @@
 (defn preferred
   "The gather plan pl, or when it gathers a need with no source seen, or mines an ore seen below the feet, and the same
   item is made another way from raw needs all seen (white wool from a seen spider's string, charcoal from logs for
-  torches) that costs less (plan-cost: an unseen need its search per find, Infinity for logs; the dark way down to coal,
-  with no torch to light it, costs more than any walk to logs), that plan. A way whose own needs are unseen (wool dyed
+  torches) that costs less (plan-cost: an unseen need its search per find, Infinity for logs; a dark way down to coal its
+  spawns), that plan. A way whose own needs are unseen (wool dyed
   from wool) is passed over for the next while that leaves out more items; none is left once it leaves out none."
   [c version pl have name n opts]
   (let [needs #(some-> % :gather (gather-needs version))

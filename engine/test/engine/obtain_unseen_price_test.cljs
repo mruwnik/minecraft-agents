@@ -133,3 +133,17 @@
         no-source (:tunnel (iron-way "stone" 39 :inventory [{:name "oak_planks" :count 4}] :ways #{:search}))]
     (is (< stocked coal planks js/Infinity) "the torches carried; crafted from coal and sticks carried; their coal searched for")
     (is (infinite? no-source) "no way to get torches: the tunnel's dark stair and legs are not dug")))
+
+(defn coal-below-cost
+  "need-cost of a coal ore seen 2 below the body's floor, 9 south, its cut at light [block sky], nothing carried."
+  [light]
+  (let [p (tu/seeing-all (tu/fake-on-floor {:time 6000
+                                            :blocks {"0,62,9" "coal_ore" "0,63,9" "air"}
+                                            :light (into {} (for [x (range -1 2) y (range 61 66) z (range 8 11)] [[x y z] light]))}))
+        view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))
+        c {:primitives p :view (constantly view) :args {:item "coal" :count 1 :ways #{:gather} :ignore-zones? true}}]
+    (plan/need-cost c (first (table/gather-needs {"coal" 1} (game/version-of p))))))
+
+(deftest a-dark-ore-seen-below-with-no-torch-is-priced-by-its-dark-way-not-refused
+  (let [dark (coal-below-cost [0 0])]
+    (is (< (coal-below-cost [0 15]) dark js/Infinity) "the dark walk there costs more than a lit one, but is a way")))
