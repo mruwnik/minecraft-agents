@@ -84,7 +84,8 @@
     (is (nil? (run (void-to 12) 8)) "no support within the length")
     (is (nil? (run (fn [cell] (when-not (= cell [2 65 0]) ((void-to 5) cell))) 8)) "an unsensed cell on the way")
     (is (nil? (run (fn [cell] (if (= cell [1 64 0]) "stone" ((void-to 5) cell))) 8)) "the first floor is solid: the ledge does not end there")
-    (is (nil? (run (fn [cell] (if (= cell [2 65 0]) "stone" ((void-to 5) cell))) 8)) "no room for the body over a cell of the run")))
+    (is (nil? (run (fn [cell] (if (= cell [2 65 0]) "stone" ((void-to 5) cell))) 8)) "no room for the body over a cell of the run")
+    (is (nil? (run (fn [[_ cy cz]] (when (and (zero? cz) (<= cy 70)) "air")) 8)) "a face that is only an unseen neighbour ends no run")))
 
 (deftest a-cave-floor-bridge-looks-at-the-unseen-cells-back-along-the-line-once
   (async done

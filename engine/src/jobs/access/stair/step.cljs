@@ -335,7 +335,8 @@
 
 (defn ^:async plan-run!
   "The flat bridge a stair down takes when the floor of its next step has nothing to place against (bridge/flat-run along the
-  heading, the cells ahead looked at once each): {:length n}, or nil when no run reaches support, the body carries no filler or the ledge is not open."
+  heading, the cells ahead looked at once each): {:length n}, or nil when no run reaches support seen, the body carries no filler or the ledge is not open.
+  Cells it has not seen count as no support (floor-at, not the rock-guessing block-at)."
   [c in]
   (let [p (:primitives c)
         feet (reach/standing-vec p)
@@ -349,7 +350,7 @@
             (when (and (unknown? p cell) (not (contains? (:run-looked (ctx/mem c)) cell)))
               (ctx/update-mem! c update :run-looked (fnil conj #{}) cell)
               (await (look-at! c cell))))
-          (if-let [n (bridge/flat-run (:block-at in) feet h (bridge/eye-y c) (bridge-opts c) k)]
+          (if-let [n (bridge/flat-run (:floor-at in) feet h (bridge/eye-y c) (bridge-opts c) k)]
             {:length n :item item}
             (recur (inc k))))))))
 

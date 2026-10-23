@@ -39,7 +39,7 @@
   floor] when only the cell under it has one (the previous floor of a stair up), the cells back along opts' :back (with
   :depth) from a solid one (a stair down whose cave undercuts its last floor). Cells with a seen face come before those
   whose face is an unseen neighbour, which may be air (place answers no-support). Only cells that are air are placed; a
-  floor in a cave with nothing near has no plan. eye-y: the body's eye height."
+  floor in a cave with nothing near has no plan. opts :seen-only drops the unseen-face plans. eye-y: the body's eye height."
   ([block-at floor eye-y] (bridge-plans block-at floor eye-y nil))
   ([block-at floor eye-y opts]
    (let [under (update floor 1 dec)
@@ -47,12 +47,12 @@
                  (for [[probe plan] [[floor [floor]] [under [under floor]]]
                        :when (face-support? block-at probe loose? eye-y)]
                    (filterv #(bs/open-floor? (block-at %)) plan)))]
-     (vec (distinct (concat (plans false) (some-> (chain-plan block-at floor opts) vector) (plans true)))))))
+     (vec (distinct (concat (plans false) (some-> (chain-plan block-at floor opts) vector) (when-not (:seen-only opts) (plans true))))))))
 
 (defn flat-run
   "The length (1 to max) of a flat bridge along h ([dx dz]) from feet, after which a stair down's next floor is solid or has
-  a face to place against: every floor of the run open or solid with room over it, the first floor open (the ledge ends
-  there). nil when none comes within max or a cell is unsensed."
+  a seen face to place against (block-at nil: unseen): every floor of the run open or solid with room over it, the first
+  floor open (the ledge ends there). nil when none comes within max or a cell is unsensed."
   [block-at feet h eye-y opts max]
   (let [at (fn [k dy] (mapv + feet [(* k (first h)) dy (* k (second h))]))
         clear? (fn [cell] (let [n (block-at cell)] (and n (bs/replaceable n) (not (bs/fluids n)))))
@@ -62,7 +62,7 @@
         (when (and (<= k max) (floor-ok? k) (clear? (at k 0)) (clear? (at k 1)))
           (let [next-floor (at (inc k) -2)
                 n (block-at next-floor)]
-            (if (and n (or (not (bs/open-floor? n)) (seq (bridge-plans block-at next-floor eye-y opts))))
+            (if (and n (or (not (bs/open-floor? n)) (seq (bridge-plans block-at next-floor eye-y (assoc opts :seen-only true)))))
               k
               (recur (inc k)))))))))
 
