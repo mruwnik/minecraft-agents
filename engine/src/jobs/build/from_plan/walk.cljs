@@ -4,6 +4,7 @@
             [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.aim :as aim]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.breath :as breath]
             [jobs.lib.escape :as escape]
@@ -15,7 +16,7 @@
             [jobs.lib.shelter.inside :as sh-inside]
             [jobs.lib.build.plan :as plan :refer [facing-of stands-for]]
             [jobs.lib.build.scaffold :as scaffold]
-            [jobs.build.from-plan.cells :refer [in-reach in-dig-reach exit-point buried? reaching rock-bound? retreat-dists step-back needs-tool?]]
+            [jobs.build.from-plan.cells :refer [in-reach in-dig-reach exit-point buried? reaching seeing rock-bound? retreat-dists step-back needs-tool?]]
             [jobs.build.from-plan.book :refer [walk-fail result-data]]))
 
 (a/defargs settings
@@ -164,18 +165,32 @@
               (= :done (:kind r)) (do (ctx/update-mem! c #(-> (update % :sightless disj (:pos deepest)) (update-in [:tunnels (:pos deepest)] (fnil inc 0)))) :again)
               :else (do (ctx/update-mem! c walk-fail (:pos deepest) :unreachable (give-up) (u/self-pos c)) :again)))))))))
 
+(defn stand-choices
+  "{:all :inner} of cell: the stands to place or dig it from (stands-for), and with none standable beside it, the cells
+  beside it standable when the plan's own cells count as open (inner)."
+  [c cells cell]
+  (let [body-y (js/Math.floor (:y (u/self-pos c)))
+        planned (set (map :pos cells))
+        bad (set (:bad-stands (ctx/mem c)))
+        facing (when-not (or (:click cell) (:dig? cell)) (facing-of (:want cell)))]
+    {:all (stands-for (:primitives c) (:pos cell) body-y facing planned bad)
+     :inner (when-not (plan/grounded-stands (:primitives c) (:pos cell) body-y facing planned bad)
+              (seq (remove bad (plan/grounded (:primitives c) (plan/stand-cells (:pos cell) (second (:pos cell)) facing #{})))))}))
+
+(defn place-here?
+  "Whether the cell in reach is placed from where the body stands: its eye sees it, or no stand of stand-choices does
+  (the place job's own walk then searches wider for one that sees it)."
+  [c cells cell]
+  (or (aim/body-sees? c (:pos cell))
+      (empty? (seeing c (:all (stand-choices c cells cell)) (:pos cell)))))
+
 (defn ^:async walk-to-stand!
-  "Walk to a stand cell beside cell (:continue while the walk waits, else :again); a cell that cannot be walked to, or is still out of reach (or unseen, as :unseen) on arrival, counts a failure."
+  "Walk to a stand cell beside cell, one that sees it first (:continue while the walk waits, else :again); a cell that cannot be walked to, or is still out of reach (or unseen, as :unseen) on arrival, counts a failure."
   [c cells cell]
   (trace! c :walk-to! (:pos cell))
   (let [body (u/self-pos c)
-        planned (set (map :pos cells))
-        bad (set (:bad-stands (ctx/mem c)))
-        facing (when-not (or (:click cell) (:dig? cell)) (facing-of (:want cell)))
-        all (stands-for (:primitives c) (:pos cell) (js/Math.floor (:y body)) facing planned bad)
-        inner (when-not (plan/grounded-stands (:primitives c) (:pos cell) (js/Math.floor (:y body)) facing planned bad)
-                (seq (remove bad (plan/grounded (:primitives c) (plan/stand-cells (:pos cell) (second (:pos cell)) facing #{})))))
-        stands (or (seq (reaching c all (:pos cell))) inner all)
+        {:keys [all inner]} (stand-choices c cells cell)
+        stands (or (seq (seeing c all (:pos cell))) (seq (reaching c all (:pos cell))) inner all)
         stand (first (sort-by #(u/dist body (zipmap [:x :y :z] %)) stands))]
     (cond
       (not stand)
@@ -184,6 +199,9 @@
       :else
       (let [shut? (or (in-hole? c) (shut-in-walk? c))
             w (await (walk-stand! c cell stand (cond-> {} (not shut?) (assoc :ways (cond-> #{:walk :clear-seal} (sh-inside/sheltered-in c) (into [:stair :dig-out]))))))]
+        ;; an arrival in reach that does not see the cell, where another stand would, is a bad stand: else the step walks to it again
+        (when (and (= :there w) (:found cell) (not (:dig? cell)) (seq (in-reach c [cell])) (not (place-here? c cells cell)))
+          (ctx/update-mem! c #(-> (update % :bad-stands (fnil conj []) stand) (walk-fail (:pos cell) :unreachable (give-up) (u/self-pos c)))))
         (if (and (= :blocked w) (or shut? (shut-in-walk? c)) (not= :budget (:why (:data (near/last-walk c)))))
           (hole-blocked! c)
           (do (ctx/update-mem! c dissoc :hole-blocked)

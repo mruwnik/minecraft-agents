@@ -25,7 +25,7 @@
             [jobs.build.from-plan.cells :refer [diggable in-reach in-dig-reach seal-price shuts-out? off-low-floor support-looks retreat-dists fill-order]]
             [jobs.build.from-plan.book :refer [walk-fail retry-walks warn-way-in! place-one! settle-placing! dig-one! result-data finish! book-failed!]]
             [jobs.build.from-plan.light :as light]
-            [jobs.build.from-plan.walk :refer [give-up trace! leave! exit-of walk-to! reach-cell! look-for-support! shut-in?]]
+            [jobs.build.from-plan.walk :refer [give-up trace! leave! exit-of walk-to! reach-cell! look-for-support! shut-in? place-here?]]
             [jobs.lib.build.text :refer [summary stopped-text assoc-fetch-failed]]))
 
 (def meta {:tags [:goal]})
@@ -231,7 +231,7 @@
         mouth (:mouth (ctx/mem c))
         fcell (let [b (u/self-pos c)] (mapv js/Math.floor [(:x b) (:y b) (:z b)]))
         dists (when mouth (retreat-dists (:primitives c) mouth cells))
-        near (cond->> (remove #(shut-in? c %) (in-reach c layer))
+        near (cond->> (filter #(place-here? c cells %) (remove #(shut-in? c %) (in-reach c layer)))
                (not= :up (scaffold/phase c)) (remove #(contains? (:needs-scaffold (ctx/mem c)) (:pos %)))
                ;; filling a block cut into rock backs out toward the mouth: the deepest cell goes first
                ;; and no cell nearer the mouth than the one the body stands in, which it leaves by

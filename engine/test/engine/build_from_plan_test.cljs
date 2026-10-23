@@ -479,6 +479,19 @@
               _ (await (child-outcome eng job {:plan "roof"} 300))]
           (is (some #(= :swalk (:slot %)) (h/events-of seen :child_started)) "the scaffold stand is walked to instead of the place walking again"))))))
 
+(deftest a-roof-corner-hidden-from-inside-the-hut-is-placed-from-a-stand-outside-that-sees-it
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [hut (merge (into {} (for [x (range 2 7) y (range 63 68) z (range 4 9)] [(h/cell-key x y z) "stone"]))
+                         (into {} (for [x (range 3 6) y (range 64 67) z (range 5 8)] [(h/cell-key x y z) "air"]))
+                         {(h/cell-key 4 64 8) "air" (h/cell-key 4 65 8) "air" (h/cell-key 2 67 4) "air"})
+              plan {:id "roof" :parts [{:id "r" :cells (vec (for [x (range 2 7) z (range 4 9)] [x 67 z])) :want "stone"}]}
+              {:keys [eng]} (start {:inventory [{:name "stone" :count 4}] :blocks hut :self {:pos {:x 4.5 :y 64 :z 6.5}}} {"roof" plan})
+              result (await (child-outcome eng job {:plan "roof"} 300))]
+          (is (= 1 (:placed result)) (pr-str result))
+          (is (empty? (:given-up result))))))))
+
 (deftest a-place-that-says-already-for-a-cell-the-plan-reads-missing-is-given-up
   (async done
     (tu/run-async done

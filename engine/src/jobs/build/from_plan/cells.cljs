@@ -6,6 +6,7 @@
             [jobs.lib.tool-kind :as kind]
             [jobs.lib.tools :as tools]
             [jobs.lib.block-sets :as bs]
+            [jobs.lib.aim :as aim]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
             [jobs.lib.util :as u]
@@ -152,6 +153,12 @@
   half diagonal of a cell, from the cell's centre)."
   [c stands pos]
   (filter (fn [[x y z]] (<= (u/eye-dist {:x (+ x 0.5) :y y :z (+ z 0.5)} pos) (- (plan/reach) 0.71))) stands))
+
+(defn seeing
+  "The stands of reaching whose eye also sees cell pos (jobs.lib.aim): from inside a hut the roof's edge is in reach but hidden."
+  [c stands pos]
+  (let [sees? (aim/stand-sees-fn (:primitives c) pos)]
+    (filter (fn [[x y z]] (sees? x y z)) (reaching c stands pos))))
 
 (defn support-looks
   "[cell neighbour] pairs: a cell refused :no-support with a neighbour never seen and not yet looked at."
