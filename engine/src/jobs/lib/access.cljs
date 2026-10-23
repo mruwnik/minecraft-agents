@@ -42,7 +42,7 @@
   ([c] (zone-input c {}))
   ([c {:keys [except own-plans-ok?] :as opts}]
    {:zones (known/zones c)
-    :footprints (let [all (fn [] (merge (known/soil-footprints c except) (known/footprints c {:except except})))]
+    :footprints (let [all #(known/memo c [:footprints except] (fn [] (merge (known/soil-footprints c except) (known/footprints c {:except except}))))]
                   (if own-plans-ok?
                     (known/memo c [:foreign-footprints except (ctx/self-name c)]
                                 #(let [mine (own-plans c)]

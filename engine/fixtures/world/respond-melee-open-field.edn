@@ -1,0 +1,24 @@
+;; Card d31ee27f: a zombie walks up to a body in an open field beside a mound (as KitOak01 j6, woken in a bed in the open). respond
+;; prices the fight, the walk away and the covers the mound offers (walls, pit, pocket) and answers: armed and whole it fights,
+;; unarmed it gets away (a cover or a walk). Open plot 48 wide, lit underground; resistance keeps the body alive.
+{:defaults
+ {:tags [:hostile :survival :reflex]
+  :time :any
+  :plot {:length 48 :width 48 :height 8 :floor "grass_block"}
+  :register [{:trigger :hostile-near}]
+  :blocks [[:fill [27 0 18] [34 2 30] "dirt"]]
+  :body {:at [24.5 0 24.5] :effects [["resistance" 600 3]]}
+  :limit-s 60}
+ :cases
+ [{:name "armed-body-fights-a-zombie-beside-it"
+   :body {:inventory [["wooden_sword" 1] ["dirt" 16]]}
+   :act [[:summon "zombie" [22.5 0 24.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:decision :fight}} :within-s 20}
+            {:event {:source :action :kind :done :data {:name "attack" :status "killed"}} :within-s 40}
+            {:no-event {:source :body :kind :died} :for-s 40}]
+   :after [[:entities "type=zombie,tag=wt" [[0 0 0] [47 6 47]] 0]]}
+  {:name "unarmed-body-gets-away-from-a-zombie-beside-it"
+   :body {:inventory [["dirt" 16]]}
+   :act [[:summon "zombie" [22.5 0 24.5] "{equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:decision :flee}} :within-s 20}
+            {:no-event {:source :body :kind :died} :for-s 30}]}]}

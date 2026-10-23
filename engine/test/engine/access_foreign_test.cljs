@@ -1,9 +1,10 @@
 (ns engine.access-foreign-test
-  "jobs.lib.access/foreign-holder: a query over zones, claims and other bodies' plans, never a refusal."
+  "jobs.lib.access: foreign-holder, a query over zones, claims and other bodies' plans, never a refusal; the rules' input."
   (:require [cljs.test :refer [deftest is are]]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
-            [jobs.lib.world :as known]))
+            [jobs.lib.world :as known]
+            [jobs.lib.world-files :as world-files]))
 
 (def zone {:name "garden" :owner "Miles" :min [0 60 0] :max [9 70 9]})
 
@@ -22,3 +23,8 @@
     {:x 20.5 :y 64 :z 20.5} {:kind :plan :plan "hut" :owner "Miles"}
     {:x 30.5 :y 64 :z 30.5} nil
     {:x 50 :y 64 :z 50} nil))
+
+(deftest the-footprints-are-merged-once-while-the-plans-stay
+  (let [c {:engine {:world (world-files/of-data {"pad" {:id "pad" :parts [{:id "p" :box [[0 64 0] [1 64 0]] :want "stone"}]}} {})}}]
+    (with-redefs [ctx/self-name (constantly "Bot") ctx/now (constantly 1000)]
+      (is (identical? (:footprints (access/zone-input c)) (:footprints (access/zone-input c)))))))

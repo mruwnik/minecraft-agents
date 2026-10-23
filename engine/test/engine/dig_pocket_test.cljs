@@ -11,6 +11,7 @@
             [jobs.lib.world-files :as ew]
             [plan.shape :as shape]
             [jobs.survival.dig-pocket :as pocket]
+            [jobs.survival.shut-in :as shut-in]
             [jobs.survival.pit-cells :as pit]))
 
 (defn blocks [name [x0 x1] [y0 y1] [z0 z1]]
@@ -27,7 +28,7 @@
 
 (defn stand
   ([extra] (stand extra iron))
-  ([extra inventory] (pocket/stand-cell (world extra inventory) feet false)))
+  ([extra inventory] (:stand (pocket/site (assoc (world extra inventory) :args {:ways #{:carried}})))))
 
 (deftest a-hill-with-rock-all-round-gives-a-stand-cell-facing-it
   (is (= {:x 3 :y 64 :z 0} (stand (blocks "stone" [4 8] [64 66] [-3 3])))))
@@ -42,11 +43,28 @@
 (deftest a-face-ten-blocks-off-is-found-once-the-walk-radius-reaches-it
   (let [far (blocks "stone" [13 17] [64 66] [-3 3])
         c (world (merge (blocks "dirt" [9 17] [60 63] [-3 3]) far) iron)]
-    (is (nil? (pocket/stand-cell c feet false)))
-    (is (= {:x 12 :y 64 :z 0} (settings/with-settings {:jobs.survival.dig-pocket/walk-radius 16} #(pocket/stand-cell c feet false))))))
+    (is (nil? (:stand (pocket/site c))))
+    (is (= {:x 12 :y 64 :z 0} (settings/with-settings {:jobs.survival.dig-pocket/walk-radius 16} #(:stand (pocket/site c)))))))
 
 (deftest a-face-above-or-below-the-feet-is-found
   (is (= {:x 3 :y 66 :z 0} (stand (merge (blocks "dirt" [-2 8] [64 65] [-3 3]) (blocks "stone" [4 8] [66 68] [-3 3]))))))
+
+(defn reads
+  "The cells (f c) reads of c's world."
+  [c f]
+  (let [p (:primitives c)
+        at (.-sensedAt p)
+        n (atom 0)]
+    (aset p "sensedAt" (fn [q] (swap! n inc) (at q)))
+    (f c)
+    (aset p "sensedAt" at)
+    @n))
+
+(deftest the-pocket-cover-in-the-open-tries-each-standing-cell-once
+  (let [c (world {} [{:name "dirt" :count 4}])
+        one-pass (reads c (fn [c] (doseq [cell (cons feet (pocket/stand-cells c feet))] (pit/pocket-site c cell true))))]
+    (is (< (reads c #(shut-in/covers % [:pocket])) (* 1.5 one-pass))
+        "one search of the stand cells serves both kinds of wall and the quote and the seconds in the open")))
 
 (defn fits? [extra]
   (boolean (pit/pocket-cells (world (merge (blocks "stone" [4 8] [64 66] [-3 3]) extra) iron) {:x 3 :y 64 :z 0} [1 0])))

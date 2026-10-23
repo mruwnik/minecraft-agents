@@ -55,28 +55,20 @@
 
 (defn done? [c] (way/done? c :pocket))
 
-(defn side-here? [c feet by-hand?] (boolean (pit/pocket-site c feet by-hand?)))
-
-(defn stand-cell
-  "The nearest cell within ::walk-radius (dy -3 to 3) that the body sees open (feet and head over a solid floor), holds no hostile
-  and has a pocket side (pocket-site), one that digs no other's wall first; nil when none."
-  [c feet by-hand?]
+(defn stand-cells
+  "The cells within ::walk-radius (dy -3 to 3) of feet, nearest first, that the body sees open (feet and head over a solid floor)
+  and hold no hostile: where a pocket may be dug from."
+  [c feet]
   (let [p (:primitives c)
         r (int (settings/get settings ::walk-radius))
-        mobs (pit/hostiles c)
-        in (access/rules-input c)
-        ok? (fn [cell]
-              (and (dig-cells/open-cell? p cell) (dig-cells/open-cell? p (update cell :y inc))
-                   (dig-cells/known-solid? p (update cell :y dec)) (not (mobs cell))
-                   (side-here? c cell by-hand?)))
-        refused? (fn [cell] (some #(access/trespass-refusal in :dig %) (pit/pocket-site c cell by-hand?)))]
+        mobs (pit/hostiles c)]
     (->> (for [dx (range (- r) (inc r)) dz (range (- r) (inc r)) dy [0 -1 1 -2 2 -3 3]
                :let [cell (assoc feet :x (+ (:x feet) dx) :y (+ (:y feet) dy) :z (+ (:z feet) dz))]
                :when (and (not= cell feet) (<= (+ (* dx dx) (* dz dz)) (* r r)))]
            cell)
          (sort-by #(u/dist feet %))
-         (filter ok?)
-         (reduce (fn [fallback cell] (if (refused? cell) (or fallback cell) (reduced cell))) nil))))
+         (filter #(and (dig-cells/open-cell? p %) (dig-cells/open-cell? p (update % :y inc))
+                       (dig-cells/known-solid? p (update % :y dec)) (not (mobs %)))))))
 
 (defn fetch-tool?
   "Whether the call's ways let the job get a tool."
@@ -92,18 +84,37 @@
              (contains? dig-look/loose-ground (u/seen-name p (update (sh-sense/feet p) :y dec)))))))
 
 (defn site
-  "Where the pocket is dug from: {:stand cell :fetch? true when no carried tool harvests its wall and one may be fetched}; with
+  "Where the pocket is dug from: the feet, else the nearest of stand-cells with a pocket side (pit/pocket-site), one that digs
+  no other's wall first: {:stand cell :fetch? true when no carried tool harvests its wall and one may be fetched}; with
   no site {:no-tool? true} when only a wall no carried tool harvests is left and no fetch is allowed, {:sink? true} when a night
-  shaft down may find rock, else {}."
+  shaft down may find rock, else {}. One pass for both: a side a carried tool digs is one the hand digs."
   [c]
   (let [feet (sh-sense/feet (:primitives c))
         by-hand? (:by-hand (ctx/mem c))
-        find (fn [hand?] (if (side-here? c feet hand?) {:stand feet} (when-let [stand (stand-cell c feet hand?)] {:stand stand})))]
-    (or (find by-hand?)
-        (when-let [s (and (not by-hand?) (find true))]
-          (if (fetch-tool? c) (assoc s :fetch? true) {:no-tool? true}))
-        (when (sink-site? c) {:sink? true})
-        {})))
+        in (access/rules-input c)
+        refused? (fn [cells] (some #(access/trespass-refusal in :dig %) cells))
+        sides (fn [cell] (when-let [hand (pit/pocket-site c cell true)] {:hand hand :carried (if by-hand? hand (pit/pocket-site c cell false))}))
+        here (sides feet)
+        ;; {kind [cell refused?]}: the first cell of each kind, one not refused replacing a refused one
+        better (fn [found kind cell cells]
+                 (let [[_ was-refused?] (found kind)]
+                   (cond (nil? cells) found
+                         (nil? (found kind)) (assoc found kind [cell (refused? cells)])
+                         (and was-refused? (not (refused? cells))) (assoc found kind [cell false])
+                         :else found)))
+        found (if (:carried here)
+                {:carried [feet false]}
+                (reduce (fn [found cell]
+                          (let [s (sides cell)
+                                found (-> found (better :carried cell (:carried s)) (better :hand cell (:hand s)))]
+                            (if (= false (second (:carried found))) (reduced found) found)))
+                        (if (:hand here) {:hand [feet false]} {})
+                        (stand-cells c feet)))]
+    (cond
+      (:carried found) {:stand (first (:carried found))}
+      (and (:hand found) (not by-hand?)) (if (fetch-tool? c) {:stand (first (:hand found)) :fetch? true} {:no-tool? true})
+      (sink-site? c) {:sink? true}
+      :else {})))
 
 (defn plan
   "{:feet :stand :cells (the pocket's dug cells, nil with no site) :sink? :open-s (the walk, the dig and a tool fetch: seconds before the way in can be shut)}."
@@ -119,23 +130,29 @@
                   (if fetch? (settings/get settings ::fetch-s) 0)))}))
 
 (defn quote-of
-  "Walk to the standing cell, the dig of the pocket's two cells by the best carried tool (the hand when a tool is to be fetched), one block to seal the way in."
-  [c]
-  (let [{:keys [feet cells sink? open-s]} (plan c)
-        seconds (if cells
-                  (+ open-s (way/place-s c) (way/zone-penalty c {:dig cells :plug [feet]}))
-                  (if sink? (+ (settings/get settings ::sink-s) (way/place-s c)) ##Inf))]
-    (way/quote-of c seconds (settings/get settings ::job-time-s))))
+  "Walk to the standing cell, the dig of the pocket's two cells by the best carried tool (the hand when a tool is to be fetched), one block to seal the way in.
+  pl: its plan (default made here)."
+  ([c] (quote-of c (plan c)))
+  ([c {:keys [feet cells sink? open-s]}]
+   (let [seconds (if cells
+                   (+ open-s (way/place-s c) (way/zone-penalty c {:dig cells :plug [feet]}))
+                   (if sink? (+ (settings/get settings ::sink-s) (way/place-s c)) ##Inf))]
+     (way/quote-of c seconds (settings/get settings ::job-time-s)))))
 
 (defn exposed-s
   "Seconds the body stays open to a shooter before the pocket shuts it in: the walk and the dig, and plug-way's ::unsensed-s
-  for each cell round the pocket it never sensed (a gap there fails the pocket). ##Inf with no site."
+  for each cell round the pocket it never sensed (a gap there fails the pocket). ##Inf with no site. pl: its plan (default made here)."
+  ([c] (exposed-s c (plan c)))
+  ([c {:keys [stand cells sink? open-s]}]
+   (cond
+     cells (+ open-s (* (way/unsensed-s) (pit/unsensed-shell (:primitives c) cells (set (into cells [stand (update stand :y inc)])))))
+     sink? (settings/get settings ::sink-s)
+     :else ##Inf)))
+
+(defn cover
+  "[quote exposed-s] from one plan."
   [c]
-  (let [{:keys [stand cells sink? open-s]} (plan c)]
-    (cond
-      cells (+ open-s (* (way/unsensed-s) (pit/unsensed-shell (:primitives c) cells (set (into cells [stand (update stand :y inc)])))))
-      sink? (settings/get settings ::sink-s)
-      :else ##Inf)))
+  (let [pl (plan c)] [(quote-of c pl) (exposed-s c pl)]))
 
 (defn ^:async step!
   "A pocket dug once (pit-cells/pocket!: it steps in), then walls on its way in: :done, :again, or nil with none that fits
@@ -178,7 +195,7 @@
   (let [e (await (ctx/call c :walk 'jobs.movement.go-to {:pos stand :range 0 :ways #{:walk :clear-seal} :floor cost-health/spend-down}))]
     (cond (= :continue e) :continue
           (not= :done (:kind e)) (fail! c :walk-failed "could not walk to a wall to pocket")
-          (not (side-here? c (sh-sense/feet (:primitives c)) (:by-hand (ctx/mem c)))) (fail! c :walk-failed "walked to a wall but no side fits there")
+          (not (pit/pocket-site c (sh-sense/feet (:primitives c)))) (fail! c :walk-failed "walked to a wall but no side fits there")
           :else :again)))
 
 (defn sink-plan

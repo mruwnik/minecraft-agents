@@ -114,6 +114,10 @@
   "Each way's quote where the body stands (the :room walk is no cover here)."
   {:walls wall-in/quote-of :pit dig-pit/quote-of :pocket dig-pocket/quote-of})
 
+(def covers-of
+  "The ways whose quote and seconds in the open come from one look at the site: way -> c -> [quote exposed-s]."
+  {:pocket dig-pocket/cover})
+
 (defn covers
   "{way {:open-s :seconds}} of each of ways (default :walls :pit :pocket) that can shut the body in where it stands: its
   seconds in the open (exposed-s), and its quoted seconds with the hide-out's quiet seconds after it, as
@@ -122,8 +126,8 @@
   ([c ways]
    (let [c (update c :args #(merge {:for :danger} (select-keys % [:for :ignore-zones? :trespass? :on-lava])))]
      (into {} (keep (fn [w]
-                      (let [s (get-in ((quotes w) c) [:uses :job-time 1])
-                            open ((exposed-s w) c)]
+                      (let [[q open] ((covers-of w (juxt (quotes w) (exposed-s w))) c)
+                            s (get-in q [:uses :job-time 1])]
                         (when (and (number? s) (js/isFinite s) (js/isFinite open))
                           [w {:open-s open :seconds (+ s (hide-out/quiet-s))}]))))
            ways))))
