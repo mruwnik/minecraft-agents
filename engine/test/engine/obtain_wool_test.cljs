@@ -64,6 +64,28 @@
           (is (seq (attacked s)))
           (is (every? #{1 2 3 4 5} (attacked s))))))))
 
+(deftest string-makes-the-wool-of-a-bed-with-no-sheep-in-sight
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (scenario {:any-of all-beds :count 1 :ways #{:craft :smelt :gather}}
+                                 {:inventory (into h/sword (carried "string" 12 "oak_planks" 3 "crafting_table" 1))
+                                  :recipes {"white_wool" {:count 1 :needs {"string" 4}}
+                                            "white_bed" {:count 1 :needs {"white_wool" 3 "oak_planks" 3} :table true}}} 20))]
+          (is (= ["white_wool" "white_bed"] (distinct (map #(.-item (.-args %)) (h/calls (:p s) "craft")))))
+          (is (empty? (attacked s))))))))
+
+(deftest a-bed-with-no-sheep-in-sight-hunts-a-seen-spider-for-string-when-the-bed-is-given-a-search-worth
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (doseq [[args hunted?] [[{:any-of all-beds :count 1 :search-worth 500 :ways #{:craft :smelt :gather}} true]
+                                [{:any-of all-beds :count 1 :search-worth 1 :ways #{:craft :smelt :gather}} false]]]
+          (let [s (await (scenario args
+                                   {:inventory (into h/sword (carried "oak_planks" 3 "crafting_table" 1))
+                                    :entities [{:id 1 :name "spider" :kind "hostile" :pos {:x 20 :y 64 :z 0} :drops [{:name "string" :count 1}]}]} 40))]
+            (is (= hunted? (boolean (seq (attacked s)))) (pr-str args))))))))
+
 (deftest a-colour-with-no-sheep-in-range-falls-back-to-another-and-says-so
   (async done
     (tu/run-async done

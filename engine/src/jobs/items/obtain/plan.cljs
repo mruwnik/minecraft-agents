@@ -124,13 +124,21 @@
      (* cost/smelt-step (count (filter #(= :smelt (:op %)) (:steps pl))))))
 
 (defn preferred
-  "The gather plan pl, or when it mines an ore seen below the feet and the same item is made another way from raw needs
-  all seen (charcoal from logs for torches) that costs less (plan-cost: the dark way down to coal, with no torch to light it, costs more than any walk to logs), that plan."
+  "The gather plan pl, or when it gathers a need with no source seen, or mines an ore seen below the feet, and the same
+  item is made another way from raw needs all seen (white wool from a seen spider's string, charcoal from logs for
+  torches) that costs less (plan-cost: an unseen need costs Infinity; the dark way down to coal, with no torch to light
+  it, costs more than any walk to logs), that plan. A way whose own needs are unseen (wool dyed from wool) is passed
+  over for the next until none is left."
   [c version pl have name n opts]
-  (let [hard (some->> pl :gather (#(gather-needs % version)) (filter #(and (:ore? %) (below? c %))) (map :key) set not-empty)
-        alt (when hard (recipes/plan version have name n (assoc opts :ungathered hard)))]
-    (if (and alt (plan-allowed? c alt) (every? #(seen-of c %) (some-> alt :gather (gather-needs version)))
-             (< (plan-cost c version alt) (plan-cost c version pl)))
+  (let [needs #(some-> % :gather (gather-needs version))
+        unseen #(set (map :key (remove (fn [need] (seen-of c need)) (needs %))))
+        hard (some->> (needs pl) (filter #(or (nil? (seen-of c %)) (and (:ore? %) (below? c %)))) (map :key) set not-empty)
+        alt (loop [off hard]
+              (when off
+                (when-let [alt (recipes/plan version have name n (assoc opts :ungathered off))]
+                  (let [more (unseen alt)]
+                    (if (empty? more) alt (recur (into off more)))))))]
+    (if (and alt (plan-allowed? c alt) (< (plan-cost c version alt) (plan-cost c version pl)))
       alt
       pl)))
 

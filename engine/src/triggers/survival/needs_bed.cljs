@@ -1,7 +1,7 @@
 (ns triggers.survival.needs-bed
   "The needs-bed trigger: by day, a body whose respawn bed is lost (reset, found gone, or seen not a bed) or overdue for sleep (sh-beds/max-days-awake in-game days since it last rested:
   sh-beds/rest-since, its sleep or respawn, else the first thing it remembers) with
-  no bed carried and none remembered within the urgent radius gets one (jobs.items.obtain: wool from sheep, planks), so
+  no bed carried and none remembered within the urgent radius gets one (jobs.items.obtain: wool from sheep or string, planks), so
   the night job can put it down and sleep before phantoms come. A when-convenient errand: it holds only in the last
   :lead-ticks of the day (early on, the body's own work goes first), and its default job is a :priced obtain: each
   walk of its search is priced against what the bed is still worth times the chance a look there finds sheep. Not in the first light or with a hostile known near (jobs.lib.dawn),
@@ -9,12 +9,14 @@
   from-plan whose plan has one, an obtain of one; a bed after dusk misses the night), nor while the body knows no way to
   the wool that pays (wool-way?): a body whose land shows no sheep gets on with its work until it sees one or walks on."
   (:require [clojure.string :as str]
+            [engine.game :as game]
             [engine.notes :as notes]
             [engine.settings :as settings]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.body :as body]
             [jobs.lib.cost :as cost]
             [jobs.lib.dawn :as dawn]
+            [jobs.lib.game-facts :as facts]
             [jobs.lib.look :as look]
             [jobs.lib.makers :as makers]
             [jobs.lib.shelter.beds :as sh-beds]
@@ -40,10 +42,10 @@
 (def bed-wool "Wool of one colour the game's bed recipe takes." 3)
 
 (defn wool-carried
-  "Wool carried by colour (\"white\"), every 4 string counting a white one (the game's string recipe)."
-  [items]
+  "Wool carried by colour (\"white\"), the string carried counting the white ones it crafts (facts/crafted-from)."
+  [version items]
   (let [t (storage/carried-totals items)]
-    (merge-with + {"white" (quot (get t "string" 0) 4)}
+    (merge-with + {"white" (quot (get t "string" 0) (facts/crafted-from version "white_wool" "string"))}
                 (into {} (keep (fn [[k v]] (when (str/ends-with? k "_wool") [(subs k 0 (- (count k) 5)) v]))) t))))
 
 (defn wool-way?
@@ -58,7 +60,7 @@
         spared (if (spare/shears-at-hand inv) 0 spare/wool-keep)
         sheep (frequencies (keep #(when-not (or (true? (.-baby %)) (true? (.-sheared %))) (.-color %))
                                  (look/seen-objs p {:names ["sheep"]})))
-        wool (merge-with + (wool-carried inv) (into {} (map (fn [[k n]] [k (spare/takeable-adults spared n)])) sheep))
+        wool (merge-with + (wool-carried (game/version-of p) inv) (into {} (map (fn [[k n]] [k (spare/takeable-adults spared n)])) sheep))
         ns (some-> (:notes kn) (notes/all (:now view)))
         r (some #(when (cost/searched-for? ["sheep"] %) (:r %)) ns)]
     (boolean
