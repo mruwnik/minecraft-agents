@@ -12,9 +12,7 @@
             [engine.harvest-test :as h]
             [engine.registry :as registry]
             [engine.test-util :as tu]
-            [jobs.lib.util :as u]
             [jobs.lib.cost :as cost]
-            [jobs.lib.look :as look]
             [engine.triggers :as triggers]
             [jobs.lib.escape :as escape]
             [jobs.lib.reach.room :as reach-room]
@@ -2069,23 +2067,27 @@
 (def no-light (contract/never :exposed "dark at 1 65 1, a hall of dark floor" :lowered-by #{:torch} :chance 0.005))
 
 (defn lit-check
-  "The start check lights-itself makes of status for a body with torches? and a fetch allowed when fetch?, a chest holding torches `chest-blocks` east of it (nil: none known)."
-  [status torches? fetch? chest-blocks mem]
-  (with-redefs [torch/lightable? (constantly torches?) need/fetch-opts (constantly (when fetch? {:how #{:gather}})) ctx/mem (constantly mem) ctx/view (constantly nil)
-                fp-light/torch-chest (constantly (when chest-blocks {:x chest-blocks :y 0 :z 0}))
-                u/self-pos (constantly {:x 0 :y 0 :z 0}) cost/death-body (constantly {}) look/dark-here? (constantly true)]
-    (first ((fp-light/lights-itself (constantly status)) {:primitives nil}))))
+  "The start check lights-itself makes of status for a body with torches? and a fetch allowed when fetch?, whose torch obtain for
+  the 2 torches owed starts with `obtain` (its worth booked in worths)."
+  [status torches? fetch? obtain mem worths]
+  (with-redefs [torch/torches-held (constantly (if torches? 4 0)) need/fetch-opts (constantly (when fetch? {:how #{:gather}})) ctx/mem (constantly mem)
+                fp-light/torches-owed (constantly 2)
+                need/item-status (fn [_ item n _ worth] (swap! worths conj [item n worth]) obtain)]
+    (first ((fp-light/lights-itself (constantly status) (constantly [])) {:primitives nil}))))
 
-(deftest a-torchless-build-fetches-torches-when-the-wait-costs-more
-  (are [status torches? fetch? chest mem kind] (= kind (lit-check status torches? fetch? chest mem))
-    (dark-wait 3000) false true nil {} :ok
+(def not-worth (contract/later :not-worth "obtain: costs 400 s, worth 297 s"))
+
+(deftest a-torchless-build-fetches-torches-when-the-obtain-takes-what-the-wait-saves
+  (are [status torches? fetch? obtain mem kind] (= kind (lit-check status torches? fetch? obtain mem (atom [])))
+    (dark-wait 3000) false true (contract/ok :ready "ready") {} :ok
     (dark-wait 3000) true false nil {} :ok
     (dark-wait 3000) false false nil {} :later
-    (dark-wait 3000) false true nil {:torches-tried true} :later
-    (dark-wait 1) false true nil {} :later
-    (dark-wait 300) false true 20 {} :ok
-    ;; a far source costs more to walk than the night is long
-    (dark-wait 300) false true 600 {} :later
-    ;; no light ever comes, so any trip beats the wait
-    no-light false true 600 {} :ok
-    no-light false false nil {} :never))
+    (dark-wait 3000) false true (contract/ok :ready "ready") {:torches-tried true} :later
+    (dark-wait 300) false true not-worth {} :later
+    no-light false true (contract/ok :ready "ready") {} :ok
+    no-light false true not-worth {} :never
+    no-light false false nil {} :never)
+  (let [worths (atom [])]
+    (lit-check (dark-wait 300) false true not-worth {} worths)
+    (lit-check no-light false true not-worth {} worths)
+    (is (= [["torch" 2 (cost/light-wait-worth 300 2)] ["torch" 2 nil]] @worths) "the wait less the placing; a wait that never ends, any price")))

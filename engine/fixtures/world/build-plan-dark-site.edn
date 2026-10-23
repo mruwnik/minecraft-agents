@@ -3,6 +3,8 @@
 ;; Sealed dark plot (no clock). Should-succeed: dark-room-is-lit-then-built (planks placed, a room corner lit by a torch it hung).
 ;; Card 192c8214: dark-hall-torches-are-fetched-then-built: a torchless body in a long dark hall (no dawn lights it) fetches the torches a seen chest
 ;; holds and lights the site instead of waiting for ever.
+;; Card b80e127a: coal-and-sticks-are-crafted-into-torches-then-lit: no torch carried, coal and sticks are: the torches light-area would hang
+;; are crafted first (the torch obtain's cheapest priced way), then hung and the site built.
 ;; Also: no-torch-dark-room-is-still-built-unlit (no torch, none craftable: nothing is hung, the build still ends done underground).
 {:defaults
  {:tags [:build :light :torches] :time :any
@@ -38,4 +40,14 @@
          [:job (jobs.build.from-plan {:plan "$plan:floor"})]]
    :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 60 :of-job true}
             {:event {:source :job :kind :completed :data {:missing []}} :within-s 180 :of-job true}]
-   :after [[:block [50 0 16] "oak_planks"] [:block [51 0 16] "oak_planks"]]}]}
+   :after [[:block [50 0 16] "oak_planks"] [:block [51 0 16] "oak_planks"]]}
+  {:name "coal-and-sticks-are-crafted-into-torches-then-lit"
+   :body {:inventory [["coal" 2] ["stick" 2] ["oak_planks" 6]]}
+   :plans [{:id "floor" :metadata {:by "$body"} :parts [{:id "p" :cells [#at [5 0 14] #at [6 0 14] #at [9 0 18]] :want "oak_planks"}]}]
+   :act [[:job (jobs.build.from-plan {:plan "$plan:floor"})]
+         [:await {:source :job :kind :completed} 150]
+         [:wait-s 1]
+         [:cli "observe" ["$body" "--world" "$world" "light" "--" #at [11 0 20]] {:ok true :light {:lit? true}}]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :need}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed :data {:missing []}} :within-s 150 :of-job true}]
+   :after [[:block [5 0 14] "oak_planks"] [:block [9 0 18] "oak_planks"]]}]}

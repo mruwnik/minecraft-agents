@@ -14,6 +14,8 @@
             [engine.memory :as mem]
             [engine.registry :as registry]
             [jobs.lib.access :as access]
+            [jobs.lib.cost :as cost]
+            [jobs.lib.need :as need]
             [jobs.lib.stock :as stock]
             [jobs.items.obtain :as obtain]
             [jobs.items.obtain.table :as table]
@@ -347,3 +349,35 @@
     {:refused 1 :of 1} "the target is"
     {:refused 3 :of 3} "every target is"
     {:refused 1 :of 4} "1 of 4 targets are"))
+
+(defn ^:async torch-status
+  "The start status of an obtain of 4 more torches worth `worth` to a parent, asked from the parent's round (jobs.lib.need/item-status)."
+  [{:keys [eng]} worth]
+  (let [out (atom nil)
+        parent {:round (fn ^:async status-round [c]
+                         (reset! out (need/item-status c "torch" 4 {:how #{:chest :craft :gather}} worth))
+                         (ctx/end c :done nil))}
+        eng (assoc-in eng [:jobs 'status-parent] parent)]
+    (core/submit! eng '(status-parent) {})
+    (await (tu/run-until-empty eng 5))
+    @out))
+
+(defn ^:async torch-chest-price
+  "The price a torch obtain names when it is worth nothing, with a chest 20 blocks east booked as holding torches, at time of day t."
+  [t]
+  (let [s (f/start (-> (f/bare []) (assoc :time t) (update :blocks assoc "20,64,0" "chest")) [(assoc f/own-zone :max [30 70 6])])]
+    (mem/write! (:store (:eng s)) stock/stock-kind {:pos [20 64 0] :items {"torch" 8}} stock/stock-policy)
+    (:price (nth (await (torch-status s 0)) 2))))
+
+(deftest a-worth-is-weighed-against-the-cheapest-ways-price-with-the-death-its-walk-risks
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [none (await (torch-status (f/start (f/bare []) []) 1000))]
+          (is (= [:later :not-worth ##Inf] [(first none) (:reason (nth none 2)) (:price (nth none 2))]) "no way, however much it is worth"))
+        (is (= :ok (first (await (torch-status (f/start (f/bare [{:name "coal" :count 1} {:name "stick" :count 1}]) []) 100))))
+            "a craft from carried coal costs its steps")
+        (let [day (await (torch-chest-price 6000))
+              night (await (torch-chest-price 18000))]
+          (is (> day (+ (cost/trip) (:cost (cost/walk-cost {:distance 40})))) "the walk there and back and the death it risks")
+          (is (> night day) "the night is the likelier death"))))))

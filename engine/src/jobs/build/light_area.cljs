@@ -7,6 +7,7 @@
             [jobs.lib.blocks :as b]
             [jobs.lib.look :as look]
             [jobs.lib.near :as near]
+            [jobs.lib.need :as need]
             [jobs.lib.pace :as pace]
             [jobs.lib.ready :as ready]
             [jobs.lib.shelter.sense :as sh-sense]
@@ -21,7 +22,7 @@
   cells that matter are those the body has seen as spawn ground (sense/spawnable?: air, air, solid floor) that it perceives
   dark (jobs.lib.torch/perceived-dark?); torches already standing count through that light read, the ones this call hung
   count at once. An area cell not seen yet that touches a seen open cell is walked to first (once) to look. Each step hangs one torch with a jobs.blocks.place child (walks in reach; a missing torch is fetched
-  by it), at the spot lighting most of the dark cells still owed. A spot whose place fails is not tried again.
+  by it with the call's :ways), at the spot lighting most of the dark cells still owed. A spot whose place fails is not tried again.
 
   Needs: the area seen, torches (carried or fetchable). Ends done {:torches [cells hung this call] :uncovered []} when no
   spawnable cell of the area is dark (at once, with none hung, when none is); nothing-possible :uncovered when dark cells
@@ -41,6 +42,7 @@
   {::job-time-s {:default 600 :doc "Seconds one call may take before it gives up (:limit-reached)." :spec (a/num-in 0 nil)}})
 
 (def target [:cells :boxes])
+(def ways need/fetch-ways)
 (def defaults {:spend {:job-time ::job-time-s}})
 
 (defn box-cells [box]
@@ -149,7 +151,7 @@
       :else
       (let [o (b/place-outcome (waits/waiting-out c (await (ctx/call c :place 'jobs.blocks.place
                                                 (merge (select-keys (:args c) [:ignore-zones?])
-                                                       {:pos spot :item "torch"})))))]
+                                                       {:pos spot :item "torch" :ways (need/pass-ways c)})))))]
         (case o
           :continue :continue
           (:placed :already) (do (ctx/update-mem! c update :torches (fnil conj []) spot) :again)

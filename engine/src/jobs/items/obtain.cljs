@@ -13,6 +13,7 @@
             [jobs.items.obtain.gather :refer [finish-tree! gather-step!]]
             [jobs.items.obtain.need :refer [explorable? gather-held gather-viable?]]
             [jobs.items.obtain.plan :refer [craft-plan gather-plan]]
+            [jobs.items.obtain.price :refer [price-of]]
             [jobs.items.obtain.why :refer [gather-fix no-source-why tried-text]]
             [jobs.lib.look :as look]
             [jobs.lib.next-call :as next-call]
@@ -33,7 +34,7 @@
   A child that brings in nothing three times ends that way (:tried); a mine for an unseen ore that cut new ground looked, so it mines on until the ground counts as barren (base ::barren-ore).
   A bill runs one obtain child per item still missing (not carried or worn), in order, after the furnace material (iron_ingot ..) the missing items need together, which is got in one go and reserved against deposits; each child gets a :spend :job-time of the ::bill-item-s setting. The first child that fails ends the bill with its kind and cause, data {:item the one it stopped at :why}.
 
-  Needs: valid :item or :any-of and :count, or a :bill (else impossible :bad-args); a source (else condition-failed :no-source with :why naming what each way lacks).
+  Needs: valid :item or :any-of and :count, or a :bill (else impossible :bad-args); a source (else condition-failed :no-source with :why naming what each way lacks); with :worth, a way priced within it (jobs.items.obtain.price/price-of: walk there and back, the death it risks; else :later :not-worth).
   Returns :done {:got n :item name} only with the count carried (the call's :least, default :all, may name fewer) (a bill: {:have [items]}); nothing-possible :no-source, :table-unreachable or the gather's walk cause (:zone-exit ..) when every allowed way was tried, data {:got :tried :why :next} (:next: jobs.lib.next-call, the gather for the first unseen raw need); limit-reached :timeout after :spend :job-time (default-time: ::job-time-s, ::unit-s more per unit of :count beyond the first).
   Quote: the count as yield, time a guess per step, no most for a gather; a bill two gathers' time per missing item.")
 
@@ -46,6 +47,7 @@
    :avoid {:doc "cells [x y z] a crafting table is never put in or dug for (a caller's dig line); passed to the craft steps" :spec (a/coll-of a/position?) :default nil}
    :center {:doc "a cell [x y z] the searches for an unseen block or animal centre on (a build's site): each starts there and stays within the ::site-radius setting of it; nil: where the body stands" :spec a/position? :default nil}
    :explore {:doc "false drops the :search way (the base ::explore setting's search for a raw need not seen): fails :no-source instead" :spec boolean? :default true}
+   :worth {:doc "seconds the count is worth to the caller: the start check waits :not-worth while price-of (the cheapest way that would start, the death its walk risks) is more; nil: any price (a bill: unpriced)" :spec (a/num-in nil nil) :default nil}
    :priced {:doc "one search only, worth what is wanted is worth to the body where it starts less a trip (jobs.lib.cost/worth-to): each walk is priced against what is left of that as the body is then (jobs.explore.search :worth); none when the trip takes it all" :spec boolean? :default false}})
 
 (a/defargs settings
@@ -113,9 +115,19 @@
       (when-not (and (= :no-source (:reason cause)) (way? c :chest) (not (look/surveyed? c)))
         cause))))
 
+(defn not-worth
+  "{:reason :not-worth :price :worth} when the call has a :worth (and no bill) and price-of is more."
+  [c]
+  (let [{:keys [worth bill]} (:args c)]
+    (when (and worth (not bill) (not (args-error (:args c))))
+      (let [s (price-of c)]
+        (when (> s worth) {:reason :not-worth :price s :worth worth})))))
+
 (defn can-start? [c]
-  (let [cause (no-source c)]
-    (contract/all [(checks/cause-status :never (bad-args c)) (checks/cause-status (:kind (cljs.core/meta cause) :later) cause)])))
+  (let [cause (no-source c)
+        dear (not-worth c)]
+    (contract/all [(checks/cause-status :never (bad-args c)) (checks/cause-status (:kind (cljs.core/meta cause) :later) cause)
+                   (checks/cause-status :later dear (when dear (str "obtain: costs " (js/Math.round (:price dear)) " s, worth " (js/Math.round (:worth dear)) " s")))])))
 
 (defn held-name
   "The name of names carried most of in inventory inv, else the first."

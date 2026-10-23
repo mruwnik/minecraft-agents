@@ -99,8 +99,6 @@
 
 (def target [:plan :part])
 (def defaults {:least :all :spend {:job-time ::job-time-s}})
-(def safe? (light/lights-itself (ready/safe-at-build work-place/spot)))
-(def fit? ready/fit?)
 
 (a/defargs settings
   {::job-time-s {:default 1800 :doc "Seconds one build may take." :spec (a/int-in 1 nil)}
@@ -115,6 +113,9 @@
   "planned, judged once per check-cache window."
   [c]
   (check-cache/cached c :planned #(planned c)))
+
+(def safe? (light/lights-itself (ready/safe-at-build work-place/spot) #(:cells (judged-plan %))))
+(def fit? ready/fit?)
 
 (defn plan-now
   "The plan as the check or the round reads it: a check (no token) judged once per check-cache window, a round afresh."

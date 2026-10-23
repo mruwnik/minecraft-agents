@@ -176,13 +176,26 @@
   [e]
   (or (get-in e [:cause :why]) (contract/cause-key e)))
 
+(defn fetch-args
+  "The args of the fetch child job for args and options o (the count still the one asked for)."
+  [job args {:keys [how explore minutes for-plan center]}]
+  (cond-> (merge (assoc args :explore (boolean explore)) (child-limits job {:how how :minutes minutes}))
+    for-plan (assoc :for-plan for-plan)
+    (and center (= job 'jobs.items.obtain)) (assoc :center center)))
+
+(defn item-status
+  "The start status of the jobs.items.obtain child item! would call now for n more of item under options o, worth `worth`
+  seconds to the caller (its :worth: the obtain's price must not pass it; nil: any price)."
+  [c item n o worth]
+  (ctx/child-status c (or (:slot o) :need) 'jobs.items.obtain
+                    (cond-> (fetch-args 'jobs.items.obtain {:item item :count (+ n (get (counts c [item]) item))} o)
+                      worth (assoc :worth worth))))
+
 (defn ^:async fetch!
   "Get :count more of what args name (jobs.items.obtain's :count is the amount to carry, so the carried is added here)."
-  [c job args cause-reason wanted {:keys [slot how explore return? minutes for-plan center]}]
+  [c job args cause-reason wanted {:keys [slot return?] :as o}]
   (let [slot (or slot :need)
-        args (cond-> (merge (assoc args :explore (boolean explore)) (child-limits job {:how how :minutes minutes}))
-                for-plan (assoc :for-plan for-plan)
-                (and center (= job 'jobs.items.obtain)) (assoc :center center))
+        args (fetch-args job args o)
         want [job args]
         identity-of [job (dissoc args :count :avoid :spend)]
         _ (when (not= identity-of (get-in (ctx/mem c) [:need/slot-want slot]))

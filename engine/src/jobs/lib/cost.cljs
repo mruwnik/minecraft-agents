@@ -14,7 +14,7 @@
     health   hp-seconds, health-scale, hp-price, commute-s (a walk there and back against sheltering here), drown-prices, damage-budget, survivable-budget: what an hp costs and how many a walk may spend (jobs.lib.cost.health).
     food     food-reserve: the food a body keeps carried, 3 days of it; cook-worth?, cook-gain: whether cooking raw food beats eating it now; meat-factor, meat-animal: raw meat's replacement cost, dear for hunted, 1 with a working pen (jobs.lib.cost.food).
     value    item-value, reserve-cost (using a reserved unit: value x s/(1-s)), fetch-cost, walk-cost, walk-beats-making (walk to what exists vs make one and place it), detour-cost: what items are worth, what fetching them, walking or a pick-up detour costs; tour-cost, tour-worth, food-worth: a tour of
-             frontiers against what its goal is worth; light-cost: a torch go-to places; torch-fetch-cost: fetching n torches from a source; dig-cost: the seconds a block takes to dig (jobs.lib.cost.value);
+             frontiers against what its goal is worth; light-cost: a torch go-to places; light-wait-worth: what n torches fetched save over a wait for light; dig-cost: the seconds a block takes to dig (jobs.lib.cost.value);
              per-dark, dark-factor: the one price of a dark block, which go-to's planner costs; spawn-chance: the chance a mob spawns at a cell or
              over an area (a set or {:min :max} box of cells) per second, from the light the body knows (unseen counts as dark); exposure: the chance a walk meets and
              what lowers it ({:chance :lowered-by #{:light}}).
@@ -268,15 +268,10 @@
     (+ (if (:found r) (or (:priced r) (:seconds r)) (second (get-in q [:uses :job-time])))
        (route-death-cost body route at))))
 
-(defn torch-fetch-cost
-  "Seconds to fetch n torches for a dark site: the torches and their placing and a trip (light-cost), and for a source `distance` blocks off the walk
-  there and back (walk-cost) and the death it risks (route-death-cost of route at `at`)."
-  [body {:keys [n distance route at]}]
-  (let [{:keys [torch place trip]} (:parts (light-cost {:carried 0}))]
-    (+ (* n (+ torch place)) trip
-       (if distance
-         (+ (:cost (walk-cost {:distance (* 2 distance)})) (route-death-cost body route at))
-         0))))
+(defn light-wait-worth
+  "Seconds fetching n torches to light a site is worth instead of waiting wait-s for light: the wait less placing them (light-cost)."
+  [wait-s n]
+  (- wait-s (* n (:place (:parts (light-cost {:carried 1}))))))
 
 (defn search-radius
   "Blocks from its origin a search's legs spacing apart may go for a find worth `worth`: the rings within it hold as

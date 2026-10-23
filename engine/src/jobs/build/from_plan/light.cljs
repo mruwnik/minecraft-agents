@@ -1,12 +1,9 @@
 (ns jobs.build.from-plan.light
   "A dark build site: the body lights it with torches (jobs.build.light-area) once per call, then builds; a player does not wait for dawn."
-  (:require [engine.contract :as contract]
+  (:require [engine.composite :as composite]
+            [engine.contract :as contract]
             [engine.ctx :as ctx]
-            [jobs.lib.access :as access]
-            [jobs.lib.look :as look]
-            [jobs.lib.stock :as stock]
-            [jobs.lib.torch-plan :as tp]
-            [jobs.lib.util :as u]
+            [jobs.build.light-area :as light-area]
             [jobs.lib.build.plan :as plan]
             [jobs.lib.cost :as cost]
             [jobs.lib.need :as need]
@@ -14,56 +11,51 @@
             [jobs.lib.torch :as torch]))
 
 (defn can-light?
-  "Whether torches are carried, or coal and sticks (or planks) to craft them, and the site is not lit yet this call."
+  "Whether torches are carried and the site is not lit yet this call."
   [c]
   (and (not (:light-tried (ctx/mem c)))
-       (torch/lightable? (:primitives c))))
+       (pos? (torch/torches-held (:primitives c)))))
 
-(defn torches-for
-  "How many torches light the owed cells: one per torch's lit area of columns (jobs.lib.torch-plan/spread), at least one."
-  [cells]
-  (let [columns (count (distinct (map (fn [{[x _ z] :pos}] [x z]) cells)))]
-    (max 1 (js/Math.ceil (/ columns (* 2 tp/spread tp/spread))))))
+(defn light-args
+  "The jobs.build.light-area args for the box round the owed cells."
+  [owed]
+  (let [ps (map :pos owed)]
+    {:boxes [[(apply mapv min ps) (apply mapv max ps)]]}))
 
-(defn torch-chest
-  "The nearest chest booked in stock as holding torches, however far ({:x :y :z}), nil for none."
-  [c]
-  (let [me (u/self-pos c)]
-    (->> (stock/stock-of (ctx/view c))
-         (filter (fn [[_ items]] (pos? (get items "torch" 0))))
-         (map (fn [[[x y z]]] {:x x :y y :z z}))
-         (remove #(access/container-refusal c :take %))
-         (sort-by #(u/dist me %))
-         first)))
+(defn torches-owed
+  "Torches jobs.build.light-area would hang over the owed cells now, as its lighting plans them in the call it would get, at least one."
+  [c owed]
+  (if (empty? owed)
+    1
+    (let [[_ args] (ctx/child-job c 'jobs.build.light-area (light-args owed))]
+      (max 1 (count (:spots (light-area/lighting (assoc c :slots (conj (:slots c) :light) :args args))))))))
 
-(defn fetch-price
-  "Seconds to fetch n torches (jobs.lib.cost/torch-fetch-cost), from the chest known to hold them when there is one, the death risked in the dark where the body stands."
-  [c n]
-  (let [p (:primitives c)
-        chest (torch-chest c)]
-    (cost/torch-fetch-cost (cost/death-body p (ctx/view c))
-                           {:n n :distance (some->> chest (u/dist (u/self-pos c))) :route {:underground? false :night? (look/dark-here? p)} :at chest})))
+(defn torches-short
+  "Torches owed over the owed cells beyond those carried."
+  [c owed]
+  (max 0 (- (torches-owed c owed) (torch/torches-held (:primitives c)))))
 
 (defn fetch-due?
-  "Whether n torches are worth fetching to light the site instead of waiting wait-s seconds for the sky's light (nil: it never comes, a cell under
-  a canopy or in a cave): none usable, no fetch tried yet this call, the call's ways allow one, and the wait costs more than fetch-price."
+  "Whether n torches are worth getting (crafted from what is carried, or fetched) to light the site instead of waiting wait-s seconds for the
+  sky's light (nil: it never comes, a cell under a canopy or in a cave): some short, none got yet this call, and the call's ways allow a torch
+  obtain whose start check takes its price (the cheapest way, the death its walk risks) for no more than the wait saves (jobs.lib.cost/light-wait-worth)."
   [c wait-s n]
-  (and (not (:torches-tried (ctx/mem c)))
-       (not (torch/lightable? (:primitives c)))
+  (and (pos? n)
+       (not (:torches-tried (ctx/mem c)))
        (some? (need/fetch-opts c))
-       (> (or wait-s ##Inf) (fetch-price c n))))
+       (composite/ok? (need/item-status c "torch" n (need/fetch-opts c) (some-> wait-s (cost/light-wait-worth n))))))
 
 (defn lights-itself
   "safe, but ok where it only waits for light (:exposed, lowered by :light) or no light comes (:exposed, a torch lowers it) and the body can hang torches
-  itself, or fetch them."
-  [safe]
+  itself, or fetch them for the owed cells of (cells-of c)."
+  [safe cells-of]
   (let [exposed? (fn [[_ _ data]] (= :exposed (:reason data)))
         wait-for-light? (fn [[kind :as s]] (and (= :later kind) (exposed? s) (contains? (:lowered-by (nth s 2)) :light)))
         no-light? (fn [[kind :as s]] (and (= :never kind) (exposed? s) (contains? (:lowered-by (nth s 2)) :torch)))
         wait-s (fn [[_ _ data]] (some-> (:recheck-after-ms data) (/ 1000)))
         lit (fn [f] (fn [c] (let [s (f c)]
                               (if (and (or (wait-for-light? s) (no-light? s))
-                                       (or (can-light? c) (fetch-due? c (when (wait-for-light? s) (wait-s s)) 1)))
+                                       (or (can-light? c) (fetch-due? c (when (wait-for-light? s) (wait-s s)) (torches-short c (plan/owed (cells-of c))))))
                                 (contract/ok :torches "dark: the body hangs torches to build by")
                                 s))))]
     (with-meta (lit safe) (update (meta safe) :jobs.lib.ready/exposure #(some-> % lit)))))
@@ -80,7 +72,7 @@
     (boolean (some #(not (sense/lit-here? p %)) (cons (sense/feet p) open)))))
 
 (defn ^:async fetch-torches!
-  "Fetch n torches (jobs.lib.need) for a dark site with none to hang: :continue while the child waits on the world, :again once it ended
+  "Get n torches (jobs.lib.need) for a dark site short of them: :continue while the child waits on the world, :again once it ended
   (:torches-tried whatever came of it, so a failed fetch is asked once and the wait for light names its reason)."
   [c n]
   (let [e (await (need/item! c "torch" n (need/fetch-opts c)))]
@@ -98,19 +90,15 @@
                         cell))))
 
 (defn ^:async light!
-  "jobs.build.light-area over the box round the owed cells while the site is dark, called again while it goes on; once it ends, :light-tried
-  whatever came of it (the build goes on in the dark rather than ask again). With no torch to hang and a wait for light that costs more than
-  a trip, torches are fetched first. :continue while it waits, :again once ended, nil when not due."
+  "While the site is dark: the torches short of what jobs.build.light-area would hang over the owed cells are got first when fetch-due?;
+  then light-area over their box with the carried ones only (:ways #{:carried}), called again while it goes on; once it ends, :light-tried
+  whatever came of it (the build goes on in the dark rather than ask again). :continue while it waits, :again once ended, nil when not due."
   [c cells]
-  (let [owed (plan/owed cells)
-        n (torches-for owed)]
+  (let [owed (plan/owed cells)]
     (cond
       (or (empty? owed) (not (dark-site? c owed))) nil
-      (can-light? c) (let [ps (map :pos owed)
-                           lo (apply mapv min ps)
-                           hi (apply mapv max ps)
-                           d (await (ctx/call c :light 'jobs.build.light-area {:boxes [[lo hi]]}))]
+      (and (not (:light-tried (ctx/mem c))) (fetch-due? c (site-wait c owed) (torches-short c owed))) (await (fetch-torches! c (torches-short c owed)))
+      (can-light? c) (let [d (await (ctx/call c :light 'jobs.build.light-area (assoc (light-args owed) :ways #{:carried})))]
                        (when-not (= :continue d)
                          (ctx/update-mem! c assoc :light-tried true))
-                       (if (= :continue d) :continue :again))
-      (fetch-due? c (site-wait c owed) n) (await (fetch-torches! c n)))))
+                       (if (= :continue d) :continue :again)))))
