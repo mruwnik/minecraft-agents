@@ -12,6 +12,7 @@
             [jobs.lib.armour :as armour]
             [jobs.lib.checks :as checks]
             [jobs.lib.combat :as combat]
+            [jobs.lib.cost :as cost]
             [jobs.lib.cost.food :as food-cost]
             [jobs.lib.foods :as foods]
             [jobs.lib.makers :as makers]
@@ -260,9 +261,10 @@
       :else {:cause cause :why (why-of e)})))
 
 (defn ^:async run-arm!
-  "One obtain child round for a sword (the best it can make): :continue, nil when armed, or {:cause :why} when it could not."
+  "One obtain child round for a sword (the best it can make), its search worth the kit's: :continue, nil when armed, or {:cause :why} when it could not."
   [c]
-  (let [e (await (ctx/call c :arm 'jobs.items.obtain {:any-of ["iron_sword" "stone_sword" "wooden_sword"] :count 1 :explore (:explore (:args c))}))]
+  (let [e (await (ctx/call c :arm 'jobs.items.obtain {:any-of ["iron_sword" "stone_sword" "wooden_sword"] :count 1 :explore (:explore (:args c))
+                                                       :search-worth (cost/items-find-worth (bill-of c))}))]
     (cond
       (= :continue e) :continue
       (= :done (:kind e)) nil

@@ -64,14 +64,25 @@
                       (let [s (ctx/child-status c (gather-slot need) (:job need) (:args need))]
                         (or (composite/startable? s) (lights-itself? c (contract/status-cause s))))))))))
 
-(defn priced-search
-  "The search options: the :worth arg, else what is wanted (:count of it) is worth (jobs.lib.cost/find-worth) to the body here, as the search's :worth, which
-  prices each walk, and that many seconds to spend. A worth that pays for no more than the trip is 0: the search ends :price at its first walk."
+(defn own-worth
+  "What n of names is worth to the body here, less a trip (jobs.lib.cost/find-worth)."
+  [c names n]
+  (cost/find-worth (cost/death-body (:primitives c) (ctx/view c)) names (u/self-pos c) n))
+
+(defn search-worth
+  "Seconds a search for the call's need is worth: :search-worth (the goal of the caller, or of the obtain whose need asked
+  for this one), else :worth, else for a bill all of it (jobs.lib.cost/items-find-worth), else own-worth of :count."
   [c]
-  (let [p (:primitives c)
-        worth (or (:worth (:args c))
-                  (cost/find-worth (cost/death-body p (ctx/view c)) (or (seq (names-of (:args c))) (keys (:bill (:args c)))) (u/self-pos c)
-                                   (:count (:args c) 1)))]
+  (let [{:keys [search-worth worth bill] :as a} (:args c)]
+    (or search-worth worth
+        (when bill (cost/items-find-worth bill))
+        (own-worth c (names-of a) (:count a 1)))))
+
+(defn priced-search
+  "The search options: search-worth as the search's :worth, which prices each walk, and that many seconds to spend. A
+  worth that pays for no more than the trip is 0: the search ends :price at its first walk."
+  [c]
+  (let [worth (search-worth c)]
     {:worth (max 0 worth)
      :spend {:job-time (max 1 worth)}}))
 

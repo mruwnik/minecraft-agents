@@ -413,6 +413,40 @@
               (pr-str (select-keys @(:out s) [:status :item :reason :why])))
           (is (= 1 (get (f/inv s) "iron_pickaxe"))))))))
 
+(defn treeless-world
+  "raw-world with its trees moved out of sight, 40 blocks east."
+  []
+  (let [w (raw-world)
+        logs (into {} (for [y [64 65 66]] [(str "40," y ",5") "oak_log"]))]
+    (-> w
+        (update :blocks #(merge (into {} (remove (fn [[_ b]] (#{"oak_log" "oak_leaves" "grass_block"} b))) %) logs))
+        (assoc :floor [-30 -10 60 30]))))
+
+(defn ^:async run-kit! [s ticks]
+  (loop [i 0]
+    (await (f/run-ticks s 1))
+    (.advance (.-world (:p s)) 40)
+    (when (and (< i ticks) (= :not-done @(:out s)) (= "oak_log" (get-in @(fake/state (:p s)) [:blocks [40 64 5]])))
+      (recur (inc i)))))
+
+(deftest a-kit-with-no-tree-seen-searches-as-far-as-the-kit-is-worth-and-fells-one
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (assoc (treeless-world) :inventory [{:name "bread" :count 12} {:name "stone_sword" :count 1}]) {:items ["iron_pickaxe"] :food false :wear false})]
+          (await (run-kit! s 3000))
+          (is (some #(some #{"oak_log"} (:for %)) (f/events-of s :obtain.exploring)) "no tree in sight: the pickaxe's logs are searched for")
+          (is (not= "oak_log" (get-in @(fake/state (:p s)) [:blocks [40 64 5]])) (pr-str (select-keys @(:out s) [:status :item :reason :why]))))))))
+
+(deftest a-kit-worth-less-than-the-walk-to-the-tree-is-refused
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (start (assoc (treeless-world) :inventory [{:name "bread" :count 12}]) {:items ["stick"] :food false :wear false})]
+          (await (run-kit! s 3000))
+          (is (= :stopped (:status @(:out s))))
+          (is (= "oak_log" (get-in @(fake/state (:p s)) [:blocks [40 64 5]])) "the tree 40 blocks off is not walked to for a stick"))))))
+
 (defn gathers-raw-iron-then-has-no-way-up
   "An obtain whose first call adds 3 raw iron to the pack and ends as a gathering that found no way up; later calls are the real obtain."
   []

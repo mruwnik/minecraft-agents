@@ -1,7 +1,8 @@
 ;; Treeless start: the only tree stands 40 blocks east. obtain oak_log with :explore walks and looks as far as the find is worth
 ;; (the caller's :worth, else a log's worth to the body, which pays for a few blocks only) until the tree is seen, then fells it.
 ;; Plot 220 x 64, open sky over a glowstone floor (lit at any hour); body at the west end, tree at x 40 z 32.
-;; Should-succeed: with a :worth that pays for the walk the log is got. Should-fail: a log is cheap, 40 blocks off is past what it pays for, so obtain stops no-source.
+;; Should-succeed: with a :worth that pays for the walk the log is got; a kit (iron pickaxe, no stone or tree in sight) prices the
+;; search of its pickaxe's logs at the kit's worth, so the tree is felled. Should-fail: a log is cheap, 40 blocks off is past what it pays for, so obtain stops no-source.
 {:defaults
  {:tags [:items :obtain :explore :large :jobs]
   :time :any
@@ -17,4 +18,9 @@
   {:name "cheap-tree-far-off-is-not-searched-for"
    :act [[:job (jobs.items.obtain {:item "oak_log" :count 1 :ways #{:gather} :explore true})]]
    :expect [{:event {:source :job :kind :stopped :data {:reason :no-source}} :within-s 200 :of-job true}]
-   :after [[:item "oak_log" 0]]}]}
+   :after [[:item "oak_log" 0]]}
+  {:name "kit-with-no-tree-in-sight-walks-to-the-far-tree"
+   :body {:inventory [["iron_axe" 1] ["stone_sword" 1]]}
+   :act [[:job (jobs.items.get-kit {:items ["iron_pickaxe"] :food false :wear false})]]
+   :expect [{:no-event {:source :job :kind :stopped} :for-s 300 :until {:source :job :kind :completed :data {:name "jobs.forestry.harvest-wood"}}}
+            {:event {:source :job :kind :completed :data {:name "jobs.forestry.harvest-wood"}} :within-s 320}]}]}

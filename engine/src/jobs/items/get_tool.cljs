@@ -33,7 +33,8 @@
    :item {:doc "a tool item name" :spec a/item? :default nil}
    :kind {:doc "a tool kind, e.g. \"pickaxe\" or \"shears\"" :spec a/name? :default nil}
    :for-plan {:doc "id of the plan whose work this is: passed to the obtain, so a table may stand in its own cells" :spec a/name? :default nil}
-   :explore {:doc "passed to the obtain: walk and look for raw material not seen (false: fail instead)" :spec boolean? :default true}})
+   :explore {:doc "passed to the obtain: walk and look for raw material not seen (false: fail instead)" :spec boolean? :default true}
+   :search-worth {:doc "passed to the obtain: seconds its search is worth to the caller's goal" :spec (a/num-in nil nil) :default nil}})
 
 (def tiered #{"pickaxe" "axe" "shovel" "hoe" "sword"})
 
@@ -75,7 +76,7 @@
   (let [ways (ways-of c)
         a (:args c)]
     (into {} (remove (comp nil? val))
-          {:any-of names :count 1 :explore (:explore a) :for-plan (:for-plan a)
+          {:any-of names :count 1 :explore (:explore a) :for-plan (:for-plan a) :search-worth (:search-worth a)
            :ways (cond-> (disj ways :craft) (ways :craft) (into [:craft :smelt]))})))
 
 (defn bad-args [c]

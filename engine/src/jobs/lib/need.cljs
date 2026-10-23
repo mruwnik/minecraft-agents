@@ -3,7 +3,7 @@
   read its ending. tool!, item! and blocks! resolve to :continue while the child waits on the world, else to the ending
   to return or read (call! is the call alone): :done as the child gave it; any other with the cause {:reason :need|:tool|:free-slots ..} naming
   what was wanted, the child's ending as its :because, the kind kept (a limit stays a limit). A duplicate call is
-  the engine's refusal. Options {:slot :how :explore} pass on to the fetch job.
+  the engine's refusal. Options {:slot :how :explore :search-worth} pass on to the fetch job.
 
   What a job may fetch is its call's :ways (fetch-ways minus :carried are the sources); fetch-opts reads them.
 
@@ -177,10 +177,12 @@
   (or (get-in e [:cause :why]) (contract/cause-key e)))
 
 (defn fetch-args
-  "The args of the fetch child job for args and options o (the count still the one asked for)."
-  [job args {:keys [how explore minutes for-plan center]}]
+  "The args of the fetch child job for args and options o (the count still the one asked for); o's :search-worth is what
+  the caller's goal makes a search for it worth."
+  [job args {:keys [how explore minutes for-plan center search-worth]}]
   (cond-> (merge (assoc args :explore (boolean explore)) (child-limits job {:how how :minutes minutes}))
     for-plan (assoc :for-plan for-plan)
+    search-worth (assoc :search-worth search-worth)
     (and center (= job 'jobs.items.obtain)) (assoc :center center)))
 
 (defn item-status

@@ -197,26 +197,54 @@
   "A one-cell pit round the body at the origin: stone on its four sides at feet and head height and over it."
   (into {"0,66,0" "stone"} (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]] y [64 65]] [(str dx "," y "," dz) "stone"])))
 
+(defn look-round! [s]
+  (doseq [pitch [-80 80 0]]
+    (swap! (fake/state (:p s)) assoc :pitch pitch)
+    (perception/pass! (aget (:p s) "perception"))))
+
+(def lit-tree
+  "Torch light round the tree and the way to it: no mob spawns there."
+  (into {} (for [x (range -2 3) y (range 64 68) z (range 1 7)] [[x y z] [15 14]])))
+
 (defn sheltered-night-start
-  "A body sealed in its night pit, the tree (and for stone, a stone) seen from inside."
-  [blocks health]
-  (let [s (f/start (assoc (ore-world (merge f/tree-blocks blocks) []) :time st/night) [f/own-zone])]
+  "A body that saw the tree (and blocks, a stone by it) before it sealed itself in its night pit; light {cell [sky block]} over the sky's."
+  [blocks health light]
+  (let [s (f/start (assoc (ore-world (merge f/tree-blocks blocks) []) :time st/night :light light) [f/own-zone])]
     (swap! (fake/state (:p s)) assoc-in [:self :health] health)
-    (doseq [pitch [-80 80 0]]
-      (swap! (fake/state (:p s)) assoc :pitch pitch)
-      (perception/pass! (aget (:p s) "perception")))
+    (look-round! s)
+    (doseq [[k b] st-pit] (fake/set-block! (:p s) (mapv js/parseInt (.split k ",")) b))
+    (look-round! s)
     (is (some? (sh-inside/night-sheltered (:p s) nil)) "sheltered at the start")
+    (is (seq (look/seen-blocks (:p s) {:names ["oak_log"]})) "the tree is remembered")
     s))
+
+(deftest a-tree-seen-from-a-night-shelter-is-walked-to-when-the-trip-is-cheap
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (sheltered-night-start {} 20 lit-tree)]
+          (await (obtain! s {:any-of ["oak_log" "spruce_log" "birch_log"] :count 2 :ways #{:gather} :explore false} 8))
+          (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "the tree is known, no search stands in")
+          (is (seq (tu/walk-calls (:p s))) "go-to prices its own route; there is no flat night hold"))))))
+
+(deftest a-pickaxe-whose-logs-are-outside-a-night-shelter-walks-out-for-them-not-no-source
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (sheltered-night-start {"1,64,4" "stone"} 20 lit-tree)]
+          (await (obtain! s {:item "cobblestone" :count 3 :ways #{:gather :craft} :explore false} 8))
+          (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "the stone and the logs are known")
+          (is (seq (tu/walk-calls (:p s))) "the logs are walked to under go-to's own pricing"))))))
 
 (deftest a-tree-seen-from-a-night-shelter-waits-when-the-trip-is-dear
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (sheltered-night-start st-pit 7)]
-          (await (settings/with-settings {:jobs.lib.price/risk-share 0} #(obtain! s {:any-of ["oak_log" "spruce_log" "birch_log"] :count 2 :ways #{:gather} :explore true} 8)))
+        (let [s (sheltered-night-start {} 7 {})]
+          (await (settings/with-settings {:jobs.lib.price/risk-share 0} #(obtain! s {:any-of ["oak_log" "spruce_log" "birch_log"] :count 2 :ways #{:gather} :explore false} 8)))
           (is (empty? (filter #(= :no-source (:reason %)) (f/events-of s :waiting))) "the tree is seen")
           (is (empty? (tu/walk-calls (:p s))) "no walk out")
-          (is (some #(= :risky (:reason %)) (f/events-of s :waiting)) "the priced route risk is over what the body can afford"))))))
+          (is (some #(#{:risky :exposed} (:reason %)) (f/events-of s :waiting)) "the priced dark at the tree is over what the body can afford"))))))
 
 (deftest a-craft-the-dark-prices-too-high-makes-the-obtain-wait-not-end-no-source
   (async done

@@ -5,6 +5,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.cost :as cost]
             [jobs.lib.need :as need]
             [jobs.lib.next-call :as next-call]
             [jobs.lib.ledger :as ledger]
@@ -324,7 +325,7 @@
     (when (seq ps) [(mid 0) (apply min (map #(% 1) ps)) (mid 2)])))
 
 (defn ^:async fetch-step!
-  "Fetch what the plan lacks (jobs.lib.need) when a fetch is due: :continue while the child waits on the world, :again
+  "Fetch what the plan lacks (jobs.lib.need, a search worth all the plan's items) when a fetch is due: :continue while the child waits on the world, :again
   once it ended (a failed one, a limit too, is booked), nil when nothing is due. A bed the plan lacks is first taken up
   from where the body put its own down, when one stands near."
   [c]
@@ -332,7 +333,9 @@
     (let [bed? (and (= :need (:reason w)) (wood/bed? (:item w)))]
       (if (and bed? (need/fetch-opts c) (own-bed-near? c))
         (await (take-own-bed! c))
-        (let [o (assoc (need/fetch-opts c) :explore (:explore (:args c)) :for-plan (:plan (:args c)) :center (site-of (:cells (planned c))))
+        (let [cells (:cells (planned c))
+              o (assoc (need/fetch-opts c) :explore (:explore (:args c)) :for-plan (:plan (:args c)) :center (site-of cells)
+                       :search-worth (cost/items-find-worth (frequencies (keep :item cells))))
               e (await (cond
                          bed? (need/blocks! c wood/bed-names (:count w) o)
                          (= :need (:reason w)) (need/item! c (:item w) (:count w) o)

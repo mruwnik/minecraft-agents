@@ -5,7 +5,7 @@
             [engine.ctx :as ctx]
             [engine.game :as game]
             [jobs.items.obtain.base :refer [animal-radius barren-ore search-scan-radius site-radius tried! ways-of]]
-            [jobs.items.obtain.need :refer [explore-opts gather-viable? pickaxe-first? light-settling? search-names tools-wanted torch-due trees-unreachable?]]
+            [jobs.items.obtain.need :refer [explore-opts gather-viable? own-worth pickaxe-first? light-settling? search-names search-worth tools-wanted torch-due trees-unreachable?]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [gather-carried gather-slot seen-of shears-source with-avoid with-block with-count]]
             [jobs.lib.breath :as breath]
@@ -79,11 +79,13 @@
       :again)))
 
 (defn pickaxe-args
-  "The args of the obtain child that gets a tool for need."
+  "The args of the obtain child that gets a tool for need: its search is worth the need's, or the tool's own when more."
   [c names need]
-  (let [a (:args c)]
+  (let [a (:args c)
+        tools (tools-wanted c names need)]
     (into {} (remove (comp nil? val))
-          {:any-of (tools-wanted c names need) :count 1 :ways (ways-of c) :explore (:explore a)})))
+          {:any-of tools :count 1 :ways (ways-of c) :explore (:explore a)
+           :search-worth (max (search-worth c) (own-worth c tools 1))})))
 
 (defn ^:async pickaxe-step!
   "Get the cheapest tool that harvests the need's block (a jobs.items.obtain child): :again once it is carried, :continue
