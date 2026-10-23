@@ -219,7 +219,7 @@
   the body are not in view."
   [c]
   (let [{:keys [adults babies]} (hunting/census c)]
-    (boolean (and (not (:looked (ctx/mem c)))
+    (boolean (and (not (look/surveyed? c))
                   (< (+ (count adults) (count babies)) (:target (:args c)))))))
 
 (defn with-pen [c pen] (update c :args merge (:args pen)))
@@ -356,7 +356,7 @@
     (hunting/in-bound? c (u/self-pos c)) (do (await (look/survey! c)) :again)
     :else
     (let [r (await (child/call-walk* c :look {:pos (pen-read/look-pos (pen-read/arg-box c)) :range 3}))]
-      (when-not (= :continue r) (ctx/update-mem! c assoc :looked true))
+      (when-not (= :continue r) (look/note-surveyed! c))
       (if (= :continue r) :yield :again))))
 
 (defn ^:async round

@@ -233,8 +233,8 @@
 
 (def looks
   "Waits on :tree; the condition can tell only after a look from here."
-  {:can-start? (fn [c] (cond (or (:tree @world) (and (:looked (ctx/mem c)) (:tree-after-look @world))) (contract/ok :tree "tree")
-                             (:looked (ctx/mem c)) (contract/later :no-tree "no tree")
+  {:can-start? (fn [c] (cond (or (:tree @world) (and (:jobs.lib.look/looked (ctx/mem c)) (:tree-after-look @world))) (contract/ok :tree "tree")
+                             (:jobs.lib.look/looked (ctx/mem c)) (contract/later :no-tree "no tree")
                              :else (contract/look :no-tree "no tree seen")))
    :round (fn [c] (swap! world update :looks-rounds (fnil inc 0)) (ctx/end c :done nil))})
 
