@@ -22,6 +22,7 @@
             [jobs.lib.look :as look]
             [jobs.lib.patch :as patch]
             [jobs.lib.pace :as pace]
+            [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.lib.vantage :as vantage]
             [engine.notes :as notes]))
@@ -546,7 +547,7 @@
 
 (defn ^:async price-leg!
   "With :worth, the price of a walk toward leg before it starts (jobs.lib.cost/leg-price of go-to's quote, the death it
-  risks under rock or in the dark where the body stands), booked as :leg-price: nil when it is affordable (or unpriced,
+  risks under rock or in the dark where the body stands and past the known threats along the straight way, jobs.lib.threats/threats-of), booked as :leg-price: nil when it is affordable (or unpriced,
   or no route is known: the walk fails that leg alone), :continue while go-to's quote search goes on (it resumes at the
   next call), else the :price ending."
   [c leg]
@@ -554,8 +555,11 @@
     (let [p (:primitives c)
           [x y z] leg
           q (await (ctx/quote c 'jobs.movement.go-to (leg-args c leg)))
-          price (cost/leg-price (cost/death-body p (ctx/view c)) q
-                                {:underground? (sh-sense/buried? p) :night? (look/dark-here? p)} {:x x :y y :z z})]
+          at {:x x :y y :z z}
+          price (cost/leg-price (merge (cost/death-body p (ctx/view c)) (threats/body-of p)) q
+                                {:underground? (sh-sense/buried? p) :night? (look/dark-here? p)
+                                 :cells (cost/straight-route (reach/mob-lookup p) (u/self-pos c) at) :threats (threats/threats-of c)}
+                                at)]
       (cond
         (:estimate q) :continue
         (infinite? price) (do (ctx/update-mem! c dissoc :leg-price) nil)

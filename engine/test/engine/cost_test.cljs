@@ -377,6 +377,13 @@
     (is (= (+ 7 (cost/route-death-cost body {} far)) (leg {:uses {:job-time [4 7 ##Inf]} :route {:found false :reason :partial}} {})) "else the quote's mean")
     (is (> (leg found {:night? true}) (leg found {:underground? true}) (leg found {})) "a dark or underground leg risks more")))
 
+(deftest a-search-leg-past-a-known-threat-risks-its-death
+  (let [body {:respawn {:x 0 :y 64 :z 0} :health 20}
+        found {:uses {:job-time [4 4 6]} :route {:found true :seconds 4 :priced 9}}
+        cells (for [x (range 20)] {:x x :y 64 :z 0})
+        zombie {:mob "zombie" :weight 1 :reach (fn [x _ _] (when (< 5 x 10) 1))}]
+    (is (> (cost/leg-price body found {:cells cells :threats [zombie]} far) (cost/leg-price body found {:cells cells} far)))))
+
 (deftest a-find-is-worth-its-value-a-bed-its-respawn-too-and-no-names-nothing
   (let [here {:x 0 :y 64 :z 0}]
     (is (> (cost/worth-to {} ["bed"] here) (cost/worth-to {} ["oak_planks"] here)) "a plan's bed block counts as a bed")

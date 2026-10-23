@@ -274,7 +274,7 @@
 (defn leg-price
   "Seconds a search leg costs body: go-to's quote q of the walk to `at` (a found route its planner's price: seconds,
   darkness by the kit, dangers and damage at the body's health; else the quote's mean time) and the death the leg risks
-  (route-death-cost of route {:underground? :night?})."
+  (route-death-cost of route {:underground? :night? :cells :threats}, death-chance's route)."
   [body q route at]
   (let [r (:route q)]
     (+ (if (:found r) (or (:priced r) (:seconds r)) (second (get-in q [:uses :job-time])))
