@@ -50,21 +50,23 @@
    :after [[:block [16 0 20] "iron_door[half=lower,open=true]"]]
    :limit-s 40}
   {:name "hurt-body-in-hut-covers-with-the-open-door"
-   :body {:effects []}
+   :time :any
+   :body {:effects [] :at [16.5 0 18.5]}
    :blocks [[:set [16 0 20] "oak_door[facing=south,half=lower,open=true]"]
             [:set [16 1 20] "oak_door[facing=south,half=upper,open=true]"]]
-   :act [[:rcon "damage $BODY 15 minecraft:generic"]
+   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30] [:rcon "damage $BODY 15 minecraft:generic"]
          [:summon "skeleton" [16.5 0 26.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :hostile.decided :data {:cover :door}} :within-s 40}
             {:event {:source :job :kind :retreat.door-shut} :within-s 40}]
    :after [[:block [16 0 20] "oak_door[half=lower,open=false]"] [:not-block [16 0 19] "cobblestone"]]
    :limit-s 60}
   {:name "hut-with-a-wall-gap-has-no-door-cover"
-   :body {:effects []}
+   :time :any
+   :body {:effects [] :at [16.5 0 18.5]}
    :blocks [[:set [16 0 20] "oak_door[facing=south,half=lower,open=true]"]
             [:set [16 1 20] "oak_door[facing=south,half=upper,open=true]"]
             [:set [20 0 16] "air"] [:set [20 1 16] "air"]]
-   :act [[:rcon "damage $BODY 15 minecraft:generic"]
+   :act [[:job (jobs.movement.look-around)] [:await {:source :job :kind :completed} 30] [:rcon "damage $BODY 15 minecraft:generic"]
          [:summon "skeleton" [16.5 0 26.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
    :expect [{:event {:source :job :kind :hostile.decided} :within-s 40}
             {:no-event {:source :job :kind :hostile.decided :data {:cover :door}} :for-s 15}]
