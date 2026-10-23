@@ -22,7 +22,7 @@
 (a/defargs settings
   {::eat-gap {:default 12 :doc "Blocks to the nearest hostile at which a bite is eaten per flee step." :spec (a/num-in 0 nil)}
    ::low-leg-s {:default 1.5 :doc "Seconds bounding a flight step while exposed low in a ranged chaser's line of fire: a search that stands still must not last." :spec (a/num-in 0 nil)}
-   ::slow-step-cap {:default 2 :doc "Flee steps in a row that ran out of their seconds before the body moved (a slow start, nothing in the way) tried again before the way counts as blocked." :spec (a/int-in 0 nil)}
+   ::slow-step-cap {:default 2 :doc "Flee steps in a row that ran out of their seconds before the body moved (a slow start, nothing in the way) tried again before the way counts as blocked; as many in a row whose end go-to then found no floor under (the walk read it unseen, as rock) are chosen again without that end." :spec (a/int-in 0 nil)}
    ::stall-blocks {:default 1 :doc "A low step that moved the body less than this many blocks stood still: cover where it stands comes next." :spec (a/num-in 0 nil)}})
 (defn eat-gap [] (settings/get settings ::eat-gap))
 (defn low-leg-s [] (settings/get settings ::low-leg-s))
@@ -150,6 +150,7 @@
             _ (say-target! c target threats covered?)
             _ (when leg (respond.goal/start-leg! c))
             from (u/self-pos c)
+            refused0 (:refused (ctx/mem c))
             moved (await (cornered/leg-step! c :step target 1
                                     (cond (or (seq (close-hitters c)) (cornered/recently-hurt? c)) (cornered/close-leg-s)
                                           low? (low-leg-s)
@@ -164,10 +165,12 @@
                              (< (u/dist (u/self-pos c) leg) (- goal-gap0 0.5)))))
           (do (respond.goal/off! c leg :lost-ground) :again)
           (and leg (respond.goal/drifted? c leg)) (do (respond.goal/off! c leg :height) :again)
+          (and (not moved) (not= refused0 (:refused (ctx/mem c))) (< (:refused-steps (ctx/mem c) 0) (slow-step-cap)))
+          (do (ctx/update-mem! c update :refused-steps (fnil inc 0)) :again)
           (and (not moved) (:leg-timed-out (ctx/mem c)) (< (:slow-steps (ctx/mem c) 0) (slow-step-cap)))
           (do (ctx/update-mem! c update :slow-steps (fnil inc 0)) :again)
           (not moved) (await (stuck "the way away from the hostile is blocked"))
           :else
           (let [gap (flight/nearest-gap p threats)]
-            (ctx/update-mem! c #(-> % (dissoc :tried :slow-steps :regrown) (flight/note-gap gap)))
+            (ctx/update-mem! c #(-> % (dissoc :tried :slow-steps :refused-steps :regrown) (flight/note-gap gap)))
             :again))))))

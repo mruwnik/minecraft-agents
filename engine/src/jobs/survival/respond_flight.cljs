@@ -35,7 +35,7 @@
      It prefers, in this order: a step whose end is out of every ranged chaser's line of fire (cover: leaves stop arrows),
      the full step that takes least time (a swim block costs respond.cover/::swim-factor; with a drowned among the chasers no step ends in water: none dry is cornered), the most open.
      It first looks away and to either side where it has not seen the ground (at most 3 looks); a cell still unseen
-     reads as rock.
+     reads as rock. An end go-to then finds no floor under is left out and the step chosen again (respond.step slow-step-cap in a row).
      Eats one bite a step (up to food 20) when the nearest chaser is at least eat-gap (12) blocks away and food is carried.
   Low on health (at most respond.state/::hide-health, 12) in a seen ranged chaser's line of fire (over the cells it has seen) with no
   covered step, it takes cover where it stands first: plug in (as below);

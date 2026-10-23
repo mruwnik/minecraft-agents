@@ -29,6 +29,7 @@
             [jobs.survival.respond.options :as cornered]
             [jobs.survival.respond.cover :as cover]
             [jobs.survival.respond.state :as respond.state]
+            [jobs.survival.respond.step :as step]
             [jobs.lib.seal :as seal]
             [jobs.survival.respond.goal :as respond.goal]
             [jobs.lib.flee-walk :as flee-walk]))
@@ -536,6 +537,30 @@
                                                     :round (fn ^:async refuse [c] (ctx/end c :nothing-possible :unreachable {:arrived false :why why}))}})]
             (await (run-job! s 'stepper {}))
             (is (= want @out) (str "go-to ends " why))))))))
+
+(deftest a-flee-end-go-to-finds-no-floor-under-is-chosen-again-not-cornered
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [out (atom [])
+              stuck (atom 0)
+              goals (atom [])
+              walker {:defaults {:checks {:safe? '(always) :fit? '(always)}}
+                      :round (fn ^:async walker-round [c]
+                               (let [threats (cornered/near-hostiles c)]
+                                 (dotimes [_ 2]
+                                   (swap! out conj (await (step/walk-away! c threats nil [] nil (fn ^:async st [_] (swap! stuck inc) :cornered))))))
+                               (ctx/end c :done nil))}
+              s (setup {:entities [(zombie 7 -3 {})]})
+              s (update-in (assoc-in s [:eng :jobs 'walker] walker) [:eng :jobs] merge
+                           {'jobs.movement.go-to {:ways (:ways (get registry/jobs 'jobs.movement.go-to))
+                                                  :round (fn ^:async refuse [c]
+                                                           (swap! goals conj (:pos (:args c)))
+                                                           (ctx/end c :nothing-possible :unreachable {:arrived false :why :goal-not-standable}))}})]
+          (await (run-job! s 'walker {}))
+          (is (= [:again :again] @out) "both refused ends are chosen again, never the cornered options")
+          (is (zero? @stuck))
+          (is (< 1 (count (distinct @goals))) "the second step aims elsewhere than the refused end"))))))
 
 (deftest every-option-failing-in-two-sweeps-in-a-row-is-cannot-escape
   (is (not (respond.state/cannot-escape? (respond.state/count-sweep {}))))

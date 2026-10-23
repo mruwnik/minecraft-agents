@@ -2,7 +2,7 @@
 ;; (retreat-pillar/climbable-top?): the cornered body then falls back to another refuge instead of pillaring beside a slope.
 ;; The same stone yard as retreat-pillar.edn (x 14..18, z 14..18, y 0..2, interior 3x3, open top), three NoAI helmeted zombies on
 ;; the west, north and south sides of the body, a stone block east of it. Case ledge: the east side is a 2 high ledge (reached by a
-;; 1 high step at the north east corner), so a zombie could walk up beside the pillar top: no pillar stands where the body started (the body may walk up the ledge as a flee step and pillar from there, where nothing climbs beside the top). Case low-bump: the east block is 1 high.
+;; 1 high step at the north east corner), so a zombie could walk up beside the pillar top: the body walks out over the east wall instead. Case low-bump: the east block is 1 high.
 {:defaults
  {:tags [:hostile :survival :cornered]
   :time :any
@@ -21,5 +21,6 @@
    :after [[:body-near [16.5 3 16.5] 2]]}
   {:name "climbable-ledge-beside-builds-no-pillar"
    :blocks [[:set [17 0 15] "stone"] [:fill [17 0 16] [17 1 16] "stone"]]
-   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 15}]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hostile-near}} :within-s 15}
+            {:no-event {:source :job :kind :child_ended :data {:slot :pillar :status :done}} :for-s 50}]
    :after [[:not-block [16 0 16] "dirt"]]}]}
