@@ -572,6 +572,17 @@ test('body events: the action bar sleep count is a sleep-status event; other act
     { kind: 'sleep-status', sleeping: 0, needed: 7 }])
 })
 
+test('body events: a chat line carries the speaker position when the speaker is a seen entity, else none', () => {
+  const { bot, p } = rig(world)
+  const seen = []
+  p.onBodyEvent(e => seen.push(e))
+  bot.players = { Ann: { entity: { position: { x: 3.5, y: 70, z: -2 } } }, Bo: {} }
+  bot.emit('chat', 'Ann', 'hi')
+  bot.emit('whisper', 'Bo', 'psst')
+  assert.deepEqual(seen[0].pos, { x: 3.5, y: 70, z: -2 })
+  assert.equal('pos' in seen[1], false)
+})
+
 test('body events: the respawn point chat line is spawn-set, the library spawnReset is spawn-reset', () => {
   const { bot, p } = rig(world)
   const seen = []

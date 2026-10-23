@@ -28,6 +28,14 @@
     (events/emit! stream {:source :action :kind :started :level :debug :job "j1"})
     (is (= [nil {:x 1.7 :y 64 :z -0.2}] (mapv #(get-in % [:data :pos]) @seen)))))
 
+(deftest heard-lines-carry-the-speakers-position-or-none
+  (let [[seen sink] (tu/capture-sink)
+        stream (events/make {:generation-id "g" :sinks [sink] :now (constantly 1)
+                             :pos-fn (constantly {:x 1.7 :y 64 :z -0.2})})]
+    (events/emit! stream {:source :body :kind :chat :from "Ann" :message "hi"})
+    (events/emit! stream {:source :body :kind :whisper :from "Bo" :message "psst" :pos {:x 9 :y 70 :z 2}})
+    (is (= [nil {:x 9 :y 70 :z 2}] (mapv #(get-in % [:data :pos]) @seen)))))
+
 (deftest canonical-edn-normalizes-legacy-input
   (let [[seen sink] (tu/capture-sink)
         stream (events/make {:generation-id "generation-a" :sinks [sink]

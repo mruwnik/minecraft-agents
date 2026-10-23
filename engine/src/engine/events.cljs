@@ -302,7 +302,11 @@
         extra (cond-> (reduce-kv (fn [m k v] (if (or (nil? v) (contains? known-keys k)) m (assoc m k v))) {} event)
                 (and (some? (:cause event)) (not (number? (:cause event)))) (assoc :cause (:cause event)))
         ;; Job debug events (state writes, child starts) carry the job id; their position doubled the debug log's size.
-        pos (or (:pos event) (when (and pos-fn (not (and (= :job source) (= :debug (:level event))))) (pos-fn)))
+        ;; A heard line's place is the speaker's (given by the emitter when seen), never the listener's.
+        pos (or (:pos event) (when (and pos-fn
+                                        (not (and (= :job source) (= :debug (:level event))))
+                                        (not (#{:chat :whisper} kind)))
+                               (pos-fn)))
         data (cond-> (merge (or (:data event) {}) extra)
                (and pos (nil? (get (or (:data event) {}) :pos)))
                (assoc :pos (select-keys pos [:x :y :z])))

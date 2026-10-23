@@ -65,6 +65,10 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
   }
 
   const here = () => xyz(bot.entity.position)
+  const speakerPos = name => {
+    const at = bot.players?.[name]?.entity?.position
+    return at ? { pos: xyz(at) } : {}
+  }
 
   // a pick-up shortly after, and near, the body's own dig, use or chest transfer is its own work, not found goods
   let ownWork = null
@@ -283,8 +287,8 @@ export function createPrimitivesFromBot (initialBot, { timeScale = 1, reconnect 
         lastPos = target.entity.position.clone()
         if (moved > setting('prim/teleport-blocks')) settleFromNow()
       },
-      chat: (from, message) => { if (from !== target.username) emit({ kind: 'chat', from, message }) },
-      whisper: (from, message) => { if (from !== target.username) emit({ kind: 'whisper', from, message }) },
+      chat: (from, message) => { if (from !== target.username) emit({ kind: 'chat', from, message, ...speakerPos(from) }) },
+      whisper: (from, message) => { if (from !== target.username) emit({ kind: 'whisper', from, message, ...speakerPos(from) }) },
       wake: () => emit({ kind: 'woke' }),
       actionBar: msg => {
         const status = sleepStatusOf(msg)
