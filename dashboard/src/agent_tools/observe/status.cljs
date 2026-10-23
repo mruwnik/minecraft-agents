@@ -204,6 +204,16 @@
                 (some-> (:time-ms e) (< started-ms))
                 (or (= :hurt (:kind e)) (some recovered? later)))))
 
+(def old-event-ms
+  "An event this much older than the wait is backlog from before the observer last looked: counted, not listed."
+  (* 10 60 1000))
+
+(defn stale-chat?
+  "Whether a chat or whisper in the backlog is older than old-event-ms at `now`: the agent has had it in its reads since, so it is no wake."
+  [e now]
+  (boolean (and (= :body (:source e)) (#{:chat :whisper} (:kind e))
+                (some-> (:time-ms e) (< (- now old-event-ms))))))
+
 (defn idle-wake
   "The body.idle wake. Under --watch it keeps only the watched jobs' entries and message segments (\"<id> <name> waiting: ...\"),
   so another job's wait text is never read as theirs; unchanged when none of them is listed."
@@ -383,10 +393,6 @@
     (not key?) nil
     :else (let [i (first (keep-indexed (fn [i item] (when (routine-item? item) i)) items))]
             (when i (into (subvec items 0 i) (subvec items (inc i)))))))
-
-(def old-event-ms
-  "An event this much older than the wait is backlog from before the observer last looked: counted, not listed."
-  (* 10 60 1000))
 
 (defn collect
   "Fold one routine event into the bounded quiet summary {:counts :items :more}; jobs are the ones a death cancelled.

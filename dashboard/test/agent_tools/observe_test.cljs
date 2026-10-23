@@ -1321,6 +1321,15 @@
                           (is (= "POST" (:method (first (:seen refused)))))
                           (is (= "{:key :a/b, :value 3}" (:body (first (:seen refused)))))))))))
 
+(deftest a-chat-older-than-ten-minutes-in-the-backlog-is-no-wake
+  (let [now 10000000
+        at (fn [kind ms] (assoc (event :body kind {:from "Alex"} "Probe hi") :time-ms ms))]
+    (is (true? (observe-status/stale-chat? (at :chat (- now observe-status/old-event-ms 1)) now)))
+    (is (true? (observe-status/stale-chat? (at :whisper 0) now)))
+    (is (false? (observe-status/stale-chat? (at :chat (- now 1000)) now)) "a recent chat wakes")
+    (is (false? (observe-status/stale-chat? (event :body :chat {} "Probe hi") now)) "no stamp: not judged old")
+    (is (false? (observe-status/stale-chat? (assoc (event :job :tick) :time-ms 0) now)))))
+
 (deftest a-body-idle-in-the-backlog-is-stale-once-the-jobs-or-the-body-moved-on
   (let [idle (event :body :idle {:jobs [{:job "j73"}]} "body idle 10 s")
         job (fn [kind] (assoc (event :job kind) :context {:job-id "j74"}))
