@@ -1691,6 +1691,19 @@
           (is (= :stopped (:status result)))
           (is (re-find #"could not fetch oak_fence: no-source" (:text result)) (:text result)))))))
 
+(deftest a-no-source-exact-wood-ending-carries-the-generic-name-hint
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [spec {:inventory [{:name "oak_fence_gate" :count 1} {:name "torch" :count 4} {:name "birch_fence" :count 9}]
+                    :blocks {fence-chest "chest"} :containers {fence-chest [{:name "torch" :count 4}]}}
+              {:keys [eng p]} (start spec {"pen" (pen-plan)})
+              _ (tu/seeing-all p)
+              result (await (child-outcome eng job {:plan "pen"} 300))
+              hint "carries birch_fence 9; the blueprint can use generic wooden_fences"]
+          (is (= hint (get-in result [:fetch-failed "oak_fence" :hint])) (pr-str (:fetch-failed result)))
+          (is (re-find (re-pattern (str "could not fetch oak_fence: no-source.* - " hint)) (:text result)) (:text result)))))))
+
 (deftest a-failed-item-fetch-does-not-hold-back-the-pickaxe-fetch
   (async done
     (tu/run-async done
