@@ -101,8 +101,9 @@
 (defn estimate
   "{:hp :spawn-hp :hostile-hp :death-hp :lethal-hp :lava-hp :dark-s :hostiles} of the walk of c's body to `goal` ({:x :y :z}): hp the expected
   damage and lethal-hp, the death the spawns and known threats risk (cost/spawns-chance, cost/threats-chance) in hp
-  (cost/lethal-hp); dark-s the seconds walked where a mob could spawn."
-  [c goal]
+  (cost/lethal-hp); dark-s the seconds walked where a mob could spawn. `:catchers? false` leaves out the sensed mobs that
+  catch the walk, their hurt and their death share both (a fight with them prices them)."
+  [c goal & [{:keys [catchers?] :or {catchers? true}}]]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
         goal (update goal :y #(or % (:y feet)))
@@ -123,7 +124,7 @@
         route (delay (cost/straight-route (reach/mob-lookup p) feet goal))
         threat-hp (fn [ts] (if (seq ts) (cost/route-hurt body {:cells @route :threats (threats/with-reach c ts)}) 0))
         known (threats/known-threats c)
-        catchers (live-catchers c known feet goal)
+        catchers (if catchers? (live-catchers c known feet goal) [])
         remembered (remembered-near-way c known feet goal)
         death-hp (threat-hp remembered)
         met (concat catchers remembered)

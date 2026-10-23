@@ -176,10 +176,10 @@
   (if-let [t (first near)]
     (let [p (:primitives c)
           goal (danger-q/mob-pos p t)
-          {:keys [hp hostile-hp]} (risk/estimate c goal)
+          {:keys [hp]} (risk/estimate c goal {:catchers? false})
           kind-at (reach/seen-lookup p reach/kind-of :ground)
           route (cost/straight-route kind-at (u/pos-of (.-pos (.self p))) goal)]
-      (+ (- hp hostile-hp)
+      (+ hp
          (cost/route-fall-damage (cost/equipment-of (.-equipment (.self p))) route)
          (cost/unseen-route-hp kind-at route)))
     0))
