@@ -229,7 +229,7 @@
   "A body shut in (a pit) that has neither cut nor left it: it must walk out before it can tell whether there is a crop.
   :in-pit keeps it so while the walk digs the pit open."
   [c m]
-  (and (not (:left-pit m)) (zero? (:cut m 0)) (or (:in-pit m) (reach-room/enclosed? (:primitives c)))))
+  (and (not (:left-pit m)) (zero? (:cut m 0)) (or (:in-pit m) (reach-room/enclosed? (:primitives c) :ground))))
 
 (def target [:area])
 (def defaults {:least 1 :spend {:job-time ::job-time-s}})
@@ -395,7 +395,7 @@
         ripe (when (cutting? c) (ripe-warned c (:skipped m)))]
     (when (seq ripe)
       (let [here (u/self-pos c)
-            shut-in? (reach-room/enclosed? p)
+            shut-in? (reach-room/enclosed? p :ground)
             near (when-not shut-in? (filterv #(<= (u/eye-dist here %) (reach)) ripe))
             walked (when (empty? near) (await (common/walk-to! c (first ripe) (if shut-in? (settings/get settings ::shut-in-walk-range) (settings/get settings ::walk-range)))))
             targets (if (seq near) near [(first ripe)])

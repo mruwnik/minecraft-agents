@@ -135,7 +135,7 @@
   (let [{:keys [x y z]} (:pos (places/parse-pos target))
         p (:primitives c)
         y' (when y
-             (some #(when (reach/standable-cell? p {:x x :y % :z z}) %)
+             (some #(when (reach/standable-cell? p {:x x :y % :z z} (reach/lookup p)) %)
                    (concat (range y (- y 12) -1) (range (inc y) (+ y 4)))))]
     (if y' {:x x :y y' :z z} target)))
 

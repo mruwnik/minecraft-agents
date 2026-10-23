@@ -18,7 +18,7 @@
   [p {:keys [start door room sealed]}]
   (cond
     (or room (false? sealed)) false
-    start (and (< (:y (sh-sense/feet p)) (:y start)) (reach-room/enclosed? p))
+    start (and (< (:y (sh-sense/feet p)) (:y start)) (reach-room/enclosed? p :ground))
     door (boolean (some #(sh-sense/solid-at? p %) door))
     :else (sh-sense/roofed? p (sh-sense/roof-height))))
 

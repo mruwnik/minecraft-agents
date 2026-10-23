@@ -124,6 +124,16 @@
   [p]
   (seen-lookup p kind-of :ground))
 
+(defn world-kinds
+  "A kind-at fn (block-kind of each cell) by one policy for a cell the body has not seen: :raw reads the true world
+  (lookup: only where the answer must agree with go-to's own plan), :solid reads it as a wall, :ground as open ground
+  with a floor (seen-lookup). Pick the worse case for the question: :solid for 'would this fill shut me in?', :ground
+  for 'am I sheltered?'."
+  [p block-kind unseen]
+  (if (keyword-identical? :raw unseen)
+    (lookup p block-kind)
+    (seen-lookup p block-kind unseen)))
+
 (defn passable? [kind-at x y z]
   (let [k (kind-at x y z)]
     (not (or (keyword-identical? :solid k) (keyword-identical? :tall k)))))
@@ -139,7 +149,6 @@
 (defn standable-cell?
   "Whether a body can stand with its feet in cell pos {:x :y :z}: feet and head free, and a solid floor below (not a
   torch, plant, rail, lava, fire, cactus or water). A floor a sensing body has not seen may be a hazard: not standable."
-  ([p pos] (standable-cell? p pos (lookup p)))
   ([p {:keys [x y z]} kind-at]
    (let [below (u/seen-block p {:x x :y (dec y) :z z})]
      (and (passable? kind-at x y z) (passable? kind-at x (inc y) z)
@@ -157,9 +166,9 @@
 (defn exits
   "How many of the four side columns of the body at feet [x y z] it can step into: a standable cell there one up, level
   or one down. open: a cell [x y z] taken as air (what if it were dug)."
-  ([p feet] (exits p feet nil))
-  ([p [x y z] open]
-   (let [base (lookup p)
+  ([p unseen feet] (exits p unseen feet nil))
+  ([p unseen [x y z] open]
+   (let [base (world-kinds p kind-of unseen)
          kind-at (if open (fn [a b c] (if (= [a b c] open) :open (base a b c))) base)]
      (count (filter (fn [[dx dz]] (some #(standable-cell? p {:x (+ x dx) :y (+ y %) :z (+ z dz)} kind-at) [1 0 -1]))
                     [[1 0] [-1 0] [0 1] [0 -1]])))))
@@ -178,7 +187,7 @@
         stands? (if kind-at
                   (fn [{:keys [x y z]}] (and (passable? kind-at x y z) (passable? kind-at x (inc y) z)
                                              (keyword-identical? :solid (kind-at x (dec y) z))))
-                  #(standable-cell? p %))]
+                  #(standable-cell? p % (lookup p)))]
     (if (stands? centre)
       centre
       (or (->> (for [cx (range (js/Math.floor (- x game/hitbox-half)) (inc (js/Math.floor (+ x game/hitbox-half))))

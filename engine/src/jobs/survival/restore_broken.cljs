@@ -91,7 +91,7 @@
   (let [p (:primitives c)]
     {:kind-at (reach/seen-lookup p)
      ;; raw on purpose: enclosure confirms go-to's own shut-in verdict, and a dark pocket's walls are unseen
-     :enclosed (delay (reach-room/enclosed? p))
+     :enclosed (delay (reach-room/enclosed? p :raw))
      :reaches (volatile! {})
      :seals (volatile! {})
      :cells-left (volatile! (max-search-cells))}))
@@ -159,8 +159,7 @@
   (and (= :dig action)
        (let [p (:primitives c)]
          (and (not @(:enclosed pr))
-              ;; raw on purpose: same as :enclosed in probe
-              (reach-room/enclosed? p #{(vec cell)} (reach/lookup p reach-room/body-kind-of) reach-room/shut-room-cells)))))
+              (reach-room/closes-in? p :fill cell)))))
 
 (def target [])
 

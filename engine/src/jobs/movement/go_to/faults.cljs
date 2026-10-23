@@ -53,7 +53,7 @@
         name-at (fn [{:keys [x y z]}] (u/feel-name p {:x x :y y :z z}))]
     (when (and (climbables (name-at feet))
                (not (climbables (u/seen-name p {:x (js/Math.floor (:x pos)) :y (js/Math.floor (:y pos)) :z (js/Math.floor (:z pos))})))
-               (not (reach/standable-cell? p feet)))
+               (not (reach/standable-cell? p feet (reach/lookup p))))
       [(:x feet) (:y feet) (:z feet)])))
 
 (defn refused-hang

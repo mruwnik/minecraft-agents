@@ -48,7 +48,7 @@
         by (js/Math.floor (:y (u/self-pos c)))
         cy (second cell)]
     (boolean (and (<= by cy (+ by 2))
-                  (reach-room/closes-in? p cell)))))
+                  (reach-room/closes-in? p :fill cell)))))
 
 (defn shuts-out?
   "Whether placing cell would wall in the floor under another cell still owed at its height or above, which can then only
@@ -58,7 +58,7 @@
         [cx _ cz] (:pos cell)
         close? #(and (>= (get (:pos %) 1) y) (not= (:pos %) (:pos cell)) (<= (js/Math.abs (- cx (nth (:pos %) 0))) 4) (<= (js/Math.abs (- cz (nth (:pos %) 2))) 4))
         above (vals (into {} (map (fn [o] [[(nth (:pos o) 0) (nth (:pos o) 2)] (:pos o)])) (filter close? owed)))]
-    (boolean (some #(reach-room/walls-in? (:primitives c) % (:pos cell)) above))))
+    (boolean (some #(reach-room/walls-in? (:primitives c) :fill % (:pos cell)) above))))
 
 (defn exit-point
   "A cell two blocks outside the box of the planned cells, on the side nearest the body, at its feet height."
@@ -88,7 +88,7 @@
       (->> (for [dx (range -2 3) dz (range -2 3)
                  :let [cell [(+ fx dx) fy (+ fz dz)]]
                  :when (and (not= [dx dz] [0 0])
-                            (reach/standable-cell? p (zipmap [:x :y :z] cell))
+                            (reach/standable-cell? p (zipmap [:x :y :z] cell) (reach/lookup p))
                             (not (low? (first cell) fy (peek cell)))
                             (not (low? (first cell) (dec fy) (peek cell))))]
              cell)

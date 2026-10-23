@@ -11,7 +11,7 @@
   [p mob body]
   (reach/walkable-way? p (js->clj mob :keywordize-keys true) (js->clj body :keywordize-keys true)))
 
-(defn enclosed [p] (reach-room/enclosed? p))
+(defn enclosed [p] (reach-room/enclosed? p :raw))
 
 (defn nearest-danger
   "The id of jobs.lib.danger/nearest-danger within radius (ranged mobs within ranged-radius), sight ignored, or nil."

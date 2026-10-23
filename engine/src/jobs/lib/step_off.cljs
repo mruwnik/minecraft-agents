@@ -36,7 +36,7 @@
                :when (not (and (zero? dx) (zero? dz)))]
            {:x (+ x dx) :y (+ y dy) :z (+ z dz)})
          (sort-by (fn [c] [(+ (* (- (:x c) x) (- (:x c) x)) (* (- (:z c) z) (- (:z c) z))) (js/Math.abs (- (:y c) y))]))
-         (filter #(and (reach/standable-cell? p %) (not (hazard-at? p %))
+         (filter #(and (reach/standable-cell? p % (reach/lookup p)) (not (hazard-at? p %))
                        (not (contains? avoid [(:x %) (:y %) (:z %)])) (ok? %))))))
 
 (defn floors

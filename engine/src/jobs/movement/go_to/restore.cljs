@@ -46,7 +46,7 @@
       (changed? p cell) :changed
       (and (:dive-climb (ctx/mem c)) (contains? (ledger/own-cells c) cell)) :kept
       (tidy/in-body? p cell) :occupied
-      (reach-room/closes-in? p cell) :needed
+      (reach-room/closes-in? p :fill cell) :needed
       (and (not (b/in-reach? c cell)) (deep-below? c cell)) :away)))
 
 (defn ^:async restore-round!

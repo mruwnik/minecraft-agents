@@ -107,24 +107,24 @@
 
 (deftest enclosed-reads-each-block-once
   (let [[p reads] (counting (tu/fake {:self {:pos body} :floor [-30 -30 30 30]}))]
-    (is (false? (reach-room/enclosed? p)))
+    (is (false? (reach-room/enclosed? p :raw)))
     (is (= 1 (most-reads reads)))))
 
 (deftest closes-in-ignores-a-fill-that-only-trims-a-room-sized-platform
   (let [p (tu/fake {:self {:pos body} :floor [-16 -16 15 15]})]
-    (is (false? (reach-room/enclosed? p)) "a 32 x 32 platform is room")
-    (is (true? (reach-room/enclosed? p #{[1 65 0]})) "one cell less floods as closed at room-cells")
-    (is (false? (reach-room/closes-in? p [1 65 0])) "yet the body still has the platform")))
+    (is (false? (reach-room/enclosed? p :raw)) "a 32 x 32 platform is room")
+    (is (true? (reach-room/enclosed? p :raw #{[1 65 0]})) "one cell less floods as closed at room-cells")
+    (is (false? (reach-room/closes-in? p :raw [1 65 0])) "yet the body still has the platform")))
 
 (deftest closes-in-names-the-doorway-and-reads-each-block-once
   (let [doorway (apply dissoc walls ["1,64,0" "1,65,0"])
         [p reads] (counting (tu/fake {:self {:pos body} :floor [-30 -30 30 30] :blocks doorway}))]
-    (is (true? (reach-room/closes-in? p [1 64 0])) "the only way out")
+    (is (true? (reach-room/closes-in? p :raw [1 64 0])) "the only way out")
     (is (= 1 (most-reads reads)) "both floods share the blocks they read"))
   (let [p (tu/fake {:self {:pos body} :floor [-30 -30 30 30] :blocks (apply dissoc walls ["1,64,0" "1,65,0"])})]
-    (is (false? (reach-room/closes-in? p [-1 64 0])) "a wall cell already solid")
-    (is (false? (reach-room/closes-in? p [9 64 9])) "a cell far off"))
-  (is (false? (reach-room/closes-in? (tu/fake {:self {:pos body} :floor [-30 -30 30 30] :blocks walls}) [1 64 0])) "already shut in"))
+    (is (false? (reach-room/closes-in? p :raw [-1 64 0])) "a wall cell already solid")
+    (is (false? (reach-room/closes-in? p :raw [9 64 9])) "a cell far off"))
+  (is (false? (reach-room/closes-in? (tu/fake {:self {:pos body} :floor [-30 -30 30 30] :blocks walls}) :raw [1 64 0])) "already shut in"))
 
 (defn ring
   "One-high ring of block name at radius 1 around the cell (6 64 0)."
@@ -203,12 +203,12 @@
 
 (deftest a-body-in-the-free-part-of-a-shut-iron-door-cell-is-shut-in-whatever-the-facing
   (doseq [facing ["north" "south" "east" "west"]]
-    (is (true? (reach-room/enclosed? (tu/fake (door-cell-world facing "iron_door" false)))) facing)))
+    (is (true? (reach-room/enclosed? (tu/fake (door-cell-world facing "iron_door" false)) :raw)) facing)))
 
 (deftest an-open-door-or-a-wooden-one-leaves-the-body-a-way-out
   (doseq [facing ["north" "south" "east" "west"]]
-    (is (false? (reach-room/enclosed? (tu/fake (door-cell-world facing "iron_door" true)))) (str "open " facing))
-    (is (false? (reach-room/enclosed? (tu/fake (door-cell-world facing "oak_door" false)))) (str "wooden " facing))))
+    (is (false? (reach-room/enclosed? (tu/fake (door-cell-world facing "iron_door" true)) :raw)) (str "open " facing))
+    (is (false? (reach-room/enclosed? (tu/fake (door-cell-world facing "oak_door" false)) :raw)) (str "wooden " facing))))
 
 (deftest roots-block-a-walker-only-where-their-collision-box-is-solid
   (let [kinds (into {} (map (fn [n] [n (reach/kind-of #js {:name n})])
@@ -345,3 +345,20 @@
     (set! (.-sensedAt q) (fn [pos] (swap! n inc) (.sensedAt p pos)))
     (is (some? (reach-room/room q {:x 0 :y 64 :z 0})))
     (is (< @n 10000) (str "sensedAt calls: " @n))))
+
+(def unseen-around
+  "Every cell within three of the body's column, up to a block over its head, but the body's own cells and the floor, unseen."
+  (set (for [x (range -3 4) z (range -3 4) y [64 65 66] :when (not= 0 x z)] [x y z])))
+
+(deftest an-unseen-cell-reads-as-the-caller-chooses-in-the-enclosure-check
+  (let [p (hiding (tu/fake {:self {:pos body} :floor [-30 -30 30 30]}) unseen-around)]
+    (is (false? (reach-room/enclosed? p :raw)) "the true world is open ground")
+    (is (true? (reach-room/enclosed? p :solid)) "a wall the body has not looked at is no way out")
+    (is (false? (reach-room/enclosed? p :ground)) "nor is a wall known: no shelter from it")))
+
+(deftest a-fill-that-cuts-the-body-off-from-unseen-ground-closes-it-in
+  (let [doorway (apply dissoc walls ["1,64,0" "1,65,0"])
+        beyond (set (for [x (range 2 8) z (range -3 4) y [64 65]] [x y z]))
+        p (hiding (tu/fake {:self {:pos body} :floor [-30 -30 30 30] :blocks doorway}) beyond)]
+    (is (true? (reach-room/closes-in? p :fill [1 64 0])) "the doorway leads to ground not looked at")
+    (is (false? (reach-room/closes-in? p :solid [1 64 0])) "an unseen wall: the body is already shut in")))

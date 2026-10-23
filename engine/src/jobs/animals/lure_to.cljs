@@ -178,7 +178,7 @@
   "Names a :pos with no standable cell in its column cell (and the ground nearest it), else nil."
   [c]
   (let [{:keys [x y z]} (:pos (:args c))
-        stand? #(reach/standable-cell? (:primitives c) {:x x :y % :z z})]
+        stand? #(reach/standable-cell? (:primitives c) {:x x :y % :z z} (reach/lookup (:primitives c)))]
     (when-not (stand? y)
       (let [ground (some #(when (stand? %) %) (interleave (range (dec y) (- y (ground-search)) -1) (range (inc y) (+ y (ground-search)))))]
         (str " (no standable cell at y" y (if ground (str "; ground at y" ground) (str " within " (ground-search) " blocks")) ")")))))
@@ -395,7 +395,7 @@
           :let [g {:x (+ x dx) :y y :z (+ z dz)}]
           :when (and (not (contains? cells [(:x g) y (:z g)])) (some-> (block-at g) .-name (str/ends-with? "_fence_gate")))]
       (let [wx (+ (:x g) (* 2 dx)) wz (+ (:z g) (* 2 dz))
-            wy (or (some #(when (reach/standable-cell? (:primitives c) {:x wx :y % :z wz}) %) [y (dec y) (- y 2) (inc y)]) y)]
+            wy (or (some #(when (reach/standable-cell? (:primitives c) {:x wx :y % :z wz} (reach/lookup (:primitives c))) %) [y (dec y) (- y 2) (inc y)]) y)]
         {:gate {:x (+ (:x g) 0.5) :y y :z (+ (:z g) 0.5)} :past {:x (+ wx 0.5) :y wy :z (+ wz 0.5)}}))))
 
 (defn gate-waypoint

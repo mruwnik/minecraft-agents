@@ -68,9 +68,9 @@
 (defn why-not
   "Why entry cannot be restored now, or nil: :changed (the cell no longer holds what was recorded), :not-carried (no
   place-item carried), :shut-in (a go-to escalation hole, :escalation, while the body is shut in: the hole is its way
-  on) or :occupied (the block would be placed into the body; never a crop). enclosed: a delay of (reach-room/enclosed? p), shared by the
+  on) or :occupied (the block would be placed into the body; never a crop). enclosed: a delay of (reach-room/enclosed? p :raw), shared by the
   calls of one decision so the flood runs at most once."
-  ([p e] (why-not p e (delay (reach-room/enclosed? p))))
+  ([p e] (why-not p e (delay (reach-room/enclosed? p :raw))))
   ([p {:keys [cell now action escalation] :as e} enclosed]
    (cond
      (and (not= now (block-now p cell)) (not (unseen? p cell))) :changed
@@ -126,7 +126,7 @@
 (defn restorable?
   "Whether entry e is worth a restore try now: fewer than max-tries tries and nothing in the way (why-not; enclosed as
   there)."
-  ([p e] (restorable? p e (delay (reach-room/enclosed? p))))
+  ([p e] (restorable? p e (delay (reach-room/enclosed? p :raw))))
   ([p {:keys [tries] :as e} enclosed]
    (and (< tries (max-tries)) (nil? (why-not p e enclosed)))))
 

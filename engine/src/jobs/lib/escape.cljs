@@ -136,7 +136,7 @@
   read from the planner's snapshot as the walk's plans are, seen or not: the verdict must agree with the walk go-to plans."
   [p doors]
   (if (not= :never doors)
-    (reach-room/enclosed? p)
+    (reach-room/enclosed? p :raw)
     (reach-room/shut-in? p (reach/lookup p reach/kind-of))))
 
 (defn scan-doors

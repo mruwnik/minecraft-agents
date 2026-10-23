@@ -104,7 +104,7 @@
 (defn in-pocket?
   "Whether the body stands in a closed room of at most ::pocket-cells walkable cells (read from the true world, as shut-in-walk? does)."
   [c]
-  (reach-room/enclosed? (:primitives c) #{} (reach/lookup (:primitives c) reach-room/body-kind-of) (settings/get settings ::pocket-cells)))
+  (reach-room/enclosed? (:primitives c) :raw #{} (settings/get settings ::pocket-cells)))
 
 (defn far-above-or-below?
   [c cell]

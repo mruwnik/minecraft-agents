@@ -221,8 +221,8 @@
   [c pos]
   (let [p (:primitives c)
         feet (let [f (cell-of (u/self-pos c))] [(:x f) (:y f) (:z f)])]
-    (and (pos? (reach-lib/exits p feet))
-         (zero? (reach-lib/exits p feet [(:x pos) (:y pos) (:z pos)])))))
+    (and (pos? (reach-lib/exits p :raw feet))
+         (zero? (reach-lib/exits p :raw feet [(:x pos) (:y pos) (:z pos)])))))
 
 (defn skip! [c pos] (ctx/update-mem! c update :skipped (fnil conj []) pos))
 

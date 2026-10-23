@@ -74,7 +74,7 @@
   (let [p (:primitives c)]
     (boolean (and (#{:air :air-lethal} (some-> (:reason result) keyword))
                   (not (breath/in-water? p))
-                  (reach-room/dry-shut-in? p)))))
+                  (reach-room/dry-shut-in? p :ground)))))
 
 (defn dive?
   "Whether a give-up with result is a way that dives (:way-dives) that go-to may climb out of by a stair (c :dive-stair,

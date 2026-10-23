@@ -218,7 +218,7 @@
         (cond
           (some #{(at 0 -1 0)} unseen) :unseen-floor
           (seq unseen) :unseen-cell
-          (or (not (reach/standable-cell? p (at 0 0 0)))
+          (or (not (reach/standable-cell? p (at 0 0 0) (reach/lookup p)))
               (some #(bs/harms-in-cell (u/seen-name p %)) [(at 0 0 0) (at 0 1 0)])
               (some #(bs/fluids (u/seen-name p %)) (concat [(at 0 0 0) (at 0 -1 0)] sides)))
           :unsafe-floor)))))

@@ -177,7 +177,7 @@
         (case (:status a)
           :found (commit-tree! c (nth ts (:index a)))
           :searching :searching
-          (if (and (:proved a) (not (reach-room/enclosed? (:primitives c))))
+          (if (and (:proved a) (not (reach-room/enclosed? (:primitives c) :ground)))
             (do (mark-all-unreachable! c ts) nil)
             (commit-tree! c (first ts))))))))
 

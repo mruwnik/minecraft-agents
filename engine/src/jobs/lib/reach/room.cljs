@@ -4,8 +4,8 @@
   See jobs.lib.reach for the block reads and walk searches."
   (:require [clojure.string :as str]
             [engine.perception.rays :as rays]
-            [jobs.lib.reach :refer [openable? open-prop? kind-of keyer lookup passable? seen-standable? standing-cell
-                                    forward backward search-steps]]
+            [jobs.lib.reach :refer [openable? open-prop? kind-of keyer passable? seen-standable? standing-cell
+                                    forward backward search-steps world-kinds]]
             [jobs.lib.util :as u]))
 
 (def room-cells
@@ -90,43 +90,57 @@
                          ns)))]
     (= :closed (flood next-cells [x y z] budget)))))
 
+(defn enclosed-over
+  "Whether the body is shut in: it can walk to fewer than budget cells over base (a kind-at) with the cells of solid (a set
+  of [x y z]) treated as solid blocks (what if they were filled). False with no body position."
+  [p solid base budget]
+  (if (some-> (.self p) .-pos)
+    (shut-in? p (if (empty? solid)
+                  base
+                  (fn [x y z] (if (contains? solid [x y z]) :solid (base x y z))))
+              budget)
+    false))
+
 (defn enclosed?
   "Whether the body is shut in: it can walk to fewer than room-cells cells (one step up, up to three down, water swum,
   wooden doors opened). A pit or sealed room is; open ground or a hut with a door is not. A body in the free part of a
   shut door's cell cannot step across the panel. False with no body position.
-  solid: a set of cells [x y z] treated as solid blocks (what if they were filled)."
-  ([p] (enclosed? p #{}))
-  ([p solid] (enclosed? p solid (lookup p body-kind-of)))
-  ([p solid base] (enclosed? p solid base room-cells))
-  ([p solid base budget]
-   (if (some-> (.self p) .-pos)
-     (shut-in? p (if (empty? solid)
-                   base
-                   (fn [x y z] (if (contains? solid [x y z]) :solid (base x y z))))
-               budget)
-     false)))
+  unseen: how a cell the body has not seen reads (reach/world-kinds). solid: a set of cells [x y z] treated as solid
+  blocks (what if they were filled)."
+  ([p unseen] (enclosed? p unseen #{}))
+  ([p unseen solid] (enclosed? p unseen solid room-cells))
+  ([p unseen solid budget] (enclosed-over p solid (world-kinds p body-kind-of unseen) budget)))
 
 (defn dry-shut-in?
-  "Whether the body is shut in when water is a wall: a dry pocket whose only way on is a swim."
-  [p]
-  (let [base (lookup p body-kind-of)]
+  "Whether the body is shut in when water is a wall: a dry pocket whose only way on is a swim. unseen as enclosed?."
+  [p unseen]
+  (let [base (world-kinds p body-kind-of unseen)]
     (shut-in? p (fn [x y z] (let [k (base x y z)] (if (keyword-identical? :water k) :solid k))))))
+
+(defn fill-kinds
+  "[filled open]: the kind-at fns of the two floods of a fill check. unseen :fill is the worse case for 'would this fill
+  shut me in?': a cell the body has not seen is a wall with the cell filled (nothing beyond it to walk to) and open ground
+  without it (the body has room now); else unseen as world-kinds reads it, for both."
+  [p unseen]
+  (if (keyword-identical? :fill unseen)
+    [(world-kinds p body-kind-of :solid) (world-kinds p body-kind-of :ground)]
+    (let [base (world-kinds p body-kind-of unseen)] [base base])))
 
 (defn closes-in?
   "Whether the body has room to walk now but would be left fewer than shut-room-cells cells with cell [x y z] solid.
-  Both floods read the cells through one lookup; the filled one goes first, as it is mostly open."
-  [p cell]
-  (let [base (lookup p body-kind-of)]
-    (boolean (and (enclosed? p #{(vec cell)} base shut-room-cells) (not (enclosed? p #{} base))))))
+  unseen as fill-kinds. The filled flood goes first, as it is mostly open."
+  [p unseen cell]
+  (let [[filled open] (fill-kinds p unseen)]
+    (boolean (and (enclosed-over p #{(vec cell)} filled shut-room-cells) (not (enclosed-over p #{} open room-cells))))))
 
 (defn walls-in?
   "Whether a walker on the floor under pos [x y z] (within four cells) can walk to fewer than 64 cells with cell solid,
-  and to more without, shut in or not (a small room only: the floods stay cheap)."
-  [p [x y z] cell]
-  (let [base (lookup p body-kind-of)
+  and to more without, shut in or not (a small room only: the floods stay cheap). unseen as fill-kinds."
+  [p unseen [x y z] cell]
+  (let [[filled-base base] (fill-kinds p unseen)
         floor-y (first (filter #(and (passable? base x % z) (passable? base x (inc %) z) (keyword-identical? :solid (base x (dec %) z)))
                                (range (dec y) (- y 5) -1)))
-        filled (fn [x y z] (if (= [x y z] (vec cell)) :solid (base x y z)))
+        filled (fn [x y z] (if (= [x y z] (vec cell)) :solid (filled-base x y z)))
         visit (fn [kind-at] (flood-visit (fn [x y z] (forward kind-at x y z)) [x floor-y z] 64))]
     (boolean (and floor-y (not= [x floor-y z] (vec cell))
                   (let [with (visit filled)]

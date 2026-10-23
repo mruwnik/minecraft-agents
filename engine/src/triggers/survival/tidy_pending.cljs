@@ -75,7 +75,7 @@
         now (:now view)
         h (u/self-pos {:primitives p})
         here {:x (:x h) :y (:y h) :z (:z h)}
-        enclosed (delay (reach-room/enclosed? p))
+        enclosed (delay (reach-room/enclosed? p :raw))
         pending (when-not (or (body/recovery-pending? view :tidy-pending) (airborne? p))
                   (holds? p view args live enclosed here))]
     (boolean (some #(not (tried-lately? args now here (tidy/restorable? p % enclosed) %)) pending))))
