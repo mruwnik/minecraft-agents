@@ -10,18 +10,20 @@
   :time :night-exclusive
   :body {:at [16.5 0 16.5] :effects [["resistance" 600 4]] :settle-s 3}}
  :cases
- [{:name "carried-bed-in-the-open-is-slept-in-and-kept-at-day"
-   :body {:spawnpoint [2 0 2]}
-   :act [[:rcon "give $BODY red_bed 1"]
-         [:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0}})]
-         [:await {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} 90]
-         [:until-rcon "data get entity $BODY SleepTimer" "data: (6[0-9]|[7-9][0-9]|[0-9]{3})s" 10]
-         [:time-set 1000]]
-   :expect [{:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 70}
-            {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}
-            {:event {:source :job :kind :completed :data {:name "jobs.survival.night"}} :within-s 150 :of-job true}]
-   :after [[:item "red_bed" 0] [:memory {:entries {:spawn-bed [{:data {:pos [:any]}}]}}]]
-   :limit-s 180}
+ ;; Card 923cacf8: with other players online and awake (the server needs every one asleep, its gamerule left as it is), the body's
+ ;; sleep would not end the night, so lying in the open is no refuge: the carried bed stays in the bag and the night logs out.
+ ;; Should-fail: a place or a sleep call. A server where the body is alone fails the list step (the skip case is a unit test).
+ [{:name "carried-bed-in-the-open-stays-in-the-bag-while-others-are-awake"
+   :time :night
+   :time-why :sleep
+   :act [[:until-rcon "list" "There are ([2-9]|[1-9][0-9]+) of" 5]
+         [:rcon "give $BODY red_bed 1"]
+         [:job (jobs.survival.night {:settings {:jobs.survival.night.sites/flee-radius 0}})]]
+   :expect [{:event {:source :job :kind :child_started :data {:slot :log-out}} :within-s 60}
+            {:no-event {:source :action :kind :started :data {:name "place"}} :for-s 60}
+            {:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 60}]
+   :after [[:item "red_bed" 1]]
+   :limit-s 90}
   {:name "no-bed-anywhere-logs-out-and-ends-exposed-then-fires-again"
    :time :night
    :time-why :dawn-decision

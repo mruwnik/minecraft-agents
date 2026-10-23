@@ -445,7 +445,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup (-> roof-over-open-sides
                                            (update :blocks assoc "10,64,0" "red_bed")
-                                           (assoc :floor tu/walk-floor :light {} :offlineScale 0.0001)))]
+                                           (assoc :floor tu/walk-floor :light {} :offlineScale 0.0001 :players ["Alex" "Bo"])))]
           (mem/write! (:store eng) :shelter {:pos {:x 0 :y 64 :z 0} :state :built} sh/shelter-policy)
           (core/submit! eng '(jobs.survival.night) {})
           (await (st/tick-n eng 4))

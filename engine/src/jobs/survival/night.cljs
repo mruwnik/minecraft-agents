@@ -54,7 +54,7 @@
   - sheltered (slept, dug in, shut in): log out for a stint while someone else sleeps, else end so the queue runs (no all-night hold: listed jobs run when their own start checks pass).
   - a roofed :roofed-places place within the night.sites ::home-radius setting (bed to use or carry), or farther while the walk fits the time left before the dark plus a margin (night.sites home-walk-*; bed or not), and the body not roofed: jobs.survival.enter-room walks in (one try tonight); a carried bed is not put down in the open while one is close (night.bed-kept).
   - an open door of the closed room the body stands in is shut; the room's doorway is filled before a carried bed goes down (ledger :doorway; one that cannot be filled for want of blocks, or was filled, is :doorway-tried, not tried again tonight).
-  - a bed to use (sh-beds/bed-to-use) whose walk is safe (bed-walk-safe?: a whole route priced no dearer than staying put), or carried: jobs.survival.bed-down, called again until it ends; one that stops hostile-near ends the round nothing-possible :monsters-near (the trigger fires again after its cooldown).
+  - a bed to use (sh-beds/bed-to-use) whose walk is safe (bed-walk-safe?: a whole route priced no dearer than staying put), or carried and bed-down/place-here-ok? (a shut-in body, a closed home, or an open bed priced no dearer than sheltering here: on a night the body's sleep does not skip, lying in the open is no refuge): jobs.survival.bed-down, called again until it ends; one that stops hostile-near ends the round nothing-possible :monsters-near (the trigger fires again after its cooldown).
   - someone else asleep: jobs.survival.log-out, a 30 s stint (till morning when coming back costs more, log-out/back-unsafe), not retried tonight when not ok.
   - the sky not dark yet (dusk, a bed term started it): done; the shelter ways below wait for the dark.
   - a roof over a room with a hole (shelter.room_open warn): walled in under the roof (:enclose).
@@ -421,7 +421,7 @@
 (defn bed-walk-price
   "{:walk :stay} in seconds: the hp the walk to bed is expected to cost (spawns over its seconds in the dark, the planner's
   :dark-seconds over jobs.lib.cost/dark-factor of the kit; the fight with the hostiles known near its way) against
-  staying put (spawns at the feet unless underground or lit by a block (the sky's light goes with the night), over the walk's
+  staying put (spawns at the feet, bed-down/stay-chance, over the walk's
   seconds but no longer than jobs.lib.shelter/shelter-here-s, the shelter here closing them out; the hostiles known near
   the body), both priced by jobs.lib.price/stay-hp and jobs.lib.cost/fight-damage, each hp at jobs.lib.cost/hp-price; the
   walk also costs jobs.lib.cost/commute-s (in the ground, the walk there and back is work time lost). r is go-to's
@@ -434,7 +434,7 @@
         dark-s (min secs (/ (or (:dark-seconds r) 0) (cost/dark-factor kit)))
         fight #(price/way-fight-hp c %)
         hp-s (cost/hp-price (or (.-health (.self p)) 20))
-        here (if (or (sh-sense/buried? p) (pos? (or (sh-sense/block-light-at p (sh-sense/feet p)) 0))) 0 chance)]
+        here (bed-down/stay-chance p)]
     {:walk (+ (* hp-s (+ (price/stay-hp c chance dark-s) (fight bed))) (cost/commute-s (sh/in-ground? p (ctx/view c)) secs (sh/shelter-here-s)))
      :stay (* hp-s (+ (price/stay-hp c here (min secs (sh/shelter-here-s))) (fight (u/self-pos c))))}))
 
@@ -519,7 +519,7 @@
           (and roofed bed-wanted (not bed) (sh-beds/bed-layout c true) (room-lib/gap c)) (await (enter-room! c nil))
           (and home-near (walk-home-wanted? c) (or bed bed-wanted)) (await (enter-room! c (:name home-near)))
           far-home (await (enter-room! c (:name far-home)))
-          (or bed (and bed-wanted (not home-near))) (await (bed-down-step c bed))
+          (or bed (and bed-wanted (not home-near) (bed-down/place-here-ok? c))) (await (bed-down-step c bed))
           (and bed-way (log-out-wanted? c)) (await (log-out-step c))
           (not (sh-sense/dark-outside? p)) (ctx/end c :done nil (assoc (ending/done-data c sheltered) :text "no bed to take and the sky is not dark yet"))
           (and (:enclose (ctx/mem c)) (not= :dug-in sheltered)) (await (enclose! c))

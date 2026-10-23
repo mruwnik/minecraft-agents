@@ -1,5 +1,5 @@
 ;; Bed rule on open ground: an unroofed body at night still fires the :night reflex, skips a bed whose block state says occupied
-;; (no sleep call on it, no :bed written) and, with a bed in hand, places its own and sleeps there. Roofed variant: bed-occupied-rule.
+;; (no sleep call on it, no :bed written). Roofed variant: bed-occupied-rule. A carried bed in the open: night-exposed-bed-retry.
 ;; The body faces the occupied bed (:yaw 90, west), since it only uses a bed it has seen.
 ;; Needs night: run with --allow-time --time-log <the shared time log>, one case per call (--match).
 {:defaults
@@ -14,10 +14,4 @@
             {:no-event {:source :action :kind :started :data {:name "sleep"}} :for-s 40}
             {:no-event {:source :job :kind :place.set :data {:name :bed}} :for-s 40}]
    :after [[:body-near [16.5 0 16.5] 1.5]]
-   :limit-s 60}
-  {:name "carried-bed-placed-and-slept-beside-the-occupied-one"
-   :act [[:rcon "give $BODY white_bed 1"]]
-   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :night}} :within-s 40}
-            {:event {:source :action :kind :done :data {:name "place" :status "placed"}} :within-s 70}
-            {:event {:source :action :kind :done :data {:name "sleep" :status "sleeping"}} :within-s 90}]
-   :limit-s 100}]}
+   :limit-s 60}]}

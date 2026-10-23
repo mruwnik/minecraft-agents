@@ -3,7 +3,7 @@
   under any roof, or carried, also in the open), then a sleeper on the server (the action bar's sleep count, or a
   sleeping player in sight): logged out in short stints until morning, then roofed or buried: the queue runs, else
   dig in."
-  (:require [cljs.test :refer [deftest is async]]
+  (:require [cljs.test :refer [deftest is are async]]
             [jobs.lib.world-files :as ew]
             [engine.contract :as contract]
             [engine.core :as core]
@@ -16,6 +16,7 @@
             [engine.memory :as mem]
             [jobs.lib.ledger :as ledger]
             [jobs.lib.shelter.beds :as sh-beds]
+            [jobs.lib.shelter.sleepers :as sh-sleepers]
             [engine.perception :as perception]
             [engine.settings :as settings]
             [engine.registry :as registry]
@@ -103,6 +104,19 @@
     (is (true? (holds-after? world (conj (slept-and-woke {:sleeping 1 :needed 2}) [:sleep-status {:sleeping 1 :needed 2}])))
         "a count since it woke")))
 
+(deftest sleepers-short-counts-who-else-must-lie-down-for-the-night-to-skip
+  (are [world seed! short] (= short (let [{:keys [eng]} (st/setup {})
+                                          p (tu/fake (merge {:time night} world))]
+                                      (seed! eng)
+                                      (sh-sleepers/sleepers-short p (mem/view (:store eng)))))
+    {} (fn [_]) 0
+    {:players ["Alex" "Bo" "Cy"]} (fn [_]) 3
+    {:players ["Alex" "Bo" "Cy"] :entities [sleeper]} (fn [_]) 2
+    {:players ["Alex" "Bo" "Cy"]} (status! 1 4) 2
+    {:players ["Alex"]} (status! 1 2) 0
+    {} (fn [eng] (write! eng :sleep-status {:skipping true})) 0
+    {:self {:isSleeping true}} (status! 1 4) 3))
+
 (deftest after-a-log-out-for-a-sleeper-no-count-since-the-return-still-counts-as-asleep
   (let [world {:time night :blocks roof}
         out-and-back (fn [eng] ((status! 1 2) eng)
@@ -148,11 +162,22 @@
           (is (= 1 (count (st/emitted seen :bed_missing))))
           (is (empty? (filterv #(and (= :child_started (:kind %)) (= :go (:slot %))) @seen)) "never walked there"))))))
 
+(deftest an-open-bed-is-slept-in-when-the-sleep-skips-the-night
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p]} (st/setup {:time night :blocks {"20,64,0" "red_bed"} :inventory st/dirt-stack})]
+          (st/know-bed! eng {:x 20 :y 64 :z 0})
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tu/run-until-empty eng 40))
+          (is (= [{:x 20 :y 64 :z 0}] (mapv st/arg-pos (st/calls p "sleep"))) "the only player: its sleep ends the night")
+          (is (empty? (st/calls p "place")) "not dug in"))))))
+
 (deftest the-night-digs-in-beside-an-open-bed-instead-of-sleeping-in-it
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p seen]} (st/setup {:time night :blocks {"20,64,0" "red_bed"} :inventory st/dirt-stack})]
+        (let [{:keys [eng p seen]} (st/setup {:time night :blocks {"20,64,0" "red_bed"} :inventory st/dirt-stack :players ["Alex" "Bo" "Cy"]})]
           (st/know-bed! eng {:x 20 :y 64 :z 0})
           (core/submit! eng '(jobs.survival.night) {})
           (await (tu/run-until-empty eng 40))
@@ -296,6 +321,19 @@
             (is (= [] (ledger/open-entries (mem/view (:store eng)))) "not scaffold any more")
             (is (empty? (st/emitted seen :spawn_lost)))
             (is (= [] (:list (core/state eng))))))))))
+
+(deftest a-carried-bed-is-not-lain-in-the-open-on-a-night-that-needs-more-sleepers
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p clock]} (st/setup {:time night :inventory [{:name "red_bed" :count 1}] :players ["Alex" "Bo" "Cy"] :blocks st/floor})]
+          (on-return! p clock (fn [_] (.setTime (.-world p) noon)))
+          (sleep-count! p 1 4)
+          (core/submit! eng '(jobs.survival.night) {})
+          (await (tu/run-until-empty eng 10))
+          (is (empty? (st/calls p "sleep")) "lying in the open skips nothing: it would be a night spent exposed")
+          (is (empty? (st/calls p "place")) "the bed stays in the bag")
+          (is (= ["logged-out-for-sleeping-player"] (offline-why p)) "logged out while the other sleeps"))))))
 
 (deftest the-night-keeps-a-carried-bed-the-reserve-register-holds-in-the-bag
   (async done
