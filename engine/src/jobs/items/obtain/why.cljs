@@ -2,8 +2,7 @@
   "The texts of a source that has nothing: why no source, what a failed try adds."
   (:require [engine.ctx :as ctx]
             [engine.game :as game]
-            [jobs.items.obtain.base :refer [gathers? makes? seen-radius way?]]
-            [jobs.items.obtain.need :refer [explore-opts]]
+            [jobs.items.obtain.base :refer [explore-opts gathers? makes? seen-radius way?]]
             [jobs.items.obtain.plan :refer [gather-plan]]
             [jobs.items.obtain.seen :refer [seen-blocks-of seen-of]]
             [jobs.items.obtain.table :refer [animal? gather-needs material-blocks source-opts]]

@@ -9,13 +9,13 @@
     weapon   attack-gap-ms, weapon-damage, remaining-health, mob-max-health, ranged-mobs: the fight inputs; the one tool-material table
              (tool-tier, weapon-rank, cheapness) (jobs.lib.cost.weapon).
     fight    fight-damage, fight-seconds: the damage (and length) of a fight with the current kit (jobs.lib.cost.fight).
-    answer   fight-answer, followed, flee-answer, build-answer, cover-answer, answer-price, decide: what each answer to hostiles costs and the cheapest; death-chance, route-death-cost, route-hurt, threat-hurt, threats-chance, spawns-chance, lethal-hp: the one chance of dying (route-hurt the same in hp, at most the life; threat-hurt one mob met; threats-chance its known threats, spawns-chance that of mobs spawned beside the body, lethal-hp a death chance in hp) (a known threat priced by the answer the body would take) and a route's death price; blast-hurt: a creeper's blast (jobs.lib.cost.answer).
+    answer   fight-answer, followed, flee-answer, build-answer, cover-answer, answer-price, decide: what each answer to hostiles costs and the cheapest; kill-price: a kill of one mob; death-chance, route-death-cost, route-hurt, threat-hurt, threats-chance, spawns-chance, lethal-hp: the one chance of dying (route-hurt the same in hp, at most the life; threat-hurt one mob met; threats-chance its known threats, spawns-chance that of mobs spawned beside the body, lethal-hp a death chance in hp) (a known threat priced by the answer the body would take) and a route's death price; blast-hurt: a creeper's blast (jobs.lib.cost.answer).
     danger   route-danger, straight-route: the danger of a walk past mobs; hurt-rate, exposure-price: what standing exposed to them costs; stance, danger-rate, threat-factor: go-to's
              planner dangers; reach-first?, wins-race?: a body's race to a refuge against its chasers; catches?, caught-on?: whether a chaser hits a walk (straight, or a timed route) before it is past; arrival-s: a chaser's seconds to a point; body-speed (jobs.lib.cost.danger).
     health   hp-seconds, health-scale, hp-price, commute-s (a walk there and back against sheltering here), drown-prices, damage-budget, survivable-budget: what an hp costs and how many a walk may spend (jobs.lib.cost.health).
     food     food-reserve: the food a body keeps carried, 3 days of it; cook-worth?, cook-gain: whether cooking raw food beats eating it now; meat-factor, meat-animal: raw meat's replacement cost, dear for hunted, 1 with a working pen (jobs.lib.cost.food).
     value    item-value, reserve-cost (using a reserved unit: value x s/(1-s)), fetch-cost, walk-cost, walk-beats-making (walk to what exists vs make one and place it), detour-cost: what items are worth, what fetching them, walking or a pick-up detour costs; tour-cost, tour-worth, food-worth: a tour of
-             frontiers against what its goal is worth; cover-tour-s: the walk that brings a set of points within reach; light-cost: a torch go-to places; light-wait-worth: what n torches fetched save over a wait for light; dig-cost: the seconds a block takes to dig (jobs.lib.cost.value);
+             frontiers against what its goal is worth; cover-tour-s: the walk that brings a set of points within reach; light-cost: a torch go-to places; light-wait-worth: what n torches fetched save over a wait for light; dig-cost: the seconds a block takes to dig, kill-drops: the items a kill drops (jobs.lib.cost.value);
              per-dark, dark-factor: the one price of a dark block, which go-to's planner costs; spawn-chance: the chance a mob spawns at a cell or
              over an area (a set or {:min :max} box of cells) per second, from the light the body knows (unseen counts as dark); exposure: the chance a walk meets and
              what lowers it ({:chance :lowered-by #{:light}}).
@@ -25,7 +25,7 @@
     death    experience-cost, death-cost: death as an ordinary cost, the walk back for the items plus the experience; spawn-worth: a respawn point's worth; worth-to, find-worth, items-find-worth, leg-price, search-radius, wait-price: what a find is worth, a search leg's price, how far its legs may go, what waiting for a listed maker costs; opening-price, hold-price: opening a shelter to mobs against holding on in it; death-weight, terrain-danger: a remembered death's fade and the plan cost near a death by terrain (jobs.lib.cost.death).
     base-rates  density, biome-chance, expected-density, peak-density: the ore a block of ground is expected to hold, from the game's
              own placements, and the chance of a biome on ground the body has not seen (jobs.lib.cost.base-rates).
-    find     look-chance, find-chance, searched-for?: the chance a look round finds the animals a search is for, from their base rate and the ground already searched in vain (jobs.lib.cost.find)."
+    find     look-chance, find-chance, searched-for?: the chance a look round finds the animals a search is for, from their base rate and the ground already searched in vain, looked-area: that ground; search-s: a search's seconds per find (jobs.lib.cost.find)."
   (:require [clojure.string :as str]
             [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.armour :as armour]
@@ -173,6 +173,7 @@
 (defn walk-blocks-per-s [] (value/walk-blocks-per-s))
 (defn per-block [] (value/per-block))
 (def dig-cost table/dig-cost)
+(def kill-drops table/kill-drops)
 (def smelt-step "Seconds one smelt step takes beyond its input." (:smelt-step table/default-basis))
 (def detour-cost value/detour-cost)
 (def tour-cost value/tour-cost)
@@ -255,6 +256,7 @@
 (def lethal-hp answer/lethal-hp)
 (def threat-hurt answer/threat-hurt)
 (def route-death-cost answer/route-death-cost)
+(def kill-price answer/kill-price)
 (def spawn-worth death/spawn-worth)
 (defn spawn-horizon-s [] (death/spawn-horizon-s))
 (def death-weight death/death-weight)
@@ -268,6 +270,8 @@
 
 (def find-chance find/find-chance)
 (def look-chance find/look-chance)
+(def search-s find/search-s)
+(def looked-area find/looked-area)
 (def searched-for? find/searched-for?)
 
 (defn death-body

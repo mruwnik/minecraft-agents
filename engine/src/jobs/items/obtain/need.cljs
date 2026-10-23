@@ -5,7 +5,7 @@
             [engine.ctx :as ctx]
             [engine.game :as game]
             [jobs.items.get-tool :as get-tool]
-            [jobs.items.obtain.base :refer [gathers? makes? names-of search-worth way?]]
+            [jobs.items.obtain.base :refer [explore-opts gathers? makes? names-of search-names way?]]
             [jobs.items.obtain.chest :refer [candidates]]
             [jobs.items.obtain.plan :refer [craft-plan gather-plan]]
             [jobs.items.obtain.seen :refer [gather-slot seen-of with-block]]
@@ -63,28 +63,6 @@
                       (tool-viable? c names need)
                       (let [s (ctx/child-status c (gather-slot need) (:job need) (:args need))]
                         (or (composite/startable? s) (lights-itself? c (contract/status-cause s))))))))))
-
-(defn priced-search
-  "The search options: search-worth as the search's :worth, which prices each walk, and that many seconds to spend. A
-  worth that pays for no more than the trip is 0: the search ends :price at its first walk."
-  [c]
-  (let [worth (search-worth c)]
-    {:worth (max 0 worth)
-     :spend {:job-time (max 1 worth)}}))
-
-(defn explore-opts
-  "The search options, or nil when the :search way is off (or :explore false)."
-  [c]
-  (when (and (:explore (:args c)) (way? c :search))
-    (priced-search c)))
-
-(defn search-names
-  "The block or animal names a search for a need looks for."
-  [need]
-  (cond (:sheep need) ["sheep"]
-        (:mob need) [(:mob need)]
-        (set? (:seen need)) (vec (sort (:seen need)))
-        :else trees/log-names))
 
 (defn trees-unreachable?
   "Whether a seen log need's child declines :no-tree (the logs seen are not ones it can fell): the search looks

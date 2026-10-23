@@ -61,3 +61,19 @@
   "find-chance of a look round of radius r at [x z], over the ground the notes ns searched for names within ::region."
   [ns names at r]
   (find-chance names (looked-area ns names at) (* js/Math.PI r r)))
+
+(defn search-s
+  "Seconds a search for names spends per find: legs of leg-s seconds, each looking over `a` blocks of new ground after
+  `looked` searched in vain, walked while a leg costs less than the worth left times its find-chance (the search's
+  :price stop), the seconds expected until a find or that stop over the chance of a find by then: a search tried
+  before a sure way of cost C (taken when it finds none) is cheaper exactly when this is under C. Infinity when no leg
+  pays or names have no base rate (no chance is priced). Each leg spends leg-s (positive) of the worth, so it ends."
+  [names looked a leg-s worth]
+  {:pre [(pos? leg-s)]}
+  (if-not (density names)
+    js/Infinity
+    (loop [looked looked spent 0 miss 1 expect 0]
+      (let [chance (find-chance names looked a)]
+        (if (> leg-s (* chance (- worth spent)))
+          (if (< miss 1) (/ expect (- 1 miss)) js/Infinity)
+          (recur (+ looked a) (+ spent leg-s) (* miss (- 1 chance)) (+ expect (* miss leg-s))))))))

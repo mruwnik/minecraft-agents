@@ -2,16 +2,19 @@
   "The craft chain and the gather plan for the names wanted."
   (:require [engine.ctx :as ctx]
             [engine.game :as game]
+            [engine.notes :as notes]
+            [jobs.explore.search :as search]
             [jobs.lib.crafting-table :as crafting-table]
-            [jobs.items.obtain.base :refer [craft-radius plan-allowed? seen-radius way?]]
+            [jobs.items.obtain.base :refer [craft-radius explore-opts plan-allowed? search-names search-scan-radius search-worth seen-radius way?]]
             [jobs.items.obtain.seen :refer [seen-of sheep-in-range shears-source]]
-            [jobs.items.obtain.table :refer [gather-needs grass-seeds hand-dug leaves-of material-blocks need-way source-opts stalks wool-color wool?]]
+            [jobs.items.obtain.table :refer [gather-needs grass-seeds hand-dug leaves-of material-blocks need-way searchable? source-opts stalks wool-color wool?]]
             [jobs.items.recipes :as recipes]
             [jobs.lib.animal-spare :as spare]
             [jobs.lib.cost :as cost]
             [jobs.lib.look :as look]
             [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.storage :as storage]
+            [jobs.lib.threats :as threats]
             [jobs.lib.torch :as torch]
             [jobs.lib.trees :as trees]
             [jobs.lib.util :as u]))
@@ -100,35 +103,66 @@
          (filter open?)
          (every? #(torch/perceived-dark? p %)))))
 
+(defn route-class
+  "The class of the body's walks as death-chance reads it: underground while it is under rock (an ore dug down to from
+  the surface is priced by its dark way), else over the surface at night while the open sky is dark."
+  [p]
+  {:underground? (sh-sense/buried? p) :night? (sh-sense/dark-outside? p)})
+
 (defn need-cost
-  "Seconds to gather a need whose nearest block is seen: the walk there, the digs, and for an ore seen below the feet a dark way
-  (walk at the dark price and a torch every few blocks) unless its cell is lit; Infinity when it is dark and no torch is carried:
-  the way down is lit by the torches it is wanted for."
+  "Seconds to gather a need whose nearest block is seen: the walk there with the death it risks (threats/route-death-cost),
+  the digs, a hostile mob's kills (cost/kill-price, as many as cost/kill-drops says the count takes), and for an ore seen
+  below the feet a dark way (walk at the dark price and a torch every few blocks) unless its cell is lit; Infinity when it
+  is dark and no torch is carried: the way down is lit by the torches it is wanted for."
   [c need]
   (let [p (:primitives c)
-        {:keys [pos name]} (seen-of c need)
-        d (u/dist (u/self-pos c) pos)
+        src (seen-of c need)
+        {:keys [pos name]} (if (map? src) src {:pos (u/pos-of (.-pos src))})
+        self (u/self-pos c)
+        d (u/dist self pos)
         walk (:cost (cost/walk-cost {:distance d}))
-        dig (* (:count need) (or (cost/dig-cost name) 0))
+        risk (threats/route-death-cost c (route-class p) pos)
+        mob (:mob need)
+        kills (when (and mob (cost/hostile? (game/version-of p) {:name mob}))
+                (* (js/Math.ceil (/ (:count need) (or (cost/kill-drops mob (:key need) :version (game/version-of p)) 1)))
+                   (cost/kill-price (threats/death-body c) mob self)))
+        dig (+ (or kills 0) (* (:count need) (or (cost/dig-cost name) 0)))
         torches (storage/carried (u/inventory p) "torch")
         dark? (and (:ore? need) (below? c need) (unlit? p pos))]
     (cond
-      (not dark?) (+ walk dig)
+      (not dark?) (+ walk risk dig)
       (not (pos? torches)) js/Infinity
-      :else (+ dig (* walk (inc (cost/dark-factor))) (* (js/Math.ceil (/ d 8)) (:cost (cost/light-cost {:carried torches})))))))
+      :else (+ dig risk (* walk (inc (cost/dark-factor))) (* (js/Math.ceil (/ d 8)) (:cost (cost/light-cost {:carried torches})))))))
+
+(defn search-cost
+  "Seconds per find of a search for an unseen need (cost/search-s): legs of the search's spacing, each the walk and the
+  death it risks now, a look of the gather's scan radius over ground the notes searched in vain round the body
+  (cost/look-chance's), within the call's search-worth, then the walk to what it saw. Infinity when the call may not
+  search, the need is tunnelled for or no chance is priced (blocks)."
+  [c need]
+  (if-not (and (explore-opts c) (searchable? need) (not (:tunnel? need)))
+    js/Infinity
+    (let [p (:primitives c)
+          self (u/self-pos c)
+          names (search-names need)
+          r (search-scan-radius)
+          leg (+ (:cost (cost/walk-cost {:distance (search/leg-spacing)}))
+                 (cost/route-death-cost (threats/death-body c) (route-class p) self))]
+      (+ (cost/search-s names (cost/looked-area (notes/notes c) names [(:x self) (:z self)]) (* js/Math.PI r r) leg (search-worth c))
+         (:cost (cost/walk-cost {:distance r}))))))
 
 (defn plan-cost
-  "Seconds to gather a plan's raw needs (need-cost) and smelt what it smelts; Infinity when a need has no block seen."
+  "Seconds to gather a plan's raw needs (need-cost, search-cost when a need has no block seen) and smelt what it smelts."
   [c version pl]
-  (+ (reduce + 0 (map #(if (seen-of c %) (need-cost c %) js/Infinity) (some-> pl :gather (gather-needs version))))
+  (+ (reduce + 0 (map #(if (seen-of c %) (need-cost c %) (search-cost c %)) (some-> pl :gather (gather-needs version))))
      (* cost/smelt-step (count (filter #(= :smelt (:op %)) (:steps pl))))))
 
 (defn preferred
   "The gather plan pl, or when it gathers a need with no source seen, or mines an ore seen below the feet, and the same
   item is made another way from raw needs all seen (white wool from a seen spider's string, charcoal from logs for
-  torches) that costs less (plan-cost: an unseen need costs Infinity; the dark way down to coal, with no torch to light
-  it, costs more than any walk to logs), that plan. A way whose own needs are unseen (wool dyed from wool) is passed
-  over for the next until none is left."
+  torches) that costs less (plan-cost: an unseen need its search per find, a block's Infinity; the dark way down to coal,
+  with no torch to light it, costs more than any walk to logs), that plan. A way whose own needs are unseen (wool dyed
+  from wool) is passed over for the next while that leaves out more items; none is left once it leaves out none."
   [c version pl have name n opts]
   (let [needs #(some-> % :gather (gather-needs version))
         unseen #(set (map :key (remove (fn [need] (seen-of c need)) (needs %))))
@@ -137,7 +171,9 @@
               (when off
                 (when-let [alt (recipes/plan version have name n (assoc opts :ungathered off))]
                   (let [more (unseen alt)]
-                    (if (empty? more) alt (recur (into off more)))))))]
+                    (cond (empty? more) alt
+                          (every? off more) nil
+                          :else (recur (into off more)))))))]
     (if (and alt (plan-allowed? c alt) (< (plan-cost c version alt) (plan-cost c version pl)))
       alt
       pl)))

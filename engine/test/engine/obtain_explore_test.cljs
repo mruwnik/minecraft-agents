@@ -8,7 +8,7 @@
             [engine.test-util :as tu]
             [engine.memory :as mem]
             [jobs.items.obtain.gather :as gather]
-            [jobs.items.obtain.need :as need]
+            [jobs.items.obtain.base :as base]
             [jobs.items.obtain.seen :as seen]
             [jobs.lib.access :as access]
             [jobs.lib.look :as look]))
@@ -36,7 +36,7 @@
   "explore-opts of an obtain of args by a fake body."
   [args]
   (let [view (mem/view (mem/open (tu/tmp-dir) {:now (constantly 0)}))]
-    (need/explore-opts {:primitives (tu/fake-on-floor {}) :view (constantly view) :args (merge {:explore true} args)})))
+    (base/explore-opts {:primitives (tu/fake-on-floor {}) :view (constantly view) :args (merge {:explore true} args)})))
 
 (def bed {:any-of ["white_bed" "red_bed"]})
 

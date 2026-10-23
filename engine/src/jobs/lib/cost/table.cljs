@@ -87,6 +87,14 @@
     (when (and b (number? (.-hardness b)) (not (neg? (.-hardness b))))
       (dig-seconds md (deep-merge default-basis basis) b))))
 
+(defn kill-drops
+  "Items of name a kill of mob is expected to drop (entityLoot: chance x mean stack), nil when it drops none. Option
+  :version as item-value's."
+  [mob name & {:keys [version]}]
+  (let [md (minecraft-data (or version @game/version))]
+    (some (fn [e] (when (= name (.-item e)) (* (.-dropChance e) (mean-range (.-stackSizeRange e)))))
+          (some-> (aget (.-entityLoot md) mob) .-drops array-seq))))
+
 (defn wood-block? [name] (boolean (re-find #"(_log|_stem|_wood|_hyphae|^bamboo_block)$" name)))
 
 (defn ore-find-seconds

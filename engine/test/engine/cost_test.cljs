@@ -433,3 +433,20 @@
         "a look that saw only cows searched in vain for sheep")
     (is (< (after (for [x (range -128 129 16) z (range -128 129 16)] (note x z))) 0.001) "a region searched in vain")
     (is (= 1 (cost/look-chance [(note 0 0)] ["oak_log"] [0 0] 24)) "a block has no base rate: no chance is priced")))
+
+(deftest a-search-costs-more-a-find-the-more-ground-round-it-showed-none
+  (let [a (* js/Math.PI 16 16)
+        per-find (fn [looked] (cost/search-s ["sheep"] looked a 6 2000))]
+    (is (< 6 (per-find 0) (per-find 20000)) "a find takes more than a leg; each empty look round lowers the chance of the next")
+    (is (infinite? (per-find 1e7)) "a region searched in vain pays for no leg")
+    (is (infinite? (cost/search-s ["sheep"] 0 a 6 5)) "a worth under a leg's price walks none")
+    (is (infinite? (cost/search-s ["oak_log"] 0 a 6 2000)) "a block has no base rate: no search is priced")))
+
+(deftest a-kill-is-priced-by-the-fight-and-drops-by-the-loot-table
+  (let [body {:health 20 :level 0 :carried 0 :weapon "stone_sword" :equipment {}}]
+    (is (< (cost/kill-price body "spider" {:x 0 :y 64 :z 0}) (cost/kill-price (assoc body :health 4) "spider" {:x 0 :y 64 :z 0}))
+        "the same blows cost a hurt body more")
+    (is (< (cost/kill-price body "spider" {:x 0 :y 64 :z 0}) (cost/kill-price (dissoc body :weapon) "spider" {:x 0 :y 64 :z 0}))
+        "a fist fight lasts longer")
+    (is (= 1 (cost/kill-drops "spider" "string")) "0 to 2 string")
+    (is (nil? (cost/kill-drops "spider" "bone")))))

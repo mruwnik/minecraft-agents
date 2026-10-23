@@ -4,12 +4,9 @@
             [jobs.items.obtain.base :refer [craft-step-s gathers? makes? names-of shortfall smelt-item-s way?]]
             [jobs.items.obtain.chest :refer [candidates]]
             [jobs.items.obtain.loose :as loose-way]
-            [jobs.items.obtain.need :refer [explorable? explore-opts gather-viable?]]
-            [jobs.items.obtain.plan :refer [below? craft-plan gather-plan plan-cost]]
-            [jobs.items.obtain.seen :refer [seen-of]]
-            [jobs.items.obtain.table :refer [gather-needs]]
+            [jobs.items.obtain.need :refer [explorable? gather-viable?]]
+            [jobs.items.obtain.plan :refer [craft-plan gather-plan plan-cost route-class]]
             [jobs.lib.cost :as cost]
-            [jobs.lib.shelter.sense :as sh-sense]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]))
 
@@ -20,15 +17,14 @@
     (+ (* (craft-step-s) (count crafts)) (* (smelt-item-s) (reduce + 0 (map :count smelts))))))
 
 (defn death-s
-  "The death a walk to `at` risks past the known threats (jobs.lib.threats/route-death-cost): underground when under? (an ore below the feet), else over the
-  surface at night while the open sky is dark."
-  [c at under?]
-  (threats/route-death-cost c {:underground? (boolean under?) :night? (sh-sense/dark-outside? (:primitives c))} at))
+  "The death a walk to `at` risks past the known threats (jobs.lib.threats/route-death-cost), of the class plan/route-class says."
+  [c at]
+  (threats/route-death-cost c (route-class (:primitives c)) at))
 
 (defn walk-s
   "A trip, the walk to `at` and back, and the death it risks."
   [c at]
-  (+ (cost/trip) (:cost (cost/walk-cost {:distance (* 2 (u/dist (u/self-pos c) at))})) (death-s c at false)))
+  (+ (cost/trip) (:cost (cost/walk-cost {:distance (* 2 (u/dist (u/self-pos c) at))})) (death-s c at)))
 
 (defn chest-s
   "The walk to the nearest chest the chest way would try: one booked as holding a name, or a seen one not looked into yet."
@@ -45,20 +41,18 @@
     (some-> (craft-plan c names n) steps-s)))
 
 (defn gather-s
-  "A gather of seen raw needs: obtain's plan-cost, the craft steps and the death each walk risks."
+  "A gather of seen raw needs: obtain's plan-cost (the death each walk risks with it) and the craft steps."
   [c names n]
   (when (and (gathers? c) (gather-viable? c names n))
-    (let [pl (gather-plan c names n)
-          needs (gather-needs (:gather pl) (game/version-of (:primitives c)))]
+    (let [pl (gather-plan c names n)]
       (+ (plan-cost c (game/version-of (:primitives c)) pl)
-         (* (craft-step-s) (count (remove #(= :smelt (:op %)) (:steps pl))))
-         (reduce + 0 (map #(death-s c (or (:pos (seen-of c %)) (u/self-pos c)) (below? c %)) needs))))))
+         (* (craft-step-s) (count (remove #(= :smelt (:op %)) (:steps pl))))))))
 
 (defn search-s
   "A search for an unseen raw need: a trip (each walk of it is priced against the need's worth as it goes) and the death risked where the body stands."
   [c names n]
   (when (and (gathers? c) (explorable? c names n))
-    (+ (cost/trip) (death-s c (u/self-pos c) false))))
+    (+ (cost/trip) (death-s c (u/self-pos c)))))
 
 (defn price-of
   "Seconds getting the call's shortfall of its :item or :any-of costs the body: 0 when carried, else the cheapest way that would

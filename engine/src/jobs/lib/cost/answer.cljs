@@ -136,6 +136,12 @@
              :seconds seconds}
       (seq left) (assoc :left (vec left)))))
 
+(defn kill-price
+  "Seconds killing one mob-name met beside body costs at `at`: answer-price of fighting it with the body's :weapon and
+  :equipment."
+  [{:keys [weapon equipment] :as body} mob-name at]
+  (answer-price body (fight-answer {:weapon weapon :equipment equipment :mobs [{:name mob-name :distance 0}]}) at))
+
 (defn followed
   "Answer a, then answer b at once (nil: a once more, later): the blows and seconds of both, b's chance of being caught
   (a's blows landed either way) and what follows b."

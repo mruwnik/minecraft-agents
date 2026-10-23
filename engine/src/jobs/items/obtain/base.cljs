@@ -5,6 +5,7 @@
             [engine.ctx :as ctx]
             [jobs.lib.cost :as cost]
             [jobs.lib.storage :as storage]
+            [jobs.lib.trees :as trees]
             [jobs.lib.util :as u]))
 
 (a/defargs settings
@@ -122,3 +123,25 @@
 (defn holds [items names]
   (first (filter #(pos? (get items % 0)) names)))
 (defn tried! [c k v] (ctx/update-mem! c assoc-in [:tried k] v) :again)
+
+(defn priced-search
+  "The search options: search-worth as the search's :worth, which prices each walk, and that many seconds to spend. A
+  worth that pays for no more than the trip is 0: the search ends :price at its first walk."
+  [c]
+  (let [worth (search-worth c)]
+    {:worth (max 0 worth)
+     :spend {:job-time (max 1 worth)}}))
+
+(defn explore-opts
+  "The search options, or nil when the :search way is off (or :explore false)."
+  [c]
+  (when (and (:explore (:args c)) (way? c :search))
+    (priced-search c)))
+
+(defn search-names
+  "The block or animal names a search for a need looks for."
+  [need]
+  (cond (:sheep need) ["sheep"]
+        (:mob need) [(:mob need)]
+        (set? (:seen need)) (vec (sort (:seen need)))
+        :else trees/log-names))
