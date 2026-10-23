@@ -142,13 +142,14 @@
     (number? (:health struck)) (assoc :health (:health struck))))
 
 (defn fight-of
-  "The fight with hostiles and the best weapon carried, as jobs.lib.cost/fight-damage takes it; struck-of maps a mob id
-  to what the attack counted on it (nil: none)."
+  "The fight with hostiles and the best weapon carried, as jobs.lib.cost/fight-damage takes it (wet? a body in water);
+  struck-of maps a mob id to what the attack counted on it (nil: none)."
   [c hostiles struck-of]
   (let [p (:primitives c)]
     {:weapon (combat/best-weapon p (combat/weapons c))
      :equipment (cost/equipment-of (.-equipment (.self p)))
-     :mobs (mapv #(mob-of p (struck-of (.-id %)) %) hostiles)}))
+     :mobs (mapv #(mob-of p (struck-of (.-id %)) %) hostiles)
+     :wet? (breath/in-water? p)}))
 
 (defn incoming
   "{:rate hp a second, :hardest hp} of the mob blows the body felt within ::felt-s (its hurt memory), none before

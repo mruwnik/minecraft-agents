@@ -191,7 +191,7 @@
   (let [kit (assoc (body 20) :weapon "stone_sword")
         price (apply min (vals (:prices (cost/decide kit (answer/threat-answers (assoc kit :swim ##Inf) "drowned" nil) nil))))
         [deep] (cost/water-factors kit)]
-    (is (< (js/Math.abs (- deep (* 0.0062 price))) 1e-9) "water a drowned can spawn in: its measured meet rate")
+    (is (< (js/Math.abs (- deep (* 0.0061 price))) 1e-9) "water a drowned can spawn in: its measured meet rate")
     (is (< deep (first (cost/water-factors (body 20)))) "a bare body pays more than one with a sword")
     (is (< deep (first (cost/water-factors (assoc kit :health 8)))) "and a hurt one more than a whole one")))
 
@@ -220,3 +220,11 @@
     (is (< (-> open :caught :damage) (-> (cost/flee-answer {:food 20 :mobs [m] :swim 4 :land 0 :open 0.25 :later {:damage 100 :hit 3 :seconds 5}}) :caught :damage)) "a later fight is what the ending flight takes")
     (is (> (-> open :caught :chance) (-> seen-land :caught :chance)))
     (is (= (:caught seen-land) (:caught (cost/flee-answer {:food 20 :mobs [m] :swim 4 :land ##Inf :open 0.25}))) "land enough already: the chance is no matter")))
+
+(deftest a-drowned-fought-in-water-lands-its-measured-blows-for-each-swing-its-kill-needs
+  (let [kit (assoc (body 20) :weapon "stone_sword")
+        wet (:fight (answer/threat-answers (assoc kit :swim ##Inf) "drowned" nil))
+        dry (:fight (answer/threat-answers kit "drowned" nil))
+        blows (* 4 0.63)]
+    (is (< (js/Math.abs (- (:damage wet) (threat/mob-hurt (cost/armour-stats nil) "drowned" blows identity 1))) 1e-9) "4 stone sword swings kill it")
+    (is (> (:damage wet) (* 1.5 (:damage dry))) "a land fight lands its swings")))

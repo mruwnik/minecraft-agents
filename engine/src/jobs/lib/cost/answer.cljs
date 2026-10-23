@@ -38,10 +38,10 @@
 (a/defargs settings
   {::caught-chance {:default 0.15 :spec (a/num-in 0 1)
                     :doc "Chance a walk away is caught, its mobs landing their blows over the whole flight: the prior for a flight whose route is unknown, measured from the trial logs on 2026-10-23 (n=63)."}
-   ::drowned-meet-per-s {:default 0.0062 :spec (a/num-in 0 nil)
-                         :doc "Chance a second a drowned meets a body in water a drowned can spawn in (its column holds water over water at block light 0, look/water-fn), by day or night: (k+1)/n over the trial bodies' logs on 2026-10-23, k=34 meets in n=5689 s (tools/drowned-prior.mjs; river or ocean and other biomes, sky light high or low, met it alike)."}
+   ::drowned-meet-per-s {:default 0.0061 :spec (a/num-in 0 nil)
+                         :doc "Chance a second a drowned meets a body in water a drowned can spawn in (its column holds water over water at block light 0, look/water-fn), by day or night: (k+1)/n over the trial bodies' logs on 2026-10-23, k=34 meets in n=5767 s (tools/event-counts.mjs drowned-meets :prior :deep; river or ocean and other biomes, sky light high or low, met it alike)."}
    ::drowned-meet-other-per-s {:default 0.0011 :spec (a/num-in 0 nil)
-                               :doc "As ::drowned-meet-per-s in any other water (one deep, or block-lit to its floor): k=4 in n=4549 s."}})
+                               :doc "As ::drowned-meet-per-s in any other water (one deep, or block-lit to its floor): k=4 in n=4602 s (:prior :other)."}})
 
 (def blast-power "A creeper's explosion power (vanilla)." 3)
 (def swell-start "Blocks within which a creeper starts to swell (vanilla)." 3)
@@ -304,11 +304,11 @@
 
 (defn threat-answers
   "The answers {key answer-or-nil} body {:health :food :equipment :weapon :covers :swim} has to mob-name met beside it: the
-  fight, the walk away (caught at chance caught, nil the prior; :swim, flee-answer's, for a body in water) and each of :covers {way {:open-s :seconds}}
+  fight (in water with :swim, fight/fight-damage's wet?), the walk away (caught at chance caught, nil the prior; :swim, flee-answer's, for a body in water) and each of :covers {way {:open-s :seconds}}
   (jobs.survival.shut-in/covers) by cover-answer, as respond prices them."
   [{:keys [food equipment weapon covers swim]} mob-name caught]
   (let [m {:name mob-name :distance 0 :follow (threat/follow-range mob-name)}
-        fight (fight-answer {:weapon weapon :equipment equipment :mobs [m]})]
+        fight (fight-answer {:weapon weapon :equipment equipment :mobs [m] :wet? (some? swim)})]
     (into {:fight fight
            :flee (flee-answer {:food food :equipment equipment :mobs [m] :caught caught :later fight :swim swim})}
           (map (fn [[way cover]] [way (cover-answer {:equipment equipment :mobs [m]} cover)]))
