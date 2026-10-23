@@ -12,8 +12,8 @@
             [jobs.movement.boat-launch :as bl]))
 
 (def pond
-  "A pond at x 4..6, z -1..1 in the stone floor (y 63), air above."
-  (into {} (for [x (range 4 7) z (range -1 2)] [(str x ",63," z) "water"])))
+  "A pond at x 4..6, z -1..1 in the stone floor (y 63) over a stone bed (a drop lands only in water that holds the fall), air above."
+  (into {} (for [x (range 4 7) z (range -1 2) [y b] [[63 "water"] [62 "stone"]]] [(str x "," y "," z) b])))
 
 (def boat-item {:name "oak_boat" :count 1})
 
@@ -52,8 +52,8 @@
           (is (= {:x 4 :y 63 :z 0} (:pos res))))))))
 
 (def big-pond
-  "A pond at x 3..7, z -2..2 in the stone floor (y 63): the ring of cells beside the bank has a bank block within a boat's width."
-  (into {} (for [x (range 3 8) z (range -2 3)] [(str x ",63," z) "water"])))
+  "A pond at x 3..7, z -2..2 in the stone floor (y 63) over a stone bed: the ring of cells beside the bank has a bank block within a boat's width."
+  (into {} (for [x (range 3 8) z (range -2 3) [y b] [[63 "water"] [62 "stone"]]] [(str x "," y "," z) b])))
 
 (deftest the-boat-goes-where-it-clears-the-bank
   (async done
@@ -143,8 +143,8 @@
           (is (empty? (:list (core/state eng)))))))))
 
 (def channel
-  "Water one cell wide at x 4, z -2..2: every cell has a bank block beside it."
-  (into {} (for [z (range -2 3)] [(str "4,63," z) "water"])))
+  "Water one cell wide at x 4, z -2..2 over a stone bed: every cell has a bank block beside it."
+  (into {} (for [z (range -2 3) [y b] [[63 "water"] [62 "stone"]]] [(str "4," y "," z) b])))
 
 (deftest water-without-room-waits-no-room
   (async done
