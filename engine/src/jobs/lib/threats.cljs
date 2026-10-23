@@ -17,6 +17,7 @@
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.death-spot :as death-spot]
+            [jobs.lib.hide-spot :as hide-spot]
             [jobs.lib.reach :as reach]
             [jobs.lib.threat-field :as field]
             [jobs.lib.util :as u]))
@@ -102,9 +103,9 @@
 
 (defn sensed-mobs
   "The real dangers primitives p senses (jobs.lib.danger/dangers within its known-scan: seen or heard, with a way to the
-  body or a line of fire; never x-ray; danger-opts as danger-q/danger-in?), as [{:key :name :pos}]."
+  body or a line of fire; never x-ray; danger-opts as danger-q/danger-in?), as [{:key :name :chaser (cost/mob-kind) :pos}]."
   [p danger-opts]
-  (mapv (fn [e] {:key (mob-key e) :name (.-name e) :pos (danger-q/mob-pos p e)})
+  (mapv (fn [e] {:key (mob-key e) :name (.-name e) :chaser (cost/mob-kind e) :pos (danger-q/mob-pos p e)})
         (danger-q/dangers p (danger-q/known-scan) {:ranged-radius (danger-q/known-scan)} danger-opts)))
 
 (defn remembered-spots
@@ -132,12 +133,12 @@
 (defn max-threats [] (settings/get settings ::max-threats))
 
 (defn known-threats
-  "The mobs c's body knows may hurt it, [{:mob :pos :weight :key}], at most ::max-threats, the nearest the body first:
-  one sensed now (sensed-mobs, weight 1), a :threat flight's last place (remembered-spots, 1; one whose :key is sensed
-  now is left out: the sensed place wins), a recent death or near-death by a mob at its spot (death-spot/recent, its
-  fading weight; a walker's only while not seen-clear?, a water mob's whatever the light: it lives in the water, not in
-  the dark) and a :hurt entry by a water mob (fading over the :hurt memory's ttl). One mob at one cell counts once, at
-  its greatest weight."
+  "The mobs c's body knows may hurt it, [{:mob :pos :weight :key :chaser :fled :remembered}], at most ::max-threats, the nearest
+  the body first: one sensed now (sensed-mobs, weight 1), :fled a :threat flight's last place (remembered-spots, 1; one whose
+  :key is sensed now is left out: the sensed place wins), and, :remembered, a recent death or near-death by a mob at its
+  spot (death-spot/recent, its fading weight x death-spot/present-share; a walker's only while not seen-clear?, a water
+  mob's whatever the light: it lives in the water, not in the dark) and a :hurt entry by a water mob (fading over the
+  :hurt memory's ttl). One mob at one cell counts once, at its greatest weight."
   [c]
   (let [p (:primitives c)
         now (ctx/now c)
@@ -146,15 +147,15 @@
         sensed (sensed-mobs p {:way? false})
         now-keys (set (map :key sensed))
         here (u/pos-of (.-pos (.self p)))]
-    (->> (concat (for [{:keys [key name pos]} sensed] {:mob name :pos pos :weight 1 :key key})
-                 (for [{:keys [mob pos key]} (remembered-spots c) :when (not (contains? now-keys key))] {:mob mob :pos pos :weight 1 :key key})
+    (->> (concat (for [{:keys [key name chaser pos]} sensed] {:mob name :pos pos :weight 1 :key key :chaser chaser})
+                 (for [{:keys [mob pos key]} (remembered-spots c) :when (not (contains? now-keys key))] {:mob mob :pos pos :weight 1 :key key :fled true})
                  (for [{:keys [cause pos weight mob?] :as d} (death-spot/recent c)
                        :when (and mob? (or (field/water-mobs cause) (not (death-spot/seen-clear? p d))))]
-                   {:mob cause :pos pos :weight weight})
+                   {:mob cause :pos pos :weight (* weight (death-spot/present-share p cause pos)) :remembered true})
                  (for [{:keys [t data]} (ctx/entries c :hurt)
                        :let [cause (death-spot/hurt-cause data) w (fade (- now t))]
                        :when (and (field/water-mobs cause) (:pos data) (pos? w))]
-                   {:mob cause :pos (:pos data) :weight w}))
+                   {:mob cause :pos (:pos data) :weight w :remembered true}))
          (filter #(and (string? (:mob %)) (:pos %)))
          (group-by (juxt :key field/field-key))
          vals
@@ -163,10 +164,28 @@
          (take (max-threats))
          vec)))
 
-(defn threats-of
-  "known-threats of c, each with its :reach (threat-field/reach-fn of its field): what death-chance reads."
+(defn hide-threats
+  "The mobs of the recent hides of c (:hid entries) at their spots, [{:mob :pos :weight :remembered}]: a stream that
+  hunted the body there, weighing death-spot/present-share, fading over hide-spot ::memory-ms."
   [c]
-  (mapv #(assoc % :reach (field/reach-fn (field/field-of c %))) (known-threats c)))
+  (let [p (:primitives c)
+        now (ctx/now c)
+        ttl (settings/get hide-spot/settings ::hide-spot/memory-ms)]
+    (vec (for [{:keys [t data]} (ctx/entries c :hid)
+               :let [w (cost/death-weight (- now t) ttl)]
+               :when (and (pos? w) (:pos data))
+               mob (:mobs data)]
+           {:mob mob :pos (:pos data) :weight (* w (death-spot/present-share p mob (:pos data))) :remembered true}))))
+
+(defn with-reach
+  "threats ({:mob :pos}), each with its :reach (threat-field/reach-fn of its field): what death-chance reads."
+  [c threats]
+  (mapv #(assoc % :reach (field/reach-fn (field/field-of c %))) threats))
+
+(defn threats-of
+  "known-threats of c, with-reach."
+  [c]
+  (with-reach c (known-threats c)))
 
 (defn death-body
   "The body of c as death-chance and death-cost read it: cost/death-body and body-of."

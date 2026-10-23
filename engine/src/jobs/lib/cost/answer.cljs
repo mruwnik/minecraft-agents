@@ -193,6 +193,20 @@
     (* (if (contains? threat/provoked-only mob-name) (threat/provoked-share) 1)
        (answer-death-chance body (get answers answer) at))))
 
+(defn route-hurt
+  "hp the known threats of route {:cells :threats :at} (death-chance's) are expected to take off body: for each one whose
+  reach the :cells enter, the expected-damage of the answer decide takes of threat-answers at :at (default the first
+  cell), times its weight (a provoked-only mob threat/provoked-share more): death-chance in hp, for a walk priced against health."
+  [body {:keys [cells threats at]}]
+  (let [at (or at (first cells))
+        hurt (memoize (fn [mob caught]
+                        (let [answers (threat-answers body mob caught)]
+                          (* (if (contains? threat/provoked-only mob) (threat/provoked-share) 1)
+                             (expected-damage (get answers (:answer (decide body answers at))))))))]
+    (reduce + 0 (for [{:keys [mob weight reach caught]} (when (seq cells) threats)
+                      :when (pos? (death/exposure-s reach cells))]
+                  (* (or weight 1) (hurt mob caught))))))
+
 (defn death-chance
   "The chance of dying on route {:underground? :night? :cells :threats :at}: the chance by its class (underground, surface
   at night or by day: the mobs not yet known) and, for each known threat {:mob :weight :reach :caught} (weight 0-1, reach
