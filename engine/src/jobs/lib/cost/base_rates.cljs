@@ -31,13 +31,24 @@
   "Expected blocks of resource per block of ground at pos's height in biome: over the resource's placements there,
   veins per chunk x the vein's size x the share of veins at that height, per chunk layer. The size is the game's
   nominal one and the ground is taken as all stone, so caves, air and other fill make the real count lower.
-  0 for a resource or biome with no placement. body is not read yet."
-  [resource pos biome _body]
+  With :exposed? the ground is a face that was open to air when the ore was placed (a cave wall), where the game drops
+  each vein block with the placement's :air chance. 0 for a resource or biome with no placement. body is not read yet."
+  [resource pos biome _body & {:keys [exposed?]}]
   (let [y (js/Math.floor (:y pos))]
     (->> (get (:ores data) (keyword resource))
          (filter #(some #{biome} (or (:biomes %) biomes)))
-         (map #(/ (* (:count %) (:size %) (height-share % y)) chunk-area))
+         (map #(/ (* (:count %) (:size %) (height-share % y) (if exposed? (- 1 (:air %)) 1)) chunk-area))
          (reduce + 0))))
+
+(def ^:private hosts (into {} (map (fn [[k v]] [(name k) (set v)])) (:hosts data)))
+
+(defn host?
+  "Whether resource's veins replace block (stone, granite, diorite, andesite, deepslate, tuff: the game's ore targets):
+  other ground (dirt, sand, gravel) holds none."
+  [resource block]
+  (contains? (get hosts resource) block))
+
+(defn host-blocks "The blocks resource's veins replace." [resource] (get hosts resource #{}))
 
 (defn biome-chance
   "The chance (0..1) that the ground at pos is biome. 1 or 0 where the body has seen that ground; for unseen ground
@@ -51,9 +62,9 @@
 
 (defn expected-density
   "density at pos when its biome is not given: each biome's density weighed by its biome-chance, so it holds for
-  seen and unseen ground alike."
-  [resource pos body]
-  (reduce + 0 (map #(* (biome-chance % pos body) (density resource pos % body)) biomes)))
+  seen and unseen ground alike. Option :exposed? as density's."
+  [resource pos body & {:keys [exposed?]}]
+  (reduce + 0 (map #(* (biome-chance % pos body) (density resource pos % body :exposed? exposed?)) biomes)))
 
 (def ^:private biome-set (set biomes))
 

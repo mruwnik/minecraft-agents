@@ -167,15 +167,22 @@
   [c]
   (within-site (explore-opts c) (:center (:args c))))
 
+(def approach-range "Blocks from an :approach goal its walk ends within." 8)
+
 (defn ^:async explore-walk!
   "Walk and look for need (a jobs.explore.search child): :again once it is seen; a search that finds none stops the
-  gather source, as does the search for one need. Also :again when none is found and the body is still under rock (the next round stairs up), and after a search that ran out of its own time (no verdict: not counted, the next round looks from where the body stands)."
-  [c need]
+  gather source, as does the search for one need, unless at its start (other-way?) said the plan gathers something else
+  once this search is spent (it was priced as tried before that seen way, obtain.plan/search-cost): then the body walks
+  back to where the search started (:approach), where that way was seen, and :again. Also :again when none is found and the body is still under rock (the next round stairs up), and after a search that ran out of its own time (no verdict: not counted, the next round looks from where the body stands)."
+  [c need other-way?]
   (let [targets (search-names need)
         k0 (get-in (ctx/mem c) [:explored (:key need)] 0)
         here (.-pos (.self (:primitives c)))
         _ (when (and (zero? k0) (not (:explore-start (ctx/mem c))))
-            (ctx/update-mem! c assoc :explore-start [(.-x here) (.-y here) (.-z here)]))
+            (ctx/update-mem! c assoc-in [:explored (:key need)] 1)
+            (let [alt? (other-way?)]
+              (ctx/update-mem! c update :explored dissoc (:key need))
+              (when alt? (ctx/update-mem! c assoc :explore-start {:x (.-x here) :y (.-y here) :z (.-z here)}))))
         o (round-opts c)
         said [(:key need) k0]
         _ (when-not (= said (:explore-said (ctx/mem c)))
@@ -213,14 +220,20 @@
             lead? (do (ctx/emit! c :obtain.lead :info {:message (str "found " (str/join "/" targets) " at " (str/join " " pos) " out of sight: walking to it") :pos pos})
                       (ctx/update-mem! c assoc-in [:gather :lead] {:key (:key need) :pos pos})
                       :again)
+            (:explore-start (ctx/mem c))
+            (let [start (:explore-start (ctx/mem c))]
+              (ctx/update-mem! c dissoc :explore-start)
+              (when (< approach-range (u/dist start (u/self-pos c))) (ctx/update-mem! c assoc :approach start))
+              :again)
             :else (tried! c :gather (cond-> {:searched (:key need) :for targets :result (or (:reason res) (contract/cause-key e))}
                                       (:why res) (assoc :why (:why res))
                                       (:coverage res) (assoc :legs (:legs (:coverage res)) :farthest (:farthest (:coverage res)))))))))))
 
 (defn ^:async approach-step!
-  "Walk up to the log a search found far off (the felling child works within its radius of the body): :continue while it walks, else :again."
+  "Walk up to the log a search found far off (the felling child works within its radius of the body), or back to where a
+  spent search started: :continue while it walks, else :again."
   [c]
-  (let [r (await (child/call-walk* c :approach {:pos (:approach (ctx/mem c)) :range 8}))]
+  (let [r (await (child/call-walk* c :approach {:pos (:approach (ctx/mem c)) :range approach-range}))]
     (if (= :continue r)
       :continue
       (do (ctx/update-mem! c dissoc :approach) :again))))
@@ -258,8 +271,6 @@
   [{:keys [legs tunnel descent]}]
   (+ (if (seq legs) (reduce + 0 (map :length legs)) (:steps tunnel 0)) (:steps descent 0)))
 
-(def faces-per-block "Rock faces a 1x2 tunnel lays bare per block it cuts: two walls two high, the roof and the floor." 6)
-
 (defn ore-resource
   "The jobs.lib.cost base-rates resource of need's ore block (\"iron\" for deepslate_iron_ore), nil for none."
   [need]
@@ -267,10 +278,10 @@
 
 (defn barren?
   "Whether n blocks cut in a row with no find of need's ore would, at the body's height, have laid bare ::barren-ore of it
-  (cost/expected-density over faces-per-block faces a block): the ground there is too poor to mine on. Always for a block with no ore placement."
+  (cost/tunnel-ore): the ground there is too poor to mine on. Always for a block with no ore placement."
   [c need n]
-  (let [d (cost/expected-density (ore-resource need) (update (u/self-pos c) :y js/Math.floor) nil)]
-    (or (not (pos? d)) (>= (* n faces-per-block d) (barren-ore)))))
+  (let [per-block (cost/tunnel-ore (ore-resource need) (update (u/self-pos c) :y js/Math.floor) 1)]
+    (or (not (pos? per-block)) (>= (* n per-block) (barren-ore)))))
 
 (defn dug-total
   "Blocks cut in a row without a find, counting this run's n: the count of the ore key in mem's [:gather :dug] ({:n :at},
@@ -326,7 +337,7 @@
       (and (not (get-in (ctx/mem c) [:gather :before])) (explore-opts c) (searchable? need) (not (:tunnel? need))
            (or (not (seen-of c need)) (get-in (ctx/mem c) [:gather :unreachable (:key need)]) (trees-unreachable? c need))
            (zero? (get-in (ctx/mem c) [:explored (:key need)] 0)))
-      (await (explore-walk! c need))
+      (await (explore-walk! c need #(not= (:key need) (some-> (gather-plan c names (- target have)) :gather (gather-need (game/version-of p)) :key))))
       (and (not (get-in (ctx/mem c) [:gather :before])) (torch-due c (start-cause c need)))
       (book-light! c (torch-due c (start-cause c need)))
       (and (not (get-in (ctx/mem c) [:gather :before])) (light-settling? c (start-cause c need)))

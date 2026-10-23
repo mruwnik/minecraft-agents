@@ -1,0 +1,40 @@
+;; Card 703b4ee3: torches wanted, no coal seen. A coal search is priced by the rock the body sees round it (the game's vein
+;; placement at each face's height, jobs.lib.cost.find), charcoal by the walk to the logs seen and the smelt.
+;; Should-succeed: on a stone floor at the surface plots' height (y 150, where coal is placed), a stand of logs 42 blocks off and a coal
+;; ore 24 off behind a wall (out of sight from the start, in sight from the first ring of legs): the coal search is cheaper,
+;; so the body looks for coal, mines it and makes the torches; no log is smelted.
+;; Should-succeed: the same without the coal: the search finds none and the logs are gathered for charcoal.
+;; Should-fail (no coal search): on a dirt floor (dirt holds no ore) with a tree beside the body: charcoal is made and no walk
+;; to look for coal starts.
+;; Both on sky plots (y 150): coal is placed only above y 0 and the underground cells lie at y -41, where no coal search is
+;; ever priced. A layer of light blocks keeps the plot lit at any time (a night plot waits for light).
+{:defaults
+ {:tags [:obtain :explore] :time :any
+  :plot {:height 8 :length 64 :width 64 :light :sky}
+  :body {:at [4.5 0 32.5] :yaw 270 :settle-s 3 :effects [["resistance" 600 4]]}
+  :limit-s 240}
+ :cases
+ [{:name "unseen-coal-in-stone-is-searched-for-before-far-logs"
+   :blocks [[:fill [0 2 0] [63 2 63] "light"] [:fill [46 0 30] [46 3 34] "oak_log"] [:fill [46 4 30] [46 4 34] "oak_leaves[persistent=true]"]
+            [:fill [24 0 36] [24 2 50] "stone"] [:set [28 0 44] "coal_ore"]]
+   :body {:inventory [["wooden_pickaxe" 1] ["stick" 2]]}
+   :act [[:job (jobs.items.obtain {:item "torch" :count 4 :explore true})]]
+   :expect [{:event {:source :job :kind :obtain.exploring :data {:for ["coal_ore" "deepslate_coal_ore"]}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :completed} :within-s 220 :of-job true}
+            {:no-event {:source :job :kind :smelt.loaded} :for-s 200 :until {:source :job :kind :completed}}]
+   :after [[:item "torch" 4]]}
+  {:name "a-coal-search-that-finds-none-falls-back-to-the-far-logs"
+   :blocks [[:fill [0 2 0] [63 2 63] "light"] [:fill [46 0 30] [46 3 34] "oak_log"] [:fill [46 4 30] [46 4 34] "oak_leaves[persistent=true]"] [:set [6 0 36] "furnace"]]
+   :body {:inventory [["wooden_pickaxe" 1] ["stick" 2] ["oak_planks" 4]]}
+   :act [[:job (jobs.items.obtain {:item "torch" :count 4 :explore true})]]
+   :expect [{:event {:source :job :kind :obtain.exploring :data {:for ["coal_ore" "deepslate_coal_ore"]}} :within-s 60 :of-job true}
+            {:event {:source :job :kind :obtain.gathering :data {:item "log"}} :within-s 200 :of-job true}]}
+  {:name "logs-beside-on-dirt-make-charcoal-not-a-coal-search"
+   :plot {:height 8 :length 64 :width 64 :light :sky :floor "dirt"}
+   :blocks [[:fill [0 2 0] [63 2 63] "light"] [:fill [7 0 32] [7 3 32] "oak_log"] [:set [7 4 32] "oak_leaves[persistent=true]"]
+            [:set [4 0 35] "furnace"] [:set [56 -1 56] "coal_ore"]]
+   :body {:inventory [["stick" 2] ["oak_planks" 4]]}
+   :act [[:job (jobs.items.obtain {:item "torch" :count 4 :explore true})]]
+   :expect [{:event {:source :job :kind :smelt.loaded} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :obtain.exploring :data {:for ["coal_ore" "deepslate_coal_ore"]}} :for-s 120 :until {:source :job :kind :smelt.loaded}}]
+   :limit-s 160}]}

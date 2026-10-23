@@ -65,7 +65,8 @@
         "size": 17,
         "shape": "trapezoid",
         "min": 0,
-        "max": 192
+        "max": 192,
+        "air": 0.5
       },
       {
         "feature": "ore_coal_upper",
@@ -73,7 +74,8 @@
         "size": 17,
         "shape": "uniform",
         "min": 136,
-        "max": 319
+        "max": 319,
+        "air": 0
       }
     ],
     "iron": [
@@ -83,7 +85,8 @@
         "size": 9,
         "shape": "trapezoid",
         "min": -24,
-        "max": 56
+        "max": 56,
+        "air": 0
       },
       {
         "feature": "ore_iron_small",
@@ -91,7 +94,8 @@
         "size": 4,
         "shape": "uniform",
         "min": -64,
-        "max": 72
+        "max": 72,
+        "air": 0
       },
       {
         "feature": "ore_iron_upper",
@@ -99,7 +103,8 @@
         "size": 9,
         "shape": "trapezoid",
         "min": 80,
-        "max": 384
+        "max": 384,
+        "air": 0
       }
     ],
     "copper": [
@@ -110,6 +115,7 @@
         "shape": "trapezoid",
         "min": -16,
         "max": 112,
+        "air": 0,
         "biomes": [
           "badlands",
           "bamboo_jungle",
@@ -174,6 +180,7 @@
         "shape": "trapezoid",
         "min": -16,
         "max": 112,
+        "air": 0,
         "biomes": [
           "dripstone_caves"
         ]
@@ -186,7 +193,8 @@
         "size": 9,
         "shape": "trapezoid",
         "min": -64,
-        "max": 32
+        "max": 32,
+        "air": 0.5
       },
       {
         "feature": "ore_gold_extra",
@@ -195,6 +203,7 @@
         "shape": "uniform",
         "min": 32,
         "max": 256,
+        "air": 0,
         "biomes": [
           "badlands",
           "eroded_badlands",
@@ -207,7 +216,8 @@
         "size": 9,
         "shape": "uniform",
         "min": -64,
-        "max": -48
+        "max": -48,
+        "air": 0.5
       }
     ],
     "redstone": [
@@ -217,7 +227,8 @@
         "size": 8,
         "shape": "uniform",
         "min": -64,
-        "max": 15
+        "max": 15,
+        "air": 0
       },
       {
         "feature": "ore_redstone_lower",
@@ -225,7 +236,8 @@
         "size": 8,
         "shape": "trapezoid",
         "min": -96,
-        "max": -32
+        "max": -32,
+        "air": 0
       }
     ],
     "lapis": [
@@ -235,7 +247,8 @@
         "size": 7,
         "shape": "trapezoid",
         "min": -32,
-        "max": 32
+        "max": 32,
+        "air": 0
       },
       {
         "feature": "ore_lapis_buried",
@@ -243,7 +256,8 @@
         "size": 7,
         "shape": "uniform",
         "min": -64,
-        "max": 64
+        "max": 64,
+        "air": 1
       }
     ],
     "diamond": [
@@ -253,7 +267,8 @@
         "size": 4,
         "shape": "trapezoid",
         "min": -144,
-        "max": 16
+        "max": 16,
+        "air": 0.5
       },
       {
         "feature": "ore_diamond_buried",
@@ -261,7 +276,8 @@
         "size": 8,
         "shape": "trapezoid",
         "min": -144,
-        "max": 16
+        "max": 16,
+        "air": 1
       },
       {
         "feature": "ore_diamond_large",
@@ -269,7 +285,8 @@
         "size": 12,
         "shape": "trapezoid",
         "min": -144,
-        "max": 16
+        "max": 16,
+        "air": 0.7
       },
       {
         "feature": "ore_diamond_medium",
@@ -277,7 +294,8 @@
         "size": 8,
         "shape": "uniform",
         "min": -64,
-        "max": -4
+        "max": -4,
+        "air": 0.5
       }
     ],
     "emerald": [
@@ -288,6 +306,7 @@
         "shape": "trapezoid",
         "min": -16,
         "max": 480,
+        "air": 0,
         "biomes": [
           "cherry_grove",
           "frozen_peaks",
@@ -301,6 +320,72 @@
           "windswept_hills"
         ]
       }
+    ]
+  },
+  "hosts": {
+    "coal": [
+      "andesite",
+      "deepslate",
+      "diorite",
+      "granite",
+      "stone",
+      "tuff"
+    ],
+    "iron": [
+      "andesite",
+      "deepslate",
+      "diorite",
+      "granite",
+      "stone",
+      "tuff"
+    ],
+    "copper": [
+      "andesite",
+      "deepslate",
+      "diorite",
+      "granite",
+      "stone",
+      "tuff"
+    ],
+    "gold": [
+      "andesite",
+      "deepslate",
+      "diorite",
+      "granite",
+      "stone",
+      "tuff"
+    ],
+    "redstone": [
+      "andesite",
+      "deepslate",
+      "diorite",
+      "granite",
+      "stone",
+      "tuff"
+    ],
+    "lapis": [
+      "andesite",
+      "deepslate",
+      "diorite",
+      "granite",
+      "stone",
+      "tuff"
+    ],
+    "diamond": [
+      "andesite",
+      "deepslate",
+      "diorite",
+      "granite",
+      "stone",
+      "tuff"
+    ],
+    "emerald": [
+      "andesite",
+      "deepslate",
+      "diorite",
+      "granite",
+      "stone",
+      "tuff"
     ]
   }
 }

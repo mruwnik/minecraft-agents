@@ -460,11 +460,34 @@
 
 (deftest a-search-costs-more-a-find-the-more-ground-round-it-showed-none
   (let [a (* js/Math.PI 16 16)
-        per-find (fn [looked] (cost/search-s ["sheep"] looked a 6 2000))]
+        sheep (fn [looked] (cost/leg-chance ["sheep"] {:looked looked :a a}))
+        per-find (fn [looked] (cost/search-s (sheep looked) 6 2000))]
     (is (< 6 (per-find 0) (per-find 20000)) "a find takes more than a leg; each empty look round lowers the chance of the next")
     (is (infinite? (per-find 1e7)) "a region searched in vain pays for no leg")
-    (is (infinite? (cost/search-s ["sheep"] 0 a 6 5)) "a worth under a leg's price walks none")
-    (is (infinite? (cost/search-s ["oak_log"] 0 a 6 2000)) "a block has no base rate: no search is priced")))
+    (is (infinite? (cost/search-s (sheep 0) 6 5)) "a worth under a leg's price walks none")
+    (is (infinite? (cost/search-s (sheep 0) 6 js/Infinity)) "a worth with no bound sets no stop")
+    (is (nil? (cost/leg-chance ["oak_log"] {:looked 0 :a a})) "logs have no base rate: no chance is priced")
+    (is (infinite? (cost/search-s nil 6 2000)))))
+
+(deftest the-price-stop-is-a-leg-dearer-than-the-worth-left-times-its-chance
+  (is (not (cost/leg-stops? 5 0.5 10)))
+  (is (cost/leg-stops? 6 0.5 10))
+  (is (cost/leg-stops? 1 0 js/Infinity) "nothing to find stops even an unbounded worth"))
+
+(defn faces [block y n] (repeat n {:name block :pos {:x 0 :y y :z 0}}))
+
+(deftest an-ore-look-is-priced-by-the-rock-it-sees-at-its-height-and-a-tunnel-by-the-rock-it-cuts
+  (let [chance (fn [seen] ((cost/leg-chance ["coal_ore" "deepslate_coal_ore"] {:seen seen}) 0))]
+    (is (= "coal" (cost/ore-of ["coal_ore" "deepslate_coal_ore"])))
+    (is (nil? (cost/ore-of ["coal_ore" "iron_ore"])))
+    (is (< 0.3 (chance (faces "stone" 60 800)) 0.9) "a cave of stone at y 60 shows coal more often than not")
+    (is (< (chance (faces "stone" 60 100)) (chance (faces "stone" 60 800))) "less rock seen, less chance")
+    (is (zero? (chance (faces "dirt" 60 800))) "dirt holds no ore")
+    (is (zero? (chance (faces "deepslate" -30 800))) "coal lies above y 0")
+    (is (= (cost/seen-ore "coal" (faces "stone" 60 800)) (cost/seen-ore "coal" (faces "andesite" 60 800))) "every rock the veins replace alike")
+    (is (< (cost/seen-ore "coal" (faces "stone" 60 6)) (cost/tunnel-ore "coal" {:y 60} 1))
+        "a cave wall was open to air when the lower coal was placed: half its vein blocks are left out; a cut lays bare buried rock")
+    (is (= (cost/seen-ore "iron" (faces "stone" 16 6)) (cost/tunnel-ore "iron" {:y 16} 1)) "iron drops none beside air")))
 
 (deftest a-kill-is-priced-by-the-fight-and-drops-by-the-loot-table
   (let [body {:health 20 :level 0 :carried 0 :weapon "stone_sword" :equipment {}}]

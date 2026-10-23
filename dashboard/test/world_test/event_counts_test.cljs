@@ -99,3 +99,11 @@
 
 (deftest a-sighting-out-of-follow-range-or-of-a-provoked-only-mob-is-not-followed
   (is (empty? (c/notices [(saw 0 "skeleton" 20) (saw 0 "enderman" 2)]))))
+
+(deftest ore-seen-together-is-one-group-a-vein-s-deepslate-blocks-with-its-plain-ones
+  (is (= [2 1] (sort > (c/groups [[0 0 0] [1 1 1] [5 0 0]]))))
+  (is (= {:groups 3 :blocks 5 :per-group 1.67 :capped 1 :by-ore {"coal" {:groups 1 :blocks 3} "iron" {:groups 2 :blocks 2}}}
+         (c/vein-seen [{:k :observed :capped? true :blocks [["coal_ore" [0 0 0]] ["deepslate_coal_ore" [0 -1 0]] ["coal_ore" [1 -2 0]]
+                                                             ["iron_ore" [9 0 0]]]}
+                       {:k :observed :blocks [["iron_ore" [0 0 0]]]}
+                       {:k :hurt}]))))

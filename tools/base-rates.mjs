@@ -1,6 +1,7 @@
 // Why JavaScript: binary data; reads the worldgen JSON out of the server jar (a zip in a zip).
 // Writes engine/src/jobs/lib/cost/base_rates.json, the worldgen numbers jobs.lib.cost.base-rates reads: per ore its
-// placements (veins per chunk, vein size, height range and shape) and the biomes that carry each. The jar is needed
+// placements (veins per chunk, vein size, height range and shape, the chance a block of the vein beside air is left out)
+// and the biomes that carry each, and the blocks each ore replaces. The jar is needed
 // only here, when the game version changes:
 //   node tools/base-rates.mjs /path/to/mojang_<version>.jar
 import fs from 'node:fs'
@@ -47,35 +48,42 @@ const STEPS = {
   }
 }
 
-const placementOf = (feature, placed, size, dimension) => {
+const placementOf = (feature, placed, { size, discard_chance_on_air_exposure: air = 0 }, dimension) => {
   const parts = placed.placement.map(step => {
     const price = STEPS[bare(step.type)]
     if (!price) throw new Error(`${feature}: placement step ${bare(step.type)} is not priced`)
     return price(step, dimension)
   })
   const { count = 1, shape, min, max } = Object.assign({}, ...parts)
-  return { feature, count, size, shape, min, max }
+  return { feature, count, size, shape, min, max, air }
 }
 
-// worldgen: {version, dimension (the overworld's dimension_type), placed, configured, biomes}, the last three as
-// {name: parsed JSON}. A placement lists its biomes only when some biome with ores lacks it.
+// the blocks a configured ore's targets replace (a tag's values, nested tags resolved)
+const hostsOf = (made, tags) => {
+  const blocks = name => (tags[name]?.values ?? []).flatMap(v => v.startsWith('#') ? blocks(bare(v.slice(1))) : [bare(v)])
+  return made.config.targets.flatMap(({ target }) => target.tag ? blocks(bare(target.tag)) : target.block ? [bare(target.block)] : [])
+}
+
+// worldgen: {version, dimension (the overworld's dimension_type), placed, configured, biomes, tags (block tags)}, the last
+// four as {name: parsed JSON}. A placement lists its biomes only when some biome with ores lacks it.
 export function oreRates (worldgen, ores = ORES) {
-  const { version, dimension, placed, configured, biomes } = worldgen
+  const { version, dimension, placed, configured, biomes, tags = {} } = worldgen
   const rows = Object.keys(placed).sort().flatMap(feature => {
     const made = configured[bare(placed[feature].feature)]
     const ore = oreOf(made)
-    return ores.includes(ore) ? [{ ore, ...placementOf(feature, placed[feature], made.config.size, dimension) }] : []
+    return ores.includes(ore) ? [{ ore, hosts: hostsOf(made, tags), ...placementOf(feature, placed[feature], made.config, dimension) }] : []
   })
   const carriers = feature => Object.keys(biomes).sort().filter(b => biomes[b].features.flat().map(bare).includes(feature))
   const withOres = [...new Set(rows.flatMap(r => carriers(r.feature)))].sort()
-  const rowOf = ({ ore, ...row }) => {
+  const rowOf = ({ ore, hosts, ...row }) => {
     const inBiomes = carriers(row.feature)
     return inBiomes.length === withOres.length ? row : { ...row, biomes: inBiomes }
   }
   return {
     version,
     biomes: withOres,
-    ores: Object.fromEntries(ores.map(ore => [ore, rows.filter(r => r.ore === ore).map(rowOf)]))
+    ores: Object.fromEntries(ores.map(ore => [ore, rows.filter(r => r.ore === ore).map(rowOf)])),
+    hosts: Object.fromEntries(ores.map(ore => [ore, [...new Set(rows.filter(r => r.ore === ore).flatMap(r => r.hosts))].sort()]))
   }
 }
 
@@ -94,7 +102,8 @@ export function readWorldgen (bundle) {
     dimension: jsonUnder(jar, 'data/minecraft/dimension_type/').overworld,
     placed: jsonUnder(jar, 'data/minecraft/worldgen/placed_feature/'),
     configured: jsonUnder(jar, 'data/minecraft/worldgen/configured_feature/'),
-    biomes: jsonUnder(jar, 'data/minecraft/worldgen/biome/')
+    biomes: jsonUnder(jar, 'data/minecraft/worldgen/biome/'),
+    tags: jsonUnder(jar, 'data/minecraft/tags/block/')
   }
 }
 

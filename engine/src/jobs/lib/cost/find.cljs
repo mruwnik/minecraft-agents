@@ -1,15 +1,19 @@
 (ns jobs.lib.cost.find
-  "The chance a look round finds the animals a search is for: a mixture prior (base-rates/animal-ground-share of the
-  land spawns them, at base-rates/animal-pack-density, the rest none) lowered by the ground within ::region that looks for
-  them found none on (live :searched notes, engine.notes), so a search over empty ground soon stops paying. Pure."
-  (:require [engine.args :as a]
+  "The chance a look round finds what a search is for, and a search's seconds per find. Animals: a mixture prior
+  (base-rates/animal-ground-share of the land spawns them, at base-rates/animal-pack-density, the rest none) lowered by
+  the ground within ::region that looks for them found none on (live :searched notes, engine.notes), so a search over
+  empty ground soon stops paying. Ore: the game's vein placement (base-rates) over the faces a look sees of the rock the
+  veins replace, at each face's height, and over the rock a tunnel cuts. Pure."
+  (:require [clojure.string :as str]
+            [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.cost.base-rates :as base-rates]))
 
 (a/defargs settings
   {::region {:default 128 :spec (a/num-in 1 nil)
              :doc "Blocks round a spot whose searched ground tells the chance of a find there: the game sets animals by biome, and a biome spans a few hundred blocks."}
-   ::leg-spacing {:default 16 :doc "Blocks between a search's legs (jobs.explore.search)." :spec (a/int-in 4 64)}})
+   ::leg-spacing {:default 16 :doc "Blocks between a search's legs (jobs.explore.search)." :spec (a/int-in 4 64)}
+   ::vein-seen {:default 4.16 :doc "Ore blocks a look sees of each vein it sees (the game places a vein as one clump): 104 blocks in 25 groups seen together in the look tool's lists of the trial logs (all 7 lists cut short at their nearest blocks, so far groups may be undercounted), coal and iron pooled. Recount: node tools/event-counts.mjs vein-seen." :spec (a/num-in 1 nil)}})
 
 (defn leg-spacing [] (settings/get settings ::leg-spacing))
 
@@ -65,18 +69,67 @@
   [ns names at r]
   (find-chance names (looked-area ns names at) (* js/Math.PI r r)))
 
+(defn ore-of
+  "The base-rates resource whose ore blocks names all are (\"coal\" for coal_ore and deepslate_coal_ore), else nil."
+  [names]
+  (let [rs (set (map #(-> % (str/replace #"^deepslate_" "") (str/replace #"_ore$" "")) names))]
+    (when (and (seq names) (every? #(str/ends-with? % "_ore") names) (= 1 (count rs)) (seq (base-rates/host-blocks (first rs))))
+      (first rs))))
+
+(defn vein-seen [] (settings/get settings ::vein-seen))
+
+(defn ore-chance
+  "Chance a look or a cut lays bare a vein when `ore` of its blocks are expected among the faces it shows: veins at
+  ::vein-seen blocks each, 1 - e^(-ore / vein-seen)."
+  [ore]
+  (- 1 (js/Math.exp (- (/ ore (vein-seen))))))
+
+(defn seen-ore
+  "Blocks of resource expected among seen ({:name :pos}, faces the body has seen): each of the rock its veins replace
+  (base-rates/host?) at the density of a face open to air at its height; other ground holds none."
+  [resource seen]
+  (->> seen
+       (filter #(base-rates/host? resource (:name %)))
+       (map #(js/Math.floor (:y (:pos %))))
+       frequencies
+       (reduce (fn [acc [y n]] (+ acc (* n (base-rates/expected-density resource {:y y} nil :exposed? true)))) 0)))
+
+(def tunnel-faces "Rock faces a 1x2 tunnel lays bare per block it cuts: two walls two high, the roof and the floor." 6)
+
+(defn tunnel-ore
+  "Blocks of resource expected among the faces n blocks of tunnel cut at pos's height lay bare (buried rock: no air
+  discard), the ground taken as all rock its veins replace."
+  [resource pos n]
+  (* n tunnel-faces (base-rates/expected-density resource pos nil)))
+
+(defn leg-chance
+  "A fn of a leg's index (0 the first) -> the chance its look finds one of names, or nil when none is priced. Animals:
+  find-chance of `a` blocks of new ground per leg after `looked` searched in vain. An ore's blocks: ore-chance of
+  seen-ore over `seen`, the faces a look round here shows, each leg's look taken to show rock alike. Others (logs,
+  other blocks): nil."
+  [names {:keys [looked a seen]}]
+  (cond
+    (density names) (fn [i] (find-chance names (+ looked (* i a)) a))
+    (ore-of names) (constantly (ore-chance (seen-ore (ore-of names) seen)))))
+
+(defn leg-stops?
+  "The :price stop of a search: a leg of price leg stops it when it costs more than the worth left times the chance its
+  look finds one (a chance of 0 always stops)."
+  [leg chance left]
+  (not (<= leg (* chance left))))
+
 (defn search-s
-  "Seconds a search for names spends per find: legs of leg-s seconds, each looking over `a` blocks of new ground after
-  `looked` searched in vain, walked while a leg costs less than the worth left times its find-chance (the search's
-  :price stop), the seconds expected until a find or that stop over the chance of a find by then: a search tried
-  before a sure way of cost C (taken when it finds none) is cheaper exactly when this is under C. Infinity when no leg
-  pays or names have no base rate (no chance is priced). Each leg spends leg-s (positive) of the worth, so it ends."
-  [names looked a leg-s worth]
+  "Seconds a search spends per find: legs of leg-s seconds, leg i finding with (chance i) (leg-chance's), walked until
+  leg-stops? on the worth left, the seconds expected until a find or that stop over the chance of a find by then: a
+  search tried before a sure way of cost C (taken when it finds none) is cheaper exactly when this is under C.
+  Infinity when no leg pays, chance is nil (none priced) or the worth has no bound (it sets no stop). Each leg spends
+  leg-s (positive) of a finite worth, so it ends."
+  [chance leg-s worth]
   {:pre [(pos? leg-s)]}
-  (if-not (density names)
+  (if-not (and chance (js/isFinite worth))
     js/Infinity
-    (loop [looked looked spent 0 miss 1 expect 0]
-      (let [chance (find-chance names looked a)]
-        (if (> leg-s (* chance (- worth spent)))
+    (loop [i 0 spent 0 miss 1 expect 0]
+      (let [p (chance i)]
+        (if (leg-stops? leg-s p (- worth spent))
           (if (< miss 1) (/ expect (- 1 miss)) js/Infinity)
-          (recur (+ looked a) (+ spent leg-s) (* miss (- 1 chance)) (+ expect (* miss leg-s))))))))
+          (recur (inc i) (+ spent leg-s) (* miss (- 1 p)) (+ expect (* miss leg-s))))))))

@@ -575,7 +575,7 @@
       (cond
         (:estimate q) :continue
         (infinite? price) (do (ctx/update-mem! c dissoc :leg-price) nil)
-        (> price (* chance (- worth (:spent (ctx/mem c) 0)))) (do (ctx/update-mem! c assoc :next-price price :next-chance chance)
+        (cost/leg-stops? price chance (- worth (:spent (ctx/mem c) 0))) (do (ctx/update-mem! c assoc :next-price price :next-chance chance)
                                                                   (finish! c :not-found :price))
         :else (do (ctx/update-mem! c assoc :leg-price price) nil)))))
 

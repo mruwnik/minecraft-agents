@@ -1,7 +1,9 @@
 (ns world-test.event-counts
   "tools/event-counts.mjs: recounts the measured combat priors from the trial bodies' event logs, so a setting can cite its k and n.
   Commands: fold | creeper-exchange | flight-starts | notice-rate, each [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]; each folds the logs into the durable counts file first (rows by run id, so counts only grow as logs rotate).
-  spot-returns [--agents DIR] (world-test.spot-returns) counts from the logs alone, no fold.
+  spot-returns [--agents DIR] (world-test.spot-returns) and vein-seen [--agents DIR] count from the logs alone, no fold.
+  vein-seen: the ore blocks one look saw together (26-connected, a vein's plain and deepslate blocks as one ore) per group, from the
+  look tool's :look.observed lists; :capped counts the lists the tool cut short (nearest first, so a far group may be cut).
   creeper-exchange: respond runs that only decided about creepers and fought (a :fight decision) with at least one swing: hp the creepers
   dealt (hurt events inside the run) per swing (attack that hit or killed), overall and per weapon equipped in the run, and the runs with a blast over 2 hp.
   flight-starts: the first flee decision of each respond run from a creeper: seconds until the body is 1 block from where it stood,
@@ -15,7 +17,7 @@
   stores {:k catches :n-s weighted seconds} for each class: :other (reach: danger/melee-reach) and :ranged (a mob of threat/ranged?, caught within
   danger/ranged-radius, whose line of fire the logs do not hold, so its weight is an upper bound too). A catch ends one sighting: the events
   carry no entity id, so it is the open sighting of the kind nearest the event's spot.
-  Pure parts: scan-line, exchange, starts, deciles, notices."
+  Pure parts: scan-line, exchange, starts, deciles, notices, groups, vein-seen."
   (:require ["fs" :as fs]
             ["path" :as path]
             ["zlib" :as zlib]
@@ -58,6 +60,11 @@
 
         (and (str/includes? line ":kind :ended") (str/includes? line ":hostile-near"))
         {:k :ended :t t :gen gen :job (root-job (second (re-find #":job-id \"([^\"]*)\"" line)))}
+
+        (and (str/includes? line ":kind :look.observed") (str/includes? line "_ore\""))
+        (let [e (whole)]
+          {:k :observed :t t :gen gen :capped? (boolean (get-in e [:data :more-blocks?]))
+           :blocks (vec (for [{:keys [name pos]} (get-in e [:data :blocks]) :when (str/ends-with? name "_ore")] [name pos]))})
 
         (and (str/includes? line ":kind :hurt") (str/includes? line ":source :body"))
         (let [e (whole)]
@@ -271,6 +278,36 @@
    :by-class (into (sorted-map) (map (fn [[ranged? rs]] [(if ranged? :ranged :other) (notice-tally rs)])) (group-by (comp ranged-mob? :mob) rows))
    :by-mob (into (sorted-map) (map (fn [[m rs]] [m (notice-tally rs)])) (group-by :mob rows))})
 
+(defn ore-of [block] (-> block (str/replace #"^deepslate_" "") (str/replace #"_ore$" "")))
+
+(defn groups
+  "Sizes of the 26-connected groups of cells."
+  [cells]
+  (loop [left (set cells) sizes []]
+    (if-let [start (first left)]
+      (let [[n left] (loop [todo [start] left (disj left start) n 0]
+                       (if-let [[x y z] (peek todo)]
+                         (let [near (for [dx [-1 0 1] dy [-1 0 1] dz [-1 0 1] :let [c [(+ x dx) (+ y dy) (+ z dz)]] :when (left c)] c)]
+                           (recur (into (pop todo) near) (reduce disj left near) (inc n)))
+                         [n left]))]
+        (recur left (conj sizes n)))
+      sizes)))
+
+(defn vein-seen
+  "{:groups n :blocks k :per-group k/n :capped lists cut short :by-ore {ore {:groups :blocks}}} of the ore seen together in the
+  :observed records."
+  [records]
+  (let [rows (for [{:keys [blocks]} (filter #(= :observed (:k %)) records)
+                   [ore cells] (group-by (comp ore-of first) blocks)
+                   n (groups (map second cells))]
+               [ore n])
+        tally (fn [rs] {:groups (count rs) :blocks (reduce + 0 (map second rs))})
+        all (tally rows)]
+    (assoc all
+           :per-group (when (pos? (:groups all)) (/ (js/Math.round (* 100 (/ (:blocks all) (:groups all)))) 100))
+           :capped (count (filter #(and (= :observed (:k %)) (:capped? %)) records))
+           :by-ore (into (sorted-map) (map (fn [[o rs]] [o (tally rs)])) (group-by first rows)))))
+
 (defn event-files
   "The event files of a body's directory listing: the plain log (events.edn, its rotations) and the debug log (action events),
   each rotation once (the plain file wins over its .gz)."
@@ -291,7 +328,7 @@
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | spot-returns [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | spot-returns | vein-seen [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -328,5 +365,9 @@
        "creeper-exchange" (do (println (pr-str (assoc (exchange-report (since (:exchange folded))) :since-ms since-ms))) 0)
        "flight-starts" (do (println (pr-str (assoc (starts-report (since (:starts folded))) :since-ms since-ms :sprint sprint))) 0)
        "spot-returns" (do (println (pr-str (spot-returns/count-in (or agents (path/join repo "worlds" "test" "agents"))))) 0)
+       "vein-seen" (let [dir (or agents (path/join repo "worlds" "test" "agents"))]
+                     (println (pr-str (vein-seen (mapcat #(read-agent (path/join dir % "engine") since-ms)
+                                                         (filter #(fs/existsSync (path/join dir % "engine")) (array-seq (fs/readdirSync dir)))))))
+                     0)
        "notice-rate" (do (println (pr-str (assoc (notice-report (since (:notices folded))) :since-ms since-ms))) 0)
        (do (js/console.error usage) 2)))))

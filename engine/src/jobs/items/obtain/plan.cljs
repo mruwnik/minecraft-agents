@@ -110,7 +110,8 @@
 
 (defn need-cost
   "Seconds to gather a need whose nearest block is seen: the walk there with the death it risks (threats/route-death-cost),
-  the digs, a hostile mob's kills (cost/kill-price, as many as cost/kill-drops says the count takes), and for an ore seen
+  the digs, a hostile mob's kills (cost/kill-price, as many as cost/kill-drops says the count takes; Infinity when its
+  loot holds none), and for an ore seen
   below the feet a dark way (walk at the dark price and a torch every few blocks) unless its cell is lit; Infinity when it
   is dark and no torch is carried: the way down is lit by the torches it is wanted for."
   [c need]
@@ -123,8 +124,9 @@
         risk (threats/route-death-cost c (route-class p) pos)
         mob (:mob need)
         kills (when (and mob (cost/hostile? (game/version-of p) {:name mob}))
-                (* (js/Math.ceil (/ (:count need) (or (cost/kill-drops mob (:key need) :version (game/version-of p)) 1)))
-                   (cost/kill-price (threats/death-body c) mob self)))
+                (if-let [drops (cost/kill-drops mob (:key need) :version (game/version-of p))]
+                  (* (js/Math.ceil (/ (:count need) drops)) (cost/kill-price (threats/death-body c) mob self))
+                  js/Infinity))
         dig (+ (or kills 0) (* (:count need) (or (cost/dig-cost name) 0)))
         torches (storage/carried (u/inventory p) "torch")
         dark? (and (:ore? need) (below? c need) (unlit? p pos))]
@@ -135,19 +137,24 @@
 
 (defn search-cost
   "Seconds per find of a search for an unseen need (cost/search-s): legs of the search's spacing, each the walk and the
-  death it risks now, a look of the gather's scan radius over ground the notes searched in vain round the body
-  (cost/look-chance's), within the call's search-worth, then the walk to what it saw. Infinity when the call may not
-  search, the need is tunnelled for or no chance is priced (blocks)."
+  death it risks now, a look of the gather's scan radius (cost/leg-chance: an animal's over ground the notes searched in
+  vain round the body, an ore's over the faces of rock the body has seen within that radius), within the call's
+  search-worth, then the walk to what it saw. Infinity when the call may not search, its search for the need ran
+  already (it found none: the seen way is next), the need is tunnelled for or no chance is priced (logs and other blocks)."
   [c need]
-  (if-not (and (explore-opts c) (searchable? need) (not (:tunnel? need)))
+  (if-not (and (explore-opts c) (searchable? need) (not (:tunnel? need)) (zero? (get-in (ctx/mem c) [:explored (:key need)] 0)))
     js/Infinity
     (let [p (:primitives c)
           self (u/self-pos c)
           names (search-names need)
           r (search-scan-radius)
           leg (+ (:cost (cost/walk-cost {:distance (cost/leg-spacing)}))
-                 (cost/route-death-cost (threats/death-body c) (route-class p) self))]
-      (+ (cost/search-s names (cost/looked-area (notes/notes c) names [(:x self) (:z self)]) (* js/Math.PI r r) leg (search-worth c))
+                 (cost/route-death-cost (threats/death-body c) (route-class p) self))
+          chance (cost/leg-chance names {:looked (cost/looked-area (notes/notes c) names [(:x self) (:z self)])
+                                         :a (* js/Math.PI r r)
+                                         :seen (when-let [ore (cost/ore-of names)]
+                                                 (look/seen-blocks p {:names (vec (cost/host-blocks ore)) :radius r :max js/Infinity}))})]
+      (+ (cost/search-s chance leg (search-worth c))
          (:cost (cost/walk-cost {:distance r}))))))
 
 (defn plan-cost
@@ -159,7 +166,7 @@
 (defn preferred
   "The gather plan pl, or when it gathers a need with no source seen, or mines an ore seen below the feet, and the same
   item is made another way from raw needs all seen (white wool from a seen spider's string, charcoal from logs for
-  torches) that costs less (plan-cost: an unseen need its search per find, a block's Infinity; the dark way down to coal,
+  torches) that costs less (plan-cost: an unseen need its search per find, Infinity for logs; the dark way down to coal,
   with no torch to light it, costs more than any walk to logs), that plan. A way whose own needs are unseen (wool dyed
   from wool) is passed over for the next while that leaves out more items; none is left once it leaves out none."
   [c version pl have name n opts]
