@@ -109,36 +109,36 @@
   (is (not (wanted? {:inventory [cobble8 pickaxe] :blocks (merge g/ground g/pit canopy)} false))))
 
 (defn ^:async no-gap-run
-  "Respond with the spec: no gap block is placed, the calls begin with the gap calls given and go on with the usual
-  response, a flight (a seal, a pocket or a flee step: which one is the flight's choice, jobs.lib.flee-search)."
-  [spec gaps]
-  (let [s (await (respond! spec))
-        slots (remove #{:pause :hide} (calls s))]
+  "Respond with the spec: no gap block is placed, the calls are the expected slots and the usual response is a flight
+  that hides sealed in (hold why hiding) or ends out of line. Over the dirt ground the priced cover is a pit dug there
+  (respond-to-hostile cover-answers), the flight's first step."
+  [spec slots hides?]
+  (let [s (await (respond! spec))]
     (is (not (placed? s)))
-    (is (= gaps (take (count gaps) slots)) (str "the gap calls first: " (pr-str slots)))
-    (is (some #{:plug :plug-dig :plug-zone :pocket :step} (drop (count gaps) slots)) (str "then the flight: " (pr-str slots)))
+    (is (= slots (remove #{:pause :hide} (calls s))) "holds not counted: how many depends on real time")
     (is (= [:flee] (decisions s)) "a lone skeleton with no weapon: flee")
+    (is (= hides? (hiding-seen? s)))
     s))
 
-(deftest no-pickaxe-no-gap-placed-and-the-body-flees
+(deftest no-pickaxe-no-gap-placed-and-the-body-flees-and-hides
   (async done
     (tu/run-async done
-      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8]} []))))))
+      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8]} [:plug-dig] true))))))
 
-(deftest no-blocks-no-gap-placed-and-the-body-flees
+(deftest no-blocks-no-gap-placed-and-the-body-flees-and-hides
   (async done
     (tu/run-async done
-      (fn ^:async t [] (await (no-gap-run {:inventory [pickaxe]} []))))))
+      (fn ^:async t [] (await (no-gap-run {:inventory [pickaxe]} [:plug-dig] true))))))
 
-(deftest a-melee-mob-as-well-no-gap-placed-and-the-body-flees
+(deftest a-melee-mob-as-well-no-gap-placed-and-the-body-flees-and-hides
   (async done
     (tu/run-async done
-      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8 pickaxe] :entities [g/pit-skeleton zombie]} []))))))
+      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8 pickaxe] :entities [g/pit-skeleton zombie]} [:plug-dig] true))))))
 
 (deftest open-ground-no-gap-placed-and-the-body-digs-in
   (async done
     (tu/run-async done
-      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8 pickaxe] :blocks (merge wide-ground g/pit canopy)} []))))))
+      (fn ^:async t [] (await (no-gap-run {:inventory [cobble8 pickaxe] :blocks (merge wide-ground g/pit canopy)} [:plug-dig] true))))))
 
 (deftest a-gap-that-fails-refused-falls-back-to-the-usual-response
   (async done
@@ -146,5 +146,5 @@
       (fn ^:async t []
         (let [{:keys [seen]} (await (no-gap-run {:inventory [cobble8 pickaxe]
                                                  :zones [{:name "keep" :owner "Miles" :min [-4 60 -4] :max [4 70 4]}]}
-                                                [:gap :gap]))]
+                                                [:gap :gap :pocket :step] false))]
           (is (some #(and (= :child_ended (:kind %)) (= :gap (:slot %)) (= :refused (:reason %))) @seen) "the gap job ran and placed nothing"))))))
