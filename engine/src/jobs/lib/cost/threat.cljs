@@ -201,16 +201,17 @@
     (- 1 (* (- 1 kept) despawned))))
 
 (defn spawned-there
-  "The chance a mob spawned since is at a place a mob spawns at a share of (jobs.lib.cost/spawn-share), after seconds with
-  the nearest player 32 to 128 blocks off: vanilla spawns at a steady rate, each mob idles idle-despawn-s and then despawns
-  idle-despawn-per-s, so the count there is Poisson, the rate times the expected life so far. The rate is the one at which a
-  wholly dark spot is held (k+1)/(n+2) of the time, ::spot-occupied."
-  [share seconds]
+  "The chance a mob spawned since is at a place that may spawn one (any cell of it not seen lit), after seconds with the
+  nearest player 32 to 128 blocks off: vanilla spawns at a steady rate, each mob idles idle-despawn-s and then despawns
+  idle-despawn-per-s, so the count there is Poisson, the rate times the expected life so far. The rate is the one at which
+  a spot of any light is held (k+1)/(n+2) of the time, ::spot-occupied (the logs carry no light, so the rate is not scaled
+  by the spot's dark share again)."
+  [seconds]
   (let [{:keys [k n]} (settings/get settings ::spot-occupied)
         held (/ (inc k) (+ n 2))
         idle (min seconds idle-despawn-s)
         life (+ idle (/ (- 1 (js/Math.exp (- (* idle-despawn-per-s (max 0 (- seconds idle-despawn-s)))))) idle-despawn-per-s))]
-    (- 1 (js/Math.pow (- 1 held) (* share (/ life (+ idle-despawn-s (/ 1 idle-despawn-per-s))))))))
+    (- 1 (js/Math.pow (- 1 held) (/ life (+ idle-despawn-s (/ 1 idle-despawn-per-s)))))))
 
 (defn creeper-blast [] (settings/get settings ::creeper-blast))
 (defn creeper-exchange

@@ -121,8 +121,8 @@
   "The chance the mob that killed or hunted c's body at pos age-ms ago, or a like one, is there now, times the spot's weight
   (its fade): 1 - (1 - old)(1 - new). old, the mob itself: threat/left-alive by the farthest the body has been from the spot
   since, the seconds since it was last within threat/idle-despawn-blocks (whereabouts) and the drops it may have
-  picked up, none while it burns there (burning?). new, one spawned since: threat/spawned-there over the cells its field
-  weighs 1 (cost/spawn-share; lit? ones spawn none) for the seconds since the body was last more than threat/despawn-blocks
+  picked up, none while it burns there (burning?). new, one spawned since: threat/spawned-there, unless every cell its field
+  weighs 1 is lit? (cost/spawn-share 0), for the seconds since the body was last more than threat/despawn-blocks
   off (none spawns, and any there despawns, while it is). Despawning goes by the nearest player: another player sensed
   within despawn-blocks of the spot now (where it was before is not known) counts as having been there all along (never far, near
   now when within idle-despawn-blocks). A water mob's is old alone: it keeps to its water, where it never burns."
@@ -143,7 +143,7 @@
          old
          (let [close (map #(vec (take 3 %)) (take-while #(= 1 (aget % 3)) (:cells (field/field-of c {:mob mob :pos pos}))))
                share (cost/spawn-share close {:light (fn [[x y z]] (when (lit? p {:x x :y y :z z}) {:block 15}))})
-               new (threat/spawned-there share (/ (- now last-far) 1000))]
+               new (if (pos? share) (threat/spawned-there (/ (- now last-far) 1000)) 0)]
            (- 1 (* (- 1 old) (- 1 new))))))))
 
 (defn uncleared

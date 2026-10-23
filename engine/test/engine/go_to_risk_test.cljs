@@ -423,12 +423,20 @@
   ;; the body 75 blocks off, the spot all dark
   (let [[ten] (dark-share 1 (died "creeper" 600000))
         [hundred] (dark-share 1 (died "creeper" 6000000))
-        since-back #(* (- 1 (/ %1 7200000)) (threat/spawned-there 1 %2))
+        since-back #(* (- 1 (/ %1 7200000)) (threat/spawned-there %2))
         later-fall {:t 35999000 :data {:pos {:x 300 :y 64 :z 5} :cause "fall" :death-t 35999000}}]
     (is (< 0 hundred ten 0.5) "a dark spot is no sure mob, and the older record says less")
     (is (= [(pct (since-back 60000 50))] (mapv pct (dark-share 1 (merge (died "creeper" 60000) respawned-far))))
         "the respawn 128 blocks off despawned the creeper and any spawned there: only the 50 s since the body came back count")
     (is (= [(pct (since-back 600000 1))] (mapv pct (dark-share 1 (update (died "creeper" 600000) :deaths conj later-fall)))) "a later death far off is where the body was")))
+
+(deftest a-spot-that-may-spawn-holds-a-spawned-mob-at-the-measured-rate-of-any-light-and-a-seen-lit-one-none
+  ;; the measured rate already covers spots of any light: a half-lit field is priced as a dark one
+  (let [shares #(mapv pct (with-redefs [death-spot/lit? %] (dark-share 1 (merge (died "creeper" 600000) respawned-far))))
+        dark (shares (constantly false))]
+    (is (= [(pct (* (- 1 (/ 600000 7200000)) (threat/spawned-there 50)))] dark))
+    (is (= dark (shares (fn [_ {:keys [x]}] (< x 80)))))
+    (is (= [0] (shares (constantly true))))))
 
 (defn died-with
   "died, the :died entry of the death holding items (names)."
@@ -436,7 +444,7 @@
   (assoc (died cause age-ms) :died [{:t (- 36000000 age-ms) :data {:pos {:x 80 :y 64 :z 5} :inventory (mapv #(hash-map :name %) items)}}]))
 
 (deftest only-a-loot-picker-above-easy-that-could-pick-up-a-drop-it-equips-outlives-the-body-going-far
-  (let [spawned (threat/spawned-there 1 50)]
+  (let [spawned (threat/spawned-there 50)]
     (are [difficulty entries kept] (= (pct (- 1 (* (- 1 kept) (- 1 spawned))))
                                       (pct (first (dark-share difficulty (merge entries respawned-far) :unfaded))))
       2 (died "zombie" 60000) 0.5522
