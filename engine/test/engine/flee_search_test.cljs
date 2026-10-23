@@ -117,8 +117,10 @@
       (fn ^:async t []
         (let [from {:x 0.5 :y 64 :z 0.5}
               zombie [{:name "baby" :mob "zombie" :pos {:x -2.5 :y 64 :z 0.5}}]
-              open (await (ends-of field from zombie [] nil))
-              walled (await (ends-of (merge field (box -2 64 -6 -2 65 6 "stone")) from zombie [] nil))]
+              ;; a ring of 4 s: its ways round the wall stay within the zombie's follow range
+              short (fn ^:async short-ring [blocks] (await (settings/with-settings {::search/horizon-s 4} (fn ^:async run [] (await (ends-of blocks from zombie [] nil))))))
+              open (await (short field))
+              walled (await (short (merge field (box -2 64 -6 -2 65 6 "stone"))))]
           (is (every? :caught? open) "in the open a baby zombie keeps up")
           (is (some? (search/pick walled {})) "round a wall it falls behind"))))))
 

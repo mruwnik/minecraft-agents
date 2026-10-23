@@ -29,7 +29,7 @@
 
 (a/defargs settings
   {::bearings {:default 12 :doc "Headings round the body a flee search plans a ring end at." :spec (a/int-in 1 64)}
-   ::horizon-s {:default 4 :doc "Seconds of a flight (reach) whose distance is the ring a flee search plans its ends on: a way that leads that far is open, one that stops short a pocket." :spec (a/num-in 0.5 nil)}
+   ::horizon-s {:default 8 :doc "Seconds of a flight (reach) whose distance is the ring a flee search plans its ends on: a way that leads that far is open, one that stops short a pocket (8 s at the flee pace, about 22 blocks: a dead end that far ahead shows)." :spec (a/num-in 0.5 nil)}
    ::max-nodes {:default 600 :doc "Planner nodes one ring end's search may expand: past it the end is its partial route's." :spec (a/int-in 50 nil)}
    ::target-max-nodes {:default 2400 :doc "Planner nodes the search of a named target (a goal, a home) may expand." :spec (a/int-in 50 nil)}
    ::open-share {:default 0.5 :doc "Share of the reach a ring end's partial route must cover to count as a way on (a lake, a tree or a wall at the ring); one that stops shorter is a pocket." :spec (a/num-in 0 1)}

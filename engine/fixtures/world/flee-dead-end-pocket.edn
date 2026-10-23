@@ -1,7 +1,7 @@
 ;; Card ee045b60: the flee search plans its ends with the go-to planner, so a corridor that runs straight away from the chaser into a dead
 ;; end is a pocket, and the way out that turns off it is taken. Stone x 0..40, z 0..31, y 0..5 (feet y 3, walls three high, open to the sky);
 ;; a corridor along z 16 from x 4 to a dead end at x 30, at x 18 a branch north to a field x 12..28, z 0..5. The body stands in the corridor
-;; at x 12, a zombie (NoAI, helmeted) 6 west of it: straight away is the dead end. Unlit (card 16f510ad: a flight in the dark sees
+;; at x 12, a creeper (NoAI: it never swells; a fist fight with it costs more than the flight) 6 west of it: straight away is the dead end. Unlit (card 16f510ad: a flight in the dark sees
 ;; about a cell ahead; the unseen ways are priced, not refused). Should-succeed: the flight starts and the body ends in the
 ;; branch or the field, not in the corridor.
 {:defaults
@@ -18,7 +18,7 @@
   :limit-s 60}
  :cases
  [{:name "flight-turns-off-a-dead-end-corridor"
-   :act [[:summon "zombie" [6.5 3 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :act [[:summon "creeper" [6.5 3 16.5] "{NoAI:1b}"]]
    :expect [{:event {:source :job :kind :retreat.target} :within-s 25}
             {:no-event {:source :body :kind :died} :for-s 30}]
    :after [[:body-near [20.5 3 2.5] 12]]}]}

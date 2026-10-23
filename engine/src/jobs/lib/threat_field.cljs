@@ -364,19 +364,6 @@
   [{:keys [weights]}]
   (fn [x y z] (.get weights (base/cell-key x y z))))
 
-(defn line-walked?
-  "Whether the straight line from cell [sx sy sz] to x y z runs over cells of steps (a Map of base/cell-key, at each
-  point the cell's height or one off): a walker goes straight there."
-  [^js steps [sx sy sz] x y z]
-  (let [n (js/Math.ceil (js/Math.hypot (- x sx) (- z sz)))]
-    (every? (fn [i]
-              (let [t (/ i n)
-                    px (js/Math.floor (+ sx 0.5 (* t (- x sx))))
-                    pz (js/Math.floor (+ sz 0.5 (* t (- z sz))))
-                    py (js/Math.round (+ sy (* t (- y sy))))]
-                (some #(.has steps (base/cell-key px % pz)) [py (dec py) (inc py)])))
-            (range 1 n))))
-
 (def cells-within
   "The offsets [dx dy dz d] of the cells within r blocks of a cell (d its distance), the cell itself first."
   (memoize (fn [r]
@@ -389,17 +376,27 @@
 
 (defn way-fn
   "A fn of a cell x y z: the blocks the walker of field walks from its cell start to within reach blocks of it (its
-  blow): to the cell itself on a straight line that runs over its way (line-walked?), less reach; else the fewest
-  steps to a cell of its way within reach; ##Inf with none and the field :whole? (the walker cannot get
-  there), nil when that is not known (the straight line stands)."
-  [{:keys [steps whole?]} [sx sy sz :as start] reach]
-  (fn [x y z]
-    (if (and (.has steps (base/cell-key x y z)) (line-walked? steps start x y z))
-      (max 0 (- (js/Math.hypot (- x sx) (- y sy) (- z sz)) reach))
-      (let [near (keep (fn [[dx dy dz]] (.get steps (base/cell-key (+ x dx) (+ y dy) (+ z dz)))) (cells-within reach))]
-        (cond
-          (seq near) (reduce min near)
-          whole? ##Inf)))))
+  blow): to a cell of its way, its walk there (the straight line when its steps took no detour, no more than the
+  cells between, else its steps) less reach; else its walk to the nearest cell of its way within reach; ##Inf with
+  none and the field :whole? (the walker cannot get there), nil when that is not known (the straight line stands)."
+  [{:keys [steps whole?]} [sx sy sz] reach]
+  (let [memo (js/Map.)
+        walked (fn [x y z]
+                 (when-let [n (.get steps (base/cell-key x y z))]
+                   (let [dx (js/Math.abs (- x sx)) dy (js/Math.abs (- y sy)) dz (js/Math.abs (- z sz))]
+                     (if (<= n (+ dx dy dz 1)) (js/Math.hypot dx dy dz) n))))
+        way (fn [x y z]
+              (if-let [d (walked x y z)]
+                (max 0 (- d reach))
+                (let [near (keep (fn [[ox oy oz]] (walked (+ x ox) (+ y oy) (+ z oz))) (cells-within reach))]
+                  (cond
+                    (seq near) (reduce min near)
+                    whole? ##Inf))))]
+    (fn [x y z]
+      (let [k (base/cell-key x y z)]
+        (if (.has memo k)
+          (.get memo k)
+          (let [w (way x y z)] (.set memo k w) w))))))
 
 (defn reaches?
   "Whether the field of threat {:mob :pos} (field-of c) holds the cell of pos {:x :y :z}."
