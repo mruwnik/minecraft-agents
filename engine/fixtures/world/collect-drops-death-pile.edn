@@ -5,6 +5,7 @@
 ;; Should-succeed: a pile in plain sight in a lit cell is collected at once: a spot seen clear since the death is no threat.
 ;; Should-succeed: diamonds at the dark end of a corridor (x 10..29, 1 wide, cut in stone filling x 10..31; the room x 0..9 lit by a
 ;; glowstone ceiling, so x 20..29 are block light 0) are fetched: the spot is not seen clear, and they are worth its risk.
+;; Should-fail (waits): the same diamonds without the sword: unarmed, the walk costs more than they are worth, so it waits :risky, nothing collected.
 ;; Should-fail (waits): one rotten flesh at the same dark end is not worth the risk: the walk waits :risky, nothing collected.
 {:defaults
  {:tags [:collect-drops :survival :go-to]
@@ -33,4 +34,12 @@
    :act [[:summon "item" [28.5 0.2 16.5] "{Item:{id:\"minecraft:rotten_flesh\",count:1}}"]
          [:job (jobs.items.collect-drops {:near #xyz [28 0 16] :radius 3})]]
    :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 40 :of-job true}]
-   :after [[:item "rotten_flesh" 0]]}]}
+   :after [[:item "rotten_flesh" 0]]}
+  {:name "diamonds-at-a-dark-corridor-end-wait-without-a-sword"
+   :plot {:height 6 :floor "stone" :light :dark}
+   :body {:inventory []}
+   :blocks [[:fill [0 5 0] [9 5 31] "glowstone"] [:fill [10 0 0] [31 5 31] "stone"] [:fill [10 0 16] [29 1 16] "air"]]
+   :act [[:summon "item" [28.5 0.2 16.5] "{Item:{id:\"minecraft:diamond\",count:3}}"]
+         [:job (jobs.items.collect-drops {:near #xyz [28 0 16] :radius 3})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 40 :of-job true}]
+   :after [[:item "diamond" 0]]}]}
