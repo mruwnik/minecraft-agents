@@ -101,12 +101,14 @@
     (catch :default error {:error (.-message error)})))
 
 (defn remember-plan!
-  "The request with :goal and :want from the saved plan when not given; given ones (\"none\" clears) are saved."
+  "The request with :goal and :want from the saved plan when not given; given ones (\"none\" clears) are saved. A
+  new goal without --want starts with no wants: the saved ones belonged to the earlier goal."
   [{:keys [goal want] :as r}]
   (let [file (:plan-file r)
         saved (when (.existsSync fs file) (data/read-edn (.readFileSync fs file "utf8")))
         pick (fn [given old] (cond (= "none" given) nil (some? given) given :else old))
-        plan {:goal (pick goal (:goal saved)) :want (pick want (:want saved))}]
+        new-goal? (and goal (not= "none" goal) (not= goal (:goal saved)))
+        plan {:goal (pick goal (:goal saved)) :want (pick want (when-not (and new-goal? (nil? want)) (:want saved)))}]
     (when (or goal want)
       (.mkdirSync fs (.dirname path file) #js {:recursive true})
       (.writeFileSync fs file (str (data/write-edn plan) "\n")))
