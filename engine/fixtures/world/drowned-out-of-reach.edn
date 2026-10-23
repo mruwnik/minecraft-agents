@@ -1,0 +1,34 @@
+;; Card 01625c50: a body afloat over a drowned deep under it cannot get within a swing of it (hostile-fight/reaches?), so the fight
+;; is its blows and then the swim out: respond flees and leaves the water. Stone x 3..30, z 9..23, y 0..8 with a lake carved in it,
+;; x 4..14, z 10..22, water y 1..8 (the surface is level with the shore, top feet y 9). The drowned is NoAI and helmeted (it never
+;; hurts, never rises, no sun burn). Torches on the shores light the lake: the body sees the shore it swims to. A hunger effect drains the food (no regeneration), then `damage` leaves 13 hp, as in the trial deaths.
+;; Should-succeed: with a stone sword at 13 hp (a drowned only heard afterwards is fought held and muted, by design), the drowned 3 blocks off and 7 down, the shore 4 blocks off: :flee, the body
+;; leaves the water and the drowned is left alive.
+;; Should-fail (control): the drowned just under the surface beside the body is in reach: an iron sword fights and kills it.
+{:defaults
+ {:tags [:hostile :survival :water]
+  :time :any
+  :plot {:height 16}
+  :register [{:trigger :hostile-near}]
+  :blocks [[:fill [3 0 9] [30 8 23] "stone"]
+           [:fill [4 1 10] [14 8 22] "water"]
+           [:set [3 9 10] "torch"] [:set [3 9 14] "torch"] [:set [3 9 18] "torch"] [:set [3 9 22] "torch"]
+           [:set [15 9 12] "torch"] [:set [15 9 20] "torch"]]
+  :body {:at [7.5 8 16.5]}
+  :limit-s 90}
+ :cases
+ [{:name "hurt-body-afloat-over-a-deep-drowned-swims-out"
+   :body {:inventory [["stone_sword" 1]]}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 60 true"] [:until-effect-gone "hunger" 30] [:rcon "damage $BODY 7 minecraft:generic"]
+         [:summon "drowned" [10.5 1 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "drowned" :decision :flee}} :within-s 10}
+            {:event {:source :job :kind :retreat.step-speed :data {:slot :dry}} :within-s 20}]
+   :after [[:body-far [7.5 8 16.5] 3] [:entities "type=drowned,tag=wt" [[3 0 9] [30 12 23]] 1]]
+   :limit-s 60}
+  {:name "armed-body-fights-a-drowned-in-reach"
+   :body {:inventory [["iron_sword" 1]]}
+   :act [[:summon "drowned" [8.5 7 16.5] "{NoAI:1b,equipment:{head:{id:\"minecraft:iron_helmet\",count:1}}}"]]
+   :expect [{:event {:source :job :kind :hostile.decided :data {:mob "drowned" :decision :fight}} :within-s 10}
+            {:no-event {:source :job :kind :retreat.step-speed :data {:slot :dry}} :for-s 30}]
+   :after [[:entities "type=drowned,tag=wt" [[3 0 9] [30 12 23]] 0]]
+   :limit-s 60}]}

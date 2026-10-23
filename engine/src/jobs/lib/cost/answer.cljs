@@ -10,18 +10,19 @@
   death-chance: the one chance of dying every route, spot, wait or answer is priced by. A known threat on a route costs
   the death of the answer the body would take to it (decide over fight, walk away and the covers it has).
 
-  fight-answer: a fight with the kit (fight/fight-damage, fight-seconds). A lone creeper fought hit-and-back risks the
+  fight-answer: a fight with the kit (fight/fight-damage, fight-seconds); a mob out of reach is left alive, hitting all
+  the fight (followed: what comes at once after it). A lone creeper fought hit-and-back risks the
   blast of a late step back: its :hit is the blast at the creeper's swell start.
   flee-answer: a walk away from the mobs, nil when one of them keeps up (outruns?: the flight's speed is body-speed over
   ::outrun-factor). A melee mob hits while within its reach, a ranged one while the body is within its bow's range (both
-  follow at their chase speed), a creeper that reaches its swell start before the body gets going
+  follow at their chase speed; a body in water first swims to land against their swim speed), a creeper that reaches its swell start before the body gets going
   (danger/flight-start-s) blows at the distance the body reached when its fuse ends. The mob is left alive:
   :then the fight with it, or the same walk once more. A stub until the priced flee search (card ee045b60).
   build-answer: building a refuge (seal or pillar) for some seconds: the blows of the melee mobs that arrive meanwhile.
   cover-answer: shutting the body in (walls, pit or pocket) by build-answer, then hidden for the quiet.
 
   Game facts kept as constants: a creeper's explosion power (3; damage falls off to none at twice it), its swell start
-  (3 blocks) and fuse (1.5 s), a skeleton's bow range (15 blocks)."
+  (3 blocks) and fuse (1.5 s), a skeleton's bow range (15 blocks), a trident's throw (10 blocks)."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [jobs.lib.cost.armour :as armour]
@@ -29,6 +30,7 @@
             [jobs.lib.cost.death :as death]
             [jobs.lib.cost.fight :as fight]
             [jobs.lib.cost.health :as health]
+            [jobs.lib.cost.planner :as planner]
             [jobs.lib.cost.threat :as threat]
             [jobs.lib.cost.weapon :as weapon]))
 
@@ -40,6 +42,14 @@
 (def swell-start "Blocks within which a creeper starts to swell (vanilla)." 3)
 (def fuse-s "Seconds from a creeper's first swell to its blast (vanilla: 30 ticks)." 1.5)
 (def bow-range "Blocks within which a skeleton shoots (vanilla)." 15)
+(def trident-range "Blocks within which a drowned holding a trident throws it (vanilla)." 10)
+
+(defn hit-range
+  "Blocks from the body within which mob {:name :held} lands its blows: a trident's throw, a bow's shot, else a melee reach."
+  [{:keys [name held]}]
+  (cond (and (= "drowned" name) (= "trident" held)) trident-range
+        (contains? weapon/ranged-mobs name) bow-range
+        :else (danger/melee-reach)))
 
 (defn blast-damage
   "hp a creeper's blast deals a body distance blocks from it, before armour (vanilla, full exposure: none at twice the power), at the server difficulty."
@@ -104,48 +114,92 @@
       {:answer (key (first (sort-by val prices))) :prices prices})))
 
 (defn fight-answer
-  "The answer of fight (fight/fight-damage's argument): its damage and seconds, :hit the hardest blow of its mobs."
+  "The answer of fight (fight/fight-damage's argument): its damage and seconds, :hit the hardest blow of its mobs. A mob
+  with :reach? false (the body cannot get within a swing of it) is not fought: its blows land over the whole fight, the
+  fight's length as if it were fought when no mob is in reach; :left the mobs the fight leaves alive."
   [{:keys [equipment mobs] :as fight}]
-  (let [stats (armour/armour-stats equipment)]
-    {:damage (fight/fight-damage fight)
-     :hit (reduce max 0 (map #(blow stats (:name %)) mobs))
-     :seconds (fight/fight-seconds fight)}))
+  (let [stats (armour/armour-stats equipment)
+        {left false fought true} (group-by #(not (false? (:reach? %))) mobs)
+        fought (vec fought)
+        seconds (fight/fight-seconds (assoc fight :mobs (if (seq fought) fought mobs)))]
+    (cond-> {:damage (+ (fight/fight-damage (assoc fight :mobs fought))
+                        (reduce + 0 (map #(threat/mob-hurt stats (:name %) seconds) left)))
+             :hit (reduce max 0 (map #(blow stats (:name %)) mobs))
+             :seconds seconds}
+      (seq left) (assoc :left (vec left)))))
+
+(defn followed
+  "Answer a, then answer b at once (nil: a once more, later): the blows and seconds of both, b's chance of being caught
+  (a's blows landed either way) and what follows b."
+  [a b]
+  (if b
+    (cond-> (assoc a :damage (+ (:damage a) (:damage b)) :hit (max (:hit a) (:hit b)) :seconds (+ (:seconds a) (:seconds b)))
+      (:caught b) (assoc :caught (update (:caught b) :damage + (:damage a)))
+      (:then b) (assoc :then (:then b))
+      (not (:then b)) (dissoc :then))
+    (assoc a :then [a])))
+
+(defn swim-leg
+  "{:in-reach s :gap blocks :seconds s :away? bool} of swimming blocks at speed sv from a mob gap blocks off that swims at
+  ms and hits within r: the seconds it is within r, the gap at the end, and the seconds taken, cut short (:away?) where
+  the gap reaches follow."
+  [sv ms gap r follow blocks]
+  (let [gain (- sv ms)
+        t (/ blocks sv)
+        out (cond (>= gap follow) 0 (pos? gain) (/ (- follow gap) gain))
+        t (if (and out (< out t)) out t)
+        in-reach (cond (pos? gain) (min t (/ (max 0 (- r gap)) gain))
+                       (< gap r) t
+                       (zero? gain) 0
+                       :else (max 0 (- t (/ (- gap r) (- gain)))))]
+    {:in-reach in-reach :gap (max 0 (+ gap (* gain t))) :seconds t :away? (boolean (and out (= t out)))}))
 
 (defn flee-mob
-  "{:damage :hit :seconds} of a walk away from mob {:name :distance :follow (blocks it keeps chasing out to) :speed (its
-  chase speed, default danger/chase-speed of the name)} at speed v through the armour stats, nil when it keeps up. A
-  creeper that reaches its swell start within danger/flight-start-s (the body gains nothing yet) blows at the distance
-  the body reached when its fuse ends: a blast is not felt before it lands, as other mobs' blows are (respond's felt
-  rate)."
-  [stats v {:keys [name distance follow speed]}]
-  (let [d (or distance 0)
-        chase (or speed (danger/chase-speed name))
-        gain (- v chase)
-        escape (when (pos? gain) (/ (max 0 (- (or follow d) d)) gain))]
-    (cond
-      (nil? escape) nil
-      (= "creeper" name)
-      (let [start (danger/flight-start-s)
-            swell (/ (max 0 (- d swell-start)) chase)
-            hurt (if (< swell start)
-                   (blast-hurt stats (+ (min d swell-start) (* v (max 0 (- fuse-s (- start swell))))))
-                   0)]
-        {:damage hurt :hit hurt :seconds (+ start escape)})
-      :else
-      (let [r (if (contains? weapon/ranged-mobs name) bow-range (danger/melee-reach))]
-        {:damage (threat/mob-hurt stats name (/ (max 0 (- r d)) gain) identity (threat/lone-hit-rate name))
-         :hit (blow stats name) :seconds escape}))))
+  "{:damage :hit :seconds} of a walk away from mob {:name :held :distance :follow (blocks it keeps chasing out to) :speed
+  (its chase speed, default danger/chase-speed of the name)} at speed v through the armour stats, nil when it keeps up.
+  It hits while within its hit-range. A flight that starts in water first swims swim blocks to dry land (##Inf: no land
+  known) at speed sv, the mob chasing at danger/swim-chase-speed, then walks from the gap the swim left. A creeper that
+  reaches its swell start within danger/flight-start-s (the body gains nothing yet) blows at the distance the body
+  reached when its fuse ends: a blast is not felt before it lands, as other mobs' blows are (respond's felt rate)."
+  ([stats v m] (flee-mob stats v nil m))
+  ([stats v {:keys [sv swim]} {:keys [name distance follow speed] :as m}]
+   (let [d (or distance 0)
+         follow (or follow d)
+         chase (or speed (danger/chase-speed name))
+         r (hit-range m)
+         wet (when (and swim (pos? swim) (not= "creeper" name))
+               (swim-leg sv (danger/swim-chase-speed name) d r follow swim))
+         d (if wet (:gap wet) d)
+         gain (- v chase)
+         escape (cond (:away? wet) 0
+                      (and wet (not (js/isFinite swim))) nil
+                      (pos? gain) (/ (max 0 (- follow d)) gain))]
+     (cond
+       (nil? escape) nil
+       (= "creeper" name)
+       (let [start (danger/flight-start-s)
+             swell (/ (max 0 (- d swell-start)) chase)
+             hurt (if (< swell start)
+                    (blast-hurt stats (+ (min d swell-start) (* v (max 0 (- fuse-s (- start swell))))))
+                    0)]
+         {:damage hurt :hit hurt :seconds (+ start escape)})
+       :else
+       {:damage (threat/mob-hurt stats name (+ (:in-reach wet 0) (if (:away? wet) 0 (/ (max 0 (- r d)) gain))) identity (threat/lone-hit-rate name))
+        :hit (blow stats name) :seconds (+ (:seconds wet 0) escape)}))))
 
 (defn flee-answer
   "The answer of a walk away from mobs [flee-mob's] by a body with food wearing equipment, the walk there and back (it
   goes back to its work), times 1 + returns (the flights from such mobs lately: each predicts another); :then the answer
   later (the fight with them, nil none) or the walk again. :caught: each flight is caught at chance caught (default
   ::caught-chance), its mobs then landing their blows (a creeper its blast) over the flight. A creeper that blows on the
-  walk is spent: what follows is the walk from the rest or later (none left: nothing). nil when a mob keeps up or none is given."
-  [{:keys [food equipment mobs returns later caught] :as args}]
+  walk is spent: what follows is the walk from the rest or later (none left: nothing). swim: the blocks a body in water
+  swims to dry land first (flee-mob's; ##Inf none known), at its planner/swim-speed over danger's outrun factor as on foot.
+  nil when a mob keeps up or none is given."
+  [{:keys [food equipment mobs returns later caught swim] :as args}]
   (let [stats (armour/armour-stats equipment)
         v (danger/flight-speed (or food 20))
-        per (map #(flee-mob stats v %) mobs)
+        wet {:swim swim :sv (/ (planner/swim-speed equipment) (danger/outrun-factor))}
+        per (map #(flee-mob stats v wet %) mobs)
         times (inc (or returns 0))]
     (when (and (seq per) (every? some? per))
       (let [hit (reduce max 0 (map :hit per))

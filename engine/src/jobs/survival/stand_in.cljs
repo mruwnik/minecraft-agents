@@ -10,7 +10,7 @@
             [jobs.lib.escape :as escape]
             [jobs.lib.look :as look]
             [jobs.lib.ready :as ready]
-            [jobs.lib.step-off :as step-off]
+            [jobs.lib.shore :as shore]
             [jobs.lib.util :as u]
             [jobs.survival.respond.options :as options]))
 
@@ -98,10 +98,10 @@
          first))))
 
 (defn dry-cell
-  "The nearest seen dry standing cell within reach of the feet cell (jobs.lib.step-off/candidates), or nil."
-  [p block-at feet reach]
-  (let [dry? (fn [{:keys [x y z]}] (and (not= "water" (block-at {:x x :y y :z z})) (not= "water" (block-at {:x x :y (inc y) :z z}))))]
-    (first (step-off/candidates p feet {:reach reach :ok? dry?}))))
+  "The nearest seen dry stand joined to the body by water and air within reach (jobs.lib.shore/reachable-land: the
+  one the hostile answer prices the swim to), or nil."
+  [p from reach]
+  (shore/reachable-land p from reach nil))
 
 (defn place-of
   "The cell to stand at for where, or nil: the nearest of its kind within reach."
@@ -112,7 +112,7 @@
       :water (water-cell block-at (u/self-pos c) reach)
       :roof (roof-cell block-at (u/self-pos c) reach
                      (mapv #(danger-q/mob-pos p %) (filter combat/enderman? (danger-q/known-hostiles p reach {}))))
-      :dry (dry-cell p block-at (feet-cell c) reach))))
+      :dry (dry-cell p (u/self-pos c) reach))))
 
 (defn here?
   "Whether the body stands in a place of its kind."

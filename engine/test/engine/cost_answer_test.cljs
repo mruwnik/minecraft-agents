@@ -127,3 +127,27 @@
     (is (> (cost/lethal-hp (body 20) (cost/spawns-chance (body 20) spawns here) here) 10))
     (is (< (cost/spawns-chance (assoc (body 20) :weapon "diamond_sword") spawns here) (cost/spawns-chance (body 20) spawns here)) "a sword dies less")
     (is (zero? (cost/spawns-chance (body 20) 0 here)))))
+
+(deftest a-fight-out-of-reach-takes-the-mobs-blows-and-kills-nothing-so-the-swim-out-wins
+  (let [deep (assoc (mob "drowned" 3 35) :reach? false)
+        unreached (cost/fight-answer (fight "stone_sword" deep))
+        fought (cost/fight-answer (fight "stone_sword" (dissoc deep :reach?)))
+        swim (cost/flee-answer {:food 20 :mobs [deep] :swim 4})]
+    (is (= [deep] (:left unreached)) "the mob is left alive")
+    (is (> (:damage unreached) (:damage fought)) "its blows land the whole fight")
+    (is (= :fight (:answer (cost/decide (body 13) {:fight fought :flee (cost/flee-answer {:food 20 :mobs [deep] :swim 4 :later fought})} here)))
+        "in reach, the fight at 13 hp beats the walk")
+    (is (= :flee (:answer (cost/decide (body 13) {:fight (cost/followed unreached swim) :flee swim} here)))
+        "out of reach, the fight is the blows and then the same swim out")))
+
+(deftest a-swim-out-gains-on-a-drowned-and-a-swim-with-no-shore-from-a-faster-swimmer-is-no-answer
+  (are [m swim expected] (= expected (some-> (cost/flee-answer {:food 20 :mobs [m] :swim swim}) :damage zero?))
+    (mob "drowned" 3 35) 4 true
+    (mob "drowned" 3 35) ##Inf true
+    (mob "drowned" 0.5 35) 4 false
+    (mob "guardian" 3 35) ##Inf nil)
+  (is (> (:seconds (cost/flee-answer {:food 20 :mobs [(mob "drowned" 3 35)] :swim 4}))
+         (:seconds (cost/flee-answer {:food 20 :mobs [(mob "drowned" 3 35)]})))
+      "a swim is slower than a run")
+  (is (pos? (:damage (cost/flee-answer {:food 20 :mobs [(assoc (mob "drowned" 8 35) :held "trident")] :swim 4})))
+      "a trident is thrown from 10 blocks"))

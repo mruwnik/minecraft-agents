@@ -194,6 +194,17 @@
     (settings/get settings ::baby-chase-speed)
     (get constants/mob-speeds mob-name (settings/get settings ::chase-speed))))
 
+(def water-speeds
+  "Blocks a second a mob swims chasing a body in water, where the game makes it a swimmer (vanilla): a drowned under water
+  pushes 0.01 (its travel) + 0.005 (its move control, toward a path node about a block off) times its speed 0.23 a tick
+  against a drag of 0.9 a tick, about 0.0345 blocks a tick."
+  {"drowned" 0.69})
+
+(defn swim-chase-speed
+  "Blocks a second mob-name covers chasing a body that swims: water-speeds, else chase-speed."
+  [mob-name]
+  (get water-speeds mob-name (chase-speed mob-name)))
+
 (defn mob-kind
   "The key of engine.constants/mob-speeds for hostile entity e: \"baby\" for a baby, else its name."
   [e]
@@ -221,6 +232,7 @@
   (/ (body-speed food) (settings/get settings ::outrun-factor)))
 
 (defn melee-reach [] (settings/get settings ::melee-reach))
+(defn outrun-factor [] (settings/get settings ::outrun-factor))
 (defn flight-start-s [] (settings/get settings ::flight-start-s))
 
 (defn outruns?

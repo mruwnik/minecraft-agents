@@ -1677,6 +1677,27 @@
       "trident" true
       nil false)))
 
+(def lake
+  "A lake 7 deep under the flight floor's level: water at x -4..4, y 57..63, z -4..4, stone under it; its shore stands at y 64."
+  (into {} (for [x (range -4 5) z (range -4 5) y (range 56 64)]
+             [(str x "," y "," z) (if (= y 56) "stone" "water")])))
+
+(defn drowned-at [x y z] {:id 9 :name "drowned" :kind "hostile" :visible true :pos {:x x :y y :z z}})
+
+(deftest a-body-afloat-cannot-reach-a-drowned-deep-under-it-and-swims-out-rather-than-fight
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [world {:blocks lake :self {:pos [-0.5 63 0.5] :health 13} :inventory [{:name "stone_sword" :count 1}]}
+              reaches? (fn [d] (let [p (tu/fake-on-floor (merge {:floor flight-floor :entities [d]} world))]
+                                 (hostile-fight/reaches? {:primitives p} (first (danger-q/known-hostiles p 30 {:ranged-radius 30})))))]
+          (are [d reached?] (= reached? (reaches? d))
+            (drowned-at 2.5 57 0.5) false
+            (drowned-at 2.5 63 0.5) true
+            (drowned-at -0.5 60 0.5) true)
+          (let [{:keys [seen]} (await (flight-round respond (assoc world :entities [(drowned-at 2.5 57 0.5)])))]
+            (is (= [:flee] (mapv :decision (decided seen))) "13 hp, the drowned 3 blocks off and 6 down, the shore 4 blocks off")))))))
+
 (deftest only-a-possible-mob-blow-counts-as-a-hit
   (are [m expected] (= expected (hurt/mob-hit? m))
     {:attacker {:name "zombie"} :damageType "minecraft:mob_attack"} true

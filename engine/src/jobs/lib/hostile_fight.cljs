@@ -12,6 +12,9 @@
             [jobs.lib.flee-walk :as walk]
             [jobs.lib.cost.weapon :as weapon]
             [jobs.lib.body :as body]
+            [jobs.lib.breath :as breath]
+            [jobs.lib.shore :as shore]
+            [engine.game :as game]
             [jobs.lib.price :as price]
             [jobs.lib.reach :as reach]
             [jobs.lib.threats :as threats]
@@ -203,21 +206,58 @@
            (remove #(ids (.-id %)))
            (filter comes?)))))
 
-(declare hit-and-back-ok?)
+(def swing-reach "Blocks from its eyes within which a player's swing lands on a mob's box (vanilla)." 3)
+
+(defn swing-gap
+  "Blocks from the eyes at ex ey ez to the box of a mob whose feet are at pos (taken as a body's box)."
+  [ex ey ez {:keys [x y z]}]
+  (let [gap (fn [v lo hi] (max 0 (- lo v) (- v hi)))]
+    (js/Math.hypot (gap ex (- x game/hitbox-half) (+ x game/hitbox-half))
+                   (gap ey y (+ y game/body-height))
+                   (gap ez (- z game/hitbox-half) (+ z game/hitbox-half)))))
+
+(defn reaches?
+  "Whether the body can get within swing-reach of hostile e: one only heard or a flyer (it comes to the body) does; else
+  the body's eyes are in reach now, or some cell in reach holds the body (on a floor, or afloat: water with no water
+  over it) and a walk or surface swim gets there (jobs.lib.reach/forward over the mob lookup: an unseen cell is ground;
+  a search that runs out counts as one)."
+  [c e]
+  (let [p (:primitives c)
+        at (danger-q/mob-pos p e)
+        me (u/self-pos c)
+        kind-at (reach/mob-lookup p)
+        near? (fn [x y z] (<= (swing-gap (+ x 0.5) (+ y game/eye-height) (+ z 0.5) at) swing-reach))
+        holds? (fn [x y z] (and (reach/standable? kind-at x y z)
+                                (not (and (keyword-identical? :water (kind-at x y z)) (keyword-identical? :water (kind-at x (inc y) z))))))
+        [mx my mz :as cell] (reach/cell-of at)
+        r (js/Math.ceil swing-reach)]
+    (boolean
+     (or (not (danger-q/seen-only? e))
+         (combat/flyer? e)
+         (<= (swing-gap (:x me) (+ (:y me) game/eye-height) (:z me) at) swing-reach)
+         (and (some (fn [[x y z]] (and (near? x y z) (holds? x y z)))
+                    (for [x (range (- mx r) (+ mx r 1)) z (range (- mz r) (+ mz r 1)) y (range (- my r 2) (+ my r 1))] [x y z]))
+              (not= :closed (reach/search-steps (partial reach/forward kind-at) (reach/cell-of me) cell near?)))))))
+
+(declare hit-and-back-ok? flee-answer)
 
 (defn fight-answer
   "The answer of fighting near (nearest first) for cost/decide: the walk there (walk-hp) and the fight with near and the
   mobs by its way (way-mobs), at least the mob blows felt lately (incoming :rate) over its length, :hit the hardest blow
-  felt lately or of its mobs. A lone creeper is fought hit-and-back (nil when hit-and-back-ok? fails); any other creeper
-  near, or by the way in time (blasting), is not fought: it blows where the fight is, beside its first mob, so its blast
-  at its distance from that mob (at most its swell start) is added."
+  felt lately or of its mobs. A mob the body cannot get within a swing of (reaches?) is not killed (cost/fight-answer):
+  the fight is followed at once by the walk away from those it leaves (flee-answer, cost/followed). A lone creeper is
+  fought hit-and-back (nil when hit-and-back-ok? fails); any other creeper near, or by the way in time (blasting), is
+  not fought: it blows where the fight is, beside its first mob, so its blast at its distance from that mob (at most its
+  swell start) is added."
   [c near struck-of]
   (let [p (:primitives c)
         lone-creeper? (and (= 1 (count near)) (combat/creeper? (first near)))
         fought (if lone-creeper? near (remove combat/creeper? near))
         others (remove combat/creeper? (way-mobs p fought))]
     (when (and (seq fought) (or (not lone-creeper?) (hit-and-back-ok? c near)))
-      (let [fight (fight-of c (concat fought others) struck-of)
+      (let [es (vec (concat fought others))
+            fight (update (fight-of c es struck-of) :mobs #(mapv (fn [m e] (assoc m :reach? (reaches? c e))) % es))
+            left (keep (fn [[m e]] (when (false? (:reach? m)) e)) (map vector (:mobs fight) es))
             stats (cost/armour-stats (:equipment fight))
             {:keys [rate hardest]} (incoming c)
             a (cost/fight-answer fight)
@@ -225,15 +265,26 @@
             creepers (if lone-creeper? [] (concat (filter combat/creeper? near) (blasting p near seconds)))
             spot (danger-q/mob-pos p (first fought))
             blasts (map #(cost/blast-hurt stats (min cost/swell-start (u/dist (danger-q/mob-pos p %) spot))) creepers)]
-        {:damage (+ (walk-hp c fought) (max (:damage a) (* rate (:seconds a))) (reduce + 0 blasts))
-         :hit (reduce max (:hit a) (cons hardest blasts))
-         :seconds seconds
-         :creepers (vec creepers)}))))
+        (cond-> {:damage (+ (walk-hp c fought) (max (:damage a) (* rate (:seconds a))) (reduce + 0 blasts))
+                 :hit (reduce max (:hit a) (cons hardest blasts))
+                 :seconds seconds
+                 :creepers (vec creepers)}
+          (seq left) (cost/followed (flee-answer c left nil nil)))))))
 
 (defn mob-near
-  "Hostile e as the answers take a mob: {:name :distance :speed (its chase speed) :follow (its follow range)}."
+  "Hostile e as the answers take a mob: {:name :held :distance :speed (its chase speed) :follow (its follow range)}."
   [p e]
-  {:name (.-name e) :distance (danger-q/mob-distance p e) :speed (cost/chase-speed (cost/mob-kind e)) :follow (threats/follow-range (.-name e))})
+  {:name (.-name e) :held (.-held e) :distance (danger-q/mob-distance p e) :speed (cost/chase-speed (cost/mob-kind e)) :follow (threats/follow-range (.-name e))})
+
+(defn swim-out
+  "Blocks a body in water swims to the nearest dry stand joined to it by water and air (shore/reachable-land) within
+  the follow range of mobs (farther, the swim alone gets away), ##Inf when none is seen; nil on land."
+  [p mobs]
+  (when (breath/in-water? p)
+    (let [me (u/self-pos {:primitives p})]
+      (if-let [stand (shore/reachable-land p me (reduce max 0 (map :follow mobs)) nil)]
+        (u/dist me {:x (+ 0.5 (:x stand)) :y (:y stand) :z (+ 0.5 (:z stand))})
+        ##Inf))))
 
 (defn returns
   "Flights from mobs named one of names within ::return-s, by the :hostile entries (c is a ctx)."
@@ -245,13 +296,15 @@
 
 (defn flee-answer
   "The answer of a walk away from near (cost/flee-answer: each at its chase speed and follow range, the flights from
-  such mobs lately its returns, later the answer after it), its damage at least felt (hp a second felt while fleeing,
+  such mobs lately its returns, later the answer after it, in water first the swim-out), its damage at least felt (hp a second felt while fleeing,
   nil none) over the walk; nil when a mob keeps up."
   [c near later felt]
   (let [p (:primitives c)
         self (.self p)
+        mobs (mapv #(mob-near p %) near)
         a (cost/flee-answer {:food (or (.-food self) 20) :equipment (cost/equipment-of (.-equipment self))
-                             :mobs (mapv #(mob-near p %) near)
+                             :mobs mobs
+                             :swim (swim-out p mobs)
                              :returns (returns c (map #(.-name %) near))
                              :later later})]
     (cond-> a

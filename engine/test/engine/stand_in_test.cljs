@@ -16,6 +16,14 @@
     (is (= {:x -2 :y 64 :z 1} (stand-in/water-cell at {:x 0.5 :y 64 :z 0.5} 6)))
     (is (nil? (stand-in/water-cell at {:x 20.5 :y 64 :z 0.5} 6)) "none within reach")))
 
+(deftest dry-cell-is-the-shore-two-up-from-a-body-sunk-under-the-surface
+  (let [p (tu/fake {:blocks (merge (into {} (for [x (range 0 4) y (range 60 64)] [(str x "," y ",0") "water"]))
+                                   (into {} (for [y (range 59 64)] [(str "-1," y ",0") "stone"]))
+                                   (into {} (for [x (range -1 4) z [-1 1] y (range 59 66)] [(str x "," y "," z) "stone"])))
+                    :self {:pos [1.5 62.7 0.5]}})]
+    (is (= {:x -1 :y 64 :z 0} (stand-in/dry-cell p {:x 1.5 :y 62.7 :z 0.5} 16))
+        "the feet cell is under the surface: the stand on the shore is two up")))
+
 (deftest roof-cell-is-the-nearest-seen-two-high-gap-under-a-roof
   (let [solid #{[0 63 0] [3 63 0] [3 66 0] [-2 63 1] [-2 65 1] [9 63 0] [9 66 0]}
         at (fn [{:keys [x y z]}] (if (solid [x y z]) "stone" "air"))]

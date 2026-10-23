@@ -50,7 +50,7 @@
       (or (= "turtle_helmet" (:name head)) (pos? pool))
       (assoc :air-grace (+ (if (= "turtle_helmet" (:name head)) 10 0) pool)))))
 
-(defn- swim-s
+(defn swim-s
   "Seconds a block of swimming at the surface takes with Depth Strider level (vanilla water travel: inertia 0.8 and
   acceleration 0.02 move toward 0.546 and the walking speed 0.1 by level/3, max 3, half that off the ground)."
   [level]
@@ -59,13 +59,24 @@
         accel (+ 0.02 (* (- 0.1 0.02) e))]
     (/ (- 1 inertia) (* 0.98 20 accel))))
 
+(defn depth-strider
+  "The Depth Strider level of the boots in equipment (self's :equipment, cljs or JS), 0 none."
+  [equipment]
+  (or (->> (:enchants (get (armour/equipment-of equipment) "feet"))
+           (some #(when (= "depth_strider" (:name %)) (:level %))))
+      0))
+
+(defn swim-speed
+  "Blocks a second the body swims at the surface wearing equipment (swim-s of its Depth Strider): about 2 with none."
+  [equipment]
+  (/ 1 (swim-s (depth-strider equipment))))
+
 (defn swim-profile
   "{:swim-h :swim-sub-h} for Depth Strider on the boots (none: {}): the planner's swimH and swimSubH (the sprint swim with the head under water) scaled as the surface swim speeds up, about
   0.73 at level 1, 0.61 at 2 and 0.55 at 3, never under walk-floor. equipment: self's :equipment (cljs or JS)."
   [equipment]
-  (let [level (->> (:enchants (get (armour/equipment-of equipment) "feet"))
-                   (some #(when (= "depth_strider" (:name %)) (:level %))))]
-    (if (pos? (or level 0))
+  (let [level (depth-strider equipment)]
+    (if (pos? level)
       (let [scale (/ (swim-s level) (swim-s 0))]
         {:swim-h (max walk-floor (* (unchecked-get base/DEFAULT-COSTS "swimH") scale))
          :swim-sub-h (max walk-floor (* (unchecked-get base/DEFAULT-COSTS "swimSubH") scale))})
