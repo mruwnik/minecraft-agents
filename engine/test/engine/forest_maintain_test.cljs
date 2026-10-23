@@ -137,7 +137,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [{:keys [eng p]} (start {:blocks (lt/tree 6 0 "oak" 5)} {})]
+        (let [{:keys [eng p]} (start {:blocks (merge (lt/tree 6 0 "oak" 5) {"6,63,0" "dirt"})} {})]
           (await (tu/child-outcome eng 'jobs.forestry.fell-tree {:radius 10} 60))
           (is (= [[6 64 0] [6 65 0] [6 66 0] [6 67 0] [6 68 0]] (digs p)))
           (is (= [[6 64 0]] (mapv (juxt :x :y :z) (tu/walked-to eng))) "one walk, to the column's foot, none for the high logs"))))))
