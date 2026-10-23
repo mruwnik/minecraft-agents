@@ -1,8 +1,10 @@
 (ns jobs.lib.walk.drive
   "The walk driver's loop over jobs.lib.walk's pieces: follow! (walk a plan, plan again in the same call), walk-to! (the whole
   loop: settle, plan, follow, plan again when off the plan) and way-back."
-  (:require [engine.ctx :as ctx]
+  (:require [engine.args :as a]
+            [engine.ctx :as ctx]
             [engine.path.executor :as executor]
+            [engine.settings :as settings]
             [jobs.lib.dig-look :as dig-look]
             [jobs.lib.look :as look]
             [jobs.lib.util :as u]
@@ -11,6 +13,9 @@
             [jobs.lib.walk.sight :as wsight]
             [jobs.lib.walk.watch :as wwatch]
             [jobs.lib.walk.world :as wworld]))
+
+(a/defargs settings
+  {::look-over-edge {:default true :doc "Whether a walk that learns a floor is not there looks over the edge (look-over-edge!); false for a flee step: its seconds are few, the next step plans again, and the gate still looks at each floor before the drop." :spec boolean?}})
 
 (defn partial-end
   "A partial plan that was walked to its end is not an arrival unless the body is in range of the goal: then the walk
@@ -164,7 +169,7 @@
           (and (= :replan (:status done)) (< spent wwatch/max-watch-replans))
           (let [_ (wsight/note-missed! (:pw plan) done)
                 _ (when (:learned done) (swap! learned conj [(:cells done) (:why done)]))
-                _ (when (and (:learned done) (= :changed (:why done)) (not (:felt done)))
+                _ (when (and (:learned done) (= :changed (:why done)) (not (:felt done)) (settings/get settings ::look-over-edge))
                     (await (look-over-edge! c (first (:cells done)))))
                 t (js/performance.now)
                 fresh (await (plan-fn []))

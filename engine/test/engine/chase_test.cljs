@@ -118,7 +118,7 @@
               r (await (run-chase {} 'jobs.movement.run-away {:pos {:x 12 :y 64 :z 0} :leg-s 3 :y-margin 9} calls
                                   (fn [c _] (leg-over c))))]
           (is (= [{:pos {:x 12 :y 64 :z 0} :ways #{:walk :clear-seal} :floor {:health 0} :job-time 3
-                   :settings {:jobs.movement.go-to.tuning/look-round false :jobs.lib.walk.world/y-margin 9}}]
+                   :settings {:jobs.movement.go-to.tuning/look-round false :jobs.lib.walk.drive/look-over-edge false :jobs.lib.walk.world/y-margin 9}}]
                  (map #(select-keys % [:pos :ways :floor :job-time :settings]) @calls)))
           (is (= {:arrived false :leg true :nearer false} (:data r))))))))
 

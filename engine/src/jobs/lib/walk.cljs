@@ -177,7 +177,7 @@
 
 (defn gate-tick
   "decide-tick with the floor gate (jobs.lib.walk.sight): a body standing on a pending floor ends the walk :pushed; the
-  pending floors are sensed (a plain one resolves, another ends :changed); the executor gets the steps up to the first
+  pending floors are sensed (a plain one resolves, another ends :changed once the body stands, swims or climbs); the executor gets the steps up to the first
   pending gate's takeoff (a walk that starts on the takeoff walks to it), its arrival there does not end the walk, nor its
   stuck clock on the takeoff; the gate's controller holds the body."
   [{:keys [policy steps watch-stop gate air-c]} {:keys [exec] :as state} pose]
@@ -188,6 +188,8 @@
       [state {:done {:status :replan :why :pushed :cells [cell] :at at :step before}
               :warn {:cell cell :step before :at at}}]
       (let [{:keys [k gstate done]} (wsight/sense gate steps (:gate state) i pose)
+            ;; a stop mid-jump drops the jump and plans from the air (start-not-standable): the step lands first
+            done (when (or (:on-ground pose) (:in-water pose) (:on-climbable pose)) done)
             settling? (and done (< (:settled gstate 0) wsight/settle-ticks) (wsight/moving? pose))]
         (if settling?
           [(assoc state :gate (update gstate :settled (fnil inc 0))) (wsight/settle gate steps k pose)]

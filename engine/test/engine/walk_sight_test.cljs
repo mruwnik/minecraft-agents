@@ -122,6 +122,13 @@
     (is (nil? (:done out)) (pr-str out))
     (is (some? (:controls out)))))
 
+(deftest a-floor-seen-not-plain-ends-the-walk-only-once-the-body-lands
+  (let [e (env (constantly "lava"))
+        s0 (walk/start-state (:steps e) {:x 1.5 :z 0.5})
+        done (fn [pose] (:done (second (walk/decide-tick e s0 (assoc still :x 1.5 :y (:y pose 64) :vy (:vy pose 0) :on-ground (:on-ground pose))))))]
+    (is (nil? (done {:y 64.4 :vy 0.2 :on-ground false})) "mid-jump: the jump goes on")
+    (is (= :changed (:why (done {:on-ground true}))))))
+
 (deftest standing-on-the-pending-floor-ends-the-walk-pushed
   (let [e (env (constantly nil))
         s0 (assoc-in (walk/start-state (:steps e) {:x 3.5 :z 0.5}) [:exec :i] 2)
