@@ -129,8 +129,8 @@
 
 (defn try-share
   "One attempt at the time lock shared by phase: any number of processes may hold the same phase together; the other
-  phase waits for all of them, and once it waits, new holders of the current phase queue behind it. A joiner also waits
-  ({:waiting-on [setter] :setting true}) while the first holder has not yet called mark-set. Dead processes'
+  phase waits for all of them, and once it waits, new holders of the current phase queue behind it. A joiner of a time phase also waits
+  ({:waiting-on [setter] :setting true}) while the first holder has not yet called mark-set (presence holders set nothing). Dead processes'
   entries are dropped. dir: {:guard (thunk -> its result, run exclusively) :entries (-> {pid entry}) :put! (pid entry)
   :remove! (pid) :alive? (pid -> bool)}. seq: when this process began waiting (keeps its place in the queue). phase :any
   (a time-independent case) joins the holders' phase, else world-phase (:day or :night), and waits like a holder of it."
@@ -147,7 +147,7 @@
             pending (when (:held r) (vec (sort (keep (fn [[p e]] (when (and (not= p pid) (= :hold (:state e)) (:setting e)) p)) live))))]
         (cond
           (not-empty pending) (do (put! pid (assoc entry :state :want)) {:waiting-on pending :setting true})
-          (:held r) (do (put! pid (cond-> (assoc entry :state :hold) (:first? r) (assoc :setting true))) r)
+          (:held r) (do (put! pid (cond-> (assoc entry :state :hold) (and (:first? r) (not (contains? #{:present :alone-x} phase))) (assoc :setting true))) r)
           :else (do (put! pid (assoc entry :state :want)) r)))))))
 
 (defn mark-set

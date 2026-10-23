@@ -330,6 +330,14 @@
     (l/mark-set d 10)
     (is (= {:held true :first? false} (l/try-share d 11 :day 6)))))
 
+(deftest presence-holders-join-at-once-with-no-set-handshake
+  (let [files (atom {})
+        d (fake-share files #{10 11 12})]
+    (is (= {:held true :first? true} (l/try-share d 10 :present 5)))
+    (is (= {:held true :first? false} (l/try-share d 11 :present 6)) "joins the first holder without a mark-set")
+    (is (= {:waiting-on [10 11]} (l/try-share d 12 :alone-x 7)) "an alone case still waits for every holder")
+    (is (not-any? :setting (vals @files)))))
+
 (deftest a-setter-that-died_before_marking_leaves_the_next_joiner_first
   (let [files (atom {})]
     (l/try-share (fake-share files #{10}) 10 :day 5)
