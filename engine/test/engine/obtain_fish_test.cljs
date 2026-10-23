@@ -56,7 +56,7 @@
   (async done
     (tu/run-async done
       (fn ^:async t []
-        (let [s (h/setup (assoc (ft/world [] {}) :entities [{:id 1 :name "rabbit" :kind "passive" :pos {:x 39 :y 64 :z 4} :drops [{:name "rabbit" :count 1}]}]) 50)]
+        (let [s (h/setup (assoc (ft/world [] {}) :entities [{:id 1 :name "rabbit" :kind "passive" :pos {:x 25 :y 64 :z 4} :drops [{:name "rabbit" :count 1}]}]) 50)]
           (core/submit! (:eng s) '(jobs.items.obtain {:any-of ["rabbit" "cod"]}) {})
           (await (tu/run-ticks (:eng s) (:clock s) 12 700))
           (let [vias (set (map :via (filter #(= :obtain.gathering (:kind %)) @(:seen s))))]
