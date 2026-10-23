@@ -6,7 +6,9 @@
             [engine.core :as core]
             [engine.fake :as fake]
             [engine.go-to-test :as gt]
+            [engine.path.planner-tuned :as planner]
             [jobs.lib.near :as near]
+            [jobs.lib.walk :as walk]
             [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.search :as wsearch]
             [engine.test-util :as tu :refer [box]]))
@@ -205,3 +207,40 @@
                                                {:pos [30 64 0] :range 1 :ways #{:walk :clear-seal} :spend {:job-time 3 :tries 1}}))]
               (is (false? (:arrived @out)) (pr-str @out))
               (is (= :search-spent (:why @out)) (pr-str @out)))))))))
+
+;; a finished quote plan kept under its key (plan-walk! :quoted) is taken by the next plan of that key once, however much time
+;; passed, unless a cell along the route reads differently by then
+(defn ^:async searches-for-second-plan!
+  "How many planner searches two quoted-then-walked plans over a flat floor made, gap-ms apart and after
+  changing (a block added at) the cells of change."
+  [gap-ms change]
+  (let [p (tu/fake {:blocks (box -2 63 -2 12 63 2 "stone") :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+        c {:primitives p}
+        searches (atom 0)
+        create-plan planner/create-plan
+        date-now (.-now js/Date)
+        plan! (fn [opts] (walk/plan-walk! c (.pathWorld p) [10 64 0] 0 (walk/default-weight) (merge {:budget 300} opts)))]
+    (reset! wsearch/searches {})
+    (set! planner/create-plan (fn [& args] (swap! searches inc) (apply create-plan args)))
+    (try
+      (await (plan! {:quoted true}))
+      (swap! (fake/state p) update :blocks merge (fake/cells change identity))
+      (set! (.-now js/Date) (let [t (+ (date-now) gap-ms)] (fn [] t)))
+      (await (plan! nil))
+      (finally
+        (set! (.-now js/Date) date-now)
+        (set! planner/create-plan create-plan)
+        (reset! wsearch/searches {})))
+    @searches))
+
+(deftest a-kept-quote-plan-is-taken-after-any-time-when-the-route-is-unchanged
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= 1 (await (searches-for-second-plan! 10000 {}))))))))
+
+(deftest a-kept-quote-plan-is-dropped-when-a-cell-of-its-route-changed
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (is (= 2 (await (searches-for-second-plan! 0 (box 5 64 0 5 65 0 "stone")))))))))
