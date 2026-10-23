@@ -1,7 +1,7 @@
 (ns world-test.fresh-drop
   "tools/fresh-drop.mjs: the fresh-drop soak. `drop` sets a body down in a far, unclaimed place with nothing; `report` reads the
   body's event logs and gives one row per run: time to base, farm and kit, deaths, kit losses, lead teleports, jobs the agent queued.
-  Commands: plan BODY --build DIR [--seed N] | drop BODY --build DIR [--seed N] [--go] | report BODY... [--world W] [--from-ms MS] [--tokens N] [--md]
+  Commands: plan BODY... --build DIR [--seed N] [--together] | drop BODY... --build DIR [--seed N] [--together] [--go] | report BODY... [--world W] [--from-ms MS] [--tokens N] [--md]
   Pure parts: pick-spots, steps, milestones, report, row."
   (:require ["child_process" :as cp]
             ["fs" :as fs]
@@ -11,8 +11,8 @@
             [clojure.string :as str]))
 
 (def usage
-  (str "usage: node tools/fresh-drop.mjs plan BODY --build DIR [--seed N] | drop BODY --build DIR [--seed N] [--go] | report BODY... [--world test] [--from-ms MS] [--tokens N] [--md]\n"
-       "drop prints the steps (like plan) and runs them only with --go: whitelist, workspace, a --fresh body start (engine state and memory wiped), a spot >= 5000 blocks from every known base, empty inventory, spawn point at the spot.\n"
+  (str "usage: node tools/fresh-drop.mjs plan BODY... --build DIR [--seed N] [--together] | drop BODY... --build DIR [--seed N] [--together] [--go] | report BODY... [--world test] [--from-ms MS] [--tokens N] [--md]\n"
+       "several BODYs need --together: one spot for all, a few blocks apart.\ndrop prints the steps (like plan) and runs them only with --go: whitelist, workspace, a --fresh body start (engine state and memory wiped), a spot >= 5000 blocks from every known base, empty inventory, spawn point at the spot.\n"
        "report reads worlds/<world>/agents/BODY/engine events (default start: the body's last drop record, else its first event) and prints EDN per body, or markdown rows with --md."))
 
 (def ms-per-day 1200000)
@@ -52,24 +52,29 @@
         (/ (unsigned-bit-shift-right (bit-xor t2 (unsigned-bit-shift-right t2 14)) 0) 4294967296)))))
 
 (defn steps
-  "The drop as data, in order: [:whitelist b] [:file path text] [:workspace b world] [:body-start b {:world :build}] [:wait-online b] [:place b spots] [:rcon text] [:record path m].
-  The --fresh start wipes the body's engine state and memory; [:place body spots] puts the body on the surface at the first of the
-  candidate spots that has dry ground (the rest are for oceans); slow falling then covers a placement in the air while the spot's chunks load; the record keeps the spot it used."
-  [{:keys [body world build spots now] :or {world "test"}}]
-  (do
-    [[:whitelist body]
-     [:file (str "worlds/" world "/agents/" body "/config.json")
-      (js/JSON.stringify (clj->js {:username body :character {:name body :note "fresh-drop soak body"}}) nil 2)]
-     [:workspace body world]
-     [:body-start body {:world world :build build}]
-     [:wait-online body]
-     [:rcon (str "gamemode survival " body)]
-     [:rcon (str "clear " body)]
-     [:place body spots]
-     [:rcon (str "effect give " body " minecraft:slow_falling 60 0 true")]
-     [:rcon (str "execute as " body " at " body " run spawnpoint " body " ~ ~ ~")]
-     [:rcon (str "effect give " body " minecraft:instant_health 1 5 true")]
-     [:record (str "worlds/" world "/fresh-drops/" body "-" now ".edn") {:body body :world world :spots spots :build build :started-ms now}]]))
+  "The drop as data, in order: per body [:whitelist b] [:file path text] [:workspace b world] [:body-start b {:world :build}], then
+  [:wait-online b] and the wipe for each, one [:place bodies spots], per body the spawn point and [:record path m].
+  The --fresh start wipes engine state and memory; [:place bodies spots] puts all bodies on the surface within a few blocks of each other at the
+  first of the candidate spots that has dry ground (the rest are for oceans); slow falling then covers a placement in the air while the spot's chunks load."
+  [{:keys [bodies world build spots now] :or {world "test"}}]
+  (let [each (fn [f] (mapcat f bodies))]
+    (vec
+     (concat
+      (each (fn [body]
+              [[:whitelist body]
+               [:file (str "worlds/" world "/agents/" body "/config.json")
+                (js/JSON.stringify (clj->js {:username body :character {:name body :note "fresh-drop soak body"}}) nil 2)]
+               [:workspace body world]
+               [:body-start body {:world world :build build}]]))
+      (each (fn [body] [[:wait-online body]
+                        [:rcon (str "gamemode survival " body)]
+                        [:rcon (str "clear " body)]]))
+      [[:place bodies spots]]
+      (each (fn [body]
+              [[:rcon (str "effect give " body " minecraft:slow_falling 60 0 true")]
+               [:rcon (str "execute as " body " at " body " run spawnpoint " body " ~ ~ ~")]
+               [:rcon (str "effect give " body " minecraft:instant_health 1 5 true")]
+               [:record (str "worlds/" world "/fresh-drops/" body "-" now ".edn") {:body body :world world :spots spots :build build :started-ms now}]]))))))
 
 ;; ---- the report
 
@@ -179,6 +184,7 @@
       (= a "--seed") (recur (rest more) (assoc o :seed (js/parseInt (first more))))
       (= a "--from-ms") (recur (rest more) (assoc o :from-ms (js/parseInt (first more))))
       (= a "--tokens") (recur (rest more) (assoc o :tokens (js/parseInt (first more))))
+      (= a "--together") (recur more (assoc o :together true))
       (= a "--go") (recur more (assoc o :go true))
       (= a "--md") (recur more (assoc o :md true))
       :else (recur more (update o :pos conj a)))))
@@ -278,9 +284,10 @@
                      (when-not (or (online?) (>= n 300))
                        (cp/spawnSync "sleep" #js ["2"])
                        (recur (inc n)))))
-    :place (let [[body spots] a
+    :place (let [[bodies spots] a
+                 [spread range] (if (next bodies) ["4" "8"] ["0" "100"])
                  try-spot (fn [[x z]]
-                            (let [out (str (.-stdout (cp/spawnSync js/process.execPath #js [(path/join (repo) "tools/rcon-raw.mjs") "spreadplayers" (str x) (str z) "0" "100" "false" body]
+                            (let [out (str (.-stdout (cp/spawnSync js/process.execPath (clj->js (into [(path/join (repo) "tools/rcon-raw.mjs") "spreadplayers" (str x) (str z) spread range "false"] bodies))
                                                                   #js {:cwd (repo) :encoding "utf8"})))]
                               (js/console.log (str/trim out))
                               (not (str/includes? out "Could not"))))]
@@ -293,14 +300,14 @@
 (defn main
   "argv (array) -> promise of the exit code."
   [argv]
-  (let [{[cmd & pos] :pos :keys [go build world seed from-ms tokens md] :or {world "test"}} (parse-args (vec (array-seq argv)))]
+  (let [{[cmd & pos] :pos :keys [go build world seed from-ms tokens md together] :or {world "test"}} (parse-args (vec (array-seq argv)))]
     (js/Promise.resolve
      (case cmd
        ("plan" "drop")
-       (if-not (and (first pos) build)
+       (if-not (and (first pos) build (or together (nil? (next pos))))
          (do (js/console.error usage) 2)
          (let [rnd (seeded-rnd (or seed (js/Date.now)))
-               ss (steps {:body (first pos) :world world :build build :spots (pick-spots rnd (known-bases world) 8) :now (js/Date.now)})]
+               ss (steps {:bodies (if together pos [(first pos)]) :world world :build build :spots (pick-spots rnd (known-bases world) 8) :now (js/Date.now)})]
            (doseq [s ss] (js/console.log (pr-str s)))
            (when (and go (= "drop" cmd)) (doseq [s ss] (exec-step! s)))
            0))

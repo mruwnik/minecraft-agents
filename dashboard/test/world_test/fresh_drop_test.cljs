@@ -73,15 +73,25 @@
     (is (= (d/pick-spots (d/seeded-rnd 7) bases 8) (d/pick-spots (d/seeded-rnd 7) bases 8)) "the same seed gives the same spot")))
 
 (deftest the-drop-wipes-then-places-and-sets-spawn
-  (let [ss (d/steps {:body "ProbeX" :world "test" :build "/b" :spots [[1200 -3400] [5 6]] :now 5})
+  (let [ss (d/steps {:bodies ["ProbeX"] :world "test" :build "/b" :spots [[1200 -3400] [5 6]] :now 5})
         rcons (map second (filter #(= :rcon (first %)) ss))]
     (is (some #{[:body-start "ProbeX" {:world "test" :build "/b"}]} ss))
     (is (< (.indexOf ss [:wait-online "ProbeX"]) (.indexOf ss [:rcon "clear ProbeX"])) "commands wait for the body to be online")
     (is (= ["gamemode survival ProbeX" "clear ProbeX"] (take 2 rcons)))
-    (is (some #{[:place "ProbeX" [[1200 -3400] [5 6]]]} ss) "all candidate spots go to the placing step")
+    (is (some #{[:place ["ProbeX"] [[1200 -3400] [5 6]]]} ss) "all candidate spots go to the placing step")
     (is (some #(re-find #"spawnpoint ProbeX ~ ~ ~" %) rcons))
-    (is (< (.indexOf ss [:place "ProbeX" [[1200 -3400] [5 6]]]) (.indexOf ss [:rcon "effect give ProbeX minecraft:slow_falling 60 0 true"])) "a body placed in the air while chunks load survives the fall")
+    (is (< (.indexOf ss [:place ["ProbeX"] [[1200 -3400] [5 6]]]) (.indexOf ss [:rcon "effect give ProbeX minecraft:slow_falling 60 0 true"])) "a body placed in the air while chunks load survives the fall")
     (is (= [:record "worlds/test/fresh-drops/ProbeX-5.edn" {:body "ProbeX" :world "test" :spots [[1200 -3400] [5 6]] :build "/b" :started-ms 5}] (last ss)))))
+
+(deftest together-places-all-bodies-once-and-sets-each-spawn
+  (let [ss (d/steps {:bodies ["A" "B" "C"] :world "test" :build "/b" :spots [[1 2]] :now 5})
+        rcons (set (map second (filter #(= :rcon (first %)) ss)))]
+    (is (= 1 (count (filter #(= :place (first %)) ss))))
+    (is (some #{[:place ["A" "B" "C"] [[1 2]]]} ss))
+    (is (= 3 (count (filter #(= :body-start (first %)) ss))))
+    (is (every? #(< (.indexOf ss [:wait-online %]) (.indexOf ss [:place ["A" "B" "C"] [[1 2]]])) ["A" "B" "C"]))
+    (is (every? #(rcons (str "execute as " % " at " % " run spawnpoint " % " ~ ~ ~")) ["A" "B" "C"]))
+    (is (= 3 (count (filter #(= :record (first %)) ss))))))
 
 (deftest rotated-logs-read-oldest-first-and-the-plain-file-wins
   (is (= ["events.edn.3" "events.edn.2.gz" "events.edn.1" "events.edn"]
