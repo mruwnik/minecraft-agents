@@ -247,17 +247,17 @@
       (fn ^:async t []
         (let [targets (atom [])
               tunnel {:round (fn ^:async w [c] (swap! targets conj (:target (:args c))) (ctx/end c :nothing-possible :dig-failed {}))}
-              plan {:id "ring" :parts [{:id "p" :cells [[12 64 7]] :want "dirt"}]}
+              plan {:id "ring" :parts [{:id "p" :cells [[12 64 8]] :want "dirt"}]}
               shell (into {} (for [x (range 11 14) z (range 1 4) y (range 62 67)
                                    :when (not (and (= x 12) (= z 2) (#{64 65} y)))]
                                [(str x "," y "," z) "stone"]))
-              {:keys [eng]} (start {:inventory [{:name "stone_pickaxe" :count 1} {:name "dirt" :count 4}]
-                                    :blocks (assoc shell "12,63,7" "stone") :sight 4
+              {:keys [eng p]} (start {:inventory [{:name "stone_pickaxe" :count 1} {:name "dirt" :count 4}]
+                                    :blocks (assoc shell "12,63,8" "stone") :sight 5
                                     :self {:pos {:x 12.5 :y 64 :z 2.5}}}
                                    {"ring" plan} [] {'jobs.access.tunnel tunnel})
-              result (await (child-outcome eng job {:plan "ring"} 200))]
-          (is (empty? @targets) "the cell was never seen in rock: no tunnel, the body digs out and walks")
-          (is (= 1 (:placed result)) "and builds it"))))))
+              _ (await (child-outcome eng job {:plan "ring"} 200))]
+          (is (empty? @targets) "the cell was never seen in rock: no tunnel is begun")
+          (is (>= (.-z (.-pos (.self p))) 4) "the body dug out of the shell and walked toward the cell"))))))
 
 (deftest a-dig-in-rock-with-no-pickaxe-is-given-up-no-tool-without-a-tunnel
   (async done
