@@ -61,10 +61,16 @@
     (is (not= [1 64 0] (:base p)))))
 
 (are [in reason] (= {:reason reason} (apply plan (mapcat identity in)))
-  {:zones [foreign-zone]} :zone
   {:block-at (constantly "air")} :no-base
   {:block-at (fn [p] (when-not (= p [0 72 0]) "air"))} :not-loaded
   {:max-height 2} :no-stand)
+
+(deftest a-zone-over-every-base-names-what-refused-them
+  (is (= {:reason :zone :refused-by :zone} (plan :zones [foreign-zone]))))
+
+(deftest a-footprint-over-some-bases-is-no-stand-when-the-others-have-none
+  (let [fp (set (for [x (range -40 1) z (range -40 41) y [64 65 66]] [x y z]))]
+    (is (= {:reason :no-stand} (plan :footprints fp :max-height 2)))))
 
 (def inner-zone {:name "z" :owner "other" :allow #{} :min [-3 0 -3] :max [3 100 3]})
 
@@ -83,7 +89,7 @@
 
 (deftest a-claim-refuses-like-a-zone
   (let [claim {:id "c" :owner "other" :status :active :until 100 :min [-20 0 -20] :max [20 100 20]}]
-    (is (= {:reason :zone} (plan :claims [claim] :now 0)))))
+    (is (= {:reason :zone :refused-by :claim} (plan :claims [claim] :now 0)))))
 
 (deftest a-claim-over-radius-3-widens-to-a-free-base
   (let [claim {:id "c" :owner "other" :status :active :until 100 :min [-3 0 -3] :max [3 100 3]}]

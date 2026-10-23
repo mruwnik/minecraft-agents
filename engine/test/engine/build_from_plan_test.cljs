@@ -2026,7 +2026,7 @@
               {:keys [eng p]} (tall-wall-start [{:name "stone" :count 15} {:name "dirt" :count 10}] zones)
               result (await (child-outcome eng job {:plan "wall" :settings {:jobs.lib.build.plan/reach 3}} 600))]
           (is (= :refused (:reason result)))
-          (is (seq (:refused result)))
+          (is (= #{[:zone :scaffold]} (set (map (juxt :reason :why) (:refused result)))))
           (is (empty? (h/calls p "jumpPlace")))
           (is (not (tall-wall-built p))))))))
 

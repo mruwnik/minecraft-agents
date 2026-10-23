@@ -109,7 +109,7 @@
         lack (cond height (- height (carried-count c))
                    row (bridge-lack c (:length row)))]
     (cond
-      (= :zone (:reason r)) (do (ctx/update-mem! c plan/refuse pos {:reason :zone :why :scaffold}) :again)
+      (= :zone (:reason r)) (do (ctx/update-mem! c plan/refuse pos {:reason (or (:refused-by r) :zone) :why :scaffold}) :again)
       (not (or (:pillar r) (:stand r) row)) nil
       (pos? (or lack 0)) (await (fetch-blocks! c lack result))
       :else (do (ctx/update-mem! c assoc :scaffold {:phase :walk :cell pos

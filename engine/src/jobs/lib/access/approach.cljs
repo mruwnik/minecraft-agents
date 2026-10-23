@@ -22,11 +22,11 @@
                           from the base up (jobs.access.pillar), :stand is the feet cell on top
     {:reason :not-loaded} a target is not loaded
     {:reason :no-base}    no ground to pillar from within the radius
-    {:reason :zone}       every base up to max-radius is refused by zones, claims or footprints
+    {:reason :zone :refused-by r}  every base up to max-radius is refused by zones, claims or footprints; r names the first of :zone :claim :no-zones :footprint
     {:reason :no-stand}   ground and permission exist but no column gives a stand (headroom, too tall)
 
   A :stand cell is not zone-checked: walking there is go-to's business. A stand or base on a built floor cell the rules
-  refuse to dig (a spared wall) is never planned; a base so refused gives :no-stand when no zone refuses another.
+  refuse to dig (a spared wall) is never planned; a base so refused gives :no-stand unless a zone, claim or footprint refuses every base that has a stand in view.
 
   Ranking: walking a block costs 1, placing a block pillar-cost. A stand needs no placement, so any stand wins over a
   pillar."
@@ -157,6 +157,10 @@
        :cost (+ (dist3 feet base) (* pillar-cost (first ok)))}
       {:base base :refusal (some-> last-try (nth 2))})))
 
+(def permission-refusals #{:zone :footprint :claim :no-zones})
+
+(def refusal-order {:zone 0 :claim 1 :no-zones 2 :footprint 3})
+
 (defn plan-at-radius [in radius]
   (let [cols (columns (:targets in) radius)
         ys (y-range (:targets in) (:reach in) (:max-height in))
@@ -164,12 +168,13 @@
     (if (seq found)
       {:stand (vec found)}
       (let [plans (base-plans in cols ys)
-            workable (filter :stand plans)]
+            workable (filter :stand plans)
+            why (keep (comp :reason :refusal) plans)]
         (cond
           (seq workable) {:pillar (-> (first (sort-by (juxt :cost :base) workable))
                                       (select-keys [:base :height :stand]))}
           (empty? plans) {:reason :no-base}
-          (some #(#{:zone :footprint :claim :no-zones} (:reason (:refusal %))) plans) {:reason :zone}
+          (and (seq why) (every? permission-refusals why)) {:reason :zone :refused-by (first (sort-by refusal-order why))}
           :else {:reason :no-stand})))))
 
 (def headings {:north [0 -1] :south [0 1] :east [1 0] :west [-1 0]})
