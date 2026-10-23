@@ -76,7 +76,7 @@
       (= (str (.-id e)) start)))
 
 (defn foreign-penned
-  "The animals of es standing in a fenced enclosure that is not the body's own (a zone or plan of its own): another
+  "The animals of es standing in a fenced enclosure that is not the body's own (a zone or plan of its own, or fences and walls it placed itself: jobs.lib.built): another
   player's kept animals, off limits wherever the zones put their box. Empty with :ignore-zones?."
   [c es]
   (if (:ignore-zones? (:args c))
@@ -84,7 +84,7 @@
     (let [pens (atom [])]
       (let [booked (set (:penned (ctx/mem c)))]
         (filterv #(or (contains? booked (key-of %))
-                      (and (not (access/in-own-area? c (u/pos-of (.-pos %)))) (spare/enclosed? c pens %)))
+                      (and (not (access/in-own-area? c (u/pos-of (.-pos %)))) (spare/enclosed? c pens % true)))
                  es)))))
 
 (defn refusal-of
@@ -143,7 +143,7 @@
                                            :max-cells (settings/get spare/settings ::spare/pen-max-cells)}
                                         #(= :unloaded (:reason %)))))]
     (cond (nil? answer) nil
-          (and (:closed? answer) (spare/fenced? c (:inside answer)) (not (access/in-own-area? c pos)))
+          (and (:closed? answer) (spare/fenced? c (:inside answer)) (not (spare/own-built? c (:inside answer))) (not (access/in-own-area? c pos)))
           (do (ctx/update-mem! c update :penned (fnil conj []) k) :looked)
           (or (not= :unloaded (:reason answer)) (contains? (set (:pen-looked (ctx/mem c))) k)) nil
           :else

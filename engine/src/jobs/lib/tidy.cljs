@@ -12,6 +12,7 @@
             [engine.game :as game]
             [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.built :as built]
             [jobs.lib.crops :as crops]
             [jobs.lib.reach :as reach]
             [jobs.lib.reach.room :as reach-room]
@@ -179,5 +180,6 @@
          r (await (ctx/act c :place (clj->js (cond-> {:pos pos :item item} click (assoc :click click)))))]
      (when (= "placed" (.-status r))
        (spent/note! c item pos)
+       (built/remember! c (spent/cell-vec pos))
        (record! c pend item))
      r)))

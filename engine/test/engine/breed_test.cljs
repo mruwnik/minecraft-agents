@@ -10,6 +10,7 @@
             [engine.memory :as mem]
             [engine.fake :as fake]
             [engine.look-support :as ls]
+            [jobs.lib.built :as built]
             [engine.test-util :as tu]))
 
 (defn ent
@@ -452,6 +453,43 @@
           (is (= :refused (:reason (done-event s))))
           (is (empty? (interacts s)))
           (is (false? (gate-open? s))))))))
+
+(defn ^:async pen-scenario
+  "As scenario for two cows in the gated pen, with the cells placed by the body (jobs.lib.built) written first."
+  [placed]
+  (await (settings/with-settings {:jobs.animals.breed/calf-wait-s 0}
+           #(let [s (setup {:inventory (wheat 2) :blocks (pen-blocks true) :states {"6,64,0" {:open false :facing "east"}}
+                            :entities [(cow 1 14 {:pos {:x 14 :y 64 :z 1}}) (cow 2 14 {:pos {:x 14 :y 64 :z -1}})]})]
+              (mem/write! (:store (:eng s)) built/kind {:cells placed} built/policy)
+              (core/submit! (:eng s) '(jobs.animals.breed {:mob "cow"}) {})
+              (.then (run-ticks s 12 700) (fn [_] s))))))
+
+(def pen-cells
+  (vec (for [k (keys (pen-blocks true)) :when (= "64" (second (re-find #"^-?\d+,(\d+)," k)))]
+         (mapv js/parseInt (re-seq #"-?\d+" k)))))
+
+(deftest breed-takes-a-pen-whose-fence-the-body-placed-itself-and-refuses-one-it-only-partly-built
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [own (await (pen-scenario pen-cells))
+              part (await (pen-scenario (rest pen-cells)))]
+          (is (= :fed (:reason (done-event own))) "every fence cell was placed by the body: its own pen")
+          (is (= 2 (count (interacts own))))
+          (is (= :refused (:reason (done-event part))) "a fence cell it did not place makes the pen another's")
+          (is (empty? (interacts part))))))))
+
+(deftest a-pair-fed-with-no-calf-ends-with-the-no-baby-reason-and-its-why
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [s (await (settings/with-settings {:jobs.animals.breed/calf-wait-s 0}
+                         #(let [s (h/setup {:inventory (wheat 2) :entities [(cow 1 2) (cow 2 3)]})]
+                            (core/submit! (:eng s) '(jobs.animals.breed {:mob "cow"}) {})
+                            (.then (run-ticks s 6 700) (fn [_] s)))))
+              e (done-event s)]
+          (is (= :no-baby (:reason e)))
+          (is (re-find #"no calf" (:why e))))))))
 
 (def known-pen {:min {:x 7 :y 64 :z -7} :max {:x 19 :y 64 :z 7}})
 

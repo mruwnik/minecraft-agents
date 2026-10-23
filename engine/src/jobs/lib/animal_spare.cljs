@@ -3,7 +3,9 @@
   last few adults of a kind so a breeding pair survives."
   (:require [engine.args :as a]
             [engine.settings :as settings]
+            [engine.ctx :as ctx]
             [jobs.lib.access :as access]
+            [jobs.lib.built :as built]
             [jobs.lib.pen :as pen]
             [jobs.lib.util :as u]))
 
@@ -41,17 +43,28 @@
 
 (def built-block #"_fence$|_fence_gate$|_wall$|_planks$|bricks?$|^cobblestone$|^mossy_cobblestone$|_slab$")
 
-(defn fenced?
-  "Whether a fence, wall, gate or other player-made block (planks, bricks, cobblestone) stands beside a feet cell of the
-  enclosure (head or foot height): a pit or hollow closed by plain terrain is no pen."
+(defn fence-cells
+  "The [x y z] cells of the fences, walls, gates and other player-made blocks beside a feet cell of the enclosure (head or foot height)."
   [c inside]
   (let [block-at (u/seen-block-at-fn (:primitives c))]
-    (boolean
-     (some (fn [[x y z]]
-             (some (fn [[dx dy dz]]
-                     (some->> (block-at {:x (+ x dx) :y (+ y dy) :z (+ z dz)}) .-name (re-find built-block)))
-                   [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [1 1 0] [-1 1 0] [0 1 1] [0 1 -1]]))
-           inside))))
+    (into #{}
+          (for [[x y z] inside
+                [dx dy dz] [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1] [1 1 0] [-1 1 0] [0 1 1] [0 1 -1]]
+                :let [cell [(+ x dx) (+ y dy) (+ z dz)]]
+                :when (some->> (block-at {:x (cell 0) :y (cell 1) :z (cell 2)}) .-name (re-find built-block))]
+            cell))))
+
+(defn fenced?
+  "Whether a fence, wall, gate or other player-made block (planks, bricks, cobblestone) stands beside a feet cell of the
+  enclosure: a pit or hollow closed by plain terrain is no pen."
+  [c inside]
+  (boolean (seq (fence-cells c inside))))
+
+(defn own-built?
+  "Whether every fence or wall block of the enclosure is one this body placed itself (jobs.lib.built): its own pen, whatever the zones say."
+  [c inside]
+  (let [fence (fence-cells c inside)]
+    (and (seq fence) (every? (built/cells (ctx/view c)) fence))))
 
 (defn enclosure
   "The feet cells ([x y z] set) of the fenced enclosure around cell, an open gate counted shut; nil when there is none."
@@ -63,20 +76,23 @@
 
 (defn cell-enclosed?
   "Whether the feet cell lies in a closed enclosure the body has seen with a fence, wall or gate in it: the pen check from it,
-  the fenced enclosures found so far kept in `pens` (an atom of cell sets)."
-  [c pens cell]
-  (or (boolean (some #(contains? % cell) @pens))
-      (let [answer (pen/check {:block-at (u/seen-block-at-fn (:primitives c)) :at {:x (cell 0) :y (cell 1) :z (cell 2)}
-                               :max-cells (settings/get settings ::pen-max-cells)})
-            penned? (and (:closed? answer) (fenced? c (:inside answer)))]
-        (when penned? (swap! pens conj (:inside answer)))
-        penned?)))
+  the fenced enclosures found so far kept in `pens` (an atom of cell sets). With others-only? an enclosure built wholly by the body (own-built?) does not count."
+  ([c pens cell] (cell-enclosed? c pens cell false))
+  ([c pens cell others-only?]
+   (or (boolean (some #(contains? % cell) @pens))
+       (let [answer (pen/check {:block-at (u/seen-block-at-fn (:primitives c)) :at {:x (cell 0) :y (cell 1) :z (cell 2)}
+                                :max-cells (settings/get settings ::pen-max-cells)})
+             penned? (and (:closed? answer) (fenced? c (:inside answer))
+                          (not (and others-only? (own-built? c (:inside answer)))))]
+         (when penned? (swap! pens conj (:inside answer)))
+         penned?))))
 
 (defn enclosed?
-  "Whether the animal stands inside a closed enclosure the body has seen with a fence, wall or gate in it (cell-enclosed? at its feet)."
-  [c pens e]
-  (let [{:keys [x y z]} (u/pos-of (.-pos e))]
-    (cell-enclosed? c pens [(js/Math.floor x) (js/Math.floor (+ y 0.01)) (js/Math.floor z)])))
+  "Whether the animal stands inside a closed enclosure the body has seen with a fence, wall or gate in it (cell-enclosed? at its feet; others-only? as there)."
+  ([c pens e] (enclosed? c pens e false))
+  ([c pens e others-only?]
+   (let [{:keys [x y z]} (u/pos-of (.-pos e))]
+     (cell-enclosed? c pens [(js/Math.floor x) (js/Math.floor (+ y 0.01)) (js/Math.floor z)] others-only?))))
 
 (defn penned?
   "Whether an adult animal stands in a zone or plan of the body's own or in a closed enclosure (see enclosed?)."

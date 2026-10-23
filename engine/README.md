@@ -362,7 +362,7 @@ One EDN store per body: `worlds/<world>/agents/<name>/engine/memory.edn`, `{:ent
 
 - An **entry** is `{:t wall-clock-ms :wt world-time :age world-ticks :data ...}` (`:age` when known), newest last. **Kinds** are an open vocabulary: `:hurt`, `:died`,
   `:chat`, `:restart`, `:bed`, `:chest`, `:home`, `:looked`, `:moved`, `:picked-up`, `:fed`, `:slept`, `:shelter`, `:threat`,
-  `:tidy`, `:scaffold`, `:forestry/replant`, `:job/j7`, and so on. Body events become entries of their kind; every start
+  `:tidy`, `:scaffold`, `:built-cells` (cells the body placed a block in; a pen it fenced itself is its own), `:forestry/replant`, `:job/j7`, and so on. Body events become entries of their kind; every start
   appends `:restart`.
 - **Policy** `{:cap n :ttl ms}` is stored beside the kind. A new kind gets cap 50 and ttl one hour unless a write gives
   one; `:forever` is a keyword; the cap drops the oldest.

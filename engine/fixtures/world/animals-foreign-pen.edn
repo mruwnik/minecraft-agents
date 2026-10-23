@@ -33,6 +33,18 @@
          [:job (jobs.animals.breed {:mob "cow" :pairs 1 :radius 16 :ways #{:carried}})]]
    :expect [{:event {:source :job :kind :breed.declined :data {:reason :refused}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed :data {:reason :fed}} :for-s 20 :until {:source :job :kind :breed.declined}}]}
+  ;; A pen the body fenced itself with blocks.fill-cells (no plan, zone or build.pen) is its own: breed feeds a pair standing in it (the fence cells
+  ;; are its own placements, jobs.lib.built). Ring x 18..22, z 14..18 of oak fence, cows inside (NoAI, so the pair is fed and no calf comes: stopped :no-baby, not :refused); the same ring set by the plot is the case above.
+  {:name "breed-cows-in-a-pen-the-body-fenced-itself"
+   :body {:at [14.5 0 16.5] :yaw 270 :inventory [["oak_fence" 16] ["wheat" 4]] :effects [["resistance" 600 4]]}
+   :act [[:job (jobs.blocks.fill-cells {:cells [#at [18 0 14] #at [18 0 15] #at [18 0 16] #at [18 0 17] #at [18 0 18] #at [19 0 14] #at [19 0 18] #at [20 0 14] #at [20 0 18] #at [21 0 14] #at [21 0 18] #at [22 0 14] #at [22 0 15] #at [22 0 16] #at [22 0 17] #at [22 0 18]] :use {:blocks ["oak_fence"]}})]
+         [:await {:source :job :kind :completed} 90]
+         [:summon "cow" [19.5 0 15.5] "{NoAI:1b}"]
+         [:summon "cow" [19.5 0 17.5] "{NoAI:1b}"]
+         [:job (jobs.animals.breed {:mob "cow" :pairs 1 :radius 16 :ways #{:carried}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:reason :no-baby}} :within-s 120 :of-job true}
+            {:no-event {:source :job :kind :breed.declined} :for-s 5 :until {:source :job :kind :stopped}}]
+   :after [[:block [18 0 16] "oak_fence"]]}
   ;; explore.search :takeable does not count a cow standing in another's fenced pen: it ends :stopped, never "found 1".
   {:name "search-does-not-count-a-cow-in-a-fenced-pen"
    :blocks [[:fill [18 0 13] [24 0 19] "oak_fence"] [:fill [19 0 14] [23 0 18] "air"]

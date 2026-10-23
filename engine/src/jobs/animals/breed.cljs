@@ -246,11 +246,12 @@
 (defn finish-now!
   "Emit the outcome and end the call; see finish!."
   [c reason ending]
-  (let [m (ctx/mem c)
-        fed (count (:fed m))
+  (let [fed (count (:fed (ctx/mem c)))
+        no-baby? (and (>= fed (least-fed c)) (>= fed 2) (zero? (new-babies c)))
+        reason (if no-baby? :no-baby reason)
         [kind cause] (cond
                        (< fed (least-fed c)) (get ending-of reason [:nothing-possible reason])
-                       (and (>= fed 2) (zero? (new-babies c))) (ending-of :no-baby)
+                       no-baby? (ending-of :no-baby)
                        :else [:done nil])]
     (contract/with-because (ctx/end c kind cause (result c reason)) ending)))
 
