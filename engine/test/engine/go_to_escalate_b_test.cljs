@@ -12,6 +12,7 @@
             [engine.memory :as mem]
             [jobs.lib.escape :as escape]
             [jobs.lib.ledger :as ledger]
+            [jobs.lib.walk.plan :as wplan]
             [jobs.lib.walk.search :as wsearch]
             [plan.shape :as shape]
             [jobs.movement.go-to.escalation :as esc]
@@ -549,3 +550,15 @@
           (await (tick-out! eng 1000))
           (is (true? (:arrived @out)) (pr-str @out))
           (is (= "air" (block p [-2 64 0])) "the seal behind the body is taken back too"))))))
+
+(def own-pillar "A 3-high column under the body: every way off it is a 3-block drop." {"0,64,0" "cobblestone" "0,65,0" "cobblestone" "0,66,0" "cobblestone"})
+
+(def bedrock-pit
+  "Bedrock round the cell (3 64 0) on its four sides, 3 high: nothing the body could dig or climb out by."
+  (into {} (for [[x z] [[2 0] [4 0] [3 -1] [3 1]] y [64 65 66]] [(str x "," y "," z) "bedrock"])))
+
+(deftest a-drop-needs-a-way-out-only-where-it-lands-in-a-pit
+  (let [priced? (fn [blocks] (wplan/one-way-priced? {:primitives (tu/fake {:self {:pos {:x 0.5 :y 67 :z 0.5}} :floor [-10 -10 10 10] :blocks (merge own-pillar blocks)}) :args {}}
+                                                    [8 64 0] [3 64 0] false))]
+    (is (true? (priced? {})) "open ground: escape/choose has no wall to dig, which is no trap")
+    (is (false? (priced? bedrock-pit)) "a pit with nothing to dig is a certain trap")))
