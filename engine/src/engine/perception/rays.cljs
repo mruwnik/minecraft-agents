@@ -382,20 +382,30 @@
   #js {:raw raw :sight sight :src (when (.-sectionStates raw) raw)
        :blocks (fn [id x y z ox oy oz tx ty tz] (blocks-line? raw sight id x y z ox oy oz tx ty tz))})
 
+(defn eye-basis
+  "basis of the eye's look, kept in st while yaw and pitch stay."
+  [^js st ^js eye]
+  (let [^js k (.-basisKey st)]
+    (if (and k (identical? (.-yaw eye) (aget k 0)) (identical? (.-pitch eye) (aget k 1)))
+      (.-basis st)
+      (do (set! (.-basisKey st) #js [(.-yaw eye) (.-pitch eye)])
+          (set! (.-basis st) (basis (.-yaw eye) (.-pitch eye)))))))
+
 (defn visible-now?
   "Whether the cell (x y z), now holding state id, is in view: its centre inside the cone and the radius, a point of it
   (the centre first, then inset points on the faces towards the eye) with nothing blocking sight on the way from the
   eye (kernel cellLight), and lit (or within near)."
-  [{:keys [raw opts grid] :as per} ^js st ^js eye x y z id]
-  (let [ox (.-x eye) oy (.-y eye) oz (.-z eye)
+  [per ^js st ^js eye x y z id]
+  (let [^js raw (:raw per)
+        ox (.-x eye) oy (.-y eye) oz (.-z eye)
         vx (- (+ x 0.5) ox) vy (- (+ y 0.5) oy) vz (- (+ z 0.5) oz)
         dist (js/Math.hypot vx vy vz)
         ^js sight (sight-of per st)
-        ^js visible (or (.-visible st) (set! (.-visible st) (table-now raw (:seeing-min opts))))]
+        ^js visible (or (.-visible st) (set! (.-visible st) (table-now raw (:seeing-min (:opts per)))))]
     (and sight
-         (<= dist (:radius opts))
-         (in-cone? (basis (.-yaw eye) (.-pitch eye)) (:hx grid) (:hy grid) vx vy vz)
-         (let [prev (.cellLight ^js (kernel) (line-ctx raw sight) ox oy oz x y z)]
+         (<= dist (.-radius st))
+         (in-cone? (eye-basis st eye) (.-hx st) (.-hy st) vx vy vz)
+         (let [prev (.cellLight ^js (kernel) (or (.-lineCtx st) (set! (.-lineCtx st) (line-ctx raw sight))) ox oy oz x y z)]
            (when (>= prev 0)
              (let [light (.lightAt ^js raw x y z)
                    shown (if (== 1 (aget sight id)) (max-light light prev) light)]
@@ -433,17 +443,21 @@
       (new-stamp! st)
       (record! st (store-of st (.-dim st)) x y z id ((:now opts))))))
 
+(defn glance-cell!
+  "glance! of the cell (x y z), holding state id, from eye."
+  [per ^js st ^js eye x y z id]
+  (when (visible-now? per st eye x y z id)
+    (new-stamp! st)
+    (record! st (store-of st (.-dimension eye)) x y z id ((.-nowFn st)))
+    id))
+
 (defn glance!
   "One ray instead of a pass: the state id of the cell (x y z) when the body sees it now (visible-now?: view cone, radius,
   clear line, lit or within near), which memory takes. Nil when it does not, or the cell is unloaded, or offline."
-  [{:keys [raw opts st] :as per} [x y z]]
-  (let [^js st st ^js eye (.eye ^js raw)]
-    (when eye
-      (let [id (.stateAt ^js raw x y z)]
-        (when (and (>= id 0) (visible-now? per st eye x y z id))
-          (new-stamp! st)
-          (record! st (store-of st (.-dimension eye)) x y z id ((:now opts)))
-          id)))))
+  [{:keys [raw st] :as per} [x y z]]
+  (when-let [^js eye (.eye ^js raw)]
+    (let [id (.stateAt ^js raw x y z)]
+      (when (>= id 0) (glance-cell! per st eye x y z id)))))
 
 (def hazard-names #{"lava" "fire" "soul_fire" "magma_block" "powder_snow"})
 
@@ -547,17 +561,22 @@
   [^js eye pos top]
   (touches? (.-x eye) (- (.-y eye) game/eye-height) (.-z eye) pos top))
 
+(defn feel-cell!
+  "feel! of the cell pos from eye."
+  [^js raw ^js st ^js eye [x y z :as pos]]
+  (when (in-reach? (.-x eye) (- (.-y eye) game/eye-height) (.-z eye) pos)
+    (let [id (.stateAt raw x y z)]
+      (when (and (>= id 0) (felt? eye pos (.-top ^js (.stateInfo raw id))))
+        (new-stamp! st)
+        (record! st (store-of st (.-dimension eye)) x y z id ((.-nowFn st)))
+        id))))
+
 (defn feel!
   "The state id of a cell the body touches (felt?), in any light; memory takes it. Nil for any other cell, an unloaded
   one, or offline."
-  [{:keys [raw opts st]} [x y z :as pos]]
-  (let [^js st st ^js eye (.eye ^js raw)]
-    (when (and eye (in-reach? (.-x eye) (- (.-y eye) game/eye-height) (.-z eye) pos))
-      (let [id (.stateAt ^js raw x y z)]
-        (when (and (>= id 0) (felt? eye pos (.-top ^js (.stateInfo ^js raw id))))
-          (new-stamp! st)
-          (record! st (store-of st (.-dimension eye)) x y z id ((:now opts)))
-          id)))))
+  [{:keys [raw st]} pos]
+  (when-let [^js eye (.eye ^js raw)]
+    (feel-cell! raw st eye pos)))
 
 (def touching-primitives
   "The primitives whose {pos} argument is a cell the body changes or clicks."

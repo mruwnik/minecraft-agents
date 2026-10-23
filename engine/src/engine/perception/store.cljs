@@ -109,9 +109,20 @@
                yes)
              (== k 1))))))
 
-(def fluid-names #{"water" "lava" "bubble_column"})
+(defn id-flag?
+  "(pred (stateInfo id)), kept per state id in st's Int8Array field k once the sight table (and so the state count) is known."
+  [^js st k id pred]
+  (let [^js flags (or (aget st k) (when-let [^js sight (.-sight st)] (aset st k (js/Int8Array. (.-length sight)))))]
+    (if (and flags (< id (.-length flags)))
+      (let [f (aget flags id)]
+        (if (zero? f)
+          (let [yes (boolean (pred ((.-infoOf st) id)))]
+            (aset flags id (if yes 1 -1))
+            yes)
+          (== f 1)))
+      (boolean (pred ((.-infoOf st) id))))))
 
-(def neighbour-offsets [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
+(def fluid-names #{"water" "lava" "bubble_column"})
 
 (def rerecord-bump-ms
   "Seeing a mutable state again after this long counts as a memory write: it may have read unknown meanwhile (:mutable-max-ms, 10 s by default), so kept room answers must be judged again."
@@ -161,11 +172,22 @@
   [^js st dim cx sy cz]
   (some-> ^js (.get (store-of st dim) (section-key cx sy cz)) .-ids))
 
+(defn section-at
+  "The memory section holding cell (x y z) in the current dimension, or nil."
+  [^js st x y z]
+  (.get (store-of st (.-dim st)) (section-key (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4))))
+
+(defn remembered-id
+  "The remembered state id of cell (x y z) in the current dimension, -1 when never seen."
+  [^js st x y z]
+  (if-let [^js sec (section-at st x y z)]
+    (dec (aget (.-ids sec) (cell-index x y z)))
+    -1))
+
 (defn remembered
   "[state id, seen time in ms] of the remembered cell (x y z) in the current dimension, or nil when never seen."
   [^js st x y z]
-  (when-let [^js sec (.get (store-of st (.-dim st))
-                           (section-key (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4)))]
+  (when-let [^js sec (section-at st x y z)]
     (let [v (aget (.-ids sec) (cell-index x y z))]
       (when (pos? v) [(dec v) (cell-seen sec (cell-index x y z))]))))
 
@@ -225,8 +247,9 @@
   "Whether the remembered cell (x y z) with state id holds a non-solid block next to a remembered fluid: fluids flow, so
   its memory goes stale like a fluid's."
   [^js st x y z id]
-  (and (= "empty" (.-boundingBox ^js ((.-infoOf st) id)))
-       (some (fn [[dx dy dz]]
-               (when-let [[nid] (remembered st (+ x dx) (+ y dy) (+ z dz))]
-                 (contains? fluid-names (.-name ^js ((.-infoOf st) nid)))))
-             neighbour-offsets)))
+  (and (id-flag? st "emptyIds" id #(= "empty" (.-boundingBox ^js %)))
+       (let [fluid? (fn [nx ny nz]
+                      (let [n (remembered-id st nx ny nz)]
+                        (and (>= n 0) (id-flag? st "fluidIds" n #(contains? fluid-names (.-name ^js %))))))]
+         (or (fluid? (inc x) y z) (fluid? (dec x) y z) (fluid? x (inc y) z) (fluid? x (dec y) z)
+             (fluid? x y (inc z)) (fluid? x y (dec z))))))

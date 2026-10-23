@@ -6,6 +6,7 @@
             [engine.fake.raw-world :as fake-raw]
             [engine.perception :as perception]
             [engine.perception.mobs :as mobs]
+            [engine.perception.store :as store]
             [jobs.lib.cost.danger :as danger]
             [jobs.lib.reach.room :as reach-room]
             [engine.test-util :as tu]))
@@ -484,6 +485,52 @@
     (turn! p 90)
     (perception/pass! per)
     (is (= [109 43201189] (memory-digest per)))))
+
+(defn first-match-answer
+  "sensed's rule spelt out on the public readers: nil unloaded, else feel!, else glance!, else memory (unknown when never
+  seen, or a mutable state, or a non-solid cell beside a remembered fluid, older than :mutable-max-ms)."
+  [{:keys [raw opts st] :as per} [x y z :as pos]]
+  (when (>= (.stateAt raw x y z) 0)
+    (or (perception/feel! per pos)
+        (perception/glance! per pos)
+        (let [info #((.-infoOf st) %)
+              [id seen-at] (store/remembered st x y z)
+              age (when id (- ((:now opts)) seen-at))
+              beside-fluid? (and id (= "empty" (.-boundingBox (info id)))
+                                 (some (fn [[dx dy dz]]
+                                         (when-let [[n] (store/remembered st (+ x dx) (+ y dy) (+ z dz))]
+                                           (#{"water" "lava" "bubble_column"} (.-name (info n)))))
+                                       [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]))]
+          (if (or (nil? id) (and (> age (:mutable-max-ms opts)) (or (store/mutable-id? st id) beside-fluid?)))
+            {:unknown true :pos pos}
+            (assoc (perception/block-of per id pos) :age-ms age :visible false))))))
+
+(defn answer-kind [m] (cond (nil? m) :none (:unknown m) :unknown (:felt m) :felt (:visible m) :visible :else :remembered))
+
+(deftest sensed-and-sensedAt-answer-and-remember-as-the-first-match-rule
+  (let [blocks (merge pinned-world
+                      {"0,63,0" "stone" "2,64,1" "oak_door" "-2,64,2" "wheat" "3,64,4" "water" "4,64,4" "water"})
+        states {[2 64 1] {:facing "north" :open true :hinge "left" :half "lower"} [-2 64 2] {:age 3}}
+        cells (for [x (range -6 7) y (range 62 68) z (range -6 11)] [x y z])
+        ;; a pass, 20 s (past :mutable-max-ms), a turn, then every cell read twice (the second from the tick's cache)
+        reads (fn [answer]
+                (let [clock (atom 0)
+                      {:keys [p per]} (rig blocks {:now (fn [] @clock) :rand (constantly 0.5)})
+                      wrapped (perception/wrap p per)]
+                  (swap! (fake/state p) update :states merge states)
+                  (perception/pass! per)
+                  (swap! clock + 20000)
+                  (turn! p 150)
+                  (let [first-read (mapv #(answer per wrapped %) cells)]
+                    {:answers first-read :again (mapv #(answer per wrapped %) cells) :memory (memory-digest per)})))
+        as-js (fn [^js o] (when o [(vec (js/Object.keys o)) (js->clj o)]))
+        rule (reads (fn [per _ pos] (first-match-answer per pos)))
+        sensed (reads (fn [per _ pos] (perception/sensed per pos)))
+        sensed-at (reads (fn [_ ^js w [x y z]] (as-js (.sensedAt w #js {:x x :y y :z z}))))]
+    (is (= #{:felt :visible :remembered :unknown} (set (map answer-kind (:answers rule)))))
+    (is (= rule sensed))
+    (is (= (mapv #(as-js (perception/answer-js %)) (:answers rule)) (:answers sensed-at) (:again sensed-at)))
+    (is (= (:memory rule) (:memory sensed-at)))))
 
 (defn walk-memory
   "Passes along a walk (one cell east and half a turn each step, the clock moving step-ms between them) over a seeded

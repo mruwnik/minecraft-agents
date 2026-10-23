@@ -139,7 +139,8 @@
               :writes 0 :stamp 0 :lastKey -1 :lastSec nil :minSec nil :minNow nil :minVal 0 :dim "overworld" :sight nil :visible nil
               :pass nil :passRays nil :lastStart nil :unsubscribe nil
               :mobs (js/Map.) :mobSource nil
-              :infoOf (fn [id] (.stateInfo ^js raw id)) :kinds nil :sensedKey nil :sensed (js/Map.) :sensedJs (js/Map.) :blockBases (js/Map.)
+              :infoOf (fn [id] (.stateInfo ^js raw id)) :kinds nil :sensedKey nil :sensed (js/Map.) :blockBases (js/Map.) :jsBases (js/Map.)
+              :nowFn (:now o) :tickMs (:step-ms o) :mutableMaxMs (:mutable-max-ms o) :radius (:radius o) :hx (:hx g) :hy (:hy g)
               :passes 0 :rays 0 :cells 0 :steps 0 :stepMs 0 :stepMsMax 0}}))
 
 (defn stats [{:keys [st] :as per}]
@@ -210,33 +211,44 @@
   (when-let [id (rays/feel! per pos)]
     (assoc (block-of per id pos) :age-ms 0 :felt true)))
 
+(defn remembered-age
+  "The age in ms of the remembered state id of cell (x y z), nil when it reads unknown: never seen, or a mutable state,
+  or a non-solid cell beside a remembered fluid, older than :mutable-max-ms."
+  [^js st x y z]
+  (when-let [^js sec (store/section-at st x y z)]
+    (let [i (store/cell-index x y z)
+          v (aget (.-ids sec) i)]
+      (when (pos? v)
+        (let [id (dec v)
+              age (- ((.-nowFn st)) (store/cell-seen sec i))]
+          (when-not (and (> age (.-mutableMaxMs st)) (or (store/mutable-id? st id) (store/beside-fluid? st x y z id)))
+            age))))))
+
 (defn remembered
-  "The remembered answer for pos with :age-ms and :visible false; unknown when never seen, or a mutable state, or a
-  non-solid cell beside a remembered fluid, older than :mutable-max-ms."
-  [{:keys [opts st] :as per} [x y z :as pos]]
-  (let [[id seen-at] (store/remembered st x y z)
-        age (when id (- ((:now opts)) seen-at))]
-    (if (or (nil? id) (and (> age (:mutable-max-ms opts)) (or (store/mutable-id? st id) (store/beside-fluid? st x y z id))))
-      {:unknown true :pos pos}
-      (assoc (block-of per id pos) :age-ms age :visible false))))
+  "The remembered answer for pos with :age-ms and :visible false; unknown when it reads unknown (remembered-age)."
+  [{:keys [st] :as per} [x y z :as pos]]
+  (if-let [age (remembered-age st x y z)]
+    (assoc (block-of per (store/remembered-id st x y z) pos) :age-ms age :visible false)
+    {:unknown true :pos pos}))
 
 (defn sense-fresh!
   "Clears the sensed cache when what it depends on (the tick, the raw world's epoch and the eye) changed since the last
-  call; false offline (no eye). Compares the parts in place: a key string per call was the cost."
-  [{:keys [raw opts st]}]
+  call. The eye, nil offline. Compares the parts in place: a key string per call was the cost."
+  [{:keys [raw st]}]
   (when-let [^js eye (.eye ^js raw)]
     (let [^js st st
           ^js last (.-sensedKey st)
-          tick (js/Math.floor (/ ((:now opts)) (:step-ms opts)))
+          tick (js/Math.floor (/ ((.-nowFn st)) (.-tickMs st)))
           epoch (rays/epoch-of raw)]
       (when-not (and last
                      (identical? tick (aget last 0)) (identical? epoch (aget last 1)) (identical? (.-dimension eye) (aget last 2))
                      (identical? (.-x eye) (aget last 3)) (identical? (.-y eye) (aget last 4)) (identical? (.-z eye) (aget last 5))
                      (identical? (.-yaw eye) (aget last 6)) (identical? (.-pitch eye) (aget last 7)))
         (set! (.-sensedKey st) #js [tick epoch (.-dimension eye) (.-x eye) (.-y eye) (.-z eye) (.-yaw eye) (.-pitch eye)])
-        (.clear ^js (.-sensed st))
-        (.clear ^js (.-sensedJs st)))
-      true)))
+        (set! (.-keyX st) (js/Math.floor (.-x eye)))
+        (set! (.-keyZ st) (js/Math.floor (.-z eye)))
+        (.clear ^js (.-sensed st)))
+      eye)))
 
 (defn memo-key
   "[k writes] that stay equal while every sensed answer does (same tick, raw-world epoch and eye, and no change to the remembered blocks); k is identical, not just equal; nil offline."
@@ -244,21 +256,55 @@
   (when (sense-fresh! per)
     (let [^js st (:st per)] [(.-sensedKey st) (.-writes st)])))
 
+(defn sense-cell
+  "What the body knows of cell pos now, seen from eye, as #js [kind state-id age-ms]: kind 0 unloaded, 1 felt, 2 visible,
+  3 remembered, 4 unknown. Slots 3 and 4 keep its answer as sensed and as sensed-js once asked."
+  [{:keys [raw st] :as per} ^js eye [x y z :as pos]]
+  (let [id (.stateAt ^js raw x y z)]
+    (if (< id 0)
+      #js [0 -1 0]
+      (if-let [felt (rays/feel-cell! raw st eye pos)]
+        #js [1 felt 0]
+        (if-let [seen (rays/glance-cell! per st eye x y z id)]
+          #js [2 seen 0]
+          (if-let [age (remembered-age st x y z)]
+            #js [3 (store/remembered-id st x y z) age]
+            #js [4 -1 0]))))))
+
+(def key-span "Blocks either side of the eye that sensed's numeric cell keys tell apart (a string key past them)." 524288)
+
+(defn sensed-cell
+  "sense-cell of pos, cached for one tick while the eye and the world stay the same; nil offline."
+  [{:keys [st] :as per} [x y z :as pos]]
+  (when-let [eye (sense-fresh! per)]
+    (let [^js st st
+          dx (+ (- x (.-keyX st)) key-span) dz (+ (- z (.-keyZ st)) key-span)
+          ck (if (and (< -1 dx (* 2 key-span)) (< -1 dz (* 2 key-span)) (< -2049 y 2048))
+               (+ (* (+ (* dx 2 key-span) dz) 4096) (+ y 2048))
+               (str x "," y "," z))
+          ^js m (.-sensed st)
+          hit (.get m ck)]
+      (if (undefined? hit)
+        (let [c (sense-cell per eye pos)] (.set m ck c) c)
+        hit))))
+
 (defn sensed
   "What the body knows of the cell pos [x y z] now: nil (unloaded or offline), felt, visible, remembered or unknown (see
   the namespace doc). Cached for one tick while the eye and the world stay the same."
-  ([per pos] (sensed per pos nil))
-  ([{:keys [raw st] :as per} [x y z :as pos] ck]
-   (let [^js st st]
-     (when (sense-fresh! per)
-       (let [ck (or ck (str x "," y "," z))
-             hit (.get ^js (.-sensed st) ck)]
-         (if (undefined? hit)
-           (let [answer (when (>= (.stateAt ^js raw x y z) 0)
-                          (or (feel! per pos) (glance! per pos) (remembered per pos)))]
-             (.set ^js (.-sensed st) ck answer)
-             answer)
-           hit))))))
+  [per pos]
+  (when-let [^js c (sensed-cell per pos)]
+    (let [hit (aget c 3)]
+      (if (undefined? hit)
+        (let [id (aget c 1)
+              answer (case (aget c 0)
+                       0 nil
+                       1 (assoc (block-of per id pos) :age-ms 0 :felt true)
+                       2 (assoc (block-of per id pos) :age-ms 0 :visible true)
+                       3 (assoc (block-of per id pos) :age-ms (aget c 2) :visible false)
+                       {:unknown true :pos pos})]
+          (aset c 3 answer)
+          answer)
+        hit))))
 
 (defn pos-js [[x y z]] #js {:x x :y y :z z})
 
@@ -278,17 +324,38 @@
           (aset o (name k) v)))
       o)))
 
+(defn base-js
+  "answer-js of block-base: the JS keys of state id that are the same for every cell, kept per id."
+  [{:keys [st] :as per} id]
+  (let [^js cache (.-jsBases ^js st)]
+    (or (.get cache id)
+        (let [b (answer-js (block-base per id))] (.set cache id b) b))))
+
+(defn cell-js
+  "answer-js of the answer sense-cell c gives for cell x y z, built from base-js (properties copied: each answer owns its own)."
+  [per ^js c x y z]
+  (let [kind (aget c 0)]
+    (case kind
+      0 nil
+      4 #js {:unknown true :pos #js {:x x :y y :z z}}
+      (let [^js o (js/Object.assign #js {} (base-js per (aget c 1)))]
+        (when-let [props (.-properties o)] (set! (.-properties o) (js/Object.assign #js {} props)))
+        (set! (.-pos o) #js {:x x :y y :z z})
+        (set! (.-ageMs o) (aget c 2))
+        (case kind
+          1 (set! (.-felt o) true)
+          2 (set! (.-visible o) true)
+          (set! (.-visible o) false))
+        o))))
+
 (defn sensed-js
   "sensed as JS, one object per cell and tick (sensed's cache window), shared between callers."
-  [{:keys [st] :as per} [x y z :as pos]]
-  (let [ck (str x "," y "," z)
-        answer (sensed per pos ck)]
-    (when answer
-      (let [^js m (.-sensedJs ^js st)
-            hit (.get m ck)]
-        (if (undefined? hit)
-          (let [o (answer-js answer)] (.set m ck o) o)
-          hit)))))
+  [per [x y z :as pos]]
+  (when-let [^js c (sensed-cell per pos)]
+    (let [hit (aget c 4)]
+      (if (undefined? hit)
+        (let [o (cell-js per c x y z)] (aset c 4 o) o)
+        hit))))
 
 (defn cell-of [^js a]
   (when-let [^js pos (some-> a .-pos)]
@@ -315,7 +382,7 @@
   glance!), and the perception itself."
   [p per]
   (let [out (js/Object.assign #js {} p)
-        cell (fn [^js a] (mapv #(js/Math.floor %) [(.-x a) (.-y a) (.-z a)]))]
+        cell (fn [^js a] [(js/Math.floor (.-x a)) (js/Math.floor (.-y a)) (js/Math.floor (.-z a))])]
     (aset out "perception" per)
     (when-not (.-rawWorld out) (aset out "rawWorld" (:raw per)))
     (set! (.-mobSource ^js (:st per)) p)
