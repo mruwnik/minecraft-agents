@@ -1205,3 +1205,20 @@
   (is (= "2 found (cow at [1 64 2], wheat at [3 64 4]), 0 legs"
          (report/explored-text {:found [{:what "cow" :pos [1 64 2]} {:what :wheat :pos [3 64 4]}] :coverage {:legs 0}})))
   (is (= "0 found, 3 legs, time" (report/explored-text {:coverage {:legs 3} :why :time}))))
+
+(def sealed-pit
+  "The body shut in a dark 1x2 cell at night, as the night handler leaves it, a furnace and a tree outside."
+  {:self {:food 5 :pos {:x 0.5 :y 64 :z 0.5}} :time 15000
+   :blocks (into {"0,66,0" "dirt" "6,64,0" "furnace" "10,64,4" "oak_log" "10,65,4" "oak_log" "10,66,4" "oak_log"}
+                 (for [[x z] [[1 0] [-1 0] [0 1] [0 -1]] y [64 65]] [(str x "," y "," z) "dirt"]))
+   :inventory [{:name "mutton" :count 2}]})
+
+(deftest the-hungry-reflex-in-a-dark-shelter-eats-raw-meat-it-cannot-cook-tonight
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng p seen]} (setup sealed-pit :step-ms 500)]
+          (core/load-scenario! eng (scenario/parse "{:register [{:trigger :hungry}]}"))
+          (await (core/tick! eng))
+          (is (= 1 (count (filter #(and (= :child_started (:kind %)) (= :cook (:slot %))) @seen))) "a cook that waits on the dark is not called again")
+          (is (> (food p) 5) "the mutton was eaten raw"))))))

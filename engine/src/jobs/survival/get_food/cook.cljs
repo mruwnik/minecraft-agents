@@ -162,7 +162,8 @@
 
 (defn ^:async cook!
   "Smelt the raw food carried (the smelt job, fuel as it takes it) in the furnace known (or the given one); the cooking
-  wait yields the round (once the furnace holds the load, the world must move on before the next look; the child is not called while it waits, since an ending would wipe its load). :again when it ended, :continue while it goes on, else nil with :no-cook remembered."
+  wait yields the round (once the furnace holds the load, the world must move on before the next look; the child is not called while it waits, since an ending would wipe its load). A smelt that waits on the world before
+  its load is in (the dark outside, a hostile) is no furnace within reach now: the raw food is eaten instead. :again when it ended, :continue while it goes on, else nil with :no-cook remembered."
   ([c] (await (cook! c nil)))
   ([c cooker] (await (cook! c cooker nil)))
   ([c cooker extra]
@@ -178,9 +179,12 @@
     (loop [n 1]
       (let [loaded-before? (some? (loaded-in c :cook))
             e (if loaded-before? :continue (await (child/run!* c :cook 'jobs.items.smelt args {:max-calls 1})))
-            loaded? (some? (loaded-in c :cook))]
+            loaded? (some? (loaded-in c :cook))
+            wait (when (and (not loaded-before?) (= :continue e) (not loaded?)) (some-> (:child-wait c) deref))]
         (cond
           (not (ctx/alive? c)) :continue
+          wait (do (ctx/update-mem! c #(-> % (dissoc :cooking) (assoc :no-cook (str "waits: " (name (:reason wait))))))
+                   nil)
           (and (= :continue e) (not loaded?) (< n (child/default-max-calls))) (do (await (pace/pace!)) (recur (inc n)))
           (= :continue e) :continue
           :else (do (ctx/update-mem! c dissoc :cooking)

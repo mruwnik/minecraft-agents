@@ -4,7 +4,8 @@
 ;; Should-succeed: a cook cut after its load is collected by the next get-food; raw chicken beside a seen furnace is smelted first by the hungry reflex; a carried furnace is put down
 ;; and 2 raw chops cooked; food near 0 with a furnace in sight still cooks; the night hold in a closed hut cooks beef at a furnace
 ;; inside and then eats it; reserved bait carrots are eaten by neither the hungry reflex nor the night hold.
-;; Should-fail: a creeper in sight rushes the body: the raw beef is eaten, no cooking; with carrots reserved as bait the
+;; Should-fail: a creeper in sight rushes the body: the raw beef is eaten, no cooking; shut in at night with the furnace out in the
+;; open, the reflex eats raw mutton at once and stays put; with carrots reserved as bait the
 ;; hungry body keeps all of them.
 {:defaults
  {:tags [:survival :get-food :cook]
@@ -95,6 +96,23 @@
    :expect [{:event {:source :job :kind #{:completed :stopped}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :child_ended :data {:slot :cook :ending {:kind :done}}} :for-s 50 :until {:source :job :kind #{:completed :stopped}}}]
    :after [[:item "beef" [:<= 1]]]}
+  ;; fcf896a3: shut in a stone cell at night (as the night's dig-in leaves it), the remembered furnace out in the open: the smelt
+  ;; waits on the night's exposure, so the hungry reflex eats the mutton raw at once instead of holding the body on the wait.
+  ;; A dark underground plot does not do: its walk is no exposure, so the cook goes ahead (as it should).
+  {:name "reflex-shut-in-at-night-eats-raw-mutton-when-the-cook-must-wait"
+   :time :night
+   :time-why :dawn-decision
+   :plot {:height 6 :length 48}
+   :register [{:trigger :hungry :why "no exploring in the closed plot; a 30 s cooldown so a refire fits the case" :cooldown-s 30 :job (jobs.survival.get-food {:explore false :carry 0})}]
+   :blocks [[:fill [3 -1 15] [5 2 17] "stone" :hollow] [:set [24 0 16] "furnace[facing=west]"]]
+   :memory [{:kind :furnace :data {:pos #xyz [24 0 16]} :policy {:cap 1 :ttl :forever}}]
+   :body {:inventory [["mutton" 2]]}
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-effect-gone "hunger" 30]
+         [:rcon "damage $BODY 5 minecraft:generic"]]
+   :expect [{:event {:source :reflex :kind :fired :context {:reflex-id :hungry}} :within-s 30}
+            {:event {:source :reflex :kind :ended :context {:reflex-id :hungry} :data {:outcome :done}} :within-s 50}
+            {:no-event {:source :action :kind :started :data {:name "furnace"}} :for-s 50}]
+   :after [[:item "mutton" 0] [:body-near [4.5 0 16.5] 1]]}
   {:name "reserved-bait-carrots-survive-the-hungry-reflex"
    :register [{:trigger :hungry :why "no exploring in the closed plot; a 30 s cooldown so a refire fits the case" :cooldown-s 30 :job (jobs.survival.get-food {:explore false :carry 0})}]
    :body {:inventory [["carrot" 13]]}
