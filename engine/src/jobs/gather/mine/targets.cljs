@@ -217,11 +217,12 @@
 
 (defn last-exit?
   "Whether digging cell pos would leave the body, which has a side cell to step to now, with none (the floor or the
-  step-up of its last way out): Rowan's pit ended on a one-cell column."
+  step-up of its last way out): Rowan's pit ended on a one-cell column. A cell the body has not seen is a way out
+  before the dig and a wall after it, the worse case for the question."
   [c pos]
   (let [p (:primitives c)
         feet (let [f (cell-of (u/self-pos c))] [(:x f) (:y f) (:z f)])]
-    (and (pos? (reach-lib/exits p :solid feet))
+    (and (pos? (reach-lib/exits p :ground feet))
          (zero? (reach-lib/exits p :solid feet [(:x pos) (:y pos) (:z pos)])))))
 
 (defn skip! [c pos] (ctx/update-mem! c update :skipped (fnil conj []) pos))

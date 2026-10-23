@@ -85,12 +85,13 @@
 
 (defn probe
   "What the checks of one pass decision share, so its work does not grow with the entries waiting or the terrain: one
-  block lookup, the body's enclosure (flooded at most once), whether the body walks to each other cell now (searched
+  block lookup, the body's enclosure (flooded at most once: :enclosed with unseen walls solid for the escape hole's why-not, :roomy with them open for seals-body?), whether the body walks to each other cell now (searched
   at most once), each cell's seal answer, and max-search-cells cells for all its walk searches."
   [c]
   (let [p (:primitives c)]
     {:kind-at (reach/seen-lookup p)
-     :enclosed (delay (reach-room/enclosed? p :ground))
+     :enclosed (delay (reach-room/enclosed? p :solid))
+     :roomy (delay (not (reach-room/enclosed? p :ground)))
      :reaches (volatile! {})
      :seals (volatile! {})
      :cells-left (volatile! (max-search-cells))}))
@@ -157,7 +158,7 @@
   [c {:keys [cell action]} pr]
   (and (= :dig action)
        (let [p (:primitives c)]
-         (and (not @(:enclosed pr))
+         (and @(:roomy pr)
               (reach-room/closes-in? p :fill cell)))))
 
 (def target [])

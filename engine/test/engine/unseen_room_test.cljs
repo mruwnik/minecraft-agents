@@ -44,7 +44,7 @@
 
 (deftest a-restore-that-fills-the-only-seen-way-out-skips-while-the-other-is-unseen
   (let [c {:primitives (doorways-p)}]
-    (is (true? (restore-broken/seals-body? c {:cell [1 64 0] :action :dig} {:enclosed (delay false)})))))
+    (is (true? (restore-broken/seals-body? c {:cell [1 64 0] :action :dig} {:roomy (delay true)})))))
 
 (deftest a-roof-and-walls-the-body-has-not-looked-at-give-no-shelter
   (let [p (walled-p)]
@@ -72,9 +72,12 @@
   (let [hole {:cell [1 66 0] :action :dig :was "stone" :now "air" :escalation true :any-of ["stone"]}]
     (is (= :shut-in (tidy/why-not (doorway-p) hole)))))
 
-(deftest a-restore-pass-reads-hidden-walls-as-open-ground-for-the-enclosure
-  (is (false? @(:enclosed (restore-broken/probe {:primitives (walled-p)})))))
+(deftest a-restore-pass-keeps-the-escape-hole-for-hidden-walls-and-reads-them-open-for-the-seal-check
+  (let [pr (restore-broken/probe {:primitives (walled-p)})]
+    (is (true? @(:enclosed pr)))
+    (is (true? @(:roomy pr)))))
 
-(deftest digging-the-floor-of-a-way-whose-headroom-is-unseen-is-not-the-last-exit
-  (let [p (hiding (tu/fake {:self {:pos body} :floor [-30 -30 30 30] :blocks one-doorway}) #{[1 65 0]})]
-    (is (false? (targets/last-exit? {:primitives p} [1 63 0])))))
+(deftest digging-the-floor-of-a-way-the-body-has-not-seen-is-the-last-exit
+  (doseq [hidden [#{[1 65 0]} #{[1 64 0] [1 65 0]}]]
+    (let [p (hiding (tu/fake {:self {:pos body} :floor [-30 -30 30 30] :blocks one-doorway}) hidden)]
+      (is (true? (targets/last-exit? {:primitives p} [1 63 0]))))))
