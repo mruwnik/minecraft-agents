@@ -5,8 +5,8 @@
 
   route-danger per mob: hostile (jobs.lib.cost.threat; provoked-only mobs x0.1) or named in overrides; mob-hurt over 3 s
   after armour, dearer for a body that cannot afford to fight it (no-answer-factor; not for a provoked-only mob, which is never fought, and a mob with :angry false adds none);
-  weight 1 within 2 blocks of the route, falling to 0 at :radius; counts only if a melee mob can walk to
-  the route or a ranged mob has a line of fire to it. Overrides {mob-name number-or-{:times n}}: threat before armour.
+  weighted by the most its reach (its way and line of fire, jobs.lib.threat-field) weighs a cell of the route, none
+  outside it. Overrides {mob-name number-or-{:times n}}: threat before armour.
 
   exposure-price: the seconds a second exposed to mobs that reach the body costs (hurt-rate, the hp a second, at the hp price).
 
@@ -23,10 +23,7 @@
             [jobs.lib.util :as u]))
 
 (a/defargs settings
-  {::max-fire-checks {:default 8 :doc "Route cells a ranged mob's line of fire is tried to, nearest first." :spec (a/int-in 1 nil)}
-   ::default-radius {:default 16 :doc "Blocks out to which a sensed or remembered mob costs a route." :spec (a/int-in 1 nil)}
-   ::close {:default 2 :doc "Blocks within which a mob is close." :spec (a/int-in 0 nil)}
-   ::exposure-s {:default 3 :doc "Seconds a body is exposed to a mob on a route." :spec (a/int-in 0 nil)}
+  {::exposure-s {:default 3 :doc "Seconds a body is exposed to a mob on a route." :spec (a/int-in 0 nil)}
    ::snap-span {:default 4 :doc "How far up or down a straight route looks for ground in each column." :spec (a/int-in 0 nil)}
    ::sprint-speed {:default 5.6 :doc "Blocks a second a sprinting body covers (reach-first?)." :spec (a/num-in 0.1 nil)}
    ::walk-speed {:default 4.3 :doc "Blocks a second a walking body covers, one too hungry to sprint (reach-first?)." :spec (a/num-in 0.1 nil)}
@@ -57,31 +54,10 @@
         (map? o) (let [t (or (:times o) (get o "times"))] (if (number? t) #(* t %) identity))
         :else identity))
 
-;; ---------------------------------------------------------------- reach
-
-(defn max-fire-checks [] (settings/get settings ::max-fire-checks))
-
 (defn centre [{:keys [x y z]}] {:x (+ (js/Math.floor x) 0.5) :y (js/Math.floor y) :z (+ (js/Math.floor z) 0.5)})
-
-(defn line-clear?
-  "Whether no :solid cell of kind-at lies on the segment from a to b ({:x :y :z}): reach/ray-clear?."
-  [kind-at a b]
-  (reach/ray-clear? kind-at [(:x a) (:y a) (:z a)] [(:x b) (:y b) (:z b)]))
-
-(defn reaches?
-  "Whether mob (at pos) can hurt a body on the route: a line of fire to one of the nearest route cells within radius
-  for a ranged mob, a walkable way to the nearest cell for any other."
-  [kind-at {:keys [name pos]} near-cells]
-  (if (= :projectile (threat/damage-type name))
-    (let [eye (update pos :y + 1.6)]
-      (boolean (some #(line-clear? kind-at eye (update (centre %) :y + 1.5)) (take (max-fire-checks) near-cells))))
-    (let [{:keys [x y z]} (first near-cells)]
-      (reach/way? kind-at (reach/cell-of pos) [(js/Math.floor x) (js/Math.floor y) (js/Math.floor z)]))))
 
 ;; ---------------------------------------------------------------- route danger
 
-(defn default-radius [] (settings/get settings ::default-radius))
-(defn close [] (settings/get settings ::close))
 (defn exposure-s [] (settings/get settings ::exposure-s))
 
 (defn no-answer-scale [] (settings/get settings ::no-answer-scale))
@@ -99,11 +75,11 @@
 (defn route-danger
   "{:danger total :mobs [{:name :pos :distance :weight :threat :danger} ...]} of walking route ([{:x :y :z}] cells)
   past mobs (cljs maps {:name :pos} or JS entities) for a body wearing equipment. Lists only mobs that add danger, the
-  worst first. version: the minecraft-data version; kind-at: a jobs.lib.reach lookup. Options: :overrides, :radius (16),
-  :weapon (the item held or to hold, default a fist) and :health (default 20): see no-answer-factor. See the ns doc."
-  [version kind-at route mobs equipment & {:keys [overrides radius weapon health]}]
-  (let [radius (or radius (default-radius))
-        overrides (into {} (map (fn [[k o]] [(if (keyword? k) (name k) (str k)) o])) overrides)
+  worst first. version: the minecraft-data version; reach-of: a fn of a mob {:name :pos} to its reach (a fn of a cell x y
+  z, its weight 0-1, nil outside: jobs.lib.threat-field). Options: :overrides, :weapon (the item held or to hold,
+  default a fist) and :health (default 20): see no-answer-factor. See the ns doc."
+  [version reach-of route mobs equipment & {:keys [overrides weapon health]}]
+  (let [overrides (into {} (map (fn [[k o]] [(if (keyword? k) (name k) (str k)) o])) overrides)
         stats (armour/armour-stats equipment)
         route (vec route)
         rows (when (seq route)
@@ -111,17 +87,13 @@
                      :when (and (string? (:name m)) (:pos m)
                                 (not (false? (:angry m)))
                                 (or (contains? overrides (:name m)) (threat/hostile? version m)))
-                     :let [cells (->> route
-                                      (map (fn [c] [(u/dist (:pos m) (centre c)) c]))
-                                      (filter #(<= (first %) radius))
-                                      (sort-by first))
-                           d (ffirst cells)]
-                     :when d
-                     :let [weight (if (<= d (close)) 1 (/ (- radius d) (- radius (close))))
+                     :let [reach (reach-of m)
+                           weight (reduce max 0 (keep (fn [{:keys [x y z]}] (reach (js/Math.floor x) (js/Math.floor y) (js/Math.floor z))) route))
+                           d (reduce min ##Inf (map #(u/dist (:pos m) (centre %)) route))
                            share (if (contains? threat/provoked-only (:name m)) (threat/provoked-share) 1)
                            threat-fn #(* share ((override-fn (get overrides (:name m))) %))
                            threat (threat-fn (:threat (threat/base-threat (:name m) (exposure-s))))]
-                     :when (and (pos? weight) (pos? threat) (reaches? kind-at m (map second cells)))
+                     :when (and (pos? weight) (pos? threat))
                      :let [hurt (threat/mob-hurt stats (:name m) (exposure-s) threat-fn)
                            scale (if (contains? threat/provoked-only (:name m)) 1 (no-answer-factor equipment weapon health (:name m) d))]]
                  {:name (:name m) :pos (:pos m) :distance d :weight weight :threat threat :danger (* weight hurt scale)}))

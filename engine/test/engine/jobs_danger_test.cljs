@@ -1,9 +1,10 @@
 (ns engine.jobs-danger-test
-  "jobs.lib.cost/route-danger: the danger of walking a route past the mobs the body senses, after its armour."
+  "jobs.lib.cost/route-danger: the danger of walking a route past the mobs the body senses, over their reach (jobs.lib.threat-field), after its armour."
   (:require [cljs.test :refer [deftest is are]]
             [jobs.lib.cost :as d]
             [jobs.lib.cost.danger :as danger]
             [jobs.lib.reach :as reach]
+            [jobs.lib.threat-field :as field]
             [engine.game :as game]
             [engine.test-util :as tu]))
 
@@ -27,7 +28,9 @@
 (def iron-armour {:head {:name "iron_helmet"} :torso {:name "iron_chestplate"}
                   :legs {:name "iron_leggings"} :feet {:name "iron_boots"}})
 
-(defn route-danger [p route mobs equipment & opts] (apply d/route-danger game/default-version (reach/lookup p) route mobs equipment opts))
+(defn reach-of [p] (fn [m] (field/reach-fn (field/field p {:mob (:name m) :pos (:pos m)}))))
+
+(defn route-danger [p route mobs equipment & opts] (apply d/route-danger game/default-version (reach-of p) route mobs equipment opts))
 
 (defn danger [p mobs & opts] (:danger (apply route-danger p route mobs naked opts)))
 
@@ -40,10 +43,11 @@
 (deftest a-creeper-is-worse-than-a-zombie
   (is (> (danger (world) [(mob 1 "creeper" 15 2)]) (danger (world) [(mob 1 "zombie" 15 2)]))))
 
-(deftest closer-is-worse-and-far-off-is-nothing
+(deftest closer-along-its-way-is-worse-and-a-way-past-its-follow-range-is-nothing
   (let [p (world)]
-    (is (> (danger p [(mob 1 "zombie" 15 1)]) (danger p [(mob 1 "zombie" 15 8)]) 0))
-    (is (= 0 (danger p [(mob 1 "zombie" 15 19)])))))
+    (is (> (danger p [(mob 1 "zombie" 15 1)]) (danger p [(mob 1 "zombie" 15 8)]) (danger p [(mob 1 "zombie" 15 19)]) 0)
+        "19 blocks off is 19 steps of its way: still within its follow range (35)")
+    (is (= 0 (danger p [(mob 1 "vindicator" 15 19)])) "a vindicator follows 12")))
 
 (deftest a-walled-off-skeleton-is-no-danger-and-an-open-one-is
   (is (= 0 (danger (world :blocks skeleton-wall) [(mob 1 "skeleton" 15 8)])))
@@ -106,16 +110,6 @@
     (is (= {:x 0 :y 64 :z 0} (first r)))
     (is (= {:x 10 :y 64 :z 0} (last r)))
     (is (= 65 (:y (first (filter #(= 5 (:x %)) r)))) "a step up onto the block")))
-
-(defn solid-at [& cells] (fn [x _ z] (if (some #{[x z]} cells) :solid :air)))
-
-(deftest line-clear-walks-the-exact-cells-of-the-ray
-  (let [from {:x 0.5 :y 64.5 :z 0.5}]
-    (are [cells to clear?] (= clear? (danger/line-clear? (apply solid-at cells) from to))
-      [[1 0]] {:x 2.5 :y 64.5 :z 2.0} false  ;; clips the corner of a solid cell for a sliver
-      [[0 1] [2 0]] {:x 2.5 :y 64.5 :z 1.5} true  ;; a diagonal between solid cells
-      [[0 0] [2 1]] {:x 2.5 :y 64.5 :z 1.5} true  ;; solid start and end cells do not count
-      [[1 0]] {:x 2.5 :y 64.5 :z 1.5} false)))
 
 ;; ---------------------------------------------------------------- a body with no answer
 

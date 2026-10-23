@@ -12,6 +12,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
+            [jobs.lib.threat-field :as field]
             [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.survival.recover-drops.config :as cfg]))
@@ -150,7 +151,7 @@
                       (later-killers c pos))
         guard-spots (set (map :pos guard))
         threat (if route
-                 (cost/route-danger version kind-at route (concat known guard) (.-equipment (.self p))
+                 (cost/route-danger version #(field/reach-fn (field/field-of c {:mob (:name %) :pos (:pos %)})) route (concat known guard) (.-equipment (.self p))
                                     :overrides (:danger-overrides (:args c)) :weapon (combat/best-weapon p combat/default-weapons) :health (.-health (.self p)))
                  {:danger 0 :mobs []})
         drown-hp (get-in quoted [:route :drown] 0)
