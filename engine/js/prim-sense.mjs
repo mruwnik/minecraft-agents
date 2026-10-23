@@ -152,11 +152,9 @@ export function createSense (env) {
   const worldAge = () => isOffline() ? null : (env.bot.time.age ?? null)
 
   // What the server announced: the difficulty name (bot.game, kept current by the difficulty packet) and the simulation
-  // distance in chunks (login and simulation_distance packets; Mineflayer keeps neither). Null while unknown.
-  let simulationDistance = null
-  env.bot._client?.on?.('login', packet => { simulationDistance = packet.simulationDistance ?? simulationDistance })
-  env.bot._client?.on?.('simulation_distance', packet => { simulationDistance = packet.distance ?? simulationDistance })
-  const serverRules = () => ({ difficulty: isOffline() ? null : (env.bot.game?.difficulty ?? null), simulationDistance })
+  // distance in chunks (bot.simulationDistance, set by connect.mjs from the login and simulation_distance packets).
+  // Null while unknown.
+  const serverRules = () => ({ difficulty: isOffline() ? null : (env.bot.game?.difficulty ?? null), simulationDistance: env.bot.simulationDistance ?? null })
 
   return { self, worldAge, serverRules, entities, blockAt, isSettling, settleFromNow, rememberSelf, lastKnown, columnLoaded }
 }

@@ -1,6 +1,6 @@
 (ns engine.cost-test
   "jobs.lib.cost: one armour formula (vanilla's) under every calculator: fight cost, mob threat and the planner's rate."
-  (:require [cljs.test :refer [deftest is are]]
+  (:require [cljs.test :refer [deftest is are use-fixtures]]
             [engine.fake :as fake]
             [engine.game :as game]
             [engine.settings :as settings]
@@ -15,6 +15,8 @@
             [jobs.lib.shelter.sense :as sh-sense]))
 
 (defn round2 [x] (/ (js/Math.round (* 100 x)) 100))
+
+(use-fixtures :each {:before #(game/select! (fake/create {}))})
 
 (def iron-set {:head {:name "iron_helmet"} :torso {:name "iron_chestplate"}
                :legs {:name "iron_leggings"} :feet {:name "iron_boots"}})
@@ -514,8 +516,11 @@
            (threat/door-break-share "zombie" {:day-time 400000 :moon-phase 0 :world-age 400000}))
         "the full moon raises it once the day time is past its first three days")
     (is (= 0 (threat/door-break-share "drowned" nil)))
-    (game/select! (fake/create {}))
-    (is (= 25 (zombie-s)) "unknown: easy")
+    (game/select! (fake/create {:server {:difficulty nil :simulationDistance nil}}))
+    (is (= 45 (zombie-s)) "unknown: hard")
+    (is (pos? (threat/door-break-share "zombie")) "unknown: a zombie breaks doors (hard)")
+    (is (nil? (threat/simulation-distance)))
+    (is (< 0 (threat/left-alive "creeper" 200 0 false)) "unknown simulation distance: a far mob is not assumed despawned")
+    (game/select! (fake/create {:server {:simulationDistance 10}}))
     (is (= 0 (threat/door-break-share "zombie")) "a zombie breaks no door below hard")
-    (is (= 10 (threat/simulation-distance)))
     (is (= 0 (threat/left-alive "creeper" 200 0 false)))))

@@ -43,6 +43,9 @@ export function connectBot (params, { timeoutMs = SPAWN_TIMEOUT_MS, create = min
     bot._client.on('registry_data', packet => {
       if (packet.id === 'minecraft:damage_type') bot.damageTypeNames = packet.entries.map(e => e.key.replace(/^minecraft:/, ''))
     })
+    // Mineflayer keeps no simulation distance; the login packet precedes spawn, so catch it here, on the bot's own client.
+    bot._client.on('login', packet => { bot.simulationDistance = packet.simulationDistance ?? bot.simulationDistance })
+    bot._client.on('simulation_distance', packet => { bot.simulationDistance = packet.distance ?? bot.simulationDistance })
     const timer = setTimeout(() => fail(new Error(`no spawn within ${timeoutMs} ms`)), timeoutMs)
     const onError = err => fail(err)
     const onKicked = reason => fail(new Error(`kicked before spawn: ${JSON.stringify(reason)}`))

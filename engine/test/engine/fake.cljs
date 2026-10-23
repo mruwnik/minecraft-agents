@@ -186,7 +186,7 @@
     (-> {:self (merge default-self self {:held (:held self)})
          :time (:time spec 1000)
          :players (vec (:players spec))
-         :server (:server spec)
+         :server (merge {:difficulty "easy" :simulationDistance 10} (:server spec))
          :raining (:raining spec false)
          :thundering (:thundering spec false)
          :blocks (cells (:blocks spec) identity)

@@ -1,7 +1,10 @@
 // Why JavaScript: tests the Mineflayer connection adapter (connect.mjs), which is JS.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { botOptions, DEFAULTS } from './connect.mjs'
+import { EventEmitter } from 'node:events'
+import prismarineRegistry from 'prismarine-registry'
+import { botOptions, connectBot, DEFAULTS } from './connect.mjs'
+import { createSense } from './prim-sense.mjs'
 
 test('botOptions passes the default view distance to mineflayer', () => {
   assert.equal(botOptions({ host: 'h', port: 1, username: 'u' }).viewDistance, DEFAULTS.viewDistance)
@@ -24,4 +27,28 @@ test('botOptions swaps in tick-rate physics by default and not when turned off',
   assert.equal(typeof botOptions(base).plugins.physics, 'function')
   assert.equal(typeof botOptions({ ...base, followTickRate: true }).plugins.physics, 'function')
   assert.equal(botOptions({ ...base, followTickRate: false }).plugins, undefined)
+})
+
+// A join packet that dropped before spawn still ends up on the bot, so each bot of a reconnect carries its own value.
+const dropAfter = async packets => {
+  const client = new EventEmitter()
+  const bot = Object.assign(new EventEmitter(), { _client: client, registry: prismarineRegistry(DEFAULTS.version), supportFeature: () => false, loadPlugin () {}, end () {} })
+  const create = () => {
+    setImmediate(() => { for (const [name, packet] of packets) client.emit(name, packet); bot.emit('end', 'closed') })
+    return bot
+  }
+  await assert.rejects(connectBot({ host: 'h', port: 1, username: 'u' }, { create }), /ended before spawn/)
+  return bot
+}
+
+test('the simulation distance is caught from the login packet and kept current by simulation_distance, on each bot', async () => {
+  const first = await dropAfter([['login', { simulationDistance: 6 }]])
+  assert.equal(first.simulationDistance, 6)
+  const updated = await dropAfter([['login', { simulationDistance: 6 }], ['simulation_distance', { distance: 4 }]])
+  assert.equal(updated.simulationDistance, 4)
+  const env = { bot: first, isOffline: () => false }
+  const sense = createSense(env)
+  assert.equal(sense.serverRules().simulationDistance, 6)
+  env.bot = updated
+  assert.equal(sense.serverRules().simulationDistance, 4)
 })

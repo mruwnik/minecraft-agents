@@ -14,8 +14,7 @@
   {::creeper-blast {:default 43 :doc "Damage a creeper's blast is costed at." :spec (a/int-in 0 nil)}
    ::creeper-exchange-hp {:default 3.06 :doc "k of the creeper exchange: hp creepers dealt over the swings (attack that hit or killed) of hit-and-back fights with a sword or axe against a lone creeper (a late step back lets the fuse run on); 1 trial run, 1 blast over 2 hp, all before 336cdd402 (the back-off) and none counted since. Recount: node tools/event-counts.mjs creeper-exchange (:armed); per-case evidence replaces it." :spec (a/num-in 0 nil)}
    ::creeper-exchange-swings {:default 5 :doc "n of the creeper exchange: the swings behind ::creeper-exchange-hp." :spec (a/num-in 1 nil)}
-   ::difficulty {:default nil :doc "Override of the server difficulty mob hits and door breaking are costed at: 0 peaceful, 1 easy, 2 normal, 3 hard. Unset, the body's sensed difficulty counts (easy while it is unknown)." :spec (a/int-in 0 3)}
-   ::default-simulation-distance {:default 10 :doc "Chunks around a player that tick, when the server's simulation distance is unknown (vanilla default)." :spec (a/int-in 2 32)}
+   ::difficulty {:default -1 :doc "Override of the server difficulty mob hits and door breaking are costed at: 0 peaceful, 1 easy, 2 normal, 3 hard. -1 (unset), the body's sensed difficulty counts (hard while it is unknown)." :spec (a/int-in -1 3)}
    ::spot-occupied {:default {:k 1 :n 4} :spec (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)})
                     :doc "Of the death and near-death spots the trial bodies came back within 16 blocks of after 300 s or more 32 to 128 blocks off (vanilla: its killer had despawned), those where a hostile met the body within 60 s (k) of all (n): node tools/event-counts.mjs spot-returns, 2026-10-23."}
    ::hit-rate {:default 0.6 :doc "Hits a zombie or skeleton lands per second of exposure (measured over trial fights; the body is out of reach part of the time). Mobs not measured count one a second." :spec (a/num-in 0 nil)}
@@ -27,12 +26,13 @@
    ::field-close {:default 3 :doc "Steps of a mob's way within which its field weighs 1 (way-weight)." :spec (a/int-in 0 nil)}})
 
 (defn difficulty
-  "The server difficulty costs use: the ::difficulty override, else the sensed one, else easy."
+  "The server difficulty costs use: the ::difficulty override, else the sensed one, else hard (an unknown is the worse case)."
   []
-  (or (settings/get settings ::difficulty) (game/difficulty) 1))
+  (let [override (settings/get settings ::difficulty)]
+    (if (<= 0 override) override (or (game/difficulty) 3))))
 
-(defn simulation-distance "Chunks around a player that tick: the server's, else ::default-simulation-distance." []
-  (or (game/simulation-distance) (settings/get settings ::default-simulation-distance)))
+(defn simulation-distance "Chunks around a player that tick: the server's, nil while unknown (left-alive then assumes the worse case, no far despawn)." []
+  (game/simulation-distance))
 
 (def follow-ranges
   "Blocks a mob keeps chasing its target out to (vanilla follow_range attribute; its navigation goes no farther)."
@@ -142,7 +142,7 @@
   most loot-share (the chunk's inhabited time, which sets the multiplier, is unknown)."
   [mob farthest away-s drops?]
   (let [kept (if (and drops? (contains? loot-pickers mob) (> (difficulty) 1)) loot-share 0)
-        despawned (if (and (> farthest despawn-blocks) (> (* 16 (simulation-distance)) despawn-blocks)) 1 (- 1 (js/Math.exp (- (* idle-despawn-per-s (max 0 (- away-s idle-despawn-s)))))))]
+        despawned (if (and (> farthest despawn-blocks) (some-> (simulation-distance) (* 16) (> despawn-blocks))) 1 (- 1 (js/Math.exp (- (* idle-despawn-per-s (max 0 (- away-s idle-despawn-s)))))))]
     (- 1 (* (- 1 kept) despawned))))
 
 (defn spawned-there
