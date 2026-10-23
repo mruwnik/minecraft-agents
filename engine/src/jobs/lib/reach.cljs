@@ -126,9 +126,9 @@
 
 (defn world-kinds
   "A kind-at fn (block-kind of each cell) by one policy for a cell the body has not seen: :raw reads the true world
-  (lookup: only where the answer must agree with go-to's own plan), :solid reads it as a wall, :ground as open ground
-  with a floor (seen-lookup). Pick the worse case for the question: :solid for 'would this fill shut me in?', :ground
-  for 'am I sheltered?'."
+  (lookup: only for a walk planned over the world as it is, go-to :unknown false), :solid reads it as a wall, :ground as
+  open ground with a floor (seen-lookup). Pick the worse case for the question: :solid for 'would this fill shut me in?',
+  :ground for 'am I sheltered?' and 'am I shut in?'."
   [p block-kind unseen]
   (if (keyword-identical? :raw unseen)
     (lookup p block-kind)

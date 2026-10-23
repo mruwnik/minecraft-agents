@@ -19,6 +19,8 @@
             [jobs.build.from-plan :as build]
             [jobs.build.from-plan.book :as fp-book]
             [jobs.build.from-plan.cells :as fp-cells]
+            [jobs.build.from-plan.walk :as fp-walk]
+            [jobs.lib.near :as near]
             [jobs.lib.build.plan :as plan]
             [plan.surface :as surface]))
 
@@ -1458,7 +1460,8 @@
       (fn ^:async t []
         (let [plan {:id "far" :parts [{:id "posts" :cells [[40 64 0] [41 64 0] [42 64 0] [43 64 0]] :want "oak_fence"}]}
               walks (atom [])
-              {:keys [eng]} (start {:inventory kit :self {:pos {:x 4.5 :y 64 :z 4.5}}} {"far" plan})
+              walled (apply dissoc (tu/box 2 64 2 6 65 6 "stone") (for [x (range 3 6) y [64 65] z (range 3 6)] (str x "," y "," z)))
+              {:keys [eng]} (start {:inventory kit :blocks walled :self {:pos {:x 4.5 :y 64 :z 4.5}}} {"far" plan})
               result (await (tu/with-near-stub (fn ^:async f [c _ _ o]
                                                  (swap! walks conj o)
                                                  (ctx/update-mem! c assoc :near-walk {:data {:why :exhausted :shut-in true}})
@@ -1479,6 +1482,15 @@
                                                  :blocked)
                               (fn ^:async b [] (await (child-outcome eng job {:plan "far" :settings {:jobs.build.from-plan.walk/pocket-cells 1}} 30)))))]
           (is (not= :shut-in (:reason result))))))))
+
+(deftest a-shut-in-verdict-counts-a-pocket-only-over-walls-the-body-has-seen
+  (let [p (tu/fake {:blocks (apply dissoc (tu/box -1 64 -1 3 66 1 "stone") (for [x (range 0 3) y [64 65]] (str x "," y ",0")))
+                    :floor [-30 -30 30 30] :self {:pos [1 64 0]}})
+        sensed (.-sensedAt p)
+        shut-in? #(with-redefs [near/last-walk (constantly {:data {:shut-in true}})] (fp-walk/shut-in-walk? {:primitives p}))]
+    (is (true? (shut-in?)) "walls all seen: a pocket")
+    (aset p "sensedAt" (fn [q] (if (#{[1 64 1] [1 65 1]} [(.-x q) (.-y q) (.-z q)]) #js {:unknown true} (sensed q))))
+    (is (false? (shut-in?)) "a wall never looked at may be a gap: not a pocket")))
 
 (deftest a-body-sealed-in-its-own-shelter-waits-instead-of-stopping-shut-in
   (async done

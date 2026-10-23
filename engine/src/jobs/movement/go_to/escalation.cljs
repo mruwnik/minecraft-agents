@@ -159,7 +159,7 @@
         _ (when (<= n (tuning/max-escalations)) (await (look-round! c feet)))
         goal (mapv #(js/Math.floor (% pos)) [:x :y :z])
         slice (route-slice (route-owner c))
-        shut? (delay (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword)))
+        shut? (delay (escape/walk-enclosed? c))
         opts {:own? (own-placed-fn c) :skip (skips c) :fetch? (fetch-tool? (:primitives c) (:doors (:args c)) shut?) :approached (:approached (ctx/mem c)) :pillar-item (escape/pillar-item c) :stands (ledger/stair-stands c) :slice slice}
         into? (goal-walled? c result shut?)
         ;; a goal over or ringed by lava is refused: no dig, in or out, makes it acceptable
@@ -272,18 +272,18 @@
 
 (defn ^:async give-up-or-escalate!
   "Give up the walk with result, or escalate instead (escalate?): at the next step, so the walk's search and the
-  escalation's do not block the body in one."
+  escalation's do not block the body in one. A give-up whose reason may mean the body is shut in looks round first
+  (look-round!), so {:shut-in true} rests on walls the body has seen."
   [c pos tries status result]
   (if (escalate? c tries result)
     (do (ctx/update-mem! c assoc :dive-climb (dive? c result) :escalate-now true
                          :give-up {:tries tries :status status
                                    :result (select-keys result [:status :reason :kind :cells :near :one-way :at :from :dip :rise :move :why :step :partial :goal-left])})
         :again)
-    (end/give-up! c pos result
-                  (when (and (not (sh-inside/sheltered-in c))
-                             (or (escalate-reason? result (some-> (:doors (:args c)) keyword)) (sprint-only? result))
-                             (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword)))
-                    {:shut-in true}))))
+    (let [shut-reason? (and (not (sh-inside/sheltered-in c))
+                            (or (escalate-reason? result (some-> (:doors (:args c)) keyword)) (sprint-only? result)))]
+      (when shut-reason? (await (look-round! c (end/feet-cell c))))
+      (end/give-up! c pos result (when (and shut-reason? (escape/walk-enclosed? c)) {:shut-in true})))))
 
 (defn escalated!
   "The child made a way (or part of one, done false): walk again from a fresh count, or escalate again at once after an

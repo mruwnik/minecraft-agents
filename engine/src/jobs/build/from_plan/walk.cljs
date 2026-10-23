@@ -102,13 +102,14 @@
       :else w)))
 
 (defn in-pocket?
-  "Whether the body stands in a closed room of at most ::pocket-cells walkable cells (read from the true world, as shut-in-walk? does)."
+  "Whether the body stands in a closed room of at most ::pocket-cells walkable cells, over what it has seen (a flood
+  that reaches the edge of that is no pocket)."
   [c]
-  (reach-room/enclosed? (:primitives c) :raw #{} (settings/get settings ::pocket-cells)))
+  (reach-room/enclosed? (:primitives c) :ground #{} (settings/get settings ::pocket-cells)))
 
 (defn shut-in-walk?
   "Whether the last walk ended because the body is shut in (go-to refuses to dig or build out of a restricted walk) and the
-  room it can walk in is a pocket of at most ::pocket-cells: a larger closed hall still has room to bridge or pillar in. Read from the true world as go-to's plan is: it confirms go-to's shut-in verdict, and in the dark the walls of a pocket are not seen."
+  room it can walk in is a pocket of at most ::pocket-cells: a larger closed hall still has room to bridge or pillar in."
   [c]
   (boolean (and (:shut-in (:data (near/last-walk c))) (in-pocket? c))))
 

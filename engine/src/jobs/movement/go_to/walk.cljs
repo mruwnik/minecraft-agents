@@ -260,7 +260,7 @@
         (ctx/update-mem! c assoc :seal-cleared true)
         (let [r (await (ctx/call c :seal-cleanup 'jobs.access.cleanup {:of :all :near near :checks {:fit? '(always)}}))]
           (if (and (some (comp #{:hostile-near :danger} :reason) (get-in r [:data :open]))
-                   (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword)))
+                   (escape/walk-enclosed? c))
             (end/give-up! c pos {:status :no-path :reason :seal-kept})
             :again))))))
 
@@ -518,7 +518,7 @@
                 unstuck? (await (unstick/swim-out! c pos walked))
                 [starts looped?] (note-start (:starts (ctx/mem c)) (mapv #(js/Math.floor (% from)) [:x :y :z]) best)
                 result (cond-> result
-                         looped? (assoc :status :no-path :reason (if (escape/enclosed? (:primitives c) doors) :start-enclosed :no-progress))
+                         looped? (assoc :status :no-path :reason (if (escape/walk-enclosed? c) :start-enclosed :no-progress))
                          (= :budget (some-> (:reason result) keyword)) (assoc :goal-left left))
                 progress? (and (not looped?) (or (< left (dec best)) explored? nearer? (learned-round? result)))
                 edge-start? (and (not progress?) (:unknown c) (= :budget (some-> (:reason result) keyword)) (not (:edge-mode (ctx/mem c))))

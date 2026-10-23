@@ -65,13 +65,14 @@
     (is (= :stair (:step again)))
     (is (not= first-heading (:heading again)))))
 
-(deftest escape-enclosed-counts-an-unseen-door-as-a-wall-under-doors-never
-  ;; live go-to-escalate/oak-door-with-doors-never-digs: in a dark room the door was never seen
+(deftest go-to-reads-a-room-shut-only-over-walls-it-has-seen
   (let [wide (merge room (box -20 63 -20 30 63 20 "stone"))
         p (tu/fake (merge in-room {:blocks (assoc wide "3,64,0" "oak_door" "3,65,0" "oak_door")}))
-        door? #{[3 64 0] [3 65 0]}]
+        door? #{[3 64 0] [3 65 0]}
+        shut? (fn [args] (escape/walk-enclosed? {:primitives p :args (assoc args :doors :never)}))]
     (aset p "sensedAt" (fn [pos] (if (door? [(.-x pos) (.-y pos) (.-z pos)]) #js {:unknown true} (.blockAt p pos))))
-    (is (true? (escape/enclosed? p :never)))))
+    (is (false? (shut? {})) "a door cell never seen may be a gap: not shut in")
+    (is (true? (shut? {:unknown false})) "a walk planned over the world as it is reads the door as it is")))
 
 (deftest go-to-climbs-out-of-a-pit-by-another-heading-when-the-first-is-refused
   (async done

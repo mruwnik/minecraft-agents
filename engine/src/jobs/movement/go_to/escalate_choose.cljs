@@ -58,7 +58,7 @@
   "Whether a walk result's reason proves the way needs the world changed (escalate-reasons), or is the planner's way
   through a door that :doors :never refuses (:abilities of kind :open): such a door is a wall. A gap jump refused for a low ceiling or
   a step up (:gap-low-ceiling, :gap-up), with no block to fill the gap, counts too: a shut-in body drops in and digs out. :goal-unloaded counts too:
-  the caller also requires the body shut in (escape/enclosed?), and a shut-in body's search can end at a loaded edge
+  the caller also requires the body shut in (escape/walk-enclosed?), and a shut-in body's search can end at a loaded edge
   beyond its walls (an unseen cell refused) instead of :start-enclosed."
   [result doors]
   (let [reason (some-> (:reason result) keyword)]
@@ -96,7 +96,7 @@
 (defn fetch-tool?
   "Whether the escalation may fetch a pickaxe (the stair's and a :dig-route dig's ways): the body is free (a shut-in body
   cannot walk to one; by-hand is its fallback) and carries one pickaxe or none, so the last one breaking is no stop."
-  ([c] (fetch-tool? (:primitives c) (:doors (:args c))))
+  ([c] (fetch-tool? (:primitives c) (:doors (:args c)) (delay (escape/walk-enclosed? c))))
   ([p doors] (fetch-tool? p doors (delay (escape/enclosed? p (some-> doors keyword)))))
   ([p _ shut?]
    (and (<= (count (filter #(str/ends-with? (str (:name %)) "_pickaxe") (u/inventory p))) 1)
@@ -189,11 +189,11 @@
           e)))))
 
 (defn goal-walled?
-  "Whether a give-up with result is a free body's (not escape/enclosed?) whose goal the planner proved walled in, or whose
+  "Whether a give-up with result is a free body's (not escape/walk-enclosed?) whose goal the planner proved walled in, or whose
   search spent its node budget (:budget) with the body within budget-near of the goal (:goal-left): a goal that close
   with no whole way found is walled off, whatever the flood could not prove. The ways that change the world run toward
-  the goal (goal-way). shut?: a delay of escape/enclosed?, when the caller has one."
-  ([c result] (goal-walled? c result (delay (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword)))))
+  the goal (goal-way). shut?: a delay of escape/walk-enclosed?, when the caller has one."
+  ([c result] (goal-walled? c result (delay (escape/walk-enclosed? c))))
   ([c result shut?]
    (boolean
     (and (or (= :goal-enclosed (some-> (:reason result) keyword))
@@ -534,7 +534,7 @@
   the body's own shelter: it is shut in on purpose."
   [c tries result]
   (let [doors (some-> (:doors (:args c)) keyword)
-        shut? (delay (escape/enclosed? (:primitives c) doors))]
+        shut? (delay (escape/walk-enclosed? c))]
     (and (ways/escalating? c)
          (or (shelter-exit? c result) (not (sh-inside/sheltered-in c)))
          ;; the cheap checks first: drop-fill and air-pocket? flood the body's land
@@ -552,12 +552,12 @@
                       @shut?))))))
 
 (defn climb-on?
-  "Whether a stair that is done leaves the body still shut in (escape/enclosed?) under the goal pos: a walk could only
+  "Whether a stair that is done leaves the body still shut in (escape/walk-enclosed?) under the goal pos: a walk could only
   lead back down the stair (live: a partial walk toward the goal's column took the body back under it), so the next
   escalation follows at once."
   [c pos]
   (and (< (second (end/feet-cell c)) (js/Math.floor (:y pos)))
-       (escape/enclosed? (:primitives c) (some-> (:doors (:args c)) keyword))))
+       (escape/walk-enclosed? c)))
 
 (defn dive-climb-on?
   "Whether a stair cut because the only way dives (memory :dive-climb) leaves the body still under ground below the

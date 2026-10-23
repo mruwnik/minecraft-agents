@@ -132,12 +132,20 @@
 (def usable-door #"^(?!iron_door$)[a-z_]+_door$|_fence_gate$")
 
 (defn enclosed?
-  "reach-room/enclosed?, with every shut door, gate and trapdoor a wall when doors is :never (the walk will not open them),
-  read from the planner's snapshot as the walk's plans are, seen or not: the verdict must agree with the walk go-to plans."
-  [p doors]
-  (if (not= :never doors)
-    (reach-room/enclosed? p :raw)
-    (reach-room/shut-in? p (reach/lookup p reach/kind-of))))
+  "reach-room/enclosed?, with every shut door, gate and trapdoor a wall when doors is :never (the walk will not open them).
+  unseen (reach/world-kinds, default :ground): a flood that reaches the edge of what the body has seen is not shut in."
+  ([p doors] (enclosed? p doors :ground))
+  ([p doors unseen]
+   (if (not= :never doors)
+     (reach-room/enclosed? p unseen)
+     (reach-room/shut-in? p (reach/world-kinds p reach/kind-of unseen)))))
+
+(defn walk-enclosed?
+  "enclosed? for the go-to of c (its :doors), over the world its plans read: as it is under :unknown false, else what
+  the body has seen."
+  [c]
+  (let [args (:args c)]
+    (enclosed? (:primitives c) (some-> (:doors args) keyword) (if (false? (:unknown args)) :raw :ground))))
 
 (defn scan-doors
   "Whether a door or gate the body can open borders a cell it can walk to from feet, with room behind it for the body
