@@ -185,15 +185,19 @@
     (is (pos? (hp-at 3600000)))
     (is (zero? (hp-at 8000000)))))
 
+(def bed-world "day-world with a bed beside the body's place, which with-bed sets its respawn at: a death costs a short walk back." (update day-world :blocks assoc "5,64,1" "red_bed"))
+
+(def with-bed "with-death's more for bed-world." {:spawn-bed [{:t 35000000 :data {:pos {:x 5 :y 64 :z 1}}}]})
+
 (defn in-lit-cave
   "(f) with every cell seen lit before the deaths and roofed from the sky: no mob spawns there and none burns."
   [f]
   (with-redefs [look/seen-block (constantly {:name "air" :age-ms 1e8}) sh-sense/sky-reaches-from-above? (constantly false)] (f)))
 
 (deftest a-hungry-body-affords-less-risk-than-a-fed-one-unless-it-cannot-heal
-  ;; a skeleton death 75 s ago, 75 blocks off: about a third of a chance it has not despawned
-  (let [status-for (fn [food inventory] (let [c (-> (ready-test/ctx-of (assoc day-world :self {:pos inside :health 20 :food food} :inventory inventory))
-                                                    (with-death {:x 80 :y 64 :z 5} "skeleton" 75000))]
+  ;; a skeleton death 105 s ago, 75 blocks off: about a sixth of a chance it has not despawned; a bed by the body
+  (let [status-for (fn [food inventory] (let [c (-> (ready-test/ctx-of (assoc bed-world :self {:pos inside :health 20 :food food} :inventory inventory))
+                                                    (with-death {:x 80 :y 64 :z 5} "skeleton" 105000 with-bed))]
                                           (in-lit-cave #(first (risk/status c far-goal)))))
         bread [{:name "bread" :count 3}]]
     (is (= :ok (status-for 20 [])))
@@ -201,8 +205,8 @@
     (is (= :ok (status-for 5 [])) "nothing to eat: waiting never lowers the risk, so the walk goes")))
 
 (deftest a-goal-worth-enough-lets-a-walk-take-a-risk-over-the-share-of-health
-  (let [status-for (fn [worth] (let [c (-> (ready-test/ctx-of (assoc day-world :self {:pos inside :health 20 :food 5} :inventory [{:name "bread" :count 3}]))
-                                           (with-death {:x 80 :y 64 :z 5} "skeleton" 75000)
+  (let [status-for (fn [worth] (let [c (-> (ready-test/ctx-of (assoc bed-world :self {:pos inside :health 20 :food 5} :inventory [{:name "bread" :count 3}]))
+                                           (with-death {:x 80 :y 64 :z 5} "skeleton" 105000 with-bed)
                                            (assoc-in [:args :worth] worth))]
                                  (in-lit-cave #(first (risk/status c far-goal)))))]
     (is (= :later (status-for nil)) "no worth said: the share of health decides")
@@ -271,7 +275,17 @@
     (is (< (* 0.5 (hp dark-spot-world "creeper" {})) (hp day-world "creeper" {})) "a creeper does not burn by day")
     (is (zero? (hp day-world "zombie" {})) "a zombie burns under the day sky")
     (is (pos? (hp day-world "creeper" {})))
-    (is (zero? (hp day-world "creeper" respawned-far)) "the body went 128 blocks off: it despawned")))
+    (is (zero? (hp day-world "creeper" respawned-far)) "the body went 128 blocks off: it despawned")
+    (is (zero? (with-redefs [look/seen-block (constantly {:name "air" :age-ms 120000})]
+                 (:hp (risk/estimate (with-death (ready-test/ctx-of day-world) {:x 80 :y 64 :z 5} "creeper" 60000 respawned-far) far-goal))))
+        "nor any death it risks")))
+
+(deftest a-walk-for-an-unseen-fresh-death-spot-risks-the-death-of-meeting-its-killer
+  ;; a fist body with no bed; the death risk alone is over half its health
+  (let [c (with-death (ready-test/ctx-of day-world) {:x 80 :y 64 :z 5} "skeleton" 10000)
+        {:keys [lethal-hp]} (estimate-unseen c far-goal)]
+    (is (> lethal-hp (price/allowed c)))
+    (is (= :later (first (with-redefs [look/seen-block (constantly {:unknown true})] (risk/status c far-goal)))))))
 
 (deftest a-drowned-death-spot-holds-while-the-body-stays-near-its-water-and-goes-once-it-went-far
   ;; 3 h old, past the 2 h fade of a walker's spot; 25 blocks from the body

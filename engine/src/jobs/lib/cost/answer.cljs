@@ -226,25 +226,44 @@
                       :when (pos? (death/exposure-s reach cells))]
                   (* (or weight 1) (hurt mob caught))))))
 
+(defn threats-chance
+  "The chance the known threats of route {:cells :threats :at} kill body (death-chance's, the route's class left out): for
+  each one whose reach the :cells enter (death/exposure-s), its threat-chance at :at (default the first cell) times its
+  weight."
+  [body {:keys [cells threats at]}]
+  (let [at (or at (first cells))
+        chance (memoize (fn [mob caught] (threat-chance body mob caught at)))
+        survive (reduce (fn [s {:keys [mob weight reach caught]}]
+                          (if (pos? (death/exposure-s reach cells))
+                            (* s (- 1 (* (or weight 1) (chance mob caught))))
+                            s))
+                        1 (when (seq cells) threats))]
+    (- 1 survive)))
+
 (defn death-chance
   "The chance of dying on route {:underground? :night? :cells :threats :at}: the chance by its class (underground, surface
-  at night or by day: the mobs not yet known) and, for each known threat {:mob :weight :reach :caught} (weight 0-1, reach
-  a fn of a cell x y z, its weight 0-1, nil outside: jobs.lib.threat-field; caught the chance a walk away from it is
-  caught, nil the prior) whose reach the route :cells enter (death/exposure-s), its threat-chance at :at (default the
-  first cell) times its weight. body as threat-answers, with answer-price's. An answer {:damage :hit :caught}: its
-  blows-chance."
-  [body {:keys [underground? night? cells threats damage at] :as route}]
+  at night or by day: the mobs not yet known) and its threats-chance, for each known threat {:mob :weight :reach :caught}
+  (weight 0-1, reach a fn of a cell x y z, its weight 0-1, nil outside: jobs.lib.threat-field; caught the chance a walk
+  away from it is caught, nil the prior). body as threat-answers, with answer-price's. An answer {:damage :hit
+  :caught}: its blows-chance."
+  [body {:keys [underground? night? damage] :as route}]
   (if damage
     (blows-chance body route)
-    (let [base (settings/get death/settings (cond underground? ::death/chance-underground night? ::death/chance-surface-night :else ::death/chance-surface-day))
-          at (or at (first cells))
-          chance (memoize (fn [mob caught] (threat-chance body mob caught at)))
-          survive (reduce (fn [s {:keys [mob weight reach caught]}]
-                            (if (pos? (death/exposure-s reach cells))
-                              (* s (- 1 (* (or weight 1) (chance mob caught))))
-                              s))
-                          1 (when (seq cells) threats))]
-      (+ base (* (- 1 base) (- 1 survive))))))
+    (let [base (settings/get death/settings (cond underground? ::death/chance-underground night? ::death/chance-surface-night :else ::death/chance-surface-day))]
+      (+ base (* (- 1 base) (threats-chance body route))))))
+
+(defn spawns-chance
+  "The chance spawns mobs (an expected count, a Poisson one) spawned beside body kill it at `at`: each its threat-chance,
+  caught at the prior, over threat/spawn-weights."
+  [body spawns at]
+  (let [per (/ (reduce + (map (fn [[mob w]] (* w (threat-chance body mob nil at))) threat/spawn-weights))
+               (reduce + (vals threat/spawn-weights)))]
+    (- 1 (js/Math.exp (- (* spawns per))))))
+
+(defn lethal-hp
+  "The hp a death chance of body at `at` weighs beside the hp it risks: chance x death/death-cost, at health/hp-seconds an hp."
+  [body chance at]
+  (/ (* chance (death/death-cost body at)) health/hp-seconds))
 
 (defn route-death-cost
   "What a route adds to its cost for the death it risks: death-chance x death/death-cost at `at` (where it would die)."

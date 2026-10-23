@@ -196,13 +196,15 @@
     5 st/night :ok))
 
 (deftest a-job-that-goes-to-its-place-binds-safe-at-that-place
-  (are [check args] (= :later (lit 0 15 #(first (check (assoc (ctx-of open-night) :args args)))))
+  (are [check args] (= :later (lit 0 15 #(first (check (assoc (ctx-of (assoc open-night :blocks {"1,64,0" "red_bed"})) :args args)))))
     smelt/safe? {:furnace outside}
     kitchen/safe? {:furnace {:x 40 :y 64 :z 0}}
     pick-up-loose/safe? {}))
 
 (deftest a-short-visit-in-the-open-night-goes-ahead-priced-by-its-exposure
-  (are [check args] (= :ok (lit 0 15 #(first (check (assoc (ctx-of open-night) :args args)))))
+  ;; the respawn set beside the body: a death there costs a short walk back
+  (are [check args] (= :ok (lit 0 15 #(first (check (assoc (ctx-of (assoc open-night :blocks {"1,64,0" "red_bed"})) :args args
+                                                           :view (fn [] {:now 0 :data {:entries {:spawn-bed [{:t 0 :data {:pos {:x 1 :y 64 :z 0}}}]}}}))))))
     deposit/safe? {:chest outside}
     withdraw/safe? {:chest outside}
     set-spawn/safe? {:bed [15 64 0]}))

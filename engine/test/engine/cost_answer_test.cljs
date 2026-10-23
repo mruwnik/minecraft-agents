@@ -120,3 +120,10 @@
 
 
 
+
+(deftest a-long-fist-stay-in-the-dark-open-risks-a-death-worth-more-than-half-the-health
+  ;; 120 s at the dark spawn chance; no bed: a death walks the body back from world spawn
+  (let [spawns (* 120 (cost/spawn-chance [0 0 0]))]
+    (is (> (cost/lethal-hp (body 20) (cost/spawns-chance (body 20) spawns here) here) 10))
+    (is (< (cost/spawns-chance (assoc (body 20) :weapon "diamond_sword") spawns here) (cost/spawns-chance (body 20) spawns here)) "a sword dies less")
+    (is (zero? (cost/spawns-chance (body 20) 0 here)))))

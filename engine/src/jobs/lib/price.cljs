@@ -8,10 +8,12 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.settings :as settings]
+            [jobs.lib.check-cache :as check-cache]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger]
             [jobs.lib.foods :as foods]
             [jobs.lib.reserve :as reserve]
+            [jobs.lib.threats :as threats]
             [jobs.lib.util :as u]
             [jobs.lib.walk.world :as wworld]))
 
@@ -54,9 +56,15 @@
          (if (cannot-heal? c) (max share (dec health)) share))))))
 
 (defn stay-hp
-  "Expected damage of staying `seconds` where mobs spawn at `chance` per second, each a zombie fight with the kit carried."
+  "The hp staying `seconds` where mobs spawn at `chance` per second risks: each a zombie fight with the kit carried, and
+  the death they risk (cost/spawns-chance) in hp (cost/lethal-hp)."
   [c chance seconds]
-  (* chance seconds (cost/fight-damage (assoc (wworld/kit-of c) :mobs [{:name "zombie" :distance 0 :hits 0}]))))
+  (check-cache/cached c [::stay-hp chance seconds]
+                      #(let [spawns (* chance seconds)
+                             body (threats/death-body c)
+                             at (u/self-pos c)]
+                         (+ (* spawns (cost/fight-damage (assoc (wworld/kit-of c) :mobs [{:name "zombie" :distance 0 :hits 0}])))
+                            (cost/lethal-hp body (cost/spawns-chance body spawns at) at)))))
 
 (defn round1 [x] (/ (js/Math.round (* 10 x)) 10))
 

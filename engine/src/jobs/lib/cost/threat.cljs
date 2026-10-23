@@ -50,6 +50,11 @@
         (> farthest despawn-blocks) 0
         :else (js/Math.exp (- (* idle-despawn-per-s (max 0 (- away-s idle-despawn-s)))))))
 
+(def spawn-weights
+  "The weights the overworld's common monster spawns are drawn by (vanilla, most biomes); slimes, kept to slime chunks and
+  swamps, left out."
+  {"spider" 100 "zombie" 95 "zombie_villager" 5 "skeleton" 100 "creeper" 100 "enderman" 10 "witch" 5})
+
 (defn creeper-blast [] (settings/get settings ::creeper-blast))
 (defn creeper-exchange [] (settings/get settings ::creeper-exchange))
 (def provoked-only #{"enderman" "zombified_piglin"})
