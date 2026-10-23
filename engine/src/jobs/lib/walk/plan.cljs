@@ -212,8 +212,9 @@
 
 (def masked-wet-limit-s
   "Seconds of air a masked walk's partial plan may have used (counted from the last breath) at its wet end, and the least it
-  may add: a body swims on into water it cannot see all of, looking as it goes, while the air left still brings it back."
-  8)
+  may add: a body swims on into water it cannot see all of, looking as it goes, while the air left still brings it back: the swim back takes as long as the way out,
+  and a climb or a dive runs slower than the plan prices it, so this is well under half of the supply."
+  6)
 (def masked-wet-min-s 2)
 
 (def masked-swim-pace-s

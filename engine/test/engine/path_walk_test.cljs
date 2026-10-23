@@ -239,7 +239,7 @@
 (deftest dry-end-keeps-a-swimming-step-the-masked-walk-accepts
   (let [s (fn [x air] {:x x :move :walk :swim true :air air})
         ok? #(<= (:air %) wplan/masked-wet-limit-s)]
-    (is (= [0 1 2] (mapv :x (wplan/dry-end [(s 0 3) (s 1 6) (s 2 8) (s 3 11)] (constantly false) ok?))) "kept to the last step within the air limit")
+    (is (= [0 1 2] (mapv :x (wplan/dry-end [(s 0 2) (s 1 4) (s 2 6) (s 3 9)] (constantly false) ok?))) "kept to the last step within the air limit")
     (is (= [] (wplan/dry-end [(s 0 11)] (constantly false) ok?)))
     (is (= [0 1] (mapv :x (wplan/dry-end [(s 0 3) (s 1 6) (s 2 11) {:x 3 :move :walk :air 2}] (constantly false) ok?))) "a dry step past a refused swim is not kept")
     (is (= [] (wplan/dry-end [(s 0 3)])) "without wet-ok? swimming steps are cut")))
@@ -250,7 +250,7 @@
     (are [oxygen air kept?] (= kept? (boolean ((ok oxygen) (step air))))
       20 wplan/masked-wet-limit-s true
       20 (inc wplan/masked-wet-limit-s) false
-      14 wplan/masked-wet-limit-s true
+      17 wplan/masked-wet-limit-s true
       11 0 false)))
 
 (deftest masked-wet-ok-stops-a-long-swim-at-the-pace-a-masked-walk-really-keeps
@@ -571,7 +571,7 @@
         steps (conj (mapv swim (range 20)) {:x 20})
         ok (wplan/masked-wet-ok {:primitives (tu/fake {:self {:pos [0 64 0] :inWater true :oxygen 20}})})
         [cut? c] (wplan/masked-cut steps ok)]
-    (is (= [12 true] [(count cut?) c]))
+    (is (= [(long (/ wplan/masked-wet-limit-s wplan/masked-swim-pace-s)) true] [(count cut?) c]))
     (is (= [steps false] (wplan/masked-cut steps (constantly true))))))
 
 (deftest a-drop-of-two-has-a-landing-to-look-at-a-drop-of-one-and-a-walk-have-none
