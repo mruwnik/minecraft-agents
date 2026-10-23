@@ -416,8 +416,8 @@
   as water whose column holds, down from it, a water cell at block light 0 over water, or reaches a cell not seen (dark
   depths do not show), where a drowned can spawn; 3 for other seen water; a cell never seen 2 when wet? (fn [x y z]: the
   walk reads it as water) says so, the worse case; a cell on a floor phantom? (fn [x y z]: the walk reads it as an
-  unseen floor) says is one, whose nearest seen cell along an axis at the floor's level within lags blocks is water d off,
-  lag-class + d - 1; 0 for any other cell. nil without a perception."
+  unseen floor) says is one, whose nearest seen cell along an axis at the floor's level within lags blocks is water d off
+  (or air over water), lag-class + d - 1; 0 for any other cell. nil without a perception."
   [p {:keys [wet? phantom? lags]}]
   (when-let [per (aget p "perception")]
     (when-let [^js raw (:raw per)]
@@ -427,21 +427,27 @@
             id-at (fn [x y z]
                     (let [^js sec (.get sections (store/section-key (bit-shift-right x 4) (bit-shift-right y 4) (bit-shift-right z 4)))]
                       (if (nil? sec) 0 (aget (.-ids sec) (store/cell-index x y z)))))
-            water? (fn [v]
-                     (when (pos? v)
-                       (let [k (.get kinds v)]
-                         (if (some? k)
-                           k
-                           (let [w (= "water" (.-name ^js (.stateInfo raw (dec v))))] (.set kinds v w) w)))))
-            ;; lag of the nearest seen water along an axis at level y, a seen dry cell ending its axis, or nil
+            kind (fn [v]
+                   (let [k (.get kinds v)]
+                     (if (some? k)
+                       k
+                       (let [n (.-name ^js (.stateInfo raw (dec v)))
+                             k (cond (= "water" n) :water (#{"air" "cave_air"} n) :air :else :dry)]
+                         (.set kinds v k)
+                         k))))
+            water? (fn [v] (and (pos? v) (keyword-identical? :water (kind v))))
+            ;; lag of the nearest seen water along an axis at level y, or at y - 1 under seen air (a phantom floor over a
+            ;; pond's air reads the surface below); a seen dry cell, or seen air over no water, ends its axis; nil: none
             lag (fn [x y z]
                   (reduce (fn [best [dx dz]]
                             (loop [d 1]
                               (if (or (> d lags) (and best (>= d best)))
                                 best
-                                (let [v (id-at (+ x (* dx d)) y (+ z (* dz d)))]
+                                (let [cx (+ x (* dx d)) cz (+ z (* dz d))
+                                      v (id-at cx y cz)]
                                   (cond (zero? v) (recur (inc d))
                                         (water? v) d
+                                        (and (keyword-identical? :air (kind v)) (water? (id-at cx (dec y) cz))) d
                                         :else best)))))
                           nil [[1 0] [-1 0] [0 1] [0 -1]]))
             phantom (fn [x y z]

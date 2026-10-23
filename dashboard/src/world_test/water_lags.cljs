@@ -10,7 +10,7 @@
 
 (def top-y 140)
 (def bottom-y 30)
-(def max-lag 8)
+(def max-lag 24)
 (def dirs [[1 0] [-1 0] [0 1] [0 -1]])
 (def air #{"air" "cave_air" "void_air"})
 

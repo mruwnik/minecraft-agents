@@ -221,14 +221,15 @@
     (is (= 0 (class nil)))))
 
 (deftest a-phantom-floor-is-classed-by-the-nearest-seen-water-along-an-axis
-  (let [class (fn [floor phantom?]
+  (let [class (fn [floor phantom? [x y z]]
                 (let [p (seeing {:blocks (merge wall (tu/box 1 63 -1 8 63 1 floor))})]
                   (swap! (fake/state p) assoc :yaw 270 :pitch 30)
                   (perception/pass! (aget p "perception"))
-                  ((look/water-fn p {:phantom? phantom? :lags 8}) 5 64 0)))]
-    (is (<= look/lag-class (class "water" (constantly true)) (+ look/lag-class 3)) "seen water 2 or 3 off, before the wall")
-    (is (= 0 (class "water" nil)) "unmasked: the walk reads the floor as it is")
-    (is (= 0 (class "stone" (constantly true))) "a seen dry floor ends each axis")))
+                  ((look/water-fn p {:phantom? phantom? :lags 8}) x y z)))]
+    (is (= look/lag-class (class "water" (constantly true) [5 64 0])) "seen water 1 off, before the wall")
+    (is (= look/lag-class (class "water" (constantly true) [1 65 0])) "a floor one up: seen air over the water 1 off")
+    (is (= 0 (class "water" nil [5 64 0])) "unmasked: the walk reads the floor as it is")
+    (is (= 0 (class "stone" (constantly true) [5 64 0])) "a seen dry floor ends each axis")))
 
 (deftest dark-fn-says-whether-the-sky-is-dark
   (is (true? (:night? (look/dark-fn (seeing {:time midnight})))))

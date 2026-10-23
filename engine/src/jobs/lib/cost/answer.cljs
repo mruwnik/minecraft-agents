@@ -43,7 +43,11 @@
    ::drowned-meet-other-per-s {:default 0.00043 :spec (a/num-in 0 nil)
                                :doc "As ::drowned-meet-per-s in any other water (one deep, or block-lit to its floor): k=1 in n=4602 s (:prior :other)."}
    ::unseen-water-lags {:default [{:k 1072482 :n 1095455} {:k 1054916 :n 1093513} {:k 1038865 :n 1091547} {:k 1024204 :n 1089545}
-                                  {:k 1010196 :n 1087526} {:k 996729 :n 1085500} {:k 983992 :n 1083481} {:k 971757 :n 1081465}]
+                                  {:k 1010196 :n 1087526} {:k 996729 :n 1085500} {:k 983992 :n 1083481} {:k 971757 :n 1081465}
+                                  {:k 960096 :n 1079468} {:k 948840 :n 1077476} {:k 937962 :n 1075465} {:k 927498 :n 1073431}
+                                  {:k 917387 :n 1071419} {:k 907520 :n 1069423} {:k 897880 :n 1067429} {:k 888501 :n 1065430}
+                                  {:k 879531 :n 1063558} {:k 870863 :n 1061652} {:k 862325 :n 1059744} {:k 853928 :n 1057848}
+                                  {:k 845800 :n 1055963} {:k 837921 :n 1054111} {:k 830319 :n 1052278} {:k 822685 :n 1050429}]
                         :spec (a/coll-of (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)}))
                         :doc "For lag d (the d-th entry), of n cells d blocks along an axis from a surface water cell at its level, k water too: the prior that an unseen cell is water when the nearest seen cell along an axis at its level, d off, is water (unseen-water-factors). Oceans dominate it. Recount: node tools/event-counts.mjs water-lags --stride 20 (4017 recorded chunk columns, 2026-10-23)."}})
 
