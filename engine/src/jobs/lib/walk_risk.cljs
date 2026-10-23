@@ -138,9 +138,11 @@
 
 (defn stay-estimate
   "hp the body expects to lose staying at its cell instead of walking `route-hp` to `goal`: what the known threats
-  sensed now whose field holds the body's cell take off it there (cost/route-hurt; one near the far end of the way
-  does not reach it) and the death they risk in hp (cost/threats-chance, cost/lethal-hp) plus the spawns met at its cell by the light seen there (price/stay-hp), for the
-  time the walk takes, or, for a body that can heal, for the wait until its health would afford the route (::heal-s-per-hp an hp)."
+  sensed now whose field holds the body's cell take off it there (cost/route-hurt, each at full weight: a sensed mob
+  within its field gets to a body that stays; one near the far end of the way does not reach it) plus the spawns met at
+  its cell by the light seen there (price/stay-parts), and the death both risk in hp (cost/threats-chance,
+  cost/lethal-hp), for the time the walk takes, or, for a body that can heal, for the wait until its health would afford
+  the route (::heal-s-per-hp an hp)."
   [c goal route-hp]
   (let [p (:primitives c)
         feet (sh-sense/feet p)
@@ -148,12 +150,14 @@
         heal-s (if (price/cannot-heal? c) 0 (* (settings/get settings ::heal-s-per-hp) (max 0 (- (min 20 (/ route-hp (settings/get price/settings ::price/risk-share))) health))))
         secs (max heal-s (/ (u/dist feet goal) (cost/walk-blocks-per-s)))
         here [(assoc feet :s secs)]
-        live (threats/with-reach c (remove #(or (:fled %) (:remembered %)) (threats/known-threats c)))
+        live (mapv (fn [{:keys [reach] :as t}] (assoc t :reach (fn [x y z] (when (reach x y z) 1))))
+                   (threats/with-reach c (remove #(or (:fled %) (:remembered %)) (threats/known-threats c))))
         chance (chance-at p (update-vals feet js/Math.floor) (:y feet) false)
         body (threats/death-body c)]
-    {:hp (+ (cost/route-hurt body {:cells here :threats live})
-            (if (seq live) (cost/lethal-hp body (cost/threats-chance body {:cells here :threats live}) feet) 0)
-            (price/stay-hp c chance secs))
+    {:hp (let [{:keys [hurt dies]} (price/stay-parts c chance secs)
+               met (if (seq live) (cost/threats-chance body {:cells here :threats live}) 0)]
+           (+ (cost/route-hurt body {:cells here :threats live}) hurt
+              (cost/lethal-hp body (- 1 (* (- 1 met) (- 1 dies))) feet)))
      :hostiles (count (filter #((:reach %) (:x feet) (:y feet) (:z feet)) live))}))
 
 (defn status

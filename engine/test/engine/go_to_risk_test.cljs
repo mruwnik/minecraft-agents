@@ -312,8 +312,8 @@
     (is (= :later (status-for [])) "nothing near the body: waiting costs nothing, so it waits")))
 
 (deftest a-body-that-cannot-heal-and-is-no-safer-staying-ends-stranded-instead-of-waiting
-  ;; on open ground, the zombies by the way 30 blocks off: their fields reach the body's cell at their edge
-  (let [zombies (for [i (range 3)] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x (+ 30 i) :y 64 :z 3}})
+  ;; on open ground: a zombie by the way 30 blocks off, whose field reaches the body's cell, and three 60 blocks off, whose fields do not
+  (let [zombies (for [[i x] (map-indexed vector [30 60 61 62])] {:id (+ 7 i) :name "zombie" :kind "hostile" :pos {:x x :y 64 :z 3}})
         c (ready-test/ctx-of (assoc ready-test/open-night :self {:pos {:x 0 :y 64 :z 0} :health 2.3 :food 5} :entities (vec zombies)))
         s (risk/status c far-goal)]
     (is (= :never (first s)))

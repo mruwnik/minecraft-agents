@@ -55,16 +55,20 @@
              share (* (settings/get settings ::risk-share) health (if hungry? (settings/get settings ::hungry-share) 1))]
          (if (cannot-heal? c) (max share (dec health)) share))))))
 
-(defn stay-hp
-  "The hp staying `seconds` where mobs spawn at `chance` per second risks: each a zombie fight with the kit carried, and
-  the death they risk (cost/spawns-chance) in hp (cost/lethal-hp)."
+(defn stay-parts
+  "{:hurt :dies} of staying `seconds` where mobs spawn at `chance` per second: hurt the hp, each a zombie fight with the
+  kit carried; dies the chance they kill the body (cost/spawns-chance)."
   [c chance seconds]
-  (check-cache/cached c [::stay-hp chance seconds]
-                      #(let [spawns (* chance seconds)
-                             body (threats/death-body c)
-                             at (u/self-pos c)]
-                         (+ (* spawns (cost/fight-damage (assoc (wworld/kit-of c) :mobs [{:name "zombie" :distance 0 :hits 0}])))
-                            (cost/lethal-hp body (cost/spawns-chance body spawns at) at)))))
+  (check-cache/cached c [::stay chance seconds]
+                      #(let [spawns (* chance seconds)]
+                         {:hurt (* spawns (cost/fight-damage (assoc (wworld/kit-of c) :mobs [{:name "zombie" :distance 0 :hits 0}])))
+                          :dies (cost/spawns-chance (threats/death-body c) spawns (u/self-pos c))})))
+
+(defn stay-hp
+  "The hp staying `seconds` where mobs spawn at `chance` per second risks: stay-parts' hurt and its death in hp (cost/lethal-hp)."
+  [c chance seconds]
+  (let [{:keys [hurt dies]} (stay-parts c chance seconds)]
+    (+ hurt (cost/lethal-hp (threats/death-body c) dies (u/self-pos c)))))
 
 (defn round1 [x] (/ (js/Math.round (* 10 x)) 10))
 
