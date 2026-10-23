@@ -39,11 +39,12 @@
 
 (defn unseen-why
   "Text for the gather source: the raw needs of the chain whose blocks are not seen, those seen but not taken (a zone,
-  claim or plan footprint refuses them), or the general text."
+  claim or plan footprint refuses them), those seen and takeable but not taken (a gather that ended first), or the general text."
   [c names n]
   (let [needs (raw-needs c names n)
         seen (filter #(and (not (animal? %)) (not (seen-of c %)) (seq (seen-blocks-of c % true))) needs)
         unseen (filter #(unseen? c %) needs)
+        takeable (remove #(or (animal? %) (nil? (seen-of c %))) needs)
         label (fn [{:keys [key seen sheep mob] :as need}]
                 (cond
                   sheep (str key " (from " sheep " sheep within " (animal-radius) " blocks)")
@@ -51,7 +52,9 @@
                   (and (set? seen) (not= #{key} seen)) (str key " (from " (clojure.string/join "/" (sort seen)) ")")
                   :else (str key (when-let [o (other-logs-seen c need)]
                                    (str " (only " (clojure.string/join "/" o) " seen: another species)")))))]
-    (str "nothing seen to gather what a craft lacks"
+    (str (if (and (seq takeable) (empty? unseen) (empty? seen))
+           (str "what a craft lacks is seen and may be taken (" (clojure.string/join ", " (map label takeable)) "), yet was not gathered")
+           "nothing seen to gather what a craft lacks")
          (when (some #(= "obsidian" (:key %)) needs)
            " (obsidian: seen obsidian, or lava with open air above and a water bucket carried; a bucket is 3 iron plus a seen water source)")
          (when (seq unseen) (str ": " (clojure.string/join ", " (map label unseen))))

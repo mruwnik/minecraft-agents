@@ -101,6 +101,24 @@
               e (await (ending-of s 'jobs.items.obtain {:item "iron_ingot" :ways #{:craft :gather} :explore false} 10))]
           (is (= {:kind :condition-failed :cause :no-source} (kc e)) "a chain with a smelt step needs the smelt way"))))))
 
+(deftest a-gather-that-ended-with-stone-in-sight-does-not-say-nothing-is-seen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [orig ctx/call
+              s (f/start (-> (oi/ore-world {"1,64,2" "stone" "2,64,2" "stone"} [{:name "oak_log" :count 3} {:name "stick" :count 2}])
+                             (assoc :recipes {"stone_pickaxe" {:count 1 :needs {"cobblestone" 3 "stick" 2} :table true}})) [])]
+          (set! ctx/call (fn [c slot j args]
+                           (if (= 'jobs.gather.mine j)
+                             (contract/ending :nothing-possible :outmatched {:why "a fight costs too much"})
+                             (orig c slot j args))))
+          (let [e (try (await (ending-of s 'jobs.items.obtain {:item "stone_pickaxe" :ways #{:craft :gather} :explore false} 30))
+                       (finally (set! ctx/call orig)))
+                why (get-in e [:cause :why])]
+            (is (= {:kind :nothing-possible :cause :no-source} (kc e)))
+            (is (re-find #"seen and may be taken" why))
+            (is (not (re-find #"nothing seen to gather" why)))))))))
+
 (deftest bad-args-are-impossible
   (async done
     (tu/run-async done
