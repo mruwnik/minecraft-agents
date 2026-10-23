@@ -360,9 +360,9 @@
       :continue
       (and (not (get-in (ctx/mem c) [:gather :before]))
            (not (if (explore-opts c)
-                  ;; :later (dark, night) is the child's to wait out, not a sign that nothing is there
+                  ;; :later (dark, night) is the child's to wait out and :look its to look up at, not a sign that nothing is there
                   (and (or (:tunnel? need) (seen-of c need))
-                       (#{:ok :later} (first (ctx/child-status c (gather-slot need) (:job need) (:args need)))))
+                       (#{:ok :later :look} (first (ctx/child-status c (gather-slot need) (:job need) (:args need)))))
                   (gather-viable? c names (- target have)))))
       (tried! c :gather :none-seen)
       :else
