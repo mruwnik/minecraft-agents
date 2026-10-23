@@ -70,6 +70,13 @@
     (is (= :wall (pick {:wall wall :flee (flee nil)})))
     (is (> (cost/death-chance (body 20) (flee 1)) 0.9) "caught, the zombie lands its blows all the flight")))
 
+(deftest a-walk-caught-beside-a-creeper-takes-its-blast-as-a-sure-part-of-the-life
+  (let [walk (cost/flee-answer {:food 20 :mobs [(mob "creeper" 1) (mob "zombie" 3 35)] :caught 1})
+        {:keys [damage hit blasts]} (:caught walk)
+        blast (cost/blast-hurt (cost/armour-stats nil) answer/swell-start)]
+    (is (= [blast] blasts))
+    (is (= (death/blow-chance (body 8) damage hit blast) (cost/death-chance (body 8) walk)))))
+
 (deftest a-walk-from-a-mob-that-keeps-up-is-no-answer
   (is (nil? (cost/flee-answer {:food 20 :mobs [(mob "spider" 4)]})) "a spider outruns the body")
   (is (some? (cost/flee-answer {:food 20 :mobs [(mob "zombie" 4 35)]})))
@@ -105,9 +112,10 @@
 (deftest a-lone-creeper-is-fought-hit-and-back-at-the-measured-exchange
   (let [price #(cost/answer-price (body %) (cost/fight-answer (fight sword (mob "creeper" 3))) here)]
     (is (> (price 10) (* 2 (price 20)))))
-  (are [health weapon distance expected] (= expected (choice health weapon [(mob "creeper" distance)]))
-    20 "stone_sword" 4 :fight
-    20 "stone_sword" 9 :fight))
+  (are [health weapon distance returns expected] (= expected (choice health weapon [(mob "creeper" distance)] returns))
+    20 "stone_sword" 4 0 :fight
+    20 "stone_sword" 9 0 :fight
+    20 "stone_sword" 9 3 :fight))
 
 (deftest a-creepers-blast-falls-off-to-nothing-at-twice-its-power
   (let [bare (cost/armour-stats nil)]

@@ -80,8 +80,8 @@
   [body {:keys [caught] :as answer}]
   (let [chance (fn [{:keys [damage hit blasts spread]}]
                  (let [sure (reduce + 0 blasts)
-                       rest (- damage sure (mean spread))]
-                   (mean (map #(death/blow-chance body (+ rest sure %) hit (+ sure %)) (or (seq spread) [0])))))
+                       small (- damage sure (mean spread))]
+                   (mean (map #(death/blow-chance body (+ small sure %) hit (+ sure %)) (or (seq spread) [0])))))
         clean (chance answer)]
     (if caught
       (+ (* (- 1 (:chance caught)) clean) (* (:chance caught) (chance caught)))
@@ -232,7 +232,7 @@
                                                                   (threat/mob-hurt stats (threat/kind m) (:seconds f) identity (threat/lone-hit-rate (threat/kind m)))))
                                                     mobs per))
                            :hit hit
-                           :blasts (vec (for [m mobs :when (= "creeper" (:name m))] (blow stats "creeper")))}}]
+                           :blasts (vec (for [m mobs :when (= "creeper" (:name m))] (blow stats m)))}}]
         (let [blows? (fn [{:keys [spread]}] (pos? (nth (sort spread) (quot (count spread) 2))))
               spent (set (keep (fn [[m f]] (when (and (= "creeper" (:name m)) (blows? f)) m)) (map vector mobs per)))
               left (remove spent mobs)]
