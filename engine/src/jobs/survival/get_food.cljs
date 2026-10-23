@@ -332,9 +332,9 @@
         (when (and (ctx/way? c :crops) (sources/last-resort? c)) (await (dig-crops! c true))))))
 
 (defn search-waits?
-  "Whether the search would wait: the search child's own safe-if-lit under the children's default (ready/or-starving) is not ok. Asked here so a child's :later does not end this job."
+  "Whether the search would wait: ready/safe-roaming (the search leaves the room) under the children's default (ready/or-starving) is not ok. Asked here so a child's :later does not end this job."
   [c]
-  (not= :ok (first (ready/or-starving ready/safe-if-lit c))))
+  (not= :ok (first (ready/or-starving ready/safe-roaming c))))
 
 (defn explore-done?
   "Whether this job's search is over: it ran to its end (\"started\" is a search a cut or a wait left open, resumed), and a starving body's foods/::starving-rest-ms has not passed since."
@@ -382,7 +382,7 @@
 
 (defn ^:async explore!
   "Once per job (again after meeting more passed-over animals, explore-again?), with nothing known or seen: search for food animals and ripe crops (jobs.explore.search, :explore),
-  not in a dark sky (a body sheltered for the night stays in) nor in the dark or with danger near unless starving (safe-if-lit), nor underground (a hungry body under rock first climbs out, jobs.lib.surface-up; a starving one searches there), nor when risk refuses it. :again when the search found something to hunt or dig, else nil with what it
+  not in a dark sky (a body sheltered for the night stays in) nor in the dark or with danger near unless starving (safe-roaming), nor underground (a hungry body under rock first climbs out, jobs.lib.surface-up; a starving one searches there), nor when risk refuses it. :again when the search found something to hunt or dig, else nil with what it
   covered remembered."
   [c]
   (when (explore-again? c) (ctx/update-mem! c dissoc :explored))

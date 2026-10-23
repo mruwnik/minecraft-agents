@@ -1,0 +1,16 @@
+;; get-food searches (explore) by leaving the room, so its search-waits? is ready/safe-roaming: shut in a closed hut under a dark sky, unstarved, it does not search.
+;; Needs night: run with --allow-time (night run owed while the time freeze holds). Should-fail: the search child never completes, the body stays in the hut.
+{:defaults
+ {:tags [:survival :get-food :night]
+  :time :night :time-why :dawn-decision
+  :plot {:length 48 :width 32 :height 10 :floor "dirt"}
+  :blocks [[:fill [2 0 14] [8 4 20] "stone" :hollow] [:fill [3 1 15] [7 3 19] "air"] [:set [5 3 17] "torch"]
+           [:set [8 1 17] "oak_door[facing=east,half=lower,hinge=left,open=false]"] [:set [8 2 17] "oak_door[facing=east,half=upper,hinge=left,open=false]"]]
+  :body {:at [5.5 1 17.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "no-food-known-in-a-closed-hut-does-not-search-out"
+   :act [[:rcon "effect give $BODY minecraft:hunger 5 243 true"] [:until-rcon "data get entity $BODY foodLevel" "data: ([0-9]|1[01])$" 20]
+         [:job (jobs.survival.get-food {:food 12 :carry 0})]]
+   :expect [{:no-event {:source :job :kind :completed :data {:name "jobs.explore.search"}} :for-s 25}]
+   :after [[:body-near [5.5 1 17.5] 3]]}]}
