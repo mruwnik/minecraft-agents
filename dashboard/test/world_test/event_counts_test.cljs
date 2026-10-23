@@ -97,6 +97,16 @@
     (is (= [:open] (map :end (decided "zombie"))) "a zombie at 12 blocks is out of melee reach"))
   (is (= [:other :ranged] (keys (:by-class (c/notice-report (c/notices [(saw 0 "skeleton" 12) (saw 0 "zombie" 12)])))))))
 
+(deftest a-ranged-mob-is-caught-within-its-own-kinds-range
+  (let [caught (fn [mob d] (map :end (c/notices [(saw 0 mob d) (pos 1000 0) (rec 1500 :decided :mob mob :at {:x d :y 64 :z 0})])))]
+    (is (= [:caught] (caught "skeleton" 14)))
+    (is (= [:open] (caught "skeleton" 16)) "past its 15")
+    (is (= [:open] (caught "pillager" 12)) "a pillager's crossbow reaches 8")))
+
+(deftest a-mob-known-again-is-one-sighting
+  (is (= 1 (count (c/notices [(assoc (saw 0 "zombie" 10) :id 7) (pos 500 0) (assoc (saw 800 "zombie" 10) :id 7)]))))
+  (is (= 2 (count (c/notices [(assoc (saw 0 "zombie" 10) :id 7) (pos 500 0) (assoc (saw 800 "zombie" 10) :id 8)])))))
+
 (deftest a-sighting-out-of-follow-range-or-of-a-provoked-only-mob-is-not-followed
   (is (empty? (c/notices [(saw 0 "skeleton" 20) (saw 0 "enderman" 2)]))))
 

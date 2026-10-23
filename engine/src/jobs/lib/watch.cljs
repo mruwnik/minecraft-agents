@@ -161,7 +161,7 @@
         (do (await (ctx/act c :look (clj->js {:pos (look-point (eye-of c) h)})))
             (if-let [^js m (first (sample! c before))]
               (do (ctx/emit! c :watch.saw :info
-                             (merge {:name (.-name m) :after-ms (- (ctx/now c) started)}
+                             (merge {:name (.-name m) :id (.-id m) :after-ms (- (ctx/now c) started)}
                                     (if (.-seen m)
                                       {:pos (mob-pos m) :distance (.-distance m) :how :seen}
                                       (assoc (rough c m) :how :heard))))

@@ -15,7 +15,7 @@
   the gap count, no catch): catches per second in its field, each second weighted by cost.threat/way-weight of the body's straight distance
   from that spot (a lower bound on the mob's steps, so an upper bound on the weight: the rate counts low). The setting death/::notice-rate
   stores {:k catches :n-s weighted seconds} for each class: :other (reach: danger/melee-reach) and :ranged (a mob of threat/ranged?, caught within
-  danger/ranged-radius, whose line of fire the logs do not hold, so its weight is an upper bound too). A catch ends one sighting: the events
+  its threat/fire-range, whose line of fire the logs do not hold, so its weight is an upper bound too). A catch ends one sighting: the events
   carry no entity id, so it is the open sighting of the kind nearest the event's spot.
   Pure parts: scan-line, exchange, starts, deciles, notices, groups, vein-seen."
   (:require ["fs" :as fs]
@@ -25,7 +25,6 @@
             [clojure.string :as str]
             [jobs.lib.cost.danger :as danger]
             [jobs.lib.cost.threat :as threat]
-            [jobs.lib.danger :as danger-q]
             [world-test.fresh-drop :as fresh-drop]
             [world-test.spot-returns :as spot-returns]))
 
@@ -55,8 +54,8 @@
            :at (when-not (get-in e [:data :band]) (get-in e [:data :pos]))})
 
         (and (str/includes? line ":kind :watch.saw") (str/includes? line ":how :seen"))
-        (let [{{:keys [name distance pos]} :data} (whole)]
-          {:k :saw :t t :gen gen :mob name :distance distance :at pos})
+        (let [{{:keys [name distance pos id]} :data} (whole)]
+          {:k :saw :t t :gen gen :mob name :id id :distance distance :at pos})
 
         (and (str/includes? line ":kind :ended") (str/includes? line ":hostile-near"))
         {:k :ended :t t :gen gen :job (root-job (second (re-find #":job-id \"([^\"]*)\"" line)))}
@@ -218,13 +217,13 @@
 (defn ranged-mob? [mob] (threat/ranged? {:name mob}))
 
 (defn reach-of
-  "Blocks from the body within which mob can catch it: a ranged one by its line of fire out to danger/ranged-radius, any other by melee reach."
+  "Blocks from the body within which mob can catch it: a ranged one by its line of fire out to its kind's threat/fire-range, any other by melee reach."
   [mob]
-  (if (ranged-mob? mob) (danger-q/ranged-radius) (danger/melee-reach)))
+  (if (ranged-mob? mob) (threat/fire-range mob) (danger/melee-reach)))
 
 (defn notices
   "Rows [{:id [gen t mob] :t :mob :s :end}] of the sightings in records (sorted by :t): :s the seconds followed, each times the weight
-  of the body's distance from the mob's spot over it (a ranged mob within danger/ranged-radius weighs 1: whether it has a line of fire is
+  of the body's distance from the mob's spot over it (a ranged mob within its threat/fire-range weighs 1: whether it has a line of fire is
   not in the logs, so the weight is an upper bound); :end :caught (the mob reached the body), :left (out of its follow range), :gap
   (censored: :s stops at the last position) or :open (the log ends).
   A catch ends one sighting: the events carry no entity id, so the open sighting of the kind whose spot is nearest the event's (a hurt:
@@ -232,7 +231,7 @@
   only a mob within reach-of the body."
   [records]
   (let [row (fn [{:keys [id t0 mob s]} end] {:id id :t t0 :mob mob :s s :end end})
-        weight (fn [mob d] (if (and (ranged-mob? mob) (<= d (danger-q/ranged-radius))) 1 (threat/way-weight d)))
+        weight (fn [mob d] (if (and (ranged-mob? mob) (<= d (threat/fire-range mob))) 1 (threat/way-weight d)))
         gain (fn [e t] (update e :s + (* (:w e) (/ (min (- t (:t e)) give-up-ms) 1000))))
         reached? (fn [st gen t mob mob-at]
                    (let [p (get-in st [:last gen])]
@@ -247,9 +246,10 @@
              (fn [{:keys [open] :as st} {:keys [k gen t mob] :as r}]
                (let [mine (get open gen [])]
                  (case k
-                   :saw (if (or (contains? threat/provoked-only mob) (> (:distance r) (threat/follow-range mob)))
+                   :saw (if (or (contains? threat/provoked-only mob) (> (:distance r) (threat/follow-range mob))
+                                (and (:id r) (contains? (get-in st [:seen gen]) (:id r))))
                           st
-                          (update-in st [:open gen] (fnil conj []) {:id [gen t mob] :t0 t :mob mob :at (:at r) :t t :s 0 :w (weight mob (:distance r))}))
+                          (-> st (update-in [:seen gen] (fnil conj #{}) (:id r)) (update-in [:open gen] (fnil conj []) {:id [gen t mob] :t0 t :mob mob :at (:at r) :t t :s 0 :w (weight mob (:distance r))})))
                    :hurt (reduce (fn [st mob] (catch st gen t mob (or (:at r) (get-in st [:last gen])))) st (:causes r))
                    :decided (if (reached? st gen t mob (:at r))
                               (catch st gen t mob (:at r))

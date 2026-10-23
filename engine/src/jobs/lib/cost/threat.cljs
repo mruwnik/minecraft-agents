@@ -23,6 +23,7 @@
    ::trident-rate {:default 0.5 :doc "Throws a second of a drowned holding a trident (vanilla: one every 40 ticks)." :spec (a/num-in 0 nil)}
    ::provoked-share {:default 0.1 :doc "What a provoked-only mob's threat counts for when it is met, not fought." :spec (a/num-in 0 nil)}
    ::default-follow-range {:default 16 :doc "Blocks a mob of unknown kind notices the body from." :spec (a/int-in 1 nil)}
+   ::default-fire-range {:default 16 :doc "Blocks a ranged mob without a known attack range (breeze, an unknown kind) shoots from." :spec (a/int-in 1 nil)}
    ::field-close {:default 3 :doc "Steps of a mob's way within which its field weighs 1 (way-weight)." :spec (a/int-in 0 nil)}})
 
 (defn difficulty
@@ -39,6 +40,12 @@
    "enderman" 64 "pillager" 32 "vindicator" 12 "evoker" 12 "blaze" 48 "ghast" 100})
 
 (defn follow-range [mob-name] (get follow-ranges mob-name (settings/get settings ::default-follow-range)))
+
+(def fire-ranges
+  "Blocks a ranged mob shoots from (the range argument of its vanilla attack goal: RangedBowAttackGoal 15 for skeleton, stray, bogged and parched; RangedAttackGoal 10 for a witch and a trident drowned; RangedCrossbowAttackGoal 8 for a pillager; a blaze fires within its follow range 48, a ghast within 64)."
+  {"skeleton" 15 "stray" 15 "bogged" 15 "parched" 15 "drowned_trident" 10 "witch" 10 "pillager" 8 "blaze" 48 "ghast" 64})
+
+(defn fire-range [mob-name] (get fire-ranges mob-name (settings/get settings ::default-fire-range)))
 
 (defn field-close [] (settings/get settings ::field-close))
 

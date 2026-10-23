@@ -33,6 +33,12 @@
     (is (= 1 (skeleton 6 67 0)) "a skeleton shoots the body on it"))
   (is (nil? ((reach-of {:blocks pen} "skeleton" {:x 0.5 :y 64 :z 0.5}) 5 64 0)) "no line of fire through the pen's wall"))
 
+(deftest a-ranged-mobs-fire-cells-end-at-its-kinds-range
+  (let [pillar {"12,64,0" "stone" "12,65,0" "stone" "12,66,0" "stone"}
+        at (fn [mob] (reach-of {:blocks pillar} mob {:x 0.5 :y 64 :z 0.5}))]
+    (is (= 1 ((at "skeleton") 12 67 0)) "a skeleton shoots 12 blocks (range 15)")
+    (is (nil? ((at "pillager") 12 67 0)) "a pillager's crossbow reaches 8")))
+
 (deftest a-walk-within-a-zombies-way-is-a-likelier-death-than-one-past-a-pen
   (let [body {:health 20}
         route {:cells (for [x (range 5 15)] {:x x :y 64 :z 0})}

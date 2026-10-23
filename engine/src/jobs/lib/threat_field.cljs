@@ -3,7 +3,7 @@
   the body has not seen the worse case): its field, the cells [x y z] a body standing in is within its reach, each with
   a weight 0-1.
   A walker's field is its way (jobs.lib.reach/forward over mob-lookup: a cell the body has not seen is ground) out to its
-  follow range in steps (cost.threat/follow-range: vanilla navigation goes no farther), weighted by cost.threat/way-weight. A ranged mob adds the standing cells within danger/ranged-radius it has a line of fire to
+  follow range in steps (cost.threat/follow-range: vanilla navigation goes no farther), weighted by cost.threat/way-weight. A ranged mob adds the standing cells within cost.threat/fire-range of its kind it has a line of fire to
   (weight 1). A mob that lives in water (water-mobs) keeps to the water it was met in: every seen cell of that body of
   water (water-body), weight 1. At most ::max-cells cells, kept per body while what it read stays (field-of)."
   (:require [engine.args :as a]
@@ -13,7 +13,6 @@
             [engine.settings :as settings]
             [jobs.lib.check-cache :as check-cache]
             [jobs.lib.cost.threat :as threat]
-            [jobs.lib.danger :as danger-q]
             [jobs.lib.reach :as reach]
             [jobs.lib.util :as u]))
 
@@ -166,7 +165,7 @@
                  :else
                  (let [walk (walk-field kind-at (reach/cell-of pos) (threat/follow-range mob) (threat/field-close) (max-cells))]
                    (if (= :projectile (threat/damage-type mob))
-                     (.concat walk (fire-cells kind-at arrow-at (update pos :y js/Math.floor) (danger-q/ranged-radius) (max-cells)))
+                     (.concat walk (fire-cells kind-at arrow-at (update pos :y js/Math.floor) (threat/fire-range mob) (max-cells)))
                      walk)))
          weights (js/Map.)
          steps (js/Map.)]
