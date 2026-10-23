@@ -9,7 +9,7 @@
     weapon   attack-gap-ms, weapon-damage, remaining-health, mob-max-health, ranged-mobs: the fight inputs; the one tool-material table
              (tool-tier, weapon-rank, cheapness) (jobs.lib.cost.weapon).
     fight    fight-damage, fight-seconds, decide: the damage (and length) of a fight with the current kit, :fight or :flee (jobs.lib.cost.fight).
-    danger   route-danger, straight-route: the danger of a walk past mobs; hurt-rate, exposure-price: what standing exposed to them costs; stance, danger-rate, danger-list: go-to's
+    danger   route-danger, straight-route: the danger of a walk past mobs; hurt-rate, exposure-price: what standing exposed to them costs; stance, danger-rate, danger-list, habitat-factor: go-to's
              planner dangers; reach-first?, outruns-at?: a body's race to a refuge against its chasers; catches?: whether a chaser hits a walk before it is past (jobs.lib.cost.danger).
     health   hp-seconds, health-scale, hp-price, commute-s (a walk there and back against sheltering here), drown-prices, damage-budget, survivable-budget: what an hp costs and how many a walk may spend (jobs.lib.cost.health).
     food     food-reserve: the food a body keeps carried, 3 days of it; cook-worth?, cook-gain: whether cooking raw food beats eating it now; meat-factor, meat-animal: raw meat's replacement cost, dear for hunted, 1 with a working pen (jobs.lib.cost.food).
@@ -75,6 +75,7 @@
 (def hurt-rate danger/hurt-rate)
 (def exposure-price danger/exposure-price)
 (def danger-opts danger/danger-opts)
+(def habitat-factor danger/habitat-factor)
 (def danger-shape-problem danger/danger-shape-problem)
 (def danger-list danger/danger-list)
 (def max-dangers danger/max-dangers)

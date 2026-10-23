@@ -1,0 +1,25 @@
+;; Card 2a37782c: go-to's plan prices the whole body of water a drowned was met in (jobs.lib.threats/water-tolls), not a sphere round the spot.
+;; Roofed stone block, a lit hall x 1..30, z 1..30 (feet y 0) cut by a wading channel x 14..16, z 1..26 (water y 0 over stone), dry past its end at z 27..30.
+;; The quote reports the planned route's :length and walks nowhere: across the channel (24 long) with nothing met, round its end (about 45)
+;; with a drowned's hit remembered at the channel's far end, 13 blocks up it from the crossing; a zombie's hit there tolls no water.
+{:defaults
+ {:tags [:movement :planner :water]
+  :time :any
+  :plot {:light :lit :height 8}
+  :blocks [[:fill [0 -1 0] [31 3 31] "stone"]
+           [:fill [1 0 1] [30 2 30] "air"]
+           [:fill [14 0 1] [16 0 26] "water"]]
+  :body {:at [3.5 0 15.5] :yaw 270 :settle-s 4}
+  :limit-s 40}
+ :cases
+ [{:name "nothing-met-wades-across-the-channel"
+   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [27 0 15] :range 1 :unknown false}] {:ok true :quote {:route {:found true :length [:< 30]}}}] 30]]
+   :after [[:body-near [3.5 0 15.5] 2]]}
+  {:name "drowned-hit-up-the-channel-goes-round-its-end"
+   :memory [{:kind :hurt :age-s 60 :data {:health 15 :pos #xyz [15.5 0 2.5] :attacker {:name "drowned"}}}]
+   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [27 0 15] :range 1 :unknown false}] {:ok true :quote {:route {:found true :length [:> 34]}}}] 30]]
+   :after [[:body-near [3.5 0 15.5] 2]]}
+  {:name "zombie-hit-up-the-channel-still-wades-across"
+   :memory [{:kind :hurt :age-s 60 :data {:health 15 :pos #xyz [15.5 0 2.5] :attacker {:name "zombie"}}}]
+   :act [[:until [:cli "quote" ["$body" "--world" "$world" "jobs.movement.go-to" {:pos #at [27 0 15] :range 1 :unknown false}] {:ok true :quote {:route {:found true :length [:< 30]}}}] 30]]
+   :after [[:body-near [3.5 0 15.5] 2]]}]}

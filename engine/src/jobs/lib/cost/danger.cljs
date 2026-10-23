@@ -216,6 +216,12 @@
   [{:keys [health equipment]} mob-names]
   (* (reduce + 0 (map #(hurt-rate equipment %) mob-names)) (health/hp-price (if (number? health) health 20))))
 
+(defn habitat-factor
+  "Seconds more each second in the water a mob-name lives in costs body {:health :equipment :weapon}: its danger-rate x
+  weight (a fading memory, 0-1) at the hp price of the body's health (the planner's options.tolls factor)."
+  [{:keys [health] :as body} mob-name weight]
+  (* weight (danger-rate body mob-name (danger-opts)) (health/hp-price (if (number? health) health 20))))
+
 (defn danger-of [body kind {:keys [name pos]} {:keys [shape] :as opts}]
   (let [k (if (= "creeper" name) :creeper kind)]
     (merge {:x (:x pos) :y (:y pos) :z (:z pos) :rate (danger-rate body name opts) :mob name :block true}

@@ -205,12 +205,15 @@
     {:weapon (combat/best-weapon p combat/default-weapons)
      :equipment (cost/equipment-of (.-equipment (.self p)))}))
 
+(declare with-tolls)
+
 (defn costed-world
-  "pw (the primitives' pathWorld) costed the way go-to plans: with the dangers the body knows of now (dangers?, jobs.lib.threats)
-  and with dark cells (dark?, look/dark-fn; over a masked pw an unseen cell is priced by the mask, not as dark). Every search that ranks routes by cost plans over this."
+  "pw (the primitives' pathWorld) costed the way go-to plans: with the dangers the body knows of now and the water a water mob
+  was met in (dangers?, jobs.lib.threats planner-dangers and water-tolls) and with dark cells (dark?, look/dark-fn; over a
+  masked pw an unseen cell is priced by the mask, not as dark). Every search that ranks routes by cost plans over this."
   [c pw {:keys [dangers? dark?]}]
   (cond-> pw
-    dangers? (with-dangers (threats/planner-dangers c))
+    dangers? (-> (with-dangers (threats/planner-dangers c)) (with-tolls (threats/water-tolls c)))
     dark? (with-dark (look/dark-fn (:primitives c) {:unseen-dark? (nil? (unknown-of pw))}) (kit-of c))))
 
 (def avoid-factor
@@ -241,14 +244,19 @@
               (str "a toll is {:x :y :z :factor}: x y z finite numbers, factor 0 or more (##Inf: never entered); got " (pr-str bad))))))
 
 (defn with-tolls
-  "pw whose plans cost the cells of tolls ([{:x :y :z :factor}], jobs.lib.cost farm-tolls and zone-tolls) factor times their
-  own seconds more (the planner's options.tolls; none: pw)."
+  "pw whose plans cost the cells of tolls ([{:x :y :z :factor}], jobs.lib.cost farm-tolls and zone-tolls, jobs.lib.threats water-tolls) factor times their
+  own seconds more, on top of pw's own tolls (the planner's options.tolls; a cell tolled twice costs both; none: pw)."
   [pw tolls]
   (if (empty? tolls)
     pw
-    #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :dark (.-dark pw) :avoid (.-avoid pw)
-         :tolls #js {:list (vec (sort-by (juxt :x :y :z) tolls))
-                     :cells (js/Map. (clj->js (mapv (fn [{:keys [x y z factor]}] [(planner/cell-key x y z) factor]) tolls)))}}))
+    (let [tolls (->> (concat (some-> (.-tolls pw) .-list) tolls)
+                     (group-by (juxt :x :y :z))
+                     (map (fn [[[x y z] ts]] {:x x :y y :z z :factor (reduce + (map :factor ts))}))
+                     (sort-by (juxt :x :y :z))
+                     vec)]
+      #js {:snapshot (.-snapshot pw) :table (.-table pw) :space (.-space pw) :dangers (.-dangers pw) :dark (.-dark pw) :avoid (.-avoid pw)
+           :tolls #js {:list tolls
+                       :cells (js/Map. (clj->js (mapv (fn [{:keys [x y z factor]}] [(planner/cell-key x y z) factor]) tolls)))}})))
 
 (defn tolls-key
   "What a kept search's key holds of pw's tolls (with-tolls): the cells with their factors, nil for none."

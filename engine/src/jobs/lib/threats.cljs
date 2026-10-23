@@ -3,12 +3,14 @@
   body memory. One :threat entry per mob fled per flight {:mob :id :uuid :key :pos (last known) :ended}, kept
   threat-policy. The third flight from one mob (same :key, uuid else id) within the ttl warns hostile.chased.
   planner-dangers: the known dangers go-to's searches cost (the planner's options.dangers), costed by
-  jobs.lib.cost/danger-list."
+  jobs.lib.cost/danger-list. water-tolls: the water a mob that lives in water was met in, the whole body of it, costed
+  by jobs.lib.cost/habitat-factor (the planner's options.tolls)."
   (:require [engine.args :as a]
             [engine.settings :as settings]
             [engine.ctx :as ctx]
             [engine.entity-observations :as obs]
             [engine.memory :as mem]
+            [jobs.lib.check-cache :as check-cache]
             [jobs.lib.combat :as combat]
             [jobs.lib.cost :as cost]
             [jobs.lib.danger :as danger-q]
@@ -20,7 +22,8 @@
    ::chased-flights {:default 3 :doc "Flights from one mob within the ttl that tell the agent." :spec (a/int-in 1 nil)}
    ::fled-memory-ms {:default 180000 :doc "Milliseconds after a flight during which a mob it fled from still counts as near the place it was last known (errands that walk to a spot hold off), and the body is not sent out on a comfort errand." :spec (a/int-in 0 nil)}
    ::fled-radius {:default 40 :doc "Blocks around a fled mob's last known place that an errand's walk treats as dangerous." :spec (a/num-in 0 nil)}
-   ::sensed-radius {:default 24 :doc "Blocks out to which a sensed real danger is costed." :spec (a/int-in 1 nil)}})
+   ::sensed-radius {:default 24 :doc "Blocks out to which a sensed real danger is costed." :spec (a/int-in 1 nil)}
+   ::water-cells {:default 8000 :doc "The most seen water cells one water mob's body of water is costed over (water-tolls; the planner looks each up per node)." :spec (a/int-in 1 nil)}})
 
 (def follow-ranges
   "Blocks a mob keeps chasing its target out to (vanilla follow_range attribute)."
@@ -151,3 +154,72 @@
                        {:mob mob :mob-pos (select-keys d [:x :y :z]) :mob-distance (js/Math.round dist)}))))
            (sort-by :mob-distance)
            first))))
+
+;; ---------------------------------------------------------------- water a mob lives in
+
+(def water-mobs "Mobs that live in water: they stay in the body of water they were met in, not round a point." #{"drowned" "guardian" "elder_guardian"})
+
+(defn water-mob-spots
+  "Where c's body met a mob that lives in water, [{:mob :pos :weight}]: one sensed now (weight 1), a :threat flight's
+  last place (1), a recent death by one (death-spot/recent, its fading weight; seeing the spot lit does not clear it,
+  the mob lives in the water, not in the dark) and a :hurt entry by one (fading over the :hurt memory's ttl)."
+  [c]
+  (let [p (:primitives c)
+        now (ctx/now c)
+        ttl (:ttl (or (mem/policy (ctx/view c) :hurt) mem/default-policy))
+        fade (fn [age] (if (number? ttl) (cost/death-weight age ttl) (cost/death-weight age)))]
+    (concat (for [{:keys [name pos]} (sensed-mobs p {:way? false}) :when (water-mobs name)] {:mob name :pos pos :weight 1})
+            (for [{:keys [mob pos]} (remembered-spots c) :when (water-mobs mob)] {:mob mob :pos pos :weight 1})
+            (for [{:keys [cause pos weight]} (death-spot/recent c) :when (water-mobs cause)] {:mob cause :pos pos :weight weight})
+            (for [{:keys [t data]} (ctx/entries c :hurt)
+                  :let [cause (death-spot/hurt-cause data) w (fade (- now t))]
+                  :when (and (water-mobs cause) (:pos data) (pos? w))]
+              {:mob cause :pos (:pos data) :weight w}))))
+
+(defn water? [p x y z] (= "water" (u/seen-name p {:x x :y y :z z})))
+
+(defn water-surface
+  "[x y z] of the top seen water cell of the column at or next to pos (the cell, up to 2 below it, or a side neighbour's:
+  a body hit from the water stood on its shore), nil when no water is seen there."
+  [p {:keys [x y z]}]
+  (let [x (js/Math.floor x) y (js/Math.floor y) z (js/Math.floor z)]
+    (some (fn [[dx dz]]
+            (when-let [wy (some #(when (water? p (+ x dx) % (+ z dz)) %) [y (dec y) (- y 2)])]
+              [(+ x dx) (loop [wy wy] (if (water? p (+ x dx) (inc wy) (+ z dz)) (recur (inc wy)) wy)) (+ z dz)]))
+          [[0 0] [1 0] [-1 0] [0 1] [0 -1]])))
+
+(defn water-body
+  "The seen water cells [x y z] of the body of water whose top cell is surface: the columns whose cell at its level is seen
+  water, side by side from it, each from that level down while seen water; at most n cells, the nearest columns first."
+  [p [sx sy sz] n]
+  (loop [queue #queue [[sx sz]] seen #{[sx sz]} cells (transient [])]
+    (if (or (empty? queue) (>= (count cells) n))
+      (persistent! cells)
+      (let [[x z] (peek queue)
+            column (take-while #(water? p x % z) (range sy (- sy 384) -1))
+            more (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+                       :let [k [(+ x dx) (+ z dz)]]
+                       :when (and (not (contains? seen k)) (water? p (first k) sy (second k)))]
+                   k)]
+        (recur (into (pop queue) more) (into seen more) (reduce #(conj! %1 [x %2 z]) cells (take (- n (count cells)) column)))))))
+
+(defn water-tolls
+  "go-to's tolls ([{:x :y :z :factor}]) for the bodies of water c's body met a water mob in (water-mob-spots): every seen
+  cell of each (water-body, at most ::water-cells) costs habitat-factor more a second, the dearest mob where two share
+  a cell. Read once per check-cache window for the same spots."
+  [c]
+  (let [p (:primitives c)
+        spots (water-mob-spots c)]
+    (if (empty? spots)
+      []
+      (check-cache/cached c [::water-tolls (mapv (fn [{:keys [mob pos weight]}] [mob (update-vals pos js/Math.floor) (/ (js/Math.round (* 20 weight)) 20)]) spots)]
+                          (fn []
+                            (let [body (body-of p)
+                                  n (settings/get settings ::water-cells)
+                                  factors (reduce (fn [m {:keys [mob pos weight]}]
+                                                    (let [f (cost/habitat-factor body mob weight)]
+                                                      (if-let [top (when (pos? f) (water-surface p pos))]
+                                                        (reduce #(update %1 %2 (fnil max 0) f) m (water-body p top n))
+                                                        m)))
+                                                  {} spots)]
+                              (mapv (fn [[[x y z] f]] {:x x :y y :z z :factor f}) factors)))))))
