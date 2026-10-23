@@ -6,7 +6,8 @@
   ::max-nodes (a named target ::target-max-nodes) and the whole search within ::budget-ms, ring headings away from the
   chasers first. A heading with no route gives the end of the planner's partial route, a pocket (:found? false); a ring
   route stops before the first cell the body has not seen (seen-part).
-  Each end is priced (the planner's price plus the death the route risks past the known threats: cost/route-death-cost) and scored against
+  Each end is priced (the planner's price plus the death the route risks past the known threats, a death about where
+  the body stands: cost/route-death-cost) and scored against
   the chasers: :arrive, the seconds the first of them takes to reach it (cost/arrival-s); :caught?, whether one lands
   a blow on the route (cost/caught-on?); :score, arrive less price. pick chooses a flee step's end."
   (:require [engine.args :as a]
@@ -133,32 +134,37 @@
 
 (defn costed
   "The pathWorld a flee route plans over: what the body has seen (go-to's :unknown, the cell goal spared by the rock
-  guess), costed as go-to's walks; nil when the body cannot sense the world."
-  [c goal]
+  guess), costed as go-to's walks but for the threats keep? leaves out (the chasers: their danger is the race); nil
+  when the body cannot sense the world."
+  [c goal keep?]
   (some-> (wworld/path-world (:primitives c) (wworld/with-seeds (wworld/unknown-spec) goal nil))
-          (#(wworld/costed-world c % {:dangers? (wworld/dangers?) :dark? (wworld/dark?)}))))
+          (#(wworld/costed-world c % {:dangers? (wworld/dangers?) :dark? (wworld/dark?) :keep? keep?}))))
+
+(defn floor-cell [pos] (mapv #(js/Math.floor (% pos)) [:x :y :z]))
 
 (defn ^:async price!
   "Each of targets (named ones {:pos :range :kind}, then ring ends {:x :z}) planned from where the body stands (see the ns
   doc): [{:target :found? :open? :end :s :priced :price :cells}] (:open? found, or a ring end whose partial route
   covers ::open-share of reach), the ones the planner found no way nearer to, and the ring ends
-  left when ::budget-ms (counted from the first ring end: named ones have their node cap) ran out, left out. opts {:y-margin :reach}: blocks past body and end the routes may plan, blocks
-  to the ring."
-  [c targets {:keys [y-margin reach]}]
+  left when ::budget-ms (counted from the first ring end: named ones have their node cap) ran out, left out. opts {:y-margin :reach :chasers}: blocks past body and end the routes may plan, blocks
+  to the ring, the chasers (their danger is the race, so death-chance weighs only the other known threats)."
+  [c targets {:keys [y-margin reach chasers]}]
   (let [p (:primitives c)
         from (u/self-pos c)
         open-at (* (settings/get settings ::open-share) (or reach 0))
-        ring-world (costed c nil)
+        chased (set (map #(floor-cell (:pos %)) chasers))
+        other? #(not (chased (floor-cell (:pos %))))
+        ring-world (costed c nil other?)
         policy (cond-> (wworld/body-policy c) y-margin (assoc :y-margin y-margin))
         body (threats/death-body c)
-        class {:underground? (sh-sense/buried? p) :night? (sh-sense/dark-outside? p) :threats (threats/threats-of c)}
+        class {:underground? (sh-sense/buried? p) :night? (sh-sense/dark-outside? p) :threats (threats/threats-of c other?)}
         slow (pace (.-food (.self p)))]
     (if (nil? ring-world)
       []
       (loop [[t & more] targets out [] t0 nil]
         (if (or (nil? t) (and t0 (>= (- (js/performance.now) t0) (settings/get settings ::budget-ms))))
           out
-          (let [pw (if-let [pos (:pos t)] (costed c (mapv #(js/Math.floor (% pos)) [:x :y :z])) ring-world)
+          (let [pw (if-let [pos (:pos t)] (costed c (floor-cell pos) other?) ring-world)
                 r (routed (await (plan-to! c pw policy (query c t)
                                            (settings/get settings (if (:pos t) ::target-max-nodes ::max-nodes))))
                           slow)
@@ -166,7 +172,7 @@
             (recur more (if r
                           (conj out (assoc r :target t
                                              :open? (or (:found? r) (and (nil? (:pos t)) (>= (u/dist from (:end r)) open-at)))
-                                             :price (+ (:priced r) (cost/route-death-cost body (assoc class :cells (dwelt (:cells r))) (:end r)))))
+                                             :price (+ (:priced r) (cost/route-death-cost body (assoc class :cells (dwelt (:cells r))) from))))
                           out)
                    (or t0 (when (nil? (:pos t)) (js/performance.now))))))))))
 
@@ -265,7 +271,7 @@
   (let [self (.self (:primitives c))
         from (u/self-pos c)
         r (or (:reach opts) (reach (.-food self)))
-        ends (scored chasers from (await (price! c (into (vec targets) (ring from chasers r (settings/get settings ::bearings))) (assoc opts :reach r))))]
+        ends (scored chasers from (await (price! c (into (vec targets) (ring from chasers r (settings/get settings ::bearings))) (assoc opts :reach r :chasers chasers))))]
     (cond-> ends covered? (into (covers chasers from covered? ends)))))
 
 (defn named

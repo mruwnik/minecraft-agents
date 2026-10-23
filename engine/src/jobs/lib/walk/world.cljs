@@ -210,10 +210,12 @@
 (defn costed-world
   "pw (the primitives' pathWorld) costed the way go-to plans: with the mobs the body knows may hurt it, each over its
   field (dangers?, jobs.lib.threats threat-tolls; planner-dangers keeps plans off sensed mobs' cells and deaths by terrain) and with dark cells (dark?, look/dark-fn; over a
-  masked pw an unseen cell is priced by the mask, not as dark). Every search that ranks routes by cost plans over this."
-  [c pw {:keys [dangers? dark?]}]
+  masked pw an unseen cell is priced by the mask, not as dark). Every search that ranks routes by cost plans over this.
+  keep? (a fn of a known threat): only the threats it holds of are tolled (a flight races its chasers instead)."
+  [c pw {:keys [dangers? dark? keep?]}]
   (cond-> pw
-    dangers? (-> (with-dangers (threats/planner-dangers c)) (with-tolls (threats/threat-tolls c)))
+    dangers? (-> (with-dangers (threats/planner-dangers c))
+                 (with-tolls (if keep? (threats/tolls-of c (filter keep? (threats/known-threats c))) (threats/threat-tolls c))))
     dark? (with-dark (look/dark-fn (:primitives c) {:unseen-dark? (nil? (unknown-of pw))}) (kit-of c))))
 
 (def avoid-factor

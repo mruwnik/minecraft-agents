@@ -182,9 +182,9 @@
   (mapv #(assoc % :reach (field/reach-fn (field/field-of c %))) threats))
 
 (defn threats-of
-  "known-threats of c, with-reach."
-  [c]
-  (with-reach c (known-threats c)))
+  "known-threats of c (those keep? holds of), with-reach."
+  ([c] (threats-of c any?))
+  ([c keep?] (with-reach c (filter keep? (known-threats c)))))
 
 (defn death-body
   "The body of c as death-chance and death-cost read it: cost/death-body and body-of."

@@ -569,9 +569,9 @@
 (defn ^:async flight!
   "Put a zombie (id 7, uuid) 5 blocks from the body out of line and run one retreat to its end."
   [s uuid]
-  (let [[x _ _] (body-pos (:p s))]
+  (let [[x _ z] (body-pos (:p s))]
     (swap! (fake/state (:p s)) assoc :entities [])
-    (fake/add-entity! (:p s) (zombie 7 (+ x 5) {:uuid uuid :visible false}))
+    (fake/add-entity! (:p s) (zombie 7 (+ x 5) {:uuid uuid :visible false :pos {:x (+ x 5) :y 64 :z z}}))
     (await (run-job! s 'test.flight {}))))
 
 (deftest one-mob-chasing-three-times-tells-the-agent-once
@@ -1277,7 +1277,7 @@
               n1 (count (fled r1))
               bp (body-pos (:p s))
               _ (swap! (fake/state (:p s)) update :entities (fn [es] (filterv #(not= 7 (:id %)) es)))
-              _ (fake/add-entity! (:p s) (zombie 7 (+ (first bp) 4) {:chase {:speed 0.7 :follow 6}}))
+              _ (fake/add-entity! (:p s) (zombie 7 (+ (first bp) 4) {:chase {:speed 0.7 :follow 6} :pos {:x (+ (first bp) 4) :y 64 :z (nth bp 2)}}))
               r2 (await (settings/with-settings {:jobs.survival.respond.state/far-flight 40}
                           #(run-job! r1 'test.flight {})))]
           (is (= 0 n1) "the first flight alone is under far-flight")
