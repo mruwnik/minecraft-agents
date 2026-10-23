@@ -20,6 +20,7 @@
             [jobs.survival.shut-in :as shut-in]
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.answer :as answer]
+            [jobs.lib.cost.threat :as threat]
             [jobs.lib.pace :as pace]
             [engine.events :as events]
             [engine.fake :as fake]
@@ -1338,7 +1339,7 @@
     (is (= 1.69 (/ (js/Math.round (* 100 (cost/fight-damage {:weapon "iron_sword" :equipment iron-armour :mobs [z]}))) 100))
         "iron armour: vanilla's 13.5 effective points against 2.5 hp hits")
     (is (= 1.875 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [(assoc z :hits 2)]})) "a struck mob has less left")
-    (is (= 1.04 (cost/fight-damage {:weapon "stone_sword" :equipment nil :mobs [{:name "creeper" :distance 3}]}))
+    (is (= (* 4 (threat/creeper-exchange)) (cost/fight-damage {:weapon "stone_sword" :equipment nil :mobs [{:name "creeper" :distance 3}]}))
         "a creeper: 4 swings at the measured exchange each (hit-and-back), not the blast")
     (is (= 6 (cost/fight-damage {:weapon "iron_sword" :equipment nil :mobs [{:name "skeleton" :distance 13}]}))
         "a skeleton shoots while the body closes 10 blocks")))

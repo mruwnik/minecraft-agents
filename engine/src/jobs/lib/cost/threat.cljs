@@ -11,7 +11,7 @@
 
 (a/defargs settings
   {::creeper-blast {:default 43 :doc "Damage a creeper's blast is costed at." :spec (a/int-in 0 nil)}
-   ::creeper-exchange {:default 0.26 :doc "hp from creepers per swing of a hit-and-back fight with a lone creeper (a late step back lets the fuse run on): measured 2026-10-23 over the trial bodies' respond runs that only fought creepers (n=48, 50 hp, 7 with a blast over 2 hp), over the 4 swings a sword needs." :spec (a/num-in 0 nil)}
+   ::creeper-exchange {:default 0.51 :doc "hp from creepers per swing (attack that hit or killed) of a hit-and-back fight with a lone creeper (a late step back lets the fuse run on): 3.06 hp over 6 swings in 2 respond runs that only fought creepers, 1 with a blast over 2 hp; all stone swords, so not split by weapon (the swings a weapon needs are fight/swings). Recount: node tools/event-counts.mjs creeper-exchange; per-case evidence replaces it." :spec (a/num-in 0 nil)}
    ::difficulty {:default 1 :doc "The server difficulty mob hits are costed at: 0 peaceful, 1 easy, 2 normal, 3 hard (not read from the server)." :spec (a/int-in 0 3)}
    ::hit-rate {:default 0.6 :doc "Hits a zombie or skeleton lands per second of exposure (measured over trial fights; the body is out of reach part of the time). Mobs not measured count one a second." :spec (a/num-in 0 nil)}
    ::spider-hit-rate {:default 0.35 :doc "Hits a spider or cave spider lands per second of exposure." :spec (a/num-in 0 nil)}
