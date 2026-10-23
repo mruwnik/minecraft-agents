@@ -53,7 +53,7 @@
 
 (defn- chance-at
   "The spawn chance per second at `cell` for a body at feet: a seen cell by its light (sky reaching it down its column; a roofed cell is dark only in a dark hall), an unseen one
-  at the worse case (Q16): by the open-sky guess when it lies within the surface band of `top`, else as a dark cave."
+  at the worse case (Q16): by the open-sky guess when it lies within the surface band of `top` and the body is not underground, else as a dark cave."
   [p cell top underground?]
   (let [night (not (look/lit-light? 0 15 (sh-sense/sky-subtract-now p)))
         sky (if night 0 15)
@@ -135,8 +135,7 @@
         feet (sh-sense/feet p)
         goal (update goal :y #(or % (:y feet)))
         top (max (:y feet) (:y goal))
-        underground? (and (sh-sense/buried? p)
-                          (or (sh-sense/buried-at? p goal) (ready/hidden-below? p goal)))
+        underground? (sh-sense/buried? p)
         leaves? (sh-inside/walk-leaves-shelter? p (:data (ctx/latest c :shelter)) goal 1)
         cells (way feet goal plan)
         exit (if leaves? (settings/get settings ::exit-blocks) 0)

@@ -122,11 +122,13 @@
     (is (zero? (dark-s)) "the rest is a seen, torch-lit line at night")
     (is (pos? (with-redefs [sh-sense/seen-cell? (constantly false) look/glimpse? (constantly false)] (dark-s))) "an unseen rest is open ground at night")))
 
-(deftest unseen-ground-below-the-surface-band-is-priced-as-a-dark-cave
+(deftest unseen-ground-below-the-surface-band-or-round-a-body-underground-is-priced-as-a-dark-cave
   (let [c (ready-test/ctx-of day-world)]
     (with-redefs [sh-sense/seen-cell? (constantly false) look/glimpse? (constantly false)]
       (is (zero? (:dark-s (risk/estimate c {:x 95 :y 64 :z 0}))) "unseen open ground by day is lit by the sky")
-      (is (pos? (:dark-s (risk/estimate c {:x 5 :y 20 :z 90}))) "unseen ground far below may be a cave"))))
+      (is (pos? (:dark-s (risk/estimate c {:x 5 :y 20 :z 90}))) "unseen ground far below may be a cave")
+      (is (pos? (with-redefs [sh-sense/buried? (constantly true)] (:dark-s (risk/estimate c {:x 95 :y 64 :z 0}))))
+          "by day too, unseen ground level with a body underground may be a cave"))))
 
 (deftest a-held-plan-is-kept-until-the-body-moves-or-a-block-it-knows-changes
   (let [m (atom {})

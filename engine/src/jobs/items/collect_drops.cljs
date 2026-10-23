@@ -40,7 +40,7 @@
   {:pos :reason :unseen-floor|:unseen-cell|:unsafe-floor|:too-deep}. A drop still falling is judged at rest.
   With :search, when fewer than the call's :least (default 1) items (those named in :least-items, else any; a gain of :least-items in the inventory since the start counts, so a drop that flew to the body ends the search) were collected and no item is in sight (trunks or terrain hide drops), the body walks (a go-to child)
   to standable cells round the anchor, nearest first (a cell whose floor is unseen counts when nothing seen forbids it: walking there is how it gets looked at; not behind a seen solid block on the way from the anchor, which is rock), and looks again at each, until an item is seen or the cells within :search
-  blocks are tried. With :dig a body shut in a room digs out by go-to's priced escalation (:clear-path :stair :dig-out). Underground a walk goes on at night; a search that go-to made wait :search-waits calls in a row ends with :reason :search-waited.
+  blocks are tried. With :dig a body shut in a room digs out by go-to's priced escalation (:clear-path :stair :dig-out). A search that go-to made wait :search-waits calls in a row ends with :reason :search-waited.
   While it runs it holds its work area (jobs.lib.loose :collecting), so the :loose-items reflex leaves those drops to it.
   With :ids, ids not in sight when none is left to try are booked as one :left {:reason :unseen :ids [...] :last {id [x y z]}}, the cell each was last seen in.
   A drop more than a block above the feet that the act cannot reach (a column top) is walked up to with go-to's :pillar and :stair ways, then collected; one go-to cannot stand beside (a wall niche) is pillared to from the feet when it lies 2 to 6 above and within 1 cell sideways (carried blocks).
@@ -125,12 +125,6 @@
 (defn max-moves [] (settings/get settings ::max-moves))
 
 (defn radius-of [c] (or (:radius (:args c)) (settings/get settings ::radius)))
-
-(defn walk-args
-  "go-to args for a walk of this job: underground it ignores the dark (not (threatened) only), like the digs that made the hole."
-  [c args]
-  (let [forms (when (sh-sense/buried? (:primitives c)) (ready/unforced c {:safe? '(not (threatened))}))]
-    (cond-> args (seq forms) (assoc :checks forms))))
 
 (defn gained-count
   "The items an act result says entered the inventory (only those named in names when given)."
@@ -281,7 +275,7 @@
   go-to's pillar or stair): one go-to call (child/run!*, slot :walk). :arrived, :continue (go-to waits on the world) or :unreachable."
   ([c item] (walk-down! c item #{:walk :clear-seal}))
   ([c item ways]
-  (let [r (await (child/run!* c :walk 'jobs.movement.go-to (walk-args c {:pos (item-cell item) :range 1 :ways ways :worth (drops-worth c)})))]
+  (let [r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (item-cell item) :range 1 :ways ways :worth (drops-worth c)}))]
     (cond
       (= :continue r) :continue
       (and (= :done (:kind r)) (:arrived (:data r))) :arrived
@@ -488,7 +482,7 @@
                     (seed! (vec (take 1 (sort-by #(u/dist (u/cell-pos (u/cell-vec anchor)) %) (search-cells c anchor))))))
                 :else (:search-queue m))]
     (when-let [cell (first queue)]
-      (let [r (await (child/run!* c :search 'jobs.movement.go-to (walk-args c {:pos (u/cell-vec cell) :range (if (reach/seen-standable? (:primitives c) cell) 0 1) :ways (search-ways c)})))]
+      (let [r (await (child/run!* c :search 'jobs.movement.go-to {:pos (u/cell-vec cell) :range (if (reach/seen-standable? (:primitives c) cell) 0 1) :ways (search-ways c)}))]
         (if (= :continue r)
           (if (>= (:search-waited (ctx/mem c) 0) (search-waits))
             :waited
@@ -696,7 +690,7 @@
                   (seq (candidates c anchor)))]
       (or (await (look!))
           (when (> (- (second (u/cell-vec near)) (feet-y c)) 1)
-            (let [r (await (child/run!* c :walk 'jobs.movement.go-to (walk-args c {:pos (u/cell-vec near) :range 1 :ways #{:walk :pillar :stair :clear-seal}})))]
+            (let [r (await (child/run!* c :walk 'jobs.movement.go-to {:pos (u/cell-vec near) :range 1 :ways #{:walk :pillar :stair :clear-seal}}))]
               (cond
                 (= :continue r) :continue
                 (and (= :done (:kind r)) (:arrived (:data r))) (await (look!)))))))))

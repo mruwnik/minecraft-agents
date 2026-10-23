@@ -276,11 +276,6 @@
                          (await (tu/child-outcome eng job {:radius 6 :items ["oak_log"] :near {:x 4 :y 64 :z 0} :search 3} 60)))]
             (is (= 1 (:collected result)))))))))
 
-(deftest a-buried-walk-forces-its-dark-form-only-where-the-caller-has-none
-  (with-redefs [sh-sense/buried? (constantly true)]
-    (is (= {:safe? '(not (threatened))} (:checks (job-ns/walk-args {:quote-call {}} {}))))
-    (is (nil? (:checks (job-ns/walk-args {:quote-call {:checks {:safe? '(always)}}} {}))))))
-
 (deftest only-the-least-items-count-towards-least
   (async done
     (tu/run-async done

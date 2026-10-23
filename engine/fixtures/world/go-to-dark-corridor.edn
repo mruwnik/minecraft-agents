@@ -1,0 +1,23 @@
+;; go-to into the dark, no item at the goal (card 35a80b18). Underground cells: the light does not hang on the clock.
+;; Should-succeed: a corridor x 10..29, 1 wide, cut in stone filling x 10..31, out of a room x 0..9 lit by a glowstone ceiling (x 20..29
+;; block light 0): a small dark tunnel holds no spawns (Q345), and go-to walks in to its far end.
+;; Should-fail (waits): a goal worth 1 s across 30 blocks of a dark hall (the plot all dark but a glowstone over the body) is not worth
+;; the spawns it risks: the walk waits :risky and the body stays put.
+{:defaults
+ {:tags [:go-to :movement]
+  :time :any
+  :plot {:height 6 :floor "stone" :light :dark}
+  :body {:at [4.5 0 16.5] :yaw 270 :settle-s 2}
+  :limit-s 90}
+ :cases
+ [{:name "walks-to-the-end-of-a-dark-corridor"
+   :blocks [[:fill [0 5 0] [9 5 31] "glowstone"] [:fill [10 0 0] [31 5 31] "stone"] [:fill [10 0 16] [29 1 16] "air"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [28 0 16] :range 0})]]
+   :expect [{:event {:source :job :kind :completed :data {:arrived true}} :within-s 60 :of-job true}]
+   :after [[:body-near [28.5 0 16.5] 1]]}
+  {:name "a-goal-worth-little-across-a-dark-hall-waits"
+   :plot {:height 6 :floor "stone" :light :dark :length 40}
+   :blocks [[:set [4 4 16] "glowstone"]]
+   :act [[:job (jobs.movement.go-to {:pos #at [35 0 16] :range 0 :worth 1})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :risky}} :within-s 40 :of-job true}]
+   :after [[:body-near [4.5 0 16.5] 2]]}]}
