@@ -24,7 +24,8 @@
   the plan's own cells are not in the way.
   Ends with data {:spot pos :spots [...]}: done with the spots, or nothing-possible with cause and :why :distance (no leg left), :legs
   (the search's max legs walked), :stuck (three walks in a row failed), :time (the call's :job-time spent) or :no-plan (the plan is
-  missing or unreadable), and the search's :text. A leg go-to gives up for the body's own shelter under a dark sky waits :dark (jobs.explore.search).
+  missing or unreadable), the search's :text and :best, the patch fewest cells short of a spot
+  {:pos :w :h :short :unseen :no-floor :dark :foreign :away} (cells with no seen ground, water/lava/ice on top, too dark, another's). A leg go-to gives up for the body's own shelter under a dark sky waits :dark (jobs.explore.search).
   :spots best first up to ::limit, each {:pos :w :h :score :level :work :step :water-share :sky :away :y :farmable :dark?}; :step is
   the largest height difference between two neighbouring cells of the patch. A pos is the north-west (minimum x and z) corner at
   ground level of the :w x :h patch, not its centre; :spot is the first spot's pos. :away is the distance from the patch's centre
@@ -110,7 +111,7 @@
               (do (ctx/update-mem! c assoc :spots spots)
                   (ctx/end c :done nil {:spot (:pos (first spots)) :spots spots}))
               (let [why (or (:why res) :time)]
-                (ctx/end c :nothing-possible why (cond-> {:spot nil :why why} (:text res) (assoc :text (:text res)))))))))
+                (ctx/end c :nothing-possible why (cond-> {:spot nil :why why} (:text res) (assoc :text (:text res)) (:best res) (assoc :best (:best res)))))))))
       (ctx/end c :nothing-possible :no-plan {:spot nil :why :no-plan :text (str "plan " (:plan a) " is missing, unreadable or has no cells")}))))
 
 (defn ^:async round

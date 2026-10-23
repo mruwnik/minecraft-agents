@@ -18,6 +18,15 @@
    :act [[:job (jobs.farm.find-spot {:range 12 :settings {:jobs.farm.find-spot/depth 7 :jobs.farm.find-spot/job-time-s 12}})]]
    :expect [{:event {:source :job :kind :stopped :data {:report {:units :spots :done 0}}} :within-s 60 :of-job true}
             {:no-event {:source :job :kind :completed} :for-s 30 :until {:source :job :kind :stopped}}]}
+  ;; Card 8b461811: a stop with no spot names the patch fewest cells short of one. A 6x6 grass island in a lit water hall; every 5x5 patch
+  ;; on it holds the one water cell at 6 6. Should-fail (no spot): stopped with :best short 1 cell, that cell water.
+  {:name "no-spot-names-the-nearest-patch-and-what-it-lacks"
+   :plot {:light :lit :height 6 :floor "water" :length 16 :width 16}
+   :blocks [[:fill [0 -2 0] [15 -2 15] "stone"] [:fill [5 -1 5] [10 -1 10] "grass_block"] [:fill [6 -1 6] [6 -1 6] "water"]]
+   :body {:at [9.5 0 9.5] :settle-s 2}
+   :act [[:job (jobs.farm.find-spot {:range 6 :settings {:jobs.farm.find-spot/depth 4}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:best {:short 1 :no-floor 1}}} :within-s 60 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 60 :until {:source :job :kind :stopped}}]}
   ;; Card e3e88fbd: the ending lists every spot with its score and level, not only the best.
   {:name "ending-lists-every-spot-with-score-and-level"
    :act [[:job (jobs.farm.find-spot {:range 20 :settings {:jobs.farm.find-spot/depth 7 :jobs.farm.find-spot/limit 3}})]]

@@ -186,6 +186,16 @@
               r (await (child-outcome eng job small 4))]
           (is (= {:spot nil :reason :distance :why :distance} (dissoc r :text))))))))
 
+(deftest no-spot-names-the-patch-fewest-cells-short
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [{:keys [eng]} (setup {:blocks (assoc (patch 2 0 3 3 63 "dirt") "4,63,2" "water")})
+              r (await (child-outcome eng job small 4))]
+          (is (= {:pos {:x 2 :y 63 :z 0} :w 3 :h 3 :short 1 :unseen 0 :no-floor 1 :dark 0 :foreign 0}
+                 (dissoc (:best r) :away)))
+          (is (re-find #"nearest to fit: 3x3 at 2 63 0, 1 of 9 cells short: 1 water/lava/ice$" (:text r))))))))
+
 (deftest no-ground-is-none
   (async done
     (tu/run-async done
@@ -213,7 +223,7 @@
       (fn ^:async t []
         (let [{:keys [eng]} (setup {:blocks bumpy})
               r (await (child-outcome eng job (assoc small :max-step 0) 200))]
-          (is (= {:spot nil :reason :distance :why :distance} (dissoc r :text))))))))
+          (is (= {:spot nil :reason :distance :why :distance} (dissoc r :text :best))))))))
 
 (deftest exploring-stops-at-the-first-patch
   (async done

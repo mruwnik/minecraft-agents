@@ -366,8 +366,12 @@
                                        (= :price why) (str ", the next walk costs " (js/Math.round (:next-price m)) " s, more than the "
                                                            (js/Math.round (- (:worth (:args c)) (:spent m 0))) " s left of what the find is worth")
                                        (and (= :stuck why) (refused-text c m)) (str ", " (refused-text c m))
-                                       (pos? (:skipped m 0)) (str ", " (:skipped m) " legs skipped as already searched"))))}
-                 why (assoc :why why))]
+                                       (pos? (:skipped m 0)) (str ", " (:skipped m) " legs skipped as already searched"))
+                                     (when-let [b (:patch-miss m)]
+                                       (str "; nearest to fit: " (:w b) "x" (:h b) " at " (str/join " " ((juxt :x :y :z) (:pos b))) ", "
+                                            (patch/lacks-text b)))))}
+                 why (assoc :why why)
+                 (and why (:patch-miss m)) (assoc :best (:patch-miss m)))]
     (case why
       nil (ctx/end c :done nil result)
       (ctx/end c :nothing-possible why result))))
