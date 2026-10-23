@@ -364,6 +364,7 @@ test('mineshaft refuses a bad heading, a to-y at or above the top, bad coordinat
     const again = await invoke('plan', fx, SHAFT)
     assert.equal(again.code, 2)
     assert.deepEqual(again.value.reason, keyword('already-exists'))
+    assert.match(again.output, /made by .* on \d{4}-\d\d-\d\d/)
   } finally { fx.close() }
 })
 

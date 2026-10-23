@@ -1,0 +1,13 @@
+;; Card 50baa571: a search job with a :center walks to it even when the way down is a one-way drop (a body relocating needs no way back).
+;; go-to refused it with "the way back is one-way" and the job ended :area-unreachable. Body on a 4-high plateau (x 0..40), centre 105 east on the flat.
+;; Should-succeed: find-spot {:center} completes with a spot near the centre. No should-fail: the refusal of an over-priced drop is go-to's (path_walk_test).
+{:defaults
+ {:tags [:farm :find-spot :jobs] :time :any
+  :plot {:light :lit :height 31 :floor "grass_block" :length 128 :width 64}
+  :body {:at [4.5 4 32.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 120}
+ :cases
+ [{:name "find-spot-walks-down-a-drop-to-its-centre"
+   :blocks [[:fill [0 0 0] [40 3 63] "grass_block"]]
+   :act [[:job (jobs.farm.find-spot {:w 5 :h 5 :center #xyz [110 -1 32] :range 6 :settings {:jobs.farm.find-spot/depth 12}})]]
+   :expect [{:event {:source :job :kind :completed :data {:spot [:near #at [110 -1 32] 8]}} :within-s 100 :of-job true}]}]}

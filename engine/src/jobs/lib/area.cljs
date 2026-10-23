@@ -6,6 +6,7 @@
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [jobs.lib.job-common :as jc]
+            [jobs.lib.toll-cells :as tc]
             [jobs.lib.util :as u]))
 
 (defn center
@@ -26,11 +27,12 @@
 
 (defn ^:async walk-within!
   "While the call's body stands outside its area (outside), one walk round toward the centre: :continue while go-to goes on or
-  waits, :there once inside, or the :nothing-possible ending {:reason :area-unreachable} when go-to gave up. nil when already inside.
+  waits, :there once inside (a one-way drop is taken when its price is within the walk's worth: the body relocates, it needs no way back), or the :nothing-possible ending {:reason :area-unreachable} when go-to gave up. nil when already inside.
   limit replaces the call's :radius."
   [c limit]
   (when-let [out (outside c limit)]
-    (let [w (await (jc/walk-to! c (:center out) (max 1 (min 3 (:radius out)))))]
+    (let [w (await (jc/walk! c (:center out) (max 1 (min 3 (:radius out)))
+                                      {:tolls (tc/walk-tolls c (:center out)) :one-way :open}))]
       (if (#{:there :continue} w)
         w
         (ctx/end c :nothing-possible :area-unreachable

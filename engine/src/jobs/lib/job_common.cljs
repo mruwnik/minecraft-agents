@@ -37,9 +37,9 @@
     {:reason :no-zones}))
 
 (defn ^:async walk!
-  "jobs.lib.near/go-near! to within range of pos (opts: :tolls): :there, :continue (go-to waits on the world) or :blocked."
-  [c pos range {:keys [tolls]}]
-  (let [w (await (near/go-near! c pos range {:tolls tolls}))]
+  "jobs.lib.near/go-near! to within range of pos (opts: :tolls, :one-way): :there, :continue (go-to waits on the world) or :blocked."
+  [c pos range {:keys [tolls one-way]}]
+  (let [w (await (near/go-near! c pos range (cond-> {:tolls tolls} one-way (assoc :one-way one-way))))]
     (if (= :partial w) :continue w)))
 
 (defn ^:async walk-to!

@@ -328,10 +328,16 @@
                (when (string? dim) dim)))
            (catch :default _ nil)))))
 
+(defn mtime
+  "The date a file was last written, nil when it cannot be read."
+  [file]
+  (try (.toISOString (.-mtime (.statSync fs file)))
+       (catch :default _ nil)))
+
 (defn mutate-plan [req ctx write]
   (let [old (data/read-document ctx :plan (:id req))
         command (:command req)]
-    (when (and (= command "add") old) (fail! :already-exists (str "plan " (:id req) " already exists; use edit")))
+    (when (and (= command "add") old) (fail! :already-exists (str "plan " (:id req) " already exists, made by " (or (shape/author (:value old)) "an unknown body") (some->> (:path old) mtime (str " on ")) "; use edit")))
     (when (and (#{"edit" "remove"} command) (nil? old)) (fail! :not-found (str "no plan " (:id req) " in " (:world ctx))))
     (validate-revision! (:revision req))
     (let [value (when-not (= command "remove") (some-> (edn-value (:edn req) "edn") (as-> v (if (map? v) (cond-> (shape/with-author v (or (shape/author (:value old)) (:by req)))
