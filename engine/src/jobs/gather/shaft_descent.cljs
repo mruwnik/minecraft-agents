@@ -35,7 +35,7 @@
 
 (def target [])
 
-(def safe? ready/safe-if-lit)
+(def safe? ready/safe-roaming)
 
 (def fit? ready/fit?)
 

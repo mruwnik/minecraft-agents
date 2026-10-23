@@ -1,0 +1,17 @@
+;; Card 3cd41687: get-seeds roams, so it is safe-roaming: shut in a closed hut under a dark sky it waits (:dark) instead of walking out.
+;; Needs night: run with --allow-time (night run owed while the time freeze holds). Should-fail: no walk out, nothing is cut, :dark waiting.
+{:defaults
+ {:tags [:gather :get-seeds :night]
+  :time :night :time-why :dawn-decision
+  :plot {:length 48 :width 32 :height 10 :floor "dirt"}
+  :blocks [[:fill [2 0 14] [8 4 20] "stone" :hollow] [:fill [3 1 15] [7 3 19] "air"] [:set [5 3 17] "torch"]
+           [:set [8 1 17] "oak_door[facing=east,half=lower,hinge=left,open=false]"] [:set [8 2 17] "oak_door[facing=east,half=upper,hinge=left,open=false]"]
+           [:set [30 -1 14] "sand"] [:set [31 -2 14] "stone"] [:set [31 -1 14] "water"] [:fill [30 0 14] [30 2 14] "sugar_cane"]]
+  :body {:at [5.5 1 17.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 60}
+ :cases
+ [{:name "cane-outside-a-closed-hut-waits-for-light"
+   :act [[:job (jobs.gather.get-seeds {:item "sugar_cane" :count 1 :radius 32})]]
+   :expect [{:event {:source :job :kind :waiting :data {:reason :dark}} :within-s 30 :of-job true}
+            {:no-event {:source :job :kind :completed} :for-s 20 :of-job true}]
+   :after [[:block [30 0 14] "sugar_cane"] [:item "sugar_cane" 0]]}]}
