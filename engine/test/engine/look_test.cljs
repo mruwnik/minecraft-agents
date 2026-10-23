@@ -215,10 +215,20 @@
 
 (deftest an-unseen-cell-the-walk-reads-as-water-is-water-a-drowned-may-spawn-in
   (let [p (seeing {:blocks (merge wall (tu/box 6 63 -1 8 63 1 "water"))})
-        class (fn [wet?] ((look/water-fn p wet?) 7 63 0))]
+        class (fn [wet?] ((look/water-fn p {:wet? wet?}) 7 63 0))]
     (is (= 2 (class (constantly true))) "behind the wall, never seen: the worse case")
     (is (= 0 (class (constantly false))) "read as dry by the walk: no water")
     (is (= 0 (class nil)))))
+
+(deftest a-phantom-floor-is-classed-by-the-nearest-seen-water-along-an-axis
+  (let [class (fn [floor phantom?]
+                (let [p (seeing {:blocks (merge wall (tu/box 1 63 -1 8 63 1 floor))})]
+                  (swap! (fake/state p) assoc :yaw 270 :pitch 30)
+                  (perception/pass! (aget p "perception"))
+                  ((look/water-fn p {:phantom? phantom? :lags 8}) 5 64 0)))]
+    (is (<= look/lag-class (class "water" (constantly true)) (+ look/lag-class 3)) "seen water 2 or 3 off, before the wall")
+    (is (= 0 (class "water" nil)) "unmasked: the walk reads the floor as it is")
+    (is (= 0 (class "stone" (constantly true))) "a seen dry floor ends each axis")))
 
 (deftest dark-fn-says-whether-the-sky-is-dark
   (is (true? (:night? (look/dark-fn (seeing {:time midnight})))))
@@ -243,3 +253,5 @@
                      {:id 4 :name "Bob" :kind "player" :pos [0 64 6] :visible false}] [])]
     (is (= [1 3 4] (map #(.-id %) (look/seen-objs p {:radius 10}))))
     (is (= [1] (map #(.-id %) (look/seen-objs p {:radius 10 :max 1}))) "max counts after the hiding")))
+
+

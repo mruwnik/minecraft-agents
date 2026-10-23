@@ -41,7 +41,11 @@
    ::drowned-meet-per-s {:default 0.0021 :spec (a/num-in 0 nil)
                          :doc "Chance a second a drowned meets a body in water a drowned can spawn in (its column holds water over water at block light 0, look/water-fn), by day or night: (k+1)/n over the trial bodies' logs on 2026-10-23, k=11 meets in n=5767 s, each meet once (a respond run soon after another is the same meet) and classed by the body's cell (tools/event-counts.mjs drowned-meets :prior :deep; river or ocean and other biomes, sky light high or low, met it alike)."}
    ::drowned-meet-other-per-s {:default 0.00043 :spec (a/num-in 0 nil)
-                               :doc "As ::drowned-meet-per-s in any other water (one deep, or block-lit to its floor): k=1 in n=4602 s (:prior :other)."}})
+                               :doc "As ::drowned-meet-per-s in any other water (one deep, or block-lit to its floor): k=1 in n=4602 s (:prior :other)."}
+   ::unseen-water-lags {:default [{:k 1072482 :n 1095455} {:k 1054916 :n 1093513} {:k 1038865 :n 1091547} {:k 1024204 :n 1089545}
+                                  {:k 1010196 :n 1087526} {:k 996729 :n 1085500} {:k 983992 :n 1083481} {:k 971757 :n 1081465}]
+                        :spec (a/coll-of (a/map-with {:k (a/int-in 0 nil) :n (a/int-in 0 nil)}))
+                        :doc "For lag d (the d-th entry), of n cells d blocks along an axis from a surface water cell at its level, k water too: the prior that an unseen cell is water when the nearest seen cell along an axis at its level, d off, is water (unseen-water-factors). Oceans dominate it. Recount: node tools/event-counts.mjs water-lags --stride 20 (4017 recorded chunk columns, 2026-10-23)."}})
 
 (def blast-power "A creeper's explosion power (vanilla)." 3)
 (def swell-start "Blocks within which a creeper starts to swell (vanilla)." 3)
@@ -333,6 +337,16 @@
   (let [price #(apply min (vals (:prices (decide body (threat-answers % "drowned" nil) nil))))]
     [(* (settings/get settings ::drowned-meet-per-s) (price (assoc body :swim ##Inf)))
      (* (settings/get settings ::drowned-meet-other-per-s) (price body))]))
+
+(defn unseen-water-factors
+  "The planner's extra share of a second walked over a phantom floor (an unseen floor read as ground) whose nearest seen
+  cell along an axis at its level, d blocks off, is water (the d-th entry): the chance it is water too, Beta(1,1) over
+  ::unseen-water-lags, times the swim it is then over the walk: planner/swim-s a block (the body's Depth Strider), paying
+  the share of water a drowned can spawn in (water-factors' first: its depths are unseen), less the walk's planner/walk-floor."
+  [body]
+  (let [[wet] (water-factors body)
+        swim (/ (* (planner/swim-s (planner/depth-strider (:equipment body))) (inc wet)) planner/walk-floor)]
+    (mapv (fn [{:keys [k n]}] (* (/ (inc k) (+ n 2)) (dec swim))) (settings/get settings ::unseen-water-lags))))
 
 (defn life [{:keys [health absorption]}] (+ (or health 20) (or absorption 0)))
 

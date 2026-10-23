@@ -216,7 +216,8 @@
   "pw whose plans cost dark cells more (the planner's options.dark): dark is look/dark-fn's {:at ..} (nil: pw). A dark
   cell costs cost/dark-factor of kit (kit-of; nil: the floor) times its own seconds more. With a kit, a cell water
   (look/water-fn's class, nil: none) gives costs its class's cost/water-factors too, by day as well: a drowned keeps to the
-  water, and a dark one pays the land mobs' dark-factor on top (classes 4 and 5: dark 2 and 3)."
+  water, and a dark one pays the land mobs' dark-factor on top (classes 4 and 5: dark 2 and 3); a phantom floor beside
+  seen water its cost/unseen-water-factors (classes from look/lag-class)."
   [pw dark water kit]
   (if (nil? dark)
     pw
@@ -225,8 +226,11 @@
            :dark (if (and kit water)
                    (let [factor (cost/dark-factor kit)
                          wet (cost/water-factors kit)]
-                     #js {:at (fn [x y z] (let [w (water x y z)] (if (pos? w) (if (== 1 (at x y z)) (+ w 2) w) (at x y z))))
-                          :factor factor :water (clj->js (into wet (map #(+ factor %)) wet))})
+                     #js {:at (fn [x y z] (let [w (water x y z)]
+                                            (cond (>= w look/lag-class) w
+                                                  (pos? w) (if (== 1 (at x y z)) (+ w 2) w)
+                                                  :else (at x y z))))
+                          :factor factor :water (clj->js (concat wet (map #(+ factor %) wet) (cost/unseen-water-factors kit)))})
                    #js {:at at :factor (if kit (cost/dark-factor kit) (cost/dark-factor))})})))
 
 (defn kit-of
@@ -239,7 +243,7 @@
      :equipment (cost/equipment-of (.-equipment self))
      :health (.-health self) :absorption (.-absorption self) :food (.-food self)}))
 
-(declare with-tolls with-edges water-read-fn)
+(declare with-tolls with-edges water-read-fn phantom-read-fn)
 
 (defn costed-world
   "pw (the primitives' pathWorld) costed the way go-to plans: with the mobs the body knows may hurt it, each over its
@@ -251,7 +255,7 @@
   (cond-> pw
     dangers? (-> (with-dangers (threats/planner-dangers c))
                  (with-tolls (if keep? (threats/tolls-of c (filter keep? (threats/known-threats c))) (threats/threat-tolls c))))
-    dark? (with-dark (look/dark-fn (:primitives c) {:unseen-dark? (nil? (unknown-of pw))}) (look/water-fn (:primitives c) (water-read-fn pw)) (kit-of c))
+    dark? (with-dark (look/dark-fn (:primitives c) {:unseen-dark? (nil? (unknown-of pw))}) (look/water-fn (:primitives c) {:wet? (water-read-fn pw) :phantom? (phantom-read-fn pw) :lags (count (cost/unseen-water-factors (kit-of c)))}) (kit-of c))
     true (with-edges (edges/tolls (:primitives c)))))
 
 (def avoid-factor
@@ -375,6 +379,13 @@
   (let [snapshot (.-snapshot pw)
         ids (set (mapcat #(blocks/state-ids (.-table pw) %) breath/swimmable))]
     (fn [x y z] (contains? ids (.stateAt snapshot x y z)))))
+
+(defn phantom-read-fn
+  "Whether the planner reads x y z of a pathWorld as a cell the body has not seen (the mask's id; nil unmasked)."
+  [pw]
+  (when-let [^js u (unknown-of pw)]
+    (let [snapshot (.-snapshot pw) id (.-id u)]
+      (fn [x y z] (== id (.stateAt snapshot x y z))))))
 
 (defn default-food [] (settings/get settings ::default-food))
 

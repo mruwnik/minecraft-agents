@@ -1,7 +1,8 @@
 (ns world-test.event-counts
   "tools/event-counts.mjs: recounts the measured combat priors from the trial bodies' event logs, so a setting can cite its k and n.
   Commands: fold | creeper-exchange | flight-starts | notice-rate | drowned-meets (world-test.drowned-meets; trial bodies only) | flee-pace (trial bodies only), each [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]; each folds the logs into the durable counts file first (rows by run id, so counts only grow as logs rotate).
-  spot-returns [--agents DIR] (world-test.spot-returns) and vein-seen [--agents DIR] count from the logs alone, no fold.
+  spot-returns [--agents DIR] (world-test.spot-returns) and vein-seen [--agents DIR] count from the logs alone, no fold;
+  water-lags [--agents DIR] [--stride N] (world-test.water-lags) from the recorded chunks beside DIR.
   vein-seen: the ore blocks one look saw together (26-connected, a vein's plain and deepslate blocks as one ore) per group, from the
   look tool's :look.observed lists; :capped counts the lists the tool cut short (nearest first, so a far group may be cut).
   creeper-exchange: respond runs that only decided about creepers and fought (a :fight decision) with at least one swing: hp the creepers
@@ -29,7 +30,8 @@
             [jobs.lib.cost.threat :as threat]
             [world-test.drowned-meets :as drowned]
             [world-test.fresh-drop :as fresh-drop]
-            [world-test.spot-returns :as spot-returns]))
+            [world-test.spot-returns :as spot-returns]
+            [world-test.water-lags :as water-lags]))
 
 (def blast-hp "hp over which one hurt event from a creeper is its blast." 2)
 (def tail-ms "Time after a run ends within which a hurt still counts as its own." 1500)
@@ -369,7 +371,7 @@
        (sort-by :t)
        vec))
 
-(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | spot-returns | vein-seen [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S]
+(def usage "usage: node tools/event-counts.mjs fold | creeper-exchange | flight-starts | notice-rate | drowned-meets | flee-pace | spot-returns | vein-seen | water-lags [--agents DIR] [--counts FILE] [--since-ms MS] [--sprint BLOCKS-PER-S] [--stride N]
   every command first folds the logs into the counts file (default worlds/test/priors-counts.edn), then reports from the file; --since-ms keeps the rows of fights started after it.")
 
 (defn- parse-args [argv]
@@ -380,6 +382,7 @@
       "--counts" (recur (rest more) (assoc o :counts (first more)))
       "--since-ms" (recur (rest more) (assoc o :since-ms (js/parseFloat (first more))))
       "--sprint" (recur (rest more) (assoc o :sprint (js/parseFloat (first more))))
+      "--stride" (recur (rest more) (assoc o :stride (js/parseInt (first more))))
       (recur more (update o :pos (fnil conj []) a)))))
 
 (def probe? "Bodies whose logs the drowned counts leave out: world-test probes, not trial play." #(re-find #"^(Claude)?Probe" %))
@@ -410,7 +413,7 @@
 (defn main
   "argv (array) -> promise of the exit code. open-chunks: tools/event-counts.mjs's reader of the recorded chunks."
   [argv open-chunks]
-  (let [{[cmd] :pos :keys [agents counts since-ms sprint] :or {since-ms 0 sprint 5.6}} (parse-args (vec (array-seq argv)))
+  (let [{[cmd] :pos :keys [agents counts since-ms sprint stride] :or {since-ms 0 sprint 5.6 stride 1}} (parse-args (vec (array-seq argv)))
         repo (or js/process.env.WORLD_TEST_REPO ".")
         agents (or agents (path/join repo "worlds" "test" "agents"))
         folded (when (#{"fold" "creeper-exchange" "flight-starts" "notice-rate" "drowned-meets" "flee-pace"} cmd)
@@ -422,6 +425,9 @@
        "fold" (do (println (pr-str (update-vals folded count))) 0)
        "creeper-exchange" (do (println (pr-str (assoc (exchange-report (since (:exchange folded))) :since-ms since-ms))) 0)
        "flight-starts" (do (println (pr-str (assoc (starts-report (since (:starts folded))) :since-ms since-ms :sprint sprint))) 0)
+       "water-lags" (let [dir (path/join agents ".." "chunks")]
+                      (println (pr-str (water-lags/count-in dir (cell-reader open-chunks dir) stride)))
+                      0)
        "spot-returns" (do (println (pr-str (spot-returns/count-in agents))) 0)
        "drowned-meets" (do (println (pr-str (assoc (drowned/report (since (:drowned-exposure folded)) (since (:drowned-meets folded))) :since-ms since-ms))) 0)
        "vein-seen" (do (println (pr-str (vein-seen (mapcat #(read-agent (path/join agents % "engine") since-ms)

@@ -406,12 +406,19 @@
                     (let [packed (.lightAt ^js raw x y z)]
                       (if (lit-light? (bit-and packed 15) (bit-shift-right packed 4) subtract) 0 1)))))})))))
 
+(def lag-class
+  "water-fn's class of a phantom floor whose nearest seen cell along an axis at its level is water 1 block off; d blocks
+  off is lag-class + d - 1."
+  6)
+
 (defn water-fn
   "The planner's water class of a feet cell (options.dark.at past dark) for the body of primitives p: 2 for a cell seen
   as water whose column holds, down from it, a water cell at block light 0 over water, or reaches a cell not seen (dark
   depths do not show), where a drowned can spawn; 3 for other seen water; a cell never seen 2 when wet? (fn [x y z]: the
-  walk reads it as water) says so, the worse case; 0 for any other cell. nil without a perception."
-  [p wet?]
+  walk reads it as water) says so, the worse case; a cell on a floor phantom? (fn [x y z]: the walk reads it as an
+  unseen floor) says is one, whose nearest seen cell along an axis at the floor's level within lags blocks is water d off,
+  lag-class + d - 1; 0 for any other cell. nil without a perception."
+  [p {:keys [wet? phantom? lags]}]
   (when-let [per (aget p "perception")]
     (when-let [^js raw (:raw per)]
       (let [^js st (:st per)
@@ -425,12 +432,27 @@
                        (let [k (.get kinds v)]
                          (if (some? k)
                            k
-                           (let [w (= "water" (.-name ^js (.stateInfo raw (dec v))))] (.set kinds v w) w)))))]
+                           (let [w (= "water" (.-name ^js (.stateInfo raw (dec v))))] (.set kinds v w) w)))))
+            ;; lag of the nearest seen water along an axis at level y, a seen dry cell ending its axis, or nil
+            lag (fn [x y z]
+                  (reduce (fn [best [dx dz]]
+                            (loop [d 1]
+                              (if (or (> d lags) (and best (>= d best)))
+                                best
+                                (let [v (id-at (+ x (* dx d)) y (+ z (* dz d)))]
+                                  (cond (zero? v) (recur (inc d))
+                                        (water? v) d
+                                        :else best)))))
+                          nil [[1 0] [-1 0] [0 1] [0 -1]]))
+            phantom (fn [x y z]
+                      (or (when (and phantom? (phantom? x (dec y) z))
+                            (some->> (lag x (dec y) z) (+ lag-class -1)))
+                          0))]
         (fn [x y z]
           (let [v (id-at x y z)]
             (cond
-              (zero? v) (if (and wet? (wet? x y z)) 2 0)
-              (not (water? v)) 0
+              (zero? v) (if (and wet? (wet? x y z)) 2 (phantom x y z))
+              (not (water? v)) (phantom x y z)
               :else
               (loop [y y]
                 (let [below (id-at x (dec y) z)

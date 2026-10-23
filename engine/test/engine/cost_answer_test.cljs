@@ -4,7 +4,8 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.death :as death]
-            [jobs.lib.cost.threat :as threat]))
+            [jobs.lib.cost.threat :as threat]
+            [engine.settings :as settings]))
 
 (def here {:x 0 :y 64 :z 0})
 
@@ -196,6 +197,14 @@
     (is (< (js/Math.abs (- other (* 0.00043 standing))) 1e-9) "other water, mostly a wade: the meet answered standing")
     (is (< deep (first (cost/water-factors (body 20)))) "a bare body pays more than one with a sword")
     (is (< deep (first (cost/water-factors (assoc kit :health 8)))) "and a hurt one more than a whole one")))
+
+(deftest a-phantom-floor-beside-seen-water-pays-its-chance-of-the-swim-there
+  (settings/with-settings {:jobs.lib.cost.answer/unseen-water-lags [{:k 8 :n 8} {:k 2 :n 8}]}
+    (fn []
+      (let [kit (assoc (body 20) :weapon "stone_sword")
+            [deep] (cost/water-factors kit)
+            swim (dec (/ (* (/ 0.2 0.392) (inc deep)) 0.23164234422052352))]
+        (is (every? #(< (js/Math.abs %) 1e-9) (map - [(* 0.9 swim) (* 0.3 swim)] (cost/unseen-water-factors kit))) "Beta(1,1) of each lag's count times the swim over the walk")))))
 
 (deftest a-look-is-worth-what-it-may-change-less-what-it-costs
   (let [walls (cost/cover-answer {:mobs [(mob "skeleton" 8)]} {:open-s 9 :seconds 39})

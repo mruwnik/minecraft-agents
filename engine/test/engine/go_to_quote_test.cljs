@@ -293,8 +293,9 @@
 
 (defn ^:async water-route
   "The quote's :route for a walk from 0 64 1 to goal over blocks at time (default 1000, day), seen through the body's
-  perception (every cell's light [15 0], `lit` {[x y z] [sky block]} over some), for a body holding held."
-  [blocks goal {:keys [lit held time]}]
+  perception (every cell's light [15 0], `lit` {[x y z] [sky block]} over some), for a body holding held that looked
+  round (looks, [yaw pitch] each; default every way) and quoted with :unknown false (unknown? true: over what it saw)."
+  [blocks goal {:keys [lit held time looks unknown?]}]
   (let [raw-p (tu/fake {:blocks blocks :time (or time 1000) :offlineScale 0.0001 :self {:pos {:x 0.5 :y 64 :z 1.5} :held held}
                         :inventory (if held [{:name held :count 1}] [])})
         _ (swap! (fake/state raw-p) merge {:light-default [15 0] :light lit})
@@ -303,10 +304,12 @@
         eng (core/create {:primitives p :jobs registry/jobs :triggers triggers/all :dir (tu/tmp-dir) :now (constantly 1000000)
                           :events (events/make {:body "Fake" :sinks [(second (tu/legacy-capture-sink))] :now (constantly 1000000)})})]
     (aset p "seenBlockAt" (fn [pos] #js {:name (.-name (.blockAt raw-p pos)) :pos pos :age-ms 0}))
-    (doseq [yaw [0 90 180 270] pitch [0 30 60]]
+    (doseq [[yaw pitch] (or looks (for [yaw [0 90 180 270] pitch [0 30 60]] [yaw pitch]))]
       (swap! (fake/state raw-p) assoc :yaw yaw :pitch pitch)
       (perception/pass! per))
-    (get-in (await (quote-reply eng {:pos goal :range 0 :unknown false})) [:quote :route])))
+    (loop [n 0]
+      (let [route (get-in (await (quote-reply eng (cond-> {:pos goal :range 0} (not unknown?) (assoc :unknown false)))) [:quote :route])]
+        (if (and (= :searching (:reason route)) (< n 20)) (recur (inc n)) route)))))
 
 ;; stone ground (top y 63) x -1..13, z -32..32, across the straight way to 12 64 1 a pond (x 3..9, z 1 +- half): 4 deep
 ;; (water y 60..63, a drowned may spawn in it), or 1 deep (y 63 over stone) and lit by a torch
@@ -328,6 +331,14 @@
           (is (swims? across) "no ban: with no way round the pond is swum")
           (is (< (:seconds round) (:priced across)) "the swim is dearer than its seconds"))))))
 
+(deftest a-pond-seen-in-part-is-swum-not-walked-on-where-unseen
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [route (await (water-route (deep-pond 30) [12 64 1] {:held "stone_sword" :looks [[270 0] [270 30]] :unknown? true}))]
+          (is (true? (:found route)))
+          (is (swims? route) (str "the unseen pond beside the seen water is priced as likely water: " (pr-str route))))))))
+
 (deftest a-lit-shallow-wade-stays-cheap
   (async done
     (tu/run-async done
@@ -347,3 +358,4 @@
               dry (await (water-route (box -1 59 -32 13 63 32 "stone") [12 64 1] {:held "stone_sword" :time 18000}))]
           (is (swims? wade))
           (is (> (:dark-seconds wade) (:dark-seconds dry)) (str "the dark wade costs more than the dark walk: " (pr-str wade dry))))))))
+
