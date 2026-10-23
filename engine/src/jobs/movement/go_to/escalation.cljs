@@ -148,10 +148,14 @@
              (or (nil? h) (= h home)))))))
 
 (defn dig-progress?
-  "Whether dig-route escalation e ends more than a block nearer goal than best, the least distance any way before it started from."
-  [e goal best]
+  "Whether dig-route escalation e ends more than a block nearer goal than best, the least any way before it started
+  from: a distance, or with dive? (a climb away from a dive, whose best is a height to gain) the height still to gain."
+  [e goal best dive?]
   (let [[x y z] (:cell (last (:cells e)))]
-    (boolean (and x (< (u/dist {:x x :y y :z z} (zipmap [:x :y :z] goal)) (dec best))))))
+    (boolean (and x (< (if dive?
+                         (- (goal 1) y)
+                         (u/dist {:x x :y y :z z} (zipmap [:x :y :z] goal)))
+                       (dec best))))))
 
 (defn ^:async choose-escalation!
   "escalate!'s choice and start of the next way, or its give-up."
@@ -225,7 +229,7 @@
           :again)
       (and failed (= :detour status)) (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation failed}))
       ;; past the count a dig route is still taken while it ends more than a block nearer the goal than any way before
-      (and (> n (tuning/max-escalations)) (not (and (= :dig-route (:step e)) (dig-progress? e goal (:escalation-best counted)))))
+      (and (> n (tuning/max-escalations)) (not (and (= :dig-route (:step e)) (dig-progress? e goal (:escalation-best counted) (:dive-climb (ctx/mem c))))))
       (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation (cond-> (or failed (:last-failed (ctx/mem c)) (when (= :none (:step chosen)) chosen) {:step :spent :n (tuning/max-escalations)}) into? (assoc :into true))}))
       (= :searching (:step e)) (do (ctx/update-mem! c assoc :escalate-now true :escalate-failed failed) :again)
       (= :none (:step e)) (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation (cond-> (or failed e) into? (assoc :into true))}))
