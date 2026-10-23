@@ -187,7 +187,52 @@
    ::lethal-air {:default false :doc "true lets a plan drown the body when no other way to air exists (breathe's); false: such a plan is refused (:why :air-lethal)." :spec boolean?}
    ::landing {:default false :doc "Map of block name to the share of a fall's damage a landing on it takes (0.2: 80% off), negative: a bounce, no damage but settle time (only onto a pad in view, bouncing blocks or a wall all round, not under :gait :sneak); entries override the defaults hay_block 0.2, honey_block 0.2, every bed 0.5 and slime_block -1."
               :spec (a/or-of false? (a/valid-by "a map of block name to a number" #(landing-problem %)))}
+   ::wet-pace {:default {:swim 2.5 :swim-up 2.5 :swim-down 2.5 :climb-up 2.5 :climb-down 2.5}
+               :doc "Map of move kind (:swim :swim-up :swim-down :climb-up :climb-down) to how many times its planner price a step of it really takes under water in a walk over unseen cells, which stops to look and replan (wet-move-s); measured live."
+               :spec (a/pred "a map of :swim :swim-up :swim-down :climb-up :climb-down to numbers > 0" #(and (map? %) (= #{:swim :swim-up :swim-down :climb-up :climb-down} (set (keys %))) (every? (fn [v] (and (number? v) (pos? v))) (vals %))))}
+   ::wet-margin-s {:default 2 :doc "Seconds of air a walk over unseen water keeps for when it is back at its last breath (wet-ok?)." :spec (a/num-in 0 nil)}
    ::unknown-prices {:default false :doc "Map of :cell :floor :peek-s :aim-s :see-lit-depth :light-depth to numbers overriding the prices of cells a walk over :unknown has not seen (unknown-prices); a go-to :unknown map wins over it." :spec (a/or-of false? (a/valid-by "a map of unknown-price name to a number >= 0" (fn [m] (when-not (or (nil? m) (and (map? m) (every? #(and (contains? unknown-prices (key %)) (number? (val %)) (>= (val %) 0)) m))) "not a map of unknown-price names to numbers >= 0"))))}})
+
+(def wet-prices
+  "Per move under water: the planner price of one step (a level step swims with the head under, swimSubH), the kind of
+  slowdown (wet-pace) it runs at, and the move that undoes it on the way back."
+  {:swim ["swimSubH" :swim :swim] :walk ["swimSubH" :swim :walk] :diagonal ["swimSubH" :swim :diagonal] :corner ["swimSubH" :swim :corner]
+   :swim-up ["swimUp" :swim-up :swim-down] :swim-down ["swimDown" :swim-down :swim-up] :drop ["swimDown" :swim-down :swim-up]
+   :exit ["exit" :swim :swim] :climb-up ["climbUp" :climb-up :climb-down] :climb-down ["climbDown" :climb-down :climb-up]
+   :jump-climb ["jumpClimb" :climb-up :climb-down]})
+
+(defn wet-move-s
+  "Real seconds a body takes for one step of move under water: its planner price (the policy's :swim-sub-h for a level
+  swim) times the setting ::wet-pace of its kind; a move without a price (the start) takes none."
+  [policy move]
+  (if-let [[price kind] (get wet-prices move)]
+    (* (or (when (= "swimSubH" price) (:swim-sub-h policy)) (unchecked-get base/DEFAULT-COSTS price))
+       (get (settings/get settings ::wet-pace) kind))
+    0))
+
+(defn air-left-s
+  "Seconds a body under policy (:air-used, :air-drain, :air-grace: the body's) may still stay under water."
+  [policy]
+  (+ (or (:air-grace policy) 0)
+     (/ (- (unchecked-get base/DEFAULT-COSTS "airSupply") (or (:air-used policy) 0)) (or (:air-drain policy) 1))))
+
+(defn wet-way-s "Real seconds of the wet moves one way (wet-move-s)." [policy moves] (reduce + 0 (map #(wet-move-s policy %) moves)))
+
+(defn wet-spare-s
+  "Seconds of air a body under policy keeps when it goes on through the wet moves and back the same way to its last
+  breath: air-left-s less the moves out and undone (wet-prices), less the way it has come under water already (its air
+  used, at the drain)."
+  [policy moves]
+  (- (air-left-s policy)
+     (/ (or (:air-used policy) 0) (or (:air-drain policy) 1))
+     (wet-way-s policy moves)
+     (wet-way-s policy (map #(get-in wet-prices [% 2] %) moves))))
+
+(defn wet-ok?
+  "Whether a body may go on through the wet moves (from where it is): back at its last breath it keeps the setting
+  ::wet-margin-s of air (wet-spare-s)."
+  [policy moves]
+  (>= (wet-spare-s policy moves) (settings/get settings ::wet-margin-s)))
 
 (defn walk-costs
   "The planner price overrides every walk keeps: the setting ::costs, with :lethal-air 1 when ::lethal-air."

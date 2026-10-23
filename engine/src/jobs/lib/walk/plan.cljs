@@ -2,7 +2,6 @@
   "The walk driver's planning: plan the walk from the body's cell to a goal within the executor's abilities (walk/plan-walk!, plan-within!),
   in slices that yield to the event loop, and say when a plan is not walked (no-walk)."
   (:require [engine.ctx :as ctx]
-            [engine.path.planner.base :as base]
             [engine.path.executor :as executor]
             [engine.path.planner-tuned :as planner]
             [jobs.lib.breath :as breath]
@@ -210,51 +209,36 @@
       (let [id (.stateAt snapshot x (inc y) z)]
         (and (not (== id planner/UNLOADED)) (pos? (aget (.-wet table) id)) (zero? (aget (.-bubble table) id)))))))
 
-(def masked-wet-limit-s
-  "Seconds of air a masked walk's partial plan may have used (counted from the last breath) at its wet end, and the least it
-  may add: a body swims on into water it cannot see all of, looking as it goes, while the air left still brings it back: the swim back takes as long as the way out,
-  and a climb or a dive runs slower than the plan prices it, so this is well under half of the supply."
-  6)
-(def masked-wet-min-s 2)
-
-(def masked-swim-pace-s
-  "Seconds a masked walk really takes per swimming cell: it stops to look and replan every few cells, so the planner's price
-  (0.26) is about 2.5 times too cheap and its unseen head cells read as air to breathe."
-  0.65)
-
 (defn masked-wet-ok
-  "(fn [step]) for dry-end of a masked walk, called on the swimming steps in order: one is kept while the air used at it stays
-  within masked-wet-limit-s and the swim so far, at masked-swim-pace-s a cell, stays within the air left of that limit; none is
-  when the body has less than masked-wet-min-s of it left."
+  "(fn [before step]) for dry-end of a masked walk, called on its swimming steps in order with the plan's steps before each:
+  one is kept while the body, going on through the swim it ends (the swimming steps right before it, and it) and back, keeps
+  the air margin at its last breath (jobs.lib.cost/wet-ok?): a long climb back turns it earlier than a flat swim."
   [c]
-  (let [left (- masked-wet-limit-s (or (:air-used (wworld/body-policy c)) 0))
-        cells (volatile! 0)]
-    (if (< left masked-wet-min-s)
-      (constantly false)
-      #(and (<= (or (:air %) 0) masked-wet-limit-s)
-            (<= (* masked-swim-pace-s (vswap! cells inc)) left)))))
+  (let [policy (wworld/body-policy c)]
+    (fn [before step]
+      (cost/wet-ok? policy (conj (mapv :move (reverse (take-while :swim (rseq before)))) (:move step))))))
 
 (def max-surfacings "Walks to air one go-to call makes at most." 3)
 
 (defn swim-outlasts-air?
   "Whether a body under water (not on a walk to air: c :to-air) that has been in air since this go-to call began (mem :last-air) and has surfaced less than
-  max-surfacings times should turn back: it is past the half of its air masked-wet-limit-s allows, and either the steps'
-  swim, at masked-swim-pace-s a cell (it stops to look), takes more than the air left, or the plan surfaces at a cell whose air it has
-  not seen (an unseen head cell reads as air to the planner; a player does not swim on for a guess)."
+  max-surfacings times should turn back: the swim back to its last breath leaves it under the air margin
+  (jobs.lib.cost/wet-ok?), and either the steps' swim (jobs.lib.cost/wet-way-s, each step at its real pace) takes more than the air left, or the
+  plan surfaces at a cell whose air it has not seen (an unseen head cell reads as air to the planner; a player does not swim on for a guess)."
   [c steps]
-  (when-some [used (:air-used (wworld/body-policy c))]
-    (let [m (ctx/mem c)
-          left (- (unchecked-get base/DEFAULT-COSTS "airSupply") used)
-          exit (first (remove :swim steps))]
-      (and (:last-air m) (not (:to-air c)) (< (:surfacings m 0) max-surfacings) (< left masked-wet-limit-s)
-           (or (> (* (count (filter :swim steps)) masked-swim-pace-s) left)
+  (let [policy (wworld/body-policy c)
+        m (ctx/mem c)
+        exit (first (remove :swim steps))]
+    (when (:air-used policy)
+      (and (:last-air m) (not (:to-air c)) (< (:surfacings m 0) max-surfacings) (not (cost/wet-ok? policy []))
+           (or (> (cost/wet-way-s policy (map :move (filter :swim steps))) (cost/air-left-s policy))
                (and exit (not (breath/air? (breath/seen-water-name (:primitives c) {:x (:x exit) :y (inc (:y exit)) :z (:z exit)})))))))))
 
 (defn masked-cut
   "A found masked plan's steps up to its first swimming step wet-ok? refuses, and whether it cut: the unseen cells above a dark
   swim read as air to breathe, so only the plan's first masked-wet-ok swim is trusted (of a body not yet under water: one under it swims to air)."
   [steps wet-ok?]
-  (let [k (first (keep-indexed (fn [i s] (when (and (:swim s) (not (wet-ok? s))) i)) steps))]
+  (let [k (first (keep-indexed (fn [i s] (when (and (:swim s) (not (wet-ok? (subvec steps 0 i) s))) i)) steps))]
     (if k [(subvec steps 0 k) true] [steps false])))
 
 (defn dry-end

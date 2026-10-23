@@ -7,6 +7,7 @@
             [engine.fake :as fake]
             [engine.ctx :as ctx]
             [engine.events :as events]
+            [engine.settings :as settings]
             [engine.path.planner-tuned :as planner]
             [jobs.lib.walk :as walk]
             [jobs.lib.walk.drive :as drive]
@@ -237,26 +238,26 @@
       [(s 0 false) (s 1 false)] [0 1])))
 
 (deftest dry-end-keeps-a-swimming-step-the-masked-walk-accepts
-  (let [s (fn [x air] {:x x :move :walk :swim true :air air})
-        ok? #(<= (:air %) wplan/masked-wet-limit-s)]
-    (is (= [0 1 2] (mapv :x (wplan/dry-end [(s 0 2) (s 1 4) (s 2 6) (s 3 9)] (constantly false) ok?))) "kept to the last step within the air limit")
-    (is (= [] (wplan/dry-end [(s 0 11)] (constantly false) ok?)))
-    (is (= [0 1] (mapv :x (wplan/dry-end [(s 0 3) (s 1 6) (s 2 11) {:x 3 :move :walk :air 2}] (constantly false) ok?))) "a dry step past a refused swim is not kept")
-    (is (= [] (wplan/dry-end [(s 0 3)])) "without wet-ok? swimming steps are cut")))
+  (let [s (fn [x] {:x x :move :walk :swim true})
+        ok? (fn [before _] (< (count before) 3))]
+    (is (= [0 1 2] (mapv :x (wplan/dry-end [(s 0) (s 1) (s 2) (s 3)] (constantly false) ok?))) "kept to the last step it accepts")
+    (is (= [0 1 2] (mapv :x (wplan/dry-end [(s 0) (s 1) (s 2) (s 3) {:x 4 :move :walk}] (constantly false) ok?))) "a dry step past a refused swim is not kept")
+    (is (= [] (wplan/dry-end [(s 0)])) "without wet-ok? swimming steps are cut")))
 
-(deftest masked-wet-ok-keeps-swimming-steps-while-the-air-left-brings-the-body-back
-  (let [ok (fn [oxygen] (wplan/masked-wet-ok {:primitives (tu/fake {:self {:pos [0 64 0] :inWater true :oxygen oxygen}})}))
-        step (fn [air] {:swim true :air air})]
-    (are [oxygen air kept?] (= kept? (boolean ((ok oxygen) (step air))))
-      20 wplan/masked-wet-limit-s true
-      20 (inc wplan/masked-wet-limit-s) false
-      17 wplan/masked-wet-limit-s true
-      11 0 false)))
+(defn- masked-kept
+  "How many of 30 swimming steps of move after a dry step a masked plan of a body with oxygen keeps (masked-cut)."
+  [oxygen move]
+  (let [ok (wplan/masked-wet-ok {:primitives (tu/fake {:self {:pos [0 64 0] :inWater true :oxygen oxygen}})})
+        steps (into [{:x 0 :move :walk}] (map (fn [x] {:x x :move move :swim true})) (range 1 31))]
+    (dec (count (first (wplan/masked-cut steps ok))))))
 
-(deftest masked-wet-ok-stops-a-long-swim-at-the-pace-a-masked-walk-really-keeps
-  (let [ok (wplan/masked-wet-ok {:primitives (tu/fake {:self {:pos [0 64 0] :inWater true :oxygen 20}})})
-        kept (count (take-while #(ok {:swim true :air 0}) (range 100)))]
-    (is (= (long (/ wplan/masked-wet-limit-s wplan/masked-swim-pace-s)) kept))))
+(deftest masked-wet-ok-keeps-a-swim-while-the-way-back-leaves-the-air-margin
+  ;; 15 s of air, 1.5 s margin; a step out and back at 2.5 times its price: a level swim 2 x 0.65 s, a climb down 0.83 + 1.08 s back up
+  (are [oxygen move kept] (= kept (settings/with-settings {:jobs.lib.cost.planner/wet-margin-s 1.5} #(masked-kept oxygen move)))
+    20 :swim 10
+    20 :climb-down 7
+    17 :swim 6
+    11 :swim 0))
 
 (deftest stop-short-ends-a-partial-plan-out-of-reach-of-a-blocking-mob
   (let [steps (mapv (fn [x] {:x x :y 12 :z 16}) (range 0 12))
@@ -567,11 +568,8 @@
           (is (empty? @ran) "clear already: no walk"))))))
 
 (deftest masked-cut-ends-a-found-plan-before-the-swim-air-does-not-cover
-  (let [swim (fn [x] {:x x :swim true :air 0})
-        steps (conj (mapv swim (range 20)) {:x 20})
-        ok (wplan/masked-wet-ok {:primitives (tu/fake {:self {:pos [0 64 0] :inWater true :oxygen 20}})})
-        [cut? c] (wplan/masked-cut steps ok)]
-    (is (= [(long (/ wplan/masked-wet-limit-s wplan/masked-swim-pace-s)) true] [(count cut?) c]))
+  (let [steps (conj (mapv (fn [x] {:x x :move :swim :swim true}) (range 20)) {:x 20 :move :walk})]
+    (is (= [(masked-kept 20 :swim) true] (update (wplan/masked-cut steps (wplan/masked-wet-ok {:primitives (tu/fake {:self {:pos [0 64 0] :inWater true :oxygen 20}})})) 0 count)))
     (is (= [steps false] (wplan/masked-cut steps (constantly true))))))
 
 (deftest a-drop-of-two-has-a-landing-to-look-at-a-drop-of-one-and-a-walk-have-none
