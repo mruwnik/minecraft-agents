@@ -37,7 +37,7 @@
    :time :any
    :register []
    :act [[:job (jobs.time.noop {:seconds 45 :why :idle :spend {:job-time 50}})]
-         [:job (jobs.items.get-kit {:food false})]
+         [:job (jobs.items.get-kit {:food false :spend {:job-time 60}})]
          [:cli "triggers" ["$body" "--world" "$world" "put" "needs-weapon" "--trigger" "needs-weapon" "--persistence" "cooldown" "--cooldown-s" "600" "--job" "(jobs.items.obtain {:any-of [\"iron_sword\" \"stone_sword\" \"wooden_sword\"] :count 1 :explore true :priced true})" "--by" "world-test"]]]
    :expect [{:event {:source :job :kind :queued :data {:name "jobs.items.get-kit"}} :within-s 10}
             {:no-event {:source :reflex :kind :fired :context {:reflex-id :needs-weapon}} :for-s 30}]

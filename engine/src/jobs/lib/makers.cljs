@@ -41,7 +41,7 @@
 
 (defn wait-s
   "Seconds before listed job id has the item: a started one's time-left; else the time-left of every listed job queued
-  before it (their :queued-t: the queue runs in that order), when it starts."
+  before it (their :queued-t: the queue runs in that order) plus its own, for the item exists only when it ends."
   [view live id]
   (let [mine (mem/job-mem view id [])
         now (:now view)]
@@ -50,6 +50,7 @@
       (->> live
            (map #(mem/job-mem view % []))
            (filter #(< (:queued-t % ##Inf) (:queued-t mine 0)))
+           (cons mine)
            (map #(time-left % now))
            (reduce + 0)))))
 

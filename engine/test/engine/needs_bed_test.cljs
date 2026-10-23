@@ -21,7 +21,7 @@
     (reset! clock (* 10 sh-clock/ms-per-day))
     (doseq [[id label args contract] jobs]
       (swap! clock inc)
-      (mem/create-job! store id label args)
+      (mem/create-job! store id label (cond-> args (not= "jobs.time.noop" label) (update :spend #(or % {:job-time 60}))))
       (when contract (mem/update-job! store id [] assoc :contract contract)))
     (f (tu/seeing-all (tu/fake-on-floor (cond-> {:floor [-10 -10 10 10] :inventory (or inv []) :entities entities :blocks blocks :time (or time 9000)} night (assoc :time 18000))))
        (mem/view store) {} (world/of-data (or plans {}) {}) (set (map first jobs)))))

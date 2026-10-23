@@ -413,6 +413,26 @@
           (is (>= (:x (peek (:steps plan))) wsearch/progress-blocks))
           (is (= {} @wsearch/searches) "the body walks on: a new search from where it gets to"))))))
 
+;; another plan between a quote's rounds must not restart it: the first goal's search ends after the same number of its own calls
+(deftest a-kept-search-survives-another-plan-between-its-rounds
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [p (tu/fake {:blocks (walkways true) :self {:pos {:x 0.5 :y 64 :z 0.5}}})
+              c {:primitives p}
+              plan! (fn [goal] (walk/plan-walk! c (.pathWorld p) goal 0 (walk/default-weight) {:budget 32}))
+              [_ calls] (await (budgeted-calls (walkways true) {:x 0.5 :y 64 :z 0.5} [6 64 0] 32))]
+          (reset! wsearch/searches {})
+          (await (tu/with-expansion-budget 16
+                   (fn ^:async run []
+                     (loop [n 1]
+                       (let [plan (await (plan! [6 64 0]))
+                             _ (await (plan! [2 64 0]))]
+                         (if (and (= "searching" (:status plan)) (< n 100))
+                           (recur (inc n))
+                           (is (<= n calls) "the interleaved plans did not restart the first search")))))))
+          (reset! wsearch/searches {}))))))
+
 (defn ^:async one-budgeted-call
   "One plan-walk! with budget (chunk-expansions 16) from pos toward goal with opts: its plan."
   [blocks pos goal budget opts]

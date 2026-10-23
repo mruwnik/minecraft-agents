@@ -59,7 +59,7 @@
        (mem/create-job! store "j0" "jobs.time.noop" {})
        (mem/update-job! store "j0" [] assoc :contract ahead))
      (swap! clock inc)
-     (mem/create-job! store "j1" label args)
+     (mem/create-job! store "j1" label (update args :spend #(or % {:job-time 30})))
      (when own
        (mem/update-job! store "j1" [] assoc :contract own))
      (nw/needs-weapon (tu/fake-on-floor {:floor [-10 -10 10 10] :inventory []}) (mem/view store) {} (world/of-data {} {}) (cond-> #{"j1"} ahead (conj "j0"))))))
@@ -76,6 +76,10 @@
       "a minute's wait costs a twentieth of the sword")
   (is (true? (holds-with-listed? "jobs.items.obtain" {:item "iron_sword"} {:call {} :ran-ms 0}))
       "behind a job with no end the wait costs the sword's whole worth, more than getting one now"))
+
+(deftest a-weapon-maker-with-no-time-budget-is-not-waited-for
+  (is (true? (holds-with-listed? "jobs.items.obtain" {:item "iron_sword" :spend {:job-time ##Inf}}))
+      "the sword exists only when the maker ends, and that is unknown"))
 
 (deftest a-started-weapon-maker-is-waited-for-only-for-the-time-it-has-left
   (is (false? (holds-with-listed? "jobs.items.obtain" {:item "iron_sword"} nil {:call {:spend {:job-time 60}} :ran-ms 0}))
