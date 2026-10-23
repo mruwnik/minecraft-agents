@@ -261,12 +261,6 @@
         (await (child/pause! c (/ (flight/wait-ms) 1000) why))
         :again)))
 
-(defn in-water?
-  "Whether the body's feet cell reads as water."
-  [c]
-  (let [{:keys [x y z]} (u/self-pos c)]
-    (= "water" ((block-at-fn (:primitives c)) {:x (js/Math.floor x) :y (js/Math.floor y) :z (js/Math.floor z)}))))
-
 (defn hurt-window-s [] (settings/get settings ::hurt-window-s))
 
 (defn recently-hurt?

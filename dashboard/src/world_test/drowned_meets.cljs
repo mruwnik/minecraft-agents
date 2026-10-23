@@ -139,19 +139,33 @@
 
 (defn first-wet [rows] (filter #(and (:class %) (not (:again? %))) rows))
 
+(def wet-grid "The blows per swing wet-fight's posterior is evaluated at." (mapv #(/ % 100) (range 1 801)))
+
 (defn wet-fight
-  "{:meets :deaths :per-swing} of the first meets in rows swum in (deep? class) and first fought with a sword or axe:
-  per-swing the fight ::drowned-wet-hits-per-swing (0.01 to 5) under which priced's death chances of their fights are
-  likeliest to give the deaths the drowned dealt (killed?) and the lives it left. A death ends the count of the blows,
-  so the blows themselves understate what a whole fight takes."
+  "{:meets :deaths :peak :mean :sd :interval :k :n} of the first meets in rows swum in (deep? class) and first fought with a
+  sword or axe: the posterior over the fight's blows per swing (fight/wet-rate), a Jeffreys prior times the likelihood
+  of the deaths the drowned dealt (killed?) and the lives it left under priced's death chances at each value of
+  wet-grid; :peak its mode, :interval its 5% and 95% points, :k :n the Gamma (Jeffreys prior, as ::fight/drowned-wet-hits-per-swing
+  takes it) with its mean and sd. A death ends the count of the blows, so the blows themselves understate what a
+  whole fight takes."
   [rows]
   (let [rs (filter #(and (deep? (:class %)) (= :fight (first (:decisions %))) (some->> (:weapon %) (re-find #"_(sword|axe)$"))) (first-wet rows))
-        fit (fn [r] (settings/with-settings {::fight/drowned-wet-hits-per-swing r}
-                      #(reduce + 0 (map (fn [row] (let [p (:death (priced row))]
-                                                    (js/Math.log (max 1e-12 (if (killed? row) p (- 1 p))))))
-                                        rs))))]
-    {:meets (count rs) :deaths (count (filter killed? rs))
-     :per-swing (when (seq rs) (apply max-key fit (map #(/ % 100) (range 1 501))))}))
+        log-post (fn [r] (settings/with-settings {::fight/drowned-wet-hits-per-swing {:k (- (* r 1e6) 0.5) :n 1e6}}
+                           #(reduce + (* -0.5 (js/Math.log r))
+                                    (map (fn [row] (let [p (:death (priced row))]
+                                                     (js/Math.log (max 1e-12 (if (killed? row) p (- 1 p))))))
+                                         rs))))
+        lp (map log-post wet-grid)
+        top (apply max lp)
+        w (map #(js/Math.exp (- % top)) lp)
+        total (reduce + w)
+        w (map #(/ % total) w)
+        mean (reduce + (map * w wet-grid))
+        var (reduce + (map (fn [wi r] (* wi (- r mean) (- r mean))) w wet-grid))
+        at (fn [q] (some (fn [[c r]] (when (>= c q) r)) (map vector (reductions + w) wet-grid)))]
+    (cond-> {:meets (count rs) :deaths (count (filter killed? rs))}
+      (seq rs) (assoc :peak (nth wet-grid (first (apply max-key second (map-indexed vector lp)))) :mean (r2 mean) :sd (r2 (js/Math.sqrt var)) :interval [(at 0.05) (at 0.95)]
+                      :k (r2 (- (/ (* mean mean) var) 0.5)) :n (r2 (/ mean var))))))
 
 (defn wet-death
   "{:k :n :priced :rows} of the first meets in water in rows: k the deaths the drowned dealt (killed?) of n, priced the sum

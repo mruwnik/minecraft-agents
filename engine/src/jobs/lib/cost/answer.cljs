@@ -1,9 +1,9 @@
 (ns jobs.lib.cost.answer
   "The one price of each answer to hostiles, so the reflexes take the cheapest (decide). Pure.
 
-  An answer is {:damage hp :hit hp :blasts [hp] :spread [hp] :seconds s :then [answer] :caught {:chance :damage :hit :blasts}}:
+  An answer is {:damage hp :hit hp :shape :blasts [hp] :spread [hp] :seconds s :then [answer] :caught {:chance :damage :hit :blasts}}:
   the hp it is expected to cost, the creeper blasts in it landing for certain (:spread: as many equally likely blast
-  totals) and the rest in blows of about :hit hp each, the seconds it takes, what may follow it (the cheapest of :then is paid too) and,
+  totals) and the rest in blows of about :hit hp each (:shape: their count's width, death/blow-chance), the seconds it takes, what may follow it (the cheapest of :then is paid too) and,
   for a walk away, the chance its mobs catch it and the blows they then land. answer-price: the hp at the health each
   leaves (health/hp-cost), the death the blows risk (death-chance x death/death-cost), the seconds, and the cheapest
   :then at full health.
@@ -87,13 +87,13 @@
 (defn mean [xs] (if (seq xs) (/ (reduce + xs) (count xs)) 0))
 
 (defn blows-chance
-  "The chance the blows of answer kill body: death/blow-chance of its :damage, its :blasts sure (each of its :spread too,
-  averaged), or of the :caught blows for its :chance."
+  "The chance the blows of answer kill body: death/blow-chance of its :damage (its count's :shape), its :blasts sure
+  (each of its :spread too, averaged), or of the :caught blows for its :chance."
   [body {:keys [caught] :as answer}]
-  (let [chance (fn [{:keys [damage hit blasts spread]}]
+  (let [chance (fn [{:keys [damage hit blasts spread shape]}]
                  (let [sure (reduce + 0 blasts)
                        small (- damage sure (mean spread))]
-                   (mean (map #(death/blow-chance body (+ small sure %) hit (+ sure %)) (or (seq spread) [0])))))
+                   (mean (map #(death/blow-chance body (+ small sure %) hit (+ sure %) shape) (or (seq spread) [0])))))
         clean (chance answer)]
     (if caught
       (+ (* (- 1 (:chance caught)) clean) (* (:chance caught) (chance caught)))
@@ -153,11 +153,14 @@
   (let [stats (armour/armour-stats equipment)
         {left false fought true} (group-by #(not (false? (:reach? %))) mobs)
         fought (vec fought)
-        seconds (fight/fight-seconds (assoc fight :mobs (if (seq fought) fought mobs)))]
-    (cond-> {:damage (+ (fight/fight-damage (assoc fight :mobs fought))
-                        (reduce + 0 (map #(threat/mob-hurt stats (threat/kind %) seconds) left)))
+        seconds (fight/fight-seconds (assoc fight :mobs (if (seq fought) fought mobs)))
+        damage (fight/fight-damage (assoc fight :mobs fought))
+        left-damage (reduce + 0 (map #(threat/mob-hurt stats (threat/kind %) seconds) left))
+        shape (when-let [s (fight/blow-shape (assoc fight :mobs fought))] (fight/sum-shape [[damage s] [left-damage nil]]))]
+    (cond-> {:damage (+ damage left-damage)
              :hit (reduce max 0 (map #(blow stats %) mobs))
              :seconds seconds}
+      shape (assoc :shape shape)
       (seq left) (assoc :left (vec left)))))
 
 (defn kill-price
@@ -172,7 +175,8 @@
   [a b]
   (if b
     (cond-> (assoc a :damage (+ (:damage a) (:damage b)) :hit (max (:hit a) (:hit b)) :seconds (+ (:seconds a) (:seconds b))
-                   :blasts (into (vec (:blasts a)) (:blasts b)) :spread (:spread b))
+                   :blasts (into (vec (:blasts a)) (:blasts b)) :spread (:spread b)
+                   :shape (fight/sum-shape [[(:damage a) (:shape a)] [(:damage b) (:shape b)]]))
       (:caught b) (assoc :caught (-> (:caught b) (update :damage + (:damage a)) (update :blasts #(into (vec (:blasts a)) %))))
       (:then b) (assoc :then (:then b))
       (not (:then b)) (dissoc :then))

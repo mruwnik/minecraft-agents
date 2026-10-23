@@ -73,10 +73,12 @@
     (is (= [true false] (map last rows)))
     (is (< 1.9 priced 2.01) "bare-handed and swimming, each fight priced near a death")))
 
-(deftest the-in-water-fight-is-fitted-to-the-deaths-its-sword-fights-gave
+(deftest the-in-water-fight-is-a-posterior-over-the-deaths-its-sword-fights-gave
   (let [fight (fn [health died] {:class "river-ocean/dark-at-night/deep" :health health :weapon "stone_sword" :decisions [:fight] :died (when died ["drowned" 1])})
-        rate #(:per-swing (d/wet-fight %))]
-    (is (< (rate [(fight 20 false) (fight 20 false) (fight 20 false) (fight 20 true)])
-           (rate [(fight 20 true) (fight 20 true) (fight 20 true) (fight 20 false)]))
+        few [(fight 20 false) (fight 20 false) (fight 20 false) (fight 20 true)]
+        fit (memoize d/wet-fight)]
+    (is (< (:mean (fit few)) (:mean (fit [(fight 20 true) (fight 20 true) (fight 20 true) (fight 20 false)])))
         "more deaths: more blows a swing")
-    (is (nil? (rate [(assoc (fight 20 true) :class "other/lit/shallow")])) "a wade is no swim")))
+    (is (> (:sd (fit few)) (:sd (fit (into few few)))) "twice the meets: a narrower posterior")
+    (is (< (:k (fit few)) (:k (fit (into few few)))) "and a Gamma worth more")
+    (is (nil? (:mean (fit [(assoc (fight 20 true) :class "other/lit/shallow")]))) "a wade is no swim")))

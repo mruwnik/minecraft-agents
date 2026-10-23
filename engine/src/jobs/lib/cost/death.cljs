@@ -76,16 +76,22 @@
     (+ (value/trip) walk (experience-cost body))))
 
 (defn blow-chance
-  "The chance that blows of about hit hp, damage hp of them expected (their count a Poisson one), take the health and
-  absorption of body: at least life/hit of them land. sure: hp of damage that lands for certain in big blows (a
+  "The chance that blows of about hit hp, damage hp of them expected, take the health and absorption of body: at least
+  life/hit of them land. Their count is a Poisson one, or with shape (a Gamma-distributed rate: an uncertain fit) a
+  negative binomial one, the Poisson's posterior predictive. sure: hp of damage that lands for certain in big blows (a
   creeper's blast), taken off the life first: the small blows count against what it leaves, not as parts of a big one."
-  ([body damage hit] (blow-chance body damage hit 0))
-  ([{:keys [health absorption]} damage hit sure]
+  ([body damage hit] (blow-chance body damage hit 0 nil))
+  ([body damage hit sure] (blow-chance body damage hit sure nil))
+  ([{:keys [health absorption]} damage hit sure shape]
    (let [life (- (+ (or health 20) (or absorption 0)) sure)
          hit (max 0.1 (or hit 1))
          lam (/ (max 0 (- damage sure)) hit)
          k (js/Math.ceil (/ life hit))
-         below (reduce + (take k (reductions (fn [p i] (/ (* p lam) i)) (js/Math.exp (- lam)) (iterate inc 1))))]
+         [p0 step] (if shape
+                     (let [q (/ lam (+ shape lam))]
+                       [(js/Math.exp (* shape (js/Math.log1p (- q)))) (fn [p i] (/ (* p q (+ shape i -1)) i))])
+                     [(js/Math.exp (- lam)) (fn [p i] (/ (* p lam) i))])
+         below (reduce + (take k (reductions step p0 (iterate inc 1))))]
      (if (pos? life) (max 0 (- 1 below)) 1))))
 
 (defn notice-rate

@@ -2,10 +2,11 @@
   "The cornered step of a flight: the conditions that rank its options (pressed, beaten, under fire, boxed in) and cornered!, which takes the first option it can."
   (:require [engine.settings :as settings]
             [jobs.survival.respond-choose :refer [escape-order with-zone-pillar]]
-            [jobs.survival.respond.options :as rc :refer [settings near-hostiles hitters arriving close-radius hurt-by press-gap hit-reach fist-sweeps tool-weapons fight! outrun? angry-enderman? fight-wins? pillar-cheaper? in-water? stand! back-off! blocked! recently-hurt? hurt-window-s]]
+            [jobs.survival.respond.options :as rc :refer [settings near-hostiles hitters arriving close-radius hurt-by press-gap hit-reach fist-sweeps tool-weapons fight! outrun? angry-enderman? fight-wins? pillar-cheaper? stand! back-off! blocked! recently-hurt? hurt-window-s]]
             [engine.args :as a]
             [jobs.lib.access :as access]
             [jobs.lib.blocks :as lb]
+            [jobs.lib.breath :as breath]
             [engine.contract :as contract]
             [engine.ctx :as ctx]
             [engine.hurt :as hurt]
@@ -232,7 +233,7 @@
                              :faster? (not (outrun? c hostiles))
                              :arriving? (boolean (and armed? (seq (arriving c hostiles))))
                              :pressed? (or beaten-fight? (press-fights? {:fire? fire? :pressed? (pressed? c hostiles) :tries fire-tries :limit (settings/get settings :jobs.survival.respond.options/cover-tries)}))
-                             :swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (in-water? c))
+                             :swim? (and (boolean (some #(= "drowned" (.-name %)) hostiles)) (breath/swimming? (:primitives c)))
                              :home? home?
                              :lean? (pillar/lean? c)
                              :pillar-first? pillar-first?

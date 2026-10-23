@@ -6,6 +6,7 @@
             [jobs.lib.cost :as cost]
             [jobs.lib.cost.answer :as answer]
             [jobs.lib.cost.death :as death]
+            [jobs.lib.cost.fight :as fight]
             [jobs.lib.cost.threat :as threat]
             [engine.settings :as settings]))
 
@@ -34,6 +35,20 @@
      (:answer (cost/decide (body health)
                            {:fight f :flee (cost/flee-answer {:food 20 :mobs mobs :returns returns :later f})}
                            here)))))
+
+(deftest an-uncertain-blow-rate-widens-the-blow-count
+  (let [poisson (death/blow-chance {:health 10} 5 2.5)]
+    (is (> (death/blow-chance {:health 10} 5 2.5 0 2) poisson) "a wide rate makes the heavy tail likelier")
+    (is (< (js/Math.abs (- (death/blow-chance {:health 10} 5 2.5 0 1e6) poisson)) 1e-4) "a sure rate is the Poisson")))
+
+(deftest a-swim-fight-with-a-drowned-is-priced-over-the-fitted-posterior
+  (let [chance (fn [k n] (settings/with-settings {:jobs.lib.cost.fight/drowned-wet-hits-per-swing {:k k :n n}}
+                           #(let [a (cost/fight-answer {:weapon "stone_sword" :mobs [(mob "drowned" 0)] :wet? true})]
+                              [(:damage a) (cost/death-chance (body 20) a)])))
+        [thin-hp thin] (chance 1.5 2)
+        [wide-hp wide] (chance 19.5 20)]
+    (is (< (js/Math.abs (- thin-hp wide-hp)) 1e-9) "the same mean: the same expected hp")
+    (is (> thin wide) "fewer meets behind the same mean: a likelier death")))
 
 (deftest blows-that-may-take-the-health-are-the-death-risk
   (is (zero? (death/blow-chance {:health 20} 0 3)))
@@ -249,7 +264,7 @@
   (let [kit (assoc (body 20) :weapon "stone_sword")
         wet (:fight (answer/threat-answers (assoc kit :swim ##Inf) "drowned" nil))
         dry (:fight (answer/threat-answers kit "drowned" nil))
-        blows (* 4 1.51)]
+        blows (* 4 (:mean (fight/wet-rate)))]
     (is (< (js/Math.abs (- (:damage wet) (threat/mob-hurt (cost/armour-stats nil) "drowned" blows identity 1))) 1e-9) "4 stone sword swings kill it")
     (is (> (:damage wet) (* 1.5 (:damage dry))) "a land fight lands its swings")))
 
