@@ -428,13 +428,16 @@
      (some-> slice (charge! (.-length cells) flood-cells-per-node))
      (vec (.find cells #(and (<= (to-goal %) near) (<= (across %) flat)))))))
 
-(def frontier-drop
-  "How far below the edge of the land a shut-in body walks the stands beyond it (frontier-way) are looked for."
-  12)
+(defn frontier-drop
+  "How far below the edge of the land the stands beyond it (frontier-way) are looked for: the most cells a dig route
+  digs and then falls (jobs.lib.dig-route settings); its time is bounded by max-route-s."
+  []
+  (+ (settings/get dig-route/settings :jobs.lib.dig-route/max-digs)
+     (settings/get dig-route/settings :jobs.lib.dig-route/max-fall)))
 
 (defn frontier-way
   "A shut-in body's way off its land (a plateau top) toward a goal too far for one dig route: {:step :dig-route :cells}
-  to the seen stand a step beyond the land's edge, at most frontier-drop below it, nearest goal (and more than a block
+  to the seen stand a step beyond the land's edge, at most (frontier-drop) below it, nearest goal (and more than a block
   nearer than feet), the next when no route reaches it (route-cells, opts as dig-way's); {:step :searching} while that
   search goes on; else, while the land beyond is not seen, {:step :approach :pos cell} to the edge cell nearest goal (not
   one approached, more than a block nearer than feet) to look over it; nil when none."
@@ -443,13 +446,14 @@
     (let [kind-at (reach/seen-lookup p reach-room/body-kind-of)
           ^js cells (:cells (reach-room/flood-visit #(reach/forward kind-at %1 %2 %3) (reach/standing-vec p) reach-room/room-cells))
           land (into #{} (map vec) cells)
+          _ (some-> slice (charge! (.-length cells) flood-cells-per-node))
           to-goal #(u/dist (zipmap [:x :y :z] %) (zipmap [:x :y :z] goal))
           nearer? #(< (to-goal %) (dec (to-goal feet)))
           stand? (fn [[x y z]] (reach/standable-cell? p {:x x :y y :z z} kind-at))
           off (fn [[x y z]] (for [[dx dz] escape/cardinals
                                   :when (not-any? #(land [(+ x dx) % (+ z dz)]) [(dec y) y (inc y)])]
                               [(+ x dx) y (+ z dz)]))
-          below (fn [[x y z]] (some #(let [c [x % z]] (when (stand? c) c)) (range (inc y) (- y frontier-drop) -1)))
+          below (fn [[x y z]] (some #(let [c [x % z]] (when (stand? c) c)) (range (inc y) (- y (frontier-drop)) -1)))
           stands (->> land (mapcat off) (keep below) (remove land) distinct (filter nearer?) (sort-by to-goal))
           edge (delay (->> land (filter #(seq (off %))) (remove #(contains? approached %)) (filter nearer?) (sort-by to-goal) first))]
       (or (->> stands

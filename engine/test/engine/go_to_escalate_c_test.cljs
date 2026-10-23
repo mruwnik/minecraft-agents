@@ -841,3 +841,21 @@
                legs (loop [n 0] (let [e (leg)] (if (and (= :searching (:step e)) (< n 300)) (recur (inc n)) e)))]
            (is (= {:step :searching} first-leg))
            (is (= :dig-route (:step legs)) (pr-str (:step legs))))))))
+
+(deftest frontier-way-charges-its-flood-to-the-slice-and-looks-as-deep-as-a-route-digs
+  (let [p (tu/fake {:blocks (merge (box -3 63 -3 3 63 3 "stone") (box 5 40 -3 9 40 3 "stone"))})
+        slice (choose/route-slice "frontier-flood")
+        before @(:left slice)
+        opts {:own? (constantly false) :skip (constantly false) :slice slice}]
+    (choose/frontier-way p [0 64 0] [40 40 0] (constantly true) opts)
+    (is (< @(:left slice) before) "the flood of the land's cells came off the slice")
+    (is (= 19 (choose/frontier-drop)))
+    (is (= 7 (settings/with-settings {::dig-route/max-digs 4} choose/frontier-drop)))))
+
+(deftest a-dig-route-past-the-count-needs-an-end-more-than-a-block-nearer-than-any-way-before
+  (are [end best ok?] (= ok? (esc/dig-progress? {:cells [{:cell [0 60 0]} {:cell end}]} [10 60 0] best))
+    [8 60 0] 12 true
+    [8 60 0] 4 true
+    [8 60 0] 3 false
+    [3 60 0] 4 false
+    [10 60 0] 2 true))

@@ -147,6 +147,12 @@
            (let [h (access/foreign-holder c (zipmap [:x :y :z] cell))]
              (or (nil? h) (= h home)))))))
 
+(defn dig-progress?
+  "Whether dig-route escalation e ends more than a block nearer goal than best, the least distance any way before it started from."
+  [e goal best]
+  (let [[x y z] (:cell (last (:cells e)))]
+    (boolean (and x (< (u/dist {:x x :y y :z z} (zipmap [:x :y :z] goal)) (dec best))))))
+
 (defn ^:async choose-escalation!
   "escalate!'s choice and start of the next way, or its give-up."
   [c pos failed]
@@ -218,8 +224,9 @@
       (do (ctx/update-mem! c #(-> % (dissoc :cave-climb :dive-climb :give-up :escalate-failed) (assoc :cave-ok true)))
           :again)
       (and failed (= :detour status)) (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation failed}))
-      ;; a dig route runs to the goal or a leg nearer it, and one that fails is skipped: past the count it is still taken
-      (and (> n (tuning/max-escalations)) (not= :dig-route (:step e))) (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation (cond-> (or failed (:last-failed (ctx/mem c)) (when (= :none (:step chosen)) chosen) {:step :spent :n (tuning/max-escalations)}) into? (assoc :into true))}))
+      ;; past the count a dig route is still taken while it ends more than a block nearer the goal than any way before
+      (and (> n (tuning/max-escalations)) (not (and (= :dig-route (:step e)) (dig-progress? e goal (:escalation-best counted)))))
+      (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation (cond-> (or failed (:last-failed (ctx/mem c)) (when (= :none (:step chosen)) chosen) {:step :spent :n (tuning/max-escalations)}) into? (assoc :into true))}))
       (= :searching (:step e)) (do (ctx/update-mem! c assoc :escalate-now true :escalate-failed failed) :again)
       (= :none (:step e)) (end/give-up! c pos result (merge (select-keys result [:route :straight :allowed]) {:escalation (cond-> (or failed e) into? (assoc :into true))}))
       :else
