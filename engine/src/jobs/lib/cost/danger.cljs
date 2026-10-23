@@ -273,6 +273,15 @@
         way (or way (constantly nil))]
     (boolean (some #(not (wins-race? (:t %) (arrival-s chaser pos % (way %)) margin)) route))))
 
+(defn reach-s
+  "Seconds a melee chaser (caught-on?'s) is within its blow of a body walking route ([{:x :y :z :t}] from where it
+  starts): at each point the chaser gets to (arrival-s) before the body, from its arrival to the body's, at most the
+  body's walk there from the point before."
+  [{:keys [chaser pos route way]}]
+  (let [way (or way (constantly nil))]
+    (reduce + 0 (map (fn [prev p] (min (max 0 (- (:t p) (arrival-s chaser pos p (way p)))) (- (:t p) (:t prev))))
+                     route (rest route)))))
+
 (defn catches?
   "Whether a melee chaser (mob-name, chaser its mob-kind) at pos lands a blow on a body with food food walking the straight
   way from `from` to `to` ({:x :y :z}) before it is past (caught-on? over the way, a point every step blocks, at

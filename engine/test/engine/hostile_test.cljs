@@ -1780,10 +1780,11 @@
               {:keys [seen]} (await (flight-round respond world))]
           (is (not (breath/swimming? (tu/fake-on-floor (merge {:floor flight-floor} world)))) "it stands on the wade's floor")
           (is (= [:fight] (mapv :decision (decided seen))) "an iron sword two blocks off: fought as on land"))
-        (let [{:keys [seen]} (await (flight-round respond {:blocks lake :self {:pos [3.5 63 0.5] :health 20}
-                                                            :entities [(drowned-at -0.5 63 0.5)]}))]
-          (is (breath/swimming? (tu/fake-on-floor {:floor flight-floor :blocks lake :self {:pos [3.5 63 0.5]}})))
-          (is (= [:flee] (mapv :decision (decided seen))) "bare-handed, afloat a block off the lake's east shore"))))))
+        (is (breath/swimming? (tu/fake-on-floor {:floor flight-floor :blocks lake :self {:pos [3.5 63 0.5]}})))
+        (doseq [x [-0.5 1.5 2.5]]
+          (let [{:keys [seen]} (await (flight-round respond {:blocks lake :self {:pos [3.5 63 0.5] :health 20}
+                                                              :entities [(drowned-at x 63 0.5)]}))]
+            (is (= [:flee] (mapv :decision (decided seen))) (str "bare-handed, afloat a block off the lake's east shore, the drowned at x " x))))))))
 
 (deftest only-a-possible-mob-blow-counts-as-a-hit
   (are [m expected] (= expected (hurt/mob-hit? m))

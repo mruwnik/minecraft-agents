@@ -209,6 +209,13 @@
     ["spider"] false
     ["baby"] false))
 
+(deftest a-chaser-is-within-its-blow-of-a-flight-only-while-it-wins-the-race-there
+  (let [route (mapv (fn [x] {:x x :y 64 :z 0 :t (/ x 3)}) (range 11))
+        reach #(cost/reach-s {:chaser "zombie" :pos {:x % :y 64 :z 0} :route route})]
+    (is (< 0 (reach -0.5) 1) "beside the start: its blows until the body pulls away, not the whole flight")
+    (is (zero? (reach -4)) "left behind")
+    (is (> (reach 11) 1) "ahead on the way: the body walks into it")))
+
 (deftest a-baby-zombie-is-priced-as-a-baby-not-as-an-adult
   (are [e kind] (= kind (cost/mob-kind e))
     #js {:name "zombie" :baby true} "baby"

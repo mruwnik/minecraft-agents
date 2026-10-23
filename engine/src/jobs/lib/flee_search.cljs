@@ -10,8 +10,8 @@
   Each end is priced (the planner's price plus the death the route risks past the known threats, a death about where
   the body stands: cost/route-death-cost, plus the chasers met on the way back from an unseen dead end: unseen-price) and scored against
   the chasers: :arrive, the seconds the first of them takes to reach it (cost/arrival-s over its way, its threat
-  field's; the body timed at cost/flee-walk-speed, cost/flee-stop-s between steps); :caught?, whether one lands
-  a blow on the route (cost/caught-on?); :score, arrive less price. pick chooses a flee step's end."
+  field's; the body timed at cost/flee-walk-speed, cost/flee-stop-s between steps); :caught-s, the seconds one is within its blow on the route
+  (cost/reach-s), :caught? whether that is any; :score, arrive less price. pick chooses a flee step's end."
   (:require [engine.args :as a]
             [engine.ctx :as ctx]
             [engine.path.executor :as executor]
@@ -240,14 +240,16 @@
 (defn scored
   "priced (price!) scored against chasers [{:name (mob-kind) :pos}] from where the body stands (from): :arrive (the
   seconds the first chaser takes to the end, ##Inf with none), :gain (arrive less the chasers' arrival at from: what
-  the walk buys over standing still; 0 where no chaser can get to the body already), :caught? (by a chaser not :calm?, on the route past where the body stands, with no race margin: a margin is for a
-  race to one place, and a chaser a few blocks off would cut every first step) and :score (see the ns doc)."
+  the walk buys over standing still; 0 where no chaser can get to the body already), :caught-s (the most seconds a
+  chaser not :calm? is within its blow on the route, cost/reach-s: no race margin, a margin is for a race to one
+  place), :caught? (one lands a blow: caught-s over 0) and :score (see the ns doc)."
   [chasers from priced]
   (let [here (arrive-at chasers from)]
     (mapv (fn [{:keys [end cells price] :as e}]
-          (let [arrive (arrive-at chasers end)]
+          (let [arrive (arrive-at chasers end)
+                caught-s (reduce max 0 (map (fn [ch] (cost/reach-s {:chaser (:name ch) :pos (:pos ch) :route cells :way #(way-at ch %)})) (remove :calm? chasers)))]
             (assoc e :arrive arrive :gain (if (js/isFinite here) (- arrive here) 0)
-                     :caught? (boolean (some (fn [ch] (cost/caught-on? {:chaser (:name ch) :pos (:pos ch) :route (rest cells) :margin-s 0 :way #(way-at ch %)})) (remove :calm? chasers)))
+                     :caught-s caught-s :caught? (pos? caught-s)
                      :score (- (min arrive unreached-s) price))))
         priced)))
 
@@ -348,13 +350,17 @@
   (->> ends (sort-by :s) (keep :unseen) distinct seq))
 
 (defn caught-chance
-  "The chance a flight from where search ends (search!) ran is caught (cost/flight-caught-chance): a way is a ring
-  route that is open (a pocket is none: the chaser follows it in), not caught by a chaser and gains on them; the flight
-  takes the best :score of them, and whether it runs unseen weighs its dead end at counts (wworld/way-counts)."
+  "{:chance :seconds} of a flight from where search ends (search!) ran: the chance it is caught
+  (cost/flight-caught-chance) and, when every way is caught, the seconds its chasers are within their blow on the way
+  least so (:caught-s; nil: the whole flight). A way is a ring route that is open (a pocket is none: the chaser follows
+  it in) and gains on the chasers; of those not caught the flight takes the best :score, and whether it runs unseen
+  weighs its dead end at counts (wworld/way-counts)."
   [ends counts]
-  (let [left (filter #(and (:open? %) (not (:cover? %)) (nil? (:pos (:target %))) (not (:caught? %)) (pos? (:gain %))) ends)
+  (let [ways (filter #(and (:open? %) (not (:cover? %)) (nil? (:pos (:target %))) (pos? (:gain %))) ends)
+        left (remove :caught? ways)
         best (when (seq left) (apply max-key :score left))]
-    (cost/flight-caught-chance {:way? (some? best) :unseen? (some? (:unseen best)) :counts counts})))
+    (cond-> {:chance (cost/flight-caught-chance {:way? (some? best) :unseen? (some? (:unseen best)) :counts counts})}
+      (and (nil? best) (seq ways)) (assoc :seconds (reduce min (map :caught-s ways))))))
 
 (defn named
   "The scored end of search ends planned to the named target at pos, nil when none."

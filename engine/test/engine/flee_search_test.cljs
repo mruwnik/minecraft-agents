@@ -105,10 +105,10 @@
           (is (seq baby) "the ways are planned")
           (is (every? :caught? baby) "a baby zombie runs faster than a body too hungry to sprint")
           (is (nil? (search/pick baby {})) "no flee step: the body is cornered")
-          (is (= 1 (search/caught-chance baby {:k 0 :n 0})) "the fight-or-flee weighing prices the flight caught")
+          (is (= 1 (:chance (search/caught-chance baby {:k 0 :n 0}))) "the fight-or-flee weighing prices the flight caught")
           (is (every? :caught? spider) "a spider 4 behind catches a flight")
           (is (some? (search/pick far {})) "one 7 behind is left behind over the ring")
-          (is (< (search/caught-chance far {:k 0 :n 0}) 1) "a way left: not caught for sure"))))))
+          (is (< (:chance (search/caught-chance far {:k 0 :n 0})) 1) "a way left: not caught for sure"))))))
 
 (deftest a-chaser-behind-a-wall-is-timed-along-its-way-round-it
   ;; the old arrival ran a straight line through the wall: every way was caught
@@ -215,3 +215,21 @@
   (is (= [[2 64 -1] [5 64 0]] (search/unseen-ahead [(end-of 4 0 1 :found? false :s 0.8 :unseen [5 64 0])
                                                     (end-of 2 0 1 :found? false :s 0.4 :unseen [2 64 -1])
                                                     (end-of 0 2 1 :found? false :s 0.4)]))))
+
+(def lake
+  "A lake 7 deep: water at x -4..4, y 57..63, z -4..4 over stone; its shore the floor at y 63."
+  (into {} (for [x (range -4 5) z (range -4 5) y (range 56 64)] [(str x "," y "," z) (if (= y 56) "stone" "water")])))
+
+(deftest a-mob-beside-a-flight-lands-its-blows-only-until-the-flight-pulls-away
+  ;; the old answer priced a flight any blow lands on as caught all the flight
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [beside (await (ends-of field {:x 0.5 :y 64 :z 0.5} [{:name "zombie" :mob "zombie" :pos {:x -0.5 :y 64 :z 0.5}}] [] nil))
+              {:keys [chance seconds]} (search/caught-chance beside {:k 0 :n 0})
+              p (tu/fake-on-floor {:floor [-50 -45 50 45] :blocks lake :self {:pos {:x 3.5 :y 63 :z 0.5}}})
+              afloat (await (search/search! (ctx-of p) [{:name "drowned" :mob "drowned" :pos {:x 1.5 :y 63 :z 0.5}}] [] {}))]
+          (is (every? :caught? beside) "a zombie beside lands a blow on every way")
+          (is (= 1 chance))
+          (is (< 0 seconds 1) (str "only while the flight pulls away from it: " seconds))
+          (is (> 1 (:seconds (search/caught-chance afloat {:k 0 :n 0}) 0)) "a drowned two blocks off an afloat body reaches it at most a moment on the way to the shore"))))))

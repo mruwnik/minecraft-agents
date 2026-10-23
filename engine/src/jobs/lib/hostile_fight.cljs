@@ -314,8 +314,8 @@
 
 (defn flee-answer
   "The answer of a walk away from near (cost/flee-answer: each at its chase speed and follow range, the flights from
-  such mobs lately its returns, later the answer after it, in water first the swim-out, caught the chance it is
-  caught: the flee search's, flee-search/caught-chance; nil the prior), its damage at least felt (hp a second felt
+  such mobs lately its returns, later the answer after it, in water first the swim-out, caught {:chance :seconds} of
+  its being caught: the flee search's, flee-search/caught-chance; nil the prior), its damage at least felt (hp a second felt
   since the flight began, nil none) over the walk; nil when a mob keeps up."
   [c near later felt caught]
   (let [p (:primitives c)
@@ -327,7 +327,7 @@
                              :swim (:swim swim) :land (:land swim) :open (:chance swim)
                              :ashore (when (and (:chance swim) (:stand? swim)) (cost/fight-answer (fight-of c near (constantly nil))))
                              :returns (returns c (map #(.-name %) near))
-                             :later later :caught caught})]
+                             :later later :caught (:chance caught) :caught-s (:seconds caught)})]
     (cond-> a
       (and a felt) (update :damage max (* felt (/ (:seconds a) 2))))))
 

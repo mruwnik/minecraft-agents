@@ -112,8 +112,8 @@
                               :beaten? (search/beaten-to? (search/with-ways c chs) (u/self-pos c) (.-food (.self (:primitives c))) goal)})))}))
 
 (defn ^:async caught-chance!
-  "The chance a flight from where the body stands is caught (flee-search/caught-chance of a search from its chasers),
-  for the fight-or-flee weighing; kept (memory :caught-chance) while the body stays in its cell for a flee step's
+  "{:chance :seconds} of a flight from where the body stands being caught (flee-search/caught-chance of a search from
+  its chasers), for the fight-or-flee weighing; kept (memory :caught-chance) while the body stays in its cell for a flee step's
   seconds (flee-search ::step-s)."
   [c]
   (let [here (cell (u/self-pos c))
