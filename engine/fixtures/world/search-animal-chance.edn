@@ -1,0 +1,22 @@
+;; Card d2a66a22: a priced search for farm animals prices each walk at the chance a look there finds one (jobs.lib.cost.find): the
+;; game's base rate, lowered by the ground searched round there in vain (:searched notes, kept a day). Grass plot under the sky (sheep
+;; live on the surface), no sheep anywhere near; :time :any (the search reads the notes, not the clock).
+;; Should-succeed: after a look that noted 128 blocks round as searched for sheep, a search worth 1000 s ends :price at its first walk,
+;; and the body stays put. Should-fail: with no ground searched, the same search walks its legs (within 12, spacing 8) to :distance.
+{:defaults
+ {:tags [:explore :search :animals]
+  :plot {:height 8 :floor "grass_block"}
+  :time :any
+  :body {:at [16.5 0 16.5] :settle-s 2 :effects [["resistance" 600 4]]}
+  :limit-s 90}
+ :cases
+ [{:name "ground-searched-in-vain-for-sheep-ends-a-priced-search-at-once"
+   :act [[:job (jobs.explore.search {:target "sheep" :scan-radius 128 :settings {:jobs.explore.search/max-legs 0}})]
+         [:await {:source :job :kind :stopped :data {:why :legs}} 30]
+         [:job (jobs.explore.search {:target "sheep" :worth 1000 :spend {:job-time 40}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:why :price}} :within-s 40 :of-job true}]
+   :after [[:body-near [16.5 0 16.5] 2]]}
+  {:name "no-ground-searched-a-priced-sheep-search-walks-its-legs"
+   :act [[:job (jobs.explore.search {:target "sheep" :worth 1000 :within 12 :settings {:jobs.explore.search/spacing 8} :spend {:job-time 60}})]]
+   :expect [{:event {:source :job :kind :stopped :data {:why :distance}} :within-s 70 :of-job true}
+            {:no-event {:source :job :kind :stopped :data {:why :price}} :for-s 70 :of-job true :until {:source :job :kind :stopped}}]}]}

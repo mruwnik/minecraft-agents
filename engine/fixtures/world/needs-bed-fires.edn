@@ -43,6 +43,19 @@
             {:event {:source :job :kind :obtain.exploring} :within-s 60}
             {:no-event {:source :job :kind :stopped :data {:cause {:reason :no-source}}} :for-s 60}]
    :after [[:item "white_bed" 0]]}
+  ;; d2a66a22: the same body on land a look noted as searched in vain for sheep 128 blocks round (no sheep in sight, 1 wool): no way to
+  ;; the wool pays, so the errand does not fire (should-fail of no-wool-source-searches-as-far-as-a-bed-is-worth)
+  {:name "land-searched-in-vain-for-sheep-does-not-fire"
+   :memory [{:kind :spawn-bed :data {:pos #xyz [8 0 16]} :age-s 60}
+            {:kind :spawn-reset :data {:pos #xyz [8 0 16]} :age-s 30}]
+   :blocks [[:set [20 0 16] "crafting_table"]]
+   :body {:inventory [["white_wool" 1] ["oak_planks" 3]]}
+   :act [[:job (jobs.explore.search {:target "sheep" :scan-radius 128 :settings {:jobs.explore.search/max-legs 0}})]
+         [:await {:source :job :kind :stopped :data {:why :legs}} 30]
+         [:time-set 9000]]
+   :expect [{:no-event {:source :reflex :kind :fired :context {:reflex-id :needs-bed}} :for-s 30}]
+   :after [[:item "white_bed" 0]]
+   :limit-s 60}
   ;; 1c50b7f5: a listed from-plan whose plan has a bed brings one, so the errand waits for it (should-fail of lost-spawn-bed-fetches-a-bed).
   {:name "listed-plan-with-a-bed-is-waited-for"
    :memory [{:kind :spawn-bed :data {:pos #xyz [8 0 16]} :age-s 60}

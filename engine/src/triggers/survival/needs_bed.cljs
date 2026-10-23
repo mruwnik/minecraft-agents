@@ -4,18 +4,24 @@
   no bed carried and none remembered within the urgent radius gets one (jobs.items.obtain: wool from sheep, planks), so
   the night job can put it down and sleep before phantoms come. A when-convenient errand: it holds only in the last
   :lead-ticks of the day (early on, the body's own work goes first), and its default job is a :priced obtain: each
-  walk of its search is priced against what the bed is still worth. Not in the first light or with a hostile known near (jobs.lib.dawn),
+  walk of its search is priced against what the bed is still worth times the chance a look there finds sheep. Not in the first light or with a hostile known near (jobs.lib.dawn),
   nor while a listed job will bring a bed before dusk for less than getting one now (jobs.lib.makers/waiting-pays?: a
-  from-plan whose plan has one, an obtain of one; a bed after dusk misses the night)."
-  (:require [engine.settings :as settings]
+  from-plan whose plan has one, an obtain of one; a bed after dusk misses the night), nor while the body knows no way to
+  the wool that pays (wool-way?): a body whose land shows no sheep gets on with its work until it sees one or walks on."
+  (:require [clojure.string :as str]
+            [engine.notes :as notes]
+            [engine.settings :as settings]
             [jobs.lib.body :as body]
             [jobs.lib.cost :as cost]
             [jobs.lib.dawn :as dawn]
+            [jobs.lib.look :as look]
             [jobs.lib.makers :as makers]
             [jobs.lib.shelter.beds :as sh-beds]
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.shelter.sense :as sh-sense]
-            [jobs.lib.shelter.spawn :as sh-spawn]))
+            [jobs.lib.shelter.spawn :as sh-spawn]
+            [jobs.lib.storage :as storage]
+            [jobs.lib.util :as u]))
 
 (def defaults {:lead-ticks 6000})
 
@@ -30,8 +36,33 @@
                  (nil? (sh-spawn/standing-bed p view (sh-beds/urgent-bed-radius))))
         {:why :unslept :days days}))))
 
+(def bed-wool "Wool of one colour the game's bed recipe takes." 3)
+
+(defn wool-carried
+  "The most wool of one colour carried, every 4 string counting a white one (the game's string recipe)."
+  [items]
+  (let [t (storage/carried-totals items)]
+    (apply max (+ (get t "white_wool" 0) (quot (get t "string" 0) 4))
+           (keep (fn [[k v]] (when (str/ends-with? k "_wool") v)) t))))
+
+(defn wool-way?
+  "Whether the body knows a way to a bed's wool that pays: enough carried, an adult unsheared sheep in sight, or a look
+  round where it stands that is worth a trip: cost/look-chance over the ground the notes (kn's store) searched for sheep
+  in vain round here, times what the bed is worth (cost/find-worth). Ground nobody searched for sheep pays; every look
+  that found none lowers the chance, so the errand comes again only on new ground or with a sheep seen."
+  [p view kn]
+  (let [at (u/self-pos {:primitives p})
+        ns (some-> (:notes kn) (notes/all (:now view)))
+        r (some #(when (cost/searched-for? ["sheep"] %) (:r %)) ns)]
+    (boolean
+     (or (>= (wool-carried (u/inventory p)) bed-wool)
+         (seq (remove #(or (true? (.-baby %)) (true? (.-sheared %))) (look/seen-objs p {:names ["sheep"]})))
+         (nil? r)
+         (> (* (cost/look-chance ns ["sheep"] [(:x at) (:z at)] r) (cost/find-worth (cost/death-body p view) ["white_bed"] at 1))
+            (cost/trip))))))
+
 (defn needs-bed
-  "Holds by day, in the last :lead-ticks before dusk, awake, on the surface (wool and planks are not underground), with no bed item carried and no listed job worth waiting for, when why names a reason."
+  "Holds by day, in the last :lead-ticks before dusk, awake, on the surface (wool and planks are not underground), with no bed item carried, no listed job worth waiting for and a way to the wool (wool-way?), when why names a reason."
   [p view args kn live]
   (boolean
    (and (< 0 (- sh-clock/dusk-tick (.-timeOfDay (.self p))) (:lead-ticks (merge defaults args)))
@@ -43,4 +74,5 @@
         (nil? (sh-beds/carried-bed p))
         (not (makers/waiting-pays? p view kn live cost/bed?
                                    (/ (settings/ticks->ms (- sh-clock/dusk-tick (.-timeOfDay (.self p)))) 1000)))
-        (some? (why p view)))))
+        (some? (why p view))
+        (wool-way? p view kn))))

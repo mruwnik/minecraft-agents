@@ -224,16 +224,22 @@
                          n (first (filter #(= :seen (:kind %)) (file-notes s)))]
                      (is (= 100000 (- (:until n) (:t n))))))))))))
 
-(deftest a-searched-note-for-farm-animals-lasts-the-short-animal-ttl
+(deftest a-searched-note-lasts-a-day-and-keeps-legs-off-farm-animal-ground-only-the-short-animal-ttl
   (async done
     (tu/run-async done
       (fn ^:async t []
         (let [notes-of (fn ^:async notes-of* [target] (let [s (await (search! {:target target :settings {:jobs.explore.search/max-legs 0}} {:blocks (ground 36)}))]
                                               (first (filter #(= :searched (:kind %)) (file-notes s)))))
               animal (await (notes-of "cow"))
-              block (await (notes-of "diamond_block"))]
-          (is (= 120000 (- (:until animal) (:t animal))))
-          (is (= 86400000 (- (:until block) (:t block)))))))))
+              block (await (notes-of "diamond_block"))
+              p (tu/seeing-all (tu/fake {:blocks (ground 36)}))
+              leg (fn [age-s] (:leg (settings/with-settings {:jobs.explore.search/spacing 4 :jobs.explore.search/max-distance 8}
+                                      #(search/choose-leg {:args {:pattern :spiral} :primitives p :view (constantly {:now 1000000})} {:origin [0 64 0]} ["cow"]
+                                                          [{:kind :searched :what ["cow"] :pos [0 64 0] :r 200 :t (- 1000000 (* 1000 age-s))}]))))]
+          (is (= 86400000 (- (:until animal) (:t animal))) "its looks still tell the chance of a find for a day")
+          (is (= 86400000 (- (:until block) (:t block))))
+          (is (nil? (leg 60)) "ground searched for cows a minute ago is skipped")
+          (is (some? (leg 300)) "five minutes on it is walked again: animals wander"))))))
 
 (deftest the-whole-search-is-one-round
   (async done
@@ -355,6 +361,18 @@
           (is (= :price (:why e)) "the price ends it, not the legs setting")
           (is (= 2 (get-in e [:coverage :legs])) "two 16-block walks fit in 12 s, a third does not")
           (is (re-find #"the next walk costs \d+ s, more than the \d+ s left" (:text e))))))))
+
+(deftest a-priced-animal-search-over-ground-searched-in-vain-stops-at-once
+  (async done
+    (tu/run-async done
+      (fn ^:async t []
+        (let [marks (fn [what] (for [[x z] (search/spiral-points [0 0] 16 128)]
+                                 {:kind :searched :what [what] :pos [x 64 z] :r 24 :by "Other" :t 1 :until 9e15}))
+              sheep (not-found-of (await (search! {:target "sheep" :worth 1000 :max-distance 32} {} 400 #(write-other! % "Other" (marks "sheep")))))
+              cows (await (search! {:target "sheep" :worth 1000 :max-distance 32} {} 400 #(write-other! % "Other" (marks "cow"))))]
+          (is (= [:price 0] ((juxt :why #(get-in % [:coverage :legs])) sheep)) "no sheep for 128 blocks round: a look here is not worth a walk")
+          (is (re-find #"at a \d+\.\d% chance a look there finds one" (:text sheep)))
+          (is (seq (walks cows)) "ground searched for cows says nothing of sheep"))))))
 
 (deftest a-cheap-find-far-off-is-not-searched-for-and-a-dear-one-is
   (async done
@@ -844,10 +862,10 @@
 
 (deftest use-notes-false-ignores-searched-notes-older-than-the-job
   (let [p (tu/seeing-all (tu/fake {:blocks (ground 36)}))
-        note (fn [t] {:kind :searched :what ["sheep"] :pos [0 64 0] :r 200 :t t})
+        note (fn [t] {:kind :searched :what ["diamond_block"] :pos [0 64 0] :r 200 :t t})
         choose (fn [use-notes? ns]
                  (settings/with-settings {:jobs.explore.search/spacing 4 :jobs.explore.search/max-distance 8}
-                   #(search/choose-leg {:args {:pattern :spiral :use-notes use-notes?} :primitives p} {:origin [0 64 0] :t0 100} ["sheep"] ns)))]
+                   #(search/choose-leg {:args {:pattern :spiral :use-notes use-notes?} :primitives p} {:origin [0 64 0] :t0 100} ["diamond_block"] ns)))]
     (is (nil? (:leg (choose true [(note 50)]))) "default: an old note covers the ground")
     (is (some? (:leg (choose false [(note 50)]))) "fresh look: an old note is ignored")
     (is (nil? (:leg (choose false [(note 150)]))) "a note this job made still covers")))

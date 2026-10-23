@@ -1,8 +1,8 @@
 (ns jobs.lib.cost.base-rates
   "Base rates: how much of a resource the ground holds before a body has looked, an input to costs (not a cost).
   The numbers are the game's own placements, in base_rates.json beside this file, which tools/base-rates.mjs writes
-  from the server jar; nothing here counts blocks of the loaded world. Ores only so far (coal, iron, copper, gold,
-  redstone, lapis, diamond, emerald, the json's keys). Pure.
+  from the server jar; nothing here counts blocks of the loaded world. Ores (coal, iron, copper, gold, redstone, lapis,
+  diamond, emerald, the json's keys) and the farm animals (animal-pack-density, animal-ground-share). Pure.
 
   Every fn takes the body: a map of what the body knows, as jobs.lib.look/beliefs gives it. Today only :biome-at is
   read, a fn of a pos -> the biome the body saw there, nil for ground it has not seen."
@@ -78,3 +78,14 @@
     (apply max 0 (for [y (range -64 65)] (expected-density resource {:y y} body)))
     (let [placements (get (:ores data) (keyword resource))]
       (reduce max 0 (map #(unseen-density placements %) (range -64 65))))))
+
+(def animal-pack-density
+  "Expected packs (of 4 adults) of a farm animal per block of ground where its kind spawns, from the game's
+  chunk-generation spawns in plains: a creature pack in about 0.11 of chunks (a 0.1 chance, drawn again while it holds),
+  its kind drawn by spawn weight out of 42 (sheep 12, pig 10, chicken 10, cow 8, horse 1, donkey 1)."
+  (into {} (map (fn [[k w]] [k (/ (* (/ 0.1 0.9) (/ w 42)) chunk-area)])) {"sheep" 12 "pig" 10 "chicken" 10 "cow" 8}))
+
+(def animal-ground-share
+  "The share of the land a body walks whose biome spawns farm animals (plains, forests, taiga, hills, swamp, savanna,
+  jungle) against the land that spawns none (desert, badlands, snowy plains, mushroom fields, beaches): a rough prior."
+  0.6)

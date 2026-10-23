@@ -418,3 +418,14 @@
     (is (< (cost/find-worth body ["oak_log"] nil 1) (cost/find-worth body ["oak_log"] nil 3)))
     (is (< (cost/animal-worth "horse") (cost/animal-worth "cow")) "a cow is worth its beef, a kind with no meat the unknown item")
     (is (= (cost/animal-worth "cow") (cost/animal-worth "sheep")) "mutton as dear as beef")))
+
+(deftest a-look-for-animals-pays-less-the-more-ground-round-it-showed-none
+  (let [note (fn [x z] {:kind :searched :what ["sheep"] :pos [x 64 z] :r 24})
+        first-look (cost/look-chance [] ["sheep"] [0 0] 24)
+        after (fn [ns] (cost/look-chance ns ["sheep"] [0 0] 24))]
+    (is (< 0.05 first-look 0.6) "nothing looked over yet: the base rate's chance")
+    (is (= (after [(note 0 0) (note 0 0)]) (after [(note 0 0)])) "the same ground counts once")
+    (is (> first-look (after [(note 0 0)]) (after (for [x (range -96 97 16) z (range -96 97 16)] (note x z)))))
+    (is (= first-look (after [(note 600 0)])) "ground past the region tells nothing here")
+    (is (< (after (for [x (range -128 129 16) z (range -128 129 16)] (note x z))) 0.001) "a region searched in vain")
+    (is (= 1 (cost/look-chance [(note 0 0)] ["oak_log"] [0 0] 24)) "a block has no base rate: no chance is priced")))

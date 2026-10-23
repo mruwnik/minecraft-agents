@@ -48,7 +48,7 @@
   Legs are ::spacing apart: :spiral points on rings round the origin, the one nearest the body first (so a body in a corridor walks on), or :outward ahead along :heading (a :heading alone means :outward), then the sides, and on further ahead once those are tried or searched. A
   leg is never tried twice and never goes beyond the max-distance setting (XZ) of the origin. It is skipped (:skipped)
   when a live :searched note of any body, this one included, listing every target name lies within half its
-  radius (a note for farm animals lasts only ::animal-searched-ttl-s, they wander); with :use-notes false only a note this job made counts.
+  radius (for farm animals only a note younger than ::animal-searched-ttl-s: they wander); with :use-notes false only a note this job made counts.
 
   A leg needs a standing cell in its column from 12 above the feet down to :descent (40) below, read top down through leaves. An unloaded,
   wet or standless column is recorded failed (:not-loaded, :wet, :no-surface, :unseen) and the next candidate is tried
@@ -69,7 +69,7 @@
   The ending's data: {:found [{:what :pos :id? (the uuid) :entity-id? (the number entities and combat.attack use) :noted? :by?}] :coverage {:legs :scans
   :failed [{:pos :reason}] :skipped :farthest} :why :text} and the ending:
   - :done: :count found.
-  - :nothing-possible :distance (no leg left), :no-way-up (animals that live at the surface, the body under rock and no stair up), :legs (::max-legs walked), :stuck (three failed walks in a row) or :price (with :worth, the next walk costs more than is left of it).
+  - :nothing-possible :distance (no leg left), :no-way-up (animals that live at the surface, the body under rock and no stair up), :legs (::max-legs walked), :stuck (three failed walks in a row) or :price (with :worth, the next walk costs more than is left of it times the chance a look there finds one, cost/look-chance: below 1 only for farm animals, falling with the ground searched round there in vain).
   - :limit-reached :job-time (the call's :spend :job-time, default ::job-time-s) or :wall-time (default ::wall-time-s); the engine ends it, with the data of done? ({:found :coverage :why}) and neither event; with :least targets found (default 1) the engine ends it :done instead.
   - A call with no :target and no :patch never runs (:bad-args).
 
@@ -108,7 +108,7 @@
    ::stale-s {:default 60 :doc "Seconds after which an animal noted no longer counts as found by a note, and one seen earlier in this search is reported with how long ago." :spec (a/num-in 0 nil)}
    ::entity-ttl-s {:default 600 :doc "Seconds a note of an entity seen lasts." :spec (a/num-in 0 nil)}
    ::searched-ttl-s {:default 86400 :doc "Seconds a note of searched ground lasts." :spec (a/num-in 0 nil)}
-   ::animal-searched-ttl-s {:default 120 :doc "Seconds a note of ground searched for farm animals lasts: they wander, so old ground is looked at again." :spec (a/num-in 0 nil)}
+   ::animal-searched-ttl-s {:default 120 :doc "Seconds a note of ground searched for farm animals keeps a leg off that ground: they wander, so older ground is looked at again (its note still lowers the chance of a find, cost/look-chance)." :spec (a/num-in 0 nil)}
    ::job-time-s {:default 600 :doc "Seconds from the first round before a search gives up." :spec (a/num-in 0 nil)}
    ::wall-time-s {:default 3600 :doc "Seconds from the first round before a search gives up, waits included." :spec (a/num-in 0 nil)}
    ::max-failed-in-row {:default 3 :doc "Failed attempts in a row before the search gives up." :spec (a/int-in 0 nil)}
@@ -367,7 +367,9 @@
                                      (:scans m 0) " looks of " (:scan-radius (:args c)) " blocks round, " (:farthest m 0) " blocks out"
                                      (cond
                                        (= :price why) (str ", the next walk costs " (js/Math.round (:next-price m)) " s, more than the "
-                                                           (js/Math.round (- (:worth (:args c)) (:spent m 0))) " s left of what the find is worth")
+                                                           (js/Math.round (- (:worth (:args c)) (:spent m 0))) " s left of what the find is worth"
+                                                           (when (< (:next-chance m 1) 1)
+                                                             (str " at a " (.toFixed (* 100 (:next-chance m)) 1) "% chance a look there finds one")))
                                        (and (= :stuck why) (refused-text c m)) (str ", " (refused-text c m))
                                        (pos? (:skipped m 0)) (str ", " (:skipped m) " legs skipped as already searched"))
                                      (when-let [b (:patch-miss m)]
@@ -418,7 +420,7 @@
   (let [{:keys [scan-radius] want :count} (:args c)
         seen-ttl-s (settings/get settings ::seen-ttl-s)
         entity-ttl-s (settings/get settings ::entity-ttl-s)
-        searched-ttl-s (settings/get settings (if (surface-only? names) ::animal-searched-ttl-s ::searched-ttl-s))
+        searched-ttl-s (settings/get settings ::searched-ttl-s)
         seen #(vec (takeable c (sense (:primitives c) names scan-radius)))
         short-by? #(< (count (add-found (:found (ctx/mem c) []) % want)) want)
         short? #(short-by? (seen))
@@ -438,6 +440,11 @@
                                    (update :scans (fnil inc 0))
                                    (update :farthest (fnil max 0) (js/Math.round (xz-dist [x z] [ox oz])))
                                    (update :found #(add-found (or % []) sighted want)))))))
+
+(defn searched-notes
+  "The notes whose searched ground counts: with :use-notes false only those this job made."
+  [c m ns]
+  (if (false? (:use-notes (:args c))) (filter #(>= (:t %) (:t0 m 0)) ns) ns))
 
 (defn candidates [c m]
   (let [{:keys [pattern heading]} (:args c)
@@ -503,7 +510,8 @@
         block-at (seen-at p)
         surface? (surface-only? names)
         buried? (sh-sense/buried? p)
-        covering (if (false? (:use-notes (:args c))) (filter #(>= (:t %) (:t0 m 0)) ns) ns)
+        covering (cond->> (searched-notes c m ns)
+                   surface? (filter #(< (- (ctx/now c) (:t %)) (* 1000 (settings/get settings ::animal-searched-ttl-s)))))
         underground? (fn [sy pt] (and surface? sy (or (< sy (- y (settings/get settings ::surface-dip)))
                                                       (sh-sense/buried-at? p {:x (pt 0) :y sy :z (pt 1)}))))]
     (loop [[pt & more] (candidates c m) reads 0 acc {:tried [] :failed [] :skipped 0 :held 0 :unloaded (vec (:deferred m))}]
@@ -551,19 +559,21 @@
   "With :worth, the price of a walk toward leg before it starts (jobs.lib.cost/leg-price of go-to's quote, the death it
   risks under rock or in the dark where the body stands and past the known threats along the straight way, jobs.lib.threats/threats-of), booked as :leg-price: nil when it is affordable (or unpriced,
   or no route is known: the walk fails that leg alone), :continue while go-to's quote search goes on (it resumes at the
-  next call), else the :price ending."
-  [c leg]
+  next call), else the :price ending: the price is more than what is left of the worth times the chance a look round
+  there finds one (cost/look-chance over the searched notes; 1 for a walk to a noted target, sure?)."
+  [c leg sure?]
   (when-let [worth (:worth (:args c))]
     (let [p (:primitives c)
           [x y z] leg
           q (await (ctx/quote c 'jobs.movement.go-to (leg-args c leg)))
           at {:x x :y y :z z}
-          price (cost/leg-price q (threats/route-death-cost c {:underground? (sh-sense/buried? p) :night? (look/dark-here? p)} at))]
+          price (cost/leg-price q (threats/route-death-cost c {:underground? (sh-sense/buried? p) :night? (look/dark-here? p)} at))
+          chance (if sure? 1 (cost/look-chance (searched-notes c (ctx/mem c) (notes/notes c)) (targets c) [x z] (:scan-radius (:args c))))]
       (cond
         (:estimate q) :continue
         (infinite? price) (do (ctx/update-mem! c dissoc :leg-price) nil)
-        (> price (- worth (:spent (ctx/mem c) 0))) (do (ctx/update-mem! c assoc :next-price price)
-                                                       (finish! c :not-found :price))
+        (> price (* chance (- worth (:spent (ctx/mem c) 0)))) (do (ctx/update-mem! c assoc :next-price price :next-chance chance)
+                                                                  (finish! c :not-found :price))
         :else (do (ctx/update-mem! c assoc :leg-price price) nil)))))
 
 (defn sheltered-dark
@@ -662,14 +672,14 @@
         :out :again
         (finish! c :not-found :no-way-up))
       stale
-      (or (await (price-leg! c (:pos stale)))
+      (or (await (price-leg! c (:pos stale) true))
           (do (ctx/update-mem! c (fn [m] (-> m (update :revisited (fnil conj #{}) (:id stale)) (assoc :leg (:pos stale) :leg-column nil))))
               (await (walk! c))))
       (and (nil? (:worth (:args c))) (>= (:legs m 0) (settings/get settings ::max-legs)))
       (finish! c :not-found :legs)
       :else
       (let [{:keys [leg step column tried failed skipped unloaded more held]} (choose-leg c m names ns)
-            priced (when leg (await (price-leg! c leg)))]
+            priced (when leg (await (price-leg! c leg false)))]
         (if (= :continue priced)
           :continue
           (do
@@ -688,7 +698,7 @@
               more :again
               (and (empty? unloaded) (pos? held)) (do (ctx/update-mem! c dissoc :blocked) :again)
               (empty? unloaded) (finish! c :not-found :distance)
-              (far-unloaded c unloaded) (or (await (price-leg! c (far-unloaded c unloaded)))
+              (far-unloaded c unloaded) (or (await (price-leg! c (far-unloaded c unloaded) false))
                                             (do (ctx/update-mem! c assoc :leg (far-unloaded c unloaded) :leg-column nil)
                                                 (await (walk! c))))
               :else (do (await (child/pause! c (/ (wait-ms) 1000) :chunks-loading))

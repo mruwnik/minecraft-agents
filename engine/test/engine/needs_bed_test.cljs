@@ -2,6 +2,7 @@
   "The :needs-bed trigger: a body overdue for sleep with no bed gets one."
   (:require [cljs.test :refer [are deftest is]]
             [engine.memory :as mem]
+            [engine.notes :as notes]
             [engine.test-util :as tu]
             [jobs.lib.shelter.clock :as sh-clock]
             [jobs.lib.world-files :as world]
@@ -11,20 +12,22 @@
 
 (defn run
   "f over a fake world (night? and inv given), a view of the memory entries [[kind data age-days] ..] written age-days ago,
-  the world's plans {id plan} and the listed jobs [[id label args contract] ..], queued in that order (a contract: started)."
-  [f {:keys [night inv entries time entities blocks plans jobs] :or {entries []}}]
+  the world's plans {id plan} and notes (another body's, live), and the listed jobs [[id label args contract] ..], queued in that order (a contract: started)."
+  [f {:keys [night inv entries time entities blocks plans jobs] seen-notes :notes :or {entries []}}]
   (let [clock (atom 0)
-        store (mem/open (tu/tmp-dir) {:now #(deref clock)})]
+        store (mem/open (tu/tmp-dir) {:now #(deref clock)})
+        noted (notes/open {:world-dir (tu/tmp-dir) :body "Other" :emit (fn [_])})]
     (doseq [[kind data age] entries]
       (reset! clock (- (* 10 sh-clock/ms-per-day) (* age sh-clock/ms-per-day)))
       (mem/write! store kind data {:cap 8 :ttl (* 20 sh-clock/ms-per-day)}))
     (reset! clock (* 10 sh-clock/ms-per-day))
+    (notes/add! noted @clock (mapv #(assoc % :by "Other" :t 1 :until 9e15) seen-notes))
     (doseq [[id label args contract] jobs]
       (swap! clock inc)
       (mem/create-job! store id label (cond-> args (not= "jobs.time.noop" label) (update :spend #(or % {:job-time 60}))))
       (when contract (mem/update-job! store id [] assoc :contract contract)))
     (f (tu/seeing-all (tu/fake-on-floor (cond-> {:floor [-10 -10 10 10] :inventory (or inv []) :entities entities :blocks blocks :time (or time 9000)} night (assoc :time 18000))))
-       (mem/view store) {} (world/of-data (or plans {}) {}) (set (map first jobs)))))
+       (mem/view store) {} (assoc (world/of-data (or plans {}) {}) :notes noted) (set (map first jobs)))))
 
 (defn holds? [opts] (run nb/needs-bed opts))
 
@@ -117,3 +120,21 @@
   (is (false? (holds? {:entries slept-long-ago :plans {"hut" hut}
                        :jobs [["j1" "jobs.build.from-plan" {:plan "hut"}] ["j2" "jobs.time.noop" {}]]}))
       "a job queued after the maker does not hold it up"))
+
+(defn searched-for [what r]
+  (for [x (range (- r) (inc r) 16) z (range (- r) (inc r) 16)] {:kind :searched :what [what] :pos [x 64 z] :r 24}))
+
+(def sheep {:id 9 :name "sheep" :kind "passive" :pos {:x 6 :y 64 :z 0}})
+
+(deftest land-searched-for-sheep-in-vain-holds-the-errand-till-wool-or-a-sheep-or-new-ground
+  (are [opts expected] (= expected (holds? (merge {:entries slept-long-ago} opts)))
+    {} true
+    {:notes (searched-for "sheep" 32)} true
+    {:notes (searched-for "sheep" 128)} false
+    {:notes (searched-for "cow" 128)} true
+    {:notes (map #(update % :pos (fn [[x y z]] [(+ x 1000) y z])) (searched-for "sheep" 128))} true
+    {:notes (searched-for "sheep" 128) :entities [sheep]} true
+    {:notes (searched-for "sheep" 128) :entities [(assoc sheep :baby true)]} false
+    {:notes (searched-for "sheep" 128) :inv [{:name "red_wool" :count 3}]} true
+    {:notes (searched-for "sheep" 128) :inv [{:name "white_wool" :count 2} {:name "string" :count 4}]} true
+    {:notes (searched-for "sheep" 128) :inv [{:name "white_wool" :count 2} {:name "red_wool" :count 1}]} false))
